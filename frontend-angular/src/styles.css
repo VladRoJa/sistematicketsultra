@@ -1,0 +1,24 @@
+/* Reset básico */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: Arial, sans-serif;
+  }
+  
+  /* Contenedor principal */
+  body {
+    background-color: #f4f4f4;
+    color: #333;
+  }
+  
+  /* Contenedor de las pantallas */
+  .container {
+    max-width: 800px;
+    margin: 40px auto;
+    padding: 20px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  }
+  

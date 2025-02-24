@@ -1,0 +1,46 @@
+<!-- pantalla-ver-tickets.component.css -->
+
+<table>
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Título</th>
+      <th>Descripción</th>
+      <th>Usuario</th>
+      <th>Estado</th>
+      <th>Fecha Creación</th>
+      <th>Fecha Finalizado</th>
+      <th>Acciones</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr *ngFor="let ticket of filteredTickets">
+      <td>{{ ticket.id }}</td>
+      <td>{{ ticket.titulo }}</td>
+      <td>{{ ticket.descripcion }}</td>
+      <td>{{ ticket.username }}</td>
+      <td>{{ ticket.estado }}</td>
+      <td>{{ ticket.fecha_creacion }}</td>
+      <td>{{ ticket.fecha_finalizado ? ticket.fecha_finalizado : 'N/A' }}</td>
+      <td>
+
+        <p>Estado: {{ ticket.estado }}</p>
+
+        <!-- Botón "En Progreso" solo si el estado es "pendiente" -->
+        <button 
+          *ngIf="getEstadoLimpio(ticket.estado) === 'pendiente'" 
+          (click)="cambiarEstadoTicket(ticket, 'en progreso')"
+          [ngStyle]="{'background-color': getEstadoLimpio(ticket.estado) === 'en progreso' ? 'grey' : 'green'}">
+          En Progreso
+        </button>
+      
+        <!-- Botón "Finalizado" si el estado es "pendiente" o "en progreso" -->
+        <button 
+          *ngIf="getEstadoLimpio(ticket.estado) === 'pendiente' || getEstadoLimpio(ticket.estado) === 'en progreso'"  
+          (click)="finalizarTicket(ticket)">
+          Finalizado
+        </button>
+      </td>
+    </tr>
+  </tbody>
+</table>

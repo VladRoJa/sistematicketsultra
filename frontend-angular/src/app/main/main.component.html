@@ -1,0 +1,16 @@
+<!-- main.component.html -->
+
+
+<div class="navbar">
+  <div>
+    <a [routerLink]="['/main/crear-ticket']">Crear Ticket</a>
+    <a [routerLink]="['/main/ver-tickets']">Ver Tickets</a>
+  </div>
+  <div class="user-info">
+    <span>{{ usuarioInfo }}</span>
+    <button (click)="cerrarSesion()">Cerrar Sesión</button>
+  </div>
+</div>
+
+<!-- Importante para mostrar las rutas hijas -->
+<router-outlet></router-outlet>
