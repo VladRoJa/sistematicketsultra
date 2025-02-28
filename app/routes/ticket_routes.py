@@ -5,8 +5,11 @@ from app.models.database import get_db_connection
 from app.models.ticket_model import Ticket
 from flask_jwt_extended import jwt_required, get_jwt_identity, verify_jwt_in_request
 from app.models.user_model import User
+from datetime import datetime
+import pytz
 
 
+mexicali_tz = pytz.timezone('America/Tijuana')  # Mexicali usa la zona de Tijuana
 ticket_bp = Blueprint('tickets', __name__)
 
 # Configuración de CORS para permitir solicitudes desde Angular
@@ -14,6 +17,7 @@ CORS(ticket_bp, resources={r"/*": {"origins": "http://localhost:4200"}},
      supports_credentials=True, allow_headers=["Content-Type", "Authorization"], 
      methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])   
 
+# ✅ Ruta para obtener todos los tickets
 # ✅ Ruta para obtener todos los tickets
 @ticket_bp.route('/', methods=['GET'])
 @jwt_required()
@@ -26,24 +30,25 @@ def get_tickets():
         if not user:
             return jsonify({"mensaje": "Usuario no encontrado"}), 404
 
-        sucursal_id = user.sucursal_id
+        id_sucursal = user.id_sucursal  # 🔥 Revisar qué sucursal tiene asignada
 
-        # 🔹 Si es admin (sucursal_id 1000), obtiene todos los tickets
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
 
-        if sucursal_id == 1000:
-            query = "SELECT id, titulo, descripcion, username, IF(estado='abierto', 'pendiente', estado) AS estado, fecha_creacion, fecha_finalizado FROM tickets"
+        if id_sucursal == 1000:  # 🔹 Si el usuario es admin, obtiene TODOS los tickets
+            query = "SELECT * FROM tickets"
             cursor.execute(query)
         else:
-            query = "SELECT id, titulo, descripcion, username, IF(estado='abierto', 'pendiente', estado) AS estado, fecha_creacion, fecha_finalizado FROM tickets WHERE sucursal_id = %s"
-            cursor.execute(query, (sucursal_id,))
+            query = "SELECT * FROM tickets WHERE id_sucursal = %s"  # 🔥 Solo los tickets de su sucursal
+            cursor.execute(query, (id_sucursal,))
 
         tickets = cursor.fetchall()
         cursor.close()
         conn.close()
 
+
         return jsonify({"mensaje": "Tickets cargados correctamente", "tickets": tickets}), 200
+
 
     except Exception as e:
         print(f"❌ Error al obtener tickets: {e}")
@@ -54,39 +59,31 @@ def get_tickets():
 @ticket_bp.route('/', methods=['POST'])
 def create_ticket():
     try:
-        # 🔥 Verificar manualmente el token antes de @jwt_required()
         verify_jwt_in_request()
-        
-        auth_header = request.headers.get('Authorization')
-        print(f"📌 Token recibido en Flask: {auth_header}")
+        usuario_actual = get_jwt_identity()
+        user = User.get_user_by_username(usuario_actual)
 
-        usuario_actual = get_jwt_identity()  # 🔹 Obtener usuario autenticado
-        print(f"📌 Usuario autenticado en Flask: {usuario_actual}")  
+        if not user:
+            return jsonify({"mensaje": "Usuario no encontrado"}), 404
 
-        if usuario_actual is None:
-            print("⚠️ No autorizado, sesión posiblemente expirada")
-            return jsonify({"mensaje": "No autorizado"}), 401
-        
-        print(f"🔍 Verificando sesión en Flask: {session.get('user_id')}")
-
+        id_sucursal = user.id_sucursal
         data = request.get_json()
         titulo = data.get("titulo")
         descripcion = data.get("descripcion")
+        
+        print(f"📌 Datos recibidos: {data}")  # 🔍 Log para ver qué datos llegan
 
         if not titulo or not descripcion:
-            print("❌ Error: Faltan datos obligatorios")
             return jsonify({"mensaje": "Faltan datos obligatorios"}), 400
 
-        nuevo_ticket = Ticket.create_ticket(titulo, descripcion, usuario_actual)
+        nuevo_ticket = Ticket.create_ticket(titulo, descripcion, usuario_actual, id_sucursal)
 
         if nuevo_ticket:
-            print("✅ Ticket creado exitosamente")
             return jsonify({"mensaje": "Ticket creado correctamente", "ticket": nuevo_ticket.to_dict()}), 201
         else:
             return jsonify({"mensaje": "Error al crear el ticket"}), 500
 
     except Exception as e:
-        print(f"❌ Error en `create_ticket`: {e}")
         return jsonify({"mensaje": f"Error interno en el servidor: {str(e)}"}), 500
     
 # ✅ Ruta para actualizar estado de un ticket
@@ -94,6 +91,8 @@ def create_ticket():
 @jwt_required()
 def update_ticket_status(id):
     try:
+        if not id:
+            return jsonify({"mensaje": "ID del ticket no proporcionado"}), 400
         data = request.get_json()
         estado = data.get("estado")
         fecha_finalizado = data.get("fecha_finalizado") if estado == "finalizado" else None

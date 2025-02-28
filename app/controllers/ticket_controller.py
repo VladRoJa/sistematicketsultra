@@ -9,11 +9,11 @@ class TicketController:
         titulo = data.get('titulo')
         descripcion = data.get('descripcion')
         username = data.get('username')
-        sucursal_id = session.get('sucursal_id')
+        id_sucursal = session.get('id_sucursal')
         
         print("📌 Sesión en Flask antes de responder:", {dict(session)})
         
-        ticket = create_ticket(titulo, descripcion, username, sucursal_id)
+        ticket = create_ticket(titulo, descripcion, username, id_sucursal)
         
         print("📌 Sesión en Flask después:", {dict(session)})
         
@@ -27,10 +27,10 @@ class TicketController:
         
         
     def get_tickets(self, estado):
-        sucursal_id = session.get('sucursal_id')
+        id_sucursal = session.get('id_sucursal')
         limit = request.args.get('limit', default=None, type=int)
         sort = request.args.get('sort', default=None, type=str)
-        tickets = get_tickets(estado, sucursal_id, limit, sort)
+        tickets = get_tickets(estado, id_sucursal, limit, sort)
         return tickets, 200
 
     def update_ticket_status(self, id, data):

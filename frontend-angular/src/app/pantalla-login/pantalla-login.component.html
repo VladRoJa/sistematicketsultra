@@ -1,8 +1,11 @@
+<!-- pantalla-login.component.html -->
+
+
 <div id="login-section">
   <h2>Iniciar Sesión</h2>
   <form (ngSubmit)="onSubmit()" #loginForm="ngForm">
-    <label for="usuario">Usuario:</label><br>
-    <input type="text" id="usuario-login" name="usuario" [(ngModel)]="usuario" required><br><br>
+    <label for="username">Usuario:</label><br>
+    <input type="text" id="usuario-login" name="username" [(ngModel)]="username" required><br><br>
 
     <label for="password">Contraseña:</label><br>
     <input type="password" id="password-login" name="password" [(ngModel)]="password" required><br><br>

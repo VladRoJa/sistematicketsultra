@@ -15,13 +15,13 @@ class AuthController:
             if user:
                 session['user_id'] = user.id
                 session['rol'] = user.rol
-                session['sucursal_id'] = user.sucursal_id
+                session['id_sucursal'] = user.id_sucursal
                 session['username'] = user.username
                 return jsonify({
                     'mensaje': 'Inicio de sesión exitoso',
                     'rol': user.rol,
                     'username': user.username,
-                    'sucursal_id': user.sucursal_id,
+                    'id_sucursal': user.id_sucursal,
                 }), 200
             else:
                 print("Credenciales inválidas")
@@ -33,7 +33,7 @@ class AuthController:
     def logout(self):
         session.pop('user_id', None)
         session.pop('rol', None)
-        session.pop('sucursal_id', None)
+        session.pop('id_sucursal', None)
         return jsonify({'mensaje': 'Cierre de sesión exitoso'}), 200
 
 # Crea una instancia de la clase

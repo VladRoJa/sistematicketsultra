@@ -12,14 +12,17 @@ import { Router } from '@angular/router';
   styleUrls: ['./pantalla-login.component.css']
 })
 export class LoginComponent { 
-  usuario: string = "";
+  username: string = "";
   password: string = "";
   errorMessage: string = "";
 
   constructor(private authService: AuthService, private router: Router) {}
 
   onSubmit() {
-    this.authService.login({ usuario: this.usuario, password: this.password })
+    console.log("🟡 Usuario ingresado:", this.username);
+    console.log("🟡 Contraseña ingresada:", this.password);
+    
+    this.authService.login({ username: this.username, password: this.password })
       .subscribe({
         next: (response) => {
           console.log("✅ Respuesta del backend:", response);
@@ -44,4 +47,5 @@ export class LoginComponent {
         }
       });
   }
+  
 }

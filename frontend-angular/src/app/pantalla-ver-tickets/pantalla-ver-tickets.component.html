@@ -1,46 +1,70 @@
-<!-- pantalla-ver-tickets.component.css -->
+<!-- pantalla-ver-tickets.component.html -->
 
-<table>
-  <thead>
-    <tr>
-      <th>ID</th>
-      <th>Título</th>
-      <th>Descripción</th>
-      <th>Usuario</th>
-      <th>Estado</th>
-      <th>Fecha Creación</th>
-      <th>Fecha Finalizado</th>
-      <th>Acciones</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr *ngFor="let ticket of filteredTickets">
-      <td>{{ ticket.id }}</td>
-      <td>{{ ticket.titulo }}</td>
-      <td>{{ ticket.descripcion }}</td>
-      <td>{{ ticket.username }}</td>
-      <td>{{ ticket.estado }}</td>
-      <td>{{ ticket.fecha_creacion }}</td>
-      <td>{{ ticket.fecha_finalizado ? ticket.fecha_finalizado : 'N/A' }}</td>
-      <td>
+<div class="contenedor-tickets">
+  <div class="filtros">
+    <select [(ngModel)]="filtroEstado" (change)="filtrarTickets()">
+      <option value="">Todos los estados</option>
+      <option value="pendiente">Pendiente</option>
+      <option value="en progreso">En progreso</option>
+      <option value="finalizado">Finalizado</option>
+    </select>
 
-        <p>Estado: {{ ticket.estado }}</p>
+    <input list="usuarios" [(ngModel)]="filtroUsuario" (input)="filtrarTickets()" placeholder="Buscar usuario...">
+    <datalist id="usuarios">
+      <option *ngFor="let user of usuariosDisponibles" [value]="user"></option>
+    </datalist>
 
-        <!-- Botón "En Progreso" solo si el estado es "pendiente" -->
-        <button 
-          *ngIf="getEstadoLimpio(ticket.estado) === 'pendiente'" 
+    <input type="date" [(ngModel)]="filtroFecha" (change)="filtrarTickets()">
+  </div>
+
+  <button (click)="exportToExcel()">📥 Exportar a Excel</button>
+
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Título</th>
+        <th>Descripción</th>
+        <th>Usuario</th>
+        <th>Estado</th>
+        <th>Fecha Creación</th>
+        <th>Fecha Finalizado</th>
+        <th>Acciones</th> <!-- ✅ Agregamos la columna de botones -->
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let ticket of filteredTickets">
+        <td>{{ ticket.id }}</td>
+        <td>{{ ticket.titulo }}</td>
+        <td>{{ ticket.descripcion }}</td>
+        <td>{{ ticket.username }}</td>
+        <td>{{ ticket.estado }}</td>
+        <td>{{ formatearFecha(ticket.fecha_creacion) }}</td>
+        <td>{{ formatearFecha(ticket.fecha_finalizado ? ticket.fecha_finalizado : 'N/A') }}</td>
+        <td>
+
+        <ng-container *ngIf="user && user.id_sucursal === 1000 && ticket.estado !== 'finalizado'">
+
+            <!-- ✅ Botón "En Progreso" (solo si el usuario es admin y el ticket no está finalizado) -->
+          <button 
+          *ngIf="ticket.estado !== 'finalizado'" 
+          [disabled]="ticket.estado === 'en progreso'" 
           (click)="cambiarEstadoTicket(ticket, 'en progreso')"
-          [ngStyle]="{'background-color': getEstadoLimpio(ticket.estado) === 'en progreso' ? 'grey' : 'green'}">
+          [ngStyle]="{ 'background-color': ticket.estado === 'en progreso' ? 'gray' : 'green', 'color': 'white' }">
           En Progreso
-        </button>
-      
-        <!-- Botón "Finalizado" si el estado es "pendiente" o "en progreso" -->
-        <button 
-          *ngIf="getEstadoLimpio(ticket.estado) === 'pendiente' || getEstadoLimpio(ticket.estado) === 'en progreso'"  
-          (click)="finalizarTicket(ticket)">
-          Finalizado
-        </button>
-      </td>
-    </tr>
-  </tbody>
-</table>
+          </button>
+
+            <!-- ✅ Botón "Finalizar" (solo si el usuario es admin y el ticket no está finalizado) -->
+            <button 
+            *ngIf="ticket.estado !== 'finalizado'"  
+            (click)="finalizarTicket(ticket)"
+            [ngStyle]="{ 'background-color': 'red', 'color': 'white', 'margin-left': '5px' }">
+            Finalizar
+          </button>
+        </ng-container>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+  
