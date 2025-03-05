@@ -9,7 +9,7 @@ import { FormsModule } from '@angular/forms';
   standalone: true,
   imports: [CommonModule, FormsModule],
   templateUrl: './pantalla-inicio.component.html',
-  styleUrl: './pantalla-inicio.component.css'
+  styleUrls: ['./pantalla-inicio.component.css'] // Corregido aquí
 })
 export class PantallaInicioComponent {
 

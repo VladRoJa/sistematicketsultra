@@ -39,3 +39,24 @@ table {
     cursor: not-allowed;
     opacity: 0.6;
   }
+
+  .filtros {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  
+  .filtros label {
+    font-weight: bold;
+    margin-right: 5px;
+  }
+  
+  .filtros select,
+  .filtros input {
+    padding: 5px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+  }
+  

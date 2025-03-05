@@ -1,0 +1,29 @@
+<!-- admin-usuarios.component.html -->
+
+
+
+<table>
+    <tr>
+      <th>ID</th>
+      <th>Nombre</th>
+      <th>Email</th>
+      <th>Área</th>
+      <th>Rol</th>
+      <th>Acciones</th>
+    </tr>
+    <tr *ngFor="let usuario of usuarios">
+      <td>{{ usuario.id }}</td>
+      <td>{{ usuario.username }}</td>
+      <td>{{ usuario.email }}</td>
+      <td>{{ usuario.id_sucursal }}</td>
+      <td>
+        <select [(ngModel)]="usuario.rol">
+          <option *ngFor="let rol of roles" [value]="rol">{{ rol }}</option>
+        </select>
+      </td>
+      <td>
+        <button (click)="cambiarRol(usuario.id, usuario.rol)">Actualizar</button>
+      </td>
+    </tr>
+  </table>
+  

@@ -15,6 +15,7 @@ interface Ticket {
   descripcion: string;
   username: string;
   estado: string;
+  criticidad: number;
   fecha_creacion: string;
   fecha_finalizado: string | null;
 }
@@ -40,11 +41,13 @@ export class PantallaVerTicketsComponent implements OnInit {
   filtroEstado: string = "";
   filtroUsuario: string = "";
   filtroFecha: string = "";
+  filtroFechaFinalizacion: string = "";
+  filtroCriticidad: string = "";
 
   user: any = null; // 🔥 Aquí guardaremos el usuario autenticado
 
   private apiUrl = 'http://localhost:5000/api/tickets'; // ✅ URL de la API
-  private authUrl = 'http://localhost:5000/api/auth/session-info'; // ✅ URL para obtener info del usuario
+  private authUrl = 'http://localhost:5000/auth/session-info'; // ✅ URL para obtener info del usuario
 
   constructor(private ticketService: TicketService, private http: HttpClient) {}
 
@@ -58,29 +61,58 @@ export class PantallaVerTicketsComponent implements OnInit {
 // ✅ Obtener información del usuario autenticado
 async obtenerUsuarioAutenticado() {
   const token = localStorage.getItem('token');
+  console.log("📡 Token obtenido del localStorage:", token);
+
   if (!token) {
     console.warn("⚠️ No hay token, el usuario no está autenticado.");
     return;
   }
 
-  const headers = new HttpHeaders().set('Authorization', `Bearer ${token}`);
+  console.log("📡 Enviando petición a session-info con token:", token);
+
+  const headers = new HttpHeaders()
+    .set('Authorization', `Bearer ${token}`)
+    .set('Content-Type', 'application/json');
 
   try {
+    console.log("📡 Enviando petición a session-info con headers:", headers);
     const response = await this.http.get<{ user: any }>('http://localhost:5000/api/auth/session-info', { headers }).toPromise();
-    this.user = response?.user;
+    
+    if (!response || !response.user) {
+      console.error("❌ No se recibió un usuario válido desde session-info");
+      return;
+    }
+
+    this.user = response.user;
     console.log("✅ Usuario autenticado:", this.user);
   } catch (error) {
     console.error("❌ Error obteniendo usuario autenticado:", error);
   }
 }
   // ✅ Cargar los tickets desde el backend
-cargarTickets() {
-  this.ticketService.getTickets().subscribe({
-    next: (data) => {
-      if (data && data.tickets) {
+  cargarTickets() {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      console.error("❌ No hay token, no se pueden cargar los tickets.");
+      return;
+    }
+  
+    const headers = new HttpHeaders()
+      .set('Authorization', `Bearer ${token}`)
+      .set('Content-Type', 'application/json');
+  
+    console.log("📡 Enviando petición a /tickets con headers:", headers);
+  
+    this.http.get<ApiResponse>('http://localhost:5000/api/tickets/all', { headers }).subscribe({
+      next: (data) => {
+        if (!data || !data.tickets) {
+          console.error("❌ La respuesta de la API no contiene tickets válidos.", data);
+          return;
+        }
+  
         this.tickets = data.tickets.map((ticket: any) => {
           let estadoNormalizado: "pendiente" | "en progreso" | "finalizado";
-
+  
           switch (ticket.estado?.trim().toLowerCase()) {
             case "abierto":
             case "pendiente":
@@ -95,35 +127,28 @@ cargarTickets() {
             default:
               estadoNormalizado = "pendiente";
           }
+  
           const fechaCreacion = new Date(ticket.fecha_creacion);
-          const offset = fechaCreacion.getTimezoneOffset();
-          const fechaLocal = new Date(fechaCreacion.getTime() - offset);
-
           if (isNaN(fechaCreacion.getTime())) {
             console.warn(`⚠️ Fecha inválida en ticket ID ${ticket.id}: ${ticket.fecha_creacion}`);
-            ticket.fecha_creacion = null;  // Evitar errores con fechas inválidas
+            ticket.fecha_creacion = null;  
+          } else {
+            ticket.fecha_creacion = fechaCreacion.toISOString().slice(0, 19).replace("T", " ");
           }
-          else {
-            ticket.fecha_creacion = fechaLocal.toISOString().slice(0, 19).replace("T", " ");
-          }
-          return { ...ticket, estado: estadoNormalizado };
+  
+          return { ...ticket, criticidad: ticket.criticidad || 1, estado: estadoNormalizado };
         });
 
-        // 🔹 Ordenar los tickets por fecha de creación (más reciente primero)
-        this.tickets.sort((a, b) => new Date(b.fecha_creacion).getTime() - new Date(a.fecha_creacion).getTime());
-
-        // Extraer usuarios únicos para el filtro
-        this.usuariosDisponibles = [...new Set(this.tickets.map(ticket => ticket.username))];
-
         this.filteredTickets = [...this.tickets];
+  
+        console.log("✅ Tickets cargados:", this.tickets);
+      },
+      error: (error) => {
+        console.error("❌ Error al cargar los tickets:", error);
       }
-    },
-    error: (error) => {
-      console.error("❌ Error al cargar los tickets:", error);
-    }
-  });
-}
-
+    });
+  }
+  
   // ✅ Cambiar el estado del ticket
 cambiarEstadoTicket(ticket: Ticket, nuevoEstado: "pendiente" | "en progreso" | "finalizado") {
   if (!this.user || this.user.id_sucursal !== 1000) {
@@ -185,34 +210,6 @@ finalizarTicket(ticket: Ticket) {
   });
 }
 
-  // ✅ Exportar a Excel
-exportToExcel() {
-  const workbook = new ExcelJS.Workbook();
-  const worksheet = workbook.addWorksheet('Tickets');
-
-  worksheet.columns = [
-    { header: 'ID', key: 'id', width: 10 },
-    { header: 'Título', key: 'titulo', width: 30 },
-    { header: 'Descripción', key: 'descripcion', width: 50 },
-    { header: 'Usuario', key: 'username', width: 20 },
-    { header: 'Estado', key: 'estado', width: 15 },
-    { header: 'Fecha de Creación', key: 'fecha_creacion', width: 20 },
-    { header: 'Fecha Finalizado', key: 'fecha_finalizado', width: 20 }
-  ];
-
-    this.filteredTickets.forEach(ticket => worksheet.addRow(ticket));
-
-    worksheet.getRow(1).font = { bold: true };
-
-    workbook.xlsx.writeBuffer().then((buffer) => {
-      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      saveAs(blob, 'tickets.xlsx');
-    }).catch(err => console.error("❌ Error al generar el Excel:", err));
-  }
-
-  logTicket(ticket: Ticket) {
-    console.log("🟡 Ticket recibido al hacer click:", ticket);
-}
 
 
 formatearFecha(fechaString: string | null): string {
@@ -235,11 +232,54 @@ formatearFecha(fechaString: string | null): string {
 
 // ✅ Filtrar tickets
 filtrarTickets() {
+  console.log("🔍 Aplicando filtros...");
+  console.log("🎯 Estado:", this.filtroEstado);
+  console.log("👤 Usuario:", this.filtroUsuario);
+  console.log("📅 Fecha de creación:", this.filtroFecha);
+  console.log("📅 Fecha de finalización:", this.filtroFechaFinalizacion);
+  console.log("⚡ Criticidad:", this.filtroCriticidad);
+
   this.filteredTickets = this.tickets.filter(ticket => {
     const coincideEstado = this.filtroEstado ? ticket.estado === this.filtroEstado : true;
     const coincideUsuario = this.filtroUsuario ? ticket.username.toLowerCase().includes(this.filtroUsuario.toLowerCase()) : true;
-    const coincideFecha = this.filtroFecha ? new Date(ticket.fecha_creacion).toISOString().split('T')[0] === this.filtroFecha : true;
-    return coincideEstado && coincideUsuario && coincideFecha;
-    });
-  }
+    const coincideFecha = this.filtroFecha
+      ? new Date(ticket.fecha_creacion).toISOString().split('T')[0] === this.filtroFecha
+      : true;
+    const coincideFechaFinalizacion = this.filtroFechaFinalizacion
+      ? ticket.fecha_finalizado && new Date(ticket.fecha_finalizado).toISOString().split('T')[0] === this.filtroFechaFinalizacion
+      : true;
+    const coincideCriticidad = this.filtroCriticidad
+      ? ticket.criticidad === parseInt(this.filtroCriticidad, 10)
+      : true;
+
+    return coincideEstado && coincideUsuario && coincideFecha && coincideFechaFinalizacion && coincideCriticidad;
+  });
+
+  console.log("🎯 Tickets después de filtrar:", this.filteredTickets);
+}
+
+
+exportToExcel() {
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet('Tickets');
+
+  worksheet.columns = [
+    { header: 'ID', key: 'id', width: 10 },
+    { header: 'Título', key: 'titulo', width: 30 },
+    { header: 'Descripción', key: 'descripcion', width: 50 },
+    { header: 'Usuario', key: 'username', width: 20 },
+    { header: 'Estado', key: 'estado', width: 15 },
+    { header: 'Fecha de Creación', key: 'fecha_creacion', width: 20 },
+    { header: 'Fecha Finalizado', key: 'fecha_finalizado', width: 20 }
+  ];
+
+  this.filteredTickets.forEach(ticket => worksheet.addRow(ticket));
+
+  worksheet.getRow(1).font = { bold: true };
+
+  workbook.xlsx.writeBuffer().then((buffer) => {
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    saveAs(blob, 'tickets.xlsx');
+  }).catch(err => console.error("❌ Error al generar el Excel:", err));
+}
 }

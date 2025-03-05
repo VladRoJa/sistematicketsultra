@@ -2,21 +2,37 @@
 
 <div class="contenedor-tickets">
   <div class="filtros">
-    <select [(ngModel)]="filtroEstado" (change)="filtrarTickets()">
+    <label for="estado">Estado:</label>
+    <select id="estado" [(ngModel)]="filtroEstado" (change)="filtrarTickets()">
       <option value="">Todos los estados</option>
       <option value="pendiente">Pendiente</option>
       <option value="en progreso">En progreso</option>
       <option value="finalizado">Finalizado</option>
     </select>
-
-    <input list="usuarios" [(ngModel)]="filtroUsuario" (input)="filtrarTickets()" placeholder="Buscar usuario...">
+  
+    <label for="criticidad">Criticidad:</label>
+    <select id="criticidad" [(ngModel)]="filtroCriticidad" (change)="filtrarTickets()">
+      <option value="">Todas las criticidades</option>
+      <option value="1">1 - Muy Baja</option>
+      <option value="2">2 - Baja</option>
+      <option value="3">3 - Media</option>
+      <option value="4">4 - Alta</option>
+      <option value="5">5 - Critico</option>
+    </select>
+  
+    <label for="usuario">Usuario:</label>
+    <input id="usuario" list="usuarios" [(ngModel)]="filtroUsuario" (input)="filtrarTickets()" placeholder="Buscar usuario...">
     <datalist id="usuarios">
       <option *ngFor="let user of usuariosDisponibles" [value]="user"></option>
     </datalist>
-
-    <input type="date" [(ngModel)]="filtroFecha" (change)="filtrarTickets()">
+  
+    <label for="fechaCreacion">Fecha de Creación:</label>
+    <input id="fechaCreacion" type="date" [(ngModel)]="filtroFecha" (change)="filtrarTickets()">
+  
+    <label for="fechaFinalizacion">Fecha de Finalización:</label>
+    <input id="fechaFinalizacion" type="date" [(ngModel)]="filtroFechaFinalizacion" (change)="filtrarTickets()">
   </div>
-
+  
   <button (click)="exportToExcel()">📥 Exportar a Excel</button>
 
   <table>
@@ -27,6 +43,7 @@
         <th>Descripción</th>
         <th>Usuario</th>
         <th>Estado</th>
+        <th>Criticidad</th>
         <th>Fecha Creación</th>
         <th>Fecha Finalizado</th>
         <th>Acciones</th> <!-- ✅ Agregamos la columna de botones -->
@@ -39,6 +56,7 @@
         <td>{{ ticket.descripcion }}</td>
         <td>{{ ticket.username }}</td>
         <td>{{ ticket.estado }}</td>
+        <td>{{ ticket.criticidad }}</td>
         <td>{{ formatearFecha(ticket.fecha_creacion) }}</td>
         <td>{{ formatearFecha(ticket.fecha_finalizado ? ticket.fecha_finalizado : 'N/A') }}</td>
         <td>
