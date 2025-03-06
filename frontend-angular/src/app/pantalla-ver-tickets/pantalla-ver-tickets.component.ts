@@ -7,6 +7,10 @@ import { FormsModule } from '@angular/forms';
 import { TicketService } from '../services/ticket.service';
 import * as ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
+import { NgxPaginationModule } from 'ngx-pagination';
+
+
+
 
 // Definición del tipo esperado de la respuesta de la API
 interface Ticket {
@@ -28,7 +32,7 @@ interface ApiResponse {
 @Component({
   selector: 'app-pantalla-ver-tickets',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, NgxPaginationModule],
   templateUrl: './pantalla-ver-tickets.component.html',
   styleUrls: ['./pantalla-ver-tickets.component.css']
 })
@@ -37,12 +41,15 @@ export class PantallaVerTicketsComponent implements OnInit {
   tickets: Ticket[] = [];
   filteredTickets: Ticket[] = [];
   usuariosDisponibles: string[] = [];
-
+  usuarioEsAdmin: boolean = false;
   filtroEstado: string = "";
   filtroUsuario: string = "";
   filtroFecha: string = "";
   filtroFechaFinalizacion: string = "";
   filtroCriticidad: string = "";
+  page: number = 1;
+  itemsPerPage: number =15;
+  loading: boolean = false;
 
   user: any = null; // 🔥 Aquí guardaremos el usuario autenticado
 
@@ -91,9 +98,14 @@ async obtenerUsuarioAutenticado() {
 }
   // ✅ Cargar los tickets desde el backend
   cargarTickets() {
+    this.loading = true;  // ⏳ Activar el loader mientras se cargan los tickets
+    console.log("⏳ Loader activado, estado de loading:", this.loading);
+
+
     const token = localStorage.getItem('token');
     if (!token) {
       console.error("❌ No hay token, no se pueden cargar los tickets.");
+      this.loading = false; // ⏹️ Desactivar el loader si no hay token
       return;
     }
   
@@ -102,11 +114,15 @@ async obtenerUsuarioAutenticado() {
       .set('Content-Type', 'application/json');
   
     console.log("📡 Enviando petición a /tickets con headers:", headers);
+
+    const inicioTiempo = Date.now();
+    
   
     this.http.get<ApiResponse>('http://localhost:5000/api/tickets/all', { headers }).subscribe({
       next: (data) => {
         if (!data || !data.tickets) {
           console.error("❌ La respuesta de la API no contiene tickets válidos.", data);
+          this.loading = false; // ⏹️ Desactivar el loader si no hay tickets
           return;
         }
   
@@ -145,7 +161,17 @@ async obtenerUsuarioAutenticado() {
       },
       error: (error) => {
         console.error("❌ Error al cargar los tickets:", error);
-      }
+      },
+      complete: () => {
+        const tiempoTranscurrido = Date.now() - inicioTiempo;
+        const tiempoRestante = Math.max(2000 - tiempoTranscurrido, 0); // ⏳ Asegurar al menos 2.5 segundos
+  
+        console.log(`⏳ Asegurando un tiempo mínimo de carga: ${tiempoRestante} ms`);
+        setTimeout(() => {
+          this.loading = false;
+          console.log("✅ Loader desactivado");
+        }, tiempoRestante);
+      }  
     });
   }
   
@@ -212,13 +238,16 @@ finalizarTicket(ticket: Ticket) {
 
 
 
-formatearFecha(fechaString: string | null): string {
+formatearFechaCreacion(fechaString: string | null): string {
   if (!fechaString || fechaString === 'N/A' || fechaString === 'null') return 'N/A';
 
-  const fecha = new Date(fechaString);
-  if (isNaN(fecha.getTime())) return 'Fecha inválida'; // Evita errores si el formato es incorrecto
+  const fechaUTC = new Date(fechaString);
+  if (isNaN(fechaUTC.getTime())) return 'Fecha inválida'; // Evita errores si el formato es incorrecto
 
-  return fecha.toLocaleString('es-ES', { 
+  // 🔥 Ajusta la zona horaria manualmente restando 8 horas
+  fechaUTC.setHours(fechaUTC.getHours());
+
+  return fechaUTC.toLocaleString('es-ES', { 
     year: 'numeric', 
     month: '2-digit', 
     day: '2-digit', 
@@ -228,7 +257,24 @@ formatearFecha(fechaString: string | null): string {
   }).replace(',', '');
 }
 
+formatearFechaFinalizacion(fechaString: string | null): string {
+  if (!fechaString || fechaString === 'N/A' || fechaString === 'null') return 'N/A';
 
+  const fechaUTC = new Date(fechaString);
+  if (isNaN(fechaUTC.getTime())) return 'Fecha inválida'; // Evita errores si el formato es incorrecto
+
+  // 🔥 Ajusta la zona horaria manualmente restando 8 horas
+  fechaUTC.setHours(fechaUTC.getHours() +8);
+
+  return fechaUTC.toLocaleString('es-ES', { 
+    year: 'numeric', 
+    month: '2-digit', 
+    day: '2-digit', 
+    hour: '2-digit', 
+    minute: '2-digit', 
+    second: '2-digit'
+  }).replace(',', '');
+}
 
 // ✅ Filtrar tickets
 filtrarTickets() {
@@ -282,4 +328,29 @@ exportToExcel() {
     saveAs(blob, 'tickets.xlsx');
   }).catch(err => console.error("❌ Error al generar el Excel:", err));
 }
+  
+// ✅ Eliminar un ticket (Solo Administrador)
+eliminarTicket(ticketId: number) {
+  if (!this.usuarioEsAdmin) {
+    alert("❌ No tienes permisos para eliminar tickets.");
+    return;
+  }
+
+  if (!confirm("⚠️ ¿Estás seguro de que quieres eliminar este ticket?")) return;
+
+  const token = localStorage.getItem('token');
+  if (!token) return;
+
+  const headers = new HttpHeaders().set('Authorization', `Bearer ${token}`);
+
+  this.http.delete<{ mensaje: string }>(`${this.apiUrl}/delete/${ticketId}`, { headers }).subscribe({
+    next: () => {
+      this.tickets = this.tickets.filter(ticket => ticket.id !== ticketId);
+      this.filteredTickets = this.filteredTickets.filter(ticket => ticket.id !== ticketId);
+      alert("✅ Ticket eliminado correctamente.");
+    },
+    error: () => alert("❌ Error al eliminar el ticket.")
+  });
+}
+
 }

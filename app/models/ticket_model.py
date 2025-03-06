@@ -8,7 +8,7 @@ import locale
 locale.setlocale(locale.LC_TIME, 'es_ES.UTF-8')
 
 class Ticket:
-    def __init__(self, id, titulo, descripcion, username, estado, fecha_creacion, id_sucursal, departamento_id, fecha_finalizado=None):
+    def __init__(self, id, titulo, descripcion, username, estado, fecha_creacion, id_sucursal, departamento_id, criticidad, categoria, fecha_finalizado=None):
         self.id = id
         self.titulo = titulo
         self.descripcion = descripcion
@@ -17,6 +17,8 @@ class Ticket:
         self.fecha_creacion = fecha_creacion
         self.id_sucursal = id_sucursal
         self.departamento_id = departamento_id
+        self.criticidad = criticidad
+        self.categoria = categoria
         self.fecha_finalizado = fecha_finalizado
         
     def to_dict(self):
@@ -33,17 +35,25 @@ class Ticket:
             'fecha_creacion': fecha_creacion_local,
             'id_sucursal': self.id_sucursal,
             'departamento_id': self.departamento_id,
+            'criticidad': self.criticidad,
+            'categoria': self.categoria,
             'fecha_finalizado': fecha_finalizado_local
         }
 
     @staticmethod
-    def create_ticket(titulo, descripcion, username, id_sucursal, departamento_id):
-        print(f"🔍 Creando ticket con: Titulo={titulo}, Descripcion={descripcion}, Usuario={username}, Sucursal={id_sucursal}, Departamento={departamento_id}")
+    def create_ticket(titulo, descripcion, username, id_sucursal, departamento_id, criticidad, categoria):
+        print(f"🔍 Creando ticket con: Titulo={titulo}, Descripcion={descripcion}, Usuario={username}, Sucursal={id_sucursal}, Departamento={departamento_id}, Criticidad={criticidad}, Categoría={categoria}")
 
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
-        query = "INSERT INTO tickets (titulo, descripcion, username, id_sucursal, estado, departamento_id) VALUES (%s, %s, %s, %s, 'abierto', %s)"
-        cursor.execute(query, (titulo, descripcion, username, id_sucursal, departamento_id))
+        
+         # 🔴 Asegúrate de que criticidad es un entero
+        if not isinstance(criticidad, int):
+            print(f"⚠️ Error: Criticidad no es un entero válido: {criticidad}")
+            return None
+        
+        query = "INSERT INTO tickets (titulo, descripcion, username, id_sucursal, estado, departamento_id, criticidad, categoria) VALUES (%s, %s, %s, %s, 'abierto', %s, %s, %s)"
+        cursor.execute(query, (titulo, descripcion, username, id_sucursal, departamento_id, criticidad, categoria))
         conn.commit()
         ticket_id = cursor.lastrowid
         cursor.close()
@@ -53,14 +63,26 @@ class Ticket:
         return ticket_id
 
     @staticmethod
-    def update_ticket_status(id, nuevo_estado):
+    def update_ticket_status(id, nuevo_estado, criticidad=None, categoria=None):
         try:
             conn = get_db_connection()
-            cursor = conn.cursor(dictionary=True)   
+            cursor = conn.cursor(dictionary=True)
 
-            query = "UPDATE tickets SET estado = %s WHERE id = %s"
-            cursor.execute(query, (nuevo_estado, id))
-            print(cursor.rowcount)
+            query = "UPDATE tickets SET estado = %s"
+            values = [nuevo_estado]
+
+            if criticidad is not None:
+                query += ", criticidad = %s"
+                values.append(criticidad)
+
+            if categoria is not None:
+                query += ", categoria = %s"
+                values.append(categoria)
+
+            query += " WHERE id = %s"
+            values.append(id)
+
+            cursor.execute(query, tuple(values))
             conn.commit()
 
             if cursor.rowcount > 0:
@@ -76,7 +98,7 @@ class Ticket:
 
         except Exception as e:
             return None
-        
+            
     @staticmethod
     def get_by_id(id):
         conn = get_db_connection()

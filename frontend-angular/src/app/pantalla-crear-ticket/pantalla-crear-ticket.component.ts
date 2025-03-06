@@ -5,6 +5,7 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import Swal from 'sweetalert2';
 
 @Component({
   selector: 'app-pantalla-crear-ticket',
@@ -18,8 +19,14 @@ export class PantallaCrearTicketComponent implements OnInit {
   descripcion: string = '';
   departamento: number | null = null;
   criticidad: number | null = null;
+  categoriaSeleccionada: string = ''; // Categoría seleccionada por el usuario
+  nuevaCategoria: string = ''; // Nueva categoría ingresada por el usuario
   mensaje: string = '';
 
+  // Historial de categorías ingresadas manualmente
+  categoriaHistorial: { [key: string]: number } = {};
+
+  // 🔥 Asegurarse de definir correctamente los departamentos
   departamentos = [
     { id: 1, nombre: 'Mantenimiento' },
     { id: 2, nombre: 'Finanzas' },
@@ -30,14 +37,68 @@ export class PantallaCrearTicketComponent implements OnInit {
     { id: 7, nombre: 'Sistemas' }
   ];
 
-  private apiUrl = 'http://localhost:5000/api/tickets/create'; 
+  // Lista de categorías dinámicas por departamento
+  categoriasPorDepartamento: { [key: number]: string[] } = {
+    1: ["Cardio", "Selectorizado", "Peso libre", "Tapicería", "Aire acondicionado", "Bodega", "Cancelería", "Extintores",
+        "Fachada", "Hidroneumático", "Iluminación", "Inmueble", "Instalación eléctrica", "Lockers", "Piso de hule negro",
+        "Recepción", "Salón de clases", "Sanitarios", "Ultrakids", "Ventilación / extracción", "Letrero luminoso"],
+
+    2: ["Facturación", "Devolución por cobro erróneo en sistema", "Devolución por cobro erróneo en terminal",
+        "Aclaración de pago no reflejado", "Permisos y licencia"],
+
+    3: ["Material promocional", "Vinilos y publicidad interna", "Landing page", "Etiquetas y logos deportivos"],
+
+    4: ["Accesorios para equipos", "Accesorios para clases", "Analizador de composición corporal", "App Ultra",
+        "Instructores de clases", "Instructores de piso", "Instructores personalizados"],
+
+    5: ["Incidencia en nómina", "Vacantes", "Uniformes", "Tarjeta de nómina", "Entrega de finiquitos", "Bajas de personal"],
+
+    6: ["Bebidas para la venta"], // ⚠️ Aún pendiente de definir para Compras
+
+    7: ["Equipo de gerencia"] // ⚠️ Aún pendiente de definir para Sistemas
+  };
+
+  private apiUrl = 'http://localhost:5000/api/tickets/create';
 
   constructor(private http: HttpClient, private router: Router) {}
 
   ngOnInit() {}
 
+  cargarFormulario() {
+    console.log("📌 Departamento seleccionado:", this.departamento);
+  
+    // Reiniciar la categoría seleccionada
+    this.categoriaSeleccionada = '';
+    this.nuevaCategoria = '';
+  
+    // Verificar si hay categorías disponibles para el departamento
+    if (this.departamento && this.categoriasPorDepartamento[this.departamento].length === 0) {
+      console.warn("⚠️ No hay categorías definidas para este departamento.");
+    }
+  }
+  
+  agregarCategoriaManual() {
+    if (this.nuevaCategoria.trim() !== '') {
+      if (!this.categoriasPorDepartamento[this.departamento!].includes(this.nuevaCategoria)) {
+        if (this.categoriaHistorial[this.nuevaCategoria]) {
+          this.categoriaHistorial[this.nuevaCategoria]++;
+        } else {
+          this.categoriaHistorial[this.nuevaCategoria] = 1;
+        }
+
+        // Si una categoría manualmente ingresada se ha repetido 3 veces, se agrega a la lista
+        if (this.categoriaHistorial[this.nuevaCategoria] >= 3) {
+          this.categoriasPorDepartamento[this.departamento!].push(this.nuevaCategoria);
+        }
+      }
+
+      this.categoriaSeleccionada = this.nuevaCategoria;
+      this.nuevaCategoria = '';
+    }
+  }
+
   onSubmit() {
-    if (!this.titulo || !this.descripcion || !this.departamento || !this.criticidad) {
+    if (!this.titulo || !this.descripcion || !this.departamento || !this.criticidad || !this.categoriaSeleccionada) {
       this.mensaje = "⚠️ Por favor, llena todos los campos.";
       return;
     }
@@ -46,34 +107,50 @@ export class PantallaCrearTicketComponent implements OnInit {
     const headers = token
       ? new HttpHeaders().set('Authorization', `Bearer ${token}`)
       : new HttpHeaders();
-    
-    const nuevoTicket = {
+
+    let datosFormulario = {
       titulo: this.titulo.trim(),
       descripcion: this.descripcion.trim(),
       departamento_id: this.departamento,
-      criticidad: this.criticidad
+      criticidad: Number(this.criticidad),
+      categoria: this.categoriaSeleccionada
     };
 
-    this.http.post<{ mensaje: string }>(this.apiUrl, nuevoTicket, { headers }).subscribe({
-      next: (response) => {
-        this.mensaje = "✅ Ticket creado correctamente.";
+    console.log("📡 Enviando datos:", datosFormulario);
+
+    this.http.post<{ mensaje: string }>(this.apiUrl, datosFormulario, { headers }).subscribe({
+      next: () => {
+        // ✅ Muestra un mensaje emergente (toast)
+        Swal.fire({
+          toast: true,
+          position: 'bottom-end', // 📌 Aparece en la esquina superior derecha
+          icon: 'success',
+          title: '✅ Ticket creado correctamente.',
+          showConfirmButton: false, // ❌ Sin botón de confirmación
+          timer: 2500 // ⏳ Se oculta automáticamente en 2.5 segundos
+        });
+    
+        // ✅ Restablecer el formulario después de la creación
         setTimeout(() => {
           this.titulo = "";
           this.descripcion = "";
           this.departamento = null;
           this.criticidad = null;
-          this.mensaje = "";
+          this.categoriaSeleccionada = "";
+          this.nuevaCategoria = "";
         }, 1000);
       },
       error: (error) => {
-        if (error.status === 400) {
-          this.mensaje = "⚠️ Faltan datos obligatorios.";
-        } else if (error.status === 401) {
-          this.mensaje = "🔒 No autorizado, inicia sesión.";
-          setTimeout(() => this.router.navigate(['/login']), 1500);
-        } else {
-          this.mensaje = "❌ Error interno en el servidor.";
-        }
+        Swal.fire({
+          toast: true,
+          position: 'top-end',
+          icon: 'error',
+          title: error.status === 400 ? "⚠️ Faltan datos obligatorios."
+                : error.status === 401 ? "🔒 No autorizado, inicia sesión."
+                : "❌ Error interno en el servidor.",
+          showConfirmButton: false,
+          timer: 2500
+        });
       }
     });
   }

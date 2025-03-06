@@ -2,7 +2,46 @@
 
 table {
     width: 100%;
-    border-collapse: collapse;
+    border-collapse: collapse;/* ✅ Estilos generales para los botones */
+    .boton-estado {
+      display: inline-block;
+      padding: 10px 15px;
+      font-size: 14px;
+      font-weight: bold;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s ease-in-out;
+      text-align: center;
+      width: 130px; /* Ajuste para uniformidad */
+      margin: 5px; /* Espaciado entre botones */
+      box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
+    }
+    
+    /* ✅ Botón "En Progreso" */
+    .boton-en-progreso {
+      background-color: #28a745; /* Verde */
+    }
+    
+    .boton-en-progreso:hover {
+      background-color: #218838; /* Verde oscuro */
+    }
+    
+    /* ✅ Botón "Finalizar" */
+    .boton-finalizar {
+      background-color: #dc3545; /* Rojo */
+    }
+    
+    .boton-finalizar:hover {
+      background-color: #c82333; /* Rojo oscuro */
+    }
+    
+    /* ✅ Evitar que los botones se encimen */
+    td {
+      vertical-align: middle; /* Asegura que los botones se alineen bien */
+      text-align: center;
+    }
     margin-top: 20px;
   }
   
@@ -60,3 +99,162 @@ table {
     border-radius: 5px;
   }
   
+  .btn-eliminar {
+    background-color: red;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    cursor: pointer;
+    border-radius: 5px;
+  }
+  
+  .btn-eliminar:hover {
+    background-color: darkred;
+  }
+  
+  /* Hacer que el contenedor de la tabla tenga desplazamiento */
+  .table-container {
+    max-height: 500px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    padding-bottom: 10px; /* Evita corte en scroll */
+  }
+
+/* Mantener los encabezados fijos */
+thead {
+  position: sticky;
+  top: 0;
+  background: #007BFF; /* Color de fondo para que no se superponga el contenido */
+  color: white;
+  z-index: 10;
+}
+
+pagination-controls {
+  display: flex;
+  justify-content: center;
+  margin: 20px 0;
+}
+
+.table-container {
+  max-height: 500px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+}
+
+thead {
+  position: sticky;
+  top: 0;
+  background: #007BFF;
+  color: white;
+  z-index: 10;
+}
+
+/* ✅ Estilos generales para los botones */
+.boton-estado {
+  display: inline-block;
+  padding: 10px 15px;
+  font-size: 14px;
+  font-weight: bold;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease-in-out;
+  text-align: center;
+  width: 130px; /* Ajuste para uniformidad */
+  margin: 5px; /* Espaciado entre botones */
+  box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+/* ✅ Botón "En Progreso" */
+.boton-en-progreso {
+  background-color: #28a745; /* Verde */
+}
+
+.boton-en-progreso:hover {
+  background-color: #218838; /* Verde oscuro */
+}
+
+/* ✅ Botón "Finalizar" */
+.boton-finalizar {
+  background-color: #dc3545; /* Rojo */
+}
+
+.boton-finalizar:hover {
+  background-color: #c82333; /* Rojo oscuro */
+}
+
+/* ✅ Evitar que los botones se encimen */
+td {
+  vertical-align: middle; /* Asegura que los botones se alineen bien */
+  text-align: center;
+}
+
+/* ✅ Loader en el centro de la pantalla */
+.loader-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7); /* Fondo oscuro semitransparente */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  z-index: 9999;
+  color: white;
+  font-size: 20px;
+  font-weight: bold;
+}
+
+/* ✅ Loader personalizado */
+.gegga {
+  width: 0;
+}
+
+.snurra {
+  filter: url(#gegga);
+}
+
+.stopp1 {
+  stop-color: #f700a8;
+}
+
+.stopp2 {
+  stop-color: #ff8000;
+}
+
+.halvan {
+  animation: Snurra1 10s infinite linear;
+  stroke-dasharray: 180 800;
+  fill: none;
+  stroke: url(#gradient);
+  stroke-width: 23;
+  stroke-linecap: round;
+}
+
+.strecken {
+  animation: Snurra1 3s infinite linear;
+  stroke-dasharray: 26 54;
+  fill: none;
+  stroke: url(#gradient);
+  stroke-width: 23;
+  stroke-linecap: round;
+}
+
+.skugga {
+  filter: blur(5px);
+  opacity: 0.3;
+  position: absolute;
+  transform: translate(3px, 3px);
+}
+
+@keyframes Snurra1 {
+  0% {
+    stroke-dashoffset: 0;
+  }
+  100% {
+    stroke-dashoffset: -403px;
+  }
+}

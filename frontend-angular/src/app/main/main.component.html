@@ -6,11 +6,23 @@
     <a [routerLink]="['/main/crear-ticket']">Crear Ticket</a>
     <a [routerLink]="['/main/ver-tickets']">Ver Tickets</a>
   </div>
+
   <div class="user-info">
     <span>{{ usuarioInfo }}</span>
+
+    <!-- Botón para eliminar ticket (solo visible si es administrador) -->
+    <button *ngIf="esAdmin" (click)="mostrarEliminarTicket = !mostrarEliminarTicket" class="btn-delete-toggle">
+      🗑️ Eliminar Ticket
+    </button>
+
     <button (click)="cerrarSesion()">Cerrar Sesión</button>
   </div>
 </div>
 
-<!-- Importante para mostrar las rutas hijas -->
+<!-- Campo para ingresar ID y confirmar eliminación -->
+<div *ngIf="mostrarEliminarTicket" class="delete-container">
+  <input type="number" [(ngModel)]="idTicketEliminar" placeholder="Ingrese ID del Ticket" />
+  <button (click)="eliminarTicket()" class="btn-confirm-delete">Confirmar</button>
+</div>
+
 <router-outlet></router-outlet>
