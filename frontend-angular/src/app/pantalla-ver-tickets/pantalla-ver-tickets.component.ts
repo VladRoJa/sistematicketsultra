@@ -8,7 +8,7 @@ import { TicketService } from '../services/ticket.service';
 import * as ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 import { NgxPaginationModule } from 'ngx-pagination';
-
+import { DepartamentoService } from '../services/departamento.service';
 
 
 
@@ -22,6 +22,9 @@ interface Ticket {
   criticidad: number;
   fecha_creacion: string;
   fecha_finalizado: string | null;
+  departamento: string;
+  departamento_id: number;
+  categoria: string;
 }
 
 interface ApiResponse {
@@ -40,9 +43,11 @@ export class PantallaVerTicketsComponent implements OnInit {
 
   tickets: Ticket[] = [];
   filteredTickets: Ticket[] = [];
+  departamentos: { id: number, nombre: string }[] = []; 
   usuariosDisponibles: string[] = [];
   usuarioEsAdmin: boolean = false;
   filtroEstado: string = "";
+  filtroDepartamento: string = "";
   filtroUsuario: string = "";
   filtroFecha: string = "";
   filtroFechaFinalizacion: string = "";
@@ -56,12 +61,18 @@ export class PantallaVerTicketsComponent implements OnInit {
   private apiUrl = 'http://localhost:5000/api/tickets'; // ✅ URL de la API
   private authUrl = 'http://localhost:5000/auth/session-info'; // ✅ URL para obtener info del usuario
 
-  constructor(private ticketService: TicketService, private http: HttpClient) {}
+  constructor(
+    private ticketService: TicketService,
+    private http: HttpClient,
+    private departamentoService: DepartamentoService
+  
+  ) { }
 
   ngOnInit() {
     this.obtenerUsuarioAutenticado().then(() => {
       this.cargarTickets();
     });
+    this.departamentos = this.departamentoService.obtenerDepartamentos();
   }
   
 
@@ -143,7 +154,8 @@ async obtenerUsuarioAutenticado() {
             default:
               estadoNormalizado = "pendiente";
           }
-  
+            
+
           const fechaCreacion = new Date(ticket.fecha_creacion);
           if (isNaN(fechaCreacion.getTime())) {
             console.warn(`⚠️ Fecha inválida en ticket ID ${ticket.id}: ${ticket.fecha_creacion}`);
@@ -152,8 +164,9 @@ async obtenerUsuarioAutenticado() {
             ticket.fecha_creacion = fechaCreacion.toISOString().slice(0, 19).replace("T", " ");
           }
   
-          return { ...ticket, criticidad: ticket.criticidad || 1, estado: estadoNormalizado };
-        });
+          return { ...ticket, criticidad: ticket.criticidad || 1, estado: estadoNormalizado, departamento: this.departamentoService.obtenerNombrePorId(ticket.departamento_id)
+        };
+      });
 
         this.filteredTickets = [...this.tickets];
   
@@ -280,14 +293,14 @@ formatearFechaFinalizacion(fechaString: string | null): string {
 filtrarTickets() {
   console.log("🔍 Aplicando filtros...");
   console.log("🎯 Estado:", this.filtroEstado);
-  console.log("👤 Usuario:", this.filtroUsuario);
+  console.log("🏢 Departamento:", this.filtroDepartamento);
   console.log("📅 Fecha de creación:", this.filtroFecha);
   console.log("📅 Fecha de finalización:", this.filtroFechaFinalizacion);
   console.log("⚡ Criticidad:", this.filtroCriticidad);
 
   this.filteredTickets = this.tickets.filter(ticket => {
     const coincideEstado = this.filtroEstado ? ticket.estado === this.filtroEstado : true;
-    const coincideUsuario = this.filtroUsuario ? ticket.username.toLowerCase().includes(this.filtroUsuario.toLowerCase()) : true;
+    const coincideDepartamento = this.filtroDepartamento ? ticket.departamento === this.filtroDepartamento : true;
     const coincideFecha = this.filtroFecha
       ? new Date(ticket.fecha_creacion).toISOString().split('T')[0] === this.filtroFecha
       : true;
@@ -298,7 +311,7 @@ filtrarTickets() {
       ? ticket.criticidad === parseInt(this.filtroCriticidad, 10)
       : true;
 
-    return coincideEstado && coincideUsuario && coincideFecha && coincideFechaFinalizacion && coincideCriticidad;
+    return coincideEstado && coincideDepartamento && coincideFecha && coincideFechaFinalizacion && coincideCriticidad;
   });
 
   console.log("🎯 Tickets después de filtrar:", this.filteredTickets);
@@ -309,24 +322,54 @@ exportToExcel() {
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet('Tickets');
 
+  // ✅ Definir las columnas a exportar
   worksheet.columns = [
     { header: 'ID', key: 'id', width: 10 },
     { header: 'Título', key: 'titulo', width: 30 },
     { header: 'Descripción', key: 'descripcion', width: 50 },
     { header: 'Usuario', key: 'username', width: 20 },
     { header: 'Estado', key: 'estado', width: 15 },
+    { header: 'Criticidad', key: 'criticidad', width: 10 },
     { header: 'Fecha de Creación', key: 'fecha_creacion', width: 20 },
-    { header: 'Fecha Finalizado', key: 'fecha_finalizado', width: 20 }
+    { header: 'Fecha Finalizado', key: 'fecha_finalizado', width: 20 },
+    { header: 'Departamento', key: 'departamento', width: 25 },
+    { header: 'Categoría', key: 'categoria', width: 25 }
   ];
 
-  this.filteredTickets.forEach(ticket => worksheet.addRow(ticket));
+  // ✅ Recorrer los tickets filtrados y agregarlos al Excel
+  this.filteredTickets.forEach(ticket => {
+    worksheet.addRow({
+      id: ticket.id,
+      titulo: ticket.titulo,
+      descripcion: ticket.descripcion,
+      username: ticket.username,
+      estado: ticket.estado,
+      criticidad: ticket.criticidad,
+      fecha_creacion: this.formatearFecha(ticket.fecha_creacion),
+      fecha_finalizado: ticket.fecha_finalizado ? this.formatearFecha(ticket.fecha_finalizado) : 'N/A',
+      departamento: ticket.departamento ? ticket.departamento : 'No asignado',
+      categoria: ticket.categoria ? ticket.categoria : 'No especificada'
+    });
+  });
 
+  // ✅ Aplicar estilos a la primera fila (encabezados)
   worksheet.getRow(1).font = { bold: true };
 
+  // ✅ Generar y descargar el archivo Excel
   workbook.xlsx.writeBuffer().then((buffer) => {
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    saveAs(blob, 'tickets.xlsx');
+    saveAs(blob, `tickets_${new Date().toISOString().slice(0, 10)}.xlsx`);
   }).catch(err => console.error("❌ Error al generar el Excel:", err));
+}
+
+// ✅ Función para formatear fechas correctamente
+formatearFecha(fechaString: string | null): string {
+  if (!fechaString || fechaString === 'N/A' || fechaString === 'null') return 'N/A';
+
+  const fecha = new Date(fechaString);
+  if (isNaN(fecha.getTime())) return 'Fecha inválida'; // Evita errores si el formato es incorrecto
+
+  return fecha.toISOString().slice(0, 19).replace("T", " ");
 }
   
 // ✅ Eliminar un ticket (Solo Administrador)

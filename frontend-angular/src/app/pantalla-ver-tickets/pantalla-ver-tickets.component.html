@@ -20,11 +20,11 @@
       <option value="5">5 - Critico</option>
     </select>
   
-    <label for="usuario">Usuario:</label>
-    <input id="usuario" list="usuarios" [(ngModel)]="filtroUsuario" (input)="filtrarTickets()" placeholder="Buscar usuario...">
-    <datalist id="usuarios">
-      <option *ngFor="let user of usuariosDisponibles" [value]="user"></option>
-    </datalist>
+    <label for="departamento">Departamento:</label>
+    <select id="departamento" [(ngModel)]="filtroDepartamento" (change)="filtrarTickets()">
+      <option value="">Todos los departamentos</option>
+      <option *ngFor="let depto of departamentos" [value]="depto.nombre">{{ depto.nombre }}</option>
+    </select>
   
     <label for="fechaCreacion">Fecha de Creación:</label>
     <input id="fechaCreacion" type="date" [(ngModel)]="filtroFecha" (change)="filtrarTickets()">
@@ -77,6 +77,8 @@
         <th>Criticidad</th>
         <th>Fecha Creación</th>
         <th>Fecha Finalizado</th>
+        <th>Departamento</th>
+        <th>Categoría</th>
         <th>Acciones</th> <!-- ✅ Agregamos la columna de botones -->
       </tr>
     </thead>
@@ -90,7 +92,8 @@
         <td>{{ ticket.criticidad }}</td>
         <td>{{ formatearFechaCreacion(ticket.fecha_creacion) }}</td>
         <td>{{ formatearFechaFinalizacion(ticket.fecha_finalizado ? ticket.fecha_finalizado : 'N/A') }}</td>
-       
+        <td>{{ ticket.departamento }}</td>
+        <td>{{ ticket.categoria }}</td>
         <td>
 
         <ng-container *ngIf="user && user.id_sucursal === 1000 && ticket.estado !== 'finalizado'">

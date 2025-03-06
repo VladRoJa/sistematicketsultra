@@ -258,3 +258,11 @@ td {
     stroke-dashoffset: -403px;
   }
 }
+
+.table-container {
+  overflow-x: auto;
+}
+table {
+  min-width: 1200px; /* Evita que las columnas se amontonen */
+}
+
