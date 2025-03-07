@@ -166,6 +166,14 @@ thead {
   box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
 }
 
+.boton-estado:disabled, 
+.boton-en-progreso:disabled {
+  background-color: #a0a0a0 !important; /* Color gris */
+  cursor: not-allowed;
+  border: 1px solid #808080;
+  opacity: 0.6;
+}
+
 /* ✅ Botón "En Progreso" */
 .boton-en-progreso {
   background-color: #28a745; /* Verde */
@@ -314,3 +322,4 @@ table {
   cursor: pointer;
   border-radius: 5px;
 }
+

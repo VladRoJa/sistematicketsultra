@@ -9,6 +9,8 @@ import * as ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 import { NgxPaginationModule } from 'ngx-pagination';
 import { DepartamentoService } from '../services/departamento.service';
+import { ChangeDetectorRef } from '@angular/core';
+
 
 interface Ticket {
   id: number;
@@ -65,7 +67,9 @@ export class PantallaVerTicketsComponent implements OnInit {
   constructor(
     private ticketService: TicketService,
     private http: HttpClient,
-    private departamentoService: DepartamentoService
+    private departamentoService: DepartamentoService,
+    private changeDetectorRef: ChangeDetectorRef
+
   ) { }
 
   ngOnInit() {
@@ -167,25 +171,28 @@ export class PantallaVerTicketsComponent implements OnInit {
   }
 
 
-cambiarEstadoTicket(ticket: Ticket, nuevoEstado: "en progreso") {
+  cambiarEstadoTicket(ticket: Ticket, nuevoEstado: "pendiente" | "en progreso" | "finalizado") {
     if (!this.usuarioEsAdmin) return;
-
+  
     this.mostrarConfirmacion(
-        `¿Estás seguro de cambiar el estado del ticket #${ticket.id} a "${nuevoEstado}"?`,
-        () => {
-            const token = localStorage.getItem('token');
-            if (!token) return;
-
-            const headers = new HttpHeaders().set('Authorization', `Bearer ${token}`).set('Content-Type', 'application/json');
-
-            this.http.put<ApiResponse>(`${this.apiUrl}/update/${ticket.id}`, { estado: nuevoEstado }, { headers }).subscribe({
-                next: () => ticket.estado = nuevoEstado,
-                error: (error) => console.error(`❌ Error actualizando ticket: ${error}`)
-            });
-        }
+      `¿Estás seguro de cambiar el estado del ticket #${ticket.id} a ${nuevoEstado.toUpperCase()}?`,
+      () => {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+  
+        const headers = new HttpHeaders().set('Authorization', `Bearer ${token}`).set('Content-Type', 'application/json');
+  
+        this.http.put<ApiResponse>(`${this.apiUrl}/update/${ticket.id}`, { estado: nuevoEstado }, { headers }).subscribe({
+          next: () => {
+            ticket.estado = nuevoEstado;
+            this.changeDetectorRef.detectChanges(); // 🔹 Forzar actualización de la UI
+          },
+          error: (error) => console.error(`❌ Error actualizando ticket: ${error}`)
+        });
+      }
     );
-}
-
+  }
+  
 finalizarTicket(ticket: Ticket) {
     if (!this.usuarioEsAdmin) return;
 

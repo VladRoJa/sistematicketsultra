@@ -79,7 +79,7 @@
         <th>Fecha Finalizado</th>
         <th>Departamento</th>
         <th>Categoría</th>
-        <th>Acciones</th> <!-- ✅ Agregamos la columna de botones -->
+        <th *ngIf="usuarioEsAdmin">Acciones</th>
       </tr>
     </thead>
     <tbody>
@@ -93,27 +93,21 @@
         <td>{{ formatearFecha(ticket.fecha_creacion) }}</td>
         <td>{{ formatearFecha(ticket.fecha_finalizado) }}</td><td>{{ ticket.departamento }}</td>
         <td>{{ ticket.categoria }}</td>
-        <td>
-
-        <ng-container *ngIf="user && user.id_sucursal === 1000 && ticket.estado !== 'finalizado'">
-
-            <!-- ✅ Botón "En Progreso" (solo si el usuario es admin y el ticket no está finalizado) -->
-            <button 
+        <td *ngIf="usuarioEsAdmin">
+          <button 
             *ngIf="ticket.estado !== 'finalizado'" 
             [disabled]="ticket.estado === 'en progreso'" 
             (click)="cambiarEstadoTicket(ticket, 'en progreso')"
             class="boton-estado boton-en-progreso">
             En Progreso
           </button>
-
-            <!-- ✅ Botón "Finalizar" (solo si el usuario es admin y el ticket no está finalizado) -->
-            <button 
+        
+          <button 
             *ngIf="ticket.estado !== 'finalizado'"  
             (click)="finalizarTicket(ticket)"
             class="boton-estado boton-finalizar">
             Finalizar
           </button>
-        </ng-container>
         </td>
       </tr>
     </tbody>
