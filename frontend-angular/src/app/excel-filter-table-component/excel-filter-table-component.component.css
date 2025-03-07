@@ -1,0 +1,68 @@
+/* excel-filter-table-component.component.css */
+
+.filter-column {
+    position: relative;
+  }
+  
+  .filter-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  
+  .filter-menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    background: white;
+    border: 1px solid #ccc;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    padding: 5px;
+    z-index: 100;
+  }
+  
+  .filter-menu input[type="text"] {
+    width: 100%;
+    margin-bottom: 5px;
+  }
+  
+  .options-list {
+    max-height: 100px;
+    overflow-y: auto;
+  }
+  
+  .filter-actions {
+    text-align: center;
+  }
+  
+  .filter-actions button {
+    margin: 5px;
+  }
+  
+  .excel-filter-dropdown {
+    background: white;
+    border: 1px solid #ccc;
+    padding: 5px;
+    box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.2);
+    position: absolute;
+    z-index: 1000;
+  }
+  
+  .excel-filter-dropdown input {
+    width: 100%;
+    padding: 3px;
+    margin-bottom: 5px;
+    border: 1px solid #ccc;
+  }
+  
+  .excel-filter-dropdown label {
+    display: block;
+    padding: 2px 5px;
+    cursor: pointer;
+  }
+  
+  .excel-filter-dropdown label:hover {
+    background: #f0f0f0;
+  }
+  

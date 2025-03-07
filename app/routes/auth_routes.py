@@ -1,7 +1,7 @@
 #app/routes/auth_routes.py
 
 from flask import Blueprint, request, jsonify
-from flask_cors import CORS
+from flask_cors import CORS, cross_origin
 from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_required
 from app.models.user_model import User
 from datetime import timedelta
@@ -13,6 +13,7 @@ CORS(auth_bp, resources={r"/*": {"origins": "http://localhost:4200"}}, supports_
 
 
 ### ✅ 🔹 OBTENER INFORMACIÓN DE LA SESIÓN
+@cross_origin(origins="http://localhost:4200", supports_credentials=True)
 @auth_bp.route('/session-info', methods=['GET', 'OPTIONS'])
 @jwt_required()
 def session_info():

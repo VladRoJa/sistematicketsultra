@@ -10,9 +10,6 @@ import { saveAs } from 'file-saver';
 import { NgxPaginationModule } from 'ngx-pagination';
 import { DepartamentoService } from '../services/departamento.service';
 
-
-
-// Definición del tipo esperado de la respuesta de la API
 interface Ticket {
   id: number;
   titulo: string;
@@ -53,347 +50,241 @@ export class PantallaVerTicketsComponent implements OnInit {
   filtroFechaFinalizacion: string = "";
   filtroCriticidad: string = "";
   page: number = 1;
-  itemsPerPage: number =15;
+  itemsPerPage: number = 15;
   loading: boolean = false;
+  user: any = null; 
+  confirmacionVisible: boolean = false;
+  accionPendiente: (() => void) | null = null;
+  mensajeConfirmacion: string = "";
 
-  user: any = null; // 🔥 Aquí guardaremos el usuario autenticado
 
-  private apiUrl = 'http://localhost:5000/api/tickets'; // ✅ URL de la API
-  private authUrl = 'http://localhost:5000/auth/session-info'; // ✅ URL para obtener info del usuario
+  private apiUrl = 'http://localhost:5000/api/tickets'; 
+  private authUrl = 'http://localhost:5000/api/auth/session-info';
+
 
   constructor(
     private ticketService: TicketService,
     private http: HttpClient,
     private departamentoService: DepartamentoService
-  
   ) { }
 
   ngOnInit() {
-    this.obtenerUsuarioAutenticado().then(() => {
-      this.cargarTickets();
-    });
+    this.obtenerUsuarioAutenticado().then(() => this.cargarTickets());
     this.departamentos = this.departamentoService.obtenerDepartamentos();
   }
+
+  async obtenerUsuarioAutenticado() {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    const headers = new HttpHeaders().set('Authorization', `Bearer ${token}`).set('Content-Type', 'application/json');
+    
+    try {
+      const response = await this.http.get<{ user: any }>(this.authUrl, { headers }).toPromise();
+      if (response?.user) {
+        this.user = response.user;
+        this.usuarioEsAdmin = this.user.id_sucursal === 1000;
+        console.log("✅ Usuario autenticado:", this.user);
+      }
+    } catch (error) {
+      console.error("❌ Error obteniendo usuario autenticado:", error);
+    }
+  }
+
+  private normalizarEstado(estado: string): "pendiente" | "en progreso" | "finalizado" {
+    const estadoLimpio = estado?.trim().toLowerCase();
+    if (estadoLimpio === "abierto" || estadoLimpio === "pendiente") return "pendiente";
+    if (estadoLimpio === "en progreso") return "en progreso";
+    if (estadoLimpio === "finalizado") return "finalizado";
+    return "pendiente"; // Valor por defecto si no coincide con ninguno
+  }
   
 
-// ✅ Obtener información del usuario autenticado
-async obtenerUsuarioAutenticado() {
-  const token = localStorage.getItem('token');
-  console.log("📡 Token obtenido del localStorage:", token);
-
-  if (!token) {
-    console.warn("⚠️ No hay token, el usuario no está autenticado.");
-    return;
-  }
-
-  console.log("📡 Enviando petición a session-info con token:", token);
-
-  const headers = new HttpHeaders()
-    .set('Authorization', `Bearer ${token}`)
-    .set('Content-Type', 'application/json');
-
-  try {
-    console.log("📡 Enviando petición a session-info con headers:", headers);
-    const response = await this.http.get<{ user: any }>('http://localhost:5000/api/auth/session-info', { headers }).toPromise();
-    
-    if (!response || !response.user) {
-      console.error("❌ No se recibió un usuario válido desde session-info");
-      return;
-    }
-
-    this.user = response.user;
-    console.log("✅ Usuario autenticado:", this.user);
-  } catch (error) {
-    console.error("❌ Error obteniendo usuario autenticado:", error);
-  }
-}
-  // ✅ Cargar los tickets desde el backend
   cargarTickets() {
-    this.loading = true;  // ⏳ Activar el loader mientras se cargan los tickets
-    console.log("⏳ Loader activado, estado de loading:", this.loading);
-
-
+    this.loading = true;
     const token = localStorage.getItem('token');
     if (!token) {
-      console.error("❌ No hay token, no se pueden cargar los tickets.");
-      this.loading = false; // ⏹️ Desactivar el loader si no hay token
+      this.loading = false;
       return;
     }
   
-    const headers = new HttpHeaders()
-      .set('Authorization', `Bearer ${token}`)
-      .set('Content-Type', 'application/json');
+    const headers = new HttpHeaders().set('Authorization', `Bearer ${token}`).set('Content-Type', 'application/json');
   
-    console.log("📡 Enviando petición a /tickets con headers:", headers);
-
-    const inicioTiempo = Date.now();
-    
-  
-    this.http.get<ApiResponse>('http://localhost:5000/api/tickets/all', { headers }).subscribe({
+    this.http.get<ApiResponse>(`${this.apiUrl}/all`, { headers }).subscribe({
       next: (data) => {
-        if (!data || !data.tickets) {
-          console.error("❌ La respuesta de la API no contiene tickets válidos.", data);
-          this.loading = false; // ⏹️ Desactivar el loader si no hay tickets
+        if (!data?.tickets) {
+          this.loading = false;
           return;
         }
   
-        this.tickets = data.tickets.map((ticket: any) => {
-          let estadoNormalizado: "pendiente" | "en progreso" | "finalizado";
+        this.tickets = data.tickets.map(ticket => {
+          const estadoNormalizado = this.normalizarEstado(ticket.estado);
+          console.log(`🎯 Ticket ID: ${ticket.id}, Estado Normalizado: ${estadoNormalizado}`);
   
-          switch (ticket.estado?.trim().toLowerCase()) {
-            case "abierto":
-            case "pendiente":
-              estadoNormalizado = "pendiente";
-              break;
-            case "en progreso":
-              estadoNormalizado = "en progreso";
-              break;
-            case "finalizado":
-              estadoNormalizado = "finalizado";
-              break;
-            default:
-              estadoNormalizado = "pendiente";
-          }
-            
-
-          const fechaCreacion = new Date(ticket.fecha_creacion);
-          if (isNaN(fechaCreacion.getTime())) {
-            console.warn(`⚠️ Fecha inválida en ticket ID ${ticket.id}: ${ticket.fecha_creacion}`);
-            ticket.fecha_creacion = null;  
-          } else {
-            ticket.fecha_creacion = fechaCreacion.toISOString().slice(0, 19).replace("T", " ");
-          }
+          return {
+            ...ticket,
+            criticidad: ticket.criticidad || 1,
+            estado: estadoNormalizado,
+            departamento: this.departamentoService.obtenerNombrePorId(ticket.departamento_id),
+            fecha_creacion: this.formatearFecha(ticket.fecha_creacion),
+            fecha_finalizado: ticket.fecha_finalizado ? this.formatearFecha(ticket.fecha_finalizado) : null
+          };
+        });
   
-          return { ...ticket, criticidad: ticket.criticidad || 1, estado: estadoNormalizado, departamento: this.departamentoService.obtenerNombrePorId(ticket.departamento_id)
-        };
-      });
-
+        this.ordenarTickets();
         this.filteredTickets = [...this.tickets];
-  
-        console.log("✅ Tickets cargados:", this.tickets);
+        this.loading = false;
       },
       error: (error) => {
         console.error("❌ Error al cargar los tickets:", error);
-      },
-      complete: () => {
-        const tiempoTranscurrido = Date.now() - inicioTiempo;
-        const tiempoRestante = Math.max(2000 - tiempoTranscurrido, 0); // ⏳ Asegurar al menos 2.5 segundos
-  
-        console.log(`⏳ Asegurando un tiempo mínimo de carga: ${tiempoRestante} ms`);
-        setTimeout(() => {
-          this.loading = false;
-          console.log("✅ Loader desactivado");
-        }, tiempoRestante);
-      }  
+        this.loading = false;
+      }
     });
   }
   
-  // ✅ Cambiar el estado del ticket
-cambiarEstadoTicket(ticket: Ticket, nuevoEstado: "pendiente" | "en progreso" | "finalizado") {
-  if (!this.user || this.user.id_sucursal !== 1000) {
-      console.warn("⚠️ No tienes permisos para cambiar el estado del ticket.");
-      return;
+  private ordenarTickets() {
+    this.tickets.sort((a, b) => new Date(b.fecha_creacion).getTime() - new Date(a.fecha_creacion).getTime());
   }
 
-  console.log(`📌 Cambiando estado del ticket ID: ${ticket.id} a '${nuevoEstado}'`); // 🔥 Agregar esta línea para depurar
-
-  if (!ticket.id) {
-      console.error("❌ Error: Ticket ID es undefined.");
-      return;
-  }
-  const token = localStorage.getItem('token');
-  if (!token) {
-    console.error("❌ No hay token en localStorage. No se puede actualizar el ticket.");
-    return;
-  }
-
-  const headers = new HttpHeaders().set('Authorization', `Bearer ${token}`).set('Content-Type', 'application/json');
-
-  this.http.put<ApiResponse>(`${this.apiUrl}/update/${ticket.id}`, { estado: nuevoEstado }, { headers, withCredentials: true }).subscribe({
-    next: (data: ApiResponse) => {
-      console.log(`✅ Ticket ${ticket.id} cambiado a '${nuevoEstado}':`, data.mensaje);
-      ticket.estado = nuevoEstado;
-    },
-    error: (error: any) => {
-      console.error(`❌ Error al cambiar el estado del ticket ${ticket.id}:`, error);
-    }
-  });
+  mostrarConfirmacion(mensaje: string, accion: () => void) {
+    this.mensajeConfirmacion = mensaje;
+    this.accionPendiente = accion;
+    this.confirmacionVisible = true;
 }
 
-  // ✅ Finalizar un ticket
+  // ✅ Función para ejecutar la acción confirmada
+  confirmarAccion() {
+      if (this.accionPendiente) {
+          this.accionPendiente();  // 🔥 Ejecuta la acción almacenada
+      }
+      this.confirmacionVisible = false;  // Cierra el modal
+  }
+
+  // ✅ Función para cerrar el modal sin hacer cambios
+  cancelarAccion() {
+      this.confirmacionVisible = false;
+      this.accionPendiente = null;
+  }
+
+
+cambiarEstadoTicket(ticket: Ticket, nuevoEstado: "en progreso") {
+    if (!this.usuarioEsAdmin) return;
+
+    this.mostrarConfirmacion(
+        `¿Estás seguro de cambiar el estado del ticket #${ticket.id} a "${nuevoEstado}"?`,
+        () => {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+
+            const headers = new HttpHeaders().set('Authorization', `Bearer ${token}`).set('Content-Type', 'application/json');
+
+            this.http.put<ApiResponse>(`${this.apiUrl}/update/${ticket.id}`, { estado: nuevoEstado }, { headers }).subscribe({
+                next: () => ticket.estado = nuevoEstado,
+                error: (error) => console.error(`❌ Error actualizando ticket: ${error}`)
+            });
+        }
+    );
+}
+
 finalizarTicket(ticket: Ticket) {
-  if (!this.user || this.user.id_sucursal !== 1000) return;
+    if (!this.usuarioEsAdmin) return;
 
-  const token = localStorage.getItem('token');
-  if (!token) {
-    console.error("❌ No hay token en localStorage. No se puede finalizar el ticket.");
-    return;
-  }
+    this.mostrarConfirmacion(
+        `¿Estás seguro de marcar como FINALIZADO el ticket #${ticket.id}?`,
+        () => {
+            const token = localStorage.getItem('token');
+            if (!token) return;
 
-  const headers = new HttpHeaders().set('Authorization', `Bearer ${token}`).set('Content-Type', 'application/json');
+            const headers = new HttpHeaders().set('Authorization', `Bearer ${token}`).set('Content-Type', 'application/json');
 
-  const fechaActual = new Date();
-  const offset = fechaActual.getTimezoneOffset() * 60000; // Obtiene la diferencia de zona horaria en milisegundos
-  const fechaLocal = new Date(fechaActual.getTime() - offset);
-  const fechaFinalizado = fechaLocal.toISOString().slice(0, 19).replace("T", " ");
-  
-  this.http.put<ApiResponse>(`${this.apiUrl}/update/${ticket.id}`, { estado: "finalizado", fecha_finalizado: fechaFinalizado }, { headers, withCredentials: true }).subscribe({
-    next: (data: ApiResponse) => {
-      console.log(`✅ Ticket ${ticket.id} finalizado:`, data.mensaje);
-      ticket.estado = "finalizado";
-      ticket.fecha_finalizado = fechaFinalizado;
-    },
-    error: (error: any) => {
-      console.error(`❌ Error al finalizar el ticket ${ticket.id}:`, error);
-    }
-  });
+            const fechaFinalizado = new Date().toISOString().slice(0, 19).replace("T", " ");
+
+            this.http.put<ApiResponse>(`${this.apiUrl}/update/${ticket.id}`, { estado: "finalizado", fecha_finalizado: fechaFinalizado }, { headers }).subscribe({
+                next: () => {
+                    ticket.estado = "finalizado";
+                    ticket.fecha_finalizado = fechaFinalizado;
+                },
+                error: (error) => console.error(`❌ Error al finalizar el ticket ${ticket.id}:`, error)
+            });
+        }
+    );
 }
 
 
+  eliminarTicket(ticketId: number) {
+    if (!this.usuarioEsAdmin) return;
 
-formatearFechaCreacion(fechaString: string | null): string {
-  if (!fechaString || fechaString === 'N/A' || fechaString === 'null') return 'N/A';
+    const token = localStorage.getItem('token');
+    if (!token) return;
 
-  const fechaUTC = new Date(fechaString);
-  if (isNaN(fechaUTC.getTime())) return 'Fecha inválida'; // Evita errores si el formato es incorrecto
-
-  // 🔥 Ajusta la zona horaria manualmente restando 8 horas
-  fechaUTC.setHours(fechaUTC.getHours());
-
-  return fechaUTC.toLocaleString('es-ES', { 
-    year: 'numeric', 
-    month: '2-digit', 
-    day: '2-digit', 
-    hour: '2-digit', 
-    minute: '2-digit', 
-    second: '2-digit'
-  }).replace(',', '');
-}
-
-formatearFechaFinalizacion(fechaString: string | null): string {
-  if (!fechaString || fechaString === 'N/A' || fechaString === 'null') return 'N/A';
-
-  const fechaUTC = new Date(fechaString);
-  if (isNaN(fechaUTC.getTime())) return 'Fecha inválida'; // Evita errores si el formato es incorrecto
-
-  // 🔥 Ajusta la zona horaria manualmente restando 8 horas
-  fechaUTC.setHours(fechaUTC.getHours() +8);
-
-  return fechaUTC.toLocaleString('es-ES', { 
-    year: 'numeric', 
-    month: '2-digit', 
-    day: '2-digit', 
-    hour: '2-digit', 
-    minute: '2-digit', 
-    second: '2-digit'
-  }).replace(',', '');
-}
-
-// ✅ Filtrar tickets
-filtrarTickets() {
-  console.log("🔍 Aplicando filtros...");
-  console.log("🎯 Estado:", this.filtroEstado);
-  console.log("🏢 Departamento:", this.filtroDepartamento);
-  console.log("📅 Fecha de creación:", this.filtroFecha);
-  console.log("📅 Fecha de finalización:", this.filtroFechaFinalizacion);
-  console.log("⚡ Criticidad:", this.filtroCriticidad);
-
-  this.filteredTickets = this.tickets.filter(ticket => {
-    const coincideEstado = this.filtroEstado ? ticket.estado === this.filtroEstado : true;
-    const coincideDepartamento = this.filtroDepartamento ? ticket.departamento === this.filtroDepartamento : true;
-    const coincideFecha = this.filtroFecha
-      ? new Date(ticket.fecha_creacion).toISOString().split('T')[0] === this.filtroFecha
-      : true;
-    const coincideFechaFinalizacion = this.filtroFechaFinalizacion
-      ? ticket.fecha_finalizado && new Date(ticket.fecha_finalizado).toISOString().split('T')[0] === this.filtroFechaFinalizacion
-      : true;
-    const coincideCriticidad = this.filtroCriticidad
-      ? ticket.criticidad === parseInt(this.filtroCriticidad, 10)
-      : true;
-
-    return coincideEstado && coincideDepartamento && coincideFecha && coincideFechaFinalizacion && coincideCriticidad;
-  });
-
-  console.log("🎯 Tickets después de filtrar:", this.filteredTickets);
-}
-
-
-exportToExcel() {
-  const workbook = new ExcelJS.Workbook();
-  const worksheet = workbook.addWorksheet('Tickets');
-
-  // ✅ Definir las columnas a exportar
-  worksheet.columns = [
-    { header: 'ID', key: 'id', width: 10 },
-    { header: 'Título', key: 'titulo', width: 30 },
-    { header: 'Descripción', key: 'descripcion', width: 50 },
-    { header: 'Usuario', key: 'username', width: 20 },
-    { header: 'Estado', key: 'estado', width: 15 },
-    { header: 'Criticidad', key: 'criticidad', width: 10 },
-    { header: 'Fecha de Creación', key: 'fecha_creacion', width: 20 },
-    { header: 'Fecha Finalizado', key: 'fecha_finalizado', width: 20 },
-    { header: 'Departamento', key: 'departamento', width: 25 },
-    { header: 'Categoría', key: 'categoria', width: 25 }
-  ];
-
-  // ✅ Recorrer los tickets filtrados y agregarlos al Excel
-  this.filteredTickets.forEach(ticket => {
-    worksheet.addRow({
-      id: ticket.id,
-      titulo: ticket.titulo,
-      descripcion: ticket.descripcion,
-      username: ticket.username,
-      estado: ticket.estado,
-      criticidad: ticket.criticidad,
-      fecha_creacion: this.formatearFecha(ticket.fecha_creacion),
-      fecha_finalizado: ticket.fecha_finalizado ? this.formatearFecha(ticket.fecha_finalizado) : 'N/A',
-      departamento: ticket.departamento ? ticket.departamento : 'No asignado',
-      categoria: ticket.categoria ? ticket.categoria : 'No especificada'
+    const headers = new HttpHeaders().set('Authorization', `Bearer ${token}`);
+    
+    this.http.delete<ApiResponse>(`${this.apiUrl}/delete/${ticketId}`, { headers }).subscribe({
+      next: () => {
+        this.tickets = this.tickets.filter(ticket => ticket.id !== ticketId);
+        this.filteredTickets = this.filteredTickets.filter(ticket => ticket.id !== ticketId);
+      },
+      error: () => console.error("❌ Error al eliminar el ticket.")
     });
-  });
-
-  // ✅ Aplicar estilos a la primera fila (encabezados)
-  worksheet.getRow(1).font = { bold: true };
-
-  // ✅ Generar y descargar el archivo Excel
-  workbook.xlsx.writeBuffer().then((buffer) => {
-    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    saveAs(blob, `tickets_${new Date().toISOString().slice(0, 10)}.xlsx`);
-  }).catch(err => console.error("❌ Error al generar el Excel:", err));
-}
-
-// ✅ Función para formatear fechas correctamente
-formatearFecha(fechaString: string | null): string {
-  if (!fechaString || fechaString === 'N/A' || fechaString === 'null') return 'N/A';
-
-  const fecha = new Date(fechaString);
-  if (isNaN(fecha.getTime())) return 'Fecha inválida'; // Evita errores si el formato es incorrecto
-
-  return fecha.toISOString().slice(0, 19).replace("T", " ");
-}
-  
-// ✅ Eliminar un ticket (Solo Administrador)
-eliminarTicket(ticketId: number) {
-  if (!this.usuarioEsAdmin) {
-    alert("❌ No tienes permisos para eliminar tickets.");
-    return;
   }
 
-  if (!confirm("⚠️ ¿Estás seguro de que quieres eliminar este ticket?")) return;
+  filtrarTickets() {
+    this.filteredTickets = this.tickets.filter(ticket => 
+      (this.filtroEstado ? ticket.estado === this.filtroEstado : true) &&
+      (this.filtroDepartamento ? ticket.departamento === this.filtroDepartamento : true) &&
+      (this.filtroFecha ? new Date(ticket.fecha_creacion).toISOString().split('T')[0] === this.filtroFecha : true) &&
+      (this.filtroFechaFinalizacion ? ticket.fecha_finalizado && new Date(ticket.fecha_finalizado).toISOString().split('T')[0] === this.filtroFechaFinalizacion : true) &&
+      (this.filtroCriticidad ? ticket.criticidad === parseInt(this.filtroCriticidad, 10) : true)
+    );
+  }
 
-  const token = localStorage.getItem('token');
-  if (!token) return;
+  formatearFecha(fechaString: string | null): string {
+    if (!fechaString) return 'Sin finalizar'; // ✅ Muestra "Sin finalizar" si la fecha es NULL
+  
+    const fecha = new Date(fechaString);
+    if (isNaN(fecha.getTime())) return 'Fecha inválida'; // ✅ Evita errores con fechas incorrectas
+  
+    // 🔹 Ajuste de zona horaria (GMT-8)
+    fecha.setHours(fecha.getHours() - 8);
+  
+    return fecha.toLocaleString('es-ES', { 
+      year: 'numeric', 
+      month: '2-digit', 
+      day: '2-digit', 
+      hour: '2-digit', 
+      minute: '2-digit', 
+      second: '2-digit'
+    }).replace(',', '');
+  }
+   
+  
 
-  const headers = new HttpHeaders().set('Authorization', `Bearer ${token}`);
+  exportToExcel() {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Tickets');
 
-  this.http.delete<{ mensaje: string }>(`${this.apiUrl}/delete/${ticketId}`, { headers }).subscribe({
-    next: () => {
-      this.tickets = this.tickets.filter(ticket => ticket.id !== ticketId);
-      this.filteredTickets = this.filteredTickets.filter(ticket => ticket.id !== ticketId);
-      alert("✅ Ticket eliminado correctamente.");
-    },
-    error: () => alert("❌ Error al eliminar el ticket.")
-  });
-}
+    worksheet.columns = [
+      { header: 'ID', key: 'id', width: 10 },
+      { header: 'Título', key: 'titulo', width: 30 },
+      { header: 'Descripción', key: 'descripcion', width: 50 },
+      { header: 'Usuario', key: 'username', width: 20 },
+      { header: 'Estado', key: 'estado', width: 15 },
+      { header: 'Criticidad', key: 'criticidad', width: 10 },
+      { header: 'Fecha Creación', key: 'fecha_creacion', width: 20 },
+      { header: 'Fecha Finalizado', key: 'fecha_finalizado', width: 20 },
+      { header: 'Departamento', key: 'departamento', width: 25 },
+      { header: 'Categoría', key: 'categoria', width: 25 }
+    ];
+
+    this.filteredTickets.forEach(ticket => {
+      worksheet.addRow({
+        ...ticket,
+        fecha_finalizado: ticket.fecha_finalizado || 'N/A'
+      });
+    });
+
+    workbook.xlsx.writeBuffer().then(buffer => saveAs(new Blob([buffer]), `tickets_${new Date().toISOString().slice(0, 10)}.xlsx`));
+  }
+
 
 }

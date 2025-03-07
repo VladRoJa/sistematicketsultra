@@ -90,9 +90,8 @@
         <td>{{ ticket.username }}</td>
         <td>{{ ticket.estado }}</td>
         <td>{{ ticket.criticidad }}</td>
-        <td>{{ formatearFechaCreacion(ticket.fecha_creacion) }}</td>
-        <td>{{ formatearFechaFinalizacion(ticket.fecha_finalizado ? ticket.fecha_finalizado : 'N/A') }}</td>
-        <td>{{ ticket.departamento }}</td>
+        <td>{{ formatearFecha(ticket.fecha_creacion) }}</td>
+        <td>{{ formatearFecha(ticket.fecha_finalizado) }}</td><td>{{ ticket.departamento }}</td>
         <td>{{ ticket.categoria }}</td>
         <td>
 
@@ -119,6 +118,18 @@
       </tr>
     </tbody>
   </table>
+  <!-- ✅ MODAL DE CONFIRMACIÓN -->
+<div class="modal-overlay" *ngIf="confirmacionVisible">
+  <div class="modal-content">
+    <h3>Confirmación</h3>
+    <p>{{ mensajeConfirmacion }}</p>
+    <div class="modal-buttons">
+      <button (click)="confirmarAccion()" class="boton-confirmar">Sí, confirmar</button>
+      <button (click)="cancelarAccion()" class="boton-cancelar">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 </div>
 
 <!-- Paginación -->

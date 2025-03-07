@@ -1,6 +1,6 @@
 # run.py
 
-from flask import Flask
+from flask import Flask, request
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from config import Config
@@ -13,11 +13,22 @@ app.config.from_object(Config)
 jwt = JWTManager(app)
 
 # Configuración de CORS
-"""CORS(app, resources={r"/api/*": {"origins": "http://localhost:4200"}}, 
-     supports_credentials=True, allow_headers=["Content-Type", "Authorization"], 
+"""CORS(app, resources={r"/*": {"origins": "http://localhost:4200"}}, 
+     supports_credentials=True,
+     allow_headers=["Content-Type", "Authorization"], 
      methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])"""
 
-CORS(app)
+"""CORS(app)"""
+
+# Configuración de CORS correcta
+CORS(app, supports_credentials=True)
+
+# Habilitar preflight en todas las rutas
+@app.before_request
+def handle_options():
+    if request.method == "OPTIONS":
+        return '', 204  # ✅ Responde correctamente a preflight requests
+
 
 # Registrar rutas
 app.register_blueprint(auth_bp, url_prefix="/api/auth")
