@@ -24,7 +24,13 @@ interface Ticket {
   departamento: string;
   departamento_id: number;
   categoria: string;
-}
+  fecha_solucion?: string | null;  // ✅ Nueva propiedad opcional
+  historial_fechas?: Array<{             
+    fecha: string;
+    cambiadoPor: string;
+    fechaCambio: string;
+  }>;
+} 
 
 interface ApiResponse {
   mensaje: string;
@@ -39,6 +45,9 @@ interface ApiResponse {
   styleUrls: ['./pantalla-ver-tickets.component.css']
 })
 export class PantallaVerTicketsComponent implements OnInit {
+
+
+  //propiedades
 
   tickets: Ticket[] = [];
   filteredTickets: Ticket[] = [];
@@ -58,6 +67,10 @@ export class PantallaVerTicketsComponent implements OnInit {
   confirmacionVisible: boolean = false;
   accionPendiente: (() => void) | null = null;
   mensajeConfirmacion: string = "";
+  fechaSolucionSeleccionada: { [id: number]: string } = {}; 
+  editandoFechaSolucion: { [id: number]: boolean } = {};
+  passwordEdicion: string = "";
+  historialVisible: { [id: number]: boolean } = {};
 
 
   private apiUrl = 'http://localhost:5000/api/tickets'; 
@@ -125,13 +138,16 @@ export class PantallaVerTicketsComponent implements OnInit {
           const estadoNormalizado = this.normalizarEstado(ticket.estado);
           console.log(`🎯 Ticket ID: ${ticket.id}, Estado Normalizado: ${estadoNormalizado}`);
   
+          console.log(`🎯 Ticket ID: ${ticket.id}, Historial:`, ticket.historial_fechas);
+
           return {
             ...ticket,
             criticidad: ticket.criticidad || 1,
             estado: estadoNormalizado,
             departamento: this.departamentoService.obtenerNombrePorId(ticket.departamento_id),
             fecha_creacion: this.formatearFecha(ticket.fecha_creacion),
-            fecha_finalizado: ticket.fecha_finalizado ? this.formatearFecha(ticket.fecha_finalizado) : null
+            fecha_finalizado: ticket.fecha_finalizado ? this.formatearFecha(ticket.fecha_finalizado) : null,
+            historial_fechas: Array.isArray(ticket.historial_fechas) ? ticket.historial_fechas : []
           };
         });
   
@@ -210,6 +226,8 @@ finalizarTicket(ticket: Ticket) {
                 next: () => {
                     ticket.estado = "finalizado";
                     ticket.fecha_finalizado = fechaFinalizado;
+                    this.changeDetectorRef.detectChanges();
+                    console.log("✅ Ticket finalizado y UI actualizada.");
                 },
                 error: (error) => console.error(`❌ Error al finalizar el ticket ${ticket.id}:`, error)
             });
@@ -294,4 +312,86 @@ finalizarTicket(ticket: Ticket) {
   }
 
 
+  editarFechaSolucion(ticket: Ticket) {
+    this.editandoFechaSolucion[ticket.id] = true;
+  }
+
+  guardarFechaSolucion(ticket: Ticket) {
+    if (!this.fechaSolucionSeleccionada[ticket.id]) return;
+  
+    const token = localStorage.getItem("token");
+    if (!token) {
+      console.error("❌ No hay token almacenado.");
+      return;
+    }
+  
+    const headers = new HttpHeaders()
+      .set("Authorization", `Bearer ${token}`)
+      .set("Content-Type", "application/json");
+  
+      const datosEnviados = {
+        estado: ticket.estado,
+        fecha_solucion: this.fechaSolucionSeleccionada[ticket.id],
+        historial_fechas: JSON.stringify([
+          ...(ticket.historial_fechas || []), // ✅ Si es undefined, usa un array vacío
+          {
+            fecha: this.fechaSolucionSeleccionada[ticket.id],
+            cambiadoPor: this.user.username,
+            fechaCambio: new Date().toISOString(),
+          },
+        ]),
+      };
+      
+  
+    this.http.put(`${this.apiUrl}/update/${ticket.id}`, datosEnviados, { headers }).subscribe({
+      next: () => {
+        ticket.fecha_solucion = this.fechaSolucionSeleccionada[ticket.id];
+        this.editandoFechaSolucion[ticket.id] = false;
+        console.log(`✅ Fecha de solución del ticket #${ticket.id} actualizada.`);
+      },
+      error: (error) => console.error(`❌ Error al actualizar la fecha de solución del ticket:`, error),
+    });
+  }
+  
+
+  confirmarEdicionFecha(ticket: Ticket) {
+    const passwordCorrecta = "admin123"; // Reemplazar con un sistema seguro de autenticación
+  
+    if (this.passwordEdicion !== passwordCorrecta) {
+      alert("❌ Contraseña incorrecta. No tienes permisos para editar esta fecha.");
+      return;
+    }
+  
+    this.editandoFechaSolucion[ticket.id] = true;
+  }
+  
+  toggleHistorial(ticketId: number) {
+    const ticket = this.tickets.find(t => t.id === ticketId);
+    
+    if (!ticket) {
+      console.error(`❌ No se encontró el ticket con ID: ${ticketId}`);
+      return;
+    }
+  
+    console.log(`📜 Historial del ticket #${ticketId}:`, ticket.historial_fechas);
+  
+    if (!this.historialVisible[ticketId]) {
+      this.historialVisible[ticketId] = true;
+    } else {
+      this.historialVisible[ticketId] = !this.historialVisible[ticketId];
+    }
+  }
+  
+  
+  
+  formatearFechaCorta(fechaString: string | null): string {
+    if (!fechaString) return 'dd/mm/aaaa';
+    
+    const fecha = new Date(fechaString);
+    return fecha.toLocaleDateString('es-ES', {
+      year: '2-digit',
+      month: '2-digit',
+      day: '2-digit'
+    });
+  }
 }

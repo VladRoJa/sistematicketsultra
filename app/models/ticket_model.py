@@ -8,7 +8,7 @@ import locale
 locale.setlocale(locale.LC_TIME, 'es_ES.UTF-8')
 
 class Ticket:
-    def __init__(self, id, titulo, descripcion, username, estado, fecha_creacion, id_sucursal, departamento_id, criticidad, categoria, fecha_finalizado=None):
+    def __init__(self, id, titulo, descripcion, username, estado, fecha_creacion, id_sucursal, departamento_id, criticidad, categoria, fecha_solucion, historial_fechas, fecha_finalizado=None):
         self.id = id
         self.titulo = titulo
         self.descripcion = descripcion
@@ -20,6 +20,8 @@ class Ticket:
         self.criticidad = criticidad
         self.categoria = categoria
         self.fecha_finalizado = fecha_finalizado
+        self.fecha_solucion = fecha_solucion
+        self.historial_fechas = historial_fechas
         
     def to_dict(self):
         tz = pytz.timezone('America/Tijuana')

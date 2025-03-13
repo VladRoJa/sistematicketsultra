@@ -1,18 +1,18 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
-import { ExcelFilterTableComponentComponent } from './excel-filter-table-component.component';
+import { ExcelFilterTableComponent } from './excel-filter-table-component';
 
 describe('ExcelFilterTableComponentComponent', () => {
-  let component: ExcelFilterTableComponentComponent;
-  let fixture: ComponentFixture<ExcelFilterTableComponentComponent>;
+  let component: ExcelFilterTableComponent;
+  let fixture: ComponentFixture<ExcelFilterTableComponent>;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [ExcelFilterTableComponentComponent]
+      imports: [ExcelFilterTableComponent]
     })
     .compileComponents();
 
-    fixture = TestBed.createComponent(ExcelFilterTableComponentComponent);
+    fixture = TestBed.createComponent(ExcelFilterTableComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
   });

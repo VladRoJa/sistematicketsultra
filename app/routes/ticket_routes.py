@@ -1,6 +1,6 @@
 # app/routes/ticket_routes.py
 from datetime import datetime
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, json, jsonify, request
 from flask_cors import CORS
 from app.models.database import get_db_connection
 from app.models.ticket_model import Ticket
@@ -45,6 +45,10 @@ def get_tickets():
         tickets = cursor.fetchall()
         cursor.close()
         conn.close()
+
+         # ✅ Verificamos que incluya fecha_solucion
+        for ticket in tickets:
+            ticket["fecha_solucion"] = ticket.get("fecha_solucion")
 
         return jsonify({"mensaje": "Tickets cargados correctamente", "tickets": tickets}), 200
 
@@ -102,8 +106,10 @@ def update_ticket_status(id):
 
         data = request.get_json()
         estado = data.get("estado")
+        fecha_solucion = data.get("fecha_solucion")  # ✅ Se recibe la nueva fecha
+        historial_fechas = data.get("historial_fechas") # ✅ Se recibe el nuevo historial de fechas
 
-        print(f"📌 Estado recibido: '{estado}'")  
+        print(f"📌 Estado: {estado}, Fecha solución: {fecha_solucion}") 
 
         if not estado:
             print("❌ Error: Estado no proporcionado")
@@ -116,19 +122,46 @@ def update_ticket_status(id):
 
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
+        
+         # Obtener historial actual
+        cursor.execute("SELECT historial_fechas FROM tickets WHERE id = %s", (id,))
+        resultado = cursor.fetchone()
+        historial_actual = json.loads(resultado["historial_fechas"]) if resultado and resultado["historial_fechas"] else []
 
-        # Obtener la fecha si el estado es finalizado
+        # Obtener el usuario actual
+        usuario_actual_id = get_jwt_identity()
+        usuario_actual = User.get_user_by_id(usuario_actual_id)
+        
+         # Agregar nueva fecha al historial si hay cambios en fecha_solucion
+        if fecha_solucion and (not historial_actual or historial_actual[-1]["fecha"] != fecha_solucion):
+            nuevo_registro = {
+                "fecha": fecha_solucion,
+                "cambiadoPor": usuario_actual.username if usuario_actual else "Desconocido",
+                "fechaCambio": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            }
+            historial_actual.append(nuevo_registro)
+
+
+        # Obtener fechas si el estado cambia a "finalizado"
         fecha_finalizado = None
         if estado == "finalizado":
             fecha_finalizado = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-        # 🔹 Actualizar el estado y la fecha si aplica
+       # Construir consulta de actualización dinámicamente
         query = "UPDATE tickets SET estado = %s"
         values = [estado]
 
         if fecha_finalizado:
             query += ", fecha_finalizado = %s"
             values.append(fecha_finalizado)
+
+        if fecha_solucion:  # ✅ NUEVO: Si se proporciona fecha de solución, actualizarla
+            query += ", fecha_solucion = %s"
+            values.append(fecha_solucion)
+
+        if historial_fechas:  # ✅ NUEVO: Guardar historial de cambios
+            query += ", historial_fechas = %s"
+            values.append(json.dumps(historial_actual))
 
         query += " WHERE id = %s"
         values.append(id)
@@ -138,7 +171,8 @@ def update_ticket_status(id):
 
         cursor.close()
         conn.close()
-
+        
+        
         print(f"✅ Ticket {id} actualizado a '{estado}' con fecha de finalización: {fecha_finalizado}")
         return jsonify({"mensaje": f"Ticket {id} actualizado"}), 200
 
