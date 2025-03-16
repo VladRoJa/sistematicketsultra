@@ -32,25 +32,38 @@ def get_tickets():
 
         id_sucursal = user.id_sucursal
 
+        limit = request.args.get('limit', default=15, type=int)  # 🔹 Número de tickets por página
+        offset = request.args.get('offset', default=0, type=int)  # 🔹 Para saltar tickets en la paginación
+
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
 
+        # 🔹 Si es admin, obtiene todos los tickets, sino solo los de su sucursal
         if user.rol in ["ADMINISTRADOR", "TECNICO"]:
-            query = "SELECT * FROM tickets"
-            cursor.execute(query)
+            query = "SELECT * FROM tickets ORDER BY fecha_creacion DESC LIMIT %s OFFSET %s"
+            cursor.execute(query, (limit, offset))
         else:
-            query = "SELECT * FROM tickets WHERE id_sucursal = %s"
-            cursor.execute(query, (id_sucursal,))
+            query = "SELECT * FROM tickets WHERE id_sucursal = %s ORDER BY fecha_creacion DESC LIMIT %s OFFSET %s"
+            cursor.execute(query, (id_sucursal, limit, offset))
 
         tickets = cursor.fetchall()
+
+        # 🔹 Contar el total de tickets respetando la sucursal del usuario
+        if user.rol in ["ADMINISTRADOR", "TECNICO"]:
+            cursor.execute("SELECT COUNT(*) as total FROM tickets")
+        else:
+            cursor.execute("SELECT COUNT(*) as total FROM tickets WHERE id_sucursal = %s", (id_sucursal,))
+
+        total_tickets = cursor.fetchone()["total"]
+
         cursor.close()
         conn.close()
 
-         # ✅ Verificamos que incluya fecha_solucion
-        for ticket in tickets:
-            ticket["fecha_solucion"] = ticket.get("fecha_solucion")
-
-        return jsonify({"mensaje": "Tickets cargados correctamente", "tickets": tickets}), 200
+        return jsonify({
+            "mensaje": "Tickets cargados correctamente",
+            "tickets": tickets,
+            "total_tickets": total_tickets  # 🔹 Devolvemos el total de registros
+        }), 200
 
     except Exception as e:
         return jsonify({"mensaje": f"Error al obtener tickets: {str(e)}"}), 500
@@ -71,17 +84,16 @@ def create_ticket():
         data = request.get_json()
         print(f"📥 Datos recibidos: {data}")  # 🔍 Ver qué datos llegan al backend
         
-        titulo = data.get("titulo")
         descripcion = data.get("descripcion")
         departamento_id = data.get("departamento_id")
         criticidad = data.get("criticidad")
         categoria = data.get("categoria")
 
-        if not titulo or not descripcion or not departamento_id or not criticidad or not categoria:
+        if not descripcion or not departamento_id or not criticidad or not categoria:
             print("🚫 Faltan datos obligatorios")  # 🔍 Verificar si faltan datos
             return jsonify({"mensaje": "Faltan datos obligatorios"}), 400
 
-        nuevo_ticket = Ticket.create_ticket(titulo, descripcion, user.username, user.id_sucursal, departamento_id, criticidad, categoria)
+        nuevo_ticket = Ticket.create_ticket( descripcion, user.username, user.id_sucursal, departamento_id, criticidad, categoria)
 
         if nuevo_ticket:
             return jsonify({"mensaje": "Ticket creado correctamente", "ticket": nuevo_ticket}), 201

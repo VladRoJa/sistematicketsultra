@@ -82,53 +82,52 @@
       </tr>
     </thead>
 
-
-    <tbody>
-      <tr *ngFor="let ticket of filteredTickets | paginate: { itemsPerPage: itemsPerPage, currentPage: page }">
-        <td>{{ ticket.id }}</td>
-        <td>{{ ticket.categoria }}</td>
-        <td>{{ ticket.descripcion }}</td>
-        <td>{{ ticket.username }}</td>
-        <td>{{ ticket.estado }}</td>
-        <td>{{ ticket.criticidad }}</td>
-        <td>{{ formatearFecha(ticket.fecha_creacion) }}</td>
-        <td>{{ formatearFecha(ticket.fecha_finalizado) }}</td><td>{{ ticket.departamento }}</td>
-
+<tbody>
+  <tr *ngFor="let ticket of filteredTickets">
+    <td>{{ ticket.id }}</td>
+    <td>{{ ticket.categoria }}</td>
+    <td>{{ ticket.descripcion }}</td>
+    <td>{{ ticket.username }}</td>
+    <td>{{ ticket.estado }}</td>
+    <td>{{ ticket.criticidad }}</td>
+    <td>{{ ticket.fecha_creacion }}</td>
+    <td>{{ ticket.fecha_finalizado }}</td>
+    <td>{{ ticket.departamento }}</td>
 
            <!-- Acciones -->
-        <td *ngIf="usuarioEsAdmin">
-          <button 
-            *ngIf="ticket.estado !== 'finalizado'" 
-            [disabled]="ticket.estado === 'en progreso'" 
-            (click)="cambiarEstadoTicket(ticket, 'en progreso')"
-            class="boton-estado boton-en-progreso">
-            En Progreso
-          </button>
-        
-          <button 
-            *ngIf="ticket.estado !== 'finalizado'"  
-            (click)="finalizarTicket(ticket)"
-            class="boton-estado boton-finalizar">
-            Finalizar
-          </button>
-        </td>
-        <td>
-          <!-- Si está en edición, mostrar input -->
-          <input *ngIf="editandoFechaSolucion[ticket.id]" 
-                 type="date" [(ngModel)]="fechaSolucionSeleccionada[ticket.id]">
-          <button *ngIf="editandoFechaSolucion[ticket.id]" 
-                  (click)="guardarFechaSolucion(ticket)"
-                  class="boton-guardar">Guardar</button>
-    
-          <!-- Si ya tiene fecha guardada, mostrarla en formato dd/mm/aa -->
-          <span *ngIf="!editandoFechaSolucion[ticket.id]">
-            {{ ticket.fecha_solucion ? formatearFechaCorta(ticket.fecha_solucion) : 'dd/mm/aaaa' }}
-          </span>
-
-          <button *ngIf="ticket.fecha_solucion && !editandoFechaSolucion[ticket.id]" 
-                  (click)="confirmarEdicionFecha(ticket)" 
-                  class="boton-editar">Editar Fecha</button>
+           <td *ngIf="usuarioEsAdmin">
+            <button 
+              *ngIf="ticket.estado === 'pendiente'" 
+              (click)="cambiarEstadoTicket(ticket, 'en progreso')"
+              class="boton-estado boton-en-progreso">
+              En Progreso
+            </button>
+          
+            <button 
+              *ngIf="ticket.estado === 'en progreso'"  
+              (click)="finalizarTicket(ticket)"
+              class="boton-estado boton-finalizar">
+              Finalizar
+            </button>
           </td>
+          
+        <td>
+          <div *ngIf="!editandoFechaSolucion[ticket.id]; else editando">
+            <span (click)="editarFechaSolucion(ticket)" class="fecha-solucion">
+              {{ ticket.fecha_solucion ? formatearFechaCorta(ticket.fecha_solucion) : "📅 Seleccionar" }}
+            </span>
+            <button *ngIf="ticket.fecha_solucion" (click)="editarFechaSolucion(ticket)" class="boton-editar">
+              ✏️
+            </button>
+          </div>
+        
+          <ng-template #editando>
+            <input type="date" [(ngModel)]="fechaSolucionSeleccionada[ticket.id]" class="input-fecha">
+            <button (click)="guardarFechaSolucion(ticket)" class="boton-guardar">💾</button>
+            <button (click)="cancelarEdicion(ticket)" class="boton-cancelar">❌</button>
+          </ng-template>
+        </td>
+        
     
         <!-- ✅ Nueva columna: Historial -->
         <td>
@@ -136,18 +135,37 @@
             {{ historialVisible[ticket.id] ? 'Ocultar Historial' : 'Ver Historial' }}
           </button>
           <div *ngIf="historialVisible[ticket.id]">
-            <p *ngIf="!ticket.historial_fechas?.length">No hay historial disponible.</p>
-            <ul *ngIf="ticket.historial_fechas?.length">
-              <li *ngFor="let cambio of ticket.historial_fechas">
-                {{ cambio.fecha }} ({{ cambio.cambiadoPor }} el {{ cambio.fechaCambio }})
+            <p *ngIf="!ticket.historial_fechas || ticket.historial_fechas.length === 0">
+              No hay historial disponible.
+            </p>
+            <ul *ngIf="historialVisible[ticket.id]" class="historial-lista">
+              <li *ngFor="let item of ticket.historial_fechas" class="historial-item">
+                🗓 <span class="fecha-nueva">{{ formatearFechaCorta(item.fecha) }}</span> 
+                - <b>{{ item.cambiadoPor }}</b>
+                (<span class="fecha-modificacion">{{ formatearFechaCorta(item.fechaCambio) }}</span>)
               </li>
             </ul>
+            
           </div>
+          
         </td>
         
       </tr>
     </tbody>
   </table>
+
+  <!-- 🔹 Controles de Paginación -->
+  <div class="pagination-container">
+    <button class="pagination-button" (click)="cambiarPagina(-1)" [disabled]="page === 1">
+        Anterior
+    </button>
+    <span>Página {{ page }} de {{ totalPaginas() }}</span>
+    <button class="pagination-button" (click)="cambiarPagina(1)" [disabled]="page >= totalPaginas()">
+        Siguiente
+    </button>
+</div>
+
+
   <!-- ✅ MODAL DE CONFIRMACIÓN -->
 <div class="modal-overlay" *ngIf="confirmacionVisible">
   <div class="modal-content">
@@ -162,10 +180,5 @@
 
 </div>
 
-<!-- Paginación -->
-<pagination-controls 
-(pageChange)="page = $event"
-previousLabel="Anterior"
-nextLabel="Siguiente"> 
-</pagination-controls>
+
   

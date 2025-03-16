@@ -14,7 +14,6 @@ import { ChangeDetectorRef } from '@angular/core';
 
 interface Ticket {
   id: number;
-  titulo: string;
   descripcion: string;
   username: string;
   estado: string;
@@ -35,6 +34,7 @@ interface Ticket {
 interface ApiResponse {
   mensaje: string;
   tickets: Ticket[];
+  total_tickets: number;
 }
 
 @Component({
@@ -71,6 +71,8 @@ export class PantallaVerTicketsComponent implements OnInit {
   editandoFechaSolucion: { [id: number]: boolean } = {};
   passwordEdicion: string = "";
   historialVisible: { [id: number]: boolean } = {};
+  totalTickets: number = 0;
+
 
 
   private apiUrl = 'http://localhost:5000/api/tickets'; 
@@ -121,50 +123,73 @@ export class PantallaVerTicketsComponent implements OnInit {
     this.loading = true;
     const token = localStorage.getItem('token');
     if (!token) {
-      this.loading = false;
-      return;
+        this.loading = false;
+        return;
     }
-  
-    const headers = new HttpHeaders().set('Authorization', `Bearer ${token}`).set('Content-Type', 'application/json');
-  
-    this.http.get<ApiResponse>(`${this.apiUrl}/all`, { headers }).subscribe({
-      next: (data) => {
-        if (!data?.tickets) {
-          this.loading = false;
-          return;
-        }
-  
-        this.tickets = data.tickets.map(ticket => {
-          const estadoNormalizado = this.normalizarEstado(ticket.estado);
-          console.log(`🎯 Ticket ID: ${ticket.id}, Estado Normalizado: ${estadoNormalizado}`);
-  
-          console.log(`🎯 Ticket ID: ${ticket.id}, Historial:`, ticket.historial_fechas);
 
-          return {
-            ...ticket,
-            criticidad: ticket.criticidad || 1,
-            estado: estadoNormalizado,
-            departamento: this.departamentoService.obtenerNombrePorId(ticket.departamento_id),
-            fecha_creacion: this.formatearFecha(ticket.fecha_creacion),
-            fecha_finalizado: ticket.fecha_finalizado ? this.formatearFecha(ticket.fecha_finalizado) : null,
-            historial_fechas: Array.isArray(ticket.historial_fechas) ? ticket.historial_fechas : []
-          };
-        });
-  
-        this.ordenarTickets();
-        this.filteredTickets = [...this.tickets];
-        this.loading = false;
-      },
-      error: (error) => {
-        console.error("❌ Error al cargar los tickets:", error);
-        this.loading = false;
-      }
+    const headers = new HttpHeaders().set('Authorization', `Bearer ${token}`).set('Content-Type', 'application/json');
+
+    const offset = (this.page - 1) * this.itemsPerPage; // 🔹 Calculamos el offset
+    const url = `${this.apiUrl}/all?limit=${this.itemsPerPage}&offset=${offset}&sort=desc`;
+
+    console.log("📌 URL enviada a la API:", url);
+
+    this.http.get<ApiResponse>(url, { headers }).subscribe({
+        next: (data) => {
+
+          console.log("📥 Respuesta de la API:", data);
+          console.log("📥 Tickets recibidos en esta página:", data.tickets.map(t => t.id));
+
+            if (!data?.tickets) {
+                this.loading = false;
+                return;
+            }
+
+            this.tickets = data.tickets.map(ticket => ({
+                ...ticket,
+                criticidad: ticket.criticidad || 1,
+                estado: this.normalizarEstado(ticket.estado),
+                departamento: this.departamentoService.obtenerNombrePorId(ticket.departamento_id),
+                fecha_creacion: this.formatearFecha(ticket.fecha_creacion),
+                fecha_finalizado: ticket.fecha_finalizado ? this.formatearFecha(ticket.fecha_finalizado) : null,
+                historial_fechas: typeof ticket.historial_fechas === "string" ? JSON.parse(ticket.historial_fechas) : ticket.historial_fechas || []
+            }));
+
+            this.totalTickets = data.total_tickets; // 🔹 Guardamos el total de tickets
+            this.filteredTickets = [...this.tickets];
+
+
+            console.log("📌 Tickets guardados en `filteredTickets`:", this.filteredTickets.map(t => t.id));
+            console.log("📌 Tickets cargados en la página:", this.page);
+            console.log("📌 Total de tickets disponibles:", this.totalTickets);
+
+            this.loading = false;
+        },
+        error: (error) => {
+            console.error("❌ Error al cargar los tickets:", error);
+            this.loading = false;
+        }
     });
+}
+
+private ordenarTickets() {
+  // 🔹 Asegurar que todos los tickets tengan una fecha válida
+  const tieneFechasValidas = this.tickets.every(ticket => {
+      return ticket.fecha_creacion && !isNaN(new Date(ticket.fecha_creacion).getTime());
+  });
+
+  if (tieneFechasValidas) {
+      console.log("✅ Usando orden por fecha de creación");
+      this.tickets.sort((a, b) => 
+          new Date(b.fecha_creacion).getTime() - new Date(a.fecha_creacion).getTime()
+      );
+  } else {
+      console.warn("⚠️ Algunas fechas son inválidas, ordenando por ID");
+      this.tickets.sort((a, b) => b.id - a.id);
   }
-  
-  private ordenarTickets() {
-    this.tickets.sort((a, b) => new Date(b.fecha_creacion).getTime() - new Date(a.fecha_creacion).getTime());
-  }
+}
+
+  // ✅ Función para mostrar el modal de confirmación
 
   mostrarConfirmacion(mensaje: string, accion: () => void) {
     this.mensajeConfirmacion = mensaje;
@@ -209,7 +234,7 @@ export class PantallaVerTicketsComponent implements OnInit {
     );
   }
   
-finalizarTicket(ticket: Ticket) {
+  finalizarTicket(ticket: Ticket) {
     if (!this.usuarioEsAdmin) return;
 
     this.mostrarConfirmacion(
@@ -224,16 +249,17 @@ finalizarTicket(ticket: Ticket) {
 
             this.http.put<ApiResponse>(`${this.apiUrl}/update/${ticket.id}`, { estado: "finalizado", fecha_finalizado: fechaFinalizado }, { headers }).subscribe({
                 next: () => {
-                    ticket.estado = "finalizado";
-                    ticket.fecha_finalizado = fechaFinalizado;
-                    this.changeDetectorRef.detectChanges();
-                    console.log("✅ Ticket finalizado y UI actualizada.");
+                    console.log("✅ Ticket finalizado en el backend.");
+
+                    // 🔹 Recargar la lista de tickets desde el backend
+                    this.cargarTickets();
                 },
                 error: (error) => console.error(`❌ Error al finalizar el ticket ${ticket.id}:`, error)
             });
         }
     );
 }
+
 
 
   eliminarTicket(ticketId: number) {
@@ -264,25 +290,29 @@ finalizarTicket(ticket: Ticket) {
   }
 
   formatearFecha(fechaString: string | null): string {
-    if (!fechaString) return 'Sin finalizar'; // ✅ Muestra "Sin finalizar" si la fecha es NULL
-  
-    const fecha = new Date(fechaString);
-    if (isNaN(fecha.getTime())) return 'Fecha inválida'; // ✅ Evita errores con fechas incorrectas
-  
-    // 🔹 Ajuste de zona horaria (GMT-8)
-    fecha.setHours(fecha.getHours() - 8);
-  
-    return fecha.toLocaleString('es-ES', { 
-      year: 'numeric', 
-      month: '2-digit', 
-      day: '2-digit', 
-      hour: '2-digit', 
-      minute: '2-digit', 
-      second: '2-digit'
-    }).replace(',', '');
-  }
-   
-  
+    if (!fechaString) return 'Sin finalizar';
+
+    console.log(`🔍 Formateando fecha: ${fechaString}`);
+
+    let fecha = new Date(fechaString);
+
+    if (isNaN(fecha.getTime())) {
+        console.error(`❌ Fecha inválida detectada: ${fechaString}`);
+        return 'Fecha inválida';
+    }
+
+    // 🔹 Ajuste de zona horaria para evitar desfases
+    fecha.setMinutes(fecha.getMinutes() + fecha.getTimezoneOffset());
+
+    return fecha.toLocaleString('es-ES', {
+        year: '2-digit',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+    }).replace(',', '').replace(/\//g, '-'); // 🔹 Cambia "/" por "-"
+}
+
 
   exportToExcel() {
     const workbook = new ExcelJS.Workbook();
@@ -290,7 +320,6 @@ finalizarTicket(ticket: Ticket) {
 
     worksheet.columns = [
       { header: 'ID', key: 'id', width: 10 },
-      { header: 'Título', key: 'titulo', width: 30 },
       { header: 'Descripción', key: 'descripcion', width: 50 },
       { header: 'Usuario', key: 'username', width: 20 },
       { header: 'Estado', key: 'estado', width: 15 },
@@ -314,6 +343,7 @@ finalizarTicket(ticket: Ticket) {
 
   editarFechaSolucion(ticket: Ticket) {
     this.editandoFechaSolucion[ticket.id] = true;
+    this.fechaSolucionSeleccionada[ticket.id] = ticket.fecha_solucion || "";
   }
 
   guardarFechaSolucion(ticket: Ticket) {
@@ -324,35 +354,52 @@ finalizarTicket(ticket: Ticket) {
       console.error("❌ No hay token almacenado.");
       return;
     }
-  
+
+    console.log(`📤 Fecha enviada al backend para ticket ${ticket.id}: ${this.fechaSolucionSeleccionada[ticket.id]}`);
+
     const headers = new HttpHeaders()
       .set("Authorization", `Bearer ${token}`)
       .set("Content-Type", "application/json");
-  
-      const datosEnviados = {
+
+    console.log(`📤 Fecha antes de ajustes: ${this.fechaSolucionSeleccionada[ticket.id]}`);
+
+    const fechaFormateada = `${this.fechaSolucionSeleccionada[ticket.id]} 00:01:00`;
+
+    const datosEnviados = {
         estado: ticket.estado,
-        fecha_solucion: this.fechaSolucionSeleccionada[ticket.id],
+        fecha_solucion: fechaFormateada, // ✅ Ahora con hora fija 00:01:00
         historial_fechas: JSON.stringify([
-          ...(ticket.historial_fechas || []), // ✅ Si es undefined, usa un array vacío
+          ...(ticket.historial_fechas || []),
           {
-            fecha: this.fechaSolucionSeleccionada[ticket.id],
+            fecha: fechaFormateada,
             cambiadoPor: this.user.username,
             fechaCambio: new Date().toISOString(),
           },
         ]),
-      };
-      
-  
+    };
+
     this.http.put(`${this.apiUrl}/update/${ticket.id}`, datosEnviados, { headers }).subscribe({
       next: () => {
-        ticket.fecha_solucion = this.fechaSolucionSeleccionada[ticket.id];
+        ticket.fecha_solucion = fechaFormateada;
         this.editandoFechaSolucion[ticket.id] = false;
+
+        if (!ticket.historial_fechas) ticket.historial_fechas = [];
+        ticket.historial_fechas.push({
+          fecha: fechaFormateada,
+          cambiadoPor: this.user.username,
+          fechaCambio: new Date().toISOString(),
+        });
+
         console.log(`✅ Fecha de solución del ticket #${ticket.id} actualizada.`);
       },
       error: (error) => console.error(`❌ Error al actualizar la fecha de solución del ticket:`, error),
     });
-  }
+}
+
   
+  cancelarEdicion(ticket: Ticket) {
+    this.editandoFechaSolucion[ticket.id] = false;
+  }
 
   confirmarEdicionFecha(ticket: Ticket) {
     const passwordCorrecta = "admin123"; // Reemplazar con un sistema seguro de autenticación
@@ -394,4 +441,18 @@ finalizarTicket(ticket: Ticket) {
       day: '2-digit'
     });
   }
+
+  // 🔹 Cambiar de página manualmente
+cambiarPagina(direccion: number) {
+  const nuevaPagina = this.page + direccion;
+  if (nuevaPagina > 0 && nuevaPagina <= this.totalPaginas()) {
+      this.page = nuevaPagina;
+      this.cargarTickets();
+  }
+}
+
+// 🔹 Calcular el número total de páginas
+totalPaginas(): number {
+  return Math.ceil(this.totalTickets / this.itemsPerPage);
+}
 }

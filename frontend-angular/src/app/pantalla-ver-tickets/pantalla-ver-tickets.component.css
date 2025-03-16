@@ -1,84 +1,20 @@
-/* pantalla-ver-tickets.component.css */
-
-table {
+/* =========================
+   ESTILOS GENERALES
+   ========================= */
+   body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+  }
+  
+  .contenedor-tickets {
     width: 100%;
-    border-collapse: collapse;/* ✅ Estilos generales para los botones */
-    .boton-estado {
-      display: inline-block;
-      padding: 10px 15px;
-      font-size: 14px;
-      font-weight: bold;
-      color: white;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: all 0.3s ease-in-out;
-      text-align: center;
-      width: 130px; /* Ajuste para uniformidad */
-      margin: 5px; /* Espaciado entre botones */
-      box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
-    }
-    
-    /* ✅ Botón "En Progreso" */
-    .boton-en-progreso {
-      background-color: #28a745; /* Verde */
-    }
-    
-    .boton-en-progreso:hover {
-      background-color: #218838; /* Verde oscuro */
-    }
-    
-    /* ✅ Botón "Finalizar" */
-    .boton-finalizar {
-      background-color: #dc3545; /* Rojo */
-    }
-    
-    .boton-finalizar:hover {
-      background-color: #c82333; /* Rojo oscuro */
-    }
-    
-    /* ✅ Evitar que los botones se encimen */
-    td {
-      vertical-align: middle; /* Asegura que los botones se alineen bien */
-      text-align: center;
-    }
-    margin-top: 20px;
+    max-width: 95vw;
+    margin: 0 auto;
+    padding: 10px;
   }
   
-  th, td {
-    border: 1px solid #ddd;
-    padding: 8px;
-    text-align: left;
-  }
-  
-  th {
-    background-color: #007bff;
-    color: white;
-  }
-  
-  tr:nth-child(even) {
-    background-color: #f2f2f2;
-  }
-  
-  button {
-    background-color: green;
-    color: white;
-    padding: 5px 10px;
-    border: none;
-    cursor: pointer;
-    margin-right: 5px;
-  }
-  
-  button:hover {
-    background-color: darkgreen;
-  }
-  
-  .btn-gray {
-    background-color: gray;
-    cursor: not-allowed;
-    opacity: 0.6;
-  }
-
   .filtros {
     display: flex;
     flex-wrap: wrap;
@@ -92,234 +28,311 @@ table {
     margin-right: 5px;
   }
   
-  .filtros select,
-  .filtros input {
+  .filtros select, .filtros input {
     padding: 5px;
     border: 1px solid #ccc;
     border-radius: 5px;
   }
   
-  .btn-eliminar {
-    background-color: red;
+  /* =========================
+     TABLA DE TICKETS
+     ========================= */
+  .table-container {
+  width: 100%;  /* ✅ Ocupa todo el ancho disponible */
+  max-width: 100vw;  /* ✅ Evita que sobresalga */
+  margin: 0 auto; /* ✅ Centra el contenedor */
+  padding: 0;
+  overflow-x: auto; /* ✅ Desplazamiento horizontal solo si es necesario */
+  overflow-y: auto;
+  max-height: 500px;
+  position: relative;
+
+  }
+  
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 1200px;
+    font-size: 14px;
+  }
+  
+  th, td {
+    border: 1px solid #ddd;
+    padding: 12px;
+    text-align: center;
+    white-space: nowrap;
+  }
+  
+  th {
+    background-color: #007bff;
+    color: white;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  
+  tr:nth-child(even) {
+    background-color: #f2f2f2;
+  }
+
+
+  
+  /* =========================
+     BOTONES
+     ========================= */
+  .boton-estado {
+    display: inline-block;
+    padding: 6px 10px;
+    font-size: 12px;
+    font-weight: bold;
     color: white;
     border: none;
-    padding: 5px 10px;
-    cursor: pointer;
     border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.3s ease-in-out;
+    text-align: center;
+    width: 130px;
+    margin: 3px;
+    box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
+    min-width: 90px;
   }
   
-  .btn-eliminar:hover {
-    background-color: darkred;
+  .boton-en-progreso {
+    background-color: #28a745;
   }
   
-  /* Hacer que el contenedor de la tabla tenga desplazamiento */
-  .table-container {
-    max-height: 500px;
-    overflow-y: auto;
-    border: 1px solid #ddd;
-    padding-bottom: 10px; /* Evita corte en scroll */
+  .boton-en-progreso:hover {
+    background-color: #218838;
+  }
+  
+  .boton-finalizar {
+    background-color: #dc3545;
+  }
+  
+  .boton-finalizar:hover {
+    background-color: #c82333;
+  }
+  
+  .boton-editar {
+    background: #28a745;
+    border: none;
+    color: white;
+    padding: 3px 6px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  
+  .boton-editar:hover {
+    background: #218838;
+  }
+  
+  .boton-guardar {
+    background: #007bff;
+    border: none;
+    color: white;
+    padding: 3px 6px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  
+  .boton-guardar:hover {
+    background: #0056b3;
+  }
+  
+  .boton-cancelar {
+    background: #dc3545;
+    border: none;
+    color: white;
+    padding: 3px 6px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  
+  .boton-cancelar:hover {
+    background: #c82333;
+  }
+  
+  /* =========================
+     MODAL DE CONFIRMACIÓN
+     ========================= */
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+  }
+  
+  .modal-content {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
+    text-align: center;
+    width: 300px;
+  }
+  
+  .modal-buttons {
+    display: flex;
+    justify-content: space-around;
+    margin-top: 15px;
+  }
+  
+  /* =========================
+     HISTORIAL
+     ========================= */
+  .historial-lista {
+    list-style-type: none;
+    padding-left: 5px;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+  
+  .historial-item {
+    background: #f8f9fa;
+    padding: 2px 5px;
+    border-radius: 5px;
+    margin-bottom: 2px;
+    display: flex;
+    align-items: center;
+    white-space: nowrap;
+  }
+  
+  .fecha-nueva {
+    color: #007bff;
+    font-weight: bold;
+  }
+  
+  .fecha-modificacion {
+    color: #6c757d;
+    font-style: italic;
+    font-size: 11px;
+  }
+  
+  /* =========================
+     RESPONSIVIDAD
+     ========================= */
+     @media screen and (min-width: 2560px) { /* 4K */
+      .table-container {
+          max-width: 80vw;
+      }
+  
+      table {
+          font-size: 18px;
+      }
+  
+      th, td {
+          padding: 16px;
+      }
+  }
+  
+     @media screen and (min-width: 1920px) {
+      .table-container {
+          max-width: 85vw; /* 🔹 Reduce márgenes laterales */
+          margin: auto; /* 🔹 Centra la tabla en la pantalla */
+      }
+  
+      table {
+          font-size: 16px; /* 🔹 Aumenta un poco el tamaño del texto */
+      }
+  
+      th, td {
+          padding: 16px; /* 🔹 Mejora la legibilidad */
+      }
   }
 
-/* Mantener los encabezados fijos */
-thead {
-  position: sticky;
-  top: 0;
-  background: #007BFF; /* Color de fondo para que no se superponga el contenido */
-  color: white;
-  z-index: 10;
+  @media screen and (max-width: 768px) {
+    th, td {
+      font-size: 12px;
+      padding: 6px;
+    }
+    .boton-historial, .boton-editar-fecha {
+      font-size: 12px;
+      padding: 4px 6px;
+    }
+    .table-container {
+      overflow-x: scroll;
+    }
+
+  }
+  
+  @media screen and (max-width: 480px) {
+    .boton-historial, .boton-editar-fecha {
+      font-size: 10px;
+      padding: 3px 5px;
+    }
+  }
+  
+  @media screen and (max-width: 600px) {
+    table, thead, tbody, th, td, tr {
+      display: block;
+    }
+  
+    thead {
+      display: none;
+    }
+  
+    tr {
+      margin-bottom: 10px;
+      border: 1px solid #ddd;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+    }
+  
+    td {
+      text-align: left;
+      padding: 5px;
+    }
+  }
+  
+  /* Alternar colores en las filas */
+tbody tr:nth-child(odd) {
+  background-color: #dee2e6; /* Gris claro */
 }
 
-pagination-controls {
+tbody tr:nth-child(even) {
+  background-color: #ffffff; /* Blanco */
+}
+
+/* Opcional: Agregar un efecto al pasar el mouse */
+tbody tr:hover {
+  background-color: #e9ecef; /* Un poco más oscuro al pasar el cursor */
+  transition: background-color 0.3s ease-in-out;
+}
+
+
+.pagination-container {
   display: flex;
   justify-content: center;
-  margin: 20px 0;
+  align-items: center;
+  margin-top: 10px;
+  gap: 10px;
 }
 
-.table-container {
-  max-height: 500px;
-  overflow-y: auto;
-  border: 1px solid #ddd;
-}
-
-thead {
-  position: sticky;
-  top: 0;
-  background: #007BFF;
-  color: white;
-  z-index: 10;
-}
-
-/* ✅ Estilos generales para los botones */
-.boton-estado {
-  display: inline-block;
-  padding: 10px 15px;
-  font-size: 14px;
-  font-weight: bold;
+.pagination-button {
+  background-color: #007bff;
   color: white;
   border: none;
-  border-radius: 8px;
+  padding: 8px 15px;
+  border-radius: 5px;
   cursor: pointer;
-  transition: all 0.3s ease-in-out;
-  text-align: center;
-  width: 130px; /* Ajuste para uniformidad */
-  margin: 5px; /* Espaciado entre botones */
-  box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
+  transition: background-color 0.2s ease-in-out;
 }
 
-.boton-estado:disabled, 
-.boton-en-progreso:disabled {
-  background-color: #a0a0a0 !important; /* Color gris */
+.pagination-button:disabled {
+  background-color: #cccccc;
   cursor: not-allowed;
-  border: 1px solid #808080;
-  opacity: 0.6;
 }
 
-/* ✅ Botón "En Progreso" */
-.boton-en-progreso {
-  background-color: #28a745; /* Verde */
+.pagination-button:hover:not(:disabled) {
+  background-color: #0056b3;
 }
-
-.boton-en-progreso:hover {
-  background-color: #218838; /* Verde oscuro */
-}
-
-/* ✅ Botón "Finalizar" */
-.boton-finalizar {
-  background-color: #dc3545; /* Rojo */
-}
-
-.boton-finalizar:hover {
-  background-color: #c82333; /* Rojo oscuro */
-}
-
-/* ✅ Evitar que los botones se encimen */
-td {
-  vertical-align: middle; /* Asegura que los botones se alineen bien */
-  text-align: center;
-}
-
-/* ✅ Loader en el centro de la pantalla */
-.loader-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.7); /* Fondo oscuro semitransparente */
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  z-index: 9999;
-  color: white;
-  font-size: 20px;
-  font-weight: bold;
-}
-
-/* ✅ Loader personalizado */
-.gegga {
-  width: 0;
-}
-
-.snurra {
-  filter: url(#gegga);
-}
-
-.stopp1 {
-  stop-color: #f700a8;
-}
-
-.stopp2 {
-  stop-color: #ff8000;
-}
-
-.halvan {
-  animation: Snurra1 10s infinite linear;
-  stroke-dasharray: 180 800;
-  fill: none;
-  stroke: url(#gradient);
-  stroke-width: 23;
-  stroke-linecap: round;
-}
-
-.strecken {
-  animation: Snurra1 3s infinite linear;
-  stroke-dasharray: 26 54;
-  fill: none;
-  stroke: url(#gradient);
-  stroke-width: 23;
-  stroke-linecap: round;
-}
-
-.skugga {
-  filter: blur(5px);
-  opacity: 0.3;
-  position: absolute;
-  transform: translate(3px, 3px);
-}
-
-@keyframes Snurra1 {
-  0% {
-    stroke-dashoffset: 0;
-  }
-  100% {
-    stroke-dashoffset: -403px;
-  }
-}
-
-.table-container {
-  overflow-x: auto;
-}
-table {
-  min-width: 1200px; /* Evita que las columnas se amontonen */
-}
-
-/* ✅ Fondo oscuro para el modal */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-/* ✅ Contenedor del modal */
-.modal-content {
-  background: white;
-  padding: 20px;
-  border-radius: 8px;
-  box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
-  text-align: center;
-  width: 300px;
-}
-
-/* ✅ Botones */
-.modal-buttons {
-  display: flex;
-  justify-content: space-around;
-  margin-top: 15px;
-}
-
-.boton-confirmar {
-  background-color: #28a745;
-  color: white;
-  border: none;
-  padding: 8px 12px;
-  cursor: pointer;
-  border-radius: 5px;
-}
-
-.boton-cancelar {
-  background-color: #dc3545;
-  color: white;
-  border: none;
-  padding: 8px 12px;
-  cursor: pointer;
-  border-radius: 5px;
-}
-

@@ -15,7 +15,6 @@ import Swal from 'sweetalert2';
   styleUrls: ['./pantalla-crear-ticket.component.css']
 })
 export class PantallaCrearTicketComponent implements OnInit {
-  titulo: string = '';
   descripcion: string = '';
   departamento: number | null = null;
   criticidad: number | null = null;
@@ -98,10 +97,14 @@ export class PantallaCrearTicketComponent implements OnInit {
   }
 
   onSubmit() {
-    if (!this.titulo || !this.descripcion || !this.departamento || !this.criticidad || !this.categoriaSeleccionada) {
-      this.mensaje = "⚠️ Por favor, llena todos los campos.";
-      return;
+    // ❌ Verifica si faltan campos
+    if (!this.descripcion || !this.departamento || !this.criticidad || !this.categoriaSeleccionada) {
+        this.mensaje = "⚠️ Por favor, llena todos los campos.";
+        return;
     }
+
+    // ✅ Borra el mensaje de error cuando todos los campos están llenos
+    this.mensaje = "";
 
     const token = localStorage.getItem('token');
     const headers = token
@@ -109,7 +112,6 @@ export class PantallaCrearTicketComponent implements OnInit {
       : new HttpHeaders();
 
     let datosFormulario = {
-      titulo: this.titulo.trim(),
       descripcion: this.descripcion.trim(),
       departamento_id: this.departamento,
       criticidad: Number(this.criticidad),
@@ -120,19 +122,18 @@ export class PantallaCrearTicketComponent implements OnInit {
 
     this.http.post<{ mensaje: string }>(this.apiUrl, datosFormulario, { headers }).subscribe({
       next: () => {
-        // ✅ Muestra un mensaje emergente (toast)
+        // ✅ Muestra mensaje de éxito
         Swal.fire({
           toast: true,
-          position: 'bottom-end', // 📌 Aparece en la esquina superior derecha
+          position: 'bottom-end',
           icon: 'success',
           title: '✅ Ticket creado correctamente.',
-          showConfirmButton: false, // ❌ Sin botón de confirmación
-          timer: 2500 // ⏳ Se oculta automáticamente en 2.5 segundos
+          showConfirmButton: false,
+          timer: 2500
         });
-    
-        // ✅ Restablecer el formulario después de la creación
+
+        // ✅ Restablece el formulario
         setTimeout(() => {
-          this.titulo = "";
           this.descripcion = "";
           this.departamento = null;
           this.criticidad = null;
@@ -153,5 +154,6 @@ export class PantallaCrearTicketComponent implements OnInit {
         });
       }
     });
-  }
+}
+
 }

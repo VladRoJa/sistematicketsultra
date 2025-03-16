@@ -8,9 +8,8 @@ import locale
 locale.setlocale(locale.LC_TIME, 'es_ES.UTF-8')
 
 class Ticket:
-    def __init__(self, id, titulo, descripcion, username, estado, fecha_creacion, id_sucursal, departamento_id, criticidad, categoria, fecha_solucion, historial_fechas, fecha_finalizado=None):
+    def __init__(self, id, descripcion, username, estado, fecha_creacion, id_sucursal, departamento_id, criticidad, categoria, fecha_solucion, historial_fechas, fecha_finalizado=None):
         self.id = id
-        self.titulo = titulo
         self.descripcion = descripcion
         self.username = username
         self.estado = estado
@@ -30,7 +29,6 @@ class Ticket:
 
         return {
             'id': self.id,
-            'titulo': self.titulo,
             'descripcion': self.descripcion,
             'username': self.username,
             'estado': self.estado,
@@ -43,8 +41,8 @@ class Ticket:
         }
 
     @staticmethod
-    def create_ticket(titulo, descripcion, username, id_sucursal, departamento_id, criticidad, categoria):
-        print(f"🔍 Creando ticket con: Titulo={titulo}, Descripcion={descripcion}, Usuario={username}, Sucursal={id_sucursal}, Departamento={departamento_id}, Criticidad={criticidad}, Categoría={categoria}")
+    def create_ticket(descripcion, username, id_sucursal, departamento_id, criticidad, categoria):
+        print(f"🔍 Creando ticket con: Descripcion={descripcion}, Usuario={username}, Sucursal={id_sucursal}, Departamento={departamento_id}, Criticidad={criticidad}, Categoría={categoria}")
 
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
@@ -54,8 +52,8 @@ class Ticket:
             print(f"⚠️ Error: Criticidad no es un entero válido: {criticidad}")
             return None
         
-        query = "INSERT INTO tickets (titulo, descripcion, username, id_sucursal, estado, departamento_id, criticidad, categoria) VALUES (%s, %s, %s, %s, 'abierto', %s, %s, %s)"
-        cursor.execute(query, (titulo, descripcion, username, id_sucursal, departamento_id, criticidad, categoria))
+        query = "INSERT INTO tickets ( descripcion, username, id_sucursal, estado, departamento_id, criticidad, categoria) VALUES (%s, %s, %s, 'abierto', %s, %s, %s)"
+        cursor.execute(query, (descripcion, username, id_sucursal, departamento_id, criticidad, categoria))
         conn.commit()
         ticket_id = cursor.lastrowid
         cursor.close()
