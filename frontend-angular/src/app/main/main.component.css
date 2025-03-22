@@ -96,3 +96,8 @@ button:hover {
 .btn-confirm-delete:hover {
   background-color: rgb(140, 0, 0);
 }
+
+
+.spacer {
+  flex: 1 1 auto;
+}

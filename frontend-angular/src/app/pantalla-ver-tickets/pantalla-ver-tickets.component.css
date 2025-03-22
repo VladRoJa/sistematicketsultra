@@ -336,3 +336,12 @@ tbody tr:hover {
 .pagination-button:hover:not(:disabled) {
   background-color: #0056b3;
 }
+
+.indicador-fecha {
+  display: inline-block;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  margin-left: 0.5rem;
+  vertical-align: middle;
+}

@@ -28,12 +28,17 @@ export class LoginComponent {
     .subscribe({
       next: (response) => {
         console.log("✅ Respuesta del backend:", response);
-        if (response && response.token) {
-          localStorage.setItem('token', response.token); // Guardamos el token de sesión
-          this.router.navigate(['/main']); // Redirigimos a la pantalla principal
+        if (response && response.token && response.user) {
+          console.log("📌 Usuario autenticado en login:", response.user);
+          
+          // 🔥 Ahora usamos setSession() para guardar token + usuario
+          this.authService.setSession(response.token, response.user);
+        
+          this.router.navigate(['/main']);
         } else {
-          this.errorMessage = "⚠️ Error inesperado: Token no recibido.";
+          this.errorMessage = "⚠️ Error inesperado: Token o usuario no recibido.";
         }
+        
       },
       error: (error) => {
         console.error("❌ Error en el login:", error);

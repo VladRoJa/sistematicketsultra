@@ -1,9 +1,10 @@
 //auth.service.ts
 
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { Observable, throwError } from 'rxjs';
 import { Router } from '@angular/router';
+import { tap } from 'rxjs/operators';
 
 @Injectable({
   providedIn: 'root'
@@ -13,19 +14,26 @@ export class AuthService {
 
   constructor(private http: HttpClient, private router: Router) { }
 
-  login(username: string, password: string): Observable<any> {  // 🔹 Debe devolver un Observable
+  login(username: string, password: string): Observable<any> {
     return this.http.post<any>(`${this.apiUrl}/login`, { username, password });
   }
 
   logout() {
+    console.log("🚪 Cerrando sesión...");
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    console.log("✅ Sesión eliminada.");
     this.router.navigate(['/login']);
-  }
+}
+
 
   setSession(token: string, user: any) {
+    console.log("📌 setSession() EJECUTADO"); 
+    console.log("📌 Guardando usuario en localStorage:", user);
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(user));
+    const storedUser = localStorage.getItem('user');
+    console.log("🔍 Usuario después de guardar:", storedUser ? JSON.parse(storedUser) : null);
 
     // 📌 Redirigir según el área del usuario
     const area = user.id_sucursal;
@@ -44,9 +52,23 @@ export class AuthService {
   }
 
   getUser(): any {
-    const user = localStorage.getItem('user');
-    return user ? JSON.parse(user) : null;
-  }
+    const userString = localStorage.getItem("user");
+
+    if (!userString) {
+        console.warn("⚠️ No hay usuario en localStorage.");
+        return null;
+    }
+
+    try {
+        const user = JSON.parse(userString);
+        console.log("✅ Usuario cargado desde localStorage:", user);
+        return user;
+    } catch (error) {
+        console.error("❌ Error al parsear usuario desde localStorage:", error);
+        return null;
+    }
+}
+
 
   isLoggedIn(): boolean {
     return !!this.getToken();
@@ -56,14 +78,19 @@ export class AuthService {
     const token = this.getToken();
     if (!token) {
       console.warn("⚠️ No hay token disponible, no se puede obtener la sesión.");
-      return new Observable((observer) => {
-        observer.error("No hay token disponible");
-      });
+      return throwError(() => new Error("No hay token disponible"));
     }
   
-    const headers = { Authorization: `Bearer ${token}` };
+    const headers = new HttpHeaders().set("Authorization", `Bearer ${token}`);
   
-    return this.http.get<any>(`${this.apiUrl}/session-info`, { headers });
+    return this.http.get<any>(`${this.apiUrl}/session-info`, { headers }).pipe(
+      tap(response => {
+        if (response?.user) {
+          console.log("📌 Usuario obtenido de la API:", response.user);
+          this.setSession(token, response.user); // 🔥 Ahora se guarda en localStorage al obtener la sesión
+        }
+      })
+    );
   }
   
 }

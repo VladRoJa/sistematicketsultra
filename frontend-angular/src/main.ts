@@ -5,12 +5,10 @@ import { provideRouter } from '@angular/router';
 import { provideHttpClient } from '@angular/common/http';
 import { AppComponent } from './app/app.component';
 import { routes } from './app/app.routes';
-import { NgxPaginationModule } from 'ngx-pagination';
-
 
 bootstrapApplication(AppComponent, {
   providers: [
-    provideRouter(routes), // Asegúrate de que 'routes' está correctamente definido
+    provideRouter(routes),
     provideHttpClient(),
   ]
 }).catch(err => console.error(err));

@@ -111,23 +111,48 @@
             </button>
           </td>
           
-        <td>
-          <div *ngIf="!editandoFechaSolucion[ticket.id]; else editando">
-            <span (click)="editarFechaSolucion(ticket)" class="fecha-solucion">
-              {{ ticket.fecha_solucion ? formatearFechaCorta(ticket.fecha_solucion) : "📅 Seleccionar" }}
-            </span>
-            <button *ngIf="ticket.fecha_solucion" (click)="editarFechaSolucion(ticket)" class="boton-editar">
-              ✏️
-            </button>
-          </div>
-        
-          <ng-template #editando>
-            <input type="date" [(ngModel)]="fechaSolucionSeleccionada[ticket.id]" class="input-fecha">
-            <button (click)="guardarFechaSolucion(ticket)" class="boton-guardar">💾</button>
-            <button (click)="cancelarEdicion(ticket)" class="boton-cancelar">❌</button>
-          </ng-template>
-        </td>
-        
+                    <!-- Fecha Solución -->
+                    <td>
+                      <!-- Caso 1: Estado pendiente -->
+                      <div *ngIf="ticket.estado === 'pendiente'">
+                        <span>No asignada</span>
+                      </div>
+                    
+                      <!-- Caso 2: Estado en progreso o finalizado -->
+                      <div *ngIf="ticket.estado !== 'pendiente'">
+                        <!-- Si el ticket está finalizado, se muestra sin opción de editar -->
+                        <div *ngIf="ticket.estado === 'finalizado'; else editable">
+                          <span class="fecha-solucion">
+                            {{ ticket.fecha_solucion ? formatearFechaCorta(ticket.fecha_solucion) : "No asignada" }}
+                          </span>
+                        </div>
+                    
+                        <!-- Editable solo para usuarios admin cuando el ticket está en progreso -->
+                        <ng-template #editable>
+                          <div *ngIf="!usuarioEsAdmin; else adminBlock">
+                            {{ ticket.fecha_solucion ? formatearFechaCorta(ticket.fecha_solucion) : "No asignada" }}
+                          </div>
+                          <ng-template #adminBlock>
+                            <div *ngIf="!editandoFechaSolucion[ticket.id]; else editandoFecha">
+                              <span (click)="editarFechaSolucion(ticket)" class="fecha-solucion">
+                                {{ ticket.fecha_solucion ? formatearFechaCorta(ticket.fecha_solucion) : "📅 Seleccionar" }}
+                              </span>
+                              <button *ngIf="ticket.fecha_solucion" (click)="editarFechaSolucion(ticket)" class="boton-editar">
+                                ✏️
+                              </button>
+                            </div>
+                            <ng-template #editandoFecha>
+                              <input type="date" [(ngModel)]="fechaSolucionSeleccionada[ticket.id]" class="input-fecha">
+                              <button (click)="guardarFechaSolucion(ticket)" class="boton-guardar">💾</button>
+                              <button (click)="cancelarEdicion(ticket)" class="boton-cancelar">❌</button>
+                            </ng-template>
+                          </ng-template>
+                        </ng-template>
+                      </div>
+                    </td>
+                    
+          
+
     
         <!-- ✅ Nueva columna: Historial -->
         <td>
@@ -159,8 +184,8 @@
     <button class="pagination-button" (click)="cambiarPagina(-1)" [disabled]="page === 1">
         Anterior
     </button>
-    <span>Página {{ page }} de {{ totalPaginas() }}</span>
-    <button class="pagination-button" (click)="cambiarPagina(1)" [disabled]="page >= totalPaginas()">
+    <span>Página {{ page }} de {{ totalPages() }}</span>
+    <button class="pagination-button" (click)="cambiarPagina(1)" [disabled]="page >= totalPages()">
         Siguiente
     </button>
 </div>
