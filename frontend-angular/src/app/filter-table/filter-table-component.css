@@ -1,4 +1,4 @@
-/* excel-filter-table-component.component.css */
+/* filter-table-component.component.css */
 
 .filter-column {
     position: relative;
@@ -40,7 +40,7 @@
     margin: 5px;
   }
   
-  .excel-filter-dropdown {
+  .filter-dropdown {
     background: white;
     border: 1px solid #ccc;
     padding: 5px;
@@ -49,20 +49,20 @@
     z-index: 1000;
   }
   
-  .excel-filter-dropdown input {
+  .filter-dropdown input {
     width: 100%;
     padding: 3px;
     margin-bottom: 5px;
     border: 1px solid #ccc;
   }
   
-  .excel-filter-dropdown label {
+  .filter-dropdown label {
     display: block;
     padding: 2px 5px;
     cursor: pointer;
   }
   
-  .excel-filter-dropdown label:hover {
+  .filter-dropdown label:hover {
     background: #f0f0f0;
   }
   

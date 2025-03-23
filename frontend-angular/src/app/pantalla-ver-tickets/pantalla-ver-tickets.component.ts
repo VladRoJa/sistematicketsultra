@@ -10,8 +10,21 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import * as ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
+import { FilterTableComponent, FiltrosTabla } from '../filter-table/filter-table-component';
 
-// Interfaz para definir la estructura de un ticket
+// Angular Material Modules
+import { MatButtonModule } from '@angular/material/button';
+import { MatMenuModule } from '@angular/material/menu';
+import { MatIconModule } from '@angular/material/icon';
+import { MatDividerModule } from '@angular/material/divider';
+import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+
+
+// -------------- Interfaces -------------- //
+
+/** Representa la estructura de un Ticket */
 export interface Ticket {
   id: number;
   descripcion: string;
@@ -24,32 +37,53 @@ export interface Ticket {
   departamento_id: number;
   categoria: string;
   fecha_solucion?: string | null;
-  historial_fechas?: Array<{             
+  historial_fechas?: Array<{
     fecha: string;
     cambiadoPor: string;
     fechaCambio: string;
   }>;
-} 
+}
 
-// Interfaz para la respuesta del backend
+/** Respuesta del backend */
 export interface ApiResponse {
   mensaje: string;
   tickets: Ticket[];
   total_tickets: number;
 }
 
+/** Filtros de la tabla (opcional para métodos generales) */
+interface TablaFiltros {
+  estado?: string;
+  criticidad?: string;
+  departamento?: string;
+  fechaCreacion?: string;
+  fechaFinalizacion?: string;
+}
+
+
+// -------------- Componente -------------- //
 @Component({
   selector: 'app-pantalla-ver-tickets',
   standalone: true,
-  imports: [CommonModule, FormsModule, NgxPaginationModule],
+  imports: [
+    CommonModule,
+    FormsModule,
+    NgxPaginationModule,
+    FilterTableComponent,
+    MatButtonModule,
+    MatMenuModule,
+    MatIconModule,
+    MatDividerModule,
+    MatCheckboxModule,
+    MatFormFieldModule,
+    MatInputModule,
+  ],
   templateUrl: './pantalla-ver-tickets.component.html',
   styleUrls: ['./pantalla-ver-tickets.component.css']
 })
 export class PantallaVerTicketsComponent implements OnInit {
 
-  // ---------------------------
-  // Propiedades para tickets y paginación
-  // ---------------------------
+  // -------------- Tickets y Paginación -------------- //
   tickets: Ticket[] = [];
   filteredTickets: Ticket[] = [];
   totalTickets: number = 0;
@@ -57,25 +91,62 @@ export class PantallaVerTicketsComponent implements OnInit {
   itemsPerPage: number = 15;
   loading: boolean = false;
 
-  // ---------------------------
-  // Propiedades para filtros (si se usan en el HTML)
-  // ---------------------------
-  filtroEstado: string = "";
-  filtroDepartamento: string = "";
-  filtroCriticidad: string = "";
-  filtroFecha: string = "";
-  filtroFechaFinalizacion: string = "";
+  // -------------- Arrays para Checkboxes (Filtros) -------------- //
+  idsDisponibles: Array<{ valor: string, seleccionado: boolean }> = [];
+  categoriasDisponibles: Array<{ valor: string, seleccionado: boolean }> = [];
+  descripcionesDisponibles: Array<{ valor: string, seleccionado: boolean }> = [];
+  usuariosDisponibles: Array<{ valor: string, seleccionado: boolean }> = [];
+  estadosDisponibles: Array<{ valor: string, seleccionado: boolean }> = [];
+  criticidadesDisponibles: Array<{ valor: string, seleccionado: boolean }> = [];
+  fechasCreacionDisponibles: Array<{ valor: string, seleccionado: boolean }> = [];
+  fechasFinalDisponibles: Array<{ valor: string, seleccionado: boolean }> = [];
+  departamentosDisponibles: Array<{ valor: string, seleccionado: boolean }> = [];
 
-  // ---------------------------
-  // Propiedades del usuario y departamentos
-  // ---------------------------
+  // -------------- Nuevas Propiedades para Filtros (cuadros de búsqueda y “Seleccionar todo”) -------------- //
+  // Para columna ID
+  seleccionarTodoID: boolean = false;
+
+  // Para Categoría
+  filtroCategoriaTexto: string = "";
+  seleccionarTodoCategoria: boolean = false;
+  categoriasFiltradas: Array<{ valor: string, seleccionado: boolean }> = [];
+
+  // Para Descripción
+  filtroDescripcionTexto: string = "";
+  seleccionarTodoDescripcion: boolean = false;
+  descripcionesFiltradas: Array<{ valor: string, seleccionado: boolean }> = [];
+
+  // Para Usuario
+  filtroUsuarioTexto: string = "";
+  seleccionarTodoUsuario: boolean = false;
+  usuariosFiltrados: Array<{ valor: string, seleccionado: boolean }> = [];
+
+  // Para Estado
+  filtroEstadoTexto: string = "";
+  seleccionarTodoEstado: boolean = false;
+  estadosFiltrados: Array<{ valor: string, seleccionado: boolean }> = [];
+
+  // Para Criticidad
+  filtroCriticidadTexto: string = "";
+  seleccionarTodoCriticidad: boolean = false;
+  criticidadesFiltradas: Array<{ valor: string, seleccionado: boolean }> = [];
+
+  // Para Fecha Creación
+  filtroFechaTexto: string = "";
+  seleccionarTodoFechaC: boolean = false;
+  fechasCreacionFiltradas: Array<{ valor: string, seleccionado: boolean }> = [];
+
+  // Para Fecha Finalizado
+  filtroFechaFinalTexto: string = "";
+  seleccionarTodoFechaF: boolean = false;
+  fechasFinalFiltradas: Array<{ valor: string, seleccionado: boolean }> = [];
+
+  // -------------- Propiedades de Usuario y Departamentos -------------- //
   user: any = null;
   usuarioEsAdmin: boolean = false;
   departamentos: any[] = [];
 
-  // ---------------------------
-  // Propiedades para confirmación y edición
-  // ---------------------------
+  // -------------- Confirmación y Edición -------------- //
   confirmacionVisible: boolean = false;
   mensajeConfirmacion: string = "";
   accionPendiente: (() => void) | null = null;
@@ -83,7 +154,12 @@ export class PantallaVerTicketsComponent implements OnInit {
   editandoFechaSolucion: Record<number, boolean> = {};
   historialVisible: Record<number, boolean> = {};
 
-  // URL para la sesión (para obtener el usuario)
+  // -------------- Propiedades para Filtro de Departamento -------------- //
+  filtroDeptoTexto: string = "";
+  seleccionarTodoDepto: boolean = false;
+  departamentosFiltrados: Array<{ valor: string, seleccionado: boolean }> = [];
+
+  // -------------- Rutas -------------- //
   private authUrl = 'http://localhost:5000/api/auth/session-info';
   private apiUrl = 'http://localhost:5000/api/tickets';
 
@@ -94,14 +170,14 @@ export class PantallaVerTicketsComponent implements OnInit {
     private http: HttpClient
   ) {}
 
+  // -------------- Ciclo de Vida -------------- //
   async ngOnInit() {
     await this.obtenerUsuarioAutenticado();
     this.cargarTickets();
 
-    // Cargar departamentos para mapear nombres (si se requieren para filtros)
+    // Cargar departamentos
     this.departamentoService.obtenerDepartamentos().subscribe({
       next: (data) => {
-        // Si data no es un array, convertirlo a array
         if (!Array.isArray(data)) {
           this.departamentos = Object.values(data);
         } else {
@@ -114,26 +190,21 @@ export class PantallaVerTicketsComponent implements OnInit {
     });
   }
 
-  /**
-   * Obtiene la información del usuario autenticado usando HttpClient y firstValueFrom.
-   */
+  // -------------- Usuario Autenticado -------------- //
   async obtenerUsuarioAutenticado() {
     const token = localStorage.getItem('token');
     if (!token) return;
-    
     const headers = new HttpHeaders({
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json'
     });
-    
     try {
       const data = await firstValueFrom(
         this.http.get<{ user: any }>(this.authUrl, { headers })
       );
       if (data?.user) {
         this.user = data.user;
-        // Usuario admin si id_sucursal es 1000
-        this.usuarioEsAdmin = this.user.id_sucursal === 1000;
+        this.usuarioEsAdmin = (this.user.id_sucursal === 1000);
         console.log("✅ Usuario autenticado:", this.user);
       }
     } catch (error) {
@@ -141,9 +212,7 @@ export class PantallaVerTicketsComponent implements OnInit {
     }
   }
 
-  /**
-   * Carga los tickets desde el backend usando TicketService y mapea los datos.
-   */
+  // -------------- Cargar Tickets -------------- //
   cargarTickets(): void {
     this.loading = true;
     const offset = (this.page - 1) * this.itemsPerPage;
@@ -154,7 +223,7 @@ export class PantallaVerTicketsComponent implements OnInit {
           this.loading = false;
           return;
         }
-        // Mapear cada ticket para normalizar datos y formatear fechas
+        // Mapear y normalizar datos de cada ticket
         this.tickets = data.tickets.map(ticket => ({
           ...ticket,
           criticidad: ticket.criticidad || 1,
@@ -168,6 +237,10 @@ export class PantallaVerTicketsComponent implements OnInit {
         }));
         this.totalTickets = data.total_tickets;
         this.filteredTickets = [...this.tickets];
+        // Construir las listas para los checkboxes de filtro
+        this.construirListasDisponibles();
+        // Inicializar las listas de filtrado específicas (para búsqueda)
+        this.inicializarListasFiltradas();
         this.loading = false;
       },
       error: (error) => {
@@ -177,9 +250,61 @@ export class PantallaVerTicketsComponent implements OnInit {
     });
   }
 
-  /**
-   * Normaliza el estado del ticket a "pendiente", "en progreso" o "finalizado".
-   */
+  // -------------- Construir Listas para Filtros -------------- //
+  construirListasDisponibles() {
+    // IDs
+    const ids = Array.from(new Set(this.tickets.map(t => t.id)));
+    this.idsDisponibles = ids.map(id => ({ valor: String(id), seleccionado: false }));
+
+    // Categorías
+    const cats = Array.from(new Set(this.tickets.map(t => t.categoria)));
+    this.categoriasDisponibles = cats.map(c => ({ valor: c, seleccionado: false }));
+
+    // Descripciones
+    const descs = Array.from(new Set(this.tickets.map(t => t.descripcion)));
+    this.descripcionesDisponibles = descs.map(d => ({ valor: d, seleccionado: false }));
+
+    // Usuarios
+    const users = Array.from(new Set(this.tickets.map(t => t.username)));
+    this.usuariosDisponibles = users.map(u => ({ valor: u, seleccionado: false }));
+
+    // Estados
+    const ests = Array.from(new Set(this.tickets.map(t => t.estado)));
+    this.estadosDisponibles = ests.map(e => ({ valor: e, seleccionado: false }));
+
+    // Criticidades
+    const crits = Array.from(new Set(this.tickets.map(t => t.criticidad)));
+    this.criticidadesDisponibles = crits.map(c => ({ valor: String(c), seleccionado: false }));
+
+    // Fechas de Creación
+    const fcs = Array.from(new Set(this.tickets.map(t => t.fecha_creacion)));
+    this.fechasCreacionDisponibles = fcs.map(fc => ({ valor: fc, seleccionado: false }));
+
+    // Fechas Final
+    const ffs = Array.from(new Set(this.tickets.map(t => t.fecha_finalizado ?? 'Sin Finalizar')));
+    this.fechasFinalDisponibles = ffs.map(ff => ({ valor: ff, seleccionado: false }));
+
+    // Departamentos
+    const deps = Array.from(new Set(this.tickets.map(t => t.departamento)));
+    this.departamentosDisponibles = deps.map(dep => ({ valor: dep, seleccionado: false }));
+
+    // Inicializar la lista filtrada para Departamento
+    this.departamentosFiltrados = [...this.departamentosDisponibles];
+  }
+
+  // -------------- Inicializar Listas para Filtros con Búsqueda -------------- //
+  inicializarListasFiltradas(): void {
+    // Para cada columna con cuadro de búsqueda, se inicializa la lista filtrada
+    this.categoriasFiltradas = [...this.categoriasDisponibles];
+    this.descripcionesFiltradas = [...this.descripcionesDisponibles];
+    this.usuariosFiltrados = [...this.usuariosDisponibles];
+    this.estadosFiltrados = [...this.estadosDisponibles];
+    this.criticidadesFiltradas = [...this.criticidadesDisponibles];
+    this.fechasCreacionFiltradas = [...this.fechasCreacionDisponibles];
+    this.fechasFinalFiltradas = [...this.fechasFinalDisponibles];
+  }
+
+  // -------------- Normalizar y Formatear Fechas -------------- //
   normalizarEstado(estado: string): "pendiente" | "en progreso" | "finalizado" {
     const estadoLimpio = estado?.trim().toLowerCase();
     if (estadoLimpio === "abierto" || estadoLimpio === "pendiente") return "pendiente";
@@ -188,9 +313,6 @@ export class PantallaVerTicketsComponent implements OnInit {
     return "pendiente";
   }
 
-  /**
-   * Formatea una fecha completa para mostrarla de forma legible.
-   */
   formatearFecha(fechaString: string | null): string {
     if (!fechaString) return 'Sin finalizar';
     const fecha = new Date(fechaString);
@@ -198,7 +320,8 @@ export class PantallaVerTicketsComponent implements OnInit {
       console.error("❌ Fecha inválida detectada:", fechaString);
       return 'Fecha inválida';
     }
-    fecha.setMinutes(fecha.getMinutes() + fecha.getTimezoneOffset() );
+    // Ajuste de zona horaria
+    fecha.setMinutes(fecha.getMinutes() + fecha.getTimezoneOffset());
     return fecha.toLocaleString('es-ES', {
       year: '2-digit',
       month: '2-digit',
@@ -208,62 +331,40 @@ export class PantallaVerTicketsComponent implements OnInit {
     }).replace(',', '').replace(/\//g, '-');
   }
 
-  /**
-   * Formatea una fecha de forma corta (solo dd-mm-aa).
-   */
-/**
- * Muestra la fecha en formato "dd/mm/aa", sin que JavaScript aplique conversiones horarias.
- * Asume que la cadena puede venir en uno de los siguientes formatos:
- *  1) "YYYY-MM-DD HH:mm:ss"
- *  2) "YYYY-MM-DD" (sin hora)
- *  3) "Sat, 01 Mar 2025 01:00:00 GMT" (u otro estilo con GMT)
- */
-formatearFechaCorta(fechaString: string | null): string {
-  if (!fechaString) return 'dd/mm/aa';
-
-
-
-  // 1) Si contiene 'GMT' (ej. "Sat, 01 Mar 2025 01:00:00 GMT"), haremos un parse básico
-  if (fechaString.includes('GMT')) {
-    // Ejemplo de cadena: "Sat, 01 Mar 2025 01:00:00 GMT"
-    // Dividimos por espacios
-    const partes = fechaString.split(' ');
-    // Suele tener [DiaSemana, DiaNumero, MesTexto, Año, HoraGMT, GMT]
-    // Ej: ["Sat,", "01", "Mar", "2025", "01:00:00", "GMT"]
-    if (partes.length < 5) return 'Fecha inválida';
-
-    const dia = partes[1];      // "01"
-    const mesTexto = partes[2]; // "Mar"
-    const anio = partes[3];     // "2025"
-
-    // Convertir mesTexto a número (ej. "Mar" → "03")
-    const meses: any = {
-      Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06',
-      Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12'
-    };
-    const mesNumero = meses[mesTexto] || '01';
-
-    // Retornamos "dd/mm/aa"
-    return `${dia}/${mesNumero}/${anio.slice(-2)}`;
+  formatearFechaCorta(fechaString: string | null): string {
+    if (!fechaString) return 'dd/mm/aa';
+  
+    // Parseamos directamente la cadena
+    const fecha = new Date(fechaString);
+  
+    // Verificamos si la fecha es inválida
+    if (isNaN(fecha.getTime())) {
+      console.error("❌ Fecha inválida detectada:", fechaString);
+      return 'Fecha inválida';
+    }
+  
+    // Devolvemos solo día/mes/año (sin hora),
+    // usando la configuración regional 'es-ES'.
+    return fecha.toLocaleDateString('es-ES', {
+      year: '2-digit',
+      month: '2-digit',
+      day: '2-digit'
+    });
   }
 
-  // 2) Si contiene espacio (ej. "YYYY-MM-DD HH:mm:ss"), tomamos solo la parte "YYYY-MM-DD"
-  //    Si NO contiene espacio, podría ser solo "YYYY-MM-DD"
-  const [datePart] = fechaString.split(" ");
-  // datePart debería ser "YYYY-MM-DD"
-  if (!datePart) return 'Fecha inválida';
-
-  const [year, month, day] = datePart.split("-");
-  if (!year || !month || !day) return 'Fecha inválida';
-
-  // Devolvemos "dd/mm/aa"
-  return `${day}/${month}/${year.slice(-2)}`;
-}
+    /**
+   * Elimina acentos y diacríticos de una cadena usando normalize + RegEx.
+   * "Eléctrica" -> "Electrica"
+   */
+  removeDiacritics(texto: string): string {
+    return texto
+      .normalize("NFD")                 // Normaliza la cadena a Unicode NFD
+      .replace(/\p{Diacritic}/gu, "");  // Elimina caracteres diacríticos
+  }
 
   
-  /**
-   * Avanza a la siguiente página de tickets.
-   */
+
+  // -------------- Paginación -------------- //
   nextPage(): void {
     if ((this.page * this.itemsPerPage) < this.totalTickets) {
       this.page++;
@@ -271,9 +372,6 @@ formatearFechaCorta(fechaString: string | null): string {
     }
   }
 
-  /**
-   * Retrocede a la página anterior de tickets.
-   */
   prevPage(): void {
     if (this.page > 1) {
       this.page--;
@@ -281,9 +379,6 @@ formatearFechaCorta(fechaString: string | null): string {
     }
   }
 
-  /**
-   * Cambia la página manualmente (por ejemplo, desde controles numéricos).
-   */
   cambiarPagina(direccion: number) {
     const nuevaPagina = this.page + direccion;
     if (nuevaPagina > 0 && nuevaPagina <= this.totalPages()) {
@@ -292,20 +387,14 @@ formatearFechaCorta(fechaString: string | null): string {
     }
   }
 
-  /**
-   * Calcula el total de páginas basado en totalTickets e itemsPerPage.
-   */
   totalPages(): number {
     return Math.ceil(this.totalTickets / this.itemsPerPage);
   }
 
-  /**
-   * Exporta la lista de tickets a Excel.
-   */
+  // -------------- Exportar a Excel -------------- //
   exportToExcel(): void {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Tickets');
-
     worksheet.columns = [
       { header: 'ID', key: 'id', width: 10 },
       { header: 'Descripción', key: 'descripcion', width: 50 },
@@ -317,54 +406,38 @@ formatearFechaCorta(fechaString: string | null): string {
       { header: 'Departamento', key: 'departamento', width: 25 },
       { header: 'Categoría', key: 'categoria', width: 25 }
     ];
-
     this.tickets.forEach(ticket => {
       worksheet.addRow({
         ...ticket,
         fecha_finalizado: ticket.fecha_finalizado || 'N/A'
       });
     });
-
     workbook.xlsx.writeBuffer().then(buffer => {
       saveAs(new Blob([buffer]), `tickets_${new Date().toISOString().slice(0, 10)}.xlsx`);
     });
   }
 
-  // ---------------------------
-  // Funciones para cambiar estado y finalizar ticket
-  // ---------------------------
-
-  
+  // -------------- Funciones para Cambiar Estado y Finalizar Tickets -------------- //
   cambiarEstadoTicket(ticket: Ticket, nuevoEstado: "pendiente" | "en progreso" | "finalizado") {
     if (!this.usuarioEsAdmin) return;
-  
     this.mostrarConfirmacion(
       `¿Estás seguro de cambiar el estado del ticket #${ticket.id} a ${nuevoEstado.toUpperCase()}?`,
       () => {
         const token = localStorage.getItem('token');
         if (!token) return;
-  
         const headers = new HttpHeaders()
           .set('Authorization', `Bearer ${token}`)
           .set('Content-Type', 'application/json');
-  
-        // Preparamos el objeto de actualización
         let updateData: any = { estado: nuevoEstado };
-  
-        // Si el estado es "finalizado", añadimos la fecha de finalización
         if (nuevoEstado === "finalizado") {
           updateData.fecha_finalizado = new Date().toISOString().slice(0, 19).replace("T", " ");
         }
-  
-        // Realizamos la petición PUT al backend
         this.http.put<ApiResponse>(`${this.apiUrl}/update/${ticket.id}`, updateData, { headers }).subscribe({
           next: () => {
-            // Actualizamos localmente el estado del ticket
             ticket.estado = nuevoEstado;
             if (nuevoEstado === "finalizado") {
               ticket.fecha_finalizado = updateData.fecha_finalizado;
             }
-            // Forzamos la actualización de la UI
             this.changeDetectorRef.detectChanges();
           },
           error: (error) => console.error(`❌ Error actualizando ticket: ${error}`)
@@ -372,36 +445,21 @@ formatearFechaCorta(fechaString: string | null): string {
       }
     );
   }
-  
 
   finalizarTicket(ticket: Ticket) {
-    // Solo los administradores pueden finalizar tickets
     if (!this.usuarioEsAdmin) return;
-  
-    // Mostrar el modal de confirmación con el mensaje y la acción pendiente
     this.mostrarConfirmacion(
       `¿Estás seguro de marcar como FINALIZADO el ticket #${ticket.id}?`,
       () => {
-        // Acción a ejecutar si el usuario confirma
         const token = localStorage.getItem('token');
         if (!token) return;
-  
-        // Configurar headers con el token para la autorización
         const headers = new HttpHeaders()
           .set('Authorization', `Bearer ${token}`)
           .set('Content-Type', 'application/json');
-  
-        // Obtener la fecha actual en formato 'YYYY-MM-DD HH:MM:SS'
         const fechaFinalizado = new Date().toISOString().slice(0, 19).replace("T", " ");
-  
-        // Realizar la llamada PUT al backend para actualizar el estado y la fecha_finalizado
-        this.http.put<ApiResponse>(`${this.apiUrl}/update/${ticket.id}`, 
-          { estado: "finalizado", fecha_finalizado: fechaFinalizado }, 
-          { headers }
-        ).subscribe({
+        this.http.put<ApiResponse>(`${this.apiUrl}/update/${ticket.id}`, { estado: "finalizado", fecha_finalizado: fechaFinalizado }, { headers }).subscribe({
           next: () => {
             console.log("✅ Ticket finalizado en el backend.");
-            // Recargar la lista de tickets para reflejar los cambios
             this.cargarTickets();
           },
           error: (error) => console.error(`❌ Error al finalizar el ticket ${ticket.id}:`, error)
@@ -409,46 +467,29 @@ formatearFechaCorta(fechaString: string | null): string {
       }
     );
   }
-  
-  
 
-  // ---------------------------
-  // Funciones para editar fecha de solución
-  // ---------------------------
+  // -------------- Funciones para Editar Fecha de Solución -------------- //
   editarFechaSolucion(ticket: Ticket) {
     this.editandoFechaSolucion[ticket.id] = true;
-    // Inicializar la fecha seleccionada si no existe
     if (!this.fechaSolucionSeleccionada[ticket.id]) {
       this.fechaSolucionSeleccionada[ticket.id] = ticket.fecha_solucion || "";
     }
   }
 
   guardarFechaSolucion(ticket: Ticket) {
-    // Verificar que el usuario haya seleccionado alguna fecha
     if (!this.fechaSolucionSeleccionada[ticket.id]) return;
-  
     const token = localStorage.getItem("token");
     if (!token) {
       console.error("❌ No hay token almacenado.");
       return;
     }
-  
-    console.log(`📤 Fecha enviada al backend para ticket #${ticket.id}: ${this.fechaSolucionSeleccionada[ticket.id]}`);
-  
-    // Configurar headers para la petición
     const headers = new HttpHeaders()
       .set("Authorization", `Bearer ${token}`)
       .set("Content-Type", "application/json");
-  
-    console.log(`📤 Fecha antes de ajustes: ${this.fechaSolucionSeleccionada[ticket.id]}`);
-    
-    
-    // Ajuste: Fijar la hora a la 1:00:00 AM en lugar de 00:01:00
+    // Fijamos la hora a 01:00:00 AM
     const fechaFormateada = `${this.fechaSolucionSeleccionada[ticket.id]} 01:00:00`;
-  
-    // Construir los datos que se enviarán al backend
     const datosEnviados = {
-      estado: ticket.estado,          // Mantiene el estado actual del ticket
+      estado: ticket.estado,
       fecha_solucion: fechaFormateada,
       historial_fechas: JSON.stringify([
         ...(ticket.historial_fechas || []),
@@ -459,16 +500,10 @@ formatearFechaCorta(fechaString: string | null): string {
         },
       ]),
     };
-  
-    // Realizar la petición PUT para actualizar el ticket en el backend
     this.http.put(`${this.apiUrl}/update/${ticket.id}`, datosEnviados, { headers }).subscribe({
       next: () => {
-        // Actualizar la fecha_solución localmente
         ticket.fecha_solucion = fechaFormateada;
-        // Salir del modo edición
         this.editandoFechaSolucion[ticket.id] = false;
-  
-        // Actualizar el historial en el ticket (por si la UI lo muestra)
         if (!ticket.historial_fechas) {
           ticket.historial_fechas = [];
         }
@@ -477,7 +512,6 @@ formatearFechaCorta(fechaString: string | null): string {
           cambiadoPor: this.user.username,
           fechaCambio: new Date().toISOString(),
         });
-  
         console.log(`✅ Fecha de solución del ticket #${ticket.id} actualizada a las 1:00 AM.`);
       },
       error: (error) => {
@@ -485,47 +519,34 @@ formatearFechaCorta(fechaString: string | null): string {
       },
     });
   }
-  
-  getIndicadorColor(ticket: Ticket): string {
-    // Si no hay historial, no se muestra color
-    if (!ticket.fecha_solucion || !ticket.historial_fechas || ticket.historial_fechas.length === 0) {
-      return 'transparent';
-    }
-  
-    // Suponemos que la primera entrada del historial es la fecha original
-    const fechaOriginalStr = ticket.historial_fechas[0].fecha;
-    const fechaNuevaStr = ticket.fecha_solucion;
-  
-    const fechaOriginal = new Date(fechaOriginalStr);
-    const fechaNueva = new Date(fechaNuevaStr);
-  
-    if (isNaN(fechaOriginal.getTime()) || isNaN(fechaNueva.getTime())) {
-      return 'transparent';
-    }
-  
-    // Diferencia en días (redondeada)
-    const diffDays = Math.round((fechaNueva.getTime() - fechaOriginal.getTime()) / (1000 * 60 * 60 * 24));
-  
-    if (diffDays < 0) {
-      // Se movió hacia atrás → verde
-      return 'green';
-    } else if (diffDays <= 5) {
-      // Se movió hacia adelante hasta 5 días → amarillo
-      return 'yellow';
-    } else {
-      // Más de 5 días hacia adelante → rojo
-      return 'red';
-    }
-  }
-  
 
   cancelarEdicion(ticket: Ticket) {
     this.editandoFechaSolucion[ticket.id] = false;
   }
 
-  // ---------------------------
-  // Funciones para mostrar historial y confirmación de acciones
-  // ---------------------------
+  // -------------- Funciones para Indicador de Color (Fecha de Solución) -------------- //
+  getIndicadorColor(ticket: Ticket): string {
+    if (!ticket.fecha_solucion || !ticket.historial_fechas || ticket.historial_fechas.length === 0) {
+      return 'transparent';
+    }
+    const fechaOriginalStr = ticket.historial_fechas[0].fecha;
+    const fechaNuevaStr = ticket.fecha_solucion;
+    const fechaOriginal = new Date(fechaOriginalStr);
+    const fechaNueva = new Date(fechaNuevaStr);
+    if (isNaN(fechaOriginal.getTime()) || isNaN(fechaNueva.getTime())) {
+      return 'transparent';
+    }
+    const diffDays = Math.round((fechaNueva.getTime() - fechaOriginal.getTime()) / (1000 * 60 * 60 * 24));
+    if (diffDays < 0) {
+      return 'green';   // Se movió hacia atrás
+    } else if (diffDays <= 5) {
+      return 'yellow';  // Adelantó pocos días
+    } else {
+      return 'red';     // Adelantó más de 5 días
+    }
+  }
+
+  // -------------- Funciones para Historial y Confirmación -------------- //
   toggleHistorial(ticketId: number) {
     this.historialVisible[ticketId] = !this.historialVisible[ticketId];
   }
@@ -548,20 +569,264 @@ formatearFechaCorta(fechaString: string | null): string {
     this.accionPendiente = null;
   }
 
-  // ---------------------------
-  // Función para filtrar tickets localmente
-  // ---------------------------
-  filtrarTickets() {
-    this.filteredTickets = this.tickets.filter(ticket =>
-      (this.filtroEstado ? ticket.estado === this.filtroEstado : true) &&
-      (this.filtroDepartamento ? ticket.departamento === this.filtroDepartamento : true) &&
-      (this.filtroFecha ? new Date(ticket.fecha_creacion).toISOString().split('T')[0] === this.filtroFecha : true) &&
-      (this.filtroFechaFinalizacion
-        ? ticket.fecha_finalizado && new Date(ticket.fecha_finalizado).toISOString().split('T')[0] === this.filtroFechaFinalizacion
-        : true) &&
-      (this.filtroCriticidad ? ticket.criticidad === parseInt(this.filtroCriticidad, 10) : true)
-    );
+  // -------------- Funciones para Filtrado por Columna -------------- //
+
+  aplicarFiltroColumna(columna: string) {
+    console.log(`Aplicar filtro en columna: ${columna}`);
+    this.filteredTickets = [...this.tickets];
+    if (columna === 'id') {
+      const seleccionadas = this.idsDisponibles.filter(i => i.seleccionado).map(i => i.valor);
+      if (seleccionadas.length > 0) {
+        this.filteredTickets = this.filteredTickets.filter(t => seleccionadas.includes(String(t.id)));
+      }
+    }
+    if (columna === 'categoria') {
+      const seleccionadas = this.categoriasDisponibles.filter(cat => cat.seleccionado).map(cat => cat.valor);
+      if (seleccionadas.length > 0) {
+        this.filteredTickets = this.filteredTickets.filter(t => seleccionadas.includes(t.categoria));
+      }
+    }
+    if (columna === 'descripcion') {
+      const seleccionadas = this.descripcionesDisponibles.filter(d => d.seleccionado).map(d => d.valor);
+      if (seleccionadas.length > 0) {
+        this.filteredTickets = this.filteredTickets.filter(t => seleccionadas.includes(t.descripcion));
+      }
+    }
+    if (columna === 'username') {
+      const seleccionadas = this.usuariosDisponibles.filter(u => u.seleccionado).map(u => u.valor);
+      if (seleccionadas.length > 0) {
+        this.filteredTickets = this.filteredTickets.filter(t => seleccionadas.includes(t.username));
+      }
+    }
+    if (columna === 'estado') {
+      const seleccionadas = this.estadosDisponibles.filter(e => e.seleccionado).map(e => e.valor);
+      if (seleccionadas.length > 0) {
+        this.filteredTickets = this.filteredTickets.filter(t => seleccionadas.includes(t.estado));
+      }
+    }
+    if (columna === 'criticidad') {
+      const seleccionadas = this.criticidadesDisponibles.filter(c => c.seleccionado).map(c => c.valor);
+      if (seleccionadas.length > 0) {
+        this.filteredTickets = this.filteredTickets.filter(t => seleccionadas.includes(String(t.criticidad)));
+      }
+    }
+    if (columna === 'fecha_creacion') {
+      const seleccionadas = this.fechasCreacionDisponibles.filter(fc => fc.seleccionado).map(fc => fc.valor);
+      if (seleccionadas.length > 0) {
+        this.filteredTickets = this.filteredTickets.filter(t => seleccionadas.includes(t.fecha_creacion));
+      }
+    }
+    if (columna === 'fecha_finalizado') {
+      const seleccionadas = this.fechasFinalDisponibles.filter(ff => ff.seleccionado).map(ff => ff.valor);
+      if (seleccionadas.length > 0) {
+        this.filteredTickets = this.filteredTickets.filter(t => {
+          const val = t.fecha_finalizado ?? 'Sin Finalizar';
+          return seleccionadas.includes(val);
+        });
+      }
+    }
+    if (columna === 'departamento') {
+      const seleccionadas = this.departamentosDisponibles.filter(d => d.seleccionado).map(d => d.valor);
+      if (seleccionadas.length > 0) {
+        this.filteredTickets = this.filteredTickets.filter(t => seleccionadas.includes(t.departamento));
+      }
+    }
   }
 
+  limpiarFiltroColumna(columna: string) {
+    if (columna === 'id') {
+      this.idsDisponibles.forEach(item => item.seleccionado = false);
+      this.seleccionarTodoID = false;
+    }
+    if (columna === 'categoria') {
+      this.categoriasDisponibles.forEach(item => item.seleccionado = false);
+      this.filtroCategoriaTexto = "";
+      // Reiniciar la lista filtrada para categoría
+      this.categoriasFiltradas = [...this.categoriasDisponibles];
+      this.seleccionarTodoCategoria = false;
+    }
+    if (columna === 'descripcion') {
+      this.descripcionesDisponibles.forEach(item => item.seleccionado = false);
+      this.filtroDescripcionTexto = "";
+      this.descripcionesFiltradas = [...this.descripcionesDisponibles];
+      this.seleccionarTodoDescripcion = false;
+    }
+    if (columna === 'username') {
+      this.usuariosDisponibles.forEach(item => item.seleccionado = false);
+      this.filtroUsuarioTexto = "";
+      this.usuariosFiltrados = [...this.usuariosDisponibles];
+      this.seleccionarTodoUsuario = false;
+    }
+    if (columna === 'estado') {
+      this.estadosDisponibles.forEach(item => item.seleccionado = false);
+      this.filtroEstadoTexto = "";
+      this.estadosFiltrados = [...this.estadosDisponibles];
+      this.seleccionarTodoEstado = false;
+    }
+    if (columna === 'criticidad') {
+      this.criticidadesDisponibles.forEach(item => item.seleccionado = false);
+      this.filtroCriticidadTexto = "";
+      this.criticidadesFiltradas = [...this.criticidadesDisponibles];
+      this.seleccionarTodoCriticidad = false;
+    }
+    if (columna === 'fecha_creacion') {
+      this.fechasCreacionDisponibles.forEach(item => item.seleccionado = false);
+      this.filtroFechaTexto = "";
+      this.fechasCreacionFiltradas = [...this.fechasCreacionDisponibles];
+      this.seleccionarTodoFechaC = false;
+    }
+    if (columna === 'fecha_finalizado') {
+      this.fechasFinalDisponibles.forEach(item => item.seleccionado = false);
+      this.filtroFechaFinalTexto = "";
+      this.fechasFinalFiltradas = [...this.fechasFinalDisponibles];
+      this.seleccionarTodoFechaF = false;
+    }
+    if (columna === 'departamento') {
+      this.departamentosDisponibles.forEach(item => item.seleccionado = false);
+      this.filtroDeptoTexto = "";
+      this.departamentosFiltrados = [...this.departamentosDisponibles];
+      this.seleccionarTodoDepto = false;
+    }
+    // Reiniciamos la lista filtrada general
+    this.filteredTickets = [...this.tickets];
+  }
 
+  // Función general para "Seleccionar Todo" según columna
+  toggleSeleccionarTodo(columna: string): void {
+    if (columna === 'id') {
+      this.idsDisponibles.forEach(item => item.seleccionado = this.seleccionarTodoID);
+    } else if (columna === 'categoria') {
+      this.categoriasFiltradas.forEach(item => item.seleccionado = this.seleccionarTodoCategoria);
+    } else if (columna === 'descripcion') {
+      this.descripcionesFiltradas.forEach(item => item.seleccionado = this.seleccionarTodoDescripcion);
+    } else if (columna === 'username') {
+      this.usuariosFiltrados.forEach(item => item.seleccionado = this.seleccionarTodoUsuario);
+    } else if (columna === 'estado') {
+      this.estadosFiltrados.forEach(item => item.seleccionado = this.seleccionarTodoEstado);
+    } else if (columna === 'criticidad') {
+      this.criticidadesFiltradas.forEach(item => item.seleccionado = this.seleccionarTodoCriticidad);
+    } else if (columna === 'fecha_creacion') {
+      this.fechasCreacionFiltradas.forEach(item => item.seleccionado = this.seleccionarTodoFechaC);
+    } else if (columna === 'fecha_finalizado') {
+      this.fechasFinalFiltradas.forEach(item => item.seleccionado = this.seleccionarTodoFechaF);
+    } else if (columna === 'departamento') {
+      // Evitamos recursión: Marcamos la lista filtrada
+      this.departamentosFiltrados.forEach(item => item.seleccionado = this.seleccionarTodoDepto);
+    }
+  }
+
+  // -------------- Funciones para Filtrar Opciones (Categoría, Descripción, etc.) -------------- //
+ // Filtrar Opciones para Categoría (ignora acentos)
+filtrarOpcionesCategoria(): void {
+  if (!this.filtroCategoriaTexto) {
+    this.categoriasFiltradas = [...this.categoriasDisponibles];
+  } else {
+    const textoNormalizado = this.removeDiacritics(this.filtroCategoriaTexto.toLowerCase());
+    this.categoriasFiltradas = this.categoriasDisponibles.filter(cat => {
+      const valorNormalizado = this.removeDiacritics(cat.valor.toLowerCase());
+      return valorNormalizado.includes(textoNormalizado);
+    });
+  }
+}
+
+// Filtrar Opciones para Descripción (ignora acentos)
+filtrarOpcionesDescripcion(): void {
+  if (!this.filtroDescripcionTexto) {
+    this.descripcionesFiltradas = [...this.descripcionesDisponibles];
+  } else {
+    const textoNormalizado = this.removeDiacritics(this.filtroDescripcionTexto.toLowerCase());
+    this.descripcionesFiltradas = this.descripcionesDisponibles.filter(desc => {
+      const valorNormalizado = this.removeDiacritics(desc.valor.toLowerCase());
+      return valorNormalizado.includes(textoNormalizado);
+    });
+  }
+}
+
+// Filtrar Opciones para Usuario (ignora acentos)
+filtrarOpcionesUsuario(): void {
+  if (!this.filtroUsuarioTexto) {
+    this.usuariosFiltrados = [...this.usuariosDisponibles];
+  } else {
+    const textoNormalizado = this.removeDiacritics(this.filtroUsuarioTexto.toLowerCase());
+    this.usuariosFiltrados = this.usuariosDisponibles.filter(usr => {
+      const valorNormalizado = this.removeDiacritics(usr.valor.toLowerCase());
+      return valorNormalizado.includes(textoNormalizado);
+    });
+  }
+}
+
+// Filtrar Opciones para Estado (ignora acentos)
+filtrarOpcionesEstado(): void {
+  if (!this.filtroEstadoTexto) {
+    this.estadosFiltrados = [...this.estadosDisponibles];
+  } else {
+    const textoNormalizado = this.removeDiacritics(this.filtroEstadoTexto.toLowerCase());
+    this.estadosFiltrados = this.estadosDisponibles.filter(est => {
+      const valorNormalizado = this.removeDiacritics(est.valor.toLowerCase());
+      return valorNormalizado.includes(textoNormalizado);
+    });
+  }
+}
+
+// Filtrar Opciones para Criticidad (aunque es numérico, se trata como string)
+filtrarOpcionesCriticidad(): void {
+  if (!this.filtroCriticidadTexto) {
+    this.criticidadesFiltradas = [...this.criticidadesDisponibles];
+  } else {
+    const textoNormalizado = this.removeDiacritics(this.filtroCriticidadTexto.toLowerCase());
+    this.criticidadesFiltradas = this.criticidadesDisponibles.filter(crit => {
+      const valorNormalizado = this.removeDiacritics(crit.valor.toLowerCase());
+      return valorNormalizado.includes(textoNormalizado);
+    });
+  }
+}
+
+// Filtrar Opciones para Fecha Creación (no requiere remoción de diacríticos)
+filtrarOpcionesFechaC(): void {
+  if (!this.filtroFechaTexto) {
+    this.fechasCreacionFiltradas = [...this.fechasCreacionDisponibles];
+  } else {
+    const texto = this.filtroFechaTexto.toLowerCase();
+    this.fechasCreacionFiltradas = this.fechasCreacionDisponibles.filter(fc =>
+      fc.valor.toLowerCase().includes(texto)
+    );
+  }
+}
+
+// Filtrar Opciones para Fecha Finalizado (no requiere remoción de diacríticos)
+filtrarOpcionesFechaF(): void {
+  if (!this.filtroFechaFinalTexto) {
+    this.fechasFinalFiltradas = [...this.fechasFinalDisponibles];
+  } else {
+    const texto = this.filtroFechaFinalTexto.toLowerCase();
+    this.fechasFinalFiltradas = this.fechasFinalDisponibles.filter(ff =>
+      ff.valor.toLowerCase().includes(texto)
+    );
+  }
+}
+
+// Filtrar Opciones para Departamento (ignora acentos)
+filtrarOpcionesDepto(): void {
+  if (!this.filtroDeptoTexto) {
+    this.departamentosFiltrados = [...this.departamentosDisponibles];
+  } else {
+    const textoNormalizado = this.removeDiacritics(this.filtroDeptoTexto.toLowerCase());
+    this.departamentosFiltrados = this.departamentosDisponibles.filter(dep => {
+      const valorNormalizado = this.removeDiacritics(dep.valor.toLowerCase());
+      return valorNormalizado.includes(textoNormalizado);
+    });
+  }
+}
+
+  // -------------- Función para Ordenar -------------- //
+  ordenar(columna: string, direccion: 'asc' | 'desc') {
+    console.log(`Ordenar por ${columna} en dirección ${direccion}`);
+    this.filteredTickets.sort((a, b) => {
+      const valA = (a as any)[columna] || '';
+      const valB = (b as any)[columna] || '';
+      if (valA < valB) return direccion === 'asc' ? -1 : 1;
+      if (valA > valB) return direccion === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }
 }

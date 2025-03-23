@@ -15,38 +15,18 @@
     padding: 10px;
   }
   
-  .filtros {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    align-items: center;
-    margin-bottom: 10px;
-  }
-  
-  .filtros label {
-    font-weight: bold;
-    margin-right: 5px;
-  }
-  
-  .filtros select, .filtros input {
-    padding: 5px;
-    border: 1px solid #ccc;
-    border-radius: 5px;
-  }
-  
   /* =========================
      TABLA DE TICKETS
      ========================= */
   .table-container {
-  width: 100%;  /* ✅ Ocupa todo el ancho disponible */
-  max-width: 100vw;  /* ✅ Evita que sobresalga */
-  margin: 0 auto; /* ✅ Centra el contenedor */
-  padding: 0;
-  overflow-x: auto; /* ✅ Desplazamiento horizontal solo si es necesario */
-  overflow-y: auto;
-  max-height: 500px;
-  position: relative;
-
+    width: 100%;              /* Ocupa todo el ancho disponible */
+    max-width: 100vw;         /* Evita que sobresalga */
+    margin: 0 auto;           /* Centra el contenedor */
+    padding: 0;
+    overflow-x: auto;         /* Scroll horizontal si es necesario */
+    overflow-y: auto;
+    max-height: 500px;
+    position: relative;
   }
   
   table {
@@ -74,11 +54,54 @@
   tr:nth-child(even) {
     background-color: #f2f2f2;
   }
-
-
   
   /* =========================
-     BOTONES
+     MENÚS DE FILTRADO (Angular Material)
+     ========================= */
+  /* Botón de encabezado en cada columna */
+  .header-button {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-weight: bold;
+  }
+  
+  /* Contenedor interno para el filtro en el menú */
+  .menu-filtro {
+    padding: 0.5rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-width: 200px;  /* Evita que el menú se vea muy angosto */
+  }
+  
+  /* Estilo para el label en el menú de filtro */
+  .menu-filtro label {
+    font-weight: bold;
+    margin-bottom: 0.25rem;
+  }
+  
+  /* Campo de búsqueda dentro del menú */
+  .buscador-filtro {
+    width: 100%;
+  }
+  
+  /* Contenedor scrollable para checkboxes, en caso de muchas opciones */
+  .opciones-scrollable {
+    max-height: 200px;
+    overflow-y: auto;
+    margin-top: 0.5rem;
+  }
+  
+  /* Botones (Aceptar / Cancelar) dentro del menú de filtro */
+  .menu-botones {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 0.5rem;
+  }
+  
+  /* =========================
+     BOTONES GENERALES
      ========================= */
   .boton-estado {
     display: inline-block;
@@ -218,37 +241,108 @@
   }
   
   /* =========================
-     RESPONSIVIDAD
+     Paginación
      ========================= */
-     @media screen and (min-width: 2560px) { /* 4K */
-      .table-container {
-          max-width: 80vw;
-      }
-  
-      table {
-          font-size: 18px;
-      }
-  
-      th, td {
-          padding: 16px;
-      }
+  .pagination-container {
+    flex: 1; /* Ocupa todo el espacio disponible */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
   }
   
-     @media screen and (min-width: 1920px) {
-      .table-container {
-          max-width: 85vw; /* 🔹 Reduce márgenes laterales */
-          margin: auto; /* 🔹 Centra la tabla en la pantalla */
-      }
+  .pagination-button {
+    background-color: #007bff;
+    color: white;
+    border: none;
+    padding: 8px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.2s ease-in-out;
+  }
   
-      table {
-          font-size: 16px; /* 🔹 Aumenta un poco el tamaño del texto */
-      }
+  .pagination-button:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+  }
   
-      th, td {
-          padding: 16px; /* 🔹 Mejora la legibilidad */
-      }
+  .pagination-button:hover:not(:disabled) {
+    background-color: #0056b3;
   }
 
+  .pagination-export-container {
+    /* Si quieres que se desplace hasta llegar al final, usa sticky: */
+    position: sticky; 
+    bottom: 0;             /* Se "pega" al fondo del contenedor/página */
+    left: 0;
+    background-color: #fff;
+    display: flex;
+    align-items: center;
+    padding: 10px 20px;
+    z-index: 10;
+  
+    /* Un margen inferior para dar espacio visual extra */
+    margin-bottom: 10px; /* Ajusta a tu preferencia */
+    
+    /* Si la tabla tiene overflow, es posible que necesites un box-shadow o border-top: */
+    /* border-top: 1px solid #ccc; */
+    /* box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.1); */
+  }
+  .export-container {
+    /* Para ubicar el botón a la derecha */
+    display: flex;
+    justify-content: flex-end;
+    margin-left: auto;
+  }
+
+  /* Botón de exportar */
+  .boton-exportar {
+    background-color: #343a40; /* Por ejemplo, gris oscuro */
+    color: white;
+    padding: 8px 15px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.2s ease-in-out;
+  }
+
+  .boton-exportar:hover {
+    background-color: #23272b;
+  }
+
+  
+  /* =========================
+     RESPONSIVIDAD
+     ========================= */
+  @media screen and (min-width: 2560px) { /* 4K */
+    .table-container {
+      max-width: 80vw;
+    }
+  
+    table {
+      font-size: 18px;
+    }
+  
+    th, td {
+      padding: 16px;
+    }
+  }
+  
+  @media screen and (min-width: 1920px) {
+    .table-container {
+      max-width: 85vw;
+      margin: auto;
+    }
+  
+    table {
+      font-size: 16px;
+    }
+  
+    th, td {
+      padding: 16px;
+    }
+  }
+  
   @media screen and (max-width: 768px) {
     th, td {
       font-size: 12px;
@@ -261,7 +355,6 @@
     .table-container {
       overflow-x: scroll;
     }
-
   }
   
   @media screen and (max-width: 480px) {
@@ -294,54 +387,3 @@
     }
   }
   
-  /* Alternar colores en las filas */
-tbody tr:nth-child(odd) {
-  background-color: #dee2e6; /* Gris claro */
-}
-
-tbody tr:nth-child(even) {
-  background-color: #ffffff; /* Blanco */
-}
-
-/* Opcional: Agregar un efecto al pasar el mouse */
-tbody tr:hover {
-  background-color: #e9ecef; /* Un poco más oscuro al pasar el cursor */
-  transition: background-color 0.3s ease-in-out;
-}
-
-
-.pagination-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  margin-top: 10px;
-  gap: 10px;
-}
-
-.pagination-button {
-  background-color: #007bff;
-  color: white;
-  border: none;
-  padding: 8px 15px;
-  border-radius: 5px;
-  cursor: pointer;
-  transition: background-color 0.2s ease-in-out;
-}
-
-.pagination-button:disabled {
-  background-color: #cccccc;
-  cursor: not-allowed;
-}
-
-.pagination-button:hover:not(:disabled) {
-  background-color: #0056b3;
-}
-
-.indicador-fecha {
-  display: inline-block;
-  width: 0.75rem;
-  height: 0.75rem;
-  border-radius: 50%;
-  margin-left: 0.5rem;
-  vertical-align: middle;
-}
