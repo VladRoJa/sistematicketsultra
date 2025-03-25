@@ -1,5 +1,4 @@
 {
-  "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
   "version": 1,
   "newProjectRoot": "projects",
   "projects": {
@@ -23,12 +22,13 @@
             "assets": [
               {
                 "glob": "**/*",
-                "input": "public"
+                "input": "public",
+                "output": "/"
               }
             ],
             "styles": [
-              "@angular/material/prebuilt-themes/cyan-orange.css",
-              "src/styles.css"
+              "src/styles/theme.scss",
+              "src/styles.scss"
             ],
             "scripts": []
           },
@@ -60,10 +60,10 @@
           "builder": "@angular-devkit/build-angular:dev-server",
           "configurations": {
             "production": {
-              "buildTarget": "frontend-angular:build:production"
+              "browserTarget": "frontend-angular:build:production"
             },
             "development": {
-              "buildTarget": "frontend-angular:build:development"
+              "browserTarget": "frontend-angular:build:development"
             }
           },
           "defaultConfiguration": "development"

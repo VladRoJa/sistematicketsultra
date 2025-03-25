@@ -1,0 +1,5 @@
+/* Clase que opaca las fechas no válidas en el calendario */
+.disabled-date {
+  opacity: 0.3;
+  pointer-events: none; /* Evita selección de esas fechas */
+}

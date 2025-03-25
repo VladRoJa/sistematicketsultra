@@ -1,26 +1,264 @@
 # app/routes/ticket_routes.py
 from datetime import datetime
-from flask import Blueprint, json, jsonify, request
+from flask import Blueprint, jsonify, request, send_file
 from flask_cors import CORS
 from app.models.database import get_db_connection
 from app.models.ticket_model import Ticket
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.models.user_model import User
-import json  # Asegúrate de importar json para manipular historial_fechas
+import json  # Para manipular historial_fechas
+from io import BytesIO
+from openpyxl import Workbook  # Para la generación de archivos Excel
 
+# Crear blueprint para tickets
 ticket_bp = Blueprint('tickets', __name__, url_prefix='/api/tickets')
 
-# Configuración de CORS para permitir el acceso desde tu frontend
+# Configuración de CORS para permitir el acceso desde el frontend (Angular)
 CORS(ticket_bp, resources={r"/*": {"origins": "http://localhost:4200"}},
      supports_credentials=True, allow_headers=["Content-Type", "Authorization"],
      methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
 
+
 # -----------------------------------------------------------------------------
-# RUTA: Obtener todos los tickets
+# RUTA: Obtener tickets con filtros (y sin paginación si se solicita)
+# -----------------------------------------------------------------------------
+@ticket_bp.route('/list', methods=['GET'])
+@jwt_required()
+def list_tickets_with_filters():
+    """
+    Devuelve tickets según filtros y según el tipo de usuario.
+    - Permite filtrar por: estado, departamento_id y criticidad.
+    - Si se envía el parámetro 'no_paging=true' en la URL, se omite la paginación (útil para exportación).
+    - Si no se especifica 'no_paging', se aplican limit y offset para paginar.
+    """
+    try:
+        # Obtener el usuario actual a partir del token JWT
+        current_user = get_jwt_identity()
+        user = User.get_user_by_id(current_user)
+        if not user:
+            return jsonify({"mensaje": "Usuario no encontrado"}), 404
+
+        # Obtener parámetros de filtro desde la URL (si se envían)
+        estado = request.args.get('estado')
+        departamento_id = request.args.get('departamento_id')
+        criticidad = request.args.get('criticidad')
+
+        # Parámetro para omitir la paginación (para exportación masiva, por ejemplo)
+        no_paging = request.args.get('no_paging', default='false').lower() == 'true'
+
+        # Parámetros de paginación (limit y offset)
+        limit = request.args.get('limit', default=15, type=int)
+        offset = request.args.get('offset', default=0, type=int)
+
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # Construimos la query base (siempre verdadera para facilitar la concatenación)
+        query = "SELECT * FROM tickets WHERE 1=1"
+        values = []
+
+        # Restricción según tipo de usuario
+        if 1 <= user.id_sucursal <= 22:
+            query += " AND id_sucursal = %s"
+            values.append(user.id_sucursal)
+        elif user.id_sucursal == 100:
+            # Para supervisores se filtra por departamento
+            if not user.department_id:
+                cursor.close()
+                conn.close()
+                return jsonify({"mensaje": "Supervisor sin departamento asignado"}), 400
+            query += " AND departamento_id = %s"
+            values.append(user.department_id)
+        elif user.id_sucursal == 1000:
+            # Administrador global: no se filtra por sucursal
+            pass
+        else:
+            cursor.close()
+            conn.close()
+            return jsonify({"mensaje": "Tipo de usuario no reconocido"}), 400
+
+        # Agregar filtros dinámicos según parámetros recibidos
+        if estado:
+            query += " AND estado = %s"
+            values.append(estado)
+        if departamento_id:
+            query += " AND departamento_id = %s"
+            values.append(departamento_id)
+        if criticidad:
+            query += " AND criticidad = %s"
+            values.append(criticidad)
+
+        # Ordenar los tickets por fecha de creación descendente
+        query += " ORDER BY fecha_creacion DESC"
+
+        # Aplicar paginación solo si no se solicita exportación masiva
+        if not no_paging:
+            query += " LIMIT %s OFFSET %s"
+            values.append(limit)
+            values.append(offset)
+
+        cursor.execute(query, tuple(values))
+        tickets = cursor.fetchall()
+
+        # Consulta para obtener el total de tickets filtrados (sin LIMIT/OFFSET)
+        cursor2 = conn.cursor(dictionary=True)
+        count_query = "SELECT COUNT(*) as total FROM tickets WHERE 1=1"
+        count_vals = []
+
+        # Repetir la restricción de usuario
+        if 1 <= user.id_sucursal <= 22:
+            count_query += " AND id_sucursal = %s"
+            count_vals.append(user.id_sucursal)
+        elif user.id_sucursal == 100 and user.department_id:
+            count_query += " AND departamento_id = %s"
+            count_vals.append(user.department_id)
+
+        # Agregar filtros al conteo
+        if estado:
+            count_query += " AND estado = %s"
+            count_vals.append(estado)
+        if departamento_id:
+            count_query += " AND departamento_id = %s"
+            count_vals.append(departamento_id)
+        if criticidad:
+            count_query += " AND criticidad = %s"
+            count_vals.append(criticidad)
+
+        cursor2.execute(count_query, tuple(count_vals))
+        total_tickets = cursor2.fetchone()["total"]
+        cursor2.close()
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            "mensaje": "Tickets filtrados",
+            "tickets": tickets,
+            "total_tickets": total_tickets
+        }), 200
+
+    except Exception as e:
+        print(f"❌ Error en list_tickets_with_filters: {e}")
+        return jsonify({"mensaje": f"Error interno: {str(e)}"}), 500
+
+
+# -----------------------------------------------------------------------------
+# RUTA: Exportar tickets a Excel (con filtros aplicados)
+# -----------------------------------------------------------------------------
+@ticket_bp.route('/export-excel', methods=['GET'])
+@jwt_required()
+def export_excel():
+    """
+    Exporta a Excel todos los tickets que cumplan con los filtros indicados.
+    Esta ruta omite la paginación para exportar todos los registros filtrados.
+    Se genera un archivo Excel utilizando openpyxl y se envía como attachment.
+    """
+    try:
+        # Obtener el usuario actual
+        current_user = get_jwt_identity()
+        user = User.get_user_by_id(current_user)
+        if not user:
+            return jsonify({"mensaje": "Usuario no encontrado"}), 404
+
+        # Obtener parámetros de filtro (los mismos que en list_tickets_with_filters)
+        estado = request.args.get('estado')
+        departamento_id = request.args.get('departamento_id')
+        criticidad = request.args.get('criticidad')
+
+        # No se usa paginación, se exportan todos los registros que cumplen los filtros
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        query = "SELECT * FROM tickets WHERE 1=1"
+        values = []
+
+        # Restricciones según tipo de usuario
+        if 1 <= user.id_sucursal <= 22:
+            query += " AND id_sucursal = %s"
+            values.append(user.id_sucursal)
+        elif user.id_sucursal == 100:
+            if not user.department_id:
+                cursor.close()
+                conn.close()
+                return jsonify({"mensaje": "Supervisor sin departamento asignado"}), 400
+            query += " AND departamento_id = %s"
+            values.append(user.department_id)
+        elif user.id_sucursal == 1000:
+            pass
+        else:
+            cursor.close()
+            conn.close()
+            return jsonify({"mensaje": "Tipo de usuario no reconocido"}), 400
+
+        # Agregar filtros dinámicos
+        if estado:
+            query += " AND estado = %s"
+            values.append(estado)
+        if departamento_id:
+            query += " AND departamento_id = %s"
+            values.append(departamento_id)
+        if criticidad:
+            query += " AND criticidad = %s"
+            values.append(criticidad)
+
+        # Ordenar los tickets
+        query += " ORDER BY fecha_creacion DESC"
+
+        cursor.execute(query, tuple(values))
+        tickets = cursor.fetchall()
+        cursor.close()
+        conn.close()
+
+        # Generar el archivo Excel usando openpyxl
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Tickets"
+
+        # Encabezados del Excel
+        headers = ["ID", "Descripción", "Usuario", "Estado", "Criticidad",
+                   "Fecha Creación", "Fecha Finalizado", "Departamento", "Categoría"]
+        ws.append(headers)
+
+        # Escribir cada ticket en una fila del Excel
+        for ticket in tickets:
+            ws.append([
+                ticket.get("id"),
+                ticket.get("descripcion"),
+                ticket.get("username"),
+                ticket.get("estado"),
+                ticket.get("criticidad"),
+                str(ticket.get("fecha_creacion")),
+                str(ticket.get("fecha_finalizado") or 'N/A'),
+                ticket.get("departamento"),
+                ticket.get("categoria")
+            ])
+
+        # Convertir el workbook a un stream de bytes
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+
+        # Enviar el archivo Excel como attachment
+        return send_file(
+            output,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            as_attachment=True,
+            attachment_filename=f"tickets_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        )
+
+    except Exception as e:
+        print(f"❌ Error en export_excel: {str(e)}")
+        return jsonify({"mensaje": f"Error interno al exportar: {str(e)}"}), 500
+
+
+# -----------------------------------------------------------------------------
+# RUTA: Obtener todos los tickets (sin filtros, con paginación)
 # -----------------------------------------------------------------------------
 @ticket_bp.route('/all', methods=['GET'])
 @jwt_required()
 def get_tickets():
+    """
+    Devuelve todos los tickets sin filtros adicionales, aplicando paginación.
+    """
     try:
         current_user = get_jwt_identity()
         user = User.get_user_by_id(current_user)
@@ -31,8 +269,6 @@ def get_tickets():
         offset = request.args.get('offset', default=0, type=int)
 
         conn = get_db_connection()
-
-        # Primer cursor para la consulta principal
         cursor1 = conn.cursor(dictionary=True)
         
         if 1 <= user.id_sucursal <= 22:
@@ -41,11 +277,9 @@ def get_tickets():
                        ORDER BY fecha_creacion DESC
                        LIMIT %s OFFSET %s"""
             cursor1.execute(query, (user.id_sucursal, limit, offset))
-
-            tickets = cursor1.fetchall()  # Consumir todos los resultados
+            tickets = cursor1.fetchall()
             cursor1.close()
 
-            # Segundo cursor para la consulta de conteo
             cursor2 = conn.cursor(dictionary=True)
             cursor2.execute("SELECT COUNT(*) as total FROM tickets WHERE id_sucursal = %s", (user.id_sucursal,))
             total_tickets = cursor2.fetchone()["total"]
@@ -54,13 +288,11 @@ def get_tickets():
         elif user.id_sucursal == 100:
             if user.department_id is None:
                 return jsonify({"mensaje": "Supervisor sin departamento asignado"}), 400
-
             query = """SELECT * FROM tickets
                        WHERE departamento_id = %s
                        ORDER BY fecha_creacion DESC
                        LIMIT %s OFFSET %s"""
             cursor1.execute(query, (user.department_id, limit, offset))
-
             tickets = cursor1.fetchall()
             cursor1.close()
 
@@ -74,7 +306,6 @@ def get_tickets():
                        ORDER BY fecha_creacion DESC
                        LIMIT %s OFFSET %s"""
             cursor1.execute(query, (limit, offset))
-
             tickets = cursor1.fetchall()
             cursor1.close()
 
@@ -98,16 +329,19 @@ def get_tickets():
         print(f"❌ ERROR en get_tickets: {e}")
         return jsonify({"mensaje": f"Error al obtener tickets: {str(e)}"}), 500
 
+
 # -----------------------------------------------------------------------------
 # RUTA: Crear un ticket
 # -----------------------------------------------------------------------------
 @ticket_bp.route('/create', methods=['POST'])
 @jwt_required()
 def create_ticket():
+    """
+    Crea un nuevo ticket con los datos recibidos (se requieren descripción, departamento_id, criticidad y categoría).
+    """
     try:
         usuario_actual = get_jwt_identity()
         user = User.get_user_by_id(usuario_actual)
-
         if not user:
             print("❌ Usuario no encontrado en la base de datos")
             return jsonify({"mensaje": "Usuario no encontrado"}), 404
@@ -115,18 +349,15 @@ def create_ticket():
         data = request.get_json()
         print(f"📥 Datos recibidos: {data}")
 
-        # Se esperan los siguientes datos para crear un ticket:
         descripcion = data.get("descripcion")
         departamento_id = data.get("departamento_id")
         criticidad = data.get("criticidad")
         categoria = data.get("categoria")
 
-        # Validación de datos obligatorios
         if not descripcion or not departamento_id or not criticidad or not categoria:
             print("🚫 Faltan datos obligatorios")
             return jsonify({"mensaje": "Faltan datos obligatorios"}), 400
 
-        # Crear el ticket utilizando el modelo Ticket
         nuevo_ticket = Ticket.create_ticket(descripcion, user.username, user.id_sucursal, departamento_id, criticidad, categoria)
 
         if nuevo_ticket:
@@ -139,12 +370,19 @@ def create_ticket():
         print(f"❌ Excepción en create_ticket: {str(e)}")
         return jsonify({"mensaje": f"Error interno en el servidor: {str(e)}"}), 500
 
+
 # -----------------------------------------------------------------------------
 # RUTA: Actualizar estado de un ticket
 # -----------------------------------------------------------------------------
 @ticket_bp.route('/update/<int:id>', methods=['PUT'])
 @jwt_required()
 def update_ticket_status(id):
+    """
+    Actualiza el estado de un ticket, y opcionalmente su fecha de solución.
+    Además, gestiona el historial de cambios:
+      - Si se recibe una nueva fecha_solucion, se agrega al historial.
+      - Si el ticket ya está finalizado, se mantiene la fecha_solucion existente.
+    """
     try:
         print(f"🔍 Intentando actualizar el ticket con ID: {id}")
         if not id:
@@ -152,8 +390,8 @@ def update_ticket_status(id):
 
         data = request.get_json()
         estado = data.get("estado")
-        fecha_solucion = data.get("fecha_solucion")  # Nueva fecha de solución (si aplica)
-        historial_fechas = data.get("historial_fechas")  # Historial de cambios (si aplica)
+        fecha_solucion = data.get("fecha_solucion")
+        historial_fechas = data.get("historial_fechas")
 
         print(f"📌 Estado: {estado}, Fecha solución: {fecha_solucion}") 
 
@@ -178,7 +416,7 @@ def update_ticket_status(id):
         usuario_actual_id = get_jwt_identity()
         usuario_actual = User.get_user_by_id(usuario_actual_id)
         
-        # Si se proporciona fecha_solucion y es distinta, agregar registro al historial
+        # Agregar al historial si se proporciona una nueva fecha de solución
         if fecha_solucion and (not historial_actual or historial_actual[-1]["fecha"] != fecha_solucion):
             nuevo_registro = {
                 "fecha": fecha_solucion,
@@ -187,11 +425,10 @@ def update_ticket_status(id):
             }
             historial_actual.append(nuevo_registro)
 
-        # **NUEVO**: Verificar si el ticket ya está finalizado
+        # Si el ticket ya está finalizado, mantener la fecha_solucion existente
         cursor.execute("SELECT estado, fecha_solucion FROM tickets WHERE id = %s", (id,))
         ticket_actual = cursor.fetchone()
         if ticket_actual and ticket_actual["estado"] == "finalizado":
-            # Si ya está finalizado, se mantiene la fecha_solucion existente
             fecha_solucion = ticket_actual["fecha_solucion"]
 
         # Si el estado es "finalizado", asignar la fecha actual como fecha_finalizado
@@ -199,18 +436,16 @@ def update_ticket_status(id):
         if estado == "finalizado":
             fecha_finalizado = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-        # Construir la consulta de actualización dinámicamente
+        # Construir la consulta de actualización
         query = "UPDATE tickets SET estado = %s"
         values = [estado]
 
         if fecha_finalizado:
             query += ", fecha_finalizado = %s"
             values.append(fecha_finalizado)
-
         if fecha_solucion:
             query += ", fecha_solucion = %s"
             values.append(fecha_solucion)
-
         if historial_fechas:
             query += ", historial_fechas = %s"
             values.append(json.dumps(historial_actual))
@@ -232,44 +467,38 @@ def update_ticket_status(id):
 
 
 # -----------------------------------------------------------------------------
-# Ruta temporal para verificar la conexión
-# -----------------------------------------------------------------------------
-@ticket_bp.route("/all", methods=["GET", "OPTIONS"])
-def all_tickets():
-    return jsonify({"message": "Ruta /all funcionando correctamente"}), 200
-
-# -----------------------------------------------------------------------------
 # RUTA: Eliminar un ticket
 # -----------------------------------------------------------------------------
 @ticket_bp.route('/delete/<int:id>', methods=['DELETE'])
 @jwt_required()
 def delete_ticket(id):
+    """
+    Elimina el ticket especificado por su ID.
+    Solo el creador del ticket o un administrador pueden eliminarlo.
+    """
     try:
         usuario_actual = get_jwt_identity()
         user = User.get_user_by_id(usuario_actual)
-
         if not user:
             return jsonify({"mensaje": "Usuario no encontrado"}), 404
 
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
 
-        # Verificar que el ticket exista
+        # Verificar que el ticket existe
         cursor.execute("SELECT * FROM tickets WHERE id = %s", (id,))
         ticket = cursor.fetchone()
-
         if not ticket:
             cursor.close()
             conn.close()
             return jsonify({"mensaje": "El ticket no existe"}), 404
 
-        # Solo el creador del ticket o un administrador pueden eliminarlo
+        # Permitir eliminación solo si es el creador o un administrador
         if ticket["username"] != user.username and user.rol != "ADMINISTRADOR":
             cursor.close()
             conn.close()
             return jsonify({"mensaje": "No tienes permiso para eliminar este ticket"}), 403
 
-        # Ejecutar la eliminación del ticket
         cursor.execute("DELETE FROM tickets WHERE id = %s", (id,))
         conn.commit()
         cursor.close()
@@ -279,3 +508,11 @@ def delete_ticket(id):
 
     except Exception as e:
         return jsonify({"mensaje": f"Error interno en el servidor: {str(e)}"}), 500
+
+
+# -----------------------------------------------------------------------------
+# Ruta temporal para verificar la conexión
+# -----------------------------------------------------------------------------
+@ticket_bp.route("/all", methods=["GET", "OPTIONS"])
+def all_tickets():
+    return jsonify({"message": "Ruta /all funcionando correctamente"}), 200

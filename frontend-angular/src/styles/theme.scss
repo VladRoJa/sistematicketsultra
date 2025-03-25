@@ -1,19 +1,21 @@
 @use '@angular/material' as mat;
 
+// 1. Importa las funciones y mixins base de Material
 @include mat.core();
 
-// Define paletas claras
+// 2. Define tus paletas de colores (primaria, acento, warn)
 $my-primary: mat.define-palette(mat.$blue-grey-palette);
-$my-accent: mat.define-palette(mat.$pink-palette);
-$my-warn: mat.define-palette(mat.$red-palette);
+$my-accent:  mat.define-palette(mat.$pink-palette);
+$my-warn:    mat.define-palette(mat.$red-palette);
 
+// 3. Define tu tema (en este caso, un tema claro)
 $my-theme: mat.define-light-theme((
   color: (
     primary: $my-primary,
-    accent: $my-accent,
-    warn: $my-warn
+    accent:  $my-accent,
+    warn:    $my-warn
   )
 ));
 
-// Aplica este tema a todos los componentes de Angular Material
+// 4. Aplica el tema a todos los componentes de Angular Material
 @include mat.all-component-themes($my-theme);

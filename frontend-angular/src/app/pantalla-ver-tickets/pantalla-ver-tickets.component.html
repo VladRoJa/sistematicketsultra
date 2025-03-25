@@ -4,7 +4,7 @@
     <thead>
       <tr>
         <!-- (1) Columna: ID -->
-        <th>
+        <th [class.filtro-activo]="isFilterActive('id')">
           <!-- Botón principal: al hacer clic se abre el menú completo de filtro para ID -->
           <button mat-button [matMenuTriggerFor]="menuId" #triggerFiltroId="matMenuTrigger" class="header-button">
             ID <mat-icon>arrow_drop_down</mat-icon>
@@ -46,7 +46,7 @@
         </th>
 
         <!-- (2) Columna: Categoría -->
-        <th>
+        <th [class.filtro-activo]="isFilterActive('categoria')">
           <button mat-button [matMenuTriggerFor]="menuCategoria" #triggerFiltroCategoria="matMenuTrigger" class="header-button">
             Categoría <mat-icon>arrow_drop_down</mat-icon>
           </button>
@@ -90,7 +90,7 @@
         </th>
 
         <!-- (3) Columna: Descripción -->
-        <th>
+        <th [class.filtro-activo]="isFilterActive('descripcion')">
           <button mat-button [matMenuTriggerFor]="menuDesc" #triggerFiltroDesc="matMenuTrigger" class="header-button">
             Descripción <mat-icon>arrow_drop_down</mat-icon>
           </button>
@@ -131,7 +131,7 @@
         </th>
 
         <!-- (4) Columna: Usuario -->
-        <th>
+        <th [class.filtro-activo]="isFilterActive('usuario')">
           <button mat-button [matMenuTriggerFor]="menuUsuario" #triggerFiltroUsuario="matMenuTrigger" class="header-button">
             Usuario <mat-icon>arrow_drop_down</mat-icon>
           </button>
@@ -172,7 +172,7 @@
         </th>
 
         <!-- (5) Columna: Estado -->
-        <th>
+        <th [class.filtro-activo]="isFilterActive('estado')">
           <button mat-button [matMenuTriggerFor]="menuEstado" #triggerFiltroEstado="matMenuTrigger" class="header-button">
             Estado <mat-icon>arrow_drop_down</mat-icon>
           </button>
@@ -213,7 +213,7 @@
         </th>
 
         <!-- (6) Columna: Criticidad -->
-        <th>
+        <th [class.filtro-activo]="isFilterActive('criticidad')">
           <button mat-button [matMenuTriggerFor]="menuCriticidad" #triggerFiltroCriticidad="matMenuTrigger" class="header-button">
             Criticidad <mat-icon>arrow_drop_down</mat-icon>
           </button>
@@ -253,90 +253,59 @@
           </mat-menu>
         </th>
 
-        <!-- (7) Columna: Fecha Creación -->
-        <th>
-          <button mat-button [matMenuTriggerFor]="menuFechaC" #triggerFiltroFechaC="matMenuTrigger" class="header-button">
-            Fecha Creación <mat-icon>arrow_drop_down</mat-icon>
-          </button>
-          <mat-menu #menuFechaC="matMenu" disableClose="true">
-            <button mat-menu-item (click)="ordenar('fecha_creacion','asc')">Asc</button>
-            <button mat-menu-item (click)="ordenar('fecha_creacion','desc')">Desc</button>
-            <mat-divider></mat-divider>
-            <div class="menu-filtro" (click)="$event.stopPropagation()">
-              <label>Filtrar Fecha Creación</label>
-              <mat-form-field appearance="fill" class="buscador-filtro" (click)="$event.stopPropagation()">
-                <mat-label>Buscar</mat-label>
-                <input matInput [(ngModel)]="filtroFechaTexto" (keyup)="filtrarOpcionesFechaC()">
-              </mat-form-field>
-              <mat-checkbox [(ngModel)]="seleccionarTodoFechaC"
-                            (change)="toggleSeleccionarTodo('fecha_creacion')"
-                            (click)="$event.stopPropagation()"
-                            name="fc_selectAll">
-                Seleccionar todo
-              </mat-checkbox>
-              <div class="opciones-scrollable">
-                <mat-checkbox *ngFor="let fc of fechasCreacionFiltradas; let i = index"
-                              [(ngModel)]="fc.seleccionado"
-                              [name]="'fc_' + i"
-                              (click)="$event.stopPropagation()">
-                  {{ fc.valor }}
-                </mat-checkbox>
-              </div>
-              <div class="menu-botones-fijos">
-                <button mat-button color="primary" (click)="aplicarFiltroColumna('fecha_creacion'); triggerFiltroFechaC.closeMenu()">
-                  Aplicar
-                </button>
-                <button mat-button (click)="limpiarFiltroColumna('fecha_creacion'); triggerFiltroFechaC.closeMenu()">
-                  Borrar Filtros
-                </button>
-              </div>
-            </div>
-          </mat-menu>
-        </th>
+     <!-- (7) Columna: Fecha Creación -->
+      <th [class.filtro-activo]="isFilterActive('fecha_creacion')">
+        <button
+          mat-button
+          [matMenuTriggerFor]="menuFechaC"
+          #triggerFiltroFechaC="matMenuTrigger"
+          class="header-button"
+        >
+          Fecha Creación <mat-icon>arrow_drop_down</mat-icon>
+        </button>
+        <mat-menu #menuFechaC="matMenu" disableClose="true">
+          <button mat-menu-item (click)="ordenar('fecha_creacion','asc')">Asc</button>
+          <button mat-menu-item (click)="ordenar('fecha_creacion','desc')">Desc</button>
+          <mat-divider></mat-divider>
 
-        <!-- (8) Columna: Fecha Finalizado -->
-        <th>
-          <button mat-button [matMenuTriggerFor]="menuFechaF" #triggerFiltroFechaF="matMenuTrigger" class="header-button">
-            Fecha Finalizado <mat-icon>arrow_drop_down</mat-icon>
-          </button>
-          <mat-menu #menuFechaF="matMenu" disableClose="true">
-            <button mat-menu-item (click)="ordenar('fecha_finalizado','asc')">Asc</button>
-            <button mat-menu-item (click)="ordenar('fecha_finalizado','desc')">Desc</button>
-            <mat-divider></mat-divider>
-            <div class="menu-filtro" (click)="$event.stopPropagation()">
-              <label>Filtrar Fecha Finalizado</label>
-              <mat-form-field appearance="fill" class="buscador-filtro" (click)="$event.stopPropagation()">
-                <mat-label>Buscar</mat-label>
-                <input matInput [(ngModel)]="filtroFechaFinalTexto" (keyup)="filtrarOpcionesFechaF()">
-              </mat-form-field>
-              <mat-checkbox [(ngModel)]="seleccionarTodoFechaF"
-                            (change)="toggleSeleccionarTodo('fecha_finalizado')"
-                            (click)="$event.stopPropagation()"
-                            name="ff_selectAll">
-                Seleccionar todo
-              </mat-checkbox>
-              <div class="opciones-scrollable">
-                <mat-checkbox *ngFor="let ff of fechasFinalFiltradas; let i = index"
-                              [(ngModel)]="ff.seleccionado"
-                              [name]="'ff_' + i"
-                              (click)="$event.stopPropagation()">
-                  {{ ff.valor }}
-                </mat-checkbox>
-              </div>
-              <div class="menu-botones-fijos">
-                <button mat-button color="primary" (click)="aplicarFiltroColumna('fecha_finalizado'); triggerFiltroFechaF.closeMenu()">
-                  Aplicar
-                </button>
-                <button mat-button (click)="limpiarFiltroColumna('fecha_finalizado'); triggerFiltroFechaF.closeMenu()">
-                  Borrar Filtros
-                </button>
-              </div>
-            </div>
-          </mat-menu>
-        </th>
+          <div class="menu-filtro" (click)="$event.stopPropagation()">
+            <label>Filtrar Fecha Creación</label>
+            <!-- NUEVO Date Range Picker -->
+            <app-filter-date-range
+              (rangoSeleccionado)="filtrarPorRangoFechaCreacion($event)"
+            ></app-filter-date-range>
+          </div>
+        </mat-menu>
+      </th>
+
+      <!-- (8) Columna: Fecha Finalizado -->
+      <th [class.filtro-activo]="isFilterActive('fecha_finalizado')">
+        <button
+          mat-button
+          [matMenuTriggerFor]="menuFechaF"
+          #triggerFiltroFechaF="matMenuTrigger"
+          class="header-button"
+        >
+          Fecha Finalizado <mat-icon>arrow_drop_down</mat-icon>
+        </button>
+        <mat-menu #menuFechaF="matMenu" disableClose="true">
+          <button mat-menu-item (click)="ordenar('fecha_finalizado','asc')">Asc</button>
+          <button mat-menu-item (click)="ordenar('fecha_finalizado','desc')">Desc</button>
+          <mat-divider></mat-divider>
+
+          <div class="menu-filtro" (click)="$event.stopPropagation()">
+            <label>Filtrar Fecha Finalizado</label>
+            <!-- NUEVO Date Range Picker -->
+            <app-filter-date-range
+              (rangoSeleccionado)="filtrarPorRangoFechaFinal($event)"
+            ></app-filter-date-range>
+          </div>
+        </mat-menu>
+      </th>
+
 
         <!-- (9) Columna: Departamento -->
-        <th>
+        <th [class.filtro-activo]="isFilterActive('departamento')">
           <button mat-button [matMenuTriggerFor]="menuDepartamento" #triggerFiltroDepartamento="matMenuTrigger" class="header-button">
             Departamento <mat-icon>arrow_drop_down</mat-icon>
           </button>
@@ -459,6 +428,15 @@
       </tr>
     </tbody>
   </table>
+</div>
+
+<!-- Bloque de confirmación -->
+<div *ngIf="confirmacionVisible" class="modal-overlay">
+  <div class="modal-confirmacion">
+    <p>{{ mensajeConfirmacion }}</p>
+    <button (click)="confirmarAccion()">Sí</button>
+    <button (click)="cancelarAccion()">No</button>
+  </div>
 </div>
 
 <!-- Controles de Paginación -->
