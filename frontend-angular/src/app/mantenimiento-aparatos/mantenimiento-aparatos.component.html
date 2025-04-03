@@ -1,0 +1,27 @@
+<div class="form-container">
+    <h2>🛠️ Reportar Falla en Aparato</h2>
+  
+    <form (ngSubmit)="submitFormulario()" *ngIf="aparatos.length > 0">
+      <label for="aparato">Aparato:</label>
+      <select id="aparato" [(ngModel)]="form.aparato_id" name="aparato_id" required>
+        <option *ngFor="let aparato of aparatos" [value]="aparato.id">
+          {{ aparato.descripcion }} - {{ aparato.marca }} ({{ aparato.numero_equipo }})
+        </option>
+      </select>
+  
+      <label for="problema">Problema detectado:</label>
+      <input id="problema" [(ngModel)]="form.problema_detectado" name="problema_detectado" required>
+  
+      <label>
+        <input type="checkbox" [(ngModel)]="form.necesita_refaccion" name="necesita_refaccion">
+        ¿Requiere refacción?
+      </label>
+  
+      <button type="submit">Enviar</button>
+    </form>
+  
+    <div *ngIf="aparatos.length === 0">
+      No hay aparatos registrados para esta sucursal.
+    </div>
+  </div>
+  

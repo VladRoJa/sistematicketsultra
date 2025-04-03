@@ -9,7 +9,7 @@ import { PantallaVerTicketsComponent } from './pantalla-ver-tickets/pantalla-ver
 import { AdminPermisosComponent } from './admin-permisos/admin-permisos.component';
 import { AuthGuard } from './guards/auth.guard';
 import { AdminGuard } from './guards/admin.guard';
-import { LayoutComponent } from './layout/layout.component'; // <-- Importas tu Layout
+import { LayoutComponent } from './layout/layout.component';
 
 export const routes: Routes = [
   { path: '', redirectTo: 'login', pathMatch: 'full' },

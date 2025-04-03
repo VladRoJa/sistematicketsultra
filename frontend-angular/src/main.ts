@@ -1,19 +1,37 @@
 // main.ts
 import { bootstrapApplication } from '@angular/platform-browser';
 import { provideRouter } from '@angular/router';
-import { provideHttpClient, withInterceptors } from '@angular/common/http';
+import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 import { provideAnimations } from '@angular/platform-browser/animations';
 import { AppComponent } from './app/app.component';
 import { routes } from './app/app.routes';
+import { HTTP_INTERCEPTORS } from '@angular/common/http';
+import { TokenInterceptor } from './app/interceptors/auth.interceptor';
+import { MatDialogModule } from '@angular/material/dialog';
+import { importProvidersFrom } from '@angular/core';
+import { JwtHelperService, JWT_OPTIONS } from '@auth0/angular-jwt';
+import { JwtInterceptor } from './app/interceptors/jwt.interceptor';
 
-import { authInterceptorFn } from './app/interceptors/auth.interceptor';
+
 
 bootstrapApplication(AppComponent, {
   providers: [
     provideAnimations(),
     provideRouter(routes),
-    provideHttpClient(
-      withInterceptors([authInterceptorFn])  // <-- Registras la función
-    )
-  ]
+    importProvidersFrom(MatDialogModule),
+    provideHttpClient(withInterceptorsFromDi()),
+    {
+        provide: HTTP_INTERCEPTORS,
+        useClass: TokenInterceptor,
+        multi: true
+    },
+    {
+        provide: HTTP_INTERCEPTORS,
+        useClass: JwtInterceptor,
+        multi: true
+    },
+    { provide: JWT_OPTIONS, useValue: JWT_OPTIONS },
+    JwtHelperService,
+    provideAnimations()
+]
 }).catch(err => console.error(err));

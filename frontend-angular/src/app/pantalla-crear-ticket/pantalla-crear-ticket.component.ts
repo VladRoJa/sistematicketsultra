@@ -54,7 +54,7 @@ export class PantallaCrearTicketComponent implements OnInit {
 
     6: ["Bebidas para la venta"], // ⚠️ Aún pendiente de definir para Compras
 
-    7: ["Equipo de gerencia"] // ⚠️ Aún pendiente de definir para Sistemas
+    7: ["Computadora Recepción", "Computadora Gerente", "Torniquete 1 (Junto a Recepcion)", "Torniquete 2 (Retirado de recepcion)", "Sonido Ambiental (Bocinas, Amplificador)", "Sonido en Salones", "Tablet 1 (Computadora recepcion)","Tablet 2 (Computadora Gerente)","Impresora multifuncional", "Impresora termica (Recepcion)", "Impresora termica (Gerente)", "Terminal (Recepcion)", "Terminal (Gerente)", "Alarma", "Telefono", "Internet", "Camaras"]
   };
 
   private apiUrl = 'http://localhost:5000/api/tickets/create';
