@@ -1,0 +1,62 @@
+<!-- Subformulario de mantenimiento - Edificio -->
+<div [formGroup]="parentForm" class="form-group-grouped">
+
+  <!-- 🏷️ Categoría -->
+  <div class="form-group-grouped">
+    <label for="categoriaPrincipal">🏷️ Categoría:</label>
+    <select id="categoriaPrincipal" formControlName="categoria">
+      <option *ngFor="let categoria of getCategorias()" [value]="categoria">
+        {{ categoria }}
+      </option>
+    </select>
+  </div>
+
+  <!-- 🔧 Subcategoría -->
+  <div class="form-group-grouped" *ngIf="parentForm.get('categoria')?.value">
+    <label for="subcategoria">🛠️ Subcategoría:</label>
+    <select id="subcategoria" formControlName="subcategoria">
+      <option *ngFor="let sub of getSubcategorias(parentForm.get('categoria')?.value)" [value]="sub">
+        {{ sub }}
+      </option>
+    </select>
+  </div>
+
+  <!-- 🧩 Sub-subcategoría -->
+  <div class="form-group-grouped" *ngIf="parentForm.get('subcategoria')?.value">
+    <label for="subsubcategoria">🧩 Detalle específico:</label>
+    <select id="subsubcategoria" formControlName="subsubcategoria">
+      <option *ngFor="let detalle of getSubsubcategorias(
+        parentForm.get('categoria')?.value,
+        parentForm.get('subcategoria')?.value
+      )" [value]="detalle">
+        {{ detalle }}
+      </option>
+    </select>
+  </div>
+
+  <!-- 📝 Descripción -->
+  <div class="form-group-grouped form-group-description">
+    <label for="descripcion" class="descripcion-label">
+      <span class="icon">📋</span> Descripción del problema:
+    </label>
+    <textarea
+      id="descripcion"
+      formControlName="descripcion"
+      class="descripcion-textarea"
+      rows="4"
+      placeholder="Detalla lo ocurrido con claridad..."
+    ></textarea>
+  </div>
+
+
+  <!-- 🔥 Criticidad -->
+  <div class="form-group-grouped">
+    <label for="criticidad">🔥 Nivel de criticidad:</label>
+    <select id="criticidad" formControlName="criticidad">
+      <option *ngFor="let nivel of [1, 2, 3, 4, 5]" [value]="nivel">
+        Nivel {{ nivel }}
+      </option>
+    </select>
+  </div>
+
+</div>

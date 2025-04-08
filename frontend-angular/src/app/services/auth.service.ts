@@ -32,13 +32,16 @@ export class AuthService {
 }
 
 
-  setSession(token: string, user: any) {
+setSession(token: string, user: any, redirigir: boolean = true) {
+
     console.log("📌 setSession() EJECUTADO"); 
     console.log("📌 Guardando usuario en localStorage:", user);
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(user));
     const storedUser = localStorage.getItem('user');
     console.log("🔍 Usuario después de guardar:", storedUser ? JSON.parse(storedUser) : null);
+
+    if (!redirigir) return;
 
     // 📌 Redirigir según el área del usuario
     const area = user.id_sucursal;

@@ -2,47 +2,97 @@
 
 <div class="container">
   <h2>🎫 Crear Nuevo Ticket</h2>
-  <form (ngSubmit)="onSubmit()">
-    
-    <!-- Selector de Departamento -->
+
+  <!-- Formulario principal reactivo -->
+  <form [formGroup]="formularioMantenimiento" (ngSubmit)="onSubmit()">
+
+    <!-- 🌐 Selector de Departamento -->
     <div class="form-group">
-      <label for="departamento">Departamento:</label>
-      <select id="departamento" [(ngModel)]="departamento" name="departamento" required (change)="cargarFormulario()">
-        <option *ngFor="let dep of departamentos" [value]="dep.id">{{ dep.nombre }}</option>
+      <label for="departamento">🏢 Departamento:</label>
+      <select
+        id="departamento"
+        formControlName="departamento"
+        (change)="cargarFormulario()"
+      >
+        <option [ngValue]="null">Selecciona un departamento</option>
+        <option *ngFor="let dep of departamentos" [ngValue]="dep.id">
+          {{ dep.nombre }}
+        </option>
       </select>
     </div>
 
-    <!-- Selector de Categoría (solo se muestra si hay categorías disponibles) -->
-    <div class="form-group" *ngIf="departamento && categoriasPorDepartamento[departamento].length > 0">
-      <label for="categoria">Categoría:</label>
-      <select id="categoria" [(ngModel)]="categoriaSeleccionada" name="categoria" required>
-        <option *ngFor="let cat of categoriasPorDepartamento[departamento]" [value]="cat">{{ cat }}</option>
+    <!-- 🛠️ Subformulario de Mantenimiento -->
+    <div
+      *ngIf="getNombreDepartamentoSeleccionado() === 'Mantenimiento'"
+      class="form-group form-mantenimiento-box"
+    >
+      <!-- Selector tipo mantenimiento -->
+      <label for="tipoMantenimiento">⚙️ Tipo de mantenimiento:</label>
+      <select id="tipoMantenimiento" formControlName="tipoMantenimiento">
+        <option [ngValue]="null">Selecciona uno</option>
+        <option value="edificio">🏢 Edificio</option>
+        <option value="aparatos">🏋️ Aparatos</option>
+      </select>
+
+      <!-- Subformularios dinámicos según tipo -->
+      <div class="form-mantenimiento-subform">
+        <app-mantenimiento-edificio
+          *ngIf="formularioMantenimiento.get('tipoMantenimiento')?.value === 'edificio'"
+          [parentForm]="formularioMantenimiento"
+        ></app-mantenimiento-edificio>
+
+        <ng-container *ngIf="formularioMantenimiento?.get('departamento')?.value === 1 && formularioMantenimiento?.get('tipoMantenimiento')?.value === 'aparatos'">
+          <app-mantenimiento-aparatos
+            *ngIf="formularioMantenimiento && formularioMantenimiento.get('tipoMantenimiento')?.value === 'aparatos'"
+            [parentForm]="formularioMantenimiento">
+          </app-mantenimiento-aparatos>
+        </ng-container>
+        
+      </div>
+    </div>
+
+    <!-- 🗂️ Categoría para otros departamentos -->
+    <div
+      *ngIf="formularioMantenimiento.get('departamento')?.value &&
+             getNombreDepartamentoSeleccionado() !== 'Mantenimiento' &&
+             categoriasPorDepartamento[formularioMantenimiento.get('departamento')?.value]?.length > 0"
+      class="form-group"
+    >
+      <label for="categoria">🗂️ Categoría:</label>
+      <select id="categoria" formControlName="categoria">
+        <option *ngFor="let cat of categoriasPorDepartamento[formularioMantenimiento.get('departamento')?.value]" [value]="cat">
+          {{ cat }}
+        </option>
         <option value="otro">Otro...</option>
       </select>
-      
-      <!-- Campo para agregar una nueva categoría si se selecciona "Otro" -->
-      <input *ngIf="categoriaSeleccionada === 'otro'" type="text" [(ngModel)]="nuevaCategoria" name="nuevaCategoria"
-            placeholder="Escribe una nueva categoría..." (blur)="agregarCategoriaManual()">
+
+      <!-- Campo libre si seleccionan "otro" -->
+      <input
+        *ngIf="formularioMantenimiento.get('categoria')?.value === 'otro'"
+        type="text"
+        formControlName="nuevaCategoria"
+        placeholder="Escribe una nueva categoría..."
+        (blur)="agregarCategoriaManual()"
+      />
     </div>
 
-    <!-- Selector de Criticidad -->
-    <div class="form-group">
-      <label for="criticidad">Criticidad:</label>
-      <select id="criticidad" [(ngModel)]="criticidad" name="criticidad" required>
-        <option *ngFor="let crit of [1, 2, 3, 4, 5]" [value]="crit">Nivel {{ crit }}</option>
+    <!-- 🔥 Nivel de Criticidad (solo se muestra si no se eligió mantenimiento) -->
+    <div
+      *ngIf="getNombreDepartamentoSeleccionado() !== 'Mantenimiento'"
+      class="form-group"
+    >
+      <label for="criticidad">🔥 Nivel de criticidad:</label>
+      <select id="criticidad" formControlName="criticidad">
+        <option *ngFor="let crit of [1,2,3,4,5]" [value]="crit">
+          Nivel {{ crit }}
+        </option>
       </select>
     </div>
 
-    <!-- Campos comunes -->
-
-
-    <div class="form-group">
-      <label for="descripcion">Descripción:</label>
-      <textarea id="descripcion" [(ngModel)]="descripcion" name="descripcion" required></textarea>
-    </div>
-
+    <!-- 📤 Botón de envío -->
     <button type="submit" class="btn-submit">📩 Crear Ticket</button>
   </form>
 
+  <!-- ✅ Mensaje de validación o éxito -->
   <p *ngIf="mensaje" class="mensaje">{{ mensaje }}</p>
 </div>

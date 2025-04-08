@@ -1,0 +1,108 @@
+.form-aparatos-box {
+  border: 1px solid #dcdcdc;
+  border-radius: 12px;
+  padding: 1.2rem;
+  margin-top: 1.2rem;
+  background-color: #fdfdfd;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+  animation: fadeSlideIn 0.5s ease-in-out forwards;
+}
+
+.form-group-grouped {
+  margin-bottom: 1.2rem;
+}
+
+label {
+  display: block;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 6px;
+}
+
+input[type="text"],
+input[type="checkbox"] {
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 14px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  transition: border-color 0.3s, box-shadow 0.3s;
+  outline: none;
+}
+
+input[type="text"]:focus {
+  border-color: #007bff;
+  box-shadow: 0 0 5px rgba(0, 123, 255, 0.4);
+}
+
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.opcion-aparato {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.emoji-aparato {
+  font-size: 20px;
+  width: 24px;
+}
+
+.detalles-aparato {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.codigo-aparato {
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.descripcion-aparato {
+  font-size: 13px;
+}
+
+.marca-aparato {
+  font-size: 12px;
+  color: gray;
+}
+
+/* 🎯 Efecto de resaltado suave al seleccionar aparato */
+.resaltado {
+  animation: resaltarInput 0.6s ease;
+}
+
+@keyframes resaltarInput {
+  0% {
+    background-color: #e6f7ff;
+  }
+  100% {
+    background-color: white;
+  }
+}
+
+textarea {
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 14px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  resize: vertical;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+textarea:focus {
+  border-color: #007bff;
+  box-shadow: 0 0 6px rgba(0, 123, 255, 0.3);
+}

@@ -40,6 +40,8 @@ export interface Ticket {
   departamento_id: number;
   categoria: string;
   fecha_solucion?: string | null;
+  subcategoria?: string | null;
+  subsubcategoria?: string | null;
   historial_fechas?: Array<{
     fecha: string;
     cambiadoPor: string;
@@ -107,6 +109,8 @@ export class PantallaVerTicketsComponent implements OnInit {
   fechasCreacionDisponibles: Array<{ valor: string, seleccionado: boolean }> = [];
   fechasFinalDisponibles: Array<{ valor: string, seleccionado: boolean }> = [];
   departamentosDisponibles: Array<{ valor: string, seleccionado: boolean }> = [];
+  subcategoriasDisponibles: Array<{ valor: string, seleccionado: boolean }> = [];
+  detallesDisponibles: Array<{ valor: string, seleccionado: boolean }> = [];
 
   // -------------- Nuevas Propiedades para Filtros (cuadros de búsqueda y “Seleccionar todo”) -------------- //
   // Para columna ID
@@ -139,6 +143,16 @@ export class PantallaVerTicketsComponent implements OnInit {
   filtroFechaFinalTexto: string = "";
   seleccionarTodoFechaF: boolean = false;
   fechasFinalFiltradas: Array<{ valor: string, seleccionado: boolean }> = [];
+
+  // Para Sub categoria
+  filtroSubcategoriaTexto: string = "";
+  subcategoriasFiltradas: Array<{ valor: string, seleccionado: boolean }> = [];
+  seleccionarTodoSubcategoria: boolean = false;
+
+  // Para Detalles
+  filtroDetalleTexto: string = "";
+  detallesFiltrados: Array<{ valor: string, seleccionado: boolean }> = [];
+  seleccionarTodoDetalle: boolean = false;
 
   // -------------- Propiedades de Usuario y Departamentos -------------- //
   user: any = null;
@@ -185,7 +199,6 @@ export class PantallaVerTicketsComponent implements OnInit {
     await this.obtenerUsuarioAutenticado();
     this.cargarTickets();
 
-    // Cargar departamentos
     this.departamentoService.obtenerDepartamentos().subscribe({
       next: (data) => {
         if (!Array.isArray(data)) {
@@ -300,6 +313,16 @@ export class PantallaVerTicketsComponent implements OnInit {
 
     // Inicializar la lista filtrada para Departamento
     this.departamentosFiltrados = [...this.departamentosDisponibles];
+
+    // Subcategorías
+    const subcats = Array.from(new Set(this.tickets.map(t => t.subcategoria || '—')));
+    this.subcategoriasDisponibles = subcats.map(s => ({ valor: s, seleccionado: false }));
+    this.subcategoriasFiltradas = [...this.subcategoriasDisponibles];
+
+    // Subsubcategorías (detalles)
+    const detalles = Array.from(new Set(this.tickets.map(t => t.subsubcategoria || '—')));
+    this.detallesDisponibles = detalles.map(d => ({ valor: d, seleccionado: false }));
+    this.detallesFiltrados = [...this.detallesDisponibles];
   }
 
   // -------------- Inicializar Listas para Filtros con Búsqueda -------------- //
@@ -617,148 +640,107 @@ export class PantallaVerTicketsComponent implements OnInit {
   }
 
   // -------------- Funciones para Filtrado por Columna -------------- //
-  aplicarFiltroColumna(columna: string) {
+  aplicarFiltroColumna(columna: string): void {
     console.log(`Aplicar filtro en columna: ${columna}`);
-    this.filteredTickets = [...this.tickets];
-    if (columna === 'id') {
-      const seleccionadas = this.idsDisponibles.filter(i => i.seleccionado).map(i => i.valor);
-      if (seleccionadas.length > 0) {
-        this.filteredTickets = this.filteredTickets.filter(t => seleccionadas.includes(String(t.id)));
-      }
-    }
-    if (columna === 'categoria') {
-      const seleccionadas = this.categoriasDisponibles.filter(cat => cat.seleccionado).map(cat => cat.valor);
-      if (seleccionadas.length > 0) {
-        this.filteredTickets = this.filteredTickets.filter(t => seleccionadas.includes(t.categoria));
-      }
-    }
-    if (columna === 'descripcion') {
-      const seleccionadas = this.descripcionesDisponibles.filter(d => d.seleccionado).map(d => d.valor);
-      if (seleccionadas.length > 0) {
-        this.filteredTickets = this.filteredTickets.filter(t => seleccionadas.includes(t.descripcion));
-      }
-    }
-    if (columna === 'username') {
-      const seleccionadas = this.usuariosDisponibles.filter(u => u.seleccionado).map(u => u.valor);
-      if (seleccionadas.length > 0) {
-        this.filteredTickets = this.filteredTickets.filter(t => seleccionadas.includes(t.username));
-      }
-    }
-    if (columna === 'estado') {
-      const seleccionadas = this.estadosDisponibles.filter(e => e.seleccionado).map(e => e.valor);
-      if (seleccionadas.length > 0) {
-        this.filteredTickets = this.filteredTickets.filter(t => seleccionadas.includes(t.estado));
-      }
-    }
-    if (columna === 'criticidad') {
-      const seleccionadas = this.criticidadesDisponibles.filter(c => c.seleccionado).map(c => c.valor);
-      if (seleccionadas.length > 0) {
-        this.filteredTickets = this.filteredTickets.filter(t => seleccionadas.includes(String(t.criticidad)));
-      }
-    }
-    if (columna === 'departamento') {
-      const seleccionadas = this.departamentosDisponibles.filter(d => d.seleccionado).map(d => d.valor);
-      if (seleccionadas.length > 0) {
-        this.filteredTickets = this.filteredTickets.filter(t => seleccionadas.includes(t.departamento));
-      }
-    }
-    // Al aplicar el filtro, cerramos el menú correspondiente si existe
-    // Por ejemplo, para "id" usamos triggerFiltroId:
-    if (columna === 'id' && this.triggerFiltroId) {
-      this.triggerFiltroId.closeMenu();
-    }
-    if (columna === 'categoria' && this.triggerFiltroCategoria) {
-      this.triggerFiltroCategoria.closeMenu();
-    }
-    if (columna === 'descripcion' && this.triggerFiltroDesc) {
-      this.triggerFiltroDesc.closeMenu();
-    }
-    if (columna === 'username' && this.triggerFiltroUsuario) {
-      this.triggerFiltroUsuario.closeMenu();
-    }
-    if (columna === 'estado' && this.triggerFiltroEstado) {
-      this.triggerFiltroEstado.closeMenu();
-    }
-    if (columna === 'criticidad' && this.triggerFiltroCriticidad) {
-      this.triggerFiltroCriticidad.closeMenu();
-    }
-    if (columna === 'fecha_creacion' && this.triggerFiltroFechaC) {
-      this.triggerFiltroFechaC.closeMenu();
-    }
-    if (columna === 'fecha_finalizado' && this.triggerFiltroFechaF) {
-      this.triggerFiltroFechaF.closeMenu();
-    }
-    if (columna === 'departamento' && this.triggerFiltroDepartamento) {
-      this.triggerFiltroDepartamento.closeMenu();
-    }
-
-    this.actualizarFiltrosCruzados();
+    this.filtrarTickets();
   }
-
-  limpiarFiltroColumna(columna: string) {
-    if (columna === 'id') {
-      this.idsDisponibles.forEach(item => item.seleccionado = false);
-      this.seleccionarTodoID = false;
-    }
-    if (columna === 'categoria') {
-      this.categoriasDisponibles.forEach(item => item.seleccionado = false);
-      this.filtroCategoriaTexto = "";
-      this.categoriasFiltradas = [...this.categoriasDisponibles];
-      this.seleccionarTodoCategoria = false;
-    }
-    if (columna === 'descripcion') {
-      this.descripcionesDisponibles.forEach(item => item.seleccionado = false);
-      this.filtroDescripcionTexto = "";
-      this.descripcionesFiltradas = [...this.descripcionesDisponibles];
-      this.seleccionarTodoDescripcion = false;
-    }
-    if (columna === 'username') {
-      this.usuariosDisponibles.forEach(item => item.seleccionado = false);
-      this.filtroUsuarioTexto = "";
-      this.usuariosFiltrados = [...this.usuariosDisponibles];
-      this.seleccionarTodoUsuario = false;
-    }
-    if (columna === 'estado') {
-      this.estadosDisponibles.forEach(item => item.seleccionado = false);
-      this.filtroEstadoTexto = "";
-      this.estadosFiltrados = [...this.estadosDisponibles];
-      this.seleccionarTodoEstado = false;
-    }
-    if (columna === 'criticidad') {
-      this.criticidadesDisponibles.forEach(item => item.seleccionado = false);
-      this.filtroCriticidadTexto = "";
-      this.criticidadesFiltradas = [...this.criticidadesDisponibles];
-      this.seleccionarTodoCriticidad = false;
-    }
-
-    if (columna === 'departamento') {
-      this.departamentosDisponibles.forEach(item => item.seleccionado = false);
-      this.filtroDeptoTexto = "";
-      this.departamentosFiltrados = [...this.departamentosDisponibles];
-      this.seleccionarTodoDepto = false;
-    }
-    // Reiniciamos la lista filtrada general
-    this.filteredTickets = [...this.tickets];
+  
+  limpiarFiltroColumna(columna: string): void {
+    const mapaColumnas = {
+      username: {
+        disponibles: this.usuariosDisponibles,
+        filtradas: 'usuariosFiltrados',
+        filtroTexto: 'filtroUsuarioTexto',
+        seleccionarTodo: 'seleccionarTodoUsuario',
+      },
+      estado: {
+        disponibles: this.estadosDisponibles,
+        filtradas: 'estadosFiltrados',
+        filtroTexto: 'filtroEstadoTexto',
+        seleccionarTodo: 'seleccionarTodoEstado',
+      },
+      categoria: {
+        disponibles: this.categoriasDisponibles,
+        filtradas: 'categoriasFiltradas',
+        filtroTexto: 'filtroCategoriaTexto',
+        seleccionarTodo: 'seleccionarTodoCategoria',
+      },
+      descripcion: {
+        disponibles: this.descripcionesDisponibles,
+        filtradas: 'descripcionesFiltradas',
+        filtroTexto: 'filtroDescripcionTexto',
+        seleccionarTodo: 'seleccionarTodoDescripcion',
+      },
+      criticidad: {
+        disponibles: this.criticidadesDisponibles,
+        filtradas: 'criticidadesFiltradas',
+        filtroTexto: 'filtroCriticidadTexto',
+        seleccionarTodo: 'seleccionarTodoCriticidad',
+      },
+      departamento: {
+        disponibles: this.departamentosDisponibles,
+        filtradas: 'departamentosFiltrados',
+        filtroTexto: 'filtroDeptoTexto',
+        seleccionarTodo: 'seleccionarTodoDepto',
+      },
+      subcategoria: {
+        disponibles: this.subcategoriasDisponibles,
+        filtradas: 'subcategoriasFiltradas',
+        filtroTexto: 'filtroSubcategoriaTexto',
+        seleccionarTodo: 'seleccionarTodoSubcategoria',
+      },
+      subsubcategoria: {
+        disponibles: this.detallesDisponibles,
+        filtradas: 'detallesFiltrados',
+        filtroTexto: 'filtroDetalleTexto',
+        seleccionarTodo: 'seleccionarTodoDetalle',
+      }
+    };
+  
+    const config = (mapaColumnas as any)[columna];
+    if (!config) return;
+  
+    config.disponibles.forEach((item: any) => item.seleccionado = false);
+    (this as any)[config.filtradas] = [...config.disponibles];
+    (this as any)[config.filtroTexto] = '';
+    (this as any)[config.seleccionarTodo] = false;
+  
+    this.filtrarTickets();
   }
+  
 
+  
   // Función general para "Seleccionar Todo" según columna
   toggleSeleccionarTodo(columna: string): void {
     if (columna === 'id') {
       this.idsDisponibles.forEach(item => item.seleccionado = this.seleccionarTodoID);
     } else if (columna === 'categoria') {
-      this.categoriasFiltradas.forEach(item => item.seleccionado = this.seleccionarTodoCategoria);
+      this.categoriasDisponibles.forEach(item => item.seleccionado = this.seleccionarTodoCategoria);
+      this.filtrarOpcionesCategoria();
     } else if (columna === 'descripcion') {
-      this.descripcionesFiltradas.forEach(item => item.seleccionado = this.seleccionarTodoDescripcion);
+      this.descripcionesDisponibles.forEach(item => item.seleccionado = this.seleccionarTodoDescripcion);
+      this.filtrarOpcionesDescripcion();
     } else if (columna === 'username') {
-      this.usuariosFiltrados.forEach(item => item.seleccionado = this.seleccionarTodoUsuario);
+      this.usuariosDisponibles.forEach(item => item.seleccionado = this.seleccionarTodoUsuario);
+      this.filtrarOpcionesUsuario();
     } else if (columna === 'estado') {
-      this.estadosFiltrados.forEach(item => item.seleccionado = this.seleccionarTodoEstado);
+      this.estadosDisponibles.forEach(item => item.seleccionado = this.seleccionarTodoEstado);
+      this.filtrarOpcionesEstado();
     } else if (columna === 'criticidad') {
-      this.criticidadesFiltradas.forEach(item => item.seleccionado = this.seleccionarTodoCriticidad);
+      this.criticidadesDisponibles.forEach(item => item.seleccionado = this.seleccionarTodoCriticidad);
+      this.filtrarOpcionesCriticidad();
     } else if (columna === 'departamento') {
-      this.departamentosFiltrados.forEach(item => item.seleccionado = this.seleccionarTodoDepto);
+      this.departamentosDisponibles.forEach(item => item.seleccionado = this.seleccionarTodoDepto);
+      this.filtrarOpcionesDepto();
+    } else if (columna === 'subcategoria') {
+      this.subcategoriasDisponibles.forEach(item => item.seleccionado = this.seleccionarTodoSubcategoria);
+      this.filtrarOpcionesSubcategoria();
+    } else if (columna === 'subsubcategoria') {
+      this.detallesDisponibles.forEach(item => item.seleccionado = this.seleccionarTodoDetalle);
+      this.filtrarOpcionesDetalle();
     }
   }
+  
 
   // -------------- Funciones para Filtrar Opciones (Con remoción de diacríticos) -------------- //
   
@@ -886,6 +868,31 @@ export class PantallaVerTicketsComponent implements OnInit {
     }
   }
 
+  filtrarOpcionesSubcategoria(): void {
+    if (!this.filtroSubcategoriaTexto) {
+      this.subcategoriasFiltradas = [...this.subcategoriasDisponibles];
+    } else {
+      const textoNormalizado = this.removeDiacritics(this.filtroSubcategoriaTexto.toLowerCase());
+      this.subcategoriasFiltradas = this.subcategoriasDisponibles.filter(sub => {
+        const valorNormalizado = this.removeDiacritics(sub.valor.toLowerCase());
+        return valorNormalizado.includes(textoNormalizado);
+      });
+    }
+  }
+  
+  filtrarOpcionesDetalle(): void {
+    if (!this.filtroDetalleTexto) {
+      this.detallesFiltrados = [...this.detallesDisponibles];
+    } else {
+      const textoNormalizado = this.removeDiacritics(this.filtroDetalleTexto.toLowerCase());
+      this.detallesFiltrados = this.detallesDisponibles.filter(det => {
+        const valorNormalizado = this.removeDiacritics(det.valor.toLowerCase());
+        return valorNormalizado.includes(textoNormalizado);
+      });
+    }
+  }
+
+
   // -------------- Función para Ordenar -------------- //
   ordenar(columna: string, direccion: 'asc' | 'desc') {
     console.log(`Ordenar por ${columna} en dirección ${direccion}`);
@@ -899,65 +906,151 @@ export class PantallaVerTicketsComponent implements OnInit {
   }
 
   // Al final de tu archivo TS, agrega la función para actualizar las listas de filtros cruzados:
-actualizarFiltrosCruzados(): void {
-  // Se generan los arrays únicos a partir de los tickets filtrados.
-  // Se utiliza Map para conservar sólo un objeto por valor único.
-  this.categoriasFiltradas = [...new Map(
-    this.filteredTickets.map(t => [t.categoria, { valor: t.categoria, seleccionado: false }])
-  ).values()];
+  actualizarFiltrosCruzados(): void {
+    const campos: Array<keyof PantallaVerTicketsComponent> = [
+      'usuariosDisponibles',
+      'estadosDisponibles',
+      'categoriasDisponibles',
+      'descripcionesDisponibles',
+      'criticidadesDisponibles',
+      'departamentosDisponibles',
+      'subcategoriasDisponibles',
+      'detallesDisponibles'
+    ];
   
-  this.descripcionesFiltradas = [...new Map(
-    this.filteredTickets.map(t => [t.descripcion, { valor: t.descripcion, seleccionado: false }])
-  ).values()];
+    const nombreCampos: { [key: string]: keyof Ticket } = {
+      usuariosDisponibles: 'username',
+      estadosDisponibles: 'estado',
+      categoriasDisponibles: 'categoria',
+      descripcionesDisponibles: 'descripcion',
+      criticidadesDisponibles: 'criticidad',
+      departamentosDisponibles: 'departamento',
+      subcategoriasDisponibles: 'subcategoria',
+      detallesDisponibles: 'subsubcategoria'
+    };
   
-  this.usuariosFiltrados = [...new Map(
-    this.filteredTickets.map(t => [t.username, { valor: t.username, seleccionado: false }])
-  ).values()];
+    for (const campo of campos) {
+      const campoFiltrado = campo.replace('Disponibles', 'Filtrados');
+      const ticketKey = nombreCampos[campo];
   
-  this.estadosFiltrados = [...new Map(
-    this.filteredTickets.map(t => [t.estado, { valor: t.estado, seleccionado: false }])
-  ).values()];
+      const nuevosValores: { valor: string; seleccionado: boolean }[] = [];
   
-  this.criticidadesFiltradas = [...new Map(
-    this.filteredTickets.map(t => [String(t.criticidad), { valor: String(t.criticidad), seleccionado: false }])
-  ).values()];
+      const valoresUnicos = new Set(
+        this.filteredTickets.map(t => (t[ticketKey] ?? '—').toString())
+      );
   
-  this.fechasCreacionFiltradas = [...new Map(
-    this.filteredTickets.map(t => [t.fecha_creacion, { valor: t.fecha_creacion, seleccionado: false }])
-  ).values()];
+      valoresUnicos.forEach(valor => {
+        const original = (this as any)[campo].find((i: any) => i.valor === valor);
+        nuevosValores.push({
+          valor,
+          seleccionado: original?.seleccionado || false
+        });
+      });
   
-  this.fechasFinalFiltradas = [...new Map(
-    this.filteredTickets.map(t => [t.fecha_finalizado ?? 'Sin Finalizar', { valor: t.fecha_finalizado ?? 'Sin Finalizar', seleccionado: false }])
-  ).values()];
+      (this as any)[campoFiltrado] = nuevosValores;
+    }
+  }
   
-  this.departamentosFiltrados = [...new Map(
-    this.filteredTickets.map(t => [t.departamento, { valor: t.departamento, seleccionado: false }])
-  ).values()];
+  
+  
+  
+
+  isFilterActive(columna: string): boolean {
+    const disponibles = (this as any)[`${columna}Disponibles`];
+    if (!Array.isArray(disponibles)) return false;
+    return disponibles.some((item: any) => item.seleccionado);
+  }
+
+limpiarTodosLosFiltros(): void {
+  [
+    'username',
+    'estado',
+    'categoria',
+    'descripcion',
+    'criticidad',
+    'departamento',
+    'subcategoria',
+    'subsubcategoria'
+  ].forEach(col => this.limpiarFiltroColumna(col));
 }
 
-isFilterActive(columna: string): boolean {
-  switch (columna) {
-    case 'id':
-      return this.idsDisponibles.some(item => item.seleccionado);
-    case 'categoria':
-      return this.categoriasDisponibles.some(item => item.seleccionado);
-    case 'descripcion':
-      return this.descripcionesDisponibles.some(item => item.seleccionado);
-    case 'username':
-      return this.usuariosDisponibles.some(item => item.seleccionado);
-    case 'estado':
-      return this.estadosDisponibles.some(item => item.seleccionado);
-    case 'criticidad':
-      return this.criticidadesDisponibles.some(item => item.seleccionado);
-    case 'fecha_creacion':
-      return this.fechasCreacionDisponibles.some(item => item.seleccionado);
-    case 'fecha_finalizado':
-      return this.fechasFinalDisponibles.some(item => item.seleccionado);
-    case 'departamento':
-      return this.departamentosDisponibles.some(item => item.seleccionado);
-    default:
-      return false;
-  }
+getFiltrosActivos(): { [clave: string]: string[] } {
+  return {
+    username: this.usuariosDisponibles.filter(i => i.seleccionado).map(i => i.valor),
+    estado: this.estadosDisponibles.filter(i => i.seleccionado).map(i => i.valor),
+    categoria: this.categoriasDisponibles.filter(i => i.seleccionado).map(i => i.valor),
+    descripcion: this.descripcionesDisponibles.filter(i => i.seleccionado).map(i => i.valor),
+    criticidad: this.criticidadesDisponibles.filter(i => i.seleccionado).map(i => i.valor),
+    departamento: this.departamentosDisponibles.filter(i => i.seleccionado).map(i => i.valor),
+    subcategoria: this.subcategoriasDisponibles.filter(i => i.seleccionado).map(i => i.valor),
+    subsubcategoria: this.detallesDisponibles.filter(i => i.seleccionado).map(i => i.valor),
+  };
 }
+
+
+filtrarTickets(): void {
+  // Sincronizar todas las listas visibles con la principal
+  const sincronizar = (
+    disponibles: { valor: string; seleccionado: boolean }[],
+    filtradas: { valor: string; seleccionado: boolean }[]
+  ) => {
+    disponibles.forEach(item => {
+      const visible = filtradas.find(f => f.valor === item.valor);
+      if (visible) item.seleccionado = visible.seleccionado;
+    });
+  };
+
+  sincronizar(this.usuariosDisponibles, this.usuariosFiltrados);
+  sincronizar(this.estadosDisponibles, this.estadosFiltrados);
+  sincronizar(this.categoriasDisponibles, this.categoriasFiltradas);
+  sincronizar(this.descripcionesDisponibles, this.descripcionesFiltradas);
+  sincronizar(this.criticidadesDisponibles, this.criticidadesFiltradas);
+  sincronizar(this.departamentosDisponibles, this.departamentosFiltrados);
+  sincronizar(this.subcategoriasDisponibles, this.subcategoriasFiltradas);
+  sincronizar(this.detallesDisponibles, this.detallesFiltrados);
+
+  const filtros = this.getFiltrosActivos();
+  this.filteredTickets = this.tickets.filter(ticket => {
+    for (const [clave, valores] of Object.entries(filtros)) {
+      if (valores.length === 0) continue;
+      const valorTicket = (ticket as any)[clave] ?? '—';
+      if (!valores.includes(valorTicket.toString())) {
+        return false;
+      }
+    }
+    return true;
+  });
+
+  this.actualizarFiltrosCruzados();
+}
+
+
+
+sincronizarCheckboxesConFiltrado(): void {
+  // Sincroniza selección entre listas disponibles y las listas filtradas
+  const sincronizar = (
+    disponibles: { valor: string; seleccionado: boolean }[],
+    filtradas: { valor: string; seleccionado: boolean }[]
+  ) => {
+    disponibles.forEach(item => {
+      const filtrado = filtradas.find(f => f.valor === item.valor);
+      if (filtrado) {
+        item.seleccionado = filtrado.seleccionado;
+      }
+    });
+  };
+
+  sincronizar(this.categoriasDisponibles, this.categoriasFiltradas);
+  sincronizar(this.descripcionesDisponibles, this.descripcionesFiltradas);
+  sincronizar(this.usuariosDisponibles, this.usuariosFiltrados);
+  sincronizar(this.estadosDisponibles, this.estadosFiltrados);
+  sincronizar(this.criticidadesDisponibles, this.criticidadesFiltradas);
+  sincronizar(this.departamentosDisponibles, this.departamentosFiltrados);
+  sincronizar(this.subcategoriasDisponibles, this.subcategoriasFiltradas);
+  sincronizar(this.detallesDisponibles, this.detallesFiltrados);
+  sincronizar(this.idsDisponibles, this.idsDisponibles); // IDs no tienen búsqueda
+}
+
+
 
 }

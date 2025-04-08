@@ -1,3 +1,5 @@
+//reauth-modal.component.ts
+
 import { Component } from '@angular/core';
 import { MatDialogRef } from '@angular/material/dialog';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
@@ -60,8 +62,11 @@ export class ReauthModalComponent {
         next: (resp) => {
           // Suponemos que la respuesta trae { token, user }
           if (resp.token) {
+            localStorage.setItem('token', resp.token);
+            localStorage.setItem('user', JSON.stringify(resp.user));
             this.dialogRef.close({ token: resp.token, user: resp.user });
-          } else {
+          }
+           else {
             // Si no se obtuvo token, cierra el modal sin devolver datos
             this.dialogRef.close();
           }

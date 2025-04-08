@@ -404,3 +404,24 @@
     }
   }
   
+
+  .boton-limpiar-todo {
+    background-color: #e53935;
+    color: white;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    margin-left: 10px;
+    transition: background-color 0.3s ease;
+  }
+  
+  .boton-limpiar-todo:hover {
+    background-color: #c62828;
+  }
+  
+  th.filtro-activo button {
+    color: #1976d2;
+    font-weight: bold;
+  }

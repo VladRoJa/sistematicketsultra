@@ -33,7 +33,7 @@ export class TokenInterceptor implements HttpInterceptor {
             switchMap(result => {
               if (result && result.token) {
                 // Se actualiza el token en el AuthService
-                this.authService.setSession(result.token, result.user || {});
+                this.authService.setSession(result.token, result.user || {}, false); // 🔁 no redirige
                 // Se reintenta la petición original con el nuevo token
                 const newRequest = req.clone({
                   headers: req.headers.set('Authorization', `Bearer ${result.token}`)

@@ -11,7 +11,7 @@ def obtener_aparatos_por_sucursal(id_sucursal):
     cursor = conn.cursor(dictionary=True)
     
     query = """
-    SELECT id, id_sucursal, descripcion, marca, numero_equipo, grupo_muscular, categoria
+    SELECT id, codigo, id_sucursal, descripcion, marca, numero_equipo, grupo_muscular, categoria
     FROM aparatos_gimnasio
     WHERE id_sucursal = %s
     """

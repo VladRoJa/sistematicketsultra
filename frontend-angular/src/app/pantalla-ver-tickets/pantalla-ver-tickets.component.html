@@ -131,7 +131,7 @@
         </th>
 
         <!-- (4) Columna: Usuario -->
-        <th [class.filtro-activo]="isFilterActive('usuario')">
+        <th [class.filtro-activo]="isFilterActive('username')">
           <button mat-button [matMenuTriggerFor]="menuUsuario" #triggerFiltroUsuario="matMenuTrigger" class="header-button">
             Usuario <mat-icon>arrow_drop_down</mat-icon>
           </button>
@@ -345,13 +345,97 @@
           </mat-menu>
         </th>
 
-        <!-- (10) Columna: Acciones (solo admin) -->
+                <!-- (11) Columna: Subcategoría -->
+        <th [class.filtro-activo]="isFilterActive('subcategoria')">
+          <button mat-button [matMenuTriggerFor]="menuSubcategoria" #triggerFiltroSubcategoria="matMenuTrigger" class="header-button">
+            Subcategoría <mat-icon>arrow_drop_down</mat-icon>
+          </button>
+          <mat-menu #menuSubcategoria="matMenu" disableClose="true">
+            <button mat-menu-item (click)="ordenar('subcategoria','asc')">A-Z</button>
+            <button mat-menu-item (click)="ordenar('subcategoria','desc')">Z-A</button>
+            <mat-divider></mat-divider>
+            <div class="menu-filtro" (click)="$event.stopPropagation()">
+              <label>Filtrar Subcategoría</label>
+              <mat-form-field appearance="fill" class="buscador-filtro" (click)="$event.stopPropagation()">
+                <mat-label>Buscar</mat-label>
+                <input matInput [(ngModel)]="filtroSubcategoriaTexto" (keyup)="filtrarOpcionesSubcategoria()">
+              </mat-form-field>
+              <mat-checkbox [(ngModel)]="seleccionarTodoSubcategoria"
+                            (change)="toggleSeleccionarTodo('subcategoria')"
+                            (click)="$event.stopPropagation()"
+                            name="subcat_selectAll">
+                Seleccionar todo
+              </mat-checkbox>
+              <div class="opciones-scrollable">
+                <mat-checkbox *ngFor="let item of subcategoriasFiltradas; let i = index"
+                              [(ngModel)]="item.seleccionado"
+                              [name]="'subcat_' + i"
+                              (click)="$event.stopPropagation()">
+                  {{ item.valor }}
+                </mat-checkbox>
+              </div>
+              <div class="menu-botones-fijos">
+                <button mat-button color="primary" (click)="aplicarFiltroColumna('subcategoria'); triggerFiltroSubcategoria.closeMenu()">
+                  Aplicar
+                </button>
+                <button mat-button (click)="limpiarFiltroColumna('subcategoria'); triggerFiltroSubcategoria.closeMenu()">
+                  Borrar Filtros
+                </button>
+              </div>
+            </div>
+          </mat-menu>
+        </th>
+
+        <!-- (11) Columna: Detalle -->
+        <th [class.filtro-activo]="isFilterActive('subsubcategoria')">
+          <button mat-button [matMenuTriggerFor]="menuDetalle" #triggerFiltroDetalle="matMenuTrigger" class="header-button">
+            Detalle <mat-icon>arrow_drop_down</mat-icon>
+          </button>
+          <mat-menu #menuDetalle="matMenu" disableClose="true">
+            <button mat-menu-item (click)="ordenar('subsubcategoria','asc')">A-Z</button>
+            <button mat-menu-item (click)="ordenar('subsubcategoria','desc')">Z-A</button>
+            <mat-divider></mat-divider>
+            <div class="menu-filtro" (click)="$event.stopPropagation()">
+              <label>Filtrar Detalle</label>
+              <mat-form-field appearance="fill" class="buscador-filtro" (click)="$event.stopPropagation()">
+                <mat-label>Buscar</mat-label>
+                <input matInput [(ngModel)]="filtroDetalleTexto" (keyup)="filtrarOpcionesDetalle()">
+              </mat-form-field>
+              <mat-checkbox [(ngModel)]="seleccionarTodoDetalle"
+                            (change)="toggleSeleccionarTodo('subsubcategoria')"
+                            (click)="$event.stopPropagation()"
+                            name="detalle_selectAll">
+                Seleccionar todo
+              </mat-checkbox>
+              <div class="opciones-scrollable">
+                <mat-checkbox *ngFor="let item of detallesFiltrados; let i = index"
+                              [(ngModel)]="item.seleccionado"
+                              [name]="'detalle_' + i"
+                              (click)="$event.stopPropagation()">
+                  {{ item.valor }}
+                </mat-checkbox>
+              </div>
+              <div class="menu-botones-fijos">
+                <button mat-button color="primary" (click)="aplicarFiltroColumna('subsubcategoria'); triggerFiltroDetalle.closeMenu()">
+                  Aplicar
+                </button>
+                <button mat-button (click)="limpiarFiltroColumna('subsubcategoria'); triggerFiltroDetalle.closeMenu()">
+                  Borrar Filtros
+                </button>
+              </div>
+            </div>
+          </mat-menu>
+        </th>
+
+
+
+        <!-- (12) Columna: Acciones (solo admin) -->
         <th>Acciones</th>
 
-        <!-- (11) Columna: Fecha Solución -->
+        <!-- (13) Columna: Fecha Solución -->
         <th>Fecha Solución</th>
 
-        <!-- (12) Columna: Historial -->
+        <!-- (14) Columna: Historial -->
         <th>Historial</th>
       </tr>
     </thead>
@@ -367,6 +451,8 @@
         <td>{{ ticket.fecha_creacion }}</td>
         <td>{{ ticket.fecha_finalizado }}</td>
         <td>{{ ticket.departamento }}</td>
+        <td>{{ ticket.subcategoria || '—' }}</td>
+        <td>{{ ticket.subsubcategoria || '—' }}</td>
         <!-- (10) Acciones -->
         <td *ngIf="usuarioEsAdmin">
           <button *ngIf="ticket.estado === 'pendiente'" (click)="cambiarEstadoTicket(ticket, 'en progreso')" class="boton-estado boton-en-progreso">
@@ -453,8 +539,7 @@
 
   <!-- Botón de Exportar a Excel -->
   <div class="export-container">
-    <button class="boton-exportar" (click)="exportToExcel()">
-      📥 Exportar a Excel
-    </button>
+    <button class="boton-exportar" (click)="exportToExcel()">📥 Exportar a Excel</button>
+    <button class="boton-limpiar-todo" (click)="limpiarTodosLosFiltros()">🧹 Limpiar Filtros</button>
   </div>
 </div>

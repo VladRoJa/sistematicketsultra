@@ -86,3 +86,29 @@ body {
     border: 1px solid #f5c6cb;
   }
   
+  .formulario-mantenimiento-box {
+    border: 1px solid #ddd;
+    padding: 20px;
+    margin: 20px 0;
+    border-radius: 10px;
+    background-color: #fafafa;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  }
+  
+  .form-mantenimiento-subform {
+    margin-top: 12px;
+    border-top: 1px dashed #ccc;
+    padding-top: 12px;
+  }
+
+  .form-group-grouped {
+    margin-bottom: 15px;
+  }
+
+  select, textarea, input {
+    width: 100%;
+    padding: 8px;
+    margin-top: 5px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+  }

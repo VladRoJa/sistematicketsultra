@@ -330,20 +330,16 @@ def get_tickets():
         return jsonify({"mensaje": f"Error al obtener tickets: {str(e)}"}), 500
 
 
-# -----------------------------------------------------------------------------
-# RUTA: Crear un ticket
-# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------  
+# RUTA: Crear un nuevo ticket (POST)  
+# -----------------------------------------------------------------------------  
 @ticket_bp.route('/create', methods=['POST'])
 @jwt_required()
 def create_ticket():
-    """
-    Crea un nuevo ticket con los datos recibidos (se requieren descripción, departamento_id, criticidad y categoría).
-    """
     try:
         usuario_actual = get_jwt_identity()
         user = User.get_user_by_id(usuario_actual)
         if not user:
-            print("❌ Usuario no encontrado en la base de datos")
             return jsonify({"mensaje": "Usuario no encontrado"}), 404
 
         data = request.get_json()
@@ -353,23 +349,41 @@ def create_ticket():
         departamento_id = data.get("departamento_id")
         criticidad = data.get("criticidad")
         categoria = data.get("categoria")
+        subcategoria = data.get("subcategoria")
+        subsubcategoria = data.get("subsubcategoria")
+
+        # 🆕 Nuevos campos (solo para Mantenimiento - Aparatos)
+        aparato_id = data.get("aparato_id")
+        problema_detectado = data.get("problema_detectado")
+        necesita_refaccion = data.get("necesita_refaccion")
+        descripcion_refaccion = data.get("descripcion_refaccion")
 
         if not descripcion or not departamento_id or not criticidad or not categoria:
-            print("🚫 Faltan datos obligatorios")
             return jsonify({"mensaje": "Faltan datos obligatorios"}), 400
 
-        nuevo_ticket = Ticket.create_ticket(descripcion, user.username, user.id_sucursal, departamento_id, criticidad, categoria)
+        ticket_id = Ticket.create_ticket(
+            descripcion=descripcion,
+            username=user.username,
+            id_sucursal=user.id_sucursal,
+            departamento_id=departamento_id,
+            criticidad=int(criticidad),
+            categoria=categoria,
+            subcategoria=subcategoria,
+            subsubcategoria=subsubcategoria,
+            aparato_id=aparato_id,
+            problema_detectado=problema_detectado,
+            necesita_refaccion=necesita_refaccion,
+            descripcion_refaccion=descripcion_refaccion
+        )
 
-        if nuevo_ticket:
-            return jsonify({"mensaje": "Ticket creado correctamente", "ticket": nuevo_ticket}), 201
+        if ticket_id:
+            return jsonify({"mensaje": "Ticket creado correctamente", "ticket_id": ticket_id}), 201
         else:
-            print("❌ Error al insertar el ticket en la base de datos")
             return jsonify({"mensaje": "Error al crear el ticket"}), 500
 
     except Exception as e:
         print(f"❌ Excepción en create_ticket: {str(e)}")
         return jsonify({"mensaje": f"Error interno en el servidor: {str(e)}"}), 500
-
 
 # -----------------------------------------------------------------------------
 # RUTA: Actualizar estado de un ticket
