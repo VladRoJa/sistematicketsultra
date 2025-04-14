@@ -1,15 +1,16 @@
-<!-- filter-date-range.component.html (sin filtros ni clases) -->
-<mat-form-field appearance="fill">
-  <mat-label>Seleccione un rango de fechas</mat-label>
-  <mat-date-range-input [rangePicker]="picker" (dateChange)="onDateRangeChange()">
-    <input matStartDate placeholder="Fecha inicio">
-    <input matEndDate placeholder="Fecha fin">
+<!-- filter-date-range.component.html -->
+
+<mat-form-field appearance="fill" class="w-full">
+  <mat-label>Rango de fechas</mat-label>
+  <mat-date-range-input [formGroup]="range" [rangePicker]="picker">
+    <input matStartDate formControlName="start" placeholder="Inicio" />
+    <input matEndDate formControlName="end" placeholder="Fin" />
   </mat-date-range-input>
   <mat-datepicker-toggle matSuffix [for]="picker"></mat-datepicker-toggle>
-  <mat-date-range-picker #picker="matDateRangePicker">
-    <mat-date-range-picker-actions>
-      <button mat-button matDateRangePickerCancel>Borrar</button>
-      <button mat-raised-button color="primary" matDateRangePickerApply>Aplicar</button>
-    </mat-date-range-picker-actions>
-  </mat-date-range-picker>
+  <mat-date-range-picker #picker [dateClass]="dateClass"></mat-date-range-picker>
 </mat-form-field>
+
+<div class="acciones mt-2">
+  <button mat-raised-button color="primary" (click)="aplicarRango()">Aplicar</button>
+  <button mat-button color="warn" (click)="borrarRango()">Borrar</button>
+</div>

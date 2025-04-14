@@ -1,5 +1,9 @@
-/* Clase que opaca las fechas no válidas en el calendario */
-.disabled-date {
-  opacity: 0.3;
-  pointer-events: none; /* Evita selección de esas fechas */
+.full-width {
+  width: 100%;
+}
+
+.menu-botones-fijos {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
 }

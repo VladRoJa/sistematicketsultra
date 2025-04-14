@@ -1,30 +1,17 @@
 // filter-date-range.component.ts
 
-import { 
-  Component, 
-  OnInit, 
-  Output, 
-  EventEmitter, 
-  ViewChild, 
-  AfterViewInit 
-} from '@angular/core';
+import { Component, Output, EventEmitter, ViewChild } from '@angular/core';
 import { FormGroup, FormControl } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
-import { 
-  MatDatepickerModule, 
-  DateFilterFn, 
-  MatDateRangePicker 
-} from '@angular/material/datepicker';
+import { MatDatepickerModule, MatDateRangePicker } from '@angular/material/datepicker';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatNativeDateModule } from '@angular/material/core';
+import { MatButtonModule } from '@angular/material/button';
+import { MatIconModule } from '@angular/material/icon';
+import { MatMenuTrigger } from '@angular/material/menu';
 
-/**
- * Componente de rango de fechas (standalone).
- * Muestra un Date Range Picker con botones "Borrar" y "Aplicar",
- * y emite el rango seleccionado al padre.
- */
 @Component({
   selector: 'app-filter-date-range',
   standalone: true,
@@ -36,97 +23,51 @@ import { MatNativeDateModule } from '@angular/material/core';
     MatFormFieldModule,
     MatInputModule,
     MatNativeDateModule,
+    MatButtonModule,
+    MatIconModule
   ],
   templateUrl: './filter-date-range.component.html',
   styleUrls: ['./filter-date-range.component.css']
 })
-export class FilterDateRangeComponent implements OnInit, AfterViewInit {
-  /**
-   * Referencia al componente MatDateRangePicker en la plantilla.
-   * Se utiliza para abrir el calendario programáticamente.
-   */
+export class FilterDateRangeComponent {
   @ViewChild('picker') picker!: MatDateRangePicker<Date>;
+  @ViewChild(MatMenuTrigger) menuTrigger!: MatMenuTrigger;
 
-  /**
-   * Emite el rango de fechas seleccionado (start, end) al padre.
-   */
-  @Output() rangoSeleccionado = new EventEmitter<{start: Date, end: Date}>();
 
-  /**
-   * FormGroup para controlar las fechas de inicio (start) y fin (end).
-   */
+
+  @Output() rangoSeleccionado = new EventEmitter<{ start: Date | null; end: Date | null }>();
+
   range = new FormGroup({
     start: new FormControl<Date | null>(null),
     end: new FormControl<Date | null>(null),
   });
 
-  /**
-   * (Opcional) Fechas "válidas" que, si quieres, se podrían marcar
-   * o filtrar en el calendario. Aquí a modo de ejemplo.
-   */
-  private fechasConDatos: Date[] = [
-    new Date('2025-03-20T12:45:00'),
-    new Date('2025-03-20T08:27:00'),
-    new Date('2025-03-24T09:41:00'),
-    new Date('2025-03-25T12:32:00'),
-  ];
+  fechasSolucionDisponibles = new Set<string>([ '2025-03-20', '2025-03-24', '2025-03-25' ]);
 
-  /**
-   * Set que contiene las fechas válidas en formato string,
-   * para usarse en la función de filtro del calendario.
-   */
-  private fechasValidasSet: Set<string> = new Set();
-
-  /**
-   * Función para bloquear/deshabilitar fechas no incluidas en `fechasValidasSet`.
-   * Angular Material la llama para cada día del calendario.
-   */
-  soloFechasValidas: DateFilterFn<Date> = (date: Date | null): boolean => {
-    if (!date) return false;
-    return this.fechasValidasSet.has(date.toDateString());
-  };
-
-  /**
-   * Asigna clases CSS a los días en el calendario (por ejemplo, para opacarlos).
-   */
   dateClass = (cellDate: Date, view: 'month' | 'year' | 'multi-year'): string => {
-    if (view === 'month') {
-      if (!this.fechasValidasSet.has(cellDate.toDateString())) {
-        return 'disabled-date';
-      }
-    }
-    return '';
+    const fechaStr = cellDate.toISOString().slice(0, 10);
+    return this.fechasSolucionDisponibles?.has(fechaStr) ? 'mat-calendar-body-cell-valid' : '';
   };
 
-  /**
-   * Inicializa la estructura de datos y llena el Set de fechas válidas.
-   */
-  ngOnInit(): void {
-    this.fechasConDatos.forEach(fecha => {
-      this.fechasValidasSet.add(fecha.toDateString());
-    });
-  }
 
-  /**
-   * Abre el date range picker automáticamente después de que la vista cargue.
-   */
-  ngAfterViewInit(): void {
-    // Abre el calendario de forma programática.
-    // Puedes quitar esta línea si prefieres no abrirlo de inmediato.
-   
-  }
-
-  /**
-   * Se llama cuando el usuario cambia la fecha (start o end).
-   * Si ambas fechas están seleccionadas, emite el rango.
-   */
-  onDateRangeChange(): void {
+  aplicarRango(): void {
     const start = this.range.value.start;
     const end = this.range.value.end;
-
     if (start && end) {
-      // Emitimos el rango para que el componente padre realice el filtrado.
       this.rangoSeleccionado.emit({ start, end });
     }
   }
+
+  borrarRango(): void {
+    this.range.reset(); // Limpia los campos de fecha
+  
+    // Emitimos valores nulos para que el padre sepa que se quiere limpiar el filtro
+    this.rangoSeleccionado.emit({ start: null, end: null });
+  
+    // Cierra el menú si existe un mat-menu activo
+    if (this.menuTrigger) {
+      this.menuTrigger.closeMenu();
+    }
+  }
+  
 }

@@ -11,7 +11,7 @@ import { firstValueFrom } from 'rxjs';
 import * as ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 import { FilterDateRangeComponent } from '../filter-date-range/filter-date-range.component';
-import { FormGroup, FormControl } from '@angular/forms';
+import {getFiltrosActivosFrom,filtrarTicketsConFiltros,actualizarFiltrosCruzados,isFilterActive, limpiarFiltroColumnaConMapa, toggleSeleccionarTodoConMapa, removeDiacritics} from '../utils/ticket-utils';
 
 
 // Angular Material Modules
@@ -23,12 +23,16 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatNativeDateModule } from '@angular/material/core';
+import { MatDatepickerModule } from '@angular/material/datepicker';
+
 
 
 // -------------- Interfaces -------------- //
 
 /** Representa la estructura de un Ticket */
 export interface Ticket {
+  fecha_finalizado_original: any;
+  fecha_creacion_original: any;
   id: number;
   descripcion: string;
   username: string;
@@ -83,6 +87,7 @@ interface TablaFiltros {
     MatInputModule,
     FilterDateRangeComponent,
     MatNativeDateModule,
+    MatDatepickerModule,
   ],
   templateUrl: './pantalla-ver-tickets.component.html',
   styleUrls: ['./pantalla-ver-tickets.component.css']
@@ -172,6 +177,8 @@ export class PantallaVerTicketsComponent implements OnInit {
   seleccionarTodoDepto: boolean = false;
   departamentosFiltrados: Array<{ valor: string, seleccionado: boolean }> = [];
 
+  fechasSolucionDisponibles = new Set<string>();
+
   // -------------- Rutas -------------- //
   private authUrl = 'http://localhost:5000/api/auth/session-info';
   private apiUrl = 'http://localhost:5000/api/tickets';
@@ -186,6 +193,9 @@ export class PantallaVerTicketsComponent implements OnInit {
   @ViewChild('triggerFiltroFechaC', { static: false }) triggerFiltroFechaC!: MatMenuTrigger;
   @ViewChild('triggerFiltroFechaF', { static: false }) triggerFiltroFechaF!: MatMenuTrigger;
   @ViewChild('triggerFiltroDepartamento', { static: false }) triggerFiltroDepartamento!: MatMenuTrigger;
+  @ViewChild('filterFechaCreacion') filterFechaCreacion!: FilterDateRangeComponent;
+  @ViewChild('filterFechaFinalizado') filterFechaFinalizado!: FilterDateRangeComponent;
+
 
   constructor(
     private ticketService: TicketService,
@@ -246,9 +256,12 @@ export class PantallaVerTicketsComponent implements OnInit {
           this.loading = false;
           return;
         }
+  
         // Mapear y normalizar datos de cada ticket
         this.tickets = data.tickets.map(ticket => ({
           ...ticket,
+          fecha_creacion_original: ticket.fecha_creacion, // 👈 GUARDAMOS UNA COPIA CRUDA
+          fecha_finalizado_original: ticket.fecha_finalizado, // 👈 TAMBIÉN FINALIZADO
           criticidad: ticket.criticidad || 1,
           estado: this.normalizarEstado(ticket.estado),
           departamento: this.departamentoService.obtenerNombrePorId(ticket.departamento_id),
@@ -258,12 +271,23 @@ export class PantallaVerTicketsComponent implements OnInit {
             ? JSON.parse(ticket.historial_fechas)
             : ticket.historial_fechas || []
         }));
+  
         this.totalTickets = data.total_tickets;
         this.filteredTickets = [...this.tickets];
+  
         // Construir las listas para los checkboxes de filtro
         this.construirListasDisponibles();
+  
         // Inicializar las listas de filtrado específicas (para búsqueda)
         this.inicializarListasFiltradas();
+  
+        // ✅ Crear Set de fechas solución válidas para el calendario
+        this.fechasSolucionDisponibles = new Set(
+          this.tickets
+            .map(t => t.fecha_solucion?.slice(0, 10))
+            .filter(f => !!f)
+        );
+  
         this.loading = false;
       },
       error: (error) => {
@@ -272,6 +296,7 @@ export class PantallaVerTicketsComponent implements OnInit {
       }
     });
   }
+  
 
   // -------------- Construir Listas para Filtros -------------- //
   construirListasDisponibles() {
@@ -383,15 +408,6 @@ export class PantallaVerTicketsComponent implements OnInit {
     });
   }
 
-  /**
-   * Elimina acentos y diacríticos de una cadena.
-   * Ejemplo: "Eléctrica" -> "Electrica"
-   */
-  removeDiacritics(texto: string): string {
-    return texto
-      .normalize("NFD")
-      .replace(/\p{Diacritic}/gu, "");
-  }
 
   // -------------- Paginación -------------- //
   nextPage(): void {
@@ -646,100 +662,20 @@ export class PantallaVerTicketsComponent implements OnInit {
   }
   
   limpiarFiltroColumna(columna: string): void {
-    const mapaColumnas = {
-      username: {
-        disponibles: this.usuariosDisponibles,
-        filtradas: 'usuariosFiltrados',
-        filtroTexto: 'filtroUsuarioTexto',
-        seleccionarTodo: 'seleccionarTodoUsuario',
-      },
-      estado: {
-        disponibles: this.estadosDisponibles,
-        filtradas: 'estadosFiltrados',
-        filtroTexto: 'filtroEstadoTexto',
-        seleccionarTodo: 'seleccionarTodoEstado',
-      },
-      categoria: {
-        disponibles: this.categoriasDisponibles,
-        filtradas: 'categoriasFiltradas',
-        filtroTexto: 'filtroCategoriaTexto',
-        seleccionarTodo: 'seleccionarTodoCategoria',
-      },
-      descripcion: {
-        disponibles: this.descripcionesDisponibles,
-        filtradas: 'descripcionesFiltradas',
-        filtroTexto: 'filtroDescripcionTexto',
-        seleccionarTodo: 'seleccionarTodoDescripcion',
-      },
-      criticidad: {
-        disponibles: this.criticidadesDisponibles,
-        filtradas: 'criticidadesFiltradas',
-        filtroTexto: 'filtroCriticidadTexto',
-        seleccionarTodo: 'seleccionarTodoCriticidad',
-      },
-      departamento: {
-        disponibles: this.departamentosDisponibles,
-        filtradas: 'departamentosFiltrados',
-        filtroTexto: 'filtroDeptoTexto',
-        seleccionarTodo: 'seleccionarTodoDepto',
-      },
-      subcategoria: {
-        disponibles: this.subcategoriasDisponibles,
-        filtradas: 'subcategoriasFiltradas',
-        filtroTexto: 'filtroSubcategoriaTexto',
-        seleccionarTodo: 'seleccionarTodoSubcategoria',
-      },
-      subsubcategoria: {
-        disponibles: this.detallesDisponibles,
-        filtradas: 'detallesFiltrados',
-        filtroTexto: 'filtroDetalleTexto',
-        seleccionarTodo: 'seleccionarTodoDetalle',
-      }
-    };
-  
-    const config = (mapaColumnas as any)[columna];
-    if (!config) return;
-  
-    config.disponibles.forEach((item: any) => item.seleccionado = false);
-    (this as any)[config.filtradas] = [...config.disponibles];
-    (this as any)[config.filtroTexto] = '';
-    (this as any)[config.seleccionarTodo] = false;
-  
+    limpiarFiltroColumnaConMapa(this, columna);
     this.filtrarTickets();
   }
+  
+  
+  
   
 
   
   // Función general para "Seleccionar Todo" según columna
   toggleSeleccionarTodo(columna: string): void {
-    if (columna === 'id') {
-      this.idsDisponibles.forEach(item => item.seleccionado = this.seleccionarTodoID);
-    } else if (columna === 'categoria') {
-      this.categoriasDisponibles.forEach(item => item.seleccionado = this.seleccionarTodoCategoria);
-      this.filtrarOpcionesCategoria();
-    } else if (columna === 'descripcion') {
-      this.descripcionesDisponibles.forEach(item => item.seleccionado = this.seleccionarTodoDescripcion);
-      this.filtrarOpcionesDescripcion();
-    } else if (columna === 'username') {
-      this.usuariosDisponibles.forEach(item => item.seleccionado = this.seleccionarTodoUsuario);
-      this.filtrarOpcionesUsuario();
-    } else if (columna === 'estado') {
-      this.estadosDisponibles.forEach(item => item.seleccionado = this.seleccionarTodoEstado);
-      this.filtrarOpcionesEstado();
-    } else if (columna === 'criticidad') {
-      this.criticidadesDisponibles.forEach(item => item.seleccionado = this.seleccionarTodoCriticidad);
-      this.filtrarOpcionesCriticidad();
-    } else if (columna === 'departamento') {
-      this.departamentosDisponibles.forEach(item => item.seleccionado = this.seleccionarTodoDepto);
-      this.filtrarOpcionesDepto();
-    } else if (columna === 'subcategoria') {
-      this.subcategoriasDisponibles.forEach(item => item.seleccionado = this.seleccionarTodoSubcategoria);
-      this.filtrarOpcionesSubcategoria();
-    } else if (columna === 'subsubcategoria') {
-      this.detallesDisponibles.forEach(item => item.seleccionado = this.seleccionarTodoDetalle);
-      this.filtrarOpcionesDetalle();
-    }
+    toggleSeleccionarTodoConMapa(this, columna);
   }
+  
   
 
   // -------------- Funciones para Filtrar Opciones (Con remoción de diacríticos) -------------- //
@@ -749,38 +685,27 @@ export class PantallaVerTicketsComponent implements OnInit {
     this.filteredTickets = this.tickets.filter(ticket => {
       // Maneja el caso en que la fecha sea nula o malformada
       if (!ticket.fecha_creacion) return false;
-      const fecha = new Date(ticket.fecha_creacion);
+      const fecha = new Date(ticket.fecha_creacion_original);
       return fecha >= rango.start && fecha <= rango.end;
     });
   }
   
-  filtrarPorRangoFechaFinal(rango: { start: Date; end: Date }) {
-    console.log('Filtrando tickets por fecha finalizado:', rango);
-    this.filteredTickets = this.tickets.filter(ticket => {
-      // Maneja el caso en que la fecha_finalizado pueda ser null
-      if (!ticket.fecha_finalizado) return false;
-      const fecha = new Date(ticket.fecha_finalizado);
-      return fecha >= rango.start && fecha <= rango.end;
-    });
-  }
   
   filtrarPorRango(rango: { start: Date; end: Date }) {
-    console.log('Rango recibido:', rango.start, '->', rango.end);
+    console.log('✅ Rango recibido para filtro general:', rango);
   
-    // Filtra tus tickets según la fecha_creacion esté dentro de ese rango
     this.filteredTickets = this.tickets.filter(ticket => {
-      // Convierte la fecha del ticket a objeto Date
-      const fechaTicket = new Date(ticket.fecha_creacion);
-      return fechaTicket >= rango.start && fechaTicket <= rango.end;
+      const fecha = this.parsearFechaDesdeTabla(ticket.fecha_creacion);
+      return fecha && fecha >= rango.start && fecha <= rango.end;
     });
   }
   filtrarOpcionesCategoria(): void {
     if (!this.filtroCategoriaTexto) {
       this.categoriasFiltradas = [...this.categoriasDisponibles];
     } else {
-      const textoNormalizado = this.removeDiacritics(this.filtroCategoriaTexto.toLowerCase());
+      const textoNormalizado = removeDiacritics(this.filtroCategoriaTexto.toLowerCase());
       this.categoriasFiltradas = this.categoriasDisponibles.filter(cat => {
-        const valorNormalizado = this.removeDiacritics(cat.valor.toLowerCase());
+        const valorNormalizado = removeDiacritics(cat.valor.toLowerCase());
         return valorNormalizado.includes(textoNormalizado);
       });
     }
@@ -790,9 +715,9 @@ export class PantallaVerTicketsComponent implements OnInit {
     if (!this.filtroDescripcionTexto) {
       this.descripcionesFiltradas = [...this.descripcionesDisponibles];
     } else {
-      const textoNormalizado = this.removeDiacritics(this.filtroDescripcionTexto.toLowerCase());
+      const textoNormalizado = removeDiacritics(this.filtroDescripcionTexto.toLowerCase());
       this.descripcionesFiltradas = this.descripcionesDisponibles.filter(desc => {
-        const valorNormalizado = this.removeDiacritics(desc.valor.toLowerCase());
+        const valorNormalizado = removeDiacritics(desc.valor.toLowerCase());
         return valorNormalizado.includes(textoNormalizado);
       });
     }
@@ -802,9 +727,9 @@ export class PantallaVerTicketsComponent implements OnInit {
     if (!this.filtroUsuarioTexto) {
       this.usuariosFiltrados = [...this.usuariosDisponibles];
     } else {
-      const textoNormalizado = this.removeDiacritics(this.filtroUsuarioTexto.toLowerCase());
+      const textoNormalizado = removeDiacritics(this.filtroUsuarioTexto.toLowerCase());
       this.usuariosFiltrados = this.usuariosDisponibles.filter(usr => {
-        const valorNormalizado = this.removeDiacritics(usr.valor.toLowerCase());
+        const valorNormalizado = removeDiacritics(usr.valor.toLowerCase());
         return valorNormalizado.includes(textoNormalizado);
       });
     }
@@ -814,9 +739,9 @@ export class PantallaVerTicketsComponent implements OnInit {
     if (!this.filtroEstadoTexto) {
       this.estadosFiltrados = [...this.estadosDisponibles];
     } else {
-      const textoNormalizado = this.removeDiacritics(this.filtroEstadoTexto.toLowerCase());
+      const textoNormalizado = removeDiacritics(this.filtroEstadoTexto.toLowerCase());
       this.estadosFiltrados = this.estadosDisponibles.filter(est => {
-        const valorNormalizado = this.removeDiacritics(est.valor.toLowerCase());
+        const valorNormalizado = removeDiacritics(est.valor.toLowerCase());
         return valorNormalizado.includes(textoNormalizado);
       });
     }
@@ -826,9 +751,9 @@ export class PantallaVerTicketsComponent implements OnInit {
     if (!this.filtroCriticidadTexto) {
       this.criticidadesFiltradas = [...this.criticidadesDisponibles];
     } else {
-      const textoNormalizado = this.removeDiacritics(this.filtroCriticidadTexto.toLowerCase());
+      const textoNormalizado = removeDiacritics(this.filtroCriticidadTexto.toLowerCase());
       this.criticidadesFiltradas = this.criticidadesDisponibles.filter(crit => {
-        const valorNormalizado = this.removeDiacritics(crit.valor.toLowerCase());
+        const valorNormalizado = removeDiacritics(crit.valor.toLowerCase());
         return valorNormalizado.includes(textoNormalizado);
       });
     }
@@ -860,9 +785,9 @@ export class PantallaVerTicketsComponent implements OnInit {
     if (!this.filtroDeptoTexto) {
       this.departamentosFiltrados = [...this.departamentosDisponibles];
     } else {
-      const textoNormalizado = this.removeDiacritics(this.filtroDeptoTexto.toLowerCase());
+      const textoNormalizado = removeDiacritics(this.filtroDeptoTexto.toLowerCase());
       this.departamentosFiltrados = this.departamentosDisponibles.filter(dep => {
-        const valorNormalizado = this.removeDiacritics(dep.valor.toLowerCase());
+        const valorNormalizado = removeDiacritics(dep.valor.toLowerCase());
         return valorNormalizado.includes(textoNormalizado);
       });
     }
@@ -872,9 +797,9 @@ export class PantallaVerTicketsComponent implements OnInit {
     if (!this.filtroSubcategoriaTexto) {
       this.subcategoriasFiltradas = [...this.subcategoriasDisponibles];
     } else {
-      const textoNormalizado = this.removeDiacritics(this.filtroSubcategoriaTexto.toLowerCase());
+      const textoNormalizado = removeDiacritics(this.filtroSubcategoriaTexto.toLowerCase());
       this.subcategoriasFiltradas = this.subcategoriasDisponibles.filter(sub => {
-        const valorNormalizado = this.removeDiacritics(sub.valor.toLowerCase());
+        const valorNormalizado = removeDiacritics(sub.valor.toLowerCase());
         return valorNormalizado.includes(textoNormalizado);
       });
     }
@@ -884,9 +809,9 @@ export class PantallaVerTicketsComponent implements OnInit {
     if (!this.filtroDetalleTexto) {
       this.detallesFiltrados = [...this.detallesDisponibles];
     } else {
-      const textoNormalizado = this.removeDiacritics(this.filtroDetalleTexto.toLowerCase());
+      const textoNormalizado = removeDiacritics(this.filtroDetalleTexto.toLowerCase());
       this.detallesFiltrados = this.detallesDisponibles.filter(det => {
-        const valorNormalizado = this.removeDiacritics(det.valor.toLowerCase());
+        const valorNormalizado = removeDiacritics(det.valor.toLowerCase());
         return valorNormalizado.includes(textoNormalizado);
       });
     }
@@ -907,48 +832,18 @@ export class PantallaVerTicketsComponent implements OnInit {
 
   // Al final de tu archivo TS, agrega la función para actualizar las listas de filtros cruzados:
   actualizarFiltrosCruzados(): void {
-    const campos: Array<keyof PantallaVerTicketsComponent> = [
-      'usuariosDisponibles',
-      'estadosDisponibles',
-      'categoriasDisponibles',
-      'descripcionesDisponibles',
-      'criticidadesDisponibles',
-      'departamentosDisponibles',
-      'subcategoriasDisponibles',
-      'detallesDisponibles'
-    ];
-  
-    const nombreCampos: { [key: string]: keyof Ticket } = {
-      usuariosDisponibles: 'username',
-      estadosDisponibles: 'estado',
-      categoriasDisponibles: 'categoria',
-      descripcionesDisponibles: 'descripcion',
-      criticidadesDisponibles: 'criticidad',
-      departamentosDisponibles: 'departamento',
-      subcategoriasDisponibles: 'subcategoria',
-      detallesDisponibles: 'subsubcategoria'
-    };
-  
-    for (const campo of campos) {
-      const campoFiltrado = campo.replace('Disponibles', 'Filtrados');
-      const ticketKey = nombreCampos[campo];
-  
-      const nuevosValores: { valor: string; seleccionado: boolean }[] = [];
-  
-      const valoresUnicos = new Set(
-        this.filteredTickets.map(t => (t[ticketKey] ?? '—').toString())
-      );
-  
-      valoresUnicos.forEach(valor => {
-        const original = (this as any)[campo].find((i: any) => i.valor === valor);
-        nuevosValores.push({
-          valor,
-          seleccionado: original?.seleccionado || false
-        });
-      });
-  
-      (this as any)[campoFiltrado] = nuevosValores;
-    }
+    actualizarFiltrosCruzados(
+      this.filteredTickets,
+      this.usuariosDisponibles,
+      this.estadosDisponibles,
+      this.categoriasDisponibles,
+      this.descripcionesDisponibles,
+      this.criticidadesDisponibles,
+      this.departamentosDisponibles,
+      this.subcategoriasDisponibles,
+      this.detallesDisponibles,
+      this
+    );
   }
   
   
@@ -956,73 +851,78 @@ export class PantallaVerTicketsComponent implements OnInit {
   
 
   isFilterActive(columna: string): boolean {
-    const disponibles = (this as any)[`${columna}Disponibles`];
-    if (!Array.isArray(disponibles)) return false;
-    return disponibles.some((item: any) => item.seleccionado);
+    return isFilterActive(this, columna);
   }
 
-limpiarTodosLosFiltros(): void {
-  [
-    'username',
-    'estado',
-    'categoria',
-    'descripcion',
-    'criticidad',
-    'departamento',
-    'subcategoria',
-    'subsubcategoria'
-  ].forEach(col => this.limpiarFiltroColumna(col));
-}
+  limpiarTodosLosFiltros(): void {
+    [
+      'username',
+      'estado',
+      'categoria',
+      'descripcion',
+      'criticidad',
+      'departamento',
+      'subcategoria',
+      'subsubcategoria'
+    ].forEach(col => this.limpiarFiltroColumna(col));
+  
+    // ✅ Limpiar filtros de rango de fecha desde los componentes hijos
+    if (this.filterFechaCreacion) this.filterFechaCreacion.borrarRango();
+    if (this.filterFechaFinalizado) this.filterFechaFinalizado.borrarRango();
+  }
+  
+  
 
-getFiltrosActivos(): { [clave: string]: string[] } {
-  return {
-    username: this.usuariosDisponibles.filter(i => i.seleccionado).map(i => i.valor),
-    estado: this.estadosDisponibles.filter(i => i.seleccionado).map(i => i.valor),
-    categoria: this.categoriasDisponibles.filter(i => i.seleccionado).map(i => i.valor),
-    descripcion: this.descripcionesDisponibles.filter(i => i.seleccionado).map(i => i.valor),
-    criticidad: this.criticidadesDisponibles.filter(i => i.seleccionado).map(i => i.valor),
-    departamento: this.departamentosDisponibles.filter(i => i.seleccionado).map(i => i.valor),
-    subcategoria: this.subcategoriasDisponibles.filter(i => i.seleccionado).map(i => i.valor),
-    subsubcategoria: this.detallesDisponibles.filter(i => i.seleccionado).map(i => i.valor),
-  };
-}
+  getFiltrosActivos(): { [clave: string]: string[] } {
+    return getFiltrosActivosFrom(
+      this.usuariosDisponibles,
+      this.estadosDisponibles,
+      this.categoriasDisponibles,
+      this.descripcionesDisponibles,
+      this.criticidadesDisponibles,
+      this.departamentosDisponibles,
+      this.subcategoriasDisponibles,
+      this.detallesDisponibles
+    );
+  }
 
 
-filtrarTickets(): void {
-  // Sincronizar todas las listas visibles con la principal
-  const sincronizar = (
-    disponibles: { valor: string; seleccionado: boolean }[],
-    filtradas: { valor: string; seleccionado: boolean }[]
-  ) => {
-    disponibles.forEach(item => {
-      const visible = filtradas.find(f => f.valor === item.valor);
-      if (visible) item.seleccionado = visible.seleccionado;
-    });
-  };
-
-  sincronizar(this.usuariosDisponibles, this.usuariosFiltrados);
-  sincronizar(this.estadosDisponibles, this.estadosFiltrados);
-  sincronizar(this.categoriasDisponibles, this.categoriasFiltradas);
-  sincronizar(this.descripcionesDisponibles, this.descripcionesFiltradas);
-  sincronizar(this.criticidadesDisponibles, this.criticidadesFiltradas);
-  sincronizar(this.departamentosDisponibles, this.departamentosFiltrados);
-  sincronizar(this.subcategoriasDisponibles, this.subcategoriasFiltradas);
-  sincronizar(this.detallesDisponibles, this.detallesFiltrados);
-
-  const filtros = this.getFiltrosActivos();
-  this.filteredTickets = this.tickets.filter(ticket => {
-    for (const [clave, valores] of Object.entries(filtros)) {
-      if (valores.length === 0) continue;
-      const valorTicket = (ticket as any)[clave] ?? '—';
-      if (!valores.includes(valorTicket.toString())) {
-        return false;
-      }
-    }
-    return true;
-  });
-
-  this.actualizarFiltrosCruzados();
-}
+  filtrarTickets(): void {
+    const sincronizar = (
+      disponibles: { valor: string; seleccionado: boolean }[],
+      filtradas: { valor: string; seleccionado: boolean }[]
+    ) => {
+      disponibles.forEach(item => {
+        const visible = filtradas.find(f => f.valor === item.valor);
+        if (visible) item.seleccionado = visible.seleccionado;
+      });
+    };
+  
+    sincronizar(this.usuariosDisponibles, this.usuariosFiltrados);
+    sincronizar(this.estadosDisponibles, this.estadosFiltrados);
+    sincronizar(this.categoriasDisponibles, this.categoriasFiltradas);
+    sincronizar(this.descripcionesDisponibles, this.descripcionesFiltradas);
+    sincronizar(this.criticidadesDisponibles, this.criticidadesFiltradas);
+    sincronizar(this.departamentosDisponibles, this.departamentosFiltrados);
+    sincronizar(this.subcategoriasDisponibles, this.subcategoriasFiltradas);
+    sincronizar(this.detallesDisponibles, this.detallesFiltrados);
+  
+    const filtros = this.getFiltrosActivos();
+    this.filteredTickets = filtrarTicketsConFiltros(this.tickets, filtros);
+  
+    actualizarFiltrosCruzados(
+      this.filteredTickets,
+      this.usuariosDisponibles,
+      this.estadosDisponibles,
+      this.categoriasDisponibles,
+      this.descripcionesDisponibles,
+      this.criticidadesDisponibles,
+      this.departamentosDisponibles,
+      this.subcategoriasDisponibles,
+      this.detallesDisponibles,
+      this
+    );
+  }
 
 
 
@@ -1051,6 +951,92 @@ sincronizarCheckboxesConFiltrado(): void {
   sincronizar(this.idsDisponibles, this.idsDisponibles); // IDs no tienen búsqueda
 }
 
+esFechaSolucionValida = (d: Date | null): boolean => {
+  if (!d) return false;
+  const yyyyMmDd = d.toISOString().slice(0, 10);
+  return this.fechasSolucionDisponibles.has(yyyyMmDd);
+};
 
+fechaClase = (d: Date): string => {
+  const yyyyMmDd = d.toISOString().slice(0, 10);
+  return this.fechasSolucionDisponibles.has(yyyyMmDd)
+    ? 'mat-calendar-body-cell-valid'
+    : '';
+};
+
+onFechaSolucionChange(ticketId: number, date: Date | null) {
+  if (date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    this.fechaSolucionSeleccionada[ticketId] = `${year}-${month}-${day}`;
+  }
+}
+
+aplicarFiltroPorRangoFechaCreacion(rango: { start: Date | null; end: Date | null }): void {
+  console.log("✅ Aplicando filtro por fecha creación con:", rango);
+
+  if (!rango.start || !rango.end) {
+    this.filteredTickets = [...this.tickets]; // Restaurar todos
+    return;
+  }
+
+  const fechasFiltradas = this.tickets.filter(ticket => {
+    if (!ticket.fecha_creacion_original) return false;
+
+    const fecha = new Date(ticket.fecha_creacion_original); // ✅ ISO válido
+    return fecha >= rango.start && fecha <= rango.end;
+  });
+
+  this.filteredTickets = fechasFiltradas;
+  this.actualizarFiltrosCruzados();
+}
+
+
+
+
+
+
+
+
+private parsearFechaDesdeTabla(valor: string): Date | null {
+  if (!valor) return null;
+
+  try {
+    // Ejemplo de valor: "07-04-25 11:04"
+    const partes = valor.split(" ");
+    const [dia, mes, año] = partes[0].split("-");
+    const horaMinuto = partes[1] || "00:00";
+    const [hora, minuto] = horaMinuto.split(":");
+
+    // Convertimos a formato ISO: yyyy-MM-ddTHH:mm
+    const fechaISO = `20${año}-${mes}-${dia}T${hora}:${minuto}:00`;
+    const fechaFinal = new Date(fechaISO);
+
+    return isNaN(fechaFinal.getTime()) ? null : fechaFinal;
+  } catch (error) {
+    console.error("❌ Error parseando fecha:", valor, error);
+    return null;
+  }
+}
+
+aplicarFiltroPorRangoFechaFinalizado(rango: { start: Date | null; end: Date | null }): void {
+  console.log("✅ Aplicando filtro por fecha finalizado con:", rango);
+
+  if (!rango.start || !rango.end) {
+    this.filteredTickets = [...this.tickets]; // Restaurar todos
+    return;
+  }
+
+  const fechasFiltradas = this.tickets.filter(ticket => {
+    if (!ticket.fecha_finalizado_original) return false;
+
+    const fecha = new Date(ticket.fecha_finalizado_original); // ✅ ISO válido
+    return fecha >= rango.start && fecha <= rango.end;
+  });
+
+  this.filteredTickets = fechasFiltradas;
+  this.actualizarFiltrosCruzados();
+}
 
 }

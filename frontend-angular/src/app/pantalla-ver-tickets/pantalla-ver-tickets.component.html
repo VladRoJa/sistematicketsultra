@@ -254,51 +254,38 @@
         </th>
 
      <!-- (7) Columna: Fecha Creación -->
-      <th [class.filtro-activo]="isFilterActive('fecha_creacion')">
-        <button
-          mat-button
-          [matMenuTriggerFor]="menuFechaC"
-          #triggerFiltroFechaC="matMenuTrigger"
-          class="header-button"
-        >
-          Fecha Creación <mat-icon>arrow_drop_down</mat-icon>
-        </button>
-        <mat-menu #menuFechaC="matMenu" disableClose="true">
-          <button mat-menu-item (click)="ordenar('fecha_creacion','asc')">Asc</button>
-          <button mat-menu-item (click)="ordenar('fecha_creacion','desc')">Desc</button>
-          <mat-divider></mat-divider>
+     <th [class.filtro-activo]="isFilterActive('fecha_creacion')">
+      <button mat-button [matMenuTriggerFor]="menuFechaC" #triggerFiltroFechaC="matMenuTrigger" class="header-button">
+        Fecha Creación <mat-icon>arrow_drop_down</mat-icon>
+      </button>
+      <mat-menu #menuFechaC="matMenu" disableClose="true">
+        <button mat-menu-item (click)="ordenar('fecha_creacion','asc')">Asc</button>
+        <button mat-menu-item (click)="ordenar('fecha_creacion','desc')">Desc</button>
+        <mat-divider></mat-divider>
+        <div class="menu-filtro" (click)="$event.stopPropagation()">
+          <label>Filtrar Fecha Creación</label>
+          <app-filter-date-range  #filterFechaCreacion (rangoSeleccionado)="aplicarFiltroPorRangoFechaCreacion($event); triggerFiltroFechaC.closeMenu()"></app-filter-date-range>
 
-          <div class="menu-filtro" (click)="$event.stopPropagation()">
-            <label>Filtrar Fecha Creación</label>
-            <!-- NUEVO Date Range Picker -->
-            <app-filter-date-range
-              (rangoSeleccionado)="filtrarPorRangoFechaCreacion($event)"
-            ></app-filter-date-range>
-          </div>
-        </mat-menu>
-      </th>
+
+        </div>
+      </mat-menu>
+    </th>
 
       <!-- (8) Columna: Fecha Finalizado -->
       <th [class.filtro-activo]="isFilterActive('fecha_finalizado')">
-        <button
-          mat-button
-          [matMenuTriggerFor]="menuFechaF"
-          #triggerFiltroFechaF="matMenuTrigger"
-          class="header-button"
-        >
+        <button mat-button [matMenuTriggerFor]="menuFechaF" #triggerFiltroFechaF="matMenuTrigger" class="header-button">
           Fecha Finalizado <mat-icon>arrow_drop_down</mat-icon>
         </button>
         <mat-menu #menuFechaF="matMenu" disableClose="true">
           <button mat-menu-item (click)="ordenar('fecha_finalizado','asc')">Asc</button>
           <button mat-menu-item (click)="ordenar('fecha_finalizado','desc')">Desc</button>
           <mat-divider></mat-divider>
-
           <div class="menu-filtro" (click)="$event.stopPropagation()">
             <label>Filtrar Fecha Finalizado</label>
-            <!-- NUEVO Date Range Picker -->
-            <app-filter-date-range
-              (rangoSeleccionado)="filtrarPorRangoFechaFinal($event)"
-            ></app-filter-date-range>
+            <app-filter-date-range  (rangoSeleccionado)="aplicarFiltroPorRangoFechaFinalizado($event); triggerFiltroFechaF.closeMenu()"></app-filter-date-range>
+
+
+
           </div>
         </mat-menu>
       </th>
@@ -464,6 +451,8 @@
         </td>
         <!-- Si no es admin, se muestra un guion -->
         <td *ngIf="!usuarioEsAdmin">-</td>
+
+
         <!-- (11) Fecha Solución -->
         <td>
           <div *ngIf="ticket.estado === 'pendiente'">
@@ -474,7 +463,9 @@
               <span class="fecha-solucion">
                 {{ ticket.fecha_solucion ? formatearFechaCorta(ticket.fecha_solucion) : "No asignada" }}
               </span>
-              <span *ngIf="ticket.fecha_solucion" class="indicador-fecha" [ngStyle]="{'background-color': getIndicadorColor(ticket)}" title="Cambio de fecha"></span>
+              <span *ngIf="ticket.fecha_solucion" class="indicador-fecha"
+                    [ngStyle]="{'background-color': getIndicadorColor(ticket)}"
+                    title="Cambio de fecha"></span>
             </div>
             <div *ngIf="usuarioEsAdmin">
               <div *ngIf="!editandoFechaSolucion[ticket.id]; else editandoFecha">
@@ -485,14 +476,34 @@
                   ✏️
                 </button>
               </div>
+
               <ng-template #editandoFecha>
-                <input type="date" [(ngModel)]="fechaSolucionSeleccionada[ticket.id]" class="input-fecha">
-                <button (click)="guardarFechaSolucion(ticket)" class="boton-guardar">💾</button>
-                <button (click)="cancelarEdicion(ticket)" class="boton-cancelar">❌</button>
+                <div class="fecha-solucion-picker">
+                  <mat-form-field appearance="outline" class="w-full">
+                    <mat-label>Seleccionar nueva fecha</mat-label>
+                    <input
+                      matInput
+                      [matDatepicker]="picker"
+                      [value]="fechaSolucionSeleccionada[ticket.id]"
+                      (dateChange)="onFechaSolucionChange(ticket.id, $event.value)"
+                      (focus)="picker.open()"
+                      [matDatepickerFilter]="esFechaSolucionValida"
+                    />
+                    <mat-datepicker-toggle matSuffix [for]="picker"></mat-datepicker-toggle>
+                    <mat-datepicker #picker startView="multi-year"></mat-datepicker>
+                  </mat-form-field>
+
+                  <div class="acciones-fecha mt-2 flex gap-2">
+                    <button mat-raised-button color="primary" (click)="guardarFechaSolucion(ticket)">💾 Guardar</button>
+                    <button mat-button (click)="cancelarEdicion(ticket)">❌ Cancelar</button>
+                  </div>
+                </div>
               </ng-template>
             </div>
           </div>
         </td>
+
+
         <!-- (12) Historial -->
         <td>
           <button (click)="toggleHistorial(ticket.id)" class="boton-historial">
