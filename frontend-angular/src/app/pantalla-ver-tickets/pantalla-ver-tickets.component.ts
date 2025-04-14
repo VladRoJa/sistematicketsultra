@@ -8,11 +8,9 @@ import { TicketService } from '../services/ticket.service';
 import { DepartamentoService } from '../services/departamento.service';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
-import * as ExcelJS from 'exceljs';
-import { saveAs } from 'file-saver';
 import { FilterDateRangeComponent } from '../filter-date-range/filter-date-range.component';
 import {getFiltrosActivosFrom,filtrarTicketsConFiltros,actualizarFiltrosCruzados,isFilterActive, limpiarFiltroColumnaConMapa, toggleSeleccionarTodoConMapa, removeDiacritics} from '../utils/ticket-utils';
-
+import { HttpParams } from '@angular/common/http';
 
 // Angular Material Modules
 import { MatButtonModule } from '@angular/material/button';
@@ -178,6 +176,10 @@ export class PantallaVerTicketsComponent implements OnInit {
   departamentosFiltrados: Array<{ valor: string, seleccionado: boolean }> = [];
 
   fechasSolucionDisponibles = new Set<string>();
+
+  rangoFechaCreacionSeleccionado: { start: Date | null; end: Date | null } = { start: null, end: null };
+  rangoFechaFinalSeleccionado: { start: Date | null; end: Date | null } = { start: null, end: null };
+
 
   // -------------- Rutas -------------- //
   private authUrl = 'http://localhost:5000/api/auth/session-info';
@@ -438,55 +440,33 @@ export class PantallaVerTicketsComponent implements OnInit {
 
   // -------------- Exportar a Excel -------------- //
   exportToExcel(): void {
-    // Suponiendo que tienes un objeto 'filtros' que contiene los filtros actuales.
-    // Si no hay filtros, este objeto puede estar vacío.
-    const filtros = {
-      categoria: this.filtroCategoriaTexto || null,
-      estado: this.filtroEstadoTexto || null,
-      departamento_id: this.filtroDeptoTexto || null,
-      criticidad: this.filtroCriticidadTexto || null,
-      descripcion: this.filtroDescripcionTexto || null,
-      username: this.filtroUsuarioTexto || null,
-      fecha_creacion: this.filtroFechaTexto || null,
-      fecha_finalizado: this.filtroFechaFinalTexto || null
-    };
+    const filtrosActivos = this.getFiltrosActivos();
   
-    // Llamamos al método del servicio que devuelve todos los tickets (sin paginación) según los filtros.
-    this.ticketService.getAllTicketsFiltered(filtros).subscribe(response => {
-      // Aquí response.tickets tendrá todos los tickets (filtrados o no)
-      const allTickets = response.tickets;
+    // Convertimos los filtros a HttpParams (solo los activos)
+    let params = new HttpParams();
+    for (const [clave, valores] of Object.entries(filtrosActivos)) {
+      if (valores.length > 0) {
+        // Solo tomamos el primer valor para filtros únicos como usuario, departamento, etc.
+        params = params.set(clave, valores[0]);
+      }
+    }
   
-      // Creamos el workbook con ExcelJS
-      const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet('Tickets');
-      worksheet.columns = [
-        { header: 'ID', key: 'id', width: 10 },
-        { header: 'Descripción', key: 'descripcion', width: 50 },
-        { header: 'Usuario', key: 'username', width: 20 },
-        { header: 'Estado', key: 'estado', width: 15 },
-        { header: 'Criticidad', key: 'criticidad', width: 10 },
-        { header: 'Fecha Creación', key: 'fecha_creacion', width: 20 },
-        { header: 'Fecha Finalizado', key: 'fecha_finalizado', width: 20 },
-        { header: 'Departamento', key: 'departamento', width: 25 },
-        { header: 'Categoría', key: 'categoria', width: 25 },
-      ];
-  
-      // Agregar cada ticket al worksheet
-      allTickets.forEach(ticket => {
-        worksheet.addRow({
-          ...ticket,
-          fecha_finalizado: ticket.fecha_finalizado || 'N/A'
-        });
-      });
-  
-      // Escribir el archivo Excel y descargarlo
-      workbook.xlsx.writeBuffer().then(buffer => {
-        saveAs(new Blob([buffer]), `tickets_${new Date().toISOString().slice(0, 10)}.xlsx`);
-      });
+    // Llamada HTTP que espera un blob (archivo binario)
+    this.http.get('http://localhost:5000/api/tickets/export-excel', {
+      params,
+      responseType: 'blob'
+    }).subscribe(blob => {
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `tickets_exportados_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      a.click();
+      window.URL.revokeObjectURL(url);
     }, error => {
       console.error("❌ Error al exportar a Excel:", error);
     });
   }
+  
   
 
   // -------------- Funciones para Cambiar Estado y Finalizar Tickets -------------- //

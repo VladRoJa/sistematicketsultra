@@ -9,6 +9,7 @@ from app.models.user_model import User
 import json  # Para manipular historial_fechas
 from io import BytesIO
 from openpyxl import Workbook  # Para la generación de archivos Excel
+from openpyxl.styles import Font, Alignment, PatternFill
 
 # Crear blueprint para tickets
 ticket_bp = Blueprint('tickets', __name__, url_prefix='/api/tickets')
@@ -144,52 +145,70 @@ def list_tickets_with_filters():
 # -----------------------------------------------------------------------------
 # RUTA: Exportar tickets a Excel (con filtros aplicados)
 # -----------------------------------------------------------------------------
+
 @ticket_bp.route('/export-excel', methods=['GET'])
 @jwt_required()
 def export_excel():
     """
-    Exporta a Excel todos los tickets que cumplan con los filtros indicados.
-    Esta ruta omite la paginación para exportar todos los registros filtrados.
-    Se genera un archivo Excel utilizando openpyxl y se envía como attachment.
+    Exporta todos los tickets (filtrados) en Excel:
+    - Encabezados azules y negrita
+    - Filtros activados
+    - Encabezado congelado
+    - Columnas alternadas blanco y gris
+    - Separación de fecha y hora
+    - Ajuste automático de columnas
     """
     try:
-        # Obtener el usuario actual
+        from datetime import datetime
+        from io import BytesIO
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill
+        from openpyxl.worksheet.table import Table, TableStyleInfo
+
         current_user = get_jwt_identity()
         user = User.get_user_by_id(current_user)
         if not user:
             return jsonify({"mensaje": "Usuario no encontrado"}), 404
 
-        # Obtener parámetros de filtro (los mismos que en list_tickets_with_filters)
+        # Filtros desde frontend
         estado = request.args.get('estado')
         departamento_id = request.args.get('departamento_id')
         criticidad = request.args.get('criticidad')
+        username = request.args.get('username')
+        categoria = request.args.get('categoria')
+        descripcion = request.args.get('descripcion')
 
-        # No se usa paginación, se exportan todos los registros que cumplen los filtros
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
 
-        query = "SELECT * FROM tickets WHERE 1=1"
+        query = """
+                    SELECT 
+                        t.*, 
+                        d.nombre AS departamento,
+                        a.codigo AS codigo_aparato
+                    FROM tickets t
+                    LEFT JOIN departamentos d ON t.departamento_id = d.id
+                    LEFT JOIN aparatos_gimnasio a ON t.aparato_id = a.id
+
+                """
+
         values = []
 
-        # Restricciones según tipo de usuario
+        # Filtro por tipo de usuario
         if 1 <= user.id_sucursal <= 22:
             query += " AND id_sucursal = %s"
             values.append(user.id_sucursal)
         elif user.id_sucursal == 100:
             if not user.department_id:
-                cursor.close()
-                conn.close()
                 return jsonify({"mensaje": "Supervisor sin departamento asignado"}), 400
             query += " AND departamento_id = %s"
             values.append(user.department_id)
         elif user.id_sucursal == 1000:
             pass
         else:
-            cursor.close()
-            conn.close()
             return jsonify({"mensaje": "Tipo de usuario no reconocido"}), 400
 
-        # Agregar filtros dinámicos
+        # Filtros
         if estado:
             query += " AND estado = %s"
             values.append(estado)
@@ -199,56 +218,99 @@ def export_excel():
         if criticidad:
             query += " AND criticidad = %s"
             values.append(criticidad)
+        if username:
+            query += " AND username = %s"
+            values.append(username)
+        if categoria:
+            query += " AND categoria = %s"
+            values.append(categoria)
+        if descripcion:
+            query += " AND descripcion LIKE %s"
+            values.append(f"%{descripcion}%")
 
-        # Ordenar los tickets
         query += " ORDER BY fecha_creacion DESC"
-
         cursor.execute(query, tuple(values))
         tickets = cursor.fetchall()
-        cursor.close()
-        conn.close()
 
-        # Generar el archivo Excel usando openpyxl
         wb = Workbook()
         ws = wb.active
         ws.title = "Tickets"
 
-        # Encabezados del Excel
-        headers = ["ID", "Descripción", "Usuario", "Estado", "Criticidad",
-                   "Fecha Creación", "Fecha Finalizado", "Departamento", "Categoría"]
+        # Estilos
+        header_font = Font(bold=True, color="FFFFFF")
+        header_fill = PatternFill("solid", fgColor="0073C2")
+        alt_fill = PatternFill("solid", fgColor="F2F2F2")
+
+        headers = [
+            "ID", "Descripción", "Usuario", "Estado", "Criticidad",
+            "Fecha Creación", "Hora Creación", "Fecha Finalizado", "Hora Finalizado",
+            "Fecha Solución", "Departamento", "Categoría", "Subcategoría", "Detalle",
+            "Aparato ID", "Problema Detectado", "Requiere Refacción", "Descripción Refacción"
+        ]
         ws.append(headers)
 
-        # Escribir cada ticket en una fila del Excel
-        for ticket in tickets:
+        for i, cell in enumerate(ws[1], 1):
+            cell.font = header_font
+            cell.fill = header_fill
+
+        # Rellenar filas
+        for idx, t in enumerate(tickets, start=2):
+            fecha_creacion = t.get("fecha_creacion")
+            fecha_finalizado = t.get("fecha_finalizado")
+            fecha_solucion = t.get("fecha_solucion")
+
             ws.append([
-                ticket.get("id"),
-                ticket.get("descripcion"),
-                ticket.get("username"),
-                ticket.get("estado"),
-                ticket.get("criticidad"),
-                str(ticket.get("fecha_creacion")),
-                str(ticket.get("fecha_finalizado") or 'N/A'),
-                ticket.get("departamento"),
-                ticket.get("categoria")
+                t.get("id", ""),
+                t.get("descripcion", ""),
+                t.get("username", ""),
+                t.get("estado", ""),
+                t.get("criticidad", ""),
+                fecha_creacion.date() if fecha_creacion else "—",
+                fecha_creacion.time().strftime("%H:%M:%S") if fecha_creacion else "—",
+                fecha_finalizado.date() if fecha_finalizado else "—",
+                fecha_finalizado.time().strftime("%H:%M:%S") if fecha_finalizado else "—",
+                fecha_solucion.date() if fecha_solucion else "—",
+                t.get("departamento", "—"),
+                t.get("categoria", "—"),
+                t.get("subcategoria", "—"),
+                t.get("subsubcategoria", "—"),
+                t.get("codigo_aparato", "—"),
+                t.get("problema_detectado", "—"),
+                "Sí" if t.get("necesita_refaccion") else "No",
+                t.get("descripcion_refaccion", "—")
             ])
 
-        # Convertir el workbook a un stream de bytes
+            # Alternar color de fondo
+            if idx % 2 == 0:
+                for cell in ws[idx]:
+                    cell.fill = alt_fill
+
+        # Ajustar ancho de columnas
+        for column_cells in ws.columns:
+            length = max(len(str(cell.value or "")) for cell in column_cells)
+            ws.column_dimensions[column_cells[0].column_letter].width = length + 2
+
+        # Congelar encabezado
+        ws.freeze_panes = "A2"
+
+        # Activar filtros
+        ws.auto_filter.ref = ws.dimensions
+
+        # Guardar en buffer
         output = BytesIO()
         wb.save(output)
         output.seek(0)
 
-        # Enviar el archivo Excel como attachment
         return send_file(
             output,
             mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             as_attachment=True,
-            attachment_filename=f"tickets_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            download_name=f"tickets_exportados_{datetime.now().strftime('%Y-%m-%d')}.xlsx"
         )
 
     except Exception as e:
-        print(f"❌ Error en export_excel: {str(e)}")
+        print(f"❌ Error en export_excel: {e}")
         return jsonify({"mensaje": f"Error interno al exportar: {str(e)}"}), 500
-
 
 # -----------------------------------------------------------------------------
 # RUTA: Obtener todos los tickets (sin filtros, con paginación)

@@ -264,7 +264,7 @@
         <mat-divider></mat-divider>
         <div class="menu-filtro" (click)="$event.stopPropagation()">
           <label>Filtrar Fecha Creación</label>
-          <app-filter-date-range  #filterFechaCreacion (rangoSeleccionado)="aplicarFiltroPorRangoFechaCreacion($event); triggerFiltroFechaC.closeMenu()"></app-filter-date-range>
+          <app-filter-date-range  #filterFechaCreacion (rangoSeleccionado)="rangoFechaCreacionSeleccionado = $event; aplicarFiltroPorRangoFechaCreacion($event); triggerFiltroFechaC.closeMenu()"></app-filter-date-range>
 
 
         </div>
@@ -282,7 +282,7 @@
           <mat-divider></mat-divider>
           <div class="menu-filtro" (click)="$event.stopPropagation()">
             <label>Filtrar Fecha Finalizado</label>
-            <app-filter-date-range  (rangoSeleccionado)="aplicarFiltroPorRangoFechaFinalizado($event); triggerFiltroFechaF.closeMenu()"></app-filter-date-range>
+            <app-filter-date-range  (rangoSeleccionado)="rangoFechaFinalSeleccionado = $event; aplicarFiltroPorRangoFechaFinalizado($event); triggerFiltroFechaF.closeMenu()"></app-filter-date-range>
 
 
 
