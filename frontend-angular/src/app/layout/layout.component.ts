@@ -9,11 +9,10 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatDividerModule } from '@angular/material/divider';
 import { FormsModule } from '@angular/forms';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
-// Importamos MatDialog y MatDialogModule
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
-
-// Importa el diálogo que acabas de crear
 import { EliminarTicketDialogComponent } from '../eliminar-ticket-dialog/eliminar-ticket-dialog.component';
+import { MatIconModule } from '@angular/material/icon';
+
 
 @Component({
   selector: 'app-layout',
@@ -27,37 +26,13 @@ import { EliminarTicketDialogComponent } from '../eliminar-ticket-dialog/elimina
     MatButtonModule,
     MatDividerModule,
     FormsModule,
-    MatDialogModule // Asegúrate de importar el módulo de diálogos
+    MatDialogModule,
+    MatIconModule
   ],
-  template: `
-    <mat-toolbar color="primary">
-      <span>Ultra Gym</span>
-      <span class="spacer"></span>
-      
-      <!-- Botón del menú: se abrirá con clic -->
-      <button mat-button [matMenuTriggerFor]="menu">
-        Menu
-      </button>
-      
-      <!-- Menú desplegable -->
-      <mat-menu #menu="matMenu">
-        <button mat-menu-item [routerLink]="['/main/crear-ticket']">Crear Ticket</button>
-        <button mat-menu-item [routerLink]="['/main/ver-tickets']">Ver Tickets</button>
-        <button mat-menu-item (click)="cerrarSesion()">Cerrar Sesión</button>
-        <mat-divider></mat-divider>
-        <button *ngIf="esAdmin" mat-menu-item (click)="irAGestionPermisos()">Administrar Permisos</button>
-        <button *ngIf="esAdmin" mat-menu-item (click)="openEliminarDialog()">Eliminar Ticket</button>
-      </mat-menu>
-    </mat-toolbar>
-    
-    <router-outlet></router-outlet>
-  `,
-  styles: [`
-    .spacer {
-      flex: 1 1 auto;
-    }
-  `]
+  templateUrl: './layout.component.html', // ✅ Usa templateUrl
+  styleUrls: ['./layout.component.css']   // ✅ Usa styleUrls
 })
+
 export class LayoutComponent implements OnInit {
   esAdmin: boolean = false;
   private apiUrl = 'http://localhost:5000/api/tickets';

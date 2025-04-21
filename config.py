@@ -2,6 +2,7 @@
 
 from datetime import timedelta
 import os
+from urllib.parse import quote_plus
 
 class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'Sp@ces2329@'
@@ -17,7 +18,11 @@ class Config:
     JWT_HEADER_TYPE = 'Bearer'  # 🔥 Debe ser "Bearer"
     
     # Construye la URI de la base de datos para SQLAlchemy
-    SQLALCHEMY_DATABASE_URI = f'mysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}'
+    SQLALCHEMY_DATABASE_URI = (
+    f"mysql://{DB_USER}:{quote_plus(DB_PASSWORD)}@{DB_HOST}/{DB_NAME}"
+)
+
+
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     CORS_ORIGINS = ["http://localhost:4200"]

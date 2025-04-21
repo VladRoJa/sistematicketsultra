@@ -1,6 +1,7 @@
 // app.routes.ts
 
 
+
 import { Routes } from '@angular/router';
 import { LoginComponent } from './pantalla-login/pantalla-login.component';
 import { MainComponent } from './main/main.component';
@@ -11,15 +12,15 @@ import { AuthGuard } from './guards/auth.guard';
 import { AdminGuard } from './guards/admin.guard';
 import { LayoutComponent } from './layout/layout.component';
 
+
 export const routes: Routes = [
   { path: '', redirectTo: 'login', pathMatch: 'full' },
   { path: 'login', component: LoginComponent },
 
-  // Rutas dentro del layout
   {
     path: '',
     component: LayoutComponent,
-    canActivate: [AuthGuard], // Protege todo lo que está dentro con AuthGuard
+    canActivate: [AuthGuard],
     children: [
       {
         path: 'main',
@@ -33,8 +34,13 @@ export const routes: Routes = [
       {
         path: 'admin-permisos',
         component: AdminPermisosComponent,
-        canActivate: [AdminGuard], // Solo admin
+        canActivate: [AdminGuard],
       },
+      {
+        path: 'inventario',
+        loadChildren: () => import('./inventario/inventario.module').then(m => m.InventarioModule),
+        canActivate: [AuthGuard]
+      }
     ],
   },
 

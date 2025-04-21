@@ -1,1 +1,17 @@
-<p>layout works!</p>
+<!-- src/app/layout/layout.component.html -->
+
+<mat-toolbar color="primary">
+  <span>Sistema de Tickets</span>
+  <span class="spacer"></span>
+
+  <a mat-button routerLink="/main/ver-tickets" routerLinkActive="active">Ver Tickets</a>
+  <a mat-button routerLink="/main/crear-ticket" routerLinkActive="active">Crear Ticket</a>
+  <a mat-button routerLink="/admin-permisos" routerLinkActive="active" *ngIf="esAdmin">Permisos</a>
+  <a mat-button routerLink="/inventario" routerLinkActive="active">Inventario</a>
+
+  <button mat-icon-button (click)="cerrarSesion()"  aria-label="Cerrar sesión">
+    <mat-icon>logout</mat-icon>
+  </button>
+</mat-toolbar>
+
+<router-outlet></router-outlet>

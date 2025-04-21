@@ -1,0 +1,31 @@
+<!-- src/app/inventario/productos/productos.component.html -->
+
+<mat-card>
+    <h2>Listado de Productos</h2>
+    <table mat-table [dataSource]="productos" class="mat-elevation-z2" style="width: 100%">
+  
+      <ng-container matColumnDef="id">
+        <th mat-header-cell *matHeaderCellDef>ID</th>
+        <td mat-cell *matCellDef="let p">{{ p.id }}</td>
+      </ng-container>
+  
+      <ng-container matColumnDef="nombre">
+        <th mat-header-cell *matHeaderCellDef>Nombre</th>
+        <td mat-cell *matCellDef="let p">{{ p.nombre }}</td>
+      </ng-container>
+  
+      <ng-container matColumnDef="unidad">
+        <th mat-header-cell *matHeaderCellDef>Unidad</th>
+        <td mat-cell *matCellDef="let p">{{ p.unidad_medida }}</td>
+      </ng-container>
+  
+      <ng-container matColumnDef="categoria">
+        <th mat-header-cell *matHeaderCellDef>Categoría</th>
+        <td mat-cell *matCellDef="let p">{{ p.categoria }}</td>
+      </ng-container>
+  
+      <tr mat-header-row *matHeaderRowDef="['id', 'nombre', 'unidad', 'categoria']"></tr>
+      <tr mat-row *matRowDef="let row; columns: ['id', 'nombre', 'unidad', 'categoria']"></tr>
+    </table>
+  </mat-card>
+  

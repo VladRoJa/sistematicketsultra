@@ -1,0 +1,80 @@
+{
+    "info": {
+      "_postman_id": "inventario-collection-id",
+      "name": "Inventario - Sistema de Tickets",
+      "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+      {
+        "name": "Crear producto",
+        "request": {
+          "method": "POST",
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": {
+            "mode": "raw",
+            "raw": "{\n  \"nombre\": \"CLORO\",\n  \"descripcion\": \"Cloro galón\",\n  \"unidad_medida\": \"GALON\",\n  \"categoria\": \"LIMPIEZA\"\n}"
+          },
+          "url": { "raw": "http://localhost:5000/api/inventario/productos", "protocol": "http", "host": ["localhost"], "port": "5000", "path": ["api", "inventario", "productos"] }
+        }
+      },
+      {
+        "name": "Obtener productos",
+        "request": {
+          "method": "GET",
+          "url": { "raw": "http://localhost:5000/api/inventario/productos", "protocol": "http", "host": ["localhost"], "port": "5000", "path": ["api", "inventario", "productos"] }
+        }
+      },
+      {
+        "name": "Registrar entrada",
+        "request": {
+          "method": "POST",
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": {
+            "mode": "raw",
+            "raw": "{\n  \"tipo_movimiento\": \"entrada\",\n  \"sucursal_id\": 1,\n  \"usuario_id\": 1,\n  \"observaciones\": \"Recepción de cloro\",\n  \"productos\": [\n    {\n      \"producto_id\": 1,\n      \"cantidad\": 10,\n      \"unidad_medida\": \"GALON\"\n    }\n  ]\n}"
+          },
+          "url": { "raw": "http://localhost:5000/api/inventario/movimientos", "protocol": "http", "host": ["localhost"], "port": "5000", "path": ["api", "inventario", "movimientos"] }
+        }
+      },
+      {
+        "name": "Registrar salida",
+        "request": {
+          "method": "POST",
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": {
+            "mode": "raw",
+            "raw": "{\n  \"tipo_movimiento\": \"salida\",\n  \"sucursal_id\": 1,\n  \"usuario_id\": 1,\n  \"observaciones\": \"Uso interno\",\n  \"productos\": [\n    {\n      \"producto_id\": 1,\n      \"cantidad\": 2,\n      \"unidad_medida\": \"GALON\"\n    }\n  ]\n}"
+          },
+          "url": { "raw": "http://localhost:5000/api/inventario/movimientos", "protocol": "http", "host": ["localhost"], "port": "5000", "path": ["api", "inventario", "movimientos"] }
+        }
+      },
+      {
+        "name": "Consultar stock por sucursal",
+        "request": {
+          "method": "GET",
+          "url": {
+            "raw": "http://localhost:5000/api/inventario/sucursal/1",
+            "protocol": "http",
+            "host": ["localhost"],
+            "port": "5000",
+            "path": ["api", "inventario", "sucursal", "1"]
+          }
+        }
+      },
+      {
+        "name": "Historial de movimientos",
+        "request": {
+          "method": "GET",
+          "url": {
+            "raw": "http://localhost:5000/api/inventario/movimientos?sucursal_id=1",
+            "protocol": "http",
+            "host": ["localhost"],
+            "port": "5000",
+            "path": ["api", "inventario", "movimientos"],
+            "query": [{ "key": "sucursal_id", "value": "1" }]
+          }
+        }
+      }
+    ]
+  }
+  
