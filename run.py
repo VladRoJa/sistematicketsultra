@@ -1,6 +1,8 @@
 # run.py
 
 from app import create_app
+from setup_db import inicializar_base_de_datos
+inicializar_base_de_datos()
 
 app = create_app()
 
