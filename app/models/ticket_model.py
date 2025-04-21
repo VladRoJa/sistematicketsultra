@@ -5,8 +5,11 @@ from datetime import datetime
 import pytz
 import locale
 
-locale.setlocale(locale.LC_TIME, 'es_ES.UTF-8')
-
+try:
+    locale.setlocale(locale.LC_TIME, 'es_ES.UTF-8')
+except locale.Error:
+    locale.setlocale(locale.LC_TIME, 'C')
+    
 class Ticket:
     def __init__(self, id, descripcion, username, estado, fecha_creacion, id_sucursal, departamento_id, criticidad, categoria, subcategoria, subsubcategoria, fecha_solucion, historial_fechas, fecha_finalizado=None):
         self.id = id
