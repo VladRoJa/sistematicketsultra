@@ -3,8 +3,16 @@
 
 from flask import Blueprint, render_template
 
+# ------------------------------------------------------------------------------
+# BLUEPRINT: RUTA PRINCIPAL
+# ------------------------------------------------------------------------------
+
+
 main_bp = Blueprint('main', __name__)
 
-@main_bp.route('/')  # Define la ruta para la raíz "/"
+# ------------------------------------------------------------------------------
+# RUTA: Página de inicio
+# ------------------------------------------------------------------------------
+@main_bp.route('/')
 def index():
-    return render_template ('index.html') # O renderiza un template HTML
+    return render_template('index.html')

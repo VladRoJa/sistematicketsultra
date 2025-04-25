@@ -1,59 +1,126 @@
 # C:\Users\Vladimir\Documents\Sistema tickets\app\controllers\ticket_controller.py
-from flask import jsonify, session, request
-from app.models.ticket_model import create_ticket, get_tickets, update_ticket_status
+
+# -------------------------------------------------------------------------------
+# CONTROLADOR DE TICKETS CON JWT
+# -------------------------------------------------------------------------------
+
+from flask import jsonify, request
+from flask_jwt_extended import get_jwt_identity
+from app.models.ticket_model import Ticket
+from app.models.user_model import UserORM
+from app.extensions import db
 
 class TicketController:
+
+    # ---------------------------------------------------------------------------
+    # CREAR TICKET
+    # ---------------------------------------------------------------------------
     def create_ticket(self, data):
-        
-        print(f"📌 Sesión antes de procesar ticket: {dict(session)}")
-        descripcion = data.get('descripcion')
-        username = data.get('username')
-        id_sucursal = session.get('id_sucursal')
-        
-        print("📌 Sesión en Flask antes de responder:", {dict(session)})
-        
-        ticket = create_ticket( descripcion, username, id_sucursal)
-        
-        print("📌 Sesión en Flask después:", {dict(session)})
-        
-        return jsonify({
-            'mensaje': 'Ticket creado exitosamente',
-            'id': ticket['id'],
-            'estado': ticket['estado'],
-            'fecha_creacion': ticket['fecha_creacion']
-        }), 201
+        try:
+            current_user_id = get_jwt_identity()
+            user = UserORM.get_by_id(current_user_id)
 
-        
-        
+            if not user:
+                return jsonify({'mensaje': 'Usuario no encontrado'}), 404
+
+            descripcion = data.get('descripcion')
+            categoria = data.get('categoria')
+            if not (descripcion and categoria):
+                return jsonify({'mensaje': 'Datos incompletos'}), 400
+
+            nuevo_ticket = Ticket.create_ticket(
+                descripcion=descripcion,
+                username=user.username,
+                id_sucursal=user.id_sucursal,
+                departamento_id=data.get('departamento_id', 1),
+                criticidad=data.get('criticidad', 1),
+                categoria=categoria,
+                subcategoria=data.get('subcategoria'),
+                subsubcategoria=data.get('subsubcategoria'),
+                aparato_id=data.get('aparato_id'),
+                problema_detectado=data.get('problema_detectado'),
+                necesita_refaccion=data.get('necesita_refaccion', False),
+                descripcion_refaccion=data.get('descripcion_refaccion')
+            )
+
+            return jsonify({
+                'mensaje': 'Ticket creado exitosamente',
+                'ticket': nuevo_ticket.to_dict()
+            }), 201
+
+        except Exception as e:
+            print(f"❌ Error en create_ticket: {e}")
+            db.session.rollback()
+            return jsonify({'mensaje': 'Error interno al crear ticket'}), 500
+
+    # ---------------------------------------------------------------------------
+    # OBTENER TICKETS (PAGINADOS)
+    # ---------------------------------------------------------------------------
     def get_tickets(self, estado):
-        id_sucursal = session.get('id_sucursal')
+        try:
+            current_user_id = get_jwt_identity()
+            user = UserORM.get_by_id(current_user_id)
 
-        # 🔹 Recibir parámetros de paginación desde la URL
-        page = request.args.get('page', default=1, type=int)
-        per_page = request.args.get('per_page', default=15, type=int)
-        offset = (page - 1) * per_page  # 🔥 Calcular desde dónde empezar la consulta
+            if not user:
+                return jsonify({'mensaje': 'Usuario no encontrado'}), 404
 
-        # 🔹 Obtener los tickets con paginación
-        tickets, total_tickets = get_tickets(estado, id_sucursal, per_page, offset)
+            page = request.args.get('page', default=1, type=int)
+            per_page = request.args.get('per_page', default=15, type=int)
+            offset = (page - 1) * per_page
 
-        return jsonify({
-            'tickets': tickets,
-            'total_tickets': total_tickets,  # 🔥 Número total de tickets (para calcular páginas)
-            'page': page,
-            'per_page': per_page
-        }), 200
+            query = Ticket.query.filter(Ticket.id_sucursal == user.id_sucursal)
 
+            if estado:
+                query = query.filter(Ticket.estado == estado)
 
+            total_tickets = query.count()
+
+            tickets = query.order_by(Ticket.fecha_creacion.desc()).limit(per_page).offset(offset).all()
+            tickets_data = [ticket.to_dict() for ticket in tickets]
+
+            return jsonify({
+                'tickets': tickets_data,
+                'total_tickets': total_tickets,
+                'page': page,
+                'per_page': per_page
+            }), 200
+
+        except Exception as e:
+            print(f"❌ Error en get_tickets: {e}")
+            return jsonify({'mensaje': 'Error interno al obtener tickets'}), 500
+
+    # ---------------------------------------------------------------------------
+    # ACTUALIZAR ESTADO DEL TICKET
+    # ---------------------------------------------------------------------------
     def update_ticket_status(self, id, data):
-        nuevo_estado = data.get('estado')
-        ticket = update_ticket_status(id, nuevo_estado)
-        if ticket:
+        try:
+            nuevo_estado = data.get('estado')
+
+            if not nuevo_estado:
+                return jsonify({'mensaje': 'Estado no proporcionado'}), 400
+
+            ticket = Ticket.query.get(id)
+            if not ticket:
+                return jsonify({'mensaje': 'Ticket no encontrado'}), 404
+
+            ticket.estado = nuevo_estado
+
+            if nuevo_estado == 'finalizado':
+                ticket.fecha_finalizado = db.func.now()
+
+            db.session.commit()
+
             return jsonify({
                 'mensaje': 'Estado del ticket actualizado exitosamente',
-                'ticket': ticket
+                'ticket': ticket.to_dict()
             }), 200
-        else:
-            return jsonify({'mensaje': 'Ticket no encontrado'}), 404
 
-# Crea una instancia de la clase
+        except Exception as e:
+            print(f"❌ Error en update_ticket_status: {e}")
+            db.session.rollback()
+            return jsonify({'mensaje': 'Error interno al actualizar ticket'}), 500
+
+# -------------------------------------------------------------------------------
+# INSTANCIA DEL CONTROLADOR
+# -------------------------------------------------------------------------------
 ticket_controller = TicketController()

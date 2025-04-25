@@ -1,112 +1,45 @@
-#C:\Users\Vladimir\Documents\Sistema tickets\app\models\user_model.py
+# C:\Users\Vladimir\Documents\Sistema tickets\app\models\user_model.py
 
 from werkzeug.security import check_password_hash
-from app.models.database import get_db_connection
 from app.extensions import db
 
-
-class User:
-    def __init__(self, id, username, password, rol="usuario", id_sucursal=None, department_id=None):
-        self.id = id
-        self.username = username
-        self.password = password
-        self.rol = rol if rol else "usuario"
-        self.id_sucursal = id_sucursal
-        self.department_id = department_id  # Nuevo campo
-
-    @staticmethod
-    def get_user_by_credentials(username, password):
-        connection = get_db_connection()
-        if connection:
-            try:
-                cursor = connection.cursor()
-                query = """
-                    SELECT id, username, password, rol, id_sucursal, department_id 
-                    FROM users 
-                    WHERE username = LOWER(%s)
-                """
-                cursor.execute(query, (username,))
-                result = cursor.fetchone()
-
-                if result:
-                    user_id, db_username, db_password, rol, id_sucursal, department_id = result
-
-                    # Verificación de contraseña usando hash (si corresponde)
-                    if db_password.startswith("$2b$") or db_password.startswith("$pbkdf2$"):
-                        if not check_password_hash(db_password, password):
-                            return None
-                    elif db_password != password:
-                        return None
-
-                    return User(user_id, db_username, db_password, rol, id_sucursal, department_id)
-
-                return None
-            except Exception as e:
-                print(f"❌ Error en la autenticación: {e}")
-                return None
-            finally:
-                connection.close()
-
-    @staticmethod
-    def get_user_by_username(username):
-        connection = get_db_connection()
-        if connection:
-            try:
-                cursor = connection.cursor()
-                query = """
-                    SELECT id, username, rol, id_sucursal, department_id 
-                    FROM users 
-                    WHERE username = LOWER(%s)
-                """
-                cursor.execute(query, (username,))
-                result = cursor.fetchone()
-
-                if result:
-                    user_id, db_username, rol, id_sucursal, department_id = result
-                    return User(user_id, db_username, None, rol, id_sucursal, department_id)
-
-                print("❌ Usuario no encontrado en get_user_by_username")
-                return None
-            except Exception as e:
-                print(f"❌ Error en get_user_by_username: {e}")
-                return None
-            finally:
-                connection.close()
-        else:
-            return None
-
-    @staticmethod
-    def get_user_by_id(user_id):
-        connection = get_db_connection()
-        if connection:
-            try:
-                cursor = connection.cursor()
-                query = """
-                    SELECT id, username, rol, id_sucursal, department_id 
-                    FROM users 
-                    WHERE id = %s
-                """
-                cursor.execute(query, (user_id,))
-                result = cursor.fetchone()
-
-                if result:
-                    user_id, username, rol, id_sucursal, department_id = result
-                    return User(user_id, username, None, rol, id_sucursal, department_id)
-
-                return None
-            except Exception as e:
-                print(f"❌ Error en get_user_by_id: {e}")
-                return None
-            finally:
-                connection.close()
-        else:
-            return None
+# ─────────────────────────────────────────────────────────────
+# MODELO: USUARIO
+# ─────────────────────────────────────────────────────────────
 
 class UserORM(db.Model):
     __tablename__ = 'users'
+
+    # ─── Campos ──────────────────────────────────────────────
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(100), nullable=False)
-    password = db.Column(db.String(255))
-    rol = db.Column(db.String(50), default="usuario")
-    id_sucursal = db.Column(db.Integer, db.ForeignKey('sucursales.id_sucursal'))
-    department_id = db.Column(db.Integer)
+    username = db.Column(db.String(100), nullable=False, unique=True)
+    password = db.Column(db.String(255), nullable=False)
+    rol = db.Column(db.String(50), default="usuario", nullable=False)
+    id_sucursal = db.Column(db.Integer, db.ForeignKey('sucursales.id_sucursal'), nullable=False)
+    department_id = db.Column(db.Integer, nullable=False)
+
+    # ─── Relaciones ─────────────────────────────────────────
+    movimientos = db.relationship('MovimientoInventario', backref='usuario', cascade='all, delete-orphan')
+
+    # ─────────────────────────────────────────────────────────────
+    # MÉTODOS
+    # ─────────────────────────────────────────────────────────────
+
+    def verify_password(self, password_input):
+        """Verifica si la contraseña ingresada es correcta."""
+        if self.password.startswith("$2b$") or self.password.startswith("$pbkdf2$"):
+            return check_password_hash(self.password, password_input)
+        return self.password == password_input
+
+    @classmethod
+    def get_by_username(cls, username):
+        """Obtiene un usuario por su username (lowercase)."""
+        return cls.query.filter(db.func.lower(cls.username) == db.func.lower(username)).first()
+
+    @classmethod
+    def get_by_id(cls, user_id):
+        """Obtiene un usuario por su ID."""
+        return cls.query.filter_by(id=user_id).first()
+
+    def __repr__(self):
+        return f"<User {self.username}>"

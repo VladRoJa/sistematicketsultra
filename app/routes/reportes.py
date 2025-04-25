@@ -1,30 +1,38 @@
-#C:\Users\Vladimir\Documents\Sistema tickets\app\routes\reportes.py
+# C:\Users\Vladimir\Documents\Sistema tickets\app\routes\reportes.py
+
+# ------------------------------------------------------------------------------
+# BLUEPRINT: REPORTES DE INVENTARIO Y MOVIMIENTOS
+# ------------------------------------------------------------------------------
 
 from flask import Blueprint, jsonify, send_file, request
 from app.extensions import db
-from app.models.inventario import Producto, InventarioSucursal, MovimientoInventario, DetalleMovimiento
+from app.models.inventario import (
+    Producto, InventarioSucursal, MovimientoInventario, DetalleMovimiento
+)
 from io import BytesIO
 import pandas as pd
 from datetime import datetime
 
-reportes_bp = Blueprint('reportes', __name__)
+reportes_bp = Blueprint('reportes', __name__, url_prefix='/api/reportes')
 
-# Exportar inventario por sucursal a Excel
+# ------------------------------------------------------------------------------
+# RUTA: Exportar inventario por sucursal a Excel
+# ------------------------------------------------------------------------------
 @reportes_bp.route('/exportar-inventario', methods=['GET'])
 def exportar_inventario():
     sucursal_id = request.args.get('sucursal_id', type=int)
-
     query = InventarioSucursal.query
+
     if sucursal_id:
         query = query.filter_by(sucursal_id=sucursal_id)
 
     data = query.all()
-
     rows = []
+
     for i in data:
         producto = Producto.query.get(i.producto_id)
         if not producto:
-            continue  # evitar NoneType
+            continue
 
         rows.append({
             "ID Producto": producto.id,
@@ -34,15 +42,13 @@ def exportar_inventario():
             "Sucursal ID": i.sucursal_id
         })
 
-
     df = pd.DataFrame(rows)
     if df.empty:
         return jsonify({"error": "No hay datos de inventario para exportar"}), 400
-    
+
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, sheet_name='Inventario', index=False)
-
         workbook = writer.book
         worksheet = writer.sheets['Inventario']
 
@@ -51,27 +57,27 @@ def exportar_inventario():
             worksheet.write(0, col_num, value, header_format)
             worksheet.set_column(col_num, col_num, 20)
 
-      
         worksheet.autofilter(0, 0, len(df), len(df.columns) - 1)
-
 
     output.seek(0)
     filename = f'Inventario_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
     return send_file(output, as_attachment=True, download_name=filename, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 
-# Exportar historial de movimientos a Excel
+# ------------------------------------------------------------------------------
+# RUTA: Exportar historial de movimientos a Excel
+# ------------------------------------------------------------------------------
 @reportes_bp.route('/exportar-movimientos', methods=['GET'])
 def exportar_movimientos():
     movimientos = MovimientoInventario.query.order_by(MovimientoInventario.fecha.desc()).all()
-
     rows = []
+
     for mov in movimientos:
         detalles = DetalleMovimiento.query.filter_by(movimiento_id=mov.id).all()
         for d in detalles:
             producto = Producto.query.get(d.producto_id)
             if not producto:
-                continue  # evitar error si producto ya no existe
+                continue
 
             rows.append({
                 "ID Movimiento": mov.id,
@@ -87,14 +93,12 @@ def exportar_movimientos():
             })
 
     df = pd.DataFrame(rows)
-    
     if df.empty:
         return jsonify({"error": "No hay movimientos registrados para exportar"}), 400
-    
+
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, sheet_name='Movimientos', index=False)
-
         workbook = writer.book
         worksheet = writer.sheets['Movimientos']
 
@@ -103,9 +107,7 @@ def exportar_movimientos():
             worksheet.write(0, col_num, value, header_format)
             worksheet.set_column(col_num, col_num, 20)
 
-       
         worksheet.autofilter(0, 0, len(df), len(df.columns) - 1)
-
 
     output.seek(0)
     filename = f'Movimientos_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'

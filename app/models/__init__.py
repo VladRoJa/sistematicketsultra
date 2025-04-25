@@ -1,17 +1,23 @@
-# C:\Users\Vladimir\Documents\Sistema tickets\app\models\__init__.py
+# -------------------------------------------------------------------------------
+# MODELOS: Inicialización de Modelos del Sistema
+# -------------------------------------------------------------------------------
 
-from .database import get_db_connection
 from .ticket_model import Ticket
-from .user_model import User
+from .user_model import UserORM
 from .sucursal_model import Sucursal
+from .inventario import Producto, InventarioSucursal, MovimientoInventario, DetalleMovimiento
+from .departamento_model import Departamento
 
+# -------------------------------------------------------------------------------
+# EXPORTACIONES: Control de qué modelos estarán disponibles al importar app.models
+# -------------------------------------------------------------------------------
 __all__ = [
-    "get_db_connection",
     "Ticket",
-    "User",
+    "UserORM",
     "Sucursal",
-    "create_ticket",
-    "get_tickets",
-    "update_ticket_status",
-    "get_user_by_credentials",
+    "Producto",
+    "InventarioSucursal",
+    "MovimientoInventario",
+    "DetalleMovimiento",
+    "Departamento"
 ]

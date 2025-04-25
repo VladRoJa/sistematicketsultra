@@ -1,26 +1,35 @@
-#C:\Users\Vladimir\Documents\Sistema tickets\app\routes\departamentos_routes.py
+# C:\Users\Vladimir\Documents\Sistema tickets\app\routes\departamentos_routes.py
+
+# ------------------------------------------------------------------------------
+# BLUEPRINT: DEPARTAMENTOS
+# ------------------------------------------------------------------------------
 
 from flask import Blueprint, jsonify
 from flask_jwt_extended import jwt_required
-from app.models.database import get_db_connection
+from app.extensions import db
+from sqlalchemy.exc import SQLAlchemyError
+
+# 🔹 Modelo (si aún no lo tienes, lo creamos después)
+from app.models.departamento_model import Departamento
 
 departamentos_bp = Blueprint('departamentos', __name__, url_prefix='/api/departamentos')
 
+# ------------------------------------------------------------------------------
+# RUTA: Listar departamentos
+# ------------------------------------------------------------------------------
 @departamentos_bp.route('/listar', methods=['GET'])
 @jwt_required()
 def listar_departamentos():
-    """ 🔹 Devuelve la lista de departamentos desde la base de datos """
+    """ 🔹 Devuelve la lista de departamentos registrados """
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
+        departamentos = Departamento.query.with_entities(
+            Departamento.id,
+            Departamento.nombre
+        ).all()
 
-        cursor.execute("SELECT id, nombre FROM departamentos")
-        departamentos = cursor.fetchall()
+        resultado = [{"id": d.id, "nombre": d.nombre} for d in departamentos]
 
-        cursor.close()
-        conn.close()
+        return jsonify({"departamentos": resultado}), 200
 
-        return jsonify({"departamentos": departamentos}), 200
-
-    except Exception as e:
+    except SQLAlchemyError as e:
         return jsonify({"error": str(e)}), 500

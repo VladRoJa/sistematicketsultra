@@ -1,34 +1,49 @@
 # C:\Users\Vladimir\Documents\Sistema tickets\app\models\ticket_model.py
-from flask import json, jsonify
-from .database import get_db_connection
+
 from datetime import datetime
 import pytz
-import locale
+from app.extensions import db
 
-try:
-    locale.setlocale(locale.LC_TIME, 'es_ES.UTF-8')
-except locale.Error:
-    locale.setlocale(locale.LC_TIME, 'C')
-    
-class Ticket:
-    def __init__(self, id, descripcion, username, estado, fecha_creacion, id_sucursal, departamento_id, criticidad, categoria, subcategoria, subsubcategoria, fecha_solucion, historial_fechas, fecha_finalizado=None):
-        self.id = id
-        self.descripcion = descripcion
-        self.username = username
-        self.estado = estado
-        self.fecha_creacion = fecha_creacion
-        self.id_sucursal = id_sucursal
-        self.departamento_id = departamento_id
-        self.criticidad = criticidad
-        self.categoria = categoria
-        self.subcategoria = subcategoria
-        self.subsubcategoria = subsubcategoria
-        self.fecha_finalizado = fecha_finalizado
-        self.fecha_solucion = fecha_solucion
-        self.historial_fechas = historial_fechas
+# ─────────────────────────────────────────────────────────────
+# MODELO: TICKET
+# ─────────────────────────────────────────────────────────────
+
+class Ticket(db.Model):
+    __tablename__ = 'tickets'
+
+    # ─── Campos ──────────────────────────────────────────────
+    id = db.Column(db.Integer, primary_key=True)
+    descripcion = db.Column(db.Text, nullable=False)
+    username = db.Column(db.String(50), db.ForeignKey('users.username'), nullable=False)
+    asignado_a = db.Column(db.String(50), db.ForeignKey('users.username'), nullable=True)
+    id_sucursal = db.Column(db.Integer, db.ForeignKey('sucursales.id_sucursal'), nullable=False)
+    estado = db.Column(db.Enum('abierto', 'en progreso', 'finalizado'), default='abierto', nullable=False)
+    fecha_creacion = db.Column(db.DateTime, default=db.func.now(), nullable=False)
+    fecha_finalizado = db.Column(db.DateTime)
+    departamento_id = db.Column(db.Integer, db.ForeignKey('departamentos.id'), nullable=True)
+    criticidad = db.Column(db.Integer, default=1, nullable=False)
+    categoria = db.Column(db.String(255), nullable=False)
+    subcategoria = db.Column(db.String(100))
+    subsubcategoria = db.Column(db.String(100))
+    aparato_id = db.Column(db.Integer, db.ForeignKey('aparatos_gimnasio.id'), nullable=True)
+    problema_detectado = db.Column(db.Text)
+    necesita_refaccion = db.Column(db.Boolean, default=False)
+    descripcion_refaccion = db.Column(db.Text)
+    historial_fechas = db.Column(db.JSON)
+    fecha_solucion = db.Column(db.DateTime)
+
+    # ─── Relaciones ─────────────────────────────────────────
+    usuario = db.relationship('UserORM', foreign_keys='Ticket.username')
+    sucursal = db.relationship('Sucursal', backref='tickets', foreign_keys='Ticket.id_sucursal')
+
+    # ─────────────────────────────────────────────────────────────
+    # MÉTODOS
+    # ─────────────────────────────────────────────────────────────
 
     def to_dict(self):
+        """Convierte un ticket a diccionario listo para JSON."""
         tz = pytz.timezone('America/Tijuana')
+
         fecha_creacion_local = self.fecha_creacion.replace(tzinfo=pytz.utc).astimezone(tz).strftime('%Y-%m-%d %H:%M:%S') if self.fecha_creacion else "N/A"
         fecha_finalizado_local = self.fecha_finalizado.replace(tzinfo=pytz.utc).astimezone(tz).strftime('%Y-%m-%d %H:%M:%S') if self.fecha_finalizado else "N/A"
 
@@ -44,82 +59,58 @@ class Ticket:
             'categoria': self.categoria,
             'subcategoria': self.subcategoria,
             'subsubcategoria': self.subsubcategoria,
-            'fecha_finalizado': fecha_finalizado_local
+            'fecha_finalizado': fecha_finalizado_local,
+            'fecha_solucion': self.fecha_solucion.strftime('%Y-%m-%d %H:%M:%S') if self.fecha_solucion else "N/A",
+            'necesita_refaccion': self.necesita_refaccion,
+            'descripcion_refaccion': self.descripcion_refaccion,
+            'problema_detectado': self.problema_detectado
         }
 
-    @staticmethod
-    def create_ticket(descripcion, username, id_sucursal, departamento_id, criticidad, categoria, subcategoria=None, subsubcategoria=None, aparato_id=None, problema_detectado=None, necesita_refaccion=False, descripcion_refaccion=None):
-        print(f"🔍 Creando ticket con: Descripcion={descripcion}, Usuario={username}, Sucursal={id_sucursal}, Departamento={departamento_id}, Criticidad={criticidad}, Categoría={categoria}, Subcategoría={subcategoria}, Sub-subcategoría={subsubcategoria}, Aparato={aparato_id}, Refacción={necesita_refaccion}")
+    @classmethod
+    def create_ticket(cls, descripcion, username, id_sucursal, departamento_id, criticidad, categoria, subcategoria=None, subsubcategoria=None, aparato_id=None, problema_detectado=None, necesita_refaccion=False, descripcion_refaccion=None):
+        """Crea y guarda un nuevo ticket."""
+        ticket = cls(
+            descripcion=descripcion,
+            username=username,
+            id_sucursal=id_sucursal,
+            departamento_id=departamento_id,
+            criticidad=criticidad,
+            categoria=categoria,
+            subcategoria=subcategoria,
+            subsubcategoria=subsubcategoria,
+            aparato_id=aparato_id,
+            problema_detectado=problema_detectado,
+            necesita_refaccion=necesita_refaccion,
+            descripcion_refaccion=descripcion_refaccion,
+            estado='abierto'
+        )
+        db.session.add(ticket)
+        db.session.commit()
+        return ticket
 
-        conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
-        
-        if not isinstance(criticidad, int):
-            print(f"⚠️ Error: Criticidad no es un entero válido: {criticidad}")
-            return None
-        
-        query = '''
-            INSERT INTO tickets 
-            (descripcion, username, id_sucursal, estado, departamento_id, criticidad, categoria, subcategoria, subsubcategoria, aparato_id, problema_detectado, necesita_refaccion, descripcion_refaccion)
-            VALUES (%s, %s, %s, 'abierto', %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        '''
-        values = (descripcion, username, id_sucursal, departamento_id, criticidad, categoria, subcategoria, subsubcategoria, aparato_id, problema_detectado, necesita_refaccion, descripcion_refaccion)
-        cursor.execute(query, values)
-
-        conn.commit()
-        ticket_id = cursor.lastrowid
-        cursor.close()
-        conn.close()
-
-        print(f"✅ Ticket creado con ID: {ticket_id}")
-        return ticket_id
-
-
-
-    @staticmethod
-    def update_ticket_status(id, nuevo_estado, criticidad=None, categoria=None):
-        try:
-            conn = get_db_connection()
-            cursor = conn.cursor(dictionary=True)
-
-            query = "UPDATE tickets SET estado = %s"
-            values = [nuevo_estado]
-
-            if criticidad is not None:
-                query += ", criticidad = %s"
-                values.append(criticidad)
-
-            if categoria is not None:
-                query += ", categoria = %s"
-                values.append(categoria)
-
-            query += " WHERE id = %s"
-            values.append(id)
-
-            cursor.execute(query, tuple(values))
-            conn.commit()
-
-            if cursor.rowcount > 0:
-                cursor.execute("SELECT * FROM tickets WHERE id = %s", (id,))
-                ticket = cursor.fetchone()
-                cursor.close()
-                conn.close()
-                return ticket
-
-            cursor.close()
-            conn.close()
+    @classmethod
+    def update_ticket_status(cls, ticket_id, nuevo_estado, criticidad=None, categoria=None):
+        """Actualiza estado, criticidad o categoría de un ticket."""
+        ticket = cls.query.get(ticket_id)
+        if not ticket:
             return None
 
-        except Exception as e:
-            return None
+        ticket.estado = nuevo_estado
+        if criticidad is not None:
+            ticket.criticidad = criticidad
+        if categoria is not None:
+            ticket.categoria = categoria
 
-    @staticmethod
-    def get_by_id(id):
-        conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM tickets WHERE id = %s", (id,))
-        data = cursor.fetchone()
-        conn.close()
-        if data:
-            return Ticket(**data)
-        return None
+        if nuevo_estado == 'finalizado':
+            ticket.fecha_finalizado = datetime.utcnow()
+
+        db.session.commit()
+        return ticket
+
+    @classmethod
+    def get_by_id(cls, ticket_id):
+        """Obtiene un ticket por su ID."""
+        return cls.query.get(ticket_id)
+
+    def __repr__(self):
+        return f"<Ticket {self.id} - {self.estado}>"
