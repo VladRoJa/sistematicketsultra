@@ -1,3 +1,5 @@
+// C:\Users\Vladimir\Documents\Sistema tickets\frontend-angular\src\app\inventario\inventario-layout\inventario-layout.component.ts
+
 import { Component } from '@angular/core';
 import { RouterModule } from '@angular/router';
 import { MatTabsModule } from '@angular/material/tabs';

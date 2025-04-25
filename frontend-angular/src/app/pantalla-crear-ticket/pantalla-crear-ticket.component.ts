@@ -1,11 +1,12 @@
-// pantalla-crear-ticket.component.ts
+// C:\Users\Vladimir\Documents\Sistema tickets\frontend-angular\src\app\pantalla-crear-ticket\pantalla-crear-ticket.component.ts
 
 import { Component, OnInit } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
-import Swal from 'sweetalert2';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule, FormsModule } from '@angular/forms';
+import { mostrarAlertaToast, mostrarAlertaErrorDesdeStatus  } from '../utils/alertas';
+
 
 // Componentes específicos por tipo de mantenimiento
 import { MantenimientoAparatosComponent } from '../mantenimiento-aparatos/mantenimiento-aparatos.component';
@@ -169,31 +170,13 @@ export class PantallaCrearTicketComponent implements OnInit {
   
     this.http.post<{ mensaje: string }>(this.apiUrl, payload, { headers }).subscribe({
       next: () => {
-        Swal.fire({
-          toast: true,
-          position: 'bottom-end',
-          icon: 'success',
-          title: '✅ Ticket creado correctamente.',
-          showConfirmButton: false,
-          timer: 2500
-        });
-  
+        mostrarAlertaToast('✅ Ticket creado correctamente.');
         this.formularioMantenimiento.reset();
       },
       error: (error) => {
-        Swal.fire({
-          toast: true,
-          position: 'top-end',
-          icon: 'error',
-          title: error.status === 400 ? "⚠️ Faltan datos obligatorios."
-                : error.status === 401 ? "🔒 No autorizado, inicia sesión."
-                : "❌ Error interno en el servidor.",
-          showConfirmButton: false,
-          timer: 2500
-        });
+        mostrarAlertaErrorDesdeStatus(error.status);
       }
     });
+  
   }
-  
-  
 }

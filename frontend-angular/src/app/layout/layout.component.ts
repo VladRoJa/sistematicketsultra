@@ -1,117 +1,202 @@
 // src/app/layout/layout.component.ts
-import { Component, OnInit } from '@angular/core';
-import { Router } from '@angular/router';
-import { CommonModule } from '@angular/common';
-import { RouterOutlet, RouterLink } from '@angular/router';
-import { MatToolbarModule } from '@angular/material/toolbar';
-import { MatMenuModule } from '@angular/material/menu';
-import { MatButtonModule } from '@angular/material/button';
-import { MatDividerModule } from '@angular/material/divider';
-import { FormsModule } from '@angular/forms';
+
+import { Component, ElementRef, ViewChild, Renderer2, OnInit, AfterViewInit } from '@angular/core';
+import { Router, RouterModule, RouterOutlet } from '@angular/router';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
-import { EliminarTicketDialogComponent } from '../eliminar-ticket-dialog/eliminar-ticket-dialog.component';
+import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatIconModule } from '@angular/material/icon';
-
+import { MatButtonModule } from '@angular/material/button';
+import { CommonModule } from '@angular/common';
+import { EliminarTicketDialogComponent } from '../eliminar-ticket-dialog/eliminar-ticket-dialog.component';
 
 @Component({
   selector: 'app-layout',
   standalone: true,
+  templateUrl: './layout.component.html',
+  styleUrls: ['./layout.component.css'],
   imports: [
     CommonModule,
+    RouterModule,
     RouterOutlet,
-    RouterLink,
     MatToolbarModule,
-    MatMenuModule,
+    MatIconModule,
     MatButtonModule,
-    MatDividerModule,
-    FormsModule,
-    MatDialogModule,
-    MatIconModule
-  ],
-  templateUrl: './layout.component.html', // ✅ Usa templateUrl
-  styleUrls: ['./layout.component.css']   // ✅ Usa styleUrls
+    MatDialogModule
+  ]
 })
+export class LayoutComponent implements OnInit, AfterViewInit {
+  @ViewChild('indicator', { static: true }) indicator!: ElementRef;
+  esAdmin = false;
+  currentSubmenu: string = 'Tickets';
+  submenuVisible: boolean = false;
+  estiloIndicador: any = {};
+  submenuActivo: { [key: string]: string } = {};
 
-export class LayoutComponent implements OnInit {
-  esAdmin: boolean = false;
+  menuItems = [
+    {
+      label: 'Tickets',
+      path: '/main/ver-tickets',
+      submenu: [
+        { label: 'Ver Tickets', path: '/main/ver-tickets' },
+        { label: 'Crear Ticket', path: '/main/crear-ticket' }
+      ]
+    },
+    {
+      label: 'Inventario',
+      path: '/inventario/productos',
+      submenu: [
+        { label: 'Productos', path: '/inventario/productos' },
+        { label: 'Movimientos', path: '/inventario/movimientos' },
+        { label: 'Existencias', path: '/inventario/existencias' },
+        { label: 'Reportes', path: '/inventario/reportes' },
+        { label: 'Carga Masiva', path: '/carga-masiva' }
+      ]
+    },
+    {
+      label: 'Permisos',
+      path: '/admin-permisos',
+      submenu: []
+    },
+    {
+      label: 'Ajustes',
+      path: '/ajustes',
+      submenu: []
+    }
+  ];
+
   private apiUrl = 'http://localhost:5000/api/tickets';
 
   constructor(
     private router: Router,
     private http: HttpClient,
-    private dialog: MatDialog // Inyectamos el servicio MatDialog
-  ) {
-    console.log('LayoutComponent constructor');
-  }
+    private dialog: MatDialog,
+    private renderer: Renderer2
+  ) {}
+
+  timeoutSubmenu: any;
+  ocultarTimeout: any;
+  estiloIndicadorSubmenu: any = {};
 
   ngOnInit(): void {
     const userString = localStorage.getItem('user');
     if (userString) {
       const user = JSON.parse(userString);
       this.esAdmin = user.rol === 'ADMINISTRADOR';
-      console.log('Es admin:', this.esAdmin);
+    }
+  }
+
+  ngAfterViewInit(): void {
+    const firstItem = document.querySelector('.nav-item') as HTMLElement;
+    if (firstItem) {
+      setTimeout(() => this.moverIndicador({ target: firstItem } as any), 0);
     }
   }
 
   cerrarSesion(): void {
-    const confirmar = window.confirm("¿Estás seguro que deseas cerrar sesión?");
-    if (confirmar) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      this.router.navigate(['/login']);
-    }
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    this.router.navigate(['/login']);
   }
 
-  irAGestionPermisos(): void {
-    this.router.navigate(['/admin-permisos']);
-  }
-
-  // Abrimos el diálogo de eliminación
   openEliminarDialog(): void {
     const dialogRef = this.dialog.open(EliminarTicketDialogComponent, {
       width: '400px',
-      data: {}  // No se pasa un ticketId, se pedirá en el diálogo
+      data: {}
     });
-  
+
     dialogRef.afterClosed().subscribe((ticketId: number | null) => {
       if (ticketId) {
         this.eliminarTicket(ticketId);
-      } else {
-        console.log("Eliminación cancelada.");
       }
     });
   }
-  
-  // Función para eliminar el ticket
+
   eliminarTicket(ticketId: number): void {
-    // Si prefieres una validación extra (por si el modal no pasa un ID válido):
     if (!ticketId) {
-      alert("No se especificó un ID de ticket.");
+      alert('No se especificó un ID de ticket.');
       return;
     }
-  
+
     const token = localStorage.getItem('token');
     if (!token) {
-      console.error("No hay token, no se puede eliminar el ticket.");
+      console.error('No hay token, no se puede eliminar el ticket.');
       return;
     }
-  
-    // Ya no llamamos a confirm(), porque el modal se encarga de esa confirmación
+
     const headers = new HttpHeaders()
       .set('Authorization', `Bearer ${token}`)
       .set('Content-Type', 'application/json');
-  
+
     this.http.delete(`${this.apiUrl}/delete/${ticketId}`, { headers }).subscribe({
-      next: (response: any) => {
-        console.log(`Ticket ${ticketId} eliminado.`);
-        alert(response.mensaje);
-      },
-      error: (error) => {
-        console.error(`Error al eliminar el ticket:`, error);
-        alert("No se pudo eliminar el ticket.");
-      }
+      next: (response: any) => alert(response.mensaje),
+      error: () => alert('No se pudo eliminar el ticket.')
     });
   }
+
+  moverIndicador(event: MouseEvent): void {
+    const target = event.target as HTMLElement;
+    if (target.classList.contains('nav-item')) {
+      const rect = target.getBoundingClientRect();
+      const containerRect = target.parentElement!.getBoundingClientRect();
+
+      this.estiloIndicador = {
+        left: `${rect.left - containerRect.left}px`,
+        width: `${rect.width}px`
+      };
+    }
+  }
+
+  cambiarMenu(menu: string): void {
+    this.currentSubmenu = menu;
+    this.submenuVisible = true;
+    this.estiloIndicadorSubmenu = {};
+  }
+
+
+  navegarConCambio(path: string, submenu: string): void {
+    this.currentSubmenu = submenu;
+    this.router.navigateByUrl(path);
+  }
+  get submenuActual() {
+    return this.menuItems.find(m => m.label === this.currentSubmenu)?.submenu || [];
+  }
+
+  ocultarSubmenu(): void {
+    this.timeoutSubmenu = setTimeout(() => {
+      this.submenuVisible = false;
+    }, 150); // pequeño retraso para permitir pasar al submenú
+  }
+
+
+  programarOcultarSubmenu(): void {
+    this.ocultarTimeout = setTimeout(() => {
+      this.submenuVisible = false;
+    }, 300); // Delay para permitir pasar de menú a submenú
+  }
   
+  cancelarOcultarSubmenu(): void {
+    if (this.ocultarTimeout) {
+      clearTimeout(this.ocultarTimeout);
+    }
+  }
+  moverIndicadorSubmenu(event: MouseEvent): void {
+    const target = event.target as HTMLElement;
+    const rect = target.getBoundingClientRect();
+    const containerRect = target.parentElement!.getBoundingClientRect();
+  
+    this.estiloIndicadorSubmenu = {
+      left: `${rect.left - containerRect.left}px`,
+      width: `${rect.width}px`
+    };
+  }
+  
+  limpiarIndicadorSubmenu(): void {
+    this.estiloIndicadorSubmenu = {};
+  }
+
+  seleccionarSubmenu(label: string, path: string): void {
+    this.submenuActivo[this.currentSubmenu] = label;
+    this.router.navigateByUrl(path);
+  }
 }

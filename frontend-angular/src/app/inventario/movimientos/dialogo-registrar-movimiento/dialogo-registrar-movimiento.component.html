@@ -1,0 +1,61 @@
+<!-- C:\Users\Vladimir\Documents\Sistema tickets\frontend-angular\src\app\inventario\movimientos\dialogo-registrar-movimiento\dialogo-registrar-movimiento.component.html -->
+
+<mat-card class="formulario-card">
+  <h2 mat-dialog-title>Registrar Movimiento</h2>
+
+  <form (ngSubmit)="registrarMovimiento()" #formMov="ngForm" class="formulario-movimiento" mat-dialog-content>
+
+    <mat-form-field appearance="fill" style="width: 100%;">
+      <mat-label>Tipo de Movimiento</mat-label>
+      <mat-select [(ngModel)]="nuevoMovimiento.tipo_movimiento" name="tipo_movimiento" required>
+        <mat-option value="entrada">Entrada</mat-option>
+        <mat-option value="salida">Salida</mat-option>
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field appearance="fill" style="width: 100%;">
+      <mat-label>Observaciones</mat-label>
+      <input matInput [(ngModel)]="nuevoMovimiento.observaciones" name="observaciones">
+    </mat-form-field>
+
+    <!-- Productos -->
+    <div *ngFor="let item of nuevoMovimiento.productos; let i = index" class="producto-card">
+      <div class="producto-grupo">
+
+        <mat-form-field appearance="outline" style="flex: 1; min-width: 200px;">
+          <mat-label>Producto</mat-label>
+          <mat-select [(ngModel)]="item.producto_id" name="producto_{{i}}" required (selectionChange)="actualizarUnidad(i)">
+            <mat-option *ngFor="let prod of productosDisponibles" [value]="prod.id">
+              {{ prod.nombre }}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" style="flex: 1; min-width: 150px;">
+          <mat-label>Unidad</mat-label>
+          <input matInput [value]="item.unidad_medida" disabled>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" style="flex: 1; min-width: 100px;">
+          <mat-label>Cantidad</mat-label>
+          <input matInput type="number" [(ngModel)]="item.cantidad" name="cantidad_{{i}}" required min="1">
+        </mat-form-field>
+
+        <button mat-icon-button color="warn" (click)="eliminarProductoCampo(i)" *ngIf="nuevoMovimiento.productos.length > 1">
+          <mat-icon>remove_circle</mat-icon>
+        </button>
+
+      </div>
+    </div>
+
+    <button mat-button type="button" (click)="agregarProductoCampo()">+ Añadir producto</button>
+
+  </form>
+
+  <mat-dialog-actions align="end">
+    <button mat-button mat-dialog-close>Cancelar</button>
+    <button mat-raised-button color="primary" [disabled]="formMov.invalid" (click)="registrarMovimiento()">
+      Guardar
+    </button>
+  </mat-dialog-actions>
+</mat-card>

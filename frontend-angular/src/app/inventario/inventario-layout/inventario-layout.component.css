@@ -1,9 +1,10 @@
-.layout-card {
-    padding: 16px;
-    margin: 24px;
-  }
-  
-  mat-tab-group {
-    margin-top: 16px;
-  }
-  
+.tab-buttons {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.active-tab {
+  background-color: #ff4081 !important;
+  color: white !important;
+}

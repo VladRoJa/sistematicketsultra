@@ -1,0 +1,17 @@
+<!-- C:\Users\Vladimir\Documents\Sistema tickets\frontend-angular\src\app\inventario\carga-masiva\carga-masiva-sinmapeo.component.html -->
+
+<div class="p-4 max-w-xl mx-auto text-center">
+    <h2 class="text-xl font-bold mb-4">Carga Directa de Archivo (Sin Mapeo)</h2>
+  
+    <input type="file" accept=".csv, .xlsx" (change)="subirArchivo($event)" class="mb-4" />
+  
+    <div *ngIf="mensaje" class="mt-2 text-sm font-semibold" [ngClass]="{ 'text-green-600': !cargando, 'text-red-600': mensaje.includes('error') }">
+      {{ mensaje }}
+    </div>
+  
+    <div *ngIf="cargando" class="text-blue-600 mt-2">Procesando archivo...</div>
+  </div>
+
+
+  
+

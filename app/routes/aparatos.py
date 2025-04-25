@@ -1,4 +1,4 @@
-#aparatos.py
+#C:\Users\Vladimir\Documents\Sistema tickets\app\routes\aparatos.py
 
 from flask import Blueprint, jsonify
 from app.models.database import get_db_connection

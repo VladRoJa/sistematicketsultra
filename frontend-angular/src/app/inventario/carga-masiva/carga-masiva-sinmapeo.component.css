@@ -1,0 +1,36 @@
+:host {
+  display: block;
+  text-align: center;
+  padding: 1.5rem;
+}
+
+h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-bottom: 1.25rem;
+  color: #1f2937;
+}
+
+input[type="file"] {
+  display: block;
+  margin: 0.5rem auto 1rem auto;
+  padding: 0.5rem;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.text-green-600 {
+  color: #16a34a;
+}
+
+.text-red-600 {
+  color: #dc2626;
+}
+
+.text-blue-600 {
+  color: #2563eb;
+}
+
+.font-semibold {
+  font-weight: 600;
+}

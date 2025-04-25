@@ -1,4 +1,4 @@
-#config.py
+#C:\Users\Vladimir\Documents\Sistema tickets\config.py
 
 from datetime import timedelta
 import os

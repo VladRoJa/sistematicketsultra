@@ -1,4 +1,4 @@
-#app/models/database.py
+#C:\Users\Vladimir\Documents\Sistema tickets\app\models\database.py
 
 import mysql.connector
 from config import Config

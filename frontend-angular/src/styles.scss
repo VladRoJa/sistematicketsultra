@@ -1,25 +1,14 @@
-
-// Custom Theming for Angular Material
-// For more information: https://material.angular.io/guide/theming
+// -------------------------------
+// 🌈 Angular Material Theme Setup
+// -------------------------------
 @use '@angular/material' as mat;
-// Plus imports for other components in your app.
 
-// Include the common styles for Angular Material. We include this here so that you only
-// have to load a single css file for Angular Material in your app.
-// Be sure that you only ever include this mixin once!
 @include mat.core();
 
-// Define the palettes for your theme using the Material Design palettes available in palette.scss
-// (imported above). For each palette, you can optionally specify a default, lighter, and darker
-// hue. Available color palettes: https://material.io/design/color/
 $frontend-angular-primary: mat.define-palette(mat.$indigo-palette);
 $frontend-angular-accent: mat.define-palette(mat.$pink-palette, A200, A100, A400);
-
-// The warn palette is optional (defaults to red).
 $frontend-angular-warn: mat.define-palette(mat.$red-palette);
 
-// Create the theme object. A theme consists of configurations for individual
-// theming systems such as "color" or "typography".
 $frontend-angular-theme: mat.define-light-theme((
   color: (
     primary: $frontend-angular-primary,
@@ -28,49 +17,117 @@ $frontend-angular-theme: mat.define-light-theme((
   )
 ));
 
-// Include theme styles for core and each component used in your app.
-// Alternatively, you can import and @include the theme mixins for each component
-// that you are using.
 @include mat.all-component-themes($frontend-angular-theme);
 
-/* Reset básico */
+// -------------------------------
+// 🔄 Reset + Base
+// -------------------------------
 * {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-    font-family: Arial, sans-serif;
-  }
-  
-  /* Contenedor principal */
-  body {
-    background-color: #f4f4f4;
-    color: #333;
-  }
-  
-  /* Contenedor de las pantallas */
-  .container {
-    max-width: 800px;
-    margin: 40px auto;
-    padding: 20px;
-    background: white;
-    border-radius: 8px;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-  }
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: Arial, sans-serif;
+}
 
-  .mat-dialog-container {
-    background-color: #fff !important;
-    color: #333 !important;
-    border-radius: 8px; /* Para esquinas redondeadas, si deseas */
-    box-shadow: 0 2px 10px rgba(0,0,0,0.3);
-  }
-  
-  /* Si el fondo semitransparente es muy oscuro, ajusta esto: */
-  .cdk-overlay-backdrop {
-    background-color: rgba(0, 0, 0, 0.5) !important; /* 50% opacidad */
-  }
-  
-html, body { height: 100%; }
-body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }
+body {
+  background-color: #f4f4f4;
+  color: #333;
+  font-family: Roboto, "Helvetica Neue", sans-serif;
+}
 
-html, body { height: 100%; }
-body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }
+html, body {
+  height: 100%;
+}
+
+// -------------------------------
+// 📦 Modal Animación
+// -------------------------------
+.custom-modal-animado .mat-dialog-container {
+  animation: fadeInDialog 0.25s ease-out;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+
+.custom-modal-animado .mat-dialog-container.ng-animating {
+  animation: fadeOutDialog 0.2s ease-in !important;
+}
+
+@keyframes fadeInDialog {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes fadeOutDialog {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.95); }
+}
+
+// -------------------------------
+// 📋 Tabla Inventario (MDC version)
+// -------------------------------
+.tabla-contenedor {
+  overflow-x: auto;
+  max-height: 600px;
+}
+
+table.mat-mdc-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 700px;
+  font-size: 14px;
+}
+
+.mdc-data-table__cell,
+.mdc-data-table__header-cell {
+  padding: 12px 16px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.mdc-data-table__header-cell {
+  background-color: #f5f5f5;
+  font-weight: bold;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  border-bottom: 2px solid #ccc;
+}
+
+.mdc-data-table__row:nth-child(even) {
+  background-color: #fafafa;
+}
+
+.mdc-data-table__row:nth-child(odd) {
+  background-color: #ffffff;
+}
+
+.mat-mdc-elevation-z2 {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  border-radius: 8px;
+}
+
+// -------------------------------
+// 🧼 Otros detalles (opcional)
+// -------------------------------
+.mat-form-field {
+  width: 100%;
+}
+
+.mat-dialog-container {
+  background-color: #fff !important;
+  color: #333 !important;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+}
+
+.cdk-overlay-backdrop {
+  background-color: rgba(0, 0, 0, 0.5) !important;
+}
+
+.container {
+  max-width: 800px;
+  margin: 40px auto;
+  padding: 20px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}

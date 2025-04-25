@@ -1,4 +1,4 @@
-# app/controllers/__init__.py
+# C:\Users\Vladimir\Documents\Sistema tickets\app\controllers\__init__.py
 from .auth_controller import AuthController, auth_controller
 from .ticket_controller import TicketController, ticket_controller
 

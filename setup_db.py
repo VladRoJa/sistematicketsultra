@@ -1,3 +1,4 @@
+#C:\Users\Vladimir\Documents\Sistema tickets\setup_db.py
 
 from app.models.database import get_db_connection
 
@@ -199,6 +200,22 @@ CREATE TABLE IF NOT EXISTS `departamentos` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 """)
+    
+    cursor.execute("""
+CREATE TABLE IF NOT EXISTS `historial_eliminaciones_movimientos` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `movimiento_id` int NOT NULL,
+  `usuario_id` int NOT NULL,
+  `fecha_hora` datetime DEFAULT CURRENT_TIMESTAMP,
+  `descripcion` text,
+  PRIMARY KEY (`id`),
+  KEY `movimiento_id` (`movimiento_id`),
+  KEY `usuario_id` (`usuario_id`),
+  CONSTRAINT `historial_eliminaciones_movimientos_ibfk_1` FOREIGN KEY (`movimiento_id`) REFERENCES `movimientos_inventario` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `historial_eliminaciones_movimientos_ibfk_2` FOREIGN KEY (`usuario_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+""")
+
 
 
     conn.commit()

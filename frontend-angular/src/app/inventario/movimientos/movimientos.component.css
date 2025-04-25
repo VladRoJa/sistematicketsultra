@@ -1,0 +1,129 @@
+/* === CONTENEDOR GENERAL === */
+mat-card {
+    margin: 1.5rem auto;
+    padding: 1.5rem;
+    max-width: 1200px;
+    background-color: #fff;
+    border-radius: 12px;
+  }
+  
+  /* === TITULOS === */
+  h2 {
+    font-size: 1.5rem;
+    font-weight: bold;
+    margin-bottom: 1.25rem;
+    color: #1f2937;
+  }
+  
+  /* === FORMULARIO === */
+  .formulario-movimiento {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+  
+  mat-form-field {
+    flex: 1 1 300px;
+    min-width: 240px;
+  }
+  
+  /* Agrupación de campos de producto */
+  .producto-grupo {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: center;
+    width: 100%;
+    margin-bottom: 1rem;
+  }
+  
+  /* === BOTONES === */
+  button[mat-button],
+  button[mat-raised-button],
+  button[mat-icon-button] {
+    margin-top: 0.5rem;
+  }
+  
+  button[mat-button] {
+    font-weight: bold;
+    text-transform: none;
+  }
+  
+  button[color="warn"] {
+    font-weight: bold;
+    color: #dc2626;
+  }
+  
+  button[color="warn"]:hover {
+    background-color: rgba(220, 38, 38, 0.1);
+  }
+  
+  /* === TABLA === */
+  .tabla-movimientos {
+    width: 100%;
+    margin-top: 1rem;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  
+  table.mat-table {
+    font-size: 14px;
+  }
+  
+  .mat-header-cell {
+    font-weight: bold;
+    background-color: #f3f4f6;
+    color: #1f2937;
+  }
+  
+  .mat-cell,
+  .mat-header-cell {
+    padding: 0.75rem 1rem;
+  }
+  
+  tr.mat-row:hover {
+    background-color: #f9fafb;
+  }
+  
+  /* Productos listados dentro de una celda */
+  td ul {
+    margin: 0;
+    padding-left: 1.2rem;
+  }
+  
+  td li {
+    list-style-type: disc;
+  }
+  
+  /* Tipos de movimiento con color */
+  td.mat-cell:nth-child(2) {
+    font-weight: bold;
+    color: #2563eb;
+  }
+  
+  td.mat-cell:nth-child(2):contains("salida") {
+    color: #dc2626;
+  }
+  
+  .producto-card {
+    background-color: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    transition: all 0.2s ease-in-out;
+  }
+  
+  .producto-card:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  }
+  
+  /* Ajustes para grupo interno */
+  .producto-grupo {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: center;
+  }
+  

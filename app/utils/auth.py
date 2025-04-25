@@ -1,3 +1,5 @@
+#C:\Users\Vladimir\Documents\Sistema tickets\app\utils\auth.py
+
 from flask import jsonify
 from flask_jwt_extended import verify_jwt_in_request, get_jwt_identity
 from app.models.user_model import User  # Asegúrate de que la ruta sea correcta

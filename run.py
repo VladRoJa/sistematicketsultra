@@ -1,4 +1,4 @@
-# run.py
+# C:\Users\Vladimir\Documents\Sistema tickets\run.py
 
 from app import create_app
 from setup_db import inicializar_base_de_datos

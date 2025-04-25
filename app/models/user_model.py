@@ -1,7 +1,9 @@
-#user_model.py
+#C:\Users\Vladimir\Documents\Sistema tickets\app\models\user_model.py
 
 from werkzeug.security import check_password_hash
 from app.models.database import get_db_connection
+from app.extensions import db
+
 
 class User:
     def __init__(self, id, username, password, rol="usuario", id_sucursal=None, department_id=None):
@@ -99,3 +101,12 @@ class User:
                 connection.close()
         else:
             return None
+
+class UserORM(db.Model):
+    __tablename__ = 'users'
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(100), nullable=False)
+    password = db.Column(db.String(255))
+    rol = db.Column(db.String(50), default="usuario")
+    id_sucursal = db.Column(db.Integer, db.ForeignKey('sucursales.id_sucursal'))
+    department_id = db.Column(db.Integer)

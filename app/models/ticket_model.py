@@ -1,4 +1,4 @@
-# app/models/ticket_model.py
+# C:\Users\Vladimir\Documents\Sistema tickets\app\models\ticket_model.py
 from flask import json, jsonify
 from .database import get_db_connection
 from datetime import datetime

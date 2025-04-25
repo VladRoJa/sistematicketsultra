@@ -1,4 +1,4 @@
-#departamentos_routes.py
+#C:\Users\Vladimir\Documents\Sistema tickets\app\routes\departamentos_routes.py
 
 from flask import Blueprint, jsonify
 from flask_jwt_extended import jwt_required

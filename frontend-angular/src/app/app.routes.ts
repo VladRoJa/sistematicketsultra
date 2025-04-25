@@ -1,6 +1,4 @@
-// app.routes.ts
-
-
+// src/app/app.routes.ts
 
 import { Routes } from '@angular/router';
 import { LoginComponent } from './pantalla-login/pantalla-login.component';
@@ -11,7 +9,6 @@ import { AdminPermisosComponent } from './admin-permisos/admin-permisos.componen
 import { AuthGuard } from './guards/auth.guard';
 import { AdminGuard } from './guards/admin.guard';
 import { LayoutComponent } from './layout/layout.component';
-
 
 export const routes: Routes = [
   { path: '', redirectTo: 'login', pathMatch: 'full' },
@@ -38,8 +35,13 @@ export const routes: Routes = [
       },
       {
         path: 'inventario',
-        loadChildren: () => import('./inventario/inventario.module').then(m => m.InventarioModule),
-        canActivate: [AuthGuard]
+        canActivate: [AuthGuard],
+        loadChildren: () => import('./inventario/inventario.routes').then(m => m.INVENTARIO_ROUTES)
+      },
+      {
+        path: 'carga-masiva',
+        loadComponent: () => import('./inventario/carga-masiva/pantalla-carga-masiva.component')
+          .then(m => m.PantallaCargaMasivaComponent)
       }
     ],
   },

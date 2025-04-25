@@ -1,4 +1,4 @@
-# app/controllers/ticket_controller.py
+# C:\Users\Vladimir\Documents\Sistema tickets\app\controllers\ticket_controller.py
 from flask import jsonify, session, request
 from app.models.ticket_model import create_ticket, get_tickets, update_ticket_status
 

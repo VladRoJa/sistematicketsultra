@@ -1,4 +1,4 @@
-#app/routes/auth_routes.py
+#C:\Users\Vladimir\Documents\Sistema tickets\app\routes\auth_routes.py
 
 from flask import Blueprint, request, jsonify
 from flask_cors import CORS, cross_origin

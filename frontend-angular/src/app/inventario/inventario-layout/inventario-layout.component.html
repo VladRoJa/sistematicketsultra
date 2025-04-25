@@ -1,14 +1,8 @@
 <!-- src/app/inventario/inventario-layout/inventario-layout.component.html -->
 
 <mat-card class="layout-card">
-    <mat-tab-group mat-stretch-tabs backgroundColor="accent">
-      <mat-tab label="Productos" [routerLink]="'productos'"></mat-tab>
-      <mat-tab label="Movimientos" [routerLink]="'movimientos'"></mat-tab>
-      <mat-tab label="Reportes" [routerLink]="'reportes'"></mat-tab>
-    </mat-tab-group>
-  
-    <div class="contenido">
-      <router-outlet></router-outlet>
-    </div>
-  </mat-card>
-  
+
+  <div class="contenido">
+    <router-outlet></router-outlet>
+  </div>
+</mat-card>
