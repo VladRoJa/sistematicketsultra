@@ -142,4 +142,35 @@ export class TicketService {
     return this.http.get<TicketsResponse>(`${this.apiUrl}/list`, { params });
   }
 
+  exportarTickets(filtros: any): Observable<Blob> {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      console.error("❌ No hay token para exportar.");
+      return new Observable<Blob>();
+    }
+  
+    console.log("📤 Filtros enviados al backend:", filtros); // Agrega esto temporalmente
+  
+    let params = new HttpParams();
+    for (const clave in filtros) {
+      const valor = filtros[clave];
+      if (Array.isArray(valor)) {
+        valor.forEach((v: string) => {
+          params = params.append(clave, v);
+        });
+      } else if (valor !== undefined) {
+        params = params.set(clave, valor);
+      }
+    }
+  
+    const headers = new HttpHeaders().set('Authorization', `Bearer ${token}`);
+    return this.http.get('http://localhost:5000/api/tickets/export-excel', {
+      headers,
+      params,
+      responseType: 'blob'
+    });
+  }
+  
+  
+  
 }

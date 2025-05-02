@@ -124,3 +124,4 @@ class TicketController:
 # INSTANCIA DEL CONTROLADOR
 # -------------------------------------------------------------------------------
 ticket_controller = TicketController()
+

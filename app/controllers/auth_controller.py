@@ -55,3 +55,4 @@ class AuthController:
 # -------------------------------------------------------------------------------
 
 auth_controller = AuthController()
+

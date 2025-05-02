@@ -7,6 +7,7 @@ from datetime import datetime
 from io import BytesIO
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
+from pytz import timezone, utc
 from sqlalchemy import or_
 
 from app.models.ticket_model import Ticket
@@ -188,9 +189,15 @@ def update_ticket_status(id):
 
         ticket.estado = estado
         if estado == "finalizado":
-            ticket.fecha_finalizado = datetime.utcnow()
+            ahora = datetime.now()
+            print(f"🕒 Hora guardada sin conversión (servidor local): {ahora.strftime('%Y-%m-%d %H:%M:%S')}")
+            ticket.fecha_finalizado = ahora.strftime('%Y-%m-%d %H:%M:%S')
+
+
         if fecha_solucion:
-            ticket.fecha_solucion = datetime.strptime(fecha_solucion, '%Y-%m-%d')
+            local = timezone('America/Tijuana')
+            fecha_local = local.localize(datetime.strptime(fecha_solucion, '%Y-%m-%d %H:%M:%S'))
+            ticket.fecha_solucion = fecha_local.astimezone(utc)
         ticket.historial_fechas = historial_fechas
 
         db.session.commit()
@@ -231,6 +238,8 @@ def delete_ticket(id):
 # ─────────────────────────────────────────────────────────────
 # RUTA: Exportar tickets a Excel
 # ─────────────────────────────────────────────────────────────
+from sqlalchemy import or_
+
 @ticket_bp.route('/export-excel', methods=['GET'])
 @jwt_required()
 def export_excel():
@@ -239,15 +248,25 @@ def export_excel():
         if not user:
             return jsonify({"mensaje": "Usuario no encontrado"}), 404
 
-        estado = request.args.get('estado')
-        departamento_id = request.args.get('departamento_id')
-        criticidad = request.args.get('criticidad')
-        username = request.args.get('username')
-        categoria = request.args.get('categoria')
-        descripcion = request.args.get('descripcion')
+        # 🔄 MULTI-VALORES
+        estados = request.args.getlist('estado')
+        departamentos = request.args.getlist('departamento_id')
+        criticidades = request.args.getlist('criticidad')
+        usernames = request.args.getlist('username')
+        categorias = request.args.getlist('categoria')
+        subcategorias = request.args.getlist('subcategoria')
+        subsubcategorias = request.args.getlist('subsubcategoria')
+        descripciones = request.args.getlist('descripcion')
+
+        # 🔎 Fechas
+        fecha_desde = request.args.get('fecha_desde')
+        fecha_hasta = request.args.get('fecha_hasta')
+        fecha_fin_desde = request.args.get('fecha_fin_desde')
+        fecha_fin_hasta = request.args.get('fecha_fin_hasta')
 
         query = Ticket.query
 
+        # 🔐 Filtro por rol
         if 1 <= user.id_sucursal <= 22:
             query = query.filter_by(id_sucursal=user.id_sucursal)
         elif user.id_sucursal == 100:
@@ -257,21 +276,49 @@ def export_excel():
         elif user.id_sucursal != 1000:
             return jsonify({"mensaje": "Tipo de usuario no reconocido"}), 400
 
-        if estado:
-            query = query.filter_by(estado=estado)
-        if departamento_id:
-            query = query.filter_by(departamento_id=int(departamento_id))
-        if criticidad:
-            query = query.filter_by(criticidad=int(criticidad))
-        if username:
-            query = query.filter_by(username=username)
-        if categoria:
-            query = query.filter_by(categoria=categoria)
-        if descripcion:
-            query = query.filter(Ticket.descripcion.like(f"%{descripcion}%"))
+        # 🧠 Aplicar MULTI-FILTROS
+        if estados:
+            query = query.filter(Ticket.estado.in_(estados))
+        if departamentos:
+            query = query.filter(Ticket.departamento_id.in_([int(d) for d in departamentos]))    
+        if criticidades:
+            query = query.filter(Ticket.criticidad.in_([int(c) for c in criticidades]))
+        if usernames:
+            query = query.filter(Ticket.username.in_(usernames))
 
+        # Filtros con posible "—"
+        def filtrar_con_null(campo, valores):
+            condiciones = []
+            for v in valores:
+                if v == "—":
+                    condiciones.append(campo.is_(None))
+                else:
+                    condiciones.append(campo == v)
+            return or_(*condiciones)
+
+        if categorias:
+            query = query.filter(filtrar_con_null(Ticket.categoria, categorias))
+        if subcategorias:
+            query = query.filter(filtrar_con_null(Ticket.subcategoria, subcategorias))
+        if subsubcategorias:
+            query = query.filter(filtrar_con_null(Ticket.subsubcategoria, subsubcategorias))
+        if descripciones:
+            query = query.filter(filtrar_con_null(Ticket.descripcion, descripciones))
+
+        # 📅 Fechas
+        if fecha_desde:
+            query = query.filter(Ticket.fecha_creacion >= datetime.strptime(fecha_desde, '%Y-%m-%d'))
+        if fecha_hasta:
+            query = query.filter(Ticket.fecha_creacion <= datetime.strptime(fecha_hasta, '%Y-%m-%d'))
+        if fecha_fin_desde:
+            query = query.filter(Ticket.fecha_finalizado >= datetime.strptime(fecha_fin_desde, '%Y-%m-%d'))
+        if fecha_fin_hasta:
+            query = query.filter(Ticket.fecha_finalizado <= datetime.strptime(fecha_fin_hasta, '%Y-%m-%d'))
+
+        # 📋 Obtener tickets
         tickets = query.order_by(Ticket.fecha_creacion.desc()).all()
 
+        # 🧾 Crear Excel (idéntico a tu lógica actual)
         wb = Workbook()
         ws = wb.active
         ws.title = "Tickets"
@@ -279,7 +326,7 @@ def export_excel():
         headers = [
             "ID", "Descripción", "Usuario", "Estado", "Criticidad",
             "Fecha Creación", "Fecha Finalizado", "Fecha Solución",
-            "Departamento ID", "Categoría", "Subcategoría", "Sub-subcategoría",
+            "Departamento", "Categoría", "Subcategoría", "Sub-subcategoría",
             "Problema Detectado", "Refacción", "Descripción Refacción"
         ]
         ws.append(headers)
@@ -303,7 +350,7 @@ def export_excel():
                 t.get("fecha_creacion"),
                 t.get("fecha_finalizado"),
                 t.get("fecha_solucion"),
-                t.get("departamento_id"),
+                ticket.departamento.nombre if ticket.departamento else "—",
                 t.get("categoria"),
                 t.get("subcategoria"),
                 t.get("subsubcategoria"),

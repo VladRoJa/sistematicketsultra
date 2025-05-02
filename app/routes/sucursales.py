@@ -24,3 +24,4 @@ def listar_sucursales():
         } for s in sucursales
     ]
     return jsonify(resultado), 200
+

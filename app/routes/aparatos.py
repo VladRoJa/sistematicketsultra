@@ -9,7 +9,6 @@ from app.models.aparatos_model import AparatoGimnasio
 
 aparatos_bp = Blueprint('aparatos', __name__, url_prefix='/api/aparatos')
 
-
 # ------------------------------------------------------------------------------
 # RUTA: Obtener aparatos por sucursal
 # ------------------------------------------------------------------------------

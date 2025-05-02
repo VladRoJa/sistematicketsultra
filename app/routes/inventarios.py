@@ -285,3 +285,4 @@ def listar_sucursales():
     sucursales = Sucursal.query.all()
     data = [{'id_sucursal': s.id_sucursal, 'sucursal': s.sucursal} for s in sucursales]
     return jsonify(data), 200
+

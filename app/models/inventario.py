@@ -83,3 +83,4 @@ class DetalleMovimiento(db.Model):
 
     def __repr__(self):
         return f"<DetalleMovimiento Producto {self.producto_id} Cantidad {self.cantidad}>"
+

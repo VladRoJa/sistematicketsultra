@@ -95,3 +95,4 @@ def session_info():
     except Exception as e:
         logger.error(f"❌ Error inesperado en session-info: {e}")
         return jsonify({"message": "Error en sesión"}), 500
+

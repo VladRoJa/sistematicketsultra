@@ -110,3 +110,4 @@ def listar_todos_los_permisos():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    

@@ -15,3 +15,4 @@ __all__ = [
     "main_bp",
     "aparatos_bp"
 ]
+

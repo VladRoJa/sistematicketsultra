@@ -20,3 +20,4 @@ class AparatoGimnasio(db.Model):
 
     def __repr__(self):
         return f"<AparatoGimnasio {self.codigo} - Sucursal {self.id_sucursal}>"
+

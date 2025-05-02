@@ -1,28 +1,48 @@
-<!-- pantalla-login.component.html -->
-
+<!-- src/app/pantalla-login/pantalla-login.component.html -->
 
 <div class="container">
-  <div class="left">
+    <div class="left">
       <form class="form" (ngSubmit)="onSubmit()" #loginForm="ngForm">
-          <div class="input-block">
-              <input class="input" type="text" id="usuario-login" name="username" [(ngModel)]="username" required>
-              <label for="usuario-login">Usuario</label>
-          </div>
-          <div class="input-block">
-              <input class="input" type="password" id="password-login" name="password" [(ngModel)]="password" required>
-              <label for="password-login">Contraseña</label>
-          </div>
-          <div class="input-block">
-              
-              <button type="submit" [disabled]="!loginForm.valid">Iniciar Sesión</button>
-          </div>
+        <div class="input-block">
+          <input
+            type="text"
+            id="usuario-login"
+            name="username"
+            class="input"
+            [(ngModel)]="username"
+            required
+            placeholder="Usuario"
+          />
+        </div>
+  
+        <div class="input-block">
+          <input
+            type="password"
+            id="password-login"
+            name="password"
+            class="input"
+            [(ngModel)]="password"
+            required
+            placeholder="Contraseña"
+          />
+        </div>
+  
+        <div class="input-block">
+          <button type="submit" [disabled]="!loginForm.valid">
+            Iniciar Sesión
+          </button>
+        </div>
+  
+        <div *ngIf="errorMessage" class="error-message">
+          {{ errorMessage }}
+        </div>
       </form>
-  </div>
-  <div class="right">
+    </div>
+  
+    <div class="right">
       <div class="img">
-          <!-- SVG o imagen decorativa -->
+        <!-- Imagen o SVG decorativo aquí -->
       </div>
+    </div>
   </div>
-</div>
-
-<p *ngIf="errorMessage" class="error-message">{{ errorMessage }}</p>
+  

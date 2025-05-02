@@ -1,14 +1,21 @@
 <!-- src/app/layout/layout.component.html -->
+
 <mat-toolbar color="primary" class="main-toolbar">
   <span class="logo">Ultra Gym</span>
 
   <div class="nav-wrapper">
-    <div class="nav-container" (mouseleave)="programarOcultarSubmenu()" (mouseenter)="cancelarOcultarSubmenu()">
+    <div
+      class="nav-container"
+      (mouseleave)="programarOcultarSubmenu()"
+      (mouseenter)="cancelarOcultarSubmenu()"
+    >
+      <!-- Indicador principal -->
       <div id="indicator" class="nav-indicator" [ngStyle]="estiloIndicador"></div>
 
+      <!-- Ítems del menú principal -->
       <div
-        class="nav-item"
         *ngFor="let item of menuItems"
+        class="nav-item"
         [class.active]="item.label === currentSubmenu"
         (mouseenter)="moverIndicador($event); cambiarMenu(item.label)"
         (click)="navegarConCambio(item.path, item.label)"
@@ -18,27 +25,33 @@
     </div>
   </div>
 
+  <!-- Botón de cerrar sesión -->
   <button mat-icon-button (click)="cerrarSesion()" class="logout-icon">
     <mat-icon>logout</mat-icon>
   </button>
 </mat-toolbar>
 
+<!-- Submenú -->
 <div
-  class="submenu nav-container"
   *ngIf="submenuVisible && submenuActual.length > 0"
+  class="submenu nav-container"
   (mouseenter)="cancelarOcultarSubmenu()"
   (mouseleave)="ocultarSubmenu()"
 >
+  <!-- Indicador de submenú -->
   <div id="submenu-indicator" class="nav-indicator" [ngStyle]="estiloIndicadorSubmenu"></div>
+
+  <!-- Ítems del submenú -->
   <div
-    class="nav-item"
     *ngFor="let sub of submenuActual"
+    class="nav-item"
     [class.active]="submenuActivo[currentSubmenu] === sub.label"
     (mouseenter)="moverIndicadorSubmenu($event)"
     (click)="seleccionarSubmenu(sub.label, sub.path)"
   >
-  {{ sub.label }}
-</div>
+    {{ sub.label }}
+  </div>
 </div>
 
+<!-- Contenido de las páginas -->
 <router-outlet></router-outlet>

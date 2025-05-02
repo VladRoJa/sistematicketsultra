@@ -27,11 +27,15 @@ import { EliminarTicketDialogComponent } from '../eliminar-ticket-dialog/elimina
 })
 export class LayoutComponent implements OnInit, AfterViewInit {
   @ViewChild('indicator', { static: true }) indicator!: ElementRef;
+
   esAdmin = false;
   currentSubmenu: string = 'Tickets';
-  submenuVisible: boolean = false;
+  submenuVisible = false;
   estiloIndicador: any = {};
+  estiloIndicadorSubmenu: any = {};
   submenuActivo: { [key: string]: string } = {};
+  timeoutSubmenu: any;
+  ocultarTimeout: any;
 
   menuItems = [
     {
@@ -74,11 +78,15 @@ export class LayoutComponent implements OnInit, AfterViewInit {
     private renderer: Renderer2
   ) {}
 
-  timeoutSubmenu: any;
-  ocultarTimeout: any;
-  estiloIndicadorSubmenu: any = {};
-
   ngOnInit(): void {
+    this.verificarRolUsuario();
+  }
+
+  ngAfterViewInit(): void {
+    this.inicializarIndicador();
+  }
+
+  private verificarRolUsuario(): void {
     const userString = localStorage.getItem('user');
     if (userString) {
       const user = JSON.parse(userString);
@@ -86,7 +94,7 @@ export class LayoutComponent implements OnInit, AfterViewInit {
     }
   }
 
-  ngAfterViewInit(): void {
+  private inicializarIndicador(): void {
     const firstItem = document.querySelector('.nav-item') as HTMLElement;
     if (firstItem) {
       setTimeout(() => this.moverIndicador({ target: firstItem } as any), 0);
@@ -112,7 +120,7 @@ export class LayoutComponent implements OnInit, AfterViewInit {
     });
   }
 
-  eliminarTicket(ticketId: number): void {
+  private eliminarTicket(ticketId: number): void {
     if (!ticketId) {
       alert('No se especificó un ID de ticket.');
       return;
@@ -120,7 +128,7 @@ export class LayoutComponent implements OnInit, AfterViewInit {
 
     const token = localStorage.getItem('token');
     if (!token) {
-      console.error('No hay token, no se puede eliminar el ticket.');
+      console.error('No hay token disponible.');
       return;
     }
 
@@ -147,56 +155,56 @@ export class LayoutComponent implements OnInit, AfterViewInit {
     }
   }
 
+  moverIndicadorSubmenu(event: MouseEvent): void {
+    const target = event.target as HTMLElement;
+    const rect = target.getBoundingClientRect();
+    const containerRect = target.parentElement!.getBoundingClientRect();
+
+    this.estiloIndicadorSubmenu = {
+      left: `${rect.left - containerRect.left}px`,
+      width: `${rect.width}px`
+    };
+  }
+
+  limpiarIndicadorSubmenu(): void {
+    this.estiloIndicadorSubmenu = {};
+  }
+
   cambiarMenu(menu: string): void {
     this.currentSubmenu = menu;
     this.submenuVisible = true;
     this.estiloIndicadorSubmenu = {};
   }
 
+  seleccionarSubmenu(label: string, path: string): void {
+    this.submenuActivo[this.currentSubmenu] = label;
+    this.router.navigateByUrl(path);
+  }
 
   navegarConCambio(path: string, submenu: string): void {
     this.currentSubmenu = submenu;
     this.router.navigateByUrl(path);
   }
-  get submenuActual() {
-    return this.menuItems.find(m => m.label === this.currentSubmenu)?.submenu || [];
-  }
 
   ocultarSubmenu(): void {
     this.timeoutSubmenu = setTimeout(() => {
       this.submenuVisible = false;
-    }, 150); // pequeño retraso para permitir pasar al submenú
+    }, 150);
   }
-
 
   programarOcultarSubmenu(): void {
     this.ocultarTimeout = setTimeout(() => {
       this.submenuVisible = false;
-    }, 300); // Delay para permitir pasar de menú a submenú
+    }, 300);
   }
-  
+
   cancelarOcultarSubmenu(): void {
     if (this.ocultarTimeout) {
       clearTimeout(this.ocultarTimeout);
     }
   }
-  moverIndicadorSubmenu(event: MouseEvent): void {
-    const target = event.target as HTMLElement;
-    const rect = target.getBoundingClientRect();
-    const containerRect = target.parentElement!.getBoundingClientRect();
-  
-    this.estiloIndicadorSubmenu = {
-      left: `${rect.left - containerRect.left}px`,
-      width: `${rect.width}px`
-    };
-  }
-  
-  limpiarIndicadorSubmenu(): void {
-    this.estiloIndicadorSubmenu = {};
-  }
 
-  seleccionarSubmenu(label: string, path: string): void {
-    this.submenuActivo[this.currentSubmenu] = label;
-    this.router.navigateByUrl(path);
+  get submenuActual() {
+    return this.menuItems.find(m => m.label === this.currentSubmenu)?.submenu || [];
   }
 }

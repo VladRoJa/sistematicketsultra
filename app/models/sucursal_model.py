@@ -22,3 +22,4 @@ class Sucursal(db.Model):
 
     def __repr__(self):
         return f"<Sucursal {self.sucursal}>"
+    

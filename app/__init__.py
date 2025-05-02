@@ -47,5 +47,10 @@ def create_app():
     app.register_blueprint(reportes_bp, url_prefix='/api/reportes')
     app.register_blueprint(sucursales_bp, url_prefix='/api/sucursales')
     app.register_blueprint(bp_importar)
+    
+    app.config['DEBUG'] = True
+    app.config['PROPAGATE_EXCEPTIONS'] = True
+
 
     return app
+

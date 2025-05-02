@@ -1,3 +1,5 @@
+#C:\Users\Vladimir\Documents\Sistema tickets\app\models\__init__.py
+
 # -------------------------------------------------------------------------------
 # MODELOS: Inicialización de Modelos del Sistema
 # -------------------------------------------------------------------------------

@@ -1,49 +1,10 @@
-<!-- pantalla-ver-tickets.component.html -->
+<!-- C:\Users\Vladimir\Documents\Sistema tickets\frontend-angular\src\app\pantalla-ver-tickets\pantalla-ver-tickets.component.html -->
 <div class="table-container" *ngIf="!loading">
   <table>
     <thead>
       <tr>
         <!-- (1) Columna: ID -->
-        <th [class.filtro-activo]="isFilterActive('id')">
-          <!-- Botón principal: al hacer clic se abre el menú completo de filtro para ID -->
-          <button mat-button [matMenuTriggerFor]="menuId" #triggerFiltroId="matMenuTrigger" class="header-button">
-            ID <mat-icon>arrow_drop_down</mat-icon>
-          </button>
-          <!-- Menú para ID con disableClose para que el contenido no se cierre automáticamente -->
-          <mat-menu #menuId="matMenu" disableClose="true">
-            <!-- Opciones de ordenación -->
-            <button mat-menu-item (click)="ordenar('id','asc')">Asc</button>
-            <button mat-menu-item (click)="ordenar('id','desc')">Desc</button>
-            <mat-divider></mat-divider>
-            <!-- Bloque de filtros siempre visible -->
-            <div class="menu-filtro" (click)="$event.stopPropagation()">
-              <label>Filtrar ID</label>
-              <!-- Checkbox para seleccionar todo -->
-              <mat-checkbox [(ngModel)]="seleccionarTodoID"
-                            (change)="toggleSeleccionarTodo('id')"
-                            (click)="$event.stopPropagation()"
-                            name="id_selectAll">
-                Seleccionar todo
-              </mat-checkbox>
-              <!-- Lista de opciones para ID -->
-              <mat-checkbox *ngFor="let item of idsDisponibles; let i = index"
-                            [(ngModel)]="item.seleccionado"
-                            [name]="'id_' + i"
-                            (click)="$event.stopPropagation()">
-                {{ item.valor }}
-              </mat-checkbox>
-              <!-- Bloque de botones fijos -->
-              <div class="menu-botones-fijos">
-                <button mat-button color="primary" (click)="aplicarFiltroColumna('id'); triggerFiltroId.closeMenu()">
-                  Aplicar
-                </button>
-                <button mat-button (click)="limpiarFiltroColumna('id'); triggerFiltroId.closeMenu()">
-                  Borrar Filtros
-                </button>
-              </div>
-            </div>
-          </mat-menu>
-        </th>
+        <th>Id</th>
 
         <!-- (2) Columna: Categoría -->
         <th [class.filtro-activo]="isFilterActive('categoria')">
@@ -253,23 +214,40 @@
           </mat-menu>
         </th>
 
-     <!-- (7) Columna: Fecha Creación -->
-     <th [class.filtro-activo]="isFilterActive('fecha_creacion')">
-      <button mat-button [matMenuTriggerFor]="menuFechaC" #triggerFiltroFechaC="matMenuTrigger" class="header-button">
-        Fecha Creación <mat-icon>arrow_drop_down</mat-icon>
-      </button>
-      <mat-menu #menuFechaC="matMenu" disableClose="true">
-        <button mat-menu-item (click)="ordenar('fecha_creacion','asc')">Asc</button>
-        <button mat-menu-item (click)="ordenar('fecha_creacion','desc')">Desc</button>
-        <mat-divider></mat-divider>
-        <div class="menu-filtro" (click)="$event.stopPropagation()">
-          <label>Filtrar Fecha Creación</label>
-          <app-filter-date-range  #filterFechaCreacion (rangoSeleccionado)="rangoFechaCreacionSeleccionado = $event; aplicarFiltroPorRangoFechaCreacion($event); triggerFiltroFechaC.closeMenu()"></app-filter-date-range>
+        <!-- (7) Columna: Fecha Creación -->
+        <th [class.filtro-activo]="isFilterActive('fecha_creacion')">
+          <button mat-button [matMenuTriggerFor]="menuFechaC" #triggerFiltroFechaC="matMenuTrigger" class="header-button">
+            Fecha Creación <mat-icon>arrow_drop_down</mat-icon>
+          </button>
+          <mat-menu #menuFechaC="matMenu" disableClose="true">
+            <div class="menu-filtro" (click)="$event.stopPropagation()">
+              <label>Filtrar Rango de Fechas</label>
+              <mat-form-field appearance="fill" class="w-full">
+                <mat-label>Desde</mat-label>
+                <input matInput [matDatepicker]="pickerInicioCreacion" [(ngModel)]="rangoFechaCreacionSeleccionado.start">
+                <mat-datepicker-toggle matSuffix [for]="pickerInicioCreacion"></mat-datepicker-toggle>
+                <mat-datepicker #pickerInicioCreacion [dateClass]="dateClassCreacion"></mat-datepicker>
+              </mat-form-field>
 
+              <mat-form-field appearance="fill" class="w-full">
+                <mat-label>Hasta</mat-label>
+                <input matInput [matDatepicker]="pickerFinCreacion" [(ngModel)]="rangoFechaCreacionSeleccionado.end">
+                <mat-datepicker-toggle matSuffix [for]="pickerFinCreacion"></mat-datepicker-toggle>
+                <mat-datepicker #pickerFinCreacion [dateClass]="dateClassCreacion"></mat-datepicker>
+              </mat-form-field>
 
-        </div>
-      </mat-menu>
-    </th>
+              <div class="menu-botones-fijos">
+                <button mat-button color="primary" (click)="aplicarFiltroPorRangoFechaCreacion(rangoFechaCreacionSeleccionado); triggerFiltroFechaC.closeMenu()">
+                  Aplicar
+                </button>
+                <button mat-button (click)="borrarFiltroRangoFechaCreacion(); triggerFiltroFechaC.closeMenu()">
+                  Borrar Filtros
+                </button>
+              </div>
+            </div>
+          </mat-menu>
+        </th>
+
 
       <!-- (8) Columna: Fecha Finalizado -->
       <th [class.filtro-activo]="isFilterActive('fecha_finalizado')">
@@ -277,18 +255,34 @@
           Fecha Finalizado <mat-icon>arrow_drop_down</mat-icon>
         </button>
         <mat-menu #menuFechaF="matMenu" disableClose="true">
-          <button mat-menu-item (click)="ordenar('fecha_finalizado','asc')">Asc</button>
-          <button mat-menu-item (click)="ordenar('fecha_finalizado','desc')">Desc</button>
-          <mat-divider></mat-divider>
           <div class="menu-filtro" (click)="$event.stopPropagation()">
-            <label>Filtrar Fecha Finalizado</label>
-            <app-filter-date-range  (rangoSeleccionado)="rangoFechaFinalSeleccionado = $event; aplicarFiltroPorRangoFechaFinalizado($event); triggerFiltroFechaF.closeMenu()"></app-filter-date-range>
+            <label>Filtrar Rango de Fechas</label>
+            <mat-form-field appearance="fill" class="w-full">
+              <mat-label>Desde</mat-label>
+              <input matInput [matDatepicker]="pickerInicioFinalizado" [(ngModel)]="rangoFechaFinalSeleccionado.start">
+              <mat-datepicker-toggle matSuffix [for]="pickerInicioFinalizado"></mat-datepicker-toggle>
+              <mat-datepicker #pickerInicioFinalizado [dateClass]="dateClassFinalizado"></mat-datepicker>
+            </mat-form-field>
 
+            <mat-form-field appearance="fill" class="w-full">
+              <mat-label>Hasta</mat-label>
+              <input matInput [matDatepicker]="pickerFinFinalizado" [(ngModel)]="rangoFechaFinalSeleccionado.end">
+              <mat-datepicker-toggle matSuffix [for]="pickerFinFinalizado"></mat-datepicker-toggle>
+              <mat-datepicker #pickerFinFinalizado [dateClass]="dateClassFinalizado"></mat-datepicker>
+            </mat-form-field>
 
-
+            <div class="menu-botones-fijos">
+              <button mat-button color="primary" (click)="aplicarFiltroPorRangoFechaFinalizado(rangoFechaFinalSeleccionado); triggerFiltroFechaC.closeMenu()">
+                Aplicar
+              </button>
+              <button mat-button (click)="borrarFiltroRangoFechaFinalizado(); triggerFiltroFechaC.closeMenu()">
+                Borrar Filtros
+              </button>
+            </div>
           </div>
         </mat-menu>
       </th>
+
 
 
         <!-- (9) Columna: Departamento -->
@@ -428,32 +422,32 @@
     </thead>
 
     <tbody>
-      <tr *ngFor="let ticket of filteredTickets">
+      <tr *ngFor="let ticket of visibleTickets">
+
         <td>{{ ticket.id }}</td>
         <td>{{ ticket.categoria }}</td>
         <td>{{ ticket.descripcion }}</td>
         <td>{{ ticket.username }}</td>
         <td>{{ ticket.estado }}</td>
         <td>{{ ticket.criticidad }}</td>
-        <td>{{ ticket.fecha_creacion }}</td>
-        <td>{{ ticket.fecha_finalizado }}</td>
+        <td>{{ (ticket.fecha_creacion) }}</td>
+        <td>{{ (ticket.fecha_finalizado) }}</td>
         <td>{{ ticket.departamento }}</td>
         <td>{{ ticket.subcategoria || '—' }}</td>
         <td>{{ ticket.subsubcategoria || '—' }}</td>
-        <!-- (10) Acciones -->
+    
+        <!-- Acciones -->
         <td *ngIf="usuarioEsAdmin">
-          <button *ngIf="ticket.estado === 'pendiente'" (click)="cambiarEstadoTicket(ticket, 'en progreso')" class="boton-estado boton-en-progreso">
+          <button *ngIf="ticket.estado?.trim().toLowerCase() === 'abierto'" (click)="cambiarEstado(ticket, 'en progreso')" class="boton-estado boton-en-progreso">
             En Progreso
           </button>
-          <button *ngIf="ticket.estado === 'en progreso'" (click)="finalizarTicket(ticket)" class="boton-estado boton-finalizar">
+          <button *ngIf="ticket.estado?.trim().toLowerCase() === 'en progreso'" (click)="cambiarEstado(ticket, 'finalizado')" class="boton-estado boton-finalizar">
             Finalizar
           </button>
+          
         </td>
-        <!-- Si no es admin, se muestra un guion -->
-        <td *ngIf="!usuarioEsAdmin">-</td>
-
-
-        <!-- (11) Fecha Solución -->
+    
+        <!-- Fecha Solución -->
         <td>
           <div *ngIf="ticket.estado === 'pendiente'">
             <span>No asignada</span>
@@ -469,10 +463,10 @@
             </div>
             <div *ngIf="usuarioEsAdmin">
               <div *ngIf="!editandoFechaSolucion[ticket.id]; else editandoFecha">
-                <span (click)="editarFechaSolucion(ticket)" class="fecha-solucion">
-                  {{ ticket.fecha_solucion ? formatearFechaCorta(ticket.fecha_solucion) : "📅 Seleccionar" }}
+                <span (click)="editarFecha(ticket)" class="fecha-solucion">
+                  {{ ticket.fecha_solucion ? formatearFechaCorta(ticket.fecha_solucion) : "🗓️ Seleccionar" }}
                 </span>
-                <button *ngIf="ticket.fecha_solucion" (click)="editarFechaSolucion(ticket)" class="boton-editar">
+                <button *ngIf="ticket.fecha_solucion" (click)="editarFecha(ticket)" class="boton-editar">
                   ✏️
                 </button>
               </div>
@@ -485,7 +479,7 @@
                       matInput
                       [matDatepicker]="picker"
                       [value]="fechaSolucionSeleccionada[ticket.id]"
-                      (dateChange)="onFechaSolucionChange(ticket.id, $event.value)"
+                      (dateChange)="onFechaChange(ticket.id, $event.value)"
                       (focus)="picker.open()"
                       [matDatepickerFilter]="esFechaSolucionValida"
                     />
@@ -494,8 +488,8 @@
                   </mat-form-field>
 
                   <div class="acciones-fecha mt-2 flex gap-2">
-                    <button mat-raised-button color="primary" (click)="guardarFechaSolucion(ticket)">💾 Guardar</button>
-                    <button mat-button (click)="cancelarEdicion(ticket)">❌ Cancelar</button>
+                    <button mat-raised-button color="primary" (click)="guardarFecha(ticket)">💾 Guardar</button>
+                    <button mat-button (click)="cancelarEdicionFecha(ticket)">❌ Cancelar</button>
                   </div>
                 </div>
               </ng-template>
@@ -503,8 +497,7 @@
           </div>
         </td>
 
-
-        <!-- (12) Historial -->
+        <!-- Historial -->
         <td>
           <button (click)="toggleHistorial(ticket.id)" class="boton-historial">
             {{ historialVisible[ticket.id] ? 'Ocultar Historial' : 'Ver Historial' }}
@@ -522,35 +515,45 @@
             </ul>
           </div>
         </td>
-      </tr>
-    </tbody>
-  </table>
-</div>
+        </tr>
+        </tbody>
+        </table>
+        </div>
 
-<!-- Bloque de confirmación -->
-<div *ngIf="confirmacionVisible" class="modal-overlay">
-  <div class="modal-confirmacion">
-    <p>{{ mensajeConfirmacion }}</p>
-    <button (click)="confirmarAccion()">Sí</button>
-    <button (click)="cancelarAccion()">No</button>
-  </div>
-</div>
 
-<!-- Controles de Paginación -->
-<div class="pagination-export-container">
-  <div class="pagination-container">
-    <button class="pagination-button" (click)="cambiarPagina(-1)" [disabled]="page === 1">
-      Anterior
-    </button>
-    <span>Página {{ page }} de {{ totalPages() }}</span>
-    <button class="pagination-button" (click)="cambiarPagina(1)" [disabled]="page >= totalPages()">
-      Siguiente
-    </button>
-  </div>
+        <!-- Bloque de confirmación -->
+        <div *ngIf="confirmacionVisible" class="modal-overlay">
+          <div class="modal-confirmacion">
+            <p>{{ mensajeConfirmacion }}</p>
+            <button (click)="confirmarAccion()">Sí</button>
+            <button (click)="cancelarAccion()">No</button>
+          </div>
+        </div>
 
-  <!-- Botón de Exportar a Excel -->
-  <div class="export-container">
-    <button class="boton-exportar" (click)="exportToExcel()">📥 Exportar a Excel</button>
-    <button class="boton-limpiar-todo" (click)="limpiarTodosLosFiltros()">🧹 Limpiar Filtros</button>
-  </div>
-</div>
+        <!-- Controles de Paginación -->
+        <div class="pagination-export-container">
+          <div class="pagination-container">
+            <button class="pagination-button" (click)="cambiarPagina(-1)" [disabled]="page === 1">
+              Anterior
+            </button>
+
+            <span>{{page}} de {{totalPages()}}</span>
+
+            <button class="pagination-button" (click)="cambiarPagina(1)" [disabled]="page === totalPages()">
+              Siguiente
+            </button>
+          </div>
+
+          <!-- Botón de Exportar a Excel -->
+          <div class="export-container">
+            <button class="boton-exportar" 
+                    (click)="exportarTickets()" 
+                    [disabled]="exportandoExcel">
+              <ng-container *ngIf="!exportandoExcel">📥 Exportar a Excel</ng-container>
+              <ng-container *ngIf="exportandoExcel">⌛ Exportando...</ng-container>
+            </button>
+
+            <button class="boton-limpiar-todo" (click)="limpiarTodosLosFiltros()">🧹 Limpiar Filtros</button>
+          </div>
+        </div>
+          

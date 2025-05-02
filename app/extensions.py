@@ -12,3 +12,4 @@ db = SQLAlchemy()
 
 # Migraciones automáticas (flask db init/migrate/upgrade)
 migrate = Migrate()
+

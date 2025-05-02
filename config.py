@@ -47,3 +47,4 @@ class Config:
     SESSION_FILE_DIR = "./flask_session"
     SESSION_FILE_THRESHOLD = 100
     SESSION_FILE_MODE = 600
+    

@@ -1,3 +1,12 @@
 {
-    "CodeGPT.apiKey": "LM Studio"
-}
+    "tailwindCSS.includeLanguages": {
+      "scss": "html"
+    },
+    "editor.quickSuggestions": {
+      "strings": true
+    },
+    "scss.lint.unknownAtRules": "ignore",
+
+  "tailwindCSS.lint.invalidConfigPath": "ignore"
+  }
+  

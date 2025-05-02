@@ -51,3 +51,4 @@ def requiere_supervisor(func):
 def requiere_admin_o_supervisor(func):
     """Permite acceso si es ADMINISTRADOR o SUPERVISOR."""
     return requiere_rol(['ADMINISTRADOR', 'SUPERVISOR'])(func)
+

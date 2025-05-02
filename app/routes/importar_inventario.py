@@ -99,3 +99,4 @@ def importar_archivo():
         db.session.rollback()
         print(f"❌ Error al procesar archivo: {e}")
         return jsonify({"error": f"Error al procesar archivo: {str(e)}"}), 500
+    

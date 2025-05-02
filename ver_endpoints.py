@@ -10,3 +10,4 @@ with app.app_context():
     for rule in app.url_map.iter_rules():
         methods = ','.join(sorted(rule.methods))
         print(f"{rule.endpoint:30s} | {methods:20s} | {rule.rule}")
+        

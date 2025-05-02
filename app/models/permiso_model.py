@@ -20,3 +20,4 @@ class Permiso(db.Model):
 
     def __repr__(self):
         return f"<Permiso User {self.user_id} Departamento {self.departamento_id} Admin {self.es_admin}>"
+

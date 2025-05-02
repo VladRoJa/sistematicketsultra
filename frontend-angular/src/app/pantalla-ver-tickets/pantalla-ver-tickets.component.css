@@ -104,6 +104,17 @@
     justify-content: space-between;
     margin-top: 0.5rem;
   }
+
+  .dia-con-ticket.mat-calendar-body-cell .mat-calendar-body-cell-content::after {
+    content: '';
+    display: block;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background-color: green;
+    margin: 2px auto 0 auto;
+  }
+  
   
   /* =========================
      BOTONES GENERALES

@@ -9,7 +9,7 @@ from flask_jwt_extended import jwt_required
 from app.extensions import db
 from sqlalchemy.exc import SQLAlchemyError
 
-# 🔹 Modelo (si aún no lo tienes, lo creamos después)
+# 🔹 Modelo
 from app.models.departamento_model import Departamento
 
 departamentos_bp = Blueprint('departamentos', __name__, url_prefix='/api/departamentos')
