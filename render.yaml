@@ -8,13 +8,9 @@ services:
     envVars:
       - key: FLASK_ENV
         value: production
-      - key: PORT
-        value: 10000
-      - key: DB_HOST
-        value: mysql.railway.internal
-      - key: DB_USER
-        value: root
-      - key: DB_PASSWORD
-        value: elTimTcWcTshJjltxiNCXrDzBdcbMzy
-      - key: DB_NAME
-        value: railway
+      - key: SQLALCHEMY_DATABASE_URI
+        value: mysql://root:elTimTcWcTshJjltxiNCXrDzBdcbMzy@mainline.proxy.rlwy.net:32920/railway
+      - key: JWT_SECRET_KEY
+        value: UltraJWTKey$2025!ConAccesoSeguro
+      - key: SECRET_KEY
+        value: cualquierclavequeelijas123
