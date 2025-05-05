@@ -24,13 +24,6 @@ def login():
     origin = request.headers.get('Origin') or '*'
     logger.info(f"🛡 Origin recibido en login: {origin}")
 
-    if request.method == 'OPTIONS':
-        response = make_response('', 204)
-        response.headers['Access-Control-Allow-Origin'] = origin
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-        response.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
-        response.headers['Access-Control-Allow-Credentials'] = 'true'
-        return response
 
     try:
         data = request.get_json()
@@ -56,8 +49,7 @@ def login():
                     "id_sucursal": user.id_sucursal
                 }
             })
-            response.headers['Access-Control-Allow-Origin'] = origin
-            response.headers['Access-Control-Allow-Credentials'] = 'true'
+
             return response, 200
 
         logger.warning(f"❌ Credenciales incorrectas para usuario: {username}")
