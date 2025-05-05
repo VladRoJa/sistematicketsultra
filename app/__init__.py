@@ -30,11 +30,14 @@ def create_app():
     # Configuración de CORS
     # ──────────────────────────────────────
     CORS(app,
-      origins=app.config.get('CORS_ORIGINS'),
+      origins=app.config['CORS_ORIGINS'],
       supports_credentials=True,
       allow_headers=["Content-Type", "Authorization"],
-      methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
-
+      methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+      
+      )
+    
+    print("✅ CORS configurado con:", app.config['CORS_ORIGINS'])
 
     # ──────────────────────────────────────
     # Registrar Blueprints (rutas)
