@@ -30,10 +30,10 @@ def create_app():
     # Configuración de CORS
     # ──────────────────────────────────────
     CORS(app,
-          origins=Config.CORS_ORIGINS,
-          supports_credentials=True,
-          allow_headers=["Content-Type", "Authorization"],
-          methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+      origins=app.config.get('CORS_ORIGINS'),
+      supports_credentials=True,
+      allow_headers=["Content-Type", "Authorization"],
+      methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
 
 
     # ──────────────────────────────────────
