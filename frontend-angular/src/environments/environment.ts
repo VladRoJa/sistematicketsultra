@@ -1,6 +1,6 @@
 // environment.ts
 export const environment = {
-    production: false,
-    apiUrl: 'http://localhost:5000/api'
+    production: true,
+    apiUrl: 'https://sistematicketsultra-backend.onrender.com/api' // O usa Railway si estás con ese backend
   };
   
