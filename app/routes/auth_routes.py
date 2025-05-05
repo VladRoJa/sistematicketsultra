@@ -24,8 +24,17 @@ auth_bp = Blueprint('auth', __name__)
 
 @auth_bp.route('/login', methods=['POST', 'OPTIONS'])
 def login():
+    origin = request.headers.get('Origin')
+    print("🌐 Origin recibido:", origin)
+
     if request.method == 'OPTIONS':
-        return '', 204  # Preflight CORS
+        # RESPUESTA PARA EL PREFLIGHT
+        response = make_response('', 204)
+        response.headers.add("Access-Control-Allow-Origin", origin)
+        response.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization")
+        response.headers.add("Access-Control-Allow-Methods", "POST,OPTIONS")
+        response.headers.add("Access-Control-Allow-Credentials", "true")
+        return response
 
     try:
         data = request.get_json()
@@ -35,17 +44,13 @@ def login():
         if not username or not password:
             return jsonify({"message": "Usuario y contraseña son obligatorios"}), 400
 
-        logger.info(f"🔍 Intentando login para usuario: {username}")
-
         user = UserORM.get_by_username(username)
         if user and user.verify_password(password):
             access_token = create_access_token(
                 identity=str(user.id),
                 expires_delta=timedelta(hours=1)
             )
-            logger.info(f"✅ Login exitoso para usuario: {username}")
-
-            return jsonify({
+            response = jsonify({
                 "message": "Login exitoso",
                 "token": access_token,
                 "user": {
@@ -54,15 +59,16 @@ def login():
                     "rol": user.rol,
                     "id_sucursal": user.id_sucursal
                 }
-            }), 200
+            })
+            response.headers.add("Access-Control-Allow-Origin", origin)
+            response.headers.add("Access-Control-Allow-Credentials", "true")
+            return response, 200
 
-        logger.warning(f"❌ Credenciales incorrectas para usuario: {username}")
         return jsonify({"message": "Credenciales incorrectas"}), 401
 
     except Exception as e:
-        logger.error(f"❌ Error inesperado en login: {e}")
+        print(f"❌ Error inesperado en login: {e}")
         return jsonify({"message": "Error interno en el servidor"}), 500
-
 # -------------------------------------------------------------------------------
 # RUTA: OBTENER INFORMACIÓN DE SESIÓN ACTIVA
 # -------------------------------------------------------------------------------
