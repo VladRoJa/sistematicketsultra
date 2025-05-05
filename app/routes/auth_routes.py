@@ -17,7 +17,6 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 auth_bp = Blueprint('auth', __name__)
-CORS(auth_bp, resources={r"/*": {"origins": Config.CORS_ORIGINS}}, supports_credentials=True)
 
 # -------------------------------------------------------------------------------
 # RUTA: LOGIN (Generar token JWT)

@@ -17,11 +17,11 @@ export class AuthService {
   constructor(private http: HttpClient, private router: Router, private noAuthHttp: NoAuthHttpClient) { }
 
   login(username: string, password: string): Observable<any> {
-    // Aquí podemos usar el "limpio" si queremos que NO pase por interceptores
-    return this.noAuthHttp.post<any>(`${environment.apiUrl}/auth/login`, {
-      username,
-      password
-    });
+    return this.noAuthHttp.post<any>(
+      `${environment.apiUrl}/auth/login`,
+      { username, password },
+      { withCredentials: true } 
+    );
   }
 
   logout() {
