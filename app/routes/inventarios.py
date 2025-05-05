@@ -11,7 +11,6 @@ from datetime import datetime
 from config import Config
 
 inventario_bp = Blueprint('inventario', __name__, url_prefix='/api/inventario')
-CORS(inventario_bp, resources={r"/*": {"origins": Config.CORS_ORIGINS}}, supports_credentials=True)
 
 # ----------------------------------------------------------------------
 # UTILIDADES

@@ -2,7 +2,7 @@
 
 from flask import Blueprint, jsonify, request, send_file
 from flask_cors import CORS
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import get_jwt_identity, jwt_required, get_jwt_identityS
 from datetime import datetime
 from io import BytesIO
 from openpyxl import Workbook
@@ -20,11 +20,6 @@ from app.extensions import db
 # ─────────────────────────────────────────────────────────────
 ticket_bp = Blueprint('tickets', __name__, url_prefix='/api/tickets')
 
-CORS(ticket_bp,
-     resources={r"/*": {"origins": Config.CORS_ORIGINS}},
-     supports_credentials=True,
-     allow_headers=["Content-Type", "Authorization"],
-     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
 
 
 # ─────────────────────────────────────────────────────────────
