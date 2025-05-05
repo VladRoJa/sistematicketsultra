@@ -30,8 +30,10 @@ class Config:
     DB_NAME = os.environ.get('DB_NAME') or 'sistema_tickets'
     
     SQLALCHEMY_DATABASE_URI = (
-        f"mysql://{DB_USER}:{quote_plus(DB_PASSWORD)}@{DB_HOST}/{DB_NAME}"
+        f"mysql://{os.environ.get('DB_USER')}:{quote_plus(os.environ.get('DB_PASSWORD'))}"
+        f"@{os.environ.get('DB_HOST')}:{os.environ.get('DB_PORT')}/{os.environ.get('DB_NAME')}"
     )
+
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     # CORS
