@@ -24,17 +24,20 @@ class Config:
     JWT_HEADER_TYPE = 'Bearer'
 
     # Base de datos
-    DB_HOST = os.environ.get('DB_HOST') or 'localhost'
-    DB_USER = os.environ.get('DB_USER') or 'root'
-    DB_PASSWORD = os.environ.get('DB_PASSWORD') or 'Sp@ces2329@'
-    DB_NAME = os.environ.get('DB_NAME') or 'sistema_tickets'
-    
-    SQLALCHEMY_DATABASE_URI = (
-        f"mysql://{os.environ.get('DB_USER')}:{quote_plus(os.environ.get('DB_PASSWORD'))}"
-        f"@{os.environ.get('DB_HOST')}:{os.environ.get('DB_PORT')}/{os.environ.get('DB_NAME')}"
-    )
+#    DB_HOST = os.environ.get('DB_HOST') or 'localhost'
+#    DB_USER = os.environ.get('DB_USER') or 'root'
+#    DB_PASSWORD = os.environ.get('DB_PASSWORD') or 'Sp@ces2329@'
+#    DB_NAME = os.environ.get('DB_NAME') or 'sistema_tickets'
+#    
+#    SQLALCHEMY_DATABASE_URI = (
+#        f"mysql://{os.environ.get('DB_USER')}:{quote_plus(os.environ.get('DB_PASSWORD'))}"
+#       f"@{os.environ.get('DB_HOST')}:{os.environ.get('DB_PORT')}/{os.environ.get('DB_NAME')}"
+#    )
 
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+
+
+    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL')
 
     # CORS
     CORS_ORIGINS = ["http://localhost:4200"]
