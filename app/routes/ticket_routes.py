@@ -2,7 +2,7 @@
 
 from flask import Blueprint, jsonify, request, send_file
 from flask_cors import CORS
-from flask_jwt_extended import get_jwt_identity, jwt_required, get_jwt_identityS
+from flask_jwt_extended import get_jwt_identity, jwt_required
 from datetime import datetime
 from io import BytesIO
 from openpyxl import Workbook
