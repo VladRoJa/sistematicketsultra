@@ -6,6 +6,7 @@ import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule, FormsModule } from '@angular/forms';
 import { mostrarAlertaToast, mostrarAlertaErrorDesdeStatus  } from '../utils/alertas';
+import { environment } from 'src/environments/environment';
 
 
 // Componentes específicos por tipo de mantenimiento
@@ -63,7 +64,7 @@ export class PantallaCrearTicketComponent implements OnInit {
   // Seguimiento de categorías manuales frecuentes
   categoriaHistorial: { [key: string]: number } = {};
 
-  private apiUrl = 'http://localhost:5000/api/tickets/create';
+  private apiUrl = `${environment.apiUrl}/tickets/create`;
 
   constructor(
     private http: HttpClient,

@@ -12,6 +12,7 @@ from app.routes.departamentos_routes import departamentos_bp
 from app.routes.reportes import reportes_bp
 from app.routes.sucursales import sucursales_bp
 from app.routes.importar_inventario import bp_importar
+from config import Config
 
 def create_app():
     """Inicializa la aplicación principal Flask."""
@@ -29,10 +30,11 @@ def create_app():
     # Configuración de CORS
     # ──────────────────────────────────────
     CORS(app,
-         origins=["http://localhost:4200"],
-         supports_credentials=True,
-         allow_headers=["Content-Type", "Authorization"],
-         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+          origins=Config.CORS_ORIGINS,
+          supports_credentials=True,
+          allow_headers=["Content-Type", "Authorization"],
+          methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+
 
     # ──────────────────────────────────────
     # Registrar Blueprints (rutas)

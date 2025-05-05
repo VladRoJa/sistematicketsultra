@@ -3,12 +3,13 @@
 import { ChangeDetectorRef } from '@angular/core';
 import { PantallaVerTicketsComponent, Ticket } from '../pantalla-ver-tickets.component';
 import { HttpHeaders } from '@angular/common/http';
+import { environment } from 'src/environments/environment';
 
 /**
  * Funciones relacionadas con la edición y guardado de la fecha de solución en tickets.
  */
 
-const API_URL = 'http://localhost:5000/api/tickets';
+const API_URL = `${environment.apiUrl}/tickets`;
 
 /** Activar el modo de edición para la fecha de solución */
 export function editarFechaSolucion(

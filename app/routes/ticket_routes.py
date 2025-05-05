@@ -9,6 +9,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 from pytz import timezone, utc
 from sqlalchemy import or_
+from config import Config
 
 from app.models.ticket_model import Ticket
 from app.models.user_model import UserORM
@@ -19,8 +20,10 @@ from app.extensions import db
 # ─────────────────────────────────────────────────────────────
 ticket_bp = Blueprint('tickets', __name__, url_prefix='/api/tickets')
 
-CORS(ticket_bp, resources={r"/*": {"origins": "http://localhost:4200"}},
-     supports_credentials=True, allow_headers=["Content-Type", "Authorization"],
+CORS(ticket_bp,
+     resources={r"/*": {"origins": Config.CORS_ORIGINS}},
+     supports_credentials=True,
+     allow_headers=["Content-Type", "Authorization"],
      methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
 
 

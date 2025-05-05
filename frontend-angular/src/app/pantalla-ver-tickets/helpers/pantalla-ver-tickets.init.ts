@@ -4,6 +4,7 @@
 import { PantallaVerTicketsComponent, ApiResponse, Ticket } from '../pantalla-ver-tickets.component';
 import { HttpHeaders } from '@angular/common/http';
 import { formatearFecha, generarOpcionesDisponiblesDesdeTickets, regenerarFiltrosFiltradosDesdeTickets, formatearFechaFinalizado } from '../../utils/ticket-utils';
+import { environment } from 'src/environments/environment';
 
 export async function obtenerUsuarioAutenticado(component: PantallaVerTicketsComponent): Promise<void> {
   const token = localStorage.getItem('token');
@@ -14,8 +15,8 @@ export async function obtenerUsuarioAutenticado(component: PantallaVerTicketsCom
     'Content-Type': 'application/json'
   });
 
-  try {
-    const data = await component.http.get<{ user: any }>('http://localhost:5000/api/auth/session-info', { headers }).toPromise();
+  try { 
+    const data = await component.http.get<{ user: any }>(`${environment.apiUrl}/auth/session-info`, { headers }).toPromise();
     if (data?.user) {
       component.user = data.user;
       component.usuarioEsAdmin = (component.user.id_sucursal === 1000);

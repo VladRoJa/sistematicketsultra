@@ -5,6 +5,7 @@ import { HttpClient } from '@angular/common/http';
 import { CommonModule } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
+import { environment } from 'src/environments/environment';
 
 @Component({
   selector: 'app-reportes',
@@ -20,7 +21,7 @@ export class ReportesComponent {
   constructor(private http: HttpClient) {}
 
   descargarInventario() {
-    this.http.get('http://localhost:5000/api/reportes/exportar-inventario', {
+    this.http.get(`${environment.apiUrl}/reportes/exportar-inventario`, {
       responseType: 'blob'
     }).subscribe(blob => {
       const url = window.URL.createObjectURL(blob);
@@ -32,7 +33,7 @@ export class ReportesComponent {
   }
 
   descargarMovimientos() {
-    this.http.get('http://localhost:5000/api/reportes/exportar-movimientos', {
+    this.http.get(`${environment.apiUrl}/reportes/exportar-movimientos`, {
       responseType: 'blob'
     }).subscribe(blob => {
       const url = window.URL.createObjectURL(blob);

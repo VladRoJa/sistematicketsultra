@@ -10,13 +10,14 @@ from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_requir
 from datetime import timedelta
 from app.models.user_model import UserORM
 import logging
+from config import Config
 
 # Configurar logging
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 auth_bp = Blueprint('auth', __name__)
-CORS(auth_bp, resources={r"/*": {"origins": "http://localhost:4200"}}, supports_credentials=True)
+CORS(auth_bp, resources={r"/*": {"origins": Config.CORS_ORIGINS}}, supports_credentials=True)
 
 # -------------------------------------------------------------------------------
 # RUTA: LOGIN (Generar token JWT)
@@ -67,7 +68,7 @@ def login():
 # RUTA: OBTENER INFORMACIÓN DE SESIÓN ACTIVA
 # -------------------------------------------------------------------------------
 
-@cross_origin(origins="http://localhost:4200", supports_credentials=True)
+@cross_origin(origins=Config.CORS_ORIGINS, supports_credentials=True)
 @auth_bp.route('/session-info', methods=['GET', 'OPTIONS'])
 @jwt_required()
 def session_info():

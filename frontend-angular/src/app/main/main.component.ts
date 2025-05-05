@@ -6,6 +6,7 @@ import { RouterLink, RouterOutlet, Router } from '@angular/router';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { NgxPaginationModule } from 'ngx-pagination';
+import { environment } from 'src/environments/environment'; // Importa la configuración del entorno
 
 @Component({
   selector: 'app-main',
@@ -23,7 +24,7 @@ export class MainComponent implements OnInit {
   usuarioInfo = "Usuario";  // Almacena el nombre del usuario autenticado
   esAdmin = false;          // Controla si el usuario es administrador
 
-  private authUrl = 'http://localhost:5000/api/auth/session-info'; // URL de autenticación
+  private authUrl = `${environment.apiUrl}/auth/session-info`; // URL de autenticación
 
   constructor(private router: Router, private http: HttpClient) {}
 

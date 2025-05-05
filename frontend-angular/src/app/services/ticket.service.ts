@@ -3,6 +3,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { environment } from 'src/environments/environment';
 
 
 export interface TicketsResponse {
@@ -17,7 +18,7 @@ export interface TicketsResponse {
 export class TicketService {
   // Base URL del backend para la gestión de tickets.
   // Se asume que la ruta para obtener tickets es '/api/tickets/all'
-  private apiUrl = 'http://localhost:5000/api/tickets';
+  private apiUrl = `${environment.apiUrl}/tickets`;
 
   constructor(private http: HttpClient) {}
 
@@ -164,7 +165,7 @@ export class TicketService {
     }
   
     const headers = new HttpHeaders().set('Authorization', `Bearer ${token}`);
-    return this.http.get('http://localhost:5000/api/tickets/export-excel', {
+    return this.http.get(`${environment.apiUrl}/tickets/export-excel`, {
       headers,
       params,
       responseType: 'blob'

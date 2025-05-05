@@ -9,6 +9,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { CommonModule } from '@angular/common';
 import { EliminarTicketDialogComponent } from '../eliminar-ticket-dialog/eliminar-ticket-dialog.component';
+import { environment } from 'src/environments/environment';
 
 @Component({
   selector: 'app-layout',
@@ -69,7 +70,7 @@ export class LayoutComponent implements OnInit, AfterViewInit {
     }
   ];
 
-  private apiUrl = 'http://localhost:5000/api/tickets';
+  private apiUrl = `${environment.apiUrl}/tickets`;
 
   constructor(
     private router: Router,

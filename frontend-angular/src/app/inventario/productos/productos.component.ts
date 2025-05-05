@@ -20,7 +20,7 @@ import { ViewChild } from '@angular/core';
 import * as XLSX from 'xlsx';
 import * as FileSaver from 'file-saver';
 import { MatPaginatorModule } from '@angular/material/paginator';
-
+import { environment } from 'src/environments/environment';
 
 @Component({
   selector: 'app-productos',
@@ -66,7 +66,7 @@ export class ProductosComponent implements OnInit {
     this.cargarProductos();
   }
   cargarProductos(): void {
-    this.http.get<any[]>('http://localhost:5000/api/inventario/productos').subscribe({
+    this.http.get<any[]>(`${environment.apiUrl}/inventario/productos`).subscribe({
       next: (data) => {
         this.dataSource.data = data;
         this.dataSource.paginator = this.paginator;
@@ -94,7 +94,7 @@ export class ProductosComponent implements OnInit {
     const token = localStorage.getItem('token');
     if (!token) return alert('No autorizado');
 
-    this.http.post('http://localhost:5000/api/inventario/productos', this.nuevoProducto, {
+    this.http.post(`${environment.apiUrl}/inventario/productos`, this.nuevoProducto, {
       headers: { Authorization: `Bearer ${token}` }
     }).subscribe({
       next: () => {
@@ -172,7 +172,7 @@ export class ProductosComponent implements OnInit {
           unidad_medida: result.unidad  // ← este es el campo correcto para backend
         };
   
-        this.http.post('http://localhost:5000/api/inventario/productos', productoAGuardar, {
+        this.http.post(`${environment.apiUrl}/inventario/productos`, productoAGuardar, {
           headers: { Authorization: `Bearer ${token}` }
         }).subscribe({
           next: () => {

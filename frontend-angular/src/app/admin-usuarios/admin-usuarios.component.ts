@@ -3,6 +3,7 @@
 import { Component, OnInit } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { AuthService } from '../services/auth.service';
+import { environment } from 'src/environments/environment';
 
 @Component({
   selector: 'app-admin-usuarios',
@@ -21,14 +22,14 @@ export class AdminUsuariosComponent implements OnInit {
 
   cargarUsuarios() {
     const headers = new HttpHeaders().set('Authorization', `Bearer ${this.authService.getToken()}`);
-    this.http.get('http://localhost:5000/api/usuarios', { headers }).subscribe((data: any) => {
+    this.http.get(`${environment.apiUrl}/usuarios`, { headers }).subscribe((data: any) => {
       this.usuarios = data;
     });
   }
 
   cambiarRol(usuarioId: number, nuevoRol: string) {
     const headers = new HttpHeaders().set('Authorization', `Bearer ${this.authService.getToken()}`);
-    this.http.put('http://localhost:5000/api/usuarios/cambiar-rol', { usuario_id: usuarioId, nuevo_rol: nuevoRol }, { headers })
+    this.http.put(`${environment.apiUrl}/usuarios/cambiar-rol`, { usuario_id: usuarioId, nuevo_rol: nuevoRol }, { headers })
       .subscribe(() => {
         alert('Rol actualizado con éxito');
         this.cargarUsuarios();

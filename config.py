@@ -40,7 +40,12 @@ class Config:
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL')
 
     # CORS
-    CORS_ORIGINS = ["http://localhost:4200"]
+    CORS_ORIGINS = [
+    "http://localhost:4200",
+    "https://ultragymsystem.web.app",         # Firebase
+    "https://ultragymsystem.onrender.com"     # Render backend
+]
+
 
     # Sesiones
     SESSION_PERMANENT = True

@@ -12,6 +12,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatCardModule } from '@angular/material/card';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { mostrarAlertaToast, mostrarAlertaStockInsuficiente } from 'src/app/utils/alertas';
+import { environment } from 'src/environments/environment';
 
 @Component({
   standalone: true,
@@ -97,7 +98,7 @@ export class DialogoRegistrarMovimientoComponent {
   
     const headers = new HttpHeaders().set('Authorization', `Bearer ${token}`);
   
-    this.http.post('http://localhost:5000/api/inventario/movimientos', movimientoAEnviar, { headers }).subscribe({
+    this.http.post(`${environment.apiUrl}/inventario/movimientos`, movimientoAEnviar, { headers }).subscribe({
       next: () => {
         console.log('✅ Movimiento registrado');
         this.dialogRef.close('ok');

@@ -15,6 +15,7 @@ import { DialogoRegistrarMovimientoComponent } from './dialogo-registrar-movimie
 import { MatIconModule } from '@angular/material/icon';
 import { mostrarAlertaToast } from 'src/app/utils/alertas';
 import { mostrarAlertaStockInsuficiente } from 'src/app/utils/alertas';
+import { environment } from 'src/environments/environment';
 
 @Component({
   selector: 'app-movimientos',
@@ -68,14 +69,14 @@ export class MovimientosComponent implements OnInit {
   }
 
   cargarMovimientos(): void {
-    this.http.get<any[]>('http://localhost:5000/api/inventario/movimientos').subscribe({
+    this.http.get<any[]>(`${environment.apiUrl}/inventario/movimientos`).subscribe({
       next: data => this.movimientos = data,
       error: err => console.error('Error al obtener movimientos', err)
     });
   }
 
   cargarProductos(): void {
-    this.http.get<any[]>('http://localhost:5000/api/inventario/productos').subscribe({
+    this.http.get<any[]>(`${environment.apiUrl}/inventario/productos`).subscribe({
       next: data => this.productosDisponibles = data,
       error: err => console.error('Error al obtener productos', err)
     });
@@ -97,7 +98,7 @@ export class MovimientosComponent implements OnInit {
     this.nuevoMovimiento.sucursal_id = user.id_sucursal;
     this.nuevoMovimiento.usuario_id = user.id;
 
-    this.http.post('http://localhost:5000/api/inventario/movimientos', this.nuevoMovimiento, {
+    this.http.post(`${environment.apiUrl}/inventario/movimientos`, this.nuevoMovimiento, {
       headers: { Authorization: `Bearer ${token}` }
     }).subscribe({
       next: () => {
@@ -125,7 +126,7 @@ export class MovimientosComponent implements OnInit {
     const token = localStorage.getItem('token');
     if (!token) return alert('No autorizado');
 
-    this.http.delete(`http://localhost:5000/api/inventario/movimientos/${id}`, {
+    this.http.delete(`${environment.apiUrl}/inventario/movimientos/${id}`, {
       headers: { Authorization: `Bearer ${token}` }
     }).subscribe({
       next: () => this.cargarMovimientos(),

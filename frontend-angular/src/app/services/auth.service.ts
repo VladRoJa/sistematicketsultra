@@ -6,18 +6,19 @@ import { Observable, throwError } from 'rxjs';
 import { Router } from '@angular/router';
 import { tap } from 'rxjs/operators';
 import { NoAuthHttpClient } from './no-auth-http-client.service';
+import { environment } from '../../environments/environment'; 
 
 @Injectable({
   providedIn: 'root'
 })
 export class AuthService {
-  private apiUrl = 'http://localhost:5000/api/auth';
+  private apiUrl = `${environment.apiUrl}/auth`;
 
   constructor(private http: HttpClient, private router: Router, private noAuthHttp: NoAuthHttpClient) { }
 
   login(username: string, password: string): Observable<any> {
     // Aquí podemos usar el "limpio" si queremos que NO pase por interceptores
-    return this.noAuthHttp.post<any>('http://localhost:5000/api/auth/login', {
+    return this.noAuthHttp.post<any>(`${environment.apiUrl}/auth/login`, {
       username,
       password
     });

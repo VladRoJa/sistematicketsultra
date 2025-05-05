@@ -7,6 +7,7 @@ import { MatCardModule } from '@angular/material/card';
 import { MatTableModule } from '@angular/material/table';
 import { MatSelectModule } from '@angular/material/select';
 import { FormsModule } from '@angular/forms';
+import { environment } from 'src/environments/environment';
 
 @Component({
   selector: 'app-existencias',
@@ -38,7 +39,7 @@ export class ExistenciasComponent implements OnInit {
   }
 
   cargarSucursales(): void {
-    this.http.get<any[]>('http://localhost:5000/api/sucursales/listar')
+    this.http.get<any[]>(`${environment.apiUrl}/sucursales/listar`)
       .subscribe({
         next: (data) => {
           // Filtramos antes de asignar
@@ -53,8 +54,8 @@ export class ExistenciasComponent implements OnInit {
 
   cargarExistencias(sucursal_id: number | 'global'): void {
     const url = (sucursal_id === 'global')
-      ? 'http://localhost:5000/api/inventario/stock-total'
-      : `http://localhost:5000/api/inventario/sucursal/${sucursal_id}`;
+      ? `${environment.apiUrl}/inventario/stock-total`
+      : `${environment.apiUrl}/inventario/sucursal/${sucursal_id}`;
 
     this.http.get<any[]>(url).subscribe({
       next: (data) => this.existencias = data,
