@@ -5,6 +5,7 @@
 # -------------------------------------------------------------------------------
 
 from app import create_app, db
+from app.db_init import inicializar_db_si_esta_vacia  # 🔁 Nueva función
 
 # -------------------------------------------------------------------------------
 # Crear la instancia de la app
@@ -12,10 +13,11 @@ from app import create_app, db
 app = create_app()
 
 # -------------------------------------------------------------------------------
-# Crear las tablas si no existen
+# Crear las tablas y cargar la base si está vacía
 # -------------------------------------------------------------------------------
 with app.app_context():
     db.create_all()
+    inicializar_db_si_esta_vacia()  # 🔁 Llama a la función que carga el .sql
 
 # -------------------------------------------------------------------------------
 # Ejecutar el servidor
