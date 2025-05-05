@@ -1,11 +1,8 @@
-# C:\Users\Vladimir\Documents\Sistema tickets\app\routes\auth_routes.py
-
 # -------------------------------------------------------------------------------
 # BLUEPRINT: AUTENTICACIÓN (LOGIN, SESIÓN)
 # -------------------------------------------------------------------------------
 
-from flask import Blueprint, request, jsonify
-from flask_cors import CORS, cross_origin
+from flask import Blueprint, request, jsonify, make_response
 from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_required
 from datetime import timedelta
 from app.models.user_model import UserORM
@@ -24,16 +21,15 @@ auth_bp = Blueprint('auth', __name__)
 
 @auth_bp.route('/login', methods=['POST', 'OPTIONS'])
 def login():
-    origin = request.headers.get('Origin')
-    print("🌐 Origin recibido:", origin)
+    origin = request.headers.get('Origin') or '*'
+    logger.info(f"🛡 Origin recibido en login: {origin}")
 
     if request.method == 'OPTIONS':
-        # RESPUESTA PARA EL PREFLIGHT
         response = make_response('', 204)
-        response.headers.add("Access-Control-Allow-Origin", origin)
-        response.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization")
-        response.headers.add("Access-Control-Allow-Methods", "POST,OPTIONS")
-        response.headers.add("Access-Control-Allow-Credentials", "true")
+        response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+        response.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
         return response
 
     try:
@@ -60,25 +56,34 @@ def login():
                     "id_sucursal": user.id_sucursal
                 }
             })
-            response.headers.add("Access-Control-Allow-Origin", origin)
-            response.headers.add("Access-Control-Allow-Credentials", "true")
+            response.headers['Access-Control-Allow-Origin'] = origin
+            response.headers['Access-Control-Allow-Credentials'] = 'true'
             return response, 200
 
+        logger.warning(f"❌ Credenciales incorrectas para usuario: {username}")
         return jsonify({"message": "Credenciales incorrectas"}), 401
 
     except Exception as e:
-        print(f"❌ Error inesperado en login: {e}")
+        logger.error(f"❌ Error inesperado en login: {e}")
         return jsonify({"message": "Error interno en el servidor"}), 500
+
 # -------------------------------------------------------------------------------
 # RUTA: OBTENER INFORMACIÓN DE SESIÓN ACTIVA
 # -------------------------------------------------------------------------------
 
-@cross_origin(origins=Config.CORS_ORIGINS, supports_credentials=True)
 @auth_bp.route('/session-info', methods=['GET', 'OPTIONS'])
 @jwt_required()
 def session_info():
+    origin = request.headers.get('Origin') or '*'
+    logger.info(f"🛡 Origin recibido en session-info: {origin}")
+
     if request.method == 'OPTIONS':
-        return '', 204
+        response = make_response('', 204)
+        response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        return response
 
     try:
         current_user_id = get_jwt_identity()
@@ -89,16 +94,18 @@ def session_info():
             logger.warning(f"⚠️ Usuario no encontrado para ID: {current_user_id}")
             return jsonify({"message": "Usuario no encontrado"}), 404
 
-        return jsonify({
+        response = jsonify({
             "user": {
                 "id": user.id,
                 "username": user.username,
                 "rol": user.rol,
                 "id_sucursal": user.id_sucursal
             }
-        }), 200
+        })
+        response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        return response, 200
 
     except Exception as e:
         logger.error(f"❌ Error inesperado en session-info: {e}")
         return jsonify({"message": "Error en sesión"}), 500
-
