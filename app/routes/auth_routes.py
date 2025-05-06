@@ -73,15 +73,12 @@ def login():
                     }
                 }
 
-                response = Response(
-                    json.dumps(response_body),
-                    status=200,
-                    mimetype='application/json'
-                )
+                response = jsonify(response_body)
                 response.headers['Access-Control-Allow-Origin'] = origin
                 response.headers['Access-Control-Allow-Credentials'] = 'true'
                 logger.info("📤 Login exitoso enviado al frontend")
-                return response
+                return response, 200
+
             else:
                 logger.warning("❌ Contraseña incorrecta")
         else:
