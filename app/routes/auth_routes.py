@@ -39,43 +39,53 @@ def login():
 
     try:
         data = request.get_json(force=True) or {}
+        logger.info(f"📩 Payload recibido: {data}")
+
         username = data.get('username', '').strip().lower()
         password = data.get('password', '')
-
-        logger.info(f"🧪 Intentando login con: {username} / {password}")
+        logger.info(f"🧪 Intentando login con username: '{username}' y password: '{password}'")
 
         if not username or not password:
+            logger.warning("⚠️ Faltan username o password en el payload")
             return jsonify({"message": "Usuario y contraseña son obligatorios"}), 400
 
         user = UserORM.get_by_username(username)
-        logger.info(f"🧾 Usuario encontrado: {user}")
-        if user and user.verify_password(password):
-            logger.info(f"✅ Contraseña verificada para usuario: {username}")
+        logger.info(f"🔎 Resultado búsqueda usuario: {user}")
 
-            token = create_access_token(
-                identity=str(user.id),
-                expires_delta=timedelta(hours=1)
-            )
+        if user:
+            if user.verify_password(password):
+                logger.info("✅ Contraseña verificada correctamente")
 
-            response_body = {
-                "message": "Login exitoso",
-                "token": token,
-                "user": {
-                    "id": user.id,
-                    "username": user.username,
-                    "rol": user.rol,
-                    "sucursal_id": user.sucursal_id
+                token = create_access_token(
+                    identity=str(user.id),
+                    expires_delta=timedelta(hours=1)
+                )
+                logger.info(f"🪙 Token generado: {token[:30]}...")
+
+                response_body = {
+                    "message": "Login exitoso",
+                    "token": token,
+                    "user": {
+                        "id": user.id,
+                        "username": user.username,
+                        "rol": user.rol,
+                        "sucursal_id": user.sucursal_id
+                    }
                 }
-            }
 
-            response = Response(
-                json.dumps(response_body),
-                status=200,
-                mimetype='application/json'
-            )
-            response.headers['Access-Control-Allow-Origin'] = origin
-            response.headers['Access-Control-Allow-Credentials'] = 'true'
-            return response
+                response = Response(
+                    json.dumps(response_body),
+                    status=200,
+                    mimetype='application/json'
+                )
+                response.headers['Access-Control-Allow-Origin'] = origin
+                response.headers['Access-Control-Allow-Credentials'] = 'true'
+                logger.info("📤 Login exitoso enviado al frontend")
+                return response
+            else:
+                logger.warning("❌ Contraseña incorrecta")
+        else:
+            logger.warning("❌ Usuario no encontrado")
 
         return jsonify({"message": "Credenciales incorrectas"}), 401
 

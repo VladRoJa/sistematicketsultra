@@ -17,12 +17,26 @@ export class AuthService {
   constructor(private http: HttpClient, private router: Router, private noAuthHttp: NoAuthHttpClient) { }
 
   login(username: string, password: string): Observable<any> {
+    console.log("🚀 Enviando login con credenciales:");
+    console.log("👤 Usuario:", username);
+    console.log("🔑 Contraseña:", password);
+  
     return this.http.post<any>(
       `${this.apiUrl}/login`,
       { username, password },
       { withCredentials: true }
+    ).pipe(
+      tap({
+        next: (response) => {
+          console.log("✅ Respuesta del backend:", response);
+        },
+        error: (error) => {
+          console.error("❌ Error recibido del backend:", error);
+        }
+      })
     );
   }
+  
 
   logout() {
     console.log("🚪 Cerrando sesión...");

@@ -27,14 +27,26 @@ class UserORM(db.Model):
 
     def verify_password(self, password_input):
         """Verifica si la contraseña ingresada es correcta."""
+        print(f"🔐 Verificando contraseña para usuario: {self.username}")
+        print(f"📦 Contraseña almacenada: {self.password}")
+        print(f"🧾 Contraseña ingresada: {password_input}")
+
         if self.password.startswith("$2b$") or self.password.startswith("$pbkdf2$"):
-            return check_password_hash(self.password, password_input)
-        return self.password == password_input
+            print("🔍 Usando check_password_hash")
+            resultado = check_password_hash(self.password, password_input)
+            print(f"✅ Resultado hash: {resultado}")
+            return resultado
+
+        resultado = self.password == password_input
+        print(f"🔓 Comparación directa (texto plano): {resultado}")
+        return resultado
 
     @classmethod
     def get_by_username(cls, username):
-        """Obtiene un usuario por su username (lowercase)."""
-        return cls.query.filter(db.func.lower(cls.username) == db.func.lower(username)).first()
+        user = cls.query.filter(db.func.lower(cls.username) == db.func.lower(username)).first()
+        print(f"🔍 get_by_username({username}) → {user}")
+        return user
+
 
     @classmethod
     def get_by_id(cls, user_id):
