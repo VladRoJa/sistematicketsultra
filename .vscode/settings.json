@@ -7,6 +7,22 @@
     },
     "scss.lint.unknownAtRules": "ignore",
 
-  "tailwindCSS.lint.invalidConfigPath": "ignore"
+  "tailwindCSS.lint.invalidConfigPath": "ignore",
+  "sqltools.connections": [
+    {
+      "mysqlOptions": {
+        "authProtocol": "default",
+        "enableSsl": "Disabled"
+      },
+      "previewLimit": 50,
+      "server": "ballast.proxy.rlwy.net",
+      "port": 54056,
+      "driver": "MySQL",
+      "name": "Railway DB",
+      "database": "railway",
+      "username": "root",
+      "password": "nhscTBldJrSjAhvVvudBBpnhBwCPIXsS"
+    }
+  ]
   }
   

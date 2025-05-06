@@ -12,13 +12,13 @@ import { environment } from '../../environments/environment';
   providedIn: 'root'
 })
 export class AuthService {
-  private apiUrl = `${environment.apiUrl}/auth`;
+  private apiUrl = `${environment.apiUrl}/api/auth`;
 
   constructor(private http: HttpClient, private router: Router, private noAuthHttp: NoAuthHttpClient) { }
 
   login(username: string, password: string): Observable<any> {
     return this.http.post<any>(
-      `${environment.apiUrl}/auth/login`,
+      `${this.apiUrl}/login`,
       { username, password },
       { withCredentials: true }
     );
