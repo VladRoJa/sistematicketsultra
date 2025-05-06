@@ -48,6 +48,7 @@ def login():
             return jsonify({"message": "Usuario y contraseña son obligatorios"}), 400
 
         user = UserORM.get_by_username(username)
+        logger.info(f"🧾 Usuario encontrado: {user}")
         if user and user.verify_password(password):
             logger.info(f"✅ Contraseña verificada para usuario: {username}")
 
