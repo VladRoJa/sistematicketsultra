@@ -17,10 +17,10 @@ export class AuthService {
   constructor(private http: HttpClient, private router: Router, private noAuthHttp: NoAuthHttpClient) { }
 
   login(username: string, password: string): Observable<any> {
-    return this.noAuthHttp.post<any>(
+    return this.http.post<any>(
       `${environment.apiUrl}/auth/login`,
       { username, password },
-      { withCredentials: true } 
+      { withCredentials: true }
     );
   }
 
