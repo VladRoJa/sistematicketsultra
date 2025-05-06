@@ -5,7 +5,7 @@ from app.extensions import db
 from app.models.user_model import UserORM
 from werkzeug.security import generate_password_hash
 
-def crear_usuario_admin(username, password, id_sucursal=1000, department_id=1):
+def crear_usuario_admin(username, password, sucursal_id=1000, department_id=1):
     app = create_app()
     with app.app_context():
         # Verificar si el usuario ya existe
@@ -20,7 +20,7 @@ def crear_usuario_admin(username, password, id_sucursal=1000, department_id=1):
             username=username,
             password=password_hash,
             rol='ADMINISTRADOR',
-            id_sucursal=id_sucursal,
+            sucursal_id=sucursal_id,
             department_id=department_id
         )
 

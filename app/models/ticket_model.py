@@ -17,7 +17,7 @@ class Ticket(db.Model):
     descripcion = db.Column(db.Text, nullable=False)
     username = db.Column(db.String(50), db.ForeignKey('users.username'), nullable=False)
     asignado_a = db.Column(db.String(50), db.ForeignKey('users.username'), nullable=True)
-    id_sucursal = db.Column(db.Integer, db.ForeignKey('sucursales.id_sucursal'), nullable=False)
+    sucursal_id = db.Column(db.Integer, db.ForeignKey('sucursales.sucursal_id'), nullable=False)
     estado = db.Column(db.Enum('abierto', 'en progreso', 'finalizado'), default='abierto', nullable=False)
     fecha_creacion = db.Column(db.DateTime, default=db.func.now(), nullable=False)
     fecha_finalizado = db.Column(db.DateTime)
@@ -37,7 +37,7 @@ class Ticket(db.Model):
 
     # ─── Relaciones ─────────────────────────────────────────
     usuario = db.relationship('UserORM', foreign_keys='Ticket.username')
-    sucursal = db.relationship('Sucursal', backref='tickets', foreign_keys='Ticket.id_sucursal')
+    sucursal = db.relationship('Sucursal', backref='tickets', foreign_keys='Ticket.sucursal_id')
 
     # ─────────────────────────────────────────────────────────────
     # MÉTODOS
@@ -50,7 +50,7 @@ class Ticket(db.Model):
             'username': self.username,
             'estado': self.estado,
             'fecha_creacion': self.fecha_creacion.strftime('%Y-%m-%d %H:%M:%S') if self.fecha_creacion else "N/A",
-            'id_sucursal': self.id_sucursal,
+            'sucursal_id': self.sucursal_id,
             'departamento_id': self.departamento_id,
             'departamento_nombre': self.departamento.nombre if self.departamento else "N/A",
 
@@ -74,12 +74,12 @@ class Ticket(db.Model):
 
 
     @classmethod
-    def create_ticket(cls, descripcion, username, id_sucursal, departamento_id, criticidad, categoria, subcategoria=None, subsubcategoria=None, aparato_id=None, problema_detectado=None, necesita_refaccion=False, descripcion_refaccion=None):
+    def create_ticket(cls, descripcion, username, sucursal_id, departamento_id, criticidad, categoria, subcategoria=None, subsubcategoria=None, aparato_id=None, problema_detectado=None, necesita_refaccion=False, descripcion_refaccion=None):
         """Crea y guarda un nuevo ticket."""
         ticket = cls(
             descripcion=descripcion,
             username=username,
-            id_sucursal=id_sucursal,
+            sucursal_id=sucursal_id,
             departamento_id=departamento_id,
             criticidad=criticidad,
             categoria=categoria,

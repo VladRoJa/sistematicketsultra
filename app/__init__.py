@@ -3,6 +3,9 @@
 from flask import Flask
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
+from dotenv import load_dotenv
+
+load_dotenv()
 from config import Config
 from app.extensions import db, migrate
 from app.routes import auth_bp, ticket_bp, main_bp, aparatos_bp
@@ -13,6 +16,7 @@ from app.routes.reportes import reportes_bp
 from app.routes.sucursales import sucursales_bp
 from app.routes.importar_inventario import bp_importar
 from config import Config
+
 
 def create_app():
     """Inicializa la aplicación principal Flask."""

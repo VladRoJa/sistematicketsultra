@@ -9,7 +9,7 @@ from app.extensions import db
 class Sucursal(db.Model):
     __tablename__ = 'sucursales'
 
-    id_sucursal = db.Column(db.Integer, primary_key=True)
+    sucursal_id = db.Column(db.Integer, primary_key=True)
     serie = db.Column(db.String(10), nullable=False)
     sucursal = db.Column(db.String(100), nullable=False)
     estado = db.Column(db.String(100), nullable=False)

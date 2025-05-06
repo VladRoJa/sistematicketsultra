@@ -31,7 +31,7 @@ class TicketController:
             nuevo_ticket = Ticket.create_ticket(
                 descripcion=descripcion,
                 username=user.username,
-                id_sucursal=user.id_sucursal,
+                sucursal_idl=user.sucursal_id,
                 departamento_id=data.get('departamento_id', 1),
                 criticidad=data.get('criticidad', 1),
                 categoria=categoria,
@@ -68,7 +68,7 @@ class TicketController:
             per_page = request.args.get('per_page', default=15, type=int)
             offset = (page - 1) * per_page
 
-            query = Ticket.query.filter(Ticket.id_sucursal == user.id_sucursal)
+            query = Ticket.query.filter(Ticket.sucursal_id == user.sucursal_id)
 
             if estado:
                 query = query.filter(Ticket.estado == estado)

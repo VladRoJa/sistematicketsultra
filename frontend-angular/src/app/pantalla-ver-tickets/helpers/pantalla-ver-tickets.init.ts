@@ -19,7 +19,7 @@ export async function obtenerUsuarioAutenticado(component: PantallaVerTicketsCom
     const data = await component.http.get<{ user: any }>(`${environment.apiUrl}/auth/session-info`, { headers }).toPromise();
     if (data?.user) {
       component.user = data.user;
-      component.usuarioEsAdmin = (component.user.id_sucursal === 1000);
+      component.usuarioEsAdmin = (component.user.sucursal_id === 1000);
       component.changeDetectorRef.detectChanges(); // 👈 OBLIGA a que se re-renderice el HTML
     }
   } catch (error) {

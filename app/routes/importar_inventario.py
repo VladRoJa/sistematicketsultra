@@ -85,7 +85,7 @@ def importar_archivo():
             # Insertar inventario
             inventario = InventarioSucursal(
                 producto_id=producto.id,
-                sucursal_id=sucursal.id_sucursal,
+                sucursal_id=sucursal.sucursal_id,
                 stock=float(fila.get('stock_actual') or 0)
             )
             db.session.add(inventario)

@@ -6,7 +6,7 @@ from app.models.user_model import UserORM
 from werkzeug.security import generate_password_hash
 import getpass
 
-def crear_usuario_admin(username, password, id_sucursal=1000, department_id=1):
+def crear_usuario_admin(username, password, sucursal_id=1000, department_id=1):
     app = create_app()
     with app.app_context():
         if UserORM.query.filter_by(username=username).first():
@@ -19,7 +19,7 @@ def crear_usuario_admin(username, password, id_sucursal=1000, department_id=1):
             username=username,
             password=password_hash,
             rol='ADMINISTRADOR',
-            id_sucursal=id_sucursal,
+            sucursal_id=sucursal_id,
             department_id=department_id
         )
 
@@ -32,13 +32,13 @@ if __name__ == "__main__":
 
     username = input("👤 Usuario: ").strip()
     password = getpass.getpass("🔒 Contraseña: ").strip()
-    id_sucursal_input = input("🏢 ID de Sucursal (default 1000): ").strip()
+    sucursal_id_input = input("🏢 ID de Sucursal (default 1000): ").strip()
     department_id_input = input("🏢 ID de Departamento (default 1): ").strip()
 
     if not username or not password:
         print("⚠️ Debes ingresar un usuario y una contraseña válidos.")
     else:
-        id_sucursal = int(id_sucursal_input) if id_sucursal_input else 1000
+        sucursal_id = int(sucursal_id_input) if sucursal_id_input else 1000
         department_id = int(department_id_input) if department_id_input else 1
 
-        crear_usuario_admin(username, password, id_sucursal, department_id)
+        crear_usuario_admin(username, password, sucursal_id, department_id)

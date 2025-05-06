@@ -33,7 +33,7 @@ class InventarioSucursal(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     producto_id = db.Column(db.Integer, db.ForeignKey('productos.id'), nullable=False)
-    sucursal_id = db.Column(db.Integer, db.ForeignKey('sucursales.id_sucursal'), nullable=False)
+    sucursal_id = db.Column(db.Integer, db.ForeignKey('sucursales.sucursal_id'), nullable=False)
     stock = db.Column(db.Integer, default=0)
 
     # Relaciones
@@ -54,7 +54,7 @@ class MovimientoInventario(db.Model):
     tipo_movimiento = db.Column(db.Enum('entrada', 'salida'), nullable=False)
     fecha = db.Column(db.DateTime, server_default=db.func.now())
     usuario_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    sucursal_id = db.Column(db.Integer, db.ForeignKey('sucursales.id_sucursal'), nullable=False)
+    sucursal_id = db.Column(db.Integer, db.ForeignKey('sucursales.sucursal_id'), nullable=False)
     observaciones = db.Column(db.Text)
 
     # Relaciones

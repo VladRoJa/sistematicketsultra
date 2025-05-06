@@ -53,7 +53,7 @@ def create_ticket():
         nuevo_ticket = Ticket.create_ticket(
             descripcion=descripcion,
             username=user.username,
-            id_sucursal=user.id_sucursal,
+            sucursal_id=user.sucursal_id,
             departamento_id=departamento_id,
             criticidad=int(criticidad),
             categoria=categoria,
@@ -91,13 +91,13 @@ def get_tickets():
 
         query = Ticket.query
 
-        if 1 <= user.id_sucursal <= 22:
-            query = query.filter_by(id_sucursal=user.id_sucursal)
-        elif user.id_sucursal == 100:
+        if 1 <= user.sucursal_id <= 22:
+            query = query.filter_by(sucursal_id=user.sucursal_id)
+        elif user.sucursal_id == 100:
             if user.department_id is None:
                 return jsonify({"mensaje": "Supervisor sin departamento asignado"}), 400
             query = query.filter_by(departamento_id=user.department_id)
-        elif user.id_sucursal != 1000:
+        elif user.sucursal_id != 1000:
             return jsonify({"mensaje": "Tipo de usuario no reconocido"}), 400
 
         total_tickets = query.count()
@@ -134,13 +134,13 @@ def list_tickets_with_filters():
 
         query = Ticket.query
 
-        if 1 <= user.id_sucursal <= 22:
-            query = query.filter_by(id_sucursal=user.id_sucursal)
-        elif user.id_sucursal == 100:
+        if 1 <= user.sucursal_id <= 22:
+            query = query.filter_by(sucursal_id=user.sucursal_id)
+        elif user.sucursal_id == 100:
             if not user.department_id:
                 return jsonify({"mensaje": "Supervisor sin departamento asignado"}), 400
             query = query.filter_by(departamento_id=user.department_id)
-        elif user.id_sucursal != 1000:
+        elif user.sucursal_id != 1000:
             return jsonify({"mensaje": "Tipo de usuario no reconocido"}), 400
 
         if estado:
@@ -265,13 +265,13 @@ def export_excel():
         query = Ticket.query
 
         # 🔐 Filtro por rol
-        if 1 <= user.id_sucursal <= 22:
-            query = query.filter_by(id_sucursal=user.id_sucursal)
-        elif user.id_sucursal == 100:
+        if 1 <= user.sucursal_id <= 22:
+            query = query.filter_by(sucursal_id=user.sucursal_id)
+        elif user.sucursal_id == 100:
             if not user.department_id:
                 return jsonify({"mensaje": "Supervisor sin departamento asignado"}), 400
             query = query.filter_by(departamento_id=user.department_id)
-        elif user.id_sucursal != 1000:
+        elif user.sucursal_id != 1000:
             return jsonify({"mensaje": "Tipo de usuario no reconocido"}), 400
 
         # 🧠 Aplicar MULTI-FILTROS

@@ -92,7 +92,7 @@ export class DialogoRegistrarMovimientoComponent {
   
     const movimientoAEnviar = {
       ...this.nuevoMovimiento,
-      sucursal_id: user.id_sucursal,
+      sucursal_id: user.sucursal_id,
       usuario_id: user.id
     };
   

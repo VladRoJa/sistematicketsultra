@@ -11,7 +11,7 @@ class AparatoGimnasio(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     codigo = db.Column(db.String(50), nullable=False)
-    id_sucursal = db.Column(db.Integer, db.ForeignKey('sucursales.id_sucursal'), nullable=False)
+    sucursal_id = db.Column(db.Integer, db.ForeignKey('sucursales.sucursal_id'), nullable=False)
     descripcion = db.Column(db.String(255))
     marca = db.Column(db.String(100))
     grupo_muscular = db.Column(db.String(100))
@@ -19,5 +19,5 @@ class AparatoGimnasio(db.Model):
     numero_equipo = db.Column(db.String(50))
 
     def __repr__(self):
-        return f"<AparatoGimnasio {self.codigo} - Sucursal {self.id_sucursal}>"
+        return f"<AparatoGimnasio {self.codigo} - Sucursal {self.sucursal_id}>"
 

@@ -24,21 +24,36 @@ def login():
     origin = request.headers.get('Origin') or '*'
     logger.info(f"🛡 Origin recibido en login: {origin}")
 
+    # 🟡 RESPONDER SOLICITUD OPTIONS PARA CORS
+    if request.method == 'OPTIONS':
+        response = make_response('', 204)
+        response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+        response.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        return response
 
     try:
         data = request.get_json()
         username = data.get('username', '').strip().lower()
         password = data.get('password', '')
 
+        logger.info(f"🧪 Intentando login con: {username} / {password}")
+
         if not username or not password:
             return jsonify({"message": "Usuario y contraseña son obligatorios"}), 400
 
         user = UserORM.get_by_username(username)
+        logger.info(f"🔍 Usuario encontrado: {user}")
+
         if user and user.verify_password(password):
+            logger.info(f"✅ Contraseña verificada para usuario: {username}")
+
             access_token = create_access_token(
                 identity=str(user.id),
                 expires_delta=timedelta(hours=1)
             )
+
             response = jsonify({
                 "message": "Login exitoso",
                 "token": access_token,
@@ -46,17 +61,19 @@ def login():
                     "id": user.id,
                     "username": user.username,
                     "rol": user.rol,
-                    "id_sucursal": user.id_sucursal
+                    "sucursal_id": user.sucursal_id
                 }
             })
 
+            response.headers['Access-Control-Allow-Origin'] = origin
+            response.headers['Access-Control-Allow-Credentials'] = 'true'
             return response, 200
 
         logger.warning(f"❌ Credenciales incorrectas para usuario: {username}")
         return jsonify({"message": "Credenciales incorrectas"}), 401
 
     except Exception as e:
-        logger.error(f"❌ Error inesperado en login: {e}")
+        logger.error(f"❌ Error inesperado en login: {e}", exc_info=True)  # <== añade exc_info para traza completa
         return jsonify({"message": "Error interno en el servidor"}), 500
 
 # -------------------------------------------------------------------------------
@@ -91,7 +108,7 @@ def session_info():
                 "id": user.id,
                 "username": user.username,
                 "rol": user.rol,
-                "id_sucursal": user.id_sucursal
+                "sucursal_id": user.sucursal_id
             }
         })
         response.headers['Access-Control-Allow-Origin'] = origin

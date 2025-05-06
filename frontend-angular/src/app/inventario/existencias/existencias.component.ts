@@ -30,7 +30,7 @@ export class ExistenciasComponent implements OnInit {
   sucursales: any[] = [];
   sucursalesFiltradas: any[] = [];
 
-  sucursalSeleccionada: number | 'global' = this.user?.id_sucursal || 1;
+  sucursalSeleccionada: number | 'global' = this.user?.sucursal_id || 1;
   existencias: any[] = [];
 
   ngOnInit(): void {

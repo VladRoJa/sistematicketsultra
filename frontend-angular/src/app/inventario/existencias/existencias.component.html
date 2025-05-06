@@ -8,7 +8,7 @@
       <mat-label>Seleccionar sucursal</mat-label>
       <mat-select [(ngModel)]="sucursalSeleccionada" (selectionChange)="cargarExistencias(sucursalSeleccionada)">
         <mat-option [value]="'global'">Global</mat-option>
-        <mat-option *ngFor="let s of sucursalesFiltradas" [value]="s.id_sucursal">
+        <mat-option *ngFor="let s of sucursalesFiltradas" [value]="s.sucursal_id">
           {{ s.sucursal }}
         </mat-option>        
       </mat-select>

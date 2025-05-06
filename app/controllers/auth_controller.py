@@ -33,7 +33,7 @@ class AuthController:
                         'id': user.id,
                         'username': user.username,
                         'rol': user.rol,
-                        'id_sucursal': user.id_sucursal
+                        'sucursal_id': user.sucursal_id
                     }
                 }), 200
 

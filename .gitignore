@@ -1,2 +1,4 @@
 node_modules/
 .qodo
+.env.local
+.env.prod

@@ -15,7 +15,7 @@ class UserORM(db.Model):
     username = db.Column(db.String(100), nullable=False, unique=True)
     password = db.Column(db.String(255), nullable=False)
     rol = db.Column(db.String(50), default="usuario", nullable=False)
-    id_sucursal = db.Column(db.Integer, db.ForeignKey('sucursales.id_sucursal'), nullable=False)
+    sucursal_id = db.Column(db.Integer, db.ForeignKey('sucursales.sucursal_id'), nullable=False)
     department_id = db.Column(db.Integer, nullable=False)
 
     # ─── Relaciones ─────────────────────────────────────────

@@ -95,7 +95,7 @@ export class MovimientosComponent implements OnInit {
     if (!token) return alert('No autorizado');
 
     const user = JSON.parse(localStorage.getItem('user') || '{}');
-    this.nuevoMovimiento.sucursal_id = user.id_sucursal;
+    this.nuevoMovimiento.sucursal_id = user.sucursal_id;
     this.nuevoMovimiento.usuario_id = user.id;
 
     this.http.post(`${environment.apiUrl}/inventario/movimientos`, this.nuevoMovimiento, {

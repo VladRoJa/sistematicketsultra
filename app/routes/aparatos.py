@@ -12,13 +12,13 @@ aparatos_bp = Blueprint('aparatos', __name__, url_prefix='/api/aparatos')
 # ------------------------------------------------------------------------------
 # RUTA: Obtener aparatos por sucursal
 # ------------------------------------------------------------------------------
-@aparatos_bp.route('/<int:id_sucursal>', methods=['GET'])
-def obtener_aparatos_por_sucursal(id_sucursal):
+@aparatos_bp.route('/<int:sucursal_id>', methods=['GET'])
+def obtener_aparatos_por_sucursal(sucursal_id):
     """
     🔹 Devuelve todos los aparatos registrados para una sucursal específica.
     """
     try:
-        aparatos = AparatoGimnasio.query.filter_by(id_sucursal=id_sucursal).all()
+        aparatos = AparatoGimnasio.query.filter_by(sucursal_id=sucursal_id).all()
 
         resultado = [
             {

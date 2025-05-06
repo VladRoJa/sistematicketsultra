@@ -19,7 +19,7 @@ def listar_sucursales():
     sucursales = Sucursal.query.all()
     resultado = [
         {
-            'id_sucursal': s.id_sucursal,
+            'sucursal_id': s.sucursal_id,
             'sucursal': s.sucursal
         } for s in sucursales
     ]

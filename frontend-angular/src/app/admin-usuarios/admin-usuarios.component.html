@@ -15,7 +15,7 @@
       <td>{{ usuario.id }}</td>
       <td>{{ usuario.username }}</td>
       <td>{{ usuario.email }}</td>
-      <td>{{ usuario.id_sucursal }}</td>
+      <td>{{ usuario.sucursal_id }}</td>
       <td>
         <select [(ngModel)]="usuario.rol">
           <option *ngFor="let rol of roles" [value]="rol">{{ rol }}</option>

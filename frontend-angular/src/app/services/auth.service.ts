@@ -45,7 +45,7 @@ setSession(token: string, user: any, redirigir: boolean = true) {
     if (!redirigir) return;
 
     // 📌 Redirigir según el área del usuario
-    const area = user.id_sucursal;
+    const area = user.sucursal_id;
     if (area === 1) this.router.navigate(['/tickets/mantenimiento']);
     else if (area === 2) this.router.navigate(['/tickets/finanzas']);
     else if (area === 3) this.router.navigate(['/tickets/marketing']);

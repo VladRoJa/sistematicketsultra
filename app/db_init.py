@@ -3,16 +3,21 @@
 import os
 import pymysql
 from flask import current_app
+from sqlalchemy.engine.url import make_url
 
 def inicializar_db_si_esta_vacia():
     try:
-        # Conexión a la base de datos (usa tus variables de entorno)
+        # Obtener la URI desde la configuración de Flask
+        uri = current_app.config["SQLALCHEMY_DATABASE_URI"]
+        db_url = make_url(uri)
+
+        # Conexión a la base de datos usando los datos parseados
         connection = pymysql.connect(
-            host=os.environ.get("DB_HOST"),
-            user=os.environ.get("DB_USER"),
-            password=os.environ.get("DB_PASSWORD"),
-            database=os.environ.get("DB_NAME"),
-            port=int(os.environ.get("DB_PORT", 3306)),
+            host=db_url.host,
+            user=db_url.username,
+            password=db_url.password,
+            database=db_url.database,
+            port=db_url.port or 3306,
             charset='utf8mb4',
             cursorclass=pymysql.cursors.DictCursor
         )
