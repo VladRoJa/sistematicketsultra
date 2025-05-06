@@ -5,12 +5,14 @@
 # BLUEPRINT: AUTENTICACIÓN (LOGIN, SESIÓN)
 # -------------------------------------------------------------------------------
 
-from flask import Blueprint, request, jsonify, make_response
+from flask import Blueprint, request, jsonify, make_response, Response
 from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_required
 from datetime import timedelta
 from app.models.user_model import UserORM
 import logging
 from config import Config
+import json
+
 
 # Configurar logging
 logger = logging.getLogger(__name__)
@@ -27,7 +29,6 @@ def login():
     origin = request.headers.get('Origin') or '*'
     logger.info(f"🛡 Origin recibido en login: {origin}")
 
-    # 🟡 RESPONDER SOLICITUD OPTIONS PARA CORS
     if request.method == 'OPTIONS':
         response = make_response('', 204)
         response.headers['Access-Control-Allow-Origin'] = origin
@@ -37,7 +38,7 @@ def login():
         return response
 
     try:
-        data = request.get_json()
+        data = request.get_json(force=True) or {}
         username = data.get('username', '').strip().lower()
         password = data.get('password', '')
 
@@ -47,33 +48,34 @@ def login():
             return jsonify({"message": "Usuario y contraseña son obligatorios"}), 400
 
         user = UserORM.get_by_username(username)
-        logger.info(f"🔍 Usuario encontrado: {user}")
-
         if user and user.verify_password(password):
             logger.info(f"✅ Contraseña verificada para usuario: {username}")
 
-            access_token = create_access_token(
+            token = create_access_token(
                 identity=str(user.id),
                 expires_delta=timedelta(hours=1)
             )
 
-            data = jsonify({
+            response_body = {
                 "message": "Login exitoso",
-                "token": access_token,
+                "token": token,
                 "user": {
                     "id": user.id,
                     "username": user.username,
                     "rol": user.rol,
                     "sucursal_id": user.sucursal_id
                 }
-            })
-            response = make_response(data, 200)
+            }
+
+            response = Response(
+                json.dumps(response_body),
+                status=200,
+                mimetype='application/json'
+            )
             response.headers['Access-Control-Allow-Origin'] = origin
             response.headers['Access-Control-Allow-Credentials'] = 'true'
-            response.headers['Content-Type'] = 'application/json'
             return response
 
-        logger.warning(f"❌ Credenciales incorrectas para usuario: {username}")
         return jsonify({"message": "Credenciales incorrectas"}), 401
 
     except Exception as e:
