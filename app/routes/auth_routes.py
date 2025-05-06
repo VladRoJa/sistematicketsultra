@@ -38,9 +38,8 @@ def login():
 
     try:
         data = request.get_json()
-        username = data.get('username') or data.get('usuario', '')
-        password = data.get('password') or data.get('contrasena', '')
-        username = username.strip().lower()
+        username = data.get('username', '').strip().lower()
+        password = data.get('password', '')
 
         logger.info(f"🧪 Intentando login con: {username} / {password}")
 
@@ -58,7 +57,7 @@ def login():
                 expires_delta=timedelta(hours=1)
             )
 
-            response = jsonify({
+            data = jsonify({
                 "message": "Login exitoso",
                 "token": access_token,
                 "user": {
@@ -68,10 +67,11 @@ def login():
                     "sucursal_id": user.sucursal_id
                 }
             })
-
+            response = make_response(data, 200)
             response.headers['Access-Control-Allow-Origin'] = origin
             response.headers['Access-Control-Allow-Credentials'] = 'true'
-            return response, 200
+            response.headers['Content-Type'] = 'application/json'
+            return response
 
         logger.warning(f"❌ Credenciales incorrectas para usuario: {username}")
         return jsonify({"message": "Credenciales incorrectas"}), 401
