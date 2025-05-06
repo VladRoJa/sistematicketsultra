@@ -6,27 +6,10 @@ import pymysql
 pymysql.install_as_MySQLdb()
 
 # -------------------------------------------------------------------------------
-# Detectar entorno automáticamente o pedirlo si se ejecuta localmente
+# Detectar entorno automáticamente (evita input en producción)
 # -------------------------------------------------------------------------------
-app_env = os.getenv("APP_ENV")
-
-# Si se ejecuta localmente (sin definir APP_ENV), preguntamos
-if not app_env and os.environ.get("WERKZEUG_RUN_MAIN") != "true":
-    print("🌐 ¿En qué entorno deseas trabajar?")
-    print("1. Local")
-    print("2. Producción (Railway)")
-    opcion = input("Selecciona 1 o 2: ").strip()
-
-    if opcion == "1":
-        app_env = "local"
-    elif opcion == "2":
-        app_env = "prod"
-    else:
-        print("⚠️ Opción inválida. Usando entorno local por defecto.")
-        app_env = "local"
-
-# Forzar variable para todo el proceso
-os.environ["APP_ENV"] = app_env or "local"
+app_env = os.getenv("APP_ENV", "prod" if os.getenv("RENDER") else "local")
+os.environ["APP_ENV"] = app_env
 env_file = ".env.local" if app_env == "local" else ".env.prod"
 load_dotenv(env_file)
 print(f"✅ Entorno '{app_env}' cargado desde {env_file}.")
