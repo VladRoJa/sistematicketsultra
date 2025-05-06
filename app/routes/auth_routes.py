@@ -1,3 +1,6 @@
+#C:\Users\Vladimir\Documents\Sistema tickets\app\routes\auth_routes.py
+
+
 # -------------------------------------------------------------------------------
 # BLUEPRINT: AUTENTICACIÓN (LOGIN, SESIÓN)
 # -------------------------------------------------------------------------------
@@ -35,8 +38,9 @@ def login():
 
     try:
         data = request.get_json()
-        username = data.get('username', '').strip().lower()
-        password = data.get('password', '')
+        username = data.get('username') or data.get('usuario', '')
+        password = data.get('password') or data.get('contrasena', '')
+        username = username.strip().lower()
 
         logger.info(f"🧪 Intentando login con: {username} / {password}")
 
@@ -73,7 +77,7 @@ def login():
         return jsonify({"message": "Credenciales incorrectas"}), 401
 
     except Exception as e:
-        logger.error(f"❌ Error inesperado en login: {e}", exc_info=True)  # <== añade exc_info para traza completa
+        logger.error(f"❌ Error inesperado en login: {e}", exc_info=True)
         return jsonify({"message": "Error interno en el servidor"}), 500
 
 # -------------------------------------------------------------------------------
