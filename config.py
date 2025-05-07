@@ -29,9 +29,9 @@ class Config:
 
     # CORS
     CORS_ORIGINS = [
-        "http://localhost:4200",
-        "https://ultragymsystem.web.app",
-        "https://ultragymsystem.onrender.com"
+        "http://localhost:4200",                            
+        "https://sistematicketsultra.onrender.com",          
+        "https://sistematicketsultra-backend.onrender.com"   
     ]
 
     # Sesiones
