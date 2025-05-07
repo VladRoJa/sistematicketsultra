@@ -2,6 +2,5 @@
 
 export const environment = {
   production: true,
-  apiUrl: 'https://sistematicketsultra.onrender.com/api'
-
+  apiUrl: 'https://sistematicketsultra-backend.onrender.com/api'
 };
