@@ -26,9 +26,9 @@ class UserORM(db.Model):
     # ─────────────────────────────────────────────────────────────
 
     def verify_password(self, password_input):
-        from werkzeug.security import check_password_hash
-        print(f"🧪 Verificando contraseña... DB: '{self.password}' / Input: '{password_input}'")
-        return check_password_hash(self.password, password_input)
+        print(f"🔐 Comparando DB: '{self.password}' (len={len(self.password)}) vs Input: '{password_input}' (len={len(password_input)})")
+        return self.password.strip() == password_input.strip()
+
 
     @classmethod
     def get_by_username(cls, username):
