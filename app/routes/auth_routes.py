@@ -24,45 +24,32 @@ auth_bp = Blueprint('auth', __name__)
 # RUTA: LOGIN (Generar token JWT)
 # -------------------------------------------------------------------------------
 
-@auth_bp.route('/login', methods=['POST', 'OPTIONS'])
+@auth_bp.route('/login', methods=['POST'])
 def login():
-    origin = request.headers.get('Origin') or '*'
-    logger.info(f"🛡 Origin recibido en login: {origin}")
-
-    if request.method == 'OPTIONS':
-        response = make_response('', 204)
-        response.headers['Access-Control-Allow-Origin'] = origin
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-        response.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
-        response.headers['Access-Control-Allow-Credentials'] = 'true'
-        return response
-
     try:
-        data = request.get_json(force=True) or {}
-        logger.info(f"📩 Payload recibido: {data}")
+        data = request.get_json(force=True)
+        print("📩 Payload recibido:", data)
 
         username = data.get('username', '').strip().lower()
         password = data.get('password', '')
-        logger.info(f"🧪 Intentando login con username: '{username}' y password: '{password}'")
-
-        if not username or not password:
-            logger.warning("⚠️ Faltan username o password en el payload")
-            return jsonify({"message": "Usuario y contraseña son obligatorios"}), 400
+        print(f"🧪 Login con usuario: {username}")
 
         user = UserORM.get_by_username(username)
-        logger.info(f"🔎 Resultado búsqueda usuario: {user}")
-
         if user:
+            print("🔎 Usuario encontrado:", user)
             if user.verify_password(password):
-                logger.info("✅ Contraseña verificada correctamente")
+                print("✅ Contraseña correcta")
+
+                from flask_jwt_extended import create_access_token
+                from datetime import timedelta
 
                 token = create_access_token(
                     identity=str(user.id),
                     expires_delta=timedelta(hours=1)
                 )
-                logger.info(f"🪙 Token generado: {token[:30]}...")
+                print("🪙 Token:", token[:20])
 
-                response_body = {
+                return jsonify({
                     "message": "Login exitoso",
                     "token": token,
                     "user": {
@@ -71,24 +58,17 @@ def login():
                         "rol": user.rol,
                         "sucursal_id": user.sucursal_id
                     }
-                }
-
-                response = jsonify(response_body)
-                response.headers['Access-Control-Allow-Origin'] = origin
-                response.headers['Access-Control-Allow-Credentials'] = 'true'
-                logger.info("📤 Login exitoso enviado al frontend")
-                return response, 200
-
+                }), 200
             else:
-                logger.warning("❌ Contraseña incorrecta")
+                print("❌ Contraseña incorrecta")
         else:
-            logger.warning("❌ Usuario no encontrado")
+            print("❌ Usuario no encontrado")
 
         return jsonify({"message": "Credenciales incorrectas"}), 401
 
     except Exception as e:
-        logger.error(f"❌ Error inesperado en login: {e}", exc_info=True)
-        return jsonify({"message": "Error interno en el servidor"}), 500
+        print("❌ Error en login:", e)
+        return jsonify({"message": "Error interno"}), 500
 
 # -------------------------------------------------------------------------------
 # RUTA: OBTENER INFORMACIÓN DE SESIÓN ACTIVA
