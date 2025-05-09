@@ -343,3 +343,4 @@ export function formatearFechaFinalizado(fecha: string): string {
 
   return `${dia}-${mes}-${año} ${hora}:${minuto}`;
 }
+

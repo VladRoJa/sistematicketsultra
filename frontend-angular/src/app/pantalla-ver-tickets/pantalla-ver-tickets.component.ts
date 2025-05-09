@@ -21,6 +21,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatNativeDateModule } from '@angular/material/core';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 
+
 // Helpers nuevos (todo modular)
 import * as TicketAcciones from './helpers/pantalla-ver-tickets.acciones';
 import * as TicketFiltros from './helpers/pantalla-ver-tickets.filtros';
@@ -28,9 +29,9 @@ import * as TicketInit from './helpers/pantalla-ver-tickets.init';
 import { cargarDepartamentos } from './helpers/pantalla-ver-tickets.departamentos';
 import { aplicarFiltroColumnaConReset, obtenerFiltrosActivos } from './helpers/pantalla-ver-tickets.filtros';
 import {filtrarOpcionesCategoria, filtrarOpcionesDescripcion, filtrarOpcionesUsuario, filtrarOpcionesEstado, filtrarOpcionesCriticidad, filtrarOpcionesDepto, filtrarOpcionesSubcategoria, filtrarOpcionesDetalle, toggleSeleccionarTodo, aplicarFiltroColumna, limpiarFiltroColumna} from './helpers/pantalla-ver-tickets.filtros';
-import { ordenar } from './helpers/pantalla-ver-tickets.init';
-import { aplicarFiltroPorRangoFechaCreacion, aplicarFiltroPorRangoFechaFinalizado, } from './helpers/pantalla-ver-tickets.fechas';
-
+import { ordenar } from './helpers/pantalla-ver-tickets.init'; 
+import { aplicarFiltroPorRangoFechaCreacion, aplicarFiltroPorRangoFechaFinalizado, aplicarFiltroPorRangoFechaEnProgreso  } from './helpers/pantalla-ver-tickets.fechas';
+import { MatDialog } from '@angular/material/dialog';
 
 
 // Interfaces
@@ -55,6 +56,8 @@ export interface Ticket {
     cambiadoPor: string;
     fechaCambio: string;
   }>;
+  fecha_en_progreso: string;
+
 }
 
 export interface ApiResponse {
@@ -101,6 +104,9 @@ export class PantallaVerTicketsComponent implements OnInit {
   user: any = null;
   usuarioEsAdmin: boolean = false;
   departamentos: any[] = [];
+  usuarioEsEditorCorporativo: boolean = false;
+
+
 
   // Filtros
   idsDisponibles: any[] = [];
@@ -152,13 +158,16 @@ export class PantallaVerTicketsComponent implements OnInit {
   filtroSubcategoriaTexto = '';
   filtroDetalleTexto = '';
 
-  fechaSolucionSeleccionada: Record<number, string> = {};
+  fechaSolucionSeleccionada: Record<number, Date | null> = {};
+
   editandoFechaSolucion: Record<number, boolean> = {};
   historialVisible: Record<number, boolean> = {};
   fechasSolucionDisponibles = new Set<string>();
 
   rangoFechaCreacionSeleccionado = { start: null as Date | null, end: null as Date | null };
   rangoFechaFinalSeleccionado = { start: null as Date | null, end: null as Date | null };
+  rangoFechaProgresoSeleccionado = { start: null as Date | null, end: null as Date | null };
+
 
   confirmacionVisible: boolean = false;
   mensajeConfirmacion: string = '';
@@ -169,13 +178,20 @@ export class PantallaVerTicketsComponent implements OnInit {
     public ticketService: TicketService,
     public departamentoService: DepartamentoService,
     public changeDetectorRef: ChangeDetectorRef,
-    public http: HttpClient
+    public http: HttpClient,
+    public dialog: MatDialog
   ) {}
 
   async ngOnInit() {
-    await TicketInit.obtenerUsuarioAutenticado(this);
-    TicketInit.cargarTickets(this);
-    cargarDepartamentos(this);
+    await TicketInit.obtenerUsuarioAutenticado(this); 
+    await cargarDepartamentos(this);                 
+    TicketInit.cargarTickets(this);   
+    
+  
+    console.log('Usuario:', this.user);
+    console.log('Editor corporativo:', this.usuarioEsEditorCorporativo);
+  
+    this.changeDetectorRef.detectChanges(); // <- 🔁 Forzar refresco de la vista
   }
 
   // Métodos públicos conectados a helpers
@@ -207,15 +223,12 @@ export class PantallaVerTicketsComponent implements OnInit {
   limpiarFiltroColumna(columna: string): void {limpiarFiltroColumna(this, columna);}
   aplicarFiltroColumna = (columna: string) => aplicarFiltroColumnaConReset(this, columna);
   onFechaChange(ticketId: number, fecha: Date | null): void {
-    if (fecha) {
-      const year = fecha.getFullYear();
-      const month = String(fecha.getMonth() + 1).padStart(2, '0');
-      const day = String(fecha.getDate()).padStart(2, '0');
-      this.fechaSolucionSeleccionada[ticketId] = `${year}-${month}-${day}`;
-    } else {
-      this.fechaSolucionSeleccionada[ticketId] = "";
-    }
+    this.fechaSolucionSeleccionada[ticketId] = fecha; // ✅ Guarda el objeto Date o null directamente
+  
+    // 🔄 Asegura que se actualice la vista
+    this.changeDetectorRef.detectChanges();
   }
+  
   aplicarFiltroPorRangoFechaCreacion = (rango: { start: Date | null, end: Date | null }) => {
     aplicarFiltroPorRangoFechaCreacion(this, rango);
     this.page = 1;
@@ -227,6 +240,7 @@ export class PantallaVerTicketsComponent implements OnInit {
   
   borrarFiltroRangoFechaCreacion = () => TicketFiltros.borrarFiltroRangoFechaCreacion(this);
   borrarFiltroRangoFechaFinalizado = () => TicketFiltros.borrarFiltroRangoFechaFinalizado(this);
+  borrarFiltroRangoFechaEnProgreso = () => TicketFiltros.borrarFiltroRangoFechaEnProgreso(this);
   aplicarFiltroPorRangoFechaFinalizado = (rango: { start: Date | null, end: Date | null }) => {
     aplicarFiltroPorRangoFechaFinalizado(this, rango);
     this.page = 1;
@@ -245,5 +259,13 @@ export class PantallaVerTicketsComponent implements OnInit {
   dateClassFinalizado = (d: Date): string => {
     const fecha = d.toISOString().split('T')[0];
     return this.diasConTicketsFinalizado.has(fecha) ? 'dia-con-ticket' : '';
+  };
+  aplicarFiltroPorRangoFechaEnProgreso = (rango: { start: Date | null, end: Date | null }) => {
+    aplicarFiltroPorRangoFechaEnProgreso(this, rango);
+    this.page = 1;
+    this.totalTickets = this.filteredTickets.length;
+    this.totalPagesCount = Math.ceil(this.totalTickets / this.itemsPerPage);
+    this.visibleTickets = this.filteredTickets.slice(0, this.itemsPerPage);
+    this.changeDetectorRef.detectChanges();
   };
 }

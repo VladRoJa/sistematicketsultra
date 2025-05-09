@@ -152,6 +152,41 @@ export function aplicarFiltroPorRangoFechaFinalizado(
   );
 }
 
+/** Aplicar filtro de rango de fechas de progreso */
+export function aplicarFiltroPorRangoFechaEnProgreso(
+  component: PantallaVerTicketsComponent,
+  rango: { start: Date | null; end: Date | null }
+): void {
+  if (!rango.start || !rango.end) {
+    component.filteredTickets = [...component.tickets];
+    return;
+  }
+
+  const fechaInicio = new Date(rango.start);
+  const fechaFin = new Date(rango.end);
+  fechaFin.setHours(23, 59, 59, 999);
+
+  component.filteredTickets = component.tickets.filter(ticket => {
+    if (!ticket.fecha_en_progreso) return false;
+    const fecha = new Date(ticket.fecha_en_progreso);
+    return fecha >= fechaInicio && fecha <= fechaFin;
+  });
+
+  actualizarFiltrosCruzados(
+    component.filteredTickets,
+    component.usuariosDisponibles,
+    component.estadosDisponibles,
+    component.categoriasDisponibles,
+    component.descripcionesDisponibles,
+    component.criticidadesDisponibles,
+    component.departamentosDisponibles,
+    component.subcategoriasDisponibles,
+    component.detallesDisponibles,
+    component
+  );
+}
+
+
 /** Sincronizar checkboxes disponibles después de filtrado cruzado */
 export function sincronizarCheckboxesConFiltrado(component: PantallaVerTicketsComponent): void {
   const sincronizar = (
@@ -176,3 +211,4 @@ export function sincronizarCheckboxesConFiltrado(component: PantallaVerTicketsCo
   sincronizar(component.detallesDisponibles, component.detallesFiltrados);
   sincronizar(component.idsDisponibles, component.idsDisponibles); // IDs no tienen búsqueda
 }
+

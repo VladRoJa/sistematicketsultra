@@ -10,10 +10,13 @@ from openpyxl.styles import Font, PatternFill
 from pytz import timezone, utc
 from sqlalchemy import or_
 from config import Config
-
+from sqlalchemy import or_
 from app.models.ticket_model import Ticket
 from app.models.user_model import UserORM
 from app.extensions import db
+from app.utils.error_handler import manejar_error
+
+
 
 # ─────────────────────────────────────────────────────────────
 # BLUEPRINT: TICKETS
@@ -71,8 +74,7 @@ def create_ticket():
         }), 201
 
     except Exception as e:
-        db.session.rollback()
-        return jsonify({"mensaje": f"Error interno: {str(e)}"}), 500
+        return manejar_error(e)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -86,12 +88,15 @@ def get_tickets():
         if not user:
             return jsonify({"mensaje": "Usuario no encontrado"}), 404
 
+        if user.sucursal_id is None:
+            return jsonify({"mensaje": "El usuario no tiene sucursal asignada"}), 400
+
         limit = request.args.get('limit', default=15, type=int)
         offset = request.args.get('offset', default=0, type=int)
 
         query = Ticket.query
 
-        if 1 <= user.sucursal_id <= 22:
+        if isinstance(user.sucursal_id, int) and 1 <= user.sucursal_id <= 22:
             query = query.filter_by(sucursal_id=user.sucursal_id)
         elif user.sucursal_id == 100:
             if user.department_id is None:
@@ -101,7 +106,7 @@ def get_tickets():
             return jsonify({"mensaje": "Tipo de usuario no reconocido"}), 400
 
         total_tickets = query.count()
-        tickets = query.order_by(Ticket.fecha_creacion.desc()).limit(limit).offset(offset).all()
+        tickets = query.order_by(Ticket.id.desc()).limit(limit).offset(offset).all()
 
         return jsonify({
             "mensaje": "Tickets cargados correctamente",
@@ -110,8 +115,7 @@ def get_tickets():
         }), 200
 
     except Exception as e:
-        db.session.rollback()
-        return jsonify({"mensaje": f"Error interno: {str(e)}"}), 500
+        return manejar_error(e)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -154,7 +158,8 @@ def list_tickets_with_filters():
         if not no_paging:
             query = query.limit(limit).offset(offset)
 
-        tickets = query.order_by(Ticket.fecha_creacion.desc()).all()
+        tickets = query.order_by(Ticket.id.desc()).all()
+
 
         return jsonify({
             "mensaje": "Tickets filtrados",
@@ -163,7 +168,7 @@ def list_tickets_with_filters():
         }), 200
 
     except Exception as e:
-        return jsonify({"mensaje": f"Error interno: {str(e)}"}), 500
+        return manejar_error(e)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -186,16 +191,22 @@ def update_ticket_status(id):
             return jsonify({"mensaje": "Estado es requerido"}), 400
 
         ticket.estado = estado
-        if estado == "finalizado":
-            ahora = datetime.now()
-            print(f"🕒 Hora guardada sin conversión (servidor local): {ahora.strftime('%Y-%m-%d %H:%M:%S')}")
-            ticket.fecha_finalizado = ahora.strftime('%Y-%m-%d %H:%M:%S')
 
+        ahora = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+        if estado == "finalizado":
+            print(f"🕒 Fecha finalizado: {ahora}")
+            ticket.fecha_finalizado = ahora
+
+        elif estado == "en progreso":
+            print(f"🕒 Fecha en progreso: {ahora}")
+            ticket.fecha_en_progreso = ahora
 
         if fecha_solucion:
             local = timezone('America/Tijuana')
             fecha_local = local.localize(datetime.strptime(fecha_solucion, '%Y-%m-%d %H:%M:%S'))
             ticket.fecha_solucion = fecha_local.astimezone(utc)
+
         ticket.historial_fechas = historial_fechas
 
         db.session.commit()
@@ -203,7 +214,7 @@ def update_ticket_status(id):
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"mensaje": f"Error interno: {str(e)}"}), 500
+        return manejar_error(e, "update_ticket_status")
 
 
 # ─────────────────────────────────────────────────────────────
@@ -229,14 +240,12 @@ def delete_ticket(id):
         return jsonify({"mensaje": f"Ticket {id} eliminado correctamente"}), 200
 
     except Exception as e:
-        db.session.rollback()
-        return jsonify({"mensaje": f"Error interno: {str(e)}"}), 500
+        return manejar_error(e)
 
 
 # ─────────────────────────────────────────────────────────────
 # RUTA: Exportar tickets a Excel
 # ─────────────────────────────────────────────────────────────
-from sqlalchemy import or_
 
 @ticket_bp.route('/export-excel', methods=['GET'])
 @jwt_required()
@@ -261,6 +270,8 @@ def export_excel():
         fecha_hasta = request.args.get('fecha_hasta')
         fecha_fin_desde = request.args.get('fecha_fin_desde')
         fecha_fin_hasta = request.args.get('fecha_fin_hasta')
+        fecha_prog_desde = request.args.get('fecha_prog_desde')
+        fecha_prog_hasta = request.args.get('fecha_prog_hasta')
 
         query = Ticket.query
 
@@ -278,7 +289,7 @@ def export_excel():
         if estados:
             query = query.filter(Ticket.estado.in_(estados))
         if departamentos:
-            query = query.filter(Ticket.departamento_id.in_([int(d) for d in departamentos]))    
+            query = query.filter(Ticket.departamento_id.in_([int(d) for d in departamentos]))
         if criticidades:
             query = query.filter(Ticket.criticidad.in_([int(c) for c in criticidades]))
         if usernames:
@@ -303,7 +314,7 @@ def export_excel():
         if descripciones:
             query = query.filter(filtrar_con_null(Ticket.descripcion, descripciones))
 
-        # 📅 Fechas
+        # 📅 Filtros por fecha
         if fecha_desde:
             query = query.filter(Ticket.fecha_creacion >= datetime.strptime(fecha_desde, '%Y-%m-%d'))
         if fecha_hasta:
@@ -312,11 +323,15 @@ def export_excel():
             query = query.filter(Ticket.fecha_finalizado >= datetime.strptime(fecha_fin_desde, '%Y-%m-%d'))
         if fecha_fin_hasta:
             query = query.filter(Ticket.fecha_finalizado <= datetime.strptime(fecha_fin_hasta, '%Y-%m-%d'))
+        if fecha_prog_desde:
+            query = query.filter(Ticket.fecha_en_progreso >= datetime.strptime(fecha_prog_desde, '%Y-%m-%d'))
+        if fecha_prog_hasta:
+            query = query.filter(Ticket.fecha_en_progreso <= datetime.strptime(fecha_prog_hasta, '%Y-%m-%d'))
 
         # 📋 Obtener tickets
         tickets = query.order_by(Ticket.fecha_creacion.desc()).all()
 
-        # 🧾 Crear Excel (idéntico a tu lógica actual)
+        # 🧾 Crear Excel
         wb = Workbook()
         ws = wb.active
         ws.title = "Tickets"
@@ -379,4 +394,4 @@ def export_excel():
         )
 
     except Exception as e:
-        return jsonify({"mensaje": f"Error interno: {str(e)}"}), 500
+        return manejar_error(e)

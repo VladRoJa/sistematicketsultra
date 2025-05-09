@@ -12,6 +12,7 @@ from app.models.user_model import UserORM
 import logging
 from config import Config
 import json
+from app.utils.error_handler import manejar_error
 
 
 # Configurar logging
@@ -67,8 +68,7 @@ def login():
         return jsonify({"message": "Credenciales incorrectas"}), 401
 
     except Exception as e:
-        print("❌ Error en login:", e)
-        return jsonify({"message": "Error interno"}), 500
+        return manejar_error(e, "login")
 
 # -------------------------------------------------------------------------------
 # RUTA: OBTENER INFORMACIÓN DE SESIÓN ACTIVA
@@ -110,5 +110,4 @@ def session_info():
         return response, 200
 
     except Exception as e:
-        logger.error(f"❌ Error inesperado en session-info: {e}")
-        return jsonify({"message": "Error en sesión"}), 500
+        return manejar_error(e, "session-info")

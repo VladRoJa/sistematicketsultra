@@ -1,6 +1,5 @@
 // C:\Users\Vladimir\Documents\Sistema tickets\frontend-angular\src\app\pantalla-ver-tickets\helpers\pantalla-ver-tickets.init.ts
 
-
 import { PantallaVerTicketsComponent, ApiResponse, Ticket } from '../pantalla-ver-tickets.component';
 import { HttpHeaders } from '@angular/common/http';
 import { formatearFecha, generarOpcionesDisponiblesDesdeTickets, regenerarFiltrosFiltradosDesdeTickets, formatearFechaFinalizado } from '../../utils/ticket-utils';
@@ -19,19 +18,28 @@ export async function obtenerUsuarioAutenticado(component: PantallaVerTicketsCom
     const data = await component.http.get<{ user: any }>(`${environment.apiUrl}/auth/session-info`, { headers }).toPromise();
     if (data?.user) {
       component.user = data.user;
+  
+      // 🟢 Admin global
       component.usuarioEsAdmin = (component.user.sucursal_id === 1000);
-      component.changeDetectorRef.detectChanges(); // 👈 OBLIGA a que se re-renderice el HTML
+  
+      // 🟦 Editor corporativo (intermedio, puede ver botones de acción)
+      component.usuarioEsEditorCorporativo = (
+        component.user.sucursal_id === 100 && 
+        component.user.rol !== 'ADMINISTRADOR'
+      );
+  
+      // ✅ Detecta cambios después de setear ambos
+      component.changeDetectorRef.detectChanges();
     }
   } catch (error) {
     console.error("❌ Error obteniendo usuario autenticado:", error);
   }
 }
-
+  
 
 export function cargarTickets(component: PantallaVerTicketsComponent): void {
   component.loading = true;
 
-  // Cargar 100 tickets máximo
   component.ticketService.getTickets(100, 0).subscribe({
     next: (data: ApiResponse) => {
       const ticketsProcesados = data.tickets.map(ticket => ({
@@ -41,12 +49,18 @@ export function cargarTickets(component: PantallaVerTicketsComponent): void {
         criticidad: ticket.criticidad || 1,
         estado: ticket.estado?.toLowerCase().trim(),
         departamento: component.departamentoService.obtenerNombrePorId(ticket.departamento_id),
-        fecha_creacion: ticket.fecha_creacion && ticket.fecha_creacion !== 'N/A' ? formatearFecha(ticket.fecha_creacion) : null,
-        fecha_finalizado: ticket.fecha_finalizado && ticket.fecha_finalizado !== 'N/A' ? formatearFechaFinalizado(ticket.fecha_finalizado) : null,
+        fecha_creacion: ticket.fecha_creacion !== 'N/A' ? ticket.fecha_creacion : null,
+        fecha_en_progreso: ticket.fecha_en_progreso && ticket.fecha_en_progreso !== 'N/A' ? ticket.fecha_en_progreso : null,
+
+        fecha_finalizado: ticket.fecha_finalizado !== 'N/A' ? ticket.fecha_finalizado : null,
         historial_fechas: typeof ticket.historial_fechas === "string"
           ? JSON.parse(ticket.historial_fechas)
           : ticket.historial_fechas || []
       }));
+
+      // 🔍 Logs de depuración
+      console.log("🔎 Tickets recibidos:", data.tickets.map(t => t.id));
+      console.log("📦 Tickets procesados:", ticketsProcesados.map(t => t.id));
 
       component.ticketsCompletos = [...ticketsProcesados];
       component.tickets = [...ticketsProcesados];
@@ -54,9 +68,16 @@ export function cargarTickets(component: PantallaVerTicketsComponent): void {
       component.page = 1;
       component.totalTickets = ticketsProcesados.length;
       component.totalPagesCount = Math.ceil(component.totalTickets / component.itemsPerPage);
+
+      console.log("📄 Página actual:", component.page);
+      console.log("👁 Antes de actualizarVisibleTickets - filtered:", component.filteredTickets.map(t => t.id));
+
       actualizarVisibleTickets(component);
 
-      // 🆕 Generar listas "Disponibles" desde los tickets
+      console.log("👁 Después de actualizarVisibleTickets - visible:", component.visibleTickets.map(t => t.id));
+
+      component.changeDetectorRef.detectChanges();
+
       component.categoriasDisponibles = generarOpcionesDisponiblesDesdeTickets(ticketsProcesados, 'categoria');
       component.descripcionesDisponibles = generarOpcionesDisponiblesDesdeTickets(ticketsProcesados, 'descripcion');
       component.usuariosDisponibles = generarOpcionesDisponiblesDesdeTickets(ticketsProcesados, 'username');
@@ -65,7 +86,6 @@ export function cargarTickets(component: PantallaVerTicketsComponent): void {
       component.departamentosDisponibles = generarOpcionesDisponiblesDesdeTickets(ticketsProcesados, 'departamento');
       component.subcategoriasDisponibles = generarOpcionesDisponiblesDesdeTickets(ticketsProcesados, 'subcategoria');
       component.detallesDisponibles = generarOpcionesDisponiblesDesdeTickets(ticketsProcesados, 'subsubcategoria');
-
 
       regenerarFiltrosFiltradosDesdeTickets(
         component.filteredTickets,
@@ -80,7 +100,6 @@ export function cargarTickets(component: PantallaVerTicketsComponent): void {
         component
       );
 
-      // 🔄 Asegurar que se muestren los checkboxes filtrables
       component.categoriasFiltradas = [...component.categoriasDisponibles];
       component.descripcionesFiltradas = [...component.descripcionesDisponibles];
       component.usuariosFiltrados = [...component.usuariosDisponibles];
@@ -98,6 +117,7 @@ export function cargarTickets(component: PantallaVerTicketsComponent): void {
     }
   });
 }
+
 
 export function actualizarVisibleTickets(component: PantallaVerTicketsComponent): void {
   const start = (component.page - 1) * component.itemsPerPage;
@@ -117,7 +137,6 @@ export function ordenar(columna: keyof Ticket, direccion: 'asc' | 'desc') {
 
   actualizarVisibleTickets(this);
 }
-
 
 export function actualizarDiasConTicketsFinalizado(component: PantallaVerTicketsComponent): void {
   const fechasSet = new Set<string>();
@@ -149,4 +168,5 @@ export function actualizarDiasConTicketsCreacion(component: PantallaVerTicketsCo
     }
   }
 }
+
 

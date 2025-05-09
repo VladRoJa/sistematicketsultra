@@ -9,6 +9,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.extensions import db
 from app.models.permiso_model import Permiso
 from app.models.departamento_model import Departamento
+from app.utils.error_handler import manejar_error
 
 permisos_bp = Blueprint('permisos', __name__, url_prefix='/api/permisos')
 
@@ -27,7 +28,6 @@ def asignar_permiso():
         if not user_id or not departamento_id:
             return jsonify({"error": "Faltan datos"}), 400
 
-        # Verificar si ya existe el permiso
         permiso_existente = Permiso.query.filter_by(user_id=user_id, departamento_id=departamento_id).first()
         if permiso_existente:
             return jsonify({"error": "El usuario ya tiene este permiso"}), 400
@@ -40,7 +40,8 @@ def asignar_permiso():
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"error": str(e)}), 500
+        return manejar_error(e, "Asignar permiso")
+
 
 # ------------------------------------------------------------------------------
 # RUTA: Listar permisos de un usuario específico
@@ -61,7 +62,8 @@ def listar_permisos(user_id):
         return jsonify({"permisos": resultado}), 200
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return manejar_error(e, "Listar permisos")
+
 
 # ------------------------------------------------------------------------------
 # RUTA: Eliminar un permiso específico
@@ -88,7 +90,8 @@ def eliminar_permiso():
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"error": str(e)}), 500
+        return manejar_error(e, "Eliminar permiso")
+
 
 # ------------------------------------------------------------------------------
 # RUTA: Listar todos los permisos de todos los usuarios
@@ -109,5 +112,6 @@ def listar_todos_los_permisos():
         return jsonify({"permisos": resultado}), 200
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return manejar_error(e, "Listar todos los permisos")
+
     

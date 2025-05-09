@@ -22,16 +22,15 @@ export function editarFechaSolucion(
   if (!component.fechaSolucionSeleccionada[ticket.id]) {
     component.fechaSolucionSeleccionada[ticket.id] = ticket.fecha_solucion
       ? formatearFechaParaInput(ticket.fecha_solucion)
-      : "";
+      : null;
   }
-
   cdr.detectChanges(); // 👈 fuerza actualización del DOM
 }
 
 /** Guardar la nueva fecha de solución en el ticket */
 export function guardarFechaSolucion(component: PantallaVerTicketsComponent, ticket: Ticket): void {
-  const nuevaFecha = component.fechaSolucionSeleccionada[ticket.id];
-  if (!nuevaFecha) return;
+  const fechaInput = component.fechaSolucionSeleccionada[ticket.id];
+  if (!fechaInput) return;
 
   const token = localStorage.getItem("token");
   if (!token) return;
@@ -40,7 +39,18 @@ export function guardarFechaSolucion(component: PantallaVerTicketsComponent, tic
     .set("Authorization", `Bearer ${token}`)
     .set("Content-Type", "application/json");
 
-  const fechaFormateada = `${nuevaFecha} 01:00:00`;
+  const fechaDate = new Date(fechaInput);
+
+  const fechaFormateada = new Intl.DateTimeFormat('sv-SE', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+    timeZone: 'America/Tijuana'
+  }).format(fechaDate).replace('T', ' ');  // resultado: '2025-05-09 00:00:00'
 
   const nuevoHistorial = [
     ...(ticket.historial_fechas || []),
@@ -54,7 +64,7 @@ export function guardarFechaSolucion(component: PantallaVerTicketsComponent, tic
   component.http.put(`${API_URL}/update/${ticket.id}`, {
     estado: ticket.estado,
     fecha_solucion: fechaFormateada,
-    historial_fechas: nuevoHistorial, // ← ya no es string
+    historial_fechas: nuevoHistorial,
   }, { headers }).subscribe({
     next: () => {
       ticket.fecha_solucion = fechaFormateada;
@@ -66,8 +76,8 @@ export function guardarFechaSolucion(component: PantallaVerTicketsComponent, tic
       console.error(`❌ Error al actualizar la fecha de solución del ticket #${ticket.id}:`, error);
     }
   });
-  
 }
+
 
 /** Cancelar el modo de edición de fecha de solución */
 export function cancelarEdicionFechaSolucion(component: PantallaVerTicketsComponent, ticket: Ticket): void {
@@ -75,10 +85,8 @@ export function cancelarEdicionFechaSolucion(component: PantallaVerTicketsCompon
 }
 
 /** Utilidad: Formatear fecha de base de datos para input tipo date */
-function formatearFechaParaInput(fechaDB: string): string {
-  const fecha = new Date(fechaDB);
-  const year = fecha.getFullYear();
-  const month = String(fecha.getMonth() + 1).padStart(2, '0');
-  const day = String(fecha.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+function formatearFechaParaInput(fechaDB: string): Date {
+  const [fecha] = fechaDB.split(' ');
+  const [year, month, day] = fecha.split('-').map(Number);
+  return new Date(year, month - 1, day, 12, 0, 0); // 🔁 Forzar hora 12:00 PM
 }

@@ -6,6 +6,8 @@
 
 from flask import Blueprint, jsonify
 from app.models.aparatos_model import AparatoGimnasio
+from app.utils.error_handler import manejar_error
+
 
 aparatos_bp = Blueprint('aparatos', __name__, url_prefix='/api/aparatos')
 
@@ -36,5 +38,4 @@ def obtener_aparatos_por_sucursal(sucursal_id):
         return jsonify(resultado), 200
 
     except Exception as e:
-        print(f"❌ Error al obtener aparatos: {e}")
-        return jsonify({"mensaje": "Error interno al consultar aparatos"}), 500
+        return manejar_error(e, "obtener_aparatos")

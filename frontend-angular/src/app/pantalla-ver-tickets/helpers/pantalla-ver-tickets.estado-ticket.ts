@@ -5,6 +5,7 @@
   import { cargarTickets } from './pantalla-ver-tickets.init';
   import { formatearFechaFinalizado } from 'src/app/utils/ticket-utils';
   import { environment } from 'src/environments/environment';
+  import { DialogoConfirmacionComponent } from 'src/app/shared/dialogo-confirmacion/dialogo-confirmacion.component';
 
   /**
    * Funciones para cambiar el estado de un ticket
@@ -18,12 +19,22 @@
     ticket: Ticket,
     nuevoEstado: "pendiente" | "en progreso" | "finalizado"
   ): void {
-    if (!component.usuarioEsAdmin) return;
-
-    component.mostrarConfirmacion(
-      `¿Estás seguro de cambiar el estado del ticket #${ticket.id} a ${nuevoEstado.toUpperCase()}?`,
-      () => actualizarEstadoEnServidor(component, ticket, nuevoEstado)
-    );
+    if (!component.usuarioEsAdmin && !component.usuarioEsEditorCorporativo) return;
+  
+    const dialogRef = (component as any).dialog.open(DialogoConfirmacionComponent, {
+      data: {
+        titulo: 'Cambiar Estado',
+        mensaje: `¿Estás seguro de cambiar el estado del ticket #${ticket.id} a ${nuevoEstado.toUpperCase()}?`,
+        textoConfirmar: 'Confirmar',
+        color: 'primary'
+      }
+    });
+  
+    dialogRef.afterClosed().subscribe((resultado: boolean) => {
+      if (resultado) {
+        actualizarEstadoEnServidor(component, ticket, nuevoEstado);
+      }
+    });
   }
 
   /** Finalizar directamente un ticket */
@@ -31,7 +42,7 @@
     component: PantallaVerTicketsComponent,
     ticket: Ticket
   ): void {
-    if (!component.usuarioEsAdmin) return;
+    if (!component.usuarioEsAdmin && !component.usuarioEsEditorCorporativo) return;
 
     component.mostrarConfirmacion(
       `¿Estás seguro de marcar como FINALIZADO el ticket #${ticket.id}?`,
@@ -48,38 +59,31 @@
   ): void {
     const token = localStorage.getItem('token');
     if (!token) return;
-
+  
     const headers = new HttpHeaders()
       .set('Authorization', `Bearer ${token}`)
       .set('Content-Type', 'application/json');
-
+  
     const updateData: any = { estado: nuevoEstado };
-
+    const fechaActual = new Date();
+    const fechaISO = fechaActual.toISOString(); // ✅ string
+  
     if (nuevoEstado === "finalizado") {
-      const fechaLocal = new Intl.DateTimeFormat('sv-SE', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-        timeZone: 'America/Tijuana'
-      }).format(new Date()).replace(' ', 'T') + ':00';
-      
-      updateData.fecha_finalizado = fechaLocal.replace('T', ' ');  }
-
+      updateData.fecha_finalizado = fechaISO;
+      ticket.fecha_finalizado = formatearFechaFinalizado(fechaISO);
+    }
+  
+    if (nuevoEstado === "en progreso") {
+      updateData.fecha_en_progreso = fechaISO;
+      ticket.fecha_en_progreso = formatearFechaFinalizado(fechaISO);
+    }
+  
     component.http.put<ApiResponse>(`${API_URL}/update/${ticket.id}`, updateData, { headers }).subscribe({
       next: () => {
-        if (recargar) {
-          cargarTickets(component);
-        } else {
-          ticket.estado = nuevoEstado;
-          if (nuevoEstado === "finalizado") {
-            ticket.fecha_finalizado = formatearFechaFinalizado(updateData.fecha_finalizado);
-          }
-          component.changeDetectorRef.detectChanges();
-        }
+        ticket.estado = nuevoEstado;
+        component.changeDetectorRef.detectChanges();
       },
       error: (error) => console.error(`❌ Error actualizando el ticket #${ticket.id}:`, error),
     });
   }
+  

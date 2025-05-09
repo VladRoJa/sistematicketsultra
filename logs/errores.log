@@ -1,0 +1,15 @@
+
+[2025-05-08 10:44:20] ERROR en update_ticket_status - /api/tickets/update/100
+Mensaje: unconverted data remains:  01:00:00
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\ticket_routes.py", line 207, in update_ticket_status
+    fecha_local = local.localize(datetime.strptime(fecha_solucion, '%Y-%m-%d %H:%M:%S'))
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\AppData\Local\Programs\Python\Python311\Lib\_strptime.py", line 568, in _strptime_datetime
+    tt, fraction, gmtoff_fraction = _strptime(data_string, format)
+                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\AppData\Local\Programs\Python\Python311\Lib\_strptime.py", line 352, in _strptime
+    raise ValueError("unconverted data remains: %s" %
+ValueError: unconverted data remains:  01:00:00
+

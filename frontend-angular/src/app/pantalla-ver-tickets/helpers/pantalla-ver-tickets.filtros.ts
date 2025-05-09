@@ -163,6 +163,12 @@ export function borrarFiltroRangoFechaFinalizado(component: PantallaVerTicketsCo
   component.filteredTickets = [...component.tickets];
 }
 
+/** Borrar filtro de rango de fecha en progreso */
+export function borrarFiltroRangoFechaEnProgreso(component: PantallaVerTicketsComponent): void {
+  component.rangoFechaProgresoSeleccionado = { start: null, end: null };
+  component.filteredTickets = [...component.tickets];
+}
+
 /** Aplicar todos los filtros activos en todas las columnas */
 export function aplicarFiltroColumna(component: PantallaVerTicketsComponent, columna: string): void {
   sincronizarCheckboxesConDisponibles(component);
@@ -309,14 +315,14 @@ export function aplicarFiltroColumnaConReset(component: PantallaVerTicketsCompon
 }
 
 
-/** Obtener filtros activos en formato para backend (solo uno por filtro) */
+/** Obtener filtros activos en formato para backend (solo uno por filtro) *//** Obtener filtros activos en formato para backend (acepta múltiples valores por filtro) */
 export function obtenerFiltrosActivosParaBackend(component: PantallaVerTicketsComponent): any {
   const filtros: any = {};
 
   const getSeleccionados = (lista: { valor: string, seleccionado: boolean }[]) =>
     lista.filter(item => item.seleccionado).map(item => item.valor);
 
-  // Filtros múltiples
+  // Filtros múltiples (mismo nombre que espera el backend)
   const estado = getSeleccionados(component.estadosFiltrados);
   const departamento_id = getSeleccionados(component.departamentosFiltrados);
   const criticidad = getSeleccionados(component.criticidadesFiltradas);
@@ -335,7 +341,7 @@ export function obtenerFiltrosActivosParaBackend(component: PantallaVerTicketsCo
   if (subsubcategoria.length) filtros.subsubcategoria = subsubcategoria;
   if (descripcion.length) filtros.descripcion = descripcion;
 
-  // Rango de fechas
+  // Fechas como strings en formato YYYY-MM-DD
   if (component.rangoFechaCreacionSeleccionado.start)
     filtros.fecha_desde = component.rangoFechaCreacionSeleccionado.start.toISOString().split("T")[0];
   if (component.rangoFechaCreacionSeleccionado.end)
@@ -344,6 +350,10 @@ export function obtenerFiltrosActivosParaBackend(component: PantallaVerTicketsCo
     filtros.fecha_fin_desde = component.rangoFechaFinalSeleccionado.start.toISOString().split("T")[0];
   if (component.rangoFechaFinalSeleccionado.end)
     filtros.fecha_fin_hasta = component.rangoFechaFinalSeleccionado.end.toISOString().split("T")[0];
+  if (component.rangoFechaProgresoSeleccionado.start)
+    filtros.fecha_prog_desde = component.rangoFechaProgresoSeleccionado.start.toISOString().split("T")[0];
+  if (component.rangoFechaProgresoSeleccionado.end)
+    filtros.fecha_prog_hasta = component.rangoFechaProgresoSeleccionado.end.toISOString().split("T")[0];
 
   return filtros;
 }

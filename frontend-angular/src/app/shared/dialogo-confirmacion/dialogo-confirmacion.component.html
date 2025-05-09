@@ -1,0 +1,15 @@
+<!-- C:\Users\Vladimir\Documents\Sistema tickets\frontend-angular\src\app\shared\dialogo-confirmacion\dialogo-confirmacion.component.html -->
+
+
+<h2 mat-dialog-title>{{ data.titulo }}</h2>
+<mat-dialog-content>
+  {{ data.mensaje }}
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+  <button mat-button (click)="cancelar()">
+    {{ data.textoCancelar || 'Cancelar' }}
+  </button>
+  <button mat-raised-button color="primary" (click)="confirmar()">
+    {{ data.textoAceptar || 'Aceptar' }}
+  </button>
+</mat-dialog-actions>

@@ -11,7 +11,6 @@ export {
   actualizarFiltrosCruzados,
   aplicarFiltroPorRangoFechaCreacion,
   aplicarFiltroPorRangoFechaFinalizado,
-  formatearFecha,
   formatearFechaCorta,
   parsearFechaDesdeTabla,
 } from './pantalla-ver-tickets.fechas';

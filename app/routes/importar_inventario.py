@@ -11,6 +11,7 @@ from app.extensions import db
 from app.models.inventario import Producto, InventarioSucursal
 from app.models.sucursal_model import Sucursal
 from datetime import datetime
+from app.utils.error_handler import manejar_error
 
 bp_importar = Blueprint('importar', __name__)
 
@@ -97,6 +98,5 @@ def importar_archivo():
 
     except Exception as e:
         db.session.rollback()
-        print(f"❌ Error al procesar archivo: {e}")
-        return jsonify({"error": f"Error al procesar archivo: {str(e)}"}), 500
+        return manejar_error(e, "procesar archivo")
     

@@ -9,6 +9,7 @@ from app.models.user_model import UserORM
 from app.models.sucursal_model import Sucursal
 from datetime import datetime
 from config import Config
+from app.utils.error_handler import manejar_error
 
 inventario_bp = Blueprint('inventario', __name__, url_prefix='/api/inventario')
 
@@ -59,20 +60,24 @@ def crear_producto():
 
     except Exception as e:
         db.session.rollback()
-        return error_response(f"Error interno: {str(e)}", 500)
+        return manejar_error(e, "crear_producto")
 
 # Obtener todos los productos
 @inventario_bp.route('/productos', methods=['GET'])
 @jwt_required()
 def obtener_productos():
-    productos = Producto.query.all()
-    data = [{
-        'id': p.id,
-        'nombre': p.nombre,
-        'unidad_medida': p.unidad_medida,
-        'categoria': p.categoria
-    } for p in productos]
-    return jsonify(data), 200
+    try:
+        productos = Producto.query.all()
+        data = [{
+            'id': p.id,
+            'nombre': p.nombre,
+            'unidad_medida': p.unidad_medida,
+            'categoria': p.categoria
+        } for p in productos]
+        return jsonify(data), 200
+
+    except Exception as e:
+        return manejar_error(e, "obtener_productos")
 
 # Registrar entrada/salida
 @inventario_bp.route('/movimientos', methods=['POST'])
@@ -136,153 +141,200 @@ def registrar_movimiento():
         return success_response('Movimiento registrado correctamente', {'movimiento_id': nuevo_movimiento.id})
 
     except Exception as e:
-        db.session.rollback()
-        return error_response(f"Error interno: {str(e)}", 500)
+        return manejar_error(e, "registrar_movimiento")
 
-# Consultar inventario por sucursal
+
 @inventario_bp.route('/sucursal/<int:sucursal_id>', methods=['GET'])
 @jwt_required()
 def obtener_inventario_por_sucursal(sucursal_id):
-    inventario = InventarioSucursal.query.filter_by(sucursal_id=sucursal_id).all()
-    resultado = []
+    try:
+        inventario = InventarioSucursal.query.filter_by(sucursal_id=sucursal_id).all()
+        resultado = []
 
-    for item in inventario:
-        producto = Producto.query.get(item.producto_id)
-        ultimo_mov = MovimientoInventario.query.join(DetalleMovimiento).filter(
-            DetalleMovimiento.producto_id == item.producto_id,
-            MovimientoInventario.sucursal_id == sucursal_id
-        ).order_by(MovimientoInventario.fecha.desc()).first()
+        for item in inventario:
+            producto = Producto.query.get(item.producto_id)
+            ultimo_mov = MovimientoInventario.query.join(DetalleMovimiento).filter(
+                DetalleMovimiento.producto_id == item.producto_id,
+                MovimientoInventario.sucursal_id == sucursal_id
+            ).order_by(MovimientoInventario.fecha.desc()).first()
 
-        resultado.append({
-            'producto_id': producto.id,
-            'nombre': producto.nombre,
-            'stock': item.stock,
-            'unidad_medida': producto.unidad_medida,
-            'ultimo_movimiento': ultimo_mov.fecha.strftime('%d/%m/%y %H:%M') if ultimo_mov else 'N/A'
-        })
+            resultado.append({
+                'producto_id': producto.id,
+                'nombre': producto.nombre,
+                'stock': item.stock,
+                'unidad_medida': producto.unidad_medida,
+                'ultimo_movimiento': ultimo_mov.fecha.strftime('%d/%m/%y %H:%M') if ultimo_mov else 'N/A'
+            })
 
-    return jsonify(resultado), 200
+        return jsonify(resultado), 200
 
+    except Exception as e:
+        return manejar_error(e, "obtener_inventario_por_sucursal")
+
+
+# ─────────────────────────────────────────────────────────────
 # Ver historial de movimientos
+# ─────────────────────────────────────────────────────────────
 @inventario_bp.route('/movimientos', methods=['GET'])
 @jwt_required()
 def historial_movimientos():
-    sucursal_id = request.args.get('sucursal_id', type=int)
-    tipo = request.args.get('tipo_movimiento')
+    try:
+        sucursal_id = request.args.get('sucursal_id', type=int)
+        tipo = request.args.get('tipo_movimiento')
 
-    query = MovimientoInventario.query
-    if sucursal_id:
-        query = query.filter_by(sucursal_id=sucursal_id)
-    if tipo:
-        query = query.filter_by(tipo_movimiento=tipo)
+        query = MovimientoInventario.query
+        if sucursal_id:
+            query = query.filter_by(sucursal_id=sucursal_id)
+        if tipo:
+            query = query.filter_by(tipo_movimiento=tipo)
 
-    movimientos = query.order_by(MovimientoInventario.fecha.desc()).all()
-    resultado = []
+        movimientos = query.order_by(MovimientoInventario.fecha.desc()).all()
+        resultado = []
 
-    for m in movimientos:
-        detalles = DetalleMovimiento.query.filter_by(movimiento_id=m.id).all()
-        productos = [{
-            'producto_id': d.producto_id,
-            'cantidad': d.cantidad,
-            'unidad_medida': d.unidad_medida
-        } for d in detalles]
+        for m in movimientos:
+            detalles = DetalleMovimiento.query.filter_by(movimiento_id=m.id).all()
+            productos = [{
+                'producto_id': d.producto_id,
+                'cantidad': d.cantidad,
+                'unidad_medida': d.unidad_medida
+            } for d in detalles]
 
-        sucursal = Sucursal.query.get(m.sucursal_id)
-        usuario = UserORM.query.get(m.usuario_id)
+            sucursal = Sucursal.query.get(m.sucursal_id)
+            usuario = UserORM.query.get(m.usuario_id)
 
-        resultado.append({
-            'movimiento_id': m.id,
-            'tipo': m.tipo_movimiento,
-            'fecha': m.fecha.strftime('%d/%m/%y %H:%M'),
-            'usuario_nombre': usuario.username if usuario else "Desconocido",
-            'sucursal_nombre': sucursal.sucursal if sucursal else "Desconocida",
-            'observaciones': m.observaciones,
-            'productos': productos
-        })
+            resultado.append({
+                'movimiento_id': m.id,
+                'tipo': m.tipo_movimiento,
+                'fecha': m.fecha.strftime('%d/%m/%y %H:%M'),
+                'usuario_nombre': usuario.username if usuario else "Desconocido",
+                'sucursal_nombre': sucursal.sucursal if sucursal else "Desconocida",
+                'observaciones': m.observaciones,
+                'productos': productos
+            })
 
-    return jsonify(resultado), 200
+        return jsonify(resultado), 200
 
+    except Exception as e:
+        return manejar_error(e, "historial_movimientos")
+
+
+# ─────────────────────────────────────────────────────────────
 # Editar producto
+# ─────────────────────────────────────────────────────────────
 @inventario_bp.route('/productos/<int:producto_id>', methods=['PUT'])
 @jwt_required()
 def editar_producto(producto_id):
-    producto = Producto.query.get(producto_id)
-    if not producto:
-        return error_response('Producto no encontrado', 404)
+    try:
+        producto = Producto.query.get(producto_id)
+        if not producto:
+            return error_response('Producto no encontrado', 404)
 
-    data = request.get_json()
-    nuevo_nombre = data.get('nombre')
+        data = request.get_json()
+        nuevo_nombre = data.get('nombre')
 
-    if not nuevo_nombre or not data.get('categoria'):
-        return error_response('Nombre y categoría son obligatorios')
+        if not nuevo_nombre or not data.get('categoria'):
+            return error_response('Nombre y categoría son obligatorios')
 
-    if Producto.query.filter(Producto.nombre == nuevo_nombre, Producto.id != producto_id).first():
-        return error_response('Ya existe otro producto con ese nombre')
+        if Producto.query.filter(Producto.nombre == nuevo_nombre, Producto.id != producto_id).first():
+            return error_response('Ya existe otro producto con ese nombre')
 
-    producto.nombre = nuevo_nombre
-    producto.descripcion = data.get('descripcion', producto.descripcion)
-    producto.unidad_medida = data.get('unidad_medida', producto.unidad_medida)
-    producto.categoria = data.get('categoria', producto.categoria)
-    producto.subcategoria = data.get('subcategoria', producto.subcategoria)
+        producto.nombre = nuevo_nombre
+        producto.descripcion = data.get('descripcion', producto.descripcion)
+        producto.unidad_medida = data.get('unidad_medida', producto.unidad_medida)
+        producto.categoria = data.get('categoria', producto.categoria)
+        producto.subcategoria = data.get('subcategoria', producto.subcategoria)
 
-    db.session.commit()
-    return success_response('Producto actualizado correctamente')
+        db.session.commit()
+        return success_response('Producto actualizado correctamente')
 
+    except Exception as e:
+        db.session.rollback()
+        return manejar_error(e, "editar_producto")
+
+
+# ─────────────────────────────────────────────────────────────
 # Eliminar producto
+# ─────────────────────────────────────────────────────────────
 @inventario_bp.route('/productos/<int:producto_id>', methods=['DELETE'])
 @jwt_required()
 def eliminar_producto(producto_id):
-    producto = Producto.query.get(producto_id)
-    if not producto:
-        return error_response('Producto no encontrado', 404)
+    try:
+        producto = Producto.query.get(producto_id)
+        if not producto:
+            return error_response('Producto no encontrado', 404)
 
-    if DetalleMovimiento.query.filter_by(producto_id=producto_id).first():
-        return error_response('No se puede eliminar: el producto tiene movimientos')
+        if DetalleMovimiento.query.filter_by(producto_id=producto_id).first():
+            return error_response('No se puede eliminar: el producto tiene movimientos')
 
-    db.session.delete(producto)
-    db.session.commit()
-    return success_response('Producto eliminado correctamente')
+        db.session.delete(producto)
+        db.session.commit()
+        return success_response('Producto eliminado correctamente')
 
+    except Exception as e:
+        db.session.rollback()
+        return manejar_error(e, "eliminar_producto")
+
+
+# ─────────────────────────────────────────────────────────────
 # Eliminar movimiento
+# ─────────────────────────────────────────────────────────────
 @inventario_bp.route('/movimientos/<int:movimiento_id>', methods=['DELETE'])
 @jwt_required()
 def eliminar_movimiento(movimiento_id):
-    movimiento = MovimientoInventario.query.get(movimiento_id)
-    if not movimiento:
-        return error_response('Movimiento no encontrado', 404)
+    try:
+        movimiento = MovimientoInventario.query.get(movimiento_id)
+        if not movimiento:
+            return error_response('Movimiento no encontrado', 404)
 
-    DetalleMovimiento.query.filter_by(movimiento_id=movimiento_id).delete()
-    db.session.delete(movimiento)
-    db.session.commit()
-    return success_response('Movimiento eliminado correctamente')
+        DetalleMovimiento.query.filter_by(movimiento_id=movimiento_id).delete()
+        db.session.delete(movimiento)
+        db.session.commit()
+        return success_response('Movimiento eliminado correctamente')
 
+    except Exception as e:
+        db.session.rollback()
+        return manejar_error(e, "eliminar_movimiento")
+
+
+# ─────────────────────────────────────────────────────────────
 # Ver existencias globales
+# ─────────────────────────────────────────────────────────────
 @inventario_bp.route('/existencias', methods=['GET'])
 @jwt_required()
 def ver_existencias():
-    inventario = InventarioSucursal.query.all()
-    data = []
+    try:
+        inventario = InventarioSucursal.query.all()
+        data = []
 
-    for item in inventario:
-        producto = Producto.query.get(item.producto_id)
-        sucursal = Sucursal.query.get(item.sucursal_id)
+        for item in inventario:
+            producto = Producto.query.get(item.producto_id)
+            sucursal = Sucursal.query.get(item.sucursal_id)
 
-        data.append({
-            'producto_id': item.producto_id,
-            'producto_nombre': producto.nombre if producto else 'Desconocido',
-            'sucursal_id': item.sucursal_id,
-            'sucursal_nombre': sucursal.sucursal if sucursal else 'Desconocida',
-            'stock': item.stock,
-            'unidad_medida': producto.unidad_medida if producto else ""
-        })
+            data.append({
+                'producto_id': item.producto_id,
+                'producto_nombre': producto.nombre if producto else 'Desconocido',
+                'sucursal_id': item.sucursal_id,
+                'sucursal_nombre': sucursal.sucursal if sucursal else 'Desconocida',
+                'stock': item.stock,
+                'unidad_medida': producto.unidad_medida if producto else ""
+            })
 
-    return jsonify(data), 200
+        return jsonify(data), 200
 
+    except Exception as e:
+        return manejar_error(e, "ver_existencias")
+
+
+# ─────────────────────────────────────────────────────────────
 # Listar todas las sucursales
+# ─────────────────────────────────────────────────────────────
 @inventario_bp.route('/sucursales', methods=['GET'])
 @jwt_required()
 def listar_sucursales():
-    sucursales = Sucursal.query.all()
-    data = [{'sucursal_id': s.sucursal_id, 'sucursal': s.sucursal} for s in sucursales]
-    return jsonify(data), 200
+    try:
+        sucursales = Sucursal.query.all()
+        data = [{'sucursal_id': s.sucursal_id, 'sucursal': s.sucursal} for s in sucursales]
+        return jsonify(data), 200
 
+    except Exception as e:
+        return manejar_error(e, "listar_sucursales")

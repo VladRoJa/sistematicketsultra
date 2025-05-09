@@ -37,38 +37,9 @@ export class LayoutComponent implements OnInit, AfterViewInit {
   submenuActivo: { [key: string]: string } = {};
   timeoutSubmenu: any;
   ocultarTimeout: any;
+  menuItems: any[] = [];
 
-  menuItems = [
-    {
-      label: 'Tickets',
-      path: '/main/ver-tickets',
-      submenu: [
-        { label: 'Ver Tickets', path: '/main/ver-tickets' },
-        { label: 'Crear Ticket', path: '/main/crear-ticket' }
-      ]
-    },
-    {
-      label: 'Inventario',
-      path: '/inventario/productos',
-      submenu: [
-        { label: 'Productos', path: '/inventario/productos' },
-        { label: 'Movimientos', path: '/inventario/movimientos' },
-        { label: 'Existencias', path: '/inventario/existencias' },
-        { label: 'Reportes', path: '/inventario/reportes' },
-        { label: 'Carga Masiva', path: '/carga-masiva' }
-      ]
-    },
-    {
-      label: 'Permisos',
-      path: '/admin-permisos',
-      submenu: []
-    },
-    {
-      label: 'Ajustes',
-      path: '/ajustes',
-      submenu: []
-    }
-  ];
+
 
   private apiUrl = `${environment.apiUrl}/tickets`;
 
@@ -81,7 +52,51 @@ export class LayoutComponent implements OnInit, AfterViewInit {
 
   ngOnInit(): void {
     this.verificarRolUsuario();
+  
+    this.menuItems = this.esAdmin
+      ? [
+          {
+            label: 'Tickets',
+            path: '/main/ver-tickets',
+            submenu: [
+              { label: 'Ver Tickets', path: '/main/ver-tickets' },
+              { label: 'Crear Ticket', path: '/main/crear-ticket' }
+            ]
+          },
+          {
+            label: 'Inventario',
+            path: '/inventario/productos',
+            submenu: [
+              { label: 'Productos', path: '/inventario/productos' },
+              { label: 'Movimientos', path: '/inventario/movimientos' },
+              { label: 'Existencias', path: '/inventario/existencias' },
+              { label: 'Reportes', path: '/inventario/reportes' },
+              { label: 'Carga Masiva', path: '/carga-masiva' }
+            ]
+          },
+          {
+            label: 'Permisos',
+            path: '/admin-permisos',
+            submenu: []
+          },
+          {
+            label: 'Ajustes',
+            path: '/ajustes',
+            submenu: []
+          }
+        ]
+      : [
+          {
+            label: 'Tickets',
+            path: '/main/ver-tickets',
+            submenu: [
+              { label: 'Ver Tickets', path: '/main/ver-tickets' },
+              { label: 'Crear Ticket', path: '/main/crear-ticket' }
+            ]
+          }
+        ];
   }
+  
 
   ngAfterViewInit(): void {
     this.inicializarIndicador();

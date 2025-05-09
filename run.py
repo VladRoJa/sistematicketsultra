@@ -5,6 +5,9 @@ import os
 import pymysql
 pymysql.install_as_MySQLdb()
 
+# Importar función de migraciones
+from app.utils.migraciones import aplicar_migraciones
+
 # -------------------------------------------------------------------------------
 # Detectar entorno automáticamente (evita input en producción)
 # -------------------------------------------------------------------------------
@@ -26,13 +29,14 @@ app = create_app()
 print(f"🔄 App config URI = {app.config.get('SQLALCHEMY_DATABASE_URI')}")
 
 # -------------------------------------------------------------------------------
-# Crear tablas y cargar base de datos solo si corre directamente
+# Crear tablas, aplicar migraciones y cargar base de datos si está vacía
 # -------------------------------------------------------------------------------
 if __name__ == '__main__':
     with app.app_context():
         try:
             print(f"🧩 Conectando a base de datos: {app.config['SQLALCHEMY_DATABASE_URI']}")
             db.create_all()
+            aplicar_migraciones()  # ✅ Aplica columnas nuevas si hacen falta
             from app.db_init import inicializar_db_si_esta_vacia
             inicializar_db_si_esta_vacia()
         except Exception as e:

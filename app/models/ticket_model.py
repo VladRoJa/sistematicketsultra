@@ -34,6 +34,8 @@ class Ticket(db.Model):
     descripcion_refaccion = db.Column(db.Text)
     historial_fechas = db.Column(db.JSON)
     fecha_solucion = db.Column(db.DateTime)
+    fecha_en_progreso = db.Column(db.DateTime)
+
 
     # ─── Relaciones ─────────────────────────────────────────
     usuario = db.relationship('UserORM', foreign_keys='Ticket.username')
@@ -49,16 +51,21 @@ class Ticket(db.Model):
             'descripcion': self.descripcion,
             'username': self.username,
             'estado': self.estado,
-            'fecha_creacion': self.fecha_creacion.strftime('%Y-%m-%d %H:%M:%S') if self.fecha_creacion else "N/A",
+            'fecha_creacion': self.fecha_creacion.strftime('%d-%m-%y %I:%M %p') if self.fecha_creacion else "N/A",
+
+
+
             'sucursal_id': self.sucursal_id,
             'departamento_id': self.departamento_id,
             'departamento_nombre': self.departamento.nombre if self.departamento else "N/A",
+            'fecha_en_progreso': self.fecha_en_progreso.strftime('%d-%m-%y %I:%M %p') if self.fecha_en_progreso else "N/A",
 
             'criticidad': self.criticidad,
             'categoria': self.categoria,
             'subcategoria': self.subcategoria,
             'subsubcategoria': self.subsubcategoria,
-            'fecha_finalizado': self.fecha_finalizado.strftime('%Y-%m-%d %H:%M:%S') if self.fecha_finalizado else "N/A",
+            'fecha_finalizado': self.fecha_finalizado.strftime('%d-%m-%y %I:%M %p') if self.fecha_finalizado else "N/A",
+
 
             'fecha_solucion': self.fecha_solucion.strftime('%Y-%m-%d %H:%M:%S') if self.fecha_solucion else "N/A",
             'necesita_refaccion': self.necesita_refaccion,
@@ -102,7 +109,8 @@ class Ticket(db.Model):
         ticket = cls.query.get(ticket_id)
         if not ticket:
             return None
-
+        if nuevo_estado == 'en progreso':
+            ticket.fecha_en_progreso = datetime.now()
         ticket.estado = nuevo_estado
         if criticidad is not None:
             ticket.criticidad = criticidad
@@ -110,7 +118,7 @@ class Ticket(db.Model):
             ticket.categoria = categoria
 
         if nuevo_estado == 'finalizado':
-            fecha_local = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            fecha_local = datetime.now()
             ticket.fecha_finalizado = fecha_local
 
 
