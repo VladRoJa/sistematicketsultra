@@ -1,7 +1,7 @@
 # C:\Users\Vladimir\Documents\Sistema tickets\app\utils\migraciones.py
 
 from sqlalchemy import text
-from app.db_init import db
+from app import db
 
 class MigracionAplicada(db.Model):
     __tablename__ = 'migraciones_aplicadas'
