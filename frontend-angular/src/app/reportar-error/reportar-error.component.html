@@ -1,0 +1,37 @@
+<!-- C:\Users\Vladimir\Documents\Sistema tickets\frontend-angular\src\app\reportar-error\reportar-error.component.html -->
+
+
+<h2 mat-dialog-title>Reportar error</h2>
+
+<mat-dialog-content [formGroup]="form" class="contenido">
+  <mat-form-field appearance="fill" class="campo">
+    <mat-label>¿Qué ocurrió?</mat-label>
+    <textarea matInput rows="4" formControlName="descripcion" placeholder="Describe el problema..."></textarea>
+    <mat-error *ngIf="form.get('descripcion')?.invalid">Campo obligatorio</mat-error>
+  </mat-form-field>
+
+  <mat-form-field appearance="fill" class="campo">
+    <mat-label>Criticidad</mat-label>
+    <mat-select formControlName="criticidad">
+      <mat-option value="baja">Baja</mat-option>
+      <mat-option value="media">Media</mat-option>
+      <mat-option value="alta">Alta</mat-option>
+    </mat-select>
+  </mat-form-field>
+
+  <div class="selector-archivo">
+    <button mat-stroked-button component="span" (click)="fileInput.click()">
+      <mat-icon>upload</mat-icon>
+      Subir imagen
+    </button>
+    <span class="nombre-archivo">{{ imagenSeleccionada?.name || 'No se ha seleccionado archivo' }}</span>
+    <input type="file" hidden (change)="onArchivoSeleccionado($event)" #fileInput accept="image/*" />
+  </div>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end" class="acciones">
+  <button mat-button (click)="cancelar()">Cancelar</button>
+  <button mat-raised-button color="primary" [disabled]="enviando || form.invalid" (click)="enviarReporte()">
+    Enviar
+  </button>
+</mat-dialog-actions>

@@ -13,3 +13,62 @@ Traceback (most recent call last):
     raise ValueError("unconverted data remains: %s" %
 ValueError: unconverted data remains:  01:00:00
 
+
+[2025-05-14 08:21:58] ERROR en Reportar error con imagen - /api/reportes/reportar-error
+Mensaje: Invalid cloud_name systemUltra
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\reportes.py", line 143, in reportar_error
+    url_imagen = upload_image_to_cloudinary(imagen)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\utils\cloudinary_upload.py", line 16, in upload_image_to_cloudinary
+    result = cloudinary.uploader.upload(image_file)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\cloudinary\uploader.py", line 198, in upload
+    return call_cacheable_api("upload", params, file=file, **options)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\cloudinary\uploader.py", line 834, in call_cacheable_api
+    result = call_api(action, params, http_headers, return_error, unsigned, file, timeout, **options)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\cloudinary\uploader.py", line 921, in call_api
+    raise exception_class(result["error"]["message"])
+cloudinary.exceptions.AuthorizationRequired: Invalid cloud_name systemUltra
+
+
+[2025-05-14 09:06:38] ERROR en Reportar error con imagen - /api/reportes/reportar-error
+Mensaje: 'titulo' is an invalid keyword argument for Ticket
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\reportes.py", line 145, in reportar_error
+    nuevo_ticket = Ticket(
+                   ^^^^^^^
+  File "<string>", line 4, in __init__
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\state.py", line 571, in _initialize_instance
+    with util.safe_reraise():
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 146, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\state.py", line 569, in _initialize_instance
+    manager.original_init(*mixed[1:], **kwargs)
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\decl_base.py", line 2175, in _declarative_constructor
+    raise TypeError(
+TypeError: 'titulo' is an invalid keyword argument for Ticket
+
+
+[2025-05-14 09:10:54] ERROR en Reportar error con imagen - /api/reportes/reportar-error
+Mensaje: 'tipo' is an invalid keyword argument for Ticket
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\reportes.py", line 145, in reportar_error
+    nuevo_ticket = Ticket(
+                   ^^^^^^^
+  File "<string>", line 4, in __init__
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\state.py", line 571, in _initialize_instance
+    with util.safe_reraise():
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 146, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\state.py", line 569, in _initialize_instance
+    manager.original_init(*mixed[1:], **kwargs)
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\decl_base.py", line 2175, in _declarative_constructor
+    raise TypeError(
+TypeError: 'tipo' is an invalid keyword argument for Ticket
+

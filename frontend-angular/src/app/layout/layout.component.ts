@@ -10,6 +10,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { CommonModule } from '@angular/common';
 import { EliminarTicketDialogComponent } from '../eliminar-ticket-dialog/eliminar-ticket-dialog.component';
 import { environment } from 'src/environments/environment';
+import { ReportarErrorComponent } from '../reportar-error/reportar-error.component'; 
 
 @Component({
   selector: 'app-layout',
@@ -223,4 +224,24 @@ export class LayoutComponent implements OnInit, AfterViewInit {
   get submenuActual() {
     return this.menuItems.find(m => m.label === this.currentSubmenu)?.submenu || [];
   }
+
+abrirModalReporte() {
+  const dialogRef = this.dialog.open(ReportarErrorComponent, {
+    width: '400px',
+    disableClose: false
+  });
+
+  dialogRef.afterClosed().subscribe((resultado) => {
+    if (resultado === 'recargar') {
+      // Si estamos en la pantalla de tickets, forzar recarga
+      if (this.router.url.includes('/main/ver-tickets')) {
+        this.router.navigateByUrl('/', { skipLocationChange: true }).then(() => {
+          this.router.navigate(['/main/ver-tickets']);
+        });
+      }
+    }
+  });
+}
+
+
 }

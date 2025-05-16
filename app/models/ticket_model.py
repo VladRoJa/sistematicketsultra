@@ -1,18 +1,16 @@
-# C:\Users\Vladimir\Documents\Sistema tickets\app\models\ticket_model.py
-
 from datetime import datetime
-import json
 import pytz
 from app.extensions import db
+from app.utils.datetime_utils import format_datetime_short, format_datetime_long
 
-# ─────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────
 # MODELO: TICKET
-# ─────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────
 
 class Ticket(db.Model):
     __tablename__ = 'tickets'
 
-    # ─── Campos ──────────────────────────────────────────────
+    # ─── Campos ───────────────────────────────────────────────
     id = db.Column(db.Integer, primary_key=True)
     descripcion = db.Column(db.Text, nullable=False)
     username = db.Column(db.String(50), db.ForeignKey('users.username'), nullable=False)
@@ -32,18 +30,18 @@ class Ticket(db.Model):
     problema_detectado = db.Column(db.Text)
     necesita_refaccion = db.Column(db.Boolean, default=False)
     descripcion_refaccion = db.Column(db.Text)
+    url_evidencia = db.Column(db.String(500))
     historial_fechas = db.Column(db.JSON)
     fecha_solucion = db.Column(db.DateTime)
     fecha_en_progreso = db.Column(db.DateTime)
 
-
-    # ─── Relaciones ─────────────────────────────────────────
+    # ─── Relaciones ────────────────────────────────────────
     usuario = db.relationship('UserORM', foreign_keys='Ticket.username')
     sucursal = db.relationship('Sucursal', backref='tickets', foreign_keys='Ticket.sucursal_id')
 
-    # ─────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────────────────
     # MÉTODOS
-    # ─────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────────────────
 
     def to_dict(self):
         return {
@@ -51,34 +49,23 @@ class Ticket(db.Model):
             'descripcion': self.descripcion,
             'username': self.username,
             'estado': self.estado,
-            'fecha_creacion': self.fecha_creacion.strftime('%d-%m-%y %I:%M %p') if self.fecha_creacion else "N/A",
-
-
-
+            'fecha_creacion': format_datetime_short(self.fecha_creacion),
             'sucursal_id': self.sucursal_id,
             'departamento_id': self.departamento_id,
             'departamento_nombre': self.departamento.nombre if self.departamento else "N/A",
-            'fecha_en_progreso': self.fecha_en_progreso.strftime('%d-%m-%y %I:%M %p') if self.fecha_en_progreso else "N/A",
-
+            'fecha_en_progreso': format_datetime_short(self.fecha_en_progreso),
             'criticidad': self.criticidad,
             'categoria': self.categoria,
             'subcategoria': self.subcategoria,
             'subsubcategoria': self.subsubcategoria,
-            'fecha_finalizado': self.fecha_finalizado.strftime('%d-%m-%y %I:%M %p') if self.fecha_finalizado else "N/A",
-
-
-            'fecha_solucion': self.fecha_solucion.strftime('%Y-%m-%d %H:%M:%S') if self.fecha_solucion else "N/A",
+            'fecha_finalizado': format_datetime_short(self.fecha_finalizado),
+            'fecha_solucion': format_datetime_long(self.fecha_solucion),
             'necesita_refaccion': self.necesita_refaccion,
             'descripcion_refaccion': self.descripcion_refaccion,
             'problema_detectado': self.problema_detectado,
-            'historial_fechas': self.historial_fechas
+            'historial_fechas': self.historial_fechas,
+            'url_evidencia': self.url_evidencia,
         }
-
-
-
-
-
-
 
     @classmethod
     def create_ticket(cls, descripcion, username, sucursal_id, departamento_id, criticidad, categoria, subcategoria=None, subsubcategoria=None, aparato_id=None, problema_detectado=None, necesita_refaccion=False, descripcion_refaccion=None):
@@ -102,7 +89,6 @@ class Ticket(db.Model):
         db.session.commit()
         return ticket
 
-
     @classmethod
     def update_ticket_status(cls, ticket_id, nuevo_estado, criticidad=None, categoria=None):
         """Actualiza estado, criticidad o categoría de un ticket."""
@@ -116,12 +102,9 @@ class Ticket(db.Model):
             ticket.criticidad = criticidad
         if categoria is not None:
             ticket.categoria = categoria
-
         if nuevo_estado == 'finalizado':
             fecha_local = datetime.now()
             ticket.fecha_finalizado = fecha_local
-
-
         db.session.commit()
         return ticket
 
@@ -132,4 +115,3 @@ class Ticket(db.Model):
 
     def __repr__(self):
         return f"<Ticket {self.id} - {self.estado}>"
-    

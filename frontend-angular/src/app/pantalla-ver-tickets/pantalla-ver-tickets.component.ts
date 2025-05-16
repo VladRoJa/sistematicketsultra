@@ -8,6 +8,8 @@ import { TicketService } from '../services/ticket.service';
 import { DepartamentoService } from '../services/departamento.service';
 import { HttpClient } from '@angular/common/http';
 import { filtrarTicketsConFiltros, formatearFechaCorta, limpiarFiltroColumnaConMapa, regenerarFiltrosFiltradosDesdeTickets, toggleSeleccionarTodoConMapa } from '../utils/ticket-utils';
+import { RefrescoService } from '../services/refresco.service';
+
 
 
 // Angular Material Modules
@@ -179,20 +181,26 @@ export class PantallaVerTicketsComponent implements OnInit {
     public departamentoService: DepartamentoService,
     public changeDetectorRef: ChangeDetectorRef,
     public http: HttpClient,
-    public dialog: MatDialog
+    public dialog: MatDialog,
+    private refrescoService: RefrescoService
   ) {}
 
   async ngOnInit() {
     await TicketInit.obtenerUsuarioAutenticado(this); 
     await cargarDepartamentos(this);                 
-    TicketInit.cargarTickets(this);   
-    
-  
+    TicketInit.cargarTickets(this); 
+
+    // 🔁 Escuchar eventos de refresco desde el servicio
+    this.refrescoService.refrescarTabla$.subscribe(() => {
+      TicketInit.cargarTickets(this); // recargar los tickets
+    });
+
     console.log('Usuario:', this.user);
     console.log('Editor corporativo:', this.usuarioEsEditorCorporativo);
-  
-    this.changeDetectorRef.detectChanges(); // <- 🔁 Forzar refresco de la vista
+
+    this.changeDetectorRef.detectChanges();
   }
+
 
   // Métodos públicos conectados a helpers
   exportarTickets() { TicketAcciones.exportarTickets(this); }

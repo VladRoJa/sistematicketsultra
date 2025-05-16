@@ -20,12 +20,15 @@ print(f"✅ Entorno '{app_env}' cargado desde {env_file}.")
 # Inicializar Flask y mostrar configuración
 # -------------------------------------------------------------------------------
 from app import create_app, db
+from flask_migrate import Migrate
 
 print(f"🧪 ENV SQLALCHEMY_DATABASE_URI = {os.environ.get('SQLALCHEMY_DATABASE_URI')}")
 
 app = create_app()
-
+migrate = Migrate(app, db)
 print(f"🔄 App config URI = {app.config.get('SQLALCHEMY_DATABASE_URI')}")
+
+
 
 # -------------------------------------------------------------------------------
 # Crear tablas, aplicar migraciones y cargar base de datos si está vacía

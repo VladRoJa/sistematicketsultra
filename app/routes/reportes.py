@@ -13,6 +13,10 @@ from io import BytesIO
 import pandas as pd
 from datetime import datetime
 from app.utils.error_handler import manejar_error
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from app.models import Ticket
+from app.utils.cloudinary_upload import upload_image_to_cloudinary
+from app.models.user_model import UserORM
 
 reportes_bp = Blueprint('reportes', __name__, url_prefix='/api/reportes')
 
@@ -120,3 +124,56 @@ def exportar_movimientos():
 
     except Exception as e:
         return manejar_error(e, "Exportar movimientos")
+
+# ------------------------------------------------------------------------------
+# RUTA: Exportar errores dentro del sistema
+# ------------------------------------------------------------------------------
+
+
+
+@reportes_bp.route('/reportar-error', methods=['POST'])
+@jwt_required()
+def reportar_error():
+    try:
+        descripcion = request.form.get('descripcion', '').strip()
+        criticidad = request.form.get('criticidad', '1')
+        modulo = request.form.get('modulo', 'Desconocido')
+        usuario_id = get_jwt_identity()
+        imagen = request.files.get('imagen')
+
+        # Obtener datos del usuario real
+        user = UserORM.get_by_id(usuario_id)
+        if not user:
+            return jsonify({"error": "Usuario no encontrado"}), 404
+
+        # Subir imagen (si aplica)
+        url_imagen = None
+        if imagen:
+            url_imagen = upload_image_to_cloudinary(imagen)
+
+        # Crear ticket dirigido al departamento de Sistemas (id 7)
+        nuevo_ticket = Ticket(
+            descripcion=f"[BUG] Módulo: {modulo} | {descripcion or 'Sin descripción'}",
+            username=user.username,
+            sucursal_id=user.sucursal_id,
+            estado='abierto',
+            criticidad=int(criticidad) if criticidad.isdigit() else 1,
+            departamento_id=7,  # 🔧 Asignar a Sistemas
+            categoria='Errores',
+            subcategoria=modulo,
+            subsubcategoria=None,
+            aparato_id=None,
+            problema_detectado=None,
+            necesita_refaccion=False,
+            descripcion_refaccion=None,
+            url_evidencia=url_imagen,
+            fecha_creacion=datetime.utcnow()
+        )
+
+        db.session.add(nuevo_ticket)
+        db.session.commit()
+
+        return jsonify({"message": "Reporte enviado correctamente"}), 201
+
+    except Exception as e:
+        return manejar_error(e, "Reportar error con imagen")
