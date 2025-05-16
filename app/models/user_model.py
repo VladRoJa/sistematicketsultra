@@ -1,87 +1,47 @@
-#C:\Users\Vladimir\Documents\Sistema tickets\app\models\user_model.py
+# C:\Users\Vladimir\Documents\Sistema tickets\app\models\user_model.py
 
-from datetime import datetime
+from werkzeug.security import check_password_hash
 from app.extensions import db
-from app.utils.datetime_utils import format_datetime_short
 
 # ─────────────────────────────────────────────────────────────
-# MODELO: PRODUCTO
+# MODELO: USUARIO
 # ─────────────────────────────────────────────────────────────
 
-class Producto(db.Model):
-    __tablename__ = 'productos'
+class UserORM(db.Model):
+    __tablename__ = 'users'
 
+    # ─── Campos ──────────────────────────────────────────────
     id = db.Column(db.Integer, primary_key=True)
-    nombre = db.Column(db.String(255), nullable=False)
-    descripcion = db.Column(db.Text)
-    unidad_medida = db.Column(db.String(50))
-    categoria = db.Column(db.String(100))
-    subcategoria = db.Column(db.String(100))
-
-    # Relaciones
-    inventarios = db.relationship('InventarioSucursal', back_populates='producto', cascade='all, delete-orphan')
-    detalles_movimiento = db.relationship('DetalleMovimiento', back_populates='producto', cascade='all, delete-orphan')
-
-    def __repr__(self):
-        return f"<Producto {self.nombre}>"
-
-
-# ─────────────────────────────────────────────────────────────
-# MODELO: INVENTARIO POR SUCURSAL
-# ─────────────────────────────────────────────────────────────
-
-class InventarioSucursal(db.Model):
-    __tablename__ = 'inventario_sucursal'
-
-    id = db.Column(db.Integer, primary_key=True)
-    producto_id = db.Column(db.Integer, db.ForeignKey('productos.id'), nullable=False)
+    username = db.Column(db.String(100), nullable=False, unique=True)
+    password = db.Column(db.String(255), nullable=False)
+    rol = db.Column(db.String(50), default="usuario", nullable=False)
     sucursal_id = db.Column(db.Integer, db.ForeignKey('sucursales.sucursal_id'), nullable=False)
-    stock = db.Column(db.Integer, default=0)
+    department_id = db.Column(db.Integer, nullable=False)
 
-    # Relaciones
-    producto = db.relationship('Producto', back_populates='inventarios')
+    # ─── Relaciones ─────────────────────────────────────────
+    movimientos = db.relationship('MovimientoInventario', backref='usuario', cascade='all, delete-orphan')
 
-    def __repr__(self):
-        return f"<InventarioSucursal Producto {self.producto_id} Stock {self.stock}>"
+    # ─────────────────────────────────────────────────────────────
+    # MÉTODOS
+    # ─────────────────────────────────────────────────────────────
 
-
-# ─────────────────────────────────────────────────────────────
-# MODELO: MOVIMIENTO DE INVENTARIO
-# ─────────────────────────────────────────────────────────────
-
-class MovimientoInventario(db.Model):
-    __tablename__ = 'movimientos_inventario'
-
-    id = db.Column(db.Integer, primary_key=True)
-    tipo_movimiento = db.Column(db.Enum('entrada', 'salida'), nullable=False)
-    fecha = db.Column(db.DateTime, server_default=db.func.now())
-    usuario_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    sucursal_id = db.Column(db.Integer, db.ForeignKey('sucursales.sucursal_id'), nullable=False)
-    observaciones = db.Column(db.Text)
-
-    # Relaciones
-    detalles = db.relationship('DetalleMovimiento', back_populates='movimiento', cascade='all, delete-orphan')
-
-    def __repr__(self):
-        return f"<MovimientoInventario {self.tipo_movimiento} {format_datetime_short(self.fecha)}>",
+    def verify_password(self, password_input):
+        print(f"🔐 Comparando DB: '{self.password}' (len={len(self.password)}) vs Input: '{password_input}' (len={len(password_input)})")
+        return self.password.strip() == password_input.strip()
 
 
-# ─────────────────────────────────────────────────────────────
-# MODELO: DETALLE DE MOVIMIENTO
-# ─────────────────────────────────────────────────────────────
+    @classmethod
+    def get_by_username(cls, username):
+        user = cls.query.filter(db.func.lower(cls.username) == db.func.lower(username)).first()
+        print(f"🔍 get_by_username({username}) → {user}")
+        return user
 
-class DetalleMovimiento(db.Model):
-    __tablename__ = 'detalle_movimiento'
 
-    id = db.Column(db.Integer, primary_key=True)
-    movimiento_id = db.Column(db.Integer, db.ForeignKey('movimientos_inventario.id'), nullable=False)
-    producto_id = db.Column(db.Integer, db.ForeignKey('productos.id'), nullable=False)
-    cantidad = db.Column(db.Integer, nullable=False)
-    unidad_medida = db.Column(db.String(50))
-
-    # Relaciones
-    movimiento = db.relationship('MovimientoInventario', back_populates='detalles')
-    producto = db.relationship('Producto', back_populates='detalles_movimiento')
+    @classmethod
+    def get_by_id(cls, user_id):
+        """Obtiene un usuario por su ID."""
+        return cls.query.filter_by(id=user_id).first()
 
     def __repr__(self):
-        return f"<DetalleMovimiento Producto {self.producto_id} Cantidad {self.cantidad}>"
+        return f"<User {self.username}>"
+    
