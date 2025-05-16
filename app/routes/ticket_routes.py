@@ -15,6 +15,8 @@ from app.models.ticket_model import Ticket
 from app.models.user_model import UserORM
 from app.extensions import db
 from app.utils.error_handler import manejar_error
+from dateutil import parser
+
 
 
 
@@ -203,9 +205,8 @@ def update_ticket_status(id):
             ticket.fecha_en_progreso = ahora
 
         if fecha_solucion:
-            local = timezone('America/Tijuana')
-            fecha_local = local.localize(datetime.strptime(fecha_solucion, '%Y-%m-%d %H:%M:%S'))
-            ticket.fecha_solucion = fecha_local.astimezone(utc)
+            fecha_parsed = parser.isoparse(fecha_solucion) 
+            ticket.fecha_solucion = fecha_parsed.astimezone(utc)
 
         ticket.historial_fechas = historial_fechas
 

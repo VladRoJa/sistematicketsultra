@@ -7,7 +7,7 @@ import { NgxPaginationModule } from 'ngx-pagination';
 import { TicketService } from '../services/ticket.service';
 import { DepartamentoService } from '../services/departamento.service';
 import { HttpClient } from '@angular/common/http';
-import { filtrarTicketsConFiltros, formatearFechaCorta, limpiarFiltroColumnaConMapa, regenerarFiltrosFiltradosDesdeTickets, toggleSeleccionarTodoConMapa } from '../utils/ticket-utils';
+import { filtrarTicketsConFiltros, limpiarFiltroColumnaConMapa, regenerarFiltrosFiltradosDesdeTickets, toggleSeleccionarTodoConMapa } from '../utils/ticket-utils';
 import { RefrescoService } from '../services/refresco.service';
 
 
@@ -182,7 +182,7 @@ export class PantallaVerTicketsComponent implements OnInit {
     public changeDetectorRef: ChangeDetectorRef,
     public http: HttpClient,
     public dialog: MatDialog,
-    private refrescoService: RefrescoService
+    public refrescoService: RefrescoService
   ) {}
 
   async ngOnInit() {
@@ -226,7 +226,6 @@ export class PantallaVerTicketsComponent implements OnInit {
   totalPages() { return TicketAcciones.totalPages(this); }
   limpiarTodosLosFiltros() { TicketAcciones.limpiarTodosLosFiltros(this); }
   isFilterActive(columna: string) { return TicketAcciones.isFilterActive(this, columna); }
-  formatearFechaCorta = formatearFechaCorta;
   exportandoExcel: boolean = false;
   limpiarFiltroColumna(columna: string): void {limpiarFiltroColumna(this, columna);}
   aplicarFiltroColumna = (columna: string) => aplicarFiltroColumnaConReset(this, columna);

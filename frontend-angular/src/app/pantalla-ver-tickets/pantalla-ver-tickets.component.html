@@ -493,7 +493,7 @@
               <div *ngIf="usuarioEsAdmin || usuarioEsEditorCorporativo">
                 <div *ngIf="!editandoFechaSolucion[ticket.id]; else editandoFecha">
                   <span class="fecha-solucion" (click)="editarFecha(ticket)">
-                    {{ ticket.fecha_solucion ? formatearFechaCorta(ticket.fecha_solucion) : "🗓️ Seleccionar" }}
+                    {{ ticket.fecha_solucion ? ticket.fecha_solucion : "🗓️ Seleccionar" }}
                   </span>
                   <button *ngIf="ticket.fecha_solucion" (click)="editarFecha(ticket)" class="boton-editar">
                     ✏️
@@ -541,9 +541,9 @@
             </p>
             <ul *ngIf="ticket.historial_fechas && ticket.historial_fechas.length > 0" class="historial-lista">
               <li *ngFor="let item of ticket.historial_fechas" class="historial-item">
-                🗓 <span class="fecha-nueva">{{ formatearFechaCorta(item.fecha) }}</span>
+                🗓 <span class="fecha-nueva">{{ item.fecha }}</span>
                 - <b>{{ item.cambiadoPor }}</b>
-                (<span class="fecha-modificacion">{{ formatearFechaCorta(item.fechaCambio) }}</span>)
+                (<span class="fecha-modificacion">{{ item.fechaCambio }}</span>)
               </li>
             </ul>
           </div>

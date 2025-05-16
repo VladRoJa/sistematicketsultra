@@ -2,11 +2,11 @@
 
 from datetime import datetime
 from app.extensions import db
-from app.utils.datetime_utils import format_datetime_short
+from app.utils.datetime_utils import format_datetime
 
 # ──────────────────────────────────────────────────────────
 # MODELO: PRODUCTO
-# ────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────
 
 class Producto(db.Model):
     __tablename__ = 'productos'
@@ -26,9 +26,9 @@ class Producto(db.Model):
         return f"<Producto {self.nombre}>"
 
 
-# ────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────
 # MODELO: INVENTARIO POR SUCURSAL
-# ────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────
 
 class InventarioSucursal(db.Model):
     __tablename__ = 'inventario_sucursal'
@@ -45,9 +45,9 @@ class InventarioSucursal(db.Model):
         return f"<InventarioSucursal Producto {self.producto_id} Stock {self.stock}>"
 
 
-# ────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────
 # MODELO: MOVIMIENTO DE INVENTARIO
-# ────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────
 
 class MovimientoInventario(db.Model):
     __tablename__ = 'movimientos_inventario'
@@ -63,12 +63,12 @@ class MovimientoInventario(db.Model):
     detalles = db.relationship('DetalleMovimiento', back_populates='movimiento', cascade='all, delete-orphan')
 
     def __repr__(self):
-        return f"<MovimientoInventario {self.tipo_movimiento} {format_datetime_short(self.fecha)}>"
+        return f"<MovimientoInventario {self.tipo_movimiento} {format_datetime(self.fecha)}>"
 
 
-# ────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────
 # MODELO: DETALLE DE MOVIMIENTO
-# ────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────
 
 class DetalleMovimiento(db.Model):
     __tablename__ = 'detalle_movimiento'

@@ -72,3 +72,48 @@ Traceback (most recent call last):
     raise TypeError(
 TypeError: 'tipo' is an invalid keyword argument for Ticket
 
+
+[2025-05-16 09:43:35] ERROR en update_ticket_status - /api/tickets/update/108
+Mensaje: time data '2025-05-16T07:00:00.000Z' does not match format '%Y-%m-%d %H:%M:%S'
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\ticket_routes.py", line 207, in update_ticket_status
+    fecha_local = local.localize(datetime.strptime(fecha_solucion, '%Y-%m-%d %H:%M:%S'))
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\AppData\Local\Programs\Python\Python311\Lib\_strptime.py", line 568, in _strptime_datetime
+    tt, fraction, gmtoff_fraction = _strptime(data_string, format)
+                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\AppData\Local\Programs\Python\Python311\Lib\_strptime.py", line 349, in _strptime
+    raise ValueError("time data %r does not match format %r" %
+ValueError: time data '2025-05-16T07:00:00.000Z' does not match format '%Y-%m-%d %H:%M:%S'
+
+
+[2025-05-16 09:43:39] ERROR en update_ticket_status - /api/tickets/update/108
+Mensaje: time data '2025-05-16T07:00:00.000Z' does not match format '%Y-%m-%d %H:%M:%S'
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\ticket_routes.py", line 207, in update_ticket_status
+    fecha_local = local.localize(datetime.strptime(fecha_solucion, '%Y-%m-%d %H:%M:%S'))
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\AppData\Local\Programs\Python\Python311\Lib\_strptime.py", line 568, in _strptime_datetime
+    tt, fraction, gmtoff_fraction = _strptime(data_string, format)
+                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\AppData\Local\Programs\Python\Python311\Lib\_strptime.py", line 349, in _strptime
+    raise ValueError("time data %r does not match format %r" %
+ValueError: time data '2025-05-16T07:00:00.000Z' does not match format '%Y-%m-%d %H:%M:%S'
+
+
+[2025-05-16 10:11:01] ERROR en update_ticket_status - /api/tickets/update/109
+Mensaje: time data '2025-05-17T14:00:00.000Z' does not match format '%Y-%m-%d %H:%M:%S'
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\ticket_routes.py", line 207, in update_ticket_status
+    fecha_local = local.localize(datetime.strptime(fecha_solucion, '%Y-%m-%d %H:%M:%S'))
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\AppData\Local\Programs\Python\Python311\Lib\_strptime.py", line 568, in _strptime_datetime
+    tt, fraction, gmtoff_fraction = _strptime(data_string, format)
+                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\AppData\Local\Programs\Python\Python311\Lib\_strptime.py", line 349, in _strptime
+    raise ValueError("time data %r does not match format %r" %
+ValueError: time data '2025-05-17T14:00:00.000Z' does not match format '%Y-%m-%d %H:%M:%S'
+

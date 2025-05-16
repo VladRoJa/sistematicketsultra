@@ -6,7 +6,7 @@ import { cambiarEstadoTicket, finalizarTicket } from './pantalla-ver-tickets.est
 import { editarFechaSolucion, guardarFechaSolucion, cancelarEdicionFechaSolucion } from './pantalla-ver-tickets.fecha-solucion';
 import { mostrarConfirmacion, confirmarAccion, cancelarAccion } from './pantalla-ver-tickets.confirmacion';
 import { toggleHistorial } from './pantalla-ver-tickets.historial';
-import { formatearFecha, isFilterActive as isFilterActiveHelper } from '../../utils/ticket-utils';
+import { isFilterActive as isFilterActiveHelper } from '../../utils/ticket-utils';
 import { regenerarFiltrosFiltradosDesdeTickets } from '../../utils/ticket-utils';
 import { aplicarFiltrosDesdeMemoria, hayFiltrosActivos, obtenerFiltrosActivos } from './pantalla-ver-tickets.filtros';
 import { cargarTickets } from './pantalla-ver-tickets.init';

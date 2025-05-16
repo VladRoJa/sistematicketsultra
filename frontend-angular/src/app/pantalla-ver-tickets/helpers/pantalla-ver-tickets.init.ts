@@ -2,7 +2,7 @@
 
 import { PantallaVerTicketsComponent, ApiResponse, Ticket } from '../pantalla-ver-tickets.component';
 import { HttpHeaders } from '@angular/common/http';
-import { formatearFecha, generarOpcionesDisponiblesDesdeTickets, regenerarFiltrosFiltradosDesdeTickets, formatearFechaFinalizado } from '../../utils/ticket-utils';
+import { generarOpcionesDisponiblesDesdeTickets, regenerarFiltrosFiltradosDesdeTickets } from '../../utils/ticket-utils';
 import { environment } from 'src/environments/environment';
 
 export async function obtenerUsuarioAutenticado(component: PantallaVerTicketsComponent): Promise<void> {

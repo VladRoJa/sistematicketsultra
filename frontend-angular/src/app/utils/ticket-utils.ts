@@ -253,67 +253,6 @@ export function limpiarFiltroColumnaConMapa(component: any, columna: string): vo
     });
   }
   
-  export function formatearFechaCorta(fechaString: string | null | undefined): string {
-    if (!fechaString || fechaString === 'N/A' || fechaString.trim() === '') {
-      return '—'; // O puedes poner "No disponible" si prefieres
-    }
-    const fecha = new Date(fechaString);
-    if (isNaN(fecha.getTime())) {
-      console.error("❌ Fecha inválida detectada en formatearFecha:", fechaString);
-      return '—'; // Antes ponías "Fecha inválida", mejor regresamos limpio
-    }
-    return fecha.toLocaleDateString('es-ES', {
-      year: '2-digit',
-      month: '2-digit',
-      day: '2-digit'
-    });
-  }
-  
-  
-  export function parsearFechaDesdeTabla(valor: string): Date | null {
-    if (!valor) return null;
-  
-    try {
-      const partes = valor.split(" ");
-      const [dia, mes, año] = partes[0].split("-");
-      const horaMinuto = partes[1] || "00:00";
-      const [hora, minuto] = horaMinuto.split(":");
-  
-      const fechaISO = `20${año}-${mes}-${dia}T${hora}:${minuto}:00`;
-      const fechaFinal = new Date(fechaISO);
-  
-      return isNaN(fechaFinal.getTime()) ? null : fechaFinal;
-    } catch (error) {
-      console.error("❌ Error parseando fecha:", valor, error);
-      return null;
-    }
-  }
-  
-
-/**
- * Formatea una fecha larga tipo "dd-mm-aa hh:mm" (ajustada a zona horaria local)
- */
-export function formatearFecha(fechaString: string | null): string {
-  if (!fechaString) return 'Sin finalizar';
-
-  const fecha = new Date(fechaString);
-
-  if (isNaN(fecha.getTime())) {
-    console.error("❌ Fecha inválida detectada en formatearFecha:", fechaString);
-    return 'Fecha inválida';
-  }
-
-
-
-  return fecha.toLocaleString('es-ES', {
-    year: '2-digit',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  }).replace(',', '').replace(/\//g, '-');
-}
-
 
 export function todasOpcionesDesmarcadas(opciones: { valor: string, seleccionado: boolean }[]): boolean {
   return opciones.every(opcion => !opcion.seleccionado);
@@ -329,18 +268,4 @@ export function generarOpcionesDisponiblesDesdeTickets(tickets: Ticket[], campo:
 }
 
 
-export function formatearFechaFinalizado(fecha: string): string {
-  const tzFecha = new Date(fecha).toLocaleString('en-US', {
-    timeZone: 'America/Tijuana'
-  });
-
-  const date = new Date(tzFecha);
-  const dia = String(date.getDate()).padStart(2, '0');
-  const mes = String(date.getMonth() + 1).padStart(2, '0');
-  const año = String(date.getFullYear()).slice(-2);
-  const hora = String(date.getHours()).padStart(2, '0');
-  const minuto = String(date.getMinutes()).padStart(2, '0');
-
-  return `${dia}-${mes}-${año} ${hora}:${minuto}`;
-}
 

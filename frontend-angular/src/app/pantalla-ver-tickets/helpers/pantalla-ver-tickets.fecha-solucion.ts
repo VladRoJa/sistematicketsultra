@@ -1,13 +1,9 @@
-// C:\Users\Vladimir\Documents\Sistema tickets\frontend-angular\src\app\pantalla-ver-tickets\helpers\pantalla-ver-tickets.fecha-solucion.tssrc/app/pantalla-ver-tickets/helpers/fecha-solucion.helper.ts
+// C:\Users\Vladimir\Documents\Sistema tickets\frontend-angular\src\app\pantalla-ver-tickets\helpers\fecha-solucion.helper.ts
 
 import { ChangeDetectorRef } from '@angular/core';
 import { PantallaVerTicketsComponent, Ticket } from '../pantalla-ver-tickets.component';
 import { HttpHeaders } from '@angular/common/http';
 import { environment } from 'src/environments/environment';
-
-/**
- * Funciones relacionadas con la edición y guardado de la fecha de solución en tickets.
- */
 
 const API_URL = `${environment.apiUrl}/tickets`;
 
@@ -24,13 +20,14 @@ export function editarFechaSolucion(
       ? formatearFechaParaInput(ticket.fecha_solucion)
       : null;
   }
-  cdr.detectChanges(); // 👈 fuerza actualización del DOM
+
+  cdr.detectChanges();
 }
 
-/** Guardar la nueva fecha de solución en el ticket */
+/** Guardar la nueva fecha de solución con hora fija 07:00 AM */
 export function guardarFechaSolucion(component: PantallaVerTicketsComponent, ticket: Ticket): void {
-  const fechaInput = component.fechaSolucionSeleccionada[ticket.id];
-  if (!fechaInput) return;
+  const fechaSeleccionada = component.fechaSolucionSeleccionada[ticket.id];
+  if (!fechaSeleccionada) return;
 
   const token = localStorage.getItem("token");
   if (!token) return;
@@ -39,23 +36,19 @@ export function guardarFechaSolucion(component: PantallaVerTicketsComponent, tic
     .set("Authorization", `Bearer ${token}`)
     .set("Content-Type", "application/json");
 
-  const fechaDate = new Date(fechaInput);
+  const fechaConHoraFija = new Date(
+    fechaSeleccionada.getFullYear(),
+    fechaSeleccionada.getMonth(),
+    fechaSeleccionada.getDate(),
+    7, 0, 0
+  );
 
-  const fechaFormateada = new Intl.DateTimeFormat('sv-SE', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-    timeZone: 'America/Tijuana'
-  }).format(fechaDate).replace('T', ' ');  // resultado: '2025-05-09 00:00:00'
+  const fechaISO = fechaConHoraFija.toISOString();
 
   const nuevoHistorial = [
     ...(ticket.historial_fechas || []),
     {
-      fecha: fechaFormateada,
+      fecha: fechaISO,
       cambiadoPor: component.user.username,
       fechaCambio: new Date().toISOString(),
     },
@@ -63,14 +56,13 @@ export function guardarFechaSolucion(component: PantallaVerTicketsComponent, tic
 
   component.http.put(`${API_URL}/update/${ticket.id}`, {
     estado: ticket.estado,
-    fecha_solucion: fechaFormateada,
+    fecha_solucion: fechaISO,
     historial_fechas: nuevoHistorial,
   }, { headers }).subscribe({
     next: () => {
-      ticket.fecha_solucion = fechaFormateada;
-      ticket.historial_fechas = nuevoHistorial;
+      // 🔁 Refrescar para forzar obtención del ticket actualizado
       component.editandoFechaSolucion[ticket.id] = false;
-      console.log(`✅ Fecha de solución del ticket #${ticket.id} actualizada.`);
+      component.refrescoService.emitirRefresco();
     },
     error: (error) => {
       console.error(`❌ Error al actualizar la fecha de solución del ticket #${ticket.id}:`, error);
@@ -78,15 +70,13 @@ export function guardarFechaSolucion(component: PantallaVerTicketsComponent, tic
   });
 }
 
-
-/** Cancelar el modo de edición de fecha de solución */
+/** Cancelar edición */
 export function cancelarEdicionFechaSolucion(component: PantallaVerTicketsComponent, ticket: Ticket): void {
   component.editandoFechaSolucion[ticket.id] = false;
 }
 
-/** Utilidad: Formatear fecha de base de datos para input tipo date */
+/** Convertir string ISO a Date con hora fija 07:00 AM para el input */
 function formatearFechaParaInput(fechaDB: string): Date {
-  const [fecha] = fechaDB.split(' ');
-  const [year, month, day] = fecha.split('-').map(Number);
-  return new Date(year, month - 1, day, 12, 0, 0); // 🔁 Forzar hora 12:00 PM
+  const fecha = new Date(fechaDB);
+  return new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate(), 7, 0, 0);
 }

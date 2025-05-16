@@ -1,4 +1,4 @@
-// C:\Users\Vladimir\Documents\Sistema tickets\frontend-angular\src\app\pantalla-ver-tickets\helpers\pantalla-ver-tickets.fechas.tssrc/app/pantalla-ver-tickets/helpers/fechas.helper.ts
+// C:\Users\Vladimir\Documents\Sistema tickets\frontend-angular\src\app\pantalla-ver-tickets\helpers\fechas.helper.ts
 
 import { PantallaVerTicketsComponent } from '../pantalla-ver-tickets.component';
 
@@ -44,49 +44,6 @@ export function actualizarFiltrosCruzados(
   actualizar(detallesDisponibles, contarValores(ticketsFiltrados, 'subsubcategoria'));
 }
 
-
-/** Formatear fecha corta (sin hora) */
-export function formatearFechaCorta(fechaString: string | null): string {
-  if (!fechaString) return 'dd/mm/aa';
-  const fecha = new Date(fechaString);
-  if (isNaN(fecha.getTime())) {
-    console.error("❌ Fecha inválida detectada:", fechaString);
-    return 'Fecha inválida';
-  }
-  return fecha.toLocaleDateString('es-ES', {
-    year: '2-digit',
-    month: '2-digit',
-    day: '2-digit'
-  });
-}
-
-/** Parsear fecha desde tabla en formato "dd-mm-aa hh:mm" */
-export function parsearFechaDesdeTabla(valor: string): Date | null {
-  if (!valor) return null;
-
-  try {
-    const partes = valor.split(" ");
-    const [dia, mes, año] = partes[0].split("-");
-    const horaMinuto = partes[1] || "00:00";
-    const [hora, minuto] = horaMinuto.split(":");
-
-    const fechaISO = `20${año}-${mes}-${dia}T${hora}:${minuto}:00`;
-    const fechaFinal = new Date(fechaISO);
-
-    // Si no es válido, intenta parsearlo manualmente
-    if (isNaN(fechaFinal.getTime())) {
-      const fallback = new Date(`20${año}-${mes}-${dia}T${hora}:${minuto}:00`);
-      return isNaN(fallback.getTime()) ? null : fallback;
-    }
-
-    return fechaFinal;
-  } catch (error) {
-    console.error("❌ Error parseando fecha:", valor, error);
-    return null;
-  }
-}
-
-
 /** Aplicar filtro de rango de fechas de creación */
 export function aplicarFiltroPorRangoFechaCreacion(
   component: PantallaVerTicketsComponent,
@@ -130,13 +87,12 @@ export function aplicarFiltroPorRangoFechaFinalizado(
   const fechaInicio = new Date(rango.start);
   const fechaFin = new Date(rango.end);
   fechaFin.setHours(23, 59, 59, 999);
-  
+
   component.filteredTickets = component.tickets.filter(ticket => {
     if (!ticket.fecha_finalizado_original) return false;
     const fecha = new Date(ticket.fecha_finalizado_original);
     return fecha >= fechaInicio && fecha <= fechaFin;
   });
-  
 
   actualizarFiltrosCruzados(
     component.filteredTickets,
@@ -186,7 +142,6 @@ export function aplicarFiltroPorRangoFechaEnProgreso(
   );
 }
 
-
 /** Sincronizar checkboxes disponibles después de filtrado cruzado */
 export function sincronizarCheckboxesConFiltrado(component: PantallaVerTicketsComponent): void {
   const sincronizar = (
@@ -209,6 +164,5 @@ export function sincronizarCheckboxesConFiltrado(component: PantallaVerTicketsCo
   sincronizar(component.departamentosDisponibles, component.departamentosFiltrados);
   sincronizar(component.subcategoriasDisponibles, component.subcategoriasFiltradas);
   sincronizar(component.detallesDisponibles, component.detallesFiltrados);
-  sincronizar(component.idsDisponibles, component.idsDisponibles); // IDs no tienen búsqueda
+  sincronizar(component.idsDisponibles, component.idsDisponibles);
 }
-
