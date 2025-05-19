@@ -54,6 +54,8 @@ export function guardarFechaSolucion(component: PantallaVerTicketsComponent, tic
     },
   ];
 
+  console.log("📋 Historial a guardar:", nuevoHistorial);
+
   component.http.put(`${API_URL}/update/${ticket.id}`, {
     estado: ticket.estado,
     fecha_solucion: fechaISO,
