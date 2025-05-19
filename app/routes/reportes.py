@@ -131,6 +131,8 @@ def exportar_movimientos():
 
 
 
+from datetime import timezone
+
 @reportes_bp.route('/reportar-error', methods=['POST'])
 @jwt_required()
 def reportar_error():
@@ -141,17 +143,32 @@ def reportar_error():
         usuario_id = get_jwt_identity()
         imagen = request.files.get('imagen')
 
-        # Obtener datos del usuario real
+        # 🔍 Log inicial
+        print("📥 Reporte de bug recibido")
+        print("📝 Descripción:", descripcion)
+        print("⚠️ Criticidad:", criticidad)
+        print("📍 Módulo:", modulo)
+        print("🧾 Imagen recibida:", "Sí" if imagen else "No")
+        print("🔐 Usuario ID:", usuario_id)
+
         user = UserORM.get_by_id(usuario_id)
         if not user:
+            print("❌ Usuario no encontrado en la base de datos")
             return jsonify({"error": "Usuario no encontrado"}), 404
 
-        # Subir imagen (si aplica)
         url_imagen = None
         if imagen:
-            url_imagen = upload_image_to_cloudinary(imagen)
+            try:
+                url_imagen = upload_image_to_cloudinary(imagen)
+                print("📸 Imagen subida correctamente:", url_imagen)
+            except Exception as e:
+                print("❌ Error al subir imagen:", str(e))
 
-        # Crear ticket dirigido al departamento de Sistemas (id 7)
+        if not descripcion:
+            print("⚠️ Descripción vacía, cancelando reporte")
+            return jsonify({"error": "Descripción es obligatoria"}), 400
+
+        # 🛠 Crear ticket
         nuevo_ticket = Ticket(
             descripcion=f"[BUG] Módulo: {modulo} | {descripcion or 'Sin descripción'}",
             username=user.username,
@@ -167,13 +184,15 @@ def reportar_error():
             necesita_refaccion=False,
             descripcion_refaccion=None,
             url_evidencia=url_imagen,
-            fecha_creacion=datetime.now(timezone.utc)
+            fecha_creacion=datetime.now(timezone.utc)  # 🔄 En UTC correctamente
         )
 
         db.session.add(nuevo_ticket)
         db.session.commit()
 
+        print("✅ Ticket de bug creado correctamente (ID:", nuevo_ticket.id, ")")
         return jsonify({"message": "Reporte enviado correctamente"}), 201
 
     except Exception as e:
+        print("❌ Excepción atrapada en reportar_error:", str(e))
         return manejar_error(e, "Reportar error con imagen")
