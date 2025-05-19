@@ -3,6 +3,8 @@ import pytz
 from app.extensions import db
 from app.utils.datetime_utils import format_datetime
 from pytz import timezone as tz
+from dateutil import parser
+
 
 class Ticket(db.Model):
     __tablename__ = 'tickets'
@@ -61,9 +63,9 @@ class Ticket(db.Model):
             'problema_detectado': self.problema_detectado,
             'historial_fechas': [
                 {
-                    'fecha': format_fecha_corta(datetime.fromisoformat(item['fecha'])),
+                    'fecha': format_fecha_corta(parser.parse(item['fecha'])),
                     'cambiadoPor': item['cambiadoPor'],
-                    'fechaCambio': format_fecha_corta(datetime.fromisoformat(item['fechaCambio']))
+                    'fechaCambio': format_fecha_corta(parser.parse(item['fechaCambio']))
                 }
                 for item in self.historial_fechas or []
             ],
