@@ -4,6 +4,7 @@ from app.extensions import db
 from app.utils.datetime_utils import format_datetime
 from pytz import timezone as tz
 from dateutil import parser
+from dateutil.parser import isoparse
 
 
 class Ticket(db.Model):
@@ -38,6 +39,15 @@ class Ticket(db.Model):
     sucursal = db.relationship('Sucursal', backref='tickets', foreign_keys=[sucursal_id])
 
     # ─── Serialización ───────────────────────────────────────
+
+    @staticmethod
+    def is_isoformat(value: str) -> bool:
+        try:
+            isoparse(value)
+            return True
+        except Exception:
+            return False
+
     def to_dict(self):
         def format_fecha_corta(dt: datetime | None) -> str:
             return dt.astimezone(pytz.timezone("America/Tijuana")).strftime('%d/%m/%y') if dt else "N/A"
@@ -63,11 +73,14 @@ class Ticket(db.Model):
             'problema_detectado': self.problema_detectado,
             'historial_fechas': [
                 {
-                    'fecha': format_fecha_corta(datetime.fromisoformat(item['fecha']).astimezone(pytz.timezone("America/Tijuana"))),
-                    'cambiadoPor': item['cambiadoPor'],
-                    'fechaCambio': format_fecha_corta(datetime.fromisoformat(item['fechaCambio']).astimezone(pytz.timezone("America/Tijuana")))
+                    'fecha': format_fecha_corta(isoparse(item['fecha']).astimezone(pytz.timezone("America/Tijuana")))
+                    if self.is_isoformat(item.get('fecha')) else item.get('fecha', 'N/A'),
+                    'cambiadoPor': item.get('cambiadoPor', 'N/A'),
+                    'fechaCambio': format_fecha_corta(isoparse(item['fechaCambio']).astimezone(pytz.timezone("America/Tijuana")))
+                    if self.is_isoformat(item.get('fechaCambio')) else item.get('fechaCambio', 'N/A')
                 }
                 for item in self.historial_fechas or []
+                if isinstance(item, dict)
             ],
             'url_evidencia': self.url_evidencia,
         }
