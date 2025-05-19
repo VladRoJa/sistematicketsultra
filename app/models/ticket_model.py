@@ -63,9 +63,9 @@ class Ticket(db.Model):
             'problema_detectado': self.problema_detectado,
             'historial_fechas': [
                 {
-                    'fecha': format_fecha_corta(parser.parse(item['fecha'])),
+                    'fecha': format_fecha_corta(datetime.fromisoformat(item['fecha']).astimezone(pytz.timezone("America/Tijuana"))),
                     'cambiadoPor': item['cambiadoPor'],
-                    'fechaCambio': format_fecha_corta(parser.parse(item['fechaCambio']))
+                    'fechaCambio': format_fecha_corta(datetime.fromisoformat(item['fechaCambio']).astimezone(pytz.timezone("America/Tijuana")))
                 }
                 for item in self.historial_fechas or []
             ],
