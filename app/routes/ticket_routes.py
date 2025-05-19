@@ -208,7 +208,9 @@ def update_ticket_status(id):
             fecha_parsed = parser.isoparse(fecha_solucion) 
             ticket.fecha_solucion = fecha_parsed.astimezone(utc)
 
-        ticket.historial_fechas = historial_fechas
+        # ✅ Acumular historial, no sobrescribir
+        if historial_fechas:
+            ticket.historial_fechas = (ticket.historial_fechas or []) + historial_fechas
 
         db.session.commit()
         return jsonify({"mensaje": f"Ticket {id} actualizado correctamente"}), 200
@@ -216,6 +218,7 @@ def update_ticket_status(id):
     except Exception as e:
         db.session.rollback()
         return manejar_error(e, "update_ticket_status")
+
 
 
 # ─────────────────────────────────────────────────────────────
