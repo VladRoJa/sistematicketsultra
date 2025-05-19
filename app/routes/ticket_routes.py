@@ -7,7 +7,6 @@ from datetime import datetime, timezone, time
 from io import BytesIO
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
-from pytz import timezone, utc
 import pytz
 from sqlalchemy import or_
 from config import Config
@@ -205,7 +204,7 @@ def update_ticket_status(id):
 
         if fecha_solucion:
             fecha_parsed = parser.isoparse(fecha_solucion)
-            ticket.fecha_solucion = fecha_parsed.astimezone(timezone.utc)
+            ticket.fecha_solucion = fecha_parsed.astimezone(datetime.timezone.utc)
 
         # 🌐 Normalizar historial nuevo
         tz_mx = pytz.timezone("America/Tijuana")
