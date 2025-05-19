@@ -341,22 +341,33 @@ export function obtenerFiltrosActivosParaBackend(component: PantallaVerTicketsCo
   if (subsubcategoria.length) filtros.subsubcategoria = subsubcategoria;
   if (descripcion.length) filtros.descripcion = descripcion;
 
-  // Fechas como strings en formato YYYY-MM-DD
-  if (component.rangoFechaCreacionSeleccionado.start)
-    filtros.fecha_desde = component.rangoFechaCreacionSeleccionado.start.toISOString().split("T")[0];
-  if (component.rangoFechaCreacionSeleccionado.end)
-    filtros.fecha_hasta = component.rangoFechaCreacionSeleccionado.end.toISOString().split("T")[0];
-  if (component.rangoFechaFinalSeleccionado.start)
-    filtros.fecha_fin_desde = component.rangoFechaFinalSeleccionado.start.toISOString().split("T")[0];
-  if (component.rangoFechaFinalSeleccionado.end)
-    filtros.fecha_fin_hasta = component.rangoFechaFinalSeleccionado.end.toISOString().split("T")[0];
-  if (component.rangoFechaProgresoSeleccionado.start)
-    filtros.fecha_prog_desde = component.rangoFechaProgresoSeleccionado.start.toISOString().split("T")[0];
-  if (component.rangoFechaProgresoSeleccionado.end)
-    filtros.fecha_prog_hasta = component.rangoFechaProgresoSeleccionado.end.toISOString().split("T")[0];
+  // ✅ Función segura para convertir a YYYY-MM-DD
+  const formatearFecha = (fecha: Date | null): string | null => {
+    if (fecha instanceof Date && !isNaN(fecha.getTime())) {
+      return fecha.toISOString().split("T")[0];
+    }
+    return null;
+  };
+
+  // Fechas como strings en formato YYYY-MM-DD (solo si son válidas)
+  const fechaCreacionStart = formatearFecha(component.rangoFechaCreacionSeleccionado.start);
+  const fechaCreacionEnd = formatearFecha(component.rangoFechaCreacionSeleccionado.end);
+  const fechaFinalStart = formatearFecha(component.rangoFechaFinalSeleccionado.start);
+  const fechaFinalEnd = formatearFecha(component.rangoFechaFinalSeleccionado.end);
+  const fechaProgresoStart = formatearFecha(component.rangoFechaProgresoSeleccionado.start);
+  const fechaProgresoEnd = formatearFecha(component.rangoFechaProgresoSeleccionado.end);
+
+  if (fechaCreacionStart) filtros.fecha_desde = fechaCreacionStart;
+  if (fechaCreacionEnd) filtros.fecha_hasta = fechaCreacionEnd;
+  if (fechaFinalStart) filtros.fecha_fin_desde = fechaFinalStart;
+  if (fechaFinalEnd) filtros.fecha_fin_hasta = fechaFinalEnd;
+  if (fechaProgresoStart) filtros.fecha_prog_desde = fechaProgresoStart;
+  if (fechaProgresoEnd) filtros.fecha_prog_hasta = fechaProgresoEnd;
+
+  // Log opcional para depuración
+  console.log("📤 Filtros para exportar:", filtros);
 
   return filtros;
 }
-
 
 
