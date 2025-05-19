@@ -497,3 +497,23 @@ def migrar_historial_railway():
         return jsonify({"mensaje": f"✅ Historial actualizado en {total_actualizados} tickets (Railway)."}), 200
     else:
         return jsonify({"mensaje": "⚠️ No se encontraron entradas para actualizar (Railway)."}), 200
+
+# ─────────────────────────────────────────────────────────────
+# RUTA: eliminar todos tickets
+# ─────────────────────────────────────────────────────────────
+
+# Ruta temporal y protegida para borrar todos los tickets
+from flask_jwt_extended import jwt_required
+from app.models.ticket_model import Ticket
+from app.extensions import db
+from flask import Blueprint, jsonify
+
+@ticket_bp.route('/eliminar-todos', methods=['DELETE'])
+@jwt_required()
+def eliminar_todos_los_tickets():
+    try:
+        cantidad = Ticket.query.delete()
+        db.session.commit()
+        return jsonify({"mensaje": f"🧨 Se eliminaron {cantidad} tickets."}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
