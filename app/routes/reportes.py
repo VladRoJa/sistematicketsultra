@@ -11,7 +11,7 @@ from app.models.inventario import (
 )
 from io import BytesIO
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timezone
 from app.utils.error_handler import manejar_error
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.models import Ticket
@@ -158,7 +158,7 @@ def reportar_error():
             sucursal_id=user.sucursal_id,
             estado='abierto',
             criticidad=int(criticidad) if criticidad.isdigit() else 1,
-            departamento_id=7,  # 🔧 Asignar a Sistemas
+            departamento_id=7,
             categoria='Errores',
             subcategoria=modulo,
             subsubcategoria=None,
@@ -167,7 +167,7 @@ def reportar_error():
             necesita_refaccion=False,
             descripcion_refaccion=None,
             url_evidencia=url_imagen,
-            fecha_creacion=datetime.utcnow()
+            fecha_creacion=datetime.now(timezone.utc)
         )
 
         db.session.add(nuevo_ticket)
