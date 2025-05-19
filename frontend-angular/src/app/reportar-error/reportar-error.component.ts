@@ -14,7 +14,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { RefrescoService } from '../services/refresco.service';
-
+import { environment } from 'src/environments/environment';
 
 
 
@@ -76,7 +76,7 @@ export class ReportarErrorComponent {
       Authorization: `Bearer ${token}`
     });
 
-      this.http.post('/api/reportes/reportar-error', formData, { headers }).subscribe({
+    this.http.post(`${environment.apiUrl}/reportes/reportar-error`, formData, { headers }).subscribe({
         next: () => {
           this.refrescoService.emitirRefresco();
           this.snackBar.open('Reporte enviado correctamente ✅', 'Cerrar', {
