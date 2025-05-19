@@ -3,6 +3,8 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HttpClient, HttpClientModule } from '@angular/common/http';
+import { environment } from 'src/environments/environment';
+
 
 @Component({
   selector: 'app-carga-masiva-sinmapeo',
@@ -25,7 +27,7 @@ export class CargaMasivaSinMapeoComponent {
     formData.append('archivo', archivo);
 
     this.cargando = true;
-    this.http.post('/api/importar-archivo', formData).subscribe({
+    this.http.post(`${environment.apiUrl}/importar-archivo`, formData).subscribe({
       next: (res: any) => {
         this.mensaje = res.mensaje || 'Carga exitosa';
         this.cargando = false;

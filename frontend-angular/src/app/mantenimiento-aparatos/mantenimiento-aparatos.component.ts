@@ -6,6 +6,8 @@ import { HttpClient, HttpClientModule, HttpHeaders } from '@angular/common/http'
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Observable, map, startWith } from 'rxjs';
+import { environment } from 'src/environments/environment';
+
 
 // Angular Material
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -54,7 +56,7 @@ export class MantenimientoAparatosComponent implements OnInit {
     const token = localStorage.getItem('token');
     const headers = new HttpHeaders().set('Authorization', `Bearer ${token}`);
   
-    this.http.get<any[]>(`http://localhost:5000/api/aparatos/${this.idSucursal}`, { headers })
+    this.http.get<any[]>(`${environment.apiUrl}/aparatos/${this.idSucursal}`, { headers })
       .subscribe({
         next: (data) => {
           this.aparatos = data;

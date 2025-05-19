@@ -17,7 +17,7 @@ export interface TicketsResponse {
 })
 export class TicketService {
   // Base URL del backend para la gestión de tickets.
-  // Se asume que la ruta para obtener tickets es '/api/tickets/all'
+
   private apiUrl = `${environment.apiUrl}/tickets`;
 
   constructor(private http: HttpClient) {}

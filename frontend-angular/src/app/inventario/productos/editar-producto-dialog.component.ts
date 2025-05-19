@@ -9,6 +9,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { environment } from 'src/environments/environment';
 
 @Component({
   selector: 'app-editar-producto-dialog',
@@ -53,7 +54,8 @@ export class EditarProductoDialogComponent {
     
       const headers = new HttpHeaders({ Authorization: `Bearer ${token}` });
     
-      this.http.put(`http://localhost:5000/api/inventario/productos/${producto.id}`, datosActualizados, { headers })
+    this.http.put(`${environment.apiUrl}/inventario/productos/${producto.id}`, datosActualizados, { headers })
+
         .subscribe({
           next: () => {
             alert("Producto actualizado correctamente");
@@ -86,7 +88,7 @@ export class EditarProductoDialogComponent {
       Authorization: `Bearer ${token}`,
     });
 
-    this.http.delete(`http://localhost:5000/api/inventario/productos/${this.data.id}`, { headers })
+    this.http.delete(`${environment.apiUrl}/inventario/productos/${this.data.id}`, { headers })
       .subscribe({
         next: () => {
           alert("Producto eliminado correctamente");

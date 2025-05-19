@@ -5,6 +5,7 @@ import * as XLSX from 'xlsx';
 import * as Papa from 'papaparse';
 import { HttpClient, HttpClientModule } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
+import { environment } from 'src/environments/environment';
 
 @Component({
   selector: 'app-carga-masiva',
@@ -64,7 +65,7 @@ export class CargaMasivaComponent {
       return obj;
     });
 
-    this.http.post('/api/importar-inventario', datosFinales).subscribe(res => {
+    this.http.post(`${environment.apiUrl}/importar-inventario`, datosFinales).subscribe(res => {
       alert('Datos cargados correctamente');
     });
   }

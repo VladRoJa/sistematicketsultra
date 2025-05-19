@@ -138,7 +138,8 @@ export class ProductosComponent implements OnInit {
     const token = localStorage.getItem('token');
     if (!token) return alert('No autorizado');
   
-    this.http.delete(`http://localhost:5000/api/inventario/productos/${id}`, {
+    this.http.delete(`${environment.apiUrl}/inventario/productos/${id}`, {
+
       headers: { Authorization: `Bearer ${token}` }
     }).subscribe({
       next: () => {
