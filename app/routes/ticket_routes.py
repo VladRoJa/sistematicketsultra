@@ -3,11 +3,12 @@
 from flask import Blueprint, jsonify, request, send_file
 from flask_cors import CORS
 from flask_jwt_extended import get_jwt_identity, jwt_required
-from datetime import datetime
+from datetime import datetime, timezone, time
 from io import BytesIO
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 from pytz import timezone, utc
+import pytz
 from sqlalchemy import or_
 from config import Config
 from sqlalchemy import or_
@@ -187,30 +188,48 @@ def update_ticket_status(id):
         data = request.get_json()
         estado = data.get("estado")
         fecha_solucion = data.get("fecha_solucion")
-        historial_fechas = data.get("historial_fechas")
+        historial_nuevo = data.get("historial_fechas", [])
 
         if not estado:
             return jsonify({"mensaje": "Estado es requerido"}), 400
 
         ticket.estado = estado
-
         ahora = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
         if estado == "finalizado":
             print(f"🕒 Fecha finalizado: {ahora}")
             ticket.fecha_finalizado = ahora
-
         elif estado == "en progreso":
             print(f"🕒 Fecha en progreso: {ahora}")
             ticket.fecha_en_progreso = ahora
 
         if fecha_solucion:
-            fecha_parsed = parser.isoparse(fecha_solucion) 
-            ticket.fecha_solucion = fecha_parsed.astimezone(utc)
+            fecha_parsed = parser.isoparse(fecha_solucion)
+            ticket.fecha_solucion = fecha_parsed.astimezone(timezone.utc)
 
-        # ✅ Acumular historial, no sobrescribir
-        if historial_fechas:
-            ticket.historial_fechas = (ticket.historial_fechas or []) + historial_fechas
+        # 🌐 Normalizar historial nuevo
+        tz_mx = pytz.timezone("America/Tijuana")
+        historial_final = ticket.historial_fechas or []
+
+        for entrada in historial_nuevo:
+            nueva = entrada.copy()
+            for campo in ['fecha', 'fechaCambio']:
+                valor = nueva.get(campo)
+                if valor and isinstance(valor, str) and '/' in valor and len(valor) == 8:
+                    try:
+                        fecha_local = datetime.strptime(valor, "%d/%m/%y")
+                        fecha_local = tz_mx.localize(datetime.combine(fecha_local.date(), time(hour=7)))
+                        fecha_utc = fecha_local.astimezone(timezone.utc)
+                        nueva[campo] = fecha_utc.isoformat()
+                    except Exception as e:
+                        print(f"❌ Error parseando {campo} en ticket #{ticket.id}: {e}")
+                        continue
+
+            # 🚫 Evitar duplicados exactos
+            if nueva not in historial_final:
+                historial_final.append(nueva)
+
+        ticket.historial_fechas = historial_final
 
         db.session.commit()
         return jsonify({"mensaje": f"Ticket {id} actualizado correctamente"}), 200
