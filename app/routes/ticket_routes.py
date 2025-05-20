@@ -214,12 +214,17 @@ def update_ticket_status(id):
             nueva = entrada.copy()
             for campo in ['fecha', 'fechaCambio']:
                 valor = nueva.get(campo)
-                if valor and isinstance(valor, str) and '/' in valor and len(valor) == 8:
+
+                if valor:
                     try:
-                        fecha_local = datetime.strptime(valor, "%d/%m/%y")
-                        fecha_local = tz_mx.localize(datetime.combine(fecha_local.date(), time(hour=7)))
-                        fecha_utc = fecha_local.astimezone(timezone.utc)
-                        nueva[campo] = fecha_utc.isoformat()
+                        if '/' in valor and len(valor) == 8:
+                            # dd/mm/yy
+                            fecha_local = datetime.strptime(valor, "%d/%m/%y")
+                            fecha_local = tz_mx.localize(datetime.combine(fecha_local.date(), time(hour=7)))
+                            nueva[campo] = fecha_local.astimezone(timezone.utc).isoformat()
+                        else:
+                            # ya está en ISO o parseable
+                            nueva[campo] = parser.isoparse(valor).astimezone(timezone.utc).isoformat()
                     except Exception as e:
                         print(f"❌ Error parseando {campo} en ticket #{ticket.id}: {e}")
                         continue
@@ -229,6 +234,7 @@ def update_ticket_status(id):
                 historial_final.append(nueva)
 
         ticket.historial_fechas = historial_final
+
 
         db.session.commit()
         return jsonify({"mensaje": f"Ticket {id} actualizado correctamente"}), 200
