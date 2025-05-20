@@ -1,5 +1,3 @@
-// C:\Users\Vladimir\Documents\Sistema tickets\frontend-angular\src\app\pantalla-ver-tickets\helpers\fecha-solucion.helper.ts
-
 import { ChangeDetectorRef } from '@angular/core';
 import { PantallaVerTicketsComponent, Ticket } from '../pantalla-ver-tickets.component';
 import { HttpHeaders } from '@angular/common/http';
@@ -51,7 +49,7 @@ export function guardarFechaSolucion(component: PantallaVerTicketsComponent, tic
       fecha: fechaISO,
       cambiadoPor: component.user.username,
       fechaCambio: new Date().toISOString(),
-    },
+    }
   ];
 
   console.log("📋 Historial a guardar:", nuevoHistorial);
@@ -62,9 +60,22 @@ export function guardarFechaSolucion(component: PantallaVerTicketsComponent, tic
     historial_fechas: nuevoHistorial,
   }, { headers }).subscribe({
     next: () => {
-      // 🔁 Refrescar para forzar obtención del ticket actualizado
-      component.editandoFechaSolucion[ticket.id] = false;
-      component.refrescoService.emitirRefresco();
+      // 🔄 Ideal: Refrescar este ticket directamente de la API principal con paginación real
+      component.ticketService.getTickets().subscribe({
+        next: (res) => {
+          const actualizado = res.tickets.find((t: Ticket) => t.id === ticket.id);
+          if (actualizado) {
+            component.tickets = component.tickets.map(t => t.id === ticket.id ? actualizado : t);
+            component.filteredTickets = component.filteredTickets.map(t => t.id === ticket.id ? actualizado : t);
+            component.visibleTickets = component.visibleTickets.map(t => t.id === ticket.id ? actualizado : t);
+          }
+          component.editandoFechaSolucion[ticket.id] = false;
+        },
+        error: (error) => {
+          console.error("❌ Error al refrescar ticket actualizado:", error);
+          component.refrescoService.emitirRefresco(); // fallback total
+        }
+      });
     },
     error: (error) => {
       console.error(`❌ Error al actualizar la fecha de solución del ticket #${ticket.id}:`, error);
