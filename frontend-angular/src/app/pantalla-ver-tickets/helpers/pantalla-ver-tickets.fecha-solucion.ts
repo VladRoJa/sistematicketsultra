@@ -30,10 +30,6 @@ export function guardarFechaSolucion(component: PantallaVerTicketsComponent, tic
   const token = localStorage.getItem("token");
   if (!token) return;
 
-  const headers = new HttpHeaders()
-    .set("Authorization", `Bearer ${token}`)
-    .set("Content-Type", "application/json");
-
   const fechaConHoraFija = new Date(
     fechaSeleccionada.getFullYear(),
     fechaSeleccionada.getMonth(),
@@ -42,6 +38,12 @@ export function guardarFechaSolucion(component: PantallaVerTicketsComponent, tic
   );
 
   const fechaISO = fechaConHoraFija.toISOString();
+
+  // ✅ Evitar guardar si no ha cambiado la fecha
+  if (ticket.fecha_solucion === fechaISO) {
+    component.editandoFechaSolucion[ticket.id] = false;
+    return;
+  }
 
   const nuevoHistorial = [
     ...(ticket.historial_fechas || []),
@@ -52,7 +54,9 @@ export function guardarFechaSolucion(component: PantallaVerTicketsComponent, tic
     }
   ];
 
-  console.log("📋 Historial a guardar:", nuevoHistorial);
+  const headers = new HttpHeaders()
+    .set("Authorization", `Bearer ${token}`)
+    .set("Content-Type", "application/json");
 
   component.http.put(`${API_URL}/update/${ticket.id}`, {
     estado: ticket.estado,
@@ -60,20 +64,25 @@ export function guardarFechaSolucion(component: PantallaVerTicketsComponent, tic
     historial_fechas: nuevoHistorial,
   }, { headers }).subscribe({
     next: () => {
-      // 🔄 Ideal: Refrescar este ticket directamente de la API principal con paginación real
       component.ticketService.getTickets().subscribe({
         next: (res) => {
           const actualizado = res.tickets.find((t: Ticket) => t.id === ticket.id);
           if (actualizado) {
-            component.tickets = component.tickets.map(t => t.id === ticket.id ? actualizado : t);
-            component.filteredTickets = component.filteredTickets.map(t => t.id === ticket.id ? actualizado : t);
-            component.visibleTickets = component.visibleTickets.map(t => t.id === ticket.id ? actualizado : t);
+            const actualizar = (lista: Ticket[]) =>
+              lista.map(t => t.id === ticket.id ? actualizado : t);
+
+            component.tickets = actualizar(component.tickets);
+            component.filteredTickets = actualizar(component.filteredTickets);
+            component.visibleTickets = actualizar(component.visibleTickets);
           }
+
+          // ✅ Cerrar editor y limpiar selección
           component.editandoFechaSolucion[ticket.id] = false;
+          delete component.fechaSolucionSeleccionada[ticket.id];
         },
         error: (error) => {
           console.error("❌ Error al refrescar ticket actualizado:", error);
-          component.refrescoService.emitirRefresco(); // fallback total
+          component.refrescoService.emitirRefresco();
         }
       });
     },
@@ -82,6 +91,7 @@ export function guardarFechaSolucion(component: PantallaVerTicketsComponent, tic
     }
   });
 }
+
 
 /** Cancelar edición */
 export function cancelarEdicionFechaSolucion(component: PantallaVerTicketsComponent, ticket: Ticket): void {
