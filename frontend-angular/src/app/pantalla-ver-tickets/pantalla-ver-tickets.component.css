@@ -461,3 +461,65 @@
   color: #999 !important;
   cursor: not-allowed;
 }
+
+/* Estilos para la fecha de solución */
+.fecha-actual {
+  display: flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background-color: #f5f5f5;
+}
+
+.boton-editar {
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.boton-editar:hover {
+  opacity: 1;
+}
+
+.fecha-solucion-picker {
+  margin-top: 8px;
+  padding: 12px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.historial-fechas {
+  border-top: 1px solid #eee;
+  padding-top: 8px;
+}
+
+.historial-lista {
+  max-height: 200px;
+  overflow-y: auto;
+  background-color: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+}
+
+.cambio-item {
+  border-bottom: 1px solid #f0f0f0;
+  background-color: #fafafa;
+}
+
+.cambio-item:last-child {
+  border-bottom: none;
+}
+
+/* Utilidades */
+.mb-1 { margin-bottom: 0.25rem; }
+.mb-2 { margin-bottom: 0.5rem; }
+.mt-2 { margin-top: 0.5rem; }
+.ml-2 { margin-left: 0.5rem; }
+.p-2 { padding: 0.5rem; }
+.text-sm { font-size: 0.875rem; }
+.text-xs { font-size: 0.75rem; }
+.text-gray-500 { color: #6b7280; }
+.text-gray-600 { color: #4b5563; }
+.w-full { width: 100%; }
+.flex { display: flex; }
+.gap-2 { gap: 0.5rem; }
