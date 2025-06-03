@@ -1,0 +1,31 @@
+// src/app/pantalla-ver-tickets/modals/historial-fechas-modal.component.ts
+
+import { Component, Inject } from '@angular/core';
+import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { Ticket } from '../pantalla-ver-tickets.component';
+import { CommonModule } from '@angular/common';
+import { MatButtonModule } from '@angular/material/button';
+import { MatDividerModule } from '@angular/material/divider';
+
+
+@Component({
+  standalone: true, 
+  selector: 'app-historial-fechas-modal',
+  templateUrl: './historial-fechas-modal.component.html',
+  imports: [
+    CommonModule,
+    MatDialogModule,
+    MatButtonModule,
+    MatDividerModule
+  ]
+})
+export class HistorialFechasModalComponent {
+  constructor(
+    @Inject(MAT_DIALOG_DATA) public data: Ticket,
+    private dialogRef: MatDialogRef<HistorialFechasModalComponent>
+  ) {}
+
+  cerrar(): void {
+    this.dialogRef.close();
+  }
+}

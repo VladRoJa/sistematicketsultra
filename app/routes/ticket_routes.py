@@ -16,7 +16,8 @@ from app.models.user_model import UserORM
 from app.extensions import db
 from app.utils.error_handler import manejar_error
 from dateutil import parser
-
+from sqlalchemy.orm.attributes import flag_modified
+from app.utils.datetime_utils import format_datetime 
 
 
 
@@ -176,6 +177,8 @@ def list_tickets_with_filters():
 # ─────────────────────────────────────────────────────────────
 # RUTA: Actualizar estado de un ticket
 # ─────────────────────────────────────────────────────────────
+
+
 @ticket_bp.route('/update/<int:id>', methods=['PUT'])
 @jwt_required()
 def update_ticket_status(id):
@@ -214,27 +217,32 @@ def update_ticket_status(id):
             nueva = entrada.copy()
             for campo in ['fecha', 'fechaCambio']:
                 valor = nueva.get(campo)
-
                 if valor:
                     try:
                         if '/' in valor and len(valor) == 8:
-                            # dd/mm/yy
                             fecha_local = datetime.strptime(valor, "%d/%m/%y")
                             fecha_local = tz_mx.localize(datetime.combine(fecha_local.date(), time(hour=7)))
                             nueva[campo] = fecha_local.astimezone(timezone.utc).isoformat()
                         else:
-                            # ya está en ISO o parseable
                             nueva[campo] = parser.isoparse(valor).astimezone(timezone.utc).isoformat()
                     except Exception as e:
                         print(f"❌ Error parseando {campo} en ticket #{ticket.id}: {e}")
                         continue
 
-            # 🚫 Evitar duplicados exactos
-            if nueva not in historial_final:
+            existe_misma_fecha = any(
+                parser.isoparse(e.get("fecha")).replace(tzinfo=None) == parser.isoparse(nueva.get("fecha")).replace(tzinfo=None)
+                for e in historial_final if e.get("fecha")
+            )
+
+            if not existe_misma_fecha:
                 historial_final.append(nueva)
-
+        
+        
+        historial_final.sort(key=lambda x: parser.isoparse(x['fechaCambio']), reverse=True)
+        # ✅ Asignar y marcar como modificado una vez al final
         ticket.historial_fechas = historial_final
-
+        flag_modified(ticket, 'historial_fechas')
+        print(f"✅ Historial final para ticket #{ticket.id}: {historial_final}")
 
         db.session.commit()
         return jsonify({"mensaje": f"Ticket {id} actualizado correctamente"}), 200
@@ -242,8 +250,6 @@ def update_ticket_status(id):
     except Exception as e:
         db.session.rollback()
         return manejar_error(e, "update_ticket_status")
-
-
 
 # ─────────────────────────────────────────────────────────────
 # RUTA: Eliminar ticket
@@ -366,7 +372,7 @@ def export_excel():
 
         headers = [
             "ID", "Descripción", "Usuario", "Estado", "Criticidad",
-            "Fecha Creación", "Fecha Finalizado", "Fecha Solución",
+            "Fecha Creación", "Fecha En Progreso", "Fecha Finalizado", "Fecha Solución",
             "Departamento", "Categoría", "Subcategoría", "Sub-subcategoría",
             "Problema Detectado", "Refacción", "Descripción Refacción"
         ]
@@ -382,6 +388,12 @@ def export_excel():
 
         for idx, ticket in enumerate(tickets, start=2):
             t = ticket.to_dict()
+
+            # ✅ Formatear fecha solución como día/mes/año
+            fecha_solucion_corta = ""
+            if ticket.fecha_solucion:
+                fecha_solucion_corta = ticket.fecha_solucion.astimezone(pytz.timezone("America/Tijuana")).strftime('%d/%m/%Y')
+
             ws.append([
                 t.get("id"),
                 t.get("descripcion"),
@@ -389,8 +401,9 @@ def export_excel():
                 t.get("estado"),
                 t.get("criticidad"),
                 t.get("fecha_creacion"),
+                t.get("fecha_en_progreso"),
                 t.get("fecha_finalizado"),
-                t.get("fecha_solucion"),
+                fecha_solucion_corta,
                 ticket.departamento.nombre if ticket.departamento else "—",
                 t.get("categoria"),
                 t.get("subcategoria"),
@@ -399,6 +412,7 @@ def export_excel():
                 "Sí" if t.get("necesita_refaccion") else "No",
                 t.get("descripcion_refaccion")
             ])
+            
             if idx % 2 == 0:
                 for cell in ws[idx]:
                     cell.fill = alt_fill

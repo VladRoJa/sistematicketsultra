@@ -1,7 +1,11 @@
+//C:\Users\Vladimir\Documents\Sistema tickets\frontend-angular\src\app\pantalla-ver-tickets\helpers\pantalla-ver-tickets.fecha-solucion.ts
+
 import { ChangeDetectorRef } from '@angular/core';
 import { PantallaVerTicketsComponent, Ticket } from '../pantalla-ver-tickets.component';
 import { HttpHeaders } from '@angular/common/http';
 import { environment } from 'src/environments/environment';
+import { mostrarAlertaToast, mostrarAlertaErrorDesdeStatus } from 'src/app/utils/alertas';
+
 
 const API_URL = `${environment.apiUrl}/tickets`;
 
@@ -12,8 +16,8 @@ export function editarFechaSolucion(
   cdr: ChangeDetectorRef
 ): void {
   // Solo permitir edición a administradores
-  if (!component.usuarioEsAdmin) {
-    console.warn('Solo los administradores pueden editar la fecha de solución');
+  if (!component.usuarioEsAdmin && !component.usuarioEsEditorCorporativo) {
+    console.warn('Solo administradores o editores corporativos pueden editar la fecha de solución');
     return;
   }
 
@@ -30,16 +34,13 @@ export function editarFechaSolucion(
 }
 
 /** Guardar la nueva fecha de solución con hora fija 07:00 AM */
-export function guardarFechaSolucion(component: PantallaVerTicketsComponent, ticket: Ticket): void {
-  // Verificar permisos de administrador
-  if (!component.usuarioEsAdmin) {
-    console.warn('Solo los administradores pueden guardar la fecha de solución');
-    return;
-  }
-
-  const fechaSeleccionada = component.fechaSolucionSeleccionada[ticket.id];
-  if (!fechaSeleccionada) {
-    console.warn('No hay fecha seleccionada para guardar');
+export function guardarFechaSolucion(
+  component: PantallaVerTicketsComponent,
+  ticket: Ticket,
+  nuevaFecha: Date
+): void {
+  if (!component.usuarioEsAdmin && !component.usuarioEsEditorCorporativo) {
+    console.warn('Solo administradores o editores corporativos pueden guardar la fecha de solución');
     return;
   }
 
@@ -49,78 +50,68 @@ export function guardarFechaSolucion(component: PantallaVerTicketsComponent, tic
     return;
   }
 
+  // Aplicar hora fija 07:00 AM
   const fechaConHoraFija = new Date(
-    fechaSeleccionada.getFullYear(),
-    fechaSeleccionada.getMonth(),
-    fechaSeleccionada.getDate(),
+    nuevaFecha.getFullYear(),
+    nuevaFecha.getMonth(),
+    nuevaFecha.getDate(),
     7, 0, 0
   );
-
   const fechaISO = fechaConHoraFija.toISOString();
 
-  // Evitar guardar si no ha cambiado la fecha
-  if (ticket.fecha_solucion === fechaISO) {
-    console.log('La fecha no ha cambiado, no es necesario guardar');
-    component.editandoFechaSolucion[ticket.id] = false;
-    return;
-  }
-
-  // Asegurarse que el historial existente sea un array
-  const historialActual = Array.isArray(ticket.historial_fechas) 
-    ? ticket.historial_fechas 
+  // Obtener historial actual o crear uno nuevo
+  const historialActual = Array.isArray(ticket.historial_fechas)
+    ? [...ticket.historial_fechas]
     : [];
 
-  console.log('Historial actual:', historialActual);
+  // Verificar si ya existe una entrada con la misma fecha
+  const yaExiste = historialActual.some(item => item.fecha === fechaISO);
 
-  // Preparar el nuevo registro en el historial
-  const nuevoRegistro = {
-    fecha: fechaISO,
-    cambiadoPor: component.user.username,
-    fechaCambio: new Date().toISOString(),
+  if (yaExiste) {
+    console.log('⚠️ Esta fecha ya está registrada en el historial. No se agregará nuevamente.');
+  } else {
+    const nuevoRegistro = {
+      fecha: fechaISO,
+      cambiadoPor: component.user.username,
+      fechaCambio: new Date().toISOString(),
+    };
+
+    historialActual.push(nuevoRegistro);
+  }
+
+  const historialActualizado = historialActual.sort(
+    (a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
+  );
+
+  const datosActualizacion = {
+    estado: ticket.estado,
+    fecha_solucion: fechaISO,
+    historial_fechas: historialActualizado,
   };
-
-  console.log('Nuevo registro a agregar:', nuevoRegistro);
-
-  const nuevoHistorial = [...historialActual, nuevoRegistro];
-
-  console.log('Historial completo a guardar:', nuevoHistorial);
 
   const headers = new HttpHeaders()
     .set("Authorization", `Bearer ${token}`)
     .set("Content-Type", "application/json");
 
-  const datosActualizacion = {
-    estado: ticket.estado,
-    fecha_solucion: fechaISO,
-    historial_fechas: nuevoHistorial,
-  };
-
-  console.log('Datos completos a enviar:', datosActualizacion);
-
-  // Actualizar el ticket
   component.http.put(`${API_URL}/update/${ticket.id}`, datosActualizacion, { headers }).subscribe({
-    next: (response) => {
-      console.log('Respuesta del servidor:', response);
-      
-      // Recargar los tickets para obtener la información actualizada
+    next: () => {
       component.ticketService.getTickets().subscribe({
         next: (res) => {
           const actualizado = res.tickets.find((t: Ticket) => t.id === ticket.id);
           if (actualizado) {
-            console.log('Ticket actualizado recibido:', actualizado);
-            
+            ticket.fecha_solucion = actualizado.fecha_solucion;
+            ticket.historial_fechas = actualizado.historial_fechas;
+
             const actualizar = (lista: Ticket[]) =>
               lista.map(t => t.id === ticket.id ? actualizado : t);
 
             component.tickets = actualizar(component.tickets);
             component.filteredTickets = actualizar(component.filteredTickets);
             component.visibleTickets = actualizar(component.visibleTickets);
-          } else {
-            console.warn('No se encontró el ticket actualizado en la respuesta');
           }
 
-          // Cerrar editor y limpiar selección
           component.editandoFechaSolucion[ticket.id] = false;
+          mostrarAlertaToast('✅ Fecha solución guardada exitosamente.');
           delete component.fechaSolucionSeleccionada[ticket.id];
         },
         error: (error) => {
@@ -131,9 +122,13 @@ export function guardarFechaSolucion(component: PantallaVerTicketsComponent, tic
     },
     error: (error) => {
       console.error(`Error al actualizar la fecha de solución del ticket #${ticket.id}:`, error);
+      mostrarAlertaErrorDesdeStatus(error.status);
     }
   });
 }
+
+
+
 
 /** Cancelar edición */
 export function cancelarEdicionFechaSolucion(component: PantallaVerTicketsComponent, ticket: Ticket): void {

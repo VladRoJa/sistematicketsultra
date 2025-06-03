@@ -17,12 +17,16 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatNativeDateModule } from '@angular/material/core';
 import { MatDatepickerModule } from '@angular/material/datepicker';
+import { MatDialogModule } from '@angular/material/dialog';
+
 
 // Componentes propios
-import { PantallaVerTicketsComponent } from '../pantalla-ver-tickets.component';
+import { PantallaVerTicketsComponent } from './pantalla-ver-tickets.component';
+import { HistorialFechasModalComponent } from './modals/historial-fechas-modal.component';
+
 
 @NgModule({
-  declarations: [], // No se usa porque es standalone, pero se deja para futuras expansiones
+  declarations: [],
   imports: [
     CommonModule,
     FormsModule,
@@ -38,6 +42,8 @@ import { PantallaVerTicketsComponent } from '../pantalla-ver-tickets.component';
     MatNativeDateModule,
     MatDatepickerModule,
     PantallaVerTicketsComponent,
+    MatDialogModule,
+    HistorialFechasModalComponent
   ],
   exports: [PantallaVerTicketsComponent]
 })

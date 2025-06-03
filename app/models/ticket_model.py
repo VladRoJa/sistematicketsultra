@@ -17,7 +17,7 @@ class Ticket(db.Model):
     asignado_a = db.Column(db.String(50), db.ForeignKey('users.username'), nullable=True)
     sucursal_id = db.Column(db.Integer, db.ForeignKey('sucursales.sucursal_id'), nullable=False)
     estado = db.Column(db.Enum('abierto', 'en progreso', 'finalizado'), default='abierto', nullable=False)
-    fecha_creacion=datetime.now(tz('America/Tijuana')).astimezone(timezone.utc)    
+    fecha_creacion = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)   
     fecha_finalizado = db.Column(db.DateTime(timezone=True))
     fecha_en_progreso = db.Column(db.DateTime(timezone=True))
     fecha_solucion = db.Column(db.DateTime(timezone=True))
@@ -67,7 +67,7 @@ class Ticket(db.Model):
             'subcategoria': self.subcategoria,
             'subsubcategoria': self.subsubcategoria,
             'fecha_finalizado': format_datetime(self.fecha_finalizado),
-            'fecha_solucion': format_fecha_corta(self.fecha_solucion),
+            'fecha_solucion': self.fecha_solucion.isoformat() if self.fecha_solucion else None,
             'necesita_refaccion': self.necesita_refaccion,
             'descripcion_refaccion': self.descripcion_refaccion,
             'problema_detectado': self.problema_detectado,

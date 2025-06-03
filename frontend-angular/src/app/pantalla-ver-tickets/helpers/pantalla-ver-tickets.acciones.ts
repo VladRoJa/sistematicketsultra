@@ -35,7 +35,8 @@ export function editarFecha(component: PantallaVerTicketsComponent, ticket: Tick
 
 /** Guardar la fecha de solución editada */
 export function guardarFecha(component: PantallaVerTicketsComponent, ticket: Ticket): void {
-  guardarFechaSolucion(component, ticket);
+  guardarFechaSolucion(component, ticket, component.fechaSolucionSeleccionada[ticket.id]);
+
 }
 
 /** Cancelar edición de fecha de solución */
@@ -128,6 +129,11 @@ export function limpiarTodosLosFiltros(component: PantallaVerTicketsComponent): 
 
   // ✅ RESET A PÁGINA 1
   component.page = 1;
+
+  component.filtroProgresoActivo = false;
+  component.filtroFinalizadoActivo = false;
+  component.incluirSinFechaProgreso = false;
+  component.incluirSinFechaFinalizado = false;
 
   actualizarVisibleTickets(component);
 }

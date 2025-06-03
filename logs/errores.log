@@ -117,3 +117,30 @@ Traceback (most recent call last):
     raise ValueError("time data %r does not match format %r" %
 ValueError: time data '2025-05-17T14:00:00.000Z' does not match format '%Y-%m-%d %H:%M:%S'
 
+
+[2025-05-22 09:12:26] ERROR en update_ticket_status - /api/tickets/update/48
+Mensaje: can't compare offset-naive and offset-aware datetimes
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\ticket_routes.py", line 241, in update_ticket_status
+    historial_final.sort(key=lambda x: parser.isoparse(x['fechaCambio']), reverse=True)
+TypeError: can't compare offset-naive and offset-aware datetimes
+
+
+[2025-05-22 09:12:51] ERROR en update_ticket_status - /api/tickets/update/48
+Mensaje: can't compare offset-naive and offset-aware datetimes
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\ticket_routes.py", line 241, in update_ticket_status
+    historial_final.sort(key=lambda x: parser.isoparse(x['fechaCambio']), reverse=True)
+TypeError: can't compare offset-naive and offset-aware datetimes
+
+
+[2025-05-22 09:18:50] ERROR en update_ticket_status - /api/tickets/update/48
+Mensaje: can't compare offset-naive and offset-aware datetimes
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\ticket_routes.py", line 241, in update_ticket_status
+    historial_final.sort(key=lambda x: parser.isoparse(x['fechaCambio']), reverse=True)
+TypeError: can't compare offset-naive and offset-aware datetimes
+

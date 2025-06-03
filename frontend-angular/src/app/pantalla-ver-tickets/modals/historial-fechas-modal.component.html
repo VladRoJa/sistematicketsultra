@@ -1,0 +1,39 @@
+<h2 mat-dialog-title>🗓 Historial de Fecha Solución</h2>
+
+<mat-dialog-content class="contenido-modal">
+
+  <!-- Información general del ticket -->
+  <section class="resumen-ticket" style="margin-bottom: 16px;">
+    <p><strong>ID:</strong> {{ data.id }}</p>
+    <p><strong>Descripción:</strong> {{ data.descripcion }}</p>
+    <p><strong>Estado:</strong> {{ data.estado | titlecase }}</p>
+    <p><strong>Fecha Creación:</strong> {{ data.fecha_creacion }}</p>
+    <p><strong>En Progreso:</strong> {{ data.fecha_en_progreso || '—' }}</p>
+    <p><strong>Finalizado:</strong> {{ data.fecha_finalizado || '—' }}</p>
+  </section>
+
+  <mat-divider></mat-divider>
+
+  <!-- Tabla de historial -->
+  <table class="tabla-historial" style="width: 100%; margin-top: 16px; border-collapse: collapse;">
+    <thead>
+      <tr>
+        <th style="text-align: left; padding: 8px;">📅 Fecha Solución</th>
+        <th style="text-align: left; padding: 8px;">👤 Usuario</th>
+        <th style="text-align: left; padding: 8px;">🕒 Fecha de Cambio</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let item of data.historial_fechas">
+        <td style="padding: 8px;">{{ item.fecha }}</td>
+        <td style="padding: 8px;">{{ item.cambiadoPor }}</td>
+        <td style="padding: 8px;">{{ item.fechaCambio }}</td>
+      </tr>
+    </tbody>
+  </table>
+
+</mat-dialog-content>
+
+<mat-dialog-actions align="end" style="margin-top: 16px;">
+  <button mat-button (click)="cerrar()">Cerrar</button>
+</mat-dialog-actions>

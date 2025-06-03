@@ -1,0 +1,26 @@
+.contenido-modal {
+  min-width: 400px;
+}
+
+.resumen-ticket p {
+  margin: 4px 0;
+  font-size: 14px;
+}
+
+.tabla-historial {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+}
+
+.tabla-historial th,
+.tabla-historial td {
+  border: 1px solid #ccc;
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
+.tabla-historial th {
+  background-color: #f5f5f5;
+  text-align: left;
+}

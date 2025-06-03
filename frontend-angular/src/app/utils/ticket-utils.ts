@@ -29,12 +29,14 @@ export function getFiltrosActivosFrom(
 export function filtrarTicketsConFiltros(tickets: Ticket[], filtros: { [clave: string]: string[] }): Ticket[] {
   return tickets.filter(ticket => {
     for (const [clave, valores] of Object.entries(filtros)) {
-      if (valores.length === 0) continue;
-      const valorTicket = (ticket as any)[clave] ?? '—';
-      const valorTicketStr = valorTicket.toString();
-      const valoresStr = valores.map(v => v.toString());
+      if (!valores.length) continue;
 
-      if (!valoresStr.includes(valorTicketStr)) {
+      const valorTicket = (ticket as any)[clave] ?? '—';
+      const valorTicketNormalizado = removeDiacritics(valorTicket.toString().trim().toLowerCase());
+
+      const valoresNormalizados = valores.map(v => removeDiacritics(v.toString().trim().toLowerCase()));
+
+      if (!valoresNormalizados.includes(valorTicketNormalizado)) {
         return false;
       }
     }
@@ -90,29 +92,43 @@ export function regenerarFiltrosFiltradosDesdeTickets(
 
 
 export function isFilterActive(ctx: any, columna: string): boolean {
-  const tieneSeleccionados = (lista: any[]) =>
-    lista?.some((item: any) => item.seleccionado);
+  const pluralMap: Record<string, string> = {
+    categoria: 'categorias',
+    descripcion: 'descripciones',
+    username: 'usuarios',
+    estado: 'estados',
+    criticidad: 'criticidades',
+    departamento: 'departamentos',
+    subcategoria: 'subcategorias',
+    subsubcategoria: 'detalles'
+  };
 
-  if (columna === 'username') return tieneSeleccionados(ctx.usuariosDisponibles);
-  if (columna === 'estado') return tieneSeleccionados(ctx.estadosDisponibles);
-  if (columna === 'categoria') return tieneSeleccionados(ctx.categoriasDisponibles);
-  if (columna === 'descripcion') return tieneSeleccionados(ctx.descripcionesDisponibles);
-  if (columna === 'criticidad') return tieneSeleccionados(ctx.criticidadesDisponibles);
-  if (columna === 'departamento') return tieneSeleccionados(ctx.departamentosDisponibles);
-  if (columna === 'subcategoria') return tieneSeleccionados(ctx.subcategoriasDisponibles);
-  if (columna === 'subsubcategoria') return tieneSeleccionados(ctx.detallesDisponibles);
+  const plural = pluralMap[columna] || `${columna}s`;
+  const disponibles = ctx[`${plural}Disponibles`];
 
-  
+  // Si no hay disponibles aún, no hay filtro activo
+  if (!Array.isArray(disponibles) || disponibles.length === 0) return false;
+
+  // Si hay al menos un ítem desmarcado y otro marcado, el filtro está activo
+  const algunoMarcado = disponibles.some((i: any) => i.seleccionado);
+  const algunoDesmarcado = disponibles.some((i: any) => !i.seleccionado);
+
+  if (algunoMarcado && algunoDesmarcado) return true;
+
+  // Casos especiales para fechas
   if (columna === 'fecha_creacion') {
-    return !!(ctx.rangoFechaCreacionSeleccionado?.start && ctx.rangoFechaCreacionSeleccionado?.end);
+    return !!(ctx.rangoFechaCreacionSeleccionado?.start || ctx.rangoFechaCreacionSeleccionado?.end);
   }
-
-  if (columna === 'fecha_finalizado') {
-    return !!(ctx.rangoFechaFinalSeleccionado?.start && ctx.rangoFechaFinalSeleccionado?.end);
-  }
+  if (columna === 'fecha_en_progreso') return ctx.filtroProgresoActivo;
+  if (columna === 'fecha_finalizado') return ctx.filtroFinalizadoActivo;
 
   return false;
 }
+
+
+
+
+
 
 
 
@@ -180,7 +196,7 @@ export function limpiarFiltroColumnaConMapa(component: any, columna: string): vo
     const config = mapa[columna];
     if (!config) return;
   
-    component[config.disponibles].forEach((item: any) => item.seleccionado = false);
+    component[config.disponibles].forEach((item: any) => item.seleccionado = true);
     component[config.filtradas] = [...component[config.disponibles]];
     component[config.filtroTexto] = '';
     component[config.seleccionarTodo] = false;
@@ -191,68 +207,68 @@ export function limpiarFiltroColumnaConMapa(component: any, columna: string): vo
     return texto.normalize("NFD").replace(/\p{Diacritic}/gu, "");
   }
 
-  export function toggleSeleccionarTodoConMapa(component: any, columna: string): void {
-    const mapa = {
-      categoria: {
-        disponibles: 'categoriasDisponibles',
-        filtradas: 'categoriasFiltradas',
-        seleccionarTodo: 'seleccionarTodoCategoria',
-      },
-      descripcion: {
-        disponibles: 'descripcionesDisponibles',
-        filtradas: 'descripcionesFiltradas',
-        seleccionarTodo: 'seleccionarTodoDescripcion',
-      },
-      username: {
-        disponibles: 'usuariosDisponibles',
-        filtradas: 'usuariosFiltrados',
-        seleccionarTodo: 'seleccionarTodoUsuario',
-      },
-      estado: {
-        disponibles: 'estadosDisponibles',
-        filtradas: 'estadosFiltrados',
-        seleccionarTodo: 'seleccionarTodoEstado',
-      },
-      criticidad: {
-        disponibles: 'criticidadesDisponibles',
-        filtradas: 'criticidadesFiltradas',
-        seleccionarTodo: 'seleccionarTodoCriticidad',
-      },
-      departamento: {
-        disponibles: 'departamentosDisponibles',
-        filtradas: 'departamentosFiltrados',
-        seleccionarTodo: 'seleccionarTodoDepto',
-      },
-      subcategoria: {
-        disponibles: 'subcategoriasDisponibles',
-        filtradas: 'subcategoriasFiltradas',
-        seleccionarTodo: 'seleccionarTodoSubcategoria',
-      },
-      subsubcategoria: {
-        disponibles: 'detallesDisponibles',
-        filtradas: 'detallesFiltrados',
-        seleccionarTodo: 'seleccionarTodoDetalle',
-      },
-    };
-  
-    const entry = mapa[columna as keyof typeof mapa];
-    if (!entry) return;
-  
-    const seleccionarTodo = !component[entry.seleccionarTodo];
-    component[entry.seleccionarTodo] = seleccionarTodo;
-  
-    // Aplicar selección a elementos visibles (filtrados)
-    component[entry.filtradas].forEach((item: any) => item.seleccionado = seleccionarTodo);
-  
-    // Sincronizar con los disponibles
-    component[entry.disponibles].forEach((item: any) => {
-      const filtrado = component[entry.filtradas].find((f: any) => f.valor === item.valor);
-      if (filtrado) {
-        item.seleccionado = filtrado.seleccionado;
-      }
-    });
-  }
-  
+export function toggleSeleccionarTodoConMapa(component: any, columna: string): void {
+  const mapa = {
+    categoria: {
+      disponibles: 'categoriasDisponibles',
+      filtradas: 'categoriasFiltradas',
+      seleccionarTodo: 'seleccionarTodoCategoria',
+    },
+    descripcion: {
+      disponibles: 'descripcionesDisponibles',
+      filtradas: 'descripcionesFiltradas',
+      seleccionarTodo: 'seleccionarTodoDescripcion',
+    },
+    username: {
+      disponibles: 'usuariosDisponibles',
+      filtradas: 'usuariosFiltrados',
+      seleccionarTodo: 'seleccionarTodoUsuario',
+    },
+    estado: {
+      disponibles: 'estadosDisponibles',
+      filtradas: 'estadosFiltrados',
+      seleccionarTodo: 'seleccionarTodoEstado',
+    },
+    criticidad: {
+      disponibles: 'criticidadesDisponibles',
+      filtradas: 'criticidadesFiltradas',
+      seleccionarTodo: 'seleccionarTodoCriticidad',
+    },
+    departamento: {
+      disponibles: 'departamentosDisponibles',
+      filtradas: 'departamentosFiltrados',
+      seleccionarTodo: 'seleccionarTodoDepto',
+    },
+    subcategoria: {
+      disponibles: 'subcategoriasDisponibles',
+      filtradas: 'subcategoriasFiltradas',
+      seleccionarTodo: 'seleccionarTodoSubcategoria',
+    },
+    subsubcategoria: {
+      disponibles: 'detallesDisponibles',
+      filtradas: 'detallesFiltrados',
+      seleccionarTodo: 'seleccionarTodoDetalle',
+    },
+  };
+
+  const entry = mapa[columna as keyof typeof mapa];
+  if (!entry) return;
+
+  const visibles = component[entry.filtradas];
+  const todosSeleccionados = visibles.every((item: any) => item.seleccionado);
+
+  visibles.forEach((item: any) => item.seleccionado = !todosSeleccionados);
+  component[entry.seleccionarTodo] = !todosSeleccionados;
+
+  // También sincronizamos los "disponibles" en base a los "filtrados"
+  component[entry.disponibles].forEach((item: any) => {
+    const coincide = visibles.find((v: any) => v.valor === item.valor);
+    if (coincide) {
+      item.seleccionado = coincide.seleccionado;
+    }
+  });
+}
+
 
 export function todasOpcionesDesmarcadas(opciones: { valor: string, seleccionado: boolean }[]): boolean {
   return opciones.every(opcion => !opcion.seleccionado);

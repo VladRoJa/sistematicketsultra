@@ -92,15 +92,37 @@ export function filtrarOpcionesFechaF(component: PantallaVerTicketsComponent): v
 
 /** ------ Checkboxes y sincronización ------ */
 
+
+
 /** Alternar selección de todos los checkboxes de una columna */
-export function toggleSeleccionarTodo(component: PantallaVerTicketsComponent, campo: string, todos: boolean): void {
-  const campoFiltrado = campo + 'Filtrados';
-  if (component[campoFiltrado]) {
-    component[campoFiltrado].forEach((item: any) => {
-      item.seleccionado = todos;
-    });
+export function toggleSeleccionarTodo(
+  component: PantallaVerTicketsComponent,
+  campo: string,
+  todos: boolean
+): void {
+  // 🔒 1) Verificamos que la propiedad exista antes de tocarla
+  const campoFiltrado = (campo + 'Filtrados') as keyof PantallaVerTicketsComponent;
+  const campoDisponibles = (campo + 'Disponibles') as keyof PantallaVerTicketsComponent;
+  if (!(campoFiltrado in component) || !(campoDisponibles in component)) {
+    console.warn(`toggleSeleccionarTodo: columna desconocida '${campo}'`);
+    return;                        // ⇦ Salimos silenciosamente
   }
+
+  // 🔄 2) Array de opciones visibles (filtradas)
+  const filtrados = component[campoFiltrado] as { valor: string; seleccionado: boolean }[];
+  if (!Array.isArray(filtrados)) { return; }
+
+  // ✅ 3) Marcamos / desmarcamos lo visible
+  filtrados.forEach(item => (item.seleccionado = todos));
+
+  // 🔄 4) Sincronizamos los disponibles con lo recién marcado
+  const disponibles = component[campoDisponibles] as { valor: string; seleccionado: boolean }[];
+  disponibles.forEach(item => {
+    const match = filtrados.find(f => f.valor === item.valor);
+    if (match) { item.seleccionado = match.seleccionado; }
+  });
 }
+
 
 /** Sincronizar selección de disponibles basado en filtrados */
 export function sincronizarCheckboxesConDisponibles(component: PantallaVerTicketsComponent): void {
@@ -126,27 +148,44 @@ export function sincronizarCheckboxesConDisponibles(component: PantallaVerTicket
 /** ------ Funciones generales de filtros ------ */
 
 /** Obtener todos los filtros activos de la tabla */
-export function obtenerFiltrosActivos(component: PantallaVerTicketsComponent): { [clave: string]: string[] } {
+/** Devuelve un objeto { campoTabla: [valoresSeleccionados] } */
+export function obtenerFiltrosActivos(
+  component: PantallaVerTicketsComponent
+): { [clave: string]: string[] } {
+
   const filtros: { [clave: string]: string[] } = {};
 
-  const agregarFiltro = (nombreCampoTabla: string, disponibles: { valor: string, seleccionado: boolean }[]) => {
-    const seleccionados = disponibles.filter(item => item.seleccionado).map(item => item.valor);
-    if (seleccionados.length > 0) {
-      filtros[nombreCampoTabla] = seleccionados;
-    }
-  };
+  // Los ocho campos que soportan filtrado por check-box
+  const campos = [
+    'categoria',
+    'descripcion',
+    'username',
+    'estado',
+    'criticidad',
+    'departamento',
+    'subcategoria',
+    'subsubcategoria'
+  ] as const;
 
-  agregarFiltro('categoria', component.categoriasDisponibles);
-  agregarFiltro('descripcion', component.descripcionesDisponibles);
-  agregarFiltro('username', component.usuariosDisponibles);
-  agregarFiltro('estado', component.estadosDisponibles);
-  agregarFiltro('criticidad', component.criticidadesDisponibles);
-  agregarFiltro('departamento', component.departamentosDisponibles);
-  agregarFiltro('subcategoria', component.subcategoriasDisponibles);
-  agregarFiltro('subsubcategoria', component.detallesDisponibles);
+  campos.forEach(campo => {
+    const seleccion = component.temporalSeleccionados[campo]
+      ?.filter(i => i.seleccionado)
+      .map(i => i.valor) ?? [];
+
+    /* 
+       - Si se desmarcó al menos un valor, el filtro está activo.
+       - Si siguen TODOS marcados, equivale a “sin filtro” y se ignora.
+    */
+    const totalOpciones = component.temporalSeleccionados[campo]?.length ?? 0;
+    if (seleccion.length > 0 && seleccion.length !== totalOpciones) {
+      filtros[campo] = seleccion;
+    }
+  });
 
   return filtros;
 }
+
+
 
 
 

@@ -4,6 +4,7 @@ import { PantallaVerTicketsComponent, ApiResponse, Ticket } from '../pantalla-ve
 import { HttpHeaders } from '@angular/common/http';
 import { generarOpcionesDisponiblesDesdeTickets, regenerarFiltrosFiltradosDesdeTickets } from '../../utils/ticket-utils';
 import { environment } from 'src/environments/environment';
+import { hayFiltrosActivos } from './pantalla-ver-tickets.filtros';
 
 export async function obtenerUsuarioAutenticado(component: PantallaVerTicketsComponent): Promise<void> {
   const token = localStorage.getItem('token');
@@ -122,7 +123,14 @@ export function cargarTickets(component: PantallaVerTicketsComponent): void {
 export function actualizarVisibleTickets(component: PantallaVerTicketsComponent): void {
   const start = (component.page - 1) * component.itemsPerPage;
   const end = start + component.itemsPerPage;
+
+if (hayFiltrosActivos(component)) {
+  component.visibleTickets = component.filteredTickets.slice(0, 100);
+  component.mostrarAvisoLimite = component.filteredTickets.length > 100;
+} else {
   component.visibleTickets = component.filteredTickets.slice(start, end);
+  component.mostrarAvisoLimite = false;
+}
 }
 
 export function ordenar(columna: keyof Ticket, direccion: 'asc' | 'desc') {
