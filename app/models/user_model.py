@@ -26,14 +26,14 @@ class UserORM(db.Model):
     # ─────────────────────────────────────────────────────────────
 
     def verify_password(self, password_input):
-        print(f"🔐 Comparando DB: '{self.password}' (len={len(self.password)}) vs Input: '{password_input}' (len={len(password_input)})")
-        return self.password.strip() == password_input.strip()
+        #print(f"🔐 Comparando DB: '{self.password}' (len={len(self.password)}) vs Input: '{password_input}' (len={len(password_input)})")
+        return check_password_hash(self.password.strip(), password_input.strip())
 
 
     @classmethod
     def get_by_username(cls, username):
         user = cls.query.filter(db.func.lower(cls.username) == db.func.lower(username)).first()
-        print(f"🔍 get_by_username({username}) → {user}")
+        #print(f"🔍 get_by_username({username}) → {user}")
         return user
 
 

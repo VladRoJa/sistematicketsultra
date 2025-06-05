@@ -31,7 +31,7 @@ class TicketController:
             nuevo_ticket = Ticket.create_ticket(
                 descripcion=descripcion,
                 username=user.username,
-                sucursal_idl=user.sucursal_id,
+                sucursal_id=user.sucursal_id,
                 departamento_id=data.get('departamento_id', 1),
                 criticidad=data.get('criticidad', 1),
                 categoria=categoria,

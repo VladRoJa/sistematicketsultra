@@ -16,7 +16,7 @@ class Ticket(db.Model):
     username = db.Column(db.String(50), db.ForeignKey('users.username'), nullable=False)
     asignado_a = db.Column(db.String(50), db.ForeignKey('users.username'), nullable=True)
     sucursal_id = db.Column(db.Integer, db.ForeignKey('sucursales.sucursal_id'), nullable=False)
-    estado = db.Column(db.Enum('abierto', 'en progreso', 'finalizado'), default='abierto', nullable=False)
+    estado = db.Column(db.Enum('abierto', 'en progreso', 'finalizado', name='estado_ticket_enum'), default='abierto', nullable=False)
     fecha_creacion = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)   
     fecha_finalizado = db.Column(db.DateTime(timezone=True))
     fecha_en_progreso = db.Column(db.DateTime(timezone=True))

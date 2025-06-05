@@ -53,7 +53,7 @@ class MovimientoInventario(db.Model):
     __tablename__ = 'movimientos_inventario'
 
     id = db.Column(db.Integer, primary_key=True)
-    tipo_movimiento = db.Column(db.Enum('entrada', 'salida'), nullable=False)
+    tipo_movimiento = db.Column(db.Enum('entrada', 'salida', name='tipo movimiento_enum'), nullable=False)
     fecha = db.Column(db.DateTime, server_default=db.func.now())
     usuario_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     sucursal_id = db.Column(db.Integer, db.ForeignKey('sucursales.sucursal_id'), nullable=False)
