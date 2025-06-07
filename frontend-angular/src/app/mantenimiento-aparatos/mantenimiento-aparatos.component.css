@@ -12,6 +12,13 @@
   margin-bottom: 1.2rem;
 }
 
+/* 👇 NUEVO: Para alinear checkbox y criticidad */
+.horizontal-align {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 label {
   display: block;
   font-weight: 600;
@@ -20,7 +27,8 @@ label {
 }
 
 input[type="text"],
-input[type="checkbox"] {
+textarea,
+select {
   width: 100%;
   padding: 8px 10px;
   font-size: 14px;
@@ -30,9 +38,16 @@ input[type="checkbox"] {
   outline: none;
 }
 
-input[type="text"]:focus {
+input[type="text"]:focus,
+textarea:focus,
+select:focus {
   border-color: #007bff;
   box-shadow: 0 0 5px rgba(0, 123, 255, 0.4);
+}
+
+input[type="checkbox"] {
+  width: auto;
+  margin: 0;
 }
 
 @keyframes fadeSlideIn {
@@ -78,7 +93,6 @@ input[type="text"]:focus {
   color: gray;
 }
 
-/* 🎯 Efecto de resaltado suave al seleccionar aparato */
 .resaltado {
   animation: resaltarInput 0.6s ease;
 }
@@ -92,17 +106,11 @@ input[type="text"]:focus {
   }
 }
 
-textarea {
+
+mat-form-field.full-width {
   width: 100%;
-  padding: 8px 10px;
-  font-size: 14px;
-  border-radius: 6px;
-  border: 1px solid #ccc;
-  resize: vertical;
-  transition: border-color 0.3s, box-shadow 0.3s;
 }
 
-textarea:focus {
-  border-color: #007bff;
-  box-shadow: 0 0 6px rgba(0, 123, 255, 0.3);
+mat-form-field input::placeholder {
+  text-align: center;
 }

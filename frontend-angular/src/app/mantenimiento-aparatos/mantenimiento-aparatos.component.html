@@ -1,11 +1,11 @@
+<!-- mantenimiento-aparatos.component.html -->
 
-  <!-- mantenimiento-aparatos.component.html -->
+<div [formGroup]="parentForm" class="form-aparatos-box">
+  <h3>🏋️‍♂️ Reportar Falla en Aparato</h3>
 
-  <div [formGroup]="parentForm" class="form-aparatos-box">
-    <h3>🏋️‍♂️ Reportar Falla en Aparato</h3>
-  
-    <!-- Buscador con Autocompletado -->
-    <mat-form-field appearance="outline" class="full-width">
+  <!-- Buscador con Autocompletado -->
+  <div class="form-group-grouped">
+    <mat-form-field appearance="fill" class="full-width">
       <mat-label>🔎 Escribe el código o nombre...</mat-label>
       <input
         type="text"
@@ -15,6 +15,18 @@
         [ngClass]="{ resaltado: inputResaltado }"
         (animationend)="inputResaltado = false"
       />
+
+      <!-- Botón de limpiar -->
+      <button
+        *ngIf="filtroControl.value"
+        matSuffix
+        mat-icon-button
+        aria-label="Limpiar búsqueda"
+        (click)="filtroControl.setValue('')"
+      >
+        <mat-icon>Borrar</mat-icon>
+      </button>
+
       <mat-autocomplete
         #auto="matAutocomplete"
         (optionSelected)="seleccionarAparato($event.option.value)"
@@ -36,40 +48,39 @@
         </mat-option>
       </mat-autocomplete>
     </mat-form-field>
-  
-    <!-- Problema detectado -->
-    <div class="form-group-grouped">
-      <label for="problema_detectado">🛠 Problema detectado:</label>
-      <input
-        type="text"
-        id="problema_detectado"
-        formControlName="problema_detectado"
-        placeholder="Describe el problema..."
-      />
-    </div>
-  
-    <!-- ¿Requiere refacción? -->
-    <div class="form-group-grouped">
-      <label>
-        <input type="checkbox" formControlName="necesita_refaccion" />
-        ¿Requiere refacción?
-      </label>
-    </div>
-  
-    <!-- Descripción técnica de la refacción -->
-    <div class="form-group-grouped" *ngIf="parentForm.get('necesita_refaccion')?.value">
-      <label for="descripcion_refaccion">🧰 Descripción técnica de la refacción:</label>
-      <textarea
-        id="descripcion_refaccion"
-        formControlName="descripcion_refaccion"
-        placeholder="Especifica el componente o detalle técnico..."
-        rows="3"
-        class="textarea-refaccion"
-      ></textarea>
-    </div>
+  </div>
 
-   <!-- 🔥 Criticidad -->
+  <!-- Problema detectado -->
   <div class="form-group-grouped">
+    <label for="problema_detectado">🛠 Problema detectado:</label>
+    <input
+      type="text"
+      id="problema_detectado"
+      formControlName="problema_detectado"
+      placeholder="Describe el problema..."
+    />
+  </div>
+
+  <!-- ¿Requiere refacción? -->
+  <div class="form-group-grouped horizontal-align">
+    <input type="checkbox" formControlName="necesita_refaccion" />
+    <label>¿Requiere refacción?</label>
+  </div>
+
+  <!-- Descripción técnica de la refacción -->
+  <div class="form-group-grouped" *ngIf="parentForm.get('necesita_refaccion')?.value">
+    <label for="descripcion_refaccion">🧰 Descripción técnica de la refacción:</label>
+    <textarea
+      id="descripcion_refaccion"
+      formControlName="descripcion_refaccion"
+      placeholder="Especifica el componente o detalle técnico..."
+      rows="3"
+      class="textarea-refaccion"
+    ></textarea>
+  </div>
+
+  <!-- 🔥 Criticidad -->
+  <div class="form-group-grouped horizontal-align">
     <label for="criticidad">🔥 Nivel de criticidad:</label>
     <select id="criticidad" formControlName="criticidad">
       <option *ngFor="let nivel of [1, 2, 3, 4, 5]" [value]="nivel">
@@ -77,6 +88,4 @@
       </option>
     </select>
   </div>
-  </div>
-  
-  
+</div>

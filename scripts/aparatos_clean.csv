@@ -1,0 +1,138 @@
+codigo;sucursal_id;descripcion;marca;grupo_muscular;categoria;numero_equipo
+01CABRSTSG01;1;Bicicleta Recumbente;Star Trac;Sin grupo muscular;Cardio;01
+01CACALFSG01;1;Caminadora;Life Fitnes;Sin grupo muscular;Cardio;01
+01CAELPRSG01;1;Eliptica;Precor;Sin grupo muscular;Cardio;01
+01CAESMTSG01;1;Escalera;Matrix;Sin grupo muscular;Cardio;01
+01CABRSTSG02;1;Bicicleta Recumbente;Star Trac;Sin grupo muscular;Cardio;02
+01CACALFSG02;1;Caminadora;Life Fitnes;Sin grupo muscular;Cardio;02
+01CAELPRSG02;1;Eliptica;Precor;Sin grupo muscular;Cardio;02
+01CABVSTSG03;1;Bicicleta Vertical;Star Trac;Sin grupo muscular;Cardio;03
+01CACALFSG03;1;Caminadora;Life Fitnes;Sin grupo muscular;Cardio;03
+01CAELPRSG03;1;Eliptica;Precor;Sin grupo muscular;Cardio;03
+01CACVSTSG04;1;Bicicleta Vertical;Star Trac;Sin grupo muscular;Cardio;04
+01CACALFSG04;1;Caminadora;Life Fitnes;Sin grupo muscular;Cardio;04
+01CAECLFSG04;1;Eliptica Cross;Life Fitnes;Sin grupo muscular;Cardio;04
+01CACALFSG05;1;Caminadora;Life Fitnes;Sin grupo muscular;Cardio;05
+01CAECLFSG05;1;Eliptica Cross;Life Fitnes;Sin grupo muscular;Cardio;05
+01CACALFSG06;1;Caminadora;Life Fitnes;Sin grupo muscular;Cardio;06
+01CAECLFSG06;1;Eliptica Cross;Life Fitnes;Sin grupo muscular;Cardio;06
+01CACALFSG07;1;Caminadora;Life Fitnes;Sin grupo muscular;Cardio;07
+01CAECLFSG07;1;Eliptica Cross;Life Fitnes;Sin grupo muscular;Cardio;07
+01CACASTSG08;1;Caminadora;Star Trac;Sin grupo muscular;Cardio;08
+01CAECLFSG08;1;Eliptica Cross;Life Fitnes;Sin grupo muscular;Cardio;08
+01CACASTSG09;1;Caminadora;Star Trac;Sin grupo muscular;Cardio;09
+01CAECLFSG09;1;Eliptica Cross;Life Fitnes;Sin grupo muscular;Cardio;09
+01CACASTSG10;1;Caminadora;Star Trac;Sin grupo muscular;Cardio;10
+01CAECLFSG10;1;Eliptica Cross;Life Fitnes;Sin grupo muscular;Cardio;10
+01CACASTSG11;1;Caminadora;Star Trac;Sin grupo muscular;Cardio;11
+01CAATCBSG11;1;Arc Trainer;Cybex;Sin grupo muscular;Cardio;11
+01CABSKESG01;1;Bicicleta P/Spinning;Keiser;Sin grupo muscular;Cardio;01
+01CABSKESG02;1;Bicicleta P/Spinning;Keiser;Sin grupo muscular;Cardio;02
+01CABSKESG03;1;Bicicleta P/Spinning;Keiser;Sin grupo muscular;Cardio;03
+01CABSKESG04;1;Bicicleta P/Spinning;Keiser;Sin grupo muscular;Cardio;04
+01CABSKESG05;1;Bicicleta P/Spinning;Keiser;Sin grupo muscular;Cardio;05
+01CABSKESG06;1;Bicicleta P/Spinning;Keiser;Sin grupo muscular;Cardio;06
+01CABSKESG07;1;Bicicleta P/Spinning;Keiser;Sin grupo muscular;Cardio;07
+01CABSKESG08;1;Bicicleta P/Spinning;Keiser;Sin grupo muscular;Cardio;08
+01CABSKESG09;1;Bicicleta P/Spinning;Keiser;Sin grupo muscular;Cardio;09
+01CABSKESG10;1;Bicicleta P/Spinning;Keiser;Sin grupo muscular;Cardio;10
+01CABSKESG11;1;Bicicleta P/Spinning;Keiser;Sin grupo muscular;Cardio;11
+01CABSKESG12;1;Bicicleta P/Spinning;Keiser;Sin grupo muscular;Cardio;12
+01CABSKESG13;1;Bicicleta P/Spinning;Keiser;Sin grupo muscular;Cardio;13
+01CABSKESG14;1;Bicicleta P/Spinning;Keiser;Sin grupo muscular;Cardio;14
+01CABSKESG15;1;Bicicleta P/Spinning;Keiser;Sin grupo muscular;Cardio;15
+01CABSKESG16;1;Bicicleta P/Spinning;Keiser;Sin grupo muscular;Cardio;16
+01CABSKESG17;1;Bicicleta P/Spinning;Keiser;Sin grupo muscular;Cardio;17
+01CABSKESG18;1;Bicicleta P/Spinning;Keiser;Sin grupo muscular;Cardio;18
+01CABSKESG19;1;Bicicleta P/Spinning;Keiser;Sin grupo muscular;Cardio;19
+01CABSKESG20;1;Bicicleta P/Spinning;Keiser;Sin grupo muscular;Cardio;20
+01CABSKESG21;1;Bicicleta P/Spinning;Keiser;Sin grupo muscular;Cardio;21
+01CABSKESG23;1;Bicicleta P/Spinning;Keiser;Sin grupo muscular;Cardio;23
+01CABSKESG24;1;Bicicleta P/Spinning;Keiser;Sin grupo muscular;Cardio;24
+01CABSKESG25;1;Bicicleta P/Spinning;Keiser;Sin grupo muscular;Cardio;25
+01CABSKESG26;1;Bicicleta P/Spinning;Keiser;Sin grupo muscular;Cardio;26
+01PLJRFLPI40;1;Jaula Rack Para Sentadilla;Flex;Pierna;Peso Libre;40
+01PLRTCBES01;1;Remo T;Cybex;Espalda;Peso Libre;01
+01PLBIFLPE02;1;Banca Olimpica Inclinada;Flex;Pecho;Peso Libre;02
+01PLBIFLPE03;1;Banca Olimpica Inclinada;Flex;Pecho;Peso Libre;03
+01PLBDFLPE04;1;Banca Olimpica Declinada;Flex;Pecho;Peso Libre;04
+01PLBOFLPE05;1;Banca Olimpica;Flex;Pecho;Peso Libre;05
+01PLHEICES05;1;Hyperextension Espalda;Icarian;Espalda;Peso Libre;05
+01PLBOFLPE06;1;Banca Olimpica;Flex;Pecho;Peso Libre;06
+01PLCOICPE07;1;Banca Olimpica;Icarian;Pecho;Peso Libre;07
+01PLPMFLPE08;1;Press Militar;Flex;Pecho;Peso Libre;08
+01PLPRICBR09;1;Predicador;Icarian;Brazo;Peso Libre;09
+01PLSMICPI10;1;Smith Machine;Icarian;Pierna;Peso Libre;10
+01PLSMFLPI11;1;Smith Machine;Flex;Pierna;Peso Libre;11
+01PLPPHSPI12;1;Prensa Pierna;Hammer Strength;Pierna;Peso Libre;12
+01PLPPHSPI13;1;Prensa Pierna;Hammer Strength;Pierna;Peso Libre;13
+01PLHSSTPI14;1;Prensa Pierna Hack Squat;Star Trac;Pierna;Peso Libre;14
+01PLPPHSPI15;1;Prensa P/Pierna Parado;Hammer Strength;Pierna;Peso Libre;15
+01PLJPICPI16;1;Jaula P/Pierna Sentadilla;Icarian;Pierna;Peso Libre;16
+01PLHTULPI17;1;Hip Thrust;Ultra;Pierna;Peso Libre;17
+01PLVKSMAB18;1;Vkr;SIN MARCA;Abdomen;Peso Libre;18
+01PLVKSMAB19;1;Vkr;SIN MARCA;Abdomen;Peso Libre;19
+01PLBACBAB20;1;Banca Abdominal;Cybex;Abdomen;Peso Libre;20
+01PLBACBAB21;1;Banca Abdominal;Cybex;Abdomen;Peso Libre;21
+01PLRBHSSG22;1;Rack Barra Integrada;Hammer Strength;Sin grupo muscular;Peso Libre;22
+01PLBZHSSG23;1;Rack Barra Integrada Z;Hammer Strength;Sin grupo muscular;Peso Libre;23
+01PLBMCBSG24;1;Banca Multiposicion;Cybex;Sin grupo muscular;Peso Libre;24
+01PLBMCBSG25;1;Banca Multiposicion;Cybex;Sin grupo muscular;Peso Libre;25
+01PLBMCBSG26;1;Banca Multiposicion;Cybex;Sin grupo muscular;Peso Libre;26
+01PLRDULSG27;1;Rack Docle P/Mancuernas;Ultra;Sin grupo muscular;Peso Libre;27
+01PLRDULSG28;1;Rack Docle P/Mancuernas;Ultra;Sin grupo muscular;Peso Libre;28
+01PLRDULSG29;1;Rack Docle P/Mancuernas;Ultra;Sin grupo muscular;Peso Libre;29
+01PLRDULSG30;1;Rack Docle P/Mancuernas;Ultra;Sin grupo muscular;Peso Libre;30
+01PLRDULSG31;1;Rack Doble P/Mancuernas;Ultra;Sin grupo muscular;Peso Libre;31
+01PLBPFLSG32;1;Banca Plana;Flex;Sin grupo muscular;Peso Libre;32
+01PLBPPASG33;1;Banca Plana;Paramount;Sin grupo muscular;Peso Libre;33
+01PLADFLSG34;1;Arbol P/Discos;Flex;Sin grupo muscular;Peso Libre;34
+01PLADFLSG35;1;Arbol P/Discos;Flex;Sin grupo muscular;Peso Libre;35
+01PLSUCBSG36;1;Silla Utilitaria;Cybex;Sin grupo muscular;Peso Libre;36
+01PLSUCBSG37;1;Silla Utilitaria;Cybex;Sin grupo muscular;Peso Libre;37
+01CABSKESG38;1;Bicicleta P/Spinning;keiser;Sin grupo muscular;Cardio;38
+01PLBAFLSG39;1;Banca Abdominal ;Flex;Sin grupo muscular;Peso Libre;39
+01PLVLEXPI45;1;Vertical Leg Press;Excel;Pierna;Peso Libre;45
+01PLSSEXPI47;1;SISSY SQUAT;Excel;Pierna;Peso Libre;47
+01SEMPFMMU01;1;Multiestacion Polea Doble;Free Motion;Multiarticular;Selectorizado;01
+01SEMULFMU02;1;Multiestacion 8;Life Fitnes;Multiarticular;Selectorizado;02
+01SEPPLFPE03;1;Prensa De Pecho;Life Fitnes;Pecho;Selectorizado;03
+01SEPMLFPE04;1;Pecho Mariposa;Life Fitnes;Pecho;Selectorizado;04
+01SEPMLFPE05;1;Pecho Mariposa;Life Fitnes;Pecho;Selectorizado;05
+01SEPPLFPE06;1;Prensa Pecho;Life Fitnes;Pecho;Selectorizado;06
+01SEEELFES07;1;Extension Espalda Baja;Life Fitnes;Espalda;Selectorizado;07
+01SERELFES08;1;Remo Para Espalda;Life Fitnes;Espalda;Selectorizado;08
+01SEPDLFES09;1;Pull Down ;Life Fitnes;Espalda;Selectorizado;09
+01SEPTLFBR10;1;Press Triceps;Life Fitnes;Brazo;Selectorizado;10
+01SEPTICBR11;1;Predicador Para Biceps;Icarian;Brazo;Selectorizado;11
+01SEBCLFBR12;1;Bicep Curl;Life Fitnes;Brazo;Selectorizado;12
+01SEHLLFBR13;1;Hombro Lateral;Life Fitnes;Brazo;Selectorizado;13
+01SEFALFBR14;1;Fondo Asistido;Life Fitnes;Brazo;Selectorizado;14
+01SEPHLFBR15;1;Prensa Hombro;Life Fitnes;Brazo;Selectorizado;15
+01SETELFBR16;1;Triceps Extension;Life Fitnes;Brazo;Selectorizado;16
+01SEPPLFPI17;1;Prensa P/Pierna;Life Fitnes;Pierna;Selectorizado;17
+01SEEPLFPI18;1;Extension P/Pierna;Life Fitnes;Pierna;Selectorizado;18
+01SEGCLFPI19;1;Gluteo Cable Motion;Life Fitnes;Pierna;Selectorizado;19
+01SEFSLFPI20;1;Femoral Sentado;Life Fitnes;Pierna;Selectorizado;20
+01SEFALFPI21;1;Femoral Acostado;Life Fitnes;Pierna;Selectorizado;21
+01SEPALFPI22;1;Pantorrilla 45 Grados;Life Fitnes;Pierna;Selectorizado;22
+01SEGLLTPI23;1;Gluteo;Leg Tech;Pierna;Selectorizado;23
+01SEABLFPI24;1;Abductor;Life Fitnes;Pierna;Selectorizado;24
+01SEABLFPI25;1;Adductor;Life Fitnes;Pierna;Selectorizado;25
+01SEPPLFPI26;1;Pantorrilla Parado;Life Fitnes;Pierna;Selectorizado;26
+01SEABICAB27;1;Abdominal;Icarian;Abdomen;Selectorizado;27
+01SEABLFAB28;1;Abdominal;Life Fitnes;Abdomen;Selectorizado;28
+01SEABLFAB29;1;Abdominal;Life Fitnes;Abdomen;Selectorizado;29
+01SEPFSTPE30;1;Pec Fly;Star Trac;Pecho;Selectorizado;30
+01SEGLLFPI31;1;Gluteo;Life Fitnes;Pierna;Selectorizado;31
+01SEGIEXPI41;1;Glute Isolator ;Excel;Pierna;Selectorizado;41
+01SEDAEXMU42;1;DUAL ADJUSTABLE PULLEY ;Excel;Multiarticular;Selectorizado;42
+01SELCEXPI43;1;LEG CURL EXTENSION;Excel;Pierna;Selectorizado;43
+01SELCEXPI44;1;LEG CURL EXTENSION;Excel;Pierna;Selectorizado;44
+01SEHTEXPI46;1;HIP THRUST ;Excel;Pierna;Selectorizado;46
+01PLDRJWSG48;1;2 tier dumbell rack;JW SPORT;Sin grupo muscular;Peso Libre;48
+01PLDRJWSG49;1;2 tier dumbell rack;JW SPORT;Sin grupo muscular;Peso Libre;49
+01PLPTJWSG50;1;Plate Tree;JW SPORT;Sin grupo muscular;Peso Libre;50
+01PLPTJWSG51;1;Plate Tree;JW SPORT;Sin grupo muscular;Peso Libre;51
+01PLHDJWPI52;1;"Hex Bar/
+DEADLIFT ";JW SPORT;Pierna;Peso Libre;52

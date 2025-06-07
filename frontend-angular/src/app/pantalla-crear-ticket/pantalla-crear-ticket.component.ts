@@ -1,4 +1,4 @@
-// C:\Users\Vladimir\Documents\Sistema tickets\frontend-angular\src\app\pantalla-crear-ticket\pantalla-crear-ticket.component.ts
+// pantalla-crear-ticket.component.ts (actualizado)
 
 import { Component, OnInit } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
@@ -7,9 +7,6 @@ import { Router } from '@angular/router';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule, FormsModule } from '@angular/forms';
 import { mostrarAlertaToast, mostrarAlertaErrorDesdeStatus  } from '../utils/alertas';
 import { environment } from 'src/environments/environment';
-
-
-// Componentes específicos por tipo de mantenimiento
 import { MantenimientoAparatosComponent } from '../mantenimiento-aparatos/mantenimiento-aparatos.component';
 import { MantenimientoEdificioComponent } from '../mantenimiento-edificio/mantenimiento-edificio.component';
 
@@ -28,11 +25,9 @@ import { MantenimientoEdificioComponent } from '../mantenimiento-edificio/manten
 })
 export class PantallaCrearTicketComponent implements OnInit {
 
-  // Formulario reactivo principal
   formularioMantenimiento!: FormGroup;
   mensaje: string = '';
 
-  // Lista de departamentos disponibles
   departamentos = [
     { id: 1, nombre: 'Mantenimiento' },
     { id: 2, nombre: 'Finanzas' },
@@ -43,7 +38,6 @@ export class PantallaCrearTicketComponent implements OnInit {
     { id: 7, nombre: 'Sistemas' }
   ];
 
-  // Categorías precargadas por departamento
   categoriasPorDepartamento: { [key: number]: string[] } = {
     1: ["Cardio", "Selectorizado", "Peso libre", "Tapicería", "Aire acondicionado", "Bodega", "Cancelería", "Extintores",
         "Fachada", "Hidroneumático", "Iluminación", "Inmueble", "Instalación eléctrica", "Lockers", "Piso de hule negro",
@@ -61,9 +55,7 @@ export class PantallaCrearTicketComponent implements OnInit {
         "Impresora termica (Gerente)", "Terminal (Recepcion)", "Terminal (Gerente)", "Alarma", "Telefono", "Internet", "Camaras"]
   };
 
-  // Seguimiento de categorías manuales frecuentes
   categoriaHistorial: { [key: string]: number } = {};
-
   private apiUrl = `${environment.apiUrl}/tickets/create`;
 
   constructor(
@@ -81,11 +73,31 @@ export class PantallaCrearTicketComponent implements OnInit {
       subsubcategoria: [''],
       nuevaCategoria: [''],
       criticidad: [null, Validators.required],
-      descripcion: ['', Validators.required]
+      descripcion: ['', Validators.required],
+    });
+
+    // Aquí va la lógica que agrega los controles hijos dependiendo el tipo
+    this.formularioMantenimiento.get('tipoMantenimiento')?.valueChanges.subscribe(tipo => {
+      this.resetCamposTipo();
     });
   }
 
-  // Al cambiar de departamento, reinicia las categorías relacionadas
+  // 🔧 Esta es la parte clave: limpiar campos cuando cambia tipo mantenimiento
+  resetCamposTipo() {
+    const keysAEliminar = [
+      'aparato_id',
+      'problema_detectado',
+      'necesita_refaccion',
+      'descripcion_refaccion'
+    ];
+
+    keysAEliminar.forEach(campo => {
+      if (this.formularioMantenimiento.contains(campo)) {
+        this.formularioMantenimiento.removeControl(campo);
+      }
+    });
+  }
+
   cargarFormulario() {
     const depto = this.formularioMantenimiento.get('departamento')?.value;
     if (depto) {
@@ -94,7 +106,6 @@ export class PantallaCrearTicketComponent implements OnInit {
     }
   }
 
-  // Si el usuario escribe una nueva categoría, la registra y si es frecuente, la guarda
   agregarCategoriaManual() {
     const depto = this.formularioMantenimiento.get('departamento')?.value;
     const nuevaCat = this.formularioMantenimiento.get('nuevaCategoria')?.value;
@@ -111,31 +122,27 @@ export class PantallaCrearTicketComponent implements OnInit {
     this.formularioMantenimiento.get('nuevaCategoria')?.reset();
   }
 
-  // Obtiene el nombre legible del departamento
   getNombreDepartamentoSeleccionado(): string | null {
     const id = this.formularioMantenimiento.get('departamento')?.value;
     const depto = this.departamentos.find(dep => dep.id === id);
     return depto ? depto.nombre : null;
   }
 
-  // Envía el formulario al backend
   onSubmit() {
     const datos = this.formularioMantenimiento.value;
-  
-    // Forzar valores cuando el tipo de mantenimiento es "aparatos"
+
     if (datos.tipoMantenimiento === 'aparatos') {
       datos.categoria = 'Aparatos';
       datos.descripcion = datos.problema_detectado;
-  
+
       this.formularioMantenimiento.patchValue({
         categoria: datos.categoria,
         descripcion: datos.descripcion
       });
     }
-  
-    // Validación condicional según el tipo de mantenimiento
+
     const tipo = datos.tipoMantenimiento;
-  
+
     if (
       this.formularioMantenimiento.invalid ||
       (tipo === 'aparatos' && (
@@ -148,12 +155,12 @@ export class PantallaCrearTicketComponent implements OnInit {
       console.log("❌ Formulario inválido:", datos);
       return;
     }
-  
+
     this.mensaje = "";
-  
+
     const token = localStorage.getItem('token');
     const headers = token ? new HttpHeaders().set('Authorization', `Bearer ${token}`) : new HttpHeaders();
-  
+
     const payload = {
       descripcion: datos.descripcion,
       departamento_id: datos.departamento,
@@ -166,9 +173,9 @@ export class PantallaCrearTicketComponent implements OnInit {
       necesita_refaccion: datos.necesita_refaccion || false,
       descripcion_refaccion: datos.descripcion_refaccion || null
     };
-  
+
     console.log("📡 Enviando al backend:", payload);
-  
+
     this.http.post<{ mensaje: string }>(this.apiUrl, payload, { headers }).subscribe({
       next: () => {
         mostrarAlertaToast('✅ Ticket creado correctamente.');
@@ -178,6 +185,6 @@ export class PantallaCrearTicketComponent implements OnInit {
         mostrarAlertaErrorDesdeStatus(error.status);
       }
     });
-  
+
   }
 }

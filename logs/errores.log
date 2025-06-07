@@ -144,3 +144,96 @@ Traceback (most recent call last):
     historial_final.sort(key=lambda x: parser.isoparse(x['fechaCambio']), reverse=True)
 TypeError: can't compare offset-naive and offset-aware datetimes
 
+
+[2025-06-06 12:16:34] ERROR en  - /api/tickets/create
+Mensaje: (psycopg2.errors.InvalidTextRepresentation) literal de multirango mal formado: «abierto»
+LINE 1: ...evidencia) VALUES ('bhb', 'ADMICORP', NULL, 1000, 'abierto',...
+                                                             ^
+DETAIL:  Falta llave izquierda.
+
+[SQL: INSERT INTO tickets (descripcion, username, asignado_a, sucursal_id, estado, fecha_creacion, fecha_finalizado, fecha_en_progreso, fecha_solucion, departamento_id, criticidad, categoria, subcategoria, subsubcategoria, aparato_id, problema_detectado, necesita_refaccion, descripcion_refaccion, url_evidencia) VALUES (%(descripcion)s, %(username)s, %(asignado_a)s, %(sucursal_id)s, %(estado)s, %(fecha_creacion)s, %(fecha_finalizado)s, %(fecha_en_progreso)s, %(fecha_solucion)s, %(departamento_id)s, %(criticidad)s, %(categoria)s, %(subcategoria)s, %(subsubcategoria)s, %(aparato_id)s, %(problema_detectado)s, %(necesita_refaccion)s, %(descripcion_refaccion)s, %(url_evidencia)s) RETURNING tickets.id]
+[parameters: {'descripcion': 'bhb', 'username': 'ADMICORP', 'asignado_a': None, 'sucursal_id': 1000, 'estado': 'abierto', 'fecha_creacion': datetime.datetime(2025, 6, 6, 19, 16, 33, 804344, tzinfo=datetime.timezone.utc), 'fecha_finalizado': None, 'fecha_en_progreso': None, 'fecha_solucion': None, 'departamento_id': 1, 'criticidad': 2, 'categoria': 'Aparatos', 'subcategoria': 'Servicios', 'subsubcategoria': 'Sin agua', 'aparato_id': 4, 'problema_detectado': 'bhb', 'necesita_refaccion': True, 'descripcion_refaccion': 'j', 'url_evidencia': None}]
+(Background on this error at: https://sqlalche.me/e/20/9h9h)
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1964, in _exec_single_context
+    self.dialect.do_execute(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 945, in do_execute
+    cursor.execute(statement, parameters)
+psycopg2.errors.InvalidTextRepresentation: literal de multirango mal formado: «abierto»
+LINE 1: ...evidencia) VALUES ('bhb', 'ADMICORP', NULL, 1000, 'abierto',...
+                                                             ^
+DETAIL:  Falta llave izquierda.
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\ticket_routes.py", line 59, in create_ticket
+    nuevo_ticket = Ticket.create_ticket(
+                   ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\models\ticket_model.py", line 108, in create_ticket
+    db.session.commit()
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\scoping.py", line 599, in commit
+    return self._proxied.commit()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2032, in commit
+    trans.commit(_to_root=True)
+  File "<string>", line 2, in commit
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\state_changes.py", line 139, in _go
+    ret_value = fn(self, *arg, **kw)
+                ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 1313, in commit
+    self._prepare_impl()
+  File "<string>", line 2, in _prepare_impl
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\state_changes.py", line 139, in _go
+    ret_value = fn(self, *arg, **kw)
+                ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 1288, in _prepare_impl
+    self.session.flush()
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 4353, in flush
+    self._flush(objects)
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 4488, in _flush
+    with util.safe_reraise():
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 146, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 4449, in _flush
+    flush_context.execute()
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\unitofwork.py", line 466, in execute
+    rec.execute(self)
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\unitofwork.py", line 642, in execute
+    util.preloaded.orm_persistence.save_obj(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\persistence.py", line 93, in save_obj
+    _emit_insert_statements(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\persistence.py", line 1233, in _emit_insert_statements
+    result = connection.execute(
+             ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1416, in execute
+    return meth(
+           ^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\sql\elements.py", line 523, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1638, in _execute_clauseelement
+    ret = self._execute_context(
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1843, in _execute_context
+    return self._exec_single_context(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1983, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 2352, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1964, in _exec_single_context
+    self.dialect.do_execute(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 945, in do_execute
+    cursor.execute(statement, parameters)
+sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) literal de multirango mal formado: «abierto»
+LINE 1: ...evidencia) VALUES ('bhb', 'ADMICORP', NULL, 1000, 'abierto',...
+                                                             ^
+DETAIL:  Falta llave izquierda.
+
+[SQL: INSERT INTO tickets (descripcion, username, asignado_a, sucursal_id, estado, fecha_creacion, fecha_finalizado, fecha_en_progreso, fecha_solucion, departamento_id, criticidad, categoria, subcategoria, subsubcategoria, aparato_id, problema_detectado, necesita_refaccion, descripcion_refaccion, url_evidencia) VALUES (%(descripcion)s, %(username)s, %(asignado_a)s, %(sucursal_id)s, %(estado)s, %(fecha_creacion)s, %(fecha_finalizado)s, %(fecha_en_progreso)s, %(fecha_solucion)s, %(departamento_id)s, %(criticidad)s, %(categoria)s, %(subcategoria)s, %(subsubcategoria)s, %(aparato_id)s, %(problema_detectado)s, %(necesita_refaccion)s, %(descripcion_refaccion)s, %(url_evidencia)s) RETURNING tickets.id]
+[parameters: {'descripcion': 'bhb', 'username': 'ADMICORP', 'asignado_a': None, 'sucursal_id': 1000, 'estado': 'abierto', 'fecha_creacion': datetime.datetime(2025, 6, 6, 19, 16, 33, 804344, tzinfo=datetime.timezone.utc), 'fecha_finalizado': None, 'fecha_en_progreso': None, 'fecha_solucion': None, 'departamento_id': 1, 'criticidad': 2, 'categoria': 'Aparatos', 'subcategoria': 'Servicios', 'subsubcategoria': 'Sin agua', 'aparato_id': 4, 'problema_detectado': 'bhb', 'necesita_refaccion': True, 'descripcion_refaccion': 'j', 'url_evidencia': None}]
+(Background on this error at: https://sqlalche.me/e/20/9h9h)
+
