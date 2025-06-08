@@ -3,95 +3,80 @@
 <div class="container">
   <h2>🎫 Crear Nuevo Ticket</h2>
 
-  <!-- Formulario principal reactivo -->
-  <form [formGroup]="formularioMantenimiento" (ngSubmit)="onSubmit()">
+  <!-- Formulario principal reactivo solo para el selector de departamento -->
+  <form [formGroup]="formularioMantenimiento">
 
     <!-- 🌐 Selector de Departamento -->
     <div class="form-group">
       <label for="departamento">🏢 Departamento:</label>
-      <select
-        id="departamento"
-        formControlName="departamento"
-        (change)="cargarFormulario()"
-      >
+      <select id="departamento" formControlName="departamento">
         <option [ngValue]="null">Selecciona un departamento</option>
-        <option *ngFor="let dep of departamentos" [ngValue]="dep.id">
-          {{ dep.nombre }}
-        </option>
+        <option *ngFor="let dep of departamentos" [ngValue]="dep.id">{{ dep.nombre }}</option>
       </select>
     </div>
-
-    <!-- 🛠️ Subformulario de Mantenimiento -->
-    <div
-      *ngIf="getNombreDepartamentoSeleccionado() === 'Mantenimiento'"
-      class="form-group form-mantenimiento-box"
-    >
-      <!-- Selector tipo mantenimiento -->
-      <label for="tipoMantenimiento">⚙️ Tipo de mantenimiento:</label>
-      <select id="tipoMantenimiento" formControlName="tipoMantenimiento">
-        <option [ngValue]="null">Selecciona uno</option>
-        <option value="edificio">🏢 Edificio</option>
-        <option value="aparatos">🏋️ Aparatos</option>
-      </select>
-
-      <!-- Subformularios dinámicos según tipo -->
-      <div class="form-mantenimiento-subform">
-        <app-mantenimiento-edificio
-          *ngIf="formularioMantenimiento.get('tipoMantenimiento')?.value === 'edificio'"
-          [parentForm]="formularioMantenimiento"
-        ></app-mantenimiento-edificio>
-
-        <ng-container *ngIf="formularioMantenimiento?.get('departamento')?.value === 1 && formularioMantenimiento?.get('tipoMantenimiento')?.value === 'aparatos'">
-          <app-mantenimiento-aparatos
-            *ngIf="formularioMantenimiento && formularioMantenimiento.get('tipoMantenimiento')?.value === 'aparatos'"
-            [parentForm]="formularioMantenimiento">
-          </app-mantenimiento-aparatos>
-        </ng-container>
-        
-      </div>
-    </div>
-
-    <!-- 🗂️ Categoría para otros departamentos -->
-    <div
-      *ngIf="formularioMantenimiento.get('departamento')?.value &&
-             getNombreDepartamentoSeleccionado() !== 'Mantenimiento' &&
-             categoriasPorDepartamento[formularioMantenimiento.get('departamento')?.value]?.length > 0"
-      class="form-group"
-    >
-      <label for="categoria">🗂️ Categoría:</label>
-      <select id="categoria" formControlName="categoria">
-        <option *ngFor="let cat of categoriasPorDepartamento[formularioMantenimiento.get('departamento')?.value]" [value]="cat">
-          {{ cat }}
-        </option>
-        <option value="otro">Otro...</option>
-      </select>
-
-      <!-- Campo libre si seleccionan "otro" -->
-      <input
-        *ngIf="formularioMantenimiento.get('categoria')?.value === 'otro'"
-        type="text"
-        formControlName="nuevaCategoria"
-        placeholder="Escribe una nueva categoría..."
-        (blur)="agregarCategoriaManual()"
-      />
-    </div>
-
-    <!-- 🔥 Nivel de Criticidad (solo se muestra si no se eligió mantenimiento) -->
-    <div
-      *ngIf="getNombreDepartamentoSeleccionado() !== 'Mantenimiento'"
-      class="form-group"
-    >
-      <label for="criticidad">🔥 Nivel de criticidad:</label>
-      <select id="criticidad" formControlName="criticidad">
-        <option *ngFor="let crit of [1,2,3,4,5]" [value]="crit">
-          Nivel {{ crit }}
-        </option>
-      </select>
-    </div>
-
-    <!-- 📤 Botón de envío -->
-    <button type="submit" class="btn-submit">📩 Crear Ticket</button>
   </form>
+
+  <!-- ⚙️ SUBFORMULARIOS POR DEPARTAMENTO -->
+
+  <!-- Mantenimiento -->
+  <div *ngIf="formularioMantenimiento.get('departamento')?.value === 1" class="form-mantenimiento-box">
+    <label for="tipoMantenimiento">⚙️ Tipo de mantenimiento:</label>
+    <select id="tipoMantenimiento" formControlName="tipoMantenimiento">
+      <option [ngValue]="null">Selecciona uno</option>
+      <option value="edificio">🏢 Edificio</option>
+      <option value="aparatos">🏋️ Aparatos</option>
+    </select>
+
+    <div class="form-mantenimiento-subform">
+      <app-mantenimiento-edificio
+        *ngIf="formularioMantenimiento.get('tipoMantenimiento')?.value === 'edificio'"
+        [parentForm]="formularioMantenimiento"
+        (formularioValido)="recibirPayloadDesdeFormulario($event)">
+      </app-mantenimiento-edificio>
+
+      <app-mantenimiento-aparatos
+        *ngIf="formularioMantenimiento.get('tipoMantenimiento')?.value === 'aparatos'"
+        [parentForm]="formularioMantenimiento"
+        (formularioValido)="recibirPayloadDesdeFormulario($event)">
+      </app-mantenimiento-aparatos>
+    </div>
+  </div>
+
+  <!-- Finanzas -->
+  <app-finanzas
+    *ngIf="formularioMantenimiento.get('departamento')?.value === 2"
+    (formularioValido)="recibirPayloadDesdeFormulario($event)">
+  </app-finanzas>
+
+  <!-- Marketing -->
+  <app-marketing
+    *ngIf="formularioMantenimiento.get('departamento')?.value === 3"
+    (formularioValido)="recibirPayloadDesdeFormulario($event)">
+  </app-marketing>
+
+  <!-- Gerencia Deportiva -->
+  <app-gerencia-deportiva
+    *ngIf="formularioMantenimiento.get('departamento')?.value === 4"
+    (formularioValido)="recibirPayloadDesdeFormulario($event)">
+  </app-gerencia-deportiva>
+
+  <!-- Recursos Humanos -->
+  <app-recursos-humanos
+    *ngIf="formularioMantenimiento.get('departamento')?.value === 5"
+    (formularioValido)="recibirPayloadDesdeFormulario($event)">
+  </app-recursos-humanos>
+
+  <!-- Compras -->
+  <app-compras
+    *ngIf="formularioMantenimiento.get('departamento')?.value === 6"
+    (formularioValido)="recibirPayloadDesdeFormulario($event)">
+  </app-compras>
+
+  <!-- Sistemas -->
+  <app-sistemas
+    *ngIf="formularioMantenimiento.get('departamento')?.value === 7"
+    (formularioValido)="recibirPayloadDesdeFormulario($event)">
+  </app-sistemas>
 
   <!-- ✅ Mensaje de validación o éxito -->
   <p *ngIf="mensaje" class="mensaje">{{ mensaje }}</p>

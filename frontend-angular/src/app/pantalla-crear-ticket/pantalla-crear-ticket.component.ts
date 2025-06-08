@@ -4,11 +4,19 @@ import { Component, OnInit } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
-import { FormBuilder, FormGroup, Validators, ReactiveFormsModule, FormsModule } from '@angular/forms';
-import { mostrarAlertaToast, mostrarAlertaErrorDesdeStatus  } from '../utils/alertas';
+import { FormBuilder, FormGroup, ReactiveFormsModule, FormsModule, Validators } from '@angular/forms';
+import { mostrarAlertaToast, mostrarAlertaErrorDesdeStatus } from '../utils/alertas';
 import { environment } from 'src/environments/environment';
-import { MantenimientoAparatosComponent } from '../mantenimiento-aparatos/mantenimiento-aparatos.component';
-import { MantenimientoEdificioComponent } from '../mantenimiento-edificio/mantenimiento-edificio.component';
+
+// IMPORTS de los subformularios
+import { MantenimientoAparatosComponent } from './formularios-crear-ticket/mantenimiento-aparatos/mantenimiento-aparatos.component';
+import { MantenimientoEdificioComponent } from './formularios-crear-ticket/mantenimiento-edificio/mantenimiento-edificio.component';
+import { FinanzasComponent } from './formularios-crear-ticket/finanzas/finanzas.component';
+import { MarketingComponent } from './formularios-crear-ticket/marketing/marketing.component';
+import { GerenciaDeportivaComponent } from './formularios-crear-ticket/gerencia-deportiva/gerencia-deportiva.component';
+import { RecursosHumanosComponent } from './formularios-crear-ticket/recursos-humanos/recursos-humanos.component';
+import { ComprasComponent } from './formularios-crear-ticket/compras/compras.component';
+import { SistemasComponent } from './formularios-crear-ticket/sistemas/sistemas.component';
 
 @Component({
   selector: 'app-pantalla-crear-ticket',
@@ -18,7 +26,13 @@ import { MantenimientoEdificioComponent } from '../mantenimiento-edificio/manten
     FormsModule,
     ReactiveFormsModule,
     MantenimientoEdificioComponent,
-    MantenimientoAparatosComponent
+    MantenimientoAparatosComponent,
+    FinanzasComponent,
+    MarketingComponent,
+    GerenciaDeportivaComponent,
+    RecursosHumanosComponent,
+    ComprasComponent,
+    SistemasComponent
   ],
   templateUrl: './pantalla-crear-ticket.component.html',
   styleUrls: ['./pantalla-crear-ticket.component.css']
@@ -38,51 +52,25 @@ export class PantallaCrearTicketComponent implements OnInit {
     { id: 7, nombre: 'Sistemas' }
   ];
 
-  categoriasPorDepartamento: { [key: number]: string[] } = {
-    1: ["Cardio", "Selectorizado", "Peso libre", "Tapicería", "Aire acondicionado", "Bodega", "Cancelería", "Extintores",
-        "Fachada", "Hidroneumático", "Iluminación", "Inmueble", "Instalación eléctrica", "Lockers", "Piso de hule negro",
-        "Recepción", "Salón de clases", "Sanitarios", "Ultrakids", "Ventilación / extracción", "Letrero luminoso"],
-    2: ["Facturación", "Devolución por cobro erróneo en sistema", "Devolución por cobro erróneo en terminal",
-        "Aclaración de pago no reflejado", "Permisos y licencia"],
-    3: ["Material promocional", "Vinilos y publicidad interna", "Landing page", "Etiquetas y logos deportivos"],
-    4: ["Accesorios para equipos", "Accesorios para clases", "Analizador de composición corporal", "App Ultra",
-        "Instructores de clases", "Instructores de piso", "Instructores personalizados"],
-    5: ["Incidencia en nómina", "Vacantes", "Uniformes", "Tarjeta de nómina", "Entrega de finiquitos", "Bajas de personal"],
-    6: ["Bebidas para la venta"],
-    7: ["Computadora Recepción", "Computadora Gerente", "Torniquete 1 (Junto a Recepcion)", "Torniquete 2 (Retirado de recepcion)",
-        "Sonido Ambiental (Bocinas, Amplificador)", "Sonido en Salones", "Tablet 1 (Computadora recepcion)",
-        "Tablet 2 (Computadora Gerente)", "Impresora multifuncional", "Impresora termica (Recepcion)",
-        "Impresora termica (Gerente)", "Terminal (Recepcion)", "Terminal (Gerente)", "Alarma", "Telefono", "Internet", "Camaras"]
-  };
-
-  categoriaHistorial: { [key: string]: number } = {};
   private apiUrl = `${environment.apiUrl}/tickets/create`;
 
   constructor(
     private http: HttpClient,
     private router: Router,
     private fb: FormBuilder
-  ) {}
+  ) { }
 
   ngOnInit() {
     this.formularioMantenimiento = this.fb.group({
       departamento: [null, Validators.required],
-      tipoMantenimiento: [null],
-      categoria: ['', Validators.required],
-      subcategoria: [''],
-      subsubcategoria: [''],
-      nuevaCategoria: [''],
-      criticidad: [null, Validators.required],
-      descripcion: ['', Validators.required],
+      tipoMantenimiento: [null]
     });
 
-    // Aquí va la lógica que agrega los controles hijos dependiendo el tipo
-    this.formularioMantenimiento.get('tipoMantenimiento')?.valueChanges.subscribe(tipo => {
+    this.formularioMantenimiento.get('tipoMantenimiento')?.valueChanges.subscribe(() => {
       this.resetCamposTipo();
     });
   }
 
-  // 🔧 Esta es la parte clave: limpiar campos cuando cambia tipo mantenimiento
   resetCamposTipo() {
     const keysAEliminar = [
       'aparato_id',
@@ -98,81 +86,10 @@ export class PantallaCrearTicketComponent implements OnInit {
     });
   }
 
-  cargarFormulario() {
-    const depto = this.formularioMantenimiento.get('departamento')?.value;
-    if (depto) {
-      this.formularioMantenimiento.get('categoria')?.reset();
-      this.formularioMantenimiento.get('nuevaCategoria')?.reset();
-    }
-  }
-
-  agregarCategoriaManual() {
-    const depto = this.formularioMantenimiento.get('departamento')?.value;
-    const nuevaCat = this.formularioMantenimiento.get('nuevaCategoria')?.value;
-    if (!depto || !nuevaCat) return;
-
-    if (!this.categoriasPorDepartamento[depto].includes(nuevaCat)) {
-      this.categoriaHistorial[nuevaCat] = (this.categoriaHistorial[nuevaCat] || 0) + 1;
-      if (this.categoriaHistorial[nuevaCat] >= 3) {
-        this.categoriasPorDepartamento[depto].push(nuevaCat);
-      }
-    }
-
-    this.formularioMantenimiento.patchValue({ categoria: nuevaCat });
-    this.formularioMantenimiento.get('nuevaCategoria')?.reset();
-  }
-
-  getNombreDepartamentoSeleccionado(): string | null {
-    const id = this.formularioMantenimiento.get('departamento')?.value;
-    const depto = this.departamentos.find(dep => dep.id === id);
-    return depto ? depto.nombre : null;
-  }
-
-  onSubmit() {
-    const datos = this.formularioMantenimiento.value;
-
-    if (datos.tipoMantenimiento === 'aparatos') {
-      datos.categoria = 'Aparatos';
-      datos.descripcion = datos.problema_detectado;
-
-      this.formularioMantenimiento.patchValue({
-        categoria: datos.categoria,
-        descripcion: datos.descripcion
-      });
-    }
-
-    const tipo = datos.tipoMantenimiento;
-
-    if (
-      this.formularioMantenimiento.invalid ||
-      (tipo === 'aparatos' && (
-        !datos.aparato_id ||
-        !datos.problema_detectado ||
-        (datos.necesita_refaccion === true && !datos.descripcion_refaccion)
-      ))
-    ) {
-      this.mensaje = "⚠️ Por favor, llena todos los campos.";
-      console.log("❌ Formulario inválido:", datos);
-      return;
-    }
-
-    this.mensaje = "";
-
+  // 🔥 Aquí viene la clave: escuchamos el payload de los subformularios
+  recibirPayloadDesdeFormulario(payload: any) {
     const token = localStorage.getItem('token');
     const headers = token ? new HttpHeaders().set('Authorization', `Bearer ${token}`) : new HttpHeaders();
-
-    const payload = {
-      descripcion: datos.descripcion,
-      departamento_id: datos.departamento,
-      criticidad: datos.criticidad,
-      categoria: datos.categoria,
-      subcategoria: datos.subcategoria || null,
-      subsubcategoria: datos.subsubcategoria || null,
-      aparato_id: datos.aparato_id || null,
-      problema_detectado: datos.problema_detectado || null,
-      necesita_refaccion: datos.necesita_refaccion || false,
-      descripcion_refaccion: datos.descripcion_refaccion || null
-    };
 
     console.log("📡 Enviando al backend:", payload);
 
@@ -185,6 +102,5 @@ export class PantallaCrearTicketComponent implements OnInit {
         mostrarAlertaErrorDesdeStatus(error.status);
       }
     });
-
   }
 }

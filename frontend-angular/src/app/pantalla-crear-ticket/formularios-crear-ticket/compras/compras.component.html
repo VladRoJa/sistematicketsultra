@@ -1,0 +1,32 @@
+<div class="formulario-compras">
+  <form [formGroup]="formCompras" (ngSubmit)="enviarFormulario()">
+
+    <label>🗂️ Categoría:</label>
+    <select formControlName="categoria" (change)="onCategoriaChange()">
+      <option value="">Seleccione</option>
+      <option *ngFor="let cat of categorias" [value]="cat.nombre">{{ cat.nombre }}</option>
+    </select>
+
+    <label>📂 Subcategoría:</label>
+    <select formControlName="subcategoria" (change)="onSubcategoriaChange()">
+      <option value="">Seleccione</option>
+      <option *ngFor="let sub of subcategoriasDisponibles" [value]="sub.nombre">{{ sub.nombre }}</option>
+    </select>
+
+    <label>📌 Detalle específico:</label>
+    <select formControlName="detalle">
+      <option value="">Seleccione</option>
+      <option *ngFor="let det of detallesDisponibles" [value]="det">{{ det }}</option>
+    </select>
+
+    <label>📝 Descripción:</label>
+    <textarea formControlName="descripcion" rows="3"></textarea>
+
+    <label>🔥 Nivel de criticidad:</label>
+    <select formControlName="criticidad">
+      <option *ngFor="let crit of [1,2,3,4,5]" [value]="crit">Nivel {{ crit }}</option>
+    </select>
+
+    <button type="submit">📩 Crear Ticket</button>
+  </form>
+</div>
