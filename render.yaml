@@ -6,11 +6,17 @@ services:
     buildCommand: "pip install -r requirements.txt"
     startCommand: "gunicorn run:app"
     envVars:
-      - key: FLASK_ENV
-        value: production
+      - key: APP_ENV
+        value: prod
       - key: SQLALCHEMY_DATABASE_URI
-        value: mysql://root:elTimTcWcTshJjltxiNCXrDzBdcbMzy@mainline.proxy.rlwy.net:32920/railway
-      - key: JWT_SECRET_KEY
-        value: UltraJWTKey$2025!ConAccesoSeguro
+        value: postgresql+psycopg2://dbultra_cbmd_user:lpYzpRi2UelukjhYjpG45XoK6yPXU8Ps@dpg-d0vr1rripnbc73872240-a.oregon-postgres.render.com/dbultra_cbmd
       - key: SECRET_KEY
-        value: cualquierclavequeelijas123
+        value: R2vYv7BzZghmbDmyiABzX61bTVl8uYo4FCR9f_pZxQvzh0fOY_Aa8b6Qb78pq6ozTo7wFQ
+      - key: JWT_SECRET_KEY
+        value: XTZqA2kt7J6Zl8jOYW0b_6oH8Nq7KgxT3sP1s5tVxfhGz9qVKsw8JCrLhvPS1ly8kIOhFtQ
+      - key: CLOUDINARY_CLOUD_NAME
+        value: dmwpxfdck
+      - key: CLOUDINARY_API_KEY
+        value: "226536834274524"
+      - key: CLOUDINARY_API_SECRET
+        value: TrxiF3ZYUJBbN4FWHmkI4O7x42o

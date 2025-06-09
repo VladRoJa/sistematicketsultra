@@ -2,8 +2,7 @@
 
 from dotenv import load_dotenv
 import os
-import pymysql
-pymysql.install_as_MySQLdb()
+
 
 from app.utils.migraciones import aplicar_migraciones
 
