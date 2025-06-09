@@ -152,9 +152,8 @@ button:hover, .btn-submit:hover {
 
 .descripcion-label {
   font-weight: bold;
-  display: flex;
-  align-items: center;
   margin-bottom: 8px;
+  display: block;
 }
 
 .descripcion-label .icon {
