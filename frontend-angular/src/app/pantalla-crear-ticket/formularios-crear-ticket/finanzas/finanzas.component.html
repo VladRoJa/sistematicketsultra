@@ -30,9 +30,17 @@
     </div>
 
     <!-- Descripción -->
-    <div class="form-group">
-      <label>📝 Descripción:</label>
-      <textarea formControlName="descripcion" rows="3" placeholder="Describe el problema..."></textarea>
+    <div class="form-group-description">
+      <label for="descripcion" class="descripcion-label">
+        <span class="icon">📋</span> Descripción del problema:
+      </label>
+      <textarea
+        id="descripcion"
+        formControlName="descripcion"
+        class="descripcion-textarea"
+        rows="4"
+        placeholder="Detalla lo ocurrido con claridad...">
+      </textarea>
     </div>
   </form>
 </div>
