@@ -1,12 +1,11 @@
-<!-- mantenimiento-aparatos.component.html -->
-
-<div [formGroup]="parentForm" class="formulario-ticket-container">
+<div [formGroup]="parentForm" class="subformulario-box">
   <h3>🏋️‍♂️ Reportar Falla en Aparato</h3>
 
   <!-- Buscador con Autocompletado -->
-  <div>
+  <div class="form-group">
+    <label>🔎 Buscar aparato:</label>
     <mat-form-field appearance="fill" class="full-width">
-      <mat-label>🔎 Escribe el código o nombre...</mat-label>
+      <mat-label>Escribe el código o nombre...</mat-label>
       <input
         type="text"
         matInput
@@ -43,37 +42,27 @@
   </div>
 
   <!-- Problema detectado -->
-  <div>
-    <label for="problema_detectado">🛠 Problema detectado:</label>
-    <input
-      type="text"
-      id="problema_detectado"
-      formControlName="problema_detectado"
-      placeholder="Describe el problema..."
-    />
+  <div class="form-group">
+    <label>🛠 Problema detectado:</label>
+    <input type="text" formControlName="problema_detectado" placeholder="Describe el problema..." />
   </div>
 
   <!-- ¿Requiere refacción? -->
-  <div class="horizontal-align">
+  <div class="form-group horizontal-align">
     <input type="checkbox" formControlName="necesita_refaccion" />
     <label>¿Requiere refacción?</label>
   </div>
 
   <!-- Descripción técnica de la refacción -->
-  <div *ngIf="parentForm.get('necesita_refaccion')?.value">
-    <label for="descripcion_refaccion">🧰 Descripción técnica de la refacción:</label>
-    <textarea
-      id="descripcion_refaccion"
-      formControlName="descripcion_refaccion"
-      placeholder="Especifica el componente o detalle técnico..."
-      rows="3"
-    ></textarea>
+  <div class="form-group" *ngIf="parentForm.get('necesita_refaccion')?.value">
+    <label>🧰 Descripción técnica de la refacción:</label>
+    <textarea formControlName="descripcion_refaccion" placeholder="Detalle técnico..." rows="3"></textarea>
   </div>
 
   <!-- 🔥 Criticidad -->
-  <div>
-    <label for="criticidad">🔥 Nivel de criticidad:</label>
-    <select id="criticidad" formControlName="criticidad">
+  <div class="form-group">
+    <label>🔥 Nivel de criticidad:</label>
+    <select formControlName="criticidad">
       <option *ngFor="let nivel of [1, 2, 3, 4, 5]" [value]="nivel">Nivel {{ nivel }}</option>
     </select>
   </div>

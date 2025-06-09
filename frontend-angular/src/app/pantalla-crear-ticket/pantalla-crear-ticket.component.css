@@ -13,11 +13,11 @@ body {
 
 .ticket-container-global {
   background: white;
-  max-width: 600px;
-  padding: 30px;
+  max-width: 450px;
+  padding: 25px;
   border-radius: 10px;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
-  margin-top: 40px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  margin: 50px auto;
 }
 
 h2 {

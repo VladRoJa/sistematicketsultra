@@ -1,11 +1,8 @@
-<!-- Subformulario de mantenimiento - Edificio -->
-
-
-<div [formGroup]="parentForm" class="formulario-ticket-container">
+<div [formGroup]="parentForm" class="subformulario-box">
   <h3>🏢 Reporte de Edificio</h3>
 
-  <!-- 🏷️ Categoría -->
-  <div>
+  <!-- Categoría -->
+  <div class="form-group">
     <label for="categoriaPrincipal">🏷️ Categoría:</label>
     <select id="categoriaPrincipal" formControlName="categoria">
       <option *ngFor="let categoria of getCategorias()" [value]="categoria">
@@ -14,8 +11,8 @@
     </select>
   </div>
 
-  <!-- 🔧 Subcategoría -->
-  <div *ngIf="parentForm.get('categoria')?.value">
+  <!-- Subcategoría -->
+  <div class="form-group" *ngIf="parentForm.get('categoria')?.value">
     <label for="subcategoria">🛠️ Subcategoría:</label>
     <select id="subcategoria" formControlName="subcategoria">
       <option *ngFor="let sub of getSubcategorias(parentForm.get('categoria')?.value)" [value]="sub">
@@ -24,8 +21,8 @@
     </select>
   </div>
 
-  <!-- 🧩 Sub-subcategoría -->
-  <div *ngIf="parentForm.get('subcategoria')?.value">
+  <!-- Sub-subcategoría -->
+  <div class="form-group" *ngIf="parentForm.get('subcategoria')?.value">
     <label for="subsubcategoria">🧩 Detalle específico:</label>
     <select id="subsubcategoria" formControlName="subsubcategoria">
       <option *ngFor="let detalle of getSubsubcategorias(
@@ -37,19 +34,14 @@
     </select>
   </div>
 
-  <!-- 📝 Descripción -->
-  <div>
-    <label for="descripcion">📋 Descripción del problema:</label>
-    <textarea
-      id="descripcion"
-      formControlName="descripcion"
-      rows="4"
-      placeholder="Detalla lo ocurrido con claridad..."
-    ></textarea>
+  <!-- Descripción -->
+  <div class="form-group">
+    <label for="descripcion">📝 Descripción del problema:</label>
+    <textarea id="descripcion" formControlName="descripcion" rows="4" placeholder="Detalla lo ocurrido con claridad..."></textarea>
   </div>
 
-  <!-- 🔥 Criticidad -->
-  <div>
+  <!-- Criticidad -->
+  <div class="form-group">
     <label for="criticidad">🔥 Nivel de criticidad:</label>
     <select id="criticidad" formControlName="criticidad">
       <option *ngFor="let nivel of [1, 2, 3, 4, 5]" [value]="nivel">
