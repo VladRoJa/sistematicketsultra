@@ -43,6 +43,7 @@ h3 {
 label {
   font-weight: 600;
   margin-bottom: 5px;
+  display: block;
 }
 
 input, select, textarea {
@@ -51,6 +52,7 @@ input, select, textarea {
   border: 1px solid #ccc;
   border-radius: 5px;
   font-size: 15px;
+  box-sizing: border-box;
 }
 
 textarea {
@@ -128,4 +130,39 @@ button:hover, .btn-submit:hover {
 .marca-aparato {
   font-size: 12px;
   color: gray;
+}
+
+/* === NUEVOS AJUSTES PARA LOGRAR EL ESTILO ORIGINAL === */
+
+.form-mantenimiento-subform {
+  margin-top: 15px;
+  padding-top: 10px;
+  border-top: 1px dashed #ccc;
+}
+
+.form-group-description {
+  background: #f9f9f9;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 15px;
+  margin-top: 10px;
+}
+
+.descripcion-label {
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.descripcion-label .icon {
+  margin-right: 6px;
+}
+
+.descripcion-textarea {
+  width: 100%;
+  padding: 10px;
+  font-size: 15px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
 }

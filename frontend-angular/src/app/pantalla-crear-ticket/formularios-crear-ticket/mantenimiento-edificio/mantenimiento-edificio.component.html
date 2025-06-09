@@ -35,9 +35,17 @@
   </div>
 
   <!-- Descripción -->
-  <div class="form-group">
-    <label for="descripcion">📝 Descripción del problema:</label>
-    <textarea id="descripcion" formControlName="descripcion" rows="4" placeholder="Detalla lo ocurrido con claridad..."></textarea>
+  <div class="form-group-description">
+    <label for="descripcion" class="descripcion-label">
+      <span class="icon">📋</span> Descripción del problema:
+    </label>
+    <textarea
+      id="descripcion"
+      formControlName="descripcion"
+      class="descripcion-textarea"
+      rows="4"
+      placeholder="Detalla lo ocurrido con claridad..."
+    ></textarea>
   </div>
 
   <!-- Criticidad -->

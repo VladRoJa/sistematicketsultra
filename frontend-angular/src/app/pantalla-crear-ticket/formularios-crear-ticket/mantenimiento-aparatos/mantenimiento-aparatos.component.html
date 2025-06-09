@@ -42,9 +42,17 @@
   </div>
 
   <!-- Problema detectado -->
-  <div class="form-group">
-    <label>🛠 Problema detectado:</label>
-    <input type="text" formControlName="problema_detectado" placeholder="Describe el problema..." />
+  <div class="form-group-description">
+    <label for="descripcion" class="descripcion-label">
+      <span class="icon">📋</span> Descripción del problema:
+    </label>
+    <textarea
+      id="descripcion"
+      formControlName="descripcion"
+      class="descripcion-textarea"
+      rows="4"
+      placeholder="Detalla lo ocurrido con claridad..."
+    ></textarea>
   </div>
 
   <!-- ¿Requiere refacción? -->
