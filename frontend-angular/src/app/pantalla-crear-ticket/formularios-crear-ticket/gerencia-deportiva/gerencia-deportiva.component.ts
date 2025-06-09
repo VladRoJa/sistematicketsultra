@@ -7,7 +7,7 @@ import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } 
   standalone: true,
   imports: [CommonModule, FormsModule, ReactiveFormsModule],
   templateUrl: './gerencia-deportiva.component.html',
-  styleUrls: ['./gerencia-deportiva.component.css']
+  styleUrls: []
 })
 export class GerenciaDeportivaComponent implements OnInit {
 

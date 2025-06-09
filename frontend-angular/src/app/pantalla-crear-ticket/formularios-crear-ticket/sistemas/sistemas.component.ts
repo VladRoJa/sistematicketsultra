@@ -7,7 +7,7 @@ import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } 
   standalone: true,
   imports: [CommonModule, FormsModule, ReactiveFormsModule],
   templateUrl: './sistemas.component.html',
-  styleUrls: ['./sistemas.component.css']
+  styleUrls: []
 })
 export class SistemasComponent implements OnInit {
 

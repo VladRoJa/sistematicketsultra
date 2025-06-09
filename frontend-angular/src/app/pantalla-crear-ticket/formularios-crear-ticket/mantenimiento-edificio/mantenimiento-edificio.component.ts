@@ -9,7 +9,7 @@ import { FormGroup, FormControl, Validators, ReactiveFormsModule, FormsModule } 
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule, FormsModule],
   templateUrl: './mantenimiento-edificio.component.html',
-  styleUrls: ['./mantenimiento-edificio.component.css']
+  styleUrls: []
 })
 export class MantenimientoEdificioComponent implements OnInit {
   @Input() parentForm!: FormGroup;

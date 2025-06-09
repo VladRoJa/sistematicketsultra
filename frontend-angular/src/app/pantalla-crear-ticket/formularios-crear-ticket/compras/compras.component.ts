@@ -9,7 +9,7 @@ import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } 
   standalone: true,
   imports: [CommonModule, FormsModule, ReactiveFormsModule],
   templateUrl: './compras.component.html',
-  styleUrls: ['./compras.component.css']
+  styleUrls: []
 })
 export class ComprasComponent implements OnInit {
 

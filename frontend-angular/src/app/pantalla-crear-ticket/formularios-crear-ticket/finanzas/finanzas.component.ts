@@ -9,7 +9,7 @@ import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } 
   standalone: true,
   imports: [CommonModule, FormsModule, ReactiveFormsModule],
   templateUrl: './finanzas.component.html',
-  styleUrls: ['./finanzas.component.css']
+  styleUrls: []
 })
 export class FinanzasComponent implements OnInit {
 

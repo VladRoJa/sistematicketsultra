@@ -29,7 +29,7 @@ import { MatOptionModule } from '@angular/material/core';
     MatOptionModule
   ],
   templateUrl: './mantenimiento-aparatos.component.html',
-  styleUrls: ['./mantenimiento-aparatos.component.css']
+  styleUrls: []
 })
 export class MantenimientoAparatosComponent implements OnInit {
   @Input() parentForm!: FormGroup;

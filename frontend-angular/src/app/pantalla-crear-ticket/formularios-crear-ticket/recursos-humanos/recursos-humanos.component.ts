@@ -7,7 +7,7 @@ import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } 
   standalone: true,
   imports: [CommonModule, FormsModule, ReactiveFormsModule],
   templateUrl: './recursos-humanos.component.html',
-  styleUrls: ['./recursos-humanos.component.css']
+  styleUrls: []
 })
 export class RecursosHumanosComponent implements OnInit {
 

@@ -7,7 +7,7 @@ import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } 
   standalone: true,
   imports: [CommonModule, FormsModule, ReactiveFormsModule],
   templateUrl: './marketing.component.html',
-  styleUrls: ['./marketing.component.css']
+  styleUrls: []
 })
 export class MarketingComponent implements OnInit {
 
