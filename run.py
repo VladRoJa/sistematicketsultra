@@ -37,9 +37,7 @@ with app.app_context():
     try:
         print(f"🧩 Conectando a base de datos: {app.config['SQLALCHEMY_DATABASE_URI']}")
         db.create_all()
-        aplicar_migraciones()  # 🟢 Se ejecuta siempre
-        from app.db_init import inicializar_db_si_esta_vacia
-        inicializar_db_si_esta_vacia()
+        aplicar_migraciones()
     except Exception as e:
         print(f"❌ Error al verificar o cargar la base de datos: {e}")
 
