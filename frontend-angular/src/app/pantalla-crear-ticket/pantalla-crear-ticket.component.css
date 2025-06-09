@@ -141,12 +141,13 @@ button:hover, .btn-submit:hover {
 }
 
 .form-group-description {
+  display: flex;
+  flex-direction: column;
+  margin-top: 15px;
+  padding: 15px;
   background: #f9f9f9;
   border: 1px solid #ddd;
   border-radius: 10px;
-  padding: 20px;
-  margin-top: 15px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
 }
 
 .descripcion-label {
