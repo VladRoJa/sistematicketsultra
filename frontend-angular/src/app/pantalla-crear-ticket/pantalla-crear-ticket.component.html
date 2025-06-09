@@ -43,6 +43,16 @@
       <app-sistemas *ngIf="formularioCrearTicket.get('departamento')?.value === 7" [parentForm]="formularioCrearTicket"></app-sistemas>
     </div>
 
+    <!-- Nivel de criticidad -->
+  <div class="form-group">
+    <label for="criticidad">🔥 Nivel de criticidad:</label>
+    <select id="criticidad" formControlName="criticidad">
+      <option *ngFor="let nivel of [1, 2, 3, 4, 5]" [value]="nivel">
+        Nivel {{ nivel }}
+      </option>
+    </select>
+  </div>
+
     <!-- 🔥 Este es el botón global -->
     <button type="submit" class="btn-submit">📩 Crear Ticket</button>
   </form>
