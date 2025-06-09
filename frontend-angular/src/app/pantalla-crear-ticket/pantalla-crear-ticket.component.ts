@@ -1,4 +1,4 @@
-// pantalla-crear-ticket.component.ts (actualizado)
+// pantalla-crear-ticket.component.ts
 
 import { Component, OnInit } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
