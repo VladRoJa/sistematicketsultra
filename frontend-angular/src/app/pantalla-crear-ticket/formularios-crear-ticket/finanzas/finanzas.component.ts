@@ -1,4 +1,4 @@
-// finanzas.component.ts
+// C:\Users\Vladimir\Documents\Sistema tickets\frontend-angular\src\app\pantalla-crear-ticket\formularios-crear-ticket\finanzas\finanzas.component.ts
 
 import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, OnInit, Output } from '@angular/core';

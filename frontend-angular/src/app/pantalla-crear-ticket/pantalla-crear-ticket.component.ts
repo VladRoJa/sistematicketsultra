@@ -39,7 +39,7 @@ import { SistemasComponent } from './formularios-crear-ticket/sistemas/sistemas.
 })
 export class PantallaCrearTicketComponent implements OnInit {
 
-  formularioMantenimiento!: FormGroup;
+  formularioCrearTicket!: FormGroup;
   mensaje: string = '';
 
   departamentos = [
@@ -61,12 +61,12 @@ export class PantallaCrearTicketComponent implements OnInit {
   ) { }
 
   ngOnInit() {
-    this.formularioMantenimiento = this.fb.group({
+    this.formularioCrearTicket = this.fb.group({
       departamento: [null, Validators.required],
       tipoMantenimiento: [null]
     });
 
-    this.formularioMantenimiento.get('tipoMantenimiento')?.valueChanges.subscribe(() => {
+    this.formularioCrearTicket.get('tipoMantenimiento')?.valueChanges.subscribe(() => {
       this.resetCamposTipo();
     });
   }
@@ -80,13 +80,12 @@ export class PantallaCrearTicketComponent implements OnInit {
     ];
 
     keysAEliminar.forEach(campo => {
-      if (this.formularioMantenimiento.contains(campo)) {
-        this.formularioMantenimiento.removeControl(campo);
+      if (this.formularioCrearTicket.contains(campo)) {
+        this.formularioCrearTicket.removeControl(campo);
       }
     });
   }
 
-  // 🔥 Aquí viene la clave: escuchamos el payload de los subformularios
   recibirPayloadDesdeFormulario(payload: any) {
     const token = localStorage.getItem('token');
     const headers = token ? new HttpHeaders().set('Authorization', `Bearer ${token}`) : new HttpHeaders();
@@ -96,7 +95,7 @@ export class PantallaCrearTicketComponent implements OnInit {
     this.http.post<{ mensaje: string }>(this.apiUrl, payload, { headers }).subscribe({
       next: () => {
         mostrarAlertaToast('✅ Ticket creado correctamente.');
-        this.formularioMantenimiento.reset();
+        this.formularioCrearTicket.reset();
       },
       error: (error) => {
         mostrarAlertaErrorDesdeStatus(error.status);

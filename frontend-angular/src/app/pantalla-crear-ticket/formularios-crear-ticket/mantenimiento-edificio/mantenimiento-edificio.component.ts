@@ -65,23 +65,6 @@ export class MantenimientoEdificioComponent implements OnInit {
   descripcionAdicional: string = '';
 
   ngOnInit(): void {
-    if (this.parentForm) {
-      if (!this.parentForm.get('categoria')) {
-        this.parentForm.addControl('categoria', new FormControl('', Validators.required));
-      }
-      if (!this.parentForm.get('subcategoria')) {
-        this.parentForm.addControl('subcategoria', new FormControl('', Validators.required));
-      }
-      if (!this.parentForm.get('subsubcategoria')) {
-        this.parentForm.addControl('subsubcategoria', new FormControl(''));
-      }
-      if (!this.parentForm.get('descripcion')) {
-        this.parentForm.addControl('descripcion', new FormControl('', Validators.required));
-      }
-      if (!this.parentForm.get('criticidad')) {
-        this.parentForm.addControl('criticidad', new FormControl(null, Validators.required));
-      }
-    }
   }
   
 

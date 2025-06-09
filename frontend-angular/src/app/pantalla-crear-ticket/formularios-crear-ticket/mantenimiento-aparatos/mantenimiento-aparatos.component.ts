@@ -50,7 +50,7 @@ export class MantenimientoAparatosComponent implements OnInit {
     this.parentForm.addControl('problema_detectado', new FormControl('', Validators.required));
     this.parentForm.addControl('necesita_refaccion', new FormControl(false));
     this.parentForm.addControl('descripcion_refaccion', new FormControl(''));
-    this.parentForm.addControl('criticidad', new FormControl(null, Validators.required));
+ 
 
   
     const token = localStorage.getItem('token');

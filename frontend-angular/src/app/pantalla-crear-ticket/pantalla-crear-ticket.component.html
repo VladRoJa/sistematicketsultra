@@ -4,7 +4,7 @@
   <h2>🎫 Crear Nuevo Ticket</h2>
 
   <!-- Formulario solo para seleccionar el departamento -->
-  <form [formGroup]="formularioMantenimiento" class="formulario-ticket-container">
+  <form [formGroup]="formularioCrearTicket" class="formulario-ticket-container">
     <div class="form-group">
       <label for="departamento">🏢 Departamento:</label>
       <select id="departamento" formControlName="departamento">
@@ -12,40 +12,41 @@
         <option *ngFor="let dep of departamentos" [ngValue]="dep.id">{{ dep.nombre }}</option>
       </select>
     </div>
+
+    <!-- Selector solo visible para mantenimiento -->
+    <div *ngIf="formularioCrearTicket.get('departamento')?.value === 1" class="form-group">
+      <label for="tipoMantenimiento">⚙️ Tipo de mantenimiento:</label>
+      <select id="tipoMantenimiento" formControlName="tipoMantenimiento">
+        <option [ngValue]="null">Selecciona uno</option>
+        <option value="edificio">🏢 Edificio</option>
+        <option value="aparatos">🏋️ Aparatos</option>
+      </select>
+    </div>
   </form>
 
-  <!-- Mantenimiento -->
-  <div *ngIf="formularioMantenimiento.get('departamento')?.value === 1" class="formulario-ticket-container">
-    <label for="tipoMantenimiento">⚙️ Tipo de mantenimiento:</label>
-    <select id="tipoMantenimiento" formControlName="tipoMantenimiento">
-      <option [ngValue]="null">Selecciona uno</option>
-      <option value="edificio">🏢 Edificio</option>
-      <option value="aparatos">🏋️ Aparatos</option>
-    </select>
+  <!-- Subformularios de mantenimiento -->
+  <div class="formulario-sub">
+    <app-mantenimiento-edificio
+      *ngIf="formularioCrearTicket.get('departamento')?.value === 1 && formularioCrearTicket.get('tipoMantenimiento')?.value === 'edificio'"
+      [parentForm]="formularioCrearTicket"
+      (formularioValido)="recibirPayloadDesdeFormulario($event)">
+    </app-mantenimiento-edificio>
 
-    <div class="form-mantenimiento-subform">
-      <app-mantenimiento-edificio
-        *ngIf="formularioMantenimiento.get('tipoMantenimiento')?.value === 'edificio'"
-        [parentForm]="formularioMantenimiento"
-        (formularioValido)="recibirPayloadDesdeFormulario($event)">
-      </app-mantenimiento-edificio>
-
-      <app-mantenimiento-aparatos
-        *ngIf="formularioMantenimiento.get('tipoMantenimiento')?.value === 'aparatos'"
-        [parentForm]="formularioMantenimiento"
-        (formularioValido)="recibirPayloadDesdeFormulario($event)">
-      </app-mantenimiento-aparatos>
-    </div>
+    <app-mantenimiento-aparatos
+      *ngIf="formularioCrearTicket.get('departamento')?.value === 1 && formularioCrearTicket.get('tipoMantenimiento')?.value === 'aparatos'"
+      [parentForm]="formularioCrearTicket"
+      (formularioValido)="recibirPayloadDesdeFormulario($event)">
+    </app-mantenimiento-aparatos>
   </div>
 
-  <!-- Subformularios hijos -->
-  <div class="formulario-ticket-container">
-    <app-finanzas *ngIf="formularioMantenimiento.get('departamento')?.value === 2" (formularioValido)="recibirPayloadDesdeFormulario($event)"></app-finanzas>
-    <app-marketing *ngIf="formularioMantenimiento.get('departamento')?.value === 3" (formularioValido)="recibirPayloadDesdeFormulario($event)"></app-marketing>
-    <app-gerencia-deportiva *ngIf="formularioMantenimiento.get('departamento')?.value === 4" (formularioValido)="recibirPayloadDesdeFormulario($event)"></app-gerencia-deportiva>
-    <app-recursos-humanos *ngIf="formularioMantenimiento.get('departamento')?.value === 5" (formularioValido)="recibirPayloadDesdeFormulario($event)"></app-recursos-humanos>
-    <app-compras *ngIf="formularioMantenimiento.get('departamento')?.value === 6" (formularioValido)="recibirPayloadDesdeFormulario($event)"></app-compras>
-    <app-sistemas *ngIf="formularioMantenimiento.get('departamento')?.value === 7" (formularioValido)="recibirPayloadDesdeFormulario($event)"></app-sistemas>
+  <!-- Subformularios de los demás departamentos -->
+  <div class="formulario-sub">
+    <app-finanzas *ngIf="formularioCrearTicket.get('departamento')?.value === 2" (formularioValido)="recibirPayloadDesdeFormulario($event)"></app-finanzas>
+    <app-marketing *ngIf="formularioCrearTicket.get('departamento')?.value === 3" (formularioValido)="recibirPayloadDesdeFormulario($event)"></app-marketing>
+    <app-gerencia-deportiva *ngIf="formularioCrearTicket.get('departamento')?.value === 4" (formularioValido)="recibirPayloadDesdeFormulario($event)"></app-gerencia-deportiva>
+    <app-recursos-humanos *ngIf="formularioCrearTicket.get('departamento')?.value === 5" (formularioValido)="recibirPayloadDesdeFormulario($event)"></app-recursos-humanos>
+    <app-compras *ngIf="formularioCrearTicket.get('departamento')?.value === 6" (formularioValido)="recibirPayloadDesdeFormulario($event)"></app-compras>
+    <app-sistemas *ngIf="formularioCrearTicket.get('departamento')?.value === 7" (formularioValido)="recibirPayloadDesdeFormulario($event)"></app-sistemas>
   </div>
 
   <p *ngIf="mensaje" class="mensaje">{{ mensaje }}</p>

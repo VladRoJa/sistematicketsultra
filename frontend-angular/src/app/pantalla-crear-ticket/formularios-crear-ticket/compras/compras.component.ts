@@ -1,3 +1,5 @@
+//C:\Users\Vladimir\Documents\Sistema tickets\frontend-angular\src\app\pantalla-crear-ticket\formularios-crear-ticket\compras\compras.component.ts
+
 import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, OnInit, Output } from '@angular/core';
 import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
@@ -75,21 +77,21 @@ export class ComprasComponent implements OnInit {
     });
   }
 
-  onCategoriaChange() {
+  onCategoriaChange(): void {
     const catSeleccionada = this.categorias.find(c => c.nombre === this.formCompras.value.categoria);
     this.subcategoriasDisponibles = catSeleccionada ? catSeleccionada.subcategorias : [];
     this.formCompras.patchValue({ subcategoria: '', detalle: '' });
     this.detallesDisponibles = [];
   }
 
-  onSubcategoriaChange() {
+  onSubcategoriaChange(): void {
     const catSeleccionada = this.categorias.find(c => c.nombre === this.formCompras.value.categoria);
     const subcatSeleccionada = catSeleccionada?.subcategorias.find(s => s.nombre === this.formCompras.value.subcategoria);
     this.detallesDisponibles = subcatSeleccionada ? subcatSeleccionada.detalles : [];
     this.formCompras.patchValue({ detalle: '' });
   }
 
-  enviarFormulario() {
+  enviarFormulario(): void {
     if (this.formCompras.valid) {
       const payload = {
         departamento_id: 6,

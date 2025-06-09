@@ -1,8 +1,11 @@
 <!-- Subformulario de mantenimiento - Edificio -->
-<div [formGroup]="parentForm" class="form-group-grouped">
+
+
+<div [formGroup]="parentForm" class="formulario-ticket-container">
+  <h3>🏢 Reporte de Edificio</h3>
 
   <!-- 🏷️ Categoría -->
-  <div class="form-group-grouped">
+  <div>
     <label for="categoriaPrincipal">🏷️ Categoría:</label>
     <select id="categoriaPrincipal" formControlName="categoria">
       <option *ngFor="let categoria of getCategorias()" [value]="categoria">
@@ -12,7 +15,7 @@
   </div>
 
   <!-- 🔧 Subcategoría -->
-  <div class="form-group-grouped" *ngIf="parentForm.get('categoria')?.value">
+  <div *ngIf="parentForm.get('categoria')?.value">
     <label for="subcategoria">🛠️ Subcategoría:</label>
     <select id="subcategoria" formControlName="subcategoria">
       <option *ngFor="let sub of getSubcategorias(parentForm.get('categoria')?.value)" [value]="sub">
@@ -22,7 +25,7 @@
   </div>
 
   <!-- 🧩 Sub-subcategoría -->
-  <div class="form-group-grouped" *ngIf="parentForm.get('subcategoria')?.value">
+  <div *ngIf="parentForm.get('subcategoria')?.value">
     <label for="subsubcategoria">🧩 Detalle específico:</label>
     <select id="subsubcategoria" formControlName="subsubcategoria">
       <option *ngFor="let detalle of getSubsubcategorias(
@@ -35,22 +38,18 @@
   </div>
 
   <!-- 📝 Descripción -->
-  <div class="form-group-grouped form-group-description">
-    <label for="descripcion" class="descripcion-label">
-      <span class="icon">📋</span> Descripción del problema:
-    </label>
+  <div>
+    <label for="descripcion">📋 Descripción del problema:</label>
     <textarea
       id="descripcion"
       formControlName="descripcion"
-      class="descripcion-textarea"
       rows="4"
       placeholder="Detalla lo ocurrido con claridad..."
     ></textarea>
   </div>
 
-
   <!-- 🔥 Criticidad -->
-  <div class="form-group-grouped">
+  <div>
     <label for="criticidad">🔥 Nivel de criticidad:</label>
     <select id="criticidad" formControlName="criticidad">
       <option *ngFor="let nivel of [1, 2, 3, 4, 5]" [value]="nivel">
@@ -58,5 +57,4 @@
       </option>
     </select>
   </div>
-
 </div>
