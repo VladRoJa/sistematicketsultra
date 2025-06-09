@@ -1,7 +1,7 @@
 //C:\Users\Vladimir\Documents\Sistema tickets\frontend-angular\src\app\pantalla-crear-ticket\formularios-crear-ticket\compras\compras.component.ts
 
 import { CommonModule } from '@angular/common';
-import { Component, EventEmitter, OnInit, Output } from '@angular/core';
+import { Component, EventEmitter, OnInit, Output, Input } from '@angular/core';
 import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 
 @Component({
@@ -13,8 +13,8 @@ import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } 
 })
 export class ComprasComponent implements OnInit {
 
+  @Input() parentForm!: FormGroup;
   @Output() formularioValido = new EventEmitter<any>();
-  formCompras!: FormGroup;
 
   categorias = [
     {
@@ -68,38 +68,36 @@ export class ComprasComponent implements OnInit {
   constructor(private fb: FormBuilder) {}
 
   ngOnInit(): void {
-    this.formCompras = this.fb.group({
-      categoria: ['', Validators.required],
-      subcategoria: ['', Validators.required],
-      detalle: ['', Validators.required],
-      descripcion: ['', Validators.required],
-      criticidad: [null, Validators.required]
-    });
+    if (!this.parentForm) return;
+
+    this.parentForm.addControl('categoria', this.fb.control('', Validators.required));
+    this.parentForm.addControl('subcategoria', this.fb.control('', Validators.required));
+    this.parentForm.addControl('detalle', this.fb.control('', Validators.required));
+    this.parentForm.addControl('descripcion', this.fb.control('', Validators.required));
   }
 
   onCategoriaChange(): void {
-    const catSeleccionada = this.categorias.find(c => c.nombre === this.formCompras.value.categoria);
+    const catSeleccionada = this.categorias.find(c => c.nombre === this.parentForm.value.categoria);
     this.subcategoriasDisponibles = catSeleccionada ? catSeleccionada.subcategorias : [];
-    this.formCompras.patchValue({ subcategoria: '', detalle: '' });
+    this.parentForm.patchValue({ subcategoria: '', detalle: '' });
     this.detallesDisponibles = [];
   }
 
   onSubcategoriaChange(): void {
-    const catSeleccionada = this.categorias.find(c => c.nombre === this.formCompras.value.categoria);
-    const subcatSeleccionada = catSeleccionada?.subcategorias.find(s => s.nombre === this.formCompras.value.subcategoria);
+    const catSeleccionada = this.categorias.find(c => c.nombre === this.parentForm.value.categoria);
+    const subcatSeleccionada = catSeleccionada?.subcategorias.find(s => s.nombre === this.parentForm.value.subcategoria);
     this.detallesDisponibles = subcatSeleccionada ? subcatSeleccionada.detalles : [];
-    this.formCompras.patchValue({ detalle: '' });
+    this.parentForm.patchValue({ detalle: '' });
   }
 
-  enviarFormulario(): void {
-    if (this.formCompras.valid) {
+  emitirFormulario() {
+    if (this.parentForm.valid) {
       const payload = {
         departamento_id: 6,
-        categoria: this.formCompras.value.categoria,
-        subcategoria: this.formCompras.value.subcategoria,
-        subsubcategoria: this.formCompras.value.detalle,
-        descripcion: this.formCompras.value.descripcion,
-        criticidad: this.formCompras.value.criticidad
+        categoria: this.parentForm.value.categoria,
+        subcategoria: this.parentForm.value.subcategoria,
+        subsubcategoria: this.parentForm.value.detalle,
+        descripcion: this.parentForm.value.descripcion
       };
       this.formularioValido.emit(payload);
     }

@@ -70,7 +70,7 @@ export class PantallaCrearTicketComponent implements OnInit {
 
     this.formularioCrearTicket.get('departamento')?.valueChanges.subscribe(() => {
       this.formularioCrearTicket.patchValue({ tipoMantenimiento: null });
-      this.payloadParcial = null; // limpiamos el payload al cambiar de departamento
+      this.payloadParcial = null;
     });
 
     this.formularioCrearTicket.get('tipoMantenimiento')?.valueChanges.subscribe(() => {
@@ -93,7 +93,6 @@ export class PantallaCrearTicketComponent implements OnInit {
     });
   }
 
-  // Recibimos el payload parcial desde los subformularios
   recibirPayloadDesdeFormulario(payload: any) {
     this.payloadParcial = payload;
   }

@@ -1,6 +1,6 @@
 <div class="subformulario-box">
-
-  <form [formGroup]="formCompras" (ngSubmit)="enviarFormulario()">
+  <!-- Form sin submit, manejado por el padre -->
+  <form [formGroup]="parentForm">
 
     <!-- Categoría -->
     <div class="form-group">
@@ -42,5 +42,7 @@
         placeholder="Detalla lo ocurrido con claridad...">
       </textarea>
     </div>
+
   </form>
 </div>
+
