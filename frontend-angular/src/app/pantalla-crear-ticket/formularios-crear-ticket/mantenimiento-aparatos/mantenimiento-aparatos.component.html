@@ -66,12 +66,4 @@
     <label>🧰 Descripción técnica de la refacción:</label>
     <textarea formControlName="descripcion_refaccion" placeholder="Detalle técnico..." rows="3"></textarea>
   </div>
-
-  <!-- 🔥 Criticidad -->
-  <div class="form-group">
-    <label>🔥 Nivel de criticidad:</label>
-    <select formControlName="criticidad">
-      <option *ngFor="let nivel of [1, 2, 3, 4, 5]" [value]="nivel">Nivel {{ nivel }}</option>
-    </select>
-  </div>
 </div>

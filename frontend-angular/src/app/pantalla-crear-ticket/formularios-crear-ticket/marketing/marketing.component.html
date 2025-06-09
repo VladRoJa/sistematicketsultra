@@ -33,19 +33,5 @@
       <label>📝 Descripción:</label>
       <textarea formControlName="descripcion" rows="3"></textarea>
     </div>
-
-    <!-- Criticidad -->
-    <div class="form-group">
-      <label>🔥 Nivel de criticidad:</label>
-      <select formControlName="criticidad">
-        <option *ngFor="let crit of [1,2,3,4,5]" [value]="crit">Nivel {{ crit }}</option>
-      </select>
-    </div>
-
-    <!-- Botón -->
-    <div class="form-group">
-      <button type="submit" class="btn-submit">📩 Crear Ticket</button>
-    </div>
-
   </form>
 </div>

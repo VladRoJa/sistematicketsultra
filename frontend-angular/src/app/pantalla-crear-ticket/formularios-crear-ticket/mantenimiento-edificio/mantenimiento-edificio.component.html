@@ -1,36 +1,30 @@
-<div [formGroup]="parentForm" class="subformulario-box">
+<div [formGroup]="parentForm" class="formulario-ticket-container">
   <h3>🏢 Reporte de Edificio</h3>
 
   <!-- Categoría -->
-  <div class="form-group">
+  <div>
     <label for="categoriaPrincipal">🏷️ Categoría:</label>
-    <select id="categoriaPrincipal" formControlName="categoria">
-      <option *ngFor="let categoria of getCategorias()" [value]="categoria">
-        {{ categoria }}
-      </option>
+    <select id="categoriaPrincipal" formControlName="categoria" (change)="categoriaSeleccionada = parentForm.get('categoria')?.value">
+      <option value="">Seleccione</option>
+      <option *ngFor="let categoria of getCategorias()" [value]="categoria">{{ categoria }}</option>
     </select>
   </div>
 
   <!-- Subcategoría -->
-  <div class="form-group" *ngIf="parentForm.get('categoria')?.value">
+  <div *ngIf="parentForm.get('categoria')?.value">
     <label for="subcategoria">🛠️ Subcategoría:</label>
-    <select id="subcategoria" formControlName="subcategoria">
-      <option *ngFor="let sub of getSubcategorias(parentForm.get('categoria')?.value)" [value]="sub">
-        {{ sub }}
-      </option>
+    <select id="subcategoria" formControlName="subcategoria" (change)="subcategoriaSeleccionada = parentForm.get('subcategoria')?.value">
+      <option value="">Seleccione</option>
+      <option *ngFor="let sub of getSubcategorias(parentForm.get('categoria')?.value)" [value]="sub">{{ sub }}</option>
     </select>
   </div>
 
   <!-- Sub-subcategoría -->
-  <div class="form-group" *ngIf="parentForm.get('subcategoria')?.value">
+  <div *ngIf="parentForm.get('subcategoria')?.value">
     <label for="subsubcategoria">🧩 Detalle específico:</label>
     <select id="subsubcategoria" formControlName="subsubcategoria">
-      <option *ngFor="let detalle of getSubsubcategorias(
-        parentForm.get('categoria')?.value,
-        parentForm.get('subcategoria')?.value
-      )" [value]="detalle">
-        {{ detalle }}
-      </option>
+      <option value="">Seleccione</option>
+      <option *ngFor="let detalle of getSubsubcategorias(parentForm.get('categoria')?.value, parentForm.get('subcategoria')?.value)" [value]="detalle">{{ detalle }}</option>
     </select>
   </div>
 
@@ -39,22 +33,6 @@
     <label for="descripcion" class="descripcion-label">
       <span class="icon">📋</span> Descripción del problema:
     </label>
-    <textarea
-      id="descripcion"
-      formControlName="descripcion"
-      class="descripcion-textarea"
-      rows="4"
-      placeholder="Detalla lo ocurrido con claridad..."
-    ></textarea>
-  </div>
-
-  <!-- Criticidad -->
-  <div class="form-group">
-    <label for="criticidad">🔥 Nivel de criticidad:</label>
-    <select id="criticidad" formControlName="criticidad">
-      <option *ngFor="let nivel of [1, 2, 3, 4, 5]" [value]="nivel">
-        Nivel {{ nivel }}
-      </option>
-    </select>
+    <textarea id="descripcion" formControlName="descripcion" class="descripcion-textarea" rows="4" placeholder="Detalla lo ocurrido con claridad..."></textarea>
   </div>
 </div>

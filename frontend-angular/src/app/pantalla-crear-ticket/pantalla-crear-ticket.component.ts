@@ -41,6 +41,7 @@ export class PantallaCrearTicketComponent implements OnInit {
 
   formularioCrearTicket!: FormGroup;
   mensaje: string = '';
+  payloadParcial: any = null;
 
   departamentos = [
     { id: 1, nombre: 'Mantenimiento' },
@@ -63,7 +64,13 @@ export class PantallaCrearTicketComponent implements OnInit {
   ngOnInit() {
     this.formularioCrearTicket = this.fb.group({
       departamento: [null, Validators.required],
-      tipoMantenimiento: [null]
+      tipoMantenimiento: [null],
+      criticidad: [null, Validators.required]
+    });
+
+    this.formularioCrearTicket.get('departamento')?.valueChanges.subscribe(() => {
+      this.formularioCrearTicket.patchValue({ tipoMantenimiento: null });
+      this.payloadParcial = null; // limpiamos el payload al cambiar de departamento
     });
 
     this.formularioCrearTicket.get('tipoMantenimiento')?.valueChanges.subscribe(() => {
@@ -86,16 +93,32 @@ export class PantallaCrearTicketComponent implements OnInit {
     });
   }
 
+  // Recibimos el payload parcial desde los subformularios
   recibirPayloadDesdeFormulario(payload: any) {
+    this.payloadParcial = payload;
+  }
+
+  enviarTicket() {
+    if (!this.payloadParcial) {
+      mostrarAlertaErrorDesdeStatus(400);
+      return;
+    }
+
+    const payloadFinal = {
+      ...this.payloadParcial,
+      criticidad: this.formularioCrearTicket.value.criticidad
+    };
+
     const token = localStorage.getItem('token');
     const headers = token ? new HttpHeaders().set('Authorization', `Bearer ${token}`) : new HttpHeaders();
 
-    console.log("📡 Enviando al backend:", payload);
+    console.log("📡 Enviando al backend:", payloadFinal);
 
-    this.http.post<{ mensaje: string }>(this.apiUrl, payload, { headers }).subscribe({
+    this.http.post<{ mensaje: string }>(this.apiUrl, payloadFinal, { headers }).subscribe({
       next: () => {
         mostrarAlertaToast('✅ Ticket creado correctamente.');
         this.formularioCrearTicket.reset();
+        this.payloadParcial = null;
       },
       error: (error) => {
         mostrarAlertaErrorDesdeStatus(error.status);

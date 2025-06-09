@@ -1,5 +1,4 @@
 <div class="subformulario-box">
-  <h3>🛒 Reporte de Compras</h3>
 
   <form [formGroup]="formCompras" (ngSubmit)="enviarFormulario()">
 
@@ -35,16 +34,5 @@
       <label>📝 Descripción:</label>
       <textarea formControlName="descripcion" rows="3" placeholder="Describe el problema..."></textarea>
     </div>
-
-    <!-- Criticidad -->
-    <div class="form-group">
-      <label>🔥 Nivel de criticidad:</label>
-      <select formControlName="criticidad">
-        <option *ngFor="let crit of [1, 2, 3, 4, 5]" [value]="crit">Nivel {{ crit }}</option>
-      </select>
-    </div>
-
-    <!-- Botón -->
-    <button type="submit">📩 Crear Ticket</button>
   </form>
 </div>
