@@ -143,6 +143,7 @@ button:hover, .btn-submit:hover {
 .form-group-description {
   display: flex;
   flex-direction: column;
+  flex-wrap: wrap;
   margin-top: 15px;
   padding: 15px;
   background: #f9f9f9;

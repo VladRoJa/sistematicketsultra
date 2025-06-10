@@ -65,12 +65,15 @@ export class PantallaCrearTicketComponent implements OnInit {
     this.formularioCrearTicket = this.fb.group({
       departamento: [null, Validators.required],
       tipoMantenimiento: [null],
+      categoria: ['', Validators.required],
+      subcategoria: ['', Validators.required],
+      detalle: ['', Validators.required],
+      descripcion: ['', Validators.required],
       criticidad: [null, Validators.required]
     });
 
     this.formularioCrearTicket.get('departamento')?.valueChanges.subscribe(() => {
       this.formularioCrearTicket.patchValue({ tipoMantenimiento: null });
-      this.payloadParcial = null;
     });
 
     this.formularioCrearTicket.get('tipoMantenimiento')?.valueChanges.subscribe(() => {
@@ -98,13 +101,18 @@ export class PantallaCrearTicketComponent implements OnInit {
   }
 
   enviarTicket() {
-    if (!this.payloadParcial) {
+    if (this.formularioCrearTicket.invalid) {
       mostrarAlertaErrorDesdeStatus(400);
       return;
     }
 
     const payloadFinal = {
-      ...this.payloadParcial,
+      departamento_id: this.formularioCrearTicket.value.departamento,
+      tipo_mantenimiento: this.formularioCrearTicket.value.tipoMantenimiento || null,
+      categoria: this.formularioCrearTicket.value.categoria,
+      subcategoria: this.formularioCrearTicket.value.subcategoria,
+      subsubcategoria: this.formularioCrearTicket.value.detalle,
+      descripcion: this.formularioCrearTicket.value.descripcion,
       criticidad: this.formularioCrearTicket.value.criticidad
     };
 
@@ -117,7 +125,6 @@ export class PantallaCrearTicketComponent implements OnInit {
       next: () => {
         mostrarAlertaToast('✅ Ticket creado correctamente.');
         this.formularioCrearTicket.reset();
-        this.payloadParcial = null;
       },
       error: (error) => {
         mostrarAlertaErrorDesdeStatus(error.status);
