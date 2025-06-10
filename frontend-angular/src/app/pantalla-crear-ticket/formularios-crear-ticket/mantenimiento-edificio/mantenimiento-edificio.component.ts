@@ -1,6 +1,6 @@
 // src/app/mantenimiento-edificio/mantenimiento-edificio.component.ts
 
-import { Component, Input, OnInit } from '@angular/core';
+import { Component, Input, OnInit, OnChanges, SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormGroup, FormControl, Validators, ReactiveFormsModule, FormsModule } from '@angular/forms';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -10,11 +10,18 @@ import { MatInputModule } from '@angular/material/input';
 @Component({
   selector: 'app-mantenimiento-edificio',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, FormsModule, MatFormFieldModule, MatSelectModule, MatInputModule],
+  imports: [
+    CommonModule,
+    ReactiveFormsModule,
+    FormsModule,
+    MatFormFieldModule,
+    MatSelectModule,
+    MatInputModule
+  ],
   templateUrl: './mantenimiento-edificio.component.html',
   styleUrls: []
 })
-export class MantenimientoEdificioComponent implements OnInit {
+export class MantenimientoEdificioComponent implements OnInit, OnChanges {
   @Input() parentForm!: FormGroup;
 
   jerarquiaMantenimiento: { [categoria: string]: { [sub: string]: string[] } } = {
@@ -60,18 +67,23 @@ export class MantenimientoEdificioComponent implements OnInit {
     }
   };
 
-  categoriaSeleccionada: string | null = null;
-  subcategoriaSeleccionada: string | null = null;
-  subsubcategoriaSeleccionada: string | null = null;
-  descripcionAdicional: string = '';
-
   ngOnInit(): void {
-    if (!this.parentForm) return;
+    this.registrarControles();
+  }
 
-    this.parentForm.addControl('categoria', new FormControl('', Validators.required));
-    this.parentForm.addControl('subcategoria', new FormControl('', Validators.required));
-    this.parentForm.addControl('detalle', new FormControl('', Validators.required));
-    this.parentForm.addControl('descripcion', new FormControl('', Validators.required));
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['parentForm'] && this.parentForm) {
+      this.registrarControles();
+    }
+  }
+
+  registrarControles(): void {
+    const campos = ['categoria', 'subcategoria', 'subsubcategoria', 'descripcion'];
+    for (const campo of campos) {
+      if (!this.parentForm.get(campo)) {
+        this.parentForm.addControl(campo, new FormControl('', Validators.required));
+      }
+    }
   }
 
   getCategorias(): string[] {
