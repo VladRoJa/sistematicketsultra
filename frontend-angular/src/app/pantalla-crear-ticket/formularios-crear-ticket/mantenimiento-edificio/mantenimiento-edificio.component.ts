@@ -17,7 +17,6 @@ import { MatInputModule } from '@angular/material/input';
 export class MantenimientoEdificioComponent implements OnInit {
   @Input() parentForm!: FormGroup;
 
-  // Categoría → Subcategoría → Sub-subcategorías
   jerarquiaMantenimiento: { [categoria: string]: { [sub: string]: string[] } } = {
     "Inmueble": {
       "extintores": ["Recarga", "Mal colocación", "Sin etiqueta"],
@@ -60,7 +59,6 @@ export class MantenimientoEdificioComponent implements OnInit {
       "Iluminación externa": ["Apagada de noche", "Luz débil", "Daño en carcasa"]
     }
   };
-  
 
   categoriaSeleccionada: string | null = null;
   subcategoriaSeleccionada: string | null = null;
@@ -68,8 +66,13 @@ export class MantenimientoEdificioComponent implements OnInit {
   descripcionAdicional: string = '';
 
   ngOnInit(): void {
+    if (!this.parentForm) return;
+
+    this.parentForm.addControl('categoria', new FormControl('', Validators.required));
+    this.parentForm.addControl('subcategoria', new FormControl('', Validators.required));
+    this.parentForm.addControl('detalle', new FormControl('', Validators.required));
+    this.parentForm.addControl('descripcion', new FormControl('', Validators.required));
   }
-  
 
   getCategorias(): string[] {
     return Object.keys(this.jerarquiaMantenimiento);
