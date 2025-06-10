@@ -18,6 +18,14 @@ import { RecursosHumanosComponent } from './formularios-crear-ticket/recursos-hu
 import { ComprasComponent } from './formularios-crear-ticket/compras/compras.component';
 import { SistemasComponent } from './formularios-crear-ticket/sistemas/sistemas.component';
 
+// Angular Material
+import { MatCardModule } from '@angular/material/card';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatSelectModule } from '@angular/material/select';
+import { MatInputModule } from '@angular/material/input';
+import { MatButtonModule } from '@angular/material/button';
+
+
 @Component({
   selector: 'app-pantalla-crear-ticket',
   standalone: true,
@@ -32,7 +40,12 @@ import { SistemasComponent } from './formularios-crear-ticket/sistemas/sistemas.
     GerenciaDeportivaComponent,
     RecursosHumanosComponent,
     ComprasComponent,
-    SistemasComponent
+    SistemasComponent,
+    MatCardModule,
+    MatFormFieldModule,
+    MatSelectModule,
+    MatInputModule,
+    MatButtonModule
   ],
   templateUrl: './pantalla-crear-ticket.component.html',
   styleUrls: ['./pantalla-crear-ticket.component.css']

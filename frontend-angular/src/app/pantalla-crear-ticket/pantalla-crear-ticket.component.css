@@ -41,44 +41,6 @@ h3 {
   margin-bottom: 25px;
 }
 
-label {
-  font-weight: 600;
-  margin-bottom: 5px;
-  display: block;
-}
-
-input, select, textarea {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid #ccc;
-  border-radius: 5px;
-  font-size: 15px;
-  box-sizing: border-box;
-}
-
-textarea {
-  resize: vertical;
-  min-height: 80px;
-}
-
-button, .btn-submit {
-  width: 100%;
-  padding: 12px;
-  background: #007bff;
-  color: white;
-  border: none;
-  border-radius: 5px;
-  font-size: 16px;
-  font-weight: bold;
-  cursor: pointer;
-  transition: background 0.3s ease-in-out;
-  margin-top: 10px;
-}
-
-button:hover, .btn-submit:hover {
-  background: #0056b3;
-}
-
 .mensaje {
   margin-top: 15px;
   padding: 10px;
@@ -149,16 +111,6 @@ button:hover, .btn-submit:hover {
   background: #f9f9f9;
   border: 1px solid #ddd;
   border-radius: 10px;
-}
-
-.descripcion-label {
-  font-weight: bold;
-  margin-bottom: 8px;
-  display: block;
-}
-
-.descripcion-label .icon {
-  margin-right: 6px;
 }
 
 .descripcion-textarea {

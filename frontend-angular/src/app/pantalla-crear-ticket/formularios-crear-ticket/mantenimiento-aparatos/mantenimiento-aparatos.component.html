@@ -42,18 +42,16 @@
   </div>
 
   <!-- Problema detectado -->
-  <div class="form-group-description">
-    <label for="descripcion" class="descripcion-label">
-      <span class="icon">📋</span> Descripción del problema:
-    </label>
+  <mat-form-field appearance="fill" class="form-group-description">
+    <mat-label>📋 Descripción del problema</mat-label>
     <textarea
+      matInput
       id="descripcion"
       formControlName="descripcion"
       class="descripcion-textarea"
       rows="4"
-      placeholder="Detalla lo ocurrido con claridad..."
-    ></textarea>
-  </div>
+      placeholder="Detalla lo ocurrido con claridad..."></textarea>
+  </mat-form-field>
 
   <!-- ¿Requiere refacción? -->
   <div class="form-group horizontal-align">
@@ -63,7 +61,9 @@
 
   <!-- Descripción técnica de la refacción -->
   <div class="form-group" *ngIf="parentForm.get('necesita_refaccion')?.value">
-    <label>🧰 Descripción técnica de la refacción:</label>
-    <textarea formControlName="descripcion_refaccion" placeholder="Detalle técnico..." rows="3"></textarea>
+    <mat-form-field appearance="fill" class="full-width">
+      <mat-label>🧰 Descripción técnica de la refacción</mat-label>
+      <textarea matInput formControlName="descripcion_refaccion" placeholder="Detalle técnico..." rows="3"></textarea>
+    </mat-form-field>
   </div>
 </div>

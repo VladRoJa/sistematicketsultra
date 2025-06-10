@@ -2,37 +2,35 @@
   <h3>🏢 Reporte de Edificio</h3>
 
   <!-- Categoría -->
-  <div>
-    <label for="categoriaPrincipal">🏷️ Categoría:</label>
-    <select id="categoriaPrincipal" formControlName="categoria" (change)="categoriaSeleccionada = parentForm.get('categoria')?.value">
-      <option value="">Seleccione</option>
-      <option *ngFor="let categoria of getCategorias()" [value]="categoria">{{ categoria }}</option>
-    </select>
-  </div>
+  <mat-form-field appearance="fill">
+    <mat-label>🏷️ Categoría</mat-label>
+    <mat-select id="categoriaPrincipal" formControlName="categoria" (selectionChange)="categoriaSeleccionada = parentForm.get('categoria')?.value">
+      <mat-option value="">Seleccione</mat-option>
+      <mat-option *ngFor="let categoria of getCategorias()" [value]="categoria">{{ categoria }}</mat-option>
+    </mat-select>
+  </mat-form-field>
 
   <!-- Subcategoría -->
-  <div *ngIf="parentForm.get('categoria')?.value">
-    <label for="subcategoria">🛠️ Subcategoría:</label>
-    <select id="subcategoria" formControlName="subcategoria" (change)="subcategoriaSeleccionada = parentForm.get('subcategoria')?.value">
-      <option value="">Seleccione</option>
-      <option *ngFor="let sub of getSubcategorias(parentForm.get('categoria')?.value)" [value]="sub">{{ sub }}</option>
-    </select>
-  </div>
+  <mat-form-field appearance="fill" *ngIf="parentForm.get('categoria')?.value">
+    <mat-label>🛠️ Subcategoría</mat-label>
+    <mat-select id="subcategoria" formControlName="subcategoria" (selectionChange)="subcategoriaSeleccionada = parentForm.get('subcategoria')?.value">
+      <mat-option value="">Seleccione</mat-option>
+      <mat-option *ngFor="let sub of getSubcategorias(parentForm.get('categoria')?.value)" [value]="sub">{{ sub }}</mat-option>
+    </mat-select>
+  </mat-form-field>
 
   <!-- Sub-subcategoría -->
-  <div *ngIf="parentForm.get('subcategoria')?.value">
-    <label for="subsubcategoria">🧩 Detalle específico:</label>
-    <select id="subsubcategoria" formControlName="subsubcategoria">
-      <option value="">Seleccione</option>
-      <option *ngFor="let detalle of getSubsubcategorias(parentForm.get('categoria')?.value, parentForm.get('subcategoria')?.value)" [value]="detalle">{{ detalle }}</option>
-    </select>
-  </div>
+  <mat-form-field appearance="fill" *ngIf="parentForm.get('subcategoria')?.value">
+    <mat-label>🧩 Detalle específico</mat-label>
+    <mat-select id="subsubcategoria" formControlName="subsubcategoria">
+      <mat-option value="">Seleccione</mat-option>
+      <mat-option *ngFor="let detalle of getSubsubcategorias(parentForm.get('categoria')?.value, parentForm.get('subcategoria')?.value)" [value]="detalle">{{ detalle }}</mat-option>
+    </mat-select>
+  </mat-form-field>
 
   <!-- Descripción -->
-  <div class="form-group-description">
-    <label for="descripcion" class="descripcion-label">
-      <span class="icon">📋</span> Descripción del problema:
-    </label>
-    <textarea id="descripcion" formControlName="descripcion" class="descripcion-textarea" rows="4" placeholder="Detalla lo ocurrido con claridad..."></textarea>
-  </div>
+  <mat-form-field appearance="fill" class="form-group-description">
+    <mat-label>📋 Descripción del problema</mat-label>
+    <textarea matInput id="descripcion" formControlName="descripcion" class="descripcion-textarea" rows="4" placeholder="Detalla lo ocurrido con claridad..."></textarea>
+  </mat-form-field>
 </div>

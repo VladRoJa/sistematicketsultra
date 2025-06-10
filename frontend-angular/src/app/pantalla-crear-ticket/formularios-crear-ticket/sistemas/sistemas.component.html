@@ -2,44 +2,41 @@
   <form [formGroup]="formSistemas" (ngSubmit)="enviarFormulario()">
 
     <!-- Categoría -->
-    <div class="form-group">
-      <label>🖥️ Equipo (Categoría):</label>
-      <select formControlName="categoria">
-        <option value="">Seleccione</option>
-        <option *ngFor="let cat of categorias" [value]="cat">{{ cat }}</option>
-      </select>
-    </div>
+    <mat-form-field appearance="fill">
+      <mat-label>🗂️ Categoría</mat-label>
+      <mat-select formControlName="categoria" (selectionChange)="onCategoriaChange()">
+        <mat-option value="">Seleccione</mat-option>
+        <mat-option *ngFor="let cat of categorias" [value]="cat.nombre">{{ cat.nombre }}</mat-option>
+      </mat-select>
+    </mat-form-field>
 
     <!-- Subcategoría -->
-    <div class="form-group">
-      <label>⚙️ Tipo de solicitud (Subcategoría):</label>
-      <select formControlName="subcategoria">
-        <option value="">Seleccione</option>
-        <option *ngFor="let sub of subcategorias" [value]="sub">{{ sub }}</option>
-      </select>
-    </div>
+    <mat-form-field appearance="fill" *ngIf="subcategoriasDisponibles.length > 0">
+      <mat-label>📂 Subcategoría</mat-label>
+      <mat-select formControlName="subcategoria" (selectionChange)="onSubcategoriaChange()">
+        <mat-option value="">Seleccione</mat-option>
+        <mat-option *ngFor="let sub of subcategoriasDisponibles" [value]="sub.nombre">{{ sub.nombre }}</mat-option>
+      </mat-select>
+    </mat-form-field>
 
     <!-- Detalle -->
-    <div class="form-group">
-      <label>📌 Detalle específico:</label>
-      <select formControlName="detalle">
-        <option value="">Seleccione</option>
-        <option *ngFor="let det of detalles" [value]="det">{{ det }}</option>
-      </select>
-    </div>
+    <mat-form-field appearance="fill" *ngIf="detallesDisponibles.length > 0">
+      <mat-label>📌 Detalle específico</mat-label>
+      <mat-select formControlName="detalle">
+        <mat-option value="">Seleccione</mat-option>
+        <mat-option *ngFor="let det of detallesDisponibles" [value]="det">{{ det }}</mat-option>
+      </mat-select>
+    </mat-form-field>
 
     <!-- Descripción -->
-    <div class="form-group-description">
-      <label for="descripcion" class="descripcion-label">
-        <span class="icon">📋</span> Descripción del problema:
-      </label>
+    <mat-form-field appearance="fill" class="form-group-description">
+      <mat-label>📋 Descripción del problema</mat-label>
       <textarea
-        id="descripcion"
+        matInput
         formControlName="descripcion"
         class="descripcion-textarea"
         rows="4"
-        placeholder="Detalla lo ocurrido con claridad...">
-      </textarea>
-    </div>
+        placeholder="Detalla lo ocurrido con claridad..."></textarea>
+    </mat-form-field>
   </form>
 </div>

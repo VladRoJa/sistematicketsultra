@@ -1,27 +1,27 @@
-<div class="ticket-container-global">
+<mat-card class="ticket-container-global">
   <h2>🎫 Crear Nuevo Ticket</h2>
 
   <!-- Formulario principal -->
   <form [formGroup]="formularioCrearTicket" (ngSubmit)="enviarTicket()" class="formulario-ticket-container">
 
     <!-- Departamento -->
-    <div class="form-group">
-      <label for="departamento">🏢 Departamento:</label>
-      <select id="departamento" formControlName="departamento">
-        <option [ngValue]="null">Selecciona un departamento</option>
-        <option *ngFor="let dep of departamentos" [ngValue]="dep.id">{{ dep.nombre }}</option>
-      </select>
-    </div>
+    <mat-form-field appearance="fill">
+      <mat-label>🏢 Departamento</mat-label>
+      <mat-select formControlName="departamento">
+        <mat-option [value]="null">Selecciona un departamento</mat-option>
+        <mat-option *ngFor="let dep of departamentos" [value]="dep.id">{{ dep.nombre }}</mat-option>
+      </mat-select>
+    </mat-form-field>
 
     <!-- Tipo de Mantenimiento (solo si es Mantenimiento) -->
-    <div *ngIf="formularioCrearTicket.get('departamento')?.value === 1" class="form-group">
-      <label for="tipoMantenimiento">⚙️ Tipo de mantenimiento:</label>
-      <select id="tipoMantenimiento" formControlName="tipoMantenimiento">
-        <option [ngValue]="null">Selecciona uno</option>
-        <option value="edificio">🏢 Edificio</option>
-        <option value="aparatos">🏋️ Aparatos</option>
-      </select>
-    </div>
+    <mat-form-field appearance="fill" *ngIf="formularioCrearTicket.get('departamento')?.value === 1">
+      <mat-label>⚙️ Tipo de mantenimiento</mat-label>
+      <mat-select formControlName="tipoMantenimiento">
+        <mat-option [value]="null">Selecciona uno</mat-option>
+        <mat-option value="edificio">🏢 Edificio</mat-option>
+        <mat-option value="aparatos">🏋️ Aparatos</mat-option>
+      </mat-select>
+    </mat-form-field>
 
     <!-- Subformularios: los hijos solo manejan campos, pero no el submit -->
     <div class="formulario-sub">
@@ -44,18 +44,18 @@
     </div>
 
     <!-- Nivel de criticidad -->
-  <div class="form-group">
-    <label for="criticidad">🔥 Nivel de criticidad:</label>
-    <select id="criticidad" formControlName="criticidad">
-      <option *ngFor="let nivel of [1, 2, 3, 4, 5]" [value]="nivel">
-        Nivel {{ nivel }}
-      </option>
-    </select>
-  </div>
+    <mat-form-field appearance="fill">
+      <mat-label>🔥 Nivel de criticidad</mat-label>
+      <mat-select formControlName="criticidad">
+        <mat-option *ngFor="let nivel of [1,2,3,4,5]" [value]="nivel">
+          Nivel {{ nivel }}
+        </mat-option>
+      </mat-select>
+    </mat-form-field>
 
     <!-- 🔥 Este es el botón global -->
-    <button type="submit" class="btn-submit">📩 Crear Ticket</button>
+    <button mat-raised-button color="primary" type="submit" class="btn-submit">📩 Crear Ticket</button>
   </form>
 
   <p *ngIf="mensaje" class="mensaje">{{ mensaje }}</p>
-</div>
+</mat-card>
