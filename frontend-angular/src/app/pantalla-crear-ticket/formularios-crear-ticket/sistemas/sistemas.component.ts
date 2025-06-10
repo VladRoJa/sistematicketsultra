@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, EventEmitter, OnInit, Output } from '@angular/core';
+import { Component, EventEmitter, OnInit, Output, Input } from '@angular/core';
 import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
@@ -14,10 +14,10 @@ import { MatInputModule } from '@angular/material/input';
 })
 export class SistemasComponent implements OnInit {
 
+  @Input() parentForm!: FormGroup;
   @Output() formularioValido = new EventEmitter<any>();
-  formSistemas!: FormGroup;
 
-  categorias = [
+  categoriasDisponibles = [
     'Computadora Recepción', 'Computadora Gerente',
     'Torniquete 1 (Junto a Recepcion)', 'Torniquete 2 (Retirado de recepcion)',
     'Sonido Ambiental (Bocinas, Amplificador)', 'Sonido en Salones',
@@ -27,13 +27,13 @@ export class SistemasComponent implements OnInit {
     'Terminal (Gerente)', 'Alarma', 'Teléfono', 'Internet', 'Cámaras'
   ];
 
-  subcategorias = [
+  subcategoriasDisponibles = [
     'Alta de usuario', 'Baja de usuario',
     'Reparación', 'Configuración',
     'Compra de equipo', 'Otro'
   ];
 
-  detalles = [
+  detallesDisponibles = [
     'Urgente', 'Preventivo',
     'Correctivo', 'Programado'
   ];
@@ -41,24 +41,30 @@ export class SistemasComponent implements OnInit {
   constructor(private fb: FormBuilder) {}
 
   ngOnInit(): void {
-    this.formSistemas = this.fb.group({
-      categoria: ['', Validators.required],
-      subcategoria: ['', Validators.required],
-      detalle: ['', Validators.required],
-      descripcion: ['', Validators.required],
-      criticidad: [null, Validators.required]
-    });
+    if (!this.parentForm) return;
+
+    this.parentForm.addControl('categoria', this.fb.control('', Validators.required));
+    this.parentForm.addControl('subcategoria', this.fb.control('', Validators.required));
+    this.parentForm.addControl('detalle', this.fb.control('', Validators.required));
+    this.parentForm.addControl('descripcion', this.fb.control('', Validators.required));
+  }
+
+  onCategoriaChange(): void {
+    this.parentForm.patchValue({ subcategoria: '', detalle: '' });
+  }
+
+  onSubcategoriaChange(): void {
+    this.parentForm.patchValue({ detalle: '' });
   }
 
   enviarFormulario() {
-    if (this.formSistemas.valid) {
+    if (this.parentForm.valid) {
       const payload = {
         departamento_id: 7,
-        categoria: this.formSistemas.value.categoria,
-        subcategoria: this.formSistemas.value.subcategoria,
-        subsubcategoria: this.formSistemas.value.detalle,
-        descripcion: this.formSistemas.value.descripcion,
-        criticidad: this.formSistemas.value.criticidad
+        categoria: this.parentForm.value.categoria,
+        subcategoria: this.parentForm.value.subcategoria,
+        subsubcategoria: this.parentForm.value.detalle,
+        descripcion: this.parentForm.value.descripcion
       };
       this.formularioValido.emit(payload);
     }
