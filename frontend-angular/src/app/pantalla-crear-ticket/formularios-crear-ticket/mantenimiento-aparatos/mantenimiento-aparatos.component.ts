@@ -8,12 +8,14 @@ import { FormsModule } from '@angular/forms';
 import { Observable, map, startWith } from 'rxjs';
 import { environment } from 'src/environments/environment';
 
-
 // Angular Material
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatOptionModule } from '@angular/material/core';
+
+// Helper
+import { limpiarCamposDependientes } from 'src/app/utils/formularios.helper';
 
 @Component({
   selector: 'app-mantenimiento-aparatos',
@@ -45,17 +47,15 @@ export class MantenimientoAparatosComponent implements OnInit {
 
   ngOnInit(): void {
     if (!this.parentForm) return;
-  
+
     this.parentForm.addControl('aparato_id', new FormControl(null, Validators.required));
     this.parentForm.addControl('problema_detectado', new FormControl('', Validators.required));
     this.parentForm.addControl('necesita_refaccion', new FormControl(false));
     this.parentForm.addControl('descripcion_refaccion', new FormControl(''));
- 
 
-  
     const token = localStorage.getItem('token');
     const headers = new HttpHeaders().set('Authorization', `Bearer ${token}`);
-  
+
     this.http.get<any[]>(`${environment.apiUrl}/aparatos/${this.idSucursal}`, { headers })
       .subscribe({
         next: (data) => {
@@ -65,7 +65,6 @@ export class MantenimientoAparatosComponent implements OnInit {
         error: (err) => console.error('❌ Error al obtener aparatos', err)
       });
   }
-  
 
   setupAutocomplete() {
     this.aparatosFiltrados$ = this.filtroControl.valueChanges.pipe(
@@ -76,16 +75,20 @@ export class MantenimientoAparatosComponent implements OnInit {
 
   filtrar(valor: any): any[] {
     if (typeof valor !== 'string') return this.aparatos;
-  
+
     const filtro = valor.toLowerCase();
     return this.aparatos.filter(ap =>
       `${ap.codigo} ${ap.descripcion} ${ap.marca}`.toLowerCase().includes(filtro)
     );
   }
+
   seleccionarAparato(ap: any) {
     this.filtroControl.setValue(`${ap.codigo} - ${ap.descripcion} (${ap.marca})`);
     this.parentForm.get('aparato_id')?.setValue(ap.id);
-    this.inputResaltado = true; // 🔵 activa animación
+    this.inputResaltado = true;
+
+    // 🧹 Limpiar campos dependientes
+    limpiarCamposDependientes(this.parentForm, ['problema_detectado', 'necesita_refaccion', 'descripcion_refaccion']);
   }
 
   obtenerEmoji(descripcion: string): string {
@@ -96,6 +99,4 @@ export class MantenimientoAparatosComponent implements OnInit {
     if (desc.includes('escalera')) return '🪜';
     return '🏋️'; // Default
   }
-
-  
 }

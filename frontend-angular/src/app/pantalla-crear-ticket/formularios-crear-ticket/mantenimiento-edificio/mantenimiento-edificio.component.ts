@@ -6,6 +6,8 @@ import { FormGroup, FormControl, Validators, ReactiveFormsModule, FormsModule } 
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
 import { MatInputModule } from '@angular/material/input';
+import { limpiarCamposDependientes } from 'src/app/utils/formularios.helper';
+
 
 @Component({
   selector: 'app-mantenimiento-edificio',
@@ -23,7 +25,7 @@ import { MatInputModule } from '@angular/material/input';
 })
 export class MantenimientoEdificioComponent implements OnInit, OnChanges {
   @Input() parentForm!: FormGroup;
-
+  
   jerarquiaMantenimiento: { [categoria: string]: { [sub: string]: string[] } } = {
     "Inmueble": {
       "extintores": ["Recarga", "Mal colocación", "Sin etiqueta"],
@@ -75,6 +77,14 @@ export class MantenimientoEdificioComponent implements OnInit, OnChanges {
     if (changes['parentForm'] && this.parentForm) {
       this.registrarControles();
     }
+  }
+
+  onCategoriaChange(): void {
+    limpiarCamposDependientes(this.parentForm, ['subcategoria', 'subsubcategoria']);
+  }
+
+  onSubcategoriaChange(): void {
+    limpiarCamposDependientes(this.parentForm, ['subsubcategoria']);
   }
 
   registrarControles(): void {

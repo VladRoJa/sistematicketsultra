@@ -4,7 +4,7 @@
   <!-- Categoría -->
   <mat-form-field appearance="fill">
     <mat-label>🏷️ Categoría</mat-label>
-    <mat-select id="categoriaPrincipal" formControlName="categoria" (selectionChange)="categoriaSeleccionada = parentForm.get('categoria')?.value">
+    <mat-select id="categoriaPrincipal" formControlName="categoria" (selectionChange)="onCategoriaChange()">
       <mat-option value="">Seleccione</mat-option>
       <mat-option *ngFor="let categoria of getCategorias()" [value]="categoria">{{ categoria }}</mat-option>
     </mat-select>
@@ -13,7 +13,7 @@
   <!-- Subcategoría -->
   <mat-form-field appearance="fill" *ngIf="parentForm.get('categoria')?.value">
     <mat-label>🛠️ Subcategoría</mat-label>
-    <mat-select id="subcategoria" formControlName="subcategoria" (selectionChange)="subcategoriaSeleccionada = parentForm.get('subcategoria')?.value">
+    <mat-select id="subcategoria" formControlName="subcategoria" (selectionChange)="onSubcategoriaChange()">
       <mat-option value="">Seleccione</mat-option>
       <mat-option *ngFor="let sub of getSubcategorias(parentForm.get('categoria')?.value)" [value]="sub">{{ sub }}</mat-option>
     </mat-select>

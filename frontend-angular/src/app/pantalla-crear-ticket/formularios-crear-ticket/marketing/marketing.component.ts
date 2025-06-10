@@ -4,6 +4,8 @@ import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } 
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
 import { MatInputModule } from '@angular/material/input';
+import { limpiarCamposDependientes } from 'src/app/utils/formularios.helper';
+
 
 @Component({
   selector: 'app-marketing',
@@ -72,16 +74,19 @@ export class MarketingComponent implements OnInit {
   onCategoriaChange() {
     const catSeleccionada = this.categorias.find(c => c.nombre === this.formMarketing.value.categoria);
     this.subcategoriasDisponibles = catSeleccionada ? catSeleccionada.subcategorias : [];
-    this.formMarketing.patchValue({ subcategoria: '', detalle: '' });
     this.detallesDisponibles = [];
+
+    limpiarCamposDependientes(this.formMarketing, ['subcategoria', 'detalle']);
   }
 
   onSubcategoriaChange() {
     const catSeleccionada = this.categorias.find(c => c.nombre === this.formMarketing.value.categoria);
     const subcatSeleccionada = catSeleccionada?.subcategorias.find(s => s.nombre === this.formMarketing.value.subcategoria);
     this.detallesDisponibles = subcatSeleccionada ? subcatSeleccionada.detalles : [];
-    this.formMarketing.patchValue({ detalle: '' });
+
+    limpiarCamposDependientes(this.formMarketing, ['detalle']);
   }
+
 
   enviarFormulario() {
     if (this.formMarketing.valid) {

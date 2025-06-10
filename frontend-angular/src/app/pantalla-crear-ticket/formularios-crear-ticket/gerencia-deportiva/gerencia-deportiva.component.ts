@@ -4,6 +4,8 @@ import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } 
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
 import { MatInputModule } from '@angular/material/input';
+import { limpiarCamposDependientes } from 'src/app/utils/formularios.helper';
+
 
 @Component({
   selector: 'app-gerencia-deportiva',
@@ -80,16 +82,19 @@ export class GerenciaDeportivaComponent implements OnInit {
   onCategoriaChange() {
     const catSeleccionada = this.categorias.find(c => c.nombre === this.formGerencia.value.categoria);
     this.subcategoriasDisponibles = catSeleccionada ? catSeleccionada.subcategorias : [];
-    this.formGerencia.patchValue({ subcategoria: '', detalle: '' });
     this.detallesDisponibles = [];
+
+    limpiarCamposDependientes(this.formGerencia, ['subcategoria', 'detalle']);
   }
 
   onSubcategoriaChange() {
     const catSeleccionada = this.categorias.find(c => c.nombre === this.formGerencia.value.categoria);
     const subcatSeleccionada = catSeleccionada?.subcategorias.find(s => s.nombre === this.formGerencia.value.subcategoria);
     this.detallesDisponibles = subcatSeleccionada ? subcatSeleccionada.detalles : [];
-    this.formGerencia.patchValue({ detalle: '' });
+
+    limpiarCamposDependientes(this.formGerencia, ['detalle']);
   }
+
 
   enviarFormulario() {
     if (this.formGerencia.valid) {

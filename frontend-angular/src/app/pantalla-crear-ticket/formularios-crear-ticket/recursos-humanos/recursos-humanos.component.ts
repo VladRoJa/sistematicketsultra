@@ -4,6 +4,8 @@ import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } 
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
 import { MatInputModule } from '@angular/material/input';
+import { limpiarCamposDependientes } from 'src/app/utils/formularios.helper';
+
 
 @Component({
   selector: 'app-recursos-humanos',
@@ -89,16 +91,19 @@ export class RecursosHumanosComponent implements OnInit {
   onCategoriaChange() {
     const catSeleccionada = this.categorias.find(c => c.nombre === this.formRH.value.categoria);
     this.subcategoriasDisponibles = catSeleccionada ? catSeleccionada.subcategorias : [];
-    this.formRH.patchValue({ subcategoria: '', detalle: '' });
     this.detallesDisponibles = [];
+
+    limpiarCamposDependientes(this.formRH, ['subcategoria', 'detalle']);
   }
 
   onSubcategoriaChange() {
     const catSeleccionada = this.categorias.find(c => c.nombre === this.formRH.value.categoria);
     const subcatSeleccionada = catSeleccionada?.subcategorias.find(s => s.nombre === this.formRH.value.subcategoria);
     this.detallesDisponibles = subcatSeleccionada ? subcatSeleccionada.detalles : [];
-    this.formRH.patchValue({ detalle: '' });
+
+    limpiarCamposDependientes(this.formRH, ['detalle']);
   }
+
 
   enviarFormulario() {
     if (this.formRH.valid) {

@@ -6,6 +6,7 @@ import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } 
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
 import { MatInputModule } from '@angular/material/input';
+import { limpiarCamposDependientes } from 'src/app/utils/formularios.helper';
 
 @Component({
   selector: 'app-finanzas',
@@ -71,16 +72,19 @@ export class FinanzasComponent implements OnInit {
   onCategoriaChange() {
     const catSeleccionada = this.categorias.find(c => c.nombre === this.formFinanzas.value.categoria);
     this.subcategoriasDisponibles = catSeleccionada ? catSeleccionada.subcategorias : [];
-    this.formFinanzas.patchValue({ subcategoria: '', detalle: '' });
     this.detallesDisponibles = [];
+
+    limpiarCamposDependientes(this.formFinanzas, ['subcategoria', 'detalle']);
   }
 
   onSubcategoriaChange() {
     const catSeleccionada = this.categorias.find(c => c.nombre === this.formFinanzas.value.categoria);
     const subcatSeleccionada = catSeleccionada?.subcategorias.find(s => s.nombre === this.formFinanzas.value.subcategoria);
     this.detallesDisponibles = subcatSeleccionada ? subcatSeleccionada.detalles : [];
-    this.formFinanzas.patchValue({ detalle: '' });
+
+    limpiarCamposDependientes(this.formFinanzas, ['detalle']);
   }
+
 
   enviarFormulario() {
     if (this.formFinanzas.valid) {
