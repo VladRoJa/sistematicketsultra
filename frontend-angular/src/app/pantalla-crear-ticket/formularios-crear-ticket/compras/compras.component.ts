@@ -78,6 +78,10 @@ export class ComprasComponent implements OnInit {
     this.parentForm.addControl('subcategoria', this.fb.control('', Validators.required));
     this.parentForm.addControl('detalle', this.fb.control('', Validators.required));
     this.parentForm.addControl('descripcion', this.fb.control('', Validators.required));
+
+    this.parentForm.valueChanges.subscribe(() => {
+      if (this.parentForm.valid) this.emitirFormulario();
+    });
   }
 
   onCategoriaChange(): void {
