@@ -1,12 +1,12 @@
 // C:\Users\Vladimir\Documents\Sistema tickets\frontend-angular\src\app\pantalla-crear-ticket\formularios-crear-ticket\finanzas\finanzas.component.ts
 
 import { CommonModule } from '@angular/common';
-import { Component, EventEmitter, OnInit, Output } from '@angular/core';
+import { Component, EventEmitter, Input, OnInit, Output } from '@angular/core';
 import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
 import { MatInputModule } from '@angular/material/input';
-import { limpiarCamposDependientes } from 'src/app/utils/formularios.helper';
+import { limpiarCamposDependientes, emitirPayloadFormulario, DEPARTAMENTO_IDS } from 'src/app/utils/formularios.helper';
 
 @Component({
   selector: 'app-finanzas',
@@ -16,7 +16,8 @@ import { limpiarCamposDependientes } from 'src/app/utils/formularios.helper';
   styleUrls: []
 })
 export class FinanzasComponent implements OnInit {
-
+  
+  @Input() parentForm!: FormGroup;
   @Output() formularioValido = new EventEmitter<any>();
   formFinanzas!: FormGroup;
 
@@ -60,12 +61,15 @@ export class FinanzasComponent implements OnInit {
   constructor(private fb: FormBuilder) {}
 
   ngOnInit(): void {
-    this.formFinanzas = this.fb.group({
-      categoria: ['', Validators.required],
-      subcategoria: ['', Validators.required],
-      detalle: ['', Validators.required],
-      descripcion: ['', Validators.required],
-      criticidad: [null, Validators.required]
+    if (!this.parentForm) return;
+
+    this.parentForm.addControl('categoria', this.fb.control('', Validators.required));
+    this.parentForm.addControl('subcategoria', this.fb.control('', Validators.required));
+    this.parentForm.addControl('detalle', this.fb.control('', Validators.required));
+    this.parentForm.addControl('descripcion', this.fb.control('', Validators.required));
+
+    this.parentForm.valueChanges.subscribe(() => {
+      emitirPayloadFormulario(this.parentForm, DEPARTAMENTO_IDS.finanzas, this.formularioValido);
     });
   }
 
@@ -87,14 +91,13 @@ export class FinanzasComponent implements OnInit {
 
 
   enviarFormulario() {
-    if (this.formFinanzas.valid) {
+    if (this.parentForm.valid) {
       const payload = {
         departamento_id: 2,
-        categoria: this.formFinanzas.value.categoria,
-        subcategoria: this.formFinanzas.value.subcategoria,
-        subsubcategoria: this.formFinanzas.value.detalle,
-        descripcion: this.formFinanzas.value.descripcion,
-        criticidad: this.formFinanzas.value.criticidad
+        categoria: this.parentForm.value.categoria,
+        subcategoria: this.parentForm.value.subcategoria,
+        subsubcategoria: this.parentForm.value.detalle,
+        descripcion: this.parentForm.value.descripcion
       };
       this.formularioValido.emit(payload);
     }

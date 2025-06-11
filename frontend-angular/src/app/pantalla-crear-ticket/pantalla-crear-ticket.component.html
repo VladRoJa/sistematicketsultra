@@ -35,12 +35,12 @@
         [parentForm]="formularioCrearTicket">
       </app-mantenimiento-aparatos>
 
-      <app-finanzas *ngIf="formularioCrearTicket.get('departamento')?.value === 2" [parentForm]="formularioCrearTicket"></app-finanzas>
-      <app-marketing *ngIf="formularioCrearTicket.get('departamento')?.value === 3" [parentForm]="formularioCrearTicket"></app-marketing>
-      <app-gerencia-deportiva *ngIf="formularioCrearTicket.get('departamento')?.value === 4" [parentForm]="formularioCrearTicket"></app-gerencia-deportiva>
-      <app-recursos-humanos *ngIf="formularioCrearTicket.get('departamento')?.value === 5" [parentForm]="formularioCrearTicket"></app-recursos-humanos>
+      <app-finanzas *ngIf="formularioCrearTicket.get('departamento')?.value === 2" [parentForm]="formularioCrearTicket" (formularioValido)="recibirPayloadDesdeFormulario($event)"></app-finanzas>
+      <app-marketing *ngIf="formularioCrearTicket.get('departamento')?.value === 3" [parentForm]="formularioCrearTicket" (formularioValido)="recibirPayloadDesdeFormulario($event)"></app-marketing>
+      <app-gerencia-deportiva *ngIf="formularioCrearTicket.get('departamento')?.value === 4" [parentForm]="formularioCrearTicket" (formularioValido)="recibirPayloadDesdeFormulario($event)"></app-gerencia-deportiva>
+      <app-recursos-humanos *ngIf="formularioCrearTicket.get('departamento')?.value === 5" [parentForm]="formularioCrearTicket" (formularioValido)="recibirPayloadDesdeFormulario($event)"></app-recursos-humanos>
       <app-compras *ngIf="formularioCrearTicket.get('departamento')?.value === 6" [parentForm]="formularioCrearTicket" (formularioValido)="recibirPayloadDesdeFormulario($event)"></app-compras>
-      <app-sistemas *ngIf="formularioCrearTicket.get('departamento')?.value === 7" [parentForm]="formularioCrearTicket"></app-sistemas>
+      <app-sistemas *ngIf="formularioCrearTicket.get('departamento')?.value === 7" [parentForm]="formularioCrearTicket" (formularioValido)="recibirPayloadDesdeFormulario($event)"></app-sistemas>
     </div>
 
     <!-- Nivel de criticidad -->

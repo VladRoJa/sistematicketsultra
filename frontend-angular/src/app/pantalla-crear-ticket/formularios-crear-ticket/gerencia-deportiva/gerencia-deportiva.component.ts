@@ -1,10 +1,10 @@
 import { CommonModule } from '@angular/common';
-import { Component, EventEmitter, OnInit, Output } from '@angular/core';
+import { Component, EventEmitter, OnInit, Output, Input } from '@angular/core';
 import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
 import { MatInputModule } from '@angular/material/input';
-import { limpiarCamposDependientes } from 'src/app/utils/formularios.helper';
+import { limpiarCamposDependientes, emitirPayloadFormulario, DEPARTAMENTO_IDS } from 'src/app/utils/formularios.helper';
 
 
 @Component({
@@ -15,7 +15,7 @@ import { limpiarCamposDependientes } from 'src/app/utils/formularios.helper';
   styleUrls: []
 })
 export class GerenciaDeportivaComponent implements OnInit {
-
+  @Input() parentForm!: FormGroup;
   @Output() formularioValido = new EventEmitter<any>();
   formGerencia!: FormGroup;
 
@@ -70,12 +70,15 @@ export class GerenciaDeportivaComponent implements OnInit {
   constructor(private fb: FormBuilder) {}
 
   ngOnInit(): void {
-    this.formGerencia = this.fb.group({
-      categoria: ['', Validators.required],
-      subcategoria: ['', Validators.required],
-      detalle: ['', Validators.required],
-      descripcion: ['', Validators.required],
-      criticidad: [null, Validators.required]
+    if (!this.parentForm) return;
+
+    this.parentForm.addControl('categoria', this.fb.control('', Validators.required));
+    this.parentForm.addControl('subcategoria', this.fb.control('', Validators.required));
+    this.parentForm.addControl('detalle', this.fb.control('', Validators.required));
+    this.parentForm.addControl('descripcion', this.fb.control('', Validators.required));
+
+    this.parentForm.valueChanges.subscribe(() => {
+      emitirPayloadFormulario(this.parentForm, DEPARTAMENTO_IDS.gerencia, this.formularioValido);
     });
   }
 

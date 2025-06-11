@@ -6,7 +6,7 @@ import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } 
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
 import { MatInputModule } from '@angular/material/input';
-import { limpiarCamposDependientes } from 'src/app/utils/formularios.helper';
+import { limpiarCamposDependientes, emitirPayloadFormulario, DEPARTAMENTO_IDS } from 'src/app/utils/formularios.helper';
 
 @Component({
   selector: 'app-compras',
@@ -80,7 +80,7 @@ export class ComprasComponent implements OnInit {
     this.parentForm.addControl('descripcion', this.fb.control('', Validators.required));
 
     this.parentForm.valueChanges.subscribe(() => {
-      if (this.parentForm.valid) this.emitirFormulario();
+      emitirPayloadFormulario(this.parentForm, DEPARTAMENTO_IDS.compras, this.formularioValido);
     });
   }
 
@@ -100,17 +100,4 @@ export class ComprasComponent implements OnInit {
     limpiarCamposDependientes(this.parentForm, ['detalle']);
   }
 
-
-  emitirFormulario() {
-    if (this.parentForm.valid) {
-      const payload = {
-        departamento_id: 6,
-        categoria: this.parentForm.value.categoria,
-        subcategoria: this.parentForm.value.subcategoria,
-        subsubcategoria: this.parentForm.value.detalle,
-        descripcion: this.parentForm.value.descripcion
-      };
-      this.formularioValido.emit(payload);
-    }
-  }
 }

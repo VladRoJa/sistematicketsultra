@@ -4,7 +4,7 @@ import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } 
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
 import { MatInputModule } from '@angular/material/input';
-import { limpiarCamposDependientes } from 'src/app/utils/formularios.helper';
+import { limpiarCamposDependientes, emitirPayloadFormulario, DEPARTAMENTO_IDS } from 'src/app/utils/formularios.helper';
 
 @Component({
   selector: 'app-sistemas',
@@ -162,6 +162,10 @@ export class SistemasComponent implements OnInit {
     this.parentForm.addControl('subcategoria', this.fb.control('', Validators.required));
     this.parentForm.addControl('detalle', this.fb.control('', Validators.required));
     this.parentForm.addControl('descripcion', this.fb.control('', Validators.required));
+
+    this.parentForm.valueChanges.subscribe(() => {
+      emitirPayloadFormulario(this.parentForm, DEPARTAMENTO_IDS.sistemas, this.formularioValido);
+    });
   }
 
   onCategoriaChange(): void {
