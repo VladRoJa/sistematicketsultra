@@ -17,7 +17,6 @@ import { limpiarCamposDependientes, emitirPayloadFormulario, DEPARTAMENTO_IDS } 
 export class MarketingComponent implements OnInit {
   @Input() parentForm!: FormGroup;
   @Output() formularioValido = new EventEmitter<any>();
-  formMarketing!: FormGroup;
 
   categorias = [
     {
@@ -75,33 +74,18 @@ export class MarketingComponent implements OnInit {
   }
 
   onCategoriaChange() {
-    const catSeleccionada = this.categorias.find(c => c.nombre === this.formMarketing.value.categoria);
+    const catSeleccionada = this.categorias.find(c => c.nombre === this.parentForm.value.categoria);
     this.subcategoriasDisponibles = catSeleccionada ? catSeleccionada.subcategorias : [];
     this.detallesDisponibles = [];
 
-    limpiarCamposDependientes(this.formMarketing, ['subcategoria', 'detalle']);
+    limpiarCamposDependientes(this.parentForm, ['subcategoria', 'detalle']);
   }
 
   onSubcategoriaChange() {
-    const catSeleccionada = this.categorias.find(c => c.nombre === this.formMarketing.value.categoria);
-    const subcatSeleccionada = catSeleccionada?.subcategorias.find(s => s.nombre === this.formMarketing.value.subcategoria);
+    const catSeleccionada = this.categorias.find(c => c.nombre === this.parentForm.value.categoria);
+    const subcatSeleccionada = catSeleccionada?.subcategorias.find(s => s.nombre === this.parentForm.value.subcategoria);
     this.detallesDisponibles = subcatSeleccionada ? subcatSeleccionada.detalles : [];
 
-    limpiarCamposDependientes(this.formMarketing, ['detalle']);
-  }
-
-
-  enviarFormulario() {
-    if (this.formMarketing.valid) {
-      const payload = {
-        departamento_id: 3,
-        categoria: this.formMarketing.value.categoria,
-        subcategoria: this.formMarketing.value.subcategoria,
-        subsubcategoria: this.formMarketing.value.detalle,
-        descripcion: this.formMarketing.value.descripcion,
-        criticidad: this.formMarketing.value.criticidad
-      };
-      this.formularioValido.emit(payload);
-    }
+    limpiarCamposDependientes(this.parentForm, ['detalle']);
   }
 }

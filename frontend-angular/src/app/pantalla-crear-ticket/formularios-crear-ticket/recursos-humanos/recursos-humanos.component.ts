@@ -17,7 +17,6 @@ import { limpiarCamposDependientes, emitirPayloadFormulario, DEPARTAMENTO_IDS } 
 export class RecursosHumanosComponent implements OnInit {
   @Input() parentForm!: FormGroup;
   @Output() formularioValido = new EventEmitter<any>();
-  formRH!: FormGroup;
 
   categorias = [
     {
@@ -92,33 +91,18 @@ export class RecursosHumanosComponent implements OnInit {
   }
 
   onCategoriaChange() {
-    const catSeleccionada = this.categorias.find(c => c.nombre === this.formRH.value.categoria);
+    const catSeleccionada = this.categorias.find(c => c.nombre === this.parentForm.value.categoria);
     this.subcategoriasDisponibles = catSeleccionada ? catSeleccionada.subcategorias : [];
     this.detallesDisponibles = [];
 
-    limpiarCamposDependientes(this.formRH, ['subcategoria', 'detalle']);
+    limpiarCamposDependientes(this.parentForm, ['subcategoria', 'detalle']);
   }
 
   onSubcategoriaChange() {
-    const catSeleccionada = this.categorias.find(c => c.nombre === this.formRH.value.categoria);
-    const subcatSeleccionada = catSeleccionada?.subcategorias.find(s => s.nombre === this.formRH.value.subcategoria);
+    const catSeleccionada = this.categorias.find(c => c.nombre === this.parentForm.value.categoria);
+    const subcatSeleccionada = catSeleccionada?.subcategorias.find(s => s.nombre === this.parentForm.value.subcategoria);
     this.detallesDisponibles = subcatSeleccionada ? subcatSeleccionada.detalles : [];
 
-    limpiarCamposDependientes(this.formRH, ['detalle']);
-  }
-
-
-  enviarFormulario() {
-    if (this.formRH.valid) {
-      const payload = {
-        departamento_id: 5,
-        categoria: this.formRH.value.categoria,
-        subcategoria: this.formRH.value.subcategoria,
-        subsubcategoria: this.formRH.value.detalle,
-        descripcion: this.formRH.value.descripcion,
-        criticidad: this.formRH.value.criticidad
-      };
-      this.formularioValido.emit(payload);
-    }
+    limpiarCamposDependientes(this.parentForm, ['detalle']);
   }
 }

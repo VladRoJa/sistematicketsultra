@@ -181,17 +181,4 @@ export class SistemasComponent implements OnInit {
     this.detallesDisponibles = subcatSeleccionada ? subcatSeleccionada.detalles : [];
     limpiarCamposDependientes(this.parentForm, ['detalle']);
   }
-
-  enviarFormulario() {
-    if (this.parentForm.valid) {
-      const payload = {
-        departamento_id: 7,
-        categoria: this.parentForm.value.categoria,
-        subcategoria: this.parentForm.value.subcategoria,
-        subsubcategoria: this.parentForm.value.detalle,
-        descripcion: this.parentForm.value.descripcion
-      };
-      this.formularioValido.emit(payload);
-    }
-  }
 }

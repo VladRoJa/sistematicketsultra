@@ -17,7 +17,6 @@ import { limpiarCamposDependientes, emitirPayloadFormulario, DEPARTAMENTO_IDS } 
 export class GerenciaDeportivaComponent implements OnInit {
   @Input() parentForm!: FormGroup;
   @Output() formularioValido = new EventEmitter<any>();
-  formGerencia!: FormGroup;
 
   categorias = [
     {
@@ -83,33 +82,19 @@ export class GerenciaDeportivaComponent implements OnInit {
   }
 
   onCategoriaChange() {
-    const catSeleccionada = this.categorias.find(c => c.nombre === this.formGerencia.value.categoria);
+    const catSeleccionada = this.categorias.find(c => c.nombre === this.parentForm.value.categoria);
     this.subcategoriasDisponibles = catSeleccionada ? catSeleccionada.subcategorias : [];
     this.detallesDisponibles = [];
 
-    limpiarCamposDependientes(this.formGerencia, ['subcategoria', 'detalle']);
+    limpiarCamposDependientes(this.parentForm, ['subcategoria', 'detalle']);
   }
 
   onSubcategoriaChange() {
-    const catSeleccionada = this.categorias.find(c => c.nombre === this.formGerencia.value.categoria);
-    const subcatSeleccionada = catSeleccionada?.subcategorias.find(s => s.nombre === this.formGerencia.value.subcategoria);
+    const catSeleccionada = this.categorias.find(c => c.nombre === this.parentForm.value.categoria);
+    const subcatSeleccionada = catSeleccionada?.subcategorias.find(s => s.nombre === this.parentForm.value.subcategoria);
     this.detallesDisponibles = subcatSeleccionada ? subcatSeleccionada.detalles : [];
 
-    limpiarCamposDependientes(this.formGerencia, ['detalle']);
+    limpiarCamposDependientes(this.parentForm, ['detalle']);
   }
 
-
-  enviarFormulario() {
-    if (this.formGerencia.valid) {
-      const payload = {
-        departamento_id: 4,
-        categoria: this.formGerencia.value.categoria,
-        subcategoria: this.formGerencia.value.subcategoria,
-        subsubcategoria: this.formGerencia.value.detalle,
-        descripcion: this.formGerencia.value.descripcion,
-        criticidad: this.formGerencia.value.criticidad
-      };
-      this.formularioValido.emit(payload);
-    }
-  }
 }
