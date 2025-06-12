@@ -142,3 +142,19 @@ table.mat-mdc-table {
   border-radius: 8px;
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
 }
+
+
+// Fuerza los mat-form-field MDC a ocupar 100%
+.mat-mdc-form-field {
+  width: 100% !important;
+}
+
+.mat-mdc-form-field-infix {
+  width: 100% !important;
+  padding: 0 !important;
+}
+
+.mat-mdc-form-field-wrapper {
+  padding: 0 !important;
+  width: 100% !important;
+}

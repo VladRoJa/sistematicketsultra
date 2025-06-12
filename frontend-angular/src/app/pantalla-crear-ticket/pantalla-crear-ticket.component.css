@@ -140,7 +140,8 @@ h3 {
 .subformulario-box form {
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: 16px;
+  width: 100%;
 }
 
 
