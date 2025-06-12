@@ -161,3 +161,10 @@ table.mat-mdc-table {
   padding: 0 !important;
   width: 100% !important;
 }
+
+textarea.mat-mdc-input-element {
+  padding-top: 16px !important;
+  padding-bottom: 12px !important;
+  line-height: 1.5;
+  min-height: 120px;
+}
