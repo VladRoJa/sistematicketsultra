@@ -128,4 +128,27 @@ h3 {
 
 .subformulario-box mat-form-field {
   width: 100%;
+  box-sizing: border-box;
+  display: block;
+  margin: 0;
+}
+
+.subformulario-box {
+  width: 100%;
+}
+
+.subformulario-box form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+
+
+.mat-form-field-infix {
+  width: 100%;
+}
+
+.mat-form-field-wrapper {
+  padding: 0 !important;
 }
