@@ -149,6 +149,21 @@ export class PantallaCrearTicketComponent implements OnInit {
   enviarTicket() {
     if (this.formularioCrearTicket.invalid) {
       const camposFaltantes = this.obtenerCamposInvalidos(this.formularioCrearTicket);
+
+      // 🔴 Marcar todos como "tocados" para que se vea en rojo
+      this.formularioCrearTicket.markAllAsTouched();
+
+      // 🧩 Log completo del formulario
+      console.warn('🧩 Formulario inválido. Valores actuales:', this.formularioCrearTicket.value);
+      console.warn('📛 Campos con error de validación:', camposFaltantes);
+
+      // 🐛 Ver cada error con su detalle
+      Object.entries(this.formularioCrearTicket.controls).forEach(([campo, control]) => {
+        if (control.invalid) {
+          console.log(`❌ Campo inválido: ${campo}`, control.errors);
+        }
+      });
+
       mostrarAlertaToast(`❗Faltan datos obligatorios: ${camposFaltantes.join(', ')}`);
       return;
     }
