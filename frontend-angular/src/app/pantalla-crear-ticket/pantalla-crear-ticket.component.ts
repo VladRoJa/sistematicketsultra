@@ -146,44 +146,46 @@ export class PantallaCrearTicketComponent implements OnInit {
     return traducciones[campo] || campo;
   }
 
-  enviarTicket() {
-    if (this.formularioCrearTicket.invalid) {
-      const camposFaltantes = this.obtenerCamposInvalidos(this.formularioCrearTicket);
+enviarTicket() {
+  if (this.formularioCrearTicket.invalid) {
+    const camposFaltantes = this.obtenerCamposInvalidos(this.formularioCrearTicket);
 
-      // 🔴 Marcar todos como "tocados" para que se vea en rojo
-      this.formularioCrearTicket.markAllAsTouched();
+    this.formularioCrearTicket.markAllAsTouched();
 
-      // 🧩 Log completo del formulario
-      console.warn('🧩 Formulario inválido. Valores actuales:', this.formularioCrearTicket.value);
-      console.warn('📛 Campos con error de validación:', camposFaltantes);
+    console.warn('🧩 Formulario inválido. Valores actuales:', this.formularioCrearTicket.value);
+    console.warn('📛 Campos con error de validación:', camposFaltantes);
 
-      // 🐛 Ver cada error con su detalle
-      Object.entries(this.formularioCrearTicket.controls).forEach(([campo, control]) => {
-        if (control.invalid) {
-          console.log(`❌ Campo inválido: ${campo}`, control.errors);
-        }
-      });
-
-      mostrarAlertaToast(`❗Faltan datos obligatorios: ${camposFaltantes.join(', ')}`);
-      return;
-    }
-
-    const payloadFinal = this.formularioCrearTicket.value;
-
-    const token = localStorage.getItem('token');
-    const headers = token ? new HttpHeaders().set('Authorization', `Bearer ${token}`) : new HttpHeaders();
-
-    console.log("📡 Enviando al backend:", payloadFinal);
-
-    this.http.post<{ mensaje: string }>(this.apiUrl, payloadFinal, { headers }).subscribe({
-      next: () => {
-        mostrarAlertaToast('✅ Ticket creado correctamente.');
-        this.formularioCrearTicket.reset();
-      },
-      error: (error) => {
-        mostrarAlertaErrorDesdeStatus(error.status);
+    Object.entries(this.formularioCrearTicket.controls).forEach(([campo, control]) => {
+      if (control.invalid) {
+        console.log(`❌ Campo inválido: ${campo}`, control.errors);
       }
     });
+
+    mostrarAlertaToast(`❗Faltan datos obligatorios: ${camposFaltantes.join(', ')}`);
+    return;
   }
+
+
+  const payloadFinal = {
+    ...this.formularioCrearTicket.value,
+    departamento_id: this.formularioCrearTicket.value.departamento
+  };
+  delete payloadFinal.departamento;
+
+  const token = localStorage.getItem('token');
+  const headers = token ? new HttpHeaders().set('Authorization', `Bearer ${token}`) : new HttpHeaders();
+
+  console.log("📡 Enviando al backend:", payloadFinal);
+
+  this.http.post<{ mensaje: string }>(this.apiUrl, payloadFinal, { headers }).subscribe({
+    next: () => {
+      mostrarAlertaToast('✅ Ticket creado correctamente.');
+      this.formularioCrearTicket.reset();
+    },
+    error: (error) => {
+      mostrarAlertaErrorDesdeStatus(error.status);
+    }
+  });
+}
 
 }
