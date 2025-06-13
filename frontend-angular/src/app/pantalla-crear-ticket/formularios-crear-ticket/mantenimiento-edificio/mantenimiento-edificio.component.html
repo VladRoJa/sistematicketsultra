@@ -22,7 +22,7 @@
   <!-- Detalle específico -->
   <mat-form-field appearance="fill" *ngIf="parentForm.get('subcategoria')?.value">
     <mat-label>🧩 Detalle específico</mat-label>
-    <mat-select formControlName="subsubcategoria">
+    <mat-select formControlName="detalle">
       <mat-option value="">Seleccione</mat-option>
       <mat-option *ngFor="let detalle of getSubsubcategorias(parentForm.get('categoria')?.value, parentForm.get('subcategoria')?.value)" [value]="detalle">{{ detalle }}</mat-option>
     </mat-select>

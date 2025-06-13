@@ -86,7 +86,7 @@ export class MantenimientoEdificioComponent implements OnInit, OnChanges {
   }
 
   onCategoriaChange(): void {
-    limpiarCamposDependientes(this.parentForm, ['subcategoria', 'subsubcategoria']);
+    limpiarCamposDependientes(this.parentForm, ['subcategoria', 'detalle']);
   }
 
   onSubcategoriaChange(): void {
@@ -94,7 +94,7 @@ export class MantenimientoEdificioComponent implements OnInit, OnChanges {
   }
 
   registrarControles(): void {
-    const campos = ['categoria', 'subcategoria', 'subsubcategoria', 'descripcion'];
+    const campos = ['categoria', 'subcategoria', 'detalle', 'descripcion'];
     for (const campo of campos) {
       if (!this.parentForm.get(campo)) {
         this.parentForm.addControl(campo, new FormControl('', Validators.required));
