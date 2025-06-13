@@ -11,7 +11,7 @@
     </mat-form-field>
 
     <!-- Subcategoría -->
-    <mat-form-field appearance="fill" *ngIf="subcategoriasDisponibles.length > 0">
+    <mat-form-field appearance="fill" *ngIf="subcategoriasDisponibles.length">
       <mat-label>📂 Subcategoría</mat-label>
       <mat-select formControlName="subcategoria" (selectionChange)="onSubcategoriaChange()">
         <mat-option value="">Seleccione</mat-option>
@@ -20,7 +20,7 @@
     </mat-form-field>
 
     <!-- Detalle -->
-    <mat-form-field appearance="fill" *ngIf="detallesDisponibles.length > 0">
+    <mat-form-field appearance="fill" *ngIf="detallesDisponibles.length">
       <mat-label>📌 Detalle específico</mat-label>
       <mat-select formControlName="detalle">
         <mat-option value="">Seleccione</mat-option>
@@ -38,5 +38,6 @@
         rows="4"
         placeholder="Detalla lo ocurrido con claridad..."></textarea>
     </mat-form-field>
+
   </form>
 </div>

@@ -1,12 +1,16 @@
 // src/app/mantenimiento-edificio/mantenimiento-edificio.component.ts
 
-import { Component, Input, OnInit, OnChanges, SimpleChanges, Output, EventEmitter } from '@angular/core';
+import { Component, Input, OnInit, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormGroup, FormControl, Validators, ReactiveFormsModule, FormsModule } from '@angular/forms';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
 import { MatInputModule } from '@angular/material/input';
-import { limpiarCamposDependientes } from 'src/app/utils/formularios.helper';
+import {
+  limpiarCamposDependientes,
+  emitirPayloadFormulario,
+  DEPARTAMENTO_IDS
+} from 'src/app/utils/formularios.helper';
 
 @Component({
   selector: 'app-mantenimiento-edificio',
@@ -22,7 +26,7 @@ import { limpiarCamposDependientes } from 'src/app/utils/formularios.helper';
   templateUrl: './mantenimiento-edificio.component.html',
   styleUrls: []
 })
-export class MantenimientoEdificioComponent implements OnInit, OnChanges {
+export class MantenimientoEdificioComponent implements OnInit {
   @Input() parentForm!: FormGroup;
   @Output() formularioValido = new EventEmitter<any>();
 
@@ -73,24 +77,8 @@ export class MantenimientoEdificioComponent implements OnInit, OnChanges {
     this.registrarControles();
 
     this.parentForm.valueChanges.subscribe(() => {
-      if (this.parentForm.valid) {
-        this.emitirPayload();
-      }
+      emitirPayloadFormulario(this.parentForm, DEPARTAMENTO_IDS.mantenimiento, this.formularioValido);
     });
-  }
-
-  ngOnChanges(changes: SimpleChanges): void {
-    if (changes['parentForm'] && this.parentForm) {
-      this.registrarControles();
-    }
-  }
-
-  onCategoriaChange(): void {
-    limpiarCamposDependientes(this.parentForm, ['subcategoria', 'detalle']);
-  }
-
-  onSubcategoriaChange(): void {
-    limpiarCamposDependientes(this.parentForm, ['subsubcategoria']);
   }
 
   registrarControles(): void {
@@ -102,14 +90,12 @@ export class MantenimientoEdificioComponent implements OnInit, OnChanges {
     }
   }
 
-  emitirPayload(): void {
-    this.formularioValido.emit({
-      departamento_id: 1,
-      categoria: this.parentForm.value.categoria,
-      subcategoria: this.parentForm.value.subcategoria,
-      detalle: this.parentForm.value.detalle,
-      descripcion: this.parentForm.value.descripcion
-    });
+  onCategoriaChange(): void {
+    limpiarCamposDependientes(this.parentForm, ['subcategoria', 'detalle']);
+  }
+
+  onSubcategoriaChange(): void {
+    limpiarCamposDependientes(this.parentForm, ['detalle']);
   }
 
   getCategorias(): string[] {

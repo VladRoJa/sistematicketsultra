@@ -1,6 +1,6 @@
 // mantenimiento-aparatos.component.ts
 
-import { Component, Input, OnInit } from '@angular/core';
+import { Component, Input, OnInit, Output, EventEmitter } from '@angular/core';
 import { FormGroup, FormControl, Validators, ReactiveFormsModule } from '@angular/forms';
 import { HttpClient, HttpClientModule, HttpHeaders } from '@angular/common/http';
 import { CommonModule } from '@angular/common';
@@ -15,7 +15,11 @@ import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatOptionModule } from '@angular/material/core';
 
 // Helper
-import { limpiarCamposDependientes } from 'src/app/utils/formularios.helper';
+import {
+  limpiarCamposDependientes,
+  emitirPayloadFormulario,
+  DEPARTAMENTO_IDS
+} from 'src/app/utils/formularios.helper';
 
 @Component({
   selector: 'app-mantenimiento-aparatos',
@@ -35,6 +39,7 @@ import { limpiarCamposDependientes } from 'src/app/utils/formularios.helper';
 })
 export class MantenimientoAparatosComponent implements OnInit {
   @Input() parentForm!: FormGroup;
+  @Output() formularioValido = new EventEmitter<any>();
 
   filtroControl = new FormControl('');
   aparatos: any[] = [];
@@ -58,17 +63,30 @@ export class MantenimientoAparatosComponent implements OnInit {
     this.parentForm.addControl('necesita_refaccion', new FormControl(false));
     this.parentForm.addControl('descripcion_refaccion', new FormControl(''));
 
+    // Emitir payload al padre al cambiar el formulario
+    this.parentForm.valueChanges.subscribe(() => {
+      emitirPayloadFormulario(this.parentForm, DEPARTAMENTO_IDS.mantenimiento, this.formularioValido);
+    });
+
+    // Obtener aparatos
     const token = localStorage.getItem('token');
     const headers = new HttpHeaders().set('Authorization', `Bearer ${token}`);
 
-    this.http.get<any[]>(`${environment.apiUrl}/aparatos/${this.idSucursal}`, { headers })
-      .subscribe({
-        next: (data) => {
-          this.aparatos = data;
-          this.setupAutocomplete();
-        },
-        error: (err) => console.error('❌ Error al obtener aparatos', err)
-      });
+    this.http.get<any[]>(`${environment.apiUrl}/aparatos/${this.idSucursal}`, { headers }).subscribe({
+      next: (data) => {
+        this.aparatos = data;
+        this.setupAutocomplete();
+
+        // ⏬ Aquí agregas la validación extra
+        this.filtroControl.valueChanges.subscribe(value => {
+          if (typeof value === 'string') {
+            this.parentForm.get('detalle')?.reset();
+            this.parentForm.get('subcategoria')?.reset();
+          }
+        });
+      },
+      error: (err) => console.error('❌ Error al obtener aparatos', err)
+    });
   }
 
   setupAutocomplete() {
@@ -80,7 +98,6 @@ export class MantenimientoAparatosComponent implements OnInit {
 
   filtrar(valor: any): any[] {
     if (typeof valor !== 'string') return this.aparatos;
-
     const filtro = valor.toLowerCase();
     return this.aparatos.filter(ap =>
       `${ap.codigo} ${ap.descripcion} ${ap.marca}`.toLowerCase().includes(filtro)
@@ -105,3 +122,4 @@ export class MantenimientoAparatosComponent implements OnInit {
     return '🏋️';
   }
 }
+

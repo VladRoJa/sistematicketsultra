@@ -11,7 +11,7 @@
   </mat-form-field>
 
   <!-- Subcategoría -->
-  <mat-form-field appearance="fill" *ngIf="parentForm.get('categoria')?.value">
+  <mat-form-field appearance="fill" *ngIf="getSubcategorias(parentForm.get('categoria')?.value).length">
     <mat-label>🛠️ Subcategoría</mat-label>
     <mat-select formControlName="subcategoria" (selectionChange)="onSubcategoriaChange()">
       <mat-option value="">Seleccione</mat-option>
@@ -20,13 +20,14 @@
   </mat-form-field>
 
   <!-- Detalle específico -->
-  <mat-form-field appearance="fill" *ngIf="parentForm.get('subcategoria')?.value">
+  <mat-form-field appearance="fill" *ngIf="getSubsubcategorias(parentForm.get('categoria')?.value, parentForm.get('subcategoria')?.value).length">
     <mat-label>🧩 Detalle específico</mat-label>
     <mat-select formControlName="detalle">
       <mat-option value="">Seleccione</mat-option>
       <mat-option *ngFor="let detalle of getSubsubcategorias(parentForm.get('categoria')?.value, parentForm.get('subcategoria')?.value)" [value]="detalle">{{ detalle }}</mat-option>
     </mat-select>
   </mat-form-field>
+
 
   <!-- Descripción -->
   <mat-form-field appearance="fill" class="form-group-description">

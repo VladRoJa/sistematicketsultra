@@ -10,23 +10,23 @@
       </mat-select>
     </mat-form-field>
 
-    <!-- Subcategoría -->
-    <mat-form-field appearance="fill" *ngIf="subcategoriasDisponibles.length > 0">
-      <mat-label>📂 Subcategoría</mat-label>
-      <mat-select formControlName="subcategoria" (selectionChange)="onSubcategoriaChange()">
-        <mat-option value="">Seleccione</mat-option>
-        <mat-option *ngFor="let sub of subcategoriasDisponibles" [value]="sub.nombre">{{ sub.nombre }}</mat-option>
-      </mat-select>
-    </mat-form-field>
+  <!-- Subcategoría -->
+  <mat-form-field appearance="fill" *ngIf="subcategoriasDisponibles.length">
+    <mat-label>📂 Subcategoría</mat-label>
+    <mat-select formControlName="subcategoria" (selectionChange)="onSubcategoriaChange()">
+      <mat-option value="">Seleccione</mat-option>
+      <mat-option *ngFor="let sub of subcategoriasDisponibles" [value]="sub.nombre">{{ sub.nombre }}</mat-option>
+    </mat-select>
+  </mat-form-field>
 
-    <!-- Detalle -->
-    <mat-form-field appearance="fill" *ngIf="detallesDisponibles.length > 0">
-      <mat-label>📌 Detalle específico</mat-label>
-      <mat-select formControlName="detalle">
-        <mat-option value="">Seleccione</mat-option>
-        <mat-option *ngFor="let det of detallesDisponibles" [value]="det">{{ det }}</mat-option>
-      </mat-select>
-    </mat-form-field>
+  <!-- Detalle -->
+  <mat-form-field appearance="fill" *ngIf="detallesDisponibles.length">
+    <mat-label>📌 Detalle específico</mat-label>
+    <mat-select formControlName="detalle">
+      <mat-option value="">Seleccione</mat-option>
+      <mat-option *ngFor="let det of detallesDisponibles" [value]="det">{{ det }}</mat-option>
+    </mat-select>
+  </mat-form-field>
 
     <!-- Descripción -->
     <mat-form-field appearance="fill">
