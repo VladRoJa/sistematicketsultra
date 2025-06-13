@@ -1,10 +1,10 @@
-<div [formGroup]="parentForm" class="formulario-ticket-container">
+<div [formGroup]="parentForm" class="subformulario-box">
   <h3>🏢 Reporte de Edificio</h3>
 
   <!-- Categoría -->
   <mat-form-field appearance="fill">
     <mat-label>🏷️ Categoría</mat-label>
-    <mat-select id="categoriaPrincipal" formControlName="categoria" (selectionChange)="onCategoriaChange()">
+    <mat-select formControlName="categoria" (selectionChange)="onCategoriaChange()">
       <mat-option value="">Seleccione</mat-option>
       <mat-option *ngFor="let categoria of getCategorias()" [value]="categoria">{{ categoria }}</mat-option>
     </mat-select>
@@ -13,16 +13,16 @@
   <!-- Subcategoría -->
   <mat-form-field appearance="fill" *ngIf="parentForm.get('categoria')?.value">
     <mat-label>🛠️ Subcategoría</mat-label>
-    <mat-select id="subcategoria" formControlName="subcategoria" (selectionChange)="onSubcategoriaChange()">
+    <mat-select formControlName="subcategoria" (selectionChange)="onSubcategoriaChange()">
       <mat-option value="">Seleccione</mat-option>
       <mat-option *ngFor="let sub of getSubcategorias(parentForm.get('categoria')?.value)" [value]="sub">{{ sub }}</mat-option>
     </mat-select>
   </mat-form-field>
 
-  <!-- Sub-subcategoría -->
+  <!-- Detalle específico -->
   <mat-form-field appearance="fill" *ngIf="parentForm.get('subcategoria')?.value">
     <mat-label>🧩 Detalle específico</mat-label>
-    <mat-select id="subsubcategoria" formControlName="subsubcategoria">
+    <mat-select formControlName="subsubcategoria">
       <mat-option value="">Seleccione</mat-option>
       <mat-option *ngFor="let detalle of getSubsubcategorias(parentForm.get('categoria')?.value, parentForm.get('subcategoria')?.value)" [value]="detalle">{{ detalle }}</mat-option>
     </mat-select>
@@ -31,6 +31,12 @@
   <!-- Descripción -->
   <mat-form-field appearance="fill" class="form-group-description">
     <mat-label>📋 Descripción del problema</mat-label>
-    <textarea matInput id="descripcion" formControlName="descripcion" class="descripcion-textarea" rows="4" placeholder="Detalla lo ocurrido con claridad..."></textarea>
+    <textarea
+      matInput
+      formControlName="descripcion"
+      class="descripcion-textarea"
+      rows="4"
+      placeholder="Detalla lo ocurrido con claridad...">
+    </textarea>
   </mat-form-field>
 </div>

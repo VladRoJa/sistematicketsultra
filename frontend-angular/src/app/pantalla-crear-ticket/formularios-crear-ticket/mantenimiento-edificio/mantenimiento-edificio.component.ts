@@ -1,13 +1,12 @@
 // src/app/mantenimiento-edificio/mantenimiento-edificio.component.ts
 
-import { Component, Input, OnInit, OnChanges, SimpleChanges } from '@angular/core';
+import { Component, Input, OnInit, OnChanges, SimpleChanges, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormGroup, FormControl, Validators, ReactiveFormsModule, FormsModule } from '@angular/forms';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
 import { MatInputModule } from '@angular/material/input';
 import { limpiarCamposDependientes } from 'src/app/utils/formularios.helper';
-
 
 @Component({
   selector: 'app-mantenimiento-edificio',
@@ -25,7 +24,8 @@ import { limpiarCamposDependientes } from 'src/app/utils/formularios.helper';
 })
 export class MantenimientoEdificioComponent implements OnInit, OnChanges {
   @Input() parentForm!: FormGroup;
-  
+  @Output() formularioValido = new EventEmitter<any>();
+
   jerarquiaMantenimiento: { [categoria: string]: { [sub: string]: string[] } } = {
     "Inmueble": {
       "extintores": ["Recarga", "Mal colocación", "Sin etiqueta"],
@@ -71,6 +71,12 @@ export class MantenimientoEdificioComponent implements OnInit, OnChanges {
 
   ngOnInit(): void {
     this.registrarControles();
+
+    this.parentForm.valueChanges.subscribe(() => {
+      if (this.parentForm.valid) {
+        this.emitirPayload();
+      }
+    });
   }
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -94,6 +100,16 @@ export class MantenimientoEdificioComponent implements OnInit, OnChanges {
         this.parentForm.addControl(campo, new FormControl('', Validators.required));
       }
     }
+  }
+
+  emitirPayload(): void {
+    this.formularioValido.emit({
+      departamento_id: 1,
+      categoria: this.parentForm.value.categoria,
+      subcategoria: this.parentForm.value.subcategoria,
+      subsubcategoria: this.parentForm.value.subsubcategoria,
+      descripcion: this.parentForm.value.descripcion
+    });
   }
 
   getCategorias(): string[] {

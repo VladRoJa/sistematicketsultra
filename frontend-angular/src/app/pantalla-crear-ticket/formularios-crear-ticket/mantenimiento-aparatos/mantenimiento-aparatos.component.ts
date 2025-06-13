@@ -87,7 +87,6 @@ export class MantenimientoAparatosComponent implements OnInit {
     this.parentForm.get('aparato_id')?.setValue(ap.id);
     this.inputResaltado = true;
 
-    // 🧹 Limpiar campos dependientes
     limpiarCamposDependientes(this.parentForm, ['problema_detectado', 'necesita_refaccion', 'descripcion_refaccion']);
   }
 
@@ -97,6 +96,6 @@ export class MantenimientoAparatosComponent implements OnInit {
     if (desc.includes('caminadora')) return '🏃';
     if (desc.includes('eliptica')) return '🌀';
     if (desc.includes('escalera')) return '🪜';
-    return '🏋️'; // Default
+    return '🏋️';
   }
 }
