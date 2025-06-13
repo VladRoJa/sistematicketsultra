@@ -25,7 +25,6 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 
-
 @Component({
   selector: 'app-pantalla-crear-ticket',
   standalone: true,
@@ -54,7 +53,6 @@ export class PantallaCrearTicketComponent implements OnInit {
 
   formularioCrearTicket!: FormGroup;
   mensaje: string = '';
-  payloadParcial: any = null;
 
   departamentos = [
     { id: 1, nombre: 'Mantenimiento' },
@@ -82,7 +80,9 @@ export class PantallaCrearTicketComponent implements OnInit {
       subcategoria: ['', Validators.required],
       detalle: ['', Validators.required],
       descripcion: ['', Validators.required],
-      criticidad: [null, Validators.required]
+      criticidad: [null, Validators.required],
+      necesita_refaccion: [false],
+      descripcion_refaccion: ['']
     });
 
     this.formularioCrearTicket.get('departamento')?.valueChanges.subscribe(() => {
@@ -109,76 +109,66 @@ export class PantallaCrearTicketComponent implements OnInit {
     });
   }
 
-obtenerCamposInvalidos(form: FormGroup): string[] {
-  const camposFaltantes: string[] = [];
+  obtenerCamposInvalidos(form: FormGroup): string[] {
+    const camposFaltantes: string[] = [];
 
-  const nombresLegibles: { [key: string]: string } = {
-    departamento: 'Departamento',
-    tipoMantenimiento: 'Tipo de Mantenimiento',
-    categoria: 'Categoría',
-    subcategoria: 'Subcategoría',
-    detalle: 'Detalle específico',
-    descripcion: 'Descripción',
-    criticidad: 'Nivel de criticidad'
-  };
+    const nombresLegibles: { [key: string]: string } = {
+      departamento: 'Departamento',
+      tipoMantenimiento: 'Tipo de Mantenimiento',
+      categoria: 'Categoría',
+      subcategoria: 'Subcategoría',
+      detalle: 'Detalle específico',
+      descripcion: 'Descripción',
+      criticidad: 'Nivel de criticidad'
+    };
 
-  Object.keys(form.controls).forEach(campo => {
-    const control = form.get(campo);
-    if (control && control.invalid) {
-      camposFaltantes.push(nombresLegibles[campo] || campo);
-    }
-  });
+    Object.keys(form.controls).forEach(campo => {
+      const control = form.get(campo);
+      if (control && control.invalid) {
+        camposFaltantes.push(nombresLegibles[campo] || campo);
+      }
+    });
 
-  return camposFaltantes;
-}
-
-formatearNombreCampo(campo: string): string {
-  const traducciones: Record<string, string> = {
-    departamento: 'Departamento',
-    tipoMantenimiento: 'Tipo de Mantenimiento',
-    categoria: 'Categoría',
-    subcategoria: 'Subcategoría',
-    detalle: 'Detalle',
-    descripcion: 'Descripción',
-    criticidad: 'Nivel de criticidad'
-  };
-
-  return traducciones[campo] || campo;
-}
-
-
-  recibirPayloadDesdeFormulario(payload: any) {
-    this.payloadParcial = payload;
+    return camposFaltantes;
   }
 
-enviarTicket() {
-  if (!this.payloadParcial) {
-    const camposFaltantes = this.obtenerCamposInvalidos(this.formularioCrearTicket);
-    mostrarAlertaToast(`❗Faltan datos obligatorios: ${camposFaltantes.join(', ')}`);
-    return;
+  formatearNombreCampo(campo: string): string {
+    const traducciones: Record<string, string> = {
+      departamento: 'Departamento',
+      tipoMantenimiento: 'Tipo de Mantenimiento',
+      categoria: 'Categoría',
+      subcategoria: 'Subcategoría',
+      detalle: 'Detalle',
+      descripcion: 'Descripción',
+      criticidad: 'Nivel de criticidad'
+    };
+
+    return traducciones[campo] || campo;
   }
 
-  const payloadFinal = {
-    ...this.payloadParcial,
-    criticidad: this.formularioCrearTicket.value.criticidad
-  };
-
-  const token = localStorage.getItem('token');
-  const headers = token ? new HttpHeaders().set('Authorization', `Bearer ${token}`) : new HttpHeaders();
-
-  console.log("📡 Enviando al backend:", payloadFinal);
-
-  this.http.post<{ mensaje: string }>(this.apiUrl, payloadFinal, { headers }).subscribe({
-    next: () => {
-      mostrarAlertaToast('✅ Ticket creado correctamente.');
-      this.formularioCrearTicket.reset();
-      this.payloadParcial = null;
-    },
-    error: (error) => {
-      mostrarAlertaErrorDesdeStatus(error.status);
+  enviarTicket() {
+    if (this.formularioCrearTicket.invalid) {
+      const camposFaltantes = this.obtenerCamposInvalidos(this.formularioCrearTicket);
+      mostrarAlertaToast(`❗Faltan datos obligatorios: ${camposFaltantes.join(', ')}`);
+      return;
     }
-  });
-}
 
+    const payloadFinal = this.formularioCrearTicket.value;
+
+    const token = localStorage.getItem('token');
+    const headers = token ? new HttpHeaders().set('Authorization', `Bearer ${token}`) : new HttpHeaders();
+
+    console.log("📡 Enviando al backend:", payloadFinal);
+
+    this.http.post<{ mensaje: string }>(this.apiUrl, payloadFinal, { headers }).subscribe({
+      next: () => {
+        mostrarAlertaToast('✅ Ticket creado correctamente.');
+        this.formularioCrearTicket.reset();
+      },
+      error: (error) => {
+        mostrarAlertaErrorDesdeStatus(error.status);
+      }
+    });
+  }
 
 }

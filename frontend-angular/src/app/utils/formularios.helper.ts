@@ -24,15 +24,15 @@ export function emitirPayloadFormulario(
   departamento_id: number,
   emisor: EventEmitter<any>
 ): void {
-  if (!parentForm.valid) return;
+  if (!parentForm || !parentForm.valid) return;
 
-  const payload = {
+  parentForm.get('departamento_id')?.setValue(departamento_id);
+
+  emisor.emit({
     departamento_id,
-    categoria: parentForm.value.categoria,
-    subcategoria: parentForm.value.subcategoria,
-    subsubcategoria: parentForm.value.detalle,
-    descripcion: parentForm.value.descripcion
-  };
-
-  emisor.emit(payload);
+    categoria: parentForm.get('categoria')?.value,
+    subcategoria: parentForm.get('subcategoria')?.value,
+    detalle: parentForm.get('detalle')?.value,
+    descripcion: parentForm.get('descripcion')?.value
+  });
 }
