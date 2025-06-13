@@ -48,8 +48,13 @@ export class MantenimientoAparatosComponent implements OnInit {
   ngOnInit(): void {
     if (!this.parentForm) return;
 
-    this.parentForm.addControl('aparato_id', new FormControl(null, Validators.required));
-    this.parentForm.addControl('problema_detectado', new FormControl('', Validators.required));
+    // Campos esperados por el backend
+    this.parentForm.addControl('categoria', new FormControl('Aparatos', Validators.required));
+    this.parentForm.addControl('subcategoria', new FormControl('', Validators.required));
+    this.parentForm.addControl('detalle', new FormControl('', Validators.required));
+    this.parentForm.addControl('descripcion', new FormControl('', Validators.required));
+
+    // Opcionales internos
     this.parentForm.addControl('necesita_refaccion', new FormControl(false));
     this.parentForm.addControl('descripcion_refaccion', new FormControl(''));
 
@@ -84,10 +89,11 @@ export class MantenimientoAparatosComponent implements OnInit {
 
   seleccionarAparato(ap: any) {
     this.filtroControl.setValue(`${ap.codigo} - ${ap.descripcion} (${ap.marca})`);
-    this.parentForm.get('aparato_id')?.setValue(ap.id);
+    this.parentForm.get('detalle')?.setValue(`${ap.codigo} - ${ap.descripcion} (${ap.marca})`);
+    this.parentForm.get('subcategoria')?.setValue(ap.area || 'General');
     this.inputResaltado = true;
 
-    limpiarCamposDependientes(this.parentForm, ['problema_detectado', 'necesita_refaccion', 'descripcion_refaccion']);
+    limpiarCamposDependientes(this.parentForm, ['descripcion', 'necesita_refaccion', 'descripcion_refaccion']);
   }
 
   obtenerEmoji(descripcion: string): string {

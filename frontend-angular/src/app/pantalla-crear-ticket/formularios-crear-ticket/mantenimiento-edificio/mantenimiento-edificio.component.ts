@@ -107,7 +107,7 @@ export class MantenimientoEdificioComponent implements OnInit, OnChanges {
       departamento_id: 1,
       categoria: this.parentForm.value.categoria,
       subcategoria: this.parentForm.value.subcategoria,
-      subsubcategoria: this.parentForm.value.subsubcategoria,
+      detalle: this.parentForm.value.detalle,
       descripcion: this.parentForm.value.descripcion
     });
   }

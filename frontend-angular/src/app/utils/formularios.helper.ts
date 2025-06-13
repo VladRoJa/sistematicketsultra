@@ -30,7 +30,7 @@ export function emitirPayloadFormulario(
     departamento_id,
     categoria: parentForm.value.categoria,
     subcategoria: parentForm.value.subcategoria,
-    subsubcategoria: parentForm.value.detalle,
+    detalle: parentForm.value.detalle,
     descripcion: parentForm.value.descripcion
   };
 
