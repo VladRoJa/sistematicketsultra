@@ -313,9 +313,6 @@ export class PantallaVerTicketsComponent implements OnInit {
   exportarTickets() { TicketAcciones.exportarTickets(this); }
   cambiarEstado(ticket: Ticket, estado: "pendiente" | "en progreso" | "finalizado") { TicketAcciones.cambiarEstado(this, ticket, estado); }
   finalizar(ticket: Ticket) { TicketAcciones.finalizar(this, ticket); }
-  editarFecha(ticket: Ticket) { TicketAcciones.editarFecha(this, ticket); }
-  guardarFecha(ticket: Ticket) { TicketAcciones.guardarFecha(this, ticket); }
-  cancelarEdicionFecha(ticket: Ticket) { TicketAcciones.cancelarEdicionFecha(this, ticket); }
   mostrarConfirmacion(mensaje: string, accion: () => void) { TicketAcciones.mostrarConfirmacionAccion(this, mensaje, accion); }
   confirmarAccion() { TicketAcciones.confirmarAccionPendiente(this); }
   cancelarAccion() { TicketAcciones.cancelarAccionPendiente(this); }  
