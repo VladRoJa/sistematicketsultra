@@ -545,19 +545,22 @@ export class PantallaVerTicketsComponent implements OnInit {
 onGuardarFechaSolucion(event: { fecha: Date, motivo: string }) {
   if (!this.ticketParaAsignarFecha) return;
 
-  // Ahora recibes también el motivo directamente
   if (!event.motivo || !event.motivo.trim()) {
     alert('Debes ingresar un motivo para el cambio de fecha.');
     return;
   }
 
-  guardarFechaSolucion(this, this.ticketParaAsignarFecha, event.fecha, event.motivo);
-
-  // Cambiar el estado del ticket a "en progreso"
-  this.cambiarEstado(this.ticketParaAsignarFecha, 'en progreso');
-
-  this.showModalAsignarFecha = false;
-  this.ticketParaAsignarFecha = null;
+  guardarFechaSolucion(
+    this,
+    this.ticketParaAsignarFecha,
+    event.fecha,
+    event.motivo,
+    () => { // SOLO se ejecuta al guardar exitosamente
+      this.cambiarEstado(this.ticketParaAsignarFecha, 'en progreso');
+      this.showModalAsignarFecha = false;
+      this.ticketParaAsignarFecha = null;
+    }
+  );
 }
 
 

@@ -14,6 +14,7 @@ export function guardarFechaSolucion(
   ticket: Ticket,
   nuevaFecha: Date,
   motivo: string,
+  onSuccess?: () => void 
 ): void {
   if (!component.usuarioEsAdmin && !component.usuarioEsEditorCorporativo) {
     console.warn('Solo administradores o editores corporativos pueden guardar la fecha de solución');
@@ -89,6 +90,7 @@ export function guardarFechaSolucion(
           }
 
           mostrarAlertaToast('✅ Fecha solución guardada exitosamente.');
+          if (onSuccess) onSuccess();
         },
         error: (error) => {
           console.error("Error al refrescar ticket actualizado:", error);
