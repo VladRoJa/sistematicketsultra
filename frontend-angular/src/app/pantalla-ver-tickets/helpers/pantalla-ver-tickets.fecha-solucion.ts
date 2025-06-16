@@ -1,4 +1,4 @@
-//C:\Users\Vladimir\Documents\Sistema tickets\frontend-angular\src\app\pantalla-ver-tickets\helpers\pantalla-ver-tickets.fecha-solucion.ts
+// C:\Users\Vladimir\Documents\Sistema tickets\frontend-angular\src\app\pantalla-ver-tickets\helpers\pantalla-ver-tickets.fecha-solucion.ts
 
 import { ChangeDetectorRef } from '@angular/core';
 import { PantallaVerTicketsComponent, Ticket } from '../pantalla-ver-tickets.component';
@@ -6,32 +6,7 @@ import { HttpHeaders } from '@angular/common/http';
 import { environment } from 'src/environments/environment';
 import { mostrarAlertaToast, mostrarAlertaErrorDesdeStatus } from 'src/app/utils/alertas';
 
-
 const API_URL = `${environment.apiUrl}/tickets`;
-
-/** Activar el modo de edición para la fecha de solución */
-export function editarFechaSolucion(
-  component: PantallaVerTicketsComponent,
-  ticket: Ticket,
-  cdr: ChangeDetectorRef
-): void {
-  // Solo permitir edición a administradores
-  if (!component.usuarioEsAdmin && !component.usuarioEsEditorCorporativo) {
-    console.warn('Solo administradores o editores corporativos pueden editar la fecha de solución');
-    return;
-  }
-
-  component.editandoFechaSolucion[ticket.id] = true;
-
-  // Inicializar con la fecha actual si existe
-  if (!component.fechaSolucionSeleccionada[ticket.id]) {
-    component.fechaSolucionSeleccionada[ticket.id] = ticket.fecha_solucion
-      ? formatearFechaParaInput(ticket.fecha_solucion)
-      : null;
-  }
-
-  cdr.detectChanges();
-}
 
 /** Guardar la nueva fecha de solución con hora fija 07:00 AM */
 export function guardarFechaSolucion(
@@ -113,9 +88,7 @@ export function guardarFechaSolucion(
             component.visibleTickets = actualizar(component.visibleTickets);
           }
 
-          component.editandoFechaSolucion[ticket.id] = false;
           mostrarAlertaToast('✅ Fecha solución guardada exitosamente.');
-          delete component.fechaSolucionSeleccionada[ticket.id];
         },
         error: (error) => {
           console.error("Error al refrescar ticket actualizado:", error);
@@ -130,23 +103,14 @@ export function guardarFechaSolucion(
   });
 }
 
-
-
-
-/** Cancelar edición */
-export function cancelarEdicionFechaSolucion(component: PantallaVerTicketsComponent, ticket: Ticket): void {
-  component.editandoFechaSolucion[ticket.id] = false;
-  delete component.fechaSolucionSeleccionada[ticket.id];
-}
-
-/** Convertir string ISO a Date con hora fija 07:00 AM para el input */
-function formatearFechaParaInput(fechaDB: string): Date {
-  const fecha = new Date(fechaDB);
-  return new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate(), 7, 0, 0);
-}
-
 /** Alternar visibilidad del historial */
 export function alternarHistorial(component: PantallaVerTicketsComponent, ticketId: number): void {
   component.historialVisible[ticketId] = !component.historialVisible[ticketId];
   component.changeDetectorRef.detectChanges();
+}
+
+/** Si necesitas convertir un string ISO a Date para algún modal */
+export function formatearFechaParaInput(fechaDB: string): Date {
+  const fecha = new Date(fechaDB);
+  return new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate(), 7, 0, 0);
 }

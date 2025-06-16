@@ -575,65 +575,35 @@
 
     
         <!-- Fecha Solución -->
-      <td>
-        <ng-container *ngIf="ticket.fecha_solucion; else soloLecturaSinFecha">
-          {{ ticket.fecha_solucion | date:'dd/MM/yy' }}
-          <button
-            *ngIf="usuarioEsAdmin || usuarioEsEditorCorporativo"
-            (click)="editarFechaSolucionWrapper(ticket)"
-            mat-icon-button
-            class="boton-editar-fecha"
-            matTooltip="Editar fecha solución">
-            <mat-icon>edit</mat-icon>
-          </button>
+    <td>
+      <ng-container *ngIf="ticket.fecha_solucion; else soloLecturaSinFecha">
+        {{ ticket.fecha_solucion | date:'dd/MM/yy' }}
+        <button
+          *ngIf="usuarioEsAdmin || usuarioEsEditorCorporativo"
+          mat-icon-button
+          class="boton-editar-fecha"
+          matTooltip="Editar fecha solución"
+          (click)="editarFechaSolucionWrapper(ticket)">
+          <mat-icon>edit</mat-icon>
+        </button>
+      </ng-container>
 
-          <div *ngIf="editandoFechaSolucion[ticket.id]" class="mt-2">
-            <mat-form-field appearance="fill">
-              <mat-label>Seleccionar nueva fecha</mat-label>
-              <input
-                matInput
-                [matDatepicker]="pickerSolucion"
-                [ngModel]="fechaSolucionSeleccionada[ticket.id]"
-                (ngModelChange)="fechaSolucionSeleccionada[ticket.id] = $event"
-                (focus)="pickerSolucion.open()" />
-              <mat-datepicker-toggle matSuffix [for]="pickerSolucion"></mat-datepicker-toggle>
-              <mat-datepicker #pickerSolucion></mat-datepicker>
-            </mat-form-field>
+      <ng-template #soloLecturaSinFecha>
+        <span class="text-gray-400">Sin asignar</span>
+      </ng-template>
+    </td>
 
-            <mat-form-field appearance="fill" class="w-full mt-2">
-              <mat-label>Motivo del cambio</mat-label>
-              <textarea matInput [(ngModel)]="motivoCambioFechaSolucion[ticket.id]" required></textarea>
-            </mat-form-field>
 
-            <div class="acciones-fecha mt-2 flex gap-2">
-              <button mat-raised-button color="primary"
-                      (click)="guardarFechaSolucionWrapper(ticket, fechaSolucionSeleccionada[ticket.id])">
-                <mat-icon>save</mat-icon> Guardar
+            <!-- Historial -->
+            <td>
+              <button mat-button color="primary" (click)="abrirHistorialModal(ticket)">
+                Ver Historial
               </button>
-              <button mat-button (click)="cancelarEdicionFechaSolucionWrapper(ticket)">
-                <mat-icon>close</mat-icon> Cancelar
-              </button>
-            </div>
-          </div>
-        </ng-container>
-
-        <ng-template #soloLecturaSinFecha>
-          <span class="text-gray-400">Sin asignar</span>
-        </ng-template>
-      </td>
-
-
-
-        <!-- Historial -->
-        <td>
-          <button mat-button color="primary" (click)="abrirHistorialModal(ticket)">
-            Ver Historial
-          </button>
-        </td>
-      </tr>
-    </tbody>
-  </table>
-</div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
 
         <!-- Modal para asignar la fecha de solución (aparece solo si showModalAsignarFecha es true) -->
     <div *ngIf="showModalAsignarFecha" class="modal-asignar-fecha-overlay">

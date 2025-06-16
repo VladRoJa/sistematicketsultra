@@ -202,3 +202,7 @@ textarea.mat-mdc-input-element {
   justify-content: center !important;
   align-items: flex-start !important;
 }
+
+.cdk-overlay-container {
+  z-index: 3000 !important;
+}

@@ -32,7 +32,7 @@ import { aplicarFiltroColumnaConReset} from './helpers/pantalla-ver-tickets.filt
 import {filtrarOpcionesDetalle, aplicarFiltroColumna, limpiarFiltroColumna} from './helpers/pantalla-ver-tickets.filtros';
 import { aplicarFiltroPorRangoFechaCreacion, aplicarFiltroPorRangoFechaFinalizado, aplicarFiltroPorRangoFechaEnProgreso  } from './helpers/pantalla-ver-tickets.fechas';
 import { MatDialog } from '@angular/material/dialog';
-import { cancelarEdicionFechaSolucion, editarFechaSolucion, guardarFechaSolucion } from './helpers/pantalla-ver-tickets.fecha-solucion';
+import { guardarFechaSolucion } from './helpers/pantalla-ver-tickets.fecha-solucion';
 import { HistorialFechasModalComponent } from './modals/historial-fechas-modal.component';
 import { refrescarDespuesDeCambioFiltro } from './helpers/refrescarDespuesDeCambioFiltro';
 import { AsignarFechaModalComponent } from './modals/asignar-fecha-modal.component';
@@ -190,9 +190,8 @@ export class PantallaVerTicketsComponent implements OnInit {
   filtroSubcategoriaTexto = '';
   filtroDetalleTexto = '';
 
-  fechaSolucionSeleccionada: Record<number, Date | null> = {};
-  motivoCambioFechaSolucion: Record<number, string> = {};
-  editandoFechaSolucion: Record<number, boolean> = {};
+
+
   historialVisible: Record<number, boolean> = {};
   fechasSolucionDisponibles = new Set<string>();
 
@@ -371,17 +370,6 @@ export class PantallaVerTicketsComponent implements OnInit {
     this.temporalSeleccionados[columna] = filtradas.map((item: any) => ({ ...item }));
   }
 
-
-
-
-
-
-  onFechaChange(ticketId: number, fecha: Date | null): void {
-    this.fechaSolucionSeleccionada[ticketId] = fecha; // ✅ Guarda el objeto Date o null directamente
-  
-    // 🔄 Asegura que se actualice la vista
-    this.changeDetectorRef.detectChanges();
-  }
   
   aplicarFiltroPorRangoFechaCreacionConfirmada = () => {
     this.rangoFechaCreacionSeleccionado = {
@@ -491,22 +479,7 @@ export class PantallaVerTicketsComponent implements OnInit {
     return this.diasConTicketsFinalizado.has(fecha) ? 'dia-con-ticket' : '';
   };
 
-  editarFechaSolucionWrapper(ticket: Ticket): void {
-    editarFechaSolucion(this, ticket, this.changeDetectorRef);
-  }
 
-  guardarFechaSolucionWrapper(ticket: Ticket, fecha: Date): void {
-    const motivo = this.motivoCambioFechaSolucion[ticket.id];
-    if (!motivo || !motivo.trim()) {
-      alert('Debes ingresar un motivo para el cambio de fecha.');
-      return;
-    }
-    guardarFechaSolucion(this, ticket, fecha, motivo); // 🔧 NUEVO
-  }
-
-  cancelarEdicionFechaSolucionWrapper(ticket: Ticket): void {
-    cancelarEdicionFechaSolucion(this, ticket);
-  }
   abrirHistorialModal(ticket: Ticket): void {
     this.dialog.open(HistorialFechasModalComponent, {
       data: ticket,
@@ -572,11 +545,16 @@ export class PantallaVerTicketsComponent implements OnInit {
   }
 }
 
-onGuardarFechaSolucion(event: { fecha: Date }) {
+onGuardarFechaSolucion(event: { fecha: Date, motivo: string }) {
   if (!this.ticketParaAsignarFecha) return;
 
-  // Guardar la fecha de solución SIN motivo
-  this.guardarFechaSolucionWrapper(this.ticketParaAsignarFecha, event.fecha);
+  // Ahora recibes también el motivo directamente
+  if (!event.motivo || !event.motivo.trim()) {
+    alert('Debes ingresar un motivo para el cambio de fecha.');
+    return;
+  }
+
+  guardarFechaSolucion(this, this.ticketParaAsignarFecha, event.fecha, event.motivo);
 
   // Cambiar el estado del ticket a "en progreso"
   this.cambiarEstado(this.ticketParaAsignarFecha, 'en progreso');
@@ -584,6 +562,7 @@ onGuardarFechaSolucion(event: { fecha: Date }) {
   this.showModalAsignarFecha = false;
   this.ticketParaAsignarFecha = null;
 }
+
 
 onCancelarAsignarFecha() {
   this.showModalAsignarFecha = false;
