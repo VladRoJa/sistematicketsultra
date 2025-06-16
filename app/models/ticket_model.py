@@ -73,11 +73,11 @@ class Ticket(db.Model):
             'problema_detectado': self.problema_detectado,
             'historial_fechas': [
                 {
+                    **item,
                     'fecha': format_fecha_corta(isoparse(item['fecha']).astimezone(pytz.timezone("America/Tijuana")))
                     if self.is_isoformat(item.get('fecha')) else item.get('fecha', 'N/A'),
-                    'cambiadoPor': item.get('cambiadoPor', 'N/A'),
                     'fechaCambio': format_fecha_corta(isoparse(item['fechaCambio']).astimezone(pytz.timezone("America/Tijuana")))
-                    if self.is_isoformat(item.get('fechaCambio')) else item.get('fechaCambio', 'N/A')
+                    if self.is_isoformat(item.get('fechaCambio')) else item.get('fechaCambio', 'N/A'),
                 }
                 for item in self.historial_fechas or []
                 if isinstance(item, dict)

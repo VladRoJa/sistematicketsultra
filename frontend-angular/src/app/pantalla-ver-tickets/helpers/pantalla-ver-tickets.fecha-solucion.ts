@@ -37,7 +37,8 @@ export function editarFechaSolucion(
 export function guardarFechaSolucion(
   component: PantallaVerTicketsComponent,
   ticket: Ticket,
-  nuevaFecha: Date
+  nuevaFecha: Date,
+  motivo: string,
 ): void {
   if (!component.usuarioEsAdmin && !component.usuarioEsEditorCorporativo) {
     console.warn('Solo administradores o editores corporativos pueden guardar la fecha de solución');
@@ -74,6 +75,7 @@ export function guardarFechaSolucion(
       fecha: fechaISO,
       cambiadoPor: component.user.username,
       fechaCambio: new Date().toISOString(),
+      motivo
     };
 
     historialActual.push(nuevoRegistro);
@@ -87,6 +89,7 @@ export function guardarFechaSolucion(
     estado: ticket.estado,
     fecha_solucion: fechaISO,
     historial_fechas: historialActualizado,
+    motivo_cambio: motivo
   };
 
   const headers = new HttpHeaders()

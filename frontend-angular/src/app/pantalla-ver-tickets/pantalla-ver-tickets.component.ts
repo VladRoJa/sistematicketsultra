@@ -185,7 +185,7 @@ export class PantallaVerTicketsComponent implements OnInit {
   filtroDetalleTexto = '';
 
   fechaSolucionSeleccionada: Record<number, Date | null> = {};
-
+  motivoCambioFechaSolucion: Record<number, string> = {};
   editandoFechaSolucion: Record<number, boolean> = {};
   historialVisible: Record<number, boolean> = {};
   fechasSolucionDisponibles = new Set<string>();
@@ -490,7 +490,12 @@ export class PantallaVerTicketsComponent implements OnInit {
   }
 
   guardarFechaSolucionWrapper(ticket: Ticket, fecha: Date): void {
-    guardarFechaSolucion(this, ticket, fecha);
+    const motivo = this.motivoCambioFechaSolucion[ticket.id];
+    if (!motivo || !motivo.trim()) {
+      alert('Debes ingresar un motivo para el cambio de fecha.');
+      return;
+    }
+    guardarFechaSolucion(this, ticket, fecha, motivo); // 🔧 NUEVO
   }
 
   cancelarEdicionFechaSolucionWrapper(ticket: Ticket): void {

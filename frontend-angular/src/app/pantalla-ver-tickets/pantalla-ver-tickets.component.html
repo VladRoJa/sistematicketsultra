@@ -590,30 +590,35 @@
             </button>
           </ng-template>
 
-          <div *ngIf="editandoFechaSolucion[ticket.id]" class="mt-2">
-            <mat-form-field appearance="fill">
-              <mat-label>Seleccionar nueva fecha</mat-label>
-              <input
-                matInput
-                [matDatepicker]="pickerSolucion"
-                [ngModel]="fechaSolucionSeleccionada[ticket.id]"
-                (ngModelChange)="fechaSolucionSeleccionada[ticket.id] = $event"
-                (focus)="pickerSolucion.open()" />
-              <mat-datepicker-toggle matSuffix [for]="pickerSolucion"></mat-datepicker-toggle>
-              <mat-datepicker #pickerSolucion></mat-datepicker>
-            </mat-form-field>
+    <div *ngIf="editandoFechaSolucion[ticket.id]" class="mt-2">
+      <mat-form-field appearance="fill">
+        <mat-label>Seleccionar nueva fecha</mat-label>
+        <input
+          matInput
+          [matDatepicker]="pickerSolucion"
+          [ngModel]="fechaSolucionSeleccionada[ticket.id]"
+          (ngModelChange)="fechaSolucionSeleccionada[ticket.id] = $event"
+          (focus)="pickerSolucion.open()" />
+        <mat-datepicker-toggle matSuffix [for]="pickerSolucion"></mat-datepicker-toggle>
+        <mat-datepicker #pickerSolucion></mat-datepicker>
+      </mat-form-field>
 
-            <div class="acciones-fecha mt-2 flex gap-2">
-              <button mat-raised-button color="primary"
-                      (click)="guardarFechaSolucionWrapper(ticket, fechaSolucionSeleccionada[ticket.id])">
-                <mat-icon>save</mat-icon> Guardar
-              </button>
-              <button mat-button (click)="cancelarEdicionFechaSolucionWrapper(ticket)">
-                <mat-icon>close</mat-icon> Cancelar
-              </button>
-            </div>
-          </div>
-        </td>
+      <mat-form-field appearance="fill" class="w-full mt-2">
+        <mat-label>Motivo del cambio</mat-label>
+        <textarea matInput [(ngModel)]="motivoCambioFechaSolucion[ticket.id]" required></textarea>
+      </mat-form-field>
+
+      <div class="acciones-fecha mt-2 flex gap-2">
+        <button mat-raised-button color="primary"
+                (click)="guardarFechaSolucionWrapper(ticket, fechaSolucionSeleccionada[ticket.id])">
+          <mat-icon>save</mat-icon> Guardar
+        </button>
+        <button mat-button (click)="cancelarEdicionFechaSolucionWrapper(ticket)">
+          <mat-icon>close</mat-icon> Cancelar
+        </button>
+      </div>
+    </div>
+
 
         <!-- Historial -->
         <td>

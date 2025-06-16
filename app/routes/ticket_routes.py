@@ -192,6 +192,7 @@ def update_ticket_status(id):
         fecha_solucion = data.get("fecha_solucion")
         historial_nuevo = data.get("historial_fechas", [])
 
+
         if not estado:
             return jsonify({"mensaje": "Estado es requerido"}), 400
 
@@ -213,6 +214,8 @@ def update_ticket_status(id):
         tz_mx = pytz.timezone("America/Tijuana")
         historial_final = ticket.historial_fechas or []
 
+        motivo_cambio = data.get("motivo_cambio", "").strip()
+
         for entrada in historial_nuevo:
             nueva = entrada.copy()
             for campo in ['fecha', 'fechaCambio']:
@@ -229,6 +232,10 @@ def update_ticket_status(id):
                         print(f"❌ Error parseando {campo} en ticket #{ticket.id}: {e}")
                         continue
 
+            # ✅ Agregar motivo si no viene desde el frontend
+            if motivo_cambio and 'motivo' not in nueva:
+                nueva['motivo'] = motivo_cambio
+
             existe_misma_fecha = any(
                 parser.isoparse(e.get("fecha")).replace(tzinfo=None) == parser.isoparse(nueva.get("fecha")).replace(tzinfo=None)
                 for e in historial_final if e.get("fecha")
@@ -236,6 +243,7 @@ def update_ticket_status(id):
 
             if not existe_misma_fecha:
                 historial_final.append(nueva)
+
         
         
         historial_final.sort(key=lambda x: parser.isoparse(x['fechaCambio']), reverse=True)
