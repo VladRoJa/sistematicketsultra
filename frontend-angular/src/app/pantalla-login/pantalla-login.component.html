@@ -1,48 +1,49 @@
 <!-- src/app/pantalla-login/pantalla-login.component.html -->
 
-<div class="container">
-    <div class="left">
-      <form class="form" (ngSubmit)="onSubmit()" #loginForm="ngForm">
-        <div class="input-block">
-          <input
-            type="text"
-            id="usuario-login"
-            name="username"
-            class="input"
-            [(ngModel)]="username"
-            required
-            placeholder="Usuario"
-          />
-        </div>
-  
-        <div class="input-block">
-          <input
-            type="password"
-            id="password-login"
-            name="password"
-            class="input"
-            [(ngModel)]="password"
-            required
-            placeholder="Contraseña"
-          />
-        </div>
-  
-        <div class="input-block">
-          <button type="submit" [disabled]="!loginForm.valid">
-            Iniciar Sesión
-          </button>
-        </div>
-  
-        <div *ngIf="errorMessage" class="error-message">
-          {{ errorMessage }}
-        </div>
-      </form>
-    </div>
-  
-    <div class="right">
-      <div class="img">
-        <!-- Imagen o SVG decorativo aquí -->
+<app-loader *ngIf="cargando"></app-loader>
+
+<div *ngIf="!cargando" class="container">
+  <div class="left">
+    <form class="form" (ngSubmit)="onSubmit()" #loginForm="ngForm">
+      <div class="input-block">
+        <input
+          type="text"
+          id="usuario-login"
+          name="username"
+          class="input"
+          [(ngModel)]="username"
+          required
+          placeholder="Usuario"
+        />
       </div>
+
+      <div class="input-block">
+        <input
+          type="password"
+          id="password-login"
+          name="password"
+          class="input"
+          [(ngModel)]="password"
+          required
+          placeholder="Contraseña"
+        />
+      </div>
+
+      <div class="input-block">
+        <button type="submit" [disabled]="!loginForm.valid">
+          Iniciar Sesión
+        </button>
+      </div>
+
+      <div *ngIf="errorMessage" class="error-message">
+        {{ errorMessage }}
+      </div>
+    </form>
+  </div>
+
+  <div class="right">
+    <div class="img">
+      <!-- Imagen o SVG decorativo aquí -->
     </div>
   </div>
-  
+</div>

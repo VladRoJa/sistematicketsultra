@@ -5,11 +5,12 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '../services/auth.service';
 import { Router } from '@angular/router';
+import { LoaderComponent } from '../shared/loader/loader.component'; 
 
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, LoaderComponent],
   templateUrl: './pantalla-login.component.html',
   styleUrls: ['./pantalla-login.component.css']
 })
@@ -17,6 +18,7 @@ export class LoginComponent {
   username = '';
   password = '';
   errorMessage = '';
+  cargando = false;
 
   constructor(
     private authService: AuthService,
@@ -32,6 +34,9 @@ export class LoginComponent {
     console.log("🟡 Usuario ingresado:", this.username);
     console.log("🟡 Contraseña ingresada:", this.password);
 
+    this.errorMessage = '';
+    this.cargando = true;
+
     this.authService.login(this.username, this.password).subscribe({
       next: (response) => this.handleLoginSuccess(response),
       error: (error) => this.handleLoginError(error)
@@ -43,14 +48,18 @@ export class LoginComponent {
     if (response?.token && response?.user) {
       console.log("📌 Usuario autenticado:", response.user);
       this.authService.setSession(response.token, response.user);
+    setTimeout(() => {
       this.router.navigate(['/main']);
+      }, 2000);
     } else {
       this.errorMessage = "⚠️ Error inesperado: Token o usuario no recibido.";
+      this.cargando = false;
     }
   }
 
   private handleLoginError(error: any): void {
     console.error("❌ Error en el login:", error);
+    this.cargando = false;
 
     switch (error.status) {
       case 0:
