@@ -18,19 +18,17 @@ const API_URL = `${environment.apiUrl}/tickets`;
 export function cambiarEstadoTicket(
   component: PantallaVerTicketsComponent,
   ticket: Ticket,
-  nuevoEstado: 'pendiente' | 'en progreso' | 'finalizado'
+  nuevoEstado: 'pendiente' | 'en progreso' | 'finalizado',
+  onSuccess?: () => void
 ): void {
   const token = localStorage.getItem("token");
-  if (!token) {
-    console.error("❌ No hay token disponible.");
-    return;
-  }
+  if (!token) { console.error("❌ No hay token disponible."); return; }
 
   const headers = new HttpHeaders()
     .set("Authorization", `Bearer ${token}`)
     .set("Content-Type", "application/json");
 
-  // 🚨 Si es "en progreso" y no tiene fecha_solucion, abrir modal obligatorio
+  // Si es "en progreso" y no tiene fecha_solucion, abrir modal obligatorio
   if (nuevoEstado === 'en progreso' && !ticket.fecha_solucion) {
     const dialogRef = component.dialog.open(AsignarFechaModalComponent, {
       width: '400px',
@@ -40,10 +38,7 @@ export function cambiarEstadoTicket(
 
     dialogRef.componentInstance.onGuardar.subscribe(({ fecha }) => {
       const fechaSolucion = new Date(
-        fecha.getFullYear(),
-        fecha.getMonth(),
-        fecha.getDate(),
-        7, 0, 0
+        fecha.getFullYear(), fecha.getMonth(), fecha.getDate(), 7, 0, 0
       ).toISOString();
 
       const body = {
@@ -59,6 +54,7 @@ export function cambiarEstadoTicket(
           ticket.fecha_solucion = fechaSolucion;
           mostrarAlertaToast(`✅ Ticket #${ticket.id} actualizado a '${nuevoEstado}'`);
           dialogRef.close();
+          if (onSuccess) onSuccess();
         },
         error: (error) => {
           mostrarAlertaErrorDesdeStatus(error.status);
@@ -70,7 +66,7 @@ export function cambiarEstadoTicket(
       dialogRef.close();
     });
 
-    return; // ⛔ Detener ejecución hasta que usuario seleccione fecha
+    return;
   }
 
   // ✅ Flujo normal para otros estados o si ya tiene fecha_solucion
@@ -80,6 +76,7 @@ export function cambiarEstadoTicket(
     next: () => {
       ticket.estado = nuevoEstado;
       mostrarAlertaToast(`✅ Ticket #${ticket.id} actualizado a '${nuevoEstado}'`);
+      if (onSuccess) onSuccess();
     },
     error: (error) => {
       mostrarAlertaErrorDesdeStatus(error.status);

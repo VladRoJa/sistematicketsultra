@@ -36,6 +36,7 @@ import { guardarFechaSolucion } from './helpers/pantalla-ver-tickets.fecha-soluc
 import { HistorialFechasModalComponent } from './modals/historial-fechas-modal.component';
 import { refrescarDespuesDeCambioFiltro } from './helpers/refrescarDespuesDeCambioFiltro';
 import { AsignarFechaModalComponent } from './modals/asignar-fecha-modal.component';
+import { cambiarEstadoTicket } from './helpers/pantalla-ver-tickets.estado-ticket';
 
 
 // Interfaces
@@ -542,25 +543,33 @@ export class PantallaVerTicketsComponent implements OnInit {
   }
 }
 
-onGuardarFechaSolucion(event: { fecha: Date, motivo: string }) {
+async onGuardarFechaSolucion(event: { fecha: Date, motivo: string }) {
   if (!this.ticketParaAsignarFecha) return;
-
   if (!event.motivo || !event.motivo.trim()) {
     alert('Debes ingresar un motivo para el cambio de fecha.');
     return;
   }
 
-  guardarFechaSolucion(
-    this,
-    this.ticketParaAsignarFecha,
-    event.fecha,
-    event.motivo,
-    () => { // SOLO se ejecuta al guardar exitosamente
-      this.cambiarEstado(this.ticketParaAsignarFecha, 'en progreso');
-      this.showModalAsignarFecha = false;
-      this.ticketParaAsignarFecha = null;
-    }
-  );
+  // Espera a que se guarde la fecha de solución
+  await new Promise<void>((resolveFecha) => {
+    guardarFechaSolucion(
+      this,
+      this.ticketParaAsignarFecha!,
+      event.fecha,
+      event.motivo,
+      async () => {
+        // Al terminar de guardar la fecha, cambiamos el estado y resolvemos al final
+        await new Promise<void>((resolveEstado) => {
+          cambiarEstadoTicket(this, this.ticketParaAsignarFecha!, 'en progreso', resolveEstado);
+        });
+        resolveFecha();
+      }
+    );
+  });
+
+  // Ya terminó todo el proceso: cierra modal y limpia
+  this.showModalAsignarFecha = false;
+  this.ticketParaAsignarFecha = null;
 }
 
 
