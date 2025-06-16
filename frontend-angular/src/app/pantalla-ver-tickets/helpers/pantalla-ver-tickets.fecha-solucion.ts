@@ -74,29 +74,13 @@ export function guardarFechaSolucion(
 
   component.http.put(`${API_URL}/update/${ticket.id}`, datosActualizacion, { headers }).subscribe({
     next: () => {
-      component.ticketService.getTickets().subscribe({
-        next: (res) => {
-          const actualizado = res.tickets.find((t: Ticket) => t.id === ticket.id);
-          if (actualizado) {
-            ticket.fecha_solucion = actualizado.fecha_solucion;
-            ticket.historial_fechas = actualizado.historial_fechas;
-
-            const actualizar = (lista: Ticket[]) =>
-              lista.map(t => t.id === ticket.id ? actualizado : t);
-
-            component.tickets = actualizar(component.tickets);
-            component.filteredTickets = actualizar(component.filteredTickets);
-            component.visibleTickets = actualizar(component.visibleTickets);
-          }
-
-          mostrarAlertaToast('✅ Fecha solución guardada exitosamente.');
-          if (onSuccess) onSuccess();
-        },
-        error: (error) => {
-          console.error("Error al refrescar ticket actualizado:", error);
-          component.refrescoService.emitirRefresco();
-        }
+      // 👇 Reemplaza la llamada a getTickets() por el refresco global de toda la tabla
+      import('./pantalla-ver-tickets.init').then(TicketInit => {
+        TicketInit.cargarTickets(component);
       });
+
+      mostrarAlertaToast('✅ Fecha solución guardada exitosamente.');
+      if (onSuccess) onSuccess();
     },
     error: (error) => {
       console.error(`Error al actualizar la fecha de solución del ticket #${ticket.id}:`, error);
