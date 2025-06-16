@@ -35,8 +35,8 @@ export function editarFecha(component: PantallaVerTicketsComponent, ticket: Tick
 
 /** Guardar la fecha de solución editada */
 export function guardarFecha(component: PantallaVerTicketsComponent, ticket: Ticket): void {
-  guardarFechaSolucion(component, ticket, component.fechaSolucionSeleccionada[ticket.id]);
-
+  const motivo = component.motivoCambioFechaSolucion?.[ticket.id] || 'Cambio sin motivo especificado';
+  guardarFechaSolucion(component, ticket, component.fechaSolucionSeleccionada[ticket.id], motivo);
 }
 
 /** Cancelar edición de fecha de solución */
