@@ -236,7 +236,38 @@
     border: 1px solid #000;
     border-radius: 8px;
     z-index: 9999; /* Muy arriba para que no quede debajo de otros elementos */
+    
   }
+
+    /* =========================
+     MODAL DE ASIGNAR FECHA
+     ========================= */
+
+  .modal-asignar-fecha-overlay {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0,0,0,0.25);
+  z-index: 2500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+    }
+
+    app-asignar-fecha-modal {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 6px 32px rgba(0,0,0,.15);
+      min-width: 330px;
+      padding: 24px 22px;
+      max-width: 97vw;
+    }
+
+
+
+
+
   /* =========================
      HISTORIAL
      ========================= */

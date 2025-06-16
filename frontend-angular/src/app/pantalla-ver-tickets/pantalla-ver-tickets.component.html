@@ -636,16 +636,17 @@
 </div>
 
         <!-- Modal para asignar la fecha de solución (aparece solo si showModalAsignarFecha es true) -->
-        <app-asignar-fecha-modal
-          *ngIf="showModalAsignarFecha"
-          [fechaSeleccionada]="fechaSolucionTentativa"
-          (onGuardar)="onGuardarFechaSolucion($event)"
-          (onCancelar)="onCancelarAsignarFecha()"
-        ></app-asignar-fecha-modal>
+    <div *ngIf="showModalAsignarFecha" class="modal-asignar-fecha-overlay">
+      <app-asignar-fecha-modal
+        [fechaSeleccionada]="fechaSolucionTentativa"
+        (onGuardar)="onGuardarFechaSolucion($event)"
+        (onCancelar)="onCancelarAsignarFecha()"
+      ></app-asignar-fecha-modal>
+    </div>
 
 
         <!-- Bloque de confirmación -->
-        <div *ngIf="confirmacionVisible" class="modal-overlay">
+        <div *ngIf="confirmacionVisible" class="modal-asignar-fecha-overlay">
           <div class="modal-confirmacion">
             <p>{{ mensajeConfirmacion }}</p>
             <button (click)="confirmarAccion()">Sí</button>
