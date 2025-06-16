@@ -4,7 +4,8 @@ import { PantallaVerTicketsComponent, Ticket, ApiResponse } from '../pantalla-ve
 import { HttpHeaders } from '@angular/common/http';
 import { cargarTickets } from './pantalla-ver-tickets.init';
 import { environment } from 'src/environments/environment';
-import { DialogoConfirmacionComponent } from 'src/app/shared/dialogo-confirmacion/dialogo-confirmacion.component';
+import { mostrarAlertaErrorDesdeStatus, mostrarAlertaToast } from 'src/app/utils/alertas';
+import { AsignarFechaModalComponent } from '../modals/asignar-fecha-modal.component';
 
 
 /**
@@ -17,22 +18,71 @@ const API_URL = `${environment.apiUrl}/tickets`;
 export function cambiarEstadoTicket(
   component: PantallaVerTicketsComponent,
   ticket: Ticket,
-  nuevoEstado: "pendiente" | "en progreso" | "finalizado"
+  nuevoEstado: 'pendiente' | 'en progreso' | 'finalizado'
 ): void {
-  if (!component.usuarioEsAdmin && !component.usuarioEsEditorCorporativo) return;
+  const token = localStorage.getItem("token");
+  if (!token) {
+    console.error("❌ No hay token disponible.");
+    return;
+  }
 
-  const dialogRef = (component as any).dialog.open(DialogoConfirmacionComponent, {
-    data: {
-      titulo: 'Cambiar Estado',
-      mensaje: `¿Estás seguro de cambiar el estado del ticket #${ticket.id} a ${nuevoEstado.toUpperCase()}?`,
-      textoConfirmar: 'Confirmar',
-      color: 'primary'
-    }
-  });
+  const headers = new HttpHeaders()
+    .set("Authorization", `Bearer ${token}`)
+    .set("Content-Type", "application/json");
 
-  dialogRef.afterClosed().subscribe((resultado: boolean) => {
-    if (resultado) {
-      actualizarEstadoEnServidor(component, ticket, nuevoEstado);
+  // 🚨 Si es "en progreso" y no tiene fecha_solucion, abrir modal obligatorio
+  if (nuevoEstado === 'en progreso' && !ticket.fecha_solucion) {
+    const dialogRef = component.dialog.open(AsignarFechaModalComponent, {
+      width: '400px',
+      disableClose: true,
+      data: {}
+    });
+
+    dialogRef.componentInstance.onGuardar.subscribe(({ fecha }) => {
+      const fechaSolucion = new Date(
+        fecha.getFullYear(),
+        fecha.getMonth(),
+        fecha.getDate(),
+        7, 0, 0
+      ).toISOString();
+
+      const body = {
+        estado: nuevoEstado,
+        fecha_solucion: fechaSolucion,
+        fecha_en_progreso: new Date().toISOString()
+      };
+
+      component.http.put(`${API_URL}/update/${ticket.id}`, body, { headers }).subscribe({
+        next: () => {
+          ticket.estado = nuevoEstado;
+          ticket.fecha_en_progreso = body.fecha_en_progreso;
+          ticket.fecha_solucion = fechaSolucion;
+          mostrarAlertaToast(`✅ Ticket #${ticket.id} actualizado a '${nuevoEstado}'`);
+          dialogRef.close();
+        },
+        error: (error) => {
+          mostrarAlertaErrorDesdeStatus(error.status);
+        }
+      });
+    });
+
+    dialogRef.componentInstance.onCancelar.subscribe(() => {
+      dialogRef.close();
+    });
+
+    return; // ⛔ Detener ejecución hasta que usuario seleccione fecha
+  }
+
+  // ✅ Flujo normal para otros estados o si ya tiene fecha_solucion
+  const body = { estado: nuevoEstado };
+
+  component.http.put(`${API_URL}/update/${ticket.id}`, body, { headers }).subscribe({
+    next: () => {
+      ticket.estado = nuevoEstado;
+      mostrarAlertaToast(`✅ Ticket #${ticket.id} actualizado a '${nuevoEstado}'`);
+    },
+    error: (error) => {
+      mostrarAlertaErrorDesdeStatus(error.status);
     }
   });
 }

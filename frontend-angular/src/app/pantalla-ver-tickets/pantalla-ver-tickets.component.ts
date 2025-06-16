@@ -36,7 +36,6 @@ import { cancelarEdicionFechaSolucion, editarFechaSolucion, guardarFechaSolucion
 import { HistorialFechasModalComponent } from './modals/historial-fechas-modal.component';
 import { refrescarDespuesDeCambioFiltro } from './helpers/refrescarDespuesDeCambioFiltro';
 
-
 // Interfaces
 export interface Ticket {
   fecha_finalizado_original: any;
@@ -86,6 +85,7 @@ export interface ApiResponse {
     MatNativeDateModule,
     MatDatepickerModule,
     HistorialFechasModalComponent,
+    
   ],
   templateUrl: './pantalla-ver-tickets.component.html',
   styleUrls: ['./pantalla-ver-tickets.component.css']
@@ -158,8 +158,11 @@ export class PantallaVerTicketsComponent implements OnInit {
   subcategoriasFiltradas: any[] = [];
   detallesFiltrados: any[] = [];
   
-
-
+  // Modal asignar fecha solución
+  showModalAsignarFecha: boolean = false;
+  ticketParaAsignarFecha: Ticket | null = null;
+  fechaSolucionTentativa: Date | null = null;
+  
 
   // Controles
   seleccionarTodoCategoria = false;
@@ -552,6 +555,36 @@ export class PantallaVerTicketsComponent implements OnInit {
   /** Sólo estas columnas muestran buscador de texto */
   permiteBusqueda(col: string): boolean {
     return col === 'categoria' || col === 'descripcion';
+}
+
+  cambiarEstadoEnProgreso(ticket: Ticket) {
+  if (!ticket.fecha_solucion) {
+    // Si NO tiene fecha de solución, abrir el modal
+    this.ticketParaAsignarFecha = ticket;
+    this.fechaSolucionTentativa = null;
+    this.showModalAsignarFecha = true;
+  } else {
+    // Si ya tiene, solo cambiar el estado normalmente
+    this.cambiarEstado(ticket, 'en progreso');
+  }
+}
+
+onGuardarFechaSolucion(event: { fecha: Date }) {
+  if (!this.ticketParaAsignarFecha) return;
+
+  // Guardar la fecha de solución SIN motivo
+  this.guardarFechaSolucionWrapper(this.ticketParaAsignarFecha, event.fecha);
+
+  // Cambiar el estado del ticket a "en progreso"
+  this.cambiarEstado(this.ticketParaAsignarFecha, 'en progreso');
+
+  this.showModalAsignarFecha = false;
+  this.ticketParaAsignarFecha = null;
+}
+
+onCancelarAsignarFecha() {
+  this.showModalAsignarFecha = false;
+  this.ticketParaAsignarFecha = null;
 }
 
 }
