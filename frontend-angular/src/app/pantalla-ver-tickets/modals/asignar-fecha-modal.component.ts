@@ -14,7 +14,7 @@ import { FormsModule } from '@angular/forms';
   selector: 'app-asignar-fecha-modal',
   standalone: true,
   templateUrl: './asignar-fecha-modal.component.html',
-  styleUrls: ['./asignar-fecha-modal.component.scss'],
+  styleUrls: ['./asignar-fecha-modal.component.css'],
   imports: [
     CommonModule,
     FormsModule,
