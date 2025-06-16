@@ -571,13 +571,7 @@
           </div>
         </td>
 
-        <!-- Modal para asignar la fecha de solución (aparece solo si showModalAsignarFecha es true) -->
-        <app-asignar-fecha-modal
-          *ngIf="showModalAsignarFecha"
-          [fechaSeleccionada]="fechaSolucionTentativa"
-          (onGuardar)="onGuardarFechaSolucion($event)"
-          (onCancelar)="onCancelarAsignarFecha()"
-        ></app-asignar-fecha-modal>
+
 
     
         <!-- Fecha Solución -->
@@ -641,7 +635,13 @@
   </table>
 </div>
 
-<!-- Resto del template sin cambios... -->
+        <!-- Modal para asignar la fecha de solución (aparece solo si showModalAsignarFecha es true) -->
+        <app-asignar-fecha-modal
+          *ngIf="showModalAsignarFecha"
+          [fechaSeleccionada]="fechaSolucionTentativa"
+          (onGuardar)="onGuardarFechaSolucion($event)"
+          (onCancelar)="onCancelarAsignarFecha()"
+        ></app-asignar-fecha-modal>
 
 
         <!-- Bloque de confirmación -->

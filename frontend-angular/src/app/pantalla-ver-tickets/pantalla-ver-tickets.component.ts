@@ -35,6 +35,8 @@ import { MatDialog } from '@angular/material/dialog';
 import { cancelarEdicionFechaSolucion, editarFechaSolucion, guardarFechaSolucion } from './helpers/pantalla-ver-tickets.fecha-solucion';
 import { HistorialFechasModalComponent } from './modals/historial-fechas-modal.component';
 import { refrescarDespuesDeCambioFiltro } from './helpers/refrescarDespuesDeCambioFiltro';
+import { AsignarFechaModalComponent } from './modals/asignar-fecha-modal.component';
+
 
 // Interfaces
 export interface Ticket {
@@ -85,6 +87,7 @@ export interface ApiResponse {
     MatNativeDateModule,
     MatDatepickerModule,
     HistorialFechasModalComponent,
+    AsignarFechaModalComponent
     
   ],
   templateUrl: './pantalla-ver-tickets.component.html',
