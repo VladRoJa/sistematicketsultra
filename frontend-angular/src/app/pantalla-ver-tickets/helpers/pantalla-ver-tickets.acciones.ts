@@ -3,7 +3,7 @@
 import { PantallaVerTicketsComponent, Ticket } from '../pantalla-ver-tickets.component';
 import { exportarTickets as exportarTicketsExcel } from './pantalla-ver-tickets.exportacion';
 import { cambiarEstadoTicket, finalizarTicket } from './pantalla-ver-tickets.estado-ticket';
-import { editarFechaSolucion, guardarFechaSolucion, cancelarEdicionFechaSolucion } from './pantalla-ver-tickets.fecha-solucion';
+import { guardarFechaSolucion } from './pantalla-ver-tickets.fecha-solucion';
 import { mostrarConfirmacion, confirmarAccion, cancelarAccion } from './pantalla-ver-tickets.confirmacion';
 import { toggleHistorial } from './pantalla-ver-tickets.historial';
 import { isFilterActive as isFilterActiveHelper } from '../../utils/ticket-utils';
@@ -28,21 +28,6 @@ export function finalizar(component: PantallaVerTicketsComponent, ticket: Ticket
   finalizarTicket(component, ticket);
 }
 
-/** Editar fecha de solución */
-export function editarFecha(component: PantallaVerTicketsComponent, ticket: Ticket): void {
-  editarFechaSolucion(component, ticket, component.changeDetectorRef); 
-}
-
-/** Guardar la fecha de solución editada */
-export function guardarFecha(component: PantallaVerTicketsComponent, ticket: Ticket): void {
-  const motivo = component.motivoCambioFechaSolucion?.[ticket.id] || 'Cambio sin motivo especificado';
-  guardarFechaSolucion(component, ticket, component.fechaSolucionSeleccionada[ticket.id], motivo);
-}
-
-/** Cancelar edición de fecha de solución */
-export function cancelarEdicionFecha(component: PantallaVerTicketsComponent, ticket: Ticket): void {
-  cancelarEdicionFechaSolucion(component, ticket);
-}
 
 /** Mostrar confirmación modal */
 export function mostrarConfirmacionAccion(component: PantallaVerTicketsComponent, mensaje: string, accion: () => void): void {
