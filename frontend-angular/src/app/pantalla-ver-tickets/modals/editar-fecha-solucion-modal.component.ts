@@ -1,13 +1,33 @@
 //C:\Users\Vladimir\Documents\Sistema tickets\frontend-angular\src\app\pantalla-ver-tickets\modals\editar-fecha-solucion-modal.component.ts
 
 import { Component, Inject } from '@angular/core';
-import { MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
+import { MatDialogRef, MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
+import { CommonModule } from '@angular/common';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+import { MatDatepickerModule } from '@angular/material/datepicker';
+import { MatNativeDateModule } from '@angular/material/core';
+import { MatButtonModule } from '@angular/material/button';
+import { FormsModule } from '@angular/forms';
 
 @Component({
+  standalone: true,
   selector: 'app-editar-fecha-solucion-modal',
   templateUrl: './editar-fecha-solucion-modal.component.html',
-  styleUrls: ['./editar-fecha-solucion-modal.component.scss']
+  styleUrls: ['./editar-fecha-solucion-modal.component.scss'],
+  imports: [
+    CommonModule,
+    MatDialogModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatDatepickerModule,
+    MatNativeDateModule,
+    MatButtonModule,
+    FormsModule 
+  ]
 })
+
+
 export class EditarFechaSolucionModalComponent {
   nuevaFecha: Date | null = null;
   motivo: string = '';
