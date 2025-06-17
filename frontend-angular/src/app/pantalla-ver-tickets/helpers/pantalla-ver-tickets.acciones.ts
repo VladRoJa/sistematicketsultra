@@ -3,7 +3,6 @@
 import { PantallaVerTicketsComponent, Ticket } from '../pantalla-ver-tickets.component';
 import { exportarTickets as exportarTicketsExcel } from './pantalla-ver-tickets.exportacion';
 import { cambiarEstadoTicket, finalizarTicket } from './pantalla-ver-tickets.estado-ticket';
-import { guardarFechaSolucion } from './pantalla-ver-tickets.fecha-solucion';
 import { mostrarConfirmacion, confirmarAccion, cancelarAccion } from './pantalla-ver-tickets.confirmacion';
 import { toggleHistorial } from './pantalla-ver-tickets.historial';
 import { isFilterActive as isFilterActiveHelper } from '../../utils/ticket-utils';
