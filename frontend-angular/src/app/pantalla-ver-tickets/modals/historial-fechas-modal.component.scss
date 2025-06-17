@@ -18,9 +18,15 @@
   border: 1px solid #ccc;
   padding: 6px 10px;
   font-size: 13px;
+  vertical-align: top;
+  max-width: 220px;
+  word-break: break-word;
 }
 
 .tabla-historial th {
   background-color: #f5f5f5;
   text-align: left;
 }
+
+.text-gray-600 { color: #4b5563; }
+.text-gray-400 { color: #9ca3af; }

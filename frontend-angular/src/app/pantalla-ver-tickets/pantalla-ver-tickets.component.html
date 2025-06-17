@@ -575,23 +575,23 @@
 
     
         <!-- Fecha Solución -->
-    <td>
-      <ng-container *ngIf="ticket.fecha_solucion; else soloLecturaSinFecha">
-        {{ ticket.fecha_solucion | date:'dd/MM/yy' }}
-        <button
-          *ngIf="usuarioEsAdmin || usuarioEsEditorCorporativo"
-          mat-icon-button
-          class="boton-editar-fecha"
-          matTooltip="Editar fecha solución"
-          (click)="editarFechaSolucionWrapper(ticket)">
-          <mat-icon>edit</mat-icon>
-        </button>
-      </ng-container>
+        <td>
+          <ng-container *ngIf="ticket.fecha_solucion; else soloLecturaSinFecha">
+            {{ ticket.fecha_solucion | date:'dd/MM/yy' }}
+            <button
+              *ngIf="usuarioEsAdmin || usuarioEsEditorCorporativo"
+              mat-icon-button
+              class="boton-editar-fecha"
+              matTooltip="Editar fecha solución"
+              (click)="abrirEditarFechaSolucion(ticket)">
+              <mat-icon>edit</mat-icon>
+            </button>
+          </ng-container>
+          <ng-template #soloLecturaSinFecha>
+            <span class="text-gray-400">Sin asignar</span>
+          </ng-template>
+        </td>
 
-      <ng-template #soloLecturaSinFecha>
-        <span class="text-gray-400">Sin asignar</span>
-      </ng-template>
-    </td>
 
 
             <!-- Historial -->

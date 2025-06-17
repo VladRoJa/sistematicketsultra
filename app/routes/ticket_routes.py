@@ -190,31 +190,39 @@ def update_ticket_status(id):
         data = request.get_json()
         estado = data.get("estado")
         fecha_solucion = data.get("fecha_solucion")
+        fecha_en_progreso = data.get("fecha_en_progreso")  
         historial_nuevo = data.get("historial_fechas", [])
-
+        motivo_cambio = data.get("motivo_cambio", "").strip()
 
         if not estado:
             return jsonify({"mensaje": "Estado es requerido"}), 400
 
         ticket.estado = estado
-        ahora = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        ahora = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
 
+        # ---- Asignación de fechas por estado ----
         if estado == "finalizado":
-            print(f"🕒 Fecha finalizado: {ahora}")
             ticket.fecha_finalizado = ahora
-        elif estado == "en progreso":
-            print(f"🕒 Fecha en progreso: {ahora}")
-            ticket.fecha_en_progreso = ahora
+
+        if estado == "en progreso":
+            # Usar la fecha_en_progreso que viene del frontend, si está
+            if fecha_en_progreso:
+                try:
+                    ticket.fecha_en_progreso = parser.isoparse(fecha_en_progreso).astimezone(timezone.utc)
+                except Exception as e:
+                    print(f"❌ Error parseando fecha_en_progreso: {e}")
+            else:
+                ticket.fecha_en_progreso = ahora
 
         if fecha_solucion:
-            fecha_parsed = parser.isoparse(fecha_solucion)
-            ticket.fecha_solucion = fecha_parsed.astimezone(timezone.utc)
+            try:
+                fecha_parsed = parser.isoparse(fecha_solucion)
+                ticket.fecha_solucion = fecha_parsed.astimezone(timezone.utc)
+            except Exception as e:
+                print(f"❌ Error parseando fecha_solucion: {e}")
 
-        # 🌐 Normalizar historial nuevo
-        tz_mx = pytz.timezone("America/Tijuana")
+        # ---- Normalizar historial nuevo ----
         historial_final = ticket.historial_fechas or []
-
-        motivo_cambio = data.get("motivo_cambio", "").strip()
 
         for entrada in historial_nuevo:
             nueva = entrada.copy()
@@ -222,17 +230,12 @@ def update_ticket_status(id):
                 valor = nueva.get(campo)
                 if valor:
                     try:
-                        if '/' in valor and len(valor) == 8:
-                            fecha_local = datetime.strptime(valor, "%d/%m/%y")
-                            fecha_local = tz_mx.localize(datetime.combine(fecha_local.date(), time(hour=7)))
-                            nueva[campo] = fecha_local.astimezone(timezone.utc).isoformat()
-                        else:
-                            nueva[campo] = parser.isoparse(valor).astimezone(timezone.utc).isoformat()
+                        nueva[campo] = parser.isoparse(valor).astimezone(timezone.utc).isoformat()
                     except Exception as e:
                         print(f"❌ Error parseando {campo} en ticket #{ticket.id}: {e}")
                         continue
 
-            # ✅ Agregar motivo si no viene desde el frontend
+            # Agregar motivo si no viene desde el frontend
             if motivo_cambio and 'motivo' not in nueva:
                 nueva['motivo'] = motivo_cambio
 
@@ -240,16 +243,14 @@ def update_ticket_status(id):
                 parser.isoparse(e.get("fecha")).replace(tzinfo=None) == parser.isoparse(nueva.get("fecha")).replace(tzinfo=None)
                 for e in historial_final if e.get("fecha")
             )
-
             if not existe_misma_fecha:
                 historial_final.append(nueva)
 
-        
-        
+        # Ordenar por fecha de cambio, más recientes primero
         historial_final.sort(key=lambda x: parser.isoparse(x['fechaCambio']), reverse=True)
-        # ✅ Asignar y marcar como modificado una vez al final
         ticket.historial_fechas = historial_final
         flag_modified(ticket, 'historial_fechas')
+
         print(f"✅ Historial final para ticket #{ticket.id}: {historial_final}")
 
         db.session.commit()
@@ -258,6 +259,7 @@ def update_ticket_status(id):
     except Exception as e:
         db.session.rollback()
         return manejar_error(e, "update_ticket_status")
+
 
 # ─────────────────────────────────────────────────────────────
 # RUTA: Eliminar ticket

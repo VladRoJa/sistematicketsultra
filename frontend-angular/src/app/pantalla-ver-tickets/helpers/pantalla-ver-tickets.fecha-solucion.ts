@@ -5,89 +5,9 @@ import { PantallaVerTicketsComponent, Ticket } from '../pantalla-ver-tickets.com
 import { HttpHeaders } from '@angular/common/http';
 import { environment } from 'src/environments/environment';
 import { mostrarAlertaToast, mostrarAlertaErrorDesdeStatus } from 'src/app/utils/alertas';
+import { cargarTickets } from './pantalla-ver-tickets.init';
 
 const API_URL = `${environment.apiUrl}/tickets`;
-
-/** Guardar la nueva fecha de solución con hora fija 07:00 AM */
-export function guardarFechaSolucion(
-  component: PantallaVerTicketsComponent,
-  ticket: Ticket,
-  nuevaFecha: Date,
-  motivo: string,
-  onSuccess?: () => void 
-): void {
-  if (!component.usuarioEsAdmin && !component.usuarioEsEditorCorporativo) {
-    console.warn('Solo administradores o editores corporativos pueden guardar la fecha de solución');
-    return;
-  }
-
-  const token = localStorage.getItem("token");
-  if (!token) {
-    console.error('No hay token de autenticación');
-    return;
-  }
-
-  // Aplicar hora fija 07:00 AM
-  const fechaConHoraFija = new Date(
-    nuevaFecha.getFullYear(),
-    nuevaFecha.getMonth(),
-    nuevaFecha.getDate(),
-    7, 0, 0
-  );
-  const fechaISO = fechaConHoraFija.toISOString();
-
-  // Obtener historial actual o crear uno nuevo
-  const historialActual = Array.isArray(ticket.historial_fechas)
-    ? [...ticket.historial_fechas]
-    : [];
-
-  // Verificar si ya existe una entrada con la misma fecha
-  const yaExiste = historialActual.some(item => item.fecha === fechaISO);
-
-  if (yaExiste) {
-    console.log('⚠️ Esta fecha ya está registrada en el historial. No se agregará nuevamente.');
-  } else {
-    const nuevoRegistro = {
-      fecha: fechaISO,
-      cambiadoPor: component.user.username,
-      fechaCambio: new Date().toISOString(),
-      motivo
-    };
-
-    historialActual.push(nuevoRegistro);
-  }
-
-  const historialActualizado = historialActual.sort(
-    (a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
-  );
-
-  const datosActualizacion = {
-    estado: ticket.estado,
-    fecha_solucion: fechaISO,
-    historial_fechas: historialActualizado,
-    motivo_cambio: motivo
-  };
-
-  const headers = new HttpHeaders()
-    .set("Authorization", `Bearer ${token}`)
-    .set("Content-Type", "application/json");
-
-  component.http.put(`${API_URL}/update/${ticket.id}`, datosActualizacion, { headers }).subscribe({
-    next: () => {
-      // 👇 Reemplaza la llamada a getTickets() por el refresco global de toda la tabla
-      import('./pantalla-ver-tickets.init').then(TicketInit => {
-        TicketInit.cargarTickets(component);
-      });
-
-      mostrarAlertaToast('✅ Fecha solución guardada exitosamente.');
-      if (onSuccess) onSuccess();
-    },
-    error: (error) => {
-      console.error(`Error al actualizar la fecha de solución del ticket #${ticket.id}:`, error);
-      mostrarAlertaErrorDesdeStatus(error.status);
-    }
-  });
-}
 
 /** Alternar visibilidad del historial */
 export function alternarHistorial(component: PantallaVerTicketsComponent, ticketId: number): void {
@@ -99,4 +19,70 @@ export function alternarHistorial(component: PantallaVerTicketsComponent, ticket
 export function formatearFechaParaInput(fechaDB: string): Date {
   const fecha = new Date(fechaDB);
   return new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate(), 7, 0, 0);
+}
+
+
+export function asignarFechaSolucionYEnProgreso(
+  component: PantallaVerTicketsComponent,
+  ticket: Ticket,
+  nuevaFecha: Date,
+  motivo: string,
+  onSuccess?: () => void
+): void {
+  const token = localStorage.getItem("token");
+  if (!token) {
+    mostrarAlertaErrorDesdeStatus(401);
+    return;
+  }
+
+  // Fecha de solución a las 07:00 AM UTC
+  const fechaSolucion = new Date(
+    nuevaFecha.getFullYear(),
+    nuevaFecha.getMonth(),
+    nuevaFecha.getDate(),
+    7, 0, 0
+  );
+  const fechaSolucionISO = fechaSolucion.toISOString();
+  const fechaEnProgresoISO = new Date().toISOString();
+
+  // Arma la nueva entrada de historial
+  const historialActual = Array.isArray(ticket.historial_fechas) ? [...ticket.historial_fechas] : [];
+  const nuevaEntrada = {
+    fecha: fechaSolucionISO,
+    cambiadoPor: component.user?.username || '',
+    fechaCambio: new Date().toISOString(),
+    motivo
+  };
+
+  // No agregues duplicado
+  const yaExiste = historialActual.some(item => item.fecha === fechaSolucionISO);
+  if (!yaExiste) historialActual.push(nuevaEntrada);
+
+  // Ordena el historial
+  historialActual.sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
+
+  // Prepara el body completo
+  const body = {
+    estado: "en progreso",
+    fecha_solucion: fechaSolucionISO,
+    fecha_en_progreso: fechaEnProgresoISO,
+    historial_fechas: historialActual,
+    motivo_cambio: motivo
+  };
+
+  const headers = new HttpHeaders()
+    .set("Authorization", `Bearer ${token}`)
+    .set("Content-Type", "application/json");
+
+  // Una sola llamada PUT
+  component.http.put(`${API_URL}/update/${ticket.id}`, body, { headers }).subscribe({
+    next: () => {
+      cargarTickets(component); // refresca toda la tabla para evitar N/A y desfaces
+      mostrarAlertaToast('✅ Fecha de solución y estado "en progreso" guardados exitosamente.');
+      if (onSuccess) onSuccess();
+    },
+    error: (error) => {
+      mostrarAlertaErrorDesdeStatus(error.status);
+    }
+  });
 }

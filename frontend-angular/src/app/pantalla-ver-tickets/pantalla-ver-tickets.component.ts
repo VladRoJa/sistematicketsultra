@@ -32,11 +32,12 @@ import { aplicarFiltroColumnaConReset} from './helpers/pantalla-ver-tickets.filt
 import {filtrarOpcionesDetalle, aplicarFiltroColumna, limpiarFiltroColumna} from './helpers/pantalla-ver-tickets.filtros';
 import { aplicarFiltroPorRangoFechaCreacion, aplicarFiltroPorRangoFechaFinalizado, aplicarFiltroPorRangoFechaEnProgreso  } from './helpers/pantalla-ver-tickets.fechas';
 import { MatDialog } from '@angular/material/dialog';
-import { guardarFechaSolucion } from './helpers/pantalla-ver-tickets.fecha-solucion';
+import { asignarFechaSolucionYEnProgreso} from './helpers/pantalla-ver-tickets.fecha-solucion';
 import { HistorialFechasModalComponent } from './modals/historial-fechas-modal.component';
 import { refrescarDespuesDeCambioFiltro } from './helpers/refrescarDespuesDeCambioFiltro';
 import { AsignarFechaModalComponent } from './modals/asignar-fecha-modal.component';
 import { cambiarEstadoTicket } from './helpers/pantalla-ver-tickets.estado-ticket';
+import { EditarFechaSolucionModalComponent } from './modals/editar-fecha-solucion-modal.component';
 
 
 // Interfaces
@@ -543,33 +544,23 @@ export class PantallaVerTicketsComponent implements OnInit {
   }
 }
 
-async onGuardarFechaSolucion(event: { fecha: Date, motivo: string }) {
+onGuardarFechaSolucion(event: { fecha: Date, motivo: string }) {
   if (!this.ticketParaAsignarFecha) return;
   if (!event.motivo || !event.motivo.trim()) {
     alert('Debes ingresar un motivo para el cambio de fecha.');
     return;
   }
 
-  // Espera a que se guarde la fecha de solución
-  await new Promise<void>((resolveFecha) => {
-    guardarFechaSolucion(
-      this,
-      this.ticketParaAsignarFecha!,
-      event.fecha,
-      event.motivo,
-      async () => {
-        // Al terminar de guardar la fecha, cambiamos el estado y resolvemos al final
-        await new Promise<void>((resolveEstado) => {
-          cambiarEstadoTicket(this, this.ticketParaAsignarFecha!, 'en progreso', resolveEstado);
-        });
-        resolveFecha();
-      }
-    );
-  });
-
-  // Ya terminó todo el proceso: cierra modal y limpia
-  this.showModalAsignarFecha = false;
-  this.ticketParaAsignarFecha = null;
+  asignarFechaSolucionYEnProgreso(
+    this,
+    this.ticketParaAsignarFecha,
+    event.fecha,
+    event.motivo,
+    () => {
+      this.showModalAsignarFecha = false;
+      this.ticketParaAsignarFecha = null;
+    }
+  );
 }
 
 
@@ -577,5 +568,23 @@ onCancelarAsignarFecha() {
   this.showModalAsignarFecha = false;
   this.ticketParaAsignarFecha = null;
 }
+
+abrirEditarFechaSolucion(ticket: Ticket) {
+  const dialogRef = this.dialog.open(EditarFechaSolucionModalComponent, {
+    width: '360px',
+    data: { fechaActual: ticket.fecha_solucion }
+  });
+
+  dialogRef.afterClosed().subscribe(result => {
+    if (result && result.fecha && result.motivo) {
+      // Aquí llamas tu helper actualizador
+      asignarFechaSolucionYEnProgreso(this, ticket, result.fecha, result.motivo);
+    }
+  });
+}
+
+
+
+
 
 }

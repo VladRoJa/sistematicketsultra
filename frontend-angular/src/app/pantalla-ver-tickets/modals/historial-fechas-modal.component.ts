@@ -6,6 +6,7 @@ import { Ticket } from '../pantalla-ver-tickets.component';
 import { CommonModule } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDividerModule } from '@angular/material/divider';
+import { MatIconModule } from '@angular/material/icon';
 
 
 @Component({
@@ -16,7 +17,8 @@ import { MatDividerModule } from '@angular/material/divider';
     CommonModule,
     MatDialogModule,
     MatButtonModule,
-    MatDividerModule
+    MatDividerModule,
+    MatIconModule
   ]
 })
 export class HistorialFechasModalComponent {

@@ -14,20 +14,45 @@
 
   <mat-divider></mat-divider>
 
-  <!-- Tabla de historial -->
-  <table class="tabla-historial" style="width: 100%; margin-top: 16px; border-collapse: collapse;">
+  <!-- Tabla de historial con motivo -->
+  <table mat-table class="tabla-historial" style="width: 100%; margin-top: 16px;">
     <thead>
       <tr>
-        <th style="text-align: left; padding: 8px;">📅 Fecha Solución</th>
-        <th style="text-align: left; padding: 8px;">👤 Usuario</th>
-        <th style="text-align: left; padding: 8px;">🕒 Fecha de Cambio</th>
+        <th style="text-align: left; padding: 8px;">
+          <mat-icon inline>event</mat-icon> Fecha Solución
+        </th>
+        <th style="text-align: left; padding: 8px;">
+          <mat-icon inline>person</mat-icon> Usuario
+        </th>
+        <th style="text-align: left; padding: 8px;">
+          <mat-icon inline>schedule</mat-icon> Fecha de Cambio
+        </th>
+        <th style="text-align: left; padding: 8px;">
+          <mat-icon inline>edit_note</mat-icon> Motivo
+        </th>
       </tr>
     </thead>
     <tbody>
       <tr *ngFor="let item of data.historial_fechas">
-        <td style="padding: 8px;">{{ item.fecha }}</td>
-        <td style="padding: 8px;">{{ item.cambiadoPor }}</td>
-        <td style="padding: 8px;">{{ item.fechaCambio }}</td>
+        <td style="padding: 8px;">
+          {{ item.fecha | date:'dd/MM/yy' }}
+        </td>
+        <td style="padding: 8px;">
+          {{ item.cambiadoPor || '—' }}
+        </td>
+        <td style="padding: 8px;">
+          {{ item.fechaCambio | date:'dd/MM/yy HH:mm' }}
+        </td>
+        <td style="padding: 8px;">
+          <span *ngIf="item.motivo && item.motivo.length > 0; else sinMotivo"
+                [matTooltip]="item.motivo.length > 30 ? item.motivo : ''"
+                class="text-gray-600" style="word-break:break-word;">
+            {{ item.motivo }}
+          </span>
+          <ng-template #sinMotivo>
+            <em class="text-gray-400">Sin motivo</em>
+          </ng-template>
+        </td>
       </tr>
     </tbody>
   </table>
