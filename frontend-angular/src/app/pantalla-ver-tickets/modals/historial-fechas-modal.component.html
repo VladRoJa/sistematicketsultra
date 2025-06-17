@@ -3,7 +3,7 @@
 <mat-dialog-content class="contenido-modal">
 
   <!-- Información general del ticket -->
-  <section class="resumen-ticket" style="margin-bottom: 16px;">
+  <section class="resumen-ticket">
     <p><strong>ID:</strong> {{ data.id }}</p>
     <p><strong>Descripción:</strong> {{ data.descripcion }}</p>
     <p><strong>Estado:</strong> {{ data.estado | titlecase }}</p>
@@ -15,42 +15,42 @@
   <mat-divider></mat-divider>
 
   <!-- Tabla de historial con motivo -->
-  <table mat-table class="tabla-historial" style="width: 100%; margin-top: 16px;">
+  <table mat-table class="tabla-historial">
     <thead>
       <tr>
-        <th style="text-align: left; padding: 8px;">
+        <th>
           <mat-icon inline>event</mat-icon> Fecha Solución
         </th>
-        <th style="text-align: left; padding: 8px;">
+        <th>
           <mat-icon inline>person</mat-icon> Usuario
         </th>
-        <th style="text-align: left; padding: 8px;">
+        <th>
           <mat-icon inline>schedule</mat-icon> Fecha de Cambio
         </th>
-        <th style="text-align: left; padding: 8px;">
+        <th>
           <mat-icon inline>edit_note</mat-icon> Motivo
         </th>
       </tr>
     </thead>
     <tbody>
       <tr *ngFor="let item of data.historial_fechas">
-        <td style="padding: 8px;">
+        <td>
           {{ item.fecha | date:'dd/MM/yy' }}
         </td>
-        <td style="padding: 8px;">
+        <td>
           {{ item.cambiadoPor || '—' }}
         </td>
-        <td style="padding: 8px;">
+        <td>
           {{ item.fechaCambio | date:'dd/MM/yy HH:mm' }}
         </td>
-        <td style="padding: 8px;">
+        <td>
           <span *ngIf="item.motivo && item.motivo.length > 0; else sinMotivo"
                 [matTooltip]="item.motivo.length > 30 ? item.motivo : ''"
-                class="text-gray-600" style="word-break:break-word;">
+                class="motivo">
             {{ item.motivo }}
           </span>
           <ng-template #sinMotivo>
-            <em class="text-gray-400">Sin motivo</em>
+            <em class="motivo-sin">Sin motivo</em>
           </ng-template>
         </td>
       </tr>
@@ -59,6 +59,6 @@
 
 </mat-dialog-content>
 
-<mat-dialog-actions align="end" style="margin-top: 16px;">
+<mat-dialog-actions align="end">
   <button mat-button (click)="cerrar()">Cerrar</button>
 </mat-dialog-actions>

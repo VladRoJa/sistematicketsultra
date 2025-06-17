@@ -1,13 +1,13 @@
 <h2 mat-dialog-title>Editar Fecha de Solución</h2>
 <div mat-dialog-content>
-  <mat-form-field appearance="outline" class="w-full mb-2">
+  <mat-form-field appearance="fill" class="w-full mb-2">
     <mat-label>Nueva fecha solución</mat-label>
     <input matInput [matDatepicker]="picker" [(ngModel)]="nuevaFecha" autocomplete="off" />
     <mat-datepicker-toggle matSuffix [for]="picker"></mat-datepicker-toggle>
     <mat-datepicker #picker></mat-datepicker>
   </mat-form-field>
 
-  <mat-form-field appearance="outline" class="w-full">
+  <mat-form-field appearance="fill" class="w-full">
     <mat-label>Motivo del cambio</mat-label>
     <textarea matInput rows="3" [(ngModel)]="motivo"></textarea>
   </mat-form-field>

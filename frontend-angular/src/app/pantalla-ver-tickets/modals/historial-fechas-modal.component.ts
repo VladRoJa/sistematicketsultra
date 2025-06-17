@@ -13,6 +13,7 @@ import { MatIconModule } from '@angular/material/icon';
   standalone: true, 
   selector: 'app-historial-fechas-modal',
   templateUrl: './historial-fechas-modal.component.html',
+  styleUrls: ['./historial-fechas-modal.component.scss'],
   imports: [
     CommonModule,
     MatDialogModule,
