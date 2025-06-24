@@ -49,10 +49,8 @@ export function cambiarEstadoTicket(
 
       component.http.put(`${API_URL}/update/${ticket.id}`, body, { headers }).subscribe({
         next: () => {
-          ticket.estado = nuevoEstado;
-          ticket.fecha_en_progreso = body.fecha_en_progreso;
-          ticket.fecha_solucion = fechaSolucion;
           mostrarAlertaToast(`✅ Ticket #${ticket.id} actualizado a '${nuevoEstado}'`);
+          cargarTickets(component); // <<--- SIEMPRE RECARGA TABLA
           dialogRef.close();
           if (onSuccess) onSuccess();
         },
@@ -74,8 +72,8 @@ export function cambiarEstadoTicket(
 
   component.http.put(`${API_URL}/update/${ticket.id}`, body, { headers }).subscribe({
     next: () => {
-      ticket.estado = nuevoEstado;
       mostrarAlertaToast(`✅ Ticket #${ticket.id} actualizado a '${nuevoEstado}'`);
+      cargarTickets(component); // <<--- SIEMPRE RECARGA TABLA
       if (onSuccess) onSuccess();
     },
     error: (error) => {
@@ -83,6 +81,7 @@ export function cambiarEstadoTicket(
     }
   });
 }
+
 
 /** Finalizar directamente un ticket */
 export function finalizarTicket(
