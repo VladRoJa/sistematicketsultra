@@ -1,3 +1,6 @@
+//C:\Users\Vladimir\Documents\Sistema tickets\frontend-angular\src\app\shared\loader\loader.component.ts
+
+
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
