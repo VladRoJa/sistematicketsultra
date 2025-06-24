@@ -3,7 +3,6 @@
 import { PantallaVerTicketsComponent, Ticket } from '../pantalla-ver-tickets.component';
 import { exportarTickets as exportarTicketsExcel } from './pantalla-ver-tickets.exportacion';
 import { cambiarEstadoTicket, finalizarTicket } from './pantalla-ver-tickets.estado-ticket';
-import { mostrarConfirmacion, confirmarAccion, cancelarAccion } from './pantalla-ver-tickets.confirmacion';
 import { toggleHistorial } from './pantalla-ver-tickets.historial';
 import { isFilterActive as isFilterActiveHelper } from '../../utils/ticket-utils';
 import { regenerarFiltrosFiltradosDesdeTickets } from '../../utils/ticket-utils';
@@ -11,6 +10,7 @@ import { aplicarFiltrosDesdeMemoria, hayFiltrosActivos, obtenerFiltrosActivos } 
 import { cargarTickets } from './pantalla-ver-tickets.init';
 import { actualizarVisibleTickets } from './pantalla-ver-tickets.init';
 import { ChangeDetectorRef } from '@angular/core';
+import { DialogoConfirmacionComponent } from 'src/app/shared/dialogo-confirmacion/dialogo-confirmacion.component';
 
 /** Exportar tickets a Excel */
 export function exportarTickets(component: PantallaVerTicketsComponent): void {
@@ -27,20 +27,25 @@ export function finalizar(component: PantallaVerTicketsComponent, ticket: Ticket
   finalizarTicket(component, ticket);
 }
 
+export function mostrarConfirmacionAccion(
+  component: any,
+  mensaje: string,
+  accion: () => void
+): void {
+  const dialogRef = component.dialog.open(DialogoConfirmacionComponent, {
+    data: {
+      titulo: 'Confirmación requerida',
+      mensaje,
+      textoAceptar: 'Aceptar',
+      textoCancelar: 'Cancelar'
+    }
+  });
 
-/** Mostrar confirmación modal */
-export function mostrarConfirmacionAccion(component: PantallaVerTicketsComponent, mensaje: string, accion: () => void): void {
-  mostrarConfirmacion(component, mensaje, accion);
-}
-
-/** Confirmar acción pendiente */
-export function confirmarAccionPendiente(component: PantallaVerTicketsComponent): void {
-  confirmarAccion(component);
-}
-
-/** Cancelar acción pendiente */
-export function cancelarAccionPendiente(component: PantallaVerTicketsComponent): void {
-  cancelarAccion(component);
+  dialogRef.afterClosed().subscribe((result: boolean) => {
+    if (result) {
+      accion();
+    }
+  });
 }
 
 /** Alternar visibilidad del historial de fechas */

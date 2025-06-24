@@ -202,9 +202,6 @@ export class PantallaVerTicketsComponent implements OnInit {
   rangoFechaProgresoSeleccionado = { start: null as Date | null, end: null as Date | null };
 
 
-  confirmacionVisible: boolean = false;
-  mensajeConfirmacion: string = '';
-  accionPendiente: (() => void) | null = null;
 
   @ViewChild('triggerFiltroCategoria') triggerFiltroCategoria: any;
   @ViewChild('triggerFiltroDesc') triggerFiltroDesc: any;
@@ -313,11 +310,17 @@ export class PantallaVerTicketsComponent implements OnInit {
 
   // Métodos públicos conectados a helpers
   exportarTickets() { TicketAcciones.exportarTickets(this); }
-  cambiarEstado(ticket: Ticket, estado: "pendiente" | "en progreso" | "finalizado") { TicketAcciones.cambiarEstado(this, ticket, estado); }
+  cambiarEstado(ticket: Ticket, estado: "pendiente" | "en progreso" | "finalizado") {
+    if (estado === 'finalizado') {
+      this.mostrarConfirmacion('¿Estás seguro de finalizar este ticket?', () => {
+        TicketAcciones.cambiarEstado(this, ticket, estado);
+      });
+    } else {
+      TicketAcciones.cambiarEstado(this, ticket, estado);
+    }
+  }
   finalizar(ticket: Ticket) { TicketAcciones.finalizar(this, ticket); }
-  mostrarConfirmacion(mensaje: string, accion: () => void) { TicketAcciones.mostrarConfirmacionAccion(this, mensaje, accion); }
-  confirmarAccion() { TicketAcciones.confirmarAccionPendiente(this); }
-  cancelarAccion() { TicketAcciones.cancelarAccionPendiente(this); }  
+  mostrarConfirmacion(mensaje: string, accion: () => void) { TicketAcciones.mostrarConfirmacionAccion(this, mensaje, accion); } 
   toggleHistorial(ticketId: number) { TicketAcciones.alternarHistorial(this, ticketId); }
   cambiarPagina(direccion: number) { TicketAcciones.cambiarPagina(this, direccion); }
   totalPages() { return TicketAcciones.totalPages(this); }

@@ -614,17 +614,6 @@
       ></app-asignar-fecha-modal>
     </div>
 
-
-        <!-- Bloque de confirmación -->
-        <div *ngIf="confirmacionVisible" class="modal-asignar-fecha-overlay">
-          <div class="modal-confirmacion">
-            <p>{{ mensajeConfirmacion }}</p>
-            <button (click)="confirmarAccion()">Sí</button>
-            <button (click)="cancelarAccion()">No</button>
-          </div>
-        </div>
-
-
         <!-- Mensaje de aviso limite -->
         <div *ngIf="mostrarAvisoLimite" class="text-warning text-sm">
         ⚠️ Se están mostrando solo los primeros 100 resultados filtrados.
