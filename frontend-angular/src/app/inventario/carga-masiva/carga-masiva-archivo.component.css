@@ -1,0 +1,73 @@
+:host {
+  display: block;
+}
+
+mat-card {
+  max-width: 420px;
+  margin: 36px auto 0 auto;
+  padding: 28px 18px 22px 18px;
+  border-radius: 20px;
+  box-shadow: 0 3px 18px 0 #0001;
+  background: #fff;
+}
+
+.mat-headline {
+  font-size: 1.37rem;
+  font-weight: 700;
+  color: #283593;
+  margin-bottom: 1rem;
+  letter-spacing: 0.02em;
+}
+
+button[mat-stroked-button] {
+  margin-bottom: 1.3rem;
+  margin-right: 0.5rem;
+}
+
+button[mat-raised-button] {
+  margin-bottom: 1.15rem;
+}
+
+#archivoInput-catalogo,
+#archivoInput-existencias {
+  display: none;
+}
+
+.text-green-700 {
+  color: #059669;
+}
+
+.text-red-700 {
+  color: #dc2626;
+}
+
+.text-blue-700 {
+  color: #2563eb;
+}
+
+.mt-4 {
+  margin-top: 1rem;
+}
+
+.flex {
+  display: flex;
+}
+.items-center {
+  align-items: center;
+}
+.justify-center {
+  justify-content: center;
+}
+.gap-2 {
+  gap: 0.5rem;
+}
+
+@media (max-width: 650px) {
+  mat-card {
+    max-width: 99vw;
+    padding: 12px 6px 15px 6px;
+  }
+  .mat-headline {
+    font-size: 1.02rem;
+  }
+}

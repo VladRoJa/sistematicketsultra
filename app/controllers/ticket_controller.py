@@ -9,6 +9,7 @@ from flask_jwt_extended import get_jwt_identity
 from app.models.ticket_model import Ticket
 from app.models.user_model import UserORM
 from app.extensions import db
+from app.models.inventario import InventarioGeneral
 
 class TicketController:
 
@@ -28,6 +29,13 @@ class TicketController:
             if not (descripcion and categoria):
                 return jsonify({'mensaje': 'Datos incompletos'}), 400
 
+            # Nuevo: Valida que el aparato/artículo exista en InventarioGeneral
+            aparato_id = data.get('aparato_id')
+            if aparato_id:
+                inv = InventarioGeneral.query.get(aparato_id)
+                if not inv:
+                    return jsonify({'mensaje': 'El aparato/artículo referenciado no existe en inventario'}), 400
+
             nuevo_ticket = Ticket.create_ticket(
                 descripcion=descripcion,
                 username=user.username,
@@ -37,7 +45,7 @@ class TicketController:
                 categoria=categoria,
                 subcategoria=data.get('subcategoria'),
                 subsubcategoria=data.get('subsubcategoria'),
-                aparato_id=data.get('aparato_id'),
+                aparato_id=aparato_id,  # <-- Ya apunta a InventarioGeneral.id
                 problema_detectado=data.get('problema_detectado'),
                 necesita_refaccion=data.get('necesita_refaccion', False),
                 descripcion_refaccion=data.get('descripcion_refaccion')
@@ -69,12 +77,10 @@ class TicketController:
             offset = (page - 1) * per_page
 
             query = Ticket.query.filter(Ticket.sucursal_id == user.sucursal_id)
-
             if estado:
                 query = query.filter(Ticket.estado == estado)
 
             total_tickets = query.count()
-
             tickets = query.order_by(Ticket.fecha_creacion.desc()).limit(per_page).offset(offset).all()
             tickets_data = [ticket.to_dict() for ticket in tickets]
 

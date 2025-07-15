@@ -1,31 +1,17 @@
-<!-- C:\Users\Vladimir\Documents\Sistema tickets\frontend-angular\src\app\inventario\carga-masiva\pantalla-carga-masiva.component.html -->
+<!-- src/app/inventario/carga-masiva/pantalla-carga-masiva.component.html -->
 
-<div class="p-4 max-w-6xl mx-auto">
-    <h2 class="text-2xl font-bold mb-4 text-center">Módulo de Carga Masiva</h2>
-  
-    <div class="flex justify-center gap-4 mb-6">
-      <button (click)="cambiarVista('manual')"
-              [ngClass]="vista === 'manual' ? 'bg-blue-600 text-white' : 'bg-gray-200'"
-              class="px-4 py-2 rounded shadow">
-        Mapeo Manual
-      </button>
-  
-      <button (click)="cambiarVista('directa')"
-              [ngClass]="vista === 'directa' ? 'bg-green-600 text-white' : 'bg-gray-200'"
-              class="px-4 py-2 rounded shadow">
-        Carga Directa
-      </button>
-    </div>
-  
-    <div *ngIf="vista === 'manual'">
-      <app-carga-masiva></app-carga-masiva>
-    </div>
-  
-    <div *ngIf="vista === 'directa'">
-      <app-carga-masiva-sinmapeo></app-carga-masiva-sinmapeo>
-    </div>
-  </div>
-
-  
-
-  
+<mat-card>
+  <h2 class="text-2xl font-bold mb-4 text-center">Módulo de Carga Masiva</h2>
+  <mat-tab-group>
+    <mat-tab label="Catálogo">
+      <ng-template matTabContent>
+        <app-carga-masiva-archivo tipo="catalogo"></app-carga-masiva-archivo>
+      </ng-template>
+    </mat-tab>
+    <mat-tab label="Existencias">
+      <ng-template matTabContent>
+        <app-carga-masiva-archivo tipo="existencias"></app-carga-masiva-archivo>
+      </ng-template>
+    </mat-tab>
+  </mat-tab-group>
+</mat-card>

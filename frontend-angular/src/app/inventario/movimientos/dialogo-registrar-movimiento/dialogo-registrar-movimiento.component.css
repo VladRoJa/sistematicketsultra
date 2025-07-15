@@ -1,0 +1,38 @@
+.formulario-card {
+  max-width: 700px;
+  margin: 24px auto;
+  padding: 28px 24px 12px 24px;
+  border-radius: 18px;
+}
+
+.formulario-movimiento {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.producto-card {
+  margin-bottom: 12px;
+}
+
+.producto-grupo {
+  display: flex;
+  gap: 14px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+mat-form-field {
+  margin-right: 0;
+}
+
+@media (max-width: 900px) {
+  .formulario-card {
+    max-width: 99vw;
+    padding: 12px 4vw;
+  }
+  .producto-grupo {
+    flex-direction: column;
+    gap: 8px;
+  }
+}

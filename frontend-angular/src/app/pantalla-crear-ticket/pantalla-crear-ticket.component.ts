@@ -1,4 +1,4 @@
-// pantalla-crear-ticket.component.ts
+// frontend-angular\src\app\pantalla-crear-ticket\pantalla-crear-ticket.component.ts
 
 import { Component, OnInit } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
@@ -146,46 +146,38 @@ export class PantallaCrearTicketComponent implements OnInit {
     return traducciones[campo] || campo;
   }
 
-enviarTicket() {
-  if (this.formularioCrearTicket.invalid) {
-    const camposFaltantes = this.obtenerCamposInvalidos(this.formularioCrearTicket);
+  enviarTicket() {
+    if (this.formularioCrearTicket.invalid) {
+      const camposFaltantes = this.obtenerCamposInvalidos(this.formularioCrearTicket);
 
-    this.formularioCrearTicket.markAllAsTouched();
+      this.formularioCrearTicket.markAllAsTouched();
 
-    console.warn('🧩 Formulario inválido. Valores actuales:', this.formularioCrearTicket.value);
-    console.warn('📛 Campos con error de validación:', camposFaltantes);
+      mostrarAlertaToast(`❗Faltan datos obligatorios: ${camposFaltantes.join(', ')}`);
+      return;
+    }
 
-    Object.entries(this.formularioCrearTicket.controls).forEach(([campo, control]) => {
-      if (control.invalid) {
-        console.log(`❌ Campo inválido: ${campo}`, control.errors);
+    const payloadFinal = {
+      ...this.formularioCrearTicket.value,
+      departamento_id: this.formularioCrearTicket.value.departamento
+    };
+    delete payloadFinal.departamento;
+
+    const token = localStorage.getItem('token');
+    const headers = token ? new HttpHeaders().set('Authorization', `Bearer ${token}`) : new HttpHeaders();
+
+    this.http.post<{ mensaje: string }>(this.apiUrl, payloadFinal, { headers }).subscribe({
+      next: () => {
+        mostrarAlertaToast('✅ Ticket creado correctamente.');
+        this.formularioCrearTicket.reset();
+      },
+      error: (error) => {
+        mostrarAlertaErrorDesdeStatus(error.status);
       }
     });
-
-    mostrarAlertaToast(`❗Faltan datos obligatorios: ${camposFaltantes.join(', ')}`);
-    return;
   }
 
 
-  const payloadFinal = {
-    ...this.formularioCrearTicket.value,
-    departamento_id: this.formularioCrearTicket.value.departamento
-  };
-  delete payloadFinal.departamento;
 
-  const token = localStorage.getItem('token');
-  const headers = token ? new HttpHeaders().set('Authorization', `Bearer ${token}`) : new HttpHeaders();
 
-  console.log("📡 Enviando al backend:", payloadFinal);
-
-  this.http.post<{ mensaje: string }>(this.apiUrl, payloadFinal, { headers }).subscribe({
-    next: () => {
-      mostrarAlertaToast('✅ Ticket creado correctamente.');
-      this.formularioCrearTicket.reset();
-    },
-    error: (error) => {
-      mostrarAlertaErrorDesdeStatus(error.status);
-    }
-  });
-}
 
 }

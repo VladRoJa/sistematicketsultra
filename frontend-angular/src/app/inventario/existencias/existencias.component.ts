@@ -1,13 +1,12 @@
 // src/app/inventario/existencias/existencias.component.ts
 
-import { Component, inject, OnInit } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
 import { MatTableModule } from '@angular/material/table';
 import { MatSelectModule } from '@angular/material/select';
 import { FormsModule } from '@angular/forms';
-import { environment } from 'src/environments/environment';
+import { InventarioService } from '../../services/inventario.service';
 
 @Component({
   selector: 'app-existencias',
@@ -22,45 +21,61 @@ import { environment } from 'src/environments/environment';
   templateUrl: './existencias.component.html',
 })
 export class ExistenciasComponent implements OnInit {
-  private http = inject(HttpClient);
-
   user = JSON.parse(localStorage.getItem('user') || '{}');
   esAdmin = this.user?.rol === 'ADMINISTRADOR';
 
   sucursales: any[] = [];
-  sucursalesFiltradas: any[] = [];
-
   sucursalSeleccionada: number | 'global' = this.user?.sucursal_id || 1;
   existencias: any[] = [];
+  displayedColumns: string[] = [
+    'id', 'nombre', 'tipo', 'marca', 'proveedor', 'categoria', 'unidad', 'stock', 'sucursal'
+  ];
+
+  loading = false;
+
+  constructor(private inventarioService: InventarioService) {}
 
   ngOnInit(): void {
     if (this.esAdmin) this.cargarSucursales();
-    this.cargarExistencias(this.sucursalSeleccionada);
+    this.cargarExistencias();
   }
 
   cargarSucursales(): void {
-    this.http.get<any[]>(`${environment.apiUrl}/sucursales/listar`)
-      .subscribe({
-        next: (data) => {
-          // Filtramos antes de asignar
-          this.sucursales = data;
-          this.sucursalesFiltradas = data.filter(
-            s => !['corporativo', 'administrador'].includes(s.sucursal.toLowerCase())
-          );
-        },
-        error: (err) => console.error('Error al cargar sucursales', err)
-      });
-  }
-
-  cargarExistencias(sucursal_id: number | 'global'): void {
-    const url = (sucursal_id === 'global')
-      ? `${environment.apiUrl}/inventario/stock-total`
-      : `${environment.apiUrl}/inventario/sucursal/${sucursal_id}`;
-
-    this.http.get<any[]>(url).subscribe({
-      next: (data) => this.existencias = data,
-      error: (err) => console.error('Error al cargar existencias', err)
+    this.inventarioService.listarSucursales().subscribe({
+      next: (data) => {
+        this.sucursales = data.filter(
+          s => !['corporativo', 'administrador'].includes((s.sucursal || '').toLowerCase())
+        );
+      },
+      error: (err) => console.error('Error al cargar sucursales', err)
     });
   }
-}
 
+  cargarExistencias(): void {
+    this.loading = true;
+    this.inventarioService.verExistencias().subscribe({
+      next: (data) => {
+        // Si es admin y selecciona "global", muestra todas
+        if (this.esAdmin && this.sucursalSeleccionada === 'global') {
+          this.existencias = data;
+        } else {
+          // Sucursal específica (la del usuario, o la que admin elija)
+          const id = this.sucursalSeleccionada === 'global'
+            ? this.user?.sucursal_id || 1
+            : this.sucursalSeleccionada;
+          this.existencias = data.filter((inv: any) => inv.sucursal_id == id);
+        }
+        this.loading = false;
+      },
+      error: (err) => {
+        this.existencias = [];
+        this.loading = false;
+        console.error('Error al cargar existencias', err);
+      }
+    });
+  }
+
+  onSucursalChange() {
+    this.cargarExistencias();
+  }
+}

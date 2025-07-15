@@ -10,7 +10,6 @@ from dateutil.parser import isoparse
 class Ticket(db.Model):
     __tablename__ = 'tickets'
 
-    # ─── Campos ───────────────────────────────────────────────
     id = db.Column(db.Integer, primary_key=True)
     descripcion = db.Column(db.Text, nullable=False)
     username = db.Column(db.String(50), db.ForeignKey('users.username'), nullable=False)
@@ -27,18 +26,20 @@ class Ticket(db.Model):
     categoria = db.Column(db.String(255), nullable=False)
     subcategoria = db.Column(db.String(100))
     subsubcategoria = db.Column(db.String(100))
-    aparato_id = db.Column(db.Integer, db.ForeignKey('aparatos_gimnasio.id'), nullable=True)
+    aparato_id = db.Column(db.Integer, db.ForeignKey('inventario_general.id'), nullable=True)
     problema_detectado = db.Column(db.Text)
     necesita_refaccion = db.Column(db.Boolean, default=False)
     descripcion_refaccion = db.Column(db.Text)
     url_evidencia = db.Column(db.String(500))
 
-    # ─── Relaciones ────────────────────────────────────────
+    # ─── Relaciones ──────────────────────────────
     departamento = db.relationship('Departamento', backref='tickets', foreign_keys=[departamento_id])
     usuario = db.relationship('UserORM', foreign_keys=[username])
     sucursal = db.relationship('Sucursal', backref='tickets', foreign_keys=[sucursal_id])
+    # Nueva relación
+    inventario = db.relationship('InventarioGeneral', foreign_keys=[aparato_id])
 
-    # ─── Serialización ───────────────────────────────────────
+    # ─── Serialización ──────────────────────────
 
     @staticmethod
     def is_isoformat(value: str) -> bool:
@@ -75,8 +76,13 @@ class Ticket(db.Model):
                         {**item} for item in self.historial_fechas or [] if isinstance(item, dict)
                     ],
             'url_evidencia': self.url_evidencia,
+            'inventario': {
+                'id': self.inventario.id if self.inventario else None,
+                'nombre': self.inventario.nombre if self.inventario else None,
+                'categoria': self.inventario.categoria if self.inventario else None,
+                'marca': self.inventario.marca if self.inventario else None
+            } if self.inventario else None,
         }
-
     # ─── Métodos CRUD ───────────────────────────────────────
     @classmethod
     def create_ticket(cls, descripcion, username, sucursal_id, departamento_id, criticidad, categoria, subcategoria=None, subsubcategoria=None, aparato_id=None, problema_detectado=None, necesita_refaccion=False, descripcion_refaccion=None):

@@ -1,0 +1,29 @@
+<form (ngSubmit)="registrarAsistencia()">
+  <mat-form-field appearance="fill">
+    <mat-label>Número de empleado</mat-label>
+    <input matInput type="number" [(ngModel)]="numeroEmpleado" name="numeroEmpleado" required>
+  </mat-form-field>
+
+  <mat-form-field appearance="fill">
+    <mat-label>Sucursal</mat-label>
+    <mat-select [(ngModel)]="sucursalId" name="sucursalId" required>
+      <mat-option *ngFor="let s of sucursales" [value]="s.sucursal_id">
+        {{ s.sucursal }}
+      </mat-option>
+    </mat-select>
+  </mat-form-field>
+
+  <button mat-raised-button color="primary" type="submit" [disabled]="loading">
+    Registrar asistencia
+  </button>
+</form>
+
+<div *ngIf="respuesta">
+  <p [ngClass]="{ 'ok': respuesta.ok, 'error': !respuesta.ok }">{{ respuesta.mensaje }}</p>
+  <ng-container *ngIf="respuesta.proxima_checada">
+    <p>Próxima checada: {{ respuesta.proxima_checada.tipo }} a las {{ respuesta.proxima_checada.hora }}</p>
+  </ng-container>
+  <ng-container *ngIf="respuesta.faltantes && respuesta.faltantes.length">
+    <p>Faltantes hoy: {{ respuesta.faltantes.join(', ') }}</p>
+  </ng-container>
+</div>

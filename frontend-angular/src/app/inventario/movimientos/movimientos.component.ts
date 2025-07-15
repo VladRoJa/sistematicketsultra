@@ -1,9 +1,9 @@
-//C:\Users\Vladimir\Documents\Sistema tickets\frontend-angular\src\app\inventario\movimientos\movimientos.component.ts
+// src/app/inventario/movimientos/movimientos.component.ts
 
 import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
-import { FormsModule } from '@angular/forms';
+import { FormControl, FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
 import { MatTableModule } from '@angular/material/table';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -12,10 +12,11 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatSelectModule } from '@angular/material/select';
 import { MatDialog } from '@angular/material/dialog';
 import { DialogoRegistrarMovimientoComponent } from './dialogo-registrar-movimiento/dialogo-registrar-movimiento.component';
+import { DialogoConfirmacionComponent } from 'src/app/shared/dialogo-confirmacion/dialogo-confirmacion.component';
 import { MatIconModule } from '@angular/material/icon';
 import { mostrarAlertaToast } from 'src/app/utils/alertas';
-import { mostrarAlertaStockInsuficiente } from 'src/app/utils/alertas';
 import { environment } from 'src/environments/environment';
+import { combineLatest, startWith } from 'rxjs';
 
 @Component({
   selector: 'app-movimientos',
@@ -29,7 +30,8 @@ import { environment } from 'src/environments/environment';
     MatInputModule,
     MatButtonModule,
     MatSelectModule,
-    MatIconModule
+    MatIconModule,
+    ReactiveFormsModule,
   ],
   templateUrl: './movimientos.component.html',
   styleUrls: ['./movimientos.component.css']
@@ -39,109 +41,101 @@ export class MovimientosComponent implements OnInit {
   private dialog = inject(MatDialog);
 
   movimientos: any[] = [];
-  productosDisponibles: any[] = [];
+  movimientosFiltrados: any[] = [];
+  inventariosDisponibles: any[] = [];
+  usuarios: any[] = [];
+  sucursales: any[] = [];
 
-  nuevoMovimiento = {
-    tipo_movimiento: 'entrada',
-    sucursal_id: 1,
-    usuario_id: 1,
-    observaciones: '',
-    productos: [{ producto_id: '', cantidad: 1, unidad_medida: '' }]
-  };
+  filtroControl = new FormControl('');
+  filtroTipo = new FormControl('');
+  filtroSucursal = new FormControl('');
+  filtroUsuario = new FormControl('');
+  filtroFecha = new FormControl('');
 
-  reiniciarFormulario(): void {
-    this.nuevoMovimiento = {
-      tipo_movimiento: 'entrada',
-      sucursal_id: null,
-      usuario_id: null,
-      observaciones: '',
-      productos: [{
-        producto_id: '',
-        cantidad: 1,
-        unidad_medida: ''
-      }]
-    };
-  }
+  esAdmin = false;
+  loading = false;
+
+  displayedColumns: string[] = [
+    'id', 'fecha', 'tipo', 'producto', 'cantidad', 'usuario', 'sucursal', 'observaciones', 'acciones'
+  ];
 
   ngOnInit(): void {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    this.esAdmin = user?.rol === 'ADMINISTRADOR';
     this.cargarMovimientos();
-    this.cargarProductos();
+    this.cargarInventarios();
+    if (this.esAdmin) this.cargarSucursales();
+    this.cargarUsuarios();
+    this.configurarFiltros();
   }
 
   cargarMovimientos(): void {
+    this.loading = true;
     this.http.get<any[]>(`${environment.apiUrl}/inventario/movimientos`).subscribe({
-      next: data => this.movimientos = data,
-      error: err => console.error('Error al obtener movimientos', err)
-    });
-  }
-
-  cargarProductos(): void {
-    this.http.get<any[]>(`${environment.apiUrl}/inventario/productos`).subscribe({
-      next: data => this.productosDisponibles = data,
-      error: err => console.error('Error al obtener productos', err)
-    });
-  }
-
-  agregarProductoCampo(): void {
-    this.nuevoMovimiento.productos.push({ producto_id: '', cantidad: 1, unidad_medida: '' });
-  }
-
-  eliminarProductoCampo(index: number): void {
-    this.nuevoMovimiento.productos.splice(index, 1);
-  }
-
-  registrarMovimiento(): void {
-    const token = localStorage.getItem('token');
-    if (!token) return alert('No autorizado');
-
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    this.nuevoMovimiento.sucursal_id = user.sucursal_id;
-    this.nuevoMovimiento.usuario_id = user.id;
-
-    this.http.post(`${environment.apiUrl}/inventario/movimientos`, this.nuevoMovimiento, {
-      headers: { Authorization: `Bearer ${token}` }
-    }).subscribe({
-      next: () => {
-        this.cargarMovimientos();
-        this.reiniciarFormulario();
+      next: data => {
+        // Ya NO hagas transformaciones aquí
+        this.movimientos = data;
+        this.filtrar();
+        this.loading = false;
       },
       error: err => {
-        console.error('Error al registrar movimiento', err);
-        const mensaje = err?.error?.error || '';
-
-        if (mensaje.includes('Stock insuficiente')) {
-          const productoFallidoId = this.nuevoMovimiento.productos[0].producto_id;
-          const producto = this.productosDisponibles.find(p => p.id == productoFallidoId);
-          const nombre = producto?.nombre || 'el producto seleccionado';
-
-          mostrarAlertaStockInsuficiente(nombre);
-        } else {
-          mostrarAlertaToast('❌ Error al registrar movimiento.', 'error');
-        }
+        mostrarAlertaToast('Error al obtener movimientos', 'error');
+        this.loading = false;
       }
     });
   }
 
-  eliminarMovimiento(id: number): void {
-    const token = localStorage.getItem('token');
-    if (!token) return alert('No autorizado');
-
-    this.http.delete(`${environment.apiUrl}/inventario/movimientos/${id}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    }).subscribe({
-      next: () => this.cargarMovimientos(),
-      error: err => {
-        console.error('Error al eliminar movimiento', err);
-        alert('Error al eliminar movimiento');
-      }
+  cargarInventarios(): void {
+    this.http.get<any[]>(`${environment.apiUrl}/inventario/`).subscribe({
+      next: data => this.inventariosDisponibles = data,
+      error: err => {}
     });
   }
 
-  actualizarUnidad(index: number): void {
-    const productoId = this.nuevoMovimiento.productos[index].producto_id;
-    const producto = this.productosDisponibles.find(p => p.id == productoId);
-    this.nuevoMovimiento.productos[index].unidad_medida = producto?.unidad_medida || '';
-    this.nuevoMovimiento.productos[index].cantidad = Number(this.nuevoMovimiento.productos[index].cantidad || 0);
+  cargarSucursales() {
+    this.http.get<any[]>(`${environment.apiUrl}/inventario/sucursales`).subscribe({
+      next: data => this.sucursales = data,
+      error: err => {}
+    });
+  }
+
+  cargarUsuarios() {
+    this.http.get<any[]>(`${environment.apiUrl}/usuarios`).subscribe({
+      next: data => this.usuarios = data,
+      error: err => {}
+    });
+  }
+
+  configurarFiltros() {
+    combineLatest([
+      this.filtroControl.valueChanges.pipe(startWith('')),
+      this.filtroTipo.valueChanges.pipe(startWith('')),
+      this.filtroSucursal.valueChanges.pipe(startWith('')),
+      this.filtroUsuario.valueChanges.pipe(startWith('')),
+      this.filtroFecha.valueChanges.pipe(startWith('')),
+    ]).subscribe(([texto, tipo, sucursal, usuario, fecha]) => {
+      this.filtrar(texto, tipo, sucursal, usuario, fecha);
+    });
+  }
+
+  filtrar(texto: string = '', tipo: string = '', sucursal: string = '', usuario: string = '', fecha: string = '') {
+    texto = (texto || '').toLowerCase();
+    this.movimientosFiltrados = this.movimientos.filter(mov => {
+      // Buscar texto en nombre de los productos del movimiento
+      const productoNombres = (mov.inventarios || []).map((p: any) => this.getNombreProducto(p).toLowerCase()).join(' ');
+      const coincideTexto = !texto || productoNombres.includes(texto) ||
+        (this.obtenerNombreUsuario(mov.usuario, mov.usuario_id).toLowerCase().includes(texto)) ||
+        (this.obtenerNombreSucursal(mov.sucursal, mov.sucursal_id).toLowerCase().includes(texto)) ||
+        (mov.tipo || '').toLowerCase().includes(texto) ||
+        (mov.observaciones || '').toLowerCase().includes(texto);
+
+      const coincideTipo = !tipo || mov.tipo === tipo;
+      const coincideSucursal = !sucursal || mov.sucursal_id == sucursal;
+      const coincideUsuario = !usuario || mov.usuario_id == usuario;
+      const coincideFecha = !fecha || (mov.fecha && mov.fecha.startsWith(fecha));
+
+      return coincideTexto && coincideTipo && coincideSucursal && coincideUsuario && coincideFecha;
+    });
   }
 
   abrirDialogoMovimiento() {
@@ -149,7 +143,7 @@ export class MovimientosComponent implements OnInit {
       width: '800px',
       disableClose: false,
       data: {
-        productosDisponibles: this.productosDisponibles
+        inventariosDisponibles: this.inventariosDisponibles
       }
     });
 
@@ -160,4 +154,84 @@ export class MovimientosComponent implements OnInit {
       }
     });
   }
+
+  eliminarMovimiento(id: number): void {
+    const dialogRef = this.dialog.open(DialogoConfirmacionComponent, {
+      data: {
+        titulo: '¿Eliminar movimiento?',
+        mensaje: 'Esta acción no se puede deshacer. ¿Seguro que quieres eliminar este movimiento?',
+        textoAceptar: 'Eliminar',
+        textoCancelar: 'Cancelar'
+      }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result) {
+        const token = localStorage.getItem('token');
+        this.http.delete(`${environment.apiUrl}/inventario/movimientos/${id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }).subscribe({
+          next: () => {
+            this.cargarMovimientos();
+            mostrarAlertaToast('✅ Movimiento eliminado correctamente.', 'success');
+          },
+          error: err => {
+            mostrarAlertaToast('❌ Error al eliminar movimiento.', 'error');
+          }
+        });
+      }
+    });
+  }
+
+  obtenerNombreUsuario(usuario: any, usuario_id: any): string {
+    if (typeof usuario === 'string') return usuario;
+    if (usuario?.username) return usuario.username;
+    const usr = this.usuarios.find(u => u.id == usuario_id);
+    return usr ? usr.username : usuario_id || '-';
+  }
+
+  obtenerNombreSucursal(sucursal: any, sucursal_id: any): string {
+    if (typeof sucursal === 'string') return sucursal;
+    if (sucursal?.nombre) return sucursal.nombre;
+    if (sucursal?.sucursal) return sucursal.sucursal;
+    const suc = this.sucursales.find(s => s.sucursal_id == sucursal_id);
+    return suc ? suc.sucursal : sucursal_id || '-';
+  }
+
+  getNombreProducto(p: any): string {
+    const prod = this.inventariosDisponibles.find(i =>
+      i.id == p.inventario_id || i.id == p.id
+    );
+    return prod ? prod.nombre : 'Sin nombre';
+  }
+
+  getMarcaProducto(p: any): string {
+  const prod = this.inventariosDisponibles.find(i =>
+    i.id == p.inventario_id || i.id == p.id
+  );
+  return prod ? prod.marca || '-' : '-';
+}
+
+getProveedorProducto(p: any): string {
+  const prod = this.inventariosDisponibles.find(i =>
+    i.id == p.inventario_id || i.id == p.id
+  );
+  return prod ? prod.proveedor || '-' : '-';
+}
+
+getCategoriaProducto(p: any): string {
+  const prod = this.inventariosDisponibles.find(i =>
+    i.id == p.inventario_id || i.id == p.id
+  );
+  return prod ? prod.categoria || '-' : '-';
+}
+
+getDescripcionLarga(p: any): string {
+  const prod = this.inventariosDisponibles.find(i =>
+    i.id == p.inventario_id || i.id == p.id
+  );
+  if (!prod) return '';
+  // Usa el mismo formato que en tu backend
+  return `${prod.nombre || ''} — ${prod.marca || ''} · ${prod.proveedor || ''} · ${prod.categoria || ''}`;
+}
 }

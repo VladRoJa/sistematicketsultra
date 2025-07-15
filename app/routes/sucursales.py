@@ -5,6 +5,7 @@
 # ------------------------------------------------------------------------------
 
 from flask import Blueprint, jsonify
+from flask_jwt_extended import jwt_required
 from app.models.sucursal_model import Sucursal
 from app.utils.error_handler import manejar_error
 
@@ -16,6 +17,7 @@ sucursales_bp = Blueprint('sucursales', __name__, url_prefix='/api/sucursales')
 # RUTA: Listar todas las sucursales
 # ------------------------------------------------------------------------------
 @sucursales_bp.route('/listar', methods=['GET'])
+@jwt_required()
 def listar_sucursales():
     try:
         sucursales = Sucursal.query.all()

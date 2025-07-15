@@ -1,10 +1,25 @@
+<!-- src/app/inventario/reportes/reportes.component.html -->
+
 <mat-card>
-    <h2>Exportar Reportes</h2>
+  <h2 class="text-xl font-bold mb-4">Exportar Reportes</h2>
+
+  <!-- Selector sucursal (sólo admins, muestra si hay más de una sucursal) -->
+  <mat-form-field *ngIf="esAdmin && sucursales.length > 0" appearance="fill" style="width: 300px; margin-bottom: 24px;">
+    <mat-label>Sucursal</mat-label>
+    <mat-select [(ngModel)]="sucursalSeleccionada">
+      <mat-option [value]="null">Todas</mat-option>
+      <mat-option *ngFor="let suc of sucursales" [value]="suc.sucursal_id">
+        {{ suc.sucursal }}
+      </mat-option>
+    </mat-select>
+  </mat-form-field>
+
+  <div class="flex gap-4 mb-2">
     <button mat-raised-button color="primary" (click)="descargarInventario()">
       Exportar Inventario
     </button>
-    <button mat-raised-button color="accent" (click)="descargarMovimientos()" style="margin-left: 10px;">
+    <button mat-raised-button color="accent" (click)="descargarMovimientos()">
       Exportar Movimientos
     </button>
-  </mat-card>
-  
+  </div>
+</mat-card>

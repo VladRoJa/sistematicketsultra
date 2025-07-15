@@ -1,10 +1,10 @@
 <!-- src/app/inventario/productos/elimnar-producto-dialog.component.html -->
 
-<h2 mat-dialog-title>Eliminar Producto</h2>
+<h2 mat-dialog-title>Eliminar Inventario</h2>
 <mat-dialog-content>
-  ¿Estás seguro que deseas eliminar <strong>{{ data.nombre }}</strong>?
+  <p>¿Seguro que deseas eliminar <b>{{ data.nombre }}</b> del inventario?</p>
 </mat-dialog-content>
 <mat-dialog-actions align="end">
   <button mat-button (click)="cancelar()">Cancelar</button>
-  <button mat-raised-button color="warn" (click)="confirmar()">Eliminar</button>
+  <button mat-flat-button color="warn" (click)="confirmar()">Eliminar</button>
 </mat-dialog-actions>

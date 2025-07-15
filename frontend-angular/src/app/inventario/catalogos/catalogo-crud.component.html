@@ -1,0 +1,67 @@
+<!-- frontend-angular\src\app\inventario\catalogos\catalogo-crud.component.html -->
+
+<div class="flex items-center mb-2">
+  <h2 class="text-lg font-bold mr-4">{{ titulo }}</h2>
+  <button mat-stroked-button color="primary" (click)="iniciarAgregar()" *ngIf="modo === 'editar'">Agregar Nuevo</button>
+</div>
+
+<form [formGroup]="form" (ngSubmit)="guardar()" class="mb-4 flex gap-2 flex-wrap">
+  <mat-form-field appearance="fill" style="min-width: 230px">
+    <mat-label>Nombre</mat-label>
+    <input
+      matInput
+      formControlName="nombre"
+      [matAutocomplete]="autoElem"
+      autocomplete="off"
+      placeholder="Buscar o crear..."
+    />
+    <mat-autocomplete #autoElem="matAutocomplete">
+      <mat-option *ngFor="let e of elementosFiltrados$ | async" [value]="e.nombre">
+        {{ e.nombre }}
+      </mat-option>
+    </mat-autocomplete>
+  </mat-form-field>
+
+  <!-- Solo para unidades de medida -->
+  <mat-form-field appearance="fill" *ngIf="tipo === 'unidades_medida'" style="min-width: 140px">
+    <mat-label>Abreviatura</mat-label>
+    <input matInput formControlName="abreviatura" maxlength="10" />
+  </mat-form-field>
+
+  <button mat-flat-button color="primary" [disabled]="form.invalid" type="submit">
+    {{ modo === 'crear' ? 'Agregar' : 'Actualizar' }}
+  </button>
+  <button mat-button color="warn" type="button" (click)="cancelar()" *ngIf="modo === 'editar'">Cancelar</button>
+</form>
+
+<mat-table [dataSource]="elementos" *ngIf="!loading && elementos.length">
+  <ng-container matColumnDef="id">
+    <mat-header-cell *matHeaderCellDef>ID</mat-header-cell>
+    <mat-cell *matCellDef="let elem">{{ elem.id }}</mat-cell>
+  </ng-container>
+  <ng-container matColumnDef="nombre">
+    <mat-header-cell *matHeaderCellDef>Nombre</mat-header-cell>
+    <mat-cell *matCellDef="let elem">{{ elem.nombre }}</mat-cell>
+  </ng-container>
+  <ng-container matColumnDef="acciones">
+    <mat-header-cell *matHeaderCellDef>Acciones</mat-header-cell>
+    <mat-cell *matCellDef="let elem">
+      <button mat-icon-button color="primary" (click)="iniciarEditar(elem)">
+        <mat-icon>edit</mat-icon>
+      </button>
+      <button mat-icon-button color="warn" (click)="eliminar(elem)">
+        <mat-icon>delete</mat-icon>
+      </button>
+    </mat-cell>
+  </ng-container>
+  <mat-header-row *matHeaderRowDef="displayedColumns"></mat-header-row>
+  <mat-row *matRowDef="let row; columns: displayedColumns"></mat-row>
+</mat-table>
+
+<div *ngIf="!loading && !elementos.length" class="text-gray-500 text-center mt-8">
+  No hay registros de {{ titulo.toLowerCase() }}.
+</div>
+
+<div *ngIf="loading" class="flex justify-center items-center mt-8">
+  <mat-spinner diameter="40"></mat-spinner>
+</div>

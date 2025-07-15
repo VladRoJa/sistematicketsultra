@@ -7,7 +7,7 @@
 from .ticket_model import Ticket
 from .user_model import UserORM
 from .sucursal_model import Sucursal
-from .inventario import Producto, InventarioSucursal, MovimientoInventario, DetalleMovimiento
+from .inventario import InventarioGeneral, InventarioSucursal, MovimientoInventario, DetalleMovimiento
 from .departamento_model import Departamento
 
 # -------------------------------------------------------------------------------
@@ -17,7 +17,7 @@ __all__ = [
     "Ticket",
     "UserORM",
     "Sucursal",
-    "Producto",
+    "InventarioGeneral",
     "InventarioSucursal",
     "MovimientoInventario",
     "DetalleMovimiento",

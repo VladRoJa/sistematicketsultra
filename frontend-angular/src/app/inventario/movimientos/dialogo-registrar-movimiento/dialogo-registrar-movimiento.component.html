@@ -1,13 +1,20 @@
-<!-- C:\Users\Vladimir\Documents\Sistema tickets\frontend-angular\src\app\inventario\movimientos\dialogo-registrar-movimiento\dialogo-registrar-movimiento.component.html -->
+<!-- src/app/inventario/movimientos/dialogo-registrar-movimiento/dialogo-registrar-movimiento.component.html -->
 
 <mat-card class="formulario-card">
   <h2 mat-dialog-title>Registrar Movimiento</h2>
-
-  <form (ngSubmit)="registrarMovimiento()" #formMov="ngForm" class="formulario-movimiento" mat-dialog-content>
+  <form [formGroup]="form" (ngSubmit)="registrarMovimiento()" class="formulario-movimiento" mat-dialog-content>
+    <mat-form-field *ngIf="esAdmin" appearance="fill" style="width: 100%;">
+      <mat-label>Sucursal</mat-label>
+      <mat-select formControlName="sucursal_id" required>
+        <mat-option *ngFor="let suc of sucursales" [value]="suc.sucursal_id">
+          {{ suc.sucursal }}
+        </mat-option>
+      </mat-select>
+    </mat-form-field>
 
     <mat-form-field appearance="fill" style="width: 100%;">
       <mat-label>Tipo de Movimiento</mat-label>
-      <mat-select [(ngModel)]="nuevoMovimiento.tipo_movimiento" name="tipo_movimiento" required>
+      <mat-select formControlName="tipo_movimiento" required>
         <mat-option value="entrada">Entrada</mat-option>
         <mat-option value="salida">Salida</mat-option>
       </mat-select>
@@ -15,46 +22,70 @@
 
     <mat-form-field appearance="fill" style="width: 100%;">
       <mat-label>Observaciones</mat-label>
-      <input matInput [(ngModel)]="nuevoMovimiento.observaciones" name="observaciones">
+      <input matInput formControlName="observaciones">
     </mat-form-field>
 
-    <!-- Productos -->
-    <div *ngFor="let item of nuevoMovimiento.productos; let i = index" class="producto-card">
-      <div class="producto-grupo">
+    <div class="mb-4 flex items-center gap-2">
+      <mat-checkbox [(ngModel)]="soloAparatos" (change)="actualizarFiltrados()" [ngModelOptions]="{standalone: true}">
+        Solo aparatos
+      </mat-checkbox>
+      <span class="text-xs text-gray-500">
+        (Marca para mostrar solo los productos tipo "Aparatos")
+      </span>
+    </div>
 
-        <mat-form-field appearance="outline" style="flex: 1; min-width: 200px;">
-          <mat-label>Producto</mat-label>
-          <mat-select [(ngModel)]="item.producto_id" name="producto_{{i}}" required (selectionChange)="actualizarUnidad(i)">
-            <mat-option *ngFor="let prod of productosDisponibles" [value]="prod.id">
-              {{ prod.nombre }}
-            </mat-option>
-          </mat-select>
-        </mat-form-field>
+    <div formArrayName="productos" *ngFor="let grupo of productosFormArray.controls; let i = index">
+      <div class="producto-card">
+        <div class="producto-grupo flex flex-wrap gap-2">
+          <mat-form-field appearance="fill" style="flex:2; min-width:210px; max-width:310px;">
+            <mat-label>Inventario</mat-label>
+            <input
+              type="text"
+              matInput
+              [formControl]="grupo.get('inventarioControl')"
+              [matAutocomplete]="autoInv"
+              required
+              autocomplete="off"
+              (blur)="onBlurInventario(i)"
+            />
+            <mat-autocomplete #autoInv="matAutocomplete" [displayWith]="displayInventario">
+              <mat-option *ngFor="let inv of inventarioFiltrado$[i] | async" [value]="inv">
+                <div class="font-medium">{{ inv.nombre }}</div>
+                <div *ngIf="inv.marca || inv.proveedor || inv.categoria" class="text-xs text-gray-500">
+                  <span *ngIf="inv.marca">{{ inv.marca }}</span>
+                  <span *ngIf="inv.proveedor"> · {{ inv.proveedor }}</span>
+                  <span *ngIf="inv.categoria"> · {{ inv.categoria }}</span>
+                </div>
+              </mat-option>
+              <mat-option *ngIf="(inventarioFiltrado$[i] | async)?.length === 0" disabled>
+                <span class="text-gray-500">No hay resultados</span>
+              </mat-option>
+            </mat-autocomplete>
+          </mat-form-field>
 
-        <mat-form-field appearance="outline" style="flex: 1; min-width: 150px;">
-          <mat-label>Unidad</mat-label>
-          <input matInput [value]="item.unidad_medida" disabled>
-        </mat-form-field>
+          <mat-form-field appearance="fill" style="flex:1; min-width:120px;">
+            <mat-label>Unidad</mat-label>
+            <input matInput [formControl]="grupo.get('unidad_medida')" disabled>
+          </mat-form-field>
 
-        <mat-form-field appearance="outline" style="flex: 1; min-width: 100px;">
-          <mat-label>Cantidad</mat-label>
-          <input matInput type="number" [(ngModel)]="item.cantidad" name="cantidad_{{i}}" required min="1">
-        </mat-form-field>
+          <mat-form-field appearance="fill" style="flex:1; min-width:90px;">
+            <mat-label>Cantidad</mat-label>
+            <input matInput type="number" [formControl]="grupo.get('cantidad')" required min="1">
+          </mat-form-field>
 
-        <button mat-icon-button color="warn" (click)="eliminarProductoCampo(i)" *ngIf="nuevoMovimiento.productos.length > 1">
-          <mat-icon>remove_circle</mat-icon>
-        </button>
-
+          <button mat-icon-button color="warn" type="button" (click)="eliminarProducto(i)" *ngIf="productosFormArray.length > 1">
+            <mat-icon>remove_circle</mat-icon>
+          </button>
+        </div>
       </div>
     </div>
 
-    <button mat-button type="button" (click)="agregarProductoCampo()">+ Añadir producto</button>
-
+    <button mat-button type="button" (click)="agregarProducto()">+ Añadir producto</button>
   </form>
 
   <mat-dialog-actions align="end">
-    <button mat-button mat-dialog-close>Cancelar</button>
-    <button mat-raised-button color="primary" [disabled]="formMov.invalid" (click)="registrarMovimiento()">
+    <button mat-button (click)="cancelar()">Cancelar</button>
+    <button mat-raised-button color="primary" [disabled]="form.invalid || cargando" (click)="registrarMovimiento()">
       Guardar
     </button>
   </mat-dialog-actions>

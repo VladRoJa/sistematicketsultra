@@ -40,8 +40,6 @@ export class LayoutComponent implements OnInit, AfterViewInit {
   ocultarTimeout: any;
   menuItems: any[] = [];
 
-
-
   private apiUrl = `${environment.apiUrl}/tickets`;
 
   constructor(
@@ -53,7 +51,7 @@ export class LayoutComponent implements OnInit, AfterViewInit {
 
   ngOnInit(): void {
     this.verificarRolUsuario();
-  
+
     this.menuItems = this.esAdmin
       ? [
           {
@@ -66,25 +64,36 @@ export class LayoutComponent implements OnInit, AfterViewInit {
           },
           {
             label: 'Inventario',
-            path: '/inventario/productos',
+            path: '/inventario', // Nuevo: listado general
             submenu: [
-              { label: 'Productos', path: '/inventario/productos' },
+              { label: 'Inventario', path: '/inventario' },
               { label: 'Movimientos', path: '/inventario/movimientos' },
               { label: 'Existencias', path: '/inventario/existencias' },
               { label: 'Reportes', path: '/inventario/reportes' },
               { label: 'Carga Masiva', path: '/carga-masiva' }
             ]
           },
+
           {
-            label: 'Permisos',
-            path: '/admin-permisos',
-            submenu: []
+        label: 'Catálogos',
+        path: '/catalogos/marcas',
+        submenu: [
+          { label: 'Marcas', path: '/catalogos/marcas' },
+          { label: 'Proveedores', path: '/catalogos/proveedores' },
+          { label: 'Categorías', path: '/catalogos/categorias' },
+          { label: 'Unidades de Medida', path: '/catalogos/unidades' },
+          { label: 'Grupo Muscular', path: '/catalogos/gruposmusculares' },
+          { label: 'Tipos de Inventario', path: '/catalogos/tipos' }
+        ]
           },
           {
-            label: 'Ajustes',
-            path: '/ajustes',
-            submenu: []
-          }
+            label: 'Asistencia',
+            path: '/asistencia/registrar',
+            submenu: [
+              { label: 'Registrar Asistencia', path: '/asistencia/registrar' },
+              { label: 'Reportes', path: '/asistencia/reportes' }
+            ]
+          },
         ]
       : [
           {
@@ -94,11 +103,29 @@ export class LayoutComponent implements OnInit, AfterViewInit {
               { label: 'Ver Tickets', path: '/main/ver-tickets' },
               { label: 'Crear Ticket', path: '/main/crear-ticket' }
             ]
-          }
+          },
+          {
+            label: 'Inventario',
+            path: '/inventario',
+            submenu: [
+              { label: 'Inventario', path: '/inventario' },
+              { label: 'Movimientos', path: '/inventario/movimientos' },
+              { label: 'Existencias', path: '/inventario/existencias' },
+              { label: 'Reportes', path: '/inventario/reportes' },
+              { label: 'Carga Masiva', path: '/carga-masiva' }
+            ]
+          },
+          {
+            label: 'Asistencia',
+            path: '/asistencia/registrar',
+            submenu: [
+              { label: 'Registrar Asistencia', path: '/asistencia/registrar' },
+              { label: 'Reportes', path: '/asistencia/reportes' }
+            ]
+          },
         ];
   }
   
-
   ngAfterViewInit(): void {
     this.inicializarIndicador();
   }
@@ -225,23 +252,21 @@ export class LayoutComponent implements OnInit, AfterViewInit {
     return this.menuItems.find(m => m.label === this.currentSubmenu)?.submenu || [];
   }
 
-abrirModalReporte() {
-  const dialogRef = this.dialog.open(ReportarErrorComponent, {
-    width: '400px',
-    disableClose: false
-  });
+  abrirModalReporte() {
+    const dialogRef = this.dialog.open(ReportarErrorComponent, {
+      width: '400px',
+      disableClose: false
+    });
 
-  dialogRef.afterClosed().subscribe((resultado) => {
-    if (resultado === 'recargar') {
-      // Si estamos en la pantalla de tickets, forzar recarga
-      if (this.router.url.includes('/main/ver-tickets')) {
-        this.router.navigateByUrl('/', { skipLocationChange: true }).then(() => {
-          this.router.navigate(['/main/ver-tickets']);
-        });
+    dialogRef.afterClosed().subscribe((resultado) => {
+      if (resultado === 'recargar') {
+        // Si estamos en la pantalla de tickets, forzar recarga
+        if (this.router.url.includes('/main/ver-tickets')) {
+          this.router.navigateByUrl('/', { skipLocationChange: true }).then(() => {
+            this.router.navigate(['/main/ver-tickets']);
+          });
+        }
       }
-    }
-  });
-}
-
-
+    });
+  }
 }

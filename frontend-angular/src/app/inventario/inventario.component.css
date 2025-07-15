@@ -1,0 +1,106 @@
+/* --- src/app/inventario/inventario.component.css (solo lo de los filtros) --- */
+
+/* Filtros tipo Excel */
+.filtros-inventario {
+  margin-bottom: 20px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 22px 18px;
+}
+
+/* Contenedor filtro individual */
+.filtro-col {
+  background: #fafbfc;
+  border-radius: 16px;
+  box-shadow: 0 2px 6px 0 #0001;
+  border: 1.5px solid #e3e8f0;
+  padding: 14px 12px 12px 12px;
+  min-width: 180px;
+  min-height: 120px;
+  transition: box-shadow .14s;
+}
+.filtro-col:hover {
+  box-shadow: 0 4px 18px 0 #0062FF22;
+  border-color: #1976d2;
+}
+
+/* Buscador */
+.filtro-input input {
+  border-radius: 10px !important;
+  background: #f3f6fa !important;
+  font-size: 14px !important;
+  padding: 7px 10px !important;
+}
+.filtro-input.mat-form-field {
+  margin-bottom: 8px;
+}
+.filtro-input .mat-form-field-outline {
+  border-radius: 10px;
+}
+
+/* Checkboxes */
+.filtro-checkboxes {
+  margin-bottom: 8px;
+  margin-top: 2px;
+  padding-right: 2px;
+  max-height: 100px;
+  overflow-y: auto;
+}
+.filtro-checkboxes .mat-checkbox {
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  margin-bottom: 2px;
+}
+.filtro-checkboxes .mat-checkbox:last-child {
+  margin-bottom: 0;
+}
+
+/* Checkbox marcar todos */
+.filtro-checkboxes .mat-checkbox:first-child {
+  font-weight: 600;
+  color: #1565c0;
+}
+
+/* Botón aplicar */
+.filtro-col button[mat-button] {
+  margin-top: 3px;
+  width: 100%;
+  font-size: 14px;
+  border-radius: 8px;
+  font-weight: 500;
+  background: #e3f2fd;
+  color: #1565c0;
+  transition: background .18s, color .18s;
+}
+.filtro-col button[mat-button]:hover {
+  background: #1976d2;
+  color: #fff;
+}
+
+@media (max-width: 900px) {
+  .filtros-inventario {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 15px 8px;
+  }
+  .filtro-col { min-width: 135px; }
+}
+
+@media (max-width: 700px) {
+  .filtros-inventario {
+    grid-template-columns: 1fr;
+    gap: 14px 0;
+  }
+  .filtro-col { min-width: unset; }
+}
+
+
+/* Puedes ajustar el color según tu tema */
+.filtro-activo {
+  background: #003366 !important;   /* Azul muy oscuro */
+  color: #fff !important;
+  font-weight: bold;
+  /* Opcional: para resaltar más, ponle sombra o subrayado */
+  border-bottom: 3px solid #1c88ff;
+  box-shadow: 0 2px 6px #00224422;
+}

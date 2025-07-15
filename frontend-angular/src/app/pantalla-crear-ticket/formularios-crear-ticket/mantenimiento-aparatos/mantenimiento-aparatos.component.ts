@@ -1,4 +1,4 @@
-// mantenimiento-aparatos.component.ts
+// frontend-angular\src\app\pantalla-crear-ticket\formularios-crear-ticket\mantenimiento-aparatos\mantenimiento-aparatos.component.ts
 
 import { Component, Input, OnInit, Output, EventEmitter } from '@angular/core';
 import { FormGroup, FormControl, Validators, ReactiveFormsModule } from '@angular/forms';
@@ -46,66 +46,67 @@ export class MantenimientoAparatosComponent implements OnInit {
   aparatosFiltrados$!: Observable<any[]>;
   inputResaltado = false;
 
-  idSucursal = 1;
+  // 💡 Mejor: obtener idSucursal del usuario logueado, no hardcodear
+  idSucursal = Number(localStorage.getItem('sucursal_id')) || 1;
 
   constructor(private http: HttpClient) {}
 
-ngOnInit(): void {
-  if (!this.parentForm) return;
+  ngOnInit(): void {
+    if (!this.parentForm) return;
 
-  // ✅ Asegurar existencia de controles antes de agregarlos
-  if (!this.parentForm.get('categoria')) {
-    this.parentForm.addControl('categoria', new FormControl('Aparatos', Validators.required));
-  } else {
-    this.parentForm.get('categoria')?.setValue('Aparatos');
+    // 💡 Aseguramos los controles básicos
+    if (!this.parentForm.get('categoria')) {
+      this.parentForm.addControl('categoria', new FormControl('Aparatos', Validators.required));
+    } else {
+      this.parentForm.get('categoria')?.setValue('Aparatos');
+    }
+
+    if (!this.parentForm.get('subcategoria')) {
+      this.parentForm.addControl('subcategoria', new FormControl('', Validators.required));
+    }
+    if (!this.parentForm.get('detalle')) {
+      this.parentForm.addControl('detalle', new FormControl('', Validators.required));
+    }
+    if (!this.parentForm.get('descripcion')) {
+      this.parentForm.addControl('descripcion', new FormControl('', Validators.required));
+    }
+    if (!this.parentForm.get('necesita_refaccion')) {
+      this.parentForm.addControl('necesita_refaccion', new FormControl(false));
+    }
+    if (!this.parentForm.get('descripcion_refaccion')) {
+      this.parentForm.addControl('descripcion_refaccion', new FormControl(''));
+    }
+    // ✅ NUEVO: asegurar campo para id del aparato
+    if (!this.parentForm.get('aparato_id')) {
+      this.parentForm.addControl('aparato_id', new FormControl('', Validators.required));
+    }
+
+    // Emitir payload al padre
+    this.parentForm.valueChanges.subscribe(() => {
+      emitirPayloadFormulario(this.parentForm, DEPARTAMENTO_IDS.mantenimiento, this.formularioValido);
+    });
+
+    // Obtener aparatos de la sucursal del usuario
+    const token = localStorage.getItem('token');
+    const headers = new HttpHeaders().set('Authorization', `Bearer ${token}`);
+
+    this.http.get<any[]>(`${environment.apiUrl}/aparatos/${this.idSucursal}`, { headers }).subscribe({
+      next: (data) => {
+        this.aparatos = data;
+        this.setupAutocomplete();
+
+        // Limpieza si el usuario borra manualmente el input
+        this.filtroControl.valueChanges.subscribe(value => {
+          if (typeof value === 'string') {
+            this.parentForm.get('detalle')?.reset();
+            this.parentForm.get('subcategoria')?.reset();
+            this.parentForm.get('aparato_id')?.reset();
+          }
+        });
+      },
+      error: (err) => console.error('❌ Error al obtener aparatos', err)
+    });
   }
-
-  if (!this.parentForm.get('subcategoria')) {
-    this.parentForm.addControl('subcategoria', new FormControl('', Validators.required));
-  }
-
-  if (!this.parentForm.get('detalle')) {
-    this.parentForm.addControl('detalle', new FormControl('', Validators.required));
-  }
-
-  if (!this.parentForm.get('descripcion')) {
-    this.parentForm.addControl('descripcion', new FormControl('', Validators.required));
-  }
-
-  // ⚙️ Opcionales
-  if (!this.parentForm.get('necesita_refaccion')) {
-    this.parentForm.addControl('necesita_refaccion', new FormControl(false));
-  }
-
-  if (!this.parentForm.get('descripcion_refaccion')) {
-    this.parentForm.addControl('descripcion_refaccion', new FormControl(''));
-  }
-
-  // 🛰 Emitir payload al padre
-  this.parentForm.valueChanges.subscribe(() => {
-    emitirPayloadFormulario(this.parentForm, DEPARTAMENTO_IDS.mantenimiento, this.formularioValido);
-  });
-
-  // 🔄 Obtener aparatos
-  const token = localStorage.getItem('token');
-  const headers = new HttpHeaders().set('Authorization', `Bearer ${token}`);
-
-  this.http.get<any[]>(`${environment.apiUrl}/aparatos/${this.idSucursal}`, { headers }).subscribe({
-    next: (data) => {
-      this.aparatos = data;
-      this.setupAutocomplete();
-
-      // 🧽 Limpieza si el usuario borra manualmente el input
-      this.filtroControl.valueChanges.subscribe(value => {
-        if (typeof value === 'string') {
-          this.parentForm.get('detalle')?.reset();
-          this.parentForm.get('subcategoria')?.reset();
-        }
-      });
-    },
-    error: (err) => console.error('❌ Error al obtener aparatos', err)
-  });
-}
 
   setupAutocomplete() {
     this.aparatosFiltrados$ = this.filtroControl.valueChanges.pipe(
@@ -126,6 +127,7 @@ ngOnInit(): void {
     this.filtroControl.setValue(`${ap.codigo} - ${ap.descripcion} (${ap.marca})`);
     this.parentForm.get('detalle')?.setValue(`${ap.codigo} - ${ap.descripcion} (${ap.marca})`);
     this.parentForm.get('subcategoria')?.setValue(ap.area || 'General');
+    this.parentForm.get('aparato_id')?.setValue(ap.id); // <-- Aquí guardamos el id real
     this.inputResaltado = true;
 
     limpiarCamposDependientes(this.parentForm, ['descripcion', 'necesita_refaccion', 'descripcion_refaccion']);
@@ -140,4 +142,3 @@ ngOnInit(): void {
     return '🏋️';
   }
 }
-

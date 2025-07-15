@@ -237,3 +237,1504 @@ DETAIL:  Falta llave izquierda.
 [parameters: {'descripcion': 'bhb', 'username': 'ADMICORP', 'asignado_a': None, 'sucursal_id': 1000, 'estado': 'abierto', 'fecha_creacion': datetime.datetime(2025, 6, 6, 19, 16, 33, 804344, tzinfo=datetime.timezone.utc), 'fecha_finalizado': None, 'fecha_en_progreso': None, 'fecha_solucion': None, 'departamento_id': 1, 'criticidad': 2, 'categoria': 'Aparatos', 'subcategoria': 'Servicios', 'subsubcategoria': 'Sin agua', 'aparato_id': 4, 'problema_detectado': 'bhb', 'necesita_refaccion': True, 'descripcion_refaccion': 'j', 'url_evidencia': None}]
 (Background on this error at: https://sqlalche.me/e/20/9h9h)
 
+
+[2025-06-25 11:49:37] ERROR en login - /api/auth/login
+Mensaje: One or more mappers failed to initialize - can't proceed with initialization of other mappers. Triggering mapper: 'Mapper[UserORM(users)]'. Original exception was: Error creating backref 'usuario' on relationship 'UserORM.asistencias': property of that name exists on mapper 'Mapper[RegistroAsistencia(registro_asistencia)]'
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\auth_routes.py", line 38, in login
+    user = UserORM.get_by_username(username)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\models\user_model.py", line 37, in get_by_username
+    user = cls.query.filter(db.func.lower(cls.username) == db.func.lower(username)).first()
+           ^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\flask_sqlalchemy\model.py", line 22, in __get__
+    return cls.query_class(
+           ^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\query.py", line 276, in __init__
+    self._set_entities(entities)
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\query.py", line 289, in _set_entities
+    coercions.expect(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\sql\coercions.py", line 388, in expect
+    insp._post_inspect
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 1257, in __get__
+    obj.__dict__[self.__name__] = result = self.fget(obj)
+                                           ^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\mapper.py", line 2724, in _post_inspect
+    self._check_configure()
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\mapper.py", line 2401, in _check_configure
+    _configure_registries({self.registry}, cascade=True)
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\mapper.py", line 4214, in _configure_registries
+    _do_configure_registries(registries, cascade)
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\mapper.py", line 4251, in _do_configure_registries
+    raise e
+sqlalchemy.exc.InvalidRequestError: One or more mappers failed to initialize - can't proceed with initialization of other mappers. Triggering mapper: 'Mapper[UserORM(users)]'. Original exception was: Error creating backref 'usuario' on relationship 'UserORM.asistencias': property of that name exists on mapper 'Mapper[RegistroAsistencia(registro_asistencia)]'
+
+
+[2025-06-25 11:52:59] ERROR en login - /api/auth/login
+Mensaje: One or more mappers failed to initialize - can't proceed with initialization of other mappers. Triggering mapper: 'Mapper[UserORM(users)]'. Original exception was: Error creating backref 'usuario' on relationship 'UserORM.asistencias': property of that name exists on mapper 'Mapper[RegistroAsistencia(registro_asistencia)]'
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\auth_routes.py", line 38, in login
+    user = UserORM.get_by_username(username)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\models\user_model.py", line 37, in get_by_username
+    user = cls.query.filter(db.func.lower(cls.username) == db.func.lower(username)).first()
+           ^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\flask_sqlalchemy\model.py", line 22, in __get__
+    return cls.query_class(
+           ^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\query.py", line 276, in __init__
+    self._set_entities(entities)
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\query.py", line 289, in _set_entities
+    coercions.expect(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\sql\coercions.py", line 388, in expect
+    insp._post_inspect
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 1257, in __get__
+    obj.__dict__[self.__name__] = result = self.fget(obj)
+                                           ^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\mapper.py", line 2724, in _post_inspect
+    self._check_configure()
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\mapper.py", line 2401, in _check_configure
+    _configure_registries({self.registry}, cascade=True)
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\mapper.py", line 4214, in _configure_registries
+    _do_configure_registries(registries, cascade)
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\mapper.py", line 4251, in _do_configure_registries
+    raise e
+sqlalchemy.exc.InvalidRequestError: One or more mappers failed to initialize - can't proceed with initialization of other mappers. Triggering mapper: 'Mapper[UserORM(users)]'. Original exception was: Error creating backref 'usuario' on relationship 'UserORM.asistencias': property of that name exists on mapper 'Mapper[RegistroAsistencia(registro_asistencia)]'
+
+
+[2025-06-25 12:24:44] ERROR en  - /api/tickets/list
+Mensaje: Query.order_by() being called on a Query which already has LIMIT or OFFSET applied.  Call order_by() before limit() or offset() are applied.
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\ticket_routes.py", line 164, in list_tickets_with_filters
+    tickets = query.order_by(Ticket.id.desc()).all()
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 2, in order_by
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\sql\base.py", line 280, in _generative
+    x = fn(self, *args, **kw)
+        ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\query.py", line 2035, in order_by
+    assertion("order_by")
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\query.py", line 443, in _no_limit_offset
+    raise sa_exc.InvalidRequestError(
+sqlalchemy.exc.InvalidRequestError: Query.order_by() being called on a Query which already has LIMIT or OFFSET applied.  Call order_by() before limit() or offset() are applied.
+
+
+[2025-06-25 12:25:10] ERROR en Eliminar permiso - /api/permisos/eliminar
+Mensaje: 400 Bad Request: Failed to decode JSON object: Expecting value: line 1 column 1 (char 0)
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\werkzeug\wrappers\request.py", line 611, in get_json
+    rv = self.json_module.loads(data)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\flask\json\provider.py", line 188, in loads
+    return json.loads(s, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\AppData\Local\Programs\Python\Python312\Lib\json\__init__.py", line 346, in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\AppData\Local\Programs\Python\Python312\Lib\json\decoder.py", line 338, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\AppData\Local\Programs\Python\Python312\Lib\json\decoder.py", line 356, in raw_decode
+    raise JSONDecodeError("Expecting value", s, err.value) from None
+json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\permisos_routes.py", line 75, in eliminar_permiso
+    data = request.json
+           ^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\werkzeug\wrappers\request.py", line 560, in json
+    return self.get_json()
+           ^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\werkzeug\wrappers\request.py", line 620, in get_json
+    rv = self.on_json_loading_failed(e)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\flask\wrappers.py", line 130, in on_json_loading_failed
+    return super().on_json_loading_failed(e)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\werkzeug\wrappers\request.py", line 645, in on_json_loading_failed
+    raise BadRequest(f"Failed to decode JSON object: {e}")
+werkzeug.exceptions.BadRequest: 400 Bad Request: Failed to decode JSON object: Expecting value: line 1 column 1 (char 0)
+
+
+[2025-06-25 12:25:15] ERROR en  - /api/tickets/create
+Mensaje: (psycopg2.errors.ForeignKeyViolation) inserción o actualización en la tabla «tickets» viola la llave foránea «tickets_departamento_id_fkey»
+DETAIL:  La llave (departamento_id)=(2) no está presente en la tabla «departamentos».
+
+[SQL: INSERT INTO tickets (descripcion, username, asignado_a, sucursal_id, estado, fecha_creacion, fecha_finalizado, fecha_en_progreso, fecha_solucion, departamento_id, criticidad, categoria, subcategoria, subsubcategoria, aparato_id, problema_detectado, necesita_refaccion, descripcion_refaccion, url_evidencia) VALUES (%(descripcion)s, %(username)s, %(asignado_a)s, %(sucursal_id)s, %(estado)s, %(fecha_creacion)s, %(fecha_finalizado)s, %(fecha_en_progreso)s, %(fecha_solucion)s, %(departamento_id)s, %(criticidad)s, %(categoria)s, %(subcategoria)s, %(subsubcategoria)s, %(aparato_id)s, %(problema_detectado)s, %(necesita_refaccion)s, %(descripcion_refaccion)s, %(url_evidencia)s) RETURNING tickets.id]
+[parameters: {'descripcion': 'prueba', 'username': 'ADMICORP', 'asignado_a': None, 'sucursal_id': 1000, 'estado': 'abierto', 'fecha_creacion': datetime.datetime(2025, 6, 25, 19, 25, 15, 352445, tzinfo=datetime.timezone.utc), 'fecha_finalizado': None, 'fecha_en_progreso': None, 'fecha_solucion': None, 'departamento_id': 2, 'criticidad': 1, 'categoria': 'Pagos a proveedores', 'subcategoria': 'Servicios', 'subsubcategoria': None, 'aparato_id': None, 'problema_detectado': None, 'necesita_refaccion': False, 'descripcion_refaccion': None, 'url_evidencia': None}]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1964, in _exec_single_context
+    self.dialect.do_execute(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 945, in do_execute
+    cursor.execute(statement, parameters)
+psycopg2.errors.ForeignKeyViolation: inserción o actualización en la tabla «tickets» viola la llave foránea «tickets_departamento_id_fkey»
+DETAIL:  La llave (departamento_id)=(2) no está presente en la tabla «departamentos».
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\ticket_routes.py", line 59, in create_ticket
+    nuevo_ticket = Ticket.create_ticket(
+                   ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\models\ticket_model.py", line 100, in create_ticket
+    db.session.commit()
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\scoping.py", line 599, in commit
+    return self._proxied.commit()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2032, in commit
+    trans.commit(_to_root=True)
+  File "<string>", line 2, in commit
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\state_changes.py", line 139, in _go
+    ret_value = fn(self, *arg, **kw)
+                ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 1313, in commit
+    self._prepare_impl()
+  File "<string>", line 2, in _prepare_impl
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\state_changes.py", line 139, in _go
+    ret_value = fn(self, *arg, **kw)
+                ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 1288, in _prepare_impl
+    self.session.flush()
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 4353, in flush
+    self._flush(objects)
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 4488, in _flush
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 146, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 4449, in _flush
+    flush_context.execute()
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\unitofwork.py", line 466, in execute
+    rec.execute(self)
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\unitofwork.py", line 642, in execute
+    util.preloaded.orm_persistence.save_obj(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\persistence.py", line 93, in save_obj
+    _emit_insert_statements(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\persistence.py", line 1233, in _emit_insert_statements
+    result = connection.execute(
+             ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1416, in execute
+    return meth(
+           ^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\sql\elements.py", line 523, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1638, in _execute_clauseelement
+    ret = self._execute_context(
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1843, in _execute_context
+    return self._exec_single_context(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1983, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 2352, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1964, in _exec_single_context
+    self.dialect.do_execute(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 945, in do_execute
+    cursor.execute(statement, parameters)
+sqlalchemy.exc.IntegrityError: (psycopg2.errors.ForeignKeyViolation) inserción o actualización en la tabla «tickets» viola la llave foránea «tickets_departamento_id_fkey»
+DETAIL:  La llave (departamento_id)=(2) no está presente en la tabla «departamentos».
+
+[SQL: INSERT INTO tickets (descripcion, username, asignado_a, sucursal_id, estado, fecha_creacion, fecha_finalizado, fecha_en_progreso, fecha_solucion, departamento_id, criticidad, categoria, subcategoria, subsubcategoria, aparato_id, problema_detectado, necesita_refaccion, descripcion_refaccion, url_evidencia) VALUES (%(descripcion)s, %(username)s, %(asignado_a)s, %(sucursal_id)s, %(estado)s, %(fecha_creacion)s, %(fecha_finalizado)s, %(fecha_en_progreso)s, %(fecha_solucion)s, %(departamento_id)s, %(criticidad)s, %(categoria)s, %(subcategoria)s, %(subsubcategoria)s, %(aparato_id)s, %(problema_detectado)s, %(necesita_refaccion)s, %(descripcion_refaccion)s, %(url_evidencia)s) RETURNING tickets.id]
+[parameters: {'descripcion': 'prueba', 'username': 'ADMICORP', 'asignado_a': None, 'sucursal_id': 1000, 'estado': 'abierto', 'fecha_creacion': datetime.datetime(2025, 6, 25, 19, 25, 15, 352445, tzinfo=datetime.timezone.utc), 'fecha_finalizado': None, 'fecha_en_progreso': None, 'fecha_solucion': None, 'departamento_id': 2, 'criticidad': 1, 'categoria': 'Pagos a proveedores', 'subcategoria': 'Servicios', 'subsubcategoria': None, 'aparato_id': None, 'problema_detectado': None, 'necesita_refaccion': False, 'descripcion_refaccion': None, 'url_evidencia': None}]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+
+
+[2025-06-25 12:55:54] ERROR en  - /api/tickets/list
+Mensaje: Query.order_by() being called on a Query which already has LIMIT or OFFSET applied.  Call order_by() before limit() or offset() are applied.
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\ticket_routes.py", line 164, in list_tickets_with_filters
+    tickets = query.order_by(Ticket.id.desc()).all()
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 2, in order_by
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\sql\base.py", line 280, in _generative
+    x = fn(self, *args, **kw)
+        ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\query.py", line 2035, in order_by
+    assertion("order_by")
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\query.py", line 443, in _no_limit_offset
+    raise sa_exc.InvalidRequestError(
+sqlalchemy.exc.InvalidRequestError: Query.order_by() being called on a Query which already has LIMIT or OFFSET applied.  Call order_by() before limit() or offset() are applied.
+
+
+[2025-06-25 12:56:20] ERROR en Eliminar permiso - /api/permisos/eliminar
+Mensaje: 400 Bad Request: Failed to decode JSON object: Expecting value: line 1 column 1 (char 0)
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\werkzeug\wrappers\request.py", line 611, in get_json
+    rv = self.json_module.loads(data)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\flask\json\provider.py", line 188, in loads
+    return json.loads(s, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\AppData\Local\Programs\Python\Python312\Lib\json\__init__.py", line 346, in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\AppData\Local\Programs\Python\Python312\Lib\json\decoder.py", line 338, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\AppData\Local\Programs\Python\Python312\Lib\json\decoder.py", line 356, in raw_decode
+    raise JSONDecodeError("Expecting value", s, err.value) from None
+json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\permisos_routes.py", line 75, in eliminar_permiso
+    data = request.json
+           ^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\werkzeug\wrappers\request.py", line 560, in json
+    return self.get_json()
+           ^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\werkzeug\wrappers\request.py", line 620, in get_json
+    rv = self.on_json_loading_failed(e)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\flask\wrappers.py", line 130, in on_json_loading_failed
+    return super().on_json_loading_failed(e)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\werkzeug\wrappers\request.py", line 645, in on_json_loading_failed
+    raise BadRequest(f"Failed to decode JSON object: {e}")
+werkzeug.exceptions.BadRequest: 400 Bad Request: Failed to decode JSON object: Expecting value: line 1 column 1 (char 0)
+
+
+[2025-07-01 09:18:51] ERROR en  - /api/tickets/list
+Mensaje: Query.order_by() being called on a Query which already has LIMIT or OFFSET applied.  Call order_by() before limit() or offset() are applied.
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\ticket_routes.py", line 164, in list_tickets_with_filters
+    tickets = query.order_by(Ticket.id.desc()).all()
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 2, in order_by
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\sql\base.py", line 280, in _generative
+    x = fn(self, *args, **kw)
+        ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\query.py", line 2035, in order_by
+    assertion("order_by")
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\query.py", line 443, in _no_limit_offset
+    raise sa_exc.InvalidRequestError(
+sqlalchemy.exc.InvalidRequestError: Query.order_by() being called on a Query which already has LIMIT or OFFSET applied.  Call order_by() before limit() or offset() are applied.
+
+
+[2025-07-01 09:19:08] ERROR en crear_inventario - /api/inventario/
+Mensaje: 'gasto_sem' is an invalid keyword argument for InventarioGeneral
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\inventarios.py", line 49, in crear_inventario
+    nuevo = InventarioGeneral(
+            ^^^^^^^^^^^^^^^^^^
+  File "<string>", line 4, in __init__
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\state.py", line 571, in _initialize_instance
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 146, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\state.py", line 569, in _initialize_instance
+    manager.original_init(*mixed[1:], **kwargs)
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\decl_base.py", line 2175, in _declarative_constructor
+    raise TypeError(
+TypeError: 'gasto_sem' is an invalid keyword argument for InventarioGeneral
+
+
+[2025-07-01 09:19:22] ERROR en Eliminar permiso - /api/permisos/eliminar
+Mensaje: 400 Bad Request: Failed to decode JSON object: Expecting value: line 1 column 1 (char 0)
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\werkzeug\wrappers\request.py", line 611, in get_json
+    rv = self.json_module.loads(data)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\flask\json\provider.py", line 188, in loads
+    return json.loads(s, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\AppData\Local\Programs\Python\Python312\Lib\json\__init__.py", line 346, in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\AppData\Local\Programs\Python\Python312\Lib\json\decoder.py", line 338, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\AppData\Local\Programs\Python\Python312\Lib\json\decoder.py", line 356, in raw_decode
+    raise JSONDecodeError("Expecting value", s, err.value) from None
+json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\permisos_routes.py", line 75, in eliminar_permiso
+    data = request.json
+           ^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\werkzeug\wrappers\request.py", line 560, in json
+    return self.get_json()
+           ^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\werkzeug\wrappers\request.py", line 620, in get_json
+    rv = self.on_json_loading_failed(e)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\flask\wrappers.py", line 130, in on_json_loading_failed
+    return super().on_json_loading_failed(e)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\werkzeug\wrappers\request.py", line 645, in on_json_loading_failed
+    raise BadRequest(f"Failed to decode JSON object: {e}")
+werkzeug.exceptions.BadRequest: 400 Bad Request: Failed to decode JSON object: Expecting value: line 1 column 1 (char 0)
+
+
+[2025-07-01 10:25:58] ERROR en crear_inventario - /api/inventario/
+Mensaje: 'gasto_sem' is an invalid keyword argument for InventarioGeneral
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\inventarios.py", line 49, in crear_inventario
+    nuevo = InventarioGeneral(
+            ^^^^^^^^^^^^^^^^^^
+  File "<string>", line 4, in __init__
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\state.py", line 571, in _initialize_instance
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 146, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\state.py", line 569, in _initialize_instance
+    manager.original_init(*mixed[1:], **kwargs)
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\decl_base.py", line 2175, in _declarative_constructor
+    raise TypeError(
+TypeError: 'gasto_sem' is an invalid keyword argument for InventarioGeneral
+
+
+[2025-07-01 10:31:37] ERROR en  - /api/tickets/list
+Mensaje: Query.order_by() being called on a Query which already has LIMIT or OFFSET applied.  Call order_by() before limit() or offset() are applied.
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\ticket_routes.py", line 164, in list_tickets_with_filters
+    tickets = query.order_by(Ticket.id.desc()).all()
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 2, in order_by
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\sql\base.py", line 280, in _generative
+    x = fn(self, *args, **kw)
+        ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\query.py", line 2035, in order_by
+    assertion("order_by")
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\query.py", line 443, in _no_limit_offset
+    raise sa_exc.InvalidRequestError(
+sqlalchemy.exc.InvalidRequestError: Query.order_by() being called on a Query which already has LIMIT or OFFSET applied.  Call order_by() before limit() or offset() are applied.
+
+
+[2025-07-01 10:32:08] ERROR en Eliminar permiso - /api/permisos/eliminar
+Mensaje: 400 Bad Request: Failed to decode JSON object: Expecting value: line 1 column 1 (char 0)
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\werkzeug\wrappers\request.py", line 611, in get_json
+    rv = self.json_module.loads(data)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\flask\json\provider.py", line 188, in loads
+    return json.loads(s, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\AppData\Local\Programs\Python\Python312\Lib\json\__init__.py", line 346, in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\AppData\Local\Programs\Python\Python312\Lib\json\decoder.py", line 338, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\AppData\Local\Programs\Python\Python312\Lib\json\decoder.py", line 356, in raw_decode
+    raise JSONDecodeError("Expecting value", s, err.value) from None
+json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\permisos_routes.py", line 75, in eliminar_permiso
+    data = request.json
+           ^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\werkzeug\wrappers\request.py", line 560, in json
+    return self.get_json()
+           ^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\werkzeug\wrappers\request.py", line 620, in get_json
+    rv = self.on_json_loading_failed(e)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\flask\wrappers.py", line 130, in on_json_loading_failed
+    return super().on_json_loading_failed(e)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\werkzeug\wrappers\request.py", line 645, in on_json_loading_failed
+    raise BadRequest(f"Failed to decode JSON object: {e}")
+werkzeug.exceptions.BadRequest: 400 Bad Request: Failed to decode JSON object: Expecting value: line 1 column 1 (char 0)
+
+
+[2025-07-01 10:37:38] ERROR en  - /api/tickets/list
+Mensaje: Query.order_by() being called on a Query which already has LIMIT or OFFSET applied.  Call order_by() before limit() or offset() are applied.
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\ticket_routes.py", line 164, in list_tickets_with_filters
+    tickets = query.order_by(Ticket.id.desc()).all()
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 2, in order_by
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\sql\base.py", line 280, in _generative
+    x = fn(self, *args, **kw)
+        ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\query.py", line 2035, in order_by
+    assertion("order_by")
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\query.py", line 443, in _no_limit_offset
+    raise sa_exc.InvalidRequestError(
+sqlalchemy.exc.InvalidRequestError: Query.order_by() being called on a Query which already has LIMIT or OFFSET applied.  Call order_by() before limit() or offset() are applied.
+
+
+[2025-07-01 10:38:15] ERROR en Eliminar permiso - /api/permisos/eliminar
+Mensaje: 400 Bad Request: Failed to decode JSON object: Expecting value: line 1 column 1 (char 0)
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\werkzeug\wrappers\request.py", line 611, in get_json
+    rv = self.json_module.loads(data)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\flask\json\provider.py", line 188, in loads
+    return json.loads(s, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\AppData\Local\Programs\Python\Python312\Lib\json\__init__.py", line 346, in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\AppData\Local\Programs\Python\Python312\Lib\json\decoder.py", line 338, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\AppData\Local\Programs\Python\Python312\Lib\json\decoder.py", line 356, in raw_decode
+    raise JSONDecodeError("Expecting value", s, err.value) from None
+json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\permisos_routes.py", line 75, in eliminar_permiso
+    data = request.json
+           ^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\werkzeug\wrappers\request.py", line 560, in json
+    return self.get_json()
+           ^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\werkzeug\wrappers\request.py", line 620, in get_json
+    rv = self.on_json_loading_failed(e)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\flask\wrappers.py", line 130, in on_json_loading_failed
+    return super().on_json_loading_failed(e)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\werkzeug\wrappers\request.py", line 645, in on_json_loading_failed
+    raise BadRequest(f"Failed to decode JSON object: {e}")
+werkzeug.exceptions.BadRequest: 400 Bad Request: Failed to decode JSON object: Expecting value: line 1 column 1 (char 0)
+
+
+[2025-07-01 10:43:21] ERROR en  - /api/tickets/list
+Mensaje: Query.order_by() being called on a Query which already has LIMIT or OFFSET applied.  Call order_by() before limit() or offset() are applied.
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\ticket_routes.py", line 164, in list_tickets_with_filters
+    tickets = query.order_by(Ticket.id.desc()).all()
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 2, in order_by
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\sql\base.py", line 280, in _generative
+    x = fn(self, *args, **kw)
+        ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\query.py", line 2035, in order_by
+    assertion("order_by")
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\query.py", line 443, in _no_limit_offset
+    raise sa_exc.InvalidRequestError(
+sqlalchemy.exc.InvalidRequestError: Query.order_by() being called on a Query which already has LIMIT or OFFSET applied.  Call order_by() before limit() or offset() are applied.
+
+
+[2025-07-01 10:43:54] ERROR en registrar_movimiento - /api/inventario/movimientos
+Mensaje: (raised as a result of Query-invoked autoflush; consider using a session.no_autoflush block if this flush is occurring prematurely)
+(psycopg2.errors.ForeignKeyViolation) inserción o actualización en la tabla «detalle_movimiento» viola la llave foránea «detalle_movimiento_inventario_id_fkey»
+DETAIL:  La llave (inventario_id)=(1) no está presente en la tabla «inventario_general».
+
+[SQL: INSERT INTO detalle_movimiento (movimiento_id, inventario_id, cantidad, unidad_medida) VALUES (%(movimiento_id)s, %(inventario_id)s, %(cantidad)s, %(unidad_medida)s) RETURNING detalle_movimiento.id]
+[parameters: {'movimiento_id': 1, 'inventario_id': 1, 'cantidad': 5, 'unidad_medida': 'PIEZAS'}]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1964, in _exec_single_context
+    self.dialect.do_execute(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 945, in do_execute
+    cursor.execute(statement, parameters)
+psycopg2.errors.ForeignKeyViolation: inserción o actualización en la tabla «detalle_movimiento» viola la llave foránea «detalle_movimiento_inventario_id_fkey»
+DETAIL:  La llave (inventario_id)=(1) no está presente en la tabla «inventario_general».
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\inventarios.py", line 147, in registrar_movimiento
+    ).first()
+      ^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\query.py", line 2759, in first
+    return self.limit(1)._iter().first()  # type: ignore
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\query.py", line 2858, in _iter
+    result: Union[ScalarResult[_T], Result[_T]] = self.session.execute(
+                                                  ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2365, in execute
+    return self._execute_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2230, in _execute_internal
+    ) = compile_state_cls.orm_pre_session_exec(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\context.py", line 577, in orm_pre_session_exec
+    session._autoflush()
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 3065, in _autoflush
+    raise e.with_traceback(sys.exc_info()[2])
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 3054, in _autoflush
+    self.flush()
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 4353, in flush
+    self._flush(objects)
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 4488, in _flush
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 146, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 4449, in _flush
+    flush_context.execute()
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\unitofwork.py", line 466, in execute
+    rec.execute(self)
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\unitofwork.py", line 642, in execute
+    util.preloaded.orm_persistence.save_obj(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\persistence.py", line 93, in save_obj
+    _emit_insert_statements(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\persistence.py", line 1233, in _emit_insert_statements
+    result = connection.execute(
+             ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1416, in execute
+    return meth(
+           ^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\sql\elements.py", line 523, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1638, in _execute_clauseelement
+    ret = self._execute_context(
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1843, in _execute_context
+    return self._exec_single_context(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1983, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 2352, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1964, in _exec_single_context
+    self.dialect.do_execute(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 945, in do_execute
+    cursor.execute(statement, parameters)
+sqlalchemy.exc.IntegrityError: (raised as a result of Query-invoked autoflush; consider using a session.no_autoflush block if this flush is occurring prematurely)
+(psycopg2.errors.ForeignKeyViolation) inserción o actualización en la tabla «detalle_movimiento» viola la llave foránea «detalle_movimiento_inventario_id_fkey»
+DETAIL:  La llave (inventario_id)=(1) no está presente en la tabla «inventario_general».
+
+[SQL: INSERT INTO detalle_movimiento (movimiento_id, inventario_id, cantidad, unidad_medida) VALUES (%(movimiento_id)s, %(inventario_id)s, %(cantidad)s, %(unidad_medida)s) RETURNING detalle_movimiento.id]
+[parameters: {'movimiento_id': 1, 'inventario_id': 1, 'cantidad': 5, 'unidad_medida': 'PIEZAS'}]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+
+
+[2025-07-01 10:43:58] ERROR en Eliminar permiso - /api/permisos/eliminar
+Mensaje: 400 Bad Request: Failed to decode JSON object: Expecting value: line 1 column 1 (char 0)
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\werkzeug\wrappers\request.py", line 611, in get_json
+    rv = self.json_module.loads(data)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\flask\json\provider.py", line 188, in loads
+    return json.loads(s, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\AppData\Local\Programs\Python\Python312\Lib\json\__init__.py", line 346, in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\AppData\Local\Programs\Python\Python312\Lib\json\decoder.py", line 338, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\AppData\Local\Programs\Python\Python312\Lib\json\decoder.py", line 356, in raw_decode
+    raise JSONDecodeError("Expecting value", s, err.value) from None
+json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\permisos_routes.py", line 75, in eliminar_permiso
+    data = request.json
+           ^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\werkzeug\wrappers\request.py", line 560, in json
+    return self.get_json()
+           ^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\werkzeug\wrappers\request.py", line 620, in get_json
+    rv = self.on_json_loading_failed(e)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\flask\wrappers.py", line 130, in on_json_loading_failed
+    return super().on_json_loading_failed(e)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\werkzeug\wrappers\request.py", line 645, in on_json_loading_failed
+    raise BadRequest(f"Failed to decode JSON object: {e}")
+werkzeug.exceptions.BadRequest: 400 Bad Request: Failed to decode JSON object: Expecting value: line 1 column 1 (char 0)
+
+
+[2025-07-01 10:52:49] ERROR en  - /api/tickets/list
+Mensaje: Query.order_by() being called on a Query which already has LIMIT or OFFSET applied.  Call order_by() before limit() or offset() are applied.
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\ticket_routes.py", line 164, in list_tickets_with_filters
+    tickets = query.order_by(Ticket.id.desc()).all()
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 2, in order_by
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\sql\base.py", line 280, in _generative
+    x = fn(self, *args, **kw)
+        ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\query.py", line 2035, in order_by
+    assertion("order_by")
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\query.py", line 443, in _no_limit_offset
+    raise sa_exc.InvalidRequestError(
+sqlalchemy.exc.InvalidRequestError: Query.order_by() being called on a Query which already has LIMIT or OFFSET applied.  Call order_by() before limit() or offset() are applied.
+
+
+[2025-07-01 10:53:22] ERROR en registrar_movimiento - /api/inventario/movimientos
+Mensaje: (raised as a result of Query-invoked autoflush; consider using a session.no_autoflush block if this flush is occurring prematurely)
+(psycopg2.errors.ForeignKeyViolation) inserción o actualización en la tabla «detalle_movimiento» viola la llave foránea «detalle_movimiento_inventario_id_fkey»
+DETAIL:  La llave (inventario_id)=(1) no está presente en la tabla «inventario_general».
+
+[SQL: INSERT INTO detalle_movimiento (movimiento_id, inventario_id, cantidad, unidad_medida) VALUES (%(movimiento_id)s, %(inventario_id)s, %(cantidad)s, %(unidad_medida)s) RETURNING detalle_movimiento.id]
+[parameters: {'movimiento_id': 2, 'inventario_id': 1, 'cantidad': 5, 'unidad_medida': 'PIEZAS'}]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1964, in _exec_single_context
+    self.dialect.do_execute(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 945, in do_execute
+    cursor.execute(statement, parameters)
+psycopg2.errors.ForeignKeyViolation: inserción o actualización en la tabla «detalle_movimiento» viola la llave foránea «detalle_movimiento_inventario_id_fkey»
+DETAIL:  La llave (inventario_id)=(1) no está presente en la tabla «inventario_general».
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\inventarios.py", line 147, in registrar_movimiento
+    ).first()
+      ^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\query.py", line 2759, in first
+    return self.limit(1)._iter().first()  # type: ignore
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\query.py", line 2858, in _iter
+    result: Union[ScalarResult[_T], Result[_T]] = self.session.execute(
+                                                  ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2365, in execute
+    return self._execute_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2230, in _execute_internal
+    ) = compile_state_cls.orm_pre_session_exec(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\context.py", line 577, in orm_pre_session_exec
+    session._autoflush()
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 3065, in _autoflush
+    raise e.with_traceback(sys.exc_info()[2])
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 3054, in _autoflush
+    self.flush()
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 4353, in flush
+    self._flush(objects)
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 4488, in _flush
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 146, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 4449, in _flush
+    flush_context.execute()
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\unitofwork.py", line 466, in execute
+    rec.execute(self)
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\unitofwork.py", line 642, in execute
+    util.preloaded.orm_persistence.save_obj(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\persistence.py", line 93, in save_obj
+    _emit_insert_statements(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\persistence.py", line 1233, in _emit_insert_statements
+    result = connection.execute(
+             ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1416, in execute
+    return meth(
+           ^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\sql\elements.py", line 523, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1638, in _execute_clauseelement
+    ret = self._execute_context(
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1843, in _execute_context
+    return self._exec_single_context(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1983, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 2352, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1964, in _exec_single_context
+    self.dialect.do_execute(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 945, in do_execute
+    cursor.execute(statement, parameters)
+sqlalchemy.exc.IntegrityError: (raised as a result of Query-invoked autoflush; consider using a session.no_autoflush block if this flush is occurring prematurely)
+(psycopg2.errors.ForeignKeyViolation) inserción o actualización en la tabla «detalle_movimiento» viola la llave foránea «detalle_movimiento_inventario_id_fkey»
+DETAIL:  La llave (inventario_id)=(1) no está presente en la tabla «inventario_general».
+
+[SQL: INSERT INTO detalle_movimiento (movimiento_id, inventario_id, cantidad, unidad_medida) VALUES (%(movimiento_id)s, %(inventario_id)s, %(cantidad)s, %(unidad_medida)s) RETURNING detalle_movimiento.id]
+[parameters: {'movimiento_id': 2, 'inventario_id': 1, 'cantidad': 5, 'unidad_medida': 'PIEZAS'}]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+
+
+[2025-07-01 10:53:26] ERROR en Eliminar permiso - /api/permisos/eliminar
+Mensaje: 400 Bad Request: Failed to decode JSON object: Expecting value: line 1 column 1 (char 0)
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\werkzeug\wrappers\request.py", line 611, in get_json
+    rv = self.json_module.loads(data)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\flask\json\provider.py", line 188, in loads
+    return json.loads(s, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\AppData\Local\Programs\Python\Python312\Lib\json\__init__.py", line 346, in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\AppData\Local\Programs\Python\Python312\Lib\json\decoder.py", line 338, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\AppData\Local\Programs\Python\Python312\Lib\json\decoder.py", line 356, in raw_decode
+    raise JSONDecodeError("Expecting value", s, err.value) from None
+json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\permisos_routes.py", line 75, in eliminar_permiso
+    data = request.json
+           ^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\werkzeug\wrappers\request.py", line 560, in json
+    return self.get_json()
+           ^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\werkzeug\wrappers\request.py", line 620, in get_json
+    rv = self.on_json_loading_failed(e)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\flask\wrappers.py", line 130, in on_json_loading_failed
+    return super().on_json_loading_failed(e)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\werkzeug\wrappers\request.py", line 645, in on_json_loading_failed
+    raise BadRequest(f"Failed to decode JSON object: {e}")
+werkzeug.exceptions.BadRequest: 400 Bad Request: Failed to decode JSON object: Expecting value: line 1 column 1 (char 0)
+
+
+[2025-07-03 08:55:48] ERROR en crear_inventario - /api/inventario/
+Mensaje: (psycopg2.errors.InvalidDatetimeFormat) la sintaxis de entrada no es válida para tipo date: «»
+LINE 1: ...', 'Limpieza', 'galon', 1, 500, '', '', 0, 0, '', '', 0) RET...
+                                                             ^
+
+[SQL: INSERT INTO inventario_general (tipo, nombre, descripcion, marca, proveedor, categoria, unidad, sucursal_id, stock_actual, codigo_interno, no_equipo, gasto_mes, pedido_mes, semana_pedido, fecha_inventario, gasto_sem) VALUES (%(tipo)s, %(nombre)s, %(descripcion)s, %(marca)s, %(proveedor)s, %(categoria)s, %(unidad)s, %(sucursal_id)s, %(stock_actual)s, %(codigo_interno)s, %(no_equipo)s, %(gasto_mes)s, %(pedido_mes)s, %(semana_pedido)s, %(fecha_inventario)s, %(gasto_sem)s) RETURNING inventario_general.id]
+[parameters: {'tipo': 'producto', 'nombre': 'Cloro', 'descripcion': '', 'marca': 'Cloralex', 'proveedor': 'Proveedor 1', 'categoria': 'Limpieza', 'unidad': 'galon', 'sucursal_id': 1, 'stock_actual': 500, 'codigo_interno': '', 'no_equipo': '', 'gasto_mes': 0, 'pedido_mes': 0, 'semana_pedido': '', 'fecha_inventario': '', 'gasto_sem': 0}]
+(Background on this error at: https://sqlalche.me/e/20/9h9h)
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1964, in _exec_single_context
+    self.dialect.do_execute(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 945, in do_execute
+    cursor.execute(statement, parameters)
+psycopg2.errors.InvalidDatetimeFormat: la sintaxis de entrada no es válida para tipo date: «»
+LINE 1: ...', 'Limpieza', 'galon', 1, 500, '', '', 0, 0, '', '', 0) RET...
+                                                             ^
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\inventarios.py", line 69, in crear_inventario
+    db.session.commit()
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\scoping.py", line 599, in commit
+    return self._proxied.commit()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2032, in commit
+    trans.commit(_to_root=True)
+  File "<string>", line 2, in commit
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\state_changes.py", line 139, in _go
+    ret_value = fn(self, *arg, **kw)
+                ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 1313, in commit
+    self._prepare_impl()
+  File "<string>", line 2, in _prepare_impl
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\state_changes.py", line 139, in _go
+    ret_value = fn(self, *arg, **kw)
+                ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 1288, in _prepare_impl
+    self.session.flush()
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 4353, in flush
+    self._flush(objects)
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 4488, in _flush
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 146, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 4449, in _flush
+    flush_context.execute()
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\unitofwork.py", line 466, in execute
+    rec.execute(self)
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\unitofwork.py", line 642, in execute
+    util.preloaded.orm_persistence.save_obj(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\persistence.py", line 93, in save_obj
+    _emit_insert_statements(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\persistence.py", line 1233, in _emit_insert_statements
+    result = connection.execute(
+             ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1416, in execute
+    return meth(
+           ^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\sql\elements.py", line 523, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1638, in _execute_clauseelement
+    ret = self._execute_context(
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1843, in _execute_context
+    return self._exec_single_context(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1983, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 2352, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1964, in _exec_single_context
+    self.dialect.do_execute(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 945, in do_execute
+    cursor.execute(statement, parameters)
+sqlalchemy.exc.DataError: (psycopg2.errors.InvalidDatetimeFormat) la sintaxis de entrada no es válida para tipo date: «»
+LINE 1: ...', 'Limpieza', 'galon', 1, 500, '', '', 0, 0, '', '', 0) RET...
+                                                             ^
+
+[SQL: INSERT INTO inventario_general (tipo, nombre, descripcion, marca, proveedor, categoria, unidad, sucursal_id, stock_actual, codigo_interno, no_equipo, gasto_mes, pedido_mes, semana_pedido, fecha_inventario, gasto_sem) VALUES (%(tipo)s, %(nombre)s, %(descripcion)s, %(marca)s, %(proveedor)s, %(categoria)s, %(unidad)s, %(sucursal_id)s, %(stock_actual)s, %(codigo_interno)s, %(no_equipo)s, %(gasto_mes)s, %(pedido_mes)s, %(semana_pedido)s, %(fecha_inventario)s, %(gasto_sem)s) RETURNING inventario_general.id]
+[parameters: {'tipo': 'producto', 'nombre': 'Cloro', 'descripcion': '', 'marca': 'Cloralex', 'proveedor': 'Proveedor 1', 'categoria': 'Limpieza', 'unidad': 'galon', 'sucursal_id': 1, 'stock_actual': 500, 'codigo_interno': '', 'no_equipo': '', 'gasto_mes': 0, 'pedido_mes': 0, 'semana_pedido': '', 'fecha_inventario': '', 'gasto_sem': 0}]
+(Background on this error at: https://sqlalche.me/e/20/9h9h)
+
+
+[2025-07-03 08:55:58] ERROR en crear_inventario - /api/inventario/
+Mensaje: (psycopg2.errors.InvalidDatetimeFormat) la sintaxis de entrada no es válida para tipo date: «»
+LINE 1: ...', 'Limpieza', 'galon', 1, 500, '', '', 0, 0, '', '', 0) RET...
+                                                             ^
+
+[SQL: INSERT INTO inventario_general (tipo, nombre, descripcion, marca, proveedor, categoria, unidad, sucursal_id, stock_actual, codigo_interno, no_equipo, gasto_mes, pedido_mes, semana_pedido, fecha_inventario, gasto_sem) VALUES (%(tipo)s, %(nombre)s, %(descripcion)s, %(marca)s, %(proveedor)s, %(categoria)s, %(unidad)s, %(sucursal_id)s, %(stock_actual)s, %(codigo_interno)s, %(no_equipo)s, %(gasto_mes)s, %(pedido_mes)s, %(semana_pedido)s, %(fecha_inventario)s, %(gasto_sem)s) RETURNING inventario_general.id]
+[parameters: {'tipo': 'producto', 'nombre': 'Cloro', 'descripcion': 'Descripcion', 'marca': 'Cloralex', 'proveedor': 'Proveedor 1', 'categoria': 'Limpieza', 'unidad': 'galon', 'sucursal_id': 1, 'stock_actual': 500, 'codigo_interno': '', 'no_equipo': '', 'gasto_mes': 0, 'pedido_mes': 0, 'semana_pedido': '', 'fecha_inventario': '', 'gasto_sem': 0}]
+(Background on this error at: https://sqlalche.me/e/20/9h9h)
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1964, in _exec_single_context
+    self.dialect.do_execute(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 945, in do_execute
+    cursor.execute(statement, parameters)
+psycopg2.errors.InvalidDatetimeFormat: la sintaxis de entrada no es válida para tipo date: «»
+LINE 1: ...', 'Limpieza', 'galon', 1, 500, '', '', 0, 0, '', '', 0) RET...
+                                                             ^
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\inventarios.py", line 69, in crear_inventario
+    db.session.commit()
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\scoping.py", line 599, in commit
+    return self._proxied.commit()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2032, in commit
+    trans.commit(_to_root=True)
+  File "<string>", line 2, in commit
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\state_changes.py", line 139, in _go
+    ret_value = fn(self, *arg, **kw)
+                ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 1313, in commit
+    self._prepare_impl()
+  File "<string>", line 2, in _prepare_impl
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\state_changes.py", line 139, in _go
+    ret_value = fn(self, *arg, **kw)
+                ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 1288, in _prepare_impl
+    self.session.flush()
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 4353, in flush
+    self._flush(objects)
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 4488, in _flush
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 146, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 4449, in _flush
+    flush_context.execute()
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\unitofwork.py", line 466, in execute
+    rec.execute(self)
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\unitofwork.py", line 642, in execute
+    util.preloaded.orm_persistence.save_obj(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\persistence.py", line 93, in save_obj
+    _emit_insert_statements(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\persistence.py", line 1233, in _emit_insert_statements
+    result = connection.execute(
+             ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1416, in execute
+    return meth(
+           ^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\sql\elements.py", line 523, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1638, in _execute_clauseelement
+    ret = self._execute_context(
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1843, in _execute_context
+    return self._exec_single_context(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1983, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 2352, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1964, in _exec_single_context
+    self.dialect.do_execute(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 945, in do_execute
+    cursor.execute(statement, parameters)
+sqlalchemy.exc.DataError: (psycopg2.errors.InvalidDatetimeFormat) la sintaxis de entrada no es válida para tipo date: «»
+LINE 1: ...', 'Limpieza', 'galon', 1, 500, '', '', 0, 0, '', '', 0) RET...
+                                                             ^
+
+[SQL: INSERT INTO inventario_general (tipo, nombre, descripcion, marca, proveedor, categoria, unidad, sucursal_id, stock_actual, codigo_interno, no_equipo, gasto_mes, pedido_mes, semana_pedido, fecha_inventario, gasto_sem) VALUES (%(tipo)s, %(nombre)s, %(descripcion)s, %(marca)s, %(proveedor)s, %(categoria)s, %(unidad)s, %(sucursal_id)s, %(stock_actual)s, %(codigo_interno)s, %(no_equipo)s, %(gasto_mes)s, %(pedido_mes)s, %(semana_pedido)s, %(fecha_inventario)s, %(gasto_sem)s) RETURNING inventario_general.id]
+[parameters: {'tipo': 'producto', 'nombre': 'Cloro', 'descripcion': 'Descripcion', 'marca': 'Cloralex', 'proveedor': 'Proveedor 1', 'categoria': 'Limpieza', 'unidad': 'galon', 'sucursal_id': 1, 'stock_actual': 500, 'codigo_interno': '', 'no_equipo': '', 'gasto_mes': 0, 'pedido_mes': 0, 'semana_pedido': '', 'fecha_inventario': '', 'gasto_sem': 0}]
+(Background on this error at: https://sqlalche.me/e/20/9h9h)
+
+
+[2025-07-04 12:48:39] ERROR en  - /api/tickets/list
+Mensaje: Query.order_by() being called on a Query which already has LIMIT or OFFSET applied.  Call order_by() before limit() or offset() are applied.
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\ticket_routes.py", line 164, in list_tickets_with_filters
+    tickets = query.order_by(Ticket.id.desc()).all()
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 2, in order_by
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\sql\base.py", line 280, in _generative
+    x = fn(self, *args, **kw)
+        ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\query.py", line 2035, in order_by
+    assertion("order_by")
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\query.py", line 443, in _no_limit_offset
+    raise sa_exc.InvalidRequestError(
+sqlalchemy.exc.InvalidRequestError: Query.order_by() being called on a Query which already has LIMIT or OFFSET applied.  Call order_by() before limit() or offset() are applied.
+
+
+[2025-07-04 12:49:00] ERROR en buscar_inventario - /api/inventario/buscar
+Mensaje: 'InventarioGeneral' object has no attribute 'sucursal_id'
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\inventarios.py", line 372, in buscar_inventario
+    'sucursal_id': i.sucursal_id,
+                   ^^^^^^^^^^^^^
+AttributeError: 'InventarioGeneral' object has no attribute 'sucursal_id'
+
+
+[2025-07-04 12:49:16] ERROR en Eliminar permiso - /api/permisos/eliminar
+Mensaje: 400 Bad Request: Failed to decode JSON object: Expecting value: line 1 column 1 (char 0)
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\werkzeug\wrappers\request.py", line 611, in get_json
+    rv = self.json_module.loads(data)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\flask\json\provider.py", line 188, in loads
+    return json.loads(s, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\AppData\Local\Programs\Python\Python312\Lib\json\__init__.py", line 346, in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\AppData\Local\Programs\Python\Python312\Lib\json\decoder.py", line 338, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\AppData\Local\Programs\Python\Python312\Lib\json\decoder.py", line 356, in raw_decode
+    raise JSONDecodeError("Expecting value", s, err.value) from None
+json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\permisos_routes.py", line 75, in eliminar_permiso
+    data = request.json
+           ^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\werkzeug\wrappers\request.py", line 560, in json
+    return self.get_json()
+           ^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\werkzeug\wrappers\request.py", line 620, in get_json
+    rv = self.on_json_loading_failed(e)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\flask\wrappers.py", line 130, in on_json_loading_failed
+    return super().on_json_loading_failed(e)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\werkzeug\wrappers\request.py", line 645, in on_json_loading_failed
+    raise BadRequest(f"Failed to decode JSON object: {e}")
+werkzeug.exceptions.BadRequest: 400 Bad Request: Failed to decode JSON object: Expecting value: line 1 column 1 (char 0)
+
+
+[2025-07-04 12:49:23] ERROR en Exportar inventario - /api/reportes/exportar-inventario
+Mensaje: 'InventarioGeneral' object has no attribute 'sucursal_id'
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\reportes.py", line 48, in exportar_inventario
+    sucursal = Sucursal.query.get(i.sucursal_id)
+                                  ^^^^^^^^^^^^^
+AttributeError: 'InventarioGeneral' object has no attribute 'sucursal_id'
+
+
+[2025-07-04 12:57:21] ERROR en  - /api/tickets/list
+Mensaje: Query.order_by() being called on a Query which already has LIMIT or OFFSET applied.  Call order_by() before limit() or offset() are applied.
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\ticket_routes.py", line 164, in list_tickets_with_filters
+    tickets = query.order_by(Ticket.id.desc()).all()
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 2, in order_by
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\sql\base.py", line 280, in _generative
+    x = fn(self, *args, **kw)
+        ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\query.py", line 2035, in order_by
+    assertion("order_by")
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\query.py", line 443, in _no_limit_offset
+    raise sa_exc.InvalidRequestError(
+sqlalchemy.exc.InvalidRequestError: Query.order_by() being called on a Query which already has LIMIT or OFFSET applied.  Call order_by() before limit() or offset() are applied.
+
+
+[2025-07-04 12:57:58] ERROR en Eliminar permiso - /api/permisos/eliminar
+Mensaje: 400 Bad Request: Failed to decode JSON object: Expecting value: line 1 column 1 (char 0)
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\werkzeug\wrappers\request.py", line 611, in get_json
+    rv = self.json_module.loads(data)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\flask\json\provider.py", line 188, in loads
+    return json.loads(s, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\AppData\Local\Programs\Python\Python312\Lib\json\__init__.py", line 346, in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\AppData\Local\Programs\Python\Python312\Lib\json\decoder.py", line 338, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\AppData\Local\Programs\Python\Python312\Lib\json\decoder.py", line 356, in raw_decode
+    raise JSONDecodeError("Expecting value", s, err.value) from None
+json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\permisos_routes.py", line 75, in eliminar_permiso
+    data = request.json
+           ^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\werkzeug\wrappers\request.py", line 560, in json
+    return self.get_json()
+           ^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\werkzeug\wrappers\request.py", line 620, in get_json
+    rv = self.on_json_loading_failed(e)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\flask\wrappers.py", line 130, in on_json_loading_failed
+    return super().on_json_loading_failed(e)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\werkzeug\wrappers\request.py", line 645, in on_json_loading_failed
+    raise BadRequest(f"Failed to decode JSON object: {e}")
+werkzeug.exceptions.BadRequest: 400 Bad Request: Failed to decode JSON object: Expecting value: line 1 column 1 (char 0)
+
+
+[2025-07-04 12:58:05] ERROR en Exportar inventario - /api/reportes/exportar-inventario
+Mensaje: 'InventarioGeneral' object has no attribute 'sucursal_id'
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\reportes.py", line 48, in exportar_inventario
+    sucursal = Sucursal.query.get(i.sucursal_id)
+                                  ^^^^^^^^^^^^^
+AttributeError: 'InventarioGeneral' object has no attribute 'sucursal_id'
+
+
+[2025-07-07 11:37:32] ERROR en eliminar_inventario - /api/inventario/7
+Mensaje: (psycopg2.errors.NotNullViolation) el valor nulo en la columna «inventario_id» de la relación «inventario_sucursal» viola la restricción de no nulo
+DETAIL:  La fila que falla contiene (2, null, 1000, 100).
+
+[SQL: UPDATE inventario_sucursal SET inventario_id=%(inventario_id)s WHERE inventario_sucursal.id = %(inventario_sucursal_id)s]
+[parameters: [{'inventario_id': None, 'inventario_sucursal_id': 2}, {'inventario_id': None, 'inventario_sucursal_id': 3}]]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1933, in _exec_single_context
+    self.dialect.do_executemany(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\psycopg2.py", line 800, in do_executemany
+    cursor.executemany(statement, parameters)
+psycopg2.errors.NotNullViolation: el valor nulo en la columna «inventario_id» de la relación «inventario_sucursal» viola la restricción de no nulo
+DETAIL:  La fila que falla contiene (2, null, 1000, 100).
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\inventarios.py", line 309, in eliminar_inventario
+    db.session.commit()
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\scoping.py", line 599, in commit
+    return self._proxied.commit()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2032, in commit
+    trans.commit(_to_root=True)
+  File "<string>", line 2, in commit
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\state_changes.py", line 139, in _go
+    ret_value = fn(self, *arg, **kw)
+                ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 1313, in commit
+    self._prepare_impl()
+  File "<string>", line 2, in _prepare_impl
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\state_changes.py", line 139, in _go
+    ret_value = fn(self, *arg, **kw)
+                ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 1288, in _prepare_impl
+    self.session.flush()
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 4353, in flush
+    self._flush(objects)
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 4488, in _flush
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 146, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 4449, in _flush
+    flush_context.execute()
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\unitofwork.py", line 466, in execute
+    rec.execute(self)
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\unitofwork.py", line 642, in execute
+    util.preloaded.orm_persistence.save_obj(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\persistence.py", line 85, in save_obj
+    _emit_update_statements(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\persistence.py", line 912, in _emit_update_statements
+    c = connection.execute(
+        ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1416, in execute
+    return meth(
+           ^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\sql\elements.py", line 523, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1638, in _execute_clauseelement
+    ret = self._execute_context(
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1843, in _execute_context
+    return self._exec_single_context(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1983, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 2352, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1933, in _exec_single_context
+    self.dialect.do_executemany(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\psycopg2.py", line 800, in do_executemany
+    cursor.executemany(statement, parameters)
+sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) el valor nulo en la columna «inventario_id» de la relación «inventario_sucursal» viola la restricción de no nulo
+DETAIL:  La fila que falla contiene (2, null, 1000, 100).
+
+[SQL: UPDATE inventario_sucursal SET inventario_id=%(inventario_id)s WHERE inventario_sucursal.id = %(inventario_sucursal_id)s]
+[parameters: [{'inventario_id': None, 'inventario_sucursal_id': 2}, {'inventario_id': None, 'inventario_sucursal_id': 3}]]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+
+
+[2025-07-07 12:49:41] ERROR en eliminar_inventario - /api/inventario/10
+Mensaje: (psycopg2.errors.NotNullViolation) el valor nulo en la columna «inventario_id» de la relación «inventario_sucursal» viola la restricción de no nulo
+DETAIL:  La fila que falla contiene (4, null, 1, 1000).
+
+[SQL: UPDATE inventario_sucursal SET inventario_id=%(inventario_id)s WHERE inventario_sucursal.id = %(inventario_sucursal_id)s]
+[parameters: {'inventario_id': None, 'inventario_sucursal_id': 4}]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1964, in _exec_single_context
+    self.dialect.do_execute(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 945, in do_execute
+    cursor.execute(statement, parameters)
+psycopg2.errors.NotNullViolation: el valor nulo en la columna «inventario_id» de la relación «inventario_sucursal» viola la restricción de no nulo
+DETAIL:  La fila que falla contiene (4, null, 1, 1000).
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\inventarios.py", line 314, in eliminar_inventario
+    db.session.commit()
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\scoping.py", line 599, in commit
+    return self._proxied.commit()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2032, in commit
+    trans.commit(_to_root=True)
+  File "<string>", line 2, in commit
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\state_changes.py", line 139, in _go
+    ret_value = fn(self, *arg, **kw)
+                ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 1313, in commit
+    self._prepare_impl()
+  File "<string>", line 2, in _prepare_impl
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\state_changes.py", line 139, in _go
+    ret_value = fn(self, *arg, **kw)
+                ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 1288, in _prepare_impl
+    self.session.flush()
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 4353, in flush
+    self._flush(objects)
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 4488, in _flush
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 146, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 4449, in _flush
+    flush_context.execute()
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\unitofwork.py", line 466, in execute
+    rec.execute(self)
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\unitofwork.py", line 642, in execute
+    util.preloaded.orm_persistence.save_obj(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\persistence.py", line 85, in save_obj
+    _emit_update_statements(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\persistence.py", line 912, in _emit_update_statements
+    c = connection.execute(
+        ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1416, in execute
+    return meth(
+           ^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\sql\elements.py", line 523, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1638, in _execute_clauseelement
+    ret = self._execute_context(
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1843, in _execute_context
+    return self._exec_single_context(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1983, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 2352, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1964, in _exec_single_context
+    self.dialect.do_execute(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 945, in do_execute
+    cursor.execute(statement, parameters)
+sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) el valor nulo en la columna «inventario_id» de la relación «inventario_sucursal» viola la restricción de no nulo
+DETAIL:  La fila que falla contiene (4, null, 1, 1000).
+
+[SQL: UPDATE inventario_sucursal SET inventario_id=%(inventario_id)s WHERE inventario_sucursal.id = %(inventario_sucursal_id)s]
+[parameters: {'inventario_id': None, 'inventario_sucursal_id': 4}]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+
+
+[2025-07-07 13:21:50] ERROR en eliminar_inventario - /api/inventario/12
+Mensaje: (psycopg2.errors.NotNullViolation) el valor nulo en la columna «inventario_id» de la relación «inventario_sucursal» viola la restricción de no nulo
+DETAIL:  La fila que falla contiene (5, null, 1, 30).
+
+[SQL: UPDATE inventario_sucursal SET inventario_id=%(inventario_id)s WHERE inventario_sucursal.id = %(inventario_sucursal_id)s]
+[parameters: {'inventario_id': None, 'inventario_sucursal_id': 5}]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1964, in _exec_single_context
+    self.dialect.do_execute(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 945, in do_execute
+    cursor.execute(statement, parameters)
+psycopg2.errors.NotNullViolation: el valor nulo en la columna «inventario_id» de la relación «inventario_sucursal» viola la restricción de no nulo
+DETAIL:  La fila que falla contiene (5, null, 1, 30).
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\inventarios.py", line 314, in eliminar_inventario
+    db.session.commit()
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\scoping.py", line 599, in commit
+    return self._proxied.commit()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2032, in commit
+    trans.commit(_to_root=True)
+  File "<string>", line 2, in commit
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\state_changes.py", line 139, in _go
+    ret_value = fn(self, *arg, **kw)
+                ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 1313, in commit
+    self._prepare_impl()
+  File "<string>", line 2, in _prepare_impl
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\state_changes.py", line 139, in _go
+    ret_value = fn(self, *arg, **kw)
+                ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 1288, in _prepare_impl
+    self.session.flush()
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 4353, in flush
+    self._flush(objects)
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 4488, in _flush
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 146, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 4449, in _flush
+    flush_context.execute()
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\unitofwork.py", line 466, in execute
+    rec.execute(self)
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\unitofwork.py", line 642, in execute
+    util.preloaded.orm_persistence.save_obj(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\persistence.py", line 85, in save_obj
+    _emit_update_statements(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\persistence.py", line 912, in _emit_update_statements
+    c = connection.execute(
+        ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1416, in execute
+    return meth(
+           ^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\sql\elements.py", line 523, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1638, in _execute_clauseelement
+    ret = self._execute_context(
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1843, in _execute_context
+    return self._exec_single_context(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1983, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 2352, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1964, in _exec_single_context
+    self.dialect.do_execute(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 945, in do_execute
+    cursor.execute(statement, parameters)
+sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) el valor nulo en la columna «inventario_id» de la relación «inventario_sucursal» viola la restricción de no nulo
+DETAIL:  La fila que falla contiene (5, null, 1, 30).
+
+[SQL: UPDATE inventario_sucursal SET inventario_id=%(inventario_id)s WHERE inventario_sucursal.id = %(inventario_sucursal_id)s]
+[parameters: {'inventario_id': None, 'inventario_sucursal_id': 5}]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+
+
+[2025-07-08 16:42:47] ERROR en  - /api/tickets/create
+Mensaje: (psycopg2.errors.ForeignKeyViolation) inserción o actualización en la tabla «tickets» viola la llave foránea «tickets_departamento_id_fkey»
+DETAIL:  La llave (departamento_id)=(1) no está presente en la tabla «departamentos».
+
+[SQL: INSERT INTO tickets (descripcion, username, asignado_a, sucursal_id, estado, fecha_creacion, fecha_finalizado, fecha_en_progreso, fecha_solucion, departamento_id, criticidad, categoria, subcategoria, subsubcategoria, aparato_id, problema_detectado, necesita_refaccion, descripcion_refaccion, url_evidencia) VALUES (%(descripcion)s, %(username)s, %(asignado_a)s, %(sucursal_id)s, %(estado)s, %(fecha_creacion)s, %(fecha_finalizado)s, %(fecha_en_progreso)s, %(fecha_solucion)s, %(departamento_id)s, %(criticidad)s, %(categoria)s, %(subcategoria)s, %(subsubcategoria)s, %(aparato_id)s, %(problema_detectado)s, %(necesita_refaccion)s, %(descripcion_refaccion)s, %(url_evidencia)s) RETURNING tickets.id]
+[parameters: {'descripcion': 'Ticket de prueba', 'username': 'ADMICORP', 'asignado_a': None, 'sucursal_id': 1000, 'estado': 'abierto', 'fecha_creacion': datetime.datetime(2025, 7, 8, 23, 42, 47, 129728, tzinfo=datetime.timezone.utc), 'fecha_finalizado': None, 'fecha_en_progreso': None, 'fecha_solucion': None, 'departamento_id': 1, 'criticidad': 1, 'categoria': 'PRUEBA', 'subcategoria': None, 'subsubcategoria': None, 'aparato_id': None, 'problema_detectado': None, 'necesita_refaccion': False, 'descripcion_refaccion': None, 'url_evidencia': None}]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1964, in _exec_single_context
+    self.dialect.do_execute(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 945, in do_execute
+    cursor.execute(statement, parameters)
+psycopg2.errors.ForeignKeyViolation: inserción o actualización en la tabla «tickets» viola la llave foránea «tickets_departamento_id_fkey»
+DETAIL:  La llave (departamento_id)=(1) no está presente en la tabla «departamentos».
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\ticket_routes.py", line 59, in create_ticket
+    nuevo_ticket = Ticket.create_ticket(
+                   ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\models\ticket_model.py", line 106, in create_ticket
+    db.session.commit()
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\scoping.py", line 599, in commit
+    return self._proxied.commit()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2032, in commit
+    trans.commit(_to_root=True)
+  File "<string>", line 2, in commit
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\state_changes.py", line 139, in _go
+    ret_value = fn(self, *arg, **kw)
+                ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 1313, in commit
+    self._prepare_impl()
+  File "<string>", line 2, in _prepare_impl
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\state_changes.py", line 139, in _go
+    ret_value = fn(self, *arg, **kw)
+                ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 1288, in _prepare_impl
+    self.session.flush()
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 4353, in flush
+    self._flush(objects)
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 4488, in _flush
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 146, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 4449, in _flush
+    flush_context.execute()
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\unitofwork.py", line 466, in execute
+    rec.execute(self)
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\unitofwork.py", line 642, in execute
+    util.preloaded.orm_persistence.save_obj(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\persistence.py", line 93, in save_obj
+    _emit_insert_statements(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\persistence.py", line 1233, in _emit_insert_statements
+    result = connection.execute(
+             ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1416, in execute
+    return meth(
+           ^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\sql\elements.py", line 523, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1638, in _execute_clauseelement
+    ret = self._execute_context(
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1843, in _execute_context
+    return self._exec_single_context(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1983, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 2352, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1964, in _exec_single_context
+    self.dialect.do_execute(
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 945, in do_execute
+    cursor.execute(statement, parameters)
+sqlalchemy.exc.IntegrityError: (psycopg2.errors.ForeignKeyViolation) inserción o actualización en la tabla «tickets» viola la llave foránea «tickets_departamento_id_fkey»
+DETAIL:  La llave (departamento_id)=(1) no está presente en la tabla «departamentos».
+
+[SQL: INSERT INTO tickets (descripcion, username, asignado_a, sucursal_id, estado, fecha_creacion, fecha_finalizado, fecha_en_progreso, fecha_solucion, departamento_id, criticidad, categoria, subcategoria, subsubcategoria, aparato_id, problema_detectado, necesita_refaccion, descripcion_refaccion, url_evidencia) VALUES (%(descripcion)s, %(username)s, %(asignado_a)s, %(sucursal_id)s, %(estado)s, %(fecha_creacion)s, %(fecha_finalizado)s, %(fecha_en_progreso)s, %(fecha_solucion)s, %(departamento_id)s, %(criticidad)s, %(categoria)s, %(subcategoria)s, %(subsubcategoria)s, %(aparato_id)s, %(problema_detectado)s, %(necesita_refaccion)s, %(descripcion_refaccion)s, %(url_evidencia)s) RETURNING tickets.id]
+[parameters: {'descripcion': 'Ticket de prueba', 'username': 'ADMICORP', 'asignado_a': None, 'sucursal_id': 1000, 'estado': 'abierto', 'fecha_creacion': datetime.datetime(2025, 7, 8, 23, 42, 47, 129728, tzinfo=datetime.timezone.utc), 'fecha_finalizado': None, 'fecha_en_progreso': None, 'fecha_solucion': None, 'departamento_id': 1, 'criticidad': 1, 'categoria': 'PRUEBA', 'subcategoria': None, 'subsubcategoria': None, 'aparato_id': None, 'problema_detectado': None, 'necesita_refaccion': False, 'descripcion_refaccion': None, 'url_evidencia': None}]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+
+
+[2025-07-08 16:43:31] ERROR en  - /api/tickets/list
+Mensaje: Query.order_by() being called on a Query which already has LIMIT or OFFSET applied.  Call order_by() before limit() or offset() are applied.
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\ticket_routes.py", line 164, in list_tickets_with_filters
+    tickets = query.order_by(Ticket.id.desc()).all()
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 2, in order_by
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\sql\base.py", line 280, in _generative
+    x = fn(self, *args, **kw)
+        ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\query.py", line 2035, in order_by
+    assertion("order_by")
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\sqlalchemy\orm\query.py", line 443, in _no_limit_offset
+    raise sa_exc.InvalidRequestError(
+sqlalchemy.exc.InvalidRequestError: Query.order_by() being called on a Query which already has LIMIT or OFFSET applied.  Call order_by() before limit() or offset() are applied.
+
+
+[2025-07-08 16:44:09] ERROR en Eliminar permiso - /api/permisos/eliminar
+Mensaje: 400 Bad Request: Failed to decode JSON object: Expecting value: line 1 column 1 (char 0)
+Traza:
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\werkzeug\wrappers\request.py", line 611, in get_json
+    rv = self.json_module.loads(data)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\flask\json\provider.py", line 188, in loads
+    return json.loads(s, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\AppData\Local\Programs\Python\Python312\Lib\json\__init__.py", line 346, in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\AppData\Local\Programs\Python\Python312\Lib\json\decoder.py", line 338, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\AppData\Local\Programs\Python\Python312\Lib\json\decoder.py", line 356, in raw_decode
+    raise JSONDecodeError("Expecting value", s, err.value) from None
+json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Vladimir\Documents\Sistema tickets\app\routes\permisos_routes.py", line 75, in eliminar_permiso
+    data = request.json
+           ^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\werkzeug\wrappers\request.py", line 560, in json
+    return self.get_json()
+           ^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\werkzeug\wrappers\request.py", line 620, in get_json
+    rv = self.on_json_loading_failed(e)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\flask\wrappers.py", line 130, in on_json_loading_failed
+    return super().on_json_loading_failed(e)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vladimir\Documents\Sistema tickets\.venv\Lib\site-packages\werkzeug\wrappers\request.py", line 645, in on_json_loading_failed
+    raise BadRequest(f"Failed to decode JSON object: {e}")
+werkzeug.exceptions.BadRequest: 400 Bad Request: Failed to decode JSON object: Expecting value: line 1 column 1 (char 0)
+

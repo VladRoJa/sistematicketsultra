@@ -20,6 +20,8 @@ class UserORM(db.Model):
 
     # ─── Relaciones ─────────────────────────────────────────
     movimientos = db.relationship('MovimientoInventario', backref='usuario', cascade='all, delete-orphan')
+    asistencias = db.relationship('RegistroAsistencia', backref='usuario', cascade='all, delete-orphan')
+
 
     # ─────────────────────────────────────────────────────────────
     # MÉTODOS

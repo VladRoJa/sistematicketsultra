@@ -1,0 +1,100 @@
+<!-- src/app/inventario/inventario.component.html -->
+
+<div class="flex items-center justify-between mb-4">
+  <h1 class="text-xl font-bold">Listado de Inventario</h1>
+  <button mat-flat-button color="primary" (click)="abrirDialogoAgregar()">
+    <mat-icon>add</mat-icon> Agregar Inventario
+  </button>
+</div>
+
+<mat-table [dataSource]="inventariosFiltrados" *ngIf="!loading && inventariosFiltrados.length > 0">
+
+  <!-- Columna ID -->
+  <ng-container matColumnDef="id">
+    <mat-header-cell *matHeaderCellDef>ID</mat-header-cell>
+    <mat-cell *matCellDef="let elem">{{ elem.id }}</mat-cell>
+  </ng-container>
+
+  <!-- Columnas filtrables -->
+  <ng-container *ngFor="let col of columnasFiltrables" [matColumnDef]="col">
+    <mat-header-cell *matHeaderCellDef [class.filtro-activo]="isFilterActive(col)">
+      <span>{{ col.replace('_', ' ') }}</span>
+      <button mat-icon-button
+        [matMenuTriggerFor]="filtroMenu"
+        (menuOpened)="abrirMenuFiltro(col)"
+        #menuTrigger="matMenuTrigger">
+        <mat-icon>filter_list</mat-icon>
+      </button>
+    </mat-header-cell>
+    <mat-cell *matCellDef="let elem">{{ elem[col] }}</mat-cell>
+  </ng-container>
+
+  <!-- Acciones -->
+  <ng-container matColumnDef="acciones">
+    <mat-header-cell *matHeaderCellDef>Acciones</mat-header-cell>
+    <mat-cell *matCellDef="let elem">
+      <button mat-icon-button color="primary" (click)="abrirDialogoEditar(elem)">
+        <mat-icon>edit</mat-icon>
+      </button>
+      <button mat-icon-button color="warn" (click)="eliminarInventario(elem.id)">
+        <mat-icon>delete</mat-icon>
+      </button>
+    </mat-cell>
+  </ng-container>
+
+  <mat-header-row *matHeaderRowDef="displayedColumns"></mat-header-row>
+  <mat-row *matRowDef="let row; columns: displayedColumns"></mat-row>
+</mat-table>
+
+<!-- Menú de filtro Excel -->
+<mat-menu #filtroMenu="matMenu" [overlapTrigger]="false" class="menu-filtro-inventario">
+  <ng-template matMenuContent>
+    <div *ngIf="filtroColumnaActual" style="padding: 12px 18px; width: 230px;" (click)="$event.stopPropagation()">
+      <!-- Buscador dinámico -->
+      <mat-form-field appearance="fill" class="w-full">
+        <mat-label>Buscar</mat-label>
+        <input matInput
+          [(ngModel)]="filtros[filtroColumnaActual].texto"
+          (ngModelChange)="buscar(filtroColumnaActual, filtros[filtroColumnaActual].texto)"
+          autocomplete="off">
+      </mat-form-field>
+      <!-- Seleccionar todos -->
+      <mat-checkbox
+        [checked]="isTodoSeleccionado(filtroColumnaActual)"
+        (change)="seleccionarTodo(filtroColumnaActual, $event.checked); $event.stopPropagation();">
+        Seleccionar todos
+      </mat-checkbox>
+      <!-- Opciones dinámicas -->
+      <div class="max-h-32 overflow-y-auto my-2" (click)="$event.stopPropagation()">
+        <mat-checkbox
+          *ngFor="let item of obtenerOpcionesVisibles(filtros[filtroColumnaActual]); let i = index"
+          [checked]="item.seleccionado"
+          (change)="alternarSeleccionIndividual(filtroColumnaActual, i, $event.checked); $event.stopPropagation();">
+          {{ item.valor }}
+        </mat-checkbox>
+      </div>
+      <!-- Botones acción -->
+      <div class="flex justify-between mt-3">
+        <button mat-stroked-button color="primary"
+          (click)="aplicarFiltro(filtroColumnaActual); $event.stopPropagation();">Aplicar</button>
+        <button mat-button
+          (click)="limpiarFiltro(filtroColumnaActual); $event.stopPropagation();">Limpiar</button>
+      </div>
+    </div>
+  </ng-template>
+</mat-menu>
+
+<!-- Spinner de carga -->
+<div *ngIf="loading" class="flex justify-center items-center mt-8">
+  <mat-spinner diameter="40"></mat-spinner>
+</div>
+
+<!-- Sin registros -->
+<div *ngIf="!loading && inventariosFiltrados.length === 0" class="text-gray-500 text-center mt-8">
+  No hay registros de inventario.
+</div>
+
+<!-- Error -->
+<div *ngIf="!loading && error" class="text-red-500 text-center mt-8">
+  {{ error }}
+</div>

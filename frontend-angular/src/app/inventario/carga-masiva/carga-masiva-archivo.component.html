@@ -1,0 +1,52 @@
+<!-- frontend-angular\src\app\inventario\carga-masiva\carga-masiva-archivo.component.html-->
+
+
+
+<mat-card class="max-w-xl mx-auto p-6 text-center">
+  <h2 class="mat-headline mb-4">Carga Masiva de {{ tipo === 'catalogo' ? 'Catálogo' : 'Existencias' }}</h2>
+
+  <button mat-stroked-button color="accent" (click)="descargarLayout()" [disabled]="cargando">
+    Descargar layout de {{ tipo }}
+  </button>
+
+  <input
+    type="file"
+    accept=".csv, .xlsx"
+    id="archivoInput-{{ tipo }}"
+    (change)="subirArchivo($event)"
+    [disabled]="cargando"
+    style="display: none"
+  />
+  <label [for]="'archivoInput-' + tipo">
+    <button mat-raised-button color="primary" [disabled]="cargando">
+      Seleccionar archivo
+    </button>
+  </label>
+
+  <!-- Muestra el nombre del archivo seleccionado -->
+  <div *ngIf="archivo" style="font-size: 0.96em; color: #555; margin-top: 7px;">
+    Archivo seleccionado: <b>{{ archivo.name }}</b>
+  </div>
+
+  <div *ngIf="mensaje" class="mt-4">
+    <span
+      [ngClass]="{
+        'text-green-700': mensaje.toLowerCase().includes('exitosa') || mensaje.toLowerCase().includes('cargado') || mensaje.toLowerCase().includes('éxito'),
+        'text-red-700': mensaje.toLowerCase().includes('error') || mensaje.toLowerCase().includes('no se')
+      }"
+      style="font-weight: 500;"
+    >
+      {{ mensaje }}
+    </span>
+  </div>
+
+  <div *ngIf="cargando" class="flex items-center justify-center gap-2 mt-4">
+    <mat-progress-spinner
+      diameter="32"
+      mode="indeterminate"
+      color="primary"
+      style="margin-right: 12px;"
+    ></mat-progress-spinner>
+    <span class="text-blue-700">Procesando archivo...</span>
+  </div>
+</mat-card>

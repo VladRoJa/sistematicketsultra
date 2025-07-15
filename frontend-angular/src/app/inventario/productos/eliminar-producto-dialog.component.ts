@@ -1,4 +1,4 @@
-// src/app/inventario/productos/eliminar-producto-dialog.component.ts
+// src/app/inventario/eliminar-inventario-dialog.component.ts
 
 import { Component, Inject } from '@angular/core';
 import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
@@ -6,18 +6,18 @@ import { CommonModule } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
 
 @Component({
-  selector: 'app-eliminar-producto-dialog',
+  selector: 'app-eliminar-inventario-dialog',
   standalone: true,
   imports: [
     CommonModule,
     MatDialogModule,
     MatButtonModule
   ],
-  templateUrl: './eliminar-producto-dialog.component.html'
+  templateUrl: './eliminar-inventario-dialog.component.html'
 })
-export class EliminarProductoDialogComponent {
+export class EliminarInventarioDialogComponent {
   constructor(
-    public dialogRef: MatDialogRef<EliminarProductoDialogComponent>,
+    public dialogRef: MatDialogRef<EliminarInventarioDialogComponent>,
     @Inject(MAT_DIALOG_DATA) public data: { nombre: string }
   ) {}
 

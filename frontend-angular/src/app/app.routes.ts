@@ -9,6 +9,7 @@ import { AdminPermisosComponent } from './admin-permisos/admin-permisos.componen
 import { AuthGuard } from './guards/auth.guard';
 import { AdminGuard } from './guards/admin.guard';
 import { LayoutComponent } from './layout/layout.component';
+import { RegistrarAsistenciaComponent } from './registrar-asistencia/registrar-asistencia.component';
 
 export const routes: Routes = [
   { path: '', redirectTo: 'login', pathMatch: 'full' },
@@ -38,11 +39,19 @@ export const routes: Routes = [
         canActivate: [AuthGuard],
         loadChildren: () => import('./inventario/inventario.routes').then(m => m.INVENTARIO_ROUTES)
       },
+        {
+        path: 'catalogos',
+        loadChildren: () => import('./inventario/catalogos/catalogos-routing.module').then(m => m.CatalogosRoutingModule)
+      },
       {
         path: 'carga-masiva',
         loadComponent: () => import('./inventario/carga-masiva/pantalla-carga-masiva.component')
           .then(m => m.PantallaCargaMasivaComponent)
-      }
+      },
+      {
+        path: 'asistencia/registrar',
+        loadComponent: () => import('./registrar-asistencia/registrar-asistencia.component').then(m => m.RegistrarAsistenciaComponent)
+      },
     ],
   },
 

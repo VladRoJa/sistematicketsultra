@@ -9,6 +9,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 import pytz
 from sqlalchemy import or_
+from app.models.inventario import InventarioGeneral
 from config import Config
 from sqlalchemy import or_
 from app.models.ticket_model import Ticket
@@ -459,8 +460,7 @@ from flask_jwt_extended import jwt_required
 @ticket_bp.route('/migrar-historial-local', methods=['POST'])
 @jwt_required()
 def migrar_historial_local():
-    from datetime import datetime, timezone, time
-    import pytz
+
 
     tz_mx = pytz.timezone("America/Tijuana")
     tickets = Ticket.query.all()
@@ -507,10 +507,7 @@ def migrar_historial_local():
 @ticket_bp.route('/migrar-historial-railway', methods=['POST'])
 @jwt_required()
 def migrar_historial_railway():
-    from datetime import datetime, timezone, time
-    import pytz
-    from app.models.ticket_model import Ticket
-    from app.extensions import db
+
 
     tz_mx = pytz.timezone("America/Tijuana")
     tickets = Ticket.query.all()
@@ -554,10 +551,7 @@ def migrar_historial_railway():
 # ─────────────────────────────────────────────────────────────
 
 # Ruta temporal y protegida para borrar todos los tickets
-from flask_jwt_extended import jwt_required
-from app.models.ticket_model import Ticket
-from app.extensions import db
-from flask import Blueprint, jsonify
+
 
 @ticket_bp.route('/eliminar-todos', methods=['DELETE'])
 @jwt_required()
@@ -568,3 +562,174 @@ def eliminar_todos_los_tickets():
         return jsonify({"mensaje": f"🧨 Se eliminaron {cantidad} tickets."}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+# ─────────────────────────────────────────────────────────────
+# RUTA: Obtener historial de tickets y reparaciones para un equipo
+# ─────────────────────────────────────────────────────────────
+
+
+@ticket_bp.route('/historial-equipo/<int:equipo_id>', methods=['GET'])
+@jwt_required()
+def historial_equipo(equipo_id):
+    """
+    Retorna el historial de tickets relacionados a un equipo/aparato (por aparato_id).
+    """
+    try:
+        user = UserORM.get_by_id(get_jwt_identity())
+        if not user:
+            return jsonify({"mensaje": "Usuario no encontrado"}), 404
+
+        # Si no eres admin, filtra solo tickets de tu sucursal
+        query = Ticket.query.filter(Ticket.aparato_id == equipo_id)
+        if not (user.rol == "ADMINISTRADOR" or user.sucursal_id == 1000):
+            query = query.filter(Ticket.sucursal_id == user.sucursal_id)
+
+        tickets = query.order_by(Ticket.fecha_creacion.desc()).all()
+
+        data = []
+        for t in tickets:
+            data.append({
+                "ticket_id": t.id,
+                "descripcion": t.descripcion,
+                "estado": t.estado,
+                "fecha_creacion": t.fecha_creacion.isoformat() if t.fecha_creacion else None,
+                "fecha_solucion": t.fecha_solucion.isoformat() if t.fecha_solucion else None,
+                "problema_detectado": t.problema_detectado,
+                "necesita_refaccion": t.necesita_refaccion,
+                "descripcion_refaccion": t.descripcion_refaccion,
+                "historial_fechas": t.historial_fechas or [],
+                "username": t.username,
+                "asignado_a": t.asignado_a,
+                "url_evidencia": t.url_evidencia,
+                "categoria": t.categoria,
+                "subcategoria": t.subcategoria,
+                "subsubcategoria": t.subsubcategoria,
+            })
+        return jsonify(data), 200
+    except Exception as e:
+        return manejar_error(e, "historial_equipo")
+
+
+@ticket_bp.route('/historial-por-equipo/<int:aparato_id>', methods=['GET'])
+@jwt_required()
+def historial_por_equipo(aparato_id):
+    """
+    Devuelve todos los tickets ligados a un aparato/sistema específico (por aparato_id).
+    Si el usuario NO es admin, solo ve los tickets de su sucursal.
+    """
+    try:
+        user = UserORM.get_by_id(get_jwt_identity())
+        if not user:
+            return jsonify({"mensaje": "Usuario no encontrado"}), 404
+
+        query = Ticket.query.filter_by(aparato_id=aparato_id)
+
+        # Solo admins pueden ver todos, los demás solo los de su sucursal
+        if not (user.rol == "ADMINISTRADOR" or user.sucursal_id == 1000):
+            query = query.filter_by(sucursal_id=user.sucursal_id)
+
+        tickets = query.order_by(Ticket.fecha_creacion.desc()).all()
+        return jsonify([t.to_dict() for t in tickets]), 200
+
+    except Exception as e:
+        return manejar_error(e, "historial_por_equipo")
+
+
+@ticket_bp.route('/historial-global', methods=['GET'])
+@jwt_required()
+def historial_global():
+    """
+    Devuelve el historial completo de tickets de todos los aparatos/sistemas.
+    Permite filtrar por tipo (aparato/sistema), sucursal, estado, fecha, etc.
+    """
+    try:
+        user = UserORM.get_by_id(get_jwt_identity())
+        if not user:
+            return jsonify({"mensaje": "Usuario no encontrado"}), 404
+
+        # Filtros opcionales
+        tipo = request.args.get('tipo')  # 'aparato' o 'sistema'
+        sucursal_id = request.args.get('sucursal_id', type=int)
+        estado = request.args.get('estado')  # abierto/en progreso/finalizado
+
+        query = Ticket.query
+
+        # Filtro por tipo de inventario
+        if tipo:
+            # Relación con InventarioGeneral (asume que tienes el campo tipo en inventario)
+            query = query.join(Ticket.inventario)
+            query = query.filter(InventarioGeneral.tipo == tipo)
+
+        # Filtro por sucursal (admins ven todo)
+        if not (user.rol == "ADMINISTRADOR" or user.sucursal_id == 1000):
+            query = query.filter_by(sucursal_id=user.sucursal_id)
+        elif sucursal_id:
+            query = query.filter_by(sucursal_id=sucursal_id)
+
+        # Filtro por estado
+        if estado:
+            query = query.filter_by(estado=estado)
+
+        tickets = query.order_by(Ticket.fecha_creacion.desc()).all()
+        return jsonify([t.to_dict() for t in tickets]), 200
+
+    except Exception as e:
+        return manejar_error(e, "historial_global")
+
+
+@ticket_bp.route('/historial/<int:aparato_id>', methods=['GET'])
+@jwt_required()
+def historial_aparato(aparato_id):
+    """
+    Devuelve el historial completo de un aparato/sistema por su ID:
+    - Tickets relacionados
+    - Movimientos de inventario relacionados
+    """
+    try:
+        user = UserORM.get_by_id(get_jwt_identity())
+        if not user:
+            return jsonify({"mensaje": "Usuario no encontrado"}), 404
+
+        # FILTRO: Si no es admin, solo puede ver su sucursal
+        filtro_sucursal = []
+        if not (user.rol == "ADMINISTRADOR" or user.sucursal_id == 1000):
+            filtro_sucursal = [user.sucursal_id]
+
+        # --- Tickets relacionados ---
+        tickets_query = Ticket.query.filter_by(aparato_id=aparato_id)
+        if filtro_sucursal:
+            tickets_query = tickets_query.filter(Ticket.sucursal_id.in_(filtro_sucursal))
+        tickets = tickets_query.order_by(Ticket.fecha_creacion.desc()).all()
+        tickets_serializados = [t.to_dict() for t in tickets]
+
+        # --- Movimientos de inventario relacionados ---
+        # Un movimiento puede traer varios detalles (productos), pero filtramos por inventario_id == aparato_id
+        from app.models.inventario import DetalleMovimiento, MovimientoInventario
+
+        detalles = DetalleMovimiento.query.filter_by(inventario_id=aparato_id).all()
+        movimientos = []
+        for d in detalles:
+            mov = d.movimiento
+            # Filtramos por sucursal si aplica
+            if filtro_sucursal and mov.sucursal_id not in filtro_sucursal:
+                continue
+            movimientos.append({
+                'id': mov.id,
+                'tipo': mov.tipo_movimiento,
+                'fecha': mov.fecha.strftime('%d/%m/%Y %H:%M'),
+                'usuario_id': mov.usuario_id,
+                'sucursal_id': mov.sucursal_id,
+                'cantidad': d.cantidad,
+                'unidad_medida': d.unidad_medida,
+                'observaciones': mov.observaciones,
+            })
+
+        # --- Respuesta combinada ---
+        return jsonify({
+            'tickets': tickets_serializados,
+            'movimientos': movimientos,
+        }), 200
+
+    except Exception as e:
+        return manejar_error(e, "historial_aparato")
+

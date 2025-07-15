@@ -1,31 +1,28 @@
 # C:\Users\Vladimir\Documents\Sistema tickets\app\routes\importar_inventario.py
 
-# ------------------------------------------------------------------------------
-# BLUEPRINT: IMPORTAR INVENTARIO DESDE EXCEL O CSV
-# ------------------------------------------------------------------------------
+# app/routes/importar_inventario.py
 
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, send_file
 from werkzeug.utils import secure_filename
-import pandas as pd
 from app.extensions import db
-from app.models.inventario import Producto, InventarioSucursal
+from app.models.inventario import InventarioGeneral, InventarioSucursal
 from app.models.sucursal_model import Sucursal
-from datetime import datetime
-from app.utils.error_handler import manejar_error
+from app.utils.string_utils import normalizar_campo
+import pandas as pd
+import io
+from flask_jwt_extended import jwt_required
+
 
 bp_importar = Blueprint('importar', __name__)
 
-# ------------------------------------------------------------------------------
-# RUTA: Importar archivo de inventario (Excel o CSV)
-# ------------------------------------------------------------------------------
-@bp_importar.route('/api/importar-archivo', methods=['POST'])
-def importar_archivo():
+# --- Carga masiva de catálogo (productos) ---
+@bp_importar.route('/catalogo', methods=['POST'])
+@jwt_required()
+def importar_catalogo():
     if 'archivo' not in request.files:
         return jsonify({"error": "No se envió ningún archivo"}), 400
-
     archivo = request.files['archivo']
     filename = secure_filename(archivo.filename)
-
     try:
         if filename.endswith('.xlsx'):
             df = pd.read_excel(archivo)
@@ -35,68 +32,104 @@ def importar_archivo():
             return jsonify({"error": "Formato de archivo no permitido"}), 400
 
         df = df.fillna('')
-        datos = df.to_dict(orient='records')
-
-        insertados = 0
-
-        for fila in datos:
-            descripcion = str(fila.get('descripcion', '')).strip().upper()
-            categoria = str(fila.get('categoria', '')).strip().upper()
-            unidad = str(fila.get('unidad', '')).strip().upper()
-            sucursal_nombre = str(fila.get('sucursal', '')).strip().upper()
-            fecha = str(fila.get('fecha_inventario', '')).strip()
-
-            if not (descripcion and categoria and unidad and sucursal_nombre and fecha):
+        creados, actualizados, errores = 0, 0, []
+        for idx, fila in df.iterrows():
+            nombre = normalizar_campo(str(fila.get('nombre', '')))
+            marca = normalizar_campo(str(fila.get('marca', '')))
+            if not nombre or not marca:
+                errores.append(f'Fila {idx+2}: Falta nombre o marca')
                 continue
-
-            try:
-                fecha_formateada = pd.to_datetime(fecha).strftime('%Y-%m-%d')
-            except Exception:
+            existe = InventarioGeneral.query.filter_by(nombre=nombre, marca=marca).first()
+            if existe:
+                actualizados += 1
                 continue
-
-            # Buscar o crear producto
-            producto = Producto.query.filter_by(
-                nombre=descripcion,
-                categoria=categoria,
-                unidad_medida=unidad
-            ).first()
-
-            if not producto:
-                producto = Producto(
-                    nombre=descripcion,
-                    categoria=categoria,
-                    unidad_medida=unidad
-                )
-                db.session.add(producto)
-                db.session.flush()  # 🔥 Obtener ID sin hacer commit inmediato
-
-            # Buscar o crear sucursal
-            sucursal = Sucursal.query.filter_by(sucursal=sucursal_nombre).first()
-            if not sucursal:
-                sucursal = Sucursal(
-                    serie='N/A',
-                    sucursal=sucursal_nombre,
-                    estado='N/A',
-                    municipio='N/A',
-                    direccion='N/A'
-                )
-                db.session.add(sucursal)
-                db.session.flush()
-
-            # Insertar inventario
-            inventario = InventarioSucursal(
-                producto_id=producto.id,
-                sucursal_id=sucursal.sucursal_id,
-                stock=float(fila.get('stock_actual') or 0)
+            inventario = InventarioGeneral(
+                tipo=normalizar_campo(str(fila.get('tipo', 'producto'))),
+                nombre=nombre,
+                marca=marca,
+                descripcion=normalizar_campo(str(fila.get('descripcion', ''))),
+                categoria=normalizar_campo(str(fila.get('categoria', ''))),
+                unidad=normalizar_campo(str(fila.get('unidad', ''))),
+                proveedor=normalizar_campo(str(fila.get('proveedor', '')))
             )
             db.session.add(inventario)
-            insertados += 1
-
+            creados += 1
         db.session.commit()
-
-        return jsonify({"mensaje": f"{insertados} registros insertados"}), 200
-
+        msg = f'🟢 {creados} productos creados. '
+        if actualizados: msg += f'⚠️ {actualizados} ya existían. '
+        if errores: msg += f'❌ Errores: {"; ".join(errores)}'
+        return jsonify({'mensaje': msg})
     except Exception as e:
         db.session.rollback()
-        return manejar_error(e, "procesar archivo")
-    
+        return jsonify({"error": f"Error al importar catálogo: {str(e)}"}), 500
+
+
+# --- Carga masiva de existencias (stock) ---
+@bp_importar.route('/existencias', methods=['POST'])
+@jwt_required()
+def importar_existencias():
+    if 'archivo' not in request.files:
+        return jsonify({"error": "No se envió ningún archivo"}), 400
+    archivo = request.files['archivo']
+    filename = secure_filename(archivo.filename)
+    try:
+        if filename.endswith('.xlsx'):
+            df = pd.read_excel(archivo)
+        elif filename.endswith('.csv'):
+            df = pd.read_csv(archivo)
+        else:
+            return jsonify({"error": "Formato de archivo no permitido"}), 400
+        df = df.fillna('')
+        actualizados, errores = 0, []
+        for idx, fila in df.iterrows():
+            nombre = normalizar_campo(str(fila.get('nombre', '')))
+            marca = normalizar_campo(str(fila.get('marca', '')))
+            sucursal_nombre = normalizar_campo(str(fila.get('sucursal', '')))
+            stock = int(float(fila.get('stock', 0) or 0))
+            if not (nombre and marca and sucursal_nombre):
+                errores.append(f'Fila {idx+2}: Falta nombre, marca o sucursal')
+                continue
+            producto = InventarioGeneral.query.filter_by(nombre=nombre, marca=marca).first()
+            if not producto:
+                errores.append(f'Fila {idx+2}: Producto "{nombre} {marca}" no encontrado')
+                continue
+            sucursal = Sucursal.query.filter_by(sucursal=sucursal_nombre).first()
+            if not sucursal:
+                errores.append(f'Fila {idx+2}: Sucursal "{sucursal_nombre}" no encontrada')
+                continue
+            inv_suc = InventarioSucursal.query.filter_by(inventario_id=producto.id, sucursal_id=sucursal.sucursal_id).first()
+            if not inv_suc:
+                inv_suc = InventarioSucursal(inventario_id=producto.id, sucursal_id=sucursal.sucursal_id, stock=stock)
+                db.session.add(inv_suc)
+            else:
+                inv_suc.stock = stock
+            actualizados += 1
+        db.session.commit()
+        msg = f'🟢 {actualizados} existencias actualizadas. '
+        if errores: msg += f'❌ Errores: {"; ".join(errores)}'
+        return jsonify({'mensaje': msg})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"Error al importar existencias: {str(e)}"}), 500
+
+@bp_importar.route('/layout/<tipo>', methods=['GET'])
+@jwt_required()
+def descargar_layout(tipo):
+    if tipo == 'catalogo':
+        columns = ['nombre', 'marca', 'tipo', 'descripcion', 'categoria', 'unidad', 'proveedor']
+    elif tipo == 'existencias':
+        columns = ['nombre', 'marca', 'sucursal', 'stock']
+    else:
+        return jsonify({'error': 'Tipo de layout no válido'}), 400
+    df = pd.DataFrame(columns=columns)
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False)
+    output.seek(0)
+    return send_file(
+        output,
+        as_attachment=True,
+        download_name=f'layout_{tipo}.xlsx',
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+

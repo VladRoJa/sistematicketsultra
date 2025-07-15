@@ -1,0 +1,118 @@
+<!-- src/app/inventario/dialogo-inventario/dialogo-inventario.component.html -->
+
+<h2 mat-dialog-title>
+  {{ modo === 'crear' ? 'Agregar Inventario' : 'Editar Inventario' }}
+</h2>
+<form [formGroup]="form" (ngSubmit)="guardar()" class="inventario-form">
+  <div class="form-grid">
+
+    <!-- NOMBRE -->
+    <mat-form-field appearance="fill" class="campo">
+      <mat-label>Nombre</mat-label>
+      <input matInput formControlName="nombre" />
+    </mat-form-field>
+
+    <!-- DESCRIPCIÓN -->
+    <mat-form-field appearance="fill" class="campo">
+      <mat-label>Descripción</mat-label>
+      <input matInput formControlName="descripcion" />
+    </mat-form-field>
+
+    <!-- TIPO -->
+    <mat-form-field appearance="fill" class="campo">
+      <mat-label>Tipo</mat-label>
+      <mat-select formControlName="tipo">
+        <mat-option>
+          <input matInput placeholder="Buscar tipo" [formControl]="tipoFiltroControl" (click)="$event.stopPropagation()" autocomplete="off">
+        </mat-option>
+        <mat-option *ngFor="let t of tiposFiltrados" [value]="t.nombre">
+          {{ t.nombre }}
+        </mat-option>
+      </mat-select>
+    </mat-form-field>
+
+    <!-- MARCA -->
+    <mat-form-field appearance="fill" class="campo">
+      <mat-label>Marca</mat-label>
+      <mat-select formControlName="marca">
+        <mat-option>
+          <input matInput placeholder="Buscar marca" [formControl]="marcaFiltroControl" (click)="$event.stopPropagation()" autocomplete="off">
+        </mat-option>
+        <mat-option *ngFor="let m of marcasFiltradas" [value]="m.nombre">
+          {{ m.nombre }}
+        </mat-option>
+      </mat-select>
+    </mat-form-field>
+
+    <!-- PROVEEDOR -->
+    <mat-form-field appearance="fill" class="campo">
+      <mat-label>Proveedor</mat-label>
+      <mat-select formControlName="proveedor">
+        <mat-option>
+          <input matInput placeholder="Buscar proveedor" [formControl]="proveedorFiltroControl" (click)="$event.stopPropagation()" autocomplete="off">
+        </mat-option>
+        <mat-option *ngFor="let p of proveedoresFiltradas" [value]="p.nombre">
+          {{ p.nombre }}
+        </mat-option>
+      </mat-select>
+    </mat-form-field>
+
+    <!-- CATEGORÍA -->
+    <mat-form-field appearance="fill" class="campo">
+      <mat-label>Categoría</mat-label>
+      <mat-select formControlName="categoria">
+        <mat-option>
+          <input matInput placeholder="Buscar categoría" [formControl]="categoriaFiltroControl" (click)="$event.stopPropagation()" autocomplete="off">
+        </mat-option>
+        <mat-option *ngFor="let c of categoriasFiltradas" [value]="c.nombre">
+          {{ c.nombre }}
+        </mat-option>
+      </mat-select>
+    </mat-form-field>
+
+    <!-- UNIDAD -->
+    <mat-form-field appearance="fill" class="campo">
+      <mat-label>Unidad</mat-label>
+      <mat-select formControlName="unidad">
+        <mat-option>
+          <input matInput placeholder="Buscar unidad" [formControl]="unidadFiltroControl" (click)="$event.stopPropagation()" autocomplete="off">
+        </mat-option>
+        <mat-option *ngFor="let u of unidadesFiltradas" [value]="u.nombre">
+          {{ u.nombre }}
+        </mat-option>
+      </mat-select>
+    </mat-form-field>
+
+    <!-- CÓDIGO INTERNO -->
+    <ng-container *ngIf="form.get('tipo')?.value === 'Aparatos'">
+    <mat-form-field appearance="fill" class="campo">
+      <mat-label>Código Interno</mat-label>
+      <input matInput formControlName="codigo_interno" />
+    </mat-form-field>
+    </ng-container>
+
+    <!-- GRUPO MUSCULAR: solo si tipo == 'aparato' -->
+    <ng-container *ngIf="form.get('tipo')?.value === 'Aparatos'">
+      <mat-form-field appearance="fill" class="campo">
+        <mat-label>Grupo Muscular</mat-label>
+        <mat-select formControlName="grupo_muscular">
+          <mat-option>
+            <input matInput placeholder="Buscar grupo muscular" [formControl]="grupoMuscularFiltroControl" (click)="$event.stopPropagation()" autocomplete="off">
+          </mat-option>
+          <mat-option *ngFor="let g of gruposMuscularesFiltrados" [value]="g.nombre">
+            {{ g.nombre }}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+    </ng-container>
+
+    <!-- Puedes agregar más campos aquí... -->
+  </div>
+
+  <div class="botones">
+    <button mat-button color="warn" (click)="cancelar()" type="button">Cancelar</button>
+    <button mat-flat-button color="primary" [disabled]="form.invalid" type="submit">
+      {{ modo === 'crear' ? 'Agregar' : 'Actualizar' }}
+    </button>
+  </div>
+</form>

@@ -19,6 +19,9 @@
         [class.active]="item.label === currentSubmenu"
         (mouseenter)="moverIndicador($event); cambiarMenu(item.label)"
         (click)="navegarConCambio(item.path, item.label)"
+        tabindex="0"
+        role="button"
+        [attr.aria-label]="item.label"
       >
         {{ item.label }}
       </div>
@@ -26,37 +29,38 @@
   </div>
 
   <!-- Botón de cerrar sesión -->
-  <button mat-icon-button (click)="cerrarSesion()" class="logout-icon">
+  <button mat-icon-button (click)="cerrarSesion()" class="logout-icon" aria-label="Cerrar sesión">
     <mat-icon>logout</mat-icon>
   </button>
 </mat-toolbar>
 
-<!-- Submenú -->
+<!-- Submenú flotante debajo del menú principal -->
 <div
   *ngIf="submenuVisible && submenuActual.length > 0"
   class="submenu nav-container"
   (mouseenter)="cancelarOcultarSubmenu()"
   (mouseleave)="ocultarSubmenu()"
 >
-  <!-- Indicador de submenú -->
   <div id="submenu-indicator" class="nav-indicator" [ngStyle]="estiloIndicadorSubmenu"></div>
 
-  <!-- Ítems del submenú -->
   <div
     *ngFor="let sub of submenuActual"
     class="nav-item"
     [class.active]="submenuActivo[currentSubmenu] === sub.label"
     (mouseenter)="moverIndicadorSubmenu($event)"
     (click)="seleccionarSubmenu(sub.label, sub.path)"
+    tabindex="0"
+    role="button"
+    [attr.aria-label]="sub.label"
   >
     {{ sub.label }}
   </div>
 </div>
 
-<!-- Contenido de las páginas -->
+<!-- Área principal de la app -->
 <router-outlet></router-outlet>
 
-<!-- Botón flotante para reportar error -->
-<button mat-fab color="warn" class="boton-reporte-error" (click)="abrirModalReporte()">
+<!-- Botón flotante para reportar error o bug -->
+<button mat-fab color="warn" class="boton-reporte-error" (click)="abrirModalReporte()" aria-label="Reportar error">
   🐞
 </button>

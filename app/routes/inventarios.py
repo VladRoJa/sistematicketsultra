@@ -1,17 +1,26 @@
 # C:\Users\Vladimir\Documents\Sistema tickets\app\routes\inventarios.py
 
+import base64
+from io import BytesIO
 from flask import Blueprint, request, jsonify
 from flask_cors import CORS
 from flask_jwt_extended import jwt_required, get_jwt_identity
+import qrcode
 from app.extensions import db
-from app.models.inventario import Producto, MovimientoInventario, DetalleMovimiento, InventarioSucursal
+from app.models.inventario import InventarioGeneral, MovimientoInventario, DetalleMovimiento, InventarioSucursal
+from app.models.ticket_model import Ticket
 from app.models.user_model import UserORM
 from app.models.sucursal_model import Sucursal
 from datetime import datetime
+import pytz
 from config import Config
 from app.utils.error_handler import manejar_error
+from app.models.sucursal_model import Sucursal
+from app.utils.string_utils import normalizar_campo
 
 inventario_bp = Blueprint('inventario', __name__, url_prefix='/api/inventario')
+
+tz = pytz.timezone('America/Tijuana')
 
 # ----------------------------------------------------------------------
 # UTILIDADES
@@ -34,52 +43,93 @@ def success_response(message, extra=None):
 def ping():
     return success_response('Pong!')
 
-# Crear un nuevo producto
-@inventario_bp.route('/productos', methods=['POST'])
+# Crear un nuevo inventario (producto/aparato/unificado)
+@inventario_bp.route('/', methods=['POST'])
 @jwt_required()
-def crear_producto():
+def crear_inventario():
     try:
         data = request.get_json()
         if not data.get('nombre') or not data.get('categoria'):
             return error_response('Nombre y categoría son obligatorios')
 
-        if Producto.query.filter_by(nombre=data['nombre']).first():
-            return error_response('Ya existe un producto con ese nombre')
+        # Validar que NO exista otro producto con el mismo nombre y marca
+        existe = InventarioGeneral.query.filter_by(
+            nombre=data['nombre'].strip(),
+            marca=data.get('marca', '').strip()
+        ).first()
+        if existe:
+            return error_response('Ya existe un producto con ese nombre y marca')
 
-        nuevo_producto = Producto(
-            nombre=data['nombre'],
-            descripcion=data.get('descripcion'),
-            unidad_medida=data.get('unidad_medida'),
-            categoria=data['categoria'],
-            subcategoria=data.get('subcategoria')
+        ahora = datetime.now(tz)
+        codigo = normalizar_campo(data.get('codigo_interno')).upper()
+        nuevo = InventarioGeneral(
+            tipo=normalizar_campo(data.get('tipo', 'producto')),
+            nombre=normalizar_campo(data['nombre']),
+            descripcion=normalizar_campo(data.get('descripcion')),
+            marca=normalizar_campo(data.get('marca')),
+            proveedor=normalizar_campo(data.get('proveedor')),
+            categoria=normalizar_campo(data.get('categoria')),
+            unidad_medida=normalizar_campo(data.get('unidad_medida')),
+            codigo_interno=codigo,
+            no_equipo=normalizar_campo(data.get('no_equipo')),
+            gasto_sem=data.get('gasto_sem'),
+            gasto_mes=data.get('gasto_mes'),
+            pedido_mes=data.get('pedido_mes'),
+            semana_pedido=normalizar_campo(data.get('semana_pedido')),
+            fecha_inventario=ahora,
+            grupo_muscular=normalizar_campo(data.get('grupo_muscular')),
         )
 
-        db.session.add(nuevo_producto)
+        db.session.add(nuevo)
         db.session.commit()
-        return success_response('Producto creado correctamente', {'producto_id': nuevo_producto.id})
+        return success_response('Producto creado correctamente', {'inventario_id': nuevo.id})
 
     except Exception as e:
         db.session.rollback()
-        return manejar_error(e, "crear_producto")
+        return manejar_error(e, "crear_inventario")
 
-# Obtener todos los productos
-@inventario_bp.route('/productos', methods=['GET'])
+# Obtener todo el inventario
+@inventario_bp.route('/', methods=['GET'])
 @jwt_required()
-def obtener_productos():
+def obtener_inventario():
     try:
-        productos = Producto.query.all()
-        data = [{
-            'id': p.id,
-            'nombre': p.nombre,
-            'unidad_medida': p.unidad_medida,
-            'categoria': p.categoria
-        } for p in productos]
+        def descripcion_larga(i):
+            partes = [
+                i.nombre,
+                i.marca,
+                i.proveedor,
+                i.categoria,
+                f"ID:{i.id}"
+            ]
+            return " - ".join([str(p) for p in partes if p])
+
+        inventario = InventarioGeneral.query.all()
+        data = []
+        for i in inventario:
+            data.append({
+                'id': i.id,
+                'tipo': i.tipo,
+                'nombre': i.nombre,
+                'descripcion': i.descripcion,
+                'marca': i.marca,
+                'proveedor': i.proveedor,
+                'categoria': i.categoria,
+                'unidad_medida': i.unidad_medida,  
+                'codigo_interno': i.codigo_interno,
+                'no_equipo': i.no_equipo,
+                'gasto_sem': i.gasto_sem,
+                'gasto_mes': i.gasto_mes,
+                'pedido_mes': i.pedido_mes,
+                'semana_pedido': i.semana_pedido,
+                'fecha_inventario': str(i.fecha_inventario) if i.fecha_inventario else None,
+                'grupo_muscular': i.grupo_muscular,
+                'descripcion_larga': descripcion_larga(i)
+            })
         return jsonify(data), 200
-
     except Exception as e:
-        return manejar_error(e, "obtener_productos")
+        return manejar_error(e, "obtener_inventario")
 
-# Registrar entrada/salida
+# Registrar entrada/salida de inventario
 @inventario_bp.route('/movimientos', methods=['POST'])
 @jwt_required()
 def registrar_movimiento():
@@ -88,54 +138,60 @@ def registrar_movimiento():
         tipo = data.get('tipo_movimiento')
         sucursal_id = data.get('sucursal_id')
         usuario_id = data.get('usuario_id')
-        productos = data.get('productos', [])
+        inventarios = data.get('inventarios', [])
         observaciones = data.get('observaciones', '')
 
-        if tipo not in ['entrada', 'salida'] or not productos:
+        if tipo not in ['entrada', 'salida'] or not inventarios:
             return error_response('Datos inválidos')
 
         nuevo_movimiento = MovimientoInventario(
             tipo_movimiento=tipo,
             sucursal_id=sucursal_id,
             usuario_id=usuario_id,
-            observaciones=observaciones
+            observaciones=observaciones,
+            fecha=datetime.now(tz)
         )
         db.session.add(nuevo_movimiento)
         db.session.flush()  # Obtener ID antes de commit
 
-        for p in productos:
-            producto_id = p['producto_id']
+        for p in inventarios:
+            inventario_id = p['inventario_id']
             cantidad = int(p['cantidad'])
-            unidad = p.get('unidad_medida')
+
+            # Forzar la unidad del producto si no viene en el movimiento (por seguridad)
+            unidad_medida = p.get('unidad_medida')
+            if not unidad_medida:
+                unidad_medida = InventarioGeneral.query.get(inventario_id).unidad_medida
 
             detalle = DetalleMovimiento(
                 movimiento_id=nuevo_movimiento.id,
-                producto_id=producto_id,
+                inventario_id=inventario_id,
                 cantidad=cantidad,
-                unidad_medida=unidad
+                unidad_medida=unidad_medida
             )
             db.session.add(detalle)
 
-            inventario = InventarioSucursal.query.filter_by(
-                producto_id=producto_id,
+            # Si llevas control por sucursal
+            inventario_sucursal = InventarioSucursal.query.filter_by(
+                inventario_id=inventario_id,
                 sucursal_id=sucursal_id
             ).first()
 
-            if not inventario:
-                inventario = InventarioSucursal(
-                    producto_id=producto_id,
+            if not inventario_sucursal:
+                inventario_sucursal = InventarioSucursal(
+                    inventario_id=inventario_id,
                     sucursal_id=sucursal_id,
                     stock=0
                 )
-                db.session.add(inventario)
+                db.session.add(inventario_sucursal)
 
             if tipo == 'entrada':
-                inventario.stock += cantidad
+                inventario_sucursal.stock += cantidad
             else:  # salida
-                if inventario.stock < cantidad:
+                if inventario_sucursal.stock < cantidad:
                     db.session.rollback()
-                    return error_response(f'Stock insuficiente para el producto {producto_id}')
-                inventario.stock -= cantidad
+                    return error_response(f'Stock insuficiente para el inventario {inventario_id}')
+                inventario_sucursal.stock -= cantidad
 
         db.session.commit()
         return success_response('Movimiento registrado correctamente', {'movimiento_id': nuevo_movimiento.id})
@@ -143,38 +199,7 @@ def registrar_movimiento():
     except Exception as e:
         return manejar_error(e, "registrar_movimiento")
 
-
-@inventario_bp.route('/sucursal/<int:sucursal_id>', methods=['GET'])
-@jwt_required()
-def obtener_inventario_por_sucursal(sucursal_id):
-    try:
-        inventario = InventarioSucursal.query.filter_by(sucursal_id=sucursal_id).all()
-        resultado = []
-
-        for item in inventario:
-            producto = Producto.query.get(item.producto_id)
-            ultimo_mov = MovimientoInventario.query.join(DetalleMovimiento).filter(
-                DetalleMovimiento.producto_id == item.producto_id,
-                MovimientoInventario.sucursal_id == sucursal_id
-            ).order_by(MovimientoInventario.fecha.desc()).first()
-
-            resultado.append({
-                'producto_id': producto.id,
-                'nombre': producto.nombre,
-                'stock': item.stock,
-                'unidad_medida': producto.unidad_medida,
-                'ultimo_movimiento': ultimo_mov.fecha.strftime('%d/%m/%y %H:%M') if ultimo_mov else 'N/A'
-            })
-
-        return jsonify(resultado), 200
-
-    except Exception as e:
-        return manejar_error(e, "obtener_inventario_por_sucursal")
-
-
-# ─────────────────────────────────────────────────────────────
 # Ver historial de movimientos
-# ─────────────────────────────────────────────────────────────
 @inventario_bp.route('/movimientos', methods=['GET'])
 @jwt_required()
 def historial_movimientos():
@@ -193,23 +218,27 @@ def historial_movimientos():
 
         for m in movimientos:
             detalles = DetalleMovimiento.query.filter_by(movimiento_id=m.id).all()
-            productos = [{
-                'producto_id': d.producto_id,
+            inventarios = [{
+                'inventario_id': d.inventario_id,
                 'cantidad': d.cantidad,
-                'unidad_medida': d.unidad_medida
+                'unidad_medida': d.unidad_medida,
+                'codigo_interno': d.inventario.codigo_interno,
+                'no_equipo': d.inventario.no_equipo
             } for d in detalles]
 
             sucursal = Sucursal.query.get(m.sucursal_id)
             usuario = UserORM.query.get(m.usuario_id)
 
             resultado.append({
-                'movimiento_id': m.id,
+                'id': m.id,
                 'tipo': m.tipo_movimiento,
-                'fecha': m.fecha.strftime('%d/%m/%y %H:%M'),
-                'usuario_nombre': usuario.username if usuario else "Desconocido",
-                'sucursal_nombre': sucursal.sucursal if sucursal else "Desconocida",
+                'fecha': m.fecha.strftime('%d/%m/%Y %H:%M'), 
+                'usuario': usuario.username if usuario else "Desconocido",
+                'usuario_id': m.usuario_id,
+                'sucursal': sucursal.sucursal if sucursal else "Desconocida",  
+                'sucursal_id': m.sucursal_id,
                 'observaciones': m.observaciones,
-                'productos': productos
+                'inventarios': inventarios
             })
 
         return jsonify(resultado), 200
@@ -217,106 +246,40 @@ def historial_movimientos():
     except Exception as e:
         return manejar_error(e, "historial_movimientos")
 
-
-# ─────────────────────────────────────────────────────────────
-# Editar producto
-# ─────────────────────────────────────────────────────────────
-@inventario_bp.route('/productos/<int:producto_id>', methods=['PUT'])
-@jwt_required()
-def editar_producto(producto_id):
-    try:
-        producto = Producto.query.get(producto_id)
-        if not producto:
-            return error_response('Producto no encontrado', 404)
-
-        data = request.get_json()
-        nuevo_nombre = data.get('nombre')
-
-        if not nuevo_nombre or not data.get('categoria'):
-            return error_response('Nombre y categoría son obligatorios')
-
-        if Producto.query.filter(Producto.nombre == nuevo_nombre, Producto.id != producto_id).first():
-            return error_response('Ya existe otro producto con ese nombre')
-
-        producto.nombre = nuevo_nombre
-        producto.descripcion = data.get('descripcion', producto.descripcion)
-        producto.unidad_medida = data.get('unidad_medida', producto.unidad_medida)
-        producto.categoria = data.get('categoria', producto.categoria)
-        producto.subcategoria = data.get('subcategoria', producto.subcategoria)
-
-        db.session.commit()
-        return success_response('Producto actualizado correctamente')
-
-    except Exception as e:
-        db.session.rollback()
-        return manejar_error(e, "editar_producto")
-
-
-# ─────────────────────────────────────────────────────────────
-# Eliminar producto
-# ─────────────────────────────────────────────────────────────
-@inventario_bp.route('/productos/<int:producto_id>', methods=['DELETE'])
-@jwt_required()
-def eliminar_producto(producto_id):
-    try:
-        producto = Producto.query.get(producto_id)
-        if not producto:
-            return error_response('Producto no encontrado', 404)
-
-        if DetalleMovimiento.query.filter_by(producto_id=producto_id).first():
-            return error_response('No se puede eliminar: el producto tiene movimientos')
-
-        db.session.delete(producto)
-        db.session.commit()
-        return success_response('Producto eliminado correctamente')
-
-    except Exception as e:
-        db.session.rollback()
-        return manejar_error(e, "eliminar_producto")
-
-
-# ─────────────────────────────────────────────────────────────
-# Eliminar movimiento
-# ─────────────────────────────────────────────────────────────
-@inventario_bp.route('/movimientos/<int:movimiento_id>', methods=['DELETE'])
-@jwt_required()
-def eliminar_movimiento(movimiento_id):
-    try:
-        movimiento = MovimientoInventario.query.get(movimiento_id)
-        if not movimiento:
-            return error_response('Movimiento no encontrado', 404)
-
-        DetalleMovimiento.query.filter_by(movimiento_id=movimiento_id).delete()
-        db.session.delete(movimiento)
-        db.session.commit()
-        return success_response('Movimiento eliminado correctamente')
-
-    except Exception as e:
-        db.session.rollback()
-        return manejar_error(e, "eliminar_movimiento")
-
-
-# ─────────────────────────────────────────────────────────────
 # Ver existencias globales
-# ─────────────────────────────────────────────────────────────
 @inventario_bp.route('/existencias', methods=['GET'])
 @jwt_required()
 def ver_existencias():
     try:
+        def descripcion_larga(inv):
+            partes = [
+                inv.nombre,
+                inv.marca,
+                inv.proveedor,
+                inv.categoria,
+                f"ID:{inv.id}"
+            ]
+            return " - ".join([str(p) for p in partes if p])
+
         inventario = InventarioSucursal.query.all()
         data = []
 
         for item in inventario:
-            producto = Producto.query.get(item.producto_id)
+            inventario_general = InventarioGeneral.query.get(item.inventario_id)
             sucursal = Sucursal.query.get(item.sucursal_id)
 
             data.append({
-                'producto_id': item.producto_id,
-                'producto_nombre': producto.nombre if producto else 'Desconocido',
+                'inventario_id': item.inventario_id,
+                'nombre': inventario_general.nombre if inventario_general else 'Desconocido',
+                'categoria': inventario_general.categoria if inventario_general else '',
+                'tipo': inventario_general.tipo if inventario_general else '',
+                'marca': inventario_general.marca if inventario_general else '',
+                'proveedor': inventario_general.proveedor if inventario_general else '',
+                'unidad_medida': inventario_general.unidad_medida if inventario_general else "",
                 'sucursal_id': item.sucursal_id,
                 'sucursal_nombre': sucursal.sucursal if sucursal else 'Desconocida',
                 'stock': item.stock,
-                'unidad_medida': producto.unidad_medida if producto else ""
+                'descripcion_larga': descripcion_larga(inventario_general) if inventario_general else ''
             })
 
         return jsonify(data), 200
@@ -324,10 +287,7 @@ def ver_existencias():
     except Exception as e:
         return manejar_error(e, "ver_existencias")
 
-
-# ─────────────────────────────────────────────────────────────
 # Listar todas las sucursales
-# ─────────────────────────────────────────────────────────────
 @inventario_bp.route('/sucursales', methods=['GET'])
 @jwt_required()
 def listar_sucursales():
@@ -338,3 +298,498 @@ def listar_sucursales():
 
     except Exception as e:
         return manejar_error(e, "listar_sucursales")
+
+# Editar inventario general
+@inventario_bp.route('/<int:inventario_id>', methods=['PUT'])
+@jwt_required()
+def editar_inventario(inventario_id):
+    try:
+        inventario = InventarioGeneral.query.get(inventario_id)
+        if not inventario:
+            return error_response('Inventario no encontrado', 404)
+
+        data = request.get_json()
+        campos = [
+            'tipo', 'nombre', 'descripcion', 'marca', 'proveedor',
+            'categoria', 'unidad_medida',
+            'codigo_interno', 'no_equipo', 'gasto_sem', 'gasto_mes',
+            'pedido_mes', 'semana_pedido'
+        ]
+        for campo in campos:
+            if campo in data:
+                valor = data[campo]
+                if isinstance(valor, str):
+                    valor = normalizar_campo(valor)
+                    if campo == 'codigo_interno':
+                        valor = valor.upper()
+                setattr(inventario, campo, valor)
+
+        inventario.fecha_inventario = datetime.now(tz)
+        db.session.commit()
+        return success_response('Producto actualizado correctamente')
+    except Exception as e:
+        db.session.rollback()
+        return manejar_error(e, "editar_inventario")
+
+# Eliminar inventario general
+@inventario_bp.route('/<int:inventario_id>', methods=['DELETE'])
+@jwt_required()
+def eliminar_inventario(inventario_id):
+    try:
+        inventario = InventarioGeneral.query.get(inventario_id)
+        if not inventario:
+            return error_response('Inventario no encontrado', 404)
+
+        # Verifica que no haya movimientos asociados antes de borrar
+        if DetalleMovimiento.query.filter_by(inventario_id=inventario_id).first():
+            return error_response('No se puede eliminar: el inventario tiene movimientos registrados')
+
+        db.session.delete(inventario)
+        db.session.commit()
+        return success_response('Inventario eliminado correctamente')
+
+    except Exception as e:
+        db.session.rollback()
+        return manejar_error(e, "eliminar_inventario")
+
+@inventario_bp.route('/<int:inventario_id>', methods=['GET'])
+@jwt_required()
+def obtener_inventario_por_id(inventario_id):
+    try:
+        i = InventarioGeneral.query.get(inventario_id)
+        if not i:
+            return error_response('Inventario no encontrado', 404)
+
+        data = {
+            'id': i.id,
+            'tipo': i.tipo,
+            'nombre': i.nombre,
+            'descripcion': i.descripcion,
+            'marca': i.marca,
+            'proveedor': i.proveedor,
+            'categoria': i.categoria,
+            'unidad_medida': i.unidad_medida, 
+            'codigo_interno': i.codigo_interno,
+            'no_equipo': i.no_equipo,
+            'gasto_sem': i.gasto_sem,
+            'gasto_mes': i.gasto_mes,
+            'pedido_mes': i.pedido_mes,
+            'semana_pedido': i.semana_pedido,
+            'fecha_inventario': str(i.fecha_inventario) if i.fecha_inventario else None
+        }
+        return jsonify(data), 200
+    except Exception as e:
+        return manejar_error(e, "obtener_inventario_por_id")
+
+@inventario_bp.route('/buscar', methods=['GET'])
+@jwt_required()
+def buscar_inventario():
+    try:
+        nombre = request.args.get('nombre', '').strip()
+        categoria = request.args.get('categoria', '').strip()
+        tipo = request.args.get('tipo', '').strip()
+
+        query = InventarioGeneral.query
+
+        if nombre:
+            query = query.filter(InventarioGeneral.nombre.ilike(f"%{nombre}%"))
+        if categoria:
+            query = query.filter(InventarioGeneral.categoria.ilike(f"%{categoria}%"))
+        if tipo:
+            query = query.filter(InventarioGeneral.tipo.ilike(f"%{tipo}%"))
+
+        inventario = query.order_by(InventarioGeneral.nombre).all()
+        data = [{
+            'id': i.id,
+            'tipo': i.tipo,
+            'nombre': i.nombre,
+            'descripcion': i.descripcion,
+            'marca': i.marca,
+            'proveedor': i.proveedor,
+            'categoria': i.categoria,
+            'unidad_medida': i.unidad_medida, 
+            'codigo_interno': i.codigo_interno,
+            'no_equipo': i.no_equipo,
+            'gasto_sem': i.gasto_sem,
+            'gasto_mes': i.gasto_mes,
+            'pedido_mes': i.pedido_mes,
+            'semana_pedido': i.semana_pedido,
+            'fecha_inventario': str(i.fecha_inventario) if i.fecha_inventario else None
+        } for i in inventario]
+        return jsonify(data), 200
+
+    except Exception as e:
+        return manejar_error(e, "buscar_inventario")
+    
+    
+@inventario_bp.route('/movimientos/<int:id>', methods=['DELETE'])
+@jwt_required()
+def eliminar_movimiento(id):
+    try:
+        mov = MovimientoInventario.query.get(id)
+        if not mov:
+            return jsonify({"error": "Movimiento no encontrado"}), 404
+
+        # Ajustar stock antes de eliminar detalles
+        for det in mov.detalles:
+            inventario_sucursal = InventarioSucursal.query.filter_by(
+                inventario_id=det.inventario_id,
+                sucursal_id=mov.sucursal_id
+            ).first()
+            if inventario_sucursal:
+                if mov.tipo_movimiento == 'entrada':
+                    inventario_sucursal.stock = max(0, inventario_sucursal.stock - det.cantidad)
+                elif mov.tipo_movimiento == 'salida':
+                    inventario_sucursal.stock += det.cantidad
+
+        # Elimina los detalles y el movimiento
+        for det in mov.detalles:
+            db.session.delete(det)
+        db.session.delete(mov)
+        db.session.commit()
+        return jsonify({"mensaje": "Movimiento eliminado correctamente"}), 200
+    except Exception as e:
+        db.session.rollback()
+        return manejar_error(e, "eliminar_movimiento")
+
+@inventario_bp.route('/equipos', methods=['GET'])
+@jwt_required()
+def listar_equipos():
+    try:
+        user_id = get_jwt_identity()
+        user = UserORM.query.get(user_id)
+        if not user:
+            return error_response('Usuario no encontrado', 404)
+
+        tipo = request.args.get('tipo')  # 'aparato', 'sistema' o None
+        sucursal_id = request.args.get('sucursal_id', type=int)
+
+        query = InventarioGeneral.query
+
+        # Filtro por tipo (solo equipos con codigo_interno)
+        query = query.filter(InventarioGeneral.codigo_interno.isnot(None))
+        if tipo:
+            query = query.filter(InventarioGeneral.tipo.ilike(tipo))
+
+        # Filtro por sucursal:
+        if not (user.rol == "ADMINISTRADOR" or user.sucursal_id == 1000):
+            # Si no es admin, solo su sucursal
+            query = query.join(InventarioSucursal).filter(InventarioSucursal.sucursal_id == user.sucursal_id)
+        elif sucursal_id:
+            # Admin puede filtrar por sucursal si lo pide
+            query = query.join(InventarioSucursal).filter(InventarioSucursal.sucursal_id == sucursal_id)
+
+        equipos = query.order_by(InventarioGeneral.nombre.asc()).all()
+        data = []
+        for eq in equipos:
+            data.append({
+                "id": eq.id,
+                "nombre": eq.nombre,
+                "codigo_interno": eq.codigo_interno,
+                "tipo": eq.tipo,
+                "marca": eq.marca,
+                "categoria": eq.categoria,
+                "sucursal_ids": [inv.sucursal_id for inv in eq.inventarios_sucursal]
+            })
+
+        return jsonify(data), 200
+    except Exception as e:
+        return manejar_error(e, "listar_equipos")
+
+
+@inventario_bp.route('/equipos-historial', methods=['GET'])
+@jwt_required()
+def equipos_con_historial():
+    """
+    Devuelve todos los equipos que tienen al menos un ticket (historial).
+    Puedes filtrar por tipo=aparato/sistema y/o sucursal_id.
+    """
+    try:
+        user = UserORM.get_by_id(get_jwt_identity())
+        if not user:
+            return jsonify({"mensaje": "Usuario no encontrado"}), 404
+
+        tipo = request.args.get('tipo')  # "aparato", "sistema" o None
+        sucursal_id = request.args.get('sucursal_id', type=int)
+
+        # Construye el query base
+        q = db.session.query(InventarioGeneral).join(Ticket, InventarioGeneral.id == Ticket.aparato_id)
+        
+        if tipo:
+            q = q.filter(InventarioGeneral.tipo == tipo)
+        if not (user.rol == "ADMINISTRADOR" or user.sucursal_id == 1000):
+            q = q.join(Ticket).filter(Ticket.sucursal_id == user.sucursal_id)
+        elif sucursal_id:
+            q = q.join(Ticket).filter(Ticket.sucursal_id == sucursal_id)
+
+        # Distintos (porque puede haber muchos tickets por equipo)
+        equipos = q.distinct().all()
+
+        data = [{
+            "id": eq.id,
+            "nombre": eq.nombre,
+            "codigo_interno": eq.codigo_interno,
+            "tipo": eq.tipo,
+            "categoria": eq.categoria,
+            "marca": eq.marca,
+            "grupo_muscular": eq.grupo_muscular
+        } for eq in equipos]
+
+        return jsonify(data), 200
+
+    except Exception as e:
+        return manejar_error(e, "equipos_con_historial")
+
+
+@inventario_bp.route('/<int:equipo_id>/historial', methods=['GET'])
+@jwt_required()
+def historial_equipo(equipo_id):
+    """
+    Devuelve el historial completo de tickets para el equipo/aparato dado.
+    """
+    try:
+        user = UserORM.get_by_id(get_jwt_identity())
+        if not user:
+            return jsonify({"mensaje": "Usuario no encontrado"}), 404
+
+        query = Ticket.query.filter(Ticket.aparato_id == equipo_id)
+
+        if not (user.rol == "ADMINISTRADOR" or user.sucursal_id == 1000):
+            query = query.filter(Ticket.sucursal_id == user.sucursal_id)
+
+        tickets = query.order_by(Ticket.fecha_creacion.desc()).all()
+
+        data = []
+        for t in tickets:
+            data.append({
+                "id": t.id,
+                "descripcion": t.descripcion,
+                "estado": t.estado,
+                "fecha_creacion": t.fecha_creacion.isoformat() if t.fecha_creacion else None,
+                "fecha_finalizado": t.fecha_finalizado.isoformat() if t.fecha_finalizado else None,
+                "fecha_solucion": t.fecha_solucion.isoformat() if t.fecha_solucion else None,
+                "username": t.username,
+                "asignado_a": t.asignado_a,
+                "problema_detectado": t.problema_detectado,
+                "necesita_refaccion": t.necesita_refaccion,
+                "descripcion_refaccion": t.descripcion_refaccion,
+                "url_evidencia": t.url_evidencia,
+                "historial_fechas": t.historial_fechas,
+                "sucursal_id": t.sucursal_id
+            })
+
+        return jsonify(data), 200
+
+    except Exception as e:
+        return manejar_error(e, "historial_equipo")
+
+
+@inventario_bp.route('/equipos', methods=['GET'])
+@jwt_required()
+def obtener_equipos():
+    """
+    Devuelve los equipos por sucursal y tipo.
+    Parámetros opcionales:
+    - sucursal_id: ID de la sucursal.
+    - tipo: 'aparato' o 'sistema'.
+    """
+    try:
+        user = UserORM.get_by_id(get_jwt_identity())
+        if not user:
+            return jsonify({"mensaje": "Usuario no encontrado"}), 404
+
+        sucursal_id = request.args.get('sucursal_id', type=int)
+        tipo = request.args.get('tipo', type=str)
+
+        query = InventarioSucursal.query
+
+        # Si no es admin, restringe a la sucursal del usuario
+        if not (user.rol == "ADMINISTRADOR" or user.sucursal_id == 1000):
+            query = query.filter_by(sucursal_id=user.sucursal_id)
+        elif sucursal_id:
+            query = query.filter_by(sucursal_id=sucursal_id)
+
+        equipos = query.all()
+
+        resultado = []
+        for e in equipos:
+            if tipo and (e.inventario.tipo != tipo):
+                continue
+            resultado.append({
+                "id": e.inventario.id,
+                "nombre": e.inventario.nombre,
+                "codigo_interno": e.inventario.codigo_interno,
+                "categoria": e.inventario.categoria,
+                "marca": e.inventario.marca,
+                "stock": e.stock,
+                "sucursal_id": e.sucursal_id,
+                "tipo": e.inventario.tipo,
+                "no_equipo": e.inventario.no_equipo,
+            })
+
+        return jsonify(resultado), 200
+
+    except Exception as e:
+        return manejar_error(e, "obtener_equipos")
+
+
+@inventario_bp.route('/listar', methods=['GET'])
+@jwt_required()
+def listar_inventario_filtrado():
+    """
+    Devuelve todos los productos/activos filtrados por tipo y sucursal.
+    Parámetros opcionales:
+        - tipo (str): 'aparato', 'sistema' (case-insensitive)
+        - sucursal_id (int): filtra por sucursal específica
+    """
+    try:
+        tipo = request.args.get('tipo', '').strip().lower()
+        sucursal_id = request.args.get('sucursal_id', type=int)
+
+        query = InventarioGeneral.query
+
+        if tipo:
+            query = query.filter(InventarioGeneral.tipo.ilike(f'%{tipo}%'))
+
+        # Si se quiere filtrar por sucursal, devolver SOLO los que tengan stock > 0 en esa sucursal
+        if sucursal_id:
+            ids_en_sucursal = [inv.inventario_id for inv in InventarioSucursal.query.filter_by(sucursal_id=sucursal_id).filter(InventarioSucursal.stock > 0).all()]
+            query = query.filter(InventarioGeneral.id.in_(ids_en_sucursal))
+
+        # Si no eres admin, filtra solo por tu sucursal
+        user = UserORM.get_by_id(get_jwt_identity())
+        if user and not (user.rol == "ADMINISTRADOR" or user.sucursal_id == 1000):
+            if not sucursal_id:
+                ids_en_sucursal = [inv.inventario_id for inv in InventarioSucursal.query.filter_by(sucursal_id=user.sucursal_id).filter(InventarioSucursal.stock > 0).all()]
+                query = query.filter(InventarioGeneral.id.in_(ids_en_sucursal))
+
+        inventarios = query.order_by(InventarioGeneral.nombre).all()
+        data = [{
+            'id': i.id,
+            'nombre': i.nombre,
+            'codigo_interno': i.codigo_interno,
+            'tipo': i.tipo,
+            'categoria': i.categoria,
+            'marca': i.marca,
+            'grupo_muscular': getattr(i, 'grupo_muscular', None),
+            'stock': sum([inv.stock for inv in i.inventarios_sucursal]),
+        } for i in inventarios]
+
+        return jsonify(data), 200
+
+    except Exception as e:
+        return manejar_error(e, "listar_inventario_filtrado")
+
+@inventario_bp.route('/<int:inventario_id>/qr', methods=['GET'])
+@jwt_required()
+def generar_qr_inventario(inventario_id):
+    """
+    Devuelve un QR PNG con los datos de identificación del aparato/sistema.
+    """
+
+    try:
+        inv = InventarioGeneral.query.get(inventario_id)
+        if not inv:
+            return error_response('Inventario no encontrado', 404)
+
+        # Codificamos lo mínimo necesario para lookup rápido
+        qr_data = {
+            "inventario_id": inv.id,
+            "codigo_interno": inv.codigo_interno,
+            "tipo": inv.tipo,
+        }
+
+        # QR codifica JSON
+        import json
+        qr_str = json.dumps(qr_data)
+        img = qrcode.make(qr_str)
+        buf = BytesIO()
+        img.save(buf, format='PNG')
+        buf.seek(0)
+        img_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+
+        return jsonify({
+            'qr_base64': img_b64,
+            'inventario_id': inv.id,
+            'codigo_interno': inv.codigo_interno,
+            'nombre': inv.nombre,
+            'tipo': inv.tipo,
+        }), 200
+    except Exception as e:
+        return manejar_error(e, "generar_qr_inventario")
+
+
+@inventario_bp.route('/buscar-por-codigo', methods=['GET'])
+@jwt_required()
+def buscar_por_codigo():
+    """
+    Busca y devuelve un inventario por código interno (escaneado de QR)
+    """
+    try:
+        codigo = request.args.get('codigo')
+        if not codigo:
+            return error_response('Código interno es requerido')
+        inv = InventarioGeneral.query.filter_by(codigo_interno=codigo.upper()).first()
+        if not inv:
+            return error_response('Inventario no encontrado', 404)
+        return jsonify({
+            'id': inv.id,
+            'nombre': inv.nombre,
+            'codigo_interno': inv.codigo_interno,
+            'tipo': inv.tipo,
+            'categoria': inv.categoria,
+            'marca': inv.marca,
+            'grupo_muscular': getattr(inv, 'grupo_muscular', None),
+        }), 200
+    except Exception as e:
+        return manejar_error(e, "buscar_por_codigo")
+
+
+@inventario_bp.route('/<int:inventario_id>/historial', methods=['GET'])
+@jwt_required()
+def historial_aparato(inventario_id):
+    """
+    Devuelve el historial de movimientos y tickets asociados a un aparato/sistema.
+    """
+
+    try:
+        inv = InventarioGeneral.query.get(inventario_id)
+        if not inv:
+            return error_response('Inventario no encontrado', 404)
+
+        # Movimientos de inventario
+        movimientos = DetalleMovimiento.query.filter_by(inventario_id=inventario_id).all()
+        movs = [{
+            "fecha": m.movimiento.fecha.strftime('%d/%m/%Y %H:%M'),
+            "tipo": m.movimiento.tipo_movimiento,
+            "usuario_id": m.movimiento.usuario_id,
+            "sucursal_id": m.movimiento.sucursal_id,
+            "cantidad": m.cantidad,
+            "unidad_medida": m.unidad_medida,
+            "observaciones": m.movimiento.observaciones
+        } for m in movimientos]
+
+        # Tickets asociados a este aparato
+        tickets = Ticket.query.filter_by(aparato_id=inventario_id).order_by(Ticket.fecha_creacion.desc()).all()
+        tks = [{
+            "id": t.id,
+            "descripcion": t.descripcion,
+            "estado": t.estado,
+            "fecha_creacion": t.fecha_creacion.strftime('%d/%m/%Y %H:%M'),
+            "fecha_solucion": t.fecha_solucion.strftime('%d/%m/%Y %H:%M') if t.fecha_solucion else None,
+            "categoria": t.categoria,
+            "subcategoria": t.subcategoria,
+            "problema_detectado": t.problema_detectado,
+            "necesita_refaccion": t.necesita_refaccion,
+            "descripcion_refaccion": t.descripcion_refaccion,
+        } for t in tickets]
+
+        return jsonify({
+            "inventario_id": inventario_id,
+            "nombre": inv.nombre,
+            "codigo_interno": inv.codigo_interno,
+            "historial_movimientos": movs,
+            "historial_tickets": tks,
+        }), 200
+    except Exception as e:
+        return manejar_error(e, "historial_aparato")

@@ -1,66 +1,139 @@
 <!-- src/app/inventario/movimientos/movimientos.component.html -->
 
-<mat-card>
-  <button mat-raised-button color="primary" (click)="abrirDialogoMovimiento()">
-    Registrar Movimiento
-  </button>
+<mat-card class="mb-6 overflow-x-auto">
+  <div class="flex flex-nowrap gap-4 items-center min-w-[900px]" style="overflow-x: auto;">
+    <button mat-flat-button color="primary" (click)="abrirDialogoMovimiento()">
+    Registrar movimiento
+    </button>
+    <mat-form-field appearance="fill" class="w-64 min-w-[220px]">
+      <mat-label>Buscar movimiento</mat-label>
+      <input matInput [formControl]="filtroControl" placeholder="Producto, usuario, sucursal...">
+    </mat-form-field>
+    <mat-form-field appearance="fill" class="w-40 min-w-[150px]">
+      <mat-label>Tipo</mat-label>
+      <mat-select [formControl]="filtroTipo">
+        <mat-option value="">Todos</mat-option>
+        <mat-option value="entrada">Entrada</mat-option>
+        <mat-option value="salida">Salida</mat-option>
+      </mat-select>
+    </mat-form-field>
+    <mat-form-field *ngIf="esAdmin" appearance="fill" class="w-40 min-w-[150px]">
+      <mat-label>Sucursal</mat-label>
+      <mat-select [formControl]="filtroSucursal">
+        <mat-option value="">Todas</mat-option>
+        <mat-option *ngFor="let suc of sucursales" [value]="suc.sucursal_id">
+          {{ suc.sucursal }}
+        </mat-option>
+      </mat-select>
+    </mat-form-field>
+    <mat-form-field appearance="fill" class="w-40 min-w-[150px]">
+      <mat-label>Usuario</mat-label>
+      <mat-select [formControl]="filtroUsuario">
+        <mat-option value="">Todos</mat-option>
+        <mat-option *ngFor="let usr of usuarios" [value]="usr.id">
+          {{ usr.username }}
+        </mat-option>
+      </mat-select>
+    </mat-form-field>
+  </div>
 </mat-card>
 
 <mat-card>
-  <h2>Historial de Movimientos</h2>
-  <table mat-table [dataSource]="movimientos" class="mat-elevation-z2 tabla-movimientos">
+  <mat-table [dataSource]="movimientosFiltrados" *ngIf="!loading && movimientosFiltrados.length">
 
     <ng-container matColumnDef="id">
-      <th mat-header-cell *matHeaderCellDef>ID</th>
-      <td mat-cell *matCellDef="let m">{{ m.movimiento_id }}</td>
-    </ng-container>
-
-    <ng-container matColumnDef="tipo">
-      <th mat-header-cell *matHeaderCellDef>Tipo</th>
-      <td mat-cell *matCellDef="let m">{{ m.tipo }}</td>
+      <mat-header-cell *matHeaderCellDef class="w-14 min-w-[40px]">ID</mat-header-cell>
+      <mat-cell *matCellDef="let mov" class="w-14 min-w-[40px]">{{ mov.id }}</mat-cell>
     </ng-container>
 
     <ng-container matColumnDef="fecha">
-      <th mat-header-cell *matHeaderCellDef>Fecha</th>
-      <td mat-cell *matCellDef="let m">{{ m.fecha }}</td>
+      <mat-header-cell *matHeaderCellDef class="w-28 min-w-[100px]">Fecha</mat-header-cell>
+      <mat-cell *matCellDef="let mov" class="w-28 min-w-[100px]">{{ mov.fecha }}</mat-cell>
     </ng-container>
 
-    <ng-container matColumnDef="sucursal">
-      <th mat-header-cell *matHeaderCellDef>Sucursal</th>
-      <td mat-cell *matCellDef="let m">{{ m.sucursal_nombre }}</td>
+    <ng-container matColumnDef="tipo">
+      <mat-header-cell *matHeaderCellDef class="w-24 min-w-[70px]">Tipo</mat-header-cell>
+      <mat-cell *matCellDef="let mov" class="w-24 min-w-[70px]">
+        <span [ngClass]="{'text-green-600': mov.tipo === 'entrada', 'text-red-600': mov.tipo === 'salida'}">
+          {{ mov.tipo | titlecase }}
+        </span>
+      </mat-cell>
+    </ng-container>
+
+    <ng-container matColumnDef="producto">
+      <mat-header-cell *matHeaderCellDef class="w-56 min-w-[180px]">Producto</mat-header-cell>
+      <mat-cell *matCellDef="let mov" class="w-56 min-w-[180px]">
+        <ng-container *ngIf="mov.inventarios?.length; else sinProductos">
+          <div *ngFor="let p of mov.inventarios" class="truncate" style="max-width: 220px;" [matTooltip]="getDescripcionLarga(p)">
+            {{ getNombreProducto(p) }}
+          </div>
+        </ng-container>
+        <ng-template #sinProductos>-</ng-template>
+      </mat-cell>
+    </ng-container>
+
+    <ng-container matColumnDef="cantidad">
+      <mat-header-cell *matHeaderCellDef class="w-24 min-w-[70px]">Cantidad</mat-header-cell>
+      <mat-cell *matCellDef="let mov" class="w-24 min-w-[70px]">
+        <ng-container *ngIf="mov.inventarios?.length">
+          <div *ngFor="let p of mov.inventarios">
+            {{ p.cantidad }} <span *ngIf="p.unidad_medida">{{ p.unidad_medida }}</span>
+          </div>
+        </ng-container>
+      </mat-cell>
+    </ng-container>
+
+    <ng-container matColumnDef="detalles">
+      <mat-header-cell *matHeaderCellDef class="w-56 min-w-[170px]">Detalles</mat-header-cell>
+      <mat-cell *matCellDef="let mov" class="w-56 min-w-[170px]">
+        <ng-container *ngIf="mov.inventarios?.length">
+          <div *ngFor="let p of mov.inventarios">
+            <span class="text-gray-700">
+              {{ getMarcaProducto(p) }} · {{ getProveedorProducto(p) }} · {{ getCategoriaProducto(p) }}
+            </span>
+          </div>
+        </ng-container>
+      </mat-cell>
+    </ng-container>
+
+      <ng-container matColumnDef="Codigo">
+        <mat-header-cell *matHeaderCellDef class="min-w-[180px] max-w-[300px] w-[240px]">Código</mat-header-cell>
+        <mat-cell *matCellDef="let mov" class="min-w-[180px] max-w-[300px] w-[240px] break-all">
+          <div *ngFor="let p of mov.inventarios">
+            {{ p.codigo_interno || '-' }}
+          </div>
+        </mat-cell>
     </ng-container>
 
     <ng-container matColumnDef="usuario">
-      <th mat-header-cell *matHeaderCellDef>Usuario</th>
-      <td mat-cell *matCellDef="let m">{{ m.usuario_nombre }}</td>
+      <mat-header-cell *matHeaderCellDef class="w-36 min-w-[90px]">Usuario</mat-header-cell>
+      <mat-cell *matCellDef="let mov" class="w-36 min-w-[90px]">
+        {{ obtenerNombreUsuario(mov.usuario, mov.usuario_id) }}
+      </mat-cell>
+    </ng-container>
+
+    <ng-container matColumnDef="sucursal">
+      <mat-header-cell *matHeaderCellDef class="w-40 min-w-[110px]">Sucursal</mat-header-cell>
+      <mat-cell *matCellDef="let mov" class="w-40 min-w-[110px]">
+        {{ obtenerNombreSucursal(mov.sucursal, mov.sucursal_id) }}
+      </mat-cell>
     </ng-container>
 
     <ng-container matColumnDef="observaciones">
-      <th mat-header-cell *matHeaderCellDef>Obs</th>
-      <td mat-cell *matCellDef="let m">{{ m.observaciones }}</td>
-    </ng-container>
-
-    <ng-container matColumnDef="productos">
-      <th mat-header-cell *matHeaderCellDef>Productos</th>
-      <td mat-cell *matCellDef="let m">
-        <ul>
-          <li *ngFor="let p of m.productos">
-            {{ p.nombre }} – {{ p.cantidad }} {{ p.unidad_medida }}
-          </li>
-        </ul>
-      </td>
+      <mat-header-cell *matHeaderCellDef class="w-56 min-w-[130px]">Observaciones</mat-header-cell>
+      <mat-cell *matCellDef="let mov" class="w-56 min-w-[130px]">{{ mov.observaciones }}</mat-cell>
     </ng-container>
 
     <ng-container matColumnDef="acciones">
-      <th mat-header-cell *matHeaderCellDef>Acciones</th>
-      <td mat-cell *matCellDef="let m">
-        <button mat-button color="warn" (click)="eliminarMovimiento(m.movimiento_id)">
-          Eliminar
+      <mat-header-cell *matHeaderCellDef class="w-16 min-w-[40px]">Acciones</mat-header-cell>
+      <mat-cell *matCellDef="let mov" class="w-16 min-w-[40px]">
+        <button mat-icon-button color="warn" (click)="eliminarMovimiento(mov.id)">
+          <mat-icon>delete</mat-icon>
         </button>
-      </td>
+      </mat-cell>
     </ng-container>
 
-    <tr mat-header-row *matHeaderRowDef="['id', 'tipo', 'fecha', 'sucursal', 'usuario', 'observaciones', 'productos', 'acciones']"></tr>
-    <tr mat-row *matRowDef="let row; columns: ['id', 'tipo', 'fecha', 'sucursal', 'usuario', 'observaciones', 'productos', 'acciones']"></tr>
-  </table>
-</mat-card>
+    <mat-header-row *matHeaderRowDef="['id', 'fecha', 'tipo', 'producto', 'cantidad', 'detalles', 'Codigo', 'usuario', 'sucursal', 'observaciones', 'acciones']"></mat-header-row>
+    <mat-row *matRowDef="let row; columns: ['id', 'fecha', 'tipo', 'producto', 'cantidad', 'detalles', 'Codigo', 'usuario', 'sucursal', 'observaciones', 'acciones']"></mat-row>
+
+  </mat-table>

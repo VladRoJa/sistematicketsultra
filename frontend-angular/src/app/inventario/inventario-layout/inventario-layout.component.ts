@@ -1,4 +1,4 @@
-// C:\Users\Vladimir\Documents\Sistema tickets\frontend-angular\src\app\inventario\inventario-layout\inventario-layout.component.ts
+// src/app/inventario/inventario-layout/inventario-layout.component.ts
 
 import { Component } from '@angular/core';
 import { RouterModule } from '@angular/router';

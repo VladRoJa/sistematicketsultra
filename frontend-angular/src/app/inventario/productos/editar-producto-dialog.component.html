@@ -1,6 +1,6 @@
-<!-- src/app/inventario/productos/editar-producto-dialog.component.html -->
+<!-- editar-inventario-dialog.component.html -->
 
-<h2 mat-dialog-title>Editar Producto</h2>
+<h2 mat-dialog-title>Editar Inventario</h2>
 
 <form [formGroup]="form" style="display: flex; flex-direction: column; gap: 12px;">
   <mat-form-field appearance="fill">
@@ -14,8 +14,18 @@
   </mat-form-field>
 
   <mat-form-field appearance="fill">
-    <mat-label>Unidad de Medida</mat-label>
-    <input matInput formControlName="unidad_medida" />
+    <mat-label>Tipo</mat-label>
+    <input matInput formControlName="tipo" />
+  </mat-form-field>
+
+  <mat-form-field appearance="fill">
+    <mat-label>Marca</mat-label>
+    <input matInput formControlName="marca" />
+  </mat-form-field>
+
+  <mat-form-field appearance="fill">
+    <mat-label>Proveedor</mat-label>
+    <input matInput formControlName="proveedor" />
   </mat-form-field>
 
   <mat-form-field appearance="fill">
@@ -24,14 +34,24 @@
   </mat-form-field>
 
   <mat-form-field appearance="fill">
-    <mat-label>Subcategoría</mat-label>
-    <input matInput formControlName="subcategoria" />
+    <mat-label>Unidad</mat-label>
+    <input matInput formControlName="unidad" />
+  </mat-form-field>
+
+  <mat-form-field appearance="fill">
+    <mat-label>Stock Actual</mat-label>
+    <input matInput type="number" formControlName="stock_actual" min="0" />
+  </mat-form-field>
+
+  <mat-form-field appearance="fill">
+    <mat-label>Sucursal</mat-label>
+    <input matInput formControlName="sucursal_id" type="number" />
   </mat-form-field>
 
   <div style="display: flex; justify-content: space-between; gap: 8px;">
-    <button mat-stroked-button color="warn" (click)="eliminarProducto()">Eliminar</button>
+    <button mat-stroked-button color="warn" type="button" (click)="eliminarInventario()">Eliminar</button>
     <span style="flex: 1 1 auto;"></span>
-    <button mat-button (click)="cancelar()">Cancelar</button>
-    <button mat-raised-button color="primary" (click)="guardar()">Guardar</button>
+    <button mat-button type="button" (click)="cancelar()">Cancelar</button>
+    <button mat-raised-button color="primary" type="button" (click)="guardar()">Guardar</button>
   </div>
 </form>

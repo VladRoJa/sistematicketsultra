@@ -1,0 +1,58 @@
+/* src/app/inventario/reportes/reportes.component.css */
+
+/* Centra y maximiza el card */
+mat-card {
+  max-width: 600px;
+  margin: 48px auto 0 auto;
+  padding: 32px 24px 28px 24px;
+  border-radius: 18px;
+  box-shadow: 0 6px 24px rgba(31, 58, 147, 0.08);
+  background: #fff;
+}
+
+/* Encabezado */
+h2 {
+  text-align: center;
+  margin-bottom: 30px;
+  font-size: 2rem;
+  font-weight: 700;
+  color: #21397b;
+}
+
+/* Fila de botones */
+.flex {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+/* Material form field personalizado */
+mat-form-field {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Botones */
+button[mat-raised-button] {
+  min-width: 170px;
+  font-weight: 500;
+}
+
+/* Responsive para móviles */
+@media (max-width: 640px) {
+  mat-card {
+    padding: 12px 4px;
+  }
+  h2 {
+    font-size: 1.2rem;
+  }
+  .flex {
+    flex-direction: column;
+    gap: 10px;
+  }
+  mat-form-field {
+    width: 100% !important;
+  }
+}
