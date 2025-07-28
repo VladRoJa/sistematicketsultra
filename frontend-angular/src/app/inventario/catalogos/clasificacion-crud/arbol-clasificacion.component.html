@@ -1,0 +1,48 @@
+<!-- frontend-angular\src\app\inventario\catalogos\clasificacion-crud\arbol-clasificacion.component.html -->
+
+<mat-tree [dataSource]="dataSource" [treeControl]="treeControl" class="arbol-clasif-erp">
+  <!-- Nodo con hijos -->
+  <mat-tree-node *matTreeNodeDef="let node; when: hasChild" matTreeNodeToggle
+                 [class]="'mat-tree-node mat-tree-node-level-' + node.nivel">
+    <div class="flex items-center arbol-nodo group">
+      <button mat-icon-button matTreeNodeToggle
+        [attr.aria-label]="'expandir/collapse ' + node.nombre">
+        <mat-icon>{{ treeControl.isExpanded(node) ? 'expand_more' : 'chevron_right' }}</mat-icon>
+      </button>
+      <span class="ml-2 font-medium">{{ node.nombre }}</span>
+      <span class="nivel-badge">N{{ node.nivel }}</span>
+      <span class="arbol-clasif-actions ml-auto">
+        <button mat-icon-button color="primary" (click)="editar.emit(node)" matTooltip="Editar">
+          <mat-icon>edit</mat-icon>
+        </button>
+        <button mat-icon-button color="accent" (click)="crearHijo.emit(node)" matTooltip="Agregar hijo">
+          <mat-icon>add</mat-icon>
+        </button>
+        <button mat-icon-button color="warn" (click)="eliminar.emit(node)" matTooltip="Eliminar">
+          <mat-icon>delete</mat-icon>
+        </button>
+      </span>
+    </div>
+  </mat-tree-node>
+
+  <!-- Nodo hoja (sin hijos) -->
+  <mat-tree-node *matTreeNodeDef="let node"
+                 [class]="'mat-tree-node mat-tree-node-level-' + node.nivel">
+    <div class="flex items-center arbol-nodo group">
+      <span style="margin-left: 32px;"></span>
+      <span class="ml-2 font-medium">{{ node.nombre }}</span>
+      <span class="nivel-badge">N{{ node.nivel }}</span>
+      <span class="arbol-clasif-actions ml-auto">
+        <button mat-icon-button color="primary" (click)="editar.emit(node)" matTooltip="Editar">
+          <mat-icon>edit</mat-icon>
+        </button>
+        <button mat-icon-button color="accent" (click)="crearHijo.emit(node)" matTooltip="Agregar hijo">
+          <mat-icon>add</mat-icon>
+        </button>
+        <button mat-icon-button color="warn" (click)="eliminar.emit(node)" matTooltip="Eliminar">
+          <mat-icon>delete</mat-icon>
+        </button>
+      </span>
+    </div>
+  </mat-tree-node>
+</mat-tree>

@@ -1,0 +1,80 @@
+  <!-- frontend-angular\src\app\inventario\catalogos\clasificacion-crud\clasificacion-crud.component.html -->
+
+<div class="flex items-center mb-4 justify-between">
+  <h2 class="text-xl font-bold">Clasificaciones</h2>
+  <button (click)="cargarClasificaciones()">Recargar</button>
+  <div>
+    <button mat-flat-button color="accent" (click)="abrirDialogoImportar()">
+      <mat-icon>file_upload</mat-icon> Importar
+    </button>
+    <button mat-flat-button color="primary" (click)="exportar()">
+      <mat-icon>file_download</mat-icon> Exportar
+    </button>
+    <button mat-flat-button color="primary" (click)="descargarPlantilla()">
+      <mat-icon>download</mat-icon> Plantilla
+    </button>
+    <input type="file" #fileInput hidden (change)="importar($event)">
+  </div>
+</div>
+
+<!-- Botón FAB para agregar -->
+<div class="mb-6 flex justify-end">
+  <button mat-flat-button color="primary" (click)="abrirFormulario()">
+    <mat-icon>add</mat-icon> Agregar Clasificación
+  </button>
+</div>
+
+<!-- ARBOL -->
+<div class="clasificacion-arbol-wrap">
+  <app-arbol-clasificacion
+    [nodos]="clasificaciones"
+    (editar)="abrirFormulario($event)"
+    (crearHijo)="abrirFormulario($event, true)"
+    (eliminar)="eliminar($event)">
+  </app-arbol-clasificacion>
+  <div style="color:red" *ngIf="!clasificaciones?.length">NO HAY CLASIFICACIONES PARA EL ÁRBOL</div>
+  <div *ngIf="!loading && !clasificaciones.length" class="text-gray-500 text-center mt-8">
+    No hay registros de clasificaciones.
+  </div>
+  <div *ngIf="loading" class="flex justify-center items-center mt-8">
+    <mat-spinner diameter="40"></mat-spinner>
+  </div>
+</div>
+
+<!-- TARJETA FORMULARIO flotante (show/hide) -->
+<mat-card class="clasificacion-form-card" *ngIf="mostrarFormulario">
+  <form [formGroup]="form" (ngSubmit)="guardar()" class="p-4 flex flex-col gap-3">
+    <h3 class="mb-2 font-bold text-lg">
+      {{ modo === 'crear' ? 'Agregar Clasificación' : 'Editar Clasificación' }}
+    </h3>
+    <mat-form-field appearance="fill">
+      <mat-label>Nombre</mat-label>
+      <input matInput formControlName="nombre" required />
+    </mat-form-field>
+    <mat-form-field appearance="fill">
+      <mat-label>Departamento</mat-label>
+      <mat-select formControlName="departamento_id" required>
+        <mat-option *ngFor="let depto of departamentos" [value]="depto.id">{{ depto.nombre }}</mat-option>
+      </mat-select>
+    </mat-form-field>
+    <mat-form-field appearance="fill">
+      <mat-label>Nivel</mat-label>
+      <input matInput formControlName="nivel" type="number" readonly />
+    </mat-form-field>
+    <mat-form-field appearance="fill">
+      <mat-label>Padre</mat-label>
+      <mat-select formControlName="parent_id">
+        <mat-option [value]="null">Ninguno (raíz)</mat-option>
+        <mat-option *ngFor="let nodo of todasLasClasificaciones" [value]="nodo.id">
+          {{ nodo.nombre }}
+        </mat-option>
+      </mat-select>
+    </mat-form-field>
+    <div class="flex gap-2 justify-end mt-2">
+      <button mat-flat-button color="primary" [disabled]="form.invalid" type="submit">
+        {{ modo === 'crear' ? 'Agregar' : 'Actualizar' }}
+      </button>
+      <button mat-button color="warn" type="button" (click)="cerrarFormulario()">Cancelar</button>
+    </div>
+  </form>
+</mat-card>

@@ -274,7 +274,7 @@ def reportar_error():
             departamento_id=7,
             categoria='Errores',
             subcategoria=modulo,
-            subsubcategoria=None,
+            detalle=None,
             aparato_id=None,
             problema_detectado=None,
             necesita_refaccion=False,

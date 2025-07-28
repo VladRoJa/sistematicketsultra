@@ -1,0 +1,13 @@
+.admin-panel-card {
+  max-width: 480px;
+  margin: 32px auto;
+  padding: 32px 24px;
+  text-align: center;
+  border-radius: 18px;
+}
+.admin-panel-menu {
+  margin-top: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}

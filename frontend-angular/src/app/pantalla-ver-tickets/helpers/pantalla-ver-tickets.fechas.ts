@@ -58,7 +58,7 @@ export function actualizarFiltrosCruzados(
   actualizar(criticidadesDisponibles, contarValores(ticketsFiltrados, 'criticidad'));
   actualizar(departamentosDisponibles, contarValores(ticketsFiltrados, 'departamento'));
   actualizar(subcategoriasDisponibles, contarValores(ticketsFiltrados, 'subcategoria'));
-  actualizar(detallesDisponibles, contarValores(ticketsFiltrados, 'subsubcategoria'));
+  actualizar(detallesDisponibles, contarValores(ticketsFiltrados, 'detalle'));
 }
 
 export function aplicarFiltroPorRangoFechaCreacion(

@@ -1,0 +1,44 @@
+<!-- frontend-angular\src\app\components\selector-equipo.component.html -->
+
+<!-- Autocomplete con búsqueda y displayWith -->
+<div *ngIf="modoAutocomplete">
+  <mat-form-field appearance="fill" class="full-width">
+    <mat-label>{{ placeholder }}<span *ngIf="required">*</span></mat-label>
+    <input
+      type="text"
+      matInput
+      [formControl]="filtroControl"
+      [matAutocomplete]="auto"
+      [required]="required"
+      autocomplete="off"
+    />
+    <button
+      *ngIf="filtroControl.value"
+      matSuffix
+      mat-icon-button
+      aria-label="Limpiar búsqueda"
+      (click)="limpiarBusqueda()"
+    >
+      <mat-icon>close</mat-icon>
+    </button>
+    <mat-autocomplete #auto="matAutocomplete"
+                      [displayWith]="displayEquipo.bind(this)"
+                      (optionSelected)="seleccionarEquipo($event.option.value)">
+      <mat-option *ngFor="let eq of equiposFiltrados$ | async" [value]="eq">
+        <span *ngIf="mostrarEmoji" class="emoji-aparato">{{ obtenerEmoji(eq.nombre) }}</span>
+        {{ eq.nombre }} - {{ eq.codigo_interno }} ({{ eq.marca }})
+      </mat-option>
+    </mat-autocomplete>
+  </mat-form-field>
+</div>
+<div *ngIf="!modoAutocomplete">
+  <mat-form-field appearance="fill" class="full-width">
+    <mat-label>{{ placeholder }}<span *ngIf="required">*</span></mat-label>
+    <mat-select (selectionChange)="seleccionarEquipo($event.value)">
+      <mat-option *ngFor="let eq of equipos" [value]="eq">
+        <span *ngIf="mostrarEmoji" class="emoji-aparato">{{ obtenerEmoji(eq.nombre) }}</span>
+        {{ eq.nombre }} - {{ eq.codigo_interno }} ({{ eq.marca }})
+      </mat-option>
+    </mat-select>
+  </mat-form-field>
+</div>

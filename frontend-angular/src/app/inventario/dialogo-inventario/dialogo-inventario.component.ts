@@ -75,8 +75,8 @@ export class DialogoInventarioComponent implements OnInit {
       categoria: [data?.item?.categoria || '', Validators.required],
       unidad: [data?.item?.unidad || '', Validators.required],
       stock_actual: [data?.item?.stock_actual ?? 0, [Validators.required, Validators.min(0)]],
-      codigo_interno: [data?.item?.codigo_interno || '', Validators.required],
-      grupo_muscular: [data?.item?.grupo_muscular || '', Validators.required],
+      codigo_interno: [data?.item?.codigo_interno || ''],
+      grupo_muscular: [data?.item?.grupo_muscular || ''],
       no_equipo: [data?.item?.no_equipo || ''],
       gasto_sem: [data?.item?.gasto_sem || 0],
       gasto_mes: [data?.item?.gasto_mes || 0],
@@ -139,8 +139,17 @@ export class DialogoInventarioComponent implements OnInit {
       this.gruposMuscularesFiltrados = this.gruposMusculares.filter(m => m.nombre.toLowerCase().includes(v));
     });
 
-    // Grupo muscular solo requerido si tipo === 'aparato'
     this.form.get('tipo')?.valueChanges.subscribe(val => {
+      // --- CODIGO INTERNO --- //
+      if (val === 'aparato' || val === 'sistemas') {
+        this.form.get('codigo_interno')?.setValidators([Validators.required]);
+      } else {
+        this.form.get('codigo_interno')?.clearValidators();
+        this.form.get('codigo_interno')?.setValue('');
+      }
+      this.form.get('codigo_interno')?.updateValueAndValidity();
+
+      // --- GRUPO MUSCULAR --- //
       if (val === 'aparato') {
         this.form.get('grupo_muscular')?.setValidators([Validators.required]);
       } else {
@@ -151,35 +160,69 @@ export class DialogoInventarioComponent implements OnInit {
     });
   }
 
-  guardar() {
-    if (this.form.invalid) {
-      this.dialog.open(ModalAlertaCamposRequeridosComponent);
-      this.form.markAllAsTouched();
-      return;
+    guardar() {
+      if (this.form.invalid) {
+        // Encuentra los campos requeridos que faltan
+        const camposFaltantes: string[] = [];
+        const nombresLegibles: Record<string, string> = {
+          nombre: 'Nombre',
+          descripcion: 'Descripción',
+          tipo: 'Tipo',
+          marca: 'Marca',
+          proveedor: 'Proveedor',
+          categoria: 'Categoría',
+          unidad: 'Unidad',
+          stock_actual: 'Stock Actual',
+          codigo_interno: 'Código Interno',
+          grupo_muscular: 'Grupo Muscular',
+          no_equipo: 'No. de Equipo',
+          gasto_sem: 'Gasto Semanal',
+          gasto_mes: 'Gasto Mensual',
+          pedido_mes: 'Pedido Mensual',
+          semana_pedido: 'Semana de Pedido',
+          fecha_inventario: 'Fecha de Inventario'
+        };
+
+        // Solo muestra los faltantes que están visibles y requeridos
+        Object.keys(this.form.controls).forEach(key => {
+          const control = this.form.get(key);
+          if (control && control.invalid && control.errors?.['required']) {
+            camposFaltantes.push(nombresLegibles[key] || key);
+          }
+        });
+
+        mostrarAlertaToast(
+          `❗Faltan datos obligatorios: ${camposFaltantes.join(', ')}`,
+          'error'
+        );
+        this.form.markAllAsTouched();
+        return;
+      }
+
+      const valores = this.form.value;
+      if (this.modo === 'crear') {
+        this.inventarioService.crearInventario(valores).subscribe({
+          next: () => {
+            mostrarAlertaToast('Inventario creado correctamente.');
+            this.dialogRef.close({ status: 'creado' });
+          },
+          error: () => {
+            mostrarAlertaToast('Error al crear inventario', 'error');
+          }
+        });
+      } else {
+        this.inventarioService.editarInventario(this.data.item.id, valores).subscribe({
+          next: () => {
+            mostrarAlertaToast('Inventario actualizado correctamente.');
+            this.dialogRef.close({ status: 'actualizado' });
+          },
+          error: () => {
+            mostrarAlertaToast('Error al actualizar inventario', 'error');
+          }
+        });
+      }
     }
-    const valores = this.form.value;
-    if (this.modo === 'crear') {
-      this.inventarioService.crearInventario(valores).subscribe({
-        next: () => {
-          mostrarAlertaToast('Inventario creado correctamente.');
-          this.dialogRef.close({ status: 'creado' });
-        },
-        error: () => {
-          mostrarAlertaToast('Error al crear inventario', 'error');
-        }
-      });
-    } else {
-      this.inventarioService.editarInventario(this.data.item.id, valores).subscribe({
-        next: () => {
-          mostrarAlertaToast('Inventario actualizado correctamente.');
-          this.dialogRef.close({ status: 'actualizado' });
-        },
-        error: () => {
-          mostrarAlertaToast('Error al actualizar inventario', 'error');
-        }
-      });
-    }
-  }
+
 
   cancelar() {
     this.dialogRef.close(null);

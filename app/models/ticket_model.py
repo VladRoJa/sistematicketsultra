@@ -1,3 +1,5 @@
+#app\models\ticket_model.py
+
 from datetime import datetime, timezone
 import pytz
 from app.extensions import db
@@ -23,21 +25,25 @@ class Ticket(db.Model):
     historial_fechas = db.Column(db.JSON)
     departamento_id = db.Column(db.Integer, db.ForeignKey('departamentos.id'), nullable=True)
     criticidad = db.Column(db.Integer, default=1, nullable=False)
-    categoria = db.Column(db.String(255), nullable=False)
-    subcategoria = db.Column(db.String(100))
-    subsubcategoria = db.Column(db.String(100))
     aparato_id = db.Column(db.Integer, db.ForeignKey('inventario_general.id'), nullable=True)
     problema_detectado = db.Column(db.Text)
     necesita_refaccion = db.Column(db.Boolean, default=False)
     descripcion_refaccion = db.Column(db.Text)
     url_evidencia = db.Column(db.String(500))
+    ubicacion = db.Column(db.String(100), nullable=True)
+    equipo = db.Column(db.String(100), nullable=True)
+    clasificacion_id = db.Column(db.Integer, db.ForeignKey('catalogo_clasificacion.id'), nullable=True)
+    
 
+    
+    
     # ─── Relaciones ──────────────────────────────
     departamento = db.relationship('Departamento', backref='tickets', foreign_keys=[departamento_id])
     usuario = db.relationship('UserORM', foreign_keys=[username])
     sucursal = db.relationship('Sucursal', backref='tickets', foreign_keys=[sucursal_id])
-    # Nueva relación
     inventario = db.relationship('InventarioGeneral', foreign_keys=[aparato_id])
+    clasificacion = db.relationship('CatalogoClasificacion', backref='tickets')
+    
 
     # ─── Serialización ──────────────────────────
 
@@ -64,9 +70,9 @@ class Ticket(db.Model):
             'departamento_nombre': self.departamento.nombre if self.departamento else "N/A",
             'fecha_en_progreso': format_datetime(self.fecha_en_progreso),
             'criticidad': self.criticidad,
-            'categoria': self.categoria,
-            'subcategoria': self.subcategoria,
-            'subsubcategoria': self.subsubcategoria,
+            'clasificacion_id': self.clasificacion_id,
+            'clasificacion_nombre': self.clasificacion.nombre if self.clasificacion else None,
+            'jerarquia_clasificacion': self._obtener_jerarquia_clasificacion(),
             'fecha_finalizado': format_datetime(self.fecha_finalizado),
             'fecha_solucion': self.fecha_solucion.isoformat() if self.fecha_solucion else None,
             'necesita_refaccion': self.necesita_refaccion,
@@ -82,25 +88,30 @@ class Ticket(db.Model):
                 'categoria': self.inventario.categoria if self.inventario else None,
                 'marca': self.inventario.marca if self.inventario else None
             } if self.inventario else None,
+            'ubicacion': self.ubicacion,
+            'equipo': self.equipo,
         }
+        
+        
     # ─── Métodos CRUD ───────────────────────────────────────
     @classmethod
-    def create_ticket(cls, descripcion, username, sucursal_id, departamento_id, criticidad, categoria, subcategoria=None, subsubcategoria=None, aparato_id=None, problema_detectado=None, necesita_refaccion=False, descripcion_refaccion=None):
+    def create_ticket(cls, descripcion, username, sucursal_id, departamento_id, criticidad,  clasificacion_id, aparato_id=None, problema_detectado=None, necesita_refaccion=False, descripcion_refaccion=None, url_evidencia=None, ubicacion=None, equipo=None):
         ticket = cls(
             descripcion=descripcion,
             username=username,
             sucursal_id=sucursal_id,
             departamento_id=departamento_id,
             criticidad=criticidad,
-            categoria=categoria,
-            subcategoria=subcategoria,
-            subsubcategoria=subsubcategoria,
+            clasificacion_id=clasificacion_id,
             aparato_id=aparato_id,
             problema_detectado=problema_detectado,
             necesita_refaccion=necesita_refaccion,
             descripcion_refaccion=descripcion_refaccion,
             estado='abierto',
-            fecha_creacion=datetime.now(timezone.utc)  # ⏰ Guardar en UTC
+            fecha_creacion=datetime.now(timezone.utc),  # ⏰ Guardar en UTC
+            url_evidencia=url_evidencia,
+            ubicacion=ubicacion,
+            equipo=equipo,
         )
         db.session.add(ticket)
         db.session.commit()
@@ -134,3 +145,11 @@ class Ticket(db.Model):
 
     def __repr__(self):
         return f"<Ticket {self.id} - {self.estado}>"
+
+    def _obtener_jerarquia_clasificacion(self):
+        jerarquia = []
+        nodo = self.clasificacion
+        while nodo:
+            jerarquia.insert(0, nodo.nombre)
+            nodo = nodo.padre
+        return jerarquia

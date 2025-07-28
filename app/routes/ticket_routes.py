@@ -10,6 +10,7 @@ from openpyxl.styles import Font, PatternFill
 import pytz
 from sqlalchemy import or_
 from app.models.inventario import InventarioGeneral
+from app.utils.ticket_filters import filtrar_tickets_por_usuario
 from config import Config
 from sqlalchemy import or_
 from app.models.ticket_model import Ticket
@@ -19,6 +20,7 @@ from app.utils.error_handler import manejar_error
 from dateutil import parser
 from sqlalchemy.orm.attributes import flag_modified
 from app.utils.datetime_utils import format_datetime 
+from app.models.inventario import InventarioGeneral
 
 
 
@@ -48,7 +50,7 @@ def create_ticket():
         criticidad = data.get("criticidad")
         categoria = data.get("categoria")
         subcategoria = data.get("subcategoria")
-        subsubcategoria = data.get("subsubcategoria")
+        detalle = data.get("detalle")
         aparato_id = data.get("aparato_id")
         problema_detectado = data.get("problema_detectado")
         necesita_refaccion = data.get("necesita_refaccion", False)
@@ -65,17 +67,26 @@ def create_ticket():
             criticidad=int(criticidad),
             categoria=categoria,
             subcategoria=subcategoria,
-            subsubcategoria=subsubcategoria,
+            detalle=detalle,
             aparato_id=aparato_id,
             problema_detectado=problema_detectado,
             necesita_refaccion=necesita_refaccion,
-            descripcion_refaccion=descripcion_refaccion
+            descripcion_refaccion=descripcion_refaccion,
+            url_evidencia=data.get("url_evidencia"),
+            ubicacion=data.get("ubicacion"),
+            equipo=data.get("equipo"),
         )
+        
+        print("DATA AL CREAR:", data)
+        print("Nuevo ticket:", nuevo_ticket.to_dict())
 
         return jsonify({
             "mensaje": "Ticket creado correctamente",
             "ticket_id": nuevo_ticket.id
         }), 201
+        
+        
+
 
     except Exception as e:
         return manejar_error(e)
@@ -92,22 +103,11 @@ def get_tickets():
         if not user:
             return jsonify({"mensaje": "Usuario no encontrado"}), 404
 
-        if user.sucursal_id is None:
-            return jsonify({"mensaje": "El usuario no tiene sucursal asignada"}), 400
-
         limit = request.args.get('limit', default=15, type=int)
         offset = request.args.get('offset', default=0, type=int)
 
-        query = Ticket.query
-
-        if isinstance(user.sucursal_id, int) and 1 <= user.sucursal_id <= 22:
-            query = query.filter_by(sucursal_id=user.sucursal_id)
-        elif user.sucursal_id == 100:
-            if user.department_id is None:
-                return jsonify({"mensaje": "Supervisor sin departamento asignado"}), 400
-            query = query.filter_by(departamento_id=user.department_id)
-        elif user.sucursal_id != 1000:
-            return jsonify({"mensaje": "Tipo de usuario no reconocido"}), 400
+        # ¡Usa el helper aquí!
+        query = filtrar_tickets_por_usuario(user)
 
         total_tickets = query.count()
         tickets = query.order_by(Ticket.id.desc()).limit(limit).offset(offset).all()
@@ -140,16 +140,8 @@ def list_tickets_with_filters():
         limit = request.args.get('limit', default=15, type=int)
         offset = request.args.get('offset', default=0, type=int)
 
-        query = Ticket.query
-
-        if 1 <= user.sucursal_id <= 22:
-            query = query.filter_by(sucursal_id=user.sucursal_id)
-        elif user.sucursal_id == 100:
-            if not user.department_id:
-                return jsonify({"mensaje": "Supervisor sin departamento asignado"}), 400
-            query = query.filter_by(departamento_id=user.department_id)
-        elif user.sucursal_id != 1000:
-            return jsonify({"mensaje": "Tipo de usuario no reconocido"}), 400
+        # Helper universal
+        query = filtrar_tickets_por_usuario(user)
 
         if estado:
             query = query.filter_by(estado=estado)
@@ -163,7 +155,6 @@ def list_tickets_with_filters():
             query = query.limit(limit).offset(offset)
 
         tickets = query.order_by(Ticket.id.desc()).all()
-
 
         return jsonify({
             "mensaje": "Tickets filtrados",
@@ -300,17 +291,18 @@ def export_excel():
         if not user:
             return jsonify({"mensaje": "Usuario no encontrado"}), 404
 
-        # 🔄 MULTI-VALORES
+        # --- MULTI-VALORES ---
         estados = request.args.getlist('estado')
         departamentos = request.args.getlist('departamento_id')
         criticidades = request.args.getlist('criticidad')
         usernames = request.args.getlist('username')
         categorias = request.args.getlist('categoria')
         subcategorias = request.args.getlist('subcategoria')
-        subsubcategorias = request.args.getlist('subsubcategoria')
+        detalles = request.args.getlist('detalle')
         descripciones = request.args.getlist('descripcion')
+        inventarios = request.args.getlist('inventario')
 
-        # 🔎 Fechas
+        # --- Fechas ---
         fecha_desde = request.args.get('fecha_desde')
         fecha_hasta = request.args.get('fecha_hasta')
         fecha_fin_desde = request.args.get('fecha_fin_desde')
@@ -318,19 +310,10 @@ def export_excel():
         fecha_prog_desde = request.args.get('fecha_prog_desde')
         fecha_prog_hasta = request.args.get('fecha_prog_hasta')
 
-        query = Ticket.query
+        # Helper universal
+        query = filtrar_tickets_por_usuario(user)
 
-        # 🔐 Filtro por rol
-        if 1 <= user.sucursal_id <= 22:
-            query = query.filter_by(sucursal_id=user.sucursal_id)
-        elif user.sucursal_id == 100:
-            if not user.department_id:
-                return jsonify({"mensaje": "Supervisor sin departamento asignado"}), 400
-            query = query.filter_by(departamento_id=user.department_id)
-        elif user.sucursal_id != 1000:
-            return jsonify({"mensaje": "Tipo de usuario no reconocido"}), 400
-
-        # 🧠 Aplicar MULTI-FILTROS
+        # --- MULTI-FILTROS ---
         if estados:
             query = query.filter(Ticket.estado.in_(estados))
         if departamentos:
@@ -340,7 +323,6 @@ def export_excel():
         if usernames:
             query = query.filter(Ticket.username.in_(usernames))
 
-        # Filtros con posible "—"
         def filtrar_con_null(campo, valores):
             condiciones = []
             for v in valores:
@@ -354,12 +336,24 @@ def export_excel():
             query = query.filter(filtrar_con_null(Ticket.categoria, categorias))
         if subcategorias:
             query = query.filter(filtrar_con_null(Ticket.subcategoria, subcategorias))
-        if subsubcategorias:
-            query = query.filter(filtrar_con_null(Ticket.subsubcategoria, subsubcategorias))
+        if detalles:
+            query = query.filter(filtrar_con_null(Ticket.detalle, detalles))
         if descripciones:
             query = query.filter(filtrar_con_null(Ticket.descripcion, descripciones))
 
-        # 📅 Filtros por fecha
+        # --- FILTRO POR INVENTARIO ---
+        if inventarios:
+            inventario_objs = InventarioGeneral.query.filter(InventarioGeneral.nombre.in_(inventarios)).all()
+            inventario_ids = [inv.id for inv in inventario_objs]
+            if "—" in inventarios:
+                query = query.filter(or_(
+                    Ticket.aparato_id.in_(inventario_ids) if inventario_ids else False,
+                    Ticket.aparato_id.is_(None)
+                ))
+            else:
+                query = query.filter(Ticket.aparato_id.in_(inventario_ids))
+
+        # --- FILTROS DE FECHA ---
         if fecha_desde:
             query = query.filter(Ticket.fecha_creacion >= datetime.strptime(fecha_desde, '%Y-%m-%d'))
         if fecha_hasta:
@@ -373,16 +367,15 @@ def export_excel():
         if fecha_prog_hasta:
             query = query.filter(Ticket.fecha_en_progreso <= datetime.strptime(fecha_prog_hasta, '%Y-%m-%d'))
 
-        # 📋 Obtener tickets
         tickets = query.order_by(Ticket.fecha_creacion.desc()).all()
 
-        # 🧾 Crear Excel
+        # --- EXCEL ---
         wb = Workbook()
         ws = wb.active
         ws.title = "Tickets"
 
         headers = [
-            "ID", "Descripción", "Usuario", "Estado", "Criticidad",
+            "ID", "Aparato/Dispositivo", "Descripción", "Usuario", "Estado", "Criticidad",
             "Fecha Creación", "Fecha En Progreso", "Fecha Finalizado", "Fecha Solución",
             "Departamento", "Categoría", "Subcategoría", "Sub-subcategoría",
             "Problema Detectado", "Refacción", "Descripción Refacción"
@@ -400,13 +393,21 @@ def export_excel():
         for idx, ticket in enumerate(tickets, start=2):
             t = ticket.to_dict()
 
-            # ✅ Formatear fecha solución como día/mes/año
             fecha_solucion_corta = ""
             if ticket.fecha_solucion:
                 fecha_solucion_corta = ticket.fecha_solucion.astimezone(pytz.timezone("America/Tijuana")).strftime('%d/%m/%Y')
 
+            # 🟢 Lógica combinada para Aparato/Dispositivo
+            if ticket.inventario and ticket.inventario.nombre:
+                aparato_nombre = ticket.inventario.nombre
+            elif ticket.equipo:
+                aparato_nombre = ticket.equipo
+            else:
+                aparato_nombre = "—"
+
             ws.append([
                 t.get("id"),
+                aparato_nombre,   # <--- ya lleva la lógica combinada
                 t.get("descripcion"),
                 t.get("username"),
                 t.get("estado"),
@@ -418,15 +419,16 @@ def export_excel():
                 ticket.departamento.nombre if ticket.departamento else "—",
                 t.get("categoria"),
                 t.get("subcategoria"),
-                t.get("subsubcategoria"),
+                t.get("detalle"),
                 t.get("problema_detectado"),
                 "Sí" if t.get("necesita_refaccion") else "No",
                 t.get("descripcion_refaccion")
             ])
-            
+
             if idx % 2 == 0:
                 for cell in ws[idx]:
                     cell.fill = alt_fill
+
 
         for column_cells in ws.columns:
             max_length = max(len(str(cell.value or "")) for cell in column_cells)
@@ -447,7 +449,12 @@ def export_excel():
         )
 
     except Exception as e:
-        return manejar_error(e)
+        import traceback
+        print(traceback.format_exc())
+        return jsonify({"mensaje": str(e)}), 500
+
+
+
 
 
 # ─────────────────────────────────────────────────────────────
@@ -603,7 +610,7 @@ def historial_equipo(equipo_id):
                 "url_evidencia": t.url_evidencia,
                 "categoria": t.categoria,
                 "subcategoria": t.subcategoria,
-                "subsubcategoria": t.subsubcategoria,
+                "detalle": t.detalle,
             })
         return jsonify(data), 200
     except Exception as e:

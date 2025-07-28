@@ -26,59 +26,66 @@
     </mat-form-field>
 
     <div class="mb-4 flex items-center gap-2">
-      <mat-checkbox [(ngModel)]="soloAparatos" (change)="actualizarFiltrados()" [ngModelOptions]="{standalone: true}">
-        Solo aparatos
-      </mat-checkbox>
-      <span class="text-xs text-gray-500">
-        (Marca para mostrar solo los productos tipo "Aparatos")
-      </span>
+      <mat-form-field appearance="fill" style="width: 100%;">
+        <mat-label>Tipo de producto</mat-label>
+        <mat-select [(ngModel)]="tipoFiltro" (selectionChange)="onTipoFiltroChange()" [ngModelOptions]="{standalone: true}">
+          <mat-option *ngFor="let tipo of tiposDisponibles" [value]="tipo">
+            {{ tipo === 'todos' || tipo === 'Todos' ? 'Todos' : (tipo | titlecase) }}
+          </mat-option>
+        </mat-select>
+        <span class="text-xs text-gray-500">(Filtra la lista de productos por tipo)</span>
+      </mat-form-field>
     </div>
 
-    <div formArrayName="productos" *ngFor="let grupo of productosFormArray.controls; let i = index">
-      <div class="producto-card">
-        <div class="producto-grupo flex flex-wrap gap-2">
-          <mat-form-field appearance="fill" style="flex:2; min-width:210px; max-width:310px;">
-            <mat-label>Inventario</mat-label>
-            <input
-              type="text"
-              matInput
-              [formControl]="grupo.get('inventarioControl')"
-              [matAutocomplete]="autoInv"
-              required
-              autocomplete="off"
-              (blur)="onBlurInventario(i)"
-            />
-            <mat-autocomplete #autoInv="matAutocomplete" [displayWith]="displayInventario">
-              <mat-option *ngFor="let inv of inventarioFiltrado$[i] | async" [value]="inv">
-                <div class="font-medium">{{ inv.nombre }}</div>
-                <div *ngIf="inv.marca || inv.proveedor || inv.categoria" class="text-xs text-gray-500">
-                  <span *ngIf="inv.marca">{{ inv.marca }}</span>
-                  <span *ngIf="inv.proveedor"> · {{ inv.proveedor }}</span>
-                  <span *ngIf="inv.categoria"> · {{ inv.categoria }}</span>
-                </div>
-              </mat-option>
-              <mat-option *ngIf="(inventarioFiltrado$[i] | async)?.length === 0" disabled>
-                <span class="text-gray-500">No hay resultados</span>
-              </mat-option>
-            </mat-autocomplete>
-          </mat-form-field>
+<div formArrayName="productos" *ngFor="let grupo of productosFormArray.controls; let i = index">
+  <div class="producto-card">
+    <div class="producto-grupo flex flex-wrap gap-2">
+      <mat-form-field appearance="fill" style="flex:2; min-width:210px; max-width:310px;">
+        <mat-label>Inventario</mat-label>
+        <input
+          type="text"
+          matInput
+          [formControl]="grupo.get('inventarioControl')"
+          [matAutocomplete]="autoInv"
+          required
+          autocomplete="off"
+          (blur)="onBlurInventario(i)"
+        />
+      <mat-autocomplete #autoInv="matAutocomplete"
+        [displayWith]="displayInventario"
+        (optionSelected)="onInventarioSeleccionado($event.option.value, i)">
+        <mat-option
+          *ngFor="let inv of inventarioFiltrado$[i] | async; let grupo = grupo"
+          [value]="inv"
+          (mousedown)="forzarObjetoEnFormArray(grupo, inv, $event)">
+          <div class="font-medium">{{ inv.nombre }}</div>
+          <div *ngIf="inv.marca || inv.proveedor || inv.categoria" class="text-xs text-gray-500">
+            <span *ngIf="inv.marca">{{ inv.marca }}</span>
+            <span *ngIf="inv.proveedor"> · {{ inv.proveedor }}</span>
+            <span *ngIf="inv.categoria"> · {{ inv.categoria }}</span>
+            <span *ngIf="inv.codigo_interno"> · {{ inv.codigo_interno }}</span> 
+          </div>
+        </mat-option>
+      </mat-autocomplete>
+      </mat-form-field>
 
-          <mat-form-field appearance="fill" style="flex:1; min-width:120px;">
-            <mat-label>Unidad</mat-label>
-            <input matInput [formControl]="grupo.get('unidad_medida')" disabled>
-          </mat-form-field>
+      <mat-form-field appearance="fill" style="flex:1; min-width:120px;">
+        <mat-label>Unidad</mat-label>
+        <input matInput [formControl]="grupo.get('unidad_medida')" disabled>
+      </mat-form-field>
 
-          <mat-form-field appearance="fill" style="flex:1; min-width:90px;">
-            <mat-label>Cantidad</mat-label>
-            <input matInput type="number" [formControl]="grupo.get('cantidad')" required min="1">
-          </mat-form-field>
+      <mat-form-field appearance="fill" style="flex:1; min-width:90px;">
+        <mat-label>Cantidad</mat-label>
+        <input matInput type="number" [formControl]="grupo.get('cantidad')" required min="1">
+      </mat-form-field>
 
-          <button mat-icon-button color="warn" type="button" (click)="eliminarProducto(i)" *ngIf="productosFormArray.length > 1">
-            <mat-icon>remove_circle</mat-icon>
-          </button>
-        </div>
-      </div>
+      <button mat-icon-button color="warn" type="button" (click)="eliminarProducto(i)" *ngIf="productosFormArray.length > 1">
+        <mat-icon>remove_circle</mat-icon>
+      </button>
     </div>
+  </div>
+</div>
+
 
     <button mat-button type="button" (click)="agregarProducto()">+ Añadir producto</button>
   </form>

@@ -1,0 +1,19 @@
+.contenedor-historial {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.tabla {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th {
+  background-color: #f0f0f0;
+  font-weight: 600;
+}
+
+td, th {
+  padding: 8px;
+}

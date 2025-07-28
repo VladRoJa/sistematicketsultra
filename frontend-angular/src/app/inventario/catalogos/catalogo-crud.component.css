@@ -1,0 +1,173 @@
+/* ======== SAP FIORI LIGHT THEME (ERP STYLE) ======== */
+
+/* Fondo base */
+body, .catalogo-module-bg {
+  background: #f7f9fb !important;
+}
+
+/* Titulos y acciones */
+.catalogo-table h2, .text-xl, .font-bold {
+  color: #005ba1;
+  font-size: 2.1rem;
+  letter-spacing: .5px;
+  margin-bottom: 10px;
+}
+
+/* Contenedor acciones rápidas */
+.catalogo-acciones-rapidas {
+  display: flex;
+  gap: 12px;
+}
+
+/* Botones principales */
+button[mat-flat-button], button[mat-stroked-button] {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 7px 18px;
+  border-radius: 7px !important;
+  text-transform: none;
+  box-shadow: 0 2px 7px 0 #0001;
+  background: #fff;
+  border: 1px solid #d8e3ee;
+  color: #005ba1 !important;
+  transition: background .13s, color .13s;
+}
+
+/* Importar - Accent */
+button[color="accent"], button.mat-accent {
+  background: linear-gradient(90deg, #fde3a7 0%, #a1c4fd 100%);
+  color: #333 !important;
+  border: none;
+}
+button[color="accent"]:hover {
+  background: #ffe082 !important;
+}
+
+/* Exportar - Primary */
+button[color="primary"], button.mat-primary {
+  background: linear-gradient(90deg, #a1c4fd 0%, #005ba1 100%);
+  color: #fff !important;
+  border: none;
+}
+button[color="primary"]:hover {
+  background: #005ba1 !important;
+  color: #fff !important;
+}
+
+/* Botón de eliminar */
+button[color="warn"], button.mat-warn {
+  background: #ffc1c1 !important;
+  color: #e2001a !important;
+  border: none;
+}
+
+/* ======================== */
+/*        FORMULARIO        */
+/* ======================== */
+.catalogo-form, .catalogo-form * {
+  color: #0c1935 !important;
+}
+mat-form-field {
+  background: #fff !important;
+  border-radius: 7px;
+  border: 1px solid #e0e6ed;
+}
+mat-form-field.mat-form-field {
+  margin-right: 14px;
+}
+.mat-form-field-label {
+  color: #005ba1 !important;
+  opacity: .8 !important;
+}
+input[matInput], .mat-input-element {
+  color: #1a2746 !important;
+  background: transparent !important;
+}
+
+/* ======================== */
+/*        TABLA ERP         */
+/* ======================== */
+.catalogo-table {
+  border-radius: 15px;
+  overflow: hidden;
+  box-shadow: 0 2px 14px 0 #005ba114;
+  margin-top: 12px;
+  margin-bottom: 22px;
+  background: #fff;
+}
+.catalogo-table .mat-header-row {
+  background: #f3f6fa !important;
+}
+.catalogo-table .mat-header-cell {
+  color: #005ba1 !important;
+  font-weight: 700;
+  font-size: 1.13em;
+  border-bottom: 2px solid #d1dde7 !important;
+  letter-spacing: .7px;
+  padding: 14px 10px 11px 14px;
+}
+.catalogo-table .mat-row {
+  background: #fff !important;
+  transition: background .13s;
+}
+.catalogo-table .mat-row:hover {
+  background: #f4f9fd !important;
+}
+.catalogo-table .mat-cell {
+  color: #222d3c !important;
+  font-size: 1.05em;
+  padding: 11px 8px 10px 14px;
+  border-bottom: 1px solid #eaeef2 !important;
+}
+.catalogo-table .mat-cell:last-child {
+  text-align: right;
+}
+
+.catalogo-table .mat-icon-button {
+  margin: 0 2px;
+  background: #e5eefc !important;
+  border-radius: 7px;
+  padding: 7px;
+}
+.catalogo-table .mat-icon-button[color="primary"] mat-icon {
+  color: #005ba1 !important;
+}
+.catalogo-table .mat-icon-button[color="warn"] mat-icon {
+  color: #e2001a !important;
+}
+.catalogo-table .mat-icon {
+  font-size: 21px;
+  vertical-align: middle;
+}
+
+.catalogo-table .mat-row:nth-child(even) {
+  background: #f7f9fc !important;
+}
+
+/* ======================== */
+/*      EMPTY & SPINNER     */
+/* ======================== */
+.text-gray-500, .text-center, .mt-8 {
+  color: #6a819f !important;
+  font-size: 1.15em;
+  padding-top: 2em;
+}
+
+.mat-spinner circle {
+  stroke: #005ba1 !important;
+}
+
+/* ======================== */
+/*    Responsive Details    */
+/* ======================== */
+@media (max-width: 800px) {
+  .catalogo-table .mat-header-cell,
+  .catalogo-table .mat-cell {
+    font-size: 0.95em;
+    padding: 8px 4px;
+  }
+  button[mat-flat-button], button[mat-stroked-button] {
+    padding: 6px 8px;
+    font-size: 0.97em;
+  }
+}

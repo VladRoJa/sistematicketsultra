@@ -84,7 +84,7 @@
     </mat-form-field>
 
     <!-- CÓDIGO INTERNO -->
-    <ng-container *ngIf="form.get('tipo')?.value === 'Aparatos'">
+    <ng-container *ngIf="form.get('tipo')?.value === 'Aparatos' || form.get('tipo')?.value === 'Sistemas'">
     <mat-form-field appearance="fill" class="campo">
       <mat-label>Código Interno</mat-label>
       <input matInput formControlName="codigo_interno" />

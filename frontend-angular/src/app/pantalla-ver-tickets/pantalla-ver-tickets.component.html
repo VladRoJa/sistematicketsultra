@@ -71,6 +71,65 @@
           </mat-menu>
         </th>
 
+<!-- (A) Columna: Aparato -->
+<th [class.filtro-activo]="isFilterActive('inventario')">
+  <button
+    mat-button
+    [matMenuTriggerFor]="menuInventario"
+    #triggerFiltroInventario="matMenuTrigger"
+    (click)="onAbrirFiltro('inventario', triggerFiltroInventario)"
+    class="header-button"
+  >
+    Aparato/Dispositivo <mat-icon>arrow_drop_down</mat-icon>
+  </button>
+
+  <mat-menu #menuInventario="matMenu" disableClose="true">
+    <button mat-menu-item (click)="ordenar('inventario','asc')">A-Z</button>
+    <button mat-menu-item (click)="ordenar('inventario','desc')">Z-A</button>
+    <mat-divider></mat-divider>
+    <div class="menu-filtro" (click)="$event.stopPropagation()">
+      <label>Filtrar Aparato</label>
+      <mat-form-field appearance="fill" class="buscador-filtro" (click)="$event.stopPropagation()">
+        <mat-label>Buscar</mat-label>
+        <input
+          matInput
+          [(ngModel)]="filtroInventarioTexto"
+          (ngModelChange)="filtrarOpcionesTexto('inventario')"
+        >
+      </mat-form-field>
+      <mat-checkbox
+        [checked]="isTodoSeleccionado('inventario')"
+        (change)="alternarSeleccionTemporal('inventario', $event.checked)"
+        (click)="$event.stopPropagation()"
+        name="inventario_selectAll"
+      >
+        Seleccionar todo
+      </mat-checkbox>
+      <div class="opciones-scrollable">
+        <mat-checkbox
+          *ngFor="let item of temporalSeleccionados['inventario']; let i = index"
+          [checked]="item.seleccionado"
+          (change)="actualizarSeleccionTemporal('inventario', i, $event.checked)"
+          [name]="'inventario' + i"
+          (click)="$event.stopPropagation()"
+        >
+          {{ item.valor }}
+        </mat-checkbox>
+      </div>
+      <div class="menu-botones-fijos">
+        <button mat-button (click)="cerrarYAplicar('inventario', triggerFiltroInventario)">
+          Aplicar
+        </button>
+        <button mat-button (click)="cerrarYLimpiar('inventario', triggerFiltroInventario)">
+          Borrar Filtro
+        </button>
+      </div>
+    </div>
+  </mat-menu>
+</th>
+
+
+
 <!-- (3) Columna: Descripción -->
 <th [class.filtro-activo]="isFilterActive('descripcion')">
   <button
@@ -483,43 +542,43 @@
         </th>
 
         <!-- (12) Columna: Detalle -->
-        <th [class.filtro-activo]="isFilterActive('subsubcategoria')">
+        <th [class.filtro-activo]="isFilterActive('detalle')">
           <button mat-button [matMenuTriggerFor]="menuDetalle" 
           #triggerFiltroDetalle="matMenuTrigger" 
-          (click)="onAbrirFiltro('subsubcategoria', triggerFiltroDetalle)"
+          (click)="onAbrirFiltro('detalle', triggerFiltroDetalle)"
           class="header-button">
             Detalle <mat-icon>arrow_drop_down</mat-icon>
           </button>
           <mat-menu #menuDetalle="matMenu" disableClose="true">
-            <button mat-menu-item (click)="ordenar('subsubcategoria','asc')">A-Z</button>
-            <button mat-menu-item (click)="ordenar('subsubcategoria','desc')">Z-A</button>
+            <button mat-menu-item (click)="ordenar('detalle','asc')">A-Z</button>
+            <button mat-menu-item (click)="ordenar('detalle','desc')">Z-A</button>
             <mat-divider></mat-divider>
             <div class="menu-filtro" (click)="$event.stopPropagation()">
               <label>Filtrar Detalle</label>
-              <mat-form-field *ngIf="permiteBusqueda('subsubcategoria')" appearance="fill" class="buscador-filtro" (click)="$event.stopPropagation()">
+              <mat-form-field *ngIf="permiteBusqueda('detalle')" appearance="fill" class="buscador-filtro" (click)="$event.stopPropagation()">
                 <mat-label>Buscar</mat-label>
-                <input matInput [(ngModel)]="filtroDetalleTexto" (ngModelChange)="filtrarOpcionesTexto('subsubcategoria')">
+                <input matInput [(ngModel)]="filtroDetalleTexto" (ngModelChange)="filtrarOpcionesTexto('detalle')">
               </mat-form-field>
-              <mat-checkbox [checked]="isTodoSeleccionado('subsubcategoria')"
-                            (change)="alternarSeleccionTemporal('subsubcategoria', $event.checked)"
+              <mat-checkbox [checked]="isTodoSeleccionado('detalle')"
+                            (change)="alternarSeleccionTemporal('detalle', $event.checked)"
                             (click)="$event.stopPropagation()"
                             name="detalle_selectAll">
                 Seleccionar todo
               </mat-checkbox>
               <div class="opciones-scrollable">
-              <mat-checkbox *ngFor="let item of temporalSeleccionados['subsubcategoria']; let i = index"
+              <mat-checkbox *ngFor="let item of temporalSeleccionados['detalle']; let i = index"
                             [checked]="item.seleccionado"
-                            (change)="actualizarSeleccionTemporal('subsubcategoria', i, $event.checked)"
+                            (change)="actualizarSeleccionTemporal('detalle', i, $event.checked)"
                             [name]="'detalle_' + i"
                             (click)="$event.stopPropagation()">
                 {{ item.valor }}
               </mat-checkbox>
               </div>
               <div class="menu-botones-fijos">
-                <button mat-button color="primary" (click)="cerrarYAplicar('subsubcategoria', triggerFiltroDetalle)">
+                <button mat-button color="primary" (click)="cerrarYAplicar('detalle', triggerFiltroDetalle)">
                   Aplicar
                 </button>
-                <button mat-button (click)="cerrarYLimpiar('subsubcategoria', triggerFiltroDetalle)">
+                <button mat-button (click)="cerrarYLimpiar('detalle', triggerFiltroDetalle)">
                   Borrar Filtros
                 </button>
               </div>
@@ -542,6 +601,7 @@
       <tr *ngFor="let ticket of visibleTickets">
         <td>{{ ticket.id }}</td>
         <td>{{ ticket.categoria }}</td>
+        <td>{{ getNombreEquipoOInventario(ticket) }}</td>
         <td>{{ ticket.descripcion }}</td>
         <td>{{ ticket.username }}</td>
         <td>{{ ticket.estado }}</td>
@@ -551,7 +611,7 @@
         <td>{{ ticket.fecha_finalizado }}</td>
         <td>{{ ticket.departamento }}</td>
         <td>{{ ticket.subcategoria || '—' }}</td>
-        <td>{{ ticket.subsubcategoria || '—' }}</td>
+        <td>{{ ticket.detalle || '—' }}</td>
     
         <!-- Acciones -->
         <td>

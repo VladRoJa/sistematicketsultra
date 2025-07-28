@@ -2,9 +2,23 @@
 
 <div class="flex items-center justify-between mb-4">
   <h1 class="text-xl font-bold">Listado de Inventario</h1>
-  <button mat-flat-button color="primary" (click)="abrirDialogoAgregar()">
-    <mat-icon>add</mat-icon> Agregar Inventario
-  </button>
+
+
+  <div>
+    <button mat-flat-button color="accent" (click)="abrirDialogoImportar()">
+      <mat-icon>file_upload</mat-icon>
+      Importar
+    </button>
+    <input type="file" #fileInput hidden (change)="importarExcel($event)">
+    <button mat-flat-button color="primary" (click)="exportarInventario()">
+      <mat-icon>file_download</mat-icon>
+      Exportar
+    </button>
+    <button mat-flat-button color="primary" (click)="descargarPlantilla()">
+      <mat-icon>download</mat-icon>
+      Plantilla
+    </button>
+  </div>
 </div>
 
 <mat-table [dataSource]="inventariosFiltrados" *ngIf="!loading && inventariosFiltrados.length > 0">

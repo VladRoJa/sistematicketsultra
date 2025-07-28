@@ -1,72 +1,59 @@
-<div [formGroup]="parentForm" class="subformulario-box">
+  <!-- frontend-angular\src\app\pantalla-crear-ticket\formularios-crear-ticket\mantenimiento-aparatos\mantenimiento-aparatos.component.html -->
+
+
+<div class="subformulario-box">
+
+  <!-- Selecciona sucursal solo si eres admin -->
+  <mat-form-field *ngIf="esAdmin" appearance="fill" class="full-width">
+    <mat-label>Selecciona sucursal</mat-label>
+    <mat-select [(ngModel)]="sucursalSeleccionada" (selectionChange)="onSucursalChange($event.value)">
+      <mat-option *ngFor="let suc of sucursales" [value]="suc.sucursal_id">
+        {{ suc.sucursal }}
+      </mat-option>
+    </mat-select>
+  </mat-form-field>
+
   <h3>🏋️‍♂️ Reportar Falla en Aparato</h3>
 
-  <!-- Buscador con Autocompletado -->
-  <div class="form-group">
-    <label>🔎 Buscar aparato:</label>
-    <mat-form-field appearance="fill" class="full-width">
-      <mat-label>Escribe el código o nombre...</mat-label>
-      <input
-        type="text"
-        matInput
-        [formControl]="filtroControl"
-        [matAutocomplete]="auto"
-        [ngClass]="{ resaltado: inputResaltado }"
-        (animationend)="inputResaltado = false"
-      />
-      <button
-        *ngIf="filtroControl.value"
-        matSuffix
-        mat-icon-button
-        aria-label="Limpiar búsqueda"
-        (click)="filtroControl.setValue('')"
-      >
-        <mat-icon>close</mat-icon>
-      </button>
-      <mat-autocomplete
-        #auto="matAutocomplete"
-        (optionSelected)="seleccionarAparato($event.option.value)"
-      >
-        <mat-option *ngFor="let ap of aparatosFiltrados$ | async" [value]="ap">
-          <div class="opcion-aparato">
-            <span class="emoji-aparato">{{ obtenerEmoji(ap.descripcion) }}</span>
-            <div class="detalles-aparato">
-              <span class="codigo-aparato">{{ ap.codigo }}</span>
-              <span class="descripcion-aparato">{{ ap.descripcion }}</span>
-              <small class="marca-aparato">({{ ap.marca }})</small>
-            </div>
-          </div>
-        </mat-option>
-      </mat-autocomplete>
-    </mat-form-field>
-  </div>
+  <!-- Selector reutilizable para equipos -->
+  <app-selector-equipo
+    [sucursalId]="sucursalSeleccionada"
+    tipo="aparato"
+    placeholder="Buscar aparato..."
+    [mostrarEmoji]="true"
+    (equipoSeleccionado)="onEquipoSeleccionado($event)">
+  </app-selector-equipo>
+
+  <!-- Detalle -->
+  <mat-form-field *ngIf="parentForm.get('detalle')" appearance="fill" class="full-width">
+    <mat-label>Detalle del aparato</mat-label>
+    <input matInput [formControl]="parentForm.get('detalle')" placeholder="Detalle del aparato" />
+  </mat-form-field>
 
   <!-- Descripción del problema -->
-  <mat-form-field appearance="fill" class="form-group-description">
+  <mat-form-field *ngIf="parentForm.get('descripcion')" appearance="fill" class="form-group-description">
     <mat-label>📋 Descripción del problema</mat-label>
     <textarea
       matInput
-      formControlName="descripcion"
+      [formControl]="parentForm.get('descripcion')"
       class="descripcion-textarea"
       rows="4"
       placeholder="Detalla lo ocurrido con claridad..."></textarea>
   </mat-form-field>
 
   <!-- ¿Requiere refacción? -->
-  <div class="form-group horizontal-align">
-    <input type="checkbox" formControlName="necesita_refaccion" />
+  <div class="form-group horizontal-align" *ngIf="parentForm.get('necesita_refaccion')">
+    <input type="checkbox" [formControl]="parentForm.get('necesita_refaccion')" />
     <label>¿Requiere refacción?</label>
   </div>
 
   <!-- Descripción técnica de la refacción -->
-  <div class="form-group" *ngIf="parentForm.get('necesita_refaccion')?.value">
-    <mat-form-field appearance="fill" class="full-width">
-      <mat-label>🧰 Descripción técnica de la refacción</mat-label>
-      <textarea
-        matInput
-        formControlName="descripcion_refaccion"
-        placeholder="Detalle técnico..."
-        rows="3"></textarea>
-    </mat-form-field>
-  </div>
+  <mat-form-field *ngIf="parentForm.get('descripcion_refaccion') && parentForm.get('necesita_refaccion')?.value" appearance="fill" class="full-width">
+    <mat-label>🧰 Descripción técnica de la refacción</mat-label>
+    <textarea
+      matInput
+      [formControl]="parentForm.get('descripcion_refaccion')"
+      placeholder="Detalle técnico..."
+      rows="3"></textarea>
+  </mat-form-field>
 </div>

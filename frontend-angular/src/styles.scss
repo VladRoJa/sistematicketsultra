@@ -206,3 +206,14 @@ textarea.mat-mdc-input-element {
 .cdk-overlay-container {
   z-index: 3000 !important;
 }
+
+.espaciado-formulario {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding-top: 1rem;
+}
+
+.campo {
+  width: 100%;
+}

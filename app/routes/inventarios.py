@@ -2,9 +2,13 @@
 
 import base64
 from io import BytesIO
-from flask import Blueprint, request, jsonify
+import io
+import os
+import tempfile
+from flask import Blueprint, request, jsonify, send_file
 from flask_cors import CORS
 from flask_jwt_extended import jwt_required, get_jwt_identity
+import pandas as pd
 import qrcode
 from app.extensions import db
 from app.models.inventario import InventarioGeneral, MovimientoInventario, DetalleMovimiento, InventarioSucursal
@@ -17,6 +21,7 @@ from config import Config
 from app.utils.error_handler import manejar_error
 from app.models.sucursal_model import Sucursal
 from app.utils.string_utils import normalizar_campo
+from werkzeug.utils import secure_filename
 
 inventario_bp = Blueprint('inventario', __name__, url_prefix='/api/inventario')
 
@@ -44,7 +49,7 @@ def ping():
     return success_response('Pong!')
 
 # Crear un nuevo inventario (producto/aparato/unificado)
-@inventario_bp.route('/', methods=['POST'])
+@inventario_bp.route('/', methods=['POST'], strict_slashes=False)
 @jwt_required()
 def crear_inventario():
     try:
@@ -89,10 +94,11 @@ def crear_inventario():
         return manejar_error(e, "crear_inventario")
 
 # Obtener todo el inventario
-@inventario_bp.route('/', methods=['GET'])
+@inventario_bp.route('/', methods=['GET', 'OPTIONS'], strict_slashes=False)
 @jwt_required()
 def obtener_inventario():
     try:
+        sucursal_id = request.args.get('sucursal_id', type=int)
         def descripcion_larga(i):
             partes = [
                 i.nombre,
@@ -103,6 +109,36 @@ def obtener_inventario():
             ]
             return " - ".join([str(p) for p in partes if p])
 
+        if sucursal_id:
+            # Devuelve solo el inventario de esa sucursal
+            inventarios = InventarioSucursal.query.filter_by(sucursal_id=sucursal_id).all()
+            data = []
+            for inv_suc in inventarios:
+                i = InventarioGeneral.query.get(inv_suc.inventario_id)
+                if i:
+                    data.append({
+                        'id': i.id,
+                        'tipo': i.tipo,
+                        'nombre': i.nombre,
+                        'descripcion': i.descripcion,
+                        'marca': i.marca,
+                        'proveedor': i.proveedor,
+                        'categoria': i.categoria,
+                        'unidad_medida': i.unidad_medida,  
+                        'codigo_interno': i.codigo_interno,
+                        'no_equipo': i.no_equipo,
+                        'gasto_sem': i.gasto_sem,
+                        'gasto_mes': i.gasto_mes,
+                        'pedido_mes': i.pedido_mes,
+                        'semana_pedido': i.semana_pedido,
+                        'fecha_inventario': str(i.fecha_inventario) if i.fecha_inventario else None,
+                        'grupo_muscular': i.grupo_muscular,
+                        'stock': inv_suc.stock,
+                        'descripcion_larga': descripcion_larga(i)
+                    })
+            return jsonify(data), 200
+
+        # Si no hay sucursal_id, inventario global
         inventario = InventarioGeneral.query.all()
         data = []
         for i in inventario:
@@ -129,8 +165,9 @@ def obtener_inventario():
     except Exception as e:
         return manejar_error(e, "obtener_inventario")
 
+
 # Registrar entrada/salida de inventario
-@inventario_bp.route('/movimientos', methods=['POST'])
+@inventario_bp.route('/movimientos', methods=['POST'], strict_slashes=False)
 @jwt_required()
 def registrar_movimiento():
     try:
@@ -200,7 +237,7 @@ def registrar_movimiento():
         return manejar_error(e, "registrar_movimiento")
 
 # Ver historial de movimientos
-@inventario_bp.route('/movimientos', methods=['GET'])
+@inventario_bp.route('/movimientos', methods=['GET'], strict_slashes=False)
 @jwt_required()
 def historial_movimientos():
     try:
@@ -247,7 +284,7 @@ def historial_movimientos():
         return manejar_error(e, "historial_movimientos")
 
 # Ver existencias globales
-@inventario_bp.route('/existencias', methods=['GET'])
+@inventario_bp.route('/existencias', methods=['GET'], strict_slashes=False)
 @jwt_required()
 def ver_existencias():
     try:
@@ -288,7 +325,7 @@ def ver_existencias():
         return manejar_error(e, "ver_existencias")
 
 # Listar todas las sucursales
-@inventario_bp.route('/sucursales', methods=['GET'])
+@inventario_bp.route('/sucursales', methods=['GET'], strict_slashes=False)
 @jwt_required()
 def listar_sucursales():
     try:
@@ -300,7 +337,7 @@ def listar_sucursales():
         return manejar_error(e, "listar_sucursales")
 
 # Editar inventario general
-@inventario_bp.route('/<int:inventario_id>', methods=['PUT'])
+@inventario_bp.route('/<int:inventario_id>', methods=['PUT'], strict_slashes=False)
 @jwt_required()
 def editar_inventario(inventario_id):
     try:
@@ -332,7 +369,7 @@ def editar_inventario(inventario_id):
         return manejar_error(e, "editar_inventario")
 
 # Eliminar inventario general
-@inventario_bp.route('/<int:inventario_id>', methods=['DELETE'])
+@inventario_bp.route('/<int:inventario_id>', methods=['DELETE'], strict_slashes=False)
 @jwt_required()
 def eliminar_inventario(inventario_id):
     try:
@@ -352,7 +389,7 @@ def eliminar_inventario(inventario_id):
         db.session.rollback()
         return manejar_error(e, "eliminar_inventario")
 
-@inventario_bp.route('/<int:inventario_id>', methods=['GET'])
+@inventario_bp.route('/<int:inventario_id>', methods=['GET'], strict_slashes=False)
 @jwt_required()
 def obtener_inventario_por_id(inventario_id):
     try:
@@ -381,7 +418,7 @@ def obtener_inventario_por_id(inventario_id):
     except Exception as e:
         return manejar_error(e, "obtener_inventario_por_id")
 
-@inventario_bp.route('/buscar', methods=['GET'])
+@inventario_bp.route('/buscar', methods=['GET'], strict_slashes=False)
 @jwt_required()
 def buscar_inventario():
     try:
@@ -422,7 +459,7 @@ def buscar_inventario():
         return manejar_error(e, "buscar_inventario")
     
     
-@inventario_bp.route('/movimientos/<int:id>', methods=['DELETE'])
+@inventario_bp.route('/movimientos/<int:id>', methods=['DELETE'], strict_slashes=False)
 @jwt_required()
 def eliminar_movimiento(id):
     try:
@@ -452,7 +489,7 @@ def eliminar_movimiento(id):
         db.session.rollback()
         return manejar_error(e, "eliminar_movimiento")
 
-@inventario_bp.route('/equipos', methods=['GET'])
+@inventario_bp.route('/equipos', methods=['GET'], strict_slashes=False)
 @jwt_required()
 def listar_equipos():
     try:
@@ -497,7 +534,7 @@ def listar_equipos():
         return manejar_error(e, "listar_equipos")
 
 
-@inventario_bp.route('/equipos-historial', methods=['GET'])
+@inventario_bp.route('/equipos-historial', methods=['GET'], strict_slashes=False)
 @jwt_required()
 def equipos_con_historial():
     """
@@ -541,7 +578,7 @@ def equipos_con_historial():
         return manejar_error(e, "equipos_con_historial")
 
 
-@inventario_bp.route('/<int:equipo_id>/historial', methods=['GET'])
+@inventario_bp.route('/<int:equipo_id>/historial', methods=['GET'], strict_slashes=False)
 @jwt_required()
 def historial_equipo(equipo_id):
     """
@@ -584,7 +621,7 @@ def historial_equipo(equipo_id):
         return manejar_error(e, "historial_equipo")
 
 
-@inventario_bp.route('/equipos', methods=['GET'])
+@inventario_bp.route('/equipos', methods=['GET'], strict_slashes=False)
 @jwt_required()
 def obtener_equipos():
     """
@@ -633,7 +670,7 @@ def obtener_equipos():
         return manejar_error(e, "obtener_equipos")
 
 
-@inventario_bp.route('/listar', methods=['GET'])
+@inventario_bp.route('/listar', methods=['GET'], strict_slashes=False)
 @jwt_required()
 def listar_inventario_filtrado():
     """
@@ -680,7 +717,7 @@ def listar_inventario_filtrado():
     except Exception as e:
         return manejar_error(e, "listar_inventario_filtrado")
 
-@inventario_bp.route('/<int:inventario_id>/qr', methods=['GET'])
+@inventario_bp.route('/<int:inventario_id>/qr', methods=['GET'], strict_slashes=False)
 @jwt_required()
 def generar_qr_inventario(inventario_id):
     """
@@ -719,7 +756,7 @@ def generar_qr_inventario(inventario_id):
         return manejar_error(e, "generar_qr_inventario")
 
 
-@inventario_bp.route('/buscar-por-codigo', methods=['GET'])
+@inventario_bp.route('/buscar-por-codigo', methods=['GET'], strict_slashes=False)
 @jwt_required()
 def buscar_por_codigo():
     """
@@ -745,7 +782,7 @@ def buscar_por_codigo():
         return manejar_error(e, "buscar_por_codigo")
 
 
-@inventario_bp.route('/<int:inventario_id>/historial', methods=['GET'])
+@inventario_bp.route('/<int:inventario_id>/historial', methods=['GET'], strict_slashes=False)
 @jwt_required()
 def historial_aparato(inventario_id):
     """
@@ -793,3 +830,110 @@ def historial_aparato(inventario_id):
         }), 200
     except Exception as e:
         return manejar_error(e, "historial_aparato")
+
+
+@inventario_bp.route('/importar', methods=['POST'], strict_slashes=False)
+@jwt_required()
+def importar_inventario():
+    file = request.files.get('file')
+    if not file:
+        return jsonify({"message": "No se subió archivo"}), 400
+    filename = secure_filename(file.filename)
+    tmp_dir = tempfile.gettempdir()
+    filepath = os.path.join(tmp_dir, filename)
+    file.save(filepath)
+    
+    # Soporte para encoding flexible
+    if filename.lower().endswith('.csv'):
+        import chardet
+        with open(filepath, 'rb') as f:
+            encoding = chardet.detect(f.read())['encoding'] or 'utf-8'
+        df = pd.read_csv(filepath, encoding=encoding)
+    else:
+        df = pd.read_excel(filepath)
+
+    agregados, errores = 0, 0
+    for idx, row in df.iterrows():
+        try:
+            # Ajusta estos campos a los de tu modelo de inventario
+            inv = InventarioGeneral(
+                nombre=str(row['nombre']).strip(),
+                descripcion=str(row['descripcion']).strip(),
+                tipo=str(row['tipo']).strip(),
+                marca=str(row['marca']).strip(),
+                proveedor=str(row['proveedor']).strip(),
+                categoria=str(row['categoria']).strip(),
+                unidad=str(row['unidad_medida']).strip(),
+                grupo_muscular=str(row['grupo_muscular']).strip(),
+                codigo_interno=str(row['codigo_interno']).strip()
+            )
+            db.session.add(inv)
+            agregados += 1
+        except Exception as e:
+            print(f"Error en fila {idx+2}: {e}")
+            errores += 1
+    db.session.commit()
+    os.remove(filepath)
+    return jsonify({"message": f"Importación exitosa. Agregados: {agregados}. Errores: {errores}"}), 200
+
+@inventario_bp.route('/plantilla', methods=['GET'], strict_slashes=False)
+@jwt_required()
+def plantilla_inventario():
+    # Ajusta los campos a tu modelo
+    columnas = [
+        "nombre", "descripcion", "tipo", "marca", "proveedor",
+        "categoria", "unidad", "grupo_muscular", "codigo_interno"
+    ]
+    # Fila de ejemplo (puedes poner más ejemplos o dejar en blanco)
+    ejemplo = {
+        "nombre": "Banca plana",
+        "descripcion": "Banco plano",
+        "tipo": "aparato",
+        "marca": "Flex",
+        "proveedor": "UltraGym",
+        "categoria": "Maquinas",
+        "unidad": "pieza",
+        "grupo_muscular": "Pecho",
+        "codigo_interno": "01PLBPFL"
+    }
+    df = pd.DataFrame([ejemplo])
+    output = io.BytesIO()
+    df.to_excel(output, index=False)
+    output.seek(0)
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name='plantilla_inventario.xlsx'
+    )
+    
+    
+@inventario_bp.route('/exportar', methods=['GET'], strict_slashes=False)
+@jwt_required()
+def exportar_inventario():
+    registros = InventarioGeneral.query.all()
+    # Extrae los campos igual que en la plantilla, agrega los que uses
+    data = [
+        {
+            "nombre": r.nombre,
+            "descripcion": r.descripcion,
+            "tipo": r.tipo,
+            "marca": r.marca,
+            "proveedor": r.proveedor,
+            "categoria": r.categoria,
+            "unidad_medida": r.unidad_medida,
+            "grupo_muscular": r.grupo_muscular,
+            "codigo_interno": r.codigo_interno
+        }
+        for r in registros
+    ]
+    df = pd.DataFrame(data)
+    output = io.BytesIO()
+    df.to_excel(output, index=False)
+    output.seek(0)
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name='inventario.xlsx'
+    )

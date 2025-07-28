@@ -1,22 +1,15 @@
-// frontend-angular\src\app\pantalla-crear-ticket\pantalla-crear-ticket.component.ts
+// frontend-angular/src/app/pantalla-crear-ticket/pantalla-crear-ticket.component.ts
 
-import { Component, OnInit } from '@angular/core';
+import { Component, isDevMode, OnInit, OnDestroy } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
-import { FormBuilder, FormGroup, ReactiveFormsModule, FormsModule, Validators } from '@angular/forms';
+import { FormBuilder, FormGroup, Validators, FormControl, ReactiveFormsModule, FormsModule } from '@angular/forms';
+import { Subscription } from 'rxjs';
 import { mostrarAlertaToast, mostrarAlertaErrorDesdeStatus } from '../utils/alertas';
 import { environment } from 'src/environments/environment';
 
-// IMPORTS de los subformularios
-import { MantenimientoAparatosComponent } from './formularios-crear-ticket/mantenimiento-aparatos/mantenimiento-aparatos.component';
-import { MantenimientoEdificioComponent } from './formularios-crear-ticket/mantenimiento-edificio/mantenimiento-edificio.component';
-import { FinanzasComponent } from './formularios-crear-ticket/finanzas/finanzas.component';
-import { MarketingComponent } from './formularios-crear-ticket/marketing/marketing.component';
-import { GerenciaDeportivaComponent } from './formularios-crear-ticket/gerencia-deportiva/gerencia-deportiva.component';
-import { RecursosHumanosComponent } from './formularios-crear-ticket/recursos-humanos/recursos-humanos.component';
-import { ComprasComponent } from './formularios-crear-ticket/compras/compras.component';
-import { SistemasComponent } from './formularios-crear-ticket/sistemas/sistemas.component';
+// Importa el formulario dinámico
 
 // Angular Material
 import { MatCardModule } from '@angular/material/card';
@@ -24,6 +17,8 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
+import { FormularioDinamicoClasificacionComponent } from './formularios-crear-ticket/formulario-dinamico.component';
+import { MatIcon, MatIconModule } from '@angular/material/icon';
 
 @Component({
   selector: 'app-pantalla-crear-ticket',
@@ -32,24 +27,18 @@ import { MatButtonModule } from '@angular/material/button';
     CommonModule,
     FormsModule,
     ReactiveFormsModule,
-    MantenimientoEdificioComponent,
-    MantenimientoAparatosComponent,
-    FinanzasComponent,
-    MarketingComponent,
-    GerenciaDeportivaComponent,
-    RecursosHumanosComponent,
-    ComprasComponent,
-    SistemasComponent,
+    FormularioDinamicoClasificacionComponent,
     MatCardModule,
     MatFormFieldModule,
     MatSelectModule,
     MatInputModule,
-    MatButtonModule
+    MatButtonModule,
+    MatIconModule
   ],
   templateUrl: './pantalla-crear-ticket.component.html',
   styleUrls: ['./pantalla-crear-ticket.component.css']
 })
-export class PantallaCrearTicketComponent implements OnInit {
+export class PantallaCrearTicketComponent implements OnInit, OnDestroy {
 
   formularioCrearTicket!: FormGroup;
   mensaje: string = '';
@@ -64,7 +53,13 @@ export class PantallaCrearTicketComponent implements OnInit {
     { id: 7, nombre: 'Sistemas' }
   ];
 
+  // Para el catálogo dinámico
+  clasificacionPlanoDepto: any[] = [];
+  loadingClasificacion: boolean = false;
+  mostrarJerarquiaDinamica = false;
+
   private apiUrl = `${environment.apiUrl}/tickets/create`;
+  private subs: Subscription[] = [];
 
   constructor(
     private http: HttpClient,
@@ -73,111 +68,129 @@ export class PantallaCrearTicketComponent implements OnInit {
   ) { }
 
   ngOnInit() {
+    // Solo los campos globales
     this.formularioCrearTicket = this.fb.group({
       departamento: [null, Validators.required],
       tipoMantenimiento: [null],
-      categoria: ['', Validators.required],
-      subcategoria: ['', Validators.required],
-      detalle: ['', Validators.required],
-      descripcion: ['', Validators.required],
       criticidad: [null, Validators.required],
-      necesita_refaccion: [false],
-      descripcion_refaccion: ['']
     });
 
-    this.formularioCrearTicket.get('departamento')?.valueChanges.subscribe(() => {
-      this.formularioCrearTicket.patchValue({ tipoMantenimiento: null });
-    });
+    // Limpia y prepara el formulario al cambiar departamento
+    this.subs.push(
+      this.formularioCrearTicket.get('departamento')!.valueChanges.subscribe(dep => {
+        if (isDevMode()) console.log('[PADRE] Cambia departamento:', dep);
+        this.formularioCrearTicket.patchValue({ tipoMantenimiento: null }, { emitEvent: false });
+        this.resetFormularioDinamico();
 
-    this.formularioCrearTicket.get('tipoMantenimiento')?.valueChanges.subscribe(() => {
-      this.resetCamposTipo();
-    });
+        if (dep) {
+          if (dep === 1) return; // Espera a seleccionar tipoMantenimiento para Mantenimiento
+          this.cargarCatalogoDinamico(dep);
+        } else {
+          this.mostrarJerarquiaDinamica = false;
+        }
+      })
+    );
+
+    // Cambia tipo de mantenimiento (solo para Mantenimiento)
+    this.subs.push(
+      this.formularioCrearTicket.get('tipoMantenimiento')!.valueChanges.subscribe(tipo => {
+        if (isDevMode()) console.log('[PADRE] Cambia tipoMantenimiento:', tipo);
+        this.resetFormularioDinamico();
+        if (this.formularioCrearTicket.get('departamento')?.value === 1 && tipo) {
+          this.cargarCatalogoDinamico(1, tipo);
+        }
+      })
+    );
   }
 
-  resetCamposTipo() {
-    const keysAEliminar = [
-      'aparato_id',
-      'problema_detectado',
-      'necesita_refaccion',
-      'descripcion_refaccion'
-    ];
+  ngOnDestroy() {
+    this.subs.forEach(s => s.unsubscribe());
+  }
 
-    keysAEliminar.forEach(campo => {
-      if (this.formularioCrearTicket.contains(campo)) {
-        this.formularioCrearTicket.removeControl(campo);
+  // Limpia todos los campos dinámicos del formulario
+  resetFormularioDinamico() {
+    this.mostrarJerarquiaDinamica = false;
+    this.clasificacionPlanoDepto = [];
+    Object.keys(this.formularioCrearTicket.controls).forEach(ctrl => {
+      if (ctrl.startsWith('nivel_') || ctrl === 'descripcion') {
+        this.formularioCrearTicket.removeControl(ctrl);
       }
     });
   }
 
+  // Carga el catálogo jerárquico dinámico
+  cargarCatalogoDinamico(deptoId: number, tipoMantenimiento?: string) {
+    this.mostrarJerarquiaDinamica = false;
+    this.loadingClasificacion = true;
+    let url = `${environment.apiUrl}/catalogos/clasificaciones?departamento_id=${deptoId}`;
+    // Si tienes filtros para mantenimiento, agrégalos, si no, ignóralo
+    if (tipoMantenimiento) url += `&tipo_mantenimiento=${tipoMantenimiento}`;
+
+    this.http.get<any[]>(url).subscribe({
+      next: cat => {
+        this.clasificacionPlanoDepto = cat;
+        this.mostrarJerarquiaDinamica = true;
+        this.loadingClasificacion = false;
+        // Asegura que siempre exista 'descripcion'
+        if (!this.formularioCrearTicket.get('descripcion')) {
+          this.formularioCrearTicket.addControl('descripcion', new FormControl('', Validators.required));
+        }
+      },
+      error: err => {
+        mostrarAlertaToast('Error al cargar catálogo', 'error');
+        this.loadingClasificacion = false;
+        this.mostrarJerarquiaDinamica = false;
+      }
+    });
+  }
+
+
   obtenerCamposInvalidos(form: FormGroup): string[] {
     const camposFaltantes: string[] = [];
-
     const nombresLegibles: { [key: string]: string } = {
       departamento: 'Departamento',
       tipoMantenimiento: 'Tipo de Mantenimiento',
-      categoria: 'Categoría',
-      subcategoria: 'Subcategoría',
-      detalle: 'Detalle específico',
-      descripcion: 'Descripción',
-      criticidad: 'Nivel de criticidad'
+      criticidad: 'Nivel de criticidad',
+      descripcion: 'Descripción'
     };
-
     Object.keys(form.controls).forEach(campo => {
       const control = form.get(campo);
       if (control && control.invalid) {
         camposFaltantes.push(nombresLegibles[campo] || campo);
       }
     });
-
     return camposFaltantes;
-  }
-
-  formatearNombreCampo(campo: string): string {
-    const traducciones: Record<string, string> = {
-      departamento: 'Departamento',
-      tipoMantenimiento: 'Tipo de Mantenimiento',
-      categoria: 'Categoría',
-      subcategoria: 'Subcategoría',
-      detalle: 'Detalle',
-      descripcion: 'Descripción',
-      criticidad: 'Nivel de criticidad'
-    };
-
-    return traducciones[campo] || campo;
   }
 
   enviarTicket() {
     if (this.formularioCrearTicket.invalid) {
       const camposFaltantes = this.obtenerCamposInvalidos(this.formularioCrearTicket);
-
       this.formularioCrearTicket.markAllAsTouched();
-
       mostrarAlertaToast(`❗Faltan datos obligatorios: ${camposFaltantes.join(', ')}`);
       return;
     }
 
-    const payloadFinal = {
+    // Payload listo para integración con backend (puedes mapear los nivel_x si lo necesitas)
+    const payload = {
       ...this.formularioCrearTicket.value,
       departamento_id: this.formularioCrearTicket.value.departamento
+      // Aquí podrías mapear los valores jerárquicos si quieres mandarlos con path/nombre/id
     };
-    delete payloadFinal.departamento;
+    delete payload.departamento;
 
     const token = localStorage.getItem('token');
     const headers = token ? new HttpHeaders().set('Authorization', `Bearer ${token}`) : new HttpHeaders();
 
-    this.http.post<{ mensaje: string }>(this.apiUrl, payloadFinal, { headers }).subscribe({
+    this.http.post<{ mensaje: string }>(this.apiUrl, payload, { headers }).subscribe({
       next: () => {
         mostrarAlertaToast('✅ Ticket creado correctamente.');
         this.formularioCrearTicket.reset();
+        this.mostrarJerarquiaDinamica = false;
       },
       error: (error) => {
         mostrarAlertaErrorDesdeStatus(error.status);
       }
     });
   }
-
-
-
-
 
 }

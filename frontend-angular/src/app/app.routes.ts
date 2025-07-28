@@ -10,10 +10,16 @@ import { AuthGuard } from './guards/auth.guard';
 import { AdminGuard } from './guards/admin.guard';
 import { LayoutComponent } from './layout/layout.component';
 import { RegistrarAsistenciaComponent } from './registrar-asistencia/registrar-asistencia.component';
+import { AdminPanelComponent } from './admin-panel/admin-panel.component';
 
 export const routes: Routes = [
   { path: '', redirectTo: 'login', pathMatch: 'full' },
   { path: 'login', component: LoginComponent },
+  {
+  path: 'admin',
+  component: AdminPanelComponent,
+  canActivate: [AdminGuard]
+  },
 
   {
     path: '',

@@ -1,0 +1,73 @@
+.arbol-clasif-erp {
+  background: #fff;
+  border-radius: 13px;
+  box-shadow: 0 2px 10px #005ba115;
+  margin-top: 16px;
+  padding: 16px;
+}
+
+.arbol-nodo {
+  padding: 8px 0;
+  align-items: center;
+  font-size: 1.13em;
+  border-bottom: 1px solid #f1f1f1;
+  transition: background 0.13s;
+  position: relative;
+}
+
+.arbol-nodo:hover {
+  background: #e8f1fa;
+}
+
+/* Indentación automática por nivel */
+.mat-tree-node-level-1 { padding-left: 32px !important; }
+.mat-tree-node-level-2 { padding-left: 56px !important; }
+.mat-tree-node-level-3 { padding-left: 80px !important; }
+.mat-tree-node-level-4 { padding-left: 104px !important; }
+.mat-tree-node-level-5 { padding-left: 128px !important; }
+
+/* Acciones solo al hover */
+.arbol-clasif-actions {
+  opacity: 0;
+  transition: opacity 0.14s;
+  pointer-events: none;
+}
+.arbol-nodo:hover .arbol-clasif-actions,
+.arbol-nodo:focus-within .arbol-clasif-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Badge de nivel (SAP style) */
+.nivel-badge {
+  background: #e1ecf7;
+  color: #005ba1;
+  border-radius: 7px;
+  padding: 2px 8px;
+  font-size: 0.79em;
+  margin-left: 8px;
+  margin-right: 6px;
+  font-weight: 500;
+  vertical-align: middle;
+  display: inline-block;
+}
+
+.mat-icon-button {
+  margin-left: 2px;
+  font-size: 19px;
+  border-radius: 8px !important;
+}
+
+/* Quita margin-left del último action */
+.arbol-clasif-actions button:last-child {
+  margin-right: 0;
+}
+
+/* Responsive */
+@media (max-width: 700px) {
+  .arbol-nodo { font-size: 1em; }
+  .nivel-badge { padding: 1px 5px; font-size: 0.7em; }
+  .mat-tree-node-level-1 { padding-left: 16px !important; }
+  .mat-tree-node-level-2 { padding-left: 32px !important; }
+  .mat-tree-node-level-3 { padding-left: 48px !important; }
+}

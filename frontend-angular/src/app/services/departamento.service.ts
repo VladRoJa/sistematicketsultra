@@ -16,7 +16,8 @@ export class DepartamentoService {
     { id: 4, nombre: 'Gerencia Deportiva' },
     { id: 5, nombre: 'Recursos Humanos' },
     { id: 6, nombre: 'Compras' },
-    { id: 7, nombre: 'Sistemas' }
+    { id: 7, nombre: 'Sistemas' },
+    { id: 8, nombre: 'Corporativo' }
   ];
 
   private apiUrl = `${environment.apiUrl}/departamentos`; // Reemplaza con la URL de tu API

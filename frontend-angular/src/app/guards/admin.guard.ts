@@ -10,34 +10,24 @@ import { AuthService } from '../services/auth.service';
 })
 export class AdminGuard implements CanActivate {
 
-  constructor(private authService: AuthService, private router: Router) {console.log("🔥 AdminGuard inicializado.");}
+  constructor(private authService: AuthService, private router: Router) {}
 
   canActivate(): boolean {
-    console.log("🛑 AdminGuard activado para:", this.router.url);
-
-    console.log("🟡 AdminGuard ejecutado.");
-
     const user = this.authService.getUser();
-    console.log("🔍 Usuario detectado en AdminGuard:", user);
 
     if (!user) {
-        console.warn("🚫 No hay usuario autenticado. Redirigiendo a login...");
-        this.router.navigate(['/login']);
-        return false;
+      this.router.navigate(['/login']);
+      return false;
     }
 
-    if (user.rol === "ADMINISTRADOR") { 
-        console.log("✅ Acceso permitido: Usuario es administrador.");
-        return true;
-    } else {
-        console.warn("🚫 Acceso denegado en AdminGuard: Usuario no es administrador.");
-        this.router.navigate(['/ver-tickets']);
-        return false;
+    // Revisa el rol en minúsculas, permite admin o super_admin (fácil de ampliar)
+    const rol = (user.rol || '').toLowerCase();
+    if (rol === 'administrador' || rol === 'super_admin') {
+      return true;
     }
+
+    this.router.navigate(['/ver-tickets']);
+    return false;
+  }
 }
 
-
-
-
-
-}

@@ -1,6 +1,6 @@
 # C:\Users\Vladimir\Documents\Sistema tickets\app\__init__.py
 
-from flask import Flask
+from flask import Flask, request
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from dotenv import load_dotenv
@@ -20,12 +20,20 @@ from app.routes.horarios_routes import horarios_bp
 from app.routes.bloques_routes import bloques_bp
 from app.routes.asignacion_horario_routes import asignacion_bp
 from app.routes.catalogos_routes import catalogos_bp
+from app.routes.usuarios_routes import usuarios_bp
+
 
 
 def create_app():
     """Inicializa la aplicación principal Flask."""
     app = Flask(__name__)
     app.config.from_object(Config)
+    
+    @app.before_request
+    def skip_jwt_for_options():
+        # Permite todas las preflight sin JWT
+        if request.method == 'OPTIONS':
+            return '', 204
 
     # ──────────────────────────────────────
     # Inicializar Extensiones
@@ -44,6 +52,8 @@ def create_app():
         allow_headers=["Content-Type", "Authorization"],
         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"]
     )
+    
+
     
     print("✅ CORS configurado con:", app.config['CORS_ORIGINS'])
 
@@ -64,7 +74,7 @@ def create_app():
     app.register_blueprint(bloques_bp, url_prefix='/api/bloques')
     app.register_blueprint(asignacion_bp, url_prefix='/api/asignaciones')
     app.register_blueprint(catalogos_bp, url_prefix='/api/catalogos')
-    
+    app.register_blueprint(usuarios_bp, url_prefix='/api/usuarios')
     
     app.config['DEBUG'] = True
     app.config['PROPAGATE_EXCEPTIONS'] = True

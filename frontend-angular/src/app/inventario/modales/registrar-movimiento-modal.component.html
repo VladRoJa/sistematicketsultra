@@ -1,0 +1,54 @@
+  <!-- frontend-angular\src\app\inventario\modales\registrar-movimiento-modal.component.html -->
+
+
+<h2 mat-dialog-title>
+  Registrar Movimiento de Inventario
+</h2>
+
+<mat-dialog-content [formGroup]="form" class="espaciado-formulario">
+  <!-- Tipo de movimiento -->
+  <mat-form-field appearance="fill" class="campo">
+    <mat-label>Tipo de movimiento</mat-label>
+    <mat-select formControlName="tipo_movimiento" required>
+      <mat-option value="instalacion">Instalación</mat-option>
+      <mat-option value="retiro">Retiro</mat-option>
+      <mat-option value="cambio_ubicacion">Cambio de ubicación</mat-option>
+      <mat-option value="baja">Baja</mat-option>
+    </mat-select>
+  </mat-form-field>
+
+  <!-- Sucursal destino -->
+  <mat-form-field appearance="fill" class="campo">
+    <mat-label>Sucursal</mat-label>
+    <mat-select formControlName="sucursal_id" required>
+      <mat-option *ngFor="let s of sucursales" [value]="s.sucursal_id">
+        {{ s.sucursal }}
+      </mat-option>
+    </mat-select>
+  </mat-form-field>
+
+  <!-- Cantidad -->
+  <mat-form-field appearance="fill" class="campo">
+    <mat-label>Cantidad</mat-label>
+    <input matInput type="number" min="1" formControlName="cantidad" required>
+  </mat-form-field>
+
+  <!-- Unidad de medida -->
+  <mat-form-field appearance="fill" class="campo">
+    <mat-label>Unidad de medida</mat-label>
+    <input matInput type="text" formControlName="unidad_medida">
+  </mat-form-field>
+
+  <!-- Observaciones -->
+  <mat-form-field appearance="fill" class="campo">
+    <mat-label>Observaciones</mat-label>
+    <textarea matInput formControlName="observaciones" rows="3"></textarea>
+  </mat-form-field>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button color="warn" (click)="cancelar()">Cancelar</button>
+  <button mat-raised-button color="primary" (click)="guardar()" [disabled]="form.invalid">
+    Guardar Movimiento
+  </button>
+</mat-dialog-actions>

@@ -11,6 +11,9 @@ import {
   emitirPayloadFormulario,
   DEPARTAMENTO_IDS
 } from 'src/app/utils/formularios.helper';
+import { MatIconModule } from '@angular/material/icon';
+import { CatalogoService } from 'src/app/services/catalogo.service';
+import { ClasificacionElemento } from 'src/app/services/catalogo.service';
 
 @Component({
   selector: 'app-mantenimiento-edificio',
@@ -21,7 +24,8 @@ import {
     FormsModule,
     MatFormFieldModule,
     MatSelectModule,
-    MatInputModule
+    MatInputModule,
+    MatIconModule,
   ],
   templateUrl: './mantenimiento-edificio.component.html',
   styleUrls: []
@@ -30,51 +34,16 @@ export class MantenimientoEdificioComponent implements OnInit {
   @Input() parentForm!: FormGroup;
   @Output() formularioValido = new EventEmitter<any>();
 
+  clasificaciones: ClasificacionElemento[] = [];
+
   jerarquiaMantenimiento: { [categoria: string]: { [sub: string]: string[] } } = {
-    "Inmueble": {
-      "extintores": ["Recarga", "Mal colocación", "Sin etiqueta"],
-      "paredes": ["Humedad", "Grietas", "Manchas", "Daños estructurales"],
-      "techos": ["Filtraciones", "Desprendimientos", "Fugas"],
-      "pintura": ["Descascarado", "Requiere retoque", "Dañado por humedad"],
-      "Albañileria": ["Reparación menor", "Reparación estructural", "Desniveles"],
-      "limpieza exterior": ["Suciedad visible", "Restos de construcción", "Graffitis"],
-      "Pisos": ["Desnivelado", "Roto", "Resbaloso", "Despegado"]
-    },
-    "AC y ventilación": {
-      "ventiladores": ["No enciende", "Hace ruido", "Vibración"],
-      "Extractores": ["No funciona", "Filtro sucio", "Hace ruido"],
-      "equipos": ["Sin enfriar", "Ruidos extraños", "Fugas"],
-      "minisplits": ["No enciende", "Gotea agua", "Filtro sucio"]
-    },
-    "Sanitarios": {
-      "Muebles Sanitarios": ["Fuga de agua", "Obstrucción", "Daño estructural"],
-      "llaves": ["No cierra bien", "Goteo", "Oxidación"],
-      "Accesorios": ["Roto", "Faltante", "Mal instalado"],
-      "Servicios": ["Sin agua", "Baja presión", "Mal olor"],
-      "Equipo Hidro": ["Falla de bomba", "Ruido", "No prende"],
-      "Boilers": ["No calienta", "Fuga", "Apagado"],
-      "Sistema Hidro": ["Baja presión", "No funciona", "Fugas"]
-    },
-    "Instalación Eléctrica": {
-      "TR": ["Sin energía", "Daños visibles", "Falla general"],
-      "Contactos": ["No funciona", "Chispazos", "Suelto"],
-      "Centro de carga": ["Interruptores dañados", "Sobrecalentamiento"],
-      "Servicios": ["Cortes frecuentes", "Voltaje inestable"],
-      "Gestion": ["Monitoreo fallido", "Alarmas no responden"],
-      "Servicio Automotriz": ["Conexión de carga", "Luz de revisión encendida"]
-    },
-    "Gasolina": {
-      "": ["Fuga de combustible", "Olor fuerte", "Desperfecto en tanque"]
-    },
-    "Iluminación": {
-      "Letreros": ["Luz fundida", "Intermitente", "No prende"],
-      "Iluminación interna": ["Parpadea", "Fundida", "Cable suelto"],
-      "Iluminación externa": ["Apagada de noche", "Luz débil", "Daño en carcasa"]
-    }
   };
+
+  constructor(private catalogoService: CatalogoService) {}
 
   ngOnInit(): void {
     this.registrarControles();
+    this.cargarClasificaciones();
 
     this.parentForm.valueChanges.subscribe(() => {
       emitirPayloadFormulario(this.parentForm, DEPARTAMENTO_IDS.mantenimiento, this.formularioValido);
@@ -82,12 +51,31 @@ export class MantenimientoEdificioComponent implements OnInit {
   }
 
   registrarControles(): void {
-    const campos = ['categoria', 'subcategoria', 'detalle', 'descripcion'];
+    const campos = ['categoria', 'subcategoria', 'detalle', 'descripcion', 'ubicacion', 'equipo', 'clasificacion_id'];
     for (const campo of campos) {
       if (!this.parentForm.get(campo)) {
-        this.parentForm.addControl(campo, new FormControl('', Validators.required));
+        this.parentForm.addControl(
+          campo,
+          new FormControl('', Validators.required)
+        );
       }
     }
+  }
+
+    cargarClasificaciones() {
+      this.catalogoService.listarElemento('clasificaciones').subscribe((data: any[]) => {
+        this.clasificaciones = data.map(clasif => ({
+          ...clasif,
+          jerarquia: clasif.jerarquia ? clasif.jerarquia : [clasif.nombre]
+        }));
+      });
+    }
+
+  // Puedes mostrar la jerarquía como string para el option:
+  mostrarJerarquia(clasif: ClasificacionElemento): string {
+    return clasif.jerarquia && Array.isArray(clasif.jerarquia)
+      ? clasif.jerarquia.join(' > ')
+      : clasif.nombre;
   }
 
   onCategoriaChange(): void {
@@ -108,7 +96,7 @@ export class MantenimientoEdificioComponent implements OnInit {
       : [];
   }
 
-  getSubsubcategorias(categoria: string, subcategoria: string): string[] {
+  getDetalles(categoria: string, subcategoria: string): string[] {
     return this.jerarquiaMantenimiento[categoria]?.[subcategoria] || [];
   }
 }

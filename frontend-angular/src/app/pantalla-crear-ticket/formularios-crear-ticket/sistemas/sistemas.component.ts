@@ -1,184 +1,128 @@
+// src/app/formularios-crear-ticket/sistemas/sistemas.component.ts
+
+import { Component, EventEmitter, Input, OnInit, OnDestroy, Output } from '@angular/core';
+import { FormBuilder, FormGroup, Validators, ReactiveFormsModule, FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
-import { Component, EventEmitter, OnInit, Output, Input } from '@angular/core';
-import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
+
 import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatSelectModule } from '@angular/material/select';
 import { MatInputModule } from '@angular/material/input';
+import { MatSelectModule } from '@angular/material/select';
+import { MatOptionModule } from '@angular/material/core';
+
+import { SucursalesService } from 'src/app/services/sucursales.service';
+import { InventarioService } from 'src/app/services/inventario.service';
+import { SelectorEquipoComponent } from 'src/app/components/selector-equipo/selector-equipo.component';
 import { limpiarCamposDependientes, emitirPayloadFormulario, DEPARTAMENTO_IDS } from 'src/app/utils/formularios.helper';
+import { Subscription } from 'rxjs';
 
 @Component({
   selector: 'app-sistemas',
   standalone: true,
-  imports: [CommonModule, FormsModule, ReactiveFormsModule, MatFormFieldModule, MatSelectModule, MatInputModule],
+  imports: [
+    CommonModule,
+    FormsModule,
+    ReactiveFormsModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatSelectModule,
+    MatOptionModule,
+    SelectorEquipoComponent
+  ],
   templateUrl: './sistemas.component.html',
   styleUrls: []
 })
-export class SistemasComponent implements OnInit {
-
+export class SistemasComponent implements OnInit, OnDestroy {
   @Input() parentForm!: FormGroup;
   @Output() formularioValido = new EventEmitter<any>();
 
-  categorias = [
-    {
-      nombre: 'Computadora Recepción',
-      subcategorias: [
-        { nombre: 'Alta de usuario', detalles: ['Urgente', 'Preventivo'] },
-        { nombre: 'Reparación', detalles: ['Correctivo', 'Programado'] },
-        { nombre: 'Configuración', detalles: ['Programado'] },
-        { nombre: 'Otro', detalles: ['Correctivo', 'Urgente'] }
-      ]
-    },
-    {
-      nombre: 'Computadora Gerente',
-      subcategorias: [
-        { nombre: 'Alta de usuario', detalles: ['Urgente', 'Preventivo'] },
-        { nombre: 'Reparación', detalles: ['Correctivo', 'Programado'] },
-        { nombre: 'Configuración', detalles: ['Programado'] },
-        { nombre: 'Otro', detalles: ['Correctivo', 'Urgente'] }
-      ]
-    },
-    {
-      nombre: 'Torniquete 1 (Junto a Recepcion)',
-      subcategorias: [
-        { nombre: 'Configuración', detalles: ['Programado'] },
-        { nombre: 'Compra de equipo', detalles: ['Urgente'] },
-        { nombre: 'Reparación', detalles: ['Correctivo'] },
-        { nombre: 'Otro', detalles: ['Urgente'] }
-      ]
-    },
-    {
-      nombre: 'Torniquete 2 (Retirado de recepcion)',
-      subcategorias: [
-        { nombre: 'Configuración', detalles: ['Programado'] },
-        { nombre: 'Compra de equipo', detalles: ['Urgente'] },
-        { nombre: 'Reparación', detalles: ['Correctivo'] }
-      ]
-    },
-    {
-      nombre: 'Sonido Ambiental (Bocinas, Amplificador)',
-      subcategorias: [
-        { nombre: 'Configuración', detalles: ['Programado'] },
-        { nombre: 'Reparación', detalles: ['Correctivo', 'Urgente'] }
-      ]
-    },
-    {
-      nombre: 'Sonido en Salones',
-      subcategorias: [
-        { nombre: 'Configuración', detalles: ['Programado'] },
-        { nombre: 'Reparación', detalles: ['Correctivo', 'Urgente'] }
-      ]
-    },
-    {
-      nombre: 'Tablet 1 (Computadora recepcion)',
-      subcategorias: [
-        { nombre: 'Reparación', detalles: ['Correctivo', 'Preventivo'] },
-        { nombre: 'Configuración', detalles: ['Programado'] },
-        { nombre: 'Otro', detalles: ['Correctivo', 'Urgente'] }
-      ]
-    },
-    {
-      nombre: 'Tablet 2 (Computadora Gerente)',
-      subcategorias: [
-        { nombre: 'Reparación', detalles: ['Correctivo', 'Preventivo'] },
-        { nombre: 'Configuración', detalles: ['Programado'] },
-        { nombre: 'Otro', detalles: ['Correctivo', 'Urgente'] }
-      ]
-    },
-    {
-      nombre: 'Impresora multifuncional',
-      subcategorias: [
-        { nombre: 'Reparación', detalles: ['Correctivo'] },
-        { nombre: 'Configuración', detalles: ['Programado'] },
-        { nombre: 'Otro', detalles: ['Urgente'] }
-      ]
-    },
-    {
-      nombre: 'Impresora termica (Recepcion)',
-      subcategorias: [
-        { nombre: 'Reparación', detalles: ['Correctivo'] },
-        { nombre: 'Configuración', detalles: ['Programado'] }
-      ]
-    },
-    {
-      nombre: 'Impresora termica (Gerente)',
-      subcategorias: [
-        { nombre: 'Reparación', detalles: ['Correctivo'] },
-        { nombre: 'Configuración', detalles: ['Programado'] }
-      ]
-    },
-    {
-      nombre: 'Terminal (Recepcion)',
-      subcategorias: [
-        { nombre: 'Configuración', detalles: ['Programado'] },
-        { nombre: 'Reparación', detalles: ['Urgente'] }
-      ]
-    },
-    {
-      nombre: 'Terminal (Gerente)',
-      subcategorias: [
-        { nombre: 'Configuración', detalles: ['Programado'] },
-        { nombre: 'Reparación', detalles: ['Urgente'] }
-      ]
-    },
-    {
-      nombre: 'Alarma',
-      subcategorias: [
-        { nombre: 'Configuración', detalles: ['Programado'] },
-        { nombre: 'Reparación', detalles: ['Urgente'] }
-      ]
-    },
-    {
-      nombre: 'Teléfono',
-      subcategorias: [
-        { nombre: 'Configuración', detalles: ['Programado'] },
-        { nombre: 'Reparación', detalles: ['Urgente'] }
-      ]
-    },
-    {
-      nombre: 'Internet',
-      subcategorias: [
-        { nombre: 'Configuración', detalles: ['Programado'] },
-        { nombre: 'Reparación', detalles: ['Urgente'] }
-      ]
-    },
-    {
-      nombre: 'Cámaras',
-      subcategorias: [
-        { nombre: 'Configuración', detalles: ['Programado'] },
-        { nombre: 'Reparación', detalles: ['Urgente'] }
-      ]
-    }
-  ];
+  sucursales: any[] = [];
+  sucursalSeleccionada: number = 1;
+  esAdmin: boolean = false;
 
-  subcategoriasDisponibles: any[] = [];
-  detallesDisponibles: string[] = [];
+  inventario: any[] = [];
+  categorias: string[] = [];
+  equiposFiltrados: any[] = [];
 
-  constructor(private fb: FormBuilder) {}
+  // Subcategorías fijas (puedes cambiarlas después)
+  subcategoriasDisponibles: string[] = ['Fallo', 'Reparación', 'Mantenimiento', 'Cambio', 'Actualización'];
+
+  valueChangesSub?: Subscription;
+
+  constructor(
+    private fb: FormBuilder,
+    private sucursalesService: SucursalesService,
+    private inventarioService: InventarioService
+  ) {}
 
   ngOnInit(): void {
-    if (!this.parentForm) return;
+    // Detectar usuario y permisos
+    const usuario = JSON.parse(localStorage.getItem('user') || '{}');
+    this.sucursalSeleccionada = Number(usuario.sucursal_id) || 1;
+    const rol = (usuario.rol || '').trim().toLowerCase();
+    this.esAdmin = (rol === 'administrador' || this.sucursalSeleccionada === 1000);
 
+    // Controls requeridos para el formulario
+    this.parentForm.addControl('sucursal_id', this.fb.control(this.sucursalSeleccionada, Validators.required));
     this.parentForm.addControl('categoria', this.fb.control('', Validators.required));
+    this.parentForm.addControl('aparato_id', this.fb.control('', Validators.required));
     this.parentForm.addControl('subcategoria', this.fb.control('', Validators.required));
-    this.parentForm.addControl('detalle', this.fb.control('', Validators.required));
     this.parentForm.addControl('descripcion', this.fb.control('', Validators.required));
 
-    this.parentForm.valueChanges.subscribe(() => {
+    // Cargar sucursales si es admin
+    if (this.esAdmin) {
+      this.sucursalesService.obtenerSucursales().subscribe({
+        next: (sucs) => this.sucursales = sucs || [],
+        error: (err) => console.error('❌ Error al obtener sucursales', err)
+      });
+    }
+
+    // Cargar inventario de la sucursal inicial
+    this.cargarInventario();
+
+    // CASCADA: Cuando cambia sucursal, recarga inventario/categoría/equipos
+    this.parentForm.get('sucursal_id')!.valueChanges.subscribe(id => {
+      this.sucursalSeleccionada = id;
+      this.parentForm.get('categoria')!.reset();
+      this.parentForm.get('aparato_id')!.reset();
+      this.cargarInventario();
+    });
+
+    // CASCADA: Cuando cambia categoría, filtra equipos
+    this.parentForm.get('categoria')!.valueChanges.subscribe(cat => {
+      this.parentForm.get('aparato_id')!.reset();
+      this.equiposFiltrados = this.inventario.filter(eq => eq.categoria === cat);
+    });
+
+    // Sincroniza cambios para emitir payload hacia el padre
+    this.valueChangesSub = this.parentForm.valueChanges.subscribe(() => {
       emitirPayloadFormulario(this.parentForm, DEPARTAMENTO_IDS.sistemas, this.formularioValido);
     });
   }
 
-  onCategoriaChange(): void {
-    const catSeleccionada = this.categorias.find(c => c.nombre === this.parentForm.value.categoria);
-    this.subcategoriasDisponibles = catSeleccionada ? catSeleccionada.subcategorias : [];
-    this.detallesDisponibles = [];
-    limpiarCamposDependientes(this.parentForm, ['subcategoria', 'detalle']);
+  ngOnDestroy(): void {
+    if (this.valueChangesSub) this.valueChangesSub.unsubscribe();
   }
 
-  onSubcategoriaChange(): void {
-    const catSeleccionada = this.categorias.find(c => c.nombre === this.parentForm.value.categoria);
-    const subcatSeleccionada = catSeleccionada?.subcategorias.find(s => s.nombre === this.parentForm.value.subcategoria);
-    this.detallesDisponibles = subcatSeleccionada ? subcatSeleccionada.detalles : [];
-    limpiarCamposDependientes(this.parentForm, ['detalle']);
+  // Obtiene el inventario solo de la sucursal seleccionada
+  cargarInventario() {
+    this.inventarioService.obtenerInventarioPorSucursal(this.sucursalSeleccionada).subscribe({
+      next: (inv) => {
+        this.inventario = inv || [];
+        // Saca categorías únicas SOLO de esa sucursal
+        this.categorias = [...new Set(this.inventario.map(eq => eq.categoria).filter(Boolean))];
+        // Reinicia el filtro de equipos
+        this.equiposFiltrados = [];
+      },
+      error: (err) => console.error('❌ Error al cargar inventario', err)
+    });
+  }
+
+  // Cuando el usuario selecciona un equipo (debe recibir el objeto equipo)
+  onEquipoSeleccionado(eq: any) {
+    if (!eq) {
+      this.parentForm.get('aparato_id')?.reset();
+      return;
+    }
+    this.parentForm.get('aparato_id')?.setValue(eq.id);
   }
 }

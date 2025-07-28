@@ -56,13 +56,24 @@ export interface Ticket {
   categoria: string;
   fecha_solucion?: string | null;
   subcategoria?: string | null;
-  subsubcategoria?: string | null;
+  detalle?: string | null;
   historial_fechas?: Array<{
     fecha: string;
     cambiadoPor: string;
     fechaCambio: string;
   }>;
   fecha_en_progreso: string;
+  inventario?: {
+    id: number;
+    nombre: string;
+    tipo: string;
+    descripcion: string;
+  };
+  equipo?: string;  
+  ubicacion?: string;     
+
+
+
 
 }
 
@@ -111,9 +122,9 @@ export class PantallaVerTicketsComponent implements OnInit {
   ticketsPorDiaFinalizado: Record<string, number> = {};
   ticketsPorDiaCreacion: Record<string, number> = {};
   user: any = null;
-  usuarioEsAdmin: boolean = false;
+  usuarioEsAdmin: boolean = true;
   departamentos: any[] = [];
-  usuarioEsEditorCorporativo: boolean = false;
+  usuarioEsEditorCorporativo: boolean = true;
   mostrarAvisoLimite: boolean = false;
 
   incluirSinFechaProgreso: boolean = false;
@@ -136,7 +147,8 @@ export class PantallaVerTicketsComponent implements OnInit {
       criticidad: [],
       departamento: [],
       subcategoria: [],
-      subsubcategoria: []
+      detalle: [],
+      inventario: []
     };
 
   // Filtros
@@ -151,6 +163,8 @@ export class PantallaVerTicketsComponent implements OnInit {
   departamentosDisponibles: any[] = [];
   subcategoriasDisponibles: any[] = [];
   detallesDisponibles: any[] = [];
+  inventariosDisponibles: any[] = [];
+
 
   categoriasFiltradas: any[] = [];
   descripcionesFiltradas: any[] = [];
@@ -162,6 +176,7 @@ export class PantallaVerTicketsComponent implements OnInit {
   departamentosFiltrados: any[] = [];
   subcategoriasFiltradas: any[] = [];
   detallesFiltrados: any[] = [];
+  inventariosFiltrados: any[] = [];
   
   // Modal asignar fecha solución
   showModalAsignarFecha: boolean = false;
@@ -180,6 +195,7 @@ export class PantallaVerTicketsComponent implements OnInit {
   seleccionarTodoDepto = false;
   seleccionarTodoSubcategoria = false;
   seleccionarTodoDetalle = false;
+  seleccionarTodoInventario = false;
 
   filtroCategoriaTexto = '';
   filtroDescripcionTexto = '';
@@ -191,6 +207,7 @@ export class PantallaVerTicketsComponent implements OnInit {
   filtroDeptoTexto = '';
   filtroSubcategoriaTexto = '';
   filtroDetalleTexto = '';
+  filtroInventarioTexto = '';
 
 
 
@@ -214,7 +231,7 @@ export class PantallaVerTicketsComponent implements OnInit {
   @ViewChild('triggerFiltroDepartamento') triggerFiltroDepartamento: any;
   @ViewChild('triggerFiltroSubcategoria') triggerFiltroSubcategoria: any;
   @ViewChild('triggerFiltroDetalle') triggerFiltroDetalle: any;
-
+  @ViewChild('triggerFiltroInventario') triggerFiltroInventario: any;
 
   constructor(
     public ticketService: TicketService,
@@ -233,7 +250,8 @@ export class PantallaVerTicketsComponent implements OnInit {
       { ref: this.triggerFiltroCriticidad, key: 'criticidad' },
       { ref: this.triggerFiltroDepartamento, key: 'departamento' },
       { ref: this.triggerFiltroSubcategoria, key: 'subcategoria' },
-      { ref: this.triggerFiltroDetalle, key: 'subsubcategoria' }
+      { ref: this.triggerFiltroDetalle, key: 'detalle' },
+      { ref: this.triggerFiltroInventario, key: 'inventario' }
     ];
 
     triggers.forEach(({ ref, key }) => {
@@ -247,18 +265,43 @@ export class PantallaVerTicketsComponent implements OnInit {
   }
 
   async ngOnInit() {
+    console.log('Rol:', this.user?.rol, 'Sucursal:', this.user?.sucursal_id, 'Admin:', this.usuarioEsAdmin, 'Editor:', this.usuarioEsEditorCorporativo);
+
     await TicketInit.obtenerUsuarioAutenticado(this); 
     await cargarDepartamentos(this);                 
     TicketInit.cargarTickets(this);
 
+    this.usuarioEsAdmin = (
+    this.user?.rol === 'ADMINISTRADOR' ||
+    this.user?.sucursal_id === 1000 ||
+    this.user?.sucursal_id === 100
+  );
+
+  this.usuarioEsEditorCorporativo = (
+    this.user?.rol === 'EDITOR_CORPORATIVO' ||
+    this.user?.sucursal_id === 100
+  );
+
+
     // ⬇️ Espera a que los tickets se hayan cargado (usa un pequeño delay para asegurarlo)
     setTimeout(() => {
       if (this.tickets.length > 0) {
-        const extraerUnicos = (campo: string) =>
-          [...new Set(this.tickets.map(t => t[campo]))].map(valor => ({
-            valor,
-            seleccionado: true
-          }));
+        const extraerUnicos = (campo: string) => {
+          if (campo === 'inventario') {
+            // Solo queremos el nombre del inventario (o '—' si está vacío)
+            return [...new Set(this.tickets.map(t => t.inventario?.nombre || '—'))]
+              .map(valor => ({
+                valor,
+                seleccionado: true
+              }));
+          } else {
+            return [...new Set(this.tickets.map(t => t[campo]))]
+              .map(valor => ({
+                valor,
+                seleccionado: true
+              }));
+          }
+        };
 
         this.categoriasDisponibles = extraerUnicos('categoria');
         this.estadosDisponibles = extraerUnicos('estado');
@@ -268,7 +311,9 @@ export class PantallaVerTicketsComponent implements OnInit {
         this.criticidadesDisponibles = extraerUnicos('criticidad');
         this.departamentosDisponibles = extraerUnicos('departamento');
         this.subcategoriasDisponibles = extraerUnicos('subcategoria');
-        this.detallesDisponibles = extraerUnicos('subsubcategoria');
+        this.detallesDisponibles = extraerUnicos('detalle');
+        this.inventariosDisponibles = extraerUnicos('inventario');
+
 
         console.log('🧩 Tickets cargados:', this.tickets.map(t => t.id));
         console.log('📋 Categorías generadas:', this.categoriasDisponibles);
@@ -281,7 +326,8 @@ export class PantallaVerTicketsComponent implements OnInit {
           'criticidad',
           'departamento',
           'subcategoria',
-          'subsubcategoria'
+          'detalle',
+          'inventario'
         ];
 
         columnasConTexto.forEach(col => {
@@ -341,7 +387,7 @@ export class PantallaVerTicketsComponent implements OnInit {
     // ↔️ Aliases para nombres “raros”
     const textoPropAlias: Record<string, string> = {
       departamento: 'filtroDeptoTexto',
-      subsubcategoria: 'filtroDetalleTexto'
+      detalle: 'filtroDetalleTexto'
     };
 
     // Propiedad que realmente contiene el texto que escribe el usuario
@@ -356,7 +402,8 @@ export class PantallaVerTicketsComponent implements OnInit {
       criticidad: 'criticidades',
       departamento: 'departamentos',
       subcategoria: 'subcategorias',
-      subsubcategoria: 'detalles'
+      detalle: 'detalles',
+      inventario: 'inventarios'
     };
 
     const plural = pluralMap[columna];
@@ -587,7 +634,12 @@ abrirEditarFechaSolucion(ticket: Ticket) {
 }
 
 
-
+public getNombreEquipoOInventario(ticket: Ticket): string {
+  console.log(ticket)
+  if (ticket.inventario?.nombre) return ticket.inventario.nombre;
+  if (ticket.equipo) return ticket.equipo;
+  return '—';
+}
 
 
 }

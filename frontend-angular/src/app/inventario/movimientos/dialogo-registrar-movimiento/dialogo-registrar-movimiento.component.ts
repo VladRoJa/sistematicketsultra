@@ -17,6 +17,7 @@ import { Observable, startWith, map } from 'rxjs';
 import { environment } from 'src/environments/environment';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { MatCheckboxModule } from '@angular/material/checkbox';
+import { seleccionarObjetoAutocomplete } from 'src/app/utils/autocomplete.helper';
 
 @Component({
   selector: 'app-dialogo-registrar-movimiento',
@@ -35,7 +36,6 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
     MatCardModule,
     MatAutocompleteModule,
     FormsModule,
-    ReactiveFormsModule,
     MatCheckboxModule
   ]
 })
@@ -46,10 +46,8 @@ export class DialogoRegistrarMovimientoComponent implements OnInit {
   esAdmin = false;
   cargando = false;
 
-  // Nuevo: controla si solo filtra aparatos
-  soloAparatos = false;
-
-  // Observables para cada producto en el formarray
+  tipoFiltro: string = 'todos';
+  tiposDisponibles: string[] = ['todos'];
   inventarioFiltrado$: Observable<any[]>[] = [];
 
   constructor(
@@ -72,6 +70,9 @@ export class DialogoRegistrarMovimientoComponent implements OnInit {
     const user = JSON.parse(localStorage.getItem('user') || '{}');
     this.esAdmin = user?.rol === 'ADMINISTRADOR';
 
+    // Log inventarios recibidos
+    console.log('Inventarios recibidos en el diálogo:', this.inventariosDisponibles);
+
     if (this.esAdmin) {
       this.inventarioService.listarSucursales().subscribe({
         next: (data) => {
@@ -83,7 +84,9 @@ export class DialogoRegistrarMovimientoComponent implements OnInit {
       this.form.get('sucursal_id')?.setValue(user?.sucursal_id || 1);
     }
 
-    if ((this.form.get('productos') as FormArray).length === 0) {
+    this.actualizarTiposDisponibles();
+
+    if (this.productosFormArray.length === 0) {
       this.agregarProducto();
     }
   }
@@ -92,14 +95,42 @@ export class DialogoRegistrarMovimientoComponent implements OnInit {
     return this.form.get('productos') as FormArray;
   }
 
-  // Actualiza todos los autocompletes cuando cambia el filtro de tipo de producto
+  actualizarTiposDisponibles() {
+    // Normaliza todo a minúscula
+    const tiposSet = new Set(
+      this.inventariosDisponibles
+        .map(i => (i.tipo || '').trim().toLowerCase())
+        .filter(t => !!t)
+    );
+
+    // Log de los tipos detectados
+    console.log('Tipos únicos detectados:', Array.from(tiposSet));
+
+    this.tiposDisponibles = ['todos', ...Array.from(tiposSet)];
+    // Corrige tipoFiltro si no existe
+    if (!this.tiposDisponibles.includes(this.tipoFiltro)) {
+      this.tipoFiltro = 'todos';
+    }
+    this.actualizarFiltrados();
+  }
+
+
+  onTipoFiltroChange() {
+    this.actualizarFiltrados();
+    // Limpia autocompletes y sus valores
+    this.productosFormArray.controls.forEach(grupo => {
+      grupo.get('inventarioControl')?.setValue('');
+      grupo.get('inventario_id')?.setValue('');
+      grupo.get('unidad_medida')?.setValue('');
+    });
+  }
+
   actualizarFiltrados() {
     this.inventarioFiltrado$ = this.productosFormArray.controls.map((_, i) =>
       this.filteredInventarios(i)
     );
   }
 
-  // Observable de filtrado dinámico para cada input de inventario
   filteredInventarios(index: number): Observable<any[]> {
     const control = this.productosFormArray.at(index).get('inventarioControl') as FormControl;
     return control.valueChanges.pipe(
@@ -108,58 +139,52 @@ export class DialogoRegistrarMovimientoComponent implements OnInit {
     );
   }
 
-  private _filtrarInventarios(valor: string): any[] {
+    private _filtrarInventarios(valor: any): any[] {
     let lista = this.inventariosDisponibles;
-    if (this.soloAparatos) {
-      lista = lista.filter(i => (i.tipo || '').toLowerCase() === 'aparatos');
-    } else {
-      lista = lista.filter(i => (i.tipo || '').toLowerCase() !== 'aparatos');
+    if (this.tipoFiltro && this.tipoFiltro !== 'todos') {
+      lista = lista.filter(i =>
+        (i.tipo || '').trim().toLowerCase() === this.tipoFiltro
+      );
     }
-    const filtro = (valor || '').toLowerCase();
+    // SOLO buscar si valor es string, si es objeto, valor = ''
+    const filtro = (typeof valor === 'string' ? valor.toLowerCase() : '');
     return lista.filter(inv =>
       (inv.nombre || '').toLowerCase().includes(filtro) ||
       (inv.marca || '').toLowerCase().includes(filtro) ||
       (inv.proveedor || '').toLowerCase().includes(filtro) ||
-      (inv.categoria || '').toLowerCase().includes(filtro)
+      (inv.categoria || '').toLowerCase().includes(filtro) ||
+      (inv.codigo_interno || '').toLowerCase().includes(filtro)
     );
   }
+
+
 
   agregarProducto() {
     const grupo = this.fb.group({
       inventario_id: ['', Validators.required],
-      inventarioControl: ['', Validators.required], // <- obligatorio para forzar selección
+      inventarioControl: ['', Validators.required],
       unidad_medida: [{ value: '', disabled: true }],
       cantidad: [1, [Validators.required, Validators.min(1)]],
     });
     this.productosFormArray.push(grupo);
+    this.inventarioFiltrado$.push(this.filteredInventarios(this.productosFormArray.length - 1));
 
-    // Inicializa observable de filtrado para el autocomplete
-    this.actualizarFiltrados();
-
-    // Cuando selecciona inventario, llena unidad automáticamente y fuerza que sea de la lista
-    grupo.get('inventarioControl')?.valueChanges.subscribe(valor => {
-      let inv;
-      if (valor && typeof valor === 'object' && valor !== null && 'id' in (valor as object)) {
-        inv = valor;
-      }
-    else if (valor) {
-        inv = this.inventariosDisponibles.find(i => i.nombre === valor);
-      }
-      if (inv) {
-        grupo.get('inventario_id')?.setValue(inv.id);
-        grupo.get('unidad_medida')?.setValue(inv.unidad || '');
-      } else {
-        grupo.get('inventario_id')?.setValue('');
-        grupo.get('unidad_medida')?.setValue('');
+    
+    grupo.get('inventarioControl')!.valueChanges.subscribe(valor => {
+      if (valor === '') {
+        grupo.get('inventario_id')?.setValue('', { emitEvent: false });
+        grupo.get('unidad_medida')?.setValue('', { emitEvent: false });
       }
     });
-
-
   }
+
+
+
+
 
   eliminarProducto(i: number) {
     this.productosFormArray.removeAt(i);
-    this.actualizarFiltrados();
+    this.inventarioFiltrado$.splice(i, 1);
   }
 
   registrarMovimiento() {
@@ -185,7 +210,6 @@ export class DialogoRegistrarMovimientoComponent implements OnInit {
 
     this.cargando = true;
 
-    // Validación de stock solo para salidas
     if (tipo_movimiento === 'salida') {
       this.http.get<any[]>(`${environment.apiUrl}/inventario/existencias`).subscribe({
         next: existencias => {
@@ -241,19 +265,50 @@ export class DialogoRegistrarMovimientoComponent implements OnInit {
     this.dialogRef.close(null);
   }
 
-  // Usado para el displayWith del autocomplete, muestra solo el nombre
-  displayInventario(inv?: any): string {
-    return inv?.nombre || '';
-  }
+  displayInventario = (inv?: any): string => {
+    // Soporta string o el objeto real
+    if (!inv) return '';
+    if (typeof inv === 'string') return inv;
+    return inv.nombre || '';
+  };
 
-  // Limpia input si no eligieron de la lista (opcional, refuerza la selección controlada)
+  // Limpia si el usuario se sale sin seleccionar objeto válido (no deja valores colgados)
   onBlurInventario(i: number) {
     const control = this.productosFormArray.at(i).get('inventarioControl');
     const value = control?.value;
     if (typeof value === 'string' && value.trim() !== '') {
-      control?.setValue('');
-      this.productosFormArray.at(i).get('inventario_id')?.setValue('');
-      this.productosFormArray.at(i).get('unidad_medida')?.setValue('');
+      // Busca en inventarios ignorando mayúsculas
+      const encontrado = this.inventariosDisponibles.find(j =>
+        j.nombre.trim().toLowerCase() === value.trim().toLowerCase()
+      );
+      if (!encontrado) {
+        control?.setValue('');
+        this.productosFormArray.at(i).get('inventario_id')?.setValue('');
+        this.productosFormArray.at(i).get('unidad_medida')?.setValue('');
+      }
     }
   }
+    onInventarioSeleccionado(inv: any, index: number) {
+      const grupo = this.productosFormArray.at(index);
+      seleccionarObjetoAutocomplete(
+        grupo.get('inventarioControl'),
+        inv,
+        (obj) => {
+          grupo.get('inventario_id')?.setValue(obj.id, { emitEvent: false });
+          grupo.get('unidad_medida')?.setValue(obj.unidad_medida || '', { emitEvent: false });
+        }
+      );
+    }
+
+    forzarInventario(inv: any, i: number, event: MouseEvent) {
+    // Previene el cierre inmediato del autocomplete y forza el valor
+    event.preventDefault(); // detiene el cierre por defecto
+    setTimeout(() => {
+      this.onInventarioSeleccionado(inv, i);
+      // Cierra el panel (esto es por si el panel sigue abierto)
+      document.activeElement && (document.activeElement as HTMLElement).blur();
+    }, 0);
+  }
+
+
 }

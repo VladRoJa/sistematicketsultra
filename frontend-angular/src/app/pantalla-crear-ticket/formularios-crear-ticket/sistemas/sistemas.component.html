@@ -1,43 +1,44 @@
-<div class="subformulario-box">
-  <form [formGroup]="parentForm">
+<!-- frontend-angular/src/app/formularios-crear-ticket/sistemas/sistemas.component.html -->
 
-    <!-- Categoría -->
-    <mat-form-field appearance="fill">
-      <mat-label>🗂️ Categoría</mat-label>
-      <mat-select formControlName="categoria" (selectionChange)="onCategoriaChange()">
-        <mat-option value="">Seleccione</mat-option>
-        <mat-option *ngFor="let cat of categorias" [value]="cat.nombre">{{ cat.nombre }}</mat-option>
-      </mat-select>
-    </mat-form-field>
+<div class="subformulario-box" [formGroup]="parentForm">
 
-    <!-- Subcategoría -->
-    <mat-form-field appearance="fill" *ngIf="subcategoriasDisponibles.length">
-      <mat-label>📂 Subcategoría</mat-label>
-      <mat-select formControlName="subcategoria" (selectionChange)="onSubcategoriaChange()">
-        <mat-option value="">Seleccione</mat-option>
-        <mat-option *ngFor="let sub of subcategoriasDisponibles" [value]="sub.nombre">{{ sub.nombre }}</mat-option>
-      </mat-select>
-    </mat-form-field>
+  <!-- Sucursal (solo admins) -->
+  <mat-form-field *ngIf="esAdmin" appearance="fill">
+    <mat-label>Selecciona sucursal</mat-label>
+    <mat-select formControlName="sucursal_id">
+      <mat-option *ngFor="let suc of sucursales" [value]="suc.sucursal_id">{{ suc.sucursal }}</mat-option>
+    </mat-select>
+  </mat-form-field>
 
-    <!-- Detalle -->
-    <mat-form-field appearance="fill" *ngIf="detallesDisponibles.length">
-      <mat-label>📌 Detalle específico</mat-label>
-      <mat-select formControlName="detalle">
-        <mat-option value="">Seleccione</mat-option>
-        <mat-option *ngFor="let det of detallesDisponibles" [value]="det">{{ det }}</mat-option>
-      </mat-select>
-    </mat-form-field>
+  <!-- Categoría (dinámica por inventario) -->
+  <mat-form-field appearance="fill">
+    <mat-label>📁 Categoría</mat-label>
+    <mat-select formControlName="categoria">
+      <mat-option value="">Seleccione categoría</mat-option>
+      <mat-option *ngFor="let cat of categorias" [value]="cat">{{ cat }}</mat-option>
+    </mat-select>
+  </mat-form-field>
 
-    <!-- Descripción -->
-    <mat-form-field appearance="fill">
-      <mat-label>📋 Descripción del problema</mat-label>
-      <textarea
-        matInput
-        formControlName="descripcion"
-        class="descripcion-textarea"
-        rows="4"
-        placeholder="Detalla lo ocurrido..."></textarea>
-    </mat-form-field>
+  <!-- Selector de equipo filtrado -->
+    <app-selector-equipo
+      [equipos]="equiposFiltrados"
+      [required]="true"
+      (equipoSeleccionado)="onEquipoSeleccionado($event)">
+    </app-selector-equipo>
 
-  </form>
+  <!-- Subcategoría (listado fijo) -->
+  <mat-form-field appearance="fill">
+    <mat-label>📂 Subcategoría</mat-label>
+    <mat-select formControlName="subcategoria">
+      <mat-option value="">Seleccione subcategoría</mat-option>
+      <mat-option *ngFor="let sub of subcategoriasDisponibles" [value]="sub">{{ sub }}</mat-option>
+    </mat-select>
+  </mat-form-field>
+
+  <!-- Descripción -->
+  <mat-form-field appearance="fill">
+    <mat-label>📋 Descripción del problema</mat-label>
+    <textarea matInput formControlName="descripcion" rows="4"></textarea>
+  </mat-form-field>
+
 </div>

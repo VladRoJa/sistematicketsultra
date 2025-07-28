@@ -1,4 +1,4 @@
-import { Component, OnInit, ViewChild } from '@angular/core';
+import { Component, OnInit, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatTableModule } from '@angular/material/table';
 import { MatButtonModule } from '@angular/material/button';
@@ -12,15 +12,11 @@ import { DialogoInventarioComponent } from './dialogo-inventario/dialogo-inventa
 import { mostrarAlertaToast } from 'src/app/utils/alertas';
 import { Inventario } from '../models/inventario.model';
 import { MatCheckboxModule } from '@angular/material/checkbox';
-import {
-  inicializarFiltros,
-  obtenerOpcionesVisibles,
-  alternarSeleccionTemporal,
-  confirmarSeleccion,
-  filtrarTabla,
-  FiltroColumna
-} from 'src/app/utils/tabla-filtros.helper';
+import { inicializarFiltros, obtenerOpcionesVisibles, alternarSeleccionTemporal, confirmarSeleccion, filtrarTabla, FiltroColumna} from 'src/app/utils/tabla-filtros.helper';
 import { FormsModule } from '@angular/forms';
+
+
+
 
 @Component({
   selector: 'app-inventario',
@@ -34,7 +30,7 @@ import { FormsModule } from '@angular/forms';
     MatDialogModule,
     MatIconModule,
     MatMenuModule,
-    MatCheckboxModule, // <-- Necesario para los checkboxes en los filtros
+    MatCheckboxModule,
     DialogoConfirmacionComponent,
     DialogoInventarioComponent,
     FormsModule
@@ -63,6 +59,7 @@ export class InventarioComponent implements OnInit {
   error: string | null = null;
 
   @ViewChild('menuTrigger', { static: false }) menuTrigger!: MatMenuTrigger;
+  @ViewChild('fileInput') fileInput!: ElementRef<HTMLInputElement>;
 
   constructor(
     private inventarioService: InventarioService,
@@ -216,4 +213,49 @@ export class InventarioComponent implements OnInit {
       }
     }
   }
+
+abrirDialogoImportar() {
+this.fileInput.nativeElement.click();
+}
+
+importarExcel(event: Event) {
+  const input = event.target as HTMLInputElement;
+  if (!input.files || input.files.length === 0) return;
+  const archivo = input.files[0];
+  this.inventarioService.importarInventario(archivo).subscribe({
+    next: res => {
+      mostrarAlertaToast('Inventario importado correctamente');
+      this.cargarInventario(); // O el método que uses para refrescar la tabla
+    },
+    error: err => {
+      mostrarAlertaToast('Error al importar inventario', 'error');
+    }
+  });
+  input.value = '';
+}
+
+descargarPlantilla() {
+  this.inventarioService.descargarPlantilla().subscribe(blob => {
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'plantilla_inventario.xlsx';
+    a.click();
+    window.URL.revokeObjectURL(url);
+  });
+}
+
+exportarInventario() {
+  this.inventarioService.exportarInventario().subscribe(blob => {
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'inventario.xlsx';
+    a.click();
+    window.URL.revokeObjectURL(url);
+  });
+}
+
+
+
 }

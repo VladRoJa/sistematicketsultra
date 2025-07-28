@@ -38,7 +38,7 @@ def aplicar_migraciones():
         'fecha_en_progreso': "ALTER TABLE tickets ADD COLUMN fecha_en_progreso TIMESTAMP;",
         'fecha_solucion': "ALTER TABLE tickets ADD COLUMN fecha_solucion TIMESTAMP;",
         'subcategoria': "ALTER TABLE tickets ADD COLUMN subcategoria VARCHAR(255);",
-        'subsubcategoria': "ALTER TABLE tickets ADD COLUMN subsubcategoria VARCHAR(255);"
+        'detalle': "ALTER TABLE tickets ADD COLUMN detalle VARCHAR(255);"
     }
 
     if dialect == 'mysql':

@@ -80,10 +80,10 @@ export class LayoutComponent implements OnInit, AfterViewInit {
         submenu: [
           { label: 'Marcas', path: '/catalogos/marcas' },
           { label: 'Proveedores', path: '/catalogos/proveedores' },
-          { label: 'Categorías', path: '/catalogos/categorias' },
+          { label: 'Clasificaciones', path: '/catalogos/clasificaciones' },
           { label: 'Unidades de Medida', path: '/catalogos/unidades' },
           { label: 'Grupo Muscular', path: '/catalogos/gruposmusculares' },
-          { label: 'Tipos de Inventario', path: '/catalogos/tipos' }
+          { label: 'Tipos de Inventario', path: '/catalogos/tipos' },
         ]
           },
           {

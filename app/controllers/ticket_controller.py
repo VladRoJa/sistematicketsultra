@@ -44,8 +44,8 @@ class TicketController:
                 criticidad=data.get('criticidad', 1),
                 categoria=categoria,
                 subcategoria=data.get('subcategoria'),
-                subsubcategoria=data.get('subsubcategoria'),
-                aparato_id=aparato_id,  # <-- Ya apunta a InventarioGeneral.id
+                detalle=data.get('detalle'),
+                aparato_id=aparato_id,
                 problema_detectado=data.get('problema_detectado'),
                 necesita_refaccion=data.get('necesita_refaccion', False),
                 descripcion_refaccion=data.get('descripcion_refaccion')

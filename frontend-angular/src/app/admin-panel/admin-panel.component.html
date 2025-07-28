@@ -1,0 +1,16 @@
+<mat-card class="admin-panel-card">
+  <h2>👨‍💼 Panel de Administración</h2>
+  <p>Bienvenido <b>{{ usuario.nombre || usuario.username }}</b> (Rol: {{ usuario.rol }})</p>
+  <div class="admin-panel-menu">
+    <button mat-raised-button color="primary" (click)="navegar('/admin-permisos')">
+      Permisos de Usuarios
+    </button>
+    <button mat-raised-button color="accent" (click)="navegar('/inventario')">
+      Inventario / Equipos
+    </button>
+    <button mat-raised-button color="warn" (click)="navegar('/carga-masiva')">
+      Carga Masiva
+    </button>
+    <!-- Agrega más accesos rápidos aquí -->
+  </div>
+</mat-card>

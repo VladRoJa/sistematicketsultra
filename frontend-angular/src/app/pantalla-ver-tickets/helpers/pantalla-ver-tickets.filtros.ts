@@ -150,12 +150,12 @@ export function sincronizarCheckboxesConDisponibles(component: PantallaVerTicket
 /** Obtener todos los filtros activos de la tabla */
 /** Devuelve un objeto { campoTabla: [valoresSeleccionados] } */
 export function obtenerFiltrosActivos(
-  component: PantallaVerTicketsComponent
+  component: any
 ): { [clave: string]: string[] } {
 
   const filtros: { [clave: string]: string[] } = {};
 
-  // Los ocho campos que soportan filtrado por check-box
+  // Los nueve campos que soportan filtrado por check-box
   const campos = [
     'categoria',
     'descripcion',
@@ -164,7 +164,8 @@ export function obtenerFiltrosActivos(
     'criticidad',
     'departamento',
     'subcategoria',
-    'subsubcategoria'
+    'detalle',
+    'inventario'
   ] as const;
 
   campos.forEach(campo => {
@@ -172,10 +173,6 @@ export function obtenerFiltrosActivos(
       ?.filter(i => i.seleccionado)
       .map(i => i.valor) ?? [];
 
-    /* 
-       - Si se desmarcó al menos un valor, el filtro está activo.
-       - Si siguen TODOS marcados, equivale a “sin filtro” y se ignora.
-    */
     const totalOpciones = component.temporalSeleccionados[campo]?.length ?? 0;
     if (seleccion.length > 0 && seleccion.length !== totalOpciones) {
       filtros[campo] = seleccion;
@@ -235,6 +232,7 @@ export function aplicarFiltroColumna(component: PantallaVerTicketsComponent, col
     component.departamentosDisponibles,
     component.subcategoriasDisponibles,
     component.detallesDisponibles,
+    component.inventariosDisponibles,
     component
   );
 
@@ -246,7 +244,8 @@ export function aplicarFiltroColumna(component: PantallaVerTicketsComponent, col
   if (columna === 'criticidad') component.filtroCriticidadTexto = '';
   if (columna === 'departamento') component.filtroDeptoTexto = '';
   if (columna === 'subcategoria') component.filtroSubcategoriaTexto = '';
-  if (columna === 'subsubcategoria') component.filtroDetalleTexto = '';
+  if (columna === 'detalle') component.filtroDetalleTexto = '';
+  if (columna === 'inventario') component.filtroInventarioTexto = '';
 
   actualizarDiasConTicketsCreacion(component);
   actualizarDiasConTicketsFinalizado(component);
@@ -273,6 +272,7 @@ export function limpiarFiltroColumna(component: PantallaVerTicketsComponent, col
     component.departamentosDisponibles,
     component.subcategoriasDisponibles,
     component.detallesDisponibles,
+    component.inventariosDisponibles,
     component
   );
 }
@@ -304,6 +304,7 @@ export function aplicarFiltrosDesdeMemoria(component: PantallaVerTicketsComponen
     component.departamentosDisponibles,
     component.subcategoriasDisponibles,
     component.detallesDisponibles,
+    component.inventariosDisponibles,
     component
   );
 
@@ -336,6 +337,7 @@ export function aplicarFiltroColumnaConReset(component: PantallaVerTicketsCompon
     component.departamentosDisponibles,
     component.subcategoriasDisponibles,
     component.detallesDisponibles,
+    component.inventariosDisponibles,
     component
   );
 
@@ -347,7 +349,8 @@ export function aplicarFiltroColumnaConReset(component: PantallaVerTicketsCompon
   if (columna === 'criticidad') component.filtroCriticidadTexto = '';
   if (columna === 'departamento') component.filtroDeptoTexto = '';
   if (columna === 'subcategoria') component.filtroSubcategoriaTexto = '';
-  if (columna === 'subsubcategoria') component.filtroDetalleTexto = '';
+  if (columna === 'detalle') component.filtroDetalleTexto = '';
+  if (columna === 'inventario') component.filtroInventarioTexto = '';
 
   // 🔄 Actualizar visibilidad
   actualizarVisibleTickets(component);
@@ -368,8 +371,9 @@ export function obtenerFiltrosActivosParaBackend(component: PantallaVerTicketsCo
   const username = getSeleccionados(component.usuariosFiltrados);
   const categoria = getSeleccionados(component.categoriasFiltradas);
   const subcategoria = getSeleccionados(component.subcategoriasFiltradas);
-  const subsubcategoria = getSeleccionados(component.detallesFiltrados);
+  const detalle = getSeleccionados(component.detallesFiltrados);
   const descripcion = getSeleccionados(component.descripcionesFiltradas);
+  const inventario = getSeleccionados(component.inventariosFiltrados);
 
   if (estado.length) filtros.estado = estado;
   if (departamento_id.length) filtros.departamento_id = departamento_id;
@@ -377,8 +381,9 @@ export function obtenerFiltrosActivosParaBackend(component: PantallaVerTicketsCo
   if (username.length) filtros.username = username;
   if (categoria.length) filtros.categoria = categoria;
   if (subcategoria.length) filtros.subcategoria = subcategoria;
-  if (subsubcategoria.length) filtros.subsubcategoria = subsubcategoria;
+  if (detalle.length) filtros.detalle = detalle;
   if (descripcion.length) filtros.descripcion = descripcion;
+  if (inventario.length) filtros.inventario = getSeleccionados(component.inventariosFiltrados);
 
   // ✅ Función segura para convertir a YYYY-MM-DD
   const formatearFecha = (fecha: Date | null): string | null => {

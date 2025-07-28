@@ -1,11 +1,33 @@
-<!-- frontend-angular\src\app\inventario\catalogos\catalogo-crud.component.html -->
+  <!-- frontend-angular\src\app\inventario\catalogos\catalogo-crud.component.html -->
 
-<div class="flex items-center mb-2">
-  <h2 class="text-lg font-bold mr-4">{{ titulo }}</h2>
-  <button mat-stroked-button color="primary" (click)="iniciarAgregar()" *ngIf="modo === 'editar'">Agregar Nuevo</button>
+<div class="flex items-center mb-4 justify-between">
+  <div class="flex items-center">
+    <h2 class="text-xl font-bold mr-4">{{ titulo }}</h2>
+    <button mat-stroked-button color="primary" (click)="iniciarAgregar()" *ngIf="modo === 'editar'">
+      Agregar Nuevo
+    </button>
+  </div>
+  
+  <!-- Acciones rápidas solo admin -->
+  <div *ngIf="authService.esAdmin()" class="catalogo-acciones-rapidas">
+    <button mat-flat-button color="accent" (click)="abrirDialogoImportar()">
+      <mat-icon>file_upload</mat-icon>
+      Importar
+    </button>
+    <input type="file" #fileInput hidden (change)="importar($event)">
+      <button mat-flat-button color="primary" (click)="exportar()">
+        <mat-icon>file_download</mat-icon>
+        Exportar
+      </button>
+      <button mat-flat-button color="primary" (click)="descargarTemplate()">
+        <mat-icon>download</mat-icon>
+        Plantilla
+      </button>
+
+  </div>
 </div>
 
-<form [formGroup]="form" (ngSubmit)="guardar()" class="mb-4 flex gap-2 flex-wrap">
+<form [formGroup]="form" (ngSubmit)="guardar()" class="mb-4 flex gap-2 flex-wrap items-center catalogo-form">
   <mat-form-field appearance="fill" style="min-width: 230px">
     <mat-label>Nombre</mat-label>
     <input
@@ -23,7 +45,7 @@
   </mat-form-field>
 
   <!-- Solo para unidades de medida -->
-  <mat-form-field appearance="fill" *ngIf="tipo === 'unidades_medida'" style="min-width: 140px">
+  <mat-form-field appearance="fill" *ngIf="tipo === 'unidades'" style="min-width: 140px">
     <mat-label>Abreviatura</mat-label>
     <input matInput formControlName="abreviatura" maxlength="10" />
   </mat-form-field>
@@ -34,7 +56,7 @@
   <button mat-button color="warn" type="button" (click)="cancelar()" *ngIf="modo === 'editar'">Cancelar</button>
 </form>
 
-<mat-table [dataSource]="elementos" *ngIf="!loading && elementos.length">
+<mat-table [dataSource]="elementos" *ngIf="!loading && elementos.length" class="catalogo-table">
   <ng-container matColumnDef="id">
     <mat-header-cell *matHeaderCellDef>ID</mat-header-cell>
     <mat-cell *matCellDef="let elem">{{ elem.id }}</mat-cell>
@@ -65,3 +87,6 @@
 <div *ngIf="loading" class="flex justify-center items-center mt-8">
   <mat-spinner diameter="40"></mat-spinner>
 </div>
+
+<!-- Diálogo de importar: pon aquí tu diálogo o usa un <input type="file"> oculto -->
+<input type="file" #fileInput hidden (change)="importar($event)">

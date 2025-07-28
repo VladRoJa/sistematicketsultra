@@ -84,7 +84,6 @@ setSession(token: string, user: any, redirigir: boolean = true) {
 
     try {
         const user = JSON.parse(userString);
-        console.log("✅ Usuario cargado desde localStorage:", user);
         return user;
     } catch (error) {
         console.error("❌ Error al parsear usuario desde localStorage:", error);
@@ -114,6 +113,13 @@ setSession(token: string, user: any, redirigir: boolean = true) {
         }
       })
     );
+  }
+  
+    esAdmin(): boolean {
+    const user = this.getUser();
+    if (!user) return false;
+    const rol = (user.rol || '').toLowerCase();
+    return rol === 'administrador' || rol === 'super_admin';
   }
   
 }

@@ -1,7 +1,8 @@
+<!-- frontend-angular\src\app\pantalla-crear-ticket\pantalla-crear-ticket.component.html -->
+
 <mat-card class="ticket-container-global">
   <h2>🎫 Crear Nuevo Ticket</h2>
 
-  <!-- Formulario principal -->
   <form [formGroup]="formularioCrearTicket" (ngSubmit)="enviarTicket()" class="formulario-ticket-container">
 
     <!-- Departamento -->
@@ -16,32 +17,21 @@
     <!-- Tipo de Mantenimiento (solo si es Mantenimiento) -->
     <mat-form-field appearance="fill" *ngIf="formularioCrearTicket.get('departamento')?.value === 1">
       <mat-label>⚙️ Tipo de mantenimiento</mat-label>
-      <mat-select formControlName="tipoMantenimiento">
+      <mat-select formControlName="tipoMantenimiento" (selectionChange)="onTipoMantenimientoChange($event.value)">
         <mat-option [value]="null">Selecciona uno</mat-option>
         <mat-option value="edificio">🏢 Edificio</mat-option>
         <mat-option value="aparatos">🏋️ Aparatos</mat-option>
       </mat-select>
     </mat-form-field>
 
-    <!-- Subformularios: los hijos solo manejan campos, pero no el submit -->
-    <div class="formulario-sub">
-      <app-mantenimiento-edificio
-        *ngIf="formularioCrearTicket.get('departamento')?.value === 1 && formularioCrearTicket.get('tipoMantenimiento')?.value === 'edificio'"
-        [parentForm]="formularioCrearTicket">
-      </app-mantenimiento-edificio>
-
-      <app-mantenimiento-aparatos
-        *ngIf="formularioCrearTicket.get('departamento')?.value === 1 && formularioCrearTicket.get('tipoMantenimiento')?.value === 'aparatos'"
-        [parentForm]="formularioCrearTicket">
-      </app-mantenimiento-aparatos>
-
-      <app-finanzas *ngIf="formularioCrearTicket.get('departamento')?.value === 2" [parentForm]="formularioCrearTicket" (formularioValido)="recibirPayloadDesdeFormulario($event)"></app-finanzas>
-      <app-marketing *ngIf="formularioCrearTicket.get('departamento')?.value === 3" [parentForm]="formularioCrearTicket" (formularioValido)="recibirPayloadDesdeFormulario($event)"></app-marketing>
-      <app-gerencia-deportiva *ngIf="formularioCrearTicket.get('departamento')?.value === 4" [parentForm]="formularioCrearTicket" (formularioValido)="recibirPayloadDesdeFormulario($event)"></app-gerencia-deportiva>
-      <app-recursos-humanos *ngIf="formularioCrearTicket.get('departamento')?.value === 5" [parentForm]="formularioCrearTicket" (formularioValido)="recibirPayloadDesdeFormulario($event)"></app-recursos-humanos>
-      <app-compras *ngIf="formularioCrearTicket.get('departamento')?.value === 6" [parentForm]="formularioCrearTicket" (formularioValido)="recibirPayloadDesdeFormulario($event)"></app-compras>
-      <app-sistemas *ngIf="formularioCrearTicket.get('departamento')?.value === 7" [parentForm]="formularioCrearTicket" (formularioValido)="recibirPayloadDesdeFormulario($event)"></app-sistemas>
-    </div>
+    <!-- Jerarquía dinámica: ultra pro -->
+    <ng-container *ngIf="mostrarJerarquiaDinamica">
+      <app-formulario-dinamico-clasificacion
+        [parentForm]="formularioCrearTicket"
+        [catalogoPlano]="clasificacionPlanoDepto"
+        [loading]="loadingClasificacion">
+      </app-formulario-dinamico-clasificacion>
+    </ng-container>
 
     <!-- Nivel de criticidad -->
     <mat-form-field appearance="fill">
@@ -53,8 +43,19 @@
       </mat-select>
     </mat-form-field>
 
-    <!-- 🔥 Este es el botón global -->
-    <button mat-raised-button color="primary" type="submit" class="btn-submit">📩 Crear Ticket</button>
+    <!-- Campo descripción, sugerido debajo de jerarquía -->
+    <mat-form-field appearance="fill" class="w-full" *ngIf="mostrarJerarquiaDinamica">
+      <mat-label>📝 Descripción del problema</mat-label>
+      <textarea
+        matInput
+        formControlName="descripcion"
+        rows="4"
+        placeholder="Detalla lo ocurrido con claridad..."></textarea>
+    </mat-form-field>
+
+    <button mat-raised-button color="primary" type="submit" class="btn-submit" [disabled]="formularioCrearTicket.invalid || loadingClasificacion">
+      <mat-icon>send</mat-icon> Crear Ticket
+    </button>
   </form>
 
   <p *ngIf="mensaje" class="mensaje">{{ mensaje }}</p>

@@ -1,36 +1,28 @@
+  <!--frontend-angular\src\app\pantalla-crear-ticket\formularios-crear-ticket\mantenimiento-edificio\mantenimiento-edificio.component.html -->
+
+
 <div [formGroup]="parentForm" class="subformulario-box">
   <h3>🏢 Reporte de Edificio</h3>
 
-  <!-- Categoría -->
+  <!-- Clasificación -->
   <mat-form-field appearance="fill">
-    <mat-label>🏷️ Categoría</mat-label>
-    <mat-select formControlName="categoria" (selectionChange)="onCategoriaChange()">
+    <mat-label>Clasificación*</mat-label>
+    <mat-select formControlName="clasificacion_id">
       <mat-option value="">Seleccione</mat-option>
-      <mat-option *ngFor="let categoria of getCategorias()" [value]="categoria">{{ categoria }}</mat-option>
+      <mat-option *ngFor="let clasif of clasificaciones" [value]="clasif.id">
+        {{ mostrarJerarquia(clasif) }}
+      </mat-option>
     </mat-select>
   </mat-form-field>
 
-  <!-- Subcategoría -->
-  <mat-form-field appearance="fill" *ngIf="getSubcategorias(parentForm.get('categoria')?.value).length">
-    <mat-label>🛠️ Subcategoría</mat-label>
-    <mat-select formControlName="subcategoria" (selectionChange)="onSubcategoriaChange()">
-      <mat-option value="">Seleccione</mat-option>
-      <mat-option *ngFor="let sub of getSubcategorias(parentForm.get('categoria')?.value)" [value]="sub">{{ sub }}</mat-option>
-    </mat-select>
+  <!-- Equipo -->
+  <mat-form-field class="w-full" appearance="fill">
+    <mat-label>Equipo*</mat-label>
+    <input matInput formControlName="equipo" placeholder="Ejemplo: Aire acondicionado, bomba de agua, etc.">
   </mat-form-field>
-
-  <!-- Detalle específico -->
-  <mat-form-field appearance="fill" *ngIf="getSubsubcategorias(parentForm.get('categoria')?.value, parentForm.get('subcategoria')?.value).length">
-    <mat-label>🧩 Detalle específico</mat-label>
-    <mat-select formControlName="detalle">
-      <mat-option value="">Seleccione</mat-option>
-      <mat-option *ngFor="let detalle of getSubsubcategorias(parentForm.get('categoria')?.value, parentForm.get('subcategoria')?.value)" [value]="detalle">{{ detalle }}</mat-option>
-    </mat-select>
-  </mat-form-field>
-
 
   <!-- Descripción -->
-  <mat-form-field appearance="fill" class="form-group-description">
+  <mat-form-field appearance="fill" class="form-group-description w-full">
     <mat-label>📋 Descripción del problema</mat-label>
     <textarea
       matInput
@@ -40,4 +32,11 @@
       placeholder="Detalla lo ocurrido con claridad...">
     </textarea>
   </mat-form-field>
+
+  <!-- Ubicación -->
+  <mat-form-field class="w-full" appearance="fill">
+    <mat-label>Ubicación*</mat-label>
+    <input matInput formControlName="ubicacion" placeholder="Ejemplo: Planta baja, pasillo, etc.">
+  </mat-form-field>
+
 </div>

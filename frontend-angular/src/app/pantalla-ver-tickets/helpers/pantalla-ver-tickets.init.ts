@@ -84,9 +84,10 @@ export function cargarTickets(component: PantallaVerTicketsComponent): void {
       component.usuariosDisponibles = generarOpcionesDisponiblesDesdeTickets(ticketsProcesados, 'username');
       component.estadosDisponibles = generarOpcionesDisponiblesDesdeTickets(ticketsProcesados, 'estado');
       component.criticidadesDisponibles = generarOpcionesDisponiblesDesdeTickets(ticketsProcesados, 'criticidad');
-      component.departamentosDisponibles = generarOpcionesDisponiblesDesdeTickets(ticketsProcesados, 'departamento');
+      component.departamentosDisponibles = generarOpcionesDisponiblesDesdeTickets(ticketsProcesados, 'departamento_id');
       component.subcategoriasDisponibles = generarOpcionesDisponiblesDesdeTickets(ticketsProcesados, 'subcategoria');
-      component.detallesDisponibles = generarOpcionesDisponiblesDesdeTickets(ticketsProcesados, 'subsubcategoria');
+      component.detallesDisponibles = generarOpcionesDisponiblesDesdeTickets(ticketsProcesados, 'detalle');
+      component.inventariosDisponibles = generarOpcionesDisponiblesDesdeTickets(ticketsProcesados, 'inventario');
 
       regenerarFiltrosFiltradosDesdeTickets(
         component.filteredTickets,
@@ -98,6 +99,7 @@ export function cargarTickets(component: PantallaVerTicketsComponent): void {
         component.departamentosDisponibles,
         component.subcategoriasDisponibles,
         component.detallesDisponibles,
+        component.inventariosDisponibles,
         component
       );
 
@@ -109,6 +111,7 @@ export function cargarTickets(component: PantallaVerTicketsComponent): void {
       component.departamentosFiltrados = [...component.departamentosDisponibles];
       component.subcategoriasFiltradas = [...component.subcategoriasDisponibles];
       component.detallesFiltrados = [...component.detallesDisponibles];
+      component.inventariosFiltrados = [...component.inventariosDisponibles];
 
       component.loading = false;
     },

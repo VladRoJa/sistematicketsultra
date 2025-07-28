@@ -411,7 +411,6 @@ CREATE TABLE `tickets_mantenimiento_edificio` (
   `id` int NOT NULL AUTO_INCREMENT,
   `ticket_id` int NOT NULL,
   `ubicacion` varchar(255) NOT NULL,
-  `tipo_problema` varchar(100) NOT NULL,
   `descripcion_detallada` text,
   `foto_url` varchar(500) DEFAULT NULL,
   `fecha_registro` datetime DEFAULT CURRENT_TIMESTAMP,

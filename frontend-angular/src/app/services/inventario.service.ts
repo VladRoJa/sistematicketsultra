@@ -50,4 +50,26 @@ export class InventarioService {
   obtenerMovimientos(): Observable<any[]> {
     return this.http.get<any[]>(`${this.url}/movimientos`);
   }
+
+  obtenerInventarioPorSucursal(sucursal_id: number): Observable<any[]> {
+  return this.http.get<any[]>(`${this.url}?sucursal_id=${sucursal_id}`);
+ }
+
+  importarInventario(file: File): Observable<any> {
+  const formData = new FormData();
+  formData.append('file', file, file.name);
+  return this.http.post(`${this.url}/importar`, formData);
+ }
+
+  descargarPlantilla(): Observable<Blob> {
+  return this.http.get(`${this.url}/plantilla`, { responseType: 'blob' });
+ }
+
+ exportarInventario(): Observable<Blob> {
+  return this.http.get(`${this.url}/exportar`, { responseType: 'blob' });
 }
+
+
+
+}
+
