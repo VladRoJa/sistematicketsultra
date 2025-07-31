@@ -17,6 +17,12 @@
   </mat-select>
 </mat-form-field>
 
+<app-mantenimiento-aparatos
+  *ngIf="mostrarSubformAparatos"
+  [parentForm]="form"
+  tipo="aparato"
+></app-mantenimiento-aparatos>
+
     <!-- Categoría -->
     <mat-form-field appearance="fill" *ngIf="categorias.length > 0">
       <mat-label>📁 Categoría</mat-label>

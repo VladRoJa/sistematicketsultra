@@ -28,14 +28,25 @@
       </mat-form-field>
     </ng-container>
 
+    <ng-container *ngIf="mostrarSubformAparatos; else generales">
+      <app-mantenimiento-aparatos
+        *ngIf="mostrarSubformAparatos"
+        [parentForm]="form"
+        tipo="aparato"
+      ></app-mantenimiento-aparatos>
+    </ng-container>
+
+
+    <ng-template #generales>
     <!-- Descripción -->
     <mat-form-field appearance="fill" class="w-full">
       <mat-label>Descripción del problema*</mat-label>
-      <textarea matInput formControlName="descripcion" rows="3"></textarea>
-      <mat-error *ngIf="form.get('descripcion')?.touched && form.get('descripcion')?.invalid">
+      <textarea matInput formControlName="descripcion_general" rows="3"></textarea>
+      <mat-error *ngIf="form.get('descripcion_general')?.touched && form.get('descripcion_general')?.invalid">
         Escribe una descripción
       </mat-error>
     </mat-form-field>
+    </ng-template>
 
     <!-- Criticidad -->
     <mat-form-field appearance="fill" class="w-full">
@@ -47,6 +58,7 @@
         Selecciona criticidad
       </mat-error>
     </mat-form-field>
+    
 
     <button
       mat-raised-button

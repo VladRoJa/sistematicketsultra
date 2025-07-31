@@ -372,7 +372,7 @@ export function generarOpcionesCategoriasDesdeTickets(
     tickets
       .map(ticket => {
         if (nivel === 2) return ticket.categoria_nivel2?.id;
-        if (nivel === 3) return ticket.subcategoria_nivel3?.id;
+        if (nivel === 3) return ticket.categoria_nivel2?.id;
         if (nivel === 4) return ticket.detalle_nivel4?.id;
         return null;
       })

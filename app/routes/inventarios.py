@@ -498,7 +498,11 @@ def listar_equipos():
         if not user:
             return error_response('Usuario no encontrado', 404)
 
-        tipo = request.args.get('tipo')  # 'aparato', 'sistema' o None
+        tipo = (request.args.get('tipo') or '').strip().lower()
+        if tipo in ['aparatos', 'aparato']:
+            tipo = 'aparatos'
+        elif tipo in ['sistemas', 'sistema']:
+            tipo = 'sistema'
         sucursal_id = request.args.get('sucursal_id', type=int)
 
         query = InventarioGeneral.query
@@ -636,7 +640,11 @@ def obtener_equipos():
             return jsonify({"mensaje": "Usuario no encontrado"}), 404
 
         sucursal_id = request.args.get('sucursal_id', type=int)
-        tipo = request.args.get('tipo', type=str)
+        tipo = (request.args.get('tipo') or '').strip().lower()
+        if tipo in ['aparatos', 'aparato']:
+            tipo = 'aparatos'
+        elif tipo in ['sistemas', 'sistema']:
+            tipo = 'sistema'
 
         query = InventarioSucursal.query
 

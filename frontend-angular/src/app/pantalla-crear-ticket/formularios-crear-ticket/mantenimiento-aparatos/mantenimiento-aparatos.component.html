@@ -13,29 +13,24 @@
     </mat-select>
   </mat-form-field>
 
-  <h3>🏋️‍♂️ Reportar Falla en Aparato</h3>
+  <h3>Reportar Falla en {{ nombreTipo }}</h3>
 
   <!-- Selector reutilizable para equipos -->
   <app-selector-equipo
     [sucursalId]="sucursalSeleccionada"
     tipo="aparato"
-    placeholder="Buscar aparato..."
+    [equipos]="equipos"
+    placeholder="Buscar {{ nombreTipo.toLowerCase() }}..."
     [mostrarEmoji]="true"
     (equipoSeleccionado)="onEquipoSeleccionado($event)">
   </app-selector-equipo>
 
-  <!-- Detalle -->
-  <mat-form-field *ngIf="parentForm.get('detalle')" appearance="fill" class="full-width">
-    <mat-label>Detalle del aparato</mat-label>
-    <input matInput [formControl]="parentForm.get('detalle')" placeholder="Detalle del aparato" />
-  </mat-form-field>
-
   <!-- Descripción del problema -->
-  <mat-form-field *ngIf="parentForm.get('descripcion')" appearance="fill" class="form-group-description">
-    <mat-label>📋 Descripción del problema</mat-label>
+  <mat-form-field *ngIf="parentForm.get('descripcion_aparato')" appearance="fill" class="form-group-description">
+    <mat-label>📋 Descripción del problemaaaaa</mat-label>
     <textarea
       matInput
-      [formControl]="parentForm.get('descripcion')"
+      [formControl]="parentForm.get('descripcion_aparato')"
       class="descripcion-textarea"
       rows="4"
       placeholder="Detalla lo ocurrido con claridad..."></textarea>

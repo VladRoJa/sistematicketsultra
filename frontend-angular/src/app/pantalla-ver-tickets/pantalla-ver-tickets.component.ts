@@ -45,7 +45,6 @@ import { CatalogoService } from '../services/catalogo.service';
 // Interfaces
 export interface Ticket {
   detalle_nivel4: any;
-  subcategoria_nivel3: any;
   categoria_nivel2: any;
   fecha_finalizado_original: any;
   fecha_creacion_original: any;
@@ -302,63 +301,7 @@ export class PantallaVerTicketsComponent implements OnInit {
 });
 
 
-    // ⬇️ Espera a que los tickets se hayan cargado (usa un pequeño delay para asegurarlo)
-    setTimeout(() => {
-      if (this.tickets.length > 0) {
-        const extraerUnicos = (campo: string) => {
-          if (campo === 'inventario') {
-            // Solo queremos el nombre del inventario (o '—' si está vacío)
-            return [...new Set(this.tickets.map(t => t.inventario?.nombre || '—'))]
-              .map(valor => ({
-                valor,
-                seleccionado: true
-              }));
-          } else {
-            return [...new Set(this.tickets.map(t => t[campo]))]
-              .map(valor => ({
-                valor,
-                seleccionado: true
-              }));
-          }
-        };
 
-        this.categoriasDisponibles = extraerUnicos('categoria');
-        this.estadosDisponibles = extraerUnicos('estado');
-        this.usuariosDisponibles = extraerUnicos('username');
-        console.log('👤 Usuarios:', this.usuariosDisponibles)
-        this.descripcionesDisponibles = extraerUnicos('descripcion');
-        this.criticidadesDisponibles = extraerUnicos('criticidad');
-        this.departamentosDisponibles = extraerUnicos('departamento');
-        this.subcategoriasDisponibles = extraerUnicos('subcategoria');
-        this.detallesDisponibles = extraerUnicos('detalle');
-        this.inventariosDisponibles = extraerUnicos('inventario');
-
-
-        console.log('🧩 Tickets cargados:', this.tickets.map(t => t.id));
-        console.log('📋 Categorías generadas:', this.categoriasDisponibles);
-
-        const columnasConTexto = [
-          'categoria',
-          'descripcion',
-          'username',
-          'estado',
-          'criticidad',
-          'departamento',
-          'subcategoria',
-          'detalle',
-          'inventario'
-        ];
-
-        columnasConTexto.forEach(col => {
-          this.inicializarTemporales(col);
-          this.inicializarFiltradas(col);
-        });
-
-        this.changeDetectorRef.detectChanges();
-      } else {
-        console.warn('⚠️ No hay tickets cargados todavía.');
-      }
-    }, 300);
 
     // 🔁 Escuchar eventos de refresco desde el servicio
     this.refrescoService.refrescarTabla$.subscribe(() => {
@@ -453,11 +396,9 @@ export class PantallaVerTicketsComponent implements OnInit {
     const disponibles = this[`${plural}Disponibles`];
     if (!Array.isArray(disponibles)) { return; }
 
-    const filtradas = disponibles.filter((item: any) => {
-      // Usa "etiqueta" si existe, si no usa "valor" (fallback para columnas normales)
-      const campoFiltro = typeof item.etiqueta === 'string' ? item.etiqueta : item.valor;
-      return campoFiltro?.toString().toLowerCase().includes(filtroTexto);
-    });
+      const filtradas = disponibles.filter((item: any) =>
+        (item.etiqueta || '').toLowerCase().includes(filtroTexto)
+      )
 
     // Mantén sincronizados lista y selección temporal
     this[`${plural}Filtradas`] = filtradas;
@@ -586,10 +527,14 @@ export class PantallaVerTicketsComponent implements OnInit {
 }
 
   onAbrirFiltro(columna: string, trigger: any) {
+    console.log(this.temporalSeleccionados['subcategoria'])
     console.log('🟢 Abriendo filtro para columna:', columna);
     this.inicializarTemporales(columna);
     this.filtrarOpcionesTexto(columna);
     setTimeout(() => trigger?.openMenu?.(), 0);
+      if (columna === 'subcategoria') {
+    console.log('🔵 temporalSeleccionados subcategoria', this.temporalSeleccionados['subcategoria']);
+  }
     
   }
 

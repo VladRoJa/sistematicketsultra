@@ -13,6 +13,8 @@ import { SelectorEquipoComponent } from 'src/app/components/selector-equipo/sele
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
+import { EquiposService } from 'src/app/services/equipos.service';
+
 
 import {
   limpiarCamposDependientes,
@@ -37,6 +39,7 @@ import {
 })
 export class MantenimientoAparatosComponent implements OnInit, OnDestroy {
   @Input() parentForm!: FormGroup;
+  @Input() tipo: 'aparato' | 'dispositivo' = 'aparato';
   @Output() formularioValido = new EventEmitter<any>();
 
   usuario: any = {};
@@ -44,10 +47,18 @@ export class MantenimientoAparatosComponent implements OnInit, OnDestroy {
   esAdmin: boolean = false;
   sucursales: any[] = [];
   sucursalSeleccionada: number = 1;
+  equipos: any[] = [];
+
+
 
   private valueChangesSub?: Subscription;
 
-  constructor(private sucursalesService: SucursalesService) {}
+  constructor(
+    private sucursalesService: SucursalesService,
+    private equiposService: EquiposService
+  ) 
+  
+  {}
 
   ngOnInit(): void {
     if (!this.parentForm) {
@@ -56,6 +67,7 @@ export class MantenimientoAparatosComponent implements OnInit, OnDestroy {
     }
 
     this.initUser();
+    this.cargarEquiposPorSucursal(this.sucursalSeleccionada);
 
     this.valueChangesSub = this.parentForm.valueChanges.subscribe(val => {
       emitirPayloadFormulario(this.parentForm, DEPARTAMENTO_IDS.mantenimiento, this.formularioValido);
@@ -87,9 +99,11 @@ export class MantenimientoAparatosComponent implements OnInit, OnDestroy {
     this.parentForm.get('detalle')?.reset();
     this.parentForm.get('subcategoria')?.reset();
     this.parentForm.get('aparato_id')?.reset();
+    this.cargarEquiposPorSucursal(sucursal_id); 
   }
 
   onEquipoSeleccionado(eq: any) {
+    console.log(this.parentForm.value)
     if (!eq) {
       this.parentForm.get('detalle')?.reset();
       this.parentForm.get('subcategoria')?.reset();
@@ -101,4 +115,21 @@ export class MantenimientoAparatosComponent implements OnInit, OnDestroy {
     this.parentForm.get('aparato_id')?.setValue(eq.id);
     limpiarCamposDependientes(this.parentForm, ['descripcion', 'necesita_refaccion', 'descripcion_refaccion']);
   }
+
+  get nombreTipo(): string {
+  return this.tipo === 'dispositivo' ? 'Dispositivo' : 'Aparato';
+}
+
+cargarEquiposPorSucursal(sucursalId: number) {
+  this.equiposService.obtenerEquipos({ sucursal_id: sucursalId, tipo: this.tipo }).subscribe({
+    next: (resp) => { 
+      console.log('Equipos recibidos:', resp); 
+      this.equipos = resp || []; 
+    },
+    error: (err) => { 
+      this.equipos = [];
+      console.error('Error al cargar equipos:', err);
+    }
+  });
+}
 }

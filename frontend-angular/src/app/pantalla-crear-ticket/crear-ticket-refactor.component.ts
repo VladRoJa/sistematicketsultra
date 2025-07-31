@@ -7,6 +7,8 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { environment } from 'src/environments/environment';
 import { CatalogoService } from 'src/app/services/catalogo.service';
 import { mostrarAlertaToast, mostrarAlertaErrorDesdeStatus } from '../utils/alertas';
+import { MantenimientoAparatosComponent } from './formularios-crear-ticket/mantenimiento-aparatos/mantenimiento-aparatos.component';
+
 
 // 👇 Angular Material
 import { CommonModule } from '@angular/common';
@@ -32,7 +34,8 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
     MatInputModule,
     MatCardModule,
     MatButtonModule,
-    MatProgressSpinnerModule
+    MatProgressSpinnerModule,
+    MantenimientoAparatosComponent
   ],
 })
 export class CrearTicketRefactorComponent implements OnInit, OnDestroy {
@@ -56,12 +59,49 @@ export class CrearTicketRefactorComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     // Inicializa el form antes de los niveles
     this.form = this.fb.group({
-      descripcion: ['', Validators.required],
-      criticidad: [null, Validators.required]
+      descripcion_general: [''],    // general
+      descripcion_aparato: [''],    // aparatos
+      criticidad: [null, Validators.required],
+      detalle: [''],
+      subcategoria: [''],
+      aparato_id: [''],
+      necesita_refaccion: [false],
+      descripcion_refaccion: [''],
+
     });
     // Inicia el árbol en nivel 1 (solo departamentos root, parent_id: null)
     this.cargarNivel(1, null, 'Departamento');
+     console.log('FIN ngOnInit');
   }
+
+
+  actualizarValidadoresDescripcion() {
+    try {
+      const general = this.form.get('descripcion_general');
+      const aparato = this.form.get('descripcion_aparato');
+      console.log('[actualizarValidadoresDescripcion] general:', general, 'aparato:', aparato);
+
+      if (!general || !aparato) {
+        console.warn('Uno de los controles no existe aún.');
+        return;
+      }
+
+      if (this.mostrarSubformAparatos) {
+        general.clearValidators();
+        general.updateValueAndValidity();
+        aparato.setValidators([Validators.required]);
+        aparato.updateValueAndValidity();
+      } else {
+        aparato.clearValidators();
+        aparato.updateValueAndValidity();
+        general.setValidators([Validators.required]);
+        general.updateValueAndValidity();
+      }
+    } catch (e) {
+      console.error('Error dentro de actualizarValidadoresDescripcion:', e);
+    }
+  }
+
 
  cargarNivel(nivel: number, parentId: number | null, etiqueta: string) {
   // Borra los niveles siguientes si eligen otro padre
@@ -69,9 +109,12 @@ export class CrearTicketRefactorComponent implements OnInit, OnDestroy {
 
   const controlName = `nivel_${nivel}`;
   // Solo agrega control si no existe
+  console.log('Antes de addControl:', controlName, this.form.contains(controlName));
   if (!this.form.contains(controlName)) {
     this.form.addControl(controlName, new FormControl('', Validators.required));
-  }
+    console.log('Control agregado:', controlName);
+  } else {
+  console.log('Ya existe el control:', controlName);}
 
   // Añade el nivel con loading
   this.niveles.push({
@@ -93,9 +136,10 @@ export class CrearTicketRefactorComponent implements OnInit, OnDestroy {
         : res;
       this.niveles[idx].loading = false;
 
-      // Suscribe cambios (sin usar observers)
+      // Suscribe cambios (sin usar observers)actualizarValidadoresDescripcion
       this.subs.push(
         this.niveles[idx].control.valueChanges.subscribe(val => {
+          console.log('ValueChange de', controlName, 'valor:', val, 'form:', this.form.value);
           // Borra niveles posteriores
           this.niveles = this.niveles.filter(n => n.nivel <= nivel);
           // Si selecciona, trae hijos si existen
@@ -106,6 +150,10 @@ export class CrearTicketRefactorComponent implements OnInit, OnDestroy {
               }
             });
           }
+        
+          if (this.form.contains('descripcion_general') && this.form.contains('descripcion_aparato')) {
+            this.actualizarValidadoresDescripcion();
+          }
         })
       );
     },
@@ -113,11 +161,31 @@ export class CrearTicketRefactorComponent implements OnInit, OnDestroy {
   });
 }
 
+public get mostrarSubformAparatos(): boolean {
+  // Asegúrate de obtener el valor del departamento seleccionado (nivel_1)
+  const nivel1 = this.form.get('nivel_1')?.value;
+  const nivel2 = this.form.get('nivel_2')?.value;
+
+  // Busca los objetos de las opciones seleccionadas
+  const dep = this.niveles[0]?.opciones.find(x => x.id === nivel1);
+  const cat = this.niveles[1]?.opciones.find(x => x.id === nivel2);
+
+  // Comprueba los nombres (ajusta a tus nombres exactos, puede ser id también)
+  return dep?.nombre?.toLowerCase() === 'mantenimiento'
+      && cat?.nombre?.toLowerCase() === 'aparatos';
+}
+
 
 enviar() {
   if (this.form.invalid) {
     this.form.markAllAsTouched();
-    mostrarAlertaToast('Faltan campos obligatorios');
+
+    const faltantes = this.getCamposInvalidos();
+    if (faltantes.length) {
+      mostrarAlertaToast(`Faltan campos obligatorios: ${faltantes.join(', ')}`, 'error');
+    } else {
+      mostrarAlertaToast('Faltan campos obligatorios', 'error');
+    }
     return;
   }
 
@@ -141,15 +209,19 @@ enviar() {
     }
   }
 
-  const body = {
-    descripcion: this.form.value.descripcion,
-    criticidad: this.form.value.criticidad,
-    departamento_id,  // <-- ahora sí es el que pide la FK
-    categoria,
-    subcategoria,
-    detalle,
-    clasificacion_id,
-  };
+    const descripcionFinal = this.mostrarSubformAparatos
+      ? this.form.value.descripcion_aparato
+      : this.form.value.descripcion_general;
+
+    const body = {
+      descripcion: descripcionFinal,
+      criticidad: this.form.value.criticidad,
+      departamento_id,
+      categoria,
+      subcategoria,
+      detalle,
+      clasificacion_id,
+    };
 
   console.log('BODY ENVIADO:', body);
 
@@ -171,6 +243,33 @@ enviar() {
   });
 }
 
+getCamposInvalidos(): string[] {
+  const campos: string[] = [];
+
+  // Campos fijos
+  if (this.form.get('descripcion')?.invalid) campos.push('Descripción');
+  if (this.form.get('criticidad')?.invalid) campos.push('Criticidad');
+
+  // Niveles dinámicos
+  for (const nivel of this.niveles) {
+    if (nivel.control.invalid) campos.push(nivel.etiqueta);
+  }
+
+  // Aparato (solo si es mantenimiento/aparatos)
+  if (this.mostrarSubformAparatos && this.form.get('aparato_id')?.invalid) {
+    campos.push('Aparato');
+  }
+
+  // Refacción
+  if (
+    this.form.get('necesita_refaccion')?.value &&
+    this.form.get('descripcion_refaccion')?.invalid
+  ) {
+    campos.push('Descripción técnica de la refacción');
+  }
+
+  return campos;
+}
 
 
   ngOnDestroy(): void {

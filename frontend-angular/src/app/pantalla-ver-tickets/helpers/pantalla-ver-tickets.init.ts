@@ -107,13 +107,25 @@ export function cargarTickets(component: PantallaVerTicketsComponent): void {
         }));
 
       // Catálogo nivel 3 (subcategoría)
+      // 1. LOG antes de filtrar/mapear
+      console.log('catalogo:', component.categoriasCatalogo);
+      console.log('idsNivel3:', idsNivel3);
+
+      // 2. Mapeo y LOG de cada elemento individual (para ver si cat.nombre viene bien)
       component.subcategoriasDisponibles = component.categoriasCatalogo
         .filter(cat => cat.nivel === 3 && idsNivel3.includes(cat.id))
-        .map(cat => ({
-          valor: cat.id,
-          etiqueta: cat.nombre,
-          seleccionado: true,
-        }));
+        .map(cat => {
+          console.log('cat:', cat); // <- cada subcategoría encontrada
+          return {
+            valor: cat.id,
+            etiqueta: cat.nombre,
+            seleccionado: true,
+          };
+        });
+
+      // 3. LOG después de mapear todo
+      console.log('subcategoriasDisponibles:', component.subcategoriasDisponibles);
+
 
       // Catálogo nivel 4 (detalle)
       component.detallesDisponibles = component.categoriasCatalogo
@@ -144,21 +156,7 @@ export function cargarTickets(component: PantallaVerTicketsComponent): void {
 
       actualizarVisibleTickets(component);
 
-      component.categoriasDisponibles = generarOpcionesCategoriasDesdeTickets(
-        ticketsProcesados,
-        component.categoriasCatalogo,
-        2
-      );
-      component.subcategoriasDisponibles = generarOpcionesCategoriasDesdeTickets(
-        ticketsProcesados,
-        component.categoriasCatalogo,
-        3
-      );
-      component.detallesDisponibles = generarOpcionesCategoriasDesdeTickets(
-        ticketsProcesados,
-        component.categoriasCatalogo,
-        4
-      );
+
 
       component.categoriasFiltradas = [...component.categoriasDisponibles];
       component.subcategoriasFiltradas = [...component.subcategoriasDisponibles];
