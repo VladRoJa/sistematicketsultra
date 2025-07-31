@@ -1,4 +1,4 @@
-# C:\Users\Vladimir\Documents\Sistema tickets\scripts\clean_aparatos_csv.py
+# scripts\clean_aparatos_csv.py
 
 import csv
 

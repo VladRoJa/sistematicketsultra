@@ -1,4 +1,4 @@
-// C:\Users\Vladimir\Documents\Sistema tickets\frontend-angular\src\app\pantalla-ver-tickets\helpers\pantalla-ver-tickets.exportacion.ts
+// frontend-angular\src\app\pantalla-ver-tickets\helpers\pantalla-ver-tickets.exportacion.ts
 
 import { PantallaVerTicketsComponent } from '../pantalla-ver-tickets.component';
 import { HttpParams } from '@angular/common/http';
@@ -11,7 +11,7 @@ import { obtenerFiltrosActivosParaBackend } from './pantalla-ver-tickets.filtros
 /** Exportar tickets filtrados a Excel */
 export function exportarTickets(component: PantallaVerTicketsComponent) {
   component.exportandoExcel = true;
-
+  console.log("🔍 temporalSeleccionados justo antes de exportar:", JSON.stringify(component.temporalSeleccionados, null, 2));
   const filtros = obtenerFiltrosActivosParaBackend(component);
 
   component.ticketService.exportarTickets(filtros).subscribe({

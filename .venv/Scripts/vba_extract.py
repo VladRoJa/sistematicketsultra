@@ -1,4 +1,4 @@
-#!C:\Users\Vladimir\Documents\Sistema tickets\.venv\Scripts\python.exe
+#!.venv\Scripts\python.exe
 
 ##############################################################################
 #

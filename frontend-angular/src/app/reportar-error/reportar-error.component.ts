@@ -1,4 +1,4 @@
-//C:\Users\Vladimir\Documents\Sistema tickets\frontend-angular\src\app\reportar-error\reportar-error.component.ts
+//frontend-angular\src\app\reportar-error\reportar-error.component.ts
 
 import { Component } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';

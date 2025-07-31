@@ -11,6 +11,7 @@ import { AdminGuard } from './guards/admin.guard';
 import { LayoutComponent } from './layout/layout.component';
 import { RegistrarAsistenciaComponent } from './registrar-asistencia/registrar-asistencia.component';
 import { AdminPanelComponent } from './admin-panel/admin-panel.component';
+import { CrearTicketRefactorComponent } from './pantalla-crear-ticket/crear-ticket-refactor.component';
 
 export const routes: Routes = [
   { path: '', redirectTo: 'login', pathMatch: 'full' },
@@ -20,6 +21,10 @@ export const routes: Routes = [
   component: AdminPanelComponent,
   canActivate: [AdminGuard]
   },
+  {
+  path: 'test-select',
+  loadComponent: () => import('./prueba-select/prueba-select.component').then(m => m.PruebaSelectComponent)
+},
 
   {
     path: '',
@@ -31,7 +36,7 @@ export const routes: Routes = [
         component: MainComponent,
         children: [
           { path: '', redirectTo: 'ver-tickets', pathMatch: 'full' },
-          { path: 'crear-ticket', component: PantallaCrearTicketComponent },
+          { path: 'crear-ticket', component: CrearTicketRefactorComponent  },
           { path: 'ver-tickets', component: PantallaVerTicketsComponent },
         ],
       },

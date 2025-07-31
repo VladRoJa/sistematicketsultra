@@ -1,4 +1,4 @@
-# C:\Users\Vladimir\Documents\Sistema tickets\app\utils\auth_utils.py
+# app\utils\auth_utils.py
 
 from flask import jsonify
 from flask_jwt_extended import verify_jwt_in_request, get_jwt_identity

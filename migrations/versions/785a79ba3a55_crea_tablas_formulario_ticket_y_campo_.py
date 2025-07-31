@@ -1,8 +1,8 @@
-"""Agrega sistemas_logicos y tipos_problema
+"""Crea tablas formulario_ticket y campo_formulario v
 
-Revision ID: 7df91c06a674
-Revises: dab51c397dcd
-Create Date: 2025-07-22 12:03:37.531827
+Revision ID: 785a79ba3a55
+Revises: 
+Create Date: 2025-07-28 20:08:11.642646
 
 """
 from alembic import op
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision = '7df91c06a674'
-down_revision = 'dab51c397dcd'
+revision = '785a79ba3a55'
+down_revision = None
 branch_labels = None
 depends_on = None
 

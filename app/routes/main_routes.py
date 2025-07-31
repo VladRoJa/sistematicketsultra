@@ -1,4 +1,4 @@
-#C:\Users\Vladimir\Documents\Sistema tickets\app\routes\main_routes.pyapp/routes/main_routes.py
+#app\routes\main_routes.pyapp/routes/main_routes.py
 
 
 from flask import Blueprint, render_template

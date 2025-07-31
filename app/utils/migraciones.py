@@ -1,4 +1,4 @@
-# C:\Users\Vladimir\Documents\Sistema tickets\app\utils\migraciones.py
+# app\utils\migraciones.py
 
 from sqlalchemy import text
 from sqlalchemy.engine import Engine

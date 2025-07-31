@@ -12,6 +12,7 @@ import { EliminarTicketDialogComponent } from '../eliminar-ticket-dialog/elimina
 import { environment } from 'src/environments/environment';
 import { ReportarErrorComponent } from '../reportar-error/reportar-error.component'; 
 
+
 @Component({
   selector: 'app-layout',
   standalone: true,

@@ -1,4 +1,4 @@
-#C:\Users\Vladimir\Documents\Sistema tickets\app\routes\auth_routes.py
+#app\routes\auth_routes.py
 
 
 # -------------------------------------------------------------------------------

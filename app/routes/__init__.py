@@ -1,4 +1,4 @@
-# C:\Users\Vladimir\Documents\Sistema tickets\app\routes\__init__.py
+# app\routes\__init__.py
 
 # ------------------------------------------------------------------------------
 # BLUEPRINTS: RUTAS REGISTRADAS

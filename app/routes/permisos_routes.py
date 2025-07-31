@@ -1,4 +1,4 @@
-# C:\Users\Vladimir\Documents\Sistema tickets\app\routes\permisos_routes.py
+# app\routes\permisos_routes.py
 
 # ------------------------------------------------------------------------------
 # BLUEPRINT: GESTIÓN DE PERMISOS DE USUARIOS A DEPARTAMENTOS

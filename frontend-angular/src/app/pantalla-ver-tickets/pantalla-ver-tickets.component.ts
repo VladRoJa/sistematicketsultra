@@ -1,4 +1,4 @@
-// C:\Users\Vladimir\Documents\Sistema tickets\frontend-angular\src\app\pantalla-ver-tickets\pantalla-ver-tickets.component.ts
+// frontend-angular\src\app\pantalla-ver-tickets\pantalla-ver-tickets.component.ts
 
 import { Component, OnInit, ChangeDetectorRef, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -38,10 +38,15 @@ import { refrescarDespuesDeCambioFiltro } from './helpers/refrescarDespuesDeCamb
 import { AsignarFechaModalComponent } from './modals/asignar-fecha-modal.component';
 import { cambiarEstadoTicket } from './helpers/pantalla-ver-tickets.estado-ticket';
 import { EditarFechaSolucionModalComponent } from './modals/editar-fecha-solucion-modal.component';
+import { CatalogoService } from '../services/catalogo.service';
+
 
 
 // Interfaces
 export interface Ticket {
+  detalle_nivel4: any;
+  subcategoria_nivel3: any;
+  categoria_nivel2: any;
   fecha_finalizado_original: any;
   fecha_creacion_original: any;
   id: number;
@@ -53,10 +58,10 @@ export interface Ticket {
   fecha_finalizado: string | null;
   departamento: string;
   departamento_id: number;
-  categoria: string;
+  categoria: number | null;
   fecha_solucion?: string | null;
-  subcategoria?: string | null;
-  detalle?: string | null;
+  subcategoria?: number | null;
+  detalle?: number | null;
   historial_fechas?: Array<{
     fecha: string;
     cambiadoPor: string;
@@ -70,7 +75,9 @@ export interface Ticket {
     descripcion: string;
   };
   equipo?: string;  
-  ubicacion?: string;     
+  ubicacion?: string;    
+  clasificacion_id?: number;  
+  clasificacion_nombre?: string;  
 
 
 
@@ -126,12 +133,13 @@ export class PantallaVerTicketsComponent implements OnInit {
   departamentos: any[] = [];
   usuarioEsEditorCorporativo: boolean = true;
   mostrarAvisoLimite: boolean = false;
-
+  clasificacionesMap: Record<number, string> = {};
   incluirSinFechaProgreso: boolean = false;
   incluirSinFechaFinalizado: boolean = false;
   filtroProgresoActivo: boolean = false;
   filtroFinalizadoActivo: boolean = false;
   filtroCreacionActivo: boolean = false;
+  categoriasCatalogo: { id: number, nombre: string, parent_id: number, nivel: number }[] = [];
 
   // Temporales
   fechaCreacionTemp = { start: null as Date | null, end: null as Date | null };
@@ -239,7 +247,8 @@ export class PantallaVerTicketsComponent implements OnInit {
     public changeDetectorRef: ChangeDetectorRef,
     public http: HttpClient,
     public dialog: MatDialog,
-    public refrescoService: RefrescoService
+    public refrescoService: RefrescoService,
+    public catalogoService: CatalogoService
   ) {}
   ngAfterViewInit(): void {
     const triggers = [
@@ -265,10 +274,10 @@ export class PantallaVerTicketsComponent implements OnInit {
   }
 
   async ngOnInit() {
-    console.log('Rol:', this.user?.rol, 'Sucursal:', this.user?.sucursal_id, 'Admin:', this.usuarioEsAdmin, 'Editor:', this.usuarioEsEditorCorporativo);
 
     await TicketInit.obtenerUsuarioAutenticado(this); 
-    await cargarDepartamentos(this);                 
+    await cargarDepartamentos(this);  
+    await this.cargarCatalogoCategorias();               
     TicketInit.cargarTickets(this);
 
     this.usuarioEsAdmin = (
@@ -281,6 +290,16 @@ export class PantallaVerTicketsComponent implements OnInit {
     this.user?.rol === 'EDITOR_CORPORATIVO' ||
     this.user?.sucursal_id === 100
   );
+
+  this.http.get<any>(`/api/catalogos/clasificaciones/todos`).subscribe(res => {
+  const lista = res.data || [];
+  this.clasificacionesMap = {};
+  lista.forEach((c: any) => {
+    this.clasificacionesMap[c.id] = c.nombre;
+  });
+  // Si quieres forzar un refresco de la vista (opcional):
+  this.changeDetectorRef.detectChanges();
+});
 
 
     // ⬇️ Espera a que los tickets se hayan cargado (usa un pequeño delay para asegurarlo)
@@ -380,6 +399,30 @@ export class PantallaVerTicketsComponent implements OnInit {
   actualizarSeleccionTemporal = (col: string, i: number, valor: boolean) => FiltrosGenericos.actualizarSeleccionTemporal(this, col, i, valor);
   alternarSeleccionTemporal = (col: string, valor: boolean) => FiltrosGenericos.alternarSeleccionTemporal(this, col, valor);
   isTodoSeleccionado = (col: string) => FiltrosGenericos.isTodoSeleccionado(this, col);
+
+
+    cargarCatalogoCategorias(): Promise<void> {
+      return new Promise((resolve, reject) => {
+        this.catalogoService.getCategorias().subscribe({
+          next: (res) => {
+            // 🔴 Cambia esto (haz el mapeo manual)
+            this.categoriasCatalogo = res.map((cat: any) => ({
+              id: cat.id,
+              nombre: cat.nombre,
+              parent_id: cat.parent_id,
+              nivel: cat.nivel
+            }));
+            resolve();
+          },
+          error: (err) => {
+            this.categoriasCatalogo = [];
+            reject(err);
+          }
+        });
+      });
+    }
+
+
   
   filtrarOpcionesTexto(columna: string) {
     const capitalizar = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
@@ -410,9 +453,11 @@ export class PantallaVerTicketsComponent implements OnInit {
     const disponibles = this[`${plural}Disponibles`];
     if (!Array.isArray(disponibles)) { return; }
 
-    const filtradas = disponibles.filter((item: any) =>
-      item.valor?.toLowerCase().includes(filtroTexto)
-    );
+    const filtradas = disponibles.filter((item: any) => {
+      // Usa "etiqueta" si existe, si no usa "valor" (fallback para columnas normales)
+      const campoFiltro = typeof item.etiqueta === 'string' ? item.etiqueta : item.valor;
+      return campoFiltro?.toString().toLowerCase().includes(filtroTexto);
+    });
 
     // Mantén sincronizados lista y selección temporal
     this[`${plural}Filtradas`] = filtradas;

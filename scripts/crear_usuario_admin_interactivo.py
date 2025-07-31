@@ -1,4 +1,4 @@
-# C:\Users\Vladimir\Documents\Sistema tickets\scripts\crear_usuario_admin_interactivo.py
+# scripts\crear_usuario_admin_interactivo.py
 
 from app import create_app
 from app.extensions import db

@@ -1,47 +1,22 @@
-.loader-ultragym {
-  margin-bottom: 18px;
+.ruta-seleccionada {
+  padding: 10px;
+  background-color: #f5f5f5;
+  border-radius: 4px;
+  margin-bottom: 15px;
+  font-size: 14px;
 }
-.breadcrumb-seleccion-pro {
-  margin-bottom: 1.1rem;
-  display: flex;
-  align-items: center;
+
+.ruta-item {
+  cursor: pointer;
+  color: #3f51b5;
+  font-weight: 500;
 }
-.breadcrumb-seleccion-pro mat-chip {
-  margin-right: 2px;
-  font-size: 1rem;
-  background: var(--mat-chip-background, #ececec);
+
+.ruta-item:hover {
+  text-decoration: underline;
 }
-.chip-icon { margin-right: 2px; }
-.mx-1 { margin: 0 2px; }
-.form-dinamico-jerarquico-pro {
-  display: flex;
-  flex-direction: column;
-  gap: 1.1rem;
-}
-.form-field-nivel {
+
+.form-niveles mat-form-field {
   width: 100%;
-}
-.input-active { border: 2px solid #2196f3; }
-.select-editing { background: #f5f5fc !important; }
-.resumen-ultragym {
-  margin-top: 1.4rem;
-}
-mat-card {
-  background: #fafbfd;
-}
-mat-card-title {
-  font-size: 1.14rem;
-  font-weight: 600;
-  margin-bottom: 5px;
-}
-mat-chip[color="success"] {
-  background: #c6f6d5 !important;
-  color: #175e32 !important;
-}
-.custom-select-panel {
-  max-height: 320px !important;
-}
-@media (max-width: 600px) {
-  .breadcrumb-seleccion-pro { font-size: .96rem; }
-  mat-card-title { font-size: 1.05rem; }
+  margin-bottom: 15px;
 }

@@ -1,4 +1,4 @@
-# C:\Users\Vladimir\Documents\Sistema tickets\run.py
+# run.py
 
 from dotenv import load_dotenv
 import os

@@ -1,4 +1,4 @@
-// C:\Users\Vladimir\Documents\Sistema tickets\frontend-angular\src\app\pantalla-ver-tickets\helpers\pantalla-ver-tickets.departamentos.ts
+// frontend-angular\src\app\pantalla-ver-tickets\helpers\pantalla-ver-tickets.departamentos.ts
 
 import { PantallaVerTicketsComponent } from '../pantalla-ver-tickets.component';
 

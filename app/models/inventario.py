@@ -1,4 +1,4 @@
-# C:\Users\Vladimir\Documents\Sistema tickets\app\models\inventario.py
+# app\models\inventario.py
 
 from datetime import datetime
 from app.extensions import db

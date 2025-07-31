@@ -1,4 +1,4 @@
-# C:\Users\Vladimir\Documents\Sistema tickets\app\controllers\auth_controller.py
+# app\controllers\auth_controller.py
 
 # -------------------------------------------------------------------------------
 # CONTROLADOR DE AUTENTICACIÓN CON JWT

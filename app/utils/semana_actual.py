@@ -1,4 +1,4 @@
-#C:\Users\Vladimir\Documents\Sistema tickets\app\utils\semana_actual.py
+#app\utils\semana_actual.py
 
 from datetime import date
 

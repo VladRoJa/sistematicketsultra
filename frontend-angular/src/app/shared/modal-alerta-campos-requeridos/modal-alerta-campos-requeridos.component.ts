@@ -1,4 +1,4 @@
-//C:\Users\Vladimir\Documents\Sistema tickets\frontend-angular\src\app\shared\modal-alerta-campos-requeridos\modal-alerta-campos-requeridos.component.ts
+//frontend-angular\src\app\shared\modal-alerta-campos-requeridos\modal-alerta-campos-requeridos.component.ts
 
 import { Component } from '@angular/core';
 import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';

@@ -1,4 +1,4 @@
-// C:\Users\Vladimir\Documents\Sistema tickets\frontend-angular\src\app\pantalla-ver-tickets\helpers\pantalla-ver-tickets.filtros.ts
+// frontend-angular\src\app\pantalla-ver-tickets\helpers\pantalla-ver-tickets.filtros.ts
 
 import { PantallaVerTicketsComponent } from '../pantalla-ver-tickets.component';
 import { filtrarTicketsConFiltros, regenerarFiltrosFiltradosDesdeTickets, limpiarFiltroColumnaConMapa, todasOpcionesDesmarcadas, removeDiacritics } from '../../utils/ticket-utils';
@@ -361,31 +361,45 @@ export function aplicarFiltroColumnaConReset(component: PantallaVerTicketsCompon
 export function obtenerFiltrosActivosParaBackend(component: PantallaVerTicketsComponent): any {
   const filtros: any = {};
 
-  const getSeleccionados = (lista: { valor: string, seleccionado: boolean }[]) =>
-    lista.filter(item => item.seleccionado).map(item => item.valor);
+  const campos = [
+    { nombre: 'estado', temp: component.temporalSeleccionados.estado },
+    { nombre: 'departamento_id', temp: component.temporalSeleccionados.departamento },
+    { nombre: 'criticidad', temp: component.temporalSeleccionados.criticidad },
+    { nombre: 'username', temp: component.temporalSeleccionados.username },
+    { nombre: 'categoria', temp: component.temporalSeleccionados.categoria },
+    { nombre: 'subcategoria', temp: component.temporalSeleccionados.subcategoria },
+    { nombre: 'detalle', temp: component.temporalSeleccionados.detalle },
+    { nombre: 'descripcion', temp: component.temporalSeleccionados.descripcion },
+    { nombre: 'inventario', temp: component.temporalSeleccionados.inventario }
+  ];
 
-  // Filtros múltiples (mismo nombre que espera el backend)
-  const estado = getSeleccionados(component.estadosFiltrados);
-  const departamento_id = getSeleccionados(component.departamentosFiltrados);
-  const criticidad = getSeleccionados(component.criticidadesFiltradas);
-  const username = getSeleccionados(component.usuariosFiltrados);
-  const categoria = getSeleccionados(component.categoriasFiltradas);
-  const subcategoria = getSeleccionados(component.subcategoriasFiltradas);
-  const detalle = getSeleccionados(component.detallesFiltrados);
-  const descripcion = getSeleccionados(component.descripcionesFiltradas);
-  const inventario = getSeleccionados(component.inventariosFiltrados);
+  campos.forEach(({ nombre, temp }) => {
+    if (!Array.isArray(temp)) return;
+    const seleccionados = temp.filter(i => i.seleccionado);
+    // No envíes el filtro si todos están seleccionados o ninguno
+    if (
+      seleccionados.length > 0 &&
+      seleccionados.length !== temp.length
+    ) {
+      // Si solo está seleccionado "—"
+      if (seleccionados.length === 1 && seleccionados[0].valor === '—') {
+        filtros[nombre] = ['—'];
+      } else {
+        // departamento_id necesita casteo numérico, los demás van como string
+        if (nombre === 'departamento_id') {
+          filtros[nombre] = seleccionados
+            .filter(i => i.valor !== '—')
+            .map(i => Number(i.valor));
+        } else {
+          filtros[nombre] = seleccionados
+            .map(i => i.valor)
+            .filter(v => v !== '—');
+        }
+      }
+    }
+  });
 
-  if (estado.length) filtros.estado = estado;
-  if (departamento_id.length) filtros.departamento_id = departamento_id;
-  if (criticidad.length) filtros.criticidad = criticidad;
-  if (username.length) filtros.username = username;
-  if (categoria.length) filtros.categoria = categoria;
-  if (subcategoria.length) filtros.subcategoria = subcategoria;
-  if (detalle.length) filtros.detalle = detalle;
-  if (descripcion.length) filtros.descripcion = descripcion;
-  if (inventario.length) filtros.inventario = getSeleccionados(component.inventariosFiltrados);
-
-  // ✅ Función segura para convertir a YYYY-MM-DD
+  // Fechas igual que antes
   const formatearFecha = (fecha: Date | null): string | null => {
     if (fecha instanceof Date && !isNaN(fecha.getTime())) {
       return fecha.toISOString().split("T")[0];
@@ -393,7 +407,6 @@ export function obtenerFiltrosActivosParaBackend(component: PantallaVerTicketsCo
     return null;
   };
 
-  // Fechas como strings en formato YYYY-MM-DD (solo si son válidas)
   const fechaCreacionStart = formatearFecha(component.rangoFechaCreacionSeleccionado.start);
   const fechaCreacionEnd = formatearFecha(component.rangoFechaCreacionSeleccionado.end);
   const fechaFinalStart = formatearFecha(component.rangoFechaFinalSeleccionado.start);
@@ -408,10 +421,7 @@ export function obtenerFiltrosActivosParaBackend(component: PantallaVerTicketsCo
   if (fechaProgresoStart) filtros.fecha_prog_desde = fechaProgresoStart;
   if (fechaProgresoEnd) filtros.fecha_prog_hasta = fechaProgresoEnd;
 
-  // Log opcional para depuración
-  console.log("📤 Filtros para exportar:", filtros);
+  console.log("📤 Filtros para exportar (backend):", filtros);
 
   return filtros;
 }
-
-

@@ -1,4 +1,4 @@
-//C:\Users\Vladimir\Documents\Sistema tickets\frontend-angular\src\main.ts
+//frontend-angular\src\main.ts
 
 import { bootstrapApplication } from '@angular/platform-browser';
 import { provideRouter, withHashLocation } from '@angular/router';
@@ -16,7 +16,7 @@ import { JwtInterceptor } from './app/interceptors/jwt.interceptor';
 bootstrapApplication(AppComponent, {
   providers: [
     provideAnimations(),
-    provideRouter(routes, withHashLocation()), // 🔧 Aquí el cambio
+    provideRouter(routes, withHashLocation()), 
     importProvidersFrom(MatDialogModule),
     provideHttpClient(withInterceptorsFromDi()),
     {

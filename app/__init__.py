@@ -1,4 +1,4 @@
-# C:\Users\Vladimir\Documents\Sistema tickets\app\__init__.py
+# app\__init__.py
 
 from flask import Flask, request
 from flask_cors import CORS
@@ -21,7 +21,7 @@ from app.routes.bloques_routes import bloques_bp
 from app.routes.asignacion_horario_routes import asignacion_bp
 from app.routes.catalogos_routes import catalogos_bp
 from app.routes.usuarios_routes import usuarios_bp
-
+from app.routes.formulario_ticket_routes import formulario_ticket_bp
 
 
 def create_app():
@@ -75,6 +75,7 @@ def create_app():
     app.register_blueprint(asignacion_bp, url_prefix='/api/asignaciones')
     app.register_blueprint(catalogos_bp, url_prefix='/api/catalogos')
     app.register_blueprint(usuarios_bp, url_prefix='/api/usuarios')
+    app.register_blueprint(formulario_ticket_bp, url_prefix='/api/formulario_ticket')
     
     app.config['DEBUG'] = True
     app.config['PROPAGATE_EXCEPTIONS'] = True

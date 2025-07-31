@@ -1,0 +1,29 @@
+<!-- src/app/shared/filtro-tabla-material/filtro-tabla-material.component.html -->
+<div style="min-width: 260px; padding: 10px 8px;">
+  <label style="font-weight: bold;">Filtrar {{label}}</label>
+  <mat-form-field style="width: 100%; margin: 8px 0;">
+    <input matInput placeholder="Buscar..." [(ngModel)]="textoBusqueda" (ngModelChange)="filtrarOpciones()" (click)="$event.stopPropagation()" />
+  </mat-form-field>
+  <div>
+    <mat-checkbox [(ngModel)]="seleccionarTodo" (change)="toggleSeleccionarTodo()" (click)="$event.stopPropagation()">
+      Seleccionar todo
+    </mat-checkbox>
+  </div>
+  <div style="max-height: 220px; overflow: auto; margin-bottom: 8px;">
+    <mat-checkbox
+      *ngFor="let opcion of opcionesFiltradas"
+      [(ngModel)]="opcion.seleccionado"
+      (change)="actualizarSeleccionTodo()"
+      (click)="$event.stopPropagation()"
+    >
+      {{ opcion.etiqueta }}
+    </mat-checkbox>
+    <div *ngIf="opcionesFiltradas.length === 0" style="color: #888; font-size: 0.95em; margin-top: 8px;">
+      Sin resultados
+    </div>
+  </div>
+  <div style="display: flex; gap: 12px; margin-top: 8px;">
+    <button mat-stroked-button color="primary" (click)="onAplicar()">Aplicar</button>
+    <button mat-stroked-button color="warn" (click)="onBorrarFiltro()">Borrar filtro</button>
+  </div>
+</div>

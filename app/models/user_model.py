@@ -1,4 +1,4 @@
-# C:\Users\Vladimir\Documents\Sistema tickets\app\models\user_model.py
+# app\models\user_model.py
 
 from werkzeug.security import check_password_hash
 from app.extensions import db

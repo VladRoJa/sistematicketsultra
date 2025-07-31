@@ -1,4 +1,4 @@
-//C:\Users\Vladimir\Documents\Sistema tickets\frontend-angular\src\app\pantalla-crear-ticket\formularios-crear-ticket\compras\compras.component.ts
+//frontend-angular\src\app\pantalla-crear-ticket\formularios-crear-ticket\compras\compras.component.ts
 
 import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, OnInit, Output, Input } from '@angular/core';

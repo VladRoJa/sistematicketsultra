@@ -1,4 +1,4 @@
-# C:\Users\Vladimir\Documents\Sistema tickets\app\controllers\ticket_controller.py
+# app\controllers\ticket_controller.py
 
 # -------------------------------------------------------------------------------
 # CONTROLADOR DE TICKETS CON JWT

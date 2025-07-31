@@ -307,3 +307,83 @@ export function removeDiacritics(texto: string): string {
   return texto.normalize("NFD").replace(/\p{Diacritic}/gu, "");
 }
 
+
+export function generarOpcionesPorCatalogo(
+  tickets: Ticket[],
+  campo: keyof Ticket,
+  catalogo: { id: number, nombre: string }[]
+): FiltroNumero[] {
+  // 1. Extrae los IDs únicos usados en los tickets para ese campo
+  const idsUnicos = Array.from(new Set(
+    tickets
+      .map(ticket => ticket[campo])
+      .filter(id => id !== null && id !== undefined)
+  ));
+
+  // 2. Sólo regresa los elementos del catálogo que SÍ aparecen en los tickets
+  return idsUnicos.map(id => {
+    const item = catalogo.find(c => c.id === id);
+    return {
+      valor: id,
+      etiqueta: item ? item.nombre : '—',
+      seleccionado: true
+    };
+  });
+}
+
+export function generarOpcionesClasificacionDesdeTickets(
+  tickets: Ticket[],
+  catalogo: { id: number, nombre: string }[]
+) {
+  // Saca todos los ids de clasificacion que están en tickets
+  const idsUnicos = Array.from(new Set(tickets.map(ticket => ticket.clasificacion_id)));
+  return idsUnicos.map(id => {
+    const item = catalogo.find(c => c.id == id);
+    return {
+      valor: id,
+      etiqueta: item ? item.nombre : '—',
+      seleccionado: true
+    };
+  });
+}
+
+export function buscarAncestroNivel(
+  clasificacionId: number,
+  nivelObjetivo: number,
+  catalogo: { id: number, nombre: string, parent_id: number | null, nivel: number }[]
+): { id: number, nombre: string } | null {
+  let actual = catalogo.find(c => c.id === clasificacionId);
+  while (actual && actual.nivel > nivelObjetivo) {
+    actual = catalogo.find(c => c.id === actual.parent_id);
+  }
+  return actual && actual.nivel === nivelObjetivo
+    ? { id: actual.id, nombre: actual.nombre }
+    : null;
+}
+
+// ticket-utils.ts
+export function generarOpcionesCategoriasDesdeTickets(
+  tickets: Ticket[],
+  catalogo: { id: number, nombre: string, nivel: number }[],
+  nivel: number
+) {
+  // IDs únicos para ese nivel
+  const idsUnicos = Array.from(new Set(
+    tickets
+      .map(ticket => {
+        if (nivel === 2) return ticket.categoria_nivel2?.id;
+        if (nivel === 3) return ticket.subcategoria_nivel3?.id;
+        if (nivel === 4) return ticket.detalle_nivel4?.id;
+        return null;
+      })
+      .filter(Boolean)
+  ));
+  return idsUnicos.map(id => {
+    const item = catalogo.find(c => c.id === id && c.nivel === nivel);
+    return {
+      valor: id,
+      etiqueta: item ? item.nombre : '—',
+      seleccionado: true
+    };
+  });
+}

@@ -1,4 +1,4 @@
-# C:\Users\Vladimir\Documents\Sistema tickets\app\routes\sucursales.py
+# app\routes\sucursales.py
 
 # ------------------------------------------------------------------------------
 # BLUEPRINT: SUCURSALES

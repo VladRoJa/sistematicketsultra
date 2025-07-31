@@ -108,7 +108,7 @@ export class DialogoInventarioComponent implements OnInit {
       this.tiposInventario = res;
       this.tiposFiltrados = res;
     });
-    this.catalogoService.getGrupoMucular().subscribe(res => {
+    this.catalogoService.getGrupoMuscular().subscribe(res => {
       this.gruposMusculares = res;
       this.gruposMuscularesFiltrados = res;
     });

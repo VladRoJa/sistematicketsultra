@@ -1,4 +1,4 @@
-//C:\Users\Vladimir\Documents\Sistema tickets\frontend-angular\src\app\pantalla-ver-tickets\modals\editar-fecha-solucion-modal.component.ts
+//frontend-angular\src\app\pantalla-ver-tickets\modals\editar-fecha-solucion-modal.component.ts
 
 import { Component, Inject } from '@angular/core';
 import { MatDialogRef, MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';

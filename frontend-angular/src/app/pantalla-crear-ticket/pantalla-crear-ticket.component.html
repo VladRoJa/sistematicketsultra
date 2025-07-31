@@ -1,62 +1,81 @@
-<!-- frontend-angular\src\app\pantalla-crear-ticket\pantalla-crear-ticket.component.html -->
-
+<!-- frontend-angular/src/app/pantalla-crear-ticket/pantalla-crear-ticket.component.html -->
 <mat-card class="ticket-container-global">
   <h2>🎫 Crear Nuevo Ticket</h2>
-
   <form [formGroup]="formularioCrearTicket" (ngSubmit)="enviarTicket()" class="formulario-ticket-container">
-
     <!-- Departamento -->
-    <mat-form-field appearance="fill">
-      <mat-label>🏢 Departamento</mat-label>
-      <mat-select formControlName="departamento">
-        <mat-option [value]="null">Selecciona un departamento</mat-option>
-        <mat-option *ngFor="let dep of departamentos" [value]="dep.id">{{ dep.nombre }}</mat-option>
-      </mat-select>
-    </mat-form-field>
+<mat-form-field appearance="fill">
+  <mat-label>🏢 Departamento</mat-label>
 
-    <!-- Tipo de Mantenimiento (solo si es Mantenimiento) -->
-    <mat-form-field appearance="fill" *ngIf="formularioCrearTicket.get('departamento')?.value === 1">
-      <mat-label>⚙️ Tipo de mantenimiento</mat-label>
-      <mat-select formControlName="tipoMantenimiento" (selectionChange)="onTipoMantenimientoChange($event.value)">
-        <mat-option [value]="null">Selecciona uno</mat-option>
-        <mat-option value="edificio">🏢 Edificio</mat-option>
-        <mat-option value="aparatos">🏋️ Aparatos</mat-option>
-      </mat-select>
-    </mat-form-field>
+  <mat-select formControlName="departamento">
+    <mat-option value="">Selecciona un departamento</mat-option>
 
-    <!-- Jerarquía dinámica: ultra pro -->
-    <ng-container *ngIf="mostrarJerarquiaDinamica">
-      <app-formulario-dinamico-clasificacion
-        [parentForm]="formularioCrearTicket"
-        [catalogoPlano]="clasificacionPlanoDepto"
-        [loading]="loadingClasificacion">
-      </app-formulario-dinamico-clasificacion>
+    <ng-container *ngIf="departamentos?.length">
+      <mat-option *ngFor="let dep of departamentos" [value]="dep.departamento_id">
+        {{ dep.id }} - {{ dep.nombre }} (nivel: {{ dep.nivel }})
+      </mat-option>
     </ng-container>
+  </mat-select>
+</mat-form-field>
 
+    <!-- Categoría -->
+    <mat-form-field appearance="fill" *ngIf="categorias.length > 0">
+      <mat-label>📁 Categoría</mat-label>
+      <mat-select formControlName="categoria">
+        <mat-option value="">Selecciona una categoría</mat-option>
+        <mat-option *ngFor="let cat of categorias" [value]="cat.id">{{ cat.nombre }}</mat-option>
+      </mat-select>
+    </mat-form-field>
+    <!-- Subcategoría -->
+    <mat-form-field appearance="fill" *ngIf="subcategorias.length > 0">
+      <mat-label>🗂️ Subcategoría</mat-label>
+      <mat-select formControlName="subcategoria">
+        <mat-option value="">Selecciona una subcategoría</mat-option>
+        <mat-option *ngFor="let sub of subcategorias" [value]="sub.id">{{ sub.nombre }}</mat-option>
+      </mat-select>
+    </mat-form-field>
+    <!-- Detalle específico -->
+    <mat-form-field appearance="fill" *ngIf="detalles.length > 0">
+      <mat-label>📌 Detalle específico</mat-label>
+      <mat-select formControlName="detalle">
+        <mat-option value="">Selecciona un detalle</mat-option>
+        <mat-option *ngFor="let det of detalles" [value]="det.id">{{ det.nombre }}</mat-option>
+      </mat-select>
+    </mat-form-field>
     <!-- Nivel de criticidad -->
     <mat-form-field appearance="fill">
       <mat-label>🔥 Nivel de criticidad</mat-label>
       <mat-select formControlName="criticidad">
-        <mat-option *ngFor="let nivel of [1,2,3,4,5]" [value]="nivel">
+        <mat-option *ngFor="let nivel of nivelesCriticidad" [value]="nivel">
           Nivel {{ nivel }}
         </mat-option>
       </mat-select>
     </mat-form-field>
-
-    <!-- Campo descripción, sugerido debajo de jerarquía -->
-    <mat-form-field appearance="fill" class="w-full" *ngIf="mostrarJerarquiaDinamica">
+    <!-- Descripción -->
+    <mat-form-field appearance="fill" class="w-full">
       <mat-label>📝 Descripción del problema</mat-label>
-      <textarea
-        matInput
-        formControlName="descripcion"
-        rows="4"
-        placeholder="Detalla lo ocurrido con claridad..."></textarea>
+      <textarea matInput formControlName="descripcion" rows="4" placeholder="Detalla lo ocurrido con claridad..."></textarea>
     </mat-form-field>
-
-    <button mat-raised-button color="primary" type="submit" class="btn-submit" [disabled]="formularioCrearTicket.invalid || loadingClasificacion">
+    <button mat-raised-button color="primary" type="submit" class="btn-submit"
+      [disabled]="formularioCrearTicket.invalid || loading">
       <mat-icon>send</mat-icon> Crear Ticket
     </button>
   </form>
-
-  <p *ngIf="mensaje" class="mensaje">{{ mensaje }}</p>
 </mat-card>
+
+
+<div style="background: #fff2; color: #222; font-size: 22px;">
+  <b>TEST DE DEPARTAMENTOS:</b>
+<div *ngFor="let dep of departamentos; let i = index">
+  <b>{{ i }}:</b> {{ dep | json }}
+</div>
+
+
+
+<mat-form-field appearance="fill">
+  <mat-label>🧪 Departamento Dummy</mat-label>
+  <mat-select>
+    <mat-option *ngFor="let dep of departamentosDummy" [value]="dep.departamento_id">
+      {{ dep.nombre }} (nivel: {{ dep.nivel }})
+    </mat-option>
+  </mat-select>
+</mat-form-field>

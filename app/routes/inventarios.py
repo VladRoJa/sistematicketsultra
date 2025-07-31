@@ -1,4 +1,4 @@
-# C:\Users\Vladimir\Documents\Sistema tickets\app\routes\inventarios.py
+# app\routes\inventarios.py
 
 import base64
 from io import BytesIO

@@ -1,4 +1,4 @@
-#C:\Users\Vladimir\Documents\Sistema tickets\app\utils\cloudinary_upload.py
+#app\utils\cloudinary_upload.py
 
 import cloudinary
 import cloudinary.uploader

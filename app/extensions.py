@@ -1,4 +1,4 @@
-# C:\Users\Vladimir\Documents\Sistema tickets\app\extensions.py
+# app\extensions.py
 
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate

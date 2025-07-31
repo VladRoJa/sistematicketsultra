@@ -33,6 +33,9 @@ class Ticket(db.Model):
     ubicacion = db.Column(db.String(100), nullable=True)
     equipo = db.Column(db.String(100), nullable=True)
     clasificacion_id = db.Column(db.Integer, db.ForeignKey('catalogo_clasificacion.id'), nullable=True)
+    categoria = db.Column(db.String(100), nullable=True)
+    subcategoria = db.Column(db.String(100), nullable=True)
+    detalle = db.Column(db.String(100), nullable=True)
     
 
     
@@ -95,7 +98,7 @@ class Ticket(db.Model):
         
     # ─── Métodos CRUD ───────────────────────────────────────
     @classmethod
-    def create_ticket(cls, descripcion, username, sucursal_id, departamento_id, criticidad,  clasificacion_id, aparato_id=None, problema_detectado=None, necesita_refaccion=False, descripcion_refaccion=None, url_evidencia=None, ubicacion=None, equipo=None):
+    def create_ticket(cls, descripcion, username, sucursal_id, departamento_id, criticidad, clasificacion_id, categoria=None, subcategoria=None, detalle=None, aparato_id=None, problema_detectado=None, necesita_refaccion=False, descripcion_refaccion=None, url_evidencia=None, ubicacion=None, equipo=None):
         ticket = cls(
             descripcion=descripcion,
             username=username,
@@ -103,6 +106,9 @@ class Ticket(db.Model):
             departamento_id=departamento_id,
             criticidad=criticidad,
             clasificacion_id=clasificacion_id,
+            categoria=categoria,
+            subcategoria=subcategoria,
+            detalle=detalle,
             aparato_id=aparato_id,
             problema_detectado=problema_detectado,
             necesita_refaccion=necesita_refaccion,

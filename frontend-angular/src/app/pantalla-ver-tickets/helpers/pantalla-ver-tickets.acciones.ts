@@ -1,4 +1,4 @@
-// C:\Users\Vladimir\Documents\Sistema tickets\frontend-angular\src\app\pantalla-ver-tickets\helpers\pantalla-ver-tickets.acciones.ts
+// frontend-angular\src\app\pantalla-ver-tickets\helpers\pantalla-ver-tickets.acciones.ts
 
 import { PantallaVerTicketsComponent, Ticket } from '../pantalla-ver-tickets.component';
 import { exportarTickets as exportarTicketsExcel } from './pantalla-ver-tickets.exportacion';

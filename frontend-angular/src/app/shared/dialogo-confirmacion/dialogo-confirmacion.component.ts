@@ -1,4 +1,4 @@
-//C:\Users\Vladimir\Documents\Sistema tickets\frontend-angular\src\app\shared\dialogo-confirmacion\dialogo-confirmacion.component.ts
+//frontend-angular\src\app\shared\dialogo-confirmacion\dialogo-confirmacion.component.ts
 
 import { Component, Inject } from '@angular/core';
 import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';

@@ -1,4 +1,4 @@
-# C:\Users\Vladimir\Documents\Sistema tickets\app\models\permiso_model.py
+# app\models\permiso_model.py
 
 # ------------------------------------------------------------------------------
 # MODELO: PERMISOS DE USUARIOS SOBRE DEPARTAMENTOS

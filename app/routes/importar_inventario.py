@@ -1,4 +1,4 @@
-# C:\Users\Vladimir\Documents\Sistema tickets\app\routes\importar_inventario.py
+# app\routes\importar_inventario.py
 
 # app/routes/importar_inventario.py
 

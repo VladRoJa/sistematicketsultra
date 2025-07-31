@@ -39,6 +39,7 @@ export class ClasificacionCrudComponent implements OnInit {
   loading = false;
   mostrarFormulario = false;
   todasLasClasificaciones: ClasificacionNode[] = [];
+  departamentoSeleccionado: number = 1;
 
   form: FormGroup;
   modo: 'crear' | 'editar' = 'crear';
@@ -78,21 +79,22 @@ export class ClasificacionCrudComponent implements OnInit {
 
 cargarClasificaciones() {
   this.loading = true;
-  this.catalogoService.listarElemento('clasificaciones').subscribe({
-      next: (items: ClasificacionNode[]) => {
-        console.log('Clasificaciones planas:', items);
-        // ¡Asegura aquí!
-        items.forEach(item => { if (!item.hijos) item.hijos = []; });
-        this.clasificaciones = this.armarArbolClasificaciones(items);
-        this.todasLasClasificaciones = items; // <- plano
-        this.loading = false;
-      },
+  // Si quieres mostrar TODO, no pases el parámetro:
+  this.catalogoService.getClasificacionesArbol().subscribe({
+    next: (todosLosArboles: any[]) => {
+      // Junta todos los árboles raíz en un solo array de nodos raíz
+      this.clasificaciones = todosLosArboles.flatMap(dep => dep.arbol);
+      this.loading = false;
+      console.log("Nodos enviados al árbol:", this.clasificaciones);
+    },
     error: err => {
       mostrarAlertaToast('Error al cargar clasificaciones', 'error');
       this.loading = false;
     }
   });
 }
+
+
 
   /**
    * Convierte el array plano a jerárquico para el árbol.

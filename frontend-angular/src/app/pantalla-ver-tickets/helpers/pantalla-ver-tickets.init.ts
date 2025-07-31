@@ -1,10 +1,15 @@
-// C:\Users\Vladimir\Documents\Sistema tickets\frontend-angular\src\app\pantalla-ver-tickets\helpers\pantalla-ver-tickets.init.ts
+// frontend-angular\src\app\pantalla-ver-tickets\helpers\pantalla-ver-tickets.init.ts
 
 import { PantallaVerTicketsComponent, ApiResponse, Ticket } from '../pantalla-ver-tickets.component';
 import { HttpHeaders } from '@angular/common/http';
-import { generarOpcionesDisponiblesDesdeTickets, regenerarFiltrosFiltradosDesdeTickets } from '../../utils/ticket-utils';
+import { generarOpcionesCategoriasDesdeTickets, generarOpcionesDisponiblesDesdeTickets, regenerarFiltrosFiltradosDesdeTickets } from '../../utils/ticket-utils';
 import { environment } from 'src/environments/environment';
 import { hayFiltrosActivos } from './pantalla-ver-tickets.filtros';
+import { generarOpcionesClasificacionDesdeTickets, buscarAncestroNivel } from '../../utils/ticket-utils';
+
+
+
+
 
 export async function obtenerUsuarioAutenticado(component: PantallaVerTicketsComponent): Promise<void> {
   const token = localStorage.getItem('token');
@@ -43,26 +48,93 @@ export function cargarTickets(component: PantallaVerTicketsComponent): void {
 
   component.ticketService.getTickets(100, 0).subscribe({
     next: (data: ApiResponse) => {
-      const ticketsProcesados = data.tickets.map(ticket => ({
-        ...ticket,
-        fecha_creacion_original: ticket.fecha_creacion,
-        fecha_finalizado_original: ticket.fecha_finalizado,
-        criticidad: ticket.criticidad || 1,
-        estado: ticket.estado?.toLowerCase().trim(),
-        departamento: component.departamentoService.obtenerNombrePorId(ticket.departamento_id),
-        fecha_creacion: ticket.fecha_creacion !== 'N/A' ? ticket.fecha_creacion : null,
-        fecha_en_progreso: ticket.fecha_en_progreso && ticket.fecha_en_progreso !== 'N/A' ? ticket.fecha_en_progreso : null,
+      // 1. Procesamos los tickets, agregando referencias a nivel2, nivel3 y nivel4
+      const ticketsProcesados = data.tickets.map(ticket => {
+        const catNivel2 = buscarAncestroNivel(ticket.clasificacion_id, 2, component.categoriasCatalogo);
+        const catNivel3 = buscarAncestroNivel(ticket.clasificacion_id, 3, component.categoriasCatalogo);
+        const catNivel4 = buscarAncestroNivel(ticket.clasificacion_id, 4, component.categoriasCatalogo);
 
-        fecha_finalizado: ticket.fecha_finalizado !== 'N/A' ? ticket.fecha_finalizado : null,
-        historial_fechas: typeof ticket.historial_fechas === "string"
-          ? JSON.parse(ticket.historial_fechas)
-          : ticket.historial_fechas || []
-      }));
+        return {
+          ...ticket,
+          fecha_creacion_original: ticket.fecha_creacion,
+          fecha_finalizado_original: ticket.fecha_finalizado,
+          criticidad: ticket.criticidad || 1,
+          estado: ticket.estado?.toLowerCase().trim(),
+          departamento: component.departamentoService.obtenerNombrePorId(ticket.departamento_id),
+          fecha_creacion: ticket.fecha_creacion !== 'N/A' ? ticket.fecha_creacion : null,
+          fecha_en_progreso: ticket.fecha_en_progreso && ticket.fecha_en_progreso !== 'N/A' ? ticket.fecha_en_progreso : null,
+          fecha_finalizado: ticket.fecha_finalizado !== 'N/A' ? ticket.fecha_finalizado : null,
+          historial_fechas: typeof ticket.historial_fechas === "string"
+            ? JSON.parse(ticket.historial_fechas)
+            : ticket.historial_fechas || [],
+          categoria_nivel2: catNivel2,
+          subcategoria_nivel3: catNivel3,
+          detalle_nivel4: catNivel4,
+        };
+      });
 
-      // 🔍 Logs de depuración
-      console.log("🔎 Tickets recibidos:", data.tickets.map(t => t.id));
-      console.log("📦 Tickets procesados:", ticketsProcesados.map(t => t.id));
 
+            // ---- Opciones de filtro DEPARTAMENTO ----
+      component.departamentosDisponibles = Array.from(
+        new Set(ticketsProcesados.map(t => `${t.departamento_id}|${t.departamento}`))
+      )
+      .filter(raw => raw.split('|')[0] && raw.split('|')[0] !== 'null') // Filtra vacíos/null
+      .map(raw => {
+        const [valor, etiqueta] = raw.split('|');
+        return {
+          valor: Number(valor),
+          etiqueta: etiqueta || valor,
+          seleccionado: true
+        };
+      });
+      component.departamentosFiltrados = [...component.departamentosDisponibles];
+      component.temporalSeleccionados['departamento'] = [...component.departamentosDisponibles];
+
+
+      // --- FILTROS POR CATÁLOGO ---
+      // IDs usados por los tickets
+      const idsNivel2 = Array.from(new Set(ticketsProcesados.map(t => t.categoria_nivel2?.id).filter(Boolean)));
+      const idsNivel3 = Array.from(new Set(ticketsProcesados.map(t => t.subcategoria_nivel3?.id).filter(Boolean)));
+      const idsNivel4 = Array.from(new Set(ticketsProcesados.map(t => t.detalle_nivel4?.id).filter(Boolean)));
+
+      // Catálogo nivel 2 (categoría)
+      component.categoriasDisponibles = component.categoriasCatalogo
+        .filter(cat => cat.nivel === 2 && idsNivel2.includes(cat.id))
+        .map(cat => ({
+          valor: cat.id,
+          etiqueta: cat.nombre,
+          seleccionado: true,
+        }));
+
+      // Catálogo nivel 3 (subcategoría)
+      component.subcategoriasDisponibles = component.categoriasCatalogo
+        .filter(cat => cat.nivel === 3 && idsNivel3.includes(cat.id))
+        .map(cat => ({
+          valor: cat.id,
+          etiqueta: cat.nombre,
+          seleccionado: true,
+        }));
+
+      // Catálogo nivel 4 (detalle)
+      component.detallesDisponibles = component.categoriasCatalogo
+        .filter(cat => cat.nivel === 4 && idsNivel4.includes(cat.id))
+        .map(cat => ({
+          valor: cat.id,
+          etiqueta: cat.nombre,
+          seleccionado: true,
+        }));
+
+        component.categoriasFiltradas = [...component.categoriasDisponibles];
+        component.subcategoriasFiltradas = [...component.subcategoriasDisponibles];
+        component.detallesFiltrados = [...component.detallesDisponibles];
+        if (!component.temporalSeleccionados['categoria']) component.temporalSeleccionados['categoria'] = [];
+        if (!component.temporalSeleccionados['subcategoria']) component.temporalSeleccionados['subcategoria'] = [];
+        if (!component.temporalSeleccionados['detalle']) component.temporalSeleccionados['detalle'] = [];
+
+
+
+
+      // El resto igual que antes
       component.ticketsCompletos = [...ticketsProcesados];
       component.tickets = [...ticketsProcesados];
       component.filteredTickets = [...ticketsProcesados];
@@ -70,24 +142,32 @@ export function cargarTickets(component: PantallaVerTicketsComponent): void {
       component.totalTickets = ticketsProcesados.length;
       component.totalPagesCount = Math.ceil(component.totalTickets / component.itemsPerPage);
 
-      console.log("📄 Página actual:", component.page);
-      console.log("👁 Antes de actualizarVisibleTickets - filtered:", component.filteredTickets.map(t => t.id));
-
       actualizarVisibleTickets(component);
 
-      console.log("👁 Después de actualizarVisibleTickets - visible:", component.visibleTickets.map(t => t.id));
+      component.categoriasDisponibles = generarOpcionesCategoriasDesdeTickets(
+        ticketsProcesados,
+        component.categoriasCatalogo,
+        2
+      );
+      component.subcategoriasDisponibles = generarOpcionesCategoriasDesdeTickets(
+        ticketsProcesados,
+        component.categoriasCatalogo,
+        3
+      );
+      component.detallesDisponibles = generarOpcionesCategoriasDesdeTickets(
+        ticketsProcesados,
+        component.categoriasCatalogo,
+        4
+      );
 
-      component.changeDetectorRef.detectChanges();
+      component.categoriasFiltradas = [...component.categoriasDisponibles];
+      component.subcategoriasFiltradas = [...component.subcategoriasDisponibles];
+      component.detallesFiltrados = [...component.detallesDisponibles];
 
-      component.categoriasDisponibles = generarOpcionesDisponiblesDesdeTickets(ticketsProcesados, 'categoria');
-      component.descripcionesDisponibles = generarOpcionesDisponiblesDesdeTickets(ticketsProcesados, 'descripcion');
-      component.usuariosDisponibles = generarOpcionesDisponiblesDesdeTickets(ticketsProcesados, 'username');
-      component.estadosDisponibles = generarOpcionesDisponiblesDesdeTickets(ticketsProcesados, 'estado');
-      component.criticidadesDisponibles = generarOpcionesDisponiblesDesdeTickets(ticketsProcesados, 'criticidad');
-      component.departamentosDisponibles = generarOpcionesDisponiblesDesdeTickets(ticketsProcesados, 'departamento_id');
-      component.subcategoriasDisponibles = generarOpcionesDisponiblesDesdeTickets(ticketsProcesados, 'subcategoria');
-      component.detallesDisponibles = generarOpcionesDisponiblesDesdeTickets(ticketsProcesados, 'detalle');
-      component.inventariosDisponibles = generarOpcionesDisponiblesDesdeTickets(ticketsProcesados, 'inventario');
+      component.temporalSeleccionados['categoria'] = [...component.categoriasDisponibles];
+      component.temporalSeleccionados['subcategoria'] = [...component.subcategoriasDisponibles];
+      component.temporalSeleccionados['detalle'] = [...component.detallesDisponibles];
+
 
       regenerarFiltrosFiltradosDesdeTickets(
         component.filteredTickets,
@@ -103,16 +183,18 @@ export function cargarTickets(component: PantallaVerTicketsComponent): void {
         component
       );
 
+      // Sincroniza filtrados iniciales
       component.categoriasFiltradas = [...component.categoriasDisponibles];
+      component.subcategoriasFiltradas = [...component.subcategoriasDisponibles];
+      component.detallesFiltrados = [...component.detallesDisponibles];
       component.descripcionesFiltradas = [...component.descripcionesDisponibles];
       component.usuariosFiltrados = [...component.usuariosDisponibles];
       component.estadosFiltrados = [...component.estadosDisponibles];
       component.criticidadesFiltradas = [...component.criticidadesDisponibles];
       component.departamentosFiltrados = [...component.departamentosDisponibles];
-      component.subcategoriasFiltradas = [...component.subcategoriasDisponibles];
-      component.detallesFiltrados = [...component.detallesDisponibles];
       component.inventariosFiltrados = [...component.inventariosDisponibles];
 
+      component.changeDetectorRef.detectChanges();
       component.loading = false;
     },
     error: () => {
@@ -121,6 +203,7 @@ export function cargarTickets(component: PantallaVerTicketsComponent): void {
     }
   });
 }
+
 
 
 export function actualizarVisibleTickets(component: PantallaVerTicketsComponent): void {

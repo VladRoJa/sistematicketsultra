@@ -1,4 +1,4 @@
-# C:\Users\Vladimir\Documents\Sistema tickets\app\routes\departamentos_routes.py
+# app\routes\departamentos_routes.py
 
 # ------------------------------------------------------------------------------
 # BLUEPRINT: DEPARTAMENTOS

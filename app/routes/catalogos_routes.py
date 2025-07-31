@@ -37,6 +37,8 @@ CAT_MODELS = {
     'gruposmusculares': GrupoMuscular,
     'tipos': TipoInventario,
     'clasificaciones': CatalogoClasificacion,
+    'categorias': CatalogoClasificacion,
+    
 }
 
 # ══════════════════════════════════════════════
@@ -295,40 +297,45 @@ def exportar_catalogo(catalogo):
 @jwt_required()
 def arbol_clasificaciones():
     departamento_id = request.args.get('departamento_id', type=int)
-    if not departamento_id:
-        return respuesta_ok(message="Falta departamento_id", code=400)
-    
-    def build_tree(parent_id, nivel=1):
-        nodos = CatalogoClasificacion.query.filter_by(parent_id=parent_id, departamento_id=departamento_id).all()
+
+    def build_tree(parent_id, departamento_id, nivel=1):
+        q = CatalogoClasificacion.query.filter_by(parent_id=parent_id)
+        if departamento_id:
+            q = q.filter_by(departamento_id=departamento_id)
+        nodos = q.all()
         return [
             {
                 "id": n.id,
                 "nombre": n.nombre,
                 "nivel": n.nivel,
                 "parent_id": n.parent_id,
-                "hijos": build_tree(n.id, n.nivel + 1)
+                "departamento_id": n.departamento_id,
+                "hijos": build_tree(n.id, departamento_id, n.nivel + 1)
             } for n in nodos
         ]
-    # Raíces (parent_id=None)
-    arbol = build_tree(None)
+    
+    if departamento_id:
+        arbol = build_tree(None, departamento_id)
+        return respuesta_ok(arbol)
+    else:
+        # TODOS los árboles raíz, uno por departamento
+        # primero encuentra todos los departamentos únicos
+        deptos = db.session.query(CatalogoClasificacion.departamento_id).distinct().all()
+        arbol = []
+        for d in deptos:
+            dep_id = d[0]
+            subarbol = build_tree(None, dep_id)
+            arbol.append({
+                "departamento_id": dep_id,
+                "arbol": subarbol
+            })
     return respuesta_ok(arbol)
 
 
-@catalogos_bp.route('/clasificaciones', methods=['GET'])
+
+@catalogos_bp.route('/clasificaciones/todos', methods=['GET'])
 @jwt_required()
-def clasificaciones_plano():
-    departamento_id = request.args.get('departamento_id', type=int)
-    if not departamento_id:
-        return respuesta_ok(message="Falta departamento_id", code=400)
-    # Filtra por departamento_id
-    nodos = CatalogoClasificacion.query.filter_by(departamento_id=departamento_id).all()
-    resultado = [
-        {
-            "id": n.id,
-            "nombre": n.nombre,
-            "nivel": n.nivel,
-            "parent_id": n.parent_id,
-            "departamento_id": n.departamento_id,
-        } for n in nodos
-    ]
-    return respuesta_ok(resultado)
+def todas_las_clasificaciones():
+    clasifs = CatalogoClasificacion.query.all()
+    data = [{'id': c.id, 'nombre': c.nombre} for c in clasifs]
+    return jsonify({'data': data})

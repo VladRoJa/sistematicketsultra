@@ -1,4 +1,4 @@
-# C:\Users\Vladimir\Documents\Sistema tickets\ver_endpoints.py
+# ver_endpoints.py
 
 from app import create_app
 

@@ -1,4 +1,4 @@
-<!-- C:\Users\Vladimir\Documents\Sistema tickets\frontend-angular\src\app\pantalla-ver-tickets\pantalla-ver-tickets.component.html -->
+<!-- frontend-angular\src\app\pantalla-ver-tickets\pantalla-ver-tickets.component.html -->
 <div class="table-container" *ngIf="!loading">
   <table>
     <thead>
@@ -54,7 +54,7 @@
                   [name]="'cat_' + i"
                   (click)="$event.stopPropagation()"
                 >
-                  {{ cat.valor }}
+                  {{ cat.etiqueta }}
                 </mat-checkbox>
               </div>
 
@@ -526,7 +526,7 @@
                             (change)="actualizarSeleccionTemporal('subcategoria', i, $event.checked)"
                             [name]="'subcat_' + i"
                             (click)="$event.stopPropagation()">
-                {{ item.valor }}
+                {{ item.etiqueta }}
               </mat-checkbox>
               </div>
               <div class="menu-botones-fijos">
@@ -571,7 +571,7 @@
                             (change)="actualizarSeleccionTemporal('detalle', i, $event.checked)"
                             [name]="'detalle_' + i"
                             (click)="$event.stopPropagation()">
-                {{ item.valor }}
+                {{ item.etiqueta }}
               </mat-checkbox>
               </div>
               <div class="menu-botones-fijos">
@@ -600,7 +600,7 @@
     <tbody>
       <tr *ngFor="let ticket of visibleTickets">
         <td>{{ ticket.id }}</td>
-        <td>{{ ticket.categoria }}</td>
+        <td>{{ ticket.jerarquia_clasificacion[1] || '—' }}</td> 
         <td>{{ getNombreEquipoOInventario(ticket) }}</td>
         <td>{{ ticket.descripcion }}</td>
         <td>{{ ticket.username }}</td>
@@ -610,8 +610,8 @@
         <td>{{ ticket.fecha_en_progreso }}</td>
         <td>{{ ticket.fecha_finalizado }}</td>
         <td>{{ ticket.departamento }}</td>
-        <td>{{ ticket.subcategoria || '—' }}</td>
-        <td>{{ ticket.detalle || '—' }}</td>
+        <td>{{ ticket.jerarquia_clasificacion[2] || '—' }}</td>
+        <td>{{ ticket.jerarquia_clasificacion[3] || '—' }}</td>
     
         <!-- Acciones -->
         <td>

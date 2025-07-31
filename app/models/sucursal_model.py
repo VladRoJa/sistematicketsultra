@@ -1,4 +1,4 @@
-# C:\Users\Vladimir\Documents\Sistema tickets\app\models\sucursal_model.py
+# app\models\sucursal_model.py
 
 from app.extensions import db
 

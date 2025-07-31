@@ -1,87 +1,13 @@
-<!-- frontend-angular\src\app\pantalla-crear-ticket\formularios-crear-ticket\formulario-dinamico.component.html -->
-<!-- Loader -->
-<div *ngIf="loading" class="loader-ultragym" [@fade]>
-  <mat-progress-bar mode="indeterminate" color="accent"></mat-progress-bar>
-</div>
-
-<!-- Breadcrumb + estatus -->
-<div class="breadcrumb-seleccion-pro" *ngIf="getRutaSeleccionada().length && !loading" [@fade]>
-  <mat-chip-list>
-    <ng-container *ngFor="let node of getRutaSeleccionada(); let i = index">
-      <mat-chip [color]="editandoNivel === node.nivel ? 'accent' : (isCompleto() ? 'primary' : 'warn')" selected
-        (click)="editarDesdeRuta(node.nivel)"
-        style="cursor:pointer; font-weight:500;">
-        <mat-icon *ngIf="editandoNivel === node.nivel" class="chip-icon">edit</mat-icon>
-        {{ node.label }}
-        <mat-icon *ngIf="i < getRutaSeleccionada().length-1" class="mx-1">chevron_right</mat-icon>
-      </mat-chip>
-    </ng-container>
-    <mat-chip *ngIf="isCompleto()" color="success" selected>
-      <mat-icon>check_circle</mat-icon> Completo
-    </mat-chip>
-  </mat-chip-list>
-</div>
-
-<!-- Selects dinámicos -->
-<div [formGroup]="parentForm" class="form-dinamico-jerarquico-pro">
-  <ng-container *ngFor="let nivel of niveles">
-    <div [@fade]>
-      <!-- Autocomplete real con input y mat-select juntos -->
-      <mat-form-field #selectNivel appearance="outline" class="form-field-nivel" floatLabel="always">
-        <mat-label>
-          <mat-icon *ngIf="nivel === 2">category</mat-icon>
-          <mat-icon *ngIf="nivel === 3">subtitles</mat-icon>
-          <mat-icon *ngIf="nivel === 4">label_important</mat-icon>
-          <mat-icon *ngIf="nivel === 5">star</mat-icon>
-          {{ getLabel(nivel) }}*
-        </mat-label>
-        <input
-          #autoInput
-          matInput
-          autocomplete="off"
-          [placeholder]="'Buscar ' + getLabel(nivel).toLowerCase()"
-          (input)="onBuscar(nivel, $event.target.value)"
-          (focus)="editandoNivel = nivel"
-          [readonly]="!!parentForm.get(getControlName(nivel))?.value"
-          [ngClass]="{'input-active': editandoNivel === nivel}"
-        >
-        <mat-select
-          [formControlName]="getControlName(nivel)"
-          (selectionChange)="onSeleccionar(nivel)"
-          panelClass="custom-select-panel"
-          [disableRipple]="false"
-          [ngClass]="{'select-editing': editandoNivel === nivel}"
-        >
-          <mat-option value="">Seleccione...</mat-option>
-          <mat-option *ngFor="let opcion of opcionesPorNivel(nivel)" [value]="opcion.id">
-            {{ opcion.nombre }}
-          </mat-option>
-        </mat-select>
-        <mat-hint>
-          <span *ngIf="!parentForm.get(getControlName(nivel))?.value">
-            <mat-chip color="warn" selected> Pendiente </mat-chip>
-            Completa {{ getLabel(nivel).toLowerCase() }}
-          </span>
-          <span *ngIf="parentForm.get(getControlName(nivel))?.value && editandoNivel !== nivel">
-            <mat-chip color="accent" selected> Elegido </mat-chip>
-            Haz click para editar
-          </span>
-        </mat-hint>
-      </mat-form-field>
-    </div>
-  </ng-container>
-</div>
-
-<!-- Resumen pro (opcional) -->
-<div *ngIf="isCompleto()" class="resumen-ultragym" [@fade]>
-  <mat-card>
-    <mat-card-title>Resumen de selección</mat-card-title>
-    <mat-card-content>
-      <ol>
-        <li *ngFor="let node of getRutaSeleccionada()">
-          <b>{{ getLabel(node.nivel) }}:</b> {{ node.label }}
-        </li>
-      </ol>
-    </mat-card-content>
-  </mat-card>
-</div>
+<form [formGroup]="parentForm" class="form-niveles">
+  <div *ngFor="let nivel of niveles">
+    <mat-form-field appearance="fill">
+      <mat-label>{{ getLabel(nivel) }}</mat-label>
+      <mat-select [formControlName]="getControlName(nivel)" (selectionChange)="onSeleccionar(nivel)">
+        <mat-option value="">Seleccione {{ getLabel(nivel).toLowerCase() }}</mat-option>
+        <mat-option *ngFor="let opcion of opcionesPorNivel(nivel)" [value]="opcion.id">
+          {{ opcion.nombre }}
+        </mat-option>
+      </mat-select>
+    </mat-form-field>
+  </div>
+</form>

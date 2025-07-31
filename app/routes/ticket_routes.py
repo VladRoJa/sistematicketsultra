@@ -1,4 +1,4 @@
-# C:\Users\Vladimir\Documents\Sistema tickets\app\routes\ticket_routes.py
+# app\routes\ticket_routes.py
 
 from flask import Blueprint, jsonify, request, send_file
 from flask_cors import CORS
@@ -55,8 +55,9 @@ def create_ticket():
         problema_detectado = data.get("problema_detectado")
         necesita_refaccion = data.get("necesita_refaccion", False)
         descripcion_refaccion = data.get("descripcion_refaccion")
+        clasificacion_id = data.get("clasificacion_id")
 
-        if not descripcion or not departamento_id or not criticidad or not categoria:
+        if not descripcion or not departamento_id or not criticidad or not categoria or not clasificacion_id:
             return jsonify({"mensaje": "Faltan datos obligatorios"}), 400
 
         nuevo_ticket = Ticket.create_ticket(
@@ -75,6 +76,7 @@ def create_ticket():
             url_evidencia=data.get("url_evidencia"),
             ubicacion=data.get("ubicacion"),
             equipo=data.get("equipo"),
+            clasificacion_id=clasificacion_id
         )
         
         print("DATA AL CREAR:", data)
@@ -405,9 +407,23 @@ def export_excel():
             else:
                 aparato_nombre = "—"
 
+            jerarquia = ticket._obtener_jerarquia_clasificacion() or []
+
+            categoria = jerarquia[0] if len(jerarquia) > 0 else "—"
+            subcategoria = jerarquia[1] if len(jerarquia) > 1 else "—"
+            subsubcategoria = jerarquia[2] if len(jerarquia) > 2 else "—"
+            detalle = jerarquia[3] if len(jerarquia) > 3 else "—"
+            
+            if hasattr(ticket, "jerarquia_clasificacion"):
+                print(f"ID {t.get('id')} jerarquia_clasificacion:", ticket.jerarquia_clasificacion)
+            else:
+                print(f"ID {t.get('id')} NO TIENE jerarquia_clasificacion")
+
+            print(f"Ticket ID {t.get('id')}, jerarquia_clasificacion: {getattr(ticket, 'jerarquia_clasificacion', None)}")
+
             ws.append([
                 t.get("id"),
-                aparato_nombre,   # <--- ya lleva la lógica combinada
+                aparato_nombre,   
                 t.get("descripcion"),
                 t.get("username"),
                 t.get("estado"),
@@ -417,13 +433,16 @@ def export_excel():
                 t.get("fecha_finalizado"),
                 fecha_solucion_corta,
                 ticket.departamento.nombre if ticket.departamento else "—",
-                t.get("categoria"),
-                t.get("subcategoria"),
-                t.get("detalle"),
+                categoria,     
+                subcategoria,        
+                subsubcategoria,    
+                detalle,            
                 t.get("problema_detectado"),
                 "Sí" if t.get("necesita_refaccion") else "No",
                 t.get("descripcion_refaccion")
             ])
+
+            
 
             if idx % 2 == 0:
                 for cell in ws[idx]:

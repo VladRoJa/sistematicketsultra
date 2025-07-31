@@ -1,4 +1,4 @@
-#C:\Users\Vladimir\Documents\Sistema tickets\app\utils\error_handler.py
+#app\utils\error_handler.py
 
 import traceback
 from flask import jsonify, request

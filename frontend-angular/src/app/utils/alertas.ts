@@ -1,4 +1,4 @@
-// C:\Users\Vladimir\Documents\Sistema tickets\frontend-angular\src\app\utils\alertas.ts
+// frontend-angular\src\app\utils\alertas.ts
 
 import Swal from 'sweetalert2';
 

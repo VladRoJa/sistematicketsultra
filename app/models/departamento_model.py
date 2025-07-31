@@ -1,4 +1,4 @@
-# C:\Users\Vladimir\Documents\Sistema tickets\app\models\departamento_model.py
+# app\models\departamento_model.py
 
 # ------------------------------------------------------------------------------
 # MODELO: DEPARTAMENTO

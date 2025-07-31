@@ -1,16 +1,11 @@
-//src/app/formularios-crear-ticket/formulario-dinamico.component.ts
+//frontend-angular\src\app\pantalla-crear-ticket\formularios-crear-ticket\formulario-dinamico.component.ts
 
 import {
-  Component, Input, OnInit, QueryList, ViewChildren, ElementRef, AfterViewInit, ChangeDetectorRef
+  Component, Input, OnInit, OnChanges, SimpleChanges, ChangeDetectorRef
 } from '@angular/core';
 import { FormGroup, FormBuilder, Validators, ReactiveFormsModule } from '@angular/forms';
 import { animate, style, transition, trigger } from '@angular/animations';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatSelectModule } from '@angular/material/select';
-import { MatInputModule } from '@angular/material/input';
-import { MatButtonModule } from '@angular/material/button';
-
-
+import { JsonPipe } from '@angular/common';
 
 export interface ClasificacionNode {
   id: number;
@@ -21,15 +16,9 @@ export interface ClasificacionNode {
 }
 
 @Component({
-  selector: 'app-formulario-dinamico',
+  selector: 'app-formulario-dinamico-clasificacion',
   standalone: true,
-  imports: [
-    ReactiveFormsModule,
-    MatFormFieldModule,
-    MatSelectModule, 
-    MatInputModule, 
-    MatButtonModule
-  ],
+  imports: [ReactiveFormsModule, JsonPipe],
   templateUrl: './formulario-dinamico.component.html',
   styleUrls: ['./formulario-dinamico.component.css'],
   animations: [
@@ -39,86 +28,75 @@ export interface ClasificacionNode {
     ])
   ]
 })
-export class FormularioDinamicoClasificacionComponent implements OnInit, AfterViewInit {
+export class FormularioDinamicoClasificacionComponent implements OnInit, OnChanges {
   @Input() parentForm!: FormGroup;
   @Input() catalogoPlano: ClasificacionNode[] = [];
   @Input() loading: boolean = false;
 
   niveles: number[] = [];
-  busquedas: { [nivel: number]: string } = {};
   seleccionados: { [nivel: number]: ClasificacionNode | null } = {};
-
-  // Para enfoque
-  @ViewChildren('selectNivel') selectsRefs!: QueryList<ElementRef>;
-  @ViewChildren('autoInput') autoInputs!: QueryList<ElementRef>;
-
-  editandoNivel: number | null = null;
+  root: ClasificacionNode | null = null;
 
   constructor(private fb: FormBuilder, private cd: ChangeDetectorRef) {}
 
   ngOnInit() {
-    this.niveles = Array.from(new Set(this.catalogoPlano.map(c => c.nivel))).sort((a, b) => a - b);
+    this.initSelects();
+
+    console.log('[HIJO] root:', this.root);
+  console.log('[HIJO] niveles:', this.niveles);
+  console.log('[HIJO] catalogoPlano:', this.catalogoPlano);
+  }
+
+  ngOnChanges(changes: SimpleChanges) {
+    if (changes['catalogoPlano']) {
+      this.initSelects();
+    }
+  }
+
+  // Inicializa niveles y controles según el árbol recibido
+  initSelects() {
+    // Busca el nodo raíz (nivel 1)
+    this.root = this.catalogoPlano.find(n => n.nivel === 1) || null;
+
+    // Detecta niveles existentes en el árbol
+    const nivelesUnicos = [...new Set(this.catalogoPlano.map(n => n.nivel))];
+    this.niveles = nivelesUnicos
+      .filter(n => n > 1)   // solo niveles descendientes
+      .sort((a, b) => a - b);
+
+    // Crea un control para cada nivel, si no existe
     this.niveles.forEach(nivel => {
-      const controlName = this.getControlName(nivel);
-      if (!this.parentForm.get(controlName)) {
-        this.parentForm.addControl(controlName, this.fb.control('', Validators.required));
+      const ctrlName = this.getControlName(nivel);
+      if (!this.parentForm.get(ctrlName)) {
+        this.parentForm.addControl(ctrlName, this.fb.control('', Validators.required));
       }
-      this.busquedas[nivel] = '';
       this.seleccionados[nivel] = null;
     });
   }
 
-  ngAfterViewInit() {
-    // Autoenfoque si el usuario comienza a editar desde el breadcrumb
-    this.cd.detectChanges();
+  getControlName(nivel: number) { return `nivel_${nivel}`; }
+
+opcionesPorNivel(nivel: number): ClasificacionNode[] {
+  if (nivel === 2 && this.root) {
+    return this.catalogoPlano.filter(n => n.nivel === 2 && n.parent_id === this.root!.id);
   }
-
-  getControlName(nivel: number) {
-    return `nivel_${nivel}`;
+  // Para los siguientes niveles, el parent es el seleccionado del nivel anterior
+  const prevNivel = nivel - 1;
+  const prevId = this.parentForm.get(this.getControlName(prevNivel))?.value;
+  if (prevId) {
+    return this.catalogoPlano.filter(n => n.nivel === nivel && n.parent_id === prevId);
   }
-
-  opcionesPorNivel(nivel: number): ClasificacionNode[] {
-    const filtro = this.busquedas[nivel]?.toLowerCase() ?? '';
-    let opciones: ClasificacionNode[];
-
-    if (nivel === Math.min(...this.niveles)) {
-      opciones = this.catalogoPlano.filter(n => n.nivel === nivel && !n.parent_id);
-    } else {
-      const parentId = this.parentForm.get(this.getControlName(nivel - 1))?.value;
-      if (!parentId) return [];
-      opciones = this.catalogoPlano.filter(n => n.nivel === nivel && n.parent_id === parentId);
-    }
-
-    return filtro
-      ? opciones.filter(op => op.nombre.toLowerCase().includes(filtro))
-      : opciones;
-  }
+  return [];
+}
 
   onSeleccionar(nivel: number) {
-    // Actualiza selección
     const id = this.parentForm.get(this.getControlName(nivel))?.value;
     this.seleccionados[nivel] = this.catalogoPlano.find(n => n.id === id) || null;
-
-    // Limpia hijos
+    // Limpia niveles siguientes
     this.niveles.filter(n => n > nivel).forEach(n => {
       this.parentForm.get(this.getControlName(n))?.reset();
       this.seleccionados[n] = null;
-      this.busquedas[n] = '';
     });
-
-    // Sale del modo editar breadcrumb
-    this.editandoNivel = null;
-
-    // Enfoque al siguiente campo
-    setTimeout(() => {
-      const idx = this.niveles.findIndex(n => n === nivel);
-      const nextInput = this.autoInputs?.get(idx + 1);
-      if (nextInput) nextInput.nativeElement.focus();
-    }, 200);
-  }
-
-  onBuscar(nivel: number, value: string) {
-    this.busquedas[nivel] = value;
   }
 
   getLabel(nivel: number): string {
@@ -129,34 +107,5 @@ export class FormularioDinamicoClasificacionComponent implements OnInit, AfterVi
       case 5: return 'Variante';
       default: return 'Nivel ' + nivel;
     }
-  }
-
-  getRutaSeleccionada(): { nivel: number, label: string }[] {
-    return this.niveles
-      .filter(nivel => this.seleccionados[nivel])
-      .map(nivel => ({
-        nivel,
-        label: this.seleccionados[nivel]?.nombre || ''
-      }));
-  }
-
-  // Permite editar desde el breadcrumb
-  editarDesdeRuta(nivel: number) {
-    // Limpia niveles posteriores
-    this.niveles.filter(n => n > nivel).forEach(n => {
-      this.parentForm.get(this.getControlName(n))?.reset();
-      this.seleccionados[n] = null;
-      this.busquedas[n] = '';
-    });
-    this.editandoNivel = nivel;
-    setTimeout(() => {
-      const idx = this.niveles.findIndex(n => n === nivel);
-      const input = this.autoInputs?.get(idx);
-      if (input) input.nativeElement.focus();
-    }, 180);
-  }
-
-  isCompleto(): boolean {
-    return this.niveles.every(nivel => this.parentForm.get(this.getControlName(nivel))?.valid);
   }
 }

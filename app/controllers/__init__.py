@@ -1,4 +1,4 @@
-# C:\Users\Vladimir\Documents\Sistema tickets\app\controllers\__init__.py
+# app\controllers\__init__.py
 
 # -------------------------------------------------------------------------------
 # CONTROLADORES DISPONIBLES PARA IMPORTACIÓN
