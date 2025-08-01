@@ -79,6 +79,8 @@ export interface Ticket {
   ubicacion?: string;    
   clasificacion_id?: number;  
   clasificacion_nombre?: string;  
+  necesita_refaccion?: boolean;
+  descripcion_refaccion?: string;
 
 
 

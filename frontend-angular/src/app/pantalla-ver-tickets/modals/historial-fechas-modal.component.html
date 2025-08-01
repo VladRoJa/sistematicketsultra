@@ -5,10 +5,30 @@
   <!-- Información general del ticket -->
   <section class="resumen-ticket">
     <p><strong>ID:</strong> {{ data.id }}</p>
+
+    <p *ngIf="data.inventario?.nombre; else mostrarEquipo">
+      <strong>Aparato:</strong> {{ data.inventario.nombre }}
+      <span *ngIf="data.inventario.codigo_interno" style="color: #0073c2;">
+        ({{ data.inventario.codigo_interno }})
+      </span>
+    </p>
+    <ng-template #mostrarEquipo>
+      <p *ngIf="data.equipo">
+        <strong>Equipo:</strong> {{ data.equipo }}
+      </p>
+    </ng-template>
+
     <p><strong>Descripción:</strong> {{ data.descripcion }}</p>
+
     <p><strong>Estado:</strong> {{ data.estado | titlecase }}</p>
+    <p *ngIf="data.necesita_refaccion && data.descripcion_refaccion">
+      <mat-icon color="warn" style="vertical-align:middle;">build</mat-icon>
+      <span style="vertical-align:middle; margin-left: 0.5em;">{{ data.descripcion_refaccion }}</span>
+    </p>
     <p><strong>Fecha Creación:</strong> {{ data.fecha_creacion }}</p>
+
     <p><strong>En Progreso:</strong> {{ data.fecha_en_progreso || '—' }}</p>
+
     <p><strong>Finalizado:</strong> {{ data.fecha_finalizado || '—' }}</p>
   </section>
 
