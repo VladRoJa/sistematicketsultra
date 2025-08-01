@@ -22,6 +22,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatNativeDateModule } from '@angular/material/core';
 import { MatDatepickerModule } from '@angular/material/datepicker';
+import { MatTooltipModule } from '@angular/material/tooltip';
 
 
 // Helpers nuevos (todo modular)
@@ -68,6 +69,7 @@ export interface Ticket {
   }>;
   fecha_en_progreso: string;
   inventario?: {
+    codigo_interno: any;
     id: number;
     nombre: string;
     tipo: string;
@@ -106,7 +108,9 @@ export interface ApiResponse {
     MatNativeDateModule,
     MatDatepickerModule,
     HistorialFechasModalComponent,
-    AsignarFechaModalComponent
+    AsignarFechaModalComponent,
+    MatTooltipModule
+
     
   ],
   templateUrl: './pantalla-ver-tickets.component.html',
@@ -629,6 +633,20 @@ public getNombreEquipoOInventario(ticket: Ticket): string {
   if (ticket.inventario?.nombre) return ticket.inventario.nombre;
   if (ticket.equipo) return ticket.equipo;
   return '—';
+}
+
+// ticket.inventario?.nombre + " " + últimos 2 dígitos del ticket.inventario?.codigo_interno
+
+getNombreCortoAparato(ticket: Ticket): string {
+  // Log para ver qué estructura trae el inventario
+  console.log('ticket.inventario:', ticket.inventario);
+
+  if (!ticket.inventario || !ticket.inventario.codigo_interno)
+    return ticket.inventario?.nombre || "—";
+
+  const codigo = ticket.inventario.codigo_interno;
+  const numerador = codigo.slice(-2);
+  return `${ticket.inventario.nombre} ${numerador}`;
 }
 
 

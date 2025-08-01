@@ -69,7 +69,7 @@ def create_ticket():
             categoria=categoria,
             subcategoria=subcategoria,
             detalle=detalle,
-            aparato_id=aparato_id,
+            aparato_id=data.get('aparato_id'),
             problema_detectado=problema_detectado,
             necesita_refaccion=necesita_refaccion,
             descripcion_refaccion=descripcion_refaccion,
@@ -377,9 +377,9 @@ def export_excel():
         ws.title = "Tickets"
 
         headers = [
-            "ID", "Aparato/Dispositivo", "Descripción", "Usuario", "Estado", "Criticidad",
+            "ID", "Aparato/Dispositivo","Código Interno", "Descripción", "Usuario", "Estado", "Criticidad",
             "Fecha Creación", "Fecha En Progreso", "Fecha Finalizado", "Fecha Solución",
-            "Departamento", "Categoría", "Subcategoría", "Sub-subcategoría",
+            "Departamento", "Categoría", "Subcategoría", "Sub-subcategoría", "Detalle",
             "Problema Detectado", "Refacción", "Descripción Refacción"
         ]
         ws.append(headers)
@@ -402,10 +402,13 @@ def export_excel():
             # 🟢 Lógica combinada para Aparato/Dispositivo
             if ticket.inventario and ticket.inventario.nombre:
                 aparato_nombre = ticket.inventario.nombre
+                codigo_interno = ticket.inventario.codigo_interno or "—"
             elif ticket.equipo:
                 aparato_nombre = ticket.equipo
+                codigo_interno = "—"
             else:
                 aparato_nombre = "—"
+                codigo_interno = "—"
 
             jerarquia = ticket._obtener_jerarquia_clasificacion() or []
 
@@ -424,6 +427,7 @@ def export_excel():
             ws.append([
                 t.get("id"),
                 aparato_nombre,   
+                codigo_interno,
                 t.get("descripcion"),
                 t.get("username"),
                 t.get("estado"),

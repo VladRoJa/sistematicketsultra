@@ -3,7 +3,6 @@
 import { Routes } from '@angular/router';
 import { LoginComponent } from './pantalla-login/pantalla-login.component';
 import { MainComponent } from './main/main.component';
-import { PantallaCrearTicketComponent } from './pantalla-crear-ticket/pantalla-crear-ticket.component';
 import { PantallaVerTicketsComponent } from './pantalla-ver-tickets/pantalla-ver-tickets.component';
 import { AdminPermisosComponent } from './admin-permisos/admin-permisos.component';
 import { AuthGuard } from './guards/auth.guard';

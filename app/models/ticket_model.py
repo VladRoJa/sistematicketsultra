@@ -89,7 +89,8 @@ class Ticket(db.Model):
                 'id': self.inventario.id if self.inventario else None,
                 'nombre': self.inventario.nombre if self.inventario else None,
                 'categoria': self.inventario.categoria if self.inventario else None,
-                'marca': self.inventario.marca if self.inventario else None
+                'marca': self.inventario.marca if self.inventario else None,
+                'codigo_interno': self.inventario.codigo_interno if self.inventario else None, 
             } if self.inventario else None,
             'ubicacion': self.ubicacion,
             'equipo': self.equipo,

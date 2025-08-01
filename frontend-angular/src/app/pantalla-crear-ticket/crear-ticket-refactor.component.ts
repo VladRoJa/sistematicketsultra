@@ -221,6 +221,9 @@ enviar() {
       subcategoria,
       detalle,
       clasificacion_id,
+      aparato_id: this.form.value.aparato_id, 
+      necesita_refaccion: this.form.value.necesita_refaccion,        
+      descripcion_refaccion: this.form.value.descripcion_refaccion, 
     };
 
   console.log('BODY ENVIADO:', body);
