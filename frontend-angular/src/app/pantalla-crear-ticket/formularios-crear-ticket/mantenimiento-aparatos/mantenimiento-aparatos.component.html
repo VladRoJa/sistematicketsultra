@@ -3,15 +3,7 @@
 
 <div class="subformulario-box">
 
-  <!-- Selecciona sucursal solo si eres admin -->
-  <mat-form-field *ngIf="esAdmin" appearance="fill" class="full-width">
-    <mat-label>Selecciona sucursal</mat-label>
-    <mat-select [(ngModel)]="sucursalSeleccionada" (selectionChange)="onSucursalChange($event.value)">
-      <mat-option *ngFor="let suc of sucursales" [value]="suc.sucursal_id">
-        {{ suc.sucursal }}
-      </mat-option>
-    </mat-select>
-  </mat-form-field>
+
 
   <h3>Reportar Falla en {{ nombreTipo }}</h3>
 
@@ -27,7 +19,7 @@
 
   <!-- Descripción del problema -->
   <mat-form-field *ngIf="parentForm.get('descripcion_aparato')" appearance="fill" class="form-group-description">
-    <mat-label>📋 Descripción del problemaaaaa</mat-label>
+    <mat-label>📋 Descripción del problema</mat-label>
     <textarea
       matInput
       [formControl]="parentForm.get('descripcion_aparato')"

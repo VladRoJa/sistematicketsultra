@@ -1,11 +1,25 @@
 <!-- frontend-angular/src/app/pantalla-crear-ticket/crear-ticket-refactor.component.html -->
 
-<mat-card class="crear-ticket-card">
+<mat-card class="crear-ticket-card" *ngIf="form">
   <h2 class="titulo-formulario">
     <span style="font-size: 1.3em;">🎫</span> Crear Nuevo Ticket
   </h2>
 
   <form [formGroup]="form" (ngSubmit)="enviar()">
+
+<mat-form-field *ngIf="esAdmin()" appearance="fill" class="w-full">
+  <mat-label>Sucursal destino</mat-label>
+  <mat-select formControlName="sucursal_id" required>
+    <mat-option
+      *ngFor="let s of listaSucursales"
+      [value]="s.sucursal_id">
+      {{ s.sucursal }}
+    </mat-option>
+  </mat-select>
+</mat-form-field>
+
+
+
 
     <!-- Campos dinámicos (departamento, categoría, subcat, etc) -->
     <ng-container *ngFor="let nivel of niveles">
@@ -28,25 +42,34 @@
       </mat-form-field>
     </ng-container>
 
-    <ng-container *ngIf="mostrarSubformAparatos; else generales">
-      <app-mantenimiento-aparatos
-        *ngIf="mostrarSubformAparatos"
-        [parentForm]="form"
-        tipo="aparato"
-      ></app-mantenimiento-aparatos>
-    </ng-container>
+      <!-- Lógica: solo uno de los tres a la vez -->
+      <ng-container *ngIf="mostrarSubformAparatos; else sistemasOrGenerales">
+        <app-mantenimiento-aparatos
+          [parentForm]="form"
+          tipo="aparato"
+        ></app-mantenimiento-aparatos>
+      </ng-container>
 
+      <ng-template #sistemasOrGenerales>
+        <ng-container *ngIf="mostrarSubformSistemasDispositivos; else generales">
+          <app-sistemas
+            [parentForm]="form"
+            (formularioValido)="onFormularioSistemasValido($event)">
+          </app-sistemas>
+        </ng-container>
+      </ng-template>
 
-    <ng-template #generales>
-    <!-- Descripción -->
-    <mat-form-field appearance="fill" class="w-full">
-      <mat-label>Descripción del problema*</mat-label>
-      <textarea matInput formControlName="descripcion_general" rows="3"></textarea>
-      <mat-error *ngIf="form.get('descripcion_general')?.touched && form.get('descripcion_general')?.invalid">
-        Escribe una descripción
-      </mat-error>
-    </mat-form-field>
-    </ng-template>
+      <ng-template #generales>
+        <!-- Descripción general si no es ni mantenimiento/aparatos ni sistemas/dispositivos -->
+        <mat-form-field appearance="fill" class="w-full">
+          <mat-label>Descripción del problema*</mat-label>
+          <textarea matInput formControlName="descripcion_general" rows="3"></textarea>
+          <mat-error *ngIf="form.get('descripcion_general')?.touched && form.get('descripcion_general')?.invalid">
+            Escribe una descripción
+          </mat-error>
+        </mat-form-field>
+      </ng-template>
+
 
     <!-- Criticidad -->
     <mat-form-field appearance="fill" class="w-full">
@@ -64,7 +87,6 @@
       mat-raised-button
       color="primary"
       class="w-full mt-3"
-      [disabled]="form.invalid || loadingGuardar"
       type="submit"
     >
       <ng-container *ngIf="!loadingGuardar; else loading">

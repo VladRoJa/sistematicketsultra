@@ -68,7 +68,7 @@ export class FormularioDinamicoClasificacionComponent implements OnInit, OnChang
     this.niveles.forEach(nivel => {
       const ctrlName = this.getControlName(nivel);
       if (!this.parentForm.get(ctrlName)) {
-        this.parentForm.addControl(ctrlName, this.fb.control('', Validators.required));
+        this.parentForm.addControl(ctrlName, this.fb.control('', ));
       }
       this.seleccionados[nivel] = null;
     });

@@ -2,13 +2,7 @@
 
 <div class="subformulario-box" [formGroup]="parentForm">
 
-  <!-- Sucursal (solo admins) -->
-  <mat-form-field *ngIf="esAdmin" appearance="fill">
-    <mat-label>Selecciona sucursal</mat-label>
-    <mat-select formControlName="sucursal_id">
-      <mat-option *ngFor="let suc of sucursales" [value]="suc.sucursal_id">{{ suc.sucursal }}</mat-option>
-    </mat-select>
-  </mat-form-field>
+
 
   <!-- Categoría (dinámica por inventario) -->
   <mat-form-field appearance="fill">
@@ -26,14 +20,6 @@
       (equipoSeleccionado)="onEquipoSeleccionado($event)">
     </app-selector-equipo>
 
-  <!-- Subcategoría (listado fijo) -->
-  <mat-form-field appearance="fill">
-    <mat-label>📂 Subcategoría</mat-label>
-    <mat-select formControlName="subcategoria">
-      <mat-option value="">Seleccione subcategoría</mat-option>
-      <mat-option *ngFor="let sub of subcategoriasDisponibles" [value]="sub">{{ sub }}</mat-option>
-    </mat-select>
-  </mat-form-field>
 
   <!-- Descripción -->
   <mat-form-field appearance="fill">

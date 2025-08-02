@@ -45,6 +45,7 @@ import { CatalogoService } from '../services/catalogo.service';
 
 // Interfaces
 export interface Ticket {
+  jerarquia_clasificacion: any;
   detalle_nivel4: any;
   categoria_nivel2: any;
   fecha_finalizado_original: any;
@@ -640,16 +641,24 @@ public getNombreEquipoOInventario(ticket: Ticket): string {
 // ticket.inventario?.nombre + " " + últimos 2 dígitos del ticket.inventario?.codigo_interno
 
 getNombreCortoAparato(ticket: Ticket): string {
-  // Log para ver qué estructura trae el inventario
-  console.log('ticket.inventario:', ticket.inventario);
+  if (!ticket.inventario || !ticket.inventario.nombre)
+    return "—";
 
-  if (!ticket.inventario || !ticket.inventario.codigo_interno)
-    return ticket.inventario?.nombre || "—";
+  // Normaliza a lowercase para evitar errores por mayúsculas/minúsculas
+  const dep = (ticket.departamento || '').toLowerCase();
+  const cat = (ticket.jerarquia_clasificacion?.[1] || '').toLowerCase();
 
-  const codigo = ticket.inventario.codigo_interno;
-  const numerador = codigo.slice(-2);
-  return `${ticket.inventario.nombre} ${numerador}`;
+  // Mostrar nombre + últimos 2 dígitos SOLO si es Mantenimiento/Aparatos
+  if (dep === 'mantenimiento' && cat === 'aparatos' && ticket.inventario.codigo_interno) {
+    const codigo = ticket.inventario.codigo_interno;
+    const numerador = codigo.slice(-2);
+    return `${ticket.inventario.nombre} ${numerador}`;
+  }
+
+  // Para sistemas/dispositivos y otros, solo nombre
+  return ticket.inventario.nombre;
 }
+
 
 
 }
