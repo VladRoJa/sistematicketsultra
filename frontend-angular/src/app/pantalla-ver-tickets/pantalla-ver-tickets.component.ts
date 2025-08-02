@@ -70,6 +70,7 @@ export interface Ticket {
   }>;
   fecha_en_progreso: string;
   inventario?: {
+    categoria: string;
     codigo_interno: any;
     id: number;
     nombre: string;
@@ -657,6 +658,22 @@ getNombreCortoAparato(ticket: Ticket): string {
 
   // Para sistemas/dispositivos y otros, solo nombre
   return ticket.inventario.nombre;
+}
+
+getSubcategoriaVisible(ticket: Ticket): string {
+  const dep = (ticket.departamento || '').toLowerCase();
+  const cat = (ticket.jerarquia_clasificacion?.[1] || '').toLowerCase();
+
+  // Solo para sistemas/dispositivos
+  if (
+    dep === 'sistemas' &&
+    cat === 'dispositivos' &&
+    !!ticket.inventario?.categoria
+  ) {
+    return ticket.inventario.categoria;
+  }
+  // Si ya existe subcategoría en la jerarquía, úsala
+  return ticket.jerarquia_clasificacion?.[2] || '—';
 }
 
 

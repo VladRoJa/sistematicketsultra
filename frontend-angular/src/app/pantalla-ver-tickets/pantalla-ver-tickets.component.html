@@ -621,7 +621,7 @@
         <td>{{ ticket.fecha_en_progreso }}</td>
         <td>{{ ticket.fecha_finalizado }}</td>
         <td>{{ ticket.departamento }}</td>
-        <td>{{ ticket.jerarquia_clasificacion[2] || '—' }}</td>
+        <td>{{ getSubcategoriaVisible(ticket) }}</td>
         <td>{{ ticket.jerarquia_clasificacion[3] || '—' }}</td>
     
         <!-- Acciones -->
