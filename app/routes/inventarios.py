@@ -499,25 +499,24 @@ def listar_equipos():
             return error_response('Usuario no encontrado', 404)
 
         tipo = (request.args.get('tipo') or '').strip().lower()
-        if tipo in ['aparatos', 'aparato']:
+        # Mapea todos los posibles valores recibidos a lo que existe en tu base
+        if tipo in ['aparato', 'aparatos']:
             tipo = 'aparatos'
-        elif tipo in ['sistemas', 'sistema']:
-            tipo = 'sistema'
+        elif tipo in ['sistema', 'sistemas', 'dispositivo', 'dispositivos']:
+            tipo = 'dispositivos'  # AJUSTA a tu valor real en la base si es "dispositivos"
+        else:
+            tipo = ''
         sucursal_id = request.args.get('sucursal_id', type=int)
 
         query = InventarioGeneral.query
-
-        # Filtro por tipo (solo equipos con codigo_interno)
         query = query.filter(InventarioGeneral.codigo_interno.isnot(None))
         if tipo:
-            query = query.filter(InventarioGeneral.tipo.ilike(tipo))
+            query = query.filter(db.func.lower(InventarioGeneral.tipo) == tipo)
 
         # Filtro por sucursal:
         if not (user.rol == "ADMINISTRADOR" or user.sucursal_id == 1000):
-            # Si no es admin, solo su sucursal
             query = query.join(InventarioSucursal).filter(InventarioSucursal.sucursal_id == user.sucursal_id)
         elif sucursal_id:
-            # Admin puede filtrar por sucursal si lo pide
             query = query.join(InventarioSucursal).filter(InventarioSucursal.sucursal_id == sucursal_id)
 
         equipos = query.order_by(InventarioGeneral.nombre.asc()).all()
@@ -641,10 +640,13 @@ def obtener_equipos():
 
         sucursal_id = request.args.get('sucursal_id', type=int)
         tipo = (request.args.get('tipo') or '').strip().lower()
-        if tipo in ['aparatos', 'aparato']:
+        # Mapea todos los posibles valores recibidos a lo que existe en tu base
+        if tipo in ['aparato', 'aparatos']:
             tipo = 'aparatos'
-        elif tipo in ['sistemas', 'sistema']:
-            tipo = 'sistema'
+        elif tipo in ['sistema', 'sistemas', 'dispositivo', 'dispositivos']:
+            tipo = 'dispositivos'
+        else:
+            tipo = ''
 
         query = InventarioSucursal.query
 
@@ -658,7 +660,8 @@ def obtener_equipos():
 
         resultado = []
         for e in equipos:
-            if tipo and (e.inventario.tipo != tipo):
+            # Compara ambos en minúsculas (por si acaso)
+            if tipo and (e.inventario.tipo or '').strip().lower() != tipo:
                 continue
             resultado.append({
                 "id": e.inventario.id,
@@ -676,6 +679,7 @@ def obtener_equipos():
 
     except Exception as e:
         return manejar_error(e, "obtener_equipos")
+
 
 
 @inventario_bp.route('/listar', methods=['GET'], strict_slashes=False)

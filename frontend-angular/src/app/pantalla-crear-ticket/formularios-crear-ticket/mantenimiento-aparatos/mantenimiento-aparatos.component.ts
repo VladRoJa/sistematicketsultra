@@ -50,54 +50,49 @@ export class MantenimientoAparatosComponent implements OnInit, OnDestroy {
     private equiposService: EquiposService
   ) {}
 
-  ngOnInit(): void {
-    if (!this.parentForm) {
-      console.error('[MantenimientoAparatos] parentForm no definido');
-      return;
-    }
-
-    // --- Inicializar controles propios ---
-    // Detalle (texto libre)
-    this.parentForm.addControl(
-      'detalle',
-      this.fb.control('', )
-    );
-    // Subcategoría
-    this.parentForm.addControl(
-      'subcategoria',
-      this.fb.control('', )
-    );
-    // Aparato/dispositivo seleccionado
-    this.parentForm.addControl(
-      'aparato_id',
-      this.fb.control(null, )
-    );
-
-    // --- Detectar sucursal desde el padre (ya viene en parentForm) ---
-    this.sucursalSeleccionada = this.parentForm.get('sucursal_id')!.value;
-
-    // Carga inicial de equipos
-    this.cargarEquiposPorSucursal(this.sucursalSeleccionada);
-
-    // Escucha cambios de sucursal desde el padre
-    this.parentForm.get('sucursal_id')!.valueChanges.subscribe((sucId: number) => {
-      this.sucursalSeleccionada = sucId;
-      // Reset controles dependientes
-      this.parentForm.get('detalle')!.reset();
-      this.parentForm.get('subcategoria')!.reset();
-      this.parentForm.get('aparato_id')!.reset();
-      this.cargarEquiposPorSucursal(sucId);
-    });
-
-    // Emite validez al padre
-    this.formSub = this.parentForm.valueChanges.subscribe(() => {
-      emitirPayloadFormulario(
-        this.parentForm,
-        DEPARTAMENTO_IDS.mantenimiento,
-        this.formularioValido
-      );
-    });
+ngOnInit(): void {
+  if (!this.parentForm) {
+    console.error('[MantenimientoAparatos] parentForm no definido');
+    return;
   }
+
+  const sucursalCtrl = this.parentForm.get('sucursal_id');
+  if (!sucursalCtrl) {
+    console.error('[MantenimientoAparatos] El control sucursal_id no existe en parentForm');
+    return;
+  }
+
+  // --- Inicializar controles propios ---
+  this.parentForm.addControl('detalle', this.fb.control(''));
+  this.parentForm.addControl('subcategoria', this.fb.control(''));
+  this.parentForm.addControl('aparato_id', this.fb.control(null));
+
+  // --- Detectar sucursal desde el padre (ya viene en parentForm) ---
+  this.sucursalSeleccionada = sucursalCtrl.value;
+
+  // Carga inicial de equipos
+  this.cargarEquiposPorSucursal(this.sucursalSeleccionada);
+
+  // Escucha cambios de sucursal desde el padre
+  sucursalCtrl.valueChanges.subscribe((sucId: number) => {
+    this.sucursalSeleccionada = sucId;
+    // Reset controles dependientes
+    this.parentForm.get('detalle')!.reset();
+    this.parentForm.get('subcategoria')!.reset();
+    this.parentForm.get('aparato_id')!.reset();
+    this.cargarEquiposPorSucursal(sucId);
+  });
+
+  // Emite validez al padre
+  this.formSub = this.parentForm.valueChanges.subscribe(() => {
+    emitirPayloadFormulario(
+      this.parentForm,
+      DEPARTAMENTO_IDS.mantenimiento,
+      this.formularioValido
+    );
+  });
+}
+
 
   ngOnDestroy(): void {
     this.formSub?.unsubscribe();

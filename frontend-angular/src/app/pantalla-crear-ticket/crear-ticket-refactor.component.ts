@@ -90,34 +90,35 @@ export class CrearTicketRefactorComponent implements OnInit, OnDestroy {
     return rol === 'administrador' || user.sucursal_id === 1000;
   }
 
-  ngOnInit(): void {
-    // 1. Inicializa el form
-    this.form = this.fb.group({
-      descripcion_general: [''],
-      descripcion_aparato: [''],
-      criticidad: [null, Validators.required],
-      detalle: [''],
-      subcategoria: [''],
-      aparato_id: [''],
-      necesita_refaccion: [false],
-      descripcion_refaccion: [''],
+ngOnInit(): void {
+  // Obtén la sucursal del usuario del localStorage o como corresponda
+  const sucursalIdUsuario = Number(localStorage.getItem('sucursal_id')) || null;
+
+  // Inicializa el form con sucursal_id para TODOS
+  this.form = this.fb.group({
+    sucursal_id: [sucursalIdUsuario, Validators.required],
+    descripcion_general: [''],
+    descripcion_aparato: [''],
+    criticidad: [null, Validators.required],
+    detalle: [''],
+    subcategoria: [''],
+    aparato_id: [''],
+    necesita_refaccion: [false],
+    descripcion_refaccion: [''],
+  });
+
+  // Si es admin, puedes permitir cambiar la sucursal y cargar lista de sucursales
+  if (this.esAdmin()) {
+    this.sucursalesService.obtenerSucursales().subscribe({
+      next: (sucs) => (this.listaSucursales = sucs || []),
+      error: (err) => console.error('Error al obtener sucursales:', err),
     });
-
-    // 2. Agrega sucursal_id si es admin
-    if (this.esAdmin()) {
-      this.form.addControl(
-        'sucursal_id',
-        this.fb.control(null, Validators.required)
-      );
-      this.sucursalesService.obtenerSucursales().subscribe({
-        next: (sucs) => (this.listaSucursales = sucs || []),
-        error: (err) => console.error('Error al obtener sucursales:', err),
-      });
-    }
-
-    // 3. Carga niveles iniciales
-    this.cargarNivel(1, null, 'Departamento');
   }
+
+  // 3. Carga niveles iniciales
+  this.cargarNivel(1, null, 'Departamento');
+}
+
 
 actualizarValidadoresDescripcion() {
   const general = this.form.get('descripcion_general');
@@ -315,6 +316,14 @@ getCamposInvalidos(): string[] {
   const faltan: string[] = [];
   Object.entries(this.form.controls).forEach(([key, ctrl]) => {
     if (ctrl.invalid && ctrl.errors?.['required']) {
+      // ⚡️ Aquí agregamos la condición para sucursal_id
+      if (
+        key === 'sucursal_id' &&
+        !this.esAdmin()
+      ) {
+        // Si no es admin, ignoramos el error de sucursal_id
+        return;
+      }
       // Solo agrega si corresponde al subform activo
       if (
         (key === 'descripcion' && this.mostrarSubformSistemasDispositivos) ||
