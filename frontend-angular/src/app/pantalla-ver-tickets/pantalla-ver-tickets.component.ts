@@ -179,7 +179,7 @@ export class PantallaVerTicketsComponent implements OnInit {
   subcategoriasDisponibles: any[] = [];
   detallesDisponibles: any[] = [];
   inventariosDisponibles: any[] = [];
-  textosBusqueda: { [campo: string]: string } = {};
+
 
   categoriasFiltradas: any[] = [];
   descripcionesFiltradas: any[] = [];
@@ -566,10 +566,12 @@ export class PantallaVerTicketsComponent implements OnInit {
   }
 }
 
-  cerrarYAplicar(columna: string, trigger: MatMenuTrigger): void {
-  this.confirmarFiltroColumna(columna);
+cerrarYAplicar(columna: string, trigger: MatMenuTrigger): void {
+  this.aplicarFiltroColumnaConReset(columna); // <-- importante usar esta
   trigger.closeMenu();
 }
+
+aplicarFiltroColumnaConReset = (col: string) => aplicarFiltroColumnaConReset(this, col);
 
   isItemSeleccionado(columna: string, valor: string): boolean {
   return this.temporalSeleccionados[columna]?.find(x => x.valor === valor)?.seleccionado ?? false;

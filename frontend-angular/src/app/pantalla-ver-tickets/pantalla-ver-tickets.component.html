@@ -24,7 +24,7 @@
             <mat-divider></mat-divider>
 
             <div class="menu-filtro" (click)="$event.stopPropagation()">
-              <label>Filtrar Categoría</label>
+<!--               <label>Filtrar Categoría</label>
 
               <mat-form-field appearance="fill" class="buscador-filtro" (click)="$event.stopPropagation()">
                 <mat-label>Buscar</mat-label>
@@ -33,7 +33,7 @@
                   [(ngModel)]="filtroCategoriaTexto"
                   (ngModelChange)="filtrarOpcionesTexto('categoria')"
                 >
-              </mat-form-field>
+              </mat-form-field> -->
 
               <!-- Seleccionar todo -->
               <mat-checkbox
@@ -88,7 +88,7 @@
     <button mat-menu-item (click)="ordenar('inventario','desc')">Z-A</button>
     <mat-divider></mat-divider>
     <div class="menu-filtro" (click)="$event.stopPropagation()">
-      <label>Filtrar Aparato</label>
+<!--       <label>Filtrar Aparato</label>
       <mat-form-field appearance="fill" class="buscador-filtro" (click)="$event.stopPropagation()">
         <mat-label>Buscar</mat-label>
         <input
@@ -96,7 +96,7 @@
           [(ngModel)]="filtroInventarioTexto"
           (ngModelChange)="filtrarOpcionesTexto('inventario')"
         >
-      </mat-form-field>
+      </mat-form-field> -->
       <mat-checkbox
         [checked]="isTodoSeleccionado('inventario')"
         (change)="alternarSeleccionTemporal('inventario', $event.checked)"
@@ -148,7 +148,7 @@
     <mat-divider></mat-divider>
 
     <div class="menu-filtro" (click)="$event.stopPropagation()">
-      <label>Filtrar Descripción</label>
+<!--       <label>Filtrar Descripción</label>
 
       <mat-form-field appearance="fill" class="buscador-filtro" (click)="$event.stopPropagation()">
         <mat-label>Buscar</mat-label>
@@ -157,7 +157,7 @@
           [(ngModel)]="filtroDescripcionTexto"
           (ngModelChange)="filtrarOpcionesTexto('descripcion')"
         >
-      </mat-form-field>
+      </mat-form-field> -->
 
       <mat-checkbox
         [checked]="isTodoSeleccionado('descripcion')"
@@ -208,14 +208,14 @@
     <mat-divider></mat-divider>
 
     <div class="menu-filtro" (click)="$event.stopPropagation()">
-      <label>Filtrar Usuario</label>
+<!--       <label>Filtrar Usuario</label>
       <mat-form-field *ngIf="permiteBusqueda('username')" appearance="fill" class="buscador-filtro" (click)="$event.stopPropagation()">
         <mat-label>Buscar</mat-label>
         <input
           matInput
           [(ngModel)]="filtroUsuarioTexto"
           (ngModelChange)="filtrarOpcionesTexto('username')">
-      </mat-form-field>
+      </mat-form-field> -->
 
       <mat-checkbox
         [checked]="isTodoSeleccionado('username')"
@@ -262,11 +262,11 @@
             <button mat-menu-item (click)="ordenar('estado','desc')">Desc</button>
             <mat-divider></mat-divider>
             <div class="menu-filtro" (click)="$event.stopPropagation()">
-              <label>Filtrar Estado</label>
+<!--               <label>Filtrar Estado</label>
               <mat-form-field *ngIf="permiteBusqueda('estado')" appearance="fill" class="buscador-filtro" (click)="$event.stopPropagation()">
                 <mat-label>Buscar</mat-label>
                 <input matInput [(ngModel)]="filtroEstadoTexto" (ngModelChange)="filtrarOpcionesTexto('estado')">
-              </mat-form-field>
+              </mat-form-field> -->
               <mat-checkbox [checked]="isTodoSeleccionado('estado')"
                             (change)="alternarSeleccionTemporal('estado', $event.checked)"
                             (click)="$event.stopPropagation()"
@@ -307,11 +307,11 @@
             <button mat-menu-item (click)="ordenar('criticidad','desc')">Mayor-Menor</button>
             <mat-divider></mat-divider>
             <div class="menu-filtro" (click)="$event.stopPropagation()">
-              <label>Filtrar Criticidad</label>
+<!--               <label>Filtrar Criticidad</label>
               <mat-form-field *ngIf="permiteBusqueda('criticidad')" appearance="fill" class="buscador-filtro" (click)="$event.stopPropagation()">
                 <mat-label>Buscar</mat-label>
                 <input matInput [(ngModel)]="filtroCriticidadTexto" (ngModelChange)="filtrarOpcionesTexto('criticidad')">
-              </mat-form-field>
+              </mat-form-field> -->
               <mat-checkbox [checked]="isTodoSeleccionado('criticidad')"
                             (change)="alternarSeleccionTemporal('criticidad', $event.checked)"
                             (click)="$event.stopPropagation()"

@@ -1,0 +1,180 @@
+[33m9edcfb38[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m checks de filtros ok
+[33m22f63fbb[m se puede crear ticket desde gerentes
+[33m94e49ab7[m funcionando ok
+[33m712dcbea[m nombres de los aparatos y crear ticket funcionando
+[33m78e3f203[m historial con los campos bien
+[33m0854e955[m requiere reparacion en tabla y en excel mas tooltip
+[33mfba4c82e[m crear ticket aparato funciona
+[33meb1be720[m voy a refactorizar filtros de ver tickets
+[33m0e9f1334[m rush final para terminar modulo de tickets
+[33m25346ff7[m Commit grande funcionando al menos local
+[33mb3de6a3d[m finalizar recarga la tabla
+[33md456ae59[m confirmacion finalizar
+[33m70277550[m loader
+[33md1925d98[m fecha solucion modal
+[33m708375a3[m fecha solucion
+[33m0b6eb83f[m modal solucion
+[33m66888df1[m fecha solucion modal
+[33md7752380[m cambiar estado
+[33meec67201[m solucion n/a
+[33m9a41949c[m en progreso
+[33m6262a082[m refactor: elimina edición inline de fecha solución, ahora todo por modal
+[33m5757ebd6[m refactor: elimina edición inline de fecha solución, ahora todo por modal
+[33md977b7cd[m fecha solucion
+[33mfb85dd32[m modal asignar fecha
+[33m9cb40b9c[m modal asignar fecha
+[33m40a9e731[m fecha solucion
+[33m85ce2c01[m fecha solucion
+[33m87bed74c[m motivo
+[33m9c84d2b7[m motivo
+[33m8e9fbfd5[m loader
+[33mafbed633[m vista formulario
+[33m5e3ec438[m aparatos
+[33m00031f0f[m enviarticket
+[33m807938c6[m crear ticket
+[33mc080d8ec[m formularios
+[33m5db13651[m formularios
+[33m1464ce3c[m formularios
+[33m530334a3[m edificio
+[33mdb8ea9fc[m mantenimiento
+[33md5d311b0[m formularios
+[33mc4c5c288[m formularios
+[33m381c9efc[m descripcion
+[33m614d7b43[m descripcion
+[33ma670dce7[m descripcion
+[33m7dc0f6cc[m descripcion
+[33m8d0718f0[m formularios
+[33mcaefcbad[m formulario
+[33mf6c9da65[m formulario
+[33m3852de27[m formularios
+[33mfec25195[m vista formularios
+[33m4f0db842[m formularios
+[33m83cee3c4[m formularios
+[33mffb56286[m compras
+[33md02624e4[m formularios
+[33m57134c9d[m formularios
+[33m5d2d58f4[m edificio
+[33macdece4f[m mantenimiento edificio
+[33m41f0242f[m prueba
+[33m93480f3c[m prueba
+[33maeb82143[m prueba
+[33m7567333a[m Refactor crear ticket
+[33m787865b8[m textarea
+[33m5d2503ce[m prueba
+[33m24b581ea[m prueba
+[33md5f4f5ac[m espacio
+[33m8821d9fe[m prueba
+[33mb712ee07[m enviarticket
+[33meb4a9aa0[m compras
+[33m4a6067e1[m descripcion
+[33m035217ae[m formularios
+[33m814d0eb4[m formularios
+[33med394f5d[m formularios
+[33m0bde1cb6[m refactor formularios
+[33m5cdb5d75[m css eliminados
+[33m373cce49[m formularios actualizados
+[33m4e440bc6[m backend limpio
+[33m86d3b2f3[m yaml actualizado
+[33m7b5881e6[m requirements actualizado
+[33m4830fe90[m formularios
+[33mda4b5191[m standalone e imports ok
+[33m534f6783[m formularios de crear ticket
+[33m25bef132[m crear ticket actualizado
+[33mb895b558[m On render db
+[33m8bad07ac[m prueba produccion
+[33md9c86a2d[m historial
+[33m54f5229b[m historial
+[33m96a8f4cd[m historial
+[33m7a885b30[m historial
+[33m052aeb57[m prueba
+[33mb5d510a1[m prueba
+[33mb6c7298e[m historial fechas
+[33m6f676c16[m historial correcto
+[33mde4e0e21[m historial
+[33mc2afe864[m prueba
+[33mfe78aa5f[m vamos a eliminar los tickets
+[33m0a1e04df[m normalizando fechas en railway
+[33m3ee1277e[m prueba
+[33ma6fb31a5[m prueba
+[33m7e564988[m ajustes endpoint
+[33mfcfe7c05[m cambio endpoint
+[33m5d2005a8[m bug prueba
+[33mcf176cbc[m fecha bug corregido
+[33m9782da76[m fechas correctas
+[33md15f3319[m regrese usermodel
+[33ma112b5cc[m prueba formato fecha correcta
+[33mc73e603d[m migraciones
+[33ma72bd5e0[m crear auto nuevas columnas
+[33m3370225f[m Agrega columnas con migraciones automáticas
+[33m2913741e[m usando hash
+[33m941b42a6[m regreso a static.json
+[33m90674ecc[m render.json listo
+[33mc57079de[m Update static.json
+[33m5858c68c[m v1.22
+[33m62826205[m Agrega static.json para manejo de rutas Angular en Render
+[33m4af29fd4[m V1.22
+[33mfe3f6e14[m v1.21
+[33m475f8dbc[m v1.20
+[33m74c1d0ab[m v1.19
+[33mfee5dbd6[m v1.18
+[33ma26bcfb8[m v1.17
+[33mbe614161[m v1.16
+[33m81f02d2d[m v1.16
+[33m01d72a5c[m v1.15
+[33md9d35793[m v1.13
+[33m12bc7124[m v1.12
+[33mbd67ea82[m v1.12
+[33ma2a28d5d[m v1.11
+[33mfea0e3f6[m v1.11
+[33m19493939[m v1.10
+[33m8d962402[m v1.9
+[33m44d492b9[m v1.8
+[33mcc50bd93[m v1.8
+[33m0b1d2b13[m v1.7
+[33mf8a69fb1[m v1.6
+[33md718778a[m v1.5
+[33m0dcacdac[m v1.4
+[33m18fdbd8e[m v1.3
+[33m90a502fe[m v1.2
+[33m9df9f8df[m v1.1
+[33m871defe0[m v1.1
+[33md3f213b6[m v1
+[33mf00d7e74[m ultragymsystem v1.03
+[33m2623a9e7[m ultragymsystem v1.02
+[33m03f8ee09[m ultragymsystem v1.01
+[33mc840ffbb[m ultragymsystem v1.00
+[33m992a1a2a[m listo para produccion v1.6
+[33m01ef491c[m listo para producion v1.5
+[33m12799606[m listo para produccion v1.4
+[33m934f9dd5[m listo para produccion v1.3
+[33m2ece1d02[m listo para desplegar v1.2
+[33m143f81c2[m preparado para publicar v1.1
+[33m7f0a93b6[m preparado para subir v1
+[33m970052c9[m ambos archivos enivorenmt creados
+[33ma8272ae6[m Agrega archivo environment.prod.ts para producción
+[33mc5b8e500[m refactorizando, pantalla de ver tickets lista
+[33m6d24f15f[m refactorizando primer commit nueva version
+[33mcb49ac0c[m Ultimo commit antes de migrar a SQLAlchemy, funcionando
+[33m38359717[m integracion de setup_db para crear tablas en el arranque
+[33mdc4378d6[m fix locale error para compatibilidad con entorno render
+[33me4945a26[m Agregado gunicorn para deploy en Render
+[33mb34c603f[m Agregado archivo de configuracion para Render
+[33m2adab585[m prueba antes de poner en internet
+[33m7c9fd9f2[m exportar a excel ya exporta sobre toda la db, funcionando
+[33mf92daa2e[m filtros de fechas funcionando, ultimo commit
+[33m82af0862[m antes de refactorizar, estoy trabajando en los filtros
+[33m7f3cab9b[m funcionando y con commit ejecutable
+[33m1b7a36a6[m ultimo commit, filtros funcionando, que pasada
+[33m33fb97d3[m ultimo commit, funcionando pero le faltan mejoras
+[33md6cc1086[m ultimo commit, filtros funcionando
+[33m8442b923[m ultimo commit, barra de navegacion funcionando
+[33mff096ca4[m ultimo commit, paginacion y responsividad
+[33m10ee454b[m guardado automatico
+[33mddd9c462[m[33m ([m[1;32mfix-regresion[m[33m)[m guardado automatico
+[33m24ae2af0[m Se actualizo la confirmacion de botones para estatus
+[33m8e918214[m guardado automático
+[33m6a455d58[m Añadi el loader animado y optimice el sistema de tickets
+[33m99c78fbc[m se agregaron las listas desplegables y funcionando
+[33mee80a00a[m Correccion de fechas, funcionando
+[33mfa4de9ee[m Ignorar node_modules
+[33m9949137d[m Subiendo todo el proyecto desde cero
