@@ -49,7 +49,7 @@ export function cargarTickets(component: PantallaVerTicketsComponent): void {
   component.ticketService.getTickets(100, 0).subscribe({
     next: (data: ApiResponse) => {
       // 1. Procesamos los tickets, agregando referencias a nivel2, nivel3 y nivel4
-      const ticketsProcesados = data.tickets.map(ticket => {
+          const ticketsProcesados = data.tickets.map(ticket => {
         const catNivel2 = buscarAncestroNivel(ticket.clasificacion_id, 2, component.categoriasCatalogo);
         const catNivel3 = buscarAncestroNivel(ticket.clasificacion_id, 3, component.categoriasCatalogo);
         const catNivel4 = buscarAncestroNivel(ticket.clasificacion_id, 4, component.categoriasCatalogo);
@@ -70,6 +70,9 @@ export function cargarTickets(component: PantallaVerTicketsComponent): void {
           categoria_nivel2: catNivel2,
           subcategoria_nivel3: catNivel3,
           detalle_nivel4: catNivel4,
+          categoria: catNivel2 ? catNivel2.id : null,
+          subcategoria: catNivel3 ? catNivel3.id : null,
+          detalle: catNivel4 ? catNivel4.id : null,
         };
       });
 
@@ -150,6 +153,46 @@ export function cargarTickets(component: PantallaVerTicketsComponent): void {
       component.ticketsCompletos = [...ticketsProcesados];
       component.tickets = [...ticketsProcesados];
       component.filteredTickets = [...ticketsProcesados];
+      component.usuariosDisponibles = extraerUnicosPorCampo(component.filteredTickets, 'username').map(valor => ({
+        valor,
+        seleccionado: true
+      }));
+      component.usuariosFiltrados = [...component.usuariosDisponibles];
+      if (!component.temporalSeleccionados['username']) component.temporalSeleccionados['username'] = [...component.usuariosDisponibles];
+      component.estadosDisponibles = extraerUnicosPorCampo(component.filteredTickets, 'estado').map(valor => ({
+          valor,
+          seleccionado: true
+        }));
+      component.estadosFiltrados = [...component.estadosDisponibles];
+      if (!component.temporalSeleccionados['estado']) component.temporalSeleccionados['estado'] = [...component.estadosDisponibles];
+      component.criticidadesDisponibles = extraerUnicosPorCampo(component.filteredTickets, 'criticidad').map(valor => ({
+          valor,
+          seleccionado: true
+          }));
+      component.criticidadesFiltradas = [...component.criticidadesDisponibles];
+      if (!component.temporalSeleccionados['criticidad']) component.temporalSeleccionados['criticidad'] = [...component.criticidadesDisponibles];
+      component.descripcionesDisponibles = extraerUnicosPorCampo(component.filteredTickets, 'descripcion').map(valor => ({
+        valor,
+        etiqueta: valor,
+        seleccionado: true
+      }));
+      component.descripcionesFiltradas = [...component.descripcionesDisponibles];
+      if (!component.temporalSeleccionados['descripcion']) component.temporalSeleccionados['descripcion'] = [...component.descripcionesDisponibles];
+        const nombresUnicos = Array.from(
+          new Set(component.filteredTickets.map(t => t.inventario?.nombre || '—'))
+        );
+
+        component.inventariosDisponibles = nombresUnicos.map(nombre => ({
+          valor: nombre,
+          etiqueta: nombre,
+          seleccionado: true
+        }));
+
+      component.inventariosFiltrados = [...component.inventariosDisponibles];
+      if (!component.temporalSeleccionados['inventario']) component.temporalSeleccionados['inventario'] = [...component.inventariosDisponibles];
+
+  
+
       component.page = 1;
       component.totalTickets = ticketsProcesados.length;
       component.totalPagesCount = Math.ceil(component.totalTickets / component.itemsPerPage);
@@ -262,3 +305,13 @@ export function actualizarDiasConTicketsCreacion(component: PantallaVerTicketsCo
 }
 
 
+export function extraerUnicosPorCampo(tickets: any[], campo: string): any[] {
+  const set = new Set();
+  return tickets
+    .map(t => t[campo])
+    .filter(val => {
+      if (val == null || set.has(val)) return false;
+      set.add(val);
+      return true;
+    });
+}

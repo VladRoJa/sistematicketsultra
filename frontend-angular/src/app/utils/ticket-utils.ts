@@ -387,3 +387,5 @@ export function generarOpcionesCategoriasDesdeTickets(
     };
   });
 }
+
+

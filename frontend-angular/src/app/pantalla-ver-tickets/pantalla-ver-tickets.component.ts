@@ -179,7 +179,7 @@ export class PantallaVerTicketsComponent implements OnInit {
   subcategoriasDisponibles: any[] = [];
   detallesDisponibles: any[] = [];
   inventariosDisponibles: any[] = [];
-
+  textosBusqueda: { [campo: string]: string } = {};
 
   categoriasFiltradas: any[] = [];
   descripcionesFiltradas: any[] = [];

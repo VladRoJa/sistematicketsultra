@@ -1,3 +1,6 @@
+//frontend-angular\src\app\pantalla-ver-tickets\helpers\filtros-genericos.ts
+
+
 export function inicializarTemporales(component: any, columna: string): void {
   const aliasPlural: Record<string, string> = {
     descripcion: 'descripciones', username: 'usuarios', estado: 'estados',
