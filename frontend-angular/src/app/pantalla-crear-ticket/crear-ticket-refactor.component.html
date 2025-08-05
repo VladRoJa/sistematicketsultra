@@ -7,31 +7,28 @@
 
   <form [formGroup]="form" (ngSubmit)="enviar()">
 
-<mat-form-field *ngIf="esAdmin()" appearance="fill" class="w-full">
-  <mat-label>Sucursal destino</mat-label>
-  <mat-select formControlName="sucursal_id" required>
-    <mat-option
-      *ngFor="let s of listaSucursales"
-      [value]="s.sucursal_id">
-      {{ s.sucursal }}
-    </mat-option>
-  </mat-select>
-</mat-form-field>
-
-
-
+    <!-- Selector de sucursal para admin -->
+    <mat-form-field *ngIf="esAdmin()" appearance="fill" class="w-full">
+      <mat-label>Sucursal destino</mat-label>
+      <mat-select formControlName="sucursal_id" required>
+        <mat-option
+          *ngFor="let s of listaSucursales"
+          [value]="s.sucursal_id">
+          {{ s.sucursal }}
+        </mat-option>
+      </mat-select>
+    </mat-form-field>
 
     <!-- Campos dinámicos (departamento, categoría, subcat, etc) -->
     <ng-container *ngFor="let nivel of niveles">
-      <mat-form-field appearance="fill" class="w-full" *ngIf="nivel.loading || nivel.opciones.length">
+      
+      <!-- Loader mientras carga -->
+      <div *ngIf="nivel.loading" class="loader" style="margin: 10px auto;"></div>
 
+      <!-- Campo solo si ya cargó y tiene opciones -->
+      <mat-form-field appearance="fill" class="w-full" *ngIf="!nivel.loading && nivel.opciones.length">
         <mat-label>{{ nivel.etiqueta }}*</mat-label>
-
-         <!-- Loader si está cargando -->
-        <div *ngIf="nivel.loading" class="loader" style="margin: 10px auto;"></div>
-
-
-        <mat-select [formControl]="nivel.control" [disabled]="nivel.loading">
+        <mat-select [formControl]="nivel.control">
           <mat-option *ngFor="let op of nivel.opciones" [value]="op.id">
             {{ op.nombre }}
           </mat-option>
@@ -40,36 +37,36 @@
           Selecciona {{ nivel.etiqueta.toLowerCase() }}
         </mat-error>
       </mat-form-field>
+
     </ng-container>
 
-      <!-- Lógica: solo uno de los tres a la vez -->
-      <ng-container *ngIf="mostrarSubformAparatos; else sistemasOrGenerales">
-        <app-mantenimiento-aparatos
+    <!-- Lógica: solo uno de los tres a la vez -->
+    <ng-container *ngIf="mostrarSubformAparatos; else sistemasOrGenerales">
+      <app-mantenimiento-aparatos
+        [parentForm]="form"
+        tipo="aparato"
+      ></app-mantenimiento-aparatos>
+    </ng-container>
+
+    <ng-template #sistemasOrGenerales>
+      <ng-container *ngIf="mostrarSubformSistemasDispositivos; else generales">
+        <app-sistemas
           [parentForm]="form"
-          tipo="aparato"
-        ></app-mantenimiento-aparatos>
+          (formularioValido)="onFormularioSistemasValido($event)">
+        </app-sistemas>
       </ng-container>
+    </ng-template>
 
-      <ng-template #sistemasOrGenerales>
-        <ng-container *ngIf="mostrarSubformSistemasDispositivos; else generales">
-          <app-sistemas
-            [parentForm]="form"
-            (formularioValido)="onFormularioSistemasValido($event)">
-          </app-sistemas>
-        </ng-container>
-      </ng-template>
-
-      <ng-template #generales>
-        <!-- Descripción general si no es ni mantenimiento/aparatos ni sistemas/dispositivos -->
-        <mat-form-field appearance="fill" class="w-full">
-          <mat-label>Descripción del problema*</mat-label>
-          <textarea matInput formControlName="descripcion_general" rows="3"></textarea>
-          <mat-error *ngIf="form.get('descripcion_general')?.touched && form.get('descripcion_general')?.invalid">
-            Escribe una descripción
-          </mat-error>
-        </mat-form-field>
-      </ng-template>
-
+    <ng-template #generales>
+      <!-- Descripción general -->
+      <mat-form-field appearance="fill" class="w-full">
+        <mat-label>Descripción del problema*</mat-label>
+        <textarea matInput formControlName="descripcion_general" rows="3"></textarea>
+        <mat-error *ngIf="form.get('descripcion_general')?.touched && form.get('descripcion_general')?.invalid">
+          Escribe una descripción
+        </mat-error>
+      </mat-form-field>
+    </ng-template>
 
     <!-- Criticidad -->
     <mat-form-field appearance="fill" class="w-full">
@@ -82,7 +79,7 @@
       </mat-error>
     </mat-form-field>
     
-
+    <!-- Botón guardar -->
     <button
       mat-raised-button
       color="primary"
@@ -101,5 +98,6 @@
         ></mat-progress-spinner>
       </ng-template>
     </button>
+
   </form>
 </mat-card>
