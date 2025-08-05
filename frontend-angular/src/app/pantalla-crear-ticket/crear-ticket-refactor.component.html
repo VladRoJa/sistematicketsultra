@@ -23,7 +23,8 @@
 
     <!-- Campos dinámicos (departamento, categoría, subcat, etc) -->
     <ng-container *ngFor="let nivel of niveles">
-      <mat-form-field appearance="fill" class="w-full" *ngIf="nivel.opciones.length">
+      <mat-form-field appearance="fill" class="w-full" *ngIf="nivel.loading || nivel.opciones.length">
+
         <mat-label>{{ nivel.etiqueta }}*</mat-label>
 
          <!-- Loader si está cargando -->
