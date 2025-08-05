@@ -9,6 +9,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatNativeDateModule } from '@angular/material/core';
 import { FormsModule } from '@angular/forms';
+import { mostrarAlertaToast } from 'src/app/utils/alertas';
 
 @Component({
   selector: 'app-asignar-fecha-modal',
@@ -35,7 +36,8 @@ export class AsignarFechaModalComponent {
 
   guardar(): void {
     if (!this.fechaSeleccionada || !this.motivo.trim()) {
-      alert('Debes seleccionar una fecha y escribir un motivo.');
+      mostrarAlertaToast("Debes seleccionar una fecha y escribir un motivo.", "error");
+
       return;
     }
     this.onGuardar.emit({ fecha: this.fechaSeleccionada, motivo: this.motivo.trim() });

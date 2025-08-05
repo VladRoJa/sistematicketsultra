@@ -1,22 +1,39 @@
 import csv
 from werkzeug.security import generate_password_hash
 
-# 🔧 Cambia este nombre si tu archivo tiene otro nombre:
 input_file = 'users_original.csv'
 output_file = 'users_hashed.csv'
 
-# Leer el CSV original
-with open(input_file, mode='r', encoding='utf-8-sig') as infile, open(output_file, mode='w', newline='', encoding='utf-8-sig') as outfile:
-    reader = csv.DictReader(infile, delimiter=';')
+with open(input_file, mode='r', encoding='utf-8-sig') as infile, \
+     open(output_file, mode='w', newline='', encoding='utf-8-sig') as outfile:
+    
+    # Detectar delimitador automáticamente
+    dialect = csv.Sniffer().sniff(infile.read(1024))
+    infile.seek(0)
+
+    reader = csv.DictReader(infile, dialect=dialect)
     fieldnames = reader.fieldnames
-    writer = csv.DictWriter(outfile, fieldnames=fieldnames, delimiter=';')
-    
+    print("🔍 Encabezados detectados:", fieldnames)
+
+    # Detectar columna de password
+    password_column = None
+    for col in fieldnames:
+        if 'pass' in col.lower() or 'contraseña' in col.lower() or 'clave' in col.lower():
+            password_column = col
+            break
+
+    if not password_column:
+        raise ValueError("❌ No se encontró ninguna columna que parezca contener contraseñas.")
+
+    print(f"✅ Columna de contraseña detectada: {password_column}")
+
+    writer = csv.DictWriter(outfile, fieldnames=fieldnames, dialect=dialect)
     writer.writeheader()
-    
+
     for row in reader:
-        raw_password = row['password']
+        raw_password = row[password_column]
         hashed_password = generate_password_hash(raw_password)
-        row['password'] = hashed_password
+        row[password_column] = hashed_password
         writer.writerow(row)
 
-print("✅ CSV generado correctamente: users_hashed.csv")
+print(f"✅ CSV generado correctamente: {output_file}")

@@ -87,7 +87,9 @@ export class SistemasComponent implements OnInit, OnDestroy {
     this.inventarioService.obtenerInventarioPorSucursal(sucursalId).subscribe({
       next: inv => {
         this.inventario = inv || [];
-        this.categorias = [...new Set(this.inventario.map(eq => eq.categoria).filter(Boolean))];
+        this.categorias = [...new Set(this.inventario.map(eq => eq.categoria).filter(cat => !!cat && cat.toLowerCase() !== 'maquinas')
+    )
+  ];
       },
       error: err => console.error('❌ Error al cargar inventario', err)
     });

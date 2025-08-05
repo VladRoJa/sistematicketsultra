@@ -196,7 +196,7 @@ def update_ticket_status(id):
 
         # ---- Asignación de fechas por estado ----
         if estado == "finalizado":
-            ticket.fecha_finalizado = ahora
+            ticket.fecha_finalizado = datetime.now(timezone.utc)
 
         if estado == "en progreso":
             # Usar la fecha_en_progreso que viene del frontend, si está

@@ -1,1 +1,17 @@
-<p>reauth-modal works!</p>
+
+    <h2>Reautenticación</h2>
+    <form [formGroup]="form" (ngSubmit)="reauthenticate()">
+      <mat-form-field appearance="fill">
+        <mat-label>Usuario</mat-label>
+        <input matInput formControlName="username" />
+      </mat-form-field>
+      <mat-form-field appearance="fill">
+        <mat-label>Contraseña</mat-label>
+        <input matInput type="password" formControlName="password" />
+      </mat-form-field>
+      <div class="actions">
+        <button mat-button type="button" (click)="cancel()">Cancelar</button>
+        <button mat-raised-button type="submit" [disabled]="form.invalid">Aceptar</button>
+      </div>
+    </form>
+  

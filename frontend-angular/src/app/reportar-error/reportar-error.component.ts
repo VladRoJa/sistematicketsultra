@@ -64,6 +64,14 @@ export class ReportarErrorComponent {
     const formData = new FormData();
     formData.append('descripcion', this.form.value.descripcion);
     formData.append('criticidad', this.form.value.criticidad);
+
+    // 🔽 Campos fijos
+    formData.append('departamento_id', '7');       // o el ID real de "Sistemas"
+    formData.append('categoria', 'Sistemas Internos');
+    formData.append('subcategoria', 'Errores');
+   
+
+    // Módulo + imagen como ya lo tienes
     formData.append('modulo', window.location.pathname);
     if (this.imagenSeleccionada) {
       formData.append('imagen', this.imagenSeleccionada);

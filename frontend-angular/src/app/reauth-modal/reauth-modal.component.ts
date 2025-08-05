@@ -1,4 +1,4 @@
-//reauth-modal.component.ts
+//frontend-angular\src\app\reauth-modal\reauth-modal.component.ts
 
 import { Component } from '@angular/core';
 import { MatDialogRef } from '@angular/material/dialog';
@@ -12,34 +12,12 @@ import { AuthService } from '../services/auth.service';
   selector: 'app-reauth-modal',
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule, MatInputModule, MatButtonModule],
-  template: `
-    <h2>Reautenticación</h2>
-    <form [formGroup]="form" (ngSubmit)="reauthenticate()">
-      <mat-form-field appearance="fill">
-        <mat-label>Usuario</mat-label>
-        <input matInput formControlName="username" />
-      </mat-form-field>
-      <mat-form-field appearance="fill">
-        <mat-label>Contraseña</mat-label>
-        <input matInput type="password" formControlName="password" />
-      </mat-form-field>
-      <div class="actions">
-        <button mat-button type="button" (click)="cancel()">Cancelar</button>
-        <button mat-raised-button type="submit" [disabled]="form.invalid">Aceptar</button>
-      </div>
-    </form>
-  `,
-  styles: [`
-    h2 {
-      margin-bottom: 16px;
-    }
-    .actions {
-      display: flex;
-      justify-content: flex-end;
-      margin-top: 24px;
-    }
-  `]
+  templateUrl: './reauth-modal.component.html',
+  styleUrls: ['./reauth-modal.component.css'],
 })
+
+
+
 export class ReauthModalComponent {
   form: FormGroup;
 

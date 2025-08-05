@@ -22,10 +22,8 @@ class AuthController:
 
             user = UserORM.get_by_username(username)
             if user and user.verify_password(password):
-                access_token = create_access_token(
-                    identity=str(user.id),
-                    expires_delta=timedelta(hours=1)
-                )
+                # ✅ Usar configuración global de expiración
+                access_token = create_access_token(identity=str(user.id))
                 return jsonify({
                     'mensaje': 'Inicio de sesión exitoso',
                     'access_token': access_token,
@@ -43,6 +41,7 @@ class AuthController:
         except Exception as e:
             print(f"❌ Error al iniciar sesión: {e}")
             return jsonify({'mensaje': 'Error al iniciar sesión'}), 500
+
 
     def logout(self):
         """

@@ -7,6 +7,7 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { NgxPaginationModule } from 'ngx-pagination';
 import { environment } from 'src/environments/environment'; // Importa la configuración del entorno
+import { mostrarAlertaErrorDesdeStatus, mostrarAlertaToast } from '../utils/alertas';
 
 @Component({
   selector: 'app-main',
@@ -67,7 +68,7 @@ export class MainComponent implements OnInit {
   irAGestionPermisos() {
     const token = localStorage.getItem('token');
     if (!token) {
-      alert("Token no encontrado. Se requiere autenticación.");
+      mostrarAlertaToast("Token no encontrado. Se requiere autenticación.");
       this.router.navigate(['/login']);
       return;
     }

@@ -198,7 +198,13 @@ actualizarValidadoresDescripcion() {
             })
           );
         },
-        error: () => mostrarAlertaToast('Error cargando opciones', 'error'),
+            error: () => {
+      mostrarAlertaToast('Error cargando opciones', 'error');
+      const idx = this.niveles.findIndex((n) => n.nivel === nivel);
+      if (idx >= 0) this.niveles[idx].loading = false; // apaga loader en error
+    }
+        
+
       });
   }
 

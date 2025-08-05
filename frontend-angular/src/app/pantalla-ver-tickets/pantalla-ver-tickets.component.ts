@@ -40,6 +40,7 @@ import { AsignarFechaModalComponent } from './modals/asignar-fecha-modal.compone
 import { cambiarEstadoTicket } from './helpers/pantalla-ver-tickets.estado-ticket';
 import { EditarFechaSolucionModalComponent } from './modals/editar-fecha-solucion-modal.component';
 import { CatalogoService } from '../services/catalogo.service';
+import { mostrarAlertaToast } from '../utils/alertas';
 
 
 
@@ -597,7 +598,7 @@ aplicarFiltroColumnaConReset = (col: string) => aplicarFiltroColumnaConReset(thi
 onGuardarFechaSolucion(event: { fecha: Date, motivo: string }) {
   if (!this.ticketParaAsignarFecha) return;
   if (!event.motivo || !event.motivo.trim()) {
-    alert('Debes ingresar un motivo para el cambio de fecha.');
+    mostrarAlertaToast('Debes ingresar un motivo para el cambio de fecha.');
     return;
   }
 

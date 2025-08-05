@@ -41,13 +41,8 @@ def login():
             if user.verify_password(password):
                 print("✅ Contraseña correcta")
 
-                from flask_jwt_extended import create_access_token
-                from datetime import timedelta
-
-                token = create_access_token(
-                    identity=str(user.id),
-                    expires_delta=timedelta(hours=1)
-                )
+                # ✅ Usar configuración global de expiración
+                token = create_access_token(identity=str(user.id))
                 print("🪙 Token:", token[:20])
 
                 return jsonify({
@@ -70,6 +65,7 @@ def login():
     except Exception as e:
         return manejar_error(e, "login")
 
+
 # -------------------------------------------------------------------------------
 # RUTA: OBTENER INFORMACIÓN DE SESIÓN ACTIVA
 # -------------------------------------------------------------------------------
@@ -77,6 +73,15 @@ def login():
 @auth_bp.route('/session-info', methods=['GET', 'OPTIONS'])
 @jwt_required()
 def session_info():
+    from flask_jwt_extended import get_jwt
+    import datetime
+
+    # 📅 Depuración: ver cuándo expira el token
+    jwt_data = get_jwt()
+    exp_timestamp = jwt_data.get("exp")
+    exp_datetime = datetime.datetime.fromtimestamp(exp_timestamp)
+    logger.info(f"🕒 Token expira en: {exp_datetime} (timestamp: {exp_timestamp})")
+
     origin = request.headers.get('Origin') or '*'
     logger.info(f"🛡 Origin recibido en session-info: {origin}")
 

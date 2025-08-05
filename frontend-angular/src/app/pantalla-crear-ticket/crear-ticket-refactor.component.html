@@ -25,17 +25,16 @@
     <ng-container *ngFor="let nivel of niveles">
       <mat-form-field appearance="fill" class="w-full" *ngIf="nivel.opciones.length">
         <mat-label>{{ nivel.etiqueta }}*</mat-label>
+
+         <!-- Loader si está cargando -->
+        <div *ngIf="nivel.loading" class="loader" style="margin: 10px auto;"></div>
+
+
         <mat-select [formControl]="nivel.control" [disabled]="nivel.loading">
           <mat-option *ngFor="let op of nivel.opciones" [value]="op.id">
             {{ op.nombre }}
           </mat-option>
         </mat-select>
-        <mat-progress-spinner
-          *ngIf="nivel.loading"
-          mode="indeterminate"
-          diameter="20"
-          style="position: absolute; top: 15px; right: 20px;"
-        ></mat-progress-spinner>
         <mat-error *ngIf="nivel.control.touched && nivel.control.invalid">
           Selecciona {{ nivel.etiqueta.toLowerCase() }}
         </mat-error>

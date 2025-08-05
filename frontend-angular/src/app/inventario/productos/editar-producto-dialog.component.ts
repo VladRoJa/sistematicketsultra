@@ -10,6 +10,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { environment } from 'src/environments/environment';
+import { mostrarAlertaToast } from 'src/app/utils/alertas';
 
 @Component({
   selector: 'app-editar-inventario-dialog',
@@ -58,19 +59,19 @@ export class EditarInventarioDialogComponent {
     const datosActualizados = { ...this.form.value };
 
     const token = localStorage.getItem('token');
-    if (!token) return alert("No autorizado");
+    if (!token) return mostrarAlertaToast("No autorizado");
 
     const headers = new HttpHeaders({ Authorization: `Bearer ${token}` });
 
     this.http.put(`${environment.apiUrl}/inventario/${inventario.id}`, datosActualizados, { headers })
       .subscribe({
         next: () => {
-          alert("Inventario actualizado correctamente");
+          mostrarAlertaToast("Inventario actualizado correctamente");
           this.dialogRef.close('actualizado');
         },
         error: (err) => {
           console.error("Error al actualizar inventario", err);
-          alert("No se pudo actualizar el inventario");
+          mostrarAlertaToast("No se pudo actualizar el inventario");
         }
       });
   }
@@ -85,7 +86,7 @@ export class EditarInventarioDialogComponent {
 
     const token = localStorage.getItem('token');
     if (!token) {
-      alert("No autorizado");
+      mostrarAlertaToast("No autorizado");
       return;
     }
 
@@ -96,12 +97,12 @@ export class EditarInventarioDialogComponent {
     this.http.delete(`${environment.apiUrl}/inventario/${this.data.inventario.id}`, { headers })
       .subscribe({
         next: () => {
-          alert("Inventario eliminado correctamente");
+          mostrarAlertaToast("Inventario eliminado correctamente");
           this.dialogRef.close('eliminado');
         },
         error: (err) => {
           console.error('Error al eliminar inventario', err);
-          alert("No se pudo eliminar el inventario");
+          mostrarAlertaToast("No se pudo eliminar el inventario");
         }
       });
   }
