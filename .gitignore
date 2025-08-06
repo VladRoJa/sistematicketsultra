@@ -1,4 +1,16 @@
+# Node (Angular)
 node_modules/
+
+# Python (virtual env, caches)
+venv/
+.venv/
+__pycache__/
+*.pyc
+
+# Qodo (desconozco si lo necesitas, pero si sí, mantenlo)
 .qodo
-.env.local
-.env.prod
+
+# Env files
+.env*
+# Logs
+*.log

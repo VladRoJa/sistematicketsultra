@@ -9,14 +9,14 @@ services:
       - key: APP_ENV
         value: prod
       - key: SQLALCHEMY_DATABASE_URI
-        value: postgresql+psycopg2://dbultra_cbmd_user:lpYzpRi2UelukjhYjpG45XoK6yPXU8Ps@dpg-d0vr1rripnbc73872240-a.oregon-postgres.render.com/dbultra_cbmd
+        value: ${SQLALCHEMY_DATABASE_URI}
       - key: SECRET_KEY
-        value: R2vYv7BzZghmbDmyiABzX61bTVl8uYo4FCR9f_pZxQvzh0fOY_Aa8b6Qb78pq6ozTo7wFQ
+        value: ${SECRET_KEY}
       - key: JWT_SECRET_KEY
-        value: XTZqA2kt7J6Zl8jOYW0b_6oH8Nq7KgxT3sP1s5tVxfhGz9qVKsw8JCrLhvPS1ly8kIOhFtQ
+        value: ${JWT_SECRET_KEY}
       - key: CLOUDINARY_CLOUD_NAME
-        value: dmwpxfdck
+        value: ${CLOUDINARY_CLOUD_NAME}
       - key: CLOUDINARY_API_KEY
-        value: "226536834274524"
+        value: ${CLOUDINARY_API_KEY}
       - key: CLOUDINARY_API_SECRET
-        value: TrxiF3ZYUJBbN4FWHmkI4O7x42o
+        value: ${CLOUDINARY_API_SECRET}
