@@ -4,6 +4,8 @@ from flask import Flask, request
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from dotenv import load_dotenv
+import logging
+import os
 
 load_dotenv()
 from config import Config
@@ -55,7 +57,11 @@ def create_app():
     
 
     
-    print("✅ CORS configurado con:", app.config['CORS_ORIGINS'])
+        # Logging solo en desarrollo
+    app_env = os.getenv("APP_ENV", "local")
+    if app_env == "local":
+        logging.basicConfig(level=logging.INFO)
+        logging.info(f"✅ CORS configurado con: {app.config['CORS_ORIGINS']}")
 
     # ──────────────────────────────────────
     # Registrar Blueprints (todas bajo /api/)
