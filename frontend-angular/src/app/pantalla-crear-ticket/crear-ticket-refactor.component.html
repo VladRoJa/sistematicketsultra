@@ -22,8 +22,6 @@
     <!-- Campos dinámicos (departamento, categoría, subcat, etc) -->
     <ng-container *ngFor="let nivel of niveles">
       
-      <!-- Loader mientras carga -->
-      <div *ngIf="nivel.loading" class="loader" style="margin: 10px auto;"></div>
 
       <!-- Campo solo si ya cargó y tiene opciones -->
       <mat-form-field appearance="fill" class="w-full" *ngIf="!nivel.loading && nivel.opciones.length">

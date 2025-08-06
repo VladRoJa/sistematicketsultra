@@ -2,10 +2,10 @@
 
 <div class="subformulario-box" [formGroup]="parentForm">
 
-  <!-- Loader mientras categorías no estén listas -->
+  <!-- Loader mientras no hay categorías -->
   <div *ngIf="categorias.length === 0" class="loader" style="margin: 20px auto;"></div>
 
-  <!-- El resto solo aparece si hay categorías -->
+  <!-- Contenido solo cuando ya se cargaron categorías -->
   <ng-container *ngIf="categorias.length > 0">
 
     <!-- Categoría -->
