@@ -299,19 +299,6 @@ export class PantallaVerTicketsComponent implements OnInit {
     this.user?.sucursal_id === 100
   );
 
-  this.http.get<any>(`/api/catalogos/clasificaciones/todos`).subscribe(res => {
-  const lista = res.data || [];
-  this.clasificacionesMap = {};
-  lista.forEach((c: any) => {
-    this.clasificacionesMap[c.id] = c.nombre;
-  });
-  // Si quieres forzar un refresco de la vista (opcional):
-  this.changeDetectorRef.detectChanges();
-});
-
-
-
-
     // 🔁 Escuchar eventos de refresco desde el servicio
     this.refrescoService.refrescarTabla$.subscribe(() => {
       TicketInit.cargarTickets(this); // recargar los tickets
