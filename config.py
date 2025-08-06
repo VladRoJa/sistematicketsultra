@@ -4,16 +4,23 @@ from datetime import timedelta
 import os
 from dotenv import load_dotenv
 
-# 🔧 Cargar el .env automáticamente desde dentro de la clase Config
-class Config:
-    # Forzar carga del entorno según APP_ENV
-    app_env = os.getenv("APP_ENV", "local")
-    env_file = ".env.local" if app_env == "local" else ".env.prod"
-    load_dotenv(env_file)
+# Cargar .env automáticamente según APP_ENV
+app_env = os.getenv("APP_ENV", "local")
+env_file = ".env.local" if app_env == "local" else ".env.prod"
+load_dotenv(env_file)
 
+# 🚨 Validar claves secretas obligatorias
+SECRET_KEY = os.environ.get('SECRET_KEY')
+JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY')
+if not SECRET_KEY:
+    raise RuntimeError("❌ La variable de entorno SECRET_KEY no está definida. Deteniendo la app.")
+if not JWT_SECRET_KEY:
+    raise RuntimeError("❌ La variable de entorno JWT_SECRET_KEY no está definida. Deteniendo la app.")
+
+class Config:
     # Seguridad
-    SECRET_KEY = os.environ.get('SECRET_KEY') or 'Sp@ces2329@'
-    JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY') or 'tu_llave_secreta_super_segura'
+    SECRET_KEY = SECRET_KEY
+    JWT_SECRET_KEY = JWT_SECRET_KEY
 
     # JWT Settings
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(minutes=45)
@@ -46,8 +53,7 @@ class Config:
     SESSION_FILE_THRESHOLD = 100
     SESSION_FILE_MODE = 600
 
-    #Cloudinary
+    # Cloudinary
     CLOUDINARY_CLOUD_NAME = os.environ.get('CLOUDINARY_CLOUD_NAME')
     CLOUDINARY_API_KEY = os.environ.get('CLOUDINARY_API_KEY')
     CLOUDINARY_API_SECRET = os.environ.get('CLOUDINARY_API_SECRET')
-
