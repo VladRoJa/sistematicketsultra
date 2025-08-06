@@ -44,9 +44,9 @@ class Config:
 
     # Sesiones
     SESSION_PERMANENT = True
-    SESSION_TYPE = "filesystem"
+    SESSION_TYPE = "filesystem" 
     SESSION_COOKIE_NAME = "session"
-    SESSION_COOKIE_SECURE = False
+    SESSION_COOKIE_SECURE = (app_env == "prod")  # True solo en prod, False en local
     SESSION_USE_SIGNER = True
     SESSION_KEY_PREFIX = "flask_session:"
     SESSION_FILE_DIR = "./flask_session"
