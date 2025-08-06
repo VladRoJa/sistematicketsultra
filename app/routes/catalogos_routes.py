@@ -336,6 +336,7 @@ def arbol_clasificaciones():
 @catalogos_bp.route('/clasificaciones/todos', methods=['GET'])
 @jwt_required()
 def todas_las_clasificaciones():
+    print(">>> Entrando a todas_las_clasificaciones()")
     clasifs = CatalogoClasificacion.query.all()
     data = [{'id': c.id, 'nombre': c.nombre} for c in clasifs]
     return jsonify({'data': data})
