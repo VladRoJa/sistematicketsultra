@@ -4,6 +4,8 @@ from app import create_app
 from app.extensions import db
 from app.models.user_model import UserORM
 from werkzeug.security import generate_password_hash
+import os
+from getpass import getpass
 
 def crear_usuario_admin(username, password, sucursal_id=1000, department_id=1):
     app = create_app()
@@ -29,8 +31,16 @@ def crear_usuario_admin(username, password, sucursal_id=1000, department_id=1):
         print(f"✅ Usuario administrador '{username}' creado exitosamente.")
 
 if __name__ == "__main__":
-    # 🔥 Aquí defines el primer admin
+    username = "admincorp"
+    # 1. Intenta leer la contraseña de variable de entorno
+    password = os.getenv("ADMIN_PASSWORD")
+    # 2. Si no existe, pide al usuario que la ingrese (con prompt seguro)
+    if not password:
+        password = getpass("Introduce la contraseña para el usuario admincorp: ")
+    # 3. Valida que la contraseña tenga al menos 8 caracteres (ajusta a tu política)
+    if not password or len(password) < 8:
+        raise ValueError("La contraseña de admin debe tener mínimo 8 caracteres.")
     crear_usuario_admin(
-        username="admincorp",
-        password="123"
+        username=username,
+        password=password
     )
