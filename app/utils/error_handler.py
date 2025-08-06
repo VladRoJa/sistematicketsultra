@@ -1,5 +1,6 @@
 #app\utils\error_handler.py
 
+import logging
 import traceback
 from flask import jsonify, request
 from datetime import datetime
@@ -11,29 +12,34 @@ def manejar_error(e, contexto=""):
     error_trace = traceback.format_exc()
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    # 🖨 Consola en desarrollo
-    print("🔴 ERROR DETECTADO")
-    print(f"🕒 {timestamp}")
-    print(f"📍 Contexto: {contexto}")
-    print(f"📄 Ruta: {request.path}")
-    print(f"🧨 Mensaje: {str(e)}")
-    print(f"🧾 Traza:\n{error_trace}")
+    # Configurar logging (si no está ya configurado en app principal)
+    logging.basicConfig(
+        filename=LOG_FILE,
+        level=logging.ERROR,
+        format="%(asctime)s [%(levelname)s] %(message)s"
+    )
 
-    # 📁 Guardar en archivo logs/errores.log
-    try:
-        os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
-        with open(LOG_FILE, "a", encoding="utf-8") as f:
-            f.write(f"\n[{timestamp}] ERROR en {contexto} - {request.path}\n")
-            f.write(f"Mensaje: {str(e)}\n")
-            f.write(f"Traza:\n{error_trace}\n")
-    except Exception as log_err:
-        print(f"⚠️ Error al escribir log: {log_err}")
+    # Registrar en logging con traza
+    logging.exception(f"Error en {contexto} - Ruta: {request.path}")
 
-    # 🧃 Respuesta JSON genérica para el frontend
+    # En desarrollo, también mostrar en consola y retornar detalles
+    if os.getenv("APP_ENV", "local"):
+        print("🔴 ERROR DETECTADO")
+        print(f"🕒 {timestamp}")
+        print(f"📍 Contexto: {contexto}")
+        print(f"📄 Ruta: {request.path}")
+        print(f"🧨 Mensaje: {str(e)}")
+        print(f"🧾 Traza:\n{error_trace}")
+
+        return jsonify({
+            "mensaje": "Error interno en el servidor",
+            "detalle": str(e),
+            "contexto": contexto,
+            "ruta": request.path,
+            "hora": timestamp
+        }), 500
+
+    # En producción, respuesta genérica sin detalles
     return jsonify({
-        "mensaje": "Error interno en el servidor",
-        "detalle": str(e),
-        "contexto": contexto,
-        "ruta": request.path,
-        "hora": timestamp
+        "mensaje": "Ocurrió un error interno. Por favor, inténtalo más tarde."
     }), 500
