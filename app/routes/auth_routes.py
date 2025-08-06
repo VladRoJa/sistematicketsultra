@@ -29,21 +29,16 @@ auth_bp = Blueprint('auth', __name__)
 def login():
     try:
         data = request.get_json(force=True)
-        print("📩 Payload recibido:", data)
-
         username = data.get('username', '').strip().lower()
         password = data.get('password', '')
-        print(f"🧪 Login con usuario: {username}")
 
         user = UserORM.get_by_username(username)
         if user:
-            print("🔎 Usuario encontrado:", user)
             if user.verify_password(password):
-                print("✅ Contraseña correcta")
-
                 # ✅ Usar configuración global de expiración
                 token = create_access_token(identity=str(user.id))
-                print("🪙 Token:", token[:20])
+                # Log de login exitoso SIN mostrar el token ni contraseña
+                logger.info(f"Usuario '{username}' inició sesión correctamente.")
 
                 return jsonify({
                     "message": "Login exitoso",
@@ -56,9 +51,9 @@ def login():
                     }
                 }), 200
             else:
-                print("❌ Contraseña incorrecta")
+                logger.warning(f"Intento de login fallido: contraseña incorrecta para usuario '{username}'.")
         else:
-            print("❌ Usuario no encontrado")
+            logger.warning(f"Intento de login fallido: usuario '{username}' no encontrado.")
 
         return jsonify({"message": "Credenciales incorrectas"}), 401
 
