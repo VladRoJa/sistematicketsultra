@@ -26,7 +26,7 @@ class Config:
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(minutes=45)
     JWT_TOKEN_LOCATION = ['headers']
     JWT_HEADER_NAME = 'Authorization'
-    JWT_HEADER_TYPE = 'Bearer'
+    JWT_HEADER_TYPE = 'Bearer' 
     JWT_VERIFY_EXPIRATION = True
 
     # Base de datos
