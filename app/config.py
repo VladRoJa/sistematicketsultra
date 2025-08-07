@@ -37,10 +37,33 @@ class Config:
 
     # CORS
     CORS_ORIGINS = [
-        "http://localhost:4200",                            
-        "https://sistematicketsultra.onrender.com",          
-        "https://sistematicketsultra-backend.onrender.com"   
+        "http://localhost",
+        "http://localhost:80",
+        "http://localhost:4200",
+        "http://127.0.0.1",
+        "http://127.0.0.1:80",
+        "http://127.0.0.1:4200",
+        "https://sistematicketsultra.onrender.com",
+        "https://sistematicketsultra-backend.onrender.com"
     ]
+
+
+    # Sesiones
+    SESSION_PERMANENT = True
+    SESSION_TYPE = "filesystem" 
+    SESSION_COOKIE_NAME = "session"
+    SESSION_COOKIE_SECURE = (app_env == "prod")  # True solo en prod, False en local
+    SESSION_USE_SIGNER = True
+    SESSION_KEY_PREFIX = "flask_session:"
+    SESSION_FILE_DIR = "./flask_session"
+    SESSION_FILE_THRESHOLD = 100
+    SESSION_FILE_MODE = 600
+
+    # Cloudinary
+    CLOUDINARY_CLOUD_NAME = os.environ.get('CLOUDINARY_CLOUD_NAME')
+    CLOUDINARY_API_KEY = os.environ.get('CLOUDINARY_API_KEY')
+    CLOUDINARY_API_SECRET = os.environ.get('CLOUDINARY_API_SECRET')
+
 
     # Sesiones
     SESSION_PERMANENT = True

@@ -1,0 +1,50 @@
+#docker-compose.yml
+
+
+version: '3.8'
+services:
+  db:
+    image: postgres:15  # Puedes cambiar la versión si quieres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: sistema_tickets
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: Insul1n4
+      TZ: America/Tijuana
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend-net
+
+  backend:
+    build: ./app
+    depends_on:
+      - db
+    env_file:
+      - .env.docker   # O el nombre del .env que quieras usar
+    ports:
+      - "5000:5000"
+    networks:
+      - backend-net
+
+
+  frontend:
+    build: ./frontend-angular
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - backend-net
+
+
+
+      
+
+volumes:
+  postgres_data:
+
+networks:
+  backend-net:

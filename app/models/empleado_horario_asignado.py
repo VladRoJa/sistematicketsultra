@@ -1,6 +1,6 @@
 # app/models/empleado_horario_asignado.py
 
-from app.extensions import db
+from extensions import db
 
 class EmpleadoHorarioAsignado(db.Model):
     __tablename__ = 'empleado_horario_asignado'

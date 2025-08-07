@@ -1,6 +1,6 @@
 # app\models\sucursal_model.py
 
-from app.extensions import db
+from extensions import db
 
 # ─────────────────────────────────────────────────────────────
 # MODELO: SUCURSAL

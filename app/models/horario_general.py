@@ -1,6 +1,6 @@
 # app/models/horario_general.py
 
-from app.extensions import db
+from extensions import db
 
 class HorarioGeneral(db.Model):
     __tablename__ = 'horarios_generales'

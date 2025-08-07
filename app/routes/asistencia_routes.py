@@ -1,14 +1,14 @@
 # app/routes/asistencia_routes.py
 
 from flask import Blueprint, request, jsonify
-from app.models.asistencia_model import RegistroAsistencia
-from app.models.user_model import UserORM
-from app.models.horario_general import HorarioGeneral
-from app.models.bloque_horario import BloqueHorario
-from app.models.empleado_horario_asignado import EmpleadoHorarioAsignado
-from app.extensions import db
+from models.asistencia_model import RegistroAsistencia
+from models.user_model import UserORM
+from models.horario_general import HorarioGeneral
+from models.bloque_horario import BloqueHorario
+from models.empleado_horario_asignado import EmpleadoHorarioAsignado
+from extensions import db
 from datetime import datetime, date, time
-from app.utils.semana_actual import get_semana_actual
+from utils.semana_actual import get_semana_actual
 from flask_jwt_extended import jwt_required
 
 asistencia_bp = Blueprint('asistencia', __name__, url_prefix='/api/asistencia')

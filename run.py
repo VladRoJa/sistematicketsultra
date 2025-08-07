@@ -6,6 +6,8 @@ import logging
 
 from app.utils.migraciones import aplicar_migraciones
 
+
+
 # -------------------------------------------------------------------------------
 # Configurar logging básico
 # -------------------------------------------------------------------------------

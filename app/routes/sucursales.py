@@ -6,8 +6,8 @@
 
 from flask import Blueprint, jsonify
 from flask_jwt_extended import jwt_required
-from app.models.sucursal_model import Sucursal
-from app.utils.error_handler import manejar_error
+from models.sucursal_model import Sucursal
+from utils.error_handler import manejar_error
 
 sucursales_bp = Blueprint('sucursales', __name__, url_prefix='/api/sucursales')
 

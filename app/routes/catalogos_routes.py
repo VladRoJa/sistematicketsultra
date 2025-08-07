@@ -2,11 +2,11 @@ import io
 from flask import Blueprint, request, jsonify, send_file
 from flask_jwt_extended import jwt_required
 import pandas as pd
-from app.extensions import db
-from app.models.catalogos import (
+from extensions import db
+from models.catalogos import (
     CatalogoClasificacion, Proveedor, Marca, UnidadMedida, GrupoMuscular, TipoInventario
 )
-from app.utils.error_handler import manejar_error
+from utils.error_handler import manejar_error
 from rapidfuzz import fuzz
 import os
 from werkzeug.utils import secure_filename

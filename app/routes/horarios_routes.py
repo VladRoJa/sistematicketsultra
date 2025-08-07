@@ -1,8 +1,8 @@
 # app/routes/horarios_routes.py
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
-from app.models.horario_general import HorarioGeneral
-from app.extensions import db
+from models.horario_general import HorarioGeneral
+from extensions import db
 
 horarios_bp = Blueprint('horarios', __name__, url_prefix='/api/horarios')
 

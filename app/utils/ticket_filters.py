@@ -1,6 +1,6 @@
 # app/utils/ticket_filters.py
 
-from app.models.ticket_model import Ticket
+from models.ticket_model import Ticket
 from sqlalchemy import or_
 
 def filtrar_tickets_por_usuario(user, query=None):
