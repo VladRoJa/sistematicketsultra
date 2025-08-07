@@ -44,7 +44,10 @@ class Config:
         "http://127.0.0.1:80",
         "http://127.0.0.1:4200",
         "https://sistematicketsultra.onrender.com",
-        "https://sistematicketsultra-backend.onrender.com"
+        "https://sistematicketsultra-backend.onrender.com",
+        "http://184.107.165.75",
+        "http://184.107.165.75:80"
+        
     ]
 
 
