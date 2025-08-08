@@ -87,7 +87,7 @@ export class CrearTicketRefactorComponent implements OnInit, OnDestroy {
   esAdmin(): boolean {
     const user = JSON.parse(localStorage.getItem('user') || '{}');
     const rol = (user.rol || '').toLowerCase().trim();
-    return rol === 'administrador' || user.sucursal_id === 1000;
+    return rol === 'administrador' || user.sucursal_id === 1000 || user.sucursal_id === 100;
   }
 
 ngOnInit(): void {

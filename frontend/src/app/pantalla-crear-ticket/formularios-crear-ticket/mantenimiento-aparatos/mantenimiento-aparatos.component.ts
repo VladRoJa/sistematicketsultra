@@ -117,15 +117,21 @@ ngOnInit(): void {
   }
 
   private cargarEquiposPorSucursal(sucursalId: number) {
+    // 👇 Log para depuración
+    console.log('[cargarEquiposPorSucursal] sucursalId:', sucursalId, 'tipo:', this.tipo);
+
     this.equiposService.obtenerEquipos({ sucursal_id: sucursalId, tipo: this.tipo })
       .subscribe({
-        next: resp => this.equipos = resp || [],
+        next: resp => {
+          console.log('[cargarEquiposPorSucursal] Respuesta del backend:', resp);
+          this.equipos = resp || [];
+        },
         error: err => {
           console.error('Error al cargar equipos:', err);
           this.equipos = [];
         }
       });
-  }
+}
 
   get nombreTipo(): string {
     return this.tipo === 'dispositivo' ? 'Dispositivo' : 'Aparato';

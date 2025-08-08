@@ -514,7 +514,7 @@ def listar_equipos():
             query = query.filter(db.func.lower(InventarioGeneral.tipo) == tipo)
 
         # Filtro por sucursal:
-        if not (user.rol == "ADMINISTRADOR" or user.sucursal_id == 1000):
+        if not (user.rol == "ADMINISTRADOR" or user.sucursal_id == 1000 or user.sucursal_id == 100):
             query = query.join(InventarioSucursal).filter(InventarioSucursal.sucursal_id == user.sucursal_id)
         elif sucursal_id:
             query = query.join(InventarioSucursal).filter(InventarioSucursal.sucursal_id == sucursal_id)
@@ -557,7 +557,7 @@ def equipos_con_historial():
         
         if tipo:
             q = q.filter(InventarioGeneral.tipo == tipo)
-        if not (user.rol == "ADMINISTRADOR" or user.sucursal_id == 1000):
+        if not (user.rol == "ADMINISTRADOR" or user.sucursal_id == 1000 or user.sucursal_id == 100):
             q = q.join(Ticket).filter(Ticket.sucursal_id == user.sucursal_id)
         elif sucursal_id:
             q = q.join(Ticket).filter(Ticket.sucursal_id == sucursal_id)
@@ -594,7 +594,7 @@ def historial_equipo(equipo_id):
 
         query = Ticket.query.filter(Ticket.aparato_id == equipo_id)
 
-        if not (user.rol == "ADMINISTRADOR" or user.sucursal_id == 1000):
+        if not (user.rol == "ADMINISTRADOR" or user.sucursal_id == 1000 or user.sucursal_id == 100):
             query = query.filter(Ticket.sucursal_id == user.sucursal_id)
 
         tickets = query.order_by(Ticket.fecha_creacion.desc()).all()
@@ -651,7 +651,7 @@ def obtener_equipos():
         query = InventarioSucursal.query
 
         # Si no es admin, restringe a la sucursal del usuario
-        if not (user.rol == "ADMINISTRADOR" or user.sucursal_id == 1000):
+        if not (user.rol == "ADMINISTRADOR" or user.sucursal_id == 1000 or user.sucursal_id == 100):
             query = query.filter_by(sucursal_id=user.sucursal_id)
         elif sucursal_id:
             query = query.filter_by(sucursal_id=sucursal_id)
@@ -707,7 +707,7 @@ def listar_inventario_filtrado():
 
         # Si no eres admin, filtra solo por tu sucursal
         user = UserORM.get_by_id(get_jwt_identity())
-        if user and not (user.rol == "ADMINISTRADOR" or user.sucursal_id == 1000):
+        if user and not (user.rol == "ADMINISTRADOR" or user.sucursal_id == 1000 or user.sucursal_id == 100):
             if not sucursal_id:
                 ids_en_sucursal = [inv.inventario_id for inv in InventarioSucursal.query.filter_by(sucursal_id=user.sucursal_id).filter(InventarioSucursal.stock > 0).all()]
                 query = query.filter(InventarioGeneral.id.in_(ids_en_sucursal))
