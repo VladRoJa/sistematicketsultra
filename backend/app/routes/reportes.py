@@ -24,7 +24,7 @@ reportes_bp = Blueprint('reportes', __name__, url_prefix='/api/reportes')
 def exportar_inventario():
     try:
         # Filtros por query params
-        categoria = request.args.get('categoria')
+        categoria = request.args.get('categoria') 
         tipo = request.args.get('tipo')
         proveedor = request.args.get('proveedor')
 
