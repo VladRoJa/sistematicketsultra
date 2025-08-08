@@ -19,9 +19,7 @@ services:
       - backend-net
 
   backend:
-  build:
-    context: .
-    dockerfile: backend/app/Dockerfile
+    build: ./backend
     depends_on:
       - db
     env_file:

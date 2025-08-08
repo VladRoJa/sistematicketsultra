@@ -13,7 +13,7 @@ RUN apt-get update && \
     apt-get autoremove -y && \
     apt-get clean
 
-COPY backend/app /app/app
+COPY app /app/app
 COPY migrations /app/migrations
 
 
