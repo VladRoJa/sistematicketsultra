@@ -2,7 +2,7 @@
 
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
-from backend.app import db
+from app import db
 
 class MigracionAplicada(db.Model):
     __tablename__ = 'migraciones_aplicadas'

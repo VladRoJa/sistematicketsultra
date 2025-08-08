@@ -1,9 +1,9 @@
 # app/routes/asignacion_horario_routes.py
 from flask import Blueprint, request, jsonify
-from backend.app.models.empleado_horario_asignado import EmpleadoHorarioAsignado
-from backend.app.models.horario_general import HorarioGeneral
-from backend.app.models.user_model import UserORM
-from backend.app. extensions import db
+from app.models.empleado_horario_asignado import EmpleadoHorarioAsignado
+from app.models.horario_general import HorarioGeneral
+from app.models.user_model import UserORM
+from app. extensions import db
 from datetime import date
 from flask_jwt_extended import jwt_required
 

@@ -1,5 +1,5 @@
 # app/models/asistencia_model.py
-from backend.app. extensions import db
+from app. extensions import db
 from datetime import datetime
 
 class RegistroAsistencia(db.Model):

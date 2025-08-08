@@ -3,27 +3,24 @@
 from flask import Flask, request
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
-from dotenv import load_dotenv
 import logging
 import os
-
-load_dotenv()
-from backend.app.config import Config
-from backend.app.extensions import db, migrate
-from backend.app.routes import auth_bp, ticket_bp, main_bp
-from backend.app.routes.inventarios import inventario_bp
-from backend.app.routes.permisos_routes import permisos_bp
-from backend.app.routes.departamentos_routes import departamentos_bp
-from backend.app.routes.reportes import reportes_bp
-from backend.app.routes.sucursales import sucursales_bp
-from backend.app.routes.importar_inventario import bp_importar
-from backend.app.routes.asistencia_routes import asistencia_bp
-from backend.app.routes.horarios_routes import horarios_bp
-from backend.app.routes.bloques_routes import bloques_bp
-from backend.app.routes.asignacion_horario_routes import asignacion_bp
-from backend.app.routes.catalogos_routes import catalogos_bp
-from backend.app.routes.usuarios_routes import usuarios_bp
-from backend.app.routes.formulario_ticket_routes import formulario_ticket_bp
+from app.config import Config
+from app.extensions import db, migrate
+from app.routes import auth_bp, ticket_bp, main_bp
+from app.routes.inventarios import inventario_bp
+from app.routes.permisos_routes import permisos_bp
+from app.routes.departamentos_routes import departamentos_bp
+from app.routes.reportes import reportes_bp
+from app.routes.sucursales import sucursales_bp
+from app.routes.importar_inventario import bp_importar
+from app.routes.asistencia_routes import asistencia_bp
+from app.routes.horarios_routes import horarios_bp
+from app.routes.bloques_routes import bloques_bp
+from app.routes.asignacion_horario_routes import asignacion_bp
+from app.routes.catalogos_routes import catalogos_bp
+from app.routes.usuarios_routes import usuarios_bp
+from app.routes.formulario_ticket_routes import formulario_ticket_bp
 
 
 

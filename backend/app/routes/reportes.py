@@ -1,14 +1,14 @@
 from flask import Blueprint, jsonify, send_file, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
-from backend.app. extensions import db
-from backend.app.models.inventario import (
+from app. extensions import db
+from app.models.inventario import (
     InventarioGeneral, InventarioSucursal, MovimientoInventario, DetalleMovimiento
 )
-from backend.app.models.user_model import UserORM
-from backend.app.models.sucursal_model import Sucursal
-from backend.app.models import Ticket
-from backend.app. utils.error_handler import manejar_error
-from backend.app. utils.cloudinary_upload import upload_image_to_cloudinary
+from app.models.user_model import UserORM
+from app.models.sucursal_model import Sucursal
+from app.models import Ticket
+from app. utils.error_handler import manejar_error
+from app. utils.cloudinary_upload import upload_image_to_cloudinary
 from io import BytesIO
 from datetime import datetime, timezone
 import pandas as pd

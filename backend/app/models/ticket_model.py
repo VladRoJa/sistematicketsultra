@@ -2,8 +2,8 @@
 
 from datetime import datetime, timezone
 import pytz
-from backend.app. extensions import db
-from backend.app. utils.datetime_utils import format_datetime
+from app. extensions import db
+from app. utils.datetime_utils import format_datetime
 from pytz import timezone as tz
 from dateutil import parser
 from dateutil.parser import isoparse

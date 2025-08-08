@@ -4,10 +4,10 @@
 
 from flask import Blueprint, request, jsonify, send_file
 from werkzeug.utils import secure_filename
-from backend.app. extensions import db
-from backend.app.models.inventario import InventarioGeneral, InventarioSucursal
-from backend.app.models.sucursal_model import Sucursal
-from backend.app. utils.string_utils import normalizar_campo
+from app. extensions import db
+from app.models.inventario import InventarioGeneral, InventarioSucursal
+from app.models.sucursal_model import Sucursal
+from app. utils.string_utils import normalizar_campo
 import pandas as pd
 import io
 from flask_jwt_extended import jwt_required

@@ -1,7 +1,7 @@
 #app\models\catalogos.py
 
 
-from backend.app. extensions import db
+from app. extensions import db
 
 class Proveedor(db.Model):
     __tablename__ = 'proveedores'

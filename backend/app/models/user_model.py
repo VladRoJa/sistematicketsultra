@@ -1,7 +1,7 @@
 # app\models\user_model.py
 
 from werkzeug.security import check_password_hash
-from backend.app. extensions import db
+from app. extensions import db
 
 # ─────────────────────────────────────────────────────────────
 # MODELO: USUARIO

@@ -2,9 +2,10 @@
 
 from dotenv import load_dotenv
 import os
+print("SECRET_KEY =", os.getenv("SECRET_KEY"))
 import logging
 
-from backend.app.utils.migraciones import aplicar_migraciones
+from app.utils.migraciones import aplicar_migraciones
 
 
 
@@ -27,7 +28,7 @@ logger.info(f"✅ Entorno '{app_env}' cargado desde {env_file}.")
 # -------------------------------------------------------------------------------
 # Inicializar Flask y mostrar configuración
 # -------------------------------------------------------------------------------
-from backend.app import create_app, db
+from app import create_app, db
 from flask_migrate import Migrate
 
 app = create_app()

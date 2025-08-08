@@ -8,11 +8,11 @@
 from flask import Blueprint, request, jsonify, make_response, Response
 from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_required
 from datetime import timedelta
-from backend.app.models.user_model import UserORM
+from app.models.user_model import UserORM
 import logging
-from backend.app.config import Config
+from app.config import Config
 import json
-from backend.app. utils.error_handler import manejar_error
+from app. utils.error_handler import manejar_error
 
 
 # Configurar logging

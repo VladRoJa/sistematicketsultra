@@ -4,7 +4,7 @@
 # MODELO: DEPARTAMENTO
 # ------------------------------------------------------------------------------
 
-from backend.app. extensions import db
+from app. extensions import db
 
 class Departamento(db.Model):
     __tablename__ = 'departamentos'

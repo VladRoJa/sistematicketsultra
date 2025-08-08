@@ -9,18 +9,18 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 import pytz
 from sqlalchemy import or_
-from backend.app.models.inventario import InventarioGeneral
-from backend.app. utils.ticket_filters import filtrar_tickets_por_usuario
-from backend.app.config import Config
+from app.models.inventario import InventarioGeneral
+from app. utils.ticket_filters import filtrar_tickets_por_usuario
+from app.config import Config
 from sqlalchemy import or_
-from backend.app.models.ticket_model import Ticket
-from backend.app.models.user_model import UserORM
-from backend.app. extensions import db
-from backend.app. utils.error_handler import manejar_error
+from app.models.ticket_model import Ticket
+from app.models.user_model import UserORM
+from app. extensions import db
+from app. utils.error_handler import manejar_error
 from dateutil import parser
 from sqlalchemy.orm.attributes import flag_modified
-from backend.app. utils.datetime_utils import format_datetime 
-from backend.app.models.inventario import InventarioGeneral
+from app. utils.datetime_utils import format_datetime 
+from app.models.inventario import InventarioGeneral
 
 
 
@@ -734,7 +734,7 @@ def historial_aparato(aparato_id):
 
         # --- Movimientos de inventario relacionados ---
         # Un movimiento puede traer varios detalles (productos), pero filtramos por inventario_id == aparato_id
-        from backend.app.models.inventario import DetalleMovimiento, MovimientoInventario
+        from app.models.inventario import DetalleMovimiento, MovimientoInventario
 
         detalles = DetalleMovimiento.query.filter_by(inventario_id=aparato_id).all()
         movimientos = []

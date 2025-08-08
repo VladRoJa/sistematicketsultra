@@ -1,8 +1,8 @@
 # scripts/migrar_historial.py
 
 from app import create_app
-from backend.app.extensions import db
-from backend.app.models.ticket_model import Ticket
+from app.extensions import db
+from app.models.ticket_model import Ticket
 from datetime import datetime, timezone, time
 import pytz
 

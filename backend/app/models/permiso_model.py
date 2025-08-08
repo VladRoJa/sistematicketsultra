@@ -4,7 +4,7 @@
 # MODELO: PERMISOS DE USUARIOS SOBRE DEPARTAMENTOS
 # ------------------------------------------------------------------------------
 
-from backend.app. extensions import db
+from app. extensions import db
 
 class Permiso(db.Model):
     __tablename__ = 'usuarios_permisos'

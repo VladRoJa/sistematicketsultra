@@ -6,10 +6,10 @@
 
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from backend.app. extensions import db
-from backend.app.models.permiso_model import Permiso
-from backend.app.models.departamento_model import Departamento
-from backend.app. utils.error_handler import manejar_error
+from app. extensions import db
+from app.models.permiso_model import Permiso
+from app.models.departamento_model import Departamento
+from app. utils.error_handler import manejar_error
 
 permisos_bp = Blueprint('permisos', __name__, url_prefix='/api/permisos')
 

@@ -2,7 +2,7 @@
 
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required
-from backend.app.models.formulario_ticket import FormularioTicket
+from app.models.formulario_ticket import FormularioTicket
 
 formulario_ticket_bp = Blueprint('formulario_ticket', __name__)
 

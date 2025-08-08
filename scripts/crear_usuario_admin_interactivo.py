@@ -1,8 +1,8 @@
 # scripts\crear_usuario_admin_interactivo.py
 
-from backend.app import create_app
-from backend.app.extensions import db
-from backend.app.models.user_model import UserORM
+from app import create_app
+from app.extensions import db
+from app.models.user_model import UserORM
 from werkzeug.security import generate_password_hash
 import getpass
 

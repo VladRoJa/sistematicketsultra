@@ -1,8 +1,8 @@
 # app/routes/bloques_routes.py
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
-from backend.app.models.bloque_horario import BloqueHorario
-from backend.app. extensions import db
+from app.models.bloque_horario import BloqueHorario
+from app. extensions import db
 
 bloques_bp = Blueprint('bloques', __name__, url_prefix='/api/bloques')
 
