@@ -18,9 +18,9 @@ from ..models.sucursal_model import Sucursal
 from datetime import datetime
 import pytz
 from config import Config
-from utils.error_handler import manejar_error
+from .. utils.error_handler import manejar_error
 from ..models.sucursal_model import Sucursal
-from utils.string_utils import normalizar_campo
+from .. utils.string_utils import normalizar_campo
 from werkzeug.utils import secure_filename
 
 inventario_bp = Blueprint('inventario', __name__, url_prefix='/api/inventario')

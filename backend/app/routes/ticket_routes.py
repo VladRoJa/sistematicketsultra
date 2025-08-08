@@ -10,16 +10,16 @@ from openpyxl.styles import Font, PatternFill
 import pytz
 from sqlalchemy import or_
 from ..models.inventario import InventarioGeneral
-from utils.ticket_filters import filtrar_tickets_por_usuario
+from .. utils.ticket_filters import filtrar_tickets_por_usuario
 from config import Config
 from sqlalchemy import or_
 from ..models.ticket_model import Ticket
 from ..models.user_model import UserORM
 from .. extensions import db
-from utils.error_handler import manejar_error
+from .. utils.error_handler import manejar_error
 from dateutil import parser
 from sqlalchemy.orm.attributes import flag_modified
-from utils.datetime_utils import format_datetime 
+from .. utils.datetime_utils import format_datetime 
 from ..models.inventario import InventarioGeneral
 
 

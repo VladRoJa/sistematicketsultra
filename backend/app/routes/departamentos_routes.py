@@ -8,7 +8,7 @@ from flask import Blueprint, jsonify
 from flask_jwt_extended import jwt_required
 from .. extensions import db
 from sqlalchemy.exc import SQLAlchemyError
-from utils.error_handler import manejar_error
+from .. utils.error_handler import manejar_error
 
 # 🔹 Modelo
 from ..models.departamento_model import Departamento

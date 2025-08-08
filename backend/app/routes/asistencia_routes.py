@@ -8,7 +8,7 @@ from ..models.bloque_horario import BloqueHorario
 from ..models.empleado_horario_asignado import EmpleadoHorarioAsignado
 from .. extensions import db
 from datetime import datetime, date, time
-from utils.semana_actual import get_semana_actual
+from .. utils.semana_actual import get_semana_actual
 from flask_jwt_extended import jwt_required
 
 asistencia_bp = Blueprint('asistencia', __name__, url_prefix='/api/asistencia')

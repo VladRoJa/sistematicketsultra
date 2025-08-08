@@ -7,8 +7,8 @@ from ..models.inventario import (
 from ..models.user_model import UserORM
 from ..models.sucursal_model import Sucursal
 from models import Ticket
-from utils.error_handler import manejar_error
-from utils.cloudinary_upload import upload_image_to_cloudinary
+from .. utils.error_handler import manejar_error
+from .. utils.cloudinary_upload import upload_image_to_cloudinary
 from io import BytesIO
 from datetime import datetime, timezone
 import pandas as pd

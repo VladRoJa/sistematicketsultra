@@ -7,7 +7,7 @@ from werkzeug.utils import secure_filename
 from .. extensions import db
 from ..models.inventario import InventarioGeneral, InventarioSucursal
 from ..models.sucursal_model import Sucursal
-from utils.string_utils import normalizar_campo
+from .. utils.string_utils import normalizar_campo
 import pandas as pd
 import io
 from flask_jwt_extended import jwt_required

@@ -12,7 +12,7 @@ from ..models.user_model import UserORM
 import logging
 from config import Config
 import json
-from utils.error_handler import manejar_error
+from .. utils.error_handler import manejar_error
 
 
 # Configurar logging

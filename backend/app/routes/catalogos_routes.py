@@ -6,7 +6,7 @@ from .. extensions import db
 from ..models.catalogos import (
     CatalogoClasificacion, Proveedor, Marca, UnidadMedida, GrupoMuscular, TipoInventario
 )
-from utils.error_handler import manejar_error
+from .. utils.error_handler import manejar_error
 from rapidfuzz import fuzz
 import os
 from werkzeug.utils import secure_filename
