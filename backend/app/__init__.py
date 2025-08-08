@@ -8,7 +8,7 @@ import logging
 import os
 
 load_dotenv()
-from config import Config
+from .config import Config
 from extensions import db, migrate
 from routes import auth_bp, ticket_bp, main_bp
 from routes.inventarios import inventario_bp
