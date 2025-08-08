@@ -20,7 +20,7 @@ RUN apt-get update && \
     apt-get clean
 
 # Copia TODO el código de la carpeta app/ dentro del contenedor en /app/app
-COPY app/ ./app
+COPY app/ .
 
 # Expón el puerto 5000
 EXPOSE 5000
