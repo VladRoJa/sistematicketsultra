@@ -19,7 +19,8 @@ services:
       - backend-net
 
   backend:
-    build: ./backend
+    build:
+      context: ./backend
     depends_on:
       - db
     env_file:
