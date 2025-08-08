@@ -19,11 +19,13 @@ services:
       - backend-net
 
   backend:
-    build: ./backend  
+  build:
+    context: .
+    dockerfile: backend/app/Dockerfile
     depends_on:
       - db
     env_file:
-      - .env.docker   # O el nombre del .env que quieras usar
+      - .env.docker  
     ports:
       - "5000:5000"
     networks:

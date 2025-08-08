@@ -13,8 +13,9 @@ RUN apt-get update && \
     apt-get autoremove -y && \
     apt-get clean
 
-COPY app /app/app
+COPY backend/app /app/app
 COPY migrations /app/migrations
+
 
 EXPOSE 5000
 CMD ["gunicorn", "-b", "0.0.0.0:5000", "app.wsgi:app"]
