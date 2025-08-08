@@ -3,7 +3,7 @@ from flask import Blueprint, request, jsonify, send_file
 from flask_jwt_extended import jwt_required
 import pandas as pd
 from extensions import db
-from models.catalogos import (
+from ..models.catalogos import (
     CatalogoClasificacion, Proveedor, Marca, UnidadMedida, GrupoMuscular, TipoInventario
 )
 from utils.error_handler import manejar_error

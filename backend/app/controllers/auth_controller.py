@@ -6,7 +6,7 @@
 
 from flask import jsonify
 from flask_jwt_extended import create_access_token
-from models.user_model import UserORM
+from ..models.user_model import UserORM
 from datetime import timedelta
 
 class AuthController:

@@ -3,7 +3,7 @@
 from flask import Blueprint, request, jsonify
 from werkzeug.security import generate_password_hash
 from extensions import db
-from models.user_model import UserORM
+from ..models.user_model import UserORM
 
 usuarios_bp = Blueprint('usuarios', __name__)
 

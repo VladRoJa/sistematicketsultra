@@ -1,11 +1,11 @@
 from flask import Blueprint, jsonify, send_file, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from extensions import db
-from models.inventario import (
+from ..models.inventario import (
     InventarioGeneral, InventarioSucursal, MovimientoInventario, DetalleMovimiento
 )
-from models.user_model import UserORM
-from models.sucursal_model import Sucursal
+from ..models.user_model import UserORM
+from ..models.sucursal_model import Sucursal
 from models import Ticket
 from utils.error_handler import manejar_error
 from utils.cloudinary_upload import upload_image_to_cloudinary

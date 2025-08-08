@@ -11,7 +11,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from utils.error_handler import manejar_error
 
 # 🔹 Modelo
-from models.departamento_model import Departamento
+from ..models.departamento_model import Departamento
 
 departamentos_bp = Blueprint('departamentos', __name__, url_prefix='/api/departamentos')
 

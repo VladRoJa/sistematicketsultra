@@ -3,7 +3,7 @@
 from flask import jsonify
 from flask_jwt_extended import verify_jwt_in_request, get_jwt_identity
 from functools import wraps
-from models.user_model import UserORM
+from ..models.user_model import UserORM
 
 # -------------------------------------------------------------------------------
 # DECORADOR: Requiere estar autenticado (token válido)

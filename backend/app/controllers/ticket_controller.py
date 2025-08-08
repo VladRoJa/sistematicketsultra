@@ -6,10 +6,10 @@
 
 from flask import jsonify, request
 from flask_jwt_extended import get_jwt_identity
-from models.ticket_model import Ticket
-from models.user_model import UserORM
+from ..models.ticket_model import Ticket
+from ..models.user_model import UserORM
 from extensions import db
-from models.inventario import InventarioGeneral
+from ..models.inventario import InventarioGeneral
 
 class TicketController:
 
