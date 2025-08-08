@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, send_file, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
-from extensions import db
+from .. extensions import db
 from ..models.inventario import (
     InventarioGeneral, InventarioSucursal, MovimientoInventario, DetalleMovimiento
 )

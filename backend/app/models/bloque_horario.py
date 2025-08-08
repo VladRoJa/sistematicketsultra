@@ -1,6 +1,6 @@
 # app/models/bloque_horario.py
 
-from extensions import db
+from .. extensions import db
 
 class BloqueHorario(db.Model):
     __tablename__ = 'bloques_horario'

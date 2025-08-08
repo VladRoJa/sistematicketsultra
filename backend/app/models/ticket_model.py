@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 import pytz
-from extensions import db
+from .. extensions import db
 from utils.datetime_utils import format_datetime
 from pytz import timezone as tz
 from dateutil import parser

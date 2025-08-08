@@ -10,7 +10,7 @@ from flask_cors import CORS
 from flask_jwt_extended import jwt_required, get_jwt_identity
 import pandas as pd
 import qrcode
-from extensions import db
+from .. extensions import db
 from ..models.inventario import InventarioGeneral, MovimientoInventario, DetalleMovimiento, InventarioSucursal
 from ..models.ticket_model import Ticket
 from ..models.user_model import UserORM

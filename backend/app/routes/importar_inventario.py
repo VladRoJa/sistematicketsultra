@@ -4,7 +4,7 @@
 
 from flask import Blueprint, request, jsonify, send_file
 from werkzeug.utils import secure_filename
-from extensions import db
+from .. extensions import db
 from ..models.inventario import InventarioGeneral, InventarioSucursal
 from ..models.sucursal_model import Sucursal
 from utils.string_utils import normalizar_campo

@@ -6,7 +6,7 @@ from ..models.user_model import UserORM
 from ..models.horario_general import HorarioGeneral
 from ..models.bloque_horario import BloqueHorario
 from ..models.empleado_horario_asignado import EmpleadoHorarioAsignado
-from extensions import db
+from .. extensions import db
 from datetime import datetime, date, time
 from utils.semana_actual import get_semana_actual
 from flask_jwt_extended import jwt_required

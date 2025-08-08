@@ -15,7 +15,7 @@ from config import Config
 from sqlalchemy import or_
 from ..models.ticket_model import Ticket
 from ..models.user_model import UserORM
-from extensions import db
+from .. extensions import db
 from utils.error_handler import manejar_error
 from dateutil import parser
 from sqlalchemy.orm.attributes import flag_modified

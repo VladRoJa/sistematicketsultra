@@ -1,7 +1,7 @@
 # app\models\inventario.py
 
 from datetime import datetime
-from extensions import db
+from .. extensions import db
 from utils.datetime_utils import format_datetime
 import pytz
 

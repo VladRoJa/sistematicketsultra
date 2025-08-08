@@ -2,7 +2,7 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 from ..models.bloque_horario import BloqueHorario
-from extensions import db
+from .. extensions import db
 
 bloques_bp = Blueprint('bloques', __name__, url_prefix='/api/bloques')
 
