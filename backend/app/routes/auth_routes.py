@@ -10,7 +10,7 @@ from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_requir
 from datetime import timedelta
 from ..models.user_model import UserORM
 import logging
-from config import Config
+from ..config import Config
 import json
 from .. utils.error_handler import manejar_error
 

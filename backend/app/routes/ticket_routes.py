@@ -11,7 +11,7 @@ import pytz
 from sqlalchemy import or_
 from ..models.inventario import InventarioGeneral
 from .. utils.ticket_filters import filtrar_tickets_por_usuario
-from config import Config
+from ..config import Config
 from sqlalchemy import or_
 from ..models.ticket_model import Ticket
 from ..models.user_model import UserORM

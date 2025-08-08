@@ -17,7 +17,7 @@ from ..models.user_model import UserORM
 from ..models.sucursal_model import Sucursal
 from datetime import datetime
 import pytz
-from config import Config
+from ..config import Config
 from .. utils.error_handler import manejar_error
 from ..models.sucursal_model import Sucursal
 from .. utils.string_utils import normalizar_campo
