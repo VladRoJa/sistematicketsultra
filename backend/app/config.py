@@ -1,4 +1,4 @@
-# config.py
+# backend\app\config.py
 
 from datetime import timedelta
 import os
