@@ -1,6 +1,6 @@
 # app/models/formulario_ticket.py
 
-from .. extensions import db
+from backend.app. extensions import db
 
 class FormularioTicket(db.Model):
     __tablename__ = 'formulario_ticket'

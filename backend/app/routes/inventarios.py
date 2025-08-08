@@ -10,17 +10,17 @@ from flask_cors import CORS
 from flask_jwt_extended import jwt_required, get_jwt_identity
 import pandas as pd
 import qrcode
-from .. extensions import db
-from ..models.inventario import InventarioGeneral, MovimientoInventario, DetalleMovimiento, InventarioSucursal
-from ..models.ticket_model import Ticket
-from ..models.user_model import UserORM
-from ..models.sucursal_model import Sucursal
+from backend.app. extensions import db
+from backend.app.models.inventario import InventarioGeneral, MovimientoInventario, DetalleMovimiento, InventarioSucursal
+from backend.app.models.ticket_model import Ticket
+from backend.app.models.user_model import UserORM
+from backend.app.models.sucursal_model import Sucursal
 from datetime import datetime
 import pytz
-from ..config import Config
-from .. utils.error_handler import manejar_error
-from ..models.sucursal_model import Sucursal
-from .. utils.string_utils import normalizar_campo
+from backend.app.config import Config
+from backend.app. utils.error_handler import manejar_error
+from backend.app.models.sucursal_model import Sucursal
+from backend.app. utils.string_utils import normalizar_campo
 from werkzeug.utils import secure_filename
 
 inventario_bp = Blueprint('inventario', __name__, url_prefix='/api/inventario')

@@ -23,6 +23,9 @@
       "username": "root",
       "password": "nhscTBldJrSjAhvVvudBBpnhBwCPIXsS"
     }
+  ],
+  "python.analysis.extraPaths": [
+    "./backend"
   ]
   }
   

@@ -4,7 +4,8 @@ from dotenv import load_dotenv
 import os
 import logging
 
-from app.utils.migraciones import aplicar_migraciones
+from backend.app.utils.migraciones import aplicar_migraciones
+
 
 
 
@@ -26,7 +27,7 @@ logger.info(f"✅ Entorno '{app_env}' cargado desde {env_file}.")
 # -------------------------------------------------------------------------------
 # Inicializar Flask y mostrar configuración
 # -------------------------------------------------------------------------------
-from app import create_app, db
+from backend.app import create_app, db
 from flask_migrate import Migrate
 
 app = create_app()

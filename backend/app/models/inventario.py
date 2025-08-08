@@ -1,8 +1,8 @@
 # app\models\inventario.py
 
 from datetime import datetime
-from .. extensions import db
-from .. utils.datetime_utils import format_datetime
+from backend.app. extensions import db
+from backend.app. utils.datetime_utils import format_datetime
 import pytz
 
 tz = pytz.timezone('America/Tijuana')
