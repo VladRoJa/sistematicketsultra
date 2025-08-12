@@ -275,13 +275,14 @@ export class PantallaVerTicketsComponent implements OnInit {
 
   // Estado del filtro unificado (UI global: rubro + opciones)
   filtroUnificado: EstadoFiltroUnificado = crearEstadoInicial();
-campoUnificadoActual: 'categoria' | 'estado' | 'departamento' | 'username' | null = null;
-columnasUnificado: Array<{ key: 'categoria' | 'estado' | 'departamento' | 'username', label: string }> = [
-  { key: 'categoria',    label: 'Categoría' },
-  { key: 'estado',       label: 'Estado' },
-  { key: 'departamento', label: 'Departamento' },
-  { key: 'username',     label: 'Usuario' },
-];
+  campoUnificadoActual: 'categoria' | 'estado' | 'departamento' | 'sucursal' | 'username' | null = null;
+  columnasUnificado: Array<{ key: 'categoria' | 'estado' | 'departamento' | 'sucursal' | 'username', label: string }> = [
+    { key: 'categoria',    label: 'Categoría' },
+    { key: 'estado',       label: 'Estado' },
+    { key: 'departamento', label: 'Departamento' },
+    { key: 'sucursal',     label: 'Sucursal' },
+    { key: 'username',     label: 'Usuario' },
+  ];
 
 
 
@@ -955,7 +956,7 @@ aplicarCategoriaUnificada(): void {
   if (!campo) return;
 
   const pluralMap: Record<string, string> = { 
-    categoria:'categorias', estado:'estados', departamento:'departamentos', username:'usuarios'
+    categoria:'categorias', estado:'estados', departamento:'departamentos', username:'usuarios', sucursal: 'sucursales',
   };
   const plural = pluralMap[campo];
 
@@ -998,11 +999,16 @@ aplicarCategoriaUnificada(): void {
 
 
 
-private refrescarPanelUnificado(campo: 'categoria' | 'estado' | 'departamento' | 'username'): void {
+private refrescarPanelUnificado(campo: 'categoria' | 'estado' | 'departamento' | 'username' | 'sucursal'): void {
+  // asegurar que los tickets tengan .sucursal calculado
+  if (campo === 'sucursal') this.hidratarSucursalEnTickets();
+
   const formatters =
-    campo === 'categoria' ? { categoria: (v: string) => this.etiquetaCatalogoPorId(v) }
-    : campo === 'departamento' ? { departamento: (v: string) => this.etiquetaDepartamentoPorId(v) }
-    : undefined;
+    campo === 'categoria'
+      ? { categoria: (v: string) => this.etiquetaCatalogoPorId(v) }
+      : campo === 'departamento'
+      ? { departamento: (v: string) => this.etiquetaDepartamentoPorId(v) }
+      : undefined;
 
   seleccionarCampo(this.filtroUnificado, this.filteredTickets as any, campo, formatters);
 
@@ -1010,7 +1016,8 @@ private refrescarPanelUnificado(campo: 'categoria' | 'estado' | 'departamento' |
     categoria: 'categorias',
     estado: 'estados',
     departamento: 'departamentos',
-    username: 'usuarios',            // 👈 nuevo
+    username: 'usuarios',
+    sucursal: 'sucursales',  // 👈 nuevo
   };
   const plural = pluralMap[campo];
   const disponibles = (this as any)[`${plural}Disponibles`] as Array<{ valor: any; seleccionado: boolean }> || [];
@@ -1019,6 +1026,7 @@ private refrescarPanelUnificado(campo: 'categoria' | 'estado' | 'departamento' |
     disponibles.filter(op => op.seleccionado).map(op => String(op.valor))
   );
 }
+
 
 
 private rebuildPanelCategoriasDesdeFiltered(): void {
@@ -1043,46 +1051,45 @@ private rebuildPanelCategoriasDesdeFiltered(): void {
 
 
 
-private etiquetaCampoUnificado: Record<'categoria' | 'estado' | 'departamento' | 'username', string> = {
+private etiquetaCampoUnificado: Record<'categoria' | 'estado' | 'departamento' | 'username' | 'sucursal', string> = {
   categoria: 'categoría',
   estado: 'estado',
   departamento: 'departamento',
-  username: 'usuario',                     // 👈 nuevo
+  username: 'usuario',
+  sucursal: 'sucursal',     // 👈 nuevo
 };
 
 
 
-onCambioCampoUnificado(campo: 'categoria' | 'estado' | 'departamento' | 'username' | null)  {
+onCambioCampoUnificado(campo: 'categoria' | 'estado' | 'departamento' | 'username' | 'sucursal' | null) {
   this.campoUnificadoActual = campo;
 
-  // limpiar estado unificado
+  // reset estado unificado + tabla…
   this.filtroUnificado.filtrosAplicados.clear();
   this.filtroUnificado.seleccionTemporal.clear();
   this.filtroUnificado.textoBusqueda = '';
-
-  // reset tabla
   this.filteredTickets = [...this.ticketsCompletos];
   this.page = 1;
   this.totalTickets = this.filteredTickets.length;
   this.totalPagesCount = Math.ceil(this.totalTickets / this.itemsPerPage);
   this.visibleTickets = this.filteredTickets.slice(0, this.itemsPerPage);
 
-  // si no hay campo seleccionado, no mostramos opciones
   if (!campo) {
     this.filtroUnificado.opcionesDisponibles = [];
     this.changeDetectorRef.detectChanges();
     return;
   }
 
-  // volver a construir opciones del campo elegido
-  const formatters =
-    campo === 'categoria'
-      ? { categoria: (v: string) => this.etiquetaCatalogoPorId(v) }
-      : undefined;
+  if (campo === 'sucursal') this.hidratarSucursalEnTickets(); // 👈 importante
+
+  const formatters = campo === 'categoria'
+    ? { categoria: (v: string) => this.etiquetaCatalogoPorId(v) }
+    : undefined;
 
   seleccionarCampo(this.filtroUnificado, this.ticketsCompletos as any, campo, formatters);
   this.changeDetectorRef.detectChanges();
 }
+
 
 
 private etiquetaDepartamentoPorId(id: any): string {
