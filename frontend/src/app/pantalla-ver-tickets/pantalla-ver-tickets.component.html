@@ -1,5 +1,66 @@
 <!-- frontend-angular\src\app\pantalla-ver-tickets\pantalla-ver-tickets.component.html -->
 <div class="table-container" *ngIf="!loading">
+
+<div style="display:flex; justify-content:flex-end; margin:6px 0;">
+  <button mat-stroked-button (click)="toggleFiltros()">
+    {{ mostrarFiltros ? 'Ocultar filtros' : 'Mostrar filtros' }}
+  </button>
+</div>
+
+  
+<div class="filtro-unificado-wrapper" *ngIf="mostrarFiltros">
+  <!-- Columna 1: Select (usa lo que ya tienes en TS) -->
+<mat-form-field appearance="fill" class="columna-select">
+  <mat-label>Filtrar por</mat-label>
+  <mat-select
+    [(ngModel)]="campoUnificadoActual"
+    (selectionChange)="onCambioCampoUnificado($event.value)">
+
+    <!-- opción placeholder (sin selección) -->
+    <mat-option [value]="null">— Selecciona —</mat-option>
+
+    <mat-option *ngFor="let c of columnasUnificado" [value]="c.key">
+      {{ c.label }}
+    </mat-option>
+  </mat-select>
+</mat-form-field>
+
+
+  <!-- Columna 2: Buscador (texto ya vive en filtroUnificado) -->
+  <mat-form-field appearance="fill" class="columna-buscador">
+    <mat-label>Buscar {{ etiquetaCampoActual }}…</mat-label>
+    <input matInput [(ngModel)]="filtroUnificado.textoBusqueda" />
+  </mat-form-field>
+
+  <!-- Columna 3: Checklist + Botones (usa tu getter y handlers existentes) -->
+  <div class="columna-checklist">
+    <div class="fu-checklist">
+      <div *ngIf="!opcionesCategoriaUnificada?.length" style="opacity:.7; font-size:13px;">
+        No hay opciones (selecciona un campo arriba).
+      </div>
+
+      <mat-checkbox
+        *ngFor="let op of opcionesCategoriaUnificada"
+        [checked]="filtroUnificado.seleccionTemporal.has(op.valor)"
+        (change)="alternarSeleccionCategoriaUnificada(op.valor)"
+        style="display:block; margin:4px 0;">
+        {{ op.etiqueta }}
+      </mat-checkbox>
+    </div>
+
+    <div class="fu-acciones">
+      <button mat-raised-button color="primary" (click)="aplicarCategoriaUnificada()">
+        Aplicar
+      </button>
+      <button mat-raised-button color="warn" (click)="limpiarCategoriaUnificada()">
+        Limpiar
+      </button>
+    </div>
+  </div>
+</div>
+
+
+
   <table>
     <thead>
       <tr>

@@ -44,6 +44,27 @@ import { mostrarAlertaToast } from '../utils/alertas';
 import { SucursalesService } from '../services/sucursales.service';
 
 
+// Filtro unificado (solo 'categoria' por ahora)
+import {
+  crearEstadoInicial,
+  seleccionarCampo,
+  aplicarFiltroActual,
+  limpiarFiltroActual,
+  filtrarTickets as filtrarTicketsUnificado,
+  filtrarOpcionesPorTexto as filtrarOpcionesUnificado,
+  alternarSeleccionTemporal,
+  EstadoFiltroUnificado,
+  aplicarFiltroColumnaConResetUnificado,
+  limpiarFiltroColumnaUnificado,
+  filtrarOpcionesPorTexto,
+
+} from 'src/app/utils/filtro-unificado';
+import { MatSelectModule } from '@angular/material/select';
+
+
+
+
+
 
 // Interfaces
 export interface Ticket {
@@ -117,7 +138,8 @@ export interface ApiResponse {
     MatDatepickerModule,
     HistorialFechasModalComponent,
     AsignarFechaModalComponent,
-    MatTooltipModule
+    MatTooltipModule,
+    MatSelectModule,
 
     
   ],
@@ -238,6 +260,8 @@ export class PantallaVerTicketsComponent implements OnInit {
   filtroSucursalTexto = '';
 
 
+  mostrarFiltros: boolean = false; 
+
 
   historialVisible: Record<number, boolean> = {};
   fechasSolucionDisponibles = new Set<string>();
@@ -245,6 +269,19 @@ export class PantallaVerTicketsComponent implements OnInit {
   rangoFechaCreacionSeleccionado = { start: null as Date | null, end: null as Date | null };
   rangoFechaFinalSeleccionado = { start: null as Date | null, end: null as Date | null };
   rangoFechaProgresoSeleccionado = { start: null as Date | null, end: null as Date | null };
+
+
+
+
+  // Estado del filtro unificado (UI global: rubro + opciones)
+  filtroUnificado: EstadoFiltroUnificado = crearEstadoInicial();
+  campoUnificadoActual: 'categoria' | 'estado' | 'departamento' | null = null;
+columnasUnificado: Array<{ key: 'categoria' | 'estado' | 'departamento', label: string }> = [
+  { key: 'categoria',    label: 'Categoría' },
+  { key: 'estado',       label: 'Estado' },
+  { key: 'departamento', label: 'Departamento' }, // ⬅️ nuevo
+];
+
 
 
 
@@ -269,7 +306,8 @@ export class PantallaVerTicketsComponent implements OnInit {
     public dialog: MatDialog,
     public refrescoService: RefrescoService,
     public catalogoService: CatalogoService,
-    private sucursalesService: SucursalesService
+    private sucursalesService: SucursalesService,
+    
   ) {}
   ngAfterViewInit(): void {
     const triggers = [
@@ -332,6 +370,8 @@ export class PantallaVerTicketsComponent implements OnInit {
     console.log('Editor corporativo:', this.usuarioEsEditorCorporativo);
 
     this.changeDetectorRef.detectChanges();
+
+      (window as any).verTicketsComp = this;
   }
 
 
@@ -575,20 +615,64 @@ private hidratarSucursalEnTickets(): void {
 }
 
 
-private prepararOpcionesFiltroSucursal(): void {
-  // Asegura que cada ticket tenga la propiedad calculada
-  this.hidratarSucursalEnTickets();
-
+private prepararOpcionesFiltro(columna: string, path: string): void {
   const set = new Set<string>();
-  (this.tickets || []).forEach((t: any) => {
-    if (t?.sucursal) set.add(t.sucursal);
-  });
-  const opciones = Array.from(set).sort().map(v => ({ valor: v }));
 
-  this.sucursalesDisponibles = opciones;
-  this.sucursalesFiltradas = [...opciones];
-  this.temporalSeleccionados['sucursal'] = opciones.map(o => ({ valor: o.valor, seleccionado: true }));
+  (this.filteredTickets || []).forEach((t: any) => {
+    let valor: any = t;
+    for (const part of path.split('.')) valor = valor?.[part];
+
+    // Normaliza departamento: nunca dejar IDs
+    if (columna === 'departamento') {
+      const esId = valor != null && /^[0-9]+$/.test(String(valor));
+      if (esId) {
+        const nombre = this.etiquetaDepartamentoPorId(valor);
+        valor = nombre || String(valor);
+      }
+    }
+
+    if (valor == null || valor === '') valor = '—';
+    set.add(String(valor));
+  });
+
+  // 🔒 Si la columna es departamento, fuerza valor = etiqueta = NOMBRE
+  if (columna === 'departamento') {
+    const toNombre = (v: any) =>
+      /^[0-9]+$/.test(String(v)) ? this.etiquetaDepartamentoPorId(v) : String(v);
+
+    const opciones = Array.from(set)
+      .map(toNombre)
+      .sort((a, b) => a.localeCompare(b))
+      .map(nombre => ({ valor: nombre, etiqueta: nombre, seleccionado: true }));
+
+    this.departamentosDisponibles = opciones;
+    this.departamentosFiltrados  = [...opciones];
+    this.temporalSeleccionados['departamento'] = opciones.map(o => ({ ...o }));
+    return;
+  }
+
+  // Resto de columnas
+  const etiquetaResolver = (col: string, v: string) => {
+    if (col === 'categoria' || col === 'subcategoria' || col === 'detalle') {
+      return this.etiquetaCatalogoPorId(v);
+    }
+    return v;
+  };
+
+  const opciones = Array.from(set)
+    .sort((a, b) => etiquetaResolver(columna, a).localeCompare(etiquetaResolver(columna, b)))
+    .map(v => ({
+      valor: v,
+      etiqueta: etiquetaResolver(columna, v),
+      seleccionado: true
+    }));
+
+  const plural = this.obtenerPluralColumna(columna);
+  (this as any)[`${plural}Disponibles`] = opciones;
+  (this as any)[`${plural}Filtradas`]  = [...opciones];
+  this.temporalSeleccionados[columna]  = opciones.map(o => ({ ...o }));
 }
+
 
 
   private rutasFiltro: Record<string, string> = {
@@ -617,32 +701,47 @@ private prepararOpcionesFiltroSucursal(): void {
   }
 
 
-  onCerrarFiltro(columna: string, trigger: any) {
-    this.confirmarFiltroColumna(columna);
-    setTimeout(() => trigger?.closeMenu?.(), 0);
+onCerrarFiltro(columna: string, trigger?: any): void {
+  if (columna === 'categoria' || columna === 'estado' || columna === 'departamento') {
+    aplicarFiltroColumnaConResetUnificado(this, columna);
+    if (columna === 'categoria') this.refrescarPanelUnificado('categoria'); // opcional
+    trigger?.closeMenu?.();
+    return;
   }
-
-  cerrarYLimpiar(columna: string, trigger: any) {
-    this.limpiarFiltroColumna(columna);
-    refrescarDespuesDeCambioFiltro(this);
-    setTimeout(() => trigger?.closeMenu?.(), 0);
-  }
-
-  inicializarFiltradas(columna: string) {
-  const disponibles = this[`${columna}sDisponibles`];
-  if (Array.isArray(disponibles)) {
-    this[`${columna}sFiltradas`] = [...disponibles];
-  } else {
-    console.warn(`⚠️ No se encontraron disponibles para la columna '${columna}'`);
-  }
+  this.confirmarFiltroColumna(columna);
+  setTimeout(() => trigger?.closeMenu?.(), 0);
 }
 
-// Reemplaza COMPLETO
 cerrarYAplicar(columna: string, trigger: MatMenuTrigger): void {
-  this.confirmarFiltroColumna(columna);       // ✅ primero sincroniza disponibles ⇐ temporales
-  this.aplicarFiltroColumnaConReset(columna); // luego aplica
+  this.confirmarFiltroColumna(columna);
+
+  if (columna === 'departamento') {
+    const sel = (this.departamentosDisponibles || [])
+      .filter((x: any) => x.seleccionado)
+      .map((x: any) => x.valor);
+    console.log('DEP seleccionados al aplicar:', sel);
+  }
+
+  if (columna === 'categoria' || columna === 'estado' || columna === 'departamento') {
+    aplicarFiltroColumnaConResetUnificado(this, columna);
+  } else {
+    this.aplicarFiltroColumnaConReset(columna);
+  }
   trigger.closeMenu();
 }
+
+
+
+cerrarYLimpiar(columna: string, trigger?: any): void {
+  if (columna === 'categoria' || columna === 'estado' || columna === 'departamento') {
+    limpiarFiltroColumnaUnificado(this, columna);
+    trigger?.closeMenu?.();
+    return;
+  }
+  (this as any).limpiarFiltroColumna?.(columna);
+  trigger?.closeMenu?.();
+}
+
 
 
 aplicarFiltroColumnaConReset = (col: string) => aplicarFiltroColumnaConReset(this, col);
@@ -761,37 +860,8 @@ getNombreSucursal(ticket: Ticket): string {
 
 
 
-private prepararOpcionesFiltro(columna: string, path: string): void {
-  const set = new Set<string>();
 
-  (this.filteredTickets || []).forEach((t: any) => {
-    let valor: any = t;
-    for (const part of path.split('.')) valor = valor?.[part];
-    if (valor == null) valor = '—';
-    set.add(String(valor));
-  });
 
-  // 👇 etiqueta por columna
-  const etiquetaResolver = (col: string, valor: string) => {
-    if (col === 'categoria' || col === 'subcategoria' || col === 'detalle') {
-      return this.etiquetaCatalogoPorId(valor);
-    }
-    return valor;
-  };
-
-  const opciones = Array.from(set)
-    .sort()
-    .map(v => ({
-      valor: v,
-      etiqueta: etiquetaResolver(columna, v),
-      seleccionado: true
-    }));
-
-  const plural = this.obtenerPluralColumna(columna);
-  (this as any)[`${plural}Disponibles`] = opciones;
-  (this as any)[`${plural}Filtradas`]  = [...opciones];
-  this.temporalSeleccionados[columna]  = opciones.map(o => ({ ...o }));
-}
 
 
 private obtenerPluralColumna(columna: string): string {
@@ -819,6 +889,227 @@ private etiquetaCatalogoPorId(id: any): string {
 }
 
 
+
+
+
+//filtros unificados
+
+/** Inicializa el filtro unificado SOLO para 'categoria'.
+ *  Debes llamarlo cuando ya existan this.ticketsCompletos.
+ */
+initFiltroUnificadoSoloCategoria(): void {
+  if (!Array.isArray(this.ticketsCompletos) || this.ticketsCompletos.length === 0) return;
+
+  // Usamos tu mapeo real: id -> nombre de catálogo
+  const formatters = {
+    categoria: (valor: string) => this.etiquetaCatalogoPorId(valor), // ya existe en este componente
+  };
+
+  seleccionarCampo(this.filtroUnificado, this.ticketsCompletos as any, 'categoria', formatters);
+}
+
+/** Setea el texto de búsqueda sobre las opciones del checklist unificado (categoria). */
+buscarCategoriaUnificada(texto: string): void {
+  this.filtroUnificado.textoBusqueda = texto ?? '';
+}
+
+/** Opciones visibles (aplican texto de búsqueda sobre las opciones disponibles). */
+get opcionesCategoriaUnificada() {
+  return filtrarOpcionesUnificado(
+    this.filtroUnificado.opcionesDisponibles,
+    this.filtroUnificado.textoBusqueda
+  );
+}
+
+/** Alterna un valor en la selección temporal del checklist (categoria). */
+alternarSeleccionCategoriaUnificada(valor: string): void {
+  alternarSeleccionTemporal(this.filtroUnificado, valor);
+}
+
+
+/** Limpia el filtro aplicado de 'categoria' y refresca la tabla. */
+limpiarCategoriaUnificada(): void {
+  const campo = this.campoUnificadoActual; 
+  this.filtroUnificado.seleccionTemporal.clear();
+  this.filtroUnificado.textoBusqueda = '';
+
+  limpiarFiltroColumnaUnificado(this, campo);
+  this.refrescarPanelUnificado(campo);
+}
+
+
+
+initFiltroUnificadoSoloEstado(): void {
+  if (!Array.isArray(this.ticketsCompletos) || this.ticketsCompletos.length === 0) return;
+  this.campoUnificadoActual = 'estado';
+  seleccionarCampo(this.filtroUnificado, this.ticketsCompletos as any, 'estado');
+  // ⬆️ Listo. No asignes a opcionesCategoriaUnificada (es un getter).
+}
+
+
+
+
+aplicarCategoriaUnificada(): void {
+  const campo = this.campoUnificadoActual;
+  if (!campo) return;
+
+  const pluralMap: Record<string, string> = { 
+    categoria:'categorias', estado:'estados', departamento:'departamentos'
+  };
+  const plural = pluralMap[campo];
+
+  let disponibles = (this as any)[`${plural}Disponibles`] as Array<{valor:any; etiqueta?:string; seleccionado:boolean}> || [];
+  if (!disponibles.length) {
+    disponibles = (this.filtroUnificado.opcionesDisponibles || []).map(o => ({
+      valor: o.valor, etiqueta: o.etiqueta, seleccionado: true
+    }));
+    (this as any)[`${plural}Disponibles`] = [...disponibles];
+    (this as any)[`${plural}Filtradas`]  = [...disponibles];
+  }
+
+  // 🔴 Normaliza solo para DEPARTAMENTO: usa NOMBRE como valor
+  if (campo === 'departamento') {
+    disponibles = disponibles.map(op => {
+      const etiqueta = typeof op.valor === 'number'
+        ? this.etiquetaDepartamentoPorId(op.valor)   // id -> nombre
+        : String(op.valor);
+      return { ...op, valor: etiqueta, etiqueta };
+    });
+    (this as any)[`${plural}Disponibles`] = [...disponibles];
+    (this as any)[`${plural}Filtradas`]  = [...disponibles];
+  }
+
+  const setSel = this.filtroUnificado.seleccionTemporal;
+  this.temporalSeleccionados[campo] = disponibles.map(op => ({
+    ...op,
+    seleccionado: setSel.has(String(op.valor))
+  }));
+
+  console.log('UNIFICADO aplicar -> campo:', campo,
+              'seleccion:', Array.from(setSel),
+              'disponibles normalizados:', disponibles);
+
+  aplicarFiltroColumnaConResetUnificado(this, campo);
+  this.refrescarPanelUnificado(campo);
+}
+
+
+
+
+
+private refrescarPanelUnificado(campo: 'categoria' | 'estado' | 'departamento'): void {
+  const formatters =
+    campo === 'categoria'
+      ? { categoria: (v: string) => this.etiquetaCatalogoPorId(v) }
+      : campo === 'departamento'
+      ? { departamento: (v: string) => this.etiquetaDepartamentoPorId(v) } // ⬅️ nuevo
+      : undefined;
+
+  seleccionarCampo(this.filtroUnificado, this.filteredTickets as any, campo, formatters);
+
+  const pluralMap: Record<string, string> = {
+    categoria: 'categorias',
+    estado: 'estados',
+    departamento: 'departamentos'
+  };
+  const plural = pluralMap[campo];
+  const disponibles = (this as any)[`${plural}Disponibles`] as Array<{ valor: any; seleccionado: boolean }> || [];
+
+  this.filtroUnificado.seleccionTemporal = new Set(
+    disponibles.filter(op => op.seleccionado).map(op => String(op.valor))
+  );
+}
+
+private rebuildPanelCategoriasDesdeFiltered(): void {
+  const set = new Set<string>();
+  (this.filteredTickets || []).forEach((t: any) => {
+    if (t?.categoria != null) set.add(String(t.categoria));
+  });
+
+  const opciones = Array.from(set)
+    .sort((a, b) =>
+      this.etiquetaCatalogoPorId(a).localeCompare(this.etiquetaCatalogoPorId(b))
+    )
+    .map(v => ({ valor: v, etiqueta: this.etiquetaCatalogoPorId(v) }));
+
+  this.filtroUnificado.opcionesDisponibles = opciones;
+  // preselecciona todas las visibles (o carga desde tus aplicadas si quieres)
+  this.filtroUnificado.seleccionTemporal = new Set(opciones.map(o => o.valor));
+
+  this.changeDetectorRef.detectChanges();
+}
+
+
+
+
+private etiquetaCampoUnificado: Record<'categoria' | 'estado' | 'departamento', string> = {
+  categoria: 'categoría',
+  estado: 'estado',
+  departamento: 'departamento', // ⬅️ nuevo
+};
+get etiquetaCampoActual(): string {
+  return this.campoUnificadoActual ? this.etiquetaCampoUnificado[this.campoUnificadoActual] : 'campo';
+}
+
+
+
+onCambioCampoUnificado(campo: 'categoria' | 'estado' | 'departamento' | null) {
+  this.campoUnificadoActual = campo;
+
+  // limpiar estado unificado
+  this.filtroUnificado.filtrosAplicados.clear();
+  this.filtroUnificado.seleccionTemporal.clear();
+  this.filtroUnificado.textoBusqueda = '';
+
+  // reset tabla
+  this.filteredTickets = [...this.ticketsCompletos];
+  this.page = 1;
+  this.totalTickets = this.filteredTickets.length;
+  this.totalPagesCount = Math.ceil(this.totalTickets / this.itemsPerPage);
+  this.visibleTickets = this.filteredTickets.slice(0, this.itemsPerPage);
+
+  // si no hay campo seleccionado, no mostramos opciones
+  if (!campo) {
+    this.filtroUnificado.opcionesDisponibles = [];
+    this.changeDetectorRef.detectChanges();
+    return;
+  }
+
+  // volver a construir opciones del campo elegido
+  const formatters =
+    campo === 'categoria'
+      ? { categoria: (v: string) => this.etiquetaCatalogoPorId(v) }
+      : undefined;
+
+  seleccionarCampo(this.filtroUnificado, this.ticketsCompletos as any, campo, formatters);
+  this.changeDetectorRef.detectChanges();
+}
+
+
+private etiquetaDepartamentoPorId(id: any): string {
+  const num = Number(id);
+  if (Number.isNaN(num)) return String(id);
+
+  // 1) intenta en catálogo de departamentos
+  const dep = (this.departamentos || []).find((d: any) =>
+    d.id === num || d.departamento_id === num || d?.id_departamento === num
+  );
+  if (dep?.nombre) return dep.nombre;
+  if (dep?.departamento) return dep.departamento;
+
+  // 2) fallback: busca en los tickets
+  const t = (this.ticketsCompletos || []).find((x: any) => x.departamento_id === num);
+  return t?.departamento ?? String(id);
+}
+
+
+
+
+
+toggleFiltros(): void {
+  this.mostrarFiltros = !this.mostrarFiltros;
+   this.filtroUnificado.textoBusqueda = '';
+}
 
 
 }

@@ -56,8 +56,7 @@ export function confirmarFiltroColumna(component: any, columna: string): void {
   component[`${plural}Filtradas`] = disponibles.map((i: any) => ({ ...i }));
   component.temporalSeleccionados[columna] = disponibles.map((i: any) => ({ ...i }));
 
-  // 3️⃣  aplica filtro global
-  component.aplicarFiltroColumna(columna);
+
 }
 
 export function alternarSeleccionTemporal(component: any, columna: string, valor: boolean): void {

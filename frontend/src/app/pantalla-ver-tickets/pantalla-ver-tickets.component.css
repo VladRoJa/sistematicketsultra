@@ -1,801 +1,107 @@
-/* =========================
-   ESTILOS GENERALES
-   ========================= */
-   body {
-    font-family: Arial, sans-serif;
-    margin: 0;
-    padding: 0;
-    overflow-x: hidden;
-  }
-  
-  .contenedor-tickets {
-    width: 100%;
-    max-width: 95vw;
-    margin: 0 auto;
-    padding: 10px;
-  }
-  
-  /* =========================
-     TABLA DE TICKETS
-     ========================= */
-  .table-container {
-    width: 100%;              /* Ocupa todo el ancho disponible */
-    max-width: 100vw;         /* Evita que sobresalga */
-    margin: 0 auto;           /* Centra el contenedor */
-    padding: 0;
-    overflow-x: auto;         /* Scroll horizontal si es necesario */
-    overflow-y: auto;
-    max-height: 500px;
-    position: relative;
-  }
-  
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    min-width: 1200px;
-    font-size: 14px;
-  }
-  
-  th, td {
-    border: 1px solid #ddd;
-    padding: 12px;
-    text-align: center;
-    white-space: nowrap;
-  }
-  
-  th {
-    background-color: #007bff;
-    color: white;
-    position: sticky;
-    top: 0;
-    z-index: 10;
-  }
-  
-  tr:nth-child(even) {
-    background-color: #f2f2f2;
-  }
-  
-  /* =========================
-     MENÚS DE FILTRADO (Angular Material)
-     ========================= */
-  .filtro-activo {
-    background-color: rgba(0, 0, 0, 0.2);
-    }
+/* ========= Base ========= */
+body{font-family:Arial, sans-serif;margin:0;padding:0;overflow-x:hidden}
 
-  /* Botón de encabezado en cada columna */
-  .header-button {
-    color: white !important;
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-    font-weight: bold;
-  }
-  
-  /* Contenedor interno para el filtro en el menú */
-  .menu-filtro {
-    padding: 0.5rem 1rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    min-width: 200px;  /* Evita que el menú se vea muy angosto */
-  }
-  
-  /* Estilo para el label en el menú de filtro */
-  .menu-filtro label {
-    font-weight: bold;
-    margin-bottom: 0.25rem;
-  }
-  
-  /* Campo de búsqueda dentro del menú */
-  .buscador-filtro {
-    width: 100%;
-  }
-  
-  /* Contenedor scrollable para checkboxes, en caso de muchas opciones */
-  .opciones-scrollable {
-    max-height: 200px;
-    overflow-y: auto;
-    margin-top: 0.5rem;
-  }
-  
-  /* Botones (Aceptar / Cancelar) dentro del menú de filtro */
-  .menu-botones {
-    display: flex;
-    justify-content: space-between;
-    margin-top: 0.5rem;
-  }
+/* ========= Tabla ========= */
+.table-container{
+  width:100%;
+  max-width:100vw;
+  margin:0 auto;
+  padding:0;
+  overflow:auto;            /* scroll horizontal/vertical si hace falta */
+  position:relative;
+}
+table{width:100%;border-collapse:collapse;min-width:1200px;font-size:14px}
+th,td{border:1px solid #ddd;padding:12px;text-align:center;white-space:nowrap}
+th{background:#007bff;color:#fff;position:sticky;top:0;z-index:10}
+tr:nth-child(even){background:#f2f2f2}
 
-  .dia-con-ticket.mat-calendar-body-cell .mat-calendar-body-cell-content::after {
-    content: '';
-    display: block;
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background-color: green;
-    margin: 2px auto 0 auto;
-  }
-  
-  
-  /* =========================
-     BOTONES GENERALES
-     ========================= */
-  .boton-estado {
-    display: inline-block;
-    padding: 6px 10px;
-    font-size: 12px;
-    font-weight: bold;
-    color: white;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    transition: all 0.3s ease-in-out;
-    text-align: center;
-    width: 130px;
-    margin: 3px;
-    box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
-    min-width: 90px;
-  }
-  
-  .boton-en-progreso {
-    background-color: #28a745;
-  }
-  
-  .boton-en-progreso:hover {
-    background-color: #218838;
-  }
-  
-  .boton-finalizar {
-    background-color: #dc3545;
-  }
-  
-  .boton-finalizar:hover {
-    background-color: #c82333;
-  }
-  
-  .boton-editar {
-    background: #28a745;
-    border: none;
-    color: white;
-    padding: 3px 6px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 12px;
-  }
-  
-  .boton-editar:hover {
-    background: #218838;
-  }
-  
-  .boton-guardar {
-    background: #007bff;
-    border: none;
-    color: white;
-    padding: 3px 6px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 12px;
-  }
-  
-  .boton-guardar:hover {
-    background: #0056b3;
-  }
-  
-  .boton-cancelar {
-    background: #dc3545;
-    border: none;
-    color: white;
-    padding: 3px 6px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 12px;
-  }
-  
-  .boton-cancelar:hover {
-    background: #c82333;
-  }
-  
-  /* =========================
-     MODAL DE CONFIRMACIÓN
-     ========================= */
-  .modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0,0,0,0.5); /* Semitransparente */
-    z-index: 9998;
-  }
-  
-  .modal-content {
-    background: white;
-    padding: 20px;
-    border-radius: 8px;
-    box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
-    text-align: center;
-    width: 300px;
-  }
-  
-  .modal-buttons {
-    display: flex;
-    justify-content: space-around;
-    margin-top: 15px;
-  }
-  
-  .modal-confirmacion {
-    /* Hace que el div se coloque encima de todo */
-    position: fixed;
-    top: 20%;
-    left: 40%;
-    /* Ajusta según necesites */
-    
-    /* Asegúrate de tener fondo y z-index alto */
-    background-color: #fff;
-    color: #000;
-    padding: 20px;
-    border: 1px solid #000;
-    border-radius: 8px;
-    z-index: 9999; /* Muy arriba para que no quede debajo de otros elementos */
-    
-  }
+/* Header de columna con filtro activo (borde celeste suave) */
+th.filtro-activo .header-button{background:#e6f4ff;border-radius:6px}
 
-    /* =========================
-     MODAL DE ASIGNAR FECHA
-     ========================= */
-
-  .modal-asignar-fecha-overlay {
-  position: fixed;
-  top: 0; left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: rgba(0,0,0,0.25);
-  z-index: 2500;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-    }
-
-    app-asignar-fecha-modal {
-      background: #fff;
-      border-radius: 12px;
-      box-shadow: 0 6px 32px rgba(0,0,0,.15);
-      min-width: 330px;
-      padding: 24px 22px;
-      max-width: 97vw;
-    }
-
-
-
-
-
-  /* =========================
-     HISTORIAL
-     ========================= */
-  .historial-lista {
-    list-style-type: none;
-    padding-left: 5px;
-    font-size: 12px;
-    line-height: 1.4;
-  }
-  
-  .historial-item {
-    background: #f8f9fa;
-    padding: 2px 5px;
-    border-radius: 5px;
-    margin-bottom: 2px;
-    display: flex;
-    align-items: center;
-    white-space: nowrap;
-  }
-  
-  .fecha-nueva {
-    color: #007bff;
-    font-weight: bold;
-  }
-  
-  .fecha-modificacion {
-    color: #6c757d;
-    font-style: italic;
-    font-size: 11px;
-  }
-  
-  /* =========================
-     Paginación
-     ========================= */
-  .pagination-container {
-    flex: 1; /* Ocupa todo el espacio disponible */
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 10px;
-  }
-  
-  .pagination-button {
-    background-color: #007bff;
-    color: white;
-    border: none;
-    padding: 8px 15px;
-    border-radius: 5px;
-    cursor: pointer;
-    transition: background-color 0.2s ease-in-out;
-  }
-  
-  .pagination-button:disabled {
-    background-color: #cccccc;
-    cursor: not-allowed;
-  }
-  
-  .pagination-button:hover:not(:disabled) {
-    background-color: #0056b3;
-  }
-
-  .pagination-export-container {
-    /* Si quieres que se desplace hasta llegar al final, usa sticky: */
-    position: sticky; 
-    bottom: 0;             /* Se "pega" al fondo del contenedor/página */
-    left: 0;
-    background-color: #fff;
-    display: flex;
-    align-items: center;
-    padding: 10px 20px;
-    z-index: 10;
-  
-    /* Un margen inferior para dar espacio visual extra */
-    margin-bottom: 10px; /* Ajusta a tu preferencia */
-    
-    /* Si la tabla tiene overflow, es posible que necesites un box-shadow o border-top: */
-    /* border-top: 1px solid #ccc; */
-    /* box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.1); */
-  }
-  .export-container {
-    /* Para ubicar el botón a la derecha */
-    display: flex;
-    justify-content: flex-end;
-    margin-left: auto;
-  }
-
-  /* Botón de exportar */
-  .boton-exportar {
-    background-color: #343a40; /* Por ejemplo, gris oscuro */
-    color: white;
-    padding: 8px 15px;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    transition: background-color 0.2s ease-in-out;
-  }
-
-  .boton-exportar:hover {
-    background-color: #23272b;
-  }
-
-  
-  /* =========================
-     RESPONSIVIDAD
-     ========================= */
-  @media screen and (min-width: 2560px) { /* 4K */
-    .table-container {
-      max-width: 80vw;
-    }
-  
-    table {
-      font-size: 18px;
-    }
-  
-    th, td {
-      padding: 16px;
-    }
-  }
-  
-  @media screen and (min-width: 1920px) {
-    .table-container {
-      max-width: 85vw;
-      margin: auto;
-    }
-  
-    table {
-      font-size: 16px;
-    }
-  
-    th, td {
-      padding: 16px;
-    }
-  }
-  
-  @media screen and (max-width: 768px) {
-    th, td {
-      font-size: 12px;
-      padding: 6px;
-    }
-    .boton-historial, .boton-editar-fecha {
-      font-size: 12px;
-      padding: 4px 6px;
-    }
-    .table-container {
-      overflow-x: scroll;
-    }
-  }
-  
-  @media screen and (max-width: 480px) {
-    .boton-historial, .boton-editar-fecha {
-      font-size: 10px;
-      padding: 3px 5px;
-    }
-  }
-  
-  @media screen and (max-width: 600px) {
-    table, thead, tbody, th, td, tr {
-      display: block;
-    }
-  
-    thead {
-      display: none;
-    }
-  
-    tr {
-      margin-bottom: 10px;
-      border: 1px solid #ddd;
-      padding: 10px;
-      display: flex;
-      flex-direction: column;
-    }
-  
-    td {
-      text-align: left;
-      padding: 5px;
-    }
-  }
-  
-
-  .boton-limpiar-todo {
-    background-color: #e53935;
-    color: white;
-    padding: 8px 16px;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-weight: bold;
-    margin-left: 10px;
-    transition: background-color 0.3s ease;
-  }
-  
-  .boton-limpiar-todo:hover {
-    background-color: #c62828;
-  }
-  
-  th.filtro-activo button {
-    color: #1976d2;
-    font-weight: bold;
-  }
-
-  .fecha-solucion-picker {
-    margin-top: 8px;
-    padding: 8px;
-    background-color: #f5f5f5;
-    border-radius: 12px;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-  }
-  
-  .acciones-fecha button {
-    min-width: 100px;
-  }
-  
-  /* Estilo personalizado para días válidos */
-.mat-calendar-body-cell-valid {
-  font-weight: bold;
-  color: #1a73e8; /* Azul brillante */
+/* Botón del encabezado */
+.header-button{
+  color:#fff !important;display:flex;align-items:center;gap:.25rem;font-weight:700
 }
 
-/* Estilo más tenue para días inválidos */
-.mat-calendar-body-disabled {
-  opacity: 0.3 !important;
-  color: #999 !important;
-  cursor: not-allowed;
+/* ========= Menús de filtro (los dropdowns de cada th) ========= */
+.menu-filtro{
+  padding:.5rem 1rem;display:flex;flex-direction:column;gap:.5rem;min-width:200px
+}
+.menu-filtro label{font-weight:700;margin-bottom:.25rem}
+.buscador-filtro{width:100%}
+.opciones-scrollable{max-height:200px;overflow:auto;margin-top:.5rem}
+
+.dia-con-ticket.mat-calendar-body-cell .mat-calendar-body-cell-content::after{
+  content:'';display:block;width:5px;height:5px;border-radius:50%;background:green;margin:2px auto 0
 }
 
-/* Estilos para la fecha de solución */
-.fecha-actual {
-  display: flex;
-  align-items: center;
-  padding: 4px 8px;
-  border-radius: 4px;
-  background-color: #f5f5f5;
+/* ========= Panel de filtros unificado (arriba de la tabla) ========= */
+/* Layout: [Select fijo] [Buscador 1/2] [Checklist+botones 1/2] */
+.filtro-unificado-wrapper{
+  display:grid;
+  grid-template-columns:160px 1fr 1fr;
+  gap:8px;
+  align-items:start;
+  margin:8px 0;
 }
 
-.boton-editar {
-  opacity: 0.7;
-  transition: opacity 0.2s;
+/* columnas */
+.columna-select{min-width:160px}
+.columna-buscador{width:100%}
+.columna-checklist{display:flex;flex-direction:column}
+
+/* checklist compacto con scroll bajo */
+.fu-checklist{
+  max-height:110px;                 /* <- compacta el alto del bloque */
+  overflow:auto;
+  padding:6px 8px;
+  border:1px solid #ddd;
+  border-radius:8px;
 }
 
-.boton-editar:hover {
-  opacity: 1;
+/* botones en una sola fila */
+.fu-acciones,.acciones-filtro{display:flex;gap:8px;align-items:center;margin-top:8px}
+
+/* Botón mostrar/ocultar filtros (barra superior) */
+.table-container > div:first-child button[mat-stroked-button]{
+  line-height:32px;height:32px;padding:0 12px
 }
 
-.fecha-solucion-picker {
-  margin-top: 8px;
-  padding: 12px;
-  background-color: #f8f9fa;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+/* ========= Compactación de Angular Material (MDC) para este panel ========= */
+/* Reduce la altura visual de los form-field dentro del filtro unificado */
+.filtro-unificado-wrapper .mat-mdc-form-field-infix{padding-block:6px}
+.filtro-unificado-wrapper .mat-mdc-form-field-subscript-wrapper{display:none}
+.filtro-unificado-wrapper .mdc-text-field--filled .mdc-line-ripple::after{transform:none}
+
+/* Checkboxes algo más densos */
+.filtro-unificado-wrapper .mdc-form-field>label{font-size:14px}
+
+/* ========= Paginación & export ========= */
+.pagination-export-container{
+  position:sticky;bottom:0;left:0;background:#fff;display:flex;align-items:center;
+  padding:10px 20px;z-index:10;margin-bottom:10px
 }
+.pagination-container{flex:1;display:flex;justify-content:center;align-items:center;gap:10px}
+.pagination-button{background:#007bff;color:#fff;border:none;padding:8px 15px;border-radius:5px;cursor:pointer;transition:.2s}
+.pagination-button:hover:not(:disabled){background:#0056b3}
+.pagination-button:disabled{background:#ccc;cursor:not-allowed}
+.export-container{display:flex;justify-content:flex-end;margin-left:auto}
+.boton-exportar{background:#343a40;color:#fff;padding:8px 15px;border:none;border-radius:5px;cursor:pointer;transition:.2s}
+.boton-exportar:hover{background:#23272b}
+.boton-limpiar-todo{background:#e53935;color:#fff;padding:8px 16px;border:none;border-radius:6px;cursor:pointer;font-weight:700;margin-left:10px;transition:.3s}
+.boton-limpiar-todo:hover{background:#c62828}
 
-.historial-fechas {
-  border-top: 1px solid #eee;
-  padding-top: 8px;
+/* ========= Varias utilidades que sí usas ========= */
+.w-full{width:100%}
+.text-sm{font-size:.875rem}
+.text-xs{font-size:.75rem}
+.mb-1{margin-bottom:.25rem}.mb-2{margin-bottom:.5rem}
+.mt-2{margin-top:.5rem}.ml-2{margin-left:.5rem}
+.flex{display:flex}.gap-2{gap:.5rem}
+
+/* ========= Responsivo básico ========= */
+@media (max-width:768px){
+  th,td{font-size:12px;padding:6px}
+  .filtro-unificado-wrapper{grid-template-columns:1fr;gap:6px}
+  .fu-acciones,.acciones-filtro{justify-content:flex-start;flex-wrap:wrap}
 }
-
-.historial-lista {
-  max-height: 200px;
-  overflow-y: auto;
-  background-color: #fff;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-}
-
-.cambio-item {
-  border-bottom: 1px solid #f0f0f0;
-  background-color: #fafafa;
-}
-
-.cambio-item:last-child {
-  border-bottom: none;
-}
-
-/* Utilidades */
-.mb-1 { margin-bottom: 0.25rem; }
-.mb-2 { margin-bottom: 0.5rem; }
-.mt-2 { margin-top: 0.5rem; }
-.ml-2 { margin-left: 0.5rem; }
-.p-2 { padding: 0.5rem; }
-.text-sm { font-size: 0.875rem; }
-.text-xs { font-size: 0.75rem; }
-.text-gray-500 { color: #6b7280; }
-.text-gray-600 { color: #4b5563; }
-.w-full { width: 100%; }
-.flex { display: flex; }
-.gap-2 { gap: 0.5rem; }
-
-
-
-/* =========================
-   FILTROS
-   ========================= */
-  /* Contenedor de la barra de filtros */
-.filtros-externos-barra {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 18px 6px 12px;
-  background: #fafbfc;
-  border-bottom: 1px solid #e0e0e0;
-  margin-bottom: 0.5rem;
-  font-size: 15px;
-}
-
-/* Label del filtro */
-.filtro-label {
-  font-weight: 500;
-  margin-right: 8px;
-  color: #555;
-  min-width: 80px;
-}
-
-/* Checkbox general */
-.filtro-checkbox .mat-checkbox-layout {
-  font-size: 13px;
-  color: #333;
-  padding: 0 6px 0 0;
-}
-
-.filtro-checkbox {
-  margin-right: 3px;
-}
-
-.filtro-checkbox .mat-checkbox-inner-container {
-  width: 18px;
-  height: 18px;
-}
-
-.filtro-checkbox .mat-checkbox-label {
-  font-size: 13px;
-  padding-left: 3px;
-}
-
-/* Input de búsqueda */
-.filtro-busqueda {
-  min-width: 120px;
-  max-width: 170px;
-  height: 32px;
-  margin-right: 5px;
-  background: #fff;
-  border-radius: 6px;
-  font-size: 13px;
-}
-
-/* Mat-form-field compacto */
-.filtros-externos-barra .mat-form-field {
-  margin-right: 4px;
-  width: 120px;
-  height: 32px;
-}
-
-.filtros-externos-barra .mat-form-field-appearance-fill .mat-form-field-flex {
-  padding: 0 6px;
-  background: #fff;
-  border-radius: 6px;
-}
-
-/* Botones */
-.filtro-boton,
-.filtro-boton-aplicar {
-  min-width: 32px;
-  height: 30px;
-  margin-right: 4px;
-  border-radius: 6px;
-  font-size: 13px;
-  padding: 0 10px;
-}
-
-.filtro-boton-aplicar {
-  background: #2196f3;
-  color: #fff;
-  border: none;
-  font-weight: 500;
-}
-
-.filtro-boton-aplicar:hover {
-  background: #1769aa;
-}
-
-.filtro-boton {
-  background: #eee;
-  color: #333;
-  border: none;
-}
-
-.filtro-boton:hover {
-  background: #d3d3d3;
-}
-
-@media (max-width: 1100px) {
-  .filtros-externos-barra {
-    flex-wrap: wrap;
-    gap: 6px;
-    padding: 6px 8px 3px 6px;
-    font-size: 13px;
-  }
-  .filtro-busqueda,
-  .filtros-externos-barra .mat-form-field {
-    width: 90px;
-    min-width: 80px;
-    font-size: 12px;
-  }
-}
-
-
-.filtro-card {
-  background: #fff;
-  border-radius: 14px;
-  box-shadow: 0 3px 12px rgba(60,60,60,0.07), 0 1.5px 4px rgba(0,0,0,0.04);
-  padding: 16px 20px;
-  margin-bottom: 16px;
-  display: inline-block;
-  vertical-align: top;
-  min-width: 230px;
-  max-width: 330px;
-  margin-right: 18px;
-  font-size: 1.03rem;
-}
-
-.filtro-card-titulo {
-  font-weight: 600;
-  font-size: 1.13rem;
-  margin-bottom: 10px;
-  letter-spacing: 0.01em;
-  color: #2c2c2c;
-}
-
-.filtro-checkbox-lista {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin-bottom: 10px;
-  margin-left: 2px;
-}
-
-.filtro-card-acciones {
-  display: flex;
-  gap: 6px;
-  justify-content: flex-end;
-  margin-top: 2px;
-}
-
-.filtro-boton-aplicar {
-  background: #1e7fe4;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  padding: 3.5px 17px;
-  font-size: 1rem;
-  cursor: pointer;
-  box-shadow: 0 0.5px 2px rgba(40, 120, 200, 0.09);
-  transition: background 0.16s;
-}
-.filtro-boton-aplicar:hover {
-  background: #0056b3;
-}
-.filtro-boton {
-  background: #f4f4f4;
-  color: #444;
-  border: none;
-  border-radius: 6px;
-  padding: 3.5px 13px;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: background 0.12s;
-}
-.filtro-boton:hover {
-  background: #ececec;
-}
-
-
-.filtro-menu .filtro-menu-card {
-  min-width: 200px;
-  max-width: 270px;
-  padding: 12px 14px;
-  box-shadow: 0 4px 18px rgba(30,30,60,0.14);
-}
-
-.filtro-card-titulo {
-  font-size: 1.08rem;
-}
-
-.filtro-checkbox-lista {
-  font-size: 0.98rem;
-}
-
-.filtro-boton-aplicar, .filtro-boton {
-  font-size: 0.93rem;
-  padding: 2.5px 10px;
-  margin-top: 6px;
-}
-
-.filtros-barra-externa {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  padding: 7px 12px;
-  background: #fafbfc;
-  border-radius: 14px;
-  box-shadow: 0 1px 5px rgba(30,30,60,0.08);
-  margin-bottom: 7px;
-}
-
-.filtro-pill {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  background: #f2f3f6;
-  border-radius: 9px;
-  padding: 3px 9px;
-  font-size: 0.97rem;
-}
-
-.mini-checkbox {
-  padding: 0 2px;
-  transform: scale(0.9);
-}
-
-.filtros-barra {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
-  align-items: flex-end;
-  margin-bottom: 1rem;
-}
-.filtro {
-  min-width: 180px;
-  max-width: 240px;
-}
-

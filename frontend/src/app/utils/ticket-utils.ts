@@ -66,31 +66,78 @@ export function getFiltrosActivosFrom(
 }
 
 // ----------- FILTRADO CRUZADO PRINCIPAL -----------
+// ----------- FILTRADO PRINCIPAL (sin cross UI, solo tabla) -----------
 export function filtrarTicketsConFiltros(
-  tickets: Ticket[],
-  filtros: { [clave: string]: (string | number)[] }
-): Ticket[] {
-  return tickets.filter(ticket => {
-    for (const [clave, valores] of Object.entries(filtros)) {
-      if (!valores.length) continue;
+  tickets: any[],
+  filtros: FiltrosEntrada | Record<string, any>
+) {
+  const filtrosSet = normalizaFiltros(filtros);
+console.log('🧪 filtrosSet:', Object.fromEntries(
+  Object.entries(filtrosSet).map(([k, v]) => [k, Array.from(v)])
+));
 
-      let valorTicket: string | number = '—';
-      if (clave === 'inventario') {
-        valorTicket = ticket.inventario?.nombre || '—';
-      } else if (clave === 'departamento') {
-        valorTicket = ticket.departamento_id ?? '—';
-      } else if (clave === 'sucursal') {          
-        valorTicket = (ticket as any).sucursal ?? '—';
-      } else {
-        valorTicket = (ticket as any)[clave] ?? '—';
-      }
-      if (!valores.some(v => v == valorTicket)) {
-        return false;
-      }
+  const getValue = (t: any, col: string): string => {
+    switch (col) {
+      case 'categoria':    return t.categoria != null ? String(t.categoria) : '';
+      case 'descripcion':  return t.descripcion ?? '';
+      case 'username':     return t.username ?? '';
+      case 'estado':       return t.estado ?? '';
+      case 'criticidad':   return t.criticidad != null ? String(t.criticidad) : '';
+      case 'departamento': return t.departamento ?? '';      // ← por nombre
+      case 'subcategoria': return t.subcategoria != null ? String(t.subcategoria) : '';
+      case 'detalle':      return t.detalle != null ? String(t.detalle) : '';
+      case 'inventario':   return t.inventario?.nombre ?? '';
+      case 'sucursal':     return t.sucursal ?? '';
+      default:             return '';
     }
-    return true;
-  });
+  };
+
+return tickets.filter(t => {
+  for (const [col, valores] of Object.entries(filtrosSet)) {
+    if (!valores || valores.size === 0) continue;
+
+    let valorTicket = '';
+
+    if (col === 'departamento') {
+      // si todos los valores del filtro son dígitos → comparamos contra departamento_id
+      const usandoIds = Array.from(valores).every(v => /^\d+$/.test(v));
+      valorTicket = usandoIds
+        ? (t.departamento_id != null ? String(t.departamento_id) : '')
+        : (t.departamento ?? '');
+
+      // 🔎 log de comparación departamento
+      console.log('🔎 dept comparando', {
+        usandoIds,
+        valorTicket,
+        valores: Array.from(valores),
+        ticket_dep_id: t.departamento_id,
+        ticket_dep_nombre: t.departamento
+      });
+    } else {
+      // tu getValue normal
+      valorTicket = (() => {
+        switch (col) {
+          case 'categoria':    return t.categoria != null ? String(t.categoria) : '';
+          case 'descripcion':  return t.descripcion ?? '';
+          case 'username':     return t.username ?? '';
+          case 'estado':       return t.estado ?? '';
+          case 'criticidad':   return t.criticidad != null ? String(t.criticidad) : '';
+          case 'subcategoria': return t.subcategoria != null ? String(t.subcategoria) : '';
+          case 'detalle':      return t.detalle != null ? String(t.detalle) : '';
+          case 'inventario':   return t.inventario?.nombre ?? '';
+          case 'sucursal':     return t.sucursal ?? '';
+          default:             return '';
+        }
+      })();
+    }
+
+    if (!valores.has(valorTicket)) return false;
+  }
+  return true;
+});
 }
+
+
 
 // ----------- REGENERAR OPCIONES FILTRADAS (para checkboxes dinámicos) -----------
 export function regenerarFiltrosFiltradosDesdeTickets(
@@ -417,3 +464,27 @@ export function generarOpcionesCategoriasDesdeTickets(
 }
 
 
+// ----------- NUEVO: tipos de entrada flexibles -----------
+export type FiltroValorEntrada = Set<string> | Array<string | number>;
+export type FiltrosEntrada = Record<string, FiltroValorEntrada>;
+
+// ----------- NUEVO: normalizador -----------
+function normalizaFiltros(filtros: FiltrosEntrada | Record<string, any>): Record<string, Set<string>> {
+  const out: Record<string, Set<string>> = {};
+  for (const key of Object.keys(filtros || {})) {
+    const v = filtros[key];
+    if (!v) continue;
+
+    if (v instanceof Set) {
+      // ya es Set<string> o Set<algo>
+      out[key] = new Set(Array.from(v as Set<any>, (x) => String(x)));
+    } else if (Array.isArray(v)) {
+      // array de string|number
+      out[key] = new Set((v as Array<string | number>).map(String));
+    } else {
+      // por si acaso: ignora tipos raros
+      continue;
+    }
+  }
+  return out;
+}

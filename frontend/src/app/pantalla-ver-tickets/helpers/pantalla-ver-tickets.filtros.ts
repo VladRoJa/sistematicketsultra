@@ -214,22 +214,26 @@ export function obtenerFiltrosActivos(
   };
 
   campos.forEach(campo => {
-    // selección tomada de los TEMPORALES (lo que quedó tras el buscador)
-    const seleccion = component.temporalSeleccionados[campo]
-      ?.filter((i: any) => i.seleccionado)
-      .map((i: any) => i.valor) ?? [];
-
-    // 👈 comparar SIEMPRE contra el total de DISPONIBLES (no temporales)
     const plural = pluralMap[campo] ?? `${campo}s`;
-    const totalDisponibles = component[`${plural}Disponibles`]?.length ?? 0;
 
-    if (seleccion.length > 0 && seleccion.length !== totalDisponibles) {
+    // ✅ Tomar SIEMPRE desde ...Disponibles (estado persistido al aplicar)
+    const disponibles = (component[`${plural}Disponibles`] as Array<{ valor: any; etiqueta?: string; seleccionado: boolean }>) ?? [];
+
+    const seleccion = disponibles
+      .filter(op => op.seleccionado)
+      .map(op => op.valor);
+
+    const totalDisponibles = disponibles.length;
+
+    // Si están TODOS seleccionados, no agregamos filtro para esa columna
+    if (totalDisponibles > 0 && seleccion.length < totalDisponibles) {
       filtros[campo] = seleccion;
     }
   });
 
   return filtros;
 }
+
 
 
 export function borrarFiltroRangoFechaCreacion(component: PantallaVerTicketsComponent): void {
