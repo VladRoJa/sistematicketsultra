@@ -1,180 +1,229 @@
-// frontend-angular\src\app\pantalla-ver-tickets\helpers\pantalla-ver-tickets.filtros.ts
+// frontend-angular/src/app/pantalla-ver-tickets/helpers/pantalla-ver-tickets.filtros.ts
 
 import { PantallaVerTicketsComponent } from '../pantalla-ver-tickets.component';
-import { filtrarTicketsConFiltros, regenerarFiltrosFiltradosDesdeTickets, limpiarFiltroColumnaConMapa, todasOpcionesDesmarcadas, removeDiacritics } from '../../utils/ticket-utils';
-import { actualizarDiasConTicketsCreacion, actualizarDiasConTicketsFinalizado, actualizarVisibleTickets } from './pantalla-ver-tickets.init'
+import {
+  filtrarTicketsConFiltros,
+  regenerarFiltrosFiltradosDesdeTickets,
+  limpiarFiltroColumnaConMapa,
+  removeDiacritics,
+} from '../../utils/ticket-utils';
+import {
+  actualizarDiasConTicketsCreacion,
+  actualizarDiasConTicketsFinalizado,
+  actualizarVisibleTickets,
+} from './pantalla-ver-tickets.init';
 
 /**
- * Funciones para manejar todos los filtros dinámicos en PantallaVerTicketsComponent
+ * Filtros dinámicos (versión DRY)
+ * - Un único motor para filtrar opciones por texto (checkboxes)
+ * - Mantiene compatibilidad exportando los nombres anteriores
  */
 
-/** ------ Filtros individuales ------ */
+/* =======================
+   Utilidades internas DRY
+   ======================= */
 
-/** Filtrar categorías */
-export function filtrarOpcionesCategoria(component: PantallaVerTicketsComponent): void {
-  const texto = component.filtroCategoriaTexto.trim().toLowerCase();
-  component.categoriasFiltradas = texto
-    ? component.categoriasDisponibles.filter(cat => removeDiacritics(cat.valor.toLowerCase()).includes(removeDiacritics(texto)))
-    : [...component.categoriasDisponibles];
+const PLURAL: Record<string, string> = {
+  categoria: 'categorias',
+  descripcion: 'descripciones',
+  username: 'usuarios',
+  estado: 'estados',
+  criticidad: 'criticidades',
+  departamento: 'departamentos',
+  subcategoria: 'subcategorias',
+  detalle: 'detalles',
+  inventario: 'inventarios',
+  sucursal: 'sucursales',
+};
+
+const TEXTO_PROP: Record<string, string> = {
+  departamento: 'filtroDeptoTexto',
+  detalle: 'filtroDetalleTexto',
+  inventario: 'filtroInventarioTexto',
+  sucursal: 'filtroSucursalTexto',
+  // los demás siguen la convención filtro{Columna}Texto
+};
+
+function getPlural(col: string) {
+  return PLURAL[col] ?? `${col}s`;
 }
 
-/** Filtrar descripciones */
-export function filtrarOpcionesDescripcion(component: PantallaVerTicketsComponent): void {
-  const texto = component.filtroDescripcionTexto.trim().toLowerCase();
-  component.descripcionesFiltradas = texto
-    ? component.descripcionesDisponibles.filter(desc => removeDiacritics(desc.valor.toLowerCase()).includes(removeDiacritics(texto)))
-    : [...component.descripcionesDisponibles];
+function getSearchProp(col: string) {
+  if (TEXTO_PROP[col]) return TEXTO_PROP[col];
+  return `filtro${col.charAt(0).toUpperCase() + col.slice(1)}Texto`;
 }
 
-/** Filtrar usuarios */
-export function filtrarOpcionesUsuario(component: PantallaVerTicketsComponent): void {
-  const texto = component.filtroUsuarioTexto.trim().toLowerCase();
-  component.usuariosFiltrados = texto
-    ? component.usuariosDisponibles.filter(usr => removeDiacritics(usr.valor.toLowerCase()).includes(removeDiacritics(texto)))
-    : [...component.usuariosDisponibles];
+/**
+ * Motor genérico: filtra las opciones visibles (…Filtradas) de una columna
+ * en base al texto escrito, usando (etiqueta ?? valor).
+ */
+function filtrarOpcionesTextoGenerico(
+  component: PantallaVerTicketsComponent,
+  columna: string
+): void {
+  const plural = getPlural(columna);
+  const propTexto = getSearchProp(columna);
+
+  const texto = (component as any)[propTexto]?.trim?.().toLowerCase?.() || '';
+
+  // Base: si ya hay …Filtradas úsala; si no, parte de …Disponibles
+  const base =
+    (component as any)[`${plural}Filtradas`]?.length
+      ? (component as any)[`${plural}Filtradas`]
+      : (component as any)[`${plural}Disponibles`] || [];
+
+  if (!Array.isArray(base)) return;
+
+  const match = (it: any) =>
+    removeDiacritics(String(it?.etiqueta ?? it?.valor ?? ''))
+      .toLowerCase()
+      .includes(removeDiacritics(texto));
+
+  const filtradas = texto ? base.filter(match) : [...base];
+
+  (component as any)[`${plural}Filtradas`] = filtradas;
+  component.temporalSeleccionados[columna] = filtradas.map((i: any) => ({ ...i }));
 }
 
-/** Filtrar estados */
-export function filtrarOpcionesEstado(component: PantallaVerTicketsComponent): void {
-  const texto = component.filtroEstadoTexto.trim().toLowerCase();
-  component.estadosFiltrados = texto
-    ? component.estadosDisponibles.filter(est => removeDiacritics(est.valor.toLowerCase()).includes(removeDiacritics(texto)))
-    : [...component.estadosDisponibles];
+/* ============================================
+   Wrappers de compatibilidad (mismos nombres)
+   ============================================ */
+
+export function filtrarOpcionesCategoria(c: PantallaVerTicketsComponent) {
+  filtrarOpcionesTextoGenerico(c, 'categoria');
+}
+export function filtrarOpcionesDescripcion(c: PantallaVerTicketsComponent) {
+  filtrarOpcionesTextoGenerico(c, 'descripcion');
+}
+export function filtrarOpcionesUsuario(c: PantallaVerTicketsComponent) {
+  filtrarOpcionesTextoGenerico(c, 'username');
+}
+export function filtrarOpcionesEstado(c: PantallaVerTicketsComponent) {
+  filtrarOpcionesTextoGenerico(c, 'estado');
+}
+export function filtrarOpcionesCriticidad(c: PantallaVerTicketsComponent) {
+  filtrarOpcionesTextoGenerico(c, 'criticidad');
+}
+export function filtrarOpcionesDepto(c: PantallaVerTicketsComponent) {
+  filtrarOpcionesTextoGenerico(c, 'departamento');
+}
+export function filtrarOpcionesSubcategoria(c: PantallaVerTicketsComponent) {
+  filtrarOpcionesTextoGenerico(c, 'subcategoria');
+}
+export function filtrarOpcionesDetalle(c: PantallaVerTicketsComponent) {
+  filtrarOpcionesTextoGenerico(c, 'detalle');
+}
+// Si activas buscador para inventario/sucursal:
+export function filtrarOpcionesInventario(c: PantallaVerTicketsComponent) {
+  filtrarOpcionesTextoGenerico(c, 'inventario');
+}
+export function filtrarOpcionesSucursal(c: PantallaVerTicketsComponent) {
+  filtrarOpcionesTextoGenerico(c, 'sucursal');
 }
 
-/** Filtrar criticidades */
-export function filtrarOpcionesCriticidad(component: PantallaVerTicketsComponent): void {
-  const texto = component.filtroCriticidadTexto.trim().toLowerCase();
-  component.criticidadesFiltradas = texto
-    ? component.criticidadesDisponibles.filter(crit => removeDiacritics(crit.valor.toLowerCase()).includes(removeDiacritics(texto)))
-    : [...component.criticidadesDisponibles];
-}
+/* ==========================
+   Fechas (se quedan iguales)
+   ========================== */
 
-/** Filtrar departamentos */
-export function filtrarOpcionesDepto(component: PantallaVerTicketsComponent): void {
-  const texto = component.filtroDeptoTexto.trim().toLowerCase();
-  component.departamentosFiltrados = texto
-    ? component.departamentosDisponibles.filter(dep => removeDiacritics(dep.valor.toLowerCase()).includes(removeDiacritics(texto)))
-    : [...component.departamentosDisponibles];
-}
-
-/** Filtrar subcategorías */
-export function filtrarOpcionesSubcategoria(component: PantallaVerTicketsComponent): void {
-  const texto = component.filtroSubcategoriaTexto.trim().toLowerCase();
-  component.subcategoriasFiltradas = texto
-    ? component.subcategoriasDisponibles.filter(sub => removeDiacritics(sub.valor.toLowerCase()).includes(removeDiacritics(texto)))
-    : [...component.subcategoriasDisponibles];
-}
-
-/** Filtrar detalles (subsubcategorías) */
-export function filtrarOpcionesDetalle(component: PantallaVerTicketsComponent): void {
-  const texto = component.filtroDetalleTexto.trim().toLowerCase();
-  component.detallesFiltrados = texto
-    ? component.detallesDisponibles.filter(det => removeDiacritics(det.valor.toLowerCase()).includes(removeDiacritics(texto)))
-    : [...component.detallesDisponibles];
-}
-
-/** Filtrar fechas de creación */
 export function filtrarOpcionesFechaC(component: PantallaVerTicketsComponent): void {
   const texto = component.filtroFechaTexto.trim().toLowerCase();
   component.fechasCreacionFiltradas = texto
-    ? component.fechasCreacionDisponibles.filter(fc => fc.valor.toLowerCase().includes(texto))
+    ? component.fechasCreacionDisponibles.filter((fc) =>
+        fc.valor.toLowerCase().includes(texto)
+      )
     : [...component.fechasCreacionDisponibles];
 }
 
-/** Filtrar fechas de finalización */
 export function filtrarOpcionesFechaF(component: PantallaVerTicketsComponent): void {
   const texto = component.filtroFechaFinalTexto.trim().toLowerCase();
   component.fechasFinalFiltradas = texto
-    ? component.fechasFinalDisponibles.filter(ff => ff.valor.toLowerCase().includes(texto))
+    ? component.fechasFinalDisponibles.filter((ff) =>
+        ff.valor.toLowerCase().includes(texto)
+      )
     : [...component.fechasFinalDisponibles];
 }
 
-/** ------ Checkboxes y sincronización ------ */
+/* ==========================================
+   Checkboxes y sincronización (sin cambios)
+   ========================================== */
 
-
-
-/** Alternar selección de todos los checkboxes de una columna */
 export function toggleSeleccionarTodo(
   component: PantallaVerTicketsComponent,
   campo: string,
   todos: boolean
 ): void {
-  // 🔒 1) Verificamos que la propiedad exista antes de tocarla
   const campoFiltrado = (campo + 'Filtrados') as keyof PantallaVerTicketsComponent;
   const campoDisponibles = (campo + 'Disponibles') as keyof PantallaVerTicketsComponent;
-  if (!(campoFiltrado in component) || !(campoDisponibles in component)) {
-    console.warn(`toggleSeleccionarTodo: columna desconocida '${campo}'`);
-    return;                        // ⇦ Salimos silenciosamente
-  }
+  if (!(campoFiltrado in component) || !(campoDisponibles in component)) return;
 
-  // 🔄 2) Array de opciones visibles (filtradas)
   const filtrados = component[campoFiltrado] as { valor: string; seleccionado: boolean }[];
-  if (!Array.isArray(filtrados)) { return; }
+  if (!Array.isArray(filtrados)) return;
 
-  // ✅ 3) Marcamos / desmarcamos lo visible
-  filtrados.forEach(item => (item.seleccionado = todos));
+  filtrados.forEach((item) => (item.seleccionado = todos));
 
-  // 🔄 4) Sincronizamos los disponibles con lo recién marcado
-  const disponibles = component[campoDisponibles] as { valor: string; seleccionado: boolean }[];
-  disponibles.forEach(item => {
-    const match = filtrados.find(f => f.valor === item.valor);
-    if (match) { item.seleccionado = match.seleccionado; }
+  const disponibles = component[campoDisponibles] as {
+    valor: string;
+    seleccionado: boolean;
+  }[];
+  disponibles.forEach((item) => {
+    const match = filtrados.find((f) => f.valor === item.valor);
+    if (match) item.seleccionado = match.seleccionado;
   });
 }
 
-
-/** Sincronizar selección de disponibles basado en filtrados */
-export function sincronizarCheckboxesConDisponibles(component: PantallaVerTicketsComponent): void {
-  const sincronizar = (disponibles: { valor: string; seleccionado: boolean }[], filtradas: { valor: string; seleccionado: boolean }[]) => {
-    disponibles.forEach(item => {
-      const match = filtradas.find(f => f.valor === item.valor);
-      if (match) {
-        item.seleccionado = match.seleccionado;
-      }
+export function sincronizarCheckboxesConDisponibles(c: PantallaVerTicketsComponent) {
+  const sync = (d: any[], f: any[]) =>
+    d.forEach((it) => {
+      const m = f.find((x) => x.valor === it.valor);
+      if (m) it.seleccionado = m.seleccionado;
     });
-  };
 
-  sincronizar(component.categoriasDisponibles, component.categoriasFiltradas);
-  sincronizar(component.descripcionesDisponibles, component.descripcionesFiltradas);
-  sincronizar(component.usuariosDisponibles, component.usuariosFiltrados);
-  sincronizar(component.estadosDisponibles, component.estadosFiltrados);
-  sincronizar(component.criticidadesDisponibles, component.criticidadesFiltradas);
-  sincronizar(component.departamentosDisponibles, component.departamentosFiltrados);
-  sincronizar(component.subcategoriasDisponibles, component.subcategoriasFiltradas);
-  sincronizar(component.detallesDisponibles, component.detallesFiltrados);
+  sync(c.categoriasDisponibles, c.categoriasFiltradas);
+  sync(c.descripcionesDisponibles, c.descripcionesFiltradas);
+  sync(c.usuariosDisponibles, c.usuariosFiltrados);
+  sync(c.estadosDisponibles, c.estadosFiltrados);
+  sync(c.criticidadesDisponibles, c.criticidadesFiltradas);
+  sync(c.departamentosDisponibles, c.departamentosFiltrados);
+  sync(c.subcategoriasDisponibles, c.subcategoriasFiltradas);
+  sync(c.detallesDisponibles, c.detallesFiltrados);
+  sync(c.sucursalesDisponibles, c.sucursalesFiltradas);
+  sync(c.inventariosDisponibles, c.inventariosFiltrados);
 }
 
-/** ------ Funciones generales de filtros ------ */
+/* =========================
+   Núcleo de aplicación DRY
+   ========================= */
 
-/** Obtener todos los filtros activos de la tabla */
-/** Devuelve un objeto { campoTabla: [valoresSeleccionados] } */
+// Devuelve un objeto { campoTabla: [valoresSeleccionados] }
 export function obtenerFiltrosActivos(
   component: any
-): { [clave: string]: string[] } {
+): { [clave: string]: (string | number)[] } {
 
-  const filtros: { [clave: string]: string[] } = {};
+  const filtros: { [clave: string]: (string | number)[] } = {};
 
-  // Los nueve campos que soportan filtrado por check-box
   const campos = [
-    'categoria',
-    'descripcion',
-    'username',
-    'estado',
-    'criticidad',
-    'departamento',
-    'subcategoria',
-    'detalle',
-    'inventario'
+    'categoria','descripcion','username','estado','criticidad',
+    'departamento','subcategoria','detalle','inventario','sucursal'
   ] as const;
 
-  campos.forEach(campo => {
-    const seleccion = component.temporalSeleccionados[campo]
-      ?.filter(i => i.seleccionado)
-      .map(i => i.valor) ?? [];
+  const pluralMap: Record<string, string> = {
+    categoria:'categorias', descripcion:'descripciones', username:'usuarios',
+    estado:'estados', criticidad:'criticidades', departamento:'departamentos',
+    subcategoria:'subcategorias', detalle:'detalles', inventario:'inventarios',
+    sucursal:'sucursales'
+  };
 
-    const totalOpciones = component.temporalSeleccionados[campo]?.length ?? 0;
-    if (seleccion.length > 0 && seleccion.length !== totalOpciones) {
+  campos.forEach(campo => {
+    // selección tomada de los TEMPORALES (lo que quedó tras el buscador)
+    const seleccion = component.temporalSeleccionados[campo]
+      ?.filter((i: any) => i.seleccionado)
+      .map((i: any) => i.valor) ?? [];
+
+    // 👈 comparar SIEMPRE contra el total de DISPONIBLES (no temporales)
+    const plural = pluralMap[campo] ?? `${campo}s`;
+    const totalDisponibles = component[`${plural}Disponibles`]?.length ?? 0;
+
+    if (seleccion.length > 0 && seleccion.length !== totalDisponibles) {
       filtros[campo] = seleccion;
     }
   });
@@ -183,45 +232,33 @@ export function obtenerFiltrosActivos(
 }
 
 
-
-
-
-
-/** Borrar filtro de rango de fecha de creación */
 export function borrarFiltroRangoFechaCreacion(component: PantallaVerTicketsComponent): void {
   component.rangoFechaCreacionSeleccionado = { start: null, end: null };
   component.filteredTickets = [...component.tickets];
 }
 
-/** Borrar filtro de rango de fecha de finalización */
 export function borrarFiltroRangoFechaFinalizado(component: PantallaVerTicketsComponent): void {
   component.rangoFechaFinalSeleccionado = { start: null, end: null };
   component.filteredTickets = [...component.tickets];
 }
 
-/** Borrar filtro de rango de fecha en progreso */
 export function borrarFiltroRangoFechaEnProgreso(component: PantallaVerTicketsComponent): void {
   component.rangoFechaProgresoSeleccionado = { start: null, end: null };
   component.filteredTickets = [...component.tickets];
 }
 
-/** Aplicar todos los filtros activos en todas las columnas */
-export function aplicarFiltroColumna(component: PantallaVerTicketsComponent, columna: string): void {
+export function aplicarFiltroColumna(
+  component: PantallaVerTicketsComponent,
+  columna: string
+): void {
   sincronizarCheckboxesConDisponibles(component);
 
-  // 1. Obtener los filtros activos (todos los checkboxes seleccionados)
   const filtros = obtenerFiltrosActivos(component);
+  component.filteredTickets =
+    Object.keys(filtros).length === 0
+      ? [...component.tickets]
+      : filtrarTicketsConFiltros(component.tickets, filtros);
 
-  if (Object.keys(filtros).length === 0) {
-    // No hay filtros activos, restauramos todo
-    component.filteredTickets = [...component.tickets];
-  } else {
-    // Filtramos los tickets basándonos en los filtros activos
-    const filtrados = filtrarTicketsConFiltros(component.tickets, filtros);
-    component.filteredTickets = filtrados;
-  }
-
-  // 2. Regeneramos todos los checkboxes de todos los filtros
   regenerarFiltrosFiltradosDesdeTickets(
     component.filteredTickets,
     component.usuariosDisponibles,
@@ -233,34 +270,24 @@ export function aplicarFiltroColumna(component: PantallaVerTicketsComponent, col
     component.subcategoriasDisponibles,
     component.detallesDisponibles,
     component.inventariosDisponibles,
+    component.sucursalesDisponibles,
     component
   );
 
-  // 3. Limpiamos filtro de texto (opcional)
-  if (columna === 'categoria') component.filtroCategoriaTexto = '';
-  if (columna === 'descripcion') component.filtroDescripcionTexto = '';
-  if (columna === 'username') component.filtroUsuarioTexto = '';
-  if (columna === 'estado') component.filtroEstadoTexto = '';
-  if (columna === 'criticidad') component.filtroCriticidadTexto = '';
-  if (columna === 'departamento') component.filtroDeptoTexto = '';
-  if (columna === 'subcategoria') component.filtroSubcategoriaTexto = '';
-  if (columna === 'detalle') component.filtroDetalleTexto = '';
-  if (columna === 'inventario') component.filtroInventarioTexto = '';
+  limpiarTextoColumna(component, columna);
 
   actualizarDiasConTicketsCreacion(component);
   actualizarDiasConTicketsFinalizado(component);
-
 }
 
-  
-
-/** Limpiar filtro individual de una columna */
-export function limpiarFiltroColumna(component: PantallaVerTicketsComponent, columna: string): void {
+export function limpiarFiltroColumna(
+  component: PantallaVerTicketsComponent,
+  columna: string
+): void {
   limpiarFiltroColumnaConMapa(component, columna);
 
   const filtros = obtenerFiltrosActivos(component);
-  const filtrados = filtrarTicketsConFiltros(component.tickets, filtros);
-  component.filteredTickets = filtrados;
+  component.filteredTickets = filtrarTicketsConFiltros(component.tickets, filtros);
 
   regenerarFiltrosFiltradosDesdeTickets(
     component.filteredTickets,
@@ -273,26 +300,23 @@ export function limpiarFiltroColumna(component: PantallaVerTicketsComponent, col
     component.subcategoriasDisponibles,
     component.detallesDisponibles,
     component.inventariosDisponibles,
+    component.sucursalesDisponibles,
     component
   );
 }
 
-/** Detecta si el usuario tiene algún filtro activo */
 export function hayFiltrosActivos(component: PantallaVerTicketsComponent): boolean {
   const filtros = obtenerFiltrosActivos(component);
   return Object.keys(filtros).length > 0;
 }
 
-/** Aplica filtros directamente sobre los tickets en memoria */
 export function aplicarFiltrosDesdeMemoria(component: PantallaVerTicketsComponent): void {
   const filtros = obtenerFiltrosActivos(component);
 
-  if (Object.keys(filtros).length === 0) {
-    component.filteredTickets = [...component.tickets];
-  } else {
-    const filtrados = filtrarTicketsConFiltros(component.tickets, filtros);
-    component.filteredTickets = filtrados;
-  }
+  component.filteredTickets =
+    Object.keys(filtros).length === 0
+      ? [...component.tickets]
+      : filtrarTicketsConFiltros(component.tickets, filtros);
 
   regenerarFiltrosFiltradosDesdeTickets(
     component.filteredTickets,
@@ -305,27 +329,28 @@ export function aplicarFiltrosDesdeMemoria(component: PantallaVerTicketsComponen
     component.subcategoriasDisponibles,
     component.detallesDisponibles,
     component.inventariosDisponibles,
+    component.sucursalesDisponibles,
     component
   );
 
   actualizarDiasConTicketsCreacion(component);
   actualizarDiasConTicketsFinalizado(component);
-
 }
 
 /** Aplicar filtro y resetear a página 1 */
-export function aplicarFiltroColumnaConReset(component: PantallaVerTicketsComponent, columna: string): void {
+export function aplicarFiltroColumnaConReset(
+  component: PantallaVerTicketsComponent,
+  columna: string
+): void {
   component.page = 1;
 
-  // 🟢 NECESARIO para aplicar correctamente filtros cruzados
   sincronizarCheckboxesConDisponibles(component);
 
   const filtros = obtenerFiltrosActivos(component);
-  if (Object.keys(filtros).length === 0) {
-    component.filteredTickets = [...component.ticketsCompletos];
-  } else {
-    component.filteredTickets = filtrarTicketsConFiltros(component.ticketsCompletos, filtros);
-  }
+  component.filteredTickets =
+    Object.keys(filtros).length === 0
+      ? [...component.ticketsCompletos]
+      : filtrarTicketsConFiltros(component.ticketsCompletos, filtros);
 
   regenerarFiltrosFiltradosDesdeTickets(
     component.filteredTickets,
@@ -338,27 +363,54 @@ export function aplicarFiltroColumnaConReset(component: PantallaVerTicketsCompon
     component.subcategoriasDisponibles,
     component.detallesDisponibles,
     component.inventariosDisponibles,
+    component.sucursalesDisponibles,
     component
   );
 
-  // Limpiar buscadores de texto
-  if (columna === 'categoria') component.filtroCategoriaTexto = '';
-  if (columna === 'descripcion') component.filtroDescripcionTexto = '';
-  if (columna === 'username') component.filtroUsuarioTexto = '';
-  if (columna === 'estado') component.filtroEstadoTexto = '';
-  if (columna === 'criticidad') component.filtroCriticidadTexto = '';
-  if (columna === 'departamento') component.filtroDeptoTexto = '';
-  if (columna === 'subcategoria') component.filtroSubcategoriaTexto = '';
-  if (columna === 'detalle') component.filtroDetalleTexto = '';
-  if (columna === 'inventario') component.filtroInventarioTexto = '';
+  // Re-sincroniza los temporales con las listas filtradas calculadas
+  resyncTemporalesDesdeFiltradas(component);
 
-  // 🔄 Actualizar visibilidad
+  limpiarTextoColumna(component, columna);
+
+  actualizarDiasConTicketsCreacion(component);
+  actualizarDiasConTicketsFinalizado(component);
   actualizarVisibleTickets(component);
 }
 
+function resyncTemporalesDesdeFiltradas(c: PantallaVerTicketsComponent): void {
+  const map: Record<string, string> = {
+    categoria: 'categoriasFiltradas',
+    descripcion: 'descripcionesFiltradas',
+    username: 'usuariosFiltrados',
+    estado: 'estadosFiltrados',
+    criticidad: 'criticidadesFiltradas',
+    departamento: 'departamentosFiltrados',
+    subcategoria: 'subcategoriasFiltradas',
+    detalle: 'detallesFiltrados',
+    inventario: 'inventariosFiltrados',
+    sucursal: 'sucursalesFiltradas',
+  };
 
-/** Obtener filtros activos en formato para backend (solo uno por filtro) *//** Obtener filtros activos en formato para backend (acepta múltiples valores por filtro) */
-export function obtenerFiltrosActivosParaBackend(component: PantallaVerTicketsComponent): any {
+  Object.entries(map).forEach(([col, key]) => {
+    const lista = (c as any)[key] as Array<{ valor: any; etiqueta?: string; seleccionado: boolean }>;
+    if (Array.isArray(lista)) {
+      (c.temporalSeleccionados as any)[col] = lista.map((i) => ({ ...i }));
+    }
+  });
+}
+
+function limpiarTextoColumna(c: PantallaVerTicketsComponent, columna: string) {
+  const prop = getSearchProp(columna);
+  if ((c as any)[prop] !== undefined) (c as any)[prop] = '';
+}
+
+/* ==============================
+   Export: filtros para backend
+   ============================== */
+
+export function obtenerFiltrosActivosParaBackend(
+  component: PantallaVerTicketsComponent
+): any {
   const filtros: any = {};
 
   const campos = [
@@ -370,58 +422,45 @@ export function obtenerFiltrosActivosParaBackend(component: PantallaVerTicketsCo
     { nombre: 'subcategoria', temp: component.temporalSeleccionados.subcategoria },
     { nombre: 'detalle', temp: component.temporalSeleccionados.detalle },
     { nombre: 'descripcion', temp: component.temporalSeleccionados.descripcion },
-    { nombre: 'inventario', temp: component.temporalSeleccionados.inventario }
+    { nombre: 'inventario', temp: component.temporalSeleccionados.inventario },
+    { nombre: 'sucursal', temp: component.temporalSeleccionados.sucursal },
   ];
 
   campos.forEach(({ nombre, temp }) => {
     if (!Array.isArray(temp)) return;
-    const seleccionados = temp.filter(i => i.seleccionado);
-    // No envíes el filtro si todos están seleccionados o ninguno
-    if (
-      seleccionados.length > 0 &&
-      seleccionados.length !== temp.length
-    ) {
-      // Si solo está seleccionado "—"
+    const seleccionados = temp.filter((i) => i.seleccionado);
+
+    if (seleccionados.length > 0 && seleccionados.length !== temp.length) {
       if (seleccionados.length === 1 && seleccionados[0].valor === '—') {
         filtros[nombre] = ['—'];
+      } else if (nombre === 'departamento_id') {
+        filtros[nombre] = seleccionados
+          .filter((i) => i.valor !== '—')
+          .map((i) => Number(i.valor));
       } else {
-        // departamento_id necesita casteo numérico, los demás van como string
-        if (nombre === 'departamento_id') {
-          filtros[nombre] = seleccionados
-            .filter(i => i.valor !== '—')
-            .map(i => Number(i.valor));
-        } else {
-          filtros[nombre] = seleccionados
-            .map(i => i.valor)
-            .filter(v => v !== '—');
-        }
+        filtros[nombre] = seleccionados.map((i) => i.valor).filter((v) => v !== '—');
       }
     }
   });
 
-  // Fechas igual que antes
-  const formatearFecha = (fecha: Date | null): string | null => {
-    if (fecha instanceof Date && !isNaN(fecha.getTime())) {
-      return fecha.toISOString().split("T")[0];
-    }
-    return null;
-  };
+  const formatearFecha = (fecha: Date | null): string | null =>
+    fecha instanceof Date && !isNaN(fecha.getTime())
+      ? fecha.toISOString().split('T')[0]
+      : null;
 
-  const fechaCreacionStart = formatearFecha(component.rangoFechaCreacionSeleccionado.start);
-  const fechaCreacionEnd = formatearFecha(component.rangoFechaCreacionSeleccionado.end);
-  const fechaFinalStart = formatearFecha(component.rangoFechaFinalSeleccionado.start);
-  const fechaFinalEnd = formatearFecha(component.rangoFechaFinalSeleccionado.end);
-  const fechaProgresoStart = formatearFecha(component.rangoFechaProgresoSeleccionado.start);
-  const fechaProgresoEnd = formatearFecha(component.rangoFechaProgresoSeleccionado.end);
+  const cIni = formatearFecha(component.rangoFechaCreacionSeleccionado.start);
+  const cFin = formatearFecha(component.rangoFechaCreacionSeleccionado.end);
+  const fIni = formatearFecha(component.rangoFechaFinalSeleccionado.start);
+  const fFin = formatearFecha(component.rangoFechaFinalSeleccionado.end);
+  const pIni = formatearFecha(component.rangoFechaProgresoSeleccionado.start);
+  const pFin = formatearFecha(component.rangoFechaProgresoSeleccionado.end);
 
-  if (fechaCreacionStart) filtros.fecha_desde = fechaCreacionStart;
-  if (fechaCreacionEnd) filtros.fecha_hasta = fechaCreacionEnd;
-  if (fechaFinalStart) filtros.fecha_fin_desde = fechaFinalStart;
-  if (fechaFinalEnd) filtros.fecha_fin_hasta = fechaFinalEnd;
-  if (fechaProgresoStart) filtros.fecha_prog_desde = fechaProgresoStart;
-  if (fechaProgresoEnd) filtros.fecha_prog_hasta = fechaProgresoEnd;
-
-  console.log("📤 Filtros para exportar (backend):", filtros);
+  if (cIni) filtros.fecha_desde = cIni;
+  if (cFin) filtros.fecha_hasta = cFin;
+  if (fIni) filtros.fecha_fin_desde = fIni;
+  if (fFin) filtros.fecha_fin_hasta = fFin;
+  if (pIni) filtros.fecha_prog_desde = pIni;
+  if (pFin) filtros.fecha_prog_hasta = pFin;
 
   return filtros;
 }

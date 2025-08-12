@@ -79,6 +79,8 @@ export function filtrarTicketsConFiltros(
         valorTicket = ticket.inventario?.nombre || '—';
       } else if (clave === 'departamento') {
         valorTicket = ticket.departamento_id ?? '—';
+      } else if (clave === 'sucursal') {          
+        valorTicket = (ticket as any).sucursal ?? '—';
       } else {
         valorTicket = (ticket as any)[clave] ?? '—';
       }
@@ -95,43 +97,59 @@ export function regenerarFiltrosFiltradosDesdeTickets(
   filteredTickets: Ticket[],
   usuariosDisponibles: FiltroString[],
   estadosDisponibles: FiltroString[],
-  categoriasDisponibles: FiltroString[],
+  categoriasDisponibles: FiltroString[] | FiltroNumero[],   // <-- podrían ser numéricas
   descripcionesDisponibles: FiltroString[],
-  criticidadesDisponibles: FiltroString[],
+  criticidadesDisponibles: FiltroString[] | FiltroNumero[], // <-- podrían ser numéricas
   departamentosDisponibles: FiltroNumero[],
-  subcategoriasDisponibles: FiltroString[],
-  detallesDisponibles: FiltroString[],
+  subcategoriasDisponibles: FiltroString[] | FiltroNumero[],// <-- podrían ser numéricas
+  detallesDisponibles: FiltroString[] | FiltroNumero[],     // <-- podrían ser numéricas
   inventariosDisponibles: FiltroString[],
+  sucursalesDisponibles: any[],
   context: any
 ): void {
+  const numericFields = new Set<keyof Ticket | 'departamento' | 'categoria' | 'subcategoria' | 'detalle' | 'criticidad'>([
+    'departamento', 'categoria', 'subcategoria', 'detalle', 'criticidad'
+  ]);
+
   const actualizarCampo = (
-    campo: keyof Ticket | 'inventario' | 'departamento',
+    campo: keyof Ticket | 'inventario' | 'departamento' | 'sucursal' | 'categoria' | 'subcategoria' | 'detalle' | 'criticidad',
     disponibles: any[],
     filtradasKey: string
   ) => {
     let valoresExistentes: Set<string | number>;
+
     if (campo === 'inventario') {
-      valoresExistentes = new Set(filteredTickets.map(ticket => ticket.inventario?.nombre || '—'));
+      valoresExistentes = new Set(filteredTickets.map(t => t.inventario?.nombre ?? '—'));
     } else if (campo === 'departamento') {
-      valoresExistentes = new Set(filteredTickets.map(ticket => ticket.departamento_id ?? '—'));
+      valoresExistentes = new Set(filteredTickets.map(t => t.departamento_id ?? '—'));
+    } else if (campo === 'sucursal') {
+      valoresExistentes = new Set(filteredTickets.map(t => (t as any).sucursal ?? '—'));
     } else {
-      valoresExistentes = new Set(filteredTickets.map(ticket => (ticket[campo] ?? '—').toString()));
+      // Para campos numéricos conservamos el tipo (número), para el resto usamos string
+      valoresExistentes = new Set(
+        filteredTickets.map(t => {
+          const raw = (t as any)[campo];
+          if (numericFields.has(campo)) return raw ?? '—';
+          return (raw ?? '—').toString();
+        })
+      );
     }
 
-    context[filtradasKey] = disponibles
+    context[filtradasKey] = (disponibles || [])
       .filter(opcion => valoresExistentes.has(opcion.valor))
-      .map(opcion => ({ ...opcion }));
+      .map((opcion: any) => ({ ...opcion }));
   };
 
   actualizarCampo('username', usuariosDisponibles, 'usuariosFiltrados');
   actualizarCampo('estado', estadosDisponibles, 'estadosFiltrados');
-  actualizarCampo('categoria', categoriasDisponibles, 'categoriasFiltradas');
+  actualizarCampo('categoria', categoriasDisponibles as any[], 'categoriasFiltradas');
   actualizarCampo('descripcion', descripcionesDisponibles, 'descripcionesFiltradas');
-  actualizarCampo('criticidad', criticidadesDisponibles, 'criticidadesFiltradas');
+  actualizarCampo('criticidad', criticidadesDisponibles as any[], 'criticidadesFiltradas');
   actualizarCampo('departamento', departamentosDisponibles, 'departamentosFiltrados');
-  actualizarCampo('subcategoria', subcategoriasDisponibles, 'subcategoriasFiltradas');
-  actualizarCampo('detalle', detallesDisponibles, 'detallesFiltrados');
+  actualizarCampo('subcategoria', subcategoriasDisponibles as any[], 'subcategoriasFiltradas');
+  actualizarCampo('detalle', detallesDisponibles as any[], 'detallesFiltrados');
   actualizarCampo('inventario', inventariosDisponibles, 'inventariosFiltrados');
+  actualizarCampo('sucursal', sucursalesDisponibles, 'sucursalesFiltradas');
 }
 
 // ----------- FUNCIONES VISUALES Y DE SELECCIÓN MULTIPLE -----------
@@ -147,7 +165,8 @@ export function isFilterActive(ctx: any, columna: string): boolean {
     departamento: 'departamentos',
     subcategoria: 'subcategorias',
     detalle: 'detalles',
-    inventario: 'inventarios'
+    inventario: 'inventarios',
+    sucursal: 'sucursales'
   };
   const plural = pluralMap[columna] || `${columna}s`;
   const disponibles = ctx[`${plural}Disponibles`];
@@ -226,7 +245,13 @@ export function limpiarFiltroColumnaConMapa(component: any, columna: string): vo
       filtradas: 'inventariosFiltrados',
       filtroTexto: 'filtroInventarioTexto',
       seleccionarTodo: 'seleccionarTodoInventario',
-    }
+    },
+    sucursal: {
+      disponibles: 'sucursalesDisponibles',
+      filtradas: 'sucursalesFiltradas',
+      filtroTexto: 'filtroSucursalTexto',
+      seleccionarTodo: 'seleccionarTodoSucursal',
+},
   };
 
   const config = mapa[columna];
@@ -284,7 +309,12 @@ export function toggleSeleccionarTodoConMapa(component: any, columna: string): v
       disponibles: 'inventariosDisponibles',
       filtradas: 'inventariosFiltrados',
       seleccionarTodo: 'seleccionarTodoInventario',
-    }
+    },
+    sucursal: {
+      disponibles: 'sucursalesDisponibles',
+      filtradas: 'sucursalesFiltradas',
+      seleccionarTodo: 'seleccionarTodoSucursal',
+    },
   };
 
   const entry = mapa[columna as keyof typeof mapa];
@@ -367,21 +397,19 @@ export function generarOpcionesCategoriasDesdeTickets(
   catalogo: { id: number, nombre: string, nivel: number }[],
   nivel: number
 ) {
-  // IDs únicos para ese nivel
   const idsUnicos = Array.from(new Set(
-    tickets
-      .map(ticket => {
-        if (nivel === 2) return ticket.categoria_nivel2?.id;
-        if (nivel === 3) return ticket.categoria_nivel2?.id;
-        if (nivel === 4) return ticket.detalle_nivel4?.id;
-        return null;
-      })
-      .filter(Boolean)
+    tickets.map(ticket => {
+      if (nivel === 2) return ticket.categoria_nivel2?.id ?? null;
+      if (nivel === 3) return ticket.subcategoria_nivel3?.id ?? null;
+      if (nivel === 4) return ticket.detalle_nivel4?.id ?? null;
+      return null;
+    }).filter(Boolean)
   ));
+
   return idsUnicos.map(id => {
     const item = catalogo.find(c => c.id === id && c.nivel === nivel);
     return {
-      valor: id,
+      valor: id as number,
       etiqueta: item ? item.nombre : '—',
       seleccionado: true
     };

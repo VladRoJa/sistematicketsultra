@@ -105,39 +105,26 @@ export function cargarTickets(component: PantallaVerTicketsComponent): void {
         .filter(cat => cat.nivel === 2 && idsNivel2.includes(cat.id))
         .map(cat => ({
           valor: cat.id,
-          etiqueta: cat.nombre,
+          etiqueta: cat.nombre ?? String(cat.id),
           seleccionado: true,
         }));
 
-      // Catálogo nivel 3 (subcategoría)
-      // 1. LOG antes de filtrar/mapear
-      console.log('catalogo:', component.categoriasCatalogo);
-      console.log('idsNivel3:', idsNivel3);
-
-      // 2. Mapeo y LOG de cada elemento individual (para ver si cat.nombre viene bien)
       component.subcategoriasDisponibles = component.categoriasCatalogo
         .filter(cat => cat.nivel === 3 && idsNivel3.includes(cat.id))
-        .map(cat => {
-          console.log('cat:', cat); // <- cada subcategoría encontrada
-          return {
-            valor: cat.id,
-            etiqueta: cat.nombre,
-            seleccionado: true,
-          };
-        });
+        .map(cat => ({
+          valor: cat.id,
+          etiqueta: cat.nombre ?? String(cat.id),
+          seleccionado: true,
+        }));
 
-      // 3. LOG después de mapear todo
-      console.log('subcategoriasDisponibles:', component.subcategoriasDisponibles);
-
-
-      // Catálogo nivel 4 (detalle)
       component.detallesDisponibles = component.categoriasCatalogo
         .filter(cat => cat.nivel === 4 && idsNivel4.includes(cat.id))
         .map(cat => ({
           valor: cat.id,
-          etiqueta: cat.nombre,
+          etiqueta: cat.nombre ?? String(cat.id),
           seleccionado: true,
         }));
+
 
         component.categoriasFiltradas = [...component.categoriasDisponibles];
         component.subcategoriasFiltradas = [...component.subcategoriasDisponibles];
@@ -153,6 +140,13 @@ export function cargarTickets(component: PantallaVerTicketsComponent): void {
       component.ticketsCompletos = [...ticketsProcesados];
       component.tickets = [...ticketsProcesados];
       component.filteredTickets = [...ticketsProcesados];
+      component.filteredTickets = component.filteredTickets.map(t => {
+        const id = (t as any).sucursal_id_destino ?? (t as any).sucursal_id;
+        return {
+          ...t,
+          sucursal: component.sucursalIdNombreMap[id] || (id != null ? String(id) : '—')
+        };
+      });
       component.usuariosDisponibles = extraerUnicosPorCampo(component.filteredTickets, 'username').map(valor => ({
         valor,
         seleccionado: true
@@ -221,6 +215,7 @@ export function cargarTickets(component: PantallaVerTicketsComponent): void {
         component.subcategoriasDisponibles,
         component.detallesDisponibles,
         component.inventariosDisponibles,
+        component.sucursalesDisponibles,
         component
       );
 

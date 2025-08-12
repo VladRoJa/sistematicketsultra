@@ -19,12 +19,11 @@
           </button>
 
           <mat-menu #menuCategoria="matMenu" disableClose="true">
-            <button mat-menu-item (click)="ordenar('categoria','asc')">A-Z</button>
-            <button mat-menu-item (click)="ordenar('categoria','desc')">Z-A</button>
+
             <mat-divider></mat-divider>
 
             <div class="menu-filtro" (click)="$event.stopPropagation()">
-<!--               <label>Filtrar Categoría</label>
+            <label>Filtrar Categoría</label>
 
               <mat-form-field appearance="fill" class="buscador-filtro" (click)="$event.stopPropagation()">
                 <mat-label>Buscar</mat-label>
@@ -33,7 +32,7 @@
                   [(ngModel)]="filtroCategoriaTexto"
                   (ngModelChange)="filtrarOpcionesTexto('categoria')"
                 >
-              </mat-form-field> -->
+              </mat-form-field> 
 
               <!-- Seleccionar todo -->
               <mat-checkbox
@@ -54,7 +53,7 @@
                   [name]="'cat_' + i"
                   (click)="$event.stopPropagation()"
                 >
-                  {{ cat.etiqueta }}
+                  {{ cat.etiqueta ?? cat.valor }}
                 </mat-checkbox>
               </div>
 
@@ -84,11 +83,10 @@
   </button>
 
   <mat-menu #menuInventario="matMenu" disableClose="true">
-    <button mat-menu-item (click)="ordenar('inventario','asc')">A-Z</button>
-    <button mat-menu-item (click)="ordenar('inventario','desc')">Z-A</button>
+
     <mat-divider></mat-divider>
     <div class="menu-filtro" (click)="$event.stopPropagation()">
-<!--       <label>Filtrar Aparato</label>
+       <label>Filtrar Aparato</label>
       <mat-form-field appearance="fill" class="buscador-filtro" (click)="$event.stopPropagation()">
         <mat-label>Buscar</mat-label>
         <input
@@ -96,7 +94,7 @@
           [(ngModel)]="filtroInventarioTexto"
           (ngModelChange)="filtrarOpcionesTexto('inventario')"
         >
-      </mat-form-field> -->
+      </mat-form-field>
       <mat-checkbox
         [checked]="isTodoSeleccionado('inventario')"
         (change)="alternarSeleccionTemporal('inventario', $event.checked)"
@@ -113,7 +111,8 @@
           [name]="'inventario' + i"
           (click)="$event.stopPropagation()"
         >
-          {{ item.valor }}
+          {{ item.etiqueta || item.valor }}
+
         </mat-checkbox>
       </div>
       <div class="menu-botones-fijos">
@@ -143,12 +142,11 @@
   </button>
 
   <mat-menu #menuDescripcion="matMenu" disableClose="true">
-    <button mat-menu-item (click)="ordenar('descripcion','asc')">A-Z</button>
-    <button mat-menu-item (click)="ordenar('descripcion','desc')">Z-A</button>
+
     <mat-divider></mat-divider>
 
     <div class="menu-filtro" (click)="$event.stopPropagation()">
-<!--       <label>Filtrar Descripción</label>
+      <label>Filtrar Descripción</label>
 
       <mat-form-field appearance="fill" class="buscador-filtro" (click)="$event.stopPropagation()">
         <mat-label>Buscar</mat-label>
@@ -157,7 +155,7 @@
           [(ngModel)]="filtroDescripcionTexto"
           (ngModelChange)="filtrarOpcionesTexto('descripcion')"
         >
-      </mat-form-field> -->
+      </mat-form-field>
 
       <mat-checkbox
         [checked]="isTodoSeleccionado('descripcion')"
@@ -176,7 +174,8 @@
           [name]="'desc_' + i"
           (click)="$event.stopPropagation()"
         >
-          {{ desc.valor }}
+          {{ desc.etiqueta || desc.valor }}
+
         </mat-checkbox>
       </div>
 
@@ -191,61 +190,56 @@
 
 
 
-<!-- (4) Columna: Usuario -->
-<th [class.filtro-activo]="isFilterActive('username')">
+<!-- (4) Columna: Sucursal -->
+<th [class.filtro-activo]="isFilterActive('sucursal')">
   <button
     mat-button
-    [matMenuTriggerFor]="menuUsuario"
-    #triggerFiltroUsuario="matMenuTrigger"
-    (click)="onAbrirFiltro('username', triggerFiltroUsuario)"
+    [matMenuTriggerFor]="menuSucursal"
+    #triggerFiltroSucursal="matMenuTrigger"
+    (click)="onAbrirFiltro('sucursal', triggerFiltroSucursal)"
     class="header-button">
-    Usuario <mat-icon>arrow_drop_down</mat-icon>
+    Sucursal <mat-icon>arrow_drop_down</mat-icon>
   </button>
 
-  <mat-menu #menuUsuario="matMenu" disableClose="true">
-    <button mat-menu-item (click)="ordenar('username','asc')">Asc</button>
-    <button mat-menu-item (click)="ordenar('username','desc')">Desc</button>
+  <mat-menu #menuSucursal="matMenu" disableClose="true">
     <mat-divider></mat-divider>
 
     <div class="menu-filtro" (click)="$event.stopPropagation()">
-<!--       <label>Filtrar Usuario</label>
-      <mat-form-field *ngIf="permiteBusqueda('username')" appearance="fill" class="buscador-filtro" (click)="$event.stopPropagation()">
-        <mat-label>Buscar</mat-label>
-        <input
-          matInput
-          [(ngModel)]="filtroUsuarioTexto"
-          (ngModelChange)="filtrarOpcionesTexto('username')">
-      </mat-form-field> -->
-
+      <!-- Seleccionar todo -->
       <mat-checkbox
-        [checked]="isTodoSeleccionado('username')"
-        (change)="alternarSeleccionTemporal('username', $event.checked)"
+        [checked]="isTodoSeleccionado('sucursal')"
+        (change)="alternarSeleccionTemporal('sucursal', $event.checked)"
         (click)="$event.stopPropagation()"
-        name="usr_selectAll">
+        name="suc_selectAll">
         Seleccionar todo
       </mat-checkbox>
 
+      <!-- Lista de opciones -->
       <div class="opciones-scrollable">
-        <mat-checkbox *ngFor="let item of temporalSeleccionados['username']; let i = index"
-                      [checked]="item.seleccionado"
-                      (change)="actualizarSeleccionTemporal('username', i, $event.checked)"
-                      [name]="'usr_' + i"
-                      (click)="$event.stopPropagation()">
-          {{ item.valor }}
+        <mat-checkbox
+          *ngFor="let item of temporalSeleccionados['sucursal']; let i = index"
+          [checked]="item.seleccionado"
+          (change)="actualizarSeleccionTemporal('sucursal', i, $event.checked)"
+          [name]="'sucursal_' + i"
+          (click)="$event.stopPropagation()">
+          {{ item.etiqueta || item.valor }}
+
         </mat-checkbox>
       </div>
 
+      <!-- Botones -->
       <div class="menu-botones-fijos">
-        <button mat-button color="primary" (click)="cerrarYAplicar('username', triggerFiltroUsuario)">
+        <button mat-button color="primary" (click)="cerrarYAplicar('sucursal', triggerFiltroSucursal)">
           Aplicar
         </button>
-        <button mat-button (click)="cerrarYLimpiar('username', triggerFiltroUsuario)">
+        <button mat-button (click)="cerrarYLimpiar('sucursal', triggerFiltroSucursal)">
           Borrar Filtros
         </button>
       </div>
     </div>
   </mat-menu>
 </th>
+
 
 
 
@@ -258,15 +252,13 @@
             Estado <mat-icon>arrow_drop_down</mat-icon>
           </button>
           <mat-menu #menuEstado="matMenu" disableClose="true">
-            <button mat-menu-item (click)="ordenar('estado','asc')">Asc</button>
-            <button mat-menu-item (click)="ordenar('estado','desc')">Desc</button>
             <mat-divider></mat-divider>
             <div class="menu-filtro" (click)="$event.stopPropagation()">
-<!--               <label>Filtrar Estado</label>
+             <label>Filtrar Estado</label>
               <mat-form-field *ngIf="permiteBusqueda('estado')" appearance="fill" class="buscador-filtro" (click)="$event.stopPropagation()">
                 <mat-label>Buscar</mat-label>
                 <input matInput [(ngModel)]="filtroEstadoTexto" (ngModelChange)="filtrarOpcionesTexto('estado')">
-              </mat-form-field> -->
+              </mat-form-field> 
               <mat-checkbox [checked]="isTodoSeleccionado('estado')"
                             (change)="alternarSeleccionTemporal('estado', $event.checked)"
                             (click)="$event.stopPropagation()"
@@ -279,7 +271,8 @@
                             (change)="actualizarSeleccionTemporal('estado', i, $event.checked)"
                             [name]="'est_' + i"
                             (click)="$event.stopPropagation()">
-                {{ item.valor }}
+                {{ item.etiqueta || item.valor }}
+
               </mat-checkbox>
               </div>
               <div class="menu-botones-fijos">
@@ -303,15 +296,14 @@
             Criticidad <mat-icon>arrow_drop_down</mat-icon>
           </button>
           <mat-menu #menuCriticidad="matMenu" disableClose="true">
-            <button mat-menu-item (click)="ordenar('criticidad','asc')">Menor-Mayor</button>
-            <button mat-menu-item (click)="ordenar('criticidad','desc')">Mayor-Menor</button>
+
             <mat-divider></mat-divider>
             <div class="menu-filtro" (click)="$event.stopPropagation()">
-<!--               <label>Filtrar Criticidad</label>
+               <label>Filtrar Criticidad</label>
               <mat-form-field *ngIf="permiteBusqueda('criticidad')" appearance="fill" class="buscador-filtro" (click)="$event.stopPropagation()">
                 <mat-label>Buscar</mat-label>
                 <input matInput [(ngModel)]="filtroCriticidadTexto" (ngModelChange)="filtrarOpcionesTexto('criticidad')">
-              </mat-form-field> -->
+              </mat-form-field> 
               <mat-checkbox [checked]="isTodoSeleccionado('criticidad')"
                             (change)="alternarSeleccionTemporal('criticidad', $event.checked)"
                             (click)="$event.stopPropagation()"
@@ -324,7 +316,8 @@
                             (change)="actualizarSeleccionTemporal('criticidad', i, $event.checked)"
                             [name]="'crit_' + i"
                             (click)="$event.stopPropagation()">
-                {{ item.valor }}
+                {{ item.etiqueta || item.valor }}
+
               </mat-checkbox>
               </div>
               <div class="menu-botones-fijos">
@@ -460,8 +453,7 @@
             Departamento <mat-icon>arrow_drop_down</mat-icon>
           </button>
           <mat-menu #menuDepartamento="matMenu" disableClose="true">
-            <button mat-menu-item (click)="ordenar('departamento','asc')">A-Z</button>
-            <button mat-menu-item (click)="ordenar('departamento','desc')">Z-A</button>
+
             <mat-divider></mat-divider>
             <div class="menu-filtro" (click)="$event.stopPropagation()">
               <label>Filtrar Departamento</label>
@@ -481,7 +473,8 @@
                             (change)="actualizarSeleccionTemporal('departamento', i, $event.checked)"
                             [name]="'dep_' + i"
                             (click)="$event.stopPropagation()">
-                {{ item.etiqueta }}
+                {{ item.etiqueta ?? item.valor }}
+
               </mat-checkbox>
               </div>
               <div class="menu-botones-fijos">
@@ -505,8 +498,7 @@
             Subcategoría <mat-icon>arrow_drop_down</mat-icon>
           </button>
           <mat-menu #menuSubcategoria="matMenu" disableClose="true">
-            <button mat-menu-item (click)="ordenar('subcategoria','asc')">A-Z</button>
-            <button mat-menu-item (click)="ordenar('subcategoria','desc')">Z-A</button>
+
             <mat-divider></mat-divider>
             <div class="menu-filtro" (click)="$event.stopPropagation()">
               <label>Filtrar Subcategoría</label>
@@ -526,7 +518,8 @@
                             (change)="actualizarSeleccionTemporal('subcategoria', i, $event.checked)"
                             [name]="'subcat_' + i"
                             (click)="$event.stopPropagation()">
-                {{ item.etiqueta }}
+                {{ item.etiqueta ?? item.valor }}
+
               </mat-checkbox>
               </div>
               <div class="menu-botones-fijos">
@@ -550,8 +543,7 @@
             Detalle <mat-icon>arrow_drop_down</mat-icon>
           </button>
           <mat-menu #menuDetalle="matMenu" disableClose="true">
-            <button mat-menu-item (click)="ordenar('detalle','asc')">A-Z</button>
-            <button mat-menu-item (click)="ordenar('detalle','desc')">Z-A</button>
+
             <mat-divider></mat-divider>
             <div class="menu-filtro" (click)="$event.stopPropagation()">
               <label>Filtrar Detalle</label>
@@ -571,7 +563,8 @@
                             (change)="actualizarSeleccionTemporal('detalle', i, $event.checked)"
                             [name]="'detalle_' + i"
                             (click)="$event.stopPropagation()">
-                {{ item.etiqueta }}
+                {{ item.etiqueta ?? item.valor }}
+
               </mat-checkbox>
               </div>
               <div class="menu-botones-fijos">
@@ -614,7 +607,7 @@
             </ng-container>
           </td>
         <td>{{ ticket.descripcion }}</td>
-        <td>{{ ticket.username }}</td>
+        <td>{{ getNombreSucursal(ticket) }}</td>
         <td>{{ ticket.estado }}</td>
         <td>{{ ticket.criticidad }}</td>
         <td>{{ ticket.fecha_creacion}}</td>

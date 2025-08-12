@@ -36,6 +36,8 @@ class Ticket(db.Model):
     categoria = db.Column(db.String(100), nullable=True)
     subcategoria = db.Column(db.String(100), nullable=True)
     detalle = db.Column(db.String(100), nullable=True)
+    sucursal_id_destino = db.Column(db.Integer, db.ForeignKey('sucursales.sucursal_id'), nullable=False)
+
     
 
     
@@ -46,6 +48,8 @@ class Ticket(db.Model):
     sucursal = db.relationship('Sucursal', backref='tickets', foreign_keys=[sucursal_id])
     inventario = db.relationship('InventarioGeneral', foreign_keys=[aparato_id])
     clasificacion = db.relationship('CatalogoClasificacion', backref='tickets')
+    sucursal_destino = db.relationship('Sucursal', foreign_keys=[sucursal_id_destino], backref='tickets_destino')
+
     
 
     # ─── Serialización ──────────────────────────
@@ -94,16 +98,18 @@ class Ticket(db.Model):
             } if self.inventario else None,
             'ubicacion': self.ubicacion,
             'equipo': self.equipo,
+            'sucursal_id_destino': self.sucursal_id_destino, 
         }
         
         
     # ─── Métodos CRUD ───────────────────────────────────────
     @classmethod
-    def create_ticket(cls, descripcion, username, sucursal_id, departamento_id, criticidad, clasificacion_id, categoria=None, subcategoria=None, detalle=None, aparato_id=None, problema_detectado=None, necesita_refaccion=False, descripcion_refaccion=None, url_evidencia=None, ubicacion=None, equipo=None):
+    def create_ticket(cls, descripcion, username, sucursal_id, sucursal_id_destino, departamento_id, criticidad, clasificacion_id, categoria=None, subcategoria=None, detalle=None, aparato_id=None, problema_detectado=None, necesita_refaccion=False, descripcion_refaccion=None, url_evidencia=None, ubicacion=None, equipo=None):
         ticket = cls(
             descripcion=descripcion,
             username=username,
             sucursal_id=sucursal_id,
+            sucursal_id_destino=sucursal_id_destino,
             departamento_id=departamento_id,
             criticidad=criticidad,
             clasificacion_id=clasificacion_id,

@@ -274,7 +274,11 @@ actualizarValidadoresDescripcion() {
         ? this.form.value.descripcion
         : this.form.value.descripcion_general;
 
+    const sucursalDestino = this.form.value.sucursal_id 
+    ?? Number(localStorage.getItem('sucursal_id'));
+
     const body = {
+      sucursal_id_destino: sucursalDestino,
       descripcion: descripcionFinal,
       criticidad: this.form.value.criticidad,
       departamento_id,
@@ -351,18 +355,21 @@ getCamposInvalidos(): string[] {
    * @param payload El objeto que envía el subformulario de Sistemas
    */
 onFormularioSistemasValido(payload: any) {
-  console.log('Formulario de Sistemas válido:', payload);
-
-  // 1. Asegura que el form tenga el campo 'descripcion'
+  // 1) Asegura el control una sola vez
   if (!this.form.contains('descripcion')) {
     this.form.addControl('descripcion', new FormControl('', Validators.required));
   }
 
-  // 2. Pone el valor de la descripción recibida desde el subform
-  this.form.patchValue({
-    descripcion: payload.descripcion || ''
-  });
+  // 2) Solo actualizar si cambió
+  const ctrl = this.form.get('descripcion') as FormControl;
+  const nuevoValor = payload?.descripcion || '';
+
+  if (ctrl.value !== nuevoValor) {
+    // 3) No dispares valueChanges al subform otra vez
+    ctrl.setValue(nuevoValor, { emitEvent: false });
+  }
 }
+
 
 
 

@@ -5,7 +5,8 @@ export function inicializarTemporales(component: any, columna: string): void {
   const aliasPlural: Record<string, string> = {
     descripcion: 'descripciones', username: 'usuarios', estado: 'estados',
     criticidad: 'criticidades', categoria: 'categorias', departamento: 'departamentos',
-    subcategoria: 'subcategorias', detalle: 'detalles', inventario: 'inventarios'
+    subcategoria: 'subcategorias', detalle: 'detalles', inventario: 'inventarios',
+    sucursal: 'sucursales'  
   };
 
   // 👉 alias para la caja de texto
@@ -21,17 +22,21 @@ export function inicializarTemporales(component: any, columna: string): void {
   const filtroProp = aliasFiltroTexto[columna] ?? `filtro${columna[0].toUpperCase() + columna.slice(1)}Texto`;
   component[filtroProp] = '';
 
-  component[`${key}Filtradas`] = component[`${key}Disponibles`];
+const actuales = (component[`${key}Filtradas`] && component[`${key}Filtradas`].length)
+  ? component[`${key}Filtradas`]
+  : component[`${key}Disponibles`];
 
-  component.temporalSeleccionados[columna] =
-    component[`${key}Filtradas`].map((item: any) => ({ ...item }));
+component[`${key}Filtradas`] = [...actuales];
+component.temporalSeleccionados[columna] = actuales.map((item: any) => ({ ...item }));
+
 }
 
 export function confirmarFiltroColumna(component: any, columna: string): void {
   const pluralMap: Record<string, string> = {
     categoria: 'categorias', descripcion: 'descripciones', username: 'usuarios',
     estado: 'estados', criticidad: 'criticidades', departamento: 'departamentos',
-    subcategoria: 'subcategorias', detalle: 'detalles', inventario: 'inventarios'
+    subcategoria: 'subcategorias', detalle: 'detalles', inventario: 'inventarios',
+    sucursal: 'sucursales'
   };
 
   const plural = pluralMap[columna];
@@ -74,17 +79,36 @@ export function capitalizar(texto: string): string {
 }
 
 export function filtrarPorTextoEnTemporales(component: any, columna: string): void {
-  const textoFiltro = component[`filtro${capitalizar(columna)}Texto`]?.toLowerCase?.() || '';
-  const originales = component[`${columna}sDisponibles`];
+  const texto = component[`filtro${capitalizar(columna)}Texto`]?.toLowerCase?.() || '';
+
+  const alias: Record<string, string> = {
+    descripcion: 'descripciones',
+    username: 'usuarios',
+    estado: 'estados',
+    criticidad: 'criticidades',
+    categoria: 'categorias',
+    departamento: 'departamentos',
+    subcategoria: 'subcategorias',
+    detalle: 'detalles',
+    inventario: 'inventarios',
+    sucursal: 'sucursales'
+  };
+
+  const key = alias[columna] ?? `${columna}s`;
+
+  const originales =
+    (component[`${key}Filtradas`] && component[`${key}Filtradas`].length)
+      ? component[`${key}Filtradas`]
+      : component[`${key}Disponibles`];
 
   if (!Array.isArray(originales)) return;
 
-  // Filtrar en base al texto
   const filtrados = originales.filter((item: any) =>
-    item.valor?.toLowerCase().includes(textoFiltro)
+    (item.etiqueta ?? item.valor ?? '').toString().toLowerCase().includes(texto)
   );
-  component[`${columna}sFiltradas`] = filtrados;
-  component.temporalSeleccionados[columna] = filtrados.map((item: any) => ({
-    ...item
-  }));
+
+  // ⬅️ Escribe en la colección con alias correcto
+  component[`${key}Filtradas`] = filtrados;
+  component.temporalSeleccionados[columna] = filtrados.map((item: any) => ({ ...item }));
 }
+

@@ -57,19 +57,31 @@ def create_ticket():
         descripcion_refaccion = data.get("descripcion_refaccion")
         clasificacion_id = data.get("clasificacion_id")
 
+        # 🔹 NUEVO: determinar sucursal destino
+        sucursal_id_destino = data.get("sucursal_id_destino")
+
+        es_admin_corp = (user.rol == "ADMINISTRADOR") or (user.sucursal_id in (1000, 100))
+        if es_admin_corp:
+            if not sucursal_id_destino:
+                return jsonify({"mensaje": "Debes enviar sucursal_id_destino"}), 400
+        else:
+            # usuario normal: se completa automático
+            sucursal_id_destino = user.sucursal_id
+
         if not descripcion or not departamento_id or not criticidad or not categoria or not clasificacion_id:
             return jsonify({"mensaje": "Faltan datos obligatorios"}), 400
 
         nuevo_ticket = Ticket.create_ticket(
             descripcion=descripcion,
             username=user.username,
-            sucursal_id=user.sucursal_id,
+            sucursal_id=user.sucursal_id,              # creador
+            sucursal_id_destino=sucursal_id_destino,   # 👈 DESTINO (nuevo)
             departamento_id=departamento_id,
             criticidad=int(criticidad),
             categoria=categoria,
             subcategoria=subcategoria,
             detalle=detalle,
-            aparato_id=data.get('aparato_id'),
+            aparato_id=aparato_id,
             problema_detectado=problema_detectado,
             necesita_refaccion=necesita_refaccion,
             descripcion_refaccion=descripcion_refaccion,
@@ -78,7 +90,7 @@ def create_ticket():
             equipo=data.get("equipo"),
             clasificacion_id=clasificacion_id
         )
-        
+
         print("DATA AL CREAR:", data)
         print("Nuevo ticket:", nuevo_ticket.to_dict())
 
@@ -86,13 +98,9 @@ def create_ticket():
             "mensaje": "Ticket creado correctamente",
             "ticket_id": nuevo_ticket.id
         }), 201
-        
-        
-
 
     except Exception as e:
         return manejar_error(e)
-
 
 # ─────────────────────────────────────────────────────────────
 # RUTA: Obtener todos los tickets (paginados) - SIMPLE

@@ -87,6 +87,7 @@ export function limpiarTodosLosFiltros(component: PantallaVerTicketsComponent): 
   limpiarSeleccion(component.departamentosDisponibles);
   limpiarSeleccion(component.subcategoriasDisponibles);
   limpiarSeleccion(component.detallesDisponibles);
+  limpiarSeleccion(component.sucursalesDisponibles);
 
   // Resetear filtros visibles
   component.categoriasFiltradas = [...component.categoriasDisponibles];
@@ -97,6 +98,7 @@ export function limpiarTodosLosFiltros(component: PantallaVerTicketsComponent): 
   component.departamentosFiltrados = [...component.departamentosDisponibles];
   component.subcategoriasFiltradas = [...component.subcategoriasDisponibles];
   component.detallesFiltrados = [...component.detallesDisponibles];
+  component.sucursalesFiltradas = [...component.sucursalesDisponibles];
 
   // Limpia buscadores
   component.filtroCategoriaTexto = '';
@@ -107,6 +109,7 @@ export function limpiarTodosLosFiltros(component: PantallaVerTicketsComponent): 
   component.filtroDeptoTexto = '';
   component.filtroSubcategoriaTexto = '';
   component.filtroDetalleTexto = '';
+  component.filtroSucursalTexto = '';
 
   // Limpia rangos de fechas
   component.rangoFechaCreacionSeleccionado = { start: null, end: null };

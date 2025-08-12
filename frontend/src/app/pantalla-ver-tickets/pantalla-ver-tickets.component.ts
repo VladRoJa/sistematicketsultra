@@ -41,11 +41,13 @@ import { cambiarEstadoTicket } from './helpers/pantalla-ver-tickets.estado-ticke
 import { EditarFechaSolucionModalComponent } from './modals/editar-fecha-solucion-modal.component';
 import { CatalogoService } from '../services/catalogo.service';
 import { mostrarAlertaToast } from '../utils/alertas';
+import { SucursalesService } from '../services/sucursales.service';
 
 
 
 // Interfaces
 export interface Ticket {
+  subcategoria_nivel3: any;
   jerarquia_clasificacion: any;
   detalle_nivel4: any;
   categoria_nivel2: any;
@@ -84,7 +86,8 @@ export interface Ticket {
   clasificacion_nombre?: string;  
   necesita_refaccion?: boolean;
   descripcion_refaccion?: string;
-
+  sucursal_id_destino?: number | null;
+  
 
 
 
@@ -148,6 +151,9 @@ export class PantallaVerTicketsComponent implements OnInit {
   filtroFinalizadoActivo: boolean = false;
   filtroCreacionActivo: boolean = false;
   categoriasCatalogo: { id: number, nombre: string, parent_id: number, nivel: number }[] = [];
+  sucursalIdNombreMap: Record<number, string> = {};
+  listaSucursales: any[] = [];
+
 
   // Temporales
   fechaCreacionTemp = { start: null as Date | null, end: null as Date | null };
@@ -164,7 +170,8 @@ export class PantallaVerTicketsComponent implements OnInit {
       departamento: [],
       subcategoria: [],
       detalle: [],
-      inventario: []
+      inventario: [],
+      sucursal: []
     };
 
   // Filtros
@@ -180,6 +187,8 @@ export class PantallaVerTicketsComponent implements OnInit {
   subcategoriasDisponibles: any[] = [];
   detallesDisponibles: any[] = [];
   inventariosDisponibles: any[] = [];
+  sucursalesDisponibles: { valor: string, etiqueta?: string }[] = [];
+
 
 
   categoriasFiltradas: any[] = [];
@@ -193,6 +202,7 @@ export class PantallaVerTicketsComponent implements OnInit {
   subcategoriasFiltradas: any[] = [];
   detallesFiltrados: any[] = [];
   inventariosFiltrados: any[] = [];
+  sucursalesFiltradas: { valor: string, etiqueta?: string }[] = [];
   
   // Modal asignar fecha solución
   showModalAsignarFecha: boolean = false;
@@ -212,6 +222,7 @@ export class PantallaVerTicketsComponent implements OnInit {
   seleccionarTodoSubcategoria = false;
   seleccionarTodoDetalle = false;
   seleccionarTodoInventario = false;
+  seleccionarTodoSucursal = false;
 
   filtroCategoriaTexto = '';
   filtroDescripcionTexto = '';
@@ -224,6 +235,7 @@ export class PantallaVerTicketsComponent implements OnInit {
   filtroSubcategoriaTexto = '';
   filtroDetalleTexto = '';
   filtroInventarioTexto = '';
+  filtroSucursalTexto = '';
 
 
 
@@ -256,7 +268,8 @@ export class PantallaVerTicketsComponent implements OnInit {
     public http: HttpClient,
     public dialog: MatDialog,
     public refrescoService: RefrescoService,
-    public catalogoService: CatalogoService
+    public catalogoService: CatalogoService,
+    private sucursalesService: SucursalesService
   ) {}
   ngAfterViewInit(): void {
     const triggers = [
@@ -298,6 +311,17 @@ export class PantallaVerTicketsComponent implements OnInit {
     this.user?.rol === 'EDITOR_CORPORATIVO' ||
     this.user?.sucursal_id === 100
   );
+
+  this.sucursalesService.obtenerSucursales().subscribe({
+  next: (sucs) => {
+    this.listaSucursales = sucs || [];
+    this.sucursalIdNombreMap = {};
+    this.listaSucursales.forEach(s => {
+      this.sucursalIdNombreMap[s.sucursal_id] = s.sucursal;
+    });
+    },
+    error: (err) => console.error('Error al obtener sucursales:', err),
+  });
 
     // 🔁 Escuchar eventos de refresco desde el servicio
     this.refrescoService.refrescarTabla$.subscribe(() => {
@@ -363,43 +387,58 @@ export class PantallaVerTicketsComponent implements OnInit {
 
 
   
-  filtrarOpcionesTexto(columna: string) {
-    const capitalizar = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+// Reemplazo completo dentro de PantallaVerTicketsComponent
+filtrarOpcionesTexto(columna: string) {
+  const capitalizar = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
 
-    // ↔️ Aliases para nombres “raros”
-    const textoPropAlias: Record<string, string> = {
-      departamento: 'filtroDeptoTexto',
-      detalle: 'filtroDetalleTexto'
-    };
+  // Aliases para nombres “raros”
+  const textoPropAlias: Record<string, string> = {
+    departamento: 'filtroDeptoTexto',
+    detalle: 'filtroDetalleTexto',
+    inventario: 'filtroInventarioTexto',
+    sucursal: 'filtroSucursalTexto',
+  };
 
-    // Propiedad que realmente contiene el texto que escribe el usuario
-    const textoProp = textoPropAlias[columna] ?? `filtro${capitalizar(columna)}Texto`;
-    const filtroTexto = (this[textoProp] || '').toLowerCase();
+  const pluralMap: Record<string, string> = {
+    categoria: 'categorias',
+    descripcion: 'descripciones',
+    username: 'usuarios',
+    estado: 'estados',
+    criticidad: 'criticidades',
+    departamento: 'departamentos',
+    subcategoria: 'subcategorias',
+    detalle: 'detalles',
+    inventario: 'inventarios',
+    sucursal: 'sucursales',
+  };
 
-    const pluralMap: Record<string, string> = {
-      categoria: 'categorias',
-      descripcion: 'descripciones',
-      username: 'usuarios',
-      estado: 'estados',
-      criticidad: 'criticidades',
-      departamento: 'departamentos',
-      subcategoria: 'subcategorias',
-      detalle: 'detalles',
-      inventario: 'inventarios'
-    };
+  const textoProp = textoPropAlias[columna] ?? `filtro${capitalizar(columna)}Texto`;
+  const filtroTexto = (this[textoProp] || '').toLowerCase();
+  const plural = pluralMap[columna];
 
-    const plural = pluralMap[columna];
-    const disponibles = this[`${plural}Disponibles`];
-    if (!Array.isArray(disponibles)) { return; }
+  if (!plural) return;
 
-      const filtradas = disponibles.filter((item: any) =>
-        (item.etiqueta || '').toLowerCase().includes(filtroTexto)
-      )
+  // ⚠️ CLAVE: Tomar como base la lista YA FILTRADA (si existe), NO los "Disponibles"
+  const base =
+    (Array.isArray(this[`${plural}Filtradas`]) && this[`${plural}Filtradas`].length)
+      ? this[`${plural}Filtradas`]
+      : (this[`${plural}Disponibles`] || []);
 
-    // Mantén sincronizados lista y selección temporal
-    this[`${plural}Filtradas`] = filtradas;
-    this.temporalSeleccionados[columna] = filtradas.map((item: any) => ({ ...item }));
-  }
+  if (!Array.isArray(base)) return;
+
+  const normaliza = (x: any) => ((x?.etiqueta ?? x?.valor) ?? '')
+    .toString()
+    .toLowerCase();
+
+  const filtradas = filtroTexto
+    ? base.filter((item: any) => normaliza(item).includes(filtroTexto))
+    : [...base];
+
+  // Mantén sincronizados lista y selección temporal
+  this[`${plural}Filtradas`] = filtradas;
+  this.temporalSeleccionados[columna] = filtradas.map((item: any) => ({ ...item }));
+}
+
 
   
   aplicarFiltroPorRangoFechaCreacionConfirmada = () => {
@@ -522,17 +561,61 @@ export class PantallaVerTicketsComponent implements OnInit {
   this.inicializarTemporales('categoria');
 }
 
+private hidratarSucursalEnTickets(): void {
+  const poner = (arr: any[] | undefined) => {
+    if (!Array.isArray(arr)) return;
+    arr.forEach((t: any) => {
+      const id = t?.sucursal_id_destino ?? t?.sucursal_id;
+      t.sucursal = this.sucursalIdNombreMap[id] || (id != null ? String(id) : '—');
+    });
+  };
+  poner(this.tickets);
+  poner(this.filteredTickets);
+  poner(this.visibleTickets);
+}
+
+
+private prepararOpcionesFiltroSucursal(): void {
+  // Asegura que cada ticket tenga la propiedad calculada
+  this.hidratarSucursalEnTickets();
+
+  const set = new Set<string>();
+  (this.tickets || []).forEach((t: any) => {
+    if (t?.sucursal) set.add(t.sucursal);
+  });
+  const opciones = Array.from(set).sort().map(v => ({ valor: v }));
+
+  this.sucursalesDisponibles = opciones;
+  this.sucursalesFiltradas = [...opciones];
+  this.temporalSeleccionados['sucursal'] = opciones.map(o => ({ valor: o.valor, seleccionado: true }));
+}
+
+
+  private rutasFiltro: Record<string, string> = {
+    categoria: 'categoria',
+    descripcion: 'descripcion',
+    username: 'username',
+    estado: 'estado',
+    criticidad: 'criticidad',
+    departamento: 'departamento',
+    subcategoria: 'subcategoria',
+    detalle: 'detalle',
+    inventario: 'inventario.nombre',
+    sucursal: 'sucursal'
+  };
+
   onAbrirFiltro(columna: string, trigger: any) {
-    console.log(this.temporalSeleccionados['subcategoria'])
     console.log('🟢 Abriendo filtro para columna:', columna);
+
+    if (this.rutasFiltro[columna]) {
+      this.prepararOpcionesFiltro(columna, this.rutasFiltro[columna]);
+    }
+
     this.inicializarTemporales(columna);
     this.filtrarOpcionesTexto(columna);
     setTimeout(() => trigger?.openMenu?.(), 0);
-      if (columna === 'subcategoria') {
-    console.log('🔵 temporalSeleccionados subcategoria', this.temporalSeleccionados['subcategoria']);
   }
-    
-  }
+
 
   onCerrarFiltro(columna: string, trigger: any) {
     this.confirmarFiltroColumna(columna);
@@ -554,10 +637,13 @@ export class PantallaVerTicketsComponent implements OnInit {
   }
 }
 
+// Reemplaza COMPLETO
 cerrarYAplicar(columna: string, trigger: MatMenuTrigger): void {
-  this.aplicarFiltroColumnaConReset(columna); // <-- importante usar esta
+  this.confirmarFiltroColumna(columna);       // ✅ primero sincroniza disponibles ⇐ temporales
+  this.aplicarFiltroColumnaConReset(columna); // luego aplica
   trigger.closeMenu();
 }
+
 
 aplicarFiltroColumnaConReset = (col: string) => aplicarFiltroColumnaConReset(this, col);
 
@@ -566,9 +652,10 @@ aplicarFiltroColumnaConReset = (col: string) => aplicarFiltroColumnaConReset(thi
 }
 
   /** Sólo estas columnas muestran buscador de texto */
-  permiteBusqueda(col: string): boolean {
-    return col === 'categoria' || col === 'descripcion';
+permiteBusqueda(col: string): boolean {
+  return ['categoria','descripcion','inventario','estado','departamento','subcategoria','detalle','sucursal','username','criticidad'].includes(col);
 }
+
 
   cambiarEstadoEnProgreso(ticket: Ticket) {
   if (!ticket.fecha_solucion) {
@@ -665,6 +752,72 @@ getSubcategoriaVisible(ticket: Ticket): string {
   // Si ya existe subcategoría en la jerarquía, úsala
   return ticket.jerarquia_clasificacion?.[2] || '—';
 }
+
+getNombreSucursal(ticket: Ticket): string {
+  const id = (ticket as any).sucursal_id_destino as number | undefined | null;
+  if (!id) return '—';
+  return this.sucursalIdNombreMap[id] || `${id}`;
+}
+
+
+
+private prepararOpcionesFiltro(columna: string, path: string): void {
+  const set = new Set<string>();
+
+  (this.filteredTickets || []).forEach((t: any) => {
+    let valor: any = t;
+    for (const part of path.split('.')) valor = valor?.[part];
+    if (valor == null) valor = '—';
+    set.add(String(valor));
+  });
+
+  // 👇 etiqueta por columna
+  const etiquetaResolver = (col: string, valor: string) => {
+    if (col === 'categoria' || col === 'subcategoria' || col === 'detalle') {
+      return this.etiquetaCatalogoPorId(valor);
+    }
+    return valor;
+  };
+
+  const opciones = Array.from(set)
+    .sort()
+    .map(v => ({
+      valor: v,
+      etiqueta: etiquetaResolver(columna, v),
+      seleccionado: true
+    }));
+
+  const plural = this.obtenerPluralColumna(columna);
+  (this as any)[`${plural}Disponibles`] = opciones;
+  (this as any)[`${plural}Filtradas`]  = [...opciones];
+  this.temporalSeleccionados[columna]  = opciones.map(o => ({ ...o }));
+}
+
+
+private obtenerPluralColumna(columna: string): string {
+  const pluralMap: Record<string, string> = {
+    categoria: 'categorias',
+    descripcion: 'descripciones',
+    username: 'usuarios',
+    estado: 'estados',
+    criticidad: 'criticidades',
+    departamento: 'departamentos',
+    subcategoria: 'subcategorias',
+    detalle: 'detalles',
+    inventario: 'inventarios',
+    sucursal: 'sucursales'
+  };
+  return pluralMap[columna] ?? `${columna}s`;
+}
+
+
+// Devuelve el nombre de catálogo por id (o el id si no lo encuentra)
+private etiquetaCatalogoPorId(id: any): string {
+  const num = Number(id);
+  const item = this.categoriasCatalogo.find(c => c.id === num);
+  return item?.nombre ?? String(id);
+}
+
 
 
 
