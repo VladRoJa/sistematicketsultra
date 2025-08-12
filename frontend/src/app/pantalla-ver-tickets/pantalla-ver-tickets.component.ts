@@ -275,13 +275,14 @@ export class PantallaVerTicketsComponent implements OnInit {
 
   // Estado del filtro unificado (UI global: rubro + opciones)
   filtroUnificado: EstadoFiltroUnificado = crearEstadoInicial();
-  campoUnificadoActual: 'categoria' | 'estado' | 'departamento' | 'sucursal' | 'username' | null = null;
-  columnasUnificado: Array<{ key: 'categoria' | 'estado' | 'departamento' | 'sucursal' | 'username', label: string }> = [
+  campoUnificadoActual: 'categoria' | 'estado' | 'departamento' | 'sucursal' | 'username' | 'criticidad' | null = null;
+  columnasUnificado: Array<{ key: 'categoria' | 'estado' | 'departamento' | 'sucursal' | 'username' | 'criticidad', label: string }> = [
     { key: 'categoria',    label: 'Categoría' },
     { key: 'estado',       label: 'Estado' },
     { key: 'departamento', label: 'Departamento' },
     { key: 'sucursal',     label: 'Sucursal' },
     { key: 'username',     label: 'Usuario' },
+    { key: 'criticidad',   label: 'Criticidad' }, // 👈 nuevo
   ];
 
 
@@ -956,7 +957,7 @@ aplicarCategoriaUnificada(): void {
   if (!campo) return;
 
   const pluralMap: Record<string, string> = { 
-    categoria:'categorias', estado:'estados', departamento:'departamentos', username:'usuarios', sucursal: 'sucursales',
+    categoria:'categorias', estado:'estados', departamento:'departamentos', username:'usuarios', sucursal: 'sucursales', criticidad:'criticidades',
   };
   const plural = pluralMap[campo];
 
@@ -999,7 +1000,7 @@ aplicarCategoriaUnificada(): void {
 
 
 
-private refrescarPanelUnificado(campo: 'categoria' | 'estado' | 'departamento' | 'username' | 'sucursal'): void {
+private refrescarPanelUnificado(campo: 'categoria' | 'estado' | 'departamento' | 'username' | 'sucursal'| 'criticidad' ): void {
   // asegurar que los tickets tengan .sucursal calculado
   if (campo === 'sucursal') this.hidratarSucursalEnTickets();
 
@@ -1017,7 +1018,8 @@ private refrescarPanelUnificado(campo: 'categoria' | 'estado' | 'departamento' |
     estado: 'estados',
     departamento: 'departamentos',
     username: 'usuarios',
-    sucursal: 'sucursales',  // 👈 nuevo
+    sucursal: 'sucursales',
+    criticidad: 'criticidades'
   };
   const plural = pluralMap[campo];
   const disponibles = (this as any)[`${plural}Disponibles`] as Array<{ valor: any; seleccionado: boolean }> || [];
@@ -1051,17 +1053,18 @@ private rebuildPanelCategoriasDesdeFiltered(): void {
 
 
 
-private etiquetaCampoUnificado: Record<'categoria' | 'estado' | 'departamento' | 'username' | 'sucursal', string> = {
+private etiquetaCampoUnificado: Record<'categoria' | 'estado' | 'departamento' | 'username' | 'sucursal'| 'criticidad', string> = {
   categoria: 'categoría',
   estado: 'estado',
   departamento: 'departamento',
   username: 'usuario',
-  sucursal: 'sucursal',     // 👈 nuevo
+  sucursal: 'sucursal',
+  criticidad: 'criticidad'
 };
 
 
 
-onCambioCampoUnificado(campo: 'categoria' | 'estado' | 'departamento' | 'username' | 'sucursal' | null) {
+onCambioCampoUnificado(campo: 'categoria' | 'estado' | 'departamento' | 'username' | 'sucursal'| 'criticidad' |  null) {
   this.campoUnificadoActual = campo;
 
   // reset estado unificado + tabla…
