@@ -275,15 +275,17 @@ export class PantallaVerTicketsComponent implements OnInit {
 
   // Estado del filtro unificado (UI global: rubro + opciones)
   filtroUnificado: EstadoFiltroUnificado = crearEstadoInicial();
-  campoUnificadoActual: 'categoria' | 'estado' | 'departamento' | 'sucursal' | 'username' | 'criticidad' | null = null;
-  columnasUnificado: Array<{ key: 'categoria' | 'estado' | 'departamento' | 'sucursal' | 'username' | 'criticidad', label: string }> = [
-    { key: 'categoria',    label: 'Categoría' },
-    { key: 'estado',       label: 'Estado' },
-    { key: 'departamento', label: 'Departamento' },
-    { key: 'sucursal',     label: 'Sucursal' },
-    { key: 'username',     label: 'Usuario' },
-    { key: 'criticidad',   label: 'Criticidad' }, // 👈 nuevo
-  ];
+  campoUnificadoActual: 'categoria' | 'estado' | 'departamento' | 'sucursal' | 'username' | 'criticidad' | 'subcategoria' | 'detalle' | null = null;
+columnasUnificado: Array<{ key: 'categoria' | 'estado' | 'departamento' | 'sucursal' | 'username' | 'criticidad' | 'subcategoria' | 'detalle', label: string }> = [
+  { key: 'categoria',    label: 'Categoría' },
+  { key: 'estado',       label: 'Estado' },
+  { key: 'departamento', label: 'Departamento' },
+  { key: 'sucursal',     label: 'Sucursal' },
+  { key: 'username',     label: 'Usuario' },
+  { key: 'criticidad',   label: 'Criticidad' },
+  { key: 'subcategoria', label: 'Subcategoría' },   // 👈 nuevo
+  { key: 'detalle',      label: 'Detalle' },        // 👈 nuevo
+];
 
 
 
@@ -312,28 +314,38 @@ export class PantallaVerTicketsComponent implements OnInit {
     private sucursalesService: SucursalesService,
     
   ) {}
-  ngAfterViewInit(): void {
-    const triggers = [
-      { ref: this.triggerFiltroCategoria, key: 'categoria' },
-      { ref: this.triggerFiltroDesc, key: 'descripcion' },
-      { ref: this.triggerFiltroUsuario, key: 'username' },
-      { ref: this.triggerFiltroEstado, key: 'estado' },
-      { ref: this.triggerFiltroCriticidad, key: 'criticidad' },
-      { ref: this.triggerFiltroDepartamento, key: 'departamento' },
-      { ref: this.triggerFiltroSubcategoria, key: 'subcategoria' },
-      { ref: this.triggerFiltroDetalle, key: 'detalle' },
-      { ref: this.triggerFiltroInventario, key: 'inventario' }
-    ];
+ngAfterViewInit(): void {
+  const triggers = [
+    { ref: this.triggerFiltroCategoria,    key: 'categoria' },
+    { ref: this.triggerFiltroDesc,         key: 'descripcion' },
+    { ref: this.triggerFiltroUsuario,      key: 'username' },
+    { ref: this.triggerFiltroEstado,       key: 'estado' },
+    { ref: this.triggerFiltroCriticidad,   key: 'criticidad' },
+    { ref: this.triggerFiltroDepartamento, key: 'departamento' },
+    { ref: this.triggerFiltroSubcategoria, key: 'subcategoria' },
+    { ref: this.triggerFiltroDetalle,      key: 'detalle' },
+    { ref: this.triggerFiltroInventario,   key: 'inventario' },
+  ];
 
-    triggers.forEach(({ ref, key }) => {
-      if (ref?.menuOpened) {
-        ref.menuOpened.subscribe(() => {
-          console.log(`🟢 Menu de ${key} abierto`);
-          this.inicializarTemporales(key);
-        });
-      }
-    });
-  }
+  triggers.forEach(({ ref, key }) => {
+    if (ref?.menuOpened) {
+      ref.menuOpened.subscribe(() => {
+        console.log(`🟢 Menu de ${key} abierto`);
+        // 👉 Asegura que siempre calculemos opciones al abrir el menú
+        const path = this.rutasFiltro[key];
+        if (path) {
+          if (key === 'subcategoria') {
+            this.filtroSubcategoriaTexto = ''; // evita que un texto viejo esconda opciones
+          }
+          this.prepararOpcionesFiltro(key, path);
+        }
+        this.inicializarTemporales(key);
+        this.filtrarOpcionesTexto(key);
+      });
+    }
+  });
+}
+
 
   async ngOnInit() {
 
@@ -619,32 +631,26 @@ private hidratarSucursalEnTickets(): void {
 
 
 private prepararOpcionesFiltro(columna: string, path: string): void {
-  const set = new Set<string>();
+  const setGen = new Set<string>();
 
+  // 1) Recolector genérico (se ignora si entramos a un caso especial)
   (this.filteredTickets || []).forEach((t: any) => {
     let valor: any = t;
     for (const part of path.split('.')) valor = valor?.[part];
 
-    // Normaliza departamento: nunca dejar IDs
     if (columna === 'departamento') {
       const esId = valor != null && /^[0-9]+$/.test(String(valor));
-      if (esId) {
-        const nombre = this.etiquetaDepartamentoPorId(valor);
-        valor = nombre || String(valor);
-      }
+      if (esId) valor = this.etiquetaDepartamentoPorId(valor);
     }
 
     if (valor == null || valor === '') valor = '—';
-    set.add(String(valor));
+    setGen.add(String(valor));
   });
 
-  // 🔒 Si la columna es departamento, fuerza valor = etiqueta = NOMBRE
+  // 2) Caso especial: DEPARTAMENTO (siempre por NOMBRE)
   if (columna === 'departamento') {
-    const toNombre = (v: any) =>
-      /^[0-9]+$/.test(String(v)) ? this.etiquetaDepartamentoPorId(v) : String(v);
-
-    const opciones = Array.from(set)
-      .map(toNombre)
+    const opciones = Array.from(setGen)
+      .map(v => (/^[0-9]+$/.test(String(v)) ? this.etiquetaDepartamentoPorId(v) : String(v)))
       .sort((a, b) => a.localeCompare(b))
       .map(nombre => ({ valor: nombre, etiqueta: nombre, seleccionado: true }));
 
@@ -654,7 +660,64 @@ private prepararOpcionesFiltro(columna: string, path: string): void {
     return;
   }
 
-  // Resto de columnas
+  // 3) Caso especial: SUBCATEGORÍA (usa exactamente lo que ves en la tabla)
+if (columna === 'subcategoria') {
+  const set = new Set<string>();
+
+  (this.filteredTickets || []).forEach((t: any) => {
+    const label = this.getSubcategoriaVisible(t) || '—';
+    set.add(label);
+  });
+
+  // DEBUG 👇
+  const debug = (this.filteredTickets || []).map((t: any) => ({
+    id: t.id,
+    dep: t.departamento,
+    jer1: t.jerarquia_clasificacion?.[1] ?? null,
+    invCat: t.inventario?.categoria ?? null,
+    jer2: t.jerarquia_clasificacion?.[2] ?? null,
+    subId: t.subcategoria ?? null,
+    labelTabla: this.getSubcategoriaVisible(t),
+  }));
+  console.table(debug);
+  console.log('[SUBCAT] únicos (set):', Array.from(set));
+  // DEBUG ☝️
+
+  const opciones = Array.from(set)
+    .sort((a, b) => a.localeCompare(b))
+    .map(nombre => ({ valor: nombre, etiqueta: nombre, seleccionado: true }));
+
+  this.subcategoriasDisponibles = opciones;
+  this.subcategoriasFiltradas  = [...opciones];
+  this.temporalSeleccionados['subcategoria'] = opciones.map(o => ({ ...o }));
+  return;
+}
+
+
+  // 4) Caso especial: DETALLE (toma nombre textual si viene en jerarquía)
+  if (columna === 'detalle') {
+    const set = new Set<string>();
+    (this.filteredTickets || []).forEach((t: any) => {
+      let label: string | null = null;
+      if (t.jerarquia_clasificacion?.[3]) {
+        label = t.jerarquia_clasificacion[3];
+      } else if (t.detalle != null) {
+        label = this.etiquetaCatalogoPorId(t.detalle);
+      }
+      set.add(label || '—');
+    });
+
+    const opciones = Array.from(set)
+      .sort((a, b) => a.localeCompare(b))
+      .map(nombre => ({ valor: nombre, etiqueta: nombre, seleccionado: true }));
+
+    this.detallesDisponibles = opciones;
+    this.detallesFiltrados  = [...opciones];
+    this.temporalSeleccionados['detalle'] = opciones.map(o => ({ ...o }));
+    return;
+  }
+
+  // 5) Resto de columnas (flujo genérico)
   const etiquetaResolver = (col: string, v: string) => {
     if (col === 'categoria' || col === 'subcategoria' || col === 'detalle') {
       return this.etiquetaCatalogoPorId(v);
@@ -662,7 +725,7 @@ private prepararOpcionesFiltro(columna: string, path: string): void {
     return v;
   };
 
-  const opciones = Array.from(set)
+  const opciones = Array.from(setGen)
     .sort((a, b) => etiquetaResolver(columna, a).localeCompare(etiquetaResolver(columna, b)))
     .map(v => ({
       valor: v,
@@ -675,6 +738,8 @@ private prepararOpcionesFiltro(columna: string, path: string): void {
   (this as any)[`${plural}Filtradas`]  = [...opciones];
   this.temporalSeleccionados[columna]  = opciones.map(o => ({ ...o }));
 }
+
+
 
 
 
@@ -691,17 +756,20 @@ private prepararOpcionesFiltro(columna: string, path: string): void {
     sucursal: 'sucursal'
   };
 
-  onAbrirFiltro(columna: string, trigger: any) {
-    console.log('🟢 Abriendo filtro para columna:', columna);
+onAbrirFiltro(columna: string, trigger: any) {
+  console.log('🟢 Abriendo filtro para columna:', columna);
 
-    if (this.rutasFiltro[columna]) {
-      this.prepararOpcionesFiltro(columna, this.rutasFiltro[columna]);
-    }
-
-    this.inicializarTemporales(columna);
-    this.filtrarOpcionesTexto(columna);
-    setTimeout(() => trigger?.openMenu?.(), 0);
+  if (this.rutasFiltro[columna]) {
+    this.prepararOpcionesFiltro(columna, this.rutasFiltro[columna]);
   }
+
+  // 👇 evita que un texto previo esconda opciones
+  if (columna === 'subcategoria') this.filtroSubcategoriaTexto = '';
+
+  this.inicializarTemporales(columna);
+  this.filtrarOpcionesTexto(columna);
+  setTimeout(() => trigger?.openMenu?.(), 0);
+}
 
 
 onCerrarFiltro(columna: string, trigger?: any): void {
@@ -956,9 +1024,16 @@ aplicarCategoriaUnificada(): void {
   const campo = this.campoUnificadoActual;
   if (!campo) return;
 
-  const pluralMap: Record<string, string> = { 
-    categoria:'categorias', estado:'estados', departamento:'departamentos', username:'usuarios', sucursal: 'sucursales', criticidad:'criticidades',
-  };
+const pluralMap: Record<string, string> = {
+  categoria:'categorias',
+  estado:'estados',
+  departamento:'departamentos',
+  sucursal:'sucursales',
+  username:'usuarios',
+  criticidad:'criticidades',
+  subcategoria:'subcategorias',   // 👈
+  detalle:'detalles',             // 👈
+};
   const plural = pluralMap[campo];
 
   let disponibles = (this as any)[`${plural}Disponibles`] as Array<{valor:any; etiqueta?:string; seleccionado:boolean}> || [];
@@ -1000,34 +1075,34 @@ aplicarCategoriaUnificada(): void {
 
 
 
-private refrescarPanelUnificado(campo: 'categoria' | 'estado' | 'departamento' | 'username' | 'sucursal'| 'criticidad' ): void {
-  // asegurar que los tickets tengan .sucursal calculado
+private refrescarPanelUnificado(
+  campo: 'categoria' | 'estado' | 'departamento' | 'sucursal' | 'username' | 'criticidad' | 'subcategoria' | 'detalle'
+): void {
   if (campo === 'sucursal') this.hidratarSucursalEnTickets();
 
+  if (campo === 'subcategoria') { this.construirOpcionesSubcategoria('filtered'); return; }
+  if (campo === 'detalle')      { this.construirOpcionesDetalle('filtered');      return; }
+
   const formatters =
-    campo === 'categoria'
-      ? { categoria: (v: string) => this.etiquetaCatalogoPorId(v) }
-      : campo === 'departamento'
-      ? { departamento: (v: string) => this.etiquetaDepartamentoPorId(v) }
-      : undefined;
+    campo === 'categoria'    ? { categoria:    (v: string) => this.etiquetaCatalogoPorId(v) } :
+    campo === 'departamento' ? { departamento: (v: string) => this.etiquetaDepartamentoPorId(v) } :
+    undefined;
 
   seleccionarCampo(this.filtroUnificado, this.filteredTickets as any, campo, formatters);
 
   const pluralMap: Record<string, string> = {
-    categoria: 'categorias',
-    estado: 'estados',
-    departamento: 'departamentos',
-    username: 'usuarios',
-    sucursal: 'sucursales',
-    criticidad: 'criticidades'
+    categoria: 'categorias', estado: 'estados', departamento: 'departamentos',
+    username: 'usuarios', sucursal: 'sucursales', criticidad: 'criticidades',
+    subcategoria: 'subcategorias', detalle: 'detalles',
   };
   const plural = pluralMap[campo];
   const disponibles = (this as any)[`${plural}Disponibles`] as Array<{ valor: any; seleccionado: boolean }> || [];
-
   this.filtroUnificado.seleccionTemporal = new Set(
     disponibles.filter(op => op.seleccionado).map(op => String(op.valor))
   );
 }
+
+
 
 
 
@@ -1053,18 +1128,21 @@ private rebuildPanelCategoriasDesdeFiltered(): void {
 
 
 
-private etiquetaCampoUnificado: Record<'categoria' | 'estado' | 'departamento' | 'username' | 'sucursal'| 'criticidad', string> = {
+private etiquetaCampoUnificado: Record<'categoria' | 'estado' | 'departamento' | 'username' | 'sucursal' | 'criticidad' | 'subcategoria' | 'detalle', string> = {
   categoria: 'categoría',
   estado: 'estado',
   departamento: 'departamento',
   username: 'usuario',
   sucursal: 'sucursal',
-  criticidad: 'criticidad'
+  criticidad: 'criticidad',
+  subcategoria: 'subcategoría', // 👈
+  detalle: 'detalle',           // 👈
 };
 
 
-
-onCambioCampoUnificado(campo: 'categoria' | 'estado' | 'departamento' | 'username' | 'sucursal'| 'criticidad' |  null) {
+onCambioCampoUnificado(
+  campo: 'categoria' | 'estado' | 'departamento' | 'sucursal' | 'username' | 'criticidad' | 'subcategoria' | 'detalle' | null
+) {
   this.campoUnificadoActual = campo;
 
   // reset estado unificado + tabla…
@@ -1083,15 +1161,30 @@ onCambioCampoUnificado(campo: 'categoria' | 'estado' | 'departamento' | 'usernam
     return;
   }
 
-  if (campo === 'sucursal') this.hidratarSucursalEnTickets(); // 👈 importante
+  if (campo === 'sucursal') this.hidratarSucursalEnTickets();
 
-  const formatters = campo === 'categoria'
-    ? { categoria: (v: string) => this.etiquetaCatalogoPorId(v) }
-    : undefined;
+  // 👇 casos especiales: construir con lo que se ve en la tabla
+  if (campo === 'subcategoria') {
+    this.construirOpcionesSubcategoria('all');
+    this.changeDetectorRef.detectChanges();
+    return;
+  }
+  if (campo === 'detalle') {
+    this.construirOpcionesDetalle('all');
+    this.changeDetectorRef.detectChanges();
+    return;
+  }
+
+  // Resto: usa tu util como ya lo tenías
+  const formatters =
+    campo === 'categoria' ? { categoria: (v: string) => this.etiquetaCatalogoPorId(v) } :
+    campo === 'departamento' ? { departamento: (v: string) => this.etiquetaDepartamentoPorId(v) } :
+    undefined;
 
   seleccionarCampo(this.filtroUnificado, this.ticketsCompletos as any, campo, formatters);
   this.changeDetectorRef.detectChanges();
 }
+
 
 
 
@@ -1118,6 +1211,41 @@ private etiquetaDepartamentoPorId(id: any): string {
 toggleFiltros(): void {
   this.mostrarFiltros = !this.mostrarFiltros;
    this.filtroUnificado.textoBusqueda = '';
+}
+
+
+private construirOpcionesSubcategoria(origen: 'all' | 'filtered' = 'all'): void {
+  const base = origen === 'filtered' ? (this.filteredTickets || []) : (this.ticketsCompletos || []);
+  const set = new Set<string>();
+  base.forEach((t: any) => set.add(this.getSubcategoriaVisible(t) || '—'));
+
+  const opciones = Array.from(set)
+    .sort((a, b) => a.localeCompare(b))
+    .map(nombre => ({ valor: nombre, etiqueta: nombre }));
+
+  this.filtroUnificado.opcionesDisponibles = opciones;
+  this.filtroUnificado.seleccionTemporal = new Set(opciones.map(o => o.valor));
+
+  console.log(`[FU] Subcategoría (${origen}) opciones:`, opciones);
+}
+
+private construirOpcionesDetalle(origen: 'all' | 'filtered' = 'all'): void {
+  const base = origen === 'filtered' ? (this.filteredTickets || []) : (this.ticketsCompletos || []);
+  const set = new Set<string>();
+  base.forEach((t: any) => {
+    const nombre = t?.jerarquia_clasificacion?.[3]
+      ?? (t?.detalle != null ? this.etiquetaCatalogoPorId(t.detalle) : '—');
+    set.add(nombre || '—');
+  });
+
+  const opciones = Array.from(set)
+    .sort((a, b) => a.localeCompare(b))
+    .map(nombre => ({ valor: nombre, etiqueta: nombre }));
+
+  this.filtroUnificado.opcionesDisponibles = opciones;
+  this.filtroUnificado.seleccionTemporal = new Set(opciones.map(o => o.valor));
+
+  console.log(`[FU] Detalle (${origen}) opciones:`, opciones);
 }
 
 
