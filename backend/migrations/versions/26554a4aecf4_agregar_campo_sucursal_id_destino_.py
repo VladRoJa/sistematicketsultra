@@ -14,29 +14,21 @@ depends_on = None
 
 
 def upgrade():
-    # 1) Agregar columna como NULL al inicio
-    op.add_column(
-        'tickets',
-        sa.Column('sucursal_id_destino', sa.Integer(), nullable=True)
-    )
+    op.add_column('tickets', sa.Column('sucursal_id_destino', sa.Integer(), nullable=True))
 
-    # 2) Backfill: copiar desde sucursal_id si está vacío
     op.execute("""
         UPDATE tickets
         SET sucursal_id_destino = COALESCE(sucursal_id_destino, sucursal_id)
     """)
 
-    # 3) Hacerla NOT NULL (si hay NULL fallará: corrige datos y vuelve a correr)
     op.alter_column('tickets', 'sucursal_id_destino', nullable=False)
 
-    # 4) FK hacia sucursales (sin CASCADE)
     op.create_foreign_key(
         'fk_tickets_sucursal_destino',
         'tickets', 'sucursales',
         ['sucursal_id_destino'], ['sucursal_id'],
         ondelete='RESTRICT'
     )
-
 
 def downgrade():
     op.drop_constraint('fk_tickets_sucursal_destino', 'tickets', type_='foreignkey')
