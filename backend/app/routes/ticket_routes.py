@@ -21,6 +21,7 @@ from dateutil import parser
 from sqlalchemy.orm.attributes import flag_modified
 from app. utils.datetime_utils import format_datetime 
 from app.models.inventario import InventarioGeneral
+from app.models.sucursal_model import Sucursal
 
 
 
@@ -266,32 +267,8 @@ def update_ticket_status(id):
 # ─────────────────────────────────────────────────────────────
 # RUTA: Eliminar ticket
 # ─────────────────────────────────────────────────────────────
-@ticket_bp.route('/delete/<int:id>', methods=['DELETE'])
-@jwt_required()
-def delete_ticket(id):
-    try:
-        ticket = Ticket.query.get(id)
-        if not ticket:
-            return jsonify({"mensaje": "El ticket no existe"}), 404
-
-        usuario_actual_id = get_jwt_identity()
-        usuario_actual = UserORM.get_by_id(usuario_actual_id)
-
-        if ticket.username != usuario_actual.username and usuario_actual.rol != "ADMINISTRADOR":
-            return jsonify({"mensaje": "No tienes permiso para eliminar este ticket"}), 403
-
-        db.session.delete(ticket)
-        db.session.commit()
-
-        return jsonify({"mensaje": f"Ticket {id} eliminado correctamente"}), 200
-
-    except Exception as e:
-        return manejar_error(e)
 
 
-# ─────────────────────────────────────────────────────────────
-# RUTA: Exportar tickets a Excel
-# ─────────────────────────────────────────────────────────────
 
 @ticket_bp.route('/export-excel', methods=['GET'])
 @jwt_required()
@@ -301,29 +278,26 @@ def export_excel():
         if not user:
             return jsonify({"mensaje": "Usuario no encontrado"}), 404
 
-        # --- MULTI-VALORES ---
-        estados = request.args.getlist('estado')
-        departamentos = request.args.getlist('departamento_id')
-        criticidades = request.args.getlist('criticidad')
-        usernames = request.args.getlist('username')
-        categorias = request.args.getlist('categoria')
-        subcategorias = request.args.getlist('subcategoria')
-        detalles = request.args.getlist('detalle')
-        descripciones = request.args.getlist('descripcion')
-        inventarios = request.args.getlist('inventario')
+        # ---------------- Filtros (igual que tenías) ----------------
+        estados        = request.args.getlist('estado')
+        departamentos  = request.args.getlist('departamento_id')
+        criticidades   = request.args.getlist('criticidad')
+        usernames      = request.args.getlist('username')
+        categorias     = request.args.getlist('categoria')
+        subcategorias  = request.args.getlist('subcategoria')
+        detalles       = request.args.getlist('detalle')
+        descripciones  = request.args.getlist('descripcion')
+        inventarios    = request.args.getlist('inventario')
 
-        # --- Fechas ---
-        fecha_desde = request.args.get('fecha_desde')
-        fecha_hasta = request.args.get('fecha_hasta')
-        fecha_fin_desde = request.args.get('fecha_fin_desde')
-        fecha_fin_hasta = request.args.get('fecha_fin_hasta')
+        fecha_desde      = request.args.get('fecha_desde')
+        fecha_hasta      = request.args.get('fecha_hasta')
+        fecha_fin_desde  = request.args.get('fecha_fin_desde')
+        fecha_fin_hasta  = request.args.get('fecha_fin_hasta')
         fecha_prog_desde = request.args.get('fecha_prog_desde')
         fecha_prog_hasta = request.args.get('fecha_prog_hasta')
 
-        # Helper universal
         query = filtrar_tickets_por_usuario(user)
 
-        # --- MULTI-FILTROS ---
         if estados:
             query = query.filter(Ticket.estado.in_(estados))
         if departamentos:
@@ -336,10 +310,7 @@ def export_excel():
         def filtrar_con_null(campo, valores):
             condiciones = []
             for v in valores:
-                if v == "—":
-                    condiciones.append(campo.is_(None))
-                else:
-                    condiciones.append(campo == v)
+                condiciones.append(campo.is_(None) if v == "—" else campo == v)
             return or_(*condiciones)
 
         if categorias:
@@ -351,9 +322,10 @@ def export_excel():
         if descripciones:
             query = query.filter(filtrar_con_null(Ticket.descripcion, descripciones))
 
-        # --- FILTRO POR INVENTARIO ---
         if inventarios:
-            inventario_objs = InventarioGeneral.query.filter(InventarioGeneral.nombre.in_(inventarios)).all()
+            inventario_objs = InventarioGeneral.query.filter(
+                InventarioGeneral.nombre.in_(inventarios)
+            ).all()
             inventario_ids = [inv.id for inv in inventario_objs]
             if "—" in inventarios:
                 query = query.filter(or_(
@@ -363,7 +335,6 @@ def export_excel():
             else:
                 query = query.filter(Ticket.aparato_id.in_(inventario_ids))
 
-        # --- FILTROS DE FECHA ---
         if fecha_desde:
             query = query.filter(Ticket.fecha_creacion >= datetime.strptime(fecha_desde, '%Y-%m-%d'))
         if fecha_hasta:
@@ -379,22 +350,117 @@ def export_excel():
 
         tickets = query.order_by(Ticket.fecha_creacion.desc()).all()
 
-        # --- EXCEL ---
+        # ===== Mapas y helpers =====
+        tz_tijuana = pytz.timezone("America/Tijuana")
+        hoy_local = datetime.now(tz_tijuana).date()
+
+        SLA_DIAS_BY_CRIT = {1: 14, 2: 7, 3: 5, 4: 2, 5: 1}
+
+        def to_local_date(dt):
+            """Devuelve date en America/Tijuana o None."""
+            if not dt:
+                return None
+            try:
+                if getattr(dt, 'tzinfo', None):
+                    return dt.astimezone(tz_tijuana).date()
+                return dt.date()
+            except Exception:
+                return None
+
+        def ultimos_tres_motivos(ticket, dict_ticket):
+            """
+            Intenta leer los 3 últimos motivos del historial de fecha de solución.
+            1) relación ORM (si existe)
+            2) lista en dict (to_dict()['historial_fechas'])
+            """
+            motivos = []
+
+            # 1) ORM
+            rel = None
+            # nombres típicos de la relación
+            for attr in ("historial_fechas_solucion", "historial_fechas", "cambios_fecha_solucion"):
+                if hasattr(ticket, attr):
+                    rel = getattr(ticket, attr)
+                    break
+            if rel:
+                try:
+                    registros = sorted(
+                        list(rel),
+                        key=lambda r: getattr(r, "fecha_cambio", None) or getattr(r, "fecha", None) or datetime.min,
+                        reverse=True
+                    )
+                    for r in registros:
+                        m = getattr(r, "motivo", None) or getattr(r, "comentario", None) or getattr(r, "razon", None)
+                        if m:
+                            motivos.append(m)
+                except Exception:
+                    pass
+
+            # 2) JSON dentro del dict
+            if not motivos:
+                items = dict_ticket.get("historial_fechas") or []
+                if isinstance(items, list):
+                    try:
+                        registros = sorted(
+                            items,
+                            key=lambda x: x.get("fechaCambio") or x.get("fecha_cambio") or "",
+                            reverse=True
+                        )
+                        for r in registros:
+                            m = r.get("motivo") or r.get("comentario") or r.get("razon")
+                            if m:
+                                motivos.append(m)
+                    except Exception:
+                        pass
+
+            # completa a 3
+            motivos = (motivos + ["", "", ""])[:3]
+            return motivos[0], motivos[1], motivos[2]
+
+        # mapa id -> nombre de sucursal
+        sucursales_map = {s.sucursal_id: s.sucursal for s in Sucursal.query.all()}
+
+        # ===== Excel =====
         wb = Workbook()
         ws = wb.active
         ws.title = "Tickets"
 
         headers = [
-            "ID", "Aparato/Dispositivo","Código Interno", "Descripción", "Usuario", "Estado", "Criticidad",
-            "Fecha Creación", "Fecha En Progreso", "Fecha Finalizado", "Fecha Solución",
-            "Departamento", "Categoría", "Subcategoría", "Sub-subcategoría", "Detalle",
-            "Problema Detectado", "Refacción", "Descripción Refacción"
+            "ID",
+            "Aparato/Dispositivo",
+            "Código Interno",
+            "Descripción",
+            "Usuario",
+            "Estado",
+            "Criticidad",
+            "Fecha Creación",
+            "Fecha En Progreso",
+
+            # 👇 nuevas
+            "Tiempo Transcurrido",
+            "Deber ser",
+            "Fecha Solución",
+            "Comentario 1",
+            "Comentario 2",
+            "Comentario 3",
+
+            "Fecha Finalizado",
+            "Tiempo Solución",
+
+            "Sucursal (destino)",
+            "Departamento",
+            "Categoría",
+            "Subcategoria",
+            "Detalle",
+            "Problema Detectado",
+            "Refacción",
+            "Descripción Refacción",
         ]
         ws.append(headers)
 
         header_font = Font(bold=True, color="FFFFFF")
         header_fill = PatternFill("solid", fgColor="0073C2")
-        alt_fill = PatternFill("solid", fgColor="F2F2F2")
+        alt_fill    = PatternFill("solid", fgColor="F2F2F2")
 
         for cell in ws[1]:
             cell.font = header_font
@@ -403,11 +469,7 @@ def export_excel():
         for idx, ticket in enumerate(tickets, start=2):
             t = ticket.to_dict()
 
-            fecha_solucion_corta = ""
-            if ticket.fecha_solucion:
-                fecha_solucion_corta = ticket.fecha_solucion.astimezone(pytz.timezone("America/Tijuana")).strftime('%d/%m/%Y')
-
-            # 🟢 Lógica combinada para Aparato/Dispositivo
+            # Aparato/Dispositivo
             if ticket.inventario and ticket.inventario.nombre:
                 aparato_nombre = ticket.inventario.nombre
                 codigo_interno = ticket.inventario.codigo_interno or "—"
@@ -418,23 +480,44 @@ def export_excel():
                 aparato_nombre = "—"
                 codigo_interno = "—"
 
-            jerarquia = ticket._obtener_jerarquia_clasificacion() or []
+            # Sucursal destino (nombre)
+            suc_id_dest = ticket.sucursal_id_destino if ticket.sucursal_id_destino is not None else ticket.sucursal_id
+            sucursal_nombre_dest = sucursales_map.get(suc_id_dest, "—")
 
-            categoria = jerarquia[0] if len(jerarquia) > 0 else "—"
-            subcategoria = jerarquia[1] if len(jerarquia) > 1 else "—"
-            subsubcategoria = jerarquia[2] if len(jerarquia) > 2 else "—"
-            detalle = jerarquia[3] if len(jerarquia) > 3 else "—"
-            
-            if hasattr(ticket, "jerarquia_clasificacion"):
-                print(f"ID {t.get('id')} jerarquia_clasificacion:", ticket.jerarquia_clasificacion)
+            # Jerarquía (y caso especial dispositivos/sistemas)
+            jer = ticket._obtener_jerarquia_clasificacion() or []
+            categoria_txt    = jer[0] if len(jer) > 0 else "—"    # nivel 1
+            subcategoria_txt = jer[1] if len(jer) > 1 else "—"    # nivel 2
+
+            dep_lower = (ticket.departamento.nombre if ticket.departamento else "").strip().lower()
+            subcat2_lower = (subcategoria_txt or "").strip().lower()
+            if dep_lower == "sistemas" and subcat2_lower == "dispositivos" and getattr(ticket, "inventario", None) and getattr(ticket.inventario, "categoria", None):
+                subsubcat_txt = ticket.inventario.categoria
             else:
-                print(f"ID {t.get('id')} NO TIENE jerarquia_clasificacion")
+                subsubcat_txt = jer[2] if len(jer) > 2 else "—"   # nivel 3 normal
 
-            print(f"Ticket ID {t.get('id')}, jerarquia_clasificacion: {getattr(ticket, 'jerarquia_clasificacion', None)}")
+            detalle_txt = jer[3] if len(jer) > 3 else "—"        # nivel 4
+            departamento_txt = ticket.departamento.nombre if ticket.departamento else "—"
+
+            # Fechas a date (zona local)
+            f_crea = to_local_date(ticket.fecha_creacion)
+            f_final = to_local_date(ticket.fecha_finalizado)
+            f_sol = to_local_date(ticket.fecha_solucion)
+            f_prog = to_local_date(ticket.fecha_en_progreso)
+
+            # Nuevos cálculos
+            tiempo_trans = (hoy_local - f_crea).days if f_crea else ""
+            deber_ser = SLA_DIAS_BY_CRIT.get(ticket.criticidad, "")
+            comentario1, comentario2, comentario3 = ultimos_tres_motivos(ticket, t)
+            tiempo_sol = (f_final - f_crea).days if (f_crea and f_final) else "N/A"
+
+            # En Excel: formatea fechas como dd/MM/yyyy (las demás las dejabas como venían)
+            fecha_sol_txt   = f_sol.strftime('%d/%m/%Y') if f_sol else ""
+            fecha_fin_txt   = f_final.strftime('%d/%m/%Y') if f_final else "N/A"
 
             ws.append([
                 t.get("id"),
-                aparato_nombre,   
+                aparato_nombre,
                 codigo_interno,
                 t.get("descripcion"),
                 t.get("username"),
@@ -442,25 +525,32 @@ def export_excel():
                 t.get("criticidad"),
                 t.get("fecha_creacion"),
                 t.get("fecha_en_progreso"),
-                t.get("fecha_finalizado"),
-                fecha_solucion_corta,
-                ticket.departamento.nombre if ticket.departamento else "—",
-                categoria,     
-                subcategoria,        
-                subsubcategoria,    
-                detalle,            
+
+                tiempo_trans,
+                deber_ser,
+                fecha_sol_txt,
+                comentario1,
+                comentario2,
+                comentario3,
+
+                fecha_fin_txt,
+                tiempo_sol,
+
+                sucursal_nombre_dest,
+                departamento_txt,
+                subcategoria_txt,  # ← tu layout: "Categoría"
+                subsubcat_txt,     # ← tu layout: "Subcategoria"
+                detalle_txt,
                 t.get("problema_detectado"),
                 "Sí" if t.get("necesita_refaccion") else "No",
-                t.get("descripcion_refaccion")
+                t.get("descripcion_refaccion"),
             ])
-
-            
 
             if idx % 2 == 0:
                 for cell in ws[idx]:
                     cell.fill = alt_fill
 
-
+        # auto ancho + filtros
         for column_cells in ws.columns:
             max_length = max(len(str(cell.value or "")) for cell in column_cells)
             ws.column_dimensions[column_cells[0].column_letter].width = max_length + 2
@@ -483,8 +573,6 @@ def export_excel():
         import traceback
         print(traceback.format_exc())
         return jsonify({"mensaje": str(e)}), 500
-
-
 
 
 

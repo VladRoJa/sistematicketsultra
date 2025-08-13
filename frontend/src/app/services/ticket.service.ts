@@ -1,4 +1,4 @@
-//ticket.service.ts
+//frontend\src\app\services\ticket.service.ts
 
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
@@ -150,7 +150,7 @@ export class TicketService {
       return new Observable<Blob>();
     }
   
-    console.log("📤 Filtros enviados al backend:", filtros); // Agrega esto temporalmente
+    console.log("📤 Filtros enviados al backend:", filtros); 
   
     let params = new HttpParams();
     for (const clave in filtros) {
