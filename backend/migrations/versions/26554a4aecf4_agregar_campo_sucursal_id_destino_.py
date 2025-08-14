@@ -22,9 +22,13 @@ def upgrade():
     # 2) rellenar con un valor válido (preferir sucursal_id existente; fallback 1)
     op.execute("""
         UPDATE tickets
-        SET sucursal_id_destino = COALESCE(sucursal_id, 1)
+        SET sucursal_id_destino = COALESCE(
+            sucursal_id,
+            (SELECT MIN(sucursal_id) FROM sucursales)
+        )
         WHERE sucursal_id_destino IS NULL
     """)
+
 
     # 3) volverla NOT NULL y crear la FK a sucursales.sucursal_id
     with op.batch_alter_table("tickets") as batch_op:
