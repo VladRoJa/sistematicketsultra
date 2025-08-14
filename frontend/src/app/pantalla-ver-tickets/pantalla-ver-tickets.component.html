@@ -613,7 +613,7 @@
               *ngIf="ticket.estado?.trim().toLowerCase() === 'en progreso'"
               class="boton-estado boton-finalizar"
               (click)="cambiarEstado(ticket, 'finalizado')">
-              Finalizar
+             <mat-icon>play_circle</mat-icon> Finalizar
             </button>
           </div>
         </td>
@@ -623,7 +623,7 @@
           <ng-container *ngIf="ticket.fecha_solucion; else soloLecturaSinFecha">
             {{ ticket.fecha_solucion | date:'dd/MM/yy' }}
             <button
-              *ngIf="usuarioEsAdmin || usuarioEsEditorCorporativo"
+                *ngIf="(usuarioEsAdmin || usuarioEsEditorCorporativo) && ((ticket.estado ?? '').toString().trim().toLowerCase() !== 'finalizado')"
               mat-icon-button
               class="boton-editar-fecha"
               matTooltip="Editar fecha solución"

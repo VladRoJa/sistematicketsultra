@@ -865,6 +865,11 @@ onCancelarAsignarFecha() {
 }
 
 abrirEditarFechaSolucion(ticket: Ticket) {
+  const estado = (ticket.estado ?? '').toString().trim().toLowerCase();
+  if (estado === 'finalizado') {
+    return; // ⛔ no abrir modal si ya está finalizado
+  }
+
   const dialogRef = this.dialog.open(EditarFechaSolucionModalComponent, {
     width: '360px',
     data: { fechaActual: ticket.fecha_solucion }
@@ -872,11 +877,11 @@ abrirEditarFechaSolucion(ticket: Ticket) {
 
   dialogRef.afterClosed().subscribe(result => {
     if (result && result.fecha && result.motivo) {
-      // Aquí llamas tu helper actualizador
       asignarFechaSolucionYEnProgreso(this, ticket, result.fecha, result.motivo);
     }
   });
 }
+
 
 
 public getNombreEquipoOInventario(ticket: Ticket): string {
