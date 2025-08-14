@@ -37,18 +37,17 @@ export class SelectorEquipoComponent implements OnInit, OnChanges {
   @Input() mostrarEmoji: boolean = false;
   @Output() equipoSeleccionado = new EventEmitter<any>();
   @Input() equipos: any[] = [];
+  @Input() modoAutocomplete: boolean = true;
 
 
   filtroControl = new FormControl('', this.required ? { nonNullable: true } : undefined);
   equiposFiltrados$!: Observable<any[]>;
-  modoAutocomplete = false;
   equipoSeleccionadoInterno: any = null;
 
   constructor(private equiposService: EquiposService) {}
 
   ngOnInit(): void {
     this.setupBusqueda();
-    // Escucha si se borra la selección manualmente
     this.filtroControl.valueChanges.subscribe(value => {
       if (typeof value === 'string' && value.trim() === '') {
         this.equipoSeleccionadoInterno = null;
@@ -57,29 +56,48 @@ export class SelectorEquipoComponent implements OnInit, OnChanges {
     });
   }
 
-ngOnChanges(changes: SimpleChanges): void {
-  if (changes['equipos']) {
-    this.setupBusqueda();
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['equipos']) {
+      this.setupBusqueda();
+    }
   }
-}
 
-setupBusqueda() {
-  this.equiposFiltrados$ = this.filtroControl.valueChanges.pipe(
-    startWith(''),
-    map(value => {
-      if (typeof value === 'string') return this.filtrar(value);
-      return this.equipos;
-    })
-  );
-}
+  private normalize(s: string): string {
+    return (s || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')   // acentos
+      .replace(/[\s-_/]/g, '');          // separadores comunes
+  }
+
+  setupBusqueda() {
+    this.equiposFiltrados$ = this.filtroControl.valueChanges.pipe(
+      startWith(''),
+      map(value => {
+        if (typeof value === 'string') return this.filtrar(value);
+        return this.equipos;
+      })
+    );
+  }
 
   filtrar(valor: string): any[] {
     if (!valor) return this.equipos;
-    const filtro = valor.toLowerCase();
-    return this.equipos.filter(eq =>
-      `${eq.codigo_interno || ''} ${eq.nombre || ''} ${eq.marca || ''}`.toLowerCase().includes(filtro)
-    );
+
+    const needle = this.normalize(valor);
+
+    return this.equipos.filter(eq => {
+      const nombre = this.normalize(eq?.nombre ?? '');
+      const codigo = this.normalize(eq?.codigo_interno ?? '');
+      const marca  = this.normalize(eq?.marca ?? '');
+
+      return (
+        nombre.includes(needle) ||
+        codigo.includes(needle) ||
+        marca.includes(needle)
+      );
+    });
   }
+
 
   seleccionarEquipo(eq: any) {
     if (!eq) return;

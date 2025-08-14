@@ -435,18 +435,14 @@ def export_excel():
             "Criticidad",
             "Fecha Creación",
             "Fecha En Progreso",
-
-            # 👇 nuevas
             "Tiempo Transcurrido",
             "Deber ser",
             "Fecha Solución",
             "Comentario 1",
             "Comentario 2",
             "Comentario 3",
-
             "Fecha Finalizado",
             "Tiempo Solución",
-
             "Sucursal (destino)",
             "Departamento",
             "Categoría",
