@@ -34,6 +34,7 @@ class InventarioGeneral(db.Model):
     semana_pedido = db.Column(db.String(20)) 
     fecha_inventario = db.Column(db.Date)
     grupo_muscular = db.Column(db.String(100))
+    subcategoria = db.Column(db.String(100))
                        
 
 

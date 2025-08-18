@@ -94,6 +94,7 @@ export interface Ticket {
   }>;
   fecha_en_progreso: string;
   inventario?: {
+    subcategoria: any;
     categoria: string;
     codigo_interno: any;
     id: number;
@@ -913,10 +914,14 @@ getNombreCortoAparato(ticket: Ticket): string {
 }
 
 getSubcategoriaVisible(ticket: Ticket): string {
+
+  const invSub = ticket?.inventario?.subcategoria?.toString().trim();
+  if (invSub) return invSub;
+
+
   const dep = (ticket.departamento || '').toLowerCase();
   const cat = (ticket.jerarquia_clasificacion?.[1] || '').toLowerCase();
 
-  // Solo para sistemas/dispositivos
   if (
     dep === 'sistemas' &&
     cat === 'dispositivos' &&
@@ -924,9 +929,10 @@ getSubcategoriaVisible(ticket: Ticket): string {
   ) {
     return ticket.inventario.categoria;
   }
-  // Si ya existe subcategoría en la jerarquía, úsala
+
   return ticket.jerarquia_clasificacion?.[2] || '—';
 }
+
 
 getNombreSucursal(ticket: Ticket): string {
   const id = (ticket as any).sucursal_id_destino as number | undefined | null;

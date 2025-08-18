@@ -487,10 +487,20 @@ def export_excel():
 
             dep_lower = (ticket.departamento.nombre if ticket.departamento else "").strip().lower()
             subcat2_lower = (subcategoria_txt or "").strip().lower()
-            if dep_lower == "sistemas" and subcat2_lower == "dispositivos" and getattr(ticket, "inventario", None) and getattr(ticket.inventario, "categoria", None):
+
+            # Prioriza la subcategoría del inventario si existe
+            inv_sub = None
+            if getattr(ticket, "inventario", None):
+                inv_sub = getattr(ticket.inventario, "subcategoria", None)
+            inv_sub = (inv_sub or "").strip()
+
+            if inv_sub:
+                subsubcat_txt = inv_sub
+            elif dep_lower == "sistemas" and subcat2_lower == "dispositivos" and getattr(ticket.inventario, "categoria", None):
                 subsubcat_txt = ticket.inventario.categoria
             else:
-                subsubcat_txt = jer[2] if len(jer) > 2 else "—"   # nivel 3 normal
+                subsubcat_txt = jer[2] if len(jer) > 2 else "—"
+            # nivel 3 normal
 
             detalle_txt = jer[3] if len(jer) > 3 else "—"        # nivel 4
             departamento_txt = ticket.departamento.nombre if ticket.departamento else "—"

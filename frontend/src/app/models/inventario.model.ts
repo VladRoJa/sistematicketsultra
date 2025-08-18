@@ -10,4 +10,6 @@ export interface Inventario {
   proveedor?: string;
   categoria?: string;
   unidad?: string;
+  subcategoria?: string;
+
 }

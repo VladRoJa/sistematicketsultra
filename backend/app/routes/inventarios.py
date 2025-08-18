@@ -134,7 +134,8 @@ def obtener_inventario():
                         'fecha_inventario': str(i.fecha_inventario) if i.fecha_inventario else None,
                         'grupo_muscular': i.grupo_muscular,
                         'stock': inv_suc.stock,
-                        'descripcion_larga': descripcion_larga(i)
+                        'descripcion_larga': descripcion_larga(i),
+                        'subcategoria': i.subcategoria, 
                     })
             return jsonify(data), 200
 
@@ -159,7 +160,8 @@ def obtener_inventario():
                 'semana_pedido': i.semana_pedido,
                 'fecha_inventario': str(i.fecha_inventario) if i.fecha_inventario else None,
                 'grupo_muscular': i.grupo_muscular,
-                'descripcion_larga': descripcion_larga(i)
+                'descripcion_larga': descripcion_larga(i),
+                'subcategoria': i.subcategoria, 
             })
         return jsonify(data), 200
     except Exception as e:
@@ -935,7 +937,9 @@ def exportar_inventario():
             "categoria": r.categoria,
             "unidad_medida": r.unidad_medida,
             "grupo_muscular": r.grupo_muscular,
-            "codigo_interno": r.codigo_interno
+            "codigo_interno": r.codigo_interno,
+            "subcategoria": r.subcategoria, 
+            
         }
         for r in registros
     ]

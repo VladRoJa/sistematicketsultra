@@ -127,3 +127,18 @@ th.filtro-activo .header-button{background:#e6f4ff;border-radius:6px}
   box-shadow: 0 12px 36px rgba(0,0,0,.3);
   padding: 16px;
 }
+
+
+.col-descripcion .texto-ellipsis {
+  display: inline-block;
+  max-width: 520px;      /* ajusta a tu gusto: 420px, 560px, etc. */
+  vertical-align: top;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Asegura que la tabla use el ancho disponible, sin permitir que una celda lo “rompa” */
+.table-container table {
+  width: 100%;
+}

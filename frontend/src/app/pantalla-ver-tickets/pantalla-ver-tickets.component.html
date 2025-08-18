@@ -589,7 +589,14 @@
             </mat-icon>
           </ng-container>
         </td>
-        <td>{{ ticket.descripcion }}</td>
+        <td class="col-descripcion">
+          <span
+            class="texto-ellipsis"
+            [matTooltip]="ticket.descripcion"
+            matTooltipShowDelay="500">
+            {{ ticket.descripcion }}
+          </span>
+        </td>
         <td>{{ getNombreSucursal(ticket) }}</td>
         <td>{{ ticket.estado }}</td>
         <td>{{ ticket.criticidad }}</td>

@@ -42,7 +42,7 @@ export class InventarioComponent implements OnInit {
   filtros: Record<string, FiltroColumna> = {};
   columnasFiltrables = [
     'nombre', 'descripcion', 'tipo', 'marca', 'proveedor',
-    'categoria', 'unidad', 'grupo_muscular', 'codigo_interno'
+    'categoria', 'unidad', 'grupo_muscular', 'codigo_interno','subcategoria', 
   ];
   filtroColumnaActual: string | null = null;
 
@@ -50,7 +50,7 @@ export class InventarioComponent implements OnInit {
     'id',
     ...[
       'nombre', 'descripcion', 'tipo', 'marca', 'proveedor',
-      'categoria', 'unidad', 'grupo_muscular', 'codigo_interno'
+      'categoria', 'unidad', 'grupo_muscular', 'codigo_interno','subcategoria', 
     ],
     'acciones'
   ];
