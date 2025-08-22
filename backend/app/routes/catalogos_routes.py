@@ -11,6 +11,7 @@ from rapidfuzz import fuzz
 import os
 from werkzeug.utils import secure_filename
 import tempfile
+from app.models.inventario import InventarioGeneral
 
 
 catalogos_bp = Blueprint('catalogos', __name__, url_prefix='/api/catalogos')
@@ -340,3 +341,29 @@ def todas_las_clasificaciones():
     clasifs = CatalogoClasificacion.query.all()
     data = [{'id': c.id, 'nombre': c.nombre} for c in clasifs]
     return jsonify({'data': data})
+
+
+@catalogos_bp.route('/inventario/categorias', methods=['GET'], strict_slashes=False)
+@jwt_required()
+def categorias_inventario_distintas():
+    """
+    Devuelve categorías únicas reales del inventario (InventarioGeneral.categoria).
+    Evita mezclar con 'clasificaciones' de tickets.
+    """
+    try:
+        # Distintas + ordenadas (case-insensitive)
+        rows = db.session.query(InventarioGeneral.categoria).filter(
+            InventarioGeneral.categoria.isnot(None),
+            InventarioGeneral.categoria != ''
+        ).distinct().all()
+
+        # rows = [('Limpieza',), ('Maquinas',), ...]
+        categorias = sorted(
+            { (r[0] or '').strip() for r in rows if (r[0] or '').strip() },
+            key=lambda s: s.lower()
+        )
+
+        data = [{"id": i+1, "nombre": nombre} for i, nombre in enumerate(categorias)]
+        return respuesta_ok(data)
+    except Exception as e:
+        return manejar_error(e, "categorias_inventario_distintas")

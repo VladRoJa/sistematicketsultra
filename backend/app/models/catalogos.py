@@ -44,3 +44,14 @@ class CatalogoClasificacion(db.Model):
         cascade='all, delete-orphan'
     )
     departamento = db.relationship('Departamento', backref='clasificaciones')
+    
+
+class CategoriaInventario(db.Model):
+    __tablename__ = 'catalogo_categoria_inventario'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(120), unique=True, nullable=False)
+    activo = db.Column(db.Boolean, default=True, nullable=False)
+
+    creado_en = db.Column(db.DateTime, server_default=db.func.now())
+    actualizado_en = db.Column(db.DateTime, onupdate=db.func.now())

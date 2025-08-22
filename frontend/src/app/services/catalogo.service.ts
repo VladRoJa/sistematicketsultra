@@ -55,6 +55,12 @@ export class CatalogoService {
       .pipe(map(res => res.data || []));
   }
 
+  getCategoriasInventario(): Observable<CatalogoElemento[]> {
+    return this.http
+      .get<{ data: CatalogoElemento[] }>(`${environment.apiUrl}/catalogos/inventario/categorias`)
+      .pipe(map(resp => resp.data ?? []));
+  }
+
   // ---- CRUD genérico para todos los catálogos planos ----
 
   crearElemento(catalogo: string, datos: any): Observable<any> {

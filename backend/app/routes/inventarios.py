@@ -227,20 +227,34 @@ def registrar_movimiento():
             inventario_id = p['inventario_id']
             cantidad = int(p['cantidad'])
 
-            # Forzar la unidad del producto si no viene en el movimiento (por seguridad)
-            unidad_medida = p.get('unidad_medida')
-            if not unidad_medida:
-                unidad_medida = InventarioGeneral.query.get(inventario_id).unidad_medida
+            # Cargar inventario para conocer sus unidades
+            inv = InventarioGeneral.query.get(inventario_id)
+            if not inv:
+                db.session.rollback()
+                return error_response(f'Inventario {inventario_id} no existe')
 
+            # Unidad capturada en el movimiento (por defecto la unidad base)
+            unidad_mov = normalizar_campo(p.get('unidad_medida')) or inv.unidad_medida
+
+            # Calcular factor de conversión
+            factor = 1
+            if inv.unidad_compra and inv.factor_compra and inv.factor_compra > 1:
+                if unidad_mov == normalizar_campo(inv.unidad_compra):
+                    factor = inv.factor_compra
+
+            # Convertir a unidad base
+            cantidad_base = cantidad * factor
+
+            # Guardar siempre en unidad base
             detalle = DetalleMovimiento(
                 movimiento_id=nuevo_movimiento.id,
                 inventario_id=inventario_id,
-                cantidad=cantidad,
-                unidad_medida=unidad_medida
+                cantidad=cantidad_base,
+                unidad_medida=inv.unidad_medida
             )
             db.session.add(detalle)
 
-            # Si llevas control por sucursal
+            # Control por sucursal
             inventario_sucursal = InventarioSucursal.query.filter_by(
                 inventario_id=inventario_id,
                 sucursal_id=sucursal_id
@@ -255,12 +269,13 @@ def registrar_movimiento():
                 db.session.add(inventario_sucursal)
 
             if tipo == 'entrada':
-                inventario_sucursal.stock += cantidad
+                inventario_sucursal.stock += cantidad_base
             else:  # salida
-                if inventario_sucursal.stock < cantidad:
+                if inventario_sucursal.stock < cantidad_base:
                     db.session.rollback()
                     return error_response(f'Stock insuficiente para el inventario {inventario_id}')
-                inventario_sucursal.stock -= cantidad
+                inventario_sucursal.stock -= cantidad_base
+
 
         db.session.commit()
         return success_response('Movimiento registrado correctamente', {'movimiento_id': nuevo_movimiento.id})
@@ -382,7 +397,7 @@ def editar_inventario(inventario_id):
             'tipo', 'nombre', 'descripcion', 'marca', 'proveedor',
             'categoria', 'unidad_medida',
             'codigo_interno', 'no_equipo', 'gasto_sem', 'gasto_mes',
-            'pedido_mes', 'semana_pedido', 'subcategoria'
+            'pedido_mes', 'semana_pedido', 'subcategoria','unidad_compra', 'factor_compra'
         ]
         for campo in campos:
             if campo in data:
@@ -399,6 +414,14 @@ def editar_inventario(inventario_id):
                         valor = _parse_int_nonneg(valor, campo)
                     except ValueError as ve:
                         return error_response(str(ve))
+                    
+                if campo == 'factor_compra':
+                    try:
+                        valor = _parse_int_nonneg(valor, campo)
+                    except ValueError as ve:
+                        return error_response(str(ve))
+                    if not valor or valor < 1:
+                        valor = 1
 
                 setattr(inventario, campo, valor)
 

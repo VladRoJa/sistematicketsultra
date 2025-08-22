@@ -73,7 +73,16 @@ export class DialogoInventarioComponent implements OnInit {
       marca: [data?.item?.marca || '', Validators.required],
       proveedor: [data?.item?.proveedor || ''],
       categoria: [data?.item?.categoria || '', Validators.required],
-      unidad: [data?.item?.unidad || '', Validators.required], // se mapea a unidad_medida en guardar()
+      // Se mapea a unidad_medida al guardar
+      unidad: [data?.item?.unidad || '', Validators.required],
+
+      // NUEVOS: esquema compra↔base
+      unidad_compra: [data?.item?.unidad_compra || ''],                // p.ej. "caja" (opcional)
+      factor_compra: [
+        data?.item?.factor_compra ?? 1,
+        [Validators.required, Validators.min(1)]
+      ],
+
       stock_actual: [data?.item?.stock_actual ?? 0, [Validators.required, Validators.min(0)]],
       codigo_interno: [data?.item?.codigo_interno || ''],
       grupo_muscular: [data?.item?.grupo_muscular || ''],
@@ -104,8 +113,6 @@ export class DialogoInventarioComponent implements OnInit {
       codigoCtrl?.setValidators([Validators.required]);
     } else {
       codigoCtrl?.clearValidators();
-      // opcional: limpiar valor si no aplica
-      // codigoCtrl?.setValue('');
     }
     codigoCtrl?.updateValueAndValidity({ emitEvent: false });
 
@@ -115,7 +122,6 @@ export class DialogoInventarioComponent implements OnInit {
       gmCtrl?.setValidators([Validators.required]);
     } else {
       gmCtrl?.clearValidators();
-      // gmCtrl?.setValue('');
     }
     gmCtrl?.updateValueAndValidity({ emitEvent: false });
   }
@@ -130,7 +136,7 @@ export class DialogoInventarioComponent implements OnInit {
       this.proveedores = res;
       this.proveedoresFiltradas = res;
     });
-    this.catalogoService.getCategorias().subscribe(res => {
+    this.catalogoService.getCategoriasInventario().subscribe(res => {
       this.categorias = res;
       this.categoriasFiltradas = res;
     });
@@ -182,6 +188,12 @@ export class DialogoInventarioComponent implements OnInit {
     });
   }
 
+  private _toNumberOrNull(v: any): number | null {
+    if (v === '' || v == null) return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+
   guardar() {
     if (this.form.invalid) {
       // Encuentra los campos requeridos que faltan
@@ -194,6 +206,8 @@ export class DialogoInventarioComponent implements OnInit {
         proveedor: 'Proveedor',
         categoria: 'Categoría',
         unidad: 'Unidad',
+        unidad_compra: 'Unidad de compra',
+        factor_compra: 'Factor de compra',
         stock_actual: 'Stock Actual',
         codigo_interno: 'Código Interno',
         grupo_muscular: 'Grupo Muscular',
@@ -205,7 +219,6 @@ export class DialogoInventarioComponent implements OnInit {
         fecha_inventario: 'Fecha de Inventario'
       };
 
-      // Solo muestra los faltantes que están visibles y requeridos
       Object.keys(this.form.controls).forEach(key => {
         const control = this.form.get(key);
         if (control && control.invalid && control.errors?.['required']) {
@@ -223,8 +236,8 @@ export class DialogoInventarioComponent implements OnInit {
 
     const f = this.form.value;
 
-    // Payload limpio y compatible con backend (unidad_medida, trims, números)
-    const body = {
+    // Payload limpio y compatible con backend (unidad_medida, compra↔base, trims, números)
+    const body: any = {
       nombre: (f.nombre || '').trim(),
       descripcion: (f.descripcion || '').trim(),
       tipo: (f.tipo || '').trim(),
@@ -233,16 +246,25 @@ export class DialogoInventarioComponent implements OnInit {
       categoria: (f.categoria || '').trim(),
       // Backend espera 'unidad_medida'
       unidad_medida: (f.unidad || '').trim(),
-      // Ya tienes el control en el form
+
+      // Compra ↔ base
+      unidad_compra: (f.unidad_compra || '').trim(),
+      factor_compra: (() => {
+        const n = this._toNumberOrNull(f.factor_compra);
+        // Si viene inválido o <1, que vaya 1 (el backend también refuerza)
+        return n && n >= 1 ? n : 1;
+      })(),
+
+      // Otros campos
       subcategoria: (f.subcategoria || '').trim(),
-      // Normalizamos a mayúsculas si viene
       codigo_interno: (f.codigo_interno || '').trim().toUpperCase() || '',
       grupo_muscular: (f.grupo_muscular || '').trim(),
       no_equipo: (f.no_equipo || '').trim(),
+
       // Numéricos opcionales → null si vienen vacíos
-      gasto_sem: f.gasto_sem === '' || f.gasto_sem == null ? null : Number(f.gasto_sem),
-      gasto_mes: f.gasto_mes === '' || f.gasto_mes == null ? null : Number(f.gasto_mes),
-      pedido_mes: f.pedido_mes === '' || f.pedido_mes == null ? null : Number(f.pedido_mes),
+      gasto_sem: this._toNumberOrNull(f.gasto_sem),
+      gasto_mes: this._toNumberOrNull(f.gasto_mes),
+      pedido_mes: this._toNumberOrNull(f.pedido_mes),
       semana_pedido: (f.semana_pedido || '').trim(),
       // No enviamos stock_actual ni fecha_inventario (los maneja backend)
     };
@@ -273,4 +295,46 @@ export class DialogoInventarioComponent implements OnInit {
   cancelar() {
     this.dialogRef.close(null);
   }
+
+  // Normaliza con la misma regla del backend (capitaliza y recorta)
+private _normalizarCategoria(nombre: string): string {
+  const n = (nombre || '').trim();
+  if (!n) return '';
+  // Capitaliza por palabra
+  return n.toLowerCase().split(' ')
+    .filter(Boolean)
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+}
+
+// Normaliza a minúsculas y sin espacios sobrantes
+private _lc(v: any): string {
+  return ((v ?? '') as string).toLowerCase().trim();
+}
+
+// ¿El texto escrito en el buscador NO existe aún en la lista de categorías?
+categoriaEsNueva(): boolean {
+  const val = this._lc(this.categoriaFiltroControl.value);
+  if (!val) return false;
+  return !this.categorias.some(c => this._lc(c.nombre) === val);
+}
+
+// Usar el valor del buscador como nueva categoría
+usarCategoriaNuevaDesdeFiltro(): void {
+  const texto = (this.categoriaFiltroControl.value || '').toString().trim();
+  if (!texto) return;
+
+  // Inserta la nueva categoría en memoria para que aparezca en el dropdown
+  this.categorias = [...this.categorias, { id: Date.now(), nombre: texto }];
+  this.categoriasFiltradas = [...this.categorias];
+
+  // Asigna la categoría al formulario y limpia el buscador
+  this.form.get('categoria')?.setValue(texto);
+  this.categoriaFiltroControl.setValue('');
+
+  // Opcional: feedback
+  mostrarAlertaToast(`Categoría agregada: ${texto}`);
+}
+
+
 }

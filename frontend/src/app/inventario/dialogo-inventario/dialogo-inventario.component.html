@@ -61,14 +61,33 @@
     <mat-form-field appearance="fill" class="campo">
       <mat-label>Categoría</mat-label>
       <mat-select formControlName="categoria">
+        <!-- Buscador -->
         <mat-option>
-          <input matInput placeholder="Buscar categoría" [formControl]="categoriaFiltroControl" (click)="$event.stopPropagation()" autocomplete="off">
+          <input
+            matInput
+            placeholder="Buscar categoría"
+            [formControl]="categoriaFiltroControl"
+            (click)="$event.stopPropagation()"
+            autocomplete="off"
+          />
         </mat-option>
+
+        <!-- Lista existente -->
         <mat-option *ngFor="let c of categoriasFiltradas" [value]="c.nombre">
           {{ c.nombre }}
         </mat-option>
+
+        <!-- Opción para crear nueva desde el filtro -->
+        <mat-option
+          *ngIf="categoriaEsNueva()"
+          (onSelectionChange)="usarCategoriaNuevaDesdeFiltro()"
+        >
+          ➕ Usar "{{ categoriaFiltroControl.value }}" como nueva categoría
+        </mat-option>
       </mat-select>
     </mat-form-field>
+
+
 
     <!-- UNIDAD -->
     <mat-form-field appearance="fill" class="campo">
@@ -82,6 +101,41 @@
         </mat-option>
       </mat-select>
     </mat-form-field>
+
+
+    <!-- Unidad de compra (opcional): caja/paquete/rollo, etc. -->
+    <mat-form-field appearance="fill" class="w-full">
+      <mat-label>Unidad de compra</mat-label>
+      <mat-select formControlName="unidad_compra">
+        <!-- Puedes reutilizar el catálogo de unidades -->
+        <mat-option *ngFor="let u of unidadesFiltradas" [value]="u.nombre">
+          {{ u.nombre }}
+        </mat-option>
+      </mat-select>
+    </mat-form-field>
+
+    <!-- Factor de compra (requerido, min 1) -->
+    <mat-form-field appearance="fill" class="w-full">
+      <mat-label>Factor de compra</mat-label>
+      <input
+        matInput
+        type="number"
+        min="1"
+        formControlName="factor_compra"
+        autocomplete="off"
+        inputmode="numeric"
+      />
+      <mat-error *ngIf="form.get('factor_compra')?.hasError('min') || form.get('factor_compra')?.hasError('required')">
+        Debe ser un número ≥ 1
+      </mat-error>
+
+      <!-- Hint informativo (no lógica extra; solo interpolación simple) -->
+      <mat-hint *ngIf="form.value.unidad_compra && form.value.factor_compra">
+        1 {{ form.value.unidad_compra }} = {{ form.value.factor_compra }} {{ form.value.unidad || 'pieza' }}
+      </mat-hint>
+    </mat-form-field>
+
+
 
     <!-- CÓDIGO INTERNO -->
     <ng-container *ngIf="form.get('tipo')?.value === 'Aparatos' || form.get('tipo')?.value === 'Sistemas'">
