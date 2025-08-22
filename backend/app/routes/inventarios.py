@@ -1,4 +1,4 @@
-# app\routes\inventarios.py
+# backend\app\routes\inventarios.py
 
 import base64
 from io import BytesIO
@@ -48,6 +48,24 @@ def success_response(message, extra=None):
 def ping():
     return success_response('Pong!')
 
+
+def _parse_int_nonneg(val, field_name):
+    """
+    Convierte a int y valida que sea >= 0.
+    - Si val es None o '', regresa None (para campos opcionales).
+    - Si no es convertible a int o es negativo, lanza ValueError con mensaje claro.
+    """
+    if val is None or (isinstance(val, str) and val.strip() == ''):
+        return None
+    try:
+        n = int(val)
+        if n < 0:
+            raise ValueError(f"{field_name} no puede ser negativo")
+        return n
+    except Exception:
+        raise ValueError(f"{field_name} debe ser un entero no negativo")
+
+
 # Crear un nuevo inventario (producto/aparato/unificado)
 @inventario_bp.route('/', methods=['POST'], strict_slashes=False)
 @jwt_required()
@@ -67,6 +85,15 @@ def crear_inventario():
 
         ahora = datetime.now(tz)
         codigo = normalizar_campo(data.get('codigo_interno')).upper()
+                # --- Validaciones numéricas ---
+        try:
+            gasto_sem = _parse_int_nonneg(data.get('gasto_sem'), 'gasto_sem')
+            gasto_mes = _parse_int_nonneg(data.get('gasto_mes'), 'gasto_mes')
+            pedido_mes = _parse_int_nonneg(data.get('pedido_mes'), 'pedido_mes')
+        except ValueError as ve:
+            return error_response(str(ve))
+        
+        
         nuevo = InventarioGeneral(
             tipo=normalizar_campo(data.get('tipo', 'producto')),
             nombre=normalizar_campo(data['nombre']),
@@ -77,13 +104,16 @@ def crear_inventario():
             unidad_medida=normalizar_campo(data.get('unidad_medida')),
             codigo_interno=codigo,
             no_equipo=normalizar_campo(data.get('no_equipo')),
-            gasto_sem=data.get('gasto_sem'),
-            gasto_mes=data.get('gasto_mes'),
-            pedido_mes=data.get('pedido_mes'),
+            gasto_sem=gasto_sem,
+            gasto_mes=gasto_mes,
+            pedido_mes=pedido_mes,
             semana_pedido=normalizar_campo(data.get('semana_pedido')),
             fecha_inventario=ahora,
             grupo_muscular=normalizar_campo(data.get('grupo_muscular')),
+            subcategoria=normalizar_campo(data.get('subcategoria', ''))  
+            
         )
+
 
         db.session.add(nuevo)
         db.session.commit()
@@ -352,16 +382,26 @@ def editar_inventario(inventario_id):
             'tipo', 'nombre', 'descripcion', 'marca', 'proveedor',
             'categoria', 'unidad_medida',
             'codigo_interno', 'no_equipo', 'gasto_sem', 'gasto_mes',
-            'pedido_mes', 'semana_pedido'
+            'pedido_mes', 'semana_pedido', 'subcategoria'
         ]
         for campo in campos:
             if campo in data:
                 valor = data[campo]
+                # Normaliza strings
                 if isinstance(valor, str):
                     valor = normalizar_campo(valor)
-                    if campo == 'codigo_interno':
+                    if campo == 'codigo_interno' and valor:
                         valor = valor.upper()
+
+                # Valida numéricos no negativos
+                if campo in ['gasto_sem', 'gasto_mes', 'pedido_mes']:
+                    try:
+                        valor = _parse_int_nonneg(valor, campo)
+                    except ValueError as ve:
+                        return error_response(str(ve))
+
                 setattr(inventario, campo, valor)
+
 
         inventario.fecha_inventario = datetime.now(tz)
         db.session.commit()
@@ -877,7 +917,7 @@ def importar_inventario():
                 marca=str(row['marca']).strip(),
                 proveedor=str(row['proveedor']).strip(),
                 categoria=str(row['categoria']).strip(),
-                unidad=str(row['unidad_medida']).strip(),
+                unidad_medida=str(row['unidad_medida']).strip(),
                 grupo_muscular=str(row['grupo_muscular']).strip(),
                 codigo_interno=str(row['codigo_interno']).strip()
             )
@@ -896,7 +936,7 @@ def plantilla_inventario():
     # Ajusta los campos a tu modelo
     columnas = [
         "nombre", "descripcion", "tipo", "marca", "proveedor",
-        "categoria", "unidad", "grupo_muscular", "codigo_interno"
+        "categoria", "unidad_medida", "grupo_muscular", "codigo_interno"
     ]
     # Fila de ejemplo (puedes poner más ejemplos o dejar en blanco)
     ejemplo = {
@@ -906,9 +946,10 @@ def plantilla_inventario():
         "marca": "Flex",
         "proveedor": "UltraGym",
         "categoria": "Maquinas",
-        "unidad": "pieza",
+        "unidad_medida": "pieza",
         "grupo_muscular": "Pecho",
-        "codigo_interno": "01PLBPFL"
+        "codigo_interno": "01PLBPFL",
+        "subcategoria": "Peso libre"
     }
     df = pd.DataFrame([ejemplo])
     output = io.BytesIO()

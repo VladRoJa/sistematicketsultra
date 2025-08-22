@@ -75,7 +75,7 @@ export class InventarioComponent implements OnInit {
     this.error = null;
     this.inventarioService.obtenerInventario().subscribe({
       next: data => {
-        this.inventarios = data;
+        this.inventarios = data.sort((a, b) => a.id - b.id);
         this.filtros = inicializarFiltros(this.inventarios, this.columnasFiltrables);
         this.inventariosFiltrados = [...this.inventarios];
         this.loading = false;

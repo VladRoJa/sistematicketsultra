@@ -5,18 +5,22 @@
 
 
   <div>
-    <button mat-flat-button color="accent" (click)="abrirDialogoImportar()">
+    <button mat-raised-button color="primary" (click)="abrirDialogoImportar()">
       <mat-icon>file_upload</mat-icon>
-      Importar
+      Importar archivo Excel
     </button>
     <input type="file" #fileInput hidden (change)="importarExcel($event)">
-    <button mat-flat-button color="primary" (click)="exportarInventario()">
+    <button mat-raised-button color="primary" (click)="exportarInventario()">
       <mat-icon>file_download</mat-icon>
-      Exportar
+      Exportar archivo Excel
     </button>
-    <button mat-flat-button color="primary" (click)="descargarPlantilla()">
+    <button mat-raised-button color="primary" (click)="descargarPlantilla()">
       <mat-icon>download</mat-icon>
-      Plantilla
+      Plantilla para importar
+      </button>
+    <button mat-raised-button color="accent" (click)="abrirDialogoAgregar()">
+      <mat-icon>add</mat-icon>
+      Agregar producto
     </button>
   </div>
 </div>
@@ -56,7 +60,7 @@
     </mat-cell>
   </ng-container>
 
-  <mat-header-row *matHeaderRowDef="displayedColumns"></mat-header-row>
+  <mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></mat-header-row>
   <mat-row *matRowDef="let row; columns: displayedColumns"></mat-row>
 </mat-table>
 

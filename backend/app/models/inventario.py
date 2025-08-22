@@ -1,4 +1,4 @@
-# app\models\inventario.py
+# backend\app\models\inventario.py
 
 from datetime import datetime
 from app. extensions import db
@@ -35,6 +35,8 @@ class InventarioGeneral(db.Model):
     fecha_inventario = db.Column(db.Date)
     grupo_muscular = db.Column(db.String(100))
     subcategoria = db.Column(db.String(100))
+    unidad_compra   = db.Column(db.String(50), nullable=True)
+    factor_compra   = db.Column(db.Integer, nullable=False, default=1)
                        
 
 
