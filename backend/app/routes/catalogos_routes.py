@@ -4,7 +4,7 @@ from flask_jwt_extended import jwt_required
 import pandas as pd
 from app. extensions import db
 from app.models.catalogos import (
-    CatalogoClasificacion, Proveedor, Marca, UnidadMedida, GrupoMuscular, TipoInventario
+    CatalogoClasificacion, Proveedor, Marca, UnidadMedida, GrupoMuscular, TipoInventario,CategoriaInventario
 )
 from app. utils.error_handler import manejar_error
 from rapidfuzz import fuzz
@@ -39,6 +39,7 @@ CAT_MODELS = {
     'tipos': TipoInventario,
     'clasificaciones': CatalogoClasificacion,
     'categorias': CatalogoClasificacion,
+    'categorias_inventario': CategoriaInventario,
     
 }
 

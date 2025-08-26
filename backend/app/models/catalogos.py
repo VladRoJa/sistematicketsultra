@@ -1,4 +1,4 @@
-#app\models\catalogos.py
+#backend\app\models\catalogos.py
 
 
 from app. extensions import db
