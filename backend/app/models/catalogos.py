@@ -50,8 +50,25 @@ class CategoriaInventario(db.Model):
     __tablename__ = 'catalogo_categoria_inventario'
 
     id = db.Column(db.Integer, primary_key=True)
-    nombre = db.Column(db.String(120), unique=True, nullable=False)
-    activo = db.Column(db.Boolean, default=True, nullable=False)
+    nombre = db.Column(db.String(120), nullable=False)
 
+    # Jerarquía tipo árbol
+    parent_id = db.Column(db.Integer, db.ForeignKey('catalogo_categoria_inventario.id'), nullable=True)
+    hijos = db.relationship(
+        'CategoriaInventario',
+        backref=db.backref('padre', remote_side=[id]),
+        cascade='all, delete-orphan'
+    )
+
+    # Nivel sugerido (1=raíz)
+    nivel = db.Column(db.Integer, nullable=False, default=1)
+
+    # Utilidades
+    activo = db.Column(db.Boolean, default=True, nullable=False)
     creado_en = db.Column(db.DateTime, server_default=db.func.now())
     actualizado_en = db.Column(db.DateTime, onupdate=db.func.now())
+
+    __table_args__ = (
+        db.UniqueConstraint('nombre', 'parent_id', name='uq_cat_inv_nombre_parent'),
+        db.Index('ix_cat_inv_parent', 'parent_id'),
+    )

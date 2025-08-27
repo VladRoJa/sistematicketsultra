@@ -14,6 +14,21 @@ config = context.config
 fileConfig(config.config_file_name)
 logger = logging.getLogger('alembic.env')
 
+# Tablas que Alembic debe ignorar al autogenerar
+IGNORE_TABLES = {
+    "migraciones_aplicadas",
+}
+
+def include_object(object, name, type_, reflected, compare_to):
+    # Ignorar tablas externas/no modeladas
+    if type_ == "table" and name in IGNORE_TABLES:
+        return False
+    # (Opcional) Ignorar índices del sistema por limpieza visual
+    if type_ == "index" and name.startswith("pg_"):
+        return False
+    return True
+
+
 
 def get_engine():
     try:
@@ -65,7 +80,7 @@ def run_migrations_offline():
     """
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
-        url=url, target_metadata=get_metadata(), literal_binds=True
+        url=url, target_metadata=get_metadata(), literal_binds=True, include_object=include_object
     )
 
     with context.begin_transaction():
@@ -93,6 +108,9 @@ def run_migrations_online():
     conf_args = current_app.extensions['migrate'].configure_args
     if conf_args.get("process_revision_directives") is None:
         conf_args["process_revision_directives"] = process_revision_directives
+        
+    if conf_args.get("include_object") is None:
+        conf_args["include_object"] = include_object    
 
     connectable = get_engine()
 
