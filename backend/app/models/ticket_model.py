@@ -62,60 +62,60 @@ class Ticket(db.Model):
         except Exception:
             return False
 
-def to_dict(self):
-    def format_fecha_corta(dt: datetime | None) -> str:
-        return dt.astimezone(pytz.timezone("America/Tijuana")).strftime('%d/%m/%y') if dt else "N/A"
+    def to_dict(self):
+        def format_fecha_corta(dt: datetime | None) -> str:
+            return dt.astimezone(pytz.timezone("America/Tijuana")).strftime('%d/%m/%y') if dt else "N/A"
 
-    # 🔹 NUEVO: resolver categoría/subcategoría/detalle con fallback a Inventario
-    inv_cat = self.inventario.categoria if self.inventario else None
-    inv_subcat = self.inventario.subcategoria if self.inventario else None
-    inv_desc = getattr(self.inventario, 'descripcion', None) if self.inventario else None
+        # 🔹 NUEVO: resolver categoría/subcategoría/detalle con fallback a Inventario
+        inv_cat = self.inventario.categoria if self.inventario else None
+        inv_subcat = self.inventario.subcategoria if self.inventario else None
+        inv_desc = getattr(self.inventario, 'descripcion', None) if self.inventario else None
 
-    cat_resuelta = self.categoria or inv_cat
-    subcat_resuelta = self.subcategoria or inv_subcat
-    detalle_resuelto = self.detalle or inv_desc
+        cat_resuelta = self.categoria or inv_cat
+        subcat_resuelta = self.subcategoria or inv_subcat
+        detalle_resuelto = self.detalle or inv_desc
 
-    return {
-        'id': self.id,
-        'descripcion': self.descripcion,
-        'username': self.username,
-        'estado': self.estado,
-        'fecha_creacion': format_datetime(self.fecha_creacion),
-        'sucursal_id': self.sucursal_id,
-        'departamento_id': self.departamento_id,
-        'departamento_nombre': self.departamento.nombre if self.departamento else "N/A",
-        'fecha_en_progreso': format_datetime(self.fecha_en_progreso),
-        'criticidad': self.criticidad,
-        'clasificacion_id': self.clasificacion_id,
-        'clasificacion_nombre': self.clasificacion.nombre if self.clasificacion else None,
-        'jerarquia_clasificacion': self._obtener_jerarquia_clasificacion(),
-        'fecha_finalizado': format_datetime(self.fecha_finalizado),
-        'fecha_solucion': self.fecha_solucion.isoformat() if self.fecha_solucion else None,
-        'necesita_refaccion': self.necesita_refaccion,
-        'descripcion_refaccion': self.descripcion_refaccion,
-        'problema_detectado': self.problema_detectado,
-        'historial_fechas': [
-            {**item} for item in self.historial_fechas or [] if isinstance(item, dict)
-        ],
-        'url_evidencia': self.url_evidencia,
+        return {
+            'id': self.id,
+            'descripcion': self.descripcion,
+            'username': self.username,
+            'estado': self.estado,
+            'fecha_creacion': format_datetime(self.fecha_creacion),
+            'sucursal_id': self.sucursal_id,
+            'departamento_id': self.departamento_id,
+            'departamento_nombre': self.departamento.nombre if self.departamento else "N/A",
+            'fecha_en_progreso': format_datetime(self.fecha_en_progreso),
+            'criticidad': self.criticidad,
+            'clasificacion_id': self.clasificacion_id,
+            'clasificacion_nombre': self.clasificacion.nombre if self.clasificacion else None,
+            'jerarquia_clasificacion': self._obtener_jerarquia_clasificacion(),
+            'fecha_finalizado': format_datetime(self.fecha_finalizado),
+            'fecha_solucion': self.fecha_solucion.isoformat() if self.fecha_solucion else None,
+            'necesita_refaccion': self.necesita_refaccion,
+            'descripcion_refaccion': self.descripcion_refaccion,
+            'problema_detectado': self.problema_detectado,
+            'historial_fechas': [
+                {**item} for item in self.historial_fechas or [] if isinstance(item, dict)
+            ],
+            'url_evidencia': self.url_evidencia,
 
-        # 🔹 NUEVO: exponer resueltos al to_dict (para la tabla de tickets)
-        'categoria': cat_resuelta,
-        'subcategoria': subcat_resuelta,
-        'detalle': detalle_resuelto,
+            # 🔹 NUEVO: exponer resueltos al to_dict (para la tabla de tickets)
+            'categoria': cat_resuelta,
+            'subcategoria': subcat_resuelta,
+            'detalle': detalle_resuelto,
 
-        'inventario': {
-            'id': self.inventario.id if self.inventario else None,
-            'nombre': self.inventario.nombre if self.inventario else None,
-            'categoria': self.inventario.categoria if self.inventario else None,
-            'marca': self.inventario.marca if self.inventario else None,
-            'codigo_interno': self.inventario.codigo_interno if self.inventario else None,
-            'subcategoria': self.inventario.subcategoria if self.inventario else None,
-        } if self.inventario else None,
-        'ubicacion': self.ubicacion,
-        'equipo': self.equipo,
-        'sucursal_id_destino': self.sucursal_id_destino,
-    }
+            'inventario': {
+                'id': self.inventario.id if self.inventario else None,
+                'nombre': self.inventario.nombre if self.inventario else None,
+                'categoria': self.inventario.categoria if self.inventario else None,
+                'marca': self.inventario.marca if self.inventario else None,
+                'codigo_interno': self.inventario.codigo_interno if self.inventario else None,
+                'subcategoria': self.inventario.subcategoria if self.inventario else None,
+            } if self.inventario else None,
+            'ubicacion': self.ubicacion,
+            'equipo': self.equipo,
+            'sucursal_id_destino': self.sucursal_id_destino,
+        }
 
         
         
