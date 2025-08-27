@@ -201,7 +201,7 @@ def update_ticket_status(id):
             return jsonify({"mensaje": "Estado es requerido"}), 400
 
         ticket.estado = estado
-        ahora = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+        ahora = datetime.now(timezone.utc)
 
         # ---- Asignación de fechas por estado ----
         if estado == "finalizado":

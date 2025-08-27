@@ -1,3 +1,5 @@
+//frontend\src\app\inventario\inventario.component.ts
+
 import { Component, OnInit, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatTableModule } from '@angular/material/table';

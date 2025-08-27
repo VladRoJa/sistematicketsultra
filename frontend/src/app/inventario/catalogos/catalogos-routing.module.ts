@@ -19,7 +19,7 @@ const routes: Routes = [
   { path: 'unidades', component: CatalogoCrudComponent, data: { tipo: 'unidades', titulo: 'Unidades de Medida' } },
   { path: 'gruposmusculares', component: CatalogoCrudComponent, data: { tipo: 'gruposmusculares', titulo: 'Grupo muscular' } },
   { path: 'tipos', component: CatalogoCrudComponent, data: { tipo: 'tipos', titulo: 'Tipos de Inventario' } },
-
+  { path: 'categorias', component: CatalogoCrudComponent, data: { tipo: 'categorias', titulo: 'Categorias de Inventario' } },
   
     
   ]

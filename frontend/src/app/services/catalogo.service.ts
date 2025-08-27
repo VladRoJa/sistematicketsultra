@@ -77,7 +77,16 @@ export class CatalogoService {
       .pipe(map(res => res.data || []));
   }
   listarElemento(catalogo: string): Observable<CatalogoElemento[]> {
-    return this.http.get<any>(`${this.apiUrl}/${catalogo}`)
+    // 🚦 Redirección explícita para categorías de inventario
+    if (catalogo === 'categorias') {
+      return this.http
+        .get<{ data: CatalogoElemento[] }>(`${environment.apiUrl}/catalogos/inventario/categorias`)
+        .pipe(map(resp => resp.data ?? []));
+    }
+
+    // 🔁 Resto de catálogos planos usan el genérico /catalogos/:catalogo
+    return this.http
+      .get<any>(`${this.apiUrl}/${catalogo}`)
       .pipe(map(res => res.data || []));
   }
   importarArchivo(catalogo: string, file: File): Observable<any> {

@@ -96,6 +96,7 @@ export class LayoutComponent implements OnInit, AfterViewInit {
               { label: 'Unidades de Medida', path: '/catalogos/unidades' },
               { label: 'Grupo Muscular', path: '/catalogos/gruposmusculares' },
               { label: 'Tipos de Inventario', path: '/catalogos/tipos' },
+              { label: 'Categorias de Inventario', path: '/catalogos/categorias' },
             ]
           },
           {

@@ -58,8 +58,6 @@ export class CatalogoCrudComponent implements OnInit {
     private route: ActivatedRoute,
     public authService: AuthService
   ) {
-    this.tipo = this.route.snapshot.data['tipo'];
-    this.titulo = this.route.snapshot.data['titulo'];
     this.form = this.fb.group({
       nombre: ['', Validators.required],
       abreviatura: [''] // Solo para unidades de medida, lo puedes ocultar por tipo
@@ -67,12 +65,26 @@ export class CatalogoCrudComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    this.cargarElementos();
+    // 🔁 Escucha los cambios de la ruta hija (/catalogos/marcas|proveedores|categorias|...)
+    this.route.data.subscribe((data) => {
+      // Actualiza tipo/titulo al volar
+      this.tipo = data['tipo'];
+      this.titulo = data['titulo'];
+
+      // Limpia el formulario sin disparar valueChanges innecesarios
+      this.form.reset({ nombre: '', abreviatura: '' }, { emitEvent: false });
+
+      // Vuelve a cargar el listado del catálogo correcto
+      this.cargarElementos();
+    });
+
+    // Mantén tu autocomplete escuchando cambios del campo
     this.elementosFiltrados$ = this.form.get('nombre')!.valueChanges.pipe(
       startWith(''),
       map(value => this.filtrarElementos(value || ''))
     );
   }
+
 
   cargarElementos() {
     this.loading = true;

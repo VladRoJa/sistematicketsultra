@@ -1,3 +1,5 @@
+#backend\app\routes\catalogos_routes.py
+
 import io
 from flask import Blueprint, request, jsonify, send_file
 from flask_jwt_extended import jwt_required
@@ -348,23 +350,25 @@ def todas_las_clasificaciones():
 @jwt_required()
 def categorias_inventario_distintas():
     """
-    Devuelve categorías únicas reales del inventario (InventarioGeneral.categoria).
-    Evita mezclar con 'clasificaciones' de tickets.
+    Devuelve el catálogo oficial de categorías de inventario desde
+    la tabla catalogo_categoria_inventario (solo activas), ordenadas por nombre.
     """
     try:
-        # Distintas + ordenadas (case-insensitive)
-        rows = db.session.query(InventarioGeneral.categoria).filter(
-            InventarioGeneral.categoria.isnot(None),
-            InventarioGeneral.categoria != ''
-        ).distinct().all()
-
-        # rows = [('Limpieza',), ('Maquinas',), ...]
-        categorias = sorted(
-            { (r[0] or '').strip() for r in rows if (r[0] or '').strip() },
-            key=lambda s: s.lower()
+        filas = (
+            db.session.query(CategoriaInventario)
+            .filter(CategoriaInventario.activo.is_(True))
+            .order_by(CategoriaInventario.nombre.asc())
+            .all()
         )
 
-        data = [{"id": i+1, "nombre": nombre} for i, nombre in enumerate(categorias)]
+        data = [
+            {
+                "id": fila.id,
+                "nombre": (fila.nombre or "").strip(),
+                "activo": bool(fila.activo),
+            }
+            for fila in filas
+        ]
         return respuesta_ok(data)
     except Exception as e:
-        return manejar_error(e, "categorias_inventario_distintas")
+        return manejar_error(e, "categorias_inventario_listado")
