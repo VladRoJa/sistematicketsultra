@@ -238,13 +238,12 @@ th.filtro-activo .header-button { background: #e6f4ff; border-radius: 6px; }
 th:nth-child(1),  td:nth-child(1)  { width: 56px;  }
 th:nth-child(2),  td:nth-child(2)  { width: 120px; }
 th:nth-child(3),  td:nth-child(3)  { width: 160px; }
-th:nth-child(4),  td:nth-child(4)  { width: var(--desc-col-width); } /* Descripción fija */
 th:nth-child(5),  td:nth-child(5)  { width: 120px; }
 th:nth-child(6),  td:nth-child(6)  { width: 92px;  }
 th:nth-child(7),  td:nth-child(7)  { width: 80px;  }
-th:nth-child(8),  td:nth-child(8)  { width: 160px; }
-th:nth-child(9),  td:nth-child(9)  { width: 160px; }
-th:nth-child(10), td:nth-child(10) { width: 160px; }
+th:nth-child(8),  td:nth-child(8)  { width: 250px; }
+th:nth-child(9),  td:nth-child(9)  { width: 250px; }
+th:nth-child(10), td:nth-child(10) { width: 250px; }
 th:nth-child(11), td:nth-child(11) { width: 140px; }
 th:nth-child(12), td:nth-child(12) { width: 140px; }
 th:nth-child(13), td:nth-child(13) { width: 120px; }
