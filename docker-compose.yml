@@ -4,7 +4,7 @@
 version: '3.8'
 services:
   db:
-    image: postgres:15  # Puedes cambiar la versión si quieres
+    image: postgres:15 
     restart: unless-stopped
     environment:
       POSTGRES_DB: sistema_tickets
@@ -30,6 +30,8 @@ services:
       - "5000:5000"
     networks:
       - backend-net
+    volumes:
+      - /home/adminrdp/sistematicketsultra/uploads:/home/adminrdp/sistematicketsultra/uploads
 
 
   frontend:

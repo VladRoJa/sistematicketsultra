@@ -1,4 +1,7 @@
-from flask import Blueprint, jsonify, send_file, request
+#backend\app\routes\reportes.py
+
+
+from flask import Blueprint, jsonify, send_file, request, current_app
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from app. extensions import db
 from app.models.inventario import (
@@ -12,6 +15,14 @@ from app. utils.cloudinary_upload import upload_image_to_cloudinary
 from io import BytesIO
 from datetime import datetime, timezone
 import pandas as pd
+import os
+from uuid import uuid4
+from pathlib import Path
+from werkzeug.utils import secure_filename
+
+from app.utils.local_upload import upload_image_to_local
+
+
 
 reportes_bp = Blueprint('reportes', __name__, url_prefix='/api/reportes')
 
@@ -256,10 +267,23 @@ def reportar_error():
         url_imagen = None
         if imagen:
             try:
-                url_imagen = upload_image_to_cloudinary(imagen)
+                storage_backend = (
+                    current_app.config.get('STORAGE_BACKEND')
+                    or os.getenv('STORAGE_BACKEND', 'cloudinary')
+                ).strip().lower()
+
+                print(f"🗄️ Storage backend seleccionado: {storage_backend}")
+
+                if storage_backend == 'local':
+                    url_imagen = upload_image_to_local(imagen)
+                else:
+                    # Fallback a cloudinary si el valor es desconocido
+                    url_imagen = upload_image_to_cloudinary(imagen)
+
                 print("📸 Imagen subida correctamente:", url_imagen)
             except Exception as e:
                 print("❌ Error al subir imagen:", str(e))
+
 
         if not descripcion:
             print("⚠️ Descripción vacía, cancelando reporte")
@@ -293,3 +317,4 @@ def reportar_error():
     except Exception as e:
         print("❌ Excepción atrapada en reportar_error:", str(e))
         return manejar_error(e, "Reportar error con imagen")
+
