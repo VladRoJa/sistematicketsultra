@@ -1,23 +1,23 @@
 /* ========== Vars (ajusta la anchura de la columna aquí) ========== */
 :root {
-  --desc-col-width: 360px;
-  --table-min-width: 1200px;
+  --desc-col-width: 400px;
+  --table-min-width: 2360px;
 }
 
 /* ========= Base ========= */
 body { font-family: Arial, sans-serif; margin: 0; padding: 0; overflow-x: hidden; }
 
 /* ========= Tabla ========= */
-.table-container {
-  width: 100%;
-  max-width: 100vw;
-  margin: 0 auto;
-  padding: 0;
-  overflow: auto;             /* scroll si hace falta */
-  position: relative;
+.table-container{
+  width:100%;
+  max-width:100vw;
+  margin:0 auto;
+  padding:0;
+  overflow:auto;
+  position:relative;
 }
 
-table {
+table{
   table-layout: fixed;
   width: 100%;
   min-width: var(--table-min-width);
@@ -29,7 +29,9 @@ th, td {
   border: 1px solid #ddd;
   padding: 12px;
   text-align: center;
-  white-space: nowrap;
+  overflow: hidden;          
+  text-overflow: ellipsis;   
+  white-space: nowrap; 
 }
 
 th {
@@ -224,3 +226,28 @@ th.filtro-activo .header-button { background: #e6f4ff; border-radius: 6px; }
   .filtro-unificado-wrapper { grid-template-columns: 1fr; gap: 6px; }
   .fu-acciones, .acciones-filtro { justify-content: flex-start; flex-wrap: wrap; }
 }
+
+
+
+/* Anchos por columna (ajústar al gusto)
+   Índices: 
+   1 Id | 2 Categoría | 3 Aparato | 4 Descripción | 5 Sucursal | 6 Estado | 7 Criticidad
+   8 F. Creación | 9 F. En Progreso | 10 F. Finalizado | 11 Depto | 12 Subcat | 13 Detalle
+   14 Acciones | 15 F. Solución | 16 Historial
+*/
+th:nth-child(1),  td:nth-child(1)  { width: 56px;  }
+th:nth-child(2),  td:nth-child(2)  { width: 120px; }
+th:nth-child(3),  td:nth-child(3)  { width: 160px; }
+th:nth-child(4),  td:nth-child(4)  { width: var(--desc-col-width); } /* Descripción fija */
+th:nth-child(5),  td:nth-child(5)  { width: 120px; }
+th:nth-child(6),  td:nth-child(6)  { width: 92px;  }
+th:nth-child(7),  td:nth-child(7)  { width: 80px;  }
+th:nth-child(8),  td:nth-child(8)  { width: 160px; }
+th:nth-child(9),  td:nth-child(9)  { width: 160px; }
+th:nth-child(10), td:nth-child(10) { width: 160px; }
+th:nth-child(11), td:nth-child(11) { width: 140px; }
+th:nth-child(12), td:nth-child(12) { width: 140px; }
+th:nth-child(13), td:nth-child(13) { width: 120px; }
+th:nth-child(14), td:nth-child(14) { width: 150px; }
+th:nth-child(15), td:nth-child(15) { width: 130px; }
+th:nth-child(16), td:nth-child(16) { width: 110px; }

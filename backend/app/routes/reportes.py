@@ -284,7 +284,7 @@ def reportar_error():
             return jsonify({"error": "Descripción es obligatoria"}), 400
 
         nuevo_ticket = Ticket(
-            descripcion=f"[BUG] Módulo: {modulo} | {descripcion or 'Sin descripción'}",
+            descripcion=f"[BUG]  | {descripcion or 'Sin descripción'}",
             username=user.username,
             sucursal_id=user.sucursal_id,
             estado='abierto',
