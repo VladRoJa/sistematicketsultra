@@ -1,5 +1,6 @@
 <!-- frontend-angular\src\app\pantalla-ver-tickets\pantalla-ver-tickets.component.html -->
-<div class="table-container" *ngIf="!loading">
+<div class="table-container" *ngIf="!loading"     [style.--desc-col-width]="'420px'"
+     [style.--table-min-width]="'2486px'">
 
   <div style="display:flex; justify-content:flex-end; margin:6px 0;">
     <button mat-stroked-button (click)="toggleFiltros()">
