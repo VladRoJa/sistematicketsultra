@@ -4,6 +4,11 @@
   --table-min-width: 2320px;
 }
 
+:host{
+  --desc-col-width: 420px;
+  --table-min-width: 2486px;
+}
+
 /* Anchos por columna */
 col.c-id  { width: 56px; }
 col.c-cat { width: 120px; }
