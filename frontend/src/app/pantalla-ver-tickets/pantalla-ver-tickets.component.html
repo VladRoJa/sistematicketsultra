@@ -588,30 +588,23 @@
               build
             </mat-icon>
           </ng-container>
-        </td>
-        <td class="col-descripcion">
-          <ng-container *ngIf="getBugParts(ticket.descripcion) as parts">
-            <!-- Si hay prefijo tipo [BUG], lo volvemos botón -->
-            <ng-container *ngIf="parts.prefix; else plainDesc">
-              <button
-                mat-button
-                class="bug-link"
-                (click)="openEvidencia(ticket)"
-                [disabled]="!ticket.url_evidencia"
-                [matTooltip]="ticket.url_evidencia ? 'Abrir evidencia' : 'Sin evidencia'"
-              >
-                {{ parts.prefix }}
-              </button>
-              <span>&nbsp;{{ parts.rest }}</span>
+          <td class="col-descripcion">
+            <ng-container *ngIf="getBugParts(ticket.descripcion) as parts">
+              <ng-container *ngIf="parts.prefix; else plainDesc">
+                <button
+                  type="button"
+                  class="tag tag-bug"
+                  (click)="openEvidencia(ticket)"
+                  [disabled]="!ticket.url_evidencia"
+                  [ngClass]="{'is-disabled': !ticket.url_evidencia}"
+                >
+                  {{ parts.prefix | slice:1:-1 }} <!-- muestra BUG sin corchetes -->
+                </button>
+                <span class="desc-rest">&nbsp;{{ parts.rest }}</span>
+              </ng-container>
+              <ng-template #plainDesc>{{ ticket.descripcion }}</ng-template>
             </ng-container>
-
-            <!-- Si no hay prefijo [..], mostramos la descripción tal cual -->
-            <ng-template #plainDesc>
-              {{ ticket.descripcion }}
-            </ng-template>
-          </ng-container>
-        </td>
-
+          </td>
         <td>{{ getNombreSucursal(ticket) }}</td>
         <td>{{ ticket.estado }}</td>
         <td>{{ ticket.criticidad }}</td>

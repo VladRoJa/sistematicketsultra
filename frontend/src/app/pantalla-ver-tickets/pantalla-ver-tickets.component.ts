@@ -42,6 +42,8 @@ import { EditarFechaSolucionModalComponent } from './modals/editar-fecha-solucio
 import { CatalogoService } from '../services/catalogo.service';
 import { mostrarAlertaToast } from '../utils/alertas';
 import { SucursalesService } from '../services/sucursales.service';
+import { EvidenciaPreviewComponent } from './modals/evidencia-preview.component';
+
 
 
 // Filtro unificado (solo 'categoria' por ahora)
@@ -1267,11 +1269,17 @@ private construirOpcionesDetalle(origen: 'all' | 'filtered' = 'all'): void {
 openEvidencia(t: Ticket): void {
   const url = (t?.url_evidencia || '').trim();
   if (!url) {
-    // Usa tu util si quieres feedback; si no, deja el return mudo.
     try { mostrarAlertaToast?.('Este ticket no tiene evidencia'); } catch {}
     return;
   }
-  window.open(url, '_blank', 'noopener,noreferrer');
+  this.dialog.open(EvidenciaPreviewComponent, {
+    data: { url, titulo: `Ticket #${t.id}` },
+    width: 'min(90vw, 1100px)',
+    maxWidth: '90vw',
+    autoFocus: false,
+    restoreFocus: false,
+    panelClass: 'dlg-evidencia'
+  });
 }
 
 /** Separa el prefijo [ALGO] (ej. [BUG]) del resto del texto de descripción */
