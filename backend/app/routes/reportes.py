@@ -11,7 +11,6 @@ from app.models.user_model import UserORM
 from app.models.sucursal_model import Sucursal
 from app.models import Ticket
 from app. utils.error_handler import manejar_error
-from app. utils.cloudinary_upload import upload_image_to_cloudinary
 from io import BytesIO
 from datetime import datetime, timezone
 import pandas as pd
@@ -269,16 +268,13 @@ def reportar_error():
             try:
                 storage_backend = (
                     current_app.config.get('STORAGE_BACKEND')
-                    or os.getenv('STORAGE_BACKEND', 'cloudinary')
+                    or os.getenv('STORAGE_BACKEND')
                 ).strip().lower()
 
                 print(f"🗄️ Storage backend seleccionado: {storage_backend}")
 
                 if storage_backend == 'local':
                     url_imagen = upload_image_to_local(imagen)
-                else:
-                    # Fallback a cloudinary si el valor es desconocido
-                    url_imagen = upload_image_to_cloudinary(imagen)
 
                 print("📸 Imagen subida correctamente:", url_imagen)
             except Exception as e:

@@ -67,9 +67,9 @@ class Config:
     SESSION_FILE_MODE = 600
 
     # Cloudinary
-    CLOUDINARY_CLOUD_NAME = os.environ.get('CLOUDINARY_CLOUD_NAME')
-    CLOUDINARY_API_KEY = os.environ.get('CLOUDINARY_API_KEY')
-    CLOUDINARY_API_SECRET = os.environ.get('CLOUDINARY_API_SECRET')
+    #CLOUDINARY_CLOUD_NAME = os.environ.get('CLOUDINARY_CLOUD_NAME')
+    #CLOUDINARY_API_KEY = os.environ.get('CLOUDINARY_API_KEY')
+    #CLOUDINARY_API_SECRET = os.environ.get('CLOUDINARY_API_SECRET')
 
 
     # Sesiones
@@ -82,8 +82,3 @@ class Config:
     SESSION_FILE_DIR = "./flask_session"
     SESSION_FILE_THRESHOLD = 100
     SESSION_FILE_MODE = 600
-
-    # Cloudinary
-    CLOUDINARY_CLOUD_NAME = os.environ.get('CLOUDINARY_CLOUD_NAME')
-    CLOUDINARY_API_KEY = os.environ.get('CLOUDINARY_API_KEY')
-    CLOUDINARY_API_SECRET = os.environ.get('CLOUDINARY_API_SECRET')
