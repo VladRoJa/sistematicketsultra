@@ -305,7 +305,8 @@ def reportar_error():
             necesita_refaccion=False,
             descripcion_refaccion=None,
             url_evidencia=url_imagen,
-            fecha_creacion=datetime.now(timezone.utc)
+            fecha_creacion=datetime.now(timezone.utc),
+            sucursal_id_destino=user.sucursal_id
         )
 
         db.session.add(nuevo_ticket)
