@@ -1,188 +1,220 @@
+/* ========== Vars (ajusta la anchura de la columna aquí) ========== */
+:root {
+  --desc-col-width: 520px;
+  --table-min-width: 1200px;
+}
+
 /* ========= Base ========= */
-body{font-family:Arial, sans-serif;margin:0;padding:0;overflow-x:hidden}
+body { font-family: Arial, sans-serif; margin: 0; padding: 0; overflow-x: hidden; }
 
 /* ========= Tabla ========= */
-.table-container{
-  width:100%;
-  max-width:100vw;
-  margin:0 auto;
-  padding:0;
-  overflow:auto;            /* scroll horizontal/vertical si hace falta */
-  position:relative;
+.table-container {
+  width: 100%;
+  max-width: 100vw;
+  margin: 0 auto;
+  padding: 0;
+  overflow: auto;             /* scroll si hace falta */
+  position: relative;
 }
-table{width:100%;border-collapse:collapse;min-width:1200px;font-size:14px}
-th,td{border:1px solid #ddd;padding:12px;text-align:center;white-space:nowrap}
-th{background:#007bff;color:#fff;position:sticky;top:0;z-index:10}
-tr:nth-child(even){background:#f2f2f2}
 
-/* Header de columna con filtro activo (borde celeste suave) */
-th.filtro-activo .header-button{background:#e6f4ff;border-radius:6px}
+table {
+  width: 100%;
+  min-width: var(--table-min-width);
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+th, td {
+  border: 1px solid #ddd;
+  padding: 12px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+th {
+  background: #007bff;
+  color: #fff;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+tr:nth-child(even) { background: #f2f2f2; }
+
+/* Header con filtro activo */
+th.filtro-activo .header-button { background: #e6f4ff; border-radius: 6px; }
 
 /* Botón del encabezado */
-.header-button{
-  color:#fff !important;display:flex;align-items:center;gap:.25rem;font-weight:700
-}
-
-/* ========= Menús de filtro (los dropdowns de cada th) ========= */
-.menu-filtro{
-  padding:.5rem 1rem;display:flex;flex-direction:column;gap:.5rem;min-width:200px
-}
-.menu-filtro label{font-weight:700;margin-bottom:.25rem}
-.buscador-filtro{width:100%}
-.opciones-scrollable{max-height:200px;overflow:auto;margin-top:.5rem}
-
-.dia-con-ticket.mat-calendar-body-cell .mat-calendar-body-cell-content::after{
-  content:'';display:block;width:5px;height:5px;border-radius:50%;background:green;margin:2px auto 0
-}
-
-/* ========= Panel de filtros unificado (arriba de la tabla) ========= */
-/* Layout: [Select fijo] [Buscador 1/2] [Checklist+botones 1/2] */
-.filtro-unificado-wrapper{
-  display:grid;
-  grid-template-columns:160px 1fr 1fr;
-  gap:8px;
-  align-items:start;
-  margin:8px 0;
-}
-
-/* columnas */
-.columna-select{min-width:160px}
-.columna-buscador{width:100%}
-.columna-checklist{display:flex;flex-direction:column}
-
-/* checklist compacto con scroll bajo */
-.fu-checklist{
-  max-height:110px;                 /* <- compacta el alto del bloque */
-  overflow:auto;
-  padding:6px 8px;
-  border:1px solid #ddd;
-  border-radius:8px;
-}
-
-/* botones en una sola fila */
-.fu-acciones,.acciones-filtro{display:flex;gap:8px;align-items:center;margin-top:8px}
-
-/* Botón mostrar/ocultar filtros (barra superior) */
-.table-container > div:first-child button[mat-stroked-button]{
-  line-height:32px;height:32px;padding:0 12px
-}
-
-/* ========= Compactación de Angular Material (MDC) para este panel ========= */
-/* Reduce la altura visual de los form-field dentro del filtro unificado */
-.filtro-unificado-wrapper .mat-mdc-form-field-infix{padding-block:6px}
-.filtro-unificado-wrapper .mat-mdc-form-field-subscript-wrapper{display:none}
-.filtro-unificado-wrapper .mdc-text-field--filled .mdc-line-ripple::after{transform:none}
-
-/* Checkboxes algo más densos */
-.filtro-unificado-wrapper .mdc-form-field>label{font-size:14px}
-
-/* ========= Paginación & export ========= */
-.pagination-export-container{
-  position:sticky;bottom:0;left:0;background:#fff;display:flex;align-items:center;
-  padding:10px 20px;z-index:10;margin-bottom:10px
-}
-.pagination-container{flex:1;display:flex;justify-content:center;align-items:center;gap:10px}
-.pagination-button{background:#007bff;color:#fff;border:none;padding:8px 15px;border-radius:5px;cursor:pointer;transition:.2s}
-.pagination-button:hover:not(:disabled){background:#0056b3}
-.pagination-button:disabled{background:#ccc;cursor:not-allowed}
-.export-container{display:flex;justify-content:flex-end;margin-left:auto}
-.boton-exportar{background:#343a40;color:#fff;padding:8px 15px;border:none;border-radius:5px;cursor:pointer;transition:.2s}
-.boton-exportar:hover{background:#23272b}
-.boton-limpiar-todo{background:#e53935;color:#fff;padding:8px 16px;border:none;border-radius:6px;cursor:pointer;font-weight:700;margin-left:10px;transition:.3s}
-.boton-limpiar-todo:hover{background:#c62828}
-
-/* ========= Varias utilidades que sí usas ========= */
-.w-full{width:100%}
-.text-sm{font-size:.875rem}
-.text-xs{font-size:.75rem}
-.mb-1{margin-bottom:.25rem}.mb-2{margin-bottom:.5rem}
-.mt-2{margin-top:.5rem}.ml-2{margin-left:.5rem}
-.flex{display:flex}.gap-2{gap:.5rem}
-
-/* ========= Responsivo básico ========= */
-@media (max-width:768px){
-  th,td{font-size:12px;padding:6px}
-  .filtro-unificado-wrapper{grid-template-columns:1fr;gap:6px}
-  .fu-acciones,.acciones-filtro{justify-content:flex-start;flex-wrap:wrap}
-}
-
-
-/* Overlay de pantalla completa */
-.modal-asignar-fecha-overlay {
-  position: fixed;
-  inset: 0; /* top:0; right:0; bottom:0; left:0 */
+.header-button {
+  color: #fff !important;
   display: flex;
   align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.45);
-  z-index: 2000; /* por encima de la tabla/headers */
+  gap: .25rem;
+  font-weight: 700;
 }
 
-/* Caja del modal (el componente) */
-:host ::ng-deep app-asignar-fecha-modal {
-  width: 95vw;
-  max-width: 720px;
+/* ========= Menús de filtro ========= */
+.menu-filtro {
+  padding: .5rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+  min-width: 200px;
+}
+.menu-filtro label { font-weight: 700; margin-bottom: .25rem; }
+.buscador-filtro { width: 100%; }
+.opciones-scrollable { max-height: 200px; overflow: auto; margin-top: .5rem; }
+
+/* Punto verde en el calendario */
+.dia-con-ticket.mat-calendar-body-cell .mat-calendar-body-cell-content::after{
+  content: '';
+  display: block;
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: green;
+  margin: 2px auto 0;
+}
+
+/* ========= Panel de filtros unificado ========= */
+.filtro-unificado-wrapper {
+  display: grid;
+  grid-template-columns: 160px 1fr 1fr;
+  gap: 8px;
+  align-items: start;
+  margin: 8px 0;
+}
+.columna-select { min-width: 160px; }
+.columna-buscador { width: 100%; }
+.columna-checklist { display: flex; flex-direction: column; }
+
+.fu-checklist {
+  max-height: 110px;
+  overflow: auto;
+  padding: 6px 8px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+}
+.fu-acciones, .acciones-filtro {
+  display: flex; gap: 8px; align-items: center; margin-top: 8px;
+}
+
+/* Compactación de Material sólo dentro del panel */
+.filtro-unificado-wrapper .mat-mdc-form-field-infix { padding-block: 6px; }
+.filtro-unificado-wrapper .mat-mdc-form-field-subscript-wrapper { display: none; }
+.filtro-unificado-wrapper .mdc-text-field--filled .mdc-line-ripple::after { transform: none; }
+.filtro-unificado-wrapper .mdc-form-field > label { font-size: 14px; }
+
+/* Botón mostrar/ocultar filtros (barra superior) */
+.table-container > div:first-child button[mat-stroked-button] {
+  line-height: 32px; height: 32px; padding: 0 12px;
+}
+
+/* ========= Paginación & export ========= */
+.pagination-export-container {
+  position: sticky; bottom: 0; left: 0;
   background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 12px 36px rgba(0,0,0,.3);
-  padding: 16px;
+  display: flex; align-items: center;
+  padding: 10px 20px;
+  z-index: 10;
+  margin-bottom: 10px;
+}
+.pagination-container { flex: 1; display: flex; justify-content: center; align-items: center; gap: 10px; }
+.pagination-button {
+  background: #007bff; color: #fff; border: none;
+  padding: 8px 15px; border-radius: 5px; cursor: pointer; transition: .2s;
+}
+.pagination-button:hover:not(:disabled) { background: #0056b3; }
+.pagination-button:disabled { background: #ccc; cursor: not-allowed; }
+.export-container { display: flex; justify-content: flex-end; margin-left: auto; }
+.boton-exportar {
+  background: #343a40; color: #fff; padding: 8px 15px; border: none; border-radius: 5px; cursor: pointer; transition: .2s;
+}
+.boton-exportar:hover { background: #23272b; }
+.boton-limpiar-todo {
+  background: #e53935; color: #fff; padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-weight: 700; margin-left: 10px; transition: .3s;
+}
+.boton-limpiar-todo:hover { background: #c62828; }
+
+/* ========= Modal ========= */
+.modal-asignar-fecha-overlay {
+  position: fixed; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 2000;
+}
+:host ::ng-deep app-asignar-fecha-modal {
+  width: 95vw; max-width: 720px; background: #fff; border-radius: 12px;
+  box-shadow: 0 12px 36px rgba(0,0,0,.3); padding: 16px;
 }
 
-
-.col-descripcion .texto-ellipsis {
-  display: inline-block;
-  max-width: 520px;      /* ajusta a tu gusto: 420px, 560px, etc. */
-  vertical-align: top;
+/* ========= Descripción (ancho fijo + elipsis + expandir) ========= */
+.col-descripcion {
+  position: relative;
+  width: var(--desc-col-width);
+  max-width: var(--desc-col-width);
+}
+.desc-wrap {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.desc-wrap.expanded {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: initial;
+}
+.desc-more {
+  position: absolute;
+  top: 50%; right: 6px;
+  transform: translateY(-50%);
+  opacity: 0;
+  transition: opacity .15s ease;
+}
+.col-descripcion:hover .desc-more { opacity: 1; }
 
-/* Asegura que la tabla use el ancho disponible, sin permitir que una celda lo “rompa” */
-.table-container table {
-  width: 100%;
+/* Tooltip ancho y con salto de línea (MDC + legacy) */
+.tooltip-wide,
+.tooltip-wide .mat-mdc-tooltip-surface,
+.tooltip-wide .mdc-tooltip__surface {
+  max-width: var(--desc-col-width);
+  white-space: normal;
+  word-break: break-word;
+  font-size: 12px;
 }
 
-.bug-link { padding: 0 4px; min-width: 0; line-height: 1.2; vertical-align: baseline; }
-.bug-link .mdc-button__label { text-decoration: underline; }
-.bug-link:disabled .mdc-button__label { text-decoration: none; opacity: .5; }
-
-/* Estilo base de etiqueta/pill */
+/* ========= Pills (etiquetas) ========= */
 .tag {
-  display: inline-flex;
-  align-items: center;
-  gap: .35rem;
+  display: inline-flex; align-items: center; gap: .35rem;
   padding: 2px 8px;
   border-radius: 9999px;
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.1;
-  border: 1px solid transparent;
-  cursor: pointer;
-  background: #f5f5f5;
-  color: #424242;
-  outline: none;
-  user-select: none;
-  transition: transform .05s ease, filter .15s ease, opacity .15s ease;
+  font-size: 12px; font-weight: 600; line-height: 1.1;
   border: 1px solid #e0e0e0;
+  background: #f5f5f5; color: #424242;
+  cursor: pointer; user-select: none;
+  transition: transform .05s ease, filter .15s ease, opacity .15s ease;
 }
 .tag:hover { filter: brightness(.97); }
 .tag:active { transform: translateY(1px); }
+.tag:disabled { opacity: .55; cursor: not-allowed; filter: none; }
 
-/* Variante BUG (roja) */
+/* Variante BUG */
 .tag-bug {
-  background: #ffebee;      /* rojo muy claro */
-  color: #c62828;           /* rojo fuerte */
-  border-color: #ffcdd2;    /* borde suave */
+  background: #ffebee;
+  border-color: #ffcdd2;
+  color: #c62828;
 }
 
-/* Cuando no hay evidencia, que parezca deshabilitado */
-.tag.is-disabled,
-.tag:disabled {
-  opacity: .55;
-  cursor: not-allowed;
-  filter: none;
-}
+/* ========= Utilidades ========= */
+.w-full { width: 100%; }
+.text-sm { font-size: .875rem; }
+.text-xs { font-size: .75rem; }
+.mb-1 { margin-bottom: .25rem; } .mb-2 { margin-bottom: .5rem; }
+.mt-2 { margin-top: .5rem; } .ml-2 { margin-left: .5rem; }
+.flex { display: flex; } .gap-2 { gap: .5rem; }
 
-/* Opcional: espaciar el resto del texto */
-.desc-rest { vertical-align: middle; }
+/* ========= Responsivo ========= */
+@media (max-width: 768px) {
+  th, td { font-size: 12px; padding: 6px; }
+  .filtro-unificado-wrapper { grid-template-columns: 1fr; gap: 6px; }
+  .fu-acciones, .acciones-filtro { justify-content: flex-start; flex-wrap: wrap; }
+}

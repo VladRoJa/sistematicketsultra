@@ -1289,5 +1289,12 @@ getBugParts(desc: string): { prefix: string; rest: string } {
   return m ? { prefix: m[1], rest: m[2] ?? '' } : { prefix: '', rest: text };
 }
 
+// Estado de expansión por ticket
+isDescExpanded: Record<number, boolean> = {};
+
+// Alternar expandido/colapsado
+toggleDesc(id: number): void {
+  this.isDescExpanded[id] = !this.isDescExpanded[id];
+}
 
 }

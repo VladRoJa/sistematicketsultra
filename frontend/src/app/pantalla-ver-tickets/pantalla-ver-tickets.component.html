@@ -588,23 +588,45 @@
               build
             </mat-icon>
           </ng-container>
-          <td class="col-descripcion">
+        <td class="col-descripcion">
+          <div class="desc-wrap"
+              [class.expanded]="isDescExpanded[ticket.id]"
+              [matTooltip]="ticket.descripcion"
+              [matTooltipDisabled]="isDescExpanded[ticket.id]"
+              matTooltipClass="tooltip-wide"
+              matTooltipShowDelay="250">
+
             <ng-container *ngIf="getBugParts(ticket.descripcion) as parts">
               <ng-container *ngIf="parts.prefix; else plainDesc">
-                <button
-                  type="button"
-                  class="tag tag-bug"
-                  (click)="openEvidencia(ticket)"
-                  [disabled]="!ticket.url_evidencia"
-                  [ngClass]="{'is-disabled': !ticket.url_evidencia}"
-                >
-                  {{ parts.prefix | slice:1:-1 }} <!-- muestra BUG sin corchetes -->
+                <!-- Etiqueta BUG como botón -->
+                <button type="button"
+                        class="tag tag-bug"
+                        (click)="openEvidencia(ticket)"
+                        [disabled]="!ticket.url_evidencia"
+                        [attr.aria-label]="ticket.url_evidencia ? 'Abrir evidencia' : 'Sin evidencia'">
+                  {{ parts.prefix | slice:1:-1 }}
                 </button>
+
                 <span class="desc-rest">&nbsp;{{ parts.rest }}</span>
               </ng-container>
-              <ng-template #plainDesc>{{ ticket.descripcion }}</ng-template>
+
+              <!-- Si no trae prefijo [BUG], mostramos tal cual -->
+              <ng-template #plainDesc>
+                {{ ticket.descripcion }}
+              </ng-template>
             </ng-container>
-          </td>
+          </div>
+
+          <!-- Botón minimalista para expandir/colapsar -->
+          <button mat-icon-button
+                  class="desc-more"
+                  (click)="toggleDesc(ticket.id)"
+                  [matTooltip]="isDescExpanded[ticket.id] ? 'Contraer' : 'Ver completo'"
+                  matTooltipShowDelay="250"
+                  aria-label="Ver/ocultar descripción">
+            <mat-icon>{{ isDescExpanded[ticket.id] ? 'expand_less' : 'expand_more' }}</mat-icon>
+          </button>
+        </td>
         <td>{{ getNombreSucursal(ticket) }}</td>
         <td>{{ ticket.estado }}</td>
         <td>{{ ticket.criticidad }}</td>
