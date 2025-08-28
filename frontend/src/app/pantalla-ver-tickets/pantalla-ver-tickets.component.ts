@@ -109,6 +109,7 @@ export interface Ticket {
   necesita_refaccion?: boolean;
   descripcion_refaccion?: string;
   sucursal_id_destino?: number | null;
+  url_evidencia?: string | null;
   
 
 
@@ -1257,6 +1258,27 @@ private construirOpcionesDetalle(origen: 'all' | 'filtered' = 'all'): void {
   this.filtroUnificado.seleccionTemporal = new Set(opciones.map(o => o.valor));
 
   console.log(`[FU] Detalle (${origen}) opciones:`, opciones);
+}
+
+
+//para cargar imagenes
+
+/** Abre la evidencia en otra pestaña (si existe) */
+openEvidencia(t: Ticket): void {
+  const url = (t?.url_evidencia || '').trim();
+  if (!url) {
+    // Usa tu util si quieres feedback; si no, deja el return mudo.
+    try { mostrarAlertaToast?.('Este ticket no tiene evidencia'); } catch {}
+    return;
+  }
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
+/** Separa el prefijo [ALGO] (ej. [BUG]) del resto del texto de descripción */
+getBugParts(desc: string): { prefix: string; rest: string } {
+  const text = (desc || '').trim();
+  const m = text.match(/^\s*(\[[^\]]+\])\s*(.*)$/);
+  return m ? { prefix: m[1], rest: m[2] ?? '' } : { prefix: '', rest: text };
 }
 
 
