@@ -10,7 +10,7 @@
 }
 
 /* Anchos por columna */
-col.c-id  { width: 56px; }
+col.c-id  { width: 560px; }
 col.c-cat { width: 120px; }
 col.c-apa { width: 160px; }
 col.c-desc{ width: var(--desc-col-width); }   /* Descripción */
