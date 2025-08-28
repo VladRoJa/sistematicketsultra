@@ -313,7 +313,9 @@ def reportar_error():
         db.session.commit()
 
         print("✅ Ticket de bug creado correctamente (ID:", nuevo_ticket.id, ")")
-        return jsonify({"message": "Reporte enviado correctamente"}), 201
+        return jsonify({"message": "Reporte enviado correctamente",
+                        "ticket_id": nuevo_ticket.id,
+                        "url_evidencia": url_imagen}), 201
 
     except Exception as e:
         print("❌ Excepción atrapada en reportar_error:", str(e))
