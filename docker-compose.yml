@@ -42,6 +42,8 @@ services:
       - backend
     networks:
       - backend-net
+    volumes:
+      - /home/adminrdp/sistematicketsultra/uploads:/usr/share/nginx/html/uploads:ro
 
 
 
