@@ -6,8 +6,12 @@ from dotenv import load_dotenv
 
 # Cargar .env automáticamente según APP_ENV
 app_env = os.getenv("APP_ENV", "local")
-env_file = ".env.local" if app_env == "local" else ".env.prod"
+
+# 👇 ANTES usabas ".env.prod". Debe apuntar a .env.docker en no-local:
+env_file = ".env.local" if app_env == "local" else ".env.docker"
+
 load_dotenv(env_file)
+print(f"🔧 APP_ENV={app_env} | .env cargado: {env_file}")
 
 # 🚨 Validar claves secretas obligatorias
 SECRET_KEY = os.environ.get('SECRET_KEY')
