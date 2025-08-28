@@ -31,7 +31,7 @@ class Config:
     JWT_TOKEN_LOCATION = ['headers']
     JWT_HEADER_NAME = 'Authorization'
     JWT_HEADER_TYPE = 'Bearer' 
-    JWT_VERIFY_EXPIRATION = True
+    JWT_VERIFY_EXPIRATION = True 
 
     # Base de datos
     SQLALCHEMY_DATABASE_URI = os.getenv('SQLALCHEMY_DATABASE_URI')
