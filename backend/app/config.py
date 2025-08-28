@@ -66,11 +66,6 @@ class Config:
     SESSION_FILE_THRESHOLD = 100
     SESSION_FILE_MODE = 600
 
-    # Cloudinary
-    #CLOUDINARY_CLOUD_NAME = os.environ.get('CLOUDINARY_CLOUD_NAME')
-    #CLOUDINARY_API_KEY = os.environ.get('CLOUDINARY_API_KEY')
-    #CLOUDINARY_API_SECRET = os.environ.get('CLOUDINARY_API_SECRET')
-
 
     # Sesiones
     SESSION_PERMANENT = True
@@ -82,3 +77,14 @@ class Config:
     SESSION_FILE_DIR = "./flask_session"
     SESSION_FILE_THRESHOLD = 100
     SESSION_FILE_MODE = 600
+    
+    
+    # ------- Storage / Subida de archivos -------
+    STORAGE_BACKEND     = os.getenv('STORAGE_BACKEND', 'local')
+    LOCAL_UPLOAD_DIR    = os.getenv('LOCAL_UPLOAD_DIR', '/home/adminrdp/sistematicketsultra/uploads/reportes')
+    PUBLIC_BASE_URL     = os.getenv('PUBLIC_BASE_URL', 'http://184.107.165.75')
+    UPLOADS_PUBLIC_PATH = os.getenv('UPLOADS_PUBLIC_PATH', '/uploads/reportes')
+    MAX_UPLOAD_SIZE_MB  = int(os.getenv('MAX_UPLOAD_SIZE_MB', '10'))
+
+    print(f"🧩 STORAGE_BACKEND={STORAGE_BACKEND} | LOCAL_UPLOAD_DIR={LOCAL_UPLOAD_DIR}")
+

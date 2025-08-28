@@ -267,16 +267,14 @@ def reportar_error():
         if imagen:
             try:
                 storage_backend = (
-                    current_app.config.get('STORAGE_BACKEND')
-                    or os.getenv('STORAGE_BACKEND')
+                    (current_app.config.get('STORAGE_BACKEND') or os.getenv('STORAGE_BACKEND') or 'local')
                 ).strip().lower()
-
-                print(f"🗄️ Storage backend seleccionado: {storage_backend}")
+                print(f"🗄️ Storage backend seleccionado: {repr(storage_backend)}")
 
                 if storage_backend == 'local':
                     url_imagen = upload_image_to_local(imagen)
-
-                print("📸 Imagen subida correctamente:", url_imagen)
+                else:
+                    raise RuntimeError(f"STORAGE_BACKEND desconocido: {storage_backend}")
             except Exception as e:
                 print("❌ Error al subir imagen:", str(e))
 
