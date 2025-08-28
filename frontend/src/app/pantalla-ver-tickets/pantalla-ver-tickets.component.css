@@ -142,3 +142,17 @@ th.filtro-activo .header-button{background:#e6f4ff;border-radius:6px}
 .table-container table {
   width: 100%;
 }
+
+.bug-link {
+  padding: 0 4px;
+  min-width: 0;
+  line-height: 1.2;
+  vertical-align: baseline;
+}
+.bug-link .mdc-button__label {
+  text-decoration: underline;
+}
+.bug-link:disabled .mdc-button__label {
+  text-decoration: none;
+  opacity: 0.5;
+}
