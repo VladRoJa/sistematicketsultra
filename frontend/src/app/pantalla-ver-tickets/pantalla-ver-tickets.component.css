@@ -227,27 +227,3 @@ th.filtro-activo .header-button { background: #e6f4ff; border-radius: 6px; }
   .fu-acciones, .acciones-filtro { justify-content: flex-start; flex-wrap: wrap; }
 }
 
-
-
-/* Anchos por columna (ajústar al gusto)
-   Índices: 
-   1 Id | 2 Categoría | 3 Aparato | 4 Descripción | 5 Sucursal | 6 Estado | 7 Criticidad
-   8 F. Creación | 9 F. En Progreso | 10 F. Finalizado | 11 Depto | 12 Subcat | 13 Detalle
-   14 Acciones | 15 F. Solución | 16 Historial
-*/
-th:nth-child(1),  td:nth-child(1)  { width: 56px;  }
-th:nth-child(2),  td:nth-child(2)  { width: 120px; }
-th:nth-child(3),  td:nth-child(3)  { width: 160px; }
-th:nth-child(4),  td:nth-child(4)  { width: var(--desc-col-width); } /* Descripción fija */
-th:nth-child(5),  td:nth-child(5)  { width: 120px; }
-th:nth-child(6),  td:nth-child(6)  { width: 92px;  }
-th:nth-child(7),  td:nth-child(7)  { width: 80px;  }
-th:nth-child(8),  td:nth-child(8)  { width: 320px; }
-th:nth-child(9),  td:nth-child(9)  { width: 320px; }
-th:nth-child(10), td:nth-child(10) { width: 320px; }
-th:nth-child(11), td:nth-child(11) { width: 140px; }
-th:nth-child(12), td:nth-child(12) { width: 140px; }
-th:nth-child(13), td:nth-child(13) { width: 120px; }
-th:nth-child(14), td:nth-child(14) { width: 150px; }
-th:nth-child(15), td:nth-child(15) { width: 130px; }
-th:nth-child(16), td:nth-child(16) { width: 110px; }

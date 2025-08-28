@@ -55,6 +55,24 @@
   </div>
 
   <table>
+      <colgroup>
+    <col style="width:56px">                     <!-- 1 Id -->
+    <col style="width:120px">                    <!-- 2 Categoría -->
+    <col style="width:160px">                    <!-- 3 Aparato -->
+    <col style="width:var(--desc-col-width)">    <!-- 4 Descripción -->
+    <col style="width:120px">                    <!-- 5 Sucursal -->
+    <col style="width:92px">                     <!-- 6 Estado -->
+    <col style="width:80px">                     <!-- 7 Criticidad -->
+    <col style="width:160px">                    <!-- 8 F. Creación -->
+    <col style="width:160px">                    <!-- 9 F. En Progreso -->
+    <col style="width:160px">                    <!-- 10 F. Finalizado -->
+    <col style="width:140px">                    <!-- 11 Depto -->
+    <col style="width:160px">                    <!-- 12 Subcategoría -->
+    <col style="width:110px">                    <!-- 13 Detalle -->
+    <col style="width:150px">                    <!-- 14 Acciones -->
+    <col style="width:130px">                    <!-- 15 F. Solución -->
+    <col style="width:110px">                    <!-- 16 Historial -->
+  </colgroup>
     <thead>
       <tr>
         <!-- (1) Id -->
@@ -584,11 +602,11 @@
               matTooltipShowDelay="1500"
               color="warn"
               class="icono-refaccion"
-              style="vertical-align: middle; margin-left: 4px;">
-              build
-            </mat-icon>
+              style="vertical-align: middle; margin-left: 4px;"
+            >build</mat-icon>
           </ng-container>
-        </td>
+        </td> 
+
         <td class="col-descripcion">
           <div class="desc-wrap"
               [class.expanded]="isDescExpanded[ticket.id]"
@@ -596,10 +614,8 @@
               [matTooltipDisabled]="isDescExpanded[ticket.id]"
               matTooltipClass="tooltip-wide"
               matTooltipShowDelay="250">
-
             <ng-container *ngIf="getBugParts(ticket.descripcion) as parts">
               <ng-container *ngIf="parts.prefix; else plainDesc">
-                <!-- Etiqueta BUG como botón -->
                 <button type="button"
                         class="tag tag-bug"
                         (click)="openEvidencia(ticket)"
@@ -607,18 +623,12 @@
                         [attr.aria-label]="ticket.url_evidencia ? 'Abrir evidencia' : 'Sin evidencia'">
                   {{ parts.prefix | slice:1:-1 }}
                 </button>
-
                 <span class="desc-rest">&nbsp;{{ parts.rest }}</span>
               </ng-container>
-
-              <!-- Si no trae prefijo [BUG], mostramos tal cual -->
-              <ng-template #plainDesc>
-                {{ ticket.descripcion }}
-              </ng-template>
+              <ng-template #plainDesc>{{ ticket.descripcion }}</ng-template>
             </ng-container>
           </div>
 
-          <!-- Botón minimalista para expandir/colapsar -->
           <button mat-icon-button
                   class="desc-more"
                   (click)="toggleDesc(ticket.id)"
@@ -628,6 +638,7 @@
             <mat-icon>{{ isDescExpanded[ticket.id] ? 'expand_less' : 'expand_more' }}</mat-icon>
           </button>
         </td>
+
         <td>{{ getNombreSucursal(ticket) }}</td>
         <td>{{ ticket.estado }}</td>
         <td>{{ ticket.criticidad }}</td>
