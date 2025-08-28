@@ -217,3 +217,23 @@ textarea.mat-mdc-input-element {
 .campo {
   width: 100%;
 }
+
+
+
+/* Anchos por columna (globales, acotados a la tabla) */
+.tabla-tickets col.c-id  { width: 80px; }      /* ajusta a lo que quieras */
+.tabla-tickets col.c-cat { width: 120px; }
+.tabla-tickets col.c-apa { width: 160px; }
+.tabla-tickets col.c-desc{ width: var(--desc-col-width); } /* descripción */
+.tabla-tickets col.c-suc { width: 120px; }
+.tabla-tickets col.c-est { width: 92px; }
+.tabla-tickets col.c-cri { width: 80px; }
+.tabla-tickets col.c-fc  { width: 160px; }
+.tabla-tickets col.c-fp  { width: 160px; }
+.tabla-tickets col.c-ff  { width: 160px; }
+.tabla-tickets col.c-dep { width: 140px; }
+.tabla-tickets col.c-sub { width: 160px; }
+.tabla-tickets col.c-det { width: 110px; }
+.tabla-tickets col.c-acc { width: 150px; }
+.tabla-tickets col.c-sol { width: 130px; }
+.tabla-tickets col.c-his { width: 110px; }
