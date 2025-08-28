@@ -1,7 +1,32 @@
 /* ========== Vars (ajusta la anchura de la columna aquí) ========== */
 :root {
   --desc-col-width: 400px;
-  --table-min-width: 2360px;
+  --table-min-width: 2320px;
+}
+
+/* Anchos por columna */
+col.c-id  { width: 56px; }
+col.c-cat { width: 120px; }
+col.c-apa { width: 160px; }
+col.c-desc{ width: var(--desc-col-width); }   /* Descripción */
+col.c-suc { width: 120px; }
+col.c-est { width: 92px; }
+col.c-cri { width: 80px; }
+col.c-fc  { width: 160px; }
+col.c-fp  { width: 160px; }
+col.c-ff  { width: 160px; }
+col.c-dep { width: 140px; }
+col.c-sub { width: 160px; }
+col.c-det { width: 110px; }
+col.c-acc { width: 150px; }
+col.c-sol { width: 130px; }
+col.c-his { width: 110px; }
+
+/* 🔧 Fix clave: no dependas sólo del <col>. Fuerza el ancho en la celda. */
+th.col-descripcion,
+td.col-descripcion{
+  width: var(--desc-col-width) !important;
+  max-width: var(--desc-col-width) !important;
 }
 
 /* ========= Base ========= */

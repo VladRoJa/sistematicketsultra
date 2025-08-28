@@ -55,24 +55,25 @@
   </div>
 
   <table>
-      <colgroup>
-    <col style="width:56px">                     <!-- 1 Id -->
-    <col style="width:120px">                    <!-- 2 Categoría -->
-    <col style="width:160px">                    <!-- 3 Aparato -->
-    <col style="width:var(--desc-col-width)">    <!-- 4 Descripción -->
-    <col style="width:120px">                    <!-- 5 Sucursal -->
-    <col style="width:92px">                     <!-- 6 Estado -->
-    <col style="width:80px">                     <!-- 7 Criticidad -->
-    <col style="width:160px">                    <!-- 8 F. Creación -->
-    <col style="width:160px">                    <!-- 9 F. En Progreso -->
-    <col style="width:160px">                    <!-- 10 F. Finalizado -->
-    <col style="width:140px">                    <!-- 11 Depto -->
-    <col style="width:160px">                    <!-- 12 Subcategoría -->
-    <col style="width:110px">                    <!-- 13 Detalle -->
-    <col style="width:150px">                    <!-- 14 Acciones -->
-    <col style="width:130px">                    <!-- 15 F. Solución -->
-    <col style="width:110px">                    <!-- 16 Historial -->
-  </colgroup>
+    <colgroup>
+      <col class="c-id">
+      <col class="c-cat">
+      <col class="c-apa">
+      <col class="c-desc">   <!-- Descripción -->
+      <col class="c-suc">
+      <col class="c-est">
+      <col class="c-cri">
+      <col class="c-fc">
+      <col class="c-fp">
+      <col class="c-ff">
+      <col class="c-dep">
+      <col class="c-sub">
+      <col class="c-det">
+      <col class="c-acc">
+      <col class="c-sol">
+      <col class="c-his">
+    </colgroup>
+
     <thead>
       <tr>
         <!-- (1) Id -->
@@ -605,6 +606,7 @@
               style="vertical-align: middle; margin-left: 4px;"
             >build</mat-icon>
           </ng-container>
+        </td> 
 
         <td class="col-descripcion">
           <div class="desc-wrap"
