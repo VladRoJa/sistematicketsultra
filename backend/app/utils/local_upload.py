@@ -62,3 +62,4 @@ def upload_image_to_local(image_file) -> str:
     # URL pública final (luego Nginx servirá /uploads/ apuntando a la carpeta real)
     url = f"{public_base}/{public_path}/{filename}"
     return url
+
