@@ -58,7 +58,6 @@ import {
   EstadoFiltroUnificado,
   aplicarFiltroColumnaConResetUnificado,
   limpiarFiltroColumnaUnificado,
-  filtrarOpcionesPorTexto,
 
 } from 'src/app/utils/filtro-unificado';
 import { MatSelectModule } from '@angular/material/select';
@@ -70,6 +69,7 @@ import { MatSelectModule } from '@angular/material/select';
 
 // Interfaces
 export interface Ticket {
+  departamento_nombre?: string;
   subcategoria_nivel3: any;
   jerarquia_clasificacion: any;
   detalle_nivel4: any;
@@ -81,20 +81,20 @@ export interface Ticket {
   username: string;
   estado: string;
   criticidad: number;
-  fecha_creacion: string;
+  fecha_creacion: string | null; 
   fecha_finalizado: string | null;
   departamento: string;
   departamento_id: number;
-  categoria: number | null;
+  categoria: string | null;
   fecha_solucion?: string | null;
-  subcategoria?: number | null;
-  detalle?: number | null;
+  subcategoria?: string | null;
+  detalle?: string | null;
   historial_fechas?: Array<{
     fecha: string;
     cambiadoPor: string;
     fechaCambio: string;
   }>;
-  fecha_en_progreso: string;
+  fecha_en_progreso: string | null;
   inventario?: {
     subcategoria: any;
     categoria: string;
@@ -916,24 +916,17 @@ getNombreCortoAparato(ticket: Ticket): string {
   return ticket.inventario.nombre;
 }
 
-getSubcategoriaVisible(ticket: Ticket): string {
-
-  const invSub = ticket?.inventario?.subcategoria?.toString().trim();
+getSubcategoriaVisible(t: Ticket): string {
+  if (t?.subcategoria) return t.subcategoria;
+  // Fallback legacy por si algún ticket viejo no trae el campo
+  const invSub = t?.inventario?.subcategoria?.toString().trim();
   if (invSub) return invSub;
-
-
-  const dep = (ticket.departamento || '').toLowerCase();
-  const cat = (ticket.jerarquia_clasificacion?.[1] || '').toLowerCase();
-
-  if (
-    dep === 'sistemas' &&
-    cat === 'dispositivos' &&
-    !!ticket.inventario?.categoria
-  ) {
-    return ticket.inventario.categoria;
+  const dep = (t.departamento || '').toLowerCase();
+  const cat = (t.jerarquia_clasificacion?.[1] || '').toLowerCase();
+  if (dep === 'sistemas' && cat === 'dispositivos' && t.inventario?.categoria) {
+    return t.inventario.categoria;
   }
-
-  return ticket.jerarquia_clasificacion?.[2] || '—';
+  return t.jerarquia_clasificacion?.[2] || '—';
 }
 
 
@@ -1153,6 +1146,11 @@ private etiquetaCampoUnificado: Record<'categoria' | 'estado' | 'departamento' |
   detalle: 'detalle',           // 👈
 };
 
+get etiquetaCampoActual(): string {
+  const c = this.campoUnificadoActual;
+  return c ? this.etiquetaCampoUnificado[c] : 'campo';
+}
+
 
 onCambioCampoUnificado(
   campo: 'categoria' | 'estado' | 'departamento' | 'sucursal' | 'username' | 'criticidad' | 'subcategoria' | 'detalle' | null
@@ -1228,39 +1226,22 @@ toggleFiltros(): void {
 }
 
 
-private construirOpcionesSubcategoria(origen: 'all' | 'filtered' = 'all'): void {
+private construirOpcionesSubcategoria(origen: 'all' | 'filtered' = 'all') {
   const base = origen === 'filtered' ? (this.filteredTickets || []) : (this.ticketsCompletos || []);
   const set = new Set<string>();
-  base.forEach((t: any) => set.add(this.getSubcategoriaVisible(t) || '—'));
-
-  const opciones = Array.from(set)
-    .sort((a, b) => a.localeCompare(b))
-    .map(nombre => ({ valor: nombre, etiqueta: nombre }));
-
-  this.filtroUnificado.opcionesDisponibles = opciones;
-  this.filtroUnificado.seleccionTemporal = new Set(opciones.map(o => o.valor));
-
-  console.log(`[FU] Subcategoría (${origen}) opciones:`, opciones);
+  base.forEach((t: any) => set.add((t.subcategoria || '—')));
+  this.filtroUnificado.opcionesDisponibles = Array.from(set).sort().map(v => ({ valor: v, etiqueta: v }));
+  this.filtroUnificado.seleccionTemporal = new Set(this.filtroUnificado.opcionesDisponibles.map(o => o.valor));
 }
 
-private construirOpcionesDetalle(origen: 'all' | 'filtered' = 'all'): void {
+private construirOpcionesDetalle(origen: 'all' | 'filtered' = 'all') {
   const base = origen === 'filtered' ? (this.filteredTickets || []) : (this.ticketsCompletos || []);
   const set = new Set<string>();
-  base.forEach((t: any) => {
-    const nombre = t?.jerarquia_clasificacion?.[3]
-      ?? (t?.detalle != null ? this.etiquetaCatalogoPorId(t.detalle) : '—');
-    set.add(nombre || '—');
-  });
-
-  const opciones = Array.from(set)
-    .sort((a, b) => a.localeCompare(b))
-    .map(nombre => ({ valor: nombre, etiqueta: nombre }));
-
-  this.filtroUnificado.opcionesDisponibles = opciones;
-  this.filtroUnificado.seleccionTemporal = new Set(opciones.map(o => o.valor));
-
-  console.log(`[FU] Detalle (${origen}) opciones:`, opciones);
+  base.forEach((t: any) => set.add((t.detalle || '—')));
+  this.filtroUnificado.opcionesDisponibles = Array.from(set).sort().map(v => ({ valor: v, etiqueta: v }));
+  this.filtroUnificado.seleccionTemporal = new Set(this.filtroUnificado.opcionesDisponibles.map(o => o.valor));
 }
+
 
 
 //para cargar imagenes

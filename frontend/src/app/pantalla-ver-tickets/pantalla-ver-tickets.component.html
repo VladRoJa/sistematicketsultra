@@ -596,7 +596,7 @@
     <tbody>
       <tr *ngFor="let ticket of visibleTickets">
         <td>{{ ticket.id }}</td>
-        <td>{{ ticket.jerarquia_clasificacion[1] || '—' }}</td>
+        <td>{{ ticket.categoria || '—' }}</td>
         <td>
           {{ getNombreCortoAparato(ticket) }}
           <ng-container *ngIf="ticket.necesita_refaccion">
@@ -649,8 +649,8 @@
         <td>{{ ticket.fecha_en_progreso }}</td>
         <td>{{ ticket.fecha_finalizado }}</td>
         <td>{{ ticket.departamento }}</td>
-        <td>{{ getSubcategoriaVisible(ticket) }}</td>
-        <td>{{ ticket.jerarquia_clasificacion[3] || '—' }}</td>
+        <td>{{ ticket.subcategoria || '—' }}</td>
+        <td>{{ ticket.detalle || '—' }}</td>
 
         <!-- Acciones -->
         <td>

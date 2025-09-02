@@ -28,19 +28,16 @@ class InventarioGeneral(db.Model):
     pedido_mes = db.Column(db.Integer)                       
     semana_pedido = db.Column(db.String(20))                      
     fecha_inventario = db.Column(db.Date)  
-    gasto_sem = db.Column(db.Integer)       
-    gasto_mes = db.Column(db.Integer)       
-    pedido_mes = db.Column(db.Integer)      
-    semana_pedido = db.Column(db.String(20)) 
-    fecha_inventario = db.Column(db.Date)
+    gasto_sem = db.Column(db.Integer)                   
     grupo_muscular = db.Column(db.String(100))
     subcategoria = db.Column(db.String(100))
     unidad_compra   = db.Column(db.String(50), nullable=True)
     factor_compra   = db.Column(db.Integer, nullable=False, default=1)
-                       
+    categoria_inventario_id = db.Column(db.Integer, db.ForeignKey('catalogo_categoria_inventario.id'), nullable=True)                   
 
-
-
+    categoria_inventario = db.relationship('CategoriaInventario', foreign_keys=[categoria_inventario_id])
+    
+    
     def __repr__(self):
         return f"<InventarioGeneral {self.tipo} {self.nombre}>"
 

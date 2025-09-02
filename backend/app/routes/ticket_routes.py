@@ -12,7 +12,6 @@ from sqlalchemy import or_
 from app.models.inventario import InventarioGeneral
 from app. utils.ticket_filters import filtrar_tickets_por_usuario
 from app.config import Config
-from sqlalchemy import or_
 from app.models.ticket_model import Ticket
 from app.models.user_model import UserORM
 from app. extensions import db
@@ -57,8 +56,6 @@ def create_ticket():
         necesita_refaccion = data.get("necesita_refaccion", False)
         descripcion_refaccion = data.get("descripcion_refaccion")
         clasificacion_id = data.get("clasificacion_id")
-
-        # 🔹 NUEVO: determinar sucursal destino
         sucursal_id_destino = data.get("sucursal_id_destino")
 
         es_admin_corp = (user.rol == "ADMINISTRADOR") or (user.sucursal_id in (1000, 100))
@@ -69,8 +66,17 @@ def create_ticket():
             # usuario normal: se completa automático
             sucursal_id_destino = user.sucursal_id
 
-        if not descripcion or not departamento_id or not criticidad or not categoria or not clasificacion_id:
+        # Requisitos mínimos comunes
+        if not descripcion or not departamento_id or not criticidad:
             return jsonify({"mensaje": "Faltan datos obligatorios"}), 400
+
+        # Debe venir una fuente de jerarquía:
+        #   - desde inventario: aparato_id
+        #   - o desde catálogo de tickets: clasificacion_id
+        if not aparato_id and not clasificacion_id:
+            return jsonify({"mensaje": "Debes enviar 'aparato_id' (si viene de inventario) o 'clasificacion_id' (si no)."}), 400
+
+        # Nota: categoria/subcategoria/detalle son opcionales; se derivan.
 
         nuevo_ticket = Ticket.create_ticket(
             descripcion=descripcion,
@@ -480,29 +486,6 @@ def export_excel():
             suc_id_dest = ticket.sucursal_id_destino if ticket.sucursal_id_destino is not None else ticket.sucursal_id
             sucursal_nombre_dest = sucursales_map.get(suc_id_dest, "—")
 
-            # Jerarquía (y caso especial dispositivos/sistemas)
-            jer = ticket._obtener_jerarquia_clasificacion() or []
-            categoria_txt    = jer[0] if len(jer) > 0 else "—"    # nivel 1
-            subcategoria_txt = jer[1] if len(jer) > 1 else "—"    # nivel 2
-
-            dep_lower = (ticket.departamento.nombre if ticket.departamento else "").strip().lower()
-            subcat2_lower = (subcategoria_txt or "").strip().lower()
-
-            # Prioriza la subcategoría del inventario si existe
-            inv_sub = None
-            if getattr(ticket, "inventario", None):
-                inv_sub = getattr(ticket.inventario, "subcategoria", None)
-            inv_sub = (inv_sub or "").strip()
-
-            if inv_sub:
-                subsubcat_txt = inv_sub
-            elif dep_lower == "sistemas" and subcat2_lower == "dispositivos" and getattr(ticket.inventario, "categoria", None):
-                subsubcat_txt = ticket.inventario.categoria
-            else:
-                subsubcat_txt = jer[2] if len(jer) > 2 else "—"
-            # nivel 3 normal
-
-            detalle_txt = jer[3] if len(jer) > 3 else "—"        # nivel 4
             departamento_txt = ticket.departamento.nombre if ticket.departamento else "—"
 
             # Fechas a date (zona local)
@@ -520,6 +503,10 @@ def export_excel():
             # En Excel: formatea fechas como dd/MM/yyyy (las demás las dejabas como venían)
             fecha_sol_txt   = f_sol.strftime('%d/%m/%Y') if f_sol else ""
             fecha_fin_txt   = f_final.strftime('%d/%m/%Y') if f_final else "N/A"
+            
+            categoria_txt    = t.get("categoria")    or "—"
+            subcategoria_txt = t.get("subcategoria") or "—"
+            detalle_txt      = t.get("detalle")      or "—"
 
             ws.append([
                 t.get("id"),
@@ -544,8 +531,8 @@ def export_excel():
 
                 sucursal_nombre_dest,
                 departamento_txt,
-                subcategoria_txt,  # ← tu layout: "Categoría"
-                subsubcat_txt,     # ← tu layout: "Subcategoria"
+                categoria_txt,
+                subcategoria_txt,
                 detalle_txt,
                 t.get("problema_detectado"),
                 "Sí" if t.get("necesita_refaccion") else "No",
@@ -586,8 +573,6 @@ def export_excel():
 # RUTA: migrar tickets a ISO local
 # ─────────────────────────────────────────────────────────────
 
-
-from flask_jwt_extended import jwt_required
 
 @ticket_bp.route('/migrar-historial-local', methods=['POST'])
 @jwt_required()

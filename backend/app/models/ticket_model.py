@@ -37,7 +37,7 @@ class Ticket(db.Model):
     subcategoria = db.Column(db.String(100), nullable=True)
     detalle = db.Column(db.String(100), nullable=True)
     sucursal_id_destino = db.Column(db.Integer, db.ForeignKey('sucursales.sucursal_id'), nullable=False)
-
+    categoria_inventario_id = db.Column(db.Integer, db.ForeignKey('catalogo_categoria_inventario.id'), nullable=True)
     
 
     
@@ -49,7 +49,7 @@ class Ticket(db.Model):
     inventario = db.relationship('InventarioGeneral', foreign_keys=[aparato_id])
     clasificacion = db.relationship('CatalogoClasificacion', backref='tickets')
     sucursal_destino = db.relationship('Sucursal', foreign_keys=[sucursal_id_destino], backref='tickets_destino')
-
+    categoria_inventario = db.relationship('CategoriaInventario', foreign_keys=[categoria_inventario_id])
     
 
     # ─── Serialización ──────────────────────────
@@ -61,19 +61,33 @@ class Ticket(db.Model):
             return True
         except Exception:
             return False
+        
+    def _obtener_jerarquia_categoria_inv(self):
+        ruta = []
+        nodo = self.categoria_inventario
+        while nodo:
+            ruta.insert(0, nodo.nombre)
+            nodo = nodo.padre
+        return ruta    
 
     def to_dict(self):
         def format_fecha_corta(dt: datetime | None) -> str:
             return dt.astimezone(pytz.timezone("America/Tijuana")).strftime('%d/%m/%y') if dt else "N/A"
 
-        # 🔹 NUEVO: resolver categoría/subcategoría/detalle con fallback a Inventario
-        inv_cat = self.inventario.categoria if self.inventario else None
-        inv_subcat = self.inventario.subcategoria if self.inventario else None
-        inv_desc = getattr(self.inventario, 'descripcion', None) if self.inventario else None
+        # 1) Elegir árbol según disponibilidad: inventario > clasificación de tickets
+        if self.categoria_inventario:   # ← viene de inventario
+            ruta = self._obtener_jerarquia_categoria_inv() or []
+        else:                           # ← viene del catálogo de tickets
+            ruta = self._obtener_jerarquia_clasificacion() or []
 
-        cat_resuelta = self.categoria or inv_cat
-        subcat_resuelta = self.subcategoria or inv_subcat
-        detalle_resuelto = self.detalle or inv_desc
+        # 2) Tomar los últimos 3 niveles como cat/sub/det
+        tail = ruta[-3:]
+        if len(tail) == 1:
+            cat_resuelta, subcat_resuelta, detalle_resuelto = tail[0], None, None
+        elif len(tail) == 2:
+            cat_resuelta, subcat_resuelta, detalle_resuelto = tail[0], tail[1], None
+        else:
+            cat_resuelta, subcat_resuelta, detalle_resuelto = tail[0], tail[1], tail[2]
 
         return {
             'id': self.id,
@@ -98,12 +112,9 @@ class Ticket(db.Model):
                 {**item} for item in self.historial_fechas or [] if isinstance(item, dict)
             ],
             'url_evidencia': self.url_evidencia,
-
-            # 🔹 NUEVO: exponer resueltos al to_dict (para la tabla de tickets)
             'categoria': cat_resuelta,
             'subcategoria': subcat_resuelta,
             'detalle': detalle_resuelto,
-
             'inventario': {
                 'id': self.inventario.id if self.inventario else None,
                 'nombre': self.inventario.nombre if self.inventario else None,
@@ -115,6 +126,7 @@ class Ticket(db.Model):
             'ubicacion': self.ubicacion,
             'equipo': self.equipo,
             'sucursal_id_destino': self.sucursal_id_destino,
+            'categoria_inventario_id': self.categoria_inventario_id,
         }
 
         
@@ -122,6 +134,18 @@ class Ticket(db.Model):
     # ─── Métodos CRUD ───────────────────────────────────────
     @classmethod
     def create_ticket(cls, descripcion, username, sucursal_id, sucursal_id_destino, departamento_id, criticidad, clasificacion_id, categoria=None, subcategoria=None, detalle=None, aparato_id=None, problema_detectado=None, necesita_refaccion=False, descripcion_refaccion=None, url_evidencia=None, ubicacion=None, equipo=None):
+        
+            # 🔹 Sanitizar: si llega un número como texto, lo consideramos vacío (derivaremos la ruta)
+        def _clean_text(v):
+            if v is None:
+                return None
+            s = str(v).strip()
+            return None if not s or s.isdigit() else s
+
+        categoria = _clean_text(categoria)
+        subcategoria = _clean_text(subcategoria)
+        detalle = _clean_text(detalle)
+            
         ticket = cls(
             descripcion=descripcion,
             username=username,
@@ -144,7 +168,64 @@ class Ticket(db.Model):
             equipo=equipo,
         )
         db.session.add(ticket)
+        db.session.flush()
+        
+        # 👇 NUEVO: si viene de inventario, copiar el leaf del catálogo de inventario
+        if aparato_id and not ticket.categoria_inventario_id:
+            inv = ticket.inventario  # relación ya definida
+            if inv and getattr(inv, 'categoria_inventario_id', None):
+                ticket.categoria_inventario_id = inv.categoria_inventario_id
+                
+        # ✅ NUEVO: si ya hay categoria_inventario_id, poblar textos desde el árbol de inventario
+        if ticket.categoria_inventario_id and (not ticket.categoria or not ticket.subcategoria or not ticket.detalle):
+            ruta = ticket._obtener_jerarquia_categoria_inv() or []
+            tail = ruta[-3:]
+            if len(tail) == 1:
+                cat, sub, det = tail[0], None, None
+            elif len(tail) == 2:
+                cat, sub, det = tail[0], tail[1], None
+            else:
+                cat, sub, det = tail[0], tail[1], tail[2]
+
+            if not ticket.categoria:
+                ticket.categoria = cat
+            if not ticket.subcategoria:
+                ticket.subcategoria = sub
+            if not ticket.detalle:
+                ticket.detalle = det
+
+        # ── NUEVO: si hay clasificacion, rellenar categoria/subcategoria/detalle desde la jerarquía
+        def _es_vacio_o_num(v):
+            if v is None:
+                return True
+            if isinstance(v, str):
+                s = v.strip()
+                return s == "" or s.isdigit()
+            return False
+
+        if (not ticket.categoria_inventario_id) and ticket.clasificacion_id and (_es_vacio_o_num(categoria) or not subcategoria or not detalle):
+            # Cargar relación y obtener ruta [raiz ... hoja]
+            ruta = ticket._obtener_jerarquia_clasificacion() or []
+            if ruta:
+                # Tomar los últimos 3 niveles para mostrar cerca de la hoja
+                tail = ruta[-3:]
+                # Normalizar a 3 slots
+                if len(tail) == 1:
+                    cat, sub, det = tail[0], None, None
+                elif len(tail) == 2:
+                    cat, sub, det = tail[0], tail[1], None
+                else:
+                    cat, sub, det = tail[0], tail[1], tail[2]
+
+                if _es_vacio_o_num(ticket.categoria):
+                    ticket.categoria = cat
+                if not ticket.subcategoria:
+                    ticket.subcategoria = sub
+                if not ticket.detalle:
+                    ticket.detalle = det
+
         db.session.commit()
+
         return ticket
 
     @classmethod

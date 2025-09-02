@@ -54,26 +54,40 @@ export function cargarTickets(component: PantallaVerTicketsComponent): void {
         const catNivel3 = buscarAncestroNivel(ticket.clasificacion_id, 3, component.categoriasCatalogo);
         const catNivel4 = buscarAncestroNivel(ticket.clasificacion_id, 4, component.categoriasCatalogo);
 
-        return {
-          ...ticket,
-          fecha_creacion_original: ticket.fecha_creacion,
-          fecha_finalizado_original: ticket.fecha_finalizado,
-          criticidad: ticket.criticidad || 1,
-          estado: ticket.estado?.toLowerCase().trim(),
-          departamento: component.departamentoService.obtenerNombrePorId(ticket.departamento_id),
-          fecha_creacion: ticket.fecha_creacion !== 'N/A' ? ticket.fecha_creacion : null,
-          fecha_en_progreso: ticket.fecha_en_progreso && ticket.fecha_en_progreso !== 'N/A' ? ticket.fecha_en_progreso : null,
-          fecha_finalizado: ticket.fecha_finalizado !== 'N/A' ? ticket.fecha_finalizado : null,
-          historial_fechas: typeof ticket.historial_fechas === "string"
-            ? JSON.parse(ticket.historial_fechas)
-            : ticket.historial_fechas || [],
-          categoria_nivel2: catNivel2,
-          subcategoria_nivel3: catNivel3,
-          detalle_nivel4: catNivel4,
-          categoria: catNivel2 ? catNivel2.id : null,
-          subcategoria: catNivel3 ? catNivel3.id : null,
-          detalle: catNivel4 ? catNivel4.id : null,
-        };
+      return {
+        ...ticket,
+
+        fecha_creacion_original: ticket.fecha_creacion,
+        fecha_finalizado_original: ticket.fecha_finalizado,
+
+        criticidad: ticket.criticidad || 1,
+        estado: (ticket.estado || '').toLowerCase().trim(),
+
+        // ✅ Usa el nombre que ya manda el backend si existe
+        departamento:
+          ticket.departamento_nombre
+          ?? component.departamentoService.obtenerNombrePorId(ticket.departamento_id)
+          ?? ticket.departamento,
+
+        fecha_creacion: ticket.fecha_creacion !== 'N/A' ? ticket.fecha_creacion : null,
+        fecha_en_progreso: ticket.fecha_en_progreso && ticket.fecha_en_progreso !== 'N/A' ? ticket.fecha_en_progreso : null,
+        fecha_finalizado: ticket.fecha_finalizado !== 'N/A' ? ticket.fecha_finalizado : null,
+
+        historial_fechas: typeof ticket.historial_fechas === 'string'
+          ? JSON.parse(ticket.historial_fechas)
+          : (ticket.historial_fechas || []),
+
+        // Seguimos guardando las referencias a los nodos del catálogo
+        categoria_nivel2: catNivel2,
+        subcategoria_nivel3: catNivel3,
+        detalle_nivel4: catNivel4,
+
+        // 👇 CAMBIO CLAVE: mantener texto (no IDs)
+        categoria:   ticket.categoria   ?? (catNivel2?.nombre ?? '—'),
+        subcategoria: ticket.subcategoria ?? (catNivel3?.nombre ?? '—'),
+        detalle:     ticket.detalle     ?? (catNivel4?.nombre ?? '—'),
+      };
+
       });
 
 
