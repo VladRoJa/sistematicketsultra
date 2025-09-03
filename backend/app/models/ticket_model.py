@@ -70,64 +70,78 @@ class Ticket(db.Model):
             nodo = nodo.padre
         return ruta    
 
+
+
     def to_dict(self):
-        def format_fecha_corta(dt: datetime | None) -> str:
-            return dt.astimezone(pytz.timezone("America/Tijuana")).strftime('%d/%m/%y') if dt else "N/A"
+        import pytz
+        from datetime import datetime
+
+        TZ = pytz.timezone("America/Tijuana")
+
+        def safe_dt_iso(dt):
+            if not dt:
+                return None
+            if isinstance(dt, str):
+                return dt
+            if getattr(dt, "tzinfo", None) is None:
+                dt = pytz.utc.localize(dt)
+            return dt.astimezone(TZ).isoformat()
 
         # 1) Elegir árbol según disponibilidad: inventario > clasificación de tickets
-        if self.categoria_inventario:   # ← viene de inventario
+        if self.categoria_inventario:
             ruta = self._obtener_jerarquia_categoria_inv() or []
-        else:                           # ← viene del catálogo de tickets
+        else:
             ruta = self._obtener_jerarquia_clasificacion() or []
 
-        # 2) Tomar los últimos 3 niveles como cat/sub/det
-        tail = ruta[-3:]
-        if len(tail) == 1:
-            cat_resuelta, subcat_resuelta, detalle_resuelto = tail[0], None, None
-        elif len(tail) == 2:
-            cat_resuelta, subcat_resuelta, detalle_resuelto = tail[0], tail[1], None
-        else:
-            cat_resuelta, subcat_resuelta, detalle_resuelto = tail[0], tail[1], tail[2]
+        # 2) Tomar los últimos 3 niveles como cat/sub/det, tolerando vacíos
+        tail = [x for x in (ruta[-3:] if ruta else []) if x]
+        # rellena hasta 3 posiciones con None para evitar IndexError
+        cat_resuelta, subcat_resuelta, detalle_resuelto = (tail + [None, None, None])[:3]
 
         return {
             'id': self.id,
             'descripcion': self.descripcion,
             'username': self.username,
             'estado': self.estado,
-            'fecha_creacion': format_datetime(self.fecha_creacion),
+
+            'fecha_creacion':   safe_dt_iso(self.fecha_creacion),
+            'fecha_en_progreso': safe_dt_iso(self.fecha_en_progreso),
+            'fecha_finalizado': safe_dt_iso(self.fecha_finalizado),
+            'fecha_solucion':   safe_dt_iso(self.fecha_solucion),
+
             'sucursal_id': self.sucursal_id,
             'departamento_id': self.departamento_id,
             'departamento_nombre': self.departamento.nombre if self.departamento else "N/A",
-            'fecha_en_progreso': format_datetime(self.fecha_en_progreso),
+
             'criticidad': self.criticidad,
             'clasificacion_id': self.clasificacion_id,
-            'clasificacion_nombre': self.clasificacion.nombre if self.clasificacion else None,
+            'clasificacion_nombre': self.clasificacion and self.clasificacion.nombre,
             'jerarquia_clasificacion': self._obtener_jerarquia_clasificacion(),
-            'fecha_finalizado': format_datetime(self.fecha_finalizado),
-            'fecha_solucion': self.fecha_solucion.isoformat() if self.fecha_solucion else None,
-            'necesita_refaccion': self.necesita_refaccion,
-            'descripcion_refaccion': self.descripcion_refaccion,
-            'problema_detectado': self.problema_detectado,
+
             'historial_fechas': [
-                {**item} for item in self.historial_fechas or [] if isinstance(item, dict)
+                {**item} for item in (self.historial_fechas or []) if isinstance(item, dict)
             ],
-            'url_evidencia': self.url_evidencia,
-            'categoria': cat_resuelta,
+
+            # anidación final (texto si existe, None si no)
+            'categoria':   cat_resuelta,
             'subcategoria': subcat_resuelta,
-            'detalle': detalle_resuelto,
+            'detalle':     detalle_resuelto,
+
             'inventario': {
                 'id': self.inventario.id if self.inventario else None,
-                'nombre': self.inventario.nombre if self.inventario else None,
-                'categoria': self.inventario.categoria if self.inventario else None,
-                'marca': self.inventario.marca if self.inventario else None,
-                'codigo_interno': self.inventario.codigo_interno if self.inventario else None,
-                'subcategoria': self.inventario.subcategoria if self.inventario else None,
+                'nombre': self.inventario and self.inventario.nombre,
+                'categoria': self.inventario and self.inventario.categoria,
+                'marca': self.inventario and self.inventario.marca,
+                'codigo_interno': self.inventario and self.inventario.codigo_interno,
+                'subcategoria': self.inventario and self.inventario.subcategoria,
             } if self.inventario else None,
+
             'ubicacion': self.ubicacion,
             'equipo': self.equipo,
             'sucursal_id_destino': self.sucursal_id_destino,
             'categoria_inventario_id': self.categoria_inventario_id,
         }
+
 
         
         
