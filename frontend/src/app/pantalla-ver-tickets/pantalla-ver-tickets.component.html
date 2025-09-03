@@ -645,9 +645,23 @@
         <td>{{ getNombreSucursal(ticket) }}</td>
         <td>{{ ticket.estado }}</td>
         <td>{{ ticket.criticidad }}</td>
-        <td>{{ ticket.fecha_creacion }}</td>
-        <td>{{ ticket.fecha_en_progreso }}</td>
-        <td>{{ ticket.fecha_finalizado }}</td>
+        <td>
+          {{ ticket.fecha_creacion
+              ? (ticket.fecha_creacion | date:'dd/MM/yyyy hh:mm a':'America/Tijuana')
+              : '—' }}
+        </td>
+
+        <td>
+          {{ ticket.fecha_en_progreso
+              ? (ticket.fecha_en_progreso | date:'dd/MM/yyyy hh:mm a':'America/Tijuana')
+              : '—' }}
+        </td>
+
+        <td>
+          {{ ticket.fecha_finalizado
+              ? (ticket.fecha_finalizado | date:'dd/MM/yyyy hh:mm a':'America/Tijuana')
+              : '—' }}
+        </td>
         <td>{{ ticket.departamento }}</td>
         <td>{{ ticket.subcategoria || '—' }}</td>
         <td>{{ ticket.detalle || '—' }}</td>
