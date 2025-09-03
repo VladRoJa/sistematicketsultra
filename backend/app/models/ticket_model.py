@@ -277,4 +277,4 @@ class Ticket(db.Model):
         while nodo:
             jerarquia.insert(0, nodo.nombre)
             nodo = nodo.padre
-        return jerarquia
+        return jerarquia 
