@@ -11,6 +11,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 import pandas as pd
 import qrcode
 from app. extensions import db
+from app.models.catalogos import CategoriaInventario
 from app.models.inventario import InventarioGeneral, MovimientoInventario, DetalleMovimiento, InventarioSucursal
 from app.models.ticket_model import Ticket
 from app.models.user_model import UserORM
@@ -129,32 +130,52 @@ def crear_inventario():
 def obtener_inventario():
     try:
         sucursal_id = request.args.get('sucursal_id', type=int)
-        def descripcion_larga(i):
+
+        # ---- Helpers locales ----
+        def _resolver_categoria(inv):
+            """
+            Regresa (categoria, subcategoria) usando SOLO el catálogo si hay FK.
+            Si NO hay FK o la FK es inválida, cae a los campos legacy del inventario.
+            """
+            cat_id = getattr(inv, 'categoria_inventario_id', None)
+            if cat_id:
+                cat = CategoriaInventario.query.get(cat_id)
+                if cat:
+                    # SOLO catálogo
+                    return (getattr(cat, 'nombre', '') or ''), (getattr(cat, 'subcategoria', '') or '')
+                # FK inválida -> legacy
+                return (inv.categoria or ''), (inv.subcategoria or '')
+            # Sin FK -> legacy
+            return (inv.categoria or ''), (inv.subcategoria or '')
+
+
+        def descripcion_larga(inv, categoria_resuelta=None):
             partes = [
-                i.nombre,
-                i.marca,
-                i.proveedor,
-                i.categoria,
-                f"ID:{i.id}"
+                inv.nombre,
+                inv.marca,
+                inv.proveedor,
+                (categoria_resuelta if categoria_resuelta is not None else inv.categoria),
+                f"ID:{inv.id}"
             ]
             return " - ".join([str(p) for p in partes if p])
 
+        # ---------- Por sucursal ----------
         if sucursal_id:
-            # Devuelve solo el inventario de esa sucursal
             inventarios = InventarioSucursal.query.filter_by(sucursal_id=sucursal_id).all()
             data = []
             for inv_suc in inventarios:
                 i = InventarioGeneral.query.get(inv_suc.inventario_id)
                 if i:
+                    categoria_res, subcategoria_res = _resolver_categoria(i)
                     data.append({
                         'id': i.id,
-                        'tipo': i.tipo,
                         'nombre': i.nombre,
                         'descripcion': i.descripcion,
                         'marca': i.marca,
                         'proveedor': i.proveedor,
-                        'categoria': i.categoria,
-                        'unidad_medida': i.unidad_medida,  
+                        'categoria': categoria_res,                 # ✅ resuelta
+                        'subcategoria': subcategoria_res,           # ✅ resuelta
+                        'unidad_medida': i.unidad_medida,
                         'codigo_interno': i.codigo_interno,
                         'no_equipo': i.no_equipo,
                         'gasto_sem': i.gasto_sem,
@@ -164,24 +185,26 @@ def obtener_inventario():
                         'fecha_inventario': str(i.fecha_inventario) if i.fecha_inventario else None,
                         'grupo_muscular': i.grupo_muscular,
                         'stock': inv_suc.stock,
-                        'descripcion_larga': descripcion_larga(i),
-                        'subcategoria': i.subcategoria, 
+                        'descripcion_larga': descripcion_larga(i, categoria_res),
+                        'categoria_inventario_id': getattr(i, 'categoria_inventario_id', None),
                     })
             return jsonify(data), 200
 
-        # Si no hay sucursal_id, inventario global
+        # ---------- Global ----------
         inventario = InventarioGeneral.query.all()
         data = []
         for i in inventario:
+            categoria_res, subcategoria_res = _resolver_categoria(i)
             data.append({
                 'id': i.id,
-                'tipo': i.tipo,
+                # 'tipo': i.tipo,  # ❌ Eliminado: dejamos de exponer 'tipo'
                 'nombre': i.nombre,
                 'descripcion': i.descripcion,
                 'marca': i.marca,
                 'proveedor': i.proveedor,
-                'categoria': i.categoria,
-                'unidad_medida': i.unidad_medida,  
+                'categoria': categoria_res,                 # ✅ resuelta
+                'subcategoria': subcategoria_res,           # ✅ resuelta
+                'unidad_medida': i.unidad_medida,
                 'codigo_interno': i.codigo_interno,
                 'no_equipo': i.no_equipo,
                 'gasto_sem': i.gasto_sem,
@@ -190,10 +213,11 @@ def obtener_inventario():
                 'semana_pedido': i.semana_pedido,
                 'fecha_inventario': str(i.fecha_inventario) if i.fecha_inventario else None,
                 'grupo_muscular': i.grupo_muscular,
-                'descripcion_larga': descripcion_larga(i),
-                'subcategoria': i.subcategoria, 
+                'descripcion_larga': descripcion_larga(i, categoria_res),
+                'categoria_inventario_id': getattr(i, 'categoria_inventario_id', None),
             })
         return jsonify(data), 200
+
     except Exception as e:
         return manejar_error(e, "obtener_inventario")
 
@@ -689,61 +713,61 @@ def historial_equipo(equipo_id):
         return manejar_error(e, "historial_equipo")
 
 
-@inventario_bp.route('/equipos', methods=['GET'], strict_slashes=False)
-@jwt_required()
-def obtener_equipos():
-    """
-    Devuelve los equipos por sucursal y tipo.
-    Parámetros opcionales:
-    - sucursal_id: ID de la sucursal.
-    - tipo: 'aparato' o 'sistema'.
-    """
-    try:
-        user = UserORM.get_by_id(get_jwt_identity())
-        if not user:
-            return jsonify({"mensaje": "Usuario no encontrado"}), 404
+# @inventario_bp.route('/equipos', methods=['GET'], strict_slashes=False)
+# @jwt_required()
+# def obtener_equipos():
+#     """
+#     Devuelve los equipos por sucursal y tipo.
+#     Parámetros opcionales:
+#     - sucursal_id: ID de la sucursal.
+#     - tipo: 'aparato' o 'sistema'.
+#     """
+#     try:
+#         user = UserORM.get_by_id(get_jwt_identity())
+#         if not user:
+#             return jsonify({"mensaje": "Usuario no encontrado"}), 404
 
-        sucursal_id = request.args.get('sucursal_id', type=int)
-        tipo = (request.args.get('tipo') or '').strip().lower()
-        # Mapea todos los posibles valores recibidos a lo que existe en tu base
-        if tipo in ['aparato', 'aparatos']:
-            tipo = 'aparatos'
-        elif tipo in ['sistema', 'sistemas', 'dispositivo', 'dispositivos']:
-            tipo = 'dispositivos'
-        else:
-            tipo = ''
+#         sucursal_id = request.args.get('sucursal_id', type=int)
+#         tipo = (request.args.get('tipo') or '').strip().lower()
+#         # Mapea todos los posibles valores recibidos a lo que existe en tu base
+#         if tipo in ['aparato', 'aparatos']:
+#             tipo = 'aparatos'
+#         elif tipo in ['sistema', 'sistemas', 'dispositivo', 'dispositivos']:
+#             tipo = 'dispositivos'
+#         else:
+#             tipo = ''
 
-        query = InventarioSucursal.query
+#         query = InventarioSucursal.query
 
-        # Si no es admin, restringe a la sucursal del usuario
-        if not (user.rol == "ADMINISTRADOR" or user.sucursal_id == 1000 or user.sucursal_id == 100):
-            query = query.filter_by(sucursal_id=user.sucursal_id)
-        elif sucursal_id:
-            query = query.filter_by(sucursal_id=sucursal_id)
+#         # Si no es admin, restringe a la sucursal del usuario
+#         if not (user.rol == "ADMINISTRADOR" or user.sucursal_id == 1000 or user.sucursal_id == 100):
+#             query = query.filter_by(sucursal_id=user.sucursal_id)
+#         elif sucursal_id:
+#             query = query.filter_by(sucursal_id=sucursal_id)
 
-        equipos = query.all()
+#         equipos = query.all()
 
-        resultado = []
-        for e in equipos:
-            # Compara ambos en minúsculas (por si acaso)
-            if tipo and (e.inventario.tipo or '').strip().lower() != tipo:
-                continue
-            resultado.append({
-                "id": e.inventario.id,
-                "nombre": e.inventario.nombre,
-                "codigo_interno": e.inventario.codigo_interno,
-                "categoria": e.inventario.categoria,
-                "marca": e.inventario.marca,
-                "stock": e.stock,
-                "sucursal_id": e.sucursal_id,
-                "tipo": e.inventario.tipo,
-                "no_equipo": e.inventario.no_equipo,
-            })
+#         resultado = []
+#         for e in equipos:
+#             # Compara ambos en minúsculas (por si acaso)
+#             if tipo and (e.inventario.tipo or '').strip().lower() != tipo:
+#                 continue
+#             resultado.append({
+#                 "id": e.inventario.id,
+#                 "nombre": e.inventario.nombre,
+#                 "codigo_interno": e.inventario.codigo_interno,
+#                 "categoria": e.inventario.categoria,
+#                 "marca": e.inventario.marca,
+#                 "stock": e.stock,
+#                 "sucursal_id": e.sucursal_id,
+#                 "tipo": e.inventario.tipo,
+#                 "no_equipo": e.inventario.no_equipo,
+#             })
 
-        return jsonify(resultado), 200
+#         return jsonify(resultado), 200
 
-    except Exception as e:
-        return manejar_error(e, "obtener_equipos")
+#     except Exception as e:
+#         return manejar_error(e, "obtener_equipos")
 
 
 
@@ -1017,3 +1041,26 @@ def exportar_inventario():
         as_attachment=True,
         download_name='inventario.xlsx'
     )
+
+
+@inventario_bp.route('/categorias-inventario', methods=['GET'], strict_slashes=False)
+@jwt_required()
+def listar_categorias_inventario():
+    try:
+        parent_id = request.args.get('parent_id', type=int)
+        nivel = request.args.get('nivel', type=int)
+        nombre = (request.args.get('nombre') or '').strip()
+
+        q = CategoriaInventario.query
+        if parent_id is not None:
+            q = q.filter(CategoriaInventario.parent_id == parent_id)
+        if nivel is not None:
+            q = q.filter(CategoriaInventario.nivel == nivel)
+        if nombre:
+            q = q.filter(CategoriaInventario.nombre.ilike(f'%{nombre}%'))
+
+        rows = q.order_by(CategoriaInventario.nombre.asc()).all()
+        data = [{'id': r.id, 'nombre': r.nombre, 'parent_id': r.parent_id, 'nivel': r.nivel} for r in rows]
+        return jsonify(data), 200
+    except Exception as e:
+        return manejar_error(e, "listar_categorias_inventario")

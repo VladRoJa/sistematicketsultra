@@ -49,6 +49,7 @@
     <ng-template #sistemasOrGenerales>
       <ng-container *ngIf="mostrarSubformSistemasDispositivos; else generales">
         <app-sistemas
+          [ocultarPickers]="mostrarSubformSistemasDispositivos"
           [parentForm]="form"
           (formularioValido)="onFormularioSistemasValido($event)">
         </app-sistemas>

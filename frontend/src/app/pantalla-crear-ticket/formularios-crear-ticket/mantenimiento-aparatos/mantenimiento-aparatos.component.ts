@@ -96,6 +96,10 @@ ngOnInit(): void {
 
   ngOnDestroy(): void {
     this.formSub?.unsubscribe();
+    // Evita que se “hereden” valores a otros flujos
+    ['detalle','subcategoria','aparato_id'].forEach(c => {
+      if (this.parentForm.contains(c)) this.parentForm.removeControl(c);
+    });
   }
 
   onEquipoSeleccionado(eq: any) {

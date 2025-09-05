@@ -31,6 +31,8 @@ import { Subscription } from 'rxjs';
 export class SistemasComponent implements OnInit, OnDestroy {
   @Input() parentForm!: FormGroup;
   @Output() formularioValido = new EventEmitter<any>();
+  @Input() soloDescripcion = false;
+  @Input() ocultarPickers: boolean = false; 
 
   inventario: any[] = [];
   categorias: string[] = [];
@@ -43,40 +45,42 @@ export class SistemasComponent implements OnInit, OnDestroy {
     private inventarioService: InventarioService
   ) {}
 
-  ngOnInit(): void {
-    if (!this.parentForm) {
-      console.warn('[SistemasComponent] parentForm no está definido');
-      return;
-    }
-
-    // Solo añado los controles propios de "Sistemas"
-    this.parentForm.addControl('categoria',  this.fb.control('', ));
-    this.parentForm.addControl('aparato_id', this.fb.control('', ));
-    this.parentForm.addControl('subcategoria', this.fb.control('', ));
-    this.parentForm.addControl('descripcion',  this.fb.control('', ));
-
-    // Cargo inventario (su parentForm ya trae 'sucursal_id')
-    this.cargarInventario();
-
-    // Cuando cambie la sucursal (control del padre), recargo inventario
-    this.subs = this.parentForm.get('sucursal_id')!
-      .valueChanges
-      .subscribe((sucId: number) => {
-        this.cargarInventario();
-      });
-
-    // Cuando cambia la categoría, filtro equipos
-    this.parentForm.get('categoria')!
-      .valueChanges
-      .subscribe(cat => {
-        this.equiposFiltrados = this.inventario.filter(eq => eq.categoria === cat);
-        this.parentForm.get('aparato_id')!.reset();
-      });
-
-    // Emito cambios al padre
-    this.parentForm.valueChanges
-      .subscribe(() => emitirPayloadFormulario(this.parentForm, DEPARTAMENTO_IDS.sistemas, this.formularioValido));
+ngOnInit(): void {
+  if (!this.parentForm) {
+    console.warn('[SistemasComponent] parentForm no está definido');
+    return;
   }
+
+  const ensure = (name: string) => {
+    if (!this.parentForm.contains(name)) {
+      this.parentForm.addControl(name, this.fb.control(''));
+    }
+  };
+
+  // Solo garantizamos que existan; si ya los tiene el padre, no los re-creamos
+  ensure('categoria');
+  ensure('subcategoria');
+  ensure('aparato_id');
+  ensure('descripcion');
+
+  // Cargar inventario (aunque se oculte, no rompe; si quieres, puedes condicionar por !ocultarPickers)
+  this.cargarInventario();
+
+  this.subs = this.parentForm.get('sucursal_id')!
+    .valueChanges
+    .subscribe(() => this.cargarInventario());
+
+  this.parentForm.get('categoria')!
+    .valueChanges
+    .subscribe(cat => {
+      this.equiposFiltrados = this.inventario.filter(eq => eq.categoria === cat);
+      this.parentForm.get('aparato_id')!.reset();
+    });
+
+  this.parentForm.valueChanges
+    .subscribe(() => emitirPayloadFormulario(this.parentForm, DEPARTAMENTO_IDS.sistemas, this.formularioValido));
+}
+
 
   ngOnDestroy(): void {
     this.subs?.unsubscribe();

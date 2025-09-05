@@ -1,8 +1,6 @@
-// frontend\src\app\services\inventario.service.ts
-
-
+// frontend/src/app/services/inventario.service.ts
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from 'src/environments/environment';
 
@@ -12,9 +10,16 @@ export class InventarioService {
 
   constructor(private http: HttpClient) {}
 
-  // Obtener todos los registros de inventario
-  obtenerInventario(): Observable<any[]> {
-    return this.http.get<any[]>(`${this.url}/`);
+  // ✅ Ahora puede filtrar por sucursal_id (opcional)
+obtenerInventario(opts?: { sucursal_id?: number }): Observable<any[]> {
+  let params = new HttpParams();
+  if (opts?.sucursal_id) params = params.set('sucursal_id', String(opts.sucursal_id));
+  return this.http.get<any[]>(`${this.url}/`, { params });
+}
+
+  // (opcional) wrapper para mantener compatibilidad donde lo uses así
+  obtenerInventarioPorSucursal(sucursal_id: number): Observable<any[]> {
+    return this.obtenerInventario({ sucursal_id });
   }
 
   obtenerInventarioPorId(id: number): Observable<any> {
@@ -34,7 +39,9 @@ export class InventarioService {
   }
 
   buscarInventario(termino: string): Observable<any[]> {
-    return this.http.get<any[]>(`${this.url}/buscar?nombre=${encodeURIComponent(termino)}`);
+    return this.http.get<any[]>(
+      `${this.url}/buscar?nombre=${encodeURIComponent(termino)}`
+    );
   }
 
   listarSucursales(): Observable<any[]> {
@@ -53,25 +60,26 @@ export class InventarioService {
     return this.http.get<any[]>(`${this.url}/movimientos`);
   }
 
-  obtenerInventarioPorSucursal(sucursal_id: number): Observable<any[]> {
-  return this.http.get<any[]>(`${this.url}?sucursal_id=${sucursal_id}`);
- }
-
   importarInventario(file: File): Observable<any> {
-  const formData = new FormData();
-  formData.append('file', file, file.name);
-  return this.http.post(`${this.url}/importar`, formData);
- }
+    const formData = new FormData();
+    formData.append('file', file, file.name);
+    return this.http.post(`${this.url}/importar`, formData);
+  }
 
   descargarPlantilla(): Observable<Blob> {
-  return this.http.get(`${this.url}/plantilla`, { responseType: 'blob' });
- }
+    return this.http.get(`${this.url}/plantilla`, { responseType: 'blob' });
+  }
 
- exportarInventario(): Observable<Blob> {
-  return this.http.get(`${this.url}/exportar`, { responseType: 'blob' });
+  exportarInventario(): Observable<Blob> {
+    return this.http.get(`${this.url}/exportar`, { responseType: 'blob' });
+  }
+
+  listarCategoriasInventario(params?: { parent_id?: number; nivel?: number; nombre?: string }): Observable<any[]> {
+  let httpParams = new HttpParams();
+  if (params?.parent_id != null) httpParams = httpParams.set('parent_id', String(params.parent_id));
+  if (params?.nivel != null)     httpParams = httpParams.set('nivel', String(params.nivel));
+  if (params?.nombre)            httpParams = httpParams.set('nombre', params.nombre);
+  return this.http.get<any[]>(`${this.url}/categorias-inventario`, { params: httpParams });
 }
-
-
-
 }
 

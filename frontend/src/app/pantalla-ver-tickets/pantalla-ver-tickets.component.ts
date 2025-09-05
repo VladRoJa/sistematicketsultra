@@ -702,13 +702,7 @@ if (columna === 'subcategoria') {
   if (columna === 'detalle') {
     const set = new Set<string>();
     (this.filteredTickets || []).forEach((t: any) => {
-      let label: string | null = null;
-      if (t.jerarquia_clasificacion?.[3]) {
-        label = t.jerarquia_clasificacion[3];
-      } else if (t.detalle != null) {
-        label = this.etiquetaCatalogoPorId(t.detalle);
-      }
-      set.add(label || '—');
+      set.add(this.getDetalleVisible(t));
     });
 
     const opciones = Array.from(set)
@@ -721,13 +715,13 @@ if (columna === 'subcategoria') {
     return;
   }
 
-  // 5) Resto de columnas (flujo genérico)
-  const etiquetaResolver = (col: string, v: string) => {
-    if (col === 'categoria' || col === 'subcategoria' || col === 'detalle') {
-      return this.etiquetaCatalogoPorId(v);
-    }
-    return v;
-  };
+    // 5) Resto de columnas (flujo genérico)
+    const etiquetaResolver = (col: string, v: string) => {
+      if (col === 'categoria' || col === 'subcategoria' || col === 'detalle') {
+        return this.etiquetaCatalogoPorId(v);
+      }
+      return v;
+    };
 
   const opciones = Array.from(setGen)
     .sort((a, b) => etiquetaResolver(columna, a).localeCompare(etiquetaResolver(columna, b)))
@@ -741,6 +735,7 @@ if (columna === 'subcategoria') {
   (this as any)[`${plural}Disponibles`] = opciones;
   (this as any)[`${plural}Filtradas`]  = [...opciones];
   this.temporalSeleccionados[columna]  = opciones.map(o => ({ ...o }));
+
 }
 
 
@@ -1237,7 +1232,7 @@ private construirOpcionesSubcategoria(origen: 'all' | 'filtered' = 'all') {
 private construirOpcionesDetalle(origen: 'all' | 'filtered' = 'all') {
   const base = origen === 'filtered' ? (this.filteredTickets || []) : (this.ticketsCompletos || []);
   const set = new Set<string>();
-  base.forEach((t: any) => set.add((t.detalle || '—')));
+  base.forEach((t: any) => set.add(this.getDetalleVisible(t)));
   this.filtroUnificado.opcionesDisponibles = Array.from(set).sort().map(v => ({ valor: v, etiqueta: v }));
   this.filtroUnificado.seleccionTemporal = new Set(this.filtroUnificado.opcionesDisponibles.map(o => o.valor));
 }
@@ -1277,5 +1272,44 @@ isDescExpanded: Record<number, boolean> = {};
 toggleDesc(id: number): void {
   this.isDescExpanded[id] = !this.isDescExpanded[id];
 }
+
+
+
+private norm(s?: string): string {
+  return (s ?? '')
+    .toString()
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
+/** Lo que se debe mostrar en la columna DETALLE */
+getDetalleVisible(t: Ticket): string {
+  // Detecta Sistemas→Dispositivos usando los mismos campos que muestra la tabla
+  const dep = this.norm(t.departamento);
+  const catTabla = this.norm((t as any)?.categoria || t.jerarquia_clasificacion?.[1]);
+
+  if (dep === 'sistemas' && catTabla === 'dispositivos') {
+    return '—'; // en este flujo no hay detalle
+  }
+
+  // Si el backend mandó el nombre del nivel 4 en la jerarquía, úsalo
+  const jerDet = t.jerarquia_clasificacion?.[3];
+  if (jerDet) return jerDet;
+
+  // Si viene id/valor en t.detalle, resuélvelo
+  if (t.detalle != null && t.detalle !== '') {
+    const num = Number(t.detalle);
+    if (!Number.isNaN(num)) return this.etiquetaCatalogoPorId(num);
+    return String(t.detalle);
+  }
+
+  return '—';
+}
+
+
+
+
 
 }

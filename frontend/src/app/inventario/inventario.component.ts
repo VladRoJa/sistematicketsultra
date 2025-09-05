@@ -43,7 +43,7 @@ export class InventarioComponent implements OnInit {
   inventariosFiltrados: Inventario[] = [];
   filtros: Record<string, FiltroColumna> = {};
   columnasFiltrables = [
-    'nombre', 'descripcion', 'tipo', 'marca', 'proveedor',
+    'nombre', 'descripcion', 'marca', 'proveedor',
     'categoria', 'unidad', 'grupo_muscular', 'codigo_interno','subcategoria', 
   ];
   filtroColumnaActual: string | null = null;
@@ -51,7 +51,7 @@ export class InventarioComponent implements OnInit {
   displayedColumns: string[] = [
     'id',
     ...[
-      'nombre', 'descripcion', 'tipo', 'marca', 'proveedor',
+      'nombre', 'descripcion', 'marca', 'proveedor',
       'categoria', 'unidad', 'grupo_muscular', 'codigo_interno','subcategoria', 
     ],
     'acciones'
@@ -76,12 +76,40 @@ export class InventarioComponent implements OnInit {
     this.loading = true;
     this.error = null;
     this.inventarioService.obtenerInventario().subscribe({
-      next: data => {
-        this.inventarios = data.sort((a, b) => a.id - b.id);
-        this.filtros = inicializarFiltros(this.inventarios, this.columnasFiltrables);
-        this.inventariosFiltrados = [...this.inventarios];
-        this.loading = false;
-      },
+    next: data => {
+      // Normalizamos para mostrar categoria/subcategoria desde el catálogo cuando exista
+      const normalizados = data.map((it: any) => {
+        // posibles formas que puede venir del backend:
+        // - it.categoria_inventario = { nombre: string, subcategoria: string }
+        // - it.categoria_inventario_nombre / it.subcategoria_inventario
+        // - it.categoria (legacy)
+        // - it.tipo (legacy)
+        const catNombre =
+          it?.categoria_inventario?.nombre ??
+          it?.categoria_inventario_nombre ??
+          it?.categoria ??
+          it?.tipo ??
+          '';
+
+        const subcatNombre =
+          it?.categoria_inventario?.subcategoria ??
+          it?.subcategoria_inventario ??
+          it?.subcategoria ??
+          'N/A';
+
+        return {
+          ...it,
+          categoria: catNombre,
+          subcategoria: subcatNombre,
+        };
+      });
+
+      this.inventarios = normalizados.sort((a: any, b: any) => a.id - b.id);
+      this.filtros = inicializarFiltros(this.inventarios, this.columnasFiltrables);
+      this.inventariosFiltrados = [...this.inventarios];
+      this.loading = false;
+    },
+
       error: err => {
         this.error = 'Error al cargar inventario';
         this.loading = false;

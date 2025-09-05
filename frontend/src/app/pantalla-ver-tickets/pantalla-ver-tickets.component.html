@@ -663,8 +663,8 @@
               : '—' }}
         </td>
         <td>{{ ticket.departamento }}</td>
-        <td>{{ ticket.subcategoria || '—' }}</td>
-        <td>{{ ticket.detalle || '—' }}</td>
+        <td>{{ getSubcategoriaVisible(ticket) }}</td>
+        <td>{{ getDetalleVisible(ticket) }}</td>
 
         <!-- Acciones -->
         <td>
