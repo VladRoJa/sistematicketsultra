@@ -125,96 +125,86 @@ def crear_inventario():
         return manejar_error(e, "crear_inventario")
 
 # Obtener todo el inventario
+# backend/app/routes/inventarios.py
+
 @inventario_bp.route('/', methods=['GET', 'OPTIONS'], strict_slashes=False)
 @jwt_required()
 def obtener_inventario():
     try:
         sucursal_id = request.args.get('sucursal_id', type=int)
+        categoria_inventario_id = request.args.get('categoria_inventario_id', type=int)
 
-        # ---- Helpers locales ----
         def _resolver_categoria(inv):
-            """
-            Regresa (categoria, subcategoria) usando SOLO el catálogo si hay FK.
-            Si NO hay FK o la FK es inválida, cae a los campos legacy del inventario.
-            """
             cat_id = getattr(inv, 'categoria_inventario_id', None)
             if cat_id:
                 cat = CategoriaInventario.query.get(cat_id)
                 if cat:
-                    # SOLO catálogo
-                    return (getattr(cat, 'nombre', '') or ''), (getattr(cat, 'subcategoria', '') or '')
-                # FK inválida -> legacy
-                return (inv.categoria or ''), (inv.subcategoria or '')
-            # Sin FK -> legacy
+                    return (cat.nombre or ''), ''  # usamos solo catálogo
             return (inv.categoria or ''), (inv.subcategoria or '')
 
+        # ---------- Con sucursal (JOIN) ----------
+        if sucursal_id is not None:
+            q = (db.session.query(InventarioGeneral, InventarioSucursal.stock)
+                 .join(InventarioSucursal, InventarioSucursal.inventario_id == InventarioGeneral.id)
+                 .filter(InventarioSucursal.sucursal_id == sucursal_id))
+            if categoria_inventario_id is not None:
+                q = q.filter(InventarioGeneral.categoria_inventario_id == categoria_inventario_id)
+            # opcional: solo con stock
+            # q = q.filter(InventarioSucursal.stock > 0)
 
-        def descripcion_larga(inv, categoria_resuelta=None):
-            partes = [
-                inv.nombre,
-                inv.marca,
-                inv.proveedor,
-                (categoria_resuelta if categoria_resuelta is not None else inv.categoria),
-                f"ID:{inv.id}"
-            ]
-            return " - ".join([str(p) for p in partes if p])
-
-        # ---------- Por sucursal ----------
-        if sucursal_id:
-            inventarios = InventarioSucursal.query.filter_by(sucursal_id=sucursal_id).all()
+            rows = q.order_by(InventarioGeneral.nombre.asc()).all()
             data = []
-            for inv_suc in inventarios:
-                i = InventarioGeneral.query.get(inv_suc.inventario_id)
-                if i:
-                    categoria_res, subcategoria_res = _resolver_categoria(i)
-                    data.append({
-                        'id': i.id,
-                        'nombre': i.nombre,
-                        'descripcion': i.descripcion,
-                        'marca': i.marca,
-                        'proveedor': i.proveedor,
-                        'categoria': categoria_res,                 # ✅ resuelta
-                        'subcategoria': subcategoria_res,           # ✅ resuelta
-                        'unidad_medida': i.unidad_medida,
-                        'codigo_interno': i.codigo_interno,
-                        'no_equipo': i.no_equipo,
-                        'gasto_sem': i.gasto_sem,
-                        'gasto_mes': i.gasto_mes,
-                        'pedido_mes': i.pedido_mes,
-                        'semana_pedido': i.semana_pedido,
-                        'fecha_inventario': str(i.fecha_inventario) if i.fecha_inventario else None,
-                        'grupo_muscular': i.grupo_muscular,
-                        'stock': inv_suc.stock,
-                        'descripcion_larga': descripcion_larga(i, categoria_res),
-                        'categoria_inventario_id': getattr(i, 'categoria_inventario_id', None),
-                    })
+            for inv, stock in rows:
+                categoria_res, subcat_res = _resolver_categoria(inv)
+                data.append({
+                    'id': inv.id,
+                    'nombre': inv.nombre,
+                    'descripcion': inv.descripcion,
+                    'marca': inv.marca,
+                    'proveedor': inv.proveedor,
+                    'categoria': categoria_res,
+                    'subcategoria': subcat_res,
+                    'unidad_medida': inv.unidad_medida,
+                    'codigo_interno': inv.codigo_interno,
+                    'no_equipo': inv.no_equipo,
+                    'gasto_sem': inv.gasto_sem,
+                    'gasto_mes': inv.gasto_mes,
+                    'pedido_mes': inv.pedido_mes,
+                    'semana_pedido': inv.semana_pedido,
+                    'fecha_inventario': str(inv.fecha_inventario) if inv.fecha_inventario else None,
+                    'grupo_muscular': inv.grupo_muscular,
+                    'stock': stock,
+                    'categoria_inventario_id': getattr(inv, 'categoria_inventario_id', None),
+                })
             return jsonify(data), 200
 
-        # ---------- Global ----------
-        inventario = InventarioGeneral.query.all()
+        # ---------- Global (sin sucursal) ----------
+        q = InventarioGeneral.query
+        if categoria_inventario_id is not None:
+            q = q.filter(InventarioGeneral.categoria_inventario_id == categoria_inventario_id)
+
+        invs = q.order_by(InventarioGeneral.nombre.asc()).all()
         data = []
-        for i in inventario:
-            categoria_res, subcategoria_res = _resolver_categoria(i)
+        for inv in invs:
+            categoria_res, subcat_res = _resolver_categoria(inv)
             data.append({
-                'id': i.id,
-                # 'tipo': i.tipo,  # ❌ Eliminado: dejamos de exponer 'tipo'
-                'nombre': i.nombre,
-                'descripcion': i.descripcion,
-                'marca': i.marca,
-                'proveedor': i.proveedor,
-                'categoria': categoria_res,                 # ✅ resuelta
-                'subcategoria': subcategoria_res,           # ✅ resuelta
-                'unidad_medida': i.unidad_medida,
-                'codigo_interno': i.codigo_interno,
-                'no_equipo': i.no_equipo,
-                'gasto_sem': i.gasto_sem,
-                'gasto_mes': i.gasto_mes,
-                'pedido_mes': i.pedido_mes,
-                'semana_pedido': i.semana_pedido,
-                'fecha_inventario': str(i.fecha_inventario) if i.fecha_inventario else None,
-                'grupo_muscular': i.grupo_muscular,
-                'descripcion_larga': descripcion_larga(i, categoria_res),
-                'categoria_inventario_id': getattr(i, 'categoria_inventario_id', None),
+                'id': inv.id,
+                'nombre': inv.nombre,
+                'descripcion': inv.descripcion,
+                'marca': inv.marca,
+                'proveedor': inv.proveedor,
+                'categoria': categoria_res,
+                'subcategoria': subcat_res,
+                'unidad_medida': inv.unidad_medida,
+                'codigo_interno': inv.codigo_interno,
+                'no_equipo': inv.no_equipo,
+                'gasto_sem': inv.gasto_sem,
+                'gasto_mes': inv.gasto_mes,
+                'pedido_mes': inv.pedido_mes,
+                'semana_pedido': inv.semana_pedido,
+                'fecha_inventario': str(inv.fecha_inventario) if inv.fecha_inventario else None,
+                'grupo_muscular': inv.grupo_muscular,
+                'categoria_inventario_id': getattr(inv, 'categoria_inventario_id', None),
             })
         return jsonify(data), 200
 

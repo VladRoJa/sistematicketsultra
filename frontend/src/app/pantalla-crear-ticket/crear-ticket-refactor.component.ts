@@ -95,6 +95,14 @@ export class CrearTicketRefactorComponent implements OnInit, OnDestroy {
       .replace(/\s+/g, ' ');         // colapsa espacios
   }
 
+  private onRutaChangeFn?: () => void;
+  private hookedNivel2 = false;
+  private nivel2Sub?: Subscription;
+  private reqTokenByNivel: Record<number, number> = {};
+  private readonly ID_CAT_DISPOSITIVOS = 2;
+  trackByNivel = (_: number, n: { nivel: number }) => n.nivel;
+
+
 
 
   constructor(
@@ -133,10 +141,10 @@ private limpiarRastroDeOtrosSubforms() {
 
 
 ngOnInit(): void {
-  // Obtén la sucursal del usuario del localStorage o como corresponda
+  // 1) Sucursal por defecto (del usuario)
   const sucursalIdUsuario = Number(localStorage.getItem('sucursal_id')) || null;
 
-  // Inicializa el form con sucursal_id para TODOS
+  // 2) Form principal
   this.form = this.fb.group({
     sucursal_id: [sucursalIdUsuario, Validators.required],
     descripcion_general: [''],
@@ -149,7 +157,7 @@ ngOnInit(): void {
     descripcion_refaccion: [''],
   });
 
-  // Si es admin, puedes permitir cambiar la sucursal y cargar lista de sucursales
+  // 3) Si es admin, carga catálogo de sucursales
   if (this.esAdmin()) {
     this.sucursalesService.obtenerSucursales().subscribe({
       next: (sucs) => (this.listaSucursales = sucs || []),
@@ -157,36 +165,46 @@ ngOnInit(): void {
     });
   }
 
-  // 3. Carga niveles iniciales
+  // 4) Handler para cambios de ruta (Departamento/Categoría)
+  this.onRutaChangeFn = () => {
+
+    console.debug('[onRutaChange]', {
+  n1: this.form.get('nivel_1')?.value,
+  n2: this.form.get('nivel_2')?.value,
+  esSisDisp: this.mostrarSubformSistemasDispositivos
+});
+    const depId = this.form.get('nivel_1')?.value;
+    const catId = this.form.get('nivel_2')?.value;
+
+    const dep = this.niveles[0]?.opciones.find(x => `${x.id}` === `${depId}`);
+    const cat = this.niveles[1]?.opciones.find(x => `${x.id}` === `${catId}`);
+
+    const esSisDisp =
+      this._norm(dep?.nombre) === 'sistemas' &&
+      this._norm(cat?.nombre) === 'dispositivos';
+
+    // Limpia rastro del otro flujo
+    this.limpiarRastroDeOtrosSubforms();
+
+    // Si es Sistemas→Dispositivos, forzar recarga del nivel 3 correcto
+    if (esSisDisp && catId) {
+      this.cargarNivel(3, catId, 'Subcategoría');
+    }
+
+    this.actualizarValidadoresDescripcion();
+  };
+
+  // 5) Cargar nivel 1 (crea control nivel_1)
   this.cargarNivel(1, null, 'Departamento');
 
-  const onRutaChange = () => {
-  const depId = this.form.get('nivel_1')?.value;
-  const catId = this.form.get('nivel_2')?.value;
-
-  const dep = this.niveles[0]?.opciones.find(x => `${x.id}` === `${depId}`);
-  const cat = this.niveles[1]?.opciones.find(x => `${x.id}` === `${catId}`);
-
-  const esSisDisp =
-    this._norm(dep?.nombre) === 'sistemas' &&
-    this._norm(cat?.nombre) === 'dispositivos';
-
-  // limpia rastro del otro flujo
-  this.limpiarRastroDeOtrosSubforms();
-
-  // si es Sistemas→Dispositivos, fuerza recargar el nivel 3 correcto
-  if (esSisDisp && catId) {
-    this.cargarNivel(3, catId, 'Subcategoría');
+  // 6) Suscripción segura a nivel_1 (el control ya existe)
+  const c1 = this.form.get('nivel_1') as FormControl | null;
+  if (c1) {
+this.subs.push(c1.valueChanges.subscribe(() => this.onRutaChangeFn?.()));
   }
 
-  this.actualizarValidadoresDescripcion();
-};
-
-this.subs.push(this.form.get('nivel_1')!.valueChanges.subscribe(onRutaChange));
-this.subs.push(this.form.get('nivel_2')!.valueChanges.subscribe(onRutaChange));
-
-  
 }
+
 
 
 actualizarValidadoresDescripcion() {
@@ -223,9 +241,8 @@ cargarNivel(nivel: number, parentId: number | null, etiqueta: string) {
   // 1) Limpia niveles posteriores
   this.niveles = this.niveles.filter(n => n.nivel < nivel);
 
-  // 2) Detecta la ruta actual (para decidir validadores)
+  // 2) Ruta actual
   const controlName = `nivel_${nivel}`;
-
   const depIdSel = this.form.get('nivel_1')?.value;
   const n2IdSel  = this.form.get('nivel_2')?.value;
   const depOpt   = (this.niveles[0]?.opciones || []).find(o => `${o.id}` === `${depIdSel}`);
@@ -239,21 +256,17 @@ cargarNivel(nivel: number, parentId: number | null, etiqueta: string) {
   const esAparatos      = this._norm(catOpt?.nombre) === 'aparatos';
   const esMantAparatos  = esMantenimiento && esAparatos;
 
-  // 3) Reglas de obligatoriedad por ruta/nivel
-  let validators: any[] = [];
-  if (nivel <= 2) {
-    validators = [Validators.required];                 // nivel 1 y 2 siempre requeridos
-  } else if (esSisDisp && (nivel === 3 || nivel === 4)) {
-    validators = [Validators.required];                 // en Sistemas→Dispositivos, 3 y 4 requeridos
-  } else if (esMantAparatos && nivel >= 3) {
-    validators = [];                                    // en Mantenimiento→Aparatos, >=3 opcionales
-  } else if (nivel === 5) {
-    validators = [];                                    // nivel 5 opcional para cualquier ruta
-  } else {
-    validators = [Validators.required];                 // genérico
-  }
+  console.debug('[cargarNivel] nivel:', nivel, 'parentId:', parentId, 'etiqueta:', etiqueta, 'esSisDisp:', esSisDisp);
 
-  // 4) Crea/ajusta el control con los validadores definidos
+  // 3) Validadores por nivel/ruta
+  let validators: any[] = [];
+  if (nivel <= 2) validators = [Validators.required];
+  else if (esSisDisp && (nivel === 3 || nivel === 4)) validators = [Validators.required];
+  else if (esMantAparatos && nivel >= 3) validators = [];
+  else if (nivel === 5) validators = [];
+  else validators = [Validators.required];
+
+  // 4) Crea/ajusta control
   if (!this.form.contains(controlName)) {
     this.form.addControl(controlName, new FormControl('', validators));
   } else {
@@ -263,7 +276,7 @@ cargarNivel(nivel: number, parentId: number | null, etiqueta: string) {
     ctrl.updateValueAndValidity({ emitEvent: false });
   }
 
-  // 5) Registra el nivel en la UI
+  // 5) Registra el nivel en UI
   this.niveles.push({
     nivel,
     etiqueta,
@@ -272,147 +285,163 @@ cargarNivel(nivel: number, parentId: number | null, etiqueta: string) {
     loading: true,
   });
 
-  // 6) Carga opciones
+  // Hook onRutaChange a nivel_2 (solo una vez)
+  if (nivel === 2 && !this.hookedNivel2 && this.onRutaChangeFn) {
+    const c2 = this.form.get('nivel_2') as FormControl;
+    if (c2) {
+      this.nivel2Sub?.unsubscribe();
+      this.nivel2Sub = c2.valueChanges.subscribe(() => this.onRutaChangeFn?.());
+      this.hookedNivel2 = true;
+    }
+  }
+
+  // token anti race
+  const token = (this.reqTokenByNivel[nivel] || 0) + 1;
+  this.reqTokenByNivel[nivel] = token;
+
+  // ============================
+  // 🔴 RAMA ESPECIAL *ANTES* del catálogo plano
+  // ============================
+
+  // NIVEL 3: categorías de inventario hijas de "Dispositivos" (id=2 en catalogo_categoria_inventario)
+  if (nivel === 3 && esSisDisp) {
+    const fila3 = this.niveles.find(n => n.nivel === 3);
+    if (!fila3) return;
+
+    const padreIdInventario = 2; // "Dispositivos" en catalogo_categoria_inventario
+    console.debug('[N3] Listando categorías de inventario parent_id=', padreIdInventario);
+
+    this.inventarioService.listarCategoriasInventario({ parent_id: padreIdInventario }).subscribe({
+      next: (cats: any[]) => {
+        if (token !== this.reqTokenByNivel[nivel]) return;
+        fila3.opciones = cats || [];
+        fila3.loading  = false;
+
+        const ctrl3 = fila3.control;
+        if (ctrl3.value && !fila3.opciones.some(o => `${o.id}` === `${ctrl3.value}`)) ctrl3.setValue(null);
+
+        this.subs.push(
+          ctrl3.valueChanges.subscribe(val => {
+            this.niveles = this.niveles.filter(n => n.nivel <= nivel);
+            if (val) this.cargarNivel(4, val, 'Equipo'); // Nivel 4: inventario por categoría
+            this.actualizarValidadoresDescripcion();
+          })
+        );
+      },
+      error: (e) => {
+        console.error('[N3] Error categorías inventario:', e);
+        fila3.opciones = [];
+        fila3.loading  = false;
+      }
+    });
+    return; // 🔚 no llames al catálogo plano
+  }
+
+  // NIVEL 4: equipos del inventario por categoría y sucursal
+  if (nivel === 4 && esSisDisp) {
+    const fila4 = this.niveles.find(n => n.nivel === 4);
+    if (!fila4) return;
+
+    const catId = this.form.get('nivel_3')?.value as number | null;
+    const sucursalDestino = this.form.value.sucursal_id ?? Number(localStorage.getItem('sucursal_id')) ?? undefined;
+
+    console.debug('[N4] Listando inventario por categoría=', catId, 'sucursal=', sucursalDestino);
+
+    this.inventarioService.listarInventarioPorCategoriaYSucursal({
+      categoria_inventario_id: Number(catId),
+      sucursal_id: sucursalDestino,
+    }).subscribe({
+      next: (items: any[]) => {
+        if (token !== this.reqTokenByNivel[nivel]) return;
+        fila4.opciones = (items || []).map(it => ({
+          id: it.id,
+          nombre: `${it.nombre}${it.marca ? ' - ' + it.marca : ''}`,
+          nivel: 4,
+          nivel_nombre: 'Equipo',
+        }));
+        fila4.loading  = false;
+
+        const ctrl4 = fila4.control;
+        if (ctrl4.value && !fila4.opciones.some(o => `${o.id}` === `${ctrl4.value}`)) ctrl4.setValue(null);
+
+        this.subs.push(
+          ctrl4.valueChanges.subscribe(val => {
+            this.niveles = this.niveles.filter(n => n.nivel <= nivel);
+            this.form.patchValue({ aparato_id: val });
+            this.actualizarValidadoresDescripcion();
+          })
+        );
+      },
+      error: (e) => {
+        console.error('[N4] Error inventario por categoría:', e);
+        fila4.opciones = [];
+        fila4.loading  = false;
+      }
+    });
+    return; // 🔚 no llames al catálogo plano
+  }
+
+  // ============================
+  // Caso genérico (catálogo plano)
+  // ============================
   this.catalogoService.getClasificacionesPlanas(undefined, parentId ?? undefined).subscribe({
     next: (res: any[]) => {
-      const idx = this.niveles.findIndex(n => n.nivel === nivel);
+      if (token !== this.reqTokenByNivel[nivel]) return;
+      const fila = this.niveles.find(n => n.nivel === nivel);
+      if (!fila) return;
 
-      // ============================
-      // NIVEL 3 especial: Sistemas → Dispositivos
-      // ============================
-      if (nivel === 3 && esSisDisp) {
-        this.form.get('detalle')?.setValue(null, { emitEvent: false });
-        this.form.get('aparato_id')?.setValue(null, { emitEvent: false });
-        this.form.get('subcategoria')?.setValue(null, { emitEvent: false });
+      fila.opciones = nivel === 1
+        ? (res || []).filter(x => x.nivel === 1 || x.parent_id == null || x.parent_id === 0)
+        : (res || []);
 
-        this.inventarioService
-          .listarCategoriasInventario({ nombre: 'Dispositivos', nivel: 1 })
-          .pipe(
-            switchMap(rows => {
-              const padre = rows?.[0];
-              if (!padre) return of([] as any[]);
-              return this.inventarioService.listarCategoriasInventario({ parent_id: padre.id, nivel: 2 });
-            })
-          )
-          .subscribe({
-            next: (cats: any[]) => {
-              const allow = new Set(this.CATS_SISTEMAS.map(this._norm)); // recepcion/gerencia/uso común
-              const candidatas = (cats || []).filter(c => allow.has(this._norm(c.nombre)));
+      fila.loading = false;
 
-              this.niveles[idx].opciones = candidatas;
-              this.niveles[idx].loading  = false;
+      const ctrl = fila.control;
+      if (ctrl.value && !fila.opciones.some(o => `${o.id}` === `${ctrl.value}`)) ctrl.setValue(null);
 
-              const ctrl3 = this.niveles[idx].control;
-              if (ctrl3.value && !candidatas.some(o => `${o.id}` === `${ctrl3.value}`)) ctrl3.setValue(null);
+this.subs.push(
+  ctrl.valueChanges.subscribe(val => {
+    // 👇 calcula si estás en Sistemas→Dispositivos
+    const depSel = this.niveles[0]?.opciones.find(o => `${o.id}` === `${this.form.get('nivel_1')?.value}`);
+    const catSel = this.niveles[1]?.opciones.find(o => `${o.id}` === `${this.form.get('nivel_2')?.value}`);
+    const _esSisDisp = this._norm(depSel?.nombre) === 'sistemas' && this._norm(catSel?.nombre) === 'dispositivos';
 
-              this.subs.push(
-                ctrl3.valueChanges.subscribe(val => {
-                  this.niveles = this.niveles.filter(n => n.nivel <= nivel);
-                  if (val) this.cargarNivel(4, val, 'Equipo'); // nivel 4 se llena con inventario
-                  this.actualizarValidadoresDescripcion();
-                })
-              );
-            },
-            error: () => {
-              this.niveles[idx].opciones = [];
-              this.niveles[idx].loading  = false;
-            }
-          });
+    // ⛔️ Si es Sistemas→Dispositivos, NO limpies ni generes hijos aquí.
+    // Deja que onRutaChange() maneje el nivel 3 especial.
+    if (nivel === 2 && _esSisDisp) {
+      this.actualizarValidadoresDescripcion();
+      return;
+    }
 
-        return; // corta el flujo genérico
-      }
+    // ✅ Fuera de la rama especial, ahora sí limpia y genera hijos normales
+    this.niveles = this.niveles.filter(n => n.nivel <= nivel);
 
-      // ============================
-      // NIVEL 4 especial: Sistemas → Dispositivos (equipos por inventario)
-      // ============================
-      if (nivel === 4 && esSisDisp) {
-        const catId    = this.form.get('nivel_3')?.value;
-        const catObj   = (this.niveles[2]?.opciones || []).find(x => `${x.id}` === `${catId}`);
-        const catNombre= catObj?.nombre || '';
-
-        const sucursalDestino =
-          this.form.value.sucursal_id ?? Number(localStorage.getItem('sucursal_id')) ?? null;
-
-        this.inventarioService
-          .obtenerInventario(sucursalDestino ? { sucursal_id: sucursalDestino } : undefined)
-          .subscribe({
-            next: (lista: any[]) => {
-              const opciones = (lista || [])
-                .filter(it => this._norm(it.categoria) === this._norm(catNombre))
-                .map(it => ({
-                  id: it.id,
-                  nombre: `${it.nombre}${it.marca ? ' - ' + it.marca : ''}`,
-                  nivel: 4,
-                  nivel_nombre: 'Equipo',
-                }));
-
-              this.niveles[idx].opciones = opciones;
-              this.niveles[idx].loading  = false;
-
-              const ctrl4 = this.niveles[idx].control;
-              if (ctrl4.value && !opciones.some(o => `${o.id}` === `${ctrl4.value}`)) ctrl4.setValue(null);
-
-              this.subs.push(
-                ctrl4.valueChanges.subscribe(val => {
-                  this.niveles = this.niveles.filter(n => n.nivel <= nivel);
-                  this.form.patchValue({ aparato_id: val });
-                  this.actualizarValidadoresDescripcion();
-                })
-              );
-            },
-            error: () => {
-              this.niveles[idx].opciones = [];
-              this.niveles[idx].loading  = false;
-            }
-          });
-        return; // corta aquí también
-      }
-
-      // ============================
-      // Caso genérico (sin filtros especiales)
-      // ============================
-      this.niveles[idx].opciones =
-        nivel === 1
-          ? (res || []).filter(x => x.nivel === 1 || x.parent_id == null || x.parent_id === 0)
-          : res;
-
-      this.niveles[idx].loading = false;
-
-      const ctrl = this.niveles[idx].control;
-      if (ctrl.value && !this.niveles[idx].opciones.some(o => `${o.id}` === `${ctrl.value}`)) {
-        ctrl.setValue(null);
-      }
-
-      this.subs.push(
-        ctrl.valueChanges.subscribe(val => {
-          // limpia niveles posteriores al actual
+    if (val) {
+      this.catalogoService.getClasificacionesPlanas(undefined, val).subscribe((hijos: any[]) => {
+        const tieneHijos = Array.isArray(hijos) && hijos.length > 0;
+        if (tieneHijos && nivel < 5) {
+          const etiquetaSig = hijos[0]?.nivel_nombre || 'Siguiente nivel';
+          this.cargarNivel(nivel + 1, val, etiquetaSig);
+        } else {
+          const nextName = `nivel_${nivel + 1}`;
+          if (this.form.contains(nextName)) this.form.removeControl(nextName);
           this.niveles = this.niveles.filter(n => n.nivel <= nivel);
+        }
+      });
+    }
 
-          if (val) {
-            this.catalogoService.getClasificacionesPlanas(undefined, val).subscribe((hijos: any[]) => {
-              const tieneHijos = Array.isArray(hijos) && hijos.length > 0;
-
-              if (tieneHijos) {
-                const etiquetaSig = hijos[0]?.nivel_nombre || 'Siguiente nivel';
-                this.cargarNivel(nivel + 1, val, etiquetaSig);
-              } else {
-                // 🚫 NO hay hijos: asegúrate de no dejar nivel_(nivel+1) colgado
-                const nextName = `nivel_${nivel + 1}`;
-                if (this.form.contains(nextName)) this.form.removeControl(nextName);
-                this.niveles = this.niveles.filter(n => n.nivel <= nivel);
-              }
-            });
-          }
-
-          this.actualizarValidadoresDescripcion();
-        })
-      );
+    this.actualizarValidadoresDescripcion();
+  })
+);
 
     },
-    error: () => {
+    error: (e) => {
+      if (token !== this.reqTokenByNivel[nivel]) return;
+      const fila = this.niveles.find(n => n.nivel === nivel);
+      if (!fila) return;
+      console.error('[Gen] Error catálogo clasificaciones:', e);
       mostrarAlertaToast('Error cargando opciones', 'error');
-      const idx = this.niveles.findIndex(n => n.nivel === nivel);
-      if (idx >= 0) this.niveles[idx].loading = false;
+      fila.loading = false;
     },
   });
 }
@@ -420,27 +449,24 @@ cargarNivel(nivel: number, parentId: number | null, etiqueta: string) {
 
 
 
-  public get mostrarSubformAparatos(): boolean {
-    const n1 = this.form.get('nivel_1')?.value;
-    const n2 = this.form.get('nivel_2')?.value;
-    const dep = this.niveles[0]?.opciones.find((x) => x.id === n1);
-    const cat = this.niveles[1]?.opciones.find((x) => x.id === n2);
-    return (
-      dep?.nombre?.toLowerCase() === 'mantenimiento' &&
-      cat?.nombre?.toLowerCase() === 'aparatos'
-    );
-  }
+public get mostrarSubformAparatos(): boolean {
+  const n1 = this.form.get('nivel_1')?.value;
+  const n2 = this.form.get('nivel_2')?.value;
+  const dep = this.niveles[0]?.opciones.find(x => `${x.id}` === `${n1}`);
+  const cat = this.niveles[1]?.opciones.find(x => `${x.id}` === `${n2}`);
+  return this._norm(dep?.nombre) === 'mantenimiento'
+      && this._norm(cat?.nombre) === 'aparatos';
+}
 
-  public get mostrarSubformSistemasDispositivos(): boolean {
-    const n1 = this.form.get('nivel_1')?.value;
-    const n2 = this.form.get('nivel_2')?.value;
+public get mostrarSubformSistemasDispositivos(): boolean {
+  const n1 = this.form.get('nivel_1')?.value;
+  const n2 = this.form.get('nivel_2')?.value;
+  const dep   = this.niveles[0]?.opciones.find(x => `${x.id}` === `${n1}`);
+  const catN2 = this.niveles[1]?.opciones.find(x => `${x.id}` === `${n2}`);
+  return this._norm(dep?.nombre) === 'sistemas'
+      && this._norm(catN2?.nombre) === 'dispositivos';
+}
 
-    const dep = this.niveles[0]?.opciones.find(x => x.id === n1);
-    const catN2 = this.niveles[1]?.opciones.find(x => x.id === n2);
-
-    return this._norm(dep?.nombre) === 'sistemas'
-        && this._norm(catN2?.nombre) === 'dispositivos';
-  }
 
 
 
@@ -542,8 +568,14 @@ enviar() {
   this.http.post<{ mensaje: string }>(`${environment.apiUrl}/tickets/create`, body, { headers }).subscribe({
     next: () => {
       mostrarAlertaToast('✅ Ticket creado correctamente');
-      this.form.reset();
+      this.form.reset({
+        sucursal_id: Number(localStorage.getItem('sucursal_id')) || null,
+        criticidad: null
+      });
+      this.nivel2Sub?.unsubscribe();  
+      this.nivel2Sub = undefined;
       this.niveles = [];
+      this.hookedNivel2 = false;
       this.cargarNivel(1, null, 'Departamento');
       this.loadingGuardar = false;
     },
@@ -552,7 +584,7 @@ enviar() {
       this.loadingGuardar = false;
     }
   });
-}
+} 
 
 
 getCamposInvalidos(): string[] {
@@ -607,9 +639,10 @@ onFormularioSistemasValido(payload: any) {
 
 
 
-  ngOnDestroy(): void {
-    this.subs.forEach((s) => s.unsubscribe());
-  }
+    ngOnDestroy(): void {
+      this.subs.forEach((s) => s.unsubscribe());
+      this.nivel2Sub?.unsubscribe(); // ← agrega esto
+    }
 
 
   
