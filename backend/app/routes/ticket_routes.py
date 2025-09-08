@@ -284,7 +284,7 @@ def export_excel():
         if not user:
             return jsonify({"mensaje": "Usuario no encontrado"}), 404
 
-        # ---------------- Filtros (igual que tenías) ----------------
+        # ---------------- Filtros ----------------
         estados        = request.args.getlist('estado')
         departamentos  = request.args.getlist('departamento_id')
         criticidades   = request.args.getlist('criticidad')
@@ -313,6 +313,7 @@ def export_excel():
         if usernames:
             query = query.filter(Ticket.username.in_(usernames))
 
+        from sqlalchemy import or_
         def filtrar_con_null(campo, valores):
             condiciones = []
             for v in valores:
@@ -341,6 +342,7 @@ def export_excel():
             else:
                 query = query.filter(Ticket.aparato_id.in_(inventario_ids))
 
+        from datetime import datetime
         if fecha_desde:
             query = query.filter(Ticket.fecha_creacion >= datetime.strptime(fecha_desde, '%Y-%m-%d'))
         if fecha_hasta:
@@ -354,36 +356,49 @@ def export_excel():
         if fecha_prog_hasta:
             query = query.filter(Ticket.fecha_en_progreso <= datetime.strptime(fecha_prog_hasta, '%Y-%m-%d'))
 
-        tickets = query.order_by(Ticket.fecha_creacion.desc()).all()
+        # 👉 Más nuevos arriba (por ID)
+        tickets = query.order_by(Ticket.id.desc()).all()
 
-        # ===== Mapas y helpers =====
+        # ===== Helpers =====
+        import pytz
         tz_tijuana = pytz.timezone("America/Tijuana")
         hoy_local = datetime.now(tz_tijuana).date()
-
         SLA_DIAS_BY_CRIT = {1: 14, 2: 7, 3: 5, 4: 2, 5: 1}
 
-        def to_local_date(dt):
-            """Devuelve date en America/Tijuana o None."""
+        def to_local_excel(dt):
+            """
+            Convierte a hora de Tijuana y devuelve un datetime *naive* (sin tzinfo),
+            porque Excel no soporta tz-aware.
+            """
             if not dt:
                 return None
             try:
                 if getattr(dt, 'tzinfo', None):
-                    return dt.astimezone(tz_tijuana).date()
-                return dt.date()
+                    # tz-aware -> pásalo a Tijuana
+                    dt_local = dt.astimezone(tz_tijuana)
+                else:
+                    # Si tus naïve ya están en hora local, déjalo así.
+                    # Si tus naïve fueran UTC, usa:
+                    # from pytz import utc
+                    # dt_local = utc.localize(dt).astimezone(tz_tijuana)
+                    dt_local = dt
+                return dt_local.replace(tzinfo=None)  # 👈 SIN tzinfo
             except Exception:
                 return None
 
-        def ultimos_tres_motivos(ticket, dict_ticket):
-            """
-            Intenta leer los 3 últimos motivos del historial de fecha de solución.
-            1) relación ORM (si existe)
-            2) lista en dict (to_dict()['historial_fechas'])
-            """
-            motivos = []
+        def _to_ts_safe(d):
+            try:
+                if d is None:
+                    return 0.0
+                if getattr(d, 'tzinfo', None) is None:
+                    return d.timestamp()
+                return d.replace(tzinfo=None).timestamp()
+            except Exception:
+                return 0.0
 
-            # 1) ORM
+        def ultimos_tres_motivos(ticket, dict_ticket):
+            motivos = []
             rel = None
-            # nombres típicos de la relación
             for attr in ("historial_fechas_solucion", "historial_fechas", "cambios_fecha_solucion"):
                 if hasattr(ticket, attr):
                     rel = getattr(ticket, attr)
@@ -392,7 +407,9 @@ def export_excel():
                 try:
                     registros = sorted(
                         list(rel),
-                        key=lambda r: getattr(r, "fecha_cambio", None) or getattr(r, "fecha", None) or datetime.min,
+                        key=lambda r: _to_ts_safe(
+                            getattr(r, "fecha_cambio", None) or getattr(r, "fecha", None)
+                        ),
                         reverse=True
                     )
                     for r in registros:
@@ -402,7 +419,6 @@ def export_excel():
                 except Exception:
                     pass
 
-            # 2) JSON dentro del dict
             if not motivos:
                 items = dict_ticket.get("historial_fechas") or []
                 if isinstance(items, list):
@@ -419,44 +435,28 @@ def export_excel():
                     except Exception:
                         pass
 
-            # completa a 3
             motivos = (motivos + ["", "", ""])[:3]
             return motivos[0], motivos[1], motivos[2]
 
-        # mapa id -> nombre de sucursal
         sucursales_map = {s.sucursal_id: s.sucursal for s in Sucursal.query.all()}
 
         # ===== Excel =====
+        from io import BytesIO
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill
+
         wb = Workbook()
         ws = wb.active
         ws.title = "Tickets"
 
         headers = [
-            "ID",
-            "Aparato/Dispositivo",
-            "Código Interno",
-            "Descripción",
-            "Usuario",
-            "Estado",
-            "Criticidad",
-            "Fecha Creación",
-            "Fecha En Progreso",
-            "Tiempo Transcurrido",
-            "Deber ser",
-            "Fecha Solución",
-            "Comentario 1",
-            "Comentario 2",
-            "Comentario 3",
-            "Fecha Finalizado",
-            "Tiempo Solución",
-            "Sucursal (destino)",
-            "Departamento",
-            "Categoría",
-            "Subcategoria",
-            "Detalle",
-            "Problema Detectado",
-            "Refacción",
-            "Descripción Refacción",
+            "ID", "Aparato/Dispositivo", "Código Interno", "Descripción", "Usuario",
+            "Estado", "Criticidad", "Fecha Creación", "Fecha En Progreso",
+            "Tiempo Transcurrido", "Deber ser", "Fecha Solución",
+            "Comentario 1", "Comentario 2", "Comentario 3",
+            "Fecha Finalizado", "Tiempo Solución", "Sucursal (destino)",
+            "Departamento", "Categoría", "Subcategoria", "Detalle",
+            "Problema Detectado", "Refacción", "Descripción Refacción",
         ]
         ws.append(headers)
 
@@ -468,10 +468,13 @@ def export_excel():
             cell.font = header_font
             cell.fill = header_fill
 
+        # Formato para columnas con fecha/hora (08/09/2025 06:13 AM)
+        excel_datetime_fmt = 'dd/mm/yyyy hh:mm AM/PM'
+
         for idx, ticket in enumerate(tickets, start=2):
             t = ticket.to_dict()
 
-            # Aparato/Dispositivo
+            # Aparato/Dispositivo y código
             if ticket.inventario and ticket.inventario.nombre:
                 aparato_nombre = ticket.inventario.nombre
                 codigo_interno = ticket.inventario.codigo_interno or "—"
@@ -482,33 +485,32 @@ def export_excel():
                 aparato_nombre = "—"
                 codigo_interno = "—"
 
-            # Sucursal destino (nombre)
+            # Sucursal destino
             suc_id_dest = ticket.sucursal_id_destino if ticket.sucursal_id_destino is not None else ticket.sucursal_id
             sucursal_nombre_dest = sucursales_map.get(suc_id_dest, "—")
 
             departamento_txt = ticket.departamento.nombre if ticket.departamento else "—"
 
-            # Fechas a date (zona local)
-            f_crea = to_local_date(ticket.fecha_creacion)
-            f_final = to_local_date(ticket.fecha_finalizado)
-            f_sol = to_local_date(ticket.fecha_solucion)
-            f_prog = to_local_date(ticket.fecha_en_progreso)
+            # Fechas (naive, sin tz) para Excel
+            f_crea_dt = to_local_excel(ticket.fecha_creacion)
+            f_prog_dt = to_local_excel(ticket.fecha_en_progreso)
+            f_sol_dt  = to_local_excel(ticket.fecha_solucion)
+            f_fin_dt  = to_local_excel(ticket.fecha_finalizado)
 
-            # Nuevos cálculos
-            tiempo_trans = (hoy_local - f_crea).days if f_crea else ""
-            deber_ser = SLA_DIAS_BY_CRIT.get(ticket.criticidad, "")
+            # Para cálculos en días
+            f_crea_d = f_crea_dt.date() if f_crea_dt else None
+            f_fin_d  = f_fin_dt.date() if f_fin_dt else None
+
+            tiempo_trans = (hoy_local - f_crea_d).days if f_crea_d else ""
+            deber_ser    = SLA_DIAS_BY_CRIT.get(ticket.criticidad, "")
             comentario1, comentario2, comentario3 = ultimos_tres_motivos(ticket, t)
-            tiempo_sol = (f_final - f_crea).days if (f_crea and f_final) else "N/A"
+            tiempo_sol   = (f_fin_d - f_crea_d).days if (f_crea_d and f_fin_d) else "N/A"
 
-            # En Excel: formatea fechas como dd/MM/yyyy (las demás las dejabas como venían)
-            fecha_sol_txt   = f_sol.strftime('%d/%m/%Y') if f_sol else ""
-            fecha_fin_txt   = f_final.strftime('%d/%m/%Y') if f_final else "N/A"
-            
             categoria_txt    = t.get("categoria")    or "—"
             subcategoria_txt = t.get("subcategoria") or "—"
             detalle_txt      = t.get("detalle")      or "—"
 
-            ws.append([
+            row = [
                 t.get("id"),
                 aparato_nombre,
                 codigo_interno,
@@ -516,19 +518,16 @@ def export_excel():
                 t.get("username"),
                 t.get("estado"),
                 t.get("criticidad"),
-                t.get("fecha_creacion"),
-                t.get("fecha_en_progreso"),
-
-                tiempo_trans,
-                deber_ser,
-                fecha_sol_txt,
-                comentario1,
-                comentario2,
-                comentario3,
-
-                fecha_fin_txt,
-                tiempo_sol,
-
+                f_crea_dt,     # 8
+                f_prog_dt,     # 9
+                tiempo_trans,  # 10
+                deber_ser,     # 11
+                f_sol_dt,      # 12
+                comentario1,   # 13
+                comentario2,   # 14
+                comentario3,   # 15
+                f_fin_dt,      # 16
+                tiempo_sol,    # 17
                 sucursal_nombre_dest,
                 departamento_txt,
                 categoria_txt,
@@ -537,16 +536,24 @@ def export_excel():
                 t.get("problema_detectado"),
                 "Sí" if t.get("necesita_refaccion") else "No",
                 t.get("descripcion_refaccion"),
-            ])
+            ]
+            ws.append(row)
 
+            # Zebra
             if idx % 2 == 0:
                 for cell in ws[idx]:
                     cell.fill = alt_fill
 
-        # auto ancho + filtros
+            # Aplica formato de fecha/hora
+            for col in (8, 9, 12, 16):
+                c = ws.cell(row=idx, column=col)
+                if c.value:
+                    c.number_format = excel_datetime_fmt
+
+        # auto-ancho + filtros
         for column_cells in ws.columns:
-            max_length = max(len(str(cell.value or "")) for cell in column_cells)
-            ws.column_dimensions[column_cells[0].column_letter].width = max_length + 2
+            max_len = max(len(str(cell.value or "")) for cell in column_cells)
+            ws.column_dimensions[column_cells[0].column_letter].width = max_len + 2
 
         ws.freeze_panes = "A2"
         ws.auto_filter.ref = ws.dimensions
@@ -566,7 +573,6 @@ def export_excel():
         import traceback
         print(traceback.format_exc())
         return jsonify({"mensaje": str(e)}), 500
-
 
 
 # ─────────────────────────────────────────────────────────────
