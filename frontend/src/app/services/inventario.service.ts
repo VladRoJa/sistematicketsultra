@@ -82,20 +82,12 @@ obtenerInventario(opts?: { sucursal_id?: number }): Observable<any[]> {
   return this.http.get<any[]>(`${this.url}/categorias-inventario`, { params: httpParams });
 }
 
-listarInventarioPorCategoriaYSucursal(params: {
-  categoria_inventario_id: number;
-  sucursal_id?: number;
-}): Observable<any[]> {
-  let httpParams = new HttpParams().set(
-    'categoria_inventario_id',
-    String(params.categoria_inventario_id)
-  );
-  if (params.sucursal_id != null) {
-    httpParams = httpParams.set('sucursal_id', String(params.sucursal_id));
-  }
-  return this.http.get<any[]>(`${this.url}/`, { params: httpParams });
+listarInventarioPorCategoriaYSucursal(params: { categoria_inventario_id: number; sucursal_id?: number; }) {
+  let httpParams = new HttpParams()
+    .set('categoria_inventario_id', String(params.categoria_inventario_id));
+  if (params.sucursal_id != null) httpParams = httpParams.set('sucursal_id', String(params.sucursal_id));
+  return this.http.get<any[]>(`${this.url}/por-categoria`, { params: httpParams });
 }
-
 
 }
 

@@ -120,24 +120,26 @@ export class CrearTicketRefactorComponent implements OnInit, OnDestroy {
   }
 
 private limpiarRastroDeOtrosSubforms() {
-
   const quitar = ['categoria', 'subcategoria', 'detalle', 'descripcion'];
   quitar.forEach(c => this.form.contains(c) && this.form.removeControl(c));
 
-  // Limpia valores colgados, pero conserva el control 'aparato_id'
-  this.form.patchValue(
-    {
-      descripcion_general: '',
-      descripcion_aparato: '',
-      necesita_refaccion: false,
-      aparato_id: null,           
-    },
-    { emitEvent: false }
-  );
+  // 🔧 elimina niveles colgados del form
+  for (let i = 3; i <= 5; i++) {
+    const name = `nivel_${i}`;
+    if (this.form.contains(name)) this.form.removeControl(name);
+  }
 
-  // Corta niveles > 3 (los que dependen de la ruta)
+  this.form.patchValue({
+    descripcion_general: '',
+    descripcion_aparato: '',
+    necesita_refaccion: false,
+    aparato_id: null,
+  }, { emitEvent: false });
+
+  // recorta los niveles pintados en UI
   this.niveles = this.niveles.filter(n => n.nivel <= 3);
 }
+
 
 
 ngOnInit(): void {
@@ -353,13 +355,14 @@ cargarNivel(nivel: number, parentId: number | null, etiqueta: string) {
     }).subscribe({
       next: (items: any[]) => {
         if (token !== this.reqTokenByNivel[nivel]) return;
-        fila4.opciones = (items || []).map(it => ({
+        const opciones = (items || []).map(it => ({
           id: it.id,
-          nombre: `${it.nombre}${it.marca ? ' - ' + it.marca : ''}`,
+          nombre: `${it.nombre}${it.marca ? ' - ' + it.marca : ''}${it.codigo_interno ? ' · ' + it.codigo_interno : ''}`,
           nivel: 4,
           nivel_nombre: 'Equipo',
         }));
-        fila4.loading  = false;
+
+        fila4.opciones = opciones;
 
         const ctrl4 = fila4.control;
         if (ctrl4.value && !fila4.opciones.some(o => `${o.id}` === `${ctrl4.value}`)) ctrl4.setValue(null);
@@ -591,15 +594,9 @@ getCamposInvalidos(): string[] {
   const faltan: string[] = [];
   Object.entries(this.form.controls).forEach(([key, ctrl]) => {
     if (ctrl.invalid && ctrl.errors?.['required']) {
-      // ⚡️ Aquí agregamos la condición para sucursal_id
-      if (
-        key === 'sucursal_id' &&
-        !this.esAdmin()
-      ) {
-        // Si no es admin, ignoramos el error de sucursal_id
-        return;
-      }
-      // Solo agrega si corresponde al subform activo
+      // No exigir nivel_4 cuando estoy en aparatos o sistemas→dispositivos
+      if (key === 'nivel_4' && (this.mostrarSubformAparatos || this.mostrarSubformSistemasDispositivos)) return;
+
       if (
         (key === 'descripcion' && this.mostrarSubformSistemasDispositivos) ||
         (key === 'descripcion_aparato' && this.mostrarSubformAparatos) ||
@@ -613,6 +610,7 @@ getCamposInvalidos(): string[] {
   });
   return faltan;
 }
+
 
 
     /**

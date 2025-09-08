@@ -703,61 +703,37 @@ def historial_equipo(equipo_id):
         return manejar_error(e, "historial_equipo")
 
 
-# @inventario_bp.route('/equipos', methods=['GET'], strict_slashes=False)
-# @jwt_required()
-# def obtener_equipos():
-#     """
-#     Devuelve los equipos por sucursal y tipo.
-#     Parámetros opcionales:
-#     - sucursal_id: ID de la sucursal.
-#     - tipo: 'aparato' o 'sistema'.
-#     """
-#     try:
-#         user = UserORM.get_by_id(get_jwt_identity())
-#         if not user:
-#             return jsonify({"mensaje": "Usuario no encontrado"}), 404
+@inventario_bp.route('/por-categoria', methods=['GET'], strict_slashes=False)
+@jwt_required()
+def inventario_por_categoria():
+    try:
+        cat_inv_id = request.args.get('categoria_inventario_id', type=int)
+        sucursal_id = request.args.get('sucursal_id', type=int)
+        if not cat_inv_id:
+            return error_response('categoria_inventario_id es requerido', 400)
 
-#         sucursal_id = request.args.get('sucursal_id', type=int)
-#         tipo = (request.args.get('tipo') or '').strip().lower()
-#         # Mapea todos los posibles valores recibidos a lo que existe en tu base
-#         if tipo in ['aparato', 'aparatos']:
-#             tipo = 'aparatos'
-#         elif tipo in ['sistema', 'sistemas', 'dispositivo', 'dispositivos']:
-#             tipo = 'dispositivos'
-#         else:
-#             tipo = ''
+        q = (db.session.query(InventarioGeneral)
+             .filter(InventarioGeneral.categoria_inventario_id == cat_inv_id))
 
-#         query = InventarioSucursal.query
+        if sucursal_id is not None:
+            q = (q.join(InventarioSucursal, InventarioSucursal.inventario_id == InventarioGeneral.id)
+                   .filter(InventarioSucursal.sucursal_id == sucursal_id))
 
-#         # Si no es admin, restringe a la sucursal del usuario
-#         if not (user.rol == "ADMINISTRADOR" or user.sucursal_id == 1000 or user.sucursal_id == 100):
-#             query = query.filter_by(sucursal_id=user.sucursal_id)
-#         elif sucursal_id:
-#             query = query.filter_by(sucursal_id=sucursal_id)
+        # ✅ En Postgres, el ORDER BY debe comenzar por la(s) columna(s) del DISTINCT ON
+        q = q.order_by(InventarioGeneral.id.asc(), InventarioGeneral.nombre.asc())
 
-#         equipos = query.all()
+        items = q.distinct(InventarioGeneral.id).all()
 
-#         resultado = []
-#         for e in equipos:
-#             # Compara ambos en minúsculas (por si acaso)
-#             if tipo and (e.inventario.tipo or '').strip().lower() != tipo:
-#                 continue
-#             resultado.append({
-#                 "id": e.inventario.id,
-#                 "nombre": e.inventario.nombre,
-#                 "codigo_interno": e.inventario.codigo_interno,
-#                 "categoria": e.inventario.categoria,
-#                 "marca": e.inventario.marca,
-#                 "stock": e.stock,
-#                 "sucursal_id": e.sucursal_id,
-#                 "tipo": e.inventario.tipo,
-#                 "no_equipo": e.inventario.no_equipo,
-#             })
-
-#         return jsonify(resultado), 200
-
-#     except Exception as e:
-#         return manejar_error(e, "obtener_equipos")
+        return jsonify([
+            {
+                'id': i.id,
+                'nombre': i.nombre,
+                'marca': i.marca,
+                'codigo_interno': i.codigo_interno,
+            } for i in items
+        ]), 200
+    except Exception as e:
+        return manejar_error(e, "inventario_por_categoria")
 
 
 
