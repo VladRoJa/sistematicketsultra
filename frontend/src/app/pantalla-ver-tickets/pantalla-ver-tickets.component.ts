@@ -1309,7 +1309,29 @@ getDetalleVisible(t: Ticket): string {
 }
 
 
+necesitaRef(t: any): boolean {
+  let v = t?.necesita_refaccion ?? t?.necesitaRefaccion ?? t?.necesitaRef;
 
+  // Arrays reales => toma el primer elemento
+  if (Array.isArray(v)) v = v[0];
+
+  // Tipos simples
+  if (v === true) return true;
+  if (v === false || v == null) return false;
+  if (typeof v === 'number') return v !== 0;
+
+  // Normaliza strings (incluye casos {"v"}, [ "v" ], etc.)
+  const s = String(v)
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // quita acentos
+    .trim()
+    .toLowerCase()
+    .replace(/[\[\]\(\)\{\}"'\s]/g, ''); // quita [, ], {, }, comillas y espacios
+
+  if (!s) return false;
+
+  // Acepta varias marcas de "verdadero"
+  return ['true','t','1','v','si','sí','y','yes','x','✓'].includes(s);
+}
 
 
 }

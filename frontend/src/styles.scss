@@ -223,7 +223,7 @@ textarea.mat-mdc-input-element {
 /* Anchos por columna (globales, acotados a la tabla) */
 .tabla-tickets col.c-id  { width: 80px; }      /* ajusta a lo que quieras */
 .tabla-tickets col.c-cat { width: 120px; }
-.tabla-tickets col.c-apa { width: 160px; }
+.tabla-tickets col.c-apa { width: 200px; }
 .tabla-tickets col.c-desc{ width: var(--desc-col-width); } /* descripción */
 .tabla-tickets col.c-suc { width: 120px; }
 .tabla-tickets col.c-est { width: 92px; }

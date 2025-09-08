@@ -241,3 +241,38 @@ th.filtro-activo .header-button { background: #e6f4ff; border-radius: 6px; }
   .fu-acciones, .acciones-filtro { justify-content: flex-start; flex-wrap: wrap; }
 }
 
+
+/* ✅ deja el td como table-cell y usa un wrapper flex interno */
+.td-aparato { /* table-cell por default */ padding-left: 12px; padding-right: 12px; }
+
+.td-aparato-inner{
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0; /* clave para que funcione el ellipsis dentro de flex */
+}
+
+.aparato-text{
+  flex: 1 1 auto;
+  min-width: 0;               /* permite encoger */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.icono-refaccion-wrap{
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  cursor: help;
+}
+
+.icono-refaccion{
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  line-height: 18px;
+  vertical-align: middle;
+}
+

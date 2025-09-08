@@ -597,18 +597,23 @@
       <tr *ngFor="let ticket of visibleTickets">
         <td>{{ ticket.id }}</td>
         <td>{{ ticket.categoria || '—' }}</td>
-        <td>
-          {{ getNombreCortoAparato(ticket) }}
-          <ng-container *ngIf="ticket.necesita_refaccion">
-            <mat-icon
-              matTooltip="{{ ticket.descripcion_refaccion || 'Requiere refacción' }}"
-              matTooltipShowDelay="1500"
-              color="warn"
-              class="icono-refaccion"
-              style="vertical-align: middle; margin-left: 4px;"
-            >build</mat-icon>
-          </ng-container>
-        </td> 
+        <td class="td-aparato">
+          <div class="td-aparato-inner">
+            <span class="aparato-text">{{ getNombreCortoAparato(ticket) }}</span>
+
+            <span *ngIf="necesitaRef(ticket)"
+                  class="icono-refaccion-wrap"
+                  [matTooltip]="ticket.descripcion_refaccion || 'Requiere refacción'"
+                  matTooltipShowDelay="1500"
+                  matTooltipClass="tooltip-wide">
+              <mat-icon class="icono-refaccion" color="warn">build</mat-icon>
+            </span>
+          </div>
+        </td>
+
+
+
+
 
         <td class="col-descripcion">
           <div class="desc-wrap"

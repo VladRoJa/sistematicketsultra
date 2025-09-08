@@ -140,6 +140,8 @@ class Ticket(db.Model):
             'equipo': self.equipo,
             'sucursal_id_destino': self.sucursal_id_destino,
             'categoria_inventario_id': self.categoria_inventario_id,
+            "necesita_refaccion": bool(self.necesita_refaccion),
+            "descripcion_refaccion": self.descripcion_refaccion or None,
         }
 
 
