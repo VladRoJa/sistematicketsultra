@@ -25,11 +25,17 @@
       <mat-icon color="warn" style="vertical-align:middle;">build</mat-icon>
       <span style="vertical-align:middle; margin-left: 0.5em;">{{ data.descripcion_refaccion }}</span>
     </p>
-    <p><strong>Fecha Creación:</strong> {{ data.fecha_creacion }}</p>
+   <p><strong>Fecha Creación:</strong>
+  {{ data.fecha_creacion ? (data.fecha_creacion | date:fmtDateTime:tz) : '—' }}
+</p>
 
-    <p><strong>En Progreso:</strong> {{ data.fecha_en_progreso || '—' }}</p>
+    <p><strong>En Progreso:</strong>
+  {{ data.fecha_en_progreso ? (data.fecha_en_progreso | date:fmtDateTime:tz) : '—' }}
+</p>
 
-    <p><strong>Finalizado:</strong> {{ data.fecha_finalizado || '—' }}</p>
+    <p><strong>Finalizado:</strong>
+  {{ data.fecha_finalizado ? (data.fecha_finalizado | date:fmtDateTime:tz) : '—' }}
+</p>
   </section>
 
   <mat-divider></mat-divider>
@@ -55,13 +61,13 @@
     <tbody>
       <tr *ngFor="let item of data.historial_fechas">
         <td>
-          {{ item.fecha | date:'dd/MM/yy' }}
+          {{ item.fecha ? (item.fecha | date:fmtDate:tz) : '—' }}
         </td>
         <td>
           {{ item.cambiadoPor || '—' }}
         </td>
         <td>
-          {{ item.fechaCambio | date:'dd/MM/yy HH:mm' }}
+           {{ item.fechaCambio ? (item.fechaCambio | date:fmtDateTime:tz) : '—' }}
         </td>
         <td>
           <span *ngIf="item.motivo && item.motivo.length > 0; else sinMotivo"

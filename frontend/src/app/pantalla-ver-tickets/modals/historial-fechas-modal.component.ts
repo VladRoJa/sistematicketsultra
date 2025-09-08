@@ -23,12 +23,14 @@ import { MatIconModule } from '@angular/material/icon';
   ]
 })
 export class HistorialFechasModalComponent {
+  tz = 'America/Tijuana';
+  fmtDate = 'dd/MM/yy';
+  fmtDateTime = 'dd/MM/yyyy hh:mm a';
+
   constructor(
     @Inject(MAT_DIALOG_DATA) public data: Ticket,
     private dialogRef: MatDialogRef<HistorialFechasModalComponent>
   ) {}
 
-  cerrar(): void {
-    this.dialogRef.close();
-  }
+  cerrar(): void { this.dialogRef.close(); }
 }
