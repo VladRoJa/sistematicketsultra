@@ -1,11 +1,15 @@
 # app/routes/usuarios_routes.py
-
 from flask import Blueprint, request, jsonify
 from werkzeug.security import generate_password_hash
-from app. extensions import db
+from app.extensions import db
 from app.models.user_model import UserORM
+import re
 
 usuarios_bp = Blueprint('usuarios', __name__)
+
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+def _is_valid_email(s: str | None) -> bool:
+    return bool(s and EMAIL_RE.match(s))
 
 # ─────────────────────────────────────────────────────────────
 # GET: Lista todos los usuarios
@@ -13,31 +17,30 @@ usuarios_bp = Blueprint('usuarios', __name__)
 @usuarios_bp.route('', methods=['GET'])
 def listar_usuarios():
     usuarios = UserORM.query.all()
-    resultado = []
-    for u in usuarios:
-        resultado.append({
-            "id": u.id,
-            "username": u.username,
-            "rol": u.rol,
-            "sucursal_id": u.sucursal_id,
-            "department_id": u.department_id,
-        })
-    return jsonify(resultado), 200
+    return jsonify([{
+        "id": u.id,
+        "username": u.username,
+        "rol": u.rol,
+        "sucursal_id": u.sucursal_id,
+        "department_id": u.department_id,
+        "email": u.email,                      
+    } for u in usuarios]), 200
 
 # ─────────────────────────────────────────────────────────────
 # GET: Usuario por ID
 # ─────────────────────────────────────────────────────────────
 @usuarios_bp.route('/<int:user_id>', methods=['GET'])
 def obtener_usuario(user_id):
-    usuario = UserORM.get_by_id(user_id)
-    if not usuario:
+    u = UserORM.get_by_id(user_id)
+    if not u:
         return jsonify({"error": "Usuario no encontrado"}), 404
     return jsonify({
-        "id": usuario.id,
-        "username": usuario.username,
-        "rol": usuario.rol,
-        "sucursal_id": usuario.sucursal_id,
-        "department_id": usuario.department_id,
+        "id": u.id,
+        "username": u.username,
+        "rol": u.rol,
+        "sucursal_id": u.sucursal_id,
+        "department_id": u.department_id,
+        "email": u.email,                        
     }), 200
 
 # ─────────────────────────────────────────────────────────────
@@ -45,7 +48,7 @@ def obtener_usuario(user_id):
 # ─────────────────────────────────────────────────────────────
 @usuarios_bp.route('', methods=['POST'])
 def crear_usuario():
-    data = request.json
+    data = request.json or {}
     obligatorio = ['username', 'password', 'rol', 'sucursal_id', 'department_id']
     if not all(k in data and data[k] for k in obligatorio):
         return jsonify({"error": "Faltan datos requeridos"}), 400
@@ -53,42 +56,57 @@ def crear_usuario():
     if UserORM.get_by_username(data['username']):
         return jsonify({"error": "El username ya está en uso"}), 409
 
-    hashed_password = generate_password_hash(data['password'])
-    nuevo_usuario = UserORM(
+    email = (data.get('email') or '').strip() or None
+    if email and not _is_valid_email(email):
+        return jsonify({"error": "Email inválido"}), 400
+    if email and UserORM.query.filter(UserORM.email == email).first():
+        return jsonify({"error": "El email ya está en uso"}), 409
+
+    nuevo = UserORM(
         username=data['username'],
-        password=hashed_password,
+        password=generate_password_hash(data['password']),
         rol=data.get('rol', 'usuario'),
         sucursal_id=data['sucursal_id'],
-        department_id=data['department_id']
+        department_id=data['department_id'],
+        email=email                                 # 👈 guardar email (opcional)
     )
-    db.session.add(nuevo_usuario)
+    db.session.add(nuevo)
     db.session.commit()
-    return jsonify({"msg": "Usuario creado correctamente", "id": nuevo_usuario.id}), 201
+    return jsonify({"msg": "Usuario creado correctamente", "id": nuevo.id}), 201
 
 # ─────────────────────────────────────────────────────────────
 # PUT: Editar usuario
 # ─────────────────────────────────────────────────────────────
 @usuarios_bp.route('/<int:user_id>', methods=['PUT'])
 def editar_usuario(user_id):
-    usuario = UserORM.get_by_id(user_id)
-    if not usuario:
+    u = UserORM.get_by_id(user_id)
+    if not u:
         return jsonify({"error": "Usuario no encontrado"}), 404
 
-    data = request.json
+    data = request.json or {}
+
     if 'username' in data:
         if UserORM.query.filter(UserORM.username == data['username'], UserORM.id != user_id).first():
             return jsonify({"error": "El username ya está en uso"}), 409
-        usuario.username = data['username']
+        u.username = data['username']
 
     if 'password' in data and data['password']:
-        usuario.password = generate_password_hash(data['password'])
+        u.password = generate_password_hash(data['password'])
 
     if 'rol' in data:
-        usuario.rol = data['rol']
+        u.rol = data['rol']
     if 'sucursal_id' in data:
-        usuario.sucursal_id = data['sucursal_id']
+        u.sucursal_id = data['sucursal_id']
     if 'department_id' in data:
-        usuario.department_id = data['department_id']
+        u.department_id = data['department_id']
+
+    if 'email' in data:                              # 👈 actualizar email
+        email = (data.get('email') or '').strip() or None
+        if email and not _is_valid_email(email):
+            return jsonify({"error": "Email inválido"}), 400
+        if email and UserORM.query.filter(UserORM.email == email, UserORM.id != user_id).first():
+            return jsonify({"error": "El email ya está en uso"}), 409
+        u.email = email
 
     db.session.commit()
     return jsonify({"msg": "Usuario actualizado correctamente"}), 200
@@ -98,10 +116,9 @@ def editar_usuario(user_id):
 # ─────────────────────────────────────────────────────────────
 @usuarios_bp.route('/<int:user_id>', methods=['DELETE'])
 def eliminar_usuario(user_id):
-    usuario = UserORM.get_by_id(user_id)
-    if not usuario:
+    u = UserORM.get_by_id(user_id)
+    if not u:
         return jsonify({"error": "Usuario no encontrado"}), 404
-    db.session.delete(usuario)
+    db.session.delete(u)
     db.session.commit()
     return jsonify({"msg": "Usuario eliminado correctamente"}), 200
-

@@ -1,6 +1,6 @@
 # app\routes\ticket_routes.py
 
-from flask import Blueprint, jsonify, request, send_file
+from flask import Blueprint, jsonify, request, send_file, current_app
 from flask_cors import CORS
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from datetime import datetime, timezone, time
@@ -10,17 +10,20 @@ from openpyxl.styles import Font, PatternFill
 import pytz
 from sqlalchemy import or_
 from app.models.inventario import InventarioGeneral
-from app. utils.ticket_filters import filtrar_tickets_por_usuario
+from app.utils.email_sender import send_email_html
+from app.utils.notify_targets import build_subject, pick_recipients
+from app.utils.notify_utils import render_ticket_html, render_ticket_whatsapp_text
+from app.utils.ticket_filters import filtrar_tickets_por_usuario
 from app.config import Config
 from app.models.ticket_model import Ticket
 from app.models.user_model import UserORM
-from app. extensions import db
-from app. utils.error_handler import manejar_error
+from app.extensions import db
+from app.utils.error_handler import manejar_error
 from dateutil import parser
 from sqlalchemy.orm.attributes import flag_modified
-from app. utils.datetime_utils import format_datetime 
-from app.models.inventario import InventarioGeneral
+from app.utils.datetime_utils import format_datetime 
 from app.models.sucursal_model import Sucursal
+import os, threading
 
 
 
@@ -28,6 +31,21 @@ from app.models.sucursal_model import Sucursal
 # BLUEPRINT: TICKETS
 # ─────────────────────────────────────────────────────────────
 ticket_bp = Blueprint('tickets', __name__, url_prefix='/api/tickets')
+
+# ─────────────────────────────────────────────────────────────
+# Helpers
+# ─────────────────────────────────────────────────────────────
+
+def _send_email_async(to_list, subject, html):
+    try:
+        send_email_html(to_list, subject, html)
+    except Exception as e:
+        try:
+            current_app.logger.exception("❌ Error enviando correo: %s", e)
+        except Exception:
+            print("❌ Error enviando correo:", e)
+
+
 
 
 
@@ -43,48 +61,57 @@ def create_ticket():
         if not user:
             return jsonify({"mensaje": "Usuario no encontrado"}), 404
 
-        data = request.get_json()
+        data = request.get_json() or {}
+        
+        
 
-        descripcion = data.get("descripcion")
-        departamento_id = data.get("departamento_id")
-        criticidad = data.get("criticidad")
-        categoria = data.get("categoria")
-        subcategoria = data.get("subcategoria")
-        detalle = data.get("detalle")
-        aparato_id = data.get("aparato_id")
-        problema_detectado = data.get("problema_detectado")
-        necesita_refaccion = data.get("necesita_refaccion", False)
+        descripcion         = data.get("descripcion")
+        departamento_id     = data.get("departamento_id")
+        criticidad          = data.get("criticidad")
+        categoria           = data.get("categoria")
+        subcategoria        = data.get("subcategoria")
+        detalle             = data.get("detalle")
+        aparato_id          = data.get("aparato_id")
+        problema_detectado  = data.get("problema_detectado")
+        necesita_refaccion  = data.get("necesita_refaccion", False)
         descripcion_refaccion = data.get("descripcion_refaccion")
-        clasificacion_id = data.get("clasificacion_id")
+        clasificacion_id    = data.get("clasificacion_id")
         sucursal_id_destino = data.get("sucursal_id_destino")
 
+
+        try:
+            departamento_id = int(departamento_id)
+            criticidad = int(criticidad)
+        except (TypeError, ValueError):
+            return jsonify({"mensaje": "departamento_id y criticidad deben ser numéricos"}), 400
+
+        
+        
+                # ¿quién puede fijar el destino?
         es_admin_corp = (user.rol == "ADMINISTRADOR") or (user.sucursal_id in (1000, 100))
         if es_admin_corp:
             if not sucursal_id_destino:
                 return jsonify({"mensaje": "Debes enviar sucursal_id_destino"}), 400
         else:
-            # usuario normal: se completa automático
+            # usuario normal: destino = su sucursal
             sucursal_id_destino = user.sucursal_id
 
-        # Requisitos mínimos comunes
+        # Requisitos mínimos
         if not descripcion or not departamento_id or not criticidad:
             return jsonify({"mensaje": "Faltan datos obligatorios"}), 400
 
-        # Debe venir una fuente de jerarquía:
-        #   - desde inventario: aparato_id
-        #   - o desde catálogo de tickets: clasificacion_id
+        # Fuente de jerarquía obligatoria
         if not aparato_id and not clasificacion_id:
             return jsonify({"mensaje": "Debes enviar 'aparato_id' (si viene de inventario) o 'clasificacion_id' (si no)."}), 400
 
-        # Nota: categoria/subcategoria/detalle son opcionales; se derivan.
-
+        # Crear ticket
         nuevo_ticket = Ticket.create_ticket(
             descripcion=descripcion,
             username=user.username,
             sucursal_id=user.sucursal_id,              # creador
-            sucursal_id_destino=sucursal_id_destino,   # 👈 DESTINO (nuevo)
+            sucursal_id_destino=sucursal_id_destino,   # destino
             departamento_id=departamento_id,
-            criticidad=int(criticidad),
+            criticidad=criticidad,
             categoria=categoria,
             subcategoria=subcategoria,
             detalle=detalle,
@@ -98,8 +125,23 @@ def create_ticket():
             clasificacion_id=clasificacion_id
         )
 
-        print("DATA AL CREAR:", data)
-        print("Nuevo ticket:", nuevo_ticket.to_dict())
+        # ⬇️ Notificación de creación (asíncrona)
+        try:
+            if os.getenv("NOTIFY_EMAIL_ON_UPDATE", "true").lower() == "true":
+                to_list = pick_recipients(nuevo_ticket, actor_username=user.username, event="create")
+                if to_list:
+                    html = render_ticket_html(nuevo_ticket.to_dict())
+                    subject = build_subject(nuevo_ticket, "Creado")
+                    threading.Thread(
+                        target=_send_email_async,
+                        args=(to_list, subject, html),
+                        daemon=True
+                    ).start()
+        except Exception as e:
+            try:
+                current_app.logger.exception("⚠️ No se pudo enviar correo de creación: %s", e)
+            except Exception:
+                print("⚠️ No se pudo enviar correo de creación:", e)
 
         return jsonify({
             "mensaje": "Ticket creado correctamente",
@@ -108,6 +150,7 @@ def create_ticket():
 
     except Exception as e:
         return manejar_error(e)
+
 
 # ─────────────────────────────────────────────────────────────
 # RUTA: Obtener todos los tickets (paginados) - SIMPLE
@@ -150,22 +193,32 @@ def list_tickets_with_filters():
         if not user:
             return jsonify({"mensaje": "Usuario no encontrado"}), 404
 
-        estado = request.args.get('estado')
+        estado          = request.args.get('estado')
         departamento_id = request.args.get('departamento_id')
-        criticidad = request.args.get('criticidad')
-        no_paging = request.args.get('no_paging', default='false').lower() == 'true'
-        limit = request.args.get('limit', default=15, type=int)
-        offset = request.args.get('offset', default=0, type=int)
+        criticidad      = request.args.get('criticidad')
+        no_paging       = request.args.get('no_paging', default='false').lower() == 'true'
+        limit           = request.args.get('limit', default=15, type=int)
+        offset          = request.args.get('offset', default=0, type=int)
 
-        # Helper universal
+        # Helper universal (aplica permisos por rol/sucursal)
         query = filtrar_tickets_por_usuario(user)
 
         if estado:
             query = query.filter_by(estado=estado)
-        if departamento_id:
-            query = query.filter_by(departamento_id=int(departamento_id))
-        if criticidad:
-            query = query.filter_by(criticidad=int(criticidad))
+
+        if departamento_id is not None:
+            try:
+                departamento_id_int = int(departamento_id)
+            except (TypeError, ValueError):
+                return jsonify({"mensaje": "departamento_id inválido"}), 400
+            query = query.filter_by(departamento_id=departamento_id_int)
+
+        if criticidad is not None:
+            try:
+                criticidad_int = int(criticidad)
+            except (TypeError, ValueError):
+                return jsonify({"mensaje": "criticidad inválida"}), 400
+            query = query.filter_by(criticidad=criticidad_int)
 
         total_tickets = query.count()
         if not no_paging:
@@ -180,7 +233,8 @@ def list_tickets_with_filters():
         }), 200
 
     except Exception as e:
-        return manejar_error(e)
+        return manejar_error(e, "list_tickets_with_filters")
+
 
 
 # ─────────────────────────────────────────────────────────────
@@ -192,6 +246,7 @@ def list_tickets_with_filters():
 @jwt_required()
 def update_ticket_status(id):
     try:
+        actor = UserORM.get_by_id(get_jwt_identity())
         ticket = Ticket.query.get(id)
         if not ticket:
             return jsonify({"mensaje": "Ticket no encontrado"}), 404
@@ -202,6 +257,11 @@ def update_ticket_status(id):
         fecha_en_progreso = data.get("fecha_en_progreso")  
         historial_nuevo = data.get("historial_fechas", [])
         motivo_cambio = data.get("motivo_cambio", "").strip()
+        prev_estado       = (ticket.estado or "").strip().lower()
+        prev_prog         = ticket.fecha_en_progreso
+        prev_sol          = ticket.fecha_solucion
+        prev_hist_len     = len(ticket.historial_fechas or [])
+
 
         if not estado:
             return jsonify({"mensaje": "Estado es requerido"}), 400
@@ -248,22 +308,69 @@ def update_ticket_status(id):
             if motivo_cambio and 'motivo' not in nueva:
                 nueva['motivo'] = motivo_cambio
 
-            existe_misma_fecha = any(
-                parser.isoparse(e.get("fecha")).replace(tzinfo=None) == parser.isoparse(nueva.get("fecha")).replace(tzinfo=None)
-                for e in historial_final if e.get("fecha")
-            )
+            existe_misma_fecha = False
+            if nueva.get("fecha"):
+                try:
+                    nf = parser.isoparse(nueva["fecha"]).replace(tzinfo=None)
+                    existe_misma_fecha = any(
+                        parser.isoparse(e["fecha"]).replace(tzinfo=None) == nf
+                        for e in historial_final
+                        if e.get("fecha")
+                    )
+                except Exception:
+                    existe_misma_fecha = False
+
             if not existe_misma_fecha:
                 historial_final.append(nueva)
 
         # Ordenar por fecha de cambio, más recientes primero
-        historial_final.sort(key=lambda x: parser.isoparse(x['fechaCambio']), reverse=True)
+        def _key_fecha_cambio(x):
+            v = x.get('fechaCambio') or x.get('fecha_cambio') or x.get('fecha')
+            try:
+                return parser.isoparse(v)
+            except Exception:
+                # muy antiguo -> lo manda al final
+                return datetime.min.replace(tzinfo=timezone.utc)
+
+        historial_final.sort(key=_key_fecha_cambio, reverse=True)
         ticket.historial_fechas = historial_final
         flag_modified(ticket, 'historial_fechas')
 
         print(f"✅ Historial final para ticket #{ticket.id}: {historial_final}")
 
         db.session.commit()
+
+        # ---- Notificación por correo (si hay cambios) ----
+        try:
+            cambios = []
+            if estado and (estado.strip().lower() != prev_estado):
+                cambios.append(f"estado: {prev_estado or '—'} → {estado}")
+            if ticket.fecha_en_progreso != prev_prog:
+                cambios.append("fecha en progreso")
+            if ticket.fecha_solucion != prev_sol:
+                cambios.append("fecha solución")
+            if len(ticket.historial_fechas or []) != prev_hist_len:
+                cambios.append("historial")
+
+            if os.getenv("NOTIFY_EMAIL_ON_UPDATE", "true").lower() == "true" and cambios:
+                to_list = pick_recipients(ticket, actor.username, event="update")
+                if to_list:
+                    subject_bits = " / ".join(cambios) or "Actualización"
+                    subject = build_subject(ticket, subject_bits)
+                    html = render_ticket_html(ticket.to_dict())
+                    threading.Thread(
+                        target=_send_email_async,
+                        args=(to_list, subject, html),
+                        daemon=True
+                    ).start()
+        except Exception as e:
+            try:
+                current_app.logger.exception("❌ Error notificando actualización de ticket %s: %s", ticket.id, e)
+            except Exception:
+                print(f"❌ Error notificando ticket {ticket.id}:", e)
+
         return jsonify({"mensaje": f"Ticket {id} actualizado correctamente"}), 200
+
 
     except Exception as e:
         db.session.rollback()
@@ -733,6 +840,11 @@ def historial_equipo(equipo_id):
         return manejar_error(e, "historial_equipo")
 
 
+# ─────────────────────────────────────────────────────────────
+# RUTA: Obtener historial completo de tickets por aparato_id
+# ─────────────────────────────────────────────────────────────
+
+
 @ticket_bp.route('/historial-por-equipo/<int:aparato_id>', methods=['GET'])
 @jwt_required()
 def historial_por_equipo(aparato_id):
@@ -756,6 +868,10 @@ def historial_por_equipo(aparato_id):
 
     except Exception as e:
         return manejar_error(e, "historial_por_equipo")
+
+# ─────────────────────────────────────────────────────────────
+# RUTA: Obtener historial global de tickets con filtros
+# ─────────────────────────────────────────────────────────────
 
 
 @ticket_bp.route('/historial-global', methods=['GET'])
@@ -798,6 +914,11 @@ def historial_global():
 
     except Exception as e:
         return manejar_error(e, "historial_global")
+
+
+# ─────────────────────────────────────────────────────────────
+# RUTA: Obtener historial completo de tickets y movimientos por aparato_id
+# ─────────────────────────────────────────────────────────────
 
 
 @ticket_bp.route('/historial/<int:aparato_id>', methods=['GET'])
@@ -856,3 +977,41 @@ def historial_aparato(aparato_id):
     except Exception as e:
         return manejar_error(e, "historial_aparato")
 
+
+# ─────────────────────────────────────────────────────────────
+# RUTA: Notificar resumen de ticket por email/WhatsApp
+# ─────────────────────────────────────────────────────────────
+
+@ticket_bp.route('/notify/<int:ticket_id>', methods=['POST'])
+@jwt_required()
+def notify_ticket(ticket_id):
+    """
+    Body JSON de ejemplo:
+    {
+      "emails": ["destino@dominio.com"],
+      "channels": ["email"]
+    }
+    """
+    user = UserORM.get_by_id(get_jwt_identity())
+    if not user:
+        return jsonify({"mensaje":"Usuario no encontrado"}), 404
+
+    data = request.get_json() or {}
+    emails  = data.get("emails") or []
+    phones  = data.get("phones") or []
+    channels = set((data.get("channels") or []))
+
+    t = Ticket.query.get(ticket_id)
+    if not t:
+        return jsonify({"mensaje":"Ticket no encontrado"}), 404
+    td = t.to_dict()  # usa tu to_dict que ya trae inventario, historial, etc.
+
+    results = {}
+
+    if "email" in channels and emails:
+        html = render_ticket_html(td)
+        send_email_html(emails, f"Ticket #{t.id} – Resumen", html)
+        results["email"] = {"ok": True, "to": emails}
+
+
+    return jsonify({"mensaje":"Notificaciones enviadas", "results": results}), 200

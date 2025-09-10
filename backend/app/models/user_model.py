@@ -1,7 +1,7 @@
 # app\models\user_model.py
 
 from werkzeug.security import check_password_hash
-from app. extensions import db
+from app.extensions import db
 
 # ─────────────────────────────────────────────────────────────
 # MODELO: USUARIO
@@ -17,6 +17,7 @@ class UserORM(db.Model):
     rol = db.Column(db.String(50), default="usuario", nullable=False)
     sucursal_id = db.Column(db.Integer, db.ForeignKey('sucursales.sucursal_id'), nullable=False)
     department_id = db.Column(db.Integer, nullable=False)
+    email = db.Column(db.String(255))
 
     # ─── Relaciones ─────────────────────────────────────────
     movimientos = db.relationship('MovimientoInventario', backref='usuario', cascade='all, delete-orphan')

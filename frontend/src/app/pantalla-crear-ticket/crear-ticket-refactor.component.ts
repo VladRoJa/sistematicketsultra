@@ -113,10 +113,19 @@ export class CrearTicketRefactorComponent implements OnInit, OnDestroy {
     private inventarioService: InventarioService, 
   ) {}
 
+
+  private get userLS() {
+    try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; }
+  }
+  private get sucursalIdUsuario(): number | null {
+    const n = Number(this.userLS?.sucursal_id);
+    return Number.isFinite(n) ? n : null;
+  }
+
   esAdmin(): boolean {
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    const rol = (user.rol || '').toLowerCase().trim();
-    return rol === 'administrador' || user.sucursal_id === 1000 || user.sucursal_id === 100;
+    const rol = (this.userLS?.rol || '').toLowerCase().trim();
+    const sucId = Number(this.userLS?.sucursal_id);
+    return rol === 'administrador' || sucId === 1000 || sucId === 100;
   }
 
 private limpiarRastroDeOtrosSubforms() {
@@ -143,12 +152,13 @@ private limpiarRastroDeOtrosSubforms() {
 
 
 ngOnInit(): void {
-  // 1) Sucursal por defecto (del usuario)
-  const sucursalIdUsuario = Number(localStorage.getItem('sucursal_id')) || null;
+  // 1) Sucursal por defecto del usuario
+  const sucursalIdUsuario = this.sucursalIdUsuario;
 
-  // 2) Form principal
+  // 2) Form principal (⚠️ required solo si es admin)
+  const validatorsSucursal = this.esAdmin() ? [Validators.required] : [];
   this.form = this.fb.group({
-    sucursal_id: [sucursalIdUsuario, Validators.required],
+    sucursal_id: [sucursalIdUsuario, validatorsSucursal],
     descripcion_general: [''],
     descripcion_aparato: [''],
     criticidad: [null, Validators.required],
@@ -159,7 +169,7 @@ ngOnInit(): void {
     descripcion_refaccion: [''],
   });
 
-  // 3) Si es admin, carga catálogo de sucursales
+  // 3) Catálogo de sucursales solo para admin
   if (this.esAdmin()) {
     this.sucursalesService.obtenerSucursales().subscribe({
       next: (sucs) => (this.listaSucursales = sucs || []),
@@ -525,7 +535,9 @@ enviar() {
         : this.form.value.descripcion_general;
 
   // --- sucursal destino (admin elige; usuario toma su sucursal del localStorage) ---
-  const sucursalDestino = this.form.value.sucursal_id ?? Number(localStorage.getItem('sucursal_id'));
+  const sucursalDestino = this.esAdmin()
+    ? this.form.value.sucursal_id
+    : this.sucursalIdUsuario;
 
   // --- construir body (sin 'detalle' de entrada) ---
   const body: any = {
@@ -572,7 +584,7 @@ enviar() {
     next: () => {
       mostrarAlertaToast('✅ Ticket creado correctamente');
       this.form.reset({
-        sucursal_id: Number(localStorage.getItem('sucursal_id')) || null,
+        sucursal_id: this.sucursalIdUsuario,
         criticidad: null
       });
       this.nivel2Sub?.unsubscribe();  
@@ -593,8 +605,8 @@ enviar() {
 getCamposInvalidos(): string[] {
   const faltan: string[] = [];
   Object.entries(this.form.controls).forEach(([key, ctrl]) => {
+    if (key === 'sucursal_id' && !this.esAdmin()) return; // 👈 no exigir a no-admin
     if (ctrl.invalid && ctrl.errors?.['required']) {
-      // No exigir nivel_4 cuando estoy en aparatos o sistemas→dispositivos
       if (key === 'nivel_4' && (this.mostrarSubformAparatos || this.mostrarSubformSistemasDispositivos)) return;
 
       if (
@@ -610,6 +622,7 @@ getCamposInvalidos(): string[] {
   });
   return faltan;
 }
+
 
 
 
