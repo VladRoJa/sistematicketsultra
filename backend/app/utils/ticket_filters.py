@@ -1,38 +1,36 @@
 # app/utils/ticket_filters.py
-
-from app.models.ticket_model import Ticket
 from sqlalchemy import or_
+from app.models.ticket_model import Ticket
+# (si aquí ya tienes otras importaciones, conserva todo igual)
 
-def filtrar_tickets_por_usuario(user, query=None):
+def filtrar_tickets_por_usuario(user):
     """
-    Devuelve un query filtrado de tickets según los privilegios del usuario:
-    - Recepción/Gerente: ve solo los tickets que ha creado (por username)
-    - Jefe de departamento: ve tickets de su departamento y los que él ha creado
-    - Admin: ve todo
+    Devuelve un Query base con los tickets que el usuario puede ver.
+    - ADMINISTRADOR / corporativo: ve todo.
+    - GERENTE: ve lo suyo + lo de su sucursal + lo destinado a su sucursal.
+    - Usuario normal: ve lo suyo + lo destinado a su sucursal.
     """
-    if query is None:
-        query = Ticket.query
+    q = Ticket.query
 
-    if hasattr(user, 'sucursal_id') and 1 <= user.sucursal_id <= 22:
-        # Recepcionistas/gerentes de sucursal: solo sus tickets
-        query = query.filter_by(username=user.username)
+    # Admin corporativo (incluye sucursal 100/1000 si así lo manejas)
+    es_admin_corp = (user.rol == "ADMINISTRADOR") or (user.sucursal_id in (100, 1000))
+    if es_admin_corp:
+        return q
 
-    elif hasattr(user, 'sucursal_id') and user.sucursal_id == 100:
-        if not hasattr(user, 'department_id') or user.department_id is None:
-            raise Exception("Supervisor sin departamento asignado")
-        # Jefe de departamento: tickets de su depto o hechos por él
-        query = query.filter(
+    # GERENTE: incluye destino a su sucursal
+    if (user.rol or "").upper() == "GERENTE":
+        return q.filter(
             or_(
-                Ticket.departamento_id == user.department_id,
-                Ticket.username == user.username
+                Ticket.username == user.username,            # lo que él creó
+                Ticket.sucursal_id == user.sucursal_id,      # lo de su sucursal (si así ya lo contemplabas)
+                Ticket.sucursal_id_destino == user.sucursal_id  # 🔴 NUEVO: lo destinado a su sucursal
             )
         )
 
-    elif hasattr(user, 'sucursal_id') and user.sucursal_id == 1000:
-        # Admin/Corporativo: sin filtro, ve todo
-        pass
-
-    else:
-        raise Exception("Tipo de usuario no reconocido o sin permisos")
-
-    return query
+    # Usuario regular: ve lo suyo + lo destinado a su sucursal
+    return q.filter(
+        or_(
+            Ticket.username == user.username,
+            Ticket.sucursal_id_destino == user.sucursal_id   # 🔴 NUEVO para usuarios no gerentes/admin
+        )
+    )

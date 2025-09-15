@@ -358,6 +358,9 @@ def update_ticket_status(id):
                     subject_bits = " / ".join(cambios) or "Actualización"
                     subject = build_subject(ticket, subject_bits)
                     html = render_ticket_html(ticket.to_dict())
+                    to_list = pick_recipients(ticket, actor.username, event="update")
+                    current_app.logger.info("📬 Ticket %s cambios=%s → %s", ticket.id, cambios, to_list)
+
                     threading.Thread(
                         target=_send_email_async,
                         args=(to_list, subject, html),
