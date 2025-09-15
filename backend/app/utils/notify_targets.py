@@ -4,6 +4,7 @@ from typing import Iterable, List, Optional, Set
 from sqlalchemy import func
 from app.models.user_model import UserORM
 from app.models.ticket_model import Ticket
+from app.models.sucursal_model import Sucursal
 import os
 
 # -----------------------
@@ -83,6 +84,16 @@ def _default_fallbacks() -> List[str]:
             seen.add(e.lower())
     return out
 
+def _sucursal_nombre_by_id(suc_id: Optional[int]) -> Optional[str]:
+    """Devuelve el nombre legible de la sucursal o None si no existe."""
+    try:
+        if suc_id is None:
+            return None
+        s = Sucursal.query.filter_by(sucursal_id=int(suc_id)).first()
+        return (s.sucursal or "").strip() if s else None
+    except Exception:
+        return None
+
 # -----------------------
 # Público
 # -----------------------
@@ -90,11 +101,22 @@ def _default_fallbacks() -> List[str]:
 def build_subject(ticket: Ticket, action_bits: str) -> str:
     base = f"[Ticket #{ticket.id}]"
     dept = (ticket.departamento.nombre if ticket and ticket.departamento else "") or ""
-    suc  = ticket.sucursal_id_destino if (ticket and ticket.sucursal_id_destino is not None) else ticket.sucursal_id
+    suc_id = ticket.sucursal_id_destino if (ticket and ticket.sucursal_id_destino is not None) else ticket.sucursal_id
+
     extra = []
-    if dept: extra.append(dept)
-    if suc is not None: extra.append(f"Sucursal {suc}")
-    if action_bits: extra.append(action_bits)
+    if dept:
+        extra.append(dept)
+
+    # 👇 usa nombre de sucursal si existe; si no, cae a ID
+    suc_nombre = _sucursal_nombre_by_id(suc_id)
+    if suc_nombre:
+        extra.append(f"Sucursal {suc_nombre}")
+    elif suc_id is not None:
+        extra.append(f"Sucursal {suc_id}")
+
+    if action_bits:
+        extra.append(action_bits)
+
     return f"{base} " + " – ".join(extra)
 
 def pick_recipients(ticket: Ticket, actor_username: str, event: str = "update") -> List[str]:
