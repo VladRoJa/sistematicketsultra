@@ -25,13 +25,23 @@ services:
     depends_on:
       - db
     env_file:
-      - .env.docker  
+      - .env.docker
+    environment:           # 👈 NUEVO: forzamos que existan dentro del contenedor
+      APP_ENV: "prod"
+      SMTP_HOST: "smtp.gmail.com"
+      SMTP_PORT: "587"
+      SMTP_USER: "notificaciones.ultragym@gmail.com"
+      SMTP_PASS: "dsjvthlmjrghuwvi"
+      EMAIL_FROM: "notificaciones.ultragym@gmail.com"
+      SMTP_DEBUG: "1"          # para ver el diálogo SMTP
+      SMTP_SYNC_DEBUG: "1"     # para envío síncrono (sin thread) mientras depuramos
     ports:
       - "5000:5000"
     networks:
       - backend-net
     volumes:
       - /home/adminrdp/sistematicketsultra/uploads:/home/adminrdp/sistematicketsultra/uploads
+
 
 
   frontend:
