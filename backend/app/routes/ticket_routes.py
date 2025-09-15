@@ -125,16 +125,18 @@ def create_ticket():
             clasificacion_id=clasificacion_id
         )
 
-        # ⬇️ Notificación de creación (asíncrona)
+        # ⬇️ Notificación de creación (asíncrona) + retorno de destinatarios
+        recipients = []
         try:
             if os.getenv("NOTIFY_EMAIL_ON_UPDATE", "true").lower() == "true":
-                to_list = pick_recipients(nuevo_ticket, actor_username=user.username, event="create")
-                if to_list:
+                recipients = pick_recipients(nuevo_ticket, actor_username=user.username, event="create") or []
+                if recipients:
                     html = render_ticket_html(nuevo_ticket.to_dict())
                     subject = build_subject(nuevo_ticket, "Creado")
+                    current_app.logger.info("📧 create_ticket #%s → notificados=%s", nuevo_ticket.id, recipients)
                     threading.Thread(
                         target=_send_email_async,
-                        args=(to_list, subject, html),
+                        args=(recipients, subject, html),
                         daemon=True
                     ).start()
         except Exception as e:
@@ -143,9 +145,11 @@ def create_ticket():
             except Exception:
                 print("⚠️ No se pudo enviar correo de creación:", e)
 
+
         return jsonify({
             "mensaje": "Ticket creado correctamente",
-            "ticket_id": nuevo_ticket.id
+            "ticket_id": nuevo_ticket.id,
+            "notificados": recipients 
         }), 201
 
     except Exception as e:
