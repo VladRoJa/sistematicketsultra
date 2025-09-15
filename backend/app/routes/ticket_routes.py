@@ -36,9 +36,22 @@ ticket_bp = Blueprint('tickets', __name__, url_prefix='/api/tickets')
 # Helpers
 # ─────────────────────────────────────────────────────────────
 
-def _send_email_async(to_list, subject, html):
+def _send_email_maybe_async(to_list, subject, html):
+    """
+    Envío de correo: si SMTP_SYNC_DEBUG=1 => envío SIN hilo (bloqueante),
+    para que los errores aparezcan en el log del request.
+    En caso contrario, lo manda en hilo (comportamiento normal).
+    """
     try:
-        send_email_html(to_list, subject, html)
+        if os.getenv("SMTP_SYNC_DEBUG", "0") == "1":
+            current_app.logger.info("🔎 SMTP_SYNC_DEBUG=1 → envío síncrono (sin hilo)")
+            send_email_html(to_list, subject, html)
+        else:
+            threading.Thread(
+                target=send_email_html,
+                args=(to_list, subject, html),
+                daemon=True
+            ).start()
     except Exception as e:
         try:
             current_app.logger.exception("❌ Error enviando correo: %s", e)
@@ -62,8 +75,6 @@ def create_ticket():
             return jsonify({"mensaje": "Usuario no encontrado"}), 404
 
         data = request.get_json() or {}
-        
-        
 
         descripcion         = data.get("descripcion")
         departamento_id     = data.get("departamento_id")
@@ -78,16 +89,13 @@ def create_ticket():
         clasificacion_id    = data.get("clasificacion_id")
         sucursal_id_destino = data.get("sucursal_id_destino")
 
-
         try:
             departamento_id = int(departamento_id)
             criticidad = int(criticidad)
         except (TypeError, ValueError):
             return jsonify({"mensaje": "departamento_id y criticidad deben ser numéricos"}), 400
 
-        
-        
-                # ¿quién puede fijar el destino?
+        # ¿quién puede fijar el destino?
         es_admin_corp = (user.rol == "ADMINISTRADOR") or (user.sucursal_id in (1000, 100))
         if es_admin_corp:
             if not sucursal_id_destino:
@@ -125,7 +133,7 @@ def create_ticket():
             clasificacion_id=clasificacion_id
         )
 
-        # ⬇️ Notificación de creación (asíncrona) + retorno de destinatarios
+        # ⬇️ Notificación de creación + retorno de destinatarios
         recipients = []
         try:
             if os.getenv("NOTIFY_EMAIL_ON_UPDATE", "true").lower() == "true":
@@ -134,26 +142,23 @@ def create_ticket():
                     html = render_ticket_html(nuevo_ticket.to_dict())
                     subject = build_subject(nuevo_ticket, "Creado")
                     current_app.logger.info("📧 create_ticket #%s → notificados=%s", nuevo_ticket.id, recipients)
-                    threading.Thread(
-                        target=_send_email_async,
-                        args=(recipients, subject, html),
-                        daemon=True
-                    ).start()
+                    # 👇 LLAMADA DIRECTA (sin envolver en otro hilo)
+                    _send_email_maybe_async(recipients, subject, html)
         except Exception as e:
             try:
                 current_app.logger.exception("⚠️ No se pudo enviar correo de creación: %s", e)
             except Exception:
                 print("⚠️ No se pudo enviar correo de creación:", e)
 
-
         return jsonify({
             "mensaje": "Ticket creado correctamente",
             "ticket_id": nuevo_ticket.id,
-            "notificados": recipients 
+            "notificados": recipients
         }), 201
 
     except Exception as e:
         return manejar_error(e)
+
 
 
 # ─────────────────────────────────────────────────────────────
@@ -357,24 +362,22 @@ def update_ticket_status(id):
                 cambios.append("historial")
 
             if os.getenv("NOTIFY_EMAIL_ON_UPDATE", "true").lower() == "true" and cambios:
-                to_list = pick_recipients(ticket, actor.username, event="update")
+                to_list = pick_recipients(ticket, actor.username, event="update") or []
                 if to_list:
                     subject_bits = " / ".join(cambios) or "Actualización"
                     subject = build_subject(ticket, subject_bits)
                     html = render_ticket_html(ticket.to_dict())
-                    to_list = pick_recipients(ticket, actor.username, event="update")
+
                     current_app.logger.info("📬 Ticket %s cambios=%s → %s", ticket.id, cambios, to_list)
 
-                    threading.Thread(
-                        target=_send_email_async,
-                        args=(to_list, subject, html),
-                        daemon=True
-                    ).start()
+                    # 👇 Envío sin envolver en Thread (el helper decide síncrono vs asíncrono)
+                    _send_email_maybe_async(to_list, subject, html)
         except Exception as e:
             try:
                 current_app.logger.exception("❌ Error notificando actualización de ticket %s: %s", ticket.id, e)
             except Exception:
                 print(f"❌ Error notificando ticket {ticket.id}:", e)
+
 
         return jsonify({"mensaje": f"Ticket {id} actualizado correctamente"}), 200
 
