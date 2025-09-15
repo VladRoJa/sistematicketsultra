@@ -350,6 +350,7 @@ def update_ticket_status(id):
         db.session.commit()
 
         # ---- Notificación por correo (si hay cambios) ----
+        notificados = []  # 👈 NUEVO
         try:
             cambios = []
             if estado and (estado.strip().lower() != prev_estado):
@@ -362,24 +363,23 @@ def update_ticket_status(id):
                 cambios.append("historial")
 
             if os.getenv("NOTIFY_EMAIL_ON_UPDATE", "true").lower() == "true" and cambios:
-                to_list = pick_recipients(ticket, actor.username, event="update") or []
-                if to_list:
+                notificados = pick_recipients(ticket, actor.username, event="update") or []  # 👈 NUEVO
+                if notificados:
                     subject_bits = " / ".join(cambios) or "Actualización"
                     subject = build_subject(ticket, subject_bits)
                     html = render_ticket_html(ticket.to_dict())
-
-                    current_app.logger.info("📬 Ticket %s cambios=%s → %s", ticket.id, cambios, to_list)
-
-                    # 👇 Envío sin envolver en Thread (el helper decide síncrono vs asíncrono)
-                    _send_email_maybe_async(to_list, subject, html)
+                    current_app.logger.info("📬 Ticket %s cambios=%s → %s", ticket.id, cambios, notificados)
+                    _send_email_maybe_async(notificados, subject, html)  # 👈 ya sin Thread
         except Exception as e:
             try:
                 current_app.logger.exception("❌ Error notificando actualización de ticket %s: %s", ticket.id, e)
             except Exception:
                 print(f"❌ Error notificando ticket {ticket.id}:", e)
 
-
-        return jsonify({"mensaje": f"Ticket {id} actualizado correctamente"}), 200
+        return jsonify({
+            "mensaje": f"Ticket {id} actualizado correctamente",
+            "notificados": notificados  # 👈 NUEVO
+        }), 200
 
 
     except Exception as e:

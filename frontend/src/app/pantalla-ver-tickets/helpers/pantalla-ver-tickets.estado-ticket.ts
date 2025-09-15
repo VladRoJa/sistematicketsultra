@@ -1,5 +1,3 @@
-// frontend-angular\src\app\pantalla-ver-tickets\helpers\pantalla-ver-tickets.estado-ticket.ts
-
 import { PantallaVerTicketsComponent, Ticket, ApiResponse } from '../pantalla-ver-tickets.component';
 import { HttpHeaders } from '@angular/common/http';
 import { cargarTickets } from './pantalla-ver-tickets.init';
@@ -7,11 +5,9 @@ import { environment } from 'src/environments/environment';
 import { mostrarAlertaErrorDesdeStatus, mostrarAlertaToast } from 'src/app/utils/alertas';
 import { AsignarFechaModalComponent } from '../modals/asignar-fecha-modal.component';
 
-
 /**
  * Funciones para cambiar el estado de un ticket
  */
-
 const API_URL = `${environment.apiUrl}/tickets`;
 
 /** Cambiar el estado de un ticket */
@@ -47,9 +43,16 @@ export function cambiarEstadoTicket(
         fecha_en_progreso: new Date().toISOString()
       };
 
-      component.http.put(`${API_URL}/update/${ticket.id}`, body, { headers }).subscribe({
-        next: () => {
-          mostrarAlertaToast(`✅ Ticket #${ticket.id} actualizado a '${nuevoEstado}'`);
+      component.http.put<{ mensaje: string; notificados?: string[] }>(
+        `${API_URL}/update/${ticket.id}`,
+        body,
+        { headers }
+      ).subscribe({
+        next: (res) => {
+          const lista = (res.notificados && res.notificados.length)
+            ? res.notificados.join(', ')
+            : '—';
+          mostrarAlertaToast(`✅ Ticket #${ticket.id} actualizado a '${nuevoEstado}'. Notificados: ${lista}`);
           cargarTickets(component); // <<--- SIEMPRE RECARGA TABLA
           dialogRef.close();
           if (onSuccess) onSuccess();
@@ -58,7 +61,7 @@ export function cambiarEstadoTicket(
           mostrarAlertaErrorDesdeStatus(error.status);
         }
       });
-    });
+    }); // 👈 cierre que faltaba del subscribe(onGuardar)
 
     dialogRef.componentInstance.onCancelar.subscribe(() => {
       dialogRef.close();
@@ -70,9 +73,16 @@ export function cambiarEstadoTicket(
   // ✅ Flujo normal para otros estados o si ya tiene fecha_solucion
   const body = { estado: nuevoEstado };
 
-  component.http.put(`${API_URL}/update/${ticket.id}`, body, { headers }).subscribe({
-    next: () => {
-      mostrarAlertaToast(`✅ Ticket #${ticket.id} actualizado a '${nuevoEstado}'`);
+  component.http.put<{ mensaje: string; notificados?: string[] }>(
+    `${API_URL}/update/${ticket.id}`,
+    body,
+    { headers }
+  ).subscribe({
+    next: (res) => {
+      const lista = (res.notificados && res.notificados.length)
+        ? res.notificados.join(', ')
+        : '—';
+      mostrarAlertaToast(`✅ Ticket #${ticket.id} actualizado a '${nuevoEstado}'. Notificados: ${lista}`);
       cargarTickets(component); // <<--- SIEMPRE RECARGA TABLA
       if (onSuccess) onSuccess();
     },
@@ -81,7 +91,6 @@ export function cambiarEstadoTicket(
     }
   });
 }
-
 
 /** Finalizar directamente un ticket */
 export function finalizarTicket(
@@ -122,11 +131,22 @@ function actualizarEstadoEnServidor(
     updateData.fecha_en_progreso = fechaISO;
   }
 
-  component.http.put<ApiResponse>(`${API_URL}/update/${ticket.id}`, updateData, { headers }).subscribe({
-    next: () => {
-      // 🧼 Que el backend nos regrese datos limpios
+  component.http.put<{ mensaje: string; notificados?: string[] }>(
+    `${API_URL}/update/${ticket.id}`,
+    updateData,
+    { headers }
+  ).subscribe({
+    next: (res) => {
+      const lista = (res.notificados && res.notificados.length)
+        ? res.notificados.join(', ')
+        : '—';
+      mostrarAlertaToast(`✅ Ticket #${ticket.id} actualizado a '${nuevoEstado}'. Notificados: ${lista}`);
+      // 🧼 Mantengo el comportamiento: siempre recargar la tabla
       cargarTickets(component);
     },
-    error: (error) => console.error(`❌ Error actualizando el ticket #${ticket.id}:`, error),
+    error: (error) => {
+      console.error(`❌ Error actualizando el ticket #${ticket.id}:`, error);
+      mostrarAlertaErrorDesdeStatus(error.status);
+    },
   });
 }

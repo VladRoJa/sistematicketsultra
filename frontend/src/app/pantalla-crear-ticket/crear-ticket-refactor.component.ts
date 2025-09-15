@@ -580,25 +580,36 @@ enviar() {
   if (esSisDisp && 'detalle' in body) delete body.detalle;
 
 
-  this.http.post<{ mensaje: string }>(`${environment.apiUrl}/tickets/create`, body, { headers }).subscribe({
-    next: () => {
-      mostrarAlertaToast('✅ Ticket creado correctamente');
-      this.form.reset({
-        sucursal_id: this.sucursalIdUsuario,
-        criticidad: null
-      });
-      this.nivel2Sub?.unsubscribe();  
-      this.nivel2Sub = undefined;
-      this.niveles = [];
-      this.hookedNivel2 = false;
-      this.cargarNivel(1, null, 'Departamento');
-      this.loadingGuardar = false;
-    },
-    error: (err) => {
-      mostrarAlertaErrorDesdeStatus(err.status);
-      this.loadingGuardar = false;
-    }
-  });
+  this.http
+    .post<{ mensaje: string; ticket_id: number; notificados?: string[] }>(
+      `${environment.apiUrl}/tickets/create`,
+      body,
+      { headers }
+    )
+    .subscribe({
+      next: (res) => {
+        const lista = (res.notificados && res.notificados.length)
+          ? res.notificados.join(', ')
+          : '—';
+        mostrarAlertaToast(`✅ ${res.mensaje}. Notificados: ${lista}`);
+
+        this.form.reset({
+          sucursal_id: this.sucursalIdUsuario,
+          criticidad: null
+        });
+        this.nivel2Sub?.unsubscribe();
+        this.nivel2Sub = undefined;
+        this.niveles = [];
+        this.hookedNivel2 = false;
+        this.cargarNivel(1, null, 'Departamento');
+        this.loadingGuardar = false;
+      },
+      error: (err) => {
+        mostrarAlertaErrorDesdeStatus(err.status);
+        this.loadingGuardar = false;
+      }
+    });
+
 } 
 
 
