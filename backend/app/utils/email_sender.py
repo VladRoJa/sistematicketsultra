@@ -1,5 +1,6 @@
 # app/utils/email_sender.py
 
+
 import os, smtplib
 from email.message import EmailMessage
 
@@ -9,8 +10,10 @@ SMTP_USER = os.getenv("SMTP_USER")
 SMTP_PASS = os.getenv("SMTP_PASS")
 EMAIL_FROM = os.getenv("EMAIL_FROM", SMTP_USER)
 
+# 🔴 NUEVO: flag para ver el diálogo SMTP en logs
+SMTP_DEBUG = os.getenv("SMTP_DEBUG", "0") == "1"
+
 def send_email_html(to_list, subject, html):
-    
     DISPLAY_FROM = os.getenv("EMAIL_FROM_NAME", "Ultra Tickets")
     msg = EmailMessage()
     msg["Subject"] = subject
@@ -22,6 +25,8 @@ def send_email_html(to_list, subject, html):
 
     # timeout para no colgar el request si el SMTP no responde
     with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=20) as s:
+        if SMTP_DEBUG:
+            s.set_debuglevel(1)  # 👈 imprime diálogo SMTP en stdout del contenedor
         s.ehlo()
         s.starttls()
         s.ehlo()
