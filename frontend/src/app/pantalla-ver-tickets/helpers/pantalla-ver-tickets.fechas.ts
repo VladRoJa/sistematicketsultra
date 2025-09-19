@@ -6,23 +6,57 @@ import { PantallaVerTicketsComponent } from '../pantalla-ver-tickets.component';
  * Funciones relacionadas a manejo de fechas y filtros cruzados en PantallaVerTicketsComponent.
  */
 
-function parsearFecha(fechaTexto: string): Date | null {
+function parsearFecha(fechaTexto: any): Date | null {
   if (!fechaTexto) return null;
 
-  // Formato esperado: dd/mm/yyyy hh:mm (AM/PM)
-  const partes = fechaTexto.split(/[/\s:]+/); // divide por /, espacio y :
-  if (partes.length < 5) return null;
+  // 1) Si ya es Date válido
+  if (fechaTexto instanceof Date && !isNaN(fechaTexto.getTime())) {
+    return fechaTexto;
+  }
 
-  let [dia, mes, anio, hora, minuto] = partes;
-  const ampm = fechaTexto.toLowerCase().includes('pm') ? 'pm' : 'am';
+  const s = String(fechaTexto).trim();
+  if (!s || s === '—') return null;
 
-  let h = parseInt(hora, 10);
-  if (ampm === 'pm' && h < 12) h += 12;
-  if (ampm === 'am' && h === 12) h = 0;
+  // 2) ISO 8601 (con T o con espacio) -> Date.parse lo entiende
+  //    Ej: 2025-09-19T17:03:11Z  |  2025-09-19 17:03:11
+  //    Lo detectamos si hay patrón de hora tipo HH:MM en la cadena.
+  if (/T\d{2}:\d{2}| \d{2}:\d{2}/.test(s)) {
+    const t = Date.parse(s);
+    if (!isNaN(t)) return new Date(t);
+  }
 
-  const fecha = new Date(parseInt(anio, 10), parseInt(mes, 10) - 1, parseInt(dia, 10), h, parseInt(minuto, 10));
-  return isNaN(fecha.getTime()) ? null : fecha;
+  // 3) dd/mm/yy(yy) opcionalmente con hora HH:MM y opcional AM/PM
+  //    Coincide: 1/9/25, 01/09/2025, 01/09/2025 6:13, 01/09/2025 06:13 PM
+  const m = s.match(
+    /^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})(?:\s+(\d{1,2}):(\d{2})(?:\s*(AM|PM|am|pm))?)?$/
+  );
+  if (m) {
+    let [, dd, mm, yy, hh, min, ampm] = m;
+    const day = parseInt(dd, 10);
+    const mon = parseInt(mm, 10) - 1;
+
+    let year = parseInt(yy, 10);
+    if (yy.length === 2) year += 2000; // 25 -> 2025
+
+    let hour = hh ? parseInt(hh, 10) : 0;
+    const minute = min ? parseInt(min, 10) : 0;
+
+    // Normalizar AM/PM si existe
+    if (ampm) {
+      const p = ampm.toLowerCase();
+      if (p === 'pm' && hour < 12) hour += 12;
+      if (p === 'am' && hour === 12) hour = 0;
+    }
+
+    const d = new Date(year, mon, day, hour, minute, 0, 0);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  // 4) Fallback: intenta Date.parse por si llega algo raro pero parseable
+  const t = Date.parse(s);
+  return isNaN(t) ? null : new Date(t);
 }
+
 
 export function actualizarFiltrosCruzados(
   ticketsFiltrados: any[],
