@@ -122,4 +122,19 @@ setSession(token: string, user: any, redirigir: boolean = true) {
     return rol === 'administrador' || rol === 'super_admin';
   }
   
+  esLectorGlobal(): boolean {
+  const user = this.getUser();
+  if (!user) return false;
+  const rol = (user.rol || '').toUpperCase();
+  return rol === 'LECTOR_GLOBAL';
+}
+
+esGerente(): boolean {
+  const user = this.getUser();
+  if (!user) return false;
+  const rol = (user.rol || '').toUpperCase();
+  return rol === 'GERENTE';
+}
+
+
 }

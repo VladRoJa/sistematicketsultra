@@ -673,7 +673,7 @@
 
         <!-- Acciones -->
         <td>
-          <div *ngIf="usuarioEsAdmin || usuarioEsEditorCorporativo">
+          <div *ngIf="puedeEditarTickets">
             <button
               *ngIf="ticket.estado?.trim().toLowerCase() === 'abierto'"
               mat-button color="accent"
@@ -684,7 +684,7 @@
               *ngIf="ticket.estado?.trim().toLowerCase() === 'en progreso'"
               class="boton-estado boton-finalizar"
               (click)="cambiarEstado(ticket, 'finalizado')">
-             <mat-icon>play_circle</mat-icon> Finalizar
+              <mat-icon>play_circle</mat-icon> Finalizar
             </button>
           </div>
         </td>
@@ -694,7 +694,7 @@
           <ng-container *ngIf="ticket.fecha_solucion; else soloLecturaSinFecha">
             {{ ticket.fecha_solucion | date:'dd/MM/yy' }}
             <button
-                *ngIf="(usuarioEsAdmin || usuarioEsEditorCorporativo) && ((ticket.estado ?? '').toString().trim().toLowerCase() !== 'finalizado')"
+              *ngIf="puedeEditarTickets && ((ticket.estado ?? '').toString().trim().toLowerCase() !== 'finalizado')"
               mat-icon-button
               class="boton-editar-fecha"
               matTooltip="Editar fecha solución"
@@ -706,6 +706,7 @@
             <span class="text-gray-400">Sin asignar</span>
           </ng-template>
         </td>
+
 
         <!-- Historial -->
         <td>

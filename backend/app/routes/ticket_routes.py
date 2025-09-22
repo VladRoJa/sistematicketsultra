@@ -24,6 +24,8 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.utils.datetime_utils import format_datetime 
 from app.models.sucursal_model import Sucursal
 import os, threading
+from app.utils.auth_utils import bloquea_lectores_globales
+
 
 
 
@@ -253,6 +255,7 @@ def list_tickets_with_filters():
 
 @ticket_bp.route('/update/<int:id>', methods=['PUT'])
 @jwt_required()
+@bloquea_lectores_globales
 def update_ticket_status(id):
     try:
         actor = UserORM.get_by_id(get_jwt_identity())
@@ -699,6 +702,7 @@ def export_excel():
 
 @ticket_bp.route('/migrar-historial-local', methods=['POST'])
 @jwt_required()
+@bloquea_lectores_globales
 def migrar_historial_local():
 
 
@@ -740,51 +744,6 @@ def migrar_historial_local():
         return jsonify({"mensaje": "⚠️ No se encontraron entradas para actualizar."}), 200
 
 
-# ─────────────────────────────────────────────────────────────
-# RUTA: migrar tickets a ISO railway
-# ─────────────────────────────────────────────────────────────
-
-@ticket_bp.route('/migrar-historial-railway', methods=['POST'])
-@jwt_required()
-def migrar_historial_railway():
-
-
-    tz_mx = pytz.timezone("America/Tijuana")
-    tickets = Ticket.query.all()
-    total_actualizados = 0
-
-    for ticket in tickets:
-        historial = ticket.historial_fechas
-        if not historial:
-            continue
-
-        actualizado = False
-        nuevo_historial = []
-
-        for entrada in historial:
-            nueva_entrada = entrada.copy()
-            for campo in ['fecha', 'fechaCambio']:
-                valor = entrada.get(campo)
-                if valor and isinstance(valor, str) and '/' in valor and len(valor) == 8:
-                    try:
-                        fecha_local = datetime.strptime(valor, "%d/%m/%y")
-                        fecha_local = tz_mx.localize(datetime.combine(fecha_local.date(), time(hour=7)))
-                        fecha_utc = fecha_local.astimezone(timezone.utc)
-                        nueva_entrada[campo] = fecha_utc.isoformat()
-                        actualizado = True
-                    except Exception as e:
-                        print(f"❌ Error en ticket #{ticket.id}, campo {campo}: {e}")
-            nuevo_historial.append(nueva_entrada)
-
-        if actualizado:
-            ticket.historial_fechas = nuevo_historial
-            total_actualizados += 1
-
-    if total_actualizados > 0:
-        db.session.commit()
-        return jsonify({"mensaje": f"✅ Historial actualizado en {total_actualizados} tickets (Railway)."}), 200
-    else:
-        return jsonify({"mensaje": "⚠️ No se encontraron entradas para actualizar (Railway)."}), 200
 
 # ─────────────────────────────────────────────────────────────
 # RUTA: eliminar todos tickets

@@ -62,6 +62,7 @@ import {
 } from 'src/app/utils/filtro-unificado';
 import { MatSelectModule } from '@angular/material/select';
 
+import { AuthService } from '../services/auth.service';
 
 
 
@@ -316,6 +317,7 @@ columnasUnificado: Array<{ key: 'categoria' | 'estado' | 'departamento' | 'sucur
     public refrescoService: RefrescoService,
     public catalogoService: CatalogoService,
     private sucursalesService: SucursalesService,
+    private authService: AuthService, 
     
   ) {}
 ngAfterViewInit(): void {
@@ -421,6 +423,15 @@ ngAfterViewInit(): void {
   actualizarSeleccionTemporal = (col: string, i: number, valor: boolean) => FiltrosGenericos.actualizarSeleccionTemporal(this, col, i, valor);
   alternarSeleccionTemporal = (col: string, valor: boolean) => FiltrosGenericos.alternarSeleccionTemporal(this, col, valor);
   isTodoSeleccionado = (col: string) => FiltrosGenericos.isTodoSeleccionado(this, col);
+  get soloLectura(): boolean {
+    return this.authService.esLectorGlobal();
+  }
+
+  get puedeEditarTickets(): boolean {
+    // Bloquea edición a LECTOR_GLOBAL y también a GERENTE
+    return !this.authService.esLectorGlobal() && !this.authService.esGerente();
+  }
+
 
 
     cargarCatalogoCategorias(): Promise<void> {

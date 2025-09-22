@@ -36,6 +36,7 @@ export class LayoutComponent implements OnInit, AfterViewInit {
   @ViewChild('indicator', { static: true }) indicator!: ElementRef;
 
   esAdmin = false;
+  esSoloLectura = false; 
   currentSubmenu: string = 'Tickets';
   submenuVisible = false;
   estiloIndicador: any = {};
@@ -60,65 +61,69 @@ export class LayoutComponent implements OnInit, AfterViewInit {
     private inactividadService: InactividadService
   ) {}
 
-  ngOnInit(): void {
-    this.verificarRolUsuario();
-    this.iniciarTimerInactividad(); 
-    this.inactividadService.registrarCallback(() => this.reiniciarTimerInactividad());
+ngOnInit(): void {
+  this.verificarRolUsuario();
+  this.iniciarTimerInactividad();
+  this.inactividadService.registrarCallback(() => this.reiniciarTimerInactividad());
 
-    this.menuItems = this.esAdmin
-      ? [
-          {
-            label: 'Tickets',
-            path: '/main/ver-tickets',
-            submenu: [
-              { label: 'Ver Tickets', path: '/main/ver-tickets' },
-              { label: 'Crear Ticket', path: '/main/crear-ticket' }
-            ]
-          },
-          {
-            label: 'Inventario',
-            path: '/inventario',
-            submenu: [
-              { label: 'Inventario', path: '/inventario' },
-              { label: 'Movimientos', path: '/inventario/movimientos' },
-              { label: 'Existencias', path: '/inventario/existencias' },
-              { label: 'Reportes', path: '/inventario/reportes' },
-              { label: 'Carga Masiva', path: '/carga-masiva' }
-            ]
-          },
-          {
-            label: 'Catálogos',
-            path: '/catalogos/marcas',
-            submenu: [
-              { label: 'Marcas', path: '/catalogos/marcas' },
-              { label: 'Proveedores', path: '/catalogos/proveedores' },
-              { label: 'Clasificaciones', path: '/catalogos/clasificaciones' },
-              { label: 'Unidades de Medida', path: '/catalogos/unidades' },
-              { label: 'Grupo Muscular', path: '/catalogos/gruposmusculares' },
-              { label: 'Tipos de Inventario', path: '/catalogos/tipos' },
-              { label: 'Categorias de Inventario', path: '/catalogos/categorias' },
-            ]
-          },
-          {
-            label: 'Asistencia',
-            path: '/asistencia/registrar',
-            submenu: [
-              { label: 'Registrar Asistencia', path: '/asistencia/registrar' },
-              { label: 'Reportes', path: '/asistencia/reportes' }
-            ]
-          }
-        ]
-      : [
-          {
-            label: 'Tickets',
-            path: '/main/ver-tickets',
-            submenu: [
-              { label: 'Ver Tickets', path: '/main/ver-tickets' },
-              { label: 'Crear Ticket', path: '/main/crear-ticket' }
-            ]
-          }
-        ];
-  }
+  const soloTickets = [
+    {
+      label: 'Tickets',
+      path: '/main/ver-tickets',
+      submenu: [
+        { label: 'Ver Tickets', path: '/main/ver-tickets' },
+        { label: 'Crear Ticket', path: '/main/crear-ticket' }
+      ]
+    }
+  ];
+
+  const menuCompleto = [
+    {
+      label: 'Tickets',
+      path: '/main/ver-tickets',
+      submenu: [
+        { label: 'Ver Tickets', path: '/main/ver-tickets' },
+        { label: 'Crear Ticket', path: '/main/crear-ticket' }
+      ]
+    },
+    {
+      label: 'Inventario',
+      path: '/inventario',
+      submenu: [
+        { label: 'Inventario', path: '/inventario' },
+        { label: 'Movimientos', path: '/inventario/movimientos' },
+        { label: 'Existencias', path: '/inventario/existencias' },
+        { label: 'Reportes', path: '/inventario/reportes' },
+        { label: 'Carga Masiva', path: '/carga-masiva' }
+      ]
+    },
+    {
+      label: 'Catálogos',
+      path: '/catalogos/marcas',
+      submenu: [
+        { label: 'Marcas', path: '/catalogos/marcas' },
+        { label: 'Proveedores', path: '/catalogos/proveedores' },
+        { label: 'Clasificaciones', path: '/catalogos/clasificaciones' },
+        { label: 'Unidades de Medida', path: '/catalogos/unidades' },
+        { label: 'Grupo Muscular', path: '/catalogos/gruposmusculares' },
+        { label: 'Tipos de Inventario', path: '/catalogos/tipos' },
+        { label: 'Categorias de Inventario', path: '/catalogos/categorias' },
+      ]
+    },
+    {
+      label: 'Asistencia',
+      path: '/asistencia/registrar',
+      submenu: [
+        { label: 'Registrar Asistencia', path: '/asistencia/registrar' },
+        { label: 'Reportes', path: '/asistencia/reportes' }
+      ]
+    }
+  ];
+
+  // Regla: LECTOR_GLOBAL → solo Tickets, Admin → completo, otros → solo Tickets (como antes)
+  this.menuItems = this.esSoloLectura ? soloTickets : (this.esAdmin ? menuCompleto : soloTickets);
+}
+
 
   // 🖱️ Lógica de inactividad
   private iniciarTimerInactividad(): void {
@@ -168,11 +173,14 @@ export class LayoutComponent implements OnInit, AfterViewInit {
   }
 
   private verificarRolUsuario(): void {
-    const userString = localStorage.getItem('user');
-    if (userString) {
-      const user = JSON.parse(userString);
-      this.esAdmin = user.sucursal_id === 1000;
-    }
+    const user = this.authService.getUser();
+    const rol = (user?.rol || '').toUpperCase();
+
+    // Admin real por rol
+    this.esAdmin = rol === 'ADMINISTRADOR' || rol === 'SUPER_ADMIN';
+
+    // Lector global (solo lectura)
+    this.esSoloLectura = rol === 'LECTOR_GLOBAL';
   }
 
 

@@ -1,7 +1,7 @@
 # app/utils/ticket_filters.py
 from sqlalchemy import or_
 from app.models.ticket_model import Ticket
-# (si aquí ya tienes otras importaciones, conserva todo igual)
+
 
 def filtrar_tickets_por_usuario(user):
     """
@@ -13,7 +13,8 @@ def filtrar_tickets_por_usuario(user):
     q = Ticket.query
 
     # Admin corporativo (incluye sucursal 100/1000 si así lo manejas)
-    es_admin_corp = (user.rol == "ADMINISTRADOR") or (user.sucursal_id in (100, 1000))
+    rol = (user.rol or "").upper()
+    es_admin_corp = (rol == "ADMINISTRADOR") or (rol == "LECTOR_GLOBAL") or (user.sucursal_id in (100, 1000))
     if es_admin_corp:
         return q
 
