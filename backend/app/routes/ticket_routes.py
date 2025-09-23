@@ -391,7 +391,7 @@ def update_ticket_status(id):
 
 
 # ─────────────────────────────────────────────────────────────
-# RUTA: Eliminar ticket
+# RUTA: Exportar tickets a Excel (con filtros)
 # ─────────────────────────────────────────────────────────────
 
 
@@ -404,7 +404,7 @@ def export_excel():
         if not user:
             return jsonify({"mensaje": "Usuario no encontrado"}), 404
 
-        # ---------------- Filtros ----------------
+        # ---------------- Query params (filtros) ----------------
         estados        = request.args.getlist('estado')
         departamentos  = request.args.getlist('departamento_id')
         criticidades   = request.args.getlist('criticidad')
@@ -422,8 +422,11 @@ def export_excel():
         fecha_prog_desde = request.args.get('fecha_prog_desde')
         fecha_prog_hasta = request.args.get('fecha_prog_hasta')
 
+
+        # ---------------- Permisos base ----------------
         query = filtrar_tickets_por_usuario(user)
 
+        # ---------------- Aplicación de filtros ----------------
         if estados:
             query = query.filter(Ticket.estado.in_(estados))
         if departamentos:
@@ -677,6 +680,254 @@ def export_excel():
 
         ws.freeze_panes = "A2"
         ws.auto_filter.ref = ws.dimensions
+
+        # ─────────────────────────────────────────────────────────────
+        # Hoja de KPI (siempre) — formato “limpio” y con nuevas métricas
+        # ─────────────────────────────────────────────────────────────
+        ws_kpi = wb.create_sheet(title="KPI")
+
+        # Índices (1-based) según 'headers'
+        COL_ESTADO         = headers.index("Estado") + 1
+        COL_DEBER          = headers.index("Deber ser") + 1
+        COL_T_SOL          = headers.index("Tiempo Solución") + 1
+        COL_FECHA_CREACION = headers.index("Fecha Creación") + 1
+        COL_CRITICIDAD     = headers.index("Criticidad") + 1
+
+        total = abiertos = en_progreso = finalizados = 0
+        cumplidos_tiempo = 0
+
+        # Métricas extra
+        tiempos_solucion_dias = []      # finalizados con días numéricos
+        abiertos_criticos = 0           # abiertos/en progreso criticidad 4-5
+        backlog_aging_buckets = {"0-2": 0, "3-7": 0, "8-14": 0, "15+": 0}
+        sum_edad_abiertos = 0
+        count_abiertos = 0
+
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            if not row or row[0] is None:
+                continue
+            total += 1
+
+            estado = (row[COL_ESTADO-1] or "").strip().lower()
+            deber = row[COL_DEBER-1]
+            tsol = row[COL_T_SOL-1]
+            crit = row[COL_CRITICIDAD-1]
+            f_crea = row[COL_FECHA_CREACION-1]
+
+            if estado == "finalizado":
+                finalizados += 1
+                if isinstance(tsol, (int, float)):
+                    tiempos_solucion_dias.append(tsol)
+                    if isinstance(deber, (int, float)) and deber > 0 and tsol <= deber:
+                        cumplidos_tiempo += 1
+            elif estado == "en progreso":
+                en_progreso += 1
+                if isinstance(crit, (int, float)) and crit >= 4:
+                    abiertos_criticos += 1
+                if f_crea:
+                    edad = (hoy_local - f_crea.date()).days
+                    edad = max(0, edad)
+                    sum_edad_abiertos += edad
+                    count_abiertos += 1
+                    if   edad <= 2:  backlog_aging_buckets["0-2"]  += 1
+                    elif edad <= 7:  backlog_aging_buckets["3-7"]  += 1
+                    elif edad <= 14: backlog_aging_buckets["8-14"] += 1
+                    else:            backlog_aging_buckets["15+"]  += 1
+            else:
+                abiertos += 1
+                if isinstance(crit, (int, float)) and crit >= 4:
+                    abiertos_criticos += 1
+                if f_crea:
+                    edad = (hoy_local - f_crea.date()).days
+                    edad = max(0, edad)
+                    sum_edad_abiertos += edad
+                    count_abiertos += 1
+                    if   edad <= 2:  backlog_aging_buckets["0-2"]  += 1
+                    elif edad <= 7:  backlog_aging_buckets["3-7"]  += 1
+                    elif edad <= 14: backlog_aging_buckets["8-14"] += 1
+                    else:            backlog_aging_buckets["15+"]  += 1
+
+        # Agregados finales
+        pct_cumplidos = (cumplidos_tiempo / finalizados * 100.0) if finalizados else 0.0
+        prom_tiempo_sol = round(sum(tiempos_solucion_dias)/len(tiempos_solucion_dias), 2) if tiempos_solucion_dias else 0.0
+        def _mediana(nums):
+            if not nums: return 0.0
+            v = sorted(nums); n = len(v); m = n//2
+            return float(v[m]) if n % 2 else round((v[m-1]+v[m])/2.0, 2)
+        mediana_tiempo_sol = _mediana(tiempos_solucion_dias)
+        edad_promedio_backlog = round(sum_edad_abiertos/count_abiertos, 2) if count_abiertos else 0.0
+
+        # Escribir tabla KPI
+        ws_kpi.append(["Métrica", "Valor"])
+        ws_kpi.append(["Total tickets", total])
+        ws_kpi.append(["Abiertos", abiertos])
+        ws_kpi.append(["En progreso", en_progreso])
+        ws_kpi.append(["Finalizados", finalizados])
+        ws_kpi.append(["% cumplidos en tiempo (solo finalizados)", pct_cumplidos])
+        ws_kpi.append(["Tiempo promedio de solución (días)", prom_tiempo_sol])
+        ws_kpi.append(["Tiempo mediano de solución (días)", mediana_tiempo_sol])
+        ws_kpi.append(["Abiertos críticos (criticidad 4-5)", abiertos_criticos])
+        ws_kpi.append(["Edad promedio del backlog (días)", edad_promedio_backlog])
+        ws_kpi.append(["Backlog 0-2 días", backlog_aging_buckets["0-2"]])
+        ws_kpi.append(["Backlog 3-7 días", backlog_aging_buckets["3-7"]])
+        ws_kpi.append(["Backlog 8-14 días", backlog_aging_buckets["8-14"]])
+        ws_kpi.append(["Backlog 15+ días", backlog_aging_buckets["15+"]])
+
+        # Estilo KPI (header azul + formatos)
+        from openpyxl.styles import Font, PatternFill, Alignment
+        hdr = ws_kpi["A1":"B1"][0]
+        for c in hdr:
+            c.font = Font(bold=True, color="FFFFFF")
+            c.fill = PatternFill("solid", fgColor="0073C2")
+        ws_kpi["B6"].number_format = "0.00"      # %
+        ws_kpi["B6"].number_format = "0.00"      # mantén 2 decimales; Excel no % puro
+        for r in range(2, ws_kpi.max_row+1):
+            ws_kpi[f"B{r}"].alignment = Alignment(horizontal="right")
+        # Auto ancho
+        for col in ws_kpi.columns:
+            mx = max(len(str(c.value or "")) for c in col)
+            ws_kpi.column_dimensions[col[0].column_letter].width = mx + 2
+
+        # ─────────────────────────────────────────────────────────────
+        # Hoja de Tablas (resúmenes estilo anterior) + 3 gráficas
+        # ─────────────────────────────────────────────────────────────
+        ws_tab = wb.create_sheet(title="Tablas")
+
+        from collections import Counter
+        COL_ID             = headers.index("ID") + 1
+        COL_SUCURSAL       = headers.index("Sucursal (destino)") + 1
+        COL_DEPTO          = headers.index("Departamento") + 1
+        COL_CATEGORIA      = headers.index("Categoría") + 1
+        COL_ESTADO         = headers.index("Estado") + 1
+        COL_FECHA_CREACION = headers.index("Fecha Creación") + 1
+        COL_FECHA_FINAL    = headers.index("Fecha Finalizado") + 1
+        COL_DEBER          = headers.index("Deber ser") + 1
+        COL_T_SOL          = headers.index("Tiempo Solución") + 1
+
+        sucursal_counts = Counter()
+        depto_counts = Counter()
+        categoria_counts = Counter()
+        creados_por_mes = Counter()
+        finalizados_por_mes = Counter()
+        sla_incumplidos = []
+
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            if not row or row[0] is None:
+                continue
+            tid      = row[COL_ID-1]
+            sucursal = row[COL_SUCURSAL-1] or "—"
+            depto    = row[COL_DEPTO-1] or "—"
+            categoria= row[COL_CATEGORIA-1] or "—"
+            estado   = (row[COL_ESTADO-1] or "").strip().lower()
+            f_crea   = row[COL_FECHA_CREACION-1]
+            f_fin    = row[COL_FECHA_FINAL-1]
+            deber    = row[COL_DEBER-1]
+            tsol     = row[COL_T_SOL-1]
+
+            sucursal_counts[sucursal] += 1
+            depto_counts[depto] += 1
+            categoria_counts[categoria] += 1
+
+            if f_crea and hasattr(f_crea, "strftime"):
+                creados_por_mes[f_crea.strftime("%Y-%m")] += 1
+            if f_fin and hasattr(f_fin, "strftime"):
+                finalizados_por_mes[f_fin.strftime("%Y-%m")] += 1
+
+            if estado == "finalizado" and isinstance(tsol, (int, float)) and isinstance(deber, (int, float)) and deber > 0:
+                if tsol > deber:
+                    sla_incumplidos.append((tid, sucursal, depto, row[COL_CRITICIDAD-1], deber, tsol))
+
+        # Helpers para escribir como antes (título azul + tabla)
+        def write_section(ws, start_row, title, cols, rows):
+            # Título (línea “azul” compacta)
+            ws.cell(row=start_row, column=1, value=title)
+            ws.merge_cells(start_row=start_row, start_column=1, end_row=start_row, end_column=2)
+            tcell = ws.cell(row=start_row, column=1)
+            tcell.font = Font(bold=True, color="FFFFFF")
+            tcell.fill = PatternFill("solid", fgColor="0073C2")
+            # Encabezados
+            hdr_row = start_row + 1
+            for j, h in enumerate(cols, start=1):
+                c = ws.cell(row=hdr_row, column=j, value=h)
+                c.font = Font(bold=True)
+            # Filas
+            r = hdr_row + 1
+            for row in rows:
+                for j, v in enumerate(row, start=1):
+                    ws.cell(row=r, column=j, value=v)
+                r += 1
+            return r + 1  # deja una línea en blanco
+
+        # Ordenar
+        suc_rows  = sorted(sucursal_counts.items(), key=lambda x: x[1], reverse=True)
+        dep_rows  = sorted(depto_counts.items(), key=lambda x: x[1], reverse=True)
+        cat_rows  = sorted(categoria_counts.items(), key=lambda x: x[1], reverse=True)
+        cre_rows  = sorted(creados_por_mes.items())
+        fin_rows  = sorted(finalizados_por_mes.items())
+
+        r = 1
+        r = write_section(ws_tab, r, "Tickets por Sucursal", ["Sucursal", "Cantidad"], suc_rows)
+        r = write_section(ws_tab, r, "Tickets por Departamento", ["Departamento", "Cantidad"], dep_rows)
+        r = write_section(ws_tab, r, "Tickets por Categoría", ["Categoría", "Cantidad"], cat_rows)
+        r = write_section(ws_tab, r, "Tickets creados por mes", ["Mes", "Cantidad"], cre_rows)
+        r = write_section(ws_tab, r, "Tickets finalizados por mes", ["Mes", "Cantidad"], fin_rows)
+        r = write_section(ws_tab, r, "Tickets SLA Incumplidos",
+                        ["ID", "Sucursal", "Departamento", "Criticidad", "Deber ser", "Tiempo Solución"],
+                        sla_incumplidos)
+
+        from openpyxl.utils import get_column_letter
+
+        # Auto ancho robusto (soporta celdas merged)
+        for col_idx in range(1, ws_tab.max_column + 1):
+            max_len = 0
+            for row_idx in range(1, ws_tab.max_row + 1):
+                cell = ws_tab.cell(row=row_idx, column=col_idx)
+                try:
+                    val = "" if cell.value is None else str(cell.value)
+                except Exception:
+                    val = ""
+                if len(val) > max_len:
+                    max_len = len(val)
+            ws_tab.column_dimensions[get_column_letter(col_idx)].width = max_len + 2
+
+
+        # ── Gráficas (Barras) como en la versión “buena”
+        from openpyxl.chart import BarChart, Reference
+
+        def add_bar_chart(ws, title, cat_col, val_col, first_data_row, last_data_row, anchor):
+            if last_data_row < first_data_row:
+                return
+            data = Reference(ws, min_col=val_col, min_row=first_data_row, max_col=val_col, max_row=last_data_row)
+            cats = Reference(ws, min_col=cat_col, min_row=first_data_row, max_row=last_data_row)
+            ch = BarChart()
+            ch.title = title
+            ch.y_axis.title = "Cantidad"
+            ch.add_data(data, titles_from_data=False)
+            ch.set_categories(cats)
+            ch.height = 12    # antes 14 -> más compacto
+            ch.width  = 22    # antes 28 -> más angosto
+            ws.add_chart(ch, anchor)
+
+        # Ubicaciones de las tablas en “Tablas”
+        # Sucursal: encabezado en A1, header en A2:B2, datos A3:Bn
+        suc_first = 3
+        suc_last  = 2 + len(suc_rows)
+        add_bar_chart(ws_tab, "Tickets por Sucursal", 1, 2, suc_first, suc_last, "H2")
+
+        # Departamento: calcula fila base (después de sucursales)
+        dep_first_title = suc_last + 2   # fila del título “Tickets por Departamento”
+        dep_first = dep_first_title + 2  # primera fila de datos
+        dep_last  = dep_first - 1 + len(dep_rows)
+        add_bar_chart(ws_tab, "Tickets por Departamento", 1, 2, dep_first, dep_last, "H28")
+
+        # Categoría: después de departamento
+        cat_first_title = dep_last + 2
+        cat_first = cat_first_title + 2
+        cat_last  = cat_first - 1 + len(cat_rows)
+        add_bar_chart(ws_tab, "Tickets por Categoría", 1, 2, cat_first, cat_last, "H54")
+
+
+        # ─────────────────────────────────────────────────────────────
 
         output = BytesIO()
         wb.save(output)
