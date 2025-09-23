@@ -31,9 +31,6 @@ onSubmit(): void {
     return;
   }
 
-  console.log("🟡 Usuario ingresado:", this.username);
-  console.log("🟡 Contraseña ingresada:", this.password);
-
   this.errorMessage = '';
 
   this.authService.login(this.username, this.password).subscribe({

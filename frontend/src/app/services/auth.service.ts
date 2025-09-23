@@ -18,8 +18,7 @@ export class AuthService {
 
   login(username: string, password: string): Observable<any> {
     console.log("🚀 Enviando login con credenciales:");
-    console.log("👤 Usuario:", username);
-    console.log("🔑 Contraseña:", password);
+
   
     return this.http.post<any>(
       `${this.apiUrl}/login`,
