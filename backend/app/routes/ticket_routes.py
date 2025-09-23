@@ -422,7 +422,6 @@ def export_excel():
         fecha_prog_desde = request.args.get('fecha_prog_desde')
         fecha_prog_hasta = request.args.get('fecha_prog_hasta')
 
-
         # ---------------- Permisos base ----------------
         query = filtrar_tickets_por_usuario(user)
 
@@ -489,23 +488,14 @@ def export_excel():
         SLA_DIAS_BY_CRIT = {1: 14, 2: 7, 3: 5, 4: 2, 5: 1}
 
         def to_local_excel(dt):
-            """
-            Convierte a hora de Tijuana y devuelve un datetime *naive* (sin tzinfo),
-            porque Excel no soporta tz-aware.
-            """
             if not dt:
                 return None
             try:
                 if getattr(dt, 'tzinfo', None):
-                    # tz-aware -> pásalo a Tijuana
                     dt_local = dt.astimezone(tz_tijuana)
                 else:
-                    # Si tus naïve ya están en hora local, déjalo así.
-                    # Si tus naïve fueran UTC, usa:
-                    # from pytz import utc
-                    # dt_local = utc.localize(dt).astimezone(tz_tijuana)
                     dt_local = dt
-                return dt_local.replace(tzinfo=None)  # 👈 SIN tzinfo
+                return dt_local.replace(tzinfo=None)
             except Exception:
                 return None
 
@@ -591,7 +581,6 @@ def export_excel():
             cell.font = header_font
             cell.fill = header_fill
 
-        # Formato para columnas con fecha/hora (08/09/2025 06:13 AM)
         excel_datetime_fmt = 'dd/mm/yyyy hh:mm AM/PM'
 
         for idx, ticket in enumerate(tickets, start=2):
@@ -667,7 +656,7 @@ def export_excel():
                 for cell in ws[idx]:
                     cell.fill = alt_fill
 
-            # Aplica formato de fecha/hora
+            # Formato de fecha/hora
             for col in (8, 9, 12, 16):
                 c = ws.cell(row=idx, column=col)
                 if c.value:
@@ -697,8 +686,8 @@ def export_excel():
         cumplidos_tiempo = 0
 
         # Métricas extra
-        tiempos_solucion_dias = []      # finalizados con días numéricos
-        abiertos_criticos = 0           # abiertos/en progreso criticidad 4-5
+        tiempos_solucion_dias = []
+        abiertos_criticos = 0
         backlog_aging_buckets = {"0-2": 0, "3-7": 0, "8-14": 0, "15+": 0}
         sum_edad_abiertos = 0
         count_abiertos = 0
@@ -747,7 +736,6 @@ def export_excel():
                     elif edad <= 14: backlog_aging_buckets["8-14"] += 1
                     else:            backlog_aging_buckets["15+"]  += 1
 
-        # Agregados finales
         pct_cumplidos = (cumplidos_tiempo / finalizados * 100.0) if finalizados else 0.0
         prom_tiempo_sol = round(sum(tiempos_solucion_dias)/len(tiempos_solucion_dias), 2) if tiempos_solucion_dias else 0.0
         def _mediana(nums):
@@ -757,7 +745,6 @@ def export_excel():
         mediana_tiempo_sol = _mediana(tiempos_solucion_dias)
         edad_promedio_backlog = round(sum_edad_abiertos/count_abiertos, 2) if count_abiertos else 0.0
 
-        # Escribir tabla KPI
         ws_kpi.append(["Métrica", "Valor"])
         ws_kpi.append(["Total tickets", total])
         ws_kpi.append(["Abiertos", abiertos])
@@ -773,27 +760,24 @@ def export_excel():
         ws_kpi.append(["Backlog 8-14 días", backlog_aging_buckets["8-14"]])
         ws_kpi.append(["Backlog 15+ días", backlog_aging_buckets["15+"]])
 
-        # Estilo KPI (header azul + formatos)
-        from openpyxl.styles import Font, PatternFill, Alignment
+        from openpyxl.styles import Alignment
         hdr = ws_kpi["A1":"B1"][0]
         for c in hdr:
             c.font = Font(bold=True, color="FFFFFF")
             c.fill = PatternFill("solid", fgColor="0073C2")
-        ws_kpi["B6"].number_format = "0.00"      # %
-        ws_kpi["B6"].number_format = "0.00"      # mantén 2 decimales; Excel no % puro
+        ws_kpi["B6"].number_format = "0.00"
         for r in range(2, ws_kpi.max_row+1):
             ws_kpi[f"B{r}"].alignment = Alignment(horizontal="right")
-        # Auto ancho
         for col in ws_kpi.columns:
             mx = max(len(str(c.value or "")) for c in col)
             ws_kpi.column_dimensions[col[0].column_letter].width = mx + 2
 
         # ─────────────────────────────────────────────────────────────
-        # Hoja de Tablas (resúmenes estilo anterior) + 3 gráficas
+        # Hoja de Tablas (resúmenes) + Gráficas combinadas
         # ─────────────────────────────────────────────────────────────
         ws_tab = wb.create_sheet(title="Tablas")
 
-        from collections import Counter
+        from collections import Counter, defaultdict
         COL_ID             = headers.index("ID") + 1
         COL_SUCURSAL       = headers.index("Sucursal (destino)") + 1
         COL_DEPTO          = headers.index("Departamento") + 1
@@ -804,9 +788,9 @@ def export_excel():
         COL_DEBER          = headers.index("Deber ser") + 1
         COL_T_SOL          = headers.index("Tiempo Solución") + 1
 
-        sucursal_counts = Counter()
-        depto_counts = Counter()
-        categoria_counts = Counter()
+        sucursal_counts = defaultdict(lambda: {"total": 0, "abiertos": 0, "en_progreso": 0, "finalizados": 0})
+        depto_counts    = defaultdict(lambda: {"total": 0, "abiertos": 0, "en_progreso": 0, "finalizados": 0})
+        categoria_counts= defaultdict(lambda: {"total": 0, "abiertos": 0, "en_progreso": 0, "finalizados": 0})
         creados_por_mes = Counter()
         finalizados_por_mes = Counter()
         sla_incumplidos = []
@@ -824,9 +808,32 @@ def export_excel():
             deber    = row[COL_DEBER-1]
             tsol     = row[COL_T_SOL-1]
 
-            sucursal_counts[sucursal] += 1
-            depto_counts[depto] += 1
-            categoria_counts[categoria] += 1
+            # Sucursal
+            sucursal_counts[sucursal]["total"] += 1
+            if estado == "abierto":
+                sucursal_counts[sucursal]["abiertos"] += 1
+            elif estado == "en progreso":
+                sucursal_counts[sucursal]["en_progreso"] += 1
+            elif estado == "finalizado":
+                sucursal_counts[sucursal]["finalizados"] += 1
+
+            # Departamento
+            depto_counts[depto]["total"] += 1
+            if estado == "abierto":
+                depto_counts[depto]["abiertos"] += 1
+            elif estado == "en progreso":
+                depto_counts[depto]["en_progreso"] += 1
+            elif estado == "finalizado":
+                depto_counts[depto]["finalizados"] += 1
+
+            # Categoría
+            categoria_counts[categoria]["total"] += 1
+            if estado == "abierto":
+                categoria_counts[categoria]["abiertos"] += 1
+            elif estado == "en progreso":
+                categoria_counts[categoria]["en_progreso"] += 1
+            elif estado == "finalizado":
+                categoria_counts[categoria]["finalizados"] += 1
 
             if f_crea and hasattr(f_crea, "strftime"):
                 creados_por_mes[f_crea.strftime("%Y-%m")] += 1
@@ -837,11 +844,10 @@ def export_excel():
                 if tsol > deber:
                     sla_incumplidos.append((tid, sucursal, depto, row[COL_CRITICIDAD-1], deber, tsol))
 
-        # Helpers para escribir como antes (título azul + tabla)
+        # Helpers para escribir (título azul + tabla)
         def write_section(ws, start_row, title, cols, rows):
-            # Título (línea “azul” compacta)
             ws.cell(row=start_row, column=1, value=title)
-            ws.merge_cells(start_row=start_row, start_column=1, end_row=start_row, end_column=2)
+            ws.merge_cells(start_row=start_row, start_column=1, end_row=start_row, end_column=len(cols))
             tcell = ws.cell(row=start_row, column=1)
             tcell.font = Font(bold=True, color="FFFFFF")
             tcell.fill = PatternFill("solid", fgColor="0073C2")
@@ -852,32 +858,47 @@ def export_excel():
                 c.font = Font(bold=True)
             # Filas
             r = hdr_row + 1
-            for row in rows:
-                for j, v in enumerate(row, start=1):
+            for row_vals in rows:
+                for j, v in enumerate(row_vals, start=1):
                     ws.cell(row=r, column=j, value=v)
                 r += 1
             return r + 1  # deja una línea en blanco
 
-        # Ordenar
-        suc_rows  = sorted(sucursal_counts.items(), key=lambda x: x[1], reverse=True)
-        dep_rows  = sorted(depto_counts.items(), key=lambda x: x[1], reverse=True)
-        cat_rows  = sorted(categoria_counts.items(), key=lambda x: x[1], reverse=True)
+        # Tablas ordenadas (👈 aquí está el fix del error: ordenar por ["total"])
+        suc_rows_sorted = sorted(sucursal_counts.items(),  key=lambda x: x[1]["total"], reverse=True)
+        dep_rows_sorted = sorted(depto_counts.items(),     key=lambda x: x[1]["total"], reverse=True)
+        cat_rows_sorted = sorted(categoria_counts.items(), key=lambda x: x[1]["total"], reverse=True)
         cre_rows  = sorted(creados_por_mes.items())
         fin_rows  = sorted(finalizados_por_mes.items())
 
+        # Construir filas para las tres tablas principales
+        suc_table = [(s, v["total"], v["abiertos"], v["en_progreso"], v["finalizados"]) for s, v in suc_rows_sorted]
+        dep_table = [(d, v["total"], v["abiertos"], v["en_progreso"], v["finalizados"]) for d, v in dep_rows_sorted]
+        cat_table = [(c, v["total"], v["abiertos"], v["en_progreso"], v["finalizados"]) for c, v in cat_rows_sorted]
+
         r = 1
-        r = write_section(ws_tab, r, "Tickets por Sucursal", ["Sucursal", "Cantidad"], suc_rows)
-        r = write_section(ws_tab, r, "Tickets por Departamento", ["Departamento", "Cantidad"], dep_rows)
-        r = write_section(ws_tab, r, "Tickets por Categoría", ["Categoría", "Cantidad"], cat_rows)
+        suc_start = r
+        r = write_section(ws_tab, r, "Tickets por Sucursal",
+                          ["Sucursal", "Cantidad", "Abiertos", "En progreso", "Finalizados"],
+                          suc_table)
+
+        dep_start = r
+        r = write_section(ws_tab, r, "Tickets por Departamento",
+                          ["Departamento", "Cantidad", "Abiertos", "En progreso", "Finalizados"],
+                          dep_table)
+
+        cat_start = r
+        r = write_section(ws_tab, r, "Tickets por Categoría",
+                          ["Categoría", "Cantidad", "Abiertos", "En progreso", "Finalizados"],
+                          cat_table)
+
         r = write_section(ws_tab, r, "Tickets creados por mes", ["Mes", "Cantidad"], cre_rows)
         r = write_section(ws_tab, r, "Tickets finalizados por mes", ["Mes", "Cantidad"], fin_rows)
         r = write_section(ws_tab, r, "Tickets SLA Incumplidos",
-                        ["ID", "Sucursal", "Departamento", "Criticidad", "Deber ser", "Tiempo Solución"],
-                        sla_incumplidos)
+                          ["ID", "Sucursal", "Departamento", "Criticidad", "Deber ser", "Tiempo Solución"],
+                          sla_incumplidos)
 
         from openpyxl.utils import get_column_letter
-
-        # Auto ancho robusto (soporta celdas merged)
         for col_idx in range(1, ws_tab.max_column + 1):
             max_len = 0
             for row_idx in range(1, ws_tab.max_row + 1):
@@ -890,42 +911,54 @@ def export_excel():
                     max_len = len(val)
             ws_tab.column_dimensions[get_column_letter(col_idx)].width = max_len + 2
 
+        # ── Gráficas combinadas: Barras (Abiertos) + Líneas (En progreso / Finalizados)
+        from openpyxl.chart import BarChart, LineChart, Reference
 
-        # ── Gráficas (Barras) como en la versión “buena”
-        from openpyxl.chart import BarChart, Reference
-
-        def add_bar_chart(ws, title, cat_col, val_col, first_data_row, last_data_row, anchor):
-            if last_data_row < first_data_row:
+        def add_combo_chart(ws, title, start_row_title, n_rows, anchor):
+            """
+            start_row_title: fila del título de la sección (línea azul)
+            n_rows: número de filas de datos de la tabla
+            """
+            if n_rows <= 0:
                 return
-            data = Reference(ws, min_col=val_col, min_row=first_data_row, max_col=val_col, max_row=last_data_row)
-            cats = Reference(ws, min_col=cat_col, min_row=first_data_row, max_row=last_data_row)
-            ch = BarChart()
-            ch.title = title
-            ch.y_axis.title = "Cantidad"
-            ch.add_data(data, titles_from_data=False)
-            ch.set_categories(cats)
-            ch.height = 12    # antes 14 -> más compacto
-            ch.width  = 22    # antes 28 -> más angosto
-            ws.add_chart(ch, anchor)
 
-        # Ubicaciones de las tablas en “Tablas”
-        # Sucursal: encabezado en A1, header en A2:B2, datos A3:Bn
-        suc_first = 3
-        suc_last  = 2 + len(suc_rows)
-        add_bar_chart(ws_tab, "Tickets por Sucursal", 1, 2, suc_first, suc_last, "H2")
+            header_row = start_row_title + 1        # fila de encabezados
+            first_data = header_row + 1             # primera fila de datos
+            last_data  = first_data + n_rows - 1
 
-        # Departamento: calcula fila base (después de sucursales)
-        dep_first_title = suc_last + 2   # fila del título “Tickets por Departamento”
-        dep_first = dep_first_title + 2  # primera fila de datos
-        dep_last  = dep_first - 1 + len(dep_rows)
-        add_bar_chart(ws_tab, "Tickets por Departamento", 1, 2, dep_first, dep_last, "H28")
+            # Categorías: columna A (nombres)
+            cats = Reference(ws, min_col=1, min_row=first_data, max_row=last_data)
 
-        # Categoría: después de departamento
-        cat_first_title = dep_last + 2
-        cat_first = cat_first_title + 2
-        cat_last  = cat_first - 1 + len(cat_rows)
-        add_bar_chart(ws_tab, "Tickets por Categoría", 1, 2, cat_first, cat_last, "H54")
+            # Serie Barras -> Columna "Abiertos" (col 3) con header
+            data_abiertos = Reference(ws, min_col=3, min_row=header_row, max_col=3, max_row=last_data)
+            bar = BarChart()
+            bar.title = title
+            bar.y_axis.title = "Cantidad"
+            bar.add_data(data_abiertos, titles_from_data=True)
+            bar.set_categories(cats)
 
+            # Series Línea -> "En progreso" (col 4) y "Finalizados" (col 5)
+            data_line = Reference(ws, min_col=4, min_row=header_row, max_col=5, max_row=last_data)
+            line = LineChart()
+            line.add_data(data_line, titles_from_data=True)
+            line.set_categories(cats)
+            # Marcadores
+            for i, s in enumerate(line.series):
+                s.marker.symbol = "circle" if i == 0 else "triangle"
+                s.smooth = False
+
+            # Superponer
+            bar += line
+
+            # Tamaño / posición
+            bar.height = 12
+            bar.width  = 22
+            ws.add_chart(bar, anchor)
+
+        # Cantidades para rango de cada tabla
+        add_combo_chart(ws_tab, "Tickets por Sucursal",    suc_start, len(suc_table), "H2")
+        add_combo_chart(ws_tab, "Tickets por Departamento",dep_start, len(dep_table), "H28")
+        add_combo_chart(ws_tab, "Tickets por Categoría",   cat_start, len(cat_table), "H54")
 
         # ─────────────────────────────────────────────────────────────
 
@@ -944,7 +977,6 @@ def export_excel():
         import traceback
         print(traceback.format_exc())
         return jsonify({"mensaje": str(e)}), 500
-
 
 # ─────────────────────────────────────────────────────────────
 # RUTA: migrar tickets a ISO local
