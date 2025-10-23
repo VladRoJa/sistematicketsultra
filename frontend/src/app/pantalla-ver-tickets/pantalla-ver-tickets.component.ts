@@ -1077,7 +1077,7 @@ buscarCategoriaUnificada(texto: string): void {
 /** Opciones visibles (aplican texto de búsqueda sobre las opciones disponibles). */
 get opcionesCategoriaUnificada() {
   return filtrarOpcionesUnificado(
-    this.filtroUnificado.opcionesDisponibles,
+    this.filtroUnificado.opcionesDisponibles, 
     this.filtroUnificado.textoBusqueda
   );
 }
