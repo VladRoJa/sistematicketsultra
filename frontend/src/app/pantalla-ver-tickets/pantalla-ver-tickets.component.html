@@ -721,11 +721,12 @@
 
 <!-- Modal para asignar fecha solución -->
 <div *ngIf="showModalAsignarFecha" class="modal-asignar-fecha-overlay">
-  <app-asignar-fecha-modal
-    [fechaSeleccionada]="fechaSolucionTentativa"
-    (onGuardar)="onGuardarFechaSolucion($event)"
-    (onCancelar)="onCancelarAsignarFecha()">
-  </app-asignar-fecha-modal>
+<app-asignar-fecha-modal
+  [fechaSeleccionada]="fechaSolucionTentativa"
+  [ticket]="ticketParaAsignarFecha"
+  (onGuardar)="onGuardarFechaSolucion($event)"
+  (onCancelar)="onCancelarAsignarFecha()">
+</app-asignar-fecha-modal>
 </div>
 
 <!-- Aviso de límite -->

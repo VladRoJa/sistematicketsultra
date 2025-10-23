@@ -1,5 +1,4 @@
-// asignar-fecha-modal.component.ts
-
+// frontend\src\app\pantalla-ver-tickets\modals\asignar-fecha-modal.component.ts
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatDialogModule } from '@angular/material/dialog';
@@ -10,6 +9,7 @@ import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatNativeDateModule } from '@angular/material/core';
 import { FormsModule } from '@angular/forms';
 import { mostrarAlertaToast } from 'src/app/utils/alertas';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 
 @Component({
   selector: 'app-asignar-fecha-modal',
@@ -24,23 +24,126 @@ import { mostrarAlertaToast } from 'src/app/utils/alertas';
     MatFormFieldModule,
     MatInputModule,
     MatDatepickerModule,
-    MatNativeDateModule
+    MatNativeDateModule,
+    MatCheckboxModule,
   ]
 })
 export class AsignarFechaModalComponent {
   @Input() fechaSeleccionada: Date | null = null;
-  @Output() onGuardar = new EventEmitter<{ fecha: Date; motivo: string }>();
+
+  // Recibe el ticket y hace prefill de refacción si ya existía
+  @Input() set ticket(value: any | null) {
+    this._ticket = value;
+    console.debug('[modal] ticket recibido:', value);
+
+    // Prefill si viene desde backend o tabla
+    if (value) {
+      this.necesitaRefaccion = !!value.necesita_refaccion;
+      this.descripcionRefaccion = value.descripcion_refaccion || '';
+    }
+  }
+  get ticket(): any | null { return this._ticket; }
+  private _ticket: any | null = null;
+
+  @Output() onGuardar = new EventEmitter<{
+    fecha: Date;
+    motivo: string;
+    necesita_refaccion?: boolean;
+    descripcion_refaccion?: string;
+    refaccion_definida_por_jefe?: boolean;
+  }>();
   @Output() onCancelar = new EventEmitter<void>();
 
   motivo: string = '';
 
+  // Estado local del mini-form
+  necesitaRefaccion: boolean = false;
+  descripcionRefaccion: string = '';
+
+  private norm(v: any): string {
+    return (v ?? '')
+      .toString()
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+  }
+
+  // ——— Detectores robustos (prioriza campos directos sobre jerarquía) ———
+  private getDepNombreNorm(): string {
+    const t: any = this._ticket || {};
+    const candidates = [
+      t?.departamento_nombre,   // ← 1º
+      t?.departamento,          // ← 2º (por si llega texto crudo)
+      t?.jerarquia_clasificacion?.[0], // ← 3º fallback
+    ];
+    for (const c of candidates) {
+      if (c != null && c !== '') return this.norm(c);
+    }
+    return '';
+  }
+
+  private getCatNombreNorm(): string {
+    const t: any = this._ticket || {};
+    const candidates = [
+      (typeof t?.categoria === 'object' ? t?.categoria?.nombre : t?.categoria), // ← 1º (string u objeto)
+      t?.categoria_nivel_2,                                                    // ← 2º (variante)
+      t?.jerarquia_clasificacion?.[1],                                         // ← 3º fallback
+      (typeof t?.categoria_nivel2 === 'object' ? t?.categoria_nivel2?.nombre : t?.categoria_nivel2),
+    ];
+    for (const c of candidates) {
+      if (c != null && c !== '') return this.norm(c);
+    }
+    return '';
+  }
+
+    public minDate: Date = (() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  })();
+
+
+  // Mostrar mini-form solo en:
+  // - Mantenimiento → Aparatos
+  // - Sistemas → Dispositivos
+  // - Fallback: Sistemas y hay inventario seleccionado
+  get mostrarRefaccionJefe(): boolean {
+    const t = this._ticket;
+    if (!t) return false;
+
+    const dep = this.getDepNombreNorm();
+    const cat = this.getCatNombreNorm();
+
+    const esMantAparatos      = dep === 'mantenimiento' && cat === 'aparatos';
+    const esSistDispositivos  = dep === 'sistemas'      && cat === 'dispositivos';
+    const esSistPorInventario = dep === 'sistemas'      && !!t?.inventario;
+
+    const show = esMantAparatos || esSistDispositivos || esSistPorInventario;
+
+    // Debug para validar detección finalmente limpia de “Edificio”
+    console.debug('[modal] dep/cat detectados:', { dep, cat, show, raw: t });
+
+    return show;
+  }
+
   guardar(): void {
     if (!this.fechaSeleccionada || !this.motivo.trim()) {
-      mostrarAlertaToast("Debes seleccionar una fecha y escribir un motivo.", "error");
-
+      mostrarAlertaToast('Debes seleccionar una fecha y escribir un motivo.', 'error');
       return;
     }
-    this.onGuardar.emit({ fecha: this.fechaSeleccionada, motivo: this.motivo.trim() });
+
+    const payload: any = {
+      fecha: this.fechaSeleccionada,
+      motivo: this.motivo.trim(),
+    };
+
+    if (this.mostrarRefaccionJefe) {
+      payload.necesita_refaccion = !!this.necesitaRefaccion;
+      payload.descripcion_refaccion = this.necesitaRefaccion ? (this.descripcionRefaccion || '') : '';
+      payload.refaccion_definida_por_jefe = true;
+    }
+
+    this.onGuardar.emit(payload);
   }
 
   cancelar(): void {

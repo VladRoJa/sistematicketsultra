@@ -61,6 +61,21 @@ def _send_email_maybe_async(to_list, subject, html):
             print("❌ Error enviando correo:", e)
 
 
+def _es_admin_o_corporativo(user: UserORM) -> bool:
+    rol = (user.rol or "").upper()
+    if rol in {"ADMINISTRADOR", "SUPER_ADMIN", "EDITOR_CORPORATIVO"}:
+        return True
+    return user.sucursal_id in (100, 1000)
+
+def _es_jefe_depto(user: UserORM, ticket: Ticket) -> bool:
+    # jefe si user.department_id coincide con depto del ticket
+    try:
+        return bool(user.department_id) and int(user.department_id) == int(ticket.departamento_id)
+    except Exception:
+        return False
+
+def _es_creador(user: UserORM, ticket: Ticket) -> bool:
+    return (user.username or "").lower() == (ticket.username or "").lower()
 
 
 
@@ -91,6 +106,15 @@ def create_ticket():
         clasificacion_id    = data.get("clasificacion_id")
         sucursal_id_destino = data.get("sucursal_id_destino")
 
+        # 👇 NUEVO: flag gate RRHH (compatibilidad: default False)
+        requiere_aprobacion = bool(data.get("requiere_aprobacion", False))
+        estado_inicial = 'pendiente' if requiere_aprobacion else 'abierto'
+        aprobacion_estado = 'pendiente' if requiere_aprobacion else None
+        # campos de metadatos iniciales de aprobacion
+        aprobador_username = None
+        aprobacion_fecha = None
+        aprobacion_comentario = None
+
         try:
             departamento_id = int(departamento_id)
             criticidad = int(criticidad)
@@ -114,6 +138,9 @@ def create_ticket():
         if not aparato_id and not clasificacion_id:
             return jsonify({"mensaje": "Debes enviar 'aparato_id' (si viene de inventario) o 'clasificacion_id' (si no)."}), 400
 
+        current_app.logger.info("DEBUG Ticket class: %s.%s", getattr(Ticket, "__module__", "?"), getattr(Ticket, "__name__", "?"))
+
+
         # Crear ticket
         nuevo_ticket = Ticket.create_ticket(
             descripcion=descripcion,
@@ -132,7 +159,15 @@ def create_ticket():
             url_evidencia=data.get("url_evidencia"),
             ubicacion=data.get("ubicacion"),
             equipo=data.get("equipo"),
-            clasificacion_id=clasificacion_id
+            clasificacion_id=clasificacion_id,
+
+            # 👇 NUEVO: estado inicial y metadatos de aprobación RRHH
+            estado=estado_inicial,
+            requiere_aprobacion=requiere_aprobacion,
+            aprobacion_estado=aprobacion_estado,
+            aprobador_username=aprobador_username,
+            aprobacion_fecha=aprobacion_fecha,
+            aprobacion_comentario=aprobacion_comentario
         )
 
         # ⬇️ Notificación de creación + retorno de destinatarios
@@ -144,7 +179,6 @@ def create_ticket():
                     html = render_ticket_html(nuevo_ticket.to_dict())
                     subject = build_subject(nuevo_ticket, "Creado")
                     current_app.logger.info("📧 create_ticket #%s → notificados=%s", nuevo_ticket.id, recipients)
-                    # 👇 LLAMADA DIRECTA (sin envolver en otro hilo)
                     _send_email_maybe_async(recipients, subject, html)
         except Exception as e:
             try:
@@ -160,7 +194,6 @@ def create_ticket():
 
     except Exception as e:
         return manejar_error(e)
-
 
 
 # ─────────────────────────────────────────────────────────────
@@ -263,38 +296,49 @@ def update_ticket_status(id):
         if not ticket:
             return jsonify({"mensaje": "Ticket no encontrado"}), 404
 
-        data = request.get_json()
+        data = request.get_json() or {}
         estado = data.get("estado")
         fecha_solucion = data.get("fecha_solucion")
-        fecha_en_progreso = data.get("fecha_en_progreso")  
+        fecha_en_progreso = data.get("fecha_en_progreso")
         historial_nuevo = data.get("historial_fechas", [])
-        motivo_cambio = data.get("motivo_cambio", "").strip()
-        prev_estado       = (ticket.estado or "").strip().lower()
-        prev_prog         = ticket.fecha_en_progreso
-        prev_sol          = ticket.fecha_solucion
-        prev_hist_len     = len(ticket.historial_fechas or [])
+        motivo_cambio = (data.get("motivo_cambio") or "").strip()
 
+        prev_estado   = (ticket.estado or "").strip().lower()
+        prev_prog     = ticket.fecha_en_progreso
+        prev_sol      = ticket.fecha_solucion
+        prev_hist_len = len(ticket.historial_fechas or [])
 
         if not estado:
             return jsonify({"mensaje": "Estado es requerido"}), 400
 
-        ticket.estado = estado
         ahora = datetime.now(timezone.utc)
 
-        # ---- Asignación de fechas por estado ----
+        # ⚠️ BLOQUEO: no permitir "finalizado" directo por este endpoint (doble check)
         if estado == "finalizado":
-            ticket.fecha_finalizado = datetime.now(timezone.utc)
+            # Si usas doble check, no se cierra aquí. Se debe usar /cierre/aceptar-creador
+            return jsonify({"mensaje": "No puedes finalizar directamente. Usa el flujo de doble check."}), 400
 
+        # ⚠️ BLOQUEO: si requiere aprobación RRHH y no está aprobado, no permitir avanzar a 'en progreso'
+        # (ajusta si quieres bloquear otros estados también)
+        if estado in ("en progreso",) and getattr(ticket, "requiere_aprobacion", False):
+            if (ticket.aprobacion_estado or "").lower() != "aprobado":
+                return jsonify({"mensaje": "Este ticket requiere aprobación del gerente antes de avanzar."}), 400
+
+        # ---- Asignación de estado (ya pasó validaciones) ----
+        ticket.estado = estado
+
+        # ---- Asignación de fechas por estado (SIN cerrar aquí) ----
         if estado == "en progreso":
-            # Usar la fecha_en_progreso que viene del frontend, si está
             if fecha_en_progreso:
                 try:
                     ticket.fecha_en_progreso = parser.isoparse(fecha_en_progreso).astimezone(timezone.utc)
                 except Exception as e:
                     print(f"❌ Error parseando fecha_en_progreso: {e}")
+                    ticket.fecha_en_progreso = ahora
             else:
                 ticket.fecha_en_progreso = ahora
 
+        # Compromiso / fecha objetivo (no cierre)
         if fecha_solucion:
             try:
                 fecha_parsed = parser.isoparse(fecha_solucion)
@@ -304,7 +348,6 @@ def update_ticket_status(id):
 
         # ---- Normalizar historial nuevo ----
         historial_final = ticket.historial_fechas or []
-
         for entrada in historial_nuevo:
             nueva = entrada.copy()
             for campo in ['fecha', 'fechaCambio']:
@@ -316,7 +359,6 @@ def update_ticket_status(id):
                         print(f"❌ Error parseando {campo} en ticket #{ticket.id}: {e}")
                         continue
 
-            # Agregar motivo si no viene desde el frontend
             if motivo_cambio and 'motivo' not in nueva:
                 nueva['motivo'] = motivo_cambio
 
@@ -335,25 +377,57 @@ def update_ticket_status(id):
             if not existe_misma_fecha:
                 historial_final.append(nueva)
 
-        # Ordenar por fecha de cambio, más recientes primero
         def _key_fecha_cambio(x):
             v = x.get('fechaCambio') or x.get('fecha_cambio') or x.get('fecha')
             try:
                 return parser.isoparse(v)
             except Exception:
-                # muy antiguo -> lo manda al final
                 return datetime.min.replace(tzinfo=timezone.utc)
 
         historial_final.sort(key=_key_fecha_cambio, reverse=True)
         ticket.historial_fechas = historial_final
         flag_modified(ticket, 'historial_fechas')
+        
+                # ── Extra (opcional): actualizar refacción cuando el JEFE fija compromiso via /update
+        necesita_ref_x = data.get("necesita_refaccion", None)
+        descr_ref_x    = data.get("descripcion_refaccion", None)
+        flag_jefe_x    = data.get("refaccion_definida_por_jefe", None)
 
-        print(f"✅ Historial final para ticket #{ticket.id}: {historial_final}")
+        def _norm(s):
+            return (s or "").strip().lower()
+
+        def _ruta_clas_norm(t: Ticket):
+            try:
+                jer = t._obtener_jerarquia_clasificacion() or []
+                return [_norm(x) for x in jer]
+            except Exception:
+                return []
+
+        # Permisos + combinaciones
+        puede_setear_ref = _es_admin_o_corporativo(actor) or _es_jefe_depto(actor, ticket)
+        dep_nom = _norm(ticket.departamento.nombre if ticket.departamento else "")
+        es_mantenimiento = dep_nom == "mantenimiento"
+        es_sistemas      = dep_nom == "sistemas"
+
+        ruta_clas = _ruta_clas_norm(ticket)
+        es_aparatos     = "aparatos" in ruta_clas
+        es_dispositivos = "dispositivos" in ruta_clas
+        tiene_inventario= bool(ticket.aparato_id or ticket.categoria_inventario_id)
+
+        combo_jefe_ok = (es_mantenimiento and es_aparatos) or (es_sistemas and (es_dispositivos or tiene_inventario))
+
+        if puede_setear_ref and combo_jefe_ok:
+            if isinstance(necesita_ref_x, bool):
+                ticket.necesita_refaccion = necesita_ref_x
+                ticket.refaccion_definida_por_jefe = True if flag_jefe_x is None else bool(flag_jefe_x)
+            if descr_ref_x is not None:
+                ticket.descripcion_refaccion = (descr_ref_x or None)
+
 
         db.session.commit()
 
         # ---- Notificación por correo (si hay cambios) ----
-        notificados = []  # 👈 NUEVO
+        notificados = []
         try:
             cambios = []
             if estado and (estado.strip().lower() != prev_estado):
@@ -366,13 +440,13 @@ def update_ticket_status(id):
                 cambios.append("historial")
 
             if os.getenv("NOTIFY_EMAIL_ON_UPDATE", "true").lower() == "true" and cambios:
-                notificados = pick_recipients(ticket, actor.username, event="update") or []  # 👈 NUEVO
+                notificados = pick_recipients(ticket, actor.username, event="update") or []
                 if notificados:
                     subject_bits = " / ".join(cambios) or "Actualización"
                     subject = build_subject(ticket, subject_bits)
                     html = render_ticket_html(ticket.to_dict())
                     current_app.logger.info("📬 Ticket %s cambios=%s → %s", ticket.id, cambios, notificados)
-                    _send_email_maybe_async(notificados, subject, html)  # 👈 ya sin Thread
+                    _send_email_maybe_async(notificados, subject, html)
         except Exception as e:
             try:
                 current_app.logger.exception("❌ Error notificando actualización de ticket %s: %s", ticket.id, e)
@@ -381,14 +455,12 @@ def update_ticket_status(id):
 
         return jsonify({
             "mensaje": f"Ticket {id} actualizado correctamente",
-            "notificados": notificados  # 👈 NUEVO
+            "notificados": notificados
         }), 200
-
 
     except Exception as e:
         db.session.rollback()
         return manejar_error(e, "update_ticket_status")
-
 
 # ─────────────────────────────────────────────────────────────
 # RUTA: Exportar tickets a Excel (con filtros)
@@ -1267,3 +1339,263 @@ def notify_ticket(ticket_id):
 
 
     return jsonify({"mensaje":"Notificaciones enviadas", "results": results}), 200
+
+
+# ─────────────────────────────────────────────────────────────
+# RUTA: Marcar ticket para aprobación RRHH
+# ─────────────────────────────────────────────────────────────
+
+
+@ticket_bp.route('/rrhh/solicitar/<int:ticket_id>', methods=['POST'])
+@jwt_required()
+def rrhh_solicitar(ticket_id):
+    user = UserORM.get_by_id(get_jwt_identity())
+    t = Ticket.query.get(ticket_id)
+    if not t:
+        return jsonify({"mensaje":"Ticket no encontrado"}), 404
+
+    # Permite: admin/corporativo o jefe del depto del ticket
+    if not (_es_admin_o_corporativo(user) or _es_jefe_depto(user, t)):
+        return jsonify({"mensaje":"No autorizado"}), 403
+
+    aprobador_username = (request.json or {}).get("aprobador_username")
+    t.marcar_para_aprobacion_rrhh(aprobador_username=aprobador_username)
+    return jsonify({"mensaje":"Ticket marcado para aprobación RRHH"}), 200
+
+
+# ─────────────────────────────────────────────────────────────
+# RUTA: Aprobar ticket por RRHH
+# ─────────────────────────────────────────────────────────────
+
+
+@ticket_bp.route('/rrhh/aprobar/<int:ticket_id>', methods=['POST'])
+@jwt_required()
+def rrhh_aprobar(ticket_id):
+    user = UserORM.get_by_id(get_jwt_identity())
+    t = Ticket.query.get(ticket_id)
+    if not t:
+        return jsonify({"mensaje":"Ticket no encontrado"}), 404
+
+    # Solo gerente general/regional (trátalo como corporativo/admin) o el username designado como aprobador
+    comentario = (request.json or {}).get("comentario")
+    if not (_es_admin_o_corporativo(user) or user.username == t.aprobador_username):
+        return jsonify({"mensaje":"No autorizado"}), 403
+
+    t.aprobar_rrhh(user.username, comentario)
+    return jsonify({"mensaje":"Aprobado por RRHH/gerencia"}), 200
+
+
+
+# ─────────────────────────────────────────────────────────────
+# RUTA: Rechazar ticket por RRHH
+# ─────────────────────────────────────────────────────────────
+
+@ticket_bp.route('/rrhh/rechazar/<int:ticket_id>', methods=['POST'])
+@jwt_required()
+def rrhh_rechazar(ticket_id):
+    user = UserORM.get_by_id(get_jwt_identity())
+    t = Ticket.query.get(ticket_id)
+    if not t:
+        return jsonify({"mensaje":"Ticket no encontrado"}), 404
+
+    comentario = (request.json or {}).get("comentario")
+    if not (_es_admin_o_corporativo(user) or user.username == t.aprobador_username):
+        return jsonify({"mensaje":"No autorizado"}), 403
+
+    t.rechazar_rrhh(user.username, comentario)
+    return jsonify({"mensaje":"Rechazado por RRHH/gerencia"}), 200
+
+
+
+# ─────────────────────────────────────────────────────────────
+# RUTA: Establecer compromiso de solución y refacción
+# ─────────────────────────────────────────────────────────────
+
+@ticket_bp.route('/compromiso/<int:ticket_id>', methods=['PUT'])
+@jwt_required()
+def set_compromiso(ticket_id):
+    user = UserORM.get_by_id(get_jwt_identity())
+    t = Ticket.query.get(ticket_id)
+    if not t:
+        return jsonify({"mensaje": "Ticket no encontrado"}), 404
+
+    if not (_es_admin_o_corporativo(user) or _es_jefe_depto(user, t)):
+        return jsonify({"mensaje": "No autorizado"}), 403
+
+    data = request.get_json() or {}
+    fecha_solucion = data.get("fecha_solucion")       # ISO string
+    necesita_ref   = data.get("necesita_refaccion")   # bool
+    desc_ref       = data.get("descripcion_refaccion")
+
+    # ── Validación de combinación permitida para refacción definida por Jefe
+    def _norm(s): return (s or "").strip().lower()
+    dep_nom = _norm(t.departamento.nombre if t.departamento else "")
+    es_mantenimiento = dep_nom == "mantenimiento"
+    es_sistemas      = dep_nom == "sistemas"
+
+    try:
+        ruta_clas = t._obtener_jerarquia_clasificacion() or []
+    except Exception:
+        ruta_clas = []
+    ruta_norm = [_norm(x) for x in ruta_clas]
+
+    es_aparatos      = "aparatos" in ruta_norm
+    es_dispositivos  = "dispositivos" in ruta_norm
+    tiene_inventario = bool(t.aparato_id or t.categoria_inventario_id)
+
+    combo_jefe_ok = (es_mantenimiento and es_aparatos) or (es_sistemas and (es_dispositivos or tiene_inventario))
+
+    # Si van a modificar campos de refacción aquí, debe ser una de las combinaciones válidas
+    if (necesita_ref is not None or desc_ref is not None) and not combo_jefe_ok:
+        return jsonify({"mensaje": "Refacción solo se define aquí para Mantenimiento→Aparatos o Sistemas→Dispositivos"}), 400
+
+    try:
+        # Compromiso de fecha (no cierra el ticket)
+        if fecha_solucion:
+            try:
+                # Usa dateutil para robustez con TZ
+                dt = parser.isoparse(fecha_solucion)
+                if getattr(dt, "tzinfo", None) is None:
+                    # Si viene naive, asúmelo como UTC
+                    dt = dt.replace(tzinfo=timezone.utc)
+                t.fecha_solucion = dt.astimezone(timezone.utc)
+            except Exception as e:
+                return jsonify({"mensaje": f"Fecha de solución inválida: {e}"}), 400
+
+        # Campos de refacción (solo si combo_jefe_ok y los mandaron)
+        if isinstance(necesita_ref, bool):
+            t.necesita_refaccion = necesita_ref
+            t.refaccion_definida_por_jefe = True
+        if desc_ref is not None:
+            t.descripcion_refaccion = (desc_ref or None)
+
+        db.session.commit()
+        return jsonify({"mensaje": "Compromiso/Refacción actualizado"}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"mensaje": str(e)}), 400
+
+
+# ─────────────────────────────────────────────────────────────
+# RUTA: Solicitar cierre de ticket (inicia proceso de aprobación)
+# ─────────────────────────────────────────────────────────────
+
+
+
+@ticket_bp.route('/cierre/solicitar/<int:ticket_id>', methods=['POST'])
+@jwt_required()
+def cierre_solicitar(ticket_id):
+    user = UserORM.get_by_id(get_jwt_identity())
+    t = Ticket.query.get(ticket_id)
+    if not t:
+        return jsonify({"mensaje":"Ticket no encontrado"}), 404
+
+    # Puede iniciar el proceso el jefe o admin; (si quieres, también el asignado)
+    if not (_es_admin_o_corporativo(user) or _es_jefe_depto(user, t)):
+        return jsonify({"mensaje":"No autorizado"}), 403
+
+    t.solicitar_cierre()
+    return jsonify({"mensaje":"Cierre solicitado (pendiente aprobación del jefe)"}), 200
+
+
+
+# ─────────────────────────────────────────────────────────────
+# RUTA: Aprobar cierre de ticket (jefe de depto)
+# ─────────────────────────────────────────────────────────────
+
+
+
+@ticket_bp.route('/cierre/aprobar-jefe/<int:ticket_id>', methods=['POST'])
+@jwt_required()
+def cierre_aprobar_jefe(ticket_id):
+    user = UserORM.get_by_id(get_jwt_identity())
+    t = Ticket.query.get(ticket_id)
+    if not t:
+        return jsonify({"mensaje":"Ticket no encontrado"}), 404
+
+    if not (_es_admin_o_corporativo(user) or _es_jefe_depto(user, t)):
+        return jsonify({"mensaje":"No autorizado"}), 403
+
+    t.aprobar_cierre_jefe()
+    return jsonify({"mensaje":"Aprobado por jefe (pendiente conformidad del creador)"}), 200
+
+
+
+
+# ─────────────────────────────────────────────────────────────
+# RUTA: Rechazar cierre de ticket (jefe de depto)
+# ─────────────────────────────────────────────────────────────
+
+
+@ticket_bp.route('/cierre/rechazar-jefe/<int:ticket_id>', methods=['POST'])
+@jwt_required()
+def cierre_rechazar_jefe(ticket_id):
+    user = UserORM.get_by_id(get_jwt_identity())
+    t = Ticket.query.get(ticket_id)
+    if not t:
+        return jsonify({"mensaje":"Ticket no encontrado"}), 404
+
+    if not (_es_admin_o_corporativo(user) or _es_jefe_depto(user, t)):
+        return jsonify({"mensaje":"No autorizado"}), 403
+
+    data = request.get_json() or {}
+    motivo = data.get("motivo")
+    nueva_compromiso = data.get("nueva_fecha_solucion")  # ISO
+    dt_new = None
+    if nueva_compromiso:
+        dt_new = datetime.fromisoformat(nueva_compromiso).astimezone(timezone.utc)
+
+    t.rechazar_cierre_jefe(motivo=motivo, nueva_fecha_compromiso=dt_new)
+    return jsonify({"mensaje":"Rechazado por jefe; ticket reabierto"}), 200
+
+
+# ─────────────────────────────────────────────────────────────
+# RUTA: Aceptar conformidad y cerrar ticket (creador)
+# ─────────────────────────────────────────────────────────────
+
+
+@ticket_bp.route('/cierre/aceptar-creador/<int:ticket_id>', methods=['POST'])
+@jwt_required()
+def cierre_aceptar_creador(ticket_id):
+    user = UserORM.get_by_id(get_jwt_identity())
+    t = Ticket.query.get(ticket_id)
+    if not t:
+        return jsonify({"mensaje":"Ticket no encontrado"}), 404
+
+    if not _es_creador(user, t):
+        return jsonify({"mensaje":"Solo el creador puede aceptar la conformidad"}), 403
+
+    t.aceptar_conformidad_creador()
+    return jsonify({"mensaje":"Conformidad aceptada; ticket finalizado"}), 200
+
+
+# ─────────────────────────────────────────────────────────────
+# RUTA: Rechazar conformidad y reabrir ticket (creador)
+# ─────────────────────────────────────────────────────────────
+
+@ticket_bp.route('/cierre/rechazar-creador/<int:ticket_id>', methods=['POST'])
+@jwt_required()
+def cierre_rechazar_creador(ticket_id):
+    user = UserORM.get_by_id(get_jwt_identity())
+    t = Ticket.query.get(ticket_id)
+    if not t:
+        return jsonify({"mensaje":"Ticket no encontrado"}), 404
+
+    if not _es_creador(user, t):
+        return jsonify({"mensaje":"Solo el creador puede rechazar la conformidad"}), 403
+
+    data = request.get_json() or {}
+    motivo = data.get("motivo")
+    nueva_compromiso = data.get("nueva_fecha_solucion")  # ISO
+    dt_new = None
+    if nueva_compromiso:
+        dt_new = datetime.fromisoformat(nueva_compromiso).astimezone(timezone.utc)
+
+    t.rechazar_conformidad_creador(motivo=motivo, nueva_fecha_compromiso=dt_new)
+    return jsonify({"mensaje":"Conformidad rechazada; ticket reabierto"}), 200
+
+
+
+
+

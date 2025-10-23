@@ -9,6 +9,8 @@ import { DepartamentoService } from '../services/departamento.service';
 import { HttpClient } from '@angular/common/http';
 import { RefrescoService } from '../services/refresco.service';
 import * as FiltrosGenericos from './helpers/filtros-genericos';
+import { HttpHeaders } from '@angular/common/http';
+
 
 
 
@@ -113,7 +115,10 @@ export interface Ticket {
   descripcion_refaccion?: string;
   sucursal_id_destino?: number | null;
   url_evidencia?: string | null;
-  
+  refaccion_definida_por_jefe?: boolean;
+  requiere_aprobacion?: boolean;
+  aprobacion_estado?: 'pendiente' | 'aprobado' | 'rechazado' | null;
+  estado_cierre?: 'pendiente_jefe' | 'pendiente_creador' | 'rechazado_por_jefe' | 'rechazado_por_creador' | null;
 
 
 
@@ -281,16 +286,16 @@ export class PantallaVerTicketsComponent implements OnInit {
   // Estado del filtro unificado (UI global: rubro + opciones)
   filtroUnificado: EstadoFiltroUnificado = crearEstadoInicial();
   campoUnificadoActual: 'categoria' | 'estado' | 'departamento' | 'sucursal' | 'username' | 'criticidad' | 'subcategoria' | 'detalle' | null = null;
-columnasUnificado: Array<{ key: 'categoria' | 'estado' | 'departamento' | 'sucursal' | 'username' | 'criticidad' | 'subcategoria' | 'detalle', label: string }> = [
-  { key: 'categoria',    label: 'Categoría' },
-  { key: 'estado',       label: 'Estado' },
-  { key: 'departamento', label: 'Departamento' },
-  { key: 'sucursal',     label: 'Sucursal' },
-  { key: 'username',     label: 'Usuario' },
-  { key: 'criticidad',   label: 'Criticidad' },
-  { key: 'subcategoria', label: 'Subcategoría' },   // 👈 nuevo
-  { key: 'detalle',      label: 'Detalle' },        // 👈 nuevo
-];
+  columnasUnificado: Array<{ key: 'categoria' | 'estado' | 'departamento' | 'sucursal' | 'username' | 'criticidad' | 'subcategoria' | 'detalle', label: string }> = [
+    { key: 'categoria',    label: 'Categoría' },
+    { key: 'estado',       label: 'Estado' },
+    { key: 'departamento', label: 'Departamento' },
+    { key: 'sucursal',     label: 'Sucursal' },
+    { key: 'username',     label: 'Usuario' },
+    { key: 'criticidad',   label: 'Criticidad' },
+    { key: 'subcategoria', label: 'Subcategoría' },
+    { key: 'detalle',      label: 'Detalle' },
+  ];
 
 
 
@@ -631,6 +636,17 @@ filtrarOpcionesTexto(columna: string) {
   this.inicializarTemporales('categoria');
 }
 
+
+// Extras que puede definir el Jefe al fijar fecha compromiso (se limpian tras usar)
+extrasCompromisoRefaccion: {
+  necesita_refaccion?: boolean;
+  descripcion_refaccion?: string;
+  refaccion_definida_por_jefe?: boolean;
+} | null = null;
+
+
+
+
 private hidratarSucursalEnTickets(): void {
   const poner = (arr: any[] | undefined) => {
     if (!Array.isArray(arr)) return;
@@ -837,36 +853,97 @@ permiteBusqueda(col: string): boolean {
 }
 
 
-  cambiarEstadoEnProgreso(ticket: Ticket) {
+cambiarEstadoEnProgreso(ticket: Ticket) {
+  if ((ticket as any).requiere_aprobacion && (ticket as any).aprobacion_estado !== 'aprobado') {
+    mostrarAlertaToast('Este ticket requiere aprobación de gerencia antes de avanzar a "en progreso".', 'error');
+    return;
+  }
   if (!ticket.fecha_solucion) {
-    // Si NO tiene fecha de solución, abrir el modal
     this.ticketParaAsignarFecha = ticket;
     this.fechaSolucionTentativa = null;
     this.showModalAsignarFecha = true;
   } else {
-    // Si ya tiene, solo cambiar el estado normalmente
     this.cambiarEstado(ticket, 'en progreso');
   }
 }
 
-onGuardarFechaSolucion(event: { fecha: Date, motivo: string }) {
+
+onGuardarFechaSolucion(event: {
+  fecha: Date;
+  motivo: string;
+  necesita_refaccion?: boolean;
+  descripcion_refaccion?: string;
+  refaccion_definida_por_jefe?: boolean;
+}) {
   if (!this.ticketParaAsignarFecha) return;
+
   if (!event.motivo || !event.motivo.trim()) {
-    mostrarAlertaToast('Debes ingresar un motivo para el cambio de fecha.');
+    mostrarAlertaToast('Debes ingresar un motivo para el cambio de fecha.', 'error');
     return;
   }
 
-  asignarFechaSolucionYEnProgreso(
-    this,
-    this.ticketParaAsignarFecha,
-    event.fecha,
-    event.motivo,
-    () => {
-      this.showModalAsignarFecha = false;
-      this.ticketParaAsignarFecha = null;
-    }
-  );
+  const id = this.ticketParaAsignarFecha.id;
+  const tieneExtras = !!event.refaccion_definida_por_jefe;
+
+  // Guardamos aquí solo para el parcheo visual inmediato (el helper lo usa para pintar el ícono),
+  // pero ya NO volveremos a mandar estos campos en el segundo PUT (/update/:id).
+  this.extrasCompromisoRefaccion = tieneExtras
+    ? {
+        necesita_refaccion: !!event.necesita_refaccion,
+        descripcion_refaccion: event.necesita_refaccion ? (event.descripcion_refaccion || '') : '',
+        refaccion_definida_por_jefe: true,
+      }
+    : null;
+
+  // Continuación del flujo: poner "en progreso" y refrescar tabla
+  const continuar = () => {
+    asignarFechaSolucionYEnProgreso(
+      this,
+      this.ticketParaAsignarFecha!,
+      event.fecha,
+      event.motivo,
+      () => {
+        this.showModalAsignarFecha = false;
+        this.ticketParaAsignarFecha = null;
+        this.extrasCompromisoRefaccion = null;
+      }
+    );
+  };
+
+  // Si hay refacción definida por el jefe, primero fija el compromiso/refacción
+  if (tieneExtras) {
+    // 07:00 local → ISO (tu backend lo guarda en UTC)
+    const fechaSolucion07ISO = new Date(
+      event.fecha.getFullYear(),
+      event.fecha.getMonth(),
+      event.fecha.getDate(),
+      7, 0, 0
+    ).toISOString();
+
+    const bodyCompromiso = {
+      fecha_solucion: fechaSolucion07ISO,
+      necesita_refaccion: !!event.necesita_refaccion,
+      descripcion_refaccion: event.necesita_refaccion ? (event.descripcion_refaccion || '') : '',
+      // El backend marca refaccion_definida_por_jefe=true si recibe necesita_refaccion (no es obligatorio enviarlo)
+      // refaccion_definida_por_jefe: true,
+    };
+
+    this.ticketService.setCompromiso(id, bodyCompromiso).subscribe({
+      next: () => continuar(),
+      error: (err) => {
+        this.extrasCompromisoRefaccion = null;  // limpia para no parchar UI
+        mostrarAlertaToast('No se pudo guardar el compromiso/refacción.', 'error');
+        console.error(err);
+      }
+    });
+  } else {
+    // Sin refacción extra → directo a "en progreso"
+    continuar();
+  }
 }
+
+
+
 
 
 onCancelarAsignarFecha() {
@@ -1321,27 +1398,32 @@ getDetalleVisible(t: Ticket): string {
 
 
 necesitaRef(t: any): boolean {
-  let v = t?.necesita_refaccion ?? t?.necesitaRefaccion ?? t?.necesitaRef;
+  // 1) Campo canónico del backend → devuelve enseguida si existe
+  if (typeof t?.necesita_refaccion === 'boolean') return t.necesita_refaccion;
 
-  // Arrays reales => toma el primer elemento
+  // 2) Alias comunes por si viniera camelCase o con datos “raros”
+  let v: any = t?.necesita_refaccion ?? t?.necesitaRefaccion ?? t?.necesitaRef;
+
+  // Arrays tipo [true] o ["1"] → usa el primero
   if (Array.isArray(v)) v = v[0];
 
-  // Tipos simples
-  if (v === true) return true;
-  if (v === false || v == null) return false;
+  // Numéricos
   if (typeof v === 'number') return v !== 0;
 
-  // Normaliza strings (incluye casos {"v"}, [ "v" ], etc.)
+  // Bools sueltos
+  if (v === true) return true;
+  if (v === false || v == null) return false;
+
+  // Strings normalizados
   const s = String(v)
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // quita acentos
-    .trim()
-    .toLowerCase()
-    .replace(/[\[\]\(\)\{\}"'\s]/g, ''); // quita [, ], {, }, comillas y espacios
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .trim().toLowerCase()
+    .replace(/[\[\]\(\)\{\}"'\s]/g, '');
 
   if (!s) return false;
 
-  // Acepta varias marcas de "verdadero"
-  return ['true','t','1','v','si','sí','y','yes','x','✓'].includes(s);
+  // Marcas típicas de “verdadero”
+  return new Set(['true','1','si','sí','y','yes','x','✓','v']).has(s);
 }
 
 

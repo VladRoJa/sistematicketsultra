@@ -1,17 +1,53 @@
+<!-- frontend/src/app/pantalla-ver-tickets/modals/asignar-fecha-modal.component.html -->
 <h2>Asignar Fecha de Solución</h2>
 
 <div class="modal-content">
-  <mat-form-field appearance="fill">
-    <mat-label>Selecciona una fecha</mat-label>
-    <input matInput [matDatepicker]="picker" [(ngModel)]="fechaSeleccionada">
-    <mat-datepicker-toggle matSuffix [for]="picker"></mat-datepicker-toggle>
-    <mat-datepicker #picker></mat-datepicker>
-  </mat-form-field>
+  <!-- Fecha -->
+<mat-form-field appearance="fill">
+  <mat-label>Selecciona una fecha</mat-label>
+  <input
+    matInput
+    [matDatepicker]="picker"
+    [(ngModel)]="fechaSeleccionada"
+    [min]="minDate"
+    required
+    #fechaNg="ngModel">
+  <mat-datepicker-toggle matSuffix [for]="picker"></mat-datepicker-toggle>
+  <mat-datepicker #picker></mat-datepicker>
+  <mat-error *ngIf="fechaNg.invalid && fechaNg.touched">La fecha es obligatoria.</mat-error>
+</mat-form-field>
 
+
+  <!-- Motivo -->
   <mat-form-field appearance="fill">
     <mat-label>Motivo del cambio</mat-label>
-    <textarea matInput [(ngModel)]="motivo" rows="3"></textarea>
+    <textarea
+      matInput
+      [(ngModel)]="motivo"
+      rows="3"
+      required
+      #motivoNg="ngModel"
+      (keyup.enter)="guardar()"></textarea>
+    <mat-error *ngIf="motivoNg.invalid && motivoNg.touched">El motivo es obligatorio.</mat-error>
   </mat-form-field>
+
+  <!-- Mini-form de refacción (Mant→Aparatos o Sist→Dispositivos) -->
+  <div *ngIf="mostrarRefaccionJefe" style="margin: 8px 0 16px;">
+    <mat-checkbox [(ngModel)]="necesitaRefaccion">
+      ¿Requiere refacción?
+    </mat-checkbox>
+
+    <mat-form-field appearance="fill" class="w-full" style="display:block; margin-top: 8px;">
+      <mat-label>Descripción técnica (opcional)</mat-label>
+      <textarea
+        matInput
+        [(ngModel)]="descripcionRefaccion"
+        [disabled]="!necesitaRefaccion"
+        rows="3"
+        maxlength="500"></textarea>
+      <mat-hint align="end">{{ (descripcionRefaccion || '').length }}/500</mat-hint>
+    </mat-form-field>
+  </div>
 
   <div class="acciones">
     <button mat-raised-button color="primary" (click)="guardar()">Guardar</button>

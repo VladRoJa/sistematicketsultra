@@ -1,4 +1,4 @@
-// frontend-angular\src\app\pantalla-ver-tickets\helpers\pantalla-ver-tickets.fecha-solucion.ts
+// frontend-angular/src/app/pantalla-ver-tickets/helpers/pantalla-ver-tickets.fecha-solucion.ts
 
 import { ChangeDetectorRef } from '@angular/core';
 import { PantallaVerTicketsComponent, Ticket } from '../pantalla-ver-tickets.component';
@@ -21,7 +21,6 @@ export function formatearFechaParaInput(fechaDB: string): Date {
   return new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate(), 7, 0, 0);
 }
 
-
 export function asignarFechaSolucionYEnProgreso(
   component: PantallaVerTicketsComponent,
   ticket: Ticket,
@@ -29,13 +28,13 @@ export function asignarFechaSolucionYEnProgreso(
   motivo: string,
   onSuccess?: () => void
 ): void {
-  const token = localStorage.getItem("token");
+  const token = localStorage.getItem('token');
   if (!token) {
     mostrarAlertaErrorDesdeStatus(401);
     return;
   }
 
-  // Fecha de solución a las 07:00 AM UTC
+  // Fecha compromiso a las 07:00 (horario local del navegador)
   const fechaSolucion = new Date(
     nuevaFecha.getFullYear(),
     nuevaFecha.getMonth(),
@@ -45,7 +44,7 @@ export function asignarFechaSolucionYEnProgreso(
   const fechaSolucionISO = fechaSolucion.toISOString();
   const fechaEnProgresoISO = new Date().toISOString();
 
-  // Arma la nueva entrada de historial
+  // Historial local (evitar duplicado)
   const historialActual = Array.isArray(ticket.historial_fechas) ? [...ticket.historial_fechas] : [];
   const nuevaEntrada = {
     fecha: fechaSolucionISO,
@@ -53,36 +52,84 @@ export function asignarFechaSolucionYEnProgreso(
     fechaCambio: new Date().toISOString(),
     motivo
   };
-
-  // No agregues duplicado
   const yaExiste = historialActual.some(item => item.fecha === fechaSolucionISO);
   if (!yaExiste) historialActual.push(nuevaEntrada);
-
-  // Ordena el historial
   historialActual.sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
 
-  // Prepara el body completo
-  const body = {
-    estado: "en progreso",
-    fecha_solucion: fechaSolucionISO,
-    fecha_en_progreso: fechaEnProgresoISO,
-    historial_fechas: historialActual,
-    motivo_cambio: motivo
+  // Headers
+  const headers = new HttpHeaders()
+    .set('Authorization', `Bearer ${token}`)
+    .set('Content-Type', 'application/json');
+
+  // Helper: PUT /tickets/update/:id → estado + fechas + historial
+  const finalizarUpdate = () => {
+    const bodyUpdate = {
+      estado: 'en progreso',
+      fecha_solucion: fechaSolucionISO,      // mantener compromiso en el mismo update
+      fecha_en_progreso: fechaEnProgresoISO,
+      historial_fechas: historialActual,
+      motivo_cambio: motivo
+    };
+
+    component.http.put(`${API_URL}/update/${ticket.id}`, bodyUpdate, { headers }).subscribe({
+      next: () => {
+        cargarTickets(component);
+        mostrarAlertaToast('✅ Fecha de solución y estado "en progreso" guardados exitosamente.');
+        if (onSuccess) onSuccess();
+      },
+      error: (error) => {
+        mostrarAlertaErrorDesdeStatus(error.status);
+      }
+    });
   };
 
-  const headers = new HttpHeaders()
-    .set("Authorization", `Bearer ${token}`)
-    .set("Content-Type", "application/json");
+  // ¿Trae refacción definida por el Jefe? → primero /compromiso, luego /update
+  if (component?.extrasCompromisoRefaccion?.refaccion_definida_por_jefe) {
+    const ex = component.extrasCompromisoRefaccion;
+    const necesita = !!ex.necesita_refaccion;
+    const descr = necesita ? (ex.descripcion_refaccion || '') : '';
 
-  // Una sola llamada PUT
-  component.http.put(`${API_URL}/update/${ticket.id}`, body, { headers }).subscribe({
-    next: () => {
-      cargarTickets(component); // refresca toda la tabla para evitar N/A y desfaces
-      mostrarAlertaToast('✅ Fecha de solución y estado "en progreso" guardados exitosamente.');
-      if (onSuccess) onSuccess();
-    },
-    error: (error) => {
-      mostrarAlertaErrorDesdeStatus(error.status);
-    }
-  });
+    // Parche optimista en UI
+    (ticket as any).necesita_refaccion = necesita;
+    (ticket as any).descripcion_refaccion = descr;
+    (ticket as any).refaccion_definida_por_jefe = true;
+
+    const patchLocal = (arr?: any[]) => {
+      if (!Array.isArray(arr)) return;
+      const t = arr.find(x => x?.id === ticket.id);
+      if (t) {
+        t.necesita_refaccion = necesita;
+        t.descripcion_refaccion = descr;
+        t.refaccion_definida_por_jefe = true;
+      }
+    };
+    patchLocal(component.visibleTickets);
+    patchLocal(component.filteredTickets);
+    patchLocal(component.tickets);
+    component.changeDetectorRef.detectChanges();
+
+    // 1) Compromiso con refacción (endpoint que sí acepta estos campos)
+    const bodyCompromiso: any = {
+      fecha_solucion: fechaSolucionISO,
+      necesita_refaccion: necesita,
+      descripcion_refaccion: descr
+    };
+
+    component.http.put(`${API_URL}/compromiso/${ticket.id}`, bodyCompromiso, { headers }).subscribe({
+      next: () => {
+        // 2) Estado + historial
+        finalizarUpdate();
+      },
+      error: (error) => {
+        // Si falla (403/400), re-sincroniza la tabla para deshacer parche optimista
+        cargarTickets(component);
+        mostrarAlertaErrorDesdeStatus(error.status);
+      }
+    });
+
+    return; // corta aquí; el resto lo hace en los callbacks
+  }
+
+  // Sin refacción del Jefe → un solo update
+  finalizarUpdate();
 }
