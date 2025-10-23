@@ -2,21 +2,12 @@
 
 
 import { Component, OnInit, OnDestroy } from '@angular/core';
-import {
-  FormBuilder,
-  FormGroup,
-  Validators,
-  FormControl,
-  ReactiveFormsModule
-} from '@angular/forms';
+import { FormBuilder, FormGroup, Validators, FormControl, ReactiveFormsModule} from '@angular/forms';
 import { Subscription } from 'rxjs';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { environment } from 'src/environments/environment';
 import { CatalogoService } from 'src/app/services/catalogo.service';
-import {
-  mostrarAlertaToast,
-  mostrarAlertaErrorDesdeStatus
-} from '../utils/alertas';
+import { mostrarAlertaToast, mostrarAlertaErrorDesdeStatus} from 'src/app/utils/alertas';
 import { MantenimientoAparatosComponent } from './formularios-crear-ticket/mantenimiento-aparatos/mantenimiento-aparatos.component';
 import { InventarioService } from 'src/app/services/inventario.service';
 
@@ -31,6 +22,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { SistemasComponent } from './formularios-crear-ticket/sistemas/sistemas.component';
 import { SucursalesService } from '../services/sucursales.service';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 
 
 import { of } from 'rxjs';
@@ -53,6 +45,7 @@ import { switchMap } from 'rxjs/operators';
     MatProgressSpinnerModule,
     MantenimientoAparatosComponent,
     SistemasComponent,
+    MatCheckboxModule,
   ],
 })
 export class CrearTicketRefactorComponent implements OnInit, OnDestroy {
@@ -179,12 +172,12 @@ ngOnInit(): void {
 
   // 4) Handler para cambios de ruta (Departamento/Categoría)
   this.onRutaChangeFn = () => {
-
     console.debug('[onRutaChange]', {
-  n1: this.form.get('nivel_1')?.value,
-  n2: this.form.get('nivel_2')?.value,
-  esSisDisp: this.mostrarSubformSistemasDispositivos
-});
+      n1: this.form.get('nivel_1')?.value,
+      n2: this.form.get('nivel_2')?.value,
+      esSisDisp: this.mostrarSubformSistemasDispositivos
+    });
+
     const depId = this.form.get('nivel_1')?.value;
     const catId = this.form.get('nivel_2')?.value;
 
@@ -194,6 +187,9 @@ ngOnInit(): void {
     const esSisDisp =
       this._norm(dep?.nombre) === 'sistemas' &&
       this._norm(cat?.nombre) === 'dispositivos';
+
+    // 🔵 NUEVO: decidir visibilidad de refacción según Mantenimiento → Edificio
+    this.setVisibilidadRefaccion();
 
     // Limpia rastro del otro flujo
     this.limpiarRastroDeOtrosSubforms();
@@ -205,6 +201,7 @@ ngOnInit(): void {
 
     this.actualizarValidadoresDescripcion();
   };
+
 
   // 5) Cargar nivel 1 (crea control nivel_1)
   this.cargarNivel(1, null, 'Departamento');
@@ -320,7 +317,7 @@ cargarNivel(nivel: number, parentId: number | null, etiqueta: string) {
     const fila3 = this.niveles.find(n => n.nivel === 3);
     if (!fila3) return;
 
-    const padreIdInventario = 2; // "Dispositivos" en catalogo_categoria_inventario
+    const padreIdInventario = this.ID_CAT_DISPOSITIVOS;
     console.debug('[N3] Listando categorías de inventario parent_id=', padreIdInventario);
 
     this.inventarioService.listarCategoriasInventario({ parent_id: padreIdInventario }).subscribe({
@@ -373,6 +370,7 @@ cargarNivel(nivel: number, parentId: number | null, etiqueta: string) {
         }));
 
         fila4.opciones = opciones;
+        fila4.loading  = false;
 
         const ctrl4 = fila4.control;
         if (ctrl4.value && !fila4.opciones.some(o => `${o.id}` === `${ctrl4.value}`)) ctrl4.setValue(null);
@@ -481,6 +479,7 @@ public get mostrarSubformSistemasDispositivos(): boolean {
 }
 
 
+public mostrarRefaccion: boolean = false;
 
 
   limpiarCamposNumericosVacios(obj: any, campos: string[]) {
@@ -512,19 +511,18 @@ enviar() {
   const n2Obj = this.niveles[1]?.opciones.find(o => o.id === n2);
   const n2Name = (n2Obj?.nombre || '').trim().toUpperCase();
   const esSisDisp = depName === 'SISTEMAS' && n2Name === 'DISPOSITIVOS';
+  const esRRHH = ['recursos humanos', 'rrhh'].includes(this._norm(depObj?.nombre));
 
-  // --- clasificacion_id: último nodo de CLASIFICACIÓN (no el equipo) ---
+  // --- clasificacion_id ---
   let clasificacion_id: number | null = null;
-  if (esSisDisp) {
-    // En Sistemas→Dispositivos el último nodo de clasificación es el nivel 3 (subcategoría)
-    clasificacion_id = n3 ?? n2 ?? n1 ?? null;
-  } else {
-    // Flujo genérico: toma el último nivel elegido
+  if (!esSisDisp) {
+    // Flujo genérico: toma el último nivel elegido de CLASIFICACIÓN
     for (let i = this.niveles.length - 1; i >= 0; i--) {
       const val = this.form.get(`nivel_${this.niveles[i].nivel}`)?.value;
       if (val) { clasificacion_id = val; break; }
     }
   }
+  // ⚠️ esSisDisp => clasificacion_id se queda en null (no mandar nada de árbol de clasificación)
 
   // --- descripción final según subform activo ---
   const descripcionFinal =
@@ -534,32 +532,34 @@ enviar() {
         ? this.form.value.descripcion
         : this.form.value.descripcion_general;
 
-  // --- sucursal destino (admin elige; usuario toma su sucursal del localStorage) ---
+  // --- sucursal destino ---
   const sucursalDestino = this.esAdmin()
     ? this.form.value.sucursal_id
     : this.sucursalIdUsuario;
 
-  // --- construir body (sin 'detalle' de entrada) ---
+  // --- construir body base ---
   const body: any = {
     sucursal_id_destino: sucursalDestino,
     descripcion: descripcionFinal,
     criticidad: this.form.value.criticidad,
     departamento_id,
-    categoria: n2 ?? null,
-    subcategoria: n3 ?? null,
     clasificacion_id,
     aparato_id: esSisDisp ? n4 : (this.form.value.aparato_id ?? null),
     necesita_refaccion: this.form.value.necesita_refaccion,
     descripcion_refaccion: this.form.value.descripcion_refaccion,
   };
 
-  // 'detalle' SOLO cuando NO es Sistemas → Dispositivos
+  // Para flujo genérico, puedes mandar detalle/categoría/subcategoría (texto/ids -> backend los limpia)
   if (!esSisDisp) {
+    body.categoria = n2 ?? null;
+    body.subcategoria = n3 ?? null;
     body.detalle = this.form.get('nivel_4')?.value ?? null;
   } else {
-    // blindaje: si algún subform dejó algo en 'detalle', lo limpiamos
+    // Blindajes en esSisDisp: NO mandamos detalle ni cat/sub numéricas
     this.form.get('detalle')?.reset(null, { emitEvent: false });
     delete body.detalle;
+    delete body.categoria;
+    delete body.subcategoria;
   }
 
   console.log('BODY ENVIADO:', body);
@@ -576,9 +576,14 @@ enviar() {
     'subcategoria',
   ]);
 
-  // doble seguro: en el flujo Sistemas→Dispositivos no debe existir 'detalle'
-  if (esSisDisp && 'detalle' in body) delete body.detalle;
+  // Doble seguro
+  if (esSisDisp) {
+    delete body.detalle;
+    delete body.categoria;
+    delete body.subcategoria;
+  }
 
+  if (esRRHH) { body.requiere_aprobacion = true; }
 
   this.http
     .post<{ mensaje: string; ticket_id: number; notificados?: string[] }>(
@@ -609,8 +614,8 @@ enviar() {
         this.loadingGuardar = false;
       }
     });
+}
 
-} 
 
 
 getCamposInvalidos(): string[] {
@@ -666,6 +671,33 @@ onFormularioSistemasValido(payload: any) {
       this.nivel2Sub?.unsubscribe(); // ← agrega esto
     }
 
+
+    /**
+ * Muestra/Oculta la UI de refacción según combinación:
+ *  Departamento = Mantenimiento  &&  Categoría = Edificio
+ * Si NO aplica, limpia los campos para evitar 400 en backend si alguien marcó algo antes.
+ */
+public setVisibilidadRefaccion(): void {
+  const n1 = this.form.get('nivel_1')?.value; // id depto seleccionado
+  const n2 = this.form.get('nivel_2')?.value; // id categoría seleccionada
+
+  const dep = this.niveles[0]?.opciones.find(x => `${x.id}` === `${n1}`)?.nombre || '';
+  const cat = this.niveles[1]?.opciones.find(x => `${x.id}` === `${n2}`)?.nombre || '';
+
+  const visible = this._norm(dep) === 'mantenimiento' && this._norm(cat) === 'edificio';
+
+  if (this.mostrarRefaccion !== visible) {
+    this.mostrarRefaccion = visible;
+
+    // Si no corresponde mostrar refacción, limpialo del form para no enviarlo
+    if (!visible) {
+      this.form.patchValue(
+        { necesita_refaccion: false, descripcion_refaccion: '' },
+        { emitEvent: false }
+      );
+    }
+  }
+}
 
   
 }

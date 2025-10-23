@@ -29,19 +29,5 @@
       placeholder="Detalla lo ocurrido con claridad..."></textarea>
   </mat-form-field>
 
-  <!-- ¿Requiere refacción? -->
-  <div class="form-group horizontal-align" *ngIf="parentForm.get('necesita_refaccion')">
-    <input type="checkbox" [formControl]="parentForm.get('necesita_refaccion')" />
-    <label>¿Requiere refacción?</label>
-  </div>
 
-  <!-- Descripción técnica de la refacción -->
-  <mat-form-field *ngIf="parentForm.get('descripcion_refaccion') && parentForm.get('necesita_refaccion')?.value" appearance="fill" class="full-width">
-    <mat-label>🧰 Descripción técnica de la refacción</mat-label>
-    <textarea
-      matInput
-      [formControl]="parentForm.get('descripcion_refaccion')"
-      placeholder="Detalle técnico..."
-      rows="3"></textarea>
-  </mat-form-field>
 </div>

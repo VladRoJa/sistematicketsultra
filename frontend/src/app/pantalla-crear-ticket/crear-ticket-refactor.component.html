@@ -18,35 +18,36 @@
 
     <!-- Campos dinámicos (n1..n5) -->
     <ng-container *ngFor="let nivel of niveles; trackBy: trackByNivel">
-      <mat-form-field appearance="fill" class="w-full">
-        <mat-label>{{ nivel.etiqueta }}*</mat-label>
+    <mat-form-field appearance="fill" class="w-full">
+      <mat-label>{{ nivel.etiqueta }}*</mat-label>
 
-        <mat-select [formControl]="nivel.control" [disabled]="nivel.loading">
-          <!-- Spinner mientras carga -->
-          <mat-progress-spinner
-            *ngIf="nivel.loading"
-            matSuffix
-            diameter="18"
-            mode="indeterminate">
-          </mat-progress-spinner>
+      <mat-select [formControl]="nivel.control" [disabled]="nivel.loading">
+        <!-- Placeholder cuando no hay opciones -->
+        <mat-option *ngIf="!nivel.loading && (!nivel.opciones || !nivel.opciones.length)" [disabled]="true">
+          (sin opciones)
+        </mat-option>
 
-          <!-- Si no hay opciones, muestro un placeholder deshabilitado -->
-          <mat-option *ngIf="!nivel.loading && (!nivel.opciones || !nivel.opciones.length)"
-                      [disabled]="true">
-            (sin opciones)
-          </mat-option>
+        <!-- Opciones reales -->
+        <mat-option *ngFor="let op of nivel.opciones" [value]="op.id">
+          {{ op.nombre }}
+        </mat-option>
+      </mat-select>
+      <!-- Spinner de carga -->
+      <mat-progress-spinner
+        *ngIf="nivel.loading"
+        matSuffix
+        diameter="18"
+        mode="indeterminate">
+      </mat-progress-spinner>
 
-          <!-- Opciones reales -->
-          <mat-option *ngFor="let op of nivel.opciones" [value]="op.id">
-            {{ op.nombre }}
-          </mat-option>
-        </mat-select>
+      <mat-error *ngIf="nivel.control.touched && nivel.control.invalid">
+        Selecciona {{ nivel.etiqueta.toLowerCase() }}
+      </mat-error>
+    </mat-form-field>
 
-        <mat-error *ngIf="nivel.control.touched && nivel.control.invalid">
-          Selecciona {{ nivel.etiqueta.toLowerCase() }}
-        </mat-error>
-      </mat-form-field>
     </ng-container>
+
+
 
     <!-- Subforms -->
     <ng-container *ngIf="mostrarSubformAparatos; else sistemasOrGenerales">
@@ -76,6 +77,25 @@
       </mat-form-field>
     </ng-template>
 
+    <!-- Refacción solo Mantenimiento → Edificio  -->
+    <div *ngIf="mostrarRefaccion" class="refaccion-block" style="margin: 8px 0 16px;">
+      <mat-checkbox formControlName="necesita_refaccion">
+        ¿Requiere refacción?
+      </mat-checkbox>
+
+      <mat-form-field appearance="fill" class="w-full" style="display:block; margin-top: 8px;">
+        <mat-label>Descripción técnica de la refacción (opcional)</mat-label>
+        <textarea
+          matInput
+          formControlName="descripcion_refaccion"
+          [disabled]="!form.get('necesita_refaccion')?.value"
+          [attr.aria-disabled]="!form.get('necesita_refaccion')?.value"
+          rows="3">
+        </textarea>
+      </mat-form-field>
+    </div>
+
+
     <!-- Criticidad -->
     <mat-form-field appearance="fill" class="w-full">
       <mat-label>Nivel de criticidad*</mat-label>
@@ -88,7 +108,12 @@
     </mat-form-field>
 
     <!-- Botón guardar -->
-    <button mat-raised-button color="primary" class="w-full mt-3" type="submit">
+    <button
+      mat-raised-button
+      color="primary"
+      class="w-full mt-3"
+      type="submit"
+      [disabled]="loadingGuardar || form.invalid">
       <ng-container *ngIf="!loadingGuardar; else loading">
         Crear ticket
       </ng-container>

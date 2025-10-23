@@ -1,10 +1,9 @@
-//frontend\src\app\services\ticket.service.ts
-
+// frontend/src/app/services/ticket.service.ts
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { Observable, throwError } from 'rxjs';
 import { environment } from 'src/environments/environment';
-
+import { TicketDTO, SetCompromisoPayload, CierreRechazoPayload } from 'src/app/types/ticket';
 
 export interface TicketsResponse {
   mensaje: string;
@@ -12,58 +11,27 @@ export interface TicketsResponse {
   total_tickets: number;
 }
 
-@Injectable({
-  providedIn: 'root'
-})
+@Injectable({ providedIn: 'root' })
 export class TicketService {
-  // Base URL del backend para la gestión de tickets.
-
   private apiUrl = `${environment.apiUrl}/tickets`;
 
   constructor(private http: HttpClient) {}
 
-  /**
-   * Obtiene la lista de tickets con soporte para paginación.
-   *
-   * La lógica de filtrado (por sucursal, departamento o todos)
-   * se aplica en el backend según el usuario autenticado.
-   *
-   * @param limit Número máximo de tickets a retornar por página (por defecto 15).
-   * @param offset Número de tickets a saltar para paginación (por defecto 0).
-   * @returns Observable que emite la respuesta del backend, incluyendo la lista de tickets y el total.
-        * Obtiene tickets aplicando filtros y pudiendo omitir paginación.
-   * @param filters Objeto con las posibles propiedades de filtro:
-   *   - estado?: string
-   *   - departamento_id?: string | number
-   *   - criticidad?: string | number
-   *   - no_paging?: boolean
-   *   - limit?: number
-   *   - offset?: number
-  */
-
-    
-
-  getTickets(limit: number = 15, offset: number = 0): Observable<any> {
-    // Obtener el token desde localStorage para la autorización.
+  /** Headers JSON con Authorization si hay token */
+  private authJsonHeaders(): HttpHeaders {
     const token = localStorage.getItem('token');
-    if (!token) {
-      console.error("❌ No hay token en localStorage.");
-      // Se podría retornar throwError() o un Observable vacío en función del manejo de errores.
-      return new Observable();
-    }
+    let headers = new HttpHeaders().set('Content-Type', 'application/json');
+    return token ? headers.set('Authorization', `Bearer ${token}`) : headers;
+  }
 
-    // Configuración de headers, incluyendo el token en la cabecera Authorization.
-    const headers = new HttpHeaders()
-      .set('Authorization', `Bearer ${token}`)
-      .set('Content-Type', 'application/json');
-
-    // Configuración de los parámetros de paginación.
-    const params = new HttpParams()
-      .set('limit', limit.toString())
-      .set('offset', offset.toString());
-
-    // Se hace la petición GET a la ruta '/all' del backend.
-    // withCredentials: true se utiliza si el backend requiere el envío de cookies.
+  // ─────────────────────────────────────────────
+  // LISTADOS
+  // ─────────────────────────────────────────────
+  getTickets(limit: number = 15, offset: number = 0): Observable<any> {
+    const token = localStorage.getItem('token');
+    if (!token) return throwError(() => new Error('NO_TOKEN'));
+    const headers = this.authJsonHeaders();
+    const params = new HttpParams().set('limit', limit).set('offset', offset);
     return this.http.get<any>(`${this.apiUrl}/all`, { headers, params, withCredentials: true });
   }
 
@@ -75,103 +43,154 @@ export class TicketService {
     limit?: number;
     offset?: number;
   }): Observable<TicketsResponse> {
-
     let params = new HttpParams();
 
-    // Filtros
-    if (filters.estado) {
-      params = params.set('estado', filters.estado);
-    }
-    if (filters.departamento_id !== undefined) {
-      params = params.set('departamento_id', String(filters.departamento_id));
-    }
-    if (filters.criticidad !== undefined) {
-      params = params.set('criticidad', String(filters.criticidad));
-    }
+    if (filters.estado) params = params.set('estado', filters.estado);
+    if (filters.departamento_id !== undefined) params = params.set('departamento_id', String(filters.departamento_id));
+    if (filters.criticidad !== undefined) params = params.set('criticidad', String(filters.criticidad));
 
-    // Omitir paginación
     if (filters.no_paging) {
       params = params.set('no_paging', 'true');
     } else {
-      // Paginación normal
-      const limit = filters.limit ?? 15;
-      const offset = filters.offset ?? 0;
-      params = params.set('limit', limit.toString());
-      params = params.set('offset', offset.toString());
+      params = params.set('limit', String(filters.limit ?? 15))
+                     .set('offset', String(filters.offset ?? 0));
     }
 
-    // Llamada al nuevo endpoint /list
-    return this.http.get<TicketsResponse>(`${this.apiUrl}/tickets/list`, { params });
+    const headers = this.authJsonHeaders();
+    return this.http.get<TicketsResponse>(`${this.apiUrl}/list`, { headers, params, withCredentials: true });
   }
 
-
   getAllTicketsFiltered(filtros: any): Observable<TicketsResponse> {
-    // Iniciamos los parámetros HTTP vacíos
-    let params: HttpParams = new HttpParams();
+    let params = new HttpParams();
 
-    // Solo se añaden parámetros si existen valores en el objeto filtros.
-    // Si filtros está vacío, la query se construirá sin restricciones (y devolverá todos los registros).
-    if (filtros.estado) {
-      params = params.set('estado', filtros.estado);
-    }
-    if (filtros.departamento_id) {
-      params = params.set('departamento_id', filtros.departamento_id);
-    }
-    if (filtros.criticidad) {
-      params = params.set('criticidad', filtros.criticidad);
-    }
-    if (filtros.username) {
-      params = params.set('username', filtros.username);
-    }
-    if (filtros.fechaDesde) {
-      params = params.set('fecha_desde', filtros.fechaDesde); // Ejemplo: '2025-02-22'
-    }
-    if (filtros.fechaHasta) {
-      params = params.set('fecha_hasta', filtros.fechaHasta); // Ejemplo: '2025-03-22'
-    }
-    if (filtros.fechaFinDesde) {
-      params = params.set('fecha_fin_desde', filtros.fechaFinDesde);
-    }
-    if (filtros.fechaFinHasta) {
-      params = params.set('fecha_fin_hasta', filtros.fechaFinHasta);
-    }
+    if (filtros.estado) params = params.set('estado', filtros.estado);
+    if (filtros.departamento_id) params = params.set('departamento_id', filtros.departamento_id);
+    if (filtros.criticidad) params = params.set('criticidad', filtros.criticidad);
+    if (filtros.username) params = params.set('username', filtros.username);
+    if (filtros.fechaDesde) params = params.set('fecha_desde', filtros.fechaDesde);
+    if (filtros.fechaHasta) params = params.set('fecha_hasta', filtros.fechaHasta);
+    if (filtros.fechaFinDesde) params = params.set('fecha_fin_desde', filtros.fechaFinDesde);
+    if (filtros.fechaFinHasta) params = params.set('fecha_fin_hasta', filtros.fechaFinHasta);
 
-    // Se fuerza que la paginación se omita, para obtener la data completa
     params = params.set('no_paging', 'true');
 
-    // Realiza la petición GET a la ruta /list del backend
-    return this.http.get<TicketsResponse>(`${this.apiUrl}/list`, { params });
+    const headers = this.authJsonHeaders();
+    return this.http.get<TicketsResponse>(`${this.apiUrl}/list`, { headers, params, withCredentials: true });
   }
 
   exportarTickets(filtros: any): Observable<Blob> {
     const token = localStorage.getItem('token');
-    if (!token) {
-      console.error("❌ No hay token para exportar.");
-      return new Observable<Blob>();
-    }
-  
-    console.log("📤 Filtros enviados al backend:", filtros); 
-  
+    if (!token) return throwError(() => new Error('NO_TOKEN'));
+
     let params = new HttpParams();
-    for (const clave in filtros) {
-      const valor = filtros[clave];
-      if (Array.isArray(valor)) {
-        valor.forEach((v: string) => {
-          params = params.append(clave, v);
-        });
-      } else if (valor !== undefined) {
-        params = params.set(clave, valor);
-      }
+    for (const k in filtros) {
+      const v = filtros[k];
+      if (Array.isArray(v)) v.forEach((x: string) => (params = params.append(k, x)));
+      else if (v !== undefined) params = params.set(k, v);
     }
-  
+
     const headers = new HttpHeaders().set('Authorization', `Bearer ${token}`);
-    return this.http.get(`${environment.apiUrl}/tickets/export-excel`, {
-      headers,
-      params,
-      responseType: 'blob'
-    });
+    return this.http.get(`${this.apiUrl}/export-excel`, { headers, params, responseType: 'blob' });
   }
-  
-  
-  
+
+  // ─────────────────────────────────────────────
+  // UPDATES / ACCIONES
+  // ─────────────────────────────────────────────
+
+  /** Actualiza (PUT) usando la ruta real /update/:id */
+  updateTicket(id: number, payload: Partial<TicketDTO>): Observable<any> {
+    const token = localStorage.getItem('token');
+    if (!token) return throwError(() => new Error('NO_TOKEN'));
+    const headers = this.authJsonHeaders();
+    return this.http.put<any>(`${this.apiUrl}/update/${id}`, payload, { headers, withCredentials: true });
+  }
+
+  /**
+   * Fija/actualiza fecha de compromiso y (si aplica) refacción.
+   * Ruta backend real: PUT /compromiso/:id
+   */
+  setCompromiso(id: number, payload: SetCompromisoPayload): Observable<any> {
+    const token = localStorage.getItem('token');
+    if (!token) return throwError(() => new Error('NO_TOKEN'));
+    const headers = this.authJsonHeaders();
+    return this.http.put<any>(`${this.apiUrl}/compromiso/${id}`, payload, { headers, withCredentials: true });
+  }
+
+  // ── RRHH (pre-aprobación) ───────────────────
+  rrhhSolicitar(id: number, aprobadorUsername?: string): Observable<any> {
+    const token = localStorage.getItem('token');
+    if (!token) return throwError(() => new Error('NO_TOKEN'));
+    const headers = this.authJsonHeaders();
+    const body = aprobadorUsername ? { aprobador_username: aprobadorUsername } : {};
+    return this.http.post<any>(`${this.apiUrl}/rrhh/solicitar/${id}`, body, { headers, withCredentials: true });
+  }
+
+  rrhhAprobar(id: number, comentario?: string): Observable<any> {
+    const token = localStorage.getItem('token');
+    if (!token) return throwError(() => new Error('NO_TOKEN'));
+    const headers = this.authJsonHeaders();
+    const body = comentario ? { comentario } : {};
+    return this.http.post<any>(`${this.apiUrl}/rrhh/aprobar/${id}`, body, { headers, withCredentials: true });
+  }
+
+  rrhhRechazar(id: number, comentario?: string): Observable<any> {
+    const token = localStorage.getItem('token');
+    if (!token) return throwError(() => new Error('NO_TOKEN'));
+    const headers = this.authJsonHeaders();
+    const body = comentario ? { comentario } : {};
+    return this.http.post<any>(`${this.apiUrl}/rrhh/rechazar/${id}`, body, { headers, withCredentials: true });
+  }
+
+  // ── Doble check de cierre ───────────────────
+  cierreSolicitar(id: number): Observable<any> {
+    const token = localStorage.getItem('token');
+    if (!token) return throwError(() => new Error('NO_TOKEN'));
+    const headers = this.authJsonHeaders();
+    return this.http.post<any>(`${this.apiUrl}/cierre/solicitar/${id}`, {}, { headers, withCredentials: true });
+  }
+
+  cierreAprobarJefe(id: number): Observable<any> {
+    const token = localStorage.getItem('token');
+    if (!token) return throwError(() => new Error('NO_TOKEN'));
+    const headers = this.authJsonHeaders();
+    return this.http.post<any>(`${this.apiUrl}/cierre/aprobar-jefe/${id}`, {}, { headers, withCredentials: true });
+  }
+
+  cierreRechazarJefe(id: number, payload: CierreRechazoPayload): Observable<any> {
+    const token = localStorage.getItem('token');
+    if (!token) return throwError(() => new Error('NO_TOKEN'));
+    if (!payload?.motivo || !payload?.nueva_fecha_solucion) {
+      return throwError(() => new Error('Falta motivo o nueva_fecha_solucion'));
+    }
+    const headers = this.authJsonHeaders();
+    return this.http.post<any>(`${this.apiUrl}/cierre/rechazar-jefe/${id}`, payload, { headers, withCredentials: true });
+  }
+
+  cierreAceptarCreador(id: number): Observable<any> {
+    const token = localStorage.getItem('token');
+    if (!token) return throwError(() => new Error('NO_TOKEN'));
+    const headers = this.authJsonHeaders();
+    return this.http.post<any>(`${this.apiUrl}/cierre/aceptar-creador/${id}`, {}, { headers, withCredentials: true });
+  }
+
+  cierreRechazarCreador(id: number, payload: CierreRechazoPayload): Observable<any> {
+    const token = localStorage.getItem('token');
+    if (!token) return throwError(() => new Error('NO_TOKEN'));
+    if (!payload?.motivo || !payload?.nueva_fecha_solucion) {
+      return throwError(() => new Error('Falta motivo o nueva_fecha_solucion'));
+    }
+    const headers = this.authJsonHeaders();
+    return this.http.post<any>(`${this.apiUrl}/cierre/rechazar-creador/${id}`, payload, { headers, withCredentials: true });
+  }
+
+  // ── Notificaciones ──────────────────────────
+  notifyTicket(
+    id: number,
+    payload: { emails?: string[]; channels?: string[]; mensaje?: string }
+  ): Observable<any> {
+    const token = localStorage.getItem('token');
+    if (!token) return throwError(() => new Error('NO_TOKEN'));
+    const headers = this.authJsonHeaders();
+    return this.http.post<any>(`${this.apiUrl}/notify/${id}`, payload || {}, { headers, withCredentials: true });
+  }
 }
