@@ -77,6 +77,9 @@ def _es_jefe_depto(user: UserORM, ticket: Ticket) -> bool:
 def _es_creador(user: UserORM, ticket: Ticket) -> bool:
     return (user.username or "").lower() == (ticket.username or "").lower()
 
+def _es_gerente_regional(user: UserORM) -> bool:
+    return (user.rol or "").upper() == "GERENTE_REGIONAL"
+
 
 
 # ─────────────────────────────────────────────────────────────
@@ -106,14 +109,15 @@ def create_ticket():
         clasificacion_id    = data.get("clasificacion_id")
         sucursal_id_destino = data.get("sucursal_id_destino")
 
-        # 👇 NUEVO: flag gate RRHH (compatibilidad: default False)
         requiere_aprobacion = bool(data.get("requiere_aprobacion", False))
-        estado_inicial = 'pendiente' if requiere_aprobacion else 'abierto'
+        # Opción B: NO usamos 'pendiente' como estado principal; siempre nace 'abierto'
+        estado_inicial = 'abierto'
         aprobacion_estado = 'pendiente' if requiere_aprobacion else None
         # campos de metadatos iniciales de aprobacion
         aprobador_username = None
         aprobacion_fecha = None
         aprobacion_comentario = None
+
 
         try:
             departamento_id = int(departamento_id)
@@ -179,7 +183,7 @@ def create_ticket():
                     html = render_ticket_html(nuevo_ticket.to_dict())
                     subject = build_subject(nuevo_ticket, "Creado")
                     current_app.logger.info("📧 create_ticket #%s → notificados=%s", nuevo_ticket.id, recipients)
-                    _send_email_maybe_async(recipients, subject, html)
+                    send_email_html(recipients, subject, html)
         except Exception as e:
             try:
                 current_app.logger.exception("⚠️ No se pudo enviar correo de creación: %s", e)
@@ -1378,8 +1382,9 @@ def rrhh_aprobar(ticket_id):
 
     # Solo gerente general/regional (trátalo como corporativo/admin) o el username designado como aprobador
     comentario = (request.json or {}).get("comentario")
-    if not (_es_admin_o_corporativo(user) or user.username == t.aprobador_username):
+    if not (_es_admin_o_corporativo(user) or _es_gerente_regional(user) or user.username == t.aprobador_username):
         return jsonify({"mensaje":"No autorizado"}), 403
+
 
     t.aprobar_rrhh(user.username, comentario)
     return jsonify({"mensaje":"Aprobado por RRHH/gerencia"}), 200
@@ -1399,8 +1404,9 @@ def rrhh_rechazar(ticket_id):
         return jsonify({"mensaje":"Ticket no encontrado"}), 404
 
     comentario = (request.json or {}).get("comentario")
-    if not (_es_admin_o_corporativo(user) or user.username == t.aprobador_username):
+    if not (_es_admin_o_corporativo(user) or _es_gerente_regional(user) or user.username == t.aprobador_username):
         return jsonify({"mensaje":"No autorizado"}), 403
+
 
     t.rechazar_rrhh(user.username, comentario)
     return jsonify({"mensaje":"Rechazado por RRHH/gerencia"}), 200

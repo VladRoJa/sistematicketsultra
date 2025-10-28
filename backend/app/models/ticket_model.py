@@ -63,7 +63,7 @@ class Ticket(db.Model):
 
     # ──────────────── NUEVO: Flujo de pre-aprobación RRHH ────────────────
     # Si el ticket es de RRHH, primero debe aprobar el gerente general/regional.
-    requiere_aprobacion = db.Column(db.Boolean, default=False)  # banderita de entrada
+    requiere_aprobacion = db.Column(db.Boolean, default=True)  # banderita de entrada
     aprobacion_estado = db.Column(db.String(20))                # 'pendiente' | 'aprobado' | 'rechazado' | None
     aprobacion_fecha = db.Column(db.DateTime(timezone=True))
     aprobador_username = db.Column(db.String(50))

@@ -674,12 +674,17 @@
         <!-- Acciones -->
         <td>
           <div *ngIf="puedeEditarTickets">
-            <button
-              *ngIf="ticket.estado?.trim().toLowerCase() === 'abierto'"
-              mat-button color="accent"
-              (click)="cambiarEstadoEnProgreso(ticket)">
-              <mat-icon>play_circle</mat-icon> En progreso
-            </button>
+          <button
+            *ngIf="ticket.estado?.trim().toLowerCase() === 'abierto'"
+            mat-button
+            color="accent"
+            (click)="cambiarEstadoEnProgreso(ticket)"
+            [disabled]="ticket.requiere_aprobacion && (ticket.aprobacion_estado || 'pendiente') !== 'aprobado'"
+            matTooltip="Requiere aprobación de gerencia"
+            [matTooltipDisabled]="!(ticket.requiere_aprobacion && (ticket.aprobacion_estado || 'pendiente') !== 'aprobado')"
+          >
+            <mat-icon>play_circle</mat-icon> En progreso
+          </button>
             <button
               *ngIf="ticket.estado?.trim().toLowerCase() === 'en progreso'"
               class="boton-estado boton-finalizar"
@@ -687,7 +692,43 @@
               <mat-icon>play_circle</mat-icon> Finalizar
             </button>
           </div>
-        </td>
+          
+          <!-- ====== Aprobación RRHH (visible solo si aplica) ====== -->
+          <div class="acciones-rrhh" *ngIf="ticket.requiere_aprobacion">
+
+            <!-- Badge de estado de aprobación -->
+            <mat-chip-list>
+              <mat-chip [disabled]="true" selected>
+                Aprobación: {{ ticket.aprobacion_estado || 'pendiente' }}
+              </mat-chip>
+            </mat-chip-list>
+
+            <!-- Botones para GERENTE_REGIONAL / Admin / Aprobador designado -->
+            <div
+              *ngIf="isPendienteRRHH(ticket) && canAprobarRRHH(ticket)"
+              class="acciones-rrhh-botones"
+              style="display:flex; gap:.5rem; margin-top:.25rem;"
+            >
+              <button
+                mat-stroked-button
+                color="primary"
+                (click)="onRrhhAprobar(ticket)"
+                aria-label="Aprobar RRHH">
+                Aprobar
+              </button>
+
+              <button
+                mat-stroked-button
+                color="warn"
+                (click)="onRrhhRechazar(ticket)"
+                aria-label="Rechazar RRHH">
+                Rechazar
+              </button>
+            </div>
+          </div>
+
+              </td>
+
 
         <!-- Fecha Solución -->
         <td>
