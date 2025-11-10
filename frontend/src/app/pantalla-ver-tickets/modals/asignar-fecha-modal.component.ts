@@ -105,7 +105,9 @@ export class AsignarFechaModalComponent {
 
   // Mostrar mini-form solo en:
   // - Mantenimiento → Aparatos
+  // - Mantenimiento → Edificio
   // - Sistemas → Dispositivos
+  // - Sistemas → Reportes
   // - Fallback: Sistemas y hay inventario seleccionado
   get mostrarRefaccionJefe(): boolean {
     const t = this._ticket;
@@ -115,16 +117,24 @@ export class AsignarFechaModalComponent {
     const cat = this.getCatNombreNorm();
 
     const esMantAparatos      = dep === 'mantenimiento' && cat === 'aparatos';
+    const esMantEdificio      = dep === 'mantenimiento' && (cat === 'edificio' || cat === 'edificios');
     const esSistDispositivos  = dep === 'sistemas'      && cat === 'dispositivos';
+    const esSistReportes      = dep === 'sistemas'      && (cat === 'reportes' || cat === 'reporte');
     const esSistPorInventario = dep === 'sistemas'      && !!t?.inventario;
 
-    const show = esMantAparatos || esSistDispositivos || esSistPorInventario;
+    const show = (
+      esMantAparatos     ||
+      esMantEdificio     ||
+      esSistDispositivos ||
+      esSistReportes     ||
+      esSistPorInventario
+    );
 
-    // Debug para validar detección finalmente limpia de “Edificio”
-    console.debug('[modal] dep/cat detectados:', { dep, cat, show, raw: t });
+
 
     return show;
   }
+
 
   guardar(): void {
     if (!this.fechaSeleccionada || !this.motivo.trim()) {

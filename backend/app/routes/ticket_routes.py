@@ -1446,14 +1446,25 @@ def set_compromiso(ticket_id):
     ruta_norm = [_norm(x) for x in ruta_clas]
 
     es_aparatos      = "aparatos" in ruta_norm
+    es_edificio      = "edificio" in ruta_norm or "edificios" in ruta_norm
     es_dispositivos  = "dispositivos" in ruta_norm
-    tiene_inventario = bool(t.aparato_id or t.categoria_inventario_id)
+    es_reportes      = "reportes" in ruta_norm or "reporte" in ruta_norm
+    tiene_inventario = bool(t.aparato_id or getattr(t, "categoria_inventario_id", None))
 
-    combo_jefe_ok = (es_mantenimiento and es_aparatos) or (es_sistemas and (es_dispositivos or tiene_inventario))
+    # ✅ Combinaciones válidas para que el Jefe defina refacción en /compromiso
+    #    - Cualquier ticket de Mantenimiento
+    #    - Tickets de Sistemas en Dispositivos / Reportes / con inventario
+    combo_jefe_ok = (
+        es_mantenimiento or
+        (es_sistemas and (es_dispositivos or es_reportes or tiene_inventario))
+    )
 
     # Si van a modificar campos de refacción aquí, debe ser una de las combinaciones válidas
     if (necesita_ref is not None or desc_ref is not None) and not combo_jefe_ok:
-        return jsonify({"mensaje": "Refacción solo se define aquí para Mantenimiento→Aparatos o Sistemas→Dispositivos"}), 400
+        return jsonify({
+            "mensaje": "Refacción solo se define aquí para tickets de Mantenimiento o Sistemas (Dispositivos/Reportes/inventario)."
+        }), 400
+
 
     try:
         # Compromiso de fecha (no cierra el ticket)
