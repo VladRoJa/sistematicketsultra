@@ -103,37 +103,22 @@ export class AsignarFechaModalComponent {
   })();
 
 
-  // Mostrar mini-form solo en:
-  // - Mantenimiento → Aparatos
-  // - Mantenimiento → Edificio
-  // - Sistemas → Dispositivos
-  // - Sistemas → Reportes
-  // - Fallback: Sistemas y hay inventario seleccionado
+  // Mostrar mini-form de refacción para TODO ticket de:
+  // - Departamento: Mantenimiento
+  // - Departamento: Sistemas
   get mostrarRefaccionJefe(): boolean {
     const t = this._ticket;
     if (!t) return false;
 
-    const dep = this.getDepNombreNorm();
-    const cat = this.getCatNombreNorm();
+    const dep = this.getDepNombreNorm(); // ya normaliza a minúsculas y sin acentos
 
-    const esMantAparatos      = dep === 'mantenimiento' && cat === 'aparatos';
-    const esMantEdificio      = dep === 'mantenimiento' && (cat === 'edificio' || cat === 'edificios');
-    const esSistDispositivos  = dep === 'sistemas'      && cat === 'dispositivos';
-    const esSistReportes      = dep === 'sistemas'      && (cat === 'reportes' || cat === 'reporte');
-    const esSistPorInventario = dep === 'sistemas'      && !!t?.inventario;
+    const show = dep === 'mantenimiento' || dep === 'sistemas';
 
-    const show = (
-      esMantAparatos     ||
-      esMantEdificio     ||
-      esSistDispositivos ||
-      esSistReportes     ||
-      esSistPorInventario
-    );
-
-
+    console.debug('[modal] dep detectado (simple):', { dep, show, raw: t });
 
     return show;
   }
+
 
 
   guardar(): void {

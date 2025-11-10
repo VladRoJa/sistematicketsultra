@@ -1434,36 +1434,24 @@ def set_compromiso(ticket_id):
     desc_ref       = data.get("descripcion_refaccion")
 
     # ── Validación de combinación permitida para refacción definida por Jefe
-    def _norm(s): return (s or "").strip().lower()
+    #    Ahora dejamos que cualquier ticket de Mantenimiento o Sistemas
+    #    pueda definir refacción desde este endpoint.
+    def _norm(s): 
+        return (s or "").strip().lower()
+
     dep_nom = _norm(t.departamento.nombre if t.departamento else "")
     es_mantenimiento = dep_nom == "mantenimiento"
     es_sistemas      = dep_nom == "sistemas"
 
-    try:
-        ruta_clas = t._obtener_jerarquia_clasificacion() or []
-    except Exception:
-        ruta_clas = []
-    ruta_norm = [_norm(x) for x in ruta_clas]
+    # ✅ Cualquier ticket de estos departamentos puede tocar refacción
+    combo_jefe_ok = es_mantenimiento or es_sistemas
 
-    es_aparatos      = "aparatos" in ruta_norm
-    es_edificio      = "edificio" in ruta_norm or "edificios" in ruta_norm
-    es_dispositivos  = "dispositivos" in ruta_norm
-    es_reportes      = "reportes" in ruta_norm or "reporte" in ruta_norm
-    tiene_inventario = bool(t.aparato_id or getattr(t, "categoria_inventario_id", None))
-
-    # ✅ Combinaciones válidas para que el Jefe defina refacción en /compromiso
-    #    - Cualquier ticket de Mantenimiento
-    #    - Tickets de Sistemas en Dispositivos / Reportes / con inventario
-    combo_jefe_ok = (
-        es_mantenimiento or
-        (es_sistemas and (es_dispositivos or es_reportes or tiene_inventario))
-    )
-
-    # Si van a modificar campos de refacción aquí, debe ser una de las combinaciones válidas
+    # Si otro departamento intenta mandar campos de refacción, lo bloqueamos
     if (necesita_ref is not None or desc_ref is not None) and not combo_jefe_ok:
         return jsonify({
-            "mensaje": "Refacción solo se define aquí para tickets de Mantenimiento o Sistemas (Dispositivos/Reportes/inventario)."
+            "mensaje": "Refacción solo se define aquí para tickets de Mantenimiento o Sistemas."
         }), 400
+
 
 
     try:
