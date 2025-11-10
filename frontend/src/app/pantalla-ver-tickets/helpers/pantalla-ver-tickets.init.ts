@@ -46,7 +46,7 @@ export async function obtenerUsuarioAutenticado(component: PantallaVerTicketsCom
 export function cargarTickets(component: PantallaVerTicketsComponent): void {
   component.loading = true;
 
-  component.ticketService.getTickets(100, 0).subscribe({
+  component.ticketService.getTickets(1000, 0).subscribe({
     next: (data: ApiResponse) => {
       // 1. Procesamos los tickets, agregando referencias a nivel2, nivel3 y nivel4
           const ticketsProcesados = data.tickets.map(ticket => {
