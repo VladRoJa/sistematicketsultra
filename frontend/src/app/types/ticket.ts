@@ -127,3 +127,9 @@ export interface CierreRechazoPayload {
   /** ISO */
   nueva_fecha_solucion: string;
 }
+
+
+export interface CierreJefePayload {
+  costo_solucion?: number | null;
+  notas_cierre?: string | null;
+}

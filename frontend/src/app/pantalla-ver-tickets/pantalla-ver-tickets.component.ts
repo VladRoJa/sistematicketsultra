@@ -45,6 +45,12 @@ import { CatalogoService } from '../services/catalogo.service';
 import { mostrarAlertaToast } from '../utils/alertas';
 import { SucursalesService } from '../services/sucursales.service';
 import { EvidenciaPreviewComponent } from './modals/evidencia-preview.component';
+import { CierreDatosModalComponent, CierreDatosModalData } from './modals/cierre-datos-modal.component';
+
+
+
+import { CierreJefePayload } from 'src/app/types/ticket';
+
 
 
 
@@ -119,6 +125,8 @@ export interface Ticket {
   requiere_aprobacion?: boolean;
   aprobacion_estado?: 'pendiente' | 'aprobado' | 'rechazado' | null;
   estado_cierre?: 'pendiente_jefe' | 'pendiente_creador' | 'rechazado_por_jefe' | 'rechazado_por_creador' | null;
+  costo_solucion?: number | null;
+  notas_cierre?: string | null;
 
 
 
@@ -150,6 +158,7 @@ export interface ApiResponse {
     AsignarFechaModalComponent,
     MatTooltipModule,
     MatSelectModule,
+    CierreDatosModalComponent,
 
     
   ],
@@ -406,13 +415,15 @@ ngAfterViewInit(): void {
   exportarTickets() { TicketAcciones.exportarTickets(this); }
   cambiarEstado(ticket: Ticket, estado: "pendiente" | "en progreso" | "finalizado") {
     if (estado === 'finalizado') {
-      this.mostrarConfirmacion('¿Estás seguro de finalizar este ticket?', () => {
-        TicketAcciones.cambiarEstado(this, ticket, estado);
-      });
-    } else {
-      TicketAcciones.cambiarEstado(this, ticket, estado);
+      // Usa SIEMPRE el flujo nuevo con modal + cierreAprobarJefe
+      this.onFinalizar(ticket);
+      return;
     }
+
+    // Para los demás estados sigue igual
+    TicketAcciones.cambiarEstado(this, ticket, estado);
   }
+
   finalizar(ticket: Ticket) { TicketAcciones.finalizar(this, ticket); }
   mostrarConfirmacion(mensaje: string, accion: () => void) { TicketAcciones.mostrarConfirmacionAccion(this, mensaje, accion); } 
   toggleHistorial(ticketId: number) { TicketAcciones.alternarHistorial(this, ticketId); }
@@ -510,6 +521,70 @@ onRrhhRechazar(t: Ticket): void {
     }
   });
 }
+
+onFinalizar(t: Ticket): void {
+  if (!t || !t.id) return;
+
+  this.mostrarConfirmacion(
+    '¿Estás seguro de solicitar el cierre de este ticket? Quedará pendiente aprobación del jefe.',
+    () => {
+      this.ticketService.cierreSolicitar(t.id).subscribe({
+        next: () => {
+          try { mostrarAlertaToast?.('Cierre solicitado. Pendiente aprobación del jefe.', 'success'); } catch {}
+          // Parche rápido en memoria, opcional
+          t.estado_cierre = 'pendiente_jefe';
+          this.postAccionRefrescar();   // Recargar desde backend
+        },
+        error: (err) => {
+          console.error(err);
+          try { mostrarAlertaToast?.('No se pudo solicitar el cierre.', 'error'); } catch {}
+        }
+      });
+    }
+  );
+}
+
+tieneProcesoCierreActivo(t: Ticket): boolean {
+  const est = (t.estado_cierre || '').toString();
+  return est === 'pendiente_jefe' || est === 'pendiente_creador';
+}
+
+
+onCierreRechazarJefe(t: Ticket): void {
+  if (!t || !t.id) return;
+
+  const motivo = (prompt('Motivo del rechazo de cierre:') || '').trim();
+  if (!motivo) {
+    try { mostrarAlertaToast?.('Debes indicar un motivo.', 'error'); } catch {}
+    return;
+  }
+
+  // Puedes pedir fecha con un modal; aquí te hago uno simple: mañana 07:00
+  const base = t.fecha_solucion ? new Date(t.fecha_solucion) : new Date();
+  const nueva = new Date(
+    base.getFullYear(),
+    base.getMonth(),
+    base.getDate() + 1,
+    7, 0, 0
+  );
+
+  const payload = {
+    motivo,
+    nueva_fecha_solucion: nueva.toISOString(),
+  };
+
+  this.ticketService.cierreRechazarJefe(t.id, payload).subscribe({
+    next: () => {
+      try { mostrarAlertaToast?.('Cierre rechazado por jefe. Ticket reabierto.', 'success'); } catch {}
+      this.postAccionRefrescar();
+    },
+    error: (err) => {
+      console.error(err);
+      try { mostrarAlertaToast?.('No se pudo rechazar el cierre.', 'error'); } catch {}
+    }
+  });
+}
+
 
 
 /** Refrescar tabla/estado tras aprobar/rechazar */
@@ -1508,6 +1583,108 @@ necesitaRef(t: any): boolean {
 
   // Marcas típicas de “verdadero”
   return new Set(['true','1','si','sí','y','yes','x','✓','v']).has(s);
+}
+
+
+onCierreAprobarJefe(t: Ticket): void {
+  if (!t || !t.id) return;
+
+  // Modal para costo + notas, como ya tenías
+  const dialogRef = this.dialog.open(CierreDatosModalComponent, {
+    width: '420px',
+    data: {
+      costo_solucion: t.costo_solucion ?? null,
+      notas_cierre: t.notas_cierre ?? null,
+    } as CierreDatosModalData,
+  });
+
+  dialogRef.afterClosed().subscribe((datos: CierreDatosModalData | null | undefined) => {
+    if (!datos) return; // cancelado
+
+    this.ticketService.cierreAprobarJefe(t.id, datos).subscribe({
+      next: () => {
+        try { mostrarAlertaToast?.('Cierre aprobado por jefe. Pendiente confirmación del creador.', 'success'); } catch {}
+        // Parche en memoria para que la UI lo refleje enseguida
+        t.estado_cierre = 'pendiente_creador';
+        this.postAccionRefrescar();
+      },
+      error: (err) => {
+        console.error(err);
+        try { mostrarAlertaToast?.('No se pudo aprobar el cierre.', 'error'); } catch {}
+      }
+    });
+  });
+}
+
+
+
+/** ¿El usuario actual es el creador del ticket? */
+esCreador(t: Ticket): boolean {
+  const current = (this.user?.username || '').toString();
+  return (t.username || '').toString() === current;
+}
+
+onCierreAceptarCreador(t: Ticket): void {
+  if (!t || !t.id) return;
+  if (!this.esCreador(t)) {
+    try { mostrarAlertaToast?.('Sólo el creador puede aceptar el cierre.', 'error'); } catch {}
+    return;
+  }
+
+  this.mostrarConfirmacion(
+    '¿Confirmas que el problema quedó resuelto y deseas cerrar definitivamente el ticket?',
+    () => {
+      this.ticketService.cierreAceptarCreador(t.id).subscribe({
+        next: () => {
+          try { mostrarAlertaToast?.('Cierre confirmado. Ticket finalizado.', 'success'); } catch {}
+          this.postAccionRefrescar();
+        },
+        error: (err) => {
+          console.error(err);
+          try { mostrarAlertaToast?.('No se pudo aceptar el cierre.', 'error'); } catch {}
+        }
+      });
+    }
+  );
+}
+
+onCierreRechazarCreador(t: Ticket): void {
+  if (!t || !t.id) return;
+  if (!this.esCreador(t)) {
+    try { mostrarAlertaToast?.('Sólo el creador puede rechazar el cierre.', 'error'); } catch {}
+    return;
+  }
+
+  const motivo = (prompt('Motivo del rechazo del cierre:') || '').trim();
+  if (!motivo) {
+    try { mostrarAlertaToast?.('Debes indicar un motivo.', 'error'); } catch {}
+    return;
+  }
+
+  // Por simplicidad: usamos la fecha_solucion actual o “mañana 07:00”
+  const base = t.fecha_solucion ? new Date(t.fecha_solucion) : new Date();
+  const nueva = new Date(
+    base.getFullYear(),
+    base.getMonth(),
+    base.getDate() + 1,
+    7, 0, 0
+  );
+
+  const payload = {
+    motivo,
+    nueva_fecha_solucion: nueva.toISOString(),
+  };
+
+  this.ticketService.cierreRechazarCreador(t.id, payload).subscribe({
+    next: () => {
+      try { mostrarAlertaToast?.('Cierre rechazado. Ticket vuelve a en progreso.', 'success'); } catch {}
+      this.postAccionRefrescar();
+    },
+    error: (err) => {
+      console.error(err);
+      try { mostrarAlertaToast?.('No se pudo rechazar el cierre.', 'error'); } catch {}
+    }
+  });
 }
 
 

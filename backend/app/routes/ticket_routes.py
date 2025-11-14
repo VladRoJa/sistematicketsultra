@@ -1517,13 +1517,34 @@ def cierre_aprobar_jefe(ticket_id):
     user = UserORM.get_by_id(get_jwt_identity())
     t = Ticket.query.get(ticket_id)
     if not t:
-        return jsonify({"mensaje":"Ticket no encontrado"}), 404
+        return jsonify({"mensaje": "Ticket no encontrado"}), 404
 
     if not (_es_admin_o_corporativo(user) or _es_jefe_depto(user, t)):
-        return jsonify({"mensaje":"No autorizado"}), 403
+        return jsonify({"mensaje": "No autorizado"}), 403
 
+    # --- NUEVO: leer datos del cuerpo ---
+    data = request.get_json(silent=True) or {}
+    costo = data.get("costo_solucion")
+    notas = data.get("notas_cierre")
+
+    # Validar y asignar (solo si vienen)
+    if costo is not None:
+        try:
+            t.costo_solucion = float(costo)
+        except Exception:
+            return jsonify({"mensaje": "costo_solucion inválido"}), 400
+
+    if notas is not None:
+        t.notas_cierre = notas.strip() or None
+
+    # Mantener tu flujo normal
     t.aprobar_cierre_jefe()
-    return jsonify({"mensaje":"Aprobado por jefe (pendiente conformidad del creador)"}), 200
+
+    # Guardar cambios
+    db.session.commit()
+
+    return jsonify({"mensaje": "Aprobado por jefe (pendiente conformidad del creador)"}), 200
+
 
 
 

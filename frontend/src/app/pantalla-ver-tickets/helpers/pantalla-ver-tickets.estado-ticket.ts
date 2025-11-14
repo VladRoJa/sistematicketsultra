@@ -20,9 +20,21 @@ export function cambiarEstadoTicket(
   const token = localStorage.getItem("token");
   if (!token) { console.error("❌ No hay token disponible."); return; }
 
+  // ⛔ IMPORTANTE:
+  // Este helper ya NO debe hacer PUT cuando el estado sea "finalizado".
+  // El cierre completo se hace con /cierre/aprobar-jefe en el componente.
+  if (nuevoEstado === 'finalizado') {
+    console.warn(
+      'cambiarEstadoTicket no debe usarse para "finalizado". ' +
+      'Usa TicketAcciones.finalizar (que a su vez llama al endpoint de cierre).'
+    );
+    return;
+  }
+
   const headers = new HttpHeaders()
     .set("Authorization", `Bearer ${token}`)
     .set("Content-Type", "application/json");
+
 
   // Si es "en progreso" y no tiene fecha_solucion, abrir modal obligatorio
   if (nuevoEstado === 'en progreso' && !ticket.fecha_solucion) {
@@ -93,60 +105,29 @@ export function cambiarEstadoTicket(
 }
 
 /** Finalizar directamente un ticket */
+/** Finalizar directamente un ticket (solo parcheo en front).
+ *  El cambio real (estado, fecha_finalizado, costo, notas)
+ *  lo hace el endpoint /tickets/cierre/aprobar-jefe/:id
+ *  que llamas desde el componente (onFinalizar / onCierreAprobarJefe).
+ */
 export function finalizarTicket(
   component: PantallaVerTicketsComponent,
   ticket: Ticket
 ): void {
-  if (!component.usuarioEsAdmin && !component.usuarioEsEditorCorporativo) return;
-
-  component.mostrarConfirmacion(
-    `¿Estás seguro de marcar como FINALIZADO el ticket #${ticket.id}?`,
-    () => actualizarEstadoEnServidor(component, ticket, "finalizado", true)
-  );
-}
-
-/** Actualizar el estado del ticket en la base de datos */
-function actualizarEstadoEnServidor(
-  component: PantallaVerTicketsComponent,
-  ticket: Ticket,
-  nuevoEstado: "pendiente" | "en progreso" | "finalizado",
-  recargar: boolean = false
-): void {
-  const token = localStorage.getItem('token');
-  if (!token) return;
-
-  const headers = new HttpHeaders()
-    .set('Authorization', `Bearer ${token}`)
-    .set('Content-Type', 'application/json');
-
-  const updateData: any = { estado: nuevoEstado };
-  const fechaActual = new Date();
-  const fechaISO = fechaActual.toISOString();
-
-  if (nuevoEstado === "finalizado") {
-    updateData.fecha_finalizado = fechaISO;
+  // Si quieres, puedes limitar por rol (opcional)
+  if (!component.usuarioEsAdmin && !component.usuarioEsEditorCorporativo) {
+    return;
   }
 
-  if (nuevoEstado === "en progreso") {
-    updateData.fecha_en_progreso = fechaISO;
+  // Parche visual mínimo: asumimos que el backend ya marcó finalizado.
+  ticket.estado = 'finalizado';
+  if (!ticket.fecha_finalizado) {
+    ticket.fecha_finalizado = new Date().toISOString();
   }
 
-  component.http.put<{ mensaje: string; notificados?: string[] }>(
-    `${API_URL}/update/${ticket.id}`,
-    updateData,
-    { headers }
-  ).subscribe({
-    next: (res) => {
-      const lista = (res.notificados && res.notificados.length)
-        ? res.notificados.join(', ')
-        : '—';
-      mostrarAlertaToast(`✅ Ticket #${ticket.id} actualizado a '${nuevoEstado}'. Notificados: ${lista}`);
-      // 🧼 Mantengo el comportamiento: siempre recargar la tabla
-      cargarTickets(component);
-    },
-    error: (error) => {
-      console.error(`❌ Error actualizando el ticket #${ticket.id}:`, error);
-      mostrarAlertaErrorDesdeStatus(error.status);
-    },
-  });
+  // No hacemos PUT aquí. El componente ya está llamando a
+  // ticketService.cierreAprobarJefe(...) y luego a postAccionRefrescar().
 }
+
+
+

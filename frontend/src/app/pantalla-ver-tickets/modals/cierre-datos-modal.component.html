@@ -1,0 +1,32 @@
+<!-- frontend-angular/src/app/pantalla-ver-tickets/modals/cierre-datos-modal.component.html -->
+
+<h2 mat-dialog-title>Datos de cierre</h2>
+
+<mat-dialog-content>
+
+  <mat-form-field appearance="fill" class="w-100">
+    <mat-label>Costo de solución (opcional)</mat-label>
+    <input
+      matInput
+      type="text"
+      [(ngModel)]="costoSolucionStr"
+      placeholder="Ej: 1500.50"
+    />
+  </mat-form-field>
+
+  <mat-form-field appearance="fill" class="w-100">
+    <mat-label>Notas de cierre (opcional)</mat-label>
+    <textarea
+      matInput
+      rows="4"
+      [(ngModel)]="notasCierreStr" 
+      placeholder="Comentarios adicionales sobre el cierre"
+    ></textarea>
+  </mat-form-field>
+
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button (click)="cancelar()">Cancelar</button>
+  <button mat-raised-button color="primary" (click)="aceptar()">Aceptar</button>
+</mat-dialog-actions>

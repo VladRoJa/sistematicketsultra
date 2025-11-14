@@ -74,7 +74,14 @@ class Ticket(db.Model):
     # Si cualquiera rechaza, vuelve a “en progreso” con nueva fecha compromiso.
     estado_cierre = db.Column(db.String(30))  # 'pendiente_jefe'|'pendiente_creador'|'rechazado_por_jefe'|'rechazado_por_creador'|None
     motivo_rechazo_cierre = db.Column(db.Text)
-
+    
+    
+    
+    # ──────────────── NUEVO: Datos de cierre ────────────────
+    costo_solucion = db.Column(db.Numeric(12, 2), nullable=True)
+    notas_cierre = db.Column(db.Text, nullable=True)
+    
+    
     # ─── Relaciones ──────────────────────────────
     departamento = db.relationship('Departamento', backref='tickets', foreign_keys=[departamento_id])
     usuario = db.relationship('UserORM', foreign_keys=[username])
@@ -192,6 +199,8 @@ class Ticket(db.Model):
             # Doble check de cierre
             "estado_cierre": self.estado_cierre,
             "motivo_rechazo_cierre": self.motivo_rechazo_cierre,
+            "costo_solucion": float(self.costo_solucion) if self.costo_solucion is not None else None,
+            "notas_cierre": self.notas_cierre,
         }
 
     # ─── Métodos CRUD / helpers ───────────────────────────────────────

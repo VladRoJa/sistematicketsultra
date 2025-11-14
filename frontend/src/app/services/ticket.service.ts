@@ -3,7 +3,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
 import { environment } from 'src/environments/environment';
-import { TicketDTO, SetCompromisoPayload, CierreRechazoPayload } from 'src/app/types/ticket';
+import { TicketDTO, SetCompromisoPayload, CierreRechazoPayload, CierreJefePayload } from 'src/app/types/ticket';
 
 export interface TicketsResponse {
   mensaje: string;
@@ -141,6 +141,8 @@ export class TicketService {
     return this.http.post<any>(`${this.apiUrl}/rrhh/rechazar/${id}`, body, { headers, withCredentials: true });
   }
 
+
+
   // ── Doble check de cierre ───────────────────
   cierreSolicitar(id: number): Observable<any> {
     const token = localStorage.getItem('token');
@@ -149,11 +151,17 @@ export class TicketService {
     return this.http.post<any>(`${this.apiUrl}/cierre/solicitar/${id}`, {}, { headers, withCredentials: true });
   }
 
-  cierreAprobarJefe(id: number): Observable<any> {
+  cierreAprobarJefe(id: number, payload: CierreJefePayload = {}): Observable<any> {
     const token = localStorage.getItem('token');
     if (!token) return throwError(() => new Error('NO_TOKEN'));
+
     const headers = this.authJsonHeaders();
-    return this.http.post<any>(`${this.apiUrl}/cierre/aprobar-jefe/${id}`, {}, { headers, withCredentials: true });
+
+    return this.http.post<any>(
+      `${this.apiUrl}/cierre/aprobar-jefe/${id}`,
+      payload,
+      { headers, withCredentials: true }
+    );
   }
 
   cierreRechazarJefe(id: number, payload: CierreRechazoPayload): Observable<any> {
