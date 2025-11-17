@@ -347,8 +347,9 @@ class Ticket(db.Model):
     # Helpers de DOBLE CHECK DE CIERRE
     # ───────────────────────────────────────────────────────────
     def solicitar_cierre(self):
-        """El operador/jefe inicia proceso de cierre (pendiente aprobación del jefe)."""
-        self.estado_cierre = 'pendiente_jefe'
+        """El JEFE inicia proceso de cierre; queda pendiente conformidad del creador."""
+        # El ticket sigue en 'en progreso'; solo marcamos el flujo de cierre.
+        self.estado_cierre = 'pendiente_creador'
         db.session.commit()
 
     def aprobar_cierre_jefe(self):

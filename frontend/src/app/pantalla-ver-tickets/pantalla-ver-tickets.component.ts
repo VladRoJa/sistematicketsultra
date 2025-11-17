@@ -65,6 +65,7 @@ import {
 import { MatSelectModule } from '@angular/material/select';
 
 import { AuthService } from '../services/auth.service';
+import { DialogoConfirmacionComponent } from '../shared/dialogo-confirmacion/dialogo-confirmacion.component';
 
 
 
@@ -312,6 +313,7 @@ export class PantallaVerTicketsComponent implements OnInit {
   @ViewChild('triggerFiltroSubcategoria') triggerFiltroSubcategoria: any;
   @ViewChild('triggerFiltroDetalle') triggerFiltroDetalle: any;
   @ViewChild('triggerFiltroInventario') triggerFiltroInventario: any;
+  usuarioActual: string;
 
   constructor(
     public ticketService: TicketService,
@@ -358,14 +360,18 @@ ngAfterViewInit(): void {
 }
 
 
-  async ngOnInit() {
+async ngOnInit() {
 
-    await TicketInit.obtenerUsuarioAutenticado(this); 
-    await cargarDepartamentos(this);  
-    await this.cargarCatalogoCategorias();               
-    TicketInit.cargarTickets(this);
+  await TicketInit.obtenerUsuarioAutenticado(this); 
 
-    this.usuarioEsAdmin = (
+  // 👇 NUEVO: setear usuarioActual a partir de this.user
+  this.usuarioActual = (this.user?.username || '').trim().toUpperCase();
+
+  await cargarDepartamentos(this);  
+  await this.cargarCatalogoCategorias();               
+  TicketInit.cargarTickets(this);
+
+  this.usuarioEsAdmin = (
     this.user?.rol === 'ADMINISTRADOR' ||
     this.user?.sucursal_id === 1000 ||
     this.user?.sucursal_id === 100
@@ -377,28 +383,29 @@ ngAfterViewInit(): void {
   );
 
   this.sucursalesService.obtenerSucursales().subscribe({
-  next: (sucs) => {
-    this.listaSucursales = sucs || [];
-    this.sucursalIdNombreMap = {};
-    this.listaSucursales.forEach(s => {
-      this.sucursalIdNombreMap[s.sucursal_id] = s.sucursal;
-    });
+    next: (sucs) => {
+      this.listaSucursales = sucs || [];
+      this.sucursalIdNombreMap = {};
+      this.listaSucursales.forEach(s => {
+        this.sucursalIdNombreMap[s.sucursal_id] = s.sucursal;
+      });
     },
     error: (err) => console.error('Error al obtener sucursales:', err),
   });
 
-    // 🔁 Escuchar eventos de refresco desde el servicio
-    this.refrescoService.refrescarTabla$.subscribe(() => {
-      TicketInit.cargarTickets(this); // recargar los tickets
-    });
+  // 🔁 Escuchar eventos de refresco desde el servicio
+  this.refrescoService.refrescarTabla$.subscribe(() => {
+    TicketInit.cargarTickets(this); // recargar los tickets
+  });
 
-    console.log('Usuario:', this.user);
-    console.log('Editor corporativo:', this.usuarioEsEditorCorporativo);
+  console.log('Usuario:', this.user);
+  console.log('usuarioActual:', this.usuarioActual);
+  console.log('Editor corporativo:', this.usuarioEsEditorCorporativo);
 
-    this.changeDetectorRef.detectChanges();
+  this.changeDetectorRef.detectChanges();
 
-      (window as any).verTicketsComp = this;
-  }
+  (window as any).verTicketsComp = this;
+}
 
 
 
@@ -406,13 +413,19 @@ ngAfterViewInit(): void {
   exportarTickets() { TicketAcciones.exportarTickets(this); }
   cambiarEstado(ticket: Ticket, estado: "pendiente" | "en progreso" | "finalizado") {
     if (estado === 'finalizado') {
-      this.mostrarConfirmacion('¿Estás seguro de finalizar este ticket?', () => {
-        TicketAcciones.cambiarEstado(this, ticket, estado);
-      });
-    } else {
-      TicketAcciones.cambiarEstado(this, ticket, estado);
+      // Antes aquí se llamaba a TicketAcciones.cambiarEstado y pegaba al /update con estado=finalizado,
+      // lo que el backend bloquea con 400.
+      mostrarAlertaToast(
+        'Este ticket ya no se puede finalizar directamente. Usa el flujo de cierre (doble aprobación).',
+        'error'
+      );
+      return;
     }
+
+    // Para otros estados seguimos usando la lógica existente
+    TicketAcciones.cambiarEstado(this, ticket, estado);
   }
+
   finalizar(ticket: Ticket) { TicketAcciones.finalizar(this, ticket); }
   mostrarConfirmacion(mensaje: string, accion: () => void) { TicketAcciones.mostrarConfirmacionAccion(this, mensaje, accion); } 
   toggleHistorial(ticketId: number) { TicketAcciones.alternarHistorial(this, ticketId); }
@@ -1245,7 +1258,121 @@ const pluralMap: Record<string, string> = {
   this.refrescarPanelUnificado(campo);
 }
 
+abrirConfirmacion(titulo: string, mensaje: string): Promise<boolean> {
+  const dialogRef = this.dialog.open(DialogoConfirmacionComponent, {
+    width: '380px',
+    data: {
+      titulo,
+      mensaje,
+      textoAceptar: 'Aceptar',
+      textoCancelar: 'Cancelar'
+    }
+  });
 
+  return dialogRef.afterClosed().toPromise();
+}
+
+
+
+async solicitarCierre(ticket: Ticket) {
+  if (!ticket?.id) {
+    mostrarAlertaToast('Ticket inválido, no se puede solicitar cierre.', 'error');
+    return;
+  }
+
+  const ok = await this.abrirConfirmacion(
+    'Confirmar cierre',
+    `¿Seguro que deseas enviar el ticket #${ticket.id} a cierre (pendiente del creador)?`
+  );
+
+  if (!ok) return;
+
+  this.ticketService.cierreSolicitar(ticket.id).subscribe({
+    next: (resp) => {
+      mostrarAlertaToast(resp?.mensaje || 'Cierre solicitado.', 'success');
+      TicketInit.cargarTickets(this);
+    },
+    error: (err) => {
+      mostrarAlertaToast(err?.error?.mensaje || 'Error al solicitar cierre', 'error');
+    }
+  });
+}
+
+
+
+async aceptarCierre(ticket: Ticket) {
+  const ok = await this.abrirConfirmacion(
+    'Aceptar cierre',
+    `¿Confirmas que el ticket #${ticket.id} fue resuelto correctamente?`
+  );
+
+  if (!ok) return;
+
+  this.ticketService.cierreAceptarCreador(ticket.id).subscribe({
+    next: (resp) => {
+      mostrarAlertaToast(resp?.mensaje || 'Cierre aceptado.', 'success');
+      TicketInit.cargarTickets(this);
+    },
+    error: (err) => {
+      mostrarAlertaToast(err?.error?.mensaje || 'No se pudo aceptar el cierre.', 'error');
+    }
+  });
+}
+
+
+
+async rechazarCierre(ticket: Ticket) {
+  const ok = await this.abrirConfirmacion(
+    'Rechazar cierre',
+    `¿Seguro que deseas rechazar el cierre del ticket #${ticket.id}?`
+  );
+
+  if (!ok) return;
+
+  const payload = {
+    motivo: 'Rechazado por el creador',
+    nueva_fecha_solucion: new Date().toISOString()
+  };
+
+  this.ticketService.cierreRechazarCreador(ticket.id, payload).subscribe({
+    next: (resp) => {
+      mostrarAlertaToast(resp?.mensaje || 'Cierre rechazado.', 'success');
+      TicketInit.cargarTickets(this);
+    },
+    error: (err) => {
+      mostrarAlertaToast(err?.error?.mensaje || 'No se pudo rechazar el cierre.', 'error');
+    }
+  });
+}
+
+
+esCreador(ticket: Ticket): boolean {
+  return !!ticket && ticket.username === this.usuarioActual;
+}
+
+esPendienteCierreCreador(ticket: Ticket): boolean {
+  return !!ticket &&
+         ticket.estado_cierre === 'pendiente_creador' &&
+         this.esCreador(ticket);
+}
+
+puedeMostrarBotonEnProgreso(ticket: Ticket): boolean {
+  const estado = (ticket?.estado || '').trim().toLowerCase();
+  return this.puedeEditarTickets && estado === 'abierto';
+}
+
+puedeMostrarBotonFinalizar(ticket: Ticket): boolean {
+  const estado = (ticket?.estado || '').trim().toLowerCase();
+  return this.puedeEditarTickets &&
+         estado === 'en progreso' &&
+         ticket?.estado_cierre !== 'pendiente_creador';
+}
+
+puedeMostrarBotonesCreador(ticket: Ticket): boolean {
+  return !!ticket &&
+         ticket.estado_cierre === 'pendiente_creador' &&
+         ticket.username === this.usuarioActual;
+}
 
 
 

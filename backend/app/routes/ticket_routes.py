@@ -1501,7 +1501,7 @@ def cierre_solicitar(ticket_id):
         return jsonify({"mensaje":"No autorizado"}), 403
 
     t.solicitar_cierre()
-    return jsonify({"mensaje":"Cierre solicitado (pendiente aprobación del jefe)"}), 200
+    return jsonify({"mensaje":"Cierre solicitado (pendiente aprobación del creador)"}), 200
 
 
 
