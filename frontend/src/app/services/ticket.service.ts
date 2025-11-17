@@ -142,12 +142,22 @@ export class TicketService {
   }
 
   // ── Doble check de cierre ───────────────────
-  cierreSolicitar(id: number): Observable<any> {
+  cierreSolicitar(
+    id: number,
+    payload: { costo_solucion: number | null; notas_cierre: string | null }
+  ): Observable<any> {
     const token = localStorage.getItem('token');
     if (!token) return throwError(() => new Error('NO_TOKEN'));
+
     const headers = this.authJsonHeaders();
-    return this.http.post<any>(`${this.apiUrl}/cierre/solicitar/${id}`, {}, { headers, withCredentials: true });
+
+    return this.http.post<any>(
+      `${this.apiUrl}/cierre/solicitar/${id}`,
+      payload,
+      { headers, withCredentials: true }
+    );
   }
+
 
   cierreAprobarJefe(id: number): Observable<any> {
     const token = localStorage.getItem('token');

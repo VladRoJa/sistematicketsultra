@@ -45,6 +45,7 @@ import { CatalogoService } from '../services/catalogo.service';
 import { mostrarAlertaToast } from '../utils/alertas';
 import { SucursalesService } from '../services/sucursales.service';
 import { EvidenciaPreviewComponent } from './modals/evidencia-preview.component';
+import { ModalCierreTicketComponent } from '../shared/modal-cierre-ticket/modal-cierre-ticket.component';
 
 
 
@@ -1276,18 +1277,36 @@ abrirConfirmacion(titulo: string, mensaje: string): Promise<boolean> {
 
 async solicitarCierre(ticket: Ticket) {
   if (!ticket?.id) {
-    mostrarAlertaToast('Ticket inválido, no se puede solicitar cierre.', 'error');
+    mostrarAlertaToast('Ticket inválido.', 'error');
     return;
   }
 
+  // 🔹 1. Abrir modal y esperar datos
+  const dialogRef = this.dialog.open(ModalCierreTicketComponent, {
+    width: '420px',
+    data: { ticketId: ticket.id }
+  });
+
+  const result = await dialogRef.afterClosed().toPromise();
+
+  if (!result) return; // usuario canceló
+
+  const { costo, notas } = result;
+
+  // 🔹 2. Confirmación secundaria (puedes omitir si quieres)
   const ok = await this.abrirConfirmacion(
     'Confirmar cierre',
-    `¿Seguro que deseas enviar el ticket #${ticket.id} a cierre (pendiente del creador)?`
+    `¿Seguro que deseas finalizar el ticket #${ticket.id}?\n\n` +
+    `Costo: ${costo ?? 0}\nNotas: ${notas || '(sin notas)'}`
   );
 
   if (!ok) return;
 
-  this.ticketService.cierreSolicitar(ticket.id).subscribe({
+  // 🔹 3. Llamar al backend
+  this.ticketService.cierreSolicitar(ticket.id, {
+    costo_solucion: costo,
+    notas_cierre: notas
+  }).subscribe({
     next: (resp) => {
       mostrarAlertaToast(resp?.mensaje || 'Cierre solicitado.', 'success');
       TicketInit.cargarTickets(this);
@@ -1297,6 +1316,7 @@ async solicitarCierre(ticket: Ticket) {
     }
   });
 }
+
 
 
 

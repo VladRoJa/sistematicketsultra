@@ -46,6 +46,10 @@ class Ticket(db.Model):
     necesita_refaccion = db.Column(db.Boolean, default=False)
     descripcion_refaccion = db.Column(db.Text)
     refaccion_definida_por_jefe = db.Column(db.Boolean, default=False)
+    
+    # Costos y notas de cierre
+    costo_solucion = db.Column(db.Numeric(10, 2))
+    notas_cierre = db.Column(db.Text)
 
     # Adjuntos / extras
     url_evidencia = db.Column(db.String(500))
@@ -192,6 +196,11 @@ class Ticket(db.Model):
             # Doble check de cierre
             "estado_cierre": self.estado_cierre,
             "motivo_rechazo_cierre": self.motivo_rechazo_cierre,
+            
+            # Costos y notas de cierre
+            "costo_solucion": float(self.costo_solucion) if self.costo_solucion is not None else None,
+            "notas_cierre": self.notas_cierre,
+            
         }
 
     # ─── Métodos CRUD / helpers ───────────────────────────────────────
@@ -347,10 +356,20 @@ class Ticket(db.Model):
     # Helpers de DOBLE CHECK DE CIERRE
     # ───────────────────────────────────────────────────────────
     def solicitar_cierre(self):
-        """El JEFE inicia proceso de cierre; queda pendiente conformidad del creador."""
-        # El ticket sigue en 'en progreso'; solo marcamos el flujo de cierre.
+        """El JEFE inicia proceso de cierre; queda pendiente conformidad del creador.
+
+        Aquí fijamos la fecha_finalizado como el momento en que el jefe considera
+        el ticket terminado, aunque todavía falte la conformidad del creador.
+        """
+        from datetime import datetime, timezone
+
         self.estado_cierre = 'pendiente_creador'
+        # Siempre fijamos la fecha de finalizado al momento del clic del jefe
+        self.fecha_finalizado = datetime.now(timezone.utc)
+
         db.session.commit()
+
+
 
     def aprobar_cierre_jefe(self):
         """Jefe valida y pasa a conformidad del creador."""
@@ -364,18 +383,32 @@ class Ticket(db.Model):
         self.estado_cierre = 'rechazado_por_jefe'
         self.motivo_rechazo_cierre = motivo
         self.estado = 'en progreso'
+
+        # Al reabrir, la fecha_finalizado ya no es válida
+        self.fecha_finalizado = None
+
         if nueva_fecha_compromiso:
             # Usamos fecha_solucion como 'compromiso'
             self.fecha_solucion = nueva_fecha_compromiso.astimezone(timezone.utc)
+
         db.session.commit()
+
 
     def aceptar_conformidad_creador(self):
         """El creador confirma el cierre y el ticket pasa a 'finalizado'."""
+        from datetime import datetime, timezone
+
         self.estado_cierre = None
         self.motivo_rechazo_cierre = None
         self.estado = 'finalizado'
-        self.fecha_finalizado = datetime.now(timezone.utc)
+
+        # Si el jefe ya fijó fecha_finalizado antes, la respetamos.
+        # Solo si viene vacío, la ponemos ahora.
+        if not self.fecha_finalizado:
+            self.fecha_finalizado = datetime.now(timezone.utc)
+
         db.session.commit()
+
 
     def rechazar_conformidad_creador(self, motivo: str = None, nueva_fecha_compromiso: datetime | None = None):
         """
@@ -384,6 +417,12 @@ class Ticket(db.Model):
         self.estado_cierre = 'rechazado_por_creador'
         self.motivo_rechazo_cierre = motivo
         self.estado = 'en progreso'
+
+        # Al reabrir por rechazo del creador, la fecha_finalizado deja de ser válida
+        self.fecha_finalizado = None
+
         if nueva_fecha_compromiso:
             self.fecha_solucion = nueva_fecha_compromiso.astimezone(timezone.utc)
+
         db.session.commit()
+

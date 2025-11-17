@@ -25,6 +25,8 @@ from app.utils.datetime_utils import format_datetime
 from app.models.sucursal_model import Sucursal
 import os, threading
 from app.utils.auth_utils import bloquea_lectores_globales
+from decimal import Decimal, InvalidOperation
+
 
 
 
@@ -646,6 +648,7 @@ def export_excel():
             "Fecha Finalizado", "Tiempo Solución", "Sucursal (destino)",
             "Departamento", "Categoría", "Subcategoria", "Detalle",
             "Problema Detectado", "Refacción", "Descripción Refacción",
+            "Costo solución", "Notas cierre",
         ]
         ws.append(headers)
 
@@ -724,6 +727,9 @@ def export_excel():
                 t.get("problema_detectado"),
                 "Sí" if t.get("necesita_refaccion") else "No",
                 t.get("descripcion_refaccion"),
+                ticket.costo_solucion,
+                ticket.notas_cierre, 
+                
             ]
             ws.append(row)
 
@@ -1482,8 +1488,9 @@ def set_compromiso(ticket_id):
         return jsonify({"mensaje": str(e)}), 400
 
 
+
 # ─────────────────────────────────────────────────────────────
-# RUTA: Solicitar cierre de ticket (inicia proceso de aprobación)
+# RUTA: Aprobar cierre de ticket (jefe de depto)
 # ─────────────────────────────────────────────────────────────
 
 
@@ -1500,31 +1507,31 @@ def cierre_solicitar(ticket_id):
     if not (_es_admin_o_corporativo(user) or _es_jefe_depto(user, t)):
         return jsonify({"mensaje":"No autorizado"}), 403
 
+    data = request.get_json() or {}
+    costo = data.get("costo_solucion")
+    notas = data.get("notas_cierre")
+
+    # Validar y asignar costo_solucion
+    if costo is not None:
+        try:
+            # lo convertimos a Decimal usando str para evitar issues con float
+            t.costo_solucion = Decimal(str(costo))
+        except (InvalidOperation, ValueError):
+            return jsonify({"mensaje": "costo_solucion inválido"}), 400
+    else:
+        t.costo_solucion = None
+
+    # Asignar notas de cierre (texto libre)
+    t.notas_cierre = (notas or None)
+
+    # Estado de cierre: queda pendiente aprobación del creador
     t.solicitar_cierre()
-    return jsonify({"mensaje":"Cierre solicitado (pendiente aprobación del creador)"}), 200
 
-
-
-# ─────────────────────────────────────────────────────────────
-# RUTA: Aprobar cierre de ticket (jefe de depto)
-# ─────────────────────────────────────────────────────────────
-
-
-
-@ticket_bp.route('/cierre/aprobar-jefe/<int:ticket_id>', methods=['POST'])
-@jwt_required()
-def cierre_aprobar_jefe(ticket_id):
-    user = UserORM.get_by_id(get_jwt_identity())
-    t = Ticket.query.get(ticket_id)
-    if not t:
-        return jsonify({"mensaje":"Ticket no encontrado"}), 404
-
-    if not (_es_admin_o_corporativo(user) or _es_jefe_depto(user, t)):
-        return jsonify({"mensaje":"No autorizado"}), 403
-
-    t.aprobar_cierre_jefe()
-    return jsonify({"mensaje":"Aprobado por jefe (pendiente conformidad del creador)"}), 200
-
+    return jsonify({
+        "mensaje": "Cierre solicitado (pendiente aprobación del creador)",
+        "costo_solucion": float(t.costo_solucion) if t.costo_solucion is not None else None,
+        "notas_cierre": t.notas_cierre
+    }), 200
 
 
 
