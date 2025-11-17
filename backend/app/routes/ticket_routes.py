@@ -634,7 +634,7 @@ def export_excel():
         # ===== Excel =====
         from io import BytesIO
         from openpyxl import Workbook
-        from openpyxl.styles import Font, PatternFill
+        from openpyxl.styles import Font, PatternFill, Alignment
 
         wb = Workbook()
         ws = wb.active
@@ -660,7 +660,44 @@ def export_excel():
             cell.font = header_font
             cell.fill = header_fill
 
+        # 🔹 Anchos fijos de columnas (para que no se hagan gigantes)
+        fixed_widths = {
+            "A": 8,    # ID
+            "B": 22,   # Aparato/Dispositivo
+            "C": 15,   # Código interno
+            "D": 45,   # Descripción
+            "E": 18,   # Usuario
+            "F": 14,   # Estado
+            "G": 12,   # Criticidad
+            "H": 20,   # Fecha creación
+            "I": 20,   # Fecha en progreso
+            "J": 14,   # Tiempo transcurrido
+            "K": 12,   # Deber ser
+            "L": 20,   # Fecha solución
+            "M": 25,   # Comentario 1
+            "N": 25,   # Comentario 2
+            "O": 25,   # Comentario 3
+            "P": 20,   # Fecha finalizado
+            "Q": 14,   # Tiempo solución
+            "R": 20,   # Sucursal
+            "S": 20,   # Depto
+            "T": 20,   # Categoría
+            "U": 20,   # Subcategoría
+            "V": 30,   # Detalle
+            "W": 30,   # Problema detectado
+            "X": 12,   # Refacción
+            "Y": 32,   # Descripción refacción
+            "Z": 14,   # Costo solución
+            "AA": 40,  # Notas cierre
+        }
+        for col, width in fixed_widths.items():
+            ws.column_dimensions[col].width = width
+
         excel_datetime_fmt = 'dd/mm/yyyy hh:mm AM/PM'
+
+        # 🔹 Columnas con wrap text
+        wrap_cols = ["D", "M", "N", "O", "V", "W", "Y", "AA"]
+        wrap_alignment = Alignment(wrap_text=True, vertical="top")
 
         for idx, ticket in enumerate(tickets, start=2):
             t = ticket.to_dict()
@@ -728,8 +765,7 @@ def export_excel():
                 "Sí" if t.get("necesita_refaccion") else "No",
                 t.get("descripcion_refaccion"),
                 ticket.costo_solucion,
-                ticket.notas_cierre, 
-                
+                ticket.notas_cierre,
             ]
             ws.append(row)
 
@@ -744,11 +780,12 @@ def export_excel():
                 if c.value:
                     c.number_format = excel_datetime_fmt
 
-        # auto-ancho + filtros
-        for column_cells in ws.columns:
-            max_len = max(len(str(cell.value or "")) for cell in column_cells)
-            ws.column_dimensions[column_cells[0].column_letter].width = max_len + 2
+            # Wrap text en columnas largas
+            for col in wrap_cols:
+                c = ws[f"{col}{idx}"]
+                c.alignment = wrap_alignment
 
+        # Filtros y freeze panes
         ws.freeze_panes = "A2"
         ws.auto_filter.ref = ws.dimensions
 
@@ -842,14 +879,14 @@ def export_excel():
         ws_kpi.append(["Backlog 8-14 días", backlog_aging_buckets["8-14"]])
         ws_kpi.append(["Backlog 15+ días", backlog_aging_buckets["15+"]])
 
-        from openpyxl.styles import Alignment
+        from openpyxl.styles import Alignment as KPIAlignment
         hdr = ws_kpi["A1":"B1"][0]
         for c in hdr:
             c.font = Font(bold=True, color="FFFFFF")
             c.fill = PatternFill("solid", fgColor="0073C2")
         ws_kpi["B6"].number_format = "0.00"
         for r in range(2, ws_kpi.max_row+1):
-            ws_kpi[f"B{r}"].alignment = Alignment(horizontal="right")
+            ws_kpi[f"B{r}"].alignment = KPIAlignment(horizontal="right")
         for col in ws_kpi.columns:
             mx = max(len(str(c.value or "")) for c in col)
             ws_kpi.column_dimensions[col[0].column_letter].width = mx + 2
@@ -927,26 +964,26 @@ def export_excel():
                     sla_incumplidos.append((tid, sucursal, depto, row[COL_CRITICIDAD-1], deber, tsol))
 
         # Helpers para escribir (título azul + tabla)
-        def write_section(ws, start_row, title, cols, rows):
-            ws.cell(row=start_row, column=1, value=title)
-            ws.merge_cells(start_row=start_row, start_column=1, end_row=start_row, end_column=len(cols))
-            tcell = ws.cell(row=start_row, column=1)
+        def write_section(ws_local, start_row, title, cols, rows_local):
+            ws_local.cell(row=start_row, column=1, value=title)
+            ws_local.merge_cells(start_row=start_row, start_column=1, end_row=start_row, end_column=len(cols))
+            tcell = ws_local.cell(row=start_row, column=1)
             tcell.font = Font(bold=True, color="FFFFFF")
             tcell.fill = PatternFill("solid", fgColor="0073C2")
             # Encabezados
             hdr_row = start_row + 1
             for j, h in enumerate(cols, start=1):
-                c = ws.cell(row=hdr_row, column=j, value=h)
+                c = ws_local.cell(row=hdr_row, column=j, value=h)
                 c.font = Font(bold=True)
             # Filas
             r = hdr_row + 1
-            for row_vals in rows:
+            for row_vals in rows_local:
                 for j, v in enumerate(row_vals, start=1):
-                    ws.cell(row=r, column=j, value=v)
+                    ws_local.cell(row=r, column=j, value=v)
                 r += 1
             return r + 1  # deja una línea en blanco
 
-        # Tablas ordenadas (👈 aquí está el fix del error: ordenar por ["total"])
+        # Tablas ordenadas
         suc_rows_sorted = sorted(sucursal_counts.items(),  key=lambda x: x[1]["total"], reverse=True)
         dep_rows_sorted = sorted(depto_counts.items(),     key=lambda x: x[1]["total"], reverse=True)
         cat_rows_sorted = sorted(categoria_counts.items(), key=lambda x: x[1]["total"], reverse=True)
@@ -996,7 +1033,7 @@ def export_excel():
         # ── Gráficas combinadas: Barras (Abiertos) + Líneas (En progreso / Finalizados)
         from openpyxl.chart import BarChart, LineChart, Reference
 
-        def add_combo_chart(ws, title, start_row_title, n_rows, anchor):
+        def add_combo_chart(ws_local, title, start_row_title, n_rows, anchor):
             """
             start_row_title: fila del título de la sección (línea azul)
             n_rows: número de filas de datos de la tabla
@@ -1009,10 +1046,10 @@ def export_excel():
             last_data  = first_data + n_rows - 1
 
             # Categorías: columna A (nombres)
-            cats = Reference(ws, min_col=1, min_row=first_data, max_row=last_data)
+            cats = Reference(ws_local, min_col=1, min_row=first_data, max_row=last_data)
 
             # Serie Barras -> Columna "Abiertos" (col 3) con header
-            data_abiertos = Reference(ws, min_col=3, min_row=header_row, max_col=3, max_row=last_data)
+            data_abiertos = Reference(ws_local, min_col=3, min_row=header_row, max_col=3, max_row=last_data)
             bar = BarChart()
             bar.title = title
             bar.y_axis.title = "Cantidad"
@@ -1020,7 +1057,7 @@ def export_excel():
             bar.set_categories(cats)
 
             # Series Línea -> "En progreso" (col 4) y "Finalizados" (col 5)
-            data_line = Reference(ws, min_col=4, min_row=header_row, max_col=5, max_row=last_data)
+            data_line = Reference(ws_local, min_col=4, min_row=header_row, max_col=5, max_row=last_data)
             line = LineChart()
             line.add_data(data_line, titles_from_data=True)
             line.set_categories(cats)
@@ -1035,7 +1072,7 @@ def export_excel():
             # Tamaño / posición
             bar.height = 12
             bar.width  = 22
-            ws.add_chart(bar, anchor)
+            ws_local.add_chart(bar, anchor)
 
         # Cantidades para rango de cada tabla
         add_combo_chart(ws_tab, "Tickets por Sucursal",    suc_start, len(suc_table), "H2")
