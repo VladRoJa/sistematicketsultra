@@ -49,70 +49,77 @@ export function cargarTickets(component: PantallaVerTicketsComponent): void {
   component.ticketService.getTickets(1000, 0).subscribe({
     next: (data: ApiResponse) => {
       // 1. Procesamos los tickets, agregando referencias a nivel2, nivel3 y nivel4
-          const ticketsProcesados = data.tickets.map(ticket => {
+      const ticketsProcesados = data.tickets.map(ticket => {
         const catNivel2 = buscarAncestroNivel(ticket.clasificacion_id, 2, component.categoriasCatalogo);
         const catNivel3 = buscarAncestroNivel(ticket.clasificacion_id, 3, component.categoriasCatalogo);
         const catNivel4 = buscarAncestroNivel(ticket.clasificacion_id, 4, component.categoriasCatalogo);
 
-      return {
-        ...ticket,
-
-        fecha_creacion_original: ticket.fecha_creacion,
-        fecha_finalizado_original: ticket.fecha_finalizado,
-
-        criticidad: ticket.criticidad || 1,
-        estado: (ticket.estado || '').toLowerCase().trim(),
-
-        // ✅ Usa el nombre que ya manda el backend si existe
-        departamento:
-          ticket.departamento_nombre
-          ?? component.departamentoService.obtenerNombrePorId(ticket.departamento_id)
-          ?? ticket.departamento,
-
-        fecha_creacion: ticket.fecha_creacion !== 'N/A' ? ticket.fecha_creacion : null,
-        fecha_en_progreso: ticket.fecha_en_progreso && ticket.fecha_en_progreso !== 'N/A' ? ticket.fecha_en_progreso : null,
-        fecha_finalizado: ticket.fecha_finalizado !== 'N/A' ? ticket.fecha_finalizado : null,
-
-        historial_fechas: typeof ticket.historial_fechas === 'string'
-          ? JSON.parse(ticket.historial_fechas)
-          : (ticket.historial_fechas || []),
-
-        // Seguimos guardando las referencias a los nodos del catálogo
-        categoria_nivel2: catNivel2,
-        subcategoria_nivel3: catNivel3,
-        detalle_nivel4: catNivel4,
-
-        // 👇 CAMBIO CLAVE: mantener texto (no IDs)
-        categoria:   ticket.categoria   ?? (catNivel2?.nombre ?? '—'),
-        subcategoria: ticket.subcategoria ?? (catNivel3?.nombre ?? '—'),
-        detalle:     ticket.detalle     ?? (catNivel4?.nombre ?? '—'),
-      };
-
-      });
-
-
-            // ---- Opciones de filtro DEPARTAMENTO ----
-      component.departamentosDisponibles = Array.from(
-        new Set(ticketsProcesados.map(t => `${t.departamento_id}|${t.departamento}`))
-      )
-      .filter(raw => raw.split('|')[0] && raw.split('|')[0] !== 'null') // Filtra vacíos/null
-      .map(raw => {
-        const [valor, etiqueta] = raw.split('|');
         return {
-          valor: Number(valor),
-          etiqueta: etiqueta || valor,
-          seleccionado: true
+          ...ticket,
+
+          fecha_creacion_original: ticket.fecha_creacion,
+          fecha_finalizado_original: ticket.fecha_finalizado,
+
+          criticidad: ticket.criticidad || 1,
+          estado: (ticket.estado || '').toLowerCase().trim(),
+
+          // ✅ Usa el nombre que ya manda el backend si existe
+          departamento:
+            ticket.departamento_nombre
+            ?? component.departamentoService.obtenerNombrePorId(ticket.departamento_id)
+            ?? ticket.departamento,
+
+          fecha_creacion: ticket.fecha_creacion !== 'N/A' ? ticket.fecha_creacion : null,
+          fecha_en_progreso: ticket.fecha_en_progreso && ticket.fecha_en_progreso !== 'N/A' ? ticket.fecha_en_progreso : null,
+          fecha_finalizado: ticket.fecha_finalizado !== 'N/A' ? ticket.fecha_finalizado : null,
+
+          historial_fechas: typeof ticket.historial_fechas === 'string'
+            ? JSON.parse(ticket.historial_fechas)
+            : (ticket.historial_fechas || []),
+
+          // Seguimos guardando las referencias a los nodos del catálogo
+          categoria_nivel2: catNivel2,
+          subcategoria_nivel3: catNivel3,
+          detalle_nivel4: catNivel4,
+
+          // 👇 CAMBIO CLAVE: mantener texto (no IDs)
+          categoria:    ticket.categoria    ?? (catNivel2?.nombre ?? '—'),
+          subcategoria: ticket.subcategoria ?? (catNivel3?.nombre ?? '—'),
+          detalle:      ticket.detalle      ?? (catNivel4?.nombre ?? '—'),
         };
       });
+
+      // 🔹 Guardamos SIEMPRE el universo completo
+      component.ticketsCompletos = [...ticketsProcesados];
+      component.tickets          = [...ticketsProcesados];
+
+      // 🔹 Base que se usará para mostrar/filtrar en la tabla
+      let base = [...ticketsProcesados];
+      if (component.ocultarFinalizados) {
+        base = base.filter(t => (t.estado || '').toLowerCase() !== 'finalizado');
+      }
+
+      // ---- Opciones de filtro DEPARTAMENTO ----
+      component.departamentosDisponibles = Array.from(
+        new Set(base.map(t => `${t.departamento_id}|${t.departamento}`))
+      )
+        .filter(raw => raw.split('|')[0] && raw.split('|')[0] !== 'null') // Filtra vacíos/null
+        .map(raw => {
+          const [valor, etiqueta] = raw.split('|');
+          return {
+            valor: Number(valor),
+            etiqueta: etiqueta || valor,
+            seleccionado: true
+          };
+        });
       component.departamentosFiltrados = [...component.departamentosDisponibles];
       component.temporalSeleccionados['departamento'] = [...component.departamentosDisponibles];
 
-
       // --- FILTROS POR CATÁLOGO ---
-      // IDs usados por los tickets
-      const idsNivel2 = Array.from(new Set(ticketsProcesados.map(t => t.categoria_nivel2?.id).filter(Boolean)));
-      const idsNivel3 = Array.from(new Set(ticketsProcesados.map(t => t.subcategoria_nivel3?.id).filter(Boolean)));
-      const idsNivel4 = Array.from(new Set(ticketsProcesados.map(t => t.detalle_nivel4?.id).filter(Boolean)));
+      // IDs usados por los tickets (sobre base o sobre todos; aquí dejo base para que coincida con lo visible)
+      const idsNivel2 = Array.from(new Set(base.map(t => t.categoria_nivel2?.id).filter(Boolean)));
+      const idsNivel3 = Array.from(new Set(base.map(t => t.subcategoria_nivel3?.id).filter(Boolean)));
+      const idsNivel4 = Array.from(new Set(base.map(t => t.detalle_nivel4?.id).filter(Boolean)));
 
       // Catálogo nivel 2 (categoría)
       component.categoriasDisponibles = component.categoriasCatalogo
@@ -139,84 +146,87 @@ export function cargarTickets(component: PantallaVerTicketsComponent): void {
           seleccionado: true,
         }));
 
+      component.categoriasFiltradas    = [...component.categoriasDisponibles];
+      component.subcategoriasFiltradas = [...component.subcategoriasDisponibles];
+      component.detallesFiltrados      = [...component.detallesDisponibles];
+      if (!component.temporalSeleccionados['categoria'])    component.temporalSeleccionados['categoria']    = [];
+      if (!component.temporalSeleccionados['subcategoria'])  component.temporalSeleccionados['subcategoria'] = [];
+      if (!component.temporalSeleccionados['detalle'])       component.temporalSeleccionados['detalle']      = [];
 
-        component.categoriasFiltradas = [...component.categoriasDisponibles];
-        component.subcategoriasFiltradas = [...component.subcategoriasDisponibles];
-        component.detallesFiltrados = [...component.detallesDisponibles];
-        if (!component.temporalSeleccionados['categoria']) component.temporalSeleccionados['categoria'] = [];
-        if (!component.temporalSeleccionados['subcategoria']) component.temporalSeleccionados['subcategoria'] = [];
-        if (!component.temporalSeleccionados['detalle']) component.temporalSeleccionados['detalle'] = [];
-
-
-
-
-      // El resto igual que antes
-      component.ticketsCompletos = [...ticketsProcesados];
-      component.tickets = [...ticketsProcesados];
-      component.filteredTickets = [...ticketsProcesados];
-      component.filteredTickets = component.filteredTickets.map(t => {
+      // 🔹 filteredTickets parte de la BASE (ya sin finalizados si está activo el flag)
+      component.filteredTickets = base.map(t => {
         const id = (t as any).sucursal_id_destino ?? (t as any).sucursal_id;
         return {
           ...t,
           sucursal: component.sucursalIdNombreMap[id] || (id != null ? String(id) : '—')
         };
       });
+
       component.usuariosDisponibles = extraerUnicosPorCampo(component.filteredTickets, 'username').map(valor => ({
         valor,
         seleccionado: true
       }));
       component.usuariosFiltrados = [...component.usuariosDisponibles];
-      if (!component.temporalSeleccionados['username']) component.temporalSeleccionados['username'] = [...component.usuariosDisponibles];
+      if (!component.temporalSeleccionados['username']) {
+        component.temporalSeleccionados['username'] = [...component.usuariosDisponibles];
+      }
+
       component.estadosDisponibles = extraerUnicosPorCampo(component.filteredTickets, 'estado').map(valor => ({
-          valor,
-          seleccionado: true
-        }));
+        valor,
+        seleccionado: true
+      }));
       component.estadosFiltrados = [...component.estadosDisponibles];
-      if (!component.temporalSeleccionados['estado']) component.temporalSeleccionados['estado'] = [...component.estadosDisponibles];
+      if (!component.temporalSeleccionados['estado']) {
+        component.temporalSeleccionados['estado'] = [...component.estadosDisponibles];
+      }
+
       component.criticidadesDisponibles = extraerUnicosPorCampo(component.filteredTickets, 'criticidad').map(valor => ({
-          valor,
-          seleccionado: true
-          }));
+        valor,
+        seleccionado: true
+      }));
       component.criticidadesFiltradas = [...component.criticidadesDisponibles];
-      if (!component.temporalSeleccionados['criticidad']) component.temporalSeleccionados['criticidad'] = [...component.criticidadesDisponibles];
+      if (!component.temporalSeleccionados['criticidad']) {
+        component.temporalSeleccionados['criticidad'] = [...component.criticidadesDisponibles];
+      }
+
       component.descripcionesDisponibles = extraerUnicosPorCampo(component.filteredTickets, 'descripcion').map(valor => ({
         valor,
         etiqueta: valor,
         seleccionado: true
       }));
       component.descripcionesFiltradas = [...component.descripcionesDisponibles];
-      if (!component.temporalSeleccionados['descripcion']) component.temporalSeleccionados['descripcion'] = [...component.descripcionesDisponibles];
-        const nombresUnicos = Array.from(
-          new Set(component.filteredTickets.map(t => t.inventario?.nombre || '—'))
-        );
+      if (!component.temporalSeleccionados['descripcion']) {
+        component.temporalSeleccionados['descripcion'] = [...component.descripcionesDisponibles];
+      }
 
-        component.inventariosDisponibles = nombresUnicos.map(nombre => ({
-          valor: nombre,
-          etiqueta: nombre,
-          seleccionado: true
-        }));
+      const nombresUnicos = Array.from(
+        new Set(component.filteredTickets.map(t => t.inventario?.nombre || '—'))
+      );
+
+      component.inventariosDisponibles = nombresUnicos.map(nombre => ({
+        valor: nombre,
+        etiqueta: nombre,
+        seleccionado: true
+      }));
 
       component.inventariosFiltrados = [...component.inventariosDisponibles];
-      if (!component.temporalSeleccionados['inventario']) component.temporalSeleccionados['inventario'] = [...component.inventariosDisponibles];
+      if (!component.temporalSeleccionados['inventario']) {
+        component.temporalSeleccionados['inventario'] = [...component.inventariosDisponibles];
+      }
 
-  
-
+      // 🔹 Paginación sobre la BASE filtrada
       component.page = 1;
-      component.totalTickets = ticketsProcesados.length;
+      component.totalTickets    = base.length;
       component.totalPagesCount = Math.ceil(component.totalTickets / component.itemsPerPage);
-
       actualizarVisibleTickets(component);
 
-
-
-      component.categoriasFiltradas = [...component.categoriasDisponibles];
+      component.categoriasFiltradas    = [...component.categoriasDisponibles];
       component.subcategoriasFiltradas = [...component.subcategoriasDisponibles];
-      component.detallesFiltrados = [...component.detallesDisponibles];
+      component.detallesFiltrados      = [...component.detallesDisponibles];
 
-      component.temporalSeleccionados['categoria'] = [...component.categoriasDisponibles];
+      component.temporalSeleccionados['categoria']    = [...component.categoriasDisponibles];
       component.temporalSeleccionados['subcategoria'] = [...component.subcategoriasDisponibles];
-      component.temporalSeleccionados['detalle'] = [...component.detallesDisponibles];
-
+      component.temporalSeleccionados['detalle']      = [...component.detallesDisponibles];
 
       regenerarFiltrosFiltradosDesdeTickets(
         component.filteredTickets,
@@ -234,15 +244,15 @@ export function cargarTickets(component: PantallaVerTicketsComponent): void {
       );
 
       // Sincroniza filtrados iniciales
-      component.categoriasFiltradas = [...component.categoriasDisponibles];
+      component.categoriasFiltradas    = [...component.categoriasDisponibles];
       component.subcategoriasFiltradas = [...component.subcategoriasDisponibles];
-      component.detallesFiltrados = [...component.detallesDisponibles];
+      component.detallesFiltrados      = [...component.detallesDisponibles];
       component.descripcionesFiltradas = [...component.descripcionesDisponibles];
-      component.usuariosFiltrados = [...component.usuariosDisponibles];
-      component.estadosFiltrados = [...component.estadosDisponibles];
-      component.criticidadesFiltradas = [...component.criticidadesDisponibles];
+      component.usuariosFiltrados      = [...component.usuariosDisponibles];
+      component.estadosFiltrados       = [...component.estadosDisponibles];
+      component.criticidadesFiltradas  = [...component.criticidadesDisponibles];
       component.departamentosFiltrados = [...component.departamentosDisponibles];
-      component.inventariosFiltrados = [...component.inventariosDisponibles];
+      component.inventariosFiltrados   = [...component.inventariosDisponibles];
 
       component.changeDetectorRef.detectChanges();
       component.loading = false;
@@ -253,6 +263,7 @@ export function cargarTickets(component: PantallaVerTicketsComponent): void {
     }
   });
 }
+
 
 
 

@@ -187,6 +187,7 @@ export class PantallaVerTicketsComponent implements OnInit {
   categoriasCatalogo: { id: number, nombre: string, parent_id: number, nivel: number }[] = [];
   sucursalIdNombreMap: Record<number, string> = {};
   listaSucursales: any[] = [];
+  ocultarFinalizados: boolean = true; 
 
 
   // Temporales
@@ -1539,6 +1540,14 @@ toggleFiltros(): void {
    this.filtroUnificado.textoBusqueda = '';
 }
 
+toggleOcultarFinalizados(): void {
+  // cambia el estado del switch
+  this.ocultarFinalizados = !this.ocultarFinalizados;
+
+  // por ahora, cada vez que cambie recargamos la tabla
+  // (si quieres después hacemos que respete filtros ya aplicados)
+  TicketInit.cargarTickets(this);
+}
 
 private construirOpcionesSubcategoria(origen: 'all' | 'filtered' = 'all') {
   const base = origen === 'filtered' ? (this.filteredTickets || []) : (this.ticketsCompletos || []);

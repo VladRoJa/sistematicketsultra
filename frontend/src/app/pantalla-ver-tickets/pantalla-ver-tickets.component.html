@@ -2,11 +2,28 @@
 <div class="table-container" *ngIf="!loading"     [style.--desc-col-width]="'420px'"
      [style.--table-min-width]="'2486px'">
 
-  <div style="display:flex; justify-content:flex-end; margin:6px 0;">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin:6px 0;">
+
+    <!-- 🔹 Nuevo botón (Izquierda) -->
+    <button
+      mat-stroked-button
+      color="primary"
+      (click)="toggleOcultarFinalizados()"
+      style="display:flex; align-items:center; gap:6px;"
+    >
+      <mat-icon>
+        {{ ocultarFinalizados ? 'visibility_off' : 'visibility' }}
+      </mat-icon>
+      {{ ocultarFinalizados ? 'Mostrar finalizados' : 'Ocultar finalizados' }}
+    </button>
+
+    <!-- 🔹 Botón de filtros (Derecha) -->
     <button mat-stroked-button (click)="toggleFiltros()">
       {{ mostrarFiltros ? 'Ocultar filtros' : 'Mostrar filtros' }}
     </button>
+
   </div>
+
 
   <div class="filtro-unificado-wrapper" *ngIf="mostrarFiltros">
     <!-- Columna 1: Select -->
