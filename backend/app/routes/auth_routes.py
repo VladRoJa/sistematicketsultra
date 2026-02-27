@@ -47,7 +47,8 @@ def login():
                         "id": user.id,
                         "username": user.username,
                         "rol": user.rol,
-                        "sucursal_id": user.sucursal_id
+                        "sucursal_id": user.sucursal_id,
+                        "sucursales_ids": user.sucursales_ids
                     }
                 }), 200
             else:
@@ -102,7 +103,8 @@ def session_info():
                 "id": user.id,
                 "username": user.username,
                 "rol": user.rol,
-                "sucursal_id": user.sucursal_id
+                "sucursal_id": user.sucursal_id,
+                "sucursales_ids": user.sucursales_ids
             }
         })
         response.headers['Access-Control-Allow-Origin'] = origin
