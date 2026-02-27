@@ -1,6 +1,7 @@
 # app/models/user_model.py
 
 from werkzeug.security import check_password_hash
+from sqlalchemy import text
 from app.extensions import db
 
 # ─────────────────────────────────────────────────────────────
@@ -115,6 +116,16 @@ class UserORM(db.Model):
         Normalmente: Gerente General (o el rol que definas).
         """
         return self.es_gerente_general() or self.es_admin()
+
+    # ─── Sucursales asignadas (M:N) ─────────────────────────
+    @property
+    def sucursales_ids(self) -> list[int]:
+        """IDs de sucursales asignadas al usuario (tabla usuario_sucursal)."""
+        rows = db.session.execute(
+            text("SELECT sucursal_id FROM usuario_sucursal WHERE user_id = :uid"),
+            {"uid": self.id},
+        ).fetchall()
+        return [r[0] for r in rows]
 
     def __repr__(self):
         return f"<User {self.username}>"
