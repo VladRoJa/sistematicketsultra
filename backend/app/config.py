@@ -11,7 +11,7 @@ app_env = os.getenv("APP_ENV", "local")
 env_file = ".env.local" if app_env == "local" else ".env.docker"
 
 load_dotenv(env_file)
-print(f"🔧 APP_ENV={app_env} | .env cargado: {env_file}")
+print(f" APP_ENV={app_env} | .env cargado: {env_file}")
 
 # 🚨 Validar claves secretas obligatorias
 SECRET_KEY = os.environ.get('SECRET_KEY')
@@ -37,7 +37,7 @@ class Config:
     SQLALCHEMY_DATABASE_URI = os.getenv('SQLALCHEMY_DATABASE_URI')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
-    print("🔧 URI en config.py:", SQLALCHEMY_DATABASE_URI)
+    print(" URI en config.py:", SQLALCHEMY_DATABASE_URI)
 
     # CORS
     CORS_ORIGINS = [
@@ -86,5 +86,5 @@ class Config:
     UPLOADS_PUBLIC_PATH = os.getenv('UPLOADS_PUBLIC_PATH', '/uploads/reportes')
     MAX_UPLOAD_SIZE_MB  = int(os.getenv('MAX_UPLOAD_SIZE_MB', '10'))
 
-    print(f"🧩 STORAGE_BACKEND={STORAGE_BACKEND} | LOCAL_UPLOAD_DIR={LOCAL_UPLOAD_DIR}")
+    print(f" STORAGE_BACKEND={STORAGE_BACKEND} | LOCAL_UPLOAD_DIR={LOCAL_UPLOAD_DIR}")
 
