@@ -14,3 +14,7 @@ __pycache__/
 .env*
 # Logs
 *.log
+
+# Local-only
+RUNBOOK.local.md
+.continue/
