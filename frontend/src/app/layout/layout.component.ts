@@ -45,6 +45,7 @@ export class LayoutComponent implements OnInit, AfterViewInit {
   timeoutSubmenu: any;
   ocultarTimeout: any;
   menuItems: any[] = [];
+  publi
 
   private apiUrl = `${environment.apiUrl}/tickets`;
 
@@ -111,11 +112,18 @@ ngOnInit(): void {
       ]
     },
     {
-      label: 'Asistencia',
-      path: '/asistencia/registrar',
+          label: 'Asistencia',
+          path: '/asistencia/registrar',
+          submenu: [
+            { label: 'Registrar Asistencia', path: '/asistencia/registrar' },
+            { label: 'Reportes', path: '/asistencia/reportes' }
+          ]
+        },
+        {
+      label: 'Permisos',
+      path: '/admin-usuarios-sucursales/1',
       submenu: [
-        { label: 'Registrar Asistencia', path: '/asistencia/registrar' },
-        { label: 'Reportes', path: '/asistencia/reportes' }
+        { label: 'Sucursales por usuario', path: '/admin-usuarios-sucursales/1' },
       ]
     }
   ];
