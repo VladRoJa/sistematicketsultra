@@ -4,8 +4,14 @@
 <h2>Admin: Sucursales por usuario</h2>
 
 <div *ngIf="loading">Cargando...</div>
-<div *ngIf="errorMsg" style="color: red;">{{ errorMsg }}</div>
-<div *ngIf="okMsg" style="color: green;">{{ okMsg }}</div>
+
+<div *ngIf="errorMsg" style="color: red; margin: 8px 0;">
+  {{ errorMsg }}
+</div>
+
+<div *ngIf="okMsg" style="color: green; margin: 8px 0;">
+  {{ okMsg }}
+</div>
 
 <hr />
 
@@ -24,4 +30,6 @@
   </li>
 </ul>
 
-<button type="button" (click)="aplicar()">Aplicar</button>
+<button type="button" (click)="aplicar()" [disabled]="loading">
+  Aplicar
+</button>
