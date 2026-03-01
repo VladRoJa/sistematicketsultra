@@ -104,7 +104,7 @@ setSession(token: string, user: any, redirigir: boolean = true) {
   
     const headers = new HttpHeaders().set("Authorization", `Bearer ${token}`);
   
-    return this.http.get<any>(`${this.apiUrl}/session-info`, { headers }).pipe(
+    return this.http.get<any>(`${environment.apiUrl}/session-info`, { headers }).pipe(
       tap(response => {
         if (response?.user) {
           console.log("📌 Usuario obtenido de la API:", response.user);
