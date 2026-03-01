@@ -58,6 +58,13 @@ export const routes: Routes = [
         loadComponent: () => import('./inventario/carga-masiva/pantalla-carga-masiva.component')
           .then(m => m.PantallaCargaMasivaComponent)
       },
+            {
+        path: 'admin-usuarios-sucursales',
+        canActivate: [AdminGuard],
+        loadComponent: () =>
+          import('./pages/admin-usuarios-sucursales/admin-usuarios-sucursales.component')
+            .then(m => m.AdminUsuariosSucursalesComponent),
+      },
       {
         path: 'admin-usuarios-sucursales/:userId',
         canActivate: [AdminGuard],
