@@ -123,7 +123,7 @@ ngOnInit(): void {
       label: 'Permisos',
       path: '/admin-usuarios-sucursales/1',
       submenu: [
-        { label: 'Sucursales por usuario', path: '/admin-usuarios-sucursales/1' },
+        { label: 'Sucursales por usuario', path: '/admin-usuarios-sucursales' },
       ]
     }
   ];
