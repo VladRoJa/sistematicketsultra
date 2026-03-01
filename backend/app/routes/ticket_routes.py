@@ -566,6 +566,7 @@ def export_excel():
         SLA_DIAS_BY_CRIT = {1: 14, 2: 7, 3: 5, 4: 2, 5: 1}
 
         def to_local_excel(dt):
+            """Convierte datetime a hora local (naive) para Excel."""
             if not dt:
                 return None
             try:
@@ -588,6 +589,7 @@ def export_excel():
                 return 0.0
 
         def ultimos_tres_motivos(ticket, dict_ticket):
+            """Extrae hasta 3 motivos/comentarios del historial (compatibilidad)."""
             motivos = []
             rel = None
             for attr in ("historial_fechas_solucion", "historial_fechas", "cambios_fecha_solucion"):
@@ -598,9 +600,7 @@ def export_excel():
                 try:
                     registros = sorted(
                         list(rel),
-                        key=lambda r: _to_ts_safe(
-                            getattr(r, "fecha_cambio", None) or getattr(r, "fecha", None)
-                        ),
+                        key=lambda r: _to_ts_safe(getattr(r, "fecha_cambio", None) or getattr(r, "fecha", None)),
                         reverse=True
                     )
                     for r in registros:
@@ -635,14 +635,17 @@ def export_excel():
         from io import BytesIO
         from openpyxl import Workbook
         from openpyxl.styles import Font, PatternFill, Alignment
+        from openpyxl.utils import get_column_letter
 
         wb = Workbook()
         ws = wb.active
         ws.title = "Tickets"
 
+        # 🔥 Headers con nuevo estado por_validar + subestado cierre
         headers = [
             "ID", "Aparato/Dispositivo", "Código Interno", "Descripción", "Usuario",
-            "Estado", "Criticidad", "Fecha Creación", "Fecha En Progreso",
+            "Estado", "Estado Cierre", "Días por validar",
+            "Criticidad", "Fecha Creación", "Fecha En Progreso",
             "Tiempo Transcurrido", "Deber ser", "Fecha Solución",
             "Comentario 1", "Comentario 2", "Comentario 3",
             "Fecha Finalizado", "Tiempo Solución", "Sucursal (destino)",
@@ -660,44 +663,52 @@ def export_excel():
             cell.font = header_font
             cell.fill = header_fill
 
-        # 🔹 Anchos fijos de columnas (para que no se hagan gigantes)
+        # 🔹 Anchos fijos de columnas
         fixed_widths = {
-            "A": 8,    # ID
-            "B": 22,   # Aparato/Dispositivo
-            "C": 15,   # Código interno
-            "D": 45,   # Descripción
-            "E": 18,   # Usuario
+            "A": 8,
+            "B": 22,
+            "C": 15,
+            "D": 45,
+            "E": 18,
             "F": 14,   # Estado
-            "G": 12,   # Criticidad
-            "H": 20,   # Fecha creación
-            "I": 20,   # Fecha en progreso
-            "J": 14,   # Tiempo transcurrido
-            "K": 12,   # Deber ser
-            "L": 20,   # Fecha solución
-            "M": 25,   # Comentario 1
-            "N": 25,   # Comentario 2
-            "O": 25,   # Comentario 3
-            "P": 20,   # Fecha finalizado
-            "Q": 14,   # Tiempo solución
-            "R": 20,   # Sucursal
-            "S": 20,   # Depto
-            "T": 20,   # Categoría
-            "U": 20,   # Subcategoría
-            "V": 30,   # Detalle
-            "W": 30,   # Problema detectado
-            "X": 12,   # Refacción
-            "Y": 32,   # Descripción refacción
-            "Z": 14,   # Costo solución
-            "AA": 40,  # Notas cierre
+            "G": 18,   # Estado Cierre
+            "H": 14,   # Días por validar
+            "I": 12,   # Criticidad
+            "J": 20,   # Fecha creación
+            "K": 20,   # Fecha en progreso
+            "L": 14,   # Tiempo transcurrido
+            "M": 12,   # Deber ser
+            "N": 20,   # Fecha solución
+            "O": 25,
+            "P": 25,
+            "Q": 25,
+            "R": 20,   # Fecha finalizado
+            "S": 14,   # Tiempo solución
+            "T": 20,   # Sucursal
+            "U": 20,   # Depto
+            "V": 20,   # Categoría
+            "W": 20,   # Subcategoría
+            "X": 30,   # Detalle
+            "Y": 30,   # Problema detectado
+            "Z": 12,   # Refacción
+            "AA": 32,  # Desc refacción
+            "AB": 14,  # Costo
+            "AC": 40,  # Notas
         }
         for col, width in fixed_widths.items():
             ws.column_dimensions[col].width = width
 
         excel_datetime_fmt = 'dd/mm/yyyy hh:mm AM/PM'
 
-        # 🔹 Columnas con wrap text
-        wrap_cols = ["D", "M", "N", "O", "V", "W", "Y", "AA"]
+        # 🔹 Wrap text
+        wrap_cols = ["D", "O", "P", "Q", "X", "Y", "AA", "AC"]  # ajustado a nuevas letras
         wrap_alignment = Alignment(wrap_text=True, vertical="top")
+
+        # Para hoja "Detenidos"
+        detenidos_rows = []
+
+        # Para hoja "DataQuality"
+        dq_rows = []
 
         for idx, ticket in enumerate(tickets, start=2):
             t = ticket.to_dict()
@@ -725,18 +736,31 @@ def export_excel():
             f_sol_dt  = to_local_excel(ticket.fecha_solucion)
             f_fin_dt  = to_local_excel(ticket.fecha_finalizado)
 
-            # Para cálculos en días
+            # Para cálculos
             f_crea_d = f_crea_dt.date() if f_crea_dt else None
+            f_prog_d = f_prog_dt.date() if f_prog_dt else None
             f_fin_d  = f_fin_dt.date() if f_fin_dt else None
 
             tiempo_trans = (hoy_local - f_crea_d).days if f_crea_d else ""
             deber_ser    = SLA_DIAS_BY_CRIT.get(ticket.criticidad, "")
             comentario1, comentario2, comentario3 = ultimos_tres_motivos(ticket, t)
-            tiempo_sol   = (f_fin_d - f_crea_d).days if (f_crea_d and f_fin_d) else "N/A"
+
+            tiempo_sol = (f_fin_d - f_crea_d).days if (f_crea_d and f_fin_d) else "N/A"
 
             categoria_txt    = t.get("categoria")    or "—"
             subcategoria_txt = t.get("subcategoria") or "—"
             detalle_txt      = t.get("detalle")      or "—"
+
+            # Estado y sub-estado
+            estado_txt = (t.get("estado") or "").strip()
+            estado_cierre_txt = (t.get("estado_cierre") or "").strip() if isinstance(t.get("estado_cierre"), str) else (ticket.estado_cierre or None)
+
+            # “Por validar” aging (días desde solicitud de cierre)
+            dias_por_validar = ""
+            if estado_txt == "por_validar":
+                # usamos fecha_finalizado como “fecha solicitud cierre”
+                if f_fin_d:
+                    dias_por_validar = max(0, (hoy_local - f_fin_d).days)
 
             row = [
                 t.get("id"),
@@ -744,27 +768,36 @@ def export_excel():
                 codigo_interno,
                 t.get("descripcion"),
                 t.get("username"),
-                t.get("estado"),
+
+                estado_txt,
+                estado_cierre_txt or "—",
+                dias_por_validar,
+
                 t.get("criticidad"),
-                f_crea_dt,     # 8
-                f_prog_dt,     # 9
-                tiempo_trans,  # 10
-                deber_ser,     # 11
-                f_sol_dt,      # 12
-                comentario1,   # 13
-                comentario2,   # 14
-                comentario3,   # 15
-                f_fin_dt,      # 16
-                tiempo_sol,    # 17
+                f_crea_dt,
+                f_prog_dt,
+
+                tiempo_trans,
+                deber_ser,
+                f_sol_dt,
+
+                comentario1,
+                comentario2,
+                comentario3,
+
+                f_fin_dt,
+                tiempo_sol,
                 sucursal_nombre_dest,
+
                 departamento_txt,
                 categoria_txt,
                 subcategoria_txt,
                 detalle_txt,
+
                 t.get("problema_detectado"),
                 "Sí" if t.get("necesita_refaccion") else "No",
                 t.get("descripcion_refaccion"),
-                ticket.costo_solucion,
+                float(ticket.costo_solucion) if ticket.costo_solucion is not None else None,
                 ticket.notas_cierre,
             ]
             ws.append(row)
@@ -774,42 +807,85 @@ def export_excel():
                 for cell in ws[idx]:
                     cell.fill = alt_fill
 
-            # Formato de fecha/hora
-            for col in (8, 9, 12, 16):
+            # Formato fechas: J=10, K=11, N=14, R=18
+            for col in (10, 11, 14, 18):
                 c = ws.cell(row=idx, column=col)
                 if c.value:
                     c.number_format = excel_datetime_fmt
 
-            # Wrap text en columnas largas
+            # Wrap text
             for col in wrap_cols:
                 c = ws[f"{col}{idx}"]
                 c.alignment = wrap_alignment
+
+            # Acumular hoja "Detenidos"
+            if estado_txt == "por_validar":
+                detenidos_rows.append((
+                    t.get("id"),
+                    sucursal_nombre_dest,
+                    departamento_txt,
+                    t.get("criticidad"),
+                    t.get("username"),
+                    f_fin_dt,
+                    dias_por_validar if dias_por_validar != "" else None,
+                    float(ticket.costo_solucion) if ticket.costo_solucion is not None else None,
+                    ticket.notas_cierre or None,
+                ))
+
+            # Acumular DataQuality (fechas inconsistentes)
+            #  - En progreso antes que creación
+            #  - Finalizado antes que creación
+            #  - Tiempo solución negativo
+            dq_flags = []
+            if f_crea_dt and f_prog_dt and f_prog_dt < f_crea_dt:
+                dq_flags.append("fecha_en_progreso < fecha_creacion")
+            if f_crea_dt and f_fin_dt and f_fin_dt < f_crea_dt:
+                dq_flags.append("fecha_finalizado < fecha_creacion")
+            if isinstance(tiempo_sol, (int, float)) and tiempo_sol < 0:
+                dq_flags.append("tiempo_solucion_negativo")
+
+            if dq_flags:
+                dq_rows.append((
+                    t.get("id"),
+                    estado_txt,
+                    sucursal_nombre_dest,
+                    departamento_txt,
+                    t.get("username"),
+                    f_crea_dt,
+                    f_prog_dt,
+                    f_fin_dt,
+                    "; ".join(dq_flags),
+                ))
 
         # Filtros y freeze panes
         ws.freeze_panes = "A2"
         ws.auto_filter.ref = ws.dimensions
 
         # ─────────────────────────────────────────────────────────────
-        # Hoja de KPI (siempre) — formato “limpio” y con nuevas métricas
+        # Hoja KPI
         # ─────────────────────────────────────────────────────────────
         ws_kpi = wb.create_sheet(title="KPI")
 
-        # Índices (1-based) según 'headers'
+        # Índices (1-based)
         COL_ESTADO         = headers.index("Estado") + 1
         COL_DEBER          = headers.index("Deber ser") + 1
         COL_T_SOL          = headers.index("Tiempo Solución") + 1
         COL_FECHA_CREACION = headers.index("Fecha Creación") + 1
         COL_CRITICIDAD     = headers.index("Criticidad") + 1
+        COL_DIAS_VALIDAR   = headers.index("Días por validar") + 1
 
-        total = abiertos = en_progreso = finalizados = 0
+        total = abiertos = en_progreso = por_validar = finalizados = 0
         cumplidos_tiempo = 0
 
         # Métricas extra
         tiempos_solucion_dias = []
         abiertos_criticos = 0
         backlog_aging_buckets = {"0-2": 0, "3-7": 0, "8-14": 0, "15+": 0}
-        sum_edad_abiertos = 0
-        count_abiertos = 0
+        sum_edad_backlog = 0
+        count_backlog = 0
+
+        dias_por_validar_list = []
+        tickets_en_riesgo = 0
 
         for row in ws.iter_rows(min_row=2, values_only=True):
             if not row or row[0] is None:
@@ -817,10 +893,11 @@ def export_excel():
             total += 1
 
             estado = (row[COL_ESTADO-1] or "").strip().lower()
-            deber = row[COL_DEBER-1]
-            tsol = row[COL_T_SOL-1]
-            crit = row[COL_CRITICIDAD-1]
+            deber  = row[COL_DEBER-1]
+            tsol   = row[COL_T_SOL-1]
+            crit   = row[COL_CRITICIDAD-1]
             f_crea = row[COL_FECHA_CREACION-1]
+            dv     = row[COL_DIAS_VALIDAR-1]
 
             if estado == "finalizado":
                 finalizados += 1
@@ -828,71 +905,87 @@ def export_excel():
                     tiempos_solucion_dias.append(tsol)
                     if isinstance(deber, (int, float)) and deber > 0 and tsol <= deber:
                         cumplidos_tiempo += 1
+
             elif estado == "en progreso":
                 en_progreso += 1
-                if isinstance(crit, (int, float)) and crit >= 4:
-                    abiertos_criticos += 1
-                if f_crea:
-                    edad = (hoy_local - f_crea.date()).days
-                    edad = max(0, edad)
-                    sum_edad_abiertos += edad
-                    count_abiertos += 1
-                    if   edad <= 2:  backlog_aging_buckets["0-2"]  += 1
-                    elif edad <= 7:  backlog_aging_buckets["3-7"]  += 1
-                    elif edad <= 14: backlog_aging_buckets["8-14"] += 1
-                    else:            backlog_aging_buckets["15+"]  += 1
+
+            elif estado == "por_validar":
+                por_validar += 1
+                if isinstance(dv, (int, float)):
+                    dias_por_validar_list.append(dv)
+
             else:
                 abiertos += 1
+
+            # Backlog = abierto + en progreso + por_validar
+            if estado in ("abierto", "en progreso", "por_validar"):
                 if isinstance(crit, (int, float)) and crit >= 4:
                     abiertos_criticos += 1
-                if f_crea:
+
+                if f_crea and hasattr(f_crea, "date"):
                     edad = (hoy_local - f_crea.date()).days
                     edad = max(0, edad)
-                    sum_edad_abiertos += edad
-                    count_abiertos += 1
+
+                    sum_edad_backlog += edad
+                    count_backlog += 1
+
                     if   edad <= 2:  backlog_aging_buckets["0-2"]  += 1
                     elif edad <= 7:  backlog_aging_buckets["3-7"]  += 1
                     elif edad <= 14: backlog_aging_buckets["8-14"] += 1
                     else:            backlog_aging_buckets["15+"]  += 1
 
-        pct_cumplidos = (cumplidos_tiempo / finalizados * 100.0) if finalizados else 0.0
-        prom_tiempo_sol = round(sum(tiempos_solucion_dias)/len(tiempos_solucion_dias), 2) if tiempos_solucion_dias else 0.0
+                    if isinstance(deber, (int, float)) and deber > 0 and edad > deber:
+                        tickets_en_riesgo += 1
+
         def _mediana(nums):
             if not nums: return 0.0
-            v = sorted(nums); n = len(v); m = n//2
-            return float(v[m]) if n % 2 else round((v[m-1]+v[m])/2.0, 2)
+            v = sorted(nums); n = len(v); m = n // 2
+            return float(v[m]) if (n % 2 == 1) else round((v[m-1] + v[m]) / 2.0, 2)
+
+        pct_cumplidos = (cumplidos_tiempo / finalizados * 100.0) if finalizados else 0.0
+        prom_tiempo_sol = round(sum(tiempos_solucion_dias)/len(tiempos_solucion_dias), 2) if tiempos_solucion_dias else 0.0
         mediana_tiempo_sol = _mediana(tiempos_solucion_dias)
-        edad_promedio_backlog = round(sum_edad_abiertos/count_abiertos, 2) if count_abiertos else 0.0
+
+        edad_promedio_backlog = round(sum_edad_backlog / count_backlog, 2) if count_backlog else 0.0
+        prom_dias_validar = round(sum(dias_por_validar_list)/len(dias_por_validar_list), 2) if dias_por_validar_list else 0.0
+        mediana_dias_validar = _mediana(dias_por_validar_list)
 
         ws_kpi.append(["Métrica", "Valor"])
         ws_kpi.append(["Total tickets", total])
         ws_kpi.append(["Abiertos", abiertos])
         ws_kpi.append(["En progreso", en_progreso])
+        ws_kpi.append(["Por validar", por_validar])
         ws_kpi.append(["Finalizados", finalizados])
         ws_kpi.append(["% cumplidos en tiempo (solo finalizados)", pct_cumplidos])
         ws_kpi.append(["Tiempo promedio de solución (días)", prom_tiempo_sol])
         ws_kpi.append(["Tiempo mediano de solución (días)", mediana_tiempo_sol])
-        ws_kpi.append(["Abiertos críticos (criticidad 4-5)", abiertos_criticos])
+        ws_kpi.append(["Abiertos críticos (criticidad 4-5) en backlog", abiertos_criticos])
         ws_kpi.append(["Edad promedio del backlog (días)", edad_promedio_backlog])
         ws_kpi.append(["Backlog 0-2 días", backlog_aging_buckets["0-2"]])
         ws_kpi.append(["Backlog 3-7 días", backlog_aging_buckets["3-7"]])
         ws_kpi.append(["Backlog 8-14 días", backlog_aging_buckets["8-14"]])
         ws_kpi.append(["Backlog 15+ días", backlog_aging_buckets["15+"]])
+        ws_kpi.append(["Días promedio por validar", prom_dias_validar])
+        ws_kpi.append(["Días mediana por validar", mediana_dias_validar])
+        ws_kpi.append(["Tickets backlog en riesgo SLA", tickets_en_riesgo])
 
         from openpyxl.styles import Alignment as KPIAlignment
         hdr = ws_kpi["A1":"B1"][0]
         for c in hdr:
             c.font = Font(bold=True, color="FFFFFF")
             c.fill = PatternFill("solid", fgColor="0073C2")
-        ws_kpi["B6"].number_format = "0.00"
-        for r in range(2, ws_kpi.max_row+1):
+
+        # Formato de porcentaje en fila de % cumplidos (buscamos la etiqueta)
+        for r in range(2, ws_kpi.max_row + 1):
             ws_kpi[f"B{r}"].alignment = KPIAlignment(horizontal="right")
+            if ws_kpi[f"A{r}"].value == "% cumplidos en tiempo (solo finalizados)":
+                ws_kpi[f"B{r}"].number_format = "0.00"
         for col in ws_kpi.columns:
             mx = max(len(str(c.value or "")) for c in col)
             ws_kpi.column_dimensions[col[0].column_letter].width = mx + 2
 
         # ─────────────────────────────────────────────────────────────
-        # Hoja de Tablas (resúmenes) + Gráficas combinadas
+        # Hoja Tablas (resúmenes) + gráficas
         # ─────────────────────────────────────────────────────────────
         ws_tab = wb.create_sheet(title="Tablas")
 
@@ -901,15 +994,17 @@ def export_excel():
         COL_SUCURSAL       = headers.index("Sucursal (destino)") + 1
         COL_DEPTO          = headers.index("Departamento") + 1
         COL_CATEGORIA      = headers.index("Categoría") + 1
-        COL_ESTADO         = headers.index("Estado") + 1
+        COL_ESTADO_T       = headers.index("Estado") + 1
         COL_FECHA_CREACION = headers.index("Fecha Creación") + 1
         COL_FECHA_FINAL    = headers.index("Fecha Finalizado") + 1
-        COL_DEBER          = headers.index("Deber ser") + 1
-        COL_T_SOL          = headers.index("Tiempo Solución") + 1
+        COL_DEBER_T        = headers.index("Deber ser") + 1
+        COL_T_SOL_T        = headers.index("Tiempo Solución") + 1
+        COL_CRITICIDAD_T   = headers.index("Criticidad") + 1
 
-        sucursal_counts = defaultdict(lambda: {"total": 0, "abiertos": 0, "en_progreso": 0, "finalizados": 0})
-        depto_counts    = defaultdict(lambda: {"total": 0, "abiertos": 0, "en_progreso": 0, "finalizados": 0})
-        categoria_counts= defaultdict(lambda: {"total": 0, "abiertos": 0, "en_progreso": 0, "finalizados": 0})
+        sucursal_counts  = defaultdict(lambda: {"total": 0, "abiertos": 0, "en_progreso": 0, "por_validar": 0, "finalizados": 0})
+        depto_counts     = defaultdict(lambda: {"total": 0, "abiertos": 0, "en_progreso": 0, "por_validar": 0, "finalizados": 0})
+        categoria_counts = defaultdict(lambda: {"total": 0, "abiertos": 0, "en_progreso": 0, "por_validar": 0, "finalizados": 0})
+
         creados_por_mes = Counter()
         finalizados_por_mes = Counter()
         sla_incumplidos = []
@@ -917,15 +1012,17 @@ def export_excel():
         for row in ws.iter_rows(min_row=2, values_only=True):
             if not row or row[0] is None:
                 continue
+
             tid      = row[COL_ID-1]
             sucursal = row[COL_SUCURSAL-1] or "—"
             depto    = row[COL_DEPTO-1] or "—"
             categoria= row[COL_CATEGORIA-1] or "—"
-            estado   = (row[COL_ESTADO-1] or "").strip().lower()
+            estado   = (row[COL_ESTADO_T-1] or "").strip().lower()
             f_crea   = row[COL_FECHA_CREACION-1]
             f_fin    = row[COL_FECHA_FINAL-1]
-            deber    = row[COL_DEBER-1]
-            tsol     = row[COL_T_SOL-1]
+            deber    = row[COL_DEBER_T-1]
+            tsol     = row[COL_T_SOL_T-1]
+            crit     = row[COL_CRITICIDAD_T-1]
 
             # Sucursal
             sucursal_counts[sucursal]["total"] += 1
@@ -933,6 +1030,8 @@ def export_excel():
                 sucursal_counts[sucursal]["abiertos"] += 1
             elif estado == "en progreso":
                 sucursal_counts[sucursal]["en_progreso"] += 1
+            elif estado == "por_validar":
+                sucursal_counts[sucursal]["por_validar"] += 1
             elif estado == "finalizado":
                 sucursal_counts[sucursal]["finalizados"] += 1
 
@@ -942,6 +1041,8 @@ def export_excel():
                 depto_counts[depto]["abiertos"] += 1
             elif estado == "en progreso":
                 depto_counts[depto]["en_progreso"] += 1
+            elif estado == "por_validar":
+                depto_counts[depto]["por_validar"] += 1
             elif estado == "finalizado":
                 depto_counts[depto]["finalizados"] += 1
 
@@ -951,6 +1052,8 @@ def export_excel():
                 categoria_counts[categoria]["abiertos"] += 1
             elif estado == "en progreso":
                 categoria_counts[categoria]["en_progreso"] += 1
+            elif estado == "por_validar":
+                categoria_counts[categoria]["por_validar"] += 1
             elif estado == "finalizado":
                 categoria_counts[categoria]["finalizados"] += 1
 
@@ -959,29 +1062,30 @@ def export_excel():
             if f_fin and hasattr(f_fin, "strftime"):
                 finalizados_por_mes[f_fin.strftime("%Y-%m")] += 1
 
+            # SLA incumplidos (solo finalizados)
             if estado == "finalizado" and isinstance(tsol, (int, float)) and isinstance(deber, (int, float)) and deber > 0:
                 if tsol > deber:
-                    sla_incumplidos.append((tid, sucursal, depto, row[COL_CRITICIDAD-1], deber, tsol))
+                    sla_incumplidos.append((tid, sucursal, depto, crit, deber, tsol))
 
-        # Helpers para escribir (título azul + tabla)
         def write_section(ws_local, start_row, title, cols, rows_local):
             ws_local.cell(row=start_row, column=1, value=title)
             ws_local.merge_cells(start_row=start_row, start_column=1, end_row=start_row, end_column=len(cols))
             tcell = ws_local.cell(row=start_row, column=1)
             tcell.font = Font(bold=True, color="FFFFFF")
             tcell.fill = PatternFill("solid", fgColor="0073C2")
-            # Encabezados
+
             hdr_row = start_row + 1
             for j, h in enumerate(cols, start=1):
                 c = ws_local.cell(row=hdr_row, column=j, value=h)
                 c.font = Font(bold=True)
-            # Filas
+
             r = hdr_row + 1
             for row_vals in rows_local:
                 for j, v in enumerate(row_vals, start=1):
                     ws_local.cell(row=r, column=j, value=v)
                 r += 1
-            return r + 1  # deja una línea en blanco
+
+            return r + 1  # deja línea en blanco
 
         # Tablas ordenadas
         suc_rows_sorted = sorted(sucursal_counts.items(),  key=lambda x: x[1]["total"], reverse=True)
@@ -990,25 +1094,24 @@ def export_excel():
         cre_rows  = sorted(creados_por_mes.items())
         fin_rows  = sorted(finalizados_por_mes.items())
 
-        # Construir filas para las tres tablas principales
-        suc_table = [(s, v["total"], v["abiertos"], v["en_progreso"], v["finalizados"]) for s, v in suc_rows_sorted]
-        dep_table = [(d, v["total"], v["abiertos"], v["en_progreso"], v["finalizados"]) for d, v in dep_rows_sorted]
-        cat_table = [(c, v["total"], v["abiertos"], v["en_progreso"], v["finalizados"]) for c, v in cat_rows_sorted]
+        suc_table = [(s, v["total"], v["abiertos"], v["en_progreso"], v["por_validar"], v["finalizados"]) for s, v in suc_rows_sorted]
+        dep_table = [(d, v["total"], v["abiertos"], v["en_progreso"], v["por_validar"], v["finalizados"]) for d, v in dep_rows_sorted]
+        cat_table = [(c, v["total"], v["abiertos"], v["en_progreso"], v["por_validar"], v["finalizados"]) for c, v in cat_rows_sorted]
 
         r = 1
         suc_start = r
         r = write_section(ws_tab, r, "Tickets por Sucursal",
-                          ["Sucursal", "Cantidad", "Abiertos", "En progreso", "Finalizados"],
+                          ["Sucursal", "Cantidad", "Abiertos", "En progreso", "Por validar", "Finalizados"],
                           suc_table)
 
         dep_start = r
         r = write_section(ws_tab, r, "Tickets por Departamento",
-                          ["Departamento", "Cantidad", "Abiertos", "En progreso", "Finalizados"],
+                          ["Departamento", "Cantidad", "Abiertos", "En progreso", "Por validar", "Finalizados"],
                           dep_table)
 
         cat_start = r
         r = write_section(ws_tab, r, "Tickets por Categoría",
-                          ["Categoría", "Cantidad", "Abiertos", "En progreso", "Finalizados"],
+                          ["Categoría", "Cantidad", "Abiertos", "En progreso", "Por validar", "Finalizados"],
                           cat_table)
 
         r = write_section(ws_tab, r, "Tickets creados por mes", ["Mes", "Cantidad"], cre_rows)
@@ -1017,38 +1120,28 @@ def export_excel():
                           ["ID", "Sucursal", "Departamento", "Criticidad", "Deber ser", "Tiempo Solución"],
                           sla_incumplidos)
 
-        from openpyxl.utils import get_column_letter
+        # Auto-width
         for col_idx in range(1, ws_tab.max_column + 1):
             max_len = 0
             for row_idx in range(1, ws_tab.max_row + 1):
                 cell = ws_tab.cell(row=row_idx, column=col_idx)
-                try:
-                    val = "" if cell.value is None else str(cell.value)
-                except Exception:
-                    val = ""
-                if len(val) > max_len:
-                    max_len = len(val)
+                val = "" if cell.value is None else str(cell.value)
+                max_len = max(max_len, len(val))
             ws_tab.column_dimensions[get_column_letter(col_idx)].width = max_len + 2
 
-        # ── Gráficas combinadas: Barras (Abiertos) + Líneas (En progreso / Finalizados)
+        # ── Gráficas: Barras (Abiertos) + Líneas (En progreso / Por validar / Finalizados)
         from openpyxl.chart import BarChart, LineChart, Reference
 
         def add_combo_chart(ws_local, title, start_row_title, n_rows, anchor):
-            """
-            start_row_title: fila del título de la sección (línea azul)
-            n_rows: número de filas de datos de la tabla
-            """
             if n_rows <= 0:
                 return
 
-            header_row = start_row_title + 1        # fila de encabezados
-            first_data = header_row + 1             # primera fila de datos
+            header_row = start_row_title + 1
+            first_data = header_row + 1
             last_data  = first_data + n_rows - 1
 
-            # Categorías: columna A (nombres)
             cats = Reference(ws_local, min_col=1, min_row=first_data, max_row=last_data)
 
-            # Serie Barras -> Columna "Abiertos" (col 3) con header
             data_abiertos = Reference(ws_local, min_col=3, min_row=header_row, max_col=3, max_row=last_data)
             bar = BarChart()
             bar.title = title
@@ -1056,31 +1149,89 @@ def export_excel():
             bar.add_data(data_abiertos, titles_from_data=True)
             bar.set_categories(cats)
 
-            # Series Línea -> "En progreso" (col 4) y "Finalizados" (col 5)
-            data_line = Reference(ws_local, min_col=4, min_row=header_row, max_col=5, max_row=last_data)
+            data_line = Reference(ws_local, min_col=4, min_row=header_row, max_col=6, max_row=last_data)
             line = LineChart()
             line.add_data(data_line, titles_from_data=True)
             line.set_categories(cats)
-            # Marcadores
+
             for i, s in enumerate(line.series):
-                s.marker.symbol = "circle" if i == 0 else "triangle"
+                s.marker.symbol = "circle" if i == 0 else ("triangle" if i == 1 else "diamond")
                 s.smooth = False
 
-            # Superponer
             bar += line
-
-            # Tamaño / posición
             bar.height = 12
             bar.width  = 22
             ws_local.add_chart(bar, anchor)
 
-        # Cantidades para rango de cada tabla
-        add_combo_chart(ws_tab, "Tickets por Sucursal",    suc_start, len(suc_table), "H2")
-        add_combo_chart(ws_tab, "Tickets por Departamento",dep_start, len(dep_table), "H28")
-        add_combo_chart(ws_tab, "Tickets por Categoría",   cat_start, len(cat_table), "H54")
+        add_combo_chart(ws_tab, "Tickets por Sucursal",     suc_start, len(suc_table), "H2")
+        add_combo_chart(ws_tab, "Tickets por Departamento", dep_start, len(dep_table), "H28")
+        add_combo_chart(ws_tab, "Tickets por Categoría",    cat_start, len(cat_table), "H54")
 
         # ─────────────────────────────────────────────────────────────
+        # Hoja Detenidos (Top por_validar)
+        # ─────────────────────────────────────────────────────────────
+        ws_det = wb.create_sheet(title="Detenidos")
 
+        ws_det.append(["ID", "Sucursal", "Departamento", "Criticidad", "Usuario", "Fecha solicitud cierre", "Días detenido", "Costo", "Notas cierre"])
+        for cell in ws_det[1]:
+            cell.font = header_font
+            cell.fill = header_fill
+
+        # ordenar por días detenido desc (None al final)
+        def _dv_key(x):
+            dv = x[6]
+            return (-dv) if isinstance(dv, (int, float)) else 999999
+
+        detenidos_rows_sorted = sorted(detenidos_rows, key=_dv_key)
+        for i, rr in enumerate(detenidos_rows_sorted[:50], start=2):
+            ws_det.append(list(rr))
+            if i % 2 == 0:
+                for cell in ws_det[i]:
+                    cell.fill = alt_fill
+
+            # fecha solicitud cierre (col 6)
+            c = ws_det.cell(row=i, column=6)
+            if c.value:
+                c.number_format = excel_datetime_fmt
+
+        # autosize Detenidos
+        for col_idx in range(1, ws_det.max_column + 1):
+            max_len = 0
+            for row_idx in range(1, ws_det.max_row + 1):
+                cell = ws_det.cell(row=row_idx, column=col_idx)
+                val = "" if cell.value is None else str(cell.value)
+                max_len = max(max_len, len(val))
+            ws_det.column_dimensions[get_column_letter(col_idx)].width = min(max_len + 2, 60)
+
+        # ─────────────────────────────────────────────────────────────
+        # Hoja DataQuality
+        # ─────────────────────────────────────────────────────────────
+        ws_dq = wb.create_sheet(title="DataQuality")
+        ws_dq.append(["ID", "Estado", "Sucursal", "Departamento", "Usuario", "Fecha Creación", "Fecha En Progreso", "Fecha Finalizado", "Problema"])
+        for cell in ws_dq[1]:
+            cell.font = header_font
+            cell.fill = header_fill
+
+        for i, rr in enumerate(dq_rows[:500], start=2):  # limitamos para que no pese demasiado
+            ws_dq.append(list(rr))
+            if i % 2 == 0:
+                for cell in ws_dq[i]:
+                    cell.fill = alt_fill
+
+            for col in (6, 7, 8):
+                c = ws_dq.cell(row=i, column=col)
+                if c.value:
+                    c.number_format = excel_datetime_fmt
+
+        for col_idx in range(1, ws_dq.max_column + 1):
+            max_len = 0
+            for row_idx in range(1, ws_dq.max_row + 1):
+                cell = ws_dq.cell(row=row_idx, column=col_idx)
+                val = "" if cell.value is None else str(cell.value)
+                max_len = max(max_len, len(val))
+            ws_dq.column_dimensions[get_column_letter(col_idx)].width = min(max_len + 2, 60)
+
+        # ─────────────────────────────────────────────────────────────
         output = BytesIO()
         wb.save(output)
         output.seek(0)
@@ -1096,7 +1247,6 @@ def export_excel():
         import traceback
         print(traceback.format_exc())
         return jsonify({"mensaje": str(e)}), 500
-
 # ─────────────────────────────────────────────────────────────
 # RUTA: migrar tickets a ISO local
 # ─────────────────────────────────────────────────────────────
