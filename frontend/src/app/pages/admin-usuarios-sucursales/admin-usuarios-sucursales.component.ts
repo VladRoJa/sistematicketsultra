@@ -1,10 +1,13 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, ReactiveFormsModule } from '@angular/forms';
+import { HttpClient } from '@angular/common/http';
 
 import { AdminUsuariosService } from '../../services/admin-usuarios.service';
 
 type SucursalOption = { id: number; nombre: string };
+
+
 
 @Component({
   selector: 'app-admin-usuarios-sucursales',
@@ -15,23 +18,41 @@ type SucursalOption = { id: number; nombre: string };
 export class AdminUsuariosSucursalesComponent implements OnInit {
   form: FormGroup;
 
-  // TODO(F4.3): cargar desde /api/sucursales
-  sucursales: SucursalOption[] = [
-    { id: 1, nombre: 'Sucursal 1' },
-    { id: 2, nombre: 'Sucursal 2' },
-    { id: 3, nombre: 'Sucursal 3' },
-  ];
+  private cargarCatalogoSucursales(): void {
+    this.loading = true;
+    this.errorMsg = null;
+
+    this.http
+      .get<Array<{ sucursal_id: number; sucursal: string }>>('/api/sucursales/listar')
+      .subscribe({
+        next: (rows) => {
+          this.sucursales = (rows ?? []).map(r => ({
+            id: Number(r.sucursal_id),
+            nombre: String(r.sucursal),
+          }));
+          this.loading = false;
+        },
+        error: (err) => {
+          this.loading = false;
+          this.errorMsg = err?.error?.mensaje ?? 'Error al cargar catálogo de sucursales';
+        },
+      });
+  }
 
   // TODO(F4.3): seleccionar usuario desde UI / route param
   userId = 1;
 
+// Propiedades para manejo de estado UI
+  
   loading = false;
   errorMsg: string | null = null;
   okMsg: string | null = null;
+  sucursales: Array<{ id: number; nombre: string }> = [];
 
   constructor(
     private fb: FormBuilder,
-    private adminUsuariosService: AdminUsuariosService
+    private adminUsuariosService: AdminUsuariosService,
+    private http: HttpClient
   ) {
     this.form = this.fb.group({
       sucursales_ids: this.fb.control<number[]>([]),
@@ -39,6 +60,7 @@ export class AdminUsuariosSucursalesComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    this.cargarCatalogoSucursales();
     this.cargarSucursalesAsignadas();
   }
 
@@ -94,4 +116,6 @@ export class AdminUsuariosSucursalesComponent implements OnInit {
       },
     });
   }
+
+
 }
