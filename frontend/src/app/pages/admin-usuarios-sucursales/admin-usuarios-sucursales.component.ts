@@ -1,13 +1,14 @@
-//frontend\src\app\pages\admin-usuarios-sucursales\admin-usuarios-sucursales.component.ts
-
-
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, ReactiveFormsModule } from '@angular/forms';
-
+import { HttpClient } from '@angular/common/http';
+import { ActivatedRoute } from '@angular/router';
 import { AdminUsuariosService } from '../../services/admin-usuarios.service';
+import { Router } from '@angular/router';
 
 type SucursalOption = { id: number; nombre: string };
+type UsuarioOption = { id: number; username: string; rol: string; sucursal_id: number };
+
 
 @Component({
   selector: 'app-admin-usuarios-sucursales',
@@ -18,48 +19,106 @@ type SucursalOption = { id: number; nombre: string };
 export class AdminUsuariosSucursalesComponent implements OnInit {
   form: FormGroup;
 
-  // ✅ por ahora hardcodeamos 3 sucursales para probar UI; en F4.3 lo conectamos a /api/sucursales
-  sucursales: SucursalOption[] = [
-    { id: 1, nombre: 'Sucursal 1' },
-    { id: 2, nombre: 'Sucursal 2' },
-    { id: 3, nombre: 'Sucursal 3' },
-  ];
+  private cargarCatalogoSucursales(): void {
+    this.loading = true;
+    this.errorMsg = null;
 
-  // userId de prueba; en F4.3 lo seleccionas desde UI real
-  userId = 1;
+    this.http
+      .get<Array<{ sucursal_id: number; sucursal: string }>>('/api/sucursales/listar')
+      .subscribe({
+        next: (rows) => {
+          this.sucursales = (rows ?? []).map(r => ({
+            id: Number(r.sucursal_id),
+            nombre: String(r.sucursal),
+          }));
+          this.loading = false;
+        },
+        error: (err) => {
+          this.loading = false;
+          this.errorMsg = err?.error?.mensaje ?? 'Error al cargar catálogo de sucursales';
+        },
+      });
+  }
 
+userId: number | null = null;
+
+// Propiedades para manejo de estado UI
+  
   loading = false;
   errorMsg: string | null = null;
   okMsg: string | null = null;
+  sucursales: Array<{ id: number; nombre: string }> = [];
+  username: string | null = null;
+
+
+  usuarios: UsuarioOption[] = [];
+  usuariosFiltrados: UsuarioOption[] = [];
+  busquedaUsuario = '';
+  selectedUserIdForNav: number | null = null;
 
   constructor(
     private fb: FormBuilder,
-    private adminUsuariosService: AdminUsuariosService
+    private adminUsuariosService: AdminUsuariosService,
+    private http: HttpClient,
+    private route: ActivatedRoute,
+    private router: Router
   ) {
     this.form = this.fb.group({
       sucursales_ids: this.fb.control<number[]>([]),
     });
   }
 
-  ngOnInit(): void {
+ngOnInit(): void {
+  this.route.paramMap.subscribe(params => {
+    const raw = params.get('userId');
+    const userId = raw ? Number(raw) : NaN;
+
+    if (!raw || Number.isNaN(userId)) {
+      this.userId = null;{}
+      this.errorMsg = 'Ruta inválida: userId no es numérico';
+      return;
+    }
+
+    this.userId = userId;
+    this.cargarUsuario();
+
+
+    // reset mensajes
+    this.errorMsg = null;
+    this.okMsg = null;
+
+    // Cargar catálogo si aún no está cargado (para no pegarle cada vez)
+    if (this.sucursales.length === 0) {
+      this.cargarCatalogoSucursales();
+    }
+
+    // Siempre recargar asignadas al cambiar userId
     this.cargarSucursalesAsignadas();
+  });
+}
+
+  get selectedIds(): number[] {
+    return (this.form.value.sucursales_ids ?? []) as number[];
   }
 
   isSucursalSeleccionada(id: number): boolean {
-    const ids = this.form.value.sucursales_ids ?? [];
-    return ids.includes(id);
+    return this.selectedIds.includes(id);
   }
 
   toggleSucursal(id: number): void {
-    const current: number[] = this.form.value.sucursales_ids ?? [];
-    const next = current.includes(id)
-      ? current.filter(x => x !== id)
-      : [...current, id];
+    const next = this.isSucursalSeleccionada(id)
+      ? this.selectedIds.filter(x => x !== id)
+      : [...this.selectedIds, id];
 
     this.form.patchValue({ sucursales_ids: next });
   }
 
   cargarSucursalesAsignadas(): void {
+    if (this.userId === null) {
+        this.errorMsg = 'No hay userId seleccionado';
+        return;
+      }
+
     this.loading = true;
     this.errorMsg = null;
     this.okMsg = null;
@@ -76,14 +135,36 @@ export class AdminUsuariosSucursalesComponent implements OnInit {
     });
   }
 
+  private cargarUsuario(): void {
+    if (this.userId === null) {
+      this.username = null;
+      return;
+    }
+
+    this.http
+      .get<{ id: number; username: string; rol: string; sucursal_id: number }>(`/api/usuarios/${this.userId}`)
+      .subscribe({
+        next: (u) => {
+          this.username = u?.username ?? null;  
+        },
+        error: () => {
+          this.username = null;
+        },
+      });
+  }
+
   aplicar(): void {
+    if (this.userId === null) {
+        this.errorMsg = 'No hay userId seleccionado';
+        return;
+      }
     this.loading = true;
     this.errorMsg = null;
     this.okMsg = null;
 
-    const payload = { sucursales_ids: (this.form.value.sucursales_ids ?? []) as number[] };
-
-    this.adminUsuariosService.actualizarSucursalesDeUsuario(this.userId, payload).subscribe({
+    this.adminUsuariosService.actualizarSucursalesDeUsuario(this.userId, {
+      sucursales_ids: this.selectedIds,
+    }).subscribe({
       next: (resp) => {
         this.form.patchValue({ sucursales_ids: resp.sucursales_ids ?? [] });
         this.loading = false;
@@ -95,4 +176,29 @@ export class AdminUsuariosSucursalesComponent implements OnInit {
       },
     });
   }
+
+
+  aplicarFiltroUsuarios(): void {
+    const q = (this.busquedaUsuario || '').trim().toLowerCase();
+
+    if (!q) {
+      this.usuariosFiltrados = [...this.usuarios];
+      return;
+    }
+
+    this.usuariosFiltrados = this.usuarios.filter(u =>
+      u.username.toLowerCase().includes(q) ||
+      u.rol.toLowerCase().includes(q) ||
+      String(u.sucursal_id).includes(q) ||
+      String(u.id).includes(q)
+    );
+  }
+
+  irAUsuarioSeleccionado(): void {
+  if (!this.selectedUserIdForNav) return;
+
+  // Con hash routing, Router navega bien (lo del # lo maneja Angular)
+  this.router.navigate(['admin-usuarios-sucursales', this.selectedUserIdForNav]);
+}
+
 }
