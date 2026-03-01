@@ -34,8 +34,8 @@ export class AdminUsuariosSucursalesComponent implements OnInit {
   sucursales: Array<{ id: number; nombre: string }> = [];
 
   // UI: nombre del usuario seleccionado por route :userId
-  username: string | null = null;
-
+  public username: string | null = null;
+  
   // Base URL API (según environment)
   private readonly API_BASE_URL = environment.apiUrl;
 
