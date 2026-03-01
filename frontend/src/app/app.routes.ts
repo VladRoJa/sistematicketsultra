@@ -59,6 +59,13 @@ export const routes: Routes = [
           .then(m => m.PantallaCargaMasivaComponent)
       },
       {
+        path: 'admin-usuarios-sucursales',
+        canActivate: [AdminGuard],
+        loadComponent: () =>
+          import('./pages/admin-usuarios-sucursales/admin-usuarios-sucursales.component')
+            .then(m => m.AdminUsuariosSucursalesComponent),
+      },
+      {
         path: 'asistencia/registrar',
         loadComponent: () => import('./registrar-asistencia/registrar-asistencia.component').then(m => m.RegistrarAsistenciaComponent)
       },
