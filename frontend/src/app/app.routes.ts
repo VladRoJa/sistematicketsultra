@@ -59,7 +59,7 @@ export const routes: Routes = [
           .then(m => m.PantallaCargaMasivaComponent)
       },
       {
-        path: 'admin-usuarios-sucursales',
+        path: 'admin-usuarios-sucursales/:userId',
         canActivate: [AdminGuard],
         loadComponent: () =>
           import('./pages/admin-usuarios-sucursales/admin-usuarios-sucursales.component')

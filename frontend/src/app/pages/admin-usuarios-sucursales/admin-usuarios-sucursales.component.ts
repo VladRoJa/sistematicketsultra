@@ -4,9 +4,10 @@ import { FormBuilder, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute } from '@angular/router';
 import { AdminUsuariosService } from '../../services/admin-usuarios.service';
+import { Router } from '@angular/router';
 
 type SucursalOption = { id: number; nombre: string };
-
+type UsuarioOption = { id: number; username: string; rol: string; sucursal_id: number };
 
 
 @Component({
@@ -49,11 +50,18 @@ userId: number | null = null;
   sucursales: Array<{ id: number; nombre: string }> = [];
   username: string | null = null;
 
+
+  usuarios: UsuarioOption[] = [];
+  usuariosFiltrados: UsuarioOption[] = [];
+  busquedaUsuario = '';
+  selectedUserIdForNav: number | null = null;
+
   constructor(
     private fb: FormBuilder,
     private adminUsuariosService: AdminUsuariosService,
     private http: HttpClient,
-    private route: ActivatedRoute
+    private route: ActivatedRoute,
+    private router: Router
   ) {
     this.form = this.fb.group({
       sucursales_ids: this.fb.control<number[]>([]),
@@ -73,7 +81,7 @@ ngOnInit(): void {
 
     this.userId = userId;
     this.cargarUsuario();
-    
+
 
     // reset mensajes
     this.errorMsg = null;
@@ -127,18 +135,21 @@ ngOnInit(): void {
     });
   }
 
-    private cargarUsuario(): void {
-    if (this.userId === null) return;
+  private cargarUsuario(): void {
+    if (this.userId === null) {
+      this.username = null;
+      return;
+    }
 
-    this.http.get<{ id: number; username: string }>(`/api/usuarios/${this.userId}`)
+    this.http
+      .get<{ id: number; username: string; rol: string; sucursal_id: number }>(`/api/usuarios/${this.userId}`)
       .subscribe({
         next: (u) => {
-          this.username = u?.username ?? null;
+          this.username = u?.username ?? null;  
         },
         error: () => {
-          // si no existe o falla, no reventamos la pantalla
           this.username = null;
-        }
+        },
       });
   }
 
@@ -166,5 +177,28 @@ ngOnInit(): void {
     });
   }
 
+
+  aplicarFiltroUsuarios(): void {
+    const q = (this.busquedaUsuario || '').trim().toLowerCase();
+
+    if (!q) {
+      this.usuariosFiltrados = [...this.usuarios];
+      return;
+    }
+
+    this.usuariosFiltrados = this.usuarios.filter(u =>
+      u.username.toLowerCase().includes(q) ||
+      u.rol.toLowerCase().includes(q) ||
+      String(u.sucursal_id).includes(q) ||
+      String(u.id).includes(q)
+    );
+  }
+
+  irAUsuarioSeleccionado(): void {
+  if (!this.selectedUserIdForNav) return;
+
+  // Con hash routing, Router navega bien (lo del # lo maneja Angular)
+  this.router.navigate(['admin-usuarios-sucursales', this.selectedUserIdForNav]);
+}
 
 }
