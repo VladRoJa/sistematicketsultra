@@ -1,4 +1,4 @@
-# backend\app\utils\ticket_filters.py
+# backend/app/utils/ticket_filters.py
 from sqlalchemy import or_, and_
 from app.models import Ticket
 
@@ -23,6 +23,26 @@ def _filtro_solo_sucursal(query, sucursal_id: int):
         )
     )
 
+def _filtro_multiples_sucursales(query, sucursales_ids: list[int]):
+    """
+    Mismo criterio que _filtro_solo_sucursal, pero para un set de sucursales.
+    - Prioriza sucursal_id_destino IN (scope)
+    - Si sucursal_id_destino es NULL, cae a Ticket.sucursal_id IN (scope)
+    """
+    ids = [int(x) for x in (sucursales_ids or [])]
+    if not ids:
+        return query.filter(False)
+
+    return query.filter(
+        or_(
+            Ticket.sucursal_id_destino.in_(ids),
+            and_(
+                Ticket.sucursal_id_destino.is_(None),
+                Ticket.sucursal_id.in_(ids)
+            )
+        )
+    )
+
 def filtrar_tickets_por_usuario(user):
     q = Ticket.query
 
@@ -35,7 +55,16 @@ def filtrar_tickets_por_usuario(user):
         print(f"[PERM] {user.username} rol={rol} suc={suc} -> ALL")
         return q
 
-    # 2) Gerentes: por SUCURSAL
+    # ✅ 1.5) Gerente regional: múltiples sucursales (scope)
+    if rol == "GERENTE_REGIONAL":
+        scope = list(getattr(user, "sucursales_ids", None) or [])
+        if not scope:
+            print(f"[PERM] {user.username} rol={rol} SIN sucursales_ids -> 0")
+            return q.filter(False)
+        print(f"[PERM] {user.username} rol={rol} scope={scope} -> MULTI SUCURSAL")
+        return _filtro_multiples_sucursales(q, scope)
+
+    # 2) Gerentes: por SUCURSAL (1)
     if rol in GERENTE_ROLES:
         if not suc:
             print(f"[PERM] {user.username} rol={rol} SIN sucursal -> 0")

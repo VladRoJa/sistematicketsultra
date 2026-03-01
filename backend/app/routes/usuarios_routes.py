@@ -4,6 +4,7 @@ from werkzeug.security import generate_password_hash
 from app.extensions import db
 from app.models.user_model import UserORM
 import re
+from flask_jwt_extended import jwt_required
 
 usuarios_bp = Blueprint('usuarios', __name__)
 
@@ -15,6 +16,7 @@ def _is_valid_email(s: str | None) -> bool:
 # GET: Lista todos los usuarios
 # ─────────────────────────────────────────────────────────────
 @usuarios_bp.route('', methods=['GET'])
+@jwt_required()  # Requiere autenticación para acceder a esta ruta
 def listar_usuarios():
     usuarios = UserORM.query.all()
     return jsonify([{
@@ -30,6 +32,7 @@ def listar_usuarios():
 # GET: Usuario por ID
 # ─────────────────────────────────────────────────────────────
 @usuarios_bp.route('/<int:user_id>', methods=['GET'])
+@jwt_required()  # Requiere autenticación para acceder a esta ruta
 def obtener_usuario(user_id):
     u = UserORM.get_by_id(user_id)
     if not u:
@@ -47,6 +50,7 @@ def obtener_usuario(user_id):
 # POST: Crear usuario nuevo
 # ─────────────────────────────────────────────────────────────
 @usuarios_bp.route('', methods=['POST'])
+@jwt_required()  # Requiere autenticación para acceder a esta ruta
 def crear_usuario():
     data = request.json or {}
     obligatorio = ['username', 'password', 'rol', 'sucursal_id', 'department_id']
@@ -78,6 +82,7 @@ def crear_usuario():
 # PUT: Editar usuario
 # ─────────────────────────────────────────────────────────────
 @usuarios_bp.route('/<int:user_id>', methods=['PUT'])
+@jwt_required()  # Requiere autenticación para acceder a esta ruta
 def editar_usuario(user_id):
     u = UserORM.get_by_id(user_id)
     if not u:
@@ -115,6 +120,7 @@ def editar_usuario(user_id):
 # DELETE: Eliminar usuario
 # ─────────────────────────────────────────────────────────────
 @usuarios_bp.route('/<int:user_id>', methods=['DELETE'])
+@jwt_required()  # Requiere autenticación para acceder a esta ruta
 def eliminar_usuario(user_id):
     u = UserORM.get_by_id(user_id)
     if not u:
