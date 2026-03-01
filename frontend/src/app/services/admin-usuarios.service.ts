@@ -1,5 +1,3 @@
-// frontend\src\app\services\admin-usuarios.service.ts
-
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
@@ -25,12 +23,14 @@ export class AdminUsuariosService {
 
   constructor(private http: HttpClient) {}
 
+  // GET /api/admin/usuarios/:userId/sucursales
   getSucursalesDeUsuario(userId: number): Observable<AdminUsuarioSucursalesResponse> {
     return this.http.get<AdminUsuarioSucursalesResponse>(
       `${this.baseUrl}/admin/usuarios/${userId}/sucursales`
     );
   }
 
+  // PUT /api/admin/usuarios/:userId/sucursales
   actualizarSucursalesDeUsuario(
     userId: number,
     payload: AdminUsuarioSucursalesUpdateRequest
