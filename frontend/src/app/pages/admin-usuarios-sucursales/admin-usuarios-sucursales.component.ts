@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormBuilder, FormGroup, ReactiveFormsModule } from '@angular/forms';
+import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute, Router } from '@angular/router';
 import { environment } from 'src/environments/environment';
@@ -12,7 +12,7 @@ type UsuarioOption = { id: number; username: string; rol: string; sucursal_id: n
 @Component({
   selector: 'app-admin-usuarios-sucursales',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, ReactiveFormsModule, FormsModule],
   templateUrl: './admin-usuarios-sucursales.component.html',
 })
 export class AdminUsuariosSucursalesComponent implements OnInit {
@@ -61,42 +61,56 @@ export class AdminUsuariosSucursalesComponent implements OnInit {
   // ─────────────────────────────────────────────────────────────
   // Lifecycle
   // ─────────────────────────────────────────────────────────────
-  ngOnInit(): void {
-    /**
-     * Reacciona a cambios de route :userId
-     * Ej: /admin-usuarios-sucursales/123
-     */
-    this.route.paramMap.subscribe((params) => {
-      const raw = params.get('userId');
-      const userId = raw ? Number(raw) : NaN;
+ngOnInit(): void {
+  /**
+   * Reacciona a cambios de route :userId
+   * Ej: /admin-usuarios-sucursales/123
+   */
+  this.route.paramMap.subscribe((params) => {
+    const raw = params.get('userId');
 
-      // Reset mensajes por cada navegación
-      this.errorMsg = null;
-      this.okMsg = null;
+    // Reset mensajes por cada navegación
+    this.errorMsg = null;
+    this.okMsg = null;
 
-      // Validación básica del route param
-      if (!raw || Number.isNaN(userId) || userId <= 0) {
-        this.userId = null;
-        this.username = null;
-        this.errorMsg = 'Ruta inválida: userId no es numérico';
-        return;
-      }
+    // ✅ Caso 1: ruta SIN userId -> modo entrada (NO es error)
+    if (!raw) {
+      this.userId = null;
+      this.username = null;
 
-      // Set de user seleccionado
-      this.userId = userId;
+      this.cargarUsuarios();
 
-      // 1) Cargar usuario (solo username para UI)
-      this.cargarUsuario();
-
-      // 2) Cargar catálogo de sucursales solo si no está cargado
+      // (Opcional) precargar catálogo para que la pantalla no se vea vacía
       if (this.sucursales.length === 0) {
         this.cargarCatalogoSucursales();
       }
+      return;
+    }
 
-      // 3) Cargar sucursales asignadas al usuario
-      this.cargarSucursalesAsignadas();
-    });
-  }
+    // ✅ Caso 2: ruta CON userId -> validar
+    const userId = Number(raw);
+    if (Number.isNaN(userId) || userId <= 0) {
+      this.userId = null;
+      this.username = null;
+      this.errorMsg = 'Ruta inválida: userId no es numérico';
+      return;
+    }
+
+    // Set de user seleccionado
+    this.userId = userId;
+
+    // 1) Cargar usuario (solo username para UI)
+    this.cargarUsuario();
+
+    // 2) Cargar catálogo de sucursales solo si no está cargado
+    if (this.sucursales.length === 0) {
+      this.cargarCatalogoSucursales();
+    }
+
+    // 3) Cargar sucursales asignadas al usuario
+    this.cargarSucursalesAsignadas();
+  });
+}
 
   // ─────────────────────────────────────────────────────────────
   // Helpers para UI de selección
@@ -195,6 +209,24 @@ export class AdminUsuariosSucursalesComponent implements OnInit {
       });
   }
 
+  private cargarUsuarios(): void {
+    this.loading = true;
+    this.errorMsg = null;
+
+    this.http.get<UsuarioOption[]>(`${this.API_BASE_URL}/usuarios`).subscribe({
+      next: (rows) => {
+        this.usuarios = rows ?? [];
+        this.usuariosFiltrados = [...this.usuarios];
+        this.loading = false;
+      },
+      error: (err) => {
+        this.loading = false;
+        this.errorMsg = err?.error?.mensaje ?? 'Error al cargar usuarios';
+      },
+    });
+  }
+
+  
   // ─────────────────────────────────────────────────────────────
   // Actions
   // ─────────────────────────────────────────────────────────────

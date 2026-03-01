@@ -1,9 +1,41 @@
-<!-- admin-usuarios-sucursales/admin-usuarios.html -->
+<!-- admin-usuarios-sucursales.component.html -->
 
 
 <h2>Admin: Sucursales por usuario</h2>
 
 <div *ngIf="loading">Cargando...</div>
+
+<hr />
+
+<div *ngIf="userId === null" style="margin: 8px 0;">
+  <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+    <label style="font-weight:600;">Selecciona usuario:</label>
+
+    <input
+      type="text"
+      placeholder="Buscar (username/rol/sucursal/id)"
+      [(ngModel)]="busquedaUsuario"
+      (input)="aplicarFiltroUsuarios()"
+      style="min-width: 240px;"
+    />
+
+    <select
+      [(ngModel)]="selectedUserIdForNav"
+      style="min-width: 260px;"
+    >
+      <option [ngValue]="null">— Selecciona —</option>
+      <option *ngFor="let u of usuariosFiltrados" [ngValue]="u.id">
+        {{ u.username }} ({{ u.rol }}) — suc {{ u.sucursal_id }} — id {{ u.id }}
+      </option>
+    </select>
+
+    <button (click)="irAUsuarioSeleccionado()" [disabled]="!selectedUserIdForNav">
+      Ir
+    </button>
+  </div>
+
+  <small *ngIf="usuariosFiltrados.length === 0">No hay usuarios para mostrar.</small>
+</div>
 
 <div *ngIf="errorMsg" style="color: red; margin: 8px 0;">
   {{ errorMsg }}
@@ -15,22 +47,24 @@
 
 <hr />
 
-<p><b>UserId:</b> {{ userId }}</p><p>
-<b>Usuario:</b> {{ username || '—' }}</p>
+<div *ngIf="userId !== null">
+  <p><b>UserId:</b> {{ userId }}</p>
+  <p><b>Usuario:</b> {{ username || '—' }}</p>
 
-<ul>
-  <li *ngFor="let s of sucursales">
-    <label>
-      <input
-        type="checkbox"
-        [checked]="isSucursalSeleccionada(s.id)"
-        (change)="toggleSucursal(s.id)"
-      />
-      {{ s.nombre }} ({{ s.id }})
-    </label>
-  </li>
-</ul>
+  <ul>
+    <li *ngFor="let s of sucursales">
+      <label>
+        <input
+          type="checkbox"
+          [checked]="isSucursalSeleccionada(s.id)"
+          (change)="toggleSucursal(s.id)"
+        />
+        {{ s.nombre }} ({{ s.id }})
+      </label>
+    </li>
+  </ul>
 
-<button type="button" (click)="aplicar()" [disabled]="loading">
-  Aplicar
-</button>
+  <button type="button" (click)="aplicar()" [disabled]="loading">
+    Aplicar
+  </button>
+</div>
