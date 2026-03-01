@@ -1,0 +1,27 @@
+<!-- admin-usuarios-sucursales/admin-usuarios.html -->
+
+
+<h2>Admin: Sucursales por usuario</h2>
+
+<div *ngIf="loading">Cargando...</div>
+<div *ngIf="errorMsg" style="color: red;">{{ errorMsg }}</div>
+<div *ngIf="okMsg" style="color: green;">{{ okMsg }}</div>
+
+<hr />
+
+<p><b>UserId:</b> {{ userId }}</p>
+
+<ul>
+  <li *ngFor="let s of sucursales">
+    <label>
+      <input
+        type="checkbox"
+        [checked]="isSucursalSeleccionada(s.id)"
+        (change)="toggleSucursal(s.id)"
+      />
+      {{ s.nombre }} ({{ s.id }})
+    </label>
+  </li>
+</ul>
+
+<button type="button" (click)="aplicar()">Aplicar</button>
