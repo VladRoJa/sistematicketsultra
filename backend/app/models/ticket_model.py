@@ -22,7 +22,7 @@ class Ticket(db.Model):
 
     # Estado principal del ticket (no lo rompemos)
     estado = db.Column(
-        db.Enum('abierto', 'en progreso', 'finalizado', name='estado_ticket_enum'),
+        db.Enum('abierto', 'en progreso', 'por_validar', 'finalizado', name='estado_ticket_enum'),
         default='abierto',
         nullable=False
     )
@@ -364,7 +364,7 @@ class Ticket(db.Model):
         from datetime import datetime, timezone
 
         self.estado_cierre = 'pendiente_creador'
-        # Siempre fijamos la fecha de finalizado al momento del clic del jefe
+        self.estado = 'por_validar'
         self.fecha_finalizado = datetime.now(timezone.utc)
 
         db.session.commit()
