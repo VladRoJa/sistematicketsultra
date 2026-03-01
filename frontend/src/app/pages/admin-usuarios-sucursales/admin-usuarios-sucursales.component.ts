@@ -2,7 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
-
+import { ActivatedRoute } from '@angular/router';
 import { AdminUsuariosService } from '../../services/admin-usuarios.service';
 
 type SucursalOption = { id: number; nombre: string };
@@ -39,8 +39,7 @@ export class AdminUsuariosSucursalesComponent implements OnInit {
       });
   }
 
-  // TODO(F4.3): seleccionar usuario desde UI / route param
-  userId = 1;
+userId: number | null = null;
 
 // Propiedades para manejo de estado UI
   
@@ -48,21 +47,47 @@ export class AdminUsuariosSucursalesComponent implements OnInit {
   errorMsg: string | null = null;
   okMsg: string | null = null;
   sucursales: Array<{ id: number; nombre: string }> = [];
+  username: string | null = null;
 
   constructor(
     private fb: FormBuilder,
     private adminUsuariosService: AdminUsuariosService,
-    private http: HttpClient
+    private http: HttpClient,
+    private route: ActivatedRoute
   ) {
     this.form = this.fb.group({
       sucursales_ids: this.fb.control<number[]>([]),
     });
   }
 
-  ngOnInit(): void {
-    this.cargarCatalogoSucursales();
+ngOnInit(): void {
+  this.route.paramMap.subscribe(params => {
+    const raw = params.get('userId');
+    const userId = raw ? Number(raw) : NaN;
+
+    if (!raw || Number.isNaN(userId)) {
+      this.userId = null;{}
+      this.errorMsg = 'Ruta inválida: userId no es numérico';
+      return;
+    }
+
+    this.userId = userId;
+    this.cargarUsuario();
+    
+
+    // reset mensajes
+    this.errorMsg = null;
+    this.okMsg = null;
+
+    // Cargar catálogo si aún no está cargado (para no pegarle cada vez)
+    if (this.sucursales.length === 0) {
+      this.cargarCatalogoSucursales();
+    }
+
+    // Siempre recargar asignadas al cambiar userId
     this.cargarSucursalesAsignadas();
-  }
+  });
+}
 
   get selectedIds(): number[] {
     return (this.form.value.sucursales_ids ?? []) as number[];
@@ -81,6 +106,11 @@ export class AdminUsuariosSucursalesComponent implements OnInit {
   }
 
   cargarSucursalesAsignadas(): void {
+    if (this.userId === null) {
+        this.errorMsg = 'No hay userId seleccionado';
+        return;
+      }
+
     this.loading = true;
     this.errorMsg = null;
     this.okMsg = null;
@@ -97,7 +127,26 @@ export class AdminUsuariosSucursalesComponent implements OnInit {
     });
   }
 
+    private cargarUsuario(): void {
+    if (this.userId === null) return;
+
+    this.http.get<{ id: number; username: string }>(`/api/usuarios/${this.userId}`)
+      .subscribe({
+        next: (u) => {
+          this.username = u?.username ?? null;
+        },
+        error: () => {
+          // si no existe o falla, no reventamos la pantalla
+          this.username = null;
+        }
+      });
+  }
+
   aplicar(): void {
+    if (this.userId === null) {
+        this.errorMsg = 'No hay userId seleccionado';
+        return;
+      }
     this.loading = true;
     this.errorMsg = null;
     this.okMsg = null;
