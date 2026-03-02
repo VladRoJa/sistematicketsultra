@@ -33,7 +33,7 @@ def _require_admin():
 def listar_usuarios():
     forbidden = _require_admin()
     if forbidden:
-        return jsonify({"error": "Forbidden", "detail": "Se requiere rol admin"}), 403   
+        return forbidden 
     usuarios = UserORM.query.all()
     return jsonify([{
         "id": u.id,
@@ -52,7 +52,7 @@ def listar_usuarios():
 def obtener_usuario(user_id):
     forbidden = _require_admin()
     if forbidden:
-        return jsonify({"error": "Forbidden", "detail": "Se requiere rol admin"}), 403    
+        return forbidden   
     u = UserORM.get_by_id(user_id)
     if not u:
         return jsonify({"error": "Usuario no encontrado"}), 404
@@ -73,7 +73,7 @@ def obtener_usuario(user_id):
 def crear_usuario():
     forbidden = _require_admin()
     if forbidden:
-        return jsonify({"error": "Forbidden", "detail": "Se requiere rol admin"}), 403    
+        return forbidden  
     data = request.json or {}
     obligatorio = ['username', 'password', 'rol', 'sucursal_id', 'department_id']
     if not all(k in data and data[k] for k in obligatorio):
@@ -108,7 +108,7 @@ def crear_usuario():
 def editar_usuario(user_id):
     forbidden = _require_admin()
     if forbidden:
-        return jsonify({"error": "Forbidden", "detail": "Se requiere rol admin"}), 403   
+        return forbidden   
     u = UserORM.get_by_id(user_id)
     if not u:
         return jsonify({"error": "Usuario no encontrado"}), 404
