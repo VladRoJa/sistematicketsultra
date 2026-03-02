@@ -1052,9 +1052,7 @@ onCancelarAsignarFecha() {
 
 abrirEditarFechaSolucion(ticket: Ticket) {
   const estado = (ticket.estado ?? '').toString().trim().toLowerCase();
-  if (estado === 'finalizado') {
-    return; // ⛔ no abrir modal si ya está finalizado
-  }
+  if (estado !== 'en progreso') return; // ✅ solo editable en progreso
 
   const dialogRef = this.dialog.open(EditarFechaSolucionModalComponent, {
     width: '360px',
@@ -1067,7 +1065,6 @@ abrirEditarFechaSolucion(ticket: Ticket) {
     }
   });
 }
-
 
 
 public getNombreEquipoOInventario(ticket: Ticket): string {
