@@ -7,7 +7,7 @@ import os
 import tempfile
 from flask import Blueprint, request, jsonify, send_file
 from flask_cors import CORS
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 import pandas as pd
 import qrcode
 from app. extensions import db
@@ -577,27 +577,83 @@ def listar_equipos():
         if not user:
             return error_response('Usuario no encontrado', 404)
 
+        claims = get_jwt() or {}
+        rol = (claims.get("rol") or "").strip().upper()
+        department_id = claims.get("department_id")
+        is_admin = rol in {"ADMINISTRADOR", "SUPER_ADMIN", "ADMIN"}
+
+        # ----------------------------
+        # Tipo + enforcement por dept
+        # ----------------------------
         tipo = (request.args.get('tipo') or '').strip().lower()
-        # Mapea todos los posibles valores recibidos a lo que existe en tu base
+
+        DEP_MANTENIMIENTO = 1
+        DEP_SISTEMAS = 7
+
+        if not is_admin:
+            if department_id == DEP_MANTENIMIENTO:
+                tipo = "aparatos"
+            elif department_id == DEP_SISTEMAS:
+                tipo = "dispositivos"
+
+        # Mapea valores recibidos a lo que existe en tu base (lower)
         if tipo in ['aparato', 'aparatos']:
             tipo = 'aparatos'
         elif tipo in ['sistema', 'sistemas', 'dispositivo', 'dispositivos']:
-            tipo = 'dispositivos'  # AJUSTA a tu valor real en la base si es "dispositivos"
+            tipo = 'dispositivos'
         else:
             tipo = ''
+
+        # ----------------------------
+        # Sucursal (scoped por rol)
+        # ----------------------------
         sucursal_id = request.args.get('sucursal_id', type=int)
 
+        allowed_sucursales = claims.get("sucursales_ids")
+        if not allowed_sucursales:
+            # fallback a BD (relación usuario_sucursal)
+            allowed_sucursales = getattr(user, "sucursales_ids", []) or []
+        try:
+            allowed_sucursales = [int(x) for x in allowed_sucursales]
+        except Exception:
+            allowed_sucursales = []
+
+        target_sucursal = sucursal_id or user.sucursal_id
+
+        # ----------------------------
+        # Query base
+        # ----------------------------
         query = InventarioGeneral.query
         query = query.filter(InventarioGeneral.codigo_interno.isnot(None))
+
         if tipo:
             query = query.filter(db.func.lower(InventarioGeneral.tipo) == tipo)
 
-        # Filtro por sucursal:
-        if not (user.rol == "ADMINISTRADOR" or user.sucursal_id == 1000 or user.sucursal_id == 100):
-            query = query.join(InventarioSucursal).filter(InventarioSucursal.sucursal_id == user.sucursal_id)
-        elif sucursal_id:
-            query = query.join(InventarioSucursal).filter(InventarioSucursal.sucursal_id == sucursal_id)
+        # ----------------------------
+        # Filtro sucursal (UNA sola vez)
+        # ----------------------------
+        # Reglas:
+        # - Admin: puede la sucursal que mande (o su sucursal por default)
+        # - MANTENIMIENTO: ve todas (igual que admin pero sin permisos extra)
+        # - SR_MANTENIMIENTO: solo sucursales_ids
+        # - AUX_MANTENIMIENTO: solo user.sucursal_id (ignora target_sucursal)
+        if is_admin or rol == "MANTENIMIENTO":
+            if target_sucursal:
+                query = query.join(InventarioSucursal).filter(InventarioSucursal.sucursal_id == target_sucursal)
 
+        elif rol == "AUX_MANTENIMIENTO":
+            # Solo su sucursal fija
+            query = query.join(InventarioSucursal).filter(InventarioSucursal.sucursal_id == user.sucursal_id)
+
+        else:
+            # SR_MANTENIMIENTO y cualquier otro no-admin: solo las asignadas
+            if target_sucursal not in allowed_sucursales:
+                return jsonify({"error": "Forbidden", "detail": "No tienes acceso a esta sucursal"}), 403
+            query = query.join(InventarioSucursal).filter(InventarioSucursal.sucursal_id == target_sucursal)
+
+        # ----------------------------
+        # Response
+        # ----------------------------
         equipos = query.order_by(InventarioGeneral.nombre.asc()).all()
         data = []
         for eq in equipos:
@@ -612,10 +668,9 @@ def listar_equipos():
             })
 
         return jsonify(data), 200
+
     except Exception as e:
         return manejar_error(e, "listar_equipos")
-
-
 @inventario_bp.route('/equipos-historial', methods=['GET'], strict_slashes=False)
 @jwt_required()
 def equipos_con_historial():

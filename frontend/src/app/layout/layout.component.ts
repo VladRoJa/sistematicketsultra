@@ -45,7 +45,7 @@ export class LayoutComponent implements OnInit, AfterViewInit {
   timeoutSubmenu: any;
   ocultarTimeout: any;
   menuItems: any[] = [];
-  publi
+  puedeVerMantenimiento = false;
 
   private apiUrl = `${environment.apiUrl}/tickets`;
 
@@ -78,6 +78,24 @@ ngOnInit(): void {
     }
   ];
 
+  const menuTicketsMantenimiento = [
+    {
+      label: 'Tickets',
+      path: '/main/ver-tickets',
+      submenu: [
+        { label: 'Ver Tickets', path: '/main/ver-tickets' },
+        { label: 'Crear Ticket', path: '/main/crear-ticket' }
+      ]
+    },
+    {
+      label: 'Mantenimiento',
+      path: '/pm/bitacoras-mobile',
+      submenu: [
+        { label: 'Bitácora PM (móvil)', path: '/pm/bitacoras-mobile' },
+      ]
+    }
+  ];
+
   const menuCompleto = [
     {
       label: 'Tickets',
@@ -96,13 +114,6 @@ ngOnInit(): void {
         { label: 'Existencias', path: '/inventario/existencias' },
         { label: 'Reportes', path: '/inventario/reportes' },
         { label: 'Carga Masiva', path: '/carga-masiva' }
-      ]
-    },
-    {
-      label: 'Mantenimiento',
-      path: '/pm/bitacoras-mobile',
-      submenu: [
-        { label: 'Bitácora PM (móvil)', path: '/pm/bitacoras-mobile' },
       ]
     },
     {
@@ -135,9 +146,15 @@ ngOnInit(): void {
     }
   ];
 
-  // Regla: LECTOR_GLOBAL → solo Tickets, Admin → completo, otros → solo Tickets (como antes)
-  this.menuItems = this.esSoloLectura ? soloTickets : (this.esAdmin ? menuCompleto : soloTickets);
-}
+
+
+  this.menuItems = this.esSoloLectura
+    ? soloTickets
+    : (this.esAdmin
+        ? menuCompleto
+        : (this.puedeVerMantenimiento ? menuTicketsMantenimiento : soloTickets)
+      );
+  }
 
 
   // 🖱️ Lógica de inactividad
@@ -191,11 +208,11 @@ ngOnInit(): void {
     const user = this.authService.getUser();
     const rol = (user?.rol || '').toUpperCase();
 
-    // Admin real por rol
     this.esAdmin = rol === 'ADMINISTRADOR' || rol === 'SUPER_ADMIN';
-
-    // Lector global (solo lectura)
     this.esSoloLectura = rol === 'LECTOR_GLOBAL';
+
+    const dept = Number(user?.department_id);
+    this.puedeVerMantenimiento = dept === 1 || dept === 7;
   }
 
 
