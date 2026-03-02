@@ -1,4 +1,4 @@
-//frontend-angular\src\app\inventario\modales\historial-equipo-modal.component.ts
+//frontend\src\app\inventario\modales\historial-equipo-modal.component.ts
 
 import { Component, Inject } from '@angular/core';
 import { MAT_DIALOG_DATA } from '@angular/material/dialog';

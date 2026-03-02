@@ -1,4 +1,4 @@
-//frontend-angular\src\app\pantalla-crear-ticket\formularios-crear-ticket\formulario-dinamico.component.ts
+//frontend\src\app\pantalla-crear-ticket\formularios-crear-ticket\formulario-dinamico.component.ts
 
 import {
   Component, Input, OnInit, OnChanges, SimpleChanges, ChangeDetectorRef

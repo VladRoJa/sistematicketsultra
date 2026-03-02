@@ -1,4 +1,4 @@
-//frontend-angular\src\app\services\productos.service.ts
+//frontend\src\app\services\productos.service.ts
 
 
 import { Injectable } from '@angular/core';

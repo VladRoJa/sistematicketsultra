@@ -1,4 +1,4 @@
-//frontend-angular\src\app\helpers\inventario\obtener-sucursales.helper.ts
+//frontend\src\app\helpers\inventario\obtener-sucursales.helper.ts
 
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { environment } from 'src/environments/environment';

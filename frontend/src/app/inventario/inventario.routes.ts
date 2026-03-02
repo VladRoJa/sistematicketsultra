@@ -1,4 +1,4 @@
-//frontend-angular\src\app\inventario\inventario.routes.ts
+//frontend\src\app\inventario\inventario.routes.ts
 
 import { Routes } from '@angular/router';
 import { InventarioLayoutComponent } from './inventario-layout/inventario-layout.component';

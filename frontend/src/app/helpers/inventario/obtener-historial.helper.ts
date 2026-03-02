@@ -1,4 +1,4 @@
-//frontend-angular\src\app\helpers\inventario\obtener-historial.helper.ts
+//frontend\src\app\helpers\inventario\obtener-historial.helper.ts
 
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { environment } from 'src/environments/environment';

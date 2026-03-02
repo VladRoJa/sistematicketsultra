@@ -4,10 +4,19 @@
   <mat-card-title>Bitácora PM (móvil)</mat-card-title>
   <mat-card-content>
     <form [formGroup]="form" style="display: grid; gap: 12px; max-width: 520px;">
-      <mat-form-field appearance="outline">
-        <mat-label>Inventario ID</mat-label>
-        <input matInput type="number" formControlName="inventario_id" />
-      </mat-form-field>
+<mat-form-field appearance="outline">
+  <mat-label>Equipo</mat-label>
+    <mat-select formControlName="inventario_id">
+    <mat-option *ngIf="equiposLoading" [disabled]="true">Cargando...</mat-option>
+    <mat-option *ngFor="let e of equipos" [value]="(e.inventario_id ?? e.id)">
+      {{ (e.inventario_id ?? e.id) }} • {{ equipoLabel(e) }}
+    </mat-option>
+  </mat-select>
+</mat-form-field>
+
+<div style="font-size:12px; opacity:.8;">
+  inventario_id actual: {{ form.get('inventario_id')?.value }}
+</div>
 
       <mat-form-field appearance="outline">
         <mat-label>Sucursal ID</mat-label>
@@ -48,6 +57,10 @@
       <button mat-raised-button color="primary" type="button" (click)="guardar()" [disabled]="loading">
         {{ loading ? 'Guardando...' : 'Guardar bitácora' }}
       </button>
+<pre style="font-size:12px; opacity:.8; margin:0;">
+{{ form.getRawValue() | json }}
+</pre>
+
 
       <div *ngIf="lastId" style="font-weight: 600;">
         Última bitácora guardada: ID {{ lastId }}

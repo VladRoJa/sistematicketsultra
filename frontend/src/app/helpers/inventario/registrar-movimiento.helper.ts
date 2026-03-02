@@ -1,4 +1,4 @@
-//frontend-angular\src\app\helpers\inventario\registrar-movimiento.helper.ts
+//frontend\src\app\helpers\inventario\registrar-movimiento.helper.ts
 
 
 import { HttpClient, HttpHeaders } from '@angular/common/http';

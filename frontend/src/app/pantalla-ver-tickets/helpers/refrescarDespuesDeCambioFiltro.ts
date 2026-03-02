@@ -1,4 +1,4 @@
-//frontend-angular\src\app\pantalla-ver-tickets\helpers\refrescarDespuesDeCambioFiltro.ts
+//frontend\src\app\pantalla-ver-tickets\helpers\refrescarDespuesDeCambioFiltro.ts
 
 import { filtrarTicketsConFiltros } from "src/app/utils/ticket-utils";
 import { obtenerFiltrosActivos } from "./pantalla-ver-tickets.filtros";
