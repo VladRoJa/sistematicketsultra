@@ -14,10 +14,16 @@ def _is_valid_email(s: str | None) -> bool:
 
 def _require_admin():
     claims = get_jwt() or {}
-    rol = claims.get("rol")
-    if rol != "admin":
+    rol = (claims.get("rol") or "").strip().lower()
+
+    # Roles admin reales en tu sistema
+    allowed = {"administrador", "super_admin", "admin"}
+
+    if rol not in allowed:
         return jsonify({"error": "Forbidden"}), 403
+
     return None
+
 
 # ─────────────────────────────────────────────────────────────
 # GET: Lista todos los usuarios

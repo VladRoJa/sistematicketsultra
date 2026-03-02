@@ -1,25 +1,34 @@
-//auth.service.ts
+// frontend/src/app/services/auth.service.ts
 
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { Observable, throwError } from 'rxjs';
+import { Observable, throwError, of } from 'rxjs';
 import { Router } from '@angular/router';
-import { tap } from 'rxjs/operators';
+import { tap, shareReplay, finalize } from 'rxjs/operators';
 import { NoAuthHttpClient } from './no-auth-http-client.service';
-import { environment } from '../../environments/environment'; 
+import { environment } from '../../environments/environment';
+import { SessionService } from '../core/auth/session.service';
+
+
 
 @Injectable({
   providedIn: 'root'
 })
 export class AuthService {
   private apiUrl = `${environment.apiUrl}/auth`;
+  private sessionInfoRequest$?: Observable<any>;
 
-  constructor(private http: HttpClient, private router: Router, private noAuthHttp: NoAuthHttpClient) { }
+  
+  constructor(
+    private http: HttpClient,
+    private router: Router,
+    private noAuthHttp: NoAuthHttpClient,
+    private session: SessionService,
+  ) {}
 
   login(username: string, password: string): Observable<any> {
     console.log("🚀 Enviando login con credenciales:");
 
-  
     return this.http.post<any>(
       `${this.apiUrl}/login`,
       { username, password },
@@ -35,30 +44,27 @@ export class AuthService {
       })
     );
   }
-  
 
   logout() {
     console.log("🚪 Cerrando sesión...");
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    this.session.clearSession(); // ✅ antes: localStorage.removeItem(...)
     console.log("✅ Sesión eliminada.");
     this.router.navigate(['/login']);
-}
+  }
 
+  setSession(token: string, user: any, redirigir: boolean = true) {
+    console.log("📌 setSession() EJECUTADO");
+    console.log("📌 Guardando usuario en sesión:", user);
 
-setSession(token: string, user: any, redirigir: boolean = true) {
+    this.session.setSession(token, user || {}); // ✅ antes: localStorage.setItem...
 
-    console.log("📌 setSession() EJECUTADO"); 
-    console.log("📌 Guardando usuario en localStorage:", user);
-    localStorage.setItem('token', token);
-    localStorage.setItem('user', JSON.stringify(user));
-    const storedUser = localStorage.getItem('user');
-    console.log("🔍 Usuario después de guardar:", storedUser ? JSON.parse(storedUser) : null);
+    const storedUser = this.session.getUser();
+    console.log("🔍 Usuario después de guardar:", storedUser);
 
     if (!redirigir) return;
 
     // 📌 Redirigir según el área del usuario
-    const area = user.sucursal_id;
+    const area = user?.sucursal_id;
     if (area === 1) this.router.navigate(['/tickets/mantenimiento']);
     else if (area === 2) this.router.navigate(['/tickets/finanzas']);
     else if (area === 3) this.router.navigate(['/tickets/marketing']);
@@ -70,29 +76,20 @@ setSession(token: string, user: any, redirigir: boolean = true) {
   }
 
   getToken(): string | null {
-    return localStorage.getItem('token');
+    return this.session.getToken(); // ✅ antes: localStorage.getItem('token')
   }
 
   getUser(): any {
-    const userString = localStorage.getItem("user");
-
-    if (!userString) {
-        console.warn("⚠️ No hay usuario en localStorage.");
-        return null;
+    const user = this.session.getUser(); // ✅ antes: parse manual
+    if (!user) {
+      console.warn("⚠️ No hay usuario en sesión.");
+      return null;
     }
-
-    try {
-        const user = JSON.parse(userString);
-        return user;
-    } catch (error) {
-        console.error("❌ Error al parsear usuario desde localStorage:", error);
-        return null;
-    }
-}
-
+    return user;
+  }
 
   isLoggedIn(): boolean {
-    return !!this.getToken();
+    return this.session.isLoggedIn(); // ✅ antes: !!getToken()
   }
 
   obtenerUsuarioAutenticado(): Observable<any> {
@@ -101,39 +98,59 @@ setSession(token: string, user: any, redirigir: boolean = true) {
       console.warn("⚠️ No hay token disponible, no se puede obtener la sesión.");
       return throwError(() => new Error("No hay token disponible"));
     }
-  
+
+    // ✅ Si ya tenemos usuario en sesión, no pegamos al backend otra vez.
+    const existingUser = this.getUser();
+    if (existingUser) {
+      return of({ user: existingUser });
+    }
+
+    // ✅ Si ya hay una petición en curso, reutilízala.
+    if (this.sessionInfoRequest$) {
+      return this.sessionInfoRequest$;
+    }
+
     const headers = new HttpHeaders().set("Authorization", `Bearer ${token}`);
-  
-    return this.http.get<any>(`${environment.apiUrl}/session-info`, { headers }).pipe(
-      tap(response => {
-        if (response?.user) {
-          console.log("📌 Usuario obtenido de la API:", response.user);
-          this.setSession(token, response.user); // 🔥 Ahora se guarda en localStorage al obtener la sesión
-        }
-      })
-    );
+
+    this.sessionInfoRequest$ = this.http
+      .get<any>(`${environment.apiUrl}/session-info`, { headers })
+      .pipe(
+        tap(response => {
+          if (response?.user) {
+            console.log("📌 Usuario obtenido de la API:", response.user);
+            this.setSession(token, response.user);
+          }
+        }),
+        // ✅ cachea el resultado para los subscriptores simultáneos
+        shareReplay(1),
+        // ✅ al terminar (éxito o error) liberamos el “lock”
+        finalize(() => {
+          this.sessionInfoRequest$ = undefined;
+        }),
+      );
+
+    return this.sessionInfoRequest$;
   }
-  
-    esAdmin(): boolean {
+
+  esAdmin(): boolean {
+    // Puedes usar session.isAdmin(), pero lo dejo equivalente a tu lógica actual:
     const user = this.getUser();
     if (!user) return false;
     const rol = (user.rol || '').toLowerCase();
     return rol === 'administrador' || rol === 'super_admin';
   }
-  
+
   esLectorGlobal(): boolean {
-  const user = this.getUser();
-  if (!user) return false;
-  const rol = (user.rol || '').toUpperCase();
-  return rol === 'LECTOR_GLOBAL';
-}
+    const user = this.getUser();
+    if (!user) return false;
+    const rol = (user.rol || '').toUpperCase();
+    return rol === 'LECTOR_GLOBAL';
+  }
 
-esGerente(): boolean {
-  const user = this.getUser();
-  if (!user) return false;
-  const rol = (user.rol || '').toUpperCase();
-  return rol === 'GERENTE';
-}
-
-
+  esGerente(): boolean {
+    const user = this.getUser();
+    if (!user) return false;
+    const rol = (user.rol || '').toUpperCase();
+    return rol === 'GERENTE';
+  }
 }
