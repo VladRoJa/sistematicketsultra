@@ -1,4 +1,4 @@
-//frontend-angular\src\app\helpers\inventario\obtener-equipos.helper.ts
+//frontend\src\app\helpers\inventario\obtener-equipos.helper.ts
 
 import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
 import { environment } from 'src/environments/environment';

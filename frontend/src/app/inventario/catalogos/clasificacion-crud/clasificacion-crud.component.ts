@@ -1,4 +1,4 @@
-//frontend-angular\src\app\inventario\catalogos\clasificacion-crud\clasificacion-crud.component.ts
+//frontend\src\app\inventario\catalogos\clasificacion-crud\clasificacion-crud.component.ts
 
 
 import { Component, ElementRef, OnInit, ViewChild } from '@angular/core';

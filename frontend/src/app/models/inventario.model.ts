@@ -1,4 +1,4 @@
-//frontend-angular\src\app\models\inventario.model.ts
+//frontend\src\app\models\inventario.model.ts
 
 
 export interface Inventario {

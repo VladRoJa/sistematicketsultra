@@ -1,4 +1,4 @@
-//frontend-angular\src\app\utils\mapa-formularios-tickets.ts
+//frontend\src\app\utils\mapa-formularios-tickets.ts
 
 
 /**

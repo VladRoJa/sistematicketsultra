@@ -1,4 +1,4 @@
-//frontend-angular\src\app\reauth-modal\reauth-modal.component.ts
+//frontend\src\app\reauth-modal\reauth-modal.component.ts
 
 import { Component } from '@angular/core';
 import { MatDialogRef } from '@angular/material/dialog';

@@ -1,4 +1,4 @@
-//frontend-angular\src\app\pantalla-ver-tickets\helpers\filtros-genericos.ts
+//frontend\src\app\pantalla-ver-tickets\helpers\filtros-genericos.ts
 
 
 export function inicializarTemporales(component: any, columna: string): void {

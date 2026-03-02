@@ -1,6 +1,6 @@
 // frontend\src\app\pm\pm-bitacoras-mobile\pm-bitacoras-mobile.component.ts
 
-import { Component, inject } from '@angular/core';
+import { Component, inject, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, Validators, ReactiveFormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
@@ -11,6 +11,8 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatButtonModule } from '@angular/material/button';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { PmInventarioService, PmEquipoItem } from './services/pm-inventario.service';
+import { debounceTime, distinctUntilChanged, map } from 'rxjs/operators';
 
 import { SessionService } from '../../core/auth/session.service';
 
@@ -33,17 +35,70 @@ type ResultadoBitacora = 'OK' | 'FALLA' | 'OBS';
   templateUrl: './pm-bitacoras-mobile.component.html',
   styleUrls: ['./pm-bitacoras-mobile.component.css'],
 })
-export class PmBitacorasMobileComponent {
+export class PmBitacorasMobileComponent implements OnInit {
   private fb = inject(FormBuilder);
   private http = inject(HttpClient);
   private snack = inject(MatSnackBar);
   private session = inject(SessionService);
+  private pmInventario = inject(PmInventarioService);
+
+  equipos: PmEquipoItem[] = [];
+  equiposLoading = false;
 
   // ✅ Endpoint backend (proxy /api)
   private readonly endpoint = '/api/pm/mobile/bitacoras';
 
   loading = false;
   lastId: number | null = null;
+
+  ngOnInit(): void {
+    // Carga inicial
+    const s = this.form.get('sucursal_id')?.value;
+    if (s) this.cargarEquipos(Number(s));
+
+    // Recargar cuando cambia sucursal (debounce para UX)
+    this.form.get('sucursal_id')?.valueChanges
+    .pipe(
+        debounceTime(150),
+        // ✅ normaliza para que "1" y 1 sean lo mismo
+        map((v) => (v === null || v === undefined ? null : Number(v))),
+        distinctUntilChanged(),
+    )
+    .subscribe((suc) => {
+        this.form.patchValue({ inventario_id: null }, { emitEvent: false });
+
+        if (suc) this.cargarEquipos(suc);
+        else this.equipos = [];
+    });
+    this.form.get('inventario_id')?.valueChanges.subscribe(v => {
+  console.log('inventario_id changed ->', v, typeof v);
+});
+  }
+
+  private cargarEquipos(sucursalId: number): void {
+    this.equiposLoading = true;
+    this.pmInventario.listarEquipos({ sucursal_id: sucursalId, tipo: 'MAQUINA' }).subscribe({
+      next: (rows) => {
+        this.equipos = rows || [];
+        this.equiposLoading = false;
+      },
+      error: () => {
+        this.equipos = [];
+        this.equiposLoading = false;
+        this.snack.open('No se pudo cargar inventario', 'OK', { duration: 2500 });
+      },
+    });
+  }
+
+  equipoLabel(e: PmEquipoItem): string {
+    const parts = [
+      e.codigo_interno,
+      e.nombre,
+      e.marca,
+      e.modelo,
+    ].filter(Boolean);
+    return parts.join(' • ') || `ID ${e.inventario_id}`;
+  }
 
   // Defaults útiles desde sesión
   private defaultSucursalId(): number | null {
@@ -121,4 +176,6 @@ export class PmBitacorasMobileComponent {
       },
     });
   }
+
+
 }

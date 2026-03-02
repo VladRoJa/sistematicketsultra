@@ -1,4 +1,4 @@
-//frontend-angular\src\main.ts
+//frontend\src\main.ts
 
 import { bootstrapApplication } from '@angular/platform-browser';
 import { provideRouter, withHashLocation } from '@angular/router';

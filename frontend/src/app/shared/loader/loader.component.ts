@@ -1,4 +1,4 @@
-//frontend-angular\src\app\shared\loader\loader.component.ts
+//frontend\src\app\shared\loader\loader.component.ts
 
 
 import { Component } from '@angular/core';
