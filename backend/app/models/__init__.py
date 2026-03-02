@@ -10,6 +10,7 @@ from .sucursal_model import Sucursal
 from .inventario import InventarioGeneral, InventarioSucursal, MovimientoInventario, DetalleMovimiento
 from .departamento_model import Departamento
 from .formulario_ticket import FormularioTicket, CampoFormulario
+from app.models.pm_bitacora import PmBitacoraORM
 
 
 # -------------------------------------------------------------------------------
@@ -26,4 +27,5 @@ __all__ = [
     "Departamento",
     "FormularioTicket",
     "CampoFormulario",
+    "PmBitacoraORM",
 ]
