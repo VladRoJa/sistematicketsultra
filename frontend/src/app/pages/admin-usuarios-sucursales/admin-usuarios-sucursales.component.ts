@@ -144,7 +144,7 @@ ngOnInit(): void {
     // Nota: aquí estás usando proxy relativo /api/...
     // Lo respetamos tal cual.
     this.http
-      .get<Array<{ sucursal_id: number; sucursal: string }>>('/api/sucursales/listar')
+      .get<Array<{ sucursal_id: number; sucursal: string }>>(`${this.API_BASE_URL}/sucursales/listar`)
       .subscribe({
         next: (rows) => {
           this.sucursales = (rows ?? []).map((r) => ({
