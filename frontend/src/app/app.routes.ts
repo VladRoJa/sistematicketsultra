@@ -11,6 +11,8 @@ import { LayoutComponent } from './layout/layout.component';
 import { RegistrarAsistenciaComponent } from './registrar-asistencia/registrar-asistencia.component';
 import { AdminPanelComponent } from './admin-panel/admin-panel.component';
 import { CrearTicketRefactorComponent } from './pantalla-crear-ticket/crear-ticket-refactor.component';
+import { PmBitacorasMobileComponent } from './pm/pm-bitacoras-mobile/pm-bitacoras-mobile.component';
+
 
 export const routes: Routes = [
   { path: '', redirectTo: 'login', pathMatch: 'full' },
@@ -18,7 +20,6 @@ export const routes: Routes = [
   {
   path: 'admin',
   component: AdminPanelComponent,
-  canActivate: [AdminGuard]
   },
   {
   path: 'test-select',
@@ -49,6 +50,10 @@ export const routes: Routes = [
         canActivate: [AuthGuard],
         loadChildren: () => import('./inventario/inventario.routes').then(m => m.INVENTARIO_ROUTES)
       },
+       {
+          path: 'pm/bitacoras-mobile',
+          component: PmBitacorasMobileComponent,
+        },
         {
         path: 'catalogos',
         loadChildren: () => import('./inventario/catalogos/catalogos-routing.module').then(m => m.CatalogosRoutingModule)

@@ -1,0 +1,57 @@
+<!-- frontend\src\app\pm\pm-bitacoras-mobile\pm-bitacoras-mobile.component.html -->
+
+<mat-card>
+  <mat-card-title>Bitácora PM (móvil)</mat-card-title>
+  <mat-card-content>
+    <form [formGroup]="form" style="display: grid; gap: 12px; max-width: 520px;">
+      <mat-form-field appearance="outline">
+        <mat-label>Inventario ID</mat-label>
+        <input matInput type="number" formControlName="inventario_id" />
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Sucursal ID</mat-label>
+        <input matInput type="number" formControlName="sucursal_id" />
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Fecha</mat-label>
+        <input matInput type="date" formControlName="fecha" />
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Resultado</mat-label>
+        <mat-select formControlName="resultado">
+          <mat-option value="OK">OK</mat-option>
+          <mat-option value="FALLA">FALLA</mat-option>
+          <mat-option value="OBS">OBS</mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Notas</mat-label>
+        <textarea matInput rows="3" formControlName="notas"></textarea>
+      </mat-form-field>
+
+      <div style="display:flex; gap: 10px; flex-wrap: wrap;">
+        <button mat-stroked-button type="button" (click)="form.patchValue({check_limpieza: !form.value.check_limpieza})">
+          Limpieza: {{ form.value.check_limpieza ? 'Sí' : 'No' }}
+        </button>
+        <button mat-stroked-button type="button" (click)="form.patchValue({check_ajustes: !form.value.check_ajustes})">
+          Ajustes: {{ form.value.check_ajustes ? 'Sí' : 'No' }}
+        </button>
+        <button mat-stroked-button type="button" (click)="form.patchValue({check_ruidos: !form.value.check_ruidos})">
+          Ruidos: {{ form.value.check_ruidos ? 'Sí' : 'No' }}
+        </button>
+      </div>
+
+      <button mat-raised-button color="primary" type="button" (click)="guardar()" [disabled]="loading">
+        {{ loading ? 'Guardando...' : 'Guardar bitácora' }}
+      </button>
+
+      <div *ngIf="lastId" style="font-weight: 600;">
+        Última bitácora guardada: ID {{ lastId }}
+      </div>
+    </form>
+  </mat-card-content>
+</mat-card>

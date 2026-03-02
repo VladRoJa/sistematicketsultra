@@ -99,6 +99,13 @@ ngOnInit(): void {
       ]
     },
     {
+      label: 'Mantenimiento',
+      path: '/pm/bitacoras-mobile',
+      submenu: [
+        { label: 'Bitácora PM (móvil)', path: '/pm/bitacoras-mobile' },
+      ]
+    },
+    {
       label: 'Catálogos',
       path: '/catalogos/marcas',
       submenu: [
