@@ -12,7 +12,7 @@ import { Observable, throwError, BehaviorSubject } from 'rxjs';
 import { catchError, filter, switchMap, take } from 'rxjs/operators';
 import { MatDialog } from '@angular/material/dialog';
 
-import { AuthService } from '../services/auth.service';
+import { SessionService } from '../core/auth/session.service';
 import { ReauthModalComponent } from '../reauth-modal/reauth-modal.component';
 import { environment } from 'src/environments/environment';
 
@@ -22,7 +22,7 @@ export class TokenInterceptor implements HttpInterceptor {
   private reauthSubject = new BehaviorSubject<string | null>(null);
 
   constructor(
-    private authService: AuthService,
+    private session: SessionService,
     private dialog: MatDialog,
   ) {}
 
@@ -36,7 +36,7 @@ export class TokenInterceptor implements HttpInterceptor {
      */
     const isApiCall = this.isApiRequest(req.url);
 
-    const token = this.authService.getToken();
+    const token = this.session.getToken();
 
     const authReq =
       token && isApiCall
@@ -87,7 +87,7 @@ export class TokenInterceptor implements HttpInterceptor {
             this.isReauthInProgress = false;
 
             if (result && result.token) {
-              this.authService.setSession(result.token, result.user || {}, false);
+              this.session.setSession(result.token, result.user || {});
               this.reauthSubject.next(result.token);
 
               // Reintentar request original con nuevo token
