@@ -4,7 +4,7 @@ from werkzeug.security import generate_password_hash
 from app.extensions import db
 from app.models.user_model import UserORM
 import re
-from flask_jwt_extended import jwt_required
+from flask_jwt_extended import jwt_required, get_jwt
 
 usuarios_bp = Blueprint('usuarios', __name__)
 
@@ -12,12 +12,22 @@ EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 def _is_valid_email(s: str | None) -> bool:
     return bool(s and EMAIL_RE.match(s))
 
+def _require_admin():
+    claims = get_jwt() or {}
+    rol = claims.get("rol")
+    if rol != "admin":
+        return jsonify({"error": "Forbidden"}), 403
+    return None
+
 # ─────────────────────────────────────────────────────────────
 # GET: Lista todos los usuarios
 # ─────────────────────────────────────────────────────────────
 @usuarios_bp.route('', methods=['GET'])
 @jwt_required()  # Requiere autenticación para acceder a esta ruta
 def listar_usuarios():
+    forbidden = _require_admin()
+    if forbidden:
+        return jsonify({"error": "Forbidden", "detail": "Se requiere rol admin"}), 403   
     usuarios = UserORM.query.all()
     return jsonify([{
         "id": u.id,
@@ -34,6 +44,9 @@ def listar_usuarios():
 @usuarios_bp.route('/<int:user_id>', methods=['GET'])
 @jwt_required()  # Requiere autenticación para acceder a esta ruta
 def obtener_usuario(user_id):
+    forbidden = _require_admin()
+    if forbidden:
+        return jsonify({"error": "Forbidden", "detail": "Se requiere rol admin"}), 403    
     u = UserORM.get_by_id(user_id)
     if not u:
         return jsonify({"error": "Usuario no encontrado"}), 404
@@ -52,6 +65,9 @@ def obtener_usuario(user_id):
 @usuarios_bp.route('', methods=['POST'])
 @jwt_required()  # Requiere autenticación para acceder a esta ruta
 def crear_usuario():
+    forbidden = _require_admin()
+    if forbidden:
+        return jsonify({"error": "Forbidden", "detail": "Se requiere rol admin"}), 403    
     data = request.json or {}
     obligatorio = ['username', 'password', 'rol', 'sucursal_id', 'department_id']
     if not all(k in data and data[k] for k in obligatorio):
@@ -84,6 +100,9 @@ def crear_usuario():
 @usuarios_bp.route('/<int:user_id>', methods=['PUT'])
 @jwt_required()  # Requiere autenticación para acceder a esta ruta
 def editar_usuario(user_id):
+    forbidden = _require_admin()
+    if forbidden:
+        return jsonify({"error": "Forbidden", "detail": "Se requiere rol admin"}), 403   
     u = UserORM.get_by_id(user_id)
     if not u:
         return jsonify({"error": "Usuario no encontrado"}), 404
@@ -122,6 +141,9 @@ def editar_usuario(user_id):
 @usuarios_bp.route('/<int:user_id>', methods=['DELETE'])
 @jwt_required()  # Requiere autenticación para acceder a esta ruta
 def eliminar_usuario(user_id):
+    forbidden = _require_admin()
+    if forbidden:
+        return jsonify({"error": "Forbidden", "detail": "Se requiere rol admin"}), 403   
     u = UserORM.get_by_id(user_id)
     if not u:
         return jsonify({"error": "Usuario no encontrado"}), 404
