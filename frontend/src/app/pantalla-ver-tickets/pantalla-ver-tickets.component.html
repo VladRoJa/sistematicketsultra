@@ -782,23 +782,29 @@
           </div>
         </td>
 
-        <!-- Fecha Solución -->
-        <td>
-          <ng-container *ngIf="ticket.fecha_solucion; else soloLecturaSinFecha">
-            {{ ticket.fecha_solucion | date:'dd/MM/yy' }}
-            <button
-              *ngIf="puedeEditarTickets && ((ticket.estado ?? '').toString().trim().toLowerCase() !== 'finalizado')"
-              mat-icon-button
-              class="boton-editar-fecha"
-              matTooltip="Editar fecha solución"
-              (click)="abrirEditarFechaSolucion(ticket)">
-              <mat-icon>edit</mat-icon>
-            </button>
-          </ng-container>
-          <ng-template #soloLecturaSinFecha>
-            <span class="text-gray-400">Sin asignar</span>
-          </ng-template>
-        </td>
+      <!-- Fecha Solución -->
+      <td>
+        <ng-container *ngIf="ticket.fecha_solucion; else soloLecturaSinFecha">
+          {{ ticket.fecha_solucion | date:'dd/MM/yy' }}
+
+          <button
+            *ngIf="
+              puedeEditarTickets &&
+              ((ticket.estado ?? '').toString().trim().toLowerCase() === 'en progreso')
+            "
+            mat-icon-button
+            class="boton-editar-fecha"
+            matTooltip="Editar fecha solución"
+            (click)="abrirEditarFechaSolucion(ticket)">
+            <mat-icon>edit</mat-icon>
+          </button>
+
+        </ng-container>
+
+        <ng-template #soloLecturaSinFecha>
+          <span class="text-gray-400">Sin asignar</span>
+        </ng-template>
+      </td>
 
 
         <!-- Historial -->
