@@ -113,7 +113,7 @@ export class AuthService {
     const headers = new HttpHeaders().set("Authorization", `Bearer ${token}`);
 
     this.sessionInfoRequest$ = this.http
-      .get<any>(`${environment.apiUrl}/session-info`, { headers })
+      .get<any>(`${this.apiUrl}/session-info`, { headers })
       .pipe(
         tap(response => {
           if (response?.user) {
