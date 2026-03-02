@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { environment } from 'src/environments/environment';
 
 export interface AdminUsuarioSucursalesResponse {
   user_id: number;
@@ -19,7 +20,7 @@ export interface AdminUsuarioSucursalesUpdateResponse {
 
 @Injectable({ providedIn: 'root' })
 export class AdminUsuariosService {
-  private readonly baseUrl = '/api';
+  private readonly baseUrl = environment.apiUrl;
 
   constructor(private http: HttpClient) {}
 
