@@ -42,6 +42,7 @@ def login():
                         "rol": user.rol,
                         "sucursal_id": user.sucursal_id,
                         "sucursales_ids": user.sucursales_ids,
+                        "department_id": user.department_id,
                     },
                 )
                 # Log de login exitoso SIN mostrar el token ni contraseña
@@ -55,7 +56,8 @@ def login():
                         "username": user.username,
                         "rol": user.rol,
                         "sucursal_id": user.sucursal_id,
-                        "sucursales_ids": user.sucursales_ids
+                        "sucursales_ids": user.sucursales_ids,
+                        "department_id": user.department_id,
                     }
                 }), 200
             else:
@@ -111,7 +113,8 @@ def session_info():
                 "username": user.username,
                 "rol": user.rol,
                 "sucursal_id": user.sucursal_id,
-                "sucursales_ids": user.sucursales_ids
+                "sucursales_ids": user.sucursales_ids,
+                "department_id": user.department_id,
             }
         })
         response.headers['Access-Control-Allow-Origin'] = origin
