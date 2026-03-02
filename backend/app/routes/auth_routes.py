@@ -36,7 +36,14 @@ def login():
         if user:
             if user.verify_password(password):
                 # ✅ Usar configuración global de expiración
-                token = create_access_token(identity=str(user.id))
+                token = create_access_token(
+                    identity=str(user.id),
+                    additional_claims={
+                        "rol": user.rol,
+                        "sucursal_id": user.sucursal_id,
+                        "sucursales_ids": user.sucursales_ids,
+                    },
+                )
                 # Log de login exitoso SIN mostrar el token ni contraseña
                 logger.info(f"Usuario '{username}' inició sesión correctamente.")
 
