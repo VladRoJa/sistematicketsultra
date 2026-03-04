@@ -18,13 +18,13 @@ export const routes: Routes = [
   { path: '', redirectTo: 'login', pathMatch: 'full' },
   { path: 'login', component: LoginComponent },
   {
-  path: 'admin',
-  component: AdminPanelComponent,
+    path: 'admin',
+    component: AdminPanelComponent,
   },
   {
-  path: 'test-select',
-  loadComponent: () => import('./prueba-select/prueba-select.component').then(m => m.PruebaSelectComponent)
-},
+    path: 'test-select',
+    loadComponent: () => import('./prueba-select/prueba-select.component').then(m => m.PruebaSelectComponent)
+  },
 
   {
     path: '',
@@ -36,7 +36,7 @@ export const routes: Routes = [
         component: MainComponent,
         children: [
           { path: '', redirectTo: 'ver-tickets', pathMatch: 'full' },
-          { path: 'crear-ticket', component: CrearTicketRefactorComponent  },
+          { path: 'crear-ticket', component: CrearTicketRefactorComponent },
           { path: 'ver-tickets', component: PantallaVerTicketsComponent },
         ],
       },
@@ -50,11 +50,17 @@ export const routes: Routes = [
         canActivate: [AuthGuard],
         loadChildren: () => import('./inventario/inventario.routes').then(m => m.INVENTARIO_ROUTES)
       },
-       {
-          path: 'pm/bitacoras-mobile',
-          component: PmBitacorasMobileComponent,
-        },
-        {
+      {
+        path: 'pm/bitacoras-mobile',
+        component: PmBitacorasMobileComponent,
+      },
+      {
+        path: 'pm/escritorio-preventivo',
+        loadComponent: () =>
+          import('./pm/pm-escritorio-preventivo/pm-escritorio-preventivo.component')
+            .then(m => m.PmEscritorioPreventComponent),
+      },
+      {
         path: 'catalogos',
         loadChildren: () => import('./inventario/catalogos/catalogos-routing.module').then(m => m.CatalogosRoutingModule)
       },
@@ -63,7 +69,7 @@ export const routes: Routes = [
         loadComponent: () => import('./inventario/carga-masiva/pantalla-carga-masiva.component')
           .then(m => m.PantallaCargaMasivaComponent)
       },
-            {
+      {
         path: 'admin-usuarios-sucursales',
         canActivate: [AdminGuard],
         loadComponent: () =>

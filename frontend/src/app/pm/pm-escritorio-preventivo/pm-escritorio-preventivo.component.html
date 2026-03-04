@@ -1,0 +1,156 @@
+<div class="pm-dashboard-container">
+
+    <h2 class="page-title">Escritorio de Mantenimiento Preventivo</h2>
+
+    <!-- ═══════ Filtros ═══════ -->
+    <mat-card class="filters-card">
+        <mat-card-content class="filters-row">
+
+            <mat-form-field appearance="outline" class="filter-field">
+                <mat-label>Sucursal</mat-label>
+                <mat-select [(ngModel)]="selectedSucursalId" (selectionChange)="onSucursalChange()">
+                    <mat-option *ngFor="let s of sucursalesList" [value]="s.sucursal_id">
+                        {{ s.sucursal }}
+                    </mat-option>
+                </mat-select>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline" class="filter-field filter-small">
+                <mat-label>Ventana (días)</mat-label>
+                <input matInput type="number" [(ngModel)]="windowDays" min="1" max="90" />
+            </mat-form-field>
+
+            <button mat-raised-button color="primary" (click)="cargarDashboard()" [disabled]="loading">
+                Refrescar
+            </button>
+
+        </mat-card-content>
+    </mat-card>
+
+    <!-- ═══════ Loading ═══════ -->
+    <div class="spinner-wrapper" *ngIf="loading">
+        <mat-spinner diameter="48"></mat-spinner>
+    </div>
+
+    <!-- ═══════ Sin datos ═══════ -->
+    <div class="empty-state" *ngIf="!loading && !tieneDatos && selectedSucursalId">
+        <mat-icon>check_circle</mat-icon>
+        <p>No hay equipos con mantenimiento pendiente.</p>
+    </div>
+
+    <!-- ═══════ ATRASADOS ═══════ -->
+    <mat-card class="section-card section-atrasados" *ngIf="contadorAtrasados > 0">
+        <mat-card-header>
+            <mat-card-title>
+                Atrasados
+                <span class="badge badge-danger">{{ contadorAtrasados }}</span>
+            </mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+            <table mat-table [dataSource]="atrasados" class="full-width">
+                <ng-container matColumnDef="equipo">
+                    <th mat-header-cell *matHeaderCellDef>Equipo</th>
+                    <td mat-cell *matCellDef="let row">{{ equipoLabel(row) }}</td>
+                </ng-container>
+                <ng-container matColumnDef="sucursal">
+                    <th mat-header-cell *matHeaderCellDef>Sucursal</th>
+                    <td mat-cell *matCellDef="let row">{{ row.sucursal }}</td>
+                </ng-container>
+                <ng-container matColumnDef="proximoPm">
+                    <th mat-header-cell *matHeaderCellDef>Próximo PM</th>
+                    <td mat-cell *matCellDef="let row">{{ row.proxima_fecha }}</td>
+                </ng-container>
+                <ng-container matColumnDef="diasRestantes">
+                    <th mat-header-cell *matHeaderCellDef>Días restantes</th>
+                    <td mat-cell *matCellDef="let row">{{ row.dias_restantes }}</td>
+                </ng-container>
+                <ng-container matColumnDef="accion">
+                    <th mat-header-cell *matHeaderCellDef></th>
+                    <td mat-cell *matCellDef="let row">
+                        <button mat-raised-button color="warn" (click)="abrirModalRegistrar(row)">Registrar PM</button>
+                    </td>
+                </ng-container>
+                <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+                <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+            </table>
+        </mat-card-content>
+    </mat-card>
+
+    <!-- ═══════ HOY ═══════ -->
+    <mat-card class="section-card section-hoy" *ngIf="contadorHoy > 0">
+        <mat-card-header>
+            <mat-card-title>
+                Hoy
+                <span class="badge badge-warning">{{ contadorHoy }}</span>
+            </mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+            <table mat-table [dataSource]="hoyList" class="full-width">
+                <ng-container matColumnDef="equipo">
+                    <th mat-header-cell *matHeaderCellDef>Equipo</th>
+                    <td mat-cell *matCellDef="let row">{{ equipoLabel(row) }}</td>
+                </ng-container>
+                <ng-container matColumnDef="sucursal">
+                    <th mat-header-cell *matHeaderCellDef>Sucursal</th>
+                    <td mat-cell *matCellDef="let row">{{ row.sucursal }}</td>
+                </ng-container>
+                <ng-container matColumnDef="proximoPm">
+                    <th mat-header-cell *matHeaderCellDef>Próximo PM</th>
+                    <td mat-cell *matCellDef="let row">{{ row.proxima_fecha }}</td>
+                </ng-container>
+                <ng-container matColumnDef="diasRestantes">
+                    <th mat-header-cell *matHeaderCellDef>Días restantes</th>
+                    <td mat-cell *matCellDef="let row">{{ row.dias_restantes }}</td>
+                </ng-container>
+                <ng-container matColumnDef="accion">
+                    <th mat-header-cell *matHeaderCellDef></th>
+                    <td mat-cell *matCellDef="let row">
+                        <button mat-raised-button color="accent" (click)="abrirModalRegistrar(row)">Registrar
+                            PM</button>
+                    </td>
+                </ng-container>
+                <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+                <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+            </table>
+        </mat-card-content>
+    </mat-card>
+
+    <!-- ═══════ PRÓXIMOS ═══════ -->
+    <mat-card class="section-card section-proximos" *ngIf="contadorProximos > 0">
+        <mat-card-header>
+            <mat-card-title>
+                Próximos
+                <span class="badge badge-info">{{ contadorProximos }}</span>
+            </mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+            <table mat-table [dataSource]="proximos" class="full-width">
+                <ng-container matColumnDef="equipo">
+                    <th mat-header-cell *matHeaderCellDef>Equipo</th>
+                    <td mat-cell *matCellDef="let row">{{ equipoLabel(row) }}</td>
+                </ng-container>
+                <ng-container matColumnDef="sucursal">
+                    <th mat-header-cell *matHeaderCellDef>Sucursal</th>
+                    <td mat-cell *matCellDef="let row">{{ row.sucursal }}</td>
+                </ng-container>
+                <ng-container matColumnDef="proximoPm">
+                    <th mat-header-cell *matHeaderCellDef>Próximo PM</th>
+                    <td mat-cell *matCellDef="let row">{{ row.proxima_fecha }}</td>
+                </ng-container>
+                <ng-container matColumnDef="diasRestantes">
+                    <th mat-header-cell *matHeaderCellDef>Días restantes</th>
+                    <td mat-cell *matCellDef="let row">{{ row.dias_restantes }}</td>
+                </ng-container>
+                <ng-container matColumnDef="accion">
+                    <th mat-header-cell *matHeaderCellDef></th>
+                    <td mat-cell *matCellDef="let row">
+                        <button mat-raised-button (click)="abrirModalRegistrar(row)">Registrar PM</button>
+                    </td>
+                </ng-container>
+                <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+                <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+            </table>
+        </mat-card-content>
+    </mat-card>
+
+</div>
