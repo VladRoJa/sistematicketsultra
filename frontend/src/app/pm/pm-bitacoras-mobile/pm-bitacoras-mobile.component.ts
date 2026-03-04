@@ -236,36 +236,32 @@ this.filteredEquipos$ = combineLatest([
 private cargarCatalogoSucursales(): void {
   this.http.get<Array<{ sucursal_id: number; sucursal: string }>>('/api/inventario/sucursales')
     .subscribe({
-    next: (rows) => {
-      const user = this.session.getUser();
-      const rol = (user?.rol || '').toString().toUpperCase();
-      const allowedIds = (user?.sucursales_ids || []).map((x: any) => Number(x));
-      const userSucursalId = Number(user?.sucursal_id);
+      next: (rows) => {
+        const list = (rows || []).map(r => ({
+          sucursal_id: Number(r.sucursal_id),
+          sucursal: r.sucursal
+        }));
 
-      let filtered = rows || [];
+        this.sucursalesList = list;
 
-      if (rol === 'SR_MANTENIMIENTO') {
-        filtered = filtered.filter(r => allowedIds.includes(Number(r.sucursal_id)));
-      } else if (rol === 'AUX_MANTENIMIENTO') {
-        filtered = filtered.filter(r => Number(r.sucursal_id) === userSucursalId);
-      }
-      // MANTENIMIENTO: no filtra (ve todas)
+        this.sucursalesMap.clear();
+        for (const r of list) {
+          this.sucursalesMap.set(Number(r.sucursal_id), r.sucursal);
+        }
 
-      this.sucursalesList = filtered.map(r => ({
-        sucursal_id: Number(r.sucursal_id),
-        sucursal: r.sucursal
-      }));
+        // si el usuario trae una sucursal default que NO está permitida,
+        // forzamos a la primera permitida para evitar dropdown raro.
+        const current = Number(this.form?.value?.sucursal_id);
+        const allowedIds = new Set(list.map(x => x.sucursal_id));
 
-      this.sucursalesMap.clear();
-      for (const r of filtered) {
-        this.sucursalesMap.set(Number(r.sucursal_id), r.sucursal);
-      }
-
-      // refresca nombre con el sucursal_id actual (si ya existe)
-      this.actualizarSucursalNombre(this.form?.value?.sucursal_id);
-    },
+        if (!current || Number.isNaN(current) || !allowedIds.has(current)) {
+          const first = list[0]?.sucursal_id ?? null;
+          this.form.patchValue({ sucursal_id: first }, { emitEvent: true });
+        } else {
+          this.actualizarSucursalNombre(current);
+        }
+      },
       error: () => {
-        // si falla, no rompemos la pantalla; solo dejamos nombre vacío
         this.sucursalNombre = '';
       }
     });

@@ -23,12 +23,12 @@ export class PmPreventivoService {
 
     /** Dashboard PM: atrasados, hoy, próximos. */
     getDashboard(sucursalId: number, windowDays = 7): Observable<DashboardPm> {
-        const params = new HttpParams()
-            .set('sucursal_id', sucursalId)
-            .set('window_days', windowDays);
-        return this.http.get<DashboardPm>(`${this.basePm}/dashboard`, { params });
-    }
+    const params = new HttpParams()
+        .set('sucursal_id', String(sucursalId))
+        .set('window_days', String(windowDays));
 
+    return this.http.get<DashboardPm>(`${this.basePm}/dashboard`, { params });
+    }
     /** Registrar mantenimiento preventivo (inserta en pm_bitacoras). */
     registrarPreventivo(payload: RegistrarPmPayload): Observable<{ msg: string; id: number }> {
         return this.http.post<{ msg: string; id: number }>(`${this.basePm}/registrar`, payload);
