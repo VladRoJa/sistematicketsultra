@@ -1,0 +1,10 @@
+.full-width {
+  width: 100%;
+}
+
+.checks-group {
+  display: flex;
+  gap: 16px;
+  margin: 8px 0 16px;
+  flex-wrap: wrap;
+}
