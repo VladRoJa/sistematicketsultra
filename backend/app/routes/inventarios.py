@@ -392,34 +392,42 @@ def listar_sucursales():
     try:
         claims = get_jwt() or {}
         rol = (claims.get("rol") or "").strip().upper()
-        admin_roles = {"ADMINISTRADOR", "SUPER_ADMIN", "ADMIN"}
 
-        # ADMIN y MANTENIMIENTO ven todas
-        if rol in admin_roles or rol == "MANTENIMIENTO":
+        def is_admin(r: str) -> bool:
+            return r in {"ADMINISTRADOR", "SUPER_ADMIN", "ADMIN"}
+
+        def is_mantenimiento_full(r: str) -> bool:
+            return r == "MANTENIMIENTO"
+
+        def is_aux_mant(r: str) -> bool:
+            return r == "AUX_MANTENIMIENTO" or r.startswith("AUX_MANT")
+
+        def is_sr_mant(r: str) -> bool:
+            return r == "SR_MANTENIMIENTO" or r.startswith("SR_MANT")
+
+        # 1) Admin / Mantenimiento global => todas
+        if is_admin(rol) or is_mantenimiento_full(rol):
             sucursales = Sucursal.query.all()
 
-        elif rol == "AUX_MANTENIMIENTO":
+        # 2) AUX => solo su sucursal_id
+        elif is_aux_mant(rol):
             user_sucursal = claims.get("sucursal_id")
             try:
                 user_sucursal = int(user_sucursal) if user_sucursal is not None else None
             except Exception:
                 user_sucursal = None
 
-            if user_sucursal:
-                sucursales = Sucursal.query.filter_by(sucursal_id=user_sucursal).all()
-            else:
-                sucursales = []
+            sucursales = Sucursal.query.filter_by(sucursal_id=user_sucursal).all() if user_sucursal else []
 
+        # 3) SR + otros => usar sucursales_ids del token (y si viene vacío, fallback BD solo para SR)
         else:
-            # SR_MANTENIMIENTO y otros: solo sucursales_ids del token
             allowed = claims.get("sucursales_ids") or []
             try:
                 allowed = [int(x) for x in allowed]
             except Exception:
                 allowed = []
 
-            # Fallback a BD si es SR_MANTENIMIENTO y el claim viene vacío
-            if not allowed and rol == "SR_MANTENIMIENTO":
+            if not allowed and is_sr_mant(rol):
                 user_id = get_jwt_identity()
                 rows = db.session.execute(
                     db.text("SELECT sucursal_id FROM usuario_sucursal WHERE user_id = :uid"),
@@ -427,10 +435,7 @@ def listar_sucursales():
                 ).fetchall()
                 allowed = [int(r[0]) for r in rows]
 
-            if allowed:
-                sucursales = Sucursal.query.filter(Sucursal.sucursal_id.in_(allowed)).all()
-            else:
-                sucursales = []
+            sucursales = Sucursal.query.filter(Sucursal.sucursal_id.in_(allowed)).all() if allowed else []
 
         data = [{'sucursal_id': s.sucursal_id, 'sucursal': s.sucursal} for s in sucursales]
         return jsonify(data), 200

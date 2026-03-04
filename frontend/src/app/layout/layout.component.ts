@@ -97,6 +97,7 @@ ngOnInit(): void {
       path: '/pm/bitacoras-mobile',
       submenu: [
         { label: 'Bitácora PM (móvil)', path: '/pm/bitacoras-mobile' },
+        { label: 'PM Preventivo (escritorio)', path: '/pm/escritorio-preventivo' },
       ]
     }
   ];
@@ -108,6 +109,14 @@ ngOnInit(): void {
       submenu: [
         { label: 'Ver Tickets', path: '/main/ver-tickets' },
         { label: 'Crear Ticket', path: '/main/crear-ticket' }
+      ]
+    },
+    {
+      label: 'Mantenimiento',
+      path: '/pm/escritorio-preventivo',
+      submenu: [
+        { label: 'PM Preventivo (escritorio)', path: '/pm/escritorio-preventivo' },
+        { label: 'Bitácora PM (móvil)', path: '/pm/bitacoras-mobile' },
       ]
     },
     {
