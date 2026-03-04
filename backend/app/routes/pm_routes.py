@@ -34,10 +34,10 @@ def pm_mobile_crear_bitacora():
             "detail": "checks debe ser un objeto/dict"
         }), 400
 
-    # 3) Scope check: sucursal permitida + relación inventario↔sucursal
+    # 3) Scope check: política final por rol + relación inventario↔sucursal
     claims = get_jwt() or {}
-    rol = (claims.get("rol") or "").strip().lower()
-    admin_roles = {"administrador", "super_admin", "admin"}
+    rol = (claims.get("rol") or "").strip().upper()
+    admin_roles = {"ADMINISTRADOR", "SUPER_ADMIN", "ADMIN"}
 
     # Normalizar ids a int (evita comparaciones raras)
     try:
@@ -49,20 +49,42 @@ def pm_mobile_crear_bitacora():
             "detail": "inventario_id y sucursal_id deben ser enteros"
         }), 400
 
-    # Si NO es admin, debe tener la sucursal en sus claims
-    if rol not in admin_roles:
-        allowed_sucursales = claims.get("sucursales_ids") or []
-        try:
-            allowed_sucursales_int = [int(x) for x in allowed_sucursales]
-        except Exception:
-            allowed_sucursales_int = []
+    # --- Política por rol ---
+    if rol in admin_roles:
+        pass
 
-        if sucursal_id_int not in allowed_sucursales_int:
+    elif rol == "MANTENIMIENTO":
+        # Mantenimiento puede registrar en cualquier sucursal
+        pass
+
+    elif rol == "AUX_MANTENIMIENTO":
+        # Aux solo en su sucursal fija (del token)
+        user_sucursal = claims.get("sucursal_id")
+        try:
+            user_sucursal = int(user_sucursal) if user_sucursal is not None else None
+        except Exception:
+            user_sucursal = None
+
+        if not user_sucursal or sucursal_id_int != user_sucursal:
             return jsonify({
                 "error": "Forbidden",
                 "detail": "No tienes acceso a esta sucursal"
             }), 403
 
+    else:
+        # SR_MANTENIMIENTO (y otros no-admin): solo sucursales_ids del token
+        allowed = claims.get("sucursales_ids") or []
+        try:
+            allowed = [int(x) for x in allowed]
+        except Exception:
+            allowed = []
+
+        if sucursal_id_int not in allowed:
+            return jsonify({
+                "error": "Forbidden",
+                "detail": "No tienes acceso a esta sucursal"
+            }), 403
+            
     # Validar que inventario_id pertenece a la sucursal_id
     rel = InventarioSucursal.query.filter_by(
         inventario_id=inventario_id_int,

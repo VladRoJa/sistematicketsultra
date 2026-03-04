@@ -609,10 +609,25 @@ def listar_equipos():
         # ----------------------------
         sucursal_id = request.args.get('sucursal_id', type=int)
 
-        allowed_sucursales = claims.get("sucursales_ids")
-        if not allowed_sucursales:
-            # fallback a BD (relación usuario_sucursal)
-            allowed_sucursales = getattr(user, "sucursales_ids", []) or []
+        # ----------------------------
+        # allowed_sucursales: solo aplica para SR_MANTENIMIENTO (y roles similares)
+        allowed_sucursales = claims.get("sucursales_ids") or []
+
+        # Fallback a BD SOLO si es SR_MANTENIMIENTO y el claim viene vacío
+        if rol == "SR_MANTENIMIENTO" and not allowed_sucursales:
+            rows = db.session.execute(
+                db.text("SELECT sucursal_id FROM usuario_sucursal WHERE user_id = :uid"),
+                {"uid": user.id}
+            ).fetchall()
+            allowed_sucursales = [int(r[0]) for r in rows]
+
+        # Normaliza
+        try:
+            allowed_sucursales = [int(x) for x in allowed_sucursales]
+        except Exception:
+            allowed_sucursales = []  # lista de ints
+
+        # Normaliza (por si venían strings en el claim)
         try:
             allowed_sucursales = [int(x) for x in allowed_sucursales]
         except Exception:
@@ -639,17 +654,17 @@ def listar_equipos():
         # - AUX_MANTENIMIENTO: solo user.sucursal_id (ignora target_sucursal)
         if is_admin or rol == "MANTENIMIENTO":
             if target_sucursal:
-                query = query.join(InventarioSucursal).filter(InventarioSucursal.sucursal_id == target_sucursal)
+                query = query.join(InventarioSucursal, InventarioSucursal.inventario_id == InventarioGeneral.id).filter(InventarioSucursal.sucursal_id == target_sucursal)
 
         elif rol == "AUX_MANTENIMIENTO":
             # Solo su sucursal fija
-            query = query.join(InventarioSucursal).filter(InventarioSucursal.sucursal_id == user.sucursal_id)
+            query = query.join(InventarioSucursal, InventarioSucursal.inventario_id == InventarioGeneral.id).filter(InventarioSucursal.sucursal_id == user.sucursal_id)
 
         else:
             # SR_MANTENIMIENTO y cualquier otro no-admin: solo las asignadas
             if target_sucursal not in allowed_sucursales:
                 return jsonify({"error": "Forbidden", "detail": "No tienes acceso a esta sucursal"}), 403
-            query = query.join(InventarioSucursal).filter(InventarioSucursal.sucursal_id == target_sucursal)
+            query = query.join(InventarioSucursal, InventarioSucursal.inventario_id == InventarioGeneral.id).filter(InventarioSucursal.sucursal_id == target_sucursal)
 
         # ----------------------------
         # Response
