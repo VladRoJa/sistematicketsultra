@@ -10,12 +10,14 @@ import { obtenerEquipos } from '../../../helpers/inventario/obtener-equipos.help
 export interface PmEquipoItem {
   inventario_id: number;
   sucursal_id: number;
+  id?: number; // para autocompletar, es el mismo que inventario_id pero como id
   nombre?: string;
   marca?: string;
   modelo?: string;
   codigo_interno?: string;
   tipo?: string;
   [key: string]: any;
+  categoria?: string; // para compatibilidad con respuesta del backend
 }
 
 @Injectable({ providedIn: 'root' })

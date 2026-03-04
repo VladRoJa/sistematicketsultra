@@ -32,7 +32,6 @@ export class AuthService {
     return this.http.post<any>(
       `${this.apiUrl}/login`,
       { username, password },
-      { withCredentials: true }
     ).pipe(
       tap({
         next: (response) => {

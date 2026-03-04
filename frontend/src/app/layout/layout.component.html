@@ -28,6 +28,9 @@
     </div>
   </div>
 
+  
+  <span class="usuario-label" *ngIf="usuarioLabel">{{ usuarioLabel }}</span>
+
   <!-- Botón de cerrar sesión -->
   <button mat-icon-button (click)="cerrarSesion()" class="logout-icon" aria-label="Cerrar sesión">
     <mat-icon>logout</mat-icon>

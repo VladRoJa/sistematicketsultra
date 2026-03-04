@@ -150,3 +150,13 @@
   font-size: 24px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
+
+.usuario-label {
+  margin-right: 10px;
+  font-size: 13px;
+  opacity: 0.9;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

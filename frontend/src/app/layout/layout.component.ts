@@ -15,6 +15,7 @@ import { mostrarAlertaToast } from '../utils/alertas';
 import { AuthService } from '../services/auth.service';
 import { ReauthModalComponent } from '../reauth-modal/reauth-modal.component';
 import { InactividadService } from '../services/inactividad.service';
+import { SessionService } from '../core/auth/session.service';
 
 
 @Component({
@@ -46,6 +47,7 @@ export class LayoutComponent implements OnInit, AfterViewInit {
   ocultarTimeout: any;
   menuItems: any[] = [];
   puedeVerMantenimiento = false;
+  usuarioLabel = '';
 
   private apiUrl = `${environment.apiUrl}/tickets`;
 
@@ -59,11 +61,14 @@ export class LayoutComponent implements OnInit, AfterViewInit {
     private dialog: MatDialog,
     private renderer: Renderer2,
     private authService: AuthService,
-    private inactividadService: InactividadService
+    private inactividadService: InactividadService,
+    private session: SessionService,
   ) {}
 
 ngOnInit(): void {
   this.verificarRolUsuario();
+  const u = this.session.getUser();
+  this.usuarioLabel = (u?.username || '').toString();
   this.iniciarTimerInactividad();
   this.inactividadService.registrarCallback(() => this.reiniciarTimerInactividad());
 

@@ -50,7 +50,8 @@ class Config:
         "https://sistematicketsultra.onrender.com",
         "https://sistematicketsultra-backend.onrender.com",
         "http://184.107.165.75",
-        "http://184.107.165.75:80"
+        "http://184.107.165.75:80",
+        "http://192.168.100.53:4200",
         
     ]
 

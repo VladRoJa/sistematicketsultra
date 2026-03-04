@@ -4,31 +4,56 @@
   <mat-card-title>Bitácora PM (móvil)</mat-card-title>
   <mat-card-content>
     <form [formGroup]="form" style="display: grid; gap: 12px; max-width: 520px;">
-<mat-form-field appearance="outline">
+<!-- Equipo (buscador) -->
+<mat-form-field appearance="fill" class="w-full">
   <mat-label>Equipo</mat-label>
-    <mat-select formControlName="inventario_id">
-    <mat-option *ngIf="equiposLoading" [disabled]="true">Cargando...</mat-option>
-    <mat-option *ngFor="let e of equipos" [value]="(e.inventario_id ?? e.id)">
-      {{ (e.inventario_id ?? e.id) }} • {{ equipoLabel(e) }}
+
+  <input
+    matInput
+    [formControl]="equipoCtrl"
+    [matAutocomplete]="autoEquipo"
+    placeholder="Buscar por código o nombre"
+  />
+
+  <mat-autocomplete
+    #autoEquipo="matAutocomplete"
+    [displayWith]="equipoDisplay"
+    (optionSelected)="onEquipoSelected($event.option.value)"
+  >
+    <mat-option *ngFor="let e of (filteredEquipos$ | async) || []" [value]="e">
+      {{ equipoLabel(e) }}
     </mat-option>
-  </mat-select>
+  </mat-autocomplete>
+
+  <mat-hint *ngIf="equiposLoading">Cargando equipos…</mat-hint>
 </mat-form-field>
 
-<div style="font-size:12px; opacity:.8;">
-  inventario_id actual: {{ form.get('inventario_id')?.value }}
-</div>
 
-      <mat-form-field appearance="outline">
-        <mat-label>Sucursal ID</mat-label>
-        <input matInput type="number" formControlName="sucursal_id" />
-      </mat-form-field>
+<!-- Sucursal -->
+<ng-container *ngIf="puedeCambiarSucursal; else sucursalFija">
+  <mat-form-field appearance="fill" class="w-full">
+    <mat-label>Sucursal</mat-label>
+    <mat-select formControlName="sucursal_id">
+      <mat-option *ngFor="let s of sucursalesList" [value]="s.sucursal_id">
+        {{ s.sucursal }}
+      </mat-option>
+    </mat-select>
+  </mat-form-field>
+</ng-container>
 
-      <mat-form-field appearance="outline">
+<ng-template #sucursalFija>
+  <mat-form-field appearance="fill" class="w-full">
+    <mat-label>Sucursal</mat-label>
+    <input matInput [value]="sucursalNombre" disabled />
+  </mat-form-field>
+</ng-template>
+
+      <mat-form-field appearance="fill">
         <mat-label>Fecha</mat-label>
         <input matInput type="date" formControlName="fecha" />
       </mat-form-field>
 
-      <mat-form-field appearance="outline">
+      <mat-form-field appearance="fill">
         <mat-label>Resultado</mat-label>
         <mat-select formControlName="resultado">
           <mat-option value="OK">OK</mat-option>
@@ -37,7 +62,7 @@
         </mat-select>
       </mat-form-field>
 
-      <mat-form-field appearance="outline">
+      <mat-form-field appearance="fill">
         <mat-label>Notas</mat-label>
         <textarea matInput rows="3" formControlName="notas"></textarea>
       </mat-form-field>
@@ -57,9 +82,6 @@
       <button mat-raised-button color="primary" type="button" (click)="guardar()" [disabled]="loading">
         {{ loading ? 'Guardando...' : 'Guardar bitácora' }}
       </button>
-<pre style="font-size:12px; opacity:.8; margin:0;">
-{{ form.getRawValue() | json }}
-</pre>
 
 
       <div *ngIf="lastId" style="font-weight: 600;">
