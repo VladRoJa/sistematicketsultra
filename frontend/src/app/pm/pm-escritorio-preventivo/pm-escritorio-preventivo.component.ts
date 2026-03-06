@@ -75,6 +75,10 @@ export class PmEscritorioPreventComponent implements OnInit {
         return this.atrasados.length > 0 || this.hoyList.length > 0 || this.proximos.length > 0;
     }
 
+    get mostrarVaciosPorSeccion(): boolean {
+        return this.tieneDatos;
+    }
+
     /** Label para equipo en la columna de tabla. */
     equipoLabel(row: EquipoEstado): string {
         return [row.codigo_interno, row.nombre].filter(Boolean).join(' — ');

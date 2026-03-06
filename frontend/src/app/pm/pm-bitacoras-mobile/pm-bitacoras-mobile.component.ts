@@ -158,8 +158,9 @@ this.filteredEquipos$ = combineLatest([
 
     // MVP checks (puedes cambiarlos luego por checklist real)
     check_limpieza: [true],
-    check_ajustes: [false],
-    check_ruidos: [false],
+    check_ajuste: [false],
+    check_revision: [false],
+    check_lubricacion: [false],
   });
 
   private todayYYYYMMDD(): string {
@@ -181,8 +182,9 @@ this.filteredEquipos$ = combineLatest([
       notas: v.notas || '',
       checks: {
         limpieza: !!v.check_limpieza,
-        ajustes: !!v.check_ajustes,
-        ruidos: !!v.check_ruidos,
+        ajustes: !!v.check_ajuste,
+        revision: !!v.check_revision,
+        lubricacion: !!v.check_lubricacion,
       },
     };
   }
@@ -215,8 +217,9 @@ this.filteredEquipos$ = combineLatest([
         resultado: 'OK' as ResultadoBitacora,  // default
         notas: '',
         check_limpieza: true,
-        check_ajustes: false,
-        check_ruidos: false,
+        check_ajuste: false,
+        check_revision: false,
+        check_lubricacion: false,
       });
 
       // limpiar el input del autocomplete

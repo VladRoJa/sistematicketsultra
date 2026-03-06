@@ -54,11 +54,12 @@
       </mat-form-field>
 
       <mat-form-field appearance="fill">
-        <mat-label>Resultado</mat-label>
-        <mat-select formControlName="resultado">
-          <mat-option value="OK">OK</mat-option>
-          <mat-option value="FALLA">FALLA</mat-option>
-          <mat-option value="OBS">OBS</mat-option>
+        <mat-label>Tipo de mantenimiento</mat-label>
+        <mat-select formControlName="tipo_mantenimiento">
+          <mat-option value="Correctivo">Correctivo</mat-option>
+          <mat-option value="Preventivo">Preventivo</mat-option>
+          <mat-option value="Estetico">Estetico</mat-option>
+          <mat-option value="Mejora">Mejora</mat-option>
         </mat-select>
       </mat-form-field>
 
@@ -71,11 +72,14 @@
         <button mat-stroked-button type="button" (click)="form.patchValue({check_limpieza: !form.value.check_limpieza})">
           Limpieza: {{ form.value.check_limpieza ? 'Sí' : 'No' }}
         </button>
-        <button mat-stroked-button type="button" (click)="form.patchValue({check_ajustes: !form.value.check_ajustes})">
-          Ajustes: {{ form.value.check_ajustes ? 'Sí' : 'No' }}
+        <button mat-stroked-button type="button" (click)="form.patchValue({check_revision: !form.value.check_revision})">
+          Revision: {{ form.value.check_revision ? 'Sí' : 'No' }}
         </button>
-        <button mat-stroked-button type="button" (click)="form.patchValue({check_ruidos: !form.value.check_ruidos})">
-          Ruidos: {{ form.value.check_ruidos ? 'Sí' : 'No' }}
+        <button mat-stroked-button type="button" (click)="form.patchValue({check_ajuste: !form.value.check_ajuste})">
+          Ajuste: {{ form.value.check_ajuste ? 'Sí' : 'No' }}
+        </button>
+        <button mat-stroked-button type="button" (click)="form.patchValue({check_lubricacion: !form.value.check_lubricacion})">
+          Lubricación: {{ form.value.check_lubricacion ? 'Sí' : 'No' }}
         </button>
       </div>
 
