@@ -13,15 +13,11 @@ import { MatTableModule } from '@angular/material/table';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatChipsModule } from '@angular/material/chips';
 
 import { PmPreventivoService } from '../../services/pm-preventivo.service';
-import {
-    EquipoEstado,
-    SucursalOption,
-} from '../../models/pm-preventivo.model';
-import { PmRegistrarPreventivoModalComponent } from './pm-registrar-preventivo-modal.component';
+import { EquipoEstado, SucursalOption,} from '../../models/pm-preventivo.model';
+import { Router } from '@angular/router';
 
 @Component({
     selector: 'app-pm-escritorio-preventivo',
@@ -38,7 +34,6 @@ import { PmRegistrarPreventivoModalComponent } from './pm-registrar-preventivo-m
         MatIconModule,
         MatSnackBarModule,
         MatProgressSpinnerModule,
-        MatDialogModule,
         MatChipsModule,
     ],
     templateUrl: './pm-escritorio-preventivo.component.html',
@@ -47,7 +42,7 @@ import { PmRegistrarPreventivoModalComponent } from './pm-registrar-preventivo-m
 export class PmEscritorioPreventComponent implements OnInit {
     private pmService = inject(PmPreventivoService);
     private snack = inject(MatSnackBar);
-    private dialog = inject(MatDialog);
+    private router = inject(Router);
 
     // ── Estado UI ──
     loading = false;
@@ -134,20 +129,6 @@ export class PmEscritorioPreventComponent implements OnInit {
         });
     }
 
-    // ── Abrir modal de registro ──
-    abrirModalRegistrar(equipo: EquipoEstado): void {
-        const ref = this.dialog.open(PmRegistrarPreventivoModalComponent, {
-            width: '480px',
-            data: equipo,
-            disableClose: true,
-        });
-
-        ref.afterClosed().subscribe((registrado: boolean) => {
-            if (registrado) {
-                this.cargarDashboard();
-            }
-        });
-    }
 
     // ── Callback cuando cambia la sucursal ──
     onSucursalChange(): void {
@@ -163,4 +144,16 @@ export class PmEscritorioPreventComponent implements OnInit {
         this.hoyList = [];
         this.proximos = [];
     }
+
+    /** Navega a bitácora móvil con parámetros para autoseleccionar equipo. */
+
+    irABitacoraPreventiva(equipo: EquipoEstado): void {
+    this.router.navigate(['/pm/bitacoras-mobile'], {
+        queryParams: {
+            sucursalId: equipo.sucursal_id,
+            inventarioId: equipo.inventario_id,
+            modo: 'preventivo',
+        },
+    });
+}
 }

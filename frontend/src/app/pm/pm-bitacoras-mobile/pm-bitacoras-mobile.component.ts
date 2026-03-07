@@ -15,10 +15,13 @@ import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { PmInventarioService, PmEquipoItem } from './services/pm-inventario.service';
 import { debounceTime, distinctUntilChanged, map, startWith } from 'rxjs/operators';
 import { BehaviorSubject, combineLatest, Observable } from 'rxjs';
+import { ActivatedRoute, Router  } from '@angular/router';
+
 
 import { SessionService } from '../../core/auth/session.service';
 
 type ResultadoBitacora = 'OK' | 'FALLA' | 'OBS';
+
 
 @Component({
   selector: 'app-pm-bitacoras-mobile',
@@ -44,6 +47,9 @@ export class PmBitacorasMobileComponent implements OnInit {
   private snack = inject(MatSnackBar);
   private session = inject(SessionService);
   private pmInventario = inject(PmInventarioService);
+  private route = inject(ActivatedRoute);
+  private router = inject(Router);
+  
   sucursalesList: Array<{ sucursal_id: number; sucursal: string }> = [];
 
   equipos: PmEquipoItem[] = [];
@@ -58,12 +64,23 @@ export class PmBitacorasMobileComponent implements OnInit {
   sucursalNombre = '';
   private sucursalesMap = new Map<number, string>();
   puedeCambiarSucursal = false;
+  prefillInventarioId: number | null = null;
+  prefillSucursalId: number | null = null;
+  prefillModo: string | null = null;
+
 
   equipoCtrl = this.fb.control<PmEquipoItem | string>(''); // texto que escribe el usuario
   filteredEquipos$!: Observable<PmEquipoItem[]>;
   
   
+  
   ngOnInit(): void {
+    this.prefillSucursalId = this.toNumberOrNull(this.route.snapshot.queryParamMap.get('sucursalId'));
+    this.prefillInventarioId = this.toNumberOrNull(this.route.snapshot.queryParamMap.get('inventarioId'));
+    this.prefillModo = this.route.snapshot.queryParamMap.get('modo');
+    if (this.prefillSucursalId) {
+      this.form.patchValue({ sucursal_id: this.prefillSucursalId }, { emitEvent: false });
+    }
     // ✅ cargar catálogo y nombre de sucursal
     this.cargarCatalogoSucursales();
     // Carga inicial
@@ -118,10 +135,23 @@ this.filteredEquipos$ = combineLatest([
     this.equiposLoading = true;
     this.pmInventario.listarEquipos({ sucursal_id: sucursalId, tipo: 'MAQUINA' }).subscribe({
       next: (rows) => {
-        this.equipos = rows || [];
-        this.equipos$.next(this.equipos);
-        this.equiposLoading = false;
+      this.equipos = rows || [];
+      this.equipos$.next(this.equipos);
+      this.equiposLoading = false;
+
+      if (this.prefillInventarioId) {
+        const equipoPrefill = this.equipos.find(
+          e => Number(e.id) === this.prefillInventarioId || Number(e.inventario_id) === this.prefillInventarioId
+        );
+
+        if (equipoPrefill) {
+          this.onEquipoSelected(equipoPrefill);
+        } else {
+          this.equipoCtrl.setValue('', { emitEvent: true });
+        }
+      } else {
         this.equipoCtrl.setValue('', { emitEvent: true });
+      }
       },
       error: () => {
         this.equipos = [];
@@ -203,27 +233,32 @@ this.filteredEquipos$ = combineLatest([
     this.loading = true;
     this.http.post<{ id: number; msg: string }>(this.endpoint, payload).subscribe({
       next: (res) => {
-        this.loading = false;
-        this.lastId = res?.id ?? null;
-        this.snack.open(res?.msg || 'Bitácora guardada', 'OK', { duration: 2500 });
+    this.loading = false;
+    this.lastId = res?.id ?? null;
+    this.snack.open(res?.msg || 'Bitácora guardada', 'OK', { duration: 2500 });
 
-      // ✅ limpiar para nueva captura (manteniendo defaults útiles)
-      const currentSucursal = this.form.get('sucursal_id')?.value;
+    if (this.esFlujoPreventivo) {
+      this.router.navigate(['/pm/escritorio-preventivo']);
+      return;
+    }
 
-      this.form.reset({
-        inventario_id: null,
-        sucursal_id: currentSucursal,          // mantener sucursal seleccionada
-        fecha: this.todayYYYYMMDD(),           // hoy
-        resultado: 'OK' as ResultadoBitacora,  // default
-        notas: '',
-        check_limpieza: true,
-        check_ajuste: false,
-        check_revision: false,
-        check_lubricacion: false,
-      });
+    // ✅ limpiar para nueva captura (manteniendo defaults útiles)
+    const currentSucursal = this.form.get('sucursal_id')?.value;
 
-      // limpiar el input del autocomplete
-      this.equipoCtrl.setValue('', { emitEvent: true });
+    this.form.reset({
+      inventario_id: null,
+      sucursal_id: currentSucursal,
+      fecha: this.todayYYYYMMDD(),
+      resultado: 'OK' as ResultadoBitacora,
+      notas: '',
+      check_limpieza: true,
+      check_ajuste: false,
+      check_revision: false,
+      check_lubricacion: false,
+    });
+
+    // limpiar el input del autocomplete
+    this.equipoCtrl.setValue('', { emitEvent: true });
       },
       error: (err) => {
         this.loading = false;
@@ -289,4 +324,17 @@ equipoDisplay = (value: PmEquipoItem | string | null): string => {
   if (!value) return '';
   return typeof value === 'string' ? value : this.equipoLabel(value);
 };
+
+private toNumberOrNull(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const n = Number(value);
+  return Number.isNaN(n) ? null : n;
+}
+
+get esFlujoPreventivo(): boolean {
+  return this.prefillModo === 'preventivo';
+}
+
+
+
 }
