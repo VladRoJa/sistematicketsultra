@@ -70,7 +70,7 @@
                 <ng-container matColumnDef="accion">
                     <th mat-header-cell *matHeaderCellDef></th>
                     <td mat-cell *matCellDef="let row">
-                        <button mat-raised-button color="warn" (click)="abrirModalRegistrar(row)">Registrar PM</button>
+                        <button mat-raised-button color="warn" (click)="irABitacoraPreventiva(row)">Registrar PM</button>
                     </td>
                 </ng-container>
                 <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
@@ -114,7 +114,7 @@
                 <ng-container matColumnDef="accion">
                     <th mat-header-cell *matHeaderCellDef></th>
                     <td mat-cell *matCellDef="let row">
-                        <button mat-raised-button color="accent" (click)="abrirModalRegistrar(row)">Registrar PM</button>
+                        <button mat-raised-button color="accent" (click)="irABitacoraPreventiva(row)">Registrar PM</button>
                     </td>
                 </ng-container>
                 <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
@@ -158,7 +158,7 @@
                 <ng-container matColumnDef="accion">
                     <th mat-header-cell *matHeaderCellDef></th>
                     <td mat-cell *matCellDef="let row">
-                        <button mat-raised-button (click)="abrirModalRegistrar(row)">Registrar PM</button>
+                        <button mat-raised-button (click)="irABitacoraPreventiva(row)">Registrar PM</button>
                     </td>
                 </ng-container>
                 <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
