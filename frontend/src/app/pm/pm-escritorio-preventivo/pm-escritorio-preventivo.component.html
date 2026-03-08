@@ -9,17 +9,28 @@
     <mat-card class="filters-card">
         <mat-card-content class="filters-row">
 
-            <mat-form-field appearance="outline" class="filter-field">
-                <mat-label>Sucursal</mat-label>
-                <mat-select [(ngModel)]="selectedSucursalId" (selectionChange)="onSucursalChange()">
-                    <mat-option *ngFor="let s of sucursalesList" [value]="s.sucursal_id">
-                        {{ s.sucursal }}
-                    </mat-option>
-                </mat-select>
-            </mat-form-field>
+            <mat-form-field appearance="fill" class="filter-field">
+            <mat-label>Sucursal</mat-label>
+            <input
+                matInput
+                [formControl]="sucursalCtrl"
+                [matAutocomplete]="autoSucursal">
 
-            <mat-form-field appearance="outline" class="filter-field filter-small">
-                <mat-label>Ventana (días)</mat-label>
+            <mat-autocomplete
+                #autoSucursal="matAutocomplete"
+                [displayWith]="sucursalDisplay"
+                (optionSelected)="onSucursalSelected($event.option.value)">
+                <mat-option *ngFor="let s of filteredSucursales$ | async" [value]="s">
+                    {{ s.sucursal }}
+                </mat-option>
+            </mat-autocomplete>
+        </mat-form-field>
+
+            <mat-form-field
+                appearance="fill"
+                class="filter-field filter-small"
+                matTooltip="Define cuántos días hacia adelante se consideran en la sección Próximos. Atrasados y Hoy se calculan por separado.">
+                <mat-label>Próximos días</mat-label>
                 <input matInput type="number" [(ngModel)]="windowDays" min="1" max="90" />
             </mat-form-field>
 
