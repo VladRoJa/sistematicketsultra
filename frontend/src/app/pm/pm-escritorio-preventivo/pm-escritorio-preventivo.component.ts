@@ -2,7 +2,10 @@
 
 import { Component, inject, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
+import { FormsModule, FormControl, ReactiveFormsModule  } from '@angular/forms';
+import { MatAutocompleteModule } from '@angular/material/autocomplete';
+import { Observable } from 'rxjs';
+import { map, startWith } from 'rxjs/operators';
 
 import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -14,6 +17,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatChipsModule } from '@angular/material/chips';
+import { MatTooltipModule } from '@angular/material/tooltip';
 
 import { PmPreventivoService } from '../../services/pm-preventivo.service';
 import { EquipoEstado, SucursalOption,} from '../../models/pm-preventivo.model';
@@ -35,6 +39,9 @@ import { Router } from '@angular/router';
         MatSnackBarModule,
         MatProgressSpinnerModule,
         MatChipsModule,
+        MatTooltipModule,
+        ReactiveFormsModule,
+        MatAutocompleteModule,
     ],
     templateUrl: './pm-escritorio-preventivo.component.html',
     styleUrls: ['./pm-escritorio-preventivo.component.css'],
@@ -56,6 +63,8 @@ export class PmEscritorioPreventComponent implements OnInit {
     atrasados: EquipoEstado[] = [];
     hoyList: EquipoEstado[] = [];
     proximos: EquipoEstado[] = [];
+    sucursalCtrl = new FormControl<string | SucursalOption>('');
+    filteredSucursales$!: Observable<SucursalOption[]>;
 
     /** Columnas de las tablas Material. */
     readonly displayedColumns = ['equipo', 'sucursal', 'proximoPm', 'diasRestantes', 'accion'];
@@ -81,7 +90,25 @@ export class PmEscritorioPreventComponent implements OnInit {
 
     ngOnInit(): void {
         this.cargarSucursales();
+            this.filteredSucursales$ = this.sucursalCtrl.valueChanges.pipe(
+        startWith(''),
+        map((value) => {
+            const term = (typeof value === 'string' ? value : value?.sucursal || '')
+                .toLowerCase()
+                .trim();
+
+            if (!term) {
+                return this.sucursalesList;
+            }
+
+            return this.sucursalesList.filter((s) =>
+                s.sucursal.toLowerCase().includes(term)
+            );
+        })
+    );
     }
+
+
 
     // ── Carga de sucursales (filtradas por backend) ──
     private cargarSucursales(): void {
@@ -138,11 +165,26 @@ export class PmEscritorioPreventComponent implements OnInit {
         }
     }
 
+
+    
+    onSucursalSelected(sucursal: SucursalOption): void {
+        this.selectedSucursalId = sucursal.sucursal_id;
+        this.sucursalCtrl.setValue(sucursal, { emitEvent: false });
+        this.onSucursalChange();
+    }
+
     /** Limpia las 3 listas. */
     private limpiarDatos(): void {
         this.atrasados = [];
         this.hoyList = [];
         this.proximos = [];
+    }
+    
+    
+
+    sucursalDisplay(value: SucursalOption | string | null): string {
+        if (!value) return '';
+        return typeof value === 'string' ? value : value.sucursal;
     }
 
     /** Navega a bitácora móvil con parámetros para autoseleccionar equipo. */
