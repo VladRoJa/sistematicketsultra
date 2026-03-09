@@ -7,6 +7,7 @@ import {
     DashboardPm,
     PmBitacoraDetalle,
     PmBitacoraResumen,
+    PmConfiguracionResumen,
     RegistrarPmPayload,
     SucursalOption,
 } from '../models/pm-preventivo.model';
@@ -63,5 +64,39 @@ export class PmPreventivoService {
     }
 
     return this.http.get<PmBitacoraResumen[]>(`${this.basePmRoot}/bitacoras`, { params });
+}
+
+    listarConfiguracionesPm(
+    sucursalId?: number | null,
+    ): Observable<PmConfiguracionResumen[]> {
+    let params = new HttpParams();
+
+    if (sucursalId) {
+        params = params.set('sucursal_id', String(sucursalId));
+    }
+
+    return this.http.get<PmConfiguracionResumen[]>(`${this.basePmRoot}/configuraciones`, { params });
+}
+
+    crearConfiguracionPm(payload: {
+    inventario_id: number;
+    sucursal_id: number;
+    frecuencia_dias: number;
+    activo: boolean;
+    }): Observable<PmConfiguracionResumen> {
+    return this.http.post<PmConfiguracionResumen>(`${this.basePmRoot}/configuraciones`, payload);
+}
+
+    actualizarConfiguracionPm(
+    configId: number,
+    payload: {
+        frecuencia_dias?: number;
+        activo?: boolean;
+    }
+    ): Observable<PmConfiguracionResumen> {
+    return this.http.put<PmConfiguracionResumen>(
+        `${this.basePmRoot}/configuraciones/${configId}`,
+        payload
+    );
 }
 }

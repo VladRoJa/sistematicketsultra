@@ -99,6 +99,7 @@ ngOnInit(): void {
         { label: 'Bitácora PM (móvil)', path: '/pm/bitacoras-mobile' },
         { label: 'PM Preventivo (escritorio)', path: '/pm/escritorio-preventivo' },
         { label: 'Consulta / Historial PM', path: '/pm/consulta-historial' },
+        { label: 'Configuración / Programación PM', path: '/pm/configuracion-programacion' },
       ]
     }
   ];
@@ -119,6 +120,7 @@ ngOnInit(): void {
         { label: 'PM Preventivo (escritorio)', path: '/pm/escritorio-preventivo' },
         { label: 'Bitácora PM (móvil)', path: '/pm/bitacoras-mobile' },
         { label: 'Consulta / Historial PM', path: '/pm/consulta-historial' },
+        { label: 'Configuración / Programación PM', path: '/pm/configuracion-programacion' },
       ]
     },
     {
