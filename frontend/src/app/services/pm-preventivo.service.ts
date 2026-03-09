@@ -5,6 +5,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import {
     DashboardPm,
+    PmBitacoraDetalle,
     RegistrarPmPayload,
     SucursalOption,
 } from '../models/pm-preventivo.model';
@@ -13,6 +14,7 @@ import {
 export class PmPreventivoService {
     private http = inject(HttpClient);
 
+    private readonly basePmRoot = '/api/pm';
     private readonly basePm = '/api/pm/preventivo';
     private readonly sucursalesUrl = '/api/inventario/sucursales';
 
@@ -23,14 +25,20 @@ export class PmPreventivoService {
 
     /** Dashboard PM: atrasados, hoy, próximos. */
     getDashboard(sucursalId: number, windowDays = 7): Observable<DashboardPm> {
-    const params = new HttpParams()
-        .set('sucursal_id', String(sucursalId))
-        .set('window_days', String(windowDays));
+        const params = new HttpParams()
+            .set('sucursal_id', String(sucursalId))
+            .set('window_days', String(windowDays));
 
-    return this.http.get<DashboardPm>(`${this.basePm}/dashboard`, { params });
+        return this.http.get<DashboardPm>(`${this.basePm}/dashboard`, { params });
     }
+
     /** Registrar mantenimiento preventivo (inserta en pm_bitacoras). */
     registrarPreventivo(payload: RegistrarPmPayload): Observable<{ msg: string; id: number }> {
         return this.http.post<{ msg: string; id: number }>(`${this.basePm}/registrar`, payload);
+    }
+
+    /** Obtener detalle de una bitácora PM existente. */
+    getBitacoraDetalle(bitacoraPmId: number): Observable<PmBitacoraDetalle> {
+        return this.http.get<PmBitacoraDetalle>(`${this.basePmRoot}/bitacoras/${bitacoraPmId}`);
     }
 }
