@@ -16,7 +16,7 @@ _ADMIN_ROLES = {"ADMINISTRADOR", "SUPER_ADMIN", "ADMIN"}
 
 
 # ────────────────────────────────────────────────────────────
-# HELPER: verificar permiso de sucursal por rol
+# HELPERS 
 # ────────────────────────────────────────────────────────────
 def _verificar_permiso_sucursal(claims, sucursal_id_int):
     """
@@ -60,9 +60,6 @@ def _verificar_permiso_sucursal(claims, sucursal_id_int):
     return None
 
 
-# ────────────────────────────────────────────────────────────
-# HELPER: crear bitácora (validación + inserción)
-# ────────────────────────────────────────────────────────────
 def _crear_bitacora(data, claims, user_id):
     """
     Valida, verifica permisos e inserta una PmBitacoraORM.
@@ -149,9 +146,6 @@ def _crear_bitacora(data, claims, user_id):
     return bit, None
 
 
-# ────────────────────────────────────────────────────────────
-# HELPER: crear validación PM (validación + inserción)
-# ────────────────────────────────────────────────────────────
 def _crear_validacion_pm(data, claims, user_id):
     """
     Valida e inserta una PmValidacionORM.
@@ -263,9 +257,140 @@ def _crear_validacion_pm(data, claims, user_id):
     return validacion, None
 
 
-# ────────────────────────────────────────────────────────────
-# HELPER: serializar detalle de bitácora PM
-# ────────────────────────────────────────────────────────────
+def _crear_configuracion_pm(data, claims):
+    inventario_id = data.get("inventario_id")
+    sucursal_id = data.get("sucursal_id")
+    frecuencia_dias = data.get("frecuencia_dias")
+    activo = data.get("activo", True)
+
+    if not inventario_id or not sucursal_id or frecuencia_dias is None:
+        return None, (
+            {
+                "error": "Bad Request",
+                "detail": "Campos requeridos: inventario_id, sucursal_id, frecuencia_dias",
+            },
+            400,
+        )
+
+    try:
+        inventario_id_int = int(inventario_id)
+        sucursal_id_int = int(sucursal_id)
+        frecuencia_dias_int = int(frecuencia_dias)
+    except (TypeError, ValueError):
+        return None, (
+            {
+                "error": "Bad Request",
+                "detail": "inventario_id, sucursal_id y frecuencia_dias deben ser enteros",
+            },
+            400,
+        )
+
+    if frecuencia_dias_int <= 0:
+        return None, (
+            {
+                "error": "Bad Request",
+                "detail": "frecuencia_dias debe ser mayor a 0",
+            },
+            400,
+        )
+
+    denied = _verificar_permiso_sucursal(claims, sucursal_id_int)
+    if denied:
+        return None, denied
+
+    rel = InventarioSucursal.query.filter_by(
+        inventario_id=inventario_id_int,
+        sucursal_id=sucursal_id_int,
+    ).first()
+    if not rel:
+        return None, (
+            {
+                "error": "Bad Request",
+                "detail": "El inventario_id no pertenece a la sucursal_id",
+            },
+            400,
+        )
+
+    existente = PmPreventivoConfigORM.query.filter_by(
+        inventario_id=inventario_id_int,
+        sucursal_id=sucursal_id_int,
+    ).first()
+    if existente:
+        return None, (
+            {
+                "error": "Conflict",
+                "detail": "Ya existe una configuración PM para ese equipo en esa sucursal",
+            },
+            409,
+        )
+
+    cfg = PmPreventivoConfigORM(
+        inventario_id=inventario_id_int,
+        sucursal_id=sucursal_id_int,
+        frecuencia_dias=frecuencia_dias_int,
+        activo=bool(activo),
+    )
+    db.session.add(cfg)
+    db.session.commit()
+
+    return cfg, None
+
+
+def _actualizar_configuracion_pm(config_id, data, claims):
+    try:
+        config_id_int = int(config_id)
+    except (TypeError, ValueError):
+        return None, (
+            {"error": "Bad Request", "detail": "config_id debe ser entero"},
+            400,
+        )
+
+    cfg = db.session.get(PmPreventivoConfigORM, config_id_int)
+    if not cfg:
+        return None, (
+            {"error": "Not Found", "detail": "La configuración PM no existe"},
+            404,
+        )
+
+    denied = _verificar_permiso_sucursal(claims, cfg.sucursal_id)
+    if denied:
+        return None, denied
+
+    frecuencia_dias = data.get("frecuencia_dias")
+    activo = data.get("activo")
+
+    if frecuencia_dias is None and activo is None:
+        return None, (
+            {
+                "error": "Bad Request",
+                "detail": "Debes enviar al menos frecuencia_dias o activo",
+            },
+            400,
+        )
+
+    if frecuencia_dias is not None:
+        try:
+            frecuencia_dias_int = int(frecuencia_dias)
+        except (TypeError, ValueError):
+            return None, (
+                {"error": "Bad Request", "detail": "frecuencia_dias debe ser entero"},
+                400,
+            )
+
+        if frecuencia_dias_int <= 0:
+            return None, (
+                {"error": "Bad Request", "detail": "frecuencia_dias debe ser mayor a 0"},
+                400,
+            )
+
+        cfg.frecuencia_dias = frecuencia_dias_int
+
+    if activo is not None:
+        cfg.activo = bool(activo)
+
+    db.session.commit()
+    return cfg, None
+
 def _serializar_bitacora_pm_detalle(bitacora):
     validacion = bitacora.pm_validacion
 
@@ -292,10 +417,6 @@ def _serializar_bitacora_pm_detalle(bitacora):
     }
 
 
-# ────────────────────────────────────────────────────────────
-# HELPER: serializar resumen de bitácora PM para dashboard preventivo
-# ────────────────────────────────────────────────────────────
-
 
 def _serializar_bitacora_pm_resumen(bitacora, inventario, sucursal, validacion):
     return {
@@ -311,6 +432,20 @@ def _serializar_bitacora_pm_resumen(bitacora, inventario, sucursal, validacion):
         "created_at": bitacora.created_at.isoformat() if bitacora.created_at else None,
         "created_by_user_id": bitacora.created_by_user_id,
         "estado_validacion": validacion.decision if validacion else "SIN_VALIDACION",
+    }
+    
+def _serializar_pm_config_resumen(cfg, inventario, sucursal):
+    return {
+        "id": cfg.id,
+        "inventario_id": cfg.inventario_id,
+        "codigo_interno": inventario.codigo_interno,
+        "nombre": inventario.nombre,
+        "sucursal_id": cfg.sucursal_id,
+        "sucursal": sucursal.sucursal,
+        "frecuencia_dias": cfg.frecuencia_dias,
+        "activo": cfg.activo,
+        "created_at": cfg.created_at.isoformat() if cfg.created_at else None,
+        "updated_at": cfg.updated_at.isoformat() if cfg.updated_at else None,
     }
 
 
@@ -486,6 +621,121 @@ def pm_listar_bitacoras():
         _serializar_bitacora_pm_resumen(bitacora, inventario, sucursal, validacion)
         for bitacora, inventario, sucursal, validacion in rows
     ]), 200
+
+# ────────────────────────────────────────────────────────────
+# GET /configuraciones?sucursal_id=X
+# ────────────────────────────────────────────────────────────
+
+@pm_bp.route("/configuraciones", methods=["GET"])
+@jwt_required()
+def pm_listar_configuraciones():
+    claims = get_jwt() or {}
+    sucursal_id = request.args.get("sucursal_id", type=int)
+
+    query = (
+        db.session.query(
+            PmPreventivoConfigORM,
+            InventarioGeneral,
+            Sucursal,
+        )
+        .join(
+            InventarioGeneral,
+            InventarioGeneral.id == PmPreventivoConfigORM.inventario_id,
+        )
+        .join(
+            Sucursal,
+            Sucursal.sucursal_id == PmPreventivoConfigORM.sucursal_id,
+        )
+    )
+
+    if sucursal_id:
+        denied = _verificar_permiso_sucursal(claims, sucursal_id)
+        if denied:
+            return jsonify(denied[0]), denied[1]
+
+        query = query.filter(PmPreventivoConfigORM.sucursal_id == sucursal_id)
+    else:
+        rol = (claims.get("rol") or "").strip().upper()
+
+        if rol not in _ADMIN_ROLES and rol != "MANTENIMIENTO":
+            if rol == "AUX_MANTENIMIENTO":
+                user_sucursal = claims.get("sucursal_id")
+                try:
+                    user_sucursal = int(user_sucursal) if user_sucursal is not None else None
+                except Exception:
+                    user_sucursal = None
+
+                if not user_sucursal:
+                    return jsonify({"error": "Forbidden", "detail": "No tienes acceso a sucursales"}), 403
+
+                query = query.filter(PmPreventivoConfigORM.sucursal_id == user_sucursal)
+            else:
+                allowed = claims.get("sucursales_ids") or []
+                try:
+                    allowed = [int(x) for x in allowed]
+                except Exception:
+                    allowed = []
+
+                if not allowed:
+                    return jsonify({"error": "Forbidden", "detail": "No tienes acceso a sucursales"}), 403
+
+                query = query.filter(PmPreventivoConfigORM.sucursal_id.in_(allowed))
+
+    rows = (
+        query.order_by(
+            Sucursal.sucursal.asc(),
+            InventarioGeneral.nombre.asc(),
+            PmPreventivoConfigORM.id.asc(),
+        )
+        .all()
+    )
+
+    return jsonify([
+        _serializar_pm_config_resumen(cfg, inventario, sucursal)
+        for cfg, inventario, sucursal in rows
+    ]), 200
+
+# ────────────────────────────────────────────────────────────
+# POST /configuraciones
+# ────────────────────────────────────────────────────────────
+
+@pm_bp.route("/configuraciones", methods=["POST"])
+@jwt_required()
+def pm_crear_configuracion():
+    data = request.get_json(silent=True) or {}
+    claims = get_jwt() or {}
+
+    cfg, err = _crear_configuracion_pm(data, claims)
+    if err:
+        return jsonify(err[0]), err[1]
+
+    inventario = db.session.get(InventarioGeneral, cfg.inventario_id)
+    sucursal = db.session.get(Sucursal, cfg.sucursal_id)
+
+    return jsonify(
+        _serializar_pm_config_resumen(cfg, inventario, sucursal)
+    ), 201
+
+# ────────────────────────────────────────────────────────────
+# PUT /configuraciones/<config_id>
+# ────────────────────────────────────────────────────────────
+
+@pm_bp.route("/configuraciones/<int:config_id>", methods=["PUT"])
+@jwt_required()
+def pm_actualizar_configuracion(config_id):
+    data = request.get_json(silent=True) or {}
+    claims = get_jwt() or {}
+
+    cfg, err = _actualizar_configuracion_pm(config_id, data, claims)
+    if err:
+        return jsonify(err[0]), err[1]
+
+    inventario = db.session.get(InventarioGeneral, cfg.inventario_id)
+    sucursal = db.session.get(Sucursal, cfg.sucursal_id)
+
+    return jsonify(
+        _serializar_pm_config_resumen(cfg, inventario, sucursal)
+    ), 200
 
 
 # ────────────────────────────────────────────────────────────

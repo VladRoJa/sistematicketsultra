@@ -73,3 +73,16 @@ export interface PmBitacoraResumen {
   created_by_user_id: number | null;
   estado_validacion: 'SIN_VALIDACION' | 'VALIDADO' | 'RECHAZADO';
 }
+
+export interface PmConfiguracionResumen {
+  id: number;
+  inventario_id: number;
+  codigo_interno: string;
+  nombre: string;
+  sucursal_id: number;
+  sucursal: string;
+  frecuencia_dias: number;
+  activo: boolean;
+  created_at: string | null;
+  updated_at: string | null;
+}
