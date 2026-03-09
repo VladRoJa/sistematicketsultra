@@ -115,3 +115,27 @@
 table.mat-mdc-table {
     margin-top: 8px;
 }
+
+.pm-row-seleccionada {
+  background: rgba(63, 81, 181, 0.08);
+}
+
+.pm-row-seleccionada .mat-mdc-cell {
+  background: rgba(63, 81, 181, 0.08);
+}
+
+.pm-detalle-card {
+  margin: 12px 0 16px;
+  border-left: 4px solid rgba(63, 81, 181, 0.45);
+  position: sticky;
+  top: 12px;
+  z-index: 3;
+}
+
+.pm-detalle-contenido p {
+  margin: 4px 0;
+}
+
+.pm-detalle-titulo {
+  font-weight: 600;
+}

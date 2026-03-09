@@ -20,7 +20,7 @@ import { MatChipsModule } from '@angular/material/chips';
 import { MatTooltipModule } from '@angular/material/tooltip';
 
 import { PmPreventivoService } from '../../services/pm-preventivo.service';
-import { EquipoEstado, SucursalOption,} from '../../models/pm-preventivo.model';
+import { EquipoEstado, PmBitacoraDetalle, SucursalOption,} from '../../models/pm-preventivo.model';
 import { Router } from '@angular/router';
 
 @Component({
@@ -59,6 +59,11 @@ export class PmEscritorioPreventComponent implements OnInit {
     sucursalesList: SucursalOption[] = [];
     selectedSucursalId: number | null = null;
     windowDays = 7;
+    detalleBitacoraPm: PmBitacoraDetalle | null = null;
+    detalleBitacoraLoading = false;
+    bitacoraPmSeleccionadaId: number | null = null;
+    seccionDetalleSeleccionada: 'ATRASADO' | 'HOY' | 'PROXIMO' | null = null;
+    detalleBitacoraEquipoLabel = '';
 
     atrasados: EquipoEstado[] = [];
     hoyList: EquipoEstado[] = [];
@@ -190,11 +195,125 @@ export class PmEscritorioPreventComponent implements OnInit {
     /** Navega a bitácora móvil con parámetros para autoseleccionar equipo. */
 
     irABitacoraPreventiva(equipo: EquipoEstado): void {
-    this.router.navigate(['/pm/bitacoras-mobile'], {
-        queryParams: {
-            sucursalId: equipo.sucursal_id,
-            inventarioId: equipo.inventario_id,
-            modo: 'preventivo',
+        if (this.puedeRegistrarPm(equipo)) {
+            this.router.navigate(['/pm/bitacoras-mobile'], {
+                queryParams: {
+                    sucursalId: equipo.sucursal_id,
+                    inventarioId: equipo.inventario_id,
+                    modo: 'preventivo',
+                },
+            });
+            return;
+        }
+
+        this.verBitacoraPm(equipo);
+    }   
+
+    getEstadoSecundarioLabel(row: EquipoEstado): string {
+    if (row.estado_ejecucion === 'SIN_CAPTURA') {
+        return 'Sin captura';
+    }
+
+    switch (row.estado_validacion) {
+        case 'PENDIENTE_VALIDACION':
+            return 'Pendiente validación';
+        case 'VALIDADO':
+            return 'Validado';
+        case 'RECHAZADO':
+            return 'Rechazado';
+        default:
+            return 'Capturado';
+    }
+}
+
+    getTextoAccion(row: EquipoEstado): string {
+    if (row.estado_ejecucion === 'SIN_CAPTURA') {
+        return 'Registrar PM';
+    }
+
+    if (row.estado_validacion === 'RECHAZADO') {
+        return 'Recapturar PM';
+    }
+
+    return 'Ver PM';
+}   
+
+    puedeRegistrarPm(row: EquipoEstado): boolean {
+    return (
+        row.estado_ejecucion === 'SIN_CAPTURA' ||
+        row.estado_validacion === 'RECHAZADO'
+    );
+}
+
+    isBitacoraSeleccionada = (_index: number, row: EquipoEstado): boolean => {
+        return row.bitacora_pm_id === this.bitacoraPmSeleccionadaId;
+    };
+
+    private scrollToDetalleBitacora(sectionId: string): void {
+    setTimeout(() => {
+        const element = document.getElementById(sectionId);
+        if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }, 0);
+}
+
+    getDetalleCheckLabel(checkKey: string): string {
+        if (!this.detalleBitacoraPm?.checks) {
+            return 'No';
+        }
+
+        return this.detalleBitacoraPm.checks[checkKey] ? 'Sí' : 'No';
+    }
+    getAccionTooltip(row: EquipoEstado): string {
+        if (this.puedeRegistrarPm(row)) {
+            return 'Abrir bitácora preventiva';
+        }
+
+        if (row.estado_validacion === 'PENDIENTE_VALIDACION') {
+            return 'Esta captura está pendiente de validación';
+        }
+
+        if (row.estado_validacion === 'VALIDADO') {
+            return 'Este PM ya fue validado';
+        }
+
+        return 'Este PM ya fue capturado';
+}
+
+
+    hasDetalleChecks(): boolean {
+        return !!this.detalleBitacoraPm?.checks && Object.keys(this.detalleBitacoraPm.checks).length > 0;
+}
+
+    verBitacoraPm(equipo: EquipoEstado): void {
+    if (!equipo.bitacora_pm_id) {
+        this.snack.open('No se encontró una bitácora PM para este registro.', 'OK', {
+            duration: 3000,
+        });
+        return;
+    }
+
+    this.detalleBitacoraLoading = true;
+    this.detalleBitacoraPm = null;
+
+    this.pmService.getBitacoraDetalle(equipo.bitacora_pm_id).subscribe({
+        next: (detalle) => {
+        this.detalleBitacoraPm = detalle;
+        this.bitacoraPmSeleccionadaId = equipo.bitacora_pm_id;
+        this.seccionDetalleSeleccionada = equipo.estado;
+        this.detalleBitacoraEquipoLabel = this.equipoLabel(equipo);
+        this.detalleBitacoraLoading = false;
+            
+
+        this.snack.open(`Bitácora PM cargada: ${detalle.id}`, 'OK', {
+            duration: 2500,
+            });
+        },
+        error: (err) => {
+            this.detalleBitacoraLoading = false;
+            const msg = err?.error?.detail || err?.error?.message || 'No se pudo cargar la bitácora PM';
+            this.snack.open(msg, 'OK', { duration: 3500 });
         },
     });
 }
