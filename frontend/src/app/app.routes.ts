@@ -12,6 +12,7 @@ import { RegistrarAsistenciaComponent } from './registrar-asistencia/registrar-a
 import { AdminPanelComponent } from './admin-panel/admin-panel.component';
 import { CrearTicketRefactorComponent } from './pantalla-crear-ticket/crear-ticket-refactor.component';
 import { PmBitacorasMobileComponent } from './pm/pm-bitacoras-mobile/pm-bitacoras-mobile.component';
+import { PmConsultaHistorialComponent } from './pm/pm-consulta-historial/pm-consulta-historial.component';
 
 
 export const routes: Routes = [
@@ -60,6 +61,11 @@ export const routes: Routes = [
           import('./pm/pm-escritorio-preventivo/pm-escritorio-preventivo.component')
             .then(m => m.PmEscritorioPreventComponent),
       },
+      {
+        path: 'pm/consulta-historial',
+        component: PmConsultaHistorialComponent
+      },
+
       {
         path: 'catalogos',
         loadChildren: () => import('./inventario/catalogos/catalogos-routing.module').then(m => m.CatalogosRoutingModule)

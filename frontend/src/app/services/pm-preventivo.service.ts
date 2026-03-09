@@ -6,6 +6,7 @@ import { Observable } from 'rxjs';
 import {
     DashboardPm,
     PmBitacoraDetalle,
+    PmBitacoraResumen,
     RegistrarPmPayload,
     SucursalOption,
 } from '../models/pm-preventivo.model';
@@ -41,4 +42,26 @@ export class PmPreventivoService {
     getBitacoraDetalle(bitacoraPmId: number): Observable<PmBitacoraDetalle> {
         return this.http.get<PmBitacoraDetalle>(`${this.basePmRoot}/bitacoras/${bitacoraPmId}`);
     }
+
+    listarBitacoras(
+    sucursalId?: number | null,
+    fechaDesde?: string | null,
+    fechaHasta?: string | null,
+    ): Observable<PmBitacoraResumen[]> {
+    let params = new HttpParams();
+
+    if (sucursalId) {
+        params = params.set('sucursal_id', String(sucursalId));
+    }
+
+    if (fechaDesde) {
+        params = params.set('fecha_desde', fechaDesde);
+    }
+
+    if (fechaHasta) {
+        params = params.set('fecha_hasta', fechaHasta);
+    }
+
+    return this.http.get<PmBitacoraResumen[]>(`${this.basePmRoot}/bitacoras`, { params });
+}
 }

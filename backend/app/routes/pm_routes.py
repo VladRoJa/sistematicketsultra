@@ -293,6 +293,28 @@ def _serializar_bitacora_pm_detalle(bitacora):
 
 
 # ────────────────────────────────────────────────────────────
+# HELPER: serializar resumen de bitácora PM para dashboard preventivo
+# ────────────────────────────────────────────────────────────
+
+
+def _serializar_bitacora_pm_resumen(bitacora, inventario, sucursal, validacion):
+    return {
+        "id": bitacora.id,
+        "inventario_id": bitacora.inventario_id,
+        "codigo_interno": inventario.codigo_interno,
+        "nombre": inventario.nombre,
+        "sucursal_id": bitacora.sucursal_id,
+        "sucursal": sucursal.sucursal,
+        "fecha": bitacora.fecha.isoformat() if bitacora.fecha else None,
+        "resultado": bitacora.resultado,
+        "notas": bitacora.notas,
+        "created_at": bitacora.created_at.isoformat() if bitacora.created_at else None,
+        "created_by_user_id": bitacora.created_by_user_id,
+        "estado_validacion": validacion.decision if validacion else "SIN_VALIDACION",
+    }
+
+
+# ────────────────────────────────────────────────────────────
 # POST /mobile/bitacoras
 # ────────────────────────────────────────────────────────────
 @pm_bp.route("/mobile/bitacoras", methods=["POST"])
@@ -372,6 +394,98 @@ def pm_obtener_bitacora_detalle(bitacora_pm_id):
         return jsonify(denied[0]), denied[1]
 
     return jsonify(_serializar_bitacora_pm_detalle(bitacora)), 200
+
+# ────────────────────────────────────────────────────────────
+# listar bitácoras PM con filtros (sucursal_id, fecha_desde, fecha_hasta)
+# ────────────────────────────────────────────────────────────
+
+
+
+@pm_bp.route("/bitacoras", methods=["GET"])
+@jwt_required()
+def pm_listar_bitacoras():
+    claims = get_jwt() or {}
+
+    sucursal_id = request.args.get("sucursal_id", type=int)
+    fecha_desde = request.args.get("fecha_desde")
+    fecha_hasta = request.args.get("fecha_hasta")
+
+    query = (
+        db.session.query(
+            PmBitacoraORM,
+            InventarioGeneral,
+            Sucursal,
+            PmValidacionORM,
+        )
+        .join(
+            InventarioGeneral,
+            InventarioGeneral.id == PmBitacoraORM.inventario_id,
+        )
+        .join(
+            Sucursal,
+            Sucursal.sucursal_id == PmBitacoraORM.sucursal_id,
+        )
+        .outerjoin(
+            PmValidacionORM,
+            PmValidacionORM.bitacora_pm_id == PmBitacoraORM.id,
+        )
+    )
+
+    if sucursal_id:
+        denied = _verificar_permiso_sucursal(claims, sucursal_id)
+        if denied:
+            return jsonify(denied[0]), denied[1]
+        query = query.filter(PmBitacoraORM.sucursal_id == sucursal_id)
+    else:
+        rol = (claims.get("rol") or "").strip().upper()
+
+        if rol not in _ADMIN_ROLES and rol != "MANTENIMIENTO":
+            if rol == "AUX_MANTENIMIENTO":
+                user_sucursal = claims.get("sucursal_id")
+                try:
+                    user_sucursal = int(user_sucursal) if user_sucursal is not None else None
+                except Exception:
+                    user_sucursal = None
+
+                if not user_sucursal:
+                    return jsonify({"error": "Forbidden", "detail": "No tienes acceso a sucursales"}), 403
+
+                query = query.filter(PmBitacoraORM.sucursal_id == user_sucursal)
+            else:
+                allowed = claims.get("sucursales_ids") or []
+                try:
+                    allowed = [int(x) for x in allowed]
+                except Exception:
+                    allowed = []
+
+                if not allowed:
+                    return jsonify({"error": "Forbidden", "detail": "No tienes acceso a sucursales"}), 403
+
+                query = query.filter(PmBitacoraORM.sucursal_id.in_(allowed))
+
+    if fecha_desde:
+        try:
+            fecha_desde_date = datetime.strptime(fecha_desde, "%Y-%m-%d").date()
+            query = query.filter(PmBitacoraORM.fecha >= fecha_desde_date)
+        except ValueError:
+            return jsonify({"error": "Bad Request", "detail": "fecha_desde debe ser YYYY-MM-DD"}), 400
+
+    if fecha_hasta:
+        try:
+            fecha_hasta_date = datetime.strptime(fecha_hasta, "%Y-%m-%d").date()
+            query = query.filter(PmBitacoraORM.fecha <= fecha_hasta_date)
+        except ValueError:
+            return jsonify({"error": "Bad Request", "detail": "fecha_hasta debe ser YYYY-MM-DD"}), 400
+
+    rows = (
+        query.order_by(PmBitacoraORM.fecha.desc(), PmBitacoraORM.id.desc())
+        .all()
+    )
+
+    return jsonify([
+        _serializar_bitacora_pm_resumen(bitacora, inventario, sucursal, validacion)
+        for bitacora, inventario, sucursal, validacion in rows
+    ]), 200
 
 
 # ────────────────────────────────────────────────────────────

@@ -1,0 +1,61 @@
+/* frontend\src\app\pm\pm-consulta-historial\pm-consulta-historial.component.css */
+
+
+.pm-historial-container {
+  padding: 24px;
+}
+
+.page-title {
+  margin: 0 0 16px;
+}
+
+.filters-card {
+  margin-bottom: 16px;
+}
+
+.filters-row {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.filter-field {
+  min-width: 220px;
+  flex: 1 1 220px;
+}
+
+.section-card {
+  margin-top: 16px;
+}
+
+.full-width {
+  width: 100%;
+}
+
+.spinner-wrapper {
+  display: flex;
+  justify-content: center;
+  padding: 24px 0;
+}
+
+.section-empty-state {
+  padding: 16px 0;
+  color: rgba(0, 0, 0, 0.65);
+}
+
+.pm-row-seleccionada {
+  background-color: rgba(63, 81, 181, 0.12);
+}
+
+.pm-row-seleccionada .mat-mdc-cell {
+  background-color: rgba(63, 81, 181, 0.12);
+}
+
+.mat-mdc-row {
+  cursor: pointer;
+}
+
+.mat-mdc-row:hover .mat-mdc-cell {
+  background-color: rgba(63, 81, 181, 0.06);
+}
