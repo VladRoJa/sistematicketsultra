@@ -1,0 +1,129 @@
+<!-- frontend\src\app\pm\pm-consulta-historial\pm-consulta-historial.component.html -->
+
+
+<div class="pm-historial-container">
+
+    <h2 class="page-title">Consulta / Historial PM</h2>
+
+    <mat-card class="filters-card">
+        <mat-card-content class="filters-row">
+
+            <mat-form-field appearance="fill" class="filter-field">
+                <mat-label>Sucursal</mat-label>
+                <input
+                    matInput
+                    [formControl]="sucursalCtrl"
+                    [matAutocomplete]="autoSucursal">
+
+                <mat-autocomplete
+                    #autoSucursal="matAutocomplete"
+                    [displayWith]="sucursalDisplay"
+                    (optionSelected)="onSucursalSelected($event.option.value)">
+                    <mat-option *ngFor="let s of filteredSucursales$ | async" [value]="s">
+                        {{ s.sucursal }}
+                    </mat-option>
+                </mat-autocomplete>
+            </mat-form-field>
+
+            <mat-form-field appearance="fill" class="filter-field">
+                <mat-label>Fecha desde</mat-label>
+                <input matInput type="date" [(ngModel)]="fechaDesde">
+            </mat-form-field>
+
+            <mat-form-field appearance="fill" class="filter-field">
+                <mat-label>Fecha hasta</mat-label>
+                <input matInput type="date" [(ngModel)]="fechaHasta">
+            </mat-form-field>
+
+            <button mat-raised-button color="primary" (click)="cargarBitacoras()" [disabled]="loading">
+                Consultar
+            </button>
+
+        </mat-card-content>
+    </mat-card>
+
+    <mat-card class="section-card" *ngIf="detalleBitacoraLoading || detalleBitacoraPm">
+        <mat-card-header>
+            <mat-card-title>
+                Detalle de bitácora PM — {{ detalleBitacoraEquipoLabel }}
+            </mat-card-title>
+
+        </mat-card-header>
+
+        <mat-card-content *ngIf="detalleBitacoraLoading">
+            Cargando detalle...
+        </mat-card-content>
+
+        <mat-card-content *ngIf="!detalleBitacoraLoading && detalleBitacoraPm">
+            <p><strong>ID:</strong> {{ detalleBitacoraPm.id }}</p>
+            <p><strong>Fecha:</strong> {{ detalleBitacoraPm.fecha }}</p>
+            <p><strong>Resultado:</strong> {{ detalleBitacoraPm.resultado }}</p>
+            <p><strong>Notas:</strong> {{ detalleBitacoraPm.notas || 'Sin notas' }}</p>
+
+            <ng-container *ngIf="detalleBitacoraPm.validacion; else sinValidacionHistorial">
+                <p><strong>Validación:</strong> {{ detalleBitacoraPm.validacion.decision }}</p>
+                <p><strong>Motivo:</strong> {{ detalleBitacoraPm.validacion.motivo || 'Sin motivo' }}</p>
+                <p><strong>Fecha validación:</strong> {{ detalleBitacoraPm.validacion.validado_en || 'Sin fecha' }}</p>
+            </ng-container>
+
+            <ng-template #sinValidacionHistorial>
+                <p><strong>Validación:</strong> Sin validación</p>
+            </ng-template>
+        </mat-card-content>
+    </mat-card>
+
+    <div class="spinner-wrapper" *ngIf="loading">
+        <mat-spinner diameter="48"></mat-spinner>
+    </div>
+
+    <mat-card class="section-card" *ngIf="!loading">
+        <mat-card-header>
+            <mat-card-title>Bitácoras PM</mat-card-title>
+        </mat-card-header>
+
+        <mat-card-content>
+            <table mat-table [dataSource]="bitacoras" class="full-width" *ngIf="bitacoras.length > 0; else emptyState">
+
+                <ng-container matColumnDef="fecha">
+                    <th mat-header-cell *matHeaderCellDef>Fecha</th>
+                    <td mat-cell *matCellDef="let row">{{ row.fecha }}</td>
+                </ng-container>
+
+                <ng-container matColumnDef="equipo">
+                    <th mat-header-cell *matHeaderCellDef>Equipo</th>
+                    <td mat-cell *matCellDef="let row">{{ equipoLabel(row) }}</td>
+                </ng-container>
+
+                <ng-container matColumnDef="sucursal">
+                    <th mat-header-cell *matHeaderCellDef>Sucursal</th>
+                    <td mat-cell *matCellDef="let row">{{ row.sucursal }}</td>
+                </ng-container>
+
+                <ng-container matColumnDef="resultado">
+                    <th mat-header-cell *matHeaderCellDef>Resultado</th>
+                    <td mat-cell *matCellDef="let row">{{ row.resultado }}</td>
+                </ng-container>
+
+                <ng-container matColumnDef="estado_validacion">
+                    <th mat-header-cell *matHeaderCellDef>Validación</th>
+                    <td mat-cell *matCellDef="let row">{{ row.estado_validacion }}</td>
+                </ng-container>
+
+                <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+                <tr
+                    mat-row
+                    *matRowDef="let row; columns: displayedColumns;"
+                    [class.pm-row-seleccionada]="row.id === bitacoraSeleccionadaId"
+                    (click)="toggleDetalleBitacora(row)">
+                </tr>
+            </table>
+
+            <ng-template #emptyState>
+                <div class="section-empty-state">
+                    Sin bitácoras para los filtros seleccionados.
+                </div>
+            </ng-template>
+        </mat-card-content>
+    </mat-card>
+
+</div>

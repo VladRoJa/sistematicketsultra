@@ -58,3 +58,18 @@ export interface PmBitacoraDetalle {
   created_at: string | null;
   validacion: PmBitacoraValidacionDetalle | null;
 }
+
+export interface PmBitacoraResumen {
+  id: number;
+  inventario_id: number;
+  codigo_interno: string;
+  nombre: string;
+  sucursal_id: number;
+  sucursal: string;
+  fecha: string | null;
+  resultado: 'OK' | 'FALLA' | 'OBS';
+  notas: string | null;
+  created_at: string | null;
+  created_by_user_id: number | null;
+  estado_validacion: 'SIN_VALIDACION' | 'VALIDADO' | 'RECHAZADO';
+}
