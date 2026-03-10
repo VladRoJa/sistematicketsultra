@@ -21,6 +21,7 @@ import { ActivatedRoute, Router  } from '@angular/router';
 import { SessionService } from '../../core/auth/session.service';
 
 type ResultadoBitacora = 'OK' | 'FALLA' | 'OBS';
+type TipoMantenimiento = 'CORRECTIVO' | 'PREVENTIVO' | 'ESTETICO' | 'MEJORA';
 
 
 @Component({
@@ -72,6 +73,12 @@ export class PmBitacorasMobileComponent implements OnInit {
   equipoCtrl = this.fb.control<PmEquipoItem | string>(''); // texto que escribe el usuario
   filteredEquipos$!: Observable<PmEquipoItem[]>;
   
+  readonly tiposMantenimiento: TipoMantenimiento[] = [
+  'CORRECTIVO',
+  'PREVENTIVO',
+  'ESTETICO',
+  'MEJORA',
+];
   
   
   ngOnInit(): void {
@@ -183,6 +190,7 @@ this.filteredEquipos$ = combineLatest([
     inventario_id: [null as number | null, [Validators.required]],
     sucursal_id: [this.defaultSucursalId(), [Validators.required]],
     fecha: [this.todayYYYYMMDD(), [Validators.required]],
+    tipo_mantenimiento: ['CORRECTIVO' as TipoMantenimiento, [Validators.required]],
     resultado: ['OK' as ResultadoBitacora, [Validators.required]],
     notas: [''],
 
@@ -191,6 +199,8 @@ this.filteredEquipos$ = combineLatest([
     check_ajuste: [false],
     check_revision: [false],
     check_lubricacion: [false],
+
+    
   });
 
   private todayYYYYMMDD(): string {
@@ -208,6 +218,7 @@ this.filteredEquipos$ = combineLatest([
       inventario_id: v.inventario_id,
       sucursal_id: v.sucursal_id,
       fecha: v.fecha,
+      tipo_mantenimiento: v.tipo_mantenimiento,
       resultado: v.resultado,
       notas: v.notas || '',
       checks: {
@@ -249,6 +260,7 @@ this.filteredEquipos$ = combineLatest([
       inventario_id: null,
       sucursal_id: currentSucursal,
       fecha: this.todayYYYYMMDD(),
+      tipo_mantenimiento: 'CORRECTIVO' as TipoMantenimiento,
       resultado: 'OK' as ResultadoBitacora,
       notas: '',
       check_limpieza: true,
@@ -335,6 +347,29 @@ get esFlujoPreventivo(): boolean {
   return this.prefillModo === 'preventivo';
 }
 
+tipoMantenimientoLabel(tipo: TipoMantenimiento | string | null): string {
+  if (!tipo) return '';
 
+  const labels: Record<string, string> = {
+    CORRECTIVO: 'Correctivo',
+    PREVENTIVO: 'Preventivo',
+    ESTETICO: 'Estético',
+    MEJORA: 'Mejora',
+  };
+
+  return labels[tipo] || tipo;
+}
+
+formatearResultadoBitacora(resultado: string | null | undefined): string {
+  if (!resultado) return 'Sin resultado';
+
+  const labels: Record<string, string> = {
+    OK: 'Ok',
+    FALLA: 'Falla',
+    OBS: 'Observación',
+  };
+
+  return labels[resultado] || resultado;
+}
 
 }

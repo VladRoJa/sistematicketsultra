@@ -99,4 +99,15 @@ export class PmPreventivoService {
         payload
     );
 }
+
+crearValidacionPm(payload: {
+    bitacora_pm_id: number;
+    decision: 'VALIDADO' | 'RECHAZADO';
+    motivo?: string;
+}): Observable<{ msg: string; id: number; bitacora_pm_id: number; decision: string }> {
+    return this.http.post<{ msg: string; id: number; bitacora_pm_id: number; decision: string }>(
+        `${this.basePmRoot}/validaciones`,
+        payload
+    );
+}
 }

@@ -1,11 +1,12 @@
 // frontend\src\app\pm\pm-consulta-historial\pm-consulta-historial.component.ts
 
 
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, ViewChild, ElementRef, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, FormControl, ReactiveFormsModule } from '@angular/forms';
 import { Observable } from 'rxjs';
 import { map, startWith } from 'rxjs/operators';
+import { SessionService } from '../../core/auth/session.service';
 
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatCardModule } from '@angular/material/card';
@@ -45,6 +46,11 @@ import {
 export class PmConsultaHistorialComponent implements OnInit {
   private pmService = inject(PmPreventivoService);
   private snack = inject(MatSnackBar);
+  private session = inject(SessionService);
+  private cdr = inject(ChangeDetectorRef);
+
+@ViewChild('detalleBitacoraCard', { read: ElementRef })
+detalleBitacoraCard?: ElementRef<HTMLElement>;
 
   loading = false;
   sucursalesLoading = false;
@@ -62,6 +68,9 @@ export class PmConsultaHistorialComponent implements OnInit {
   detalleBitacoraLoading = false;
   detalleBitacoraEquipoLabel = '';
   bitacoraSeleccionadaId: number | null = null;
+
+  mostrarRechazoPm = false;
+  motivoRechazoPm = '';
 
   readonly displayedColumns = [
     'fecha',
@@ -159,12 +168,17 @@ export class PmConsultaHistorialComponent implements OnInit {
     this.detalleBitacoraLoading = true;
     this.detalleBitacoraPm = null;
     this.detalleBitacoraEquipoLabel = this.equipoLabel(row);
+    this.mostrarRechazoPm = false;
+    this.motivoRechazoPm = '';
 
     this.pmService.getBitacoraDetalle(row.id).subscribe({
       next: (detalle) => {
         this.detalleBitacoraPm = detalle;
+        console.log('detalleBitacoraPm', this.detalleBitacoraPm);
         this.bitacoraSeleccionadaId = row.id;
         this.detalleBitacoraLoading = false;
+        this.cdr.detectChanges();
+        this.scrollAlDetalleBitacora();
       },
       error: (err) => {
         this.detalleBitacoraLoading = false;
@@ -192,4 +206,213 @@ export class PmConsultaHistorialComponent implements OnInit {
 
     this.verDetalleBitacora(row);
   }
+
+  formatearTipoMantenimiento(tipo: string | null | undefined): string {
+  if (!tipo) return 'Sin tipo';
+
+  const labels: Record<string, string> = {
+    CORRECTIVO: 'Correctivo',
+    PREVENTIVO: 'Preventivo',
+    ESTETICO: 'Estético',
+    MEJORA: 'Mejora',
+  };
+
+  return labels[tipo] || tipo;
+}
+
+formatearResultadoBitacora(resultado: string | null | undefined): string {
+  if (!resultado) return 'Sin resultado';
+
+  const labels: Record<string, string> = {
+    OK: 'Ok',
+    FALLA: 'Falla',
+    OBS: 'Observación',
+  };
+
+  return labels[resultado] || resultado;
+}
+
+obtenerNombreSucursalDetalle(): string {
+  const sucursalId = this.detalleBitacoraPm?.sucursal_id;
+
+  if (!sucursalId) {
+    return 'Sin sucursal';
+  }
+
+  const sucursal = this.sucursalesList.find(
+    (s) => s.sucursal_id === sucursalId
+  );
+
+  return sucursal?.sucursal || 'Sin sucursal';
+}
+
+formatearFechaDetalle(fecha: string | null | undefined): string {
+  if (!fecha) return 'Sin fecha';
+
+  const partes = fecha.split('-');
+  if (partes.length !== 3) return fecha;
+
+  const [yyyy, mm, dd] = partes;
+  return `${dd}/${mm}/${yyyy}`;
+}
+
+puedeValidarPm(): boolean {
+  const user = this.session.getUser();
+  const rol = (user?.rol || '').toString().trim().toUpperCase();
+
+  return ['GERENTE', 'GERENTE_REGIONAL', 'MANTENIMIENTO'].includes(rol);
+}
+
+validarBitacoraPm(): void {
+  const bitacoraId = this.detalleBitacoraPm?.id;
+
+  if (!bitacoraId) {
+    this.snack.open('No hay bitácora seleccionada para validar', 'OK', {
+      duration: 3000,
+    });
+    return;
+  }
+
+  this.pmService
+    .crearValidacionPm({
+      bitacora_pm_id: bitacoraId,
+      decision: 'VALIDADO',
+    })
+    .subscribe({
+      next: () => {
+        this.snack.open('Bitácora validada correctamente', 'OK', {
+          duration: 3000,
+        });
+
+        this.cargarBitacoras();
+      },
+      error: (err) => {
+        const msg =
+          err?.error?.detail ||
+          err?.error?.message ||
+          'No se pudo validar la bitácora PM';
+
+        this.snack.open(msg, 'OK', { duration: 3500 });
+      },
+    });
+}
+
+private scrollAlDetalleBitacora(): void {
+  setTimeout(() => {
+    const elemento = this.detalleBitacoraCard?.nativeElement;
+    if (!elemento) {
+      console.log('scroll detalle -> sin elemento');
+      return;
+    }
+
+    const rectTop = elemento.getBoundingClientRect().top;
+    const top = rectTop + window.scrollY - 16;
+
+    console.log('scroll detalle -> antes', {
+      rectTop,
+      windowScrollY: window.scrollY,
+      targetTop: top,
+    });
+
+    window.scrollTo({
+      top,
+      behavior: 'smooth',
+    });
+
+    setTimeout(() => {
+      console.log('scroll detalle -> despues', {
+        windowScrollY: window.scrollY,
+      });
+    }, 300);
+  }, 0);
+}
+
+
+rechazarBitacoraPm(): void {
+  const bitacoraId = this.detalleBitacoraPm?.id;
+  const motivo = this.motivoRechazoPm.trim();
+
+  if (!bitacoraId) {
+    this.snack.open('No hay bitácora seleccionada para rechazar', 'OK', {
+      duration: 3000,
+    });
+    return;
+  }
+
+  if (!motivo) {
+    this.snack.open('Debes capturar un motivo de rechazo', 'OK', {
+      duration: 3000,
+    });
+    return;
+  }
+
+  this.pmService
+    .crearValidacionPm({
+      bitacora_pm_id: bitacoraId,
+      decision: 'RECHAZADO',
+      motivo,
+    })
+    .subscribe({
+      next: () => {
+        this.snack.open('Bitácora rechazada correctamente', 'OK', {
+          duration: 3000,
+        });
+
+        this.mostrarRechazoPm = false;
+        this.motivoRechazoPm = '';
+
+        this.cargarBitacoras();
+      },
+      error: (err) => {
+        const msg =
+          err?.error?.detail ||
+          err?.error?.message ||
+          'No se pudo rechazar la bitácora PM';
+
+        this.snack.open(msg, 'OK', { duration: 3500 });
+      },
+    });
+}
+
+textoBotonRechazoPm(): string {
+  if (this.mostrarRechazoPm && this.motivoRechazoPm.trim()) {
+    return 'Confirmar rechazo';
+  }
+
+  return 'Rechazar';
+}
+
+manejarBotonRechazoPm(): void {
+  if (!this.mostrarRechazoPm) {
+    this.mostrarRechazoPm = true;
+    return;
+  }
+
+  if (!this.motivoRechazoPm.trim()) {
+    this.snack.open('Debes capturar un motivo de rechazo', 'OK', {
+      duration: 3000,
+    });
+    return;
+  }
+
+  this.rechazarBitacoraPm();
+}
+
+formatearFechaValidacion(fechaIso: string | null | undefined): string {
+  if (!fechaIso) return 'Sin fecha';
+
+  const fecha = new Date(fechaIso);
+
+  if (Number.isNaN(fecha.getTime())) {
+    return fechaIso;
+  }
+
+  const dd = String(fecha.getDate()).padStart(2, '0');
+  const mm = String(fecha.getMonth() + 1).padStart(2, '0');
+  const yyyy = fecha.getFullYear();
+  const hh = String(fecha.getHours()).padStart(2, '0');
+  const min = String(fecha.getMinutes()).padStart(2, '0');
+
+  return `${dd}/${mm}/${yyyy} ${hh}:${min}`;
+}
 }

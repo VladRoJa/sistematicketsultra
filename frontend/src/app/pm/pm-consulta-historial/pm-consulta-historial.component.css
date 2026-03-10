@@ -59,3 +59,7 @@
 .mat-mdc-row:hover .mat-mdc-cell {
   background-color: rgba(63, 81, 181, 0.06);
 }
+
+.pm-detalle-notas {
+  white-space: pre-wrap;
+}

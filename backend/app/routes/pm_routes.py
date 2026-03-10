@@ -69,15 +69,16 @@ def _crear_bitacora(data, claims, user_id):
     sucursal_id = data.get("sucursal_id")
     fecha = data.get("fecha")  # "YYYY-MM-DD"
     resultado = data.get("resultado")  # "OK" | "FALLA" | "OBS"
+    tipo_mantenimiento = data.get("tipo_mantenimiento")  # "CORRECTIVO" | "PREVENTIVO" | "ESTETICO" | "MEJORA"
     notas = data.get("notas") or ""
     checks = data.get("checks") or {}
 
     # 1) Validación de requeridos
-    if not inventario_id or not sucursal_id or not fecha or not resultado:
+    if not inventario_id or not sucursal_id or not fecha or not resultado or not tipo_mantenimiento:
         return None, (
             {
                 "error": "Bad Request",
-                "detail": "Campos requeridos: inventario_id, sucursal_id, fecha, resultado",
+                "detail": "Campos requeridos: inventario_id, sucursal_id, fecha, resultado, tipo_mantenimiento",
             },
             400,
         )
@@ -137,6 +138,7 @@ def _crear_bitacora(data, claims, user_id):
         created_by_user_id=int(user_id) if user_id is not None else None,
         fecha=fecha_date,
         resultado=resultado,
+        tipo_mantenimiento=tipo_mantenimiento,
         notas=notas,
         checks=checks,
     )
@@ -401,6 +403,7 @@ def _serializar_bitacora_pm_detalle(bitacora):
         "created_by_user_id": bitacora.created_by_user_id,
         "fecha": bitacora.fecha.isoformat() if bitacora.fecha else None,
         "resultado": bitacora.resultado,
+        "tipo_mantenimiento": bitacora.tipo_mantenimiento,
         "notas": bitacora.notas,
         "checks": bitacora.checks or {},
         "created_at": bitacora.created_at.isoformat() if bitacora.created_at else None,
