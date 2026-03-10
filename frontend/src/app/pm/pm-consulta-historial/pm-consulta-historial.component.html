@@ -42,7 +42,7 @@
         </mat-card-content>
     </mat-card>
 
-    <mat-card class="section-card" *ngIf="detalleBitacoraLoading || detalleBitacoraPm">
+    <mat-card #detalleBitacoraCard class="section-card" *ngIf="detalleBitacoraLoading || detalleBitacoraPm">
         <mat-card-header>
             <mat-card-title>
                 Detalle de bitácora PM — {{ detalleBitacoraEquipoLabel }}
@@ -56,19 +56,55 @@
 
         <mat-card-content *ngIf="!detalleBitacoraLoading && detalleBitacoraPm">
             <p><strong>ID:</strong> {{ detalleBitacoraPm.id }}</p>
-            <p><strong>Fecha:</strong> {{ detalleBitacoraPm.fecha }}</p>
-            <p><strong>Resultado:</strong> {{ detalleBitacoraPm.resultado }}</p>
-            <p><strong>Notas:</strong> {{ detalleBitacoraPm.notas || 'Sin notas' }}</p>
+            <p><strong>Sucursal:</strong> {{ obtenerNombreSucursalDetalle() }}</p>
+            <p><strong>Equipo:</strong> {{ detalleBitacoraEquipoLabel || 'Sin equipo' }}</p>
+            <p><strong>Inventario ID:</strong> {{ detalleBitacoraPm.inventario_id || 'Sin inventario' }}</p>
+            <p><strong>Fecha:</strong> {{ formatearFechaDetalle(detalleBitacoraPm.fecha) }}</p>
+            <p><strong>Resultado:</strong> {{ formatearResultadoBitacora(detalleBitacoraPm.resultado) }}</p>
+            <p><strong>Tipo de mantenimiento:</strong> {{ formatearTipoMantenimiento(detalleBitacoraPm.tipo_mantenimiento) }}</p>
+            <div class="pm-detalle-notas">
+            <strong>Notas:</strong>
+            <div>{{ detalleBitacoraPm.notas || 'Sin notas' }}</div>
+            </div>
+            <p><strong>Checklist capturado:</strong></p>
+            <p>• Limpieza: {{ detalleBitacoraPm.checks?.limpieza ? 'Sí' : 'No' }}</p>
+            <p>• Ajustes: {{ detalleBitacoraPm.checks?.ajustes ? 'Sí' : 'No' }}</p>
+            <p>• Revisión: {{ detalleBitacoraPm.checks?.revision ? 'Sí' : 'No' }}</p>
+            <p>• Lubricación: {{ detalleBitacoraPm.checks?.lubricacion ? 'Sí' : 'No' }}</p>
 
             <ng-container *ngIf="detalleBitacoraPm.validacion; else sinValidacionHistorial">
                 <p><strong>Validación:</strong> {{ detalleBitacoraPm.validacion.decision }}</p>
                 <p><strong>Motivo:</strong> {{ detalleBitacoraPm.validacion.motivo || 'Sin motivo' }}</p>
-                <p><strong>Fecha validación:</strong> {{ detalleBitacoraPm.validacion.validado_en || 'Sin fecha' }}</p>
+                <p><strong>Fecha validación:</strong> {{ formatearFechaValidacion(detalleBitacoraPm.validacion.validado_en) }}</p>
             </ng-container>
 
             <ng-template #sinValidacionHistorial>
                 <p><strong>Validación:</strong> Sin validación</p>
             </ng-template>
+                <div *ngIf="puedeValidarPm() && !detalleBitacoraPm?.validacion" class="pm-detalle-acciones-validacion">
+                <button mat-raised-button color="primary" type="button" (click)="validarBitacoraPm()">
+                    Validar
+                </button>
+
+                <button
+                mat-stroked-button
+                color="warn"
+                type="button"
+                (click)="manejarBotonRechazoPm()">
+                {{ textoBotonRechazoPm() }}
+                </button>
+                </div>
+
+                <div *ngIf="mostrarRechazoPm" class="pm-detalle-rechazo">
+                <mat-form-field appearance="fill" class="full-width">
+                    <mat-label>Motivo de rechazo</mat-label>
+                    <textarea
+                    matInput
+                    rows="4"
+                    [(ngModel)]="motivoRechazoPm">
+                    </textarea>
+                </mat-form-field>
+                </div>
         </mat-card-content>
     </mat-card>
 

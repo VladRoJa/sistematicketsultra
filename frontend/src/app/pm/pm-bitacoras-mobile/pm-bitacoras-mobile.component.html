@@ -56,10 +56,9 @@
       <mat-form-field appearance="fill">
         <mat-label>Tipo de mantenimiento</mat-label>
         <mat-select formControlName="tipo_mantenimiento">
-          <mat-option value="Correctivo">Correctivo</mat-option>
-          <mat-option value="Preventivo">Preventivo</mat-option>
-          <mat-option value="Estetico">Estetico</mat-option>
-          <mat-option value="Mejora">Mejora</mat-option>
+          <mat-option *ngFor="let tipo of tiposMantenimiento" [value]="tipo">
+            {{ tipoMantenimientoLabel(tipo) }}
+          </mat-option>
         </mat-select>
       </mat-form-field>
 

@@ -30,6 +30,8 @@ class PmBitacoraORM(db.Model):
 
     # "OK" | "FALLA" | "OBS"
     resultado = db.Column(db.String(20), nullable=False)
+    
+    tipo_mantenimiento = db.Column(db.String(20), nullable=False)
 
     notas = db.Column(db.Text, nullable=True)
 
