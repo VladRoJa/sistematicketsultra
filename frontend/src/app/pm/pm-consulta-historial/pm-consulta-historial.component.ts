@@ -415,4 +415,17 @@ formatearFechaValidacion(fechaIso: string | null | undefined): string {
 
   return `${dd}/${mm}/${yyyy} ${hh}:${min}`;
 }
+
+formatearEstadoValidacion(estado: string | null | undefined): string {
+  if (!estado) return 'Sin validación';
+
+  const labels: Record<string, string> = {
+    SIN_VALIDACION: 'Sin validación',
+    VALIDADO: 'Validado',
+    RECHAZADO: 'Rechazado',
+    PENDIENTE_VALIDACION: 'Pendiente de validación',
+  };
+
+  return labels[estado] || estado;
+}
 }
