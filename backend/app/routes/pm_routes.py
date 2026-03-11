@@ -2,12 +2,15 @@ from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from datetime import datetime, date, timedelta
 from sqlalchemy import func
+from calendar import monthrange
+
 from app.extensions import db
 from app.models.pm_bitacora import PmBitacoraORM
 from app.models.pm_preventivo import PmPreventivoConfigORM
 from app.models.inventario import InventarioGeneral, InventarioSucursal
 from app.models.sucursal_model import Sucursal
 from app.models.pm_validacion import PmValidacionORM
+
 
 pm_bp = Blueprint("pm", __name__)
 
@@ -263,13 +266,19 @@ def _crear_configuracion_pm(data, claims):
     inventario_id = data.get("inventario_id")
     sucursal_id = data.get("sucursal_id")
     frecuencia_dias = data.get("frecuencia_dias")
+    semana_programada_mes = data.get("semana_programada_mes")
     activo = data.get("activo", True)
 
-    if not inventario_id or not sucursal_id or frecuencia_dias is None:
+    if (
+        not inventario_id
+        or not sucursal_id
+        or frecuencia_dias is None
+        or semana_programada_mes is None
+    ):
         return None, (
             {
                 "error": "Bad Request",
-                "detail": "Campos requeridos: inventario_id, sucursal_id, frecuencia_dias",
+                "detail": "Campos requeridos: inventario_id, sucursal_id, frecuencia_dias, semana_programada_mes",
             },
             400,
         )
@@ -278,11 +287,12 @@ def _crear_configuracion_pm(data, claims):
         inventario_id_int = int(inventario_id)
         sucursal_id_int = int(sucursal_id)
         frecuencia_dias_int = int(frecuencia_dias)
+        semana_programada_mes_int = int(semana_programada_mes)
     except (TypeError, ValueError):
         return None, (
             {
                 "error": "Bad Request",
-                "detail": "inventario_id, sucursal_id y frecuencia_dias deben ser enteros",
+                "detail": "inventario_id, sucursal_id, frecuencia_dias y semana_programada_mes deben ser enteros",
             },
             400,
         )
@@ -292,6 +302,15 @@ def _crear_configuracion_pm(data, claims):
             {
                 "error": "Bad Request",
                 "detail": "frecuencia_dias debe ser mayor a 0",
+            },
+            400,
+        )
+        
+    if semana_programada_mes_int < 1 or semana_programada_mes_int > 5:
+        return None, (
+            {
+                "error": "Bad Request",
+                "detail": "semana_programada_mes debe estar entre 1 y 5",
             },
             400,
         )
@@ -330,6 +349,7 @@ def _crear_configuracion_pm(data, claims):
         inventario_id=inventario_id_int,
         sucursal_id=sucursal_id_int,
         frecuencia_dias=frecuencia_dias_int,
+        semana_programada_mes=semana_programada_mes_int,
         activo=bool(activo),
     )
     db.session.add(cfg)
@@ -446,10 +466,70 @@ def _serializar_pm_config_resumen(cfg, inventario, sucursal):
         "sucursal_id": cfg.sucursal_id,
         "sucursal": sucursal.sucursal,
         "frecuencia_dias": cfg.frecuencia_dias,
+        "semana_programada_mes": cfg.semana_programada_mes,
         "activo": cfg.activo,
         "created_at": cfg.created_at.isoformat() if cfg.created_at else None,
         "updated_at": cfg.updated_at.isoformat() if cfg.updated_at else None,
     }
+
+def _formatear_ddmm(fecha: date) -> str:
+    return fecha.strftime("%d/%m")
+
+
+def _primer_domingo_del_mes(anio: int, mes: int) -> date | None:
+    _, ultimo_dia = monthrange(anio, mes)
+
+    for dia in range(1, ultimo_dia + 1):
+        fecha = date(anio, mes, dia)
+        # weekday(): lunes=0 ... domingo=6
+        if fecha.weekday() == 6:
+            return fecha
+
+    return None
+
+
+def _inicio_anio_domingo(anio: int) -> date:
+    primero_enero = date(anio, 1, 1)
+    dias_hacia_atras = (primero_enero.weekday() + 1) % 7
+    return primero_enero - timedelta(days=dias_hacia_atras)
+
+
+def _calcular_semana_anio_domingo_sabado(fecha: date) -> int:
+    inicio = _inicio_anio_domingo(fecha.year)
+    diff_dias = (fecha - inicio).days
+    return (diff_dias // 7) + 1
+
+
+def _generar_semanas_visibles_mes(anio: int, mes: int):
+    primer_domingo = _primer_domingo_del_mes(anio, mes)
+    if not primer_domingo:
+        return []
+
+    semanas = []
+    semana_programada_mes = 1
+    domingo_actual = primer_domingo
+
+    while domingo_actual.month == mes:
+        sabado_actual = domingo_actual + timedelta(days=6)
+        semana_anio = _calcular_semana_anio_domingo_sabado(domingo_actual)
+
+        semanas.append({
+            "anio": anio,
+            "mes": mes,
+            "semana_anio": semana_anio,
+            "semana_programada_mes": semana_programada_mes,
+            "fecha_inicio_iso": domingo_actual.isoformat(),
+            "fecha_fin_iso": sabado_actual.isoformat(),
+            "fecha_inicio_label": _formatear_ddmm(domingo_actual),
+            "fecha_fin_label": _formatear_ddmm(sabado_actual),
+            "label": f"Semana {semana_anio} — {_formatear_ddmm(domingo_actual)} al {_formatear_ddmm(sabado_actual)}",
+        })
+
+        domingo_actual = domingo_actual + timedelta(days=7)
+        semana_programada_mes += 1
+
+    return semanas
+
 
 
 # ────────────────────────────────────────────────────────────
@@ -910,3 +990,208 @@ def pm_preventivo_dashboard():
             "proximos": proximos,
         }
     ), 200
+    
+    
+# ────────────────────────────────────────────────────────────
+# GET /calendario?anio=X&mes=Y&sucursales_ids=1,2,3
+# ──────────────────────────────────────────────────────────── 
+    
+    
+@pm_bp.route("/calendario",methods=["GET"])
+@jwt_required()
+def pm_calendario():
+    claims = get_jwt() or {}
+
+    anio = request.args.get("anio", type=int)
+    mes = request.args.get("mes", type=int)
+    semana_anio = request.args.get("semana_anio", type=int)
+    sucursales_ids = request.args.getlist("sucursales_ids", type=int)
+
+    if not anio or not mes:
+        return jsonify({
+            "error": "Bad Request",
+            "detail": "anio y mes son requeridos",
+        }), 400
+
+    if mes < 1 or mes > 12:
+        return jsonify({
+            "error": "Bad Request",
+            "detail": "mes debe estar entre 1 y 12",
+        }), 400
+
+    semanas = _generar_semanas_visibles_mes(anio, mes)
+
+    if not semanas:
+        return jsonify({
+            "anio": anio,
+            "mes": mes,
+            "semanas": [],
+            "sucursales": [],
+            "detalle_semana_seleccionada": {
+                "semana_anio": None,
+                "semana_programada_mes": None,
+                "fecha_inicio_iso": None,
+                "fecha_fin_iso": None,
+                "fecha_inicio_label": None,
+                "fecha_fin_label": None,
+                "label": None,
+                "items": [],
+            },
+        }), 200
+
+    query = (
+        db.session.query(
+            PmPreventivoConfigORM,
+            InventarioGeneral,
+            Sucursal,
+        )
+        .join(
+            InventarioGeneral,
+            InventarioGeneral.id == PmPreventivoConfigORM.inventario_id,
+        )
+        .join(
+            Sucursal,
+            Sucursal.sucursal_id == PmPreventivoConfigORM.sucursal_id,
+        )
+        .filter(PmPreventivoConfigORM.activo.is_(True))
+    )
+
+    if sucursales_ids:
+        for sucursal_id in sucursales_ids:
+            denied = _verificar_permiso_sucursal(claims, sucursal_id)
+            if denied:
+                return jsonify(denied[0]), denied[1]
+
+        query = query.filter(PmPreventivoConfigORM.sucursal_id.in_(sucursales_ids))
+    else:
+        rol = (claims.get("rol") or "").strip().upper()
+
+        if rol not in _ADMIN_ROLES and rol != "MANTENIMIENTO":
+            if rol == "AUX_MANTENIMIENTO":
+                user_sucursal = claims.get("sucursal_id")
+                try:
+                    user_sucursal = int(user_sucursal) if user_sucursal is not None else None
+                except Exception:
+                    user_sucursal = None
+
+                if not user_sucursal:
+                    return jsonify({"error": "Forbidden", "detail": "No tienes acceso a sucursales"}), 403
+
+                query = query.filter(PmPreventivoConfigORM.sucursal_id == user_sucursal)
+            else:
+                allowed = claims.get("sucursales_ids") or []
+                try:
+                    allowed = [int(x) for x in allowed]
+                except Exception:
+                    allowed = []
+
+                if not allowed:
+                    return jsonify({"error": "Forbidden", "detail": "No tienes acceso a sucursales"}), 403
+
+                query = query.filter(PmPreventivoConfigORM.sucursal_id.in_(allowed))
+
+    rows = query.all()
+
+    sucursales_map = {}
+
+    for cfg, inventario, sucursal in rows:
+        key = sucursal.sucursal_id
+
+        if key not in sucursales_map:
+            sucursales_map[key] = {
+                "sucursal_id": sucursal.sucursal_id,
+                "sucursal": sucursal.sucursal,
+                "celdas": [],
+            }
+
+        # no hacemos nada aquí todavía; primero agrupamos por sucursal
+        # y luego armamos celdas por cada semana visible del mes
+
+    for sucursal_id, sucursal_row in sucursales_map.items():
+        configs_sucursal = [
+            cfg for cfg, inv, suc in rows
+            if suc.sucursal_id == sucursal_id
+        ]
+
+        celdas = []
+
+        for semana in semanas:
+            total_programados = sum(
+                1
+                for cfg in configs_sucursal
+                if cfg.semana_programada_mes == semana["semana_programada_mes"]
+            )
+
+            celdas.append({
+                "sucursal_id": sucursal_row["sucursal_id"],
+                "sucursal": sucursal_row["sucursal"],
+                "anio": anio,
+                "mes": mes,
+                "semana_anio": semana["semana_anio"],
+                "semana_programada_mes": semana["semana_programada_mes"],
+                "fecha_inicio_iso": semana["fecha_inicio_iso"],
+                "fecha_fin_iso": semana["fecha_fin_iso"],
+                "fecha_inicio_label": semana["fecha_inicio_label"],
+                "fecha_fin_label": semana["fecha_fin_label"],
+                "label_semana": semana["label"],
+                "total_programados": total_programados,
+                "total_capturados": 0,
+                "total_validados": 0,
+                "total_rechazados": 0,
+                "total_atrasados": 0,
+                "total_sin_bitacora": total_programados,
+                "estado_resumen": "SIN_PROGRAMACION" if total_programados == 0 else "PROGRAMADO",
+            })
+
+        sucursal_row["celdas"] = celdas
+
+    semana_detalle = None
+
+    if semana_anio is not None:
+        semana_detalle = next((s for s in semanas if s["semana_anio"] == semana_anio), None)
+
+    if semana_detalle is None:
+        semana_detalle = semanas[0] if semanas else None
+
+    detalle_items = []
+
+    if semana_detalle is not None:
+        for cfg, inventario, sucursal in rows:
+            if cfg.semana_programada_mes != semana_detalle["semana_programada_mes"]:
+                continue
+
+            detalle_items.append({
+                "configuracion_pm_id": cfg.id,
+                "sucursal_id": sucursal.sucursal_id,
+                "sucursal": sucursal.sucursal,
+                "inventario_id": inventario.id,
+                "codigo_interno": inventario.codigo_interno,
+                "nombre": inventario.nombre,
+                "frecuencia_dias": cfg.frecuencia_dias,
+                "semana_programada_mes": cfg.semana_programada_mes,
+                "estado_operativo": "PROGRAMADO",
+            })
+
+
+
+    detalle_semana = {
+        "semana_anio": semana_detalle["semana_anio"] if semana_detalle else None,
+        "semana_programada_mes": semana_detalle["semana_programada_mes"] if semana_detalle else None,
+        "fecha_inicio_iso": semana_detalle["fecha_inicio_iso"] if semana_detalle else None,
+        "fecha_fin_iso": semana_detalle["fecha_fin_iso"] if semana_detalle else None,
+        "fecha_inicio_label": semana_detalle["fecha_inicio_label"] if semana_detalle else None,
+        "fecha_fin_label": semana_detalle["fecha_fin_label"] if semana_detalle else None,
+        "label": semana_detalle["label"] if semana_detalle else None,
+        "items": detalle_items,
+    }
+
+    return jsonify({
+        "anio": anio,
+        "mes": mes,
+        "semanas": semanas,
+        "sucursales": list(sucursales_map.values()),
+        "detalle_semana_seleccionada": detalle_semana,
+    }), 200
+    
+    
+    
