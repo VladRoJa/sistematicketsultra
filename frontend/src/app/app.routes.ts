@@ -14,6 +14,7 @@ import { CrearTicketRefactorComponent } from './pantalla-crear-ticket/crear-tick
 import { PmBitacorasMobileComponent } from './pm/pm-bitacoras-mobile/pm-bitacoras-mobile.component';
 import { PmConsultaHistorialComponent } from './pm/pm-consulta-historial/pm-consulta-historial.component';
 import { PmConfiguracionProgramacionComponent } from './pm/pm-configuracion-programacion/pm-configuracion-programacion.component';
+import { PmCalendarioComponent } from './pm/pm-calendario/pm-calendario.component';
 
 
 export const routes: Routes = [
@@ -69,6 +70,10 @@ export const routes: Routes = [
       {
         path: 'pm/configuracion-programacion',
         component: PmConfiguracionProgramacionComponent,
+      },
+      {
+        path: 'pm/calendario',
+        component: PmCalendarioComponent,
       },
       {
         path: 'catalogos',

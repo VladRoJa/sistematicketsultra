@@ -25,6 +25,8 @@ class PmPreventivoConfigORM(db.Model):
 
     activo = db.Column(db.Boolean, nullable=False, default=True)
 
+    semana_programada_mes = db.Column(db.Integer, nullable=True)
+
     created_at = db.Column(
         db.DateTime(timezone=True),
         nullable=False,
@@ -37,6 +39,8 @@ class PmPreventivoConfigORM(db.Model):
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
     )
+    
+
 
     __table_args__ = (
         db.UniqueConstraint("inventario_id", "sucursal_id", name="uq_pm_config_equipo"),

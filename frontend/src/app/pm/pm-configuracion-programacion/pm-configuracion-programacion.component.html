@@ -83,6 +83,17 @@
                 <input matInput [value]="activoInput ? 'Sí' : 'No'" readonly>
             </mat-form-field>
 
+            <mat-form-field appearance="fill" class="filter-field">
+            <mat-label>Semana programada del mes</mat-label>
+            <mat-select [(ngModel)]="semanaProgramadaMesInput">
+                <mat-option [value]="1">Semana 1</mat-option>
+                <mat-option [value]="2">Semana 2</mat-option>
+                <mat-option [value]="3">Semana 3</mat-option>
+                <mat-option [value]="4">Semana 4</mat-option>
+                <mat-option [value]="5">Semana 5</mat-option>
+            </mat-select>
+            </mat-form-field>
+
             <button mat-raised-button color="accent" (click)="crearConfiguracion()" [disabled]="saving">
                 Guardar
             </button>

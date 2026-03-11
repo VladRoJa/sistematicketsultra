@@ -82,6 +82,7 @@ export interface PmConfiguracionResumen {
   sucursal_id: number;
   sucursal: string;
   frecuencia_dias: number;
+  semana_programada_mes: number | null;
   activo: boolean;
   created_at: string | null;
   updated_at: string | null;

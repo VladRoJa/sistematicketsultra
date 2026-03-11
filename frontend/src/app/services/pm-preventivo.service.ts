@@ -78,10 +78,37 @@ export class PmPreventivoService {
     return this.http.get<PmConfiguracionResumen[]>(`${this.basePmRoot}/configuraciones`, { params });
 }
 
+getCalendarioPm(
+  anio: number,
+  mes: number,
+  sucursalesIds?: number[] | null,
+  semanaAnio?: number | null
+): Observable<any> {
+  let params = new HttpParams()
+    .set('anio', String(anio))
+    .set('mes', String(mes));
+
+  if (sucursalesIds && sucursalesIds.length > 0) {
+    for (const sucursalId of sucursalesIds) {
+      if (sucursalId !== -1) {
+        params = params.append('sucursales_ids', String(sucursalId));
+      }
+    }
+  }
+
+  if (semanaAnio) {
+    params = params.set('semana_anio', String(semanaAnio));
+  }
+
+  return this.http.get<any>(`${this.basePmRoot}/calendario`, { params });
+}
+
+
     crearConfiguracionPm(payload: {
     inventario_id: number;
     sucursal_id: number;
     frecuencia_dias: number;
+    semana_programada_mes: number;
     activo: boolean;
     }): Observable<PmConfiguracionResumen> {
     return this.http.post<PmConfiguracionResumen>(`${this.basePmRoot}/configuraciones`, payload);
@@ -91,6 +118,7 @@ export class PmPreventivoService {
     configId: number,
     payload: {
         frecuencia_dias?: number;
+        semana_programada_mes?: number;
         activo?: boolean;
     }
     ): Observable<PmConfiguracionResumen> {

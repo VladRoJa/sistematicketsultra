@@ -1,0 +1,118 @@
+<!-- frontend\src\app\pm\pm-calendario\pm-calendario.component.html -->
+
+
+<div class="pm-calendario-container">
+  <h2 class="page-title">Calendario PM</h2>
+
+  <div class="pm-calendario-filtros">
+    <label>
+      Año
+      <select [(ngModel)]="anioSeleccionado" (change)="actualizarSemanasDisponibles()">
+        <option [value]="2025">2025</option>
+        <option [value]="2026">2026</option>
+        <option [value]="2027">2027</option>
+      </select>
+    </label>
+
+    <label>
+      Mes
+      <select [(ngModel)]="mesSeleccionado" (change)="actualizarSemanasDisponibles()">
+        <option [value]="1">Enero</option>
+        <option [value]="2">Febrero</option>
+        <option [value]="3">Marzo</option>
+        <option [value]="4">Abril</option>
+        <option [value]="5">Mayo</option>
+        <option [value]="6">Junio</option>
+        <option [value]="7">Julio</option>
+        <option [value]="8">Agosto</option>
+        <option [value]="9">Septiembre</option>
+        <option [value]="10">Octubre</option>
+        <option [value]="11">Noviembre</option>
+        <option [value]="12">Diciembre</option>
+      </select>
+    </label>
+        <mat-form-field appearance="fill">
+        <mat-label>Sucursales</mat-label>
+        <mat-select
+            multiple
+            [ngModel]="sucursalesSeleccionadasIds"
+            (ngModelChange)="manejarCambioSucursalesSeleccionadas($event)">
+
+            <mat-option [value]="-1">Todas</mat-option>
+
+            <mat-option
+            *ngFor="let sucursal of sucursalesCalendario"
+            [value]="sucursal.sucursal_id">
+            {{ sucursal.sucursal }}
+            </mat-option>
+        </mat-select>
+        </mat-form-field>
+        <label>
+          Semana
+          <select [(ngModel)]="semanaSeleccionada" (change)="cargarCalendarioPm()">
+            <option *ngFor="let semana of semanasDisponibles" [value]="semana.semana_anio">
+              {{ semana.label }}
+            </option>
+          </select>
+        </label>
+
+  </div>
+    <div *ngIf="semanaSeleccionadaInfo" class="pm-calendario-resumen-semana">
+    <strong>Semana seleccionada:</strong>
+    {{ semanaSeleccionadaInfo.label }}
+    </div>
+        <div
+            class="pm-calendario-grid"
+            [style.grid-template-columns]="obtenerGridTemplateColumns()">
+    <div class="pm-calendario-grid-header pm-calendario-grid-cell pm-col-sucursal">
+        Sucursal
+    </div>
+
+    <div
+        *ngFor="let semana of semanasDisponibles"
+        class="pm-calendario-grid-header pm-calendario-grid-cell">
+        {{ semana.label }}
+    </div>
+
+    <ng-container *ngFor="let sucursalRow of calendarioPmData?.sucursales || []">
+    <div class="pm-calendario-grid-cell pm-col-sucursal">
+        {{ sucursalRow.sucursal }}
+    </div>
+
+    <div
+    *ngFor="let celda of sucursalRow.celdas"
+    class="pm-calendario-grid-cell pm-calendario-grid-placeholder"
+    [ngClass]="obtenerClaseCargaCelda(celda.total_programados)">
+    <div class="pm-celda-resumen">
+        <div class="pm-celda-total">{{ celda.total_programados }}</div>
+        <div class="pm-celda-label">PM</div>
+    </div>
+    </div>
+    </ng-container>
+    <div class="pm-detalle-semana" *ngIf="detalleSemanaSeleccionada">
+      <h3 class="pm-detalle-semana-titulo">
+        Detalle de semana — {{ detalleSemanaSeleccionada.label }}
+      </h3>
+
+      <div class="pm-detalle-semana-resumen">
+        <strong>Rango:</strong>
+        {{ detalleSemanaSeleccionada.fecha_inicio_label }}
+        al
+        {{ detalleSemanaSeleccionada.fecha_fin_label }}
+      </div>
+
+    <div class="pm-detalle-semana-lista" *ngIf="detalleSemanaSeleccionada.items?.length">
+      <div
+        class="pm-detalle-semana-item"
+        *ngFor="let item of detalleSemanaSeleccionada.items">
+        <div><strong>Sucursal:</strong> {{ item.sucursal }}</div>
+        <div><strong>Código:</strong> {{ item.codigo_interno }}</div>
+        <div><strong>Equipo:</strong> {{ item.nombre }}</div>
+        <div><strong>Frecuencia:</strong> {{ item.frecuencia_dias }} días</div>
+        <div><strong>Semana programada:</strong> {{ item.semana_programada_mes }}</div>
+        <div><strong>Estado:</strong> {{ item.estado_operativo }}</div>
+      </div>
+    </div>
+    </div>    
+  </div>
+</div>

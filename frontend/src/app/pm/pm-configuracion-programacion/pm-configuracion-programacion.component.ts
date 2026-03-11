@@ -66,6 +66,7 @@ export class PmConfiguracionProgramacionComponent implements OnInit {
 
   equipoCtrl = new FormControl<string | any>('');
   filteredInventarioOptions$!: Observable<any[]>;
+  semanaProgramadaMesInput: number | null = null;
 
   
 
@@ -184,8 +185,8 @@ onSucursalSelected(sucursal: SucursalOption): void {
   }
 
   crearConfiguracion(): void {
-    if (!this.selectedSucursalId || !this.inventarioIdInput || !this.frecuenciaDiasInput) {
-      this.snack.open('Completa sucursal, inventario_id y frecuencia_dias', 'OK', {
+    if (!this.selectedSucursalId || !this.inventarioIdInput || !this.frecuenciaDiasInput|| !this.semanaProgramadaMesInput) {
+      this.snack.open('Completa sucursal, inventario_id, frecuencia_dias y semana programada', 'OK', {
         duration: 2500,
       });
       return;
@@ -197,6 +198,7 @@ onSucursalSelected(sucursal: SucursalOption): void {
       inventario_id: this.inventarioIdInput,
       sucursal_id: this.selectedSucursalId,
       frecuencia_dias: this.frecuenciaDiasInput,
+      semana_programada_mes: this.semanaProgramadaMesInput,
       activo: this.activoInput,
     }).subscribe({
       next: () => {
@@ -205,6 +207,7 @@ onSucursalSelected(sucursal: SucursalOption): void {
         this.equipoCtrl.setValue('', { emitEvent: false });
         this.frecuenciaDiasInput = null;
         this.activoInput = true;
+        this.semanaProgramadaMesInput = null;
 
         this.snack.open('Configuración PM creada', 'OK', { duration: 2500 });
         this.cargarConfiguraciones();
