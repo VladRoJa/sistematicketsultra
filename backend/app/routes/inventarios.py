@@ -158,6 +158,7 @@ def obtener_inventario():
                 categoria_res, subcat_res = _resolver_categoria(inv)
                 data.append({
                     'id': inv.id,
+                    'tipo': inv.tipo,
                     'nombre': inv.nombre,
                     'descripcion': inv.descripcion,
                     'marca': inv.marca,

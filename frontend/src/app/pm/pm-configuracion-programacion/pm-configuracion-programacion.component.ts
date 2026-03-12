@@ -1,7 +1,7 @@
 //frontend\src\app\pm\pm-configuracion-programacion\pm-configuracion-programacion.component.ts
 
 
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject,ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, FormControl, ReactiveFormsModule } from '@angular/forms';
 import { Observable } from 'rxjs';
@@ -15,6 +15,10 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatTableModule } from '@angular/material/table';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatDatepickerModule } from '@angular/material/datepicker';
+import { MatNativeDateModule } from '@angular/material/core';
+import { MatAutocompleteTrigger } from '@angular/material/autocomplete';
+
 import { InventarioService } from '../../services/inventario.service';
 import { PmPreventivoService } from '../../services/pm-preventivo.service';
 import {
@@ -37,6 +41,8 @@ import {
     MatTableModule,
     MatSnackBarModule,
     MatProgressSpinnerModule,
+    MatDatepickerModule,
+    MatNativeDateModule
   ],
   templateUrl: './pm-configuracion-programacion.component.html',
   styleUrls: ['./pm-configuracion-programacion.component.css'],
@@ -45,6 +51,8 @@ export class PmConfiguracionProgramacionComponent implements OnInit {
   private pmService = inject(PmPreventivoService);
   private snack = inject(MatSnackBar);
   private inventarioService = inject(InventarioService);
+  @ViewChild('equipoAutocompleteTrigger', { read: MatAutocompleteTrigger })
+  equipoAutocompleteTrigger?: MatAutocompleteTrigger;
 
   loading = false;
   saving = false;
@@ -66,7 +74,7 @@ export class PmConfiguracionProgramacionComponent implements OnInit {
 
   equipoCtrl = new FormControl<string | any>('');
   filteredInventarioOptions$!: Observable<any[]>;
-  semanaProgramadaMesInput: number | null = null;
+  fechaBaseProgramacionInput: Date | null = null;
 
   
 
@@ -74,7 +82,9 @@ export class PmConfiguracionProgramacionComponent implements OnInit {
     'equipo',
     'sucursal',
     'frecuencia_dias',
+    'fecha_base_programacion',
     'activo',
+    'editar_frecuencia',
     'accion',
 
   ];
@@ -171,6 +181,7 @@ onSucursalSelected(sucursal: SucursalOption): void {
     this.pmService.listarConfiguracionesPm(this.selectedSucursalId).subscribe({
       next: (rows) => {
         this.configuraciones = rows || [];
+        this.filtrarInventarioSinConfiguracion();
         this.loading = false;
       },
       error: (err) => {
@@ -185,8 +196,17 @@ onSucursalSelected(sucursal: SucursalOption): void {
   }
 
   crearConfiguracion(): void {
-    if (!this.selectedSucursalId || !this.inventarioIdInput || !this.frecuenciaDiasInput|| !this.semanaProgramadaMesInput) {
-      this.snack.open('Completa sucursal, inventario_id, frecuencia_dias y semana programada', 'OK', {
+    if (!this.selectedSucursalId || !this.inventarioIdInput || !this.frecuenciaDiasInput|| !this.fechaBaseProgramacionInput) {
+      this.snack.open('Completa sucursal, inventario_id, frecuencia_dias y fecha base', 'OK', {
+        duration: 2500,
+      });
+      return;
+    }
+
+    const fechaBaseProgramacionIso = this.formatearFechaLocal(this.fechaBaseProgramacionInput);
+
+    if (!fechaBaseProgramacionIso) {
+      this.snack.open('No se pudo convertir la fecha base', 'OK', {
         duration: 2500,
       });
       return;
@@ -198,7 +218,7 @@ onSucursalSelected(sucursal: SucursalOption): void {
       inventario_id: this.inventarioIdInput,
       sucursal_id: this.selectedSucursalId,
       frecuencia_dias: this.frecuenciaDiasInput,
-      semana_programada_mes: this.semanaProgramadaMesInput,
+      fecha_base_programacion: fechaBaseProgramacionIso,
       activo: this.activoInput,
     }).subscribe({
       next: () => {
@@ -207,7 +227,7 @@ onSucursalSelected(sucursal: SucursalOption): void {
         this.equipoCtrl.setValue('', { emitEvent: false });
         this.frecuenciaDiasInput = null;
         this.activoInput = true;
-        this.semanaProgramadaMesInput = null;
+        this.fechaBaseProgramacionInput = null;
 
         this.snack.open('Configuración PM creada', 'OK', { duration: 2500 });
         this.cargarConfiguraciones();
@@ -246,7 +266,9 @@ onSucursalSelected(sucursal: SucursalOption): void {
 
   this.inventarioService.obtenerInventarioPorSucursal(this.selectedSucursalId).subscribe({
     next: (rows) => {
-      this.inventarioOptions = rows || [];
+      const inventarioFiltradoPorArea = this.filtrarInventarioPorArea(rows || []);
+      this.inventarioOptions = inventarioFiltradoPorArea;
+      this.filtrarInventarioSinConfiguracion();
       this.inventarioLoading = false;
     },
     error: () => {
@@ -291,4 +313,112 @@ toggleActivoConfiguracion(row: PmConfiguracionResumen): void {
     },
   });
 }
+
+private formatearFechaLocal(fecha: Date | null): string | null {
+  if (!fecha) {
+    return null;
+  }
+
+  const anio = fecha.getFullYear();
+  const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+  const dia = String(fecha.getDate()).padStart(2, '0');
+
+  return `${anio}-${mes}-${dia}`;
+}
+
+private filtrarInventarioSinConfiguracion(): void {
+  const inventariosConfigurados = new Set(
+    this.configuraciones.map((config) => config.inventario_id)
+  );
+
+  this.inventarioOptions = this.inventarioOptions.filter(
+    (item) => !inventariosConfigurados.has(item.id)
+  );
+}
+
+abrirAutocompleteEquipo(): void {
+  if (this.inventarioSelectDisabled) {
+    return;
+  }
+
+  this.equipoCtrl.setValue(this.equipoCtrl.value ?? '', { emitEvent: true });
+
+  setTimeout(() => {
+    this.equipoAutocompleteTrigger?.openPanel();
+  });
+}
+
+
+private filtrarInventarioPorArea(items: any[]): any[] {
+
+  const userRaw = localStorage.getItem('user');
+  let rolActual = '';
+
+  if (userRaw) {
+    try {
+      const user = JSON.parse(userRaw);
+      rolActual = (user?.rol || '').toUpperCase().trim();
+    } catch {
+      rolActual = '';
+    }
+  }
+
+  if (rolActual === 'MANTENIMIENTO' || rolActual === 'SR_MANTENIMIENTO' || rolActual === 'AUX_MANTENIMIENTO') {
+    return items.filter(
+      (item) => (item?.tipo || '').toUpperCase().trim() === 'APARATOS'
+    );
+  }
+
+  if (rolActual === 'SISTEMAS' || rolActual === 'TECNICO') {
+    return items.filter(
+      (item) => (item?.tipo || '').toUpperCase().trim() === 'DISPOSITIVOS'
+    );
+  }
+
+  return items;
+}
+
+editarFrecuencia(row: PmConfiguracionResumen): void {
+  const valorActual = row.frecuencia_dias;
+  const respuesta = window.prompt(
+    `Nueva frecuencia en días para ${this.equipoLabel(row)}:`,
+    String(valorActual)
+  );
+
+  if (respuesta === null) {
+    return;
+  }
+
+  const nuevaFrecuencia = Number(respuesta);
+
+  if (!Number.isInteger(nuevaFrecuencia) || nuevaFrecuencia <= 0) {
+    this.snack.open('La frecuencia debe ser un entero mayor a 0', 'OK', {
+      duration: 3000,
+    });
+    return;
+  }
+
+  if (nuevaFrecuencia === valorActual) {
+    return;
+  }
+
+  this.pmService.actualizarConfiguracionPm(row.id, {
+    frecuencia_dias: nuevaFrecuencia,
+  }).subscribe({
+    next: () => {
+      this.snack.open('Frecuencia actualizada', 'OK', {
+        duration: 2500,
+      });
+      this.cargarConfiguraciones();
+    },
+    error: (err) => {
+      const msg =
+        err?.error?.detail ||
+        err?.error?.message ||
+        'No se pudo actualizar la frecuencia';
+      this.snack.open(msg, 'OK', { duration: 3500 });
+    },
+  });
+}
+
 }

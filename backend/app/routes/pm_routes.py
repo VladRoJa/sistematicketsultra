@@ -1,3 +1,6 @@
+#backend\app\routes\pm_routes.py
+
+
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from datetime import datetime, date, timedelta
@@ -266,19 +269,21 @@ def _crear_configuracion_pm(data, claims):
     inventario_id = data.get("inventario_id")
     sucursal_id = data.get("sucursal_id")
     frecuencia_dias = data.get("frecuencia_dias")
-    semana_programada_mes = data.get("semana_programada_mes")
+    fecha_base_programacion = data.get("fecha_base_programacion")
+
     activo = data.get("activo", True)
 
     if (
         not inventario_id
         or not sucursal_id
         or frecuencia_dias is None
-        or semana_programada_mes is None
+        or fecha_base_programacion is None
     ):
+        
         return None, (
             {
                 "error": "Bad Request",
-                "detail": "Campos requeridos: inventario_id, sucursal_id, frecuencia_dias, semana_programada_mes",
+                "detail": "Campos requeridos: inventario_id, sucursal_id, frecuencia_dias, fecha_base_programacion",
             },
             400,
         )
@@ -287,16 +292,17 @@ def _crear_configuracion_pm(data, claims):
         inventario_id_int = int(inventario_id)
         sucursal_id_int = int(sucursal_id)
         frecuencia_dias_int = int(frecuencia_dias)
-        semana_programada_mes_int = int(semana_programada_mes)
     except (TypeError, ValueError):
         return None, (
             {
                 "error": "Bad Request",
-                "detail": "inventario_id, sucursal_id, frecuencia_dias y semana_programada_mes deben ser enteros",
+                "detail": "inventario_id, sucursal_id y frecuencia_dias deben ser enteros",
             },
             400,
         )
 
+    semana_programada_mes_int = None
+    
     if frecuencia_dias_int <= 0:
         return None, (
             {
@@ -305,15 +311,18 @@ def _crear_configuracion_pm(data, claims):
             },
             400,
         )
-        
-    if semana_programada_mes_int < 1 or semana_programada_mes_int > 5:
+    
+    try:
+        fecha_base_programacion_date = date.fromisoformat(fecha_base_programacion)
+    except (TypeError, ValueError):
         return None, (
             {
                 "error": "Bad Request",
-                "detail": "semana_programada_mes debe estar entre 1 y 5",
+                "detail": "fecha_base_programacion debe tener formato YYYY-MM-DD",
             },
             400,
         )
+   
 
     denied = _verificar_permiso_sucursal(claims, sucursal_id_int)
     if denied:
@@ -349,7 +358,7 @@ def _crear_configuracion_pm(data, claims):
         inventario_id=inventario_id_int,
         sucursal_id=sucursal_id_int,
         frecuencia_dias=frecuencia_dias_int,
-        semana_programada_mes=semana_programada_mes_int,
+        fecha_base_programacion=fecha_base_programacion_date,
         activo=bool(activo),
     )
     db.session.add(cfg)
@@ -380,12 +389,13 @@ def _actualizar_configuracion_pm(config_id, data, claims):
 
     frecuencia_dias = data.get("frecuencia_dias")
     activo = data.get("activo")
+    fecha_base_programacion = data.get("fecha_base_programacion")
 
-    if frecuencia_dias is None and activo is None:
+    if frecuencia_dias is None and activo is None and fecha_base_programacion is None:
         return None, (
             {
                 "error": "Bad Request",
-                "detail": "Debes enviar al menos frecuencia_dias o activo",
+                "detail": "Debes enviar al menos frecuencia_dias, fecha_base_programacion o activo",
             },
             400,
         )
@@ -406,7 +416,20 @@ def _actualizar_configuracion_pm(config_id, data, claims):
             )
 
         cfg.frecuencia_dias = frecuencia_dias_int
+    if fecha_base_programacion is not None:
+        try:
+            fecha_base_programacion_date = date.fromisoformat(fecha_base_programacion)
+        except (TypeError, ValueError):
+            return None, (
+                {
+                    "error": "Bad Request",
+                    "detail": "fecha_base_programacion debe tener formato YYYY-MM-DD",
+                },
+                400,
+            )
 
+        cfg.fecha_base_programacion = fecha_base_programacion_date
+        
     if activo is not None:
         cfg.activo = bool(activo)
 
@@ -466,7 +489,7 @@ def _serializar_pm_config_resumen(cfg, inventario, sucursal):
         "sucursal_id": cfg.sucursal_id,
         "sucursal": sucursal.sucursal,
         "frecuencia_dias": cfg.frecuencia_dias,
-        "semana_programada_mes": cfg.semana_programada_mes,
+        "fecha_base_programacion": cfg.fecha_base_programacion.isoformat() if cfg.fecha_base_programacion else None,
         "activo": cfg.activo,
         "created_at": cfg.created_at.isoformat() if cfg.created_at else None,
         "updated_at": cfg.updated_at.isoformat() if cfg.updated_at else None,
@@ -530,7 +553,26 @@ def _generar_semanas_visibles_mes(anio: int, mes: int):
 
     return semanas
 
+def _generar_fechas_programadas_en_rango(
+    fecha_base: date | None,
+    frecuencia_dias: int,
+    fecha_inicio: date,
+    fecha_fin: date,
+):
+    if fecha_base is None or frecuencia_dias <= 0:
+        return []
 
+    fechas = []
+    fecha_actual = fecha_base
+
+    while fecha_actual < fecha_inicio:
+        fecha_actual = fecha_actual + timedelta(days=frecuencia_dias)
+
+    while fecha_actual <= fecha_fin:
+        fechas.append(fecha_actual)
+        fecha_actual = fecha_actual + timedelta(days=frecuencia_dias)
+
+    return fechas
 
 # ────────────────────────────────────────────────────────────
 # POST /mobile/bitacoras
@@ -1104,8 +1146,6 @@ def pm_calendario():
                 "celdas": [],
             }
 
-        # no hacemos nada aquí todavía; primero agrupamos por sucursal
-        # y luego armamos celdas por cada semana visible del mes
 
     for sucursal_id, sucursal_row in sucursales_map.items():
         configs_sucursal = [
@@ -1116,11 +1156,20 @@ def pm_calendario():
         celdas = []
 
         for semana in semanas:
-            total_programados = sum(
-                1
-                for cfg in configs_sucursal
-                if cfg.semana_programada_mes == semana["semana_programada_mes"]
-            )
+            fecha_inicio_semana = date.fromisoformat(semana["fecha_inicio_iso"])
+            fecha_fin_semana = date.fromisoformat(semana["fecha_fin_iso"])
+
+            total_programados = 0
+
+            for cfg in configs_sucursal:
+                fechas_programadas = _generar_fechas_programadas_en_rango(
+                    cfg.fecha_base_programacion,
+                    cfg.frecuencia_dias,
+                    fecha_inicio_semana,
+                    fecha_fin_semana,
+                )
+
+                total_programados += len(fechas_programadas)
 
             celdas.append({
                 "sucursal_id": sucursal_row["sucursal_id"],
@@ -1156,8 +1205,18 @@ def pm_calendario():
     detalle_items = []
 
     if semana_detalle is not None:
+        fecha_inicio_detalle = date.fromisoformat(semana_detalle["fecha_inicio_iso"])
+        fecha_fin_detalle = date.fromisoformat(semana_detalle["fecha_fin_iso"])
+
         for cfg, inventario, sucursal in rows:
-            if cfg.semana_programada_mes != semana_detalle["semana_programada_mes"]:
+            fechas_programadas = _generar_fechas_programadas_en_rango(
+                cfg.fecha_base_programacion,
+                cfg.frecuencia_dias,
+                fecha_inicio_detalle,
+                fecha_fin_detalle,
+            )
+
+            if not fechas_programadas:
                 continue
 
             detalle_items.append({
@@ -1168,7 +1227,8 @@ def pm_calendario():
                 "codigo_interno": inventario.codigo_interno,
                 "nombre": inventario.nombre,
                 "frecuencia_dias": cfg.frecuencia_dias,
-                "semana_programada_mes": cfg.semana_programada_mes,
+                "fecha_base_programacion": cfg.fecha_base_programacion.isoformat() if cfg.fecha_base_programacion else None,
+                "fechas_programadas": [f.isoformat() for f in fechas_programadas],
                 "estado_operativo": "PROGRAMADO",
             })
 
