@@ -108,24 +108,28 @@ getCalendarioPm(
     inventario_id: number;
     sucursal_id: number;
     frecuencia_dias: number;
-    semana_programada_mes: number;
+    semana_programada_mes?: number;
+    dia_programado_semana?: number;
+    fecha_base_programacion: string;
     activo: boolean;
     }): Observable<PmConfiguracionResumen> {
     return this.http.post<PmConfiguracionResumen>(`${this.basePmRoot}/configuraciones`, payload);
 }
 
-    actualizarConfiguracionPm(
-    configId: number,
-    payload: {
-        frecuencia_dias?: number;
-        semana_programada_mes?: number;
-        activo?: boolean;
-    }
-    ): Observable<PmConfiguracionResumen> {
-    return this.http.put<PmConfiguracionResumen>(
-        `${this.basePmRoot}/configuraciones/${configId}`,
-        payload
-    );
+actualizarConfiguracionPm(
+  configId: number,
+  payload: {
+    frecuencia_dias?: number;
+    semana_programada_mes?: number;
+    dia_programado_semana?: number;
+    fecha_base_programacion?: string;
+    activo?: boolean;
+  }
+): Observable<PmConfiguracionResumen> {
+  return this.http.put<PmConfiguracionResumen>(
+    `${this.basePmRoot}/configuraciones/${configId}`,
+    payload
+  );
 }
 
 crearValidacionPm(payload: {

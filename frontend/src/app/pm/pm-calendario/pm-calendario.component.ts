@@ -45,8 +45,8 @@ export class PmCalendarioComponent implements OnInit {
   detalleSemanaSeleccionada: any = null;
 
   ngOnInit(): void {
+    this.cargarSucursalesCalendario();
     this.actualizarSemanasDisponibles();
-    this.cargarCalendarioPm();
     this.cargarCalendarioPm();
   }
 
@@ -109,6 +109,7 @@ manejarCambioSucursalesSeleccionadas(valores: number[]): void {
   if (!valores || valores.length === 0) {
     this.mostrarTodasLasSucursales = false;
     this.sucursalesSeleccionadasIds = [];
+    this.cargarCalendarioPm();
     return;
   }
 
@@ -118,6 +119,7 @@ manejarCambioSucursalesSeleccionadas(valores: number[]): void {
   if (incluyeTodas && !antesIncluiaTodas) {
     this.mostrarTodasLasSucursales = true;
     this.sucursalesSeleccionadasIds = [-1];
+    this.cargarCalendarioPm();
     return;
   }
 
@@ -125,17 +127,20 @@ manejarCambioSucursalesSeleccionadas(valores: number[]): void {
     const idsValidos = valores.filter((id) => id !== -1);
     this.mostrarTodasLasSucursales = false;
     this.sucursalesSeleccionadasIds = idsValidos;
+    this.cargarCalendarioPm();
     return;
   }
 
   if (incluyeTodas) {
     this.mostrarTodasLasSucursales = true;
     this.sucursalesSeleccionadasIds = [-1];
+    this.cargarCalendarioPm();
     return;
   }
 
   this.mostrarTodasLasSucursales = false;
   this.sucursalesSeleccionadasIds = valores.filter((id) => id !== -1);
+  this.cargarCalendarioPm();
 }
 
 cargarConfiguracionesPm(): void {
@@ -155,16 +160,6 @@ obtenerTotalConfiguracionesSucursal(sucursalId: number): number {
   ).length;
 }
 
-obtenerTotalConfiguracionesPorSucursalYSemana(
-  sucursalId: number,
-  indiceSemanaMes: number
-): number {
-  return this.configuracionesPm.filter(
-    (config) =>
-      config.sucursal_id === sucursalId &&
-      config.semana_programada_mes === indiceSemanaMes
-  ).length;
-}
 
 cargarCalendarioPm(): void {
   const sucursalesIds =

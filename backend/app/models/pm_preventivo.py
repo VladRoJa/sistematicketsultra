@@ -26,6 +26,10 @@ class PmPreventivoConfigORM(db.Model):
     activo = db.Column(db.Boolean, nullable=False, default=True)
 
     semana_programada_mes = db.Column(db.Integer, nullable=True)
+    
+    dia_programado_semana = db.Column(db.Integer, nullable=True)
+    
+    fecha_base_programacion = db.Column(db.Date, nullable=True)
 
     created_at = db.Column(
         db.DateTime(timezone=True),

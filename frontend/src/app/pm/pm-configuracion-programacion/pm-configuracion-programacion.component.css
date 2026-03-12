@@ -42,3 +42,20 @@
   padding: 16px 0;
   color: rgba(0, 0, 0, 0.65);
 }
+
+.pm-config-form-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: start;
+}
+
+.pm-config-form-row .filter-field {
+  flex: 1 1 220px;
+  min-width: 220px;
+}
+
+.pm-config-form-row button {
+  align-self: center;
+  margin-top: 4px;
+}
