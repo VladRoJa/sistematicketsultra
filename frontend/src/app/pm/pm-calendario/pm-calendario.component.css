@@ -30,6 +30,16 @@
   margin-bottom: 16px;
 }
 
+.pm-vista-contenedor {
+  background: #f8f9fb;
+  border: 1px solid #d9dee8;
+  border-radius: 12px;
+  padding: 16px;
+  margin-top: 16px;
+}
+
+/* ===== Vista mensual ===== */
+
 .pm-calendario-grid {
   display: grid;
   grid-template-columns: 220px repeat(auto-fit, minmax(210px, 1fr));
@@ -106,13 +116,7 @@
   opacity: 0.8;
 }
 
-.pm-detalle-semana {
-  margin-top: 20px;
-  padding: 16px 20px;
-  border-radius: 12px;
-  background: #f5f5f5;
-  border: 1px solid #e0e0e0;
-}
+/* ===== Encabezados/reutilizables ===== */
 
 .pm-detalle-semana-titulo {
   margin: 0 0 8px 0;
@@ -128,6 +132,95 @@
 .pm-detalle-semana-empty {
   font-size: 14px;
   color: #666;
+}
+
+/* ===== Vista semanal ===== */
+
+.pm-semana-operativa {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.pm-semana-operativa-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(180px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+  align-items: start;
+}
+
+.pm-semana-operativa-columna {
+  background: #ffffff;
+  border: 1px solid #dfe3eb;
+  border-radius: 10px;
+  min-height: 220px;
+  padding: 12px;
+}
+
+.pm-semana-operativa-columna-titulo {
+  font-weight: 700;
+  font-size: 14px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #eceff5;
+}
+
+.pm-semana-operativa-columna-fecha {
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+.pm-semana-operativa-vacio {
+  font-size: 13px;
+  color: #7a8191;
+}
+
+.pm-semana-operativa-item {
+  border: 1px solid #e6eaf2;
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 10px;
+  background: #fdfdfd;
+  font-size: 12px;
+  line-height: 1.45;
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+}
+
+.pm-semana-operativa-item:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+}
+
+.pm-semana-operativa-item-seleccionado {
+  border-color: #1976d2;
+  box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.18);
+}
+
+.pm-ocurrencia-detalle {
+  background: #ffffff;
+  border: 1px solid #dfe3eb;
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+
+.pm-ocurrencia-detalle h4 {
+  margin: 0 0 12px 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+/* ===== Legacy / compatibilidad temporal ===== */
+
+.pm-detalle-semana {
+  margin-top: 20px;
+  padding: 16px 20px;
+  border-radius: 12px;
+  background: #f5f5f5;
+  border: 1px solid #e0e0e0;
 }
 
 .pm-detalle-semana-lista {
@@ -149,4 +242,46 @@
 
 .pm-detalle-semana-item div {
   font-size: 14px;
+}
+
+
+
+
+
+
+
+.pm-cambio-vista-btn {
+  height: 40px;
+  padding: 0 14px;
+  border: 1px solid #cfd6e3;
+  background: #ffffff;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.pm-cambio-vista-btn:hover {
+  background: #f8f9fb;
+  border-color: #b8c2d3;
+}
+
+.pm-cambio-vista-btn:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.18);
+}
+
+.pm-semana-acciones {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  min-width: 320px;
+}
+
+.pm-semana-acciones-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 240px;
+  font-weight: 600;
 }

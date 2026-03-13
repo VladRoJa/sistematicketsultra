@@ -43,6 +43,11 @@ export class PmCalendarioComponent implements OnInit {
   configuracionesPm: PmConfiguracionResumen[] = [];
   calendarioPmData: any = null;
   detalleSemanaSeleccionada: any = null;
+  ocurrenciaSeleccionada: any = null;
+  diasSemanaVista = this.crearDiasSemanaVacios();
+  vistaActual: 'MES' | 'SEMANA' = 'MES';
+
+
 
   ngOnInit(): void {
     this.cargarSucursalesCalendario();
@@ -179,13 +184,19 @@ cargarCalendarioPm(): void {
         this.calendarioPmData = data;
         this.semanasDisponibles = data?.semanas || [];
         this.detalleSemanaSeleccionada = data?.detalle_semana_seleccionada || null;
-        this.semanaSeleccionada = data?.detalle_semana_seleccionada?.semana_anio ?? this.semanaSeleccionada;
+        this.semanaSeleccionada =
+          data?.detalle_semana_seleccionada?.semana_anio ?? this.semanaSeleccionada;
+        this.actualizarVistaSegunSemanaSeleccionada();  
 
+        this.construirVistaSemanalDetalle();
       },
       error: () => {
         this.calendarioPmData = null;
         this.semanasDisponibles = [];
         this.detalleSemanaSeleccionada = null;
+        this.vistaActual = 'MES';
+        this.diasSemanaVista = this.crearDiasSemanaVacios();
+      
       },
     });
 }
@@ -206,6 +217,96 @@ obtenerClaseCargaCelda(totalProgramados: number): string {
   return 'pm-celda-alta';
 }
 
+private obtenerDiaSemanaItem(item: any): number {
+  if (typeof item?.dia_semana === 'number' && item.dia_semana >= 0 && item.dia_semana <= 6) {
+    return item.dia_semana;
+  }
+
+  if (item?.fecha_programada) {
+    const fecha = new Date(`${item.fecha_programada}T00:00:00`);
+    if (!isNaN(fecha.getTime())) {
+      return fecha.getDay();
+    }
+  }
+
+  return -1;
+}
+
+private crearDiasSemanaVacios(): Array<{ key: number; label: string; fechaLabel: string; items: any[] }> {
+  return [
+    { key: 0, label: 'Domingo', fechaLabel: '', items: [] },
+    { key: 1, label: 'Lunes', fechaLabel: '', items: [] },
+    { key: 2, label: 'Martes', fechaLabel: '', items: [] },
+    { key: 3, label: 'Miércoles', fechaLabel: '', items: [] },
+    { key: 4, label: 'Jueves', fechaLabel: '', items: [] },
+    { key: 5, label: 'Viernes', fechaLabel: '', items: [] },
+    { key: 6, label: 'Sábado', fechaLabel: '', items: [] },
+  ];
+}
+
+private construirVistaSemanalDetalle(): void {
+  const baseDias = this.crearDiasSemanaVacios();
+  const items = this.detalleSemanaSeleccionada?.items || [];
+  const fechaInicioIso = this.detalleSemanaSeleccionada?.fecha_inicio_iso;
+
+  if (fechaInicioIso) {
+    const fechaInicio = new Date(`${fechaInicioIso}T00:00:00`);
+
+    if (!isNaN(fechaInicio.getTime())) {
+      for (let i = 0; i < baseDias.length; i++) {
+        const fechaDia = new Date(fechaInicio);
+        fechaDia.setDate(fechaInicio.getDate() + i);
+        baseDias[i].fechaLabel = this.formatearFechaDiaSemana(fechaDia);
+      }
+    }
+  }
+
+  for (const item of items) {
+    const diaSemana = this.obtenerDiaSemanaItem(item);
+
+    if (diaSemana >= 0 && diaSemana <= 6) {
+      baseDias[diaSemana].items.push(item);
+    }
+  }
+
+  this.diasSemanaVista = baseDias;
+}
+
+seleccionarOcurrenciaSemana(item: any): void {
+  this.ocurrenciaSeleccionada = item;
+}
+
+esOcurrenciaSeleccionada(item: any): boolean {
+  return (
+    this.ocurrenciaSeleccionada?.configuracion_pm_id === item?.configuracion_pm_id &&
+    this.ocurrenciaSeleccionada?.fecha_programada === item?.fecha_programada
+  );
+}
+
+actualizarVistaSegunSemanaSeleccionada(): void {
+  if (!this.semanaSeleccionada) {
+    this.vistaActual = 'MES';
+  }
+}
+
+irAVistaSemanal(): void {
+  if (!this.semanaSeleccionada) {
+    return;
+  }
+
+  this.vistaActual = 'SEMANA';
+  this.construirVistaSemanalDetalle();
+}
 
 
+irAVistaMensual(): void {
+  this.vistaActual = 'MES';
+  this.ocurrenciaSeleccionada = null;
+}
+
+private formatearFechaDiaSemana(fecha: Date): string {
+  const dia = String(fecha.getDate()).padStart(2, '0');
+  const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+  return `${dia}/${mes}`;
+}
 }
