@@ -1219,18 +1219,20 @@ def pm_calendario():
             if not fechas_programadas:
                 continue
 
-            detalle_items.append({
-                "configuracion_pm_id": cfg.id,
-                "sucursal_id": sucursal.sucursal_id,
-                "sucursal": sucursal.sucursal,
-                "inventario_id": inventario.id,
-                "codigo_interno": inventario.codigo_interno,
-                "nombre": inventario.nombre,
-                "frecuencia_dias": cfg.frecuencia_dias,
-                "fecha_base_programacion": cfg.fecha_base_programacion.isoformat() if cfg.fecha_base_programacion else None,
-                "fechas_programadas": [f.isoformat() for f in fechas_programadas],
-                "estado_operativo": "PROGRAMADO",
-            })
+            for fecha_programada in fechas_programadas:
+                detalle_items.append({
+                    "configuracion_pm_id": cfg.id,
+                    "sucursal_id": sucursal.sucursal_id,
+                    "sucursal": sucursal.sucursal,
+                    "inventario_id": inventario.id,
+                    "codigo_interno": inventario.codigo_interno,
+                    "nombre": inventario.nombre,
+                    "frecuencia_dias": cfg.frecuencia_dias,
+                    "fecha_base_programacion": cfg.fecha_base_programacion.isoformat() if cfg.fecha_base_programacion else None,
+                    "fecha_programada": fecha_programada.isoformat(),
+                    "dia_semana": (fecha_programada.weekday() + 1) % 7,
+                    "estado_operativo": "PROGRAMADO",
+                })
 
 
 
