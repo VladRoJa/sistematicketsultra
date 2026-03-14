@@ -95,7 +95,7 @@ export class PmBitacorasMobileComponent implements OnInit {
     const user = this.session.getUser();
     const rol = (user?.rol || '').toString().toUpperCase();
 
-    this.puedeCambiarSucursal = rol === 'MANTENIMIENTO' || rol === 'SR_MANTENIMIENTO';
+    this.puedeCambiarSucursal = ['MANTENIMIENTO', 'SR_MANTENIMIENTO', 'SISTEMAS', 'TECNICO'].includes(rol);
     if (s) this.cargarEquipos(Number(s));
 
     // Recargar cuando cambia sucursal (debounce para UX)

@@ -18,6 +18,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatNativeDateModule } from '@angular/material/core';
 import { MatAutocompleteTrigger } from '@angular/material/autocomplete';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 
 import { InventarioService } from '../../services/inventario.service';
 import { PmPreventivoService } from '../../services/pm-preventivo.service';
@@ -25,6 +26,7 @@ import {
   PmConfiguracionResumen,
   SucursalOption,
 } from '../../models/pm-preventivo.model';
+import { EditarFrecuenciaDialogComponent } from './Dialogs/editar-frecuencia-dialog.component';
 
 @Component({
   selector: 'app-pm-configuracion-programacion',
@@ -42,7 +44,8 @@ import {
     MatSnackBarModule,
     MatProgressSpinnerModule,
     MatDatepickerModule,
-    MatNativeDateModule
+    MatNativeDateModule,
+    MatDialogModule
   ],
   templateUrl: './pm-configuracion-programacion.component.html',
   styleUrls: ['./pm-configuracion-programacion.component.css'],
@@ -51,6 +54,7 @@ export class PmConfiguracionProgramacionComponent implements OnInit {
   private pmService = inject(PmPreventivoService);
   private snack = inject(MatSnackBar);
   private inventarioService = inject(InventarioService);
+  private dialog = inject(MatDialog);
   @ViewChild('equipoAutocompleteTrigger', { read: MatAutocompleteTrigger })
   equipoAutocompleteTrigger?: MatAutocompleteTrigger;
 
@@ -264,10 +268,9 @@ onSucursalSelected(sucursal: SucursalOption): void {
   this.inventarioLoading = true;
   this.inventarioOptions = [];
 
-  this.inventarioService.obtenerInventarioPorSucursal(this.selectedSucursalId).subscribe({
+  this.inventarioService.obtenerEquiposPmPorSucursal(this.selectedSucursalId).subscribe({
     next: (rows) => {
-      const inventarioFiltradoPorArea = this.filtrarInventarioPorArea(rows || []);
-      this.inventarioOptions = inventarioFiltradoPorArea;
+      this.inventarioOptions = rows || [];
       this.filtrarInventarioSinConfiguracion();
       this.inventarioLoading = false;
     },
@@ -379,45 +382,40 @@ private filtrarInventarioPorArea(items: any[]): any[] {
 }
 
 editarFrecuencia(row: PmConfiguracionResumen): void {
-  const valorActual = row.frecuencia_dias;
-  const respuesta = window.prompt(
-    `Nueva frecuencia en días para ${this.equipoLabel(row)}:`,
-    String(valorActual)
-  );
+  const dialogRef = this.dialog.open(EditarFrecuenciaDialogComponent, {
+    width: '420px',
+    data: {
+      equipoLabel: this.equipoLabel(row),
+      frecuenciaActual: row.frecuencia_dias,
+    },
+  });
 
-  if (respuesta === null) {
-    return;
-  }
+  dialogRef.afterClosed().subscribe((nuevaFrecuencia: number | undefined) => {
+    if (nuevaFrecuencia === undefined) {
+      return;
+    }
 
-  const nuevaFrecuencia = Number(respuesta);
+    if (nuevaFrecuencia === row.frecuencia_dias) {
+      return;
+    }
 
-  if (!Number.isInteger(nuevaFrecuencia) || nuevaFrecuencia <= 0) {
-    this.snack.open('La frecuencia debe ser un entero mayor a 0', 'OK', {
-      duration: 3000,
+    this.pmService.actualizarConfiguracionPm(row.id, {
+      frecuencia_dias: nuevaFrecuencia,
+    }).subscribe({
+      next: () => {
+        this.snack.open('Frecuencia actualizada', 'OK', {
+          duration: 2500,
+        });
+        this.cargarConfiguraciones();
+      },
+      error: (err) => {
+        const msg =
+          err?.error?.detail ||
+          err?.error?.message ||
+          'No se pudo actualizar la frecuencia';
+        this.snack.open(msg, 'OK', { duration: 3500 });
+      },
     });
-    return;
-  }
-
-  if (nuevaFrecuencia === valorActual) {
-    return;
-  }
-
-  this.pmService.actualizarConfiguracionPm(row.id, {
-    frecuencia_dias: nuevaFrecuencia,
-  }).subscribe({
-    next: () => {
-      this.snack.open('Frecuencia actualizada', 'OK', {
-        duration: 2500,
-      });
-      this.cargarConfiguraciones();
-    },
-    error: (err) => {
-      const msg =
-        err?.error?.detail ||
-        err?.error?.message ||
-        'No se pudo actualizar la frecuencia';
-      this.snack.open(msg, 'OK', { duration: 3500 });
-    },
   });
 }
 

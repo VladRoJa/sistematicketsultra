@@ -1,0 +1,20 @@
+.editar-frecuencia-dialog-content {
+  min-width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.editar-frecuencia-dialog-equipo {
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.editar-frecuencia-dialog-field {
+  width: 100%;
+}
+
+.editar-frecuencia-dialog-error {
+  color: #b71c1c;
+  font-size: 13px;
+}

@@ -34,7 +34,7 @@ def _verificar_permiso_sucursal(claims, sucursal_id_int):
     if rol in _ADMIN_ROLES:
         return None
 
-    if rol == "MANTENIMIENTO":
+    if rol in {"MANTENIMIENTO", "SISTEMAS", "TECNICO"}:
         return None
 
     if rol == "AUX_MANTENIMIENTO":
@@ -690,6 +690,14 @@ def pm_listar_bitacoras():
             PmValidacionORM.bitacora_pm_id == PmBitacoraORM.id,
         )
     )
+    
+    department_id = claims.get("department_id")
+    rol = (claims.get("rol") or "").strip().upper()
+
+    if department_id == 1 or rol in {"MANTENIMIENTO", "SR_MANTENIMIENTO", "AUX_MANTENIMIENTO"}:
+        query = query.filter(db.func.upper(InventarioGeneral.tipo) == "APARATOS")
+    elif department_id == 7 or rol in {"SISTEMAS", "TECNICO"}:
+        query = query.filter(db.func.upper(InventarioGeneral.tipo) == "DISPOSITIVOS")
 
     if sucursal_id:
         denied = _verificar_permiso_sucursal(claims, sucursal_id)
@@ -772,6 +780,14 @@ def pm_listar_configuraciones():
             Sucursal.sucursal_id == PmPreventivoConfigORM.sucursal_id,
         )
     )
+    
+    department_id = claims.get("department_id")
+    rol = (claims.get("rol") or "").strip().upper()
+
+    if department_id == 1 or rol in {"MANTENIMIENTO", "SR_MANTENIMIENTO", "AUX_MANTENIMIENTO"}:
+        query = query.filter(db.func.upper(InventarioGeneral.tipo) == "APARATOS")
+    elif department_id == 7 or rol in {"SISTEMAS", "TECNICO"}:
+        query = query.filter(db.func.upper(InventarioGeneral.tipo) == "DISPOSITIVOS")
 
     if sucursal_id:
         denied = _verificar_permiso_sucursal(claims, sucursal_id)
@@ -917,7 +933,7 @@ def pm_preventivo_dashboard():
     )
 
     # ── 5) Query principal ──
-    rows = (
+    query = (
         db.session.query(
             PmPreventivoConfigORM,
             InventarioGeneral,
@@ -956,8 +972,18 @@ def pm_preventivo_dashboard():
             PmPreventivoConfigORM.sucursal_id == sucursal_id_int,
             PmPreventivoConfigORM.activo.is_(True),
         )
-        .all()
     )
+
+    rol = (claims.get("rol") or "").strip().upper()
+    department_id = claims.get("department_id")
+
+    if department_id == 1 or rol in {"MANTENIMIENTO", "SR_MANTENIMIENTO", "AUX_MANTENIMIENTO"}:
+        query = query.filter(db.func.upper(InventarioGeneral.tipo) == "APARATOS")
+    elif department_id == 7 or rol in {"SISTEMAS", "TECNICO"}:
+        query = query.filter(db.func.upper(InventarioGeneral.tipo) == "DISPOSITIVOS")
+
+    rows = query.all()
+    
 
     # ── 6) Clasificar ──
     hoy = date.today()
@@ -1098,6 +1124,14 @@ def pm_calendario():
         .filter(PmPreventivoConfigORM.activo.is_(True))
     )
 
+    department_id = claims.get("department_id")
+    rol = (claims.get("rol") or "").strip().upper()
+
+    if department_id == 1 or rol in {"MANTENIMIENTO", "SR_MANTENIMIENTO", "AUX_MANTENIMIENTO"}:
+        query = query.filter(db.func.upper(InventarioGeneral.tipo) == "APARATOS")
+    elif department_id == 7 or rol in {"SISTEMAS", "TECNICO"}:
+        query = query.filter(db.func.upper(InventarioGeneral.tipo) == "DISPOSITIVOS")
+
     if sucursales_ids:
         for sucursal_id in sucursales_ids:
             denied = _verificar_permiso_sucursal(claims, sucursal_id)
@@ -1108,7 +1142,7 @@ def pm_calendario():
     else:
         rol = (claims.get("rol") or "").strip().upper()
 
-        if rol not in _ADMIN_ROLES and rol != "MANTENIMIENTO":
+        if rol not in _ADMIN_ROLES and rol not in {"MANTENIMIENTO", "SISTEMAS", "TECNICO"}:
             if rol == "AUX_MANTENIMIENTO":
                 user_sucursal = claims.get("sucursal_id")
                 try:

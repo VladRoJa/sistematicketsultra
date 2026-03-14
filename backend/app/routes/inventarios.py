@@ -397,6 +397,9 @@ def listar_sucursales():
         def is_admin(r: str) -> bool:
             return r in {"ADMINISTRADOR", "SUPER_ADMIN", "ADMIN"}
 
+        def is_sistemas_full(r: str) -> bool:
+            return r in {"SISTEMAS", "TECNICO"}
+
         def is_mantenimiento_full(r: str) -> bool:
             return r == "MANTENIMIENTO"
 
@@ -406,8 +409,12 @@ def listar_sucursales():
         def is_sr_mant(r: str) -> bool:
             return r == "SR_MANTENIMIENTO" or r.startswith("SR_MANT")
 
+        def is_sistemas_scope(r: str) -> bool:
+            return r in {"SISTEMAS", "TECNICO"}
+        
+        
         # 1) Admin / Mantenimiento global => todas
-        if is_admin(rol) or is_mantenimiento_full(rol):
+        if is_admin(rol) or is_mantenimiento_full(rol) or is_sistemas_full(rol):
             sucursales = Sucursal.query.all()
 
         # 2) AUX => solo su sucursal_id
@@ -420,15 +427,15 @@ def listar_sucursales():
 
             sucursales = Sucursal.query.filter_by(sucursal_id=user_sucursal).all() if user_sucursal else []
 
-        # 3) SR + otros => usar sucursales_ids del token (y si viene vacío, fallback BD solo para SR)
+            # 3) SR_MANTENIMIENTO / SISTEMAS / TECNICO / otros con scope por sucursales_ids
         else:
             allowed = claims.get("sucursales_ids") or []
             try:
                 allowed = [int(x) for x in allowed]
             except Exception:
                 allowed = []
-
-            if not allowed and is_sr_mant(rol):
+            
+            if not allowed and (is_sr_mant(rol) or is_sistemas_scope(rol)):
                 user_id = get_jwt_identity()
                 rows = db.session.execute(
                     db.text("SELECT sucursal_id FROM usuario_sucursal WHERE user_id = :uid"),
@@ -437,6 +444,7 @@ def listar_sucursales():
                 allowed = [int(r[0]) for r in rows]
 
             sucursales = Sucursal.query.filter(Sucursal.sucursal_id.in_(allowed)).all() if allowed else []
+
 
         data = [{'sucursal_id': s.sucursal_id, 'sucursal': s.sucursal} for s in sucursales]
         return jsonify(data), 200
@@ -699,10 +707,12 @@ def listar_equipos():
         # - MANTENIMIENTO: ve todas (igual que admin pero sin permisos extra)
         # - SR_MANTENIMIENTO: solo sucursales_ids
         # - AUX_MANTENIMIENTO: solo user.sucursal_id (ignora target_sucursal)
-        if is_admin or rol == "MANTENIMIENTO":
+        if is_admin or rol in {"MANTENIMIENTO", "SISTEMAS", "TECNICO"}:
             if target_sucursal:
-                query = query.join(InventarioSucursal, InventarioSucursal.inventario_id == InventarioGeneral.id).filter(InventarioSucursal.sucursal_id == target_sucursal)
-
+                query = query.join(
+                    InventarioSucursal,
+                    InventarioSucursal.inventario_id == InventarioGeneral.id
+                ).filter(InventarioSucursal.sucursal_id == target_sucursal)
         elif rol == "AUX_MANTENIMIENTO":
             # Solo su sucursal fija
             query = query.join(InventarioSucursal, InventarioSucursal.inventario_id == InventarioGeneral.id).filter(InventarioSucursal.sucursal_id == user.sucursal_id)
