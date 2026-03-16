@@ -2,6 +2,7 @@
 
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
+import { environment } from 'src/environments/environment';
 import { Observable } from 'rxjs';
 import {
     DashboardPm,
@@ -16,9 +17,9 @@ import {
 export class PmPreventivoService {
     private http = inject(HttpClient);
 
-    private readonly basePmRoot = '/api/pm';
-    private readonly basePm = '/api/pm/preventivo';
-    private readonly sucursalesUrl = '/api/inventario/sucursales';
+    private readonly basePmRoot = `${environment.apiUrl}/pm`;
+    private readonly basePm = `${environment.apiUrl}/pm/preventivo`;
+    private readonly sucursalesUrl = `${environment.apiUrl}/inventario/sucursales`;
 
     /** Sucursales permitidas para el usuario autenticado (ya filtradas por backend). */
     getSucursalesPermitidas(): Observable<SucursalOption[]> {
