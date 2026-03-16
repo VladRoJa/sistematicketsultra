@@ -4,7 +4,7 @@ import { Component, inject, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, Validators, ReactiveFormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
-
+import { environment } from 'src/environments/environment';
 import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -13,6 +13,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { PmInventarioService, PmEquipoItem } from './services/pm-inventario.service';
+import { PmPreventivoService } from '../../services/pm-preventivo.service';
 import { debounceTime, distinctUntilChanged, map, startWith } from 'rxjs/operators';
 import { BehaviorSubject, combineLatest, Observable } from 'rxjs';
 import { ActivatedRoute, Router  } from '@angular/router';
@@ -48,6 +49,7 @@ export class PmBitacorasMobileComponent implements OnInit {
   private snack = inject(MatSnackBar);
   private session = inject(SessionService);
   private pmInventario = inject(PmInventarioService);
+  private pmPreventivo = inject(PmPreventivoService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   
@@ -57,8 +59,7 @@ export class PmBitacorasMobileComponent implements OnInit {
   private equipos$ = new BehaviorSubject<PmEquipoItem[]>([]);
   equiposLoading = false;
 
-  // ✅ Endpoint backend (proxy /api)
-  private readonly endpoint = '/api/pm/mobile/bitacoras';
+  private readonly endpoint = `${environment.apiUrl}/pm/mobile/bitacoras`;
 
   loading = false;
   lastId: number | null = null;
@@ -140,7 +141,7 @@ this.filteredEquipos$ = combineLatest([
 
   private cargarEquipos(sucursalId: number): void {
     this.equiposLoading = true;
-    this.pmInventario.listarEquipos({ sucursal_id: sucursalId, tipo: 'MAQUINA' }).subscribe({
+    this.pmInventario.listarEquipos({ sucursal_id: sucursalId, tipo: 'aparatos' }).subscribe({
       next: (rows) => {
       this.equipos = rows || [];
       this.equipos$.next(this.equipos);
@@ -284,37 +285,35 @@ this.filteredEquipos$ = combineLatest([
   }
 
 private cargarCatalogoSucursales(): void {
-  this.http.get<Array<{ sucursal_id: number; sucursal: string }>>('/api/inventario/sucursales')
-    .subscribe({
-      next: (rows) => {
-        const list = (rows || []).map(r => ({
-          sucursal_id: Number(r.sucursal_id),
-          sucursal: r.sucursal
-        }));
+  this.pmPreventivo.getSucursalesPermitidas().subscribe({
+    next: (rows) => {
+      const list = (rows || []).map(r => ({
+        sucursal_id: Number(r.sucursal_id),
+        sucursal: r.sucursal
+      }));
 
-        this.sucursalesList = list;
+      this.sucursalesList = list;
 
-        this.sucursalesMap.clear();
-        for (const r of list) {
-          this.sucursalesMap.set(Number(r.sucursal_id), r.sucursal);
-        }
-
-        // si el usuario trae una sucursal default que NO está permitida,
-        // forzamos a la primera permitida para evitar dropdown raro.
-        const current = Number(this.form?.value?.sucursal_id);
-        const allowedIds = new Set(list.map(x => x.sucursal_id));
-
-        if (!current || Number.isNaN(current) || !allowedIds.has(current)) {
-          const first = list[0]?.sucursal_id ?? null;
-          this.form.patchValue({ sucursal_id: first }, { emitEvent: true });
-        } else {
-          this.actualizarSucursalNombre(current);
-        }
-      },
-      error: () => {
-        this.sucursalNombre = '';
+      this.sucursalesMap.clear();
+      for (const r of list) {
+        this.sucursalesMap.set(Number(r.sucursal_id), r.sucursal);
       }
-    });
+
+      const current = Number(this.form?.value?.sucursal_id);
+      const allowedIds = new Set(list.map(x => x.sucursal_id));
+
+      if (!current || Number.isNaN(current) || !allowedIds.has(current)) {
+        const first = list[0]?.sucursal_id ?? null;
+        this.form.patchValue({ sucursal_id: first }, { emitEvent: true });
+      } else {
+        this.actualizarSucursalNombre(current);
+      }
+    },
+    error: () => {
+      this.sucursalNombre = '';
+      this.sucursalesList = [];
+    }
+  });
 }
 
 private actualizarSucursalNombre(sucursalId: any): void {
