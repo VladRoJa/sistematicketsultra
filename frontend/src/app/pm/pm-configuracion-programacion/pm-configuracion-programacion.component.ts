@@ -270,7 +270,7 @@ onSucursalSelected(sucursal: SucursalOption): void {
 
   this.inventarioService.obtenerEquiposPmPorSucursal(this.selectedSucursalId).subscribe({
     next: (rows) => {
-      this.inventarioOptions = rows || [];
+      this.inventarioOptions = this.filtrarInventarioPorArea(rows || []);
       this.filtrarInventarioSinConfiguracion();
       this.inventarioLoading = false;
     },
