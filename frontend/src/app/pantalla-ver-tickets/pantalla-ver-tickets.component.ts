@@ -1111,8 +1111,13 @@ getSubcategoriaVisible(t: Ticket): string {
 
 
 getNombreSucursal(ticket: Ticket): string {
-  const id = (ticket as any).sucursal_id_destino as number | undefined | null;
-  if (!id) return '—';
+  const id =
+    (ticket as any).sucursal_id_destino ??
+    (ticket as any).sucursal_id ??
+    null;
+
+  if (id == null) return '—';
+
   return this.sucursalIdNombreMap[id] || `${id}`;
 }
 
