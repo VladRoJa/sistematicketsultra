@@ -843,6 +843,8 @@ def export_excel():
                 dq_flags.append("fecha_finalizado < fecha_creacion")
             if isinstance(tiempo_sol, (int, float)) and tiempo_sol < 0:
                 dq_flags.append("tiempo_solucion_negativo")
+            if estado_txt == "en progreso" and not f_sol_dt:
+                dq_flags.append("ticket_en_progreso_sin_fecha_compromiso")    
 
             if dq_flags:
                 dq_rows.append((
@@ -1232,6 +1234,104 @@ def export_excel():
             ws_dq.column_dimensions[get_column_letter(col_idx)].width = min(max_len + 2, 60)
 
         # ─────────────────────────────────────────────────────────────
+        # Hoja Indicadores 2 (vista agrupada por sucursal)
+        # ─────────────────────────────────────────────────────────────
+        ws_ind2 = wb.create_sheet(title="Indicadores 2")
+
+        headers_ind2 = [
+            "Sucursal",
+            "Descripción",
+            "Fecha de creación",
+            "Fecha compromiso",
+            "Comentario de dpto",
+            "Tickets en progreso",
+        ]
+        ws_ind2.append(headers_ind2)
+
+        for cell in ws_ind2[1]:
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+
+        from collections import defaultdict
+
+        tickets_por_sucursal = defaultdict(list)
+
+        for ticket in tickets:
+            t = ticket.to_dict()
+
+            suc_id_dest = ticket.sucursal_id_destino if ticket.sucursal_id_destino is not None else ticket.sucursal_id
+            sucursal_nombre_dest = sucursales_map.get(suc_id_dest, "—")
+
+            f_crea_dt = to_local_excel(ticket.fecha_creacion)
+            f_sol_dt = to_local_excel(ticket.fecha_solucion)
+
+            comentario1, comentario2, comentario3 = ultimos_tres_motivos(ticket, t)
+
+            estado_txt = (t.get("estado") or "").strip().lower()
+
+            if estado_txt != "en progreso":
+                continue
+
+            tickets_por_sucursal[sucursal_nombre_dest].append({
+                "sucursal": sucursal_nombre_dest,
+                "descripcion": t.get("descripcion") or "",
+                "fecha_creacion": f_crea_dt,
+                "fecha_compromiso": f_sol_dt,
+                "comentario": comentario1 or "",
+            })
+
+        fill_sucursal = PatternFill("solid", fgColor="FFC000")
+        bold_font = Font(bold=True)
+
+        row_ind2 = 2
+
+        for sucursal in sorted(tickets_por_sucursal.keys()):
+            items = tickets_por_sucursal[sucursal]
+            total_en_progreso = len(items)
+
+            # Fila resumen por sucursal
+            ws_ind2.append([sucursal, "", "", "", "", total_en_progreso])
+            for cell in ws_ind2[row_ind2]:
+                cell.fill = fill_sucursal
+                cell.font = bold_font
+                cell.alignment = Alignment(vertical="top")
+            row_ind2 += 1
+
+            # Filas detalle
+            for item in items:
+                ws_ind2.append([
+                    item["sucursal"],
+                    item["descripcion"],
+                    item["fecha_creacion"],
+                    item["fecha_compromiso"],
+                    item["comentario"],
+                    "",
+                ])
+
+                if item["fecha_creacion"]:
+                    ws_ind2.cell(row=row_ind2, column=3).number_format = "dd/mm/yyyy"
+                if item["fecha_compromiso"]:
+                    ws_ind2.cell(row=row_ind2, column=4).number_format = "dd/mm/yyyy"
+
+                for col in (1, 2, 5):
+                    ws_ind2.cell(row=row_ind2, column=col).alignment = Alignment(wrap_text=True, vertical="top")
+
+                row_ind2 += 1
+
+        # Anchos de columna
+        ws_ind2.column_dimensions["A"].width = 24
+        ws_ind2.column_dimensions["B"].width = 42
+        ws_ind2.column_dimensions["C"].width = 18
+        ws_ind2.column_dimensions["D"].width = 18
+        ws_ind2.column_dimensions["E"].width = 55
+        ws_ind2.column_dimensions["F"].width = 18
+
+        ws_ind2.freeze_panes = "A2"
+        ws_ind2.auto_filter.ref = ws_ind2.dimensions
+
+
+        # ─────────────────────────────────────────────────────────────
         output = BytesIO()
         wb.save(output)
         output.seek(0)
@@ -1247,6 +1347,8 @@ def export_excel():
         import traceback
         print(traceback.format_exc())
         return jsonify({"mensaje": str(e)}), 500
+
+
 # ─────────────────────────────────────────────────────────────
 # RUTA: migrar tickets a ISO local
 # ─────────────────────────────────────────────────────────────
