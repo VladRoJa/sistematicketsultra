@@ -47,6 +47,9 @@ export class LayoutComponent implements OnInit, AfterViewInit {
   ocultarTimeout: any;
   menuItems: any[] = [];
   puedeVerMantenimiento = false;
+  puedeVerMantenimientoCompleto = false;
+  puedeVerMantenimientoOperativo = false;
+  puedeVerMantenimientoGerencial = false;
   usuarioLabel = '';
 
   private apiUrl = `${environment.apiUrl}/tickets`;
@@ -83,29 +86,68 @@ ngOnInit(): void {
     }
   ];
 
-  const menuTicketsMantenimiento = [
-    {
-      label: 'Tickets',
-      path: '/main/ver-tickets',
-      submenu: [
-        { label: 'Ver Tickets', path: '/main/ver-tickets' },
-        { label: 'Crear Ticket', path: '/main/crear-ticket' }
-      ]
-    },
-    {
-      label: 'Mantenimiento',
-      path: '/pm/bitacoras-mobile',
-      submenu: [
-        { label: 'Bitácora PM (móvil)', path: '/pm/bitacoras-mobile' },
-        { label: 'PM Preventivo (escritorio)', path: '/pm/escritorio-preventivo' },
-        { label: 'Consulta / Historial PM', path: '/pm/consulta-historial' },
-        { label: 'Configuración / Programación PM', path: '/pm/configuracion-programacion' },
-        { label: 'Calendario PM', path: '/pm/calendario' },
-        
+const menuMantenimientoCompleto = [
+  {
+    label: 'Tickets',
+    path: '/main/ver-tickets',
+    submenu: [
+      { label: 'Ver Tickets', path: '/main/ver-tickets' },
+      { label: 'Crear Ticket', path: '/main/crear-ticket' }
+    ]
+  },
+  {
+    label: 'Mantenimiento',
+    path: '/pm/escritorio-preventivo',
+    submenu: [
+      { label: 'PM Preventivo (escritorio)', path: '/pm/escritorio-preventivo' },
+      { label: 'Bitácora PM (móvil)', path: '/pm/bitacoras-mobile' },
+      { label: 'Consulta / Historial PM', path: '/pm/consulta-historial' },
+      { label: 'Configuración / Programación PM', path: '/pm/configuracion-programacion' },
+      { label: 'Calendario PM', path: '/pm/calendario' },
+    ]
+  }
+];
 
-      ]
-    }
-  ];
+const menuMantenimientoOperativo = [
+  {
+    label: 'Tickets',
+    path: '/main/ver-tickets',
+    submenu: [
+      { label: 'Ver Tickets', path: '/main/ver-tickets' },
+      { label: 'Crear Ticket', path: '/main/crear-ticket' }
+    ]
+  },
+  {
+    label: 'Mantenimiento',
+    path: '/pm/bitacoras-mobile',
+    submenu: [
+      { label: 'Bitácora PM (móvil)', path: '/pm/bitacoras-mobile' },
+      { label: 'PM Preventivo (escritorio)', path: '/pm/escritorio-preventivo' },
+      { label: 'Consulta / Historial PM', path: '/pm/consulta-historial' },
+      { label: 'Calendario PM', path: '/pm/calendario' },
+    ]
+  }
+];
+
+const menuMantenimientoGerencial = [
+  {
+    label: 'Tickets',
+    path: '/main/ver-tickets',
+    submenu: [
+      { label: 'Ver Tickets', path: '/main/ver-tickets' },
+      { label: 'Crear Ticket', path: '/main/crear-ticket' }
+    ]
+  },
+  {
+    label: 'Mantenimiento',
+    path: '/pm/escritorio-preventivo',
+    submenu: [
+      { label: 'PM Preventivo (escritorio)', path: '/pm/escritorio-preventivo' },
+      { label: 'Consulta / Historial PM', path: '/pm/consulta-historial' },
+      { label: 'Calendario PM', path: '/pm/calendario' },
+    ]
+  }
+];
 
   const menuCompleto = [
     {
@@ -170,12 +212,19 @@ ngOnInit(): void {
 
 
 
-  this.menuItems = this.esSoloLectura
-    ? soloTickets
-    : (this.esAdmin
-        ? menuCompleto
-        : (this.puedeVerMantenimiento ? menuTicketsMantenimiento : soloTickets)
-      );
+  if (this.esSoloLectura) {
+    this.menuItems = soloTickets;
+  } else if (this.esAdmin) {
+    this.menuItems = menuCompleto;
+  } else if (this.puedeVerMantenimientoCompleto) {
+    this.menuItems = menuMantenimientoCompleto;
+  } else if (this.puedeVerMantenimientoOperativo) {
+    this.menuItems = menuMantenimientoOperativo;
+  } else if (this.puedeVerMantenimientoGerencial) {
+    this.menuItems = menuMantenimientoGerencial;
+  } else {
+    this.menuItems = soloTickets;
+  }
   }
 
 
@@ -226,16 +275,32 @@ ngOnInit(): void {
     this.inicializarIndicador();
   }
 
-  private verificarRolUsuario(): void {
-    const user = this.authService.getUser();
-    const rol = (user?.rol || '').toUpperCase();
+private verificarRolUsuario(): void {
+  const user = this.authService.getUser();
+  const rol = (user?.rol || '').toUpperCase();
 
-    this.esAdmin = rol === 'ADMINISTRADOR' || rol === 'SUPER_ADMIN';
-    this.esSoloLectura = rol === 'LECTOR_GLOBAL';
+  this.esAdmin = rol === 'ADMINISTRADOR' || rol === 'SUPER_ADMIN';
+  this.esSoloLectura = rol === 'LECTOR_GLOBAL';
 
-    const dept = Number(user?.department_id);
-    this.puedeVerMantenimiento = dept === 1 || dept === 7;
-  }
+  this.puedeVerMantenimientoCompleto =
+    rol === 'SISTEMAS' ||
+    rol === 'MANTENIMIENTO' ||
+    rol === 'ADMINISTRADOR' ||
+    rol === 'SUPER_ADMIN';
+
+  this.puedeVerMantenimientoOperativo =
+    rol === 'SR_MANTENIMIENTO' ||
+    rol === 'AUX_MANTENIMIENTO';
+
+  this.puedeVerMantenimientoGerencial =
+    rol === 'GERENTE' ||
+    rol === 'GERENTE_REGIONAL';
+
+  this.puedeVerMantenimiento =
+    this.puedeVerMantenimientoCompleto ||
+    this.puedeVerMantenimientoOperativo ||
+    this.puedeVerMantenimientoGerencial;
+}
 
 
   private inicializarIndicador(): void {

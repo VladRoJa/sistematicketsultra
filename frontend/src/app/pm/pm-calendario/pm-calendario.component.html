@@ -7,28 +7,28 @@
   <div class="pm-calendario-filtros">
     <label>
       Año
-      <select [(ngModel)]="anioSeleccionado" (change)="actualizarSemanasDisponibles()">
-        <option [value]="2025">2025</option>
-        <option [value]="2026">2026</option>
-        <option [value]="2027">2027</option>
-      </select>
+    <select [(ngModel)]="anioSeleccionado" (ngModelChange)="actualizarSemanasDisponibles()">
+      <option [ngValue]="2025">2025</option>
+      <option [ngValue]="2026">2026</option>
+      <option [ngValue]="2027">2027</option>
+    </select>
     </label>
 
     <label>
       Mes
-      <select [(ngModel)]="mesSeleccionado" (change)="actualizarSemanasDisponibles()">
-        <option [value]="1">Enero</option>
-        <option [value]="2">Febrero</option>
-        <option [value]="3">Marzo</option>
-        <option [value]="4">Abril</option>
-        <option [value]="5">Mayo</option>
-        <option [value]="6">Junio</option>
-        <option [value]="7">Julio</option>
-        <option [value]="8">Agosto</option>
-        <option [value]="9">Septiembre</option>
-        <option [value]="10">Octubre</option>
-        <option [value]="11">Noviembre</option>
-        <option [value]="12">Diciembre</option>
+      <select [(ngModel)]="mesSeleccionado" (ngModelChange)="actualizarSemanasDisponibles()">
+        <option [ngValue]="1">Enero</option>
+        <option [ngValue]="2">Febrero</option>
+        <option [ngValue]="3">Marzo</option>
+        <option [ngValue]="4">Abril</option>
+        <option [ngValue]="5">Mayo</option>
+        <option [ngValue]="6">Junio</option>
+        <option [ngValue]="7">Julio</option>
+        <option [ngValue]="8">Agosto</option>
+        <option [ngValue]="9">Septiembre</option>
+        <option [ngValue]="10">Octubre</option>
+        <option [ngValue]="11">Noviembre</option>
+        <option [ngValue]="12">Diciembre</option>
       </select>
     </label>
 
@@ -53,11 +53,11 @@
 <div class="pm-semana-acciones">
   <label class="pm-semana-acciones-label">
     Semana
-    <select [(ngModel)]="semanaSeleccionada" (change)="cargarCalendarioPm()">
-      <option *ngFor="let semana of semanasDisponibles" [value]="semana.semana_anio">
-        {{ semana.label }}
-      </option>
-    </select>
+      <select [(ngModel)]="semanaSeleccionada" (ngModelChange)="cargarCalendarioPm()">
+        <option *ngFor="let semana of semanasDisponibles" [ngValue]="semana.semana_anio">
+          {{ semana.label }}
+        </option>
+      </select>
   </label>
 
   <button

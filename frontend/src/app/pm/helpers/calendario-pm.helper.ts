@@ -45,8 +45,20 @@ function inicioAnioDomingo(anio: number): Date {
 
 function calcularSemanaAnioDomingoASabado(fecha: Date): number {
   const inicio = inicioAnioDomingo(fecha.getFullYear());
-  const diffMs = fecha.getTime() - inicio.getTime();
-  const diffDias = Math.floor(diffMs / 86400000);
+
+  const fechaUtc = Date.UTC(
+    fecha.getFullYear(),
+    fecha.getMonth(),
+    fecha.getDate()
+  );
+
+  const inicioUtc = Date.UTC(
+    inicio.getFullYear(),
+    inicio.getMonth(),
+    inicio.getDate()
+  );
+
+  const diffDias = Math.floor((fechaUtc - inicioUtc) / 86400000);
   return Math.floor(diffDias / 7) + 1;
 }
 

@@ -187,7 +187,8 @@ export class PantallaVerTicketsComponent implements OnInit {
   categoriasCatalogo: { id: number, nombre: string, parent_id: number, nivel: number }[] = [];
   sucursalIdNombreMap: Record<number, string> = {};
   listaSucursales: any[] = [];
-  ocultarFinalizados: boolean = true; 
+  ocultarFinalizados: boolean = true;
+  filtroRapidoPorValidarActivo: boolean = false;
 
 
   // Temporales
@@ -1545,6 +1546,33 @@ toggleOcultarFinalizados(): void {
   // (si quieres después hacemos que respete filtros ya aplicados)
   TicketInit.cargarTickets(this);
 }
+
+private actualizarVistaTicketsFiltrados(): void {
+  this.page = 1;
+  this.totalTickets = this.filteredTickets.length;
+  this.totalPagesCount = Math.ceil(this.totalTickets / this.itemsPerPage);
+  this.visibleTickets = this.filteredTickets.slice(0, this.itemsPerPage);
+  this.changeDetectorRef.detectChanges();
+}
+
+mostrarSoloPorValidar(): void {
+  this.filtroRapidoPorValidarActivo = true;
+
+  this.filteredTickets = (this.ticketsCompletos || []).filter((ticket: Ticket) => {
+    return (ticket.estado || '').trim().toLowerCase() === 'por_validar';
+  });
+
+  this.actualizarVistaTicketsFiltrados();
+}
+
+quitarFiltroPorValidar(): void {
+  this.filtroRapidoPorValidarActivo = false;
+  this.filteredTickets = [...(this.ticketsCompletos || [])];
+  this.actualizarVistaTicketsFiltrados();
+}
+
+
+
 
 private construirOpcionesSubcategoria(origen: 'all' | 'filtered' = 'all') {
   const base = origen === 'filtered' ? (this.filteredTickets || []) : (this.ticketsCompletos || []);

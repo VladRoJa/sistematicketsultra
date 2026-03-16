@@ -30,8 +30,8 @@ export class PmCalendarioComponent implements OnInit {
 
     private pmService = inject(PmPreventivoService);
 
-  anioSeleccionado = 2026;
-  mesSeleccionado = 6;
+  anioSeleccionado = new Date().getFullYear();
+  mesSeleccionado = new Date().getMonth() + 1;
   semanaSeleccionada: number | null = null;
 
   semanasDisponibles: SemanaCalendarioPmOption[] = [];
@@ -55,15 +55,32 @@ export class PmCalendarioComponent implements OnInit {
     this.cargarCalendarioPm();
   }
 
-    actualizarSemanasDisponibles(): void {
-    this.semanasDisponibles = generarSemanasDelMes(
-        this.anioSeleccionado,
-        this.mesSeleccionado
-    );
+  private obtenerSemanaActualDelMes(): number | null {
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
 
-    this.semanaSeleccionada = this.semanasDisponibles[0]?.semana_anio ?? null;
-    this.cargarCalendarioPm();
-    }
+  const semanaActual = this.semanasDisponibles.find((semana) => {
+    const fechaInicio = new Date(`${semana.fecha_inicio_iso}T00:00:00`);
+    const fechaFin = new Date(`${semana.fecha_fin_iso}T23:59:59`);
+
+    return hoy >= fechaInicio && hoy <= fechaFin;
+  });
+
+  return semanaActual?.semana_anio ?? this.semanasDisponibles[0]?.semana_anio ?? null;
+}
+
+
+actualizarSemanasDisponibles(): void {
+  this.semanasDisponibles = generarSemanasDelMes(
+    
+    this.anioSeleccionado,
+    this.mesSeleccionado
+  );
+  console.log('semanasDisponibles calendario PM:', this.semanasDisponibles);
+
+  this.semanaSeleccionada = this.obtenerSemanaActualDelMes();
+  this.cargarCalendarioPm();
+}
 
   get semanaSeleccionadaInfo(): SemanaCalendarioPmOption | null {
     return (
@@ -172,6 +189,8 @@ cargarCalendarioPm(): void {
       ? null
       : this.sucursalesSeleccionadasIds;
 
+  console.log('ANTES de pedir calendario, semanaSeleccionada =', this.semanaSeleccionada);
+
   this.pmService
     .getCalendarioPm(
       this.anioSeleccionado,
@@ -181,12 +200,15 @@ cargarCalendarioPm(): void {
     )
     .subscribe({
       next: (data) => {
+        console.log('RESPUESTA backend detalle_semana_seleccionada =', data?.detalle_semana_seleccionada);
+        console.log('RESPUESTA backend semanas =', data?.semanas);
+
         this.calendarioPmData = data;
         this.semanasDisponibles = data?.semanas || [];
         this.detalleSemanaSeleccionada = data?.detalle_semana_seleccionada || null;
         this.semanaSeleccionada =
           data?.detalle_semana_seleccionada?.semana_anio ?? this.semanaSeleccionada;
-        this.actualizarVistaSegunSemanaSeleccionada();  
+        this.actualizarVistaSegunSemanaSeleccionada();
 
         this.construirVistaSemanalDetalle();
       },
@@ -196,7 +218,6 @@ cargarCalendarioPm(): void {
         this.detalleSemanaSeleccionada = null;
         this.vistaActual = 'MES';
         this.diasSemanaVista = this.crearDiasSemanaVacios();
-      
       },
     });
 }
