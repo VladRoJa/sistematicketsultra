@@ -91,7 +91,7 @@ listarInventarioPorCategoriaYSucursal(params: { categoria_inventario_id: number;
 
 obtenerEquiposPmPorSucursal(sucursalId: number) {
   const params = new HttpParams().set('sucursal_id', String(sucursalId));
-  return this.http.get<any[]>('/api/inventario/equipos', { params });
+  return this.http.get<any[]>(`${environment.apiUrl}/inventario/equipos`, { params });
 }
 
 
