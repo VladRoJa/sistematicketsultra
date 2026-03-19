@@ -12,6 +12,15 @@ from .departamento_model import Departamento
 from .formulario_ticket import FormularioTicket, CampoFormulario
 from .pm_bitacora import PmBitacoraORM
 from .pm_validacion import PmValidacionORM
+from .warehouse import (
+    WarehouseSourceORM,
+    WarehouseFamilyORM,
+    WarehouseOperationalRoleORM,
+    WarehouseReportTypeORM,
+    WarehouseUploadORM,
+    WarehouseOperatorORM,
+    WarehouseAuditLogORM
+)
 
 
 # -------------------------------------------------------------------------------
@@ -26,8 +35,14 @@ __all__ = [
     "MovimientoInventario",
     "DetalleMovimiento",
     "Departamento",
-    "FormularioTicket",
     "CampoFormulario",
     "PmBitacoraORM",
     "PmValidacionORM",
+    "WarehouseSourceORM",
+    "WarehouseFamilyORM",
+    "WarehouseOperationalRoleORM",
+    "WarehouseReportTypeORM",
+    "WarehouseUploadORM",
+    "WarehouseOperatorORM",
+    "WarehouseAuditLogORM"
 ]

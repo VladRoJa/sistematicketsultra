@@ -23,6 +23,7 @@ from app.routes.usuarios_routes import usuarios_bp
 from app.routes.formulario_ticket_routes import formulario_ticket_bp
 from app.routes.admin_usuarios_routes import admin_usuarios_bp
 from app.routes.pm_routes import pm_bp
+from app.routes.warehouse_routes import warehouse_bp
 
 
 
@@ -84,6 +85,8 @@ def create_app():
     app.register_blueprint(formulario_ticket_bp, url_prefix='/api/formulario_ticket')
     app.register_blueprint(admin_usuarios_bp, url_prefix='/api/admin/usuarios')
     app.register_blueprint(pm_bp, url_prefix='/api/pm')
+    app.register_blueprint(warehouse_bp, url_prefix='/api/warehouse')
+    
     
     
     app.config['DEBUG'] = True

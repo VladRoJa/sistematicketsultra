@@ -15,6 +15,7 @@ import { PmBitacorasMobileComponent } from './pm/pm-bitacoras-mobile/pm-bitacora
 import { PmConsultaHistorialComponent } from './pm/pm-consulta-historial/pm-consulta-historial.component';
 import { PmConfiguracionProgramacionComponent } from './pm/pm-configuracion-programacion/pm-configuracion-programacion.component';
 import { PmCalendarioComponent } from './pm/pm-calendario/pm-calendario.component';
+import { WarehouseHomeComponent } from './warehouse/warehouse-home.component';
 
 
 export const routes: Routes = [
@@ -101,6 +102,10 @@ export const routes: Routes = [
       {
         path: 'asistencia/registrar',
         loadComponent: () => import('./registrar-asistencia/registrar-asistencia.component').then(m => m.RegistrarAsistenciaComponent)
+      },
+      {
+        path: 'warehouse',
+        component: WarehouseHomeComponent,
       },
     ],
   },

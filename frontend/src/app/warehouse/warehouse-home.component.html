@@ -1,0 +1,15 @@
+<!-- frontend\src\app\warehouse\warehouse-home.component.html -->
+
+<section class="warehouse-home">
+  <h1>Warehouse</h1>
+
+  <p *ngIf="loading">Validando acceso a Warehouse...</p>
+
+  <div *ngIf="!loading && accessAllowed">
+    <p>Módulo documental base en construcción.</p>
+  </div>
+
+  <div *ngIf="!loading && !accessAllowed">
+    <p>{{ errorMessage }}</p>
+  </div>
+</section>

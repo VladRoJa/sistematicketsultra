@@ -1,0 +1,13 @@
+/* src/app/warehouse/warehouse-home.component.css */
+
+.warehouse-home {
+  padding: 16px;
+}
+
+.warehouse-home h1 {
+  margin: 0 0 8px;
+}
+
+.warehouse-home p {
+  margin: 0;
+}
