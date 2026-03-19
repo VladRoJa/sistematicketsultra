@@ -454,3 +454,68 @@ def warehouse_list_uploads():
             for item in uploads
         ]
     }), 200
+    
+@warehouse_bp.route('/uploads/<int:upload_id>', methods=['GET'])
+@jwt_required()
+def warehouse_get_upload_detail(upload_id: int):
+    forbidden = require_warehouse_operator()
+    if forbidden:
+        return forbidden
+
+    upload = (
+        WarehouseUploadORM.query
+        .options(
+            joinedload(WarehouseUploadORM.report_type),
+            joinedload(WarehouseUploadORM.source),
+            joinedload(WarehouseUploadORM.family),
+            joinedload(WarehouseUploadORM.operational_role),
+            joinedload(WarehouseUploadORM.uploader),
+        )
+        .filter_by(id=upload_id)
+        .first()
+    )
+
+    if not upload:
+        return jsonify({
+            "error": "Upload no encontrado",
+            "detail": f"No existe un upload de Warehouse con id {upload_id}."
+        }), 404
+
+    return jsonify({
+        "id": upload.id,
+        "original_filename": upload.original_filename,
+        "stored_filename": upload.stored_filename,
+        "stored_path": upload.stored_path,
+        "file_size_bytes": upload.file_size_bytes,
+        "file_hash_sha256": upload.file_hash_sha256,
+        "mime_type": upload.mime_type,
+        "extension": upload.extension,
+
+        "report_type_id": upload.report_type_id,
+        "report_type_key": upload.report_type.key if upload.report_type else None,
+        "report_type_label": upload.report_type.label if upload.report_type else None,
+
+        "source_id": upload.source_id,
+        "source_key": upload.source.key if upload.source else None,
+        "source_label": upload.source.label if upload.source else None,
+
+        "family_id": upload.family_id,
+        "family_key": upload.family.key if upload.family else None,
+        "family_label": upload.family.label if upload.family else None,
+
+        "operational_role_id": upload.operational_role_id,
+        "operational_role_key": upload.operational_role.key if upload.operational_role else None,
+        "operational_role_label": upload.operational_role.label if upload.operational_role else None,
+
+        "period_type": upload.period_type,
+        "cutoff_date": upload.cutoff_date.isoformat() if upload.cutoff_date else None,
+        "date_from": upload.date_from.isoformat() if upload.date_from else None,
+        "date_to": upload.date_to.isoformat() if upload.date_to else None,
+
+        "status": upload.status,
+        "uploaded_by_user_id": upload.uploaded_by_user_id,
+        "uploaded_by_username": upload.uploader.username if upload.uploader else None,
+
+        "created_at": upload.created_at.isoformat() if upload.created_at else None,
+        "updated_at": upload.updated_at.isoformat() if upload.updated_at else None,
+    }), 200
