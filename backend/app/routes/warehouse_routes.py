@@ -551,3 +551,33 @@ def warehouse_download_upload(upload_id: int):
         download_name=upload.original_filename,
         mimetype=upload.mime_type or 'application/octet-stream'
     )
+    
+@warehouse_bp.route('/uploads/<int:upload_id>/archive', methods=['PATCH'])
+@jwt_required()
+def warehouse_archive_upload(upload_id: int):
+    forbidden = require_warehouse_operator()
+    if forbidden:
+        return forbidden
+
+    upload = WarehouseUploadORM.query.filter_by(id=upload_id).first()
+
+    if not upload:
+        return jsonify({
+            "error": "Upload no encontrado",
+            "detail": f"No existe un upload de Warehouse con id {upload_id}."
+        }), 404
+
+    if upload.status == 'ARCHIVED':
+        return jsonify({
+            "error": "Upload ya archivado",
+            "detail": f"El upload {upload_id} ya se encuentra en estado ARCHIVED."
+        }), 400
+
+    upload.status = 'ARCHIVED'
+    db.session.commit()
+
+    return jsonify({
+        "message": "Upload archivado correctamente",
+        "upload_id": upload.id,
+        "status": upload.status
+    }), 200
