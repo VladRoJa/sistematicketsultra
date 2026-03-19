@@ -7,6 +7,8 @@ from datetime import datetime
 from werkzeug.utils import secure_filename
 import hashlib
 import uuid
+from sqlalchemy.orm import joinedload
+
 
 from app.extensions import db
 from app.models.warehouse import WarehouseUploadORM
@@ -16,6 +18,7 @@ from app.models import (
     WarehouseFamilyORM,
     WarehouseOperationalRoleORM,
     WarehouseReportTypeORM,
+    WarehouseUploadORM,
 )
 
 
@@ -369,3 +372,85 @@ def warehouse_create_upload():
         "duplicate_detected": duplicate_upload is not None,
         "duplicate_upload_id": duplicate_upload.id if duplicate_upload else None,
     }), 201
+    
+    
+@warehouse_bp.route('/uploads', methods=['GET'])
+@jwt_required()
+def warehouse_list_uploads():
+    forbidden = require_warehouse_operator()
+    if forbidden:
+        return forbidden
+
+    source_key = (request.args.get('source_key') or '').strip()
+    report_type_key = (request.args.get('report_type_key') or '').strip()
+    status = (request.args.get('status') or '').strip()
+    period_type = (request.args.get('period_type') or '').strip()
+
+    query = (
+        WarehouseUploadORM.query
+        .options(
+            joinedload(WarehouseUploadORM.report_type),
+            joinedload(WarehouseUploadORM.source),
+            joinedload(WarehouseUploadORM.family),
+            joinedload(WarehouseUploadORM.operational_role),
+            joinedload(WarehouseUploadORM.uploader),
+        )
+    )
+
+    if source_key:
+        query = query.filter(WarehouseUploadORM.source.has(key=source_key))
+
+    if report_type_key:
+        query = query.filter(WarehouseUploadORM.report_type.has(key=report_type_key))
+
+    if status:
+        query = query.filter(WarehouseUploadORM.status == status)
+
+    if period_type:
+        query = query.filter(WarehouseUploadORM.period_type == period_type)
+
+    uploads = query.order_by(WarehouseUploadORM.created_at.desc()).all()
+
+    return jsonify({
+        "items": [
+            {
+                "id": item.id,
+                "original_filename": item.original_filename,
+                "stored_filename": item.stored_filename,
+                "stored_path": item.stored_path,
+                "file_size_bytes": item.file_size_bytes,
+                "file_hash_sha256": item.file_hash_sha256,
+                "mime_type": item.mime_type,
+                "extension": item.extension,
+
+                "report_type_id": item.report_type_id,
+                "report_type_key": item.report_type.key if item.report_type else None,
+                "report_type_label": item.report_type.label if item.report_type else None,
+
+                "source_id": item.source_id,
+                "source_key": item.source.key if item.source else None,
+                "source_label": item.source.label if item.source else None,
+
+                "family_id": item.family_id,
+                "family_key": item.family.key if item.family else None,
+                "family_label": item.family.label if item.family else None,
+
+                "operational_role_id": item.operational_role_id,
+                "operational_role_key": item.operational_role.key if item.operational_role else None,
+                "operational_role_label": item.operational_role.label if item.operational_role else None,
+
+                "period_type": item.period_type,
+                "cutoff_date": item.cutoff_date.isoformat() if item.cutoff_date else None,
+                "date_from": item.date_from.isoformat() if item.date_from else None,
+                "date_to": item.date_to.isoformat() if item.date_to else None,
+
+                "status": item.status,
+                "uploaded_by_user_id": item.uploaded_by_user_id,
+                "uploaded_by_username": item.uploader.username if item.uploader else None,
+
+                "created_at": item.created_at.isoformat() if item.created_at else None,
+                "updated_at": item.updated_at.isoformat() if item.updated_at else None,
+            }
+            for item in uploads
+        ]
+    }), 200
