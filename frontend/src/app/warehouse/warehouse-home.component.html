@@ -1,15 +1,70 @@
 <!-- frontend\src\app\warehouse\warehouse-home.component.html -->
 
-<section class="warehouse-home">
-  <h1>Warehouse</h1>
+<div class="warehouse-home">
+  <h2>Warehouse</h2>
+  <p>Módulo documental base en construcción.</p>
 
-  <p *ngIf="loading">Validando acceso a Warehouse...</p>
+  <p *ngIf="isLoading">Cargando uploads...</p>
+  <p *ngIf="!isLoading && errorMessage">{{ errorMessage }}</p>
 
-  <div *ngIf="!loading && accessAllowed">
-    <p>Módulo documental base en construcción.</p>
-  </div>
+  <ng-container *ngIf="!isLoading && !errorMessage">
+    <p>Uploads cargados: {{ uploads.length }}</p>
 
-  <div *ngIf="!loading && !accessAllowed">
-    <p>{{ errorMessage }}</p>
-  </div>
-</section>
+    <table *ngIf="uploads.length > 0" class="warehouse-table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Archivo</th>
+          <th>Tipo de reporte</th>
+          <th>Periodo</th>
+          <th>Estatus</th>
+          <th>Creado</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let upload of uploads">
+          <td>{{ upload.id }}</td>
+          <td>{{ upload.original_filename }}</td>
+          <td>{{ upload.report_type_label || upload.report_type_key }}</td>
+          <td>{{ upload.period_type }}</td>
+          <td>{{ upload.status }}</td>
+          <td>{{ upload.created_at_display }}</td>
+          <td>
+            <div class="warehouse-actions">
+              <button type="button" (click)="downloadUpload(upload)">
+                Descargar
+              </button>
+
+              <button type="button" (click)="viewUploadDetail(upload)">
+                Ver detalle
+              </button>
+
+              <button *ngIf="upload.status === 'ACTIVE'" type="button" (click)="archiveUpload(upload)">
+              Archivar
+              </button>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    <div *ngIf="selectedUploadDetail" class="warehouse-detail">
+  <h3>Detalle del upload</h3>
+
+  <p><strong>ID:</strong> {{ selectedUploadDetail.id }}</p>
+  <p><strong>Archivo:</strong> {{ selectedUploadDetail.original_filename }}</p>
+  <p><strong>Tipo de reporte:</strong> {{ selectedUploadDetail.report_type_label || selectedUploadDetail.report_type_key }}</p>
+  <p><strong>Fuente:</strong> {{ selectedUploadDetail.source_label || selectedUploadDetail.source_key }}</p>
+  <p><strong>Familia:</strong> {{ selectedUploadDetail.family_label || selectedUploadDetail.family_key }}</p>
+  <p><strong>Rol operativo:</strong> {{ selectedUploadDetail.operational_role_label || selectedUploadDetail.operational_role_key }}</p>
+  <p><strong>Periodo:</strong> {{ selectedUploadDetail.period_type }}</p>
+  <p><strong>Cutoff date:</strong> {{ selectedUploadDetail.cutoff_date }}</p>
+  <p><strong>Date from:</strong> {{ selectedUploadDetail.date_from }}</p>
+  <p><strong>Date to:</strong> {{ selectedUploadDetail.date_to }}</p>
+  <p><strong>Estatus:</strong> {{ selectedUploadDetail.status }}</p>
+  <p><strong>Subido por:</strong> {{ selectedUploadDetail.uploaded_by_username }}</p>
+</div>
+
+    <p *ngIf="uploads.length === 0">No hay uploads registrados.</p>
+  </ng-container>
+</div>
