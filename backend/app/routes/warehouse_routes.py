@@ -20,7 +20,7 @@ from app.models import (
     WarehouseReportTypeORM,
     WarehouseUploadORM,
 )
-
+from app.utils.warehouse_audit import log_warehouse_audit
 
 
 warehouse_bp = Blueprint('warehouse', __name__)
@@ -339,6 +339,21 @@ def warehouse_create_upload():
         )
 
         db.session.add(upload)
+        db.session.flush()
+        
+        log_warehouse_audit(
+        action='UPLOAD',
+        performed_by_user_id=current_user_id,
+        upload_id=upload.id,
+        details={
+            "original_filename": original_filename,
+            "stored_filename": stored_filename,
+            "report_type_key": report_type.key,
+            "period_type": report_type.default_period_type,
+        },
+    )    
+    
+    
         db.session.commit()
 
     except Exception:
@@ -528,7 +543,12 @@ def warehouse_download_upload(upload_id: int):
     if forbidden:
         return forbidden
 
-    upload = WarehouseUploadORM.query.filter_by(id=upload_id).first()
+    upload = (
+        WarehouseUploadORM.query
+        .options(joinedload(WarehouseUploadORM.report_type))
+        .filter_by(id=upload_id)
+        .first()
+    )
 
     if not upload:
         return jsonify({
@@ -545,6 +565,25 @@ def warehouse_download_upload(upload_id: int):
             "detail": f"No se encontró el archivo físico para el upload {upload_id}."
         }), 404
 
+    current_user_id = _get_current_user_id()
+    if not current_user_id:
+        return jsonify({
+            "error": "Sesión inválida",
+            "detail": "No se pudo resolver el usuario autenticado actual."
+        }), 401
+
+    log_warehouse_audit(
+        action='DOWNLOAD',
+        performed_by_user_id=current_user_id,
+        upload_id=upload.id,
+        details={
+            "original_filename": upload.original_filename,
+            "stored_filename": upload.stored_filename,
+            "report_type_key": upload.report_type.key if upload.report_type else None,
+        },
+    )
+    db.session.commit()
+
     return send_file(
         file_path,
         as_attachment=True,
@@ -552,6 +591,7 @@ def warehouse_download_upload(upload_id: int):
         mimetype=upload.mime_type or 'application/octet-stream'
     )
     
+       
 @warehouse_bp.route('/uploads/<int:upload_id>/archive', methods=['PATCH'])
 @jwt_required()
 def warehouse_archive_upload(upload_id: int):
@@ -573,7 +613,27 @@ def warehouse_archive_upload(upload_id: int):
             "detail": f"El upload {upload_id} ya se encuentra en estado ARCHIVED."
         }), 400
 
+    current_user_id = _get_current_user_id()
+    if not current_user_id:
+        return jsonify({
+            "error": "Sesión inválida",
+            "detail": "No se pudo resolver el usuario autenticado actual."
+        }), 401
+
     upload.status = 'ARCHIVED'
+
+    log_warehouse_audit(
+        action='ARCHIVE',
+        performed_by_user_id=current_user_id,
+        upload_id=upload.id,
+        details={
+            "original_filename": upload.original_filename,
+            "stored_filename": upload.stored_filename,
+            "previous_status": "ACTIVE",
+            "new_status": "ARCHIVED",
+        },
+    )
+
     db.session.commit()
 
     return jsonify({
