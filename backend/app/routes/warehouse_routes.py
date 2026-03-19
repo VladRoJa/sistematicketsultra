@@ -1,6 +1,6 @@
 # app/routes/warehouse_routes.py
 
-from flask import Blueprint, jsonify, request, current_app
+from flask import Blueprint, jsonify, request, current_app, send_file
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from pathlib import Path
 from datetime import datetime
@@ -519,3 +519,35 @@ def warehouse_get_upload_detail(upload_id: int):
         "created_at": upload.created_at.isoformat() if upload.created_at else None,
         "updated_at": upload.updated_at.isoformat() if upload.updated_at else None,
     }), 200
+    
+    
+@warehouse_bp.route('/uploads/<int:upload_id>/download', methods=['GET'])
+@jwt_required()
+def warehouse_download_upload(upload_id: int):
+    forbidden = require_warehouse_operator()
+    if forbidden:
+        return forbidden
+
+    upload = WarehouseUploadORM.query.filter_by(id=upload_id).first()
+
+    if not upload:
+        return jsonify({
+            "error": "Upload no encontrado",
+            "detail": f"No existe un upload de Warehouse con id {upload_id}."
+        }), 404
+
+    base_dir = Path(current_app.root_path).parent.parent
+    file_path = (base_dir / upload.stored_path / upload.stored_filename).resolve()
+
+    if not file_path.exists() or not file_path.is_file():
+        return jsonify({
+            "error": "Archivo no encontrado",
+            "detail": f"No se encontró el archivo físico para el upload {upload_id}."
+        }), 404
+
+    return send_file(
+        file_path,
+        as_attachment=True,
+        download_name=upload.original_filename,
+        mimetype=upload.mime_type or 'application/octet-stream'
+    )
