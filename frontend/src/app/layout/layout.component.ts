@@ -181,6 +181,13 @@ const menuMantenimientoGerencial = [
       ]
     },
     {
+      label: 'Warehouse',
+      path: '/warehouse',
+      submenu: [
+        { label: 'Warehouse', path: '/warehouse' }
+      ]
+    },
+    {
       label: 'Catálogos',
       path: '/catalogos/marcas',
       submenu: [
@@ -225,6 +232,7 @@ const menuMantenimientoGerencial = [
   } else {
     this.menuItems = soloTickets;
   }
+  this.sincronizarMenuConRutaActual();
   }
 
 
@@ -434,4 +442,22 @@ private verificarRolUsuario(): void {
       }
     });
   }
+
+  private sincronizarMenuConRutaActual(): void {
+  const currentPath = this.router.url;
+
+  const menuMatch = this.menuItems.find(item => {
+    if (item.path === currentPath) {
+      return true;
+    }
+
+    return Array.isArray(item.submenu)
+      && item.submenu.some((sub: { path: string }) => sub.path === currentPath);
+  });
+
+  if (menuMatch) {
+    this.currentSubmenu = menuMatch.label;
+  }
+}
+
 }
