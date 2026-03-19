@@ -2,47 +2,134 @@
 
 
 import { CommonModule } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
-import { WarehouseAccessService } from '../services/warehouse-access.service';
+import { Component, OnInit, inject } from '@angular/core';
+import {
+  WarehouseUploadDetail,
+  WarehouseUploadListItem,
+  WarehouseUploadsService,
+} from './services/warehouse-uploads.service';
+
+interface WarehouseUploadRow extends WarehouseUploadListItem {
+  created_at_display: string;
+}
 
 @Component({
   selector: 'app-warehouse-home',
   standalone: true,
   imports: [CommonModule],
   templateUrl: './warehouse-home.component.html',
-  styleUrls: ['./warehouse-home.component.css']
+  styleUrls: ['./warehouse-home.component.css'],
 })
 export class WarehouseHomeComponent implements OnInit {
-  loading = true;
-  accessAllowed = false;
+  private readonly warehouseUploadsService = inject(WarehouseUploadsService);
+
+  selectedUploadDetail: WarehouseUploadDetail | null = null;
+
+
+
+  uploads: WarehouseUploadRow[] = [];
+  isLoading = false;
   errorMessage = '';
 
-  constructor(private warehouseAccessService: WarehouseAccessService) {}
-
   ngOnInit(): void {
-    this.loadAccess();
+    this.loadUploads();
   }
 
-  private loadAccess(): void {
-    this.loading = true;
+  loadUploads(): void {
+    this.isLoading = true;
     this.errorMessage = '';
 
-    this.warehouseAccessService.checkAccess().subscribe({
+    this.warehouseUploadsService.getUploads().subscribe({
       next: (response) => {
-        this.accessAllowed = response.allowed === true;
-        this.loading = false;
+        const items = response.items || [];
+        this.uploads = items.map((item) => this.mapUploadRow(item));
+        this.isLoading = false;
       },
-      error: (error) => {
-        this.accessAllowed = false;
-        this.loading = false;
-
-        if (error.status === 403) {
-          this.errorMessage = 'No autorizado para acceder a Warehouse.';
-          return;
-        }
-
-        this.errorMessage = 'No se pudo validar el acceso a Warehouse.';
-      }
+      error: () => {
+        this.uploads = [];
+        this.errorMessage = 'No se pudo cargar el histórico de Warehouse.';
+        this.isLoading = false;
+      },
     });
   }
+
+  private mapUploadRow(item: WarehouseUploadListItem): WarehouseUploadRow {
+    return {
+      ...item,
+      created_at_display: this.formatDateTime(item.created_at),
+    };
+  }
+
+  private formatDateTime(value: string | null): string {
+    if (!value) {
+      return '';
+    }
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return value;
+    }
+
+    return new Intl.DateTimeFormat('es-MX', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    }).format(date);
+  }
+
+  downloadUpload(upload: WarehouseUploadRow): void {
+  this.warehouseUploadsService.downloadUpload(upload.id).subscribe({
+    next: (blob) => {
+      const objectUrl = window.URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+
+      anchor.href = objectUrl;
+      anchor.download = upload.original_filename;
+      anchor.click();
+
+      window.URL.revokeObjectURL(objectUrl);
+    },
+    error: () => {
+      this.errorMessage = `No se pudo descargar el archivo ${upload.original_filename}.`;
+    },
+  });
+}
+
+viewUploadDetail(upload: WarehouseUploadRow): void {
+  this.errorMessage = '';
+
+  this.warehouseUploadsService.getUploadDetail(upload.id).subscribe({
+    next: (detail) => {
+      this.selectedUploadDetail = detail;
+    },
+    error: () => {
+      this.selectedUploadDetail = null;
+      this.errorMessage = `No se pudo cargar el detalle del upload ${upload.id}.`;
+    },
+  });
+}
+
+archiveUpload(upload: WarehouseUploadRow): void {
+  this.errorMessage = '';
+
+  this.warehouseUploadsService.archiveUpload(upload.id).subscribe({
+    next: () => {
+      const selectedId = this.selectedUploadDetail?.id ?? null;
+
+      this.loadUploads();
+
+      if (selectedId === upload.id) {
+        this.viewUploadDetail(upload);
+      }
+    },
+    error: () => {
+      this.errorMessage = `No se pudo archivar el upload ${upload.id}.`;
+    },
+  });
+}
+
 }
