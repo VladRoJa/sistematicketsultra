@@ -19,6 +19,7 @@ from app.models import (
     WarehouseOperationalRoleORM,
     WarehouseReportTypeORM,
     WarehouseUploadORM,
+    WarehouseAuditLogORM,
 )
 from app.utils.warehouse_audit import log_warehouse_audit
 
@@ -640,4 +641,39 @@ def warehouse_archive_upload(upload_id: int):
         "message": "Upload archivado correctamente",
         "upload_id": upload.id,
         "status": upload.status
+    }), 200
+    
+@warehouse_bp.route('/uploads/<int:upload_id>/audit', methods=['GET'])
+@jwt_required()
+def warehouse_get_upload_audit(upload_id: int):
+    forbidden = require_warehouse_operator()
+    if forbidden:
+        return forbidden
+
+    upload = WarehouseUploadORM.query.filter_by(id=upload_id).first()
+    if not upload:
+        return jsonify({
+            "error": "Upload no encontrado",
+            "detail": f"No existe un upload de Warehouse con id {upload_id}."
+        }), 404
+
+    audit_items = (
+        WarehouseAuditLogORM.query
+        .filter_by(upload_id=upload_id)
+        .order_by(WarehouseAuditLogORM.created_at.desc())
+        .all()
+    )
+
+    return jsonify({
+        "items": [
+            {
+                "id": item.id,
+                "upload_id": item.upload_id,
+                "action": item.action,
+                "performed_by_user_id": item.performed_by_user_id,
+                "details": item.details,
+                "created_at": item.created_at.isoformat() if item.created_at else None,
+            }
+            for item in audit_items
+        ]
     }), 200
