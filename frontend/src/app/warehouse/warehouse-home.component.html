@@ -1,70 +1,359 @@
 <!-- frontend\src\app\warehouse\warehouse-home.component.html -->
 
-<div class="warehouse-home">
-  <h2>Warehouse</h2>
-  <p>Módulo documental base en construcción.</p>
+<div class="warehouse-page">
+  <section class="warehouse-hero">
+    <div class="warehouse-hero__content">
+      <p class="warehouse-eyebrow">Warehouse</p>
+      <h1 class="warehouse-title">Gestión documental</h1>
+      <p class="warehouse-subtitle">
+        Administra uploads documentales, consulta su metadata y ejecuta acciones
+        rápidas desde una sola pantalla.
+      </p>
+    </div>
 
-  <p *ngIf="isLoading">Cargando uploads...</p>
-  <p *ngIf="!isLoading && errorMessage">{{ errorMessage }}</p>
+    <div class="warehouse-stats-grid">
+      <div class="warehouse-stat-card">
+        <span class="warehouse-stat-card__label">Sources</span>
+        <strong class="warehouse-stat-card__value">{{ sources.length }}</strong>
+      </div>
 
-  <ng-container *ngIf="!isLoading && !errorMessage">
-    <p>Uploads cargados: {{ uploads.length }}</p>
+      <div class="warehouse-stat-card">
+        <span class="warehouse-stat-card__label">Families</span>
+        <strong class="warehouse-stat-card__value">{{ families.length }}</strong>
+      </div>
 
-    <table *ngIf="uploads.length > 0" class="warehouse-table">
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>Archivo</th>
-          <th>Tipo de reporte</th>
-          <th>Periodo</th>
-          <th>Estatus</th>
-          <th>Creado</th>
-          <th>Acciones</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr *ngFor="let upload of uploads">
-          <td>{{ upload.id }}</td>
-          <td>{{ upload.original_filename }}</td>
-          <td>{{ upload.report_type_label || upload.report_type_key }}</td>
-          <td>{{ upload.period_type }}</td>
-          <td>{{ upload.status }}</td>
-          <td>{{ upload.created_at_display }}</td>
-          <td>
-            <div class="warehouse-actions">
-              <button type="button" (click)="downloadUpload(upload)">
-                Descargar
-              </button>
+      <div class="warehouse-stat-card">
+        <span class="warehouse-stat-card__label">Roles operativos</span>
+        <strong class="warehouse-stat-card__value">{{ operationalRoles.length }}</strong>
+      </div>
 
-              <button type="button" (click)="viewUploadDetail(upload)">
-                Ver detalle
-              </button>
+      <div class="warehouse-stat-card">
+        <span class="warehouse-stat-card__label">Report types</span>
+        <strong class="warehouse-stat-card__value">{{ reportTypes.length }}</strong>
+      </div>
 
-              <button *ngIf="upload.status === 'ACTIVE'" type="button" (click)="archiveUpload(upload)">
-              Archivar
-              </button>
-            </div>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-    <div *ngIf="selectedUploadDetail" class="warehouse-detail">
-  <h3>Detalle del upload</h3>
+      <div class="warehouse-stat-card warehouse-stat-card--accent">
+        <span class="warehouse-stat-card__label">Uploads cargados</span>
+        <strong class="warehouse-stat-card__value">{{ uploads.length }}</strong>
+      </div>
+    </div>
+  </section>
 
-  <p><strong>ID:</strong> {{ selectedUploadDetail.id }}</p>
-  <p><strong>Archivo:</strong> {{ selectedUploadDetail.original_filename }}</p>
-  <p><strong>Tipo de reporte:</strong> {{ selectedUploadDetail.report_type_label || selectedUploadDetail.report_type_key }}</p>
-  <p><strong>Fuente:</strong> {{ selectedUploadDetail.source_label || selectedUploadDetail.source_key }}</p>
-  <p><strong>Familia:</strong> {{ selectedUploadDetail.family_label || selectedUploadDetail.family_key }}</p>
-  <p><strong>Rol operativo:</strong> {{ selectedUploadDetail.operational_role_label || selectedUploadDetail.operational_role_key }}</p>
-  <p><strong>Periodo:</strong> {{ selectedUploadDetail.period_type }}</p>
-  <p><strong>Cutoff date:</strong> {{ selectedUploadDetail.cutoff_date }}</p>
-  <p><strong>Date from:</strong> {{ selectedUploadDetail.date_from }}</p>
-  <p><strong>Date to:</strong> {{ selectedUploadDetail.date_to }}</p>
-  <p><strong>Estatus:</strong> {{ selectedUploadDetail.status }}</p>
-  <p><strong>Subido por:</strong> {{ selectedUploadDetail.uploaded_by_username }}</p>
+  <p class="warehouse-banner warehouse-banner--error" *ngIf="catalogsErrorMessage">
+    {{ catalogsErrorMessage }}
+  </p>
+
+  <div class="warehouse-main-grid">
+    <section class="warehouse-panel warehouse-panel--form">
+      <div class="warehouse-panel__header">
+        <h2>Nuevo upload</h2>
+        <p>Selecciona el tipo de reporte, adjunta el archivo y captura el periodo requerido.</p>
+      </div>
+      <div class="warehouse-form warehouse-form--inline">
+  <div class="warehouse-form__group warehouse-form__group--report-type">
+    <label for="warehouse-report-type">Tipo de reporte</label>
+    <select
+      id="warehouse-report-type"
+      [value]="uploadForm.report_type_key"
+      (change)="onReportTypeChanged(reportTypeSelect.value)"
+      #reportTypeSelect
+    >
+      <option value="">Selecciona un tipo de reporte</option>
+
+      <option *ngFor="let reportType of reportTypes" [value]="reportType.key">
+        {{ reportType.label }}
+      </option>
+    </select>
+  </div>
+
+  <div class="warehouse-form__group warehouse-form__group--file">
+    <label for="warehouse-file">Archivo</label>
+    <input
+      id="warehouse-file"
+      type="file"
+      (change)="onFileSelected($event)"
+      #warehouseFileInput
+    />
+  </div>
+
+  <div
+    class="warehouse-form__group warehouse-form__group--date"
+    *ngIf="isDailyPeriodSelected()"
+  >
+    <label for="warehouse-cutoff-date">Fecha de corte</label>
+    <input
+      id="warehouse-cutoff-date"
+      type="date"
+      [value]="uploadForm.cutoff_date"
+      (input)="uploadForm.cutoff_date = $any($event.target).value"
+    />
+  </div>
+
+  <div
+    class="warehouse-form__group warehouse-form__group--date"
+    *ngIf="isRangePeriodSelected()"
+  >
+    <label for="warehouse-date-from">Desde</label>
+    <input
+      id="warehouse-date-from"
+      type="date"
+      [value]="uploadForm.date_from"
+      (input)="uploadForm.date_from = $any($event.target).value"
+    />
+  </div>
+
+  <div
+    class="warehouse-form__group warehouse-form__group--date"
+    *ngIf="isRangePeriodSelected()"
+  >
+    <label for="warehouse-date-to">Hasta</label>
+    <input
+      id="warehouse-date-to"
+      type="date"
+      [value]="uploadForm.date_to"
+      (input)="uploadForm.date_to = $any($event.target).value"
+    />
+  </div>
+
+  <div class="warehouse-form__group warehouse-form__group--submit">
+    <label>&nbsp;</label>
+    <button
+      type="button"
+      class="warehouse-button warehouse-button--primary"
+      (click)="submitUpload()"
+    >
+      Subir archivo
+    </button>
+  </div>
 </div>
 
-    <p *ngIf="uploads.length === 0">No hay uploads registrados.</p>
-  </ng-container>
+<div class="warehouse-form__feedback">
+  <div class="warehouse-form__hint" *ngIf="selectedReportTypeContext.periodType">
+    <span class="warehouse-pill">
+      Periodo requerido: {{ selectedReportTypeContext.periodType }}
+    </span>
+  </div>
+
+  <p class="warehouse-file-selected" *ngIf="uploadForm.file">
+    Archivo seleccionado: <strong>{{ uploadForm.file.name }}</strong>
+  </p>
+
+  <p class="warehouse-banner warehouse-banner--error" *ngIf="uploadErrorMessage">
+    {{ uploadErrorMessage }}
+  </p>
+
+  <p class="warehouse-banner warehouse-banner--success" *ngIf="uploadSuccessMessage">
+    {{ uploadSuccessMessage }}
+  </p>
+</div>
+      
+    </section>
+
+<section class="warehouse-panel warehouse-panel--detail" *ngIf="selectedUploadDetail">
+  <div class="warehouse-panel__header warehouse-panel__header--with-action">
+    <div>
+      <h2>Detalle del upload</h2>
+      <p>Vista rápida de la metadata del registro seleccionado.</p>
+    </div>
+
+    <button
+      type="button"
+      class="warehouse-button warehouse-button--secondary"
+      (click)="clearSelectedUploadDetail()"
+    >
+      Cerrar detalle
+    </button>
+  </div>
+
+  <div class="warehouse-detail-grid">
+    <div class="warehouse-detail-item">
+      <span class="warehouse-detail-item__label">ID</span>
+      <strong class="warehouse-detail-item__value">{{ selectedUploadDetail.id }}</strong>
+    </div>
+
+    <div class="warehouse-detail-item warehouse-detail-item--wide">
+      <span class="warehouse-detail-item__label">Archivo</span>
+      <strong class="warehouse-detail-item__value">{{ selectedUploadDetail.original_filename }}</strong>
+    </div>
+
+    <div class="warehouse-detail-item">
+      <span class="warehouse-detail-item__label">Tipo de reporte</span>
+      <strong class="warehouse-detail-item__value">
+        {{ selectedUploadDetail.report_type_label || selectedUploadDetail.report_type_key }}
+      </strong>
+    </div>
+
+    <div class="warehouse-detail-item">
+      <span class="warehouse-detail-item__label">Fuente</span>
+      <strong class="warehouse-detail-item__value">
+        {{ selectedUploadDetail.source_label || selectedUploadDetail.source_key }}
+      </strong>
+    </div>
+
+    <div class="warehouse-detail-item">
+      <span class="warehouse-detail-item__label">Familia</span>
+      <strong class="warehouse-detail-item__value">
+        {{ selectedUploadDetail.family_label || selectedUploadDetail.family_key }}
+      </strong>
+    </div>
+
+    <div class="warehouse-detail-item">
+      <span class="warehouse-detail-item__label">Rol operativo</span>
+      <strong class="warehouse-detail-item__value">
+        {{ selectedUploadDetail.operational_role_label || selectedUploadDetail.operational_role_key }}
+      </strong>
+    </div>
+
+    <div class="warehouse-detail-item">
+      <span class="warehouse-detail-item__label">Periodo</span>
+      <strong class="warehouse-detail-item__value">{{ selectedUploadDetail.period_type }}</strong>
+    </div>
+
+    <div class="warehouse-detail-item">
+      <span class="warehouse-detail-item__label">Fecha de corte</span>
+      <strong class="warehouse-detail-item__value">{{ selectedUploadDetail.cutoff_date || '—' }}</strong>
+    </div>
+
+    <div class="warehouse-detail-item">
+      <span class="warehouse-detail-item__label">Desde</span>
+      <strong class="warehouse-detail-item__value">{{ selectedUploadDetail.date_from || '—' }}</strong>
+    </div>
+
+    <div class="warehouse-detail-item">
+      <span class="warehouse-detail-item__label">Hasta</span>
+      <strong class="warehouse-detail-item__value">{{ selectedUploadDetail.date_to || '—' }}</strong>
+    </div>
+
+    <div class="warehouse-detail-item">
+      <span class="warehouse-detail-item__label">Estatus</span>
+      <strong class="warehouse-detail-item__value">{{ selectedUploadDetail.status }}</strong>
+    </div>
+
+    <div class="warehouse-detail-item">
+      <span class="warehouse-detail-item__label">Subido por</span>
+      <strong class="warehouse-detail-item__value">{{ selectedUploadDetail.uploaded_by_username || '—' }}</strong>
+    </div>
+  </div>
+</section>
+
+<section
+  class="warehouse-panel warehouse-panel--audit"
+  *ngIf="selectedUploadAudit.length > 0 || auditErrorMessage"
+>
+<div class="warehouse-panel__header warehouse-panel__header--with-action">
+  <div>
+    <h2>Auditoría del upload</h2>
+    <p>Eventos registrados para el documento seleccionado.</p>
+  </div>
+
+  <button
+    type="button"
+    class="warehouse-button warehouse-button--secondary"
+    (click)="clearSelectedUploadAudit()"
+  >
+    Cerrar auditoría
+  </button>
+</div>
+
+  <div class="warehouse-audit-list">
+    <p class="warehouse-banner warehouse-banner--error" *ngIf="auditErrorMessage">
+      {{ auditErrorMessage }}
+    </p>
+
+    <div class="warehouse-audit-item" *ngFor="let auditItem of selectedUploadAudit">
+      <p><strong>Acción:</strong> {{ auditItem.action }}</p>
+      <p><strong>Usuario:</strong> {{ auditItem.performed_by_user_id }}</p>
+      <p><strong>Fecha:</strong> {{ auditItem.created_at_display }}</p>
+      <p><strong>Details:</strong> {{ auditItem.details_display }}</p>
+    </div>
+  </div>
+</section>
+
+  <section class="warehouse-panel warehouse-panel--table">
+    <div class="warehouse-panel__header">
+      <h2>Histórico de uploads</h2>
+      <p>Consulta rápida de archivos cargados y acciones disponibles.</p>
+    </div>
+
+    <p class="warehouse-banner warehouse-banner--muted" *ngIf="isLoading">
+      Cargando uploads...
+    </p>
+
+    <p class="warehouse-banner warehouse-banner--error" *ngIf="!isLoading && errorMessage">
+      {{ errorMessage }}
+    </p>
+
+    <div class="warehouse-table-wrapper" *ngIf="!isLoading && !errorMessage">
+      <table *ngIf="uploads.length > 0" class="warehouse-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Archivo</th>
+            <th>Tipo de reporte</th>
+            <th>Periodo</th>
+            <th>Estatus</th>
+            <th>Creado</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          <tr *ngFor="let upload of uploads">
+            <td>{{ upload.id }}</td>
+            <td>{{ upload.original_filename }}</td>
+            <td>{{ upload.report_type_label || upload.report_type_key }}</td>
+            <td>{{ upload.period_type }}</td>
+            <td>
+              <span
+                class="warehouse-status-pill"
+                [class.warehouse-status-pill--archived]="upload.status === 'ARCHIVED'"
+                [class.warehouse-status-pill--active]="upload.status === 'ACTIVE'"
+              >
+                {{ upload.status }}
+              </span>
+            </td>
+            <td>{{ upload.created_at_display }}</td>
+            <td>
+              <div class="warehouse-actions">
+                <button
+                  type="button"
+                  class="warehouse-button warehouse-button--secondary"
+                  (click)="downloadUpload(upload)"
+                >
+                  Descargar
+                </button>
+
+                <button
+                  type="button"
+                  class="warehouse-button warehouse-button--secondary"
+                  (click)="viewUploadDetail(upload)"
+                >
+                  Ver detalle
+                </button>
+                <button
+                  type="button"
+                  class="warehouse-button warehouse-button--secondary"
+                  (click)="viewUploadAudit(upload)"
+                >
+                  Ver auditoría
+                </button>
+                <button
+                  *ngIf="upload.status === 'ACTIVE'"
+                  type="button"
+                  class="warehouse-button warehouse-button--danger"
+                  (click)="archiveUpload(upload)"
+                >
+                  Archivar
+                </button>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p class="warehouse-empty-state" *ngIf="uploads.length === 0">
+        No hay uploads registrados.
+      </p>
+    </div>
+  </section>
 </div>
