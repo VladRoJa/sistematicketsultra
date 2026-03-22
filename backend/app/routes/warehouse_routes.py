@@ -22,6 +22,12 @@ from app.models import (
     WarehouseAuditLogORM,
 )
 from app.utils.warehouse_audit import log_warehouse_audit
+from app.warehouse.services.warehouse_document_upload_service import (
+    create_warehouse_document_upload,
+    WarehouseDocumentUploadError,
+    WarehouseDocumentValidationError,
+)
+
 
 
 warehouse_bp = Blueprint('warehouse', __name__)
@@ -212,103 +218,6 @@ def warehouse_create_upload():
             "detail": "El archivo enviado no tiene nombre válido."
         }), 400
 
-    original_filename = uploaded_file.filename
-    safe_original_filename = secure_filename(original_filename)
-
-    if not safe_original_filename:
-        return jsonify({
-            "error": "Archivo inválido",
-            "detail": "No se pudo normalizar el nombre del archivo."
-        }), 400
-
-    extension = original_filename.rsplit('.', 1)[-1].lower() if '.' in original_filename else ''
-    if extension not in ALLOWED_WAREHOUSE_EXTENSIONS:
-        return jsonify({
-            "error": "Extensión no permitida",
-            "detail": f"La extensión '{extension or 'sin extensión'}' no está permitida para Warehouse."
-        }), 400
-
-    uploaded_file.stream.seek(0, 2)
-    file_size = uploaded_file.stream.tell()
-    uploaded_file.stream.seek(0)
-
-    if file_size > MAX_WAREHOUSE_FILE_SIZE_BYTES:
-        return jsonify({
-            "error": "Archivo demasiado grande",
-            "detail": "El archivo excede el tamaño máximo permitido de 70 MB para Warehouse."
-        }), 400
-
-    report_type_key = (request.form.get('report_type_key') or '').strip()
-    if not report_type_key:
-        return jsonify({
-            "error": "Metadata requerida",
-            "detail": "Debes enviar 'report_type_key' en el formulario del upload."
-        }), 400
-
-    report_type = WarehouseReportTypeORM.query.filter_by(
-        key=report_type_key,
-        active=True
-    ).first()
-
-    if not report_type:
-        return jsonify({
-            "error": "Report type inválido",
-            "detail": f"El report_type_key '{report_type_key}' no existe o no está activo en Warehouse."
-        }), 400
-
-    if not report_type.default_source_id or not report_type.default_operational_role_id or not report_type.family_id:
-        return jsonify({
-            "error": "Configuración incompleta",
-            "detail": f"El report_type_key '{report_type_key}' no tiene configuración base completa en Warehouse."
-        }), 400
-
-    source = WarehouseSourceORM.query.filter_by(id=report_type.default_source_id, active=True).first()
-    family = WarehouseFamilyORM.query.filter_by(id=report_type.family_id, active=True).first()
-    operational_role = WarehouseOperationalRoleORM.query.filter_by(
-        id=report_type.default_operational_role_id,
-        active=True
-    ).first()
-
-    if not source or not family or not operational_role:
-        return jsonify({
-            "error": "Configuración inválida",
-            "detail": f"El report_type_key '{report_type_key}' referencia catálogos inactivos o inexistentes."
-        }), 400
-
-    cutoff_date_raw = (request.form.get('cutoff_date') or '').strip()
-    date_from_raw = (request.form.get('date_from') or '').strip()
-    date_to_raw = (request.form.get('date_to') or '').strip()
-
-    period_data, period_error = _resolve_period_data(
-        report_type,
-        cutoff_date_raw,
-        date_from_raw,
-        date_to_raw,
-    )
-    if period_error:
-        return period_error
-
-    period_anchor_date = period_data['cutoff_date'] or period_data['date_from']
-    if not period_anchor_date:
-        return jsonify({
-            "error": "Periodo inválido",
-            "detail": "No se pudo determinar la fecha base del periodo documental."
-        }), 400
-
-    file_hash_sha256 = _calculate_file_sha256(uploaded_file)
-
-    duplicate_upload = WarehouseUploadORM.query.filter_by(
-        file_hash_sha256=file_hash_sha256
-    ).order_by(WarehouseUploadORM.created_at.desc()).first()
-
-    stored_filename = f"{uuid.uuid4()}_{safe_original_filename}"
-    relative_dir, absolute_file_path = _build_warehouse_storage_paths(
-        source.key,
-        report_type.key,
-        period_anchor_date,
-        stored_filename,
-    )
-
     current_user_id = _get_current_user_id()
     if not current_user_id:
         return jsonify({
@@ -316,53 +225,43 @@ def warehouse_create_upload():
             "detail": "No se pudo resolver el usuario autenticado actual."
         }), 401
 
-    try:
-        uploaded_file.save(absolute_file_path)
+    report_type_key = (request.form.get('report_type_key') or '').strip()
+    cutoff_date_raw = (request.form.get('cutoff_date') or '').strip()
+    date_from_raw = (request.form.get('date_from') or '').strip()
+    date_to_raw = (request.form.get('date_to') or '').strip()
 
-        upload = WarehouseUploadORM(
-            original_filename=original_filename,
-            stored_filename=stored_filename,
-            stored_path=str(relative_dir).replace('\\', '/'),
-            file_size_bytes=file_size,
-            file_hash_sha256=file_hash_sha256,
-            mime_type=uploaded_file.mimetype,
-            extension=extension,
-            source_id=source.id,
-            family_id=family.id,
-            operational_role_id=operational_role.id,
-            report_type_id=report_type.id,
-            period_type=report_type.default_period_type,
-            cutoff_date=period_data['cutoff_date'],
-            date_from=period_data['date_from'],
-            date_to=period_data['date_to'],
-            status='ACTIVE',
+    try:
+        file_bytes = uploaded_file.read()
+
+        result = create_warehouse_document_upload(
+            report_type_key=report_type_key,
+            original_filename=uploaded_file.filename,
+            content_type=uploaded_file.mimetype,
+            file_bytes=file_bytes,
             uploaded_by_user_id=current_user_id,
+            cutoff_date=cutoff_date_raw or None,
+            date_from=date_from_raw or None,
+            date_to=date_to_raw or None,
+            audit_details={
+                "upload_origin": "manual_route",
+            },
         )
 
-        db.session.add(upload)
-        db.session.flush()
-        
-        log_warehouse_audit(
-        action='UPLOAD',
-        performed_by_user_id=current_user_id,
-        upload_id=upload.id,
-        details={
-            "original_filename": original_filename,
-            "stored_filename": stored_filename,
-            "report_type_key": report_type.key,
-            "period_type": report_type.default_period_type,
-        },
-    )    
-    
-    
-        db.session.commit()
+    except WarehouseDocumentValidationError as exc:
+        return jsonify({
+            "error": "No se pudo crear el upload",
+            "detail": str(exc),
+        }), 400
+
+    except WarehouseDocumentUploadError as exc:
+        current_app.logger.exception("Error controlado creando upload documental de Warehouse.")
+        return jsonify({
+            "error": "No se pudo crear el upload",
+            "detail": str(exc),
+        }), 500
 
     except Exception:
-        db.session.rollback()
-
-        if absolute_file_path.exists():
-            absolute_file_path.unlink()
-
+        current_app.logger.exception("Error inesperado creando upload documental de Warehouse.")
         return jsonify({
             "error": "No se pudo crear el upload",
             "detail": "Ocurrió un error al guardar el archivo y registrar el upload en Warehouse."
@@ -370,25 +269,24 @@ def warehouse_create_upload():
 
     return jsonify({
         "message": "Upload creado correctamente",
-        "upload_id": upload.id,
-        "filename": original_filename,
-        "stored_filename": stored_filename,
-        "stored_path": str(relative_dir).replace('\\', '/'),
-        "file_size_bytes": file_size,
-        "file_hash_sha256": file_hash_sha256,
-        "report_type_key": report_type.key,
-        "report_type_id": report_type.id,
-        "family_id": family.id,
-        "source_id": source.id,
-        "operational_role_id": operational_role.id,
-        "period_type": report_type.default_period_type,
-        "cutoff_date": cutoff_date_raw,
-        "date_from": date_from_raw,
-        "date_to": date_to_raw,
-        "duplicate_detected": duplicate_upload is not None,
-        "duplicate_upload_id": duplicate_upload.id if duplicate_upload else None,
-    }), 201
-    
+        "upload_id": result["upload_id"],
+        "filename": result["filename"],
+        "stored_filename": result["stored_filename"],
+        "stored_path": result["stored_path"],
+        "file_size_bytes": result["file_size_bytes"],
+        "file_hash_sha256": result["file_hash_sha256"],
+        "report_type_key": result["report_type_key"],
+        "report_type_id": result["report_type_id"],
+        "family_id": result["family_id"],
+        "source_id": result["source_id"],
+        "operational_role_id": result["operational_role_id"],
+        "period_type": result["period_type"],
+        "cutoff_date": result["cutoff_date"],
+        "date_from": result["date_from"],
+        "date_to": result["date_to"],
+        "duplicate_detected": result["duplicate_detected"],
+        "duplicate_upload_id": result["duplicate_upload_id"],
+    }), 201  
     
 @warehouse_bp.route('/uploads', methods=['GET'])
 @jwt_required()
