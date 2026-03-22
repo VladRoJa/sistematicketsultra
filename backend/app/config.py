@@ -87,5 +87,124 @@ class Config:
     UPLOADS_PUBLIC_PATH = os.getenv('UPLOADS_PUBLIC_PATH', '/uploads/reportes')
     MAX_UPLOAD_SIZE_MB  = int(os.getenv('MAX_UPLOAD_SIZE_MB', '10'))
 
-    print(f" STORAGE_BACKEND={STORAGE_BACKEND} | LOCAL_UPLOAD_DIR={LOCAL_UPLOAD_DIR}")
+    # ──────────────────────────────────────
+    # Warehouse / Gasca runtime config
+    # ──────────────────────────────────────
 
+    # Estrategia actual: integrar el script legado multi-reporte sin reescribirlo todavía.
+    WAREHOUSE_GASCA_SCRIPT_STRATEGY = os.getenv(
+        "WAREHOUSE_GASCA_SCRIPT_STRATEGY",
+        "legacy_main",
+    )
+
+    # Main legado de Gasca
+    # AJUSTA estos 2 valores en .env.local o aquí mismo cuando confirmes la ruta real del script.
+    WAREHOUSE_GASCA_LEGACY_MAIN_MODULE = os.getenv(
+        "WAREHOUSE_GASCA_LEGACY_MAIN_MODULE",
+        "",
+    )
+    WAREHOUSE_GASCA_LEGACY_MAIN_ENTRYPOINT = os.getenv(
+        "WAREHOUSE_GASCA_LEGACY_MAIN_ENTRYPOINT",
+        "main",
+    )
+
+    # Bridge de archivos generados por el script legado
+    WAREHOUSE_GASCA_SCRIPT_RECENT_FILE_LOOKBACK_SECONDS = int(
+        os.getenv("WAREHOUSE_GASCA_SCRIPT_RECENT_FILE_LOOKBACK_SECONDS", "3600")
+    )
+
+    WAREHOUSE_GASCA_SCRIPT_OUTPUT_DIRS = {
+        "reporte_direccion": os.getenv(
+            "WAREHOUSE_GASCA_REPORTE_DIRECCION_OUTPUT_DIR",
+            "data/direccion_ingresos",
+        ),
+        "kpi_desempeno": os.getenv(
+            "WAREHOUSE_GASCA_KPI_DESEMPENO_OUTPUT_DIR",
+            "data/kpi_desempeno",
+        ),
+        "kpi_ventas_nuevos": os.getenv(
+            "WAREHOUSE_GASCA_KPI_VENTAS_NUEVOS_OUTPUT_DIR",
+            "data/kpi_ventas_nuevos_socios",
+        ),
+    }
+
+    WAREHOUSE_GASCA_SCRIPT_FILENAME_PREFIXES = {
+        "reporte_direccion": os.getenv(
+            "WAREHOUSE_GASCA_REPORTE_DIRECCION_FILENAME_PREFIX",
+            "ingresos_",
+        ),
+        "kpi_desempeno": os.getenv(
+            "WAREHOUSE_GASCA_KPI_DESEMPENO_FILENAME_PREFIX",
+            "kpi_desempeno_",
+        ),
+        "kpi_ventas_nuevos": os.getenv(
+            "WAREHOUSE_GASCA_KPI_VENTAS_NUEVOS_FILENAME_PREFIX",
+            "kpi_ventas_nuevos_socios_",
+        ),
+    }
+
+    # Upload documental existente de Warehouse F1
+    # Déjalos vacíos por ahora si aún no amarramos el servicio real.
+    WAREHOUSE_EXISTING_UPLOAD_SERVICE_MODULE = os.getenv(
+        "WAREHOUSE_EXISTING_UPLOAD_SERVICE_MODULE",
+        "",
+    )
+    WAREHOUSE_EXISTING_UPLOAD_SERVICE_ENTRYPOINT = os.getenv(
+        "WAREHOUSE_EXISTING_UPLOAD_SERVICE_ENTRYPOINT",
+        "",
+    )
+
+    # ──────────────────────────────────────
+    # Warehouse / Gasca legacy runner
+    # ──────────────────────────────────────
+    WAREHOUSE_GASCA_SCRIPT_STRATEGY = os.getenv(
+        "WAREHOUSE_GASCA_SCRIPT_STRATEGY",
+        "legacy_main",
+    )
+
+    WAREHOUSE_GASCA_LEGACY_MAIN_MODULE = os.getenv(
+        "WAREHOUSE_GASCA_LEGACY_MAIN_MODULE",
+        "scripts.gasca_legacy_main",
+    )
+    WAREHOUSE_GASCA_LEGACY_MAIN_ENTRYPOINT = os.getenv(
+        "WAREHOUSE_GASCA_LEGACY_MAIN_ENTRYPOINT",
+        "main",
+    )
+
+    WAREHOUSE_GASCA_SCRIPT_RECENT_FILE_LOOKBACK_SECONDS = int(
+        os.getenv("WAREHOUSE_GASCA_SCRIPT_RECENT_FILE_LOOKBACK_SECONDS", "3600")
+    )
+
+    WAREHOUSE_GASCA_SCRIPT_OUTPUT_DIRS = {
+        "reporte_direccion": os.getenv(
+            "WAREHOUSE_GASCA_REPORTE_DIRECCION_OUTPUT_DIR",
+            "data/direccion_ingresos",
+        ),
+        "kpi_desempeno": os.getenv(
+            "WAREHOUSE_GASCA_KPI_DESEMPENO_OUTPUT_DIR",
+            "data/kpi_desempeno",
+        ),
+        "kpi_ventas_nuevos": os.getenv(
+            "WAREHOUSE_GASCA_KPI_VENTAS_NUEVOS_OUTPUT_DIR",
+            "data/kpi_ventas_nuevos_socios",
+        ),
+    }
+
+    WAREHOUSE_GASCA_SCRIPT_FILENAME_PREFIXES = {
+        "reporte_direccion": os.getenv(
+            "WAREHOUSE_GASCA_REPORTE_DIRECCION_FILENAME_PREFIX",
+            "ingresos_",
+        ),
+        "kpi_desempeno": os.getenv(
+            "WAREHOUSE_GASCA_KPI_DESEMPENO_FILENAME_PREFIX",
+            "kpi_desempeno_",
+        ),
+        "kpi_ventas_nuevos": os.getenv(
+            "WAREHOUSE_GASCA_KPI_VENTAS_NUEVOS_FILENAME_PREFIX",
+            "kpi_ventas_nuevos_socios_",
+        ),
+    }
+    
+    WAREHOUSE_INTERNAL_SYSTEM_USER_ID = int(
+        os.getenv("WAREHOUSE_INTERNAL_SYSTEM_USER_ID", "0")
+    )
