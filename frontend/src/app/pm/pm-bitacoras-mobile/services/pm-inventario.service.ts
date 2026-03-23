@@ -5,6 +5,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
+import { environment } from 'src/environments/environment';
 
 import { obtenerEquipos } from '../../../helpers/inventario/obtener-equipos.helper';
 
@@ -41,7 +42,7 @@ listarEquiposPreventivosOperativos(
   ventanaModo: 'ATRASADOS' | 'HOY' | 'PROXIMOS_7' | 'PROXIMOS_14'
 ): Observable<PmEquipoItem[]> {
 
-  return this.http.get<any>(`/api/pm/preventivo/dashboard`, {
+  return this.http.get<any>(`${environment.apiUrl}/pm/preventivo/dashboard`, {
     params: {
       sucursal_id: String(sucursalId),
       window_days: String(windowDays),
