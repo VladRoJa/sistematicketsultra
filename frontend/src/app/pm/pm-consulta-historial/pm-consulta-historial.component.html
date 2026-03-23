@@ -75,11 +75,7 @@
             <strong>Notas:</strong>
             <div>{{ detalleBitacoraPm.notas || 'Sin notas' }}</div>
             </div>
-            <p><strong>Checklist capturado:</strong></p>
-            <p>• Limpieza: {{ detalleBitacoraPm.checks?.limpieza ? 'Sí' : 'No' }}</p>
-            <p>• Ajustes: {{ detalleBitacoraPm.checks?.ajustes ? 'Sí' : 'No' }}</p>
-            <p>• Revisión: {{ detalleBitacoraPm.checks?.revision ? 'Sí' : 'No' }}</p>
-            <p>• Lubricación: {{ detalleBitacoraPm.checks?.lubricacion ? 'Sí' : 'No' }}</p>
+
 
             <ng-container *ngIf="detalleBitacoraPm.validacion; else sinValidacionHistorial">
                 <p><strong>Validación:</strong> {{ detalleBitacoraPm.validacion.decision }}</p>

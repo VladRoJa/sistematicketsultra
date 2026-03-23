@@ -70,9 +70,7 @@
         <p><strong>Fecha:</strong> {{ detalleBitacoraPm.fecha }}</p>
         <p><strong>Resultado:</strong> {{ detalleBitacoraPm.resultado }}</p>
         <p><strong>Notas:</strong> {{ detalleBitacoraPm.notas || 'Sin notas' }}</p>
-<ng-container *ngIf="hasDetalleChecks(); else sinChecklistDetalle">
-    <p><strong>Checks raw:</strong> {{ detalleBitacoraPm?.checks | json }}</p>
-</ng-container>
+
 
 <ng-template #sinChecklistDetalle>
     <p><strong>Checklist:</strong> No disponible en esta captura</p>
