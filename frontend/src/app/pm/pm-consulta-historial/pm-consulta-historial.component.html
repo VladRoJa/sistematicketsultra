@@ -142,11 +142,6 @@
                     <td mat-cell *matCellDef="let row">{{ row.sucursal }}</td>
                 </ng-container>
 
-                <ng-container matColumnDef="resultado">
-                    <th mat-header-cell *matHeaderCellDef>Resultado</th>
-                    <td mat-cell *matCellDef="let row">{{ formatearResultadoBitacora(row.resultado) }}</td>
-                </ng-container>
-
                 <ng-container matColumnDef="estado_validacion">
                     <th mat-header-cell *matHeaderCellDef>Validación</th>
                     <td mat-cell *matCellDef="let row">{{ formatearEstadoValidacion(row.estado_validacion) }}</td>
