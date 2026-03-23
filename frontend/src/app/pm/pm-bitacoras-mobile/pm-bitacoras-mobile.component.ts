@@ -22,7 +22,9 @@ import { ActivatedRoute, Router  } from '@angular/router';
 import { SessionService } from '../../core/auth/session.service';
 
 type ResultadoBitacora = 'OK' | 'FALLA' | 'OBS';
-type TipoMantenimiento = 'CORRECTIVO' | 'PREVENTIVO' | 'ESTETICO' | 'MEJORA';
+type TipoMantenimiento = 'CORRECTIVO' | 'PREVENTIVO' | 'ESTETICO';
+type VentanaPreventiva = 'ATRASADOS' | 'HOY' | 'PROXIMOS_7' | 'PROXIMOS_14';
+
 
 
 @Component({
@@ -78,8 +80,14 @@ export class PmBitacorasMobileComponent implements OnInit {
   'CORRECTIVO',
   'PREVENTIVO',
   'ESTETICO',
-  'MEJORA',
 ];
+
+  readonly ventanasPreventivo = [
+    { value: 'ATRASADOS', label: 'Solo atrasados' },
+    { value: 'HOY', label: 'Solo hoy' },
+    { value: 'PROXIMOS_7', label: 'Próximos 7 días' },
+    { value: 'PROXIMOS_14', label: 'Próximos 14 días' },
+  ];
   
   
   ngOnInit(): void {
@@ -116,6 +124,45 @@ export class PmBitacorasMobileComponent implements OnInit {
   if (suc) this.cargarEquipos(suc);
   else this.equipos = [];
 });
+
+this.form.get('tipo_mantenimiento')?.valueChanges
+  .pipe(distinctUntilChanged())
+  .subscribe(() => {
+    const suc = Number(this.form.get('sucursal_id')?.value);
+
+    this.form.patchValue({ inventario_id: null }, { emitEvent: false });
+    this.equipoCtrl.setValue('', { emitEvent: true });
+
+    if (suc) {
+      this.cargarEquipos(suc);
+    } else {
+      this.equipos = [];
+      this.equipos$.next([]);
+    }
+  });
+
+this.form.get('ventana_preventivo_dias')?.valueChanges
+  .pipe(distinctUntilChanged())
+  .subscribe(() => {
+    if (!this.esTipoMantenimientoPreventivo()) {
+      return;
+    }
+
+    const suc = Number(this.form.get('sucursal_id')?.value);
+
+    this.form.patchValue({ inventario_id: null }, { emitEvent: false });
+    this.equipoCtrl.setValue('', { emitEvent: true });
+
+    if (suc) {
+      this.cargarEquipos(suc);
+    } else {
+      this.equipos = [];
+      this.equipos$.next([]);
+    }
+  });
+
+
+
     this.form.get('inventario_id')?.valueChanges.subscribe(v => {
 });
 this.filteredEquipos$ = combineLatest([
@@ -139,10 +186,19 @@ this.filteredEquipos$ = combineLatest([
 );
   }
 
-  private cargarEquipos(sucursalId: number): void {
-    this.equiposLoading = true;
-    this.pmInventario.listarEquipos({ sucursal_id: sucursalId, tipo: 'aparatos' }).subscribe({
-      next: (rows) => {
+private cargarEquipos(sucursalId: number): void {
+  this.equiposLoading = true;
+
+const request$ = this.esTipoMantenimientoPreventivo()
+  ? this.pmInventario.listarEquiposPreventivosOperativos(
+      sucursalId,
+      this.obtenerVentanaPreventivaDias(),
+      this.obtenerVentanaPreventivaModo()
+    )
+  : this.pmInventario.listarEquiposOperativosSucursal(sucursalId);
+
+  request$.subscribe({
+    next: (rows) => {
       this.equipos = rows || [];
       this.equipos$.next(this.equipos);
       this.equiposLoading = false;
@@ -160,15 +216,15 @@ this.filteredEquipos$ = combineLatest([
       } else {
         this.equipoCtrl.setValue('', { emitEvent: true });
       }
-      },
-      error: () => {
-        this.equipos = [];
-        this.equipos$.next([]);
-        this.equiposLoading = false;
-        this.snack.open('No se pudo cargar inventario', 'OK', { duration: 2500 });
-      },
-    });
-  }
+    },
+    error: () => {
+      this.equipos = [];
+      this.equipos$.next([]);
+      this.equiposLoading = false;
+      this.snack.open('No se pudo cargar inventario', 'OK', { duration: 2500 });
+    },
+  });
+}
 
   equipoLabel(e: PmEquipoItem): string {
     const parts = [
@@ -192,6 +248,7 @@ this.filteredEquipos$ = combineLatest([
     sucursal_id: [this.defaultSucursalId(), [Validators.required]],
     fecha: [this.todayYYYYMMDD(), [Validators.required]],
     tipo_mantenimiento: ['CORRECTIVO' as TipoMantenimiento, [Validators.required]],
+    ventana_preventivo_dias: ['HOY' as string | null],
     resultado: ['OK' as ResultadoBitacora, [Validators.required]],
     notas: [''],
 
@@ -336,6 +393,42 @@ equipoDisplay = (value: PmEquipoItem | string | null): string => {
   return typeof value === 'string' ? value : this.equipoLabel(value);
 };
 
+mostrarMetaPreventiva(item: PmEquipoItem): boolean {
+  return this.esTipoMantenimientoPreventivo() && !!item?.estado_pm;
+}
+
+formatearFechaCorta(fechaIso: string | null | undefined): string {
+  if (!fechaIso) {
+    return '';
+  }
+
+  const [anio, mes, dia] = fechaIso.split('-');
+  if (!anio || !mes || !dia) {
+    return fechaIso;
+  }
+
+  return `${dia}/${mes}`;
+}
+
+obtenerMetaPreventiva(item: PmEquipoItem): string {
+  const estado = (item?.estado_pm || '').toUpperCase();
+  const fecha = this.formatearFechaCorta(item?.proxima_fecha);
+
+  if (estado === 'HOY') {
+    return 'PM hoy';
+  }
+
+  if (estado === 'ATRASADO') {
+    return fecha ? `PM atrasado · ${fecha}` : 'PM atrasado';
+  }
+
+  if (estado === 'PROXIMO') {
+    return fecha ? `Próximo · ${fecha}` : 'Próximo PM';
+  }
+
+  return '';
+}
+
 private toNumberOrNull(value: unknown): number | null {
   if (value === null || value === undefined || value === '') return null;
   const n = Number(value);
@@ -357,6 +450,42 @@ tipoMantenimientoLabel(tipo: TipoMantenimiento | string | null): string {
   };
 
   return labels[tipo] || tipo;
+}
+
+private esTipoMantenimientoPreventivo(): boolean {
+  return this.form.get('tipo_mantenimiento')?.value === 'PREVENTIVO';
+}
+
+private obtenerVentanaPreventivaDias(): number {
+  const valor = this.form.get('ventana_preventivo_dias')?.value;
+
+  if (valor === 'PROXIMOS_14') {
+    return 14;
+  }
+
+  if (valor === 'PROXIMOS_7') {
+    return 7;
+  }
+
+  return 1;
+}
+
+private obtenerVentanaPreventivaModo(): VentanaPreventiva {
+  const valor = this.form.get('ventana_preventivo_dias')?.value;
+
+  if (valor === 'ATRASADOS') {
+    return 'ATRASADOS';
+  }
+
+  if (valor === 'HOY') {
+    return 'HOY';
+  }
+
+  if (valor === 'PROXIMOS_14') {
+    return 'PROXIMOS_14';
+  }
+
+  return 'PROXIMOS_7';
 }
 
 formatearResultadoBitacora(resultado: string | null | undefined): string {

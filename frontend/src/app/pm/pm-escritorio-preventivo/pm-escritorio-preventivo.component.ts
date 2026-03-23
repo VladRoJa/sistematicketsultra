@@ -71,6 +71,16 @@ export class PmEscritorioPreventComponent implements OnInit {
     sucursalCtrl = new FormControl<string | SucursalOption>('');
     filteredSucursales$!: Observable<SucursalOption[]>;
 
+    subcategoriaSeleccionada = 'TODAS';
+
+    readonly subcategoriasDisponibles = [
+    { value: 'TODAS', label: 'Ver todo' },
+    { value: 'spinning', label: 'Spinning' },
+    { value: 'cardio', label: 'Cardio' },
+    { value: 'selectorizado', label: 'Selectorizado' },
+    { value: 'peso libre', label: 'Peso libre' },
+    ];
+
     /** Columnas de las tablas Material. */
     readonly displayedColumns = ['equipo', 'sucursal', 'proximoPm', 'diasRestantes', 'accion'];
 
@@ -146,7 +156,10 @@ export class PmEscritorioPreventComponent implements OnInit {
         this.loading = true;
         this.limpiarDatos();
 
-        this.pmService.getDashboard(this.selectedSucursalId, this.windowDays).subscribe({
+        this.pmService.getDashboard(this.selectedSucursalId,
+                                    this.windowDays, 
+                                    this.subcategoriaSeleccionada
+                                ).subscribe({
             next: (data) => {
                 this.atrasados = data.atrasados || [];
                 this.hoyList = data.hoy || [];
@@ -317,4 +330,11 @@ export class PmEscritorioPreventComponent implements OnInit {
         },
     });
 }
+
+manejarCambioSubcategoria(): void {
+  this.cargarDashboard();
+}
+
+
+
 }

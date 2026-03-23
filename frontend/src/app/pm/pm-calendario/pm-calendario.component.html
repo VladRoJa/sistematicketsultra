@@ -2,7 +2,7 @@
 
 
 <div class="pm-calendario-container">
-  <h2 class="page-title">Calendario PM</h2>
+  <h2 class="page-title">Calendario Mantenimiento Preventivo</h2>
 
   <div class="pm-calendario-filtros">
     <label>
@@ -29,6 +29,15 @@
         <option [ngValue]="10">Octubre</option>
         <option [ngValue]="11">Noviembre</option>
         <option [ngValue]="12">Diciembre</option>
+      </select>
+    </label>
+
+    <label>
+      Subcategoría
+      <select [(ngModel)]="subcategoriaSeleccionada" (change)="manejarCambioSubcategoria()">
+        <option *ngFor="let subcategoria of subcategoriasDisponibles" [value]="subcategoria.value">
+          {{ subcategoria.label }}
+        </option>
       </select>
     </label>
 

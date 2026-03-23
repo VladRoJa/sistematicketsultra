@@ -27,11 +27,18 @@ export class PmPreventivoService {
     }
 
     /** Dashboard PM: atrasados, hoy, próximos. */
-    getDashboard(sucursalId: number, windowDays = 7): Observable<DashboardPm> {
-        const params = new HttpParams()
-            .set('sucursal_id', String(sucursalId))
-            .set('window_days', String(windowDays));
+    getDashboard(
+      sucursalId: number,
+      windowDays = 7,
+      subcategoria?: string | null
+    ): Observable<DashboardPm> {
+      let params = new HttpParams()
+        .set('sucursal_id', String(sucursalId))
+        .set('window_days', String(windowDays));
 
+      if (subcategoria && subcategoria !== 'TODAS') {
+        params = params.set('subcategoria', subcategoria);
+      }
         return this.http.get<DashboardPm>(`${this.basePm}/dashboard`, { params });
     }
 
@@ -49,6 +56,7 @@ export class PmPreventivoService {
     sucursalId?: number | null,
     fechaDesde?: string | null,
     fechaHasta?: string | null,
+    subcategoria?: string | null,
     ): Observable<PmBitacoraResumen[]> {
     let params = new HttpParams();
 
@@ -62,6 +70,9 @@ export class PmPreventivoService {
 
     if (fechaHasta) {
         params = params.set('fecha_hasta', fechaHasta);
+    }
+    if (subcategoria && subcategoria !== 'TODAS') {
+        params = params.set('subcategoria', subcategoria);
     }
 
     return this.http.get<PmBitacoraResumen[]>(`${this.basePmRoot}/bitacoras`, { params });
@@ -83,7 +94,8 @@ getCalendarioPm(
   anio: number,
   mes: number,
   sucursalesIds?: number[] | null,
-  semanaAnio?: number | null
+  semanaAnio?: number | null,
+  subcategoria?: string | null
 ): Observable<any> {
   let params = new HttpParams()
     .set('anio', String(anio))
@@ -101,6 +113,9 @@ getCalendarioPm(
     params = params.set('semana_anio', String(semanaAnio));
   }
 
+  if (subcategoria && subcategoria !== 'TODAS') {
+    params = params.set('subcategoria', subcategoria);
+  }
   return this.http.get<any>(`${this.basePmRoot}/calendario`, { params });
 }
 

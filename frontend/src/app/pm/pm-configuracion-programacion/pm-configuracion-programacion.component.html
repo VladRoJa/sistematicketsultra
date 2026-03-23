@@ -2,7 +2,7 @@
 
 <div class="pm-config-container">
 
-  <h2 class="page-title">Configuración / Programación PM</h2>
+  <h2 class="page-title">Configuración / Programación Mantenimiento Preventivo</h2>
 
   <mat-card class="filters-card">
     <mat-card-content class="filters-row">
@@ -37,7 +37,7 @@
 
   <mat-card class="section-card">
     <mat-card-header>
-      <mat-card-title>Alta rápida de configuración PM</mat-card-title>
+      <mat-card-title>Alta de configuración</mat-card-title>
     </mat-card-header>
 
     <mat-card-content class="pm-config-form-row">
@@ -123,15 +123,38 @@
 
   <mat-card class="section-card" *ngIf="!loading">
     <mat-card-header>
-      <mat-card-title>Configuraciones PM</mat-card-title>
+      <mat-card-title>Programados</mat-card-title>
     </mat-card-header>
 
     <mat-card-content>
+
+      <div class="pm-config-tabla-filtros">
+    <mat-form-field appearance="fill" class="filter-field">
+      <mat-label>Subcategoría</mat-label>
+      <mat-select
+        [(ngModel)]="subcategoriaFiltroTabla"
+        (selectionChange)="manejarCambioSubcategoriaTabla()">
+        <mat-option *ngFor="let subcategoria of subcategoriasTablaDisponibles" [value]="subcategoria.value">
+          {{ subcategoria.label }}
+        </mat-option>
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field appearance="fill" class="filter-field">
+      <mat-label>Buscar equipo o código</mat-label>
+      <input
+        matInput
+        [ngModel]="textoFiltroTabla"
+        (ngModelChange)="manejarCambioTextoFiltroTabla($event)"
+        placeholder="Ej. abdominal, 03PIA..." />
+    </mat-form-field>
+  </div>  
+
       <table
         mat-table
-        [dataSource]="configuraciones"
+        [dataSource]="configuracionesFiltradas"
         class="full-width"
-        *ngIf="configuraciones.length > 0; else emptyState">
+        *ngIf="configuracionesFiltradas.length > 0; else emptyState">
 
         <ng-container matColumnDef="equipo">
           <th mat-header-cell *matHeaderCellDef>Equipo</th>

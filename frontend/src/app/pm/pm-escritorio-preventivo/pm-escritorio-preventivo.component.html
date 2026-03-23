@@ -26,6 +26,15 @@
                 </mat-autocomplete>
             </mat-form-field>
 
+            <mat-form-field appearance="fill" class="filter-field">
+            <mat-label>Subcategoría</mat-label>
+            <mat-select [(ngModel)]="subcategoriaSeleccionada" (selectionChange)="manejarCambioSubcategoria()">
+                <mat-option *ngFor="let subcategoria of subcategoriasDisponibles" [value]="subcategoria.value">
+                {{ subcategoria.label }}
+                </mat-option>
+            </mat-select>
+            </mat-form-field>
+
             <mat-form-field
                 appearance="fill"
                 class="filter-field filter-small"
@@ -46,7 +55,7 @@
     *ngIf="detalleBitacoraLoading || detalleBitacoraPm">
     <mat-card-header>
         <mat-card-title class="pm-detalle-titulo">
-            Detalle de bitácora PM — {{ detalleBitacoraEquipoLabel }}
+            Detalle de bitácora — {{ detalleBitacoraEquipoLabel }}
         </mat-card-title>
     </mat-card-header>
 

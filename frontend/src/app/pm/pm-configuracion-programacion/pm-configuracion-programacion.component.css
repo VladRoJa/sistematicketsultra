@@ -59,3 +59,16 @@
   align-self: center;
   margin-top: 4px;
 }
+
+.pm-config-tabla-filtros {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  margin-bottom: 16px;
+}
+
+.pm-config-tabla-filtros .filter-field {
+  flex: 1 1 280px;
+  min-width: 240px;
+}

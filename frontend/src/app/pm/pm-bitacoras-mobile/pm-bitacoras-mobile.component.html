@@ -1,34 +1,9 @@
 <!-- frontend\src\app\pm\pm-bitacoras-mobile\pm-bitacoras-mobile.component.html -->
 
 <mat-card>
-  <mat-card-title>Bitácora PM (móvil)</mat-card-title>
+  <mat-card-title>Bitácora Mantenimiento Preventivo</mat-card-title>
   <mat-card-content>
     <form [formGroup]="form" style="display: grid; gap: 12px; max-width: 520px;">
-<!-- Equipo (buscador) -->
-<mat-form-field appearance="fill" class="w-full">
-  <mat-label>Equipo</mat-label>
-
-  <input
-    matInput
-    [formControl]="equipoCtrl"
-    [matAutocomplete]="autoEquipo"
-    placeholder="Buscar por código o nombre"
-  />
-
-  <mat-autocomplete
-    #autoEquipo="matAutocomplete"
-    [displayWith]="equipoDisplay"
-    (optionSelected)="onEquipoSelected($event.option.value)"
-  >
-    <mat-option *ngFor="let e of (filteredEquipos$ | async) || []" [value]="e">
-      {{ equipoLabel(e) }}
-    </mat-option>
-  </mat-autocomplete>
-
-  <mat-hint *ngIf="equiposLoading">Cargando equipos…</mat-hint>
-</mat-form-field>
-
-
 <!-- Sucursal -->
 <ng-container *ngIf="puedeCambiarSucursal; else sucursalFija">
   <mat-form-field appearance="fill" class="w-full">
@@ -48,48 +23,71 @@
   </mat-form-field>
 </ng-template>
 
-      <mat-form-field appearance="fill">
-        <mat-label>Fecha</mat-label>
-        <input matInput type="date" formControlName="fecha" />
-      </mat-form-field>
+<!-- Tipo de mantenimiento -->
+<mat-form-field appearance="fill">
+  <mat-label>Tipo de mantenimiento</mat-label>
+  <mat-select formControlName="tipo_mantenimiento">
+    <mat-option *ngFor="let tipo of tiposMantenimiento" [value]="tipo">
+      {{ tipoMantenimientoLabel(tipo) }}
+    </mat-option>
+  </mat-select>
+</mat-form-field>
 
-      <mat-form-field appearance="fill">
-        <mat-label>Tipo de mantenimiento</mat-label>
-        <mat-select formControlName="tipo_mantenimiento">
-          <mat-option *ngFor="let tipo of tiposMantenimiento" [value]="tipo">
-            {{ tipoMantenimientoLabel(tipo) }}
-          </mat-option>
-        </mat-select>
-      </mat-form-field>
+<mat-form-field appearance="fill" *ngIf="form.value.tipo_mantenimiento === 'PREVENTIVO'">
+  <mat-label>Ventana preventiva</mat-label>
+  <mat-select formControlName="ventana_preventivo_dias">
+    <mat-option *ngFor="let opcion of ventanasPreventivo" [value]="opcion.value">
+      {{ opcion.label }}
+    </mat-option>
+  </mat-select>
+</mat-form-field>
 
-      <mat-form-field appearance="fill">
-        <mat-label>Notas</mat-label>
-        <textarea matInput rows="3" formControlName="notas"></textarea>
-      </mat-form-field>
+<!-- Equipo -->
+<mat-form-field appearance="fill" class="w-full">
+  <mat-label>Equipo</mat-label>
 
-      <div style="display:flex; gap: 10px; flex-wrap: wrap;">
-        <button mat-stroked-button type="button" (click)="form.patchValue({check_limpieza: !form.value.check_limpieza})">
-          Limpieza: {{ form.value.check_limpieza ? 'Sí' : 'No' }}
-        </button>
-        <button mat-stroked-button type="button" (click)="form.patchValue({check_revision: !form.value.check_revision})">
-          Revision: {{ form.value.check_revision ? 'Sí' : 'No' }}
-        </button>
-        <button mat-stroked-button type="button" (click)="form.patchValue({check_ajuste: !form.value.check_ajuste})">
-          Ajuste: {{ form.value.check_ajuste ? 'Sí' : 'No' }}
-        </button>
-        <button mat-stroked-button type="button" (click)="form.patchValue({check_lubricacion: !form.value.check_lubricacion})">
-          Lubricación: {{ form.value.check_lubricacion ? 'Sí' : 'No' }}
-        </button>
-      </div>
+  <input
+    matInput
+    [formControl]="equipoCtrl"
+    [matAutocomplete]="autoEquipo"
+    placeholder="Buscar por código o nombre"
+  />
 
-      <button mat-raised-button color="primary" type="button" (click)="guardar()" [disabled]="loading">
-        {{ loading ? 'Guardando...' : 'Guardar bitácora' }}
-      </button>
+  <mat-autocomplete
+    #autoEquipo="matAutocomplete"
+    [displayWith]="equipoDisplay"
+    (optionSelected)="onEquipoSelected($event.option.value)"
+  >
+<mat-option *ngFor="let e of (filteredEquipos$ | async) || []" [value]="e">
+  <div>{{ equipoLabel(e) }}</div>
+  <small *ngIf="mostrarMetaPreventiva(e)">
+    {{ obtenerMetaPreventiva(e) }}
+  </small>
+</mat-option>
+  </mat-autocomplete>
 
+  <mat-hint *ngIf="equiposLoading">Cargando equipos…</mat-hint>
+</mat-form-field>
 
-      <div *ngIf="lastId" style="font-weight: 600;">
-        Última bitácora guardada: ID {{ lastId }}
-      </div>
+<!-- Fecha -->
+<mat-form-field appearance="fill">
+  <mat-label>Fecha</mat-label>
+  <input matInput type="date" formControlName="fecha" />
+</mat-form-field>
+
+<!-- Notas -->
+<mat-form-field appearance="fill">
+  <mat-label>Notas</mat-label>
+  <textarea matInput rows="3" formControlName="notas"></textarea>
+</mat-form-field>
+
+<button mat-raised-button color="primary" type="button" (click)="guardar()" [disabled]="loading">
+  {{ loading ? 'Guardando...' : 'Guardar bitácora' }}
+</button>
+
+<div *ngIf="lastId" style="font-weight: 600;">
+  Última bitácora guardada: ID {{ lastId }}
+</div>
     </form>
   </mat-card-content>
 </mat-card>

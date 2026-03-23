@@ -16,6 +16,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatTableModule } from '@angular/material/table';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatSelectModule } from '@angular/material/select';
 
 import { PmPreventivoService } from '../../services/pm-preventivo.service';
 import {
@@ -39,6 +40,7 @@ import {
     MatTableModule,
     MatSnackBarModule,
     MatProgressSpinnerModule,
+    MatSelectModule
   ],
   templateUrl: './pm-consulta-historial.component.html',
   styleUrls: ['./pm-consulta-historial.component.css'],
@@ -78,6 +80,16 @@ detalleBitacoraCard?: ElementRef<HTMLElement>;
     'sucursal',
     'resultado',
     'estado_validacion',
+  ];
+
+  subcategoriaSeleccionada = 'TODAS';
+
+  readonly subcategoriasDisponibles = [
+      { value: 'TODAS', label: 'Ver todo' },
+      { value: 'spinning', label: 'Spinning' },
+      { value: 'cardio', label: 'Cardio' },
+      { value: 'selectorizado', label: 'Selectorizado' },
+      { value: 'peso libre', label: 'Peso libre' },
   ];
 
   ngOnInit(): void {
@@ -142,7 +154,8 @@ detalleBitacoraCard?: ElementRef<HTMLElement>;
       .listarBitacoras(
         this.selectedSucursalId,
         this.fechaDesde || null,
-        this.fechaHasta || null
+        this.fechaHasta || null,
+        this.subcategoriaSeleccionada
       )
       .subscribe({
         next: (rows) => {
@@ -428,4 +441,9 @@ formatearEstadoValidacion(estado: string | null | undefined): string {
 
   return labels[estado] || estado;
 }
+
+manejarCambioSubcategoria(): void {
+  this.cargarBitacoras();
+}
+
 }

@@ -46,6 +46,15 @@ export class PmCalendarioComponent implements OnInit {
   ocurrenciaSeleccionada: any = null;
   diasSemanaVista = this.crearDiasSemanaVacios();
   vistaActual: 'MES' | 'SEMANA' = 'MES';
+  subcategoriaSeleccionada = 'TODAS';
+
+readonly subcategoriasDisponibles = [
+  { value: 'TODAS', label: 'Ver todo' },
+  { value: 'spinning', label: 'Spinning' },
+  { value: 'cardio', label: 'Cardio' },
+  { value: 'selectorizado', label: 'Selectorizado' },
+  { value: 'peso libre', label: 'Peso libre' },
+];  
 
 
 
@@ -189,19 +198,16 @@ cargarCalendarioPm(): void {
       ? null
       : this.sucursalesSeleccionadasIds;
 
-  console.log('ANTES de pedir calendario, semanaSeleccionada =', this.semanaSeleccionada);
-
   this.pmService
     .getCalendarioPm(
       this.anioSeleccionado,
       this.mesSeleccionado,
       sucursalesIds,
-      this.semanaSeleccionada
+      this.semanaSeleccionada,
+      this.subcategoriaSeleccionada
     )
     .subscribe({
       next: (data) => {
-        console.log('RESPUESTA backend detalle_semana_seleccionada =', data?.detalle_semana_seleccionada);
-        console.log('RESPUESTA backend semanas =', data?.semanas);
 
         this.calendarioPmData = data;
         this.semanasDisponibles = data?.semanas || [];
@@ -330,4 +336,9 @@ private formatearFechaDiaSemana(fecha: Date): string {
   const mes = String(fecha.getMonth() + 1).padStart(2, '0');
   return `${dia}/${mes}`;
 }
+
+manejarCambioSubcategoria(): void {
+  this.cargarCalendarioPm();
+}
+
 }

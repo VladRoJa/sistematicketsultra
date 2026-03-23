@@ -478,6 +478,7 @@ def _serializar_bitacora_pm_resumen(bitacora, inventario, sucursal, validacion):
         "created_at": bitacora.created_at.isoformat() if bitacora.created_at else None,
         "created_by_user_id": bitacora.created_by_user_id,
         "estado_validacion": validacion.decision if validacion else "SIN_VALIDACION",
+        
     }
     
 def _serializar_pm_config_resumen(cfg, inventario, sucursal):
@@ -486,6 +487,7 @@ def _serializar_pm_config_resumen(cfg, inventario, sucursal):
         "inventario_id": cfg.inventario_id,
         "codigo_interno": inventario.codigo_interno,
         "nombre": inventario.nombre,
+        "subcategoria": inventario.subcategoria,
         "sucursal_id": cfg.sucursal_id,
         "sucursal": sucursal.sucursal,
         "frecuencia_dias": cfg.frecuencia_dias,
@@ -669,6 +671,7 @@ def pm_listar_bitacoras():
     sucursal_id = request.args.get("sucursal_id", type=int)
     fecha_desde = request.args.get("fecha_desde")
     fecha_hasta = request.args.get("fecha_hasta")
+    subcategoria = (request.args.get("subcategoria") or "").strip().lower()
 
     query = (
         db.session.query(
@@ -699,6 +702,9 @@ def pm_listar_bitacoras():
     elif department_id == 7 or rol in {"SISTEMAS", "TECNICO"}:
         query = query.filter(db.func.upper(InventarioGeneral.tipo) == "DISPOSITIVOS")
 
+    if subcategoria:
+        query = query.filter(db.func.lower(InventarioGeneral.subcategoria) == subcategoria)
+    
     if sucursal_id:
         denied = _verificar_permiso_sucursal(claims, sucursal_id)
         if denied:
@@ -887,14 +893,14 @@ def pm_actualizar_configuracion(config_id):
 def pm_preventivo_dashboard():
     claims = get_jwt() or {}
 
-    # ── 1) Validar sucursal_id ──
+    # ──  Validar sucursal_id ──
     sucursal_id_raw = request.args.get("sucursal_id", type=int)
     if not sucursal_id_raw:
         return jsonify({"error": "Bad Request", "detail": "sucursal_id es requerido"}), 400
 
     sucursal_id_int = sucursal_id_raw
 
-    # ── 2) Validar window_days ──
+    # ──  Validar window_days ──
     window_days = request.args.get("window_days", default=7, type=int)
     if window_days < 1 or window_days > 90:
         return jsonify(
@@ -903,13 +909,16 @@ def pm_preventivo_dashboard():
                 "detail": "window_days debe estar entre 1 y 90",
             }
         ), 400
+        
+    # ── Validar subcategoria ──    
+    subcategoria = (request.args.get("subcategoria") or "").strip().lower()    
 
-    # ── 3) Scope check ──
+    # ──  Scope check ──
     denied = _verificar_permiso_sucursal(claims, sucursal_id_int)
     if denied:
         return jsonify(denied[0]), denied[1]
 
-    # ── 4) Subqueries ──
+    # ──  Subqueries ──
     ultima_fecha_sq = (
         db.session.query(
             PmBitacoraORM.inventario_id,
@@ -932,7 +941,7 @@ def pm_preventivo_dashboard():
         .subquery("ub")
     )
 
-    # ── 5) Query principal ──
+    # ──  Query principal ──
     query = (
         db.session.query(
             PmPreventivoConfigORM,
@@ -981,32 +990,54 @@ def pm_preventivo_dashboard():
         query = query.filter(db.func.upper(InventarioGeneral.tipo) == "APARATOS")
     elif department_id == 7 or rol in {"SISTEMAS", "TECNICO"}:
         query = query.filter(db.func.upper(InventarioGeneral.tipo) == "DISPOSITIVOS")
+    if subcategoria:
+        query = query.filter(db.func.lower(InventarioGeneral.subcategoria) == subcategoria)    
 
     rows = query.all()
     
 
-    # ── 6) Clasificar ──
+    # ──  Clasificar ──
     hoy = date.today()
     atrasados = []
     hoy_list = []
     proximos = []
 
     for cfg, inv, suc, ultima_fecha, ultima_bitacora_id, decision_validacion in rows:
-        if ultima_fecha is None:
+        fechas_programadas = _generar_fechas_programadas_en_rango(
+            cfg.fecha_base_programacion,
+            cfg.frecuencia_dias,
+            hoy - timedelta(days=365),
+            hoy + timedelta(days=window_days),
+        )
+
+        if not fechas_programadas:
+            continue
+
+        fechas_pasadas_o_hoy = [f for f in fechas_programadas if f <= hoy]
+        fechas_futuras = [f for f in fechas_programadas if f > hoy]
+
+        proxima_fecha = None
+        estado = "AL_DIA"
+
+        if hoy in fechas_programadas:
             proxima_fecha = hoy
-        else:
-            proxima_fecha = ultima_fecha + timedelta(days=cfg.frecuencia_dias)
+            estado = "HOY"
+        elif fechas_pasadas_o_hoy:
+            ultima_programada = max(fechas_pasadas_o_hoy)
+            if ultima_programada < hoy:
+                proxima_fecha = ultima_programada
+                estado = "ATRASADO"
+        elif fechas_futuras:
+            primera_futura = min(fechas_futuras)
+            dias_restantes = (primera_futura - hoy).days
+            if dias_restantes <= window_days:
+                proxima_fecha = primera_futura
+                estado = "PROXIMO"
+
+        if proxima_fecha is None:
+            continue
 
         dias_restantes = (proxima_fecha - hoy).days
-
-        if proxima_fecha < hoy:
-            estado = "ATRASADO"
-        elif proxima_fecha == hoy:
-            estado = "HOY"
-        elif 0 < dias_restantes <= window_days:
-            estado = "PROXIMO"
-        else:
-            estado = "AL_DIA"
 
         if estado == "AL_DIA":
             continue
@@ -1074,6 +1105,7 @@ def pm_calendario():
     mes = request.args.get("mes", type=int)
     semana_anio = request.args.get("semana_anio", type=int)
     sucursales_ids = request.args.getlist("sucursales_ids", type=int)
+    subcategoria = (request.args.get("subcategoria") or "").strip().lower()
 
     if not anio or not mes:
         return jsonify({
@@ -1123,6 +1155,9 @@ def pm_calendario():
         )
         .filter(PmPreventivoConfigORM.activo.is_(True))
     )
+
+    if subcategoria:
+        query = query.filter(db.func.lower(InventarioGeneral.subcategoria) == subcategoria)
 
     department_id = claims.get("department_id")
     rol = (claims.get("rol") or "").strip().upper()

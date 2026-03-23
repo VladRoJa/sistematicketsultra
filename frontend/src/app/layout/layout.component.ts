@@ -99,11 +99,11 @@ const menuMantenimientoCompleto = [
     label: 'Mantenimiento',
     path: '/pm/escritorio-preventivo',
     submenu: [
-      { label: 'PM Preventivo (escritorio)', path: '/pm/escritorio-preventivo' },
-      { label: 'Bitácora PM (móvil)', path: '/pm/bitacoras-mobile' },
-      { label: 'Consulta / Historial PM', path: '/pm/consulta-historial' },
-      { label: 'Configuración / Programación PM', path: '/pm/configuracion-programacion' },
-      { label: 'Calendario PM', path: '/pm/calendario' },
+      { label: 'Escritorio Mantenimiento', path: '/pm/escritorio-preventivo' },
+      { label: 'Bitácora', path: '/pm/bitacoras-mobile' },
+      { label: 'Consulta / Historial', path: '/pm/consulta-historial' },
+      { label: 'Configuración / Programación', path: '/pm/configuracion-programacion' },
+      { label: 'Calendario', path: '/pm/calendario' },
     ]
   }
 ];
@@ -121,10 +121,10 @@ const menuMantenimientoOperativo = [
     label: 'Mantenimiento',
     path: '/pm/bitacoras-mobile',
     submenu: [
-      { label: 'Bitácora PM (móvil)', path: '/pm/bitacoras-mobile' },
-      { label: 'PM Preventivo (escritorio)', path: '/pm/escritorio-preventivo' },
-      { label: 'Consulta / Historial PM', path: '/pm/consulta-historial' },
-      { label: 'Calendario PM', path: '/pm/calendario' },
+      { label: 'Bitácora', path: '/pm/bitacoras-mobile' },
+      { label: 'Escritorio Mantenimiento', path: '/pm/escritorio-preventivo' },
+      { label: 'Consulta / Historial', path: '/pm/consulta-historial' },
+      { label: 'Calendario', path: '/pm/calendario' },
     ]
   }
 ];
@@ -142,9 +142,9 @@ const menuMantenimientoGerencial = [
     label: 'Mantenimiento',
     path: '/pm/escritorio-preventivo',
     submenu: [
-      { label: 'PM Preventivo (escritorio)', path: '/pm/escritorio-preventivo' },
-      { label: 'Consulta / Historial PM', path: '/pm/consulta-historial' },
-      { label: 'Calendario PM', path: '/pm/calendario' },
+      { label: 'Escritorio Mantenimiento', path: '/pm/escritorio-preventivo' },
+      { label: 'Consulta / Historial', path: '/pm/consulta-historial' },
+      { label: 'Calendario', path: '/pm/calendario' },
     ]
   }
 ];
@@ -162,11 +162,11 @@ const menuMantenimientoGerencial = [
       label: 'Mantenimiento',
       path: '/pm/escritorio-preventivo',
       submenu: [
-        { label: 'PM Preventivo (escritorio)', path: '/pm/escritorio-preventivo' },
-        { label: 'Bitácora PM (móvil)', path: '/pm/bitacoras-mobile' },
-        { label: 'Consulta / Historial PM', path: '/pm/consulta-historial' },
-        { label: 'Configuración / Programación PM', path: '/pm/configuracion-programacion' },
-        { label: 'Calendario PM', path: '/pm/calendario' },
+        { label: 'Escritorio Mantenimiento', path: '/pm/escritorio-preventivo' },
+        { label: 'Bitácora', path: '/pm/bitacoras-mobile' },
+        { label: 'Consulta / Historial', path: '/pm/consulta-historial' },
+        { label: 'Configuración / Programación', path: '/pm/configuracion-programacion' },
+        { label: 'Calendario', path: '/pm/calendario' },
       ]
     },
     {

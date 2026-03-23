@@ -3,7 +3,7 @@
 
 <div class="pm-historial-container">
 
-    <h2 class="page-title">Consulta / Historial PM</h2>
+    <h2 class="page-title">Consulta / Historial Mantenimiento Preventivo</h2>
 
     <mat-card class="filters-card">
         <mat-card-content class="filters-row">
@@ -26,6 +26,15 @@
             </mat-form-field>
 
             <mat-form-field appearance="fill" class="filter-field">
+            <mat-label>Subcategoría</mat-label>
+            <mat-select [(ngModel)]="subcategoriaSeleccionada" (selectionChange)="manejarCambioSubcategoria()">
+                <mat-option *ngFor="let subcategoria of subcategoriasDisponibles" [value]="subcategoria.value">
+                {{ subcategoria.label }}
+                </mat-option>
+            </mat-select>
+            </mat-form-field>
+
+            <mat-form-field appearance="fill" class="filter-field">
                 <mat-label>Fecha desde</mat-label>
                 <input matInput type="date" [(ngModel)]="fechaDesde">
             </mat-form-field>
@@ -45,7 +54,7 @@
     <mat-card #detalleBitacoraCard class="section-card" *ngIf="detalleBitacoraLoading || detalleBitacoraPm">
         <mat-card-header>
             <mat-card-title>
-                Detalle de bitácora PM — {{ detalleBitacoraEquipoLabel }}
+                Detalle de bitácora — {{ detalleBitacoraEquipoLabel }}
             </mat-card-title>
 
         </mat-card-header>
@@ -116,7 +125,7 @@
 
     <mat-card class="section-card" *ngIf="!loading">
         <mat-card-header>
-            <mat-card-title>Bitácoras PM</mat-card-title>
+            <mat-card-title>Bitácoras</mat-card-title>
         </mat-card-header>
 
         <mat-card-content>

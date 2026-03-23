@@ -19,6 +19,8 @@ import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatNativeDateModule } from '@angular/material/core';
 import { MatAutocompleteTrigger } from '@angular/material/autocomplete';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatSelectModule } from '@angular/material/select';
+
 
 import { InventarioService } from '../../services/inventario.service';
 import { PmPreventivoService } from '../../services/pm-preventivo.service';
@@ -45,7 +47,8 @@ import { EditarFrecuenciaDialogComponent } from './Dialogs/editar-frecuencia-dia
     MatProgressSpinnerModule,
     MatDatepickerModule,
     MatNativeDateModule,
-    MatDialogModule
+    MatDialogModule,
+    MatSelectModule
   ],
   templateUrl: './pm-configuracion-programacion.component.html',
   styleUrls: ['./pm-configuracion-programacion.component.css'],
@@ -80,7 +83,18 @@ export class PmConfiguracionProgramacionComponent implements OnInit {
   filteredInventarioOptions$!: Observable<any[]>;
   fechaBaseProgramacionInput: Date | null = null;
 
-  
+ configuracionesFiltradas: PmConfiguracionResumen[] = [];
+
+subcategoriaFiltroTabla = 'TODAS';
+textoFiltroTabla = '';
+
+  readonly subcategoriasTablaDisponibles = [
+    { value: 'TODAS', label: 'Ver todo' },
+    { value: 'spinning', label: 'Spinning' },
+    { value: 'cardio', label: 'Cardio' },
+    { value: 'selectorizado', label: 'Selectorizado' },
+    { value: 'peso libre', label: 'Peso libre' },
+  ]; 
 
   readonly displayedColumns = [
     'equipo',
@@ -185,6 +199,7 @@ onSucursalSelected(sucursal: SucursalOption): void {
     this.pmService.listarConfiguracionesPm(this.selectedSucursalId).subscribe({
       next: (rows) => {
         this.configuraciones = rows || [];
+        this.aplicarFiltrosTablaConfiguraciones();
         this.filtrarInventarioSinConfiguracion();
         this.loading = false;
       },
@@ -255,6 +270,45 @@ onSucursalSelected(sucursal: SucursalOption): void {
     return row.activo ? 'Sí' : 'No';
   }
 
+  private normalizarTextoFiltro(value: string | null | undefined): string {
+  return (value || '').toString().trim().toLowerCase();
+}
+
+private obtenerTextoBusquedaConfiguracion(row: PmConfiguracionResumen): string {
+  return this.normalizarTextoFiltro(
+    [row.codigo_interno, row.nombre, row.sucursal].filter(Boolean).join(' ')
+  );
+}
+
+private obtenerSubcategoriaConfiguracion(row: PmConfiguracionResumen): string {
+  return this.normalizarTextoFiltro((row as any).subcategoria);
+}
+
+aplicarFiltrosTablaConfiguraciones(): void {
+  const texto = this.normalizarTextoFiltro(this.textoFiltroTabla);
+  const subcategoria = this.normalizarTextoFiltro(this.subcategoriaFiltroTabla);
+
+  this.configuracionesFiltradas = this.configuraciones.filter((row) => {
+    const cumpleTexto =
+      !texto || this.obtenerTextoBusquedaConfiguracion(row).includes(texto);
+
+    const cumpleSubcategoria =
+      subcategoria === 'todas' ||
+      this.obtenerSubcategoriaConfiguracion(row) === subcategoria;
+
+    return cumpleTexto && cumpleSubcategoria;
+  });
+}
+
+manejarCambioSubcategoriaTabla(): void {
+  this.aplicarFiltrosTablaConfiguraciones();
+}
+
+manejarCambioTextoFiltroTabla(value: string): void {
+  this.textoFiltroTabla = value;
+  this.aplicarFiltrosTablaConfiguraciones();
+}
+
   get inventarioSelectDisabled(): boolean {
   return this.inventarioLoading || !this.selectedSucursalId || this.inventarioOptions.length === 0;
 }
@@ -296,16 +350,25 @@ onEquipoSelected(item: any): void {
 }
 
 toggleActivoConfiguracion(row: PmConfiguracionResumen): void {
+  const nuevoActivo = !row.activo;
+
   this.pmService.actualizarConfiguracionPm(row.id, {
-    activo: !row.activo,
+    activo: nuevoActivo,
   }).subscribe({
     next: () => {
+      this.configuraciones = this.configuraciones.map((config) =>
+        config.id === row.id
+          ? { ...config, activo: nuevoActivo }
+          : config
+      );
+
+      this.aplicarFiltrosTablaConfiguraciones();
+
       this.snack.open(
-        row.activo ? 'Configuración PM desactivada' : 'Configuración PM activada',
+        nuevoActivo ? 'Configuración PM activada' : 'Configuración PM desactivada',
         'OK',
         { duration: 2500 }
       );
-      this.cargarConfiguraciones();
     },
     error: (err) => {
       const msg =
