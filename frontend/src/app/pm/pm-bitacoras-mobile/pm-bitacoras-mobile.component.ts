@@ -446,7 +446,6 @@ tipoMantenimientoLabel(tipo: TipoMantenimiento | string | null): string {
     CORRECTIVO: 'Correctivo',
     PREVENTIVO: 'Preventivo',
     ESTETICO: 'Estético',
-    MEJORA: 'Mejora',
   };
 
   return labels[tipo] || tipo;

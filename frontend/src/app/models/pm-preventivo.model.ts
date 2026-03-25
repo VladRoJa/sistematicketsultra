@@ -53,9 +53,11 @@ export interface PmBitacoraDetalle {
   created_by_user_id: number | null;
   fecha: string | null;
   resultado: 'OK' | 'FALLA' | 'OBS';
+  tipo_mantenimiento: string | null;
   notas: string | null;
   checks: Record<string, boolean>;
   created_at: string | null;
+  validacion_estado?: 'VALIDADO' | 'RECHAZADO' | null;
   validacion: PmBitacoraValidacionDetalle | null;
 }
 

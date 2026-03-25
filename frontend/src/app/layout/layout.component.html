@@ -64,6 +64,15 @@
 <router-outlet></router-outlet>
 
 <!-- Botón flotante para reportar error o bug -->
-<button mat-fab color="warn" class="boton-reporte-error" (click)="abrirModalReporte()" aria-label="Reportar error">
+<button
+  mat-fab
+  color="warn"
+  class="boton-reporte-error"
+  cdkDrag
+  (cdkDragStarted)="onReporteBugDragStarted()"
+  (cdkDragEnded)="onReporteBugDragEnded($event)"
+  (click)="onClickReporteBug()"
+  aria-label="Reportar error"
+>
   🐞
 </button>

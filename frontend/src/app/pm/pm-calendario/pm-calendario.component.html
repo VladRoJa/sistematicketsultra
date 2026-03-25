@@ -131,6 +131,29 @@
     *ngIf="vistaActual === 'SEMANA' && detalleSemanaSeleccionada"
     class="pm-vista-contenedor pm-semana-operativa"
   >
+<div class="pm-calendario-leyenda">
+  <div class="pm-calendario-leyenda-item">
+    <span class="pm-calendario-leyenda-color ocurrencia-programada"></span>
+    <span>Programado</span>
+  </div>
+
+  <div class="pm-calendario-leyenda-item">
+    <span class="pm-calendario-leyenda-color ocurrencia-pendiente-validacion"></span>
+    <span>Pendiente de validación</span>
+  </div>
+
+  <div class="pm-calendario-leyenda-item">
+    <span class="pm-calendario-leyenda-color ocurrencia-validada"></span>
+    <span>Validado</span>
+  </div>
+
+  <div class="pm-calendario-leyenda-item">
+    <span class="pm-calendario-leyenda-color ocurrencia-rechazada"></span>
+    <span>Rechazado</span>
+  </div>
+</div> 
+
+
 
     <div class="pm-semana-operativa-grid">
       <div class="pm-semana-operativa-columna" *ngFor="let dia of diasSemanaVista">
@@ -143,12 +166,13 @@
           Sin equipos programados
         </div>
 
-        <div
-          class="pm-semana-operativa-item"
-          *ngFor="let item of dia.items"
-          (click)="seleccionarOcurrenciaSemana(item)"
-          [class.pm-semana-operativa-item-seleccionado]="esOcurrenciaSeleccionada(item)"
-        >
+          <div
+            class="pm-semana-operativa-item"
+            [ngClass]="obtenerClaseEstadoCalendario(item)"
+            *ngFor="let item of dia.items"
+            (click)="seleccionarOcurrenciaSemana(item)"
+            [class.pm-semana-operativa-item-seleccionado]="esOcurrenciaSeleccionada(item)"
+          >
           <div><strong>Equipo:</strong> {{ item.nombre }}</div>
           <div><strong>Código:</strong> {{ item.codigo_interno }}</div>
           <div><strong>Sucursal:</strong> {{ item.sucursal }}</div>
@@ -156,14 +180,75 @@
       </div>
     </div>
 
-    <div class="pm-ocurrencia-detalle" *ngIf="ocurrenciaSeleccionada">
-      <h4>Detalle de ocurrencia seleccionada</h4>
-      <div><strong>Sucursal:</strong> {{ ocurrenciaSeleccionada.sucursal }}</div>
-      <div><strong>Código:</strong> {{ ocurrenciaSeleccionada.codigo_interno }}</div>
-      <div><strong>Equipo:</strong> {{ ocurrenciaSeleccionada.nombre }}</div>
-      <div><strong>Frecuencia:</strong> {{ ocurrenciaSeleccionada.frecuencia_dias }} días</div>
-      <div><strong>Fecha programada:</strong> {{ ocurrenciaSeleccionada.fecha_programada }}</div>
-      <div><strong>Estado:</strong> {{ ocurrenciaSeleccionada.estado_operativo }}</div>
-    </div>
+<div class="pm-detalle-panel" *ngIf="ocurrenciaSeleccionada">
+  <div class="pm-ocurrencia-detalle">
+    <h4>Detalle de ocurrencia seleccionada</h4>
+    <div><strong>Sucursal:</strong> {{ ocurrenciaSeleccionada.sucursal }}</div>
+    <div><strong>Código:</strong> {{ ocurrenciaSeleccionada.codigo_interno }}</div>
+    <div><strong>Equipo:</strong> {{ ocurrenciaSeleccionada.nombre }}</div>
+    <div><strong>Frecuencia:</strong> {{ ocurrenciaSeleccionada.frecuencia_dias }} días</div>
+    <div><strong>Fecha programada:</strong> {{ ocurrenciaSeleccionada.fecha_programada }}</div>
+    <div class="pm-estado-detalle-row">
+  <strong>Estado:</strong>
+  <span
+    class="pm-estado-badge"
+    [ngClass]="obtenerClaseBadgeEstadoCalendario(ocurrenciaSeleccionada)"
+  >
+    {{ obtenerLabelEstadoCalendario(ocurrenciaSeleccionada) }}
+  </span>
+</div>
   </div>
+
+  <div class="pm-bitacora-detalle" *ngIf="detalleBitacoraPmCalendario">
+    <h4>Detalle de bitácora asociada</h4>
+
+    <div><strong>ID:</strong> {{ detalleBitacoraPmCalendario.id }}</div>
+    <div><strong>Fecha:</strong> {{ detalleBitacoraPmCalendario.fecha }}</div>
+    <div><strong>Tipo de mantenimiento:</strong> {{ tipoMantenimientoLabel(detalleBitacoraPmCalendario.tipo_mantenimiento) }}</div>
+    <div><strong>Notas:</strong> {{ detalleBitacoraPmCalendario.notas || 'Sin notas' }}</div>
+    <div class="pm-estado-detalle-row">
+  <strong>Validación:</strong>
+  <span
+    class="pm-estado-badge"
+    [ngClass]="obtenerClaseBadgeValidacionBitacora()"
+  >
+    {{ obtenerLabelValidacionBitacora() }}
+  </span>
+</div>
+
+    <div class="pm-ocurrencia-acciones" *ngIf="puedeMostrarAccionesValidacionCalendario()">
+      <button
+        mat-raised-button
+        color="primary"
+        type="button"
+        (click)="validarBitacoraPmDesdeCalendario()"
+      >
+        Validar
+      </button>
+
+      <button
+        mat-stroked-button
+        color="warn"
+        type="button"
+        (click)="manejarBotonRechazoPmCalendario()"
+      >
+        {{ textoBotonRechazoPmCalendario() }}
+      </button>
+    </div>
+
+    <mat-form-field
+      *ngIf="puedeMostrarAccionesValidacionCalendario() && mostrarRechazoPm"
+      appearance="fill"
+      class="pm-rechazo-field"
+    >
+      <mat-label>Motivo de rechazo</mat-label>
+      <textarea
+        matInput
+        rows="3"
+        [(ngModel)]="motivoRechazoPm"
+        placeholder="Escribe el motivo del rechazo"
+      ></textarea>
+    </mat-form-field>
+  </div>
+</div>
 </div>

@@ -5,9 +5,14 @@ import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { PmPreventivoService } from '../../services/pm-preventivo.service';
-import { PmConfiguracionResumen, SucursalOption  } from '../../models/pm-preventivo.model';
+import { PmBitacoraDetalle, PmConfiguracionResumen, SucursalOption  } from '../../models/pm-preventivo.model';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
+import { SessionService } from '../../core/auth/session.service';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatInputModule } from '@angular/material/input';
+import { MatButtonModule } from '@angular/material/button';
+
 
 
 import {
@@ -22,13 +27,20 @@ import {
             FormsModule,
             MatFormFieldModule,
             MatSelectModule,
+            MatInputModule,
+            MatButtonModule,
+            MatSnackBarModule,
+
+
   ],
   templateUrl: './pm-calendario.component.html',
   styleUrls: ['./pm-calendario.component.css'],
 })
 export class PmCalendarioComponent implements OnInit {
 
-    private pmService = inject(PmPreventivoService);
+  private pmService = inject(PmPreventivoService);
+  private session = inject(SessionService);
+  private snack = inject(MatSnackBar);
 
   anioSeleccionado = new Date().getFullYear();
   mesSeleccionado = new Date().getMonth() + 1;
@@ -44,6 +56,9 @@ export class PmCalendarioComponent implements OnInit {
   calendarioPmData: any = null;
   detalleSemanaSeleccionada: any = null;
   ocurrenciaSeleccionada: any = null;
+  detalleBitacoraPmCalendario: PmBitacoraDetalle | null = null;
+  mostrarRechazoPm = false;
+  motivoRechazoPm = '';
   diasSemanaVista = this.crearDiasSemanaVacios();
   vistaActual: 'MES' | 'SEMANA' = 'MES';
   subcategoriaSeleccionada = 'TODAS';
@@ -208,6 +223,20 @@ cargarCalendarioPm(): void {
     )
     .subscribe({
       next: (data) => {
+        console.log('detalleSemanaSeleccionada calendario PM', data?.detalle_semana_seleccionada);
+
+console.log(
+  'items semana calendario PM',
+  (data?.detalle_semana_seleccionada?.items || []).map((item: any) => ({
+    codigo: item.codigo_interno,
+    fecha_programada: item.fecha_programada,
+    estado_calendario: item.estado_calendario,
+    tiene_bitacora: item.tiene_bitacora,
+    bitacora_pm_id: item.bitacora_pm_id,
+    validacion_estado: item.validacion_estado,
+  }))
+);
+
 
         this.calendarioPmData = data;
         this.semanasDisponibles = data?.semanas || [];
@@ -301,14 +330,263 @@ private construirVistaSemanalDetalle(): void {
 
 seleccionarOcurrenciaSemana(item: any): void {
   this.ocurrenciaSeleccionada = item;
-}
 
+  this.mostrarRechazoPm = false;
+  this.motivoRechazoPm = '';
+
+  this.detalleBitacoraPmCalendario = null;
+
+  if (item?.bitacora_pm_id) {
+    this.pmService.getBitacoraDetalle(item.bitacora_pm_id).subscribe({
+      next: (detalle) => {
+        this.detalleBitacoraPmCalendario = detalle;
+      },
+      error: (err) => {
+        const msg =
+          err?.error?.detail ||
+          err?.error?.message ||
+          'No se pudo cargar el detalle de la bitácora PM';
+
+        this.snack.open(msg, 'OK', { duration: 3000 });
+      },
+    });
+  }
+}
 esOcurrenciaSeleccionada(item: any): boolean {
   return (
     this.ocurrenciaSeleccionada?.configuracion_pm_id === item?.configuracion_pm_id &&
     this.ocurrenciaSeleccionada?.fecha_programada === item?.fecha_programada
   );
 }
+
+obtenerClaseEstadoCalendario(item: any): string {
+  const estado = (item?.estado_calendario || 'PROGRAMADO').toUpperCase();
+
+  if (estado === 'PENDIENTE_VALIDACION') {
+    return 'ocurrencia-pendiente-validacion';
+  }
+
+  if (estado === 'VALIDADO') {
+    return 'ocurrencia-validada';
+  }
+
+  if (estado === 'RECHAZADO') {
+    return 'ocurrencia-rechazada';
+  }
+
+  return 'ocurrencia-programada';
+}
+
+obtenerLabelEstadoCalendario(item: any): string {
+  const estado = (item?.estado_calendario || 'PROGRAMADO').toUpperCase();
+
+  if (estado === 'PENDIENTE_VALIDACION') {
+    return 'Pendiente de validación';
+  }
+
+  if (estado === 'VALIDADO') {
+    return 'Validado';
+  }
+
+  if (estado === 'RECHAZADO') {
+    return 'Rechazado';
+  }
+
+  return 'Programado';
+}
+
+obtenerClaseBadgeEstadoCalendario(item: any): string {
+  const estado = (item?.estado_calendario || 'PROGRAMADO').toUpperCase();
+
+  if (estado === 'PENDIENTE_VALIDACION') {
+    return 'badge-estado-pendiente';
+  }
+
+  if (estado === 'VALIDADO') {
+    return 'badge-estado-validado';
+  }
+
+  if (estado === 'RECHAZADO') {
+    return 'badge-estado-rechazado';
+  }
+
+  return 'badge-estado-programado';
+}
+
+
+obtenerClaseBadgeValidacionBitacora(): string {
+  const estado = (this.detalleBitacoraPmCalendario?.validacion_estado || '').toUpperCase();
+
+  if (estado === 'VALIDADO') {
+    return 'badge-estado-validado';
+  }
+
+  if (estado === 'RECHAZADO') {
+    return 'badge-estado-rechazado';
+  }
+
+  return 'badge-estado-pendiente';
+}
+
+obtenerLabelValidacionBitacora(): string {
+  const estado = (this.detalleBitacoraPmCalendario?.validacion_estado || '').toUpperCase();
+
+  if (estado === 'VALIDADO') {
+    return 'Validado';
+  }
+
+  if (estado === 'RECHAZADO') {
+    return 'Rechazado';
+  }
+
+  return 'Sin validación';
+}
+
+
+formatearResultadoBitacora(resultado: string | null | undefined): string {
+  if (!resultado) return 'Sin resultado';
+
+  const labels: Record<string, string> = {
+    OK: 'Ok',
+    FALLA: 'Falla',
+    OBS: 'Observación',
+  };
+
+  return labels[resultado] || resultado;
+}
+
+tipoMantenimientoLabel(tipo: string | null | undefined): string {
+  if (!tipo) return 'Sin tipo';
+
+  const labels: Record<string, string> = {
+    CORRECTIVO: 'Correctivo',
+    PREVENTIVO: 'Preventivo',
+    ESTETICO: 'Estético',
+  };
+
+  return labels[tipo] || tipo;
+}
+
+
+puedeValidarPm(): boolean {
+  const user = this.session.getUser();
+  const rol = (user?.rol || '').toString().trim().toUpperCase();
+
+  return ['GERENTE', 'GERENTE_REGIONAL'].includes(rol);
+}
+
+puedeMostrarAccionesValidacionCalendario(): boolean {
+  const bitacoraId = this.ocurrenciaSeleccionada?.bitacora_pm_id;
+  const estado = (this.ocurrenciaSeleccionada?.estado_calendario || '').toUpperCase();
+
+  return this.puedeValidarPm() && !!bitacoraId && estado === 'PENDIENTE_VALIDACION';
+}
+
+validarBitacoraPmDesdeCalendario(): void {
+  const bitacoraId = this.ocurrenciaSeleccionada?.bitacora_pm_id;
+
+  if (!bitacoraId) {
+    this.snack.open('No hay bitácora seleccionada para validar', 'OK', {
+      duration: 3000,
+    });
+    return;
+  }
+
+  this.pmService
+    .crearValidacionPm({
+      bitacora_pm_id: bitacoraId,
+      decision: 'VALIDADO',
+    })
+    .subscribe({
+      next: () => {
+        this.snack.open('Bitácora validada correctamente', 'OK', {
+          duration: 3000,
+        });
+
+        this.mostrarRechazoPm = false;
+        this.motivoRechazoPm = '';
+        this.cargarCalendarioPm();
+      },
+      error: (err) => {
+        const msg =
+          err?.error?.detail ||
+          err?.error?.message ||
+          'No se pudo validar la bitácora PM';
+
+        this.snack.open(msg, 'OK', { duration: 3500 });
+      },
+    });
+}
+
+rechazarBitacoraPmDesdeCalendario(): void {
+  const bitacoraId = this.ocurrenciaSeleccionada?.bitacora_pm_id;
+  const motivo = this.motivoRechazoPm.trim();
+
+  if (!bitacoraId) {
+    this.snack.open('No hay bitácora seleccionada para rechazar', 'OK', {
+      duration: 3000,
+    });
+    return;
+  }
+
+  if (!motivo) {
+    this.snack.open('Debes capturar un motivo de rechazo', 'OK', {
+      duration: 3000,
+    });
+    return;
+  }
+
+  this.pmService
+    .crearValidacionPm({
+      bitacora_pm_id: bitacoraId,
+      decision: 'RECHAZADO',
+      motivo,
+    })
+    .subscribe({
+      next: () => {
+        this.snack.open('Bitácora rechazada correctamente', 'OK', {
+          duration: 3000,
+        });
+
+        this.mostrarRechazoPm = false;
+        this.motivoRechazoPm = '';
+        this.cargarCalendarioPm();
+      },
+      error: (err) => {
+        const msg =
+          err?.error?.detail ||
+          err?.error?.message ||
+          'No se pudo rechazar la bitácora PM';
+
+        this.snack.open(msg, 'OK', { duration: 3500 });
+      },
+    });
+}
+
+textoBotonRechazoPmCalendario(): string {
+  if (this.mostrarRechazoPm && this.motivoRechazoPm.trim()) {
+    return 'Confirmar rechazo';
+  }
+
+  return 'Rechazar';
+}
+
+manejarBotonRechazoPmCalendario(): void {
+  if (!this.mostrarRechazoPm) {
+    this.mostrarRechazoPm = true;
+    return;
+  }
+
+  if (!this.motivoRechazoPm.trim()) {
+    this.snack.open('Debes capturar un motivo de rechazo', 'OK', {
+      duration: 3000,
+    });
+    return;
+  }
+
+  this.rechazarBitacoraPmDesdeCalendario();
+}
+
 
 actualizarVistaSegunSemanaSeleccionada(): void {
   if (!this.semanaSeleccionada) {
@@ -340,5 +618,14 @@ private formatearFechaDiaSemana(fecha: Date): string {
 manejarCambioSubcategoria(): void {
   this.cargarCalendarioPm();
 }
+
+puedeValidarOcurrenciaSeleccionada(): boolean {
+  const item = this.ocurrenciaSeleccionada;
+
+  return !!item
+    && !!item.bitacora_pm_id
+    && item.estado_calendario === 'PENDIENTE_VALIDACION';
+}
+
 
 }

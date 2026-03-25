@@ -144,11 +144,12 @@
 
 .boton-reporte-error {
   position: fixed;
-  bottom: 5px;
-  left: 20px; 
-  z-index: 1000;
-  font-size: 24px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  right: 24px;
+  bottom: 24px;
+  z-index: 1200;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
 }
 
 .usuario-label {
@@ -159,4 +160,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.boton-reporte-error:active {
+  cursor: grabbing;
 }

@@ -273,7 +273,7 @@ puedeValidarPm(): boolean {
   const user = this.session.getUser();
   const rol = (user?.rol || '').toString().trim().toUpperCase();
 
-  return ['GERENTE', 'GERENTE_REGIONAL', 'MANTENIMIENTO'].includes(rol);
+  return ['GERENTE', 'GERENTE_REGIONAL'].includes(rol);
 }
 
 validarBitacoraPm(): void {
