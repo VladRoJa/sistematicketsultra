@@ -16,6 +16,7 @@ import { AuthService } from '../services/auth.service';
 import { ReauthModalComponent } from '../reauth-modal/reauth-modal.component';
 import { InactividadService } from '../services/inactividad.service';
 import { SessionService } from '../core/auth/session.service';
+import { DragDropModule } from '@angular/cdk/drag-drop';
 
 
 @Component({
@@ -30,7 +31,8 @@ import { SessionService } from '../core/auth/session.service';
     MatToolbarModule,
     MatIconModule,
     MatButtonModule,
-    MatDialogModule
+    MatDialogModule,
+    DragDropModule
   ]
 })
 export class LayoutComponent implements OnInit, AfterViewInit {
@@ -51,6 +53,7 @@ export class LayoutComponent implements OnInit, AfterViewInit {
   puedeVerMantenimientoOperativo = false;
   puedeVerMantenimientoGerencial = false;
   usuarioLabel = '';
+  reporteBugFueArrastrado = false;
 
   private apiUrl = `${environment.apiUrl}/tickets`;
 
@@ -459,5 +462,26 @@ private verificarRolUsuario(): void {
     this.currentSubmenu = menuMatch.label;
   }
 }
+
+onReporteBugDragStarted(): void {
+  this.reporteBugFueArrastrado = false;
+}
+
+onReporteBugDragEnded(event: any): void {
+  const movioEnX = Math.abs(event.distance?.x || 0) > 3;
+  const movioEnY = Math.abs(event.distance?.y || 0) > 3;
+
+  this.reporteBugFueArrastrado = movioEnX || movioEnY;
+}
+
+onClickReporteBug(): void {
+  if (this.reporteBugFueArrastrado) {
+    this.reporteBugFueArrastrado = false;
+    return;
+  }
+
+  this.abrirModalReporte();
+}
+
 
 }

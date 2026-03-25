@@ -450,6 +450,7 @@ def _serializar_bitacora_pm_detalle(bitacora):
         "notas": bitacora.notas,
         "checks": bitacora.checks or {},
         "created_at": bitacora.created_at.isoformat() if bitacora.created_at else None,
+        "validacion_estado": validacion.decision if validacion else None,
         "validacion": {
             "decision": validacion.decision,
             "motivo": validacion.motivo,
@@ -575,6 +576,73 @@ def _generar_fechas_programadas_en_rango(
         fecha_actual = fecha_actual + timedelta(days=frecuencia_dias)
 
     return fechas
+
+
+def _asignar_bitacoras_a_ocurrencias_con_ventana(
+    fechas_programadas,
+    bitacoras,
+    frecuencia_dias,
+    dias_adelanto_permitidos=7,
+):
+    """
+    Asigna cada bitácora a una sola ocurrencia programada respetando una ventana válida.
+
+    Reglas:
+    - cada bitácora atiende como máximo una ocurrencia
+    - cada ocurrencia recibe como máximo una bitácora
+    - una bitácora solo puede cubrir una ocurrencia si cae dentro de su ventana válida:
+        fecha_programada - dias_adelanto_permitidos <= fecha_bitacora < siguiente_fecha_programada
+    - si una bitácora puede caer en más de una ocurrencia válida, se asigna a la ocurrencia más cercana
+    - en empate por cercanía, se prefiere la ocurrencia más antigua
+    """
+
+    if not fechas_programadas or not bitacoras:
+        return {}
+
+    ocurrencias_ordenadas = sorted(fechas_programadas)
+    bitacoras_ordenadas = sorted(
+        bitacoras,
+        key=lambda bit: (
+            bit["fecha"],
+            bit.get("bitacora_pm_id") or 0,
+        ),
+    )
+
+    frecuencia_actual = max(int(frecuencia_dias or 0), 1)
+
+    ocurrencias_usadas = set()
+    asignaciones = {}
+
+    for bitacora in bitacoras_ordenadas:
+        candidatos_validos = []
+
+        for fecha_programada in ocurrencias_ordenadas:
+            if fecha_programada in ocurrencias_usadas:
+                continue
+
+            siguiente_fecha_programada = fecha_programada + timedelta(days=frecuencia_actual)
+            fecha_inicio_valida = fecha_programada - timedelta(days=dias_adelanto_permitidos)
+            fecha_fin_valida_exclusiva = siguiente_fecha_programada
+
+            if fecha_inicio_valida <= bitacora["fecha"] < fecha_fin_valida_exclusiva:
+                candidatos_validos.append(fecha_programada)
+
+        if not candidatos_validos:
+            continue
+
+        mejor_ocurrencia = min(
+            candidatos_validos,
+            key=lambda fecha_programada: (
+                abs((bitacora["fecha"] - fecha_programada).days),
+                fecha_programada,
+            ),
+        )
+
+        ocurrencias_usadas.add(mejor_ocurrencia)
+        asignaciones[mejor_ocurrencia.isoformat()] = bitacora
+
+    return asignaciones
+
 
 # ────────────────────────────────────────────────────────────
 # POST /mobile/bitacoras
@@ -1276,6 +1344,62 @@ def pm_calendario():
     if semana_detalle is not None:
         fecha_inicio_detalle = date.fromisoformat(semana_detalle["fecha_inicio_iso"])
         fecha_fin_detalle = date.fromisoformat(semana_detalle["fecha_fin_iso"])
+        
+        max_frecuencia_dias = max(
+            [max(int(cfg.frecuencia_dias or 0), 1) for cfg, _, _ in rows],
+            default=1,
+        )
+
+        fecha_fin_busqueda_bitacoras = fecha_fin_detalle + timedelta(days=max_frecuencia_dias)
+
+        ultima_bitacora_rango_sq = (
+            db.session.query(
+                PmBitacoraORM.inventario_id.label("inventario_id"),
+                PmBitacoraORM.sucursal_id.label("sucursal_id"),
+                PmBitacoraORM.fecha.label("fecha"),
+                func.max(PmBitacoraORM.id).label("ultima_bitacora_id"),
+            )
+            .filter(
+                PmBitacoraORM.fecha >= fecha_inicio_detalle,
+                PmBitacoraORM.fecha <= fecha_fin_busqueda_bitacoras,
+            )
+            .group_by(
+                PmBitacoraORM.inventario_id,
+                PmBitacoraORM.sucursal_id,
+                PmBitacoraORM.fecha,
+            )
+            .subquery("ub_rango")
+        )
+
+        bitacoras_rango_rows = (
+            db.session.query(
+                ultima_bitacora_rango_sq.c.inventario_id,
+                ultima_bitacora_rango_sq.c.sucursal_id,
+                ultima_bitacora_rango_sq.c.fecha,
+                ultima_bitacora_rango_sq.c.ultima_bitacora_id,
+                PmValidacionORM.decision,
+            )
+            .outerjoin(
+                PmValidacionORM,
+                PmValidacionORM.bitacora_pm_id == ultima_bitacora_rango_sq.c.ultima_bitacora_id,
+            )
+            .order_by(
+                ultima_bitacora_rango_sq.c.inventario_id.asc(),
+                ultima_bitacora_rango_sq.c.sucursal_id.asc(),
+                ultima_bitacora_rango_sq.c.fecha.asc(),
+                ultima_bitacora_rango_sq.c.ultima_bitacora_id.asc(),
+            )
+            .all()
+        )
+
+        bitacoras_rango_map = {}
+        for inventario_id_map, sucursal_id_map, fecha_map, bitacora_id_map, decision_map in bitacoras_rango_rows:
+            key = (int(inventario_id_map), int(sucursal_id_map))
+            bitacoras_rango_map.setdefault(key, []).append({
+                "fecha": fecha_map,
+                "bitacora_pm_id": int(bitacora_id_map) if bitacora_id_map else None,
+                "decision": decision_map,
+            })
 
         for cfg, inventario, sucursal in rows:
             fechas_programadas = _generar_fechas_programadas_en_rango(
@@ -1288,7 +1412,33 @@ def pm_calendario():
             if not fechas_programadas:
                 continue
 
+            bitacoras_candidatas = bitacoras_rango_map.get(
+                (int(inventario.id), int(sucursal.sucursal_id)),
+                [],
+            )
+
+            asignaciones_bitacoras = _asignar_bitacoras_a_ocurrencias_con_ventana(
+                fechas_programadas=fechas_programadas,
+                bitacoras=bitacoras_candidatas,
+                frecuencia_dias=cfg.frecuencia_dias,
+            )
+
             for fecha_programada in fechas_programadas:
+                bitacora_info = asignaciones_bitacoras.get(fecha_programada.isoformat())
+
+                tiene_bitacora = bool(bitacora_info and bitacora_info.get("bitacora_pm_id"))
+                bitacora_pm_id = bitacora_info.get("bitacora_pm_id") if bitacora_info else None
+                validacion_estado = bitacora_info.get("decision") if bitacora_info else None
+
+                if not tiene_bitacora:
+                    estado_calendario = "PROGRAMADO"
+                elif validacion_estado == "VALIDADO":
+                    estado_calendario = "VALIDADO"
+                elif validacion_estado == "RECHAZADO":
+                    estado_calendario = "RECHAZADO"
+                else:
+                    estado_calendario = "PENDIENTE_VALIDACION"
+
                 detalle_items.append({
                     "configuracion_pm_id": cfg.id,
                     "sucursal_id": sucursal.sucursal_id,
@@ -1300,7 +1450,11 @@ def pm_calendario():
                     "fecha_base_programacion": cfg.fecha_base_programacion.isoformat() if cfg.fecha_base_programacion else None,
                     "fecha_programada": fecha_programada.isoformat(),
                     "dia_semana": (fecha_programada.weekday() + 1) % 7,
-                    "estado_operativo": "PROGRAMADO",
+                    "estado_operativo": estado_calendario,
+                    "estado_calendario": estado_calendario,
+                    "tiene_bitacora": tiene_bitacora,
+                    "bitacora_pm_id": bitacora_pm_id,
+                    "validacion_estado": validacion_estado,
                 })
 
 
@@ -1323,6 +1477,6 @@ def pm_calendario():
         "sucursales": list(sucursales_map.values()),
         "detalle_semana_seleccionada": detalle_semana,
     }), 200
-    
+  
     
     
