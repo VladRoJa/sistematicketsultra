@@ -29,6 +29,9 @@ from app.warehouse.services.reporte_direccion_repository import (
 from app.warehouse.services.warehouse_upload_creator_existing_service import register_warehouse_upload_creator_existing_service_impl
 from app.warehouse.services.warehouse_upload_loader import register_warehouse_upload_loader
 from app.warehouse.services.warehouse_upload_loader_sql import register_warehouse_upload_loader_sql_impl
+from app.warehouse.services.reporte_direccion_advisory_lock import (
+    register_reporte_direccion_advisory_lock,
+)
 
 WAREHOUSE_RUNTIME_HOOKS_EXTENSION_KEY = "warehouse_runtime_hooks"
 
@@ -46,6 +49,7 @@ def _mark_runtime_hooks_registered(app: Flask) -> None:
         "reporte_direccion_ingestor": True,
         "reporte_direccion_parser": True,
         "reporte_direccion_repository": True,
+        "reporte_direccion_advisory_lock": True,
     }
 
 
@@ -86,6 +90,7 @@ def register_warehouse_runtime_hooks(app: Flask) -> None:
     register_reporte_direccion_ingestor(app)
     register_reporte_direccion_parser(app)
     register_reporte_direccion_repository(app)
+    register_reporte_direccion_advisory_lock(app)
     
 
     _mark_runtime_hooks_registered(app)
