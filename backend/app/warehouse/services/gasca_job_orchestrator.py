@@ -335,9 +335,11 @@ def _should_dispatch_ingestion(
     if not force_ingestion:
         return False
 
-    # En la primera implementación estructurada solo entra reporte_direccion.
-    return report_type_key == "reporte_direccion"
-
+    # Habilitados para ingesta estructurada en esta etapa:
+    return report_type_key in {
+        "reporte_direccion",
+        "kpi_desempeno",
+    }
 
 def _normalize_ingestion_result(result: Any) -> IngestionDispatchResult:
     if isinstance(result, IngestionDispatchResult):
@@ -375,41 +377,71 @@ def _dispatch_ingestion_if_applicable(
             metadata={"reason": "force_ingestion_false"},
         )
 
-    if command.report_type_key != "reporte_direccion":
-        return IngestionDispatchResult(
-            ingestion_status="not_applicable",
-            snapshot_id=None,
-            metadata={"reason": "structured_ingestion_not_enabled_for_report_type"},
+    if command.report_type_key == "reporte_direccion":
+        ingestor = _get_required_callable(
+            "WAREHOUSE_REPORTE_DIRECCION_INGESTOR",
+            description="ingerir estructuradamente reporte_direccion",
         )
 
-    ingestor = _get_required_callable(
-        "WAREHOUSE_REPORTE_DIRECCION_INGESTOR",
-        description="ingerir estructuradamente reporte_direccion",
-    )
+        try:
+            result = ingestor(
+                warehouse_upload_id=upload_ref.warehouse_upload_id,
+                snapshot_kind=command.snapshot_kind,
+                requested_by=command.requested_by,
+                ingestion_source=command.trigger_source,
+            )
+        except Exception as exc:
+            raise GascaIngestionError(
+                "Falló la ingesta estructurada de 'reporte_direccion'."
+            ) from exc
 
-    try:
-        result = ingestor(
-            warehouse_upload_id=upload_ref.warehouse_upload_id,
-            snapshot_kind=command.snapshot_kind,
-            requested_by=command.requested_by,
-            ingestion_source=command.trigger_source,
+        ingestion_result = _normalize_ingestion_result(result)
+
+        current_app.logger.info(
+            "Structured ingestion dispatched: warehouse_upload_id=%s report_type_key=%s status=%s snapshot_id=%s",
+            upload_ref.warehouse_upload_id,
+            command.report_type_key,
+            ingestion_result.ingestion_status,
+            ingestion_result.snapshot_id,
         )
-    except Exception as exc:
-        raise GascaIngestionError(
-            "Falló la ingesta estructurada de 'reporte_direccion'."
-        ) from exc
 
-    ingestion_result = _normalize_ingestion_result(result)
+        return ingestion_result
 
-    current_app.logger.info(
-        "Structured ingestion dispatched: warehouse_upload_id=%s status=%s snapshot_id=%s",
-        upload_ref.warehouse_upload_id,
-        ingestion_result.ingestion_status,
-        ingestion_result.snapshot_id,
+    if command.report_type_key == "kpi_desempeno":
+        ingestor = _get_required_callable(
+            "WAREHOUSE_KPI_DESEMPENO_INGESTOR",
+            description="ingerir estructuradamente kpi_desempeno",
+        )
+
+        try:
+            result = ingestor(
+                warehouse_upload_id=upload_ref.warehouse_upload_id,
+                snapshot_kind=command.snapshot_kind,
+                requested_by=command.requested_by,
+                ingestion_source=command.trigger_source,
+            )
+        except Exception as exc:
+            raise GascaIngestionError(
+                "Falló la ingesta estructurada de 'kpi_desempeno'."
+            ) from exc
+
+        ingestion_result = _normalize_ingestion_result(result)
+
+        current_app.logger.info(
+            "Structured ingestion dispatched: warehouse_upload_id=%s report_type_key=%s status=%s snapshot_id=%s",
+            upload_ref.warehouse_upload_id,
+            command.report_type_key,
+            ingestion_result.ingestion_status,
+            ingestion_result.snapshot_id,
+        )
+
+        return ingestion_result
+
+    return IngestionDispatchResult(
+        ingestion_status="not_applicable",
+        snapshot_id=None,
+        metadata={"reason": "structured_ingestion_not_enabled_for_report_type"},
     )
-
-    return ingestion_result
-
 
 def _resolve_job_status(ingestion_status: str) -> str:
     if ingestion_status == "ingested":

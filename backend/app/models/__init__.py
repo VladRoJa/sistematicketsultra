@@ -19,7 +19,9 @@ from .warehouse import (
     WarehouseReportTypeORM,
     WarehouseUploadORM,
     WarehouseOperatorORM,
-    WarehouseAuditLogORM
+    WarehouseAuditLogORM,
+    KpiDesempenoSnapshotORM,
+    KpiDesempenoSnapshotRowORM,
 )
 
 
@@ -44,5 +46,7 @@ __all__ = [
     "WarehouseReportTypeORM",
     "WarehouseUploadORM",
     "WarehouseOperatorORM",
-    "WarehouseAuditLogORM"
+    "WarehouseAuditLogORM",
+    "KpiDesempenoSnapshotORM",
+    "KpiDesempenoSnapshotRowORM",
 ]

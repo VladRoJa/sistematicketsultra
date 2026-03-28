@@ -108,8 +108,9 @@ def acquire_reporte_direccion_advisory_lock(
         ) from exc
 
     current_app.logger.info(
-        "Reporte_direccion advisory lock acquired: report_type_key=%s business_date=%s key1=%s key2=%s",
+        "Reporte_direccion advisory lock acquired: report_type_key=%s business_date=%s key=%s",
         report_type_key,
         parsed_business_date.isoformat(),
-        key
+        key,
     )
+    

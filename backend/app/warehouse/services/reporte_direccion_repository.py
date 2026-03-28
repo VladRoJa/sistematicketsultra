@@ -398,7 +398,8 @@ def persist_reporte_direccion_snapshot(
 
     session = db.session()
 
-    transaction_ctx = session.begin() if not session.in_transaction() else nullcontext()
+    owns_transaction = not session.in_transaction()
+    transaction_ctx = session.begin() if owns_transaction else nullcontext()
 
     try:
         with transaction_ctx:
@@ -445,10 +446,7 @@ def persist_reporte_direccion_snapshot(
                     is_canonical=True,
                 )
 
-            if session.in_transaction():
-                session.flush()
-
-            return {
+            result = {
                 "snapshot_id": snapshot_id,
                 "business_date": business_date.isoformat(),
                 "snapshot_kind": snapshot_kind,
@@ -470,6 +468,14 @@ def persist_reporte_direccion_snapshot(
                     ),
                 },
             }
+
+        # Si ya veníamos dentro de una transacción activa (abierta por lecturas previas
+        # en la misma scoped_session), hay que confirmar explícitamente para que el
+        # snapshot quede persistido de forma durable.
+        if not owns_transaction and session.in_transaction():
+            session.commit()
+
+        return result
 
     except IntegrityError as exc:
         session.rollback()

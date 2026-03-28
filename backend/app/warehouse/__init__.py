@@ -32,6 +32,17 @@ from app.warehouse.services.warehouse_upload_loader_sql import register_warehous
 from app.warehouse.services.reporte_direccion_advisory_lock import (
     register_reporte_direccion_advisory_lock,
 )
+from app.warehouse.services.kpi_desempeno_ingestion_service import (
+    register_kpi_desempeno_ingestor,
+)
+from app.warehouse.services.kpi_desempeno_repository import (
+    register_kpi_desempeno_repository,
+)
+
+
+
+
+
 
 WAREHOUSE_RUNTIME_HOOKS_EXTENSION_KEY = "warehouse_runtime_hooks"
 
@@ -50,6 +61,8 @@ def _mark_runtime_hooks_registered(app: Flask) -> None:
         "reporte_direccion_parser": True,
         "reporte_direccion_repository": True,
         "reporte_direccion_advisory_lock": True,
+        "kpi_desempeno_ingestor": True,
+        "kpi_desempeno_repository": True,
     }
 
 
@@ -91,6 +104,9 @@ def register_warehouse_runtime_hooks(app: Flask) -> None:
     register_reporte_direccion_parser(app)
     register_reporte_direccion_repository(app)
     register_reporte_direccion_advisory_lock(app)
+    
+    register_kpi_desempeno_ingestor(app)
+    register_kpi_desempeno_repository(app)
     
 
     _mark_runtime_hooks_registered(app)

@@ -20,6 +20,7 @@ from app.warehouse.services.warehouse_document_upload_service import (
 
 DEFAULT_SOURCE_KEY = "gasca"
 REPORTE_DIRECCION_REPORT_TYPE_KEY = "reporte_direccion"
+KPI_DESEMPENO_REPORT_TYPE_KEY = "kpi_desempeno"
 
 SPANISH_MONTHS = {
     "ene": 1,
@@ -203,6 +204,7 @@ def _resolve_internal_system_user_id() -> int:
 def _resolve_period_for_internal_upload(
     *,
     report_type_key: str,
+    original_filename: str | None,
     file_path: str | None,
     file_bytes: bytes | None,
     captured_at: datetime,
@@ -236,10 +238,53 @@ def _resolve_period_for_internal_upload(
             "date_to": None,
         }
 
+    if report_type_key == KPI_DESEMPENO_REPORT_TYPE_KEY:
+        cutoff_date = _resolve_kpi_desempeno_cutoff_date_from_filename(
+            original_filename=original_filename,
+            file_path=file_path,
+        )
+        return {
+            "cutoff_date": cutoff_date.isoformat(),
+            "date_from": None,
+            "date_to": None,
+        }
+
     raise InternalWarehousePeriodResolutionError(
         f"No hay resolución de periodo documental configurada todavía para "
         f"{report_type_key!r} en uploads internos."
     )
+def _resolve_kpi_desempeno_cutoff_date_from_filename(
+    *,
+    original_filename: str | None,
+    file_path: str | None,
+) -> date:
+    candidate_name = None
+
+    if original_filename:
+        candidate_name = Path(original_filename).name
+    elif file_path:
+        candidate_name = Path(file_path).name
+
+    if not candidate_name:
+        raise InternalWarehousePeriodResolutionError(
+            "Se requiere original_filename o file_path para resolver cutoff_date de kpi_desempeno."
+        )
+
+    match = re.match(
+        r"^kpi_desempeno_(\d{4})-(\d{2})-(\d{2})_\d{2}-\d{2}\.xlsx$",
+        candidate_name,
+        re.IGNORECASE,
+    )
+    if not match:
+        raise InternalWarehousePeriodResolutionError(
+            f"No se pudo resolver cutoff_date de kpi_desempeno desde el filename: {candidate_name!r}"
+        )
+
+    year = int(match.group(1))
+    month = int(match.group(2))
+    day = int(match.group(3))
+
+    return date(year, month, day)
 
 
 def create_warehouse_upload_via_existing_service(
@@ -264,6 +309,7 @@ def create_warehouse_upload_via_existing_service(
 
     period_data = _resolve_period_for_internal_upload(
         report_type_key=report_type_key,
+        original_filename=original_filename,
         file_path=file_path,
         file_bytes=file_bytes,
         captured_at=effective_captured_at,
