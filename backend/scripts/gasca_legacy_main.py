@@ -541,6 +541,28 @@ def ejecutar_con_reintentos(fn, nombre_reporte):
     )
 
 
+
+def guardar_excel_kpi_con_metadata(
+    destino: Path,
+    report_type: str,
+    business_date: date,
+    generated_at: datetime,
+    df: pd.DataFrame,
+):
+    metadata_rows = [
+        {"key": "report_type", "value": report_type},
+        {"key": "business_date", "value": business_date.isoformat()},
+        {"key": "generated_at", "value": generated_at.isoformat()},
+        {"key": "timezone", "value": str(TZ)},
+    ]
+    df_metadata = pd.DataFrame(metadata_rows)
+
+    with pd.ExcelWriter(destino, engine="openpyxl") as writer:
+        df_metadata.to_excel(writer, sheet_name="metadata", index=False)
+        df.to_excel(writer, sheet_name="data", index=False)
+
+
+
 # ================== main ================== #
 
 def main():
@@ -564,6 +586,7 @@ def main():
     fecha_reporte = datetime.now(TZ).date() - timedelta(days=1)
     hora_ejecucion = datetime.now(TZ).strftime("%H-%M")
     timestamp = f"{fecha_reporte:%Y-%m-%d}_{hora_ejecucion}"
+    generated_at = datetime.now(TZ)
 
 
     try:
@@ -612,7 +635,13 @@ def main():
     # KPI Desempeño
     filename_kpi = f"kpi_desempeno_{timestamp}.xlsx"
     destino_kpi = KPI_OUTPUT_DIR / filename_kpi
-    df_kpi.to_excel(destino_kpi, index=False)
+    guardar_excel_kpi_con_metadata(
+        destino=destino_kpi,
+        report_type="kpi_desempeno",
+        business_date=fecha_reporte,
+        generated_at=generated_at,
+        df=df_kpi,
+    )
     logging.info(f"Archivo KPI Desempeño guardado en: {destino_kpi}")
     print(f"✅ KPI Desempeño guardado en: {destino_kpi}")
 

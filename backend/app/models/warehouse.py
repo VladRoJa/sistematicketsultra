@@ -3,6 +3,8 @@
 
 from app.extensions import db
 from datetime import datetime
+from sqlalchemy import UniqueConstraint, Index
+from sqlalchemy.orm import relationship
 
 class WarehouseSourceORM(db.Model):
     __tablename__ = 'warehouse_sources'
@@ -119,3 +121,86 @@ class WarehouseAuditLogORM(db.Model):
     
     upload = db.relationship('WarehouseUploadORM')
     performer = db.relationship('UserORM')
+
+
+
+
+class KpiDesempenoSnapshotORM(db.Model):
+    __tablename__ = "kpi_desempeno_snapshots"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    warehouse_upload_id = db.Column(
+        db.Integer,
+        db.ForeignKey("warehouse_uploads.id"),
+        nullable=False,
+        unique=True,
+    )
+
+    report_type_key = db.Column(db.String(100), nullable=False)
+    business_date = db.Column(db.Date, nullable=False)
+    captured_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    snapshot_kind = db.Column(db.String(50), nullable=False)
+    is_canonical = db.Column(db.Boolean, nullable=False, default=False)
+
+    row_count_detected = db.Column(db.Integer, nullable=False)
+    row_count_valid = db.Column(db.Integer, nullable=False)
+    row_count_rejected = db.Column(db.Integer, nullable=False, default=0)
+
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False)
+
+    warehouse_upload = db.relationship("WarehouseUploadORM")
+
+    rows = db.relationship(
+        "KpiDesempenoSnapshotRowORM",
+        back_populates="snapshot",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+    __table_args__ = (
+        Index("ix_kpi_desempeno_snapshots_business_date", "business_date"),
+        Index("ix_kpi_desempeno_snapshots_is_canonical", "is_canonical"),
+    )
+
+
+class KpiDesempenoSnapshotRowORM(db.Model):
+    __tablename__ = "kpi_desempeno_snapshot_rows"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    snapshot_id = db.Column(
+        db.Integer,
+        db.ForeignKey("kpi_desempeno_snapshots.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    row_index = db.Column(db.Integer, nullable=False)
+    sucursal = db.Column(db.String(255), nullable=False)
+
+    socios_activos_inicio_mes = db.Column(db.Integer, nullable=False)
+    clientes_nuevo_real = db.Column(db.Integer, nullable=False)
+    reactivaciones = db.Column(db.Integer, nullable=False)
+    renovaciones = db.Column(db.Integer, nullable=False)
+    bajas = db.Column(db.Integer, nullable=False)
+    socios_activos_del_mes = db.Column(db.Integer, nullable=False)
+    meta_socios_activos_del_mes = db.Column(db.Integer, nullable=False)
+    alcance_meta = db.Column(db.Numeric(12, 2), nullable=False)
+
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False)
+
+    snapshot = db.relationship(
+        "KpiDesempenoSnapshotORM",
+        back_populates="rows",
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "snapshot_id",
+            "sucursal",
+            name="uq_kpi_desempeno_snapshot_rows_snapshot_id_sucursal",
+        ),
+        Index("ix_kpi_desempeno_snapshot_rows_snapshot_id", "snapshot_id"),
+    )
