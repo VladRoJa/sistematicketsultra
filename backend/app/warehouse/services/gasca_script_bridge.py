@@ -20,20 +20,20 @@ SUPPORTED_REPORT_TYPES = frozenset(
     {
         "reporte_direccion",
         "kpi_desempeno",
-        "kpi_ventas_nuevos",
+        "kpi_ventas_nuevos_socios",
     }
 )
 
 DEFAULT_FILENAME_PREFIXES: dict[str, str] = {
     "reporte_direccion": "ingresos_",
     "kpi_desempeno": "kpi_desempeno_",
-    "kpi_ventas_nuevos": "kpi_ventas_nuevos_socios_",
+    "kpi_ventas_nuevos_socios": "kpi_ventas_nuevos_socios_",
 }
 
 DEFAULT_OUTPUT_DIRS: dict[str, str] = {
     "reporte_direccion": "data/direccion_ingresos",
     "kpi_desempeno": "data/kpi_desempeno",
-    "kpi_ventas_nuevos": "data/kpi_ventas_nuevos_socios",
+    "kpi_ventas_nuevos_socios": "data/kpi_ventas_nuevos_socios",
 }
 
 DEFAULT_XLSX_CONTENT_TYPE = (

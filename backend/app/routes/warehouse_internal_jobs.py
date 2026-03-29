@@ -20,7 +20,7 @@ SUPPORTED_REPORT_TYPES = frozenset(
     {
         "reporte_direccion",
         "kpi_desempeno",
-        "kpi_ventas_nuevos",
+        "kpi_ventas_nuevos_socios",
     }
 )
 
@@ -46,7 +46,7 @@ RUN_MODE_COMPATIBILITY: dict[str, set[str]] = {
         "manual_backfill",
         "manual_retry",
     },
-    "kpi_ventas_nuevos": {
+    "kpi_ventas_nuevos_socios": {
         "scheduled_daily",
         "manual_backfill",
         "manual_retry",
@@ -206,7 +206,7 @@ def create_gasca_report_job():
 
     Reglas cerradas:
     - reporte_direccion acepta scheduled_month_end_close
-    - kpi_desempeno y kpi_ventas_nuevos no aceptan scheduled_month_end_close
+    - kpi_desempeno y kpi_ventas_nuevos_socios no aceptan scheduled_month_end_close
     - snapshot_kind se resuelve aquí, no en parser ni en el servicio de ingesta
     """
     payload = request.get_json(silent=True)

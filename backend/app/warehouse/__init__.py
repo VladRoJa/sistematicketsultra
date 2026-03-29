@@ -4,41 +4,25 @@ from __future__ import annotations
 
 from flask import Flask
 
-from app.warehouse.services.gasca_extractor_adapter import (
-    register_gasca_extractor_adapter,
-)
+from app.warehouse.services.gasca_extractor_adapter import (register_gasca_extractor_adapter,)
 from app.warehouse.services.gasca_legacy_main_runner_impl import register_gasca_legacy_main_runner_impl
-from app.warehouse.services.gasca_script_bridge import (
-    register_gasca_script_bridge,
-)
-from app.warehouse.services.gasca_script_runner import (
-    register_gasca_script_runner,
-)
-from app.warehouse.services.warehouse_upload_creator import (
-    register_warehouse_upload_creator,
-)
-from app.warehouse.services.reporte_direccion_ingestion_service import (
-    register_reporte_direccion_ingestor,
-)
-from app.warehouse.services.reporte_direccion_parser import (
-    register_reporte_direccion_parser,
-)
-from app.warehouse.services.reporte_direccion_repository import (
-    register_reporte_direccion_repository,
-)
+from app.warehouse.services.gasca_script_bridge import (register_gasca_script_bridge,)
+from app.warehouse.services.gasca_script_runner import (register_gasca_script_runner,)
+from app.warehouse.services.warehouse_upload_creator import (register_warehouse_upload_creator,)
+from app.warehouse.services.reporte_direccion_ingestion_service import (register_reporte_direccion_ingestor,)
+from app.warehouse.services.reporte_direccion_parser import (register_reporte_direccion_parser,)
+from app.warehouse.services.reporte_direccion_repository import (register_reporte_direccion_repository,)
 from app.warehouse.services.warehouse_upload_creator_existing_service import register_warehouse_upload_creator_existing_service_impl
 from app.warehouse.services.warehouse_upload_loader import register_warehouse_upload_loader
 from app.warehouse.services.warehouse_upload_loader_sql import register_warehouse_upload_loader_sql_impl
-from app.warehouse.services.reporte_direccion_advisory_lock import (
-    register_reporte_direccion_advisory_lock,
-)
-from app.warehouse.services.kpi_desempeno_ingestion_service import (
-    register_kpi_desempeno_ingestor,
-)
-from app.warehouse.services.kpi_desempeno_repository import (
-    register_kpi_desempeno_repository,
-)
+from app.warehouse.services.reporte_direccion_advisory_lock import ( register_reporte_direccion_advisory_lock,)
 
+from app.warehouse.services.kpi_desempeno_ingestion_service import ( register_kpi_desempeno_ingestor,)
+from app.warehouse.services.kpi_desempeno_repository import (register_kpi_desempeno_repository,)
+from app.warehouse.services.kpi_ventas_nuevos_socios_ingestion_service import (register_kpi_ventas_nuevos_socios_ingestor,)
+from app.warehouse.services.kpi_ventas_nuevos_socios_repository import (register_kpi_ventas_nuevos_socios_repository,)
+
+from app.warehouse.services.kpi_daily_canonicality_resolver import (register_kpi_daily_canonicality_resolvers,)
 
 
 
@@ -63,6 +47,9 @@ def _mark_runtime_hooks_registered(app: Flask) -> None:
         "reporte_direccion_advisory_lock": True,
         "kpi_desempeno_ingestor": True,
         "kpi_desempeno_repository": True,
+        "kpi_ventas_nuevos_socios_ingestor": True,
+        "kpi_ventas_nuevos_socios_repository": True,
+        "kpi_daily_canonicality_resolvers": True,
     }
 
 
@@ -99,6 +86,7 @@ def register_warehouse_runtime_hooks(app: Flask) -> None:
     register_warehouse_upload_loader(app)
     register_warehouse_upload_loader_sql_impl(app)
     register_warehouse_upload_creator_existing_service_impl(app)
+    register_kpi_daily_canonicality_resolvers(app)
     
     register_reporte_direccion_ingestor(app)
     register_reporte_direccion_parser(app)
@@ -107,6 +95,8 @@ def register_warehouse_runtime_hooks(app: Flask) -> None:
     
     register_kpi_desempeno_ingestor(app)
     register_kpi_desempeno_repository(app)
+    register_kpi_ventas_nuevos_socios_ingestor(app)
+    register_kpi_ventas_nuevos_socios_repository(app)
     
 
     _mark_runtime_hooks_registered(app)

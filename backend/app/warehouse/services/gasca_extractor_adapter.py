@@ -20,7 +20,7 @@ SUPPORTED_REPORT_TYPES = frozenset(
     {
         "reporte_direccion",
         "kpi_desempeno",
-        "kpi_ventas_nuevos",
+        "kpi_ventas_nuevos_socios",
     }
 )
 
@@ -28,7 +28,7 @@ SUPPORTED_REPORT_TYPES = frozenset(
 REPORT_EXTRACTOR_CONFIG_KEYS: dict[str, str] = {
     "reporte_direccion": "WAREHOUSE_GASCA_REPORTE_DIRECCION_EXTRACTOR",
     "kpi_desempeno": "WAREHOUSE_GASCA_KPI_DESEMPENO_EXTRACTOR",
-    "kpi_ventas_nuevos": "WAREHOUSE_GASCA_KPI_VENTAS_NUEVOS_EXTRACTOR",
+    "kpi_ventas_nuevos_socios": "WAREHOUSE_GASCA_KPI_VENTAS_NUEVOS_EXTRACTOR",
 }
 
 # Fallback opcional: un solo extractor multipropósito.
