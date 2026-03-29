@@ -39,7 +39,7 @@ crea el upload documental en Warehouse
 si aplica, dispara la ingesta estructurada
 Regla actual
 reporte_direccion → sí intenta ingesta estructurada
-kpi_desempeno y kpi_ventas_nuevos → por ahora solo upload documental
+kpi_desempeno y kpi_ventas_nuevos_socios → por ahora solo upload documental
 3. Extracción desde Gasca
 
 El orquestador no habla directo con el script.
