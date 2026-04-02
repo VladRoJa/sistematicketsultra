@@ -293,3 +293,81 @@ class KpiVentasNuevosSociosSnapshotRowORM(db.Model):
             "snapshot_id",
         ),
     )
+    
+    
+class CorteCajaSnapshotORM(db.Model):
+    __tablename__ = "corte_caja_snapshots"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    warehouse_upload_id = db.Column(
+        db.Integer,
+        db.ForeignKey("warehouse_uploads.id"),
+        nullable=False,
+        unique=True,
+    )
+
+    report_type_key = db.Column(db.String(100), nullable=False)
+    business_date = db.Column(db.Date, nullable=False)
+    captured_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    snapshot_kind = db.Column(db.String(50), nullable=False)
+    is_canonical = db.Column(db.Boolean, nullable=False, default=False)
+
+    row_count_detected = db.Column(db.Integer, nullable=False)
+    row_count_valid = db.Column(db.Integer, nullable=False)
+    row_count_rejected = db.Column(db.Integer, nullable=False, default=0)
+
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False)
+
+    warehouse_upload = db.relationship("WarehouseUploadORM")
+
+    rows = db.relationship(
+        "CorteCajaSnapshotRowORM",
+        back_populates="snapshot",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+    __table_args__ = (
+        Index("ix_corte_caja_snapshots_business_date", "business_date"),
+        Index("ix_corte_caja_snapshots_is_canonical", "is_canonical"),
+    )
+
+
+class CorteCajaSnapshotRowORM(db.Model):
+    __tablename__ = "corte_caja_snapshot_rows"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    snapshot_id = db.Column(
+        db.Integer,
+        db.ForeignKey("corte_caja_snapshots.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    row_index = db.Column(db.Integer, nullable=False)
+
+    clave = db.Column(db.String(100), nullable=True)
+    folio = db.Column(db.String(100), nullable=False)
+    hora = db.Column(db.String(20), nullable=False)
+    nombre = db.Column(db.String(255), nullable=False)
+    importe = db.Column(db.Numeric(12, 2), nullable=False)
+    pago = db.Column(db.String(50), nullable=True)
+    renovacion = db.Column(db.String(50), nullable=True)
+    operacion = db.Column(db.String(100), nullable=True)
+    tipo_pago = db.Column(db.String(100), nullable=True)
+    recepcion = db.Column(db.String(255), nullable=True)
+    sucursal = db.Column(db.String(255), nullable=False)
+
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False)
+
+    snapshot = db.relationship(
+        "CorteCajaSnapshotORM",
+        back_populates="rows",
+    )
+
+    __table_args__ = (
+        Index("ix_corte_caja_snapshot_rows_snapshot_id", "snapshot_id"),
+    )

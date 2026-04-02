@@ -94,7 +94,7 @@ class Config:
     # Estrategia actual: integrar el script legado multi-reporte sin reescribirlo todavía.
     WAREHOUSE_GASCA_SCRIPT_STRATEGY = os.getenv(
         "WAREHOUSE_GASCA_SCRIPT_STRATEGY",
-        "legacy_main",
+        "single_report",
     )
 
     # Main legado de Gasca
@@ -159,7 +159,7 @@ class Config:
     # ──────────────────────────────────────
     WAREHOUSE_GASCA_SCRIPT_STRATEGY = os.getenv(
         "WAREHOUSE_GASCA_SCRIPT_STRATEGY",
-        "legacy_main",
+        "single_report",
     )
 
     WAREHOUSE_GASCA_LEGACY_MAIN_MODULE = os.getenv(
