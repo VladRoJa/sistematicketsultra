@@ -23,6 +23,10 @@ class LoadedWarehouseUpload:
     content_type: str | None = None
     storage_path: str | None = None
     captured_at: datetime | None = None
+    period_type: str | None = None
+    cutoff_date: Any = None
+    date_from: Any = None
+    date_to: Any = None
     metadata: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -35,9 +39,12 @@ class LoadedWarehouseUpload:
             "captured_at": (
                 self.captured_at.isoformat() if isinstance(self.captured_at, datetime) else None
             ),
+            "period_type": self.period_type,
+            "cutoff_date": self.cutoff_date,
+            "date_from": self.date_from,
+            "date_to": self.date_to,
             "metadata": self.metadata or {},
         }
-
 
 def register_warehouse_upload_loader(app) -> None:
     """
@@ -228,6 +235,10 @@ def _normalize_loaded_upload(result: Any, warehouse_upload_id: int) -> dict[str,
                 if result.get("captured_at") is not None
                 else None
             ),
+            "period_type": result.get("period_type"),
+            "cutoff_date": result.get("cutoff_date"),
+            "date_from": result.get("date_from"),
+            "date_to": result.get("date_to"),
             "metadata": result.get("metadata") or {},
         }
 
@@ -256,6 +267,10 @@ def _normalize_loaded_upload(result: Any, warehouse_upload_id: int) -> dict[str,
         "captured_at": (
             _ensure_datetime(captured_at).isoformat() if captured_at is not None else None
         ),
+        "period_type": getattr(result, "period_type", None),
+        "cutoff_date": getattr(result, "cutoff_date", None),
+        "date_from": getattr(result, "date_from", None),
+        "date_to": getattr(result, "date_to", None),
         "metadata": getattr(result, "metadata", {}) or {},
     }
 

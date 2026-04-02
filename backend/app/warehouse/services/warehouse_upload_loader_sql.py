@@ -49,6 +49,24 @@ STORED_FILENAME_CANDIDATES = [
     "stored_filename",
 ]
 
+PERIOD_TYPE_CANDIDATES = [
+    "period_type",
+]
+
+CUTOFF_DATE_CANDIDATES = [
+    "cutoff_date",
+]
+
+DATE_FROM_CANDIDATES = [
+    "date_from",
+]
+
+DATE_TO_CANDIDATES = [
+    "date_to",
+]
+
+
+
 class WarehouseUploadLoaderSqlError(RuntimeError):
     """Error base del loader SQL real de Warehouse."""
 
@@ -207,6 +225,23 @@ def load_warehouse_upload_from_db(*, warehouse_upload_id: int) -> dict[str, Any]
         existing_columns=upload_columns,
         candidates=STORED_FILENAME_CANDIDATES,
     )
+    
+    period_type_col = _pick_first_existing_column(
+        existing_columns=upload_columns,
+        candidates=PERIOD_TYPE_CANDIDATES,
+    )
+    cutoff_date_col = _pick_first_existing_column(
+        existing_columns=upload_columns,
+        candidates=CUTOFF_DATE_CANDIDATES,
+    )
+    date_from_col = _pick_first_existing_column(
+        existing_columns=upload_columns,
+        candidates=DATE_FROM_CANDIDATES,
+    )
+    date_to_col = _pick_first_existing_column(
+        existing_columns=upload_columns,
+        candidates=DATE_TO_CANDIDATES,
+    )
 
     if original_filename_col is None:
         raise WarehouseUploadLoaderSqlError(
@@ -230,6 +265,14 @@ def load_warehouse_upload_from_db(*, warehouse_upload_id: int) -> dict[str, Any]
         selected_columns.append(f"wu.{storage_path_col} AS storage_path")
     if captured_at_col:
         selected_columns.append(f"wu.{captured_at_col} AS captured_at")
+    if period_type_col:
+        selected_columns.append(f"wu.{period_type_col} AS period_type")
+    if cutoff_date_col:
+        selected_columns.append(f"wu.{cutoff_date_col} AS cutoff_date")
+    if date_from_col:
+        selected_columns.append(f"wu.{date_from_col} AS date_from")
+    if date_to_col:
+        selected_columns.append(f"wu.{date_to_col} AS date_to")
     if metadata_col:
         selected_columns.append(f"wu.{metadata_col} AS metadata_value")
 
@@ -276,6 +319,10 @@ def load_warehouse_upload_from_db(*, warehouse_upload_id: int) -> dict[str, Any]
         "content_type": row_dict.get("content_type"),
         "storage_path": resolved_storage_path,
         "captured_at": _ensure_datetime(row_dict.get("captured_at")),
+        "period_type": row_dict.get("period_type"),
+        "cutoff_date": row_dict.get("cutoff_date"),
+        "date_from": row_dict.get("date_from"),
+        "date_to": row_dict.get("date_to"),
         "metadata": _extract_metadata_value(
             row=row_dict,
             metadata_column="metadata_value" if "metadata_value" in row_dict else None,
