@@ -22,7 +22,8 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 
 CORTE_CAJA_REPORT_TYPE_KEY = "corte_caja"
-SUPPORTED_REPORT_TYPES = frozenset({CORTE_CAJA_REPORT_TYPE_KEY})
+CARGOS_RECURRENTES_REPORT_TYPE_KEY = "cargos_recurrentes"
+SUPPORTED_REPORT_TYPES = frozenset({CORTE_CAJA_REPORT_TYPE_KEY, CARGOS_RECURRENTES_REPORT_TYPE_KEY,})
 XLSX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
@@ -82,10 +83,20 @@ def run_gasca_single_report(
     )
 
     with _authenticated_page(runtime) as page:
-        artifact_path, extra_metadata = _run_corte_caja_report(
-            page=page,
-            runtime=runtime,
-        )
+        if report_type_key == CORTE_CAJA_REPORT_TYPE_KEY:
+            artifact_path, extra_metadata = _run_corte_caja_report(
+                page=page,
+                runtime=runtime,
+            )
+        elif report_type_key == CARGOS_RECURRENTES_REPORT_TYPE_KEY:
+            artifact_path, extra_metadata = _run_cargos_recurrentes_report(
+                page=page,
+                runtime=runtime,
+            )
+        else:
+            raise GascaSingleReportRunnerError(
+                f"No hay implementación interna para report_type_key={report_type_key!r}"
+            )
 
     captured_at = datetime.now(tz=pytz.timezone(runtime.timezone_name))
 
@@ -99,7 +110,7 @@ def run_gasca_single_report(
             "bridge_source": "single_report_runner",
             "runner_mode": "internalized_suite_runner",
             "output_dir": str(artifact_path.parent),
-            "filename_prefix": "corte_caja",
+            "filename_prefix": report_type_key,
             **extra_metadata,
         },
     }
@@ -283,6 +294,7 @@ def _resolve_contractual_output_path(*, report_type_key: str) -> Path:
 
     filename_map = {
         CORTE_CAJA_REPORT_TYPE_KEY: "corte_caja.xlsx",
+        CARGOS_RECURRENTES_REPORT_TYPE_KEY: "cargos_recurrentes.xlsx",
     }
     filename = filename_map.get(report_type_key)
     if not filename:
@@ -493,3 +505,83 @@ def _limpiar_excel_inplace(ruta: Path | str) -> Path:
 
     tmp_path.rename(ruta)
     return ruta
+
+def _rellenar_fechas_rango_simple(
+    *,
+    page: Any,
+    fecha_inicio: date,
+    fecha_fin: date,
+) -> None:
+    fecha_inicio_str = fecha_inicio.strftime("%m/%d/%Y")
+    fecha_fin_str = fecha_fin.strftime("%m/%d/%Y")
+
+    inputs = page.locator("input[type='text']")
+    total = inputs.count()
+    if total < 2:
+        raise GascaSingleReportRunnerError(
+            f"Esperaba al menos 2 inputs de texto para fechas, pero encontré {total}"
+        )
+
+    campo_inicio = inputs.nth(0)
+    campo_fin = inputs.nth(1)
+
+    for campo, valor in [
+        (campo_inicio, fecha_inicio_str),
+        (campo_fin, fecha_fin_str),
+    ]:
+        campo.click()
+        campo.fill("")
+        campo.type(valor, delay=50)
+        time.sleep(0.3)
+        
+def _run_cargos_recurrentes_report(
+    *,
+    page: Any,
+    runtime: GascaRuntimeConfig,
+) -> tuple[Path, dict[str, Any]]:
+    current_app.logger.info("Gasca single report runner: ejecutando cargos_recurrentes.")
+
+    page.goto(runtime.reportes_url, timeout=120_000)
+    page.wait_for_load_state("networkidle")
+
+    _seleccionar_tipo_reporte(page, "Reporte Cargos Recurrentes")
+
+    hoy_local = datetime.now(pytz.timezone(runtime.timezone_name)).date()
+    inicio_mes = hoy_local.replace(day=1)
+
+    _rellenar_fechas_rango_simple(
+        page=page,
+        fecha_inicio=inicio_mes,
+        fecha_fin=hoy_local,
+    )
+
+    _click_boton_generar(page)
+
+    current_app.logger.info("Gasca single report runner: esperando carga de Cargos Recurrentes.")
+    time.sleep(5)
+
+    try:
+        page.wait_for_selector("table tbody tr", timeout=20_000)
+    except Exception:
+        current_app.logger.warning(
+            "Gasca single report runner: no se detectaron filas visibles en tabla de Cargos Recurrentes antes de exportar."
+        )
+
+    artifact_path = _resolve_contractual_output_path(
+        report_type_key=CARGOS_RECURRENTES_REPORT_TYPE_KEY
+    )
+
+    _descargar_excel_desde_tabla(
+        page=page,
+        nombre_reporte="Reporte Cargos Recurrentes",
+        destination_path=artifact_path,
+    )
+
+    _limpiar_excel_inplace(artifact_path)
+
+    metadata = {
+        "date_from": inicio_mes.isoformat(),
+        "date_to": hoy_local.isoformat(),
+        "snapshot_kind_hint": "daily",
+    }
+    return artifact_path, metadata

@@ -22,6 +22,7 @@ SUPPORTED_REPORT_TYPES = frozenset(
         "kpi_desempeno",
         "kpi_ventas_nuevos_socios",
         "corte_caja",
+        "cargos_recurrentes"
     }
 )
 
@@ -29,14 +30,16 @@ DEFAULT_FILENAME_PREFIXES: dict[str, str] = {
     "reporte_direccion": "ingresos_",
     "kpi_desempeno": "kpi_desempeno_",
     "kpi_ventas_nuevos_socios": "kpi_ventas_nuevos_socios_",
-    "corte_caja":"corte_caja"
+    "corte_caja":"corte_caja",
+    "cargos_recurrentes" : "cargos_recurrentes",
 }
 
 DEFAULT_OUTPUT_DIRS: dict[str, str] = {
     "reporte_direccion": "data/direccion_ingresos",
     "kpi_desempeno": "data/kpi_desempeno",
     "kpi_ventas_nuevos_socios": "data/kpi_ventas_nuevos_socios",
-    "corte_caja":"data/corte_caja"
+    "corte_caja":"data/corte_caja",
+    "cargos_recurrentes" : "data/cargos_recurrentes",    
 }
 
 DEFAULT_XLSX_CONTENT_TYPE = (

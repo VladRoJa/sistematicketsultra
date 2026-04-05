@@ -126,6 +126,14 @@ class Config:
             "WAREHOUSE_GASCA_KPI_VENTAS_NUEVOS_OUTPUT_DIR",
             "data/kpi_ventas_nuevos_socios",
         ),
+        "corte_caja": os.getenv(
+            "WAREHOUSE_GASCA_CORTE_CAJA_OUTPUT_DIR",
+            "data/corte_caja",
+        ),
+        "cargos_recurrentes": os.getenv(
+            "WAREHOUSE_GASCA_CARGOS_RECURRENTES_OUTPUT_DIR",
+            "data/cargos_recurrentes",
+        ),
     }
 
     WAREHOUSE_GASCA_SCRIPT_FILENAME_PREFIXES = {
@@ -140,6 +148,14 @@ class Config:
         "kpi_ventas_nuevos": os.getenv(
             "WAREHOUSE_GASCA_KPI_VENTAS_NUEVOS_FILENAME_PREFIX",
             "kpi_ventas_nuevos_socios_",
+        ),
+        "corte_caja": os.getenv(
+            "WAREHOUSE_GASCA_CORTE_CAJA_FILENAME_PREFIX",
+            "corte_caja",
+        ),
+        "cargos_recurrentes": os.getenv(
+            "WAREHOUSE_GASCA_CARGOS_RECURRENTES_FILENAME_PREFIX",
+            "cargos_recurrentes",
         ),
     }
 
