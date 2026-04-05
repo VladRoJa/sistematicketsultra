@@ -19,7 +19,8 @@ SUPPORTED_REPORT_TYPES = frozenset(
         "kpi_desempeno",
         "kpi_ventas_nuevos_socios",
         "corte_caja",
-        "cargos_recurrentes"
+        "cargos_recurrentes",
+        "venta_total"
     }
 )
 

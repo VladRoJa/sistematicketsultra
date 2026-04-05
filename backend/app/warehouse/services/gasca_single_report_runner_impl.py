@@ -23,8 +23,10 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 CORTE_CAJA_REPORT_TYPE_KEY = "corte_caja"
 CARGOS_RECURRENTES_REPORT_TYPE_KEY = "cargos_recurrentes"
-SUPPORTED_REPORT_TYPES = frozenset({CORTE_CAJA_REPORT_TYPE_KEY, CARGOS_RECURRENTES_REPORT_TYPE_KEY,})
+VENTA_TOTAL_REPORT_TYPE_KEY = "venta_total"
+SUPPORTED_REPORT_TYPES = frozenset({CORTE_CAJA_REPORT_TYPE_KEY, CARGOS_RECURRENTES_REPORT_TYPE_KEY,VENTA_TOTAL_REPORT_TYPE_KEY})
 XLSX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
 
 
 class GascaSingleReportRunnerError(RuntimeError):
@@ -90,6 +92,11 @@ def run_gasca_single_report(
             )
         elif report_type_key == CARGOS_RECURRENTES_REPORT_TYPE_KEY:
             artifact_path, extra_metadata = _run_cargos_recurrentes_report(
+                page=page,
+                runtime=runtime,
+            )
+        elif report_type_key == VENTA_TOTAL_REPORT_TYPE_KEY:
+            artifact_path, extra_metadata = _run_venta_total_report(
                 page=page,
                 runtime=runtime,
             )
@@ -286,6 +293,54 @@ def _run_corte_caja_report(
     }
     return artifact_path, metadata
 
+def _run_venta_total_report(
+    *,
+    page: Any,
+    runtime: GascaRuntimeConfig,
+) -> tuple[Path, dict[str, Any]]:
+    current_app.logger.info("Gasca single report runner: ejecutando venta_total.")
+
+    page.goto(runtime.reportes_url, timeout=120_000)
+    page.wait_for_load_state("networkidle")
+
+    _seleccionar_tipo_reporte(page, "Reporte Venta Total")
+
+    hoy_local = datetime.now(pytz.timezone(runtime.timezone_name)).date()
+    inicio_mes = hoy_local.replace(day=1)
+
+    _rellenar_fechas_rango_simple(
+        page=page,
+        fecha_inicio=inicio_mes,
+        fecha_fin=hoy_local,
+    )
+
+    _click_boton_generar(page)
+
+    _esperar_fin_carga_venta_total(
+        page=page,
+        timeout_seconds=120,
+    )
+
+    page.wait_for_selector("button:has-text('Exportar')", timeout=120_000)
+
+    artifact_path = _resolve_contractual_output_path(
+        report_type_key=VENTA_TOTAL_REPORT_TYPE_KEY
+    )
+
+    _descargar_excel_desde_tabla(
+        page=page,
+        nombre_reporte="Reporte Venta Total",
+        destination_path=artifact_path,
+    )
+
+    _limpiar_excel_inplace(artifact_path)
+
+    metadata = {
+        "date_from": inicio_mes.isoformat(),
+        "date_to": hoy_local.isoformat(),
+        "snapshot_kind_hint": "daily",
+    }
+    return artifact_path, metadata
 
 def _resolve_contractual_output_path(*, report_type_key: str) -> Path:
     backend_dir = Path(__file__).resolve().parents[3]
@@ -295,6 +350,7 @@ def _resolve_contractual_output_path(*, report_type_key: str) -> Path:
     filename_map = {
         CORTE_CAJA_REPORT_TYPE_KEY: "corte_caja.xlsx",
         CARGOS_RECURRENTES_REPORT_TYPE_KEY: "cargos_recurrentes.xlsx",
+        VENTA_TOTAL_REPORT_TYPE_KEY: "venta_total.xlsx",
     }
     filename = filename_map.get(report_type_key)
     if not filename:
@@ -303,6 +359,33 @@ def _resolve_contractual_output_path(*, report_type_key: str) -> Path:
         )
 
     return output_dir / filename
+
+def _esperar_fin_carga_venta_total(*, page: Any, timeout_seconds: int = 120) -> None:
+    current_app.logger.info(
+        "Gasca single report runner: esperando fin de carga de Venta Total."
+    )
+
+    try:
+        page.wait_for_selector("text=Cargando...", timeout=10_000)
+        current_app.logger.info(
+            "Gasca single report runner: 'Cargando...' detectado en Venta Total."
+        )
+    except Exception:
+        current_app.logger.info(
+            "Gasca single report runner: no se detectó 'Cargando...' en Venta Total; se asume carga rápida."
+        )
+        return
+
+    try:
+        page.wait_for_selector(
+            "text=Cargando...",
+            state="detached",
+            timeout=timeout_seconds * 1000,
+        )
+    except Exception as exc:
+        raise GascaSingleReportRunnerError(
+            "Venta Total: 'Cargando...' no desapareció dentro del timeout."
+        ) from exc
 
 
 def _seleccionar_tipo_reporte(page: Any, texto_opcion: str) -> None:
