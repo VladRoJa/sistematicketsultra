@@ -15,7 +15,8 @@ SUPPORTED_REPORT_TYPES = frozenset(
         "reporte_direccion",
         "kpi_desempeno",
         "kpi_ventas_nuevos_socios",
-        "corte_caja"
+        "corte_caja",
+        "cargos_recurrentes"
     }
 )
 
@@ -46,6 +47,11 @@ RUN_MODE_COMPATIBILITY: dict[str, set[str]] = {
         "manual_retry",
     },
         "corte_caja": {
+        "scheduled_daily",
+        "manual_backfill",
+        "manual_retry",
+    },
+        "cargos_recurrentes": {
         "scheduled_daily",
         "manual_backfill",
         "manual_retry",
@@ -346,7 +352,8 @@ def _should_dispatch_ingestion(
         "reporte_direccion",
         "kpi_desempeno",
         "kpi_ventas_nuevos_socios",
-        "corte_caja"
+        "corte_caja",
+        "cargos_recurrentes"
     }
 
 def _normalize_ingestion_result(result: Any) -> IngestionDispatchResult:

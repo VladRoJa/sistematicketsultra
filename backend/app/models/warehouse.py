@@ -371,3 +371,85 @@ class CorteCajaSnapshotRowORM(db.Model):
     __table_args__ = (
         Index("ix_corte_caja_snapshot_rows_snapshot_id", "snapshot_id"),
     )
+    
+class CargosRecurrentesSnapshotORM(db.Model):
+    __tablename__ = "cargos_recurrentes_snapshots"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    warehouse_upload_id = db.Column(
+        db.Integer,
+        db.ForeignKey("warehouse_uploads.id"),
+        nullable=False,
+        unique=True,
+    )
+
+    report_type_key = db.Column(db.String(100), nullable=False)
+    business_date = db.Column(db.Date, nullable=False)
+    captured_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    snapshot_kind = db.Column(db.String(50), nullable=False)
+    is_canonical = db.Column(db.Boolean, nullable=False, default=False)
+
+    row_count_detected = db.Column(db.Integer, nullable=False)
+    row_count_valid = db.Column(db.Integer, nullable=False)
+    row_count_rejected = db.Column(db.Integer, nullable=False, default=0)
+
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False)
+
+    warehouse_upload = db.relationship("WarehouseUploadORM")
+
+    rows = db.relationship(
+        "CargosRecurrentesSnapshotRowORM",
+        back_populates="snapshot",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+    __table_args__ = (
+        Index("ix_cargos_recurrentes_snapshots_business_date", "business_date"),
+        Index("ix_cargos_recurrentes_snapshots_is_canonical", "is_canonical"),
+    )
+
+
+class CargosRecurrentesSnapshotRowORM(db.Model):
+    __tablename__ = "cargos_recurrentes_snapshot_rows"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    snapshot_id = db.Column(
+        db.Integer,
+        db.ForeignKey("cargos_recurrentes_snapshots.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    row_index = db.Column(db.Integer, nullable=False)
+
+    folio = db.Column(db.String(100), nullable=False)
+    id_socio = db.Column(db.String(100), nullable=False)
+    pin = db.Column(db.String(100), nullable=False)
+    nombre = db.Column(db.String(255), nullable=False)
+    sucursal = db.Column(db.String(255), nullable=False)
+    fecha_inicio = db.Column(db.String(50), nullable=False)
+    fecha_proximo_pago = db.Column(db.String(50), nullable=False)
+    numero_intentos = db.Column(db.Integer, nullable=False)
+    hd = db.Column(db.String(100), nullable=True)
+    estatus = db.Column(db.String(100), nullable=False)
+    importe = db.Column(db.Numeric(12, 2), nullable=False)
+    meses_pendiente = db.Column(db.String(100), nullable=True)
+    fecha_fin_contrato = db.Column(db.String(50), nullable=True)
+    tipo_contrato = db.Column(db.String(100), nullable=True)
+    contrato_ajuste = db.Column(db.String(100), nullable=True)
+    acciones = db.Column(db.String(255), nullable=True)
+
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False)
+
+    snapshot = db.relationship(
+        "CargosRecurrentesSnapshotORM",
+        back_populates="rows",
+    )
+
+    __table_args__ = (
+        Index("ix_cargos_recurrentes_snapshot_rows_snapshot_id", "snapshot_id"),
+    )
