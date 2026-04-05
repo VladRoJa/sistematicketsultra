@@ -22,7 +22,8 @@ SUPPORTED_REPORT_TYPES = frozenset(
         "kpi_desempeno",
         "kpi_ventas_nuevos_socios",
         "corte_caja",
-        "cargos_recurrentes"
+        "cargos_recurrentes",
+        "venta_total"
     }
 )
 
@@ -33,6 +34,7 @@ REPORT_EXTRACTOR_CONFIG_KEYS: dict[str, str] = {
     "kpi_ventas_nuevos_socios": "WAREHOUSE_GASCA_KPI_VENTAS_NUEVOS_EXTRACTOR",
     "corte_caja": "WAREHOUSE_GASCA_CORTE_CAJA_EXTRACTOR",
     "cargos_recurrentes": "WAREHOUSE_GASCA_CARGOS_RECURRENTES_EXTRACTOR",
+    "venta_total": "WAREHOUSE_GASCA_VENTA_TOTAL_EXTRACTOR",
 }
 
 # Fallback opcional: un solo extractor multipropósito.

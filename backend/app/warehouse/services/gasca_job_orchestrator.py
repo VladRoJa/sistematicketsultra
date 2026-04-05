@@ -16,7 +16,8 @@ SUPPORTED_REPORT_TYPES = frozenset(
         "kpi_desempeno",
         "kpi_ventas_nuevos_socios",
         "corte_caja",
-        "cargos_recurrentes"
+        "cargos_recurrentes",
+        "venta_total"
     }
 )
 
@@ -52,6 +53,11 @@ RUN_MODE_COMPATIBILITY: dict[str, set[str]] = {
         "manual_retry",
     },
         "cargos_recurrentes": {
+        "scheduled_daily",
+        "manual_backfill",
+        "manual_retry",
+    },
+        "venta_total": {
         "scheduled_daily",
         "manual_backfill",
         "manual_retry",

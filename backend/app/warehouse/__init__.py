@@ -34,7 +34,9 @@ from app.warehouse.services.cargos_recurrentes_ingestion_service import (registe
 from app.warehouse.services.kpi_daily_canonicality_resolver import (register_kpi_daily_canonicality_resolvers,)
 from app.warehouse.services.gasca_single_report_runner_impl import (register_gasca_single_report_runner_impl,)
 
-
+from app.warehouse.services.venta_total_parser import ( register_venta_total_parser,)
+from app.warehouse.services.venta_total_repository import (register_venta_total_repository,)
+from app.warehouse.services.venta_total_ingestion_service import (register_venta_total_ingestor,)
 
 
 
@@ -67,6 +69,9 @@ def _mark_runtime_hooks_registered(app: Flask) -> None:
         "cargos_recurrentes_parser": True,
         "cargos_recurrentes_repository": True,
         "cargos_recurrentes_ingestor": True,
+        "venta_total_parser": True,
+        "venta_total_repository": True,
+        "venta_total_ingestor": True,
     }
 
 
@@ -122,6 +127,10 @@ def register_warehouse_runtime_hooks(app: Flask) -> None:
     register_cargos_recurrentes_parser(app)
     register_cargos_recurrentes_repository(app)
     register_cargos_recurrentes_ingestor(app)
+    
+    register_venta_total_parser(app)
+    register_venta_total_repository(app)
+    register_venta_total_ingestor(app)
     
     register_gasca_single_report_runner_impl(app)
 

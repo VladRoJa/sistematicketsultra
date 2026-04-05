@@ -453,3 +453,95 @@ class CargosRecurrentesSnapshotRowORM(db.Model):
     __table_args__ = (
         Index("ix_cargos_recurrentes_snapshot_rows_snapshot_id", "snapshot_id"),
     )
+    
+    
+    
+class VentaTotalSnapshotORM(db.Model):
+    __tablename__ = "venta_total_snapshots"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    warehouse_upload_id = db.Column(
+        db.Integer,
+        db.ForeignKey("warehouse_uploads.id"),
+        nullable=False,
+        unique=True,
+    )
+
+    report_type_key = db.Column(db.String(100), nullable=False)
+    business_date = db.Column(db.Date, nullable=False)
+    captured_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    snapshot_kind = db.Column(db.String(50), nullable=False)
+    is_canonical = db.Column(db.Boolean, nullable=False, default=False)
+
+    row_count_detected = db.Column(db.Integer, nullable=False)
+    row_count_valid = db.Column(db.Integer, nullable=False)
+    row_count_rejected = db.Column(db.Integer, nullable=False, default=0)
+
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False)
+
+    warehouse_upload = db.relationship("WarehouseUploadORM")
+
+    rows = db.relationship(
+        "VentaTotalSnapshotRowORM",
+        back_populates="snapshot",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+    __table_args__ = (
+        Index("ix_venta_total_snapshots_business_date", "business_date"),
+        Index("ix_venta_total_snapshots_is_canonical", "is_canonical"),
+    )
+
+
+class VentaTotalSnapshotRowORM(db.Model):
+    __tablename__ = "venta_total_snapshot_rows"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    snapshot_id = db.Column(
+        db.Integer,
+        db.ForeignKey("venta_total_snapshots.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    row_index = db.Column(db.Integer, nullable=False)
+
+    fecha = db.Column(db.String(50), nullable=False)
+    sucursal = db.Column(db.String(255), nullable=False)
+    folio = db.Column(db.String(100), nullable=False)
+    clave = db.Column(db.String(100), nullable=True)
+    clave_producto = db.Column(db.String(100), nullable=True)
+    descripcion = db.Column(db.String(255), nullable=False)
+    cantidad = db.Column(db.Numeric(12, 2), nullable=False)
+    precio_unitario = db.Column(db.Numeric(12, 2), nullable=False)
+    subtotal = db.Column(db.Numeric(12, 2), nullable=False)
+    iva_importe = db.Column(db.Numeric(12, 2), nullable=False)
+    iva_tasa = db.Column(db.Numeric(12, 2), nullable=False)
+    total = db.Column(db.Numeric(12, 2), nullable=False)
+    forma_pago = db.Column(db.String(100), nullable=False)
+    estatus = db.Column(db.String(100), nullable=False)
+    motivo = db.Column(db.String(255), nullable=True)
+    realizo_venta = db.Column(db.String(255), nullable=False)
+    hora = db.Column(db.String(50), nullable=False)
+    id_orden = db.Column(db.String(100), nullable=True)
+    encuesta = db.Column(db.String(255), nullable=True)
+    capturista = db.Column(db.String(255), nullable=True)
+    pin = db.Column(db.String(100), nullable=True)
+    socio = db.Column(db.String(255), nullable=True)
+    nuevo = db.Column(db.String(100), nullable=True)
+    tipo = db.Column(db.String(100), nullable=True)
+
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False)
+
+    snapshot = db.relationship(
+        "VentaTotalSnapshotORM",
+        back_populates="rows",
+    )
+
+    __table_args__ = (
+        Index("ix_venta_total_snapshot_rows_snapshot_id", "snapshot_id"),
+    )
