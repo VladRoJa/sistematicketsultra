@@ -228,9 +228,25 @@ def _invoke_callable_flexibly(
     return fn(**accepted_kwargs)
 
 
-def _select_strategy_callable(strategy: str) -> tuple[str, Callable[..., Any]]:
+def _select_strategy_callable(
+    strategy: str,
+    *,
+    report_type_key: str,
+) -> tuple[str, Callable[..., Any]]:
     single_runner = _resolve_single_report_runner()
     legacy_runner = _resolve_legacy_main_runner()
+
+    single_report_types = {
+        "corte_caja",
+        "cargos_recurrentes",
+        "venta_total",
+    }
+
+    legacy_main_report_types = {
+        "reporte_direccion",
+        "kpi_desempeno",
+        "kpi_ventas_nuevos_socios",
+    }
 
     if strategy == "single_report":
         if single_runner is None:
@@ -255,24 +271,25 @@ def _select_strategy_callable(strategy: str) -> tuple[str, Callable[..., Any]]:
         return "legacy_main", legacy_runner
 
     # strategy == "auto"
-    if single_runner is not None:
+    if report_type_key in single_report_types:
+        if single_runner is None:
+            raise NotImplementedError(
+                f"El report_type_key {report_type_key!r} requiere estrategia 'single_report', "
+                "pero no existe runner configurado."
+            )
         return "single_report", single_runner
 
-    if legacy_runner is not None:
+    if report_type_key in legacy_main_report_types:
+        if legacy_runner is None:
+            raise NotImplementedError(
+                f"El report_type_key {report_type_key!r} requiere estrategia 'legacy_main', "
+                "pero no existe runner configurado."
+            )
         return "legacy_main", legacy_runner
 
-    raise NotImplementedError(
-        "No hay runner configurado para Gasca. Configura alguno de estos caminos:\n"
-        "A) Single report:\n"
-        "   - WAREHOUSE_GASCA_SINGLE_REPORT_RUNNER\n"
-        "   - o WAREHOUSE_GASCA_SINGLE_REPORT_MODULE + "
-        "WAREHOUSE_GASCA_SINGLE_REPORT_ENTRYPOINT\n"
-        "B) Legacy main:\n"
-        "   - WAREHOUSE_GASCA_LEGACY_MAIN_RUNNER\n"
-        "   - o WAREHOUSE_GASCA_LEGACY_MAIN_MODULE + "
-        "WAREHOUSE_GASCA_LEGACY_MAIN_ENTRYPOINT"
-    )
-
+    raise GascaProducerError(
+        f"No hay estrategia automática definida para report_type_key={report_type_key!r}."
+    )    
 
 def _extract_requested_report_from_legacy_result(
     *,
@@ -407,7 +424,10 @@ def run_gasca_script_report(
     _validate_command(command)
 
     strategy = _resolve_strategy()
-    resolved_strategy, runner = _select_strategy_callable(strategy)
+    resolved_strategy, runner = _select_strategy_callable(
+        strategy,
+        report_type_key=command.report_type_key,
+    )
 
     current_app.logger.info(
         "Gasca script runner dispatch: strategy=%s report_type_key=%s run_mode=%s snapshot_kind=%s runner=%s",

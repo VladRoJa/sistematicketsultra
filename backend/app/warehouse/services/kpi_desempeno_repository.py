@@ -310,6 +310,9 @@ def _resolve_canonicality_decision(
     *,
     business_date: date,
     snapshot_kind: str,
+    captured_at: datetime,
+    row_count_valid: int,
+    row_count_rejected: int,
     canonicality_resolver: Callable[..., dict[str, Any] | None] | None,
 ) -> dict[str, Any]:
     existing_canonical = _fetch_existing_canonical_snapshot_for_day(
@@ -317,39 +320,95 @@ def _resolve_canonicality_decision(
         snapshot_kind=snapshot_kind,
     )
 
-    default_decision = {
-        "is_canonical": False,
-        "replace_existing_canonical": False,
-        "existing_canonical_snapshot_id": (
-            existing_canonical.id if existing_canonical else None
-        ),
-        "reason": "canonicality_not_configured",
-    }
-
-    if canonicality_resolver is None:
-        return default_decision
-
-    resolved = canonicality_resolver(
-        business_date=business_date,
-        snapshot_kind=snapshot_kind,
-        existing_canonical_snapshot=existing_canonical,
-        report_type_key=KPI_DESEMPENO_REPORT_TYPE_KEY,
+    existing_canonical_snapshot_id = (
+        existing_canonical.id if existing_canonical else None
     )
 
-    if not resolved:
-        return default_decision
+    # Si hay resolver externo, lo respetamos
+    if canonicality_resolver is not None:
+        resolved = canonicality_resolver(
+            business_date=business_date,
+            snapshot_kind=snapshot_kind,
+            existing_canonical_snapshot=existing_canonical,
+            report_type_key=KPI_DESEMPENO_REPORT_TYPE_KEY,
+            captured_at=captured_at,
+            row_count_valid=row_count_valid,
+            row_count_rejected=row_count_rejected,
+        )
+
+        if resolved:
+            return {
+                "is_canonical": bool(resolved.get("is_canonical", False)),
+                "replace_existing_canonical": bool(
+                    resolved.get("replace_existing_canonical", False)
+                ),
+                "existing_canonical_snapshot_id": existing_canonical_snapshot_id,
+                "reason": resolved.get("reason") or "resolver_provided_decision",
+            }
+
+    # Regla default mínima operativa:
+    # 1) menor row_count_rejected
+    # 2) mayor row_count_valid
+    # 3) mayor captured_at
+    if existing_canonical is None:
+        return {
+            "is_canonical": True,
+            "replace_existing_canonical": False,
+            "existing_canonical_snapshot_id": None,
+            "reason": "auto_first_snapshot_for_day",
+        }
+
+    incoming_is_better = (
+        row_count_rejected < existing_canonical.row_count_rejected
+        or (
+            row_count_rejected == existing_canonical.row_count_rejected
+            and row_count_valid > existing_canonical.row_count_valid
+        )
+        or (
+            row_count_rejected == existing_canonical.row_count_rejected
+            and row_count_valid == existing_canonical.row_count_valid
+            and captured_at > existing_canonical.captured_at
+        )
+    )
+
+    if incoming_is_better:
+        return {
+            "is_canonical": True,
+            "replace_existing_canonical": True,
+            "existing_canonical_snapshot_id": existing_canonical_snapshot_id,
+            "reason": "auto_better_snapshot_for_day",
+        }
 
     return {
-        "is_canonical": bool(resolved.get("is_canonical", False)),
-        "replace_existing_canonical": bool(
-            resolved.get("replace_existing_canonical", False)
-        ),
-        "existing_canonical_snapshot_id": (
-            existing_canonical.id if existing_canonical else None
-        ),
-        "reason": resolved.get("reason") or "resolver_provided_decision",
+        "is_canonical": False,
+        "replace_existing_canonical": False,
+        "existing_canonical_snapshot_id": existing_canonical_snapshot_id,
+        "reason": "auto_existing_canonical_kept",
     }
+    
+def _clear_all_existing_canonical_snapshots_for_day(
+    *,
+    business_date: date,
+    snapshot_kind: str,
+    exclude_snapshot_id: int | None = None,
+) -> None:
+    snapshots = (
+        KpiDesempenoSnapshotORM.query.filter_by(
+            business_date=business_date,
+            snapshot_kind=snapshot_kind,
+            is_canonical=True,
+        )
+        .all()
+    )
 
+    now = _utc_now()
+    for snapshot in snapshots:
+        if exclude_snapshot_id is not None and snapshot.id == exclude_snapshot_id:
+            continue
+        snapshot.is_canonical = False
+        snapshot.updated_at = now
+
+    db.session.flush()
 
 def persist_kpi_desempeno_snapshot(
     *,
@@ -412,6 +471,9 @@ def persist_kpi_desempeno_snapshot(
         canonicality_decision = _resolve_canonicality_decision(
             business_date=business_date_value,
             snapshot_kind=snapshot_kind,
+            captured_at=captured_at_value,
+            row_count_valid=row_count_valid,
+            row_count_rejected=row_count_rejected,
             canonicality_resolver=canonicality_resolver,
         )
 
@@ -433,21 +495,16 @@ def persist_kpi_desempeno_snapshot(
         )
 
         if canonicality_decision["replace_existing_canonical"]:
-            existing_canonical_snapshot = _fetch_existing_canonical_snapshot_for_day(
+            _clear_all_existing_canonical_snapshots_for_day(
                 business_date=business_date_value,
                 snapshot_kind=snapshot_kind,
+                exclude_snapshot_id=snapshot.id,
             )
-            if (
-                existing_canonical_snapshot is not None
-                and existing_canonical_snapshot.id != snapshot.id
-            ):
-                _clear_existing_canonical_snapshot(
-                    existing_snapshot=existing_canonical_snapshot
-                )
-                _set_snapshot_canonical_state(
-                    snapshot=snapshot,
-                    is_canonical=True,
-                )
+
+            _set_snapshot_canonical_state(
+                snapshot=snapshot,
+                is_canonical=True,
+            )
 
         db.session.commit()
 

@@ -359,9 +359,11 @@ def _should_dispatch_ingestion(
         "kpi_desempeno",
         "kpi_ventas_nuevos_socios",
         "corte_caja",
-        "cargos_recurrentes"
+        "cargos_recurrentes",
+        "venta_total",
     }
-
+    
+    
 def _normalize_ingestion_result(result: Any) -> IngestionDispatchResult:
     if isinstance(result, IngestionDispatchResult):
         return result
@@ -504,6 +506,36 @@ def _dispatch_ingestion_if_applicable(
         except Exception as exc:
             raise GascaIngestionError(
                 "Falló la ingesta estructurada de 'corte_caja'."
+            ) from exc
+
+        ingestion_result = _normalize_ingestion_result(result)
+
+        current_app.logger.info(
+            "Structured ingestion dispatched: warehouse_upload_id=%s report_type_key=%s status=%s snapshot_id=%s",
+            upload_ref.warehouse_upload_id,
+            command.report_type_key,
+            ingestion_result.ingestion_status,
+            ingestion_result.snapshot_id,
+        )
+
+        return ingestion_result
+    
+    if command.report_type_key == "venta_total":
+        ingestor = _get_required_callable(
+            "WAREHOUSE_VENTA_TOTAL_INGESTOR",
+            description="ingerir estructuradamente venta_total",
+        )
+
+        try:
+            result = ingestor(
+                warehouse_upload_id=upload_ref.warehouse_upload_id,
+                snapshot_kind=command.snapshot_kind,
+                requested_by=command.requested_by,
+                ingestion_source=command.trigger_source,
+            )
+        except Exception as exc:
+            raise GascaIngestionError(
+                "Falló la ingesta estructurada de 'venta_total'."
             ) from exc
 
         ingestion_result = _normalize_ingestion_result(result)

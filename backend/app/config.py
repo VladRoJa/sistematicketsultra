@@ -80,7 +80,7 @@ class Config:
     # Estrategia por defecto: single_report interno
     WAREHOUSE_GASCA_SCRIPT_STRATEGY = os.getenv(
         "WAREHOUSE_GASCA_SCRIPT_STRATEGY",
-        "single_report",
+        "auto",
     )
 
     # Legacy main runner (se conserva por compatibilidad/fallback)

@@ -26,6 +26,10 @@ def resolve_kpi_daily_canonicality(
     snapshot_kind: str,
     existing_canonical_snapshot,
     report_type_key: str,
+    captured_at=None,
+    row_count_valid=None,
+    row_count_rejected=None,
+    **kwargs,
 ) -> dict[str, Any]:
     """
     Política inicial de canonicalidad para KPIs:
@@ -57,7 +61,6 @@ def resolve_kpi_daily_canonicality(
         "replace_existing_canonical": True,
         "reason": "latest_successful_daily_snapshot_wins",
     }
-
 
 def register_kpi_daily_canonicality_resolvers(app) -> None:
     """
