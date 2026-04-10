@@ -545,3 +545,173 @@ class VentaTotalSnapshotRowORM(db.Model):
     __table_args__ = (
         Index("ix_venta_total_snapshot_rows_snapshot_id", "snapshot_id"),
     )
+    
+class TrackMonthlyTargetORM(db.Model):
+    __tablename__ = "track_monthly_targets"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    target_month = db.Column(db.Date, nullable=False)
+    sucursal_canon = db.Column(
+        db.Text,
+        db.ForeignKey("track_branch_catalog.sucursal_canon", ondelete="RESTRICT"),
+        nullable=False,
+    )
+
+    m2_sin_circulaciones = db.Column(db.Numeric(12, 2), nullable=False)
+    usuarios_inicio_mes = db.Column(db.Integer, nullable=False)
+    proyeccion_usuarios_cierre_mes = db.Column(db.Integer, nullable=False)
+
+    meta_faycgo_mes = db.Column(db.Numeric(14, 2), nullable=False)
+    meta_clientes_nuevos_mes = db.Column(db.Integer, nullable=False)
+    meta_reactivaciones_mes = db.Column(db.Integer, nullable=False)
+    meta_bajas_mes = db.Column(db.Integer, nullable=False)
+    meta_nuevos_domiciliados_mes = db.Column(db.Integer, nullable=False)
+    meta_arpu_mes = db.Column(db.Numeric(14, 2), nullable=False)
+    meta_venta_tienda_mes = db.Column(db.Numeric(14, 2), nullable=False)
+
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    notes = db.Column(db.Text, nullable=True)
+    
+class TrackBranchCatalogORM(db.Model):
+    __tablename__ = "track_branch_catalog"
+
+    sucursal_canon = db.Column(db.Text, primary_key=True)
+    track_label = db.Column(db.Text, nullable=False)
+    display_order = db.Column(db.Integer, nullable=False)
+    is_track_active = db.Column(db.Boolean, nullable=False, default=True)
+    notes = db.Column(db.Text, nullable=True)
+    
+class TrackBranchAliasORM(db.Model):
+    __tablename__ = "track_branch_aliases"
+
+    source_family = db.Column(db.Text, primary_key=True)
+    raw_branch_name = db.Column(db.Text, primary_key=True)
+    sucursal_canon = db.Column(
+        db.Text,
+        db.ForeignKey("track_branch_catalog.sucursal_canon", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    notes = db.Column(db.Text, nullable=True)
+    
+class TrackSourceDesempenoDailyORM(db.Model):
+    __tablename__ = "track_source_desempeno_daily"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    business_date = db.Column(db.Date, nullable=False)
+    sucursal_canon = db.Column(
+        db.Text,
+        db.ForeignKey("track_branch_catalog.sucursal_canon", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    usuarios_activos_actual = db.Column(db.Integer, nullable=False)
+    reactivaciones_real_mtd = db.Column(db.Integer, nullable=False)
+    bajas_reales_mtd = db.Column(db.Integer, nullable=False)
+    source_snapshot_id = db.Column(db.BigInteger, nullable=False)
+    source_report_type_key = db.Column(db.Text, nullable=False)
+    
+class ReporteDireccionSnapshotORM(db.Model):
+    __tablename__ = "reporte_direccion_snapshots"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    warehouse_upload_id = db.Column(db.BigInteger, nullable=False)
+    report_type_key = db.Column(db.Text, nullable=False)
+    business_date = db.Column(db.Date, nullable=False)
+    captured_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    snapshot_kind = db.Column(db.Text, nullable=False)
+    is_canonical = db.Column(db.Boolean, nullable=False, default=False)
+    row_count_detected = db.Column(db.Integer, nullable=False)
+    row_count_valid = db.Column(db.Integer, nullable=False)
+    row_count_rejected = db.Column(db.Integer, nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False)
+
+
+class ReporteDireccionSnapshotRowORM(db.Model):
+    __tablename__ = "reporte_direccion_snapshot_rows"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    snapshot_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("reporte_direccion_snapshots.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    sucursal = db.Column(db.Text, nullable=False)
+    ingreso_acumulado_mes_en_curso = db.Column(db.Numeric(14, 2), nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    
+class TrackSourceIngresosDailyORM(db.Model):
+    __tablename__ = "track_source_ingresos_daily"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    business_date = db.Column(db.Date, nullable=False)
+    sucursal_canon = db.Column(
+        db.Text,
+        db.ForeignKey("track_branch_catalog.sucursal_canon", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    ingreso_real_mtd = db.Column(db.Numeric(14, 2), nullable=False)
+    source_snapshot_id = db.Column(db.BigInteger, nullable=False)
+    source_report_type_key = db.Column(db.Text, nullable=False)
+    
+class TrackSourceNuevosDailyORM(db.Model):
+    __tablename__ = "track_source_nuevos_daily"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    business_date = db.Column(db.Date, nullable=False)
+    sucursal_canon = db.Column(
+        db.Text,
+        db.ForeignKey("track_branch_catalog.sucursal_canon", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    clientes_nuevos_real_mtd = db.Column(db.Integer, nullable=False)
+    source_snapshot_id = db.Column(db.BigInteger, nullable=False)
+    source_report_type_key = db.Column(db.Text, nullable=False)
+    
+class DomiciliadosTotalSnapshotORM(db.Model):
+    __tablename__ = "domiciliados_total_snapshots"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    warehouse_upload_id = db.Column(db.BigInteger, nullable=False)
+    report_type_key = db.Column(db.Text, nullable=False)
+    business_date = db.Column(db.Date, nullable=False)
+    captured_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    snapshot_kind = db.Column(db.Text, nullable=False)
+    is_canonical = db.Column(db.Boolean, nullable=False, default=False)
+    row_count_detected = db.Column(db.Integer, nullable=False)
+    row_count_valid = db.Column(db.Integer, nullable=False)
+    row_count_rejected = db.Column(db.Integer, nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False)
+
+
+class DomiciliadosTotalSnapshotRowORM(db.Model):
+    __tablename__ = "domiciliados_total_snapshot_rows"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    snapshot_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("domiciliados_total_snapshots.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    row_index = db.Column(db.Integer, nullable=False)
+    sucursal = db.Column(db.Text, nullable=False)
+    general = db.Column(db.Integer, nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    
+
+class TrackSourceDomiciliadosEfectivosDailyORM(db.Model):
+    __tablename__ = "track_source_domiciliados_efectivos_daily"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    business_date = db.Column(db.Date, nullable=False)
+    sucursal_canon = db.Column(
+        db.Text,
+        db.ForeignKey("track_branch_catalog.sucursal_canon", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    nuevos_domiciliados_real_mtd = db.Column(db.Integer, nullable=False)
+    source_snapshot_id = db.Column(db.BigInteger, nullable=False)
+    source_report_type_key = db.Column(db.Text, nullable=False)
