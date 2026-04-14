@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+import os
+from contextlib import contextmanager
+from datetime import datetime, date
 import importlib
 from typing import Any, Callable
 
@@ -77,6 +79,21 @@ def _resolve_legacy_main_callable() -> Callable[..., Any]:
 
     return _import_callable(module_path.strip(), entrypoint_name.strip())
 
+@contextmanager
+def _temporary_env(var_name: str, value: str | None):
+    previous = os.environ.get(var_name)
+
+    try:
+        if value is None:
+            os.environ.pop(var_name, None)
+        else:
+            os.environ[var_name] = value
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop(var_name, None)
+        else:
+            os.environ[var_name] = previous
 
 def _build_log_context(
     *,
@@ -105,6 +122,7 @@ def run_gasca_legacy_main(
     requested_by: str | None = None,
     trigger_source: str | None = None,
     requested_at: datetime | None = None,
+    target_business_date: date | None = None
 ) -> None:
     """
     Ejecuta el main legado multi-reporte de Gasca.
@@ -139,7 +157,11 @@ def run_gasca_legacy_main(
         # El main legado normalmente no acepta argumentos.
         # Si en el futuro decides exponer uno que sí acepte kwargs,
         # aquí lo podemos extender. Por ahora, lo mantenemos simple y explícito.
-        result = legacy_main()
+        with _temporary_env(
+            "GASCA_TARGET_BUSINESS_DATE",
+            target_business_date.isoformat() if target_business_date else None,
+        ):
+            result = legacy_main()
     except NotImplementedError:
         raise
     except SystemExit as exc:

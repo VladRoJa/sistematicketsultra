@@ -1,0 +1,50 @@
+/* frontend\src\app\warehouse\track-dashboard\track-dashboard.component.css */
+
+
+.track-dashboard-page {
+  padding: 24px;
+}
+
+.track-dashboard-header {
+  margin-bottom: 24px;
+}
+
+.track-kicker {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: #4f46e5;
+}
+
+.track-dashboard-header h1 {
+  margin: 0 0 8px;
+  font-size: 36px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.track-subtitle {
+  margin: 0;
+  font-size: 15px;
+  color: #475569;
+}
+
+.track-placeholder-card {
+  background: #ffffff;
+  border: 1px solid #dbe2ea;
+  border-radius: 18px;
+  padding: 24px;
+}
+
+.track-placeholder-card h2 {
+  margin: 0 0 8px;
+  font-size: 22px;
+  color: #0f172a;
+}
+
+.track-placeholder-card p {
+  margin: 0;
+  color: #475569;
+}

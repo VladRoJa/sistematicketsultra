@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 from pathlib import Path
 from typing import Any, Callable
 import mimetypes
@@ -53,7 +53,7 @@ class RawExtractorCommand:
     requested_by: str | None = None
     trigger_source: str | None = None
     requested_at: datetime | None = None
-
+    target_business_date: date | None = None
 
 def register_gasca_extractor_adapter(app) -> None:
     """
@@ -262,6 +262,8 @@ def _call_extractor(
         requested_by=command.requested_by,
         trigger_source=command.trigger_source,
         requested_at=command.requested_at,
+        target_business_date=command.target_business_date,
+        
     )
 
 
@@ -273,6 +275,8 @@ def extract_gasca_report(
     requested_by: str | None = None,
     trigger_source: str | None = None,
     requested_at: datetime | None = None,
+    target_business_date: date | None = None,
+    
 ) -> ProducedGascaArtifact:
     """
     Hook principal del orquestador para extracción de artefactos Gasca.
@@ -293,6 +297,7 @@ def extract_gasca_report(
         requested_by=requested_by,
         trigger_source=trigger_source,
         requested_at=requested_at or _utc_now(),
+        target_business_date=target_business_date,
     )
     _validate_command(command)
 

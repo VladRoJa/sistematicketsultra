@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 import importlib
 import mimetypes
 from pathlib import Path
@@ -378,6 +378,11 @@ def _resolve_recent_file_from_disk(
         },
     )
 
+def _should_bypass_runner_and_resolve_from_disk(
+    *,
+    trigger_source: str | None,
+) -> bool:
+    return trigger_source == "track_daily_pipeline_recent_disk_only"
 
 def _call_runner(
     *,
@@ -388,6 +393,7 @@ def _call_runner(
     requested_by: str | None,
     trigger_source: str | None,
     requested_at: datetime,
+    target_business_date: date | None = None,
 ) -> Any:
     return runner(
         report_type_key=report_type_key,
@@ -396,6 +402,7 @@ def _call_runner(
         requested_by=requested_by,
         trigger_source=trigger_source,
         requested_at=requested_at,
+        target_business_date=target_business_date,
     )
 
 
@@ -407,6 +414,7 @@ def extract_with_gasca_script(
     requested_by: str | None = None,
     trigger_source: str | None = None,
     requested_at: datetime | None = None,
+    target_business_date: date | None = None,
 ) -> ProducedGascaArtifact | dict[str, Any] | str | Path:
     """
     Bridge entre Suite y el script actual de Gasca.
@@ -441,6 +449,19 @@ def extract_with_gasca_script(
         snapshot_kind,
         getattr(runner, "__name__", runner.__class__.__name__),
     )
+    
+    if _should_bypass_runner_and_resolve_from_disk(
+        trigger_source=trigger_source,
+    ):
+        current_app.logger.info(
+            "Gasca script bridge bypassing runner and resolving artifact from disk: report_type_key=%s trigger_source=%s",
+            report_type_key,
+            trigger_source,
+        )
+        return _resolve_recent_file_from_disk(
+            report_type_key=report_type_key,
+            requested_at=effective_requested_at,
+        )
 
     try:
         raw_result = _call_runner(
@@ -451,6 +472,7 @@ def extract_with_gasca_script(
             requested_by=requested_by,
             trigger_source=trigger_source,
             requested_at=effective_requested_at,
+            target_business_date=target_business_date,
         )
     except NotImplementedError:
         raise

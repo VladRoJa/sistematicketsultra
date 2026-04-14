@@ -9,11 +9,7 @@ from typing import Any
 from flask import Blueprint, current_app, jsonify, request
 
 
-warehouse_internal_jobs_bp = Blueprint(
-    "warehouse_internal_jobs",
-    __name__,
-    url_prefix="/api/warehouse/internal",
-)
+warehouse_internal_jobs_bp = Blueprint( "warehouse_internal_jobs", __name__)
 
 
 SUPPORTED_REPORT_TYPES = frozenset(
