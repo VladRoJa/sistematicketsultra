@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime, timezone
 import importlib
 import inspect
 from typing import Any, Callable
@@ -41,6 +41,7 @@ class GascaScriptRunCommand:
     requested_by: str | None
     trigger_source: str | None
     requested_at: datetime | None
+    target_business_date: date | None = None
 
 
 def register_gasca_script_runner(app) -> None:
@@ -391,6 +392,7 @@ def run_gasca_script_report(
     requested_by: str | None = None,
     trigger_source: str | None = None,
     requested_at: datetime | None = None,
+    target_business_date: date | None = None,
 ) -> Any:
     """
     Runner wrapper principal entre Suite y el script real de Gasca.
@@ -420,6 +422,7 @@ def run_gasca_script_report(
         requested_by=requested_by,
         trigger_source=trigger_source,
         requested_at=requested_at,
+        target_business_date=target_business_date,
     )
     _validate_command(command)
 

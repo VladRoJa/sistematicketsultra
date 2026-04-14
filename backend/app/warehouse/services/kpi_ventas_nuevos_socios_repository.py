@@ -415,10 +415,18 @@ def persist_kpi_ventas_nuevos_socios_snapshot(
         )
 
         if canonicality_decision["replace_existing_canonical"]:
-            existing_canonical_snapshot = _fetch_existing_canonical_snapshot_for_day(
-                business_date=business_date_value,
-                snapshot_kind=snapshot_kind,
+            existing_canonical_snapshot_id = canonicality_decision[
+                "existing_canonical_snapshot_id"
+            ]
+
+            existing_canonical_snapshot = (
+                KpiVentasNuevosSociosSnapshotORM.query.get(
+                    existing_canonical_snapshot_id
+                )
+                if existing_canonical_snapshot_id is not None
+                else None
             )
+
             if (
                 existing_canonical_snapshot is not None
                 and existing_canonical_snapshot.id != snapshot.id

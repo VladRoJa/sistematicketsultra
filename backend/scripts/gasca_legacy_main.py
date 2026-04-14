@@ -77,6 +77,19 @@ WA_TOKEN   = os.getenv("WA_TOKEN")
 WA_TO      = os.getenv("WA_TO")
 
 
+def resolver_fecha_kpi_objetivo(default_date: date) -> date:
+    raw_value = os.environ.get("GASCA_TARGET_BUSINESS_DATE")
+    if not raw_value:
+        return default_date
+
+    try:
+        return datetime.fromisoformat(raw_value).date()
+    except ValueError as exc:
+        raise RuntimeError(
+            f"GASCA_TARGET_BUSINESS_DATE inválida: {raw_value!r}"
+        ) from exc
+
+
 def send_whatsapp(msg: str):
     if not WA_ENABLED:
         return
@@ -480,9 +493,10 @@ def descargar_kpi_desempeno(page):
 
     seleccionar_tipo_reporte(page, "Desempeño")
 
-    # ✅ NUEVO: forzar fecha a AYER (Tijuana) antes de generar
-    ayer = datetime.now(TZ).date() - timedelta(days=1)
-    setear_fecha_kpi(page, ayer)
+    fecha_kpi = resolver_fecha_kpi_objetivo(
+        datetime.now(TZ).date() - timedelta(days=1)
+    )
+    setear_fecha_kpi(page, fecha_kpi)
 
     click_boton_generar(page)
 
@@ -502,9 +516,10 @@ def descargar_kpi_ventas_nuevos_socios(page):
 
     seleccionar_tipo_reporte(page, "Ventas Nuevas Socios")
 
-    # ✅ NUEVO: forzar fecha a AYER (Tijuana) antes de generar
-    ayer = datetime.now(TZ).date() - timedelta(days=1)
-    setear_fecha_kpi(page, ayer)
+    fecha_kpi = resolver_fecha_kpi_objetivo(
+        datetime.now(TZ).date() - timedelta(days=1)
+    )
+    setear_fecha_kpi(page, fecha_kpi)
 
     click_boton_generar(page)
 
@@ -582,8 +597,12 @@ def main():
         borrar_snapshots_del_dia(KPI_OUTPUT_DIR, "kpi_desempeno", hoy)
         borrar_snapshots_del_dia(KPI_VENTAS_NS_OUTPUT_DIR, "kpi_ventas_nuevos_socios", hoy)
 
-    # Timestamp basado en AYER (fecha de reporte), con hora actual para evitar colisiones
-    fecha_reporte = datetime.now(TZ).date() - timedelta(days=1)
+    # Fecha objetivo del reporte:
+    # - si viene GASCA_TARGET_BUSINESS_DATE, usar esa
+    # - si no, seguir usando ayer por default
+    fecha_reporte = resolver_fecha_kpi_objetivo(
+        datetime.now(TZ).date() - timedelta(days=1)
+    )
     hora_ejecucion = datetime.now(TZ).strftime("%H-%M")
     timestamp = f"{fecha_reporte:%Y-%m-%d}_{hora_ejecucion}"
     generated_at = datetime.now(TZ)

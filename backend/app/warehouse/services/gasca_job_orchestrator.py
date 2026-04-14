@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 from pathlib import Path
 from typing import Any, Callable
 
@@ -95,6 +95,7 @@ class GascaExtractionCommand:
     snapshot_kind: str
     requested_by: str | None = None
     trigger_source: str | None = None
+    target_business_date: date | None = None
     requested_at: datetime = field(
         default_factory=lambda: datetime.now(timezone.utc)
     )
@@ -258,6 +259,7 @@ def _extract_gasca_artifact(
             requested_by=command.requested_by,
             trigger_source=command.trigger_source,
             requested_at=command.requested_at,
+            target_business_date=command.target_business_date,
         )
     except Exception as exc:
         raise GascaProducerError(
@@ -576,6 +578,7 @@ def run_gasca_report_job(
     snapshot_kind: str,
     requested_by: str | None = None,
     trigger_source: str | None = None,
+    target_business_date: date | None = None,
     force_ingestion: bool = True,
 ) -> dict[str, Any]:
     """
@@ -603,13 +606,15 @@ def run_gasca_report_job(
         snapshot_kind=snapshot_kind,
         requested_by=requested_by,
         trigger_source=trigger_source,
+        target_business_date=target_business_date,
     )
 
     current_app.logger.info(
-        "Running Gasca job orchestration: report_type_key=%s run_mode=%s snapshot_kind=%s",
+        "Running Gasca job orchestration: report_type_key=%s run_mode=%s snapshot_kind=%s target_business_date=%s",
         command.report_type_key,
         command.run_mode,
         command.snapshot_kind,
+        command.target_business_date.isoformat() if command.target_business_date else None,
     )
 
     artifact = _extract_gasca_artifact(command)
@@ -651,6 +656,11 @@ def run_gasca_report_job(
         "snapshot_kind": command.snapshot_kind,
         "requested_by": command.requested_by,
         "trigger_source": command.trigger_source,
+        "target_business_date": (
+            command.target_business_date.isoformat()
+            if command.target_business_date is not None
+            else None
+        ),
         "force_ingestion": force_ingestion,
         "artifact": {
             "original_filename": artifact.original_filename,
@@ -666,3 +676,5 @@ def run_gasca_report_job(
         "snapshot_id": ingestion_result.snapshot_id,
         "ingestion_metadata": ingestion_result.metadata,
     }
+    
+    

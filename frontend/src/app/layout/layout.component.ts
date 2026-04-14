@@ -187,7 +187,9 @@ const menuMantenimientoGerencial = [
       label: 'Warehouse',
       path: '/warehouse',
       submenu: [
-        { label: 'Warehouse', path: '/warehouse' }
+        { label: 'Warehouse', path: '/warehouse' },
+        { label: 'Track diario', path: '/warehouse/track' }
+
       ]
     },
     {

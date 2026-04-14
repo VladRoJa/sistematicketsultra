@@ -2,9 +2,12 @@
 
 
 from app.extensions import db
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import UniqueConstraint, Index
 from sqlalchemy.orm import relationship
+
+def _utc_now():
+    return datetime.now(timezone.utc)
 
 class WarehouseSourceORM(db.Model):
     __tablename__ = 'warehouse_sources'
@@ -715,3 +718,67 @@ class TrackSourceDomiciliadosEfectivosDailyORM(db.Model):
     nuevos_domiciliados_real_mtd = db.Column(db.Integer, nullable=False)
     source_snapshot_id = db.Column(db.BigInteger, nullable=False)
     source_report_type_key = db.Column(db.Text, nullable=False)
+    
+class TrackDailyMartORM(db.Model):
+    __tablename__ = "track_daily_mart"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    track_date = db.Column(db.Date, nullable=False)
+    generation_mode = db.Column(db.Text, nullable=False)
+    sucursal_canon = db.Column(
+        db.Text,
+        db.ForeignKey("track_branch_catalog.sucursal_canon", ondelete="RESTRICT"),
+        nullable=False,
+    )
+
+    # F2 metas / base mensual
+    target_month = db.Column(db.Date, nullable=False)
+    m2_sin_circulaciones = db.Column(db.Numeric(12, 2), nullable=True)
+    usuarios_inicio_mes = db.Column(db.Integer, nullable=True)
+    proyeccion_usuarios_cierre_mes = db.Column(db.Integer, nullable=True)
+    meta_faycgo_mes = db.Column(db.Numeric(14, 2), nullable=True)
+    meta_clientes_nuevos_mes = db.Column(db.Integer, nullable=True)
+    meta_reactivaciones_mes = db.Column(db.Integer, nullable=True)
+    meta_bajas_mes = db.Column(db.Integer, nullable=True)
+    meta_nuevos_domiciliados_mes = db.Column(db.Integer, nullable=True)
+    meta_arpu_mes = db.Column(db.Numeric(14, 2), nullable=True)
+    meta_venta_tienda_mes = db.Column(db.Numeric(14, 2), nullable=True)
+
+    # F3 desempeño
+    usuarios_activos_actual = db.Column(db.Integer, nullable=True)
+    reactivaciones_real_mtd = db.Column(db.Integer, nullable=True)
+    bajas_reales_mtd = db.Column(db.Integer, nullable=True)
+
+    # F4 ingresos
+    ingreso_real_mtd = db.Column(db.Numeric(14, 2), nullable=True)
+
+    # F5 nuevos
+    clientes_nuevos_real_mtd = db.Column(db.Integer, nullable=True)
+
+    # F6 domiciliados efectivos
+    nuevos_domiciliados_real_mtd = db.Column(db.Integer, nullable=True)
+
+    # lineage mínimo
+    source_snapshot_id_desempeno = db.Column(db.BigInteger, nullable=True)
+    source_snapshot_id_ingresos = db.Column(db.BigInteger, nullable=True)
+    source_snapshot_id_nuevos = db.Column(db.BigInteger, nullable=True)
+    source_snapshot_id_domiciliados = db.Column(db.BigInteger, nullable=True)
+    source_business_date_desempeno = db.Column(db.Date, nullable=True)
+    source_business_date_ingresos = db.Column(db.Date, nullable=True)   
+    source_business_date_nuevos = db.Column(db.Date, nullable=True)
+    source_business_date_domiciliados = db.Column(db.Date, nullable=True)
+
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+        server_default=db.func.now(),
+    )
+
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+        onupdate=_utc_now,
+        server_default=db.func.now(),
+    )

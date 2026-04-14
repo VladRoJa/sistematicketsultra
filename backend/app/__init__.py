@@ -26,6 +26,7 @@ from app.routes.pm_routes import pm_bp
 from app.routes.warehouse_routes import warehouse_bp
 from app.warehouse import register_warehouse_runtime_hooks
 from app.routes.warehouse_internal_jobs import warehouse_internal_jobs_bp
+from app.routes.track_routes import track_bp
 
 
 def create_app():
@@ -92,8 +93,8 @@ def create_app():
     app.register_blueprint(admin_usuarios_bp, url_prefix='/api/admin/usuarios')
     app.register_blueprint(pm_bp, url_prefix='/api/pm')
     app.register_blueprint(warehouse_bp, url_prefix='/api/warehouse')
-    app.register_blueprint(warehouse_internal_jobs_bp)
-    
+    app.register_blueprint(warehouse_internal_jobs_bp, url_prefix="/api/warehouse/internal")
+    app.register_blueprint(track_bp, url_prefix='/api/track')
     
     
     app.config['DEBUG'] = True
