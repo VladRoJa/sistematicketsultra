@@ -151,8 +151,14 @@ def parse_venta_total_xlsx(
         if _is_report_generated_row(row):
             skipped_rows += 1
             continue
+        
+        folio_raw = row.get("Folio")
+        if pd.isna(folio_raw) or str(folio_raw).strip() == "":
+            skipped_rows += 1
+            continue
 
         parsed_rows.append(
+            
             VentaTotalParsedRow(
                 row_index=int(source_row_index),
                 fecha=_normalize_required_text(

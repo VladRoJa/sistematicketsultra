@@ -2,7 +2,7 @@
 
 
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
 export type TrackGenerationMode = 'manual_preview' | 'official_closed_day';
@@ -34,6 +34,47 @@ export interface TrackPipelineResponse {
   detail?: string;
 }
 
+export interface TrackDailyMartRow {
+  track_date: string;
+  generation_mode: TrackGenerationMode;
+  sucursal_canon: string;
+  target_month: string | null;
+  m2_sin_circulaciones: number | null;
+  usuarios_inicio_mes: number | null;
+  proyeccion_usuarios_cierre_mes: number | null;
+  meta_faycgo_mes: number | null;
+  meta_clientes_nuevos_mes: number | null;
+  meta_reactivaciones_mes: number | null;
+  meta_bajas_mes: number | null;
+  meta_nuevos_domiciliados_mes: number | null;
+  meta_arpu_mes: number | null;
+  meta_venta_tienda_mes: number | null;
+  usuarios_activos_actual: number | null;
+  reactivaciones_real_mtd: number | null;
+  bajas_reales_mtd: number | null;
+  ingreso_real_mtd: number | null;
+  clientes_nuevos_real_mtd: number | null;
+  nuevos_domiciliados_real_mtd: number | null;
+  source_business_date_desempeno: string | null;
+  source_business_date_ingresos: string | null;
+  source_business_date_nuevos: string | null;
+  source_business_date_domiciliados: string | null;
+  source_snapshot_id_desempeno: number | null;
+  source_snapshot_id_ingresos: number | null;
+  source_snapshot_id_nuevos: number | null;
+  source_snapshot_id_domiciliados: number | null;
+}
+
+export interface TrackDailyMartResponse {
+  status: 'ok' | 'error';
+  track_date?: string;
+  generation_mode?: TrackGenerationMode;
+  total_rows?: number;
+  rows?: TrackDailyMartRow[];
+  message?: string;
+  detail?: string;
+}
+
 @Injectable({
   providedIn: 'root',
 })
@@ -56,4 +97,58 @@ export class TrackService {
       payload,
     );
   }
+
+  getDailyMart(
+    trackDate: string,
+    generationMode: TrackGenerationMode,
+  ): Observable<TrackDailyMartResponse> {
+    const params = new HttpParams()
+      .set('track_date', trackDate)
+      .set('generation_mode', generationMode);
+
+    return this.http.get<TrackDailyMartResponse>(
+      `${this.baseUrl}/daily-mart`,
+      { params },
+    );
+  }
+  getBranchHistory(
+    sucursalCanon: string,
+    targetMonth: string,
+    generationMode: TrackGenerationMode,
+  ): Observable<TrackBranchHistoryResponse> {
+    const params = new HttpParams()
+      .set('sucursal_canon', sucursalCanon)
+      .set('target_month', targetMonth)
+      .set('generation_mode', generationMode);
+
+    return this.http.get<TrackBranchHistoryResponse>(
+      `${this.baseUrl}/branch-history`,
+      { params },
+    );
+  }
+}
+
+
+
+
+export interface TrackBranchHistoryResponse {
+  status: 'ok' | 'error';
+  sucursal_canon?: string;
+  generation_mode?: TrackGenerationMode;
+  days_requested?: number;
+  total_rows?: number;
+  rows?: TrackDailyMartRow[];
+  message?: string;
+  detail?: string;
+}
+
+export interface TrackBranchHistoryResponse {
+  status: 'ok' | 'error';
+  sucursal_canon?: string;
+  generation_mode?: TrackGenerationMode;
+  days_requested?: number;
+  total_rows?: number;
+  rows?: TrackDailyMartRow[];
+  message?: string;
+  detail?: string;
 }

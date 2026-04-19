@@ -1,7 +1,6 @@
 <!-- frontend\src\app\warehouse\track-dashboard\track-dashboard.component.html -->
 
 
-
 <div class="track-dashboard-page">
   <div class="track-dashboard-header">
     <p class="track-kicker">WAREHOUSE</p>
@@ -12,9 +11,230 @@
   </div>
 
   <section class="track-placeholder-card">
-    <h2>Próximo paso</h2>
-    <p>
-      Aquí montaremos la ejecución manual del pipeline y la consulta del track.
-    </p>
+    <div class="card-title-block">
+      <h2>Ejecución manual</h2>
+      <p>
+        Genera un snapshot del track por fecha y modo.
+      </p>
+    </div>
+
+    <div class="track-form">
+      <div class="track-field">
+        <label for="trackDate">Fecha</label>
+        <input
+          id="trackDate"
+          type="date"
+          [(ngModel)]="trackDate"
+          [disabled]="isSubmitting || isLoadingMart"
+        />
+      </div>
+
+      <div class="track-field">
+        <label for="generationMode">Modo</label>
+        <select
+          id="generationMode"
+          [(ngModel)]="generationMode"
+          (ngModelChange)="onGenerationModeChanged()"
+          [disabled]="isSubmitting || isLoadingMart"
+        >
+          <option
+            *ngFor="let option of generationModeOptions"
+            [ngValue]="option.value"
+          >
+            {{ option.label }}
+          </option>
+        </select>
+      </div>
+
+      <div class="track-actions">
+        <button
+          type="button"
+          class="primary-button"
+          (click)="runTrackPipeline()"
+          [disabled]="isSubmitting"
+        >
+          {{ isSubmitting ? 'Generando...' : 'Generar Track' }}
+        </button>
+
+        <button
+          type="button"
+          class="secondary-button"
+          (click)="loadDailyMart()"
+          [disabled]="isLoadingMart"
+        >
+          {{ isLoadingMart ? 'Consultando...' : 'Consultar resultado' }}
+        </button>
+      </div>
+    </div>
+
+    <div class="track-mode-hint">
+      <strong>Modo actual:</strong> {{ selectedModeLabel }}
+    </div>
+
+    <div class="track-feedback" *ngIf="errorMessage">
+      <p>{{ errorMessage }}</p>
+    </div>
+
+    <div
+      class="track-feedback success"
+      *ngIf="lastResponse?.status === 'ok' && lastResponse?.result"
+    >
+      <p>
+        Track generado correctamente para
+        <strong>{{ lastResponse?.result?.track_date }}</strong>
+        en modo
+        <strong>{{ lastResponse?.result?.generation_mode }}</strong>.
+      </p>
+    </div>
+  </section>
+
+  <section class="summary-grid" *ngIf="summaryCards.length > 0">
+    <article
+      *ngFor="let card of summaryCards"
+      [class]="getSummaryCardClass(card.tone)"
+    >
+      <span class="summary-card__label">{{ card.label }}</span>
+      <strong class="summary-card__value">{{ card.value }}</strong>
+    </article>
+  </section>
+
+  <section class="track-placeholder-card track-results-card">
+    <div class="track-results-header">
+      <div class="card-title-block">
+        <h2>Resultado del Track</h2>
+        <p>
+          Daily mart para
+          <strong>{{ lastLoadedTrackDateLabel }}</strong>
+          en modo
+          <strong>{{ selectedModeLabel }}</strong>.
+        </p>
+      </div>
+
+      <div class="track-results-meta">
+        <span class="results-pill">Filas: {{ totalRowsLabel }}</span>
+      </div>
+    </div>
+
+    <div class="track-feedback" *ngIf="martErrorMessage">
+      <p>{{ martErrorMessage }}</p>
+    </div>
+
+    <div class="track-loading" *ngIf="isLoadingMart">
+      <p>Cargando resultado del Track...</p>
+    </div>
+
+    <div
+      class="track-empty-state"
+      *ngIf="!isLoadingMart && !martErrorMessage && viewRows.length === 0"
+    >
+      <p>No hay filas para la fecha y modo seleccionados.</p>
+    </div>
+
+    <div class="track-table-wrapper" *ngIf="!isLoadingMart && viewRows.length > 0">
+      <table class="track-table">
+        <thead>
+          <tr>
+            <th class="cell-sticky">Club</th>
+            <th class="cell-right">Socios inicio mes</th>
+            <th class="cell-right">Socios activos</th>
+            <th class="cell-right">Proyección cierre</th>
+            <th class="cell-right">M² sin circulaciones</th>
+
+            <th class="cell-right">Meta FAYCGO</th>
+            <th class="cell-right">Ingreso real</th>
+            <th class="cell-right">Avance ingreso</th>
+            <th class="cell-right">Dif. ingreso VS meta</th>
+
+            <th class="cell-right">Meta socios nuevos</th>
+            <th class="cell-right">Socios nuevos</th>
+            <th class="cell-right">Avance socios nuevos</th>
+            <th class="cell-right">Dif. socios nuevos VS meta</th>
+
+            <th class="cell-right">Meta reactivaciones</th>
+            <th class="cell-right">Reactivaciones reales</th>
+
+            <th class="cell-right">Meta bajas</th>
+            <th class="cell-right">Bajas reales</th>
+
+            <th class="cell-right">Meta nuevos domiciliados</th>
+            <th class="cell-right">Nuevos domiciliados</th>
+            <th class="cell-right">Avance domiciliados</th>
+            <th class="cell-right">Dif. domiciliados VS meta</th>
+
+            <th class="cell-right">Meta ARPU</th>
+            <th class="cell-right">ARPU actual</th>
+          </tr>
+        </thead>
+
+        <tbody>
+            <tr
+              *ngFor="let row of viewRows"
+              class="track-row"
+              [class.track-row--clickable]="row.rowKind === 'data'"
+              [attr.data-row-kind]="row.rowKind"
+            >
+            <td
+              class="cell-sticky"
+              [class.branch-link-cell]="row.rowKind === 'data'"
+              (click)="openBranchHistory(row)"
+            >
+              {{ row.displayLabel }}
+            </td>
+            <td class="cell-right">{{ row.usuariosInicioMes }}</td>
+            <td class="cell-right">{{ row.usuariosActivos }}</td>
+            <td class="cell-right">{{ row.proyeccionUsuariosCierre }}</td>
+            <td class="cell-right">{{ row.m2SinCirculaciones }}</td>
+
+            <td class="cell-right">{{ row.metaFaycgo }}</td>
+            <td class="cell-right">{{ row.ingresoReal }}</td>
+            <td class="cell-right">
+              <span [class]="getProgressBadgeClass(row.avanceIngresoTone)">
+                {{ row.avanceIngresoLabel }}
+              </span>
+            </td>
+            <td class="cell-right">
+              <span [class]="getProgressBadgeClass(row.diferenciaIngresoTone)">
+                {{ row.diferenciaIngresoLabel }}
+              </span>
+            </td>
+
+            <td class="cell-right">{{ row.metaClientesNuevos }}</td>
+            <td class="cell-right">{{ row.clientesNuevos }}</td>
+            <td class="cell-right">
+              <span [class]="getProgressBadgeClass(row.avanceClientesNuevosTone)">
+                {{ row.avanceClientesNuevosLabel }}
+              </span>
+            </td>
+            <td class="cell-right">
+              <span [class]="getProgressBadgeClass(row.diferenciaClientesNuevosTone)">
+                {{ row.diferenciaClientesNuevosLabel }}
+              </span>
+            </td>
+
+            <td class="cell-right">{{ row.metaReactivaciones }}</td>
+            <td class="cell-right">{{ row.reactivacionesReales }}</td>
+
+            <td class="cell-right">{{ row.metaBajas }}</td>
+            <td class="cell-right">{{ row.bajasReales }}</td>
+
+            <td class="cell-right">{{ row.metaNuevosDomiciliados }}</td>
+            <td class="cell-right">{{ row.nuevosDomiciliados }}</td>
+            <td class="cell-right">
+              <span [class]="getProgressBadgeClass(row.avanceDomiciliadosTone)">
+                {{ row.avanceDomiciliadosLabel }}
+              </span>
+            </td>
+            <td class="cell-right">
+              <span [class]="getProgressBadgeClass(row.diferenciaDomiciliadosTone)">
+                {{ row.diferenciaDomiciliadosLabel }}
+              </span>
+            </td>
+
+            <td class="cell-right">{{ row.metaArpu }}</td>
+            <td class="cell-right">{{ row.arpuActual }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   </section>
 </div>

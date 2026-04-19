@@ -17,6 +17,7 @@ import { PmConfiguracionProgramacionComponent } from './pm/pm-configuracion-prog
 import { PmCalendarioComponent } from './pm/pm-calendario/pm-calendario.component';
 import { WarehouseHomeComponent } from './warehouse/warehouse-home.component';
 import { TrackDashboardComponent } from './warehouse/track-dashboard/track-dashboard.component';
+import { TrackBranchHistoryComponent } from './warehouse/track-dashboard/track-branch-history/track-branch-history.component';
 
 
 export const routes: Routes = [
@@ -111,6 +112,10 @@ export const routes: Routes = [
       {
         path: 'warehouse/track',
         component: TrackDashboardComponent,
+      },
+      {
+        path: 'warehouse/track/sucursal/:sucursalCanon',
+        component: TrackBranchHistoryComponent,
       },
     ],
   },
