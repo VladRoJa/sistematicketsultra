@@ -1,0 +1,306 @@
+/* frontend\src\app\warehouse\track-dashboard\track-branch-history\track-branch-history.component.css */
+
+.track-branch-history-page {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  background: #f8fafc;
+  min-height: 100%;
+}
+
+.track-branch-history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.track-branch-history-kicker {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: #4f46e5;
+}
+
+.track-branch-history-header h1 {
+  margin: 0 0 8px;
+  font-size: 32px;
+  line-height: 1.1;
+  color: #0f172a;
+}
+
+.track-branch-history-subtitle {
+  margin: 0;
+  color: #475569;
+}
+
+.back-button {
+  height: 44px;
+  min-width: 180px;
+  border: none;
+  border-radius: 12px;
+  padding: 0 18px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  color: #0f172a;
+  background: #e2e8f0;
+}
+
+.track-branch-history-card {
+  background: #ffffff;
+  border: 1px solid #dbe2ea;
+  border-radius: 18px;
+  padding: 24px;
+  box-shadow: 0 8px 30px rgba(15, 23, 42, 0.04);
+}
+
+.track-branch-history-meta {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.track-branch-history-meta > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.latest-snapshot-card {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.latest-snapshot-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.latest-snapshot-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #f8fafc;
+}
+
+.latest-snapshot-item strong {
+  font-size: 20px;
+  color: #0f172a;
+}
+
+.track-branch-history-meta strong,
+.track-branch-history-meta .branch-select {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+
+.meta-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: #64748b;
+}
+
+.branch-select {
+  height: 44px;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  padding: 0 14px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+  background: #ffffff;
+  width: 100%;
+}
+
+.card-title-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 18px;
+}
+
+.card-title-block h2 {
+  margin: 0;
+  font-size: 22px;
+  color: #0f172a;
+}
+
+.card-title-block p {
+  margin: 0;
+  color: #475569;
+}
+
+.track-feedback {
+  margin-top: 18px;
+  border-radius: 12px;
+  padding: 14px 16px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+}
+
+.track-feedback p {
+  margin: 0;
+  color: #991b1b;
+}
+
+.track-loading,
+.track-empty-state {
+  border: 1px dashed #cbd5e1;
+  border-radius: 14px;
+  padding: 18px;
+  background: #f8fafc;
+}
+
+.track-loading p,
+.track-empty-state p {
+  margin: 0;
+  color: #475569;
+}
+
+.track-history-table-wrapper {
+  overflow: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #ffffff;
+}
+
+.track-history-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 1100px;
+  background: #ffffff;
+}
+
+.track-history-table thead th {
+  background: #f8fafc;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  color: #334155;
+  padding: 14px 16px;
+  border-bottom: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.track-history-table tbody td {
+  padding: 14px 16px;
+  font-size: 14px;
+  color: #0f172a;
+  border-bottom: 1px solid #eef2f7;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.track-history-table tbody tr:hover {
+  background: #f8fbff;
+}
+
+.progress-cell {
+  font-weight: 700;
+  color: #1d4ed8;
+}
+
+.delta-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 88px;
+  max-width: 100%;
+  padding: 6px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.track-history-table .delta-badge {
+  min-width: 52px;
+  padding: 4px 8px;
+  font-size: 11px;
+}
+
+.delta-badge__value {
+  white-space: nowrap;
+}
+
+.delta-badge--success {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.delta-badge--danger {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.delta-badge--neutral {
+  background: #e2e8f0;
+  color: #475569;
+}
+
+.delta-sparkline {
+  width: 64px;
+  height: 22px;
+  flex: 0 0 auto;
+  overflow: visible;
+}
+
+.delta-sparkline__line {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.delta-sparkline__point {
+  fill: currentColor;
+}
+
+@media (max-width: 900px) {
+  .track-branch-history-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .back-button {
+    width: 100%;
+  }
+
+  .track-branch-history-meta {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .latest-snapshot-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .track-branch-history-page {
+    padding: 16px;
+  }
+
+  .track-branch-history-header h1 {
+    font-size: 28px;
+  }
+
+  .track-branch-history-card {
+    padding: 18px;
+  }
+
+  .track-branch-history-meta {
+    grid-template-columns: 1fr;
+  }
+}

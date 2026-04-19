@@ -1,0 +1,258 @@
+<!-- frontend\src\app\warehouse\track-dashboard\track-branch-history\track-branch-history.component.html -->
+
+<div class="track-branch-history-page">
+  <div class="track-branch-history-header">
+    <div>
+      <p class="track-branch-history-kicker">TRACK / DETALLE</p>
+      <h1>{{ sucursalCanon || pageTitle }}</h1>
+      <p class="track-branch-history-subtitle">
+        Vista histórica por sucursal.
+      </p>
+    </div>
+
+    <button
+      type="button"
+      class="back-button"
+      (click)="goBackToTrack()"
+    >
+      Volver al Track
+    </button>
+  </div>
+
+  <section class="track-branch-history-card">
+    <div class="track-branch-history-meta">
+    <div>
+      <span class="meta-label">Sucursal</span>
+      <select
+        class="branch-select"
+        [ngModel]="selectedSucursalCanon"
+        (ngModelChange)="onSucursalCanonChanged($event)"
+      >
+        <option
+          *ngFor="let option of branchOptions"
+          [ngValue]="option.value"
+        >
+          {{ option.label }}
+        </option>
+      </select>
+    </div>
+
+      <div>
+        <span class="meta-label">Modo</span>
+        <strong>{{ generationMode }}</strong>
+      </div>
+
+      <div>
+        <span class="meta-label">Mes</span>
+        <select
+          class="branch-select"
+          [ngModel]="targetMonth"
+          (ngModelChange)="onTargetMonthChanged($event)"
+        >
+          <option
+            *ngFor="let option of targetMonthOptions"
+            [ngValue]="option.value"
+          >
+            {{ option.label }}
+          </option>
+        </select>
+      </div>
+
+      <div>
+        <span class="meta-label">Filas</span>
+        <strong>{{ totalRows }}</strong>
+      </div>
+    </div>
+  </section>
+
+  <section
+    class="track-branch-history-card latest-snapshot-card"
+    *ngIf="latestSnapshot"
+  >
+    <div class="card-title-block">
+      <h2>Resumen</h2>
+    </div>
+
+    <div class="latest-snapshot-grid">
+      <div class="latest-snapshot-item">
+        <span class="meta-label">Fecha</span>
+        <strong>{{ formatShortDate(latestSnapshot.trackDate) }}</strong>
+      </div>
+
+      <div class="latest-snapshot-item">
+        <span class="meta-label">Socios activos</span>
+        <strong>{{ latestSnapshot.usuariosActivos }}</strong>
+
+        <div
+          [class]="'delta-badge delta-badge--' + latestSnapshot.usuariosActivosDeltaTone"
+        >
+          <svg
+            *ngIf="sociosActivosSparkline"
+            class="delta-sparkline"
+            viewBox="0 0 120 48"
+            preserveAspectRatio="none"
+          >
+            <path
+              class="delta-sparkline__line"
+              [attr.d]="sociosActivosSparkline.path"
+            ></path>
+
+            <circle
+              *ngFor="let point of sociosActivosSparkline.points"
+              class="delta-sparkline__point"
+              [attr.cx]="point.x"
+              [attr.cy]="point.y"
+              r="2.2"
+            ></circle>
+          </svg>
+
+          <span class="delta-badge__value">
+            {{ latestSnapshot.usuariosActivosDelta }}
+          </span>
+        </div>
+      </div>
+
+      <div class="latest-snapshot-item">
+        <span class="meta-label">Ingreso real</span>
+        <strong>{{ latestSnapshot.ingresoReal }}</strong>
+
+        <div
+          [class]="'delta-badge delta-badge--' + latestSnapshot.ingresoDeltaTone"
+        >
+          <svg
+            *ngIf="ingresoRealSparkline"
+            class="delta-sparkline"
+            viewBox="0 0 120 48"
+            preserveAspectRatio="none"
+          >
+            <path
+              class="delta-sparkline__line"
+              [attr.d]="ingresoRealSparkline.path"
+            ></path>
+
+            <circle
+              *ngFor="let point of ingresoRealSparkline.points"
+              class="delta-sparkline__point"
+              [attr.cx]="point.x"
+              [attr.cy]="point.y"
+              r="2.2"
+            ></circle>
+          </svg>
+
+          <span class="delta-badge__value">
+            {{ latestSnapshot.ingresoDelta }}
+          </span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="track-branch-history-card">
+    <div class="card-title-block">
+      <h2>Histórico reciente</h2>
+      <p>
+        Evolución reciente del club dentro del Track.
+      </p>
+    </div>
+
+    <div class="track-feedback" *ngIf="errorMessage">
+      <p>{{ errorMessage }}</p>
+    </div>
+
+    <div class="track-loading" *ngIf="isLoading">
+      <p>Cargando historial del club...</p>
+    </div>
+
+    <div
+      class="track-empty-state"
+      *ngIf="!isLoading && !errorMessage && historyRows.length === 0"
+    >
+      <p>No hay datos históricos para esta sucursal.</p>
+    </div>
+
+    <div
+      class="track-history-table-wrapper"
+      *ngIf="!isLoading && historyRows.length > 0"
+    >
+      <table class="track-history-table">
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Socios activos</th>
+            <th>Δ socios activos</th>
+            <th>Ingreso real</th>
+            <th>Δ ingreso</th>
+            <th>Avance ingreso</th>
+            <th>Socios nuevos</th>
+            <th>Avance socios nuevos</th>
+            <th>Nuevos domiciliados</th>
+            <th>Avance domiciliados</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          <tr *ngFor="let row of historyRows; let i = index">
+            <td>{{ formatShortDate(row.track_date) }}</td>
+
+            <td>{{ formatInteger(row.usuarios_activos_actual) }}</td>
+
+            <td>
+              <span
+                [class]="'delta-badge delta-badge--' + getSociosActivosDeltaTone(i)"
+              >
+                {{ getSociosActivosDeltaLabel(i) }}
+              </span>
+            </td>
+
+            <td>{{ formatCurrency(row.ingreso_real_mtd) }}</td>
+
+            <td>
+              <span
+                [class]="'delta-badge delta-badge--' + getIngresoDeltaTone(i)"
+              >
+                {{ getIngresoDeltaLabel(i) }}
+              </span>
+            </td>
+
+            <td class="progress-cell">
+              {{
+                formatPercent(
+                  calculateProgressPercent(
+                    row.ingreso_real_mtd,
+                    row.meta_faycgo_mes
+                  )
+                )
+              }}
+            </td>
+
+            <td>{{ formatInteger(row.clientes_nuevos_real_mtd) }}</td>
+
+            <td class="progress-cell">
+              {{
+                formatPercent(
+                  calculateProgressPercent(
+                    row.clientes_nuevos_real_mtd,
+                    row.meta_clientes_nuevos_mes
+                  )
+                )
+              }}
+            </td>
+
+            <td>{{ formatInteger(row.nuevos_domiciliados_real_mtd) }}</td>
+
+            <td class="progress-cell">
+              {{
+                formatPercent(
+                  calculateProgressPercent(
+                    row.nuevos_domiciliados_real_mtd,
+                    row.meta_nuevos_domiciliados_mes
+                  )
+                )
+              }}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>

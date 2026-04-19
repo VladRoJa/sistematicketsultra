@@ -116,6 +116,7 @@ def run_track_daily_pipeline_for_date(
         snapshot_kind="daily",
         requested_by=requested_by_value,
         trigger_source=trigger_source_value,
+        target_business_date=track_date,
         force_ingestion=True,
     )
 
@@ -133,9 +134,16 @@ def run_track_daily_pipeline_for_date(
             snapshot_kind="daily",
             requested_by=requested_by_value,
             trigger_source="track_daily_pipeline_recent_disk_only",
+            target_business_date=track_date,
             force_ingestion=True,
         )
         legacy_followup_results.append(result)
+
+    single_report_type_keys = [
+        "venta_total",
+        "cargos_recurrentes",
+        "corte_caja",
+    ]
 
     single_report_type_keys = [
         "venta_total",
@@ -153,6 +161,7 @@ def run_track_daily_pipeline_for_date(
                 snapshot_kind="daily",
                 requested_by=requested_by_value,
                 trigger_source=trigger_source_value,
+                target_business_date=track_date,
                 force_ingestion=True,
             )
             single_report_results.append(result)
@@ -169,7 +178,6 @@ def run_track_daily_pipeline_for_date(
                     "error": str(exc),
                 }
             )
-
     # 2) REFRESH DE FUENTES TRACK
     refresh_dates = _resolve_refresh_dates(
         track_date=track_date,
@@ -214,3 +222,22 @@ def run_track_daily_pipeline_for_date(
         "source_refresh_results": source_refresh_results,
         "mart_refresh_result": mart_refresh_result,
     }
+    
+    
+def run_track_official_closed_day_job(
+    *,
+    business_date: Any,
+    requested_by: str | None = None,
+    trigger_source: str | None = None,
+) -> dict[str, Any]:
+    normalized_business_date = _ensure_date(
+        business_date,
+        field_name="business_date",
+    )
+
+    return run_track_daily_pipeline_for_date(
+        business_date=normalized_business_date,
+        generation_mode="official_closed_day",
+        requested_by=requested_by or "track_official_closed_day_job",
+        trigger_source=trigger_source or "track_official_closed_day_job_service",
+    )

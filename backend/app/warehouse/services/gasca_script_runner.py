@@ -159,6 +159,7 @@ def _build_callable_kwargs(command: GascaScriptRunCommand) -> dict[str, Any]:
         "requested_by": command.requested_by,
         "trigger_source": command.trigger_source,
         "requested_at": command.requested_at,
+        "target_business_date": command.target_business_date,
     }
 
 
