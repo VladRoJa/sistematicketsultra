@@ -15,6 +15,16 @@ import {
 
 type ProgressTone = 'danger' | 'warning' | 'success' | 'neutral';
 type SummaryTone = ProgressTone | 'default';
+type TrackColumnGroupKey =
+  | 'ocupacion'
+  | 'ingresos'
+  | 'crecimiento'
+  | 'domiciliados';
+
+interface TrackColumnGroupOption {
+  key: TrackColumnGroupKey;
+  label: string;
+}
 
 interface GenerationModeOption {
   value: TrackGenerationMode;
@@ -119,6 +129,14 @@ export class TrackDashboardComponent implements OnInit {
     'SALTILLO_VILLALTA',
     'LA_VIGA',
   ];
+
+  readonly trackColumnGroupOptions: TrackColumnGroupOption[] = [
+  { key: 'ocupacion', label: 'Ocupación' },
+  { key: 'crecimiento', label: 'Crecimiento' },
+  { key: 'domiciliados', label: 'Domiciliados' },
+  { key: 'ingresos', label: 'Ingresos' },
+];
+
 
   trackDate = this.buildTodayIsoDate();
   generationMode: TrackGenerationMode = 'manual_preview';
@@ -245,6 +263,32 @@ openBranchHistory(row: TrackViewRow): void {
       },
     },
   );
+}
+
+shouldDisableTrackDateInput(): boolean {
+  return this.isLoadingMart;
+}
+
+shouldDisableGenerationModeSelect(): boolean {
+  return this.isLoadingMart;
+}
+
+shouldDisableGenerateTrackButton(): boolean {
+  return this.isSubmitting;
+}
+
+getGenerateTrackButtonClass(): string {
+  return this.isSubmitting
+    ? 'primary-button primary-button--loading'
+    : 'primary-button';
+}
+
+getGenerateTrackButtonLabel(): string {
+  return this.isSubmitting ? 'Generando...' : 'Generar Track';
+}
+
+isGenerateTrackButtonLoading(): boolean {
+  return this.isSubmitting;
 }
 
 private buildTargetMonthFromTrackDate(): string {
@@ -714,4 +758,95 @@ private formatSignedCurrency(value: number | null | undefined): string {
 
     return `${year}-${month}-${day}`;
   }
+
+showAllTrackColumnGroups(): void {
+  this.selectedTrackColumnGroups = [];
+}
+
+toggleTrackColumnGroup(groupKey: TrackColumnGroupKey): void {
+  const isSelected = this.selectedTrackColumnGroups.includes(groupKey);
+
+  if (isSelected) {
+    const nextSelectedGroups = this.selectedTrackColumnGroups.filter(
+      (key) => key !== groupKey
+    );
+
+    this.selectedTrackColumnGroups = nextSelectedGroups;
+    return;
+  }
+
+  this.selectedTrackColumnGroups = [
+    ...this.selectedTrackColumnGroups,
+    groupKey,
+  ];
+}
+
+isTrackColumnGroupVisible(groupKey: TrackColumnGroupKey): boolean {
+  if (this.areAllTrackColumnGroupsVisible()) {
+    return true;
+  }
+
+  return this.selectedTrackColumnGroups.includes(groupKey);
+}
+
+isTrackColumnGroupActive(groupKey: TrackColumnGroupKey): boolean {
+  return this.selectedTrackColumnGroups.includes(groupKey);
+}
+
+areAllTrackColumnGroupsVisible(): boolean {
+  return this.selectedTrackColumnGroups.length === 0;
+}
+
+getTrackColumnGroupAllButtonClass(): string {
+  return this.areAllTrackColumnGroupsVisible()
+    ? 'secondary-button track-column-groups__button track-column-groups__button--active'
+    : 'secondary-button track-column-groups__button';
+}
+
+getTrackColumnGroupButtonClass(groupKey: TrackColumnGroupKey): string {
+  return this.isTrackColumnGroupActive(groupKey)
+    ? 'secondary-button track-column-groups__button track-column-groups__button--active'
+    : 'secondary-button track-column-groups__button';
+}
+
+
+selectedTrackColumnGroups: TrackColumnGroupKey[] = [];
+
+shouldStretchTrackTableToPanel(): boolean {
+  return this.getVisibleTrackTableColumnCount() <= 7;
+}
+
+getVisibleTrackTableColumnCount(): number {
+  let totalColumns = 1; // Club siempre visible
+
+  if (this.isTrackColumnGroupVisible('ocupacion')) {
+    totalColumns += 4;
+  }
+
+  if (this.isTrackColumnGroupVisible('ingresos')) {
+    totalColumns += 6;
+  }
+
+  if (this.isTrackColumnGroupVisible('crecimiento')) {
+    totalColumns += 8;
+  }
+
+  if (this.isTrackColumnGroupVisible('domiciliados')) {
+    totalColumns += 4;
+  }
+
+  return totalColumns;
+}
+
+getTrackTableWrapperClass(): string {
+  return this.shouldStretchTrackTableToPanel()
+    ? 'track-table-wrapper track-table-wrapper--stretch'
+    : 'track-table-wrapper';
+}
+
+getTrackTableClass(): string {
+  return this.shouldStretchTrackTableToPanel()
+    ? 'track-table track-table--stretch'
+    : 'track-table';
+}
 }
