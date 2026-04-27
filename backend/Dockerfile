@@ -15,7 +15,8 @@ RUN apt-get update && \
 
 COPY app /app/app
 COPY migrations /app/migrations
+COPY scripts /app/scripts
 
 
 EXPOSE 5000
-CMD ["gunicorn", "-b", "0.0.0.0:5000", "app.wsgi:app"]
+CMD ["gunicorn", "--timeout", "300", "-b", "0.0.0.0:5000", "app.wsgi:app"]
