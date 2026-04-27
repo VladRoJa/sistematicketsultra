@@ -25,6 +25,7 @@ RUN apt-get update && \
         libgbm1 \
         libxcb1 \
         libxkbcommon0 \
+        libcups2t64 \
         libasound2t64 && \
     pip install --upgrade pip && \
     pip install -r requirements.txt && \
