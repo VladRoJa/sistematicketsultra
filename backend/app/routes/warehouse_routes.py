@@ -24,8 +24,12 @@ from app.models import (
 from app.utils.warehouse_audit import log_warehouse_audit
 from app.warehouse.services.warehouse_document_upload_service import (
     create_warehouse_document_upload,
+    _build_upload_display_filename,
     WarehouseDocumentUploadError,
     WarehouseDocumentValidationError,
+)
+from app.warehouse.services.warehouse_manual_ingestion_dispatcher import (
+    WarehouseManualIngestionDispatcherError,
 )
 
 
@@ -230,6 +234,15 @@ def warehouse_create_upload():
     date_from_raw = (request.form.get('date_from') or '').strip()
     date_to_raw = (request.form.get('date_to') or '').strip()
 
+    manual_ingestion_result = {
+        "ingestion_status": "not_applicable",
+        "metadata": {
+            "reason": "manual_structured_ingestion_not_attempted",
+        },
+    }
+
+    result = None
+
     try:
         file_bytes = uploaded_file.read()
 
@@ -247,6 +260,16 @@ def warehouse_create_upload():
             },
         )
 
+        manual_dispatcher = current_app.config.get(
+            "WAREHOUSE_MANUAL_INGESTION_DISPATCHER"
+        )
+        if callable(manual_dispatcher):
+            manual_ingestion_result = manual_dispatcher(
+                warehouse_upload_id=result["upload_id"],
+                requested_by=str(current_user_id),
+                ingestion_source="manual_route",
+            )
+
     except WarehouseDocumentValidationError as exc:
         return jsonify({
             "error": "No se pudo crear el upload",
@@ -254,14 +277,59 @@ def warehouse_create_upload():
         }), 400
 
     except WarehouseDocumentUploadError as exc:
-        current_app.logger.exception("Error controlado creando upload documental de Warehouse.")
+        current_app.logger.exception(
+            "Error controlado creando upload documental de Warehouse."
+        )
         return jsonify({
             "error": "No se pudo crear el upload",
             "detail": str(exc),
         }), 500
 
+    except WarehouseManualIngestionDispatcherError as exc:
+        current_app.logger.exception(
+            "Error controlado disparando ingesta estructurada manual de Warehouse."
+        )
+
+        if result is None:
+            return jsonify({
+                "error": "No se pudo crear el upload",
+                "detail": str(exc),
+            }), 500
+
+        manual_ingestion_result = {
+            "ingestion_status": "failed",
+            "error": "Upload creado pero falló la ingesta estructurada",
+            "detail": str(exc),
+        }
+
+        return jsonify({
+            "message": "Upload creado correctamente",
+            "upload_id": result["upload_id"],
+            "filename": result["filename"],
+            "stored_filename": result["stored_filename"],
+            "display_filename": result["display_filename"],
+            "stored_path": result["stored_path"],
+            "file_size_bytes": result["file_size_bytes"],
+            "file_hash_sha256": result["file_hash_sha256"],
+            "report_type_key": result["report_type_key"],
+            "report_type_id": result["report_type_id"],
+            "family_id": result["family_id"],
+            "source_id": result["source_id"],
+            "operational_role_id": result["operational_role_id"],
+            "period_type": result["period_type"],
+            "cutoff_date": result["cutoff_date"],
+            "date_from": result["date_from"],
+            "date_to": result["date_to"],
+            "duplicate_detected": result["duplicate_detected"],
+            "duplicate_upload_id": result["duplicate_upload_id"],
+            "manual_ingestion_status": manual_ingestion_result.get("ingestion_status"),
+            "manual_structured_result": manual_ingestion_result,
+        }), 201
+
     except Exception:
-        current_app.logger.exception("Error inesperado creando upload documental de Warehouse.")
+        current_app.logger.exception(
+            "Error inesperado creando upload documental de Warehouse."
+        )
         return jsonify({
             "error": "No se pudo crear el upload",
             "detail": "Ocurrió un error al guardar el archivo y registrar el upload en Warehouse."
@@ -286,8 +354,10 @@ def warehouse_create_upload():
         "date_to": result["date_to"],
         "duplicate_detected": result["duplicate_detected"],
         "duplicate_upload_id": result["duplicate_upload_id"],
-    }), 201  
-    
+        "manual_ingestion_status": manual_ingestion_result.get("ingestion_status"),
+        "manual_structured_result": manual_ingestion_result,
+    }), 201
+        
 @warehouse_bp.route('/uploads', methods=['GET'])
 @jwt_required()
 def warehouse_list_uploads():
@@ -331,6 +401,14 @@ def warehouse_list_uploads():
                 "id": item.id,
                 "original_filename": item.original_filename,
                 "stored_filename": item.stored_filename,
+                "display_filename": _build_upload_display_filename(
+                    report_type_key=item.report_type.key if item.report_type else "",
+                    period_type=item.period_type,
+                    cutoff_date=item.cutoff_date,
+                    date_from=item.date_from,
+                    date_to=item.date_to,
+                    original_filename=item.original_filename,
+                ),
                 "stored_path": item.stored_path,
                 "file_size_bytes": item.file_size_bytes,
                 "file_hash_sha256": item.file_hash_sha256,

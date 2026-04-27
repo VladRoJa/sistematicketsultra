@@ -13,6 +13,7 @@ from flask_jwt_extended import get_jwt, jwt_required
 
 from app.models.warehouse import TrackDailyMartORM
 from app.warehouse.services.track_daily_pipeline_service import (
+    run_track_agregadoras_integration_for_date,
     run_track_daily_pipeline_for_date,
 )
 
@@ -99,6 +100,8 @@ def _serialize_track_daily_mart_row(row: TrackDailyMartORM) -> dict[str, Any]:
         "usuarios_activos_actual": row.usuarios_activos_actual,
         "reactivaciones_real_mtd": row.reactivaciones_real_mtd,
         "bajas_reales_mtd": row.bajas_reales_mtd,
+        "ingreso_real_base_mtd": _serialize_decimal(row.ingreso_real_base_mtd),
+        "ingreso_real_agregadora_mtd": _serialize_decimal(row.ingreso_real_agregadora_mtd),        
         "ingreso_real_mtd": _serialize_decimal(row.ingreso_real_mtd),
         "clientes_nuevos_real_mtd": row.clientes_nuevos_real_mtd,
         "nuevos_domiciliados_real_mtd": row.nuevos_domiciliados_real_mtd,
@@ -197,7 +200,63 @@ def run_track_daily_pipeline_endpoint():
             }
         ), 500
 
+@track_bp.route("/run-agregadoras-integration", methods=["POST"])
+@jwt_required()
+def run_track_agregadoras_integration_endpoint():
+    try:
+        _require_admin_role()
 
+        payload = request.get_json(silent=True) or {}
+
+        track_date = _ensure_date(
+            payload.get("track_date"),
+            field_name="track_date",
+        )
+
+        requested_by = str(
+            payload.get("requested_by") or "api_agregadoras_integration"
+        ).strip()
+        trigger_source = str(
+            payload.get("trigger_source") or "api_track_agregadoras_integration"
+        ).strip()
+
+        result = run_track_agregadoras_integration_for_date(
+            business_date=track_date,
+            requested_by=requested_by,
+            trigger_source=trigger_source,
+        )
+
+        return jsonify(
+            {
+                "status": "ok",
+                "result": result,
+            }
+        ), 200
+
+    except PermissionError as exc:
+        return jsonify(
+            {
+                "status": "error",
+                "message": str(exc),
+            }
+        ), 403
+
+    except ValueError as exc:
+        return jsonify(
+            {
+                "status": "error",
+                "message": str(exc),
+            }
+        ), 400
+
+    except Exception as exc:
+        return jsonify(
+            {
+                "status": "error",
+                "message": "Falló la integración manual de agregadoras del Track.",
+                "detail": str(exc),
+            }
+        ), 500
 @track_bp.route("/daily-mart", methods=["GET"])
 @jwt_required()
 def get_track_daily_mart_endpoint():

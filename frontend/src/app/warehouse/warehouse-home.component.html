@@ -173,7 +173,7 @@
 
     <div class="warehouse-detail-item warehouse-detail-item--wide">
       <span class="warehouse-detail-item__label">Archivo</span>
-      <strong class="warehouse-detail-item__value">{{ selectedUploadDetail.original_filename }}</strong>
+      <strong class="warehouse-detail-item__value">{{ selectedUploadDetail.display_filename }}</strong>
     </div>
 
     <div class="warehouse-detail-item">
@@ -300,7 +300,7 @@
         <tbody>
           <tr *ngFor="let upload of uploads">
             <td>{{ upload.id }}</td>
-            <td>{{ upload.original_filename }}</td>
+            <td>{{ upload.display_filename }}</td>
             <td>{{ upload.report_type_label || upload.report_type_key }}</td>
             <td>{{ upload.period_type }}</td>
             <td>

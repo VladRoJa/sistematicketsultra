@@ -48,6 +48,8 @@ interface TrackViewRow {
   m2SinCirculaciones: string;
 
   metaFaycgo: string;
+  ingresoBase: string;
+  ingresoAgregadoras: string;
   ingresoReal: string;
   avanceIngresoLabel: string;
   avanceIngresoTone: ProgressTone;
@@ -214,6 +216,40 @@ export class TrackDashboardComponent implements OnInit {
     this.lastLoadedTrackDateLabel = this.trackDate;
     this.syncSelectedModeLabel();
 
+    if (this.generationMode !== 'official_closed_day') {
+      this.fetchDailyMart();
+      return;
+    }
+
+    this.trackService
+      .runAgregadorasIntegration({
+        track_date: this.trackDate,
+        requested_by: 'track_dashboard_consultar_resultado',
+        trigger_source: 'track_dashboard_load_daily_mart',
+      })
+      .subscribe({
+        next: (response) => {
+          if (response.status !== 'ok') {
+            this.martErrorMessage =
+              response.message ||
+              'No se pudo integrar agregadoras antes de consultar el Track.';
+            this.isLoadingMart = false;
+            return;
+          }
+
+          this.fetchDailyMart();
+        },
+        error: (error) => {
+          this.martErrorMessage =
+            error?.error?.message ||
+            error?.error?.detail ||
+            'Ocurrió un error al integrar agregadoras antes de consultar el Track.';
+          this.isLoadingMart = false;
+        },
+      });
+  }
+
+  private fetchDailyMart(): void {
     this.trackService
       .getDailyMart(this.trackDate, this.generationMode)
       .subscribe({
@@ -361,6 +397,8 @@ private buildTargetMonthFromTrackDate(): string {
       m2SinCirculaciones: this.formatDecimal(row.m2_sin_circulaciones, 1),
 
       metaFaycgo: this.formatCurrency(row.meta_faycgo_mes),
+      ingresoBase: this.formatCurrency(row.ingreso_real_base_mtd),
+      ingresoAgregadoras: this.formatCurrency(row.ingreso_real_agregadora_mtd),
       ingresoReal: this.formatCurrency(row.ingreso_real_mtd),
       avanceIngresoLabel: this.formatPercent(ingresoProgress),
       avanceIngresoTone: this.getProgressTone(ingresoProgress),
@@ -530,6 +568,11 @@ private buildTargetMonthFromTrackDate(): string {
       usuarios_activos_actual: totalUsuariosActivos,
       reactivaciones_real_mtd: this.sumNumber(rows, 'reactivaciones_real_mtd'),
       bajas_reales_mtd: this.sumNumber(rows, 'bajas_reales_mtd'),
+      ingreso_real_base_mtd: this.sumNumber(rows, 'ingreso_real_base_mtd'),
+      ingreso_real_agregadora_mtd: this.sumNumber(
+        rows,
+        'ingreso_real_agregadora_mtd',
+      ),
       ingreso_real_mtd: totalIngresoReal,
       clientes_nuevos_real_mtd: this.sumNumber(rows, 'clientes_nuevos_real_mtd'),
       nuevos_domiciliados_real_mtd: this.sumNumber(

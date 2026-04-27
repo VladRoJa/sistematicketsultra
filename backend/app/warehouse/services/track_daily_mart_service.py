@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from typing import Any
 
 from app.extensions import db
@@ -176,6 +176,20 @@ def build_track_daily_mart_for_date(
         nuevos_row = nuevos_by_branch.get(branch.sucursal_canon)
         domiciliados_row = domiciliados_by_branch.get(branch.sucursal_canon)
 
+        ingreso_real_base_mtd = (
+            ingresos_row.ingreso_real_base_mtd if ingresos_row else None
+        )
+        ingreso_real_agregadora_mtd = (
+            ingresos_row.ingreso_real_agregadora_mtd if ingresos_row else None
+        )
+        ingreso_real_total_mtd = (
+            ingresos_row.ingreso_real_total_mtd if ingresos_row else None
+        )
+
+        ingreso_real_mtd = ingreso_real_total_mtd
+        if ingreso_real_mtd is None and ingresos_row:
+            ingreso_real_mtd = ingresos_row.ingreso_real_mtd
+
         result.append(
             {
                 "track_date": track_date.isoformat(),
@@ -227,9 +241,10 @@ def build_track_daily_mart_for_date(
                 ),
 
                 # F4
-                "ingreso_real_mtd": (
-                    ingresos_row.ingreso_real_mtd if ingresos_row else None
-                ),
+                "ingreso_real_base_mtd": ingreso_real_base_mtd,
+                "ingreso_real_agregadora_mtd": ingreso_real_agregadora_mtd,
+                "ingreso_real_total_mtd": ingreso_real_total_mtd,
+                "ingreso_real_mtd": ingreso_real_mtd,
 
                 # F5
                 "clientes_nuevos_real_mtd": (
@@ -262,7 +277,8 @@ def build_track_daily_mart_for_date(
                     desempeno_row.source_snapshot_id if desempeno_row else None
                 ),
                 "source_snapshot_id_ingresos": (
-                    ingresos_row.source_snapshot_id if ingresos_row else None
+                    ingresos_row.source_snapshot_id_reporte_direccion
+                    if ingresos_row else None
                 ),
                 "source_snapshot_id_nuevos": (
                     nuevos_row.source_snapshot_id if nuevos_row else None
@@ -327,7 +343,11 @@ def refresh_track_daily_mart_for_date(
                     reactivaciones_real_mtd=row["reactivaciones_real_mtd"],
                     bajas_reales_mtd=row["bajas_reales_mtd"],
 
+                    ingreso_real_base_mtd=row["ingreso_real_base_mtd"],
+                    ingreso_real_agregadora_mtd=row["ingreso_real_agregadora_mtd"],
+                    ingreso_real_total_mtd=row["ingreso_real_total_mtd"],
                     ingreso_real_mtd=row["ingreso_real_mtd"],
+
                     clientes_nuevos_real_mtd=row["clientes_nuevos_real_mtd"],
                     nuevos_domiciliados_real_mtd=row["nuevos_domiciliados_real_mtd"],
 
