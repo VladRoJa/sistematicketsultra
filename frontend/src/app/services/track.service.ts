@@ -52,6 +52,8 @@ export interface TrackDailyMartRow {
   usuarios_activos_actual: number | null;
   reactivaciones_real_mtd: number | null;
   bajas_reales_mtd: number | null;
+  ingreso_real_base_mtd: number | null;
+  ingreso_real_agregadora_mtd: number | null;
   ingreso_real_mtd: number | null;
   clientes_nuevos_real_mtd: number | null;
   nuevos_domiciliados_real_mtd: number | null;
@@ -75,6 +77,40 @@ export interface TrackDailyMartResponse {
   detail?: string;
 }
 
+export interface TrackAgregadorasIntegrationRequest {
+  track_date: string;
+  requested_by?: string;
+  trigger_source?: string;
+}
+
+export interface TrackAgregadorasIntegrationResult {
+  status: string;
+  track_date: string;
+  generation_mode: string;
+  requested_by: string;
+  trigger_source: string;
+  source_refresh_results: {
+    ingresos: {
+      status: string;
+      business_date: string;
+      rows_inserted: number;
+    };
+  };
+  mart_refresh_result: {
+    status: string;
+    track_date: string;
+    generation_mode: string;
+    rows_inserted: number;
+  };
+}
+
+export interface TrackAgregadorasIntegrationResponse {
+  status: string;
+  result: TrackAgregadorasIntegrationResult | null;
+  message?: string;
+  detail?: string;
+}
+
 @Injectable({
   providedIn: 'root',
 })
@@ -94,6 +130,15 @@ export class TrackService {
 
     return this.http.post<TrackPipelineResponse>(
       `${this.baseUrl}/run-daily-pipeline`,
+      payload,
+    );
+  }
+
+  runAgregadorasIntegration(
+    payload: TrackAgregadorasIntegrationRequest,
+  ) {
+    return this.http.post<TrackAgregadorasIntegrationResponse>(
+      `${this.baseUrl}/run-agregadoras-integration`,
       payload,
     );
   }

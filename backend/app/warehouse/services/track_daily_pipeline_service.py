@@ -241,3 +241,42 @@ def run_track_official_closed_day_job(
         requested_by=requested_by or "track_official_closed_day_job",
         trigger_source=trigger_source or "track_official_closed_day_job_service",
     )
+    
+    
+def run_track_agregadoras_integration_for_date(
+    *,
+    business_date: Any,
+    requested_by: str | None = None,
+    trigger_source: str | None = None,
+) -> dict[str, Any]:
+    track_date = _ensure_date(
+        business_date,
+        field_name="business_date",
+    )
+
+    requested_by_value = requested_by or "track_agregadoras_integration"
+    trigger_source_value = (
+        trigger_source or "track_agregadoras_integration_service"
+    )
+
+    ingresos_refresh_result = refresh_track_source_ingresos_daily_for_date(
+        business_date=track_date,
+    )
+
+    mart_refresh_result = refresh_track_daily_mart_for_date(
+        business_date=track_date,
+        generation_mode="official_closed_day",
+    )
+
+    return {
+        "status": "completed",
+        "track_date": track_date.isoformat(),
+        "generation_mode": "official_closed_day",
+        "requested_by": requested_by_value,
+        "trigger_source": trigger_source_value,
+        "source_refresh_results": {
+            "ingresos": ingresos_refresh_result,
+        },
+        "mart_refresh_result": mart_refresh_result,
+    }
+    

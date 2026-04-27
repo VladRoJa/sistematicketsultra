@@ -171,6 +171,8 @@
 
             <ng-container *ngIf="isTrackColumnGroupVisible('ingresos')">
               <th class="cell-right">Meta FAYCGO</th>
+              <th class="cell-right">Ingreso base</th>
+              <th class="cell-right">Ingreso agregadoras</th>
               <th class="cell-right">Ingreso real</th>
               <th class="cell-right">Avance ingreso</th>
               <th class="cell-right">Dif. ingreso VS meta</th>
@@ -222,6 +224,8 @@
 
             <ng-container *ngIf="isTrackColumnGroupVisible('ingresos')">
               <td class="cell-right">{{ row.metaFaycgo }}</td>
+              <td class="cell-right">{{ row.ingresoBase }}</td>
+              <td class="cell-right">{{ row.ingresoAgregadoras }}</td>
               <td class="cell-right">{{ row.ingresoReal }}</td>
               <td class="cell-right">
                 <span [class]="getProgressBadgeClass(row.avanceIngresoTone)">

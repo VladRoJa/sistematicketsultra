@@ -38,6 +38,14 @@ from app.warehouse.services.venta_total_parser import ( register_venta_total_par
 from app.warehouse.services.venta_total_repository import (register_venta_total_repository,)
 from app.warehouse.services.venta_total_ingestion_service import (register_venta_total_ingestor,)
 
+from app.warehouse.services.ingresos_totalpass_parser import ( register_ingresos_totalpass_parser,)
+from app.warehouse.services.ingresos_totalpass_repository import (register_ingresos_totalpass_repository,)
+from app.warehouse.services.ingresos_totalpass_ingestion_service import (register_ingresos_totalpass_ingestor,)
+from app.warehouse.services.ingresos_wellhub_parser import (register_ingresos_wellhub_parser,)
+from app.warehouse.services.ingresos_wellhub_repository import (register_ingresos_wellhub_repository,)
+from app.warehouse.services.ingresos_wellhub_ingestion_service import (register_ingresos_wellhub_ingestor,)
+
+from app.warehouse.services.warehouse_manual_ingestion_dispatcher import ( register_warehouse_manual_ingestion_dispatcher,)
 
 
 WAREHOUSE_RUNTIME_HOOKS_EXTENSION_KEY = "warehouse_runtime_hooks"
@@ -72,6 +80,13 @@ def _mark_runtime_hooks_registered(app: Flask) -> None:
         "venta_total_parser": True,
         "venta_total_repository": True,
         "venta_total_ingestor": True,
+        "ingresos_totalpass_parser": True,
+        "ingresos_totalpass_repository": True,
+        "ingresos_totalpass_ingestor": True,
+        "warehouse_manual_ingestion_dispatcher": True,
+        "ingresos_wellhub_parser": True,
+        "ingresos_wellhub_repository": True,
+        "ingresos_wellhub_ingestor": True,        
     }
 
 
@@ -131,6 +146,15 @@ def register_warehouse_runtime_hooks(app: Flask) -> None:
     register_venta_total_parser(app)
     register_venta_total_repository(app)
     register_venta_total_ingestor(app)
+    
+    register_ingresos_totalpass_parser(app)
+    register_ingresos_totalpass_repository(app)
+    register_ingresos_totalpass_ingestor(app)
+    register_ingresos_wellhub_parser(app)
+    register_ingresos_wellhub_repository(app)
+    register_ingresos_wellhub_ingestor(app)
+    
+    register_warehouse_manual_ingestion_dispatcher(app)
     
     register_gasca_single_report_runner_impl(app)
 

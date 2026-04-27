@@ -38,7 +38,7 @@ def upgrade():
         sa.UniqueConstraint('warehouse_upload_id', name='uq_ingresos_wellhub_snapshots_warehouse_upload_id'),
     )
     op.create_index(
-        'ix_ingresos_wellhub_snapshots_business_date_snapshot_kind_is_canonical',
+        'ix_iwh_snap_bd_kind_can',
         'ingresos_wellhub_snapshots',
         ['business_date', 'snapshot_kind', 'is_canonical'],
         unique=False,
@@ -107,7 +107,7 @@ def upgrade():
         sa.UniqueConstraint('warehouse_upload_id', name='uq_ingresos_totalpass_snapshots_warehouse_upload_id'),
     )
     op.create_index(
-        'ix_ingresos_totalpass_snapshots_business_date_snapshot_kind_is_canonical',
+        'ix_itp_snap_bd_kind_can',
         'ingresos_totalpass_snapshots',
         ['business_date', 'snapshot_kind', 'is_canonical'],
         unique=False,
@@ -290,8 +290,8 @@ def downgrade():
     # 4) Drop Wellhub snapshots
     # -------------------------------------------------------------------------
     op.drop_index(
-        'ix_ingresos_wellhub_snapshot_rows_snapshot_id_sucursal_canon',
-        table_name='ingresos_wellhub_snapshot_rows',
+        'ix_itp_snap_bd_kind_can',
+        table_name='ingresos_totalpass_snapshots',
     )
     op.drop_index(
         'ix_ingresos_wellhub_snapshot_rows_snapshot_id',
@@ -300,7 +300,7 @@ def downgrade():
     op.drop_table('ingresos_wellhub_snapshot_rows')
 
     op.drop_index(
-        'ix_ingresos_wellhub_snapshots_business_date_snapshot_kind_is_canonical',
+        'ix_iwh_snap_bd_kind_can',
         table_name='ingresos_wellhub_snapshots',
     )
     op.drop_table('ingresos_wellhub_snapshots')

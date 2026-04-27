@@ -654,10 +654,93 @@ class TrackSourceIngresosDailyORM(db.Model):
         db.ForeignKey("track_branch_catalog.sucursal_canon", ondelete="RESTRICT"),
         nullable=False,
     )
+
+    ingreso_real_base_mtd = db.Column(db.Numeric(14, 2), nullable=False, default=0)
+    ingreso_wellhub_mtd = db.Column(db.Numeric(14, 2), nullable=False, default=0)
+    ingreso_totalpass_mtd = db.Column(db.Numeric(14, 2), nullable=False, default=0)
+    ingreso_real_agregadora_mtd = db.Column(db.Numeric(14, 2), nullable=False, default=0)
+    ingreso_real_total_mtd = db.Column(db.Numeric(14, 2), nullable=False, default=0)
+
+    # compatibilidad transitoria
     ingreso_real_mtd = db.Column(db.Numeric(14, 2), nullable=False)
+    
+    # compatibilidad legacy mientras migramos mart y serializer
     source_snapshot_id = db.Column(db.BigInteger, nullable=False)
     source_report_type_key = db.Column(db.Text, nullable=False)
+
+    source_snapshot_id_reporte_direccion = db.Column(db.BigInteger, nullable=True)
+    source_snapshot_id_wellhub = db.Column(db.BigInteger, nullable=True)
+    source_snapshot_id_totalpass = db.Column(db.BigInteger, nullable=True)
+
+    source_report_type_key_reporte_direccion = db.Column(db.Text, nullable=True)
+    source_report_type_key_wellhub = db.Column(db.Text, nullable=True)
+    source_report_type_key_totalpass = db.Column(db.Text, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "business_date",
+            "sucursal_canon",
+            name="uq_track_source_ingresos_daily_business_date_branch",
+        ),
+    )
     
+class TrackSourceAgregadorasDailyORM(db.Model):
+    __tablename__ = "track_source_agregadoras_daily"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    business_date = db.Column(db.Date, nullable=False)
+    sucursal_canon = db.Column(
+        db.Text,
+        db.ForeignKey("track_branch_catalog.sucursal_canon", ondelete="RESTRICT"),
+        nullable=False, 
+    )
+
+    ingreso_wellhub_mtd = db.Column(db.Numeric(14, 2), nullable=False, default=0)
+    ingreso_totalpass_mtd = db.Column(db.Numeric(14, 2), nullable=False, default=0)
+    ingreso_agregadora_total_mtd = db.Column(
+        db.Numeric(14, 2),
+        nullable=False,
+        default=0,
+    )
+
+    source_snapshot_id_wellhub = db.Column(db.BigInteger, nullable=True)
+    source_snapshot_id_totalpass = db.Column(db.BigInteger, nullable=True)
+
+    source_report_type_key_wellhub = db.Column(db.Text, nullable=True)
+    source_report_type_key_totalpass = db.Column(db.Text, nullable=True)
+
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+        server_default=db.func.now(),
+    )
+
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+        onupdate=_utc_now,
+        server_default=db.func.now(),
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "business_date",
+            "sucursal_canon",
+            name="uq_track_source_agregadoras_daily_business_date_branch",
+        ),
+        Index(
+            "ix_track_source_agregadoras_daily_business_date",
+            "business_date",
+        ),
+        Index(
+            "ix_track_source_agregadoras_daily_business_date_sucursal",
+            "business_date",
+            "sucursal_canon",
+        ),
+    )
+
 class TrackSourceNuevosDailyORM(db.Model):
     __tablename__ = "track_source_nuevos_daily"
 
@@ -750,8 +833,13 @@ class TrackDailyMartORM(db.Model):
     bajas_reales_mtd = db.Column(db.Integer, nullable=True)
 
     # F4 ingresos
-    ingreso_real_mtd = db.Column(db.Numeric(14, 2), nullable=True)
+    ingreso_real_base_mtd = db.Column(db.Numeric(14, 2), nullable=True)
+    ingreso_real_agregadora_mtd = db.Column(db.Numeric(14, 2), nullable=True)
+    ingreso_real_total_mtd = db.Column(db.Numeric(14, 2), nullable=True)
 
+    # compatibilidad transitoria
+    ingreso_real_mtd = db.Column(db.Numeric(14, 2), nullable=True)
+    
     # F5 nuevos
     clientes_nuevos_real_mtd = db.Column(db.Integer, nullable=True)
 
@@ -781,4 +869,113 @@ class TrackDailyMartORM(db.Model):
         default=_utc_now,
         onupdate=_utc_now,
         server_default=db.func.now(),
+    )
+    
+class IngresosWellhubSnapshotORM(db.Model):
+    __tablename__ = "ingresos_wellhub_snapshots"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    warehouse_upload_id = db.Column(db.BigInteger, nullable=False, unique=True)
+    report_type_key = db.Column(db.Text, nullable=False)
+    business_date = db.Column(db.Date, nullable=False)
+    captured_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    snapshot_kind = db.Column(db.Text, nullable=False)
+    is_canonical = db.Column(db.Boolean, nullable=False, default=False)
+    row_count_detected = db.Column(db.Integer, nullable=False)
+    row_count_valid = db.Column(db.Integer, nullable=False)
+    row_count_rejected = db.Column(db.Integer, nullable=False)
+    metadata_json = db.Column(db.JSON, nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False)
+
+
+class IngresosWellhubSnapshotRowORM(db.Model):
+    __tablename__ = "ingresos_wellhub_snapshot_rows"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    snapshot_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("ingresos_wellhub_snapshots.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    sucursal_canon = db.Column(
+        db.Text,
+        db.ForeignKey("track_branch_catalog.sucursal_canon", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    raw_branch_name = db.Column(db.Text, nullable=False)
+    visitor_name = db.Column(db.Text, nullable=True)
+    wellhub_member_id = db.Column(db.Text, nullable=True)
+    total_checkins_mtd = db.Column(db.Integer, nullable=True)
+    pago_total_mtd = db.Column(db.Numeric(14, 2), nullable=False, default=0)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        Index("ix_ingresos_wellhub_snapshot_rows_snapshot_id", "snapshot_id"),
+        Index(
+            "ix_ingresos_wellhub_snapshot_rows_snapshot_id_sucursal_canon",
+            "snapshot_id",
+            "sucursal_canon",
+        ),
+        UniqueConstraint(
+            "snapshot_id",
+            "sucursal_canon",
+            "wellhub_member_id",
+            name="uq_ingresos_wellhub_snapshot_rows_snapshot_branch_member",
+        ),
+    )
+
+
+class IngresosTotalpassSnapshotORM(db.Model):
+    __tablename__ = "ingresos_totalpass_snapshots"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    warehouse_upload_id = db.Column(db.BigInteger, nullable=False, unique=True)
+    report_type_key = db.Column(db.Text, nullable=False)
+    business_date = db.Column(db.Date, nullable=False)
+    captured_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    snapshot_kind = db.Column(db.Text, nullable=False)
+    is_canonical = db.Column(db.Boolean, nullable=False, default=False)
+    row_count_detected = db.Column(db.Integer, nullable=False)
+    row_count_valid = db.Column(db.Integer, nullable=False)
+    row_count_rejected = db.Column(db.Integer, nullable=False)
+    metadata_json = db.Column(db.JSON, nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False)
+
+
+class IngresosTotalpassSnapshotRowORM(db.Model):
+    __tablename__ = "ingresos_totalpass_snapshot_rows"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    snapshot_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("ingresos_totalpass_snapshots.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    sucursal_canon = db.Column(
+        db.Text,
+        db.ForeignKey("track_branch_catalog.sucursal_canon", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    raw_branch_name = db.Column(db.Text, nullable=False)
+    monto_acumulado_mes = db.Column(db.Numeric(14, 2), nullable=False, default=0)
+    usage_count = db.Column(db.Integer, nullable=True)
+    student_count = db.Column(db.Integer, nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        Index("ix_ingresos_totalpass_snapshot_rows_snapshot_id", "snapshot_id"),
+        Index(
+            "ix_ingresos_totalpass_snapshot_rows_snapshot_id_sucursal_canon",
+            "snapshot_id",
+            "sucursal_canon",
+        ),
+        UniqueConstraint(
+            "snapshot_id",
+            "sucursal_canon",
+            name="uq_ingresos_totalpass_snapshot_rows_snapshot_branch",
+        ),
     )

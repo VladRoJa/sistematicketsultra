@@ -153,6 +153,31 @@ def _validate_filename_and_extension(original_filename: str) -> tuple[str, str]:
 
     return safe_original_filename, extension
 
+def _resolve_upload_display_extension(original_filename: str) -> str:
+    suffix = Path(original_filename or "").suffix.strip()
+    if suffix:
+        return suffix
+    return ".xlsx"
+
+
+def _build_upload_display_filename(
+    *,
+    report_type_key: str,
+    period_type: str | None,
+    cutoff_date: Any = None,
+    date_from: Any = None,
+    date_to: Any = None,
+    original_filename: str,
+) -> str:
+    extension = _resolve_upload_display_extension(original_filename)
+
+    if period_type == "diario" and cutoff_date:
+        return f"{report_type_key}_{cutoff_date}{extension}"
+
+    if period_type == "rango" and date_from and date_to:
+        return f"{report_type_key}_{date_from}_a_{date_to}{extension}"
+
+    return f"{report_type_key}{extension}"
 
 def create_warehouse_document_upload(
     *,
@@ -259,6 +284,14 @@ def create_warehouse_document_upload(
         )
 
     file_hash_sha256 = _calculate_sha256(file_content)
+    display_filename = _build_upload_display_filename(
+        report_type_key=report_type.key,
+        period_type=report_type.default_period_type,
+        cutoff_date=period_data["cutoff_date"],
+        date_from=period_data["date_from"],
+        date_to=period_data["date_to"],
+        original_filename=original_filename,
+    )
 
     duplicate_upload = (
         WarehouseUploadORM.query
@@ -266,6 +299,46 @@ def create_warehouse_document_upload(
         .order_by(WarehouseUploadORM.created_at.desc())
         .first()
     )
+    if (
+        duplicate_upload is not None
+        and duplicate_upload.status == "ACTIVE"
+        and duplicate_upload.report_type_id == report_type.id
+        and duplicate_upload.period_type == report_type.default_period_type
+        and duplicate_upload.cutoff_date == period_data["cutoff_date"]
+        and duplicate_upload.date_from == period_data["date_from"]
+        and duplicate_upload.date_to == period_data["date_to"]
+    ):
+        return {
+            "upload_id": duplicate_upload.id,
+            "warehouse_upload_id": duplicate_upload.id,
+            "filename": duplicate_upload.original_filename,
+            "stored_filename": duplicate_upload.stored_filename,
+            "display_filename": display_filename,
+            "stored_path": duplicate_upload.stored_path,
+            "file_size_bytes": duplicate_upload.file_size_bytes,
+            "file_hash_sha256": duplicate_upload.file_hash_sha256,
+            "report_type_key": report_type.key,
+            "report_type_id": report_type.id,
+            "family_id": family.id,
+            "source_id": source.id,
+            "operational_role_id": operational_role.id,
+            "period_type": duplicate_upload.period_type,
+            "cutoff_date": (
+                duplicate_upload.cutoff_date.isoformat()
+                if duplicate_upload.cutoff_date else None
+            ),
+            "date_from": (
+                duplicate_upload.date_from.isoformat()
+                if duplicate_upload.date_from else None
+            ),
+            "date_to": (
+                duplicate_upload.date_to.isoformat()
+                if duplicate_upload.date_to else None
+            ),
+            "duplicate_detected": True,
+            "duplicate_upload_id": duplicate_upload.id,
+            "upload_status": "reused_existing",
+        }
 
     stored_filename = f"{uuid.uuid4()}_{safe_original_filename}"
 
@@ -330,6 +403,7 @@ def create_warehouse_document_upload(
         "warehouse_upload_id": upload.id,
         "filename": original_filename,
         "stored_filename": stored_filename,
+        "display_filename": display_filename,
         "stored_path": str(relative_dir).replace("\\", "/"),
         "file_size_bytes": file_size,
         "file_hash_sha256": file_hash_sha256,
