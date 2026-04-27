@@ -9,6 +9,7 @@ RUN apt-get update && \
     apt-get install -y gcc libpq-dev && \
     pip install --upgrade pip && \
     pip install -r requirements.txt && \
+    python -m playwright install --with-deps chromium && \
     apt-get remove -y gcc && \
     apt-get autoremove -y && \
     apt-get clean
