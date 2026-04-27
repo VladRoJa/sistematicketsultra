@@ -4,6 +4,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { environment } from 'src/environments/environment';
 
 export type TrackGenerationMode = 'manual_preview' | 'official_closed_day';
 
@@ -115,7 +116,7 @@ export interface TrackAgregadorasIntegrationResponse {
   providedIn: 'root',
 })
 export class TrackService {
-  private readonly baseUrl = 'http://localhost:5000/api/track';
+  private readonly baseUrl = `${environment.apiUrl}/track`;
 
   constructor(private readonly http: HttpClient) {}
 
