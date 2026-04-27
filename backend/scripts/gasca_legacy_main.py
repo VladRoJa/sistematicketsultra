@@ -610,7 +610,31 @@ def main():
 
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=not SHOW_BROWSER)
+            chrome_candidates = list(
+                Path("/root/.cache/ms-playwright").glob("chromium-*/chrome-linux/chrome")
+            )
+
+            launch_args = [
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-gpu",
+                "--disable-extensions",
+                "--no-zygote",
+            ]
+
+            launch_kwargs = {
+                "headless": not SHOW_BROWSER,
+                "args": launch_args,
+                "chromium_sandbox": False,
+            }
+
+            if chrome_candidates and not SHOW_BROWSER:
+                launch_kwargs["executable_path"] = str(chrome_candidates[0])
+                launch_kwargs["headless"] = False
+                launch_kwargs["args"] = ["--headless=new", *launch_args]
+
+            browser = p.chromium.launch(**launch_kwargs)
             context = browser.new_context()
             page = context.new_page()
 
