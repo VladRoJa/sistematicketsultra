@@ -161,8 +161,22 @@ def _build_agregadoras_map_for_date(
 def _resolve_agregadoras_business_date(
     *,
     business_date: date,
+    generation_mode: str | None = None,
 ) -> date:
-    return business_date - timedelta(days=1)
+    if generation_mode != "manual_preview":
+        return business_date
+
+    latest_available_row = (
+        db.session.query(TrackSourceAgregadorasDailyORM.business_date)
+        .filter(TrackSourceAgregadorasDailyORM.business_date <= business_date)
+        .order_by(TrackSourceAgregadorasDailyORM.business_date.desc())
+        .first()
+    )
+
+    if latest_available_row is None or latest_available_row[0] is None:
+        return business_date
+
+    return latest_available_row[0]
 
 def _merge_base_and_agregadoras_maps_for_date(
     *,
@@ -378,6 +392,7 @@ def _merge_ingresos_maps_for_date(
 def build_track_source_ingresos_daily_for_date(
     *,
     business_date: Any,
+    generation_mode: str | None = None,
 ) -> list[dict[str, Any]]:
     normalized_business_date = _ensure_date(
         business_date,
@@ -389,6 +404,7 @@ def build_track_source_ingresos_daily_for_date(
     )
     agregadoras_business_date = _resolve_agregadoras_business_date(
         business_date=normalized_business_date,
+        generation_mode=generation_mode,
     )
 
     agregadoras_map = _build_agregadoras_map_for_date(
@@ -404,6 +420,7 @@ def build_track_source_ingresos_daily_for_date(
 def refresh_track_source_ingresos_daily_for_date(
     *,
     business_date: Any,
+    generation_mode: str | None = None,
 ) -> dict[str, Any]:
     normalized_business_date = _ensure_date(
         business_date,
@@ -412,6 +429,7 @@ def refresh_track_source_ingresos_daily_for_date(
 
     rows = build_track_source_ingresos_daily_for_date(
         business_date=normalized_business_date,
+        generation_mode=generation_mode,
     )
 
     try:

@@ -190,6 +190,7 @@ def run_track_daily_pipeline_for_date(
         ),
         "ingresos": refresh_track_source_ingresos_daily_for_date(
             business_date=refresh_dates["ingresos"],
+            generation_mode=normalized_generation_mode,
         ),
         "nuevos": refresh_track_source_nuevos_daily_for_date(
             business_date=refresh_dates["nuevos"],
