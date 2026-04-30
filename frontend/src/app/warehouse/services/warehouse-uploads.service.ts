@@ -79,6 +79,7 @@ export interface WarehouseCreateUploadRequest {
   cutoff_date?: string;
   date_from?: string;
   date_to?: string;
+  target_month?: string;
 }
 
 export interface WarehouseCreateUploadResponse {
@@ -178,6 +179,9 @@ createUpload(payload: WarehouseCreateUploadRequest) {
 
   if (payload.date_to) {
     formData.append('date_to', payload.date_to);
+  }
+  if (payload.target_month) {
+    formData.append('target_month', payload.target_month);
   }
 
   return this.http.post<WarehouseCreateUploadResponse>(this.apiUrl, formData, {

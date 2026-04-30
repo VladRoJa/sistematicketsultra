@@ -45,6 +45,8 @@ from app.warehouse.services.ingresos_wellhub_parser import (register_ingresos_we
 from app.warehouse.services.ingresos_wellhub_repository import (register_ingresos_wellhub_repository,)
 from app.warehouse.services.ingresos_wellhub_ingestion_service import (register_ingresos_wellhub_ingestor,)
 
+from app.warehouse.services.track_monthly_targets_ingestion_service import (register_track_monthly_targets_ingestor,)
+
 from app.warehouse.services.warehouse_manual_ingestion_dispatcher import ( register_warehouse_manual_ingestion_dispatcher,)
 
 
@@ -86,7 +88,8 @@ def _mark_runtime_hooks_registered(app: Flask) -> None:
         "warehouse_manual_ingestion_dispatcher": True,
         "ingresos_wellhub_parser": True,
         "ingresos_wellhub_repository": True,
-        "ingresos_wellhub_ingestor": True,        
+        "ingresos_wellhub_ingestor": True,
+        "register_track_monthly_targets_ingestor": True,
     }
 
 
@@ -153,6 +156,8 @@ def register_warehouse_runtime_hooks(app: Flask) -> None:
     register_ingresos_wellhub_parser(app)
     register_ingresos_wellhub_repository(app)
     register_ingresos_wellhub_ingestor(app)
+    
+    register_track_monthly_targets_ingestor(app)
     
     register_warehouse_manual_ingestion_dispatcher(app)
     

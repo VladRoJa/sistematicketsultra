@@ -66,54 +66,6 @@ def _calculate_file_sha256(uploaded_file) -> str:
     return hasher.hexdigest()
 
 
-def _resolve_period_data(report_type, cutoff_date_raw: str, date_from_raw: str, date_to_raw: str):
-    parsed_cutoff_date = None
-    parsed_date_from = None
-    parsed_date_to = None
-
-    if report_type.default_period_type == 'diario':
-        if not cutoff_date_raw:
-            return None, (jsonify({
-                "error": "Fecha requerida",
-                "detail": "Debes enviar 'cutoff_date' cuando el report_type requiere periodo diario."
-            }), 400)
-
-        try:
-            parsed_cutoff_date = datetime.strptime(cutoff_date_raw, '%Y-%m-%d').date()
-        except ValueError:
-            return None, (jsonify({
-                "error": "Fecha inválida",
-                "detail": "cutoff_date debe tener formato YYYY-MM-DD."
-            }), 400)
-
-    if report_type.default_period_type == 'rango':
-        if not date_from_raw or not date_to_raw:
-            return None, (jsonify({
-                "error": "Rango requerido",
-                "detail": "Debes enviar 'date_from' y 'date_to' cuando el report_type requiere periodo rango."
-            }), 400)
-
-        try:
-            parsed_date_from = datetime.strptime(date_from_raw, '%Y-%m-%d').date()
-            parsed_date_to = datetime.strptime(date_to_raw, '%Y-%m-%d').date()
-        except ValueError:
-            return None, (jsonify({
-                "error": "Fecha inválida",
-                "detail": "date_from y date_to deben tener formato YYYY-MM-DD."
-            }), 400)
-
-        if parsed_date_from > parsed_date_to:
-            return None, (jsonify({
-                "error": "Rango inválido",
-                "detail": "date_from no puede ser mayor que date_to."
-            }), 400)
-
-    return {
-        "cutoff_date": parsed_cutoff_date,
-        "date_from": parsed_date_from,
-        "date_to": parsed_date_to,
-    }, None
-
 def _build_warehouse_storage_paths(source_key: str, report_type_key: str, anchor_date, stored_filename: str):
     year = anchor_date.strftime('%Y')
     month = anchor_date.strftime('%m')
@@ -233,6 +185,7 @@ def warehouse_create_upload():
     cutoff_date_raw = (request.form.get('cutoff_date') or '').strip()
     date_from_raw = (request.form.get('date_from') or '').strip()
     date_to_raw = (request.form.get('date_to') or '').strip()
+    target_month_raw = (request.form.get('target_month') or '').strip()
 
     manual_ingestion_result = {
         "ingestion_status": "not_applicable",
@@ -255,6 +208,7 @@ def warehouse_create_upload():
             cutoff_date=cutoff_date_raw or None,
             date_from=date_from_raw or None,
             date_to=date_to_raw or None,
+            target_month=target_month_raw or None,
             audit_details={
                 "upload_origin": "manual_route",
             },

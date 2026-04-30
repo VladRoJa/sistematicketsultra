@@ -24,6 +24,7 @@ interface WarehouseUploadFormState {
   cutoff_date: string;
   date_from: string;
   date_to: string;
+  target_month: string;
 }
 
 interface WarehouseSelectedReportTypeContext {
@@ -60,6 +61,7 @@ export class WarehouseHomeComponent implements OnInit {
     cutoff_date: '',
     date_from: '',
     date_to: '',
+    target_month: '',
   };
 
   selectedReportTypeContext: WarehouseSelectedReportTypeContext = {
@@ -203,6 +205,7 @@ onReportTypeChanged(reportTypeKey: string): void {
   this.uploadForm.cutoff_date = '';
   this.uploadForm.date_from = '';
   this.uploadForm.date_to = '';
+  this.uploadForm.target_month = '';
 
   const selectedReportType =
     this.reportTypes.find((item) => item.key === reportTypeKey) || null;
@@ -219,12 +222,20 @@ onFileSelected(event: Event): void {
   this.uploadForm.file = file;
 }
 
+onTargetMonthChanged(value: string): void {
+  this.uploadForm.target_month = value;
+}
+
 isDailyPeriodSelected(): boolean {
   return this.selectedReportTypeContext.periodType === 'diario';
 }
 
 isRangePeriodSelected(): boolean {
   return this.selectedReportTypeContext.periodType === 'rango';
+}
+
+isMonthlyPeriodSelected(): boolean {
+  return this.selectedReportTypeContext.periodType === 'mensual';
 }
 
 submitUpload(): void {
@@ -270,6 +281,10 @@ private validateUploadForm(): string {
     return 'Debes capturar cutoff date para un reporte diario.';
   }
 
+  if (this.isMonthlyPeriodSelected() && !this.uploadForm.target_month) {
+    return 'Debes capturar target month para un reporte mensual.';
+  }
+
   if (this.isRangePeriodSelected()) {
     if (!this.uploadForm.date_from || !this.uploadForm.date_to) {
       return 'Debes capturar date from y date to para un reporte de rango.';
@@ -290,6 +305,7 @@ private buildCreateUploadPayload(): WarehouseCreateUploadRequest | null {
     cutoff_date: this.uploadForm.cutoff_date || undefined,
     date_from: this.uploadForm.date_from || undefined,
     date_to: this.uploadForm.date_to || undefined,
+    target_month: this.uploadForm.target_month || undefined,
   };
 }
 
@@ -300,6 +316,7 @@ private resetUploadForm(): void {
     cutoff_date: '',
     date_from: '',
     date_to: '',
+    target_month: '',
   };
 
   this.selectedReportTypeContext = {

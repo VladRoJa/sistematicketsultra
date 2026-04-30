@@ -60,6 +60,7 @@ def _resolve_period_data(
     cutoff_date: date | None,
     date_from: date | None,
     date_to: date | None,
+    target_month: str | None = None,
 ) -> dict[str, date | None]:
     if report_type.default_period_type == "diario":
         if not cutoff_date:
@@ -78,12 +79,30 @@ def _resolve_period_data(
                 "date_from no puede ser mayor que date_to."
             )
 
+    if report_type.default_period_type == "mensual":
+        if not target_month:
+            raise WarehouseDocumentValidationError(
+                "Debes enviar 'target_month' cuando el report_type requiere periodo mensual."
+            )
+
+        try:
+            cutoff_date = datetime.strptime(
+                f"{target_month}-01",
+                "%Y-%m-%d",
+            ).date()
+        except ValueError as exc:
+            raise WarehouseDocumentValidationError(
+                "target_month debe tener formato YYYY-MM."
+            ) from exc
+
+        date_from = None
+        date_to = None
+
     return {
         "cutoff_date": cutoff_date,
         "date_from": date_from,
         "date_to": date_to,
     }
-
 
 def _build_warehouse_storage_paths(
     *,
@@ -190,6 +209,7 @@ def create_warehouse_document_upload(
     cutoff_date: date | str | None = None,
     date_from: date | str | None = None,
     date_to: date | str | None = None,
+    target_month: str | None = None,
     audit_details: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
@@ -275,6 +295,7 @@ def create_warehouse_document_upload(
         cutoff_date=parsed_cutoff_date,
         date_from=parsed_date_from,
         date_to=parsed_date_to,
+        target_month=target_month,
     )
 
     period_anchor_date = period_data["cutoff_date"] or period_data["date_from"]
@@ -432,3 +453,5 @@ def create_warehouse_document_upload(
         "duplicate_upload_id": duplicate_upload.id if duplicate_upload else None,
         "upload_status": "created",
     }
+    
+    

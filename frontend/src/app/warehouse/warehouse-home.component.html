@@ -91,6 +91,19 @@
 
   <div
     class="warehouse-form__group warehouse-form__group--date"
+    *ngIf="isMonthlyPeriodSelected()"
+  >
+    <label for="warehouse-target-month">Mes objetivo</label>
+    <input
+      id="warehouse-target-month"
+      type="month"
+      [value]="uploadForm.target_month"
+      (input)="onTargetMonthChanged($any($event.target).value)"
+    />
+  </div>
+
+  <div
+    class="warehouse-form__group warehouse-form__group--date"
     *ngIf="isRangePeriodSelected()"
   >
     <label for="warehouse-date-from">Desde</label>
