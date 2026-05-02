@@ -150,6 +150,7 @@ def _build_agregadoras_map_for_date(
             "ingreso_real_agregadora_mtd": _to_decimal(
                 row.ingreso_agregadora_total_mtd
             ),
+            "source_business_date_agregadoras": row.business_date,
             "source_snapshot_id_wellhub": row.source_snapshot_id_wellhub,
             "source_snapshot_id_totalpass": row.source_snapshot_id_totalpass,
             "source_report_type_key_wellhub": row.source_report_type_key_wellhub,
@@ -229,6 +230,9 @@ def _merge_base_and_agregadoras_maps_for_date(
                 ),
                 "source_snapshot_id_totalpass": agregadoras_data.get(
                     "source_snapshot_id_totalpass"
+                ),
+                "source_business_date_agregadoras": agregadoras_data.get(
+                    "source_business_date_agregadoras"
                 ),
                 "source_report_type_key_reporte_direccion": base_data.get(
                     "source_report_type_key_reporte_direccion"
@@ -458,6 +462,9 @@ def refresh_track_source_ingresos_daily_for_date(
                     ],
                     source_snapshot_id_wellhub=row["source_snapshot_id_wellhub"],
                     source_snapshot_id_totalpass=row["source_snapshot_id_totalpass"],
+                    source_business_date_agregadoras=row.get(
+                        "source_business_date_agregadoras"
+                    ),
                     source_report_type_key_reporte_direccion=row[
                         "source_report_type_key_reporte_direccion"
                     ],

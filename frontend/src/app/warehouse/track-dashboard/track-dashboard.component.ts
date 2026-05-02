@@ -157,6 +157,7 @@ export class TrackDashboardComponent implements OnInit {
   totalRowsLabel = '0';
   selectedModeLabel = '';
   lastLoadedTrackDateLabel = '';
+  agregadorasFreshnessLabel = '';
 
   constructor(private readonly trackService: TrackService,
     private readonly router: Router,
@@ -257,12 +258,15 @@ export class TrackDashboardComponent implements OnInit {
           if (response.status !== 'ok') {
             this.martErrorMessage =
               response.message || 'No se pudo consultar el Track daily mart.';
+            this.agregadorasFreshnessLabel = '';  
             this.isLoadingMart = false;
             return;
           }
 
           const baseRows = this.sortRowsByOpeningOrder(response.rows || []);
 
+          this.agregadorasFreshnessLabel =
+            this.buildAgregadorasFreshnessLabel(baseRows);
           this.summaryCards = this.buildSummaryCards(baseRows);
           this.rawMartRows = this.appendClosingRows(baseRows);
           const builtRows = this.rawMartRows.map((row) => this.buildViewRow(row));
@@ -661,6 +665,37 @@ private buildTargetMonthFromTrackDate(): string {
     );
 
     this.selectedModeLabel = option?.label || this.generationMode;
+  }
+
+  private buildAgregadorasFreshnessLabel(rows: TrackDailyMartRow[]): string {
+    const uniqueDates = Array.from(
+      new Set(
+        rows
+          .map((row) => row.source_business_date_agregadoras || null)
+          .filter((value): value is string => !!value)
+      )
+    );
+
+    if (uniqueDates.length === 0) {
+      return '';
+    }
+
+    if (uniqueDates.length > 1) {
+      return 'Agregadoras con fechas mixtas';
+    }
+
+    return `Agregadoras al ${this.formatIsoDateLabel(uniqueDates[0])}`;
+  }
+
+  private formatIsoDateLabel(value: string): string {
+    const trimmed = (value || '').trim();
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+      return value;
+    }
+
+    const [year, month, day] = trimmed.split('-');
+    return `${day}/${month}/${year}`;
   }
 
   private calculateProgressPercent(

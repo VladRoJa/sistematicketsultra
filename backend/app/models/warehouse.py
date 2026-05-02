@@ -671,7 +671,7 @@ class TrackSourceIngresosDailyORM(db.Model):
     source_snapshot_id_reporte_direccion = db.Column(db.BigInteger, nullable=True)
     source_snapshot_id_wellhub = db.Column(db.BigInteger, nullable=True)
     source_snapshot_id_totalpass = db.Column(db.BigInteger, nullable=True)
-
+    source_business_date_agregadoras = db.Column(db.Date, nullable=True)
     source_report_type_key_reporte_direccion = db.Column(db.Text, nullable=True)
     source_report_type_key_wellhub = db.Column(db.Text, nullable=True)
     source_report_type_key_totalpass = db.Column(db.Text, nullable=True)
@@ -849,6 +849,7 @@ class TrackDailyMartORM(db.Model):
     # lineage mínimo
     source_snapshot_id_desempeno = db.Column(db.BigInteger, nullable=True)
     source_snapshot_id_ingresos = db.Column(db.BigInteger, nullable=True)
+    source_business_date_agregadoras = db.Column(db.Date, nullable=True)
     source_snapshot_id_nuevos = db.Column(db.BigInteger, nullable=True)
     source_snapshot_id_domiciliados = db.Column(db.BigInteger, nullable=True)
     source_business_date_desempeno = db.Column(db.Date, nullable=True)
@@ -978,4 +979,56 @@ class IngresosTotalpassSnapshotRowORM(db.Model):
             "sucursal_canon",
             name="uq_ingresos_totalpass_snapshot_rows_snapshot_branch",
         ),
+    )
+    
+class TrackDailyVersionORM(db.Model):
+    __tablename__ = "track_daily_versions"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    track_date = db.Column(db.Date, nullable=False)
+
+    version_type = db.Column(db.Text, nullable=False)
+    status = db.Column(db.Text, nullable=False)
+
+    generated_at_utc = db.Column(db.DateTime(timezone=True), nullable=True)
+    started_at_utc = db.Column(db.DateTime(timezone=True), nullable=True)
+    finished_at_utc = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    is_current = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=True,
+        server_default=db.true(),
+    )
+
+    replaces_version_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("track_daily_versions.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    base_version_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("track_daily_versions.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    requested_by = db.Column(db.Text, nullable=True)
+    trigger_source = db.Column(db.Text, nullable=False)
+    retry_count = db.Column(
+        db.Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
+    error_message = db.Column(db.Text, nullable=True)
+
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        server_default=db.text("now()"),
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        server_default=db.text("now()"),
     )

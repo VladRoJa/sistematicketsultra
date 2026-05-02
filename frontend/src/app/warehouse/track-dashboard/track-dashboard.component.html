@@ -17,6 +17,12 @@
         <span class="track-topbar__mode-value">
           Modo actual: <strong>{{ selectedModeLabel }}</strong>
         </span>
+        <span
+          class="track-topbar__mode-value"
+          *ngIf="agregadorasFreshnessLabel"
+        >
+          <strong>{{ agregadorasFreshnessLabel }}</strong>
+        </span>
       </div>
 
       <div class="track-form track-form--topbar">

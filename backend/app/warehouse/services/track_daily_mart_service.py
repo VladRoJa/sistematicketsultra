@@ -264,6 +264,11 @@ def build_track_daily_mart_for_date(
                 "source_business_date_ingresos": (
                     ingresos_row.business_date.isoformat() if ingresos_row else None
                 ),
+                "source_business_date_agregadoras": (
+                    ingresos_row.source_business_date_agregadoras.isoformat()
+                    if ingresos_row and ingresos_row.source_business_date_agregadoras
+                    else None
+                ),
                 "source_business_date_nuevos": (
                     nuevos_row.business_date.isoformat() if nuevos_row else None
                 ),
@@ -386,6 +391,14 @@ def refresh_track_daily_mart_for_date(
 
                     source_snapshot_id_desempeno=row["source_snapshot_id_desempeno"],
                     source_snapshot_id_ingresos=row["source_snapshot_id_ingresos"],
+                    source_business_date_agregadoras=(
+                        _ensure_date(
+                            row["source_business_date_agregadoras"],
+                            field_name="source_business_date_agregadoras",
+                        )
+                        if row["source_business_date_agregadoras"] is not None
+                        else None
+                    ),
                     source_snapshot_id_nuevos=row["source_snapshot_id_nuevos"],
                     source_snapshot_id_domiciliados=row["source_snapshot_id_domiciliados"],
                 )

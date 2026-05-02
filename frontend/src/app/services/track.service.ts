@@ -60,6 +60,7 @@ export interface TrackDailyMartRow {
   nuevos_domiciliados_real_mtd: number | null;
   source_business_date_desempeno: string | null;
   source_business_date_ingresos: string | null;
+  source_business_date_agregadoras?: string | null;
   source_business_date_nuevos: string | null;
   source_business_date_domiciliados: string | null;
   source_snapshot_id_desempeno: number | null;

@@ -115,6 +115,11 @@ def _serialize_track_daily_mart_row(row: TrackDailyMartORM) -> dict[str, Any]:
             if row.source_business_date_ingresos
             else None
         ),
+        "source_business_date_agregadoras": (
+            row.source_business_date_agregadoras.isoformat()
+            if row.source_business_date_agregadoras
+            else None
+        ),
         "source_business_date_nuevos": (
             row.source_business_date_nuevos.isoformat()
             if row.source_business_date_nuevos

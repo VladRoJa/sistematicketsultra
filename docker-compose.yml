@@ -56,7 +56,29 @@ services:
       - /home/adminrdp/sistematicketsultra/uploads:/usr/share/nginx/html/uploads:ro
 
 
-
+  track-scheduler:
+    build:
+      context: ./backend
+    depends_on:
+      - db
+    env_file:
+      - .env.docker
+    environment:
+      APP_ENV: "prod"
+      SMTP_HOST: "smtp.gmail.com"
+      SMTP_PORT: "587"
+      SMTP_USER: "notificaciones.ultragym@gmail.com"
+      SMTP_PASS: "dsjvthlmjrghuwvi"
+      EMAIL_FROM: "notificaciones.ultragym@gmail.com"
+      SMTP_DEBUG: "1"
+      SMTP_SYNC_DEBUG: "1"
+    command: python -m app.warehouse.scheduler.track_scheduler_worker
+    networks:
+      - backend-net
+    volumes:
+      - /home/adminrdp/sistematicketsultra/uploads:/home/adminrdp/sistematicketsultra/uploads
+    profiles:
+      - scheduler
       
 
 volumes:
