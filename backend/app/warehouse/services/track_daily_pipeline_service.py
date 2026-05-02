@@ -30,6 +30,9 @@ from app.warehouse.services.track_daily_version_service import (
     replace_current_track_daily_version,
     _now_utc,
 )
+from app.warehouse.services.track_source_agregadoras_daily_service import (
+    refresh_track_source_agregadoras_daily_for_track_date,
+)
 
 
 SUPPORTED_GENERATION_MODES = frozenset(
@@ -262,6 +265,10 @@ def run_track_daily_pipeline_for_date(
             "desempeno": refresh_track_source_desempeno_daily_for_date(
                 business_date=refresh_dates["desempeno"],
             ),
+            "agregadoras": refresh_track_source_agregadoras_daily_for_track_date(
+                business_date=refresh_dates["ingresos"],
+                generation_mode=normalized_generation_mode,
+            ),
             "ingresos": refresh_track_source_ingresos_daily_for_date(
                 business_date=refresh_dates["ingresos"],
                 generation_mode=normalized_generation_mode,
@@ -378,6 +385,11 @@ def run_track_agregadoras_integration_for_date(
             auto_commit=True,
         )
 
+        agregadoras_refresh_result = refresh_track_source_agregadoras_daily_for_track_date(
+            business_date=track_date,
+            generation_mode="official_closed_day",
+        )
+
         ingresos_refresh_result = refresh_track_source_ingresos_daily_for_date(
             business_date=track_date,
             generation_mode="official_closed_day",
@@ -408,6 +420,7 @@ def run_track_agregadoras_integration_for_date(
             "requested_by": requested_by_value,
             "trigger_source": trigger_source_value,
             "source_refresh_results": {
+                "agregadoras": agregadoras_refresh_result,
                 "ingresos": ingresos_refresh_result,
             },
             "mart_refresh_result": mart_refresh_result,

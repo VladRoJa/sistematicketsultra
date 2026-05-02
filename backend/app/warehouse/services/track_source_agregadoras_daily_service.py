@@ -193,6 +193,76 @@ def _merge_agregadoras_maps_for_date(
     return result
 
 
+def _resolve_latest_agregadoras_snapshot_date_for_preview(
+    *,
+    business_date: date,
+) -> date | None:
+    latest_wellhub_date = (
+        db.session.query(IngresosWellhubSnapshotORM.business_date)
+        .filter(
+            IngresosWellhubSnapshotORM.snapshot_kind == "daily",
+            IngresosWellhubSnapshotORM.is_canonical.is_(True),
+            IngresosWellhubSnapshotORM.business_date <= business_date,
+        )
+        .order_by(
+            IngresosWellhubSnapshotORM.business_date.desc(),
+            IngresosWellhubSnapshotORM.id.desc(),
+        )
+        .first()
+    )
+
+    latest_totalpass_date = (
+        db.session.query(IngresosTotalpassSnapshotORM.business_date)
+        .filter(
+            IngresosTotalpassSnapshotORM.snapshot_kind == "daily",
+            IngresosTotalpassSnapshotORM.is_canonical.is_(True),
+            IngresosTotalpassSnapshotORM.business_date <= business_date,
+        )
+        .order_by(
+            IngresosTotalpassSnapshotORM.business_date.desc(),
+            IngresosTotalpassSnapshotORM.id.desc(),
+        )
+        .first()
+    )
+
+    candidates: list[date] = []
+
+    if latest_wellhub_date is not None and latest_wellhub_date[0] is not None:
+        candidates.append(latest_wellhub_date[0])
+
+    if latest_totalpass_date is not None and latest_totalpass_date[0] is not None:
+        candidates.append(latest_totalpass_date[0])
+
+    if not candidates:
+        return None
+
+    return max(candidates)
+
+
+def resolve_agregadoras_business_date_for_track_date(
+    *,
+    business_date: Any,
+    generation_mode: str | None = None,
+) -> date:
+    normalized_business_date = _ensure_date(
+        business_date,
+        field_name="business_date",
+    )
+    normalized_generation_mode = str(generation_mode or "").strip()
+
+    if normalized_generation_mode != "manual_preview":
+        return normalized_business_date
+
+    latest_available_date = _resolve_latest_agregadoras_snapshot_date_for_preview(
+        business_date=normalized_business_date,
+    )
+
+    if latest_available_date is None:
+        return normalized_business_date
+
+    return latest_available_date
+
+
 def build_track_source_agregadoras_daily_for_date(
     *,
     business_date: Any,
@@ -266,4 +336,29 @@ def refresh_track_source_agregadoras_daily_for_date(
         "status": "refreshed",
         "business_date": normalized_business_date.isoformat(),
         "rows_inserted": len(rows),
+    }
+
+
+def refresh_track_source_agregadoras_daily_for_track_date(
+    *,
+    business_date: Any,
+    generation_mode: str | None = None,
+) -> dict[str, Any]:
+    agregadoras_business_date = resolve_agregadoras_business_date_for_track_date(
+        business_date=business_date,
+        generation_mode=generation_mode,
+    )
+
+    result = refresh_track_source_agregadoras_daily_for_date(
+        business_date=agregadoras_business_date,
+    )
+
+    return {
+        **result,
+        "track_date": _ensure_date(
+            business_date,
+            field_name="business_date",
+        ).isoformat(),
+        "generation_mode": str(generation_mode or "").strip() or None,
+        "agregadoras_business_date": agregadoras_business_date.isoformat(),
     }
