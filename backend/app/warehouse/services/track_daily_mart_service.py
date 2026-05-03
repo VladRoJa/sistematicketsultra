@@ -301,6 +301,7 @@ def refresh_track_daily_mart_for_date(
     *,
     business_date: Any,
     generation_mode: str = "official_closed_day",
+    track_daily_version_id: int | None = None,
 ) -> dict[str, Any]:
     track_date = _ensure_date(
         business_date,
@@ -326,6 +327,7 @@ def refresh_track_daily_mart_for_date(
                         row["track_date"],
                         field_name="track_date",
                     ),
+                    track_daily_version_id=track_daily_version_id,
                     generation_mode=row["generation_mode"],
                     sucursal_canon=row["sucursal_canon"],
                     target_month=_ensure_date(
