@@ -285,6 +285,7 @@ def run_track_daily_pipeline_for_date(
         mart_refresh_result = refresh_track_daily_mart_for_date(
             business_date=track_date,
             generation_mode=normalized_generation_mode,
+            track_daily_version_id=track_daily_version.id,
         )
 
         mark_track_daily_version_success(
@@ -394,10 +395,11 @@ def run_track_agregadoras_integration_for_date(
             business_date=track_date,
             generation_mode="official_closed_day",
         )
-
+       
         mart_refresh_result = refresh_track_daily_mart_for_date(
             business_date=track_date,
             generation_mode="official_closed_day",
+            track_daily_version_id=cierre_version.id,
         )
 
         mark_track_daily_version_success(

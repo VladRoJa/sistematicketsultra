@@ -806,6 +806,11 @@ class TrackDailyMartORM(db.Model):
     __tablename__ = "track_daily_mart"
 
     id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    track_daily_version_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("track_daily_versions.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     track_date = db.Column(db.Date, nullable=False)
     generation_mode = db.Column(db.Text, nullable=False)
     sucursal_canon = db.Column(
