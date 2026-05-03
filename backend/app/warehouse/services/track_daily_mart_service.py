@@ -315,10 +315,15 @@ def refresh_track_daily_mart_for_date(
     )
 
     try:
-        TrackDailyMartORM.query.filter_by(
-            track_date=track_date,
-            generation_mode=normalized_generation_mode,
-        ).delete(synchronize_session=False)
+        if track_daily_version_id is not None:
+            TrackDailyMartORM.query.filter_by(
+                track_daily_version_id=track_daily_version_id,
+            ).delete(synchronize_session=False)
+        else:
+            TrackDailyMartORM.query.filter_by(
+                track_date=track_date,
+                generation_mode=normalized_generation_mode,
+            ).delete(synchronize_session=False)
 
         for row in rows:
             db.session.add(
