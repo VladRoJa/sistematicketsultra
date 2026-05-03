@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, time as dt_time, timedelta
 from zoneinfo import ZoneInfo
 
-from app import create_app
+from app import create_app, db
 from app.warehouse.services.track_daily_pipeline_service import (
     run_track_daily_pipeline_for_date,
     run_track_agregadoras_integration_for_date,
@@ -218,27 +218,29 @@ def run_scheduler_loop() -> None:
 
     with app.app_context():
         while True:
-            now_local = _now_tijuana()
-            decision = decide_track_scheduler_action(now_local)
+            try:
+                now_local = _now_tijuana()
+                decision = decide_track_scheduler_action(now_local)
 
-            if decision is not None:
-                try:
-                    result = execute_track_scheduler_decision(decision)
-                    LOGGER.info(
-                        "Track scheduler terminó action=%s track_date=%s result_status=%s",
-                        decision.action,
-                        decision.track_date.isoformat(),
-                        result.get("status") if isinstance(result, dict) else None,
-                    )
-                except Exception:
-                    LOGGER.exception(
-                        "Track scheduler falló action=%s track_date=%s",
-                        decision.action,
-                        decision.track_date.isoformat(),
-                    )
+                if decision is not None:
+                    try:
+                        result = execute_track_scheduler_decision(decision)
+                        LOGGER.info(
+                            "Track scheduler terminó action=%s track_date=%s result_status=%s",
+                            decision.action,
+                            decision.track_date.isoformat(),
+                            result.get("status") if isinstance(result, dict) else None,
+                        )
+                    except Exception:
+                        LOGGER.exception(
+                            "Track scheduler falló action=%s track_date=%s",
+                            decision.action,
+                            decision.track_date.isoformat(),
+                        )
+            finally:
+                db.session.remove()
 
             time.sleep(poll_interval_seconds)
-
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
