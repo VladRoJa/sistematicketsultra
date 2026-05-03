@@ -12,6 +12,9 @@ from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt, jwt_required
 
 from app.models.warehouse import TrackDailyMartORM
+from app.warehouse.services.track_daily_version_service import (
+    get_current_track_daily_version,
+)
 from app.warehouse.services.track_daily_pipeline_service import (
     run_track_agregadoras_integration_for_date,
     run_track_daily_pipeline_for_date,
@@ -80,9 +83,43 @@ def _serialize_decimal(value: Decimal | None) -> float | None:
         return None
     return float(value)
 
+def _resolve_track_daily_version_type_candidates(
+    *,
+    generation_mode: str,
+) -> list[str]:
+    if generation_mode == "manual_preview":
+        return ["preview_operativo"]
+
+    if generation_mode == "official_closed_day":
+        return [
+            "cierre_canonico",
+            "base_nocturna_canonica",
+        ]
+
+    raise ValueError(f"generation_mode inválido: {generation_mode!r}")
+
+
+def _resolve_current_track_daily_version_for_query(
+    *,
+    track_date: date,
+    generation_mode: str,
+):
+    for version_type in _resolve_track_daily_version_type_candidates(
+        generation_mode=generation_mode,
+    ):
+        version = get_current_track_daily_version(
+            track_date=track_date,
+            version_type=version_type,
+        )
+
+        if version is not None and version.status == "success":
+            return version
+
+    return None
 
 def _serialize_track_daily_mart_row(row: TrackDailyMartORM) -> dict[str, Any]:
     return {
+        "track_daily_version_id": row.track_daily_version_id,
         "track_date": row.track_date.isoformat(),
         "generation_mode": row.generation_mode,
         "sucursal_canon": row.sucursal_canon,
@@ -286,20 +323,51 @@ def get_track_daily_mart_endpoint():
                 }
             ), 400
 
-        rows = (
-            TrackDailyMartORM.query.filter_by(
-                track_date=track_date,
-                generation_mode=generation_mode,
-            )
-            .order_by(TrackDailyMartORM.sucursal_canon.asc())
-            .all()
+        resolved_version = _resolve_current_track_daily_version_for_query(
+            track_date=track_date,
+            generation_mode=generation_mode,
         )
+
+        if resolved_version is None:
+            rows = []
+        else:
+            rows = (
+                TrackDailyMartORM.query.filter_by(
+                    track_daily_version_id=resolved_version.id,
+                )
+                .order_by(TrackDailyMartORM.sucursal_canon.asc())
+                .all()
+            )
 
         return jsonify(
             {
                 "status": "ok",
                 "track_date": track_date.isoformat(),
                 "generation_mode": generation_mode,
+                "resolved_version": (
+                    {
+                        "id": resolved_version.id,
+                        "version_type": resolved_version.version_type,
+                        "status": resolved_version.status,
+                        "generated_at_utc": (
+                            resolved_version.generated_at_utc.isoformat()
+                            if resolved_version.generated_at_utc
+                            else None
+                        ),
+                        "started_at_utc": (
+                            resolved_version.started_at_utc.isoformat()
+                            if resolved_version.started_at_utc
+                            else None
+                        ),
+                        "finished_at_utc": (
+                            resolved_version.finished_at_utc.isoformat()
+                            if resolved_version.finished_at_utc
+                            else None
+                        ),
+                    }
+                    if resolved_version
+                    else None
+                ),
                 "total_rows": len(rows),
                 "rows": [_serialize_track_daily_mart_row(row) for row in rows],
             }
