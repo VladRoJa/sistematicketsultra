@@ -423,3 +423,24 @@ def refresh_track_daily_mart_for_date(
         "generation_mode": normalized_generation_mode,
         "rows_inserted": len(rows),
     }
+    
+def delete_track_daily_mart_rows_for_version(
+    *,
+    track_daily_version_id: int,
+    auto_commit: bool = False,
+) -> dict[str, int]:
+    deleted_count = (
+        TrackDailyMartORM.query.filter_by(
+            track_daily_version_id=track_daily_version_id,
+        ).delete(synchronize_session=False)
+    )
+
+    db.session.flush()
+
+    if auto_commit:
+        db.session.commit()
+
+    return {
+        "track_daily_version_id": track_daily_version_id,
+        "rows_deleted": deleted_count,
+    }

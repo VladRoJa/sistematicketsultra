@@ -22,6 +22,7 @@ services:
   backend:
     build:
       context: ./backend
+    restart: unless-stopped
     depends_on:
       - db
     env_file:
@@ -35,6 +36,21 @@ services:
       EMAIL_FROM: "notificaciones.ultragym@gmail.com"
       SMTP_DEBUG: "1"          # para ver el diálogo SMTP
       SMTP_SYNC_DEBUG: "1"     # para envío síncrono (sin thread) mientras depuramos
+
+    command: >
+      gunicorn
+      --workers 2
+      --worker-class sync
+      --timeout 300
+      --graceful-timeout 30
+      --keep-alive 5
+      --max-requests 1000
+      --max-requests-jitter 100
+      --access-logfile -
+      --error-logfile -
+      --capture-output
+      -b 0.0.0.0:5000
+      app.wsgi:app
     ports:
       - "5000:5000"
     networks:
