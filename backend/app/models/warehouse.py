@@ -877,6 +877,16 @@ class TrackDailyMartORM(db.Model):
         server_default=db.func.now(),
     )
     
+    __table_args__ = (
+        db.Index(
+            "uq_track_daily_mart_version_branch",
+            "track_daily_version_id",
+            "sucursal_canon",
+            unique=True,
+            postgresql_where=db.text("track_daily_version_id IS NOT NULL"),
+        ),
+    )
+    
 class IngresosWellhubSnapshotORM(db.Model):
     __tablename__ = "ingresos_wellhub_snapshots"
 
