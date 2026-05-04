@@ -18,6 +18,9 @@ from app.warehouse.services.track_daily_pipeline_service import (
 from app.warehouse.services.track_daily_version_service import (
     get_current_track_daily_version,
 )
+from app.warehouse.services.track_source_agregadoras_daily_service import (
+    resolve_exact_agregadoras_snapshot_status_for_date,
+)
 
 
 LOGGER = logging.getLogger(__name__)
@@ -31,6 +34,7 @@ DEFAULT_NIGHTLY_BASE_HOUR = 23
 DEFAULT_NIGHTLY_BASE_MINUTE = 30
 DEFAULT_NIGHTLY_RETRY_HOUR = 0
 DEFAULT_NIGHTLY_RETRY_MINUTE = 30
+DEFAULT_CLOSE_LOOKBACK_DAYS = 7
 
 
 @dataclass(frozen=True)
@@ -87,6 +91,44 @@ def _has_failed_current_version(*, track_date: date, version_type: str) -> bool:
 
     return bool(version and version.status == "failed")
 
+def _is_close_check_minute(value: datetime) -> bool:
+    return value.minute in {5, 20, 35, 50}
+
+
+def _has_exact_agregadoras_ready(*, track_date: date) -> bool:
+    readiness = resolve_exact_agregadoras_snapshot_status_for_date(
+        business_date=track_date,
+    )
+
+    return bool(readiness.get("is_ready"))
+
+
+def _find_pending_cierre_canonico_date(
+    *,
+    today: date,
+    lookback_days: int,
+) -> date | None:
+    for days_back in range(1, lookback_days + 1):
+        candidate_date = today - timedelta(days=days_back)
+
+        if not _has_success_current_version(
+            track_date=candidate_date,
+            version_type="base_nocturna_canonica",
+        ):
+            continue
+
+        if _has_success_current_version(
+            track_date=candidate_date,
+            version_type="cierre_canonico",
+        ):
+            continue
+
+        if not _has_exact_agregadoras_ready(track_date=candidate_date):
+            continue
+
+        return candidate_date
+
+    return None
 
 def decide_track_scheduler_action(now_local: datetime) -> TrackSchedulerDecision | None:
     preview_start_hour = _env_int(
@@ -155,6 +197,24 @@ def decide_track_scheduler_action(now_local: datetime) -> TrackSchedulerDecision
                 action="base_nocturna_retry",
                 track_date=previous_day,
                 reason="nightly_base_retry_after_failure",
+            )
+            
+    close_lookback_days = _env_int(
+        "TRACK_CLOSE_LOOKBACK_DAYS",
+        DEFAULT_CLOSE_LOOKBACK_DAYS,
+    )
+
+    if _is_close_check_minute(now_local):
+        pending_close_date = _find_pending_cierre_canonico_date(
+            today=today,
+            lookback_days=close_lookback_days,
+        )
+
+        if pending_close_date is not None:
+            return TrackSchedulerDecision(
+                action="cierre_canonico",
+                track_date=pending_close_date,
+                reason="exact_agregadoras_available_for_closed_day",
             )
 
     return None

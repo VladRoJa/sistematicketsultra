@@ -145,6 +145,43 @@ def _build_totalpass_map_for_date(
 
     return result, snapshot.id
 
+def resolve_exact_agregadoras_snapshot_status_for_date(
+    *,
+    business_date: Any,
+) -> dict[str, Any]:
+    normalized_business_date = _ensure_date(
+        business_date,
+        field_name="business_date",
+    )
+
+    wellhub_snapshot = (
+        IngresosWellhubSnapshotORM.query.filter_by(
+            business_date=normalized_business_date,
+            snapshot_kind="daily",
+            is_canonical=True,
+        )
+        .order_by(IngresosWellhubSnapshotORM.id.desc())
+        .first()
+    )
+
+    totalpass_snapshot = (
+        IngresosTotalpassSnapshotORM.query.filter_by(
+            business_date=normalized_business_date,
+            snapshot_kind="daily",
+            is_canonical=True,
+        )
+        .order_by(IngresosTotalpassSnapshotORM.id.desc())
+        .first()
+    )
+
+    return {
+        "business_date": normalized_business_date.isoformat(),
+        "has_wellhub": wellhub_snapshot is not None,
+        "has_totalpass": totalpass_snapshot is not None,
+        "wellhub_snapshot_id": wellhub_snapshot.id if wellhub_snapshot else None,
+        "totalpass_snapshot_id": totalpass_snapshot.id if totalpass_snapshot else None,
+        "is_ready": wellhub_snapshot is not None and totalpass_snapshot is not None,
+    }
 
 def _merge_agregadoras_maps_for_date(
     *,

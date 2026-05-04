@@ -33,6 +33,7 @@ from app.warehouse.services.track_daily_version_service import (
 )
 from app.warehouse.services.track_source_agregadoras_daily_service import (
     refresh_track_source_agregadoras_daily_for_track_date,
+    resolve_exact_agregadoras_snapshot_status_for_date,
 )
 from app.warehouse.services.track_upload_retention_service import (
     archive_warehouse_uploads_for_track_daily_version,
@@ -410,6 +411,33 @@ def run_track_agregadoras_integration_for_date(
         version_type="base_nocturna_canonica",
     )
 
+    if base_version is None or base_version.status != "success":
+        return {
+            "status": "not_ready",
+            "track_date": track_date.isoformat(),
+            "generation_mode": "official_closed_day",
+            "reason": "missing_success_base_nocturna_canonica",
+            "base_version_id": base_version.id if base_version else None,
+            "requested_by": requested_by_value,
+            "trigger_source": trigger_source_value,
+        }
+
+    agregadoras_readiness = resolve_exact_agregadoras_snapshot_status_for_date(
+        business_date=track_date,
+    )
+
+    if not agregadoras_readiness.get("is_ready"):
+        return {
+            "status": "not_ready",
+            "track_date": track_date.isoformat(),
+            "generation_mode": "official_closed_day",
+            "reason": "missing_exact_agregadoras",
+            "base_version_id": base_version.id,
+            "agregadoras_readiness": agregadoras_readiness,
+            "requested_by": requested_by_value,
+            "trigger_source": trigger_source_value,
+        }
+
     cierre_version = None
 
     try:
@@ -429,6 +457,23 @@ def run_track_agregadoras_integration_for_date(
             business_date=track_date,
             generation_mode="official_closed_day",
         )
+
+        agregadoras_business_date = agregadoras_refresh_result.get(
+            "agregadoras_business_date"
+        )
+
+        if agregadoras_business_date != track_date.isoformat():
+            raise TrackDailyPipelineServiceError(
+                "El cierre_canonico requiere agregadoras exactas del mismo día. "
+                f"track_date={track_date.isoformat()} "
+                f"agregadoras_business_date={agregadoras_business_date!r}."
+            )
+
+        if int(agregadoras_refresh_result.get("rows_inserted") or 0) <= 0:
+            raise TrackDailyPipelineServiceError(
+                "No existen agregadoras exactas para crear cierre_canonico "
+                f"de track_date={track_date.isoformat()}."
+            )   
 
         agregadoras_business_date = agregadoras_refresh_result.get(
             "agregadoras_business_date"
