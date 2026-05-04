@@ -424,6 +424,7 @@ def refresh_track_daily_mart_for_date(
         "rows_inserted": len(rows),
     }
     
+    
 def delete_track_daily_mart_rows_for_version(
     *,
     track_daily_version_id: int,

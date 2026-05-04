@@ -20,6 +20,7 @@ from app.warehouse.services.track_source_domiciliados_efectivos_daily_service im
     refresh_track_source_domiciliados_efectivos_daily_for_date,
 )
 from app.warehouse.services.track_daily_mart_service import (
+    delete_track_daily_mart_rows_for_version,
     refresh_track_daily_mart_for_date,
 )
 from app.warehouse.services.track_daily_version_service import (
@@ -288,6 +289,17 @@ def run_track_daily_pipeline_for_date(
             track_daily_version_id=track_daily_version.id,
         )
 
+        replaced_preview_cleanup_result = None
+
+        if (
+            version_type == "preview_operativo"
+            and track_daily_version.replaces_version_id
+        ):
+            replaced_preview_cleanup_result = delete_track_daily_mart_rows_for_version(
+                track_daily_version_id=track_daily_version.replaces_version_id,
+                auto_commit=False,
+            )
+
         mark_track_daily_version_success(
             version_id=track_daily_version.id,
             generated_at_utc=_now_utc(),
@@ -320,6 +332,7 @@ def run_track_daily_pipeline_for_date(
             },
             "source_refresh_results": source_refresh_results,
             "mart_refresh_result": mart_refresh_result,
+            "replaced_preview_cleanup_result": replaced_preview_cleanup_result,
         }
 
     except Exception as exc:
