@@ -11,12 +11,14 @@
       </p>
     </div>
 
-    <div class="track-topbar__controls">
+    <div class="track-topbar__content">
       <div class="track-topbar__mode">
         <span class="track-topbar__mode-label">Ejecución manual</span>
+
         <span class="track-topbar__mode-value">
           Modo actual: <strong>{{ selectedModeLabel }}</strong>
         </span>
+
         <span
           class="track-topbar__mode-value"
           *ngIf="trackVersionLabel"
@@ -25,11 +27,12 @@
         </span>
 
         <span
-          class="track-topbar__mode-value"s
+          class="track-topbar__mode-value"
           *ngIf="trackGeneratedAtLabel"
         >
           <strong>{{ trackGeneratedAtLabel }}</strong>
         </span>
+
         <span
           class="track-topbar__mode-value"
           *ngIf="agregadorasFreshnessLabel"
@@ -39,37 +42,42 @@
       </div>
 
       <div class="track-form track-form--topbar">
-        <div class="track-field">
-          <label for="trackDate">Fecha</label>
-          <div class="track-date-nav">
-            <button
-              type="button"
-              class="track-date-nav__button"
-              (click)="goToPreviousTrackDate()"
-              [disabled]="shouldDisablePreviousTrackDateButton()"
-              title="Día anterior"
-            >
-              ‹
-            </button>
+        <div class="track-field track-field--date">
+          <div class="track-date-control__header">
+            <label for="trackDate">Fecha</label>
 
-            <input
-              id="trackDate"
-              type="date"
-              [(ngModel)]="trackDate"
-              (ngModelChange)="onTrackDateChanged()"
-              [disabled]="shouldDisableTrackDateInput()"
-            />
+            <div class="track-date-control__nav">
+              <button
+                type="button"
+                class="track-date-control__nav-btn"
+                (click)="goToPreviousTrackDate()"
+                [disabled]="shouldDisablePreviousTrackDateButton()"
+                aria-label="Ir al día anterior"
+                title="Día anterior"
+              >
+                ←
+              </button>
 
-            <button
-              type="button"
-              class="track-date-nav__button"
-              (click)="goToNextTrackDate()"
-              [disabled]="shouldDisableNextTrackDateButton()"
-              title="Día siguiente"
-            >
-              ›
-            </button>
+              <button
+                type="button"
+                class="track-date-control__nav-btn"
+                (click)="goToNextTrackDate()"
+                [disabled]="shouldDisableNextTrackDateButton()"
+                aria-label="Ir al día siguiente"
+                title="Día siguiente"
+              >
+                →
+              </button>
+            </div>
           </div>
+
+          <input
+            id="trackDate"
+            type="date"
+            [(ngModel)]="trackDate"
+            (ngModelChange)="onTrackDateChanged()"
+            [disabled]="shouldDisableTrackDateInput()"
+          />
         </div>
 
         <div class="track-field">
