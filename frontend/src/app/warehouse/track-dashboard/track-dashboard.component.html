@@ -45,6 +45,7 @@
             id="trackDate"
             type="date"
             [(ngModel)]="trackDate"
+            (ngModelChange)="onTrackDateChanged()"
             [disabled]="shouldDisableTrackDateInput()"
           />
         </div>

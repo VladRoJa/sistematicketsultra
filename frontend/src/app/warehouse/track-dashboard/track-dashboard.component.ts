@@ -207,26 +207,17 @@ export class TrackDashboardComponent implements OnInit {
       });
   }
 
-  loadDailyMart(): void {
-    if (this.isLoadingMart) {
-      return;
-    }
-
-    this.isLoadingMart = true;
-    this.martErrorMessage = '';
-    this.rawMartRows = [];
-    this.viewRows = [];
-    this.summaryCards = [];
-    this.totalRowsLabel = '0';
-    this.lastLoadedTrackDateLabel = this.trackDate;
-    this.resolvedVersion = null;
-    this.trackVersionLabel = '';
-    this.trackGeneratedAtLabel = '';
-    this.agregadorasFreshnessLabel = '';
-    this.syncSelectedModeLabel();
-
-    this.fetchDailyMart();
+loadDailyMart(): void {
+  if (this.isLoadingMart) {
+    return;
   }
+
+  this.isLoadingMart = true;
+  this.resetLoadedMartState();
+  this.syncSelectedModeLabel();
+
+  this.fetchDailyMart();
+}
 
   private fetchDailyMart(): void {
     this.trackService
@@ -272,9 +263,27 @@ export class TrackDashboardComponent implements OnInit {
       });
   }
 
-  onGenerationModeChanged(): void {
-    this.syncSelectedModeLabel();
+  private resetLoadedMartState(): void {
+    this.martErrorMessage = '';
+    this.rawMartRows = [];
+    this.viewRows = [];
+    this.summaryCards = [];
+    this.totalRowsLabel = '0';
+    this.lastLoadedTrackDateLabel = this.trackDate;
+    this.resolvedVersion = null;
+    this.trackVersionLabel = '';
+    this.trackGeneratedAtLabel = '';
+    this.agregadorasFreshnessLabel = '';
   }
+
+onGenerationModeChanged(): void {
+  this.syncSelectedModeLabel();
+  this.resetLoadedMartState();
+}
+
+onTrackDateChanged(): void {
+  this.resetLoadedMartState();
+}  
  
 openBranchHistory(row: TrackViewRow): void {
   if (row.rowKind !== 'data') {
