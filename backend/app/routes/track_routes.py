@@ -99,6 +99,44 @@ def _resolve_track_daily_version_type_candidates(
 
     raise ValueError(f"generation_mode inválido: {generation_mode!r}")
 
+def _track_daily_version_has_mart_rows(*, version_id: int) -> bool:
+    return (
+        db.session.query(TrackDailyMartORM.id)
+        .filter(TrackDailyMartORM.track_daily_version_id == version_id)
+        .first()
+        is not None
+    )
+
+
+def _resolve_replaced_track_daily_version_with_rows(version: Any):
+    if version is None or not version.replaces_version_id:
+        return None
+
+    previous_version = db.session.get(
+        type(version),
+        version.replaces_version_id,
+    )
+
+    if previous_version is None:
+        return None
+
+    if previous_version.track_date != version.track_date:
+        return None
+
+    if previous_version.version_type != version.version_type:
+        return None
+
+    if previous_version.status not in {"success", "replaced"}:
+        return None
+
+    if not _track_daily_version_has_mart_rows(
+        version_id=previous_version.id,
+    ):
+        return None
+
+    return previous_version
+
+
 def _resolve_current_track_daily_version_for_query(
     *,
     track_date: date,
@@ -112,11 +150,23 @@ def _resolve_current_track_daily_version_for_query(
             version_type=version_type,
         )
 
-        if version is not None and version.status == "success":
+        if version is None:
+            continue
+
+        if (
+            version.status == "success"
+            and _track_daily_version_has_mart_rows(version_id=version.id)
+        ):
             return version
 
-    return None
+        fallback_version = _resolve_replaced_track_daily_version_with_rows(
+            version,
+        )
 
+        if fallback_version is not None:
+            return fallback_version
+
+    return None
 
 def _get_track_local_today() -> date:
     return datetime.now(ZoneInfo("America/Tijuana")).date()
