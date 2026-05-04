@@ -321,7 +321,7 @@ def warehouse_list_uploads():
 
     source_key = (request.args.get('source_key') or '').strip()
     report_type_key = (request.args.get('report_type_key') or '').strip()
-    status = (request.args.get('status') or '').strip()
+    status = (request.args.get('status') or 'ACTIVE').strip()
     period_type = (request.args.get('period_type') or '').strip()
 
     query = (
