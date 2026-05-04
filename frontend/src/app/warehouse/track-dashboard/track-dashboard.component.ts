@@ -327,11 +327,10 @@ private shiftTrackDateByDays(days: number): void {
 }
 
 private applyHistoricalModeForSelectedDate(): void {
-  if (
-    this.isSelectedTrackDateInPast() &&
-    this.generationMode === 'manual_preview'
-  ) {
+  if (this.isSelectedTrackDateInPast()) {
     this.generationMode = 'official_closed_day';
+  } else {
+    this.generationMode = 'manual_preview';
   }
 
   this.syncSelectedModeLabel();
