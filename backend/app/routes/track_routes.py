@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from zoneinfo import ZoneInfo
 from decimal import Decimal
 from typing import Any
 from app.extensions import db
@@ -98,7 +99,6 @@ def _resolve_track_daily_version_type_candidates(
 
     raise ValueError(f"generation_mode inválido: {generation_mode!r}")
 
-
 def _resolve_current_track_daily_version_for_query(
     *,
     track_date: date,
@@ -116,6 +116,81 @@ def _resolve_current_track_daily_version_for_query(
             return version
 
     return None
+
+
+def _get_track_local_today() -> date:
+    return datetime.now(ZoneInfo("America/Tijuana")).date()
+
+
+def _resolve_track_daily_history_version_type_candidates(
+    *,
+    track_date: date,
+    generation_mode: str,
+) -> list[str]:
+    if generation_mode == "official_closed_day":
+        return [
+            "cierre_canonico",
+            "base_nocturna_canonica",
+        ]
+
+    if generation_mode == "manual_preview":
+        if track_date == _get_track_local_today():
+            return ["preview_operativo"]
+
+        return [
+            "cierre_canonico",
+            "base_nocturna_canonica",
+        ]
+
+    raise ValueError(f"generation_mode inválido: {generation_mode!r}")
+
+
+def _resolve_track_daily_history_version_for_query(
+    *,
+    track_date: date,
+    generation_mode: str,
+):
+    for version_type in _resolve_track_daily_history_version_type_candidates(
+        track_date=track_date,
+        generation_mode=generation_mode,
+    ):
+        version = get_current_track_daily_version(
+            track_date=track_date,
+            version_type=version_type,
+        )
+
+        if version is not None and version.status == "success":
+            return version
+
+    return None
+
+
+def _resolve_track_branch_history_rows(
+    *,
+    sucursal_canon: str,
+    generation_mode: str,
+    candidate_dates: list[date],
+) -> list[TrackDailyMartORM]:
+    resolved_rows: list[TrackDailyMartORM] = []
+
+    for candidate_date in candidate_dates:
+        resolved_version = _resolve_track_daily_history_version_for_query(
+            track_date=candidate_date,
+            generation_mode=generation_mode,
+        )
+
+        if resolved_version is None:
+            continue
+
+        row = TrackDailyMartORM.query.filter_by(
+            track_daily_version_id=resolved_version.id,
+            sucursal_canon=sucursal_canon,
+        ).one_or_none()
+
+        if row is not None:
+            resolved_rows.append(row)
+
+    return resolved_rows
 
 def _serialize_track_daily_mart_row(row: TrackDailyMartORM) -> dict[str, Any]:
     return {
@@ -438,15 +513,24 @@ def get_track_branch_history_endpoint():
                 field_name="target_month",
             )
 
-            rows = (
-                TrackDailyMartORM.query.filter_by(
-                    sucursal_canon=sucursal_canon,
-                    generation_mode=generation_mode,
+            candidate_dates = [
+                row.track_date
+                for row in (
+                    db.session.query(TrackDailyMartORM.track_date)
+                    .filter(TrackDailyMartORM.sucursal_canon == sucursal_canon)
+                    .filter(TrackDailyMartORM.track_daily_version_id.isnot(None))
+                    .filter(db.extract("year", TrackDailyMartORM.track_date) == target_year)
+                    .filter(db.extract("month", TrackDailyMartORM.track_date) == target_month)
+                    .distinct()
+                    .order_by(TrackDailyMartORM.track_date.asc())
+                    .all()
                 )
-                .filter(db.extract("year", TrackDailyMartORM.track_date) == target_year)
-                .filter(db.extract("month", TrackDailyMartORM.track_date) == target_month)
-                .order_by(TrackDailyMartORM.track_date.asc())
-                .all()
+            ]
+
+            rows = _resolve_track_branch_history_rows(
+                sucursal_canon=sucursal_canon,
+                generation_mode=generation_mode,
+                candidate_dates=candidate_dates,
             )
 
             serialized_rows = [
@@ -466,6 +550,7 @@ def get_track_branch_history_endpoint():
             ), 200
 
         raw_days = request.args.get("days", "5")
+
         try:
             days = int(raw_days)
         except Exception:
@@ -484,15 +569,24 @@ def get_track_branch_history_endpoint():
                 }
             ), 400
 
-        rows = (
-            TrackDailyMartORM.query.filter_by(
-                sucursal_canon=sucursal_canon,
-                generation_mode=generation_mode,
+        candidate_dates = [
+            row.track_date
+            for row in (
+                db.session.query(TrackDailyMartORM.track_date)
+                .filter(TrackDailyMartORM.sucursal_canon == sucursal_canon)
+                .filter(TrackDailyMartORM.track_daily_version_id.isnot(None))
+                .distinct()
+                .order_by(TrackDailyMartORM.track_date.desc())
+                .limit(120)
+                .all()
             )
-            .order_by(TrackDailyMartORM.track_date.desc())
-            .limit(days)
-            .all()
-        )
+        ]
+
+        rows = _resolve_track_branch_history_rows(
+            sucursal_canon=sucursal_canon,
+            generation_mode=generation_mode,
+            candidate_dates=candidate_dates,
+        )[:days]
 
         serialized_rows = [
             _serialize_track_daily_mart_row(row)
@@ -518,11 +612,20 @@ def get_track_branch_history_endpoint():
             }
         ), 403
 
+    except ValueError as exc:
+        return jsonify(
+            {
+                "status": "error",
+                "message": str(exc),
+            }
+        ), 400
+
     except Exception as exc:
         return jsonify(
             {
                 "status": "error",
-                "message": "Falló la consulta del historial del Track por sucursal.",
+                "message": "Error consultando historial de Track por sucursal.",
                 "detail": str(exc),
             }
-        ), 500
+        ), 500       
+        
