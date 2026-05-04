@@ -71,21 +71,43 @@ def _is_out_of_scope_track_branch(raw_branch_name: str) -> bool:
     return normalized in {"BECA", "CORPORATIVO"}
 
 
-def _build_base_ingresos_map_for_date(
+def _resolve_reporte_direccion_snapshot_for_track(
     *,
     business_date: date,
-) -> tuple[dict[str, dict[str, Any]], int]:
-    snapshot = (
-        ReporteDireccionSnapshotORM.query.filter_by(
-            business_date=business_date,
-            snapshot_kind="daily",
-            is_canonical=True,
-        )
+    generation_mode: str | None = None,
+) -> ReporteDireccionSnapshotORM | None:
+    query = ReporteDireccionSnapshotORM.query.filter_by(
+        business_date=business_date,
+        snapshot_kind="daily",
+    )
+
+    if generation_mode == "manual_preview":
+        return query.order_by(ReporteDireccionSnapshotORM.id.desc()).first()
+
+    return (
+        query
+        .filter(ReporteDireccionSnapshotORM.is_canonical.is_(True))
         .order_by(ReporteDireccionSnapshotORM.id.desc())
         .first()
     )
 
+
+def _build_base_ingresos_map_for_date(
+    *,
+    business_date: date,
+    generation_mode: str | None = None,
+) -> tuple[dict[str, dict[str, Any]], int]:
+    snapshot = _resolve_reporte_direccion_snapshot_for_track(
+        business_date=business_date,
+        generation_mode=generation_mode,
+    )
+
     if snapshot is None:
+        if generation_mode == "manual_preview":
+            raise TrackSourceIngresosDailyServiceError(
+                f"No existe snapshot daily de reporte_direccion para business_date={business_date.isoformat()}."
+            )
+
         raise TrackSourceIngresosDailyServiceError(
             f"No existe snapshot canónico daily de reporte_direccion para business_date={business_date.isoformat()}."
         )
@@ -128,7 +150,6 @@ def _build_base_ingresos_map_for_date(
         result[sucursal_canon] = current
 
     return result, snapshot.id
-
 def _build_agregadoras_map_for_date(
     *,
     business_date: date,
@@ -405,6 +426,7 @@ def build_track_source_ingresos_daily_for_date(
 
     base_map, _base_snapshot_id = _build_base_ingresos_map_for_date(
         business_date=normalized_business_date,
+        generation_mode=generation_mode,
     )
     agregadoras_business_date = _resolve_agregadoras_business_date(
         business_date=normalized_business_date,
