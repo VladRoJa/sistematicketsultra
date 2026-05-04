@@ -84,6 +84,9 @@ def _serialize_decimal(value: Decimal | None) -> float | None:
         return None
     return float(value)
 
+def _today_tijuana() -> date:
+    return datetime.now(ZoneInfo("America/Tijuana")).date()
+
 def _resolve_track_daily_version_type_candidates(
     *,
     generation_mode: str,
@@ -322,6 +325,22 @@ def run_track_daily_pipeline_endpoint():
                     "status": "error",
                     "message": "generation_mode inválido.",
                     "allowed_generation_modes": sorted(ALLOWED_GENERATION_MODES),
+                }
+            ), 400
+            
+        today_local = _today_tijuana()
+
+        if track_date < today_local:
+            return jsonify(
+                {
+                    "status": "error",
+                    "message": (
+                        "No se puede generar Track para fechas pasadas desde este flujo. "
+                        "Consulta la versión histórica cerrada."
+                    ),
+                    "track_date": track_date.isoformat(),
+                    "today": today_local.isoformat(),
+                    "generation_mode": generation_mode,
                 }
             ), 400
 
