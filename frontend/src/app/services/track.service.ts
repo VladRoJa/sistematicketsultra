@@ -35,7 +35,17 @@ export interface TrackPipelineResponse {
   detail?: string;
 }
 
+export interface TrackResolvedVersion {
+  id: number;
+  version_type: string;
+  status: string;
+  generated_at_utc: string | null;
+  started_at_utc: string | null;
+  finished_at_utc: string | null;
+}
+
 export interface TrackDailyMartRow {
+  track_daily_version_id?: number | null;
   track_date: string;
   generation_mode: TrackGenerationMode;
   sucursal_canon: string;
@@ -73,6 +83,7 @@ export interface TrackDailyMartResponse {
   status: 'ok' | 'error';
   track_date?: string;
   generation_mode?: TrackGenerationMode;
+  resolved_version?: TrackResolvedVersion | null;
   total_rows?: number;
   rows?: TrackDailyMartRow[];
   message?: string;

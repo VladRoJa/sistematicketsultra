@@ -11,6 +11,7 @@ import {
   TrackPipelineResponse,
   TrackDailyMartResponse,
   TrackDailyMartRow,
+  TrackResolvedVersion,
 } from '../../services/track.service';
 
 type ProgressTone = 'danger' | 'warning' | 'success' | 'neutral';
@@ -158,6 +159,9 @@ export class TrackDashboardComponent implements OnInit {
   selectedModeLabel = '';
   lastLoadedTrackDateLabel = '';
   agregadorasFreshnessLabel = '';
+  resolvedVersion: TrackResolvedVersion | null = null;
+  trackVersionLabel = '';
+  trackGeneratedAtLabel = '';
 
   constructor(private readonly trackService: TrackService,
     private readonly router: Router,
@@ -259,11 +263,17 @@ export class TrackDashboardComponent implements OnInit {
             this.martErrorMessage =
               response.message || 'No se pudo consultar el Track daily mart.';
             this.agregadorasFreshnessLabel = '';  
+            this.resolvedVersion = null;
+            this.trackVersionLabel = '';
+            this.trackGeneratedAtLabel = '';
             this.isLoadingMart = false;
             return;
           }
 
           const baseRows = this.sortRowsByOpeningOrder(response.rows || []);
+          this.resolvedVersion = response.resolved_version || null;
+          this.trackVersionLabel = this.buildTrackVersionLabel(this.resolvedVersion);
+          this.trackGeneratedAtLabel = this.buildTrackGeneratedAtLabel(this.resolvedVersion);
 
           this.agregadorasFreshnessLabel =
             this.buildAgregadorasFreshnessLabel(baseRows);
@@ -280,6 +290,9 @@ export class TrackDashboardComponent implements OnInit {
             error?.error?.message ||
             error?.error?.detail ||
             'Ocurrió un error al consultar el Track daily mart.';
+            this.resolvedVersion = null;
+            this.trackVersionLabel = '';
+            this.trackGeneratedAtLabel = '';
           this.isLoadingMart = false;
         },
       });
@@ -667,6 +680,87 @@ private buildTargetMonthFromTrackDate(): string {
     this.selectedModeLabel = option?.label || this.generationMode;
   }
 
+private buildTrackVersionLabel(
+  resolvedVersion: TrackResolvedVersion | null,
+): string {
+  if (!resolvedVersion) {
+    return '';
+  }
+
+  return `#${resolvedVersion.id} · ${this.formatTrackVersionTypeLabel(
+    resolvedVersion.version_type,
+  )}`;
+}
+
+
+private buildTrackGeneratedAtLabel(
+  resolvedVersion: TrackResolvedVersion | null,
+): string {
+  if (!resolvedVersion) {
+    return '';
+  }
+
+  const generatedAt =
+    resolvedVersion.finished_at_utc ||
+    resolvedVersion.generated_at_utc ||
+    resolvedVersion.started_at_utc;
+
+  if (!generatedAt) {
+    return '';
+  }
+
+  const formattedDateTime = this.formatIsoDateTimeLabel(generatedAt);
+
+  if (resolvedVersion.version_type === 'preview_operativo') {
+    return `Preview generada: ${formattedDateTime}`;
+  }
+
+  if (resolvedVersion.version_type === 'base_nocturna_canonica') {
+    return `Base nocturna generada: ${formattedDateTime}`;
+  }
+
+  if (resolvedVersion.version_type === 'cierre_canonico') {
+    return `Cierre canónico generado: ${formattedDateTime}`;
+  }
+
+  return `Versión generada: ${formattedDateTime}`;
+}
+
+
+private formatTrackVersionTypeLabel(versionType: string): string {
+  if (versionType === 'preview_operativo') {
+    return 'Preview operativo';
+  }
+
+  if (versionType === 'base_nocturna_canonica') {
+    return 'Base nocturna canónica';
+  }
+
+  if (versionType === 'cierre_canonico') {
+    return 'Cierre canónico';
+  }
+
+  return versionType;
+}
+
+
+private formatIsoDateTimeLabel(value: string): string {
+  const parsedDate = new Date(value);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat('es-MX', {
+    timeZone: 'America/Tijuana',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(parsedDate);
+}
   private buildAgregadorasFreshnessLabel(rows: TrackDailyMartRow[]): string {
     const uniqueDates = Array.from(
       new Set(
