@@ -301,7 +301,7 @@ shouldDisableGenerationModeSelect(): boolean {
 }
 
 shouldDisableGenerateTrackButton(): boolean {
-  return this.isSubmitting;
+  return this.isSubmitting || this.isSelectedTrackDateInPast();
 }
 
 getGenerateTrackButtonClass(): string {
@@ -311,11 +311,40 @@ getGenerateTrackButtonClass(): string {
 }
 
 getGenerateTrackButtonLabel(): string {
-  return this.isSubmitting ? 'Generando...' : 'Generar Track';
+  if (this.isSubmitting) {
+    return 'Generando...';
+  }
+
+  if (this.isSelectedTrackDateInPast()) {
+    return 'Solo día actual';
+  }
+
+  return 'Generar Track';
 }
 
 isGenerateTrackButtonLoading(): boolean {
   return this.isSubmitting;
+}
+
+isSelectedTrackDateInPast(): boolean {
+  if (!this.trackDate) {
+    return false;
+  }
+
+  return this.trackDate < this.getTodayIsoDate();
+}
+
+private getTodayIsoDate(): string {
+  const now = new Date();
+
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Tijuana',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+
+  return formatter.format(now);
 }
 
 private buildTargetMonthFromTrackDate(): string {
