@@ -219,39 +219,13 @@ export class TrackDashboardComponent implements OnInit {
     this.summaryCards = [];
     this.totalRowsLabel = '0';
     this.lastLoadedTrackDateLabel = this.trackDate;
+    this.resolvedVersion = null;
+    this.trackVersionLabel = '';
+    this.trackGeneratedAtLabel = '';
+    this.agregadorasFreshnessLabel = '';
     this.syncSelectedModeLabel();
 
-    if (this.generationMode !== 'official_closed_day') {
-      this.fetchDailyMart();
-      return;
-    }
-
-    this.trackService
-      .runAgregadorasIntegration({
-        track_date: this.trackDate,
-        requested_by: 'track_dashboard_consultar_resultado',
-        trigger_source: 'track_dashboard_load_daily_mart',
-      })
-      .subscribe({
-        next: (response) => {
-          if (response.status !== 'ok') {
-            this.martErrorMessage =
-              response.message ||
-              'No se pudo integrar agregadoras antes de consultar el Track.';
-            this.isLoadingMart = false;
-            return;
-          }
-
-          this.fetchDailyMart();
-        },
-        error: (error) => {
-          this.martErrorMessage =
-            error?.error?.message ||
-            error?.error?.detail ||
-            'Ocurrió un error al integrar agregadoras antes de consultar el Track.';
-          this.isLoadingMart = false;
-        },
-      });
+    this.fetchDailyMart();
   }
 
   private fetchDailyMart(): void {
