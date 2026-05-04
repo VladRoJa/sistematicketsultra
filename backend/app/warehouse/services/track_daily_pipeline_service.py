@@ -430,6 +430,23 @@ def run_track_agregadoras_integration_for_date(
             generation_mode="official_closed_day",
         )
 
+        agregadoras_business_date = agregadoras_refresh_result.get(
+            "agregadoras_business_date"
+        )
+
+        if agregadoras_business_date != track_date.isoformat():
+            raise TrackDailyPipelineServiceError(
+                "El cierre_canonico requiere agregadoras exactas del mismo día. "
+                f"track_date={track_date.isoformat()} "
+                f"agregadoras_business_date={agregadoras_business_date!r}."
+            )
+
+        if int(agregadoras_refresh_result.get("rows_inserted") or 0) <= 0:
+            raise TrackDailyPipelineServiceError(
+                "No existen agregadoras exactas para crear cierre_canonico "
+                f"de track_date={track_date.isoformat()}."
+            )
+
         ingresos_refresh_result = refresh_track_source_ingresos_daily_for_date(
             business_date=track_date,
             generation_mode="official_closed_day",
