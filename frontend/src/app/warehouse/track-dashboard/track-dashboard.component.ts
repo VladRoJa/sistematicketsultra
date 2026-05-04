@@ -285,6 +285,78 @@ onTrackDateChanged(): void {
   this.resetLoadedMartState();
 }  
  
+goToPreviousTrackDate(): void {
+  this.shiftTrackDateByDays(-1);
+}
+
+goToNextTrackDate(): void {
+  this.shiftTrackDateByDays(1);
+}
+
+shouldDisablePreviousTrackDateButton(): boolean {
+  return this.isLoadingMart;
+}
+
+shouldDisableNextTrackDateButton(): boolean {
+  return this.isLoadingMart || this.trackDate >= this.getTodayIsoDate();
+}
+
+private shiftTrackDateByDays(days: number): void {
+  if (this.isLoadingMart) {
+    return;
+  }
+
+  const parsedDate = this.parseIsoDate(this.trackDate);
+
+  if (!parsedDate) {
+    return;
+  }
+
+  parsedDate.setUTCDate(parsedDate.getUTCDate() + days);
+
+  const nextTrackDate = this.formatDateAsIso(parsedDate);
+  const todayIsoDate = this.getTodayIsoDate();
+
+  if (nextTrackDate > todayIsoDate) {
+    return;
+  }
+
+  this.trackDate = nextTrackDate;
+  this.applyHistoricalModeForSelectedDate();
+  this.loadDailyMart();
+}
+
+private applyHistoricalModeForSelectedDate(): void {
+  if (
+    this.isSelectedTrackDateInPast() &&
+    this.generationMode === 'manual_preview'
+  ) {
+    this.generationMode = 'official_closed_day';
+  }
+
+  this.syncSelectedModeLabel();
+}
+
+private parseIsoDate(value: string): Date | null {
+  const trimmed = (value || '').trim();
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return null;
+  }
+
+  const [year, month, day] = trimmed.split('-').map(Number);
+
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+private formatDateAsIso(value: Date): string {
+  const year = value.getUTCFullYear();
+  const month = String(value.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(value.getUTCDate()).padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
+}
+
 openBranchHistory(row: TrackViewRow): void {
   if (row.rowKind !== 'data') {
     return;

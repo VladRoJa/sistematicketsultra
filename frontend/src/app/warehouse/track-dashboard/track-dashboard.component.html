@@ -41,13 +41,35 @@
       <div class="track-form track-form--topbar">
         <div class="track-field">
           <label for="trackDate">Fecha</label>
-          <input
-            id="trackDate"
-            type="date"
-            [(ngModel)]="trackDate"
-            (ngModelChange)="onTrackDateChanged()"
-            [disabled]="shouldDisableTrackDateInput()"
-          />
+          <div class="track-date-nav">
+            <button
+              type="button"
+              class="track-date-nav__button"
+              (click)="goToPreviousTrackDate()"
+              [disabled]="shouldDisablePreviousTrackDateButton()"
+              title="Día anterior"
+            >
+              ‹
+            </button>
+
+            <input
+              id="trackDate"
+              type="date"
+              [(ngModel)]="trackDate"
+              (ngModelChange)="onTrackDateChanged()"
+              [disabled]="shouldDisableTrackDateInput()"
+            />
+
+            <button
+              type="button"
+              class="track-date-nav__button"
+              (click)="goToNextTrackDate()"
+              [disabled]="shouldDisableNextTrackDateButton()"
+              title="Día siguiente"
+            >
+              ›
+            </button>
+          </div>
         </div>
 
         <div class="track-field">
