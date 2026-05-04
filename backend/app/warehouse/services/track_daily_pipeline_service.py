@@ -34,7 +34,11 @@ from app.warehouse.services.track_daily_version_service import (
 from app.warehouse.services.track_source_agregadoras_daily_service import (
     refresh_track_source_agregadoras_daily_for_track_date,
 )
-
+from app.warehouse.services.track_upload_retention_service import (
+    archive_warehouse_uploads_for_track_daily_version,
+    extract_warehouse_upload_ids_from_track_raw_ingestion,
+    link_warehouse_uploads_to_track_daily_version,
+)
 
 SUPPORTED_GENERATION_MODES = frozenset(
     {
@@ -255,6 +259,27 @@ def run_track_daily_pipeline_for_date(
                         "error": str(exc),
                     }
                 )
+        
+        raw_ingestion = {
+            "legacy_bundle_result": legacy_bundle_result,
+            "legacy_followup_results": legacy_followup_results,
+            "single_report_results": single_report_results,
+            "jobs_executed": (
+                1
+                + len(legacy_followup_results)
+                + len(single_report_results)
+            ),
+        }
+
+        warehouse_upload_ids = extract_warehouse_upload_ids_from_track_raw_ingestion(
+            raw_ingestion,
+        )
+
+        upload_link_result = link_warehouse_uploads_to_track_daily_version(
+            track_daily_version_id=track_daily_version.id,
+            warehouse_upload_ids=warehouse_upload_ids,
+            auto_commit=False,
+        )
 
         # 2) REFRESH DE FUENTES TRACK
         refresh_dates = _resolve_refresh_dates(
@@ -290,6 +315,7 @@ def run_track_daily_pipeline_for_date(
         )
 
         replaced_preview_cleanup_result = None
+        replaced_preview_upload_archive_result = None
 
         if (
             version_type == "preview_operativo"
@@ -298,6 +324,13 @@ def run_track_daily_pipeline_for_date(
             replaced_preview_cleanup_result = delete_track_daily_mart_rows_for_version(
                 track_daily_version_id=track_daily_version.replaces_version_id,
                 auto_commit=False,
+            )
+
+            replaced_preview_upload_archive_result = (
+                archive_warehouse_uploads_for_track_daily_version(
+                    track_daily_version_id=track_daily_version.replaces_version_id,
+                    auto_commit=False,
+                )
             )
 
         mark_track_daily_version_success(
@@ -320,19 +353,12 @@ def run_track_daily_pipeline_for_date(
                 key: value.isoformat()
                 for key, value in refresh_dates.items()
             },
-            "raw_ingestion": {
-                "legacy_bundle_result": legacy_bundle_result,
-                "legacy_followup_results": legacy_followup_results,
-                "single_report_results": single_report_results,
-                "jobs_executed": (
-                    1
-                    + len(legacy_followup_results)
-                    + len(single_report_results)
-                ),
-            },
+            "raw_ingestion": raw_ingestion,
             "source_refresh_results": source_refresh_results,
             "mart_refresh_result": mart_refresh_result,
+            "upload_link_result": upload_link_result,
             "replaced_preview_cleanup_result": replaced_preview_cleanup_result,
+            "replaced_preview_upload_archive_result": replaced_preview_upload_archive_result,
         }
 
     except Exception as exc:
