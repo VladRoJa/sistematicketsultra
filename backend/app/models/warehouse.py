@@ -78,6 +78,12 @@ class WarehouseUploadORM(db.Model):
     notes = db.Column(db.Text, nullable=True)
     
     uploaded_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+
+    track_daily_version_id = db.Column(
+        db.Integer,
+        db.ForeignKey('track_daily_versions.id', ondelete='SET NULL'),
+        nullable=True,
+    )
     
     created_at = db.Column(db.DateTime(timezone=True), default=db.func.now())
     updated_at = db.Column(db.DateTime(timezone=True), default=db.func.now(), onupdate=db.func.now())
@@ -87,6 +93,7 @@ class WarehouseUploadORM(db.Model):
         db.Index('idx_warehouse_uploads_source_id', 'source_id'),
         db.Index('idx_warehouse_uploads_report_type_id', 'report_type_id'),
         db.Index('idx_warehouse_uploads_created_at', 'created_at'),
+        db.Index('idx_warehouse_uploads_track_daily_version_id', 'track_daily_version_id'),
     )
 
     # Relaciones
@@ -95,7 +102,6 @@ class WarehouseUploadORM(db.Model):
     operational_role = db.relationship('WarehouseOperationalRoleORM')
     report_type = db.relationship('WarehouseReportTypeORM')
     uploader = db.relationship('UserORM')
-
 class WarehouseOperatorORM(db.Model):
     __tablename__ = 'warehouse_operators'
 
