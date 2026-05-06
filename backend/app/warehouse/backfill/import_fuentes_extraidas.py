@@ -163,7 +163,10 @@ def _resolve_file_path(
     files_root: Path,
     row: InventoryRow,
 ) -> Path:
-    file_path = files_root / Path(row.relative_path)
+    normalized_relative_path = row.relative_path.strip().replace("\\", "/")
+    normalized_relative_path = normalized_relative_path.lstrip("/")
+
+    file_path = files_root / Path(normalized_relative_path)
 
     if not file_path.exists() or not file_path.is_file():
         raise FileNotFoundError(
