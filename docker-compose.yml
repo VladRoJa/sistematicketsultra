@@ -56,7 +56,7 @@ services:
     networks:
       - backend-net
     volumes:
-      - /home/adminrdp/sistematicketsultra/uploads:/home/adminrdp/sistematicketsultra/uploads
+      - /home/adminrdp/sistematicketsultra/uploads:/uploads
 
 
 
@@ -92,7 +92,7 @@ services:
     networks:
       - backend-net
     volumes:
-      - /home/adminrdp/sistematicketsultra/uploads:/home/adminrdp/sistematicketsultra/uploads
+      - /home/adminrdp/sistematicketsultra/uploads:/uploads
     profiles:
       - scheduler
       
