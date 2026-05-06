@@ -196,15 +196,47 @@ def _validate_branches_exist_in_catalog(
         )
 
 def parse_track_monthly_targets_file(file_path: str | Path) -> list[TrackMonthlyTargetParsedRow]:
-    dataframe = pd.read_excel(file_path)
+    dataframe: pd.DataFrame | None = None
+    selected_header_row: int | None = None
+    last_missing_columns: list[str] = []
 
-    dataframe.columns = [str(column).strip() for column in dataframe.columns]
+    for header_row in range(0, 8):
+        candidate_dataframe = pd.read_excel(
+            file_path,
+            header=header_row,
+        )
+
+        candidate_dataframe.columns = [
+            str(column).strip()
+            for column in candidate_dataframe.columns
+        ]
+
+        missing_columns = [
+            column
+            for column in REQUIRED_COLUMNS
+            if column not in candidate_dataframe.columns
+        ]
+
+        if not missing_columns:
+            dataframe = candidate_dataframe.dropna(how="all")
+            selected_header_row = header_row
+            break
+
+        last_missing_columns = missing_columns
+
+    if dataframe is None or selected_header_row is None:
+        raise TrackMonthlyTargetsParseError(
+            "No se encontró una fila de encabezados válida para metas mensuales. "
+            "Faltan columnas requeridas en el archivo de metas: "
+            + ", ".join(last_missing_columns)
+        )
+
     _require_columns(dataframe)
 
     parsed_rows: list[TrackMonthlyTargetParsedRow] = []
 
     for index, row in dataframe.iterrows():
-        row_number = index + 2
+        row_number = index + selected_header_row + 2
         parsed_rows.append(_normalize_row(row, row_number))
 
     _validate_no_duplicate_branches(parsed_rows)
