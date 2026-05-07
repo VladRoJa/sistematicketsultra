@@ -434,16 +434,30 @@ def build_track_source_agregadoras_daily_for_date(
     )
 
     if use_month_close_proration:
-        wellhub_map, _wellhub_snapshot_id, _wellhub_source_date = (
-            _build_wellhub_prorated_map_for_date(
-                business_date=normalized_business_date,
-            )
+        exact_wellhub_map, _exact_wellhub_snapshot_id = _build_wellhub_map_for_date(
+            business_date=normalized_business_date,
         )
-        totalpass_map, _totalpass_snapshot_id, _totalpass_source_date = (
-            _build_totalpass_prorated_map_for_date(
-                business_date=normalized_business_date,
-            )
+        exact_totalpass_map, _exact_totalpass_snapshot_id = _build_totalpass_map_for_date(
+            business_date=normalized_business_date,
         )
+
+        if exact_wellhub_map:
+            wellhub_map = exact_wellhub_map
+        else:
+            wellhub_map, _wellhub_snapshot_id, _wellhub_source_date = (
+                _build_wellhub_prorated_map_for_date(
+                    business_date=normalized_business_date,
+                )
+            )
+
+        if exact_totalpass_map:
+            totalpass_map = exact_totalpass_map
+        else:
+            totalpass_map, _totalpass_snapshot_id, _totalpass_source_date = (
+                _build_totalpass_prorated_map_for_date(
+                    business_date=normalized_business_date,
+                )
+            )
     else:
         wellhub_map, _wellhub_snapshot_id = _build_wellhub_map_for_date(
             business_date=normalized_business_date,
