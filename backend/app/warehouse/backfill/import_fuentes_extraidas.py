@@ -26,24 +26,34 @@ from app.warehouse.services.kpi_desempeno_ingestion_service import (
 from app.warehouse.services.kpi_ventas_nuevos_socios_ingestion_service import (
     ingest_kpi_ventas_nuevos_socios_upload,
 )
+from app.warehouse.services.venta_total_ingestion_service import (
+    ingest_venta_total_upload,
+)
 
 
-REQUIRED_REPORT_TYPES = (
+DEFAULT_REQUIRED_REPORT_TYPES = (
     "reporte_direccion",
     "kpi_desempeno",
     "kpi_ventas_nuevos_socios",
+)
+
+SUPPORTED_REPORT_TYPES = (
+    *DEFAULT_REQUIRED_REPORT_TYPES,
+    "venta_total",
 )
 
 INGESTORS_BY_REPORT_TYPE: dict[str, Callable[..., dict[str, Any]]] = {
     "reporte_direccion": ingest_reporte_direccion_upload,
     "kpi_desempeno": ingest_kpi_desempeno_upload,
     "kpi_ventas_nuevos_socios": ingest_kpi_ventas_nuevos_socios_upload,
+    "venta_total": ingest_venta_total_upload,
 }
 
 SNAPSHOT_TABLE_BY_REPORT_TYPE = {
     "reporte_direccion": "reporte_direccion_snapshots",
     "kpi_desempeno": "kpi_desempeno_snapshots",
     "kpi_ventas_nuevos_socios": "kpi_ventas_nuevos_socios_snapshots",
+    "venta_total": "venta_total_snapshots",
 }
 
 @dataclass(frozen=True)
@@ -64,8 +74,44 @@ def _parse_date(value: str, *, field_name: str) -> date:
     except Exception as exc:
         raise ValueError(f"{field_name} debe tener formato YYYY-MM-DD: {value!r}") from exc
 
+def _parse_report_types(value: str | None) -> tuple[str, ...]:
+    if value is None or not str(value).strip():
+        return DEFAULT_REQUIRED_REPORT_TYPES
 
-def _load_inventory(csv_path: Path) -> list[InventoryRow]:
+    normalized = str(value).strip()
+
+    if normalized.lower() == "base":
+        return DEFAULT_REQUIRED_REPORT_TYPES
+
+    selected = tuple(
+        item.strip()
+        for item in normalized.split(",")
+        if item.strip()
+    )
+
+    if not selected:
+        return DEFAULT_REQUIRED_REPORT_TYPES
+
+    unknown = [
+        report_type_key
+        for report_type_key in selected
+        if report_type_key not in SUPPORTED_REPORT_TYPES
+    ]
+
+    if unknown:
+        raise ValueError(
+            f"Report types no soportados: {unknown}. "
+            f"Permitidos: {list(SUPPORTED_REPORT_TYPES)}"
+        )
+
+    return selected
+
+
+def _load_inventory(
+    csv_path: Path,
+    *,
+    allowed_report_types: tuple[str, ...],
+) -> list[InventoryRow]:
     rows: list[InventoryRow] = []
 
     with csv_path.open("r", encoding="utf-8-sig", newline="") as file:
@@ -74,7 +120,7 @@ def _load_inventory(csv_path: Path) -> list[InventoryRow]:
         for raw in reader:
             report_type_key = str(raw.get("report_type_key") or "").strip()
 
-            if report_type_key not in REQUIRED_REPORT_TYPES:
+            if report_type_key not in allowed_report_types:
                 continue
 
             business_date = _parse_date(
@@ -103,6 +149,7 @@ def _filter_rows(
     *,
     target_date: date | None,
     target_month: str | None,
+    report_types: tuple[str, ...],
 ) -> list[InventoryRow]:
     filtered = rows
 
@@ -124,7 +171,7 @@ def _filter_rows(
         filtered,
         key=lambda row: (
             row.business_date,
-            REQUIRED_REPORT_TYPES.index(row.report_type_key),
+            report_types.index(row.report_type_key),
         ),
     )
 
@@ -140,13 +187,15 @@ def _group_by_date(rows: list[InventoryRow]) -> dict[date, dict[str, InventoryRo
 
 def _validate_complete_days(
     grouped: dict[date, dict[str, InventoryRow]],
+    *,
+    required_report_types: tuple[str, ...],
 ) -> list[str]:
     issues: list[str] = []
 
     for business_date, by_report_type in sorted(grouped.items()):
         missing = [
             report_type_key
-            for report_type_key in REQUIRED_REPORT_TYPES
+            for report_type_key in required_report_types
             if report_type_key not in by_report_type
         ]
 
@@ -268,6 +317,15 @@ def main() -> None:
     parser.add_argument("--date", default=None, help="Fecha específica YYYY-MM-DD")
     parser.add_argument("--month", default=None, help="Mes específico YYYY-MM")
     parser.add_argument("--limit-days", type=int, default=None, help="Limita número de días completos")
+    parser.add_argument(
+        "--report-types",
+        default="base",
+        help=(
+            "Tipos de reporte a importar separados por coma. "
+            "Default: base = reporte_direccion,kpi_desempeno,kpi_ventas_nuevos_socios. "
+            "Ejemplo: --report-types venta_total"
+        ),
+    )
     parser.add_argument("--uploaded-by-user-id", type=int, default=None)
     parser.add_argument("--requested-by", default="historical_backfill")
     parser.add_argument("--commit", action="store_true", help="Ejecuta cambios reales. Sin esto es dry-run.")
@@ -284,19 +342,30 @@ def main() -> None:
 
     args = parser.parse_args()
 
+    selected_report_types = _parse_report_types(args.report_types)
+
     inventory_path = Path(args.inventory).resolve()
     files_root = Path(args.files_root).resolve()
     target_date = _parse_date(args.date, field_name="date") if args.date else None
 
-    rows = _load_inventory(inventory_path)
+    rows = _load_inventory(
+        inventory_path,
+        allowed_report_types=selected_report_types,
+    )
+
     rows = _filter_rows(
         rows,
         target_date=target_date,
         target_month=args.month,
+        report_types=selected_report_types,
     )
 
     grouped = _group_by_date(rows)
-    issues = _validate_complete_days(grouped)
+
+    issues = _validate_complete_days(
+        grouped,
+        required_report_types=selected_report_types,
+    )
 
     if issues:
         raise RuntimeError(
@@ -312,12 +381,14 @@ def main() -> None:
     planned_rows: list[InventoryRow] = []
 
     for business_date in selected_dates:
-        for report_type_key in REQUIRED_REPORT_TYPES:
+        for report_type_key in selected_report_types:
             planned_rows.append(grouped[business_date][report_type_key])
-
+            
+            
     print("Backfill fuentes extraídas")
     print(f"Inventory: {inventory_path}")
     print(f"Files root: {files_root}")
+    print(f"Report types: {', '.join(selected_report_types)}")
     print(f"Commit: {args.commit}")
     print(f"Días seleccionados: {len(selected_dates)}")
     print(f"Archivos seleccionados: {len(planned_rows)}")
