@@ -54,6 +54,80 @@ def _is_out_of_scope_track_branch(raw_branch_name: str) -> bool:
     normalized = str(raw_branch_name or "").strip().upper()
     return normalized in {"BECA", "CORPORATIVO"}
 
+def _month_start_for_date(value: date) -> date:
+    return date(value.year, value.month, 1)
+
+
+def _month_end_for_date(value: date) -> date:
+    if value.month == 12:
+        return date(value.year, 12, 31)
+
+    next_month = date(value.year, value.month + 1, 1)
+    return date.fromordinal(next_month.toordinal() - 1)
+
+
+def _parse_venta_total_row_date(value: Any, *, row_index: int | None = None) -> date:
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return value
+
+    if isinstance(value, datetime):
+        return value.date()
+
+    text = str(value or "").strip()
+
+    for date_format in ("%Y-%m-%d", "%d-%m-%y", "%d/%m/%y", "%d-%m-%Y", "%d/%m/%Y"):
+        try:
+            return datetime.strptime(text, date_format).date()
+        except ValueError:
+            continue
+
+    raise TrackSourceDomiciliadosEfectivosDailyServiceError(
+        "No se pudo parsear fecha de venta_total "
+        f"row_index={row_index}: {value!r}"
+    )
+
+
+def _resolve_venta_total_snapshot_for_track_date(
+    *,
+    business_date: date,
+) -> VentaTotalSnapshotORM:
+    exact_snapshot = (
+        VentaTotalSnapshotORM.query.filter_by(
+            business_date=business_date,
+            snapshot_kind="daily",
+            is_canonical=True,
+        )
+        .order_by(VentaTotalSnapshotORM.id.desc())
+        .first()
+    )
+
+    if exact_snapshot is not None:
+        return exact_snapshot
+
+    month_start = _month_start_for_date(business_date)
+    month_end = _month_end_for_date(business_date)
+
+    monthly_snapshot = (
+        VentaTotalSnapshotORM.query.filter(
+            VentaTotalSnapshotORM.business_date >= month_start,
+            VentaTotalSnapshotORM.business_date <= month_end,
+            VentaTotalSnapshotORM.snapshot_kind == "daily",
+            VentaTotalSnapshotORM.is_canonical.is_(True),
+        )
+        .order_by(
+            VentaTotalSnapshotORM.business_date.desc(),
+            VentaTotalSnapshotORM.id.desc(),
+        )
+        .first()
+    )
+
+    if monthly_snapshot is not None:
+        return monthly_snapshot
+
+    raise TrackSourceDomiciliadosEfectivosDailyServiceError(
+        "No existe snapshot canónico daily de venta_total "
+        f"para el mes de business_date={business_date.isoformat()}."
+    )
 
 def build_track_source_domiciliados_efectivos_daily_for_date(
     *,
@@ -64,21 +138,9 @@ def build_track_source_domiciliados_efectivos_daily_for_date(
         field_name="business_date",
     )
 
-    snapshot = (
-        VentaTotalSnapshotORM.query.filter_by(
-            business_date=normalized_business_date,
-            snapshot_kind="daily",
-            is_canonical=True,
-        )
-        .order_by(VentaTotalSnapshotORM.id.desc())
-        .first()
+    snapshot = _resolve_venta_total_snapshot_for_track_date(
+        business_date=normalized_business_date,
     )
-
-    if snapshot is None:
-        raise TrackSourceDomiciliadosEfectivosDailyServiceError(
-            "No existe snapshot canónico daily de venta_total "
-            f"para business_date={normalized_business_date.isoformat()}."
-        )
 
     rows = (
         VentaTotalSnapshotRowORM.query.filter_by(snapshot_id=snapshot.id)
@@ -89,6 +151,20 @@ def build_track_source_domiciliados_efectivos_daily_for_date(
     counts_by_branch: dict[str, int] = {}
 
     for row in rows:
+        row_date = _parse_venta_total_row_date(
+            row.fecha,
+            row_index=row.row_index,
+        )
+
+        if (
+            row_date.year != normalized_business_date.year
+            or row_date.month != normalized_business_date.month
+        ):
+            continue
+
+        if row_date > normalized_business_date:
+            continue
+
         if _is_out_of_scope_track_branch(row.sucursal):
             continue
 
@@ -116,7 +192,7 @@ def build_track_source_domiciliados_efectivos_daily_for_date(
     for sucursal_canon, count in sorted(counts_by_branch.items()):
         result.append(
             {
-                "business_date": snapshot.business_date.isoformat(),
+                "business_date": normalized_business_date.isoformat(),
                 "sucursal_canon": sucursal_canon,
                 "nuevos_domiciliados_real_mtd": count,
                 "source_snapshot_id": snapshot.id,
