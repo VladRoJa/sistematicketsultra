@@ -27,6 +27,9 @@ from app.warehouse.services.track_daily_version_service import (
 from app.warehouse.services.track_daily_mart_service import (
     refresh_track_daily_mart_for_date,
 )
+from app.warehouse.services.track_source_agregadoras_daily_service import (
+    refresh_track_source_agregadoras_daily_for_date,
+)
 
 
 REQUIRED_SNAPSHOT_TABLES = {
@@ -167,6 +170,7 @@ def _rebuild_one_date(
     generation_mode: str,
     commit: bool,
     skip_existing_version: bool,
+    use_month_close_agregadoras_proration: bool,
 ) -> dict[str, Any]:
     if skip_existing_version and _current_success_version_exists(
         track_date=track_date,
@@ -210,17 +214,26 @@ def _rebuild_one_date(
     version_id: int | None = None
 
     try:
-        sources_result = {
-            "ingresos": refresh_track_source_ingresos_daily_for_date(
+        sources_result: dict[str, Any] = {}
+
+        if use_month_close_agregadoras_proration:
+            sources_result["agregadoras"] = refresh_track_source_agregadoras_daily_for_date(
                 business_date=track_date,
-            ),
-            "desempeno": refresh_track_source_desempeno_daily_for_date(
-                business_date=track_date,
-            ),
-            "nuevos": refresh_track_source_nuevos_daily_for_date(
-                business_date=track_date,
-            ),
-        }
+                use_month_close_proration=True,
+            )
+
+        sources_result["ingresos"] = refresh_track_source_ingresos_daily_for_date(
+            business_date=track_date,
+            generation_mode=generation_mode,
+        )
+
+        sources_result["desempeno"] = refresh_track_source_desempeno_daily_for_date(
+            business_date=track_date,
+        )
+
+        sources_result["nuevos"] = refresh_track_source_nuevos_daily_for_date(
+            business_date=track_date,
+        )
 
         db.session.commit()
 
@@ -305,6 +318,14 @@ def main() -> None:
         "--output",
         default="rebuild_track_from_sources_result.jsonl",
     )
+    parser.add_argument(
+        "--use-month-close-agregadoras-proration",
+        action="store_true",
+        help=(
+            "Usa el cierre mensual canónico de Wellhub/TotalPass para calcular "
+            "agregadoras MTD prorrateadas por día. Usar solo para cierre_canonico histórico."
+        ),
+    )
 
     args = parser.parse_args()
 
@@ -321,11 +342,25 @@ def main() -> None:
     else:
         selected_dates = _dates_for_month(args.month)
 
+    if args.use_month_close_agregadoras_proration:
+        if args.version_type != "cierre_canonico":
+            raise RuntimeError(
+                "--use-month-close-agregadoras-proration solo debe usarse con "
+                "--version-type cierre_canonico."
+            )
+
+        if args.generation_mode != "official_closed_day":
+            raise RuntimeError(
+                "--use-month-close-agregadoras-proration solo debe usarse con "
+                "--generation-mode official_closed_day."
+            )
+
     print("Rebuild Track desde fuentes")
     print(f"Commit: {args.commit}")
     print(f"Fechas seleccionadas: {len(selected_dates)}")
     print(f"Version type: {args.version_type}")
     print(f"Generation mode: {args.generation_mode}")
+    print(f"Agregadoras prorrateadas: {args.use_month_close_agregadoras_proration}")
 
     app = create_app()
 
@@ -341,6 +376,7 @@ def main() -> None:
                 generation_mode=args.generation_mode,
                 commit=args.commit,
                 skip_existing_version=args.skip_existing_version,
+                use_month_close_agregadoras_proration=args.use_month_close_agregadoras_proration,
             )
             results.append(result)
 
