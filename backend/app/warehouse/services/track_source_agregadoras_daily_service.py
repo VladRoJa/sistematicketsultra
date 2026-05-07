@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
+import calendar
+
 
 from app.extensions import db
 from app.models.warehouse import (
@@ -57,6 +59,68 @@ def _to_decimal(value: Any) -> Decimal:
             f"No se pudo convertir a Decimal el valor {value!r}"
         ) from exc
 
+def _month_range_for_date(value: date) -> tuple[date, date, int]:
+    _, last_day = calendar.monthrange(value.year, value.month)
+
+    return (
+        date(value.year, value.month, 1),
+        date(value.year, value.month, last_day),
+        last_day,
+    )
+
+
+def _proration_factor_for_date(value: date) -> Decimal:
+    _, _, days_in_month = _month_range_for_date(value)
+
+    return Decimal(value.day) / Decimal(days_in_month)
+
+
+def _find_latest_wellhub_snapshot_date_in_month(
+    *,
+    business_date: date,
+) -> date | None:
+    month_start, month_end, _ = _month_range_for_date(business_date)
+
+    row = (
+        db.session.query(IngresosWellhubSnapshotORM.business_date)
+        .filter(
+            IngresosWellhubSnapshotORM.snapshot_kind == "daily",
+            IngresosWellhubSnapshotORM.is_canonical.is_(True),
+            IngresosWellhubSnapshotORM.business_date >= month_start,
+            IngresosWellhubSnapshotORM.business_date <= month_end,
+        )
+        .order_by(
+            IngresosWellhubSnapshotORM.business_date.desc(),
+            IngresosWellhubSnapshotORM.id.desc(),
+        )
+        .first()
+    )
+
+    return row[0] if row else None
+
+
+def _find_latest_totalpass_snapshot_date_in_month(
+    *,
+    business_date: date,
+) -> date | None:
+    month_start, month_end, _ = _month_range_for_date(business_date)
+
+    row = (
+        db.session.query(IngresosTotalpassSnapshotORM.business_date)
+        .filter(
+            IngresosTotalpassSnapshotORM.snapshot_kind == "daily",
+            IngresosTotalpassSnapshotORM.is_canonical.is_(True),
+            IngresosTotalpassSnapshotORM.business_date >= month_start,
+            IngresosTotalpassSnapshotORM.business_date <= month_end,
+        )
+        .order_by(
+            IngresosTotalpassSnapshotORM.business_date.desc(),
+            IngresosTotalpassSnapshotORM.id.desc(),
+        )
+        .first()
+    )
+
+    return row[0] if row else None
 
 def _build_wellhub_map_for_date(
     *,
@@ -144,6 +208,65 @@ def _build_totalpass_map_for_date(
         result[row.sucursal_canon] = current
 
     return result, snapshot.id
+
+def _build_wellhub_prorated_map_for_date(
+    *,
+    business_date: date,
+) -> tuple[dict[str, dict[str, Any]], int | None, date | None]:
+    source_business_date = _find_latest_wellhub_snapshot_date_in_month(
+        business_date=business_date,
+    )
+
+    if source_business_date is None:
+        return {}, None, None
+
+    source_map, snapshot_id = _build_wellhub_map_for_date(
+        business_date=source_business_date,
+    )
+
+    factor = _proration_factor_for_date(business_date)
+    result: dict[str, dict[str, Any]] = {}
+
+    for sucursal_canon, row in source_map.items():
+        result[sucursal_canon] = {
+            **row,
+            "ingreso_wellhub_mtd": (
+                _to_decimal(row.get("ingreso_wellhub_mtd")) * factor
+            ),
+        }
+
+    return result, snapshot_id, source_business_date
+
+
+def _build_totalpass_prorated_map_for_date(
+    *,
+    business_date: date,
+) -> tuple[dict[str, dict[str, Any]], int | None, date | None]:
+    source_business_date = _find_latest_totalpass_snapshot_date_in_month(
+        business_date=business_date,
+    )
+
+    if source_business_date is None:
+        return {}, None, None
+
+    source_map, snapshot_id = _build_totalpass_map_for_date(
+        business_date=source_business_date,
+    )
+
+    factor = _proration_factor_for_date(business_date)
+    result: dict[str, dict[str, Any]] = {}
+
+    for sucursal_canon, row in source_map.items():
+        result[sucursal_canon] = {
+            **row,
+            "ingreso_totalpass_mtd": (
+                _to_decimal(row.get("ingreso_totalpass_mtd")) * factor
+            ),
+        }
+
+    return result, snapshot_id, source_business_date
+
+
 
 def resolve_exact_agregadoras_snapshot_status_for_date(
     *,
@@ -303,18 +426,31 @@ def resolve_agregadoras_business_date_for_track_date(
 def build_track_source_agregadoras_daily_for_date(
     *,
     business_date: Any,
+    use_month_close_proration: bool = False,
 ) -> list[dict[str, Any]]:
     normalized_business_date = _ensure_date(
         business_date,
         field_name="business_date",
     )
 
-    wellhub_map, _wellhub_snapshot_id = _build_wellhub_map_for_date(
-        business_date=normalized_business_date,
-    )
-    totalpass_map, _totalpass_snapshot_id = _build_totalpass_map_for_date(
-        business_date=normalized_business_date,
-    )
+    if use_month_close_proration:
+        wellhub_map, _wellhub_snapshot_id, _wellhub_source_date = (
+            _build_wellhub_prorated_map_for_date(
+                business_date=normalized_business_date,
+            )
+        )
+        totalpass_map, _totalpass_snapshot_id, _totalpass_source_date = (
+            _build_totalpass_prorated_map_for_date(
+                business_date=normalized_business_date,
+            )
+        )
+    else:
+        wellhub_map, _wellhub_snapshot_id = _build_wellhub_map_for_date(
+            business_date=normalized_business_date,
+        )
+        totalpass_map, _totalpass_snapshot_id = _build_totalpass_map_for_date(
+            business_date=normalized_business_date,
+        )
 
     return _merge_agregadoras_maps_for_date(
         business_date=normalized_business_date,
@@ -326,6 +462,7 @@ def build_track_source_agregadoras_daily_for_date(
 def refresh_track_source_agregadoras_daily_for_date(
     *,
     business_date: Any,
+    use_month_close_proration: bool = False,
 ) -> dict[str, Any]:
     normalized_business_date = _ensure_date(
         business_date,
@@ -334,6 +471,7 @@ def refresh_track_source_agregadoras_daily_for_date(
 
     rows = build_track_source_agregadoras_daily_for_date(
         business_date=normalized_business_date,
+        use_month_close_proration=use_month_close_proration,
     )
 
     try:
@@ -373,6 +511,7 @@ def refresh_track_source_agregadoras_daily_for_date(
         "status": "refreshed",
         "business_date": normalized_business_date.isoformat(),
         "rows_inserted": len(rows),
+        "use_month_close_proration": use_month_close_proration,
     }
 
 
