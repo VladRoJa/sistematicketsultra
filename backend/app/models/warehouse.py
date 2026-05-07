@@ -532,7 +532,7 @@ class VentaTotalSnapshotRowORM(db.Model):
     total = db.Column(db.Numeric(12, 2), nullable=False)
     forma_pago = db.Column(db.String(100), nullable=False)
     estatus = db.Column(db.String(100), nullable=False)
-    motivo = db.Column(db.String(255), nullable=True)
+    motivo = db.Column(db.Text, nullable=True)
     realizo_venta = db.Column(db.String(255), nullable=False)
     hora = db.Column(db.String(50), nullable=False)
     id_orden = db.Column(db.String(100), nullable=True)
