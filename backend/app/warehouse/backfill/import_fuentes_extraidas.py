@@ -256,29 +256,50 @@ def _structured_snapshot_exists(
 
     return result is not None
 
+def _month_start_for_date(value: date) -> date:
+    return date(value.year, value.month, 1)
+
+
+def _build_upload_period_kwargs(row: InventoryRow) -> dict[str, Any]:
+    if row.report_type_key == "venta_total":
+        return {
+            "cutoff_date": row.business_date,
+            "date_from": _month_start_for_date(row.business_date),
+            "date_to": row.business_date,
+        }
+
+    return {
+        "cutoff_date": row.business_date,
+    }
+
 def _upload_and_ingest(
-    *,
-    row: InventoryRow,
-    file_path: Path,
-    uploaded_by_user_id: int,
-    requested_by: str,
-) -> dict[str, Any]:
+        *,
+        row: InventoryRow,
+        file_path: Path,
+        uploaded_by_user_id: int,
+        requested_by: str,
+    ) -> dict[str, Any]:
+    period_kwargs = _build_upload_period_kwargs(row)
+
     upload_result = create_warehouse_document_upload(
         report_type_key=row.report_type_key,
         original_filename=row.file_name,
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         file_path=str(file_path),
         uploaded_by_user_id=uploaded_by_user_id,
-        cutoff_date=row.business_date,
+        **period_kwargs,
         audit_details={
             "upload_origin": "historical_backfill_fuentes_extraidas",
             "source_inventory": "inventario_fuentes_extraidas.csv",
             "inventory_relative_path": row.relative_path,
             "inventory_sha256": row.sha256,
             "business_date": row.business_date.isoformat(),
+            "period": {
+                key: value.isoformat() if hasattr(value, "isoformat") else value
+                for key, value in period_kwargs.items()
+            },
         },
     )
-
     warehouse_upload_id = int(upload_result["upload_id"])
 
     ingestor = INGESTORS_BY_REPORT_TYPE[row.report_type_key]
