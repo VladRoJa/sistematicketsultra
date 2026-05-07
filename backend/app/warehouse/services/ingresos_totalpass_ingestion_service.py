@@ -425,6 +425,16 @@ def _validate_upload_for_ingresos_totalpass(upload: WarehouseUploadDocument) -> 
             f"El archivo del upload documental no existe: {path}"
         )
 
+def _get_first_not_none(raw_row: dict[str, Any], *keys: str) -> Any:
+    for key in keys:
+        if key in raw_row:
+            value = raw_row.get(key)
+
+            if value is not None:
+                return value
+
+    return None
+
 
 def _normalize_parsed_row(raw_row: Any) -> ParsedIngresosTotalpassRow:
     if isinstance(raw_row, ParsedIngresosTotalpassRow):
@@ -453,9 +463,21 @@ def _normalize_parsed_row(raw_row: Any) -> ParsedIngresosTotalpassRow:
     return ParsedIngresosTotalpassRow(
         raw_branch_name=raw_branch_name.strip(),
         sucursal_canon=sucursal_canon,
-        monto_acumulado_mes=raw_row.get("monto_acumulado_mes") or raw_row.get("value"),
-        usage_count=raw_row.get("usage_count") or raw_row.get("usageCount"),
-        student_count=raw_row.get("student_count") or raw_row.get("studentCount"),
+        monto_acumulado_mes=_get_first_not_none(
+            raw_row,
+            "monto_acumulado_mes",
+            "value",
+        ),
+        usage_count=_get_first_not_none(
+            raw_row,
+            "usage_count",
+            "usageCount",
+        ),
+        student_count=_get_first_not_none(
+            raw_row,
+            "student_count",
+            "studentCount",
+        ),
     )
 
 
