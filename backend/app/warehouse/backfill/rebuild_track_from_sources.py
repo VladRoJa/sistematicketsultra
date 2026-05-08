@@ -30,6 +30,9 @@ from app.warehouse.services.track_daily_mart_service import (
 from app.warehouse.services.track_source_agregadoras_daily_service import (
     refresh_track_source_agregadoras_daily_for_date,
 )
+from app.warehouse.services.track_source_domiciliados_efectivos_daily_service import (
+    refresh_track_source_domiciliados_efectivos_daily_for_date,
+)
 
 
 REQUIRED_SNAPSHOT_TABLES = {
@@ -232,6 +235,9 @@ def _rebuild_one_date(
         )
 
         sources_result["nuevos"] = refresh_track_source_nuevos_daily_for_date(
+            business_date=track_date,
+        )
+        sources_result["domiciliados"] = refresh_track_source_domiciliados_efectivos_daily_for_date(
             business_date=track_date,
         )
 
