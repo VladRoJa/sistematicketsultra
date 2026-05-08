@@ -52,7 +52,17 @@ def _is_domiciliado_payment(value: Any) -> bool:
 
 def _is_out_of_scope_track_branch(raw_branch_name: str) -> bool:
     normalized = str(raw_branch_name or "").strip().upper()
-    return normalized in {"BECA", "CORPORATIVO"}
+
+    if not normalized:
+        return True
+
+    if normalized in {"BECA", "CORPORATIVO"}:
+        return True
+
+    if "PRUEBA" in normalized:
+        return True
+
+    return False
 
 def _month_start_for_date(value: date) -> date:
     return date(value.year, value.month, 1)
