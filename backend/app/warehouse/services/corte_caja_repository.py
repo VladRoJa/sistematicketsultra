@@ -313,39 +313,38 @@ def _resolve_canonicality_decision(
         snapshot_kind=snapshot_kind,
     )
 
-    default_decision = {
-        "is_canonical": False,
-        "replace_existing_canonical": False,
-        "existing_canonical_snapshot_id": (
-            existing_canonical.id if existing_canonical else None
-        ),
-        "reason": "canonicality_not_configured",
-    }
+    if canonicality_resolver is not None:
+        resolved = canonicality_resolver(
+            business_date=business_date,
+            snapshot_kind=snapshot_kind,
+            existing_canonical_snapshot=existing_canonical,
+            report_type_key=CORTE_CAJA_REPORT_TYPE_KEY,
+        )
 
-    if canonicality_resolver is None:
-        return default_decision
-
-    resolved = canonicality_resolver(
-        business_date=business_date,
-        snapshot_kind=snapshot_kind,
-        existing_canonical_snapshot=existing_canonical,
-        report_type_key=CORTE_CAJA_REPORT_TYPE_KEY,
-    )
-
-    if not resolved:
-        return default_decision
+        if resolved:
+            return {
+                "is_canonical": bool(resolved.get("is_canonical", False)),
+                "replace_existing_canonical": bool(
+                    resolved.get("replace_existing_canonical", False)
+                ),
+                "existing_canonical_snapshot_id": (
+                    existing_canonical.id if existing_canonical else None
+                ),
+                "reason": resolved.get("reason") or "resolver_provided_decision",
+            }
 
     return {
-        "is_canonical": bool(resolved.get("is_canonical", False)),
-        "replace_existing_canonical": bool(
-            resolved.get("replace_existing_canonical", False)
-        ),
+        "is_canonical": True,
+        "replace_existing_canonical": existing_canonical is not None,
         "existing_canonical_snapshot_id": (
             existing_canonical.id if existing_canonical else None
         ),
-        "reason": resolved.get("reason") or "resolver_provided_decision",
+        "reason": (
+            "latest_successful_snapshot_replaces_existing"
+            if existing_canonical is not None
+            else "first_successful_snapshot_for_day"
+        ),
     }
-
 
 def persist_corte_caja_snapshot(
     *,
@@ -419,22 +418,26 @@ def persist_corte_caja_snapshot(
             rows=normalized_rows,
         )
 
+        existing_canonical_snapshot = None
+
         if canonicality_decision["replace_existing_canonical"]:
             existing_canonical_snapshot = _fetch_existing_canonical_snapshot_for_day(
                 business_date=business_date_value,
                 snapshot_kind=snapshot_kind,
             )
-            if (
-                existing_canonical_snapshot is not None
-                and existing_canonical_snapshot.id != snapshot.id
-            ):
-                _clear_existing_canonical_snapshot(
-                    existing_snapshot=existing_canonical_snapshot
-                )
-                _set_snapshot_canonical_state(
-                    snapshot=snapshot,
-                    is_canonical=True,
-                )
+
+        if (
+            existing_canonical_snapshot is not None
+            and existing_canonical_snapshot.id != snapshot.id
+        ):
+            _clear_existing_canonical_snapshot(
+                existing_snapshot=existing_canonical_snapshot,
+            )
+
+        _set_snapshot_canonical_state(
+            snapshot=snapshot,
+            is_canonical=bool(canonicality_decision["is_canonical"]),
+        )
 
         db.session.commit()
 
@@ -480,3 +483,4 @@ def persist_corte_caja_snapshot(
         raise CorteCajaRepositoryError(
             "Falló la persistencia estructurada de Corte de Caja."
         ) from exc
+        
