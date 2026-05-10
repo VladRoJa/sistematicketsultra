@@ -236,17 +236,22 @@ loadDailyMart(): void {
           }
 
           const baseRows = this.sortRowsByOpeningOrder(response.rows || []);
+          const visibleRows = this.filterRowsWithFaycgoMeta(baseRows);
+
           this.resolvedVersion = response.resolved_version || null;
           this.trackVersionLabel = this.buildTrackVersionLabel(this.resolvedVersion);
           this.trackGeneratedAtLabel = this.buildTrackGeneratedAtLabel(this.resolvedVersion);
 
           this.agregadorasFreshnessLabel =
-            this.buildAgregadorasFreshnessLabel(baseRows);
-          this.summaryCards = this.buildSummaryCards(baseRows);
-          this.rawMartRows = this.appendClosingRows(baseRows);
+            this.buildAgregadorasFreshnessLabel(visibleRows);
+
+          this.summaryCards = this.buildSummaryCards(visibleRows);
+          this.rawMartRows = this.appendClosingRows(visibleRows);
+
           const builtRows = this.rawMartRows.map((row) => this.buildViewRow(row));
           this.viewRows = builtRows;
-          this.totalRowsLabel = this.formatInteger(response.total_rows || 0);
+
+          this.totalRowsLabel = this.formatInteger(visibleRows.length);
           this.lastLoadedTrackDateLabel = response.track_date || this.trackDate;
           this.isLoadingMart = false;
         },
@@ -601,10 +606,30 @@ private buildTargetMonthFromTrackDate(): string {
     ];
   }
 
+  private filterRowsWithFaycgoMeta(rows: TrackDailyMartRow[]): TrackDailyMartRow[] {
+    return rows.filter((row) => this.hasFaycgoMeta(row));
+  }
+
+  private hasFaycgoMeta(row: TrackDailyMartRow): boolean {
+    const metaFaycgo = Number(row.meta_faycgo_mes ?? 0);
+
+    return !Number.isNaN(metaFaycgo) && metaFaycgo > 0;
+  }
+
+  private isMainOpeningGroupBranch(sucursalCanon: string): boolean {
+    const branchIndex = this.branchOpeningOrder.indexOf(sucursalCanon);
+
+    return branchIndex >= 0 && branchIndex < 21;
+  }
 
   private appendClosingRows(rows: TrackDailyMartRow[]): TrackDailyMartRow[] {
-    const firstGroup = rows.slice(0, 21);
-    const secondGroup = rows.slice(21);
+    const firstGroup = rows.filter((row) =>
+      this.isMainOpeningGroupBranch(row.sucursal_canon),
+    );
+
+    const secondGroup = rows.filter((row) =>
+      !this.isMainOpeningGroupBranch(row.sucursal_canon),
+    );
 
     const subtotal21Gyms = this.buildAggregateRawRow(
       'SUBTOTAL_21_GYMS',
