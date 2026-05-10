@@ -261,11 +261,12 @@
 
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(10, minmax(0, 1fr));
   gap: 12px;
 }
 
 .summary-card {
+  grid-column: span 2;
   border-radius: 14px;
   padding: 12px 14px;
   border: 1px solid #e2e8f0;
@@ -274,6 +275,16 @@
   flex-direction: column;
   gap: 6px;
   box-shadow: 0 6px 20px rgba(15, 23, 42, 0.03);
+}
+
+.summary-card--compact {
+  grid-column: span 1;
+  align-items: center;
+  text-align: center;
+}
+
+.summary-card--compact .summary-card__value {
+  font-size: 15px;
 }
 
 .summary-card__label {
@@ -746,7 +757,15 @@
 
 @media (max-width: 1280px) {
   .summary-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  .summary-card {
+    grid-column: span 2;
+  }
+
+  .summary-card--compact {
+    grid-column: span 1;
   }
 
   .track-form {

@@ -36,6 +36,7 @@ interface TrackSummaryCard {
   label: string;
   value: string;
   tone: SummaryTone;
+  compact?: boolean;
 }
 
 interface TrackViewRow {
@@ -56,6 +57,9 @@ interface TrackViewRow {
   avanceIngresoTone: ProgressTone;
   diferenciaIngresoLabel: string;
   diferenciaIngresoTone: ProgressTone;
+  metaIngresoDia: string;
+  diferenciaIngresoDiaLabel: string;
+  diferenciaIngresoDiaTone: ProgressTone;
 
   metaClientesNuevos: string;
   clientesNuevos: string;
@@ -63,6 +67,9 @@ interface TrackViewRow {
   avanceClientesNuevosTone: ProgressTone;
   diferenciaClientesNuevosLabel: string;
   diferenciaClientesNuevosTone: ProgressTone;
+  metaClientesNuevosDia: string;
+  diferenciaClientesNuevosDiaLabel: string;
+  diferenciaClientesNuevosDiaTone: ProgressTone;
 
   metaReactivaciones: string;
   reactivacionesReales: string;
@@ -76,6 +83,9 @@ interface TrackViewRow {
   avanceDomiciliadosTone: ProgressTone;
   diferenciaDomiciliadosLabel: string;
   diferenciaDomiciliadosTone: ProgressTone;
+  metaDomiciliadosDia: string;
+  diferenciaDomiciliadosDiaLabel: string;
+  diferenciaDomiciliadosDiaTone: ProgressTone;
 
   metaArpu: string;
   arpuActual: string;
@@ -419,6 +429,30 @@ isSelectedTrackDateInPast(): boolean {
   return this.trackDate < this.getTodayIsoDate();
 }
 
+private calculateRemainingToIdealTarget(
+  realValue: number | null | undefined,
+  idealValue: number | null | undefined,
+): number {
+  const real = Number(realValue ?? 0);
+  const ideal = Number(idealValue ?? 0);
+
+  if (Number.isNaN(real) || Number.isNaN(ideal)) {
+    return 0;
+  }
+
+  return Math.max(ideal - real, 0);
+}
+
+private getRemainingTargetTone(value: number | null | undefined): ProgressTone {
+  const numericValue = Number(value ?? 0);
+
+  if (numericValue <= 0) {
+    return 'success';
+  }
+
+  return 'danger';
+}
+
 private getTodayIsoDate(): string {
   const now = new Date();
 
@@ -447,8 +481,10 @@ private buildTargetMonthFromTrackDate(): string {
 }
 
 
-  getSummaryCardClass(tone: SummaryTone): string {
-    return `summary-card summary-card--${tone}`;
+  getSummaryCardClass(card: TrackSummaryCard): string {
+    const compactClass = card.compact ? ' summary-card--compact' : '';
+
+    return `summary-card summary-card--${card.tone}${compactClass}`;
   }
 
   getProgressBadgeClass(tone: ProgressTone): string {
@@ -484,6 +520,37 @@ private buildTargetMonthFromTrackDate(): string {
       row.meta_nuevos_domiciliados_mes,
     );
 
+    const metaIngresoDia = this.calculateIdealMtdTarget(
+      row.meta_faycgo_mes,
+      row.track_date,
+    );
+
+    const metaIngresoPendienteDia = this.calculateRemainingToIdealTarget(
+      row.ingreso_real_mtd,
+      metaIngresoDia,
+    );
+
+    const metaClientesNuevosDia = this.calculateIdealMtdTarget(
+      row.meta_clientes_nuevos_mes,
+      row.track_date,
+    );
+
+    const metaClientesNuevosPendienteDia = this.calculateRemainingToIdealTarget(
+      row.clientes_nuevos_real_mtd,
+      metaClientesNuevosDia,
+    );
+
+    const metaDomiciliadosDia = this.calculateIdealMtdTarget(
+      row.meta_nuevos_domiciliados_mes,
+      row.track_date,
+    );
+
+    const metaDomiciliadosPendienteDia = this.calculateRemainingToIdealTarget(
+      row.nuevos_domiciliados_real_mtd,
+      metaDomiciliadosDia,
+    );
+
+
     const arpuActual = this.calculateArpuActual(
       row.ingreso_real_mtd,
       row.usuarios_activos_actual,
@@ -507,6 +574,11 @@ private buildTargetMonthFromTrackDate(): string {
       ingresoReal: this.formatCurrency(row.ingreso_real_mtd),
       avanceIngresoLabel: this.formatPercent(ingresoProgress),
       avanceIngresoTone: this.getProgressTone(ingresoProgress),
+      metaIngresoDia: this.formatCurrency(metaIngresoDia),
+      diferenciaIngresoDiaLabel: this.formatCurrency(metaIngresoPendienteDia),
+      diferenciaIngresoDiaTone: this.getRemainingTargetTone(
+        metaIngresoPendienteDia,
+      ),
 
       metaClientesNuevos: this.formatInteger(row.meta_clientes_nuevos_mes),
       clientesNuevos: this.formatInteger(row.clientes_nuevos_real_mtd),
@@ -517,6 +589,13 @@ private buildTargetMonthFromTrackDate(): string {
       ),
       diferenciaClientesNuevosTone: this.getDifferenceTone(
         diferenciaClientesNuevos,
+      ),
+      metaClientesNuevosDia: this.formatInteger(Math.round(metaClientesNuevosDia)),
+      diferenciaClientesNuevosDiaLabel: this.formatInteger(
+        Math.ceil(metaClientesNuevosPendienteDia),
+      ),
+      diferenciaClientesNuevosDiaTone: this.getRemainingTargetTone(
+        metaClientesNuevosPendienteDia,
       ),
 
       diferenciaIngresoLabel: this.formatSignedCurrency(diferenciaIngreso),
@@ -539,6 +618,13 @@ private buildTargetMonthFromTrackDate(): string {
       ),
       diferenciaDomiciliadosTone: this.getDifferenceTone(
         diferenciaDomiciliados,
+      ),
+      metaDomiciliadosDia: this.formatInteger(Math.round(metaDomiciliadosDia)),
+      diferenciaDomiciliadosDiaLabel: this.formatInteger(
+        Math.ceil(metaDomiciliadosPendienteDia),
+      ),
+      diferenciaDomiciliadosDiaTone: this.getRemainingTargetTone(
+        metaDomiciliadosPendienteDia,
       ),
 
       metaArpu: this.formatCurrency(row.meta_arpu_mes),
@@ -563,35 +649,66 @@ private buildTargetMonthFromTrackDate(): string {
     );
 
     const totalUsuariosActivos = this.sumNumber(rows, 'usuarios_activos_actual');
+    const totalMetaUsuarios = this.sumNumber(
+      rows,
+      'proyeccion_usuarios_cierre_mes',
+    );
+
+    const sociosActivosProgress = this.calculateProgressPercent(
+      totalUsuariosActivos,
+      totalMetaUsuarios,
+    );
 
     const ingresoProgress = this.calculateProgressPercent(
       totalIngresoReal,
       totalMetaIngreso,
     );
+
     const clientesProgress = this.calculateProgressPercent(
       totalClientesReales,
       totalMetaClientes,
     );
+
     const domiciliadosProgress = this.calculateProgressPercent(
       totalDomiciliadosReales,
       totalMetaDomiciliados,
     );
 
+    const diffUsuariosVsMeta = totalUsuariosActivos - totalMetaUsuarios;
+    const diffIngresoVsMeta = totalIngresoReal - totalMetaIngreso;
+
     return [
       {
-        label: 'Socios activos',
-        value: this.formatInteger(totalUsuariosActivos),
-        tone: 'default',
+        label: 'Socios activos / meta',
+        value: `${this.formatInteger(totalUsuariosActivos)} / ${this.formatInteger(totalMetaUsuarios)}`,
+        tone: this.getProgressTone(sociosActivosProgress),
       },
       {
-        label: 'Ingreso real total',
-        value: this.formatCurrency(totalIngresoReal),
-        tone: 'default',
+        label: 'Dif. socios vs meta',
+        value: this.formatSignedInteger(diffUsuariosVsMeta),
+        tone: this.getDifferenceTone(diffUsuariosVsMeta),
+      },
+      {
+        label: 'Avance socios',
+        value: this.formatPercent(sociosActivosProgress),
+        tone: this.getProgressTone(sociosActivosProgress),
+        compact: true,
+      },
+      {
+        label: 'Ingreso real / meta',
+        value: `${this.formatCurrency(totalIngresoReal)} / ${this.formatCurrency(totalMetaIngreso)}`,
+        tone: this.getProgressTone(ingresoProgress),
+      },
+      {
+        label: 'Dif. ingreso vs meta',
+        value: this.formatSignedCurrency(diffIngresoVsMeta),
+        tone: this.getDifferenceTone(diffIngresoVsMeta),
       },
       {
         label: 'Avance ingreso',
         value: this.formatPercent(ingresoProgress),
         tone: this.getProgressTone(ingresoProgress),
+        compact: true,
       },
       {
         label: 'Socios nuevos',
@@ -899,6 +1016,61 @@ private formatIsoDateTimeLabel(value: string): string {
     const [year, month, day] = trimmed.split('-');
     return `${day}/${month}/${year}`;
   }
+
+private calculateIdealMtdTarget(
+  monthlyTarget: number | null | undefined,
+  trackDate: string | null | undefined,
+): number {
+  const target = Number(monthlyTarget ?? 0);
+
+  if (target <= 0) {
+    return 0;
+  }
+
+  const dateParts = this.parseIsoDateParts(trackDate || this.trackDate);
+
+  if (!dateParts) {
+    return 0;
+  }
+
+  const daysInMonth = this.getDaysInMonth(dateParts.year, dateParts.month);
+  const elapsedDay = Math.min(
+    Math.max(dateParts.day, 1),
+    daysInMonth,
+  );
+
+  return (target * elapsedDay) / daysInMonth;
+}
+
+private parseIsoDateParts(
+  value: string | null | undefined,
+): { year: number; month: number; day: number } | null {
+  const text = String(value || '').trim();
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+    return null;
+  }
+
+  const [yearText, monthText, dayText] = text.split('-');
+
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+
+  if (
+    Number.isNaN(year) ||
+    Number.isNaN(month) ||
+    Number.isNaN(day)
+  ) {
+    return null;
+  }
+
+  return { year, month, day };
+}
+
+private getDaysInMonth(year: number, month: number): number {
+  return new Date(year, month, 0).getDate();
+}
 
   private calculateProgressPercent(
     realValue: number | null | undefined,
