@@ -225,16 +225,19 @@ private ensureTargetMonthOption(targetMonth: string): void {
           return;
         }
 
-        this.historyRows = response.rows || [];
-        this.totalRows = response.total_rows || 0;
-        this.latestSnapshot = this.buildLatestSnapshot();
-        this.sociosActivosSparkline = this.buildSparklineData(
-          this.historyRows.map((row) => row.usuarios_activos_actual ?? 0),
-        );
+      this.historyRows = this.sortHistoryRowsMostRecentFirst(response.rows || []);
+      this.totalRows = this.historyRows.length;
+      this.latestSnapshot = this.buildLatestSnapshot();
 
-        this.ingresoRealSparkline = this.buildSparklineData(
-          this.historyRows.map((row) => row.ingreso_real_mtd ?? 0),
-        );
+      const chronologicalRows = this.getHistoryRowsChronological();
+
+      this.sociosActivosSparkline = this.buildSparklineData(
+        chronologicalRows.map((row) => row.usuarios_activos_actual ?? 0),
+      );
+
+      this.ingresoRealSparkline = this.buildSparklineData(
+        chronologicalRows.map((row) => row.ingreso_real_mtd ?? 0),
+      );
         this.isLoading = false;
       },
       error: (error) => {
@@ -245,6 +248,21 @@ private ensureTargetMonthOption(targetMonth: string): void {
         this.isLoading = false;
       },
     });
+}
+
+private sortHistoryRowsMostRecentFirst(
+  rows: TrackDailyMartRow[],
+): TrackDailyMartRow[] {
+  return [...rows].sort((left, right) => {
+    const leftDate = left.track_date || '';
+    const rightDate = right.track_date || '';
+
+    return rightDate.localeCompare(leftDate);
+  });
+}
+
+private getHistoryRowsChronological(): TrackDailyMartRow[] {
+  return [...this.historyRows].reverse();
 }
 
 formatInteger(value: number | null | undefined): string {
@@ -321,11 +339,13 @@ formatPercent(value: number | null | undefined): string {
 }
 
 getPreviousHistoryRow(index: number): TrackDailyMartRow | null {
-  if (index <= 0 || index >= this.historyRows.length) {
+  const previousIndex = index + 1;
+
+  if (index < 0 || previousIndex >= this.historyRows.length) {
     return null;
   }
 
-  return this.historyRows[index - 1] || null;
+  return this.historyRows[previousIndex] || null;
 }
 
 calculateDeltaFromPreviousDay(
@@ -449,8 +469,7 @@ private buildLatestSnapshot(): LatestHistorySnapshot | null {
     return null;
   }
 
-  const lastIndex = this.historyRows.length - 1;
-  const latestRow = this.historyRows[lastIndex];
+  const latestRow = this.historyRows[0];
 
   return {
     trackDate: latestRow.track_date,
@@ -519,12 +538,12 @@ private getSociosActivosWindowDeltaLabel(): string {
     return '—';
   }
 
-  const firstRow = this.historyRows[0];
-  const lastRow = this.historyRows[this.historyRows.length - 1];
+  const latestRow = this.historyRows[0];
+  const oldestRow = this.historyRows[this.historyRows.length - 1];
 
   const delta = this.calculateDeltaFromPreviousDay(
-    lastRow.usuarios_activos_actual,
-    firstRow.usuarios_activos_actual,
+    latestRow.usuarios_activos_actual,
+    oldestRow.usuarios_activos_actual,
   );
 
   return this.formatSignedInteger(delta);
@@ -535,12 +554,12 @@ private getSociosActivosWindowDeltaTone(): 'success' | 'danger' | 'neutral' {
     return 'neutral';
   }
 
-  const firstRow = this.historyRows[0];
-  const lastRow = this.historyRows[this.historyRows.length - 1];
+  const latestRow = this.historyRows[0];
+  const oldestRow = this.historyRows[this.historyRows.length - 1];
 
   const delta = this.calculateDeltaFromPreviousDay(
-    lastRow.usuarios_activos_actual,
-    firstRow.usuarios_activos_actual,
+    latestRow.usuarios_activos_actual,
+    oldestRow.usuarios_activos_actual,
   );
 
   return this.getDeltaTone(delta);
@@ -551,12 +570,12 @@ private getIngresoWindowDeltaLabel(): string {
     return '—';
   }
 
-  const firstRow = this.historyRows[0];
-  const lastRow = this.historyRows[this.historyRows.length - 1];
+  const latestRow = this.historyRows[0];
+  const oldestRow = this.historyRows[this.historyRows.length - 1];
 
   const delta = this.calculateDeltaFromPreviousDay(
-    lastRow.ingreso_real_mtd,
-    firstRow.ingreso_real_mtd,
+    latestRow.ingreso_real_mtd,
+    oldestRow.ingreso_real_mtd,
   );
 
   return this.formatSignedCurrency(delta);
@@ -567,12 +586,12 @@ private getIngresoWindowDeltaTone(): 'success' | 'danger' | 'neutral' {
     return 'neutral';
   }
 
-  const firstRow = this.historyRows[0];
-  const lastRow = this.historyRows[this.historyRows.length - 1];
+  const latestRow = this.historyRows[0];
+  const oldestRow = this.historyRows[this.historyRows.length - 1];
 
   const delta = this.calculateDeltaFromPreviousDay(
-    lastRow.ingreso_real_mtd,
-    firstRow.ingreso_real_mtd,
+    latestRow.ingreso_real_mtd,
+    oldestRow.ingreso_real_mtd,
   );
 
   return this.getDeltaTone(delta);

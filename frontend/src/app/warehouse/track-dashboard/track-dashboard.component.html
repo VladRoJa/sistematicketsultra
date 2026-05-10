@@ -150,7 +150,7 @@
   <section class="summary-grid" *ngIf="summaryCards.length > 0">
     <article
       *ngFor="let card of summaryCards"
-      [class]="getSummaryCardClass(card.tone)"
+      [class]="getSummaryCardClass(card)"
     >
       <span class="summary-card__label">{{ card.label }}</span>
       <strong class="summary-card__value">{{ card.value }}</strong>
@@ -226,6 +226,7 @@
               <th class="cell-right">Ingreso real</th>
               <th class="cell-right">Avance ingreso</th>
               <th class="cell-right">Dif. ingreso VS meta</th>
+              <th class="cell-right">Meta del día</th>
               <th class="cell-right">Meta ARPU</th>
               <th class="cell-right">ARPU actual</th>
             </ng-container>
@@ -235,6 +236,7 @@
               <th class="cell-right">Socios nuevos</th>
               <th class="cell-right">Avance socios nuevos</th>
               <th class="cell-right">Dif. socios nuevos VS meta</th>
+              <th class="cell-right">Meta del día socios</th>
               <th class="cell-right">Meta reactivaciones</th>
               <th class="cell-right">Reactivaciones reales</th>
               <th class="cell-right">Meta bajas</th>
@@ -246,6 +248,7 @@
               <th class="cell-right">Nuevos domiciliados</th>
               <th class="cell-right">Avance domiciliados</th>
               <th class="cell-right">Dif. domiciliados VS meta</th>
+              <th class="cell-right">Meta del día domic.</th>
             </ng-container>
           </tr>
         </thead>
@@ -287,6 +290,11 @@
                   {{ row.diferenciaIngresoLabel }}
                 </span>
               </td>
+              <td class="cell-right">
+                <span [class]="getProgressBadgeClass(row.diferenciaIngresoDiaTone)">
+                  {{ row.diferenciaIngresoDiaLabel }}
+                </span>
+              </td>
               <td class="cell-right">{{ row.metaArpu }}</td>
               <td class="cell-right">{{ row.arpuActual }}</td>
             </ng-container>
@@ -302,6 +310,11 @@
               <td class="cell-right">
                 <span [class]="getProgressBadgeClass(row.diferenciaClientesNuevosTone)">
                   {{ row.diferenciaClientesNuevosLabel }}
+                </span>
+              </td>
+              <td class="cell-right">
+                <span [class]="getProgressBadgeClass(row.diferenciaClientesNuevosDiaTone)">
+                  {{ row.diferenciaClientesNuevosDiaLabel }}
                 </span>
               </td>
               <td class="cell-right">{{ row.metaReactivaciones }}</td>
@@ -321,6 +334,11 @@
               <td class="cell-right">
                 <span [class]="getProgressBadgeClass(row.diferenciaDomiciliadosTone)">
                   {{ row.diferenciaDomiciliadosLabel }}
+                </span>
+              </td>
+              <td class="cell-right">
+                <span [class]="getProgressBadgeClass(row.diferenciaDomiciliadosDiaTone)">
+                  {{ row.diferenciaDomiciliadosDiaLabel }}
                 </span>
               </td>
             </ng-container>
