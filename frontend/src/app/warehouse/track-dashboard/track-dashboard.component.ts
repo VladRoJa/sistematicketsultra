@@ -20,7 +20,9 @@ type TrackColumnGroupKey =
   | 'ocupacion'
   | 'ingresos'
   | 'crecimiento'
-  | 'domiciliados';
+  | 'domiciliados'
+  | 'tienda';
+
 
 interface TrackColumnGroupOption {
   key: TrackColumnGroupKey;
@@ -87,6 +89,15 @@ interface TrackViewRow {
   diferenciaDomiciliadosDiaLabel: string;
   diferenciaDomiciliadosDiaTone: ProgressTone;
 
+  metaVentaTienda: string;
+  ventaTiendaReal: string;
+  avanceTiendaLabel: string;
+  avanceTiendaTone: ProgressTone;
+  diferenciaTiendaLabel: string;
+  diferenciaTiendaTone: ProgressTone;
+  metaTiendaDiaLabel: string;
+  metaTiendaDiaTone: ProgressTone;
+
   metaArpu: string;
   arpuActual: string;
 }
@@ -148,6 +159,8 @@ export class TrackDashboardComponent implements OnInit {
   { key: 'crecimiento', label: 'Crecimiento' },
   { key: 'domiciliados', label: 'Domiciliados' },
   { key: 'ingresos', label: 'Ingresos' },
+  { key: 'tienda', label: 'Tienda' },
+
 ];
 
 
@@ -549,6 +562,25 @@ private buildTargetMonthFromTrackDate(): string {
       row.nuevos_domiciliados_real_mtd,
       metaDomiciliadosDia,
     );
+    const avanceTienda = this.calculateProgressPercent(
+      row.venta_tienda_real_mtd,
+      row.meta_venta_tienda_mes,
+    );
+
+    const diferenciaTienda = this.calculateDifference(
+      row.venta_tienda_real_mtd,
+      row.meta_venta_tienda_mes,
+    );
+
+    const metaTiendaDia = this.calculateIdealMtdTarget(
+      row.meta_venta_tienda_mes,
+      row.track_date,
+    );
+
+    const metaTiendaPendienteDia = this.calculateRemainingToIdealTarget(
+      row.venta_tienda_real_mtd,
+      metaTiendaDia,
+    );
 
 
     const arpuActual = this.calculateArpuActual(
@@ -626,6 +658,14 @@ private buildTargetMonthFromTrackDate(): string {
       diferenciaDomiciliadosDiaTone: this.getRemainingTargetTone(
         metaDomiciliadosPendienteDia,
       ),
+      metaVentaTienda: this.formatCurrency(row.meta_venta_tienda_mes),
+      ventaTiendaReal: this.formatCurrency(row.venta_tienda_real_mtd),
+      avanceTiendaLabel: this.formatPercent(avanceTienda),
+      avanceTiendaTone: this.getProgressTone(avanceTienda),
+      diferenciaTiendaLabel: this.formatSignedCurrency(diferenciaTienda),
+      diferenciaTiendaTone: this.getDifferenceTone(diferenciaTienda),
+      metaTiendaDiaLabel: this.formatCurrency(metaTiendaPendienteDia),
+      metaTiendaDiaTone: this.getRemainingTargetTone(metaTiendaPendienteDia),
 
       metaArpu: this.formatCurrency(row.meta_arpu_mes),
       arpuActual: this.formatCurrency(arpuActual),
@@ -647,6 +687,14 @@ private buildTargetMonthFromTrackDate(): string {
       rows,
       'meta_nuevos_domiciliados_mes',
     );
+    const totalVentaTiendaReal = this.sumNumber(rows, 'venta_tienda_real_mtd');
+    const totalMetaVentaTienda = this.sumNumber(rows, 'meta_venta_tienda_mes');
+
+    const tiendaProgress = this.calculateProgressPercent(
+      totalVentaTiendaReal,
+      totalMetaVentaTienda,
+    );
+
 
     const totalUsuariosActivos = this.sumNumber(rows, 'usuarios_activos_actual');
     const totalMetaUsuarios = this.sumNumber(
@@ -673,6 +721,7 @@ private buildTargetMonthFromTrackDate(): string {
       totalDomiciliadosReales,
       totalMetaDomiciliados,
     );
+
 
     const diffUsuariosVsMeta = totalUsuariosActivos - totalMetaUsuarios;
     const diffIngresoVsMeta = totalIngresoReal - totalMetaIngreso;
@@ -719,6 +768,11 @@ private buildTargetMonthFromTrackDate(): string {
         label: 'Domiciliados',
         value: `${this.formatInteger(totalDomiciliadosReales)} / ${this.formatInteger(totalMetaDomiciliados)}`,
         tone: this.getProgressTone(domiciliadosProgress),
+      },
+      {
+        label: 'Tienda',
+        value: `${this.formatCurrency(totalVentaTiendaReal)} / ${this.formatCurrency(totalMetaVentaTienda)}`,
+        tone: this.getProgressTone(tiendaProgress),
       },
     ];
   }
@@ -807,6 +861,7 @@ private buildTargetMonthFromTrackDate(): string {
       ),
       meta_arpu_mes: totalMetaArpu,
       meta_venta_tienda_mes: this.sumNumber(rows, 'meta_venta_tienda_mes'),
+      venta_tienda_real_mtd: this.sumNumber(rows, 'venta_tienda_real_mtd'),
       usuarios_activos_actual: totalUsuariosActivos,
       reactivaciones_real_mtd: this.sumNumber(rows, 'reactivaciones_real_mtd'),
       bajas_reales_mtd: this.sumNumber(rows, 'bajas_reales_mtd'),
@@ -829,6 +884,8 @@ private buildTargetMonthFromTrackDate(): string {
       source_snapshot_id_ingresos: null,
       source_snapshot_id_nuevos: null,
       source_snapshot_id_domiciliados: null,
+      source_business_date_tienda: null,
+      source_snapshot_id_tienda: null,
     };
   }
 
@@ -1285,6 +1342,9 @@ getVisibleTrackTableColumnCount(): number {
 
   if (this.isTrackColumnGroupVisible('domiciliados')) {
     totalColumns += 4;
+  }
+  if (this.isTrackColumnGroupVisible('tienda')) {
+    totalColumns += 5;
   }
 
   return totalColumns;

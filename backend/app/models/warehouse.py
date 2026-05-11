@@ -747,6 +747,47 @@ class TrackSourceAgregadorasDailyORM(db.Model):
         ),
     )
 
+class TrackSourceTiendaDailyORM(db.Model):
+    __tablename__ = "track_source_tienda_daily"
+
+    id = db.Column(db.BigInteger, primary_key=True)
+    business_date = db.Column(db.Date, nullable=False)
+    sucursal_canon = db.Column(db.Text, nullable=False)
+
+    venta_tienda_mtd = db.Column(
+        db.Numeric(14, 2),
+        nullable=False,
+        default=0,
+    )
+
+    source_snapshot_id = db.Column(db.BigInteger, nullable=True)
+    source_report_type_key = db.Column(db.Text, nullable=True)
+
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        server_default=db.func.now(),
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        server_default=db.func.now(),
+        onupdate=db.func.now(),
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "business_date",
+            "sucursal_canon",
+            name="uq_track_source_tienda_daily_business_date_sucursal",
+        ),
+        db.Index(
+            "ix_track_source_tienda_daily_business_date",
+            "business_date",
+        ),
+    )
+
+
 class TrackSourceNuevosDailyORM(db.Model):
     __tablename__ = "track_source_nuevos_daily"
 
@@ -856,6 +897,16 @@ class TrackDailyMartORM(db.Model):
 
     # F6 domiciliados efectivos
     nuevos_domiciliados_real_mtd = db.Column(db.Integer, nullable=True)
+    
+    # F7 Tienda
+    venta_tienda_real_mtd = db.Column(
+    db.Numeric(14, 2),
+        nullable=False,
+        default=0,
+    )
+
+    source_snapshot_id_tienda = db.Column(db.BigInteger, nullable=True)
+    source_business_date_tienda = db.Column(db.Date, nullable=True)
 
     # lineage mínimo
     source_snapshot_id_desempeno = db.Column(db.BigInteger, nullable=True)

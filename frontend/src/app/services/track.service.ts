@@ -60,6 +60,9 @@ export interface TrackDailyMartRow {
   meta_nuevos_domiciliados_mes: number | null;
   meta_arpu_mes: number | null;
   meta_venta_tienda_mes: number | null;
+  venta_tienda_real_mtd: number | null;
+  source_business_date_tienda: string | null;
+  source_snapshot_id_tienda: number | null;
   usuarios_activos_actual: number | null;
   reactivaciones_real_mtd: number | null;
   bajas_reales_mtd: number | null;

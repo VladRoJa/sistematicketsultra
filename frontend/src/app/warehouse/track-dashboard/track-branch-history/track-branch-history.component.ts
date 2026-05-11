@@ -597,6 +597,150 @@ private getIngresoWindowDeltaTone(): 'success' | 'danger' | 'neutral' {
   return this.getDeltaTone(delta);
 }
 
+getTiendaProgressLabel(row: TrackDailyMartRow): string {
+  return this.formatPercent(
+    this.calculateProgressPercent(
+      row.venta_tienda_real_mtd,
+      row.meta_venta_tienda_mes,
+    ),
+  );
+}
+
+getTiendaProgressTone(row: TrackDailyMartRow): 'success' | 'danger' | 'neutral' {
+  const progress = this.calculateProgressPercent(
+    row.venta_tienda_real_mtd,
+    row.meta_venta_tienda_mes,
+  );
+
+  return this.getProgressTone(progress);
+}
+
+getTiendaDifferenceLabel(row: TrackDailyMartRow): string {
+  const difference =
+    (row.venta_tienda_real_mtd ?? 0) - (row.meta_venta_tienda_mes ?? 0);
+
+  return this.formatSignedCurrency(difference);
+}
+
+getTiendaDifferenceTone(row: TrackDailyMartRow): 'success' | 'danger' | 'neutral' {
+  const difference =
+    (row.venta_tienda_real_mtd ?? 0) - (row.meta_venta_tienda_mes ?? 0);
+
+  return this.getDeltaTone(difference);
+}
+
+getTiendaRemainingTargetLabel(row: TrackDailyMartRow): string {
+  const idealTarget = this.calculateIdealMtdTarget(
+    row.meta_venta_tienda_mes,
+    row.track_date,
+  );
+
+  const remainingTarget = this.calculateRemainingToIdealTarget(
+    row.venta_tienda_real_mtd,
+    idealTarget,
+  );
+
+  return this.formatCurrency(remainingTarget);
+}
+
+getTiendaRemainingTargetTone(
+  row: TrackDailyMartRow,
+): 'success' | 'danger' | 'neutral' {
+  const idealTarget = this.calculateIdealMtdTarget(
+    row.meta_venta_tienda_mes,
+    row.track_date,
+  );
+
+  const remainingTarget = this.calculateRemainingToIdealTarget(
+    row.venta_tienda_real_mtd,
+    idealTarget,
+  );
+
+  if (remainingTarget <= 0) {
+    return 'success';
+  }
+
+  return 'danger';
+}
+
+private getProgressTone(progressPercent: number): 'success' | 'danger' | 'neutral' {
+  if (progressPercent >= 100) {
+    return 'success';
+  }
+
+  if (progressPercent <= 0) {
+    return 'neutral';
+  }
+
+  return 'danger';
+}
+
+private calculateIdealMtdTarget(
+  monthlyTarget: number | null | undefined,
+  trackDate: string | null | undefined,
+): number {
+  const target = Number(monthlyTarget ?? 0);
+
+  if (target <= 0) {
+    return 0;
+  }
+
+  const dateParts = this.parseIsoDateParts(trackDate);
+
+  if (!dateParts) {
+    return 0;
+  }
+
+  const daysInMonth = this.getDaysInMonth(dateParts.year, dateParts.month);
+  const elapsedDay = Math.min(Math.max(dateParts.day, 1), daysInMonth);
+
+  return (target * elapsedDay) / daysInMonth;
+}
+
+private calculateRemainingToIdealTarget(
+  realValue: number | null | undefined,
+  idealValue: number | null | undefined,
+): number {
+  const real = Number(realValue ?? 0);
+  const ideal = Number(idealValue ?? 0);
+
+  if (Number.isNaN(real) || Number.isNaN(ideal)) {
+    return 0;
+  }
+
+  return Math.max(ideal - real, 0);
+}
+
+private parseIsoDateParts(
+  value: string | null | undefined,
+): { year: number; month: number; day: number } | null {
+  const text = String(value || '').trim();
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+    return null;
+  }
+
+  const [yearText, monthText, dayText] = text.split('-');
+
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+
+  if (
+    Number.isNaN(year) ||
+    Number.isNaN(month) ||
+    Number.isNaN(day)
+  ) {
+    return null;
+  }
+
+  return { year, month, day };
+}
+
+private getDaysInMonth(year: number, month: number): number {
+  return new Date(year, month, 0).getDate();
+}
+
   private syncRouteStateFromMaps(
     paramMap: ParamMap,
     queryParamMap: ParamMap,
