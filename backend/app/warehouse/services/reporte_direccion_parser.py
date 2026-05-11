@@ -304,8 +304,40 @@ def _parse_raw_text(value: Any) -> str | None:
         return None
     return text
 
+def _try_parse_float(value: Any) -> float | None:
+    try:
+        return _parse_float(value)
+    except Exception:
+        return None
 
-def _parse_detail_row(row: list[Any]) -> dict[str, Any]:
+
+def _is_new_gasca_layout_row(row: list[Any]) -> bool:
+    """
+    Detecta el layout nuevo de Gasca donde las columnas de ingresos
+    se recorrieron dos posiciones a la derecha.
+
+    Señal práctica:
+    - En layout viejo, row[16] suele ser hora apertura y row[17] texto/hora clausura.
+    - En layout nuevo, row[16] y row[17] vienen como números:
+      producto_pct_venta y mismo_mes_año_anterior.
+    """
+    if len(row) < EXPECTED_COLUMN_COUNT:
+        return False
+
+    producto_candidate = _try_parse_float(row[16])
+    mismo_mes_candidate = _try_parse_float(row[17])
+
+    ingreso_hoy_candidate = _try_parse_float(row[11])
+    ingreso_mes_candidate = _try_parse_float(row[13])
+
+    return (
+        producto_candidate is not None
+        and mismo_mes_candidate is not None
+        and ingreso_hoy_candidate is not None
+        and ingreso_mes_candidate is not None
+    )
+
+def _parse_detail_row_legacy(row: list[Any]) -> dict[str, Any]:
     return {
         "sucursal": _normalize_text(row[0]).strip(),
         "socios_activos_totales": _parse_int(row[1]),
@@ -327,6 +359,39 @@ def _parse_detail_row(row: list[Any]) -> dict[str, Any]:
         "hora_clausura_raw": _parse_raw_text(row[17]),
     }
 
+def _parse_detail_row_gasca_shifted(row: list[Any]) -> dict[str, Any]:
+    return {
+        "sucursal": _normalize_text(row[0]).strip(),
+        "socios_activos_totales": _parse_int(row[1]),
+
+        # En el layout nuevo estos dos valores vienen corridos dentro de la fila.
+        "socios_activos_kpi": _parse_int(row[5]),
+        "socios_kpi_m2": _parse_float(row[4]),
+
+        "asistencia_hoy": _parse_int(row[6]),
+        "diarios_hoy": _parse_int(row[7]),
+        "gympass": _parse_int(row[8]),
+        "totalpass": _parse_int(row[9]),
+        "pases_cortesia": _parse_int(row[10]),
+
+        "ingreso_hoy": _parse_float(row[11]),
+        "ingreso_acumulado_semana_en_curso": _parse_float(row[12]),
+        "ingreso_acumulado_mes_en_curso": _parse_float(row[13]),
+        "membresia_domiciliada_mes_en_curso": _parse_float(row[14]),
+        "pago_posterior_domiciliado_mes_en_curso": _parse_float(row[15]),
+        "producto_pct_venta": _parse_float(row[16]),
+        "ingreso_acumulado_mismo_mes_anio_anterior": _parse_float(row[17]),
+
+        # El layout nuevo ya no trae estas dos columnas reales en la fila detalle.
+        "hora_apertura_raw": None,
+        "hora_clausura_raw": None,
+    }
+
+def _parse_detail_row(row: list[Any]) -> dict[str, Any]:
+    if _is_new_gasca_layout_row(row):
+        return _parse_detail_row_gasca_shifted(row)
+
+    return _parse_detail_row_legacy(row)
 
 def _load_rows_from_workbook(file_path: str) -> list[list[Any]]:
     try:
