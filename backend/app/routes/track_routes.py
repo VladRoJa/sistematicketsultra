@@ -262,6 +262,7 @@ def _serialize_track_daily_mart_row(row: TrackDailyMartORM) -> dict[str, Any]:
         "meta_nuevos_domiciliados_mes": row.meta_nuevos_domiciliados_mes,
         "meta_arpu_mes": _serialize_decimal(row.meta_arpu_mes),
         "meta_venta_tienda_mes": _serialize_decimal(row.meta_venta_tienda_mes),
+        "venta_tienda_real_mtd": _serialize_decimal(row.venta_tienda_real_mtd),
         "usuarios_activos_actual": row.usuarios_activos_actual,
         "reactivaciones_real_mtd": row.reactivaciones_real_mtd,
         "bajas_reales_mtd": row.bajas_reales_mtd,
@@ -295,10 +296,16 @@ def _serialize_track_daily_mart_row(row: TrackDailyMartORM) -> dict[str, Any]:
             if row.source_business_date_domiciliados
             else None
         ),
+        "source_business_date_tienda": (
+            row.source_business_date_tienda.isoformat()
+            if row.source_business_date_tienda
+            else None
+        ),
         "source_snapshot_id_desempeno": row.source_snapshot_id_desempeno,
         "source_snapshot_id_ingresos": row.source_snapshot_id_ingresos,
         "source_snapshot_id_nuevos": row.source_snapshot_id_nuevos,
         "source_snapshot_id_domiciliados": row.source_snapshot_id_domiciliados,
+        "source_snapshot_id_tienda": row.source_snapshot_id_tienda,
     }
 
 

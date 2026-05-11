@@ -187,6 +187,11 @@
             <th>Avance socios nuevos</th>
             <th>Nuevos domiciliados</th>
             <th>Avance domiciliados</th>
+            <th>Meta tienda</th>
+            <th>Venta tienda</th>
+            <th>Avance tienda</th>
+            <th>Dif. tienda VS meta</th>
+            <th>Meta del día tienda</th>
           </tr>
         </thead>
 
@@ -250,6 +255,27 @@
                 )
               }}
             </td>
+            <td>{{ formatCurrency(row.meta_venta_tienda_mes) }}</td>
+
+              <td>{{ formatCurrency(row.venta_tienda_real_mtd) }}</td>
+
+              <td class="progress-cell">
+                <span [class]="'delta-badge delta-badge--' + getTiendaProgressTone(row)">
+                  {{ getTiendaProgressLabel(row) }}
+                </span>
+              </td>
+
+              <td class="progress-cell">
+                <span [class]="'delta-badge delta-badge--' + getTiendaDifferenceTone(row)">
+                  {{ getTiendaDifferenceLabel(row) }}
+                </span>
+              </td>
+
+              <td class="progress-cell">
+                <span [class]="'delta-badge delta-badge--' + getTiendaRemainingTargetTone(row)">
+                  {{ getTiendaRemainingTargetLabel(row) }}
+                </span>
+              </td>
           </tr>
         </tbody>
       </table>

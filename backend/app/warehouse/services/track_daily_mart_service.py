@@ -14,6 +14,7 @@ from app.models.warehouse import (
     TrackSourceIngresosDailyORM,
     TrackSourceNuevosDailyORM,
     TrackSourceDomiciliadosEfectivosDailyORM,
+    TrackSourceTiendaDailyORM,
     TrackDailyMartORM,
 )
 
@@ -162,9 +163,18 @@ def build_track_daily_mart_for_date(
         )
         .all()
     )
+    tienda_rows = (
+        TrackSourceTiendaDailyORM.query.filter_by(
+            business_date=track_date,
+        ).all()
+    )
     domiciliados_by_branch = {
         row.sucursal_canon: row
         for row in domiciliados_rows
+    }
+    tienda_by_branch = {
+        row.sucursal_canon: row
+        for row in tienda_rows
     }
 
     result: list[dict[str, Any]] = []
@@ -175,6 +185,7 @@ def build_track_daily_mart_for_date(
         ingresos_row = ingresos_by_branch.get(branch.sucursal_canon)
         nuevos_row = nuevos_by_branch.get(branch.sucursal_canon)
         domiciliados_row = domiciliados_by_branch.get(branch.sucursal_canon)
+        tienda_row = tienda_by_branch.get(branch.sucursal_canon)
 
         ingreso_real_base_mtd = (
             ingresos_row.ingreso_real_base_mtd if ingresos_row else None
@@ -256,6 +267,11 @@ def build_track_daily_mart_for_date(
                     domiciliados_row.nuevos_domiciliados_real_mtd
                     if domiciliados_row else None
                 ),
+                # F7
+                "venta_tienda_real_mtd": (
+                    tienda_row.venta_tienda_mtd if tienda_row else None
+                ),
+                
 
                 # lineage: source business dates
                 "source_business_date_desempeno": (
@@ -276,7 +292,10 @@ def build_track_daily_mart_for_date(
                     domiciliados_row.business_date.isoformat()
                     if domiciliados_row else None
                 ),
-
+                "source_business_date_tienda": (
+                    tienda_row.business_date.isoformat()
+                    if tienda_row else None
+                ),
                 # lineage: source snapshot ids
                 "source_snapshot_id_desempeno": (
                     desempeno_row.source_snapshot_id if desempeno_row else None
@@ -290,6 +309,9 @@ def build_track_daily_mart_for_date(
                 ),
                 "source_snapshot_id_domiciliados": (
                     domiciliados_row.source_snapshot_id if domiciliados_row else None
+                ),
+                "source_snapshot_id_tienda": (
+                    tienda_row.source_snapshot_id if tienda_row else None
                 ),
             }
         )
@@ -359,6 +381,8 @@ def refresh_track_daily_mart_for_date(
                     ingreso_real_agregadora_mtd=row["ingreso_real_agregadora_mtd"],
                     ingreso_real_total_mtd=row["ingreso_real_total_mtd"],
                     ingreso_real_mtd=row["ingreso_real_mtd"],
+                    
+                    venta_tienda_real_mtd=row["venta_tienda_real_mtd"],
 
                     clientes_nuevos_real_mtd=row["clientes_nuevos_real_mtd"],
                     nuevos_domiciliados_real_mtd=row["nuevos_domiciliados_real_mtd"],
@@ -395,6 +419,14 @@ def refresh_track_daily_mart_for_date(
                         if row["source_business_date_domiciliados"] is not None
                         else None
                     ),
+                    source_business_date_tienda=(
+                        _ensure_date(
+                            row["source_business_date_tienda"],
+                            field_name="source_business_date_tienda",
+                        )
+                        if row["source_business_date_tienda"] is not None
+                        else None
+                    ),
 
                     source_snapshot_id_desempeno=row["source_snapshot_id_desempeno"],
                     source_snapshot_id_ingresos=row["source_snapshot_id_ingresos"],
@@ -408,6 +440,7 @@ def refresh_track_daily_mart_for_date(
                     ),
                     source_snapshot_id_nuevos=row["source_snapshot_id_nuevos"],
                     source_snapshot_id_domiciliados=row["source_snapshot_id_domiciliados"],
+                    source_snapshot_id_tienda=row["source_snapshot_id_tienda"],
                 )
             )
 

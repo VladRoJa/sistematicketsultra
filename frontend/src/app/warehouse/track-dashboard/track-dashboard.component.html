@@ -250,6 +250,15 @@
               <th class="cell-right">Dif. domiciliados VS meta</th>
               <th class="cell-right">Meta del día domic.</th>
             </ng-container>
+
+            <ng-container *ngIf="isTrackColumnGroupVisible('tienda')">
+              <th class="cell-right">Meta tienda</th>
+              <th class="cell-right">Venta tienda</th>
+              <th class="cell-right">Avance tienda</th>
+              <th class="cell-right">Dif. tienda VS meta</th>
+              <th class="cell-right">Meta del día tienda</th>
+            </ng-container>
+
           </tr>
         </thead>
 
@@ -339,6 +348,26 @@
               <td class="cell-right">
                 <span [class]="getProgressBadgeClass(row.diferenciaDomiciliadosDiaTone)">
                   {{ row.diferenciaDomiciliadosDiaLabel }}
+                </span>
+              </td>
+            </ng-container>
+
+            <ng-container *ngIf="isTrackColumnGroupVisible('tienda')">
+              <td class="cell-right">{{ row.metaVentaTienda }}</td>
+              <td class="cell-right">{{ row.ventaTiendaReal }}</td>
+              <td class="cell-right">
+                <span [class]="getProgressBadgeClass(row.avanceTiendaTone)">
+                  {{ row.avanceTiendaLabel }}
+                </span>
+              </td>
+              <td class="cell-right">
+                <span [class]="getProgressBadgeClass(row.diferenciaTiendaTone)">
+                  {{ row.diferenciaTiendaLabel }}
+                </span>
+              </td>
+              <td class="cell-right">
+                <span [class]="getProgressBadgeClass(row.metaTiendaDiaTone)">
+                  {{ row.metaTiendaDiaLabel }}
                 </span>
               </td>
             </ng-container>
