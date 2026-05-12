@@ -16,6 +16,8 @@ from openpyxl import load_workbook
 
 REPORTE_DIRECCION_REPORT_TYPE_KEY = "reporte_direccion"
 EXPECTED_COLUMN_COUNT = 18
+LAYOUT_LEGACY = "legacy"
+LAYOUT_GASCA_SHIFTED = "gasca_shifted"
 
 SPANISH_MONTHS = {
     "ene": 1,
@@ -337,6 +339,23 @@ def _is_new_gasca_layout_row(row: list[Any]) -> bool:
         and ingreso_mes_candidate is not None
     )
 
+def _detect_reporte_direccion_detail_layout(
+    detail_rows: list[list[Any]],
+) -> str:
+    if not detail_rows:
+        return LAYOUT_LEGACY
+
+    shifted_votes = sum(
+        1
+        for row in detail_rows
+        if _is_new_gasca_layout_row(row)
+    )
+
+    if shifted_votes >= max(1, len(detail_rows) // 2):
+        return LAYOUT_GASCA_SHIFTED
+
+    return LAYOUT_LEGACY
+
 def _parse_detail_row_legacy(row: list[Any]) -> dict[str, Any]:
     return {
         "sucursal": _normalize_text(row[0]).strip(),
@@ -387,8 +406,12 @@ def _parse_detail_row_gasca_shifted(row: list[Any]) -> dict[str, Any]:
         "hora_clausura_raw": None,
     }
 
-def _parse_detail_row(row: list[Any]) -> dict[str, Any]:
-    if _is_new_gasca_layout_row(row):
+def _parse_detail_row(
+    row: list[Any],
+    *,
+    detail_layout: str,
+) -> dict[str, Any]:
+    if detail_layout == LAYOUT_GASCA_SHIFTED:
         return _parse_detail_row_gasca_shifted(row)
 
     return _parse_detail_row_legacy(row)
@@ -473,6 +496,8 @@ def parse_reporte_direccion_snapshot(
     row_count_valid = 0
     row_count_rejected = 0
 
+    detail_rows: list[tuple[int, list[Any]]] = []
+
     # Excel: fila humana = índice + 1
     for idx, raw_row in enumerate(rows[1:], start=2):
         row = _truncate_or_pad_row(list(raw_row))
@@ -483,8 +508,12 @@ def parse_reporte_direccion_snapshot(
         first_cell_text = _normalize_text(row[0]).strip()
 
         if not first_cell_text:
-            # Si no trae sucursal, pero parece resumen en otra celda, se ignora.
-            non_empty_cells = [_normalize_text(cell) for cell in row if _normalize_text(cell)]
+            non_empty_cells = [
+                _normalize_text(cell)
+                for cell in row
+                if _normalize_text(cell)
+            ]
+
             if non_empty_cells:
                 first_non_empty = non_empty_cells[0]
                 if _is_summary_row(first_non_empty):
@@ -503,10 +532,20 @@ def parse_reporte_direccion_snapshot(
         if _is_summary_row(first_cell_text):
             continue
 
-        row_count_detected += 1
+        detail_rows.append((idx, row))
 
+    row_count_detected = len(detail_rows)
+
+    detail_layout = _detect_reporte_direccion_detail_layout(
+        [row for _, row in detail_rows]
+    )
+
+    for idx, row in detail_rows:
         try:
-            parsed_row = _parse_detail_row(row)
+            parsed_row = _parse_detail_row(
+                row,
+                detail_layout=detail_layout,
+            )
             parsed_rows.append(parsed_row)
             row_count_valid += 1
         except Exception as exc:
@@ -519,7 +558,7 @@ def parse_reporte_direccion_snapshot(
                     message=f"Fila rechazada por error de parseo: {exc}",
                 )
             )
-
+   
     if row_count_valid <= 0:
         raise NoDetailRowsFound(
             "No se encontraron filas detalle válidas en reporte_direccion."
@@ -557,5 +596,6 @@ def parse_reporte_direccion_snapshot(
             "original_filename": original_filename,
             "storage_path": str(path),
             "sheet_index": 0,
+            "detected_layout": detail_layout,
         },
     }
