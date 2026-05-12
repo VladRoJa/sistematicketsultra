@@ -337,6 +337,50 @@ def _set_snapshot_canonical_state(
         },
     )
 
+def _delete_snapshot_rows(*, snapshot_id: int) -> None:
+    sql = text(
+        f"""
+        DELETE FROM {ROWS_TABLE}
+        WHERE snapshot_id = :snapshot_id
+        """
+    )
+
+    db.session.execute(sql, {"snapshot_id": snapshot_id})
+
+
+def _update_snapshot_header_for_reingestion(
+    *,
+    snapshot_id: int,
+    parsed_snapshot: dict[str, Any],
+    snapshot_kind: str,
+) -> None:
+    sql = text(
+        f"""
+        UPDATE {SNAPSHOTS_TABLE}
+        SET
+            business_date = :business_date,
+            captured_at = :captured_at,
+            snapshot_kind = :snapshot_kind,
+            row_count_detected = :row_count_detected,
+            row_count_valid = :row_count_valid,
+            row_count_rejected = :row_count_rejected,
+            updated_at = NOW()
+        WHERE id = :snapshot_id
+        """
+    )
+
+    db.session.execute(
+        sql,
+        {
+            "snapshot_id": snapshot_id,
+            "business_date": _ensure_date(parsed_snapshot["business_date"]),
+            "captured_at": _ensure_datetime(parsed_snapshot["captured_at"]),
+            "snapshot_kind": snapshot_kind,
+            "row_count_detected": int(parsed_snapshot["row_count_detected"]),
+            "row_count_valid": int(parsed_snapshot["row_count_valid"]),
+            "row_count_rejected": int(parsed_snapshot["row_count_rejected"]),
+        },
+    )
 
 def _build_already_ingested_result(existing_snapshot: dict[str, Any]) -> dict[str, Any]:
     business_date = existing_snapshot.get("business_date")
@@ -368,6 +412,7 @@ def persist_reporte_direccion_snapshot(
     ingestion_source: str | None = None,
     advisory_lock_callback: Callable[..., Any] | None = None,
     canonicality_resolver: Callable[..., tuple[bool, int | None]] | None = None,
+    force_ingestion: bool = False,
 ) -> dict[str, Any]:
     """
     Persistencia transaccional de reporte_direccion.
@@ -404,10 +449,107 @@ def persist_reporte_direccion_snapshot(
     try:
         with transaction_ctx:
             existing_snapshot = _fetch_existing_snapshot_by_upload(
-                warehouse_upload_id=warehouse_upload_id
+            warehouse_upload_id=warehouse_upload_id
+        )
+
+        if existing_snapshot is not None and not force_ingestion:
+            return _build_already_ingested_result(existing_snapshot)
+
+        if advisory_lock_callback is not None:
+            advisory_lock_callback(
+                report_type_key=REPORTE_DIRECCION_REPORT_TYPE_KEY,
+                business_date=business_date,
             )
-            if existing_snapshot is not None:
-                return _build_already_ingested_result(existing_snapshot)
+
+        if existing_snapshot is not None and force_ingestion:
+            snapshot_id = int(existing_snapshot["snapshot_id"])
+
+            _delete_snapshot_rows(snapshot_id=snapshot_id)
+
+            _update_snapshot_header_for_reingestion(
+                snapshot_id=snapshot_id,
+                parsed_snapshot=parsed,
+                snapshot_kind=snapshot_kind,
+            )
+
+            _insert_snapshot_rows(
+                snapshot_id=snapshot_id,
+                rows=rows,
+            )
+
+            result = {
+                "snapshot_id": snapshot_id,
+                "business_date": business_date.isoformat(),
+                "snapshot_kind": snapshot_kind,
+                "is_canonical": bool(existing_snapshot.get("is_canonical")),
+                "status": "reingested",
+                "was_idempotent": False,
+                "row_count_detected": int(parsed["row_count_detected"]),
+                "row_count_valid": int(parsed["row_count_valid"]),
+                "row_count_rejected": int(parsed["row_count_rejected"]),
+                "issues_count": len(parsed.get("issues") or []),
+                "metadata": {
+                    "requested_by": requested_by,
+                    "ingestion_source": ingestion_source,
+                    "reason": "forced_reingestion_existing_upload",
+                    "previous_snapshot_id": snapshot_id,
+                },
+            }
+
+        else:
+            existing_canonical = _fetch_existing_canonical_snapshot_for_day(
+                business_date=business_date
+            )
+
+            snapshot_id = _insert_snapshot_header(
+                parsed_snapshot=parsed,
+                snapshot_kind=snapshot_kind,
+            )
+
+            _insert_snapshot_rows(
+                snapshot_id=snapshot_id,
+                rows=rows,
+            )
+
+            new_is_canonical, previous_canonical_snapshot_id = canonicality_resolver(
+                existing_canonical_snapshot=existing_canonical,
+                snapshot_kind=snapshot_kind,
+            )
+
+            if previous_canonical_snapshot_id is not None:
+                _set_snapshot_canonical_state(
+                    snapshot_id=previous_canonical_snapshot_id,
+                    is_canonical=False,
+                )
+
+            if new_is_canonical:
+                _set_snapshot_canonical_state(
+                    snapshot_id=snapshot_id,
+                    is_canonical=True,
+                )
+
+            result = {
+                "snapshot_id": snapshot_id,
+                "business_date": business_date.isoformat(),
+                "snapshot_kind": snapshot_kind,
+                "is_canonical": bool(new_is_canonical),
+                "status": "ingested",
+                "was_idempotent": False,
+                "row_count_detected": int(parsed["row_count_detected"]),
+                "row_count_valid": int(parsed["row_count_valid"]),
+                "row_count_rejected": int(parsed["row_count_rejected"]),
+                "issues_count": len(parsed.get("issues") or []),
+                "metadata": {
+                    "requested_by": requested_by,
+                    "ingestion_source": ingestion_source,
+                    "previous_canonical_snapshot_id": previous_canonical_snapshot_id,
+                    "existing_canonical_snapshot_id": (
+                        existing_canonical.get("snapshot_id")
+                        if existing_canonical
+                        else None
+                    ),
+                },
+            }
 
             if advisory_lock_callback is not None:
                 advisory_lock_callback(

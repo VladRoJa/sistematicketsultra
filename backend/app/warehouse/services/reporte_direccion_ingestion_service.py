@@ -92,6 +92,7 @@ class IngestReporteDireccionCommand:
     snapshot_kind: str
     requested_by: str | None = None
     ingestion_source: str | None = None
+    force_ingestion: bool = False
 
 
 @dataclass(slots=True)
@@ -645,6 +646,7 @@ def _persist_snapshot_transactionally(
                 "ingestion_source": command.ingestion_source,
                 "advisory_lock_callback": _apply_advisory_lock_if_configured,
                 "canonicality_resolver": _resolve_canonicality_decision,
+                "force_ingestion": command.force_ingestion,
             },
             description="reporte_direccion repository",
         )
@@ -694,6 +696,7 @@ def ingest_reporte_direccion_upload(
     snapshot_kind: str,
     requested_by: str | None = None,
     ingestion_source: str | None = None,
+    force_ingestion: bool = False,
 ) -> dict[str, Any]:
     """
     Servicio principal de ingesta estructurada de reporte_direccion.
@@ -715,6 +718,7 @@ def ingest_reporte_direccion_upload(
         snapshot_kind=snapshot_kind,
         requested_by=requested_by,
         ingestion_source=ingestion_source,
+        force_ingestion=force_ingestion,
     )
     _validate_command(command)
 
