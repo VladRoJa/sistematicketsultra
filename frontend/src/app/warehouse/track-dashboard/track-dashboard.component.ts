@@ -838,10 +838,7 @@ private buildTargetMonthFromTrackDate(): string {
       'proyeccion_usuarios_cierre_mes',
     );
 
-    const totalMetaArpu =
-      totalProyeccionUsuariosCierre > 0
-        ? totalMetaFaycgo / totalProyeccionUsuariosCierre
-        : 0;
+    const totalMetaArpu = this.averagePositiveNumber(rows, 'meta_arpu_mes');
 
     return {
       track_date: this.trackDate,
@@ -953,6 +950,23 @@ private buildTargetMonthFromTrackDate(): string {
       return accumulator + numericValue;
     }, 0);
   }
+
+private averagePositiveNumber(
+  rows: TrackDailyMartRow[],
+  field: keyof TrackDailyMartRow,
+): number {
+  const values = rows
+    .map((row) => Number(row[field] ?? 0))
+    .filter((value) => Number.isFinite(value) && value > 0);
+
+  if (!values.length) {
+    return 0;
+  }
+
+  const total = values.reduce((acc, value) => acc + value, 0);
+
+  return total / values.length;
+}
 
   private syncSelectedModeLabel(): void {
     const option = this.generationModeOptions.find(
