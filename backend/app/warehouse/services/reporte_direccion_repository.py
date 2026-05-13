@@ -551,65 +551,6 @@ def persist_reporte_direccion_snapshot(
                 },
             }
 
-            if advisory_lock_callback is not None:
-                advisory_lock_callback(
-                    report_type_key=REPORTE_DIRECCION_REPORT_TYPE_KEY,
-                    business_date=business_date,
-                )
-
-            existing_canonical = _fetch_existing_canonical_snapshot_for_day(
-                business_date=business_date
-            )
-
-            snapshot_id = _insert_snapshot_header(
-                parsed_snapshot=parsed,
-                snapshot_kind=snapshot_kind,
-            )
-
-            _insert_snapshot_rows(
-                snapshot_id=snapshot_id,
-                rows=rows,
-            )
-
-            new_is_canonical, previous_canonical_snapshot_id = canonicality_resolver(
-                existing_canonical_snapshot=existing_canonical,
-                snapshot_kind=snapshot_kind,
-            )
-
-            if previous_canonical_snapshot_id is not None:
-                _set_snapshot_canonical_state(
-                    snapshot_id=previous_canonical_snapshot_id,
-                    is_canonical=False,
-                )
-
-            if new_is_canonical:
-                _set_snapshot_canonical_state(
-                    snapshot_id=snapshot_id,
-                    is_canonical=True,
-                )
-
-            result = {
-                "snapshot_id": snapshot_id,
-                "business_date": business_date.isoformat(),
-                "snapshot_kind": snapshot_kind,
-                "is_canonical": bool(new_is_canonical),
-                "status": "ingested",
-                "was_idempotent": False,
-                "row_count_detected": int(parsed["row_count_detected"]),
-                "row_count_valid": int(parsed["row_count_valid"]),
-                "row_count_rejected": int(parsed["row_count_rejected"]),
-                "issues_count": len(parsed.get("issues") or []),
-                "metadata": {
-                    "requested_by": requested_by,
-                    "ingestion_source": ingestion_source,
-                    "previous_canonical_snapshot_id": previous_canonical_snapshot_id,
-                    "existing_canonical_snapshot_id": (
-                        existing_canonical.get("snapshot_id")
-                        if existing_canonical
-                        else None
-                    ),
-                },
-            }
 
         # Si ya veníamos dentro de una transacción activa (abierta por lecturas previas
         # en la misma scoped_session), hay que confirmar explícitamente para que el
