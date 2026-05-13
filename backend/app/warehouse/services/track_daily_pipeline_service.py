@@ -40,6 +40,9 @@ from app.warehouse.services.track_upload_retention_service import (
     extract_warehouse_upload_ids_from_track_raw_ingestion,
     link_warehouse_uploads_to_track_daily_version,
 )
+from app.warehouse.services.track_source_tienda_daily_service import (
+    refresh_track_source_tienda_daily_for_date,
+)
 
 SUPPORTED_GENERATION_MODES = frozenset(
     {
@@ -306,6 +309,9 @@ def run_track_daily_pipeline_for_date(
             "domiciliados": refresh_track_source_domiciliados_efectivos_daily_for_date(
                 business_date=refresh_dates["domiciliados"],
             ),
+            "tienda": refresh_track_source_tienda_daily_for_date(
+                business_date=track_date,
+            ),
         }
 
         # 3) REFRESH DEL MART
@@ -425,7 +431,7 @@ def run_track_agregadoras_integration_for_date(
     agregadoras_readiness = resolve_exact_agregadoras_snapshot_status_for_date(
         business_date=track_date,
     )
-
+    
     if not agregadoras_readiness.get("is_ready"):
         return {
             "status": "not_ready",
@@ -475,26 +481,14 @@ def run_track_agregadoras_integration_for_date(
                 f"de track_date={track_date.isoformat()}."
             )   
 
-        agregadoras_business_date = agregadoras_refresh_result.get(
-            "agregadoras_business_date"
-        )
-
-        if agregadoras_business_date != track_date.isoformat():
-            raise TrackDailyPipelineServiceError(
-                "El cierre_canonico requiere agregadoras exactas del mismo día. "
-                f"track_date={track_date.isoformat()} "
-                f"agregadoras_business_date={agregadoras_business_date!r}."
-            )
-
-        if int(agregadoras_refresh_result.get("rows_inserted") or 0) <= 0:
-            raise TrackDailyPipelineServiceError(
-                "No existen agregadoras exactas para crear cierre_canonico "
-                f"de track_date={track_date.isoformat()}."
-            )
 
         ingresos_refresh_result = refresh_track_source_ingresos_daily_for_date(
             business_date=track_date,
             generation_mode="official_closed_day",
+        )
+       
+        tienda_refresh_result = refresh_track_source_tienda_daily_for_date(
+            business_date=track_date,
         )
        
         mart_refresh_result = refresh_track_daily_mart_for_date(
@@ -525,8 +519,9 @@ def run_track_agregadoras_integration_for_date(
             "source_refresh_results": {
                 "agregadoras": agregadoras_refresh_result,
                 "ingresos": ingresos_refresh_result,
+                "tienda": tienda_refresh_result,
             },
-            "mart_refresh_result": mart_refresh_result,
+            "mart_refresh_result": mart_refresh_result,           
         }
 
     except Exception as exc:
