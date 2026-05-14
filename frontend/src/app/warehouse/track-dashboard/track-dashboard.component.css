@@ -379,6 +379,80 @@
 }
 
 /* ==========================================================================
+   Orden especial / ordenamiento de tabla
+   ========================================================================== */
+
+.track-active-sort-button {
+  align-self: center;
+  margin-inline: auto;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.08);
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    transform 0.12s ease,
+    box-shadow 0.18s ease;
+}
+
+.track-active-sort-button span {
+  color: #475569;
+  font-weight: 700;
+}
+
+.track-active-sort-button:hover {
+  transform: translateY(-1px);
+  background: #dbeafe;
+  border-color: #60a5fa;
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.12);
+}
+
+.track-sort-header {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0;
+  white-space: nowrap;
+}
+
+.track-sort-header:hover {
+  color: #1d4ed8;
+}
+
+.track-sort-header span {
+  font-size: 10px;
+  line-height: 1;
+  color: #64748b;
+}
+
+.track-sort-header--active {
+  color: #1d4ed8;
+}
+
+.track-sort-header--active span {
+  color: #1d4ed8;
+}
+
+/* ==========================================================================
    Estados de carga / vacío
    ========================================================================== */
 
@@ -459,6 +533,12 @@
 }
 
 .track-row--clickable:hover td {
+  background: #eef6ff;
+}
+
+.track-row--clickable:focus-visible td {
+  outline: 2px solid #60a5fa;
+  outline-offset: -2px;
   background: #eef6ff;
 }
 
@@ -781,6 +861,11 @@
     align-items: stretch;
   }
 
+  .track-active-sort-button {
+    align-self: flex-start;
+    margin-inline: 0;
+  }
+
   .track-column-groups {
     justify-content: flex-start;
   }
@@ -844,6 +929,13 @@
 
   .track-column-groups__button {
     min-width: 96px;
+  }
+
+  .track-active-sort-button {
+    width: 100%;
+    justify-content: center;
+    white-space: normal;
+    text-align: center;
   }
 }
 

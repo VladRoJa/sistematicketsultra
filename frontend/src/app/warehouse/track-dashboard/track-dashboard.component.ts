@@ -23,6 +23,48 @@ type TrackColumnGroupKey =
   | 'domiciliados'
   | 'tienda';
 
+type TrackSortDirection = 'asc' | 'desc';
+
+type TrackSortKey =
+  | 'sucursal_canon'
+  | 'usuarios_inicio_mes'
+  | 'usuarios_activos_actual'
+  | 'proyeccion_usuarios_cierre_mes'
+  | 'm2_sin_circulaciones'
+  | 'meta_faycgo_mes'
+  | 'ingreso_real_base_mtd'
+  | 'ingreso_real_agregadora_mtd'
+  | 'ingreso_real_mtd'
+  | 'avance_ingreso'
+  | 'diferencia_ingreso'
+  | 'meta_ingreso_dia'
+  | 'meta_arpu_mes'
+  | 'arpu_actual'
+  | 'meta_clientes_nuevos_mes'
+  | 'clientes_nuevos_real_mtd'
+  | 'avance_clientes_nuevos'
+  | 'diferencia_clientes_nuevos'
+  | 'meta_clientes_nuevos_dia'
+  | 'meta_reactivaciones_mes'
+  | 'reactivaciones_real_mtd'
+  | 'meta_bajas_mes'
+  | 'bajas_reales_mtd'
+  | 'meta_nuevos_domiciliados_mes'
+  | 'nuevos_domiciliados_real_mtd'
+  | 'avance_domiciliados'
+  | 'diferencia_domiciliados'
+  | 'meta_domiciliados_dia'
+  | 'meta_venta_tienda_mes'
+  | 'venta_tienda_real_mtd'
+  | 'avance_tienda'
+  | 'diferencia_tienda'
+  | 'meta_tienda_dia';
+
+interface TrackSortState {
+  key: TrackSortKey;
+  direction: TrackSortDirection;
+}
+
 
 interface TrackColumnGroupOption {
   key: TrackColumnGroupKey;
@@ -176,6 +218,8 @@ export class TrackDashboardComponent implements OnInit {
   lastResponse: TrackPipelineResponse | null = null;
   rawMartRows: TrackDailyMartRow[] = [];
   viewRows: TrackViewRow[] = [];
+  dataMartRows: TrackDailyMartRow[] = [];
+  activeSort: TrackSortState | null = null;
   summaryCards: TrackSummaryCard[] = [];  
 
   totalRowsLabel = '0';
@@ -269,10 +313,8 @@ loadDailyMart(): void {
             this.buildAgregadorasFreshnessLabel(visibleRows);
 
           this.summaryCards = this.buildSummaryCards(visibleRows);
-          this.rawMartRows = this.appendClosingRows(visibleRows);
-
-          const builtRows = this.rawMartRows.map((row) => this.buildViewRow(row));
-          this.viewRows = builtRows;
+          this.dataMartRows = visibleRows;
+          this.rebuildTrackViewRows();
 
           this.totalRowsLabel = this.formatInteger(visibleRows.length);
           this.lastLoadedTrackDateLabel = response.track_date || this.trackDate;
@@ -294,6 +336,8 @@ loadDailyMart(): void {
   private resetLoadedMartState(): void {
     this.martErrorMessage = '';
     this.rawMartRows = [];
+    this.dataMartRows = [];
+    this.activeSort = null;
     this.viewRows = [];
     this.summaryCards = [];
     this.totalRowsLabel = '0';
@@ -303,6 +347,242 @@ loadDailyMart(): void {
     this.trackGeneratedAtLabel = '';
     this.agregadorasFreshnessLabel = '';
   }
+
+sortTrackTable(key: TrackSortKey): void {
+  if (!this.activeSort || this.activeSort.key !== key) {
+    this.activeSort = {
+      key,
+      direction: 'asc',
+    };
+  } else if (this.activeSort.direction === 'asc') {
+    this.activeSort = {
+      key,
+      direction: 'desc',
+    };
+  } else {
+    this.activeSort = null;
+  }
+
+  this.rebuildTrackViewRows();
+}
+
+resetTrackSort(): void {
+  this.activeSort = null;
+  this.rebuildTrackViewRows();
+}
+
+hasActiveTrackSort(): boolean {
+  return this.activeSort !== null;
+}
+
+getActiveTrackSortLabel(): string {
+  if (!this.activeSort) {
+    return 'Orden de apertura';
+  }
+
+  const directionLabel = this.activeSort.direction === 'asc'
+    ? 'menor a mayor'
+    : 'mayor a menor';
+
+  return `Orden especial: ${this.getTrackSortColumnLabel(this.activeSort.key)} · ${directionLabel}`;
+}
+
+getTrackSortIndicator(key: TrackSortKey): string {
+  if (!this.activeSort || this.activeSort.key !== key) {
+    return '↕';
+  }
+
+  return this.activeSort.direction === 'asc' ? '↑' : '↓';
+}
+
+getTrackSortHeaderClass(key: TrackSortKey): string {
+  const activeClass =
+    this.activeSort?.key === key ? ' track-sort-header--active' : '';
+
+  return `track-sort-header${activeClass}`;
+}
+
+private rebuildTrackViewRows(): void {
+  const sortedDataRows = this.getSortedDataRows(this.dataMartRows);
+
+  this.rawMartRows = this.appendClosingRows(sortedDataRows);
+  this.viewRows = this.rawMartRows.map((row) => this.buildViewRow(row));
+}
+
+private getSortedDataRows(rows: TrackDailyMartRow[]): TrackDailyMartRow[] {
+  if (!this.activeSort) {
+    return this.sortRowsByOpeningOrder(rows);
+  }
+
+  const directionMultiplier = this.activeSort.direction === 'asc' ? 1 : -1;
+
+  return [...rows].sort((left, right) => {
+    const leftValue = this.getTrackSortValue(left, this.activeSort!.key);
+    const rightValue = this.getTrackSortValue(right, this.activeSort!.key);
+
+    const comparison = this.compareTrackSortValues(leftValue, rightValue);
+
+    if (comparison !== 0) {
+      return comparison * directionMultiplier;
+    }
+
+    return this.getOpeningOrderIndex(left) - this.getOpeningOrderIndex(right);
+  });
+}
+
+private compareTrackSortValues(
+  leftValue: string | number,
+  rightValue: string | number,
+): number {
+  if (typeof leftValue === 'string' || typeof rightValue === 'string') {
+    return String(leftValue).localeCompare(String(rightValue), 'es-MX');
+  }
+
+  return leftValue - rightValue;
+}
+
+private getOpeningOrderIndex(row: TrackDailyMartRow): number {
+  const index = this.branchOpeningOrder.indexOf(row.sucursal_canon);
+
+  return index >= 0 ? index : Number.MAX_SAFE_INTEGER;
+}
+
+private getTrackSortValue(
+  row: TrackDailyMartRow,
+  key: TrackSortKey,
+): string | number {
+  switch (key) {
+    case 'sucursal_canon':
+      return row.sucursal_canon || '';
+
+    case 'avance_ingreso':
+      return this.calculateProgressPercent(
+        row.ingreso_real_mtd,
+        row.meta_faycgo_mes,
+      );
+
+    case 'diferencia_ingreso':
+      return this.calculateDifference(
+        row.ingreso_real_mtd,
+        row.meta_faycgo_mes,
+      );
+
+    case 'meta_ingreso_dia':
+      return this.calculateRemainingToIdealTarget(
+        row.ingreso_real_mtd,
+        this.calculateIdealMtdTarget(row.meta_faycgo_mes, row.track_date),
+      );
+
+    case 'arpu_actual':
+      return this.calculateArpuActual(
+        row.ingreso_real_mtd,
+        row.usuarios_activos_actual,
+      );
+
+    case 'avance_clientes_nuevos':
+      return this.calculateProgressPercent(
+        row.clientes_nuevos_real_mtd,
+        row.meta_clientes_nuevos_mes,
+      );
+
+    case 'diferencia_clientes_nuevos':
+      return this.calculateDifference(
+        row.clientes_nuevos_real_mtd,
+        row.meta_clientes_nuevos_mes,
+      );
+
+    case 'meta_clientes_nuevos_dia':
+      return this.calculateRemainingToIdealTarget(
+        row.clientes_nuevos_real_mtd,
+        this.calculateIdealMtdTarget(
+          row.meta_clientes_nuevos_mes,
+          row.track_date,
+        ),
+      );
+
+    case 'avance_domiciliados':
+      return this.calculateProgressPercent(
+        row.nuevos_domiciliados_real_mtd,
+        row.meta_nuevos_domiciliados_mes,
+      );
+
+    case 'diferencia_domiciliados':
+      return this.calculateDifference(
+        row.nuevos_domiciliados_real_mtd,
+        row.meta_nuevos_domiciliados_mes,
+      );
+
+    case 'meta_domiciliados_dia':
+      return this.calculateRemainingToIdealTarget(
+        row.nuevos_domiciliados_real_mtd,
+        this.calculateIdealMtdTarget(
+          row.meta_nuevos_domiciliados_mes,
+          row.track_date,
+        ),
+      );
+
+    case 'avance_tienda':
+      return this.calculateProgressPercent(
+        row.venta_tienda_real_mtd,
+        row.meta_venta_tienda_mes,
+      );
+
+    case 'diferencia_tienda':
+      return this.calculateDifference(
+        row.venta_tienda_real_mtd,
+        row.meta_venta_tienda_mes,
+      );
+
+    case 'meta_tienda_dia':
+      return this.calculateRemainingToIdealTarget(
+        row.venta_tienda_real_mtd,
+        this.calculateIdealMtdTarget(row.meta_venta_tienda_mes, row.track_date),
+      );
+
+    default:
+      return Number(row[key] ?? 0);
+  }
+}
+
+private getTrackSortColumnLabel(key: TrackSortKey): string {
+  const labels: Record<TrackSortKey, string> = {
+    sucursal_canon: 'Club',
+    usuarios_inicio_mes: 'Socios inicio mes',
+    usuarios_activos_actual: 'Socios activos',
+    proyeccion_usuarios_cierre_mes: 'Proyección cierre',
+    m2_sin_circulaciones: 'M² sin circulaciones',
+    meta_faycgo_mes: 'Meta FAYCGO',
+    ingreso_real_base_mtd: 'Ingreso base',
+    ingreso_real_agregadora_mtd: 'Ingreso agregadoras',
+    ingreso_real_mtd: 'Ingreso real',
+    avance_ingreso: 'Avance ingreso',
+    diferencia_ingreso: 'Dif. ingreso VS meta',
+    meta_ingreso_dia: 'Meta del día',
+    meta_arpu_mes: 'Meta ARPU',
+    arpu_actual: 'ARPU actual',
+    meta_clientes_nuevos_mes: 'Meta socios nuevos',
+    clientes_nuevos_real_mtd: 'Socios nuevos',
+    avance_clientes_nuevos: 'Avance socios nuevos',
+    diferencia_clientes_nuevos: 'Dif. socios nuevos VS meta',
+    meta_clientes_nuevos_dia: 'Meta del día socios',
+    meta_reactivaciones_mes: 'Meta reactivaciones',
+    reactivaciones_real_mtd: 'Reactivaciones reales',
+    meta_bajas_mes: 'Meta bajas',
+    bajas_reales_mtd: 'Bajas reales',
+    meta_nuevos_domiciliados_mes: 'Meta nuevos domiciliados',
+    nuevos_domiciliados_real_mtd: 'Nuevos domiciliados',
+    avance_domiciliados: 'Avance domiciliados',
+    diferencia_domiciliados: 'Dif. domiciliados VS meta',
+    meta_domiciliados_dia: 'Meta del día domic.',
+    meta_venta_tienda_mes: 'Meta tienda',
+    venta_tienda_real_mtd: 'Venta tienda',
+    avance_tienda: 'Avance tienda',
+    diferencia_tienda: 'Dif. tienda VS meta',
+    meta_tienda_dia: 'Meta del día tienda',
+  };
+
+  return labels[key];
+}
 
 onGenerationModeChanged(): void {
   this.syncSelectedModeLabel();
@@ -398,6 +678,14 @@ openBranchHistory(row: TrackViewRow): void {
       },
     },
   );
+}
+
+onTrackRowClicked(row: TrackViewRow): void {
+  if (row.rowKind !== 'data') {
+    return;
+  }
+
+  this.openBranchHistory(row);
 }
 
 shouldDisableTrackDateInput(): boolean {
