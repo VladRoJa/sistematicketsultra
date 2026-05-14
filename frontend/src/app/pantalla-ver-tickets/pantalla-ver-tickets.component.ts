@@ -316,7 +316,7 @@ export class PantallaVerTicketsComponent implements OnInit {
   @ViewChild('triggerFiltroSubcategoria') triggerFiltroSubcategoria: any;
   @ViewChild('triggerFiltroDetalle') triggerFiltroDetalle: any;
   @ViewChild('triggerFiltroInventario') triggerFiltroInventario: any;
-  usuarioActual: string;
+  usuarioActual: string = '';
 
   constructor(
     public ticketService: TicketService,
@@ -564,6 +564,7 @@ private postAccionRefrescar(): void {
 
   
 filtrarOpcionesTexto(columna: string) {
+  const self = this as any;
   const capitalizar = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
 
   // Aliases para nombres “raros”
@@ -588,16 +589,16 @@ filtrarOpcionesTexto(columna: string) {
   };
 
   const textoProp = textoPropAlias[columna] ?? `filtro${capitalizar(columna)}Texto`;
-  const filtroTexto = (this[textoProp] || '').toLowerCase();
+  const filtroTexto = (self[textoProp] || '').toLowerCase();
   const plural = pluralMap[columna];
 
   if (!plural) return;
 
   // ⚠️ CLAVE: Tomar como base la lista YA FILTRADA (si existe), NO los "Disponibles"
   const base =
-    (Array.isArray(this[`${plural}Filtradas`]) && this[`${plural}Filtradas`].length)
-      ? this[`${plural}Filtradas`]
-      : (this[`${plural}Disponibles`] || []);
+    (Array.isArray(self[`${plural}Filtradas`]) && self[`${plural}Filtradas`].length)
+      ? self[`${plural}Filtradas`]
+      : (self[`${plural}Disponibles`] || []);
 
   if (!Array.isArray(base)) return;
 
@@ -610,7 +611,7 @@ filtrarOpcionesTexto(columna: string) {
     : [...base];
 
   // Mantén sincronizados lista y selección temporal
-  this[`${plural}Filtradas`] = filtradas;
+  self[`${plural}Filtradas`] = filtradas;
   this.temporalSeleccionados[columna] = filtradas.map((item: any) => ({ ...item }));
 }
 
@@ -1192,7 +1193,10 @@ alternarSeleccionCategoriaUnificada(valor: string): void {
 
 /** Limpia el filtro aplicado de 'categoria' y refresca la tabla. */
 limpiarCategoriaUnificada(): void {
-  const campo = this.campoUnificadoActual; 
+  const campo = this.campoUnificadoActual;
+
+  if (!campo) return;
+
   this.filtroUnificado.seleccionTemporal.clear();
   this.filtroUnificado.textoBusqueda = '';
 
