@@ -202,14 +202,34 @@ export class TicketService {
     return this.http.post<any>(`${this.apiUrl}/cierre/aceptar-creador/${id}`, {}, { headers, withCredentials: true });
   }
 
-  cierreRechazarCreador(id: number, payload: CierreRechazoPayload): Observable<any> {
+  cierreRechazarCreador(
+    id: number,
+    payload: { motivo: string; nueva_fecha_solucion?: string | null }
+  ): Observable<any> {
     const token = localStorage.getItem('token');
     if (!token) return throwError(() => new Error('NO_TOKEN'));
-    if (!payload?.motivo || !payload?.nueva_fecha_solucion) {
-      return throwError(() => new Error('Falta motivo o nueva_fecha_solucion'));
+
+    const motivo = (payload?.motivo || '').trim();
+
+    if (!motivo) {
+      return throwError(() => new Error('El motivo de rechazo es obligatorio'));
     }
+
     const headers = this.authJsonHeaders();
-    return this.http.post<any>(`${this.apiUrl}/cierre/rechazar-creador/${id}`, payload, { headers, withCredentials: true });
+
+    const body: { motivo: string; nueva_fecha_solucion?: string } = {
+      motivo
+    };
+
+    if (payload.nueva_fecha_solucion) {
+      body.nueva_fecha_solucion = payload.nueva_fecha_solucion;
+    }
+
+    return this.http.post<any>(
+      `${this.apiUrl}/cierre/rechazar-creador/${id}`,
+      body,
+      { headers, withCredentials: true }
+    );
   }
 
   // ── Notificaciones ──────────────────────────

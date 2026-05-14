@@ -42,7 +42,7 @@ import { AsignarFechaModalComponent } from './modals/asignar-fecha-modal.compone
 import { cambiarEstadoTicket } from './helpers/pantalla-ver-tickets.estado-ticket';
 import { EditarFechaSolucionModalComponent } from './modals/editar-fecha-solucion-modal.component';
 import { CatalogoService } from '../services/catalogo.service';
-import { mostrarAlertaToast } from '../utils/alertas';
+import { mostrarAlertaToast,solicitarMotivoRechazoCierre } from '../utils/alertas';
 import { SucursalesService } from '../services/sucursales.service';
 import { EvidenciaPreviewComponent } from './modals/evidencia-preview.component';
 import { ModalCierreTicketComponent } from '../shared/modal-cierre-ticket/modal-cierre-ticket.component';
@@ -734,8 +734,10 @@ filtrarOpcionesTexto(columna: string) {
 
   abrirHistorialModal(ticket: Ticket): void {
     this.dialog.open(HistorialFechasModalComponent, {
-      data: ticket,
-      width: '500px'
+      width: '920px',
+      maxWidth: '96vw',
+      maxHeight: '90vh',
+      data: ticket
     });
   }
   inicializarCategoriaTemp() {
@@ -1446,26 +1448,42 @@ async aceptarCierre(ticket: Ticket) {
 
 
 
-async rechazarCierre(ticket: Ticket) {
+async rechazarCierre(ticket: Ticket): Promise<void> {
+  if (!ticket?.id) {
+    mostrarAlertaToast('Ticket inválido.', 'error');
+    return;
+  }
+
+  if (!this.puedeMostrarBotonesValidarCierre(ticket)) {
+    mostrarAlertaToast('No tienes permisos para rechazar este cierre.', 'error');
+    return;
+  }
+
+  const motivo = await solicitarMotivoRechazoCierre(
+    ticket.id,
+    ticket.descripcion
+  );
+
+  if (!motivo) return;
+
   const ok = await this.abrirConfirmacion(
     'Rechazar cierre',
-    `¿Seguro que deseas rechazar el cierre del ticket #${ticket.id}?`
+    `¿Seguro que deseas rechazar el cierre del ticket #${ticket.id}?\n\n` +
+    `Motivo: ${motivo}`
   );
 
   if (!ok) return;
 
-  const payload = {
-    motivo: 'Rechazado por el creador',
-    nueva_fecha_solucion: new Date().toISOString()
-  };
-
-  this.ticketService.cierreRechazarCreador(ticket.id, payload).subscribe({
+  this.ticketService.cierreRechazarCreador(ticket.id, { motivo }).subscribe({
     next: (resp) => {
       mostrarAlertaToast(resp?.mensaje || 'Cierre rechazado.', 'success');
       TicketInit.cargarTickets(this);
     },
     error: (err) => {
-      mostrarAlertaToast(err?.error?.mensaje || 'No se pudo rechazar el cierre.', 'error');
+      mostrarAlertaToast(
+        err?.error?.mensaje || 'No se pudo rechazar el cierre.',
+        'error'
+      );
     }
   });
 }
@@ -1493,10 +1511,46 @@ puedeMostrarBotonFinalizar(ticket: Ticket): boolean {
          ticket?.estado_cierre !== 'pendiente_creador';
 }
 
-puedeMostrarBotonesCreador(ticket: Ticket): boolean {
-  return !!ticket &&
-         ticket.estado_cierre === 'pendiente_creador' &&
-         ticket.username === this.usuarioActual;
+private esAdminParaValidarCierre(): boolean {
+  const rol = (this.user?.rol || '').toString().trim().toUpperCase();
+  return ['ADMIN', 'ADMINISTRADOR', 'SUPER_ADMIN'].includes(rol);
+}
+
+private esGerenteParaValidarCierre(): boolean {
+  const rol = (this.user?.rol || '').toString().trim().toUpperCase();
+  return rol === 'GERENTE';
+}
+
+private ticketPerteneceASucursalDelUsuario(ticket: Ticket): boolean {
+  const sucursalUsuario = Number(this.user?.sucursal_id);
+  const sucursalTicket = Number(
+    ticket.sucursal_id_destino ?? (ticket as any).sucursal_id
+  );
+
+  if (!sucursalUsuario || !sucursalTicket) return false;
+
+  return sucursalUsuario === sucursalTicket;
+}
+
+puedeMostrarBotonesValidarCierre(ticket: Ticket): boolean {
+  if (!ticket?.id) return false;
+
+  const estado = (ticket.estado || '').toString().trim().toLowerCase();
+  const estadoCierre = (ticket.estado_cierre || '').toString().trim().toLowerCase();
+
+  const estaPendienteDeValidacion =
+    estado === 'por_validar' &&
+    estadoCierre === 'pendiente_creador';
+
+  if (!estaPendienteDeValidacion) return false;
+
+  if (this.esAdminParaValidarCierre()) return true;
+
+  if (this.esGerenteParaValidarCierre()) {
+    return this.ticketPerteneceASucursalDelUsuario(ticket);
+  }
+
+  return false;
 }
 
 

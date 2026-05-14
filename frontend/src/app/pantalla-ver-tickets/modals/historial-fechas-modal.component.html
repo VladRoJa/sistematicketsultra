@@ -1,90 +1,263 @@
-<h2 mat-dialog-title>🗓 Historial de Fecha Solución</h2>
+<!--
+  Modal: Resumen / Historial de ticket
+  Archivo: src/app/pantalla-ver-tickets/modals/historial-fechas-modal.component.html
 
+  Notas:
+  - La lógica pesada queda en el .ts.
+  - El HTML solo llama métodos ya definidos:
+    getEstadoClass(), getEstadoLabel(), getActivoNombre(), getSucursal(), etc.
+  - El historial se muestra como lista compacta, no como tabla, para evitar scroll horizontal.
+-->
+
+<!-- ─────────────────────────────────────────────────────────────
+     TÍTULO DEL MODAL
+     ───────────────────────────────────────────────────────────── -->
+<h2 mat-dialog-title class="modal-title">
+  <span class="title-main">
+    <mat-icon>assignment</mat-icon>
+    <span>Resumen del ticket</span>
+  </span>
+
+  <span class="ticket-id">#{{ data.id }}</span>
+</h2>
+
+
+<!-- ─────────────────────────────────────────────────────────────
+     CONTENIDO PRINCIPAL
+     ───────────────────────────────────────────────────────────── -->
 <mat-dialog-content class="contenido-modal">
 
-  <!-- Información general del ticket -->
-  <section class="resumen-ticket">
-    <p><strong>ID:</strong> {{ data.id }}</p>
+  <!-- ───────────────────────────────────────────────────────────
+       ENCABEZADO PREMIUM DEL TICKET
+       Muestra descripción, estado y activo/equipo relacionado.
+       ─────────────────────────────────────────────────────────── -->
+  <section class="ticket-hero">
+    <div class="hero-content">
 
-    <p *ngIf="data.inventario?.nombre; else mostrarEquipo">
-      <strong>Aparato:</strong> {{ data.inventario.nombre }}
-      <span *ngIf="data.inventario.codigo_interno" style="color: #0073c2;">
-        ({{ data.inventario.codigo_interno }})
-      </span>
-    </p>
-    <ng-template #mostrarEquipo>
-      <p *ngIf="data.equipo">
-        <strong>Equipo:</strong> {{ data.equipo }}
-      </p>
-    </ng-template>
+      <!-- Estado general del ticket -->
+      <div class="hero-topline">
+        <span class="mini-label">Ticket</span>
 
-    <p><strong>Descripción:</strong> {{ data.descripcion }}</p>
+        <span class="estado-chip" [ngClass]="getEstadoClass()">
+          {{ getEstadoLabel() | titlecase }}
+        </span>
+      </div>
 
-    <p><strong>Estado:</strong> {{ data.estado | titlecase }}</p>
-    <p *ngIf="data.necesita_refaccion && data.descripcion_refaccion">
-      <mat-icon color="warn" style="vertical-align:middle;">build</mat-icon>
-      <span style="vertical-align:middle; margin-left: 0.5em;">{{ data.descripcion_refaccion }}</span>
-    </p>
-   <p><strong>Fecha Creación:</strong>
-  {{ data.fecha_creacion ? (data.fecha_creacion | date:fmtDateTime:tz) : '—' }}
-</p>
+      <!-- Descripción principal -->
+      <h3 class="descripcion-principal">
+        {{ data.descripcion || 'Sin descripción' }}
+      </h3>
 
-    <p><strong>En Progreso:</strong>
-  {{ data.fecha_en_progreso ? (data.fecha_en_progreso | date:fmtDateTime:tz) : '—' }}
-</p>
+      <!-- Activo / Equipo / Código interno -->
+      <div class="activo-linea">
+        <mat-icon>precision_manufacturing</mat-icon>
 
-    <p><strong>Finalizado:</strong>
-  {{ data.fecha_finalizado ? (data.fecha_finalizado | date:fmtDateTime:tz) : '—' }}
-</p>
+        <span>{{ getActivoNombre() }}</span>
+
+        <span class="codigo-interno" *ngIf="getCodigoInterno()">
+          {{ getCodigoInterno() }}
+        </span>
+      </div>
+
+    </div>
   </section>
+
+
+  <!-- ───────────────────────────────────────────────────────────
+       DATOS RÁPIDOS DEL TICKET
+       Cards compactas con la información principal.
+       ─────────────────────────────────────────────────────────── -->
+  <section class="resumen-grid">
+
+    <!-- Sucursal destino / asociada -->
+    <article class="resumen-card">
+      <span class="card-label">Sucursal</span>
+      <strong>{{ getSucursal() }}</strong>
+    </article>
+
+    <!-- Departamento -->
+    <article class="resumen-card">
+      <span class="card-label">Departamento</span>
+      <strong>{{ getDepartamento() }}</strong>
+    </article>
+
+    <!-- Criticidad -->
+    <article class="resumen-card">
+      <span class="card-label">Criticidad</span>
+      <strong>{{ getCriticidad() }}</strong>
+    </article>
+
+    <!-- Fecha creación -->
+    <article class="resumen-card">
+      <span class="card-label">Fecha creación</span>
+      <strong>
+        {{ data.fecha_creacion ? (data.fecha_creacion | date:fmtDateTime:tz) : '—' }}
+      </strong>
+    </article>
+
+    <!-- Fecha en progreso -->
+    <article class="resumen-card">
+      <span class="card-label">En progreso</span>
+      <strong>
+        {{ data.fecha_en_progreso ? (data.fecha_en_progreso | date:fmtDateTime:tz) : '—' }}
+      </strong>
+    </article>
+
+    <!-- Fecha finalizado -->
+    <article class="resumen-card">
+      <span class="card-label">Finalizado</span>
+      <strong>
+        {{ data.fecha_finalizado ? (data.fecha_finalizado | date:fmtDateTime:tz) : '—' }}
+      </strong>
+    </article>
+
+  </section>
+
+
+  <!-- ───────────────────────────────────────────────────────────
+       BLOQUE DE REFACCIÓN
+       Solo aparece si el ticket requiere refacción y tiene descripción.
+       ─────────────────────────────────────────────────────────── -->
+  <section
+    class="refaccion-card"
+    *ngIf="data.necesita_refaccion && data.descripcion_refaccion">
+
+    <mat-icon>build</mat-icon>
+
+    <div>
+      <strong>Refacción requerida</strong>
+      <p>{{ data.descripcion_refaccion }}</p>
+    </div>
+
+  </section>
+
 
   <mat-divider></mat-divider>
 
-  <!-- Tabla de historial con motivo -->
-  <table mat-table class="tabla-historial">
-    <thead>
-      <tr>
-        <th>
-          <mat-icon inline>event</mat-icon> Fecha Solución
-        </th>
-        <th>
-          <mat-icon inline>person</mat-icon> Usuario
-        </th>
-        <th>
-          <mat-icon inline>schedule</mat-icon> Fecha de Cambio
-        </th>
-        <th>
-          <mat-icon inline>edit_note</mat-icon> Motivo
-        </th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr *ngFor="let item of data.historial_fechas">
-        <td>
-          {{ item.fecha ? (item.fecha | date:fmtDate:tz) : '—' }}
-        </td>
-        <td>
-          {{ item.cambiadoPor || '—' }}
-        </td>
-        <td>
-           {{ item.fechaCambio ? (item.fechaCambio | date:fmtDateTime:tz) : '—' }}
-        </td>
-        <td>
-          <span *ngIf="item.motivo && item.motivo.length > 0; else sinMotivo"
-                [matTooltip]="item.motivo.length > 30 ? item.motivo : ''"
-                class="motivo">
-            {{ item.motivo }}
+
+  <!-- ───────────────────────────────────────────────────────────
+       HISTORIAL DE SOLUCIÓN
+       Lista compacta de cambios, iteraciones y rechazos.
+       ─────────────────────────────────────────────────────────── -->
+  <section class="historial-section">
+
+    <!-- Encabezado de sección -->
+    <div class="section-header">
+      <div>
+        <h3>Historial de solución</h3>
+        <p>Iteraciones, cambios de fecha y rechazos asociados al ticket.</p>
+      </div>
+
+      <span class="contador-historial">
+        {{ historial.length }} registro{{ historial.length === 1 ? '' : 's' }}
+      </span>
+    </div>
+
+
+    <!-- Estado vacío -->
+    <div class="empty-state" *ngIf="!tieneHistorial">
+      <mat-icon>history</mat-icon>
+      <p>Este ticket todavía no tiene historial registrado.</p>
+    </div>
+
+
+    <!-- Lista compacta de historial -->
+    <div class="historial-lista" *ngIf="tieneHistorial">
+
+      <!-- Registro individual del historial -->
+      <article
+        *ngFor="let item of historial"
+        class="historial-card historial-card-compacta"
+        [class.historial-card-rechazo]="esRechazoCierre(item)">
+
+        <!-- Fila compacta: evento, usuario, fechas y motivo -->
+        <div class="historial-compact-row">
+
+          <!-- Tipo de evento: Cambio / Rechazo / Cierre -->
+          <span
+            class="evento-chip"
+            [class.evento-rechazo]="esRechazoCierre(item)">
+
+            <mat-icon inline>
+              {{ esRechazoCierre(item) ? 'report' : 'history' }}
+            </mat-icon>
+
+            {{ getEventoLabel(item) }}
           </span>
-          <ng-template #sinMotivo>
-            <em class="motivo-sin">Sin motivo</em>
-          </ng-template>
-        </td>
-      </tr>
-    </tbody>
-  </table>
+
+
+          <!-- Usuario que generó el cambio -->
+          <span class="usuario-chip">
+            {{ getUsuarioItem(item) }}
+          </span>
+
+
+          <!-- Fecha solución / compromiso -->
+          <div class="compact-cell">
+            <span class="compact-label">
+              <mat-icon inline>event</mat-icon>
+              Solución
+            </span>
+
+            <strong>
+              {{ getFechaSolucionItem(item) ? (getFechaSolucionItem(item) | date:fmtDate:tz) : '—' }}
+            </strong>
+          </div>
+
+
+          <!-- Fecha de cambio -->
+          <div class="compact-cell">
+            <span class="compact-label">
+              <mat-icon inline>schedule</mat-icon>
+              Cambio
+            </span>
+
+            <strong>
+              {{ getFechaCambioItem(item) ? (getFechaCambioItem(item) | date:fmtDateTime:tz) : '—' }}
+            </strong>
+          </div>
+
+
+          <!-- Motivo / comentario -->
+          <div class="compact-cell motivo-compacto">
+            <span class="compact-label">
+              <mat-icon inline>edit_note</mat-icon>
+              Motivo
+            </span>
+
+            <!-- Motivo existente -->
+            <p
+              *ngIf="getMotivoItem(item); else sinMotivo"
+              class="motivo"
+              [class.motivo-rechazo]="esRechazoCierre(item)"
+              [matTooltip]="debeMostrarTooltipMotivo(item) ? getMotivoItem(item) : ''">
+              {{ getMotivoItem(item) }}
+            </p>
+
+            <!-- Sin motivo -->
+            <ng-template #sinMotivo>
+              <em class="motivo-sin">Sin motivo</em>
+            </ng-template>
+          </div>
+
+        </div>
+      </article>
+
+    </div>
+  </section>
 
 </mat-dialog-content>
 
-<mat-dialog-actions align="end">
-  <button mat-button (click)="cerrar()">Cerrar</button>
+
+<!-- ─────────────────────────────────────────────────────────────
+     ACCIONES DEL MODAL
+     ───────────────────────────────────────────────────────────── -->
+<mat-dialog-actions align="end" class="modal-actions">
+  <button
+    mat-button
+    class="btn-cerrar"
+    type="button"
+    (click)="cerrar()">
+    Cerrar
+  </button>
 </mat-dialog-actions>

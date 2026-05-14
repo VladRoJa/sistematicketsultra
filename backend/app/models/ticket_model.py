@@ -7,6 +7,7 @@ from app.utils.datetime_utils import format_datetime
 from pytz import timezone as tz
 from dateutil import parser
 from dateutil.parser import isoparse
+from sqlalchemy.orm.attributes import flag_modified
 
 
 class Ticket(db.Model):
@@ -352,6 +353,63 @@ class Ticket(db.Model):
         self.fecha_en_progreso = None
         db.session.commit()
 
+    def _agregar_evento_historial_cierre(
+        self,
+        *,
+        evento: str,
+        actor_username: str | None,
+        motivo: str,
+        estado_anterior: str | None,
+        estado_nuevo: str | None,
+        estado_cierre_anterior: str | None,
+        estado_cierre_nuevo: str | None,
+        nueva_fecha_compromiso: datetime | None = None
+    ):
+        """
+        Registra una iteración de validación/rechazo de cierre dentro de historial_fechas.
+
+        Se usa el JSON existente para no crear migración.
+        """
+        ahora = datetime.now(timezone.utc)
+
+        historial = list(self.historial_fechas or [])
+
+        fecha_compromiso_iso = None
+        if nueva_fecha_compromiso:
+            fecha_compromiso_iso = nueva_fecha_compromiso.astimezone(timezone.utc).isoformat()
+        elif self.fecha_solucion:
+            fecha_solucion = self.fecha_solucion
+            if getattr(fecha_solucion, "tzinfo", None) is None:
+                fecha_solucion = fecha_solucion.replace(tzinfo=timezone.utc)
+            fecha_compromiso_iso = fecha_solucion.astimezone(timezone.utc).isoformat()
+
+        historial.append({
+            "tipo": evento,
+            "evento": evento,
+            "fecha": fecha_compromiso_iso,
+            "fechaCambio": ahora.isoformat(),
+            "fecha_cambio": ahora.isoformat(),
+            "cambiadoPor": actor_username or "sistema",
+            "usuario": actor_username or "sistema",
+            "motivo": motivo,
+            "estadoAnterior": estado_anterior,
+            "estadoNuevo": estado_nuevo,
+            "estadoCierreAnterior": estado_cierre_anterior,
+            "estadoCierreNuevo": estado_cierre_nuevo,
+        })
+
+        def _key_fecha_cambio(item):
+            valor = item.get("fechaCambio") or item.get("fecha_cambio") or item.get("fecha")
+            try:
+                return isoparse(valor)
+            except Exception:
+                return datetime.min.replace(tzinfo=timezone.utc)
+
+        historial.sort(key=_key_fecha_cambio, reverse=True)
+
+        self.historial_fechas = historial
+        flag_modified(self, "historial_fechas")
+
     # ───────────────────────────────────────────────────────────
     # Helpers de DOBLE CHECK DE CIERRE
     # ───────────────────────────────────────────────────────────
@@ -410,19 +468,42 @@ class Ticket(db.Model):
         db.session.commit()
 
 
-    def rechazar_conformidad_creador(self, motivo: str = None, nueva_fecha_compromiso: datetime | None = None):
+    def rechazar_conformidad_creador(
+        self,
+        motivo: str = None,
+        nueva_fecha_compromiso: datetime | None = None,
+        actor_username: str | None = None
+    ):
         """
-        El creador rechaza el cierre: reabrimos y pedimos nueva fecha compromiso.
+        El gerente/admin rechaza el cierre: reabrimos y registramos iteración.
         """
-        self.estado_cierre = 'rechazado_por_creador'
-        self.motivo_rechazo_cierre = motivo
+        motivo_limpio = (motivo or "").strip()
+        if not motivo_limpio:
+            raise ValueError("El motivo de rechazo es obligatorio.")
+
+        estado_anterior = self.estado
+        estado_cierre_anterior = self.estado_cierre
+
+        self.estado_cierre = 'rechazado_por_gerente'
+        self.motivo_rechazo_cierre = motivo_limpio
         self.estado = 'en progreso'
 
-        # Al reabrir por rechazo del creador, la fecha_finalizado deja de ser válida
+        # Al reabrir por rechazo, la fecha_finalizado deja de ser válida
         self.fecha_finalizado = None
 
         if nueva_fecha_compromiso:
             self.fecha_solucion = nueva_fecha_compromiso.astimezone(timezone.utc)
+
+        self._agregar_evento_historial_cierre(
+            evento="rechazo_cierre_gerente",
+            actor_username=actor_username,
+            motivo=motivo_limpio,
+            estado_anterior=estado_anterior,
+            estado_nuevo=self.estado,
+            estado_cierre_anterior=estado_cierre_anterior,
+            estado_cierre_nuevo=self.estado_cierre,
+            nueva_fecha_compromiso=nueva_fecha_compromiso
+        )
 
         db.session.commit()
 
