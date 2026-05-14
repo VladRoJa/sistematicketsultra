@@ -705,9 +705,6 @@
 
         <!-- Acciones -->
         <td
-          [matTooltip]="'user=' + ticket.username + ' | cierre=' + (ticket.estado_cierre || 'null') + ' | actual=' + usuarioActual"
-          matTooltipShowDelay="0"
-          matTooltipClass="tooltip-wide">
           <div *ngIf="puedeEditarTickets">
             <!-- Botón: pasar a En progreso -->
             <button
@@ -716,8 +713,7 @@
               color="accent"
               (click)="cambiarEstadoEnProgreso(ticket)"
               [disabled]="ticket.requiere_aprobacion && (ticket.aprobacion_estado || 'pendiente') !== 'aprobado'"
-              matTooltip="Requiere aprobación de gerencia"
-              [matTooltipDisabled]="!(ticket.requiere_aprobacion && (ticket.aprobacion_estado || 'pendiente') !== 'aprobado')"
+
             >
               <mat-icon>play_circle</mat-icon> En progreso
             </button>
@@ -735,8 +731,6 @@
           <button
             *ngIf="puedeMostrarBotonCerrarDesdeCero(ticket)"
             class="boton-estado boton-finalizar"
-            matTooltip="Cerrar por limpieza administrativa"
-            matTooltipPosition="above"
             (click)="cerrarDesdeCeroPorGerente(ticket)">
             <mat-icon>task_alt</mat-icon> Cierre gerente
           </button>
@@ -749,8 +743,6 @@
             <button
               mat-icon-button
               color="primary"
-              matTooltip="Aceptar cierre"
-              matTooltipPosition="above"
               (click)="aceptarCierre(ticket)">
               <mat-icon>check_circle</mat-icon>
             </button>
@@ -759,8 +751,6 @@
             <button
               mat-icon-button
               color="warn"
-              matTooltip="Rechazar cierre"
-              matTooltipPosition="above"
               (click)="rechazarCierre(ticket)">
               <mat-icon>cancel</mat-icon>
             </button>
