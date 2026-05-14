@@ -82,7 +82,38 @@ def _es_creador(user: UserORM, ticket: Ticket) -> bool:
 def _es_gerente_regional(user: UserORM) -> bool:
     return (user.rol or "").upper() == "GERENTE_REGIONAL"
 
+def _es_admin_para_cierre_desde_cero(user: UserORM) -> bool:
+    rol = (user.rol or "").upper()
+    return rol in {"ADMIN", "ADMINISTRADOR", "SUPER_ADMIN"}
 
+
+def _es_gerente_para_cierre_desde_cero(user: UserORM) -> bool:
+    rol = (user.rol or "").upper()
+    return rol == "GERENTE"
+
+
+def _puede_cerrar_ticket_desde_cero(user: UserORM, ticket: Ticket) -> bool:
+    """
+    Permiso específico para cierre administrativo/limpieza.
+
+    Reglas:
+    - ADMIN / ADMINISTRADOR / SUPER_ADMIN puede cerrar cualquier ticket desde cero.
+    - GERENTE solo puede cerrar tickets de su sucursal destino.
+    - No incluye corporativo.
+    - No incluye gerente regional.
+    """
+    if _es_admin_para_cierre_desde_cero(user):
+        return True
+
+    if not _es_gerente_para_cierre_desde_cero(user):
+        return False
+
+    sucursal_ticket = ticket.sucursal_id_destino or ticket.sucursal_id
+
+    try:
+        return int(user.sucursal_id) == int(sucursal_ticket)
+    except Exception:
+        return False
 
 # ─────────────────────────────────────────────────────────────
 # RUTA: Crear ticket
@@ -1776,7 +1807,102 @@ def set_compromiso(ticket_id):
         db.session.rollback()
         return jsonify({"mensaje": str(e)}), 400
 
+# ─────────────────────────────────────────────────────────────
+# RUTA: Cerrar ticket abierto desde cero por gerente/admin
+# ─────────────────────────────────────────────────────────────
 
+@ticket_bp.route('/cierre/gerente-desde-cero/<int:ticket_id>', methods=['POST'])
+@jwt_required()
+@bloquea_lectores_globales
+def cierre_gerente_desde_cero(ticket_id):
+    """
+    Cierre administrativo para limpiar tickets que:
+    - siguen en estado abierto
+    - nunca pasaron a en progreso
+    - nunca fueron finalizados
+
+    No sustituye el flujo normal de doble check.
+    Solo aplica para tickets "desde cero".
+    """
+    try:
+        user = UserORM.get_by_id(get_jwt_identity())
+        if not user:
+            return jsonify({"mensaje": "Usuario no encontrado"}), 404
+
+        t = Ticket.query.get(ticket_id)
+        if not t:
+            return jsonify({"mensaje": "Ticket no encontrado"}), 404
+
+        if not _puede_cerrar_ticket_desde_cero(user, t):
+            return jsonify({"mensaje": "No autorizado"}), 403
+
+        estado_actual = (t.estado or "").strip().lower()
+
+        estados_permitidos = {"abierto", "en progreso"}
+
+        if estado_actual not in estados_permitidos:
+            return jsonify({
+                "mensaje": "Solo se pueden cerrar por limpieza tickets en estado abierto o en progreso."
+            }), 400
+
+        if t.fecha_finalizado is not None:
+            return jsonify({
+                "mensaje": "Este ticket ya tiene fecha de finalización."
+            }), 400
+
+        data = request.get_json() or {}
+        motivo = (data.get("motivo") or data.get("notas_cierre") or "").strip()
+
+        if not motivo:
+            return jsonify({
+                "mensaje": "El motivo de cierre es obligatorio."
+            }), 400
+
+        ahora = datetime.now(timezone.utc)
+
+        t.estado = "finalizado"
+        t.fecha_finalizado = ahora
+        t.estado_cierre = "cerrado_por_gerente_desde_cero"
+        t.notas_cierre = motivo
+
+        db.session.commit()
+
+        notificados = []
+        try:
+            if os.getenv("NOTIFY_EMAIL_ON_UPDATE", "true").lower() == "true":
+                notificados = pick_recipients(t, user.username, event="update") or []
+                if notificados:
+                    subject = build_subject(t, "Cerrado por gerente")
+                    html = render_ticket_html(t.to_dict())
+                    current_app.logger.info(
+                        "📬 Ticket %s cerrado desde cero por %s → %s",
+                        t.id,
+                        user.username,
+                        notificados
+                    )
+                    _send_email_maybe_async(notificados, subject, html)
+        except Exception as e:
+            try:
+                current_app.logger.exception(
+                    "❌ Error notificando cierre desde cero de ticket %s: %s",
+                    t.id,
+                    e
+                )
+            except Exception:
+                print(f"❌ Error notificando ticket {t.id}:", e)
+
+        return jsonify({
+            "mensaje": "Ticket finalizado correctamente por gerente.",
+            "ticket_id": t.id,
+            "estado": t.estado,
+            "estado_cierre": t.estado_cierre,
+            "fecha_finalizado": t.fecha_finalizado.isoformat() if t.fecha_finalizado else None,
+            "notificados": notificados
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return manejar_error(e, "cierre_gerente_desde_cero")
 
 # ─────────────────────────────────────────────────────────────
 # RUTA: Aprobar cierre de ticket (jefe de depto)
