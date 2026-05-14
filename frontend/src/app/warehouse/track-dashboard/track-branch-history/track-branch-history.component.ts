@@ -20,6 +20,9 @@ interface LatestHistorySnapshot {
   ingresoReal: string;
   ingresoDelta: string;
   ingresoDeltaTone: 'success' | 'danger' | 'neutral';
+  sociosActivosGauge: SummaryGauge;
+  ingresoRealGauge: SummaryGauge;
+  dailyTargetGauges: SummaryGauge[];
 }
 
 interface SparklinePoint {
@@ -30,6 +33,15 @@ interface SparklinePoint {
 interface SparklineData {
   path: string;
   points: SparklinePoint[];
+}
+
+interface SummaryGauge {
+  title: string;
+  currentLabel: string;
+  targetLabel: string;
+  percentLabel: string;
+  dashArray: string;
+  tone: 'success' | 'warning' | 'danger';
 }
 
 interface BranchOption {
@@ -338,6 +350,48 @@ formatPercent(value: number | null | undefined): string {
   }).format(value ?? 0) + '%';
 }
 
+private buildSummaryGauge(
+  title: string,
+  currentValue: number | null | undefined,
+  targetValue: number | null | undefined,
+  formatter: (value: number) => string,
+): SummaryGauge {
+  const current = Number(currentValue ?? 0);
+  const target = Number(targetValue ?? 0);
+  const progress = this.calculateProgressPercent(current, target);
+
+  return {
+    title,
+    currentLabel: formatter(current),
+    targetLabel: formatter(target),
+    percentLabel: this.formatPercent(progress),
+    dashArray: this.buildGaugeDashArray(progress),
+    tone: this.getGaugeProgressTone(progress),  };
+}
+
+private getGaugeProgressTone(progressPercent: number): 'success' | 'warning' | 'danger' {
+  const progress = Number(progressPercent || 0);
+
+  if (progress >= 100) {
+    return 'success';
+  }
+
+  if (progress >= 89) {
+    return 'warning';
+  }
+
+  return 'danger';
+}
+
+private buildGaugeDashArray(progressPercent: number): string {
+  const clampedProgress = Math.min(
+    Math.max(Number(progressPercent || 0), 0),
+    100,
+  );
+
+  return `${clampedProgress.toFixed(2)} 100`;
+}
+
 getPreviousHistoryRow(index: number): TrackDailyMartRow | null {
   const previousIndex = index + 1;
 
@@ -471,6 +525,16 @@ private buildLatestSnapshot(): LatestHistorySnapshot | null {
 
   const latestRow = this.historyRows[0];
 
+  const ingresoIdealDia = this.calculateIdealMtdTarget(
+    latestRow.meta_faycgo_mes,
+    latestRow.track_date,
+  );
+
+  const tiendaIdealDia = this.calculateIdealMtdTarget(
+    latestRow.meta_venta_tienda_mes,
+    latestRow.track_date,
+  );
+
   return {
     trackDate: latestRow.track_date,
     usuariosActivos: this.formatInteger(latestRow.usuarios_activos_actual),
@@ -479,6 +543,35 @@ private buildLatestSnapshot(): LatestHistorySnapshot | null {
     ingresoReal: this.formatCurrency(latestRow.ingreso_real_mtd),
     ingresoDelta: this.getIngresoWindowDeltaLabel(),
     ingresoDeltaTone: this.getIngresoWindowDeltaTone(),
+
+    sociosActivosGauge: this.buildSummaryGauge(
+      'Socios activos / meta',
+      latestRow.usuarios_activos_actual,
+      latestRow.proyeccion_usuarios_cierre_mes,
+      (value) => this.formatInteger(value),
+    ),
+
+    ingresoRealGauge: this.buildSummaryGauge(
+      'Ingreso real / meta',
+      latestRow.ingreso_real_mtd,
+      latestRow.meta_faycgo_mes,
+      (value) => this.formatCurrency(value),
+    ),
+
+    dailyTargetGauges: [
+      this.buildSummaryGauge(
+        'Ingreso al día',
+        latestRow.ingreso_real_mtd,
+        ingresoIdealDia,
+        (value) => this.formatCurrency(value),
+      ),
+      this.buildSummaryGauge(
+        'Tienda al día',
+        latestRow.venta_tienda_real_mtd,
+        tiendaIdealDia,
+        (value) => this.formatCurrency(value),
+      ),
+    ],
   };
 }
 

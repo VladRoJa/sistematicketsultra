@@ -275,6 +275,116 @@
   font-size: 12px;
 }
 
+.latest-snapshot-item--with-gauge {
+  gap: 10px;
+}
+
+.latest-snapshot-item--daily-targets {
+  gap: 12px;
+}
+
+.summary-gauge-layout {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  align-items: center;
+  gap: 14px;
+}
+
+.summary-gauge {
+  width: 120px;
+  height: 70px;
+  overflow: visible;
+}
+
+.summary-gauge--mini {
+  width: 86px;
+  height: 50px;
+}
+
+.summary-gauge__track {
+  fill: none;
+  stroke: #e5eaf3;
+  stroke-width: 12;
+  stroke-linecap: round;
+}
+
+.summary-gauge__value {
+  fill: none;
+  stroke-width: 12;
+  stroke-linecap: round;
+}
+
+.summary-gauge__value--success {
+  stroke: #1fbe6c;
+}
+
+.summary-gauge__value--danger {
+  stroke: #ef4444;
+}
+
+.summary-gauge__value--neutral {
+  stroke: #94a3b8;
+}
+
+.summary-gauge__value--warning {
+  stroke: #f59e0b;
+}
+
+.summary-gauge-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.summary-gauge-content strong {
+  font-size: 18px;
+  line-height: 1.15;
+}
+
+.summary-gauge-content span {
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.daily-gauge-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.mini-gauge-card {
+  display: grid;
+  grid-template-columns: 86px 1fr;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mini-gauge-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mini-gauge-content strong {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.mini-gauge-content span {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: #42526e;
+}
+
+.mini-gauge-content small {
+  font-size: 11px;
+  color: #64748b;
+  white-space: nowrap;
+}
+
 @media (max-width: 900px) {
   .track-branch-history-header {
     flex-direction: column;

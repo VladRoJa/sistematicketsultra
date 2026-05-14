@@ -74,14 +74,74 @@
     </div>
 
     <div class="latest-snapshot-grid">
-      <div class="latest-snapshot-item">
-        <span class="meta-label">Fecha</span>
-        <strong>{{ formatShortDate(latestSnapshot.trackDate) }}</strong>
+      <div class="latest-snapshot-item latest-snapshot-item--daily-targets">
+        <span class="meta-label">Metas del día</span>
+
+        <div class="daily-gauge-list">
+          <div
+            class="mini-gauge-card"
+            *ngFor="let gauge of latestSnapshot.dailyTargetGauges"
+          >
+            <svg
+              class="summary-gauge summary-gauge--mini"
+              viewBox="0 0 120 70"
+              preserveAspectRatio="xMidYMid meet"
+            >
+              <path
+                class="summary-gauge__track"
+                d="M 15 58 A 45 45 0 0 1 105 58"
+                pathLength="100"
+              ></path>
+
+              <path
+                [class]="'summary-gauge__value summary-gauge__value--' + gauge.tone"
+                [attr.stroke-dasharray]="gauge.dashArray"
+                d="M 15 58 A 45 45 0 0 1 105 58"
+                pathLength="100"
+              ></path>
+            </svg>
+
+            <div class="mini-gauge-content">
+              <strong>{{ gauge.percentLabel }}</strong>
+              <span>{{ gauge.title }}</span>
+              <small>{{ gauge.currentLabel }} / {{ gauge.targetLabel }}</small>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div class="latest-snapshot-item">
-        <span class="meta-label">Socios activos</span>
-        <strong>{{ latestSnapshot.usuariosActivos }}</strong>
+      <div class="latest-snapshot-item latest-snapshot-item--with-gauge">
+        <span class="meta-label">{{ latestSnapshot.sociosActivosGauge.title }}</span>
+
+        <div class="summary-gauge-layout">
+          <svg
+            class="summary-gauge"
+            viewBox="0 0 120 70"
+            preserveAspectRatio="xMidYMid meet"
+          >
+            <path
+              class="summary-gauge__track"
+              d="M 15 58 A 45 45 0 0 1 105 58"
+              pathLength="100"
+            ></path>
+
+            <path
+              [class]="'summary-gauge__value summary-gauge__value--' + latestSnapshot.sociosActivosGauge.tone"
+              [attr.stroke-dasharray]="latestSnapshot.sociosActivosGauge.dashArray"
+              d="M 15 58 A 45 45 0 0 1 105 58"
+              pathLength="100"
+            ></path>
+          </svg>
+
+          <div class="summary-gauge-content">
+            <strong>
+              {{ latestSnapshot.sociosActivosGauge.currentLabel }}
+              /
+              {{ latestSnapshot.sociosActivosGauge.targetLabel }}
+            </strong>
+            <span>{{ latestSnapshot.sociosActivosGauge.percentLabel }}</span>
+          </div>
+        </div>
 
         <div
           [class]="'delta-badge delta-badge--' + latestSnapshot.usuariosActivosDeltaTone"
@@ -112,9 +172,38 @@
         </div>
       </div>
 
-      <div class="latest-snapshot-item">
-        <span class="meta-label">Ingreso real</span>
-        <strong>{{ latestSnapshot.ingresoReal }}</strong>
+      <div class="latest-snapshot-item latest-snapshot-item--with-gauge">
+        <span class="meta-label">{{ latestSnapshot.ingresoRealGauge.title }}</span>
+
+        <div class="summary-gauge-layout">
+          <svg
+            class="summary-gauge"
+            viewBox="0 0 120 70"
+            preserveAspectRatio="xMidYMid meet"
+          >
+            <path
+              class="summary-gauge__track"
+              d="M 15 58 A 45 45 0 0 1 105 58"
+              pathLength="100"
+            ></path>
+
+            <path
+              [class]="'summary-gauge__value summary-gauge__value--' + latestSnapshot.ingresoRealGauge.tone"
+              [attr.stroke-dasharray]="latestSnapshot.ingresoRealGauge.dashArray"
+              d="M 15 58 A 45 45 0 0 1 105 58"
+              pathLength="100"
+            ></path>
+          </svg>
+
+          <div class="summary-gauge-content">
+            <strong>
+              {{ latestSnapshot.ingresoRealGauge.currentLabel }}
+              /
+              {{ latestSnapshot.ingresoRealGauge.targetLabel }}
+            </strong>
+            <span>{{ latestSnapshot.ingresoRealGauge.percentLabel }}</span>
+          </div>
+        </div>
 
         <div
           [class]="'delta-badge delta-badge--' + latestSnapshot.ingresoDeltaTone"
