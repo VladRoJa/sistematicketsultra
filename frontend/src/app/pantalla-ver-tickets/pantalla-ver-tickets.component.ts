@@ -120,7 +120,13 @@ export interface Ticket {
   refaccion_definida_por_jefe?: boolean;
   requiere_aprobacion?: boolean;
   aprobacion_estado?: 'pendiente' | 'aprobado' | 'rechazado' | null;
-  estado_cierre?: 'pendiente_jefe' | 'pendiente_creador' | 'rechazado_por_jefe' | 'rechazado_por_creador' | null;
+  estado_cierre?:
+  | 'pendiente_jefe'
+  | 'pendiente_creador'
+  | 'rechazado_por_jefe'
+  | 'rechazado_por_creador'
+  | 'cerrado_por_gerente_desde_cero'
+  | null;
 
 
 
@@ -1326,7 +1332,98 @@ async solicitarCierre(ticket: Ticket) {
 }
 
 
+private esAdminParaCierreDesdeCero(): boolean {
+  const rol = (this.user?.rol || '').toString().trim().toUpperCase();
+  return ['ADMIN', 'ADMINISTRADOR', 'SUPER_ADMIN'].includes(rol);
+}
 
+private esGerenteParaCierreDesdeCero(): boolean {
+  const rol = (this.user?.rol || '').toString().trim().toUpperCase();
+  return rol === 'GERENTE';
+}
+
+private ticketPerteneceASucursalDelGerente(ticket: Ticket): boolean {
+  const sucursalUsuario = Number(this.user?.sucursal_id);
+  const sucursalTicket = Number(
+    ticket.sucursal_id_destino ?? (ticket as any).sucursal_id
+  );
+
+  if (!sucursalUsuario || !sucursalTicket) return false;
+
+  return sucursalUsuario === sucursalTicket;
+}
+
+puedeMostrarBotonCerrarDesdeCero(ticket: Ticket): boolean {
+  if (!ticket?.id) return false;
+
+  const estado = (ticket.estado || '').toString().trim().toLowerCase();
+
+  const esEstadoPermitido = estado === 'abierto' || estado === 'en progreso';
+  const noEstaFinalizado = !ticket.fecha_finalizado;
+
+  if (!esEstadoPermitido || !noEstaFinalizado) return false;
+
+  if (this.esAdminParaCierreDesdeCero()) return true;
+
+  if (this.esGerenteParaCierreDesdeCero()) {
+    return this.ticketPerteneceASucursalDelGerente(ticket);
+  } 
+
+  return false;
+}
+
+async cerrarDesdeCeroPorGerente(ticket: Ticket): Promise<void> {
+  if (!ticket?.id) {
+    mostrarAlertaToast('Ticket inválido.', 'error');
+    return;
+  }
+
+  if (!this.puedeMostrarBotonCerrarDesdeCero(ticket)) {
+    mostrarAlertaToast('No tienes permisos para cerrar este ticket desde cero.', 'error');
+    return;
+  }
+
+  const dialogRef = this.dialog.open(ModalCierreTicketComponent, {
+    width: '420px',
+    data: {
+      ticketId: ticket.id,
+      modo: 'cierre_desde_cero'
+    }
+  });
+
+  const result = await dialogRef.afterClosed().toPromise();
+
+  if (!result) return;
+
+  const motivo = (result.motivo || result.notas || '').toString().trim();
+
+  if (!motivo) {
+    mostrarAlertaToast('El motivo de cierre es obligatorio.', 'error');
+    return;
+  }
+
+  const ok = await this.abrirConfirmacion(
+    'Cerrar ticket desde cero',
+    `¿Seguro que deseas finalizar el ticket #${ticket.id}?\n\n` +
+    `Este cierre es solo para limpieza de tickets abiertos o en progreso.\n\n` +
+    `Motivo: ${motivo}`
+  );
+
+  if (!ok) return;
+
+  this.ticketService.cierreGerenteDesdeCero(ticket.id, { motivo }).subscribe({
+    next: (resp) => {
+      mostrarAlertaToast(resp?.mensaje || 'Ticket finalizado correctamente.', 'success');
+      TicketInit.cargarTickets(this);
+    },
+    error: (err) => {
+      mostrarAlertaToast(
+        err?.error?.mensaje || 'No se pudo cerrar el ticket desde cero.',
+        'error'
+      );
+    }
+  });
+}
 
 async aceptarCierre(ticket: Ticket) {
   const ok = await this.abrirConfirmacion(

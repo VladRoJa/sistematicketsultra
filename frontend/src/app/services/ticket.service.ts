@@ -158,6 +158,25 @@ export class TicketService {
     );
   }
 
+  cierreGerenteDesdeCero(
+    id: number,
+    payload: { motivo: string }
+  ): Observable<any> {
+    const token = localStorage.getItem('token');
+    if (!token) return throwError(() => new Error('NO_TOKEN'));
+
+    if (!payload?.motivo?.trim()) {
+      return throwError(() => new Error('El motivo de cierre es obligatorio'));
+    }
+
+    const headers = this.authJsonHeaders();
+
+    return this.http.post<any>(
+      `${this.apiUrl}/cierre/gerente-desde-cero/${id}`,
+      payload,
+      { headers, withCredentials: true }
+    );
+  }
 
   cierreAprobarJefe(id: number): Observable<any> {
     const token = localStorage.getItem('token');
