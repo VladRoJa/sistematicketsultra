@@ -731,6 +731,16 @@
             </button>
           </div>
 
+          <!-- Botón: Cierre administrativo por gerente/admin -->
+          <button
+            *ngIf="puedeMostrarBotonCerrarDesdeCero(ticket)"
+            class="boton-estado boton-finalizar"
+            matTooltip="Cerrar por limpieza administrativa"
+            matTooltipPosition="above"
+            (click)="cerrarDesdeCeroPorGerente(ticket)">
+            <mat-icon>task_alt</mat-icon> Cierre gerente
+          </button>
+
           <!-- Botones del CREADOR cuando el cierre está pendiente -->
           <div *ngIf="puedeMostrarBotonesCreador(ticket)"
               style="display:flex; gap:4px; align-items:center;">
