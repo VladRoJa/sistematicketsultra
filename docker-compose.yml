@@ -27,15 +27,8 @@ services:
       - db
     env_file:
       - .env.docker
-    environment:           # 👈 NUEVO: forzamos que existan dentro del contenedor
-      APP_ENV: "prod"
-      SMTP_HOST: "smtp.gmail.com"
-      SMTP_PORT: "587"
-      SMTP_USER: "notificaciones.ultragym@gmail.com"
-      SMTP_PASS: "dsjvthlmjrghuwvi"
-      EMAIL_FROM: "notificaciones.ultragym@gmail.com"
-      SMTP_DEBUG: "1"          # para ver el diálogo SMTP
-      SMTP_SYNC_DEBUG: "1"     # para envío síncrono (sin thread) mientras depuramos
+  environment:
+    APP_ENV: "prod"
 
     command: >
       gunicorn
@@ -80,14 +73,7 @@ services:
     env_file:
       - .env.docker
     environment:
-      APP_ENV: "prod"
-      SMTP_HOST: "smtp.gmail.com"
-      SMTP_PORT: "587"
-      SMTP_USER: "notificaciones.ultragym@gmail.com"
-      SMTP_PASS: "dsjvthlmjrghuwvi"
-      EMAIL_FROM: "notificaciones.ultragym@gmail.com"
-      SMTP_DEBUG: "1"
-      SMTP_SYNC_DEBUG: "1"
+    APP_ENV: "prod"
     command: python -m app.warehouse.scheduler.track_scheduler_worker
     networks:
       - backend-net
