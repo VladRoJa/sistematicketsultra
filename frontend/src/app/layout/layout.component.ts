@@ -254,10 +254,19 @@ private habilitarWarehouseEnMenuSiAplica(menuWarehouse: any): void {
     .subscribe({
       next: (response) => {
         const puedeVerWarehouse = Boolean(
+          response?.allowed ??
           response?.can_view ??
           response?.canView ??
+          response?.has_access ??
+          response?.hasAccess ??
           response?.access?.can_view ??
-          response?.warehouse_access?.can_view
+          response?.access?.canView ??
+          response?.permissions?.can_view ??
+          response?.permissions?.canView ??
+          response?.operator?.can_view ??
+          response?.operator?.canView ??
+          response?.warehouse_access?.can_view ??
+          response?.warehouse_access?.canView
         );
 
         if (!puedeVerWarehouse) {
