@@ -145,6 +145,50 @@ def _puede_cerrar_ticket_desde_cero(user: UserORM, ticket: Ticket) -> bool:
     except Exception:
         return False
 
+def _notificar_evento_ticket(ticket: Ticket, actor_username: str, event: str, subject_bits: str) -> list[str]:
+    """
+    Notifica un evento específico del ticket.
+
+    Usado para cierres/finalizaciones donde se requiere avisar
+    a todos los involucrados según notify_targets.py.
+    """
+    notificados = []
+
+    try:
+        if os.getenv("NOTIFY_EMAIL_ON_UPDATE", "true").lower() != "true":
+            return notificados
+
+        notificados = pick_recipients(ticket, actor_username, event=event) or []
+
+        if not notificados:
+            return notificados
+
+        subject = build_subject(ticket, subject_bits)
+        html = render_ticket_html(ticket.to_dict())
+
+        current_app.logger.info(
+            "📬 Ticket %s evento=%s actor=%s → notificados=%s",
+            ticket.id,
+            event,
+            actor_username,
+            notificados
+        )
+
+        _send_email_maybe_async(notificados, subject, html)
+
+    except Exception as e:
+        try:
+            current_app.logger.exception(
+                "❌ Error notificando evento=%s ticket=%s: %s",
+                event,
+                getattr(ticket, "id", None),
+                e
+            )
+        except Exception:
+            print(f"❌ Error notificando ticket {getattr(ticket, 'id', None)}:", e)
+
+    return notificados
+
 # ─────────────────────────────────────────────────────────────
 # RUTA: Crear ticket
 # ─────────────────────────────────────────────────────────────
@@ -1897,29 +1941,12 @@ def cierre_gerente_desde_cero(ticket_id):
 
         db.session.commit()
 
-        notificados = []
-        try:
-            if os.getenv("NOTIFY_EMAIL_ON_UPDATE", "true").lower() == "true":
-                notificados = pick_recipients(t, user.username, event="update") or []
-                if notificados:
-                    subject = build_subject(t, "Cerrado por gerente")
-                    html = render_ticket_html(t.to_dict())
-                    current_app.logger.info(
-                        "📬 Ticket %s cerrado desde cero por %s → %s",
-                        t.id,
-                        user.username,
-                        notificados
-                    )
-                    _send_email_maybe_async(notificados, subject, html)
-        except Exception as e:
-            try:
-                current_app.logger.exception(
-                    "❌ Error notificando cierre desde cero de ticket %s: %s",
-                    t.id,
-                    e
-                )
-            except Exception:
-                print(f"❌ Error notificando ticket {t.id}:", e)
+        notificados = _notificar_evento_ticket(
+            ticket=t,
+            actor_username=user.username,
+            event="manager_finalized",
+            subject_bits="Cerrado por gerente"
+        )
 
         return jsonify({
             "mensaje": "Ticket finalizado correctamente por gerente.",
@@ -1971,11 +1998,19 @@ def cierre_solicitar(ticket_id):
 
     # Estado de cierre: queda pendiente aprobación del creador
     t.solicitar_cierre()
+    
+    notificados = _notificar_evento_ticket(
+        ticket=t,
+        actor_username=user.username,
+        event="closure_requested",
+        subject_bits="Cierre solicitado"
+    )
 
     return jsonify({
         "mensaje": "Cierre solicitado (pendiente aprobación del creador)",
         "costo_solucion": float(t.costo_solucion) if t.costo_solucion is not None else None,
-        "notas_cierre": t.notas_cierre
+        "notas_cierre": t.notas_cierre,
+        "notificados": notificados
     }), 200
 
 
@@ -2032,7 +2067,16 @@ def cierre_aceptar_creador(ticket_id):
         }), 400
 
     t.aceptar_conformidad_creador()
-    return jsonify({"mensaje": "Cierre validado por gerente; ticket finalizado"}), 200
+    notificados = _notificar_evento_ticket(
+        ticket=t,
+        actor_username=user.username,
+        event="closure_accepted",
+        subject_bits="Cierre validado"
+    )
+    return jsonify({
+        "mensaje": "Cierre validado por gerente; ticket finalizado",
+        "notificados": notificados
+    }), 200
 
 # ─────────────────────────────────────────────────────────────
 # RUTA: Rechazar conformidad y reabrir ticket (creador)
@@ -2083,6 +2127,13 @@ def cierre_rechazar_creador(ticket_id):
         )
     except ValueError as e:
         return jsonify({"mensaje": str(e)}), 400
+    
+    notificados = _notificar_evento_ticket(
+        ticket=t,
+        actor_username=user.username,
+        event="closure_rejected",
+        subject_bits="Cierre rechazado"
+    )
 
     return jsonify({
         "mensaje": "Cierre rechazado por gerente; ticket reabierto",
@@ -2090,7 +2141,8 @@ def cierre_rechazar_creador(ticket_id):
         "estado": t.estado,
         "estado_cierre": t.estado_cierre,
         "motivo": motivo,
-        "historial_fechas": t.historial_fechas or []
+        "historial_fechas": t.historial_fechas or [],
+        "notificados": notificados
     }), 200
 
 

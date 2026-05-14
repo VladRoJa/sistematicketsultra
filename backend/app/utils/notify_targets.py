@@ -43,6 +43,63 @@ def _assignee_email(ticket: Ticket, actor_username: str) -> List[str]:
     u = UserORM.query.filter(func.lower(UserORM.username) == ticket.asignado_a.lower()).first()
     return _emails_only([u]) if u else []
 
+def _creator_email(ticket: Ticket) -> List[str]:
+    """
+    Correo del usuario que creó el ticket.
+    El ticket guarda username, así que buscamos al usuario por username.
+    """
+    if not ticket or not ticket.username:
+        return []
+
+    u = UserORM.query.filter(
+        func.lower(UserORM.username) == ticket.username.lower()
+    ).first()
+
+    return _emails_only([u]) if u else []
+
+
+def _dedupe_emails(emails: Iterable[str]) -> List[str]:
+    """
+    Deduplicación centralizada para evitar mandar el mismo correo varias veces.
+    """
+    dedup: List[str] = []
+    seen: Set[str] = set()
+
+    for e in emails or []:
+        email = (e or "").strip()
+        key = email.lower()
+
+        if email and "@" in email and key not in seen:
+            dedup.append(email)
+            seen.add(key)
+
+    return dedup
+
+
+def _all_involved_emails(ticket: Ticket, actor_username: str) -> List[str]:
+    """
+    Destinatarios para eventos de cierre/finalización.
+
+    Incluye:
+    - jefes del departamento
+    - gerente(s) de la sucursal destino
+    - creador del ticket
+    - actor que ejecutó la acción
+    - asignado, si existe
+    """
+    actor = _get_actor(actor_username)
+    actor_email = _emails_only([actor]) if actor else []
+
+    recipients = (
+        _dept_admin_emails(ticket)
+        + _branch_manager_emails(ticket)
+        + _creator_email(ticket)
+        + actor_email
+        + _assignee_email(ticket, actor_username)
+    )
+
+    return _dedupe_emails(recipients)
+
 def _dept_admin_emails(ticket: Ticket) -> List[str]:
     """
     Jefes de departamento corporativos (sucursal_id == 100) cuyo rol coincide con el nombre del departamento.
@@ -122,14 +179,34 @@ def build_subject(ticket: Ticket, action_bits: str) -> str:
 def pick_recipients(ticket: Ticket, actor_username: str, event: str = "update") -> List[str]:
     """
     Reglas:
-      - Creación por corporativo (suc 100/1000 o ADMINISTRADOR): notifica a AMBAS partes.
-      - En cualquier actualización: notifica a la OTRA parte respecto al actor.
-      - Siempre incluir al actor (si tiene email).
-      - Siempre incluir al asignado (si existe y no es el actor).
+      - Creación por corporativo: notifica a ambas partes.
+      - Creación por sucursal: notifica al departamento.
+      - Actualización normal: notifica a la otra parte respecto al actor.
+      - Cierre/finalización: notifica a todos los involucrados.
+      - Siempre incluir actor + asignado en updates normales.
       - Fallback a NOTIFY_DEFAULT_EMAILS si quedara vacío.
     """
     if not ticket:
         return _default_fallbacks()
+
+    event_norm = _norm(event)
+
+    closure_events = {
+        "closure_requested",
+        "closure_accepted",
+        "closure_rejected",
+        "finalized",
+        "manager_finalized",
+    }
+
+    # Eventos de cierre/finalización: avisar a todos los involucrados.
+    if event_norm in closure_events:
+        recipients = _all_involved_emails(ticket, actor_username)
+
+        if not recipients:
+            recipients = _default_fallbacks()
+
+        return _dedupe_emails(recipients)
 
     actor = _get_actor(actor_username)
     actor_email = _emails_only([actor]) if actor else []
@@ -140,39 +217,29 @@ def pick_recipients(ticket: Ticket, actor_username: str, event: str = "update") 
     recipients: List[str] = []
 
     # --- Evento de creación ---
-    if _norm(event) == "create":
+    if event_norm == "create":
         if actor and _is_corporativo(actor):
-            # corporativo crea → ambas partes
+            # Corporativo crea → ambas partes
             recipients = dept_side + branch_side
         else:
-            # No corporativo crea: si actor es gerente de la sucursal → avisa al depto; si no, por defecto depto.
-            # (puedes ajustar esta rama si quieres otras reglas)
+            # Sucursal/gerente/usuario crea → avisa al departamento
             recipients = dept_side
 
-    # --- Evento de actualización ---
+    # --- Evento de actualización normal ---
     else:
-        # identifica el "lado" del actor
         actor_is_dept_side = False
+
         if actor:
-            # Es corporativo o su rol coincide con el nombre del departamento del ticket
             dept_name = (ticket.departamento.nombre if ticket and ticket.departamento else "") or ""
             actor_is_dept_side = _is_corporativo(actor) or (_norm(actor.rol) == _norm(dept_name))
 
-        # se notifica a la otra parte
-        recipients = (branch_side if actor_is_dept_side else dept_side)
+        # Se notifica a la otra parte
+        recipients = branch_side if actor_is_dept_side else dept_side
 
-    # --- Siempre CC: actor + asignado ---
+    # Siempre CC: actor + asignado
     recipients = recipients + actor_email + _assignee_email(ticket, actor_username)
 
-    # --- Fallback si queda vacío ---
     if not recipients:
         recipients = _default_fallbacks()
 
-    # Dedupe final
-    dedup, seen = [], set()
-    for e in recipients:
-        k = e.lower()
-        if k not in seen:
-            dedup.append(e)
-            seen.add(k)
-    return dedup
+    return _dedupe_emails(recipients)
