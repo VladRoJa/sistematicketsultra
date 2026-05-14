@@ -75,7 +75,7 @@ def _require_admin_role() -> None:
     claims = get_jwt()
     role = str(claims.get("rol") or "").strip().upper()
 
-    if role not in {"ADMIN", "ADMINISTRADOR", "SUPER_ADMIN"}:
+    if role not in {"ADMIN", "ADMINISTRADOR", "SUPER_ADMIN", "LECTOR_GLOBAL"}:
         raise PermissionError("No autorizado para ejecutar o consultar el Track.")
 
 
