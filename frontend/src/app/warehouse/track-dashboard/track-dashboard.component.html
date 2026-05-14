@@ -1,153 +1,179 @@
-<!-- frontend\src\app\warehouse\track-dashboard\track-dashboard.component.html -->
+<!-- frontend/src/app/warehouse/track-dashboard/track-dashboard.component.html -->
 
 <div class="track-dashboard-page">
-<section class="track-placeholder-card track-topbar">
-  <div class="track-topbar__main">
-    <div class="track-topbar__intro">
-      <p class="track-kicker">WAREHOUSE</p>
-      <h1>{{ pageTitle }}</h1>
-      <p class="track-subtitle">
-        {{ pageSubtitle }}
-      </p>
-    </div>
+  <!-- ==========================================================================
+       TOPBAR / CONTROLES PRINCIPALES
+       ========================================================================== -->
 
-    <div class="track-topbar__content">
-      <div class="track-topbar__mode">
-        <span class="track-topbar__mode-label">Ejecución manual</span>
+  <section class="track-placeholder-card track-topbar">
+    <div class="track-topbar__main">
+      <!-- Intro / título -->
+      <div class="track-topbar__intro">
+        <p class="track-kicker">WAREHOUSE</p>
 
-        <span class="track-topbar__mode-value">
-          Modo actual: <strong>{{ selectedModeLabel }}</strong>
-        </span>
+        <h1>{{ pageTitle }}</h1>
 
-        <span
-          class="track-topbar__mode-value"
-          *ngIf="trackVersionLabel"
-        >
-          Versión Track: <strong>{{ trackVersionLabel }}</strong>
-        </span>
-
-        <span
-          class="track-topbar__mode-value"
-          *ngIf="trackGeneratedAtLabel"
-        >
-          <strong>{{ trackGeneratedAtLabel }}</strong>
-        </span>
-
-        <span
-          class="track-topbar__mode-value"
-          *ngIf="agregadorasFreshnessLabel"
-        >
-          <strong>{{ agregadorasFreshnessLabel }}</strong>
-        </span>
+        <p class="track-subtitle">
+          {{ pageSubtitle }}
+        </p>
       </div>
 
-      <div class="track-form track-form--topbar">
-        <div class="track-field track-field--date">
-          <div class="track-date-control__header">
-            <label for="trackDate">Fecha</label>
+      <!-- Contenido derecho: metadata + formulario -->
+      <div class="track-topbar__content">
+        <!-- Metadata de ejecución / versión -->
+        <div class="track-topbar__mode">
+          <span class="track-topbar__mode-label">Ejecución manual</span>
 
-            <div class="track-date-control__nav">
-              <button
-                type="button"
-                class="track-date-control__nav-btn"
-                (click)="goToPreviousTrackDate()"
-                [disabled]="shouldDisablePreviousTrackDateButton()"
-                aria-label="Ir al día anterior"
-                title="Día anterior"
-              >
-                ←
-              </button>
+          <span class="track-topbar__mode-value">
+            Modo actual: <strong>{{ selectedModeLabel }}</strong>
+          </span>
 
-              <button
-                type="button"
-                class="track-date-control__nav-btn"
-                (click)="goToNextTrackDate()"
-                [disabled]="shouldDisableNextTrackDateButton()"
-                aria-label="Ir al día siguiente"
-                title="Día siguiente"
-              >
-                →
-              </button>
+          <span
+            class="track-topbar__mode-value"
+            *ngIf="trackVersionLabel"
+          >
+            Versión Track: <strong>{{ trackVersionLabel }}</strong>
+          </span>
+
+          <span
+            class="track-topbar__mode-value"
+            *ngIf="trackGeneratedAtLabel"
+          >
+            <strong>{{ trackGeneratedAtLabel }}</strong>
+          </span>
+
+          <span
+            class="track-topbar__mode-value"
+            *ngIf="agregadorasFreshnessLabel"
+          >
+            <strong>{{ agregadorasFreshnessLabel }}</strong>
+          </span>
+        </div>
+
+        <!-- Formulario de consulta / generación -->
+        <div class="track-form track-form--topbar">
+          <!-- Fecha -->
+          <div class="track-field track-field--date">
+            <div class="track-date-control__header">
+              <label for="trackDate">Fecha</label>
+
+              <div class="track-date-control__nav">
+                <button
+                  type="button"
+                  class="track-date-control__nav-btn"
+                  (click)="goToPreviousTrackDate()"
+                  [disabled]="shouldDisablePreviousTrackDateButton()"
+                  aria-label="Ir al día anterior"
+                  title="Día anterior"
+                >
+                  ←
+                </button>
+
+                <button
+                  type="button"
+                  class="track-date-control__nav-btn"
+                  (click)="goToNextTrackDate()"
+                  [disabled]="shouldDisableNextTrackDateButton()"
+                  aria-label="Ir al día siguiente"
+                  title="Día siguiente"
+                >
+                  →
+                </button>
+              </div>
             </div>
+
+            <input
+              id="trackDate"
+              type="date"
+              [(ngModel)]="trackDate"
+              (ngModelChange)="onTrackDateChanged()"
+              [disabled]="shouldDisableTrackDateInput()"
+            />
           </div>
 
-          <input
-            id="trackDate"
-            type="date"
-            [(ngModel)]="trackDate"
-            (ngModelChange)="onTrackDateChanged()"
-            [disabled]="shouldDisableTrackDateInput()"
-          />
-        </div>
+          <!-- Modo -->
+          <div class="track-field">
+            <label for="generationMode">Modo</label>
 
-        <div class="track-field">
-          <label for="generationMode">Modo</label>
-          <select
-            id="generationMode"
-            [(ngModel)]="generationMode"
-            (ngModelChange)="onGenerationModeChanged()"
-            [disabled]="shouldDisableGenerationModeSelect()"
-          >
-            <option
-              *ngFor="let option of generationModeOptions"
-              [ngValue]="option.value"
+            <select
+              id="generationMode"
+              [(ngModel)]="generationMode"
+              (ngModelChange)="onGenerationModeChanged()"
+              [disabled]="shouldDisableGenerationModeSelect()"
             >
-              {{ option.label }}
-            </option>
-          </select>
-        </div>
+              <option
+                *ngFor="let option of generationModeOptions"
+                [ngValue]="option.value"
+              >
+                {{ option.label }}
+              </option>
+            </select>
+          </div>
 
-        <div class="track-actions">
-          <button
-            type="button"
-            [class]="getGenerateTrackButtonClass()"
-            (click)="runTrackPipeline()"
-            [disabled]="shouldDisableGenerateTrackButton()"
-          >
-            <span class="primary-button__label">
-              {{ getGenerateTrackButtonLabel() }}
-            </span>
-
-            <span
-              class="primary-button__progress"
-              *ngIf="isGenerateTrackButtonLoading()"
-              aria-hidden="true"
+          <!-- Acciones -->
+          <div class="track-actions">
+            <button
+              type="button"
+              [class]="getGenerateTrackButtonClass()"
+              (click)="runTrackPipeline()"
+              [disabled]="shouldDisableGenerateTrackButton()"
             >
-              <span class="primary-button__progress-bar"></span>
-            </span>
-          </button>
+              <span class="primary-button__label">
+                {{ getGenerateTrackButtonLabel() }}
+              </span>
 
-          <button
-            type="button"
-            class="secondary-button"
-            (click)="loadDailyMart()"
-            [disabled]="isLoadingMart"
-          >
-            {{ isLoadingMart ? 'Consultando...' : 'Consultar resultado' }}
-          </button>
+              <span
+                class="primary-button__progress"
+                *ngIf="isGenerateTrackButtonLoading()"
+                aria-hidden="true"
+              >
+                <span class="primary-button__progress-bar"></span>
+              </span>
+            </button>
+
+            <button
+              type="button"
+              class="secondary-button"
+              (click)="loadDailyMart()"
+              [disabled]="isLoadingMart"
+            >
+              {{ isLoadingMart ? 'Consultando...' : 'Consultar resultado' }}
+            </button>
+          </div>
         </div>
       </div>
     </div>
-  </div>
 
-  <div class="track-feedback" *ngIf="errorMessage">
-    <p>{{ errorMessage }}</p>
-  </div>
+    <!-- Error general de ejecución -->
+    <div
+      class="track-feedback"
+      *ngIf="errorMessage"
+    >
+      <p>{{ errorMessage }}</p>
+    </div>
 
-  <div
-    class="track-feedback success"
-    *ngIf="lastResponse?.status === 'ok' && lastResponse?.result"
+    <!-- Respuesta exitosa de generación manual -->
+    <div
+      class="track-feedback success"
+      *ngIf="lastResponse?.status === 'ok' && lastResponse?.result"
+    >
+      <p>
+        Track generado correctamente para
+        <strong>{{ lastResponse?.result?.track_date }}</strong>
+        en modo
+        <strong>{{ lastResponse?.result?.generation_mode }}</strong>.
+      </p>
+    </div>
+  </section>
+
+  <!-- ==========================================================================
+       TARJETAS RESUMEN
+       ========================================================================== -->
+
+  <section
+    class="summary-grid"
+    *ngIf="summaryCards.length > 0"
   >
-    <p>
-      Track generado correctamente para
-      <strong>{{ lastResponse?.result?.track_date }}</strong>
-      en modo
-      <strong>{{ lastResponse?.result?.generation_mode }}</strong>.
-    </p>
-  </div>
-</section>
-
-  <section class="summary-grid" *ngIf="summaryCards.length > 0">
     <article
       *ngFor="let card of summaryCards"
       [class]="getSummaryCardClass(card)"
@@ -157,10 +183,16 @@
     </article>
   </section>
 
+  <!-- ==========================================================================
+       RESULTADO DEL TRACK
+       ========================================================================== -->
+
   <section class="track-placeholder-card track-results-card">
+    <!-- Header de resultados: título + orden especial + grupos de columnas -->
     <div class="track-results-header">
       <div class="card-title-block">
         <h2>Resultado del Track</h2>
+
         <p>
           Daily mart para
           <strong>{{ lastLoadedTrackDateLabel }}</strong>
@@ -169,7 +201,23 @@
         </p>
       </div>
 
-      <div class="track-column-groups" *ngIf="viewRows.length > 0">
+      <!-- Botón visible solo cuando hay orden especial activo -->
+      <button
+        type="button"
+        class="track-active-sort-button"
+        *ngIf="hasActiveTrackSort()"
+        (click)="resetTrackSort()"
+        title="Restaurar orden de apertura"
+      >
+        {{ getActiveTrackSortLabel() }}
+        <span>Restaurar orden de apertura</span>
+      </button>
+
+      <!-- Botones de grupos de columnas -->
+      <div
+        class="track-column-groups"
+        *ngIf="viewRows.length > 0"
+      >
         <button
           type="button"
           [class]="getTrackColumnGroupAllButtonClass()"
@@ -191,14 +239,23 @@
       </div>
     </div>
 
-    <div class="track-feedback" *ngIf="martErrorMessage">
+    <!-- Error de consulta del mart -->
+    <div
+      class="track-feedback"
+      *ngIf="martErrorMessage"
+    >
       <p>{{ martErrorMessage }}</p>
     </div>
 
-    <div class="track-loading" *ngIf="isLoadingMart">
+    <!-- Loading -->
+    <div
+      class="track-loading"
+      *ngIf="isLoadingMart"
+    >
       <p>Cargando resultado del Track...</p>
     </div>
 
+    <!-- Empty state -->
     <div
       class="track-empty-state"
       *ngIf="!isLoadingMart && !martErrorMessage && viewRows.length === 0"
@@ -206,61 +263,402 @@
       <p>No hay filas para la fecha y modo seleccionados.</p>
     </div>
 
-    <div [class]="getTrackTableWrapperClass()" *ngIf="!isLoadingMart && viewRows.length > 0">
+    <!-- Tabla principal -->
+    <div
+      [class]="getTrackTableWrapperClass()"
+      *ngIf="!isLoadingMart && viewRows.length > 0"
+    >
       <table [class]="getTrackTableClass()">
+        <!-- ==================================================================
+             ENCABEZADOS ORDENABLES
+             ================================================================== -->
+
         <thead>
           <tr>
-            <th class="cell-sticky">Club</th>
+            <!-- Columna fija: Club -->
+            <th class="cell-sticky">
+              <button
+                type="button"
+                [class]="getTrackSortHeaderClass('sucursal_canon')"
+                (click)="sortTrackTable('sucursal_canon')"
+              >
+                Club
+                <span>{{ getTrackSortIndicator('sucursal_canon') }}</span>
+              </button>
+            </th>
 
+            <!-- Grupo: Ocupación -->
             <ng-container *ngIf="isTrackColumnGroupVisible('ocupacion')">
-              <th class="cell-right">Socios inicio mes</th>
-              <th class="cell-right">Socios activos</th>
-              <th class="cell-right">Proyección cierre</th>
-              <th class="cell-right">M² sin circulaciones</th>
+              <th class="cell-right">
+                <button
+                  type="button"
+                  [class]="getTrackSortHeaderClass('usuarios_inicio_mes')"
+                  (click)="sortTrackTable('usuarios_inicio_mes')"
+                >
+                  Socios inicio mes
+                  <span>{{ getTrackSortIndicator('usuarios_inicio_mes') }}</span>
+                </button>
+              </th>
+
+              <th class="cell-right">
+                <button
+                  type="button"
+                  [class]="getTrackSortHeaderClass('usuarios_activos_actual')"
+                  (click)="sortTrackTable('usuarios_activos_actual')"
+                >
+                  Socios activos
+                  <span>{{ getTrackSortIndicator('usuarios_activos_actual') }}</span>
+                </button>
+              </th>
+
+              <th class="cell-right">
+                <button
+                  type="button"
+                  [class]="getTrackSortHeaderClass('proyeccion_usuarios_cierre_mes')"
+                  (click)="sortTrackTable('proyeccion_usuarios_cierre_mes')"
+                >
+                  Proyección cierre
+                  <span>{{ getTrackSortIndicator('proyeccion_usuarios_cierre_mes') }}</span>
+                </button>
+              </th>
+
+              <th class="cell-right">
+                <button
+                  type="button"
+                  [class]="getTrackSortHeaderClass('m2_sin_circulaciones')"
+                  (click)="sortTrackTable('m2_sin_circulaciones')"
+                >
+                  M² sin circulaciones
+                  <span>{{ getTrackSortIndicator('m2_sin_circulaciones') }}</span>
+                </button>
+              </th>
             </ng-container>
 
+            <!-- Grupo: Ingresos -->
             <ng-container *ngIf="isTrackColumnGroupVisible('ingresos')">
-              <th class="cell-right">Meta FAYCGO</th>
-              <th class="cell-right">Ingreso base</th>
-              <th class="cell-right">Ingreso agregadoras</th>
-              <th class="cell-right">Ingreso real</th>
-              <th class="cell-right">Avance ingreso</th>
-              <th class="cell-right">Dif. ingreso VS meta</th>
-              <th class="cell-right">Meta del día</th>
-              <th class="cell-right">Meta ARPU</th>
-              <th class="cell-right">ARPU actual</th>
+              <th class="cell-right">
+                <button
+                  type="button"
+                  [class]="getTrackSortHeaderClass('meta_faycgo_mes')"
+                  (click)="sortTrackTable('meta_faycgo_mes')"
+                >
+                  Meta FAYCGO
+                  <span>{{ getTrackSortIndicator('meta_faycgo_mes') }}</span>
+                </button>
+              </th>
+
+              <th class="cell-right">
+                <button
+                  type="button"
+                  [class]="getTrackSortHeaderClass('ingreso_real_base_mtd')"
+                  (click)="sortTrackTable('ingreso_real_base_mtd')"
+                >
+                  Ingreso base
+                  <span>{{ getTrackSortIndicator('ingreso_real_base_mtd') }}</span>
+                </button>
+              </th>
+
+              <th class="cell-right">
+                <button
+                  type="button"
+                  [class]="getTrackSortHeaderClass('ingreso_real_agregadora_mtd')"
+                  (click)="sortTrackTable('ingreso_real_agregadora_mtd')"
+                >
+                  Ingreso agregadoras
+                  <span>{{ getTrackSortIndicator('ingreso_real_agregadora_mtd') }}</span>
+                </button>
+              </th>
+
+              <th class="cell-right">
+                <button
+                  type="button"
+                  [class]="getTrackSortHeaderClass('ingreso_real_mtd')"
+                  (click)="sortTrackTable('ingreso_real_mtd')"
+                >
+                  Ingreso real
+                  <span>{{ getTrackSortIndicator('ingreso_real_mtd') }}</span>
+                </button>
+              </th>
+
+              <th class="cell-right">
+                <button
+                  type="button"
+                  [class]="getTrackSortHeaderClass('avance_ingreso')"
+                  (click)="sortTrackTable('avance_ingreso')"
+                >
+                  Avance ingreso
+                  <span>{{ getTrackSortIndicator('avance_ingreso') }}</span>
+                </button>
+              </th>
+
+              <th class="cell-right">
+                <button
+                  type="button"
+                  [class]="getTrackSortHeaderClass('diferencia_ingreso')"
+                  (click)="sortTrackTable('diferencia_ingreso')"
+                >
+                  Dif. ingreso VS meta
+                  <span>{{ getTrackSortIndicator('diferencia_ingreso') }}</span>
+                </button>
+              </th>
+
+              <th class="cell-right">
+                <button
+                  type="button"
+                  [class]="getTrackSortHeaderClass('meta_ingreso_dia')"
+                  (click)="sortTrackTable('meta_ingreso_dia')"
+                >
+                  Meta del día
+                  <span>{{ getTrackSortIndicator('meta_ingreso_dia') }}</span>
+                </button>
+              </th>
+
+              <th class="cell-right">
+                <button
+                  type="button"
+                  [class]="getTrackSortHeaderClass('meta_arpu_mes')"
+                  (click)="sortTrackTable('meta_arpu_mes')"
+                >
+                  Meta ARPU
+                  <span>{{ getTrackSortIndicator('meta_arpu_mes') }}</span>
+                </button>
+              </th>
+
+              <th class="cell-right">
+                <button
+                  type="button"
+                  [class]="getTrackSortHeaderClass('arpu_actual')"
+                  (click)="sortTrackTable('arpu_actual')"
+                >
+                  ARPU actual
+                  <span>{{ getTrackSortIndicator('arpu_actual') }}</span>
+                </button>
+              </th>
             </ng-container>
 
+            <!-- Grupo: Crecimiento -->
             <ng-container *ngIf="isTrackColumnGroupVisible('crecimiento')">
-              <th class="cell-right">Meta socios nuevos</th>
-              <th class="cell-right">Socios nuevos</th>
-              <th class="cell-right">Avance socios nuevos</th>
-              <th class="cell-right">Dif. socios nuevos VS meta</th>
-              <th class="cell-right">Meta del día socios</th>
-              <th class="cell-right">Meta reactivaciones</th>
-              <th class="cell-right">Reactivaciones reales</th>
-              <th class="cell-right">Meta bajas</th>
-              <th class="cell-right">Bajas reales</th>
+              <th class="cell-right">
+                <button
+                  type="button"
+                  [class]="getTrackSortHeaderClass('meta_clientes_nuevos_mes')"
+                  (click)="sortTrackTable('meta_clientes_nuevos_mes')"
+                >
+                  Meta socios nuevos
+                  <span>{{ getTrackSortIndicator('meta_clientes_nuevos_mes') }}</span>
+                </button>
+              </th>
+
+              <th class="cell-right">
+                <button
+                  type="button"
+                  [class]="getTrackSortHeaderClass('clientes_nuevos_real_mtd')"
+                  (click)="sortTrackTable('clientes_nuevos_real_mtd')"
+                >
+                  Socios nuevos
+                  <span>{{ getTrackSortIndicator('clientes_nuevos_real_mtd') }}</span>
+                </button>
+              </th>
+
+              <th class="cell-right">
+                <button
+                  type="button"
+                  [class]="getTrackSortHeaderClass('avance_clientes_nuevos')"
+                  (click)="sortTrackTable('avance_clientes_nuevos')"
+                >
+                  Avance socios nuevos
+                  <span>{{ getTrackSortIndicator('avance_clientes_nuevos') }}</span>
+                </button>
+              </th>
+
+              <th class="cell-right">
+                <button
+                  type="button"
+                  [class]="getTrackSortHeaderClass('diferencia_clientes_nuevos')"
+                  (click)="sortTrackTable('diferencia_clientes_nuevos')"
+                >
+                  Dif. socios nuevos VS meta
+                  <span>{{ getTrackSortIndicator('diferencia_clientes_nuevos') }}</span>
+                </button>
+              </th>
+
+              <th class="cell-right">
+                <button
+                  type="button"
+                  [class]="getTrackSortHeaderClass('meta_clientes_nuevos_dia')"
+                  (click)="sortTrackTable('meta_clientes_nuevos_dia')"
+                >
+                  Meta del día socios
+                  <span>{{ getTrackSortIndicator('meta_clientes_nuevos_dia') }}</span>
+                </button>
+              </th>
+
+              <th class="cell-right">
+                <button
+                  type="button"
+                  [class]="getTrackSortHeaderClass('meta_reactivaciones_mes')"
+                  (click)="sortTrackTable('meta_reactivaciones_mes')"
+                >
+                  Meta reactivaciones
+                  <span>{{ getTrackSortIndicator('meta_reactivaciones_mes') }}</span>
+                </button>
+              </th>
+
+              <th class="cell-right">
+                <button
+                  type="button"
+                  [class]="getTrackSortHeaderClass('reactivaciones_real_mtd')"
+                  (click)="sortTrackTable('reactivaciones_real_mtd')"
+                >
+                  Reactivaciones reales
+                  <span>{{ getTrackSortIndicator('reactivaciones_real_mtd') }}</span>
+                </button>
+              </th>
+
+              <th class="cell-right">
+                <button
+                  type="button"
+                  [class]="getTrackSortHeaderClass('meta_bajas_mes')"
+                  (click)="sortTrackTable('meta_bajas_mes')"
+                >
+                  Meta bajas
+                  <span>{{ getTrackSortIndicator('meta_bajas_mes') }}</span>
+                </button>
+              </th>
+
+              <th class="cell-right">
+                <button
+                  type="button"
+                  [class]="getTrackSortHeaderClass('bajas_reales_mtd')"
+                  (click)="sortTrackTable('bajas_reales_mtd')"
+                >
+                  Bajas reales
+                  <span>{{ getTrackSortIndicator('bajas_reales_mtd') }}</span>
+                </button>
+              </th>
             </ng-container>
 
+            <!-- Grupo: Domiciliados -->
             <ng-container *ngIf="isTrackColumnGroupVisible('domiciliados')">
-              <th class="cell-right">Meta nuevos domiciliados</th>
-              <th class="cell-right">Nuevos domiciliados</th>
-              <th class="cell-right">Avance domiciliados</th>
-              <th class="cell-right">Dif. domiciliados VS meta</th>
-              <th class="cell-right">Meta del día domic.</th>
+              <th class="cell-right">
+                <button
+                  type="button"
+                  [class]="getTrackSortHeaderClass('meta_nuevos_domiciliados_mes')"
+                  (click)="sortTrackTable('meta_nuevos_domiciliados_mes')"
+                >
+                  Meta nuevos domiciliados
+                  <span>{{ getTrackSortIndicator('meta_nuevos_domiciliados_mes') }}</span>
+                </button>
+              </th>
+
+              <th class="cell-right">
+                <button
+                  type="button"
+                  [class]="getTrackSortHeaderClass('nuevos_domiciliados_real_mtd')"
+                  (click)="sortTrackTable('nuevos_domiciliados_real_mtd')"
+                >
+                  Nuevos domiciliados
+                  <span>{{ getTrackSortIndicator('nuevos_domiciliados_real_mtd') }}</span>
+                </button>
+              </th>
+
+              <th class="cell-right">
+                <button
+                  type="button"
+                  [class]="getTrackSortHeaderClass('avance_domiciliados')"
+                  (click)="sortTrackTable('avance_domiciliados')"
+                >
+                  Avance domiciliados
+                  <span>{{ getTrackSortIndicator('avance_domiciliados') }}</span>
+                </button>
+              </th>
+
+              <th class="cell-right">
+                <button
+                  type="button"
+                  [class]="getTrackSortHeaderClass('diferencia_domiciliados')"
+                  (click)="sortTrackTable('diferencia_domiciliados')"
+                >
+                  Dif. domiciliados VS meta
+                  <span>{{ getTrackSortIndicator('diferencia_domiciliados') }}</span>
+                </button>
+              </th>
+
+              <th class="cell-right">
+                <button
+                  type="button"
+                  [class]="getTrackSortHeaderClass('meta_domiciliados_dia')"
+                  (click)="sortTrackTable('meta_domiciliados_dia')"
+                >
+                  Meta del día domic.
+                  <span>{{ getTrackSortIndicator('meta_domiciliados_dia') }}</span>
+                </button>
+              </th>
             </ng-container>
 
+            <!-- Grupo: Tienda -->
             <ng-container *ngIf="isTrackColumnGroupVisible('tienda')">
-              <th class="cell-right">Meta tienda</th>
-              <th class="cell-right">Venta tienda</th>
-              <th class="cell-right">Avance tienda</th>
-              <th class="cell-right">Dif. tienda VS meta</th>
-              <th class="cell-right">Meta del día tienda</th>
-            </ng-container>
+              <th class="cell-right">
+                <button
+                  type="button"
+                  [class]="getTrackSortHeaderClass('meta_venta_tienda_mes')"
+                  (click)="sortTrackTable('meta_venta_tienda_mes')"
+                >
+                  Meta tienda
+                  <span>{{ getTrackSortIndicator('meta_venta_tienda_mes') }}</span>
+                </button>
+              </th>
 
+              <th class="cell-right">
+                <button
+                  type="button"
+                  [class]="getTrackSortHeaderClass('venta_tienda_real_mtd')"
+                  (click)="sortTrackTable('venta_tienda_real_mtd')"
+                >
+                  Venta tienda
+                  <span>{{ getTrackSortIndicator('venta_tienda_real_mtd') }}</span>
+                </button>
+              </th>
+
+              <th class="cell-right">
+                <button
+                  type="button"
+                  [class]="getTrackSortHeaderClass('avance_tienda')"
+                  (click)="sortTrackTable('avance_tienda')"
+                >
+                  Avance tienda
+                  <span>{{ getTrackSortIndicator('avance_tienda') }}</span>
+                </button>
+              </th>
+
+              <th class="cell-right">
+                <button
+                  type="button"
+                  [class]="getTrackSortHeaderClass('diferencia_tienda')"
+                  (click)="sortTrackTable('diferencia_tienda')"
+                >
+                  Dif. tienda VS meta
+                  <span>{{ getTrackSortIndicator('diferencia_tienda') }}</span>
+                </button>
+              </th>
+
+              <th class="cell-right">
+                <button
+                  type="button"
+                  [class]="getTrackSortHeaderClass('meta_tienda_dia')"
+                  (click)="sortTrackTable('meta_tienda_dia')"
+                >
+                  Meta del día tienda
+                  <span>{{ getTrackSortIndicator('meta_tienda_dia') }}</span>
+                </button>
+              </th>
+            </ng-container>
           </tr>
         </thead>
+
+        <!-- ==================================================================
+             FILAS
+             ================================================================== -->
 
         <tbody>
           <tr
@@ -268,15 +666,22 @@
             class="track-row"
             [class.track-row--clickable]="row.rowKind === 'data'"
             [attr.data-row-kind]="row.rowKind"
+            [attr.role]="row.rowKind === 'data' ? 'button' : null"
+            [attr.tabindex]="row.rowKind === 'data' ? '0' : null"
+            [attr.title]="row.rowKind === 'data' ? 'Ver detalle del club' : null"
+            (click)="onTrackRowClicked(row)"
+            (keydown.enter)="onTrackRowClicked(row)"
+            (keydown.space)="onTrackRowClicked(row)"
           >
+            <!-- Club / enlace a detalle -->
             <td
               class="cell-sticky"
               [class.branch-link-cell]="row.rowKind === 'data'"
-              (click)="openBranchHistory(row)"
             >
               {{ row.displayLabel }}
             </td>
 
+            <!-- Grupo: Ocupación -->
             <ng-container *ngIf="isTrackColumnGroupVisible('ocupacion')">
               <td class="cell-right">{{ row.usuariosInicioMes }}</td>
               <td class="cell-right">{{ row.usuariosActivos }}</td>
@@ -284,67 +689,81 @@
               <td class="cell-right">{{ row.m2SinCirculaciones }}</td>
             </ng-container>
 
+            <!-- Grupo: Ingresos -->
             <ng-container *ngIf="isTrackColumnGroupVisible('ingresos')">
               <td class="cell-right">{{ row.metaFaycgo }}</td>
               <td class="cell-right">{{ row.ingresoBase }}</td>
               <td class="cell-right">{{ row.ingresoAgregadoras }}</td>
               <td class="cell-right">{{ row.ingresoReal }}</td>
+
               <td class="cell-right">
                 <span [class]="getProgressBadgeClass(row.avanceIngresoTone)">
                   {{ row.avanceIngresoLabel }}
                 </span>
               </td>
+
               <td class="cell-right">
                 <span [class]="getProgressBadgeClass(row.diferenciaIngresoTone)">
                   {{ row.diferenciaIngresoLabel }}
                 </span>
               </td>
+
               <td class="cell-right">
                 <span [class]="getProgressBadgeClass(row.diferenciaIngresoDiaTone)">
                   {{ row.diferenciaIngresoDiaLabel }}
                 </span>
               </td>
+
               <td class="cell-right">{{ row.metaArpu }}</td>
               <td class="cell-right">{{ row.arpuActual }}</td>
             </ng-container>
 
+            <!-- Grupo: Crecimiento -->
             <ng-container *ngIf="isTrackColumnGroupVisible('crecimiento')">
               <td class="cell-right">{{ row.metaClientesNuevos }}</td>
               <td class="cell-right">{{ row.clientesNuevos }}</td>
+
               <td class="cell-right">
                 <span [class]="getProgressBadgeClass(row.avanceClientesNuevosTone)">
                   {{ row.avanceClientesNuevosLabel }}
                 </span>
               </td>
+
               <td class="cell-right">
                 <span [class]="getProgressBadgeClass(row.diferenciaClientesNuevosTone)">
                   {{ row.diferenciaClientesNuevosLabel }}
                 </span>
               </td>
+
               <td class="cell-right">
                 <span [class]="getProgressBadgeClass(row.diferenciaClientesNuevosDiaTone)">
                   {{ row.diferenciaClientesNuevosDiaLabel }}
                 </span>
               </td>
+
               <td class="cell-right">{{ row.metaReactivaciones }}</td>
               <td class="cell-right">{{ row.reactivacionesReales }}</td>
               <td class="cell-right">{{ row.metaBajas }}</td>
               <td class="cell-right">{{ row.bajasReales }}</td>
             </ng-container>
 
+            <!-- Grupo: Domiciliados -->
             <ng-container *ngIf="isTrackColumnGroupVisible('domiciliados')">
               <td class="cell-right">{{ row.metaNuevosDomiciliados }}</td>
               <td class="cell-right">{{ row.nuevosDomiciliados }}</td>
+
               <td class="cell-right">
                 <span [class]="getProgressBadgeClass(row.avanceDomiciliadosTone)">
                   {{ row.avanceDomiciliadosLabel }}
                 </span>
               </td>
+
               <td class="cell-right">
                 <span [class]="getProgressBadgeClass(row.diferenciaDomiciliadosTone)">
                   {{ row.diferenciaDomiciliadosLabel }}
                 </span>
               </td>
+
               <td class="cell-right">
                 <span [class]="getProgressBadgeClass(row.diferenciaDomiciliadosDiaTone)">
                   {{ row.diferenciaDomiciliadosDiaLabel }}
@@ -352,19 +771,23 @@
               </td>
             </ng-container>
 
+            <!-- Grupo: Tienda -->
             <ng-container *ngIf="isTrackColumnGroupVisible('tienda')">
               <td class="cell-right">{{ row.metaVentaTienda }}</td>
               <td class="cell-right">{{ row.ventaTiendaReal }}</td>
+
               <td class="cell-right">
                 <span [class]="getProgressBadgeClass(row.avanceTiendaTone)">
                   {{ row.avanceTiendaLabel }}
                 </span>
               </td>
+
               <td class="cell-right">
                 <span [class]="getProgressBadgeClass(row.diferenciaTiendaTone)">
                   {{ row.diferenciaTiendaLabel }}
                 </span>
               </td>
+
               <td class="cell-right">
                 <span [class]="getProgressBadgeClass(row.metaTiendaDiaTone)">
                   {{ row.metaTiendaDiaLabel }}
