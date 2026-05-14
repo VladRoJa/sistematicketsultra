@@ -52,6 +52,7 @@ export class LayoutComponent implements OnInit, AfterViewInit {
   puedeVerMantenimientoCompleto = false;
   puedeVerMantenimientoOperativo = false;
   puedeVerMantenimientoGerencial = false;
+  puedeVerWarehouse = false;
   usuarioLabel = '';
   reporteBugFueArrastrado = false;
 
@@ -77,6 +78,15 @@ ngOnInit(): void {
   this.usuarioLabel = (u?.username || '').toString();
   this.iniciarTimerInactividad();
   this.inactividadService.registrarCallback(() => this.reiniciarTimerInactividad());
+
+  const menuWarehouse = {
+    label: 'Warehouse',
+    path: '/warehouse',
+    submenu: [
+      { label: 'Warehouse', path: '/warehouse' },
+      { label: 'Track diario', path: '/warehouse/track' },
+    ],
+  };
 
   const soloTickets = [
     {
@@ -183,15 +193,7 @@ const menuMantenimientoGerencial = [
         { label: 'Carga Masiva', path: '/carga-masiva' }
       ]
     },
-    {
-      label: 'Warehouse',
-      path: '/warehouse',
-      submenu: [
-        { label: 'Warehouse', path: '/warehouse' },
-        { label: 'Track diario', path: '/warehouse/track' }
-
-      ]
-    },
+    menuWarehouse,
     {
       label: 'Catálogos',
       path: '/catalogos/marcas',
@@ -237,8 +239,48 @@ const menuMantenimientoGerencial = [
   } else {
     this.menuItems = soloTickets;
   }
+
+  this.habilitarWarehouseEnMenuSiAplica(menuWarehouse);
   this.sincronizarMenuConRutaActual();
   }
+
+private habilitarWarehouseEnMenuSiAplica(menuWarehouse: any): void {
+  if (this.menuItems.some((item) => item.label === 'Warehouse')) {
+    return;
+  }
+
+  this.http
+    .get<any>(`${environment.apiUrl}/warehouse/access`)
+    .subscribe({
+      next: (response) => {
+        const puedeVerWarehouse = Boolean(
+          response?.can_view ??
+          response?.canView ??
+          response?.access?.can_view ??
+          response?.warehouse_access?.can_view
+        );
+
+        if (!puedeVerWarehouse) {
+          return;
+        }
+
+        if (this.menuItems.some((item) => item.label === 'Warehouse')) {
+          return;
+        }
+
+        this.puedeVerWarehouse = true;
+        this.menuItems = [
+          ...this.menuItems,
+          menuWarehouse,
+        ];
+
+        this.sincronizarMenuConRutaActual();
+      },
+      error: () => {
+        this.puedeVerWarehouse = false;
+      },
+    });
+}
 
 
   // 🖱️ Lógica de inactividad
