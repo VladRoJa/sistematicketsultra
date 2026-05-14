@@ -91,6 +91,36 @@ def _es_gerente_para_cierre_desde_cero(user: UserORM) -> bool:
     rol = (user.rol or "").upper()
     return rol == "GERENTE"
 
+def _es_admin_para_validar_cierre(user: UserORM) -> bool:
+    rol = (user.rol or "").upper()
+    return rol in {"ADMIN", "ADMINISTRADOR", "SUPER_ADMIN"}
+
+
+def _es_gerente_para_validar_cierre(user: UserORM) -> bool:
+    rol = (user.rol or "").upper()
+    return rol == "GERENTE"
+
+
+def _puede_validar_cierre_gerente(user: UserORM, ticket: Ticket) -> bool:
+    """
+    Permiso específico para aceptar/rechazar tickets en por_validar.
+
+    - Admin puede validar cualquier ticket.
+    - Gerente solo puede validar tickets de su sucursal destino.
+    """
+    if _es_admin_para_validar_cierre(user):
+        return True
+
+    if not _es_gerente_para_validar_cierre(user):
+        return False
+
+    sucursal_ticket = ticket.sucursal_id_destino or ticket.sucursal_id
+
+    try:
+        return int(user.sucursal_id) == int(sucursal_ticket)
+    except Exception:
+        return False
+
 
 def _puede_cerrar_ticket_desde_cero(user: UserORM, ticket: Ticket) -> bool:
     """
@@ -1988,14 +2018,21 @@ def cierre_aceptar_creador(ticket_id):
     user = UserORM.get_by_id(get_jwt_identity())
     t = Ticket.query.get(ticket_id)
     if not t:
-        return jsonify({"mensaje":"Ticket no encontrado"}), 404
+        return jsonify({"mensaje": "Ticket no encontrado"}), 404
 
-    if not _es_creador(user, t):
-        return jsonify({"mensaje":"Solo el creador puede aceptar la conformidad"}), 403
+    if not _puede_validar_cierre_gerente(user, t):
+        return jsonify({"mensaje": "No autorizado"}), 403
+
+    estado_actual = (t.estado or "").strip().lower()
+    estado_cierre_actual = (t.estado_cierre or "").strip().lower()
+
+    if estado_actual != "por_validar" or estado_cierre_actual != "pendiente_creador":
+        return jsonify({
+            "mensaje": "Solo se pueden aceptar tickets en estado por_validar."
+        }), 400
 
     t.aceptar_conformidad_creador()
-    return jsonify({"mensaje":"Conformidad aceptada; ticket finalizado"}), 200
-
+    return jsonify({"mensaje": "Cierre validado por gerente; ticket finalizado"}), 200
 
 # ─────────────────────────────────────────────────────────────
 # RUTA: Rechazar conformidad y reabrir ticket (creador)
@@ -2007,21 +2044,54 @@ def cierre_rechazar_creador(ticket_id):
     user = UserORM.get_by_id(get_jwt_identity())
     t = Ticket.query.get(ticket_id)
     if not t:
-        return jsonify({"mensaje":"Ticket no encontrado"}), 404
+        return jsonify({"mensaje": "Ticket no encontrado"}), 404
 
-    if not _es_creador(user, t):
-        return jsonify({"mensaje":"Solo el creador puede rechazar la conformidad"}), 403
+    if not _puede_validar_cierre_gerente(user, t):
+        return jsonify({"mensaje": "No autorizado"}), 403
+
+    estado_actual = (t.estado or "").strip().lower()
+    estado_cierre_actual = (t.estado_cierre or "").strip().lower()
+
+    if estado_actual != "por_validar" or estado_cierre_actual != "pendiente_creador":
+        return jsonify({
+            "mensaje": "Solo se pueden rechazar tickets en estado por_validar."
+        }), 400
 
     data = request.get_json() or {}
-    motivo = data.get("motivo")
-    nueva_compromiso = data.get("nueva_fecha_solucion")  # ISO
+    motivo = (data.get("motivo") or "").strip()
+
+    if not motivo:
+        return jsonify({"mensaje": "El motivo de rechazo es obligatorio."}), 400
+
+    nueva_compromiso = data.get("nueva_fecha_solucion")
     dt_new = None
+
     if nueva_compromiso:
-        dt_new = datetime.fromisoformat(nueva_compromiso).astimezone(timezone.utc)
+        try:
+            dt_new = parser.isoparse(nueva_compromiso)
+            if getattr(dt_new, "tzinfo", None) is None:
+                dt_new = dt_new.replace(tzinfo=timezone.utc)
+            dt_new = dt_new.astimezone(timezone.utc)
+        except Exception as e:
+            return jsonify({"mensaje": f"nueva_fecha_solucion inválida: {e}"}), 400
 
-    t.rechazar_conformidad_creador(motivo=motivo, nueva_fecha_compromiso=dt_new)
-    return jsonify({"mensaje":"Conformidad rechazada; ticket reabierto"}), 200
+    try:
+        t.rechazar_conformidad_creador(
+            motivo=motivo,
+            nueva_fecha_compromiso=dt_new,
+            actor_username=user.username
+        )
+    except ValueError as e:
+        return jsonify({"mensaje": str(e)}), 400
 
+    return jsonify({
+        "mensaje": "Cierre rechazado por gerente; ticket reabierto",
+        "ticket_id": t.id,
+        "estado": t.estado,
+        "estado_cierre": t.estado_cierre,
+        "motivo": motivo,
+        "historial_fechas": t.historial_fechas or []
+    }), 200
 
 
 

@@ -51,4 +51,43 @@ export function mostrarAlertaToast(
     });
   }
   
-  
+  export async function solicitarMotivoRechazoCierre(
+  ticketId: number,
+  descripcion?: string
+): Promise<string | null> {
+  const result = await Swal.fire<string>({
+    icon: 'warning',
+    title: 'Rechazar cierre',
+    text: descripcion
+      ? `Ticket #${ticketId}: ${descripcion}`
+      : `Ticket #${ticketId}`,
+    input: 'textarea',
+    inputLabel: 'Motivo del rechazo',
+    inputPlaceholder: 'Ej. El ticket no está realmente resuelto; falta evidencia de solución.',
+    inputAttributes: {
+      'aria-label': 'Motivo del rechazo'
+    },
+    showCancelButton: true,
+    confirmButtonText: 'Rechazar cierre',
+    cancelButtonText: 'Cancelar',
+    confirmButtonColor: '#d33',
+    cancelButtonColor: '#6c757d',
+    inputValidator: (value) => {
+      if (!value || !value.trim()) {
+        return 'El motivo de rechazo es obligatorio.';
+      }
+
+      if (value.trim().length < 3) {
+        return 'El motivo debe tener al menos 3 caracteres.';
+      }
+
+      return null;
+    }
+  });
+
+  if (!result.isConfirmed) {
+    return null;
+  }
+
+  return (result.value || '').trim();
+}

@@ -741,8 +741,8 @@
             <mat-icon>task_alt</mat-icon> Cierre gerente
           </button>
 
-          <!-- Botones del CREADOR cuando el cierre está pendiente -->
-          <div *ngIf="puedeMostrarBotonesCreador(ticket)"
+          <!-- Botones de validación de cierre para GERENTE / ADMIN -->
+          <div *ngIf="puedeMostrarBotonesValidarCierre(ticket)"
               style="display:flex; gap:4px; align-items:center;">
 
             <!-- Aceptar -->
