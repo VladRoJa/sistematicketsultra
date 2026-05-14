@@ -27,8 +27,8 @@ services:
       - db
     env_file:
       - .env.docker
-  environment:
-    APP_ENV: "prod"
+    environment:
+      APP_ENV: "prod"
 
     command: >
       gunicorn
