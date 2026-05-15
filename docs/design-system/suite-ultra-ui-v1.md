@@ -73,3 +73,36 @@ Ejemplo:
 ```css
 background: var(--ultra-orange);
 color: var(--ultra-surface);
+```
+
+Evitar:
+
+```css
+background: #e54525;
+```
+
+salvo en definición de tokens.
+
+---
+
+## 6. Convención de banderas de refactor
+
+Durante el refactor visual de Suite Ultra UI v1, toda sección nueva o modificación estructural relevante debe marcarse con una bandera visible en el archivo.
+
+El objetivo es facilitar:
+
+- Búsqueda con `grep`.
+- Revisión de cambios.
+- Limpieza posterior.
+- Rollback parcial.
+- Separación entre código heredado y código nuevo del refactor.
+
+---
+
+### Formato para TypeScript
+
+```ts
+// ============================================================================
+// Suite Ultra UI v1 - <descripción corta>
+// ============================================================================
+```
