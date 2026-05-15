@@ -1,91 +1,125 @@
 <!-- frontend-angular\src\app\pantalla-ver-tickets\pantalla-ver-tickets.component.html -->
-<div class="table-container" *ngIf="!loading"     [style.--desc-col-width]="'420px'"
-     [style.--table-min-width]="'2486px'">
 
-    <div style="display:flex; justify-content:space-between; align-items:center; margin:6px 0;">
+<!-- ==========================================================================
+     Suite Ultra UI v1 - Pantalla principal de Tickets
+     ========================================================================== -->
 
-      <div style="display:flex; align-items:center; gap:8px;">
-        <button
-          mat-stroked-button
-          color="primary"
-          (click)="toggleOcultarFinalizados()"
-          style="display:flex; align-items:center; gap:6px;"
-        >
-          <mat-icon>
-            {{ ocultarFinalizados ? 'visibility_off' : 'visibility' }}
-          </mat-icon>
-          {{ ocultarFinalizados ? 'Mostrar finalizados' : 'Ocultar finalizados' }}
-        </button>
+<section
+  class="tickets-page"
+  *ngIf="!loading"
+  [style.--desc-col-width]="'420px'"
+  [style.--table-min-width]="'2486px'"
+>
+  <header class="tickets-page__header">
+    <div>
+      <span class="tickets-page__eyebrow">Tickets</span>
+      <h1 class="tickets-page__title">Ver Tickets</h1>
+      <p class="tickets-page__subtitle">
+        Consulta, filtra y da seguimiento a los tickets registrados en Suite Ultra.
+      </p>
+    </div>
 
-        <button
-          mat-stroked-button
-          color="accent"
-          (click)="filtroRapidoPorValidarActivo ? quitarFiltroPorValidar() : mostrarSoloPorValidar()"
-          style="display:flex; align-items:center; gap:6px;"
-        >
-          <mat-icon>
-            {{ filtroRapidoPorValidarActivo ? 'filter_alt_off' : 'fact_check' }}
-          </mat-icon>
-          {{ filtroRapidoPorValidarActivo ? 'Quitar por validar' : 'Mostrar por validar' }}
-        </button>
-      </div>
+    <div class="tickets-page__status">
+      <span class="tickets-page__status-label">Resultados visibles</span>
+      <strong>{{ visibleTickets.length }}</strong>
+    </div>
+  </header>
 
-      <button mat-stroked-button (click)="toggleFiltros()">
-        {{ mostrarFiltros ? 'Ocultar filtros' : 'Mostrar filtros' }}
+  <!-- ==========================================================================
+       Suite Ultra UI v1 - Acciones rápidas y filtros
+       ========================================================================== -->
+
+  <div class="tickets-toolbar">
+    <div class="tickets-toolbar__group">
+      <button
+        mat-stroked-button
+        color="primary"
+        class="tickets-toolbar__button"
+        (click)="toggleOcultarFinalizados()"
+      >
+        <mat-icon>
+          {{ ocultarFinalizados ? 'visibility_off' : 'visibility' }}
+        </mat-icon>
+        {{ ocultarFinalizados ? 'Mostrar finalizados' : 'Ocultar finalizados' }}
       </button>
 
+      <button
+        mat-stroked-button
+        color="accent"
+        class="tickets-toolbar__button"
+        (click)="filtroRapidoPorValidarActivo ? quitarFiltroPorValidar() : mostrarSoloPorValidar()"
+      >
+        <mat-icon>
+          {{ filtroRapidoPorValidarActivo ? 'filter_alt_off' : 'fact_check' }}
+        </mat-icon>
+        {{ filtroRapidoPorValidarActivo ? 'Quitar por validar' : 'Mostrar por validar' }}
+      </button>
     </div>
 
-
-  <div class="filtro-unificado-wrapper" *ngIf="mostrarFiltros">
-    <!-- Columna 1: Select -->
-    <mat-form-field appearance="fill" class="columna-select">
-      <mat-label>Filtrar por</mat-label>
-      <mat-select
-        [(ngModel)]="campoUnificadoActual"
-        (selectionChange)="onCambioCampoUnificado($event.value)">
-        <mat-option [value]="null">— Selecciona —</mat-option>
-        <mat-option *ngFor="let c of columnasUnificado" [value]="c.key">
-          {{ c.label }}
-        </mat-option>
-      </mat-select>
-    </mat-form-field>
-
-    <!-- Columna 2: Buscador -->
-    <mat-form-field appearance="fill" class="columna-buscador">
-      <mat-label>Buscar {{ etiquetaCampoActual }}…</mat-label>
-      <input matInput [(ngModel)]="filtroUnificado.textoBusqueda" />
-    </mat-form-field>
-
-    <!-- Columna 3: Checklist + Botones -->
-    <div class="columna-checklist">
-      <div class="fu-checklist">
-        <div *ngIf="!opcionesCategoriaUnificada?.length" style="opacity:.7; font-size:13px;">
-          No hay opciones (selecciona un campo arriba).
-        </div>
-
-        <mat-checkbox
-          *ngFor="let op of opcionesCategoriaUnificada"
-          [checked]="filtroUnificado.seleccionTemporal.has(op.valor)"
-          (change)="alternarSeleccionCategoriaUnificada(op.valor)"
-          style="display:block; margin:4px 0;">
-          {{ op.etiqueta }}
-        </mat-checkbox>
-      </div>
-
-      <div class="fu-acciones">
-        <button mat-raised-button color="primary" (click)="aplicarCategoriaUnificada()">
-          Aplicar
-        </button>
-        <button mat-raised-button color="warn" (click)="limpiarCategoriaUnificada()">
-          Limpiar
-        </button>
-      </div>
-    </div>
+    <button
+      mat-stroked-button
+      class="tickets-toolbar__toggle"
+      (click)="toggleFiltros()"
+    >
+      {{ mostrarFiltros ? 'Ocultar filtros' : 'Mostrar filtros' }}
+    </button>
   </div>
 
-  <table class="tabla-tickets">
+  <!-- ==========================================================================
+       Suite Ultra UI v1 - Card de filtros y tabla
+       ========================================================================== -->
 
+  <div class="tickets-table-card table-container">
+    <div class="filtro-unificado-wrapper" *ngIf="mostrarFiltros">
+      <!-- Columna 1: Select -->
+      <mat-form-field appearance="fill" class="columna-select">
+        <mat-label>Filtrar por</mat-label>
+        <mat-select
+          [(ngModel)]="campoUnificadoActual"
+          (selectionChange)="onCambioCampoUnificado($event.value)"
+        >
+          <mat-option [value]="null">— Selecciona —</mat-option>
+          <mat-option *ngFor="let c of columnasUnificado" [value]="c.key">
+            {{ c.label }}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <!-- Columna 2: Buscador -->
+      <mat-form-field appearance="fill" class="columna-buscador">
+        <mat-label>Buscar {{ etiquetaCampoActual }}…</mat-label>
+        <input matInput [(ngModel)]="filtroUnificado.textoBusqueda" />
+      </mat-form-field>
+
+      <!-- Columna 3: Checklist + Botones -->
+      <div class="columna-checklist">
+        <div class="fu-checklist">
+          <div *ngIf="!opcionesCategoriaUnificada?.length" class="fu-empty-state">
+            No hay opciones (selecciona un campo arriba).
+          </div>
+
+          <mat-checkbox
+            *ngFor="let op of opcionesCategoriaUnificada"
+            class="fu-checkbox"
+            [checked]="filtroUnificado.seleccionTemporal.has(op.valor)"
+            (change)="alternarSeleccionCategoriaUnificada(op.valor)"
+          >
+            {{ op.etiqueta }}
+          </mat-checkbox>
+        </div>
+
+        <div class="fu-acciones">
+          <button mat-raised-button color="primary" (click)="aplicarCategoriaUnificada()">
+            Aplicar
+          </button>
+          <button mat-raised-button color="warn" (click)="limpiarCategoriaUnificada()">
+            Limpiar
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <table class="tabla-tickets">
       <colgroup>
         <col class="c-id">
         <col class="c-cat">
@@ -105,764 +139,767 @@
         <col class="c-his">
       </colgroup>
 
-    <thead>
-      <tr>
-        <!-- (1) Id -->
-        <th>Id</th>
+      <thead>
+        <tr>
+          <!-- (1) Id -->
+          <th>Id</th>
 
-        <!-- (2) Categoría -->
-        <th [class.filtro-activo]="isFilterActive('categoria')">
-          Categoría
-          <!-- Filtros en encabezado desactivados -->
-          <ng-container *ngIf="false">
-            <button
-              mat-button
-              [matMenuTriggerFor]="menuCategoria"
-              #triggerFiltroCategoria="matMenuTrigger"
-              (click)="onAbrirFiltro('categoria', triggerFiltroCategoria)"
-              class="header-button">
-              Categoría <mat-icon>arrow_drop_down</mat-icon>
-            </button>
-            <mat-menu #menuCategoria="matMenu" disableClose="true">
-              <mat-divider></mat-divider>
-              <div class="menu-filtro" (click)="$event.stopPropagation()">
-                <label>Filtrar Categoría</label>
-                <mat-form-field appearance="fill" class="buscador-filtro" (click)="$event.stopPropagation()">
-                  <mat-label>Buscar</mat-label>
-                  <input matInput [(ngModel)]="filtroCategoriaTexto" (ngModelChange)="filtrarOpcionesTexto('categoria')">
-                </mat-form-field>
-                <mat-checkbox
-                  [checked]="isTodoSeleccionado('categoria')"
-                  (change)="alternarSeleccionTemporal('categoria', $event.checked)"
-                  (click)="$event.stopPropagation()"
-                  name="cat_selectAll">
-                  Seleccionar todo
-                </mat-checkbox>
-                <div class="opciones-scrollable">
+          <!-- (2) Categoría -->
+          <th [class.filtro-activo]="isFilterActive('categoria')">
+            Categoría
+            <!-- Filtros en encabezado desactivados -->
+            <ng-container *ngIf="false">
+              <button
+                mat-button
+                [matMenuTriggerFor]="menuCategoria"
+                #triggerFiltroCategoria="matMenuTrigger"
+                (click)="onAbrirFiltro('categoria', triggerFiltroCategoria)"
+                class="header-button">
+                Categoría <mat-icon>arrow_drop_down</mat-icon>
+              </button>
+              <mat-menu #menuCategoria="matMenu" disableClose="true">
+                <mat-divider></mat-divider>
+                <div class="menu-filtro" (click)="$event.stopPropagation()">
+                  <label>Filtrar Categoría</label>
+                  <mat-form-field appearance="fill" class="buscador-filtro" (click)="$event.stopPropagation()">
+                    <mat-label>Buscar</mat-label>
+                    <input matInput [(ngModel)]="filtroCategoriaTexto" (ngModelChange)="filtrarOpcionesTexto('categoria')">
+                  </mat-form-field>
                   <mat-checkbox
-                    *ngFor="let cat of temporalSeleccionados['categoria']; let i = index"
-                    [checked]="cat.seleccionado"
-                    (change)="actualizarSeleccionTemporal('categoria', i, $event.checked)"
-                    [name]="'cat_' + i"
-                    (click)="$event.stopPropagation()">
-                    {{ cat.etiqueta ?? cat.valor }}
+                    [checked]="isTodoSeleccionado('categoria')"
+                    (change)="alternarSeleccionTemporal('categoria', $event.checked)"
+                    (click)="$event.stopPropagation()"
+                    name="cat_selectAll">
+                    Seleccionar todo
                   </mat-checkbox>
+                  <div class="opciones-scrollable">
+                    <mat-checkbox
+                      *ngFor="let cat of temporalSeleccionados['categoria']; let i = index"
+                      [checked]="cat.seleccionado"
+                      (change)="actualizarSeleccionTemporal('categoria', i, $event.checked)"
+                      [name]="'cat_' + i"
+                      (click)="$event.stopPropagation()">
+                      {{ cat.etiqueta ?? cat.valor }}
+                    </mat-checkbox>
+                  </div>
+                  <div class="menu-botones-fijos">
+                    <button mat-button (click)="cerrarYAplicar('categoria', triggerFiltroCategoria)">Aplicar</button>
+                    <button mat-button (click)="cerrarYLimpiar('categoria', triggerFiltroCategoria)">Borrar Filtro</button>
+                  </div>
                 </div>
-                <div class="menu-botones-fijos">
-                  <button mat-button (click)="cerrarYAplicar('categoria', triggerFiltroCategoria)">Aplicar</button>
-                  <button mat-button (click)="cerrarYLimpiar('categoria', triggerFiltroCategoria)">Borrar Filtro</button>
-                </div>
-              </div>
-            </mat-menu>
-          </ng-container>
-        </th>
+              </mat-menu>
+            </ng-container>
+          </th>
 
-        <!-- (A) Aparato/Dispositivo -->
-        <th [class.filtro-activo]="isFilterActive('inventario')">
-          Aparato/Dispositivo
-          <!-- Filtros en encabezado desactivados -->
-          <ng-container *ngIf="false">
-            <button mat-button [matMenuTriggerFor]="menuInventario"
-                    #triggerFiltroInventario="matMenuTrigger"
-                    (click)="onAbrirFiltro('inventario', triggerFiltroInventario)"
-                    class="header-button">
-              Aparato/Dispositivo <mat-icon>arrow_drop_down</mat-icon>
-            </button>
-            <mat-menu #menuInventario="matMenu" disableClose="true">
-              <mat-divider></mat-divider>
-              <div class="menu-filtro" (click)="$event.stopPropagation()">
-                <label>Filtrar Aparato</label>
-                <mat-form-field appearance="fill" class="buscador-filtro" (click)="$event.stopPropagation()">
-                  <mat-label>Buscar</mat-label>
-                  <input matInput [(ngModel)]="filtroInventarioTexto" (ngModelChange)="filtrarOpcionesTexto('inventario')">
-                </mat-form-field>
-                <mat-checkbox
-                  [checked]="isTodoSeleccionado('inventario')"
-                  (change)="alternarSeleccionTemporal('inventario', $event.checked)"
-                  (click)="$event.stopPropagation()"
-                  name="inventario_selectAll">
-                  Seleccionar todo
-                </mat-checkbox>
-                <div class="opciones-scrollable">
+          <!-- (A) Aparato/Dispositivo -->
+          <th [class.filtro-activo]="isFilterActive('inventario')">
+            Aparato/Dispositivo
+            <!-- Filtros en encabezado desactivados -->
+            <ng-container *ngIf="false">
+              <button mat-button [matMenuTriggerFor]="menuInventario"
+                      #triggerFiltroInventario="matMenuTrigger"
+                      (click)="onAbrirFiltro('inventario', triggerFiltroInventario)"
+                      class="header-button">
+                Aparato/Dispositivo <mat-icon>arrow_drop_down</mat-icon>
+              </button>
+              <mat-menu #menuInventario="matMenu" disableClose="true">
+                <mat-divider></mat-divider>
+                <div class="menu-filtro" (click)="$event.stopPropagation()">
+                  <label>Filtrar Aparato</label>
+                  <mat-form-field appearance="fill" class="buscador-filtro" (click)="$event.stopPropagation()">
+                    <mat-label>Buscar</mat-label>
+                    <input matInput [(ngModel)]="filtroInventarioTexto" (ngModelChange)="filtrarOpcionesTexto('inventario')">
+                  </mat-form-field>
                   <mat-checkbox
-                    *ngFor="let item of temporalSeleccionados['inventario']; let i = index"
-                    [checked]="item.seleccionado"
-                    (change)="actualizarSeleccionTemporal('inventario', i, $event.checked)"
-                    [name]="'inventario' + i"
-                    (click)="$event.stopPropagation()">
-                    {{ item.etiqueta || item.valor }}
+                    [checked]="isTodoSeleccionado('inventario')"
+                    (change)="alternarSeleccionTemporal('inventario', $event.checked)"
+                    (click)="$event.stopPropagation()"
+                    name="inventario_selectAll">
+                    Seleccionar todo
                   </mat-checkbox>
+                  <div class="opciones-scrollable">
+                    <mat-checkbox
+                      *ngFor="let item of temporalSeleccionados['inventario']; let i = index"
+                      [checked]="item.seleccionado"
+                      (change)="actualizarSeleccionTemporal('inventario', i, $event.checked)"
+                      [name]="'inventario' + i"
+                      (click)="$event.stopPropagation()">
+                      {{ item.etiqueta || item.valor }}
+                    </mat-checkbox>
+                  </div>
+                  <div class="menu-botones-fijos">
+                    <button mat-button (click)="cerrarYAplicar('inventario', triggerFiltroInventario)">Aplicar</button>
+                    <button mat-button (click)="cerrarYLimpiar('inventario', triggerFiltroInventario)">Borrar Filtro</button>
+                  </div>
                 </div>
-                <div class="menu-botones-fijos">
-                  <button mat-button (click)="cerrarYAplicar('inventario', triggerFiltroInventario)">Aplicar</button>
-                  <button mat-button (click)="cerrarYLimpiar('inventario', triggerFiltroInventario)">Borrar Filtro</button>
-                </div>
-              </div>
-            </mat-menu>
-          </ng-container>
-        </th>
+              </mat-menu>
+            </ng-container>
+          </th>
 
-        <!-- (3) Descripción -->
-        <th class="col-descripcion" [class.filtro-activo]="isFilterActive('descripcion')">
-          Descripción
-          <!-- Filtros en encabezado desactivados -->
-          <ng-container *ngIf="false">
-            <button mat-button [matMenuTriggerFor]="menuDescripcion"
-                    #triggerFiltroDesc="matMenuTrigger"
-                    (click)="onAbrirFiltro('descripcion', triggerFiltroDesc)"
-                    class="header-button">
-              Descripción <mat-icon>arrow_drop_down</mat-icon>
-            </button>
-            <mat-menu #menuDescripcion="matMenu" disableClose="true">
-              <mat-divider></mat-divider>
-              <div class="menu-filtro" (click)="$event.stopPropagation()">
-                <label>Filtrar Descripción</label>
-                <mat-form-field appearance="fill" class="buscador-filtro" (click)="$event.stopPropagation()">
-                  <mat-label>Buscar</mat-label>
-                  <input matInput [(ngModel)]="filtroDescripcionTexto" (ngModelChange)="filtrarOpcionesTexto('descripcion')">
-                </mat-form-field>
-                <mat-checkbox
-                  [checked]="isTodoSeleccionado('descripcion')"
-                  (change)="alternarSeleccionTemporal('descripcion', $event.checked)"
-                  (click)="$event.stopPropagation()"
-                  name="desc_selectAll">
-                  Seleccionar todo
-                </mat-checkbox>
-                <div class="opciones-scrollable">
+          <!-- (3) Descripción -->
+          <th class="col-descripcion" [class.filtro-activo]="isFilterActive('descripcion')">
+            Descripción
+            <!-- Filtros en encabezado desactivados -->
+            <ng-container *ngIf="false">
+              <button mat-button [matMenuTriggerFor]="menuDescripcion"
+                      #triggerFiltroDesc="matMenuTrigger"
+                      (click)="onAbrirFiltro('descripcion', triggerFiltroDesc)"
+                      class="header-button">
+                Descripción <mat-icon>arrow_drop_down</mat-icon>
+              </button>
+              <mat-menu #menuDescripcion="matMenu" disableClose="true">
+                <mat-divider></mat-divider>
+                <div class="menu-filtro" (click)="$event.stopPropagation()">
+                  <label>Filtrar Descripción</label>
+                  <mat-form-field appearance="fill" class="buscador-filtro" (click)="$event.stopPropagation()">
+                    <mat-label>Buscar</mat-label>
+                    <input matInput [(ngModel)]="filtroDescripcionTexto" (ngModelChange)="filtrarOpcionesTexto('descripcion')">
+                  </mat-form-field>
                   <mat-checkbox
-                    *ngFor="let desc of temporalSeleccionados['descripcion']; let i = index"
-                    [checked]="desc.seleccionado"
-                    (change)="actualizarSeleccionTemporal('descripcion', i, $event.checked)"
-                    [name]="'desc_' + i"
-                    (click)="$event.stopPropagation()">
-                    {{ desc.etiqueta || desc.valor }}
+                    [checked]="isTodoSeleccionado('descripcion')"
+                    (change)="alternarSeleccionTemporal('descripcion', $event.checked)"
+                    (click)="$event.stopPropagation()"
+                    name="desc_selectAll">
+                    Seleccionar todo
                   </mat-checkbox>
+                  <div class="opciones-scrollable">
+                    <mat-checkbox
+                      *ngFor="let desc of temporalSeleccionados['descripcion']; let i = index"
+                      [checked]="desc.seleccionado"
+                      (change)="actualizarSeleccionTemporal('descripcion', i, $event.checked)"
+                      [name]="'desc_' + i"
+                      (click)="$event.stopPropagation()">
+                      {{ desc.etiqueta || desc.valor }}
+                    </mat-checkbox>
+                  </div>
+                  <div class="menu-botones-fijos">
+                    <button mat-button (click)="cerrarYAplicar('descripcion', triggerFiltroDesc)">Aplicar</button>
+                    <button mat-button (click)="cerrarYLimpiar('descripcion', triggerFiltroDesc)">Borrar Filtro</button>
+                  </div>
                 </div>
-                <div class="menu-botones-fijos">
-                  <button mat-button (click)="cerrarYAplicar('descripcion', triggerFiltroDesc)">Aplicar</button>
-                  <button mat-button (click)="cerrarYLimpiar('descripcion', triggerFiltroDesc)">Borrar Filtro</button>
-                </div>
-              </div>
-            </mat-menu>
-          </ng-container>
-        </th>
+              </mat-menu>
+            </ng-container>
+          </th>
 
-        <!-- (4) Sucursal -->
-        <th [class.filtro-activo]="isFilterActive('sucursal')">
-          Sucursal
-          <!-- Filtros en encabezado desactivados -->
-          <ng-container *ngIf="false">
-            <button mat-button [matMenuTriggerFor]="menuSucursal"
-                    #triggerFiltroSucursal="matMenuTrigger"
-                    (click)="onAbrirFiltro('sucursal', triggerFiltroSucursal)"
-                    class="header-button">
-              Sucursal <mat-icon>arrow_drop_down</mat-icon>
-            </button>
-            <mat-menu #menuSucursal="matMenu" disableClose="true">
-              <mat-divider></mat-divider>
-              <div class="menu-filtro" (click)="$event.stopPropagation()">
-                <mat-checkbox
-                  [checked]="isTodoSeleccionado('sucursal')"
-                  (change)="alternarSeleccionTemporal('sucursal', $event.checked)"
-                  (click)="$event.stopPropagation()"
-                  name="suc_selectAll">
-                  Seleccionar todo
-                </mat-checkbox>
-                <div class="opciones-scrollable">
+          <!-- (4) Sucursal -->
+          <th [class.filtro-activo]="isFilterActive('sucursal')">
+            Sucursal
+            <!-- Filtros en encabezado desactivados -->
+            <ng-container *ngIf="false">
+              <button mat-button [matMenuTriggerFor]="menuSucursal"
+                      #triggerFiltroSucursal="matMenuTrigger"
+                      (click)="onAbrirFiltro('sucursal', triggerFiltroSucursal)"
+                      class="header-button">
+                Sucursal <mat-icon>arrow_drop_down</mat-icon>
+              </button>
+              <mat-menu #menuSucursal="matMenu" disableClose="true">
+                <mat-divider></mat-divider>
+                <div class="menu-filtro" (click)="$event.stopPropagation()">
                   <mat-checkbox
-                    *ngFor="let item of temporalSeleccionados['sucursal']; let i = index"
-                    [checked]="item.seleccionado"
-                    (change)="actualizarSeleccionTemporal('sucursal', i, $event.checked)"
-                    [name]="'sucursal_' + i"
-                    (click)="$event.stopPropagation()">
-                    {{ item.etiqueta || item.valor }}
+                    [checked]="isTodoSeleccionado('sucursal')"
+                    (change)="alternarSeleccionTemporal('sucursal', $event.checked)"
+                    (click)="$event.stopPropagation()"
+                    name="suc_selectAll">
+                    Seleccionar todo
                   </mat-checkbox>
+                  <div class="opciones-scrollable">
+                    <mat-checkbox
+                      *ngFor="let item of temporalSeleccionados['sucursal']; let i = index"
+                      [checked]="item.seleccionado"
+                      (change)="actualizarSeleccionTemporal('sucursal', i, $event.checked)"
+                      [name]="'sucursal_' + i"
+                      (click)="$event.stopPropagation()">
+                      {{ item.etiqueta || item.valor }}
+                    </mat-checkbox>
+                  </div>
+                  <div class="menu-botones-fijos">
+                    <button mat-button color="primary" (click)="cerrarYAplicar('sucursal', triggerFiltroSucursal)">Aplicar</button>
+                    <button mat-button (click)="cerrarYLimpiar('sucursal', triggerFiltroSucursal)">Borrar Filtros</button>
+                  </div>
                 </div>
-                <div class="menu-botones-fijos">
-                  <button mat-button color="primary" (click)="cerrarYAplicar('sucursal', triggerFiltroSucursal)">Aplicar</button>
-                  <button mat-button (click)="cerrarYLimpiar('sucursal', triggerFiltroSucursal)">Borrar Filtros</button>
-                </div>
-              </div>
-            </mat-menu>
-          </ng-container>
-        </th>
+              </mat-menu>
+            </ng-container>
+          </th>
 
-        <!-- (5) Estado -->
-        <th [class.filtro-activo]="isFilterActive('estado')">
-          Estado
-          <!-- Filtros en encabezado desactivados -->
-          <ng-container *ngIf="false">
-            <button mat-button [matMenuTriggerFor]="menuEstado"
-                    #triggerFiltroEstado="matMenuTrigger"
-                    (click)="onAbrirFiltro('estado', triggerFiltroEstado)"
-                    class="header-button">
-              Estado <mat-icon>arrow_drop_down</mat-icon>
-            </button>
-            <mat-menu #menuEstado="matMenu" disableClose="true">
-              <mat-divider></mat-divider>
-              <div class="menu-filtro" (click)="$event.stopPropagation()">
-                <label>Filtrar Estado</label>
-                <mat-form-field *ngIf="permiteBusqueda('estado')" appearance="fill" class="buscador-filtro" (click)="$event.stopPropagation()">
-                  <mat-label>Buscar</mat-label>
-                  <input matInput [(ngModel)]="filtroEstadoTexto" (ngModelChange)="filtrarOpcionesTexto('estado')">
-                </mat-form-field>
-                <mat-checkbox
-                  [checked]="isTodoSeleccionado('estado')"
-                  (change)="alternarSeleccionTemporal('estado', $event.checked)"
-                  (click)="$event.stopPropagation()"
-                  name="est_selectAll">
-                  Seleccionar todo
-                </mat-checkbox>
-                <div class="opciones-scrollable">
+          <!-- (5) Estado -->
+          <th [class.filtro-activo]="isFilterActive('estado')">
+            Estado
+            <!-- Filtros en encabezado desactivados -->
+            <ng-container *ngIf="false">
+              <button mat-button [matMenuTriggerFor]="menuEstado"
+                      #triggerFiltroEstado="matMenuTrigger"
+                      (click)="onAbrirFiltro('estado', triggerFiltroEstado)"
+                      class="header-button">
+                Estado <mat-icon>arrow_drop_down</mat-icon>
+              </button>
+              <mat-menu #menuEstado="matMenu" disableClose="true">
+                <mat-divider></mat-divider>
+                <div class="menu-filtro" (click)="$event.stopPropagation()">
+                  <label>Filtrar Estado</label>
+                  <mat-form-field *ngIf="permiteBusqueda('estado')" appearance="fill" class="buscador-filtro" (click)="$event.stopPropagation()">
+                    <mat-label>Buscar</mat-label>
+                    <input matInput [(ngModel)]="filtroEstadoTexto" (ngModelChange)="filtrarOpcionesTexto('estado')">
+                  </mat-form-field>
                   <mat-checkbox
-                    *ngFor="let item of temporalSeleccionados['estado']; let i = index"
-                    [checked]="item.seleccionado"
-                    (change)="actualizarSeleccionTemporal('estado', i, $event.checked)"
-                    [name]="'est_' + i"
-                    (click)="$event.stopPropagation()">
-                    {{ item.etiqueta || item.valor }}
+                    [checked]="isTodoSeleccionado('estado')"
+                    (change)="alternarSeleccionTemporal('estado', $event.checked)"
+                    (click)="$event.stopPropagation()"
+                    name="est_selectAll">
+                    Seleccionar todo
                   </mat-checkbox>
+                  <div class="opciones-scrollable">
+                    <mat-checkbox
+                      *ngFor="let item of temporalSeleccionados['estado']; let i = index"
+                      [checked]="item.seleccionado"
+                      (change)="actualizarSeleccionTemporal('estado', i, $event.checked)"
+                      [name]="'est_' + i"
+                      (click)="$event.stopPropagation()">
+                      {{ item.etiqueta || item.valor }}
+                    </mat-checkbox>
+                  </div>
+                  <div class="menu-botones-fijos">
+                    <button mat-button color="primary" (click)="cerrarYAplicar('estado', triggerFiltroEstado)">Aplicar</button>
+                    <button mat-button (click)="cerrarYLimpiar('estado', triggerFiltroEstado)">Borrar Filtros</button>
+                  </div>
                 </div>
-                <div class="menu-botones-fijos">
-                  <button mat-button color="primary" (click)="cerrarYAplicar('estado', triggerFiltroEstado)">Aplicar</button>
-                  <button mat-button (click)="cerrarYLimpiar('estado', triggerFiltroEstado)">Borrar Filtros</button>
-                </div>
-              </div>
-            </mat-menu>
-          </ng-container>
-        </th>
+              </mat-menu>
+            </ng-container>
+          </th>
 
-        <!-- (6) Criticidad -->
-        <th [class.filtro-activo]="isFilterActive('criticidad')">
-          Criticidad
-          <!-- Filtros en encabezado desactivados -->
-          <ng-container *ngIf="false">
-            <button mat-button [matMenuTriggerFor]="menuCriticidad"
-                    #triggerFiltroCriticidad="matMenuTrigger"
-                    (click)="onAbrirFiltro('criticidad', triggerFiltroCriticidad)"
-                    class="header-button">
-              Criticidad <mat-icon>arrow_drop_down</mat-icon>
-            </button>
-            <mat-menu #menuCriticidad="matMenu" disableClose="true">
-              <mat-divider></mat-divider>
-              <div class="menu-filtro" (click)="$event.stopPropagation()">
-                <label>Filtrar Criticidad</label>
-                <mat-form-field *ngIf="permiteBusqueda('criticidad')" appearance="fill" class="buscador-filtro" (click)="$event.stopPropagation()">
-                  <mat-label>Buscar</mat-label>
-                  <input matInput [(ngModel)]="filtroCriticidadTexto" (ngModelChange)="filtrarOpcionesTexto('criticidad')">
-                </mat-form-field>
-                <mat-checkbox
-                  [checked]="isTodoSeleccionado('criticidad')"
-                  (change)="alternarSeleccionTemporal('criticidad', $event.checked)"
-                  (click)="$event.stopPropagation()"
-                  name="crit_selectAll">
-                  Seleccionar todo
-                </mat-checkbox>
-                <div class="opciones-scrollable">
+          <!-- (6) Criticidad -->
+          <th [class.filtro-activo]="isFilterActive('criticidad')">
+            Criticidad
+            <!-- Filtros en encabezado desactivados -->
+            <ng-container *ngIf="false">
+              <button mat-button [matMenuTriggerFor]="menuCriticidad"
+                      #triggerFiltroCriticidad="matMenuTrigger"
+                      (click)="onAbrirFiltro('criticidad', triggerFiltroCriticidad)"
+                      class="header-button">
+                Criticidad <mat-icon>arrow_drop_down</mat-icon>
+              </button>
+              <mat-menu #menuCriticidad="matMenu" disableClose="true">
+                <mat-divider></mat-divider>
+                <div class="menu-filtro" (click)="$event.stopPropagation()">
+                  <label>Filtrar Criticidad</label>
+                  <mat-form-field *ngIf="permiteBusqueda('criticidad')" appearance="fill" class="buscador-filtro" (click)="$event.stopPropagation()">
+                    <mat-label>Buscar</mat-label>
+                    <input matInput [(ngModel)]="filtroCriticidadTexto" (ngModelChange)="filtrarOpcionesTexto('criticidad')">
+                  </mat-form-field>
                   <mat-checkbox
-                    *ngFor="let item of temporalSeleccionados['criticidad']; let i = index"
-                    [checked]="item.seleccionado"
-                    (change)="actualizarSeleccionTemporal('criticidad', i, $event.checked)"
-                    [name]="'crit_' + i"
-                    (click)="$event.stopPropagation()">
-                    {{ item.etiqueta || item.valor }}
+                    [checked]="isTodoSeleccionado('criticidad')"
+                    (change)="alternarSeleccionTemporal('criticidad', $event.checked)"
+                    (click)="$event.stopPropagation()"
+                    name="crit_selectAll">
+                    Seleccionar todo
                   </mat-checkbox>
+                  <div class="opciones-scrollable">
+                    <mat-checkbox
+                      *ngFor="let item of temporalSeleccionados['criticidad']; let i = index"
+                      [checked]="item.seleccionado"
+                      (change)="actualizarSeleccionTemporal('criticidad', i, $event.checked)"
+                      [name]="'crit_' + i"
+                      (click)="$event.stopPropagation()">
+                      {{ item.etiqueta || item.valor }}
+                    </mat-checkbox>
+                  </div>
+                  <div class="menu-botones-fijos">
+                    <button mat-button color="primary" (click)="cerrarYAplicar('criticidad', triggerFiltroCriticidad)">Aplicar</button>
+                    <button mat-button (click)="cerrarYLimpiar('criticidad', triggerFiltroCriticidad)">Borrar Filtros</button>
+                  </div>
                 </div>
-                <div class="menu-botones-fijos">
-                  <button mat-button color="primary" (click)="cerrarYAplicar('criticidad', triggerFiltroCriticidad)">Aplicar</button>
-                  <button mat-button (click)="cerrarYLimpiar('criticidad', triggerFiltroCriticidad)">Borrar Filtros</button>
-                </div>
-              </div>
-            </mat-menu>
-          </ng-container>
-        </th>
+              </mat-menu>
+            </ng-container>
+          </th>
 
-        <!-- (7) Fecha Creación -->
-        <th [class.filtro-activo]="isFilterActive('fecha_creacion')">
-          <!-- Filtros en encabezado desactivados -->
-          <ng-container *ngIf="true">
-            <button mat-button [matMenuTriggerFor]="menuFechaC" #triggerFiltroFechaC="matMenuTrigger" class="header-button">
-              Fecha Creación <mat-icon>arrow_drop_down</mat-icon>
-            </button>
-            <mat-menu #menuFechaC="matMenu" disableClose="true">
-              <div class="menu-filtro" (click)="$event.stopPropagation()">
-                <label>Filtrar Rango de Fechas</label>
-                <mat-form-field appearance="fill" class="w-full">
-                  <mat-label>Desde</mat-label>
-                  <input matInput [matDatepicker]="pickerInicioCreacion" [ngModel]="fechaCreacionTemp.start" (ngModelChange)="fechaCreacionTemp.start = $event">
-                  <mat-datepicker-toggle matSuffix [for]="pickerInicioCreacion"></mat-datepicker-toggle>
-                  <mat-datepicker #pickerInicioCreacion [dateClass]="dateClassCreacion"></mat-datepicker>
-                </mat-form-field>
-                <mat-form-field appearance="fill" class="w-full">
-                  <mat-label>Hasta</mat-label>
-                  <input matInput [matDatepicker]="pickerFinCreacion" [ngModel]="fechaCreacionTemp.end" (ngModelChange)="fechaCreacionTemp.end = $event">
-                  <mat-datepicker-toggle matSuffix [for]="pickerFinCreacion"></mat-datepicker-toggle>
-                  <mat-datepicker #pickerFinCreacion [dateClass]="dateClassCreacion"></mat-datepicker>
-                </mat-form-field>
-                <div class="menu-botones-fijos">
-                  <button mat-button color="primary" (click)="aplicarFiltroPorRangoFechaCreacionConfirmada(); triggerFiltroFechaC.closeMenu()">Aplicar</button>
-                  <button mat-button (click)="borrarFiltroRangoFechaCreacion(); triggerFiltroFechaC.closeMenu()">Borrar Filtros</button>
+          <!-- (7) Fecha Creación -->
+          <th [class.filtro-activo]="isFilterActive('fecha_creacion')">
+            <ng-container *ngIf="true">
+              <button mat-button [matMenuTriggerFor]="menuFechaC" #triggerFiltroFechaC="matMenuTrigger" class="header-button">
+                Fecha Creación <mat-icon>arrow_drop_down</mat-icon>
+              </button>
+              <mat-menu #menuFechaC="matMenu" disableClose="true">
+                <div class="menu-filtro" (click)="$event.stopPropagation()">
+                  <label>Filtrar Rango de Fechas</label>
+                  <mat-form-field appearance="fill" class="w-full">
+                    <mat-label>Desde</mat-label>
+                    <input matInput [matDatepicker]="pickerInicioCreacion" [ngModel]="fechaCreacionTemp.start" (ngModelChange)="fechaCreacionTemp.start = $event">
+                    <mat-datepicker-toggle matSuffix [for]="pickerInicioCreacion"></mat-datepicker-toggle>
+                    <mat-datepicker #pickerInicioCreacion [dateClass]="dateClassCreacion"></mat-datepicker>
+                  </mat-form-field>
+                  <mat-form-field appearance="fill" class="w-full">
+                    <mat-label>Hasta</mat-label>
+                    <input matInput [matDatepicker]="pickerFinCreacion" [ngModel]="fechaCreacionTemp.end" (ngModelChange)="fechaCreacionTemp.end = $event">
+                    <mat-datepicker-toggle matSuffix [for]="pickerFinCreacion"></mat-datepicker-toggle>
+                    <mat-datepicker #pickerFinCreacion [dateClass]="dateClassCreacion"></mat-datepicker>
+                  </mat-form-field>
+                  <div class="menu-botones-fijos">
+                    <button mat-button color="primary" (click)="aplicarFiltroPorRangoFechaCreacionConfirmada(); triggerFiltroFechaC.closeMenu()">Aplicar</button>
+                    <button mat-button (click)="borrarFiltroRangoFechaCreacion(); triggerFiltroFechaC.closeMenu()">Borrar Filtros</button>
+                  </div>
                 </div>
-              </div>
-            </mat-menu>
-          </ng-container>
-        </th>
+              </mat-menu>
+            </ng-container>
+          </th>
 
-        <!-- (8) Fecha En Progreso -->
-        <th [class.filtro-activo]="isFilterActive('fecha_en_progreso')">
-          <!-- Filtros en encabezado desactivados -->
-          <ng-container *ngIf="true">
-            <button mat-button [matMenuTriggerFor]="menuFechaP" #triggerFiltroFechaP="matMenuTrigger" class="header-button">
-              Fecha En Progreso <mat-icon>arrow_drop_down</mat-icon>
-            </button>
-            <mat-menu #menuFechaP="matMenu" disableClose="true">
-              <div class="menu-filtro" (click)="$event.stopPropagation()">
-                <label>Filtrar Rango de Fechas</label>
-                <mat-form-field appearance="fill" class="w-full">
-                  <mat-label>Desde</mat-label>
-                  <input matInput [matDatepicker]="pickerInicioProgreso" [ngModel]="fechaProgresoTemp.start" (ngModelChange)="fechaProgresoTemp.start = $event">
-                  <mat-datepicker-toggle matSuffix [for]="pickerInicioProgreso"></mat-datepicker-toggle>
-                  <mat-datepicker #pickerInicioProgreso></mat-datepicker>
-                </mat-form-field>
-                <mat-form-field appearance="fill" class="w-full">
-                  <mat-label>Hasta</mat-label>
-                  <input matInput [matDatepicker]="pickerFinProgreso" [ngModel]="fechaProgresoTemp.end" (ngModelChange)="fechaProgresoTemp.end = $event">
-                  <mat-datepicker-toggle matSuffix [for]="pickerFinProgreso"></mat-datepicker-toggle>
-                  <mat-datepicker #pickerFinProgreso></mat-datepicker>
-                </mat-form-field>
-                <mat-checkbox [checked]="incluirSinFechaProgreso" (change)="incluirSinFechaProgreso = $event.checked" (click)="$event.stopPropagation()">
-                  Vacias
-                </mat-checkbox>
-                <div class="menu-botones-fijos">
-                  <button mat-button color="primary" (click)="aplicarFiltroPorRangoFechaEnProgresoConfirmada(); triggerFiltroFechaP.closeMenu()">Aplicar</button>
-                  <button mat-button (click)="borrarFiltroRangoFechaEnProgreso(); triggerFiltroFechaP.closeMenu()">Borrar Filtros</button>
+          <!-- (8) Fecha En Progreso -->
+          <th [class.filtro-activo]="isFilterActive('fecha_en_progreso')">
+            <ng-container *ngIf="true">
+              <button mat-button [matMenuTriggerFor]="menuFechaP" #triggerFiltroFechaP="matMenuTrigger" class="header-button">
+                Fecha En Progreso <mat-icon>arrow_drop_down</mat-icon>
+              </button>
+              <mat-menu #menuFechaP="matMenu" disableClose="true">
+                <div class="menu-filtro" (click)="$event.stopPropagation()">
+                  <label>Filtrar Rango de Fechas</label>
+                  <mat-form-field appearance="fill" class="w-full">
+                    <mat-label>Desde</mat-label>
+                    <input matInput [matDatepicker]="pickerInicioProgreso" [ngModel]="fechaProgresoTemp.start" (ngModelChange)="fechaProgresoTemp.start = $event">
+                    <mat-datepicker-toggle matSuffix [for]="pickerInicioProgreso"></mat-datepicker-toggle>
+                    <mat-datepicker #pickerInicioProgreso></mat-datepicker>
+                  </mat-form-field>
+                  <mat-form-field appearance="fill" class="w-full">
+                    <mat-label>Hasta</mat-label>
+                    <input matInput [matDatepicker]="pickerFinProgreso" [ngModel]="fechaProgresoTemp.end" (ngModelChange)="fechaProgresoTemp.end = $event">
+                    <mat-datepicker-toggle matSuffix [for]="pickerFinProgreso"></mat-datepicker-toggle>
+                    <mat-datepicker #pickerFinProgreso></mat-datepicker>
+                  </mat-form-field>
+                  <mat-checkbox [checked]="incluirSinFechaProgreso" (change)="incluirSinFechaProgreso = $event.checked" (click)="$event.stopPropagation()">
+                    Vacias
+                  </mat-checkbox>
+                  <div class="menu-botones-fijos">
+                    <button mat-button color="primary" (click)="aplicarFiltroPorRangoFechaEnProgresoConfirmada(); triggerFiltroFechaP.closeMenu()">Aplicar</button>
+                    <button mat-button (click)="borrarFiltroRangoFechaEnProgreso(); triggerFiltroFechaP.closeMenu()">Borrar Filtros</button>
+                  </div>
                 </div>
-              </div>
-            </mat-menu>
-          </ng-container>
-        </th>
+              </mat-menu>
+            </ng-container>
+          </th>
 
-        <!-- (9) Fecha Finalizado -->
-        <th [class.filtro-activo]="isFilterActive('fecha_finalizado')">
-          <!-- Filtros en encabezado desactivados -->
-          <ng-container *ngIf="true">
-            <button mat-button [matMenuTriggerFor]="menuFechaF" #triggerFiltroFechaF="matMenuTrigger" class="header-button">
-              Fecha Finalizado <mat-icon>arrow_drop_down</mat-icon>
-            </button>
-            <mat-menu #menuFechaF="matMenu" disableClose="true">
-              <div class="menu-filtro" (click)="$event.stopPropagation()">
-                <label>Filtrar Rango de Fechas</label>
-                <mat-form-field appearance="fill" class="w-full">
-                  <mat-label>Desde</mat-label>
-                  <input matInput [matDatepicker]="pickerInicioFinalizado" [ngModel]="fechaFinalTemp.start" (ngModelChange)="fechaFinalTemp.start = $event">
-                  <mat-datepicker-toggle matSuffix [for]="pickerInicioFinalizado"></mat-datepicker-toggle>
-                  <mat-datepicker #pickerInicioFinalizado [dateClass]="dateClassFinalizado"></mat-datepicker>
-                </mat-form-field>
-                <mat-form-field appearance="fill" class="w-full">
-                  <mat-label>Hasta</mat-label>
-                  <input matInput [matDatepicker]="pickerFinFinalizado" [ngModel]="fechaFinalTemp.end" (ngModelChange)="fechaFinalTemp.end = $event">
-                  <mat-datepicker-toggle matSuffix [for]="pickerFinFinalizado"></mat-datepicker-toggle>
-                  <mat-datepicker #pickerFinFinalizado [dateClass]="dateClassFinalizado"></mat-datepicker>
-                </mat-form-field>
-                <mat-checkbox [checked]="incluirSinFechaFinalizado" (change)="incluirSinFechaFinalizado = $event.checked" (click)="$event.stopPropagation()">
-                  Vacias
-                </mat-checkbox>
-                <div class="menu-botones-fijos">
-                  <button mat-button color="primary" (click)="aplicarFiltroPorRangoFechaFinalizadoConfirmada(); triggerFiltroFechaF.closeMenu()">Aplicar</button>
-                  <button mat-button (click)="borrarFiltroRangoFechaFinalizado(); triggerFiltroFechaF.closeMenu()">Borrar Filtros</button>
+          <!-- (9) Fecha Finalizado -->
+          <th [class.filtro-activo]="isFilterActive('fecha_finalizado')">
+            <ng-container *ngIf="true">
+              <button mat-button [matMenuTriggerFor]="menuFechaF" #triggerFiltroFechaF="matMenuTrigger" class="header-button">
+                Fecha Finalizado <mat-icon>arrow_drop_down</mat-icon>
+              </button>
+              <mat-menu #menuFechaF="matMenu" disableClose="true">
+                <div class="menu-filtro" (click)="$event.stopPropagation()">
+                  <label>Filtrar Rango de Fechas</label>
+                  <mat-form-field appearance="fill" class="w-full">
+                    <mat-label>Desde</mat-label>
+                    <input matInput [matDatepicker]="pickerInicioFinalizado" [ngModel]="fechaFinalTemp.start" (ngModelChange)="fechaFinalTemp.start = $event">
+                    <mat-datepicker-toggle matSuffix [for]="pickerInicioFinalizado"></mat-datepicker-toggle>
+                    <mat-datepicker #pickerInicioFinalizado [dateClass]="dateClassFinalizado"></mat-datepicker>
+                  </mat-form-field>
+                  <mat-form-field appearance="fill" class="w-full">
+                    <mat-label>Hasta</mat-label>
+                    <input matInput [matDatepicker]="pickerFinFinalizado" [ngModel]="fechaFinalTemp.end" (ngModelChange)="fechaFinalTemp.end = $event">
+                    <mat-datepicker-toggle matSuffix [for]="pickerFinFinalizado"></mat-datepicker-toggle>
+                    <mat-datepicker #pickerFinFinalizado [dateClass]="dateClassFinalizado"></mat-datepicker>
+                  </mat-form-field>
+                  <mat-checkbox [checked]="incluirSinFechaFinalizado" (change)="incluirSinFechaFinalizado = $event.checked" (click)="$event.stopPropagation()">
+                    Vacias
+                  </mat-checkbox>
+                  <div class="menu-botones-fijos">
+                    <button mat-button color="primary" (click)="aplicarFiltroPorRangoFechaFinalizadoConfirmada(); triggerFiltroFechaF.closeMenu()">Aplicar</button>
+                    <button mat-button (click)="borrarFiltroRangoFechaFinalizado(); triggerFiltroFechaF.closeMenu()">Borrar Filtros</button>
+                  </div>
                 </div>
-              </div>
-            </mat-menu>
-          </ng-container>
-        </th>
+              </mat-menu>
+            </ng-container>
+          </th>
 
-        <!-- (10) Departamento -->
-        <th [class.filtro-activo]="isFilterActive('departamento')">
-          Departamento
-          <!-- Filtros en encabezado desactivados -->
-          <ng-container *ngIf="false">
-            <button mat-button [matMenuTriggerFor]="menuDepartamento"
-                    #triggerFiltroDepartamento="matMenuTrigger"
-                    (click)="onAbrirFiltro('departamento', triggerFiltroDepartamento)"
-                    class="header-button">
-              Departamento <mat-icon>arrow_drop_down</mat-icon>
-            </button>
-            <mat-menu #menuDepartamento="matMenu" disableClose="true">
-              <mat-divider></mat-divider>
-              <div class="menu-filtro" (click)="$event.stopPropagation()">
-                <label>Filtrar Departamento</label>
-                <mat-form-field *ngIf="permiteBusqueda('departamento')" appearance="fill" class="buscador-filtro" (click)="$event.stopPropagation()">
-                  <mat-label>Buscar</mat-label>
-                  <input matInput [(ngModel)]="filtroDeptoTexto" (ngModelChange)="filtrarOpcionesTexto('departamento')">
-                </mat-form-field>
-                <mat-checkbox
-                  [checked]="isTodoSeleccionado('departamento')"
-                  (change)="alternarSeleccionTemporal('departamento', $event.checked)"
-                  (click)="$event.stopPropagation()"
-                  name="dep_selectAll">
-                  Seleccionar todo
-                </mat-checkbox>
-                <div class="opciones-scrollable">
+          <!-- (10) Departamento -->
+          <th [class.filtro-activo]="isFilterActive('departamento')">
+            Departamento
+            <!-- Filtros en encabezado desactivados -->
+            <ng-container *ngIf="false">
+              <button mat-button [matMenuTriggerFor]="menuDepartamento"
+                      #triggerFiltroDepartamento="matMenuTrigger"
+                      (click)="onAbrirFiltro('departamento', triggerFiltroDepartamento)"
+                      class="header-button">
+                Departamento <mat-icon>arrow_drop_down</mat-icon>
+              </button>
+              <mat-menu #menuDepartamento="matMenu" disableClose="true">
+                <mat-divider></mat-divider>
+                <div class="menu-filtro" (click)="$event.stopPropagation()">
+                  <label>Filtrar Departamento</label>
+                  <mat-form-field *ngIf="permiteBusqueda('departamento')" appearance="fill" class="buscador-filtro" (click)="$event.stopPropagation()">
+                    <mat-label>Buscar</mat-label>
+                    <input matInput [(ngModel)]="filtroDeptoTexto" (ngModelChange)="filtrarOpcionesTexto('departamento')">
+                  </mat-form-field>
                   <mat-checkbox
-                    *ngFor="let item of temporalSeleccionados['departamento']; let i = index"
-                    [checked]="item.seleccionado"
-                    (change)="actualizarSeleccionTemporal('departamento', i, $event.checked)"
-                    [name]="'dep_' + i"
-                    (click)="$event.stopPropagation()">
-                    {{ item.etiqueta ?? item.valor }}
+                    [checked]="isTodoSeleccionado('departamento')"
+                    (change)="alternarSeleccionTemporal('departamento', $event.checked)"
+                    (click)="$event.stopPropagation()"
+                    name="dep_selectAll">
+                    Seleccionar todo
                   </mat-checkbox>
+                  <div class="opciones-scrollable">
+                    <mat-checkbox
+                      *ngFor="let item of temporalSeleccionados['departamento']; let i = index"
+                      [checked]="item.seleccionado"
+                      (change)="actualizarSeleccionTemporal('departamento', i, $event.checked)"
+                      [name]="'dep_' + i"
+                      (click)="$event.stopPropagation()">
+                      {{ item.etiqueta ?? item.valor }}
+                    </mat-checkbox>
+                  </div>
+                  <div class="menu-botones-fijos">
+                    <button mat-button color="primary" (click)="cerrarYAplicar('departamento', triggerFiltroDepartamento)">Aplicar</button>
+                    <button mat-button (click)="cerrarYLimpiar('departamento', triggerFiltroDepartamento)">Borrar Filtros</button>
+                  </div>
                 </div>
-                <div class="menu-botones-fijos">
-                  <button mat-button color="primary" (click)="cerrarYAplicar('departamento', triggerFiltroDepartamento)">Aplicar</button>
-                  <button mat-button (click)="cerrarYLimpiar('departamento', triggerFiltroDepartamento)">Borrar Filtros</button>
-                </div>
-              </div>
-            </mat-menu>
-          </ng-container>
-        </th>
+              </mat-menu>
+            </ng-container>
+          </th>
 
-        <!-- (11) Subcategoría -->
-        <th [class.filtro-activo]="isFilterActive('subcategoria')">
-          Subcategoría
-          <!-- Filtros en encabezado desactivados -->
-          <ng-container *ngIf="false">
-            <button mat-button [matMenuTriggerFor]="menuSubcategoria"
-                    #triggerFiltroSubcategoria="matMenuTrigger"
-                    (click)="onAbrirFiltro('subcategoria', triggerFiltroSubcategoria)"
-                    class="header-button">
-              Subcategoría <mat-icon>arrow_drop_down</mat-icon>
-            </button>
-            <mat-menu #menuSubcategoria="matMenu" disableClose="true">
-              <mat-divider></mat-divider>
-              <div class="menu-filtro" (click)="$event.stopPropagation()">
-                <label>Filtrar Subcategoría</label>
-                <mat-form-field *ngIf="permiteBusqueda('subcategoria')" appearance="fill" class="buscador-filtro" (click)="$event.stopPropagation()">
-                  <mat-label>Buscar</mat-label>
-                  <input matInput [(ngModel)]="filtroSubcategoriaTexto" (ngModelChange)="filtrarOpcionesTexto('subcategoria')">
-                </mat-form-field>
-                <mat-checkbox
-                  [checked]="isTodoSeleccionado('subcategoria')"
-                  (change)="alternarSeleccionTemporal('subcategoria', $event.checked)"
-                  (click)="$event.stopPropagation()"
-                  name="subcat_selectAll">
-                  Seleccionar todo
-                </mat-checkbox>
-                <div class="opciones-scrollable">
+          <!-- (11) Subcategoría -->
+          <th [class.filtro-activo]="isFilterActive('subcategoria')">
+            Subcategoría
+            <!-- Filtros en encabezado desactivados -->
+            <ng-container *ngIf="false">
+              <button mat-button [matMenuTriggerFor]="menuSubcategoria"
+                      #triggerFiltroSubcategoria="matMenuTrigger"
+                      (click)="onAbrirFiltro('subcategoria', triggerFiltroSubcategoria)"
+                      class="header-button">
+                Subcategoría <mat-icon>arrow_drop_down</mat-icon>
+              </button>
+              <mat-menu #menuSubcategoria="matMenu" disableClose="true">
+                <mat-divider></mat-divider>
+                <div class="menu-filtro" (click)="$event.stopPropagation()">
+                  <label>Filtrar Subcategoría</label>
+                  <mat-form-field *ngIf="permiteBusqueda('subcategoria')" appearance="fill" class="buscador-filtro" (click)="$event.stopPropagation()">
+                    <mat-label>Buscar</mat-label>
+                    <input matInput [(ngModel)]="filtroSubcategoriaTexto" (ngModelChange)="filtrarOpcionesTexto('subcategoria')">
+                  </mat-form-field>
                   <mat-checkbox
-                    *ngFor="let item of temporalSeleccionados['subcategoria']; let i = index"
-                    [checked]="item.seleccionado"
-                    (change)="actualizarSeleccionTemporal('subcategoria', i, $event.checked)"
-                    [name]="'subcat_' + i"
-                    (click)="$event.stopPropagation()">
-                    {{ item.etiqueta ?? item.valor }}
+                    [checked]="isTodoSeleccionado('subcategoria')"
+                    (change)="alternarSeleccionTemporal('subcategoria', $event.checked)"
+                    (click)="$event.stopPropagation()"
+                    name="subcat_selectAll">
+                    Seleccionar todo
                   </mat-checkbox>
+                  <div class="opciones-scrollable">
+                    <mat-checkbox
+                      *ngFor="let item of temporalSeleccionados['subcategoria']; let i = index"
+                      [checked]="item.seleccionado"
+                      (change)="actualizarSeleccionTemporal('subcategoria', i, $event.checked)"
+                      [name]="'subcat_' + i"
+                      (click)="$event.stopPropagation()">
+                      {{ item.etiqueta ?? item.valor }}
+                    </mat-checkbox>
+                  </div>
+                  <div class="menu-botones-fijos">
+                    <button mat-button color="primary" (click)="cerrarYAplicar('subcategoria', triggerFiltroSubcategoria)">Aplicar</button>
+                    <button mat-button (click)="cerrarYLimpiar('subcategoria', triggerFiltroSubcategoria)">Borrar Filtros</button>
+                  </div>
                 </div>
-                <div class="menu-botones-fijos">
-                  <button mat-button color="primary" (click)="cerrarYAplicar('subcategoria', triggerFiltroSubcategoria)">Aplicar</button>
-                  <button mat-button (click)="cerrarYLimpiar('subcategoria', triggerFiltroSubcategoria)">Borrar Filtros</button>
-                </div>
-              </div>
-            </mat-menu>
-          </ng-container>
-        </th>
+              </mat-menu>
+            </ng-container>
+          </th>
 
-        <!-- (12) Detalle -->
-        <th [class.filtro-activo]="isFilterActive('detalle')">
-          Detalle
-          <!-- Filtros en encabezado desactivados -->
-          <ng-container *ngIf="false">
-            <button mat-button [matMenuTriggerFor]="menuDetalle"
-                    #triggerFiltroDetalle="matMenuTrigger"
-                    (click)="onAbrirFiltro('detalle', triggerFiltroDetalle)"
-                    class="header-button">
-              Detalle <mat-icon>arrow_drop_down</mat-icon>
-            </button>
-            <mat-menu #menuDetalle="matMenu" disableClose="true">
-              <mat-divider></mat-divider>
-              <div class="menu-filtro" (click)="$event.stopPropagation()">
-                <label>Filtrar Detalle</label>
-                <mat-form-field *ngIf="permiteBusqueda('detalle')" appearance="fill" class="buscador-filtro" (click)="$event.stopPropagation()">
-                  <mat-label>Buscar</mat-label>
-                  <input matInput [(ngModel)]="filtroDetalleTexto" (ngModelChange)="filtrarOpcionesTexto('detalle')">
-                </mat-form-field>
-                <mat-checkbox
-                  [checked]="isTodoSeleccionado('detalle')"
-                  (change)="alternarSeleccionTemporal('detalle', $event.checked)"
-                  (click)="$event.stopPropagation()"
-                  name="detalle_selectAll">
-                  Seleccionar todo
-                </mat-checkbox>
-                <div class="opciones-scrollable">
+          <!-- (12) Detalle -->
+          <th [class.filtro-activo]="isFilterActive('detalle')">
+            Detalle
+            <!-- Filtros en encabezado desactivados -->
+            <ng-container *ngIf="false">
+              <button mat-button [matMenuTriggerFor]="menuDetalle"
+                      #triggerFiltroDetalle="matMenuTrigger"
+                      (click)="onAbrirFiltro('detalle', triggerFiltroDetalle)"
+                      class="header-button">
+                Detalle <mat-icon>arrow_drop_down</mat-icon>
+              </button>
+              <mat-menu #menuDetalle="matMenu" disableClose="true">
+                <mat-divider></mat-divider>
+                <div class="menu-filtro" (click)="$event.stopPropagation()">
+                  <label>Filtrar Detalle</label>
+                  <mat-form-field *ngIf="permiteBusqueda('detalle')" appearance="fill" class="buscador-filtro" (click)="$event.stopPropagation()">
+                    <mat-label>Buscar</mat-label>
+                    <input matInput [(ngModel)]="filtroDetalleTexto" (ngModelChange)="filtrarOpcionesTexto('detalle')">
+                  </mat-form-field>
                   <mat-checkbox
-                    *ngFor="let item of temporalSeleccionados['detalle']; let i = index"
-                    [checked]="item.seleccionado"
-                    (change)="actualizarSeleccionTemporal('detalle', i, $event.checked)"
-                    [name]="'detalle_' + i"
-                    (click)="$event.stopPropagation()">
-                    {{ item.etiqueta ?? item.valor }}
+                    [checked]="isTodoSeleccionado('detalle')"
+                    (change)="alternarSeleccionTemporal('detalle', $event.checked)"
+                    (click)="$event.stopPropagation()"
+                    name="detalle_selectAll">
+                    Seleccionar todo
                   </mat-checkbox>
+                  <div class="opciones-scrollable">
+                    <mat-checkbox
+                      *ngFor="let item of temporalSeleccionados['detalle']; let i = index"
+                      [checked]="item.seleccionado"
+                      (change)="actualizarSeleccionTemporal('detalle', i, $event.checked)"
+                      [name]="'detalle_' + i"
+                      (click)="$event.stopPropagation()">
+                      {{ item.etiqueta ?? item.valor }}
+                    </mat-checkbox>
+                  </div>
+                  <div class="menu-botones-fijos">
+                    <button mat-button color="primary" (click)="cerrarYAplicar('detalle', triggerFiltroDetalle)">Aplicar</button>
+                    <button mat-button (click)="cerrarYLimpiar('detalle', triggerFiltroDetalle)">Borrar Filtros</button>
+                  </div>
                 </div>
-                <div class="menu-botones-fijos">
-                  <button mat-button color="primary" (click)="cerrarYAplicar('detalle', triggerFiltroDetalle)">Aplicar</button>
-                  <button mat-button (click)="cerrarYLimpiar('detalle', triggerFiltroDetalle)">Borrar Filtros</button>
-                </div>
-              </div>
-            </mat-menu>
-          </ng-container>
-        </th>
+              </mat-menu>
+            </ng-container>
+          </th>
 
-        <!-- (13) Acciones -->
-        <th>Acciones</th>
+          <!-- (13) Acciones -->
+          <th>Acciones</th>
 
-        <!-- (14) Fecha Solución -->
-        <th>Fecha Solución</th>
+          <!-- (14) Fecha Solución -->
+          <th>Fecha Solución</th>
 
-        <!-- (15) Historial -->
-        <th>Historial</th>
-      </tr>
-    </thead>
+          <!-- (15) Historial -->
+          <th>Historial</th>
+        </tr>
+      </thead>
 
-    <tbody>
-      <tr *ngFor="let ticket of visibleTickets">
-        <td>{{ ticket.id }}</td>
-        <td>{{ ticket.categoria || '—' }}</td>
-        <td class="td-aparato">
-          <div class="td-aparato-inner">
-            <span class="aparato-text">{{ getNombreCortoAparato(ticket) }}</span>
+      <tbody>
+        <tr *ngFor="let ticket of visibleTickets">
+          <td>{{ ticket.id }}</td>
+          <td>{{ ticket.categoria || '—' }}</td>
 
-            <span *ngIf="necesitaRef(ticket)"
-                  class="icono-refaccion-wrap"
-                  [matTooltip]="ticket.descripcion_refaccion || 'Requiere refacción'"
-                  matTooltipShowDelay="1500"
-                  matTooltipClass="tooltip-wide">
-              <mat-icon class="icono-refaccion" color="warn">build</mat-icon>
-            </span>
-          </div>
-        </td>
+          <td class="td-aparato">
+            <div class="td-aparato-inner">
+              <span class="aparato-text">{{ getNombreCortoAparato(ticket) }}</span>
 
+              <span
+                *ngIf="necesitaRef(ticket)"
+                class="icono-refaccion-wrap"
+                [matTooltip]="ticket.descripcion_refaccion || 'Requiere refacción'"
+                matTooltipShowDelay="1500"
+                matTooltipClass="tooltip-wide"
+              >
+                <mat-icon class="icono-refaccion" color="warn">build</mat-icon>
+              </span>
+            </div>
+          </td>
 
-
-
-
-        <td class="col-descripcion">
-          <div class="desc-wrap"
+          <td class="col-descripcion">
+            <div
+              class="desc-wrap"
               [class.expanded]="isDescExpanded[ticket.id]"
               [matTooltip]="ticket.descripcion"
               [matTooltipDisabled]="isDescExpanded[ticket.id]"
               matTooltipClass="tooltip-wide"
-              matTooltipShowDelay="250">
-            <ng-container *ngIf="getBugParts(ticket.descripcion) as parts">
-              <ng-container *ngIf="parts.prefix; else plainDesc">
-                <button type="button"
-                        class="tag tag-bug"
-                        (click)="openEvidencia(ticket)"
-                        [disabled]="!ticket.url_evidencia"
-                        [attr.aria-label]="ticket.url_evidencia ? 'Abrir evidencia' : 'Sin evidencia'">
-                  {{ parts.prefix | slice:1:-1 }}
-                </button>
-                <span class="desc-rest">&nbsp;{{ parts.rest }}</span>
+              matTooltipShowDelay="250"
+            >
+              <ng-container *ngIf="getBugParts(ticket.descripcion) as parts">
+                <ng-container *ngIf="parts.prefix; else plainDesc">
+                  <button
+                    type="button"
+                    class="tag tag-bug"
+                    (click)="openEvidencia(ticket)"
+                    [disabled]="!ticket.url_evidencia"
+                    [attr.aria-label]="ticket.url_evidencia ? 'Abrir evidencia' : 'Sin evidencia'"
+                  >
+                    {{ parts.prefix | slice:1:-1 }}
+                  </button>
+                  <span class="desc-rest">&nbsp;{{ parts.rest }}</span>
+                </ng-container>
+                <ng-template #plainDesc>{{ ticket.descripcion }}</ng-template>
               </ng-container>
-              <ng-template #plainDesc>{{ ticket.descripcion }}</ng-template>
-            </ng-container>
-          </div>
+            </div>
 
-          <button mat-icon-button
-                  class="desc-more"
-                  (click)="toggleDesc(ticket.id)"
-                  [matTooltip]="isDescExpanded[ticket.id] ? 'Contraer' : 'Ver completo'"
-                  matTooltipShowDelay="250"
-                  aria-label="Ver/ocultar descripción">
-            <mat-icon>{{ isDescExpanded[ticket.id] ? 'expand_less' : 'expand_more' }}</mat-icon>
-          </button>
-        </td>
-
-        <td>{{ getNombreSucursal(ticket) }}</td>
-        <td>{{ ticket.estado }}</td>
-        <td>{{ ticket.criticidad }}</td>
-        <td>
-          {{ ticket.fecha_creacion
-              ? (ticket.fecha_creacion | date:'dd/MM/yyyy hh:mm a':'America/Tijuana')
-              : '—' }}
-        </td>
-
-        <td>
-          {{ ticket.fecha_en_progreso
-              ? (ticket.fecha_en_progreso | date:'dd/MM/yyyy hh:mm a':'America/Tijuana')
-              : '—' }}
-        </td>
-
-        <td>
-          {{ ticket.fecha_finalizado
-              ? (ticket.fecha_finalizado | date:'dd/MM/yyyy hh:mm a':'America/Tijuana')
-              : '—' }}
-        </td>
-        <td>
-  {{ ticket.departamento }}
-</td>
-
-        <td>{{ getSubcategoriaVisible(ticket) }}</td>
-        <td>{{ getDetalleVisible(ticket) }}</td>
-
-        <!-- Acciones -->
-        <td>
-          <div *ngIf="puedeEditarTickets">
-            <!-- Botón: pasar a En progreso -->
-            <button
-              *ngIf="puedeMostrarBotonEnProgreso(ticket)"
-              mat-button
-              color="accent"
-              (click)="cambiarEstadoEnProgreso(ticket)"
-              [disabled]="ticket.requiere_aprobacion && (ticket.aprobacion_estado || 'pendiente') !== 'aprobado'"
-
-            >
-              <mat-icon>play_circle</mat-icon> En progreso
-            </button>
-
-            <!-- Botón: Finalizar (jefe inicia flujo de cierre) -->
-            <button
-              *ngIf="puedeMostrarBotonFinalizar(ticket)"
-              class="boton-estado boton-finalizar"
-              (click)="solicitarCierre(ticket)">
-              <mat-icon>play_circle</mat-icon> Finalizar
-            </button>
-          </div>
-
-          <!-- Botón: Cierre administrativo por gerente/admin -->
-          <button
-            *ngIf="puedeMostrarBotonCerrarDesdeCero(ticket)"
-            class="boton-estado boton-finalizar"
-            (click)="cerrarDesdeCeroPorGerente(ticket)">
-            <mat-icon>task_alt</mat-icon> Cierre gerente
-          </button>
-
-          <!-- Botones de validación de cierre para GERENTE / ADMIN -->
-          <div *ngIf="puedeMostrarBotonesValidarCierre(ticket)"
-              style="display:flex; gap:4px; align-items:center;">
-
-            <!-- Aceptar -->
             <button
               mat-icon-button
-              color="primary"
-              (click)="aceptarCierre(ticket)">
-              <mat-icon>check_circle</mat-icon>
-            </button>
-
-            <!-- Rechazar -->
-            <button
-              mat-icon-button
-              color="warn"
-              (click)="rechazarCierre(ticket)">
-              <mat-icon>cancel</mat-icon>
-            </button>
-
-          </div>
-
-
-
-          <!-- ====== Aprobación RRHH (visible solo si aplica) ====== -->
-          <div class="acciones-rrhh" *ngIf="ticket.requiere_aprobacion">
-
-            <!-- Badge de estado de aprobación -->
-            <mat-chip-list>
-              <mat-chip [disabled]="true" selected>
-                Aprobación: {{ ticket.aprobacion_estado || 'pendiente' }}
-              </mat-chip>
-            </mat-chip-list>
-
-            <!-- Botones para GERENTE_REGIONAL / Admin / Aprobador designado -->
-            <div
-              *ngIf="isPendienteRRHH(ticket) && canAprobarRRHH(ticket)"
-              class="acciones-rrhh-botones"
-              style="display:flex; gap:.5rem; margin-top:.25rem;"
+              class="desc-more"
+              (click)="toggleDesc(ticket.id)"
+              [matTooltip]="isDescExpanded[ticket.id] ? 'Contraer' : 'Ver completo'"
+              matTooltipShowDelay="250"
+              aria-label="Ver/ocultar descripción"
             >
+              <mat-icon>{{ isDescExpanded[ticket.id] ? 'expand_less' : 'expand_more' }}</mat-icon>
+            </button>
+          </td>
+
+          <td>{{ getNombreSucursal(ticket) }}</td>
+          <td>{{ ticket.estado }}</td>
+          <td>{{ ticket.criticidad }}</td>
+
+          <td>
+            {{ ticket.fecha_creacion
+                ? (ticket.fecha_creacion | date:'dd/MM/yyyy hh:mm a':'America/Tijuana')
+                : '—' }}
+          </td>
+
+          <td>
+            {{ ticket.fecha_en_progreso
+                ? (ticket.fecha_en_progreso | date:'dd/MM/yyyy hh:mm a':'America/Tijuana')
+                : '—' }}
+          </td>
+
+          <td>
+            {{ ticket.fecha_finalizado
+                ? (ticket.fecha_finalizado | date:'dd/MM/yyyy hh:mm a':'America/Tijuana')
+                : '—' }}
+          </td>
+
+          <td>{{ ticket.departamento }}</td>
+          <td>{{ getSubcategoriaVisible(ticket) }}</td>
+          <td>{{ getDetalleVisible(ticket) }}</td>
+
+          <!-- Acciones -->
+          <td>
+            <div *ngIf="puedeEditarTickets">
+              <!-- Botón: pasar a En progreso -->
               <button
-                mat-stroked-button
-                color="primary"
-                (click)="onRrhhAprobar(ticket)"
-                aria-label="Aprobar RRHH">
-                Aprobar
+                *ngIf="puedeMostrarBotonEnProgreso(ticket)"
+                mat-button
+                color="accent"
+                (click)="cambiarEstadoEnProgreso(ticket)"
+                [disabled]="ticket.requiere_aprobacion && (ticket.aprobacion_estado || 'pendiente') !== 'aprobado'"
+              >
+                <mat-icon>play_circle</mat-icon> En progreso
               </button>
 
+              <!-- Botón: Finalizar (jefe inicia flujo de cierre) -->
               <button
-                mat-stroked-button
-                color="warn"
-                (click)="onRrhhRechazar(ticket)"
-                aria-label="Rechazar RRHH">
-                Rechazar
+                *ngIf="puedeMostrarBotonFinalizar(ticket)"
+                class="boton-estado boton-finalizar"
+                (click)="solicitarCierre(ticket)"
+              >
+                <mat-icon>play_circle</mat-icon> Finalizar
               </button>
             </div>
-          </div>
-        </td>
 
-      <!-- Fecha Solución -->
-      <td>
-        <ng-container *ngIf="ticket.fecha_solucion; else soloLecturaSinFecha">
-          {{ ticket.fecha_solucion | date:'dd/MM/yy' }}
+            <!-- Botón: Cierre administrativo por gerente/admin -->
+            <button
+              *ngIf="puedeMostrarBotonCerrarDesdeCero(ticket)"
+              class="boton-estado boton-finalizar"
+              (click)="cerrarDesdeCeroPorGerente(ticket)"
+            >
+              <mat-icon>task_alt</mat-icon> Cierre gerente
+            </button>
 
-          <button
-            *ngIf="
-              puedeEditarTickets &&
-              ((ticket.estado ?? '').toString().trim().toLowerCase() === 'en progreso')
-            "
-            mat-icon-button
-            class="boton-editar-fecha"
-            matTooltip="Editar fecha solución"
-            (click)="abrirEditarFechaSolucion(ticket)">
-            <mat-icon>edit</mat-icon>
-          </button>
+            <!-- Botones de validación de cierre para GERENTE / ADMIN -->
+            <div
+              *ngIf="puedeMostrarBotonesValidarCierre(ticket)"
+              class="acciones-validacion-cierre"
+            >
+              <!-- Aceptar -->
+              <button
+                mat-icon-button
+                color="primary"
+                (click)="aceptarCierre(ticket)"
+              >
+                <mat-icon>check_circle</mat-icon>
+              </button>
 
-        </ng-container>
+              <!-- Rechazar -->
+              <button
+                mat-icon-button
+                color="warn"
+                (click)="rechazarCierre(ticket)"
+              >
+                <mat-icon>cancel</mat-icon>
+              </button>
+            </div>
 
-        <ng-template #soloLecturaSinFecha>
-          <span class="text-gray-400">Sin asignar</span>
-        </ng-template>
-      </td>
+            <!-- ====== Aprobación RRHH (visible solo si aplica) ====== -->
+            <div class="acciones-rrhh" *ngIf="ticket.requiere_aprobacion">
+              <!-- Badge de estado de aprobación -->
+              <mat-chip-list>
+                <mat-chip [disabled]="true" selected>
+                  Aprobación: {{ ticket.aprobacion_estado || 'pendiente' }}
+                </mat-chip>
+              </mat-chip-list>
 
+              <!-- Botones para GERENTE_REGIONAL / Admin / Aprobador designado -->
+              <div
+                *ngIf="isPendienteRRHH(ticket) && canAprobarRRHH(ticket)"
+                class="acciones-rrhh-botones"
+              >
+                <button
+                  mat-stroked-button
+                  color="primary"
+                  (click)="onRrhhAprobar(ticket)"
+                  aria-label="Aprobar RRHH"
+                >
+                  Aprobar
+                </button>
 
-        <!-- Historial -->
-        <td>
-          <button mat-button color="primary" (click)="abrirHistorialModal(ticket)">
-            Ver Historial
-          </button>
-        </td>
-      </tr>
-    </tbody>
-  </table>
-</div>
+                <button
+                  mat-stroked-button
+                  color="warn"
+                  (click)="onRrhhRechazar(ticket)"
+                  aria-label="Rechazar RRHH"
+                >
+                  Rechazar
+                </button>
+              </div>
+            </div>
+          </td>
 
-<!-- Modal para asignar fecha solución -->
-<div *ngIf="showModalAsignarFecha" class="modal-asignar-fecha-overlay">
-<app-asignar-fecha-modal
-  [fechaSeleccionada]="fechaSolucionTentativa"
-  [ticket]="ticketParaAsignarFecha"
-  (onGuardar)="onGuardarFechaSolucion($event)"
-  (onCancelar)="onCancelarAsignarFecha()">
-</app-asignar-fecha-modal>
-</div>
+          <!-- Fecha Solución -->
+          <td>
+            <ng-container *ngIf="ticket.fecha_solucion; else soloLecturaSinFecha">
+              {{ ticket.fecha_solucion | date:'dd/MM/yy' }}
 
-<!-- Aviso de límite -->
-<div *ngIf="mostrarAvisoLimite" class="text-warning text-sm">
-  ⚠️ Se están mostrando solo los primeros 100 resultados filtrados.
-</div>
+              <button
+                *ngIf="
+                  puedeEditarTickets &&
+                  ((ticket.estado ?? '').toString().trim().toLowerCase() === 'en progreso')
+                "
+                mat-icon-button
+                class="boton-editar-fecha"
+                matTooltip="Editar fecha solución"
+                (click)="abrirEditarFechaSolucion(ticket)"
+              >
+                <mat-icon>edit</mat-icon>
+              </button>
+            </ng-container>
 
-<!-- Paginación + Export -->
-<div class="pagination-export-container">
-  <div class="pagination-container">
-    <button class="pagination-button" (click)="cambiarPagina(-1)" [disabled]="page === 1">
-      Anterior
-    </button>
-    <span>{{page}} de {{totalPages()}}</span>
-    <button class="pagination-button" (click)="cambiarPagina(1)" [disabled]="page === totalPages()">
-      Siguiente
-    </button>
+            <ng-template #soloLecturaSinFecha>
+              <span class="text-gray-400">Sin asignar</span>
+            </ng-template>
+          </td>
+
+          <!-- Historial -->
+          <td>
+            <button mat-button color="primary" (click)="abrirHistorialModal(ticket)">
+              Ver Historial
+            </button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
   </div>
 
-  <div class="export-container">
-    <button class="boton-exportar" (click)="exportarTickets()" [disabled]="exportandoExcel">
-      <ng-container *ngIf="!exportandoExcel">📥 Exportar a Excel</ng-container>
-      <ng-container *ngIf="exportandoExcel">⌛ Exportando...</ng-container>
-    </button>
-
-    <button class="boton-limpiar-todo" (click)="limpiarTodosLosFiltros()">🧹 Limpiar Filtros</button>
+  <!-- Modal para asignar fecha solución -->
+  <div *ngIf="showModalAsignarFecha" class="modal-asignar-fecha-overlay">
+    <app-asignar-fecha-modal
+      [fechaSeleccionada]="fechaSolucionTentativa"
+      [ticket]="ticketParaAsignarFecha"
+      (onGuardar)="onGuardarFechaSolucion($event)"
+      (onCancelar)="onCancelarAsignarFecha()"
+    >
+    </app-asignar-fecha-modal>
   </div>
-</div>
+
+  <!-- Aviso de límite -->
+  <div *ngIf="mostrarAvisoLimite" class="text-warning text-sm">
+    ⚠️ Se están mostrando solo los primeros 100 resultados filtrados.
+  </div>
+
+  <!-- Paginación + Export -->
+  <div class="pagination-export-container">
+    <div class="pagination-container">
+      <button class="pagination-button" (click)="cambiarPagina(-1)" [disabled]="page === 1">
+        Anterior
+      </button>
+      <span>{{ page }} de {{ totalPages() }}</span>
+      <button class="pagination-button" (click)="cambiarPagina(1)" [disabled]="page === totalPages()">
+        Siguiente
+      </button>
+    </div>
+
+    <div class="export-container">
+      <button class="boton-exportar" (click)="exportarTickets()" [disabled]="exportandoExcel">
+        <ng-container *ngIf="!exportandoExcel">📥 Exportar a Excel</ng-container>
+        <ng-container *ngIf="exportandoExcel">⌛ Exportando...</ng-container>
+      </button>
+
+      <button class="boton-limpiar-todo" (click)="limpiarTodosLosFiltros()">🧹 Limpiar Filtros</button>
+    </div>
+  </div>
+</section>
