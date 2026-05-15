@@ -280,7 +280,7 @@
 }
 
 .tabla-tickets .c-acc {
-  width: 170px;
+  width: 150px;
 }
 
 .tabla-tickets .c-sol {
@@ -548,28 +548,90 @@ td.col-descripcion {
    Suite Ultra UI v1 - Acciones por fila
    ========================================================================== */
 
-.boton-estado {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
+.td-acciones {
+  min-width: 150px;
+}
+
+.td-acciones,
+.td-acciones > div {
+  text-align: center;
+}
+
+.ticket-action {
+  min-height: 28px;
+  width: 128px;
   border: 0;
   border-radius: 999px;
-  padding: 7px 10px;
-  font-weight: 800;
+  padding: 5px 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 900;
+  white-space: nowrap;
   cursor: pointer;
   transition:
     transform 0.12s ease,
-    filter 0.16s ease;
+    box-shadow 0.16s ease,
+    filter 0.16s ease,
+    background-color 0.16s ease;
 }
 
-.boton-estado:hover {
+.ticket-action + .ticket-action,
+.td-acciones .ticket-action:not(:first-child) {
+  margin-top: 5px;
+}
+
+.ticket-action mat-icon {
+  width: 15px;
+  height: 15px;
+  font-size: 15px;
+  line-height: 15px;
+}
+
+.ticket-action:hover:not(:disabled) {
   transform: translateY(-1px);
-  filter: brightness(0.98);
 }
 
-.boton-finalizar {
+.ticket-action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.ticket-action--finish {
   background: var(--ultra-orange);
   color: var(--ultra-surface);
+  box-shadow: 0 6px 14px rgba(229, 69, 37, 0.18);
+}
+
+.ticket-action--finish:hover:not(:disabled) {
+  filter: brightness(0.96);
+  box-shadow: 0 8px 18px rgba(229, 69, 37, 0.24);
+}
+
+.ticket-action--manager {
+  background: var(--ultra-black-90);
+  color: var(--ultra-surface);
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.14);
+}
+
+.ticket-action--manager:hover:not(:disabled) {
+  background: var(--ultra-charcoal);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.20);
+}
+
+.ticket-action--progress {
+  width: auto;
+  min-width: 118px;
+  color: var(--ultra-orange);
+  background: var(--ultra-orange-soft);
+  border: 1px solid rgba(229, 69, 37, 0.22);
+}
+
+.ticket-action--progress:hover:not(:disabled) {
+  background: #fff1ec;
 }
 
 .boton-editar-fecha {

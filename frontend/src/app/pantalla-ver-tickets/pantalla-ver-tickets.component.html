@@ -739,36 +739,39 @@
           <td>{{ getDetalleVisible(ticket) }}</td>
 
           <!-- Acciones -->
-          <td>
+          <td class="td-acciones">
             <div *ngIf="puedeEditarTickets">
               <!-- Botón: pasar a En progreso -->
               <button
                 *ngIf="puedeMostrarBotonEnProgreso(ticket)"
                 mat-button
-                color="accent"
+                class="ticket-action ticket-action--progress"
                 (click)="cambiarEstadoEnProgreso(ticket)"
                 [disabled]="ticket.requiere_aprobacion && (ticket.aprobacion_estado || 'pendiente') !== 'aprobado'"
               >
-                <mat-icon>play_circle</mat-icon> En progreso
+                <mat-icon>play_circle</mat-icon>
+                <span>En progreso</span>
               </button>
 
               <!-- Botón: Finalizar (jefe inicia flujo de cierre) -->
               <button
                 *ngIf="puedeMostrarBotonFinalizar(ticket)"
-                class="boton-estado boton-finalizar"
+                class="ticket-action ticket-action--finish"
                 (click)="solicitarCierre(ticket)"
               >
-                <mat-icon>play_circle</mat-icon> Finalizar
+                <mat-icon>play_circle</mat-icon>
+                <span>Finalizar</span>
               </button>
             </div>
 
             <!-- Botón: Cierre administrativo por gerente/admin -->
             <button
               *ngIf="puedeMostrarBotonCerrarDesdeCero(ticket)"
-              class="boton-estado boton-finalizar"
+              class="ticket-action ticket-action--manager"
               (click)="cerrarDesdeCeroPorGerente(ticket)"
             >
-              <mat-icon>task_alt</mat-icon> Cierre gerente
+              <mat-icon>task_alt</mat-icon>
+              <span>Cierre gerente</span>
             </button>
 
             <!-- Botones de validación de cierre para GERENTE / ADMIN -->
