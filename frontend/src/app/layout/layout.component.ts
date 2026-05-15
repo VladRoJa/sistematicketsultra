@@ -679,8 +679,8 @@ onMainMenuMouseEnter(event: MouseEvent, item: any): void {
 onMainMenuClick(item: any): void {
   this.navegarConCambio(item.path, item.label);
 }
-}
+
   // ============================================================================
   // Fin Suite Ultra UI v1 - Helpers visuales del menú principal
   // ============================================================================
-  
+}
