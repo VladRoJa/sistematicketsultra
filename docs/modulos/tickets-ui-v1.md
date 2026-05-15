@@ -152,3 +152,42 @@ Antes del commit debe comprobarse:
 - El historial se muestra si existen registros.
 - El estado vacío se muestra si no hay historial.
 - El botón Cerrar funciona.
+
+---
+
+## Modal Editar Fecha Solución UI v1
+
+### Objetivo
+
+Aplicar Suite Ultra UI v1 al modal de edición de fecha solución sin modificar la lógica funcional.
+
+Este modal forma parte del flujo de seguimiento de tickets y debe mantener la obligatoriedad de fecha y motivo.
+
+### Alcance
+
+- Aplicar paleta oficial Ultra.
+- Mejorar estructura visual del título.
+- Mejorar presentación de campos.
+- Mejorar botones de acción.
+- Mantener datepicker actual.
+- Mantener motivo obligatorio.
+- Mantener comportamiento de carga.
+
+### No alcance
+
+- No cambiar validaciones.
+- No cambiar payload emitido.
+- No cambiar formato de fecha.
+- No cambiar permisos.
+- No cambiar lógica TypeScript.
+
+### Validación
+
+Antes del commit debe comprobarse:
+
+- El modal abre correctamente.
+- Precarga la fecha actual si existe.
+- No permite guardar sin fecha.
+- No permite guardar sin motivo.
+- Guardar cierra el modal con fecha y motivo.
+- Cancelar cierra sin cambios.
