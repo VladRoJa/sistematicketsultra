@@ -537,4 +537,150 @@ onClickReporteBug(): void {
 }
 
 
+
+
+
+
+
+  // ============================================================================
+  // Suite Ultra UI v1 - Helpers visuales del menú principal
+  // ============================================================================
+getMenuIcon(label: string): string {
+  const normalizedLabel = String(label || '').toLowerCase();
+
+  const iconsByLabel: Record<string, string> = {
+    tickets: 'confirmation_number',
+    mantenimiento: 'build',
+    inventario: 'inventory_2',
+    warehouse: 'warehouse',
+    catálogos: 'category',
+    catalogos: 'category',
+    asistencia: 'event_available',
+    permisos: 'admin_panel_settings',
+  };
+
+  return iconsByLabel[normalizedLabel] || 'apps';
 }
+
+getSubmenuIcon(label: string): string {
+  const normalizedLabel = String(label || '').toLowerCase();
+
+  if (normalizedLabel.includes('crear')) {
+    return 'add_circle';
+  }
+
+  if (normalizedLabel.includes('ver')) {
+    return 'visibility';
+  }
+
+  if (normalizedLabel.includes('track')) {
+    return 'monitoring';
+  }
+
+  if (normalizedLabel.includes('warehouse')) {
+    return 'folder_open';
+  }
+
+  if (normalizedLabel.includes('bitácora') || normalizedLabel.includes('bitacora')) {
+    return 'assignment';
+  }
+
+  if (normalizedLabel.includes('historial') || normalizedLabel.includes('consulta')) {
+    return 'history';
+  }
+
+  if (normalizedLabel.includes('configuración') || normalizedLabel.includes('configuracion')) {
+    return 'settings';
+  }
+
+  if (normalizedLabel.includes('calendario')) {
+    return 'calendar_month';
+  }
+
+  if (normalizedLabel.includes('movimientos')) {
+    return 'swap_horiz';
+  }
+
+  if (normalizedLabel.includes('existencias')) {
+    return 'inventory';
+  }
+
+  if (normalizedLabel.includes('reportes')) {
+    return 'bar_chart';
+  }
+
+  if (normalizedLabel.includes('carga')) {
+    return 'upload_file';
+  }
+
+  if (normalizedLabel.includes('sucursales')) {
+    return 'store';
+  }
+
+  return 'chevron_right';
+}
+
+getSubmenuDescription(label: string): string {
+  const normalizedLabel = String(label || '').toLowerCase();
+
+  if (normalizedLabel === 'ver tickets') {
+    return 'Consulta y da seguimiento a los tickets registrados.';
+  }
+
+  if (normalizedLabel === 'crear ticket') {
+    return 'Crea un nuevo ticket para soporte o solicitud.';
+  }
+
+  if (normalizedLabel.includes('track')) {
+    return 'Consulta indicadores diarios, metas y avance por club.';
+  }
+
+  if (normalizedLabel.includes('warehouse')) {
+    return 'Gestiona documentos, reportes y fuentes de información.';
+  }
+
+  if (normalizedLabel.includes('bitácora') || normalizedLabel.includes('bitacora')) {
+    return 'Captura ejecuciones y evidencias desde operación.';
+  }
+
+  if (normalizedLabel.includes('escritorio')) {
+    return 'Monitorea activos, programación y avance operativo.';
+  }
+
+  if (normalizedLabel.includes('historial') || normalizedLabel.includes('consulta')) {
+    return 'Revisa registros históricos y trazabilidad.';
+  }
+
+  if (normalizedLabel.includes('configuración') || normalizedLabel.includes('configuracion')) {
+    return 'Administra reglas, frecuencias y parámetros.';
+  }
+
+  if (normalizedLabel.includes('calendario')) {
+    return 'Visualiza programación y actividades por fecha.';
+  }
+
+  return 'Acceso rápido al módulo seleccionado.';
+}
+
+isMainMenuActive(label: string): boolean {
+  return this.currentSubmenu === label;
+}
+
+hasVisibleSubmenu(): boolean {
+  return this.submenuVisible && this.submenuActual.length > 0;
+}
+
+onMainMenuMouseEnter(event: MouseEvent, item: any): void {
+  this.cancelarOcultarSubmenu();
+  this.moverIndicador(event);
+  this.cambiarMenu(item.label);
+}
+
+onMainMenuClick(item: any): void {
+  this.navegarConCambio(item.path, item.label);
+}
+}
+  // ============================================================================
+  // Fin Suite Ultra UI v1 - Helpers visuales del menú principal
+  // ============================================================================
+  
