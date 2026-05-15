@@ -58,3 +58,55 @@ No se modificará:
 ```text
 frontend/src/app/pantalla-ver-tickets/pantalla-ver-tickets.component.html
 frontend/src/app/pantalla-ver-tickets/pantalla-ver-tickets.component.css
+
+```
+
+---
+
+## Crear Ticket UI v1
+
+### Objetivo
+
+Aplicar Suite Ultra UI v1 a la pantalla de creación de tickets sin modificar la lógica funcional existente.
+
+La pantalla debe sentirse parte del mismo sistema visual que Ver Tickets y el nuevo layout principal.
+
+---
+
+### Alcance
+
+Se aplicará una capa visual nueva a:
+
+- Contenedor principal.
+- Header de pantalla.
+- Card principal del formulario.
+- Agrupación visual de campos.
+- Campos dinámicos de categoría/niveles.
+- Subformularios existentes.
+- Selector de criticidad.
+- Botón principal de creación.
+- Estados de carga.
+
+---
+
+### No alcance
+
+No se modificará:
+
+- Lógica del formulario.
+- Validaciones existentes.
+- Payload enviado al backend.
+- Endpoints.
+- Reglas dinámicas por categoría/subcategoría.
+- Subformularios de aparatos.
+- Subformularios de sistemas.
+- Flujo de refacciones.
+- Permisos por rol.
+
+---
+
+### Archivos involucrados
+
+```text
+frontend/src/app/pantalla-crear-ticket/crear-ticket-refactor.component.html
+frontend/src/app/pantalla-crear-ticket/crear-ticket-refactor.component.css
