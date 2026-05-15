@@ -1,18 +1,269 @@
-/* frontend-angular/src/app/pantalla-crear-ticket/crear-ticket-refactor.component.css */
+/* ==========================================================================
+   Suite Ultra UI v1 - Pantalla Crear Ticket
+   ========================================================================== */
 
-.crear-ticket-card {
-  max-width: 480px;
-  margin: 2rem auto;
-  padding: 2rem 1.5rem;
-  border-radius: 24px;
-  box-shadow: 0 6px 32px 0 #0001;
-  background: #fff;
+:host {
+  display: block;
 }
 
-.mat-form-field {
+/* ==========================================================================
+   Suite Ultra UI v1 - Shell de página
+   ========================================================================== */
+
+.crear-ticket-page {
+  min-height: calc(100vh - 72px);
+  padding: 24px;
+  background:
+    radial-gradient(circle at top left, rgba(229, 69, 37, 0.08), transparent 28%),
+    var(--ultra-bg);
+  color: var(--ultra-gray-900);
+}
+
+.crear-ticket-page__header {
+  max-width: 980px;
+  margin: 0 auto 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 18px;
+}
+
+.crear-ticket-page__eyebrow {
+  display: inline-flex;
+  margin-bottom: 6px;
+  color: var(--ultra-orange);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.crear-ticket-page__title {
+  margin: 0;
+  color: var(--ultra-gray-900);
+  font-size: 30px;
+  line-height: 1.05;
+  font-weight: 900;
+}
+
+.crear-ticket-page__subtitle {
+  margin: 8px 0 0;
+  color: var(--ultra-gray-600);
+  font-size: 14px;
+}
+
+.crear-ticket-page__badge {
+  min-width: 180px;
+  padding: 12px 16px;
+  border: 1px solid var(--ultra-gray-200);
+  border-radius: var(--ultra-radius-lg);
+  background: var(--ultra-surface);
+  box-shadow: var(--ultra-shadow-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.crear-ticket-page__badge-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 14px;
+  background: var(--ultra-orange-soft);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+}
+
+.crear-ticket-page__badge strong {
+  display: block;
+  color: var(--ultra-gray-900);
+  font-size: 13px;
+  line-height: 1.1;
+}
+
+.crear-ticket-page__badge small {
+  display: block;
+  margin-top: 3px;
+  color: var(--ultra-gray-500);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Card principal
+   ========================================================================== */
+
+.crear-ticket-card {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 0;
+  border-radius: var(--ultra-radius-xl);
+  background: var(--ultra-surface);
+  box-shadow: var(--ultra-shadow-md);
+  overflow: hidden;
+}
+
+.crear-ticket-form {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Secciones del formulario
+   ========================================================================== */
+
+.crear-ticket-section {
+  padding: 22px;
+  border-bottom: 1px solid var(--ultra-gray-200);
+}
+
+.crear-ticket-section:last-child {
+  border-bottom: 0;
+}
+
+.crear-ticket-section__header {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.crear-ticket-section__number {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--ultra-orange), var(--ultra-orange-dark));
+  color: var(--ultra-surface);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  font-size: 14px;
+  font-weight: 900;
+  box-shadow: 0 8px 18px rgba(229, 69, 37, 0.22);
+}
+
+.crear-ticket-section__header h2 {
+  margin: 0;
+  color: var(--ultra-gray-900);
+  font-size: 18px;
+  line-height: 1.15;
+  font-weight: 900;
+}
+
+.crear-ticket-section__header p {
+  margin: 4px 0 0;
+  color: var(--ultra-gray-600);
+  font-size: 13px;
+}
+
+.crear-ticket-section--final {
+  background: var(--ultra-gray-50);
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Campos
+   ========================================================================== */
+
+.w-full {
   width: 100%;
 }
 
+.crear-ticket-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.crear-ticket-page mat-form-field {
+  width: 100%;
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Ajuste visual de campos Material fill
+   ========================================================================== */
+
+.crear-ticket-page ::ng-deep .mat-mdc-form-field {
+  --mdc-filled-text-field-container-color: var(--ultra-gray-50);
+  --mdc-filled-text-field-label-text-color: var(--ultra-gray-600);
+  --mdc-filled-text-field-focus-label-text-color: var(--ultra-orange);
+  --mdc-filled-text-field-active-indicator-color: var(--ultra-gray-300);
+  --mdc-filled-text-field-focus-active-indicator-color: var(--ultra-orange);
+  --mdc-filled-text-field-hover-active-indicator-color: rgba(229, 69, 37, 0.55);
+}
+
+.crear-ticket-page ::ng-deep .mat-mdc-text-field-wrapper {
+  border-radius: 14px 14px 8px 8px;
+  overflow: hidden;
+}
+
+.crear-ticket-page ::ng-deep .mat-mdc-form-field-infix {
+  min-height: 48px;
+  padding-top: 14px;
+  padding-bottom: 10px;
+}
+
+.crear-ticket-page ::ng-deep .mat-mdc-select-value,
+.crear-ticket-page ::ng-deep .mat-mdc-input-element {
+  color: var(--ultra-gray-900);
+  font-weight: 700;
+}
+
+.crear-ticket-page ::ng-deep .mat-mdc-form-field-icon-suffix,
+.crear-ticket-page ::ng-deep .mat-mdc-select-arrow {
+  color: var(--ultra-gray-500);
+}
+
+.crear-ticket-page ::ng-deep .mat-mdc-form-field.mat-focused .mat-mdc-select-arrow {
+  color: var(--ultra-orange);
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Subformularios heredados
+   ========================================================================== */
+
+.crear-ticket-section app-mantenimiento-aparatos,
+.crear-ticket-section app-sistemas {
+  display: block;
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Refacciones comentadas / futuro
+   ========================================================================== */
+
+.refaccion-block {
+  margin: 8px 0 16px;
+}
+
+.refaccion-field {
+  display: block;
+  margin-top: 8px;
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Botón principal
+   ========================================================================== */
+
+.crear-ticket-submit {
+  width: 100%;
+  min-height: 44px;
+  border-radius: 999px;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+}
+
+.crear-ticket-submit__loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Loader heredado
+   ========================================================================== */
 
 .loader {
   width: 90px;
@@ -21,28 +272,92 @@
   position: relative;
   clip-path: inset(-40px 0 -5px);
 }
+
 .loader:before {
   content: "";
   position: absolute;
   inset: auto calc(50% - 17px) 0;
   height: 50px;
-  --g:no-repeat linear-gradient(#ccc 0 0);
-  background: var(--g),var(--g),var(--g),var(--g);
+  --g: no-repeat linear-gradient(#ccc 0 0);
+  background: var(--g), var(--g), var(--g), var(--g);
   background-size: 16px 14px;
   animation:
     l7-1 2s infinite linear,
     l7-2 2s infinite linear;
 }
+
 @keyframes l7-1 {
   0%,
-  100%  {background-position: 0 -50px,100% -50px}
-  17.5% {background-position: 0 100%,100% -50px,0 -50px,100% -50px}
-  35%   {background-position: 0 100%,100% 100% ,0 -50px,100% -50px}
-  52.5% {background-position: 0 100%,100% 100% ,0 calc(100% - 16px),100% -50px}
+  100% {
+    background-position: 0 -50px, 100% -50px;
+  }
+
+  17.5% {
+    background-position: 0 100%, 100% -50px, 0 -50px, 100% -50px;
+  }
+
+  35% {
+    background-position: 0 100%, 100% 100%, 0 -50px, 100% -50px;
+  }
+
+  52.5% {
+    background-position: 0 100%, 100% 100%, 0 calc(100% - 16px), 100% -50px;
+  }
+
   70%,
-  98%  {background-position: 0 100%,100% 100% ,0 calc(100% - 16px),100% calc(100% - 16px)}
+  98% {
+    background-position: 0 100%, 100% 100%, 0 calc(100% - 16px), 100% calc(100% - 16px);
+  }
 }
+
 @keyframes l7-2 {
-  0%,70% {transform:translate(0)}
-  100%  {transform:translate(200%)}
+  0%,
+  70% {
+    transform: translate(0);
+  }
+
+  100% {
+    transform: translate(200%);
+  }
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Responsive
+   ========================================================================== */
+
+@media (max-width: 860px) {
+  .crear-ticket-page {
+    padding: 18px;
+  }
+
+  .crear-ticket-page__header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .crear-ticket-page__badge {
+    width: 100%;
+  }
+
+  .crear-ticket-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .crear-ticket-page {
+    padding: 12px;
+  }
+
+  .crear-ticket-page__title {
+    font-size: 24px;
+  }
+
+  .crear-ticket-section {
+    padding: 16px;
+  }
+
+  .crear-ticket-section__header {
+    gap: 10px;
+  }
 }

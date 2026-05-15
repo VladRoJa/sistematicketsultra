@@ -1,130 +1,233 @@
 <!-- frontend-angular/src/app/pantalla-crear-ticket/crear-ticket-refactor.component.html -->
-<mat-card class="crear-ticket-card" *ngIf="form">
-  <h2 class="titulo-formulario">
-    <span style="font-size: 1.3em;">🎫</span> Crear Nuevo Ticket
-  </h2>
 
-  <form [formGroup]="form" (ngSubmit)="enviar()">
+<!-- ==========================================================================
+     Suite Ultra UI v1 - Pantalla Crear Ticket
+     ========================================================================== -->
 
-    <!-- Selector de sucursal para admin -->
-    <mat-form-field *ngIf="esAdmin()" appearance="fill" class="w-full">
-      <mat-label>Sucursal destino</mat-label>
-      <mat-select formControlName="sucursal_id" required>
-        <mat-option *ngFor="let s of listaSucursales" [value]="s.sucursal_id">
-          {{ s.sucursal }}
-        </mat-option>
-      </mat-select>
-    </mat-form-field>
-
-    <!-- Campos dinámicos (n1..n5) -->
-    <ng-container *ngFor="let nivel of niveles; trackBy: trackByNivel">
-      <mat-form-field appearance="fill" class="w-full">
-        <mat-label>{{ nivel.etiqueta }}*</mat-label>
-
-        <mat-select [formControl]="nivel.control" [disabled]="nivel.loading">
-          <!-- Placeholder cuando no hay opciones -->
-          <mat-option *ngIf="!nivel.loading && (!nivel.opciones || !nivel.opciones.length)" [disabled]="true">
-            (sin opciones)
-          </mat-option>
-
-          <!-- Opciones reales -->
-          <mat-option *ngFor="let op of nivel.opciones" [value]="op.id">
-            {{ op.nombre }}
-          </mat-option>
-        </mat-select>
-        <!-- Spinner de carga -->
-        <mat-progress-spinner
-          *ngIf="nivel.loading"
-          matSuffix
-          diameter="18"
-          mode="indeterminate">
-        </mat-progress-spinner>
-
-        <mat-error *ngIf="nivel.control.touched && nivel.control.invalid">
-          Selecciona {{ nivel.etiqueta.toLowerCase() }}
-        </mat-error>
-      </mat-form-field>
-    </ng-container>
-
-    <!-- Subforms -->
-    <ng-container *ngIf="mostrarSubformAparatos; else sistemasOrGenerales">
-      <app-mantenimiento-aparatos
-        [parentForm]="form"
-        tipo="aparato">
-      </app-mantenimiento-aparatos>
-    </ng-container>
-
-    <ng-template #sistemasOrGenerales>
-      <ng-container *ngIf="mostrarSubformSistemasDispositivos; else generales">
-        <app-sistemas
-          [ocultarPickers]="mostrarSubformSistemasDispositivos"
-          [parentForm]="form"
-          (formularioValido)="onFormularioSistemasValido($event)">
-        </app-sistemas>
-      </ng-container>
-    </ng-template>
-
-    <ng-template #generales>
-      <mat-form-field appearance="fill" class="w-full">
-        <mat-label>Descripción del problema*</mat-label>
-        <textarea matInput formControlName="descripcion_general" rows="3"></textarea>
-        <mat-error *ngIf="form.get('descripcion_general')?.touched && form.get('descripcion_general')?.invalid">
-          Escribe una descripción
-        </mat-error>
-      </mat-form-field>
-    </ng-template>
-
-    <!-- Refacción SOLO se manejará en el flujo de fecha compromiso (Jefe de departamento).
-         Bloque original comentado para no mostrarlo en la creación de ticket:
-
-    <div *ngIf="mostrarRefaccion" class="refaccion-block" style="margin: 8px 0 16px;">
-      <mat-checkbox formControlName="necesita_refaccion">
-        ¿Requiere refacción?
-      </mat-checkbox>
-
-      <mat-form-field appearance="fill" class="w-full" style="display:block; margin-top: 8px;">
-        <mat-label>Descripción técnica de la refacción (opcional)</mat-label>
-        <textarea
-          matInput
-          formControlName="descripcion_refaccion"
-          [disabled]="!form.get('necesita_refaccion')?.value"
-          [attr.aria-disabled]="!form.get('necesita_refaccion')?.value"
-          rows="3">
-        </textarea>
-      </mat-form-field>
+<section class="crear-ticket-page" *ngIf="form">
+  <header class="crear-ticket-page__header">
+    <div>
+      <span class="crear-ticket-page__eyebrow">Tickets</span>
+      <h1 class="crear-ticket-page__title">Crear nuevo ticket</h1>
+      <p class="crear-ticket-page__subtitle">
+        Registra una solicitud o incidencia para darle seguimiento dentro de Suite Ultra.
+      </p>
     </div>
-    -->
 
-    <!-- Criticidad -->
-    <mat-form-field appearance="fill" class="w-full">
-      <mat-label>Nivel de criticidad*</mat-label>
-      <mat-select formControlName="criticidad">
-        <mat-option *ngFor="let n of [1,2,3,4,5]" [value]="n">Nivel {{ n }}</mat-option>
-      </mat-select>
-      <mat-error *ngIf="form.get('criticidad')?.touched && form.get('criticidad')?.invalid">
-        Selecciona criticidad
-      </mat-error>
-    </mat-form-field>
+    <div class="crear-ticket-page__badge">
+      <span class="crear-ticket-page__badge-icon">🎫</span>
+      <span>
+        <strong>Nuevo registro</strong>
+        <small>Captura guiada</small>
+      </span>
+    </div>
+  </header>
 
-    <!-- Botón guardar -->
-    <button
-      mat-raised-button
-      color="primary"
-      class="w-full mt-3"
-      type="submit"
-      [disabled]="loadingGuardar || form.invalid">
-      <ng-container *ngIf="!loadingGuardar; else loading">
-        Crear ticket
-      </ng-container>
-      <ng-template #loading>
-        <mat-progress-spinner
-          diameter="20"
-          mode="indeterminate"
+  <mat-card class="crear-ticket-card">
+    <form
+      class="crear-ticket-form"
+      [formGroup]="form"
+      (ngSubmit)="enviar()"
+    >
+      <!-- ==========================================================================
+           Suite Ultra UI v1 - Datos principales
+           ========================================================================== -->
+
+      <section class="crear-ticket-section">
+        <div class="crear-ticket-section__header">
+          <span class="crear-ticket-section__number">1</span>
+          <div>
+            <h2>Datos principales</h2>
+            <p>Selecciona la sucursal y clasifica el tipo de solicitud.</p>
+          </div>
+        </div>
+
+        <!-- Selector de sucursal para admin -->
+        <mat-form-field
+          *ngIf="esAdmin()"
+          appearance="fill"
+          class="w-full"
+        >
+          <mat-label>Sucursal destino</mat-label>
+          <mat-select formControlName="sucursal_id" required>
+            <mat-option
+              *ngFor="let s of listaSucursales"
+              [value]="s.sucursal_id"
+            >
+              {{ s.sucursal }}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
+
+        <!-- Campos dinámicos (n1..n5) -->
+        <div class="crear-ticket-grid">
+          <ng-container *ngFor="let nivel of niveles; trackBy: trackByNivel">
+            <mat-form-field appearance="fill" class="w-full">
+              <mat-label>{{ nivel.etiqueta }}*</mat-label>
+
+              <mat-select
+                [formControl]="nivel.control"
+                [disabled]="nivel.loading"
+              >
+                <!-- Placeholder cuando no hay opciones -->
+                <mat-option
+                  *ngIf="!nivel.loading && (!nivel.opciones || !nivel.opciones.length)"
+                  [disabled]="true"
+                >
+                  (sin opciones)
+                </mat-option>
+
+                <!-- Opciones reales -->
+                <mat-option
+                  *ngFor="let op of nivel.opciones"
+                  [value]="op.id"
+                >
+                  {{ op.nombre }}
+                </mat-option>
+              </mat-select>
+
+              <!-- Spinner de carga -->
+              <mat-progress-spinner
+                *ngIf="nivel.loading"
+                matSuffix
+                diameter="18"
+                mode="indeterminate"
+              >
+              </mat-progress-spinner>
+
+              <mat-error *ngIf="nivel.control.touched && nivel.control.invalid">
+                Selecciona {{ nivel.etiqueta.toLowerCase() }}
+              </mat-error>
+            </mat-form-field>
+          </ng-container>
+        </div>
+      </section>
+
+      <!-- ==========================================================================
+           Suite Ultra UI v1 - Detalle del ticket
+           ========================================================================== -->
+
+      <section class="crear-ticket-section">
+        <div class="crear-ticket-section__header">
+          <span class="crear-ticket-section__number">2</span>
+          <div>
+            <h2>Detalle de la solicitud</h2>
+            <p>Completa la información necesaria según el tipo de ticket.</p>
+          </div>
+        </div>
+
+        <!-- Subforms -->
+        <ng-container *ngIf="mostrarSubformAparatos; else sistemasOrGenerales">
+          <app-mantenimiento-aparatos
+            [parentForm]="form"
+            tipo="aparato"
+          >
+          </app-mantenimiento-aparatos>
+        </ng-container>
+
+        <ng-template #sistemasOrGenerales>
+          <ng-container *ngIf="mostrarSubformSistemasDispositivos; else generales">
+            <app-sistemas
+              [ocultarPickers]="mostrarSubformSistemasDispositivos"
+              [parentForm]="form"
+              (formularioValido)="onFormularioSistemasValido($event)"
+            >
+            </app-sistemas>
+          </ng-container>
+        </ng-template>
+
+        <ng-template #generales>
+          <mat-form-field appearance="fill" class="w-full">
+            <mat-label>Descripción del problema*</mat-label>
+            <textarea
+              matInput
+              formControlName="descripcion_general"
+              rows="3"
+            >
+            </textarea>
+
+            <mat-error
+              *ngIf="form.get('descripcion_general')?.touched && form.get('descripcion_general')?.invalid"
+            >
+              Escribe una descripción
+            </mat-error>
+          </mat-form-field>
+        </ng-template>
+
+        <!-- Refacción SOLO se manejará en el flujo de fecha compromiso (Jefe de departamento).
+             Bloque original comentado para no mostrarlo en la creación de ticket:
+
+        <div *ngIf="mostrarRefaccion" class="refaccion-block">
+          <mat-checkbox formControlName="necesita_refaccion">
+            ¿Requiere refacción?
+          </mat-checkbox>
+
+          <mat-form-field appearance="fill" class="w-full refaccion-field">
+            <mat-label>Descripción técnica de la refacción (opcional)</mat-label>
+            <textarea
+              matInput
+              formControlName="descripcion_refaccion"
+              [disabled]="!form.get('necesita_refaccion')?.value"
+              [attr.aria-disabled]="!form.get('necesita_refaccion')?.value"
+              rows="3">
+            </textarea>
+          </mat-form-field>
+        </div>
+        -->
+      </section>
+
+      <!-- ==========================================================================
+           Suite Ultra UI v1 - Prioridad y envío
+           ========================================================================== -->
+
+      <section class="crear-ticket-section crear-ticket-section--final">
+        <div class="crear-ticket-section__header">
+          <span class="crear-ticket-section__number">3</span>
+          <div>
+            <h2>Prioridad</h2>
+            <p>Define el nivel de criticidad antes de crear el ticket.</p>
+          </div>
+        </div>
+
+        <!-- Criticidad -->
+        <mat-form-field appearance="fill" class="w-full">
+          <mat-label>Nivel de criticidad*</mat-label>
+          <mat-select formControlName="criticidad">
+            <mat-option *ngFor="let n of [1,2,3,4,5]" [value]="n">
+              Nivel {{ n }}
+            </mat-option>
+          </mat-select>
+
+          <mat-error *ngIf="form.get('criticidad')?.touched && form.get('criticidad')?.invalid">
+            Selecciona criticidad
+          </mat-error>
+        </mat-form-field>
+
+        <!-- Botón guardar -->
+        <button
+          mat-raised-button
           color="primary"
-          style="display:inline-block; vertical-align:middle;">
-        </mat-progress-spinner>
-      </ng-template>
-    </button>
+          class="crear-ticket-submit"
+          type="submit"
+          [disabled]="loadingGuardar || form.invalid"
+        >
+          <ng-container *ngIf="!loadingGuardar; else loading">
+            Crear ticket
+          </ng-container>
 
-  </form>
-</mat-card>
+          <ng-template #loading>
+            <span class="crear-ticket-submit__loading">
+              <mat-progress-spinner
+                diameter="20"
+                mode="indeterminate"
+                color="primary"
+              >
+              </mat-progress-spinner>
+              Guardando...
+            </span>
+          </ng-template>
+        </button>
+      </section>
+    </form>
+  </mat-card>
+</section>
