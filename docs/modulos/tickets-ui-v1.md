@@ -110,3 +110,45 @@ No se modificará:
 ```text
 frontend/src/app/pantalla-crear-ticket/crear-ticket-refactor.component.html
 frontend/src/app/pantalla-crear-ticket/crear-ticket-refactor.component.css
+```
+
+---
+
+## Modal Historial de Ticket UI v1
+
+### Objetivo
+
+Aplicar la paleta oficial de Suite Ultra UI v1 al modal de historial/resumen de ticket sin modificar su lógica funcional.
+
+Este modal ya cuenta con una estructura visual mejorada, por lo que el alcance será principalmente ajuste de color, contraste, espaciado menor y consistencia con la identidad Ultra.
+
+### Alcance
+
+- Aplicar tokens globales de Suite Ultra UI v1.
+- Reemplazar tonos azules/cyan heredados por Ultra Orange, carbón, grises y superficies suaves.
+- Mantener la estructura actual del modal.
+- Mantener resumen del ticket.
+- Mantener cards informativas.
+- Mantener historial de solución.
+- Mantener estado vacío.
+- Mantener botón de cierre.
+
+### No alcance
+
+- No cambiar inputs del modal.
+- No cambiar datos mostrados.
+- No cambiar lógica de historial.
+- No cambiar formato de fechas.
+- No cambiar permisos.
+- No cambiar acciones funcionales.
+
+### Validación
+
+Antes del commit debe comprobarse:
+
+- El modal abre correctamente desde Ver Tickets.
+- El resumen del ticket se muestra correctamente.
+- El estado del ticket se muestra correctamente.
+- El historial se muestra si existen registros.
+- El estado vacío se muestra si no hay historial.
+- El botón Cerrar funciona.
