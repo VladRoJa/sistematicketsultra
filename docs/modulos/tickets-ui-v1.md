@@ -349,3 +349,41 @@ Antes del commit debe comprobarse:
 - Aceptar devuelve `true`.
 - Los textos personalizados siguen funcionando.
 - Los flujos de aceptar/rechazar cierre siguen funcionando.
+
+---
+
+## Modal Rechazar Cierre UI v1
+
+### Objetivo
+
+Aplicar Suite Ultra UI v1 al modal de rechazo de cierre sin modificar la lógica funcional.
+
+Este modal se usa cuando un gerente/admin rechaza el cierre de un ticket y debe capturar un motivo obligatorio.
+
+### Alcance
+
+- Aplicar paleta oficial Ultra.
+- Mejorar título y jerarquía visual.
+- Mejorar textarea de motivo.
+- Mejorar botones Rechazar cierre / Cancelar.
+- Mantener motivo obligatorio.
+- Mantener payload actual.
+- Mantener flujo actual de rechazo.
+
+### No alcance
+
+- No cambiar lógica TypeScript.
+- No cambiar endpoints.
+- No cambiar permisos.
+- No cambiar validaciones.
+- No mezclar con rechazo RRHH por `prompt`.
+
+### Validación
+
+Antes del commit debe comprobarse:
+
+- El modal abre desde `Rechazar cierre`.
+- No permite rechazar sin motivo si esa validación ya existe.
+- Cancelar cierra sin cambios.
+- Rechazar cierre ejecuta el flujo actual.
+- El ticket se actualiza correctamente después del rechazo.
