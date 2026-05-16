@@ -747,7 +747,6 @@
                 mat-button
                 class="ticket-action ticket-action--progress"
                 (click)="cambiarEstadoEnProgreso(ticket)"
-                [disabled]="ticket.requiere_aprobacion && (ticket.aprobacion_estado || 'pendiente') !== 'aprobado'"
               >
                 <mat-icon>play_circle</mat-icon>
                 <span>En progreso</span>
@@ -798,40 +797,6 @@
               </button>
             </div>
 
-            <!-- ====== Aprobación RRHH (visible solo si aplica) ====== -->
-            <div class="acciones-rrhh" *ngIf="ticket.requiere_aprobacion">
-              <!-- Badge de estado de aprobación -->
-              <mat-chip-list>
-                <mat-chip [disabled]="true" selected>
-                  Aprobación: {{ ticket.aprobacion_estado || 'pendiente' }}
-                </mat-chip>
-              </mat-chip-list>
-
-              <!-- Botones para GERENTE_REGIONAL / Admin / Aprobador designado -->
-              <div
-                *ngIf="isPendienteRRHH(ticket) && canAprobarRRHH(ticket)"
-                class="acciones-rrhh-botones"
-              >
-                <button
-                  mat-stroked-button
-                  color="primary"
-                  (click)="onRrhhAprobar(ticket)"
-                  aria-label="Aprobar RRHH"
-                >
-                  Aprobar
-                </button>
-
-                <button
-                  mat-stroked-button
-                  color="warn"
-                  (click)="onRrhhRechazar(ticket)"
-                  aria-label="Rechazar RRHH"
-                >
-                  Rechazar
-                </button>
-              </div>
-            </div>
-          </td>
 
           <!-- Fecha Solución -->
           <td>
