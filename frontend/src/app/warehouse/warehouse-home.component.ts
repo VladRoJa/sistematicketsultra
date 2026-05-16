@@ -215,6 +215,35 @@ getUploadListSummary(): string {
   return `${start}-${end} de ${this.uploadListTotal} uploads`;
 }
 
+setUploadListDatePreset(value: string): void {
+  this.uploadListFilters.date_preset = value as WarehouseUploadDatePreset;
+
+  if (this.uploadListFilters.date_preset !== 'custom') {
+    this.uploadListFilters.date_from = '';
+    this.uploadListFilters.date_to = '';
+  }
+}
+
+setUploadListStatus(value: string): void {
+  this.uploadListFilters.status = value as WarehouseUploadStatusFilter;
+}
+
+setUploadListReportType(value: string): void {
+  this.uploadListFilters.report_type_key = value;
+}
+
+setUploadListSearch(value: string): void {
+  this.uploadListFilters.search = value;
+}
+
+setUploadListDateFrom(value: string): void {
+  this.uploadListFilters.date_from = value;
+}
+
+setUploadListDateTo(value: string): void {
+  this.uploadListFilters.date_to = value;
+}
+
   private mapUploadRow(item: WarehouseUploadListItem): WarehouseUploadRow {
     return {
       ...item,

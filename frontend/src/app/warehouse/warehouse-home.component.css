@@ -239,7 +239,8 @@
 .warehouse-form__group select,
 .warehouse-form__group input[type="date"],
 .warehouse-form__group input[type="month"],
-.warehouse-form__group input[type="file"] {
+.warehouse-form__group input[type="file"],
+.warehouse-form__group input[type="search"] {
   width: 100%;
   min-height: 44px;
   padding: 9px 11px;
@@ -261,7 +262,8 @@
 .warehouse-form__group select:hover,
 .warehouse-form__group input[type="date"]:hover,
 .warehouse-form__group input[type="month"]:hover,
-.warehouse-form__group input[type="file"]:hover {
+.warehouse-form__group input[type="file"]:hover,
+.warehouse-form__group input[type="search"]:hover {
   border-bottom-color: rgba(229, 69, 37, 0.55);
   background: #fff7f4;
 }
@@ -269,7 +271,8 @@
 .warehouse-form__group select:focus,
 .warehouse-form__group input[type="date"]:focus,
 .warehouse-form__group input[type="month"]:focus,
-.warehouse-form__group input[type="file"]:focus {
+.warehouse-form__group input[type="file"]:focus,
+.warehouse-form__group input[type="search"]:focus {
   border-bottom-color: var(--ultra-orange);
   box-shadow: 0 0 0 3px rgba(229, 69, 37, 0.12);
   background: var(--ultra-surface);
@@ -317,6 +320,40 @@
 }
 
 /* ==========================================================================
+   Suite Ultra UI v1 - Filtros de histórico
+   ========================================================================== */
+
+.warehouse-list-summary {
+  flex: 0 0 auto;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: var(--ultra-orange-soft);
+  color: var(--ultra-orange);
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.warehouse-list-filters {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(150px, 1fr));
+  gap: 12px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--ultra-gray-200);
+  background: var(--ultra-gray-50);
+}
+
+.warehouse-list-filters__search {
+  grid-column: span 2;
+}
+
+.warehouse-list-filters__actions {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+}
+
+/* ==========================================================================
    Suite Ultra UI v1 - Botones
    ========================================================================== */
 
@@ -336,12 +373,18 @@
     background-color 0.16s ease;
 }
 
-.warehouse-button:hover {
+.warehouse-button:hover:not(:disabled) {
   transform: translateY(-1px);
 }
 
-.warehouse-button:active {
+.warehouse-button:active:not(:disabled) {
   transform: translateY(0);
+}
+
+.warehouse-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .warehouse-button--primary {
@@ -350,7 +393,7 @@
   box-shadow: 0 10px 20px rgba(229, 69, 37, 0.22);
 }
 
-.warehouse-button--primary:hover {
+.warehouse-button--primary:hover:not(:disabled) {
   filter: brightness(0.96);
   box-shadow: 0 14px 28px rgba(229, 69, 37, 0.28);
 }
@@ -361,7 +404,7 @@
   border: 1px solid var(--ultra-gray-200);
 }
 
-.warehouse-button--secondary:hover {
+.warehouse-button--secondary:hover:not(:disabled) {
   background: var(--ultra-gray-100);
 }
 
@@ -371,7 +414,7 @@
   border: 1px solid rgba(220, 38, 38, 0.22);
 }
 
-.warehouse-button--danger:hover {
+.warehouse-button--danger:hover:not(:disabled) {
   filter: brightness(0.98);
 }
 
@@ -404,7 +447,7 @@
   background: var(--ultra-gray-50);
   color: var(--ultra-gray-600);
   border: 1px solid var(--ultra-gray-200);
-  margin: 0 20px 14px;
+  margin: 14px 20px;
 }
 
 /* ==========================================================================
@@ -567,6 +610,24 @@
 }
 
 /* ==========================================================================
+   Suite Ultra UI v1 - Paginación
+   ========================================================================== */
+
+.warehouse-pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 20px 4px;
+}
+
+.warehouse-pagination__label {
+  color: var(--ultra-gray-600);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+/* ==========================================================================
    Suite Ultra UI v1 - Responsive
    ========================================================================== */
 
@@ -577,6 +638,14 @@
 
   .warehouse-detail-item--wide {
     grid-column: span 1;
+  }
+
+  .warehouse-list-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .warehouse-list-filters__search {
+    grid-column: span 2;
   }
 }
 
@@ -607,11 +676,28 @@
     flex-direction: column;
   }
 
+  .warehouse-list-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .warehouse-list-filters__search {
+    grid-column: span 1;
+  }
+
+  .warehouse-list-filters__actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
   .warehouse-button {
     width: 100%;
   }
 
   .warehouse-actions {
+    flex-direction: column;
+  }
+
+  .warehouse-pagination {
     flex-direction: column;
   }
 }
