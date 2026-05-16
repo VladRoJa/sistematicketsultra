@@ -1065,7 +1065,8 @@ abrirEditarFechaSolucion(ticket: Ticket) {
   if (estado !== 'en progreso') return; // ✅ solo editable en progreso
 
   const dialogRef = this.dialog.open(EditarFechaSolucionModalComponent, {
-    width: '360px',
+    width: '560px',
+    maxWidth: '92vw',
     data: { fechaActual: ticket.fecha_solucion }
   });
 
