@@ -79,3 +79,40 @@ No se modificará:
 
 ```text
 style(warehouse): apply Suite Ultra UI v1 to warehouse home
+```
+
+---
+
+## Warehouse uploads: filtros y paginación
+
+### Objetivo
+
+Evitar que Warehouse cargue y renderice todo el histórico de uploads en la pantalla principal.
+
+Warehouse debe mostrar por defecto un subconjunto operativo útil y permitir consultar el histórico mediante filtros y paginación real.
+
+---
+
+### Problema actual
+
+La pantalla principal lista los uploads cargados en una tabla de histórico.
+
+A medida que Warehouse crezca, cargar todos los registros puede provocar:
+
+- Lentitud en frontend.
+- Respuestas backend más pesadas.
+- Tabla difícil de usar.
+- Peor experiencia para usuarios operativos.
+- Mayor consumo innecesario de memoria y red.
+
+---
+
+### Comportamiento objetivo
+
+Al abrir Warehouse, el listado debe cargar por defecto:
+
+```text
+date_preset = today
+page = 1
+page_size = 25
+status = ALL

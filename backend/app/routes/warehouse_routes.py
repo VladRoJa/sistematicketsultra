@@ -3,12 +3,12 @@
 from flask import Blueprint, jsonify, request, current_app, send_file
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, date, time, timedelta
 from werkzeug.utils import secure_filename
 import hashlib
 import uuid
 from sqlalchemy.orm import joinedload
-
+from sqlalchemy import or_
 
 from app.extensions import db
 from app.models.warehouse import WarehouseUploadORM
@@ -312,6 +312,121 @@ def warehouse_create_upload():
         "manual_structured_result": manual_ingestion_result,
     }), 201
         
+def _parse_positive_int(raw_value, default: int, minimum: int = 1, maximum: int | None = None) -> int:
+    try:
+        value = int(raw_value)
+    except (TypeError, ValueError):
+        value = default
+
+    value = max(value, minimum)
+
+    if maximum is not None:
+        value = min(value, maximum)
+
+    return value
+
+
+def _parse_iso_date(raw_value: str | None) -> date | None:
+    value = (raw_value or '').strip()
+
+    if not value:
+        return None
+
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def _build_upload_created_at_range(date_preset: str, date_from_raw: str | None, date_to_raw: str | None):
+    today = date.today()
+    normalized_preset = (date_preset or 'today').strip().lower()
+
+    if normalized_preset == 'all':
+        return None, None
+
+    if normalized_preset == 'yesterday':
+        start_day = today - timedelta(days=1)
+        end_day = start_day
+    elif normalized_preset == 'last_7_days':
+        start_day = today - timedelta(days=6)
+        end_day = today
+    elif normalized_preset == 'current_month':
+        start_day = today.replace(day=1)
+        end_day = today
+    elif normalized_preset == 'custom':
+        start_day = _parse_iso_date(date_from_raw)
+        end_day = _parse_iso_date(date_to_raw)
+
+        if start_day is None and end_day is None:
+            return None, None
+
+        if start_day is None:
+            start_day = end_day
+
+        if end_day is None:
+            end_day = start_day
+    else:
+        start_day = today
+        end_day = today
+
+    if end_day < start_day:
+        start_day, end_day = end_day, start_day
+
+    start_dt = datetime.combine(start_day, time.min)
+    end_dt = datetime.combine(end_day + timedelta(days=1), time.min)
+
+    return start_dt, end_dt
+
+
+def _serialize_warehouse_upload_item(item: WarehouseUploadORM) -> dict:
+    return {
+        "id": item.id,
+        "original_filename": item.original_filename,
+        "stored_filename": item.stored_filename,
+        "display_filename": _build_upload_display_filename(
+            report_type_key=item.report_type.key if item.report_type else "",
+            period_type=item.period_type,
+            cutoff_date=item.cutoff_date,
+            date_from=item.date_from,
+            date_to=item.date_to,
+            original_filename=item.original_filename,
+        ),
+        "stored_path": item.stored_path,
+        "file_size_bytes": item.file_size_bytes,
+        "file_hash_sha256": item.file_hash_sha256,
+        "mime_type": item.mime_type,
+        "extension": item.extension,
+
+        "report_type_id": item.report_type_id,
+        "report_type_key": item.report_type.key if item.report_type else None,
+        "report_type_label": item.report_type.label if item.report_type else None,
+
+        "source_id": item.source_id,
+        "source_key": item.source.key if item.source else None,
+        "source_label": item.source.label if item.source else None,
+
+        "family_id": item.family_id,
+        "family_key": item.family.key if item.family else None,
+        "family_label": item.family.label if item.family else None,
+
+        "operational_role_id": item.operational_role_id,
+        "operational_role_key": item.operational_role.key if item.operational_role else None,
+        "operational_role_label": item.operational_role.label if item.operational_role else None,
+
+        "period_type": item.period_type,
+        "cutoff_date": item.cutoff_date.isoformat() if item.cutoff_date else None,
+        "date_from": item.date_from.isoformat() if item.date_from else None,
+        "date_to": item.date_to.isoformat() if item.date_to else None,
+
+        "status": item.status,
+        "uploaded_by_user_id": item.uploaded_by_user_id,
+        "uploaded_by_username": item.uploader.username if item.uploader else None,
+
+        "created_at": item.created_at.isoformat() if item.created_at else None,
+        "updated_at": item.updated_at.isoformat() if item.updated_at else None,
+    }        
+
 @warehouse_bp.route('/uploads', methods=['GET'])
 @jwt_required()
 def warehouse_list_uploads():
@@ -321,8 +436,21 @@ def warehouse_list_uploads():
 
     source_key = (request.args.get('source_key') or '').strip()
     report_type_key = (request.args.get('report_type_key') or '').strip()
-    status = (request.args.get('status') or 'ACTIVE').strip()
+    status = (request.args.get('status') or 'ALL').strip().upper()
     period_type = (request.args.get('period_type') or '').strip()
+
+    date_preset = (request.args.get('date_preset') or 'today').strip()
+    date_from_raw = (request.args.get('date_from') or '').strip()
+    date_to_raw = (request.args.get('date_to') or '').strip()
+    search = (request.args.get('search') or '').strip()
+
+    page = _parse_positive_int(request.args.get('page'), default=1, minimum=1)
+    page_size = _parse_positive_int(
+        request.args.get('page_size'),
+        default=25,
+        minimum=1,
+        maximum=100,
+    )
 
     query = (
         WarehouseUploadORM.query
@@ -341,66 +469,63 @@ def warehouse_list_uploads():
     if report_type_key:
         query = query.filter(WarehouseUploadORM.report_type.has(key=report_type_key))
 
-    if status:
+    if status and status != 'ALL':
         query = query.filter(WarehouseUploadORM.status == status)
 
     if period_type:
         query = query.filter(WarehouseUploadORM.period_type == period_type)
 
-    uploads = query.order_by(WarehouseUploadORM.created_at.desc()).all()
+    start_dt, end_dt = _build_upload_created_at_range(
+        date_preset=date_preset,
+        date_from_raw=date_from_raw,
+        date_to_raw=date_to_raw,
+    )
+
+    if start_dt is not None:
+        query = query.filter(WarehouseUploadORM.created_at >= start_dt)
+
+    if end_dt is not None:
+        query = query.filter(WarehouseUploadORM.created_at < end_dt)
+
+    if search:
+        search_pattern = f"%{search}%"
+        query = query.filter(
+            or_(
+                WarehouseUploadORM.original_filename.ilike(search_pattern),
+                WarehouseUploadORM.stored_filename.ilike(search_pattern),
+            )
+        )
+
+    query = query.order_by(WarehouseUploadORM.created_at.desc())
+
+    pagination = query.paginate(
+        page=page,
+        per_page=page_size,
+        error_out=False,
+    )
 
     return jsonify({
         "items": [
-            {
-                "id": item.id,
-                "original_filename": item.original_filename,
-                "stored_filename": item.stored_filename,
-                "display_filename": _build_upload_display_filename(
-                    report_type_key=item.report_type.key if item.report_type else "",
-                    period_type=item.period_type,
-                    cutoff_date=item.cutoff_date,
-                    date_from=item.date_from,
-                    date_to=item.date_to,
-                    original_filename=item.original_filename,
-                ),
-                "stored_path": item.stored_path,
-                "file_size_bytes": item.file_size_bytes,
-                "file_hash_sha256": item.file_hash_sha256,
-                "mime_type": item.mime_type,
-                "extension": item.extension,
-
-                "report_type_id": item.report_type_id,
-                "report_type_key": item.report_type.key if item.report_type else None,
-                "report_type_label": item.report_type.label if item.report_type else None,
-
-                "source_id": item.source_id,
-                "source_key": item.source.key if item.source else None,
-                "source_label": item.source.label if item.source else None,
-
-                "family_id": item.family_id,
-                "family_key": item.family.key if item.family else None,
-                "family_label": item.family.label if item.family else None,
-
-                "operational_role_id": item.operational_role_id,
-                "operational_role_key": item.operational_role.key if item.operational_role else None,
-                "operational_role_label": item.operational_role.label if item.operational_role else None,
-
-                "period_type": item.period_type,
-                "cutoff_date": item.cutoff_date.isoformat() if item.cutoff_date else None,
-                "date_from": item.date_from.isoformat() if item.date_from else None,
-                "date_to": item.date_to.isoformat() if item.date_to else None,
-
-                "status": item.status,
-                "uploaded_by_user_id": item.uploaded_by_user_id,
-                "uploaded_by_username": item.uploader.username if item.uploader else None,
-
-                "created_at": item.created_at.isoformat() if item.created_at else None,
-                "updated_at": item.updated_at.isoformat() if item.updated_at else None,
-            }
-            for item in uploads
-        ]
-    }), 200
-    
+            _serialize_warehouse_upload_item(item)
+            for item in pagination.items
+        ],
+        "page": pagination.page,
+        "page_size": pagination.per_page,
+        "total": pagination.total,
+        "total_pages": pagination.pages,
+        "has_next": pagination.has_next,
+        "has_prev": pagination.has_prev,
+        "filters": {
+            "source_key": source_key or None,
+            "report_type_key": report_type_key or None,
+            "status": status,
+            "period_type": period_type or None,
+            "date_preset": date_preset,
+            "date_from": date_from_raw or None,
+            "date_to": date_to_raw or None,
+            "search": search or None,
+        }
+    }), 200   
 @warehouse_bp.route('/uploads/<int:upload_id>', methods=['GET'])
 @jwt_required()
 def warehouse_get_upload_detail(upload_id: int):
