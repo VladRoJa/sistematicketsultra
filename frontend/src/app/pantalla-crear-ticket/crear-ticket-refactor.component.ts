@@ -583,7 +583,6 @@ enviar() {
     delete body.subcategoria;
   }
 
-  if (esRRHH) { body.requiere_aprobacion = true; }
 
   this.http
     .post<{ mensaje: string; ticket_id: number; notificados?: string[] }>(

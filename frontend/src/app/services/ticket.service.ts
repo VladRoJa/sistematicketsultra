@@ -116,30 +116,6 @@ export class TicketService {
     return this.http.put<any>(`${this.apiUrl}/compromiso/${id}`, payload, { headers, withCredentials: true });
   }
 
-  // ── RRHH (pre-aprobación) ───────────────────
-  rrhhSolicitar(id: number, aprobadorUsername?: string): Observable<any> {
-    const token = localStorage.getItem('token');
-    if (!token) return throwError(() => new Error('NO_TOKEN'));
-    const headers = this.authJsonHeaders();
-    const body = aprobadorUsername ? { aprobador_username: aprobadorUsername } : {};
-    return this.http.post<any>(`${this.apiUrl}/rrhh/solicitar/${id}`, body, { headers, withCredentials: true });
-  }
-
-  rrhhAprobar(id: number, comentario?: string): Observable<any> {
-    const token = localStorage.getItem('token');
-    if (!token) return throwError(() => new Error('NO_TOKEN'));
-    const headers = this.authJsonHeaders();
-    const body = comentario ? { comentario } : {};
-    return this.http.post<any>(`${this.apiUrl}/rrhh/aprobar/${id}`, body, { headers, withCredentials: true });
-  }
-
-  rrhhRechazar(id: number, comentario?: string): Observable<any> {
-    const token = localStorage.getItem('token');
-    if (!token) return throwError(() => new Error('NO_TOKEN'));
-    const headers = this.authJsonHeaders();
-    const body = comentario ? { comentario } : {};
-    return this.http.post<any>(`${this.apiUrl}/rrhh/rechazar/${id}`, body, { headers, withCredentials: true });
-  }
 
   // ── Doble check de cierre ───────────────────
   cierreSolicitar(
