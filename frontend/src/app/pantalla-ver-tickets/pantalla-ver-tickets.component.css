@@ -652,6 +652,76 @@ td.col-descripcion {
 }
 
 /* ==========================================================================
+   Suite Ultra UI v1 - Acciones de validación de cierre
+   ========================================================================== */
+
+.ticket-validation-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: 100%;
+}
+
+.ticket-validation-button {
+  width: 118px;
+  min-height: 28px;
+  border: 0;
+  border-radius: 999px;
+  padding: 5px 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 900;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.16s ease,
+    filter 0.16s ease,
+    background-color 0.16s ease;
+}
+
+.ticket-validation-button mat-icon {
+  width: 15px;
+  height: 15px;
+  font-size: 15px;
+  line-height: 15px;
+}
+
+.ticket-validation-button:hover {
+  transform: translateY(-1px);
+}
+
+.ticket-validation-button--approve {
+  background: var(--ultra-success-soft);
+  color: var(--ultra-success);
+  box-shadow: 0 6px 14px rgba(22, 163, 74, 0.14);
+}
+
+.ticket-validation-button--approve:hover {
+  filter: brightness(0.98);
+  box-shadow: 0 8px 18px rgba(22, 163, 74, 0.20);
+}
+
+.ticket-validation-button--reject {
+  background: var(--ultra-danger-soft);
+  color: var(--ultra-danger);
+  box-shadow: 0 6px 14px rgba(220, 38, 38, 0.14);
+}
+
+.ticket-validation-button--reject:hover {
+  filter: brightness(0.98);
+  box-shadow: 0 8px 18px rgba(220, 38, 38, 0.20);
+}
+
+
+
+/* ==========================================================================
    Suite Ultra UI v1 - Modal asignar fecha
    ========================================================================== */
 

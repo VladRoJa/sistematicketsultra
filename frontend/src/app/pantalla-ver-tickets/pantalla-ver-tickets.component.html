@@ -779,22 +779,29 @@
               class="acciones-validacion-cierre"
             >
               <!-- Aceptar -->
+            <div class="ticket-validation-actions">
               <button
-                mat-icon-button
-                color="primary"
+                type="button"
+                class="ticket-validation-button ticket-validation-button--approve"
                 (click)="aceptarCierre(ticket)"
+                aria-label="Aceptar cierre"
               >
                 <mat-icon>check_circle</mat-icon>
+                <span>Aceptar</span>
               </button>
 
-              <!-- Rechazar -->
+
+                <!-- Rechazar -->
               <button
-                mat-icon-button
-                color="warn"
+                type="button"
+                class="ticket-validation-button ticket-validation-button--reject"
                 (click)="rechazarCierre(ticket)"
+                aria-label="Rechazar cierre"
               >
                 <mat-icon>cancel</mat-icon>
+                <span>Rechazar</span>
               </button>
+            </div>
             </div>
 
 
