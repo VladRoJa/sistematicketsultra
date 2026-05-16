@@ -116,3 +116,70 @@ date_preset = today
 page = 1
 page_size = 25
 status = ALL
+```
+
+---
+
+## Track Dashboard UI v1 polish
+
+### Objetivo
+
+Aplicar Suite Ultra UI v1 al dashboard principal de Track sin modificar su lógica funcional ni sus contratos backend.
+
+Track debe sentirse como la capa ejecutiva/BI construida sobre datos consolidados desde Warehouse.
+
+---
+
+### Alcance
+
+Se aplicará una mejora visual a:
+
+- Header del dashboard.
+- Controles superiores.
+- Filtros de fecha/modo si existen.
+- Cards KPI.
+- Secciones de métricas.
+- Tabla principal.
+- Estados de carga.
+- Estados vacíos.
+- Estados de error.
+- Botones de acción.
+
+---
+
+### No alcance
+
+No se modificará:
+
+- Endpoints Track.
+- Pipeline diario.
+- Scheduler.
+- Cálculos de ingresos.
+- Cálculos de metas.
+- Alias de sucursal.
+- Canonicalidad.
+- Snapshots.
+- Mart diario.
+- Campos de respuesta backend.
+- Permisos.
+
+---
+
+### Reglas
+
+- No cambiar lógica de negocio.
+- No mover lógica al HTML.
+- No cambiar contratos API.
+- No cambiar nombres de campos.
+- Usar tokens globales Suite Ultra UI v1.
+- Mantener cambios pequeños y verificables.
+
+---
+
+### Archivos esperados
+
+```text
+frontend/src/app/warehouse/track-dashboard/track-dashboard.component.ts
+frontend/src/app/warehouse/track-dashboard/track-dashboard.component.html
+frontend/src/app/warehouse/track-dashboard/track-dashboard.component.css
+```
