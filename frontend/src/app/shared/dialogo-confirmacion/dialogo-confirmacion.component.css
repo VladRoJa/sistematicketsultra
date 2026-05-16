@@ -1,0 +1,149 @@
+/* ==========================================================================
+   Suite Ultra UI v1 - Diálogo de confirmación
+   ========================================================================== */
+
+:host {
+  display: block;
+  width: min(460px, 92vw);
+  color: var(--ultra-gray-900);
+  box-sizing: border-box;
+}
+
+.confirm-dialog {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.confirm-dialog__header,
+.confirm-dialog__content,
+.confirm-dialog__actions {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Header
+   ========================================================================== */
+
+.confirm-dialog__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 24px 10px;
+  margin: 0;
+}
+
+.confirm-dialog__icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  background: var(--ultra-orange-soft);
+  color: var(--ultra-orange);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+.confirm-dialog__icon mat-icon {
+  width: 22px;
+  height: 22px;
+  font-size: 22px;
+  line-height: 22px;
+}
+
+.confirm-dialog__title {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.confirm-dialog__title strong {
+  color: var(--ultra-gray-900);
+  font-size: 18px;
+  line-height: 1.15;
+  font-weight: 900;
+}
+
+.confirm-dialog__title small {
+  color: var(--ultra-gray-600);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Contenido
+   ========================================================================== */
+
+.confirm-dialog__content {
+  padding: 10px 24px 0;
+}
+
+.confirm-dialog__content p {
+  margin: 0;
+  padding: 14px;
+  border: 1px solid rgba(229, 69, 37, 0.22);
+  border-radius: var(--ultra-radius-lg);
+  background:
+    radial-gradient(circle at top left, rgba(229, 69, 37, 0.10), transparent 38%),
+    var(--ultra-orange-soft);
+  color: var(--ultra-gray-800);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Acciones
+   ========================================================================== */
+
+.confirm-dialog__actions {
+  display: flex;
+  gap: 10px;
+  padding: 16px 24px 20px;
+}
+
+.confirm-dialog__cancel,
+.confirm-dialog__accept {
+  min-width: 108px;
+  border-radius: 999px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.confirm-dialog__cancel {
+  color: var(--ultra-gray-700);
+}
+
+.confirm-dialog__accept {
+  background: var(--ultra-orange);
+  color: var(--ultra-surface);
+}
+
+.confirm-dialog__accept:hover:not(:disabled) {
+  filter: brightness(0.96);
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Responsive
+   ========================================================================== */
+
+@media (max-width: 520px) {
+  :host {
+    width: 92vw;
+  }
+
+  .confirm-dialog__header {
+    align-items: flex-start;
+  }
+
+  .confirm-dialog__actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .confirm-dialog__cancel,
+  .confirm-dialog__accept {
+    width: 100%;
+  }
+}

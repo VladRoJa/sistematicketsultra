@@ -1298,7 +1298,7 @@ async solicitarCierre(ticket: Ticket) {
     return;
   }
 
-  // 🔹 1. Abrir modal y esperar datos
+  // 🔹 1. Abrir modal de cierre y esperar datos
   const dialogRef = this.dialog.open(ModalCierreTicketComponent, {
     width: '420px',
     data: { ticketId: ticket.id }
@@ -1306,20 +1306,14 @@ async solicitarCierre(ticket: Ticket) {
 
   const result = await dialogRef.afterClosed().toPromise();
 
-  if (!result) return; // usuario canceló
+  // Usuario canceló el modal
+  if (!result) {
+    return;
+  }
 
   const { costo, notas } = result;
 
-  // 🔹 2. Confirmación secundaria (puedes omitir si quieres)
-  const ok = await this.abrirConfirmacion(
-    'Confirmar cierre',
-    `¿Seguro que deseas finalizar el ticket #${ticket.id}?\n\n` +
-    `Costo: ${costo ?? 0}\nNotas: ${notas || '(sin notas)'}`
-  );
-
-  if (!ok) return;
-
-  // 🔹 3. Llamar al backend
+  // 🔹 2. El modal ya actúa como confirmación; se elimina confirmación secundaria
   this.ticketService.cierreSolicitar(ticket.id, {
     costo_solucion: costo,
     notas_cierre: notas
@@ -1386,6 +1380,7 @@ async cerrarDesdeCeroPorGerente(ticket: Ticket): Promise<void> {
     return;
   }
 
+  // 🔹 1. Abrir modal de cierre gerente y esperar datos
   const dialogRef = this.dialog.open(ModalCierreTicketComponent, {
     width: '420px',
     data: {
@@ -1396,7 +1391,10 @@ async cerrarDesdeCeroPorGerente(ticket: Ticket): Promise<void> {
 
   const result = await dialogRef.afterClosed().toPromise();
 
-  if (!result) return;
+  // Usuario canceló el modal
+  if (!result) {
+    return;
+  }
 
   const motivo = (result.motivo || result.notas || '').toString().trim();
 
@@ -1405,15 +1403,7 @@ async cerrarDesdeCeroPorGerente(ticket: Ticket): Promise<void> {
     return;
   }
 
-  const ok = await this.abrirConfirmacion(
-    'Cerrar ticket desde cero',
-    `¿Seguro que deseas finalizar el ticket #${ticket.id}?\n\n` +
-    `Este cierre es solo para limpieza de tickets abiertos o en progreso.\n\n` +
-    `Motivo: ${motivo}`
-  );
-
-  if (!ok) return;
-
+  // 🔹 2. El modal ya actúa como confirmación; se elimina confirmación secundaria
   this.ticketService.cierreGerenteDesdeCero(ticket.id, { motivo }).subscribe({
     next: (resp) => {
       mostrarAlertaToast(resp?.mensaje || 'Ticket finalizado correctamente.', 'success');
