@@ -356,34 +356,37 @@ Antes del commit debe comprobarse:
 
 ### Objetivo
 
-Aplicar Suite Ultra UI v1 al modal de rechazo de cierre sin modificar la lógica funcional.
+Reemplazar el SweetAlert de rechazo de cierre por un modal Angular propio con Suite Ultra UI v1.
 
 Este modal se usa cuando un gerente/admin rechaza el cierre de un ticket y debe capturar un motivo obligatorio.
 
 ### Alcance
 
+- Crear `ModalRechazarCierreComponent`.
+- Usar `MatDialog`.
 - Aplicar paleta oficial Ultra.
-- Mejorar título y jerarquía visual.
-- Mejorar textarea de motivo.
-- Mejorar botones Rechazar cierre / Cancelar.
 - Mantener motivo obligatorio.
-- Mantener payload actual.
-- Mantener flujo actual de rechazo.
+- Mantener cancelación sin ejecutar acción.
+- Mantener retorno `string | null`.
+- Reemplazar uso de `solicitarMotivoRechazoCierre`.
+- Evitar estilos globales de SweetAlert.
 
 ### No alcance
 
-- No cambiar lógica TypeScript.
-- No cambiar endpoints.
+- No cambiar endpoint backend.
 - No cambiar permisos.
-- No cambiar validaciones.
-- No mezclar con rechazo RRHH por `prompt`.
+- No cambiar lógica de aceptación de cierre.
+- No cambiar rechazo RRHH por `prompt` todavía.
+- No eliminar utilidades SweetAlert generales.
 
 ### Validación
 
 Antes del commit debe comprobarse:
 
 - El modal abre desde `Rechazar cierre`.
-- No permite rechazar sin motivo si esa validación ya existe.
-- Cancelar cierra sin cambios.
-- Rechazar cierre ejecuta el flujo actual.
-- El ticket se actualiza correctamente después del rechazo.
+- Cancelar no ejecuta rechazo.
+- Rechazar sin motivo muestra validación.
+- Rechazar con motivo ejecuta el flujo actual.
+- El ticket se actualiza correctamente.
+- No se afecta el flujo de `Finalizar`.
+- No se afecta el flujo de `Cierre gerente`.
