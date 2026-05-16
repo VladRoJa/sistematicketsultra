@@ -106,3 +106,31 @@ El objetivo es facilitar:
 // Suite Ultra UI v1 - <descripción corta>
 // ============================================================================
 ```
+
+---
+
+## Loader Suite Ultra UI v1
+
+### Objetivo
+
+Definir un loader visual de marca para Suite Ultra.
+
+El loader debe sentirse como parte de la identidad oficial de Ultra y funcionar como pantalla de espera durante login, carga inicial o procesos pesados.
+
+### Comportamiento visual
+
+- Fondo oscuro con gradientes suaves.
+- Logo Ultra al centro.
+- Logo con pulso sutil.
+- Anillo exterior giratorio.
+- Halo naranja respirando.
+- Texto de carga.
+- Dots animados.
+
+### Reglas
+
+- No usar GIFs.
+- No depender de imágenes externas cuando pueda usarse SVG.
+- No bloquear lógica de autenticación.
+- Mantener el loader como componente compartido.
+- Evitar animaciones agresivas o mareantes.
