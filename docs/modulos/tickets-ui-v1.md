@@ -271,3 +271,44 @@ Antes del commit debe comprobarse:
 - Aceptar devuelve `true`.
 - Los textos personalizados siguen funcionando.
 - Los flujos de cierre/validación siguen funcionando.
+
+---
+
+## Modal Cierre Ticket UI v1
+
+### Objetivo
+
+Aplicar Suite Ultra UI v1 al modal de cierre de ticket sin modificar su lógica funcional.
+
+Este modal se usa en los flujos de cierre normal y cierre administrativo/gerente. Después del ajuste de flujo, este modal queda como la confirmación principal del cierre.
+
+### Alcance
+
+- Aplicar paleta oficial Ultra.
+- Mejorar título del modal.
+- Mejorar campo de costo de solución.
+- Mejorar campo de notas de cierre.
+- Mejorar botones Cancelar / Aceptar.
+- Mantener los datos capturados actuales.
+- Mantener compatibilidad con los flujos `Finalizar` y `Cierre gerente`.
+
+### No alcance
+
+- No cambiar lógica TypeScript.
+- No cambiar payload.
+- No cambiar validaciones.
+- No cambiar permisos.
+- No cambiar backend.
+- No reintroducir confirmación secundaria.
+
+### Validación
+
+Antes del commit debe comprobarse:
+
+- El modal abre desde `Finalizar`.
+- El modal abre desde `Cierre gerente`.
+- El campo costo sigue funcionando.
+- El campo notas sigue funcionando.
+- Cancelar cierra sin cambios.
+- Aceptar continúa el flujo actual.
+- No aparece confirmación secundaria después de aceptar.

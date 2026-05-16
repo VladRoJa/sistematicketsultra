@@ -1300,7 +1300,7 @@ async solicitarCierre(ticket: Ticket) {
 
   // 🔹 1. Abrir modal de cierre y esperar datos
   const dialogRef = this.dialog.open(ModalCierreTicketComponent, {
-    width: '420px',
+    width: '560px',
     data: { ticketId: ticket.id }
   });
 
@@ -1382,7 +1382,7 @@ async cerrarDesdeCeroPorGerente(ticket: Ticket): Promise<void> {
 
   // 🔹 1. Abrir modal de cierre gerente y esperar datos
   const dialogRef = this.dialog.open(ModalCierreTicketComponent, {
-    width: '420px',
+    width: '560px',
     data: {
       ticketId: ticket.id,
       modo: 'cierre_desde_cero'

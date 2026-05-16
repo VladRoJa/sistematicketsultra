@@ -1,20 +1,67 @@
-<h2 mat-dialog-title>Finalizar ticket #{{ data.ticketId }}</h2>
+<!-- frontend/src/app/shared/modal-cierre-ticket/modal-cierre-ticket.component.html -->
 
-<mat-dialog-content>
+<!-- ==========================================================================
+     Suite Ultra UI v1 - Modal cierre ticket
+     ========================================================================== -->
 
-  <mat-form-field appearance="fill" style="width: 100%; margin-bottom: 1rem;">
-    <mat-label>Costo de la solución</mat-label>
-    <input matInput type="number" [(ngModel)]="costo" placeholder="Ej. 1500">
-  </mat-form-field>
+<section class="modal-cierre">
+  <header mat-dialog-title class="modal-cierre__header">
+    <span class="modal-cierre__icon">
+      <mat-icon>task_alt</mat-icon>
+    </span>
 
-  <mat-form-field appearance="fill" style="width: 100%;">
-    <mat-label>Notas de cierre</mat-label>
-    <textarea matInput rows="4" [(ngModel)]="notas" placeholder="Describe trabajos realizados, piezas cambiadas..."></textarea>
-  </mat-form-field>
+    <span class="modal-cierre__title">
+      <strong>Finalizar ticket #{{ data.ticketId }}</strong>
+      <small>Registra el costo y las notas del cierre antes de continuar.</small>
+    </span>
+  </header>
 
-</mat-dialog-content>
+  <mat-dialog-content class="modal-cierre__content">
+    <div class="modal-cierre__notice">
+      <strong>Confirmación de cierre</strong>
+      <span>
+        Al aceptar, el cierre se enviará directamente. Ya no se mostrará una segunda confirmación.
+      </span>
+    </div>
 
-<mat-dialog-actions align="end">
-  <button mat-stroked-button color="warn" (click)="cancelar()">Cancelar</button>
-  <button mat-raised-button color="primary" (click)="aceptar()">Aceptar</button>
-</mat-dialog-actions>
+    <mat-form-field appearance="fill" class="w-full">
+      <mat-label>Costo de la solución</mat-label>
+      <input
+        matInput
+        type="number"
+        [(ngModel)]="costo"
+        placeholder="Ej. 1500"
+      />
+    </mat-form-field>
+
+    <mat-form-field appearance="fill" class="w-full">
+      <mat-label>Notas de cierre</mat-label>
+      <textarea
+        matInput
+        rows="4"
+        [(ngModel)]="notas"
+        placeholder="Describe trabajos realizados, piezas cambiadas o contexto del cierre."
+      ></textarea>
+    </mat-form-field>
+  </mat-dialog-content>
+
+  <mat-dialog-actions align="end" class="modal-cierre__actions">
+    <button
+      mat-button
+      type="button"
+      class="modal-cierre__cancel"
+      (click)="cancelar()"
+    >
+      Cancelar
+    </button>
+
+    <button
+      mat-raised-button
+      type="button"
+      class="modal-cierre__accept"
+      (click)="aceptar()"
+    >
+      Aceptar cierre
+    </button>
+  </mat-dialog-actions>
+</section>
