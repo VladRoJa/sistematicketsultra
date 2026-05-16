@@ -1278,7 +1278,7 @@ const pluralMap: Record<string, string> = {
 
 abrirConfirmacion(titulo: string, mensaje: string): Promise<boolean> {
   const dialogRef = this.dialog.open(DialogoConfirmacionComponent, {
-    width: '380px',
+    width: '460px',
     data: {
       titulo,
       mensaje,

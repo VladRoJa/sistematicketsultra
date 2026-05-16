@@ -312,3 +312,40 @@ Antes del commit debe comprobarse:
 - Cancelar cierra sin cambios.
 - Aceptar continúa el flujo actual.
 - No aparece confirmación secundaria después de aceptar.
+
+---
+
+## Diálogo de Confirmación UI v1
+
+### Objetivo
+
+Aplicar Suite Ultra UI v1 al diálogo compartido de confirmación usado por el módulo Tickets.
+
+Este diálogo se utiliza en flujos sensibles como aceptar cierre, rechazar cierre y confirmaciones directas, por lo que el cambio debe ser visual y no debe alterar la respuesta booleana del modal.
+
+### Alcance
+
+- Aplicar paleta oficial Ultra.
+- Mejorar título, mensaje y jerarquía visual.
+- Mejorar botones de aceptar/cancelar.
+- Mantener `true` al confirmar.
+- Mantener `false` al cancelar.
+- Mantener compatibilidad con `titulo`, `mensaje`, `textoAceptar` y `textoCancelar`.
+
+### No alcance
+
+- No cambiar lógica TypeScript.
+- No cambiar payloads.
+- No cambiar permisos.
+- No cambiar backend.
+- No reemplazar todavía el `prompt` de rechazo RRHH.
+
+### Validación
+
+Antes del commit debe comprobarse:
+
+- El diálogo abre correctamente.
+- Cancelar devuelve `false`.
+- Aceptar devuelve `true`.
+- Los textos personalizados siguen funcionando.
+- Los flujos de aceptar/rechazar cierre siguen funcionando.
