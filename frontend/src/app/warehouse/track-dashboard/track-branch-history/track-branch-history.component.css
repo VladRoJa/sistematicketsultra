@@ -421,3 +421,365 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Track Branch History polish pass
+   ========================================================================== */
+
+.track-branch-history-page {
+  min-height: calc(100vh - 72px);
+  padding: 24px;
+  gap: 20px;
+  background:
+    radial-gradient(circle at top left, rgba(229, 69, 37, 0.08), transparent 28%),
+    var(--ultra-bg);
+  color: var(--ultra-gray-900);
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Header
+   ========================================================================== */
+
+.track-branch-history-header {
+  padding: 24px;
+  border: 1px solid var(--ultra-gray-200);
+  border-radius: var(--ultra-radius-xl);
+  background:
+    radial-gradient(circle at top right, rgba(229, 69, 37, 0.12), transparent 32%),
+    linear-gradient(135deg, var(--ultra-surface), var(--ultra-gray-50));
+  box-shadow: var(--ultra-shadow-md);
+}
+
+.track-branch-history-kicker {
+  color: var(--ultra-orange);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+}
+
+.track-branch-history-header h1 {
+  color: var(--ultra-gray-900);
+  font-size: 32px;
+  font-weight: 900;
+  letter-spacing: -0.035em;
+}
+
+.track-branch-history-subtitle {
+  color: var(--ultra-gray-600);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.back-button {
+  border-radius: 999px;
+  background: var(--ultra-gray-50);
+  color: var(--ultra-gray-800);
+  border: 1px solid var(--ultra-gray-200);
+  font-weight: 900;
+  box-shadow: var(--ultra-shadow-sm);
+  transition:
+    transform 0.12s ease,
+    background-color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.back-button:hover {
+  transform: translateY(-1px);
+  background: var(--ultra-gray-100);
+  box-shadow: var(--ultra-shadow-md);
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Cards
+   ========================================================================== */
+
+.track-branch-history-card {
+  border: 1px solid var(--ultra-gray-200);
+  border-radius: var(--ultra-radius-xl);
+  background: var(--ultra-surface);
+  box-shadow: var(--ultra-shadow-md);
+}
+
+.card-title-block h2 {
+  color: var(--ultra-gray-900);
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+
+.card-title-block p {
+  color: var(--ultra-gray-600);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Metadata / selectors
+   ========================================================================== */
+
+.track-branch-history-meta {
+  gap: 14px;
+}
+
+.track-branch-history-meta > div {
+  padding: 14px;
+  border: 1px solid var(--ultra-gray-200);
+  border-radius: var(--ultra-radius-lg);
+  background: var(--ultra-gray-50);
+}
+
+.track-branch-history-meta strong {
+  color: var(--ultra-gray-900);
+  font-weight: 900;
+}
+
+.meta-label {
+  color: var(--ultra-gray-600);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.branch-select {
+  border: 0;
+  border-bottom: 2px solid var(--ultra-gray-300);
+  border-radius: 14px 14px 8px 8px;
+  background: var(--ultra-surface);
+  color: var(--ultra-gray-900);
+  font-weight: 800;
+  outline: none;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    background-color 0.18s ease;
+}
+
+.branch-select:hover {
+  border-bottom-color: rgba(229, 69, 37, 0.55);
+  background: #fff7f4;
+}
+
+.branch-select:focus {
+  border-bottom-color: var(--ultra-orange);
+  box-shadow: 0 0 0 3px rgba(229, 69, 37, 0.12);
+  background: var(--ultra-surface);
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Latest snapshot / gauges
+   ========================================================================== */
+
+.latest-snapshot-card {
+  background:
+    radial-gradient(circle at top right, rgba(229, 69, 37, 0.08), transparent 34%),
+    var(--ultra-surface);
+}
+
+.latest-snapshot-grid {
+  gap: 14px;
+}
+
+.latest-snapshot-item {
+  border: 1px solid var(--ultra-gray-200);
+  border-radius: var(--ultra-radius-lg);
+  background: var(--ultra-gray-50);
+  box-shadow: var(--ultra-shadow-sm);
+}
+
+.latest-snapshot-item strong {
+  color: var(--ultra-gray-900);
+  font-weight: 900;
+}
+
+.summary-gauge__track {
+  stroke: var(--ultra-gray-200);
+}
+
+.summary-gauge__value--success {
+  stroke: var(--ultra-success);
+}
+
+.summary-gauge__value--danger {
+  stroke: var(--ultra-danger);
+}
+
+.summary-gauge__value--neutral {
+  stroke: var(--ultra-gray-400);
+}
+
+.summary-gauge__value--warning {
+  stroke: var(--ultra-warning);
+}
+
+.summary-gauge-content strong,
+.mini-gauge-content strong {
+  color: var(--ultra-gray-900);
+  font-weight: 900;
+}
+
+.summary-gauge-content span,
+.mini-gauge-content span {
+  color: var(--ultra-orange);
+  font-weight: 900;
+}
+
+.mini-gauge-content small {
+  color: var(--ultra-gray-600);
+  font-weight: 700;
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Deltas / badges
+   ========================================================================== */
+
+.delta-badge {
+  border-radius: 999px;
+  font-weight: 900;
+}
+
+.delta-badge--success {
+  background: var(--ultra-success-soft);
+  color: var(--ultra-success);
+}
+
+.delta-badge--danger {
+  background: var(--ultra-danger-soft);
+  color: #991b1b;
+}
+
+.delta-badge--neutral {
+  background: var(--ultra-gray-100);
+  color: var(--ultra-gray-700);
+}
+
+.delta-sparkline__line,
+.delta-sparkline__point {
+  color: currentColor;
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Feedback states
+   ========================================================================== */
+
+.track-feedback {
+  border-radius: var(--ultra-radius-lg);
+  background: var(--ultra-danger-soft);
+  border: 1px solid rgba(220, 38, 38, 0.22);
+}
+
+.track-feedback p {
+  color: #991b1b;
+  font-weight: 800;
+}
+
+.track-loading,
+.track-empty-state {
+  border: 1px dashed var(--ultra-gray-300);
+  border-radius: var(--ultra-radius-lg);
+  background: var(--ultra-gray-50);
+}
+
+.track-loading p,
+.track-empty-state p {
+  color: var(--ultra-gray-600);
+  font-weight: 800;
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Tabla historial
+   ========================================================================== */
+
+.track-history-table-wrapper {
+  border: 1px solid var(--ultra-gray-200);
+  border-radius: var(--ultra-radius-lg);
+  background: var(--ultra-surface);
+  box-shadow: var(--ultra-shadow-sm);
+}
+
+.track-history-table {
+  background: var(--ultra-surface);
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.track-history-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background:
+    linear-gradient(135deg, var(--ultra-black-90), var(--ultra-charcoal));
+  color: var(--ultra-surface);
+  font-size: 12px;
+  font-weight: 900;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+.track-history-table tbody td {
+  color: var(--ultra-gray-800);
+  border-bottom: 1px solid var(--ultra-gray-200);
+  font-weight: 700;
+}
+
+.track-history-table tbody tr:nth-child(even) {
+  background: var(--ultra-gray-50);
+}
+
+.track-history-table tbody tr:hover {
+  background: #fff7f4;
+}
+
+.progress-cell {
+  color: var(--ultra-orange);
+  font-weight: 900;
+}
+
+.track-history-table .delta-badge {
+  min-width: 64px;
+  justify-content: center;
+  border: 1px solid transparent;
+}
+
+.track-history-table .delta-badge--success {
+  border-color: rgba(22, 163, 74, 0.22);
+}
+
+.track-history-table .delta-badge--danger {
+  border-color: rgba(220, 38, 38, 0.22);
+}
+
+.track-history-table .delta-badge--neutral {
+  border-color: var(--ultra-gray-200);
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Responsive polish
+   ========================================================================== */
+
+@media (max-width: 900px) {
+  .track-branch-history-header {
+    padding: 20px;
+  }
+
+  .back-button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .track-branch-history-page {
+    padding: 14px;
+    gap: 14px;
+  }
+
+  .track-branch-history-header h1 {
+    font-size: 26px;
+  }
+
+  .track-branch-history-card {
+    padding: 18px;
+    border-radius: var(--ultra-radius-lg);
+  }
+
+  .track-branch-history-meta > div {
+    padding: 12px;
+  }
+}
