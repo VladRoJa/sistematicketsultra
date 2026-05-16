@@ -191,3 +191,46 @@ Antes del commit debe comprobarse:
 - No permite guardar sin motivo.
 - Guardar cierra el modal con fecha y motivo.
 - Cancelar cierra sin cambios.
+
+---
+
+## Modal Asignar Fecha Solución UI v1
+
+### Objetivo
+
+Aplicar Suite Ultra UI v1 al modal de asignación de fecha solución sin modificar la lógica funcional.
+
+Este modal se usa cuando se asigna una fecha compromiso al ticket y puede capturar información de refacción cuando el ticket pertenece a Mantenimiento o Sistemas.
+
+### Alcance
+
+- Aplicar paleta oficial Ultra.
+- Mejorar estructura visual del título.
+- Mejorar campos de fecha y motivo.
+- Mejorar bloque opcional de refacción.
+- Eliminar estilos inline.
+- Mejorar botones de acción.
+- Mantener validaciones actuales.
+- Mantener outputs actuales.
+
+### No alcance
+
+- No cambiar lógica TypeScript.
+- No cambiar payload emitido.
+- No cambiar reglas de refacción.
+- No cambiar validaciones.
+- No cambiar permisos.
+- No cambiar flujo de guardado.
+
+### Validación
+
+Antes del commit debe comprobarse:
+
+- El modal abre correctamente.
+- No permite guardar sin fecha.
+- No permite guardar sin motivo.
+- Respeta fecha mínima.
+- Muestra bloque de refacción para Mantenimiento/Sistemas.
+- Oculta bloque de refacción cuando no aplica.
+- Guardar emite fecha, motivo y datos de refacción cuando aplica.
+- Cancelar cierra sin cambios.
