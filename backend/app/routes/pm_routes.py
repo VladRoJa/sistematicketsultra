@@ -14,7 +14,7 @@ from app.models.inventario import InventarioGeneral, InventarioSucursal
 from app.models.sucursal_model import Sucursal
 from app.models.pm_validacion import PmValidacionORM
 from app.utils.scope_utils import can_claims_access_branch
-from app.utils.pm_permissions import require_pm_execute
+from app.utils.pm_permissions import require_pm_execute, require_pm_validate
 from app.models.user_model import UserORM
 
 
@@ -274,22 +274,7 @@ def _crear_validacion_pm(data, claims, user_id):
             404,
         )
 
-    # 6) Scope check usando la sucursal de la bitácora
-    denied = _verificar_permiso_sucursal(claims, bitacora.sucursal_id)
-    if denied:
-        return None, denied
-
-    # 7) Evitar doble validación
-    if bitacora.pm_validacion:
-        return None, (
-            {
-                "error": "Conflict",
-                "detail": "La bitácora PM ya cuenta con validación",
-            },
-            409,
-        )
-
-    # 8) Evitar auto-validación
+    # 6) Identificar usuario actual
     try:
         current_user_id = int(user_id) if user_id is not None else None
     except (TypeError, ValueError):
@@ -304,6 +289,38 @@ def _crear_validacion_pm(data, claims, user_id):
             401,
         )
 
+    user = UserORM.get_by_id(current_user_id)
+    if not user:
+        return None, (
+            {
+                "error": "Unauthorized",
+                "detail": "Usuario no encontrado.",
+            },
+            401,
+        )
+
+    # 7) Permiso de acción: validar bitácora PM
+    denied_action = require_pm_validate(user)
+    if denied_action:
+        return None, denied_action
+
+    # 8) Scope check usando la sucursal de la bitácora
+    denied = _verificar_permiso_sucursal(claims, bitacora.sucursal_id)
+    if denied:
+        return None, denied
+
+    # 9) Evitar doble validación
+    if bitacora.pm_validacion:
+        return None, (
+            {
+                "error": "Conflict",
+                "detail": "La bitácora PM ya cuenta con validación",
+            },
+            409,
+        )
+
+    # 10) Evitar auto-validación
+
     if (
         bitacora.created_by_user_id is not None
         and bitacora.created_by_user_id == current_user_id
@@ -316,7 +333,7 @@ def _crear_validacion_pm(data, claims, user_id):
             403,
         )
 
-    # 9) Insertar validación
+    # 11) Insertar validación
     validacion = PmValidacionORM(
         bitacora_pm_id=bitacora_pm_id_int,
         decision=decision,
