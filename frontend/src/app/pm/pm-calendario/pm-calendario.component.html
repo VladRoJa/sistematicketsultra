@@ -1,22 +1,52 @@
-<!-- frontend\src\app\pm\pm-calendario\pm-calendario.component.html -->
+<!-- frontend/src/app/pm/pm-calendario/pm-calendario.component.html -->
 
+<div class="pm-calendar-page">
+  <!-- ==========================================================================
+       Suite Ultra UI v1 - Header calendario PM
+       ========================================================================== -->
+  <section class="pm-calendar-hero">
+    <div class="pm-calendar-hero__content">
+      <p class="pm-calendar-eyebrow">Planeación PM</p>
+      <h1>Calendario preventivo</h1>
+      <p>
+        Vista de programación mensual y semanal para anticipar carga operativa,
+        revisar ocurrencias y validar bitácoras asociadas.
+      </p>
+    </div>
 
-<div class="pm-calendario-container">
-  <h2 class="page-title">Calendario Mantenimiento Preventivo</h2>
+    <div class="pm-calendar-mode-card">
+      <span>Vista actual</span>
+      <strong>{{ vistaActual === 'SEMANA' ? 'Semana operativa' : 'Mes operativo' }}</strong>
+      <small>
+        {{ vistaActual === 'SEMANA'
+          ? 'Detalle por día y ocurrencia.'
+          : 'Resumen por sucursal y semana.' }}
+      </small>
+    </div>
+  </section>
 
-  <div class="pm-calendario-filtros">
-    <label>
-      Año
-    <select [(ngModel)]="anioSeleccionado" (ngModelChange)="actualizarSemanasDisponibles()">
-      <option [ngValue]="2025">2025</option>
-      <option [ngValue]="2026">2026</option>
-      <option [ngValue]="2027">2027</option>
-    </select>
+  <!-- ==========================================================================
+       Suite Ultra UI v1 - Filtros
+       ========================================================================== -->
+  <section class="pm-calendar-panel pm-calendar-filters">
+    <label class="pm-calendar-field">
+      <span>Año</span>
+      <select
+        [(ngModel)]="anioSeleccionado"
+        (ngModelChange)="actualizarSemanasDisponibles()"
+      >
+        <option [ngValue]="2025">2025</option>
+        <option [ngValue]="2026">2026</option>
+        <option [ngValue]="2027">2027</option>
+      </select>
     </label>
 
-    <label>
-      Mes
-      <select [(ngModel)]="mesSeleccionado" (ngModelChange)="actualizarSemanasDisponibles()">
+    <label class="pm-calendar-field">
+      <span>Mes</span>
+      <select
+        [(ngModel)]="mesSeleccionado"
+        (ngModelChange)="actualizarSemanasDisponibles()"
+      >
         <option [ngValue]="1">Enero</option>
         <option [ngValue]="2">Febrero</option>
         <option [ngValue]="3">Marzo</option>
@@ -32,16 +62,22 @@
       </select>
     </label>
 
-    <label>
-      Subcategoría
-      <select [(ngModel)]="subcategoriaSeleccionada" (change)="manejarCambioSubcategoria()">
-        <option *ngFor="let subcategoria of subcategoriasDisponibles" [value]="subcategoria.value">
+    <label class="pm-calendar-field">
+      <span>Subcategoría</span>
+      <select
+        [(ngModel)]="subcategoriaSeleccionada"
+        (change)="manejarCambioSubcategoria()"
+      >
+        <option
+          *ngFor="let subcategoria of subcategoriasDisponibles"
+          [value]="subcategoria.value"
+        >
           {{ subcategoria.label }}
         </option>
       </select>
     </label>
 
-    <mat-form-field appearance="fill">
+    <mat-form-field appearance="fill" class="pm-calendar-branches-field">
       <mat-label>Sucursales</mat-label>
       <mat-select
         multiple
@@ -59,196 +95,280 @@
       </mat-select>
     </mat-form-field>
 
-<div class="pm-semana-acciones">
-  <label class="pm-semana-acciones-label">
-    Semana
-      <select [(ngModel)]="semanaSeleccionada" (ngModelChange)="cargarCalendarioPm()">
-        <option *ngFor="let semana of semanasDisponibles" [ngValue]="semana.semana_anio">
-          {{ semana.label }}
-        </option>
-      </select>
-  </label>
+    <div class="pm-week-actions">
+      <label class="pm-calendar-field pm-calendar-field--week">
+        <span>Semana</span>
+        <select
+          [(ngModel)]="semanaSeleccionada"
+          (ngModelChange)="cargarCalendarioPm()"
+        >
+          <option
+            *ngFor="let semana of semanasDisponibles"
+            [ngValue]="semana.semana_anio"
+          >
+            {{ semana.label }}
+          </option>
+        </select>
+      </label>
 
-  <button
-    type="button"
-    class="pm-cambio-vista-btn"
-    *ngIf="vistaActual === 'MES'"
-    (click)="irAVistaSemanal()"
-  >
-    Ver semana
-  </button>
-
-  <button
-    type="button"
-    class="pm-cambio-vista-btn"
-    *ngIf="vistaActual === 'SEMANA'"
-    (click)="irAVistaMensual()"
-  >
-    Volver al mes
-  </button>
-</div>
-  </div>
-
-  <div
-    *ngIf="vistaActual === 'MES'"
-    class="pm-vista-contenedor"
-  >
-    <div
-      class="pm-calendario-grid"
-      [style.grid-template-columns]="obtenerGridTemplateColumns()"
-    >
-      <div class="pm-calendario-grid-header pm-calendario-grid-cell pm-col-sucursal">
-        Sucursal
-      </div>
-
-      <div
-        *ngFor="let semana of semanasDisponibles"
-        class="pm-calendario-grid-header pm-calendario-grid-cell"
+      <button
+        type="button"
+        class="pm-calendar-primary-button"
+        *ngIf="vistaActual === 'MES'"
+        (click)="irAVistaSemanal()"
       >
-        {{ semana.label }}
-      </div>
+        Ver semana
+      </button>
 
-      <ng-container *ngFor="let sucursalRow of calendarioPmData?.sucursales || []">
-        <div class="pm-calendario-grid-cell pm-col-sucursal">
-          {{ sucursalRow.sucursal }}
+      <button
+        type="button"
+        class="pm-calendar-secondary-button"
+        *ngIf="vistaActual === 'SEMANA'"
+        (click)="irAVistaMensual()"
+      >
+        Volver al mes
+      </button>
+    </div>
+  </section>
+
+  <!-- ==========================================================================
+       Suite Ultra UI v1 - Vista mensual
+       ========================================================================== -->
+  <section
+    *ngIf="vistaActual === 'MES'"
+    class="pm-calendar-panel pm-month-view"
+  >
+    <header class="pm-panel-header">
+      <div>
+        <h2>Resumen mensual</h2>
+        <p>Carga de mantenimientos preventivos por sucursal y semana.</p>
+      </div>
+    </header>
+
+    <div class="pm-month-scroll">
+      <div
+        class="pm-calendar-grid"
+        [style.grid-template-columns]="obtenerGridTemplateColumns()"
+      >
+        <div class="pm-calendar-grid-header pm-calendar-grid-cell pm-col-sucursal">
+          Sucursal
         </div>
 
         <div
-          *ngFor="let celda of sucursalRow.celdas"
-          class="pm-calendario-grid-cell pm-calendario-grid-placeholder"
-          [ngClass]="obtenerClaseCargaCelda(celda.total_programados)"
+          *ngFor="let semana of semanasDisponibles"
+          class="pm-calendar-grid-header pm-calendar-grid-cell pm-week-header"
         >
-          <div class="pm-celda-resumen">
-            <div class="pm-celda-total">{{ celda.total_programados }}</div>
-            <div class="pm-celda-label">PM</div>
+          <strong>Semana {{ semana.semana_anio }}</strong>
+          <small>{{ semana.fecha_inicio_label }} al {{ semana.fecha_fin_label }}</small>
+        </div>
+
+        <ng-container *ngFor="let sucursalRow of calendarioPmData?.sucursales || []">
+          <div class="pm-calendar-grid-cell pm-col-sucursal pm-branch-cell">
+            {{ sucursalRow.sucursal }}
           </div>
-        </div>
-      </ng-container>
-    </div>
-  </div>
-
-  <div
-    *ngIf="vistaActual === 'SEMANA' && detalleSemanaSeleccionada"
-    class="pm-vista-contenedor pm-semana-operativa"
-  >
-<div class="pm-calendario-leyenda">
-  <div class="pm-calendario-leyenda-item">
-    <span class="pm-calendario-leyenda-color ocurrencia-programada"></span>
-    <span>Programado</span>
-  </div>
-
-  <div class="pm-calendario-leyenda-item">
-    <span class="pm-calendario-leyenda-color ocurrencia-pendiente-validacion"></span>
-    <span>Pendiente de validación</span>
-  </div>
-
-  <div class="pm-calendario-leyenda-item">
-    <span class="pm-calendario-leyenda-color ocurrencia-validada"></span>
-    <span>Validado</span>
-  </div>
-
-  <div class="pm-calendario-leyenda-item">
-    <span class="pm-calendario-leyenda-color ocurrencia-rechazada"></span>
-    <span>Rechazado</span>
-  </div>
-</div> 
-
-
-
-    <div class="pm-semana-operativa-grid">
-      <div class="pm-semana-operativa-columna" *ngFor="let dia of diasSemanaVista">
-        <div class="pm-semana-operativa-columna-titulo">
-          <div>{{ dia.label }}</div>
-          <div class="pm-semana-operativa-columna-fecha">{{ dia.fechaLabel }}</div>
-        </div>
-
-        <div class="pm-semana-operativa-vacio" *ngIf="!dia.items.length">
-          Sin equipos programados
-        </div>
 
           <div
-            class="pm-semana-operativa-item"
+            *ngFor="let celda of sucursalRow.celdas"
+            class="pm-calendar-grid-cell pm-calendar-grid-placeholder"
+            [ngClass]="obtenerClaseCargaCelda(celda.total_programados)"
+          >
+            <div class="pm-celda-resumen">
+              <div class="pm-celda-total">{{ celda.total_programados }}</div>
+              <div class="pm-celda-label">PM</div>
+            </div>
+          </div>
+        </ng-container>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==========================================================================
+       Suite Ultra UI v1 - Vista semanal
+       ========================================================================== -->
+  <section
+    *ngIf="vistaActual === 'SEMANA' && detalleSemanaSeleccionada"
+    class="pm-calendar-panel pm-week-view"
+  >
+    <header class="pm-panel-header pm-panel-header--week">
+      <div>
+        <h2>Semana operativa</h2>
+        <p>Detalle diario de equipos programados y estado de cada ocurrencia.</p>
+      </div>
+
+      <div class="pm-calendar-legend">
+        <div class="pm-calendar-legend-item">
+          <span class="pm-calendar-legend-color ocurrencia-programada"></span>
+          <span>Programado</span>
+        </div>
+
+        <div class="pm-calendar-legend-item">
+          <span class="pm-calendar-legend-color ocurrencia-pendiente-validacion"></span>
+          <span>Pendiente</span>
+        </div>
+
+        <div class="pm-calendar-legend-item">
+          <span class="pm-calendar-legend-color ocurrencia-validada"></span>
+          <span>Validado</span>
+        </div>
+
+        <div class="pm-calendar-legend-item">
+          <span class="pm-calendar-legend-color ocurrencia-rechazada"></span>
+          <span>Rechazado</span>
+        </div>
+      </div>
+    </header>
+
+    <div class="pm-week-scroll">
+      <div class="pm-week-grid">
+        <div
+          class="pm-week-column"
+          *ngFor="let dia of diasSemanaVista"
+        >
+          <div class="pm-week-column__title">
+            <strong>{{ dia.label }}</strong>
+            <span>{{ dia.fechaLabel }}</span>
+          </div>
+
+          <div class="pm-week-empty" *ngIf="!dia.items.length">
+            Sin equipos programados
+          </div>
+
+          <button
+            type="button"
+            class="pm-week-item"
             [ngClass]="obtenerClaseEstadoCalendario(item)"
             *ngFor="let item of dia.items"
             (click)="seleccionarOcurrenciaSemana(item)"
-            [class.pm-semana-operativa-item-seleccionado]="esOcurrenciaSeleccionada(item)"
+            [class.pm-week-item--selected]="esOcurrenciaSeleccionada(item)"
           >
-          <div><strong>Equipo:</strong> {{ item.nombre }}</div>
-          <div><strong>Código:</strong> {{ item.codigo_interno }}</div>
-          <div><strong>Sucursal:</strong> {{ item.sucursal }}</div>
+            <strong>{{ item.nombre }}</strong>
+            <span>{{ item.codigo_interno || 'Sin código' }}</span>
+            <small>{{ item.sucursal }}</small>
+          </button>
         </div>
       </div>
     </div>
 
-<div class="pm-detalle-panel" *ngIf="ocurrenciaSeleccionada">
-  <div class="pm-ocurrencia-detalle">
-    <h4>Detalle de ocurrencia seleccionada</h4>
-    <div><strong>Sucursal:</strong> {{ ocurrenciaSeleccionada.sucursal }}</div>
-    <div><strong>Código:</strong> {{ ocurrenciaSeleccionada.codigo_interno }}</div>
-    <div><strong>Equipo:</strong> {{ ocurrenciaSeleccionada.nombre }}</div>
-    <div><strong>Frecuencia:</strong> {{ ocurrenciaSeleccionada.frecuencia_dias }} días</div>
-    <div><strong>Fecha programada:</strong> {{ ocurrenciaSeleccionada.fecha_programada }}</div>
-    <div class="pm-estado-detalle-row">
-  <strong>Estado:</strong>
-  <span
-    class="pm-estado-badge"
-    [ngClass]="obtenerClaseBadgeEstadoCalendario(ocurrenciaSeleccionada)"
-  >
-    {{ obtenerLabelEstadoCalendario(ocurrenciaSeleccionada) }}
-  </span>
-</div>
-  </div>
+    <div class="pm-detail-panel" *ngIf="ocurrenciaSeleccionada">
+      <article class="pm-detail-card">
+        <h3>Ocurrencia seleccionada</h3>
 
-  <div class="pm-bitacora-detalle" *ngIf="detalleBitacoraPmCalendario">
-    <h4>Detalle de bitácora asociada</h4>
+        <div class="pm-detail-list">
+          <div>
+            <span>Sucursal</span>
+            <strong>{{ ocurrenciaSeleccionada.sucursal }}</strong>
+          </div>
 
-    <div><strong>ID:</strong> {{ detalleBitacoraPmCalendario.id }}</div>
-    <div><strong>Fecha:</strong> {{ detalleBitacoraPmCalendario.fecha }}</div>
-    <div><strong>Tipo de mantenimiento:</strong> {{ tipoMantenimientoLabel(detalleBitacoraPmCalendario.tipo_mantenimiento) }}</div>
-    <div><strong>Notas:</strong> {{ detalleBitacoraPmCalendario.notas || 'Sin notas' }}</div>
-    <div class="pm-estado-detalle-row">
-  <strong>Validación:</strong>
-  <span
-    class="pm-estado-badge"
-    [ngClass]="obtenerClaseBadgeValidacionBitacora()"
-  >
-    {{ obtenerLabelValidacionBitacora() }}
-  </span>
-</div>
+          <div>
+            <span>Código</span>
+            <strong>{{ ocurrenciaSeleccionada.codigo_interno || 'Sin código' }}</strong>
+          </div>
 
-    <div class="pm-ocurrencia-acciones" *ngIf="puedeMostrarAccionesValidacionCalendario()">
-      <button
-        mat-raised-button
-        color="primary"
-        type="button"
-        (click)="validarBitacoraPmDesdeCalendario()"
-      >
-        Validar
-      </button>
+          <div>
+            <span>Equipo</span>
+            <strong>{{ ocurrenciaSeleccionada.nombre }}</strong>
+          </div>
 
-      <button
-        mat-stroked-button
-        color="warn"
-        type="button"
-        (click)="manejarBotonRechazoPmCalendario()"
-      >
-        {{ textoBotonRechazoPmCalendario() }}
-      </button>
+          <div>
+            <span>Frecuencia</span>
+            <strong>{{ ocurrenciaSeleccionada.frecuencia_dias }} días</strong>
+          </div>
+
+          <div>
+            <span>Fecha programada</span>
+            <strong>{{ ocurrenciaSeleccionada.fecha_programada }}</strong>
+          </div>
+
+          <div>
+            <span>Estado</span>
+            <strong>
+              <span
+                class="pm-state-badge"
+                [ngClass]="obtenerClaseBadgeEstadoCalendario(ocurrenciaSeleccionada)"
+              >
+                {{ obtenerLabelEstadoCalendario(ocurrenciaSeleccionada) }}
+              </span>
+            </strong>
+          </div>
+        </div>
+      </article>
+
+      <article class="pm-detail-card" *ngIf="detalleBitacoraPmCalendario">
+        <h3>Bitácora asociada</h3>
+
+        <div class="pm-detail-list">
+          <div>
+            <span>ID</span>
+            <strong>{{ detalleBitacoraPmCalendario.id }}</strong>
+          </div>
+
+          <div>
+            <span>Fecha</span>
+            <strong>{{ detalleBitacoraPmCalendario.fecha }}</strong>
+          </div>
+
+          <div>
+            <span>Tipo</span>
+            <strong>{{ tipoMantenimientoLabel(detalleBitacoraPmCalendario.tipo_mantenimiento) }}</strong>
+          </div>
+
+          <div class="pm-detail-list__wide">
+            <span>Notas</span>
+            <strong>{{ detalleBitacoraPmCalendario.notas || 'Sin notas' }}</strong>
+          </div>
+
+          <div>
+            <span>Validación</span>
+            <strong>
+              <span
+                class="pm-state-badge"
+                [ngClass]="obtenerClaseBadgeValidacionBitacora()"
+              >
+                {{ obtenerLabelValidacionBitacora() }}
+              </span>
+            </strong>
+          </div>
+        </div>
+
+        <div
+          class="pm-validation-actions"
+          *ngIf="puedeMostrarAccionesValidacionCalendario()"
+        >
+          <button
+            mat-raised-button
+            color="primary"
+            type="button"
+            class="pm-calendar-primary-button"
+            (click)="validarBitacoraPmDesdeCalendario()"
+          >
+            Validar
+          </button>
+
+          <button
+            mat-stroked-button
+            color="warn"
+            type="button"
+            class="pm-calendar-danger-button"
+            (click)="manejarBotonRechazoPmCalendario()"
+          >
+            {{ textoBotonRechazoPmCalendario() }}
+          </button>
+        </div>
+
+        <mat-form-field
+          *ngIf="puedeMostrarAccionesValidacionCalendario() && mostrarRechazoPm"
+          appearance="fill"
+          class="pm-rechazo-field"
+        >
+          <mat-label>Motivo de rechazo</mat-label>
+          <textarea
+            matInput
+            rows="3"
+            [(ngModel)]="motivoRechazoPm"
+            placeholder="Escribe el motivo del rechazo"
+          ></textarea>
+        </mat-form-field>
+      </article>
     </div>
-
-    <mat-form-field
-      *ngIf="puedeMostrarAccionesValidacionCalendario() && mostrarRechazoPm"
-      appearance="fill"
-      class="pm-rechazo-field"
-    >
-      <mat-label>Motivo de rechazo</mat-label>
-      <textarea
-        matInput
-        rows="3"
-        [(ngModel)]="motivoRechazoPm"
-        placeholder="Escribe el motivo del rechazo"
-      ></textarea>
-    </mat-form-field>
-  </div>
-</div>
+  </section>
 </div>
