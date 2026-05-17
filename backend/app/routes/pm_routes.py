@@ -1375,10 +1375,19 @@ def pm_preventivo_dashboard():
 # ──────────────────────────────────────────────────────────── 
     
     
-@pm_bp.route("/calendario",methods=["GET"])
+@pm_bp.route("/calendario", methods=["GET"])
 @jwt_required()
 def pm_calendario():
     claims = get_jwt() or {}
+    user_id = get_jwt_identity()
+
+    user, user_err = _obtener_usuario_actual_pm(user_id)
+    if user_err:
+        return jsonify(user_err[0]), user_err[1]
+
+    denied_action = require_pm_view(user)
+    if denied_action:
+        return jsonify(denied_action[0]), denied_action[1]
 
     anio = request.args.get("anio", type=int)
     mes = request.args.get("mes", type=int)
