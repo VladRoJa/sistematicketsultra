@@ -549,6 +549,27 @@ filtrarOpcionesTexto(columna: string): void {
   this.changeDetectorRef.detectChanges();
 }
 
+private columnaTieneFiltroReal(columna: string): boolean {
+  const plural = this.obtenerPluralFiltro(columna);
+
+  if (!plural) {
+    return false;
+  }
+
+  const disponibles = (this as any)[`${plural}Disponibles`] as Array<{
+    valor: any;
+    seleccionado: boolean;
+  }>;
+
+  if (!Array.isArray(disponibles) || disponibles.length === 0) {
+    return false;
+  }
+
+  const seleccionadas = disponibles.filter(opcion => opcion.seleccionado).length;
+
+  return seleccionadas > 0 && seleccionadas < disponibles.length;
+}
+
 private obtenerTextoFiltroColumna(columna: string): string {
   const textoMap: Record<string, string> = {
     categoria: this.filtroCategoriaTexto,
@@ -896,22 +917,6 @@ if (columna === 'subcategoria') {
       .sort((a, b) => a.localeCompare(b))
       .map(nombre => ({ valor: nombre, etiqueta: nombre, seleccionado: true }));
 
-      console.group('🧪 [DETALLE] prepararOpcionesFiltro');
-      console.log('baseOpciones length:', baseOpciones?.length);
-      console.log('opciones detalle:', opciones);
-      console.table((baseOpciones || []).slice(0, 20).map((t: any) => ({
-        id: t.id,
-        detalle_raw: t.__detalle_raw,
-        detalle: t.detalle,
-        detalle_visible: t.detalle_visible,
-        detalle_filtro: t.detalle_filtro,
-        getDetalleVisible: this.getDetalleVisible({
-          ...t,
-          detalle: t.__detalle_raw ?? t.detalle,
-        } as Ticket),
-      })));
-      console.groupEnd();
-
     this.detallesDisponibles = opciones;
     this.detallesFiltrados = [...opciones];
     this.temporalSeleccionados['detalle'] = opciones.map(o => ({ ...o }));
@@ -1004,6 +1009,13 @@ cerrarYAplicar(columna: string, trigger: MatMenuTrigger): void {
   }
 
   this.confirmarFiltroColumna(columna);
+  this.sincronizarDisponiblesDesdeTemporal(columna);
+
+  if (!this.columnaTieneFiltroReal(columna)) {
+    this.limpiarFiltroColumna(columna);
+    trigger.closeMenu();
+    return;
+  }
 
   if (columna === 'detalle') {
     this.sincronizarDisponiblesDesdeTemporal('detalle');
@@ -1013,11 +1025,103 @@ if (columna === 'categoria' || columna === 'estado' || columna === 'departamento
   aplicarFiltroColumnaConResetUnificado(this, columna);
 } else if (columna === 'detalle') {
   this.aplicarFiltroDetalleConReset();
+} else if (columna === 'inventario') {
+  const valoresInventario = this.obtenerValoresSeleccionadosDesdeTemporal('inventario');
+  this.aplicarFiltroInventarioConReset(valoresInventario);
 } else {
   this.aplicarFiltroColumnaConReset(columna);
 }
 
 trigger.closeMenu();
+}
+
+private obtenerValoresSeleccionadosDesdeTemporal(columna: string): Set<string> {
+  const temporales = this.temporalSeleccionados[columna] || [];
+
+  return new Set(
+    temporales
+      .filter((opcion: any) => opcion.seleccionado)
+      .map((opcion: any) => String(opcion.valor))
+  );
+}
+
+private sincronizarDisponiblesDesdeValoresSeleccionados(
+  columna: string,
+  valoresSeleccionados: Set<string>
+): void {
+  const plural = this.obtenerPluralFiltro(columna);
+
+  if (!plural) {
+    return;
+  }
+
+  const disponibles = ((this as any)[`${plural}Disponibles`] || []) as Array<{
+    valor: any;
+    etiqueta?: string;
+    seleccionado: boolean;
+  }>;
+
+  if (!Array.isArray(disponibles) || disponibles.length === 0) {
+    return;
+  }
+
+  const normalizados = disponibles.map((opcion) => ({
+    valor: opcion.valor,
+    etiqueta: opcion.etiqueta ?? opcion.valor,
+    seleccionado: valoresSeleccionados.has(String(opcion.valor)),
+  }));
+
+  (this as any)[`${plural}Disponibles`] = normalizados;
+  (this as any)[`${plural}Filtradas`] = [...normalizados];
+  this.temporalSeleccionados[columna] = normalizados.map((opcion: any) => ({ ...opcion }));
+}
+
+private aplicarFiltroInventarioConReset(valoresSeleccionados: Set<string>): void {
+  this.page = 1;
+  this.hidratarSucursalEnTickets();
+
+  this.sincronizarDisponiblesDesdeValoresSeleccionados(
+    'inventario',
+    valoresSeleccionados
+  );
+
+  if (!this.columnaTieneFiltroReal('inventario')) {
+    this.limpiarFiltroColumna('inventario');
+    return;
+  }
+
+  const filtrosActivos = obtenerFiltrosActivos(this);
+  const filtrosSinInventario = { ...filtrosActivos };
+  delete filtrosSinInventario['inventario'];
+
+  const base = Array.isArray(this.ticketsCompletos) && this.ticketsCompletos.length > 0
+    ? this.ticketsCompletos
+    : this.tickets;
+
+  const baseFiltrada =
+    Object.keys(filtrosSinInventario).length === 0
+      ? [...base]
+      : filtrarTicketsConFiltros(base, filtrosSinInventario);
+
+  const valoresNormalizados = new Set(
+    Array.from(valoresSeleccionados).map((valor) =>
+      this.normalizarTextoFiltro(valor)
+    )
+  );
+
+  this.filteredTickets = baseFiltrada.filter((ticket: any) => {
+    const inventarioTicket = this.normalizarTextoFiltro(
+      ticket.inventario?.nombre || '—'
+    );
+
+    return valoresNormalizados.has(inventarioTicket);
+  });
+
+  this.totalTickets = this.filteredTickets.length;
+  this.totalPagesCount = Math.ceil(this.totalTickets / this.itemsPerPage);
+  this.visibleTickets = this.filteredTickets.slice(0, this.itemsPerPage);
+
+  this.changeDetectorRef.detectChanges();
 }
 
 private aplicarFiltroDetalleConReset(): void {
@@ -1072,20 +1176,64 @@ private sincronizarDisponiblesDesdeTemporal(columna: string): void {
     return;
   }
 
-  const temporales = this.temporalSeleccionados[columna];
+  const temporales = (this.temporalSeleccionados[columna] || []) as Array<{
+    valor: any;
+    etiqueta?: string;
+    seleccionado: boolean;
+  }>;
 
   if (!Array.isArray(temporales)) {
     return;
   }
 
-  const normalizados = temporales.map((opcion: any) => ({
-    valor: opcion.valor,
-    etiqueta: opcion.etiqueta ?? opcion.valor,
-    seleccionado: Boolean(opcion.seleccionado),
-  }));
+  const disponiblesActuales = ((this as any)[`${plural}Disponibles`] || []) as Array<{
+    valor: any;
+    etiqueta?: string;
+    seleccionado: boolean;
+  }>;
+
+  const baseMaestra = disponiblesActuales.length > 0
+    ? disponiblesActuales
+    : temporales;
+
+  const textoActivo = this.normalizarTextoFiltro(
+    this.obtenerTextoFiltroColumna(columna)
+  ).length > 0;
+
+  const valoresTemporales = new Set(
+    temporales.map((opcion) => String(opcion.valor))
+  );
+
+  const seleccionTemporalPorValor = new Map<string, boolean>(
+    temporales.map((opcion) => [
+      String(opcion.valor),
+      Boolean(opcion.seleccionado),
+    ])
+  );
+
+  const normalizados = baseMaestra.map((opcion: any) => {
+    const valorKey = String(opcion.valor);
+
+    let seleccionado = Boolean(opcion.seleccionado);
+
+    if (textoActivo) {
+      seleccionado = valoresTemporales.has(valorKey)
+        ? Boolean(seleccionTemporalPorValor.get(valorKey))
+        : false;
+    } else if (seleccionTemporalPorValor.has(valorKey)) {
+      seleccionado = Boolean(seleccionTemporalPorValor.get(valorKey));
+    }
+
+    return {
+      valor: opcion.valor,
+      etiqueta: opcion.etiqueta ?? opcion.valor,
+      seleccionado,
+    };
+  });
 
   (this as any)[`${plural}Disponibles`] = normalizados;
   (this as any)[`${plural}Filtradas`] = [...normalizados];
+  this.temporalSeleccionados[columna] = normalizados.map((opcion: any) => ({ ...opcion }));
 }
 
 cerrarYLimpiar(columna: string, trigger?: any): void {

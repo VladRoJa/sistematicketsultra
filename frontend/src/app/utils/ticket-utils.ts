@@ -66,29 +66,12 @@ export function getFiltrosActivosFrom(
 }
 
 // ----------- FILTRADO CRUZADO PRINCIPAL -----------
-// ----------- FILTRADO PRINCIPAL (sin cross UI, solo tabla) -----------
 export function filtrarTicketsConFiltros(
   tickets: any[],
   filtros: FiltrosEntrada | Record<string, any>
 ) {
   const filtrosSet = normalizaFiltros(filtros);
-const debugDetalleActivo = Boolean(filtrosSet.detalle?.size);
-
-if (debugDetalleActivo) {
-  console.group('🧪 [DETALLE] filtrarTicketsConFiltros entrada');
-  console.log('filtros detalle:', Array.from(filtrosSet.detalle || []));
-  console.log('tickets entrada:', tickets.length);
-  console.table((tickets || []).slice(0, 20).map((t: any) => ({
-    id: t.id,
-    detalle: t.detalle,
-    detalle_visible: t.detalle_visible,
-    detalle_filtro: t.detalle_filtro,
-  })));
-  console.groupEnd();
-}
-console.log('🧪 filtrosSet:', Object.fromEntries(
-  Object.entries(filtrosSet).map(([k, v]) => [k, Array.from(v)])
-));
+  const debugDetalleActivo = Boolean(filtrosSet.detalle?.size);
 
   const getValue = (t: any, col: string): string => {
     switch (col) {
@@ -145,15 +128,14 @@ return tickets.filter(t => {
       })();
     }
 
-if (col === 'detalle') {
-  console.log('🧪 [DETALLE] comparando', {
+if (col === 'inventario') {
+  console.log('🧪 [INVENTARIO] comparando', {
     ticket_id: t.id,
     valorTicket,
     valoresFiltro: Array.from(valores),
     match: valores.has(valorTicket),
-    detalle: t.detalle,
-    detalle_visible: t.detalle_visible,
-    detalle_filtro: t.detalle_filtro,
+    inventario_nombre: t.inventario?.nombre,
+    inventario_filtro: t.inventario_filtro,
   });
 }
 
