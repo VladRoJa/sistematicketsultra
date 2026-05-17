@@ -103,7 +103,10 @@ def _crear_bitacora(data, claims, user_id):
         return None, (
             {
                 "error": "Bad Request",
-                "detail": "Campos requeridos: inventario_id, sucursal_id, fecha, resultado, tipo_mantenimiento",
+                "detail": (
+                    "Campos requeridos: inventario_id, sucursal_id, "
+                    "fecha, resultado, tipo_mantenimiento"
+                ),
             },
             400,
         )
@@ -129,7 +132,10 @@ def _crear_bitacora(data, claims, user_id):
     # 2) Validación checks
     if not isinstance(checks, dict):
         return None, (
-            {"error": "Bad Request", "detail": "checks debe ser un objeto/dict"},
+            {
+                "error": "Bad Request",
+                "detail": "checks debe ser un objeto/dict",
+            },
             400,
         )
 
@@ -162,16 +168,17 @@ def _crear_bitacora(data, claims, user_id):
     if denied_action:
         return None, denied_action
 
-    # 5) Política por rol
+    # 5) Scope por sucursal
     denied = _verificar_permiso_sucursal(claims, sucursal_id_int)
     if denied:
         return None, denied
 
-    # 6) Validar inventario↔sucursal
+    # 6) Validar inventario ↔ sucursal
     rel = InventarioSucursal.query.filter_by(
         inventario_id=inventario_id_int,
         sucursal_id=sucursal_id_int,
     ).first()
+
     if not rel:
         return None, (
             {
@@ -186,7 +193,10 @@ def _crear_bitacora(data, claims, user_id):
         fecha_date = datetime.strptime(fecha, "%Y-%m-%d").date()
     except ValueError:
         return None, (
-            {"error": "Bad Request", "detail": "fecha debe ser YYYY-MM-DD"},
+            {
+                "error": "Bad Request",
+                "detail": "fecha debe ser YYYY-MM-DD",
+            },
             400,
         )
 
@@ -223,6 +233,10 @@ def _crear_bitacora(data, claims, user_id):
         checks=checks,
     )
 
+    db.session.add(bit)
+    db.session.commit()
+
+    return bit, None
 
 def _crear_validacion_pm(data, claims, user_id):
     """
