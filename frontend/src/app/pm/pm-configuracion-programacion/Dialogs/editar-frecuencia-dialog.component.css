@@ -1,20 +1,135 @@
-.editar-frecuencia-dialog-content {
-  min-width: 320px;
+/* ==========================================================================
+   Suite Ultra UI v1 - Dialog editar frecuencia PM
+   ========================================================================== */
+
+:host {
+  display: block;
+  width: min(460px, 92vw);
+  color: var(--ultra-gray-900);
+  box-sizing: border-box;
+}
+
+.editar-frecuencia-dialog {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.editar-frecuencia-dialog__header {
+  margin: 0;
+  padding: 20px 24px 10px;
+  border-bottom: 1px solid var(--ultra-gray-200);
+  background:
+    radial-gradient(circle at top right, rgba(229, 69, 37, 0.10), transparent 38%),
+    var(--ultra-gray-50);
+}
+
+.editar-frecuencia-dialog__header p {
+  margin: 0 0 4px;
+  color: var(--ultra-orange);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.editar-frecuencia-dialog__header h2 {
+  margin: 0;
+  color: var(--ultra-gray-900);
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1.15;
+}
+
+.editar-frecuencia-dialog__content {
+  padding: 18px 24px 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 
-.editar-frecuencia-dialog-equipo {
+.editar-frecuencia-dialog__notice {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  border: 1px solid rgba(229, 69, 37, 0.24);
+  border-radius: var(--ultra-radius-lg);
+  background: var(--ultra-orange-soft);
+}
+
+.editar-frecuencia-dialog__notice span {
+  color: var(--ultra-orange);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.editar-frecuencia-dialog__notice strong {
+  color: var(--ultra-gray-900);
   font-size: 14px;
-  line-height: 1.4;
+  line-height: 1.35;
+  font-weight: 900;
 }
 
-.editar-frecuencia-dialog-field {
+.editar-frecuencia-dialog__field {
   width: 100%;
 }
 
-.editar-frecuencia-dialog-error {
-  color: #b71c1c;
+.editar-frecuencia-dialog ::ng-deep .mat-mdc-form-field {
+  --mdc-filled-text-field-container-color: var(--ultra-gray-50);
+  --mdc-filled-text-field-label-text-color: var(--ultra-gray-600);
+  --mdc-filled-text-field-focus-label-text-color: var(--ultra-orange);
+  --mdc-filled-text-field-active-indicator-color: var(--ultra-gray-300);
+  --mdc-filled-text-field-focus-active-indicator-color: var(--ultra-orange);
+  --mdc-filled-text-field-hover-active-indicator-color: rgba(229, 69, 37, 0.55);
+}
+
+.editar-frecuencia-dialog ::ng-deep .mat-mdc-text-field-wrapper {
+  border-radius: 14px 14px 8px 8px;
+  overflow: hidden;
+}
+
+.editar-frecuencia-dialog__error {
+  padding: 10px 12px;
+  border: 1px solid rgba(220, 38, 38, 0.22);
+  border-radius: var(--ultra-radius-md);
+  background: var(--ultra-danger-soft);
+  color: #991b1b;
   font-size: 13px;
+  font-weight: 800;
+}
+
+.editar-frecuencia-dialog__actions {
+  padding: 16px 24px 20px;
+  display: flex;
+  gap: 10px;
+}
+
+.editar-frecuencia-dialog__cancel,
+.editar-frecuencia-dialog__save {
+  min-width: 110px;
+  border-radius: 999px;
+  font-weight: 900;
+}
+
+.editar-frecuencia-dialog__cancel {
+  color: var(--ultra-gray-700);
+}
+
+.editar-frecuencia-dialog__save {
+  background: var(--ultra-orange) !important;
+  color: var(--ultra-surface) !important;
+}
+
+@media (max-width: 520px) {
+  .editar-frecuencia-dialog__actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .editar-frecuencia-dialog__cancel,
+  .editar-frecuencia-dialog__save {
+    width: 100%;
+  }
 }
