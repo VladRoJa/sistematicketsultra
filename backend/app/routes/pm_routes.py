@@ -63,6 +63,18 @@ def _verificar_permiso_sucursal(claims, sucursal_id_int):
 def _normalizar_texto_pm(value) -> str:
     return (value or "").strip().upper()
 
+def _buscar_bitacora_preventiva_existente(inventario_id: int, sucursal_id: int, fecha_obj):
+    return (
+        PmBitacoraORM.query
+        .filter(
+            PmBitacoraORM.inventario_id == inventario_id,
+            PmBitacoraORM.sucursal_id == sucursal_id,
+            PmBitacoraORM.fecha == fecha_obj,
+            PmBitacoraORM.tipo_mantenimiento == "PREVENTIVO",
+        )
+        .first()
+    )
+
 def _crear_bitacora(data, claims, user_id):
     """
     Valida, verifica permisos e inserta una PmBitacoraORM.
@@ -154,7 +166,28 @@ def _crear_bitacora(data, claims, user_id):
             400,
         )
 
-    # 7) Insertar
+    # 7) Evitar duplicado operativo de preventivo
+    if tipo_mantenimiento == "PREVENTIVO":
+        bitacora_existente = _buscar_bitacora_preventiva_existente(
+            inventario_id=inventario_id_int,
+            sucursal_id=sucursal_id_int,
+            fecha_obj=fecha_date,
+        )
+
+        if bitacora_existente:
+            return None, (
+                {
+                    "error": "Conflict",
+                    "detail": (
+                        "Ya existe una bitácora preventiva para este activo, "
+                        "sucursal y fecha."
+                    ),
+                    "existing_bitacora_id": bitacora_existente.id,
+                },
+                409,
+            )
+
+    # 8) Insertar
     bit = PmBitacoraORM(
         inventario_id=inventario_id_int,
         sucursal_id=sucursal_id_int,
@@ -165,10 +198,6 @@ def _crear_bitacora(data, claims, user_id):
         notas=notas,
         checks=checks,
     )
-    db.session.add(bit)
-    db.session.commit()
-
-    return bit, None
 
 
 def _crear_validacion_pm(data, claims, user_id):
@@ -659,6 +688,7 @@ def _asignar_bitacoras_a_ocurrencias_con_ventana(
         asignaciones[mejor_ocurrencia.isoformat()] = bitacora
 
     return asignaciones
+
 
 
 # ────────────────────────────────────────────────────────────
