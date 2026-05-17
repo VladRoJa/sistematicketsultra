@@ -118,8 +118,6 @@ export interface Ticket {
   sucursal_id_destino?: number | null;
   url_evidencia?: string | null;
   refaccion_definida_por_jefe?: boolean;
-  requiere_aprobacion?: boolean;
-  aprobacion_estado?: 'pendiente' | 'aprobado' | 'rechazado' | null;
   estado_cierre?:
   | 'pendiente_jefe'
   | 'pendiente_creador'
@@ -460,79 +458,6 @@ async ngOnInit() {
   }
 
   
-
-// ====== RRHH: helpers de estado/permiso y handlers ======
-
-/** ¿El usuario autenticado es GERENTE_REGIONAL? */
-get esGerenciaRegional(): boolean {
-  return (this.user?.rol || '').toString().toUpperCase() === 'GERENTE_REGIONAL';
-}
-
-/** ¿Es admin/corporativo/edición corporativa? (incluye tus reglas existentes) */
-get esAdminOCorporativo(): boolean {
-  return !!this.usuarioEsAdmin || !!this.usuarioEsEditorCorporativo || this.user?.sucursal_id === 1000;
-}
-
-/** ¿El usuario actual es el aprobador asignado explícitamente en el ticket? */
-private esAprobadorAsignado(t: Ticket): boolean {
-  const aprobador = ((t as any)?.aprobador_username || '').toString();
-  const current = (this.user?.username || '').toString();
-  return !!aprobador && aprobador === current;
-}
-
-/** ¿Este ticket está pendiente de aprobación RRHH? */
-isPendienteRRHH(t: Ticket): boolean {
-  if (!t?.requiere_aprobacion) return false;
-  const est = (t.aprobacion_estado ?? 'pendiente').toString().toLowerCase();
-  return est === 'pendiente';
-}
-
-/** ¿El usuario actual puede aprobar/rechazar este ticket? */
-canAprobarRRHH(t: Ticket): boolean {
-  return this.esGerenciaRegional || this.esAdminOCorporativo || this.esAprobadorAsignado(t);
-}
-
-/** Handler: Aprobar RRHH */
-onRrhhAprobar(t: Ticket): void {
-  if (!t || !t.id) return;
-  if (!this.canAprobarRRHH(t)) {
-    try { mostrarAlertaToast?.('No tienes permisos para aprobar este ticket.', 'error'); } catch {}
-    return;
-  }
-  const comentario = 'Aprobado por gerencia regional desde UI';
-  this.ticketService.rrhhAprobar(t.id, comentario).subscribe({
-    next: () => {
-      try { mostrarAlertaToast?.('Ticket aprobado.', 'success'); } catch {}
-      this.postAccionRefrescar();
-    },
-    error: (err) => {
-      console.error(err);
-      try { mostrarAlertaToast?.('No se pudo aprobar el ticket.', 'error'); } catch {}
-    }
-  });
-}
-
-/** Handler: Rechazar RRHH (pide motivo rápido) */
-onRrhhRechazar(t: Ticket): void {
-  if (!t || !t.id) return;
-  if (!this.canAprobarRRHH(t)) {
-    try { mostrarAlertaToast?.('No tienes permisos para rechazar este ticket.', 'error'); } catch {}
-    return;
-  }
-  const motivo = (prompt('Motivo del rechazo:') || '').trim();
-  const comentario = motivo || 'Rechazado por gerencia regional desde UI';
-  this.ticketService.rrhhRechazar(t.id, comentario).subscribe({
-    next: () => {
-      try { mostrarAlertaToast?.('Ticket rechazado.', 'success'); } catch {}
-      this.postAccionRefrescar();
-    },
-    error: (err) => {
-      console.error(err);
-      try { mostrarAlertaToast?.('No se pudo rechazar el ticket.', 'error'); } catch {}
-    }
-  });
-}
-
 
 /** Refrescar tabla/estado tras aprobar/rechazar */
 private postAccionRefrescar(): void {
@@ -963,10 +888,6 @@ permiteBusqueda(col: string): boolean {
 
 
 cambiarEstadoEnProgreso(ticket: Ticket) {
-  if ((ticket as any).requiere_aprobacion && (ticket as any).aprobacion_estado !== 'aprobado') {
-    mostrarAlertaToast('Este ticket requiere aprobación de gerencia antes de avanzar a "en progreso".', 'error');
-    return;
-  }
   if (!ticket.fecha_solucion) {
     this.ticketParaAsignarFecha = ticket;
     this.fechaSolucionTentativa = null;
@@ -1065,7 +986,8 @@ abrirEditarFechaSolucion(ticket: Ticket) {
   if (estado !== 'en progreso') return; // ✅ solo editable en progreso
 
   const dialogRef = this.dialog.open(EditarFechaSolucionModalComponent, {
-    width: '360px',
+    width: '560px',
+    maxWidth: '92vw',
     data: { fechaActual: ticket.fecha_solucion }
   });
 
@@ -1277,7 +1199,7 @@ const pluralMap: Record<string, string> = {
 
 abrirConfirmacion(titulo: string, mensaje: string): Promise<boolean> {
   const dialogRef = this.dialog.open(DialogoConfirmacionComponent, {
-    width: '380px',
+    width: '460px',
     data: {
       titulo,
       mensaje,
@@ -1297,28 +1219,22 @@ async solicitarCierre(ticket: Ticket) {
     return;
   }
 
-  // 🔹 1. Abrir modal y esperar datos
+  // 🔹 1. Abrir modal de cierre y esperar datos
   const dialogRef = this.dialog.open(ModalCierreTicketComponent, {
-    width: '420px',
+    width: '560px',
     data: { ticketId: ticket.id }
   });
 
   const result = await dialogRef.afterClosed().toPromise();
 
-  if (!result) return; // usuario canceló
+  // Usuario canceló el modal
+  if (!result) {
+    return;
+  }
 
   const { costo, notas } = result;
 
-  // 🔹 2. Confirmación secundaria (puedes omitir si quieres)
-  const ok = await this.abrirConfirmacion(
-    'Confirmar cierre',
-    `¿Seguro que deseas finalizar el ticket #${ticket.id}?\n\n` +
-    `Costo: ${costo ?? 0}\nNotas: ${notas || '(sin notas)'}`
-  );
-
-  if (!ok) return;
-
-  // 🔹 3. Llamar al backend
+  // 🔹 2. El modal ya actúa como confirmación; se elimina confirmación secundaria
   this.ticketService.cierreSolicitar(ticket.id, {
     costo_solucion: costo,
     notas_cierre: notas
@@ -1385,8 +1301,9 @@ async cerrarDesdeCeroPorGerente(ticket: Ticket): Promise<void> {
     return;
   }
 
+  // 🔹 1. Abrir modal de cierre gerente y esperar datos
   const dialogRef = this.dialog.open(ModalCierreTicketComponent, {
-    width: '420px',
+    width: '560px',
     data: {
       ticketId: ticket.id,
       modo: 'cierre_desde_cero'
@@ -1395,7 +1312,10 @@ async cerrarDesdeCeroPorGerente(ticket: Ticket): Promise<void> {
 
   const result = await dialogRef.afterClosed().toPromise();
 
-  if (!result) return;
+  // Usuario canceló el modal
+  if (!result) {
+    return;
+  }
 
   const motivo = (result.motivo || result.notas || '').toString().trim();
 
@@ -1404,15 +1324,7 @@ async cerrarDesdeCeroPorGerente(ticket: Ticket): Promise<void> {
     return;
   }
 
-  const ok = await this.abrirConfirmacion(
-    'Cerrar ticket desde cero',
-    `¿Seguro que deseas finalizar el ticket #${ticket.id}?\n\n` +
-    `Este cierre es solo para limpieza de tickets abiertos o en progreso.\n\n` +
-    `Motivo: ${motivo}`
-  );
-
-  if (!ok) return;
-
+  // 🔹 2. El modal ya actúa como confirmación; se elimina confirmación secundaria
   this.ticketService.cierreGerenteDesdeCero(ticket.id, { motivo }).subscribe({
     next: (resp) => {
       mostrarAlertaToast(resp?.mensaje || 'Ticket finalizado correctamente.', 'success');

@@ -1,200 +1,456 @@
-/* ========== Vars (ajusta la anchura de la columna aquí) ========== */
-:root {
-  --desc-col-width: 400px;
-  --table-min-width: 2320px;
-}
+/* ==========================================================================
+   Suite Ultra UI v1 - Pantalla principal de Tickets
+   ========================================================================== */
 
-:host{
+:host {
+  display: block;
   --desc-col-width: 420px;
   --table-min-width: 2486px;
 }
 
+/* ==========================================================================
+   Suite Ultra UI v1 - Shell de página
+   ========================================================================== */
 
+.tickets-page {
+  min-height: calc(100vh - 72px);
+  padding: 24px;
+  background:
+    radial-gradient(circle at top left, rgba(229, 69, 37, 0.08), transparent 28%),
+    var(--ultra-bg);
+  color: var(--ultra-gray-900);
+}
 
-/* 🔧 Fix clave: no dependas sólo del <col>. Fuerza el ancho en la celda. */
+.tickets-page__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-end;
+  margin-bottom: 18px;
+}
+
+.tickets-page__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  color: var(--ultra-orange);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.tickets-page__title {
+  margin: 0;
+  color: var(--ultra-gray-900);
+  font-size: 30px;
+  line-height: 1.05;
+  font-weight: 900;
+}
+
+.tickets-page__subtitle {
+  margin: 8px 0 0;
+  color: var(--ultra-gray-600);
+  font-size: 14px;
+}
+
+.tickets-page__status {
+  min-width: 150px;
+  padding: 12px 16px;
+  border: 1px solid var(--ultra-gray-200);
+  border-radius: var(--ultra-radius-lg);
+  background: var(--ultra-surface);
+  box-shadow: var(--ultra-shadow-sm);
+  text-align: right;
+}
+
+.tickets-page__status-label {
+  display: block;
+  color: var(--ultra-gray-500);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.tickets-page__status strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--ultra-orange);
+  font-size: 24px;
+  line-height: 1;
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Barra de acciones rápidas
+   ========================================================================== */
+
+.tickets-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 14px;
+  padding: 12px;
+  border: 1px solid var(--ultra-gray-200);
+  border-radius: var(--ultra-radius-lg);
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: var(--ultra-shadow-sm);
+}
+
+.tickets-toolbar__group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tickets-toolbar__button,
+.tickets-toolbar__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  border-radius: 999px;
+  font-weight: 800;
+}
+
+.tickets-toolbar__button mat-icon {
+  width: 18px;
+  height: 18px;
+  font-size: 18px;
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Card de filtros y tabla
+   ========================================================================== */
+
+.tickets-table-card {
+  width: 100%;
+  max-width: 100vw;
+  margin: 0 auto;
+  padding: 14px;
+  overflow: auto;
+  position: relative;
+  border: 1px solid var(--ultra-gray-200);
+  border-radius: var(--ultra-radius-xl);
+  background: var(--ultra-surface);
+  box-shadow: var(--ultra-shadow-md);
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Filtros unificados
+   ========================================================================== */
+
+.filtro-unificado-wrapper {
+  display: grid;
+  grid-template-columns: 180px minmax(260px, 1fr) minmax(320px, 1.2fr);
+  gap: 12px;
+  align-items: start;
+  margin: 0 0 14px;
+  padding: 14px;
+  border: 1px solid var(--ultra-gray-200);
+  border-radius: var(--ultra-radius-lg);
+  background: var(--ultra-gray-50);
+}
+
+.columna-select {
+  min-width: 160px;
+}
+
+.columna-buscador {
+  width: 100%;
+}
+
+.columna-checklist {
+  display: flex;
+  flex-direction: column;
+}
+
+.fu-checklist {
+  max-height: 116px;
+  overflow: auto;
+  padding: 8px 10px;
+  border: 1px solid var(--ultra-gray-200);
+  border-radius: var(--ultra-radius-md);
+  background: var(--ultra-surface);
+}
+
+.fu-empty-state {
+  opacity: 0.72;
+  color: var(--ultra-gray-600);
+  font-size: 13px;
+}
+
+.fu-checkbox {
+  display: block;
+  margin: 4px 0;
+}
+
+.fu-acciones,
+.acciones-filtro {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+/* Compactación de Material sólo dentro del panel */
+.filtro-unificado-wrapper .mat-mdc-form-field-infix {
+  padding-block: 6px;
+}
+
+.filtro-unificado-wrapper .mat-mdc-form-field-subscript-wrapper {
+  display: none;
+}
+
+.filtro-unificado-wrapper .mdc-text-field--filled .mdc-line-ripple::after {
+  transform: none;
+}
+
+.filtro-unificado-wrapper .mdc-form-field > label {
+  font-size: 14px;
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Tabla principal
+   ========================================================================== */
+
+.tabla-tickets {
+  table-layout: auto;
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+  color: var(--ultra-gray-900);
+  overflow: hidden;
+  border-radius: var(--ultra-radius-lg);
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Anchos base de columnas Tickets
+   ========================================================================== */
+
+.tabla-tickets .c-id {
+  width: 72px;
+}
+
+.tabla-tickets .c-cat {
+  width: 120px;
+}
+
+.tabla-tickets .c-apa {
+  width: 170px;
+}
+
+.tabla-tickets .c-desc {
+  width: var(--desc-col-width);
+}
+
+.tabla-tickets .c-suc {
+  width: 120px;
+}
+
+.tabla-tickets .c-est {
+  width: 110px;
+}
+
+.tabla-tickets .c-cri {
+  width: 92px;
+}
+
+.tabla-tickets .c-fc,
+.tabla-tickets .c-fp,
+.tabla-tickets .c-ff {
+  width: 158px;
+}
+
+.tabla-tickets .c-dep {
+  width: 132px;
+}
+
+.tabla-tickets .c-sub {
+  width: 150px;
+}
+
+.tabla-tickets .c-det {
+  width: 135px;
+}
+
+.tabla-tickets .c-acc {
+  width: 150px;
+}
+
+.tabla-tickets .c-sol {
+  width: 126px;
+}
+
+.tabla-tickets .c-his {
+  width: 126px;
+}
+
+.tabla-tickets th,
+.tabla-tickets td {
+  border-bottom: 1px solid var(--ultra-gray-200);
+  border-right: 1px solid var(--ultra-gray-200);
+  padding: 11px 12px;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tabla-tickets th:first-child,
+.tabla-tickets td:first-child {
+  border-left: 1px solid var(--ultra-gray-200);
+}
+
+.tabla-tickets th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background:
+    linear-gradient(135deg, var(--ultra-black-90), var(--ultra-charcoal));
+  color: var(--ultra-surface);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+}
+
+.tabla-tickets tbody tr {
+  background: var(--ultra-surface);
+  transition:
+    background-color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.tabla-tickets tbody tr:nth-child(even) {
+  background: var(--ultra-gray-50);
+}
+
+.tabla-tickets tbody tr:hover {
+  background: #fff7f4;
+}
+
+.tabla-tickets tbody td {
+  vertical-align: middle;
+}
+
+/* Header con filtro activo */
+th.filtro-activo {
+  box-shadow: inset 0 -3px 0 var(--ultra-orange);
+}
+
+th.filtro-activo .header-button {
+  background: rgba(229, 69, 37, 0.18);
+  border-radius: 999px;
+}
+
+/* Botón del encabezado */
+.header-button {
+  color: var(--ultra-surface) !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-weight: 900;
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Menús de filtro
+   ========================================================================== */
+
+.menu-filtro {
+  padding: 0.65rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 220px;
+}
+
+.menu-filtro label {
+  font-weight: 800;
+  margin-bottom: 0.25rem;
+  color: var(--ultra-gray-900);
+}
+
+.buscador-filtro {
+  width: 100%;
+}
+
+.opciones-scrollable {
+  max-height: 200px;
+  overflow: auto;
+  margin-top: 0.5rem;
+}
+
+.menu-botones-fijos {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+/* Punto verde en el calendario */
+.dia-con-ticket.mat-calendar-body-cell .mat-calendar-body-cell-content::after {
+  content: '';
+  display: block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--ultra-success);
+  margin: 2px auto 0;
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Descripción
+   ========================================================================== */
+
+/* No dependas sólo del <col>. Fuerza el ancho en la celda. */
 th.col-descripcion,
-td.col-descripcion{
+td.col-descripcion {
   width: var(--desc-col-width) !important;
   max-width: var(--desc-col-width) !important;
 }
 
-/* ========= Base ========= */
-body { font-family: Arial, sans-serif; margin: 0; padding: 0; overflow-x: hidden; }
-
-/* ========= Tabla ========= */
-.table-container{
-  width:100%;
-  max-width:100vw;
-  margin:0 auto;
-  padding:0;
-  overflow:auto;
-  position:relative;
-}
-
-table{
-  table-layout: fixed;
-  width: 100%;
-  min-width: var(--table-min-width);
-  border-collapse: collapse;
-  font-size: 14px;
-}
-
-th, td {
-  border: 1px solid #ddd;
-  padding: 12px;
-  text-align: center;
-  overflow: hidden;          
-  text-overflow: ellipsis;   
-  white-space: nowrap; 
-}
-
-th {
-  background: #007bff;
-  color: #fff;
-  position: sticky;
-  top: 0;
-  z-index: 10;
-}
-
-tr:nth-child(even) { background: #f2f2f2; }
-
-/* Header con filtro activo */
-th.filtro-activo .header-button { background: #e6f4ff; border-radius: 6px; }
-
-/* Botón del encabezado */
-.header-button {
-  color: #fff !important;
-  display: flex;
-  align-items: center;
-  gap: .25rem;
-  font-weight: 700;
-}
-
-/* ========= Menús de filtro ========= */
-.menu-filtro {
-  padding: .5rem 1rem;
-  display: flex;
-  flex-direction: column;
-  gap: .5rem;
-  min-width: 200px;
-}
-.menu-filtro label { font-weight: 700; margin-bottom: .25rem; }
-.buscador-filtro { width: 100%; }
-.opciones-scrollable { max-height: 200px; overflow: auto; margin-top: .5rem; }
-
-/* Punto verde en el calendario */
-.dia-con-ticket.mat-calendar-body-cell .mat-calendar-body-cell-content::after{
-  content: '';
-  display: block;
-  width: 5px; height: 5px;
-  border-radius: 50%;
-  background: green;
-  margin: 2px auto 0;
-}
-
-/* ========= Panel de filtros unificado ========= */
-.filtro-unificado-wrapper {
-  display: grid;
-  grid-template-columns: 160px 1fr 1fr;
-  gap: 8px;
-  align-items: start;
-  margin: 8px 0;
-}
-.columna-select { min-width: 160px; }
-.columna-buscador { width: 100%; }
-.columna-checklist { display: flex; flex-direction: column; }
-
-.fu-checklist {
-  max-height: 110px;
-  overflow: auto;
-  padding: 6px 8px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-}
-.fu-acciones, .acciones-filtro {
-  display: flex; gap: 8px; align-items: center; margin-top: 8px;
-}
-
-/* Compactación de Material sólo dentro del panel */
-.filtro-unificado-wrapper .mat-mdc-form-field-infix { padding-block: 6px; }
-.filtro-unificado-wrapper .mat-mdc-form-field-subscript-wrapper { display: none; }
-.filtro-unificado-wrapper .mdc-text-field--filled .mdc-line-ripple::after { transform: none; }
-.filtro-unificado-wrapper .mdc-form-field > label { font-size: 14px; }
-
-/* Botón mostrar/ocultar filtros (barra superior) */
-.table-container > div:first-child button[mat-stroked-button] {
-  line-height: 32px; height: 32px; padding: 0 12px;
-}
-
-/* ========= Paginación & export ========= */
-.pagination-export-container {
-  position: sticky; bottom: 0; left: 0;
-  background: #fff;
-  display: flex; align-items: center;
-  padding: 10px 20px;
-  z-index: 10;
-  margin-bottom: 10px;
-}
-.pagination-container { flex: 1; display: flex; justify-content: center; align-items: center; gap: 10px; }
-.pagination-button {
-  background: #007bff; color: #fff; border: none;
-  padding: 8px 15px; border-radius: 5px; cursor: pointer; transition: .2s;
-}
-.pagination-button:hover:not(:disabled) { background: #0056b3; }
-.pagination-button:disabled { background: #ccc; cursor: not-allowed; }
-.export-container { display: flex; justify-content: flex-end; margin-left: auto; }
-.boton-exportar {
-  background: #343a40; color: #fff; padding: 8px 15px; border: none; border-radius: 5px; cursor: pointer; transition: .2s;
-}
-.boton-exportar:hover { background: #23272b; }
-.boton-limpiar-todo {
-  background: #e53935; color: #fff; padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-weight: 700; margin-left: 10px; transition: .3s;
-}
-.boton-limpiar-todo:hover { background: #c62828; }
-
-/* ========= Modal ========= */
-.modal-asignar-fecha-overlay {
-  position: fixed; inset: 0;
-  display: flex; align-items: center; justify-content: center;
-  background: rgba(0, 0, 0, 0.45);
-  z-index: 2000;
-}
-:host ::ng-deep app-asignar-fecha-modal {
-  width: 95vw; max-width: 720px; background: #fff; border-radius: 12px;
-  box-shadow: 0 12px 36px rgba(0,0,0,.3); padding: 16px;
-}
-
-/* ========= Descripción (ancho fijo + elipsis + expandir) ========= */
 .col-descripcion {
   position: relative;
   width: var(--desc-col-width);
   max-width: var(--desc-col-width);
 }
+
 .desc-wrap {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
 .desc-wrap.expanded {
   white-space: normal;
   overflow: visible;
   text-overflow: initial;
 }
+
 .desc-more {
   position: absolute;
-  top: 50%; right: 6px;
+  top: 50%;
+  right: 6px;
   transform: translateY(-50%);
   opacity: 0;
-  transition: opacity .15s ease;
+  transition: opacity 0.15s ease;
 }
-.col-descripcion:hover .desc-more { opacity: 1; }
 
-.col-descripcion .desc-wrap{
+.col-descripcion:hover .desc-more {
+  opacity: 1;
+}
+
+.col-descripcion .desc-wrap {
   display: inline-block;
   max-width: calc(var(--desc-col-width) - 28px);
 }
 
-/* Tooltip ancho y con salto de línea (MDC + legacy) */
+/* Tooltip ancho y con salto de línea */
 .tooltip-wide,
 .tooltip-wide .mat-mdc-tooltip-surface,
 .tooltip-wide .mdc-tooltip__surface {
@@ -204,71 +460,39 @@ th.filtro-activo .header-button { background: #e6f4ff; border-radius: 6px; }
   font-size: 12px;
 }
 
-/* ========= Pills (etiquetas) ========= */
-.tag {
-  display: inline-flex; align-items: center; gap: .35rem;
-  padding: 2px 8px;
-  border-radius: 9999px;
-  font-size: 12px; font-weight: 600; line-height: 1.1;
-  border: 1px solid #e0e0e0;
-  background: #f5f5f5; color: #424242;
-  cursor: pointer; user-select: none;
-  transition: transform .05s ease, filter .15s ease, opacity .15s ease;
-}
-.tag:hover { filter: brightness(.97); }
-.tag:active { transform: translateY(1px); }
-.tag:disabled { opacity: .55; cursor: not-allowed; filter: none; }
+/* ==========================================================================
+   Suite Ultra UI v1 - Aparato / refacción
+   ========================================================================== */
 
-/* Variante BUG */
-.tag-bug {
-  background: #ffebee;
-  border-color: #ffcdd2;
-  color: #c62828;
+.td-aparato {
+  padding-left: 12px;
+  padding-right: 12px;
 }
 
-/* ========= Utilidades ========= */
-.w-full { width: 100%; }
-.text-sm { font-size: .875rem; }
-.text-xs { font-size: .75rem; }
-.mb-1 { margin-bottom: .25rem; } .mb-2 { margin-bottom: .5rem; }
-.mt-2 { margin-top: .5rem; } .ml-2 { margin-left: .5rem; }
-.flex { display: flex; } .gap-2 { gap: .5rem; }
-
-/* ========= Responsivo ========= */
-@media (max-width: 768px) {
-  th, td { font-size: 12px; padding: 6px; }
-  .filtro-unificado-wrapper { grid-template-columns: 1fr; gap: 6px; }
-  .fu-acciones, .acciones-filtro { justify-content: flex-start; flex-wrap: wrap; }
-}
-
-
-/* ✅ deja el td como table-cell y usa un wrapper flex interno */
-.td-aparato { /* table-cell por default */ padding-left: 12px; padding-right: 12px; }
-
-.td-aparato-inner{
+.td-aparato-inner {
   display: flex;
   align-items: center;
   gap: 6px;
   width: 100%;
-  min-width: 0; /* clave para que funcione el ellipsis dentro de flex */
+  min-width: 0;
 }
 
-.aparato-text{
+.aparato-text {
   flex: 1 1 auto;
-  min-width: 0;               /* permite encoger */
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.icono-refaccion-wrap{
+.icono-refaccion-wrap {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   cursor: help;
 }
 
-.icono-refaccion{
+.icono-refaccion {
   font-size: 18px;
   width: 18px;
   height: 18px;
@@ -276,3 +500,479 @@ th.filtro-activo .header-button { background: #e6f4ff; border-radius: 6px; }
   vertical-align: middle;
 }
 
+/* ==========================================================================
+   Suite Ultra UI v1 - Pills y etiquetas
+   ========================================================================== */
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.1;
+  border: 1px solid var(--ultra-gray-200);
+  background: var(--ultra-gray-100);
+  color: var(--ultra-gray-700);
+  cursor: pointer;
+  user-select: none;
+  transition:
+    transform 0.05s ease,
+    filter 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.tag:hover {
+  filter: brightness(0.97);
+}
+
+.tag:active {
+  transform: translateY(1px);
+}
+
+.tag:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  filter: none;
+}
+
+.tag-bug {
+  background: var(--ultra-danger-soft);
+  border-color: #ffcdd2;
+  color: #b91c1c;
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Acciones por fila
+   ========================================================================== */
+
+.td-acciones {
+  min-width: 150px;
+}
+
+.td-acciones,
+.td-acciones > div {
+  text-align: center;
+}
+
+.ticket-action {
+  min-height: 28px;
+  width: 128px;
+  border: 0;
+  border-radius: 999px;
+  padding: 5px 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 900;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.16s ease,
+    filter 0.16s ease,
+    background-color 0.16s ease;
+}
+
+.ticket-action + .ticket-action,
+.td-acciones .ticket-action:not(:first-child) {
+  margin-top: 5px;
+}
+
+.ticket-action mat-icon {
+  width: 15px;
+  height: 15px;
+  font-size: 15px;
+  line-height: 15px;
+}
+
+.ticket-action:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.ticket-action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.ticket-action--finish {
+  background: var(--ultra-orange);
+  color: var(--ultra-surface);
+  box-shadow: 0 6px 14px rgba(229, 69, 37, 0.18);
+}
+
+.ticket-action--finish:hover:not(:disabled) {
+  filter: brightness(0.96);
+  box-shadow: 0 8px 18px rgba(229, 69, 37, 0.24);
+}
+
+.ticket-action--manager {
+  background: var(--ultra-black-90);
+  color: var(--ultra-surface);
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.14);
+}
+
+.ticket-action--manager:hover:not(:disabled) {
+  background: var(--ultra-charcoal);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.20);
+}
+
+.ticket-action--progress {
+  width: auto;
+  min-width: 118px;
+  color: var(--ultra-orange);
+  background: var(--ultra-orange-soft);
+  border: 1px solid rgba(229, 69, 37, 0.22);
+}
+
+.ticket-action--progress:hover:not(:disabled) {
+  background: #fff1ec;
+}
+
+.boton-editar-fecha {
+  width: 30px;
+  height: 30px;
+  margin-left: 4px;
+}
+
+.acciones-validacion-cierre,
+.acciones-rrhh-botones {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.acciones-rrhh-botones {
+  margin-top: 0.25rem;
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Acciones de validación de cierre
+   ========================================================================== */
+
+.ticket-validation-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: 100%;
+}
+
+.ticket-validation-button {
+  width: 118px;
+  min-height: 28px;
+  border: 0;
+  border-radius: 999px;
+  padding: 5px 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 900;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.16s ease,
+    filter 0.16s ease,
+    background-color 0.16s ease;
+}
+
+.ticket-validation-button mat-icon {
+  width: 15px;
+  height: 15px;
+  font-size: 15px;
+  line-height: 15px;
+}
+
+.ticket-validation-button:hover {
+  transform: translateY(-1px);
+}
+
+.ticket-validation-button--approve {
+  background: var(--ultra-success-soft);
+  color: var(--ultra-success);
+  box-shadow: 0 6px 14px rgba(22, 163, 74, 0.14);
+}
+
+.ticket-validation-button--approve:hover {
+  filter: brightness(0.98);
+  box-shadow: 0 8px 18px rgba(22, 163, 74, 0.20);
+}
+
+.ticket-validation-button--reject {
+  background: var(--ultra-danger-soft);
+  color: var(--ultra-danger);
+  box-shadow: 0 6px 14px rgba(220, 38, 38, 0.14);
+}
+
+.ticket-validation-button--reject:hover {
+  filter: brightness(0.98);
+  box-shadow: 0 8px 18px rgba(220, 38, 38, 0.20);
+}
+
+
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Modal asignar fecha
+   ========================================================================== */
+
+.modal-asignar-fecha-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.48);
+  z-index: 2000;
+}
+
+:host ::ng-deep app-asignar-fecha-modal {
+  width: 95vw;
+  max-width: 720px;
+  background: var(--ultra-surface);
+  border-radius: var(--ultra-radius-xl);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+  padding: 16px;
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Paginación y exportación
+   ========================================================================== */
+
+.pagination-export-container {
+  position: sticky;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  z-index: 10;
+  margin-top: 14px;
+  border: 1px solid var(--ultra-gray-200);
+  border-radius: var(--ultra-radius-lg);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: var(--ultra-shadow-sm);
+}
+
+.pagination-container {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+}
+
+.pagination-container span {
+  color: var(--ultra-gray-700);
+  font-weight: 800;
+}
+
+.pagination-button {
+  background: var(--ultra-black-90);
+  color: var(--ultra-surface);
+  border: none;
+  padding: 8px 15px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-weight: 800;
+  transition:
+    background-color 0.18s ease,
+    transform 0.12s ease;
+}
+
+.pagination-button:hover:not(:disabled) {
+  background: var(--ultra-orange);
+  transform: translateY(-1px);
+}
+
+.pagination-button:disabled {
+  background: var(--ultra-gray-300);
+  color: var(--ultra-gray-600);
+  cursor: not-allowed;
+}
+
+.export-container {
+  display: flex;
+  justify-content: flex-end;
+  margin-left: auto;
+  gap: 10px;
+}
+
+.boton-exportar,
+.boton-limpiar-todo {
+  color: var(--ultra-surface);
+  padding: 9px 16px;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  font-weight: 900;
+  transition:
+    transform 0.12s ease,
+    filter 0.16s ease;
+}
+
+.boton-exportar {
+  background: var(--ultra-black-90);
+}
+
+.boton-exportar:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+.boton-exportar:disabled {
+  opacity: 0.72;
+  cursor: wait;
+}
+
+.boton-limpiar-todo {
+  background: var(--ultra-orange);
+}
+
+.boton-limpiar-todo:hover {
+  filter: brightness(0.96);
+  transform: translateY(-1px);
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Utilidades locales
+   ========================================================================== */
+
+.w-full {
+  width: 100%;
+}
+
+.text-sm {
+  font-size: 0.875rem;
+}
+
+.text-xs {
+  font-size: 0.75rem;
+}
+
+.text-warning {
+  color: var(--ultra-warning);
+  font-weight: 800;
+}
+
+.text-gray-400 {
+  color: var(--ultra-gray-400);
+}
+
+.mb-1 {
+  margin-bottom: 0.25rem;
+}
+
+.mb-2 {
+  margin-bottom: 0.5rem;
+}
+
+.mt-2 {
+  margin-top: 0.5rem;
+}
+
+.ml-2 {
+  margin-left: 0.5rem;
+}
+
+.flex {
+  display: flex;
+}
+
+.gap-2 {
+  gap: 0.5rem;
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Responsive
+   ========================================================================== */
+
+@media (max-width: 1024px) {
+  .tickets-page {
+    padding: 18px;
+  }
+
+  .tickets-page__header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .tickets-page__status {
+    text-align: left;
+  }
+
+  .filtro-unificado-wrapper {
+    grid-template-columns: 1fr;
+  }
+
+  .pagination-export-container {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .export-container {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 768px) {
+  .tickets-page {
+    padding: 12px;
+  }
+
+  .tickets-page__title {
+    font-size: 24px;
+  }
+
+  .tickets-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .tickets-toolbar__group {
+    width: 100%;
+  }
+
+  .tickets-toolbar__button,
+  .tickets-toolbar__toggle {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .tickets-table-card {
+    padding: 10px;
+    border-radius: var(--ultra-radius-lg);
+  }
+
+  .tabla-tickets th,
+  .tabla-tickets td {
+    font-size: 12px;
+    padding: 7px;
+  }
+
+  .fu-acciones,
+  .acciones-filtro {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .export-container {
+    flex-direction: column;
+  }
+
+  .boton-exportar,
+  .boton-limpiar-todo {
+    width: 100%;
+  }
+}

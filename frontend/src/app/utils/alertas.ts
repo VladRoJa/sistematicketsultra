@@ -51,7 +51,7 @@ export function mostrarAlertaToast(
     });
   }
   
-  export async function solicitarMotivoRechazoCierre(
+export async function solicitarMotivoRechazoCierre(
   ticketId: number,
   descripcion?: string
 ): Promise<string | null> {
@@ -70,8 +70,22 @@ export function mostrarAlertaToast(
     showCancelButton: true,
     confirmButtonText: 'Rechazar cierre',
     cancelButtonText: 'Cancelar',
-    confirmButtonColor: '#d33',
-    cancelButtonColor: '#6c757d',
+    buttonsStyling: false,
+    focusConfirm: false,
+    returnFocus: false,
+    width: '560px',
+    customClass: {
+      popup: 'ultra-swal ultra-swal--rechazo-cierre',
+      icon: 'ultra-swal__icon',
+      title: 'ultra-swal__title',
+      htmlContainer: 'ultra-swal__content',
+      inputLabel: 'ultra-swal__input-label',
+      input: 'ultra-swal__textarea',
+      actions: 'ultra-swal__actions',
+      confirmButton: 'ultra-swal__confirm ultra-swal__confirm--danger',
+      cancelButton: 'ultra-swal__cancel',
+      validationMessage: 'ultra-swal__validation'
+    },
     inputValidator: (value) => {
       if (!value || !value.trim()) {
         return 'El motivo de rechazo es obligatorio.';

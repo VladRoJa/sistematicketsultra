@@ -1,11 +1,213 @@
+/* ==========================================================================
+   Suite Ultra UI v1 - Modal editar fecha solución
+   ========================================================================== */
+
 :host {
   display: block;
+  width: min(560px, 92vw);
+  color: var(--ultra-gray-900);
+  box-sizing: border-box;
+}
+
+.fecha-modal-title,
+.fecha-modal-content,
+.fecha-modal-actions {
+  box-sizing: border-box;
   width: 100%;
-  max-width: 360px;
 }
-.mat-form-field {
-  margin-bottom: 18px;
+
+.fecha-modal-actions {
+  justify-content: flex-end;
+  flex-wrap: nowrap;
 }
-.mat-dialog-actions {
+
+.fecha-modal-actions__cancel,
+.fecha-modal-actions__save {
+  white-space: nowrap;
+}
+/* ==========================================================================
+   Suite Ultra UI v1 - Título
+   ========================================================================== */
+
+.fecha-modal-title {
+  display: flex;
+  align-items: center;
   gap: 12px;
+  padding: 20px 24px 10px;
+  margin: 0;
+}
+
+.fecha-modal-title__icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  background: var(--ultra-orange-soft);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  font-size: 20px;
+}
+
+.fecha-modal-title__text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.fecha-modal-title__text strong {
+  color: var(--ultra-gray-900);
+  font-size: 18px;
+  line-height: 1.15;
+  font-weight: 900;
+}
+
+.fecha-modal-title__text small {
+  color: var(--ultra-gray-600);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Contenido
+   ========================================================================== */
+
+.fecha-modal-content {
+  padding: 10px 24px 0;
+}
+
+.fecha-modal-notice {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border-radius: var(--ultra-radius-lg);
+  border: 1px solid rgba(229, 69, 37, 0.24);
+  background:
+    radial-gradient(circle at top left, rgba(229, 69, 37, 0.12), transparent 38%),
+    var(--ultra-orange-soft);
+  color: var(--ultra-gray-800);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.fecha-modal-notice strong {
+  color: var(--ultra-orange);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.fecha-modal-notice span {
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Campos Material fill
+   ========================================================================== */
+
+.w-full {
+  width: 100%;
+}
+
+.fecha-modal-content mat-form-field {
+  width: 100%;
+  margin-bottom: 12px;
+}
+
+.fecha-modal-content ::ng-deep .mat-mdc-form-field {
+  --mdc-filled-text-field-container-color: var(--ultra-gray-50);
+  --mdc-filled-text-field-label-text-color: var(--ultra-gray-600);
+  --mdc-filled-text-field-focus-label-text-color: var(--ultra-orange);
+  --mdc-filled-text-field-active-indicator-color: var(--ultra-gray-300);
+  --mdc-filled-text-field-focus-active-indicator-color: var(--ultra-orange);
+  --mdc-filled-text-field-hover-active-indicator-color: rgba(229, 69, 37, 0.55);
+}
+
+.fecha-modal-content ::ng-deep .mat-mdc-text-field-wrapper {
+  border-radius: 14px 14px 8px 8px;
+  overflow: hidden;
+}
+
+.fecha-modal-content ::ng-deep .mat-mdc-form-field-infix {
+  min-height: 48px;
+  padding-top: 14px;
+  padding-bottom: 10px;
+}
+
+.fecha-modal-content ::ng-deep .mat-mdc-input-element {
+  color: var(--ultra-gray-900);
+  font-weight: 700;
+}
+
+.fecha-modal-content textarea {
+  min-height: 96px;
+  resize: none;
+  overflow-y: auto;
+  line-height: 1.35;
+}
+
+.fecha-modal-content ::ng-deep .mat-mdc-form-field textarea.mat-mdc-input-element {
+  padding-top: 2px;
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Acciones
+   ========================================================================== */
+
+.fecha-modal-actions {
+  display: flex;
+  gap: 10px;
+  padding: 14px 24px 20px;
+}
+
+.fecha-modal-actions__cancel,
+.fecha-modal-actions__save {
+  min-width: 110px;
+  border-radius: 999px;
+  font-weight: 900;
+}
+
+.fecha-modal-actions__cancel {
+  color: var(--ultra-gray-700);
+}
+
+.fecha-modal-actions__save {
+  background: var(--ultra-orange);
+  color: var(--ultra-surface);
+}
+
+.fecha-modal-actions__save:hover:not(:disabled) {
+  filter: brightness(0.96);
+}
+
+.fecha-modal-actions__save:disabled,
+.fecha-modal-actions__cancel:disabled {
+  opacity: 0.65;
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Responsive
+   ========================================================================== */
+
+@media (max-width: 520px) {
+  :host {
+    max-width: 92vw;
+  }
+
+  .fecha-modal-title {
+    align-items: flex-start;
+  }
+
+  .fecha-modal-actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .fecha-modal-actions__cancel,
+  .fecha-modal-actions__save {
+    width: 100%;
+  }
 }

@@ -1,7 +1,7 @@
 //frontend/src/app/warehouse/services/warehouse-uploads.service.ts
 
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from 'src/environments/environment';
 
@@ -37,8 +37,38 @@ export interface WarehouseUploadListItem {
   updated_at: string | null;
 }
 
+export type WarehouseUploadDatePreset =
+  | 'today'
+  | 'yesterday'
+  | 'last_7_days'
+  | 'current_month'
+  | 'custom'
+  | 'all';
+
+export type WarehouseUploadStatusFilter = 'ALL' | 'ACTIVE' | 'ARCHIVED';
+
+export interface WarehouseUploadListParams {
+  page?: number;
+  page_size?: number;
+  date_preset?: WarehouseUploadDatePreset;
+  date_from?: string;
+  date_to?: string;
+  source_key?: string;
+  report_type_key?: string;
+  status?: WarehouseUploadStatusFilter;
+  period_type?: string;
+  search?: string;
+}
+
 export interface WarehouseUploadListResponse {
   items: WarehouseUploadListItem[];
+  page: number;
+  page_size: number;
+  total: number;
+  total_pages: number;
+  has_next: boolean;
+  has_prev: boolean;
+  filters?: Record<string, unknown>;
 }
 
 export interface WarehouseUploadDetail {
@@ -125,11 +155,26 @@ export class WarehouseUploadsService {
   private readonly http = inject(HttpClient);
   private readonly apiUrl = `${environment.apiUrl}/warehouse/uploads`;
 
-  getUploads(): Observable<WarehouseUploadListResponse> {
+  getUploads(params: WarehouseUploadListParams = {}): Observable<WarehouseUploadListResponse> {
     return this.http.get<WarehouseUploadListResponse>(this.apiUrl, {
       headers: this.buildAuthHeaders(),
+      params: this.buildListParams(params),
     });
   }
+
+private buildListParams(params: WarehouseUploadListParams): HttpParams {
+  let httpParams = new HttpParams();
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') {
+      return;
+    }
+
+    httpParams = httpParams.set(key, String(value));
+  });
+
+  return httpParams;
+}
 
   private buildAuthHeaders(): HttpHeaders {
     const token = localStorage.getItem('token') || '';

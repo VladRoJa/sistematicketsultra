@@ -13,6 +13,14 @@ from app.models.pm_preventivo import PmPreventivoConfigORM
 from app.models.inventario import InventarioGeneral, InventarioSucursal
 from app.models.sucursal_model import Sucursal
 from app.models.pm_validacion import PmValidacionORM
+from app.utils.scope_utils import can_claims_access_branch
+from app.utils.pm_permissions import (
+    require_pm_execute,
+    require_pm_validate,
+    require_pm_configure,
+    require_pm_view,
+)
+from app.models.user_model import UserORM
 
 
 pm_bp = Blueprint("pm", __name__)
@@ -20,6 +28,20 @@ pm_bp = Blueprint("pm", __name__)
 # ── Admin roles (reutilizado en todos los checks) ──
 _ADMIN_ROLES = {"ADMINISTRADOR", "SUPER_ADMIN", "ADMIN"}
 
+_PM_LEGACY_GLOBAL_SCOPE_ROLES = _ADMIN_ROLES | {
+    "MANTENIMIENTO",
+    "SISTEMAS",
+    "TECNICO",
+}
+
+_PM_RESULTADOS_VALIDOS = {"OK", "FALLA", "OBS"}
+
+_PM_TIPOS_MANTENIMIENTO_VALIDOS = {
+    "PREVENTIVO",
+    "CORRECTIVO",
+    "ESTETICO",
+    "MEJORA",
+}
 
 # ────────────────────────────────────────────────────────────
 # HELPERS 
@@ -28,43 +50,38 @@ def _verificar_permiso_sucursal(claims, sucursal_id_int):
     """
     Valida que el token tenga acceso a la sucursal indicada.
     Retorna None si OK, o (response_dict, status_code) si denegado.
+
+    PM conserva por ahora el comportamiento legacy:
+    - ADMINISTRADOR / SUPER_ADMIN / ADMIN: global.
+    - MANTENIMIENTO / SISTEMAS / TECNICO: global.
+    - Resto: scope por usuario_sucursal o sucursal principal.
     """
-    rol = (claims.get("rol") or "").strip().upper()
-
-    if rol in _ADMIN_ROLES:
+    if can_claims_access_branch(
+        claims,
+        sucursal_id_int,
+        global_roles=_PM_LEGACY_GLOBAL_SCOPE_ROLES,
+    ):
         return None
 
-    if rol in {"MANTENIMIENTO", "SISTEMAS", "TECNICO"}:
-        return None
+    return (
+        {"error": "Forbidden", "detail": "No tienes acceso a esta sucursal"},
+        403,
+    )
 
-    if rol == "AUX_MANTENIMIENTO":
-        user_sucursal = claims.get("sucursal_id")
-        try:
-            user_sucursal = int(user_sucursal) if user_sucursal is not None else None
-        except Exception:
-            user_sucursal = None
+def _normalizar_texto_pm(value) -> str:
+    return (value or "").strip().upper()
 
-        if not user_sucursal or sucursal_id_int != user_sucursal:
-            return (
-                {"error": "Forbidden", "detail": "No tienes acceso a esta sucursal"},
-                403,
-            )
-        return None
-
-    # SR_MANTENIMIENTO y otros: solo sucursales_ids del token
-    allowed = claims.get("sucursales_ids") or []
-    try:
-        allowed = [int(x) for x in allowed]
-    except Exception:
-        allowed = []
-
-    if sucursal_id_int not in allowed:
-        return (
-            {"error": "Forbidden", "detail": "No tienes acceso a esta sucursal"},
-            403,
+def _buscar_bitacora_preventiva_existente(inventario_id: int, sucursal_id: int, fecha_obj):
+    return (
+        PmBitacoraORM.query
+        .filter(
+            PmBitacoraORM.inventario_id == inventario_id,
+            PmBitacoraORM.sucursal_id == sucursal_id,
+            PmBitacoraORM.fecha == fecha_obj,
+            PmBitacoraORM.tipo_mantenimiento == "PREVENTIVO",
         )
-    return None
-
+        .first()
+    )
 
 def _crear_bitacora(data, claims, user_id):
     """
@@ -74,9 +91,11 @@ def _crear_bitacora(data, claims, user_id):
     inventario_id = data.get("inventario_id")
     sucursal_id = data.get("sucursal_id")
     fecha = data.get("fecha")  # "YYYY-MM-DD"
-    resultado = data.get("resultado")  # "OK" | "FALLA" | "OBS"
-    tipo_mantenimiento = data.get("tipo_mantenimiento")  # "CORRECTIVO" | "PREVENTIVO" | "ESTETICO" | "MEJORA"
-    notas = data.get("notas") or ""
+    resultado = _normalizar_texto_pm(data.get("resultado"))  # "OK" | "FALLA" | "OBS"
+    tipo_mantenimiento = _normalizar_texto_pm(
+        data.get("tipo_mantenimiento")
+    )  # "CORRECTIVO" | "PREVENTIVO" | "ESTETICO" | "MEJORA"
+    notas = (data.get("notas") or "").strip()
     checks = data.get("checks") or {}
 
     # 1) Validación de requeridos
@@ -84,7 +103,28 @@ def _crear_bitacora(data, claims, user_id):
         return None, (
             {
                 "error": "Bad Request",
-                "detail": "Campos requeridos: inventario_id, sucursal_id, fecha, resultado, tipo_mantenimiento",
+                "detail": (
+                    "Campos requeridos: inventario_id, sucursal_id, "
+                    "fecha, resultado, tipo_mantenimiento"
+                ),
+            },
+            400,
+        )
+
+    if resultado not in _PM_RESULTADOS_VALIDOS:
+        return None, (
+            {
+                "error": "Bad Request",
+                "detail": "resultado debe ser OK, FALLA u OBS",
+            },
+            400,
+        )
+
+    if tipo_mantenimiento not in _PM_TIPOS_MANTENIMIENTO_VALIDOS:
+        return None, (
+            {
+                "error": "Bad Request",
+                "detail": "tipo_mantenimiento debe ser PREVENTIVO, CORRECTIVO, ESTETICO o MEJORA",
             },
             400,
         )
@@ -92,7 +132,10 @@ def _crear_bitacora(data, claims, user_id):
     # 2) Validación checks
     if not isinstance(checks, dict):
         return None, (
-            {"error": "Bad Request", "detail": "checks debe ser un objeto/dict"},
+            {
+                "error": "Bad Request",
+                "detail": "checks debe ser un objeto/dict",
+            },
             400,
         )
 
@@ -109,16 +152,33 @@ def _crear_bitacora(data, claims, user_id):
             400,
         )
 
-    # 4) Política por rol
+    # 4) Permiso de acción: ejecutar bitácora PM
+    user = UserORM.get_by_id(user_id)
+
+    if not user:
+        return None, (
+            {
+                "error": "Unauthorized",
+                "detail": "Usuario no encontrado.",
+            },
+            401,
+        )
+
+    denied_action = require_pm_execute(user)
+    if denied_action:
+        return None, denied_action
+
+    # 5) Scope por sucursal
     denied = _verificar_permiso_sucursal(claims, sucursal_id_int)
     if denied:
         return None, denied
 
-    # 5) Validar inventario↔sucursal
+    # 6) Validar inventario ↔ sucursal
     rel = InventarioSucursal.query.filter_by(
         inventario_id=inventario_id_int,
         sucursal_id=sucursal_id_int,
     ).first()
+
     if not rel:
         return None, (
             {
@@ -128,16 +188,40 @@ def _crear_bitacora(data, claims, user_id):
             400,
         )
 
-    # 6) Parse fecha
+    # 7) Parse fecha
     try:
         fecha_date = datetime.strptime(fecha, "%Y-%m-%d").date()
     except ValueError:
         return None, (
-            {"error": "Bad Request", "detail": "fecha debe ser YYYY-MM-DD"},
+            {
+                "error": "Bad Request",
+                "detail": "fecha debe ser YYYY-MM-DD",
+            },
             400,
         )
 
-    # 7) Insertar
+    # 8) Evitar duplicado operativo de preventivo
+    if tipo_mantenimiento == "PREVENTIVO":
+        bitacora_existente = _buscar_bitacora_preventiva_existente(
+            inventario_id=inventario_id_int,
+            sucursal_id=sucursal_id_int,
+            fecha_obj=fecha_date,
+        )
+
+        if bitacora_existente:
+            return None, (
+                {
+                    "error": "Conflict",
+                    "detail": (
+                        "Ya existe una bitácora preventiva para este activo, "
+                        "sucursal y fecha."
+                    ),
+                    "existing_bitacora_id": bitacora_existente.id,
+                },
+                409,
+            )
+
+    # 9) Insertar
     bit = PmBitacoraORM(
         inventario_id=inventario_id_int,
         sucursal_id=sucursal_id_int,
@@ -148,11 +232,11 @@ def _crear_bitacora(data, claims, user_id):
         notas=notas,
         checks=checks,
     )
+
     db.session.add(bit)
     db.session.commit()
 
     return bit, None
-
 
 def _crear_validacion_pm(data, claims, user_id):
     """
@@ -210,22 +294,7 @@ def _crear_validacion_pm(data, claims, user_id):
             404,
         )
 
-    # 6) Scope check usando la sucursal de la bitácora
-    denied = _verificar_permiso_sucursal(claims, bitacora.sucursal_id)
-    if denied:
-        return None, denied
-
-    # 7) Evitar doble validación
-    if bitacora.pm_validacion:
-        return None, (
-            {
-                "error": "Conflict",
-                "detail": "La bitácora PM ya cuenta con validación",
-            },
-            409,
-        )
-
-    # 8) Evitar auto-validación
+    # 6) Identificar usuario actual
     try:
         current_user_id = int(user_id) if user_id is not None else None
     except (TypeError, ValueError):
@@ -240,6 +309,38 @@ def _crear_validacion_pm(data, claims, user_id):
             401,
         )
 
+    user = UserORM.get_by_id(current_user_id)
+    if not user:
+        return None, (
+            {
+                "error": "Unauthorized",
+                "detail": "Usuario no encontrado.",
+            },
+            401,
+        )
+
+    # 7) Permiso de acción: validar bitácora PM
+    denied_action = require_pm_validate(user)
+    if denied_action:
+        return None, denied_action
+
+    # 8) Scope check usando la sucursal de la bitácora
+    denied = _verificar_permiso_sucursal(claims, bitacora.sucursal_id)
+    if denied:
+        return None, denied
+
+    # 9) Evitar doble validación
+    if bitacora.pm_validacion:
+        return None, (
+            {
+                "error": "Conflict",
+                "detail": "La bitácora PM ya cuenta con validación",
+            },
+            409,
+        )
+
+    # 10) Evitar auto-validación
+
     if (
         bitacora.created_by_user_id is not None
         and bitacora.created_by_user_id == current_user_id
@@ -252,7 +353,7 @@ def _crear_validacion_pm(data, claims, user_id):
             403,
         )
 
-    # 9) Insertar validación
+    # 11) Insertar validación
     validacion = PmValidacionORM(
         bitacora_pm_id=bitacora_pm_id_int,
         decision=decision,
@@ -264,13 +365,66 @@ def _crear_validacion_pm(data, claims, user_id):
 
     return validacion, None
 
+def _parse_bool_pm(value, *, field_name: str = "activo", default=None):
+    if value is None:
+        return default, None
 
-def _crear_configuracion_pm(data, claims):
+    if isinstance(value, bool):
+        return value, None
+
+    if isinstance(value, int) and value in (0, 1):
+        return bool(value), None
+
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+
+        if normalized in {"true", "1", "yes", "si", "sí", "on"}:
+            return True, None
+
+        if normalized in {"false", "0", "no", "off"}:
+            return False, None
+
+    return None, (
+        {
+            "error": "Bad Request",
+            "detail": f"{field_name} debe ser booleano",
+        },
+        400,
+    )
+
+
+def _obtener_usuario_actual_pm(user_id):
+    try:
+        current_user_id = int(user_id) if user_id is not None else None
+    except (TypeError, ValueError):
+        current_user_id = None
+
+    if current_user_id is None:
+        return None, (
+            {
+                "error": "Unauthorized",
+                "detail": "No se pudo identificar al usuario actual",
+            },
+            401,
+        )
+
+    user = UserORM.get_by_id(current_user_id)
+    if not user:
+        return None, (
+            {
+                "error": "Unauthorized",
+                "detail": "Usuario no encontrado.",
+            },
+            401,
+        )
+
+    return user, None
+
+def _crear_configuracion_pm(data, claims, user_id):
     inventario_id = data.get("inventario_id")
     sucursal_id = data.get("sucursal_id")
     frecuencia_dias = data.get("frecuencia_dias")
     fecha_base_programacion = data.get("fecha_base_programacion")
-
     activo = data.get("activo", True)
 
     if (
@@ -279,11 +433,13 @@ def _crear_configuracion_pm(data, claims):
         or frecuencia_dias is None
         or fecha_base_programacion is None
     ):
-        
         return None, (
             {
                 "error": "Bad Request",
-                "detail": "Campos requeridos: inventario_id, sucursal_id, frecuencia_dias, fecha_base_programacion",
+                "detail": (
+                    "Campos requeridos: inventario_id, sucursal_id, "
+                    "frecuencia_dias, fecha_base_programacion"
+                ),
             },
             400,
         )
@@ -301,8 +457,6 @@ def _crear_configuracion_pm(data, claims):
             400,
         )
 
-    semana_programada_mes_int = None
-    
     if frecuencia_dias_int <= 0:
         return None, (
             {
@@ -311,7 +465,7 @@ def _crear_configuracion_pm(data, claims):
             },
             400,
         )
-    
+
     try:
         fecha_base_programacion_date = date.fromisoformat(fecha_base_programacion)
     except (TypeError, ValueError):
@@ -322,7 +476,14 @@ def _crear_configuracion_pm(data, claims):
             },
             400,
         )
-   
+
+    user, user_err = _obtener_usuario_actual_pm(user_id)
+    if user_err:
+        return None, user_err
+
+    denied_action = require_pm_configure(user)
+    if denied_action:
+        return None, denied_action
 
     denied = _verificar_permiso_sucursal(claims, sucursal_id_int)
     if denied:
@@ -332,6 +493,7 @@ def _crear_configuracion_pm(data, claims):
         inventario_id=inventario_id_int,
         sucursal_id=sucursal_id_int,
     ).first()
+
     if not rel:
         return None, (
             {
@@ -345,6 +507,7 @@ def _crear_configuracion_pm(data, claims):
         inventario_id=inventario_id_int,
         sucursal_id=sucursal_id_int,
     ).first()
+
     if existente:
         return None, (
             {
@@ -354,20 +517,28 @@ def _crear_configuracion_pm(data, claims):
             409,
         )
 
+    activo_bool, activo_err = _parse_bool_pm(
+        activo,
+        field_name="activo",
+        default=True,
+    )
+    if activo_err:
+        return None, activo_err
+
     cfg = PmPreventivoConfigORM(
         inventario_id=inventario_id_int,
         sucursal_id=sucursal_id_int,
         frecuencia_dias=frecuencia_dias_int,
         fecha_base_programacion=fecha_base_programacion_date,
-        activo=bool(activo),
+        activo=activo_bool,
     )
+
     db.session.add(cfg)
     db.session.commit()
 
     return cfg, None
 
-
-def _actualizar_configuracion_pm(config_id, data, claims):
+def _actualizar_configuracion_pm(config_id, data, claims, user_id):
     try:
         config_id_int = int(config_id)
     except (TypeError, ValueError):
@@ -383,6 +554,14 @@ def _actualizar_configuracion_pm(config_id, data, claims):
             404,
         )
 
+    user, user_err = _obtener_usuario_actual_pm(user_id)
+    if user_err:
+        return None, user_err
+
+    denied_action = require_pm_configure(user)
+    if denied_action:
+        return None, denied_action
+
     denied = _verificar_permiso_sucursal(claims, cfg.sucursal_id)
     if denied:
         return None, denied
@@ -395,7 +574,10 @@ def _actualizar_configuracion_pm(config_id, data, claims):
         return None, (
             {
                 "error": "Bad Request",
-                "detail": "Debes enviar al menos frecuencia_dias, fecha_base_programacion o activo",
+                "detail": (
+                    "Debes enviar al menos frecuencia_dias, "
+                    "fecha_base_programacion o activo"
+                ),
             },
             400,
         )
@@ -416,6 +598,7 @@ def _actualizar_configuracion_pm(config_id, data, claims):
             )
 
         cfg.frecuencia_dias = frecuencia_dias_int
+
     if fecha_base_programacion is not None:
         try:
             fecha_base_programacion_date = date.fromisoformat(fecha_base_programacion)
@@ -429,13 +612,20 @@ def _actualizar_configuracion_pm(config_id, data, claims):
             )
 
         cfg.fecha_base_programacion = fecha_base_programacion_date
-        
+
     if activo is not None:
-        cfg.activo = bool(activo)
+        activo_bool, activo_err = _parse_bool_pm(
+            activo,
+            field_name="activo",
+        )
+        if activo_err:
+            return None, activo_err
+
+        cfg.activo = activo_bool
 
     db.session.commit()
-    return cfg, None
 
+    return cfg, None
 def _serializar_bitacora_pm_detalle(bitacora):
     validacion = bitacora.pm_validacion
 
@@ -644,6 +834,7 @@ def _asignar_bitacoras_a_ocurrencias_con_ventana(
     return asignaciones
 
 
+
 # ────────────────────────────────────────────────────────────
 # POST /mobile/bitacoras
 # ────────────────────────────────────────────────────────────
@@ -709,6 +900,15 @@ def pm_crear_validacion():
 @jwt_required()
 def pm_obtener_bitacora_detalle(bitacora_pm_id):
     claims = get_jwt() or {}
+    user_id = get_jwt_identity()
+
+    user, user_err = _obtener_usuario_actual_pm(user_id)
+    if user_err:
+        return jsonify(user_err[0]), user_err[1]
+
+    denied_action = require_pm_view(user)
+    if denied_action:
+        return jsonify(denied_action[0]), denied_action[1]
 
     bitacora = db.session.get(PmBitacoraORM, bitacora_pm_id)
     if not bitacora:
@@ -724,7 +924,6 @@ def pm_obtener_bitacora_detalle(bitacora_pm_id):
         return jsonify(denied[0]), denied[1]
 
     return jsonify(_serializar_bitacora_pm_detalle(bitacora)), 200
-
 # ────────────────────────────────────────────────────────────
 # listar bitácoras PM con filtros (sucursal_id, fecha_desde, fecha_hasta)
 # ────────────────────────────────────────────────────────────
@@ -735,6 +934,15 @@ def pm_obtener_bitacora_detalle(bitacora_pm_id):
 @jwt_required()
 def pm_listar_bitacoras():
     claims = get_jwt() or {}
+    user_id = get_jwt_identity()
+
+    user, user_err = _obtener_usuario_actual_pm(user_id)
+    if user_err:
+        return jsonify(user_err[0]), user_err[1]
+
+    denied_action = require_pm_view(user)
+    if denied_action:
+        return jsonify(denied_action[0]), denied_action[1]
 
     sucursal_id = request.args.get("sucursal_id", type=int)
     fecha_desde = request.args.get("fecha_desde")
@@ -837,7 +1045,16 @@ def pm_listar_bitacoras():
 @jwt_required()
 def pm_listar_configuraciones():
     claims = get_jwt() or {}
+    user_id = get_jwt_identity()
     sucursal_id = request.args.get("sucursal_id", type=int)
+
+    user, user_err = _obtener_usuario_actual_pm(user_id)
+    if user_err:
+        return jsonify(user_err[0]), user_err[1]
+
+    denied_action = require_pm_view(user)
+    if denied_action:
+        return jsonify(denied_action[0]), denied_action[1]
 
     query = (
         db.session.query(
@@ -854,7 +1071,7 @@ def pm_listar_configuraciones():
             Sucursal.sucursal_id == PmPreventivoConfigORM.sucursal_id,
         )
     )
-    
+
     department_id = claims.get("department_id")
     rol = (claims.get("rol") or "").strip().upper()
 
@@ -870,8 +1087,6 @@ def pm_listar_configuraciones():
 
         query = query.filter(PmPreventivoConfigORM.sucursal_id == sucursal_id)
     else:
-        rol = (claims.get("rol") or "").strip().upper()
-
         if rol not in _ADMIN_ROLES and rol != "MANTENIMIENTO":
             if rol == "AUX_MANTENIMIENTO":
                 user_sucursal = claims.get("sucursal_id")
@@ -909,7 +1124,6 @@ def pm_listar_configuraciones():
         _serializar_pm_config_resumen(cfg, inventario, sucursal)
         for cfg, inventario, sucursal in rows
     ]), 200
-
 # ────────────────────────────────────────────────────────────
 # POST /configuraciones
 # ────────────────────────────────────────────────────────────
@@ -919,8 +1133,9 @@ def pm_listar_configuraciones():
 def pm_crear_configuracion():
     data = request.get_json(silent=True) or {}
     claims = get_jwt() or {}
+    user_id = get_jwt_identity()
 
-    cfg, err = _crear_configuracion_pm(data, claims)
+    cfg, err = _crear_configuracion_pm(data, claims, user_id)
     if err:
         return jsonify(err[0]), err[1]
 
@@ -940,8 +1155,9 @@ def pm_crear_configuracion():
 def pm_actualizar_configuracion(config_id):
     data = request.get_json(silent=True) or {}
     claims = get_jwt() or {}
+    user_id = get_jwt_identity()
 
-    cfg, err = _actualizar_configuracion_pm(config_id, data, claims)
+    cfg, err = _actualizar_configuracion_pm(config_id, data, claims, user_id)
     if err:
         return jsonify(err[0]), err[1]
 
@@ -960,6 +1176,15 @@ def pm_actualizar_configuracion(config_id):
 @jwt_required()
 def pm_preventivo_dashboard():
     claims = get_jwt() or {}
+    user_id = get_jwt_identity()
+
+    user, user_err = _obtener_usuario_actual_pm(user_id)
+    if user_err:
+        return jsonify(user_err[0]), user_err[1]
+
+    denied_action = require_pm_view(user)
+    if denied_action:
+        return jsonify(denied_action[0]), denied_action[1]
 
     # ──  Validar sucursal_id ──
     sucursal_id_raw = request.args.get("sucursal_id", type=int)
@@ -1164,10 +1389,19 @@ def pm_preventivo_dashboard():
 # ──────────────────────────────────────────────────────────── 
     
     
-@pm_bp.route("/calendario",methods=["GET"])
+@pm_bp.route("/calendario", methods=["GET"])
 @jwt_required()
 def pm_calendario():
     claims = get_jwt() or {}
+    user_id = get_jwt_identity()
+
+    user, user_err = _obtener_usuario_actual_pm(user_id)
+    if user_err:
+        return jsonify(user_err[0]), user_err[1]
+
+    denied_action = require_pm_view(user)
+    if denied_action:
+        return jsonify(denied_action[0]), denied_action[1]
 
     anio = request.args.get("anio", type=int)
     mes = request.args.get("mes", type=int)

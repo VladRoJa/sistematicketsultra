@@ -1,56 +1,119 @@
 <!-- frontend/src/app/pantalla-ver-tickets/modals/asignar-fecha-modal.component.html -->
-<h2>Asignar Fecha de Solución</h2>
 
-<div class="modal-content">
-  <!-- Fecha -->
-<mat-form-field appearance="fill">
-  <mat-label>Selecciona una fecha</mat-label>
-  <input
-    matInput
-    [matDatepicker]="picker"
-    [(ngModel)]="fechaSeleccionada"
-    [min]="minDate"
-    required
-    #fechaNg="ngModel">
-  <mat-datepicker-toggle matSuffix [for]="picker"></mat-datepicker-toggle>
-  <mat-datepicker #picker></mat-datepicker>
-  <mat-error *ngIf="fechaNg.invalid && fechaNg.touched">La fecha es obligatoria.</mat-error>
-</mat-form-field>
+<!-- ==========================================================================
+     Suite Ultra UI v1 - Modal asignar fecha solución
+     ========================================================================== -->
 
+<section class="asignar-fecha-modal">
+  <header class="asignar-fecha-modal__header">
+    <span class="asignar-fecha-modal__icon">📅</span>
 
-  <!-- Motivo -->
-  <mat-form-field appearance="fill">
-    <mat-label>Motivo del cambio</mat-label>
-    <textarea
-      matInput
-      [(ngModel)]="motivo"
-      rows="3"
-      required
-      #motivoNg="ngModel"
-      (keyup.enter)="guardar()"></textarea>
-    <mat-error *ngIf="motivoNg.invalid && motivoNg.touched">El motivo es obligatorio.</mat-error>
-  </mat-form-field>
+    <div class="asignar-fecha-modal__title">
+      <h2>Asignar fecha de solución</h2>
+      <p>
+        Define la fecha compromiso y registra el motivo para mantener trazabilidad.
+      </p>
+    </div>
+  </header>
 
-  <!-- Mini-form de refacción (Mant→Aparatos o Sist→Dispositivos) -->
-  <div *ngIf="mostrarRefaccionJefe" style="margin: 8px 0 16px;">
-    <mat-checkbox [(ngModel)]="necesitaRefaccion">
-      ¿Requiere refacción?
-    </mat-checkbox>
+  <div class="asignar-fecha-modal__notice">
+    <strong>Registro obligatorio</strong>
+    <span>
+      La fecha y el motivo quedarán asociados al historial del ticket.
+    </span>
+  </div>
 
-    <mat-form-field appearance="fill" class="w-full" style="display:block; margin-top: 8px;">
-      <mat-label>Descripción técnica (opcional)</mat-label>
+  <div class="asignar-fecha-modal__content">
+    <!-- Fecha -->
+    <mat-form-field appearance="fill" class="w-full">
+      <mat-label>Selecciona una fecha</mat-label>
+      <input
+        matInput
+        [matDatepicker]="picker"
+        [(ngModel)]="fechaSeleccionada"
+        [min]="minDate"
+        required
+        #fechaNg="ngModel"
+      />
+      <mat-datepicker-toggle matSuffix [for]="picker"></mat-datepicker-toggle>
+      <mat-datepicker #picker></mat-datepicker>
+      <mat-error *ngIf="fechaNg.invalid && fechaNg.touched">
+        La fecha es obligatoria.
+      </mat-error>
+    </mat-form-field>
+
+    <!-- Motivo -->
+    <mat-form-field appearance="fill" class="w-full">
+      <mat-label>Motivo del cambio</mat-label>
       <textarea
         matInput
-        [(ngModel)]="descripcionRefaccion"
-        [disabled]="!necesitaRefaccion"
+        [(ngModel)]="motivo"
         rows="3"
-        maxlength="500"></textarea>
-      <mat-hint align="end">{{ (descripcionRefaccion || '').length }}/500</mat-hint>
+        required
+        #motivoNg="ngModel"
+        placeholder="Ej. Se asigna fecha por programación operativa, disponibilidad o seguimiento del área."
+        (keyup.enter)="guardar()"
+      ></textarea>
+      <mat-error *ngIf="motivoNg.invalid && motivoNg.touched">
+        El motivo es obligatorio.
+      </mat-error>
     </mat-form-field>
+
+    <!-- Mini-form de refacción -->
+    <section
+      *ngIf="mostrarRefaccionJefe"
+      class="asignar-fecha-refaccion"
+    >
+      <div class="asignar-fecha-refaccion__header">
+        <div>
+          <strong>Refacción</strong>
+          <p>
+            Indica si este ticket requiere refacción o material especial.
+          </p>
+        </div>
+      </div>
+
+      <mat-checkbox
+        class="asignar-fecha-refaccion__checkbox"
+        [(ngModel)]="necesitaRefaccion"
+      >
+        ¿Requiere refacción?
+      </mat-checkbox>
+
+      <mat-form-field appearance="fill" class="w-full asignar-fecha-refaccion__field">
+        <mat-label>Descripción técnica (opcional)</mat-label>
+        <textarea
+          matInput
+          [(ngModel)]="descripcionRefaccion"
+          [disabled]="!necesitaRefaccion"
+          rows="3"
+          maxlength="500"
+          placeholder="Describe la pieza, refacción o material necesario."
+        ></textarea>
+        <mat-hint align="end">
+          {{ (descripcionRefaccion || '').length }}/500
+        </mat-hint>
+      </mat-form-field>
+    </section>
   </div>
 
-  <div class="acciones">
-    <button mat-raised-button color="primary" (click)="guardar()">Guardar</button>
-    <button mat-button color="warn" (click)="cancelar()">Cancelar</button>
-  </div>
-</div>
+  <footer class="asignar-fecha-modal__actions">
+    <button
+      mat-button
+      type="button"
+      class="asignar-fecha-modal__cancel"
+      (click)="cancelar()"
+    >
+      Cancelar
+    </button>
+
+    <button
+      mat-raised-button
+      type="button"
+      class="asignar-fecha-modal__save"
+      (click)="guardar()"
+    >
+      Guardar
+    </button>
+  </footer>
+</section>

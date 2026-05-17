@@ -1,93 +1,229 @@
-<!-- frontend\src\app\pm\pm-bitacoras-mobile\pm-bitacoras-mobile.component.html -->
+<!-- frontend/src/app/pm/pm-bitacoras-mobile/pm-bitacoras-mobile.component.html -->
 
-<mat-card>
-  <mat-card-title>Bitácora Mantenimiento Preventivo</mat-card-title>
-  <mat-card-content>
-    <form [formGroup]="form" style="display: grid; gap: 12px; max-width: 520px;">
-<!-- Sucursal -->
-<ng-container *ngIf="puedeCambiarSucursal; else sucursalFija">
-  <mat-form-field appearance="fill" class="w-full">
-    <mat-label>Sucursal</mat-label>
-    <mat-select formControlName="sucursal_id">
-      <mat-option *ngFor="let s of sucursalesList" [value]="s.sucursal_id">
-        {{ s.sucursal }}
-      </mat-option>
-    </mat-select>
-  </mat-form-field>
-</ng-container>
+<div class="pm-mobile-page">
+  <section class="pm-mobile-hero">
+    <p class="pm-mobile-eyebrow">Captura PM</p>
+    <h1>Bitácora de mantenimiento</h1>
+    <p>
+      Registra la ejecución del mantenimiento por sucursal, equipo, resultado y checklist operativo.
+    </p>
+  </section>
 
-<ng-template #sucursalFija>
-  <mat-form-field appearance="fill" class="w-full">
-    <mat-label>Sucursal</mat-label>
-    <input matInput [value]="sucursalNombre" disabled />
-  </mat-form-field>
-</ng-template>
+  <form [formGroup]="form" class="pm-mobile-form">
+    <!-- Sucursal -->
+    <section class="pm-mobile-card">
+      <header class="pm-mobile-section-header">
+        <span>1</span>
+        <div>
+          <h2>Sucursal</h2>
+          <p>Ubicación donde se realiza la captura.</p>
+        </div>
+      </header>
 
-<!-- Tipo de mantenimiento -->
-<mat-form-field appearance="fill">
-  <mat-label>Tipo de mantenimiento</mat-label>
-  <mat-select formControlName="tipo_mantenimiento">
-    <mat-option *ngFor="let tipo of tiposMantenimiento" [value]="tipo">
-      {{ tipoMantenimientoLabel(tipo) }}
-    </mat-option>
-  </mat-select>
-</mat-form-field>
+      <ng-container *ngIf="puedeCambiarSucursal; else sucursalFija">
+        <mat-form-field appearance="fill" class="pm-mobile-field">
+          <mat-label>Sucursal</mat-label>
+          <mat-select formControlName="sucursal_id">
+            <mat-option *ngFor="let s of sucursalesList" [value]="s.sucursal_id">
+              {{ s.sucursal }}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
+      </ng-container>
 
-<mat-form-field appearance="fill" *ngIf="form.value.tipo_mantenimiento === 'PREVENTIVO'">
-  <mat-label>Ventana preventiva</mat-label>
-  <mat-select formControlName="ventana_preventivo_dias">
-    <mat-option *ngFor="let opcion of ventanasPreventivo" [value]="opcion.value">
-      {{ opcion.label }}
-    </mat-option>
-  </mat-select>
-</mat-form-field>
+      <ng-template #sucursalFija>
+        <mat-form-field appearance="fill" class="pm-mobile-field">
+          <mat-label>Sucursal</mat-label>
+          <input matInput [value]="sucursalNombre" disabled />
+        </mat-form-field>
+      </ng-template>
+    </section>
 
-<!-- Equipo -->
-<mat-form-field appearance="fill" class="w-full">
-  <mat-label>Equipo</mat-label>
+    <!-- Tipo / Ventana preventiva -->
+    <section class="pm-mobile-card">
+      <header class="pm-mobile-section-header">
+        <span>2</span>
+        <div>
+          <h2>Tipo de mantenimiento</h2>
+          <p>Define si es preventivo, correctivo, estético o mejora.</p>
+        </div>
+      </header>
 
-  <input
-    matInput
-    [formControl]="equipoCtrl"
-    [matAutocomplete]="autoEquipo"
-    placeholder="Buscar por código o nombre"
-  />
+      <div class="pm-mobile-grid">
+        <mat-form-field appearance="fill" class="pm-mobile-field">
+          <mat-label>Tipo de mantenimiento</mat-label>
+          <mat-select formControlName="tipo_mantenimiento">
+            <mat-option *ngFor="let tipo of tiposMantenimiento" [value]="tipo">
+              {{ tipoMantenimientoLabel(tipo) }}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
 
-  <mat-autocomplete
-    #autoEquipo="matAutocomplete"
-    [displayWith]="equipoDisplay"
-    (optionSelected)="onEquipoSelected($event.option.value)"
-  >
-<mat-option *ngFor="let e of (filteredEquipos$ | async) || []" [value]="e">
-  <div>{{ equipoLabel(e) }}</div>
-  <small *ngIf="mostrarMetaPreventiva(e)">
-    {{ obtenerMetaPreventiva(e) }}
-  </small>
-</mat-option>
-  </mat-autocomplete>
+        <mat-form-field
+          appearance="fill"
+          class="pm-mobile-field"
+          *ngIf="form.value.tipo_mantenimiento === 'PREVENTIVO'"
+        >
+          <mat-label>Ventana preventiva</mat-label>
+          <mat-select formControlName="ventana_preventivo_dias">
+            <mat-option *ngFor="let opcion of ventanasPreventivo" [value]="opcion.value">
+              {{ opcion.label }}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
+      </div>
+    </section>
 
-  <mat-hint *ngIf="equiposLoading">Cargando equipos…</mat-hint>
-</mat-form-field>
+    <!-- Equipo -->
+    <section class="pm-mobile-card">
+      <header class="pm-mobile-section-header">
+        <span>3</span>
+        <div>
+          <h2>Equipo</h2>
+          <p>Busca por código interno o nombre del activo.</p>
+        </div>
+      </header>
 
-<!-- Fecha -->
-<mat-form-field appearance="fill">
-  <mat-label>Fecha</mat-label>
-  <input matInput type="date" formControlName="fecha" />
-</mat-form-field>
+      <mat-form-field appearance="fill" class="pm-mobile-field">
+        <mat-label>Equipo</mat-label>
 
-<!-- Notas -->
-<mat-form-field appearance="fill">
-  <mat-label>Notas</mat-label>
-  <textarea matInput rows="3" formControlName="notas"></textarea>
-</mat-form-field>
+        <input
+          matInput
+          [formControl]="equipoCtrl"
+          [matAutocomplete]="autoEquipo"
+          placeholder="Buscar por código o nombre"
+        />
 
-<button mat-raised-button color="primary" type="button" (click)="guardar()" [disabled]="loading">
-  {{ loading ? 'Guardando...' : 'Guardar bitácora' }}
-</button>
+        <mat-autocomplete
+          #autoEquipo="matAutocomplete"
+          [displayWith]="equipoDisplay"
+          (optionSelected)="onEquipoSelected($event.option.value)"
+        >
+          <mat-option *ngFor="let e of (filteredEquipos$ | async) || []" [value]="e">
+            <div class="pm-mobile-equipo-option">
+              <strong>{{ equipoLabel(e) }}</strong>
+              <small *ngIf="mostrarMetaPreventiva(e)">
+                {{ obtenerMetaPreventiva(e) }}
+              </small>
+            </div>
+          </mat-option>
+        </mat-autocomplete>
 
-<div *ngIf="lastId" style="font-weight: 600;">
-  Última bitácora guardada: ID {{ lastId }}
+        <mat-hint *ngIf="equiposLoading">Cargando equipos…</mat-hint>
+      </mat-form-field>
+    </section>
+
+    <!-- Resultado -->
+    <section class="pm-mobile-card">
+      <header class="pm-mobile-section-header">
+        <span>4</span>
+        <div>
+          <h2>Resultado</h2>
+          <p>Marca el estado final del mantenimiento realizado.</p>
+        </div>
+      </header>
+
+      <div class="pm-result-options">
+        <label class="pm-result-option pm-result-option--ok">
+          <input type="radio" formControlName="resultado" value="OK" />
+          <span>
+            <strong>OK</strong>
+            <small>Equipo en buen estado</small>
+          </span>
+        </label>
+
+        <label class="pm-result-option pm-result-option--obs">
+          <input type="radio" formControlName="resultado" value="OBS" />
+          <span>
+            <strong>Observación</strong>
+            <small>Requiere seguimiento</small>
+          </span>
+        </label>
+
+        <label class="pm-result-option pm-result-option--falla">
+          <input type="radio" formControlName="resultado" value="FALLA" />
+          <span>
+            <strong>Falla</strong>
+            <small>Requiere atención</small>
+          </span>
+        </label>
+      </div>
+    </section>
+
+    <!-- Fecha / Checklist -->
+    <section class="pm-mobile-card">
+      <header class="pm-mobile-section-header">
+        <span>5</span>
+        <div>
+          <h2>Ejecución</h2>
+          <p>Fecha y checklist básico de la captura.</p>
+        </div>
+      </header>
+
+      <mat-form-field appearance="fill" class="pm-mobile-field">
+        <mat-label>Fecha</mat-label>
+        <input matInput type="date" formControlName="fecha" />
+      </mat-form-field>
+
+      <div class="pm-checklist-grid">
+        <label class="pm-check-item">
+          <input type="checkbox" formControlName="check_limpieza" />
+          <span>Limpieza</span>
+        </label>
+
+        <label class="pm-check-item">
+          <input type="checkbox" formControlName="check_ajuste" />
+          <span>Ajustes</span>
+        </label>
+
+        <label class="pm-check-item">
+          <input type="checkbox" formControlName="check_revision" />
+          <span>Revisión</span>
+        </label>
+
+        <label class="pm-check-item">
+          <input type="checkbox" formControlName="check_lubricacion" />
+          <span>Lubricación</span>
+        </label>
+      </div>
+    </section>
+
+    <!-- Notas -->
+    <section class="pm-mobile-card">
+      <header class="pm-mobile-section-header">
+        <span>6</span>
+        <div>
+          <h2>Notas</h2>
+          <p>Agrega evidencia textual o comentarios relevantes.</p>
+        </div>
+      </header>
+
+      <mat-form-field appearance="fill" class="pm-mobile-field">
+        <mat-label>Notas</mat-label>
+        <textarea
+          matInput
+          rows="4"
+          formControlName="notas"
+          placeholder="Ej. Se realizó limpieza, ajuste y revisión general."
+        ></textarea>
+      </mat-form-field>
+    </section>
+
+    <!-- Guardado -->
+    <section class="pm-mobile-save-panel">
+      <button
+        mat-raised-button
+        type="button"
+        class="pm-mobile-save-button"
+        (click)="guardar()"
+        [disabled]="loading || form.invalid"
+      >
+        {{ loading ? 'Guardando...' : 'Guardar bitácora' }}
+      </button>
+
+      <div *ngIf="lastId" class="pm-mobile-success">
+        Última bitácora guardada: ID {{ lastId }}
+      </div>
+    </section>
+  </form>
 </div>
-    </form>
-  </mat-card-content>
-</mat-card>

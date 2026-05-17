@@ -1,172 +1,307 @@
-<!-- frontend\src\app\pm\pm-consulta-historial\pm-consulta-historial.component.html -->
+<!-- frontend/src/app/pm/pm-consulta-historial/pm-consulta-historial.component.html -->
 
-
-<div class="pm-historial-container">
-
-    <h2 class="page-title">Consulta / Historial Mantenimiento Preventivo</h2>
-
-    <mat-card class="filters-card">
-        <mat-card-content class="filters-row">
-
-            <mat-form-field appearance="fill" class="filter-field">
-                <mat-label>Sucursal</mat-label>
-                <input
-                    matInput
-                    [formControl]="sucursalCtrl"
-                    [matAutocomplete]="autoSucursal">
-
-                <mat-autocomplete
-                    #autoSucursal="matAutocomplete"
-                    [displayWith]="sucursalDisplay"
-                    (optionSelected)="onSucursalSelected($event.option.value)">
-                    <mat-option *ngFor="let s of filteredSucursales$ | async" [value]="s">
-                        {{ s.sucursal }}
-                    </mat-option>
-                </mat-autocomplete>
-            </mat-form-field>
-
-            <mat-form-field appearance="fill" class="filter-field">
-            <mat-label>Subcategoría</mat-label>
-            <mat-select [(ngModel)]="subcategoriaSeleccionada" (selectionChange)="manejarCambioSubcategoria()">
-                <mat-option *ngFor="let subcategoria of subcategoriasDisponibles" [value]="subcategoria.value">
-                {{ subcategoria.label }}
-                </mat-option>
-            </mat-select>
-            </mat-form-field>
-
-            <mat-form-field appearance="fill" class="filter-field">
-                <mat-label>Fecha desde</mat-label>
-                <input matInput type="date" [(ngModel)]="fechaDesde">
-            </mat-form-field>
-
-            <mat-form-field appearance="fill" class="filter-field">
-                <mat-label>Fecha hasta</mat-label>
-                <input matInput type="date" [(ngModel)]="fechaHasta">
-            </mat-form-field>
-
-            <button mat-raised-button color="primary" (click)="cargarBitacoras()" [disabled]="loading">
-                Consultar
-            </button>
-
-        </mat-card-content>
-    </mat-card>
-
-    <mat-card #detalleBitacoraCard class="section-card" *ngIf="detalleBitacoraLoading || detalleBitacoraPm">
-        <mat-card-header>
-            <mat-card-title>
-                Detalle de bitácora — {{ detalleBitacoraEquipoLabel }}
-            </mat-card-title>
-
-        </mat-card-header>
-
-        <mat-card-content *ngIf="detalleBitacoraLoading">
-            Cargando detalle...
-        </mat-card-content>
-
-        <mat-card-content *ngIf="!detalleBitacoraLoading && detalleBitacoraPm">
-            <p><strong>ID:</strong> {{ detalleBitacoraPm.id }}</p>
-            <p><strong>Sucursal:</strong> {{ obtenerNombreSucursalDetalle() }}</p>
-            <p><strong>Equipo:</strong> {{ detalleBitacoraEquipoLabel || 'Sin equipo' }}</p>
-            <p><strong>Inventario ID:</strong> {{ detalleBitacoraPm.inventario_id || 'Sin inventario' }}</p>
-            <p><strong>Fecha:</strong> {{ formatearFechaDetalle(detalleBitacoraPm.fecha) }}</p>
-            <p><strong>Resultado:</strong> {{ formatearResultadoBitacora(detalleBitacoraPm.resultado) }}</p>
-            <p><strong>Tipo de mantenimiento:</strong> {{ formatearTipoMantenimiento(detalleBitacoraPm.tipo_mantenimiento) }}</p>
-            <div class="pm-detalle-notas">
-            <strong>Notas:</strong>
-            <div>{{ detalleBitacoraPm.notas || 'Sin notas' }}</div>
-            </div>
-
-
-            <ng-container *ngIf="detalleBitacoraPm.validacion; else sinValidacionHistorial">
-                <p><strong>Validación:</strong> {{ detalleBitacoraPm.validacion.decision }}</p>
-                <p *ngIf="detalleBitacoraPm.validacion.decision === 'RECHAZADO'">
-                <strong>Motivo:</strong> {{ detalleBitacoraPm.validacion.motivo }}
-                </p>
-                <p><strong>Fecha validación:</strong> {{ formatearFechaValidacion(detalleBitacoraPm.validacion.validado_en) }}</p>
-            </ng-container>
-
-            <ng-template #sinValidacionHistorial>
-                <p><strong>Validación:</strong> Sin validación</p>
-            </ng-template>
-                <div *ngIf="puedeValidarPm() && !detalleBitacoraPm?.validacion" class="pm-detalle-acciones-validacion">
-                <button mat-raised-button color="primary" type="button" (click)="validarBitacoraPm()">
-                    Validar
-                </button> 
-
-                <button
-                mat-stroked-button
-                color="warn"
-                type="button"
-                (click)="manejarBotonRechazoPm()">
-                {{ textoBotonRechazoPm() }}
-                </button>
-                </div>
-
-                <div *ngIf="mostrarRechazoPm" class="pm-detalle-rechazo">
-                <mat-form-field appearance="fill" class="full-width">
-                    <mat-label>Motivo de rechazo</mat-label>
-                    <textarea
-                    matInput
-                    rows="4"
-                    [(ngModel)]="motivoRechazoPm">
-                    </textarea>
-                </mat-form-field>
-                </div>
-        </mat-card-content>
-    </mat-card>
-
-    <div class="spinner-wrapper" *ngIf="loading">
-        <mat-spinner diameter="48"></mat-spinner>
+<div class="pm-history-page">
+  <!-- ==========================================================================
+       Suite Ultra UI v1 - Header historial PM
+       ========================================================================== -->
+  <section class="pm-history-hero">
+    <div class="pm-history-hero__content">
+      <p class="pm-history-eyebrow">Historial PM</p>
+      <h1>Consulta de bitácoras</h1>
+      <p>
+        Expediente operativo de mantenimientos capturados, resultados y validaciones
+        por sucursal, activo y rango de fechas.
+      </p>
     </div>
 
-    <mat-card class="section-card" *ngIf="!loading">
-        <mat-card-header>
-            <mat-card-title>Bitácoras</mat-card-title>
-        </mat-card-header>
+    <div class="pm-history-mode-card">
+      <span>Registros encontrados</span>
+      <strong>{{ bitacoras.length }}</strong>
+      <small>Según filtros seleccionados</small>
+    </div>
+  </section>
 
-        <mat-card-content>
-            <table mat-table [dataSource]="bitacoras" class="full-width" *ngIf="bitacoras.length > 0; else emptyState">
+  <!-- ==========================================================================
+       Suite Ultra UI v1 - Filtros
+       ========================================================================== -->
+  <mat-card class="pm-history-panel pm-history-filters-card">
+    <mat-card-content class="pm-history-filters-row">
+      <mat-form-field appearance="fill" class="pm-filter-field">
+        <mat-label>Sucursal</mat-label>
+        <input
+          matInput
+          [formControl]="sucursalCtrl"
+          [matAutocomplete]="autoSucursal"
+        />
 
-                <ng-container matColumnDef="fecha">
-                    <th mat-header-cell *matHeaderCellDef>Fecha</th>
-                    <td mat-cell *matCellDef="let row">{{ row.fecha }}</td>
-                </ng-container>
+        <mat-autocomplete
+          #autoSucursal="matAutocomplete"
+          [displayWith]="sucursalDisplay"
+          (optionSelected)="onSucursalSelected($event.option.value)"
+        >
+          <mat-option *ngFor="let s of filteredSucursales$ | async" [value]="s">
+            {{ s.sucursal }}
+          </mat-option>
+        </mat-autocomplete>
+      </mat-form-field>
 
-                <ng-container matColumnDef="equipo">
-                    <th mat-header-cell *matHeaderCellDef>Equipo</th>
-                    <td mat-cell *matCellDef="let row">{{ equipoLabel(row) }}</td>
-                </ng-container>
+      <mat-form-field appearance="fill" class="pm-filter-field">
+        <mat-label>Subcategoría</mat-label>
+        <mat-select
+          [(ngModel)]="subcategoriaSeleccionada"
+          (selectionChange)="manejarCambioSubcategoria()"
+        >
+          <mat-option
+            *ngFor="let subcategoria of subcategoriasDisponibles"
+            [value]="subcategoria.value"
+          >
+            {{ subcategoria.label }}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
 
-                <ng-container matColumnDef="sucursal">
-                    <th mat-header-cell *matHeaderCellDef>Sucursal</th>
-                    <td mat-cell *matCellDef="let row">{{ row.sucursal }}</td>
-                </ng-container>
+      <mat-form-field appearance="fill" class="pm-filter-field pm-filter-field--date">
+        <mat-label>Fecha desde</mat-label>
+        <input matInput type="date" [(ngModel)]="fechaDesde" />
+      </mat-form-field>
 
-                <ng-container matColumnDef="resultado">
-                    <th mat-header-cell *matHeaderCellDef>Resultado</th>
-                    <td mat-cell *matCellDef="let row">{{ formatearResultadoBitacora(row.resultado) }}</td>
-                </ng-container>
+      <mat-form-field appearance="fill" class="pm-filter-field pm-filter-field--date">
+        <mat-label>Fecha hasta</mat-label>
+        <input matInput type="date" [(ngModel)]="fechaHasta" />
+      </mat-form-field>
 
-                <ng-container matColumnDef="estado_validacion">
-                    <th mat-header-cell *matHeaderCellDef>Validación</th>
-                    <td mat-cell *matCellDef="let row">{{ formatearEstadoValidacion(row.estado_validacion) }}</td>
-                </ng-container>
+      <button
+        mat-raised-button
+        type="button"
+        class="pm-history-primary-button"
+        (click)="cargarBitacoras()"
+        [disabled]="loading"
+      >
+        Consultar
+      </button>
+    </mat-card-content>
+  </mat-card>
 
-                <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-                <tr
-                    mat-row
-                    *matRowDef="let row; columns: displayedColumns;"
-                    [class.pm-row-seleccionada]="row.id === bitacoraSeleccionadaId"
-                    (click)="toggleDetalleBitacora(row)">
-                </tr>
-            </table>
+  <!-- ==========================================================================
+       Suite Ultra UI v1 - Detalle de bitácora
+       ========================================================================== -->
+  <mat-card
+    #detalleBitacoraCard
+    class="pm-history-panel pm-history-detail-card"
+    *ngIf="detalleBitacoraLoading || detalleBitacoraPm"
+  >
+    <mat-card-header class="pm-history-detail-card__header">
+      <mat-card-title>Detalle de bitácora</mat-card-title>
+      <mat-card-subtitle>{{ detalleBitacoraEquipoLabel }}</mat-card-subtitle>
+    </mat-card-header>
 
-            <ng-template #emptyState>
-                <div class="section-empty-state">
-                    Sin bitácoras para los filtros seleccionados.
-                </div>
-            </ng-template>
-        </mat-card-content>
-    </mat-card>
+    <mat-card-content *ngIf="detalleBitacoraLoading" class="pm-history-detail-loading">
+      Cargando detalle...
+    </mat-card-content>
 
+    <mat-card-content
+      *ngIf="!detalleBitacoraLoading && detalleBitacoraPm"
+      class="pm-history-detail-content"
+    >
+      <section class="pm-history-detail-grid">
+        <div class="pm-history-detail-item">
+          <span>ID</span>
+          <strong>{{ detalleBitacoraPm.id }}</strong>
+        </div>
+
+        <div class="pm-history-detail-item">
+          <span>Sucursal</span>
+          <strong>{{ obtenerNombreSucursalDetalle() }}</strong>
+        </div>
+
+        <div class="pm-history-detail-item">
+          <span>Inventario ID</span>
+          <strong>{{ detalleBitacoraPm.inventario_id || 'Sin inventario' }}</strong>
+        </div>
+
+        <div class="pm-history-detail-item">
+          <span>Fecha</span>
+          <strong>{{ formatearFechaDetalle(detalleBitacoraPm.fecha) }}</strong>
+        </div>
+
+        <div class="pm-history-detail-item">
+          <span>Resultado</span>
+          <strong>{{ formatearResultadoBitacora(detalleBitacoraPm.resultado) }}</strong>
+        </div>
+
+        <div class="pm-history-detail-item">
+          <span>Tipo</span>
+          <strong>{{ formatearTipoMantenimiento(detalleBitacoraPm.tipo_mantenimiento) }}</strong>
+        </div>
+
+        <div class="pm-history-detail-item pm-history-detail-item--wide">
+          <span>Equipo</span>
+          <strong>{{ detalleBitacoraEquipoLabel || 'Sin equipo' }}</strong>
+        </div>
+
+        <div class="pm-history-detail-item pm-history-detail-item--wide">
+          <span>Notas</span>
+          <strong class="pm-detalle-notas">{{ detalleBitacoraPm.notas || 'Sin notas' }}</strong>
+        </div>
+
+        <ng-container *ngIf="detalleBitacoraPm.validacion; else sinValidacionHistorial">
+          <div class="pm-history-detail-item">
+            <span>Validación</span>
+            <strong>
+              <span
+                class="pm-history-state-badge"
+                [class.pm-history-state-badge--success]="detalleBitacoraPm.validacion.decision === 'VALIDADO'"
+                [class.pm-history-state-badge--danger]="detalleBitacoraPm.validacion.decision === 'RECHAZADO'"
+              >
+                {{ detalleBitacoraPm.validacion.decision }}
+              </span>
+            </strong>
+          </div>
+
+          <div class="pm-history-detail-item">
+            <span>Fecha validación</span>
+            <strong>{{ formatearFechaValidacion(detalleBitacoraPm.validacion.validado_en) }}</strong>
+          </div>
+
+          <div
+            class="pm-history-detail-item pm-history-detail-item--wide"
+            *ngIf="detalleBitacoraPm.validacion.decision === 'RECHAZADO'"
+          >
+            <span>Motivo</span>
+            <strong>{{ detalleBitacoraPm.validacion.motivo || 'Sin motivo' }}</strong>
+          </div>
+        </ng-container>
+
+        <ng-template #sinValidacionHistorial>
+          <div class="pm-history-detail-item pm-history-detail-item--wide">
+            <span>Validación</span>
+            <strong>
+              <span class="pm-history-state-badge pm-history-state-badge--pending">
+                Sin validación
+              </span>
+            </strong>
+          </div>
+        </ng-template>
+      </section>
+
+      <section
+        *ngIf="puedeValidarPm() && !detalleBitacoraPm?.validacion"
+        class="pm-history-validation-actions"
+      >
+        <button
+          mat-raised-button
+          type="button"
+          class="pm-history-primary-button"
+          (click)="validarBitacoraPm()"
+        >
+          Validar
+        </button>
+
+        <button
+          mat-stroked-button
+          type="button"
+          class="pm-history-danger-button"
+          (click)="manejarBotonRechazoPm()"
+        >
+          {{ textoBotonRechazoPm() }}
+        </button>
+      </section>
+
+      <div *ngIf="mostrarRechazoPm" class="pm-history-reject-box">
+        <mat-form-field appearance="fill" class="full-width">
+          <mat-label>Motivo de rechazo</mat-label>
+          <textarea
+            matInput
+            rows="4"
+            [(ngModel)]="motivoRechazoPm"
+            placeholder="Describe por qué se rechaza esta bitácora."
+          ></textarea>
+        </mat-form-field>
+      </div>
+    </mat-card-content>
+  </mat-card>
+
+  <!-- ==========================================================================
+       Suite Ultra UI v1 - Loading
+       ========================================================================== -->
+  <div class="pm-history-loading" *ngIf="loading">
+    <mat-spinner diameter="48"></mat-spinner>
+    <p>Cargando historial PM...</p>
+  </div>
+
+  <!-- ==========================================================================
+       Suite Ultra UI v1 - Tabla historial
+       ========================================================================== -->
+  <mat-card class="pm-history-panel pm-history-table-card" *ngIf="!loading">
+    <mat-card-header class="pm-history-table-card__header">
+      <div>
+        <mat-card-title>Bitácoras</mat-card-title>
+        <mat-card-subtitle>
+          Selecciona una fila para abrir el expediente de la captura.
+        </mat-card-subtitle>
+      </div>
+    </mat-card-header>
+
+    <mat-card-content>
+      <div class="pm-history-table-wrapper" *ngIf="bitacoras.length > 0; else emptyState">
+        <table mat-table [dataSource]="bitacoras" class="pm-history-table full-width">
+          <ng-container matColumnDef="fecha">
+            <th mat-header-cell *matHeaderCellDef>Fecha</th>
+            <td mat-cell *matCellDef="let row">{{ row.fecha }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="equipo">
+            <th mat-header-cell *matHeaderCellDef>Equipo</th>
+            <td mat-cell *matCellDef="let row">
+              <strong>{{ equipoLabel(row) }}</strong>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="sucursal">
+            <th mat-header-cell *matHeaderCellDef>Sucursal</th>
+            <td mat-cell *matCellDef="let row">{{ row.sucursal }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="resultado">
+            <th mat-header-cell *matHeaderCellDef>Resultado</th>
+            <td mat-cell *matCellDef="let row">
+              <span class="pm-history-result-pill">
+                {{ formatearResultadoBitacora(row.resultado) }}
+              </span>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="estado_validacion">
+            <th mat-header-cell *matHeaderCellDef>Validación</th>
+            <td mat-cell *matCellDef="let row">
+              <span
+                class="pm-history-state-badge"
+                [class.pm-history-state-badge--success]="row.estado_validacion === 'VALIDADO'"
+                [class.pm-history-state-badge--danger]="row.estado_validacion === 'RECHAZADO'"
+                [class.pm-history-state-badge--pending]="!row.estado_validacion"
+              >
+                {{ formatearEstadoValidacion(row.estado_validacion) }}
+              </span>
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+          <tr
+            mat-row
+            *matRowDef="let row; columns: displayedColumns"
+            [class.pm-row-seleccionada]="row.id === bitacoraSeleccionadaId"
+            (click)="toggleDetalleBitacora(row)"
+          ></tr>
+        </table>
+      </div>
+
+      <ng-template #emptyState>
+        <div class="pm-history-empty-state">
+          <mat-icon>historial</mat-icon>
+          <h3>Sin bitácoras</h3>
+          <p>No hay bitácoras para los filtros seleccionados.</p>
+        </div>
+      </ng-template>
+    </mat-card-content>
+  </mat-card>
 </div>

@@ -1,238 +1,328 @@
+/* ==========================================================================
+   Suite Ultra UI v1 - Loader global
+   ========================================================================== */
+
 :host {
   position: fixed;
   inset: 0;
-  background-color: white;
   z-index: 9999;
+  display: block;
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Shell
+   ========================================================================== */
+
+.ultra-loader {
+  position: relative;
+  min-height: 100vh;
+  width: 100%;
+  overflow: hidden;
   display: flex;
-  justify-content: center;
   align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(circle at top left, rgba(229, 69, 37, 0.18), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(44, 69, 149, 0.16), transparent 30%),
+    linear-gradient(135deg, var(--ultra-black-90), var(--ultra-charcoal));
+  color: var(--ultra-surface);
+  animation: ultra-loader-fade-in 0.32s ease-out both;
 }
 
+/* ==========================================================================
+   Suite Ultra UI v1 - Ambientes
+   ========================================================================== */
 
-.loader-container {
+.ultra-loader__ambient {
+  position: absolute;
+  pointer-events: none;
+  border-radius: 999px;
+  opacity: 0.55;
+  filter: blur(8px);
+}
+
+.ultra-loader__ambient--one {
+  width: 360px;
+  height: 360px;
+  top: -130px;
+  right: -90px;
+  background: rgba(229, 69, 37, 0.22);
+  animation: ultra-loader-ambient 6s ease-in-out infinite;
+}
+
+.ultra-loader__ambient--two {
+  width: 420px;
+  height: 420px;
+  left: -170px;
+  bottom: -180px;
+  border: 1px solid rgba(229, 69, 37, 0.25);
+  box-shadow:
+    0 0 0 28px rgba(229, 69, 37, 0.035),
+    0 0 0 58px rgba(229, 69, 37, 0.025),
+    0 0 0 92px rgba(229, 69, 37, 0.018);
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Contenido
+   ========================================================================== */
+
+.ultra-loader__content {
+  position: relative;
+  z-index: 2;
   display: flex;
-  justify-content: center;
   align-items: center;
-  height: 100vh;
+  flex-direction: column;
+  text-align: center;
+  padding: 32px;
 }
 
-.pl {
-  width: 8em;
-  height: 8em;
+/* ==========================================================================
+   Suite Ultra UI v1 - Orb / Logo
+   ========================================================================== */
+
+.ultra-loader__orb {
+  position: relative;
+  width: 184px;
+  height: 184px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 28px;
 }
 
-.pl circle {
-  transform-box: fill-box;
-  transform-origin: 50% 50%;
+.ultra-loader__halo,
+.ultra-loader__ring,
+.ultra-loader__logo-wrap {
+  position: absolute;
+  border-radius: 999px;
 }
 
-.pl__ring1 {
-  animation: ring1_ 4s 0s ease-in-out infinite;
+.ultra-loader__halo--outer {
+  inset: 8px;
+  background: rgba(229, 69, 37, 0.10);
+  box-shadow:
+    0 0 42px rgba(229, 69, 37, 0.35),
+    0 0 90px rgba(229, 69, 37, 0.16);
+  animation: ultra-loader-halo 2.8s ease-in-out infinite;
 }
 
-.pl__ring2 {
-  animation: ring2_ 4s 0.04s ease-in-out infinite;
+.ultra-loader__halo--inner {
+  inset: 34px;
+  background:
+    radial-gradient(circle, rgba(255, 255, 255, 0.10), transparent 62%),
+    rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.10);
 }
 
-.pl__ring3 {
-  animation: ring3_ 4s 0.08s ease-in-out infinite;
+.ultra-loader__ring--primary {
+  inset: 0;
+  border: 3px solid transparent;
+  border-top-color: var(--ultra-orange);
+  border-right-color: rgba(229, 69, 37, 0.58);
+  filter: drop-shadow(0 0 10px rgba(229, 69, 37, 0.65));
+  animation: ultra-loader-spin 1.55s linear infinite;
 }
 
-.pl__ring4 {
-  animation: ring4_ 4s 0.12s ease-in-out infinite;
+.ultra-loader__ring--secondary {
+  inset: 18px;
+  border: 1px dashed rgba(229, 69, 37, 0.42);
+  animation: ultra-loader-spin-reverse 5.6s linear infinite;
 }
 
-.pl__ring5 {
-  animation: ring5_ 4s 0.16s ease-in-out infinite;
+.ultra-loader__logo-wrap {
+  width: 104px;
+  height: 104px;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.18), transparent 34%),
+    var(--ultra-black-90);
+  box-shadow:
+    0 18px 40px rgba(0, 0, 0, 0.35),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  animation: ultra-loader-logo-pulse 2.4s ease-in-out infinite;
 }
 
-.pl__ring6 {
-  animation: ring6_ 4s 0.2s ease-in-out infinite;
+.ultra-loader__logo {
+  width: 70px;
+  height: 70px;
+  display: block;
+  filter: drop-shadow(0 8px 16px rgba(229, 69, 37, 0.30));
 }
 
-/* Animations */
-@keyframes ring1_ {
+/* ==========================================================================
+   Suite Ultra UI v1 - Texto
+   ========================================================================== */
+
+.ultra-loader__copy h1 {
+  margin: 0;
+  color: var(--ultra-surface);
+  font-size: clamp(28px, 4vw, 42px);
+  line-height: 1.05;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+}
+
+.ultra-loader__copy h1 span {
+  color: var(--ultra-orange);
+}
+
+.ultra-loader__copy p {
+  margin: 12px 0 0;
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Dots
+   ========================================================================== */
+
+.ultra-loader__dots {
+  display: inline-flex;
+  gap: 10px;
+  margin-top: 28px;
+}
+
+.ultra-loader__dots span {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.30);
+  animation: ultra-loader-dot 1.4s ease-in-out infinite;
+}
+
+.ultra-loader__dots span:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.ultra-loader__dots span:nth-child(2) {
+  animation-delay: 0.14s;
+}
+
+.ultra-loader__dots span:nth-child(3) {
+  animation-delay: 0.28s;
+}
+
+.ultra-loader__dots span:nth-child(4) {
+  animation-delay: 0.42s;
+}
+
+.ultra-loader__dots span:nth-child(5) {
+  animation-delay: 0.56s;
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Animaciones
+   ========================================================================== */
+
+@keyframes ultra-loader-fade-in {
   from {
-    stroke-dashoffset: -376.237129776;
-    transform: rotate(-0.25turn);
-    animation-timing-function: ease-in;
+    opacity: 0;
   }
 
-  23% {
-    stroke-dashoffset: -94.247778;
-    transform: rotate(1turn);
-    animation-timing-function: ease-out;
-  }
-
-  46%, 50% {
-    stroke-dashoffset: -376.237129776;
-    transform: rotate(2.25turn);
-    animation-timing-function: ease-in;
-  }
-
-  73% {
-    stroke-dashoffset: -94.247778;
-    transform: rotate(3.5turn);
-    animation-timing-function: ease-out;
-  }
-
-  96%, to {
-    stroke-dashoffset: -376.237129776;
-    transform: rotate(4.75turn);
+  to {
+    opacity: 1;
   }
 }
 
-@keyframes ring2_ {
-  from {
-    stroke-dashoffset: -329.207488554;
-    transform: rotate(-0.25turn);
-    animation-timing-function: ease-in;
-  }
-
-  23% {
-    stroke-dashoffset: -82.46680575;
-    transform: rotate(1turn);
-    animation-timing-function: ease-out;
-  }
-
-  46%, 50% {
-    stroke-dashoffset: -329.207488554;
-    transform: rotate(2.25turn);
-    animation-timing-function: ease-in;
-  }
-
-  73% {
-    stroke-dashoffset: -82.46680575;
-    transform: rotate(3.5turn);
-    animation-timing-function: ease-out;
-  }
-
-  96%, to {
-    stroke-dashoffset: -329.207488554;
-    transform: rotate(4.75turn);
+@keyframes ultra-loader-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 
-@keyframes ring3_ {
-  from {
-    stroke-dashoffset: -288.4484661616;
-    transform: rotate(-0.25turn);
-    animation-timing-function: ease-in;
-  }
-
-  23% {
-    stroke-dashoffset: -72.2566298;
-    transform: rotate(1turn);
-    animation-timing-function: ease-out;
-  }
-
-  46%, 50% {
-    stroke-dashoffset: -288.4484661616;
-    transform: rotate(2.25turn);
-    animation-timing-function: ease-in;
-  }
-
-  73% {
-    stroke-dashoffset: -72.2566298;
-    transform: rotate(3.5turn);
-    animation-timing-function: ease-out;
-  }
-
-  96%, to {
-    stroke-dashoffset: -288.4484661616;
-    transform: rotate(4.75turn);
+@keyframes ultra-loader-spin-reverse {
+  to {
+    transform: rotate(-360deg);
   }
 }
 
-@keyframes ring4_ {
-  from {
-    stroke-dashoffset: -253.9600625988;
-    transform: rotate(-0.25turn);
-    animation-timing-function: ease-in;
+@keyframes ultra-loader-logo-pulse {
+  0%,
+  100% {
+    transform: scale(1);
   }
 
-  23% {
-    stroke-dashoffset: -63.61725015;
-    transform: rotate(1turn);
-    animation-timing-function: ease-out;
-  }
-
-  46%, 50% {
-    stroke-dashoffset: -253.9600625988;
-    transform: rotate(2.25turn);
-    animation-timing-function: ease-in;
-  }
-
-  73% {
-    stroke-dashoffset: -63.61725015;
-    transform: rotate(3.5turn);
-    animation-timing-function: ease-out;
-  }
-
-  96%, to {
-    stroke-dashoffset: -253.9600625988;
-    transform: rotate(4.75turn);
+  50% {
+    transform: scale(1.035);
   }
 }
 
-@keyframes ring5_ {
-  from {
-    stroke-dashoffset: -225.7422778656;
-    transform: rotate(-0.25turn);
-    animation-timing-function: ease-in;
+@keyframes ultra-loader-halo {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.96);
   }
 
-  23% {
-    stroke-dashoffset: -56.5486668;
-    transform: rotate(1turn);
-    animation-timing-function: ease-out;
-  }
-
-  46%, 50% {
-    stroke-dashoffset: -225.7422778656;
-    transform: rotate(2.25turn);
-    animation-timing-function: ease-in;
-  }
-
-  73% {
-    stroke-dashoffset: -56.5486668;
-    transform: rotate(3.5turn);
-    animation-timing-function: ease-out;
-  }
-
-  96%, to {
-    stroke-dashoffset: -225.7422778656;
-    transform: rotate(4.75turn);
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
   }
 }
 
-@keyframes ring6_ {
-  from {
-    stroke-dashoffset: -203.795111962;
-    transform: rotate(-0.25turn);
-    animation-timing-function: ease-in;
+@keyframes ultra-loader-dot {
+  0%,
+  100% {
+    background: rgba(255, 255, 255, 0.26);
+    transform: translateY(0);
+    box-shadow: none;
   }
 
-  23% {
-    stroke-dashoffset: -51.05087975;
-    transform: rotate(1turn);
-    animation-timing-function: ease-out;
+  40% {
+    background: var(--ultra-orange);
+    transform: translateY(-3px);
+    box-shadow: 0 0 14px rgba(229, 69, 37, 0.80);
+  }
+}
+
+@keyframes ultra-loader-ambient {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
   }
 
-  46%, 50% {
-    stroke-dashoffset: -203.795111962;
-    transform: rotate(2.25turn);
-    animation-timing-function: ease-in;
+  50% {
+    transform: translate3d(-18px, 22px, 0) scale(1.08);
+  }
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Accesibilidad / Reduced motion
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  .ultra-loader,
+  .ultra-loader__ambient,
+  .ultra-loader__halo,
+  .ultra-loader__ring,
+  .ultra-loader__logo-wrap,
+  .ultra-loader__dots span {
+    animation: none;
+  }
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Responsive
+   ========================================================================== */
+
+@media (max-width: 520px) {
+  .ultra-loader__orb {
+    width: 150px;
+    height: 150px;
   }
 
-  73% {
-    stroke-dashoffset: -51.05087975;
-    transform: rotate(3.5turn);
-    animation-timing-function: ease-out;
+  .ultra-loader__logo-wrap {
+    width: 88px;
+    height: 88px;
   }
 
-  96%, to {
-    stroke-dashoffset: -203.795111962;
-    transform: rotate(4.75turn);
+  .ultra-loader__logo {
+    width: 60px;
+    height: 60px;
+  }
+
+  .ultra-loader__copy p {
+    font-size: 13px;
   }
 }

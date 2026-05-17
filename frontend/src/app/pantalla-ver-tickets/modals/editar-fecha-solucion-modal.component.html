@@ -1,22 +1,67 @@
-<h2 mat-dialog-title>Editar Fecha de Solución</h2>
-<div mat-dialog-content>
-  <mat-form-field appearance="fill" class="w-full mb-2">
+<!-- frontend/src/app/pantalla-ver-tickets/modals/editar-fecha-solucion-modal.component.html -->
+
+<!-- ==========================================================================
+     Suite Ultra UI v1 - Modal editar fecha solución
+     ========================================================================== -->
+
+<div mat-dialog-title class="fecha-modal-title">
+  <span class="fecha-modal-title__icon">📅</span>
+
+  <span class="fecha-modal-title__text">
+    <strong>Editar fecha de solución</strong>
+    <small>Actualiza la fecha compromiso y registra el motivo del cambio.</small>
+  </span>
+</div>
+
+<div mat-dialog-content class="fecha-modal-content">
+  <div class="fecha-modal-notice">
+    <strong>Motivo obligatorio</strong>
+    <span>
+      Cada cambio queda registrado en el historial del ticket para mantener trazabilidad.
+    </span>
+  </div>
+
+  <mat-form-field appearance="fill" class="w-full">
     <mat-label>Nueva fecha solución</mat-label>
-    <input matInput [matDatepicker]="picker" [(ngModel)]="nuevaFecha" autocomplete="off" />
+    <input
+      matInput
+      [matDatepicker]="picker"
+      [(ngModel)]="nuevaFecha"
+      autocomplete="off"
+    />
     <mat-datepicker-toggle matSuffix [for]="picker"></mat-datepicker-toggle>
     <mat-datepicker #picker></mat-datepicker>
   </mat-form-field>
 
   <mat-form-field appearance="fill" class="w-full">
     <mat-label>Motivo del cambio</mat-label>
-    <textarea matInput rows="3" [(ngModel)]="motivo"></textarea>
+    <textarea
+      matInput
+      rows="3"
+      [(ngModel)]="motivo"
+      placeholder="Ej. Se ajusta fecha por espera de proveedor, refacción o agenda operativa."
+    ></textarea>
   </mat-form-field>
 </div>
-<div mat-dialog-actions align="end" class="mt-2">
-  <button mat-flat-button color="primary" (click)="guardar()" [disabled]="loading">
-    Guardar
-  </button>
-  <button mat-button color="warn" (click)="cerrar()" [disabled]="loading">
+
+<div mat-dialog-actions align="end" class="fecha-modal-actions">
+  <button
+    mat-button
+    type="button"
+    class="fecha-modal-actions__cancel"
+    (click)="cerrar()"
+    [disabled]="loading"
+  >
     Cancelar
+  </button>
+
+  <button
+    mat-flat-button
+    type="button"
+    class="fecha-modal-actions__save"
+    (click)="guardar()"
+    [disabled]="loading"
+  >
+    Guardar cambio
   </button>
 </div>

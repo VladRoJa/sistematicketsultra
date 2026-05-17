@@ -999,3 +999,528 @@
     height: 32px;
   }
 }
+
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Track Dashboard polish pass
+   ========================================================================== */
+
+.track-dashboard-page {
+  min-height: calc(100vh - 72px);
+  padding: 18px;
+  gap: 16px;
+  background:
+    radial-gradient(circle at top left, rgba(229, 69, 37, 0.08), transparent 28%),
+    var(--ultra-bg);
+  color: var(--ultra-gray-900);
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Cards / Shell
+   ========================================================================== */
+
+.track-placeholder-card {
+  border: 1px solid var(--ultra-gray-200);
+  border-radius: var(--ultra-radius-xl);
+  background: var(--ultra-surface);
+  box-shadow: var(--ultra-shadow-md);
+}
+
+.track-topbar {
+  padding: 20px 22px;
+  background:
+    radial-gradient(circle at top right, rgba(229, 69, 37, 0.13), transparent 32%),
+    linear-gradient(135deg, var(--ultra-surface), var(--ultra-gray-50));
+}
+
+.track-kicker {
+  color: var(--ultra-orange);
+  font-weight: 900;
+}
+
+.track-topbar__intro h1,
+.track-dashboard-header h1 {
+  color: var(--ultra-gray-900);
+  font-weight: 900;
+  letter-spacing: -0.035em;
+}
+
+.track-subtitle,
+.card-title-block p,
+.track-topbar__mode,
+.track-topbar__mode-value {
+  color: var(--ultra-gray-600);
+}
+
+.track-topbar__mode-label {
+  color: var(--ultra-gray-900);
+  font-weight: 900;
+}
+
+.track-topbar__mode-value strong {
+  color: var(--ultra-orange);
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Inputs / Selects
+   ========================================================================== */
+
+.track-field label {
+  color: var(--ultra-gray-700);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.track-field input,
+.track-field select {
+  border: 0;
+  border-bottom: 2px solid var(--ultra-gray-300);
+  border-radius: 14px 14px 8px 8px;
+  background: var(--ultra-gray-50);
+  color: var(--ultra-gray-900);
+  font-weight: 800;
+  outline: none;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    background-color 0.18s ease;
+}
+
+.track-field input:hover,
+.track-field select:hover {
+  border-bottom-color: rgba(229, 69, 37, 0.55);
+  background: #fff7f4;
+}
+
+.track-field input:focus,
+.track-field select:focus {
+  border-bottom-color: var(--ultra-orange);
+  box-shadow: 0 0 0 3px rgba(229, 69, 37, 0.12);
+  background: var(--ultra-surface);
+}
+
+.track-field input:disabled,
+.track-field select:disabled {
+  background: var(--ultra-gray-100);
+  color: var(--ultra-gray-500);
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Botones principales
+   ========================================================================== */
+
+.primary-button,
+.secondary-button,
+.track-column-groups__button,
+.track-active-sort-button,
+.track-date-control__nav-btn {
+  border-radius: 999px;
+  font-weight: 900;
+}
+
+.primary-button {
+  background: var(--ultra-orange);
+  color: var(--ultra-surface);
+  box-shadow: 0 10px 20px rgba(229, 69, 37, 0.22);
+}
+
+.primary-button:hover:not(:disabled) {
+  filter: brightness(0.96);
+  box-shadow: 0 14px 28px rgba(229, 69, 37, 0.28);
+}
+
+.secondary-button {
+  color: var(--ultra-gray-800);
+  background: var(--ultra-gray-50);
+  border: 1px solid var(--ultra-gray-200);
+}
+
+.secondary-button:hover:not(:disabled) {
+  background: var(--ultra-gray-100);
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Navegación de fecha
+   ========================================================================== */
+
+.track-date-control__nav-btn {
+  border-color: rgba(229, 69, 37, 0.24);
+  background: var(--ultra-orange-soft);
+  color: var(--ultra-orange);
+  box-shadow: 0 4px 10px rgba(229, 69, 37, 0.12);
+}
+
+.track-date-control__nav-btn:hover:not(:disabled) {
+  background: rgba(229, 69, 37, 0.16);
+  border-color: rgba(229, 69, 37, 0.36);
+  color: var(--ultra-orange);
+  box-shadow: 0 6px 16px rgba(229, 69, 37, 0.18);
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Feedback
+   ========================================================================== */
+
+.track-feedback {
+  border-radius: var(--ultra-radius-lg);
+  background: var(--ultra-danger-soft);
+  border: 1px solid rgba(220, 38, 38, 0.22);
+}
+
+.track-feedback p {
+  color: #991b1b;
+  font-weight: 800;
+}
+
+.track-feedback.success {
+  background: var(--ultra-success-soft);
+  border-color: rgba(22, 163, 74, 0.22);
+}
+
+.track-feedback.success p {
+  color: var(--ultra-success);
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Summary cards
+   ========================================================================== */
+
+.summary-grid {
+  gap: 12px;
+}
+
+.summary-card {
+  border: 1px solid var(--ultra-gray-200);
+  border-radius: var(--ultra-radius-lg);
+  background: var(--ultra-surface);
+  box-shadow: var(--ultra-shadow-sm);
+}
+
+.summary-card__label {
+  color: var(--ultra-gray-600);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.summary-card__value {
+  color: var(--ultra-gray-900);
+  font-weight: 900;
+}
+
+.summary-card--default,
+.summary-card--neutral {
+  background: var(--ultra-surface);
+  border-color: var(--ultra-gray-200);
+}
+
+.summary-card--success {
+  background: var(--ultra-success-soft);
+  border-color: rgba(22, 163, 74, 0.22);
+}
+
+.summary-card--warning {
+  background: var(--ultra-warning-soft);
+  border-color: rgba(245, 158, 11, 0.24);
+}
+
+.summary-card--danger {
+  background: var(--ultra-danger-soft);
+  border-color: rgba(220, 38, 38, 0.22);
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Resultados / grupos de columnas
+   ========================================================================== */
+
+.track-results-card {
+  gap: 14px;
+}
+
+.card-title-block h2 {
+  color: var(--ultra-gray-900);
+  font-weight: 900;
+}
+
+.card-title-block p strong {
+  color: var(--ultra-orange);
+}
+
+.track-column-groups {
+  gap: 7px;
+}
+
+.track-column-groups__button {
+  min-width: auto;
+  height: 36px;
+  padding: 0 13px;
+  border: 1px solid var(--ultra-gray-200);
+  background: var(--ultra-gray-50);
+  color: var(--ultra-gray-700);
+  font-size: 12px;
+  box-shadow: none;
+}
+
+.track-column-groups__button:hover:not(:disabled) {
+  background: var(--ultra-gray-100);
+  border-color: var(--ultra-gray-300);
+  color: var(--ultra-gray-900);
+}
+
+.track-column-groups__button--active {
+  background: var(--ultra-orange-soft);
+  border-color: rgba(229, 69, 37, 0.34);
+  color: var(--ultra-orange);
+  box-shadow: inset 0 0 0 1px rgba(229, 69, 37, 0.12);
+}
+
+.track-column-groups__button--active:hover:not(:disabled) {
+  background: rgba(229, 69, 37, 0.16);
+  border-color: rgba(229, 69, 37, 0.42);
+  color: var(--ultra-orange);
+}
+
+.track-active-sort-button {
+  border-color: rgba(229, 69, 37, 0.24);
+  background: var(--ultra-orange-soft);
+  color: var(--ultra-orange);
+  box-shadow: 0 6px 16px rgba(229, 69, 37, 0.10);
+}
+
+.track-active-sort-button span {
+  color: var(--ultra-gray-600);
+}
+
+.track-active-sort-button:hover {
+  background: rgba(229, 69, 37, 0.16);
+  border-color: rgba(229, 69, 37, 0.36);
+  color: var(--ultra-orange);
+  box-shadow: 0 8px 20px rgba(229, 69, 37, 0.16);
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Loading / Empty
+   ========================================================================== */
+
+.track-loading,
+.track-empty-state {
+  border: 1px dashed var(--ultra-gray-300);
+  border-radius: var(--ultra-radius-lg);
+  background: var(--ultra-gray-50);
+}
+
+.track-loading p,
+.track-empty-state p {
+  color: var(--ultra-gray-600);
+  font-weight: 800;
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Tabla Track
+   ========================================================================== */
+
+.track-table-wrapper {
+  border: 1px solid var(--ultra-gray-200);
+  border-radius: var(--ultra-radius-lg);
+  background: var(--ultra-surface);
+  box-shadow: var(--ultra-shadow-sm);
+}
+
+.track-table {
+  background: var(--ultra-surface);
+}
+
+.track-table thead th {
+  background:
+    linear-gradient(135deg, var(--ultra-black-90), var(--ultra-charcoal));
+  color: var(--ultra-surface);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+.track-table thead .cell-sticky {
+  background:
+    linear-gradient(135deg, var(--ultra-black-90), var(--ultra-charcoal));
+}
+
+.track-table tbody td {
+  color: var(--ultra-gray-800);
+  border-bottom: 1px solid var(--ultra-gray-200);
+}
+
+.track-table tbody tr:hover {
+  background: #fff7f4;
+}
+
+.track-row--clickable:hover td {
+  background: #fff7f4;
+}
+
+.track-row--clickable:focus-visible td {
+  outline: 2px solid rgba(229, 69, 37, 0.45);
+  outline-offset: -2px;
+  background: #fff7f4;
+}
+
+.track-row--clickable .branch-link-cell {
+  color: var(--ultra-orange);
+  font-weight: 900;
+}
+
+.cell-sticky {
+  background: var(--ultra-surface);
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Sort headers
+   ========================================================================== */
+
+.track-sort-header {
+  color: inherit;
+  font-weight: 900;
+}
+
+.track-sort-header:hover {
+  color: var(--ultra-orange);
+}
+
+.track-sort-header span {
+  color: rgba(255, 255, 255, 0.68);
+}
+
+.track-sort-header--active,
+.track-sort-header--active span {
+  color: var(--ultra-orange);
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Badges / progreso
+   ========================================================================== */
+
+.progress-badge {
+  min-width: 78px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.progress-badge--success {
+  background: var(--ultra-success-soft);
+  color: var(--ultra-success);
+}
+
+.progress-badge--warning {
+  background: var(--ultra-warning-soft);
+  color: #92400e;
+}
+
+.progress-badge--danger {
+  background: var(--ultra-danger-soft);
+  color: #991b1b;
+}
+
+.progress-badge--neutral {
+  background: var(--ultra-gray-100);
+  color: var(--ultra-gray-700);
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Filas especiales
+   ========================================================================== */
+
+.track-row[data-row-kind='subtotal'] td {
+  background: var(--ultra-orange-soft);
+  color: #7c2d12;
+  border-top: 2px solid rgba(229, 69, 37, 0.28);
+  border-bottom: 2px solid rgba(229, 69, 37, 0.28);
+}
+
+.track-row[data-row-kind='total'] td {
+  background:
+    linear-gradient(135deg, var(--ultra-black-90), var(--ultra-charcoal));
+  color: var(--ultra-surface);
+  border-top: 2px solid rgba(229, 69, 37, 0.45);
+  border-bottom: 2px solid rgba(229, 69, 37, 0.45);
+}
+
+.track-row[data-row-kind='subtotal'] .cell-sticky {
+  background: var(--ultra-orange-soft);
+}
+
+.track-row[data-row-kind='total'] .cell-sticky {
+  background:
+    linear-gradient(135deg, var(--ultra-black-90), var(--ultra-charcoal));
+  color: var(--ultra-surface);
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Responsive polish
+   ========================================================================== */
+
+@media (max-width: 700px) {
+  .track-dashboard-page {
+    padding: 14px;
+  }
+
+  .track-placeholder-card {
+    border-radius: var(--ultra-radius-lg);
+  }
+
+  .track-topbar {
+    padding: 18px;
+  }
+
+  .track-column-groups__button {
+    width: 100%;
+  }
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Fix contraste fila Total General Track
+   ========================================================================== */
+
+.track-table tbody .track-row[data-row-kind='total'] td,
+.track-table tbody .track-row[data-row-kind='total'] .cell-sticky {
+  background:
+    linear-gradient(135deg, var(--ultra-black-90), var(--ultra-charcoal)) !important;
+  color: var(--ultra-surface) !important;
+  font-weight: 900;
+  border-top: 2px solid rgba(229, 69, 37, 0.55);
+  border-bottom: 2px solid rgba(229, 69, 37, 0.55);
+}
+
+.track-table tbody .track-row[data-row-kind='total'] td * {
+  color: inherit;
+}
+
+.track-table tbody .track-row[data-row-kind='total'] .progress-badge {
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--ultra-surface) !important;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+}
+
+.track-table tbody .track-row[data-row-kind='total'] .progress-badge--success {
+  background: rgba(22, 163, 74, 0.22);
+  color: #bbf7d0 !important;
+  border-color: rgba(187, 247, 208, 0.28);
+}
+
+.track-table tbody .track-row[data-row-kind='total'] .progress-badge--warning {
+  background: rgba(245, 158, 11, 0.22);
+  color: #fde68a !important;
+  border-color: rgba(253, 230, 138, 0.30);
+}
+
+.track-table tbody .track-row[data-row-kind='total'] .progress-badge--danger {
+  background: rgba(220, 38, 38, 0.24);
+  color: #fecaca !important;
+  border-color: rgba(254, 202, 202, 0.30);
+}
+
+.track-table tbody .track-row[data-row-kind='total'] .progress-badge--neutral {
+  background: rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.86) !important;
+  border-color: rgba(255, 255, 255, 0.20);
+}

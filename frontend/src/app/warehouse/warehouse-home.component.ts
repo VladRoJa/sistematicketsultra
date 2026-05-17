@@ -5,8 +5,16 @@ import { CommonModule } from '@angular/common';
 import { Component, ElementRef, OnInit, ViewChild, inject } from '@angular/core';
 
 
-import { WarehouseUploadDetail, WarehouseUploadListItem, WarehouseUploadsService, WarehouseCreateUploadRequest,WarehouseUploadAuditItem,} from './services/warehouse-uploads.service';
-import { WarehouseCatalogOption, WarehouseCatalogsService, WarehouseReportTypeCatalogOption, } from './services/warehouse-catalogs.service';
+import {
+  WarehouseCreateUploadRequest,
+  WarehouseUploadAuditItem,
+  WarehouseUploadDatePreset,
+  WarehouseUploadDetail,
+  WarehouseUploadListItem,
+  WarehouseUploadListParams,
+  WarehouseUploadStatusFilter,
+  WarehouseUploadsService,
+} from './services/warehouse-uploads.service';import { WarehouseCatalogOption, WarehouseCatalogsService, WarehouseReportTypeCatalogOption, } from './services/warehouse-catalogs.service';
 
 
 
@@ -35,6 +43,15 @@ interface WarehouseSelectedReportTypeContext {
 interface WarehouseUploadAuditRow extends WarehouseUploadAuditItem {
   created_at_display: string;
   details_display: string;
+}
+
+interface WarehouseUploadListFilterState {
+  date_preset: WarehouseUploadDatePreset;
+  date_from: string;
+  date_to: string;
+  report_type_key: string;
+  status: WarehouseUploadStatusFilter;
+  search: string;
 }
 
 @Component({
@@ -78,28 +95,154 @@ export class WarehouseHomeComponent implements OnInit {
   isLoading = false;
   errorMessage = '';
 
+  uploadListFilters: WarehouseUploadListFilterState = {
+    date_preset: 'today',
+    date_from: '',
+    date_to: '',
+    report_type_key: '',
+    status: 'ALL',
+    search: '',
+  };
+
+  uploadListPage = 1;
+  uploadListPageSize = 25;
+  uploadListTotal = 0;
+  uploadListTotalPages = 0;
+  uploadListHasNext = false;
+  uploadListHasPrev = false;
+
   ngOnInit(): void {
     this.loadCatalogs();
     this.loadUploads();
   }
 
-  loadUploads(): void {
+  loadUploads(page: number = this.uploadListPage): void {
     this.isLoading = true;
     this.errorMessage = '';
+    this.uploadListPage = Math.max(1, page);
 
-    this.warehouseUploadsService.getUploads().subscribe({
+    const params = this.buildUploadListParams();
+
+    this.warehouseUploadsService.getUploads(params).subscribe({
       next: (response) => {
         const items = response.items || [];
+
         this.uploads = items.map((item) => this.mapUploadRow(item));
+        this.uploadListPage = response.page || this.uploadListPage;
+        this.uploadListPageSize = response.page_size || this.uploadListPageSize;
+        this.uploadListTotal = response.total || 0;
+        this.uploadListTotalPages = response.total_pages || 0;
+        this.uploadListHasNext = !!response.has_next;
+        this.uploadListHasPrev = !!response.has_prev;
+
         this.isLoading = false;
       },
       error: () => {
         this.uploads = [];
+        this.uploadListTotal = 0;
+        this.uploadListTotalPages = 0;
+        this.uploadListHasNext = false;
+        this.uploadListHasPrev = false;
         this.errorMessage = 'No se pudo cargar el histórico de Warehouse.';
         this.isLoading = false;
       },
     });
   }
+
+  private buildUploadListParams(): WarehouseUploadListParams {
+  return {
+    page: this.uploadListPage,
+    page_size: this.uploadListPageSize,
+    date_preset: this.uploadListFilters.date_preset,
+    date_from: this.uploadListFilters.date_preset === 'custom'
+      ? this.uploadListFilters.date_from
+      : '',
+    date_to: this.uploadListFilters.date_preset === 'custom'
+      ? this.uploadListFilters.date_to
+      : '',
+    report_type_key: this.uploadListFilters.report_type_key,
+    status: this.uploadListFilters.status,
+    search: this.uploadListFilters.search.trim(),
+  };
+}
+
+applyUploadListFilters(): void {
+  this.loadUploads(1);
+}
+
+clearUploadListFilters(): void {
+  this.uploadListFilters = {
+    date_preset: 'today',
+    date_from: '',
+    date_to: '',
+    report_type_key: '',
+    status: 'ALL',
+    search: '',
+  };
+
+  this.loadUploads(1);
+}
+
+goToPreviousUploadsPage(): void {
+  if (!this.uploadListHasPrev || this.isLoading) {
+    return;
+  }
+
+  this.loadUploads(this.uploadListPage - 1);
+}
+
+goToNextUploadsPage(): void {
+  if (!this.uploadListHasNext || this.isLoading) {
+    return;
+  }
+
+  this.loadUploads(this.uploadListPage + 1);
+}
+
+shouldShowCustomUploadDateRange(): boolean {
+  return this.uploadListFilters.date_preset === 'custom';
+}
+
+getUploadListSummary(): string {
+  if (this.uploadListTotal === 0) {
+    return 'Sin uploads encontrados';
+  }
+
+  const visibleCount = this.uploads.length;
+  const start = ((this.uploadListPage - 1) * this.uploadListPageSize) + 1;
+  const end = start + visibleCount - 1;
+
+  return `${start}-${end} de ${this.uploadListTotal} uploads`;
+}
+
+setUploadListDatePreset(value: string): void {
+  this.uploadListFilters.date_preset = value as WarehouseUploadDatePreset;
+
+  if (this.uploadListFilters.date_preset !== 'custom') {
+    this.uploadListFilters.date_from = '';
+    this.uploadListFilters.date_to = '';
+  }
+}
+
+setUploadListStatus(value: string): void {
+  this.uploadListFilters.status = value as WarehouseUploadStatusFilter;
+}
+
+setUploadListReportType(value: string): void {
+  this.uploadListFilters.report_type_key = value;
+}
+
+setUploadListSearch(value: string): void {
+  this.uploadListFilters.search = value;
+}
+
+setUploadListDateFrom(value: string): void {
+  this.uploadListFilters.date_from = value;
+}
+
+setUploadListDateTo(value: string): void {
+  this.uploadListFilters.date_to = value;
+}
 
   private mapUploadRow(item: WarehouseUploadListItem): WarehouseUploadRow {
     return {

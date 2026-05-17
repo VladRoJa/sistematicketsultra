@@ -1,15 +1,42 @@
-<!-- frontend-angular\src\app\shared\dialogo-confirmacion\dialogo-confirmacion.component.html -->
+<!-- frontend-angular/src/app/shared/dialogo-confirmacion/dialogo-confirmacion.component.html -->
 
+<!-- ==========================================================================
+     Suite Ultra UI v1 - Diálogo de confirmación
+     ========================================================================== -->
 
-<h2 mat-dialog-title>{{ data.titulo }}</h2>
-<mat-dialog-content>
-  {{ data.mensaje }}
-</mat-dialog-content>
-<mat-dialog-actions align="end">
-  <button mat-button (click)="cancelar()">
-    {{ data.textoCancelar || 'Cancelar' }}
-  </button>
-  <button mat-raised-button color="primary" (click)="confirmar()">
-    {{ data.textoAceptar || 'Aceptar' }}
-  </button>
-</mat-dialog-actions>
+<section class="confirm-dialog">
+  <header mat-dialog-title class="confirm-dialog__header">
+    <span class="confirm-dialog__icon">
+      <mat-icon>help_outline</mat-icon>
+    </span>
+
+    <span class="confirm-dialog__title">
+      <strong>{{ data.titulo }}</strong>
+      <small>Confirma la acción antes de continuar.</small>
+    </span>
+  </header>
+
+  <mat-dialog-content class="confirm-dialog__content">
+    <p>{{ data.mensaje }}</p>
+  </mat-dialog-content>
+
+  <mat-dialog-actions align="end" class="confirm-dialog__actions">
+    <button
+      mat-button
+      type="button"
+      class="confirm-dialog__cancel"
+      (click)="cancelar()"
+    >
+      {{ data.textoCancelar || 'Cancelar' }}
+    </button>
+
+    <button
+      mat-raised-button
+      type="button"
+      class="confirm-dialog__accept"
+      (click)="confirmar()"
+    >
+      {{ data.textoAceptar || 'Aceptar' }}
+    </button>
+  </mat-dialog-actions>
+</section>

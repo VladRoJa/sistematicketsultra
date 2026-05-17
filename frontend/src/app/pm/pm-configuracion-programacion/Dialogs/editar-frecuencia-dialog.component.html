@@ -1,30 +1,52 @@
-<h2 mat-dialog-title>Editar frecuencia</h2>
+<!-- frontend/src/app/pm/pm-configuracion-programacion/Dialogs/editar-frecuencia-dialog.component.html -->
 
-<mat-dialog-content class="editar-frecuencia-dialog-content">
-  <div class="editar-frecuencia-dialog-equipo">
-    <strong>Equipo:</strong> {{ data.equipoLabel }}
-  </div>
+<section class="editar-frecuencia-dialog">
+  <header mat-dialog-title class="editar-frecuencia-dialog__header">
+    <div>
+      <p>Programación PM</p>
+      <h2>Editar frecuencia</h2>
+    </div>
+  </header>
 
-  <mat-form-field appearance="fill" class="editar-frecuencia-dialog-field">
-    <mat-label>Nueva frecuencia (días)</mat-label>
-    <input
-      matInput
-      type="number"
-      [(ngModel)]="frecuencia"
-      min="1">
-  </mat-form-field>
+  <mat-dialog-content class="editar-frecuencia-dialog__content">
+    <div class="editar-frecuencia-dialog__notice">
+      <span>Equipo</span>
+      <strong>{{ data.equipoLabel }}</strong>
+    </div>
 
-  <div class="editar-frecuencia-dialog-error" *ngIf="mostrarError">
-    La frecuencia debe ser un entero mayor a 0.
-  </div>
-</mat-dialog-content>
+    <mat-form-field appearance="fill" class="editar-frecuencia-dialog__field">
+      <mat-label>Nueva frecuencia</mat-label>
+      <input
+        matInput
+        type="number"
+        [(ngModel)]="frecuencia"
+        min="1"
+      />
+      <span matTextSuffix>días</span>
+    </mat-form-field>
 
-<mat-dialog-actions align="end">
-  <button mat-button type="button" (click)="cancelar()">
-    Cancelar
-  </button>
+    <div class="editar-frecuencia-dialog__error" *ngIf="mostrarError">
+      La frecuencia debe ser un entero mayor a 0.
+    </div>
+  </mat-dialog-content>
 
-  <button mat-raised-button color="primary" type="button" (click)="guardar()">
-    Guardar
-  </button>
-</mat-dialog-actions>   
+  <mat-dialog-actions align="end" class="editar-frecuencia-dialog__actions">
+    <button
+      mat-button
+      type="button"
+      class="editar-frecuencia-dialog__cancel"
+      (click)="cancelar()"
+    >
+      Cancelar
+    </button>
+
+    <button
+      mat-raised-button
+      type="button"
+      class="editar-frecuencia-dialog__save"
+      (click)="guardar()"
+    >
+      Guardar
+    </button>
+  </mat-dialog-actions>
+</section>

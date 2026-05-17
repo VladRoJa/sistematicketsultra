@@ -1,69 +1,126 @@
 <!-- src/app/layout/layout.component.html -->
 
-<mat-toolbar color="primary" class="main-toolbar">
-  <span class="logo">Ultra Gym</span>
+<!-- ==========================================================================
+     Suite Ultra UI v1 - Header principal y navegación
+     ========================================================================== -->
 
-  <div class="nav-wrapper">
-    <div
-      class="nav-container"
-      (mouseleave)="programarOcultarSubmenu()"
-      (mouseenter)="cancelarOcultarSubmenu()"
+<header
+  class="suite-header"
+  (mouseenter)="cancelarOcultarSubmenu()"
+  (mouseleave)="programarOcultarSubmenu()"
+>
+  <div class="suite-header__bar">
+    <!-- Marca -->
+    <button
+      type="button"
+      class="suite-brand"
+      (click)="navegarConCambio('/ver-tickets', 'Tickets')"
+      aria-label="Ir al inicio de Suite Ultra"
     >
-      <!-- Indicador principal -->
-      <div id="indicator" class="nav-indicator" [ngStyle]="estiloIndicador"></div>
+      <span class="suite-brand__mark">U</span>
 
-      <!-- Ítems del menú principal -->
-      <div
+      <span class="suite-brand__text">
+        <strong>Ultra Gym</strong>
+        <small>Suite Ultra</small>
+      </span>
+    </button>
+
+    <!-- Menú principal -->
+    <nav
+      class="suite-main-nav"
+      aria-label="Navegación principal"
+    >
+      <button
         *ngFor="let item of menuItems"
-        class="nav-item"
-        [class.active]="item.label === currentSubmenu"
-        (mouseenter)="moverIndicador($event); cambiarMenu(item.label)"
-        (click)="navegarConCambio(item.path, item.label)"
-        tabindex="0"
-        role="button"
+        type="button"
+        class="suite-main-nav__item"
+        [class.suite-main-nav__item--active]="isMainMenuActive(item.label)"
+        (mouseenter)="onMainMenuMouseEnter($event, item)"
+        (click)="onMainMenuClick(item)"
         [attr.aria-label]="item.label"
       >
-        {{ item.label }}
-      </div>
+        <mat-icon class="suite-main-nav__icon">
+          {{ getMenuIcon(item.label) }}
+        </mat-icon>
+
+        <span>{{ item.label }}</span>
+      </button>
+    </nav>
+
+    <!-- Usuario / sesión -->
+    <div class="suite-user-area">
+      <span
+        class="suite-user-area__label"
+        *ngIf="usuarioLabel"
+        [title]="usuarioLabel"
+      >
+        {{ usuarioLabel }}
+      </span>
+
+      <button
+        mat-icon-button
+        type="button"
+        class="suite-user-area__logout"
+        (click)="cerrarSesion()"
+        aria-label="Cerrar sesión"
+        title="Cerrar sesión"
+      >
+        <mat-icon>logout</mat-icon>
+      </button>
     </div>
   </div>
 
-  
-  <span class="usuario-label" *ngIf="usuarioLabel">{{ usuarioLabel }}</span>
-
-  <!-- Botón de cerrar sesión -->
-  <button mat-icon-button (click)="cerrarSesion()" class="logout-icon" aria-label="Cerrar sesión">
-    <mat-icon>logout</mat-icon>
-  </button>
-</mat-toolbar>
-
-<!-- Submenú flotante debajo del menú principal -->
-<div
-  *ngIf="submenuVisible && submenuActual.length > 0"
-  class="submenu nav-container"
-  (mouseenter)="cancelarOcultarSubmenu()"
-  (mouseleave)="ocultarSubmenu()"
->
-  <div id="submenu-indicator" class="nav-indicator" [ngStyle]="estiloIndicadorSubmenu"></div>
-
+  <!-- Submenú conectado al módulo activo -->
   <div
-    *ngFor="let sub of submenuActual"
-    class="nav-item"
-    [class.active]="submenuActivo[currentSubmenu] === sub.label"
-    (mouseenter)="moverIndicadorSubmenu($event)"
-    (click)="seleccionarSubmenu(sub.label, sub.path)"
-    tabindex="0"
-    role="button"
-    [attr.aria-label]="sub.label"
+    class="suite-subnav"
+    *ngIf="hasVisibleSubmenu()"
   >
-    {{ sub.label }}
+    <div class="suite-subnav__panel">
+      <div class="suite-subnav__header">
+        <span class="suite-subnav__eyebrow">Accesos del módulo</span>
+        <strong>{{ currentSubmenu }}</strong>
+      </div>
+
+      <div class="suite-subnav__grid">
+        <button
+          *ngFor="let sub of submenuActual"
+          type="button"
+          class="suite-subnav-card"
+          [class.suite-subnav-card--active]="submenuActivo[currentSubmenu] === sub.label"
+          (mouseenter)="moverIndicadorSubmenu($event)"
+          (click)="seleccionarSubmenu(sub.label, sub.path)"
+          [attr.aria-label]="sub.label"
+        >
+          <span class="suite-subnav-card__icon">
+            <mat-icon>{{ getSubmenuIcon(sub.label) }}</mat-icon>
+          </span>
+
+          <span class="suite-subnav-card__content">
+            <strong>{{ sub.label }}</strong>
+            <small>{{ getSubmenuDescription(sub.label) }}</small>
+          </span>
+
+          <mat-icon class="suite-subnav-card__arrow">
+            chevron_right
+          </mat-icon>
+        </button>
+      </div>
+    </div>
   </div>
-</div>
+</header>
 
-<!-- Área principal de la app -->
-<router-outlet></router-outlet>
+<!-- ==========================================================================
+     Suite Ultra UI v1 - Área principal
+     ========================================================================== -->
 
-<!-- Botón flotante para reportar error o bug -->
+<main class="suite-main-content">
+  <router-outlet></router-outlet>
+</main>
+
+<!-- ==========================================================================
+     Suite Ultra UI v1 - Acción flotante para reporte de errores
+     ========================================================================== -->
+
 <button
   mat-fab
   color="warn"

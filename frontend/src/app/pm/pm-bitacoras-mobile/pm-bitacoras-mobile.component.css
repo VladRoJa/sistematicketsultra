@@ -1,1 +1,367 @@
-:host { display: block; padding: 12px; }
+/* ==========================================================================
+   Suite Ultra UI v1 - PM Bitácora Mobile
+   ========================================================================== */
+
+:host {
+  display: block;
+}
+
+.pm-mobile-page {
+  min-height: 100vh;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background:
+    radial-gradient(circle at top left, rgba(229, 69, 37, 0.10), transparent 30%),
+    var(--ultra-bg);
+  color: var(--ultra-gray-900);
+}
+
+/* ==========================================================================
+   Hero
+   ========================================================================== */
+
+.pm-mobile-hero {
+  padding: 20px;
+  border: 1px solid var(--ultra-gray-200);
+  border-radius: var(--ultra-radius-xl);
+  background:
+    radial-gradient(circle at top right, rgba(229, 69, 37, 0.14), transparent 34%),
+    linear-gradient(135deg, var(--ultra-surface), var(--ultra-gray-50));
+  box-shadow: var(--ultra-shadow-md);
+}
+
+.pm-mobile-eyebrow {
+  margin: 0 0 6px;
+  color: var(--ultra-orange);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.pm-mobile-hero h1 {
+  margin: 0;
+  color: var(--ultra-gray-900);
+  font-size: 26px;
+  line-height: 1.05;
+  font-weight: 900;
+  letter-spacing: -0.035em;
+}
+
+.pm-mobile-hero p {
+  margin: 10px 0 0;
+  color: var(--ultra-gray-600);
+  font-size: 13px;
+  line-height: 1.45;
+  font-weight: 700;
+}
+
+/* ==========================================================================
+   Form shell
+   ========================================================================== */
+
+.pm-mobile-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pm-mobile-card {
+  padding: 16px;
+  border: 1px solid var(--ultra-gray-200);
+  border-radius: var(--ultra-radius-xl);
+  background: var(--ultra-surface);
+  box-shadow: var(--ultra-shadow-sm);
+}
+
+.pm-mobile-section-header {
+  margin-bottom: 14px;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.pm-mobile-section-header > span {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ultra-orange);
+  color: var(--ultra-surface);
+  font-size: 14px;
+  font-weight: 900;
+  box-shadow: 0 8px 16px rgba(229, 69, 37, 0.24);
+}
+
+.pm-mobile-section-header h2 {
+  margin: 0;
+  color: var(--ultra-gray-900);
+  font-size: 17px;
+  line-height: 1.15;
+  font-weight: 900;
+}
+
+.pm-mobile-section-header p {
+  margin: 4px 0 0;
+  color: var(--ultra-gray-600);
+  font-size: 12px;
+  line-height: 1.35;
+  font-weight: 700;
+}
+
+.pm-mobile-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.pm-mobile-field {
+  width: 100%;
+}
+
+/* Material fields */
+.pm-mobile-page ::ng-deep .mat-mdc-form-field {
+  --mdc-filled-text-field-container-color: var(--ultra-gray-50);
+  --mdc-filled-text-field-label-text-color: var(--ultra-gray-600);
+  --mdc-filled-text-field-focus-label-text-color: var(--ultra-orange);
+  --mdc-filled-text-field-active-indicator-color: var(--ultra-gray-300);
+  --mdc-filled-text-field-focus-active-indicator-color: var(--ultra-orange);
+  --mdc-filled-text-field-hover-active-indicator-color: rgba(229, 69, 37, 0.55);
+}
+
+.pm-mobile-page ::ng-deep .mat-mdc-text-field-wrapper {
+  border-radius: 14px 14px 8px 8px;
+  overflow: hidden;
+}
+
+.pm-mobile-page ::ng-deep .mat-mdc-form-field-infix {
+  min-height: 50px;
+}
+
+.pm-mobile-page ::ng-deep .mat-mdc-input-element,
+.pm-mobile-page ::ng-deep .mat-mdc-select-value {
+  color: var(--ultra-gray-900);
+  font-weight: 800;
+}
+
+.pm-mobile-equipo-option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pm-mobile-equipo-option strong {
+  color: var(--ultra-gray-900);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.pm-mobile-equipo-option small {
+  color: var(--ultra-orange);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+/* ==========================================================================
+   Resultado radios
+   ========================================================================== */
+
+.pm-result-options {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.pm-result-option {
+  position: relative;
+  display: block;
+  cursor: pointer;
+}
+
+.pm-result-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.pm-result-option span {
+  min-height: 62px;
+  padding: 13px 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  border: 1px solid var(--ultra-gray-200);
+  border-radius: var(--ultra-radius-lg);
+  background: var(--ultra-gray-50);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.pm-result-option strong {
+  color: var(--ultra-gray-900);
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.pm-result-option small {
+  color: var(--ultra-gray-600);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.pm-result-option input:checked + span {
+  transform: translateY(-1px);
+  box-shadow: var(--ultra-shadow-sm);
+}
+
+.pm-result-option--ok input:checked + span {
+  border-color: rgba(22, 163, 74, 0.36);
+  background: var(--ultra-success-soft);
+}
+
+.pm-result-option--obs input:checked + span {
+  border-color: rgba(245, 158, 11, 0.36);
+  background: var(--ultra-warning-soft);
+}
+
+.pm-result-option--falla input:checked + span {
+  border-color: rgba(220, 38, 38, 0.36);
+  background: var(--ultra-danger-soft);
+}
+
+/* ==========================================================================
+   Checklist
+   ========================================================================== */
+
+.pm-checklist-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.pm-check-item {
+  position: relative;
+  min-height: 52px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--ultra-gray-200);
+  border-radius: var(--ultra-radius-lg);
+  background: var(--ultra-gray-50);
+  color: var(--ultra-gray-800);
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.pm-check-item input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--ultra-orange);
+}
+
+.pm-check-item:has(input:checked) {
+  border-color: rgba(229, 69, 37, 0.32);
+  background: var(--ultra-orange-soft);
+  color: var(--ultra-gray-900);
+}
+
+/* ==========================================================================
+   Save panel
+   ========================================================================== */
+
+.pm-mobile-save-panel {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  margin: 4px -14px -14px;
+  padding: 12px 14px 14px;
+  border-top: 1px solid var(--ultra-gray-200);
+  background:
+    linear-gradient(to top, var(--ultra-bg) 72%, rgba(248, 250, 252, 0));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pm-mobile-save-button {
+  width: 100%;
+  min-height: 50px;
+  border-radius: 999px !important;
+  background: var(--ultra-orange) !important;
+  color: var(--ultra-surface) !important;
+  font-size: 15px;
+  font-weight: 900 !important;
+  box-shadow: 0 12px 24px rgba(229, 69, 37, 0.26);
+}
+
+.pm-mobile-save-button:hover:not(:disabled) {
+  filter: brightness(0.96);
+}
+
+.pm-mobile-save-button:disabled {
+  opacity: 0.65;
+}
+
+.pm-mobile-success {
+  padding: 11px 12px;
+  border: 1px solid rgba(22, 163, 74, 0.22);
+  border-radius: var(--ultra-radius-lg);
+  background: var(--ultra-success-soft);
+  color: var(--ultra-success);
+  font-size: 13px;
+  font-weight: 900;
+  text-align: center;
+}
+
+/* ==========================================================================
+   Wider screens
+   ========================================================================== */
+
+@media (min-width: 720px) {
+  .pm-mobile-page {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 24px;
+  }
+
+  .pm-mobile-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .pm-result-options {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .pm-checklist-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .pm-mobile-save-panel {
+    margin: 4px 0 0;
+    padding: 0;
+    position: static;
+    background: transparent;
+    border-top: 0;
+  }
+}
+
+@media (max-width: 380px) {
+  .pm-checklist-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pm-mobile-hero h1 {
+    font-size: 23px;
+  }
+}

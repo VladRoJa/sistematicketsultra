@@ -1,12 +1,55 @@
-<!-- frontend-angular\src\app\shared\loader\loader.component.html -->
+<!-- frontend/src/app/shared/loader/loader.component.html -->
 
-<div class="loader-container">
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" height="128px" width="128px" class="pl">
-	<circle stroke-dashoffset="-376.4" stroke-dasharray="377 377" stroke-linecap="round" transform="rotate(-90,64,64)" stroke-width="8" stroke="hsl(3,90%,55%)" fill="none" r="60" cy="64" cx="64" class="pl__ring1"></circle>
-	<circle stroke-dashoffset="-329.3" stroke-dasharray="329.9 329.9" stroke-linecap="round" transform="rotate(-90,64,64)" stroke-width="7" stroke="hsl(13,90%,55%)" fill="none" r="52.5" cy="64" cx="64" class="pl__ring2"></circle>
-	<circle stroke-dashoffset="-288.6" stroke-dasharray="289 289" stroke-linecap="round" transform="rotate(-90,64,64)" stroke-width="6" stroke="hsl(23,90%,55%)" fill="none" r="46" cy="64" cx="64" class="pl__ring3"></circle>
-	<circle stroke-dashoffset="-254" stroke-dasharray="254.5 254.5" stroke-linecap="round" transform="rotate(-90,64,64)" stroke-width="5" stroke="hsl(33,90%,55%)" fill="none" r="40.5" cy="64" cx="64" class="pl__ring4"></circle>
-	<circle stroke-dashoffset="-225.8" stroke-dasharray="226.2 226.2" stroke-linecap="round" transform="rotate(-90,64,64)" stroke-width="4" stroke="hsl(43,90%,55%)" fill="none" r="36" cy="64" cx="64" class="pl__ring5"></circle>
-	<circle stroke-dashoffset="-203.9" stroke-dasharray="204.2 204.2" stroke-linecap="round" transform="rotate(-90,64,64)" stroke-width="3" stroke="hsl(53,90%,55%)" fill="none" r="32.5" cy="64" cx="64" class="pl__ring6"></circle>
-</svg>
-</div>
+<!-- ==========================================================================
+     Suite Ultra UI v1 - Loader global
+     ========================================================================== -->
+
+<section
+  class="ultra-loader"
+  role="status"
+  aria-live="polite"
+  aria-label="Cargando Suite Ultra"
+>
+  <div class="ultra-loader__ambient ultra-loader__ambient--one"></div>
+  <div class="ultra-loader__ambient ultra-loader__ambient--two"></div>
+
+  <div class="ultra-loader__content">
+    <div class="ultra-loader__orb" aria-hidden="true">
+      <span class="ultra-loader__halo ultra-loader__halo--outer"></span>
+      <span class="ultra-loader__halo ultra-loader__halo--inner"></span>
+      <span class="ultra-loader__ring ultra-loader__ring--primary"></span>
+      <span class="ultra-loader__ring ultra-loader__ring--secondary"></span>
+
+      <div class="ultra-loader__logo-wrap">
+        <svg
+          class="ultra-loader__logo"
+          viewBox="0 0 100 100"
+          xmlns="http://www.w3.org/2000/svg"
+          focusable="false"
+          aria-hidden="true"
+        >
+          <circle cx="50" cy="50" r="42" fill="var(--ultra-orange)" />
+          <path
+            d="M50 10 L72 10 L58 47 H80 L47 92 H28 L42 56 H20 Z"
+            fill="white"
+          />
+        </svg>
+      </div>
+    </div>
+
+    <div class="ultra-loader__copy">
+      <h1>
+        Cargando <span>Suite Ultra</span>
+      </h1>
+      <p>Preparando módulos y datos...</p>
+    </div>
+
+    <div class="ultra-loader__dots" aria-hidden="true">
+      <span></span>
+      <span></span>
+      <span></span>
+      <span></span>
+      <span></span>
+    </div>
+  </div>
+</section>

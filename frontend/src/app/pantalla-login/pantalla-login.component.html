@@ -2,48 +2,98 @@
 
 <app-loader *ngIf="cargando"></app-loader>
 
-<div *ngIf="!cargando" class="container">
-  <div class="left">
-    <form class="form" (ngSubmit)="onSubmit()" #loginForm="ngForm">
-      <div class="input-block">
-        <input
-          type="text"
-          id="usuario-login"
-          name="username"
-          class="input"
-          [(ngModel)]="username"
-          required
-          placeholder="Usuario"
-        />
+<!-- ==========================================================================
+     Suite Ultra UI v1 - Login
+     ========================================================================== -->
+
+<section *ngIf="!cargando" class="login-page">
+  <div class="login-shell">
+    <section class="login-card">
+      <div class="login-card__brand">
+        <div class="login-brand-mark">U</div>
+
+        <div>
+          <span class="login-eyebrow">Suite Ultra</span>
+          <h1>Bienvenido</h1>
+          <p>
+            Accede a la plataforma interna.
+          </p>
+        </div>
       </div>
 
-      <div class="input-block">
-        <input
-          type="password"
-          id="password-login"
-          name="password"
-          class="input"
-          [(ngModel)]="password"
-          required
-          placeholder="Contraseña"
-        />
-      </div>
+      <form
+        class="login-form"
+        (ngSubmit)="onSubmit()"
+        #loginForm="ngForm"
+        autocomplete="on"
+      >
+        <div class="login-field">
+          <label for="usuario-login">Usuario</label>
+          <input
+            type="text"
+            id="usuario-login"
+            name="username"
+            class="login-input"
+            [(ngModel)]="username"
+            required
+            autocomplete="username"
+            placeholder="Ingresa tu usuario"
+          />
+        </div>
 
-      <div class="input-block">
-        <button type="submit" [disabled]="!loginForm.valid">
-          Iniciar Sesión
+        <div class="login-field">
+          <label for="password-login">Contraseña</label>
+          <input
+            type="password"
+            id="password-login"
+            name="password"
+            class="login-input"
+            [(ngModel)]="password"
+            required
+            autocomplete="current-password"
+            placeholder="Ingresa tu contraseña"
+          />
+        </div>
+
+        <button
+          type="submit"
+          class="login-submit"
+          [disabled]="!loginForm.valid"
+        >
+          Iniciar sesión
         </button>
-      </div>
 
-      <div *ngIf="errorMessage" class="error-message">
-        {{ errorMessage }}
-      </div>
-    </form>
-  </div>
+        <div *ngIf="errorMessage" class="login-error">
+          {{ errorMessage }}
+        </div>
+      </form>
+    </section>
 
-  <div class="right">
-    <div class="img">
-      <!-- Imagen o SVG decorativo aquí -->
-    </div>
+    <aside class="login-visual" aria-hidden="true">
+      <div class="login-visual__content">
+        <span class="login-visual__pill">Ultra Gym</span>
+        <h2>Operación conectada</h2>
+        <p>
+          Tickets, mantenimiento, inventario, Warehouse y Track en una sola Suite.
+        </p>
+
+        <div class="login-visual__grid">
+          <div class="login-visual__metric">
+            <strong>BI</strong>
+            <span>Track diario</span>
+          </div>
+
+          <div class="login-visual__metric">
+            <strong>PM</strong>
+            <span>Mantenimiento</span>
+          </div>
+
+          <div class="login-visual__metric">
+            <strong>WH</strong>
+            <span>Warehouse</span>
+          </div>
+        </div>
+      </div>
+    </aside>
   </div>
-</div>
+</section>

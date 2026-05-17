@@ -1,9 +1,89 @@
 //frontend\src\styles.scss
 
+@use '@angular/material' as mat;
+/* ==========================================================================
+   Suite Ultra Design Tokens
+   Paleta oficial Ultra
+   ========================================================================== */
+
+:root {
+  /* Marca principal */
+  --ultra-orange: #e54525;
+  --ultra-orange-dark: #c93a20;
+  --ultra-orange-soft: #fde8e2;
+
+  /* Azul complementario / Ultra Kids */
+  --ultra-blue: #2c4595;
+  --ultra-blue-dark: #24397c;
+  --ultra-blue-soft: #e8edff;
+
+  /* Negro / grises */
+  --ultra-black-90: #1a1a1a;
+  --ultra-charcoal: #2b2b2b;
+  --ultra-gray-900: #252525;
+  --ultra-gray-800: #374151;
+  --ultra-gray-700: #4b5563;
+  --ultra-gray-600: #64748b;
+  --ultra-gray-500: #6b7280;
+  --ultra-gray-400: #9ca3af;
+  --ultra-gray-300: #d1d5db;
+  --ultra-gray-200: #e5e7eb;
+  --ultra-gray-100: #f3f4f6;
+  --ultra-gray-50: #f8fafc;
+
+  /* Superficies */
+  --ultra-bg: #f6f7f9;
+  --ultra-surface: #ffffff;
+  --ultra-surface-soft: #f8fafc;
+
+  /* Estados semánticos */
+  --ultra-success: #16a34a;
+  --ultra-success-soft: #dcfce7;
+  --ultra-warning: #f59e0b;
+  --ultra-warning-soft: #fef3c7;
+  --ultra-danger: #dc2626;
+  --ultra-danger-soft: #fee2e2;
+  --ultra-info: var(--ultra-blue);
+  --ultra-info-soft: var(--ultra-blue-soft);
+
+  /* Layout */
+  --ultra-radius-sm: 8px;
+  --ultra-radius-md: 12px;
+  --ultra-radius-lg: 16px;
+  --ultra-radius-xl: 22px;
+
+  --ultra-shadow-sm: 0 4px 12px rgba(15, 23, 42, 0.06);
+  --ultra-shadow-md: 0 10px 28px rgba(15, 23, 42, 0.10);
+  --ultra-shadow-lg: 0 18px 48px rgba(15, 23, 42, 0.16);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 // -------------------------------
 // 🌈 Angular Material Theme Setup
-@use '@angular/material' as mat;
 
 // Usamos todo desde 'mat' sin separar 'theming'
 $my-primary: mat.define-palette(mat.$indigo-palette);
@@ -237,3 +317,135 @@ textarea.mat-mdc-input-element {
 .tabla-tickets col.c-acc { width: 150px; }
 .tabla-tickets col.c-sol { width: 130px; }
 .tabla-tickets col.c-his { width: 110px; }
+
+
+/* ==========================================================================
+   Suite Ultra UI v1 - SweetAlert rechazo de cierre
+   ========================================================================== */
+
+.swal2-popup.ultra-swal {
+  width: min(560px, 92vw) !important;
+  padding: 0 !important;
+  border-radius: var(--ultra-radius-xl) !important;
+  color: var(--ultra-gray-900) !important;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.30) !important;
+  overflow: hidden !important;
+}
+
+.swal2-popup.ultra-swal .ultra-swal__icon.swal2-icon {
+  width: 46px !important;
+  height: 46px !important;
+  margin: 24px auto 10px !important;
+  border-color: rgba(220, 38, 38, 0.45) !important;
+  color: var(--ultra-danger) !important;
+}
+
+.swal2-popup.ultra-swal .ultra-swal__title {
+  margin: 0 !important;
+  padding: 0 24px !important;
+  color: var(--ultra-gray-900) !important;
+  font-size: 22px !important;
+  line-height: 1.15 !important;
+  font-weight: 900 !important;
+}
+
+.swal2-popup.ultra-swal .ultra-swal__content {
+  margin: 8px 0 0 !important;
+  padding: 0 24px !important;
+  color: var(--ultra-gray-700) !important;
+  font-size: 14px !important;
+  line-height: 1.4 !important;
+}
+
+.swal2-popup.ultra-swal .ultra-swal__input-label {
+  display: block !important;
+  margin: 18px 24px 8px !important;
+  color: var(--ultra-gray-800) !important;
+  font-size: 13px !important;
+  font-weight: 900 !important;
+  text-align: left !important;
+}
+
+.swal2-popup.ultra-swal .swal2-textarea.ultra-swal__textarea {
+  width: calc(100% - 48px) !important;
+  min-height: 118px !important;
+  margin: 0 24px !important;
+  padding: 14px !important;
+  resize: none !important;
+  border: 0 !important;
+  border-bottom: 2px solid var(--ultra-danger) !important;
+  border-radius: 14px 14px 8px 8px !important;
+  background: var(--ultra-gray-50) !important;
+  box-shadow: none !important;
+  color: var(--ultra-gray-900) !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  line-height: 1.35 !important;
+}
+
+.swal2-popup.ultra-swal .swal2-textarea.ultra-swal__textarea:focus {
+  outline: none !important;
+  border-bottom-color: var(--ultra-danger) !important;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12) !important;
+}
+
+.swal2-popup.ultra-swal .ultra-swal__validation {
+  margin: 12px 24px 0 !important;
+  border-radius: var(--ultra-radius-md) !important;
+  background: var(--ultra-danger-soft) !important;
+  color: #991b1b !important;
+  font-size: 13px !important;
+  font-weight: 800 !important;
+}
+
+.swal2-popup.ultra-swal .ultra-swal__actions {
+  display: flex !important;
+  justify-content: flex-end !important;
+  gap: 10px !important;
+  width: 100% !important;
+  margin: 0 !important;
+  padding: 22px 24px 24px !important;
+  box-sizing: border-box !important;
+}
+
+.swal2-popup.ultra-swal .ultra-swal__confirm,
+.swal2-popup.ultra-swal .ultra-swal__cancel {
+  min-width: 126px !important;
+  min-height: 38px !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  padding: 8px 16px !important;
+  font-size: 14px !important;
+  font-weight: 900 !important;
+  cursor: pointer !important;
+}
+
+.swal2-popup.ultra-swal .ultra-swal__confirm--danger {
+  background: var(--ultra-danger) !important;
+  color: var(--ultra-surface) !important;
+}
+
+.swal2-popup.ultra-swal .ultra-swal__confirm--danger:hover {
+  filter: brightness(0.96) !important;
+}
+
+.swal2-popup.ultra-swal .ultra-swal__cancel {
+  background: var(--ultra-gray-200) !important;
+  color: var(--ultra-gray-800) !important;
+}
+
+.swal2-popup.ultra-swal .ultra-swal__cancel:hover {
+  background: var(--ultra-gray-300) !important;
+}
+
+@media (max-width: 520px) {
+  .swal2-popup.ultra-swal .ultra-swal__actions {
+    flex-direction: column-reverse !important;
+    align-items: stretch !important;
+  }
+
+  .swal2-popup.ultra-swal .ultra-swal__confirm,
+  .swal2-popup.ultra-swal .ultra-swal__cancel {
+    width: 100% !important;
+  }
+}

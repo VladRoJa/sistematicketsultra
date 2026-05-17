@@ -1,23 +1,44 @@
 <!-- frontend/src/app/pm/pm-configuracion-programacion/pm-configuracion-programacion.component.html -->
 
-<div class="pm-config-container">
+<div class="pm-config-page">
+  <!-- ==========================================================================
+       Suite Ultra UI v1 - Header configuración PM
+       ========================================================================== -->
+  <section class="pm-config-hero">
+    <div class="pm-config-hero__content">
+      <p class="pm-config-eyebrow">Programación PM</p>
+      <h1>Configuración preventiva</h1>
+      <p>
+        Alta, consulta y ajuste de programación preventiva por sucursal, activo,
+        frecuencia y fecha base.
+      </p>
+    </div>
 
-  <h2 class="page-title">Configuración / Programación Mantenimiento Preventivo</h2>
+    <div class="pm-config-mode-card">
+      <span>Configuraciones</span>
+      <strong>{{ configuracionesFiltradas.length }}</strong>
+      <small>Según filtros actuales</small>
+    </div>
+  </section>
 
-  <mat-card class="filters-card">
-    <mat-card-content class="filters-row">
-
-      <mat-form-field appearance="fill" class="filter-field">
+  <!-- ==========================================================================
+       Suite Ultra UI v1 - Consulta por sucursal
+       ========================================================================== -->
+  <mat-card class="pm-config-panel pm-config-filters-card">
+    <mat-card-content class="pm-config-filters-row">
+      <mat-form-field appearance="fill" class="pm-filter-field">
         <mat-label>Sucursal</mat-label>
         <input
           matInput
           [formControl]="sucursalCtrl"
-          [matAutocomplete]="autoSucursal">
+          [matAutocomplete]="autoSucursal"
+        />
 
         <mat-autocomplete
           #autoSucursal="matAutocomplete"
           [displayWith]="sucursalDisplay"
-          (optionSelected)="onSucursalSelected($event.option.value)">
+          (optionSelected)="onSucursalSelected($event.option.value)"
+        >
           <mat-option *ngFor="let s of filteredSucursales$ | async" [value]="s">
             {{ s.sucursal }}
           </mat-option>
@@ -26,25 +47,32 @@
 
       <button
         mat-raised-button
-        color="primary"
+        type="button"
+        class="pm-config-primary-button"
         (click)="cargarConfiguraciones()"
-        [disabled]="loading">
+        [disabled]="loading"
+      >
         Consultar
       </button>
-
     </mat-card-content>
   </mat-card>
 
-  <mat-card class="section-card">
-    <mat-card-header>
-      <mat-card-title>Alta de configuración</mat-card-title>
+  <!-- ==========================================================================
+       Suite Ultra UI v1 - Alta de configuración
+       ========================================================================== -->
+  <mat-card class="pm-config-panel pm-config-create-card">
+    <mat-card-header class="pm-config-card-header">
+      <div>
+        <mat-card-title>Alta de configuración</mat-card-title>
+        <mat-card-subtitle>
+          Define la frecuencia y fecha base para programar mantenimientos preventivos.
+        </mat-card-subtitle>
+      </div>
     </mat-card-header>
 
-    <mat-card-content class="pm-config-form-row">
-
+    <mat-card-content class="pm-config-create-content">
       <div class="pm-config-form-fields">
-
-        <mat-form-field appearance="fill" class="filter-field" floatLabel="always">
+        <mat-form-field appearance="fill" class="pm-filter-field" floatLabel="always">
           <mat-label>Equipo</mat-label>
           <input
             matInput
@@ -52,13 +80,14 @@
             [matAutocomplete]="autoEquipo"
             [disabled]="inventarioSelectDisabled"
             (focus)="abrirAutocompleteEquipo()"
-            #equipoAutocompleteTrigger="matAutocompleteTrigger">
+            #equipoAutocompleteTrigger="matAutocompleteTrigger"
+          />
 
           <mat-autocomplete
             #autoEquipo="matAutocomplete"
             [displayWith]="equipoDisplay"
-            (optionSelected)="onEquipoSelected($event.option.value)">
-
+            (optionSelected)="onEquipoSelected($event.option.value)"
+          >
             <mat-option *ngIf="!selectedSucursalId" [value]="null" disabled>
               Selecciona una sucursal primero
             </mat-option>
@@ -70,147 +99,194 @@
             <mat-option
               *ngIf="selectedSucursalId && !inventarioLoading && inventarioOptions.length === 0"
               [value]="null"
-              disabled>
+              disabled
+            >
               Sin equipos en esta sucursal
             </mat-option>
 
             <mat-option
               *ngFor="let item of filteredInventarioOptions$ | async"
-              [value]="item">
+              [value]="item"
+            >
               {{ item.codigo_interno }} — {{ item.nombre }}
             </mat-option>
           </mat-autocomplete>
         </mat-form-field>
 
-        <mat-form-field appearance="fill" class="filter-field">
+        <mat-form-field appearance="fill" class="pm-filter-field pm-filter-field--frequency">
           <mat-label>Frecuencia (días)</mat-label>
-          <input matInput type="number" [(ngModel)]="frecuenciaDiasInput">
+          <input matInput type="number" [(ngModel)]="frecuenciaDiasInput" />
         </mat-form-field>
 
-        <mat-form-field appearance="fill" class="filter-field">
+        <mat-form-field appearance="fill" class="pm-filter-field">
           <mat-label>Fecha base de programación</mat-label>
           <input
             matInput
             [matDatepicker]="pickerFechaBase"
-            [(ngModel)]="fechaBaseProgramacionInput">
+            [(ngModel)]="fechaBaseProgramacionInput"
+          />
           <mat-datepicker-toggle matIconSuffix [for]="pickerFechaBase"></mat-datepicker-toggle>
           <mat-datepicker #pickerFechaBase></mat-datepicker>
         </mat-form-field>
 
-        <mat-form-field appearance="fill" class="filter-field">
+        <mat-form-field appearance="fill" class="pm-filter-field pm-filter-field--small">
           <mat-label>Activo</mat-label>
-          <input matInput [value]="activoInput ? 'Sí' : 'No'" readonly>
+          <input matInput [value]="activoInput ? 'Sí' : 'No'" readonly />
         </mat-form-field>
-
       </div>
 
       <div class="pm-config-form-actions">
         <button
           mat-raised-button
-          color="accent"
+          type="button"
+          class="pm-config-primary-button"
           (click)="crearConfiguracion()"
-          [disabled]="saving">
-          Guardar
+          [disabled]="saving"
+        >
+          Guardar configuración
         </button>
       </div>
-
     </mat-card-content>
   </mat-card>
 
-  <div class="spinner-wrapper" *ngIf="loading">
+  <!-- ==========================================================================
+       Suite Ultra UI v1 - Loading
+       ========================================================================== -->
+  <div class="pm-config-loading" *ngIf="loading">
     <mat-spinner diameter="48"></mat-spinner>
+    <p>Cargando configuraciones PM...</p>
   </div>
 
-  <mat-card class="section-card" *ngIf="!loading">
-    <mat-card-header>
-      <mat-card-title>Programados</mat-card-title>
+  <!-- ==========================================================================
+       Suite Ultra UI v1 - Tabla de programados
+       ========================================================================== -->
+  <mat-card class="pm-config-panel pm-config-table-card" *ngIf="!loading">
+    <mat-card-header class="pm-config-card-header">
+      <div>
+        <mat-card-title>Programados</mat-card-title>
+        <mat-card-subtitle>
+          Configuraciones preventivas activas o desactivadas por equipo.
+        </mat-card-subtitle>
+      </div>
     </mat-card-header>
 
     <mat-card-content>
+      <div class="pm-config-table-filters">
+        <mat-form-field appearance="fill" class="pm-filter-field">
+          <mat-label>Subcategoría</mat-label>
+          <mat-select
+            [(ngModel)]="subcategoriaFiltroTabla"
+            (selectionChange)="manejarCambioSubcategoriaTabla()"
+          >
+            <mat-option
+              *ngFor="let subcategoria of subcategoriasTablaDisponibles"
+              [value]="subcategoria.value"
+            >
+              {{ subcategoria.label }}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
 
-      <div class="pm-config-tabla-filtros">
-    <mat-form-field appearance="fill" class="filter-field">
-      <mat-label>Subcategoría</mat-label>
-      <mat-select
-        [(ngModel)]="subcategoriaFiltroTabla"
-        (selectionChange)="manejarCambioSubcategoriaTabla()">
-        <mat-option *ngFor="let subcategoria of subcategoriasTablaDisponibles" [value]="subcategoria.value">
-          {{ subcategoria.label }}
-        </mat-option>
-      </mat-select>
-    </mat-form-field>
+        <mat-form-field appearance="fill" class="pm-filter-field">
+          <mat-label>Buscar equipo o código</mat-label>
+          <input
+            matInput
+            [ngModel]="textoFiltroTabla"
+            (ngModelChange)="manejarCambioTextoFiltroTabla($event)"
+            placeholder="Ej. abdominal, 03PIA..."
+          />
+        </mat-form-field>
+      </div>
 
-    <mat-form-field appearance="fill" class="filter-field">
-      <mat-label>Buscar equipo o código</mat-label>
-      <input
-        matInput
-        [ngModel]="textoFiltroTabla"
-        (ngModelChange)="manejarCambioTextoFiltroTabla($event)"
-        placeholder="Ej. abdominal, 03PIA..." />
-    </mat-form-field>
-  </div>  
+      <div
+        class="pm-config-table-wrapper"
+        *ngIf="configuracionesFiltradas.length > 0; else emptyState"
+      >
+        <table
+          mat-table
+          [dataSource]="configuracionesFiltradas"
+          class="pm-config-table full-width"
+        >
+          <ng-container matColumnDef="equipo">
+            <th mat-header-cell *matHeaderCellDef>Equipo</th>
+            <td mat-cell *matCellDef="let row">
+              <strong>{{ equipoLabel(row) }}</strong>
+            </td>
+          </ng-container>
 
-      <table
-        mat-table
-        [dataSource]="configuracionesFiltradas"
-        class="full-width"
-        *ngIf="configuracionesFiltradas.length > 0; else emptyState">
+          <ng-container matColumnDef="sucursal">
+            <th mat-header-cell *matHeaderCellDef>Sucursal</th>
+            <td mat-cell *matCellDef="let row">{{ row.sucursal }}</td>
+          </ng-container>
 
-        <ng-container matColumnDef="equipo">
-          <th mat-header-cell *matHeaderCellDef>Equipo</th>
-          <td mat-cell *matCellDef="let row">{{ equipoLabel(row) }}</td>
-        </ng-container>
+          <ng-container matColumnDef="frecuencia_dias">
+            <th mat-header-cell *matHeaderCellDef>Frecuencia</th>
+            <td mat-cell *matCellDef="let row">
+              <span class="pm-frequency-pill">{{ row.frecuencia_dias }} días</span>
+            </td>
+          </ng-container>
 
-        <ng-container matColumnDef="sucursal">
-          <th mat-header-cell *matHeaderCellDef>Sucursal</th>
-          <td mat-cell *matCellDef="let row">{{ row.sucursal }}</td>
-        </ng-container>
+          <ng-container matColumnDef="fecha_base_programacion">
+            <th mat-header-cell *matHeaderCellDef>Fecha base</th>
+            <td mat-cell *matCellDef="let row">
+              {{ row.fecha_base_programacion || '—' }}
+            </td>
+          </ng-container>
 
-        <ng-container matColumnDef="frecuencia_dias">
-          <th mat-header-cell *matHeaderCellDef>Frecuencia</th>
-          <td mat-cell *matCellDef="let row">{{ row.frecuencia_dias }} días</td>
-        </ng-container>
+          <ng-container matColumnDef="activo">
+            <th mat-header-cell *matHeaderCellDef>Activo</th>
+            <td mat-cell *matCellDef="let row">
+              <span
+                class="pm-active-badge"
+                [class.pm-active-badge--on]="row.activo"
+                [class.pm-active-badge--off]="!row.activo"
+              >
+                {{ activoLabel(row) }}
+              </span>
+            </td>
+          </ng-container>
 
-        <ng-container matColumnDef="fecha_base_programacion">
-          <th mat-header-cell *matHeaderCellDef>Fecha base</th>
-          <td mat-cell *matCellDef="let row">
-            {{ row.fecha_base_programacion || '—' }}
-          </td>
-        </ng-container>
+          <ng-container matColumnDef="editar_frecuencia">
+            <th mat-header-cell *matHeaderCellDef></th>
+            <td mat-cell *matCellDef="let row">
+              <button
+                mat-raised-button
+                type="button"
+                class="pm-config-secondary-button"
+                (click)="editarFrecuencia(row)"
+              >
+                Editar frecuencia
+              </button>
+            </td>
+          </ng-container>
 
-        <ng-container matColumnDef="activo">
-          <th mat-header-cell *matHeaderCellDef>Activo</th>
-          <td mat-cell *matCellDef="let row">{{ activoLabel(row) }}</td>
-        </ng-container>
-      
-        <ng-container matColumnDef="editar_frecuencia">
-          <th mat-header-cell *matHeaderCellDef></th>
-          <td mat-cell *matCellDef="let row">
-            <button mat-raised-button (click)="editarFrecuencia(row)">
-              Editar frecuencia
-            </button>
-          </td>
-        </ng-container>
+          <ng-container matColumnDef="accion">
+            <th mat-header-cell *matHeaderCellDef></th>
+            <td mat-cell *matCellDef="let row">
+              <button
+                mat-raised-button
+                type="button"
+                class="pm-config-toggle-button"
+                [class.pm-config-toggle-button--off]="row.activo"
+                [class.pm-config-toggle-button--on]="!row.activo"
+                (click)="toggleActivoConfiguracion(row)"
+              >
+                {{ row.activo ? 'Desactivar' : 'Activar' }}
+              </button>
+            </td>
+          </ng-container>
 
-        <ng-container matColumnDef="accion">
-          <th mat-header-cell *matHeaderCellDef></th>
-          <td mat-cell *matCellDef="let row">
-            <button mat-raised-button (click)="toggleActivoConfiguracion(row)">
-              {{ row.activo ? 'Desactivar' : 'Activar' }}
-            </button>
-          </td>
-        </ng-container>
-
-        <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-        <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
-      </table>
+          <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
+        </table>
+      </div>
 
       <ng-template #emptyState>
-        <div class="section-empty-state">
-          Sin configuraciones PM para la sucursal seleccionada.
+        <div class="pm-config-empty-state">
+          <h3>Sin configuraciones</h3>
+          <p>No hay configuraciones PM para la sucursal seleccionada.</p>
         </div>
       </ng-template>
     </mat-card-content>
   </mat-card>
-
 </div>

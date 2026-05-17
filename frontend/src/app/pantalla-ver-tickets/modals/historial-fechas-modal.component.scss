@@ -1,26 +1,18 @@
 /* ==========================================================================
-   MODAL: Resumen / Historial de ticket
-   Archivo: historial-fechas-modal.component.scss
-
-   Objetivo:
-   - Mostrar el ticket como resumen premium.
-   - Mostrar historial como cards compactas, no tabla.
-   - Evitar scroll horizontal.
-   - Resaltar rechazos de cierre en rojo.
+   Suite Ultra UI v1 - Modal resumen / historial de ticket
    ========================================================================== */
 
-
 /* ==========================================================================
-   HOST / BASE
+   Host / Base
    ========================================================================== */
 
 :host {
   display: block;
+  color: var(--ultra-gray-900);
 }
 
-
 /* ==========================================================================
-   TÍTULO DEL MODAL
+   Suite Ultra UI v1 - Título del modal
    ========================================================================== */
 
 .modal-title {
@@ -36,26 +28,26 @@
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  color: #1f2937;
-  font-weight: 700;
+  color: var(--ultra-gray-900);
+  font-weight: 900;
+  letter-spacing: 0.01em;
 
   mat-icon {
-    color: #0073c2;
+    color: var(--ultra-orange);
   }
 }
 
 .ticket-id {
-  padding: 5px 12px;
+  padding: 6px 12px;
   border-radius: 999px;
-  background: #eef5ff;
-  color: #005da8;
+  background: var(--ultra-orange-soft);
+  color: var(--ultra-orange);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 900;
 }
 
-
 /* ==========================================================================
-   CONTENEDOR PRINCIPAL DEL MODAL
+   Suite Ultra UI v1 - Contenedor principal del modal
    ========================================================================== */
 
 .contenido-modal {
@@ -67,9 +59,8 @@
   overflow-x: hidden;
 }
 
-
 /* ==========================================================================
-   HERO / ENCABEZADO PREMIUM DEL TICKET
+   Suite Ultra UI v1 - Hero / resumen principal del ticket
    ========================================================================== */
 
 .ticket-hero {
@@ -77,9 +68,9 @@
   padding: 18px;
   border-radius: 18px;
   background:
-    linear-gradient(135deg, rgba(0, 115, 194, 0.12), rgba(0, 255, 204, 0.10)),
-    #ffffff;
-  border: 1px solid rgba(0, 115, 194, 0.14);
+    radial-gradient(circle at top left, rgba(229, 69, 37, 0.14), transparent 34%),
+    linear-gradient(135deg, #fff7f4, var(--ultra-surface));
+  border: 1px solid rgba(229, 69, 37, 0.22);
 }
 
 .hero-content {
@@ -99,16 +90,16 @@
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #64748b;
-  font-weight: 700;
+  color: var(--ultra-gray-600);
+  font-weight: 900;
 }
 
 .descripcion-principal {
   margin: 0;
-  color: #111827;
+  color: var(--ultra-gray-900);
   font-size: 18px;
   line-height: 1.35;
-  font-weight: 700;
+  font-weight: 900;
 }
 
 .activo-linea {
@@ -116,26 +107,25 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  color: #475569;
+  color: var(--ultra-gray-700);
   font-size: 14px;
 
   mat-icon {
-    color: #0073c2;
+    color: var(--ultra-orange);
   }
 }
 
 .codigo-interno {
   padding: 3px 8px;
   border-radius: 999px;
-  background: #e8f4ff;
-  color: #0065ad;
+  background: var(--ultra-gray-100);
+  color: var(--ultra-gray-800);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 900;
 }
 
-
 /* ==========================================================================
-   CHIP DE ESTADO DEL TICKET
+   Suite Ultra UI v1 - Chip de estado del ticket
    ========================================================================== */
 
 .estado-chip {
@@ -146,39 +136,38 @@
   padding: 5px 12px;
   border-radius: 999px;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 900;
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
 
 .estado-abierto {
-  background: #fff7ed;
-  color: #c2410c;
+  background: var(--ultra-orange-soft);
+  color: var(--ultra-orange);
 }
 
 .estado-en-progreso {
-  background: #eff6ff;
-  color: #1d4ed8;
+  background: var(--ultra-info-soft);
+  color: var(--ultra-blue);
 }
 
 .estado-por-validar {
-  background: #fef3c7;
+  background: var(--ultra-warning-soft);
   color: #92400e;
 }
 
 .estado-finalizado {
-  background: #ecfdf5;
-  color: #047857;
+  background: var(--ultra-success-soft);
+  color: var(--ultra-success);
 }
 
 .estado-sin-estado {
-  background: #f1f5f9;
-  color: #475569;
+  background: var(--ultra-gray-100);
+  color: var(--ultra-gray-700);
 }
 
-
 /* ==========================================================================
-   CARDS DE RESUMEN DEL TICKET
+   Suite Ultra UI v1 - Cards de resumen del ticket
    ========================================================================== */
 
 .resumen-grid {
@@ -190,31 +179,31 @@
 
 .resumen-card {
   padding: 12px 14px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--ultra-gray-200);
   border-radius: 14px;
-  background: #ffffff;
+  background: var(--ultra-surface);
+  box-shadow: 0 5px 14px rgba(15, 23, 42, 0.035);
 
   .card-label {
     display: block;
     margin-bottom: 4px;
-    color: #6b7280;
+    color: var(--ultra-gray-600);
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 900;
     text-transform: uppercase;
     letter-spacing: 0.04em;
   }
 
   strong {
     display: block;
-    color: #111827;
+    color: var(--ultra-gray-900);
     font-size: 14px;
     line-height: 1.3;
   }
 }
 
-
 /* ==========================================================================
-   BLOQUE DE REFACCIÓN
+   Suite Ultra UI v1 - Bloque de refacción
    ========================================================================== */
 
 .refaccion-card {
@@ -224,17 +213,18 @@
   padding: 13px 14px;
   margin-bottom: 16px;
   border-radius: 14px;
-  background: #fff7ed;
-  border: 1px solid #fed7aa;
+  background: var(--ultra-orange-soft);
+  border: 1px solid rgba(229, 69, 37, 0.24);
   color: #7c2d12;
 
   mat-icon {
-    color: #ea580c;
+    color: var(--ultra-orange);
   }
 
   strong {
     display: block;
     margin-bottom: 2px;
+    color: var(--ultra-gray-900);
   }
 
   p {
@@ -244,9 +234,8 @@
   }
 }
 
-
 /* ==========================================================================
-   SECCIÓN HISTORIAL
+   Suite Ultra UI v1 - Sección historial
    ========================================================================== */
 
 .historial-section {
@@ -262,14 +251,14 @@
 
   h3 {
     margin: 0;
-    color: #111827;
+    color: var(--ultra-gray-900);
     font-size: 16px;
-    font-weight: 800;
+    font-weight: 900;
   }
 
   p {
     margin: 4px 0 0;
-    color: #6b7280;
+    color: var(--ultra-gray-600);
     font-size: 13px;
   }
 }
@@ -278,15 +267,14 @@
   flex: 0 0 auto;
   padding: 5px 10px;
   border-radius: 999px;
-  background: #f3f4f6;
-  color: #374151;
+  background: var(--ultra-gray-100);
+  color: var(--ultra-gray-800);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 900;
 }
 
-
 /* ==========================================================================
-   ESTADO VACÍO DEL HISTORIAL
+   Suite Ultra UI v1 - Estado vacío del historial
    ========================================================================== */
 
 .empty-state {
@@ -295,17 +283,20 @@
   gap: 10px;
   padding: 20px;
   border-radius: 14px;
-  background: #f9fafb;
-  color: #6b7280;
+  background: var(--ultra-gray-50);
+  color: var(--ultra-gray-600);
+
+  mat-icon {
+    color: var(--ultra-gray-500);
+  }
 
   p {
     margin: 0;
   }
 }
 
-
 /* ==========================================================================
-   LISTA COMPACTA DEL HISTORIAL
+   Suite Ultra UI v1 - Lista compacta del historial
    ========================================================================== */
 
 .historial-lista {
@@ -314,17 +305,16 @@
   gap: 8px;
 }
 
-
 /* ==========================================================================
-   CARD INDIVIDUAL DE HISTORIAL
+   Suite Ultra UI v1 - Card individual de historial
    ========================================================================== */
 
 .historial-card {
   position: relative;
   padding: 10px 14px 10px 18px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--ultra-gray-200);
   border-radius: 14px;
-  background: #ffffff;
+  background: var(--ultra-surface);
   box-shadow: 0 6px 14px rgba(15, 23, 42, 0.035);
 }
 
@@ -336,12 +326,11 @@
   left: 0;
   width: 5px;
   border-radius: 999px;
-  background: #2563eb;
+  background: var(--ultra-orange);
 }
 
-
 /* ==========================================================================
-   CARD DE RECHAZO
+   Suite Ultra UI v1 - Card de rechazo
    ========================================================================== */
 
 .historial-card-rechazo {
@@ -350,12 +339,11 @@
 }
 
 .historial-card-rechazo::before {
-  background: #dc2626;
+  background: var(--ultra-danger);
 }
 
-
 /* ==========================================================================
-   FILA COMPACTA DE CADA ITERACIÓN
+   Suite Ultra UI v1 - Fila compacta de cada iteración
    ========================================================================== */
 
 .historial-compact-row {
@@ -366,9 +354,8 @@
   min-width: 0;
 }
 
-
 /* ==========================================================================
-   CELDAS COMPACTAS
+   Suite Ultra UI v1 - Celdas compactas
    ========================================================================== */
 
 .compact-cell {
@@ -382,29 +369,28 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: #64748b;
+  color: var(--ultra-gray-600);
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 900;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   line-height: 1;
 
   mat-icon {
-    color: #64748b;
+    color: var(--ultra-gray-500);
   }
 }
 
 .compact-cell strong {
   display: block;
-  color: #111827;
+  color: var(--ultra-gray-900);
   font-size: 12px;
   line-height: 1.2;
   white-space: normal;
 }
 
-
 /* ==========================================================================
-   MOTIVO / COMENTARIO
+   Suite Ultra UI v1 - Motivo / comentario
    ========================================================================== */
 
 .motivo-compacto {
@@ -413,7 +399,7 @@
 
 .motivo {
   margin: 0;
-  color: #374151;
+  color: var(--ultra-gray-800);
   font-size: 13px;
   line-height: 1.25;
   word-break: break-word;
@@ -422,17 +408,16 @@
 
 .motivo-rechazo {
   color: #991b1b;
-  font-weight: 800;
+  font-weight: 900;
 }
 
 .motivo-sin {
-  color: #9ca3af;
+  color: var(--ultra-gray-400);
   font-size: 13px;
 }
 
-
 /* ==========================================================================
-   CHIPS: USUARIO / EVENTO
+   Suite Ultra UI v1 - Chips usuario / evento
    ========================================================================== */
 
 .usuario-chip,
@@ -444,10 +429,10 @@
   display: inline-flex;
   padding: 4px 8px;
   border-radius: 999px;
-  background: #f1f5f9;
-  color: #334155;
+  background: var(--ultra-gray-100);
+  color: var(--ultra-gray-800);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 800;
 }
 
 .evento-chip {
@@ -456,21 +441,24 @@
   gap: 4px;
   padding: 4px 8px;
   border-radius: 999px;
-  background: #eef2ff;
-  color: #3730a3;
+  background: var(--ultra-orange-soft);
+  color: var(--ultra-orange);
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 900;
   white-space: nowrap;
 }
 
+.evento-chip mat-icon {
+  color: currentColor;
+}
+
 .evento-rechazo {
-  background: #fee2e2;
+  background: var(--ultra-danger-soft);
   color: #991b1b;
 }
 
-
 /* ==========================================================================
-   ACCIONES DEL MODAL
+   Suite Ultra UI v1 - Acciones del modal
    ========================================================================== */
 
 .modal-actions {
@@ -479,13 +467,19 @@
 
 .btn-cerrar {
   min-width: 96px;
-  border-radius: 10px;
-  background: #f3f4f6;
+  border-radius: 999px;
+  background: var(--ultra-black-90);
+  color: var(--ultra-surface);
+  font-weight: 900;
+  padding: 8px 18px;
 }
 
+.btn-cerrar:hover {
+  background: var(--ultra-charcoal);
+}
 
 /* ==========================================================================
-   RESPONSIVE
+   Suite Ultra UI v1 - Responsive
    ========================================================================== */
 
 @media (max-width: 900px) {

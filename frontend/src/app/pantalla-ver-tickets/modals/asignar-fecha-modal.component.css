@@ -1,17 +1,251 @@
-h2 {
-  margin-bottom: 16px;
-  font-size: 20px;
-  font-weight: 600;
+/* ==========================================================================
+   Suite Ultra UI v1 - Modal asignar fecha solución
+   ========================================================================== */
+
+:host {
+  display: block;
+  width: min(560px, 92vw);
+  color: var(--ultra-gray-900);
+  box-sizing: border-box;
 }
 
-.modal-content {
+/* ==========================================================================
+   Suite Ultra UI v1 - Shell
+   ========================================================================== */
+
+.asignar-fecha-modal {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.asignar-fecha-modal__header,
+.asignar-fecha-modal__content,
+.asignar-fecha-modal__actions {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Header
+   ========================================================================== */
+
+.asignar-fecha-modal__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.asignar-fecha-modal__icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  background: var(--ultra-orange-soft);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  font-size: 20px;
+}
+
+.asignar-fecha-modal__title {
+  min-width: 0;
+}
+
+.asignar-fecha-modal__title h2 {
+  margin: 0;
+  color: var(--ultra-gray-900);
+  font-size: 19px;
+  line-height: 1.15;
+  font-weight: 900;
+}
+
+.asignar-fecha-modal__title p {
+  margin: 4px 0 0;
+  color: var(--ultra-gray-600);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Aviso
+   ========================================================================== */
+
+.asignar-fecha-modal__notice {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border-radius: var(--ultra-radius-lg);
+  border: 1px solid rgba(229, 69, 37, 0.24);
+  background:
+    radial-gradient(circle at top left, rgba(229, 69, 37, 0.12), transparent 38%),
+    var(--ultra-orange-soft);
+  color: var(--ultra-gray-800);
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 3px;
 }
 
-.acciones {
+.asignar-fecha-modal__notice strong {
+  color: var(--ultra-orange);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.asignar-fecha-modal__notice span {
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Contenido
+   ========================================================================== */
+
+.asignar-fecha-modal__content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.w-full {
+  width: 100%;
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Campos Material fill
+   ========================================================================== */
+
+.asignar-fecha-modal ::ng-deep .mat-mdc-form-field {
+  --mdc-filled-text-field-container-color: var(--ultra-gray-50);
+  --mdc-filled-text-field-label-text-color: var(--ultra-gray-600);
+  --mdc-filled-text-field-focus-label-text-color: var(--ultra-orange);
+  --mdc-filled-text-field-active-indicator-color: var(--ultra-gray-300);
+  --mdc-filled-text-field-focus-active-indicator-color: var(--ultra-orange);
+  --mdc-filled-text-field-hover-active-indicator-color: rgba(229, 69, 37, 0.55);
+}
+
+.asignar-fecha-modal ::ng-deep .mat-mdc-text-field-wrapper {
+  border-radius: 14px 14px 8px 8px;
+  overflow: hidden;
+}
+
+.asignar-fecha-modal ::ng-deep .mat-mdc-form-field-infix {
+  min-height: 48px;
+  padding-top: 14px;
+  padding-bottom: 10px;
+}
+
+.asignar-fecha-modal ::ng-deep .mat-mdc-input-element {
+  color: var(--ultra-gray-900);
+  font-weight: 700;
+}
+
+.asignar-fecha-modal textarea {
+  min-height: 92px;
+  resize: none;
+  overflow-y: auto;
+  line-height: 1.35;
+}
+
+.asignar-fecha-modal ::ng-deep textarea.mat-mdc-input-element {
+  padding-top: 2px;
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Bloque refacción
+   ========================================================================== */
+
+.asignar-fecha-refaccion {
+  padding: 14px;
+  border: 1px solid var(--ultra-gray-200);
+  border-radius: var(--ultra-radius-lg);
+  background: var(--ultra-gray-50);
+}
+
+.asignar-fecha-refaccion__header {
+  margin-bottom: 10px;
+}
+
+.asignar-fecha-refaccion__header strong {
+  display: block;
+  color: var(--ultra-gray-900);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.asignar-fecha-refaccion__header p {
+  margin: 3px 0 0;
+  color: var(--ultra-gray-600);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.asignar-fecha-refaccion__checkbox {
+  display: block;
+  margin-bottom: 10px;
+  color: var(--ultra-gray-800);
+  font-weight: 800;
+}
+
+.asignar-fecha-refaccion__field {
+  display: block;
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Acciones
+   ========================================================================== */
+
+.asignar-fecha-modal__actions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+  flex-wrap: nowrap;
+}
+
+.asignar-fecha-modal__cancel,
+.asignar-fecha-modal__save {
+  min-width: 110px;
+  border-radius: 999px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.asignar-fecha-modal__cancel {
+  color: var(--ultra-gray-700);
+}
+
+.asignar-fecha-modal__save {
+  background: var(--ultra-orange);
+  color: var(--ultra-surface);
+}
+
+.asignar-fecha-modal__save:hover:not(:disabled) {
+  filter: brightness(0.96);
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Responsive
+   ========================================================================== */
+
+@media (max-width: 520px) {
+  :host {
+    width: 92vw;
+  }
+
+  .asignar-fecha-modal__header {
+    align-items: flex-start;
+  }
+
+  .asignar-fecha-modal__actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .asignar-fecha-modal__cancel,
+  .asignar-fecha-modal__save {
+    width: 100%;
+  }
 }
