@@ -66,6 +66,12 @@ def normalize_branch_ids(values: Iterable | None) -> tuple[int, ...]:
 
     return tuple(sorted(normalized))
 
+def normalize_role_set(roles: Iterable[str] | None) -> set[str]:
+    return {
+        normalize_role(role)
+        for role in (roles or [])
+        if normalize_role(role)
+    }
 
 def is_root_admin(user) -> bool:
     role = normalize_role(getattr(user, "rol", None))
@@ -135,6 +141,77 @@ def get_user_branch_scope(user, *, allow_global_roles: bool = True) -> BranchSco
         reason="empty_scope",
     )
 
+def get_claims_branch_scope(
+    claims: dict | None,
+    *,
+    global_roles: Iterable[str] | None = None,
+) -> BranchScope:
+    if not claims:
+        return BranchScope(
+            is_global=False,
+            branch_ids=(),
+            reason="missing_claims",
+        )
+
+    role = normalize_role(claims.get("rol"))
+    effective_global_roles = (
+        normalize_role_set(global_roles)
+        if global_roles is not None
+        else ALL_GLOBAL_ROLES
+    )
+
+    if role in effective_global_roles:
+        return BranchScope(
+            is_global=True,
+            branch_ids=(),
+            reason=f"global_role:{role}",
+        )
+
+    assigned_branch_ids = normalize_branch_ids(claims.get("sucursales_ids") or [])
+
+    if assigned_branch_ids:
+        return BranchScope(
+            is_global=False,
+            branch_ids=assigned_branch_ids,
+            reason="assigned_branches",
+        )
+
+    primary_branch_id = normalize_int(claims.get("sucursal_id"))
+
+    if primary_branch_id is not None:
+        return BranchScope(
+            is_global=False,
+            branch_ids=(primary_branch_id,),
+            reason="primary_branch",
+        )
+
+    return BranchScope(
+        is_global=False,
+        branch_ids=(),
+        reason="empty_scope",
+    )
+
+
+def can_claims_access_branch(
+    claims: dict | None,
+    sucursal_id,
+    *,
+    global_roles: Iterable[str] | None = None,
+) -> bool:
+    target_branch_id = normalize_int(sucursal_id)
+
+    if target_branch_id is None:
+        return False
+
+    scope = get_claims_branch_scope(
+        claims,
+        global_roles=global_roles,
+    )
+
+    if scope.is_global:
+        return True
+
+    return target_branch_id in scope.branch_ids
 
 def can_access_branch(user, sucursal_id, *, allow_global_roles: bool = True) -> bool:
     target_branch_id = normalize_int(sucursal_id)
