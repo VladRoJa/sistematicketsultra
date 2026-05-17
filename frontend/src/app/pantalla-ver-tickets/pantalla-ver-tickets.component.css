@@ -123,6 +123,113 @@
 }
 
 /* ==========================================================================
+   Suite Ultra UI v1 - KPIs Tickets
+   ========================================================================== */
+
+.tickets-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.tickets-kpi-card {
+  min-height: 96px;
+  padding: 14px 16px;
+  border: 1px solid var(--ultra-gray-200);
+  border-radius: var(--ultra-radius-lg);
+  background: var(--ultra-surface);
+  box-shadow: var(--ultra-shadow-sm);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.tickets-kpi-card span {
+  color: var(--ultra-gray-600);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.tickets-kpi-card strong {
+  margin-top: 7px;
+  color: var(--ultra-gray-900);
+  font-size: 28px;
+  line-height: 1;
+  font-weight: 900;
+}
+
+.tickets-kpi-card small {
+  margin-top: 6px;
+  color: var(--ultra-gray-600);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.tickets-kpi-card--total {
+  background: var(--ultra-gray-50);
+}
+
+.tickets-kpi-card--open {
+  background: var(--ultra-orange-soft);
+  border-color: rgba(229, 69, 37, 0.24);
+}
+
+.tickets-kpi-card--open strong {
+  color: var(--ultra-orange);
+}
+
+.tickets-kpi-card--progress {
+  background: var(--ultra-warning-soft);
+  border-color: rgba(245, 158, 11, 0.24);
+}
+
+.tickets-kpi-card--progress strong {
+  color: #92400e;
+}
+
+.tickets-kpi-card--validate {
+  background: var(--ultra-danger-soft);
+  border-color: rgba(220, 38, 38, 0.22);
+}
+
+.tickets-kpi-card--validate strong {
+  color: #991b1b;
+}
+
+.tickets-kpi-card--done {
+  background: var(--ultra-success-soft);
+  border-color: rgba(22, 163, 74, 0.22);
+}
+
+.tickets-kpi-card--done strong {
+  color: var(--ultra-success);
+}
+
+.tickets-kpi-card--critical {
+  background: var(--ultra-danger-soft);
+  border-color: rgba(220, 38, 38, 0.22);
+}
+
+.tickets-kpi-card--critical strong {
+  color: var(--ultra-danger);
+}
+
+@media (max-width: 1280px) {
+  .tickets-kpi-grid {
+    grid-template-columns: repeat(3, minmax(160px, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .tickets-kpi-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* ==========================================================================
    Suite Ultra UI v1 - Card de filtros y tabla
    ========================================================================== */
 

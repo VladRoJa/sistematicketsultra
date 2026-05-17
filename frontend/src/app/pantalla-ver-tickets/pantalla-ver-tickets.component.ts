@@ -1627,6 +1627,49 @@ private actualizarVistaTicketsFiltrados(): void {
   this.changeDetectorRef.detectChanges();
 }
 
+private normalizarEstadoTicket(ticket: Ticket): string {
+  return (ticket?.estado || '').toString().trim().toLowerCase();
+}
+
+private esTicketCritico(ticket: Ticket): boolean {
+  const criticidad = Number(ticket?.criticidad);
+  return criticidad >= 4;
+}
+
+get kpiTicketsFiltrados(): number {
+  return this.filteredTickets?.length || 0;
+}
+
+get kpiTicketsAbiertos(): number {
+  return (this.filteredTickets || []).filter(
+    ticket => this.normalizarEstadoTicket(ticket) === 'abierto'
+  ).length;
+}
+
+get kpiTicketsEnProgreso(): number {
+  return (this.filteredTickets || []).filter(
+    ticket => this.normalizarEstadoTicket(ticket) === 'en progreso'
+  ).length;
+}
+
+get kpiTicketsPorValidar(): number {
+  return (this.filteredTickets || []).filter(
+    ticket => this.normalizarEstadoTicket(ticket) === 'por_validar'
+  ).length;
+}
+
+get kpiTicketsFinalizados(): number {
+  return (this.filteredTickets || []).filter(
+    ticket => this.normalizarEstadoTicket(ticket) === 'finalizado'
+  ).length;
+}
+
+get kpiTicketsCriticos(): number {
+  return (this.filteredTickets || []).filter(
+    ticket => this.esTicketCritico(ticket)
+  ).length;
+}
+
 mostrarSoloPorValidar(): void {
   this.filtroRapidoPorValidarActivo = true;
 

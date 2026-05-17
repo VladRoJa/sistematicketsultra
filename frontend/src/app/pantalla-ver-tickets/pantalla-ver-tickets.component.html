@@ -10,20 +10,58 @@
   [style.--desc-col-width]="'420px'"
   [style.--table-min-width]="'2486px'"
 >
-  <header class="tickets-page__header">
-    <div>
-      <span class="tickets-page__eyebrow">Tickets</span>
-      <h1 class="tickets-page__title">Ver Tickets</h1>
-      <p class="tickets-page__subtitle">
-        Consulta, filtra y da seguimiento a los tickets registrados en Suite Ultra.
-      </p>
-    </div>
+<header class="tickets-page__header">
+  <div>
+    <span class="tickets-page__eyebrow">Tickets</span>
+    <h1 class="tickets-page__title">Ver Tickets</h1>
+    <p class="tickets-page__subtitle">
+      Consulta, filtra y da seguimiento a los tickets registrados en Suite Ultra.
+    </p>
+  </div>
 
-    <div class="tickets-page__status">
-      <span class="tickets-page__status-label">Resultados visibles</span>
-      <strong>{{ visibleTickets.length }}</strong>
-    </div>
-  </header>
+  <div class="tickets-page__status">
+    <span class="tickets-page__status-label">Resultados filtrados</span>
+    <strong>{{ kpiTicketsFiltrados }}</strong>
+  </div>
+</header>
+
+<section class="tickets-kpi-grid">
+  <article class="tickets-kpi-card tickets-kpi-card--total">
+    <span>Filtrados</span>
+    <strong>{{ kpiTicketsFiltrados }}</strong>
+    <small>Resultado actual</small>
+  </article>
+
+  <article class="tickets-kpi-card tickets-kpi-card--open">
+    <span>Abiertos</span>
+    <strong>{{ kpiTicketsAbiertos }}</strong>
+    <small>Pendientes de iniciar</small>
+  </article>
+
+  <article class="tickets-kpi-card tickets-kpi-card--progress">
+    <span>En progreso</span>
+    <strong>{{ kpiTicketsEnProgreso }}</strong>
+    <small>En atención</small>
+  </article>
+
+  <article class="tickets-kpi-card tickets-kpi-card--validate">
+    <span>Por validar</span>
+    <strong>{{ kpiTicketsPorValidar }}</strong>
+    <small>Cierre pendiente</small>
+  </article>
+
+  <article class="tickets-kpi-card tickets-kpi-card--done">
+    <span>Finalizados</span>
+    <strong>{{ kpiTicketsFinalizados }}</strong>
+    <small>Cerrados</small>
+  </article>
+
+  <article class="tickets-kpi-card tickets-kpi-card--critical">
+    <span>Críticos</span>
+    <strong>{{ kpiTicketsCriticos }}</strong>
+    <small>Prioridad alta</small>
+  </article>
+</section>
 
   <!-- ==========================================================================
        Suite Ultra UI v1 - Acciones rápidas y filtros
@@ -803,7 +841,7 @@
               </button>
             </div>
             </div>
-
+          </td>
 
           <!-- Fecha Solución -->
           <td>
