@@ -22,7 +22,7 @@ import { ActivatedRoute, Router  } from '@angular/router';
 import { SessionService } from '../../core/auth/session.service';
 
 type ResultadoBitacora = 'OK' | 'FALLA' | 'OBS';
-type TipoMantenimiento = 'CORRECTIVO' | 'PREVENTIVO' | 'ESTETICO';
+type TipoMantenimiento = 'CORRECTIVO' | 'PREVENTIVO' | 'ESTETICO' | 'MEJORA';
 type VentanaPreventiva = 'ATRASADOS' | 'HOY' | 'PROXIMOS_7' | 'PROXIMOS_14';
 
 
@@ -80,6 +80,7 @@ export class PmBitacorasMobileComponent implements OnInit {
   'CORRECTIVO',
   'PREVENTIVO',
   'ESTETICO',
+  'MEJORA',
 ];
 
   readonly ventanasPreventivo = [
@@ -446,6 +447,7 @@ tipoMantenimientoLabel(tipo: TipoMantenimiento | string | null): string {
     CORRECTIVO: 'Correctivo',
     PREVENTIVO: 'Preventivo',
     ESTETICO: 'Estético',
+    MEJORA: 'Mejora',
   };
 
   return labels[tipo] || tipo;
