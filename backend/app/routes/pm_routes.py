@@ -18,6 +18,7 @@ from app.utils.pm_permissions import (
     require_pm_execute,
     require_pm_validate,
     require_pm_configure,
+    require_pm_view,
 )
 from app.models.user_model import UserORM
 
@@ -39,6 +40,7 @@ _PM_TIPOS_MANTENIMIENTO_VALIDOS = {
     "PREVENTIVO",
     "CORRECTIVO",
     "ESTETICO",
+    "MEJORA",
 }
 
 # ────────────────────────────────────────────────────────────
@@ -92,7 +94,7 @@ def _crear_bitacora(data, claims, user_id):
     resultado = _normalizar_texto_pm(data.get("resultado"))  # "OK" | "FALLA" | "OBS"
     tipo_mantenimiento = _normalizar_texto_pm(
         data.get("tipo_mantenimiento")
-    )  # "CORRECTIVO" | "PREVENTIVO" | "ESTETICO"
+    )  # "CORRECTIVO" | "PREVENTIVO" | "ESTETICO" | "MEJORA"
     notas = (data.get("notas") or "").strip()
     checks = data.get("checks") or {}
 
@@ -1012,7 +1014,16 @@ def pm_listar_bitacoras():
 @jwt_required()
 def pm_listar_configuraciones():
     claims = get_jwt() or {}
+    user_id = get_jwt_identity()
     sucursal_id = request.args.get("sucursal_id", type=int)
+
+    user, user_err = _obtener_usuario_actual_pm(user_id)
+    if user_err:
+        return jsonify(user_err[0]), user_err[1]
+
+    denied_action = require_pm_view(user)
+    if denied_action:
+        return jsonify(denied_action[0]), denied_action[1]
 
     query = (
         db.session.query(
@@ -1029,7 +1040,7 @@ def pm_listar_configuraciones():
             Sucursal.sucursal_id == PmPreventivoConfigORM.sucursal_id,
         )
     )
-    
+
     department_id = claims.get("department_id")
     rol = (claims.get("rol") or "").strip().upper()
 
@@ -1045,8 +1056,6 @@ def pm_listar_configuraciones():
 
         query = query.filter(PmPreventivoConfigORM.sucursal_id == sucursal_id)
     else:
-        rol = (claims.get("rol") or "").strip().upper()
-
         if rol not in _ADMIN_ROLES and rol != "MANTENIMIENTO":
             if rol == "AUX_MANTENIMIENTO":
                 user_sucursal = claims.get("sucursal_id")
@@ -1084,7 +1093,6 @@ def pm_listar_configuraciones():
         _serializar_pm_config_resumen(cfg, inventario, sucursal)
         for cfg, inventario, sucursal in rows
     ]), 200
-
 # ────────────────────────────────────────────────────────────
 # POST /configuraciones
 # ────────────────────────────────────────────────────────────
