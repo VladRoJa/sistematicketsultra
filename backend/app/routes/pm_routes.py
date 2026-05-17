@@ -13,6 +13,7 @@ from app.models.pm_preventivo import PmPreventivoConfigORM
 from app.models.inventario import InventarioGeneral, InventarioSucursal
 from app.models.sucursal_model import Sucursal
 from app.models.pm_validacion import PmValidacionORM
+from app.utils.scope_utils import can_claims_access_branch
 
 
 pm_bp = Blueprint("pm", __name__)
@@ -20,6 +21,11 @@ pm_bp = Blueprint("pm", __name__)
 # ── Admin roles (reutilizado en todos los checks) ──
 _ADMIN_ROLES = {"ADMINISTRADOR", "SUPER_ADMIN", "ADMIN"}
 
+_PM_LEGACY_GLOBAL_SCOPE_ROLES = _ADMIN_ROLES | {
+    "MANTENIMIENTO",
+    "SISTEMAS",
+    "TECNICO",
+}
 
 # ────────────────────────────────────────────────────────────
 # HELPERS 
@@ -28,43 +34,23 @@ def _verificar_permiso_sucursal(claims, sucursal_id_int):
     """
     Valida que el token tenga acceso a la sucursal indicada.
     Retorna None si OK, o (response_dict, status_code) si denegado.
+
+    PM conserva por ahora el comportamiento legacy:
+    - ADMINISTRADOR / SUPER_ADMIN / ADMIN: global.
+    - MANTENIMIENTO / SISTEMAS / TECNICO: global.
+    - Resto: scope por usuario_sucursal o sucursal principal.
     """
-    rol = (claims.get("rol") or "").strip().upper()
-
-    if rol in _ADMIN_ROLES:
+    if can_claims_access_branch(
+        claims,
+        sucursal_id_int,
+        global_roles=_PM_LEGACY_GLOBAL_SCOPE_ROLES,
+    ):
         return None
 
-    if rol in {"MANTENIMIENTO", "SISTEMAS", "TECNICO"}:
-        return None
-
-    if rol == "AUX_MANTENIMIENTO":
-        user_sucursal = claims.get("sucursal_id")
-        try:
-            user_sucursal = int(user_sucursal) if user_sucursal is not None else None
-        except Exception:
-            user_sucursal = None
-
-        if not user_sucursal or sucursal_id_int != user_sucursal:
-            return (
-                {"error": "Forbidden", "detail": "No tienes acceso a esta sucursal"},
-                403,
-            )
-        return None
-
-    # SR_MANTENIMIENTO y otros: solo sucursales_ids del token
-    allowed = claims.get("sucursales_ids") or []
-    try:
-        allowed = [int(x) for x in allowed]
-    except Exception:
-        allowed = []
-
-    if sucursal_id_int not in allowed:
-        return (
-            {"error": "Forbidden", "detail": "No tienes acceso a esta sucursal"},
-            403,
-        )
-    return None
-
+    return (
+        {"error": "Forbidden", "detail": "No tienes acceso a esta sucursal"},
+        403,
+    )
 
 def _crear_bitacora(data, claims, user_id):
     """
