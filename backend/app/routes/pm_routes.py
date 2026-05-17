@@ -27,6 +27,14 @@ _PM_LEGACY_GLOBAL_SCOPE_ROLES = _ADMIN_ROLES | {
     "TECNICO",
 }
 
+_PM_RESULTADOS_VALIDOS = {"OK", "FALLA", "OBS"}
+
+_PM_TIPOS_MANTENIMIENTO_VALIDOS = {
+    "PREVENTIVO",
+    "CORRECTIVO",
+    "ESTETICO",
+}
+
 # ────────────────────────────────────────────────────────────
 # HELPERS 
 # ────────────────────────────────────────────────────────────
@@ -52,6 +60,9 @@ def _verificar_permiso_sucursal(claims, sucursal_id_int):
         403,
     )
 
+def _normalizar_texto_pm(value) -> str:
+    return (value or "").strip().upper()
+
 def _crear_bitacora(data, claims, user_id):
     """
     Valida, verifica permisos e inserta una PmBitacoraORM.
@@ -60,9 +71,11 @@ def _crear_bitacora(data, claims, user_id):
     inventario_id = data.get("inventario_id")
     sucursal_id = data.get("sucursal_id")
     fecha = data.get("fecha")  # "YYYY-MM-DD"
-    resultado = data.get("resultado")  # "OK" | "FALLA" | "OBS"
-    tipo_mantenimiento = data.get("tipo_mantenimiento")  # "CORRECTIVO" | "PREVENTIVO" | "ESTETICO" | "MEJORA"
-    notas = data.get("notas") or ""
+    resultado = _normalizar_texto_pm(data.get("resultado"))  # "OK" | "FALLA" | "OBS"
+    tipo_mantenimiento = _normalizar_texto_pm(
+        data.get("tipo_mantenimiento")
+    )  # "CORRECTIVO" | "PREVENTIVO" | "ESTETICO"
+    notas = (data.get("notas") or "").strip()
     checks = data.get("checks") or {}
 
     # 1) Validación de requeridos
@@ -71,6 +84,24 @@ def _crear_bitacora(data, claims, user_id):
             {
                 "error": "Bad Request",
                 "detail": "Campos requeridos: inventario_id, sucursal_id, fecha, resultado, tipo_mantenimiento",
+            },
+            400,
+        )
+
+    if resultado not in _PM_RESULTADOS_VALIDOS:
+        return None, (
+            {
+                "error": "Bad Request",
+                "detail": "resultado debe ser OK, FALLA u OBS",
+            },
+            400,
+        )
+
+    if tipo_mantenimiento not in _PM_TIPOS_MANTENIMIENTO_VALIDOS:
+        return None, (
+            {
+                "error": "Bad Request",
+                "detail": "tipo_mantenimiento debe ser PREVENTIVO, CORRECTIVO, ESTETICO o MEJORA",
             },
             400,
         )
