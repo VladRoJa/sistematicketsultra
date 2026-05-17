@@ -1,65 +1,499 @@
-/* frontend\src\app\pm\pm-consulta-historial\pm-consulta-historial.component.css */
+/* ==========================================================================
+   Suite Ultra UI v1 - PM Consulta / Historial
+   ========================================================================== */
 
+:host {
+  display: block;
+}
 
-.pm-historial-container {
+.pm-history-page {
+  min-height: calc(100vh - 72px);
   padding: 24px;
-}
-
-.page-title {
-  margin: 0 0 16px;
-}
-
-.filters-card {
-  margin-bottom: 16px;
-}
-
-.filters-row {
   display: flex;
-  gap: 16px;
+  flex-direction: column;
+  gap: 20px;
+  background:
+    radial-gradient(circle at top left, rgba(229, 69, 37, 0.08), transparent 28%),
+    var(--ultra-bg);
+  color: var(--ultra-gray-900);
+}
+
+/* ==========================================================================
+   Hero
+   ========================================================================== */
+
+.pm-history-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 18px;
+  align-items: stretch;
+  padding: 24px;
+  border: 1px solid var(--ultra-gray-200);
+  border-radius: var(--ultra-radius-xl);
+  background:
+    radial-gradient(circle at top right, rgba(229, 69, 37, 0.13), transparent 34%),
+    linear-gradient(135deg, var(--ultra-surface), var(--ultra-gray-50));
+  box-shadow: var(--ultra-shadow-md);
+}
+
+.pm-history-eyebrow {
+  margin: 0 0 8px;
+  color: var(--ultra-orange);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.pm-history-hero h1 {
+  margin: 0;
+  color: var(--ultra-gray-900);
+  font-size: 34px;
+  line-height: 1.05;
+  font-weight: 900;
+  letter-spacing: -0.035em;
+}
+
+.pm-history-hero p {
+  max-width: 820px;
+  margin: 12px 0 0;
+  color: var(--ultra-gray-600);
+  font-size: 14px;
+  line-height: 1.55;
+  font-weight: 700;
+}
+
+.pm-history-mode-card {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  border: 1px solid rgba(229, 69, 37, 0.24);
+  border-radius: var(--ultra-radius-lg);
+  background: var(--ultra-orange-soft);
+  box-shadow: var(--ultra-shadow-sm);
+}
+
+.pm-history-mode-card span {
+  color: var(--ultra-orange);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.pm-history-mode-card strong {
+  margin-top: 7px;
+  color: var(--ultra-gray-900);
+  font-size: 34px;
+  line-height: 1;
+  font-weight: 900;
+}
+
+.pm-history-mode-card small {
+  margin-top: 6px;
+  color: var(--ultra-gray-600);
+  font-weight: 800;
+}
+
+/* ==========================================================================
+   Panels
+   ========================================================================== */
+
+.pm-history-panel {
+  overflow: hidden;
+  border: 1px solid var(--ultra-gray-200);
+  border-radius: var(--ultra-radius-xl);
+  background: var(--ultra-surface);
+  box-shadow: var(--ultra-shadow-md);
+}
+
+/* ==========================================================================
+   Filters
+   ========================================================================== */
+
+.pm-history-filters-row {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(220px, 0.8fr) 160px 160px auto;
+  gap: 14px;
   align-items: center;
+  padding: 18px 20px;
+}
+
+.pm-filter-field {
+  width: 100%;
+  min-width: 0;
+}
+
+.pm-filter-field--date {
+  min-width: 150px;
+}
+
+.pm-history-page ::ng-deep .mat-mdc-form-field {
+  --mdc-filled-text-field-container-color: var(--ultra-gray-50);
+  --mdc-filled-text-field-label-text-color: var(--ultra-gray-600);
+  --mdc-filled-text-field-focus-label-text-color: var(--ultra-orange);
+  --mdc-filled-text-field-active-indicator-color: var(--ultra-gray-300);
+  --mdc-filled-text-field-focus-active-indicator-color: var(--ultra-orange);
+  --mdc-filled-text-field-hover-active-indicator-color: rgba(229, 69, 37, 0.55);
+}
+
+.pm-history-page ::ng-deep .mat-mdc-text-field-wrapper {
+  border-radius: 14px 14px 8px 8px;
+  overflow: hidden;
+}
+
+.pm-history-page ::ng-deep .mat-mdc-form-field-infix {
+  min-height: 48px;
+}
+
+.pm-history-page ::ng-deep .mat-mdc-input-element,
+.pm-history-page ::ng-deep .mat-mdc-select-value {
+  color: var(--ultra-gray-900);
+  font-weight: 800;
+}
+
+/* ==========================================================================
+   Buttons
+   ========================================================================== */
+
+.pm-history-primary-button,
+.pm-history-danger-button {
+  min-height: 38px;
+  padding: 0 16px;
+  border-radius: 999px !important;
+  font-weight: 900 !important;
+  white-space: nowrap;
+}
+
+.pm-history-primary-button {
+  background: var(--ultra-orange) !important;
+  color: var(--ultra-surface) !important;
+  box-shadow: 0 10px 20px rgba(229, 69, 37, 0.22);
+}
+
+.pm-history-primary-button:hover:not(:disabled) {
+  filter: brightness(0.96);
+}
+
+.pm-history-danger-button {
+  border-color: rgba(220, 38, 38, 0.42) !important;
+  color: #991b1b !important;
+}
+
+/* ==========================================================================
+   Detail
+   ========================================================================== */
+
+.pm-history-detail-card {
+  border-left: 5px solid var(--ultra-orange);
+  position: sticky;
+  top: 12px;
+  z-index: 3;
+}
+
+.pm-history-detail-card__header {
+  padding: 18px 20px 10px;
+  border-bottom: 1px solid var(--ultra-gray-200);
+  background:
+    radial-gradient(circle at top right, rgba(229, 69, 37, 0.08), transparent 34%),
+    var(--ultra-gray-50);
+}
+
+.pm-history-detail-card__header mat-card-title {
+  color: var(--ultra-gray-900);
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.pm-history-detail-card__header mat-card-subtitle {
+  color: var(--ultra-gray-600);
+  font-weight: 700;
+}
+
+.pm-history-detail-loading {
+  padding: 18px 20px;
+  color: var(--ultra-gray-600);
+  font-weight: 800;
+}
+
+.pm-history-detail-content {
+  padding: 18px 20px 20px;
+}
+
+.pm-history-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.pm-history-detail-item {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  border: 1px solid var(--ultra-gray-200);
+  border-radius: var(--ultra-radius-lg);
+  background: var(--ultra-gray-50);
+}
+
+.pm-history-detail-item--wide {
+  grid-column: span 3;
+}
+
+.pm-history-detail-item span {
+  color: var(--ultra-gray-600);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.pm-history-detail-item strong {
+  color: var(--ultra-gray-900);
+  font-size: 14px;
+  line-height: 1.45;
+  font-weight: 900;
+  word-break: break-word;
+}
+
+.pm-detalle-notas {
+  white-space: pre-wrap;
+}
+
+.pm-history-validation-actions {
+  margin-top: 16px;
+  display: flex;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
-.filter-field {
-  min-width: 220px;
-  flex: 1 1 220px;
-}
-
-.section-card {
-  margin-top: 16px;
+.pm-history-reject-box {
+  margin-top: 14px;
 }
 
 .full-width {
   width: 100%;
 }
 
-.spinner-wrapper {
+/* ==========================================================================
+   Loading / Empty
+   ========================================================================== */
+
+.pm-history-loading,
+.pm-history-empty-state {
   display: flex;
+  flex-direction: column;
+  align-items: center;
   justify-content: center;
-  padding: 24px 0;
+  gap: 12px;
+  padding: 42px 20px;
+  border: 1px dashed var(--ultra-gray-300);
+  border-radius: var(--ultra-radius-xl);
+  background: var(--ultra-gray-50);
+  color: var(--ultra-gray-600);
 }
 
-.section-empty-state {
-  padding: 16px 0;
-  color: rgba(0, 0, 0, 0.65);
+.pm-history-loading p,
+.pm-history-empty-state p {
+  margin: 0;
+  font-weight: 800;
 }
 
-.pm-row-seleccionada {
-  background-color: rgba(63, 81, 181, 0.12);
+.pm-history-empty-state mat-icon {
+  width: 52px;
+  height: 52px;
+  color: var(--ultra-orange);
+  font-size: 52px;
 }
 
-.pm-row-seleccionada .mat-mdc-cell {
-  background-color: rgba(63, 81, 181, 0.12);
+.pm-history-empty-state h3 {
+  margin: 0;
+  color: var(--ultra-gray-900);
+  font-size: 18px;
+  font-weight: 900;
 }
 
-.mat-mdc-row {
+/* ==========================================================================
+   Table
+   ========================================================================== */
+
+.pm-history-table-card__header {
+  padding: 18px 20px 12px;
+  border-bottom: 1px solid var(--ultra-gray-200);
+  background:
+    radial-gradient(circle at top left, rgba(229, 69, 37, 0.08), transparent 36%),
+    var(--ultra-gray-50);
+}
+
+.pm-history-table-card__header mat-card-title {
+  color: var(--ultra-gray-900);
+  font-size: 19px;
+  font-weight: 900;
+}
+
+.pm-history-table-card__header mat-card-subtitle {
+  color: var(--ultra-gray-600);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.pm-history-table-wrapper {
+  overflow-x: auto;
+  padding: 0 20px 20px;
+}
+
+.pm-history-table {
+  width: 100%;
+  min-width: 860px;
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: var(--ultra-radius-lg);
+  overflow: hidden;
+}
+
+.pm-history-table ::ng-deep .mat-mdc-header-cell {
+  height: 42px;
+  padding: 0 14px;
+  background:
+    linear-gradient(135deg, var(--ultra-black-90), var(--ultra-charcoal));
+  color: var(--ultra-surface);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.pm-history-table ::ng-deep .mat-mdc-cell {
+  min-height: 46px;
+  padding: 10px 14px;
+  color: var(--ultra-gray-800);
+  border-bottom: 1px solid var(--ultra-gray-200);
+  font-size: 12px;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+.pm-history-table ::ng-deep .mat-mdc-cell strong {
+  color: var(--ultra-gray-900);
+  font-weight: 900;
+}
+
+.pm-history-table ::ng-deep .mat-mdc-row {
   cursor: pointer;
 }
 
-.mat-mdc-row:hover .mat-mdc-cell {
-  background-color: rgba(63, 81, 181, 0.06);
+.pm-history-table ::ng-deep .mat-mdc-row:nth-child(even) {
+  background: var(--ultra-gray-50);
 }
 
-.pm-detalle-notas {
-  white-space: pre-wrap;
+.pm-history-table ::ng-deep .mat-mdc-row:hover {
+  background: #fff7f4;
+}
+
+.pm-row-seleccionada,
+.pm-row-seleccionada .mat-mdc-cell {
+  background: rgba(229, 69, 37, 0.10) !important;
+}
+
+/* ==========================================================================
+   Badges
+   ========================================================================== */
+
+.pm-history-result-pill,
+.pm-history-state-badge {
+  width: fit-content;
+  min-height: 26px;
+  padding: 4px 11px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.pm-history-result-pill {
+  background: var(--ultra-gray-100);
+  color: var(--ultra-gray-800);
+  border-color: var(--ultra-gray-200);
+}
+
+.pm-history-state-badge--success {
+  background: var(--ultra-success-soft);
+  color: var(--ultra-success);
+  border-color: rgba(22, 163, 74, 0.22);
+}
+
+.pm-history-state-badge--danger {
+  background: var(--ultra-danger-soft);
+  color: #991b1b;
+  border-color: rgba(220, 38, 38, 0.22);
+}
+
+.pm-history-state-badge--pending {
+  background: var(--ultra-warning-soft);
+  color: #92400e;
+  border-color: rgba(245, 158, 11, 0.24);
+}
+
+/* ==========================================================================
+   Responsive
+   ========================================================================== */
+
+@media (max-width: 1100px) {
+  .pm-history-hero,
+  .pm-history-filters-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .pm-history-primary-button {
+    width: 100%;
+  }
+
+  .pm-history-detail-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pm-history-detail-item--wide {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 720px) {
+  .pm-history-page {
+    padding: 14px;
+    gap: 14px;
+  }
+
+  .pm-history-hero,
+  .pm-history-filters-row {
+    grid-template-columns: 1fr;
+    padding: 18px;
+  }
+
+  .pm-history-hero h1 {
+    font-size: 28px;
+  }
+
+  .pm-history-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pm-history-detail-item--wide {
+    grid-column: span 1;
+  }
+
+  .pm-history-validation-actions {
+    flex-direction: column;
+  }
+
+  .pm-history-validation-actions button {
+    width: 100%;
+  }
+
+  .pm-history-table-wrapper {
+    padding: 0 16px 16px;
+  }
 }
