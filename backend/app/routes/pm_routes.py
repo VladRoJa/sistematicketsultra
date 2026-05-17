@@ -1162,6 +1162,15 @@ def pm_actualizar_configuracion(config_id):
 @jwt_required()
 def pm_preventivo_dashboard():
     claims = get_jwt() or {}
+    user_id = get_jwt_identity()
+
+    user, user_err = _obtener_usuario_actual_pm(user_id)
+    if user_err:
+        return jsonify(user_err[0]), user_err[1]
+
+    denied_action = require_pm_view(user)
+    if denied_action:
+        return jsonify(denied_action[0]), denied_action[1]
 
     # ──  Validar sucursal_id ──
     sucursal_id_raw = request.args.get("sucursal_id", type=int)
