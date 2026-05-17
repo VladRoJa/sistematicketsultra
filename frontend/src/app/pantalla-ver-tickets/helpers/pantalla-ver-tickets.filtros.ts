@@ -213,23 +213,35 @@ export function obtenerFiltrosActivos(
     sucursal:'sucursales'
   };
 
-  campos.forEach(campo => {
-    const plural = pluralMap[campo] ?? `${campo}s`;
+campos.forEach(campo => {
+  const plural = pluralMap[campo] ?? `${campo}s`;
 
-    // ✅ Tomar SIEMPRE desde ...Disponibles (estado persistido al aplicar)
-    const disponibles = (component[`${plural}Disponibles`] as Array<{ valor: any; etiqueta?: string; seleccionado: boolean }>) ?? [];
+  const disponibles =
+    (component[`${plural}Disponibles`] as Array<{
+      valor: any;
+      etiqueta?: string;
+      seleccionado: boolean;
+    }>) ?? [];
 
-    const seleccion = disponibles
-      .filter(op => op.seleccionado)
-      .map(op => op.valor);
+  if (!Array.isArray(disponibles) || disponibles.length === 0) {
+    return;
+  }
 
-    const totalDisponibles = disponibles.length;
+  const seleccion = disponibles
+    .filter(op => op.seleccionado)
+    .map(op => op.valor);
 
-    // Si están TODOS seleccionados, no agregamos filtro para esa columna
-    if (totalDisponibles > 0 && seleccion.length < totalDisponibles) {
-      filtros[campo] = seleccion;
-    }
-  });
+  const totalOpciones = disponibles.length;
+  const totalSeleccionadas = seleccion.length;
+
+  // ✅ Excel-like:
+  // Nada seleccionado o todo seleccionado = no hay filtro real para esa columna.
+  if (totalSeleccionadas === 0 || totalSeleccionadas === totalOpciones) {
+    return;
+  }
+
+  filtros[campo] = seleccion;
+});
 
   return filtros;
 }

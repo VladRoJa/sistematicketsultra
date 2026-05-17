@@ -182,9 +182,8 @@
 
           <!-- (A) Aparato/Dispositivo -->
           <th [class.filtro-activo]="isFilterActive('inventario')">
-            Aparato/Dispositivo
             <!-- Filtros en encabezado desactivados -->
-            <ng-container *ngIf="false">
+            <ng-container *ngIf="true">
               <button mat-button [matMenuTriggerFor]="menuInventario"
                       #triggerFiltroInventario="matMenuTrigger"
                       (click)="onAbrirFiltro('inventario', triggerFiltroInventario)"
