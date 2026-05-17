@@ -57,6 +57,14 @@ class InventarioSucursal(db.Model):
 
     inventario = db.relationship('InventarioGeneral', backref='inventarios_sucursal')
 
+    __table_args__ = (
+        db.UniqueConstraint(
+            "inventario_id",
+            "sucursal_id",
+            name="uq_inventario_sucursal_activo",
+        ),
+    )
+
     def __repr__(self):
         return f"<InventarioSucursal Inventario {self.inventario_id} Stock {self.stock}>"
 
