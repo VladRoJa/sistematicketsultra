@@ -72,6 +72,20 @@ export function filtrarTicketsConFiltros(
   filtros: FiltrosEntrada | Record<string, any>
 ) {
   const filtrosSet = normalizaFiltros(filtros);
+const debugDetalleActivo = Boolean(filtrosSet.detalle?.size);
+
+if (debugDetalleActivo) {
+  console.group('🧪 [DETALLE] filtrarTicketsConFiltros entrada');
+  console.log('filtros detalle:', Array.from(filtrosSet.detalle || []));
+  console.log('tickets entrada:', tickets.length);
+  console.table((tickets || []).slice(0, 20).map((t: any) => ({
+    id: t.id,
+    detalle: t.detalle,
+    detalle_visible: t.detalle_visible,
+    detalle_filtro: t.detalle_filtro,
+  })));
+  console.groupEnd();
+}
 console.log('🧪 filtrosSet:', Object.fromEntries(
   Object.entries(filtrosSet).map(([k, v]) => [k, Array.from(v)])
 ));
@@ -85,7 +99,7 @@ console.log('🧪 filtrosSet:', Object.fromEntries(
       case 'criticidad':   return t.criticidad != null ? String(t.criticidad) : '';
       case 'departamento': return t.departamento ?? '';      // ← por nombre
       case 'subcategoria': return t.subcategoria != null ? String(t.subcategoria) : '';
-      case 'detalle':      return t.detalle != null ? String(t.detalle) : '';
+      case 'detalle':      return t.detalle_filtro ?? t.detalle_visible ?? (t.detalle != null ? String(t.detalle) : '');
       case 'inventario':   return t.inventario?.nombre ?? '';
       case 'sucursal':     return t.sucursal ?? '';
       default:             return '';
@@ -123,13 +137,25 @@ return tickets.filter(t => {
           case 'estado':       return t.estado ?? '';
           case 'criticidad':   return t.criticidad != null ? String(t.criticidad) : '';
           case 'subcategoria': return t.subcategoria != null ? String(t.subcategoria) : '';
-          case 'detalle':      return t.detalle != null ? String(t.detalle) : '';
+          case 'detalle':      return t.detalle_filtro ?? t.detalle_visible ?? (t.detalle != null ? String(t.detalle) : '');
           case 'inventario':   return t.inventario?.nombre ?? '';
           case 'sucursal':     return t.sucursal ?? '';
           default:             return '';
         }
       })();
     }
+
+if (col === 'detalle') {
+  console.log('🧪 [DETALLE] comparando', {
+    ticket_id: t.id,
+    valorTicket,
+    valoresFiltro: Array.from(valores),
+    match: valores.has(valorTicket),
+    detalle: t.detalle,
+    detalle_visible: t.detalle_visible,
+    detalle_filtro: t.detalle_filtro,
+  });
+}
 
     if (!valores.has(valorTicket)) return false;
   }
@@ -171,6 +197,14 @@ export function regenerarFiltrosFiltradosDesdeTickets(
       valoresExistentes = new Set(filteredTickets.map(t => t.departamento_id ?? '—'));
     } else if (campo === 'sucursal') {
       valoresExistentes = new Set(filteredTickets.map(t => (t as any).sucursal ?? '—'));
+    } else if (campo === 'detalle') {
+      valoresExistentes = new Set(
+        filteredTickets.map(t =>
+          (t as any).detalle_filtro ??
+          (t as any).detalle_visible ??
+          ((t as any).detalle != null ? String((t as any).detalle) : '—')
+        )
+      );
     } else {
       // Para campos numéricos conservamos el tipo (número), para el resto usamos string
       valoresExistentes = new Set(
@@ -427,12 +461,20 @@ export function generarOpcionesClasificacionDesdeTickets(
 export function buscarAncestroNivel(
   clasificacionId: number,
   nivelObjetivo: number,
-  catalogo: { id: number, nombre: string, parent_id: number | null, nivel: number }[]
-): { id: number, nombre: string } | null {
+  catalogo: { id: number; nombre: string; parent_id: number | null; nivel: number }[]
+): { id: number; nombre: string } | null {
   let actual = catalogo.find(c => c.id === clasificacionId);
+
   while (actual && actual.nivel > nivelObjetivo) {
-    actual = catalogo.find(c => c.id === actual.parent_id);
+    const parentId = actual.parent_id;
+
+    if (parentId == null) {
+      return null;
+    }
+
+    actual = catalogo.find(c => c.id === parentId);
   }
+
   return actual && actual.nivel === nivelObjetivo
     ? { id: actual.id, nombre: actual.nombre }
     : null;

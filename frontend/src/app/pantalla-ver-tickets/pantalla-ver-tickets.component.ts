@@ -799,6 +799,7 @@ private restaurarSeleccionActivaDeFiltro(
 
 private obtenerTicketsParaOpcionesDeFiltro(columna: string): Ticket[] {
   this.hidratarSucursalEnTickets();
+  this.hidratarDetalleEnTickets();
 
   const filtros = obtenerFiltrosActivos(this);
   delete filtros[columna];
@@ -881,17 +882,38 @@ if (columna === 'subcategoria') {
 
   // 4) Caso especial: DETALLE (toma nombre textual si viene en jerarquía)
   if (columna === 'detalle') {
+    this.hidratarDetalleEnTickets();
+
     const set = new Set<string>();
-    (this.filteredTickets || []).forEach((t: any) => {
-      set.add(this.getDetalleVisible(t));
+
+    (baseOpciones || []).forEach((t: any) => {
+      set.add(t.detalle_filtro || t.detalle_visible || '—');
     });
 
+
+    
     const opciones = Array.from(set)
       .sort((a, b) => a.localeCompare(b))
       .map(nombre => ({ valor: nombre, etiqueta: nombre, seleccionado: true }));
 
+      console.group('🧪 [DETALLE] prepararOpcionesFiltro');
+      console.log('baseOpciones length:', baseOpciones?.length);
+      console.log('opciones detalle:', opciones);
+      console.table((baseOpciones || []).slice(0, 20).map((t: any) => ({
+        id: t.id,
+        detalle_raw: t.__detalle_raw,
+        detalle: t.detalle,
+        detalle_visible: t.detalle_visible,
+        detalle_filtro: t.detalle_filtro,
+        getDetalleVisible: this.getDetalleVisible({
+          ...t,
+          detalle: t.__detalle_raw ?? t.detalle,
+        } as Ticket),
+      })));
+      console.groupEnd();
+
     this.detallesDisponibles = opciones;
-    this.detallesFiltrados  = [...opciones];
+    this.detallesFiltrados = [...opciones];
     this.temporalSeleccionados['detalle'] = opciones.map(o => ({ ...o }));
     return;
   }
@@ -943,6 +965,10 @@ onAbrirFiltro(columna: string, trigger: any) {
     this.hidratarSucursalEnTickets();
   }
 
+  if (columna === 'detalle') {
+    this.hidratarDetalleEnTickets();
+  }
+
   const seleccionActiva = this.obtenerSeleccionActivaDeFiltro(columna);
 
   if (this.rutasFiltro[columna]) {
@@ -973,24 +999,94 @@ onCerrarFiltro(columna: string, trigger?: any): void {
 }
 
 cerrarYAplicar(columna: string, trigger: MatMenuTrigger): void {
+  if (columna === 'detalle') {
+    this.hidratarDetalleEnTickets();
+  }
+
   this.confirmarFiltroColumna(columna);
 
-  if (columna === 'departamento') {
-    const sel = (this.departamentosDisponibles || [])
-      .filter((x: any) => x.seleccionado)
-      .map((x: any) => x.valor);
-    console.log('DEP seleccionados al aplicar:', sel);
+  if (columna === 'detalle') {
+    this.sincronizarDisponiblesDesdeTemporal('detalle');
   }
 
-  if (columna === 'categoria' || columna === 'estado' || columna === 'departamento') {
-    aplicarFiltroColumnaConResetUnificado(this, columna);
-  } else {
-    this.aplicarFiltroColumnaConReset(columna);
-  }
-  trigger.closeMenu();
+if (columna === 'categoria' || columna === 'estado' || columna === 'departamento') {
+  aplicarFiltroColumnaConResetUnificado(this, columna);
+} else if (columna === 'detalle') {
+  this.aplicarFiltroDetalleConReset();
+} else {
+  this.aplicarFiltroColumnaConReset(columna);
 }
 
+trigger.closeMenu();
+}
 
+private aplicarFiltroDetalleConReset(): void {
+  this.page = 1;
+  this.hidratarDetalleEnTickets();
+  this.hidratarSucursalEnTickets();
+
+  const filtrosActivos = obtenerFiltrosActivos(this);
+
+  const valoresDetalle = new Set(
+    ((filtrosActivos['detalle'] || []) as any[]).map((valor) =>
+      this.normalizarTextoFiltro(valor)
+    )
+  );
+
+  const filtrosSinDetalle = { ...filtrosActivos };
+  delete filtrosSinDetalle['detalle'];
+
+  const base = Array.isArray(this.ticketsCompletos) && this.ticketsCompletos.length > 0
+    ? this.ticketsCompletos
+    : this.tickets;
+
+  const baseFiltrada =
+    Object.keys(filtrosSinDetalle).length === 0
+      ? [...base]
+      : filtrarTicketsConFiltros(base, filtrosSinDetalle);
+
+  this.filteredTickets =
+    valoresDetalle.size === 0
+      ? baseFiltrada
+      : baseFiltrada.filter((ticket: any) => {
+          const detalleTicket = this.normalizarTextoFiltro(
+            ticket.detalle_filtro ||
+            ticket.detalle_visible ||
+            this.getDetalleVisible(ticket)
+          );
+
+          return valoresDetalle.has(detalleTicket);
+        });
+
+  this.totalTickets = this.filteredTickets.length;
+  this.totalPagesCount = Math.ceil(this.totalTickets / this.itemsPerPage);
+  this.visibleTickets = this.filteredTickets.slice(0, this.itemsPerPage);
+
+  this.changeDetectorRef.detectChanges();
+}
+
+private sincronizarDisponiblesDesdeTemporal(columna: string): void {
+  const plural = this.obtenerPluralFiltro(columna);
+
+  if (!plural) {
+    return;
+  }
+
+  const temporales = this.temporalSeleccionados[columna];
+
+  if (!Array.isArray(temporales)) {
+    return;
+  }
+
+  const normalizados = temporales.map((opcion: any) => ({
+    valor: opcion.valor,
+    etiqueta: opcion.etiqueta ?? opcion.valor,
+    seleccionado: Boolean(opcion.seleccionado),
+  }));
+
+  (this as any)[`${plural}Disponibles`] = normalizados;
+  (this as any)[`${plural}Filtradas`] = [...normalizados];
+}
 
 cerrarYLimpiar(columna: string, trigger?: any): void {
   if (columna === 'categoria' || columna === 'estado' || columna === 'departamento') {
@@ -1905,6 +2001,32 @@ getDetalleVisible(t: Ticket): string {
   return '—';
 }
 
+private hidratarDetalleEnTickets(): void {
+  const poner = (arr: any[] | undefined) => {
+    if (!Array.isArray(arr)) {
+      return;
+    }
+
+    arr.forEach((ticket: any) => {
+      if (ticket.__detalle_raw === undefined) {
+        ticket.__detalle_raw = ticket.detalle;
+      }
+
+      const detalleVisible = this.getDetalleVisible({
+        ...ticket,
+        detalle: ticket.__detalle_raw,
+      } as Ticket);
+
+      ticket.detalle_visible = detalleVisible || '—';
+      ticket.detalle_filtro = detalleVisible || '—';
+    });
+  };
+
+  poner(this.ticketsCompletos);
+  poner(this.tickets);
+  poner(this.filteredTickets);
+  poner(this.visibleTickets);
+}
 
 necesitaRef(t: any): boolean {
   // 1) Campo canónico del backend → devuelve enseguida si existe
