@@ -14,6 +14,8 @@ from app.models.inventario import InventarioGeneral, InventarioSucursal
 from app.models.sucursal_model import Sucursal
 from app.models.pm_validacion import PmValidacionORM
 from app.utils.scope_utils import can_claims_access_branch
+from app.utils.pm_permissions import require_pm_execute
+from app.models.user_model import UserORM
 
 
 pm_bp = Blueprint("pm", __name__)
@@ -138,12 +140,28 @@ def _crear_bitacora(data, claims, user_id):
             400,
         )
 
-    # 4) Política por rol
+    # 4) Permiso de acción: ejecutar bitácora PM
+    user = UserORM.get_by_id(user_id)
+
+    if not user:
+        return None, (
+            {
+                "error": "Unauthorized",
+                "detail": "Usuario no encontrado.",
+            },
+            401,
+        )
+
+    denied_action = require_pm_execute(user)
+    if denied_action:
+        return None, denied_action
+
+    # 5) Política por rol
     denied = _verificar_permiso_sucursal(claims, sucursal_id_int)
     if denied:
         return None, denied
 
-    # 5) Validar inventario↔sucursal
+    # 6) Validar inventario↔sucursal
     rel = InventarioSucursal.query.filter_by(
         inventario_id=inventario_id_int,
         sucursal_id=sucursal_id_int,
@@ -157,7 +175,7 @@ def _crear_bitacora(data, claims, user_id):
             400,
         )
 
-    # 6) Parse fecha
+    # 7) Parse fecha
     try:
         fecha_date = datetime.strptime(fecha, "%Y-%m-%d").date()
     except ValueError:
@@ -166,7 +184,7 @@ def _crear_bitacora(data, claims, user_id):
             400,
         )
 
-    # 7) Evitar duplicado operativo de preventivo
+    # 8) Evitar duplicado operativo de preventivo
     if tipo_mantenimiento == "PREVENTIVO":
         bitacora_existente = _buscar_bitacora_preventiva_existente(
             inventario_id=inventario_id_int,
@@ -187,7 +205,7 @@ def _crear_bitacora(data, claims, user_id):
                 409,
             )
 
-    # 8) Insertar
+    # 9) Insertar
     bit = PmBitacoraORM(
         inventario_id=inventario_id_int,
         sucursal_id=sucursal_id_int,
