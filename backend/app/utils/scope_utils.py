@@ -36,6 +36,13 @@ class BranchScope:
     branch_ids: tuple[int, ...]
     reason: str
 
+    def to_dict(self) -> dict:
+        return {
+            "is_global": self.is_global,
+            "branch_ids": list(self.branch_ids),
+            "reason": self.reason,
+        }
+
 
 def normalize_role(role: str | None) -> str:
     return (role or "").strip().upper()
@@ -161,6 +168,6 @@ def require_branch_access(user, sucursal_id, *, allow_global_roles: bool = True)
             "scope": get_user_branch_scope(
                 user,
                 allow_global_roles=allow_global_roles,
-            ),
+            ).to_dict(),
         },
     }
