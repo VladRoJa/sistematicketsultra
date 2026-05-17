@@ -136,7 +136,6 @@
 
           <!-- (2) Categoría -->
           <th [class.filtro-activo]="isFilterActive('categoria')">
-            Categoría
             <!-- Filtros en encabezado desactivados -->
             <ng-container *ngIf="true">
               <button
@@ -273,7 +272,6 @@
 
           <!-- (4) Sucursal -->
           <th [class.filtro-activo]="isFilterActive('sucursal')">
-            Sucursal
             <!-- Filtros en encabezado desactivados -->
             <ng-container *ngIf="true">
               <button mat-button [matMenuTriggerFor]="menuSucursal"
@@ -323,7 +321,6 @@
 
           <!-- (5) Estado -->
           <th [class.filtro-activo]="isFilterActive('estado')">
-            Estado
             <!-- Filtros en encabezado desactivados -->
             <ng-container *ngIf="true">
               <button mat-button [matMenuTriggerFor]="menuEstado"
@@ -368,9 +365,8 @@
 
           <!-- (6) Criticidad -->
           <th [class.filtro-activo]="isFilterActive('criticidad')">
-            Criticidad
             <!-- Filtros en encabezado desactivados -->
-            <ng-container *ngIf="false">
+            <ng-container *ngIf="true">
               <button mat-button [matMenuTriggerFor]="menuCriticidad"
                       #triggerFiltroCriticidad="matMenuTrigger"
                       (click)="onAbrirFiltro('criticidad', triggerFiltroCriticidad)"
@@ -509,9 +505,8 @@
 
           <!-- (10) Departamento -->
           <th [class.filtro-activo]="isFilterActive('departamento')">
-            Departamento
             <!-- Filtros en encabezado desactivados -->
-            <ng-container *ngIf="false">
+            <ng-container *ngIf="true">
               <button mat-button [matMenuTriggerFor]="menuDepartamento"
                       #triggerFiltroDepartamento="matMenuTrigger"
                       (click)="onAbrirFiltro('departamento', triggerFiltroDepartamento)"
@@ -554,9 +549,8 @@
 
           <!-- (11) Subcategoría -->
           <th [class.filtro-activo]="isFilterActive('subcategoria')">
-            Subcategoría
             <!-- Filtros en encabezado desactivados -->
-            <ng-container *ngIf="false">
+            <ng-container *ngIf="true">
               <button mat-button [matMenuTriggerFor]="menuSubcategoria"
                       #triggerFiltroSubcategoria="matMenuTrigger"
                       (click)="onAbrirFiltro('subcategoria', triggerFiltroSubcategoria)"
@@ -599,9 +593,8 @@
 
           <!-- (12) Detalle -->
           <th [class.filtro-activo]="isFilterActive('detalle')">
-            Detalle
             <!-- Filtros en encabezado desactivados -->
-            <ng-container *ngIf="false">
+            <ng-container *ngIf="true">
               <button mat-button [matMenuTriggerFor]="menuDetalle"
                       #triggerFiltroDetalle="matMenuTrigger"
                       (click)="onAbrirFiltro('detalle', triggerFiltroDetalle)"
