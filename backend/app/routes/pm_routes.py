@@ -886,6 +886,15 @@ def pm_crear_validacion():
 @jwt_required()
 def pm_obtener_bitacora_detalle(bitacora_pm_id):
     claims = get_jwt() or {}
+    user_id = get_jwt_identity()
+
+    user, user_err = _obtener_usuario_actual_pm(user_id)
+    if user_err:
+        return jsonify(user_err[0]), user_err[1]
+
+    denied_action = require_pm_view(user)
+    if denied_action:
+        return jsonify(denied_action[0]), denied_action[1]
 
     bitacora = db.session.get(PmBitacoraORM, bitacora_pm_id)
     if not bitacora:
@@ -901,7 +910,6 @@ def pm_obtener_bitacora_detalle(bitacora_pm_id):
         return jsonify(denied[0]), denied[1]
 
     return jsonify(_serializar_bitacora_pm_detalle(bitacora)), 200
-
 # ────────────────────────────────────────────────────────────
 # listar bitácoras PM con filtros (sucursal_id, fecha_desde, fecha_hasta)
 # ────────────────────────────────────────────────────────────
@@ -912,6 +920,15 @@ def pm_obtener_bitacora_detalle(bitacora_pm_id):
 @jwt_required()
 def pm_listar_bitacoras():
     claims = get_jwt() or {}
+    user_id = get_jwt_identity()
+
+    user, user_err = _obtener_usuario_actual_pm(user_id)
+    if user_err:
+        return jsonify(user_err[0]), user_err[1]
+
+    denied_action = require_pm_view(user)
+    if denied_action:
+        return jsonify(denied_action[0]), denied_action[1]
 
     sucursal_id = request.args.get("sucursal_id", type=int)
     fecha_desde = request.args.get("fecha_desde")
