@@ -108,54 +108,6 @@
        ========================================================================== -->
 
   <div class="tickets-table-card table-container">
-    <div class="filtro-unificado-wrapper" *ngIf="mostrarFiltros">
-      <!-- Columna 1: Select -->
-      <mat-form-field appearance="fill" class="columna-select">
-        <mat-label>Filtrar por</mat-label>
-        <mat-select
-          [(ngModel)]="campoUnificadoActual"
-          (selectionChange)="onCambioCampoUnificado($event.value)"
-        >
-          <mat-option [value]="null">— Selecciona —</mat-option>
-          <mat-option *ngFor="let c of columnasUnificado" [value]="c.key">
-            {{ c.label }}
-          </mat-option>
-        </mat-select>
-      </mat-form-field>
-
-      <!-- Columna 2: Buscador -->
-      <mat-form-field appearance="fill" class="columna-buscador">
-        <mat-label>Buscar {{ etiquetaCampoActual }}…</mat-label>
-        <input matInput [(ngModel)]="filtroUnificado.textoBusqueda" />
-      </mat-form-field>
-
-      <!-- Columna 3: Checklist + Botones -->
-      <div class="columna-checklist">
-        <div class="fu-checklist">
-          <div *ngIf="!opcionesCategoriaUnificada?.length" class="fu-empty-state">
-            No hay opciones (selecciona un campo arriba).
-          </div>
-
-          <mat-checkbox
-            *ngFor="let op of opcionesCategoriaUnificada"
-            class="fu-checkbox"
-            [checked]="filtroUnificado.seleccionTemporal.has(op.valor)"
-            (change)="alternarSeleccionCategoriaUnificada(op.valor)"
-          >
-            {{ op.etiqueta }}
-          </mat-checkbox>
-        </div>
-
-        <div class="fu-acciones">
-          <button mat-raised-button color="primary" (click)="aplicarCategoriaUnificada()">
-            Aplicar
-          </button>
-          <button mat-raised-button color="warn" (click)="limpiarCategoriaUnificada()">
-            Limpiar
-          </button>
-        </div>
-      </div>
-    </div>
 
     <table class="tabla-tickets">
       <colgroup>
@@ -186,7 +138,7 @@
           <th [class.filtro-activo]="isFilterActive('categoria')">
             Categoría
             <!-- Filtros en encabezado desactivados -->
-            <ng-container *ngIf="false">
+            <ng-container *ngIf="true">
               <button
                 mat-button
                 [matMenuTriggerFor]="menuCategoria"
@@ -323,7 +275,7 @@
           <th [class.filtro-activo]="isFilterActive('sucursal')">
             Sucursal
             <!-- Filtros en encabezado desactivados -->
-            <ng-container *ngIf="false">
+            <ng-container *ngIf="true">
               <button mat-button [matMenuTriggerFor]="menuSucursal"
                       #triggerFiltroSucursal="matMenuTrigger"
                       (click)="onAbrirFiltro('sucursal', triggerFiltroSucursal)"
@@ -333,6 +285,16 @@
               <mat-menu #menuSucursal="matMenu" disableClose="true">
                 <mat-divider></mat-divider>
                 <div class="menu-filtro" (click)="$event.stopPropagation()">
+                  <strong>Filtrar Sucursal</strong>
+
+                  <mat-form-field appearance="fill" class="buscador-filtro">
+                    <mat-label>Buscar</mat-label>
+                    <input
+                      matInput
+                      [(ngModel)]="filtroSucursalTexto"
+                      (ngModelChange)="filtrarOpcionesTexto('sucursal')"
+                    />
+                  </mat-form-field>
                   <mat-checkbox
                     [checked]="isTodoSeleccionado('sucursal')"
                     (change)="alternarSeleccionTemporal('sucursal', $event.checked)"
@@ -363,7 +325,7 @@
           <th [class.filtro-activo]="isFilterActive('estado')">
             Estado
             <!-- Filtros en encabezado desactivados -->
-            <ng-container *ngIf="false">
+            <ng-container *ngIf="true">
               <button mat-button [matMenuTriggerFor]="menuEstado"
                       #triggerFiltroEstado="matMenuTrigger"
                       (click)="onAbrirFiltro('estado', triggerFiltroEstado)"

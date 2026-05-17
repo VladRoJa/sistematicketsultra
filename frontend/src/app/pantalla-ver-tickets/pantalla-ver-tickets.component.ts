@@ -31,8 +31,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import * as TicketAcciones from './helpers/pantalla-ver-tickets.acciones';
 import * as TicketInit from './helpers/pantalla-ver-tickets.init';
 import { cargarDepartamentos } from './helpers/pantalla-ver-tickets.departamentos';
-import { aplicarFiltroColumnaConReset} from './helpers/pantalla-ver-tickets.filtros';
-import {filtrarOpcionesDetalle, aplicarFiltroColumna, limpiarFiltroColumna} from './helpers/pantalla-ver-tickets.filtros';
+import {filtrarOpcionesDetalle, aplicarFiltroColumna, limpiarFiltroColumna, aplicarFiltroColumnaConReset, obtenerFiltrosActivos} from './helpers/pantalla-ver-tickets.filtros';
 import { aplicarFiltroPorRangoFechaCreacion, aplicarFiltroPorRangoFechaFinalizado, aplicarFiltroPorRangoFechaEnProgreso  } from './helpers/pantalla-ver-tickets.fechas';
 import { MatDialog } from '@angular/material/dialog';
 import { asignarFechaSolucionYEnProgreso} from './helpers/pantalla-ver-tickets.fecha-solucion';
@@ -46,7 +45,7 @@ import { mostrarAlertaToast,solicitarMotivoRechazoCierre } from '../utils/alerta
 import { SucursalesService } from '../services/sucursales.service';
 import { EvidenciaPreviewComponent } from './modals/evidencia-preview.component';
 import { ModalCierreTicketComponent } from '../shared/modal-cierre-ticket/modal-cierre-ticket.component';
-
+import { filtrarTicketsConFiltros } from '../utils/ticket-utils';
 
 
 // Filtro unificado (solo 'categoria' por ahora)
@@ -494,59 +493,86 @@ private postAccionRefrescar(): void {
 
 
   
-filtrarOpcionesTexto(columna: string) {
-  const self = this as any;
-  const capitalizar = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+filtrarOpcionesTexto(columna: string): void {
+  const plural = this.obtenerPluralFiltro(columna);
 
-  // Aliases para nombres “raros”
-  const textoPropAlias: Record<string, string> = {
-    departamento: 'filtroDeptoTexto',
-    detalle: 'filtroDetalleTexto',
-    inventario: 'filtroInventarioTexto',
-    sucursal: 'filtroSucursalTexto',
-  };
+  if (!plural) {
+    return;
+  }
 
-  const pluralMap: Record<string, string> = {
-    categoria: 'categorias',
-    descripcion: 'descripciones',
-    username: 'usuarios',
-    estado: 'estados',
-    criticidad: 'criticidades',
-    departamento: 'departamentos',
-    subcategoria: 'subcategorias',
-    detalle: 'detalles',
-    inventario: 'inventarios',
-    sucursal: 'sucursales',
-  };
+  const texto = this.obtenerTextoFiltroColumna(columna);
+  const textoNormalizado = this.normalizarTextoFiltro(texto);
 
-  const textoProp = textoPropAlias[columna] ?? `filtro${capitalizar(columna)}Texto`;
-  const filtroTexto = (self[textoProp] || '').toLowerCase();
-  const plural = pluralMap[columna];
+  const disponibles = ((this as any)[`${plural}Disponibles`] || []) as Array<{
+    valor: any;
+    etiqueta?: string;
+    seleccionado: boolean;
+  }>;
 
-  if (!plural) return;
+  const temporalesActuales = (this.temporalSeleccionados[columna] || []) as Array<{
+    valor: any;
+    etiqueta?: string;
+    seleccionado: boolean;
+  }>;
 
-  // ⚠️ CLAVE: Tomar como base la lista YA FILTRADA (si existe), NO los "Disponibles"
-  const base =
-    (Array.isArray(self[`${plural}Filtradas`]) && self[`${plural}Filtradas`].length)
-      ? self[`${plural}Filtradas`]
-      : (self[`${plural}Disponibles`] || []);
+  const seleccionTemporalPorValor = new Map<string, boolean>(
+    temporalesActuales.map((opcion) => [
+      String(opcion.valor),
+      opcion.seleccionado,
+    ])
+  );
 
-  if (!Array.isArray(base)) return;
+  const fuente = disponibles.map((opcion) => {
+    const valorKey = String(opcion.valor);
 
-  const normaliza = (x: any) => ((x?.etiqueta ?? x?.valor) ?? '')
-    .toString()
-    .toLowerCase();
+    return {
+      ...opcion,
+      seleccionado: seleccionTemporalPorValor.has(valorKey)
+        ? Boolean(seleccionTemporalPorValor.get(valorKey))
+        : opcion.seleccionado !== false,
+    };
+  });
 
-  const filtradas = filtroTexto
-    ? base.filter((item: any) => normaliza(item).includes(filtroTexto))
-    : [...base];
+  const filtradas = textoNormalizado
+    ? fuente.filter((opcion) => {
+        const etiqueta = this.normalizarTextoFiltro(
+          opcion.etiqueta ?? opcion.valor ?? ''
+        );
 
-  // Mantén sincronizados lista y selección temporal
-  self[`${plural}Filtradas`] = filtradas;
-  this.temporalSeleccionados[columna] = filtradas.map((item: any) => ({ ...item }));
+        return etiqueta.includes(textoNormalizado);
+      })
+    : fuente;
+
+  this.temporalSeleccionados[columna] = [...filtradas];
+  (this as any)[`${plural}Filtradas`] = [...filtradas];
+
+  this.changeDetectorRef.detectChanges();
 }
 
+private obtenerTextoFiltroColumna(columna: string): string {
+  const textoMap: Record<string, string> = {
+    categoria: this.filtroCategoriaTexto,
+    descripcion: this.filtroDescripcionTexto,
+    username: this.filtroUsuarioTexto,
+    estado: this.filtroEstadoTexto,
+    criticidad: this.filtroCriticidadTexto,
+    departamento: this.filtroDeptoTexto,
+    subcategoria: this.filtroSubcategoriaTexto,
+    detalle: this.filtroDetalleTexto,
+    inventario: this.filtroInventarioTexto,
+    sucursal: this.filtroSucursalTexto,
+  };
 
+  return textoMap[columna] || '';
+}
+
+private normalizarTextoFiltro(value: any): string {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
   
   aplicarFiltroPorRangoFechaCreacionConfirmada = () => {
     this.rangoFechaCreacionSeleccionado = {
@@ -684,22 +710,116 @@ extrasCompromisoRefaccion: {
 private hidratarSucursalEnTickets(): void {
   const poner = (arr: any[] | undefined) => {
     if (!Array.isArray(arr)) return;
-    arr.forEach((t: any) => {
-      const id = t?.sucursal_id_destino ?? t?.sucursal_id;
-      t.sucursal = this.sucursalIdNombreMap[id] || (id != null ? String(id) : '—');
+
+    arr.forEach((ticket: any) => {
+      const id = ticket?.sucursal_id_destino ?? ticket?.sucursal_id;
+
+      ticket.sucursal = this.sucursalIdNombreMap[id] || (id != null ? String(id) : '—');
     });
   };
+
+  poner(this.ticketsCompletos);
   poner(this.tickets);
   poner(this.filteredTickets);
   poner(this.visibleTickets);
 }
 
+private obtenerPluralFiltro(columna: string): string | null {
+  const pluralMap: Record<string, string> = {
+    categoria: 'categorias',
+    descripcion: 'descripciones',
+    username: 'usuarios',
+    estado: 'estados',
+    criticidad: 'criticidades',
+    departamento: 'departamentos',
+    subcategoria: 'subcategorias',
+    detalle: 'detalles',
+    inventario: 'inventarios',
+    sucursal: 'sucursales',
+  };
+
+  return pluralMap[columna] || null;
+}
+
+private obtenerSeleccionActivaDeFiltro(columna: string): Set<string> | null {
+  if (!this.isFilterActive(columna)) {
+    return null;
+  }
+
+  const plural = this.obtenerPluralFiltro(columna);
+  if (!plural) {
+    return null;
+  }
+
+  const disponibles = (this as any)[`${plural}Disponibles`] as Array<{
+    valor: any;
+    seleccionado: boolean;
+  }>;
+
+  if (!Array.isArray(disponibles)) {
+    return null;
+  }
+
+  const seleccionados = disponibles
+    .filter(opcion => opcion.seleccionado)
+    .map(opcion => String(opcion.valor));
+
+  return new Set(seleccionados);
+}
+
+private restaurarSeleccionActivaDeFiltro(
+  columna: string,
+  seleccionActiva: Set<string> | null
+): void {
+  const plural = this.obtenerPluralFiltro(columna);
+  if (!plural) {
+    return;
+  }
+
+  const disponibles = (this as any)[`${plural}Disponibles`] as Array<{
+    valor: any;
+    etiqueta?: string;
+    seleccionado: boolean;
+  }>;
+
+  if (!Array.isArray(disponibles)) {
+    return;
+  }
+
+  const normalizados = disponibles.map(opcion => ({
+    ...opcion,
+    seleccionado: seleccionActiva
+      ? seleccionActiva.has(String(opcion.valor))
+      : true,
+  }));
+
+  (this as any)[`${plural}Disponibles`] = normalizados;
+  (this as any)[`${plural}Filtradas`] = [...normalizados];
+}
+
+private obtenerTicketsParaOpcionesDeFiltro(columna: string): Ticket[] {
+  this.hidratarSucursalEnTickets();
+
+  const filtros = obtenerFiltrosActivos(this);
+  delete filtros[columna];
+
+  const base = Array.isArray(this.ticketsCompletos) && this.ticketsCompletos.length > 0
+    ? this.ticketsCompletos
+    : this.tickets;
+
+  if (Object.keys(filtros).length === 0) {
+    return [...base];
+  }
+
+  return filtrarTicketsConFiltros(base, filtros);
+}
 
 private prepararOpcionesFiltro(columna: string, path: string): void {
   const setGen = new Set<string>();
+  const baseOpciones = this.obtenerTicketsParaOpcionesDeFiltro(columna);
 
-  // 1) Recolector genérico (se ignora si entramos a un caso especial)
-  (this.filteredTickets || []).forEach((t: any) => {
+  // 1) Recolector genérico: usa todos los filtros activos EXCEPTO la columna actual.
+  (baseOpciones || []).forEach((t: any) => {
     let valor: any = t;
     for (const part of path.split('.')) valor = valor?.[part];
 
@@ -819,12 +939,21 @@ if (columna === 'subcategoria') {
 onAbrirFiltro(columna: string, trigger: any) {
   console.log('🟢 Abriendo filtro para columna:', columna);
 
+  if (columna === 'sucursal') {
+    this.hidratarSucursalEnTickets();
+  }
+
+  const seleccionActiva = this.obtenerSeleccionActivaDeFiltro(columna);
+
   if (this.rutasFiltro[columna]) {
     this.prepararOpcionesFiltro(columna, this.rutasFiltro[columna]);
+    this.restaurarSeleccionActivaDeFiltro(columna, seleccionActiva);
   }
 
   // 👇 evita que un texto previo esconda opciones
-  if (columna === 'subcategoria') this.filtroSubcategoriaTexto = '';
+  if (columna === 'subcategoria') {
+    this.filtroSubcategoriaTexto = '';
+  }
 
   this.inicializarTemporales(columna);
   this.filtrarOpcionesTexto(columna);

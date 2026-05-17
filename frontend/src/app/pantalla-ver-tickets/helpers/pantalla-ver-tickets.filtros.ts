@@ -288,10 +288,19 @@ export function limpiarFiltroColumna(
   component: PantallaVerTicketsComponent,
   columna: string
 ): void {
+  component.page = 1;
+
   limpiarFiltroColumnaConMapa(component, columna);
 
   const filtros = obtenerFiltrosActivos(component);
-  component.filteredTickets = filtrarTicketsConFiltros(component.tickets, filtros);
+  const base = Array.isArray(component.ticketsCompletos) && component.ticketsCompletos.length > 0
+    ? component.ticketsCompletos
+    : component.tickets;
+
+  component.filteredTickets =
+    Object.keys(filtros).length === 0
+      ? [...base]
+      : filtrarTicketsConFiltros(base, filtros);
 
   regenerarFiltrosFiltradosDesdeTickets(
     component.filteredTickets,
@@ -307,6 +316,18 @@ export function limpiarFiltroColumna(
     component.sucursalesDisponibles,
     component
   );
+
+  resyncTemporalesDesdeFiltradas(component);
+  limpiarTextoColumna(component, columna);
+
+  component.totalTickets = component.filteredTickets.length;
+  component.totalPagesCount = Math.ceil(component.totalTickets / component.itemsPerPage);
+
+  actualizarDiasConTicketsCreacion(component);
+  actualizarDiasConTicketsFinalizado(component);
+  actualizarVisibleTickets(component);
+
+  component.changeDetectorRef.detectChanges();
 }
 
 export function hayFiltrosActivos(component: PantallaVerTicketsComponent): boolean {
