@@ -1094,3 +1094,53 @@ td.col-descripcion {
     width: 100%;
   }
 }
+
+.tickets-loading-state {
+  min-height: calc(100vh - 96px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+}
+
+.tickets-loading-card {
+  min-width: 320px;
+  max-width: 420px;
+  padding: 24px;
+  border-radius: 20px;
+  background: #ffffff;
+  border: 1px solid rgba(229, 69, 37, 0.18);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.08);
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+  text-align: center;
+}
+
+.tickets-loading-logo {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: #e54525;
+  color: #ffffff;
+  display: grid;
+  place-items: center;
+  font-size: 28px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+}
+
+.tickets-loading-text {
+  display: grid;
+  gap: 4px;
+}
+
+.tickets-loading-text strong {
+  font-size: 1rem;
+  color: #111827;
+}
+
+.tickets-loading-text span {
+  font-size: 0.9rem;
+  color: #52627a;
+}

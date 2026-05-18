@@ -6,7 +6,7 @@
 
 <section
   class="tickets-page"
-  *ngIf="!loading"
+  *ngIf="!loading; else ticketsLoadingTpl"
   [style.--desc-col-width]="'420px'"
   [style.--table-min-width]="'2486px'"
 >
@@ -847,3 +847,21 @@
     </div>
   </div>
 </section>
+
+<ng-template #ticketsLoadingTpl>
+  <section class="tickets-loading-state">
+    <div class="tickets-loading-card">
+      <div class="tickets-loading-logo">U</div>
+
+      <div class="tickets-loading-text">
+        <strong>Cargando tickets</strong>
+        <span>Preparando tabla, filtros y métricas...</span>
+      </div>
+
+      <mat-progress-spinner
+        mode="indeterminate"
+        diameter="36">
+      </mat-progress-spinner>
+    </div>
+  </section>
+</ng-template>
