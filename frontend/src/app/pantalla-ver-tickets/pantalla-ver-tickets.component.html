@@ -849,19 +849,26 @@
 </section>
 
 <ng-template #ticketsLoadingTpl>
-  <section class="tickets-loading-state">
-    <div class="tickets-loading-card">
-      <div class="tickets-loading-logo">U</div>
+  <section class="tickets-ultra-loading-state">
+    <div class="tickets-ultra-loading-orb">
+      <div class="tickets-ultra-loading-ring"></div>
+      <div class="tickets-ultra-loading-ring tickets-ultra-loading-ring--delay"></div>
+      <div class="tickets-ultra-loading-icon">⚡</div>
+    </div>
 
-      <div class="tickets-loading-text">
-        <strong>Cargando tickets</strong>
-        <span>Preparando tabla, filtros y métricas...</span>
-      </div>
+    <div class="tickets-ultra-loading-copy">
+      <h2>
+        Cargando <span>Suite Ultra</span>
+      </h2>
+      <p>Preparando tickets, filtros y métricas...</p>
+    </div>
 
-      <mat-progress-spinner
-        mode="indeterminate"
-        diameter="36">
-      </mat-progress-spinner>
+    <div class="tickets-ultra-loading-dots" aria-label="Cargando">
+      <span></span>
+      <span></span>
+      <span></span>
+      <span></span>
+      <span></span>
     </div>
   </section>
 </ng-template>
