@@ -1232,3 +1232,61 @@ td.col-descripcion {
     transform: translateY(-4px);
   }
 }
+
+/* =========================================================
+   Ver Tickets - sticky header + columnas congeladas
+   ========================================================= */
+
+.table-container {
+  position: relative;
+  max-height: calc(100vh - 330px);
+  overflow: auto;
+}
+
+/* Header fijo al hacer scroll vertical */
+.tabla-tickets thead th {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+/*
+  Columnas congeladas:
+  1 = Id
+  2 = Categoría
+  3 = Aparato/Dispositivo
+  4 = Descripción
+
+  Congelamos Aparato y Descripción.
+*/
+.tabla-tickets th:nth-child(3),
+.tabla-tickets td:nth-child(3) {
+  position: sticky;
+  left: 0;
+  z-index: 12;
+}
+
+.tabla-tickets th:nth-child(4),
+.tabla-tickets td:nth-child(4) {
+  position: sticky;
+  left: var(--sticky-aparato-width, 220px);
+  z-index: 12;
+}
+
+/* Fondo para que no se transparenten columnas al desplazarse */
+.tabla-tickets td:nth-child(3),
+.tabla-tickets td:nth-child(4) {
+  background: inherit;
+}
+
+/* Header de columnas congeladas debe quedar por encima de celdas normales */
+.tabla-tickets thead th:nth-child(3),
+.tabla-tickets thead th:nth-child(4) {
+  z-index: 30;
+}
+
+/* Refuerzo visual para separar la zona congelada */
+.tabla-tickets th:nth-child(4),
+.tabla-tickets td:nth-child(4) {
+  box-shadow: 8px 0 12px rgba(15, 23, 42, 0.08);
+}
