@@ -66,15 +66,11 @@ export function getFiltrosActivosFrom(
 }
 
 // ----------- FILTRADO CRUZADO PRINCIPAL -----------
-// ----------- FILTRADO PRINCIPAL (sin cross UI, solo tabla) -----------
 export function filtrarTicketsConFiltros(
   tickets: any[],
   filtros: FiltrosEntrada | Record<string, any>
 ) {
   const filtrosSet = normalizaFiltros(filtros);
-console.log('🧪 filtrosSet:', Object.fromEntries(
-  Object.entries(filtrosSet).map(([k, v]) => [k, Array.from(v)])
-));
 
   const getValue = (t: any, col: string): string => {
     switch (col) {
@@ -85,7 +81,7 @@ console.log('🧪 filtrosSet:', Object.fromEntries(
       case 'criticidad':   return t.criticidad != null ? String(t.criticidad) : '';
       case 'departamento': return t.departamento ?? '';      // ← por nombre
       case 'subcategoria': return t.subcategoria != null ? String(t.subcategoria) : '';
-      case 'detalle':      return t.detalle != null ? String(t.detalle) : '';
+      case 'detalle':      return t.detalle_filtro ?? t.detalle_visible ?? (t.detalle != null ? String(t.detalle) : '');
       case 'inventario':   return t.inventario?.nombre ?? '';
       case 'sucursal':     return t.sucursal ?? '';
       default:             return '';
@@ -104,15 +100,6 @@ return tickets.filter(t => {
       valorTicket = usandoIds
         ? (t.departamento_id != null ? String(t.departamento_id) : '')
         : (t.departamento ?? '');
-
-      // 🔎 log de comparación departamento
-      console.log('🔎 dept comparando', {
-        usandoIds,
-        valorTicket,
-        valores: Array.from(valores),
-        ticket_dep_id: t.departamento_id,
-        ticket_dep_nombre: t.departamento
-      });
     } else {
       // tu getValue normal
       valorTicket = (() => {
@@ -123,7 +110,7 @@ return tickets.filter(t => {
           case 'estado':       return t.estado ?? '';
           case 'criticidad':   return t.criticidad != null ? String(t.criticidad) : '';
           case 'subcategoria': return t.subcategoria != null ? String(t.subcategoria) : '';
-          case 'detalle':      return t.detalle != null ? String(t.detalle) : '';
+          case 'detalle':      return t.detalle_filtro ?? t.detalle_visible ?? (t.detalle != null ? String(t.detalle) : '');
           case 'inventario':   return t.inventario?.nombre ?? '';
           case 'sucursal':     return t.sucursal ?? '';
           default:             return '';
@@ -171,6 +158,14 @@ export function regenerarFiltrosFiltradosDesdeTickets(
       valoresExistentes = new Set(filteredTickets.map(t => t.departamento_id ?? '—'));
     } else if (campo === 'sucursal') {
       valoresExistentes = new Set(filteredTickets.map(t => (t as any).sucursal ?? '—'));
+    } else if (campo === 'detalle') {
+      valoresExistentes = new Set(
+        filteredTickets.map(t =>
+          (t as any).detalle_filtro ??
+          (t as any).detalle_visible ??
+          ((t as any).detalle != null ? String((t as any).detalle) : '—')
+        )
+      );
     } else {
       // Para campos numéricos conservamos el tipo (número), para el resto usamos string
       valoresExistentes = new Set(
@@ -201,8 +196,20 @@ export function regenerarFiltrosFiltradosDesdeTickets(
 
 // ----------- FUNCIONES VISUALES Y DE SELECCIÓN MULTIPLE -----------
 
-// ¿El filtro de una columna está activo?
 export function isFilterActive(ctx: any, columna: string): boolean {
+  // Fechas primero, porque no usan listas Disponibles/Filtradas.
+  if (columna === 'fecha_creacion') {
+    return !!ctx.filtroCreacionActivo;
+  }
+
+  if (columna === 'fecha_en_progreso') {
+    return !!ctx.filtroProgresoActivo;
+  }
+
+  if (columna === 'fecha_finalizado') {
+    return !!ctx.filtroFinalizadoActivo;
+  }
+
   const pluralMap: Record<string, string> = {
     categoria: 'categorias',
     descripcion: 'descripciones',
@@ -213,20 +220,20 @@ export function isFilterActive(ctx: any, columna: string): boolean {
     subcategoria: 'subcategorias',
     detalle: 'detalles',
     inventario: 'inventarios',
-    sucursal: 'sucursales'
+    sucursal: 'sucursales',
   };
+
   const plural = pluralMap[columna] || `${columna}s`;
   const disponibles = ctx[`${plural}Disponibles`];
-  if (!Array.isArray(disponibles) || disponibles.length === 0) return false;
+
+  if (!Array.isArray(disponibles) || disponibles.length === 0) {
+    return false;
+  }
+
   const algunoMarcado = disponibles.some((i: any) => i.seleccionado);
   const algunoDesmarcado = disponibles.some((i: any) => !i.seleccionado);
-  if (algunoMarcado && algunoDesmarcado) return true;
-  if (columna === 'fecha_creacion') {
-    return !!(ctx.rangoFechaCreacionSeleccionado?.start || ctx.rangoFechaCreacionSeleccionado?.end);
-  }
-  if (columna === 'fecha_en_progreso') return ctx.filtroProgresoActivo;
-  if (columna === 'fecha_finalizado') return ctx.filtroFinalizadoActivo;
-  return false;
+
+  return algunoMarcado && algunoDesmarcado;
 }
 
 // Limpiar filtro de una columna (checkboxes, texto, seleccionar todo)
@@ -427,12 +434,20 @@ export function generarOpcionesClasificacionDesdeTickets(
 export function buscarAncestroNivel(
   clasificacionId: number,
   nivelObjetivo: number,
-  catalogo: { id: number, nombre: string, parent_id: number | null, nivel: number }[]
-): { id: number, nombre: string } | null {
+  catalogo: { id: number; nombre: string; parent_id: number | null; nivel: number }[]
+): { id: number; nombre: string } | null {
   let actual = catalogo.find(c => c.id === clasificacionId);
+
   while (actual && actual.nivel > nivelObjetivo) {
-    actual = catalogo.find(c => c.id === actual.parent_id);
+    const parentId = actual.parent_id;
+
+    if (parentId == null) {
+      return null;
+    }
+
+    actual = catalogo.find(c => c.id === parentId);
   }
+
   return actual && actual.nivel === nivelObjetivo
     ? { id: actual.id, nombre: actual.nombre }
     : null;

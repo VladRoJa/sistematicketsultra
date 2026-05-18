@@ -213,23 +213,35 @@ export function obtenerFiltrosActivos(
     sucursal:'sucursales'
   };
 
-  campos.forEach(campo => {
-    const plural = pluralMap[campo] ?? `${campo}s`;
+campos.forEach(campo => {
+  const plural = pluralMap[campo] ?? `${campo}s`;
 
-    // ✅ Tomar SIEMPRE desde ...Disponibles (estado persistido al aplicar)
-    const disponibles = (component[`${plural}Disponibles`] as Array<{ valor: any; etiqueta?: string; seleccionado: boolean }>) ?? [];
+  const disponibles =
+    (component[`${plural}Disponibles`] as Array<{
+      valor: any;
+      etiqueta?: string;
+      seleccionado: boolean;
+    }>) ?? [];
 
-    const seleccion = disponibles
-      .filter(op => op.seleccionado)
-      .map(op => op.valor);
+  if (!Array.isArray(disponibles) || disponibles.length === 0) {
+    return;
+  }
 
-    const totalDisponibles = disponibles.length;
+  const seleccion = disponibles
+    .filter(op => op.seleccionado)
+    .map(op => op.valor);
 
-    // Si están TODOS seleccionados, no agregamos filtro para esa columna
-    if (totalDisponibles > 0 && seleccion.length < totalDisponibles) {
-      filtros[campo] = seleccion;
-    }
-  });
+  const totalOpciones = disponibles.length;
+  const totalSeleccionadas = seleccion.length;
+
+  // ✅ Excel-like:
+  // Nada seleccionado o todo seleccionado = no hay filtro real para esa columna.
+  if (totalSeleccionadas === 0 || totalSeleccionadas === totalOpciones) {
+    return;
+  }
+
+  filtros[campo] = seleccion;
+});
 
   return filtros;
 }
@@ -288,10 +300,19 @@ export function limpiarFiltroColumna(
   component: PantallaVerTicketsComponent,
   columna: string
 ): void {
+  component.page = 1;
+
   limpiarFiltroColumnaConMapa(component, columna);
 
   const filtros = obtenerFiltrosActivos(component);
-  component.filteredTickets = filtrarTicketsConFiltros(component.tickets, filtros);
+  const base = Array.isArray(component.ticketsCompletos) && component.ticketsCompletos.length > 0
+    ? component.ticketsCompletos
+    : component.tickets;
+
+  component.filteredTickets =
+    Object.keys(filtros).length === 0
+      ? [...base]
+      : filtrarTicketsConFiltros(base, filtros);
 
   regenerarFiltrosFiltradosDesdeTickets(
     component.filteredTickets,
@@ -307,6 +328,18 @@ export function limpiarFiltroColumna(
     component.sucursalesDisponibles,
     component
   );
+
+  resyncTemporalesDesdeFiltradas(component);
+  limpiarTextoColumna(component, columna);
+
+  component.totalTickets = component.filteredTickets.length;
+  component.totalPagesCount = Math.ceil(component.totalTickets / component.itemsPerPage);
+
+  actualizarDiasConTicketsCreacion(component);
+  actualizarDiasConTicketsFinalizado(component);
+  actualizarVisibleTickets(component);
+
+  component.changeDetectorRef.detectChanges();
 }
 
 export function hayFiltrosActivos(component: PantallaVerTicketsComponent): boolean {

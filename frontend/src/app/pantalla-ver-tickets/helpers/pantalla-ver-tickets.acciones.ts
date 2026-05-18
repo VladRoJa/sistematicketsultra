@@ -71,25 +71,44 @@ export function totalPages(component: PantallaVerTicketsComponent): number {
   return Math.ceil(component.filteredTickets.length / component.itemsPerPage);
 }
 
-
-
-/** Limpiar todos los filtros aplicados */
-// pantalla-ver-tickets.acciones.ts
 export function limpiarTodosLosFiltros(component: PantallaVerTicketsComponent): void {
-  // Limpiar selección de todos los filtros
-  const limpiarSeleccion = (lista: any[]) => lista.forEach(i => i.seleccionado = false);
+  const marcarTodoSeleccionado = (lista: any[] | undefined) => {
+    if (!Array.isArray(lista)) {
+      return;
+    }
 
-  limpiarSeleccion(component.categoriasDisponibles);
-  limpiarSeleccion(component.descripcionesDisponibles);
-  limpiarSeleccion(component.usuariosDisponibles);
-  limpiarSeleccion(component.estadosDisponibles);
-  limpiarSeleccion(component.criticidadesDisponibles);
-  limpiarSeleccion(component.departamentosDisponibles);
-  limpiarSeleccion(component.subcategoriasDisponibles);
-  limpiarSeleccion(component.detallesDisponibles);
-  limpiarSeleccion(component.sucursalesDisponibles);
+    lista.forEach(item => {
+      item.seleccionado = true;
+    });
+  };
 
-  // Resetear filtros visibles
+  const columnas = [
+    'categoria',
+    'descripcion',
+    'username',
+    'estado',
+    'criticidad',
+    'departamento',
+    'subcategoria',
+    'detalle',
+    'inventario',
+    'sucursal',
+  ];
+
+  // 1) Limpiar selección de todos los filtros.
+  // Todo seleccionado = sin filtro activo.
+  marcarTodoSeleccionado(component.categoriasDisponibles);
+  marcarTodoSeleccionado(component.descripcionesDisponibles);
+  marcarTodoSeleccionado(component.usuariosDisponibles);
+  marcarTodoSeleccionado(component.estadosDisponibles);
+  marcarTodoSeleccionado(component.criticidadesDisponibles);
+  marcarTodoSeleccionado(component.departamentosDisponibles);
+  marcarTodoSeleccionado(component.subcategoriasDisponibles);
+  marcarTodoSeleccionado(component.detallesDisponibles);
+  marcarTodoSeleccionado(component.inventariosDisponibles);
+  marcarTodoSeleccionado(component.sucursalesDisponibles);
+
+  // 2) Resetear filtros visibles.
   component.categoriasFiltradas = [...component.categoriasDisponibles];
   component.descripcionesFiltradas = [...component.descripcionesDisponibles];
   component.usuariosFiltrados = [...component.usuariosDisponibles];
@@ -98,9 +117,34 @@ export function limpiarTodosLosFiltros(component: PantallaVerTicketsComponent): 
   component.departamentosFiltrados = [...component.departamentosDisponibles];
   component.subcategoriasFiltradas = [...component.subcategoriasDisponibles];
   component.detallesFiltrados = [...component.detallesDisponibles];
+  component.inventariosFiltrados = [...component.inventariosDisponibles];
   component.sucursalesFiltradas = [...component.sucursalesDisponibles];
 
-  // Limpia buscadores
+  // 3) Resetear temporales.
+  columnas.forEach(columna => {
+    const pluralMap: Record<string, string> = {
+      categoria: 'categorias',
+      descripcion: 'descripciones',
+      username: 'usuarios',
+      estado: 'estados',
+      criticidad: 'criticidades',
+      departamento: 'departamentos',
+      subcategoria: 'subcategorias',
+      detalle: 'detalles',
+      inventario: 'inventarios',
+      sucursal: 'sucursales',
+    };
+
+    const plural = pluralMap[columna];
+    const disponibles = (component as any)[`${plural}Disponibles`] || [];
+
+    component.temporalSeleccionados[columna] = disponibles.map((opcion: any) => ({
+      ...opcion,
+      seleccionado: true,
+    }));
+  });
+
+  // 4) Limpia buscadores.
   component.filtroCategoriaTexto = '';
   component.filtroDescripcionTexto = '';
   component.filtroUsuarioTexto = '';
@@ -109,27 +153,44 @@ export function limpiarTodosLosFiltros(component: PantallaVerTicketsComponent): 
   component.filtroDeptoTexto = '';
   component.filtroSubcategoriaTexto = '';
   component.filtroDetalleTexto = '';
+  component.filtroInventarioTexto = '';
   component.filtroSucursalTexto = '';
+  component.filtroDescripcionTexto = '';
+  (component as any).filtroDescripcionAplicadoTexto = '';
 
-  // Limpia rangos de fechas
+  // 5) Limpia rangos de fechas.
   component.rangoFechaCreacionSeleccionado = { start: null, end: null };
   component.rangoFechaFinalSeleccionado = { start: null, end: null };
+  component.rangoFechaProgresoSeleccionado = { start: null, end: null };
 
-  // Restaurar tickets
-  component.filteredTickets = [...component.ticketsCompletos];
-
-
-  // ✅ RESET A PÁGINA 1
-  component.page = 1;
+  component.fechaCreacionTemp = { start: null, end: null };
+  component.fechaFinalTemp = { start: null, end: null };
+  component.fechaProgresoTemp = { start: null, end: null };
 
   component.filtroProgresoActivo = false;
   component.filtroFinalizadoActivo = false;
+  component.filtroCreacionActivo = false;
   component.incluirSinFechaProgreso = false;
   component.incluirSinFechaFinalizado = false;
 
-  actualizarVisibleTickets(component);
-}
+  // 6) Restaurar vista base respetando ocultarFinalizados.
+  const base = [...component.ticketsCompletos];
 
+  component.filteredTickets = component.ocultarFinalizados
+    ? base.filter((ticket: any) => {
+        const estado = (ticket.estado || '').toString().trim().toLowerCase();
+        return estado !== 'finalizado';
+      })
+    : base;
+
+  // 7) Reset paginación.
+  component.page = 1;
+  component.totalTickets = component.filteredTickets.length;
+  component.totalPagesCount = Math.ceil(component.totalTickets / component.itemsPerPage);
+  component.visibleTickets = component.filteredTickets.slice(0, component.itemsPerPage);
+
+  component.changeDetectorRef.detectChanges();
+}
 
 
 

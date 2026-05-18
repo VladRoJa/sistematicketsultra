@@ -31,8 +31,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import * as TicketAcciones from './helpers/pantalla-ver-tickets.acciones';
 import * as TicketInit from './helpers/pantalla-ver-tickets.init';
 import { cargarDepartamentos } from './helpers/pantalla-ver-tickets.departamentos';
-import { aplicarFiltroColumnaConReset} from './helpers/pantalla-ver-tickets.filtros';
-import {filtrarOpcionesDetalle, aplicarFiltroColumna, limpiarFiltroColumna} from './helpers/pantalla-ver-tickets.filtros';
+import {filtrarOpcionesDetalle, aplicarFiltroColumna, limpiarFiltroColumna, aplicarFiltroColumnaConReset, obtenerFiltrosActivos} from './helpers/pantalla-ver-tickets.filtros';
 import { aplicarFiltroPorRangoFechaCreacion, aplicarFiltroPorRangoFechaFinalizado, aplicarFiltroPorRangoFechaEnProgreso  } from './helpers/pantalla-ver-tickets.fechas';
 import { MatDialog } from '@angular/material/dialog';
 import { asignarFechaSolucionYEnProgreso} from './helpers/pantalla-ver-tickets.fecha-solucion';
@@ -46,25 +45,8 @@ import { mostrarAlertaToast,solicitarMotivoRechazoCierre } from '../utils/alerta
 import { SucursalesService } from '../services/sucursales.service';
 import { EvidenciaPreviewComponent } from './modals/evidencia-preview.component';
 import { ModalCierreTicketComponent } from '../shared/modal-cierre-ticket/modal-cierre-ticket.component';
-
-
-
-// Filtro unificado (solo 'categoria' por ahora)
-import {
-  crearEstadoInicial,
-  seleccionarCampo,
-  aplicarFiltroActual,
-  limpiarFiltroActual,
-  filtrarTickets as filtrarTicketsUnificado,
-  filtrarOpcionesPorTexto as filtrarOpcionesUnificado,
-  alternarSeleccionTemporal,
-  EstadoFiltroUnificado,
-  aplicarFiltroColumnaConResetUnificado,
-  limpiarFiltroColumnaUnificado,
-
-} from 'src/app/utils/filtro-unificado';
+import { filtrarTicketsConFiltros } from '../utils/ticket-utils';
 import { MatSelectModule } from '@angular/material/select';
-
 import { AuthService } from '../services/auth.service';
 import { DialogoConfirmacionComponent } from '../shared/dialogo-confirmacion/dialogo-confirmacion.component';
 
@@ -192,7 +174,6 @@ export class PantallaVerTicketsComponent implements OnInit {
   sucursalIdNombreMap: Record<number, string> = {};
   listaSucursales: any[] = [];
   ocultarFinalizados: boolean = true;
-  filtroRapidoPorValidarActivo: boolean = false;
 
 
   // Temporales
@@ -266,6 +247,7 @@ export class PantallaVerTicketsComponent implements OnInit {
 
   filtroCategoriaTexto = '';
   filtroDescripcionTexto = '';
+  filtroDescripcionAplicadoTexto = '';
   filtroUsuarioTexto = '';
   filtroEstadoTexto = '';
   filtroCriticidadTexto = '';
@@ -277,33 +259,12 @@ export class PantallaVerTicketsComponent implements OnInit {
   filtroInventarioTexto = '';
   filtroSucursalTexto = '';
 
-
-  mostrarFiltros: boolean = false; 
-
-
   historialVisible: Record<number, boolean> = {};
   fechasSolucionDisponibles = new Set<string>();
 
   rangoFechaCreacionSeleccionado = { start: null as Date | null, end: null as Date | null };
   rangoFechaFinalSeleccionado = { start: null as Date | null, end: null as Date | null };
   rangoFechaProgresoSeleccionado = { start: null as Date | null, end: null as Date | null };
-
-
-
-
-  // Estado del filtro unificado (UI global: rubro + opciones)
-  filtroUnificado: EstadoFiltroUnificado = crearEstadoInicial();
-  campoUnificadoActual: 'categoria' | 'estado' | 'departamento' | 'sucursal' | 'username' | 'criticidad' | 'subcategoria' | 'detalle' | null = null;
-  columnasUnificado: Array<{ key: 'categoria' | 'estado' | 'departamento' | 'sucursal' | 'username' | 'criticidad' | 'subcategoria' | 'detalle', label: string }> = [
-    { key: 'categoria',    label: 'Categoría' },
-    { key: 'estado',       label: 'Estado' },
-    { key: 'departamento', label: 'Departamento' },
-    { key: 'sucursal',     label: 'Sucursal' },
-    { key: 'username',     label: 'Usuario' },
-    { key: 'criticidad',   label: 'Criticidad' },
-    { key: 'subcategoria', label: 'Subcategoría' },
-    { key: 'detalle',      label: 'Detalle' },
-  ];
 
 
 
@@ -467,7 +428,71 @@ private postAccionRefrescar(): void {
 }
 
 
+get filtroDescripcionActivo(): boolean {
+  return this.filtroDescripcionAplicadoTexto.trim().length > 0;
+}
 
+private obtenerBaseParaFiltroDescripcion(): Ticket[] {
+  this.hidratarSucursalEnTickets();
+  this.hidratarDetalleEnTickets();
+
+  const filtros = obtenerFiltrosActivos(this);
+  delete filtros['descripcion'];
+
+  const baseCompleta = Array.isArray(this.ticketsCompletos) && this.ticketsCompletos.length > 0
+    ? this.ticketsCompletos
+    : this.tickets;
+
+  const baseModoVista = this.ocultarFinalizados
+    ? baseCompleta.filter((ticket: Ticket) => {
+        const estado = (ticket.estado || '').toString().trim().toLowerCase();
+        return estado !== 'finalizado';
+      })
+    : [...baseCompleta];
+
+  return Object.keys(filtros).length === 0
+    ? baseModoVista
+    : filtrarTicketsConFiltros(baseModoVista, filtros);
+}
+
+aplicarFiltroDescripcionTexto(trigger?: MatMenuTrigger): void {
+  const textoOriginal = (this.filtroDescripcionTexto || '').trim();
+  const textoNormalizado = this.normalizarTextoFiltro(textoOriginal);
+
+  this.filtroDescripcionAplicadoTexto = textoOriginal;
+
+  const base = this.obtenerBaseParaFiltroDescripcion();
+
+  this.filteredTickets = textoNormalizado
+    ? base.filter((ticket: Ticket) => {
+        const descripcion = this.normalizarTextoFiltro(ticket.descripcion || '');
+        return descripcion.includes(textoNormalizado);
+      })
+    : base;
+
+  this.page = 1;
+  this.totalTickets = this.filteredTickets.length;
+  this.totalPagesCount = Math.ceil(this.totalTickets / this.itemsPerPage);
+  this.visibleTickets = this.filteredTickets.slice(0, this.itemsPerPage);
+
+  this.changeDetectorRef.detectChanges();
+  trigger?.closeMenu?.();
+}
+
+limpiarFiltroDescripcionTexto(trigger?: MatMenuTrigger): void {
+  this.filtroDescripcionTexto = '';
+  this.filtroDescripcionAplicadoTexto = '';
+
+  this.filteredTickets = this.obtenerBaseParaFiltroDescripcion();
+
+  this.page = 1;
+  this.totalTickets = this.filteredTickets.length;
+  this.totalPagesCount = Math.ceil(this.totalTickets / this.itemsPerPage);
+  this.visibleTickets = this.filteredTickets.slice(0, this.itemsPerPage);
+
+  this.changeDetectorRef.detectChanges();
+  trigger?.closeMenu?.();
+}
 
 
 
@@ -494,65 +519,117 @@ private postAccionRefrescar(): void {
 
 
   
-filtrarOpcionesTexto(columna: string) {
-  const self = this as any;
-  const capitalizar = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+filtrarOpcionesTexto(columna: string): void {
+  const plural = this.obtenerPluralFiltro(columna);
 
-  // Aliases para nombres “raros”
-  const textoPropAlias: Record<string, string> = {
-    departamento: 'filtroDeptoTexto',
-    detalle: 'filtroDetalleTexto',
-    inventario: 'filtroInventarioTexto',
-    sucursal: 'filtroSucursalTexto',
-  };
+  if (!plural) {
+    return;
+  }
 
-  const pluralMap: Record<string, string> = {
-    categoria: 'categorias',
-    descripcion: 'descripciones',
-    username: 'usuarios',
-    estado: 'estados',
-    criticidad: 'criticidades',
-    departamento: 'departamentos',
-    subcategoria: 'subcategorias',
-    detalle: 'detalles',
-    inventario: 'inventarios',
-    sucursal: 'sucursales',
-  };
+  const texto = this.obtenerTextoFiltroColumna(columna);
+  const textoNormalizado = this.normalizarTextoFiltro(texto);
 
-  const textoProp = textoPropAlias[columna] ?? `filtro${capitalizar(columna)}Texto`;
-  const filtroTexto = (self[textoProp] || '').toLowerCase();
-  const plural = pluralMap[columna];
+  const disponibles = ((this as any)[`${plural}Disponibles`] || []) as Array<{
+    valor: any;
+    etiqueta?: string;
+    seleccionado: boolean;
+  }>;
 
-  if (!plural) return;
+  const temporalesActuales = (this.temporalSeleccionados[columna] || []) as Array<{
+    valor: any;
+    etiqueta?: string;
+    seleccionado: boolean;
+  }>;
 
-  // ⚠️ CLAVE: Tomar como base la lista YA FILTRADA (si existe), NO los "Disponibles"
-  const base =
-    (Array.isArray(self[`${plural}Filtradas`]) && self[`${plural}Filtradas`].length)
-      ? self[`${plural}Filtradas`]
-      : (self[`${plural}Disponibles`] || []);
+  const seleccionTemporalPorValor = new Map<string, boolean>(
+    temporalesActuales.map((opcion) => [
+      String(opcion.valor),
+      opcion.seleccionado,
+    ])
+  );
 
-  if (!Array.isArray(base)) return;
+  const fuente = disponibles.map((opcion) => {
+    const valorKey = String(opcion.valor);
 
-  const normaliza = (x: any) => ((x?.etiqueta ?? x?.valor) ?? '')
-    .toString()
-    .toLowerCase();
+    return {
+      ...opcion,
+      seleccionado: seleccionTemporalPorValor.has(valorKey)
+        ? Boolean(seleccionTemporalPorValor.get(valorKey))
+        : opcion.seleccionado !== false,
+    };
+  });
 
-  const filtradas = filtroTexto
-    ? base.filter((item: any) => normaliza(item).includes(filtroTexto))
-    : [...base];
+  const filtradas = textoNormalizado
+    ? fuente.filter((opcion) => {
+        const etiqueta = this.normalizarTextoFiltro(
+          opcion.etiqueta ?? opcion.valor ?? ''
+        );
 
-  // Mantén sincronizados lista y selección temporal
-  self[`${plural}Filtradas`] = filtradas;
-  this.temporalSeleccionados[columna] = filtradas.map((item: any) => ({ ...item }));
+        return etiqueta.includes(textoNormalizado);
+      })
+    : fuente;
+
+  this.temporalSeleccionados[columna] = [...filtradas];
+  (this as any)[`${plural}Filtradas`] = [...filtradas];
+
+  this.changeDetectorRef.detectChanges();
 }
 
+private columnaTieneFiltroReal(columna: string): boolean {
+  const plural = this.obtenerPluralFiltro(columna);
 
+  if (!plural) {
+    return false;
+  }
+
+  const disponibles = (this as any)[`${plural}Disponibles`] as Array<{
+    valor: any;
+    seleccionado: boolean;
+  }>;
+
+  if (!Array.isArray(disponibles) || disponibles.length === 0) {
+    return false;
+  }
+
+  const seleccionadas = disponibles.filter(opcion => opcion.seleccionado).length;
+
+  return seleccionadas > 0 && seleccionadas < disponibles.length;
+}
+
+private obtenerTextoFiltroColumna(columna: string): string {
+  const textoMap: Record<string, string> = {
+    categoria: this.filtroCategoriaTexto,
+    descripcion: this.filtroDescripcionTexto,
+    username: this.filtroUsuarioTexto,
+    estado: this.filtroEstadoTexto,
+    criticidad: this.filtroCriticidadTexto,
+    departamento: this.filtroDeptoTexto,
+    subcategoria: this.filtroSubcategoriaTexto,
+    detalle: this.filtroDetalleTexto,
+    inventario: this.filtroInventarioTexto,
+    sucursal: this.filtroSucursalTexto,
+  };
+
+  return textoMap[columna] || '';
+}
+
+private normalizarTextoFiltro(value: any): string {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
   
   aplicarFiltroPorRangoFechaCreacionConfirmada = () => {
     this.rangoFechaCreacionSeleccionado = {
       start: this.fechaCreacionTemp.start,
       end: this.fechaCreacionTemp.end
     };
+
+    this.filtroCreacionActivo =
+      !!this.rangoFechaCreacionSeleccionado.start ||
+      !!this.rangoFechaCreacionSeleccionado.end;
 
     aplicarFiltroPorRangoFechaCreacion(this, this.rangoFechaCreacionSeleccionado);
 
@@ -565,8 +642,10 @@ filtrarOpcionesTexto(columna: string) {
     
   borrarFiltroRangoFechaCreacion = () => {
     this.rangoFechaCreacionSeleccionado = { start: null, end: null };
-    this.fechaCreacionTemp = { start: null, end: null }; // ⬅️ limpia también la temporal
-    this.filteredTickets = [...this.tickets];
+    this.fechaCreacionTemp = { start: null, end: null };
+    this.filtroCreacionActivo = false;
+
+    this.filteredTickets = this.obtenerBaseConModoYFechas();
 
     this.page = 1;
     this.totalTickets = this.filteredTickets.length;
@@ -582,8 +661,10 @@ filtrarOpcionesTexto(columna: string) {
       end: this.fechaProgresoTemp.end
     };
 
-    // ⬇️ Solo en aplicar se toma en cuenta esta bandera
-    this.filtroProgresoActivo = !!this.rangoFechaProgresoSeleccionado.start || !!this.rangoFechaProgresoSeleccionado.end || this.incluirSinFechaProgreso;
+    this.filtroProgresoActivo =
+      !!this.rangoFechaProgresoSeleccionado.start ||
+      !!this.rangoFechaProgresoSeleccionado.end ||
+      this.incluirSinFechaProgreso;
 
     aplicarFiltroPorRangoFechaEnProgreso(this, this.rangoFechaProgresoSeleccionado);
 
@@ -601,8 +682,10 @@ filtrarOpcionesTexto(columna: string) {
       end: this.fechaFinalTemp.end
     };
 
-    // ⬇️ Activar sólo al aplicar
-    this.filtroFinalizadoActivo = !!this.rangoFechaFinalSeleccionado.start || !!this.rangoFechaFinalSeleccionado.end || this.incluirSinFechaFinalizado;
+    this.filtroFinalizadoActivo =
+      !!this.rangoFechaFinalSeleccionado.start ||
+      !!this.rangoFechaFinalSeleccionado.end ||
+      this.incluirSinFechaFinalizado;
 
     aplicarFiltroPorRangoFechaFinalizado(this, this.rangoFechaFinalSeleccionado);
 
@@ -618,13 +701,15 @@ filtrarOpcionesTexto(columna: string) {
     this.rangoFechaProgresoSeleccionado = { start: null, end: null };
     this.fechaProgresoTemp = { start: null, end: null };
     this.incluirSinFechaProgreso = false;
-    this.filtroProgresoActivo = false; 
+    this.filtroProgresoActivo = false;
 
-    this.filteredTickets = [...this.tickets];
+    this.filteredTickets = this.obtenerBaseConModoYFechas();
+
     this.page = 1;
     this.totalTickets = this.filteredTickets.length;
     this.totalPagesCount = Math.ceil(this.totalTickets / this.itemsPerPage);
     this.visibleTickets = this.filteredTickets.slice(0, this.itemsPerPage);
+
     this.changeDetectorRef.detectChanges();
   };
 
@@ -633,13 +718,15 @@ filtrarOpcionesTexto(columna: string) {
     this.rangoFechaFinalSeleccionado = { start: null, end: null };
     this.fechaFinalTemp = { start: null, end: null };
     this.incluirSinFechaFinalizado = false;
-    this.filtroFinalizadoActivo = false; 
+    this.filtroFinalizadoActivo = false;
 
-    this.filteredTickets = [...this.tickets];
+    this.filteredTickets = this.obtenerBaseConModoYFechas();
+
     this.page = 1;
     this.totalTickets = this.filteredTickets.length;
     this.totalPagesCount = Math.ceil(this.totalTickets / this.itemsPerPage);
     this.visibleTickets = this.filteredTickets.slice(0, this.itemsPerPage);
+
     this.changeDetectorRef.detectChanges();
   };
 
@@ -684,22 +771,115 @@ extrasCompromisoRefaccion: {
 private hidratarSucursalEnTickets(): void {
   const poner = (arr: any[] | undefined) => {
     if (!Array.isArray(arr)) return;
-    arr.forEach((t: any) => {
-      const id = t?.sucursal_id_destino ?? t?.sucursal_id;
-      t.sucursal = this.sucursalIdNombreMap[id] || (id != null ? String(id) : '—');
+
+    arr.forEach((ticket: any) => {
+      const id = ticket?.sucursal_id_destino ?? ticket?.sucursal_id;
+
+      ticket.sucursal = this.sucursalIdNombreMap[id] || (id != null ? String(id) : '—');
     });
   };
+
+  poner(this.ticketsCompletos);
   poner(this.tickets);
   poner(this.filteredTickets);
   poner(this.visibleTickets);
 }
 
+private obtenerPluralFiltro(columna: string): string | null {
+  const pluralMap: Record<string, string> = {
+    categoria: 'categorias',
+    descripcion: 'descripciones',
+    username: 'usuarios',
+    estado: 'estados',
+    criticidad: 'criticidades',
+    departamento: 'departamentos',
+    subcategoria: 'subcategorias',
+    detalle: 'detalles',
+    inventario: 'inventarios',
+    sucursal: 'sucursales',
+  };
+
+  return pluralMap[columna] || null;
+}
+
+private obtenerSeleccionActivaDeFiltro(columna: string): Set<string> | null {
+  if (!this.isFilterActive(columna)) {
+    return null;
+  }
+
+  const plural = this.obtenerPluralFiltro(columna);
+  if (!plural) {
+    return null;
+  }
+
+  const disponibles = (this as any)[`${plural}Disponibles`] as Array<{
+    valor: any;
+    seleccionado: boolean;
+  }>;
+
+  if (!Array.isArray(disponibles)) {
+    return null;
+  }
+
+  const seleccionados = disponibles
+    .filter(opcion => opcion.seleccionado)
+    .map(opcion => String(opcion.valor));
+
+  return new Set(seleccionados);
+}
+
+private restaurarSeleccionActivaDeFiltro(
+  columna: string,
+  seleccionActiva: Set<string> | null
+): void {
+  const plural = this.obtenerPluralFiltro(columna);
+  if (!plural) {
+    return;
+  }
+
+  const disponibles = (this as any)[`${plural}Disponibles`] as Array<{
+    valor: any;
+    etiqueta?: string;
+    seleccionado: boolean;
+  }>;
+
+  if (!Array.isArray(disponibles)) {
+    return;
+  }
+
+  const normalizados = disponibles.map(opcion => ({
+    ...opcion,
+    seleccionado: seleccionActiva
+      ? seleccionActiva.has(String(opcion.valor))
+      : true,
+  }));
+
+  (this as any)[`${plural}Disponibles`] = normalizados;
+  (this as any)[`${plural}Filtradas`] = [...normalizados];
+}
+
+private obtenerTicketsParaOpcionesDeFiltro(columna: string): Ticket[] {
+  this.hidratarSucursalEnTickets();
+  this.hidratarDetalleEnTickets();
+
+  const filtros = obtenerFiltrosActivos(this);
+  delete filtros[columna];
+
+  const base = this.obtenerBaseConModoYFechas();
+
+  if (Object.keys(filtros).length === 0) {
+    return [...base];
+  }
+
+  return filtrarTicketsConFiltros(base, filtros);
+}
 
 private prepararOpcionesFiltro(columna: string, path: string): void {
   const setGen = new Set<string>();
+  const baseOpciones = this.obtenerTicketsParaOpcionesDeFiltro(columna);
 
-  // 1) Recolector genérico (se ignora si entramos a un caso especial)
-  (this.filteredTickets || []).forEach((t: any) => {
+  // 1) Recolector genérico: usa todos los filtros activos EXCEPTO la columna actual.
+  (baseOpciones || []).forEach((t: any) => {
     let valor: any = t;
     for (const part of path.split('.')) valor = valor?.[part];
 
@@ -761,17 +941,22 @@ if (columna === 'subcategoria') {
 
   // 4) Caso especial: DETALLE (toma nombre textual si viene en jerarquía)
   if (columna === 'detalle') {
+    this.hidratarDetalleEnTickets();
+
     const set = new Set<string>();
-    (this.filteredTickets || []).forEach((t: any) => {
-      set.add(this.getDetalleVisible(t));
+
+    (baseOpciones || []).forEach((t: any) => {
+      set.add(t.detalle_filtro || t.detalle_visible || '—');
     });
 
+
+    
     const opciones = Array.from(set)
       .sort((a, b) => a.localeCompare(b))
       .map(nombre => ({ valor: nombre, etiqueta: nombre, seleccionado: true }));
 
     this.detallesDisponibles = opciones;
-    this.detallesFiltrados  = [...opciones];
+    this.detallesFiltrados = [...opciones];
     this.temporalSeleccionados['detalle'] = opciones.map(o => ({ ...o }));
     return;
   }
@@ -819,57 +1004,379 @@ if (columna === 'subcategoria') {
 onAbrirFiltro(columna: string, trigger: any) {
   console.log('🟢 Abriendo filtro para columna:', columna);
 
+  if (columna === 'sucursal') {
+    this.hidratarSucursalEnTickets();
+  }
+
+  if (columna === 'detalle') {
+    this.hidratarDetalleEnTickets();
+  }
+
+  const seleccionActiva = this.obtenerSeleccionActivaDeFiltro(columna);
+
   if (this.rutasFiltro[columna]) {
     this.prepararOpcionesFiltro(columna, this.rutasFiltro[columna]);
+    this.restaurarSeleccionActivaDeFiltro(columna, seleccionActiva);
   }
 
   // 👇 evita que un texto previo esconda opciones
-  if (columna === 'subcategoria') this.filtroSubcategoriaTexto = '';
+  if (columna === 'subcategoria') {
+    this.filtroSubcategoriaTexto = '';
+  }
 
   this.inicializarTemporales(columna);
   this.filtrarOpcionesTexto(columna);
   setTimeout(() => trigger?.openMenu?.(), 0);
 }
 
-
-onCerrarFiltro(columna: string, trigger?: any): void {
-  if (columna === 'categoria' || columna === 'estado' || columna === 'departamento') {
-    aplicarFiltroColumnaConResetUnificado(this, columna);
-    if (columna === 'categoria') this.refrescarPanelUnificado('categoria'); // opcional
-    trigger?.closeMenu?.();
-    return;
-  }
-  this.confirmarFiltroColumna(columna);
-  setTimeout(() => trigger?.closeMenu?.(), 0);
-}
-
 cerrarYAplicar(columna: string, trigger: MatMenuTrigger): void {
+  if (columna === 'detalle') {
+    this.hidratarDetalleEnTickets();
+  }
+
   this.confirmarFiltroColumna(columna);
+  this.sincronizarDisponiblesDesdeTemporal(columna);
 
-  if (columna === 'departamento') {
-    const sel = (this.departamentosDisponibles || [])
-      .filter((x: any) => x.seleccionado)
-      .map((x: any) => x.valor);
-    console.log('DEP seleccionados al aplicar:', sel);
+  if (!this.columnaTieneFiltroReal(columna)) {
+    this.limpiarTextoFiltroColumnaLocal(columna);
   }
 
-  if (columna === 'categoria' || columna === 'estado' || columna === 'departamento') {
-    aplicarFiltroColumnaConResetUnificado(this, columna);
-  } else {
-    this.aplicarFiltroColumnaConReset(columna);
-  }
+  this.aplicarFiltrosDeTablaConContexto();
+
   trigger.closeMenu();
 }
 
+private obtenerValoresSeleccionadosDesdeTemporal(columna: string): Set<string> {
+  const temporales = this.temporalSeleccionados[columna] || [];
 
+  return new Set(
+    temporales
+      .filter((opcion: any) => opcion.seleccionado)
+      .map((opcion: any) => String(opcion.valor))
+  );
+}
 
-cerrarYLimpiar(columna: string, trigger?: any): void {
-  if (columna === 'categoria' || columna === 'estado' || columna === 'departamento') {
-    limpiarFiltroColumnaUnificado(this, columna);
-    trigger?.closeMenu?.();
+private sincronizarDisponiblesDesdeValoresSeleccionados(
+  columna: string,
+  valoresSeleccionados: Set<string>
+): void {
+  const plural = this.obtenerPluralFiltro(columna);
+
+  if (!plural) {
     return;
   }
-  (this as any).limpiarFiltroColumna?.(columna);
+
+  const disponibles = ((this as any)[`${plural}Disponibles`] || []) as Array<{
+    valor: any;
+    etiqueta?: string;
+    seleccionado: boolean;
+  }>;
+
+  if (!Array.isArray(disponibles) || disponibles.length === 0) {
+    return;
+  }
+
+  const normalizados = disponibles.map((opcion) => ({
+    valor: opcion.valor,
+    etiqueta: opcion.etiqueta ?? opcion.valor,
+    seleccionado: valoresSeleccionados.has(String(opcion.valor)),
+  }));
+
+  (this as any)[`${plural}Disponibles`] = normalizados;
+  (this as any)[`${plural}Filtradas`] = [...normalizados];
+  this.temporalSeleccionados[columna] = normalizados.map((opcion: any) => ({ ...opcion }));
+}
+
+private aplicarFiltrosDeTablaConContexto(): void {
+  this.hidratarSucursalEnTickets();
+  this.hidratarDetalleEnTickets();
+
+  const filtrosActivos = obtenerFiltrosActivos(this);
+
+  Object.keys(filtrosActivos).forEach((key) => {
+    const valores = filtrosActivos[key];
+
+    if (!Array.isArray(valores) || valores.length === 0) {
+      delete filtrosActivos[key];
+    }
+  });
+
+  const filtrosInventario = filtrosActivos['inventario'] || [];
+  const filtrosDetalle = filtrosActivos['detalle'] || [];
+
+  delete filtrosActivos['inventario'];
+  delete filtrosActivos['detalle'];
+  delete filtrosActivos['descripcion'];
+
+  const base = this.obtenerBaseConModoYFechas();
+
+  let resultado =
+    Object.keys(filtrosActivos).length === 0
+      ? [...base]
+      : filtrarTicketsConFiltros(base, filtrosActivos);
+
+  if (Array.isArray(filtrosInventario) && filtrosInventario.length > 0) {
+    const valoresInventario = new Set(
+      filtrosInventario.map((valor: any) => this.normalizarTextoFiltro(valor))
+    );
+
+    resultado = resultado.filter((ticket: any) => {
+      const inventarioTicket = this.normalizarTextoFiltro(
+        ticket.inventario?.nombre || '—'
+      );
+
+      return valoresInventario.has(inventarioTicket);
+    });
+  }
+
+  if (Array.isArray(filtrosDetalle) && filtrosDetalle.length > 0) {
+    const valoresDetalle = new Set(
+      filtrosDetalle.map((valor: any) => this.normalizarTextoFiltro(valor))
+    );
+
+    resultado = resultado.filter((ticket: any) => {
+      const detalleTicket = this.normalizarTextoFiltro(
+        ticket.detalle_filtro ||
+        ticket.detalle_visible ||
+        this.getDetalleVisible(ticket)
+      );
+
+      return valoresDetalle.has(detalleTicket);
+    });
+  }
+
+  const textoDescripcion = this.normalizarTextoFiltro(
+    this.filtroDescripcionAplicadoTexto || ''
+  );
+
+  if (textoDescripcion) {
+    resultado = resultado.filter((ticket: Ticket) => {
+      const descripcion = this.normalizarTextoFiltro(ticket.descripcion || '');
+      return descripcion.includes(textoDescripcion);
+    });
+  }
+
+  this.filteredTickets = resultado;
+  this.actualizarVistaTicketsFiltrados();
+}
+
+private limpiarTextoFiltroColumnaLocal(columna: string): void {
+  if (columna === 'categoria') this.filtroCategoriaTexto = '';
+  if (columna === 'descripcion') {
+    this.filtroDescripcionTexto = '';
+    this.filtroDescripcionAplicadoTexto = '';
+  }
+  if (columna === 'username') this.filtroUsuarioTexto = '';
+  if (columna === 'estado') this.filtroEstadoTexto = '';
+  if (columna === 'criticidad') this.filtroCriticidadTexto = '';
+  if (columna === 'departamento') this.filtroDeptoTexto = '';
+  if (columna === 'subcategoria') this.filtroSubcategoriaTexto = '';
+  if (columna === 'detalle') this.filtroDetalleTexto = '';
+  if (columna === 'inventario') this.filtroInventarioTexto = '';
+  if (columna === 'sucursal') this.filtroSucursalTexto = '';
+}
+
+private aplicarFiltroInventarioConReset(valoresSeleccionados: Set<string>): void {
+  this.page = 1;
+  this.hidratarSucursalEnTickets();
+
+  this.sincronizarDisponiblesDesdeValoresSeleccionados(
+    'inventario',
+    valoresSeleccionados
+  );
+
+  if (!this.columnaTieneFiltroReal('inventario')) {
+    this.filtroInventarioTexto = '';
+    this.reaplicarFiltrosSinColumna('inventario');
+    return;
+  }
+
+  const filtrosActivos = obtenerFiltrosActivos(this);
+  const filtrosSinInventario = { ...filtrosActivos };
+  delete filtrosSinInventario['inventario'];
+
+  const base = this.obtenerBaseConModoYFechas();
+
+  const baseFiltrada =
+    Object.keys(filtrosSinInventario).length === 0
+      ? [...base]
+      : filtrarTicketsConFiltros(base, filtrosSinInventario);
+
+  const valoresNormalizados = new Set(
+    Array.from(valoresSeleccionados).map((valor) =>
+      this.normalizarTextoFiltro(valor)
+    )
+  );
+
+  this.filteredTickets = baseFiltrada.filter((ticket: any) => {
+    const inventarioTicket = this.normalizarTextoFiltro(
+      ticket.inventario?.nombre || '—'
+    );
+
+    return valoresNormalizados.has(inventarioTicket);
+  });
+
+  this.totalTickets = this.filteredTickets.length;
+  this.totalPagesCount = Math.ceil(this.totalTickets / this.itemsPerPage);
+  this.visibleTickets = this.filteredTickets.slice(0, this.itemsPerPage);
+
+  this.changeDetectorRef.detectChanges();
+}
+
+private reaplicarFiltrosSinColumna(columna: string): void {
+  const filtrosActivos = obtenerFiltrosActivos(this);
+  delete filtrosActivos[columna];
+
+  const base = this.obtenerBaseConModoYFechas();
+
+  this.filteredTickets =
+    Object.keys(filtrosActivos).length === 0
+      ? [...base]
+      : filtrarTicketsConFiltros(base, filtrosActivos);
+
+  this.page = 1;
+  this.totalTickets = this.filteredTickets.length;
+  this.totalPagesCount = Math.ceil(this.totalTickets / this.itemsPerPage);
+  this.visibleTickets = this.filteredTickets.slice(0, this.itemsPerPage);
+
+  this.changeDetectorRef.detectChanges();
+}
+
+private aplicarFiltroDetalleConReset(): void {
+  this.page = 1;
+  this.hidratarDetalleEnTickets();
+  this.hidratarSucursalEnTickets();
+
+  const filtrosActivos = obtenerFiltrosActivos(this);
+
+  const valoresDetalle = new Set(
+    ((filtrosActivos['detalle'] || []) as any[]).map((valor) =>
+      this.normalizarTextoFiltro(valor)
+    )
+  );
+
+  const filtrosSinDetalle = { ...filtrosActivos };
+  delete filtrosSinDetalle['detalle'];
+
+  const base = Array.isArray(this.ticketsCompletos) && this.ticketsCompletos.length > 0
+    ? this.ticketsCompletos
+    : this.tickets;
+
+  const baseFiltrada =
+    Object.keys(filtrosSinDetalle).length === 0
+      ? [...base]
+      : filtrarTicketsConFiltros(base, filtrosSinDetalle);
+
+  this.filteredTickets =
+    valoresDetalle.size === 0
+      ? baseFiltrada
+      : baseFiltrada.filter((ticket: any) => {
+          const detalleTicket = this.normalizarTextoFiltro(
+            ticket.detalle_filtro ||
+            ticket.detalle_visible ||
+            this.getDetalleVisible(ticket)
+          );
+
+          return valoresDetalle.has(detalleTicket);
+        });
+
+  this.totalTickets = this.filteredTickets.length;
+  this.totalPagesCount = Math.ceil(this.totalTickets / this.itemsPerPage);
+  this.visibleTickets = this.filteredTickets.slice(0, this.itemsPerPage);
+
+  this.changeDetectorRef.detectChanges();
+}
+
+private sincronizarDisponiblesDesdeTemporal(columna: string): void {
+  const plural = this.obtenerPluralFiltro(columna);
+
+  if (!plural) {
+    return;
+  }
+
+  const temporales = (this.temporalSeleccionados[columna] || []) as Array<{
+    valor: any;
+    etiqueta?: string;
+    seleccionado: boolean;
+  }>;
+
+  if (!Array.isArray(temporales)) {
+    return;
+  }
+
+  const disponiblesActuales = ((this as any)[`${plural}Disponibles`] || []) as Array<{
+    valor: any;
+    etiqueta?: string;
+    seleccionado: boolean;
+  }>;
+
+  const baseMaestra = disponiblesActuales.length > 0
+    ? disponiblesActuales
+    : temporales;
+
+  const textoActivo = this.normalizarTextoFiltro(
+    this.obtenerTextoFiltroColumna(columna)
+  ).length > 0;
+
+  const valoresTemporales = new Set(
+    temporales.map((opcion) => String(opcion.valor))
+  );
+
+  const seleccionTemporalPorValor = new Map<string, boolean>(
+    temporales.map((opcion) => [
+      String(opcion.valor),
+      Boolean(opcion.seleccionado),
+    ])
+  );
+
+  const normalizados = baseMaestra.map((opcion: any) => {
+    const valorKey = String(opcion.valor);
+
+    let seleccionado = Boolean(opcion.seleccionado);
+
+    if (textoActivo) {
+      seleccionado = valoresTemporales.has(valorKey)
+        ? Boolean(seleccionTemporalPorValor.get(valorKey))
+        : false;
+    } else if (seleccionTemporalPorValor.has(valorKey)) {
+      seleccionado = Boolean(seleccionTemporalPorValor.get(valorKey));
+    }
+
+    return {
+      valor: opcion.valor,
+      etiqueta: opcion.etiqueta ?? opcion.valor,
+      seleccionado,
+    };
+  });
+
+  (this as any)[`${plural}Disponibles`] = normalizados;
+  (this as any)[`${plural}Filtradas`] = [...normalizados];
+  this.temporalSeleccionados[columna] = normalizados.map((opcion: any) => ({ ...opcion }));
+}
+
+cerrarYLimpiar(columna: string, trigger?: any): void {
+  const plural = this.obtenerPluralFiltro(columna);
+
+  if (plural) {
+    const disponibles = ((this as any)[`${plural}Disponibles`] || []) as Array<{
+      valor: any;
+      etiqueta?: string;
+      seleccionado: boolean;
+    }>;
+
+    const normalizados = disponibles.map((opcion: any) => ({
+      ...opcion,
+      seleccionado: true,
+    }));
+
+    (this as any)[`${plural}Disponibles`] = normalizados;
+    (this as any)[`${plural}Filtradas`] = [...normalizados];
+    this.temporalSeleccionados[columna] = normalizados.map((opcion: any) => ({ ...opcion }));
+  }
+
+  this.limpiarTextoFiltroColumnaLocal(columna);
+  this.reaplicarFiltrosSinColumna(columna);
+
   trigger?.closeMenu?.();
 }
 
@@ -1054,9 +1561,212 @@ getNombreSucursal(ticket: Ticket): string {
 
 
 
+get kpiTicketsActivosBd(): number {
+  return (this.ticketsCompletos || []).filter((ticket: Ticket) => {
+    return this.normalizarEstadoTicket(ticket) !== 'finalizado';
+  }).length;
+}
 
+get kpiTicketsAbiertosBd(): number {
+  return (this.ticketsCompletos || []).filter(
+    ticket => this.normalizarEstadoTicket(ticket) === 'abierto'
+  ).length;
+}
 
+get kpiTicketsEnProgresoBd(): number {
+  return (this.ticketsCompletos || []).filter(
+    ticket => this.normalizarEstadoTicket(ticket) === 'en progreso'
+  ).length;
+}
 
+get kpiTicketsPorValidarBd(): number {
+  return (this.ticketsCompletos || []).filter(
+    ticket => this.normalizarEstadoTicket(ticket) === 'por_validar'
+  ).length;
+}
+
+get kpiTicketsFinalizadosBd(): number {
+  return (this.ticketsCompletos || []).filter(
+    ticket => this.normalizarEstadoTicket(ticket) === 'finalizado'
+  ).length;
+}
+
+get kpiTicketsCriticosBd(): number {
+  return (this.ticketsCompletos || []).filter((ticket: Ticket) => {
+    const estado = this.normalizarEstadoTicket(ticket);
+    return estado !== 'finalizado' && this.esTicketCritico(ticket);
+  }).length;
+} 
+
+private aplicarFiltroRapidoColumna(columna: string, valores: string[]): void {
+  const plural = this.obtenerPluralFiltro(columna);
+
+  if (!plural) {
+    return;
+  }
+
+  const disponibles = ((this as any)[`${plural}Disponibles`] || []) as Array<{
+    valor: any;
+    etiqueta?: string;
+    seleccionado: boolean;
+  }>;
+
+  if (!Array.isArray(disponibles) || disponibles.length === 0) {
+    return;
+  }
+
+  const valoresSet = new Set(valores.map(valor => String(valor)));
+
+  const actualizados = disponibles.map(opcion => ({
+    ...opcion,
+    seleccionado: valoresSet.has(String(opcion.valor)),
+  }));
+
+  (this as any)[`${plural}Disponibles`] = actualizados;
+  (this as any)[`${plural}Filtradas`] = [...actualizados];
+  this.temporalSeleccionados[columna] = actualizados.map((opcion: any) => ({ ...opcion }));
+
+  this.aplicarFiltrosDeTablaConContexto();
+  this.changeDetectorRef.detectChanges();
+}
+
+private parseTicketDate(value: any): Date | null {
+  if (!value) {
+    return null;
+  }
+
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value;
+  }
+
+  const texto = String(value).trim();
+
+  if (!texto) {
+    return null;
+  }
+
+  // ISO: 2026-05-15T...
+  if (/^\d{4}-\d{2}-\d{2}/.test(texto)) {
+    const fecha = new Date(texto);
+    return Number.isNaN(fecha.getTime()) ? null : fecha;
+  }
+
+  // dd/mm/yyyy o dd/mm/yy con hora opcional
+  const match = texto.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+
+  if (match) {
+    const dia = Number(match[1]);
+    const mes = Number(match[2]);
+    let anio = Number(match[3]);
+
+    if (anio < 100) {
+      anio += 2000;
+    }
+
+    const fecha = new Date(anio, mes - 1, dia);
+    return Number.isNaN(fecha.getTime()) ? null : fecha;
+  }
+
+  const fallback = new Date(texto);
+  return Number.isNaN(fallback.getTime()) ? null : fallback;
+}
+
+private normalizarDia(fecha: Date): Date {
+  return new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate());
+}
+
+private fechaEnRango(fecha: Date | null, start: Date | null, end: Date | null): boolean {
+  if (!fecha) {
+    return false;
+  }
+
+  const dia = this.normalizarDia(fecha);
+  const desde = start ? this.normalizarDia(start) : null;
+  const hasta = end ? this.normalizarDia(end) : null;
+
+  if (desde && dia < desde) {
+    return false;
+  }
+
+  if (hasta && dia > hasta) {
+    return false;
+  }
+
+  return true;
+}
+
+private ticketCumpleFiltrosFecha(ticket: Ticket): boolean {
+  if (this.filtroCreacionActivo) {
+    const fechaCreacion = this.parseTicketDate(
+      ticket.fecha_creacion_original ?? ticket.fecha_creacion
+    );
+
+    if (!this.fechaEnRango(
+      fechaCreacion,
+      this.rangoFechaCreacionSeleccionado.start,
+      this.rangoFechaCreacionSeleccionado.end
+    )) {
+      return false;
+    }
+  }
+
+  if (this.filtroProgresoActivo) {
+    const fechaProgreso = this.parseTicketDate(ticket.fecha_en_progreso);
+
+    if (!fechaProgreso && this.incluirSinFechaProgreso) {
+      // permitido
+    } else if (!this.fechaEnRango(
+      fechaProgreso,
+      this.rangoFechaProgresoSeleccionado.start,
+      this.rangoFechaProgresoSeleccionado.end
+    )) {
+      return false;
+    }
+  }
+
+  if (this.filtroFinalizadoActivo) {
+    const fechaFinalizado = this.parseTicketDate(
+      ticket.fecha_finalizado_original ?? ticket.fecha_finalizado
+    );
+
+    if (!fechaFinalizado && this.incluirSinFechaFinalizado) {
+      // permitido
+    } else if (!this.fechaEnRango(
+      fechaFinalizado,
+      this.rangoFechaFinalSeleccionado.start,
+      this.rangoFechaFinalSeleccionado.end
+    )) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+private obtenerBaseConModoYFechas(): Ticket[] {
+  const base = Array.isArray(this.ticketsCompletos) && this.ticketsCompletos.length > 0
+    ? this.ticketsCompletos
+    : this.tickets;
+
+  return base.filter((ticket: Ticket) => {
+    const estado = this.normalizarEstadoTicket(ticket);
+
+    // Si estás filtrando por fecha finalizado, permitimos ver finalizados.
+  const hayFiltroFechaActivo =
+    this.filtroCreacionActivo ||
+    this.filtroProgresoActivo ||
+    this.filtroFinalizadoActivo;
+
+  const debeOcultarFinalizados =
+    this.ocultarFinalizados && !hayFiltroFechaActivo;
+
+  if (debeOcultarFinalizados && estado === 'finalizado') {
+    return false;
+  }
+
+    return this.ticketCumpleFiltrosFecha(ticket);
+  });
+}
 
 private obtenerPluralColumna(columna: string): string {
   const pluralMap: Record<string, string> = {
@@ -1083,119 +1793,113 @@ private etiquetaCatalogoPorId(id: any): string {
 }
 
 
-
-
-
-//filtros unificados
-
-/** Inicializa el filtro unificado SOLO para 'categoria'.
- *  Debes llamarlo cuando ya existan this.ticketsCompletos.
- */
-initFiltroUnificadoSoloCategoria(): void {
-  if (!Array.isArray(this.ticketsCompletos) || this.ticketsCompletos.length === 0) return;
-
-  // Usamos tu mapeo real: id -> nombre de catálogo
-  const formatters = {
-    categoria: (valor: string) => this.etiquetaCatalogoPorId(valor), // ya existe en este componente
-  };
-
-  seleccionarCampo(this.filtroUnificado, this.ticketsCompletos as any, 'categoria', formatters);
+private resetearFiltrosParaCard(incluirFinalizados: boolean): void {
+  this.ocultarFinalizados = !incluirFinalizados;
+  this.limpiarTodosLosFiltros();
 }
 
-/** Setea el texto de búsqueda sobre las opciones del checklist unificado (categoria). */
-buscarCategoriaUnificada(texto: string): void {
-  this.filtroUnificado.textoBusqueda = texto ?? '';
-}
+private sincronizarFiltroCardEstado(estado: string): void {
+  const estadoNormalizado = this.normalizarTextoFiltro(estado);
 
-/** Opciones visibles (aplican texto de búsqueda sobre las opciones disponibles). */
-get opcionesCategoriaUnificada() {
-  return filtrarOpcionesUnificado(
-    this.filtroUnificado.opcionesDisponibles, 
-    this.filtroUnificado.textoBusqueda
-  );
-}
+  const opcionesBase =
+    Array.isArray(this.estadosDisponibles) && this.estadosDisponibles.length > 0
+      ? this.estadosDisponibles
+      : Array.from(
+          new Set(
+            (this.ticketsCompletos || [])
+              .map((ticket: Ticket) => ticket.estado)
+              .filter(Boolean)
+          )
+        ).map((valor) => ({
+          valor,
+          etiqueta: valor,
+          seleccionado: true,
+        }));
 
-/** Alterna un valor en la selección temporal del checklist (categoria). */
-alternarSeleccionCategoriaUnificada(valor: string): void {
-  alternarSeleccionTemporal(this.filtroUnificado, valor);
-}
-
-
-/** Limpia el filtro aplicado de 'categoria' y refresca la tabla. */
-limpiarCategoriaUnificada(): void {
-  const campo = this.campoUnificadoActual;
-
-  if (!campo) return;
-
-  this.filtroUnificado.seleccionTemporal.clear();
-  this.filtroUnificado.textoBusqueda = '';
-
-  limpiarFiltroColumnaUnificado(this, campo);
-  this.refrescarPanelUnificado(campo);
-}
-
-
-
-initFiltroUnificadoSoloEstado(): void {
-  if (!Array.isArray(this.ticketsCompletos) || this.ticketsCompletos.length === 0) return;
-  this.campoUnificadoActual = 'estado';
-  seleccionarCampo(this.filtroUnificado, this.ticketsCompletos as any, 'estado');
-  // ⬆️ Listo. No asignes a opcionesCategoriaUnificada (es un getter).
-}
-
-
-
-
-aplicarCategoriaUnificada(): void {
-  const campo = this.campoUnificadoActual;
-  if (!campo) return;
-
-const pluralMap: Record<string, string> = {
-  categoria:'categorias',
-  estado:'estados',
-  departamento:'departamentos',
-  sucursal:'sucursales',
-  username:'usuarios',
-  criticidad:'criticidades',
-  subcategoria:'subcategorias',   // 👈
-  detalle:'detalles',             // 👈
-};
-  const plural = pluralMap[campo];
-
-  let disponibles = (this as any)[`${plural}Disponibles`] as Array<{valor:any; etiqueta?:string; seleccionado:boolean}> || [];
-  if (!disponibles.length) {
-    disponibles = (this.filtroUnificado.opcionesDisponibles || []).map(o => ({
-      valor: o.valor, etiqueta: o.etiqueta, seleccionado: true
-    }));
-    (this as any)[`${plural}Disponibles`] = [...disponibles];
-    (this as any)[`${plural}Filtradas`]  = [...disponibles];
-  }
-
-  // 🔴 Normaliza solo para DEPARTAMENTO: usa NOMBRE como valor
-  if (campo === 'departamento') {
-    disponibles = disponibles.map(op => {
-      const etiqueta = typeof op.valor === 'number'
-        ? this.etiquetaDepartamentoPorId(op.valor)   // id -> nombre
-        : String(op.valor);
-      return { ...op, valor: etiqueta, etiqueta };
-    });
-    (this as any)[`${plural}Disponibles`] = [...disponibles];
-    (this as any)[`${plural}Filtradas`]  = [...disponibles];
-  }
-
-  const setSel = this.filtroUnificado.seleccionTemporal;
-  this.temporalSeleccionados[campo] = disponibles.map(op => ({
-    ...op,
-    seleccionado: setSel.has(String(op.valor))
+  const actualizados = opcionesBase.map((opcion: any) => ({
+    ...opcion,
+    seleccionado: this.normalizarTextoFiltro(opcion.valor) === estadoNormalizado,
   }));
 
-  console.log('UNIFICADO aplicar -> campo:', campo,
-              'seleccion:', Array.from(setSel),
-              'disponibles normalizados:', disponibles);
-
-  aplicarFiltroColumnaConResetUnificado(this, campo);
-  this.refrescarPanelUnificado(campo);
+  this.estadosDisponibles = actualizados;
+  this.estadosFiltrados = [...actualizados];
+  this.temporalSeleccionados['estado'] = actualizados.map((opcion: any) => ({
+    ...opcion,
+  }));
 }
+
+private sincronizarFiltroCardCriticidadCriticos(): void {
+  const opcionesBase =
+    Array.isArray(this.criticidadesDisponibles) && this.criticidadesDisponibles.length > 0
+      ? this.criticidadesDisponibles
+      : Array.from(
+          new Set(
+            (this.ticketsCompletos || [])
+              .map((ticket: Ticket) => ticket.criticidad)
+              .filter((valor) => valor !== null && valor !== undefined)
+          )
+        ).map((valor) => ({
+          valor,
+          etiqueta: String(valor),
+          seleccionado: true,
+        }));
+
+  const actualizados = opcionesBase.map((opcion: any) => ({
+    ...opcion,
+    seleccionado: Number(opcion.valor) >= 4,
+  }));
+
+  this.criticidadesDisponibles = actualizados;
+  this.criticidadesFiltradas = [...actualizados];
+  this.temporalSeleccionados['criticidad'] = actualizados.map((opcion: any) => ({
+    ...opcion,
+  }));
+}
+
+filtrarCardActivos(): void {
+  this.resetearFiltrosParaCard(false);
+}
+
+filtrarCardEstado(estado: string): void {
+  const estadoNormalizado = this.normalizarTextoFiltro(estado);
+  const esFinalizado = estadoNormalizado === 'finalizado';
+
+  // Cada card parte de cero.
+  this.resetearFiltrosParaCard(esFinalizado);
+
+  // Sincroniza header/checklist de Estado para que parezca filtro real.
+  this.sincronizarFiltroCardEstado(estado);
+
+  const base = Array.isArray(this.ticketsCompletos) && this.ticketsCompletos.length > 0
+    ? this.ticketsCompletos
+    : this.tickets;
+
+  this.filteredTickets = base.filter((ticket: Ticket) => {
+    return this.normalizarTextoFiltro(ticket.estado) === estadoNormalizado;
+  });
+
+  this.actualizarVistaTicketsFiltrados();
+}
+
+filtrarCardCriticos(): void {
+  // Críticos vuelve a la vista operativa: sin finalizados.
+  this.resetearFiltrosParaCard(false);
+
+  // Sincroniza header/checklist de Criticidad.
+  this.sincronizarFiltroCardCriticidadCriticos();
+
+  const base = Array.isArray(this.ticketsCompletos) && this.ticketsCompletos.length > 0
+    ? this.ticketsCompletos
+    : this.tickets;
+
+  this.filteredTickets = base.filter((ticket: Ticket) => {
+    const estado = this.normalizarEstadoTicket(ticket);
+    return estado !== 'finalizado' && this.esTicketCritico(ticket);
+  });
+
+  this.actualizarVistaTicketsFiltrados();
+}
+
 
 abrirConfirmacion(titulo: string, mensaje: string): Promise<boolean> {
   const dialogRef = this.dialog.open(DialogoConfirmacionComponent, {
@@ -1467,55 +2171,6 @@ puedeMostrarBotonesValidarCierre(ticket: Ticket): boolean {
 
 
 
-private refrescarPanelUnificado(
-  campo: 'categoria' | 'estado' | 'departamento' | 'sucursal' | 'username' | 'criticidad' | 'subcategoria' | 'detalle'
-): void {
-  if (campo === 'sucursal') this.hidratarSucursalEnTickets();
-
-  if (campo === 'subcategoria') { this.construirOpcionesSubcategoria('filtered'); return; }
-  if (campo === 'detalle')      { this.construirOpcionesDetalle('filtered');      return; }
-
-  const formatters =
-    campo === 'categoria'    ? { categoria:    (v: string) => this.etiquetaCatalogoPorId(v) } :
-    campo === 'departamento' ? { departamento: (v: string) => this.etiquetaDepartamentoPorId(v) } :
-    undefined;
-
-  seleccionarCampo(this.filtroUnificado, this.filteredTickets as any, campo, formatters);
-
-  const pluralMap: Record<string, string> = {
-    categoria: 'categorias', estado: 'estados', departamento: 'departamentos',
-    username: 'usuarios', sucursal: 'sucursales', criticidad: 'criticidades',
-    subcategoria: 'subcategorias', detalle: 'detalles',
-  };
-  const plural = pluralMap[campo];
-  const disponibles = (this as any)[`${plural}Disponibles`] as Array<{ valor: any; seleccionado: boolean }> || [];
-  this.filtroUnificado.seleccionTemporal = new Set(
-    disponibles.filter(op => op.seleccionado).map(op => String(op.valor))
-  );
-}
-
-
-
-
-
-private rebuildPanelCategoriasDesdeFiltered(): void {
-  const set = new Set<string>();
-  (this.filteredTickets || []).forEach((t: any) => {
-    if (t?.categoria != null) set.add(String(t.categoria));
-  });
-
-  const opciones = Array.from(set)
-    .sort((a, b) =>
-      this.etiquetaCatalogoPorId(a).localeCompare(this.etiquetaCatalogoPorId(b))
-    )
-    .map(v => ({ valor: v, etiqueta: this.etiquetaCatalogoPorId(v) }));
-
-  this.filtroUnificado.opcionesDisponibles = opciones;
-  // preselecciona todas las visibles (o carga desde tus aplicadas si quieres)
-  this.filtroUnificado.seleccionTemporal = new Set(opciones.map(o => o.valor));
-
-  this.changeDetectorRef.detectChanges();
-}
 
 
 
@@ -1530,60 +2185,6 @@ private etiquetaCampoUnificado: Record<'categoria' | 'estado' | 'departamento' |
   subcategoria: 'subcategoría', // 👈
   detalle: 'detalle',           // 👈
 };
-
-get etiquetaCampoActual(): string {
-  const c = this.campoUnificadoActual;
-  return c ? this.etiquetaCampoUnificado[c] : 'campo';
-}
-
-
-onCambioCampoUnificado(
-  campo: 'categoria' | 'estado' | 'departamento' | 'sucursal' | 'username' | 'criticidad' | 'subcategoria' | 'detalle' | null
-) {
-  this.campoUnificadoActual = campo;
-
-  // reset estado unificado + tabla…
-  this.filtroUnificado.filtrosAplicados.clear();
-  this.filtroUnificado.seleccionTemporal.clear();
-  this.filtroUnificado.textoBusqueda = '';
-  this.filteredTickets = [...this.ticketsCompletos];
-  this.page = 1;
-  this.totalTickets = this.filteredTickets.length;
-  this.totalPagesCount = Math.ceil(this.totalTickets / this.itemsPerPage);
-  this.visibleTickets = this.filteredTickets.slice(0, this.itemsPerPage);
-
-  if (!campo) {
-    this.filtroUnificado.opcionesDisponibles = [];
-    this.changeDetectorRef.detectChanges();
-    return;
-  }
-
-  if (campo === 'sucursal') this.hidratarSucursalEnTickets();
-
-  // 👇 casos especiales: construir con lo que se ve en la tabla
-  if (campo === 'subcategoria') {
-    this.construirOpcionesSubcategoria('all');
-    this.changeDetectorRef.detectChanges();
-    return;
-  }
-  if (campo === 'detalle') {
-    this.construirOpcionesDetalle('all');
-    this.changeDetectorRef.detectChanges();
-    return;
-  }
-
-  // Resto: usa tu util como ya lo tenías
-  const formatters =
-    campo === 'categoria' ? { categoria: (v: string) => this.etiquetaCatalogoPorId(v) } :
-    campo === 'departamento' ? { departamento: (v: string) => this.etiquetaDepartamentoPorId(v) } :
-    undefined;
-
-  seleccionarCampo(this.filtroUnificado, this.ticketsCompletos as any, campo, formatters);
-  this.changeDetectorRef.detectChanges();
-}
-
-
-
 
 private etiquetaDepartamentoPorId(id: any): string {
   const num = Number(id);
@@ -1601,24 +2202,6 @@ private etiquetaDepartamentoPorId(id: any): string {
   return t?.departamento ?? String(id);
 }
 
-
-
-
-
-toggleFiltros(): void {
-  this.mostrarFiltros = !this.mostrarFiltros;
-   this.filtroUnificado.textoBusqueda = '';
-}
-
-toggleOcultarFinalizados(): void {
-  // cambia el estado del switch
-  this.ocultarFinalizados = !this.ocultarFinalizados;
-
-  // por ahora, cada vez que cambie recargamos la tabla
-  // (si quieres después hacemos que respete filtros ya aplicados)
-  TicketInit.cargarTickets(this);
-}
-
 private actualizarVistaTicketsFiltrados(): void {
   this.page = 1;
   this.totalTickets = this.filteredTickets.length;
@@ -1627,43 +2210,48 @@ private actualizarVistaTicketsFiltrados(): void {
   this.changeDetectorRef.detectChanges();
 }
 
-mostrarSoloPorValidar(): void {
-  this.filtroRapidoPorValidarActivo = true;
-
-  this.filteredTickets = (this.ticketsCompletos || []).filter((ticket: Ticket) => {
-    return (ticket.estado || '').trim().toLowerCase() === 'por_validar';
-  });
-
-  this.actualizarVistaTicketsFiltrados();
+private normalizarEstadoTicket(ticket: Ticket): string {
+  return (ticket?.estado || '').toString().trim().toLowerCase();
 }
 
-quitarFiltroPorValidar(): void {
-  this.filtroRapidoPorValidarActivo = false;
-  this.filteredTickets = [...(this.ticketsCompletos || [])];
-  this.actualizarVistaTicketsFiltrados();
+private esTicketCritico(ticket: Ticket): boolean {
+  const criticidad = Number(ticket?.criticidad);
+  return criticidad >= 4;
 }
 
-
-
-
-private construirOpcionesSubcategoria(origen: 'all' | 'filtered' = 'all') {
-  const base = origen === 'filtered' ? (this.filteredTickets || []) : (this.ticketsCompletos || []);
-  const set = new Set<string>();
-  base.forEach((t: any) => set.add((t.subcategoria || '—')));
-  this.filtroUnificado.opcionesDisponibles = Array.from(set).sort().map(v => ({ valor: v, etiqueta: v }));
-  this.filtroUnificado.seleccionTemporal = new Set(this.filtroUnificado.opcionesDisponibles.map(o => o.valor));
+get kpiTicketsFiltrados(): number {
+  return this.filteredTickets?.length || 0;
 }
 
-private construirOpcionesDetalle(origen: 'all' | 'filtered' = 'all') {
-  const base = origen === 'filtered' ? (this.filteredTickets || []) : (this.ticketsCompletos || []);
-  const set = new Set<string>();
-  base.forEach((t: any) => set.add(this.getDetalleVisible(t)));
-  this.filtroUnificado.opcionesDisponibles = Array.from(set).sort().map(v => ({ valor: v, etiqueta: v }));
-  this.filtroUnificado.seleccionTemporal = new Set(this.filtroUnificado.opcionesDisponibles.map(o => o.valor));
+get kpiTicketsAbiertos(): number {
+  return (this.filteredTickets || []).filter(
+    ticket => this.normalizarEstadoTicket(ticket) === 'abierto'
+  ).length;
 }
 
+get kpiTicketsEnProgreso(): number {
+  return (this.filteredTickets || []).filter(
+    ticket => this.normalizarEstadoTicket(ticket) === 'en progreso'
+  ).length;
+}
 
+get kpiTicketsPorValidar(): number {
+  return (this.filteredTickets || []).filter(
+    ticket => this.normalizarEstadoTicket(ticket) === 'por_validar'
+  ).length;
+}
 
+get kpiTicketsFinalizados(): number {
+  return (this.filteredTickets || []).filter(
+    ticket => this.normalizarEstadoTicket(ticket) === 'finalizado'
+  ).length;
+}
+
+get kpiTicketsCriticos(): number {
+  return (this.filteredTickets || []).filter(
+    ticket => this.esTicketCritico(ticket)
+  ).length;
+}
 //para cargar imagenes
 
 /** Abre la evidencia en otra pestaña (si existe) */
@@ -1733,6 +2321,32 @@ getDetalleVisible(t: Ticket): string {
   return '—';
 }
 
+private hidratarDetalleEnTickets(): void {
+  const poner = (arr: any[] | undefined) => {
+    if (!Array.isArray(arr)) {
+      return;
+    }
+
+    arr.forEach((ticket: any) => {
+      if (ticket.__detalle_raw === undefined) {
+        ticket.__detalle_raw = ticket.detalle;
+      }
+
+      const detalleVisible = this.getDetalleVisible({
+        ...ticket,
+        detalle: ticket.__detalle_raw,
+      } as Ticket);
+
+      ticket.detalle_visible = detalleVisible || '—';
+      ticket.detalle_filtro = detalleVisible || '—';
+    });
+  };
+
+  poner(this.ticketsCompletos);
+  poner(this.tickets);
+  poner(this.filteredTickets);
+  poner(this.visibleTickets);
+}
 
 necesitaRef(t: any): boolean {
   // 1) Campo canónico del backend → devuelve enseguida si existe

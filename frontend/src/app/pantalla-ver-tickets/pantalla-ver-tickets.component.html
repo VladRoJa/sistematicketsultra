@@ -10,114 +10,82 @@
   [style.--desc-col-width]="'420px'"
   [style.--table-min-width]="'2486px'"
 >
-  <header class="tickets-page__header">
-    <div>
-      <span class="tickets-page__eyebrow">Tickets</span>
-      <h1 class="tickets-page__title">Ver Tickets</h1>
-      <p class="tickets-page__subtitle">
-        Consulta, filtra y da seguimiento a los tickets registrados en Suite Ultra.
-      </p>
-    </div>
-
-    <div class="tickets-page__status">
-      <span class="tickets-page__status-label">Resultados visibles</span>
-      <strong>{{ visibleTickets.length }}</strong>
-    </div>
-  </header>
-
-  <!-- ==========================================================================
-       Suite Ultra UI v1 - Acciones rápidas y filtros
-       ========================================================================== -->
-
-  <div class="tickets-toolbar">
-    <div class="tickets-toolbar__group">
-      <button
-        mat-stroked-button
-        color="primary"
-        class="tickets-toolbar__button"
-        (click)="toggleOcultarFinalizados()"
-      >
-        <mat-icon>
-          {{ ocultarFinalizados ? 'visibility_off' : 'visibility' }}
-        </mat-icon>
-        {{ ocultarFinalizados ? 'Mostrar finalizados' : 'Ocultar finalizados' }}
-      </button>
-
-      <button
-        mat-stroked-button
-        color="accent"
-        class="tickets-toolbar__button"
-        (click)="filtroRapidoPorValidarActivo ? quitarFiltroPorValidar() : mostrarSoloPorValidar()"
-      >
-        <mat-icon>
-          {{ filtroRapidoPorValidarActivo ? 'filter_alt_off' : 'fact_check' }}
-        </mat-icon>
-        {{ filtroRapidoPorValidarActivo ? 'Quitar por validar' : 'Mostrar por validar' }}
-      </button>
-    </div>
-
-    <button
-      mat-stroked-button
-      class="tickets-toolbar__toggle"
-      (click)="toggleFiltros()"
-    >
-      {{ mostrarFiltros ? 'Ocultar filtros' : 'Mostrar filtros' }}
-    </button>
+<header class="tickets-page__header">
+  <div>
+    <span class="tickets-page__eyebrow">Tickets</span>
+    <h1 class="tickets-page__title">Ver Tickets</h1>
+    <p class="tickets-page__subtitle">
+      Consulta, filtra y da seguimiento a los tickets registrados en Suite Ultra.
+    </p>
   </div>
 
+  <div class="tickets-page__status">
+    <span class="tickets-page__status-label">Resultados filtrados</span>
+    <strong>{{ kpiTicketsFiltrados }}</strong>
+  </div>
+</header>
+
+<section class="tickets-kpi-grid">
+<button
+  type="button"
+  class="tickets-kpi-card tickets-kpi-card--total"
+  (click)="filtrarCardActivos()">
+  <span>Activos</span>
+  <strong>{{ kpiTicketsActivosBd }}</strong>
+  <small>Sin finalizados</small>
+</button>
+
+  <button 
+  type="button" 
+  class="tickets-kpi-card tickets-kpi-card--open" 
+  (click)="filtrarCardEstado('abierto')">
+    <span>Abiertos</span>
+    <strong>{{ kpiTicketsAbiertosBd }}</strong>
+    <small>Pendientes de iniciar</small>
+  </button>
+
+  <button 
+  type="button" 
+  class="tickets-kpi-card tickets-kpi-card--progress" 
+  (click)="filtrarCardEstado('en progreso')">
+    <span>En progreso</span>
+    <strong>{{ kpiTicketsEnProgresoBd }}</strong>
+    <small>En atención</small>
+  </button>
+
+  <button 
+  type="button" 
+  class="tickets-kpi-card tickets-kpi-card--validate" 
+  (click)="filtrarCardEstado('por_validar')">
+    <span>Por validar</span>
+    <strong>{{ kpiTicketsPorValidarBd }}</strong>
+    <small>Cierre pendiente</small>
+  </button>
+
+  <button 
+  type="button" 
+  class="tickets-kpi-card tickets-kpi-card--done" 
+  (click)="filtrarCardEstado('finalizado')">
+    <span>Finalizados</span>
+    <strong>{{ kpiTicketsFinalizadosBd }}</strong>
+    <small>Cerrados</small>
+  </button>
+
+  <button 
+  type="button" 
+  class="tickets-kpi-card tickets-kpi-card--critical" 
+  (click)="filtrarCardCriticos()">
+    <span>Críticos</span>
+    <strong>{{ kpiTicketsCriticosBd }}</strong>
+    <small>Prioridad alta</small>
+  </button>
+</section>
+  
   <!-- ==========================================================================
        Suite Ultra UI v1 - Card de filtros y tabla
        ========================================================================== -->
 
   <div class="tickets-table-card table-container">
-    <div class="filtro-unificado-wrapper" *ngIf="mostrarFiltros">
-      <!-- Columna 1: Select -->
-      <mat-form-field appearance="fill" class="columna-select">
-        <mat-label>Filtrar por</mat-label>
-        <mat-select
-          [(ngModel)]="campoUnificadoActual"
-          (selectionChange)="onCambioCampoUnificado($event.value)"
-        >
-          <mat-option [value]="null">— Selecciona —</mat-option>
-          <mat-option *ngFor="let c of columnasUnificado" [value]="c.key">
-            {{ c.label }}
-          </mat-option>
-        </mat-select>
-      </mat-form-field>
-
-      <!-- Columna 2: Buscador -->
-      <mat-form-field appearance="fill" class="columna-buscador">
-        <mat-label>Buscar {{ etiquetaCampoActual }}…</mat-label>
-        <input matInput [(ngModel)]="filtroUnificado.textoBusqueda" />
-      </mat-form-field>
-
-      <!-- Columna 3: Checklist + Botones -->
-      <div class="columna-checklist">
-        <div class="fu-checklist">
-          <div *ngIf="!opcionesCategoriaUnificada?.length" class="fu-empty-state">
-            No hay opciones (selecciona un campo arriba).
-          </div>
-
-          <mat-checkbox
-            *ngFor="let op of opcionesCategoriaUnificada"
-            class="fu-checkbox"
-            [checked]="filtroUnificado.seleccionTemporal.has(op.valor)"
-            (change)="alternarSeleccionCategoriaUnificada(op.valor)"
-          >
-            {{ op.etiqueta }}
-          </mat-checkbox>
-        </div>
-
-        <div class="fu-acciones">
-          <button mat-raised-button color="primary" (click)="aplicarCategoriaUnificada()">
-            Aplicar
-          </button>
-          <button mat-raised-button color="warn" (click)="limpiarCategoriaUnificada()">
-            Limpiar
-          </button>
-        </div>
-      </div>
-    </div>
 
     <table class="tabla-tickets">
       <colgroup>
@@ -146,9 +114,8 @@
 
           <!-- (2) Categoría -->
           <th [class.filtro-activo]="isFilterActive('categoria')">
-            Categoría
             <!-- Filtros en encabezado desactivados -->
-            <ng-container *ngIf="false">
+            <ng-container *ngIf="true">
               <button
                 mat-button
                 [matMenuTriggerFor]="menuCategoria"
@@ -191,11 +158,10 @@
             </ng-container>
           </th>
 
-          <!-- (A) Aparato/Dispositivo -->
+          <!-- (3) Aparato/Dispositivo -->
           <th [class.filtro-activo]="isFilterActive('inventario')">
-            Aparato/Dispositivo
             <!-- Filtros en encabezado desactivados -->
-            <ng-container *ngIf="false">
+            <ng-container *ngIf="true">
               <button mat-button [matMenuTriggerFor]="menuInventario"
                       #triggerFiltroInventario="matMenuTrigger"
                       (click)="onAbrirFiltro('inventario', triggerFiltroInventario)"
@@ -236,56 +202,54 @@
             </ng-container>
           </th>
 
-          <!-- (3) Descripción -->
-          <th class="col-descripcion" [class.filtro-activo]="isFilterActive('descripcion')">
-            Descripción
-            <!-- Filtros en encabezado desactivados -->
-            <ng-container *ngIf="false">
-              <button mat-button [matMenuTriggerFor]="menuDescripcion"
-                      #triggerFiltroDesc="matMenuTrigger"
-                      (click)="onAbrirFiltro('descripcion', triggerFiltroDesc)"
-                      class="header-button">
-                Descripción <mat-icon>arrow_drop_down</mat-icon>
-              </button>
-              <mat-menu #menuDescripcion="matMenu" disableClose="true">
-                <mat-divider></mat-divider>
-                <div class="menu-filtro" (click)="$event.stopPropagation()">
-                  <label>Filtrar Descripción</label>
-                  <mat-form-field appearance="fill" class="buscador-filtro" (click)="$event.stopPropagation()">
-                    <mat-label>Buscar</mat-label>
-                    <input matInput [(ngModel)]="filtroDescripcionTexto" (ngModelChange)="filtrarOpcionesTexto('descripcion')">
-                  </mat-form-field>
-                  <mat-checkbox
-                    [checked]="isTodoSeleccionado('descripcion')"
-                    (change)="alternarSeleccionTemporal('descripcion', $event.checked)"
-                    (click)="$event.stopPropagation()"
-                    name="desc_selectAll">
-                    Seleccionar todo
-                  </mat-checkbox>
-                  <div class="opciones-scrollable">
-                    <mat-checkbox
-                      *ngFor="let desc of temporalSeleccionados['descripcion']; let i = index"
-                      [checked]="desc.seleccionado"
-                      (change)="actualizarSeleccionTemporal('descripcion', i, $event.checked)"
-                      [name]="'desc_' + i"
-                      (click)="$event.stopPropagation()">
-                      {{ desc.etiqueta || desc.valor }}
-                    </mat-checkbox>
-                  </div>
-                  <div class="menu-botones-fijos">
-                    <button mat-button (click)="cerrarYAplicar('descripcion', triggerFiltroDesc)">Aplicar</button>
-                    <button mat-button (click)="cerrarYLimpiar('descripcion', triggerFiltroDesc)">Borrar Filtro</button>
-                  </div>
+          <!-- (4) Descripción -->
+          <th class="col-descripcion" [class.filtro-activo]="filtroDescripcionActivo">
+            <button
+              mat-button
+              [matMenuTriggerFor]="menuDescripcion"
+              #triggerFiltroDesc="matMenuTrigger"
+              class="header-button">
+              Descripción <mat-icon>arrow_drop_down</mat-icon>
+            </button>
+
+            <mat-menu #menuDescripcion="matMenu" disableClose="true">
+              <div class="menu-filtro" (click)="$event.stopPropagation()">
+                <label>Buscar en descripción</label>
+
+                <mat-form-field
+                  appearance="fill"
+                  class="buscador-filtro"
+                  (click)="$event.stopPropagation()">
+                  <mat-label>Texto</mat-label>
+                  <input
+                    matInput
+                    [(ngModel)]="filtroDescripcionTexto"
+                    placeholder="Ej. fuga, pantalla, ruido, error"
+                    (keydown.enter)="aplicarFiltroDescripcionTexto(triggerFiltroDesc)">
+                </mat-form-field>
+
+                <div class="menu-botones-fijos">
+                  <button
+                    mat-button
+                    color="primary"
+                    (click)="aplicarFiltroDescripcionTexto(triggerFiltroDesc)">
+                    Aplicar
+                  </button>
+
+                  <button
+                    mat-button
+                    (click)="limpiarFiltroDescripcionTexto(triggerFiltroDesc)">
+                    Borrar Filtro
+                  </button>
                 </div>
-              </mat-menu>
-            </ng-container>
+              </div>
+            </mat-menu>
           </th>
 
-          <!-- (4) Sucursal -->
+          <!-- (5) Sucursal -->
           <th [class.filtro-activo]="isFilterActive('sucursal')">
-            Sucursal
             <!-- Filtros en encabezado desactivados -->
-            <ng-container *ngIf="false">
+            <ng-container *ngIf="true">
               <button mat-button [matMenuTriggerFor]="menuSucursal"
                       #triggerFiltroSucursal="matMenuTrigger"
                       (click)="onAbrirFiltro('sucursal', triggerFiltroSucursal)"
@@ -295,6 +259,16 @@
               <mat-menu #menuSucursal="matMenu" disableClose="true">
                 <mat-divider></mat-divider>
                 <div class="menu-filtro" (click)="$event.stopPropagation()">
+                  <strong>Filtrar Sucursal</strong>
+
+                  <mat-form-field appearance="fill" class="buscador-filtro">
+                    <mat-label>Buscar</mat-label>
+                    <input
+                      matInput
+                      [(ngModel)]="filtroSucursalTexto"
+                      (ngModelChange)="filtrarOpcionesTexto('sucursal')"
+                    />
+                  </mat-form-field>
                   <mat-checkbox
                     [checked]="isTodoSeleccionado('sucursal')"
                     (change)="alternarSeleccionTemporal('sucursal', $event.checked)"
@@ -321,11 +295,10 @@
             </ng-container>
           </th>
 
-          <!-- (5) Estado -->
+          <!-- (6) Estado -->
           <th [class.filtro-activo]="isFilterActive('estado')">
-            Estado
             <!-- Filtros en encabezado desactivados -->
-            <ng-container *ngIf="false">
+            <ng-container *ngIf="true">
               <button mat-button [matMenuTriggerFor]="menuEstado"
                       #triggerFiltroEstado="matMenuTrigger"
                       (click)="onAbrirFiltro('estado', triggerFiltroEstado)"
@@ -366,11 +339,10 @@
             </ng-container>
           </th>
 
-          <!-- (6) Criticidad -->
+          <!-- (7) Criticidad -->
           <th [class.filtro-activo]="isFilterActive('criticidad')">
-            Criticidad
             <!-- Filtros en encabezado desactivados -->
-            <ng-container *ngIf="false">
+            <ng-container *ngIf="true">
               <button mat-button [matMenuTriggerFor]="menuCriticidad"
                       #triggerFiltroCriticidad="matMenuTrigger"
                       (click)="onAbrirFiltro('criticidad', triggerFiltroCriticidad)"
@@ -411,7 +383,7 @@
             </ng-container>
           </th>
 
-          <!-- (7) Fecha Creación -->
+          <!-- (8) Fecha Creación -->
           <th [class.filtro-activo]="isFilterActive('fecha_creacion')">
             <ng-container *ngIf="true">
               <button mat-button [matMenuTriggerFor]="menuFechaC" #triggerFiltroFechaC="matMenuTrigger" class="header-button">
@@ -441,7 +413,7 @@
             </ng-container>
           </th>
 
-          <!-- (8) Fecha En Progreso -->
+          <!-- (9) Fecha En Progreso -->
           <th [class.filtro-activo]="isFilterActive('fecha_en_progreso')">
             <ng-container *ngIf="true">
               <button mat-button [matMenuTriggerFor]="menuFechaP" #triggerFiltroFechaP="matMenuTrigger" class="header-button">
@@ -474,7 +446,7 @@
             </ng-container>
           </th>
 
-          <!-- (9) Fecha Finalizado -->
+          <!-- (10) Fecha Finalizado -->
           <th [class.filtro-activo]="isFilterActive('fecha_finalizado')">
             <ng-container *ngIf="true">
               <button mat-button [matMenuTriggerFor]="menuFechaF" #triggerFiltroFechaF="matMenuTrigger" class="header-button">
@@ -507,11 +479,10 @@
             </ng-container>
           </th>
 
-          <!-- (10) Departamento -->
+          <!-- (11) Departamento -->
           <th [class.filtro-activo]="isFilterActive('departamento')">
-            Departamento
             <!-- Filtros en encabezado desactivados -->
-            <ng-container *ngIf="false">
+            <ng-container *ngIf="true">
               <button mat-button [matMenuTriggerFor]="menuDepartamento"
                       #triggerFiltroDepartamento="matMenuTrigger"
                       (click)="onAbrirFiltro('departamento', triggerFiltroDepartamento)"
@@ -552,11 +523,10 @@
             </ng-container>
           </th>
 
-          <!-- (11) Subcategoría -->
+          <!-- (12) Subcategoría -->
           <th [class.filtro-activo]="isFilterActive('subcategoria')">
-            Subcategoría
             <!-- Filtros en encabezado desactivados -->
-            <ng-container *ngIf="false">
+            <ng-container *ngIf="true">
               <button mat-button [matMenuTriggerFor]="menuSubcategoria"
                       #triggerFiltroSubcategoria="matMenuTrigger"
                       (click)="onAbrirFiltro('subcategoria', triggerFiltroSubcategoria)"
@@ -597,11 +567,10 @@
             </ng-container>
           </th>
 
-          <!-- (12) Detalle -->
+          <!-- (13) Detalle -->
           <th [class.filtro-activo]="isFilterActive('detalle')">
-            Detalle
             <!-- Filtros en encabezado desactivados -->
-            <ng-container *ngIf="false">
+            <ng-container *ngIf="true">
               <button mat-button [matMenuTriggerFor]="menuDetalle"
                       #triggerFiltroDetalle="matMenuTrigger"
                       (click)="onAbrirFiltro('detalle', triggerFiltroDetalle)"
@@ -642,13 +611,13 @@
             </ng-container>
           </th>
 
-          <!-- (13) Acciones -->
+          <!-- (14) Acciones -->
           <th>Acciones</th>
 
-          <!-- (14) Fecha Solución -->
+          <!-- (15) Fecha Solución -->
           <th>Fecha Solución</th>
 
-          <!-- (15) Historial -->
+          <!-- (16) Historial -->
           <th>Historial</th>
         </tr>
       </thead>
@@ -803,7 +772,7 @@
               </button>
             </div>
             </div>
-
+          </td>
 
           <!-- Fecha Solución -->
           <td>
