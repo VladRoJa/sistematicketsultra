@@ -336,8 +336,8 @@ async ngOnInit() {
   this.usuarioActual = (this.user?.username || '').trim().toUpperCase();
 
   await cargarDepartamentos(this);  
-  await this.cargarCatalogoCategorias();               
-  TicketInit.cargarTickets(this);
+  await this.cargarCatalogoCategorias();
+  await this.cargarSucursalesParaTickets();
 
   this.usuarioEsAdmin = (
     this.user?.rol === 'ADMINISTRADOR' ||
@@ -350,16 +350,7 @@ async ngOnInit() {
     this.user?.sucursal_id === 100
   );
 
-  this.sucursalesService.obtenerSucursales().subscribe({
-    next: (sucs) => {
-      this.listaSucursales = sucs || [];
-      this.sucursalIdNombreMap = {};
-      this.listaSucursales.forEach(s => {
-        this.sucursalIdNombreMap[s.sucursal_id] = s.sucursal;
-      });
-    },
-    error: (err) => console.error('Error al obtener sucursales:', err),
-  });
+  TicketInit.cargarTickets(this);
 
   // 🔁 Escuchar eventos de refresco desde el servicio
   this.refrescoService.refrescarTabla$.subscribe(() => {
@@ -373,6 +364,34 @@ async ngOnInit() {
   this.changeDetectorRef.detectChanges();
 
   (window as any).verTicketsComp = this;
+}
+
+private cargarSucursalesParaTickets(): Promise<void> {
+  return new Promise((resolve) => {
+    this.sucursalesService.obtenerSucursales().subscribe({
+      next: (sucs) => {
+        this.listaSucursales = sucs || [];
+        this.sucursalIdNombreMap = {};
+
+        this.listaSucursales.forEach((s: any) => {
+          const id = Number(s.sucursal_id ?? s.id);
+          const nombre = s.sucursal ?? s.nombre ?? s.nombre_sucursal;
+
+          if (Number.isFinite(id) && nombre) {
+            this.sucursalIdNombreMap[id] = nombre;
+          }
+        });
+
+        resolve();
+      },
+      error: (err) => {
+        console.error('Error al obtener sucursales:', err);
+        this.listaSucursales = [];
+        this.sucursalIdNombreMap = {};
+        resolve();
+      },
+    });
+  });
 }
 
 refrescarTicketsPreservandoFiltros(): void {
