@@ -45,7 +45,7 @@ import { mostrarAlertaToast,solicitarMotivoRechazoCierre } from '../utils/alerta
 import { SucursalesService } from '../services/sucursales.service';
 import { EvidenciaPreviewComponent } from './modals/evidencia-preview.component';
 import { ModalCierreTicketComponent } from '../shared/modal-cierre-ticket/modal-cierre-ticket.component';
-import { filtrarTicketsConFiltros } from '../utils/ticket-utils';
+import { buscarAncestroNivel, filtrarTicketsConFiltros } from '../utils/ticket-utils';
 import { MatSelectModule } from '@angular/material/select';
 import { AuthService } from '../services/auth.service';
 import { DialogoConfirmacionComponent } from '../shared/dialogo-confirmacion/dialogo-confirmacion.component';
@@ -375,7 +375,62 @@ async ngOnInit() {
   (window as any).verTicketsComp = this;
 }
 
+refrescarTicketsPreservandoFiltros(): void {
+  const pageActual = this.page;
 
+  this.ticketService.getTickets(1000, 0).subscribe({
+    next: (data: any) => {
+    const ticketsProcesados = (data?.tickets || []).map((ticket: Ticket) => {
+      const clasificacionId = Number(ticket.clasificacion_id);
+
+      const tieneClasificacionValida = Number.isFinite(clasificacionId);
+
+      const catNivel2 = tieneClasificacionValida
+        ? buscarAncestroNivel(clasificacionId, 2, this.categoriasCatalogo)
+        : null;
+
+      const catNivel3 = tieneClasificacionValida
+        ? buscarAncestroNivel(clasificacionId, 3, this.categoriasCatalogo)
+        : null;
+
+      const catNivel4 = tieneClasificacionValida
+        ? buscarAncestroNivel(clasificacionId, 4, this.categoriasCatalogo)
+        : null;
+
+      return {
+        ...ticket,
+        categoria: catNivel2?.nombre || ticket.categoria || '—',
+        subcategoria: catNivel3?.nombre || ticket.subcategoria || '—',
+        detalle: catNivel4?.nombre || ticket.detalle || '—',
+      };
+    });
+
+      this.tickets = ticketsProcesados;
+      this.ticketsCompletos = ticketsProcesados;
+
+      this.hidratarSucursalEnTickets();
+      this.hidratarDetalleEnTickets();
+
+      this.aplicarFiltrosDeTablaConContexto();
+
+      if (pageActual <= this.totalPagesCount) {
+        this.page = pageActual;
+      } else {
+        this.page = Math.max(this.totalPagesCount, 1);
+      }
+
+      this.visibleTickets = this.filteredTickets.slice(
+        (this.page - 1) * this.itemsPerPage,
+        this.page * this.itemsPerPage
+      );
+
+      this.changeDetectorRef.detectChanges();
+    },
+    error: (err) => {
+      console.error('No se pudieron refrescar tickets después de la acción:', err);
+    },
+  });
+}
 
   // Métodos públicos conectados a helpers
   exportarTickets() { TicketAcciones.exportarTickets(this); }
@@ -422,9 +477,7 @@ async ngOnInit() {
 
 /** Refrescar tabla/estado tras aprobar/rechazar */
 private postAccionRefrescar(): void {
-  // Reutiliza tu flujo estándar de recarga
-  TicketInit.cargarTickets(this);
-  this.changeDetectorRef.detectChanges();
+  this.refrescarTicketsPreservandoFiltros();
 }
 
 
@@ -1945,7 +1998,7 @@ async solicitarCierre(ticket: Ticket) {
   }).subscribe({
     next: (resp) => {
       mostrarAlertaToast(resp?.mensaje || 'Cierre solicitado.', 'success');
-      TicketInit.cargarTickets(this);
+      this.refrescarTicketsPreservandoFiltros();
     },
     error: (err) => {
       mostrarAlertaToast(err?.error?.mensaje || 'Error al solicitar cierre', 'error');
@@ -2032,7 +2085,7 @@ async cerrarDesdeCeroPorGerente(ticket: Ticket): Promise<void> {
   this.ticketService.cierreGerenteDesdeCero(ticket.id, { motivo }).subscribe({
     next: (resp) => {
       mostrarAlertaToast(resp?.mensaje || 'Ticket finalizado correctamente.', 'success');
-      TicketInit.cargarTickets(this);
+      this.refrescarTicketsPreservandoFiltros();
     },
     error: (err) => {
       mostrarAlertaToast(
@@ -2054,7 +2107,7 @@ async aceptarCierre(ticket: Ticket) {
   this.ticketService.cierreAceptarCreador(ticket.id).subscribe({
     next: (resp) => {
       mostrarAlertaToast(resp?.mensaje || 'Cierre aceptado.', 'success');
-      TicketInit.cargarTickets(this);
+      this.refrescarTicketsPreservandoFiltros();
     },
     error: (err) => {
       mostrarAlertaToast(err?.error?.mensaje || 'No se pudo aceptar el cierre.', 'error');
@@ -2093,7 +2146,7 @@ async rechazarCierre(ticket: Ticket): Promise<void> {
   this.ticketService.cierreRechazarCreador(ticket.id, { motivo }).subscribe({
     next: (resp) => {
       mostrarAlertaToast(resp?.mensaje || 'Cierre rechazado.', 'success');
-      TicketInit.cargarTickets(this);
+      this.refrescarTicketsPreservandoFiltros();
     },
     error: (err) => {
       mostrarAlertaToast(

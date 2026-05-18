@@ -53,7 +53,7 @@ export function cambiarEstadoTicket(
             ? res.notificados.join(', ')
             : '—';
           mostrarAlertaToast(`✅ Ticket #${ticket.id} actualizado a '${nuevoEstado}'. Notificados: ${lista}`);
-          cargarTickets(component); // <<--- SIEMPRE RECARGA TABLA
+          component.refrescarTicketsPreservandoFiltros();
           dialogRef.close();
           if (onSuccess) onSuccess();
         },
@@ -83,7 +83,7 @@ export function cambiarEstadoTicket(
         ? res.notificados.join(', ')
         : '—';
       mostrarAlertaToast(`✅ Ticket #${ticket.id} actualizado a '${nuevoEstado}'. Notificados: ${lista}`);
-      cargarTickets(component); // <<--- SIEMPRE RECARGA TABLA
+      component.refrescarTicketsPreservandoFiltros();
       if (onSuccess) onSuccess();
     },
     error: (error) => {
@@ -141,8 +141,7 @@ function actualizarEstadoEnServidor(
         ? res.notificados.join(', ')
         : '—';
       mostrarAlertaToast(`✅ Ticket #${ticket.id} actualizado a '${nuevoEstado}'. Notificados: ${lista}`);
-      // 🧼 Mantengo el comportamiento: siempre recargar la tabla
-      cargarTickets(component);
+      component.refrescarTicketsPreservandoFiltros();
     },
     error: (error) => {
       console.error(`❌ Error actualizando el ticket #${ticket.id}:`, error);

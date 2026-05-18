@@ -73,7 +73,7 @@ export function asignarFechaSolucionYEnProgreso(
 
     component.http.put(`${API_URL}/update/${ticket.id}`, bodyUpdate, { headers }).subscribe({
       next: () => {
-        cargarTickets(component);
+        component.refrescarTicketsPreservandoFiltros();
         mostrarAlertaToast('✅ Fecha de solución y estado "en progreso" guardados exitosamente.');
         if (onSuccess) onSuccess();
       },
@@ -122,7 +122,7 @@ export function asignarFechaSolucionYEnProgreso(
       },
       error: (error) => {
         // Si falla (403/400), re-sincroniza la tabla para deshacer parche optimista
-        cargarTickets(component);
+        component.refrescarTicketsPreservandoFiltros();
         mostrarAlertaErrorDesdeStatus(error.status);
       }
     });
