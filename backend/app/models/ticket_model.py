@@ -137,6 +137,19 @@ class Ticket(db.Model):
         # 2) Tomar los últimos 3 niveles como cat/sub/det, tolerando vacíos
         tail = [x for x in (ruta[-3:] if ruta else []) if x]
         cat_resuelta, subcat_resuelta, detalle_resuelto = (tail + [None, None, None])[:3]
+        
+        def safe_sucursal_nombre(sucursal):
+            if not sucursal:
+                return None
+
+            return (
+                getattr(sucursal, "sucursal", None)
+                or getattr(sucursal, "nombre", None)
+                or getattr(sucursal, "nombre_sucursal", None)
+            )
+
+        sucursal_nombre = safe_sucursal_nombre(self.sucursal)
+        sucursal_nombre_destino = safe_sucursal_nombre(self.sucursal_destino)
 
         return {
             'id': self.id,
@@ -152,6 +165,13 @@ class Ticket(db.Model):
 
             'sucursal_id': self.sucursal_id,
             'sucursal_id_destino': self.sucursal_id_destino,
+
+            'sucursal_nombre': sucursal_nombre,
+            'sucursal_nombre_destino': sucursal_nombre_destino,
+
+            # Campo visual principal para frontend.
+            # En tickets usamos destino como sucursal operativa.
+            'sucursal': sucursal_nombre_destino or sucursal_nombre,
 
             'departamento_id': self.departamento_id,
             'departamento_nombre': self.departamento.nombre if self.departamento else "N/A",
