@@ -151,7 +151,7 @@ export class PantallaVerTicketsComponent implements OnInit {
   totalTickets: number = 0;
   page: number = 1;
   itemsPerPage: number = 15;
-  loading: boolean = false;
+  loading: boolean = true;
   ticketsCompletos: Ticket[] = [];  
   visibleTickets: Ticket[] = [];    
   totalPagesCount: number = 0;
@@ -329,7 +329,7 @@ ngAfterViewInit(): void {
 
 
 async ngOnInit() {
-
+  this.loading = true;
   await TicketInit.obtenerUsuarioAutenticado(this); 
 
   // 👇 NUEVO: setear usuarioActual a partir de this.user
