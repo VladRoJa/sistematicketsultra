@@ -90,6 +90,7 @@
     <table class="tabla-tickets">
       <colgroup>
         <col class="c-id">
+        <col class="c-acc">
         <col class="c-cat">
         <col class="c-apa">
         <col class="c-desc">
@@ -102,7 +103,6 @@
         <col class="c-dep">
         <col class="c-sub">
         <col class="c-det">
-        <col class="c-acc">
         <col class="c-sol">
         <col class="c-his">
       </colgroup>
@@ -112,7 +112,10 @@
           <!-- (1) Id -->
           <th>Id</th>
 
-          <!-- (2) Categoría -->
+          <!-- (2) Acciones -->
+          <th>Acciones</th>
+
+          <!-- (3) Categoría -->
           <th [class.filtro-activo]="isFilterActive('categoria')">
             <!-- Filtros en encabezado desactivados -->
             <ng-container *ngIf="true">
@@ -158,7 +161,7 @@
             </ng-container>
           </th>
 
-          <!-- (3) Aparato/Dispositivo -->
+          <!-- (4) Aparato/Dispositivo -->
           <th [class.filtro-activo]="isFilterActive('inventario')">
             <!-- Filtros en encabezado desactivados -->
             <ng-container *ngIf="true">
@@ -202,7 +205,7 @@
             </ng-container>
           </th>
 
-          <!-- (4) Descripción -->
+          <!-- (5) Descripción -->
           <th class="col-descripcion" [class.filtro-activo]="filtroDescripcionActivo">
             <button
               mat-button
@@ -246,7 +249,7 @@
             </mat-menu>
           </th>
 
-          <!-- (5) Sucursal -->
+          <!-- (6) Sucursal -->
           <th [class.filtro-activo]="isFilterActive('sucursal')">
             <!-- Filtros en encabezado desactivados -->
             <ng-container *ngIf="true">
@@ -295,7 +298,7 @@
             </ng-container>
           </th>
 
-          <!-- (6) Estado -->
+          <!-- (7) Estado -->
           <th [class.filtro-activo]="isFilterActive('estado')">
             <!-- Filtros en encabezado desactivados -->
             <ng-container *ngIf="true">
@@ -339,7 +342,7 @@
             </ng-container>
           </th>
 
-          <!-- (7) Criticidad -->
+          <!-- (8) Criticidad -->
           <th [class.filtro-activo]="isFilterActive('criticidad')">
             <!-- Filtros en encabezado desactivados -->
             <ng-container *ngIf="true">
@@ -383,7 +386,7 @@
             </ng-container>
           </th>
 
-          <!-- (8) Fecha Creación -->
+          <!-- (9) Fecha Creación -->
           <th [class.filtro-activo]="isFilterActive('fecha_creacion')">
             <ng-container *ngIf="true">
               <button mat-button [matMenuTriggerFor]="menuFechaC" #triggerFiltroFechaC="matMenuTrigger" class="header-button">
@@ -413,7 +416,7 @@
             </ng-container>
           </th>
 
-          <!-- (9) Fecha En Progreso -->
+          <!-- (10) Fecha En Progreso -->
           <th [class.filtro-activo]="isFilterActive('fecha_en_progreso')">
             <ng-container *ngIf="true">
               <button mat-button [matMenuTriggerFor]="menuFechaP" #triggerFiltroFechaP="matMenuTrigger" class="header-button">
@@ -446,7 +449,7 @@
             </ng-container>
           </th>
 
-          <!-- (10) Fecha Finalizado -->
+          <!-- (11) Fecha Finalizado -->
           <th [class.filtro-activo]="isFilterActive('fecha_finalizado')">
             <ng-container *ngIf="true">
               <button mat-button [matMenuTriggerFor]="menuFechaF" #triggerFiltroFechaF="matMenuTrigger" class="header-button">
@@ -479,7 +482,7 @@
             </ng-container>
           </th>
 
-          <!-- (11) Departamento -->
+          <!-- (12) Departamento -->
           <th [class.filtro-activo]="isFilterActive('departamento')">
             <!-- Filtros en encabezado desactivados -->
             <ng-container *ngIf="true">
@@ -523,7 +526,7 @@
             </ng-container>
           </th>
 
-          <!-- (12) Subcategoría -->
+          <!-- (13) Subcategoría -->
           <th [class.filtro-activo]="isFilterActive('subcategoria')">
             <!-- Filtros en encabezado desactivados -->
             <ng-container *ngIf="true">
@@ -567,7 +570,7 @@
             </ng-container>
           </th>
 
-          <!-- (13) Detalle -->
+          <!-- (14) Detalle -->
           <th [class.filtro-activo]="isFilterActive('detalle')">
             <!-- Filtros en encabezado desactivados -->
             <ng-container *ngIf="true">
@@ -611,8 +614,7 @@
             </ng-container>
           </th>
 
-          <!-- (14) Acciones -->
-          <th>Acciones</th>
+
 
           <!-- (15) Fecha Solución -->
           <th>Fecha Solución</th>
@@ -625,6 +627,75 @@
       <tbody>
         <tr *ngFor="let ticket of visibleTickets">
           <td>{{ ticket.id }}</td>
+
+          <!-- Acciones -->
+          <td class="td-acciones">
+            <div *ngIf="puedeEditarTickets">
+              <!-- Botón: pasar a En progreso -->
+              <button
+                *ngIf="puedeMostrarBotonEnProgreso(ticket)"
+                mat-button
+                class="ticket-action ticket-action--progress"
+                (click)="cambiarEstadoEnProgreso(ticket)"
+              >
+                <mat-icon>play_circle</mat-icon>
+                <span>En progreso</span>
+              </button>
+
+              <!-- Botón: Finalizar (jefe inicia flujo de cierre) -->
+              <button
+                *ngIf="puedeMostrarBotonFinalizar(ticket)"
+                class="ticket-action ticket-action--finish"
+                (click)="solicitarCierre(ticket)"
+              >
+                <mat-icon>play_circle</mat-icon>
+                <span>Finalizar</span>
+              </button>
+            </div>
+
+            <!-- Botón: Cierre administrativo por gerente/admin -->
+            <button
+              *ngIf="puedeMostrarBotonCerrarDesdeCero(ticket)"
+              class="ticket-action ticket-action--manager"
+              (click)="cerrarDesdeCeroPorGerente(ticket)"
+            >
+              <mat-icon>task_alt</mat-icon>
+              <span>Cierre gerente</span>
+            </button>
+
+            <!-- Botones de validación de cierre para GERENTE / ADMIN -->
+            <div
+              *ngIf="puedeMostrarBotonesValidarCierre(ticket)"
+              class="acciones-validacion-cierre"
+            >
+              <!-- Aceptar -->
+            <div class="ticket-validation-actions">
+              <button
+                type="button"
+                class="ticket-validation-button ticket-validation-button--approve"
+                (click)="aceptarCierre(ticket)"
+                aria-label="Aceptar cierre"
+              >
+                <mat-icon>check_circle</mat-icon>
+                <span>Aceptar</span>
+              </button>
+
+
+                <!-- Rechazar -->
+              <button
+                type="button"
+                class="ticket-validation-button ticket-validation-button--reject"
+                (click)="rechazarCierre(ticket)"
+                aria-label="Rechazar cierre"
+              >
+                <mat-icon>cancel</mat-icon>
+                <span>Rechazar</span>
+              </button>
+            </div>
+            </div>
+          </td>
+
+
           <td>{{ ticket.categoria || '—' }}</td>
 
           <td class="td-aparato">
@@ -707,72 +778,6 @@
           <td>{{ getSubcategoriaVisible(ticket) }}</td>
           <td>{{ getDetalleVisible(ticket) }}</td>
 
-          <!-- Acciones -->
-          <td class="td-acciones">
-            <div *ngIf="puedeEditarTickets">
-              <!-- Botón: pasar a En progreso -->
-              <button
-                *ngIf="puedeMostrarBotonEnProgreso(ticket)"
-                mat-button
-                class="ticket-action ticket-action--progress"
-                (click)="cambiarEstadoEnProgreso(ticket)"
-              >
-                <mat-icon>play_circle</mat-icon>
-                <span>En progreso</span>
-              </button>
-
-              <!-- Botón: Finalizar (jefe inicia flujo de cierre) -->
-              <button
-                *ngIf="puedeMostrarBotonFinalizar(ticket)"
-                class="ticket-action ticket-action--finish"
-                (click)="solicitarCierre(ticket)"
-              >
-                <mat-icon>play_circle</mat-icon>
-                <span>Finalizar</span>
-              </button>
-            </div>
-
-            <!-- Botón: Cierre administrativo por gerente/admin -->
-            <button
-              *ngIf="puedeMostrarBotonCerrarDesdeCero(ticket)"
-              class="ticket-action ticket-action--manager"
-              (click)="cerrarDesdeCeroPorGerente(ticket)"
-            >
-              <mat-icon>task_alt</mat-icon>
-              <span>Cierre gerente</span>
-            </button>
-
-            <!-- Botones de validación de cierre para GERENTE / ADMIN -->
-            <div
-              *ngIf="puedeMostrarBotonesValidarCierre(ticket)"
-              class="acciones-validacion-cierre"
-            >
-              <!-- Aceptar -->
-            <div class="ticket-validation-actions">
-              <button
-                type="button"
-                class="ticket-validation-button ticket-validation-button--approve"
-                (click)="aceptarCierre(ticket)"
-                aria-label="Aceptar cierre"
-              >
-                <mat-icon>check_circle</mat-icon>
-                <span>Aceptar</span>
-              </button>
-
-
-                <!-- Rechazar -->
-              <button
-                type="button"
-                class="ticket-validation-button ticket-validation-button--reject"
-                (click)="rechazarCierre(ticket)"
-                aria-label="Rechazar cierre"
-              >
-                <mat-icon>cancel</mat-icon>
-                <span>Rechazar</span>
-              </button>
-            </div>
-            </div>
-          </td>
 
           <!-- Fecha Solución -->
           <td>
