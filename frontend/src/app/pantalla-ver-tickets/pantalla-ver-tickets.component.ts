@@ -265,6 +265,7 @@ export class PantallaVerTicketsComponent implements OnInit {
 
   filtroCategoriaTexto = '';
   filtroDescripcionTexto = '';
+  filtroDescripcionAplicadoTexto = '';
   filtroUsuarioTexto = '';
   filtroEstadoTexto = '';
   filtroCriticidadTexto = '';
@@ -466,7 +467,71 @@ private postAccionRefrescar(): void {
 }
 
 
+get filtroDescripcionActivo(): boolean {
+  return this.filtroDescripcionAplicadoTexto.trim().length > 0;
+}
 
+private obtenerBaseParaFiltroDescripcion(): Ticket[] {
+  this.hidratarSucursalEnTickets();
+  this.hidratarDetalleEnTickets();
+
+  const filtros = obtenerFiltrosActivos(this);
+  delete filtros['descripcion'];
+
+  const baseCompleta = Array.isArray(this.ticketsCompletos) && this.ticketsCompletos.length > 0
+    ? this.ticketsCompletos
+    : this.tickets;
+
+  const baseModoVista = this.ocultarFinalizados
+    ? baseCompleta.filter((ticket: Ticket) => {
+        const estado = (ticket.estado || '').toString().trim().toLowerCase();
+        return estado !== 'finalizado';
+      })
+    : [...baseCompleta];
+
+  return Object.keys(filtros).length === 0
+    ? baseModoVista
+    : filtrarTicketsConFiltros(baseModoVista, filtros);
+}
+
+aplicarFiltroDescripcionTexto(trigger?: MatMenuTrigger): void {
+  const textoOriginal = (this.filtroDescripcionTexto || '').trim();
+  const textoNormalizado = this.normalizarTextoFiltro(textoOriginal);
+
+  this.filtroDescripcionAplicadoTexto = textoOriginal;
+
+  const base = this.obtenerBaseParaFiltroDescripcion();
+
+  this.filteredTickets = textoNormalizado
+    ? base.filter((ticket: Ticket) => {
+        const descripcion = this.normalizarTextoFiltro(ticket.descripcion || '');
+        return descripcion.includes(textoNormalizado);
+      })
+    : base;
+
+  this.page = 1;
+  this.totalTickets = this.filteredTickets.length;
+  this.totalPagesCount = Math.ceil(this.totalTickets / this.itemsPerPage);
+  this.visibleTickets = this.filteredTickets.slice(0, this.itemsPerPage);
+
+  this.changeDetectorRef.detectChanges();
+  trigger?.closeMenu?.();
+}
+
+limpiarFiltroDescripcionTexto(trigger?: MatMenuTrigger): void {
+  this.filtroDescripcionTexto = '';
+  this.filtroDescripcionAplicadoTexto = '';
+
+  this.filteredTickets = this.obtenerBaseParaFiltroDescripcion();
+
+  this.page = 1;
+  this.totalTickets = this.filteredTickets.length;
+  this.totalPagesCount = Math.ceil(this.totalTickets / this.itemsPerPage);
+  this.visibleTickets = this.filteredTickets.slice(0, this.itemsPerPage);
+
+  this.changeDetectorRef.detectChanges();
+  trigger?.closeMenu?.();
+}
 
 
 

@@ -155,6 +155,8 @@ export function limpiarTodosLosFiltros(component: PantallaVerTicketsComponent): 
   component.filtroDetalleTexto = '';
   component.filtroInventarioTexto = '';
   component.filtroSucursalTexto = '';
+  component.filtroDescripcionTexto = '';
+  (component as any).filtroDescripcionAplicadoTexto = '';
 
   // 5) Limpia rangos de fechas.
   component.rangoFechaCreacionSeleccionado = { start: null, end: null };
