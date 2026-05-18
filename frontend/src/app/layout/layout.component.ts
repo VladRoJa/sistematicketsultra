@@ -84,8 +84,12 @@ ngOnInit(): void {
     path: '/warehouse',
     submenu: [
       { label: 'Warehouse', path: '/warehouse' },
-      { label: 'Track diario', path: '/warehouse/track' },
     ],
+  };
+
+  const menuTrackDiario = {
+    label: 'Track',
+    path: '/warehouse/track',
   };
 
   const soloTickets = [
@@ -239,7 +243,15 @@ const menuMantenimientoGerencial = [
   } else {
     this.menuItems = soloTickets;
   }
-
+  if (
+    this.puedeVerTrackDiarioPorRol() &&
+    !this.menuItems.some((item) => item.label === 'Track diario')
+  ) {
+    this.menuItems = [
+      ...this.menuItems,
+      menuTrackDiario,
+    ];
+  }
   this.habilitarWarehouseEnMenuSiAplica(menuWarehouse);
   this.sincronizarMenuConRutaActual();
   }
@@ -537,7 +549,19 @@ onClickReporteBug(): void {
 }
 
 
+private puedeVerTrackDiarioPorRol(): boolean {
+  const user = this.authService.getUser();
+  const rol = (user?.rol || '').toString().trim().toUpperCase();
 
+  return [
+    'ADMIN',
+    'ADMINISTRADOR',
+    'SUPER_ADMIN',
+    'LECTOR_GLOBAL',
+    'GERENTE',
+    'GERENTE_REGIONAL',
+  ].includes(rol);
+}
 
 
 

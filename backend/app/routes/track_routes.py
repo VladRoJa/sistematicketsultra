@@ -71,12 +71,30 @@ def _ensure_target_month(value: Any, *, field_name: str) -> tuple[int, int]:
     return year, month
 
 
-def _require_admin_role() -> None:
+def _get_current_role() -> str:
     claims = get_jwt()
-    role = str(claims.get("rol") or "").strip().upper()
+    return str(claims.get("rol") or "").strip().upper()
 
-    if role not in {"ADMIN", "ADMINISTRADOR", "SUPER_ADMIN", "LECTOR_GLOBAL"}:
-        raise PermissionError("No autorizado para ejecutar o consultar el Track.")
+
+def _require_track_admin_role() -> None:
+    role = _get_current_role()
+
+    if role not in {"ADMIN", "ADMINISTRADOR", "SUPER_ADMIN"}:
+        raise PermissionError("No autorizado para ejecutar procesos del Track.")
+
+
+def _require_track_read_role() -> None:
+    role = _get_current_role()
+
+    if role not in {
+        "ADMIN",
+        "ADMINISTRADOR",
+        "SUPER_ADMIN",
+        "LECTOR_GLOBAL",
+        "GERENTE",
+        "GERENTE_REGIONAL",
+    }:
+        raise PermissionError("No autorizado para consultar el Track.")
 
 
 def _serialize_decimal(value: Decimal | None) -> float | None:
@@ -313,7 +331,7 @@ def _serialize_track_daily_mart_row(row: TrackDailyMartORM) -> dict[str, Any]:
 @jwt_required()
 def run_track_daily_pipeline_endpoint():
     try:
-        _require_admin_role()
+        run_track_agregadoras_integration_endpoint()
 
         payload = request.get_json(silent=True) or {}
 
@@ -397,7 +415,7 @@ def run_track_daily_pipeline_endpoint():
 @jwt_required()
 def run_track_agregadoras_integration_endpoint():
     try:
-        _require_admin_role()
+        _require_track_admin_role()
 
         payload = request.get_json(silent=True) or {}
 
@@ -454,7 +472,7 @@ def run_track_agregadoras_integration_endpoint():
 @jwt_required()
 def get_track_daily_mart_endpoint():
     try:
-        _require_admin_role()
+        _require_track_read_role()
 
         track_date = _ensure_date(
             request.args.get("track_date"),
@@ -554,8 +572,7 @@ def get_track_daily_mart_endpoint():
 @jwt_required()
 def get_track_branch_history_endpoint():
     try:
-        _require_admin_role()
-
+        _require_track_read_role()
         sucursal_canon = str(
             request.args.get("sucursal_canon") or ""
         ).strip().upper()
