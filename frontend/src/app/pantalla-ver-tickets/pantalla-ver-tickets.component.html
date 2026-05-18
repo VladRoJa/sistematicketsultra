@@ -82,38 +82,6 @@
 </section>
 
   <!-- ==========================================================================
-       Suite Ultra UI v1 - Acciones rápidas y filtros
-       ========================================================================== -->
-
-  <div class="tickets-toolbar">
-    <div class="tickets-toolbar__group">
-      <button
-        mat-stroked-button
-        color="primary"
-        class="tickets-toolbar__button"
-        (click)="toggleOcultarFinalizados()"
-      >
-        <mat-icon>
-          {{ ocultarFinalizados ? 'visibility_off' : 'visibility' }}
-        </mat-icon>
-        {{ ocultarFinalizados ? 'Mostrar finalizados' : 'Ocultar finalizados' }}
-      </button>
-
-      <button
-        mat-stroked-button
-        color="accent"
-        class="tickets-toolbar__button"
-        (click)="filtroRapidoPorValidarActivo ? quitarFiltroPorValidar() : mostrarSoloPorValidar()"
-      >
-        <mat-icon>
-          {{ filtroRapidoPorValidarActivo ? 'filter_alt_off' : 'fact_check' }}
-        </mat-icon>
-        {{ filtroRapidoPorValidarActivo ? 'Quitar por validar' : 'Mostrar por validar' }}
-      </button>
-    </div>
-  </div>
-
-  <!-- ==========================================================================
        Suite Ultra UI v1 - Card de filtros y tabla
        ========================================================================== -->
 
