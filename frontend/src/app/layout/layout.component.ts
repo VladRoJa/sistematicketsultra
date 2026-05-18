@@ -197,7 +197,6 @@ const menuMantenimientoGerencial = [
         { label: 'Carga Masiva', path: '/carga-masiva' }
       ]
     },
-    menuWarehouse,
     {
       label: 'Catálogos',
       path: '/catalogos/marcas',
@@ -212,14 +211,14 @@ const menuMantenimientoGerencial = [
       ]
     },
     {
-          label: 'Asistencia',
-          path: '/asistencia/registrar',
-          submenu: [
-            { label: 'Registrar Asistencia', path: '/asistencia/registrar' },
-            { label: 'Reportes', path: '/asistencia/reportes' }
-          ]
-        },
-        {
+      label: 'Asistencia',
+      path: '/asistencia/registrar',
+      submenu: [
+        { label: 'Registrar Asistencia', path: '/asistencia/registrar' },
+        { label: 'Reportes', path: '/asistencia/reportes' }
+      ]
+    },
+    {
       label: 'Permisos',
       path: '/admin-usuarios-sucursales/1',
       submenu: [
@@ -245,7 +244,7 @@ const menuMantenimientoGerencial = [
   }
   if (
     this.puedeVerTrackDiarioPorRol() &&
-    !this.menuItems.some((item) => item.label === 'Track diario')
+    !this.menuItems.some((item) => item.label === 'Track')
   ) {
     this.menuItems = [
       ...this.menuItems,
