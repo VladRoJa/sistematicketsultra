@@ -71,7 +71,6 @@ export function filtrarTicketsConFiltros(
   filtros: FiltrosEntrada | Record<string, any>
 ) {
   const filtrosSet = normalizaFiltros(filtros);
-  const debugDetalleActivo = Boolean(filtrosSet.detalle?.size);
 
   const getValue = (t: any, col: string): string => {
     switch (col) {
@@ -101,15 +100,6 @@ return tickets.filter(t => {
       valorTicket = usandoIds
         ? (t.departamento_id != null ? String(t.departamento_id) : '')
         : (t.departamento ?? '');
-
-      // 🔎 log de comparación departamento
-      console.log('🔎 dept comparando', {
-        usandoIds,
-        valorTicket,
-        valores: Array.from(valores),
-        ticket_dep_id: t.departamento_id,
-        ticket_dep_nombre: t.departamento
-      });
     } else {
       // tu getValue normal
       valorTicket = (() => {

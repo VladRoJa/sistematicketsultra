@@ -11,7 +11,6 @@ import { obtenerFiltrosActivosParaBackend } from './pantalla-ver-tickets.filtros
 /** Exportar tickets filtrados a Excel */
 export function exportarTickets(component: PantallaVerTicketsComponent) {
   component.exportandoExcel = true;
-  console.log("🔍 temporalSeleccionados justo antes de exportar:", JSON.stringify(component.temporalSeleccionados, null, 2));
   const filtros = obtenerFiltrosActivosParaBackend(component);
 
   component.ticketService.exportarTickets(filtros).subscribe({
