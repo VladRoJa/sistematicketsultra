@@ -5,6 +5,7 @@ import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { AuthService } from '../../services/auth.service';
 import {
   TrackService,
   TrackGenerationMode,
@@ -230,8 +231,10 @@ export class TrackDashboardComponent implements OnInit {
   trackVersionLabel = '';
   trackGeneratedAtLabel = '';
 
-  constructor(private readonly trackService: TrackService,
+  constructor(
+    private readonly trackService: TrackService,
     private readonly router: Router,
+    private readonly authService: AuthService,
   ) {}
 
   ngOnInit(): void {
@@ -240,6 +243,10 @@ export class TrackDashboardComponent implements OnInit {
   }
 
   runTrackPipeline(): void {
+    if (!this.puedeEjecutarTrack()) {
+      this.errorMessage = 'No tienes permisos para ejecutar procesos del Track.';
+      return;
+    }
     if (this.isSubmitting) {
       return;
     }
@@ -428,6 +435,13 @@ private getSortedDataRows(rows: TrackDailyMartRow[]): TrackDailyMartRow[] {
 
     return this.getOpeningOrderIndex(left) - this.getOpeningOrderIndex(right);
   });
+}
+
+puedeEjecutarTrack(): boolean {
+  const user = this.authService.getUser();
+  const rol = (user?.rol || '').toString().trim().toUpperCase();
+
+  return ['ADMIN', 'ADMINISTRADOR', 'SUPER_ADMIN'].includes(rol);
 }
 
 private compareTrackSortValues(
