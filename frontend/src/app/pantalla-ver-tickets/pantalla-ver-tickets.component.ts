@@ -666,6 +666,10 @@ private normalizarTextoFiltro(value: any): string {
       end: this.fechaCreacionTemp.end
     };
 
+    this.filtroCreacionActivo =
+      !!this.rangoFechaCreacionSeleccionado.start ||
+      !!this.rangoFechaCreacionSeleccionado.end;
+
     aplicarFiltroPorRangoFechaCreacion(this, this.rangoFechaCreacionSeleccionado);
 
     this.page = 1;
@@ -677,8 +681,10 @@ private normalizarTextoFiltro(value: any): string {
     
   borrarFiltroRangoFechaCreacion = () => {
     this.rangoFechaCreacionSeleccionado = { start: null, end: null };
-    this.fechaCreacionTemp = { start: null, end: null }; // ⬅️ limpia también la temporal
-    this.filteredTickets = [...this.tickets];
+    this.fechaCreacionTemp = { start: null, end: null };
+    this.filtroCreacionActivo = false;
+
+    this.filteredTickets = this.obtenerBaseConModoYFechas();
 
     this.page = 1;
     this.totalTickets = this.filteredTickets.length;
@@ -694,8 +700,10 @@ private normalizarTextoFiltro(value: any): string {
       end: this.fechaProgresoTemp.end
     };
 
-    // ⬇️ Solo en aplicar se toma en cuenta esta bandera
-    this.filtroProgresoActivo = !!this.rangoFechaProgresoSeleccionado.start || !!this.rangoFechaProgresoSeleccionado.end || this.incluirSinFechaProgreso;
+    this.filtroProgresoActivo =
+      !!this.rangoFechaProgresoSeleccionado.start ||
+      !!this.rangoFechaProgresoSeleccionado.end ||
+      this.incluirSinFechaProgreso;
 
     aplicarFiltroPorRangoFechaEnProgreso(this, this.rangoFechaProgresoSeleccionado);
 
@@ -713,8 +721,10 @@ private normalizarTextoFiltro(value: any): string {
       end: this.fechaFinalTemp.end
     };
 
-    // ⬇️ Activar sólo al aplicar
-    this.filtroFinalizadoActivo = !!this.rangoFechaFinalSeleccionado.start || !!this.rangoFechaFinalSeleccionado.end || this.incluirSinFechaFinalizado;
+    this.filtroFinalizadoActivo =
+      !!this.rangoFechaFinalSeleccionado.start ||
+      !!this.rangoFechaFinalSeleccionado.end ||
+      this.incluirSinFechaFinalizado;
 
     aplicarFiltroPorRangoFechaFinalizado(this, this.rangoFechaFinalSeleccionado);
 
@@ -730,13 +740,15 @@ private normalizarTextoFiltro(value: any): string {
     this.rangoFechaProgresoSeleccionado = { start: null, end: null };
     this.fechaProgresoTemp = { start: null, end: null };
     this.incluirSinFechaProgreso = false;
-    this.filtroProgresoActivo = false; 
+    this.filtroProgresoActivo = false;
 
-    this.filteredTickets = [...this.tickets];
+    this.filteredTickets = this.obtenerBaseConModoYFechas();
+
     this.page = 1;
     this.totalTickets = this.filteredTickets.length;
     this.totalPagesCount = Math.ceil(this.totalTickets / this.itemsPerPage);
     this.visibleTickets = this.filteredTickets.slice(0, this.itemsPerPage);
+
     this.changeDetectorRef.detectChanges();
   };
 
@@ -745,13 +757,15 @@ private normalizarTextoFiltro(value: any): string {
     this.rangoFechaFinalSeleccionado = { start: null, end: null };
     this.fechaFinalTemp = { start: null, end: null };
     this.incluirSinFechaFinalizado = false;
-    this.filtroFinalizadoActivo = false; 
+    this.filtroFinalizadoActivo = false;
 
-    this.filteredTickets = [...this.tickets];
+    this.filteredTickets = this.obtenerBaseConModoYFechas();
+
     this.page = 1;
     this.totalTickets = this.filteredTickets.length;
     this.totalPagesCount = Math.ceil(this.totalTickets / this.itemsPerPage);
     this.visibleTickets = this.filteredTickets.slice(0, this.itemsPerPage);
+
     this.changeDetectorRef.detectChanges();
   };
 
@@ -890,9 +904,7 @@ private obtenerTicketsParaOpcionesDeFiltro(columna: string): Ticket[] {
   const filtros = obtenerFiltrosActivos(this);
   delete filtros[columna];
 
-  const base = Array.isArray(this.ticketsCompletos) && this.ticketsCompletos.length > 0
-    ? this.ticketsCompletos
-    : this.tickets;
+  const base = this.obtenerBaseConModoYFechas();
 
   if (Object.keys(filtros).length === 0) {
     return [...base];
@@ -1077,27 +1089,12 @@ cerrarYAplicar(columna: string, trigger: MatMenuTrigger): void {
   this.sincronizarDisponiblesDesdeTemporal(columna);
 
   if (!this.columnaTieneFiltroReal(columna)) {
-    this.limpiarFiltroColumna(columna);
-    trigger.closeMenu();
-    return;
+    this.limpiarTextoFiltroColumnaLocal(columna);
   }
 
-  if (columna === 'detalle') {
-    this.sincronizarDisponiblesDesdeTemporal('detalle');
-  }
+  this.aplicarFiltrosDeTablaConContexto();
 
-if (columna === 'categoria' || columna === 'estado' || columna === 'departamento') {
-  aplicarFiltroColumnaConResetUnificado(this, columna);
-} else if (columna === 'detalle') {
-  this.aplicarFiltroDetalleConReset();
-} else if (columna === 'inventario') {
-  const valoresInventario = this.obtenerValoresSeleccionadosDesdeTemporal('inventario');
-  this.aplicarFiltroInventarioConReset(valoresInventario);
-} else {
-  this.aplicarFiltroColumnaConReset(columna);
-}
-
-trigger.closeMenu();
+  trigger.closeMenu();
 }
 
 private obtenerValoresSeleccionadosDesdeTemporal(columna: string): Set<string> {
@@ -1141,6 +1138,95 @@ private sincronizarDisponiblesDesdeValoresSeleccionados(
   this.temporalSeleccionados[columna] = normalizados.map((opcion: any) => ({ ...opcion }));
 }
 
+private aplicarFiltrosDeTablaConContexto(): void {
+  this.hidratarSucursalEnTickets();
+  this.hidratarDetalleEnTickets();
+
+  const filtrosActivos = obtenerFiltrosActivos(this);
+
+  Object.keys(filtrosActivos).forEach((key) => {
+    const valores = filtrosActivos[key];
+
+    if (!Array.isArray(valores) || valores.length === 0) {
+      delete filtrosActivos[key];
+    }
+  });
+
+  const filtrosInventario = filtrosActivos['inventario'] || [];
+  const filtrosDetalle = filtrosActivos['detalle'] || [];
+
+  delete filtrosActivos['inventario'];
+  delete filtrosActivos['detalle'];
+  delete filtrosActivos['descripcion'];
+
+  const base = this.obtenerBaseConModoYFechas();
+
+  let resultado =
+    Object.keys(filtrosActivos).length === 0
+      ? [...base]
+      : filtrarTicketsConFiltros(base, filtrosActivos);
+
+  if (Array.isArray(filtrosInventario) && filtrosInventario.length > 0) {
+    const valoresInventario = new Set(
+      filtrosInventario.map((valor: any) => this.normalizarTextoFiltro(valor))
+    );
+
+    resultado = resultado.filter((ticket: any) => {
+      const inventarioTicket = this.normalizarTextoFiltro(
+        ticket.inventario?.nombre || '—'
+      );
+
+      return valoresInventario.has(inventarioTicket);
+    });
+  }
+
+  if (Array.isArray(filtrosDetalle) && filtrosDetalle.length > 0) {
+    const valoresDetalle = new Set(
+      filtrosDetalle.map((valor: any) => this.normalizarTextoFiltro(valor))
+    );
+
+    resultado = resultado.filter((ticket: any) => {
+      const detalleTicket = this.normalizarTextoFiltro(
+        ticket.detalle_filtro ||
+        ticket.detalle_visible ||
+        this.getDetalleVisible(ticket)
+      );
+
+      return valoresDetalle.has(detalleTicket);
+    });
+  }
+
+  const textoDescripcion = this.normalizarTextoFiltro(
+    this.filtroDescripcionAplicadoTexto || ''
+  );
+
+  if (textoDescripcion) {
+    resultado = resultado.filter((ticket: Ticket) => {
+      const descripcion = this.normalizarTextoFiltro(ticket.descripcion || '');
+      return descripcion.includes(textoDescripcion);
+    });
+  }
+
+  this.filteredTickets = resultado;
+  this.actualizarVistaTicketsFiltrados();
+}
+
+private limpiarTextoFiltroColumnaLocal(columna: string): void {
+  if (columna === 'categoria') this.filtroCategoriaTexto = '';
+  if (columna === 'descripcion') {
+    this.filtroDescripcionTexto = '';
+    this.filtroDescripcionAplicadoTexto = '';
+  }
+  if (columna === 'username') this.filtroUsuarioTexto = '';
+  if (columna === 'estado') this.filtroEstadoTexto = '';
+  if (columna === 'criticidad') this.filtroCriticidadTexto = '';
+  if (columna === 'departamento') this.filtroDeptoTexto = '';
+  if (columna === 'subcategoria') this.filtroSubcategoriaTexto = '';
+  if (columna === 'detalle') this.filtroDetalleTexto = '';
+  if (columna === 'inventario') this.filtroInventarioTexto = '';
+  if (columna === 'sucursal') this.filtroSucursalTexto = '';
+}
+
 private aplicarFiltroInventarioConReset(valoresSeleccionados: Set<string>): void {
   this.page = 1;
   this.hidratarSucursalEnTickets();
@@ -1151,7 +1237,8 @@ private aplicarFiltroInventarioConReset(valoresSeleccionados: Set<string>): void
   );
 
   if (!this.columnaTieneFiltroReal('inventario')) {
-    this.limpiarFiltroColumna('inventario');
+    this.filtroInventarioTexto = '';
+    this.reaplicarFiltrosSinColumna('inventario');
     return;
   }
 
@@ -1159,9 +1246,7 @@ private aplicarFiltroInventarioConReset(valoresSeleccionados: Set<string>): void
   const filtrosSinInventario = { ...filtrosActivos };
   delete filtrosSinInventario['inventario'];
 
-  const base = Array.isArray(this.ticketsCompletos) && this.ticketsCompletos.length > 0
-    ? this.ticketsCompletos
-    : this.tickets;
+  const base = this.obtenerBaseConModoYFechas();
 
   const baseFiltrada =
     Object.keys(filtrosSinInventario).length === 0
@@ -1182,6 +1267,25 @@ private aplicarFiltroInventarioConReset(valoresSeleccionados: Set<string>): void
     return valoresNormalizados.has(inventarioTicket);
   });
 
+  this.totalTickets = this.filteredTickets.length;
+  this.totalPagesCount = Math.ceil(this.totalTickets / this.itemsPerPage);
+  this.visibleTickets = this.filteredTickets.slice(0, this.itemsPerPage);
+
+  this.changeDetectorRef.detectChanges();
+}
+
+private reaplicarFiltrosSinColumna(columna: string): void {
+  const filtrosActivos = obtenerFiltrosActivos(this);
+  delete filtrosActivos[columna];
+
+  const base = this.obtenerBaseConModoYFechas();
+
+  this.filteredTickets =
+    Object.keys(filtrosActivos).length === 0
+      ? [...base]
+      : filtrarTicketsConFiltros(base, filtrosActivos);
+
+  this.page = 1;
   this.totalTickets = this.filteredTickets.length;
   this.totalPagesCount = Math.ceil(this.totalTickets / this.itemsPerPage);
   this.visibleTickets = this.filteredTickets.slice(0, this.itemsPerPage);
@@ -1492,9 +1596,222 @@ getNombreSucursal(ticket: Ticket): string {
 
 
 
+get kpiTicketsActivosBd(): number {
+  return (this.ticketsCompletos || []).filter((ticket: Ticket) => {
+    return this.normalizarEstadoTicket(ticket) !== 'finalizado';
+  }).length;
+}
 
+get kpiTicketsAbiertosBd(): number {
+  return (this.ticketsCompletos || []).filter(
+    ticket => this.normalizarEstadoTicket(ticket) === 'abierto'
+  ).length;
+}
 
+get kpiTicketsEnProgresoBd(): number {
+  return (this.ticketsCompletos || []).filter(
+    ticket => this.normalizarEstadoTicket(ticket) === 'en progreso'
+  ).length;
+}
 
+get kpiTicketsPorValidarBd(): number {
+  return (this.ticketsCompletos || []).filter(
+    ticket => this.normalizarEstadoTicket(ticket) === 'por_validar'
+  ).length;
+}
+
+get kpiTicketsFinalizadosBd(): number {
+  return (this.ticketsCompletos || []).filter(
+    ticket => this.normalizarEstadoTicket(ticket) === 'finalizado'
+  ).length;
+}
+
+get kpiTicketsCriticosBd(): number {
+  return (this.ticketsCompletos || []).filter((ticket: Ticket) => {
+    const estado = this.normalizarEstadoTicket(ticket);
+    return estado !== 'finalizado' && this.esTicketCritico(ticket);
+  }).length;
+} 
+
+private aplicarFiltroRapidoColumna(columna: string, valores: string[]): void {
+  const plural = this.obtenerPluralFiltro(columna);
+
+  if (!plural) {
+    return;
+  }
+
+  const disponibles = ((this as any)[`${plural}Disponibles`] || []) as Array<{
+    valor: any;
+    etiqueta?: string;
+    seleccionado: boolean;
+  }>;
+
+  if (!Array.isArray(disponibles) || disponibles.length === 0) {
+    return;
+  }
+
+  const valoresSet = new Set(valores.map(valor => String(valor)));
+
+  const actualizados = disponibles.map(opcion => ({
+    ...opcion,
+    seleccionado: valoresSet.has(String(opcion.valor)),
+  }));
+
+  (this as any)[`${plural}Disponibles`] = actualizados;
+  (this as any)[`${plural}Filtradas`] = [...actualizados];
+  this.temporalSeleccionados[columna] = actualizados.map((opcion: any) => ({ ...opcion }));
+
+  if (columna === 'categoria' || columna === 'estado' || columna === 'departamento') {
+    aplicarFiltroColumnaConResetUnificado(this, columna);
+  } else if (columna === 'detalle') {
+    this.aplicarFiltroDetalleConReset();
+  } else if (columna === 'inventario') {
+    const valoresSeleccionados = this.obtenerValoresSeleccionadosDesdeTemporal('inventario');
+    this.aplicarFiltroInventarioConReset(valoresSeleccionados);
+  } else {
+    this.aplicarFiltroColumnaConReset(columna);
+  }
+
+  this.changeDetectorRef.detectChanges();
+}
+
+private parseTicketDate(value: any): Date | null {
+  if (!value) {
+    return null;
+  }
+
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value;
+  }
+
+  const texto = String(value).trim();
+
+  if (!texto) {
+    return null;
+  }
+
+  // ISO: 2026-05-15T...
+  if (/^\d{4}-\d{2}-\d{2}/.test(texto)) {
+    const fecha = new Date(texto);
+    return Number.isNaN(fecha.getTime()) ? null : fecha;
+  }
+
+  // dd/mm/yyyy o dd/mm/yy con hora opcional
+  const match = texto.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+
+  if (match) {
+    const dia = Number(match[1]);
+    const mes = Number(match[2]);
+    let anio = Number(match[3]);
+
+    if (anio < 100) {
+      anio += 2000;
+    }
+
+    const fecha = new Date(anio, mes - 1, dia);
+    return Number.isNaN(fecha.getTime()) ? null : fecha;
+  }
+
+  const fallback = new Date(texto);
+  return Number.isNaN(fallback.getTime()) ? null : fallback;
+}
+
+private normalizarDia(fecha: Date): Date {
+  return new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate());
+}
+
+private fechaEnRango(fecha: Date | null, start: Date | null, end: Date | null): boolean {
+  if (!fecha) {
+    return false;
+  }
+
+  const dia = this.normalizarDia(fecha);
+  const desde = start ? this.normalizarDia(start) : null;
+  const hasta = end ? this.normalizarDia(end) : null;
+
+  if (desde && dia < desde) {
+    return false;
+  }
+
+  if (hasta && dia > hasta) {
+    return false;
+  }
+
+  return true;
+}
+
+private ticketCumpleFiltrosFecha(ticket: Ticket): boolean {
+  if (this.filtroCreacionActivo) {
+    const fechaCreacion = this.parseTicketDate(
+      ticket.fecha_creacion_original ?? ticket.fecha_creacion
+    );
+
+    if (!this.fechaEnRango(
+      fechaCreacion,
+      this.rangoFechaCreacionSeleccionado.start,
+      this.rangoFechaCreacionSeleccionado.end
+    )) {
+      return false;
+    }
+  }
+
+  if (this.filtroProgresoActivo) {
+    const fechaProgreso = this.parseTicketDate(ticket.fecha_en_progreso);
+
+    if (!fechaProgreso && this.incluirSinFechaProgreso) {
+      // permitido
+    } else if (!this.fechaEnRango(
+      fechaProgreso,
+      this.rangoFechaProgresoSeleccionado.start,
+      this.rangoFechaProgresoSeleccionado.end
+    )) {
+      return false;
+    }
+  }
+
+  if (this.filtroFinalizadoActivo) {
+    const fechaFinalizado = this.parseTicketDate(
+      ticket.fecha_finalizado_original ?? ticket.fecha_finalizado
+    );
+
+    if (!fechaFinalizado && this.incluirSinFechaFinalizado) {
+      // permitido
+    } else if (!this.fechaEnRango(
+      fechaFinalizado,
+      this.rangoFechaFinalSeleccionado.start,
+      this.rangoFechaFinalSeleccionado.end
+    )) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+private obtenerBaseConModoYFechas(): Ticket[] {
+  const base = Array.isArray(this.ticketsCompletos) && this.ticketsCompletos.length > 0
+    ? this.ticketsCompletos
+    : this.tickets;
+
+  return base.filter((ticket: Ticket) => {
+    const estado = this.normalizarEstadoTicket(ticket);
+
+    // Si estás filtrando por fecha finalizado, permitimos ver finalizados.
+  const hayFiltroFechaActivo =
+    this.filtroCreacionActivo ||
+    this.filtroProgresoActivo ||
+    this.filtroFinalizadoActivo;
+
+  const debeOcultarFinalizados =
+    this.ocultarFinalizados && !hayFiltroFechaActivo;
+
+  if (debeOcultarFinalizados && estado === 'finalizado') {
+    return false;
+  }
+
+    return this.ticketCumpleFiltrosFecha(ticket);
+  });
+}
 
 private obtenerPluralColumna(columna: string): string {
   const pluralMap: Record<string, string> = {
@@ -1521,7 +1838,112 @@ private etiquetaCatalogoPorId(id: any): string {
 }
 
 
+private resetearFiltrosParaCard(incluirFinalizados: boolean): void {
+  this.ocultarFinalizados = !incluirFinalizados;
+  this.limpiarTodosLosFiltros();
+}
 
+private sincronizarFiltroCardEstado(estado: string): void {
+  const estadoNormalizado = this.normalizarTextoFiltro(estado);
+
+  const opcionesBase =
+    Array.isArray(this.estadosDisponibles) && this.estadosDisponibles.length > 0
+      ? this.estadosDisponibles
+      : Array.from(
+          new Set(
+            (this.ticketsCompletos || [])
+              .map((ticket: Ticket) => ticket.estado)
+              .filter(Boolean)
+          )
+        ).map((valor) => ({
+          valor,
+          etiqueta: valor,
+          seleccionado: true,
+        }));
+
+  const actualizados = opcionesBase.map((opcion: any) => ({
+    ...opcion,
+    seleccionado: this.normalizarTextoFiltro(opcion.valor) === estadoNormalizado,
+  }));
+
+  this.estadosDisponibles = actualizados;
+  this.estadosFiltrados = [...actualizados];
+  this.temporalSeleccionados['estado'] = actualizados.map((opcion: any) => ({
+    ...opcion,
+  }));
+}
+
+private sincronizarFiltroCardCriticidadCriticos(): void {
+  const opcionesBase =
+    Array.isArray(this.criticidadesDisponibles) && this.criticidadesDisponibles.length > 0
+      ? this.criticidadesDisponibles
+      : Array.from(
+          new Set(
+            (this.ticketsCompletos || [])
+              .map((ticket: Ticket) => ticket.criticidad)
+              .filter((valor) => valor !== null && valor !== undefined)
+          )
+        ).map((valor) => ({
+          valor,
+          etiqueta: String(valor),
+          seleccionado: true,
+        }));
+
+  const actualizados = opcionesBase.map((opcion: any) => ({
+    ...opcion,
+    seleccionado: Number(opcion.valor) >= 4,
+  }));
+
+  this.criticidadesDisponibles = actualizados;
+  this.criticidadesFiltradas = [...actualizados];
+  this.temporalSeleccionados['criticidad'] = actualizados.map((opcion: any) => ({
+    ...opcion,
+  }));
+}
+
+filtrarCardActivos(): void {
+  this.resetearFiltrosParaCard(false);
+}
+
+filtrarCardEstado(estado: string): void {
+  const estadoNormalizado = this.normalizarTextoFiltro(estado);
+  const esFinalizado = estadoNormalizado === 'finalizado';
+
+  // Cada card parte de cero.
+  this.resetearFiltrosParaCard(esFinalizado);
+
+  // Sincroniza header/checklist de Estado para que parezca filtro real.
+  this.sincronizarFiltroCardEstado(estado);
+
+  const base = Array.isArray(this.ticketsCompletos) && this.ticketsCompletos.length > 0
+    ? this.ticketsCompletos
+    : this.tickets;
+
+  this.filteredTickets = base.filter((ticket: Ticket) => {
+    return this.normalizarTextoFiltro(ticket.estado) === estadoNormalizado;
+  });
+
+  this.actualizarVistaTicketsFiltrados();
+}
+
+filtrarCardCriticos(): void {
+  // Críticos vuelve a la vista operativa: sin finalizados.
+  this.resetearFiltrosParaCard(false);
+
+  // Sincroniza header/checklist de Criticidad.
+  this.sincronizarFiltroCardCriticidadCriticos();
+
+  const base = Array.isArray(this.ticketsCompletos) && this.ticketsCompletos.length > 0
+    ? this.ticketsCompletos
+    : this.tickets;
+
+  this.filteredTickets = base.filter((ticket: Ticket) => {
+    const estado = this.normalizarEstadoTicket(ticket);
+    return estado !== 'finalizado' && this.esTicketCritico(ticket);
+  });
+
+  this.actualizarVistaTicketsFiltrados();
+}
 
 
 //filtros unificados

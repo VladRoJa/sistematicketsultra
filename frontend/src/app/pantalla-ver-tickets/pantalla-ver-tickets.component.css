@@ -143,6 +143,17 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.tickets-kpi-card:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--ultra-shadow-md);
+}
+
+.tickets-kpi-card:active {
+  transform: translateY(0);
 }
 
 .tickets-kpi-card span {

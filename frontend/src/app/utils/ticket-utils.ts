@@ -128,17 +128,6 @@ return tickets.filter(t => {
       })();
     }
 
-if (col === 'inventario') {
-  console.log('🧪 [INVENTARIO] comparando', {
-    ticket_id: t.id,
-    valorTicket,
-    valoresFiltro: Array.from(valores),
-    match: valores.has(valorTicket),
-    inventario_nombre: t.inventario?.nombre,
-    inventario_filtro: t.inventario_filtro,
-  });
-}
-
     if (!valores.has(valorTicket)) return false;
   }
   return true;
@@ -217,8 +206,20 @@ export function regenerarFiltrosFiltradosDesdeTickets(
 
 // ----------- FUNCIONES VISUALES Y DE SELECCIÓN MULTIPLE -----------
 
-// ¿El filtro de una columna está activo?
 export function isFilterActive(ctx: any, columna: string): boolean {
+  // Fechas primero, porque no usan listas Disponibles/Filtradas.
+  if (columna === 'fecha_creacion') {
+    return !!ctx.filtroCreacionActivo;
+  }
+
+  if (columna === 'fecha_en_progreso') {
+    return !!ctx.filtroProgresoActivo;
+  }
+
+  if (columna === 'fecha_finalizado') {
+    return !!ctx.filtroFinalizadoActivo;
+  }
+
   const pluralMap: Record<string, string> = {
     categoria: 'categorias',
     descripcion: 'descripciones',
@@ -229,20 +230,20 @@ export function isFilterActive(ctx: any, columna: string): boolean {
     subcategoria: 'subcategorias',
     detalle: 'detalles',
     inventario: 'inventarios',
-    sucursal: 'sucursales'
+    sucursal: 'sucursales',
   };
+
   const plural = pluralMap[columna] || `${columna}s`;
   const disponibles = ctx[`${plural}Disponibles`];
-  if (!Array.isArray(disponibles) || disponibles.length === 0) return false;
+
+  if (!Array.isArray(disponibles) || disponibles.length === 0) {
+    return false;
+  }
+
   const algunoMarcado = disponibles.some((i: any) => i.seleccionado);
   const algunoDesmarcado = disponibles.some((i: any) => !i.seleccionado);
-  if (algunoMarcado && algunoDesmarcado) return true;
-  if (columna === 'fecha_creacion') {
-    return !!(ctx.rangoFechaCreacionSeleccionado?.start || ctx.rangoFechaCreacionSeleccionado?.end);
-  }
-  if (columna === 'fecha_en_progreso') return ctx.filtroProgresoActivo;
-  if (columna === 'fecha_finalizado') return ctx.filtroFinalizadoActivo;
-  return false;
+
+  return algunoMarcado && algunoDesmarcado;
 }
 
 // Limpiar filtro de una columna (checkboxes, texto, seleccionar todo)

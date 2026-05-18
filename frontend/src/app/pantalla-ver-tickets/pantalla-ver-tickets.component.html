@@ -26,41 +26,59 @@
 </header>
 
 <section class="tickets-kpi-grid">
-  <article class="tickets-kpi-card tickets-kpi-card--total">
-    <span>Filtrados</span>
-    <strong>{{ kpiTicketsFiltrados }}</strong>
-    <small>Resultado actual</small>
-  </article>
+<button
+  type="button"
+  class="tickets-kpi-card tickets-kpi-card--total"
+  (click)="filtrarCardActivos()">
+  <span>Activos</span>
+  <strong>{{ kpiTicketsActivosBd }}</strong>
+  <small>Sin finalizados</small>
+</button>
 
-  <article class="tickets-kpi-card tickets-kpi-card--open">
+  <button 
+  type="button" 
+  class="tickets-kpi-card tickets-kpi-card--open" 
+  (click)="filtrarCardEstado('abierto')">
     <span>Abiertos</span>
-    <strong>{{ kpiTicketsAbiertos }}</strong>
+    <strong>{{ kpiTicketsAbiertosBd }}</strong>
     <small>Pendientes de iniciar</small>
-  </article>
+  </button>
 
-  <article class="tickets-kpi-card tickets-kpi-card--progress">
+  <button 
+  type="button" 
+  class="tickets-kpi-card tickets-kpi-card--progress" 
+  (click)="filtrarCardEstado('en progreso')">
     <span>En progreso</span>
-    <strong>{{ kpiTicketsEnProgreso }}</strong>
+    <strong>{{ kpiTicketsEnProgresoBd }}</strong>
     <small>En atención</small>
-  </article>
+  </button>
 
-  <article class="tickets-kpi-card tickets-kpi-card--validate">
+  <button 
+  type="button" 
+  class="tickets-kpi-card tickets-kpi-card--validate" 
+  (click)="filtrarCardEstado('por_validar')">
     <span>Por validar</span>
-    <strong>{{ kpiTicketsPorValidar }}</strong>
+    <strong>{{ kpiTicketsPorValidarBd }}</strong>
     <small>Cierre pendiente</small>
-  </article>
+  </button>
 
-  <article class="tickets-kpi-card tickets-kpi-card--done">
+  <button 
+  type="button" 
+  class="tickets-kpi-card tickets-kpi-card--done" 
+  (click)="filtrarCardEstado('finalizado')">
     <span>Finalizados</span>
-    <strong>{{ kpiTicketsFinalizados }}</strong>
+    <strong>{{ kpiTicketsFinalizadosBd }}</strong>
     <small>Cerrados</small>
-  </article>
+  </button>
 
-  <article class="tickets-kpi-card tickets-kpi-card--critical">
+  <button 
+  type="button" 
+  class="tickets-kpi-card tickets-kpi-card--critical" 
+  (click)="filtrarCardCriticos()">
     <span>Críticos</span>
-    <strong>{{ kpiTicketsCriticos }}</strong>
+    <strong>{{ kpiTicketsCriticosBd }}</strong>
     <small>Prioridad alta</small>
-  </article>
+  </button>
 </section>
 
   <!-- ==========================================================================
@@ -93,14 +111,6 @@
         {{ filtroRapidoPorValidarActivo ? 'Quitar por validar' : 'Mostrar por validar' }}
       </button>
     </div>
-
-    <button
-      mat-stroked-button
-      class="tickets-toolbar__toggle"
-      (click)="toggleFiltros()"
-    >
-      {{ mostrarFiltros ? 'Ocultar filtros' : 'Mostrar filtros' }}
-    </button>
   </div>
 
   <!-- ==========================================================================
