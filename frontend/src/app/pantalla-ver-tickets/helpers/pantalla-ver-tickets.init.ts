@@ -1,58 +1,104 @@
-// frontend-angular\src\app\pantalla-ver-tickets\helpers\pantalla-ver-tickets.init.ts
+// frontend-angular/src/app/pantalla-ver-tickets/helpers/pantalla-ver-tickets.init.ts
 
-import { PantallaVerTicketsComponent, ApiResponse, Ticket } from '../pantalla-ver-tickets.component';
 import { HttpHeaders } from '@angular/common/http';
-import { generarOpcionesCategoriasDesdeTickets, generarOpcionesDisponiblesDesdeTickets, regenerarFiltrosFiltradosDesdeTickets } from '../../utils/ticket-utils';
+import {
+  PantallaVerTicketsComponent,
+  ApiResponse,
+  Ticket,
+} from '../pantalla-ver-tickets.component';
+import {
+  buscarAncestroNivel,
+  regenerarFiltrosFiltradosDesdeTickets,
+} from '../../utils/ticket-utils';
 import { environment } from 'src/environments/environment';
 import { hayFiltrosActivos } from './pantalla-ver-tickets.filtros';
-import { generarOpcionesClasificacionDesdeTickets, buscarAncestroNivel } from '../../utils/ticket-utils';
 
-
-
-
-
-export async function obtenerUsuarioAutenticado(component: PantallaVerTicketsComponent): Promise<void> {
+export async function obtenerUsuarioAutenticado(
+  component: PantallaVerTicketsComponent
+): Promise<void> {
   const token = localStorage.getItem('token');
-  if (!token) return;
+  if (!token) {
+    return;
+  }
 
   const headers = new HttpHeaders({
-    'Authorization': `Bearer ${token}`,
-    'Content-Type': 'application/json'
+    Authorization: `Bearer ${token}`,
+    'Content-Type': 'application/json',
   });
 
-  try { 
-    const data = await component.http.get<{ user: any }>(`${environment.apiUrl}/auth/session-info`, { headers }).toPromise();
+  try {
+    const data = await component.http
+      .get<{ user: any }>(`${environment.apiUrl}/auth/session-info`, { headers })
+      .toPromise();
+
     if (data?.user) {
       component.user = data.user;
-  
-      // 🟢 Admin global
-      component.usuarioEsAdmin = (component.user.sucursal_id === 1000);
-  
-      // 🟦 Editor corporativo (intermedio, puede ver botones de acción)
-      component.usuarioEsEditorCorporativo = (
-        component.user.sucursal_id === 100 && 
-        component.user.rol !== 'ADMINISTRADOR'
-      );
-  
-      // ✅ Detecta cambios después de setear ambos
+
+      component.usuarioEsAdmin = component.user.sucursal_id === 1000;
+
+      component.usuarioEsEditorCorporativo =
+        component.user.sucursal_id === 100 &&
+        component.user.rol !== 'ADMINISTRADOR';
+
       component.changeDetectorRef.detectChanges();
     }
   } catch (error) {
-    console.error("❌ Error obteniendo usuario autenticado:", error);
+    console.error('❌ Error obteniendo usuario autenticado:', error);
   }
 }
-  
+
+function resolverNombreSucursalTicket(
+  ticket: any,
+  component: PantallaVerTicketsComponent
+): string {
+  const nombreDirecto =
+    ticket.sucursal_nombre_destino ||
+    ticket.sucursal_nombre ||
+    ticket.sucursal_destino?.sucursal ||
+    ticket.sucursal_destino?.nombre ||
+    ticket.sucursal?.sucursal ||
+    ticket.sucursal?.nombre;
+
+  if (nombreDirecto) {
+    return String(nombreDirecto);
+  }
+
+  const idRaw =
+    ticket.sucursal_id_destino ??
+    ticket.sucursal_destino_id ??
+    ticket.sucursal_id ??
+    ticket.id_sucursal ??
+    ticket.sucursal;
+
+  const id = Number(idRaw);
+
+  if (Number.isFinite(id)) {
+    return component.sucursalIdNombreMap[id] || String(id);
+  }
+
+  return idRaw != null ? String(idRaw) : '—';
+}
 
 export function cargarTickets(component: PantallaVerTicketsComponent): void {
   component.loading = true;
 
   component.ticketService.getTickets(1000, 0).subscribe({
     next: (data: ApiResponse) => {
-      // 1. Procesamos los tickets, agregando referencias a nivel2, nivel3 y nivel4
-      const ticketsProcesados = data.tickets.map(ticket => {
-        const catNivel2 = buscarAncestroNivel(ticket.clasificacion_id, 2, component.categoriasCatalogo);
-        const catNivel3 = buscarAncestroNivel(ticket.clasificacion_id, 3, component.categoriasCatalogo);
-        const catNivel4 = buscarAncestroNivel(ticket.clasificacion_id, 4, component.categoriasCatalogo);
+      const ticketsProcesados = data.tickets.map((ticket: Ticket) => {
+        const clasificacionId = Number(ticket.clasificacion_id);
+        const tieneClasificacionValida = Number.isFinite(clasificacionId);
+
+        const catNivel2 = tieneClasificacionValida
+          ? buscarAncestroNivel(clasificacionId, 2, component.categoriasCatalogo)
+          : null;
+
+        const catNivel3 = tieneClasificacionValida
+          ? buscarAncestroNivel(clasificacionId, 3, component.categoriasCatalogo)
+          : null;
+
+        const catNivel4 = tieneClasificacionValida
+          ? buscarAncestroNivel(clasificacionId, 4, component.categoriasCatalogo)
+          : null;
 
         return {
           ...ticket,
@@ -63,170 +109,239 @@ export function cargarTickets(component: PantallaVerTicketsComponent): void {
           criticidad: ticket.criticidad || 1,
           estado: (ticket.estado || '').toLowerCase().trim(),
 
-          // ✅ Usa el nombre que ya manda el backend si existe
           departamento:
-            ticket.departamento_nombre
-            ?? component.departamentoService.obtenerNombrePorId(ticket.departamento_id)
-            ?? ticket.departamento,
+            ticket.departamento_nombre ??
+            component.departamentoService.obtenerNombrePorId(ticket.departamento_id) ??
+            ticket.departamento,
 
-          fecha_creacion: ticket.fecha_creacion !== 'N/A' ? ticket.fecha_creacion : null,
-          fecha_en_progreso: ticket.fecha_en_progreso && ticket.fecha_en_progreso !== 'N/A' ? ticket.fecha_en_progreso : null,
-          fecha_finalizado: ticket.fecha_finalizado !== 'N/A' ? ticket.fecha_finalizado : null,
+          fecha_creacion:
+            ticket.fecha_creacion !== 'N/A' ? ticket.fecha_creacion : null,
 
-          historial_fechas: typeof ticket.historial_fechas === 'string'
-            ? JSON.parse(ticket.historial_fechas)
-            : (ticket.historial_fechas || []),
+          fecha_en_progreso:
+            ticket.fecha_en_progreso && ticket.fecha_en_progreso !== 'N/A'
+              ? ticket.fecha_en_progreso
+              : null,
 
-          // Seguimos guardando las referencias a los nodos del catálogo
+          fecha_finalizado:
+            ticket.fecha_finalizado !== 'N/A' ? ticket.fecha_finalizado : null,
+
+          historial_fechas:
+            typeof ticket.historial_fechas === 'string'
+              ? JSON.parse(ticket.historial_fechas)
+              : ticket.historial_fechas || [],
+
           categoria_nivel2: catNivel2,
           subcategoria_nivel3: catNivel3,
           detalle_nivel4: catNivel4,
 
-          // 👇 CAMBIO CLAVE: mantener texto (no IDs)
-          categoria:    ticket.categoria    ?? (catNivel2?.nombre ?? '—'),
-          subcategoria: ticket.subcategoria ?? (catNivel3?.nombre ?? '—'),
-          detalle:      ticket.detalle      ?? (catNivel4?.nombre ?? '—'),
+          categoria: ticket.categoria ?? catNivel2?.nombre ?? '—',
+          subcategoria: ticket.subcategoria ?? catNivel3?.nombre ?? '—',
+          detalle: ticket.detalle ?? catNivel4?.nombre ?? '—',
+
+          sucursal: resolverNombreSucursalTicket(ticket, component),
         };
       });
 
-      // 🔹 Guardamos SIEMPRE el universo completo
       component.ticketsCompletos = [...ticketsProcesados];
-      component.tickets          = [...ticketsProcesados];
+      component.tickets = [...ticketsProcesados];
 
-      // 🔹 Base que se usará para mostrar/filtrar en la tabla
       let base = [...ticketsProcesados];
+
       if (component.ocultarFinalizados) {
-        base = base.filter(t => (t.estado || '').toLowerCase() !== 'finalizado');
+        base = base.filter(
+          (ticket) => (ticket.estado || '').toLowerCase() !== 'finalizado'
+        );
       }
 
-      // ---- Opciones de filtro DEPARTAMENTO ----
       component.departamentosDisponibles = Array.from(
-        new Set(base.map(t => `${t.departamento_id}|${t.departamento}`))
+        new Set(base.map((ticket) => `${ticket.departamento_id}|${ticket.departamento}`))
       )
-        .filter(raw => raw.split('|')[0] && raw.split('|')[0] !== 'null') // Filtra vacíos/null
-        .map(raw => {
+        .filter((raw) => raw.split('|')[0] && raw.split('|')[0] !== 'null')
+        .map((raw) => {
           const [valor, etiqueta] = raw.split('|');
+
           return {
             valor: Number(valor),
             etiqueta: etiqueta || valor,
-            seleccionado: true
+            seleccionado: true,
           };
         });
+
       component.departamentosFiltrados = [...component.departamentosDisponibles];
-      component.temporalSeleccionados['departamento'] = [...component.departamentosDisponibles];
+      component.temporalSeleccionados['departamento'] = [
+        ...component.departamentosDisponibles,
+      ];
 
-      // --- FILTROS POR CATÁLOGO ---
-      // IDs usados por los tickets (sobre base o sobre todos; aquí dejo base para que coincida con lo visible)
-      const idsNivel2 = Array.from(new Set(base.map(t => t.categoria_nivel2?.id).filter(Boolean)));
-      const idsNivel3 = Array.from(new Set(base.map(t => t.subcategoria_nivel3?.id).filter(Boolean)));
-      const idsNivel4 = Array.from(new Set(base.map(t => t.detalle_nivel4?.id).filter(Boolean)));
+      const idsNivel2 = Array.from(
+        new Set(
+          base
+            .map((ticket) => ticket.categoria_nivel2?.id)
+            .filter((id): id is number => id !== undefined && id !== null)
+        )
+      );
 
-      // Catálogo nivel 2 (categoría)
+      const idsNivel3 = Array.from(
+        new Set(
+          base
+            .map((ticket) => ticket.subcategoria_nivel3?.id)
+            .filter((id): id is number => id !== undefined && id !== null)
+        )
+      );
+
+      const idsNivel4 = Array.from(
+        new Set(
+          base
+            .map((ticket) => ticket.detalle_nivel4?.id)
+            .filter((id): id is number => id !== undefined && id !== null)
+        )
+      );
+
       component.categoriasDisponibles = component.categoriasCatalogo
-        .filter(cat => cat.nivel === 2 && idsNivel2.includes(cat.id))
-        .map(cat => ({
+        .filter((cat) => cat.nivel === 2 && idsNivel2.includes(cat.id))
+        .map((cat) => ({
           valor: cat.id,
           etiqueta: cat.nombre ?? String(cat.id),
           seleccionado: true,
         }));
 
       component.subcategoriasDisponibles = component.categoriasCatalogo
-        .filter(cat => cat.nivel === 3 && idsNivel3.includes(cat.id))
-        .map(cat => ({
+        .filter((cat) => cat.nivel === 3 && idsNivel3.includes(cat.id))
+        .map((cat) => ({
           valor: cat.id,
           etiqueta: cat.nombre ?? String(cat.id),
           seleccionado: true,
         }));
 
       component.detallesDisponibles = component.categoriasCatalogo
-        .filter(cat => cat.nivel === 4 && idsNivel4.includes(cat.id))
-        .map(cat => ({
+        .filter((cat) => cat.nivel === 4 && idsNivel4.includes(cat.id))
+        .map((cat) => ({
           valor: cat.id,
           etiqueta: cat.nombre ?? String(cat.id),
           seleccionado: true,
         }));
 
-      component.categoriasFiltradas    = [...component.categoriasDisponibles];
+      component.categoriasFiltradas = [...component.categoriasDisponibles];
       component.subcategoriasFiltradas = [...component.subcategoriasDisponibles];
-      component.detallesFiltrados      = [...component.detallesDisponibles];
-      if (!component.temporalSeleccionados['categoria'])    component.temporalSeleccionados['categoria']    = [];
-      if (!component.temporalSeleccionados['subcategoria'])  component.temporalSeleccionados['subcategoria'] = [];
-      if (!component.temporalSeleccionados['detalle'])       component.temporalSeleccionados['detalle']      = [];
+      component.detallesFiltrados = [...component.detallesDisponibles];
 
-      // 🔹 filteredTickets parte de la BASE (ya sin finalizados si está activo el flag)
-      component.filteredTickets = base.map(t => {
-        const id = (t as any).sucursal_id_destino ?? (t as any).sucursal_id;
-        return {
-          ...t,
-          sucursal: component.sucursalIdNombreMap[id] || (id != null ? String(id) : '—')
-        };
-      });
+      if (!component.temporalSeleccionados['categoria']) {
+        component.temporalSeleccionados['categoria'] = [];
+      }
 
-      component.usuariosDisponibles = extraerUnicosPorCampo(component.filteredTickets, 'username').map(valor => ({
+      if (!component.temporalSeleccionados['subcategoria']) {
+        component.temporalSeleccionados['subcategoria'] = [];
+      }
+
+      if (!component.temporalSeleccionados['detalle']) {
+        component.temporalSeleccionados['detalle'] = [];
+      }
+
+      component.filteredTickets = [...base];
+
+      component.usuariosDisponibles = extraerUnicosPorCampo(
+        component.filteredTickets,
+        'username'
+      ).map((valor) => ({
         valor,
-        seleccionado: true
+        seleccionado: true,
       }));
+
       component.usuariosFiltrados = [...component.usuariosDisponibles];
+
       if (!component.temporalSeleccionados['username']) {
-        component.temporalSeleccionados['username'] = [...component.usuariosDisponibles];
+        component.temporalSeleccionados['username'] = [
+          ...component.usuariosDisponibles,
+        ];
       }
 
-      component.estadosDisponibles = extraerUnicosPorCampo(component.filteredTickets, 'estado').map(valor => ({
+      component.estadosDisponibles = extraerUnicosPorCampo(
+        component.filteredTickets,
+        'estado'
+      ).map((valor) => ({
         valor,
-        seleccionado: true
+        seleccionado: true,
       }));
+
       component.estadosFiltrados = [...component.estadosDisponibles];
+
       if (!component.temporalSeleccionados['estado']) {
-        component.temporalSeleccionados['estado'] = [...component.estadosDisponibles];
+        component.temporalSeleccionados['estado'] = [
+          ...component.estadosDisponibles,
+        ];
       }
 
-      component.criticidadesDisponibles = extraerUnicosPorCampo(component.filteredTickets, 'criticidad').map(valor => ({
+      component.criticidadesDisponibles = extraerUnicosPorCampo(
+        component.filteredTickets,
+        'criticidad'
+      ).map((valor) => ({
         valor,
-        seleccionado: true
+        seleccionado: true,
       }));
+
       component.criticidadesFiltradas = [...component.criticidadesDisponibles];
+
       if (!component.temporalSeleccionados['criticidad']) {
-        component.temporalSeleccionados['criticidad'] = [...component.criticidadesDisponibles];
+        component.temporalSeleccionados['criticidad'] = [
+          ...component.criticidadesDisponibles,
+        ];
       }
 
-      component.descripcionesDisponibles = extraerUnicosPorCampo(component.filteredTickets, 'descripcion').map(valor => ({
+      component.descripcionesDisponibles = extraerUnicosPorCampo(
+        component.filteredTickets,
+        'descripcion'
+      ).map((valor) => ({
         valor,
         etiqueta: valor,
-        seleccionado: true
+        seleccionado: true,
       }));
+
       component.descripcionesFiltradas = [...component.descripcionesDisponibles];
+
       if (!component.temporalSeleccionados['descripcion']) {
-        component.temporalSeleccionados['descripcion'] = [...component.descripcionesDisponibles];
+        component.temporalSeleccionados['descripcion'] = [
+          ...component.descripcionesDisponibles,
+        ];
       }
 
-      const nombresUnicos = Array.from(
-        new Set(component.filteredTickets.map(t => t.inventario?.nombre || '—'))
+      const nombresInventarioUnicos = Array.from(
+        new Set(component.filteredTickets.map((ticket) => ticket.inventario?.nombre || '—'))
       );
 
-      component.inventariosDisponibles = nombresUnicos.map(nombre => ({
+      component.inventariosDisponibles = nombresInventarioUnicos.map((nombre) => ({
         valor: nombre,
         etiqueta: nombre,
-        seleccionado: true
+        seleccionado: true,
       }));
 
       component.inventariosFiltrados = [...component.inventariosDisponibles];
+
       if (!component.temporalSeleccionados['inventario']) {
-        component.temporalSeleccionados['inventario'] = [...component.inventariosDisponibles];
+        component.temporalSeleccionados['inventario'] = [
+          ...component.inventariosDisponibles,
+        ];
       }
 
-      // 🔹 Paginación sobre la BASE filtrada
       component.page = 1;
-      component.totalTickets    = base.length;
-      component.totalPagesCount = Math.ceil(component.totalTickets / component.itemsPerPage);
+      component.totalTickets = base.length;
+      component.totalPagesCount = Math.ceil(
+        component.totalTickets / component.itemsPerPage
+      );
+
       actualizarVisibleTickets(component);
 
-      component.categoriasFiltradas    = [...component.categoriasDisponibles];
+      component.categoriasFiltradas = [...component.categoriasDisponibles];
       component.subcategoriasFiltradas = [...component.subcategoriasDisponibles];
-      component.detallesFiltrados      = [...component.detallesDisponibles];
+      component.detallesFiltrados = [...component.detallesDisponibles];
 
-      component.temporalSeleccionados['categoria']    = [...component.categoriasDisponibles];
-      component.temporalSeleccionados['subcategoria'] = [...component.subcategoriasDisponibles];
-      component.temporalSeleccionados['detalle']      = [...component.detallesDisponibles];
+      component.temporalSeleccionados['categoria'] = [
+        ...component.categoriasDisponibles,
+      ];
+      component.temporalSeleccionados['subcategoria'] = [
+        ...component.subcategoriasDisponibles,
+      ];
+      component.temporalSeleccionados['detalle'] = [
+        ...component.detallesDisponibles,
+      ];
 
       regenerarFiltrosFiltradosDesdeTickets(
         component.filteredTickets,
@@ -243,67 +358,79 @@ export function cargarTickets(component: PantallaVerTicketsComponent): void {
         component
       );
 
-      // Sincroniza filtrados iniciales
-      component.categoriasFiltradas    = [...component.categoriasDisponibles];
+      component.categoriasFiltradas = [...component.categoriasDisponibles];
       component.subcategoriasFiltradas = [...component.subcategoriasDisponibles];
-      component.detallesFiltrados      = [...component.detallesDisponibles];
+      component.detallesFiltrados = [...component.detallesDisponibles];
       component.descripcionesFiltradas = [...component.descripcionesDisponibles];
-      component.usuariosFiltrados      = [...component.usuariosDisponibles];
-      component.estadosFiltrados       = [...component.estadosDisponibles];
-      component.criticidadesFiltradas  = [...component.criticidadesDisponibles];
+      component.usuariosFiltrados = [...component.usuariosDisponibles];
+      component.estadosFiltrados = [...component.estadosDisponibles];
+      component.criticidadesFiltradas = [...component.criticidadesDisponibles];
       component.departamentosFiltrados = [...component.departamentosDisponibles];
-      component.inventariosFiltrados   = [...component.inventariosDisponibles];
+      component.inventariosFiltrados = [...component.inventariosDisponibles];
 
       component.changeDetectorRef.detectChanges();
       component.loading = false;
     },
     error: () => {
       component.loading = false;
-      console.error("❌ Error cargando tickets.");
-    }
+      console.error('❌ Error cargando tickets.');
+    },
   });
 }
 
-
-
-
-export function actualizarVisibleTickets(component: PantallaVerTicketsComponent): void {
+export function actualizarVisibleTickets(
+  component: PantallaVerTicketsComponent
+): void {
   const start = (component.page - 1) * component.itemsPerPage;
   const end = start + component.itemsPerPage;
 
-if (hayFiltrosActivos(component)) {
-  component.visibleTickets = component.filteredTickets.slice(0, 100);
-  component.mostrarAvisoLimite = component.filteredTickets.length > 100;
-} else {
-  component.visibleTickets = component.filteredTickets.slice(start, end);
-  component.mostrarAvisoLimite = false;
-}
+  if (hayFiltrosActivos(component)) {
+    component.visibleTickets = component.filteredTickets.slice(0, 100);
+    component.mostrarAvisoLimite = component.filteredTickets.length > 100;
+  } else {
+    component.visibleTickets = component.filteredTickets.slice(start, end);
+    component.mostrarAvisoLimite = false;
+  }
 }
 
-export function ordenar(columna: keyof Ticket, direccion: 'asc' | 'desc') {
-  this.filteredTickets.sort((a, b) => {
+export function ordenar(
+  this: PantallaVerTicketsComponent,
+  columna: keyof Ticket,
+  direccion: 'asc' | 'desc'
+): void {
+  this.filteredTickets.sort((a: Ticket, b: Ticket) => {
     const valorA = (a[columna] ?? '').toString().toLowerCase();
     const valorB = (b[columna] ?? '').toString().toLowerCase();
 
-    if (valorA < valorB) return direccion === 'asc' ? -1 : 1;
-    if (valorA > valorB) return direccion === 'asc' ? 1 : -1;
+    if (valorA < valorB) {
+      return direccion === 'asc' ? -1 : 1;
+    }
+
+    if (valorA > valorB) {
+      return direccion === 'asc' ? 1 : -1;
+    }
+
     return 0;
   });
 
   actualizarVisibleTickets(this);
 }
 
-export function actualizarDiasConTicketsFinalizado(component: PantallaVerTicketsComponent): void {
+export function actualizarDiasConTicketsFinalizado(
+  component: PantallaVerTicketsComponent
+): void {
   const fechasSet = new Set<string>();
   component.ticketsPorDiaFinalizado = {};
 
   for (const ticket of component.filteredTickets) {
     if (ticket.fecha_finalizado) {
       const fecha = new Date(ticket.fecha_finalizado);
-      if (!isNaN(fecha.getTime())) {
+
+      if (!Number.isNaN(fecha.getTime())) {
         const isoDate = fecha.toISOString().split('T')[0];
         fechasSet.add(isoDate);
-        component.ticketsPorDiaFinalizado[isoDate] = (component.ticketsPorDiaFinalizado[isoDate] || 0) + 1;
+        component.ticketsPorDiaFinalizado[isoDate] =
+          (component.ticketsPorDiaFinalizado[isoDate] || 0) + 1;
       }
     }
   }
@@ -311,27 +438,34 @@ export function actualizarDiasConTicketsFinalizado(component: PantallaVerTickets
   component.diasConTicketsFinalizado = fechasSet;
 }
 
-export function actualizarDiasConTicketsCreacion(component: PantallaVerTicketsComponent): void {
+export function actualizarDiasConTicketsCreacion(
+  component: PantallaVerTicketsComponent
+): void {
   component.diasConTicketsCreacion = new Set();
   component.ticketsPorDiaCreacion = {};
 
   for (const ticket of component.filteredTickets) {
     const fecha = ticket.fecha_creacion_original?.split('T')[0];
+
     if (fecha) {
       component.diasConTicketsCreacion.add(fecha);
-      component.ticketsPorDiaCreacion[fecha] = (component.ticketsPorDiaCreacion[fecha] || 0) + 1;
+      component.ticketsPorDiaCreacion[fecha] =
+        (component.ticketsPorDiaCreacion[fecha] || 0) + 1;
     }
   }
 }
 
-
 export function extraerUnicosPorCampo(tickets: any[], campo: string): any[] {
   const set = new Set();
+
   return tickets
-    .map(t => t[campo])
-    .filter(val => {
-      if (val == null || set.has(val)) return false;
-      set.add(val);
+    .map((ticket) => ticket[campo])
+    .filter((valor) => {
+      if (valor == null || set.has(valor)) {
+        return false;
+      }
+
+      set.add(valor);
       return true;
     });
 }
