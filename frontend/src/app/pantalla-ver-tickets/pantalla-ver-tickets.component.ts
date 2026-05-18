@@ -174,7 +174,6 @@ export class PantallaVerTicketsComponent implements OnInit {
   sucursalIdNombreMap: Record<number, string> = {};
   listaSucursales: any[] = [];
   ocultarFinalizados: boolean = true;
-  filtroRapidoPorValidarActivo: boolean = false;
 
 
   // Temporales
@@ -2203,15 +2202,6 @@ private etiquetaDepartamentoPorId(id: any): string {
   return t?.departamento ?? String(id);
 }
 
-toggleOcultarFinalizados(): void {
-  // cambia el estado del switch
-  this.ocultarFinalizados = !this.ocultarFinalizados;
-
-  // por ahora, cada vez que cambie recargamos la tabla
-  // (si quieres después hacemos que respete filtros ya aplicados)
-  TicketInit.cargarTickets(this);
-}
-
 private actualizarVistaTicketsFiltrados(): void {
   this.page = 1;
   this.totalTickets = this.filteredTickets.length;
@@ -2262,23 +2252,6 @@ get kpiTicketsCriticos(): number {
     ticket => this.esTicketCritico(ticket)
   ).length;
 }
-
-mostrarSoloPorValidar(): void {
-  this.filtroRapidoPorValidarActivo = true;
-
-  this.filteredTickets = (this.ticketsCompletos || []).filter((ticket: Ticket) => {
-    return (ticket.estado || '').trim().toLowerCase() === 'por_validar';
-  });
-
-  this.actualizarVistaTicketsFiltrados();
-}
-
-quitarFiltroPorValidar(): void {
-  this.filtroRapidoPorValidarActivo = false;
-  this.filteredTickets = [...(this.ticketsCompletos || [])];
-  this.actualizarVistaTicketsFiltrados();
-}
-
 //para cargar imagenes
 
 /** Abre la evidencia en otra pestaña (si existe) */

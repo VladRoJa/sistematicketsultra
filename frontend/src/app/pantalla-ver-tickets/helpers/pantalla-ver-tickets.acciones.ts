@@ -172,7 +172,6 @@ export function limpiarTodosLosFiltros(component: PantallaVerTicketsComponent): 
   component.filtroCreacionActivo = false;
   component.incluirSinFechaProgreso = false;
   component.incluirSinFechaFinalizado = false;
-  component.filtroRapidoPorValidarActivo = false;
 
   // 6) Restaurar vista base respetando ocultarFinalizados.
   const base = [...component.ticketsCompletos];
