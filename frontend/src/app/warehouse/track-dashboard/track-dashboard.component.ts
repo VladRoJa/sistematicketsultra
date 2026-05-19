@@ -755,7 +755,7 @@ private calculateRemainingToIdealTarget(
     return 0;
   }
 
-  return Math.max(ideal - real, 0);
+  return Math.max(ideal - real);
 }
 
 private getRemainingTargetTone(value: number | null | undefined): ProgressTone {
