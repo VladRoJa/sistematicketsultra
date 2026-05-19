@@ -841,13 +841,50 @@ extrasCompromisoRefaccion: {
 
 
 private hidratarSucursalEnTickets(): void {
+  const resolverNombreSucursal = (ticket: any): string => {
+    const nombreDirecto =
+      ticket?.sucursal_nombre_destino ||
+      ticket?.sucursal_nombre ||
+      ticket?.sucursal_destino?.sucursal ||
+      ticket?.sucursal_destino?.nombre ||
+      ticket?.sucursal?.sucursal ||
+      ticket?.sucursal?.nombre;
+
+    if (nombreDirecto) {
+      return String(nombreDirecto);
+    }
+
+    const sucursalActual = ticket?.sucursal;
+
+    if (
+      typeof sucursalActual === 'string' &&
+      sucursalActual.trim() !== '' &&
+      !/^\d+$/.test(sucursalActual.trim())
+    ) {
+      return sucursalActual;
+    }
+
+    const idRaw =
+      ticket?.sucursal_id_destino ??
+      ticket?.sucursal_destino_id ??
+      ticket?.sucursal_id ??
+      ticket?.id_sucursal ??
+      ticket?.sucursal;
+
+    const id = Number(idRaw);
+
+    if (Number.isFinite(id)) {
+      return this.sucursalIdNombreMap[id] || String(id);
+    }
+
+    return idRaw != null ? String(idRaw) : '—';
+  };
+
   const poner = (arr: any[] | undefined) => {
     if (!Array.isArray(arr)) return;
 
     arr.forEach((ticket: any) => {
-      const id = ticket?.sucursal_id_destino ?? ticket?.sucursal_id;
-
-      ticket.sucursal = this.sucursalIdNombreMap[id] || (id != null ? String(id) : '—');
+      ticket.sucursal = resolverNombreSucursal(ticket);
     });
   };
 
@@ -1621,14 +1658,44 @@ getSubcategoriaVisible(t: Ticket): string {
 
 
 getNombreSucursal(ticket: Ticket): string {
-  const id =
-    (ticket as any).sucursal_id_destino ??
-    (ticket as any).sucursal_id ??
-    null;
+  const ticketAny = ticket as any;
 
-  if (id == null) return '—';
+  const nombreDirecto =
+    ticketAny.sucursal_nombre_destino ||
+    ticketAny.sucursal_nombre ||
+    ticketAny.sucursal_destino?.sucursal ||
+    ticketAny.sucursal_destino?.nombre ||
+    ticketAny.sucursal?.sucursal ||
+    ticketAny.sucursal?.nombre;
 
-  return this.sucursalIdNombreMap[id] || `${id}`;
+  if (nombreDirecto) {
+    return String(nombreDirecto);
+  }
+
+  const sucursalActual = ticketAny.sucursal;
+
+  if (
+    typeof sucursalActual === 'string' &&
+    sucursalActual.trim() !== '' &&
+    !/^\d+$/.test(sucursalActual.trim())
+  ) {
+    return sucursalActual;
+  }
+
+  const idRaw =
+    ticketAny.sucursal_id_destino ??
+    ticketAny.sucursal_destino_id ??
+    ticketAny.sucursal_id ??
+    ticketAny.id_sucursal ??
+    ticketAny.sucursal;
+
+  const id = Number(idRaw);
+
+  if (Number.isFinite(id)) {
+    return this.sucursalIdNombreMap[id] || String(id);
+  }
+
+  return idRaw != null ? String(idRaw) : '—';
 }
 
 
