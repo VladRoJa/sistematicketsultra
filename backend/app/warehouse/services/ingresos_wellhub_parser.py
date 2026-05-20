@@ -12,18 +12,33 @@ import pandas as pd
 
 INGRESOS_WELLHUB_REPORT_TYPE_KEY = "ingresos_wellhub"
 
+WELLHUB_LAYOUT_SUMMARY = "summary_visitors"
+WELLHUB_LAYOUT_CHECKINS_DETAIL = "checkins_detail"
+
 WELLHUB_SHEET_CANDIDATES = (
     "Datos de visitantes",
     "datos de visitantes",
+    "Información sobre check-ins",
+    "informacion sobre check-ins",
 )
 
-REQUIRED_COLUMN_ALIASES = {
+SUMMARY_REQUIRED_COLUMN_ALIASES = {
     "ID de ubicación": "location_id",
     "Localización": "raw_branch_name",
     "Visitante": "visitor_name",
     "ID de Wellhub": "wellhub_member_id",
     "Total de check-ins": "total_checkins_mtd",
     "Pago total": "pago_total_mtd",
+}
+
+CHECKINS_DETAIL_REQUIRED_COLUMN_ALIASES = {
+    "Fecha": "checkin_date",
+    "Hora": "checkin_time",
+    "ID de ubicación": "location_id",
+    "Localización": "raw_branch_name",
+    "Visitante": "visitor_name",
+    "ID de Wellhub": "wellhub_member_id",
+    "Pago": "pago_total_mtd",
 }
 
 
@@ -153,12 +168,27 @@ def _load_raw_wellhub_dataframe(*, file_path: str | Path) -> pd.DataFrame:
     return dataframe
 
 
-def _find_header_row_index(dataframe: pd.DataFrame) -> int:
-    expected_headers = {
+def _detect_layout_from_headers(normalized_headers: set[str]) -> str | None:
+    summary_headers = {
         _normalize_text(column_name)
-        for column_name in REQUIRED_COLUMN_ALIASES.keys()
+        for column_name in SUMMARY_REQUIRED_COLUMN_ALIASES.keys()
     }
 
+    detail_headers = {
+        _normalize_text(column_name)
+        for column_name in CHECKINS_DETAIL_REQUIRED_COLUMN_ALIASES.keys()
+    }
+
+    if summary_headers.issubset(normalized_headers):
+        return WELLHUB_LAYOUT_SUMMARY
+
+    if detail_headers.issubset(normalized_headers):
+        return WELLHUB_LAYOUT_CHECKINS_DETAIL
+
+    return None
+
+
+def _find_header_row_index(dataframe: pd.DataFrame) -> tuple[int, str]:
     max_scan_rows = min(len(dataframe), 30)
 
     for row_index in range(max_scan_rows):
@@ -168,16 +198,20 @@ def _find_header_row_index(dataframe: pd.DataFrame) -> int:
             for value in row_values
             if _normalize_text(value)
         }
-        if expected_headers.issubset(normalized_row):
-            return row_index
+
+        detected_layout = _detect_layout_from_headers(normalized_row)
+
+        if detected_layout is not None:
+            return row_index, detected_layout
 
     raise IngresosWellhubParseError(
-        "No se encontró el header esperado de Wellhub dentro de las primeras filas."
+        "No se encontró un header compatible de Wellhub dentro de las primeras filas. "
+        "Layouts soportados: 'Datos de visitantes' e 'Información sobre check-ins'."
     )
 
 
-def _extract_wellhub_dataframe(dataframe_raw: pd.DataFrame) -> tuple[pd.DataFrame, int]:
-    header_row_index = _find_header_row_index(dataframe_raw)
+def _extract_wellhub_dataframe(dataframe_raw: pd.DataFrame) -> tuple[pd.DataFrame, int, str]:
+    header_row_index, detected_layout = _find_header_row_index(dataframe_raw)
 
     header_values = dataframe_raw.iloc[header_row_index].tolist()
     detail_values = dataframe_raw.iloc[header_row_index + 1 :].copy()
@@ -185,19 +219,26 @@ def _extract_wellhub_dataframe(dataframe_raw: pd.DataFrame) -> tuple[pd.DataFram
     detail_values.columns = [str(value).strip() for value in header_values]
     detail_values = detail_values.reset_index(drop=True)
 
+    required_columns = (
+        SUMMARY_REQUIRED_COLUMN_ALIASES.keys()
+        if detected_layout == WELLHUB_LAYOUT_SUMMARY
+        else CHECKINS_DETAIL_REQUIRED_COLUMN_ALIASES.keys()
+    )
+
     missing_columns = [
         column_name
-        for column_name in REQUIRED_COLUMN_ALIASES.keys()
+        for column_name in required_columns
         if column_name not in detail_values.columns
     ]
+
     if missing_columns:
         raise IngresosWellhubParseError(
-            "El archivo Wellhub no contiene las columnas requeridas: "
-            f"{missing_columns}"
+            "El archivo Wellhub no contiene las columnas requeridas para "
+            f"layout={detected_layout!r}: {missing_columns}"
         )
 
     detected_rows = int(len(detail_values))
-    return detail_values, detected_rows
+    return detail_values, detected_rows, detected_layout
 
 
 def _parse_numeric(value: Any, *, field_name: str) -> float | None:
@@ -217,21 +258,53 @@ def _parse_numeric(value: Any, *, field_name: str) -> float | None:
             f"No se pudo convertir el campo {field_name!r}: {value!r}"
         ) from exc
 
+def _clean_text_series(series: pd.Series) -> pd.Series:
+    return (
+        series
+        .fillna("")
+        .astype(str)
+        .str.strip()
+        .replace(
+            {
+                "nan": "",
+                "NaN": "",
+                "None": "",
+                "NaT": "",
+            }
+        )
+    )
 
-def _normalize_wellhub_dataframe(dataframe: pd.DataFrame) -> pd.DataFrame:
+def _normalize_wellhub_dataframe(
+    dataframe: pd.DataFrame,
+    *,
+    detected_layout: str,
+) -> pd.DataFrame:
+    if detected_layout == WELLHUB_LAYOUT_SUMMARY:
+        return _normalize_wellhub_summary_dataframe(dataframe)
+
+    if detected_layout == WELLHUB_LAYOUT_CHECKINS_DETAIL:
+        return _normalize_wellhub_checkins_detail_dataframe(dataframe)
+
+    raise IngresosWellhubParseError(
+        f"Layout Wellhub no soportado: {detected_layout!r}"
+    )
+
+
+def _normalize_wellhub_summary_dataframe(dataframe: pd.DataFrame) -> pd.DataFrame:
     normalized = dataframe.copy()
 
-    normalized = normalized.rename(columns=REQUIRED_COLUMN_ALIASES)
+    normalized = normalized.rename(columns=SUMMARY_REQUIRED_COLUMN_ALIASES)
 
-    normalized["location_id"] = normalized["location_id"].astype(str).str.strip()
-    normalized["raw_branch_name"] = normalized["raw_branch_name"].astype(str).str.strip()
-    normalized["visitor_name"] = normalized["visitor_name"].astype(str).str.strip()
-    normalized["wellhub_member_id"] = normalized["wellhub_member_id"].astype(str).str.strip()
+    normalized["location_id"] = _clean_text_series(normalized["location_id"])
+    normalized["raw_branch_name"] = _clean_text_series(normalized["raw_branch_name"])
+    normalized["visitor_name"] = _clean_text_series(normalized["visitor_name"])
+    normalized["wellhub_member_id"] = _clean_text_series(normalized["wellhub_member_id"])
 
     normalized["total_checkins_mtd"] = pd.to_numeric(
         normalized["total_checkins_mtd"],
         errors="coerce",
     )
+
     normalized["pago_total_mtd"] = normalized["pago_total_mtd"].apply(
         lambda value: _parse_numeric(value, field_name="pago_total_mtd")
     )
@@ -246,6 +319,41 @@ def _normalize_wellhub_dataframe(dataframe: pd.DataFrame) -> pd.DataFrame:
     if normalized.empty:
         raise IngresosWellhubParseError(
             "Después de normalizar, el archivo Wellhub no dejó filas válidas."
+        )
+
+    normalized["total_checkins_mtd"] = normalized["total_checkins_mtd"].astype(int)
+
+    return normalized
+
+
+def _normalize_wellhub_checkins_detail_dataframe(dataframe: pd.DataFrame) -> pd.DataFrame:
+    normalized = dataframe.copy()
+
+    normalized = normalized.rename(columns=CHECKINS_DETAIL_REQUIRED_COLUMN_ALIASES)
+
+    normalized["location_id"] = _clean_text_series(normalized["location_id"])
+    normalized["raw_branch_name"] = _clean_text_series(normalized["raw_branch_name"])
+    normalized["visitor_name"] = _clean_text_series(normalized["visitor_name"])
+    normalized["wellhub_member_id"] = _clean_text_series(normalized["wellhub_member_id"])
+    normalized["checkin_date"] = _clean_text_series(normalized["checkin_date"])
+    normalized["checkin_time"] = _clean_text_series(normalized["checkin_time"])
+
+    normalized["total_checkins_mtd"] = 1
+
+    normalized["pago_total_mtd"] = normalized["pago_total_mtd"].apply(
+        lambda value: _parse_numeric(value, field_name="pago_total_mtd")
+    )
+
+    normalized = normalized[
+        normalized["checkin_date"].ne("")
+        & normalized["raw_branch_name"].ne("")
+        & normalized["wellhub_member_id"].ne("")
+        & normalized["pago_total_mtd"].notna()
+    ].copy()
+
+    if normalized.empty:
+        raise IngresosWellhubParseError(
+            "Después de normalizar el layout detallado, el archivo Wellhub no dejó filas válidas."
         )
 
     normalized["total_checkins_mtd"] = normalized["total_checkins_mtd"].astype(int)
@@ -312,8 +420,13 @@ def parse_ingresos_wellhub_excel(
 
     business_date = _ensure_business_date(cutoff_date)
     dataframe_raw = _load_raw_wellhub_dataframe(file_path=file_path)
-    dataframe_detail, row_count_detected = _extract_wellhub_dataframe(dataframe_raw)
-    dataframe_normalized = _normalize_wellhub_dataframe(dataframe_detail)
+    dataframe_detail, row_count_detected, detected_layout = _extract_wellhub_dataframe(
+        dataframe_raw
+    )
+    dataframe_normalized = _normalize_wellhub_dataframe(
+        dataframe_detail,
+        detected_layout=detected_layout,
+    )
     rows = _build_rows(dataframe_normalized)
 
     return {
@@ -331,5 +444,10 @@ def parse_ingresos_wellhub_excel(
             "content_type": content_type,
             "storage_path": storage_path,
             "sheet_candidates": list(WELLHUB_SHEET_CANDIDATES),
+            "detected_layout": detected_layout,
+            "supported_layouts": [
+                WELLHUB_LAYOUT_SUMMARY,
+                WELLHUB_LAYOUT_CHECKINS_DETAIL,
+            ],
         },
     }
