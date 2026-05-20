@@ -4,11 +4,13 @@
 from __future__ import annotations
 
 from calendar import monthrange
-from datetime import date, datetime
+from datetime import date, datetime, timezone
+from zoneinfo import ZoneInfo
 from decimal import Decimal
 from io import BytesIO
 from typing import Any, Sequence
 
+from openpyxl.formatting.rule import CellIsRule
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
@@ -38,6 +40,23 @@ CURRENCY_FORMAT = '$#,##0.00;[Red]-$#,##0.00;$0.00'
 INTEGER_FORMAT = '#,##0'
 DECIMAL_FORMAT = '#,##0.00'
 PERCENT_FORMAT = '0.0%'
+
+ULTRA_ORANGE = "E54525"
+ULTRA_BLUE = "2C4595"
+ULTRA_CHARCOAL = "1F1F1F"
+HEADER_DARK = "111827"
+
+GOOD_FILL_COLOR = "D9F99D"
+GOOD_FONT_COLOR = "166534"
+
+WARN_FILL_COLOR = "FEF3C7"
+WARN_FONT_COLOR = "92400E"
+
+BAD_FILL_COLOR = "FECACA"
+BAD_FONT_COLOR = "991B1B"
+
+NEUTRAL_FILL_COLOR = "F3F4F6"
+SEGMENT_BORDER_COLOR = "111827"
 
 
 TRACK_GROUPS = [
@@ -167,6 +186,7 @@ def build_track_daily_mart_excel(
         track_date=track_date,
         generation_mode=generation_mode,
         days_in_month=days_in_month,
+        resolved_version=resolved_version,
     )
 
     ordered_rows = _sort_rows_by_track_order(rows)
@@ -269,6 +289,7 @@ def _setup_track_sheet(
     track_date: date,
     generation_mode: str,
     days_in_month: int,
+    resolved_version: Any,
 ) -> None:
     month_label = MONTH_NAMES_ES[track_date.month]
     day_month_label = f"{track_date.day} {month_label}"
@@ -276,10 +297,12 @@ def _setup_track_sheet(
     worksheet.sheet_view.showGridLines = False
     worksheet.freeze_panes = "D4"
 
-    worksheet["B1"] = "Track diario"
+    worksheet["B1"] = "Track"
     worksheet["C1"] = "A dia"
     worksheet["D1"] = track_date.isoformat()
-    worksheet["E1"] = generation_mode
+
+    worksheet.merge_cells("E1:J1")
+    worksheet["E1"] = _format_version_update_label(resolved_version)
 
     worksheet["B2"] = f"=C2/{days_in_month}"
     worksheet["C2"] = track_date.day
@@ -477,9 +500,11 @@ def _apply_track_sheet_formatting(*, worksheet: Worksheet, last_row: int) -> Non
     border = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
 
     worksheet["B1"].font = title_font
+    worksheet.column_dimensions["A"].hidden = True
     worksheet["C1"].font = Font(bold=True)
     worksheet["D1"].font = Font(bold=True)
     worksheet["E1"].font = Font(color="E54525", bold=True)
+    worksheet["E1"].alignment = Alignment(horizontal="left", vertical="center")
 
     for merge_range, _title in TRACK_GROUPS:
         first_cell = merge_range.split(":", 1)[0]
@@ -502,10 +527,15 @@ def _apply_track_sheet_formatting(*, worksheet: Worksheet, last_row: int) -> Non
             cell.alignment = Alignment(horizontal="center", vertical="center")
             cell.border = border
 
-    for col_idx in range(TRACK_FIRST_COL, TRACK_LAST_COL + 1):
-        cell = worksheet.cell(row=last_row, column=col_idx)
-        cell.fill = subtotal_fill
-        cell.font = Font(color="0F1F3A", bold=True, size=9)
+    _apply_zebra_rows(
+        worksheet=worksheet,
+        last_row=last_row,
+    )
+
+    _apply_summary_row_formatting(
+        worksheet=worksheet,
+        last_row=last_row,
+    )
 
     for row_idx in range(TRACK_START_ROW, last_row + 1):
         worksheet[f"C{row_idx}"].font = Font(color="0F1F3A", bold=True, size=9)
@@ -571,9 +601,299 @@ def _apply_track_sheet_formatting(*, worksheet: Worksheet, last_row: int) -> Non
 
     for row_idx in range(TRACK_START_ROW, last_row + 1):
         worksheet.row_dimensions[row_idx].height = 22
+        
+
+    _apply_track_segment_formatting(
+        worksheet=worksheet,
+        last_row=last_row,
+    )
+
+    _apply_track_conditional_formatting(
+        worksheet=worksheet,
+        last_row=last_row,
+    )
 
     worksheet.auto_filter.ref = f"B3:BC{last_row}"
 
+def _apply_zebra_rows(
+    *,
+    worksheet: Worksheet,
+    last_row: int,
+) -> None:
+    zebra_fill = PatternFill("solid", fgColor="F9FAFB")
+    white_fill = PatternFill("solid", fgColor="FFFFFF")
+
+    data_row_counter = 0
+
+    for row_idx in range(TRACK_START_ROW, last_row + 1):
+        label = str(worksheet[f"C{row_idx}"].value or "").strip().upper()
+
+        if label.startswith("SUBTOTALES") or label == "TOTAL GENERAL":
+            continue
+
+        row_fill = zebra_fill if data_row_counter % 2 else white_fill
+
+        for col_idx in range(TRACK_FIRST_COL, TRACK_LAST_COL + 1):
+            worksheet.cell(row=row_idx, column=col_idx).fill = row_fill
+
+        data_row_counter += 1
+
+
+def _apply_summary_row_formatting(
+    *,
+    worksheet: Worksheet,
+    last_row: int,
+) -> None:
+    subtotal_fill = PatternFill("solid", fgColor="E5E7EB")
+    total_fill = PatternFill("solid", fgColor="FBE3DC")
+    subtotal_font = Font(color="0F1F3A", bold=True, size=9)
+    total_font = Font(color="0F1F3A", bold=True, size=9)
+
+    for row_idx in range(TRACK_START_ROW, last_row + 1):
+        label = str(worksheet[f"C{row_idx}"].value or "").strip().upper()
+
+        if label.startswith("SUBTOTALES"):
+            row_fill = subtotal_fill
+            row_font = subtotal_font
+        elif label == "TOTAL GENERAL":
+            row_fill = total_fill
+            row_font = total_font
+        else:
+            continue
+
+        for col_idx in range(TRACK_FIRST_COL, TRACK_LAST_COL + 1):
+            cell = worksheet.cell(row=row_idx, column=col_idx)
+            cell.fill = row_fill
+            cell.font = row_font
+
+def _apply_track_segment_formatting(
+    *,
+    worksheet: Worksheet,
+    last_row: int,
+) -> None:
+    segment_title_fills = {
+        "D": ULTRA_ORANGE,
+        "K": ULTRA_BLUE,
+        "R": ULTRA_ORANGE,
+        "Z": ULTRA_BLUE,
+        "AJ": ULTRA_CHARCOAL,
+        "AR": ULTRA_BLUE,
+        "AU": ULTRA_CHARCOAL,
+        "AZ": ULTRA_ORANGE,
+    }
+
+    segment_ranges = [
+        ("D", "J", "Ocupación"),
+        ("K", "Q", "Crecimiento"),
+        ("R", "Y", "Ingresos totales"),
+        ("Z", "AI", "Ventas nuevas y Reactivaciones"),
+        ("AJ", "AQ", "Bajas & Churn"),
+        ("AR", "AT", "Domiciliados"),
+        ("AU", "AY", "ARPU"),
+        ("AZ", "BC", "Tienda"),
+    ]
+
+    header_fill = PatternFill("solid", fgColor=HEADER_DARK)
+    header_font = Font(color="FFFFFF", bold=True, size=8)
+    segment_side = Side(style="medium", color=SEGMENT_BORDER_COLOR)
+
+    for start_col, end_col, _title in segment_ranges:
+        start_idx = _column_letter_to_index(start_col)
+        end_idx = _column_letter_to_index(end_col)
+
+        for col_idx in range(start_idx, end_idx + 1):
+            header_cell = worksheet.cell(row=3, column=col_idx)
+            header_cell.fill = header_fill
+            header_cell.font = header_font
+            header_cell.alignment = Alignment(
+                horizontal="center",
+                vertical="center",
+                wrap_text=True,
+            )
+
+        title_cell = worksheet[f"{start_col}2"]
+        title_cell.fill = PatternFill(
+            "solid",
+            fgColor=segment_title_fills.get(start_col, ULTRA_CHARCOAL),
+        )
+        title_cell.font = Font(color="FFFFFF", bold=True, size=9)
+        title_cell.alignment = Alignment(
+            horizontal="center",
+            vertical="center",
+        )
+
+        for row_idx in range(3, last_row + 1):
+            left_cell = worksheet[f"{start_col}{row_idx}"]
+            right_cell = worksheet[f"{end_col}{row_idx}"]
+
+            left_cell.border = _with_border_side(
+                left_cell.border,
+                left=segment_side,
+            )
+            right_cell.border = _with_border_side(
+                right_cell.border,
+                right=segment_side,
+            )
+
+    highlighted_header_columns = {
+        "X": ULTRA_ORANGE,
+        "Y": ULTRA_ORANGE,
+        "AH": "00C853",
+        "AM": ULTRA_ORANGE,
+        "AQ": ULTRA_ORANGE,
+        "AT": ULTRA_BLUE,
+        "AX": ULTRA_ORANGE,
+        "BB": ULTRA_ORANGE,
+        "BC": ULTRA_BLUE,
+    }
+
+    for column_letter, color in highlighted_header_columns.items():
+        cell = worksheet[f"{column_letter}3"]
+        cell.fill = PatternFill("solid", fgColor=color)
+        cell.font = Font(color="FFFFFF", bold=True, size=8)
+
+
+def _apply_track_conditional_formatting(
+    *,
+    worksheet: Worksheet,
+    last_row: int,
+) -> None:
+    if last_row < TRACK_START_ROW:
+        return
+
+    good_fill = PatternFill("solid", fgColor=GOOD_FILL_COLOR)
+    warn_fill = PatternFill("solid", fgColor=WARN_FILL_COLOR)
+    bad_fill = PatternFill("solid", fgColor=BAD_FILL_COLOR)
+
+    good_font = Font(color=GOOD_FONT_COLOR, bold=True)
+    warn_font = Font(color=WARN_FONT_COLOR, bold=True)
+    bad_font = Font(color=BAD_FONT_COLOR, bold=True)
+
+    positive_is_good_columns = [
+        "N",   # DIF INICIO MES
+        "O",   # Dif meta vs Real
+        "P",   # % Alcance meta crecimiento
+        "Q",   # Alcance usuarios activos
+        "X",   # Meta del día ingresos
+        "Y",   # Dif $$ Real vs Meta
+        "AC",  # Diferencia clientes nuevos
+        "AX",  # Dif $$ ARPU
+    ]
+
+    positive_is_bad_columns = [
+        "AH",  # Meta del día reactivaciones, positivo = falta
+        "AM",  # Bajas sobre ideal, positivo = mal
+        "AQ",  # Churn sobre ideal, positivo = mal
+        "BB",  # Diferencia tienda, positivo = falta
+    ]
+
+    percent_goal_columns = [
+        "J",   # % Alcance meta Ocupación
+        "W",   # % alcance ingreso
+        "AD",  # % alcance nuevos
+        "AI",  # % alcance reactivaciones
+        "AT",  # % alcance domiciliados
+        "AY",  # % alcance ARPU
+        "BC",  # % alcance tienda
+    ]
+
+    for column_letter in positive_is_good_columns:
+        cell_range = f"{column_letter}{TRACK_START_ROW}:{column_letter}{last_row}"
+        worksheet.conditional_formatting.add(
+            cell_range,
+            CellIsRule(
+                operator="greaterThan",
+                formula=["0"],
+                fill=good_fill,
+                font=good_font,
+            ),
+        )
+        worksheet.conditional_formatting.add(
+            cell_range,
+            CellIsRule(
+                operator="lessThan",
+                formula=["0"],
+                fill=bad_fill,
+                font=bad_font,
+            ),
+        )
+
+    for column_letter in positive_is_bad_columns:
+        cell_range = f"{column_letter}{TRACK_START_ROW}:{column_letter}{last_row}"
+        worksheet.conditional_formatting.add(
+            cell_range,
+            CellIsRule(
+                operator="greaterThan",
+                formula=["0"],
+                fill=bad_fill,
+                font=bad_font,
+            ),
+        )
+        worksheet.conditional_formatting.add(
+            cell_range,
+            CellIsRule(
+                operator="lessThan",
+                formula=["0"],
+                fill=good_fill,
+                font=good_font,
+            ),
+        )
+
+    for column_letter in percent_goal_columns:
+        cell_range = f"{column_letter}{TRACK_START_ROW}:{column_letter}{last_row}"
+
+        worksheet.conditional_formatting.add(
+            cell_range,
+            CellIsRule(
+                operator="greaterThanOrEqual",
+                formula=["1"],
+                fill=good_fill,
+                font=good_font,
+            ),
+        )
+        worksheet.conditional_formatting.add(
+            cell_range,
+            CellIsRule(
+                operator="between",
+                formula=["0.8", "0.999999"],
+                fill=warn_fill,
+                font=warn_font,
+            ),
+        )
+        worksheet.conditional_formatting.add(
+            cell_range,
+            CellIsRule(
+                operator="lessThan",
+                formula=["0.8"],
+                fill=bad_fill,
+                font=bad_font,
+            ),
+        )
+
+
+def _with_border_side(
+    border: Border,
+    *,
+    left: Side | None = None,
+    right: Side | None = None,
+    top: Side | None = None,
+    bottom: Side | None = None,
+) -> Border:
+    return Border(
+        left=left or border.left,
+        right=right or border.right,
+        top=top or border.top,
+        bottom=bottom or border.bottom,
+    )
+
+
+def _column_letter_to_index(column_letter: str) -> int:
+    result = 0
+
+    for character in column_letter:
+        result = result * 26 + ord(character.upper()) - ord("A") + 1
+
+    return result
 
 def _set_number_format(
     *,
@@ -691,6 +1011,26 @@ def _to_number(value: Any) -> float | int | None:
 
     return None
 
+def _format_version_update_label(resolved_version: Any) -> str:
+    version_datetime = (
+        getattr(resolved_version, "finished_at_utc", None)
+        or getattr(resolved_version, "generated_at_utc", None)
+        or getattr(resolved_version, "started_at_utc", None)
+    )
+
+    if not isinstance(version_datetime, datetime):
+        return "Actualización no disponible"
+
+    local_datetime = _to_tijuana_datetime(version_datetime)
+
+    return f"Actualizado: {local_datetime.strftime('%d/%m/%Y %H:%M')} h"
+
+
+def _to_tijuana_datetime(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+
+    return value.astimezone(ZoneInfo("America/Tijuana"))
 
 def _serialize_cell_value(value: Any) -> Any:
     if isinstance(value, Decimal):

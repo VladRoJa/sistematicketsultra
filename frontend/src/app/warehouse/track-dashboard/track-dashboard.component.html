@@ -147,6 +147,15 @@
             >
               {{ isLoadingMart ? 'Consultando...' : 'Consultar resultado' }}
             </button>
+            <button
+  type="button"
+  class="track-excel-export-button"
+  [disabled]="isDownloadingTrackExcel"
+  (click)="downloadTrackExcel()"
+>
+  <span class="track-excel-export-icon">⬇</span>
+  <span>{{ getTrackExcelButtonLabel() }}</span>
+</button>
           </div>
         </div>
       </div>
@@ -246,13 +255,7 @@
         </button>
       </div>
 
-      <button
-  type="button"
-  [disabled]="isDownloadingTrackExcel"
-  (click)="downloadTrackExcel()"
->
-  {{ getTrackExcelButtonLabel() }}
-</button>
+
 
     </div>
 

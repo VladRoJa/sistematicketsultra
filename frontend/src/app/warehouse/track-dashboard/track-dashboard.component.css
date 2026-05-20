@@ -1524,3 +1524,47 @@
   color: rgba(255, 255, 255, 0.86) !important;
   border-color: rgba(255, 255, 255, 0.20);
 }
+
+.track-excel-export-button {
+  border: none;
+  border-radius: 999px;
+  padding: 0.75rem 1.15rem;
+  background: linear-gradient(135deg, #e54525, #ff6a3d);
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  box-shadow: 0 10px 22px rgba(229, 69, 37, 0.28);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 42px;
+  white-space: nowrap;
+  transition:
+    transform 140ms ease,
+    box-shadow 140ms ease,
+    opacity 140ms ease;
+}
+
+.track-excel-export-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 28px rgba(229, 69, 37, 0.36);
+}
+
+.track-excel-export-button:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 8px 18px rgba(229, 69, 37, 0.28);
+}
+
+.track-excel-export-button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.track-excel-export-icon {
+  font-size: 1rem;
+  line-height: 1;
+}
