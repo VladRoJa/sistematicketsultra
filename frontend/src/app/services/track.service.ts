@@ -172,6 +172,21 @@ export class TrackService {
       { params },
     );
   }
+
+  downloadDailyMartExcel(
+    trackDate: string,
+    generationMode: TrackGenerationMode,
+  ) {
+    const params = new HttpParams()
+      .set('track_date', trackDate)
+      .set('generation_mode', generationMode);
+
+    return this.http.get(`${this.baseUrl}/daily-mart/export-xlsx`, {
+      params,
+      responseType: 'blob',
+    });
+  }
+
   getBranchHistory(
     sucursalCanon: string,
     targetMonth: string,

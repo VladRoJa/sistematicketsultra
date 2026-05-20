@@ -147,6 +147,15 @@
             >
               {{ isLoadingMart ? 'Consultando...' : 'Consultar resultado' }}
             </button>
+            <button
+  type="button"
+  class="track-excel-export-button"
+  [disabled]="isDownloadingTrackExcel"
+  (click)="downloadTrackExcel()"
+>
+  <span class="track-excel-export-icon">⬇</span>
+  <span>{{ getTrackExcelButtonLabel() }}</span>
+</button>
           </div>
         </div>
       </div>
@@ -245,6 +254,9 @@
           {{ group.label }}
         </button>
       </div>
+
+
+
     </div>
 
     <!-- Error de consulta del mart -->

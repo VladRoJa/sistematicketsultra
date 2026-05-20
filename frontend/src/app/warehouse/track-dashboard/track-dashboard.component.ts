@@ -212,7 +212,7 @@ export class TrackDashboardComponent implements OnInit {
 
   isSubmitting = false;
   isLoadingMart = false;
-
+  isDownloadingTrackExcel = false;
   errorMessage = '';
   martErrorMessage = '';
 
@@ -291,6 +291,57 @@ loadDailyMart(): void {
   this.syncSelectedModeLabel();
 
   this.fetchDailyMart();
+}
+
+downloadTrackExcel(): void {
+  if (this.isDownloadingTrackExcel) {
+    return;
+  }
+
+  this.isDownloadingTrackExcel = true;
+  this.martErrorMessage = '';
+
+  this.trackService
+    .downloadDailyMartExcel(this.trackDate, this.generationMode)
+    .subscribe({
+      next: (blob: Blob) => {
+        this.saveBlobAsFile(blob, this.buildTrackExcelFilename());
+        this.isDownloadingTrackExcel = false;
+      },
+      error: (error) => {
+        this.martErrorMessage =
+          error?.error?.message ||
+          error?.error?.detail ||
+          'Ocurrió un error al descargar el Excel del Track.';
+
+        this.isDownloadingTrackExcel = false;
+      },
+    });
+}
+
+getTrackExcelButtonLabel(): string {
+  if (this.isDownloadingTrackExcel) {
+    return 'Descargando...';
+  }
+
+  return 'Descargar Excel';
+}
+
+private buildTrackExcelFilename(): string {
+  return `Track_${this.trackDate}_${this.generationMode}.xlsx`;
+}
+
+private saveBlobAsFile(blob: Blob, filename: string): void {
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
 }
 
   private fetchDailyMart(): void {
