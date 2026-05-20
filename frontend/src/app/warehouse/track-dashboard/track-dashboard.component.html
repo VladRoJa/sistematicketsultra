@@ -245,6 +245,15 @@
           {{ group.label }}
         </button>
       </div>
+
+      <button
+  type="button"
+  [disabled]="isDownloadingTrackExcel"
+  (click)="downloadTrackExcel()"
+>
+  {{ getTrackExcelButtonLabel() }}
+</button>
+
     </div>
 
     <!-- Error de consulta del mart -->

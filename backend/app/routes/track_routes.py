@@ -8,8 +8,9 @@ from zoneinfo import ZoneInfo
 from decimal import Decimal
 from typing import Any
 from app.extensions import db
+from io import BytesIO
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, send_file
 from flask_jwt_extended import get_jwt, jwt_required
 
 from app.models.warehouse import TrackDailyMartORM
@@ -19,6 +20,9 @@ from app.warehouse.services.track_daily_version_service import (
 from app.warehouse.services.track_daily_pipeline_service import (
     run_track_agregadoras_integration_for_date,
     run_track_daily_pipeline_for_date,
+)
+from app.warehouse.services.track_excel_export_service import (
+    build_track_daily_mart_excel,
 )
 
 
@@ -567,6 +571,104 @@ def get_track_daily_mart_endpoint():
             }
         ), 500
         
+@track_bp.route("/daily-mart/export-xlsx", methods=["GET"])
+@jwt_required()
+def export_track_daily_mart_xlsx_endpoint():
+    try:
+        _require_track_read_role()
+
+        track_date = _ensure_date(
+            request.args.get("track_date"),
+            field_name="track_date",
+        )
+
+        generation_mode = str(
+            request.args.get("generation_mode") or "manual_preview"
+        ).strip()
+
+        if generation_mode not in ALLOWED_GENERATION_MODES:
+            return jsonify(
+                {
+                    "status": "error",
+                    "message": "generation_mode inválido.",
+                    "allowed_generation_modes": sorted(ALLOWED_GENERATION_MODES),
+                }
+            ), 400
+
+        resolved_version = _resolve_current_track_daily_version_for_query(
+            track_date=track_date,
+            generation_mode=generation_mode,
+        )
+
+        if resolved_version is None:
+            return jsonify(
+                {
+                    "status": "error",
+                    "message": "No hay versión disponible del Track para exportar.",
+                    "track_date": track_date.isoformat(),
+                    "generation_mode": generation_mode,
+                }
+            ), 404
+
+        rows = (
+            TrackDailyMartORM.query.filter_by(
+                track_daily_version_id=resolved_version.id,
+            )
+            .order_by(TrackDailyMartORM.sucursal_canon.asc())
+            .all()
+        )
+
+        if not rows:
+            return jsonify(
+                {
+                    "status": "error",
+                    "message": "La versión resuelta no tiene rows de mart para exportar.",
+                    "track_date": track_date.isoformat(),
+                    "generation_mode": generation_mode,
+                    "track_daily_version_id": resolved_version.id,
+                }
+            ), 404
+
+        excel_bytes = build_track_daily_mart_excel(
+            track_date=track_date,
+            generation_mode=generation_mode,
+            resolved_version=resolved_version,
+            rows=rows,
+        )
+
+        filename = f"Track_{track_date.isoformat()}_{generation_mode}.xlsx"
+
+        return send_file(
+            BytesIO(excel_bytes),
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            as_attachment=True,
+            download_name=filename,
+        )
+
+    except PermissionError as exc:
+        return jsonify(
+            {
+                "status": "error",
+                "message": str(exc),
+            }
+        ), 403
+
+    except ValueError as exc:
+        return jsonify(
+            {
+                "status": "error",
+                "message": str(exc),
+            }
+        ), 400
+
+    except Exception as exc:
+        return jsonify(
+            {
+                "status": "error",
+                "message": "Falló la exportación Excel del Track daily mart.",
+                "detail": str(exc),
+            }
+        ), 500
         
 @track_bp.route("/branch-history", methods=["GET"])
 @jwt_required()
