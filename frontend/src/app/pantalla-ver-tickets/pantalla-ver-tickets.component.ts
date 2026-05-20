@@ -366,6 +366,28 @@ async ngOnInit() {
   (window as any).verTicketsComp = this;
 }
 
+selectedTicketYear = String(new Date().getFullYear());
+
+ticketYearOptions = [
+  { value: String(new Date().getFullYear()), label: String(new Date().getFullYear()) },
+  { value: String(new Date().getFullYear() - 1), label: String(new Date().getFullYear() - 1) },
+  { value: 'all', label: 'Todos los años' },
+];
+
+onTicketYearChanged(year: string): void {
+  this.selectedTicketYear = year;
+  this.page = 1;
+  TicketInit.cargarTickets(this);
+}
+
+getSelectedTicketYearLabel(): string {
+  const option = this.ticketYearOptions.find(
+    item => item.value === this.selectedTicketYear
+  );
+
+  return option?.label || this.selectedTicketYear;
+}
+
 private cargarSucursalesParaTickets(): Promise<void> {
   return new Promise((resolve) => {
     this.sucursalesService.obtenerSucursales().subscribe({
@@ -397,7 +419,7 @@ private cargarSucursalesParaTickets(): Promise<void> {
 refrescarTicketsPreservandoFiltros(): void {
   const pageActual = this.page;
 
-  this.ticketService.getTickets(1000, 0).subscribe({
+  this.ticketService.getTickets(1000, 0, this.selectedTicketYear).subscribe({
     next: (data: any) => {
     const ticketsProcesados = (data?.tickets || []).map((ticket: Ticket) => {
       const clasificacionId = Number(ticket.clasificacion_id);

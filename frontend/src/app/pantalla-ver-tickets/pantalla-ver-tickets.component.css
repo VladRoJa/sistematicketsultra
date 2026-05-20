@@ -1240,3 +1240,75 @@ td.col-descripcion {
     transform: translateY(-4px);
   }
 }
+
+.tickets-year-mini {
+  height: 58px;
+  min-width: 310px;
+  border: 1px solid rgba(229, 69, 37, 0.16);
+  border-radius: 16px;
+  padding: 0.45rem 0.7rem;
+  background:
+    linear-gradient(135deg, rgba(229, 69, 37, 0.07), rgba(255, 255, 255, 0.96)),
+    #ffffff;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+}
+
+.tickets-year-mini__label {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.05;
+  gap: 0.15rem;
+  min-width: 120px;
+}
+
+.tickets-year-mini__label span {
+  color: #e54525;
+  font-size: 0.66rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.tickets-year-mini__label small {
+  color: #667085;
+  font-size: 0.66rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.tickets-year-mini__select {
+  width: 135px;
+  flex-shrink: 0;
+}
+
+.tickets-year-mini__select ::ng-deep .mat-mdc-text-field-wrapper {
+  height: 42px;
+  background: #ffffff;
+  border-radius: 13px;
+}
+
+.tickets-year-mini__select ::ng-deep .mat-mdc-form-field-flex {
+  height: 42px;
+  align-items: center;
+}
+
+.tickets-year-mini__select ::ng-deep .mat-mdc-form-field-infix {
+  min-height: 42px;
+  padding-top: 8px;
+  padding-bottom: 6px;
+}
+
+.tickets-year-mini__select ::ng-deep .mat-mdc-floating-label {
+  font-size: 0.72rem;
+}
+
+@media (max-width: 980px) {
+  .tickets-year-mini {
+    width: 100%;
+    min-width: 0;
+  }
+}
