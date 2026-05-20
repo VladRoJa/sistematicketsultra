@@ -610,7 +610,15 @@ def _resolve_canonicality_decision(
     existing_kind = existing_canonical_snapshot.get("snapshot_kind")
 
     if snapshot_kind == "daily":
-        return False, None
+        if existing_kind == "daily":
+            if not isinstance(existing_id, int):
+                raise CanonicalityConflictError(
+                    "El snapshot canónico actual no trae snapshot_id entero."
+                )
+            return True, existing_id
+
+        if existing_kind == "month_end_close":
+            return False, None
 
     if snapshot_kind == "month_end_close":
         if existing_kind == "daily":
@@ -627,7 +635,6 @@ def _resolve_canonicality_decision(
         f"No se pudo resolver canonicalidad para snapshot_kind={snapshot_kind!r} "
         f"y existing_kind={existing_kind!r}."
     )
-
 
 def _persist_snapshot_transactionally(
     *,
