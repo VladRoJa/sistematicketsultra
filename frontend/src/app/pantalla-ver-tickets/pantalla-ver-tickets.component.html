@@ -18,7 +18,37 @@
       Consulta, filtra y da seguimiento a los tickets registrados en Suite Ultra.
     </p>
   </div>
+<div class="tickets-year-toolbar">
+  <div class="tickets-year-toolbar__content">
+<div class="tickets-year-mini">
+  <div class="tickets-year-mini__label">
+    <span>Corte anual</span>
+    <small>Incluye activos previos</small>
+  </div>
 
+  <mat-form-field
+    class="tickets-year-mini__select"
+    appearance="fill"
+    subscriptSizing="dynamic"
+  >
+    <mat-label>Año</mat-label>
+
+    <mat-select
+      [(ngModel)]="selectedTicketYear"
+      (selectionChange)="onTicketYearChanged($event.value)"
+    >
+      <mat-option
+        *ngFor="let option of ticketYearOptions"
+        [value]="option.value"
+      >
+        {{ option.label }}
+      </mat-option>
+    </mat-select>
+  </mat-form-field>
+</div>
+  </div>
+</div>
+  
   <div class="tickets-page__status">
     <span class="tickets-page__status-label">Resultados filtrados</span>
     <strong>{{ kpiTicketsFiltrados }}</strong>

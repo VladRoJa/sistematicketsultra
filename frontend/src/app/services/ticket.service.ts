@@ -27,14 +27,27 @@ export class TicketService {
   // ─────────────────────────────────────────────
   // LISTADOS
   // ─────────────────────────────────────────────
-  getTickets(limit: number = 15, offset: number = 0): Observable<any> {
+  getTickets(
+    limit: number = 15,
+    offset: number = 0,
+    year: string = String(new Date().getFullYear()),
+  ): Observable<any> {
     const token = localStorage.getItem('token');
     if (!token) return throwError(() => new Error('NO_TOKEN'));
-    const headers = this.authJsonHeaders();
-    const params = new HttpParams().set('limit', limit).set('offset', offset);
-    return this.http.get<any>(`${this.apiUrl}/all`, { headers, params, withCredentials: true });
-  }
 
+    const headers = this.authJsonHeaders();
+
+    const params = new HttpParams()
+      .set('limit', String(limit))
+      .set('offset', String(offset))
+      .set('year', year);
+
+    return this.http.get<any>(`${this.apiUrl}/all`, {
+      headers,
+      params,
+      withCredentials: true,
+    });
+  }
   getTicketsConFiltros(filters: {
     estado?: string;
     departamento_id?: number;

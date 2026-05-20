@@ -62,6 +62,66 @@ def _send_email_maybe_async(to_list, subject, html):
         except Exception:
             print("❌ Error enviando correo:", e)
 
+def _get_current_operational_year() -> int:
+    tz_tijuana = pytz.timezone("America/Tijuana")
+    return datetime.now(tz_tijuana).year
+
+
+def _normalize_ticket_year_scope(raw_year: str | None) -> str:
+    year_value = (raw_year or "").strip().lower()
+
+    if not year_value:
+        return str(_get_current_operational_year())
+
+    if year_value == "all":
+        return "all"
+
+    try:
+        parsed_year = int(year_value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("El parámetro year debe ser un año válido o 'all'.") from exc
+
+    if parsed_year < 2000 or parsed_year > 2100:
+        raise ValueError("El parámetro year está fuera de rango permitido.")
+
+    return str(parsed_year)
+
+
+def _apply_ticket_year_scope(query, raw_year: str | None):
+    year_scope = _normalize_ticket_year_scope(raw_year)
+
+    if year_scope == "all":
+        return query, year_scope
+
+    selected_year = int(year_scope)
+
+    start_date = datetime(selected_year, 1, 1)
+    end_date = datetime(selected_year + 1, 1, 1)
+
+    active_carryover_statuses = [
+        "abierto",
+        "en progreso",
+        "por_validar",
+    ]
+
+    tickets_created_in_selected_year = (
+        (Ticket.fecha_creacion >= start_date)
+        & (Ticket.fecha_creacion < end_date)
+    )
+
+    active_tickets_from_previous_years = (
+        (Ticket.fecha_creacion < start_date)
+        & (Ticket.estado.in_(active_carryover_statuses))
+    )
+
+    query = query.filter(
+        or_(
+            tickets_created_in_selected_year,
+            active_tickets_from_previous_years,
+        )
+    )
+
+    return query, year_scope
 
 def _es_admin_o_corporativo(user: UserORM) -> bool:
     rol = (user.rol or "").upper()
@@ -324,13 +384,22 @@ def get_tickets():
         # ¡Usa el helper aquí!
         query = filtrar_tickets_por_usuario(user)
 
+        try:
+            query, year_scope = _apply_ticket_year_scope(
+                query,
+                request.args.get("year"),
+            )
+        except ValueError as exc:
+            return jsonify({"mensaje": str(exc)}), 400
+
         total_tickets = query.count()
         tickets = query.order_by(Ticket.id.desc()).limit(limit).offset(offset).all()
 
         return jsonify({
             "mensaje": "Tickets cargados correctamente",
             "tickets": [t.to_dict() for t in tickets],
-            "total_tickets": total_tickets
+            "total_tickets": total_tickets,
+            "year_scope": year_scope,
         }), 200
 
     except Exception as e:
@@ -357,6 +426,14 @@ def list_tickets_with_filters():
 
         # Helper universal (aplica permisos por rol/sucursal)
         query = filtrar_tickets_por_usuario(user)
+        
+        try:
+            query, year_scope = _apply_ticket_year_scope(
+                query,
+                request.args.get("year"),
+            )
+        except ValueError as exc:
+            return jsonify({"mensaje": str(exc)}), 400
 
         if estado:
             query = query.filter_by(estado=estado)
@@ -384,7 +461,8 @@ def list_tickets_with_filters():
         return jsonify({
             "mensaje": "Tickets filtrados",
             "tickets": [t.to_dict() for t in tickets],
-            "total_tickets": total_tickets
+            "total_tickets": total_tickets,
+            "year_scope": year_scope,
         }), 200
 
     except Exception as e:
@@ -609,6 +687,14 @@ def export_excel():
         query = filtrar_tickets_por_usuario(user)
 
         # ---------------- Aplicación de filtros ----------------
+        
+        try:
+            query, year_scope = _apply_ticket_year_scope(
+                query,
+                request.args.get("year"),
+            )
+        except ValueError as exc:
+            return jsonify({"mensaje": str(exc)}), 400
         if estados:
             query = query.filter(Ticket.estado.in_(estados))
         if departamentos:
@@ -1445,7 +1531,7 @@ def export_excel():
             output,
             mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             as_attachment=True,
-            download_name=f"tickets_exportados_{datetime.now().strftime('%Y-%m-%d')}.xlsx"
+            download_name=f"tickets_exportados_{year_scope}_{datetime.now().strftime('%Y-%m-%d')}.xlsx"
         )
 
     except Exception as e:
