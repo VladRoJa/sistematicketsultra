@@ -559,6 +559,7 @@ private puedeVerTrackDiarioPorRol(): boolean {
     'LECTOR_GLOBAL',
     'GERENTE',
     'GERENTE_REGIONAL',
+    'SISTEMAS'
   ].includes(rol);
 }
 
