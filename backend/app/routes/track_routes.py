@@ -97,6 +97,7 @@ def _require_track_read_role() -> None:
         "LECTOR_GLOBAL",
         "GERENTE",
         "GERENTE_REGIONAL",
+        "SISTEMAS",
     }:
         raise PermissionError("No autorizado para consultar el Track.")
 
