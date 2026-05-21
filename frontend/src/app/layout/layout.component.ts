@@ -84,6 +84,10 @@ ngOnInit(): void {
     path: '/warehouse',
     submenu: [
       { label: 'Warehouse', path: '/warehouse' },
+      {
+        label: 'BI Comercial / Promociones',
+        path: '/warehouse/comercial/promociones',
+      },
     ],
   };
 
@@ -601,6 +605,10 @@ getSubmenuIcon(label: string): string {
     return 'monitoring';
   }
 
+  if (normalizedLabel.includes('promociones') || normalizedLabel.includes('comercial')) {
+    return 'campaign';
+  }
+
   if (normalizedLabel.includes('warehouse')) {
     return 'folder_open';
   }
@@ -657,6 +665,10 @@ getSubmenuDescription(label: string): string {
 
   if (normalizedLabel.includes('track')) {
     return 'Consulta indicadores diarios, metas y avance por club.';
+  }
+
+  if (normalizedLabel.includes('promociones') || normalizedLabel.includes('comercial')) {
+    return 'Analiza promociones por mes, sucursal y desempeño comercial.';
   }
 
   if (normalizedLabel.includes('warehouse')) {
