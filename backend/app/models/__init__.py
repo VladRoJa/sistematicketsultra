@@ -25,6 +25,7 @@ from .warehouse import (
     KpiVentasNuevosSociosSnapshotORM,
     KpiVentasNuevosSociosSnapshotRowORM,
     TrackSourceTiendaDailyORM,
+    WarehouseCommercialCatalogORM,
 )
 
 
@@ -55,4 +56,5 @@ __all__ = [
     "KpiVentasNuevosSociosSnapshotORM",
     "KpiVentasNuevosSociosSnapshotRowORM",
     "TrackSourceTiendaDailyORM",
+    "WarehouseCommercialCatalogORM",
 ]

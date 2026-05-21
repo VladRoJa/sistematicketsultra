@@ -18,6 +18,10 @@ import { PmCalendarioComponent } from './pm/pm-calendario/pm-calendario.componen
 import { WarehouseHomeComponent } from './warehouse/warehouse-home.component';
 import { TrackDashboardComponent } from './warehouse/track-dashboard/track-dashboard.component';
 import { TrackBranchHistoryComponent } from './warehouse/track-dashboard/track-branch-history/track-branch-history.component';
+import { CommercialPromotionsComponent } from './warehouse/commercial-promotions/commercial-promotions.component';
+
+
+
 
 
 export const routes: Routes = [
@@ -116,6 +120,10 @@ export const routes: Routes = [
       {
         path: 'warehouse/track/sucursal/:sucursalCanon',
         component: TrackBranchHistoryComponent,
+      },
+      {
+        path: 'warehouse/comercial/promociones',
+        component: CommercialPromotionsComponent,
       },
     ],
   },

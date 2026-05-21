@@ -1,0 +1,110 @@
+.commercial-promotions-page {
+  padding: 24px;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.page-header h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.page-header p {
+  margin: 8px 0 0;
+  color: #666;
+  max-width: 900px;
+}
+
+.loading-state,
+.error-state {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 24px;
+}
+
+.error-state {
+  color: #b00020;
+  font-weight: 600;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(180px, 1fr));
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.summary-card {
+  padding: 18px;
+}
+
+.summary-card strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 22px;
+}
+
+.summary-card small {
+  display: block;
+  margin-top: 6px;
+  color: #666;
+}
+
+.summary-label {
+  font-size: 13px;
+  color: #777;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.warning-card {
+  border-left: 4px solid #e54525;
+}
+
+.methodology-card {
+  padding: 16px;
+  margin-bottom: 18px;
+}
+
+.methodology-card p {
+  margin: 8px 0 0;
+  color: #555;
+}
+
+.table-section {
+  padding: 18px 0;
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+  min-width: 900px;
+}
+
+.empty-message {
+  margin: 16px 0;
+  color: #666;
+}
+
+@media (max-width: 1200px) {
+  .summary-grid {
+    grid-template-columns: repeat(2, minmax(180px, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .commercial-promotions-page {
+    padding: 16px;
+  }
+
+  .summary-grid {
+    grid-template-columns: 1fr;
+  }
+}

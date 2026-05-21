@@ -1,0 +1,229 @@
+<!-- frontend\src\app\warehouse\commercial-promotions\commercial-promotions.component.html -->
+
+
+<div class="commercial-promotions-page">
+  <header class="page-header">
+    <div>
+      <h1>BI Comercial / Promociones</h1>
+      <p>
+        Análisis basado en Venta Total de sucursales canonizadas.
+        No incluye agregadoras ni registros no asociados a club.
+      </p>
+    </div>
+  </header>
+
+  <div *ngIf="loading" class="loading-state">
+    <mat-spinner diameter="42"></mat-spinner>
+    <span>Cargando análisis comercial...</span>
+  </div>
+
+  <div *ngIf="!loading && errorMessage" class="error-state">
+    {{ errorMessage }}
+  </div>
+
+  <ng-container *ngIf="!loading && !errorMessage">
+    <section class="summary-grid" *ngIf="summary">
+      <mat-card class="summary-card">
+        <span class="summary-label">Promo ganadora</span>
+        <strong>{{ getWinnerName() }}</strong>
+        <small>{{ getWinnerIncome() }}</small>
+      </mat-card>
+
+      <mat-card class="summary-card">
+        <span class="summary-label">Ingreso promocional</span>
+        <strong>{{ getPromoTotalIncome() }}</strong>
+        <small>{{ getPromoTotalPercent() }} sobre Venta Total canonizado</small>
+      </mat-card>
+
+      <mat-card class="summary-card">
+        <span class="summary-label">Impacto fuerte</span>
+        <strong>{{ summary.impact.strong_branches }}</strong>
+        <small>sucursales con promo ganadora ≥ 5%</small>
+      </mat-card>
+
+      <mat-card class="summary-card">
+        <span class="summary-label">Periodo</span>
+        <strong>{{ getPeriodLabel() }}</strong>
+        <small>Corte: {{ summary.period.last_snapshot_cutoff || '-' }}</small>
+      </mat-card>
+
+      <mat-card class="summary-card warning-card">
+        <span class="summary-label">Sin clasificar</span>
+        <strong>{{ summary.unmapped.candidate_count }}</strong>
+        <small>descripciones candidatas a promo</small>
+      </mat-card>
+    </section>
+
+    <mat-card class="methodology-card">
+      <strong>Alcance del análisis</strong>
+      <p>
+        Este módulo mide promociones registradas en Venta Total, usando el último
+        snapshot daily canónico de cada mes, ventas activas del mismo mes y
+        sucursales resueltas por aliases de Track. No sustituye el ingreso real
+        consolidado de Track.
+      </p>
+    </mat-card>
+
+    <mat-tab-group>
+      <mat-tab label="Ranking general">
+        <section class="table-section">
+          <table mat-table [dataSource]="rankingItems" class="data-table">
+            <ng-container matColumnDef="commercial_canon">
+              <th mat-header-cell *matHeaderCellDef>Promoción</th>
+              <td mat-cell *matCellDef="let item">{{ item.commercial_canon }}</td>
+            </ng-container>
+
+            <ng-container matColumnDef="family">
+              <th mat-header-cell *matHeaderCellDef>Familia</th>
+              <td mat-cell *matCellDef="let item">{{ item.family }}</td>
+            </ng-container>
+
+            <ng-container matColumnDef="meses_con_venta">
+              <th mat-header-cell *matHeaderCellDef>Meses</th>
+              <td mat-cell *matCellDef="let item">{{ item.meses_con_venta }}</td>
+            </ng-container>
+
+            <ng-container matColumnDef="ingreso_promo">
+              <th mat-header-cell *matHeaderCellDef>Ingreso</th>
+              <td mat-cell *matCellDef="let item">{{ formatCurrency(item.ingreso_promo) }}</td>
+            </ng-container>
+
+            <ng-container matColumnDef="ticket_promedio">
+              <th mat-header-cell *matHeaderCellDef>Ticket promedio</th>
+              <td mat-cell *matCellDef="let item">{{ formatCurrency(item.ticket_promedio) }}</td>
+            </ng-container>
+
+            <ng-container matColumnDef="porcentaje_sobre_venta_total">
+              <th mat-header-cell *matHeaderCellDef>% Venta Total</th>
+              <td mat-cell *matCellDef="let item">{{ formatPercent(item.porcentaje_sobre_venta_total) }}</td>
+            </ng-container>
+
+            <tr mat-header-row *matHeaderRowDef="rankingColumns"></tr>
+            <tr mat-row *matRowDef="let row; columns: rankingColumns"></tr>
+          </table>
+        </section>
+      </mat-tab>
+
+      <mat-tab label="Top por mes">
+        <section class="table-section">
+          <table mat-table [dataSource]="byMonthItems" class="data-table">
+            <ng-container matColumnDef="mes">
+              <th mat-header-cell *matHeaderCellDef>Mes</th>
+              <td mat-cell *matCellDef="let item">{{ formatMonth(item.mes) }}</td>
+            </ng-container>
+
+            <ng-container matColumnDef="ranking_mes">
+              <th mat-header-cell *matHeaderCellDef>#</th>
+              <td mat-cell *matCellDef="let item">{{ item.ranking_mes }}</td>
+            </ng-container>
+
+            <ng-container matColumnDef="commercial_canon">
+              <th mat-header-cell *matHeaderCellDef>Promoción</th>
+              <td mat-cell *matCellDef="let item">{{ item.commercial_canon }}</td>
+            </ng-container>
+
+            <ng-container matColumnDef="ingreso_promo">
+              <th mat-header-cell *matHeaderCellDef>Ingreso</th>
+              <td mat-cell *matCellDef="let item">{{ formatCurrency(item.ingreso_promo) }}</td>
+            </ng-container>
+
+            <ng-container matColumnDef="ticket_promedio">
+              <th mat-header-cell *matHeaderCellDef>Ticket promedio</th>
+              <td mat-cell *matCellDef="let item">{{ formatCurrency(item.ticket_promedio) }}</td>
+            </ng-container>
+
+            <ng-container matColumnDef="porcentaje_sobre_venta_total_mes">
+              <th mat-header-cell *matHeaderCellDef>% mes</th>
+              <td mat-cell *matCellDef="let item">{{ formatPercent(item.porcentaje_sobre_venta_total_mes) }}</td>
+            </ng-container>
+
+            <tr mat-header-row *matHeaderRowDef="byMonthColumns"></tr>
+            <tr mat-row *matRowDef="let row; columns: byMonthColumns"></tr>
+          </table>
+        </section>
+      </mat-tab>
+
+      <mat-tab label="Por sucursal">
+        <section class="table-section">
+          <table mat-table [dataSource]="byBranchItems" class="data-table">
+            <ng-container matColumnDef="sucursal_canon">
+              <th mat-header-cell *matHeaderCellDef>Sucursal</th>
+              <td mat-cell *matCellDef="let item">{{ item.sucursal_canon }}</td>
+            </ng-container>
+
+            <ng-container matColumnDef="promo_ganadora">
+              <th mat-header-cell *matHeaderCellDef>Promo ganadora</th>
+              <td mat-cell *matCellDef="let item">{{ item.promo_ganadora }}</td>
+            </ng-container>
+
+            <ng-container matColumnDef="ingreso_promo">
+              <th mat-header-cell *matHeaderCellDef>Ingreso</th>
+              <td mat-cell *matCellDef="let item">{{ formatCurrency(item.ingreso_promo) }}</td>
+            </ng-container>
+
+            <ng-container matColumnDef="ticket_promedio">
+              <th mat-header-cell *matHeaderCellDef>Ticket promedio</th>
+              <td mat-cell *matCellDef="let item">{{ formatCurrency(item.ticket_promedio) }}</td>
+            </ng-container>
+
+            <ng-container matColumnDef="porcentaje_sobre_venta_total_sucursal">
+              <th mat-header-cell *matHeaderCellDef>% sucursal</th>
+              <td mat-cell *matCellDef="let item">{{ formatPercent(item.porcentaje_sobre_venta_total_sucursal) }}</td>
+            </ng-container>
+
+            <ng-container matColumnDef="lectura_impacto">
+              <th mat-header-cell *matHeaderCellDef>Impacto</th>
+              <td mat-cell *matCellDef="let item">{{ getImpactLabel(item.lectura_impacto) }}</td>
+            </ng-container>
+
+            <tr mat-header-row *matHeaderRowDef="byBranchColumns"></tr>
+            <tr mat-row *matRowDef="let row; columns: byBranchColumns"></tr>
+          </table>
+        </section>
+      </mat-tab>
+
+      <mat-tab label="Sin clasificar">
+        <section class="table-section">
+          <table mat-table [dataSource]="unmappedItems" class="data-table">
+            <ng-container matColumnDef="descripcion_raw">
+              <th mat-header-cell *matHeaderCellDef>Descripción Gasca</th>
+              <td mat-cell *matCellDef="let item">{{ item.descripcion_raw }}</td>
+            </ng-container>
+
+            <ng-container matColumnDef="operaciones">
+              <th mat-header-cell *matHeaderCellDef>Operaciones</th>
+              <td mat-cell *matCellDef="let item">{{ formatNumber(item.operaciones) }}</td>
+            </ng-container>
+
+            <ng-container matColumnDef="ingreso_total">
+              <th mat-header-cell *matHeaderCellDef>Ingreso</th>
+              <td mat-cell *matCellDef="let item">{{ formatCurrency(item.ingreso_total) }}</td>
+            </ng-container>
+
+            <ng-container matColumnDef="ticket_promedio">
+              <th mat-header-cell *matHeaderCellDef>Ticket promedio</th>
+              <td mat-cell *matCellDef="let item">{{ formatCurrency(item.ticket_promedio) }}</td>
+            </ng-container>
+
+            <ng-container matColumnDef="sucursales_detectadas">
+              <th mat-header-cell *matHeaderCellDef>Sucursales</th>
+              <td mat-cell *matCellDef="let item">{{ item.sucursales_detectadas }}</td>
+            </ng-container>
+
+            <ng-container matColumnDef="ultimo_mes_detectado">
+              <th mat-header-cell *matHeaderCellDef>Último mes</th>
+              <td mat-cell *matCellDef="let item">{{ formatMonth(item.ultimo_mes_detectado) }}</td>
+            </ng-container>
+
+            <tr mat-header-row *matHeaderRowDef="unmappedColumns"></tr>
+            <tr mat-row *matRowDef="let row; columns: unmappedColumns"></tr>
+          </table>
+
+          <p class="empty-message" *ngIf="unmappedItems.length === 0">
+            No hay descripciones candidatas a promoción pendientes de clasificar.
+          </p>
+        </section>
+      </mat-tab>
+    </mat-tab-group>
+  </ng-container>
+</div>
