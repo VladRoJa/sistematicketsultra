@@ -11,7 +11,6 @@ import {
   regenerarFiltrosFiltradosDesdeTickets,
 } from '../../utils/ticket-utils';
 import { environment } from 'src/environments/environment';
-import { hayFiltrosActivos } from './pantalla-ver-tickets.filtros';
 
 export async function obtenerUsuarioAutenticado(
   component: PantallaVerTicketsComponent
@@ -84,19 +83,13 @@ export function cargarTickets(component: PantallaVerTicketsComponent): void {
 
   const departamentoScopeId = component.getSelectedDepartmentScopeId();
 
-    const ticketsRequest$ = departamentoScopeId
-      ? component.ticketService.getTicketsConFiltros({
-          year: component.selectedTicketYear,
-          departamento_id: departamentoScopeId,
-          no_paging: true,
-        })
-      : component.ticketService.getTickets(
-          1000,
-          0,
-          component.selectedTicketYear
-        );
+  const ticketsRequest$ = component.ticketService.getTicketsConFiltros({
+    year: component.selectedTicketYear,
+    ...(departamentoScopeId ? { departamento_id: departamentoScopeId } : {}),
+    no_paging: true,
+  });
 
-    ticketsRequest$.subscribe({
+  ticketsRequest$.subscribe({
     next: (data: ApiResponse) => {
       const ticketsProcesados = data.tickets.map((ticket: Ticket) => {
         const clasificacionId = Number(ticket.clasificacion_id);
@@ -398,13 +391,8 @@ export function actualizarVisibleTickets(
   const start = (component.page - 1) * component.itemsPerPage;
   const end = start + component.itemsPerPage;
 
-  if (hayFiltrosActivos(component)) {
-    component.visibleTickets = component.filteredTickets.slice(0, 100);
-    component.mostrarAvisoLimite = component.filteredTickets.length > 100;
-  } else {
-    component.visibleTickets = component.filteredTickets.slice(start, end);
-    component.mostrarAvisoLimite = false;
-  }
+  component.visibleTickets = component.filteredTickets.slice(start, end);
+  component.mostrarAvisoLimite = false;
 }
 
 export function ordenar(
