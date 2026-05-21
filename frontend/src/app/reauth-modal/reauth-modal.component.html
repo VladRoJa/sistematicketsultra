@@ -1,17 +1,89 @@
+<div class="reauth-modal">
+  <div class="reauth-modal__header">
+    <div class="reauth-modal__icon">
+      <mat-icon>lock_reset</mat-icon>
+    </div>
 
-    <h2>Reautenticación</h2>
-    <form [formGroup]="form" (ngSubmit)="reauthenticate()">
-      <mat-form-field appearance="fill">
-        <mat-label>Usuario</mat-label>
-        <input matInput formControlName="username" />
-      </mat-form-field>
-      <mat-form-field appearance="fill">
-        <mat-label>Contraseña</mat-label>
-        <input matInput type="password" formControlName="password" />
-      </mat-form-field>
-      <div class="actions">
-        <button mat-button type="button" (click)="cancel()">Cancelar</button>
-        <button mat-raised-button type="submit" [disabled]="form.invalid">Aceptar</button>
-      </div>
-    </form>
-  
+    <div class="reauth-modal__title-block">
+      <h2>Reautenticación</h2>
+      <p>
+        Tu sesión requiere validación. Ingresa tu contraseña para continuar trabajando en Suite Ultra.
+      </p>
+    </div>
+  </div>
+
+  <form
+    class="reauth-modal__form"
+    [formGroup]="form"
+    (ngSubmit)="reauthenticate()"
+  >
+    <mat-form-field appearance="fill" class="reauth-modal__field">
+      <mat-label>Usuario</mat-label>
+      <mat-icon matPrefix>person</mat-icon>
+
+      <input
+        matInput
+        formControlName="username"
+        autocomplete="username"
+        [readonly]="loading"
+      />
+
+      <mat-error *ngIf="form.controls['username'].hasError('required')">
+        El usuario es obligatorio.
+      </mat-error>
+    </mat-form-field>
+
+    <mat-form-field appearance="fill" class="reauth-modal__field">
+      <mat-label>Contraseña</mat-label>
+      <mat-icon matPrefix>vpn_key</mat-icon>
+
+      <input
+        matInput
+        [type]="hidePassword ? 'password' : 'text'"
+        formControlName="password"
+        autocomplete="current-password"
+        [readonly]="loading"
+      />
+
+      <button
+        mat-icon-button
+        matSuffix
+        type="button"
+        (click)="hidePassword = !hidePassword"
+        [disabled]="loading"
+        aria-label="Mostrar u ocultar contraseña"
+      >
+        <mat-icon>{{ hidePassword ? 'visibility' : 'visibility_off' }}</mat-icon>
+      </button>
+
+      <mat-error *ngIf="form.controls['password'].hasError('required')">
+        La contraseña es obligatoria.
+      </mat-error>
+    </mat-form-field>
+
+    <div class="reauth-modal__error" *ngIf="errorMessage">
+      <mat-icon>error_outline</mat-icon>
+      <span>{{ errorMessage }}</span>
+    </div>
+
+    <div class="reauth-modal__actions">
+      <button
+        mat-button
+        type="button"
+        (click)="cancel()"
+        [disabled]="loading"
+      >
+        Cancelar
+      </button>
+
+      <button
+        mat-raised-button
+        color="primary"
+        type="submit"
+        [disabled]="form.invalid || loading"
+      >
+        {{ loading ? 'Validando...' : 'Aceptar' }}
+      </button>
+    </div>
+  </form>
+</div>

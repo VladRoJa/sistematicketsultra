@@ -61,6 +61,7 @@ export class LayoutComponent implements OnInit, AfterViewInit {
   // ⏳ Configuración de inactividad
   private tiempoInactividad = 45 * 60 * 1000; // 45 minutos en ms
   private temporizadorInactividad: any;
+  private reauthPorInactividadAbierto = false;
 
   constructor(
     private router: Router,
@@ -318,28 +319,55 @@ private habilitarWarehouseEnMenuSiAplica(menuWarehouse: any): void {
 
 
   private reiniciarTimerInactividad(): void {
+    if (this.reauthPorInactividadAbierto) {
+      return;
+    }
+
     clearTimeout(this.temporizadorInactividad);
+
     this.temporizadorInactividad = setTimeout(() => {
       this.abrirModalReautenticacion();
     }, this.tiempoInactividad);
   }
 
   private abrirModalReautenticacion(): void {
-    mostrarAlertaToast('Sesión bloqueada por inactividad. Por favor, reautentícate.');
+    if (this.router.url.includes('/login')) {
+      return;
+    }
+
+    const reauthYaAbierto = this.dialog.openDialogs.some( 
+      dialogRef => dialogRef.componentInstance instanceof ReauthModalComponent
+    );
+
+    if (this.reauthPorInactividadAbierto || reauthYaAbierto) {
+      return;
+    }
+
+    this.reauthPorInactividadAbierto = true;
+    clearTimeout(this.temporizadorInactividad);
+
+    mostrarAlertaToast('Sesión bloqueada por inactividad. Reautentícate para continuar.');
+
     const dialogRef = this.dialog.open(ReauthModalComponent, {
-      disableClose: true
+      disableClose: true,
+      width: '440px',
+      maxWidth: '94vw',
+      panelClass: 'suite-reauth-dialog',
+      backdropClass: 'suite-dialog-backdrop',
+      autoFocus: false,
+      restoreFocus: false,
     });
 
     dialogRef.afterClosed().subscribe(result => {
-      if (result && result.token) {
+      this.reauthPorInactividadAbierto = false;
+
+      if (result?.token) {
         this.authService.setSession(result.token, result.user || {}, false);
         this.reiniciarTimerInactividad();
-      } else {
-        // Si no se autenticó, cerrar sesión
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        this.router.navigate(['/login']);
+        return;
       }
+
+      this.cerrarPorInactividad();
     });
   }
 
