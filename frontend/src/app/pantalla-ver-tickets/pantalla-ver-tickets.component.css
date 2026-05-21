@@ -1312,3 +1312,48 @@ td.col-descripcion {
     min-width: 0;
   }
 }
+
+.tickets-scope-toggle {
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem;
+  border: 1px solid rgba(229, 69, 37, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05);
+}
+
+.tickets-scope-toggle__btn {
+  height: 34px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 0.8rem;
+  background: transparent;
+  color: #475467;
+  font-size: 0.72rem;
+  font-weight: 900;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+
+.tickets-scope-toggle__btn mat-icon {
+  font-size: 17px;
+  width: 17px;
+  height: 17px;
+}
+
+.tickets-scope-toggle__btn:hover {
+  background: rgba(229, 69, 37, 0.07);
+  color: #e54525;
+}
+
+.tickets-scope-toggle__btn--active {
+  background: #e54525;
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgba(229, 69, 37, 0.22);
+}

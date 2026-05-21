@@ -52,12 +52,13 @@ export class TicketService {
     estado?: string;
     departamento_id?: number;
     criticidad?: number;
+    year?: string;
     no_paging?: boolean;
     limit?: number;
     offset?: number;
   }): Observable<TicketsResponse> {
     let params = new HttpParams();
-
+    if (filters.year) params = params.set('year', filters.year);
     if (filters.estado) params = params.set('estado', filters.estado);
     if (filters.departamento_id !== undefined) params = params.set('departamento_id', String(filters.departamento_id));
     if (filters.criticidad !== undefined) params = params.set('criticidad', String(filters.criticidad));

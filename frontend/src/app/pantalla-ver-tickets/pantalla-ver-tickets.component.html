@@ -18,6 +18,22 @@
       Consulta, filtra y da seguimiento a los tickets registrados en Suite Ultra.
     </p>
   </div>
+<div
+  class="tickets-scope-toggle"
+  *ngIf="puedeUsarScopeDepartamento"
+>
+  <button
+    type="button"
+    class="tickets-scope-toggle__btn"
+    *ngFor="let option of departmentScopeOptions"
+    [class.tickets-scope-toggle__btn--active]="isDepartmentScopeActive(option.value)"
+    (click)="onDepartmentScopeChanged(option.value)"
+  >
+    <mat-icon>{{ option.icon }}</mat-icon>
+    <span>{{ option.label }}</span>
+  </button>
+</div>
+
 <div class="tickets-year-toolbar">
   <div class="tickets-year-toolbar__content">
 <div class="tickets-year-mini">

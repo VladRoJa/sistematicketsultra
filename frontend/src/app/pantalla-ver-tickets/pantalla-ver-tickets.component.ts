@@ -311,7 +311,6 @@ ngAfterViewInit(): void {
   triggers.forEach(({ ref, key }) => {
     if (ref?.menuOpened) {
       ref.menuOpened.subscribe(() => {
-        console.log(`🟢 Menu de ${key} abierto`);
         // 👉 Asegura que siempre calculemos opciones al abrir el menú
         const path = this.rutasFiltro[key];
         if (path) {
@@ -350,16 +349,16 @@ async ngOnInit() {
     this.user?.sucursal_id === 100
   );
 
+    if (!this.puedeUsarScopeDepartamento) {
+    this.selectedDepartmentScope = 'all';
+  }
+
   TicketInit.cargarTickets(this);
 
   // 🔁 Escuchar eventos de refresco desde el servicio
   this.refrescoService.refrescarTabla$.subscribe(() => {
     TicketInit.cargarTickets(this); // recargar los tickets
   });
-
-  console.log('Usuario:', this.user);
-  console.log('usuarioActual:', this.usuarioActual);
-  console.log('Editor corporativo:', this.usuarioEsEditorCorporativo);
 
   this.changeDetectorRef.detectChanges();
 
@@ -374,10 +373,75 @@ ticketYearOptions = [
   { value: 'all', label: 'Todos los años' },
 ];
 
+selectedDepartmentScope: 'all' | 'mantenimiento' | 'sistemas' = 'all';
+
+departmentScopeOptions: Array<{
+  value: 'all' | 'mantenimiento' | 'sistemas';
+  label: string;
+  icon: string;
+}> = [
+  { value: 'all', label: 'Todos', icon: 'apps' },
+  { value: 'mantenimiento', label: 'Mantenimiento', icon: 'build' },
+  { value: 'sistemas', label: 'Sistemas', icon: 'desktop_windows' },
+];
+
 onTicketYearChanged(year: string): void {
   this.selectedTicketYear = year;
   this.page = 1;
   TicketInit.cargarTickets(this);
+}
+
+onDepartmentScopeChanged(scope: 'all' | 'mantenimiento' | 'sistemas'): void {
+  if (this.selectedDepartmentScope === scope) {
+    return;
+  }
+
+  this.selectedDepartmentScope = scope;
+  this.page = 1;
+
+  TicketInit.cargarTickets(this);
+}
+
+isDepartmentScopeActive(scope: 'all' | 'mantenimiento' | 'sistemas'): boolean {
+  return this.selectedDepartmentScope === scope;
+}
+
+getSelectedDepartmentScopeLabel(): string {
+  const option = this.departmentScopeOptions.find(
+    item => item.value === this.selectedDepartmentScope
+  );
+
+  return option?.label || 'Todos';
+}
+
+getSelectedDepartmentScopeId(): number | null {
+  if (this.selectedDepartmentScope === 'all') {
+    return null;
+  }
+
+  const objetivo = this.normalizarTextoFiltro(this.selectedDepartmentScope);
+
+  const departamentosPlanos = (this.departamentos || []).flat();
+
+  const departamento = departamentosPlanos.find((dep: any) => {
+    const nombre =
+      dep?.nombre ??
+      dep?.departamento ??
+      dep?.nombre_departamento ??
+      dep?.label ??
+      '';
+
+    return this.normalizarTextoFiltro(nombre) === objetivo;
+  });
+
+  const idRaw =
+    departamento?.id ??
+    departamento?.departamento_id ??
+    departamento?.id_departamento;
+
+  const id = Number(idRaw);
+
+  return Number.isFinite(id) ? id : null;
 }
 
 getSelectedTicketYearLabel(): string {
@@ -387,6 +451,8 @@ getSelectedTicketYearLabel(): string {
 
   return option?.label || this.selectedTicketYear;
 }
+
+
 
 private cargarSucursalesParaTickets(): Promise<void> {
   return new Promise((resolve) => {
@@ -514,7 +580,19 @@ refrescarTicketsPreservandoFiltros(): void {
     return !this.authService.esLectorGlobal() && !this.authService.esGerente();
   }
 
-  
+  private readonly usuariosConScopeDepartamento = new Set([
+    'FABIAN',
+  ]);
+
+get puedeUsarScopeDepartamento(): boolean {
+  const usuario = (this.usuarioActual || '').trim().toUpperCase();
+  const rol = (this.user?.rol || '').toString().trim().toUpperCase();
+
+  const esAdminReal = ['ADMIN', 'ADMINISTRADOR', 'SUPER_ADMIN'].includes(rol);
+
+  return esAdminReal || this.usuariosConScopeDepartamento.has(usuario);
+}
+
 
 /** Refrescar tabla/estado tras aprobar/rechazar */
 private postAccionRefrescar(): void {
@@ -847,7 +925,6 @@ private normalizarTextoFiltro(value: any): string {
     });
   }
   inicializarCategoriaTemp() {
-  console.log('🟢 inicializarCategoriaTemp llamada desde el HTML');
   this.inicializarTemporales('categoria');
 }
 
@@ -1045,20 +1122,6 @@ if (columna === 'subcategoria') {
     set.add(label);
   });
 
-  // DEBUG 👇
-  const debug = (this.filteredTickets || []).map((t: any) => ({
-    id: t.id,
-    dep: t.departamento,
-    jer1: t.jerarquia_clasificacion?.[1] ?? null,
-    invCat: t.inventario?.categoria ?? null,
-    jer2: t.jerarquia_clasificacion?.[2] ?? null,
-    subId: t.subcategoria ?? null,
-    labelTabla: this.getSubcategoriaVisible(t),
-  }));
-  console.table(debug);
-  console.log('[SUBCAT] únicos (set):', Array.from(set));
-  // DEBUG ☝️
-
   const opciones = Array.from(set)
     .sort((a, b) => a.localeCompare(b))
     .map(nombre => ({ valor: nombre, etiqueta: nombre, seleccionado: true }));
@@ -1133,7 +1196,6 @@ if (columna === 'subcategoria') {
   };
 
 onAbrirFiltro(columna: string, trigger: any) {
-  console.log('🟢 Abriendo filtro para columna:', columna);
 
   if (columna === 'sucursal') {
     this.hidratarSucursalEnTickets();
@@ -1638,7 +1700,6 @@ abrirEditarFechaSolucion(ticket: Ticket) {
 
 
 public getNombreEquipoOInventario(ticket: Ticket): string {
-  console.log(ticket)
   if (ticket.inventario?.nombre) return ticket.inventario.nombre;
   if (ticket.equipo) return ticket.equipo;
   return '—';

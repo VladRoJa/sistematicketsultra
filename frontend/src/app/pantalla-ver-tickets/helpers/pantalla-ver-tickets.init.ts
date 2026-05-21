@@ -82,9 +82,21 @@ function resolverNombreSucursalTicket(
 export function cargarTickets(component: PantallaVerTicketsComponent): void {
   component.loading = true;
 
-  component.ticketService
-    .getTickets(1000, 0, component.selectedTicketYear)
-    .subscribe({
+  const departamentoScopeId = component.getSelectedDepartmentScopeId();
+
+    const ticketsRequest$ = departamentoScopeId
+      ? component.ticketService.getTicketsConFiltros({
+          year: component.selectedTicketYear,
+          departamento_id: departamentoScopeId,
+          no_paging: true,
+        })
+      : component.ticketService.getTickets(
+          1000,
+          0,
+          component.selectedTicketYear
+        );
+
+    ticketsRequest$.subscribe({
     next: (data: ApiResponse) => {
       const ticketsProcesados = data.tickets.map((ticket: Ticket) => {
         const clasificacionId = Number(ticket.clasificacion_id);
