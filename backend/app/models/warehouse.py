@@ -1104,3 +1104,37 @@ class TrackDailyVersionORM(db.Model):
         nullable=False,
         server_default=db.text("now()"),
     )
+    
+class WarehouseCommercialCatalogORM(db.Model):
+    __tablename__ = "warehouse_commercial_catalog"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    raw_description = db.Column(db.Text, nullable=False, unique=True, index=True)
+    normalized_description = db.Column(db.Text, nullable=False, index=True)
+
+    commercial_canon = db.Column(db.Text, nullable=True, index=True)
+    family = db.Column(db.Text, nullable=False, default="sin_clasificar", index=True)
+    subfamily = db.Column(db.Text, nullable=True)
+
+    is_promo = db.Column(db.Boolean, nullable=False, default=False, index=True)
+    is_membership = db.Column(db.Boolean, nullable=False, default=False)
+    is_retail = db.Column(db.Boolean, nullable=False, default=False)
+    is_aggregator = db.Column(db.Boolean, nullable=False, default=False)
+
+    is_active = db.Column(db.Boolean, nullable=False, default=True, index=True)
+    needs_business_validation = db.Column(db.Boolean, nullable=False, default=False, index=True)
+
+    notes = db.Column(db.Text, nullable=True)
+
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        server_default=db.func.now(),
+        nullable=False,
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        server_default=db.func.now(),
+        onupdate=db.func.now(),
+        nullable=False,
+    )
