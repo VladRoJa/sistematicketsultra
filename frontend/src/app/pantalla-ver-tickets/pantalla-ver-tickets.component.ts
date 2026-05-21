@@ -506,6 +506,7 @@ refrescarTicketsPreservandoFiltros(): void {
 
       return {
         ...ticket,
+        departamento: this.resolverNombreDepartamentoTicket(ticket),
         categoria: catNivel2?.nombre || ticket.categoria || '—',
         subcategoria: catNivel3?.nombre || ticket.subcategoria || '—',
         detalle: catNivel4?.nombre || ticket.detalle || '—',
@@ -2410,18 +2411,79 @@ private etiquetaCampoUnificado: Record<'categoria' | 'estado' | 'departamento' |
 
 private etiquetaDepartamentoPorId(id: any): string {
   const num = Number(id);
-  if (Number.isNaN(num)) return String(id);
 
-  // 1) intenta en catálogo de departamentos
-  const dep = (this.departamentos || []).find((d: any) =>
-    d.id === num || d.departamento_id === num || d?.id_departamento === num
-  );
-  if (dep?.nombre) return dep.nombre;
-  if (dep?.departamento) return dep.departamento;
+  if (Number.isNaN(num)) {
+    return String(id);
+  }
 
-  // 2) fallback: busca en los tickets
-  const t = (this.ticketsCompletos || []).find((x: any) => x.departamento_id === num);
-  return t?.departamento ?? String(id);
+  const departamentosPlanos = (this.departamentos || []).flat();
+
+  const dep = departamentosPlanos.find((d: any) => {
+    const depId = Number(
+      d?.id ??
+      d?.departamento_id ??
+      d?.id_departamento ??
+      d?.department_id
+    );
+
+    return depId === num;
+  });
+
+  const nombre =
+    dep?.nombre ??
+    dep?.departamento ??
+    dep?.nombre_departamento ??
+    dep?.label ??
+    dep?.name;
+
+  if (nombre) {
+    return String(nombre);
+  }
+
+  const ticketReferencia = (this.ticketsCompletos || []).find((ticket: any) => {
+    return Number(ticket.departamento_id) === num;
+  });
+
+  return ticketReferencia?.departamento ?? String(id);
+}
+
+private resolverNombreDepartamentoTicket(ticket: any): string {
+  const nombreDirecto =
+    ticket?.departamento_nombre ||
+    ticket?.departamento?.nombre ||
+    ticket?.departamento?.departamento;
+
+  if (nombreDirecto) {
+    return String(nombreDirecto);
+  }
+
+  const departamentoActual = ticket?.departamento;
+
+  if (
+    typeof departamentoActual === 'string' &&
+    departamentoActual.trim() !== '' &&
+    !/^\d+$/.test(departamentoActual.trim())
+  ) {
+    return departamentoActual;
+  }
+
+  const idRaw =
+    ticket?.departamento_id ??
+    ticket?.id_departamento ??
+    ticket?.department_id ??
+    ticket?.departamento;
+
+  const id = Number(idRaw);
+
+  if (Number.isFinite(id)) {
+    return (
+      this.departamentoService.obtenerNombrePorId(id) ||
+      this.etiquetaDepartamentoPorId(id) ||
+      String(id)
+    );
+  }
+
+  return '—';
 }
 
 private actualizarVistaTicketsFiltrados(): void {
