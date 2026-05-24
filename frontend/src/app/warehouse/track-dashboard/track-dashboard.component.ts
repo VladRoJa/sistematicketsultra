@@ -19,42 +19,99 @@ type ProgressTone = 'danger' | 'warning' | 'success' | 'neutral';
 type SummaryTone = ProgressTone | 'default';
 type TrackColumnGroupKey =
   | 'ocupacion'
-  | 'ingresos'
   | 'crecimiento'
+  | 'ventas_reactivaciones'
+  | 'bajas_churn'
   | 'domiciliados'
+  | 'arpu'
+  | 'ingresos'
   | 'tienda';
 
 type TrackSortDirection = 'asc' | 'desc';
 
+type TrackViewMode = 'simplificada' | 'completa';
+
+interface TrackViewModeOption {
+  value: TrackViewMode;
+  label: string;
+  description: string;
+}
+
+
 type TrackSortKey =
   | 'sucursal_canon'
-  | 'usuarios_inicio_mes'
-  | 'usuarios_activos_actual'
-  | 'proyeccion_usuarios_cierre_mes'
+
+  // Ocupación
   | 'm2_sin_circulaciones'
-  | 'meta_faycgo_mes'
-  | 'ingreso_real_base_mtd'
-  | 'ingreso_real_agregadora_mtd'
-  | 'ingreso_real_mtd'
-  | 'avance_ingreso'
-  | 'diferencia_ingreso'
-  | 'meta_ingreso_dia'
-  | 'meta_arpu_mes'
-  | 'arpu_actual'
+  | 'usuarios_inicio_mes'
+  | 'proyeccion_usuarios_cierre_mes'
+  | 'usuarios_activos_actual'
+  | 'ocupacion_inicio_mes'
+  | 'meta_ocupacion_px_m2'
+  | 'meta_ocupacion_mes'
+  | 'ocupacion_actual'
+  | 'diferencia_ocupacion_inicio'
+  | 'avance_ocupacion'
+
+  // Crecimiento
+  | 'diferencia_inicio_mes'
+  | 'diferencia_meta_crecimiento'
+  | 'avance_meta_crecimiento'
+  | 'alcance_usuarios_activos'
+
+  // Ventas nuevas y reactivaciones
   | 'meta_clientes_nuevos_mes'
+  | 'clientes_nuevos_ideal_mtd'
   | 'clientes_nuevos_real_mtd'
+  | 'diferencia_clientes_nuevos_ideal'
   | 'avance_clientes_nuevos'
   | 'diferencia_clientes_nuevos'
   | 'meta_clientes_nuevos_dia'
   | 'meta_reactivaciones_mes'
+  | 'reactivaciones_ideal_mtd'
   | 'reactivaciones_real_mtd'
+  | 'diferencia_reactivaciones_ideal'
+  | 'avance_reactivaciones'
+
+  // Bajas & churn
   | 'meta_bajas_mes'
+  | 'bajas_ideal_mtd'
   | 'bajas_reales_mtd'
+  | 'diferencia_bajas_ideal'
+  | 'meta_churn_mes'
+  | 'churn_ideal_mtd'
+  | 'churn_real_mtd'
+  | 'diferencia_churn_ideal'
+
+  // Domiciliados
   | 'meta_nuevos_domiciliados_mes'
+  | 'domiciliados_ideal_mtd'
   | 'nuevos_domiciliados_real_mtd'
   | 'avance_domiciliados'
   | 'diferencia_domiciliados'
+  | 'diferencia_domiciliados_ideal'
   | 'meta_domiciliados_dia'
+
+  // Ingresos
+  | 'meta_faycgo_mes'
+  | 'ingreso_ideal_cierre_mtd'
+  | 'ingreso_real_base_mtd'
+  | 'ingreso_real_agregadora_mtd'
+  | 'ingreso_real_mtd'
+  | 'avance_ingreso'
+  | 'avance_ingreso_ideal'
+  | 'diferencia_ingreso'
+  | 'diferencia_ingreso_ideal'
+  | 'meta_ingreso_dia'
+
+  // ARPU
+  | 'meta_arpu_mes'
+  | 'arpu_actual'
+  | 'arpu_teorico'
+  | 'diferencia_arpu'
+  | 'avance_arpu'
+
+  // Tienda
   | 'meta_venta_tienda_mes'
   | 'venta_tienda_real_mtd'
   | 'avance_tienda'
@@ -89,25 +146,37 @@ interface TrackViewRow {
   displayLabel: string;
 
   sucursalCanon: string;
+
+  // Ocupación
+  m2SinCirculaciones: string;
+  ocupacionInicioMes: string;
+  metaOcupacionPxM2: string;
+  metaOcupacionMes: string;
+  ocupacionActual: string;
+  diferenciaOcupacionInicioLabel: string;
+  diferenciaOcupacionInicioTone: ProgressTone;
+  avanceOcupacionLabel: string;
+  avanceOcupacionTone: ProgressTone;
+
+  // Crecimiento
   usuariosInicioMes: string;
   usuariosActivos: string;
   proyeccionUsuariosCierre: string;
-  m2SinCirculaciones: string;
+  diferenciaInicioMesLabel: string;
+  diferenciaInicioMesTone: ProgressTone;
+  diferenciaMetaCrecimientoLabel: string;
+  diferenciaMetaCrecimientoTone: ProgressTone;
+  avanceMetaCrecimientoLabel: string;
+  avanceMetaCrecimientoTone: ProgressTone;
+  alcanceUsuariosActivosLabel: string;
+  alcanceUsuariosActivosTone: ProgressTone;
 
-  metaFaycgo: string;
-  ingresoBase: string;
-  ingresoAgregadoras: string;
-  ingresoReal: string;
-  avanceIngresoLabel: string;
-  avanceIngresoTone: ProgressTone;
-  diferenciaIngresoLabel: string;
-  diferenciaIngresoTone: ProgressTone;
-  metaIngresoDia: string;
-  diferenciaIngresoDiaLabel: string;
-  diferenciaIngresoDiaTone: ProgressTone;
-
+  // Ventas nuevas y reactivaciones
   metaClientesNuevos: string;
+  clientesNuevosIdealMtd: string;
   clientesNuevos: string;
+  diferenciaClientesNuevosIdealLabel: string;
+  diferenciaClientesNuevosIdealTone: ProgressTone;
   avanceClientesNuevosLabel: string;
   avanceClientesNuevosTone: ProgressTone;
   diferenciaClientesNuevosLabel: string;
@@ -117,12 +186,28 @@ interface TrackViewRow {
   diferenciaClientesNuevosDiaTone: ProgressTone;
 
   metaReactivaciones: string;
+  reactivacionesIdealMtd: string;
   reactivacionesReales: string;
+  diferenciaReactivacionesIdealLabel: string;
+  diferenciaReactivacionesIdealTone: ProgressTone;
+  avanceReactivacionesLabel: string;
+  avanceReactivacionesTone: ProgressTone;
 
+  // Bajas & churn
   metaBajas: string;
+  bajasIdealMtd: string;
   bajasReales: string;
+  diferenciaBajasIdealLabel: string;
+  diferenciaBajasIdealTone: ProgressTone;
+  metaChurnLabel: string;
+  churnIdealLabel: string;
+  churnRealLabel: string;
+  diferenciaChurnIdealLabel: string;
+  diferenciaChurnIdealTone: ProgressTone;
 
+  // Domiciliados
   metaNuevosDomiciliados: string;
+  domiciliadosIdealMtd: string;
   nuevosDomiciliados: string;
   avanceDomiciliadosLabel: string;
   avanceDomiciliadosTone: ProgressTone;
@@ -131,7 +216,37 @@ interface TrackViewRow {
   metaDomiciliadosDia: string;
   diferenciaDomiciliadosDiaLabel: string;
   diferenciaDomiciliadosDiaTone: ProgressTone;
+  diferenciaDomiciliadosIdealLabel: string;
+  diferenciaDomiciliadosIdealTone: ProgressTone;
 
+  // Ingresos
+  metaFaycgo: string;
+  ingresoIdealCierre: string;
+  ingresoBase: string;
+  ingresoAgregadoras: string;
+  ingresoReal: string;
+  avanceIngresoLabel: string;
+  avanceIngresoTone: ProgressTone;
+  avanceIngresoIdealLabel: string;
+  avanceIngresoIdealTone: ProgressTone;
+  diferenciaIngresoLabel: string;
+  diferenciaIngresoTone: ProgressTone;
+  diferenciaIngresoIdealLabel: string;
+  diferenciaIngresoIdealTone: ProgressTone;
+  metaIngresoDia: string;
+  diferenciaIngresoDiaLabel: string;
+  diferenciaIngresoDiaTone: ProgressTone;
+
+  // ARPU
+  metaArpu: string;
+  arpuActual: string;
+  arpuTeorico: string;
+  diferenciaArpuLabel: string;
+  diferenciaArpuTone: ProgressTone;
+  avanceArpuLabel: string;
+  avanceArpuTone: ProgressTone;
+
+  // Tienda
   metaVentaTienda: string;
   ventaTiendaReal: string;
   avanceTiendaLabel: string;
@@ -140,9 +255,6 @@ interface TrackViewRow {
   diferenciaTiendaTone: ProgressTone;
   metaTiendaDiaLabel: string;
   metaTiendaDiaTone: ProgressTone;
-
-  metaArpu: string;
-  arpuActual: string;
 }
 
 @Component({
@@ -197,14 +309,72 @@ export class TrackDashboardComponent implements OnInit {
     'LA_VIGA',
   ];
 
-  readonly trackColumnGroupOptions: TrackColumnGroupOption[] = [
+  readonly simplifiedTrackColumnGroupOptions: TrackColumnGroupOption[] = [
   { key: 'ocupacion', label: 'Ocupación' },
   { key: 'crecimiento', label: 'Crecimiento' },
   { key: 'domiciliados', label: 'Domiciliados' },
   { key: 'ingresos', label: 'Ingresos' },
   { key: 'tienda', label: 'Tienda' },
-
 ];
+
+readonly completeTrackColumnGroupOptions: TrackColumnGroupOption[] = [
+  { key: 'ocupacion', label: 'Ocupación' },
+  { key: 'crecimiento', label: 'Crecimiento' },
+  { key: 'ingresos', label: 'Ingresos totales' },
+  { key: 'ventas_reactivaciones', label: 'Ventas y reactivaciones' },
+  { key: 'bajas_churn', label: 'Bajas & Churn' },
+  { key: 'domiciliados', label: 'Domiciliados' },
+  { key: 'arpu', label: 'ARPU' },
+  { key: 'tienda', label: 'Tienda' },
+];
+
+trackViewMode: TrackViewMode = 'simplificada';
+
+readonly trackViewModeOptions: TrackViewModeOption[] = [
+  {
+    value: 'simplificada',
+    label: 'Vista simplificada',
+    description: 'Lectura operativa para gerentes',
+  },
+  {
+    value: 'completa',
+    label: 'Vista completa',
+    description: 'Análisis extendido y validación',
+  },
+];
+
+get trackColumnGroupOptions(): TrackColumnGroupOption[] {
+  return this.isCompleteTrackView()
+    ? this.completeTrackColumnGroupOptions
+    : this.simplifiedTrackColumnGroupOptions;
+}
+
+setTrackViewMode(mode: TrackViewMode): void {
+  if (this.trackViewMode === mode) {
+    return;
+  }
+
+  this.trackViewMode = mode;
+  this.selectedTrackColumnGroups = [];
+}
+
+isTrackViewModeActive(mode: TrackViewMode): boolean {
+  return this.trackViewMode === mode;
+}
+
+isSimplifiedTrackView(): boolean {
+  return this.trackViewMode === 'simplificada';
+}
+
+isCompleteTrackView(): boolean {
+  return this.trackViewMode === 'completa';
+}
+
+getTrackViewModeButtonClass(mode: TrackViewMode): string {
+  return this.isTrackViewModeActive(mode)
+    ? 'track-view-mode__button track-view-mode__button--active'
+    : 'track-view-mode__button';
+}
 
 
   trackDate = this.buildTodayIsoDate();
@@ -361,7 +531,7 @@ private saveBlobAsFile(blob: Blob, filename: string): void {
           }
 
           const baseRows = this.sortRowsByOpeningOrder(response.rows || []);
-          const visibleRows = this.filterRowsWithFaycgoMeta(baseRows);
+          const visibleRows = baseRows;
 
           this.resolvedVersion = response.resolved_version || null;
           this.trackVersionLabel = this.buildTrackVersionLabel(this.resolvedVersion);
@@ -520,28 +690,79 @@ private getTrackSortValue(
     case 'sucursal_canon':
       return row.sucursal_canon || '';
 
-    case 'avance_ingreso':
-      return this.calculateProgressPercent(
-        row.ingreso_real_mtd,
-        row.meta_faycgo_mes,
+    // Ocupación
+    case 'ocupacion_inicio_mes':
+      return this.calculateOccupancyRatio(
+        row.usuarios_inicio_mes,
+        row.m2_sin_circulaciones,
       );
 
-    case 'diferencia_ingreso':
-      return this.calculateDifference(
-        row.ingreso_real_mtd,
-        row.meta_faycgo_mes,
+    case 'meta_ocupacion_px_m2':
+      return 2;
+
+    case 'meta_ocupacion_mes':
+      return this.calculateOccupancyRatio(
+        row.proyeccion_usuarios_cierre_mes,
+        row.m2_sin_circulaciones,
       );
 
-    case 'meta_ingreso_dia':
-      return this.calculateRemainingToIdealTarget(
-        row.ingreso_real_mtd,
-        this.calculateIdealMtdTarget(row.meta_faycgo_mes, row.track_date),
-      );
-
-    case 'arpu_actual':
-      return this.calculateArpuActual(
-        row.ingreso_real_mtd,
+    case 'ocupacion_actual':
+      return this.calculateOccupancyRatio(
         row.usuarios_activos_actual,
+        row.m2_sin_circulaciones,
+      );
+
+    case 'diferencia_ocupacion_inicio':
+      return this.calculateDifference(
+        this.calculateOccupancyRatio(row.usuarios_activos_actual, row.m2_sin_circulaciones),
+        this.calculateOccupancyRatio(row.usuarios_inicio_mes, row.m2_sin_circulaciones),
+      );
+
+    case 'avance_ocupacion':
+      return this.calculateProgressPercent(
+        row.usuarios_activos_actual,
+        row.proyeccion_usuarios_cierre_mes,
+      );
+
+    // Crecimiento
+    case 'diferencia_inicio_mes':
+      return this.calculateDifference(
+        row.usuarios_activos_actual,
+        row.usuarios_inicio_mes,
+      );
+
+    case 'diferencia_meta_crecimiento':
+      return this.calculateDifference(
+        row.usuarios_activos_actual,
+        row.proyeccion_usuarios_cierre_mes,
+      );
+
+    case 'avance_meta_crecimiento':
+      return this.calculateRelativeDifferencePercent(
+        row.usuarios_activos_actual,
+        row.proyeccion_usuarios_cierre_mes,
+      );
+
+    case 'alcance_usuarios_activos':
+      return this.calculateRelativeDifferencePercent(
+        row.usuarios_activos_actual,
+        row.usuarios_inicio_mes,
+      );
+
+    // Ventas nuevas y reactivaciones
+    case 'clientes_nuevos_ideal_mtd':
+      return this.calculateIdealMtdTarget(
+        row.meta_clientes_nuevos_mes,
+        row.track_date,
+      );
+
+    case 'diferencia_clientes_nuevos_ideal':
+      return this.calculateDifference(
+        row.clientes_nuevos_real_mtd,
+        this.calculateIdealMtdTarget(
+          row.meta_clientes_nuevos_mes,
+          row.track_date,
+        ),
       );
 
     case 'avance_clientes_nuevos':
@@ -565,6 +786,74 @@ private getTrackSortValue(
         ),
       );
 
+    case 'reactivaciones_ideal_mtd':
+      return this.calculateIdealMtdTarget(
+        row.meta_reactivaciones_mes,
+        row.track_date,
+      );
+
+    case 'diferencia_reactivaciones_ideal':
+      return this.calculateDifference(
+        this.calculateIdealMtdTarget(
+          row.meta_reactivaciones_mes,
+          row.track_date,
+        ),
+        row.reactivaciones_real_mtd,
+      );
+
+    case 'avance_reactivaciones':
+      return this.calculateProgressPercent(
+        row.reactivaciones_real_mtd,
+        row.meta_reactivaciones_mes,
+      );
+
+    // Bajas & churn
+    case 'bajas_ideal_mtd':
+      return this.calculateIdealMtdTarget(
+        row.meta_bajas_mes,
+        row.track_date,
+      );
+
+    case 'diferencia_bajas_ideal':
+      return this.calculateDifference(
+        row.bajas_reales_mtd,
+        this.calculateIdealMtdTarget(row.meta_bajas_mes, row.track_date),
+      );
+
+    case 'meta_churn_mes':
+      return this.calculateChurnPercent(
+        row.meta_bajas_mes,
+        row.proyeccion_usuarios_cierre_mes,
+      );
+
+    case 'churn_ideal_mtd':
+      return this.calculateChurnPercent(
+        this.calculateIdealMtdTarget(row.meta_bajas_mes, row.track_date),
+        row.usuarios_inicio_mes,
+      );
+
+    case 'churn_real_mtd':
+      return this.calculateChurnPercent(
+        row.bajas_reales_mtd,
+        row.usuarios_inicio_mes,
+      );
+
+    case 'diferencia_churn_ideal':
+      return this.calculateDifference(
+        this.calculateChurnPercent(row.bajas_reales_mtd, row.usuarios_inicio_mes),
+        this.calculateChurnPercent(
+          this.calculateIdealMtdTarget(row.meta_bajas_mes, row.track_date),
+          row.usuarios_inicio_mes,
+        ),
+      );
+
+    // Domiciliados
+    case 'domiciliados_ideal_mtd':
+      return this.calculateIdealMtdTarget(
+        row.meta_nuevos_domiciliados_mes,
+        row.track_date,
+      );
+
     case 'avance_domiciliados':
       return this.calculateProgressPercent(
         row.nuevos_domiciliados_real_mtd,
@@ -577,6 +866,15 @@ private getTrackSortValue(
         row.meta_nuevos_domiciliados_mes,
       );
 
+    case 'diferencia_domiciliados_ideal':
+      return this.calculateDifference(
+        row.nuevos_domiciliados_real_mtd,
+        this.calculateIdealMtdTarget(
+          row.meta_nuevos_domiciliados_mes,
+          row.track_date,
+        ),
+      );
+
     case 'meta_domiciliados_dia':
       return this.calculateRemainingToIdealTarget(
         row.nuevos_domiciliados_real_mtd,
@@ -586,6 +884,72 @@ private getTrackSortValue(
         ),
       );
 
+    // Ingresos
+    case 'ingreso_ideal_cierre_mtd':
+      return this.calculateIdealMtdTarget(row.meta_faycgo_mes, row.track_date);
+
+    case 'avance_ingreso':
+      return this.calculateProgressPercent(
+        row.ingreso_real_mtd,
+        row.meta_faycgo_mes,
+      );
+
+    case 'avance_ingreso_ideal':
+      return this.calculateProgressPercent(
+        row.ingreso_real_mtd,
+        this.calculateIdealMtdTarget(row.meta_faycgo_mes, row.track_date),
+      );
+
+    case 'diferencia_ingreso':
+      return this.calculateDifference(
+        row.ingreso_real_mtd,
+        row.meta_faycgo_mes,
+      );
+
+    case 'diferencia_ingreso_ideal':
+      return this.calculateDifference(
+        row.ingreso_real_mtd,
+        this.calculateIdealMtdTarget(row.meta_faycgo_mes, row.track_date),
+      );
+
+    case 'meta_ingreso_dia':
+      return this.calculateRemainingToIdealTarget(
+        row.ingreso_real_mtd,
+        this.calculateIdealMtdTarget(row.meta_faycgo_mes, row.track_date),
+      );
+
+    // ARPU
+    case 'arpu_actual':
+      return this.calculateArpuActual(
+        row.ingreso_real_mtd,
+        row.usuarios_activos_actual,
+      );
+
+    case 'arpu_teorico':
+      return this.calculateArpuActual(
+        row.meta_faycgo_mes,
+        row.proyeccion_usuarios_cierre_mes,
+      );
+
+    case 'diferencia_arpu':
+      return this.calculateDifference(
+        this.calculateArpuActual(
+          row.ingreso_real_mtd,
+          row.usuarios_activos_actual,
+        ),
+        row.meta_arpu_mes,
+      );
+
+    case 'avance_arpu':
+      return this.calculateProgressPercent(
+        this.calculateArpuActual(
+          row.ingreso_real_mtd,
+          row.usuarios_activos_actual,
+        ),
+        row.meta_arpu_mes,
+      );
+
+    // Tienda
     case 'avance_tienda':
       return this.calculateProgressPercent(
         row.venta_tienda_real_mtd,
@@ -605,44 +969,89 @@ private getTrackSortValue(
       );
 
     default:
-      return Number(row[key] ?? 0);
+      return Number(row[key as keyof TrackDailyMartRow] ?? 0);
   }
 }
 
 private getTrackSortColumnLabel(key: TrackSortKey): string {
   const labels: Record<TrackSortKey, string> = {
     sucursal_canon: 'Club',
-    usuarios_inicio_mes: 'Socios inicio mes',
-    usuarios_activos_actual: 'Socios activos',
-    proyeccion_usuarios_cierre_mes: 'Proyección cierre',
+
+    // Ocupación
     m2_sin_circulaciones: 'M² sin circulaciones',
-    meta_faycgo_mes: 'Meta FAYCGO',
-    ingreso_real_base_mtd: 'Ingreso base',
-    ingreso_real_agregadora_mtd: 'Ingreso agregadoras',
-    ingreso_real_mtd: 'Ingreso real',
-    avance_ingreso: 'Avance ingreso',
-    diferencia_ingreso: 'Dif. ingreso VS meta',
-    meta_ingreso_dia: 'Meta del día',
-    meta_arpu_mes: 'Meta ARPU',
-    arpu_actual: 'ARPU actual',
+    usuarios_inicio_mes: 'Usuarios inicio mes',
+    proyeccion_usuarios_cierre_mes: 'Proyección cierre',
+    usuarios_activos_actual: 'Usuarios activos',
+    ocupacion_inicio_mes: 'Ocupación inicio mes',
+    meta_ocupacion_px_m2: 'Meta ocupación 2 px m²',
+    meta_ocupacion_mes: 'Meta ocupación',
+    ocupacion_actual: 'Ocupación actual',
+    diferencia_ocupacion_inicio: 'Dif. inicio mes vs día actual',
+    avance_ocupacion: '% alcance meta ocupación',
+
+    // Crecimiento
+    diferencia_inicio_mes: 'DIF inicio mes',
+    diferencia_meta_crecimiento: 'Dif. meta vs real',
+    avance_meta_crecimiento: '% alcance meta crecimiento',
+    alcance_usuarios_activos: 'Alcance usuarios activos',
+
+    // Ventas nuevas y reactivaciones
     meta_clientes_nuevos_mes: 'Meta socios nuevos',
-    clientes_nuevos_real_mtd: 'Socios nuevos',
-    avance_clientes_nuevos: 'Avance socios nuevos',
-    diferencia_clientes_nuevos: 'Dif. socios nuevos VS meta',
-    meta_clientes_nuevos_dia: 'Meta del día socios',
+    clientes_nuevos_ideal_mtd: 'Alcance ideal socios nuevos',
+    clientes_nuevos_real_mtd: 'Socios nuevos reales',
+    diferencia_clientes_nuevos_ideal: 'Diferencia ideal vs real',
+    avance_clientes_nuevos: '% avance socios nuevos',
+    diferencia_clientes_nuevos: 'Dif. socios nuevos vs meta',
+    meta_clientes_nuevos_dia: 'Meta del día socios nuevos',
     meta_reactivaciones_mes: 'Meta reactivaciones',
+    reactivaciones_ideal_mtd: 'Reactivaciones ideales',
     reactivaciones_real_mtd: 'Reactivaciones reales',
+    diferencia_reactivaciones_ideal: 'Meta del día reactivaciones',
+    avance_reactivaciones: '% avance reactivaciones',
+
+    // Bajas & churn
     meta_bajas_mes: 'Meta bajas',
+    bajas_ideal_mtd: 'Bajas ideales',
     bajas_reales_mtd: 'Bajas reales',
-    meta_nuevos_domiciliados_mes: 'Meta nuevos domiciliados',
+    diferencia_bajas_ideal: 'Dif. ideal vs real',
+    meta_churn_mes: 'Meta churn',
+    churn_ideal_mtd: 'Churn ideal',
+    churn_real_mtd: 'Churn real',
+    diferencia_churn_ideal: 'Dif. churn ideal vs real',
+
+    // Domiciliados
+    meta_nuevos_domiciliados_mes: 'Meta domiciliados',
+    domiciliados_ideal_mtd: 'Domiciliados ideales',
     nuevos_domiciliados_real_mtd: 'Nuevos domiciliados',
     avance_domiciliados: 'Avance domiciliados',
-    diferencia_domiciliados: 'Dif. domiciliados VS meta',
-    meta_domiciliados_dia: 'Meta del día domic.',
+    diferencia_domiciliados: 'Dif. domiciliados vs meta',
+    diferencia_domiciliados_ideal: 'Dif. ideal domiciliados',
+    meta_domiciliados_dia: 'Meta del día domiciliados',
+
+    // Ingresos
+    meta_faycgo_mes: 'Meta FAYCGO',
+    ingreso_ideal_cierre_mtd: 'Ingreso ideal al cierre',
+    ingreso_real_base_mtd: 'Ingreso base',
+    ingreso_real_agregadora_mtd: 'Ingreso agregadoras',
+    ingreso_real_mtd: 'Ingreso real total',
+    avance_ingreso: 'Avance ingreso mensual',
+    avance_ingreso_ideal: '% alcance meta al día',
+    diferencia_ingreso: 'Dif. ingreso vs meta mensual',
+    diferencia_ingreso_ideal: 'Dif. ingreso vs meta al día',
+    meta_ingreso_dia: 'Meta del día ingreso',
+
+    // ARPU
+    meta_arpu_mes: 'Meta ARPU',
+    arpu_actual: 'ARPU actual',
+    arpu_teorico: 'ARPU teórico',
+    diferencia_arpu: 'Dif. ARPU',
+    avance_arpu: '% alcance ARPU',
+
+    // Tienda
     meta_venta_tienda_mes: 'Meta tienda',
     venta_tienda_real_mtd: 'Venta tienda',
     avance_tienda: 'Avance tienda',
-    diferencia_tienda: 'Dif. tienda VS meta',
+    diferencia_tienda: 'Dif. tienda vs meta',
     meta_tienda_dia: 'Meta del día tienda',
   };
 
@@ -858,172 +1267,410 @@ private buildTargetMonthFromTrackDate(): string {
   }
 
   private buildViewRow(row: TrackDailyMartRow): TrackViewRow {
-    const ingresoProgress = this.calculateProgressPercent(
-      row.ingreso_real_mtd,
-      row.meta_faycgo_mes,
-    );
-    const clientesProgress = this.calculateProgressPercent(
-      row.clientes_nuevos_real_mtd,
-      row.meta_clientes_nuevos_mes,
-    );
-    const domiciliadosProgress = this.calculateProgressPercent(
-      row.nuevos_domiciliados_real_mtd,
+  const ingresoProgress = this.calculateProgressPercent(
+    row.ingreso_real_mtd,
+    row.meta_faycgo_mes,
+  );
+
+  const clientesProgress = this.calculateProgressPercent(
+    row.clientes_nuevos_real_mtd,
+    row.meta_clientes_nuevos_mes,
+  );
+
+  const reactivacionesProgress = this.calculateProgressPercent(
+    row.reactivaciones_real_mtd,
+    row.meta_reactivaciones_mes,
+  );
+
+  const domiciliadosProgress = this.calculateProgressPercent(
+    row.nuevos_domiciliados_real_mtd,
+    row.meta_nuevos_domiciliados_mes,
+  );
+
+  const avanceTienda = this.calculateProgressPercent(
+    row.venta_tienda_real_mtd,
+    row.meta_venta_tienda_mes,
+  );
+
+  const arpuActual = this.calculateArpuActual(
+    row.ingreso_real_mtd,
+    row.usuarios_activos_actual,
+  );
+
+  const avanceArpu = this.calculateProgressPercent(
+    arpuActual,
+    row.meta_arpu_mes,
+  );
+
+  const arpuTeorico = this.calculateArpuActual(
+    row.meta_faycgo_mes,
+    row.proyeccion_usuarios_cierre_mes,
+  );
+
+  const diferenciaArpu = this.calculateDifference(
+    arpuActual,
+    row.meta_arpu_mes,
+  );
+
+  // Ocupación
+  const ocupacionInicioMes = this.calculateOccupancyRatio(
+    row.usuarios_inicio_mes,
+    row.m2_sin_circulaciones,
+  );
+
+  const metaOcupacionMes = this.calculateOccupancyRatio(
+    row.proyeccion_usuarios_cierre_mes,
+    row.m2_sin_circulaciones,
+  );
+
+  const ocupacionActual = this.calculateOccupancyRatio(
+    row.usuarios_activos_actual,
+    row.m2_sin_circulaciones,
+  );
+
+  const diferenciaOcupacionInicio = this.calculateDifference(
+    ocupacionActual,
+    ocupacionInicioMes,
+  );
+
+  const avanceOcupacion = this.calculateProgressPercent(
+    row.usuarios_activos_actual,
+    row.proyeccion_usuarios_cierre_mes,
+  );
+
+  // Crecimiento
+  const diferenciaInicioMes = this.calculateDifference(
+    row.usuarios_activos_actual,
+    row.usuarios_inicio_mes,
+  );
+
+  const diferenciaMetaCrecimiento = this.calculateDifference(
+    row.usuarios_activos_actual,
+    row.proyeccion_usuarios_cierre_mes,
+  );
+
+  const avanceMetaCrecimiento = this.calculateRelativeDifferencePercent(
+    row.usuarios_activos_actual,
+    row.proyeccion_usuarios_cierre_mes,
+  );
+
+  const alcanceUsuariosActivos = this.calculateRelativeDifferencePercent(
+    row.usuarios_activos_actual,
+    row.usuarios_inicio_mes,
+  );
+
+  // Ventas nuevas y reactivaciones
+  const clientesNuevosIdealMtd = this.calculateIdealMtdTarget(
+    row.meta_clientes_nuevos_mes,
+    row.track_date,
+  );
+
+  const diferenciaClientesNuevosIdeal = this.calculateDifference(
+    row.clientes_nuevos_real_mtd,
+    clientesNuevosIdealMtd,
+  );
+
+  const metaClientesNuevosDia = this.calculateIdealMtdTarget(
+    row.meta_clientes_nuevos_mes,
+    row.track_date,
+  );
+
+  const metaClientesNuevosPendienteDia = this.calculateRemainingToIdealTarget(
+    row.clientes_nuevos_real_mtd,
+    metaClientesNuevosDia,
+  );
+
+  const reactivacionesIdealMtd = this.calculateIdealMtdTarget(
+    row.meta_reactivaciones_mes,
+    row.track_date,
+  );
+
+  const diferenciaReactivacionesIdeal = this.calculateDifference(
+    reactivacionesIdealMtd,
+    row.reactivaciones_real_mtd,
+  );
+
+  // Bajas & churn
+  const bajasIdealMtd = this.calculateIdealMtdTarget(
+    row.meta_bajas_mes,
+    row.track_date,
+  );
+
+  const diferenciaBajasIdeal = this.calculateDifference(
+    row.bajas_reales_mtd,
+    bajasIdealMtd,
+  );
+
+  const metaChurn = this.calculateChurnPercent(
+    row.meta_bajas_mes,
+    row.proyeccion_usuarios_cierre_mes,
+  );
+
+  const churnIdeal = this.calculateChurnPercent(
+    bajasIdealMtd,
+    row.usuarios_inicio_mes,
+  );
+
+  const churnReal = this.calculateChurnPercent(
+    row.bajas_reales_mtd,
+    row.usuarios_inicio_mes,
+  );
+
+  const diferenciaChurnIdeal = this.calculateDifference(
+    churnReal,
+    churnIdeal,
+  );
+
+  // Domiciliados
+  const domiciliadosIdealMtd = this.calculateIdealMtdTarget(
+    row.meta_nuevos_domiciliados_mes,
+    row.track_date,
+  );
+
+  const diferenciaDomiciliados = this.calculateDifference(
+    row.nuevos_domiciliados_real_mtd,
+    row.meta_nuevos_domiciliados_mes,
+  );
+
+  const diferenciaDomiciliadosIdeal = this.calculateDifference(
+    row.nuevos_domiciliados_real_mtd,
+    domiciliadosIdealMtd,
+  );
+
+  const metaDomiciliadosDia = this.calculateIdealMtdTarget(
+    row.meta_nuevos_domiciliados_mes,
+    row.track_date,
+  );
+
+  const metaDomiciliadosPendienteDia = this.calculateRemainingToIdealTarget(
+    row.nuevos_domiciliados_real_mtd,
+    metaDomiciliadosDia,
+  );
+
+  // Ingresos
+  const diferenciaIngreso = this.calculateDifference(
+    row.ingreso_real_mtd,
+    row.meta_faycgo_mes,
+  );
+
+  const ingresoIdealCierreMtd = this.calculateIdealMtdTarget(
+    row.meta_faycgo_mes,
+    row.track_date,
+  );
+
+  const avanceIngresoIdeal = this.calculateProgressPercent(
+    row.ingreso_real_mtd,
+    ingresoIdealCierreMtd,
+  );
+
+  const diferenciaIngresoIdeal = this.calculateDifference(
+    row.ingreso_real_mtd,
+    ingresoIdealCierreMtd,
+  );
+
+  const metaIngresoPendienteDia = this.calculateRemainingToIdealTarget(
+    row.ingreso_real_mtd,
+    ingresoIdealCierreMtd,
+  );
+
+  // Tienda
+  const diferenciaTienda = this.calculateDifference(
+    row.venta_tienda_real_mtd,
+    row.meta_venta_tienda_mes,
+  );
+
+  const metaTiendaDia = this.calculateIdealMtdTarget(
+    row.meta_venta_tienda_mes,
+    row.track_date,
+  );
+
+  const metaTiendaPendienteDia = this.calculateRemainingToIdealTarget(
+    row.venta_tienda_real_mtd,
+    metaTiendaDia,
+  );
+
+  return {
+    rowKind: this.getRowKindForSucursal(row.sucursal_canon),
+    displayLabel: this.getDisplayLabelForRow(row.sucursal_canon),
+
+    sucursalCanon: row.sucursal_canon,
+
+    // Ocupación
+    m2SinCirculaciones: this.formatDecimal(row.m2_sin_circulaciones, 1),
+    ocupacionInicioMes: this.formatDecimal(ocupacionInicioMes, 1),
+    metaOcupacionPxM2: this.formatDecimal(2, 1),
+    metaOcupacionMes: this.formatDecimal(metaOcupacionMes, 1),
+    ocupacionActual: this.formatDecimal(ocupacionActual, 1),
+    diferenciaOcupacionInicioLabel: this.formatSignedDecimal(diferenciaOcupacionInicio, 1),
+    diferenciaOcupacionInicioTone: this.getDifferenceTone(diferenciaOcupacionInicio),
+    avanceOcupacionLabel: this.formatPercentWithDecimals(avanceOcupacion, 2),
+    avanceOcupacionTone: this.getProgressTone(avanceOcupacion),
+
+    // Crecimiento
+    usuariosInicioMes: this.formatInteger(row.usuarios_inicio_mes),
+    usuariosActivos: this.formatInteger(row.usuarios_activos_actual),
+    proyeccionUsuariosCierre: this.formatInteger(
+      row.proyeccion_usuarios_cierre_mes,
+    ),
+    diferenciaInicioMesLabel: this.formatSignedInteger(diferenciaInicioMes),
+    diferenciaInicioMesTone: this.getDifferenceTone(diferenciaInicioMes),
+    diferenciaMetaCrecimientoLabel: this.formatSignedInteger(
+      diferenciaMetaCrecimiento,
+    ),
+    diferenciaMetaCrecimientoTone: this.getDifferenceTone(
+      diferenciaMetaCrecimiento,
+    ),
+    avanceMetaCrecimientoLabel: this.formatPercentWithDecimals(
+      avanceMetaCrecimiento,
+      2,
+    ),
+    avanceMetaCrecimientoTone: this.getDifferenceTone(avanceMetaCrecimiento),
+    alcanceUsuariosActivosLabel: this.formatPercentWithDecimals(
+      alcanceUsuariosActivos,
+      2,
+    ),
+    alcanceUsuariosActivosTone: this.getDifferenceTone(alcanceUsuariosActivos),
+
+    // Ventas nuevas y reactivaciones
+    metaClientesNuevos: this.formatInteger(row.meta_clientes_nuevos_mes),
+    clientesNuevosIdealMtd: this.formatInteger(
+      Math.round(clientesNuevosIdealMtd),
+    ),
+    clientesNuevos: this.formatInteger(row.clientes_nuevos_real_mtd),
+    diferenciaClientesNuevosIdealLabel: this.formatSignedInteger(
+      diferenciaClientesNuevosIdeal,
+    ),
+    diferenciaClientesNuevosIdealTone: this.getDifferenceTone(
+      diferenciaClientesNuevosIdeal,
+    ),
+    avanceClientesNuevosLabel: this.formatPercentWithDecimals(
+      clientesProgress,
+      2,
+    ),
+    avanceClientesNuevosTone: this.getProgressTone(clientesProgress),
+    diferenciaClientesNuevosLabel: this.formatSignedInteger(
+      this.calculateDifference(
+        row.clientes_nuevos_real_mtd,
+        row.meta_clientes_nuevos_mes,
+      ),
+    ),
+    diferenciaClientesNuevosTone: this.getDifferenceTone(
+      this.calculateDifference(
+        row.clientes_nuevos_real_mtd,
+        row.meta_clientes_nuevos_mes,
+      ),
+    ),
+    metaClientesNuevosDia: this.formatInteger(Math.round(metaClientesNuevosDia)),
+    diferenciaClientesNuevosDiaLabel: this.formatInteger(
+      Math.ceil(metaClientesNuevosPendienteDia),
+    ),
+    diferenciaClientesNuevosDiaTone: this.getRemainingTargetTone(
+      metaClientesNuevosPendienteDia,
+    ),
+
+    metaReactivaciones: this.formatInteger(row.meta_reactivaciones_mes),
+    reactivacionesIdealMtd: this.formatInteger(
+      Math.round(reactivacionesIdealMtd),
+    ),
+    reactivacionesReales: this.formatInteger(row.reactivaciones_real_mtd),
+    diferenciaReactivacionesIdealLabel: this.formatSignedInteger(
+      diferenciaReactivacionesIdeal,
+    ),
+    diferenciaReactivacionesIdealTone: this.getRemainingTargetTone(
+      diferenciaReactivacionesIdeal,
+    ),
+    avanceReactivacionesLabel: this.formatPercentWithDecimals(
+      reactivacionesProgress,
+      2,
+    ),
+    avanceReactivacionesTone: this.getProgressTone(reactivacionesProgress),
+
+    // Bajas & churn
+    metaBajas: this.formatInteger(row.meta_bajas_mes),
+    bajasIdealMtd: this.formatInteger(Math.round(bajasIdealMtd)),
+    bajasReales: this.formatInteger(row.bajas_reales_mtd),
+    diferenciaBajasIdealLabel: this.formatSignedInteger(diferenciaBajasIdeal),
+    diferenciaBajasIdealTone: this.getInverseDifferenceTone(diferenciaBajasIdeal),
+    metaChurnLabel: this.formatPercentWithDecimals(metaChurn, 2),
+    churnIdealLabel: this.formatPercentWithDecimals(churnIdeal, 2),
+    churnRealLabel: this.formatPercentWithDecimals(churnReal, 2),
+    diferenciaChurnIdealLabel: this.formatSignedPercentWithDecimals(
+      diferenciaChurnIdeal,
+      2,
+    ),
+    diferenciaChurnIdealTone: this.getInverseDifferenceTone(
+      diferenciaChurnIdeal,
+    ),
+
+    // Domiciliados
+    metaNuevosDomiciliados: this.formatInteger(
       row.meta_nuevos_domiciliados_mes,
-    );
+    ),
+    domiciliadosIdealMtd: this.formatInteger(Math.round(domiciliadosIdealMtd)),
+    nuevosDomiciliados: this.formatInteger(row.nuevos_domiciliados_real_mtd),
+    avanceDomiciliadosLabel: this.formatPercentWithDecimals(
+      domiciliadosProgress,
+      2,
+    ),
+    avanceDomiciliadosTone: this.getProgressTone(domiciliadosProgress),
+    diferenciaDomiciliadosLabel: this.formatSignedInteger(
+      diferenciaDomiciliados,
+    ),
+    diferenciaDomiciliadosTone: this.getDifferenceTone(diferenciaDomiciliados),
+    metaDomiciliadosDia: this.formatInteger(Math.round(metaDomiciliadosDia)),
+    diferenciaDomiciliadosDiaLabel: this.formatInteger(
+      Math.ceil(metaDomiciliadosPendienteDia),
+    ),
+    diferenciaDomiciliadosDiaTone: this.getRemainingTargetTone(
+      metaDomiciliadosPendienteDia,
+    ),
+    diferenciaDomiciliadosIdealLabel: this.formatSignedInteger(
+      diferenciaDomiciliadosIdeal,
+    ),
+    diferenciaDomiciliadosIdealTone: this.getDifferenceTone(
+      diferenciaDomiciliadosIdeal,
+    ),
 
-    const diferenciaIngreso = this.calculateDifference(
-      row.ingreso_real_mtd,
-      row.meta_faycgo_mes,
-    );
+    // Ingresos
+    metaFaycgo: this.formatCurrency(row.meta_faycgo_mes),
+    ingresoIdealCierre: this.formatCurrency(ingresoIdealCierreMtd),
+    ingresoBase: this.formatCurrency(row.ingreso_real_base_mtd),
+    ingresoAgregadoras: this.formatCurrency(row.ingreso_real_agregadora_mtd),
+    ingresoReal: this.formatCurrency(row.ingreso_real_mtd),
+    avanceIngresoLabel: this.formatPercentWithDecimals(ingresoProgress, 2),
+    avanceIngresoTone: this.getProgressTone(ingresoProgress),
+    avanceIngresoIdealLabel: this.formatPercentWithDecimals(avanceIngresoIdeal, 2),
+    avanceIngresoIdealTone: this.getProgressTone(avanceIngresoIdeal),
+    diferenciaIngresoLabel: this.formatSignedCurrency(diferenciaIngreso),
+    diferenciaIngresoTone: this.getDifferenceTone(diferenciaIngreso),
+    diferenciaIngresoIdealLabel: this.formatSignedCurrency(diferenciaIngresoIdeal),
+    diferenciaIngresoIdealTone: this.getDifferenceTone(diferenciaIngresoIdeal),
+    metaIngresoDia: this.formatCurrency(metaIngresoPendienteDia),
+    diferenciaIngresoDiaLabel: this.formatCurrency(metaIngresoPendienteDia),
+    diferenciaIngresoDiaTone: this.getRemainingTargetTone(
+      metaIngresoPendienteDia,
+    ),
 
-    const diferenciaClientesNuevos = this.calculateDifference(
-      row.clientes_nuevos_real_mtd,
-      row.meta_clientes_nuevos_mes,
-    );
+    // ARPU
+    metaArpu: this.formatCurrency(row.meta_arpu_mes),
+    arpuActual: this.formatCurrency(arpuActual),
+    arpuTeorico: this.formatCurrency(arpuTeorico),
+    diferenciaArpuLabel: this.formatSignedCurrency(diferenciaArpu),
+    diferenciaArpuTone: this.getDifferenceTone(diferenciaArpu),
+    avanceArpuLabel: this.formatPercentWithDecimals(avanceArpu, 2),
+    avanceArpuTone: this.getProgressTone(avanceArpu),
 
-    const diferenciaDomiciliados = this.calculateDifference(
-      row.nuevos_domiciliados_real_mtd,
-      row.meta_nuevos_domiciliados_mes,
-    );
-
-    const metaIngresoDia = this.calculateIdealMtdTarget(
-      row.meta_faycgo_mes,
-      row.track_date,
-    );
-
-    const metaIngresoPendienteDia = this.calculateRemainingToIdealTarget(
-      row.ingreso_real_mtd,
-      metaIngresoDia,
-    );
-
-    const metaClientesNuevosDia = this.calculateIdealMtdTarget(
-      row.meta_clientes_nuevos_mes,
-      row.track_date,
-    );
-
-    const metaClientesNuevosPendienteDia = this.calculateRemainingToIdealTarget(
-      row.clientes_nuevos_real_mtd,
-      metaClientesNuevosDia,
-    );
-
-    const metaDomiciliadosDia = this.calculateIdealMtdTarget(
-      row.meta_nuevos_domiciliados_mes,
-      row.track_date,
-    );
-
-    const metaDomiciliadosPendienteDia = this.calculateRemainingToIdealTarget(
-      row.nuevos_domiciliados_real_mtd,
-      metaDomiciliadosDia,
-    );
-    const avanceTienda = this.calculateProgressPercent(
-      row.venta_tienda_real_mtd,
-      row.meta_venta_tienda_mes,
-    );
-
-    const diferenciaTienda = this.calculateDifference(
-      row.venta_tienda_real_mtd,
-      row.meta_venta_tienda_mes,
-    );
-
-    const metaTiendaDia = this.calculateIdealMtdTarget(
-      row.meta_venta_tienda_mes,
-      row.track_date,
-    );
-
-    const metaTiendaPendienteDia = this.calculateRemainingToIdealTarget(
-      row.venta_tienda_real_mtd,
-      metaTiendaDia,
-    );
-
-
-    const arpuActual = this.calculateArpuActual(
-      row.ingreso_real_mtd,
-      row.usuarios_activos_actual,
-    );
-
-    return {
-      rowKind: this.getRowKindForSucursal(row.sucursal_canon),
-      displayLabel: this.getDisplayLabelForRow(row.sucursal_canon),
-
-      sucursalCanon: row.sucursal_canon,
-      usuariosInicioMes: this.formatInteger(row.usuarios_inicio_mes),
-      usuariosActivos: this.formatInteger(row.usuarios_activos_actual),
-      proyeccionUsuariosCierre: this.formatInteger(
-        row.proyeccion_usuarios_cierre_mes,
-      ),
-      m2SinCirculaciones: this.formatDecimal(row.m2_sin_circulaciones, 1),
-
-      metaFaycgo: this.formatCurrency(row.meta_faycgo_mes),
-      ingresoBase: this.formatCurrency(row.ingreso_real_base_mtd),
-      ingresoAgregadoras: this.formatCurrency(row.ingreso_real_agregadora_mtd),
-      ingresoReal: this.formatCurrency(row.ingreso_real_mtd),
-      avanceIngresoLabel: this.formatPercent(ingresoProgress),
-      avanceIngresoTone: this.getProgressTone(ingresoProgress),
-      metaIngresoDia: this.formatCurrency(metaIngresoDia),
-      diferenciaIngresoDiaLabel: this.formatCurrency(metaIngresoPendienteDia),
-      diferenciaIngresoDiaTone: this.getRemainingTargetTone(
-        metaIngresoPendienteDia,
-      ),
-
-      metaClientesNuevos: this.formatInteger(row.meta_clientes_nuevos_mes),
-      clientesNuevos: this.formatInteger(row.clientes_nuevos_real_mtd),
-      avanceClientesNuevosLabel: this.formatPercent(clientesProgress),
-      avanceClientesNuevosTone: this.getProgressTone(clientesProgress),
-      diferenciaClientesNuevosLabel: this.formatSignedInteger(
-        diferenciaClientesNuevos,
-      ),
-      diferenciaClientesNuevosTone: this.getDifferenceTone(
-        diferenciaClientesNuevos,
-      ),
-      metaClientesNuevosDia: this.formatInteger(Math.round(metaClientesNuevosDia)),
-      diferenciaClientesNuevosDiaLabel: this.formatInteger(
-        Math.ceil(metaClientesNuevosPendienteDia),
-      ),
-      diferenciaClientesNuevosDiaTone: this.getRemainingTargetTone(
-        metaClientesNuevosPendienteDia,
-      ),
-
-      diferenciaIngresoLabel: this.formatSignedCurrency(diferenciaIngreso),
-      diferenciaIngresoTone: this.getDifferenceTone(diferenciaIngreso),
-
-      metaReactivaciones: this.formatInteger(row.meta_reactivaciones_mes),
-      reactivacionesReales: this.formatInteger(row.reactivaciones_real_mtd),
-
-      metaBajas: this.formatInteger(row.meta_bajas_mes),
-      bajasReales: this.formatInteger(row.bajas_reales_mtd),
-
-      metaNuevosDomiciliados: this.formatInteger(
-        row.meta_nuevos_domiciliados_mes,
-      ),
-      nuevosDomiciliados: this.formatInteger(row.nuevos_domiciliados_real_mtd),
-      avanceDomiciliadosLabel: this.formatPercent(domiciliadosProgress),
-      avanceDomiciliadosTone: this.getProgressTone(domiciliadosProgress),
-      diferenciaDomiciliadosLabel: this.formatSignedInteger(
-        diferenciaDomiciliados,
-      ),
-      diferenciaDomiciliadosTone: this.getDifferenceTone(
-        diferenciaDomiciliados,
-      ),
-      metaDomiciliadosDia: this.formatInteger(Math.round(metaDomiciliadosDia)),
-      diferenciaDomiciliadosDiaLabel: this.formatInteger(
-        Math.ceil(metaDomiciliadosPendienteDia),
-      ),
-      diferenciaDomiciliadosDiaTone: this.getRemainingTargetTone(
-        metaDomiciliadosPendienteDia,
-      ),
-      metaVentaTienda: this.formatCurrency(row.meta_venta_tienda_mes),
-      ventaTiendaReal: this.formatCurrency(row.venta_tienda_real_mtd),
-      avanceTiendaLabel: this.formatPercent(avanceTienda),
-      avanceTiendaTone: this.getProgressTone(avanceTienda),
-      diferenciaTiendaLabel: this.formatSignedCurrency(diferenciaTienda),
-      diferenciaTiendaTone: this.getDifferenceTone(diferenciaTienda),
-      metaTiendaDiaLabel: this.formatCurrency(metaTiendaPendienteDia),
-      metaTiendaDiaTone: this.getRemainingTargetTone(metaTiendaPendienteDia),
-
-      metaArpu: this.formatCurrency(row.meta_arpu_mes),
-      arpuActual: this.formatCurrency(arpuActual),
-    };
-  }
+    // Tienda
+    metaVentaTienda: this.formatCurrency(row.meta_venta_tienda_mes),
+    ventaTiendaReal: this.formatCurrency(row.venta_tienda_real_mtd),
+    avanceTiendaLabel: this.formatPercentWithDecimals(avanceTienda, 2),
+    avanceTiendaTone: this.getProgressTone(avanceTienda),
+    diferenciaTiendaLabel: this.formatSignedCurrency(diferenciaTienda),
+    diferenciaTiendaTone: this.getDifferenceTone(diferenciaTienda),
+    metaTiendaDiaLabel: this.formatCurrency(metaTiendaPendienteDia),
+    metaTiendaDiaTone: this.getRemainingTargetTone(metaTiendaPendienteDia),
+  };
+}
 
   private buildSummaryCards(rows: TrackDailyMartRow[]): TrackSummaryCard[] {
     const totalIngresoReal = this.sumNumber(rows, 'ingreso_real_mtd');
@@ -1574,6 +2221,55 @@ private getDaysInMonth(year: number, month: number): number {
     );
   }
 
+getTrackMonthShortLabel(): string {
+  const parsed = this.parseIsoDateParts(this.trackDate);
+
+  if (!parsed) {
+    return 'mes';
+  }
+
+  const monthLabels = [
+    'enero',
+    'febrero',
+    'marzo',
+    'abril',
+    'mayo',
+    'junio',
+    'julio',
+    'agosto',
+    'septiembre',
+    'octubre',
+    'noviembre',
+    'diciembre',
+  ];
+
+  return monthLabels[parsed.month - 1] || 'mes';
+}
+
+  getTrackDayMonthShortLabel(): string {
+    const parsed = this.parseIsoDateParts(this.trackDate);
+
+    if (!parsed) {
+      return 'día actual';
+    }
+
+    return `${parsed.day} ${this.getTrackMonthShortLabel()}`;
+  }
+
+  private calculateOccupancyRatio(
+    usersValue: number | null | undefined,
+    m2Value: number | null | undefined,
+  ): number {
+    const users = Number(usersValue ?? 0);
+    const m2 = Number(m2Value ?? 0);
+
+    if (!Number.isFinite(users) || !Number.isFinite(m2) || m2 <= 0) {
+      return 0;
+    }
+
+    return users / m2;
+  }
+
   private calculateDifference(
   realValue: number | null | undefined,
   targetValue: number | null | undefined,
@@ -1582,6 +2278,64 @@ private getDaysInMonth(year: number, month: number): number {
   const target = targetValue ?? 0;
 
   return real - target;
+}
+
+private calculateRelativeDifferencePercent(
+  realValue: number | null | undefined,
+  baseValue: number | null | undefined,
+): number {
+  const real = Number(realValue ?? 0);
+  const base = Number(baseValue ?? 0);
+
+  if (!Number.isFinite(real) || !Number.isFinite(base) || base <= 0) {
+    return 0;
+  }
+
+  return ((real - base) / base) * 100;
+}
+
+private calculateChurnPercent(
+  bajasValue: number | null | undefined,
+  usersValue: number | null | undefined,
+): number {
+  const bajas = Number(bajasValue ?? 0);
+  const users = Number(usersValue ?? 0);
+
+  if (!Number.isFinite(bajas) || !Number.isFinite(users) || users <= 0) {
+    return 0;
+  }
+
+  return (bajas / users) * 100;
+}
+
+private formatPercentWithDecimals(
+  value: number | null | undefined,
+  decimals: number,
+): string {
+  return (
+    new Intl.NumberFormat('es-MX', {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    }).format(value ?? 0) + '%'
+  );
+}
+
+private formatSignedPercentWithDecimals(
+  value: number | null | undefined,
+  decimals: number,
+): string {
+  const normalizedValue = value ?? 0;
+  const formatted = this.formatPercentWithDecimals(Math.abs(normalizedValue), decimals);
+
+  if (normalizedValue > 0) {
+    return `+${formatted}`;
+  }
+
+  if (normalizedValue < 0) {
+    return `-${formatted}`;
+  }
+
+  return formatted;
 }
 
 private getDifferenceTone(value: number): ProgressTone {
@@ -1594,6 +2348,33 @@ private getDifferenceTone(value: number): ProgressTone {
   }
 
   return 'neutral';
+}
+
+private getInverseDifferenceTone(value: number): ProgressTone {
+  if (value < 0) {
+    return 'success';
+  }
+
+  if (value > 0) {
+    return 'danger';
+  }
+
+  return 'neutral';
+}
+
+private formatSignedDecimal(value: number | null | undefined, decimals = 1): string {
+  const normalizedValue = Number(value ?? 0);
+  const formatted = this.formatDecimal(Math.abs(normalizedValue), decimals);
+
+  if (normalizedValue > 0) {
+    return `+${formatted}`;
+  }
+
+  if (normalizedValue < 0) {
+    return `-${formatted}`;
+  }
+
+  return formatted;
 }
 
 private formatSignedInteger(value: number | null | undefined): string {
@@ -1695,23 +2476,60 @@ shouldStretchTrackTableToPanel(): boolean {
 getVisibleTrackTableColumnCount(): number {
   let totalColumns = 1; // Club siempre visible
 
-  if (this.isTrackColumnGroupVisible('ocupacion')) {
-    totalColumns += 4;
+  if (this.isSimplifiedTrackView()) {
+    if (this.isTrackColumnGroupVisible('ocupacion')) {
+      totalColumns += 5;
+    }
+
+    if (this.isTrackColumnGroupVisible('crecimiento')) {
+      totalColumns += 9;
+    }
+
+    if (this.isTrackColumnGroupVisible('domiciliados')) {
+      totalColumns += 5;
+    }
+
+    if (this.isTrackColumnGroupVisible('ingresos')) {
+      totalColumns += 9;
+    }
+
+    if (this.isTrackColumnGroupVisible('tienda')) {
+      totalColumns += 5;
+    }
+
+    return totalColumns;
   }
 
-  if (this.isTrackColumnGroupVisible('ingresos')) {
-    totalColumns += 6;
+  if (this.isTrackColumnGroupVisible('ocupacion')) {
+    totalColumns += 7;
   }
 
   if (this.isTrackColumnGroupVisible('crecimiento')) {
+    totalColumns += 7;
+  }
+
+  if (this.isTrackColumnGroupVisible('ingresos')) {
+    totalColumns += 8;
+  }
+
+  if (this.isTrackColumnGroupVisible('ventas_reactivaciones')) {
+    totalColumns += 10;
+  }
+
+  if (this.isTrackColumnGroupVisible('bajas_churn')) {
     totalColumns += 8;
   }
 
   if (this.isTrackColumnGroupVisible('domiciliados')) {
-    totalColumns += 4;
+    totalColumns += 3;
   }
-  if (this.isTrackColumnGroupVisible('tienda')) {
+
+  if (this.isTrackColumnGroupVisible('arpu')) {
     totalColumns += 5;
+  }
+
+  if (this.isTrackColumnGroupVisible('tienda')) {
+    totalColumns += 4;
   }
 
   return totalColumns;
