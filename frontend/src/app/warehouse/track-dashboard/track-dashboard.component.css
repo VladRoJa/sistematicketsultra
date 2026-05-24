@@ -1568,3 +1568,69 @@
   font-size: 1rem;
   line-height: 1;
 }
+
+/* ==========================================================================
+   Track view mode selector: Vista simplificada / Vista completa
+   ========================================================================== */
+
+.track-view-mode {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  justify-content: flex-end;
+  align-items: stretch;
+}
+
+.track-view-mode__button {
+  border: 1px solid rgba(229, 69, 37, 0.18);
+  border-radius: 16px;
+  background: var(--ultra-surface, #ffffff);
+  color: var(--ultra-gray-700, #344054);
+  padding: 0.65rem 0.9rem;
+  min-width: 190px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.05);
+  transition:
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background-color 0.16s ease,
+    box-shadow 0.16s ease,
+    color 0.16s ease;
+}
+
+.track-view-mode__button:hover {
+  border-color: rgba(229, 69, 37, 0.4);
+  transform: translateY(-1px);
+}
+
+.track-view-mode__button--active {
+  background: var(--ultra-orange, #e54525);
+  border-color: var(--ultra-orange, #e54525);
+  color: #ffffff;
+  box-shadow: 0 12px 24px rgba(229, 69, 37, 0.22);
+}
+
+.track-view-mode__label {
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.track-view-mode__description {
+  font-size: 0.7rem;
+  font-weight: 800;
+  opacity: 0.82;
+}
+
+@media (max-width: 700px) {
+  .track-view-mode {
+    width: 100%;
+  }
+
+  .track-view-mode__button {
+    width: 100%;
+  }
+}
