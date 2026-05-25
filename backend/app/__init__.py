@@ -28,6 +28,7 @@ from app.warehouse import register_warehouse_runtime_hooks
 from app.routes.warehouse_internal_jobs import warehouse_internal_jobs_bp
 from app.routes.track_routes import track_bp
 from app.routes.warehouse_commercial_routes import warehouse_commercial_bp
+from app.track_alerts.routes.track_alert_routes import track_alert_bp
 
 
 def create_app():
@@ -97,6 +98,7 @@ def create_app():
     app.register_blueprint(warehouse_internal_jobs_bp, url_prefix="/api/warehouse/internal")
     app.register_blueprint(track_bp, url_prefix='/api/track')
     app.register_blueprint(warehouse_commercial_bp, url_prefix="/api/warehouse/commercial")
+    app.register_blueprint(track_alert_bp)
     
     
     app.config['DEBUG'] = True
