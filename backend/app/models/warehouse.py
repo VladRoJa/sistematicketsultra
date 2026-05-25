@@ -585,10 +585,29 @@ class TrackBranchCatalogORM(db.Model):
     __tablename__ = "track_branch_catalog"
 
     sucursal_canon = db.Column(db.Text, primary_key=True)
+
+    sucursal_id = db.Column(
+        db.Integer,
+        db.ForeignKey("sucursales.sucursal_id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
     track_label = db.Column(db.Text, nullable=False)
     display_order = db.Column(db.Integer, nullable=False)
     is_track_active = db.Column(db.Boolean, nullable=False, default=True)
     notes = db.Column(db.Text, nullable=True)
+
+    sucursal = db.relationship(
+        "Sucursal",
+        lazy="joined",
+    )
+
+    __table_args__ = (
+        db.Index(
+            "ix_track_branch_catalog_sucursal_id",
+            "sucursal_id",
+        ),
+    )
     
 class TrackBranchAliasORM(db.Model):
     __tablename__ = "track_branch_aliases"
@@ -1137,4 +1156,65 @@ class WarehouseCommercialCatalogORM(db.Model):
         server_default=db.func.now(),
         onupdate=db.func.now(),
         nullable=False,
+    )
+    
+class TrackAlertEventORM(db.Model):
+    __tablename__ = "track_alert_events"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    track_date = db.Column(db.Date, nullable=False)
+
+    sucursal_canon = db.Column(
+        db.String(120),
+        db.ForeignKey("track_branch_catalog.sucursal_canon"),
+        nullable=True,
+    )
+
+    alert_code = db.Column(db.String(100), nullable=False)
+
+    severity = db.Column(db.String(20), nullable=False)
+    # INFO | SUCCESS | WARNING | CRITICAL
+
+    title = db.Column(db.String(255), nullable=False)
+
+    message = db.Column(db.Text, nullable=False)
+
+    metric_value = db.Column(db.Numeric(18, 2), nullable=True)
+
+    threshold_value = db.Column(db.Numeric(18, 2), nullable=True)
+
+    ranking_position = db.Column(db.Integer, nullable=True)
+
+    was_sent = db.Column(db.Boolean, nullable=False, default=False)
+
+    sent_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    metadata_json = db.Column(db.JSON, nullable=True)
+
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+    )
+
+    branch = db.relationship("TrackBranchCatalogORM")
+
+    __table_args__ = (
+        Index(
+            "ix_track_alert_events_track_date",
+            "track_date",
+        ),
+        Index(
+            "ix_track_alert_events_alert_code",
+            "alert_code",
+        ),
+        Index(
+            "ix_track_alert_events_sucursal_canon",
+            "sucursal_canon",
+        ),
+        Index(
+            "ix_track_alert_events_was_sent",
+            "was_sent",
+        ),
     )
