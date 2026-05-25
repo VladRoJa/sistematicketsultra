@@ -140,6 +140,14 @@
               {{ isLoadingMart ? 'Consultando...' : 'Consultar resultado' }}
             </button>
             <button
+            type="button"
+            class="track-intelligence-button"
+            (click)="goToRegionalIntelligence()"
+          >
+            <span class="track-intelligence-icon">🏆</span>
+            <span>Inteligencia regional</span>
+          </button>
+            <button
   type="button"
   class="track-excel-export-button"
   [disabled]="isDownloadingTrackExcel"

@@ -127,11 +127,79 @@ export interface TrackAgregadorasIntegrationResponse {
   detail?: string;
 }
 
+export interface TrackRegionalRankingItem {
+  region_key: string;
+  region_label: string;
+  ranking_position: number;
+  total_regions: number;
+  ingreso_real_total_mtd: string;
+  meta_faycgo_mes: string;
+  clientes_nuevos_real_mtd: number;
+  total_branches: number;
+  cumplimiento_ingreso_pct: string | null;
+}
+
+export interface TrackRegionalBranchDetailItem {
+  sucursal_id: number | null;
+  sucursal_canon: string;
+  sucursal_name: string;
+  orden_apertura: number | null;
+  ingreso_real_total_mtd: string;
+  meta_faycgo_mes: string;
+  clientes_nuevos_real_mtd: number;
+  cumplimiento_ingreso_pct: string | null;
+}
+
+export interface TrackRegionalDetailRankings {
+  income_compliance_position: number | null;
+  income_position: number | null;
+  new_clients_position: number | null;
+  total_regions: number;
+}
+
+export interface TrackRegionalDetailSummary {
+  region_key: string;
+  region_label: string;
+  ingreso_real_total_mtd: string;
+  meta_faycgo_mes: string;
+  clientes_nuevos_real_mtd: number;
+  total_branches: number;
+  total_regions: number;
+  cumplimiento_ingreso_pct: string | null;
+}
+
+export interface TrackRegionalDetailRegion {
+  region_key: string;
+  region_label: string;
+  summary: TrackRegionalDetailSummary;
+  rankings: TrackRegionalDetailRankings;
+  branches: TrackRegionalBranchDetailItem[];
+}
+
+export interface TrackRegionalBusinessRule {
+  key: string;
+  label: string;
+  description: string;
+}
+
+export interface TrackRegionalDetailResponse {
+  track_date: string;
+  generation_mode: TrackGenerationMode;
+  rankings: {
+    income_compliance: TrackRegionalRankingItem[];
+    income: TrackRegionalRankingItem[];
+    new_clients: TrackRegionalRankingItem[];
+  };
+  regions: TrackRegionalDetailRegion[];
+  business_rules: TrackRegionalBusinessRule[];
+}
+
 @Injectable({
   providedIn: 'root',
 })
 export class TrackService {
   private readonly baseUrl = `${environment.apiUrl}/track`;
+  private readonly trackAlertsBaseUrl = `${environment.apiUrl}/track-alerts`;
 
   constructor(private readonly http: HttpClient) {}
 
@@ -185,6 +253,20 @@ export class TrackService {
       params,
       responseType: 'blob',
     });
+  }
+
+  getRegionalDetail(
+    trackDate: string,
+    generationMode: TrackGenerationMode = 'manual_preview',
+  ): Observable<TrackRegionalDetailResponse> {
+    const params = new HttpParams()
+      .set('track_date', trackDate)
+      .set('generation_mode', generationMode);
+
+    return this.http.get<TrackRegionalDetailResponse>(
+      `${this.trackAlertsBaseUrl}/regional-detail`,
+      { params },
+    );
   }
 
   getBranchHistory(

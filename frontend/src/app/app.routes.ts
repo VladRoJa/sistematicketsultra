@@ -118,6 +118,12 @@ export const routes: Routes = [
         component: TrackDashboardComponent,
       },
       {
+        path: 'warehouse/track-intelligence/regional',
+        loadComponent: () =>
+          import('./warehouse/track-intelligence-regional/track-intelligence-regional.component')
+            .then(m => m.TrackIntelligenceRegionalComponent),
+      },
+      {
         path: 'warehouse/track/sucursal/:sucursalCanon',
         component: TrackBranchHistoryComponent,
       },
