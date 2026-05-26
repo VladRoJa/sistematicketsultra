@@ -8,6 +8,7 @@ from datetime import datetime
 from flask import Blueprint, jsonify, request
 
 from app.extensions import db
+from smtplib import SMTPException
 
 from app.track_alerts.services.track_alert_rules_service import (
     evaluate_track_alerts,
@@ -201,12 +202,37 @@ def send_track_alert_email():
             }
         ), 400
 
-    result = send_executive_track_alert_email(
-        track_date=track_date,
-        generation_mode=generation_mode,
-        to_list=to_list,
-        only_unsent=only_unsent,
-    )
+    try:
+        result = send_executive_track_alert_email(
+            track_date=track_date,
+            generation_mode=generation_mode,
+            to_list=to_list,
+            only_unsent=only_unsent,
+        )
+    except SMTPException as exc:
+        return jsonify(
+            {
+                "sent": False,
+                "error": "No se pudo enviar el correo nacional por error SMTP.",
+                "detail": str(exc),
+            }
+        ), 502
+    except RuntimeError as exc:
+        return jsonify(
+            {
+                "sent": False,
+                "error": "No se pudo enviar el correo nacional por configuración incompleta.",
+                "detail": str(exc),
+            }
+        ), 502
+    except OSError as exc:
+        return jsonify(
+            {
+                "sent": False,
+                "error": "No se pudo conectar con el servidor SMTP.",
+                "detail": str(exc),
+            }
+        ), 502
 
     return jsonify(result)
 
@@ -244,11 +270,36 @@ def send_regional_track_alert_email():
             }
         ), 400
 
-    result = send_regional_executive_track_alert_email(
-        track_date=track_date,
-        generation_mode=generation_mode,
-        to_list=to_list,
-    )
+    try:
+        result = send_regional_executive_track_alert_email(
+            track_date=track_date,
+            generation_mode=generation_mode,
+            to_list=to_list,
+        )
+    except SMTPException as exc:
+        return jsonify(
+            {
+                "sent": False,
+                "error": "No se pudo enviar el correo regional por error SMTP.",
+                "detail": str(exc),
+            }
+        ), 502
+    except RuntimeError as exc:
+        return jsonify(
+            {
+                "sent": False,
+                "error": "No se pudo enviar el correo regional por configuración incompleta.",
+                "detail": str(exc),
+            }
+        ), 502
+    except OSError as exc:
+        return jsonify(
+            {
+                "sent": False,
+                "error": "No se pudo conectar con el servidor SMTP.",
+                "detail": str(exc),
+            }
+        ), 502
 
     return jsonify(result)
 
