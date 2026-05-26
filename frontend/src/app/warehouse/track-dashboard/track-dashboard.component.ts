@@ -334,12 +334,12 @@ readonly trackViewModeOptions: TrackViewModeOption[] = [
   {
     value: 'simplificada',
     label: 'Vista simplificada',
-    description: 'Lectura operativa para gerentes',
+    description: 'Lectura operativa',
   },
   {
     value: 'completa',
     label: 'Vista completa',
-    description: 'Análisis extendido y validación',
+    description: 'Análisis extendido',
   },
 ];
 
@@ -663,6 +663,19 @@ puedeEjecutarTrack(): boolean {
   const rol = (user?.rol || '').toString().trim().toUpperCase();
 
   return ['ADMIN', 'ADMINISTRADOR', 'SUPER_ADMIN'].includes(rol);
+}
+
+canViewRegionalIntelligence(): boolean {
+  const user = this.authService.getUser();
+  const rol = (user?.rol || '').toString().trim().toUpperCase();
+
+  return [
+    'ADMIN',
+    'ADMINISTRADOR',
+    'SUPER_ADMIN',
+    'LECTOR_GLOBAL',
+    'GERENTE_REGIONAL',
+  ].includes(rol);
 }
 
 private compareTrackSortValues(
