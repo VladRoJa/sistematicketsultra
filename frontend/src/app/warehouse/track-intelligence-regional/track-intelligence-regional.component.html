@@ -1,45 +1,64 @@
 <!-- frontend/src/app/warehouse/track-intelligence-regional/track-intelligence-regional.component.html -->
 
 <div class="regional-page">
-  <header class="regional-header">
-    <div>
-      <p class="eyebrow">Track Intelligence</p>
-      <h1>Inteligencia regional</h1>
-      <p class="subtitle">
-        Ranking ejecutivo por región, cumplimiento contra meta y detalle por club.
-      </p>
+  <section class="regional-topbar">
+    <div class="regional-topbar__main">
+      <div class="regional-topbar__intro">
+        <p class="eyebrow">Warehouse</p>
+
+        <h1>Track Intelligence Regional</h1>
+
+        <p class="subtitle">
+          Vista ejecutiva regional con rankings, cumplimiento contra meta y detalle por club.
+        </p>
+      </div>
+
+      <div class="regional-topbar__content">
+        <div class="regional-topbar__mode">
+          <span class="regional-topbar__mode-label">Ejecución manual</span>
+
+          <span class="regional-topbar__mode-value">
+            Modo actual: <strong>{{ generationMode }}</strong>
+          </span>
+
+          <span
+            class="regional-topbar__mode-value"
+            *ngIf="data?.track_date"
+          >
+            Fecha Track: <strong>{{ data?.track_date }}</strong>
+          </span>
+        </div>
+
+        <div class="regional-form">
+          <label class="regional-field">
+            <span>Fecha</span>
+
+            <input
+              type="date"
+              [(ngModel)]="selectedTrackDate"
+            />
+          </label>
+
+          <div class="regional-actions">
+            <button
+              type="button"
+              class="regional-primary-button"
+              (click)="loadRegionalDetail()"
+            >
+              Consultar
+            </button>
+
+            <button
+              type="button"
+              class="regional-secondary-button"
+              (click)="goToTrackDashboard()"
+            >
+              ← Volver al Track
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
-
-    <div class="header-actions">
-      <button
-        type="button"
-        mat-stroked-button
-        color="primary"
-        (click)="goToTrackDashboard()"
-      >
-        <mat-icon>arrow_back</mat-icon>
-        Volver al dashboard Track
-      </button>
-    </div>
-  </header>
-
-  <section class="filters-card">
-    <label class="date-field">
-      <span>Fecha Track</span>
-      <input
-        type="date"
-        [(ngModel)]="selectedTrackDate"
-      />
-    </label>
-
-    <button
-      type="button"
-      mat-raised-button
-      color="primary"
-      (click)="loadRegionalDetail()"
-    >
-      Actualizar
-    </button>
   </section>
 
   <section
@@ -59,23 +78,23 @@
 
   <ng-container *ngIf="!isLoading && data">
     <section class="summary-grid">
-    <mat-card
-      *ngFor="let card of getSummaryCards()"
-      [class]="getSummaryCardClass(card)"
-    >
-      <div class="summary-card__top">
-        <p class="summary-label">{{ card.label }}</p>
-        <span class="summary-badge">{{ card.badge }}</span>
-      </div>
+      <mat-card
+        *ngFor="let card of getSummaryCards()"
+        [class]="getSummaryCardClass(card)"
+      >
+        <div class="summary-card__top">
+          <p class="summary-label">{{ card.label }}</p>
+          <span class="summary-badge">{{ card.badge }}</span>
+        </div>
 
-      <h2>{{ card.regionLabel }}</h2>
+        <h2>{{ card.regionLabel }}</h2>
 
-      <strong class="summary-metric">
-        {{ card.metricValue }}
-      </strong>
+        <strong class="summary-metric">
+          {{ card.metricValue }}
+        </strong>
 
-      <p class="summary-helper">{{ card.helper }}</p>
-    </mat-card>
+        <p class="summary-helper">{{ card.helper }}</p>
+      </mat-card>
     </section>
 
     <section class="content-grid">
@@ -111,16 +130,21 @@
                       {{ item.ranking_position }}
                     </span>
                   </td>
+
                   <td>{{ item.region_label }}</td>
+
                   <td class="numeric strong">
                     {{ getRankingMetricValue(item, section.metricType) }}
                   </td>
+
                   <td class="numeric">
                     {{ formatMoney(item.ingreso_real_total_mtd) }}
                   </td>
+
                   <td class="numeric">
                     {{ formatMoney(item.meta_faycgo_mes) }}
                   </td>
+
                   <td class="numeric">
                     {{ item.total_branches }}
                   </td>
@@ -148,8 +172,15 @@
       <div class="section-heading">
         <h2>Detalle por región</h2>
         <p>
-          Abre una región para revisar la lectura ejecutiva y los clubes que explican el resultado.
+          Selecciona una región para desplegar su lectura ejecutiva, clubes destacados y tabla de detalle.
         </p>
+      </div>
+
+      <div class="region-help-banner">
+        <span class="region-help-icon">☝️</span>
+        <span>
+          Haz clic en cualquier región para ver qué clubes empujan el resultado y cuáles tienen mayor brecha contra meta.
+        </span>
       </div>
 
       <mat-accordion multi>
@@ -162,13 +193,19 @@
               {{ region.region_label }}
             </mat-panel-title>
 
-            <mat-panel-description>
-              Cumplimiento:
-              {{ getRegionCompliancePosition(region) }}
-              · Ingreso:
-              {{ getRegionIncomePosition(region) }}
-              · Clientes:
-              {{ getRegionNewClientsPosition(region) }}
+            <mat-panel-description class="region-panel-description">
+              <span class="region-rankings-summary">
+                Cumplimiento:
+                {{ getRegionCompliancePosition(region) }}
+                · Ingreso:
+                {{ getRegionIncomePosition(region) }}
+                · Clientes:
+                {{ getRegionNewClientsPosition(region) }}
+              </span>
+
+              <span class="region-panel-cta">
+                Ver detalle
+              </span>
             </mat-panel-description>
           </mat-expansion-panel-header>
 
@@ -207,7 +244,9 @@
 
             <div>
               <span>Brecha vs meta</span>
-              <strong [class]="getRegionIncomeGapClass(region)"> {{ formatSignedMoney(getRegionIncomeGap(region)) }}</strong>
+              <strong [class]="getRegionIncomeGapClass(region)">
+                {{ formatSignedMoney(getRegionIncomeGap(region)) }}
+              </strong>
             </div>
 
             <div>
@@ -220,6 +259,10 @@
               <strong>{{ formatInteger(region.summary.clientes_nuevos_real_mtd) }}</strong>
             </div>
           </div>
+
+          <p class="region-table-note">
+            Clubes ordenados por cumplimiento contra meta, de mayor a menor.
+          </p>
 
           <div class="table-wrapper">
             <table class="branches-table">
@@ -237,19 +280,28 @@
 
               <tbody>
                 <tr *ngFor="let branch of getRegionBranchesForDisplay(region)">
-                  <td>{{ getBranchRegionalRank(region, branch) }}°</td>   
+                  <td>{{ getBranchRegionalRank(region, branch) }}°</td>
+
                   <td>{{ branch.sucursal_name }}</td>
+
                   <td class="numeric">
                     {{ formatMoney(branch.ingreso_real_total_mtd) }}
                   </td>
+
                   <td class="numeric">
                     {{ formatMoney(branch.meta_faycgo_mes) }}
                   </td>
-                  <td class="numeric strong"><span [class]="getBranchIncomeGapClass(branch)">{{ formatSignedMoney(getBranchIncomeGap(branch)) }}</span>
+
+                  <td class="numeric strong">
+                    <span [class]="getBranchIncomeGapClass(branch)">
+                      {{ formatSignedMoney(getBranchIncomeGap(branch)) }}
+                    </span>
                   </td>
+
                   <td class="numeric strong">
                     {{ formatPercent(branch.cumplimiento_ingreso_pct) }}
                   </td>
+
                   <td class="numeric">
                     {{ formatInteger(branch.clientes_nuevos_real_mtd) }}
                   </td>
