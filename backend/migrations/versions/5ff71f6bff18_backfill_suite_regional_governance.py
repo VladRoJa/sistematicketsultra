@@ -93,9 +93,8 @@ def upgrade():
                     (21, 'CDMX_IXT_TLAL'),
                     (22, 'CDMX_IXT_TLAL'),
                     (23, 'CDMX_IXT_TLAL'),
-                    (24, 'CDMX_IXT_TLAL'),
+                    (24, 'CDMX_IXT_TLAL')
 
-                    (26, 'NUEVAS')
             ) AS mapping(sucursal_id, region_key)
             JOIN suite_regions sr
                 ON sr.region_key = mapping.region_key
@@ -117,8 +116,7 @@ def downgrade():
                 7, 8, 9, 10, 11, 12, 13,
                 14, 15, 16, 20,
                 17, 18, 19, 25,
-                21, 22, 23, 24,
-                26
+                21, 22, 23, 24
             )
             AND is_current = true
             AND valid_from = DATE '2026-05-25';
