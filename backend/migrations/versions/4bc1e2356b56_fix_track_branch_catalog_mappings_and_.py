@@ -46,7 +46,7 @@ def upgrade():
                     ('TLALNEPANTLA', 24, 23),
                     ('SALTILLO_VILLALTA', 25, 24),
                     ('METEPEC', 23, 25),
-                    ('LA_VIGA', 26, 26),
+                    ('LA_VIGA', NULL::integer, 26),
                     ('SERRANIA', NULL::integer, 27)
             ) AS mapping(sucursal_canon, sucursal_id, display_order)
             WHERE tbc.sucursal_canon = mapping.sucursal_canon;
