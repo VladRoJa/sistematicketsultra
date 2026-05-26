@@ -1,0 +1,264 @@
+<!-- frontend/src/app/warehouse/track-intelligence-regional/track-intelligence-regional.component.html -->
+
+<div class="regional-page">
+  <header class="regional-header">
+    <div>
+      <p class="eyebrow">Track Intelligence</p>
+      <h1>Inteligencia regional</h1>
+      <p class="subtitle">
+        Ranking ejecutivo por región, cumplimiento contra meta y detalle por club.
+      </p>
+    </div>
+
+    <div class="header-actions">
+      <button
+        type="button"
+        mat-stroked-button
+        color="primary"
+        (click)="goToTrackDashboard()"
+      >
+        <mat-icon>arrow_back</mat-icon>
+        Volver al dashboard Track
+      </button>
+    </div>
+  </header>
+
+  <section class="filters-card">
+    <label class="date-field">
+      <span>Fecha Track</span>
+      <input
+        type="date"
+        [(ngModel)]="selectedTrackDate"
+      />
+    </label>
+
+    <button
+      type="button"
+      mat-raised-button
+      color="primary"
+      (click)="loadRegionalDetail()"
+    >
+      Actualizar
+    </button>
+  </section>
+
+  <section
+    *ngIf="isLoading"
+    class="loading-state"
+  >
+    <mat-spinner diameter="42"></mat-spinner>
+    <p>Cargando inteligencia regional...</p>
+  </section>
+
+  <section
+    *ngIf="errorMessage"
+    class="error-state"
+  >
+    {{ errorMessage }}
+  </section>
+
+  <ng-container *ngIf="!isLoading && data">
+    <section class="summary-grid">
+    <mat-card
+      *ngFor="let card of getSummaryCards()"
+      [class]="getSummaryCardClass(card)"
+    >
+      <div class="summary-card__top">
+        <p class="summary-label">{{ card.label }}</p>
+        <span class="summary-badge">{{ card.badge }}</span>
+      </div>
+
+      <h2>{{ card.regionLabel }}</h2>
+
+      <strong class="summary-metric">
+        {{ card.metricValue }}
+      </strong>
+
+      <p class="summary-helper">{{ card.helper }}</p>
+    </mat-card>
+    </section>
+
+    <section class="content-grid">
+      <article class="main-panel">
+        <h2>Rankings regionales</h2>
+
+        <div
+          *ngFor="let section of getRankingSections()"
+          class="ranking-section"
+        >
+          <div class="section-heading">
+            <h3>{{ section.title }}</h3>
+            <p>{{ section.subtitle }}</p>
+          </div>
+
+          <div class="table-wrapper">
+            <table class="ranking-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Región</th>
+                  <th>Indicador</th>
+                  <th>Ingreso</th>
+                  <th>Meta</th>
+                  <th>Clubes</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                <tr *ngFor="let item of section.items">
+                  <td>
+                    <span class="rank-pill">
+                      {{ item.ranking_position }}
+                    </span>
+                  </td>
+                  <td>{{ item.region_label }}</td>
+                  <td class="numeric strong">
+                    {{ getRankingMetricValue(item, section.metricType) }}
+                  </td>
+                  <td class="numeric">
+                    {{ formatMoney(item.ingreso_real_total_mtd) }}
+                  </td>
+                  <td class="numeric">
+                    {{ formatMoney(item.meta_faycgo_mes) }}
+                  </td>
+                  <td class="numeric">
+                    {{ item.total_branches }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </article>
+
+      <aside class="rules-panel">
+        <h2>Criterios usados</h2>
+
+        <div
+          *ngFor="let rule of getBusinessRules()"
+          class="rule-item"
+        >
+          <h3>{{ rule.label }}</h3>
+          <p>{{ rule.description }}</p>
+        </div>
+      </aside>
+    </section>
+
+    <section class="regions-section">
+      <div class="section-heading">
+        <h2>Detalle por región</h2>
+        <p>
+          Abre una región para revisar la lectura ejecutiva y los clubes que explican el resultado.
+        </p>
+      </div>
+
+      <mat-accordion multi>
+        <mat-expansion-panel
+          *ngFor="let region of getRegions()"
+          class="region-panel"
+        >
+          <mat-expansion-panel-header>
+            <mat-panel-title>
+              {{ region.region_label }}
+            </mat-panel-title>
+
+            <mat-panel-description>
+              Cumplimiento:
+              {{ getRegionCompliancePosition(region) }}
+              · Ingreso:
+              {{ getRegionIncomePosition(region) }}
+              · Clientes:
+              {{ getRegionNewClientsPosition(region) }}
+            </mat-panel-description>
+          </mat-expansion-panel-header>
+
+          <div class="region-reading">
+            <p class="region-reading__main">
+              {{ getRegionExecutiveReading(region) }}
+            </p>
+
+            <p class="region-reading__helper">
+              {{ getRegionInterpretation(region) }}
+            </p>
+          </div>
+
+          <div class="region-insights">
+            <div class="region-insight region-insight--positive">
+              <span>Club que empuja</span>
+              <strong>{{ getBestComplianceBranchLabel(region) }}</strong>
+            </div>
+
+            <div class="region-insight region-insight--risk">
+              <span>Mayor brecha a cerrar</span>
+              <strong>{{ getWorstIncomeGapBranchLabel(region) }}</strong>
+            </div>
+          </div>
+
+          <div class="region-summary">
+            <div>
+              <span>Ingreso real regional</span>
+              <strong>{{ formatMoney(region.summary.ingreso_real_total_mtd) }}</strong>
+            </div>
+
+            <div>
+              <span>Meta FAYCGO regional</span>
+              <strong>{{ formatMoney(region.summary.meta_faycgo_mes) }}</strong>
+            </div>
+
+            <div>
+              <span>Brecha vs meta</span>
+              <strong [class]="getRegionIncomeGapClass(region)"> {{ formatSignedMoney(getRegionIncomeGap(region)) }}</strong>
+            </div>
+
+            <div>
+              <span>Cumplimiento regional</span>
+              <strong>{{ formatPercent(region.summary.cumplimiento_ingreso_pct) }}</strong>
+            </div>
+
+            <div>
+              <span>Clientes nuevos regionales</span>
+              <strong>{{ formatInteger(region.summary.clientes_nuevos_real_mtd) }}</strong>
+            </div>
+          </div>
+
+          <div class="table-wrapper">
+            <table class="branches-table">
+              <thead>
+                <tr>
+                  <th>Top</th>
+                  <th>Club</th>
+                  <th>Ingreso real</th>
+                  <th>Meta FAYCGO</th>
+                  <th>Brecha vs meta</th>
+                  <th>Cumplimiento</th>
+                  <th>Clientes nuevos</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                <tr *ngFor="let branch of getRegionBranchesForDisplay(region)">
+                  <td>{{ getBranchRegionalRank(region, branch) }}°</td>   
+                  <td>{{ branch.sucursal_name }}</td>
+                  <td class="numeric">
+                    {{ formatMoney(branch.ingreso_real_total_mtd) }}
+                  </td>
+                  <td class="numeric">
+                    {{ formatMoney(branch.meta_faycgo_mes) }}
+                  </td>
+                  <td class="numeric strong"><span [class]="getBranchIncomeGapClass(branch)">{{ formatSignedMoney(getBranchIncomeGap(branch)) }}</span>
+                  </td>
+                  <td class="numeric strong">
+                    {{ formatPercent(branch.cumplimiento_ingreso_pct) }}
+                  </td>
+                  <td class="numeric">
+                    {{ formatInteger(branch.clientes_nuevos_real_mtd) }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </mat-expansion-panel>
+      </mat-accordion>
+    </section>
+  </ng-container>
+</div>

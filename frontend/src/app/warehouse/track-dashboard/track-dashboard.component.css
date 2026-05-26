@@ -1634,3 +1634,51 @@
     width: 100%;
   }
 }
+
+
+.track-intelligence-button {
+  border: 1px solid rgba(229, 69, 37, 0.24);
+  border-radius: 999px;
+  padding: 0.75rem 1.15rem;
+  background: var(--ultra-orange-soft, #fff1ed);
+  color: var(--ultra-orange, #e54525);
+  font-weight: 900;
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(229, 69, 37, 0.12);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 42px;
+  white-space: nowrap;
+  transition:
+    transform 140ms ease,
+    box-shadow 140ms ease,
+    background-color 140ms ease,
+    border-color 140ms ease;
+}
+
+.track-intelligence-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  background: rgba(229, 69, 37, 0.16);
+  border-color: rgba(229, 69, 37, 0.42);
+  box-shadow: 0 12px 24px rgba(229, 69, 37, 0.18);
+}
+
+.track-intelligence-button:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 6px 14px rgba(229, 69, 37, 0.14);
+}
+
+.track-intelligence-icon {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+@media (max-width: 700px) {
+  .track-intelligence-button {
+    width: 100%;
+  }
+}

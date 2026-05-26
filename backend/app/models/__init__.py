@@ -27,6 +27,11 @@ from .warehouse import (
     TrackSourceTiendaDailyORM,
     WarehouseCommercialCatalogORM,
 )
+from .suite_governance import (
+    SuiteRegionORM,
+    SuiteSucursalRegionAssignmentORM,
+    SuiteRegionManagerORM,
+)
 
 
 # -------------------------------------------------------------------------------
@@ -57,4 +62,7 @@ __all__ = [
     "KpiVentasNuevosSociosSnapshotRowORM",
     "TrackSourceTiendaDailyORM",
     "WarehouseCommercialCatalogORM",
+    "SuiteRegionORM",
+    "SuiteSucursalRegionAssignmentORM",
+    "SuiteRegionManagerORM",
 ]

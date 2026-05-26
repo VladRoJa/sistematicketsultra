@@ -1154,6 +1154,15 @@ openBranchHistory(row: TrackViewRow): void {
   );
 }
 
+goToRegionalIntelligence(): void {
+  this.router.navigate(['/warehouse/track-intelligence/regional'], {
+    queryParams: {
+      track_date: this.trackDate,
+      generation_mode: this.generationMode,
+    },
+  });
+}
+
 onTrackRowClicked(row: TrackViewRow): void {
   if (row.rowKind !== 'data') {
     return;
