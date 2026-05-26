@@ -14,11 +14,13 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
 import {
+  TrackRegionalBranchDetailItem,
   TrackRegionalBusinessRule,
   TrackRegionalDetailRegion,
   TrackRegionalDetailResponse,
   TrackRegionalRankingItem,
   TrackService,
+
 } from '../../services/track.service';
 
 interface RegionalRankingSection {
@@ -29,10 +31,15 @@ interface RegionalRankingSection {
   metricType: 'percent' | 'money' | 'integer';
 }
 
+type RegionalSummaryCardTone = 'success' | 'warning' | 'danger' | 'neutral';
+
 interface RegionalSummaryCard {
   label: string;
-  value: string;
+  badge: string;
+  regionLabel: string;
+  metricValue: string;
   helper: string;
+  tone: RegionalSummaryCardTone;
 }
 
 @Component({
@@ -117,43 +124,51 @@ export class TrackIntelligenceRegionalComponent implements OnInit, OnDestroy {
     });
     }
 
-  getSummaryCards(): RegionalSummaryCard[] {
-    const complianceLeader = this.data?.rankings.income_compliance?.[0] || null;
-    const incomeLeader = this.data?.rankings.income?.[0] || null;
-    const newClientsLeader = this.data?.rankings.new_clients?.[0] || null;
-    const complianceRisk = this.getLastItem(this.data?.rankings.income_compliance || []);
+getSummaryCards(): RegionalSummaryCard[] {
+  const complianceLeader = this.data?.rankings.income_compliance?.[0] || null;
+  const incomeLeader = this.data?.rankings.income?.[0] || null;
+  const newClientsLeader = this.data?.rankings.new_clients?.[0] || null;
+  const complianceRisk = this.getLastItem(this.data?.rankings.income_compliance || []);
 
-    return [
-      {
-        label: 'Mejor cumplimiento',
-        value: complianceLeader
-          ? `${complianceLeader.region_label} · ${this.formatPercent(complianceLeader.cumplimiento_ingreso_pct)}`
-          : '-',
-        helper: 'Eficiencia contra meta FAYCGO.',
-      },
-      {
-        label: 'Mayor ingreso',
-        value: incomeLeader
-          ? `${incomeLeader.region_label} · ${this.formatMoney(incomeLeader.ingreso_real_total_mtd)}`
-          : '-',
-        helper: 'Volumen total acumulado.',
-      },
-      {
-        label: 'Más clientes nuevos',
-        value: newClientsLeader
-          ? `${newClientsLeader.region_label} · ${this.formatInteger(newClientsLeader.clientes_nuevos_real_mtd)}`
-          : '-',
-        helper: 'Captación acumulada del mes.',
-      },
-      {
-        label: 'Menor cumplimiento',
-        value: complianceRisk
-          ? `${complianceRisk.region_label} · ${this.formatPercent(complianceRisk.cumplimiento_ingreso_pct)}`
-          : '-',
-        helper: 'Región que requiere más atención.',
-      },
-    ];
-  }
+  return [
+    {
+      label: 'Cumplimiento',
+      badge: '1° lugar',
+      regionLabel: complianceLeader?.region_label || '-',
+      metricValue: this.formatPercent(complianceLeader?.cumplimiento_ingreso_pct),
+      helper: 'Eficiencia contra meta FAYCGO.',
+      tone: 'success',
+    },
+    {
+      label: 'Ingreso real',
+      badge: '1° lugar',
+      regionLabel: incomeLeader?.region_label || '-',
+      metricValue: this.formatMoney(incomeLeader?.ingreso_real_total_mtd),
+      helper: 'Mayor volumen acumulado del mes.',
+      tone: 'neutral',
+    },
+    {
+      label: 'Clientes nuevos',
+      badge: '1° lugar',
+      regionLabel: newClientsLeader?.region_label || '-',
+      metricValue: this.formatInteger(newClientsLeader?.clientes_nuevos_real_mtd),
+      helper: 'Mayor captación acumulada del mes.',
+      tone: 'neutral',
+    },
+    {
+      label: 'Foco de atención',
+      badge: 'Menor cumplimiento',
+      regionLabel: complianceRisk?.region_label || '-',
+      metricValue: this.formatPercent(complianceRisk?.cumplimiento_ingreso_pct),
+      helper: 'Región con menor eficiencia relativa contra meta.',
+      tone: 'danger',
+    },
+  ];
+}
+
+getSummaryCardClass(card: RegionalSummaryCard): string {
+  return `summary-card summary-card--${card.tone}`;
+}
 
   getRankingSections(): RegionalRankingSection[] {
     if (!this.data) {
@@ -263,7 +278,7 @@ export class TrackIntelligenceRegionalComponent implements OnInit, OnDestroy {
       return '-';
     }
 
-    return `${position} de ${total}`;
+    return `${position}° lugar`;
   }
 
   private getTodayIsoDate(): string {
@@ -294,4 +309,208 @@ export class TrackIntelligenceRegionalComponent implements OnInit, OnDestroy {
       replaceUrl: true,
     });
   }
+
+  getRegionExecutiveReading(region: TrackRegionalDetailRegion): string {
+    const total = region.rankings.total_regions;
+    const compliancePosition = region.rankings.income_compliance_position;
+    const incomePosition = region.rankings.income_position;
+    const clientsPosition = region.rankings.new_clients_position;
+
+    return (
+      `Esta región va en ${compliancePosition}° lugar de ${total} en cumplimiento, ` +
+      `${incomePosition}° lugar en ingreso y ` +
+      `${clientsPosition}° lugar en clientes nuevos.`
+    );
+  }
+
+getRegionInterpretation(region: TrackRegionalDetailRegion): string {
+  const total = region.rankings.total_regions;
+  const compliancePosition = region.rankings.income_compliance_position || 0;
+  const incomePosition = region.rankings.income_position || 0;
+  const clientsPosition = region.rankings.new_clients_position || 0;
+  const regionalGap = this.getRegionIncomeGap(region);
+
+  const worstGapBranch = this.getWorstIncomeGapBranch(region);
+  const bestComplianceBranch = this.getBestComplianceBranch(region);
+
+  if (compliancePosition === 1) {
+    return (
+      `La región lidera en cumplimiento contra meta. ` +
+      `Su mejor referencia interna es ${bestComplianceBranch?.sucursal_name || 'un club destacado'}; ` +
+      `conviene identificar qué práctica está empujando ese avance.`
+    );
+  }
+
+  if (incomePosition === 1 && clientsPosition === 1 && compliancePosition > 1) {
+    return (
+      `La región lidera en ingreso y clientes nuevos, pero va ${compliancePosition}° de ${total} en cumplimiento contra meta. ` +
+      `La brecha regional es ${this.formatSignedMoney(regionalGap)}; el foco debe estar en cerrar diferencia contra meta, ` +
+      `especialmente en ${worstGapBranch?.sucursal_name || 'los clubes con mayor brecha'}.`
+    );
+  }
+
+  if (incomePosition <= 2 && compliancePosition >= 4) {
+    return (
+      `La región tiene alto volumen de ingreso, pero su cumplimiento contra meta está rezagado. ` +
+      `La brecha regional es ${this.formatSignedMoney(regionalGap)}; revisar clubes con meta alta y avance relativo bajo.`
+    );
+  }
+
+  if (clientsPosition < compliancePosition) {
+    return (
+      `La captación está mejor posicionada que el cumplimiento de ingreso. ` +
+      `Esto puede indicar oportunidad en conversión, ticket promedio, mix de ventas o velocidad de monetización de nuevos clientes.`
+    );
+  }
+
+  if (compliancePosition >= total) {
+    return (
+      `Es la región con menor cumplimiento relativo. ` +
+      `La prioridad es revisar la brecha contra meta por club; el mayor foco aparece en ` +
+      `${worstGapBranch?.sucursal_name || 'el club con mayor diferencia negativa'}.`
+    );
+  }
+
+  return (
+    `La región se mantiene en una posición intermedia. ` +
+    `El detalle por club ayuda a separar qué unidades empujan el resultado y cuáles explican la brecha contra meta.`
+  );
 }
+
+getRegionIncomeGap(region: TrackRegionalDetailRegion): number {
+  const ingreso = Number(region.summary.ingreso_real_total_mtd || 0);
+  const meta = Number(region.summary.meta_faycgo_mes || 0);
+
+  return ingreso - meta;
+}
+
+formatSignedMoney(value: number | null | undefined): string {
+  const numericValue = Number(value || 0);
+  const formatted = Math.abs(numericValue).toLocaleString('es-MX', {
+    style: 'currency',
+    currency: 'MXN',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
+  if (numericValue > 0) {
+    return `+${formatted}`;
+  }
+
+  if (numericValue < 0) {
+    return `-${formatted}`;
+  }
+
+  return formatted;
+}
+
+getBranchIncomeGap(branch: TrackRegionalBranchDetailItem): number {
+  const ingreso = Number(branch.ingreso_real_total_mtd || 0);
+  const meta = Number(branch.meta_faycgo_mes || 0);
+
+  return ingreso - meta;
+}
+
+getWorstIncomeGapBranch(
+  region: TrackRegionalDetailRegion,
+): TrackRegionalBranchDetailItem | null {
+  if (!region.branches.length) {
+    return null;
+  }
+
+  return [...region.branches].sort(
+    (left, right) => this.getBranchIncomeGap(left) - this.getBranchIncomeGap(right),
+  )[0];
+}
+
+getBestComplianceBranch(
+  region: TrackRegionalDetailRegion,
+): TrackRegionalBranchDetailItem | null {
+  if (!region.branches.length) {
+    return null;
+  }
+
+  return [...region.branches].sort(
+    (left, right) =>
+      Number(right.cumplimiento_ingreso_pct || 0) -
+      Number(left.cumplimiento_ingreso_pct || 0),
+  )[0];
+}
+
+getRegionBranchesForDisplay(
+  region: TrackRegionalDetailRegion,
+): TrackRegionalBranchDetailItem[] {
+  return [...region.branches].sort((left, right) => {
+    const rightCompliance = Number(right.cumplimiento_ingreso_pct || 0);
+    const leftCompliance = Number(left.cumplimiento_ingreso_pct || 0);
+
+    if (rightCompliance !== leftCompliance) {
+      return rightCompliance - leftCompliance;
+    }
+
+    const rightIncome = Number(right.ingreso_real_total_mtd || 0);
+    const leftIncome = Number(left.ingreso_real_total_mtd || 0);
+
+    return rightIncome - leftIncome;
+  });
+}
+
+getBranchRegionalRank(
+  region: TrackRegionalDetailRegion,
+  branch: TrackRegionalBranchDetailItem,
+): number {
+  const branches = this.getRegionBranchesForDisplay(region);
+
+  const index = branches.findIndex(
+    (item) => item.sucursal_canon === branch.sucursal_canon,
+  );
+
+  return index >= 0 ? index + 1 : 0;
+}
+
+getIncomeGapClass(value: number | null | undefined): string {
+  const numericValue = Number(value || 0);
+
+  if (numericValue > 0) {
+    return 'income-gap income-gap--positive';
+  }
+
+  if (numericValue < 0) {
+    return 'income-gap income-gap--negative';
+  }
+
+  return 'income-gap income-gap--neutral';
+}
+
+getRegionIncomeGapClass(region: TrackRegionalDetailRegion): string {
+  return this.getIncomeGapClass(this.getRegionIncomeGap(region));
+}
+
+getBranchIncomeGapClass(branch: TrackRegionalBranchDetailItem): string {
+  return this.getIncomeGapClass(this.getBranchIncomeGap(branch));
+}
+
+getBestComplianceBranchLabel(region: TrackRegionalDetailRegion): string {
+  const branch = this.getBestComplianceBranch(region);
+
+  if (!branch) {
+    return '-';
+  }
+
+  return `${branch.sucursal_name} · ${this.formatPercent(branch.cumplimiento_ingreso_pct)}`;
+}
+
+getWorstIncomeGapBranchLabel(region: TrackRegionalDetailRegion): string {
+  const branch = this.getWorstIncomeGapBranch(region);
+
+  if (!branch) {
+    return '-';
+  }
+
+  return `${branch.sucursal_name} · ${this.formatSignedMoney(this.getBranchIncomeGap(branch))}`;
+}
+
+
+
+}
+

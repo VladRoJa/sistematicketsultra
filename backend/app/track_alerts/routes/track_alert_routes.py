@@ -21,6 +21,7 @@ from app.track_alerts.services.track_alert_email_renderer_service import (
 )
 from app.track_alerts.services.track_alert_delivery_service import (
     send_executive_track_alert_email,
+    send_regional_executive_track_alert_email,
 )
 from app.track_alerts.services.track_alert_region_rules_service import (
     evaluate_regional_rankings,
@@ -205,6 +206,48 @@ def send_track_alert_email():
         generation_mode=generation_mode,
         to_list=to_list,
         only_unsent=only_unsent,
+    )
+
+    return jsonify(result)
+
+@track_alert_bp.route("/send-regional-email", methods=["POST"])
+def send_regional_track_alert_email():
+    payload = request.get_json(silent=True) or {}
+
+    track_date_raw = payload.get("track_date")
+    generation_mode = payload.get("generation_mode", "manual_preview")
+    to_list = payload.get("to_list") or []
+
+    if not track_date_raw:
+        return jsonify(
+            {
+                "error": "track_date is required",
+            }
+        ), 400
+
+    if not isinstance(to_list, list) or not to_list:
+        return jsonify(
+            {
+                "error": "to_list is required and must be a non-empty array",
+            }
+        ), 400
+
+    try:
+        track_date = datetime.strptime(
+            track_date_raw,
+            "%Y-%m-%d",
+        ).date()
+    except ValueError:
+        return jsonify(
+            {
+                "error": "Invalid track_date format. Use YYYY-MM-DD",
+            }
+        ), 400
+
+    result = send_regional_executive_track_alert_email(
+        track_date=track_date,
+        generation_mode=generation_mode,
+        to_list=to_list,
     )
 
     return jsonify(result)

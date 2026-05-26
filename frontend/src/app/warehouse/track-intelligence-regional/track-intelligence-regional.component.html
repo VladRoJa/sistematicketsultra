@@ -1,5 +1,4 @@
-<!-- frontend\src\app\warehouse\track-intelligence-regional\track-intelligence-regional.component.html -->
-
+<!-- frontend/src/app/warehouse/track-intelligence-regional/track-intelligence-regional.component.html -->
 
 <div class="regional-page">
   <header class="regional-header">
@@ -60,14 +59,23 @@
 
   <ng-container *ngIf="!isLoading && data">
     <section class="summary-grid">
-      <mat-card
-        *ngFor="let card of getSummaryCards()"
-        class="summary-card"
-      >
+    <mat-card
+      *ngFor="let card of getSummaryCards()"
+      [class]="getSummaryCardClass(card)"
+    >
+      <div class="summary-card__top">
         <p class="summary-label">{{ card.label }}</p>
-        <h2>{{ card.value }}</h2>
-        <p class="summary-helper">{{ card.helper }}</p>
-      </mat-card>
+        <span class="summary-badge">{{ card.badge }}</span>
+      </div>
+
+      <h2>{{ card.regionLabel }}</h2>
+
+      <strong class="summary-metric">
+        {{ card.metricValue }}
+      </strong>
+
+      <p class="summary-helper">{{ card.helper }}</p>
+    </mat-card>
     </section>
 
     <section class="content-grid">
@@ -140,7 +148,7 @@
       <div class="section-heading">
         <h2>Detalle por región</h2>
         <p>
-          Abre una región para revisar los clubes que explican el resultado.
+          Abre una región para revisar la lectura ejecutiva y los clubes que explican el resultado.
         </p>
       </div>
 
@@ -164,24 +172,51 @@
             </mat-panel-description>
           </mat-expansion-panel-header>
 
+          <div class="region-reading">
+            <p class="region-reading__main">
+              {{ getRegionExecutiveReading(region) }}
+            </p>
+
+            <p class="region-reading__helper">
+              {{ getRegionInterpretation(region) }}
+            </p>
+          </div>
+
+          <div class="region-insights">
+            <div class="region-insight region-insight--positive">
+              <span>Club que empuja</span>
+              <strong>{{ getBestComplianceBranchLabel(region) }}</strong>
+            </div>
+
+            <div class="region-insight region-insight--risk">
+              <span>Mayor brecha a cerrar</span>
+              <strong>{{ getWorstIncomeGapBranchLabel(region) }}</strong>
+            </div>
+          </div>
+
           <div class="region-summary">
             <div>
-              <span>Ingreso</span>
+              <span>Ingreso real regional</span>
               <strong>{{ formatMoney(region.summary.ingreso_real_total_mtd) }}</strong>
             </div>
 
             <div>
-              <span>Meta</span>
+              <span>Meta FAYCGO regional</span>
               <strong>{{ formatMoney(region.summary.meta_faycgo_mes) }}</strong>
             </div>
 
             <div>
-              <span>Cumplimiento</span>
+              <span>Brecha vs meta</span>
+              <strong [class]="getRegionIncomeGapClass(region)"> {{ formatSignedMoney(getRegionIncomeGap(region)) }}</strong>
+            </div>
+
+            <div>
+              <span>Cumplimiento regional</span>
               <strong>{{ formatPercent(region.summary.cumplimiento_ingreso_pct) }}</strong>
             </div>
 
             <div>
-              <span>Clientes nuevos</span>
+              <span>Clientes nuevos regionales</span>
               <strong>{{ formatInteger(region.summary.clientes_nuevos_real_mtd) }}</strong>
             </div>
           </div>
@@ -190,24 +225,27 @@
             <table class="branches-table">
               <thead>
                 <tr>
-                  <th>Orden</th>
+                  <th>Top</th>
                   <th>Club</th>
-                  <th>Ingreso</th>
-                  <th>Meta</th>
+                  <th>Ingreso real</th>
+                  <th>Meta FAYCGO</th>
+                  <th>Brecha vs meta</th>
                   <th>Cumplimiento</th>
                   <th>Clientes nuevos</th>
                 </tr>
               </thead>
 
               <tbody>
-                <tr *ngFor="let branch of region.branches">
-                  <td>{{ branch.orden_apertura || '-' }}</td>
+                <tr *ngFor="let branch of getRegionBranchesForDisplay(region)">
+                  <td>{{ getBranchRegionalRank(region, branch) }}°</td>   
                   <td>{{ branch.sucursal_name }}</td>
                   <td class="numeric">
                     {{ formatMoney(branch.ingreso_real_total_mtd) }}
                   </td>
                   <td class="numeric">
                     {{ formatMoney(branch.meta_faycgo_mes) }}
+                  </td>
+                  <td class="numeric strong"><span [class]="getBranchIncomeGapClass(branch)">{{ formatSignedMoney(getBranchIncomeGap(branch)) }}</span>
                   </td>
                   <td class="numeric strong">
                     {{ formatPercent(branch.cumplimiento_ingreso_pct) }}

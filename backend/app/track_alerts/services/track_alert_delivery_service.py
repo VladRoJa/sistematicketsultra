@@ -12,6 +12,12 @@ from app.track_alerts.services.track_alert_email_renderer_service import (
     render_executive_alert_email,
 )
 from app.utils.email_sender import send_email_html
+from app.track_alerts.services.track_alert_region_rules_service import (
+    evaluate_regional_rankings,
+)
+from app.track_alerts.services.track_alert_region_email_renderer_service import (
+    render_regional_executive_email,
+)
 
 
 def send_executive_track_alert_email(
@@ -69,6 +75,59 @@ def send_executive_track_alert_email(
         "sent_at": sent_at.isoformat(),
     }
 
+def send_regional_executive_track_alert_email(
+    *,
+    track_date: date,
+    generation_mode: str = "manual_preview",
+    to_list: list[str],
+) -> dict[str, Any]:
+    if not to_list:
+        raise RuntimeError("No se recibieron destinatarios para alertas regionales Track.")
+
+    rankings = evaluate_regional_rankings(
+        track_date=track_date,
+        generation_mode=generation_mode,
+    )
+
+    income_compliance_ranking = rankings["income_compliance_ranking"]
+    income_ranking = rankings["income_ranking"]
+    new_clients_ranking = rankings["new_clients_ranking"]
+
+    if not income_compliance_ranking:
+        return {
+            "track_date": track_date.isoformat(),
+            "generation_mode": generation_mode,
+            "sent": False,
+            "reason": "No hay ranking regional disponible para enviar.",
+            "total_regions": 0,
+            "recipients": to_list,
+        }
+
+    rendered = render_regional_executive_email(
+        track_date=track_date.isoformat(),
+        income_compliance_ranking=income_compliance_ranking,
+        income_ranking=income_ranking,
+        new_clients_ranking=new_clients_ranking,
+        generation_mode=generation_mode,
+    )
+
+    send_email_html(
+        to_list=to_list,
+        subject=rendered["subject"],
+        html=rendered["html"],
+    )
+
+    sent_at = datetime.now(timezone.utc)
+
+    return {
+        "track_date": track_date.isoformat(),
+        "generation_mode": generation_mode,
+        "sent": True,
+        "subject": rendered["subject"],
+        "total_regions": rendered["total_regions"],
+        "recipients": to_list,
+        "sent_at": sent_at.isoformat(),
+    }
 
 def _get_events_for_delivery(
     *,
