@@ -14,7 +14,7 @@ from app.models import (
     PlanningTargetBatchORM,
     PlanningTargetBranchRowORM,
 )
-from app.models.warehouse import TrackBranchCatalogORM
+from app.models.warehouse import TrackBranchCatalogORM, TrackMonthlyTargetORM
 
 
 class PlanningTargetsServiceError(RuntimeError):
@@ -96,6 +96,13 @@ class ApprovePlanningTargetBatchCommand:
 class RejectPlanningTargetBatchCommand:
     batch_id: int
     rejected_by_user_id: int | None = None
+    actor_username_snapshot: str | None = None
+    comment: str | None = None
+
+@dataclass(slots=True)
+class PublishPlanningTargetBatchCommand:
+    batch_id: int
+    published_by_user_id: int | None = None
     actor_username_snapshot: str | None = None
     comment: str | None = None
 
@@ -419,6 +426,30 @@ def _ensure_batch_can_reject(batch: PlanningTargetBatchORM) -> None:
             f"desde status={batch.status!r}."
         )
 
+def _ensure_batch_can_publish(batch: PlanningTargetBatchORM) -> None:
+    if batch.status != "APROBADA":
+        raise PlanningTargetsServiceError(
+            f"El batch id={batch.id!r} no puede publicarse "
+            f"desde status={batch.status!r}."
+        )
+
+    if not batch.branch_rows:
+        raise PlanningTargetsServiceError(
+            f"El batch id={batch.id!r} no puede publicarse "
+            "porque no tiene filas por sucursal."
+        )
+
+    invalid_rows = [
+        row.sucursal_canon
+        for row in batch.branch_rows
+        if row.status != "APROBADA"
+    ]
+
+    if invalid_rows:
+        raise PlanningTargetsServiceError(
+            "No se puede publicar el batch porque hay filas no aprobadas: "
+            + ", ".join(invalid_rows)
+        )
 
 def _ensure_required_comment(value: Any, *, field_name: str) -> str:
     normalized = _ensure_text(value, field_name=field_name)
@@ -1098,5 +1129,133 @@ def reject_target_batch(
         "rejected_by_user_id": batch.rejected_by_user_id,
         "rejected_at": _serialize_datetime(batch.rejected_at),
         "rejection_comment": batch.rejection_comment,
+        "event_id": event.id,
+    }
+    
+def publish_approved_batch_to_track(
+    command: PublishPlanningTargetBatchCommand,
+) -> dict[str, Any]:
+    if not isinstance(command, PublishPlanningTargetBatchCommand):
+        raise PlanningTargetsServiceError(
+            "command debe ser instancia de PublishPlanningTargetBatchCommand."
+        )
+
+    batch = _get_target_batch(command.batch_id)
+    _ensure_batch_can_publish(batch)
+
+    published_by_user_id = _ensure_optional_user_id(
+        command.published_by_user_id,
+        field_name="published_by_user_id",
+    )
+
+    previous_status = batch.status
+    now = _utc_now()
+
+    replaced_active_targets_count = 0
+    created_targets_count = 0
+
+    try:
+        # Si ya había otro batch canónico para el mismo mes, lo dejamos como reemplazado.
+        # Esto mantiene un solo paquete mensual vigente a nivel conceptual.
+        previous_canonical_batches = (
+            PlanningTargetBatchORM.query
+            .filter(
+                PlanningTargetBatchORM.target_month == batch.target_month,
+                PlanningTargetBatchORM.is_canonical.is_(True),
+                PlanningTargetBatchORM.id != batch.id,
+            )
+            .all()
+        )
+
+        for previous_batch in previous_canonical_batches:
+            previous_batch.is_canonical = False
+            if previous_batch.status == "PUBLICADA":
+                previous_batch.status = "REEMPLAZADA"
+
+        for branch_row in batch.branch_rows:
+            existing_active = TrackMonthlyTargetORM.query.filter_by(
+                target_month=batch.target_month,
+                sucursal_canon=branch_row.sucursal_canon,
+                is_active=True,
+            ).first()
+
+            if existing_active is not None:
+                existing_active.is_active = False
+                replaced_active_targets_count += 1
+
+            track_target = TrackMonthlyTargetORM(
+                target_month=batch.target_month,
+                sucursal_canon=branch_row.sucursal_canon,
+                m2_sin_circulaciones=branch_row.m2_sin_circulaciones,
+                usuarios_inicio_mes=branch_row.usuarios_inicio_mes,
+                proyeccion_usuarios_cierre_mes=(
+                    branch_row.proyeccion_usuarios_cierre_mes
+                ),
+                meta_faycgo_mes=branch_row.meta_faycgo_mes,
+                meta_clientes_nuevos_mes=branch_row.meta_clientes_nuevos_mes,
+                meta_reactivaciones_mes=branch_row.meta_reactivaciones_mes,
+                meta_bajas_mes=branch_row.meta_bajas_mes,
+                meta_nuevos_domiciliados_mes=(
+                    branch_row.meta_nuevos_domiciliados_mes
+                ),
+                meta_arpu_mes=branch_row.meta_arpu_mes,
+                meta_venta_tienda_mes=branch_row.meta_venta_tienda_mes,
+                is_active=True,
+                notes=(
+                    f"Publicado desde Planning batch_id={batch.id}, "
+                    f"branch_row_id={branch_row.id}."
+                ),
+            )
+
+            db.session.add(track_target)
+            db.session.flush()
+
+            branch_row.published_track_monthly_target_id = track_target.id
+            branch_row.status = "PUBLICADA"
+            created_targets_count += 1
+
+        batch.status = "PUBLICADA"
+        batch.published_at = now
+        batch.is_canonical = True
+
+        event = PlanningTargetApprovalEventORM(
+            batch_id=batch.id,
+            branch_row_id=None,
+            event_type="PUBLISHED_TO_TRACK",
+            from_status=previous_status,
+            to_status=batch.status,
+            actor_user_id=published_by_user_id,
+            actor_username_snapshot=_ensure_optional_text(
+                command.actor_username_snapshot
+            ),
+            comment=_ensure_optional_text(command.comment),
+            metadata_json={
+                "branch_rows_count": len(batch.branch_rows),
+                "target_month": batch.target_month.isoformat(),
+                "version": batch.version,
+                "created_targets_count": created_targets_count,
+                "replaced_active_targets_count": replaced_active_targets_count,
+                "previous_canonical_batches_count": len(previous_canonical_batches),
+            },
+        )
+
+        db.session.add(event)
+        db.session.commit()
+
+    except Exception:
+        db.session.rollback()
+        raise
+
+    return {
+        "status": "published",
+        "id": batch.id,
+        "target_month": batch.target_month.isoformat(),
+        "version": batch.version,
+        "previous_status": previous_status,
+        "batch_status": batch.status,
+        "published_at": _serialize_datetime(batch.published_at),
+        "is_canonical": batch.is_canonical,
+        "created_targets_count": created_targets_count,
+        "replaced_active_targets_count": replaced_active_targets_count,
         "event_id": event.id,
     }

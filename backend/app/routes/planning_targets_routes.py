@@ -10,21 +10,23 @@ from flask_jwt_extended import get_jwt, jwt_required
 
 from app.warehouse.services.planning_targets_service import (
     AddPlanningTargetBranchRowCommand,
+    ApprovePlanningTargetBatchCommand,
     CreatePlanningModelConfigCommand,
     CreatePlanningTargetBatchCommand,
     PlanningTargetsServiceError,
+    PublishPlanningTargetBatchCommand,
+    RejectPlanningTargetBatchCommand,
     SubmitPlanningTargetBatchCommand,
     add_branch_row_to_batch,
+    approve_target_batch,
     create_model_config,
     create_target_batch,
     get_batch_detail,
     list_model_configs,
     list_target_batches,
-    submit_target_batch,
-    ApprovePlanningTargetBatchCommand,
-    RejectPlanningTargetBatchCommand,
-    approve_target_batch,
+    publish_approved_batch_to_track,
     reject_target_batch,
+    submit_target_batch,
 )
 
 
@@ -218,6 +220,36 @@ def reject_target_batch_route(batch_id: int):
             RejectPlanningTargetBatchCommand(
                 batch_id=batch_id,
                 rejected_by_user_id=_current_user_id_or_none(),
+                actor_username_snapshot=_current_username_or_none(),
+                comment=payload.get("comment"),
+            )
+        )
+
+        return _success(result)
+
+    except PlanningTargetsServiceError as exc:
+        return _service_error(exc)
+
+@planning_targets_bp.route(
+    "/batches/<int:batch_id>/publish",
+    methods=["POST"],
+)
+@jwt_required()
+def publish_approved_batch_to_track_route(batch_id: int):
+    try:
+        payload = request.get_json(silent=True)
+        if payload is None:
+            payload = {}
+
+        if not isinstance(payload, dict):
+            raise PlanningTargetsServiceError(
+                "El body debe ser JSON tipo objeto."
+            )
+
+        result = publish_approved_batch_to_track(
+            PublishPlanningTargetBatchCommand(
+                batch_id=batch_id,
+                published_by_user_id=_current_user_id_or_none(),
                 actor_username_snapshot=_current_username_or_none(),
                 comment=payload.get("comment"),
             )
