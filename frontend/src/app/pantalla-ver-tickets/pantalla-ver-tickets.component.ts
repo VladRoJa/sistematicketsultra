@@ -10,7 +10,7 @@ import { HttpClient } from '@angular/common/http';
 import { RefrescoService } from '../services/refresco.service';
 import * as FiltrosGenericos from './helpers/filtros-genericos';
 import { HttpHeaders } from '@angular/common/http';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 
 
@@ -301,7 +301,7 @@ export class PantallaVerTicketsComponent implements OnInit, OnDestroy {
     private sucursalesService: SucursalesService,
     private authService: AuthService, 
     private route: ActivatedRoute,
-    
+    private router: Router,
   ) {}
 ngAfterViewInit(): void {
   const triggers = [
@@ -501,6 +501,17 @@ private cargarSucursalesParaTickets(): Promise<void> {
   });
 }
 
+private limpiarEstadoQueryParam(): void {
+  this.router.navigate([], {
+    relativeTo: this.route,
+    queryParams: {
+      estado: null,
+    },
+    queryParamsHandling: 'merge',
+    replaceUrl: true,
+  });
+}
+
 private escucharFiltroEstadoDesdeQueryParams(): void {
   this.queryParamsSubscription = this.route.queryParamMap.subscribe((params) => {
     const estado = this.normalizarTextoFiltro(params.get('estado'));
@@ -565,6 +576,7 @@ private aplicarFiltroEstadoDesdeQueryParamSiEsPosible(): void {
   this.filtroEstadoQueryIntentos = 0;
 
   this.filtrarCardEstado(estado);
+  this.limpiarEstadoQueryParam();
 }
 
 refrescarTicketsPreservandoFiltros(): void {
@@ -1785,6 +1797,38 @@ abrirEditarFechaSolucion(ticket: Ticket) {
   });
 }
 
+getCodigoInternoEquipo(ticket: Ticket): string {
+  const codigo = ticket?.inventario?.codigo_interno;
+
+  if (codigo === null || codigo === undefined) {
+    return '';
+  }
+
+  return String(codigo).trim();
+}
+
+puedeMostrarCodigoInternoEquipo(ticket: Ticket): boolean {
+  return this.getCodigoInternoEquipo(ticket).length > 0;
+}
+
+async copiarCodigoInternoEquipo(ticket: Ticket, event?: MouseEvent): Promise<void> {
+  event?.stopPropagation();
+
+  const codigo = this.getCodigoInternoEquipo(ticket);
+
+  if (!codigo) {
+    mostrarAlertaToast('Este equipo no tiene código interno registrado.', 'error');
+    return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(codigo);
+    mostrarAlertaToast(`Código copiado: ${codigo}`, 'success');
+  } catch (error) {
+    console.error('No se pudo copiar el código interno:', error);
+    mostrarAlertaToast('No se pudo copiar el código interno.', 'error');
+  }
+}
 
 public getNombreEquipoOInventario(ticket: Ticket): string {
   if (ticket.inventario?.nombre) return ticket.inventario.nombre;
