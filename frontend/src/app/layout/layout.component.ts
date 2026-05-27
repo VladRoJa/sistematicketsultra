@@ -1,6 +1,6 @@
 // src/app/layout/layout.component.ts
 
-import { Component, ElementRef, ViewChild, Renderer2, OnInit, AfterViewInit } from '@angular/core';
+import { Component, ElementRef, ViewChild, Renderer2, OnInit, AfterViewInit, OnDestroy } from '@angular/core';
 import { Router, RouterModule, RouterOutlet } from '@angular/router';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
@@ -16,8 +16,8 @@ import { AuthService } from '../services/auth.service';
 import { ReauthModalComponent } from '../reauth-modal/reauth-modal.component';
 import { InactividadService } from '../services/inactividad.service';
 import { SessionService } from '../core/auth/session.service';
-import { DragDropModule } from '@angular/cdk/drag-drop';
-
+import { CdkDragEnd, DragDropModule } from '@angular/cdk/drag-drop';
+import { TicketService, TicketValidationSummary } from '../services/ticket.service';
 
 @Component({
   selector: 'app-layout',
@@ -35,7 +35,7 @@ import { DragDropModule } from '@angular/cdk/drag-drop';
     DragDropModule
   ]
 })
-export class LayoutComponent implements OnInit, AfterViewInit {
+export class LayoutComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('indicator', { static: true }) indicator!: ElementRef;
 
   esAdmin = false;
@@ -55,6 +55,15 @@ export class LayoutComponent implements OnInit, AfterViewInit {
   puedeVerWarehouse = false;
   usuarioLabel = '';
   reporteBugFueArrastrado = false;
+  validationSummary: TicketValidationSummary | null = null;
+  validationAlertFueArrastrada = false;
+  validationAlertPosition = { x: 0, y: 0 };
+
+  private validationSummaryIntervalId: ReturnType<typeof setInterval> | null = null;
+  private readonly validationSummaryRefreshMs = 60 * 1000;
+  private readonly validationAlertSnoozeMs = 3 * 60 * 1000;
+  private readonly validationAlertSnoozeKey = 'suite.ticketValidationAlert.snoozeUntil';
+  private readonly validationAlertPositionKey = 'suite.ticketValidationAlert.position';
 
   private apiUrl = `${environment.apiUrl}/tickets`;
 
@@ -71,6 +80,7 @@ export class LayoutComponent implements OnInit, AfterViewInit {
     private authService: AuthService,
     private inactividadService: InactividadService,
     private session: SessionService,
+    private ticketService: TicketService,
   ) {}
 
 ngOnInit(): void {
@@ -258,6 +268,12 @@ const menuMantenimientoGerencial = [
   }
   this.habilitarWarehouseEnMenuSiAplica(menuWarehouse);
   this.sincronizarMenuConRutaActual();
+  this.cargarTicketValidationAlertPosition();
+  this.cargarTicketValidationSummary();
+
+  this.validationSummaryIntervalId = setInterval(() => {
+    this.cargarTicketValidationSummary();
+  }, this.validationSummaryRefreshMs);
   }
 
 private habilitarWarehouseEnMenuSiAplica(menuWarehouse: any): void {
@@ -381,6 +397,13 @@ private habilitarWarehouseEnMenuSiAplica(menuWarehouse: any): void {
   ngAfterViewInit(): void {
     this.inicializarIndicador();
   }
+
+ngOnDestroy(): void {
+  if (this.validationSummaryIntervalId) {
+    clearInterval(this.validationSummaryIntervalId);
+    this.validationSummaryIntervalId = null;
+  }
+}
 
 private verificarRolUsuario(): void {
   const user = this.authService.getUser();
@@ -557,6 +580,159 @@ private verificarRolUsuario(): void {
   if (menuMatch) {
     this.currentSubmenu = menuMatch.label;
   }
+}
+
+private cargarTicketValidationSummary(): void {
+  this.ticketService.getValidationSummary().subscribe({
+    next: (summary) => {
+      this.validationSummary = summary;
+    },
+    error: () => {
+      this.validationSummary = null;
+    },
+  });
+}
+
+private cargarTicketValidationAlertPosition(): void {
+  const rawPosition = localStorage.getItem(this.validationAlertPositionKey);
+
+  if (!rawPosition) {
+    this.validationAlertPosition = { x: 0, y: 0 };
+    return;
+  }
+
+  try {
+    const parsed = JSON.parse(rawPosition);
+    const x = Number(parsed?.x ?? 0);
+    const y = Number(parsed?.y ?? 0);
+
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      localStorage.removeItem(this.validationAlertPositionKey);
+      this.validationAlertPosition = { x: 0, y: 0 };
+      return;
+    }
+
+    this.validationAlertPosition = { x, y };
+  } catch {
+    localStorage.removeItem(this.validationAlertPositionKey);
+    this.validationAlertPosition = { x: 0, y: 0 };
+  }
+}
+
+get shouldShowValidationAlert(): boolean {
+  if (!this.validationSummary) {
+    return false;
+  }
+
+  if (this.validationSummary.total_por_validar <= 0) {
+    return false;
+  }
+
+  return !this.isTicketValidationAlertSnoozed();
+}
+
+private isTicketValidationAlertSnoozed(): boolean {
+  const rawValue = localStorage.getItem(this.validationAlertSnoozeKey);
+
+  if (!rawValue) {
+    return false;
+  }
+
+  const snoozeUntil = Number(rawValue);
+
+  if (!Number.isFinite(snoozeUntil)) {
+    localStorage.removeItem(this.validationAlertSnoozeKey);
+    return false;
+  }
+
+  if (Date.now() >= snoozeUntil) {
+    localStorage.removeItem(this.validationAlertSnoozeKey);
+    return false;
+  }
+
+  return true;
+}
+
+dismissTicketValidationAlert(event: MouseEvent): void {
+  event.preventDefault();
+  event.stopPropagation();
+
+  const snoozeUntil = Date.now() + this.validationAlertSnoozeMs;
+  localStorage.setItem(this.validationAlertSnoozeKey, String(snoozeUntil));
+}
+
+onTicketValidationDragStarted(): void {
+  this.validationAlertFueArrastrada = false;
+}
+
+onTicketValidationDragEnded(event: CdkDragEnd): void {
+  const movioEnX = Math.abs(event.distance?.x || 0) > 3;
+  const movioEnY = Math.abs(event.distance?.y || 0) > 3;
+
+  this.validationAlertFueArrastrada = movioEnX || movioEnY;
+
+  const freePosition = event.source.getFreeDragPosition();
+  this.validationAlertPosition = {
+    x: freePosition.x,
+    y: freePosition.y,
+  };
+
+  localStorage.setItem(
+    this.validationAlertPositionKey,
+    JSON.stringify(this.validationAlertPosition)
+  );
+}
+
+goToTicketValidationList(): void {
+  if (this.validationAlertFueArrastrada) {
+    this.validationAlertFueArrastrada = false;
+    return;
+  }
+
+  this.currentSubmenu = 'Tickets';
+  this.submenuActivo['Tickets'] = 'Ver Tickets';
+
+  this.router.navigate(['/main/ver-tickets'], {
+    queryParams: {
+      estado: 'por_validar',
+    },
+  });
+}
+
+getTicketValidationIcon(): string {
+  if (!this.validationSummary || this.validationSummary.severity === 'normal') {
+    return 'assignment_turned_in';
+  }
+
+  return 'warning_amber';
+}
+
+getTicketValidationTitle(): string {
+  if (!this.validationSummary) {
+    return 'Por validar';
+  }
+
+  if (this.validationSummary.severity === 'critical') {
+    return `${this.validationSummary.mayores_72h} críticos`;
+  }
+
+  return 'Por validar';
+}
+
+getTicketValidationSubtitle(): string {
+  if (!this.validationSummary) {
+    return 'Clic para revisar';
+  }
+
+  if (this.validationSummary.severity === 'critical') {
+    return `${this.validationSummary.total_por_validar} pendientes · 72h+`;
+  }
+
+  if (this.validationSummary.severity === 'warning') {
+    return `${this.validationSummary.mayores_48h} con 48h+`;
+  }
+
+  return 'Clic para revisar';
 }
 
 onReporteBugDragStarted(): void {

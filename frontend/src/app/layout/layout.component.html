@@ -117,6 +117,62 @@
   <router-outlet></router-outlet>
 </main>
 
+
+<!-- ==========================================================================
+     Suite Ultra UI v1 - Alerta flotante de tickets por validar
+     ========================================================================== -->
+
+<div class="suite-floating-layer">
+  <div
+    *ngIf="shouldShowValidationAlert"
+    class="validation-floating-alert"
+    [class.validation-floating-alert--normal]="validationSummary?.severity === 'normal'"
+    [class.validation-floating-alert--warning]="validationSummary?.severity === 'warning'"
+    [class.validation-floating-alert--critical]="validationSummary?.severity === 'critical'"
+    cdkDrag
+    cdkDragBoundary=".suite-floating-layer"
+    [cdkDragFreeDragPosition]="validationAlertPosition"
+    (cdkDragStarted)="onTicketValidationDragStarted()"
+    (cdkDragEnded)="onTicketValidationDragEnded($event)"
+    (click)="goToTicketValidationList()"
+    (keydown.enter)="goToTicketValidationList()"
+    (keydown.space)="goToTicketValidationList()"
+    role="button"
+    tabindex="0"
+    aria-label="Revisar tickets por validar"
+  >
+    <div class="validation-floating-alert__halo"></div>
+
+    <div class="validation-floating-alert__content">
+      <span class="validation-floating-alert__icon-wrap">
+        <mat-icon class="validation-floating-alert__icon">
+          {{ getTicketValidationIcon() }}
+        </mat-icon>
+      </span>
+
+      <span class="validation-floating-alert__text">
+        <strong>{{ getTicketValidationTitle() }}</strong>
+        <small>{{ getTicketValidationSubtitle() }}</small>
+      </span>
+
+      <span class="validation-floating-alert__badge">
+        {{ validationSummary?.total_por_validar }}
+      </span>
+    </div>
+
+    <button
+      type="button"
+      class="validation-floating-alert__close"
+      aria-label="Ocultar alerta por 3 minutos"
+      title="Ocultar por 3 minutos"
+      (click)="dismissTicketValidationAlert($event)"
+    >
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
+</div>
+
+
 <!-- ==========================================================================
      Suite Ultra UI v1 - Acción flotante para reporte de errores
      ========================================================================== -->
