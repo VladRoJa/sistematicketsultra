@@ -21,6 +21,10 @@ from app.warehouse.services.planning_targets_service import (
     list_model_configs,
     list_target_batches,
     submit_target_batch,
+    ApprovePlanningTargetBatchCommand,
+    RejectPlanningTargetBatchCommand,
+    approve_target_batch,
+    reject_target_batch,
 )
 
 
@@ -159,6 +163,67 @@ def create_model_config_route():
         )
 
         return _success(result, status_code=201)
+
+    except PlanningTargetsServiceError as exc:
+        return _service_error(exc)
+
+@planning_targets_bp.route(
+    "/batches/<int:batch_id>/approve",
+    methods=["POST"],
+)
+@jwt_required()
+def approve_target_batch_route(batch_id: int):
+    try:
+        payload = request.get_json(silent=True)
+        if payload is None:
+            payload = {}
+
+        if not isinstance(payload, dict):
+            raise PlanningTargetsServiceError(
+                "El body debe ser JSON tipo objeto."
+            )
+
+        result = approve_target_batch(
+            ApprovePlanningTargetBatchCommand(
+                batch_id=batch_id,
+                approved_by_user_id=_current_user_id_or_none(),
+                actor_username_snapshot=_current_username_or_none(),
+                comment=payload.get("comment"),
+            )
+        )
+
+        return _success(result)
+
+    except PlanningTargetsServiceError as exc:
+        return _service_error(exc)
+
+
+@planning_targets_bp.route(
+    "/batches/<int:batch_id>/reject",
+    methods=["POST"],
+)
+@jwt_required()
+def reject_target_batch_route(batch_id: int):
+    try:
+        payload = request.get_json(silent=True)
+        if payload is None:
+            payload = {}
+
+        if not isinstance(payload, dict):
+            raise PlanningTargetsServiceError(
+                "El body debe ser JSON tipo objeto."
+            )
+
+        result = reject_target_batch(
+            RejectPlanningTargetBatchCommand(
+                batch_id=batch_id,
+                rejected_by_user_id=_current_user_id_or_none(),
+                actor_username_snapshot=_current_username_or_none(),
+                comment=payload.get("comment"),
+            )
+        )
+
+        return _success(result)
 
     except PlanningTargetsServiceError as exc:
         return _service_error(exc)
