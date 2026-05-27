@@ -13,10 +13,14 @@ from app.warehouse.services.planning_targets_service import (
     CreatePlanningModelConfigCommand,
     CreatePlanningTargetBatchCommand,
     PlanningTargetsServiceError,
+    SubmitPlanningTargetBatchCommand,
     add_branch_row_to_batch,
     create_model_config,
     create_target_batch,
     get_batch_detail,
+    list_model_configs,
+    list_target_batches,
+    submit_target_batch,
 )
 
 
@@ -56,6 +60,19 @@ def _current_user_id_or_none() -> int | None:
 
     return None
 
+def _current_username_or_none() -> str | None:
+    claims = get_jwt() or {}
+
+    for key in ("username", "sub", "user"):
+        raw_value = claims.get(key)
+        if raw_value is None:
+            continue
+
+        normalized = str(raw_value).strip()
+        if normalized:
+            return normalized
+
+    return None
 
 def _optional_decimal(value: Any) -> Decimal | None:
     if value is None:
@@ -85,6 +102,17 @@ def _service_error(exc: PlanningTargetsServiceError):
         }
     ), 400
 
+@planning_targets_bp.route("/model-configs", methods=["GET"])
+@jwt_required()
+def list_model_configs_route():
+    try:
+        result = list_model_configs(
+            status=request.args.get("status"),
+        )
+        return _success(result)
+
+    except PlanningTargetsServiceError as exc:
+        return _service_error(exc)
 
 @planning_targets_bp.route("/model-configs", methods=["POST"])
 @jwt_required()
@@ -135,6 +163,18 @@ def create_model_config_route():
     except PlanningTargetsServiceError as exc:
         return _service_error(exc)
 
+@planning_targets_bp.route("/batches", methods=["GET"])
+@jwt_required()
+def list_target_batches_route():
+    try:
+        result = list_target_batches(
+            target_month=request.args.get("target_month"),
+            status=request.args.get("status"),
+        )
+        return _success(result)
+
+    except PlanningTargetsServiceError as exc:
+        return _service_error(exc)
 
 @planning_targets_bp.route("/batches", methods=["POST"])
 @jwt_required()
@@ -225,6 +265,35 @@ def add_branch_row_to_batch_route(batch_id: int):
     except PlanningTargetsServiceError as exc:
         return _service_error(exc)
 
+@planning_targets_bp.route(
+    "/batches/<int:batch_id>/submit",
+    methods=["POST"],
+)
+@jwt_required()
+def submit_target_batch_route(batch_id: int):
+    try:
+        payload = request.get_json(silent=True)
+        if payload is None:
+            payload = {}
+
+        if not isinstance(payload, dict):
+            raise PlanningTargetsServiceError(
+                "El body debe ser JSON tipo objeto."
+            )
+
+        result = submit_target_batch(
+            SubmitPlanningTargetBatchCommand(
+                batch_id=batch_id,
+                submitted_by_user_id=_current_user_id_or_none(),
+                actor_username_snapshot=_current_username_or_none(),
+                comment=payload.get("comment"),
+            )
+        )
+
+        return _success(result)
+
+    except PlanningTargetsServiceError as exc:
+        return _service_error(exc)
 
 @planning_targets_bp.route("/batches/<int:batch_id>", methods=["GET"])
 @jwt_required()

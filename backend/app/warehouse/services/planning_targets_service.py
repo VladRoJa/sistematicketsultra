@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any
 
 from app.extensions import db
 from app.models import (
     PlanningModelConfigORM,
+    PlanningTargetApprovalEventORM,
     PlanningTargetBatchORM,
     PlanningTargetBranchRowORM,
 )
@@ -77,6 +78,13 @@ class AddPlanningTargetBranchRowCommand:
     previous_branch_row_id: int | None = None
     notes: str | None = None
 
+@dataclass(slots=True)
+class SubmitPlanningTargetBatchCommand:
+    batch_id: int
+    submitted_by_user_id: int | None = None
+    actor_username_snapshot: str | None = None
+    comment: str | None = None
+
 def _ensure_text(value: Any, *, field_name: str) -> str:
     normalized = str(value or "").strip()
     if not normalized:
@@ -93,6 +101,8 @@ def _ensure_optional_text(value: Any) -> str | None:
     normalized = str(value).strip()
     return normalized or None
 
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
 
 def _ensure_positive_int(value: Any, *, field_name: str) -> int:
     if isinstance(value, bool):
@@ -358,6 +368,21 @@ def _ensure_previous_branch_row_exists(
     if exists is None:
         raise PlanningTargetsServiceError(
             f"No existe planning_target_branch_rows.id={normalized_id!r}."
+        )
+
+def _ensure_batch_can_submit(batch: PlanningTargetBatchORM) -> None:
+    allowed_statuses = {"BORRADOR", "PROPUESTA"}
+
+    if batch.status not in allowed_statuses:
+        raise PlanningTargetsServiceError(
+            f"El batch id={batch.id!r} no puede enviarse a revisión "
+            f"desde status={batch.status!r}."
+        )
+
+    if not batch.branch_rows:
+        raise PlanningTargetsServiceError(
+            f"El batch id={batch.id!r} no puede enviarse a revisión "
+            "porque no tiene filas por sucursal."
         )
 
 def _serialize_decimal(value: Any) -> str | None:
@@ -718,4 +743,181 @@ def get_batch_detail(batch_id: int) -> dict[str, Any]:
             }
             for event in batch.approval_events
         ],
+    }
+    
+def list_model_configs(
+    *,
+    status: str | None = None,
+) -> dict[str, Any]:
+    query = PlanningModelConfigORM.query
+
+    normalized_status = _ensure_optional_text(status)
+    if normalized_status is not None:
+        query = query.filter_by(status=normalized_status)
+
+    rows = (
+        query
+        .order_by(
+            PlanningModelConfigORM.name.asc(),
+            PlanningModelConfigORM.version.desc(),
+            PlanningModelConfigORM.id.desc(),
+        )
+        .all()
+    )
+
+    return {
+        "status": "ok",
+        "items": [
+            {
+                "id": row.id,
+                "name": row.name,
+                "version": row.version,
+                "model_status": row.status,
+                "description": row.description,
+                "trend_window_months": row.trend_window_months,
+                "trend_closed_months_only": row.trend_closed_months_only,
+                "arpu_strategy": row.arpu_strategy,
+                "bajas_strategy": row.bajas_strategy,
+                "reactivaciones_strategy": row.reactivaciones_strategy,
+                "domiciliados_strategy": row.domiciliados_strategy,
+                "aggregators_strategy": row.aggregators_strategy,
+                "new_branch_strategy": row.new_branch_strategy,
+                "risk_rules_json": row.risk_rules_json,
+                "parameters_json": row.parameters_json,
+                "created_by_user_id": row.created_by_user_id,
+                "activated_by_user_id": row.activated_by_user_id,
+                "activated_at": _serialize_datetime(row.activated_at),
+                "replaced_by_config_id": row.replaced_by_config_id,
+                "notes": row.notes,
+                "created_at": _serialize_datetime(row.created_at),
+                "updated_at": _serialize_datetime(row.updated_at),
+            }
+            for row in rows
+        ],
+    }
+    
+def list_target_batches(
+    *,
+    target_month: Any = None,
+    status: str | None = None,
+) -> dict[str, Any]:
+    query = PlanningTargetBatchORM.query
+
+    if target_month is not None:
+        normalized_target_month = _normalize_target_month(target_month)
+        query = query.filter_by(target_month=normalized_target_month)
+
+    normalized_status = _ensure_optional_text(status)
+    if normalized_status is not None:
+        query = query.filter_by(status=normalized_status)
+
+    rows = (
+        query
+        .order_by(
+            PlanningTargetBatchORM.target_month.desc(),
+            PlanningTargetBatchORM.version.desc(),
+            PlanningTargetBatchORM.id.desc(),
+        )
+        .all()
+    )
+
+    return {
+        "status": "ok",
+        "items": [
+            {
+                "id": row.id,
+                "target_month": row.target_month.isoformat(),
+                "version": row.version,
+                "batch_status": row.status,
+                "scope": row.scope,
+                "source_type": row.source_type,
+                "source_upload_id": row.source_upload_id,
+                "model_config_id": row.model_config_id,
+                "model_config": None
+                if row.model_config is None
+                else {
+                    "id": row.model_config.id,
+                    "name": row.model_config.name,
+                    "version": row.model_config.version,
+                    "status": row.model_config.status,
+                },
+                "scenario_base": row.scenario_base,
+                "proposed_by_user_id": row.proposed_by_user_id,
+                "proposed_at": _serialize_datetime(row.proposed_at),
+                "approved_by_user_id": row.approved_by_user_id,
+                "approved_at": _serialize_datetime(row.approved_at),
+                "rejected_by_user_id": row.rejected_by_user_id,
+                "rejected_at": _serialize_datetime(row.rejected_at),
+                "rejection_comment": row.rejection_comment,
+                "published_at": _serialize_datetime(row.published_at),
+                "is_canonical": row.is_canonical,
+                "notes": row.notes,
+                "created_by_user_id": row.created_by_user_id,
+                "created_at": _serialize_datetime(row.created_at),
+                "updated_at": _serialize_datetime(row.updated_at),
+                "branch_rows_count": len(row.branch_rows),
+            }
+            for row in rows
+        ],
+    }
+    
+def submit_target_batch(
+    command: SubmitPlanningTargetBatchCommand,
+) -> dict[str, Any]:
+    if not isinstance(command, SubmitPlanningTargetBatchCommand):
+        raise PlanningTargetsServiceError(
+            "command debe ser instancia de SubmitPlanningTargetBatchCommand."
+        )
+
+    batch = _get_target_batch(command.batch_id)
+    _ensure_batch_can_submit(batch)
+
+    submitted_by_user_id = _ensure_optional_user_id(
+        command.submitted_by_user_id,
+        field_name="submitted_by_user_id",
+    )
+
+    previous_status = batch.status
+    now = _utc_now()
+
+    batch.status = "EN_REVISION"
+    batch.proposed_by_user_id = submitted_by_user_id
+    batch.proposed_at = now
+
+    event = PlanningTargetApprovalEventORM(
+        batch_id=batch.id,
+        branch_row_id=None,
+        event_type="SUBMITTED",
+        from_status=previous_status,
+        to_status=batch.status,
+        actor_user_id=submitted_by_user_id,
+        actor_username_snapshot=_ensure_optional_text(
+            command.actor_username_snapshot
+        ),
+        comment=_ensure_optional_text(command.comment),
+        metadata_json={
+            "branch_rows_count": len(batch.branch_rows),
+            "target_month": batch.target_month.isoformat(),
+            "version": batch.version,
+        },
+    )
+
+    db.session.add(event)
+
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
+
+    return {
+        "status": "submitted",
+        "id": batch.id,
+        "target_month": batch.target_month.isoformat(),
+        "version": batch.version,
+        "previous_status": previous_status,
+        "batch_status": batch.status,
+        "proposed_by_user_id": batch.proposed_by_user_id,
+        "proposed_at": _serialize_datetime(batch.proposed_at),
+        "event_id": event.id,
     }
