@@ -119,6 +119,7 @@ def _fetch_existing_snapshot_by_upload(
 def _fetch_existing_canonical_snapshot_for_day(
     *,
     business_date: date,
+    snapshot_kind: str,
 ) -> dict[str, Any] | None:
     sql = text(
         f"""
@@ -130,6 +131,7 @@ def _fetch_existing_canonical_snapshot_for_day(
         FROM {SNAPSHOTS_TABLE}
         WHERE report_type_key = :report_type_key
           AND business_date = :business_date
+          AND snapshot_kind = :snapshot_kind
           AND is_canonical = TRUE
         LIMIT 1
         """
@@ -140,11 +142,11 @@ def _fetch_existing_canonical_snapshot_for_day(
         {
             "report_type_key": INGRESOS_WELLHUB_REPORT_TYPE_KEY,
             "business_date": business_date,
+            "snapshot_kind": snapshot_kind,
         },
     ).mappings().first()
 
     return dict(row) if row else None
-
 
 def _insert_snapshot_header(
     *,
@@ -284,6 +286,60 @@ def _set_snapshot_canonical_state(
         },
     )
 
+def _promote_snapshot_as_only_canonical(
+    *,
+    business_date: date,
+    snapshot_kind: str,
+    snapshot_id: int,
+) -> None:
+    """
+    Marca el snapshot indicado como único canónico para ingresos_wellhub
+    en la combinación business_date + snapshot_kind.
+
+    Regla de negocio:
+    - Wellhub es snapshot MTD.
+    - Si se sube una versión corregida/más reciente del mismo día,
+      la última ingesta exitosa debe reemplazar la canonicalidad anterior.
+    """
+    unset_sql = text(
+        f"""
+        UPDATE {SNAPSHOTS_TABLE}
+        SET
+            is_canonical = FALSE,
+            updated_at = NOW()
+        WHERE report_type_key = :report_type_key
+          AND business_date = :business_date
+          AND snapshot_kind = :snapshot_kind
+          AND id <> :snapshot_id
+        """
+    )
+
+    set_sql = text(
+        f"""
+        UPDATE {SNAPSHOTS_TABLE}
+        SET
+            is_canonical = TRUE,
+            updated_at = NOW()
+        WHERE id = :snapshot_id
+        """
+    )
+
+    db.session.execute(
+        unset_sql,
+        {
+            "report_type_key": INGRESOS_WELLHUB_REPORT_TYPE_KEY,
+            "business_date": business_date,
+            "snapshot_kind": snapshot_kind,
+            "snapshot_id": snapshot_id,
+        },
+    )
+
+    db.session.execute(
+        set_sql,
+        {
+            "snapshot_id": snapshot_id,
+        },
+    )
 
 def _build_already_ingested_result(existing_snapshot: dict[str, Any]) -> dict[str, Any]:
     business_date = existing_snapshot.get("business_date")
@@ -362,7 +418,8 @@ def persist_ingresos_wellhub_snapshot(
                 )
 
             existing_canonical = _fetch_existing_canonical_snapshot_for_day(
-                business_date=business_date
+                business_date=business_date,
+                snapshot_kind=snapshot_kind,
             )
 
             snapshot_id = _insert_snapshot_header(
@@ -375,22 +432,19 @@ def persist_ingresos_wellhub_snapshot(
                 rows=rows,
             )
 
-            new_is_canonical, previous_canonical_snapshot_id = canonicality_resolver(
-                existing_canonical_snapshot=existing_canonical,
-                snapshot_kind=snapshot_kind,
+            previous_canonical_snapshot_id = (
+                existing_canonical.get("snapshot_id")
+                if existing_canonical
+                else None
             )
 
-            if previous_canonical_snapshot_id is not None:
-                _set_snapshot_canonical_state(
-                    snapshot_id=previous_canonical_snapshot_id,
-                    is_canonical=False,
-                )
+            _promote_snapshot_as_only_canonical(
+                business_date=business_date,
+                snapshot_kind=snapshot_kind,
+                snapshot_id=snapshot_id,
+            )
 
-            if new_is_canonical:
-                _set_snapshot_canonical_state(
-                    snapshot_id=snapshot_id,
-                    is_canonical=True,
-                )
+            new_is_canonical = True
 
             result = {
                 "snapshot_id": snapshot_id,
