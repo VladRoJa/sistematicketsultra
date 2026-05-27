@@ -85,6 +85,20 @@ class SubmitPlanningTargetBatchCommand:
     actor_username_snapshot: str | None = None
     comment: str | None = None
 
+@dataclass(slots=True)
+class ApprovePlanningTargetBatchCommand:
+    batch_id: int
+    approved_by_user_id: int | None = None
+    actor_username_snapshot: str | None = None
+    comment: str | None = None
+
+@dataclass(slots=True)
+class RejectPlanningTargetBatchCommand:
+    batch_id: int
+    rejected_by_user_id: int | None = None
+    actor_username_snapshot: str | None = None
+    comment: str | None = None
+
 def _ensure_text(value: Any, *, field_name: str) -> str:
     normalized = str(value or "").strip()
     if not normalized:
@@ -384,6 +398,37 @@ def _ensure_batch_can_submit(batch: PlanningTargetBatchORM) -> None:
             f"El batch id={batch.id!r} no puede enviarse a revisión "
             "porque no tiene filas por sucursal."
         )
+
+def _ensure_batch_can_approve(batch: PlanningTargetBatchORM) -> None:
+    if batch.status != "EN_REVISION":
+        raise PlanningTargetsServiceError(
+            f"El batch id={batch.id!r} no puede aprobarse "
+            f"desde status={batch.status!r}."
+        )
+
+    if not batch.branch_rows:
+        raise PlanningTargetsServiceError(
+            f"El batch id={batch.id!r} no puede aprobarse "
+            "porque no tiene filas por sucursal."
+        )
+
+def _ensure_batch_can_reject(batch: PlanningTargetBatchORM) -> None:
+    if batch.status != "EN_REVISION":
+        raise PlanningTargetsServiceError(
+            f"El batch id={batch.id!r} no puede rechazarse "
+            f"desde status={batch.status!r}."
+        )
+
+
+def _ensure_required_comment(value: Any, *, field_name: str) -> str:
+    normalized = _ensure_text(value, field_name=field_name)
+
+    if len(normalized) < 5:
+        raise PlanningTargetsServiceError(
+            f"El campo {field_name!r} debe tener al menos 5 caracteres."
+        )
+
+    return normalized
 
 def _serialize_decimal(value: Any) -> str | None:
     if value is None:
@@ -919,5 +964,139 @@ def submit_target_batch(
         "batch_status": batch.status,
         "proposed_by_user_id": batch.proposed_by_user_id,
         "proposed_at": _serialize_datetime(batch.proposed_at),
+        "event_id": event.id,
+    }
+    
+def approve_target_batch(
+    command: ApprovePlanningTargetBatchCommand,
+) -> dict[str, Any]:
+    if not isinstance(command, ApprovePlanningTargetBatchCommand):
+        raise PlanningTargetsServiceError(
+            "command debe ser instancia de ApprovePlanningTargetBatchCommand."
+        )
+
+    batch = _get_target_batch(command.batch_id)
+    _ensure_batch_can_approve(batch)
+
+    approved_by_user_id = _ensure_optional_user_id(
+        command.approved_by_user_id,
+        field_name="approved_by_user_id",
+    )
+
+    previous_status = batch.status
+    now = _utc_now()
+
+    batch.status = "APROBADA"
+    batch.approved_by_user_id = approved_by_user_id
+    batch.approved_at = now
+
+    for row in batch.branch_rows:
+        row.status = "APROBADA"
+
+    event = PlanningTargetApprovalEventORM(
+        batch_id=batch.id,
+        branch_row_id=None,
+        event_type="APPROVED",
+        from_status=previous_status,
+        to_status=batch.status,
+        actor_user_id=approved_by_user_id,
+        actor_username_snapshot=_ensure_optional_text(
+            command.actor_username_snapshot
+        ),
+        comment=_ensure_optional_text(command.comment),
+        metadata_json={
+            "branch_rows_count": len(batch.branch_rows),
+            "target_month": batch.target_month.isoformat(),
+            "version": batch.version,
+        },
+    )
+
+    db.session.add(event)
+
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
+
+    return {
+        "status": "approved",
+        "id": batch.id,
+        "target_month": batch.target_month.isoformat(),
+        "version": batch.version,
+        "previous_status": previous_status,
+        "batch_status": batch.status,
+        "approved_by_user_id": batch.approved_by_user_id,
+        "approved_at": _serialize_datetime(batch.approved_at),
+        "event_id": event.id,
+    }
+    
+def reject_target_batch(
+    command: RejectPlanningTargetBatchCommand,
+) -> dict[str, Any]:
+    if not isinstance(command, RejectPlanningTargetBatchCommand):
+        raise PlanningTargetsServiceError(
+            "command debe ser instancia de RejectPlanningTargetBatchCommand."
+        )
+
+    batch = _get_target_batch(command.batch_id)
+    _ensure_batch_can_reject(batch)
+
+    rejected_by_user_id = _ensure_optional_user_id(
+        command.rejected_by_user_id,
+        field_name="rejected_by_user_id",
+    )
+    rejection_comment = _ensure_required_comment(
+        command.comment,
+        field_name="comment",
+    )
+
+    previous_status = batch.status
+    now = _utc_now()
+
+    batch.status = "RECHAZADA"
+    batch.rejected_by_user_id = rejected_by_user_id
+    batch.rejected_at = now
+    batch.rejection_comment = rejection_comment
+
+    for row in batch.branch_rows:
+        row.status = "RECHAZADA"
+
+    event = PlanningTargetApprovalEventORM(
+        batch_id=batch.id,
+        branch_row_id=None,
+        event_type="REJECTED",
+        from_status=previous_status,
+        to_status=batch.status,
+        actor_user_id=rejected_by_user_id,
+        actor_username_snapshot=_ensure_optional_text(
+            command.actor_username_snapshot
+        ),
+        comment=rejection_comment,
+        metadata_json={
+            "branch_rows_count": len(batch.branch_rows),
+            "target_month": batch.target_month.isoformat(),
+            "version": batch.version,
+        },
+    )
+
+    db.session.add(event)
+
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
+
+    return {
+        "status": "rejected",
+        "id": batch.id,
+        "target_month": batch.target_month.isoformat(),
+        "version": batch.version,
+        "previous_status": previous_status,
+        "batch_status": batch.status,
+        "rejected_by_user_id": batch.rejected_by_user_id,
+        "rejected_at": _serialize_datetime(batch.rejected_at),
+        "rejection_comment": batch.rejection_comment,
         "event_id": event.id,
     }
