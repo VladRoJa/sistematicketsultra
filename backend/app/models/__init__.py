@@ -32,6 +32,13 @@ from .suite_governance import (
     SuiteSucursalRegionAssignmentORM,
     SuiteRegionManagerORM,
 )
+from .planning_targets import (
+    PlanningModelConfigORM,
+    PlanningTargetBatchORM,
+    PlanningTargetBranchRowORM,
+    PlanningTargetAdjustmentORM,
+    PlanningTargetApprovalEventORM,
+)
 
 
 # -------------------------------------------------------------------------------
@@ -65,4 +72,9 @@ __all__ = [
     "SuiteRegionORM",
     "SuiteSucursalRegionAssignmentORM",
     "SuiteRegionManagerORM",
+    "PlanningModelConfigORM",
+    "PlanningTargetBatchORM",
+    "PlanningTargetBranchRowORM",
+    "PlanningTargetAdjustmentORM",
+    "PlanningTargetApprovalEventORM",
 ]
