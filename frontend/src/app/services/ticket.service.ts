@@ -11,6 +11,13 @@ export interface TicketsResponse {
   total_tickets: number;
 }
 
+export interface TicketValidationSummary {
+  total_por_validar: number;
+  mayores_48h: number;
+  mayores_72h: number;
+  severity: 'none' | 'normal' | 'warning' | 'critical';
+}
+
 @Injectable({ providedIn: 'root' })
 export class TicketService {
   private apiUrl = `${environment.apiUrl}/tickets`;
@@ -73,6 +80,21 @@ export class TicketService {
     const headers = this.authJsonHeaders();
     return this.http.get<TicketsResponse>(`${this.apiUrl}/list`, { headers, params, withCredentials: true });
   }
+
+getValidationSummary(): Observable<TicketValidationSummary> {
+  const token = localStorage.getItem('token');
+  if (!token) return throwError(() => new Error('NO_TOKEN'));
+
+  const headers = this.authJsonHeaders();
+
+  return this.http.get<TicketValidationSummary>(
+    `${this.apiUrl}/validation-summary`,
+    {
+      headers,
+      withCredentials: true,
+    }
+  );
+}
 
   getAllTicketsFiltered(filtros: any): Observable<TicketsResponse> {
     let params = new HttpParams();

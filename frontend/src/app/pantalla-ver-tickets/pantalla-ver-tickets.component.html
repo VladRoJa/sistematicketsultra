@@ -743,21 +743,61 @@
 
           <td>{{ ticket.categoria || '—' }}</td>
 
-          <td class="td-aparato">
-            <div class="td-aparato-inner">
-              <span class="aparato-text">{{ getNombreCortoAparato(ticket) }}</span>
+      <td class="td-aparato">
+        <div class="td-aparato-inner">
+          <span class="aparato-text">{{ getNombreCortoAparato(ticket) }}</span>
 
-              <span
-                *ngIf="necesitaRef(ticket)"
-                class="icono-refaccion-wrap"
-                [matTooltip]="ticket.descripcion_refaccion || 'Requiere refacción'"
-                matTooltipShowDelay="1500"
-                matTooltipClass="tooltip-wide"
+          <span
+            *ngIf="necesitaRef(ticket)"
+            class="icono-refaccion-wrap"
+            [matTooltip]="ticket.descripcion_refaccion || 'Requiere refacción'"
+            matTooltipShowDelay="1500"
+            matTooltipClass="tooltip-wide"
+          >
+            <mat-icon class="icono-refaccion" color="warn">build</mat-icon>
+          </span>
+
+          <button
+            *ngIf="puedeMostrarCodigoInternoEquipo(ticket)"
+            type="button"
+            mat-icon-button
+            class="btn-codigo-equipo"
+            [matMenuTriggerFor]="menuCodigoEquipo"
+            matTooltip="Ver código del equipo"
+            matTooltipShowDelay="500"
+            (click)="$event.stopPropagation()"
+            aria-label="Ver código del equipo"
+          >
+            <mat-icon>qr_code_2</mat-icon>
+          </button>
+
+          <mat-menu #menuCodigoEquipo="matMenu" class="menu-codigo-equipo">
+            <div class="codigo-equipo-popover" (click)="$event.stopPropagation()">
+              <span class="codigo-equipo-popover__eyebrow">Equipo</span>
+
+              <strong class="codigo-equipo-popover__nombre">
+                {{ getNombreEquipoOInventario(ticket) }}
+              </strong>
+
+              <span class="codigo-equipo-popover__eyebrow">Código interno</span>
+
+              <code class="codigo-equipo-popover__codigo">
+                {{ getCodigoInternoEquipo(ticket) }}
+              </code>
+
+              <button
+                type="button"
+                mat-stroked-button
+                class="codigo-equipo-popover__copy"
+                (click)="copiarCodigoInternoEquipo(ticket, $event)"
               >
-                <mat-icon class="icono-refaccion" color="warn">build</mat-icon>
-              </span>
+                <mat-icon>content_copy</mat-icon>
+                Copiar código
+              </button>
             </div>
-          </td>
+          </mat-menu>
+        </div>
+      </td>
 
           <td class="col-descripcion">
             <div

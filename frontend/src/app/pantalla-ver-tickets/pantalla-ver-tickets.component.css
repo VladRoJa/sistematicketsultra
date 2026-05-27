@@ -1357,3 +1357,96 @@ td.col-descripcion {
   color: #ffffff;
   box-shadow: 0 8px 18px rgba(229, 69, 37, 0.22);
 }
+
+.td-aparato-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+}
+
+.aparato-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.btn-codigo-equipo {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  padding: 0;
+  color: #2c4595;
+  background: rgba(44, 69, 149, 0.08);
+  border-radius: 999px;
+  transition:
+    background-color 0.16s ease,
+    transform 0.12s ease,
+    color 0.16s ease;
+}
+
+.btn-codigo-equipo:hover {
+  color: #ffffff;
+  background: #2c4595;
+  transform: translateY(-1px);
+}
+
+.btn-codigo-equipo mat-icon {
+  width: 18px;
+  height: 18px;
+  font-size: 18px;
+  line-height: 18px;
+}
+
+.codigo-equipo-popover {
+  width: 260px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  user-select: text;
+}
+
+.codigo-equipo-popover__eyebrow {
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #e54525;
+}
+
+.codigo-equipo-popover__nombre {
+  font-size: 13px;
+  line-height: 1.25;
+  color: #1f2933;
+  word-break: break-word;
+}
+
+.codigo-equipo-popover__codigo {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f4f6f8;
+  color: #111827;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  border: 1px solid #d8dee6;
+  user-select: text;
+  white-space: normal;
+  word-break: break-all;
+}
+
+.codigo-equipo-popover__copy {
+  margin-top: 4px;
+  align-self: flex-start;
+  font-weight: 800;
+}
+
+.codigo-equipo-popover__copy mat-icon {
+  width: 17px;
+  height: 17px;
+  font-size: 17px;
+  line-height: 17px;
+  margin-right: 6px;
+}

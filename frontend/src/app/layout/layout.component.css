@@ -370,6 +370,279 @@
 }
 
 /* ==========================================================================
+   Alerta flotante de tickets por validar
+   ========================================================================== */
+
+.suite-floating-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 1210;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.validation-floating-alert {
+  position: absolute;
+  right: 24px;
+  bottom: 96px;
+  min-width: 232px;
+  max-width: calc(100vw - 32px);
+  border-radius: 999px;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  pointer-events: auto;
+  filter: drop-shadow(0 18px 30px rgba(0, 0, 0, 0.30));
+  transition:
+    filter 180ms ease,
+    opacity 180ms ease;
+}
+
+.validation-floating-alert:active {
+  cursor: grabbing;
+}
+
+.validation-floating-alert__content {
+  position: relative;
+  min-height: 58px;
+  padding: 10px 48px 10px 14px;
+  border-radius: 999px;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  overflow: hidden;
+}
+
+.validation-floating-alert__icon-wrap {
+  width: 36px;
+  height: 36px;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+.validation-floating-alert__icon {
+  width: 24px;
+  height: 24px;
+  font-size: 24px;
+  line-height: 24px;
+}
+
+.validation-floating-alert__text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  line-height: 1.05;
+}
+
+.validation-floating-alert__text strong {
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.validation-floating-alert__text small {
+  font-size: 11px;
+  font-weight: 800;
+  opacity: 0.84;
+  white-space: nowrap;
+}
+
+.validation-floating-alert__badge {
+  min-width: 30px;
+  height: 30px;
+  padding: 0 9px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.validation-floating-alert__close {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  width: 27px;
+  height: 27px;
+  border: 0;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ultra-surface);
+  color: var(--ultra-gray-900);
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.28);
+  z-index: 2;
+}
+
+.validation-floating-alert__close:hover {
+  transform: scale(1.06);
+}
+
+.validation-floating-alert__close mat-icon {
+  width: 17px;
+  height: 17px;
+  font-size: 17px;
+  line-height: 17px;
+}
+
+.validation-floating-alert__halo {
+  position: absolute;
+  inset: -8px;
+  border-radius: 999px;
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Normal */
+
+.validation-floating-alert--normal {
+  animation: validation-alert-float 4.2s ease-in-out infinite;
+}
+
+.validation-floating-alert--normal .validation-floating-alert__content {
+  background: linear-gradient(135deg, var(--ultra-black-90), var(--ultra-charcoal));
+  color: var(--ultra-surface);
+  border: 2px solid var(--ultra-orange);
+}
+
+.validation-floating-alert--normal .validation-floating-alert__icon-wrap {
+  background: rgba(229, 69, 37, 0.18);
+  color: var(--ultra-orange);
+}
+
+.validation-floating-alert--normal .validation-floating-alert__badge {
+  background: var(--ultra-orange);
+  color: var(--ultra-surface);
+}
+
+/* Warning */
+
+.validation-floating-alert--warning {
+  animation: validation-alert-float 3.4s ease-in-out infinite;
+}
+
+.validation-floating-alert--warning .validation-floating-alert__content {
+  background: linear-gradient(135deg, var(--ultra-orange), var(--ultra-orange-dark));
+  color: var(--ultra-surface);
+  border: 2px solid rgba(255, 255, 255, 0.62);
+}
+
+.validation-floating-alert--warning .validation-floating-alert__icon-wrap {
+  background: rgba(255, 255, 255, 0.18);
+  color: var(--ultra-surface);
+}
+
+.validation-floating-alert--warning .validation-floating-alert__badge {
+  background: var(--ultra-black-90);
+  color: var(--ultra-surface);
+}
+
+.validation-floating-alert--warning .validation-floating-alert__halo {
+  border: 2px solid rgba(229, 69, 37, 0.48);
+  animation: validation-alert-pulse 2.2s ease-out infinite;
+}
+
+/* Critical */
+
+.validation-floating-alert--critical {
+  animation:
+    validation-alert-float 2.8s ease-in-out infinite,
+    validation-alert-shake 4s ease-in-out infinite;
+}
+
+.validation-floating-alert--critical .validation-floating-alert__content {
+  background:
+    radial-gradient(circle at 14% 18%, rgba(255, 255, 255, 0.22), transparent 22%),
+    linear-gradient(135deg, #E54525, #b71f15);
+  color: var(--ultra-surface);
+  border: 2px solid rgba(255, 255, 255, 0.72);
+}
+
+.validation-floating-alert--critical .validation-floating-alert__icon-wrap {
+  background: rgba(255, 255, 255, 0.20);
+  color: var(--ultra-surface);
+}
+
+.validation-floating-alert--critical .validation-floating-alert__badge {
+  background: var(--ultra-surface);
+  color: #b71f15;
+}
+
+.validation-floating-alert--critical .validation-floating-alert__halo {
+  border: 2px solid rgba(229, 69, 37, 0.65);
+  animation: validation-alert-critical-pulse 1.55s ease-out infinite;
+}
+
+@keyframes validation-alert-float {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+
+  50% {
+    translate: 0 -5px;
+  }
+}
+
+@keyframes validation-alert-pulse {
+  0% {
+    transform: scale(0.96);
+    opacity: 0.72;
+  }
+
+  100% {
+    transform: scale(1.18);
+    opacity: 0;
+  }
+}
+
+@keyframes validation-alert-critical-pulse {
+  0% {
+    transform: scale(0.94);
+    opacity: 0.92;
+  }
+
+  100% {
+    transform: scale(1.25);
+    opacity: 0;
+  }
+}
+
+@keyframes validation-alert-shake {
+  0%,
+  86%,
+  100% {
+    translate: 0 0;
+  }
+
+  88% {
+    translate: -3px 0;
+  }
+
+  90% {
+    translate: 3px 0;
+  }
+
+  92% {
+    translate: -2px 0;
+  }
+
+  94% {
+    translate: 2px 0;
+  }
+}
+
+/* ==========================================================================
    Acción flotante para reporte de errores
    ========================================================================== */
 
@@ -490,5 +763,15 @@
   .boton-reporte-error {
     right: 16px;
     bottom: 16px;
+  }
+  .validation-floating-alert {
+    right: 16px;
+    bottom: 88px;
+    min-width: 214px;
+  }
+
+  .validation-floating-alert__content {
+    min-height: 54px;
+    padding: 9px 44px 9px 12px;
   }
 }

@@ -14,6 +14,7 @@ from app.utils.email_sender import send_email_html
 from app.utils.notify_targets import build_subject, pick_recipients
 from app.utils.notify_utils import render_ticket_html, render_ticket_whatsapp_text
 from app.utils.ticket_filters import filtrar_tickets_por_usuario
+from app.services.ticket_validation_summary_service import get_ticket_validation_summary_for_user
 from app.config import Config
 from app.models.ticket_model import Ticket
 from app.models.user_model import UserORM
@@ -366,6 +367,23 @@ def create_ticket():
     except Exception as e:
         return manejar_error(e)
 
+# ─────────────────────────────────────────────────────────────
+# RUTA: Resumen de tickets pendientes por validar
+# ─────────────────────────────────────────────────────────────
+@ticket_bp.route('/validation-summary', methods=['GET'])
+@jwt_required()
+def get_ticket_validation_summary():
+    try:
+        user = UserORM.get_by_id(get_jwt_identity())
+        if not user:
+            return jsonify({"mensaje": "Usuario no encontrado"}), 404
+
+        summary = get_ticket_validation_summary_for_user(user)
+
+        return jsonify(summary.to_dict()), 200
+
+    except Exception as e:
+        return manejar_error(e)
 
 # ─────────────────────────────────────────────────────────────
 # RUTA: Obtener todos los tickets (paginados) - SIMPLE
