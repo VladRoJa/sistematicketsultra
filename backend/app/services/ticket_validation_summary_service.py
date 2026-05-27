@@ -44,11 +44,19 @@ def get_ticket_validation_summary_for_user(
     visibles para el usuario recibido.
 
     Reglas:
+    - Solo aplica para usuarios que pueden validar cierres.
     - Reutiliza filtrar_tickets_por_usuario(user) para no duplicar permisos.
     - Usa Ticket.fecha_finalizado como fecha de entrada a por_validar.
     - 48h+ => warning.
     - 72h+ => critical.
     """
+    if not _can_receive_ticket_validation_alert(user):
+        return build_ticket_validation_summary(
+            total_por_validar=0,
+            mayores_48h=0,
+            mayores_72h=0,
+        )
+
     now = _ensure_utc(now_utc or datetime.now(timezone.utc))
 
     warning_cutoff = now - timedelta(hours=WARNING_HOURS)
@@ -135,3 +143,13 @@ def _ensure_utc(value: datetime) -> datetime:
         return value.replace(tzinfo=timezone.utc)
 
     return value.astimezone(timezone.utc)
+
+def _can_receive_ticket_validation_alert(user) -> bool:
+    rol = (getattr(user, "rol", "") or "").strip().upper()
+
+    return rol in {
+        "ADMIN",
+        "ADMINISTRADOR",
+        "SUPER_ADMIN",
+        "GERENTE",
+    }
