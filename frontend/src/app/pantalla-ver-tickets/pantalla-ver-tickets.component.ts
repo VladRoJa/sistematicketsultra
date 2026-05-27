@@ -2255,6 +2255,7 @@ async solicitarCierre(ticket: Ticket) {
     next: (resp) => {
       mostrarAlertaToast(resp?.mensaje || 'Cierre solicitado.', 'success');
       this.refrescarTicketsPreservandoFiltros();
+      this.refrescoService.emitirRefrescoResumenValidacionTickets();
     },
     error: (err) => {
       mostrarAlertaToast(err?.error?.mensaje || 'Error al solicitar cierre', 'error');
@@ -2364,6 +2365,7 @@ async aceptarCierre(ticket: Ticket) {
     next: (resp) => {
       mostrarAlertaToast(resp?.mensaje || 'Cierre aceptado.', 'success');
       this.refrescarTicketsPreservandoFiltros();
+      this.refrescoService.emitirRefrescoResumenValidacionTickets();
     },
     error: (err) => {
       mostrarAlertaToast(err?.error?.mensaje || 'No se pudo aceptar el cierre.', 'error');
@@ -2403,6 +2405,7 @@ async rechazarCierre(ticket: Ticket): Promise<void> {
     next: (resp) => {
       mostrarAlertaToast(resp?.mensaje || 'Cierre rechazado.', 'success');
       this.refrescarTicketsPreservandoFiltros();
+      this.refrescoService.emitirRefrescoResumenValidacionTickets();
     },
     error: (err) => {
       mostrarAlertaToast(

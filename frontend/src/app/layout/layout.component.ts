@@ -18,6 +18,8 @@ import { InactividadService } from '../services/inactividad.service';
 import { SessionService } from '../core/auth/session.service';
 import { CdkDragEnd, DragDropModule } from '@angular/cdk/drag-drop';
 import { TicketService, TicketValidationSummary } from '../services/ticket.service';
+import { Subscription } from 'rxjs';
+import { RefrescoService } from '../services/refresco.service';
 
 @Component({
   selector: 'app-layout',
@@ -60,6 +62,7 @@ export class LayoutComponent implements OnInit, AfterViewInit, OnDestroy {
   validationAlertPosition = { x: 0, y: 0 };
 
   private validationSummaryIntervalId: ReturnType<typeof setInterval> | null = null;
+  private validationSummaryRefreshSubscription?: Subscription;
   private readonly validationSummaryRefreshMs = 60 * 1000;
   private readonly validationAlertSnoozeMs = 3 * 60 * 1000;
   private readonly validationAlertSnoozeKey = 'suite.ticketValidationAlert.snoozeUntil';
@@ -81,6 +84,7 @@ export class LayoutComponent implements OnInit, AfterViewInit, OnDestroy {
     private inactividadService: InactividadService,
     private session: SessionService,
     private ticketService: TicketService,
+    private refrescoService: RefrescoService,
   ) {}
 
 ngOnInit(): void {
@@ -274,6 +278,11 @@ const menuMantenimientoGerencial = [
   this.validationSummaryIntervalId = setInterval(() => {
     this.cargarTicketValidationSummary();
   }, this.validationSummaryRefreshMs);
+
+  this.validationSummaryRefreshSubscription =
+    this.refrescoService.refrescarResumenValidacionTickets$.subscribe(() => {
+      this.cargarTicketValidationSummary();
+    });
   }
 
 private habilitarWarehouseEnMenuSiAplica(menuWarehouse: any): void {
@@ -403,6 +412,8 @@ ngOnDestroy(): void {
     clearInterval(this.validationSummaryIntervalId);
     this.validationSummaryIntervalId = null;
   }
+
+  this.validationSummaryRefreshSubscription?.unsubscribe();
 }
 
 private verificarRolUsuario(): void {
