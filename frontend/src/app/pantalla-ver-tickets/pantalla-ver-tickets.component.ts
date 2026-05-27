@@ -1,6 +1,6 @@
 // frontend-angular\src\app\pantalla-ver-tickets\pantalla-ver-tickets.component.ts
 
-import { Component, OnInit, ChangeDetectorRef, ViewChild } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NgxPaginationModule } from 'ngx-pagination';
@@ -10,7 +10,8 @@ import { HttpClient } from '@angular/common/http';
 import { RefrescoService } from '../services/refresco.service';
 import * as FiltrosGenericos from './helpers/filtros-genericos';
 import { HttpHeaders } from '@angular/common/http';
-
+import { ActivatedRoute } from '@angular/router';
+import { Subscription } from 'rxjs';
 
 
 
@@ -144,7 +145,7 @@ export interface ApiResponse {
   templateUrl: './pantalla-ver-tickets.component.html',
   styleUrls: ['./pantalla-ver-tickets.component.css']
 })
-export class PantallaVerTicketsComponent implements OnInit {
+export class PantallaVerTicketsComponent implements OnInit, OnDestroy {
   // --- Variables ---
   tickets: Ticket[] = [];
   filteredTickets: Ticket[] = [];
@@ -174,7 +175,13 @@ export class PantallaVerTicketsComponent implements OnInit {
   sucursalIdNombreMap: Record<number, string> = {};
   listaSucursales: any[] = [];
   ocultarFinalizados: boolean = true;
-
+  private readonly estadoQueryParamPorValidar = 'por_validar';
+  private estadoFiltroDesdeQueryParam: string | null = null;
+  private queryParamsSubscription?: Subscription;
+  private filtroEstadoQueryAplicado = false;
+  private filtroEstadoQueryRetryId: ReturnType<typeof setTimeout> | null = null;
+  private filtroEstadoQueryIntentos = 0;
+  private readonly filtroEstadoQueryMaxIntentos = 30;
 
   // Temporales
   fechaCreacionTemp = { start: null as Date | null, end: null as Date | null };
@@ -293,6 +300,7 @@ export class PantallaVerTicketsComponent implements OnInit {
     public catalogoService: CatalogoService,
     private sucursalesService: SucursalesService,
     private authService: AuthService, 
+    private route: ActivatedRoute,
     
   ) {}
 ngAfterViewInit(): void {
@@ -330,6 +338,7 @@ ngAfterViewInit(): void {
 async ngOnInit() {
   this.loading = true;
   await TicketInit.obtenerUsuarioAutenticado(this); 
+  this.escucharFiltroEstadoDesdeQueryParams();
 
   // 👇 NUEVO: setear usuarioActual a partir de this.user
   this.usuarioActual = (this.user?.username || '').trim().toUpperCase();
@@ -354,6 +363,7 @@ async ngOnInit() {
   }
 
   TicketInit.cargarTickets(this);
+  this.programarAplicacionFiltroEstadoDesdeQueryParam();
 
   // 🔁 Escuchar eventos de refresco desde el servicio
   this.refrescoService.refrescarTabla$.subscribe(() => {
@@ -363,6 +373,15 @@ async ngOnInit() {
   this.changeDetectorRef.detectChanges();
 
   (window as any).verTicketsComp = this;
+}
+
+ngOnDestroy(): void {
+  this.queryParamsSubscription?.unsubscribe();
+
+  if (this.filtroEstadoQueryRetryId) {
+    clearTimeout(this.filtroEstadoQueryRetryId);
+    this.filtroEstadoQueryRetryId = null;
+  }
 }
 
 selectedTicketYear = String(new Date().getFullYear());
@@ -482,6 +501,72 @@ private cargarSucursalesParaTickets(): Promise<void> {
   });
 }
 
+private escucharFiltroEstadoDesdeQueryParams(): void {
+  this.queryParamsSubscription = this.route.queryParamMap.subscribe((params) => {
+    const estado = this.normalizarTextoFiltro(params.get('estado'));
+
+    if (estado !== this.estadoQueryParamPorValidar) {
+      this.estadoFiltroDesdeQueryParam = null;
+      this.filtroEstadoQueryAplicado = false;
+      return;
+    }
+
+    this.estadoFiltroDesdeQueryParam = this.estadoQueryParamPorValidar;
+    this.filtroEstadoQueryAplicado = false;
+    this.filtroEstadoQueryIntentos = 0;
+
+    // La alerta operativa debe mostrar pendientes aunque sean de otro año.
+    this.selectedTicketYear = 'all';
+    this.ocultarFinalizados = true;
+
+    this.programarAplicacionFiltroEstadoDesdeQueryParam();
+  });
+}
+
+private programarAplicacionFiltroEstadoDesdeQueryParam(): void {
+  if (!this.estadoFiltroDesdeQueryParam || this.filtroEstadoQueryAplicado) {
+    return;
+  }
+
+  if (this.filtroEstadoQueryRetryId) {
+    clearTimeout(this.filtroEstadoQueryRetryId);
+  }
+
+  this.filtroEstadoQueryRetryId = setTimeout(() => {
+    this.filtroEstadoQueryRetryId = null;
+    this.aplicarFiltroEstadoDesdeQueryParamSiEsPosible();
+  }, 100);
+}
+
+private aplicarFiltroEstadoDesdeQueryParamSiEsPosible(): void {
+  const estado = this.estadoFiltroDesdeQueryParam;
+
+  if (!estado || this.filtroEstadoQueryAplicado) {
+    return;
+  }
+
+  const hayTicketsCargados =
+    Array.isArray(this.ticketsCompletos) && this.ticketsCompletos.length > 0;
+
+  const hayOpcionesEstado =
+    Array.isArray(this.estadosDisponibles) && this.estadosDisponibles.length > 0;
+
+  if (!hayTicketsCargados || !hayOpcionesEstado) {
+    this.filtroEstadoQueryIntentos += 1;
+
+    if (this.filtroEstadoQueryIntentos <= this.filtroEstadoQueryMaxIntentos) {
+      this.programarAplicacionFiltroEstadoDesdeQueryParam();
+    }
+
+    return;
+  }
+
+  this.filtroEstadoQueryAplicado = true;
+  this.filtroEstadoQueryIntentos = 0;
+
+  this.filtrarCardEstado(estado);
+}
+
 refrescarTicketsPreservandoFiltros(): void {
   const pageActual = this.page;
 
@@ -533,6 +618,7 @@ refrescarTicketsPreservandoFiltros(): void {
       );
 
       this.changeDetectorRef.detectChanges();
+      this.programarAplicacionFiltroEstadoDesdeQueryParam();
     },
     error: (err) => {
       console.error('No se pudieron refrescar tickets después de la acción:', err);
