@@ -1,0 +1,262 @@
+<!-- frontend\src\app\planning\targets\planning-target-batch-detail\planning-target-batch-detail.component.html -->
+
+
+<div class="batch-detail-page">
+  <mat-card class="header-card">
+    <div class="header-content">
+      <div>
+        <a mat-button routerLink="/planeacion/metas">
+          <mat-icon>arrow_back</mat-icon>
+          Volver
+        </a>
+
+        <h1>Detalle de paquete mensual</h1>
+        <p>
+          Consulta de metas por sucursal, estado del flujo y auditoría de decisiones.
+        </p>
+      </div>
+
+      <button
+        mat-stroked-button
+        type="button"
+        color="primary"
+        (click)="refresh()"
+        [disabled]="isLoading"
+      >
+        <mat-icon>refresh</mat-icon>
+        Actualizar
+      </button>
+    </div>
+  </mat-card>
+
+  <mat-card *ngIf="isLoading" class="state-card">
+    <mat-spinner diameter="36"></mat-spinner>
+    <p>Cargando detalle del paquete...</p>
+  </mat-card>
+
+  <mat-card *ngIf="!isLoading && !batch" class="state-card warning-card">
+    <mat-icon>error_outline</mat-icon>
+    <h2>No se encontró el paquete</h2>
+    <p>
+      Verifica que el identificador sea correcto o regresa al listado.
+    </p>
+  </mat-card>
+
+  <ng-container *ngIf="!isLoading && batch">
+    <mat-card class="summary-card">
+      <div class="summary-header">
+        <div>
+          <h2>
+            {{ formatMonth(batch.target_month) }} · v{{ batch.version }}
+          </h2>
+          <p>{{ batch.notes || 'Sin notas registradas.' }}</p>
+        </div>
+
+        <span class="status-pill" [ngClass]="getStatusClass(batch.status)">
+          {{ batch.status }}
+        </span>
+      </div>
+
+      <div class="summary-grid">
+        <div class="summary-item">
+          <span>Alcance</span>
+          <strong>{{ batch.scope }}</strong>
+        </div>
+
+        <div class="summary-item">
+          <span>Origen</span>
+          <strong>{{ batch.source_type }}</strong>
+        </div>
+
+        <div class="summary-item">
+          <span>Escenario base</span>
+          <strong>{{ batch.scenario_base || '—' }}</strong>
+        </div>
+
+        <div class="summary-item">
+          <span>Modelo</span>
+          <strong>{{ getModelLabel() }}</strong>
+        </div>
+
+        <div class="summary-item">
+          <span>Canónica</span>
+          <strong>{{ batch.is_canonical ? 'Sí' : 'No' }}</strong>
+        </div>
+
+        <div class="summary-item">
+          <span>Publicada</span>
+          <strong>{{ formatDateTime(batch.published_at) }}</strong>
+        </div>
+      </div>
+    </mat-card>
+
+    <mat-card class="section-card">
+      <div class="section-header">
+        <div>
+          <h2>Sucursales del paquete</h2>
+          <p>
+            Metas capturadas por sucursal dentro de este batch.
+          </p>
+        </div>
+      </div>
+
+      <div *ngIf="getBranchRows().length === 0" class="empty-state">
+        <mat-icon>domain_disabled</mat-icon>
+        <h3>Sin sucursales capturadas</h3>
+        <p>
+          Este paquete todavía no tiene filas por sucursal.
+        </p>
+      </div>
+
+      <div *ngIf="getBranchRows().length > 0" class="table-wrapper">
+        <table mat-table [dataSource]="getBranchRows()" class="detail-table">
+          <ng-container matColumnDef="sucursal_canon">
+            <th mat-header-cell *matHeaderCellDef>Sucursal</th>
+            <td mat-cell *matCellDef="let row">
+              {{ row.sucursal_canon }}
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="status">
+            <th mat-header-cell *matHeaderCellDef>Estado</th>
+            <td mat-cell *matCellDef="let row">
+              <span class="status-pill" [ngClass]="getStatusClass(row.status)">
+                {{ row.status }}
+              </span>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="meta_faycgo_mes">
+            <th mat-header-cell *matHeaderCellDef>Meta FAYCGO</th>
+            <td mat-cell *matCellDef="let row">
+              {{ formatMoney(row.meta_faycgo_mes) }}
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="clientes_nuevos">
+            <th mat-header-cell *matHeaderCellDef>Clientes nuevos</th>
+            <td mat-cell *matCellDef="let row">
+              {{ formatNumber(row.meta_clientes_nuevos_mes) }}
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="reactivaciones">
+            <th mat-header-cell *matHeaderCellDef>Reactivaciones</th>
+            <td mat-cell *matCellDef="let row">
+              {{ formatNumber(row.meta_reactivaciones_mes) }}
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="bajas">
+            <th mat-header-cell *matHeaderCellDef>Bajas</th>
+            <td mat-cell *matCellDef="let row">
+              {{ formatNumber(row.meta_bajas_mes) }}
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="domiciliados">
+            <th mat-header-cell *matHeaderCellDef>Domiciliados</th>
+            <td mat-cell *matCellDef="let row">
+              {{ formatNumber(row.meta_nuevos_domiciliados_mes) }}
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="arpu">
+            <th mat-header-cell *matHeaderCellDef>ARPU</th>
+            <td mat-cell *matCellDef="let row">
+              {{ formatMoney(row.meta_arpu_mes) }}
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="venta_tienda">
+            <th mat-header-cell *matHeaderCellDef>Venta tienda</th>
+            <td mat-cell *matCellDef="let row">
+              {{ formatMoney(row.meta_venta_tienda_mes) }}
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="published_target">
+            <th mat-header-cell *matHeaderCellDef>Track target</th>
+            <td mat-cell *matCellDef="let row">
+              <mat-chip *ngIf="hasPublishedTarget(row)" class="published-chip">
+                #{{ row.published_track_monthly_target_id }}
+              </mat-chip>
+              <span *ngIf="!hasPublishedTarget(row)">—</span>
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="branchDisplayedColumns"></tr>
+          <tr mat-row *matRowDef="let row; columns: branchDisplayedColumns"></tr>
+        </table>
+      </div>
+    </mat-card>
+
+    <mat-card class="section-card">
+      <div class="section-header">
+        <div>
+          <h2>Eventos de auditoría</h2>
+          <p>
+            Registro de cambios de estado y decisiones sobre este paquete.
+          </p>
+        </div>
+      </div>
+
+      <div *ngIf="getApprovalEvents().length === 0" class="empty-state">
+        <mat-icon>history_toggle_off</mat-icon>
+        <h3>Sin eventos registrados</h3>
+        <p>
+          Cuando el paquete avance de estado, los eventos aparecerán aquí.
+        </p>
+      </div>
+
+      <div *ngIf="getApprovalEvents().length > 0" class="table-wrapper">
+        <table mat-table [dataSource]="getApprovalEvents()" class="detail-table">
+          <ng-container matColumnDef="created_at">
+            <th mat-header-cell *matHeaderCellDef>Fecha</th>
+            <td mat-cell *matCellDef="let event">
+              {{ formatDateTime(event.created_at) }}
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="event_type">
+            <th mat-header-cell *matHeaderCellDef>Evento</th>
+            <td mat-cell *matCellDef="let event">
+              {{ event.event_type }}
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="from_status">
+            <th mat-header-cell *matHeaderCellDef>Desde</th>
+            <td mat-cell *matCellDef="let event">
+              {{ event.from_status || '—' }}
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="to_status">
+            <th mat-header-cell *matHeaderCellDef>Hacia</th>
+            <td mat-cell *matCellDef="let event">
+              {{ event.to_status || '—' }}
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="actor">
+            <th mat-header-cell *matHeaderCellDef>Usuario</th>
+            <td mat-cell *matCellDef="let event">
+              {{ event.actor_username_snapshot || event.actor_user_id || '—' }}
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="comment">
+            <th mat-header-cell *matHeaderCellDef>Comentario</th>
+            <td mat-cell *matCellDef="let event">
+              {{ event.comment || '—' }}
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="eventsDisplayedColumns"></tr>
+          <tr mat-row *matRowDef="let row; columns: eventsDisplayedColumns"></tr>
+        </table>
+      </div>
+    </mat-card>
+  </ng-container>
+</div>

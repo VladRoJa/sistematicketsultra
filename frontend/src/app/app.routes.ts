@@ -116,6 +116,12 @@ export const routes: Routes = [
             .then((m) => m.PlanningTargetsHomeComponent),
       },
       {
+        path: 'planeacion/metas/:batchId',
+        loadComponent: () =>
+          import('./planning/targets/planning-target-batch-detail/planning-target-batch-detail.component')
+            .then((m) => m.PlanningTargetBatchDetailComponent),
+      },
+      {
         path: 'warehouse',
         component: WarehouseHomeComponent,
       },
