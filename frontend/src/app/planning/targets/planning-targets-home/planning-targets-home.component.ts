@@ -14,6 +14,7 @@ import { FormsModule } from '@angular/forms';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
+import { RouterLink } from '@angular/router';
 
 import {
   PlanningAccessResponse,
@@ -38,6 +39,7 @@ import {
     MatFormFieldModule,
     MatInputModule,
     MatSelectModule,
+    RouterLink,
   ],
   templateUrl: './planning-targets-home.component.html',
   styleUrls: ['./planning-targets-home.component.css',]
