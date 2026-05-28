@@ -91,14 +91,243 @@
     </mat-card>
 
     <mat-card class="section-card">
-      <div class="section-header">
-        <div>
-          <h2>Sucursales del paquete</h2>
-          <p>
-            Metas capturadas por sucursal dentro de este batch.
-          </p>
-        </div>
-      </div>
+    <div class="section-header">
+    <div>
+        <h2>Sucursales del paquete</h2>
+        <p>
+        Metas capturadas por sucursal dentro de este batch.
+        </p>
+    </div>
+
+    <button
+        mat-flat-button
+        type="button"
+        color="primary"
+        *ngIf="canAddBranchRow()"
+        [disabled]="isAddingBranchRow"
+        (click)="toggleAddBranchForm()"
+    >
+        <mat-icon>{{ showAddBranchForm ? 'close' : 'add' }}</mat-icon>
+        {{ showAddBranchForm ? 'Cancelar' : 'Agregar sucursal' }}
+    </button>
+    </div>
+
+    <div *ngIf="showAddBranchForm" class="branch-form">
+    <div class="branch-form-grid">
+        <mat-form-field appearance="outline">
+        <mat-label>Sucursal canónica</mat-label>
+        <input
+            matInput
+            name="sucursalCanon"
+            [(ngModel)]="branchForm.sucursalCanon"
+            placeholder="Ej. VILLA_VERDE"
+        />
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+        <mat-label>m² sin circulaciones</mat-label>
+        <input
+            matInput
+            type="number"
+            min="0"
+            name="m2SinCirculaciones"
+            [(ngModel)]="branchForm.m2SinCirculaciones"
+        />
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+        <mat-label>Usuarios inicio mes</mat-label>
+        <input
+            matInput
+            type="number"
+            min="0"
+            name="usuariosInicioMes"
+            [(ngModel)]="branchForm.usuariosInicioMes"
+        />
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+        <mat-label>Usuarios cierre proyectado</mat-label>
+        <input
+            matInput
+            type="number"
+            min="0"
+            name="proyeccionUsuariosCierreMes"
+            [(ngModel)]="branchForm.proyeccionUsuariosCierreMes"
+        />
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+        <mat-label>Meta FAYCGO</mat-label>
+        <input
+            matInput
+            type="number"
+            min="0"
+            name="metaFaycgoMes"
+            [(ngModel)]="branchForm.metaFaycgoMes"
+        />
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+        <mat-label>Clientes nuevos</mat-label>
+        <input
+            matInput
+            type="number"
+            min="0"
+            name="metaClientesNuevosMes"
+            [(ngModel)]="branchForm.metaClientesNuevosMes"
+        />
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+        <mat-label>Reactivaciones</mat-label>
+        <input
+            matInput
+            type="number"
+            min="0"
+            name="metaReactivacionesMes"
+            [(ngModel)]="branchForm.metaReactivacionesMes"
+        />
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+        <mat-label>Bajas</mat-label>
+        <input
+            matInput
+            type="number"
+            min="0"
+            name="metaBajasMes"
+            [(ngModel)]="branchForm.metaBajasMes"
+        />
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+        <mat-label>Nuevos domiciliados</mat-label>
+        <input
+            matInput
+            type="number"
+            min="0"
+            name="metaNuevosDomiciliadosMes"
+            [(ngModel)]="branchForm.metaNuevosDomiciliadosMes"
+        />
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+        <mat-label>ARPU</mat-label>
+        <input
+            matInput
+            type="number"
+            min="0"
+            name="metaArpuMes"
+            [(ngModel)]="branchForm.metaArpuMes"
+        />
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+        <mat-label>Venta tienda</mat-label>
+        <input
+            matInput
+            type="number"
+            min="0"
+            name="metaVentaTiendaMes"
+            [(ngModel)]="branchForm.metaVentaTiendaMes"
+        />
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+        <mat-label>Ingreso agregadoras estimado</mat-label>
+        <input
+            matInput
+            type="number"
+            min="0"
+            name="ingresoAgregadorasEstimado"
+            [(ngModel)]="branchForm.ingresoAgregadorasEstimado"
+        />
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+        <mat-label>Usuarios agregadoras estimado</mat-label>
+        <input
+            matInput
+            type="number"
+            min="0"
+            name="usuariosAgregadorasEstimado"
+            [(ngModel)]="branchForm.usuariosAgregadorasEstimado"
+        />
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+        <mat-label>Escenario</mat-label>
+        <mat-select
+            name="scenarioUsed"
+            [(ngModel)]="branchForm.scenarioUsed"
+        >
+            <mat-option value="AGRESIVO">Agresivo</mat-option>
+            <mat-option value="REALISTA">Realista</mat-option>
+            <mat-option value="AJUSTADO">Ajustado</mat-option>
+        </mat-select>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+        <mat-label>Tendencia</mat-label>
+        <mat-select
+            name="trendClassification"
+            [(ngModel)]="branchForm.trendClassification"
+        >
+            <mat-option value="">Sin clasificar</mat-option>
+            <mat-option value="POSITIVA">Positiva</mat-option>
+            <mat-option value="ESTABLE">Estable</mat-option>
+            <mat-option value="NEGATIVA">Negativa</mat-option>
+            <mat-option value="VOLATIL">Volátil</mat-option>
+        </mat-select>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+        <mat-label>Riesgo</mat-label>
+        <mat-select
+            name="riskLevel"
+            [(ngModel)]="branchForm.riskLevel"
+        >
+            <mat-option value="BAJO">Bajo</mat-option>
+            <mat-option value="MEDIO">Medio</mat-option>
+            <mat-option value="ALTO">Alto</mat-option>
+        </mat-select>
+        </mat-form-field>
+    </div>
+
+    <mat-form-field appearance="outline" class="notes-field">
+        <mat-label>Notas</mat-label>
+        <textarea
+        matInput
+        rows="3"
+        name="branchNotes"
+        [(ngModel)]="branchForm.notes"
+        placeholder="Notas o contexto de esta sucursal"
+        ></textarea>
+    </mat-form-field>
+
+    <div class="branch-form-actions">
+        <button
+        mat-flat-button
+        type="button"
+        color="primary"
+        [disabled]="isAddingBranchRow"
+        (click)="addBranchRow()"
+        >
+        <mat-icon>save</mat-icon>
+        Agregar sucursal
+        </button>
+
+        <button
+        mat-stroked-button
+        type="button"
+        [disabled]="isAddingBranchRow"
+        (click)="toggleAddBranchForm()"
+        >
+        Cancelar
+        </button>
+    </div>
+    </div>
 
       <div *ngIf="getBranchRows().length === 0" class="empty-state">
         <mat-icon>domain_disabled</mat-icon>
