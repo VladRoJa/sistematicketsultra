@@ -32,6 +32,8 @@ from app.warehouse.services.track_daily_version_service import (
     _now_utc,
 )
 from app.warehouse.services.track_source_agregadoras_daily_service import (
+    AGREGADORAS_POLICY_EXACT_REQUIRED,
+    AGREGADORAS_POLICY_LATEST_AVAILABLE,
     refresh_track_source_agregadoras_daily_for_track_date,
     resolve_exact_agregadoras_snapshot_status_for_date,
 )
@@ -298,6 +300,7 @@ def run_track_daily_pipeline_for_date(
             "agregadoras": refresh_track_source_agregadoras_daily_for_track_date(
                 business_date=refresh_dates["ingresos"],
                 generation_mode=normalized_generation_mode,
+                agregadoras_policy=AGREGADORAS_POLICY_LATEST_AVAILABLE,
             ),
             "ingresos": refresh_track_source_ingresos_daily_for_date(
                 business_date=refresh_dates["ingresos"],
@@ -462,6 +465,8 @@ def run_track_agregadoras_integration_for_date(
         agregadoras_refresh_result = refresh_track_source_agregadoras_daily_for_track_date(
             business_date=track_date,
             generation_mode="official_closed_day",
+            agregadoras_policy=AGREGADORAS_POLICY_EXACT_REQUIRED,
+        
         )
 
         agregadoras_business_date = agregadoras_refresh_result.get(
