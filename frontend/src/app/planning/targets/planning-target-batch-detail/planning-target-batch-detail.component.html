@@ -44,18 +44,64 @@
 
   <ng-container *ngIf="!isLoading && batch">
     <mat-card class="summary-card">
-      <div class="summary-header">
-        <div>
-          <h2>
-            {{ formatMonth(batch.target_month) }} · v{{ batch.version }}
-          </h2>
-          <p>{{ batch.notes || 'Sin notas registradas.' }}</p>
-        </div>
+    <div class="summary-header">
+    <div>
+        <h2>
+        {{ formatMonth(batch.target_month) }} · v{{ batch.version }}
+        </h2>
+        <p>{{ batch.notes || 'Sin notas registradas.' }}</p>
+    </div>
 
+    <div class="summary-actions">
         <span class="status-pill" [ngClass]="getStatusClass(batch.status)">
-          {{ batch.status }}
+        {{ batch.status }}
         </span>
-      </div>
+
+        <button
+        mat-stroked-button
+        type="button"
+        color="primary"
+        *ngIf="canSubmitBatch()"
+        [disabled]="isRunningBatchAction"
+        (click)="submitBatch()"
+        >
+        Enviar a revisión
+        </button>
+
+        <button
+        mat-stroked-button
+        type="button"
+        color="primary"
+        *ngIf="canApproveBatch()"
+        [disabled]="isRunningBatchAction"
+        (click)="approveBatch()"
+        >
+        Aprobar
+        </button>
+
+        <button
+        mat-stroked-button
+        type="button"
+        color="warn"
+        *ngIf="canRejectBatch()"
+        [disabled]="isRunningBatchAction"
+        (click)="rejectBatch()"
+        >
+        Rechazar
+        </button>
+
+        <button
+        mat-flat-button
+        type="button"
+        color="primary"
+        *ngIf="canPublishBatch()"
+        [disabled]="isRunningBatchAction"
+        (click)="publishBatch()"
+        >
+        Publicar a Track
+        </button>
+    </div>
+    </div>
 
       <div class="summary-grid">
         <div class="summary-item">

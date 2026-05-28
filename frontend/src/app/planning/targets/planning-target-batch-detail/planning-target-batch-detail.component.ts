@@ -54,6 +54,7 @@ export class PlanningTargetBatchDetailComponent implements OnInit {
 showAddBranchForm = false;
 isLoadingAccess = false;
 isAddingBranchRow = false;
+isRunningBatchAction = false;
 
 branchForm = {
 sucursalCanon: '',
@@ -173,6 +174,45 @@ loadAccess(): void {
         ['BORRADOR', 'PROPUESTA'].includes(this.batch.status),
     );
     }
+
+canSubmitBatch(): boolean {
+  return Boolean(
+    this.access?.can_submit &&
+      this.batch &&
+      ['BORRADOR', 'PROPUESTA'].includes(this.batch.status) &&
+      this.getBranchRows().length > 0,
+  );
+}
+
+canApproveBatch(): boolean {
+  return Boolean(
+    this.access?.can_approve &&
+      this.batch?.status === 'EN_REVISION',
+  );
+}
+
+canRejectBatch(): boolean {
+  return Boolean(
+    this.access?.can_approve &&
+      this.batch?.status === 'EN_REVISION',
+  );
+}
+
+canPublishBatch(): boolean {
+  return Boolean(
+    this.access?.can_publish &&
+      this.batch?.status === 'APROBADA',
+  );
+}
+
+hasAnyBatchAction(): boolean {
+  return (
+    this.canSubmitBatch() ||
+    this.canApproveBatch() ||
+    this.canRejectBatch() ||
+    this.canPublishBatch()
+  );
+}
 
     toggleAddBranchForm(): void {
     this.showAddBranchForm = !this.showAddBranchForm;
@@ -319,6 +359,126 @@ loadAccess(): void {
     };
     }
 
+submitBatch(): void {
+  if (!this.batchId || !this.canSubmitBatch()) {
+    this.snackBar.open(
+      'No se puede enviar este paquete a revisión.',
+      'Cerrar',
+      { duration: 4000 },
+    );
+    return;
+  }
+
+  this.isRunningBatchAction = true;
+
+  this.planningTargetsService
+    .submitBatch(this.batchId, 'Enviado a revisión desde detalle.')
+    .pipe(finalize(() => (this.isRunningBatchAction = false)))
+    .subscribe({
+      next: () => {
+        this.snackBar.open('Paquete enviado a revisión.', 'Cerrar', {
+          duration: 3000,
+        });
+        this.loadBatchDetail();
+      },
+      error: () => {
+        this.snackBar.open('No se pudo enviar a revisión.', 'Cerrar', {
+          duration: 4000,
+        });
+      },
+    });
+}
+
+approveBatch(): void {
+  if (!this.batchId || !this.canApproveBatch()) {
+    this.snackBar.open(
+      'No se puede aprobar este paquete en su estado actual.',
+      'Cerrar',
+      { duration: 4000 },
+    );
+    return;
+  }
+
+  this.isRunningBatchAction = true;
+
+  this.planningTargetsService
+    .approveBatch(this.batchId, 'Aprobado desde detalle.')
+    .pipe(finalize(() => (this.isRunningBatchAction = false)))
+    .subscribe({
+      next: () => {
+        this.snackBar.open('Paquete aprobado.', 'Cerrar', {
+          duration: 3000,
+        });
+        this.loadBatchDetail();
+      },
+      error: () => {
+        this.snackBar.open('No se pudo aprobar el paquete.', 'Cerrar', {
+          duration: 4000,
+        });
+      },
+    });
+}
+
+rejectBatch(): void {
+  if (!this.batchId || !this.canRejectBatch()) {
+    this.snackBar.open(
+      'No se puede rechazar este paquete en su estado actual.',
+      'Cerrar',
+      { duration: 4000 },
+    );
+    return;
+  }
+
+  this.isRunningBatchAction = true;
+
+  this.planningTargetsService
+    .rejectBatch(this.batchId, 'Rechazado desde detalle. Requiere ajuste antes de aprobar.')
+    .pipe(finalize(() => (this.isRunningBatchAction = false)))
+    .subscribe({
+      next: () => {
+        this.snackBar.open('Paquete rechazado.', 'Cerrar', {
+          duration: 3000,
+        });
+        this.loadBatchDetail();
+      },
+      error: () => {
+        this.snackBar.open('No se pudo rechazar el paquete.', 'Cerrar', {
+          duration: 4000,
+        });
+      },
+    });
+}
+
+publishBatch(): void {
+  if (!this.batchId || !this.canPublishBatch()) {
+    this.snackBar.open(
+      'No se puede publicar este paquete hacia Track.',
+      'Cerrar',
+      { duration: 4000 },
+    );
+    return;
+  }
+
+  this.isRunningBatchAction = true;
+
+  this.planningTargetsService
+    .publishBatch(this.batchId, 'Publicado hacia Track desde detalle.')
+    .pipe(finalize(() => (this.isRunningBatchAction = false)))
+    .subscribe({
+      next: () => {
+        this.snackBar.open('Paquete publicado hacia Track.', 'Cerrar', {
+          duration: 3000,
+        });
+        this.loadBatchDetail();
+      },
+      error: () => {
+        this.snackBar.open('No se pudo publicar hacia Track.', 'Cerrar', {
+          duration: 4000,
+        });
+      },
+    });
+}
+    
   refresh(): void {
     this.loadBatchDetail();
   }
