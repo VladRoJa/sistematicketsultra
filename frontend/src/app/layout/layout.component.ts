@@ -55,6 +55,8 @@ export class LayoutComponent implements OnInit, AfterViewInit, OnDestroy {
   puedeVerMantenimientoOperativo = false;
   puedeVerMantenimientoGerencial = false;
   puedeVerWarehouse = false;
+  puedeVerPlanning = false; 
+
   usuarioLabel = '';
   reporteBugFueArrastrado = false;
   validationSummary: TicketValidationSummary | null = null;
@@ -109,6 +111,14 @@ ngOnInit(): void {
   const menuTrackDiario = {
     label: 'Track',
     path: '/warehouse/track',
+  };
+
+  const menuPlanning = {
+    label: 'Planeación',
+    path: '/planeacion/metas',
+    submenu: [
+      { label: 'Metas Comerciales', path: '/planeacion/metas' },
+    ],
   };
 
   const soloTickets = [
@@ -271,6 +281,7 @@ const menuMantenimientoGerencial = [
     ];
   }
   this.habilitarWarehouseEnMenuSiAplica(menuWarehouse);
+  this.habilitarPlanningEnMenuSiAplica(menuPlanning);
   this.sincronizarMenuConRutaActual();
   this.cargarTicketValidationAlertPosition();
   this.cargarTicketValidationSummary();
@@ -328,6 +339,48 @@ private habilitarWarehouseEnMenuSiAplica(menuWarehouse: any): void {
       },
       error: () => {
         this.puedeVerWarehouse = false;
+      },
+    });
+}
+
+private habilitarPlanningEnMenuSiAplica(menuPlanning: any): void {
+  if (this.menuItems.some((item) => item.label === 'Planeación')) {
+    return;
+  }
+
+  this.http
+    .get<any>(`${environment.apiUrl}/planning/targets/access`)
+    .subscribe({
+      next: (response) => {
+        const puedeVerPlanning = Boolean(
+          response?.has_access ??
+          response?.hasAccess ??
+          response?.can_view ??
+          response?.canView ??
+          response?.access?.can_view ??
+          response?.access?.canView ??
+          response?.permissions?.can_view ??
+          response?.permissions?.canView
+        );
+
+        if (!puedeVerPlanning) {
+          return;
+        }
+
+        if (this.menuItems.some((item) => item.label === 'Planeación')) {
+          return;
+        }
+
+        this.puedeVerPlanning = true;
+        this.menuItems = [
+          ...this.menuItems,
+          menuPlanning,
+        ];
+
+        this.sincronizarMenuConRutaActual();
+      },
+      error: () => {
+        this.puedeVerPlanning = false;
       },
     });
 }
