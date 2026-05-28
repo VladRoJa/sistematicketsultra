@@ -125,3 +125,31 @@ def require_planning_model_config():
         )
 
     return None
+
+def get_current_planning_access_payload() -> dict:
+    operator = get_current_planning_operator()
+
+    if operator is None:
+        return {
+            "status": "ok",
+            "has_access": False,
+            "can_view": False,
+            "can_edit": False,
+            "can_submit": False,
+            "can_approve": False,
+            "can_publish": False,
+            "can_configure_model": False,
+        }
+
+    return {
+        "status": "ok",
+        "has_access": bool(operator.is_active and operator.can_view),
+        "can_view": bool(operator.is_active and operator.can_view),
+        "can_edit": bool(operator.is_active and operator.can_edit),
+        "can_submit": bool(operator.is_active and operator.can_submit),
+        "can_approve": bool(operator.is_active and operator.can_approve),
+        "can_publish": bool(operator.is_active and operator.can_publish),
+        "can_configure_model": bool(
+            operator.is_active and operator.can_configure_model
+        ),
+    }

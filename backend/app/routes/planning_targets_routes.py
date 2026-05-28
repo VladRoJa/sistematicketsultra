@@ -30,6 +30,7 @@ from app.warehouse.services.planning_targets_service import (
 )
 
 from app.utils.planning_access import (
+    get_current_planning_access_payload,
     require_planning_approve,
     require_planning_edit,
     require_planning_model_config,
@@ -115,6 +116,11 @@ def _service_error(exc: PlanningTargetsServiceError):
             "error": str(exc),
         }
     ), 400
+
+@planning_targets_bp.route("/access", methods=["GET"])
+@jwt_required()
+def get_planning_access_route():
+    return _success(get_current_planning_access_payload())
 
 def _guard(access_check):
     access_error = access_check()
