@@ -204,3 +204,51 @@
     font-size: 21px;
   }
 }
+
+.create-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  margin-bottom: 16px;
+  border: 1px solid #eaecf0;
+  border-radius: 14px;
+  background: #fcfcfd;
+}
+
+.create-form-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(160px, 1fr));
+  gap: 14px;
+}
+
+.notes-field {
+  width: 100%;
+}
+
+.create-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+@media (max-width: 1024px) {
+  .create-form-grid {
+    grid-template-columns: repeat(2, minmax(160px, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .create-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .create-form-actions {
+    justify-content: stretch;
+  }
+
+  .create-form-actions button {
+    width: 100%;
+  }
+}

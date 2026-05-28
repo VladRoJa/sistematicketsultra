@@ -57,14 +57,115 @@
     </mat-card>
 
     <mat-card class="table-card">
-      <div class="section-header">
-        <div>
-          <h2>Paquetes mensuales</h2>
-          <p>
-            Lista de batches de metas creados en Planeación Comercial.
-          </p>
-        </div>
+    <div class="section-header">
+      <div>
+        <h2>Paquetes mensuales</h2>
+        <p>
+          Lista de batches de metas creados en Planeación Comercial.
+        </p>
       </div>
+
+      <button
+        mat-flat-button
+        type="button"
+        color="primary"
+        *ngIf="canCreateBatch()"
+        (click)="toggleCreateForm()"
+      >
+        <mat-icon>{{ showCreateForm ? 'close' : 'add' }}</mat-icon>
+        {{ showCreateForm ? 'Cancelar' : 'Crear paquete' }}
+      </button>
+    </div>
+
+    <div *ngIf="showCreateForm" class="create-form">
+      <div class="create-form-grid">
+        <mat-form-field appearance="outline">
+          <mat-label>Mes objetivo</mat-label>
+          <input
+            matInput
+            type="month"
+            name="targetMonth"
+            [(ngModel)]="createForm.targetMonth"
+          />
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Versión</mat-label>
+          <input
+            matInput
+            type="number"
+            min="1"
+            name="version"
+            [(ngModel)]="createForm.version"
+          />
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Modelo</mat-label>
+          <mat-select
+            name="modelConfigId"
+            [(ngModel)]="createForm.modelConfigId"
+            [disabled]="isLoadingModelConfigs"
+          >
+            <mat-option [value]="null">Sin modelo</mat-option>
+            <mat-option
+              *ngFor="let config of modelConfigs"
+              [value]="config.id"
+            >
+              {{ config.name }} v{{ config.version }}
+              <span *ngIf="config.model_status || config.status">
+                — {{ config.model_status || config.status }}
+              </span>
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Escenario base</mat-label>
+          <mat-select
+            name="scenarioBase"
+            [(ngModel)]="createForm.scenarioBase"
+          >
+            <mat-option value="AGRESIVO">Agresivo</mat-option>
+            <mat-option value="REALISTA">Realista</mat-option>
+            <mat-option value="AJUSTADO">Ajustado</mat-option>
+          </mat-select>
+        </mat-form-field>
+      </div>
+
+      <mat-form-field appearance="outline" class="notes-field">
+        <mat-label>Notas</mat-label>
+        <textarea
+          matInput
+          rows="3"
+          name="notes"
+          [(ngModel)]="createForm.notes"
+          placeholder="Notas internas del paquete mensual"
+        ></textarea>
+      </mat-form-field>
+
+      <div class="create-form-actions">
+        <button
+          mat-flat-button
+          type="button"
+          color="primary"
+          [disabled]="isCreatingBatch"
+          (click)="createBatch()"
+        >
+          <mat-icon>save</mat-icon>
+          Crear paquete
+        </button>
+
+        <button
+          mat-stroked-button
+          type="button"
+          [disabled]="isCreatingBatch"
+          (click)="toggleCreateForm()"
+        >
+          Cancelar
+        </button>
+      </div>
+    </div>
 
       <div *ngIf="isLoadingBatches" class="state-card inline-state">
         <mat-spinner diameter="32"></mat-spinner>
