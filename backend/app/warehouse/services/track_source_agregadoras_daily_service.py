@@ -23,7 +23,15 @@ class TrackSourceAgregadorasDailyServiceError(RuntimeError):
 
 
 _DECIMAL_ZERO = Decimal("0.00")
+AGREGADORAS_POLICY_EXACT_REQUIRED = "exact_required"
+AGREGADORAS_POLICY_LATEST_AVAILABLE = "latest_available"
 
+SUPPORTED_AGREGADORAS_POLICIES = frozenset(
+    {
+        AGREGADORAS_POLICY_EXACT_REQUIRED,
+        AGREGADORAS_POLICY_LATEST_AVAILABLE,
+    }
+)
 
 def _ensure_date(value: Any, *, field_name: str) -> date:
     if isinstance(value, date) and not isinstance(value, datetime):
@@ -44,6 +52,19 @@ def _ensure_date(value: Any, *, field_name: str) -> date:
         f"Valor inválido para {field_name!r}: {value!r}"
     )
 
+def _ensure_agregadoras_policy(value: str | None) -> str | None:
+    normalized = str(value or "").strip()
+
+    if not normalized:
+        return None
+
+    if normalized not in SUPPORTED_AGREGADORAS_POLICIES:
+        raise TrackSourceAgregadorasDailyServiceError(
+            "agregadoras_policy inválida. "
+            f"Permitidas: {sorted(SUPPORTED_AGREGADORAS_POLICIES)}"
+        )
+
+    return normalized
 
 def _to_decimal(value: Any) -> Decimal:
     if value is None:
@@ -403,13 +424,30 @@ def resolve_agregadoras_business_date_for_track_date(
     *,
     business_date: Any,
     generation_mode: str | None = None,
+    agregadoras_policy: str | None = None,
 ) -> date:
     normalized_business_date = _ensure_date(
         business_date,
         field_name="business_date",
     )
     normalized_generation_mode = str(generation_mode or "").strip()
+    normalized_policy = _ensure_agregadoras_policy(agregadoras_policy)
 
+    if normalized_policy == AGREGADORAS_POLICY_EXACT_REQUIRED:
+        return normalized_business_date
+
+    if normalized_policy == AGREGADORAS_POLICY_LATEST_AVAILABLE:
+        latest_available_date = _resolve_latest_agregadoras_snapshot_date_for_preview(
+            business_date=normalized_business_date,
+        )
+
+        if latest_available_date is None:
+            return normalized_business_date
+
+        return latest_available_date
+
+    # Compatibilidad con comportamiento anterior:
+    # manual_preview ya usaba últimas disponibles.
     if normalized_generation_mode != "manual_preview":
         return normalized_business_date
 
@@ -533,10 +571,12 @@ def refresh_track_source_agregadoras_daily_for_track_date(
     *,
     business_date: Any,
     generation_mode: str | None = None,
+    agregadoras_policy: str | None = None,
 ) -> dict[str, Any]:
     agregadoras_business_date = resolve_agregadoras_business_date_for_track_date(
         business_date=business_date,
         generation_mode=generation_mode,
+        agregadoras_policy=agregadoras_policy,
     )
 
     result = refresh_track_source_agregadoras_daily_for_date(
@@ -550,5 +590,6 @@ def refresh_track_source_agregadoras_daily_for_track_date(
             field_name="business_date",
         ).isoformat(),
         "generation_mode": str(generation_mode or "").strip() or None,
+        "agregadoras_policy": _ensure_agregadoras_policy(agregadoras_policy),
         "agregadoras_business_date": agregadoras_business_date.isoformat(),
     }
