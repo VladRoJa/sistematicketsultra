@@ -427,3 +427,56 @@ class PlanningTargetApprovalEventORM(db.Model):
         back_populates="approval_events",
     )
     actor_user = db.relationship("UserORM")
+    
+class PlanningOperatorORM(db.Model):
+    __tablename__ = "planning_operators"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+
+    can_view = db.Column(db.Boolean, nullable=False, default=True)
+    can_edit = db.Column(db.Boolean, nullable=False, default=False)
+    can_submit = db.Column(db.Boolean, nullable=False, default=False)
+    can_approve = db.Column(db.Boolean, nullable=False, default=False)
+    can_publish = db.Column(db.Boolean, nullable=False, default=False)
+    can_configure_model = db.Column(db.Boolean, nullable=False, default=False)
+
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+
+    added_by_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    notes = db.Column(db.Text, nullable=True)
+
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+        onupdate=_utc_now,
+    )
+
+    user = db.relationship(
+        "UserORM",
+        foreign_keys=[user_id],
+    )
+    added_by_user = db.relationship(
+        "UserORM",
+        foreign_keys=[added_by_user_id],
+    )
+    

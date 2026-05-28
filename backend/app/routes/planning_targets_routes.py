@@ -29,6 +29,14 @@ from app.warehouse.services.planning_targets_service import (
     submit_target_batch,
 )
 
+from app.utils.planning_access import (
+    require_planning_approve,
+    require_planning_edit,
+    require_planning_model_config,
+    require_planning_operator,
+    require_planning_publish,
+    require_planning_submit,
+)
 
 planning_targets_bp = Blueprint(
     "planning_targets",
@@ -108,10 +116,21 @@ def _service_error(exc: PlanningTargetsServiceError):
         }
     ), 400
 
+def _guard(access_check):
+    access_error = access_check()
+    if access_error is not None:
+        return access_error
+
+    return None
+
 @planning_targets_bp.route("/model-configs", methods=["GET"])
 @jwt_required()
 def list_model_configs_route():
     try:
+        access_error = _guard(require_planning_operator)
+        if access_error:
+            return access_error
+
         result = list_model_configs(
             status=request.args.get("status"),
         )
@@ -124,6 +143,9 @@ def list_model_configs_route():
 @jwt_required()
 def create_model_config_route():
     try:
+        access_error = _guard(require_planning_model_config)
+        if access_error:
+            return access_error
         payload = _json_payload()
 
         result = create_model_config(
@@ -175,6 +197,9 @@ def create_model_config_route():
 )
 @jwt_required()
 def approve_target_batch_route(batch_id: int):
+    access_error = _guard(require_planning_submit)
+    if access_error:
+        return access_error    
     try:
         payload = request.get_json(silent=True)
         if payload is None:
@@ -206,6 +231,9 @@ def approve_target_batch_route(batch_id: int):
 )
 @jwt_required()
 def reject_target_batch_route(batch_id: int):
+    access_error = _guard(require_planning_submit)
+    if access_error:
+        return access_error    
     try:
         payload = request.get_json(silent=True)
         if payload is None:
@@ -236,6 +264,9 @@ def reject_target_batch_route(batch_id: int):
 )
 @jwt_required()
 def publish_approved_batch_to_track_route(batch_id: int):
+    access_error = _guard(require_planning_submit)
+    if access_error:
+        return access_error
     try:
         payload = request.get_json(silent=True)
         if payload is None:
@@ -264,6 +295,9 @@ def publish_approved_batch_to_track_route(batch_id: int):
 @jwt_required()
 def list_target_batches_route():
     try:
+        access_error = _guard(require_planning_model_config)
+        if access_error:
+            return access_error        
         result = list_target_batches(
             target_month=request.args.get("target_month"),
             status=request.args.get("status"),
@@ -276,6 +310,10 @@ def list_target_batches_route():
 @planning_targets_bp.route("/batches", methods=["POST"])
 @jwt_required()
 def create_target_batch_route():
+    access_error = _guard(require_planning_model_config)
+    if access_error:
+        return access_error
+
     try:
         payload = _json_payload()
 
@@ -305,6 +343,9 @@ def create_target_batch_route():
 )
 @jwt_required()
 def add_branch_row_to_batch_route(batch_id: int):
+    access_error = _guard(require_planning_model_config)
+    if access_error:
+        return access_error
     try:
         payload = _json_payload()
 
@@ -368,6 +409,10 @@ def add_branch_row_to_batch_route(batch_id: int):
 )
 @jwt_required()
 def submit_target_batch_route(batch_id: int):
+    access_error = _guard(require_planning_submit)
+    if access_error:
+        return access_error    
+    
     try:
         payload = request.get_json(silent=True)
         if payload is None:
@@ -395,6 +440,9 @@ def submit_target_batch_route(batch_id: int):
 @planning_targets_bp.route("/batches/<int:batch_id>", methods=["GET"])
 @jwt_required()
 def get_batch_detail_route(batch_id: int):
+    access_error = _guard(require_planning_submit)
+    if access_error:
+        return access_error
     try:
         result = get_batch_detail(batch_id)
         return _success(result)
