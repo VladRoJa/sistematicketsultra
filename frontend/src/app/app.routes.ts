@@ -110,6 +110,12 @@ export const routes: Routes = [
         loadComponent: () => import('./registrar-asistencia/registrar-asistencia.component').then(m => m.RegistrarAsistenciaComponent)
       },
       {
+        path: 'planeacion/metas',
+        loadComponent: () =>
+          import('./planning/targets/planning-targets-home/planning-targets-home.component')
+            .then((m) => m.PlanningTargetsHomeComponent),
+      },
+      {
         path: 'warehouse',
         component: WarehouseHomeComponent,
       },

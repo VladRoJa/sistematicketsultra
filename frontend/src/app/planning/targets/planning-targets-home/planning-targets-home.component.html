@@ -1,0 +1,213 @@
+<!-- frontend\src\app\planning\targets\planning-targets-home\planning-targets-home.component.html -->
+
+
+<div class="planning-page">
+  <mat-card class="planning-header-card">
+    <div class="planning-header">
+      <div>
+        <h1>Planeación Comercial</h1>
+        <p>
+          Gobierno de metas comerciales, aprobación y publicación hacia Track.
+        </p>
+      </div>
+
+      <button
+        mat-stroked-button
+        type="button"
+        color="primary"
+        (click)="refresh()"
+        [disabled]="isLoadingAccess || isLoadingBatches"
+      >
+        <mat-icon>refresh</mat-icon>
+        Actualizar
+      </button>
+    </div>
+  </mat-card>
+
+  <mat-card *ngIf="isLoadingAccess" class="state-card">
+    <mat-spinner diameter="36"></mat-spinner>
+    <p>Validando acceso a Planeación Comercial...</p>
+  </mat-card>
+
+  <mat-card *ngIf="!isLoadingAccess && access && !access.has_access" class="state-card warning-card">
+    <mat-icon>lock</mat-icon>
+    <h2>Sin acceso</h2>
+    <p>
+      Tu usuario no está autorizado para acceder al módulo de Planeación Comercial.
+    </p>
+  </mat-card>
+
+  <ng-container *ngIf="!isLoadingAccess && access?.has_access">
+    <mat-card class="permissions-card">
+      <div class="permissions-header">
+        <div>
+          <h2>Permisos activos</h2>
+          <p>Estos permisos vienen del backend y controlan las acciones disponibles.</p>
+        </div>
+      </div>
+
+      <mat-chip-set>
+        <mat-chip [class.enabled-chip]="access?.can_view">Ver</mat-chip>
+        <mat-chip [class.enabled-chip]="access?.can_edit">Editar</mat-chip>
+        <mat-chip [class.enabled-chip]="access?.can_submit">Enviar a revisión</mat-chip>
+        <mat-chip [class.enabled-chip]="access?.can_approve">Aprobar/Rechazar</mat-chip>
+        <mat-chip [class.enabled-chip]="access?.can_publish">Publicar</mat-chip>
+        <mat-chip [class.enabled-chip]="access?.can_configure_model">Configurar modelo</mat-chip>
+      </mat-chip-set>
+    </mat-card>
+
+    <mat-card class="table-card">
+      <div class="section-header">
+        <div>
+          <h2>Paquetes mensuales</h2>
+          <p>
+            Lista de batches de metas creados en Planeación Comercial.
+          </p>
+        </div>
+      </div>
+
+      <div *ngIf="isLoadingBatches" class="state-card inline-state">
+        <mat-spinner diameter="32"></mat-spinner>
+        <p>Cargando paquetes...</p>
+      </div>
+
+      <div *ngIf="!isLoadingBatches && batches.length === 0" class="empty-state">
+        <mat-icon>inbox</mat-icon>
+        <h3>No hay paquetes registrados</h3>
+        <p>
+          Cuando se creen paquetes mensuales de metas, aparecerán aquí.
+        </p>
+      </div>
+
+      <div *ngIf="!isLoadingBatches && batches.length > 0" class="table-wrapper">
+        <table mat-table [dataSource]="batches" class="planning-table">
+          <ng-container matColumnDef="target_month">
+            <th mat-header-cell *matHeaderCellDef>Mes</th>
+            <td mat-cell *matCellDef="let batch">
+              {{ formatMonth(batch.target_month) }}
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="version">
+            <th mat-header-cell *matHeaderCellDef>Versión</th>
+            <td mat-cell *matCellDef="let batch">
+              v{{ batch.version }}
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="status">
+            <th mat-header-cell *matHeaderCellDef>Estado</th>
+            <td mat-cell *matCellDef="let batch">
+              <span class="status-pill" [ngClass]="getStatusClass(batch.batch_status)">
+                {{ batch.batch_status }}
+              </span>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="scope">
+            <th mat-header-cell *matHeaderCellDef>Alcance</th>
+            <td mat-cell *matCellDef="let batch">
+              {{ batch.scope }}
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="model_config">
+            <th mat-header-cell *matHeaderCellDef>Modelo</th>
+            <td mat-cell *matCellDef="let batch">
+              <ng-container *ngIf="batch.model_config; else noModel">
+                {{ batch.model_config.name }} v{{ batch.model_config.version }}
+              </ng-container>
+
+              <ng-template #noModel>
+                —
+              </ng-template>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="rows">
+            <th mat-header-cell *matHeaderCellDef>Sucursales</th>
+            <td mat-cell *matCellDef="let batch">
+              {{ batch.branch_rows_count }}
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="canonical">
+            <th mat-header-cell *matHeaderCellDef>Canónica</th>
+            <td mat-cell *matCellDef="let batch">
+              <mat-icon *ngIf="batch.is_canonical" class="canonical-icon">
+                check_circle
+              </mat-icon>
+              <span *ngIf="!batch.is_canonical">—</span>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="actions">
+            <th mat-header-cell *matHeaderCellDef>Acciones</th>
+            <td mat-cell *matCellDef="let batch">
+              <div class="actions-cell">
+                <button
+                  mat-stroked-button
+                  type="button"
+                  color="primary"
+                  *ngIf="canSubmit(batch)"
+                  [disabled]="isActionLoading(batch)"
+                  (click)="submitBatch(batch)"
+                >
+                  Enviar
+                </button>
+
+                <button
+                  mat-stroked-button
+                  type="button"
+                  color="primary"
+                  *ngIf="canApprove(batch)"
+                  [disabled]="isActionLoading(batch)"
+                  (click)="approveBatch(batch)"
+                >
+                  Aprobar
+                </button>
+
+                <button
+                  mat-stroked-button
+                  type="button"
+                  color="warn"
+                  *ngIf="canReject(batch)"
+                  [disabled]="isActionLoading(batch)"
+                  (click)="rejectBatch(batch)"
+                >
+                  Rechazar
+                </button>
+
+                <button
+                  mat-flat-button
+                  type="button"
+                  color="primary"
+                  *ngIf="canPublish(batch)"
+                  [disabled]="isActionLoading(batch)"
+                  (click)="publishBatch(batch)"
+                >
+                  Publicar
+                </button>
+
+                <span
+                  *ngIf="
+                    !canSubmit(batch) &&
+                    !canApprove(batch) &&
+                    !canReject(batch) &&
+                    !canPublish(batch)
+                  "
+                  class="no-actions"
+                >
+                  Sin acciones
+                </span>
+              </div>
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
+        </table>
+      </div>
+    </mat-card>
+  </ng-container>
+</div>
