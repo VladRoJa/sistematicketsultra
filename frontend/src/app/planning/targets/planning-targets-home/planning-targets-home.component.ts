@@ -10,9 +10,14 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
 import { finalize } from 'rxjs';
+import { FormsModule } from '@angular/forms';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+import { MatSelectModule } from '@angular/material/select';
 
 import {
   PlanningAccessResponse,
+  PlanningModelConfigSummary,
   PlanningTargetBatchSummary,
   PlanningTargetsService,
 } from '../../services/planning-targets.service';
@@ -29,6 +34,10 @@ import {
     MatProgressSpinnerModule,
     MatSnackBarModule,
     MatTableModule,
+    FormsModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatSelectModule,
   ],
   templateUrl: './planning-targets-home.component.html',
   styleUrls: ['./planning-targets-home.component.css',]
@@ -36,6 +45,19 @@ import {
 export class PlanningTargetsHomeComponent implements OnInit {
   access: PlanningAccessResponse | null = null;
   batches: PlanningTargetBatchSummary[] = [];
+  modelConfigs: PlanningModelConfigSummary[] = [];
+
+  showCreateForm = false;
+  isLoadingModelConfigs = false;
+  isCreatingBatch = false;
+
+  createForm = {
+    targetMonth: '',
+    version: 1,
+    modelConfigId: null as number | null,
+    scenarioBase: 'AJUSTADO',
+    notes: '',
+  };
 
   isLoadingAccess = false;
   isLoadingBatches = false;
@@ -73,6 +95,7 @@ export class PlanningTargetsHomeComponent implements OnInit {
 
           if (access.has_access) {
             this.loadBatches();
+            this.loadModelConfigs();
           }
         },
         error: () => {
@@ -105,6 +128,130 @@ export class PlanningTargetsHomeComponent implements OnInit {
       });
   }
 
+loadModelConfigs(): void {
+  this.isLoadingModelConfigs = true;
+
+  this.planningTargetsService
+    .listModelConfigs()
+    .pipe(finalize(() => (this.isLoadingModelConfigs = false)))
+    .subscribe({
+      next: (response) => {
+        this.modelConfigs = response.items || [];
+        this.ensureDefaultModelConfig();
+      },
+      error: () => {
+        this.snackBar.open(
+          'No se pudieron cargar las configuraciones del modelo.',
+          'Cerrar',
+          { duration: 4000 },
+        );
+      },
+    });
+}
+
+ensureDefaultModelConfig(): void {
+  if (this.createForm.modelConfigId || this.modelConfigs.length === 0) {
+    return;
+  }
+
+  const activeConfig = this.modelConfigs.find(
+    (config) =>
+      config.model_status === 'ACTIVO' ||
+      config.status === 'ACTIVO',
+  );
+
+  this.createForm.modelConfigId = activeConfig?.id ?? this.modelConfigs[0].id;
+}
+
+toggleCreateForm(): void {
+  this.showCreateForm = !this.showCreateForm;
+
+  if (this.showCreateForm) {
+    this.ensureDefaultCreateMonth();
+    this.ensureDefaultModelConfig();
+  }
+}
+
+ensureDefaultCreateMonth(): void {
+  if (this.createForm.targetMonth) {
+    return;
+  }
+
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+
+  this.createForm.targetMonth = `${year}-${month}`;
+}
+
+createBatch(): void {
+  if (!this.access?.can_edit) {
+    this.snackBar.open('No tienes permiso para crear paquetes.', 'Cerrar', {
+      duration: 4000,
+    });
+    return;
+  }
+
+  if (!this.createForm.targetMonth) {
+    this.snackBar.open('Selecciona el mes objetivo.', 'Cerrar', {
+      duration: 4000,
+    });
+    return;
+  }
+
+  const normalizedVersion = Number(this.createForm.version);
+
+  if (!Number.isInteger(normalizedVersion) || normalizedVersion <= 0) {
+    this.snackBar.open('La versión debe ser un número entero mayor a 0.', 'Cerrar', {
+      duration: 4000,
+    });
+    return;
+  }
+
+  this.isCreatingBatch = true;
+
+  this.planningTargetsService
+    .createBatch({
+      target_month: `${this.createForm.targetMonth}-01`,
+      version: normalizedVersion,
+      model_config_id: this.createForm.modelConfigId,
+      scope: 'MONTHLY_BATCH',
+      source_type: 'MANUAL',
+      scenario_base: this.createForm.scenarioBase || null,
+      notes: this.createForm.notes || null,
+    })
+    .pipe(finalize(() => (this.isCreatingBatch = false)))
+    .subscribe({
+      next: () => {
+        this.snackBar.open('Paquete mensual creado.', 'Cerrar', {
+          duration: 3000,
+        });
+        this.showCreateForm = false;
+        this.resetCreateForm();
+        this.loadBatches();
+      },
+      error: () => {
+        this.snackBar.open(
+          'No se pudo crear el paquete. Revisa si ya existe esa versión para el mes.',
+          'Cerrar',
+          { duration: 5000 },
+        );
+      },
+    });
+}
+
+resetCreateForm(): void {
+  this.createForm = {
+    targetMonth: '',
+    version: 1,
+    modelConfigId: this.modelConfigs[0]?.id ?? null,
+    scenarioBase: 'AJUSTADO',
+    notes: '',
+  };
+
+  this.ensureDefaultCreateMonth();
+}
+  
   refresh(): void {
     if (!this.access?.has_access) {
       this.loadAccess();
@@ -113,6 +260,10 @@ export class PlanningTargetsHomeComponent implements OnInit {
 
     this.loadBatches();
   }
+
+canCreateBatch(): boolean {
+  return Boolean(this.access?.can_edit);
+}
 
   canSubmit(batch: PlanningTargetBatchSummary): boolean {
     return Boolean(

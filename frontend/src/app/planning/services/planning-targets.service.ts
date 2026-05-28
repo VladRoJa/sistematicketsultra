@@ -160,6 +160,27 @@ export interface PlanningTargetBatchDetail {
   rejection_comment?: string | null;
 }
 
+export interface CreatePlanningTargetBatchPayload {
+  target_month: string;
+  version: number;
+  model_config_id?: number | null;
+  scope: string;
+  source_type: string;
+  scenario_base?: string | null;
+  notes?: string | null;
+}
+
+export interface CreatePlanningTargetBatchResponse {
+  status: string;
+  id: number;
+  target_month: string;
+  version: number;
+  batch_status: string;
+  scope: string;
+  source_type: string;
+  model_config_id?: number | null;
+}
+
 export interface PlanningActionResponse {
   status: string;
   id: number;
@@ -223,6 +244,15 @@ export class PlanningTargetsService {
     return this.http.get<PlanningTargetBatchesResponse>(
       `${this.baseUrl}/batches`,
       { params },
+    );
+  }
+
+  createBatch(
+    payload: CreatePlanningTargetBatchPayload,
+  ): Observable<CreatePlanningTargetBatchResponse> {
+    return this.http.post<CreatePlanningTargetBatchResponse>(
+      `${this.baseUrl}/batches`,
+      payload,
     );
   }
 
