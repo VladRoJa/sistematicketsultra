@@ -26,6 +26,7 @@ from .warehouse import (
     KpiVentasNuevosSociosSnapshotRowORM,
     TrackSourceTiendaDailyORM,
     WarehouseCommercialCatalogORM,
+    
 )
 from .suite_governance import (
     SuiteRegionORM,
@@ -38,6 +39,7 @@ from .planning_targets import (
     PlanningTargetBranchRowORM,
     PlanningTargetAdjustmentORM,
     PlanningTargetApprovalEventORM,
+    PlanningOperatorORM,
 )
 
 
@@ -77,4 +79,5 @@ __all__ = [
     "PlanningTargetBranchRowORM",
     "PlanningTargetAdjustmentORM",
     "PlanningTargetApprovalEventORM",
+    "PlanningOperatorORM",
 ]
