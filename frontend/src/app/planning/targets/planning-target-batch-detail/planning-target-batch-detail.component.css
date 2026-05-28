@@ -242,3 +242,57 @@
     font-size: 21px;
   }
 }
+
+.branch-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  margin-bottom: 16px;
+  border: 1px solid #eaecf0;
+  border-radius: 14px;
+  background: #fcfcfd;
+}
+
+.branch-form-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(170px, 1fr));
+  gap: 14px;
+}
+
+.notes-field {
+  width: 100%;
+}
+
+.branch-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+@media (max-width: 1200px) {
+  .branch-form-grid {
+    grid-template-columns: repeat(3, minmax(170px, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .branch-form-grid {
+    grid-template-columns: repeat(2, minmax(170px, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .branch-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .branch-form-actions {
+    justify-content: stretch;
+  }
+
+  .branch-form-actions button {
+    width: 100%;
+  }
+}

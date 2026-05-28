@@ -181,6 +181,42 @@ export interface CreatePlanningTargetBatchResponse {
   model_config_id?: number | null;
 }
 
+export interface AddPlanningTargetBranchRowPayload {
+  sucursal_canon: string;
+
+  m2_sin_circulaciones: number;
+  usuarios_inicio_mes: number;
+  proyeccion_usuarios_cierre_mes: number;
+
+  meta_faycgo_mes: number;
+  meta_clientes_nuevos_mes: number;
+  meta_reactivaciones_mes: number;
+  meta_bajas_mes: number;
+  meta_nuevos_domiciliados_mes: number;
+  meta_arpu_mes: number;
+  meta_venta_tienda_mes: number;
+
+  ingreso_agregadoras_estimado?: number | null;
+  usuarios_agregadoras_estimado?: number | null;
+
+  scenario_used?: string | null;
+  trend_classification?: string | null;
+  risk_level?: string | null;
+  status?: string;
+  previous_branch_row_id?: number | null;
+  notes?: string | null;
+}
+
+export interface AddPlanningTargetBranchRowResponse {
+  status: string;
+  id: number;
+  batch_id: number;
+  target_month: string;
+  sucursal_canon: string;
+  row_status: string;
+  meta_faycgo_mes: string;
+}
+
 export interface PlanningActionResponse {
   status: string;
   id: number;
@@ -259,6 +295,16 @@ export class PlanningTargetsService {
   getBatchDetail(batchId: number): Observable<PlanningTargetBatchDetail> {
     return this.http.get<PlanningTargetBatchDetail>(
       `${this.baseUrl}/batches/${batchId}`,
+    );
+  }
+
+  addBranchRowToBatch(
+    batchId: number,
+    payload: AddPlanningTargetBranchRowPayload,
+  ): Observable<AddPlanningTargetBranchRowResponse> {
+    return this.http.post<AddPlanningTargetBranchRowResponse>(
+      `${this.baseUrl}/batches/${batchId}/branch-rows`,
+      payload,
     );
   }
 

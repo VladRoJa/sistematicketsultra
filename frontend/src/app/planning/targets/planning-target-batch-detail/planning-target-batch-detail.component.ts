@@ -10,8 +10,15 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
+import { FormsModule } from '@angular/forms';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+import { MatSelectModule } from '@angular/material/select';
+import { finalize } from 'rxjs';
 
 import {
+  AddPlanningTargetBranchRowPayload,
+  PlanningAccessResponse,
   PlanningTargetBatchDetail,
   PlanningTargetBranchRowDetail,
   PlanningTargetApprovalEventDetail,
@@ -31,6 +38,10 @@ import {
     MatProgressSpinnerModule,
     MatSnackBarModule,
     MatTableModule,
+    FormsModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatSelectModule,
   ],
   templateUrl: './planning-target-batch-detail.component.html',
   styleUrls: ['./planning-target-batch-detail.component.css',]
@@ -38,6 +49,31 @@ import {
 export class PlanningTargetBatchDetailComponent implements OnInit {
   batchId: number | null = null;
   batch: PlanningTargetBatchDetail | null = null;
+  access: PlanningAccessResponse | null = null;
+
+showAddBranchForm = false;
+isLoadingAccess = false;
+isAddingBranchRow = false;
+
+branchForm = {
+sucursalCanon: '',
+m2SinCirculaciones: 0,
+usuariosInicioMes: 0,
+proyeccionUsuariosCierreMes: 0,
+metaFaycgoMes: 0,
+metaClientesNuevosMes: 0,
+metaReactivacionesMes: 0,
+metaBajasMes: 0,
+metaNuevosDomiciliadosMes: 0,
+metaArpuMes: 0,
+metaVentaTiendaMes: 0,
+ingresoAgregadorasEstimado: null as number | null,
+usuariosAgregadorasEstimado: null as number | null,
+scenarioUsed: 'AJUSTADO',
+trendClassification: '',
+riskLevel: 'MEDIO',
+notes: '',
+};
 
   isLoading = false;
 
@@ -69,10 +105,11 @@ export class PlanningTargetBatchDetailComponent implements OnInit {
     private readonly snackBar: MatSnackBar,
   ) {}
 
-  ngOnInit(): void {
+    ngOnInit(): void {
     this.loadBatchIdFromRoute();
+    this.loadAccess();
     this.loadBatchDetail();
-  }
+    }
 
   loadBatchIdFromRoute(): void {
     const rawBatchId = this.activatedRoute.snapshot.paramMap.get('batchId');
@@ -112,6 +149,175 @@ export class PlanningTargetBatchDetailComponent implements OnInit {
         },
       });
   }
+
+loadAccess(): void {
+  this.isLoadingAccess = true;
+
+  this.planningTargetsService
+    .getAccess()
+    .pipe(finalize(() => (this.isLoadingAccess = false)))
+    .subscribe({
+      next: (access) => {
+        this.access = access;
+      },
+      error: () => {
+        this.access = null;
+      },
+    });
+}
+
+    canAddBranchRow(): boolean {
+    return Boolean(
+        this.access?.can_edit &&
+        this.batch &&
+        ['BORRADOR', 'PROPUESTA'].includes(this.batch.status),
+    );
+    }
+
+    toggleAddBranchForm(): void {
+    this.showAddBranchForm = !this.showAddBranchForm;
+
+    if (this.showAddBranchForm && !this.branchForm.scenarioUsed) {
+        this.branchForm.scenarioUsed = 'AJUSTADO';
+    }
+    }
+
+    addBranchRow(): void {
+    if (!this.batchId || !this.batch) {
+        this.snackBar.open('Batch inválido.', 'Cerrar', {
+        duration: 4000,
+        });
+        return;
+    }
+
+    if (!this.canAddBranchRow()) {
+        this.snackBar.open('No puedes agregar sucursales en este estado.', 'Cerrar', {
+        duration: 4000,
+        });
+        return;
+    }
+
+    const payload = this.buildBranchRowPayload();
+
+    if (!payload) {
+        return;
+    }
+
+    this.isAddingBranchRow = true;
+
+    this.planningTargetsService
+        .addBranchRowToBatch(this.batchId, payload)
+        .pipe(finalize(() => (this.isAddingBranchRow = false)))
+        .subscribe({
+        next: () => {
+            this.snackBar.open('Sucursal agregada al paquete.', 'Cerrar', {
+            duration: 3000,
+            });
+            this.showAddBranchForm = false;
+            this.resetBranchForm();
+            this.loadBatchDetail();
+        },
+        error: () => {
+            this.snackBar.open(
+            'No se pudo agregar la sucursal. Revisa si ya existe en el batch o si la clave es correcta.',
+            'Cerrar',
+            { duration: 5000 },
+            );
+        },
+        });
+    }
+
+    buildBranchRowPayload(): AddPlanningTargetBranchRowPayload | null {
+    const sucursalCanon = this.branchForm.sucursalCanon.trim().toUpperCase();
+
+    if (!sucursalCanon) {
+        this.snackBar.open('Captura la sucursal canónica.', 'Cerrar', {
+        duration: 4000,
+        });
+        return null;
+    }
+
+    const numericFields = [
+        ['m2 sin circulaciones', this.branchForm.m2SinCirculaciones],
+        ['usuarios inicio mes', this.branchForm.usuariosInicioMes],
+        ['proyección usuarios cierre mes', this.branchForm.proyeccionUsuariosCierreMes],
+        ['meta FAYCGO mes', this.branchForm.metaFaycgoMes],
+        ['clientes nuevos', this.branchForm.metaClientesNuevosMes],
+        ['reactivaciones', this.branchForm.metaReactivacionesMes],
+        ['bajas', this.branchForm.metaBajasMes],
+        ['nuevos domiciliados', this.branchForm.metaNuevosDomiciliadosMes],
+        ['ARPU', this.branchForm.metaArpuMes],
+        ['venta tienda', this.branchForm.metaVentaTiendaMes],
+    ] as Array<[string, number]>;
+
+    const invalidField = numericFields.find(([, value]) => {
+        const numericValue = Number(value);
+        return Number.isNaN(numericValue) || numericValue < 0;
+    });
+
+    if (invalidField) {
+        this.snackBar.open(
+        `El campo ${invalidField[0]} debe ser numérico y no negativo.`,
+        'Cerrar',
+        { duration: 4000 },
+        );
+        return null;
+    }
+
+    return {
+        sucursal_canon: sucursalCanon,
+        m2_sin_circulaciones: Number(this.branchForm.m2SinCirculaciones),
+        usuarios_inicio_mes: Number(this.branchForm.usuariosInicioMes),
+        proyeccion_usuarios_cierre_mes: Number(
+        this.branchForm.proyeccionUsuariosCierreMes,
+        ),
+        meta_faycgo_mes: Number(this.branchForm.metaFaycgoMes),
+        meta_clientes_nuevos_mes: Number(this.branchForm.metaClientesNuevosMes),
+        meta_reactivaciones_mes: Number(this.branchForm.metaReactivacionesMes),
+        meta_bajas_mes: Number(this.branchForm.metaBajasMes),
+        meta_nuevos_domiciliados_mes: Number(
+        this.branchForm.metaNuevosDomiciliadosMes,
+        ),
+        meta_arpu_mes: Number(this.branchForm.metaArpuMes),
+        meta_venta_tienda_mes: Number(this.branchForm.metaVentaTiendaMes),
+        ingreso_agregadoras_estimado:
+        this.branchForm.ingresoAgregadorasEstimado === null
+            ? null
+            : Number(this.branchForm.ingresoAgregadorasEstimado),
+        usuarios_agregadoras_estimado:
+        this.branchForm.usuariosAgregadorasEstimado === null
+            ? null
+            : Number(this.branchForm.usuariosAgregadorasEstimado),
+        scenario_used: this.branchForm.scenarioUsed || null,
+        trend_classification: this.branchForm.trendClassification || null,
+        risk_level: this.branchForm.riskLevel || null,
+        status: 'PROPUESTA',
+        previous_branch_row_id: null,
+        notes: this.branchForm.notes || null,
+    };
+    }
+
+    resetBranchForm(): void {
+    this.branchForm = {
+        sucursalCanon: '',
+        m2SinCirculaciones: 0,
+        usuariosInicioMes: 0,
+        proyeccionUsuariosCierreMes: 0,
+        metaFaycgoMes: 0,
+        metaClientesNuevosMes: 0,
+        metaReactivacionesMes: 0,
+        metaBajasMes: 0,
+        metaNuevosDomiciliadosMes: 0,
+        metaArpuMes: 0,
+        metaVentaTiendaMes: 0,
+        ingresoAgregadorasEstimado: null,
+        usuariosAgregadorasEstimado: null,
+        scenarioUsed: 'AJUSTADO',
+        trendClassification: '',
+        riskLevel: 'MEDIO',
+        notes: '',
+    };
+    }
 
   refresh(): void {
     this.loadBatchDetail();
