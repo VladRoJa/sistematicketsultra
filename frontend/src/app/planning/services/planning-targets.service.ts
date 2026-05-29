@@ -209,16 +209,31 @@ export interface PlanningBranchComparisonMetricRow {
   target_month?: string | null;
   sucursal_canon?: string | null;
 
+  // Metas / propuesta mensual
   meta_faycgo_mes?: string | null;
+  meta_clientes_nuevos_mes?: number | null;
+  meta_reactivaciones_mes?: number | null;
+  meta_bajas_mes?: number | null;
+  meta_nuevos_domiciliados_mes?: number | null;
+  meta_arpu_mes?: string | null;
+  meta_venta_tienda_mes?: string | null;
+
+  // Usuarios / desempeño real
+  usuarios_inicio_mes?: number | null;
+  proyeccion_usuarios_cierre_mes?: number | null;
+  usuarios_activos_actual?: number | null;
+  clientes_nuevos_real_mtd?: number | null;
+  reactivaciones_real_mtd?: number | null;
+  bajas_reales_mtd?: number | null;
+  nuevos_domiciliados_real_mtd?: number | null;
+
+  // Ingresos
   ingreso_real_base_mtd?: string | null;
   ingreso_real_agregadora_mtd?: string | null;
   ingreso_real_total_mtd?: string | null;
   ingreso_real_mtd?: string | null;
 
-  meta_clientes_nuevos_mes?: number | null;
-  clientes_nuevos_real_mtd?: number | null;
-
-  usuarios_activos_actual?: number | null;
+  // Tienda
   venta_tienda_real_mtd?: string | null;
 }
 

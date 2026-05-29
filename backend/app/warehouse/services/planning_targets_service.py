@@ -161,7 +161,25 @@ def _serialize_track_mart_comparison_row(row) -> dict[str, Any] | None:
         "target_month": row.target_month.isoformat() if row.target_month else None,
         "sucursal_canon": row.sucursal_canon,
 
+        # Metas / propuesta mensual
         "meta_faycgo_mes": _serialize_decimal(row.meta_faycgo_mes),
+        "meta_clientes_nuevos_mes": row.meta_clientes_nuevos_mes,
+        "meta_reactivaciones_mes": row.meta_reactivaciones_mes,
+        "meta_bajas_mes": row.meta_bajas_mes,
+        "meta_nuevos_domiciliados_mes": row.meta_nuevos_domiciliados_mes,
+        "meta_arpu_mes": _serialize_decimal(row.meta_arpu_mes),
+        "meta_venta_tienda_mes": _serialize_decimal(row.meta_venta_tienda_mes),
+
+        # Usuarios / desempeño real
+        "usuarios_inicio_mes": row.usuarios_inicio_mes,
+        "proyeccion_usuarios_cierre_mes": row.proyeccion_usuarios_cierre_mes,
+        "usuarios_activos_actual": row.usuarios_activos_actual,
+        "clientes_nuevos_real_mtd": row.clientes_nuevos_real_mtd,
+        "reactivaciones_real_mtd": row.reactivaciones_real_mtd,
+        "bajas_reales_mtd": row.bajas_reales_mtd,
+        "nuevos_domiciliados_real_mtd": row.nuevos_domiciliados_real_mtd,
+
+        # Ingresos
         "ingreso_real_base_mtd": _serialize_decimal(row.ingreso_real_base_mtd),
         "ingreso_real_agregadora_mtd": _serialize_decimal(
             row.ingreso_real_agregadora_mtd
@@ -169,10 +187,7 @@ def _serialize_track_mart_comparison_row(row) -> dict[str, Any] | None:
         "ingreso_real_total_mtd": _serialize_decimal(row.ingreso_real_total_mtd),
         "ingreso_real_mtd": _serialize_decimal(row.ingreso_real_mtd),
 
-        "meta_clientes_nuevos_mes": row.meta_clientes_nuevos_mes,
-        "clientes_nuevos_real_mtd": row.clientes_nuevos_real_mtd,
-
-        "usuarios_activos_actual": row.usuarios_activos_actual,
+        # Tienda
         "venta_tienda_real_mtd": _serialize_decimal(row.venta_tienda_real_mtd),
     }
 

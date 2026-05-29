@@ -228,7 +228,7 @@
               </div>
 
               <div class="branch-form-grid proposal-grid">
-                <mat-form-field appearance="fill">
+                <mat-form-field appearance="fill" class="field-family field-users">
                   <mat-label>Usuarios cierre proyectado</mat-label>
                   <input
                     matInput
@@ -239,7 +239,7 @@
                   />
                 </mat-form-field>
 
-                <mat-form-field appearance="fill">
+                <mat-form-field appearance="fill" class="field-family field-commercial">
                   <mat-label>Meta FAYCGO</mat-label>
                   <input
                     matInput
@@ -250,7 +250,7 @@
                   />
                 </mat-form-field>
 
-                <mat-form-field appearance="fill">
+                <mat-form-field appearance="fill" class="field-family field-commercial">
                   <mat-label>Clientes nuevos</mat-label>
                   <input
                     matInput
@@ -261,7 +261,7 @@
                   />
                 </mat-form-field>
 
-                <mat-form-field appearance="fill">
+                <mat-form-field appearance="fill" class="field-family field-users">
                   <mat-label>Reactivaciones</mat-label>
                   <input
                     matInput
@@ -272,7 +272,7 @@
                   />
                 </mat-form-field>
 
-                <mat-form-field appearance="fill">
+                <mat-form-field appearance="fill" class="field-family field-users field-risk">
                   <mat-label>Bajas</mat-label>
                   <input
                     matInput
@@ -283,7 +283,7 @@
                   />
                 </mat-form-field>
 
-                <mat-form-field appearance="fill">
+                <mat-form-field appearance="fill" class="field-family field-users">
                   <mat-label>Nuevos domiciliados</mat-label>
                   <input
                     matInput
@@ -294,7 +294,7 @@
                   />
                 </mat-form-field>
 
-                <mat-form-field appearance="fill">
+                <mat-form-field appearance="fill" class="field-family field-commercial">
                   <mat-label>ARPU</mat-label>
                   <input
                     matInput
@@ -305,7 +305,7 @@
                   />
                 </mat-form-field>
 
-                <mat-form-field appearance="fill">
+                <mat-form-field appearance="fill" class="field-family field-income">
                   <mat-label>Venta tienda</mat-label>
                   <input
                     matInput
@@ -316,7 +316,7 @@
                   />
                 </mat-form-field>
 
-                <mat-form-field appearance="fill">
+                <mat-form-field appearance="fill" class="field-family field-income">
                   <mat-label>Ingreso agregadoras estimado</mat-label>
                   <input
                     matInput
@@ -327,7 +327,7 @@
                   />
                 </mat-form-field>
 
-                <mat-form-field appearance="fill">
+                <mat-form-field appearance="fill" class="field-family field-income">
                   <mat-label>Usuarios agregadoras estimado</mat-label>
                   <input
                     matInput
@@ -351,7 +351,7 @@
               </div>
 
               <div class="branch-form-grid context-grid">
-                <mat-form-field appearance="fill">
+                <mat-form-field appearance="fill" class="field-family field-context">
                   <mat-label>Escenario</mat-label>
                   <mat-select
                     name="scenarioUsed"
@@ -363,7 +363,7 @@
                   </mat-select>
                 </mat-form-field>
 
-                <mat-form-field appearance="fill">
+                <mat-form-field appearance="fill" class="field-family field-context">
                   <mat-label>Tendencia</mat-label>
                   <mat-select
                     name="trendClassification"
@@ -377,7 +377,7 @@
                   </mat-select>
                 </mat-form-field>
 
-                <mat-form-field appearance="fill">
+                <mat-form-field appearance="fill" class="field-family field-context">
                   <mat-label>Riesgo</mat-label>
                   <mat-select
                     name="riskLevel"
@@ -390,7 +390,7 @@
                 </mat-form-field>
               </div>
 
-              <mat-form-field appearance="fill" class="notes-field">
+              <mat-form-field appearance="fill" class="notes-field field-family field-context">
                 <mat-label>Notas</mat-label>
                 <textarea
                   matInput
@@ -403,132 +403,169 @@
             </div>
           </div>
 
-          <aside class="decision-column">
-            <div class="decision-panel">
-              <div class="decision-panel-header">
-                <div>
-                  <h3>Panel de decisión</h3>
-                  <p>
-                    Referencias para validar si la propuesta se ve alineada, agresiva o conservadora.
-                  </p>
+        <aside class="decision-column">
+          <div class="decision-panel">
+            <div class="decision-panel-header">
+              <div>
+                <h3>Panel de decisión</h3>
+                <p>
+                  Enfoca los rubros por familia y revisa variaciones contra histórico.
+                </p>
+              </div>
+
+              <span *ngIf="isLoadingBranchComparisons" class="comparison-loading">
+                Cargando...
+              </span>
+            </div>
+
+            <div class="decision-section-tabs" *ngIf="branchComparisons">
+              <button
+                mat-button
+                type="button"
+                *ngFor="let tab of decisionSectionTabs"
+                [class.active]="isDecisionSectionActive(tab.key)"
+                (click)="setActiveDecisionSection(tab.key)"
+              >
+                <mat-icon>{{ tab.icon }}</mat-icon>
+                {{ tab.label }}
+              </button>
+            </div>
+
+            <div
+              *ngIf="!isLoadingBranchComparisons && branchComparisons"
+              class="decision-content"
+            >
+              <div class="decision-periods">
+                <div class="decision-period-card decision-period-current">
+                  <span>Mes trabajado</span>
+                  <strong>{{ formatMonthLabel(branchComparisons.periods.current_month) }}</strong>
                 </div>
 
-                <span *ngIf="isLoadingBranchComparisons" class="comparison-loading">
-                  Cargando...
+                <div class="decision-period-card">
+                  <span>Mes anterior</span>
+                  <strong>{{ branchComparisons.periods.previous_month | date: 'yyyy-MM' }}</strong>
+                </div>
+
+                <div class="decision-period-card">
+                  <span>Mismo mes año anterior</span>
+                  <strong>{{ branchComparisons.periods.same_month_last_year | date: 'yyyy-MM' }}</strong>
+                </div>
+              </div>
+
+              <div
+                *ngIf="!hasComparisonPeriod('same_month_last_year')"
+                class="annual-history-note"
+              >
+                <mat-icon>info</mat-icon>
+                <span>
+                  Sin histórico anual suficiente para comparar contra el mismo mes del año anterior.
                 </span>
               </div>
 
               <div
-                *ngIf="!isLoadingBranchComparisons && branchComparisons"
-                class="decision-content"
+                *ngFor="let group of getDecisionMetricGroups(); trackBy: trackByDecisionGroup"
+                class="decision-metric-group"
+                [ngClass]="getDecisionMetricFamilyClass(group)"
+                [class.hidden-decision-group]="!shouldShowDecisionGroup(group)"
               >
-                <div class="decision-block">
-                  <div class="decision-block-title">
-                    <span>Mes anterior</span>
-                    <strong>{{ branchComparisons.periods.previous_month | date: 'yyyy-MM' }}</strong>
+                <div class="decision-metric-group-header">
+                  <div>
+                    <h4>{{ group.title }}</h4>
+                    <p>{{ group.description }}</p>
                   </div>
-
-                  <div
-                    *ngIf="hasComparisonPeriod('previous_month')"
-                    class="comparison-metrics"
-                  >
-                    <span>Ingreso real: {{ formatComparisonMoney('previous_month', 'ingreso_real_total_mtd') }}</span>
-                    <span>Meta FAYCGO: {{ formatComparisonMoney('previous_month', 'meta_faycgo_mes') }}</span>
-                    <span>Clientes nuevos: {{ formatComparisonNumber('previous_month', 'clientes_nuevos_real_mtd') }}</span>
-                    <span>Usuarios activos: {{ formatComparisonNumber('previous_month', 'usuarios_activos_actual') }}</span>
-                    <span>Venta tienda: {{ formatComparisonMoney('previous_month', 'venta_tienda_real_mtd') }}</span>
-                  </div>
-
-                  <p *ngIf="!hasComparisonPeriod('previous_month')" class="missing-comparison">
-                    Sin histórico del mes anterior.
-                  </p>
                 </div>
 
-                <div class="decision-block">
-                  <div class="decision-block-title">
-                    <span>Mismo mes año anterior</span>
-                    <strong>{{ branchComparisons.periods.same_month_last_year | date: 'yyyy-MM' }}</strong>
-                  </div>
-
+                <div class="decision-metric-list">
                   <div
-                    *ngIf="hasComparisonPeriod('same_month_last_year')"
-                    class="comparison-metrics"
+                    *ngFor="let metric of group.metrics; trackBy: trackByDecisionMetric"
+                    class="decision-metric-card"
+                    [ngClass]="getDecisionVariationCardClass(metric, metric.previousMonthVariation)"
                   >
-                    <span>Ingreso real: {{ formatComparisonMoney('same_month_last_year', 'ingreso_real_total_mtd') }}</span>
-                    <span>Meta FAYCGO: {{ formatComparisonMoney('same_month_last_year', 'meta_faycgo_mes') }}</span>
-                    <span>Clientes nuevos: {{ formatComparisonNumber('same_month_last_year', 'clientes_nuevos_real_mtd') }}</span>
-                    <span>Usuarios activos: {{ formatComparisonNumber('same_month_last_year', 'usuarios_activos_actual') }}</span>
-                    <span>Venta tienda: {{ formatComparisonMoney('same_month_last_year', 'venta_tienda_real_mtd') }}</span>
-                  </div>
+                    <div class="decision-metric-main">
+                      <div>
+                        <span class="decision-metric-label">{{ metric.label }}</span>
+                        <strong>
+                          {{ formatDecisionMetricValue(metric, metric.currentValue) }}
+                        </strong>
+                      </div>
 
-                  <p *ngIf="!hasComparisonPeriod('same_month_last_year')" class="missing-comparison">
-                    Sin histórico anual suficiente.
-                  </p>
-                </div>
-
-                <div
-                  *ngIf="hasComparisonPeriod('previous_month')"
-                  class="decision-block variations-block"
-                >
-                  <div class="decision-block-title">
-                    <span>Variación vs mes anterior</span>
-                    <strong>En vivo</strong>
-                  </div>
-
-                  <div class="variations-list">
-                    <div
-                      class="variation-row"
-                      [ngClass]="getVariationClass(getMetaFaycgoVsPreviousMonthVariation().direction)"
-                    >
-                      <span>Meta FAYCGO</span>
-                      <strong>
-                        {{ formatSignedPercentage(getMetaFaycgoVsPreviousMonthVariation().percentageVariation) }}
-                      </strong>
-                      <small>
-                        {{ formatSignedMoney(getMetaFaycgoVsPreviousMonthVariation().absoluteVariation) }}
-                      </small>
+                      <div
+                        class="decision-metric-live-badge"
+                        [ngClass]="getDecisionVariationClass(metric, metric.previousMonthVariation)"
+                      >
+                        {{ formatSignedPercentage(metric.previousMonthVariation.percentageVariation) }}
+                      </div>
                     </div>
 
-                    <div
-                      class="variation-row"
-                      [ngClass]="getVariationClass(getClientesNuevosVsPreviousMonthVariation().direction)"
-                    >
-                      <span>Clientes nuevos</span>
-                      <strong>
-                        {{ formatSignedPercentage(getClientesNuevosVsPreviousMonthVariation().percentageVariation) }}
-                      </strong>
-                      <small>
-                        {{ formatSignedNumber(getClientesNuevosVsPreviousMonthVariation().absoluteVariation) }}
-                      </small>
-                    </div>
+                    <div class="decision-metric-comparisons">
+                      <div class="decision-comparison-row">
+                        <span>Vs mes anterior</span>
 
-                    <div
-                      class="variation-row"
-                      [ngClass]="getVariationClass(getVentaTiendaVsPreviousMonthVariation().direction)"
-                    >
-                      <span>Venta tienda</span>
-                      <strong>
-                        {{ formatSignedPercentage(getVentaTiendaVsPreviousMonthVariation().percentageVariation) }}
-                      </strong>
-                      <small>
-                        {{ formatSignedMoney(getVentaTiendaVsPreviousMonthVariation().absoluteVariation) }}
-                      </small>
+                        <div class="decision-comparison-values">
+                          <small>
+                            Ref:
+                            {{ formatDecisionMetricValue(metric, metric.previousMonthValue) }}
+                          </small>
+
+                          <strong
+                            [ngClass]="getDecisionVariationClass(metric, metric.previousMonthVariation)"
+                          >
+                            {{ formatSignedPercentage(metric.previousMonthVariation.percentageVariation) }}
+                          </strong>
+
+                          <small>
+                            {{ formatDecisionMetricVariation(metric, metric.previousMonthVariation) }}
+                          </small>
+                        </div>
+                      </div>
+
+                      <div class="decision-comparison-row">
+                        <span>Vs año anterior</span>
+
+                        <div class="decision-comparison-values">
+                          <small>
+                            Ref:
+                            {{ formatDecisionMetricValue(metric, metric.sameMonthLastYearValue) }}
+                          </small>
+
+                          <strong
+                            [ngClass]="getDecisionVariationClass(metric, metric.sameMonthLastYearVariation)"
+                          >
+                            {{ formatSignedPercentage(metric.sameMonthLastYearVariation.percentageVariation) }}
+                          </strong>
+
+                          <small>
+                            {{ formatDecisionMetricVariation(metric, metric.sameMonthLastYearVariation) }}
+                          </small>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div
-                *ngIf="!isLoadingBranchComparisons && !branchComparisons"
-                class="decision-empty"
-              >
-                <mat-icon>insights</mat-icon>
-                <p>
-                  Selecciona una sucursal para cargar referencias de decisión.
-                </p>
+              <div class="future-finance-note">
+                <mat-icon>account_balance</mat-icon>
+                <div>
+                  <strong>Validación financiera posterior</strong>
+                  <span>
+                    Esta propuesta podrá cruzarse después contra gastos teorizados para revisión de viabilidad.
+                  </span>
+                </div>
               </div>
             </div>
-          </aside>
+
+            <div
+              *ngIf="!isLoadingBranchComparisons && !branchComparisons"
+              class="decision-empty"
+            >
+              <mat-icon>insights</mat-icon>
+              <p>
+                Selecciona una sucursal para cargar referencias de decisión.
+              </p>
+            </div>
+          </div>
+        </aside>
         </section>
 
         <div class="branch-form-actions">

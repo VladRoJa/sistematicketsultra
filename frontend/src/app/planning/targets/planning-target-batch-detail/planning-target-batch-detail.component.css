@@ -522,3 +522,483 @@
     width: 100%;
   }
 }
+
+
+.decision-column {
+  min-width: 360px;
+}
+
+.decision-panel {
+  position: sticky;
+  top: 88px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid #eaecf0;
+  border-radius: 16px;
+  background: #ffffff;
+}
+
+.decision-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.decision-panel-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  color: #101828;
+}
+
+.decision-panel-header p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: #667085;
+}
+
+.decision-content {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.decision-periods {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.decision-period-card {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px;
+  border: 1px solid #eaecf0;
+  border-radius: 12px;
+  background: #f9fafb;
+}
+
+.decision-period-card span {
+  font-size: 11px;
+  font-weight: 600;
+  color: #667085;
+}
+
+.decision-period-card strong {
+  font-size: 13px;
+  color: #101828;
+}
+
+.annual-history-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 12px;
+  background: #f2f4f7;
+  color: #475467;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.annual-history-note mat-icon {
+  flex: 0 0 auto;
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+}
+
+.decision-metric-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.decision-metric-group + .decision-metric-group {
+  border-top: 1px solid #eaecf0;
+  padding-top: 14px;
+}
+
+.decision-metric-group-header h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 800;
+  color: #101828;
+}
+
+.decision-metric-group-header p {
+  margin: 3px 0 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: #667085;
+}
+
+.decision-metric-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.decision-metric-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 11px;
+  border: 1px solid #eaecf0;
+  border-radius: 12px;
+  background: #fcfcfd;
+}
+
+.decision-metric-main {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.decision-metric-label {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #475467;
+}
+
+.decision-metric-main strong {
+  display: block;
+  font-size: 16px;
+  font-weight: 800;
+  color: #101828;
+}
+
+.decision-metric-comparisons {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.decision-comparison-row {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+}
+
+.decision-comparison-row > span {
+  color: #667085;
+  font-weight: 600;
+}
+
+.decision-comparison-values {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.decision-comparison-values small {
+  color: #667085;
+  white-space: nowrap;
+}
+
+.decision-comparison-values strong {
+  min-width: 64px;
+  text-align: right;
+  font-weight: 800;
+}
+
+.decision-variation-good {
+  color: #027a48;
+}
+
+.decision-variation-bad {
+  color: #b42318;
+}
+
+.decision-variation-neutral,
+.decision-variation-unknown {
+  color: #667085;
+}
+
+.future-finance-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #d0d5dd;
+  border-radius: 14px;
+  background: #f9fafb;
+  color: #344054;
+}
+
+.future-finance-note mat-icon {
+  flex: 0 0 auto;
+  font-size: 20px;
+  width: 20px;
+  height: 20px;
+}
+
+.future-finance-note div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.future-finance-note strong {
+  font-size: 13px;
+  color: #101828;
+}
+
+.future-finance-note span {
+  font-size: 12px;
+  line-height: 1.35;
+  color: #667085;
+}
+
+.decision-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 24px 12px;
+  color: #667085;
+  text-align: center;
+}
+
+.decision-empty mat-icon {
+  font-size: 30px;
+  width: 30px;
+  height: 30px;
+}
+
+.decision-empty p {
+  margin: 0;
+  font-size: 13px;
+}
+
+@media (max-width: 1280px) {
+  .decision-periods {
+    grid-template-columns: 1fr;
+  }
+
+  .decision-comparison-row {
+    grid-template-columns: 1fr;
+  }
+
+  .decision-comparison-values {
+    grid-template-columns: 1fr auto;
+  }
+
+  .decision-comparison-values small {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 1024px) {
+  .decision-column {
+    min-width: 0;
+  }
+
+  .decision-panel {
+    position: static;
+  }
+}
+
+/* ==========================================================
+   Decision panel v2 — tabs, colored cards and synced inputs
+   ========================================================== */
+
+.decision-section-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid #eaecf0;
+  border-radius: 999px;
+  background: #f9fafb;
+}
+
+.decision-section-tabs button {
+  min-width: 0;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 999px;
+  color: #475467;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.decision-section-tabs button mat-icon {
+  margin-right: 4px;
+  font-size: 17px;
+  width: 17px;
+  height: 17px;
+}
+
+.decision-section-tabs button.active {
+  color: #ffffff;
+  background: #e54525;
+}
+
+.hidden-decision-group {
+  display: none;
+}
+
+.field-family {
+  position: relative;
+  border-radius: 12px;
+}
+
+.field-family::before {
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  left: 0;
+  width: 4px;
+  border-radius: 999px;
+  content: '';
+  z-index: 1;
+}
+
+.field-commercial::before {
+  background: #e54525;
+}
+
+.field-users::before {
+  background: #2c4595;
+}
+
+.field-income::before {
+  background: #7a5af8;
+}
+
+.field-context::before {
+  background: #667085;
+}
+
+.field-risk::before {
+  background: #b42318;
+}
+
+.field-family .mat-mdc-form-field-focus-overlay,
+.field-family .mdc-text-field--filled {
+  border-radius: 10px;
+}
+
+.decision-period-current {
+  border-color: #fed7aa;
+  background: #fff7ed;
+}
+
+.decision-metric-group {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.decision-metric-group + .decision-metric-group {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.decision-metric-group-header {
+  padding: 10px 10px 0;
+  border-radius: 14px 14px 0 0;
+}
+
+.decision-family-commercial .decision-metric-group-header {
+  border-left: 4px solid #e54525;
+}
+
+.decision-family-users .decision-metric-group-header {
+  border-left: 4px solid #2c4595;
+}
+
+.decision-family-income .decision-metric-group-header {
+  border-left: 4px solid #7a5af8;
+}
+
+.decision-metric-card {
+  border-color: #eaecf0;
+  background: #ffffff;
+}
+
+.decision-card-good {
+  border-color: #abefc6;
+  background: #f6fef9;
+}
+
+.decision-card-bad {
+  border-color: #fecdca;
+  background: #fffbfa;
+}
+
+.decision-card-neutral {
+  border-color: #d0d5dd;
+  background: #f9fafb;
+}
+
+.decision-card-unknown {
+  border-color: #eaecf0;
+  background: #ffffff;
+}
+
+.decision-metric-live-badge {
+  min-width: 72px;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: #ffffff;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.decision-card-good .decision-metric-live-badge {
+  background: #dcfae6;
+}
+
+.decision-card-bad .decision-metric-live-badge {
+  background: #fee4e2;
+}
+
+.decision-card-neutral .decision-metric-live-badge,
+.decision-card-unknown .decision-metric-live-badge {
+  background: #eef2f6;
+}
+
+.decision-metric-main {
+  align-items: center;
+}
+
+.decision-comparison-values strong {
+  padding: 2px 0;
+}
+
+@media (max-width: 1280px) {
+  .decision-section-tabs {
+    border-radius: 14px;
+  }
+
+  .decision-section-tabs button {
+    flex: 1 1 calc(50% - 6px);
+  }
+}
+
+@media (max-width: 640px) {
+  .decision-section-tabs button {
+    flex-basis: 100%;
+    justify-content: flex-start;
+  }
+
+  .decision-metric-main {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
