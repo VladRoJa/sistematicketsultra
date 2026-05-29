@@ -20,6 +20,7 @@ import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import {
   AddPlanningTargetBranchRowPayload,
   PlanningAccessResponse,
+  PlanningBranchComparisonsResponse,
   PlanningTargetBatchDetail,
   PlanningTargetBranchRowDetail,
   PlanningTargetApprovalEventDetail,
@@ -62,8 +63,10 @@ export class PlanningTargetBatchDetailComponent implements OnInit {
   batch: PlanningTargetBatchDetail | null = null;
   access: PlanningAccessResponse | null = null;
   activeBranches: PlanningTrackBranchSummary[] = [];
+  branchComparisons: PlanningBranchComparisonsResponse | null = null;
   isLoadingBranches = false;
   isLoadingBranchPrefill = false;
+  isLoadingBranchComparisons = false;
   branchPrefillSourceLabel = '';
 
   showAddBranchForm = false;
@@ -283,10 +286,11 @@ toggleAddBranchForm(): void {
       this.branchForm.scenarioUsed = 'AJUSTADO';
     }
 
-    if (!this.branchForm.sucursalCanon && this.activeBranches.length > 0) {
-      this.branchForm.sucursalCanon = this.activeBranches[0].sucursal_canon;
-      this.prefillBranchData(this.branchForm.sucursalCanon);
-    }
+  if (!this.branchForm.sucursalCanon && this.activeBranches.length > 0) {
+    this.branchForm.sucursalCanon = this.activeBranches[0].sucursal_canon;
+    this.prefillBranchData(this.branchForm.sucursalCanon);
+    this.loadBranchComparisons(this.branchForm.sucursalCanon);
+  }
   }
 }
 
@@ -295,10 +299,12 @@ toggleAddBranchForm(): void {
 
     if (!sucursalCanon) {
       this.branchPrefillSourceLabel = '';
+      this.branchComparisons = null;
       return;
     }
 
     this.prefillBranchData(sucursalCanon);
+    this.loadBranchComparisons(sucursalCanon);
   }
 
   prefillBranchData(sucursalCanon: string): void {
@@ -385,6 +391,34 @@ toggleAddBranchForm(): void {
           this.branchPrefillSourceLabel = 'No se pudo precargar información de la sucursal.';
           this.snackBar.open(
             'No se pudo precargar información de la sucursal.',
+            'Cerrar',
+            { duration: 4000 },
+          );
+        },
+      });
+  }
+
+  loadBranchComparisons(sucursalCanon: string): void {
+    const targetMonth = this.getTargetMonthForPrefill();
+
+    if (!targetMonth) {
+      this.branchComparisons = null;
+      return;
+    }
+
+    this.isLoadingBranchComparisons = true;
+
+    this.planningTargetsService
+      .getBranchComparisons(sucursalCanon, targetMonth)
+      .pipe(finalize(() => (this.isLoadingBranchComparisons = false)))
+      .subscribe({
+        next: (response) => {
+          this.branchComparisons = response;
+        },
+        error: () => {
+          this.branchComparisons = null;
+          this.snackBar.open(
+            'No se pudieron cargar los comparativos de la sucursal.',
             'Cerrar',
             { duration: 4000 },
           );
@@ -528,6 +562,7 @@ toggleAddBranchForm(): void {
         notes: '',
     };
     this.branchPrefillSourceLabel = '';
+    this.branchComparisons = null;
     }
 
 submitBatch(): void {
@@ -659,6 +694,25 @@ publishBatch(): void {
     return value.slice(0, 7);
   }
 
+  formatMonthLabel(value: string | null | undefined): string {
+    if (!value) {
+      return '—';
+    }
+
+    const [year, month] = value.slice(0, 7).split('-').map(Number);
+
+    if (!year || !month) {
+      return value;
+    }
+
+    const date = new Date(year, month - 1, 1);
+
+    return new Intl.DateTimeFormat('es-MX', {
+      month: 'long',
+      year: 'numeric',
+    }).format(date);
+  }
+
   formatMoney(value: string | number | null | undefined): string {
     if (value === null || value === undefined || value === '') {
       return '—';
@@ -703,6 +757,39 @@ publishBatch(): void {
     }
 
     return date.toLocaleString('es-MX');
+  }
+
+  getComparisonValue(
+    periodKey: 'current_month' | 'previous_month' | 'same_month_last_year',
+    fieldKey: keyof NonNullable<PlanningBranchComparisonsResponse['items']['current_month']>,
+  ): string | number | null {
+    const row = this.branchComparisons?.items?.[periodKey];
+
+    if (!row) {
+      return null;
+    }
+
+    return row[fieldKey] ?? null;
+  }
+
+  formatComparisonMoney(
+    periodKey: 'current_month' | 'previous_month' | 'same_month_last_year',
+    fieldKey: keyof NonNullable<PlanningBranchComparisonsResponse['items']['current_month']>,
+  ): string {
+    return this.formatMoney(this.getComparisonValue(periodKey, fieldKey));
+  }
+
+  formatComparisonNumber(
+    periodKey: 'current_month' | 'previous_month' | 'same_month_last_year',
+    fieldKey: keyof NonNullable<PlanningBranchComparisonsResponse['items']['current_month']>,
+  ): string {
+    return this.formatNumber(this.getComparisonValue(periodKey, fieldKey));
+  }
+
+  hasComparisonPeriod(
+    periodKey: 'current_month' | 'previous_month' | 'same_month_last_year',
+  ): boolean {
+    return Boolean(this.branchComparisons?.items?.[periodKey]);
   }
 
 getBranchLabel(sucursalCanon: string | null | undefined): string {

@@ -204,6 +204,40 @@ export interface PlanningBranchPrefillResponse {
   source_target_month?: string | null;
 }
 
+export interface PlanningBranchComparisonMetricRow {
+  track_date?: string | null;
+  target_month?: string | null;
+  sucursal_canon?: string | null;
+
+  meta_faycgo_mes?: string | null;
+  ingreso_real_base_mtd?: string | null;
+  ingreso_real_agregadora_mtd?: string | null;
+  ingreso_real_total_mtd?: string | null;
+  ingreso_real_mtd?: string | null;
+
+  meta_clientes_nuevos_mes?: number | null;
+  clientes_nuevos_real_mtd?: number | null;
+
+  usuarios_activos_actual?: number | null;
+  venta_tienda_real_mtd?: string | null;
+}
+
+export interface PlanningBranchComparisonsResponse {
+  status: string;
+  sucursal_canon: string;
+  target_month: string;
+  periods: {
+    current_month: string;
+    previous_month: string;
+    same_month_last_year: string;
+  };
+  items: {
+    current_month: PlanningBranchComparisonMetricRow | null;
+    previous_month: PlanningBranchComparisonMetricRow | null;
+    same_month_last_year: PlanningBranchComparisonMetricRow | null;
+  };
+}
+
 export interface PlanningTrackBranchSummary {
   sucursal_canon: string;
   track_label: string;
@@ -304,6 +338,18 @@ export class PlanningTargetsService {
 
     return this.http.get<PlanningBranchPrefillResponse>(
       `${this.baseUrl}/branches/${sucursalCanon}/prefill`,
+      { params },
+    );
+  }
+
+  getBranchComparisons(
+    sucursalCanon: string,
+    targetMonth: string,
+  ): Observable<PlanningBranchComparisonsResponse> {
+    const params = new HttpParams().set('target_month', targetMonth);
+
+    return this.http.get<PlanningBranchComparisonsResponse>(
+      `${this.baseUrl}/branches/${sucursalCanon}/comparisons`,
       { params },
     );
   }

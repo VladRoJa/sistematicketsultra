@@ -105,6 +105,10 @@
 
       <div class="summary-grid">
         <div class="summary-item">
+          <span>Mes trabajando</span>
+          <strong>{{ formatMonthLabel(batch.target_month) }}</strong>
+        </div>
+        <div class="summary-item">
           <span>Alcance</span>
           <strong>{{ batch.scope }}</strong>
         </div>
@@ -220,6 +224,70 @@
             </p>
           </div>
         </div>
+        <div class="comparisons-panel">
+          <div class="comparisons-header">
+            <div>
+              <h4>Comparativos de referencia</h4>
+              <p>
+                Vista rápida contra mes anterior y mismo mes del año anterior.
+              </p>
+            </div>
+
+            <span *ngIf="isLoadingBranchComparisons" class="comparison-loading">
+              Cargando comparativos...
+            </span>
+          </div>
+
+          <div *ngIf="!isLoadingBranchComparisons && branchComparisons" class="comparisons-grid">
+            <div class="comparison-card">
+              <span class="comparison-label">Mes actual</span>
+              <strong>{{ branchComparisons.periods.current_month | date: 'yyyy-MM' }}</strong>
+
+              <div class="comparison-metrics">
+                <span>Ingreso real: {{ formatComparisonMoney('current_month', 'ingreso_real_total_mtd') }}</span>
+                <span>Meta FAYCGO: {{ formatComparisonMoney('current_month', 'meta_faycgo_mes') }}</span>
+                <span>Clientes nuevos: {{ formatComparisonNumber('current_month', 'clientes_nuevos_real_mtd') }}</span>
+                <span>Usuarios activos: {{ formatComparisonNumber('current_month', 'usuarios_activos_actual') }}</span>
+                <span>Venta tienda: {{ formatComparisonMoney('current_month', 'venta_tienda_real_mtd') }}</span>
+              </div>
+            </div>
+
+            <div class="comparison-card">
+              <span class="comparison-label">Mes anterior</span>
+              <strong>{{ branchComparisons.periods.previous_month | date: 'yyyy-MM' }}</strong>
+
+              <div *ngIf="hasComparisonPeriod('previous_month')" class="comparison-metrics">
+                <span>Ingreso real: {{ formatComparisonMoney('previous_month', 'ingreso_real_total_mtd') }}</span>
+                <span>Meta FAYCGO: {{ formatComparisonMoney('previous_month', 'meta_faycgo_mes') }}</span>
+                <span>Clientes nuevos: {{ formatComparisonNumber('previous_month', 'clientes_nuevos_real_mtd') }}</span>
+                <span>Usuarios activos: {{ formatComparisonNumber('previous_month', 'usuarios_activos_actual') }}</span>
+                <span>Venta tienda: {{ formatComparisonMoney('previous_month', 'venta_tienda_real_mtd') }}</span>
+              </div>
+
+              <p *ngIf="!hasComparisonPeriod('previous_month')" class="missing-comparison">
+                Sin histórico del mes anterior.
+              </p>
+            </div>
+
+            <div class="comparison-card">
+              <span class="comparison-label">Mismo mes año anterior</span>
+              <strong>{{ branchComparisons.periods.same_month_last_year | date: 'yyyy-MM' }}</strong>
+
+              <div *ngIf="hasComparisonPeriod('same_month_last_year')" class="comparison-metrics">
+                <span>Ingreso real: {{ formatComparisonMoney('same_month_last_year', 'ingreso_real_total_mtd') }}</span>
+                <span>Meta FAYCGO: {{ formatComparisonMoney('same_month_last_year', 'meta_faycgo_mes') }}</span>
+                <span>Clientes nuevos: {{ formatComparisonNumber('same_month_last_year', 'clientes_nuevos_real_mtd') }}</span>
+                <span>Usuarios activos: {{ formatComparisonNumber('same_month_last_year', 'usuarios_activos_actual') }}</span>
+                <span>Venta tienda: {{ formatComparisonMoney('same_month_last_year', 'venta_tienda_real_mtd') }}</span>
+              </div>
+
+              <p *ngIf="!hasComparisonPeriod('same_month_last_year')" class="missing-comparison">
+                Sin histórico anual suficiente.
+              </p>
+            </div>
+          </div>
+        </div>
+
 
         <div class="branch-form-grid proposal-grid">
           <mat-form-field appearance="fill">
