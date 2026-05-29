@@ -181,6 +181,19 @@ export interface CreatePlanningTargetBatchResponse {
   model_config_id?: number | null;
 }
 
+export interface PlanningTrackBranchSummary {
+  sucursal_canon: string;
+  track_label: string;
+  display_order?: number | null;
+  is_track_active: boolean;
+  notes?: string | null;
+}
+
+export interface PlanningTrackBranchesResponse {
+  status: string;
+  items: PlanningTrackBranchSummary[];
+}
+
 export interface AddPlanningTargetBranchRowPayload {
   sucursal_canon: string;
 
@@ -248,6 +261,12 @@ export class PlanningTargetsService {
 
   getAccess(): Observable<PlanningAccessResponse> {
     return this.http.get<PlanningAccessResponse>(`${this.baseUrl}/access`);
+  }
+
+  listActiveBranches(): Observable<PlanningTrackBranchesResponse> {
+    return this.http.get<PlanningTrackBranchesResponse>(
+      `${this.baseUrl}/branches`,
+    );
   }
 
   listModelConfigs(status?: string): Observable<PlanningModelConfigsResponse> {

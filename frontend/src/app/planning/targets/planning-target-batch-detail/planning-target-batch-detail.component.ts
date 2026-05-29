@@ -24,6 +24,7 @@ import {
   PlanningTargetBranchRowDetail,
   PlanningTargetApprovalEventDetail,
   PlanningTargetsService,
+  PlanningTrackBranchSummary,
 } from '../../services/planning-targets.service';
 
 import {
@@ -60,31 +61,33 @@ export class PlanningTargetBatchDetailComponent implements OnInit {
   batchId: number | null = null;
   batch: PlanningTargetBatchDetail | null = null;
   access: PlanningAccessResponse | null = null;
+  activeBranches: PlanningTrackBranchSummary[] = [];
+  isLoadingBranches = false;
 
-showAddBranchForm = false;
-isLoadingAccess = false;
-isAddingBranchRow = false;
-isRunningBatchAction = false;
+  showAddBranchForm = false;
+  isLoadingAccess = false;
+  isAddingBranchRow = false;
+  isRunningBatchAction = false;
 
-branchForm = {
-sucursalCanon: '',
-m2SinCirculaciones: 0,
-usuariosInicioMes: 0,
-proyeccionUsuariosCierreMes: 0,
-metaFaycgoMes: 0,
-metaClientesNuevosMes: 0,
-metaReactivacionesMes: 0,
-metaBajasMes: 0,
-metaNuevosDomiciliadosMes: 0,
-metaArpuMes: 0,
-metaVentaTiendaMes: 0,
-ingresoAgregadorasEstimado: null as number | null,
-usuariosAgregadorasEstimado: null as number | null,
-scenarioUsed: 'AJUSTADO',
-trendClassification: '',
-riskLevel: 'MEDIO',
-notes: '',
-};
+  branchForm = {
+  sucursalCanon: '',
+  m2SinCirculaciones: 0,
+  usuariosInicioMes: 0,
+  proyeccionUsuariosCierreMes: 0,
+  metaFaycgoMes: 0,
+  metaClientesNuevosMes: 0,
+  metaReactivacionesMes: 0,
+  metaBajasMes: 0,
+  metaNuevosDomiciliadosMes: 0,
+  metaArpuMes: 0,
+  metaVentaTiendaMes: 0,
+  ingresoAgregadorasEstimado: null as number | null,
+  usuariosAgregadorasEstimado: null as number | null,
+  scenarioUsed: 'AJUSTADO',
+  trendClassification: '',
+  riskLevel: 'MEDIO',
+  notes: '',
+  };
 
   isLoading = false;
 
@@ -117,11 +120,12 @@ notes: '',
     private readonly dialog: MatDialog,
   ) {}
 
-    ngOnInit(): void {
+  ngOnInit(): void {
     this.loadBatchIdFromRoute();
     this.loadAccess();
+    this.loadActiveBranches();
     this.loadBatchDetail();
-    }
+  }
 
   loadBatchIdFromRoute(): void {
     const rawBatchId = this.activatedRoute.snapshot.paramMap.get('batchId');
@@ -174,6 +178,27 @@ loadAccess(): void {
       },
       error: () => {
         this.access = null;
+      },
+    });
+}
+
+loadActiveBranches(): void {
+  this.isLoadingBranches = true;
+
+  this.planningTargetsService
+    .listActiveBranches()
+    .pipe(finalize(() => (this.isLoadingBranches = false)))
+    .subscribe({
+      next: (response) => {
+        this.activeBranches = response.items || [];
+      },
+      error: () => {
+        this.activeBranches = [];
+        this.snackBar.open(
+          'No se pudo cargar el catálogo de sucursales.',
+          'Cerrar',
+          { duration: 4000 },
+        );
       },
     });
 }
@@ -248,13 +273,19 @@ hasAnyBatchAction(): boolean {
   );
 }
 
-    toggleAddBranchForm(): void {
-    this.showAddBranchForm = !this.showAddBranchForm;
+toggleAddBranchForm(): void {
+  this.showAddBranchForm = !this.showAddBranchForm;
 
-    if (this.showAddBranchForm && !this.branchForm.scenarioUsed) {
-        this.branchForm.scenarioUsed = 'AJUSTADO';
+  if (this.showAddBranchForm) {
+    if (!this.branchForm.scenarioUsed) {
+      this.branchForm.scenarioUsed = 'AJUSTADO';
     }
+
+    if (!this.branchForm.sucursalCanon && this.activeBranches.length > 0) {
+      this.branchForm.sucursalCanon = this.activeBranches[0].sucursal_canon;
     }
+  }
+}
 
     addBranchRow(): void {
     if (!this.batchId || !this.batch) {
@@ -563,6 +594,22 @@ publishBatch(): void {
 
     return date.toLocaleString('es-MX');
   }
+
+getBranchLabel(sucursalCanon: string | null | undefined): string {
+  if (!sucursalCanon) {
+    return '—';
+  }
+
+  const branch = this.activeBranches.find(
+    (item) => item.sucursal_canon === sucursalCanon,
+  );
+
+  if (!branch) {
+    return sucursalCanon;
+  }
+
+  return branch.track_label;
+}
 
   getModelLabel(): string {
     const modelConfig = this.batch?.model_config;

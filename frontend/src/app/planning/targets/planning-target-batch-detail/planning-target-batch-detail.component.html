@@ -160,17 +160,23 @@
 
     <div *ngIf="showAddBranchForm" class="branch-form">
     <div class="branch-form-grid">
-        <mat-form-field appearance="outline">
-        <mat-label>Sucursal canónica</mat-label>
-        <input
-            matInput
-            name="sucursalCanon"
-            [(ngModel)]="branchForm.sucursalCanon"
-            placeholder="Ej. VILLA_VERDE"
-        />
-        </mat-form-field>
+    <mat-form-field appearance="fill">
+      <mat-label>Sucursal</mat-label>
+      <mat-select
+        name="sucursalCanon"
+        [(ngModel)]="branchForm.sucursalCanon"
+        [disabled]="isLoadingBranches"
+      >
+        <mat-option
+          *ngFor="let branch of activeBranches"
+          [value]="branch.sucursal_canon"
+        >
+          {{ branch.track_label }}
+        </mat-option>
+      </mat-select>
+    </mat-form-field>
 
-        <mat-form-field appearance="outline">
+        <mat-form-field appearance="fill">
         <mat-label>m² sin circulaciones</mat-label>
         <input
             matInput
@@ -181,7 +187,7 @@
         />
         </mat-form-field>
 
-        <mat-form-field appearance="outline">
+        <mat-form-field appearance="fill">
         <mat-label>Usuarios inicio mes</mat-label>
         <input
             matInput
@@ -192,7 +198,7 @@
         />
         </mat-form-field>
 
-        <mat-form-field appearance="outline">
+        <mat-form-field appearance="fill">
         <mat-label>Usuarios cierre proyectado</mat-label>
         <input
             matInput
@@ -203,7 +209,7 @@
         />
         </mat-form-field>
 
-        <mat-form-field appearance="outline">
+        <mat-form-field appearance="fill">
         <mat-label>Meta FAYCGO</mat-label>
         <input
             matInput
@@ -214,7 +220,7 @@
         />
         </mat-form-field>
 
-        <mat-form-field appearance="outline">
+        <mat-form-field appearance="fill">
         <mat-label>Clientes nuevos</mat-label>
         <input
             matInput
@@ -225,7 +231,7 @@
         />
         </mat-form-field>
 
-        <mat-form-field appearance="outline">
+        <mat-form-field appearance="fill">
         <mat-label>Reactivaciones</mat-label>
         <input
             matInput
@@ -236,7 +242,7 @@
         />
         </mat-form-field>
 
-        <mat-form-field appearance="outline">
+        <mat-form-field appearance="fill">
         <mat-label>Bajas</mat-label>
         <input
             matInput
@@ -247,7 +253,7 @@
         />
         </mat-form-field>
 
-        <mat-form-field appearance="outline">
+        <mat-form-field appearance="fill">
         <mat-label>Nuevos domiciliados</mat-label>
         <input
             matInput
@@ -258,7 +264,7 @@
         />
         </mat-form-field>
 
-        <mat-form-field appearance="outline">
+        <mat-form-field appearance="fill">
         <mat-label>ARPU</mat-label>
         <input
             matInput
@@ -269,7 +275,7 @@
         />
         </mat-form-field>
 
-        <mat-form-field appearance="outline">
+        <mat-form-field appearance="fill">
         <mat-label>Venta tienda</mat-label>
         <input
             matInput
@@ -280,7 +286,7 @@
         />
         </mat-form-field>
 
-        <mat-form-field appearance="outline">
+        <mat-form-field appearance="fill">
         <mat-label>Ingreso agregadoras estimado</mat-label>
         <input
             matInput
@@ -291,7 +297,7 @@
         />
         </mat-form-field>
 
-        <mat-form-field appearance="outline">
+        <mat-form-field appearance="fill">
         <mat-label>Usuarios agregadoras estimado</mat-label>
         <input
             matInput
@@ -302,7 +308,7 @@
         />
         </mat-form-field>
 
-        <mat-form-field appearance="outline">
+        <mat-form-field appearance="fill">
         <mat-label>Escenario</mat-label>
         <mat-select
             name="scenarioUsed"
@@ -314,7 +320,7 @@
         </mat-select>
         </mat-form-field>
 
-        <mat-form-field appearance="outline">
+        <mat-form-field appearance="fill">
         <mat-label>Tendencia</mat-label>
         <mat-select
             name="trendClassification"
@@ -328,7 +334,7 @@
         </mat-select>
         </mat-form-field>
 
-        <mat-form-field appearance="outline">
+        <mat-form-field appearance="fill">
         <mat-label>Riesgo</mat-label>
         <mat-select
             name="riskLevel"
@@ -341,7 +347,7 @@
         </mat-form-field>
     </div>
 
-    <mat-form-field appearance="outline" class="notes-field">
+    <mat-form-field appearance="fill" class="notes-field">
         <mat-label>Notas</mat-label>
         <textarea
         matInput
@@ -385,12 +391,12 @@
 
       <div *ngIf="getBranchRows().length > 0" class="table-wrapper">
         <table mat-table [dataSource]="getBranchRows()" class="detail-table">
-          <ng-container matColumnDef="sucursal_canon">
-            <th mat-header-cell *matHeaderCellDef>Sucursal</th>
-            <td mat-cell *matCellDef="let row">
-              {{ row.sucursal_canon }}
-            </td>
-          </ng-container>
+        <ng-container matColumnDef="sucursal_canon">
+          <th mat-header-cell *matHeaderCellDef>Sucursal</th>
+          <td mat-cell *matCellDef="let row">
+            {{ getBranchLabel(row.sucursal_canon) }}
+          </td>
+        </ng-container>
 
           <ng-container matColumnDef="status">
             <th mat-header-cell *matHeaderCellDef>Estado</th>
