@@ -35,6 +35,19 @@ import {
 } from '../planning-target-action-dialog/planning-target-action-dialog.component';
 
 
+type ComparisonPeriodKey =
+  | 'current_month'
+  | 'previous_month'
+  | 'same_month_last_year';
+
+interface PlanningVariationResult {
+  currentValue: number | null;
+  referenceValue: number | null;
+  absoluteVariation: number | null;
+  percentageVariation: number | null;
+  direction: 'up' | 'down' | 'neutral' | 'unknown';
+}
+
 
 @Component({
   selector: 'app-planning-target-batch-detail',
@@ -757,6 +770,125 @@ publishBatch(): void {
     }
 
     return date.toLocaleString('es-MX');
+  }
+
+  toNumberOrNull(value: string | number | null | undefined): number | null {
+    if (value === null || value === undefined || value === '') {
+      return null;
+    }
+
+    const numericValue = Number(value);
+
+    if (Number.isNaN(numericValue)) {
+      return null;
+    }
+
+    return numericValue;
+  }
+
+  calculateVariation(
+    currentValue: string | number | null | undefined,
+    referenceValue: string | number | null | undefined,
+  ): PlanningVariationResult {
+    const normalizedCurrentValue = this.toNumberOrNull(currentValue);
+    const normalizedReferenceValue = this.toNumberOrNull(referenceValue);
+
+    if (
+      normalizedCurrentValue === null ||
+      normalizedReferenceValue === null ||
+      normalizedReferenceValue === 0
+    ) {
+      return {
+        currentValue: normalizedCurrentValue,
+        referenceValue: normalizedReferenceValue,
+        absoluteVariation: null,
+        percentageVariation: null,
+        direction: 'unknown',
+      };
+    }
+
+    const absoluteVariation = normalizedCurrentValue - normalizedReferenceValue;
+    const percentageVariation = (absoluteVariation / normalizedReferenceValue) * 100;
+
+    let direction: PlanningVariationResult['direction'] = 'neutral';
+
+    if (absoluteVariation > 0) {
+      direction = 'up';
+    }
+
+    if (absoluteVariation < 0) {
+      direction = 'down';
+    }
+
+    return {
+      currentValue: normalizedCurrentValue,
+      referenceValue: normalizedReferenceValue,
+      absoluteVariation,
+      percentageVariation,
+      direction,
+    };
+  }
+
+  formatSignedPercentage(value: number | null): string {
+    if (value === null || value === undefined || Number.isNaN(value)) {
+      return '—';
+    }
+
+    const sign = value > 0 ? '+' : '';
+
+    return `${sign}${value.toLocaleString('es-MX', {
+      maximumFractionDigits: 2,
+      minimumFractionDigits: 2,
+    })}%`;
+  }
+
+  formatSignedNumber(value: number | null): string {
+    if (value === null || value === undefined || Number.isNaN(value)) {
+      return '—';
+    }
+
+    const sign = value > 0 ? '+' : '';
+
+    return `${sign}${value.toLocaleString('es-MX')}`;
+  }
+
+  formatSignedMoney(value: number | null): string {
+    if (value === null || value === undefined || Number.isNaN(value)) {
+      return '—';
+    }
+
+    const sign = value > 0 ? '+' : '';
+
+    return `${sign}${value.toLocaleString('es-MX', {
+      style: 'currency',
+      currency: 'MXN',
+      maximumFractionDigits: 2,
+    })}`;
+  }
+
+  getVariationClass(direction: PlanningVariationResult['direction']): string {
+    return `variation-${direction}`;
+  }
+
+  getMetaFaycgoVsPreviousMonthVariation(): PlanningVariationResult {
+    return this.calculateVariation(
+      this.branchForm.metaFaycgoMes,
+      this.getComparisonValue('previous_month', 'meta_faycgo_mes'),
+    );
+  }
+
+  getClientesNuevosVsPreviousMonthVariation(): PlanningVariationResult {
+    return this.calculateVariation(
+      this.branchForm.metaClientesNuevosMes,
+      this.getComparisonValue('previous_month', 'clientes_nuevos_real_mtd'),
+    );
+  }
+
+  getVentaTiendaVsPreviousMonthVariation(): PlanningVariationResult {
+    return this.calculateVariation(
+      this.branchForm.metaVentaTiendaMes,
+      this.getComparisonValue('previous_month', 'venta_tienda_real_mtd'),
+    );
   }
 
   getComparisonValue(
