@@ -14,7 +14,11 @@ from app.models import (
     PlanningTargetBatchORM,
     PlanningTargetBranchRowORM,
 )
-from app.models.warehouse import TrackBranchCatalogORM, TrackMonthlyTargetORM
+from app.models.warehouse import (
+    TrackBranchCatalogORM,
+    TrackDailyMartORM,
+    TrackMonthlyTargetORM,
+)
 
 
 class PlanningTargetsServiceError(RuntimeError):
@@ -1283,4 +1287,65 @@ def list_active_track_branches() -> dict[str, Any]:
             }
             for row in rows
         ],
+    }
+    
+def get_branch_prefill(
+    *,
+    sucursal_canon: str,
+    target_month: Any = None,
+) -> dict[str, Any]:
+    normalized_sucursal_canon = _ensure_branch_exists(sucursal_canon)
+
+    branch = TrackBranchCatalogORM.query.filter_by(
+        sucursal_canon=normalized_sucursal_canon,
+    ).first()
+
+    normalized_target_month = None
+    if target_month is not None:
+        normalized_target_month = _normalize_target_month(target_month)
+
+    query = TrackDailyMartORM.query.filter(
+        TrackDailyMartORM.sucursal_canon == normalized_sucursal_canon,
+        TrackDailyMartORM.m2_sin_circulaciones.isnot(None),
+    )
+
+    if normalized_target_month is not None:
+        query = query.filter(
+            TrackDailyMartORM.target_month <= normalized_target_month,
+        )
+
+    latest_mart_row = (
+        query
+        .order_by(
+            TrackDailyMartORM.track_date.desc(),
+            TrackDailyMartORM.id.desc(),
+        )
+        .first()
+    )
+
+    return {
+        "status": "ok",
+        "sucursal_canon": normalized_sucursal_canon,
+        "track_label": branch.track_label if branch else normalized_sucursal_canon,
+        "target_month": (
+            normalized_target_month.isoformat()
+            if normalized_target_month is not None
+            else None
+        ),
+        "m2_sin_circulaciones": (
+            _serialize_decimal(latest_mart_row.m2_sin_circulaciones)
+            if latest_mart_row is not None
+            else None
+        ),
+        "source": "track_daily_mart" if latest_mart_row is not None else None,
+        "source_track_date": (
+            latest_mart_row.track_date.isoformat()
+            if latest_mart_row is not None
+            else None
+        ),
+        "source_target_month": (
+            latest_mart_row.target_month.isoformat()
+            if latest_mart_row is not None
+            else None
+        ),
     }
