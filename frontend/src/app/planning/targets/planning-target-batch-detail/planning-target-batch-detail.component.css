@@ -296,3 +296,7 @@
     width: 100%;
   }
 }
+
+.readonly-field input {
+  cursor: default;
+}

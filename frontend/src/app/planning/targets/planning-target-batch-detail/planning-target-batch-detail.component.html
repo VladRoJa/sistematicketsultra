@@ -162,11 +162,12 @@
     <div class="branch-form-grid">
     <mat-form-field appearance="fill">
       <mat-label>Sucursal</mat-label>
-      <mat-select
-        name="sucursalCanon"
-        [(ngModel)]="branchForm.sucursalCanon"
-        [disabled]="isLoadingBranches"
-      >
+        <mat-select
+          name="sucursalCanon"
+          [(ngModel)]="branchForm.sucursalCanon"
+          [disabled]="isLoadingBranches"
+          (selectionChange)="onBranchSelected()"
+        >
         <mat-option
           *ngFor="let branch of activeBranches"
           [value]="branch.sucursal_canon"
@@ -176,15 +177,15 @@
       </mat-select>
     </mat-form-field>
 
-        <mat-form-field appearance="fill">
-        <mat-label>m² sin circulaciones</mat-label>
-        <input
+        <mat-form-field appearance="fill" class="readonly-field">
+          <mat-label>m² sin circulaciones</mat-label>
+          <input
             matInput
-            type="number"
-            min="0"
+            type="text"
             name="m2SinCirculaciones"
-            [(ngModel)]="branchForm.m2SinCirculaciones"
-        />
+            [value]="formatNumber(branchForm.m2SinCirculaciones)"
+            readonly
+          />
         </mat-form-field>
 
         <mat-form-field appearance="fill">
