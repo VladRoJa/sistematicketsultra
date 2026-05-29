@@ -15,6 +15,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { finalize } from 'rxjs';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 
 import {
   AddPlanningTargetBranchRowPayload,
@@ -24,6 +25,14 @@ import {
   PlanningTargetApprovalEventDetail,
   PlanningTargetsService,
 } from '../../services/planning-targets.service';
+
+import {
+  PlanningTargetActionDialogComponent,
+  PlanningTargetActionDialogData,
+  PlanningTargetActionDialogResult,
+} from '../planning-target-action-dialog/planning-target-action-dialog.component';
+
+
 
 @Component({
   selector: 'app-planning-target-batch-detail',
@@ -42,6 +51,7 @@ import {
     MatFormFieldModule,
     MatInputModule,
     MatSelectModule,
+    MatDialogModule,
   ],
   templateUrl: './planning-target-batch-detail.component.html',
   styleUrls: ['./planning-target-batch-detail.component.css',]
@@ -104,6 +114,7 @@ notes: '',
     private readonly activatedRoute: ActivatedRoute,
     private readonly planningTargetsService: PlanningTargetsService,
     private readonly snackBar: MatSnackBar,
+    private readonly dialog: MatDialog,
   ) {}
 
     ngOnInit(): void {
@@ -174,6 +185,29 @@ loadAccess(): void {
         ['BORRADOR', 'PROPUESTA'].includes(this.batch.status),
     );
     }
+
+private openActionDialog(
+  data: PlanningTargetActionDialogData,
+  onConfirm: (comment: string) => void,
+): void {
+  const dialogRef = this.dialog.open<
+    PlanningTargetActionDialogComponent,
+    PlanningTargetActionDialogData,
+    PlanningTargetActionDialogResult
+  >(PlanningTargetActionDialogComponent, {
+    width: '520px',
+    maxWidth: '95vw',
+    data,
+  });
+
+  dialogRef.afterClosed().subscribe((result) => {
+    if (!result?.confirmed) {
+      return;
+    }
+
+    onConfirm(result.comment);
+  });
+}
 
 canSubmitBatch(): boolean {
   return Boolean(
@@ -369,24 +403,18 @@ submitBatch(): void {
     return;
   }
 
-  this.isRunningBatchAction = true;
-
-  this.planningTargetsService
-    .submitBatch(this.batchId, 'Enviado a revisión desde detalle.')
-    .pipe(finalize(() => (this.isRunningBatchAction = false)))
-    .subscribe({
-      next: () => {
-        this.snackBar.open('Paquete enviado a revisión.', 'Cerrar', {
-          duration: 3000,
-        });
-        this.loadBatchDetail();
-      },
-      error: () => {
-        this.snackBar.open('No se pudo enviar a revisión.', 'Cerrar', {
-          duration: 4000,
-        });
-      },
-    });
+  this.openActionDialog(
+    {
+      title: 'Enviar paquete a revisión',
+      actionLabel: 'Enviar a revisión',
+      description:
+        'El paquete quedará disponible para aprobación o rechazo. Asegúrate de que las sucursales capturadas sean correctas.',
+      defaultComment: 'Enviado a revisión desde detalle.',
+      requireComment: false,
+      confirmColor: 'primary',
+    },
+    (comment) => this.runSubmitBatch(comment),
+  );
 }
 
 approveBatch(): void {
@@ -399,24 +427,18 @@ approveBatch(): void {
     return;
   }
 
-  this.isRunningBatchAction = true;
-
-  this.planningTargetsService
-    .approveBatch(this.batchId, 'Aprobado desde detalle.')
-    .pipe(finalize(() => (this.isRunningBatchAction = false)))
-    .subscribe({
-      next: () => {
-        this.snackBar.open('Paquete aprobado.', 'Cerrar', {
-          duration: 3000,
-        });
-        this.loadBatchDetail();
-      },
-      error: () => {
-        this.snackBar.open('No se pudo aprobar el paquete.', 'Cerrar', {
-          duration: 4000,
-        });
-      },
-    });
+  this.openActionDialog(
+    {
+      title: 'Aprobar paquete mensual',
+      actionLabel: 'Aprobar',
+      description:
+        'Al aprobar este paquete, quedará listo para publicarse hacia Track. Esta acción quedará registrada en auditoría.',
+      defaultComment: 'Aprobado desde detalle.',
+      requireComment: false,
+      confirmColor: 'primary',
+    },
+    (comment) => this.runApproveBatch(comment),
+  );
 }
 
 rejectBatch(): void {
@@ -429,24 +451,20 @@ rejectBatch(): void {
     return;
   }
 
-  this.isRunningBatchAction = true;
-
-  this.planningTargetsService
-    .rejectBatch(this.batchId, 'Rechazado desde detalle. Requiere ajuste antes de aprobar.')
-    .pipe(finalize(() => (this.isRunningBatchAction = false)))
-    .subscribe({
-      next: () => {
-        this.snackBar.open('Paquete rechazado.', 'Cerrar', {
-          duration: 3000,
-        });
-        this.loadBatchDetail();
-      },
-      error: () => {
-        this.snackBar.open('No se pudo rechazar el paquete.', 'Cerrar', {
-          duration: 4000,
-        });
-      },
-    });
+  this.openActionDialog(
+    {
+      title: 'Rechazar paquete mensual',
+      actionLabel: 'Rechazar',
+      description:
+        'El paquete quedará rechazado y deberá ajustarse antes de poder aprobarse.',
+      warning:
+        'El motivo es obligatorio porque esta decisión afecta la trazabilidad del proceso.',
+      defaultComment: '',
+      requireComment: true,
+      confirmColor: 'warn',
+    },
+    (comment) => this.runRejectBatch(comment),
+  );
 }
 
 publishBatch(): void {
@@ -459,24 +477,20 @@ publishBatch(): void {
     return;
   }
 
-  this.isRunningBatchAction = true;
-
-  this.planningTargetsService
-    .publishBatch(this.batchId, 'Publicado hacia Track desde detalle.')
-    .pipe(finalize(() => (this.isRunningBatchAction = false)))
-    .subscribe({
-      next: () => {
-        this.snackBar.open('Paquete publicado hacia Track.', 'Cerrar', {
-          duration: 3000,
-        });
-        this.loadBatchDetail();
-      },
-      error: () => {
-        this.snackBar.open('No se pudo publicar hacia Track.', 'Cerrar', {
-          duration: 4000,
-        });
-      },
-    });
+  this.openActionDialog(
+    {
+      title: 'Publicar metas hacia Track',
+      actionLabel: 'Publicar a Track',
+      description:
+        'Al publicar, estas metas quedarán activas para Track y reemplazarán metas activas anteriores del mismo mes y sucursal.',
+      warning:
+        'Esta acción afecta datos canónicos. Revisa que el paquete aprobado sea correcto antes de publicar.',
+      defaultComment: 'Publicado hacia Track desde detalle.',
+      requireComment: true,
+      confirmColor: 'primary',
+    },
+    (comment) => this.runPublishBatch(comment),
+  );
 }
     
   refresh(): void {
@@ -563,4 +577,104 @@ publishBatch(): void {
   hasPublishedTarget(row: PlanningTargetBranchRowDetail): boolean {
     return Boolean(row.published_track_monthly_target_id);
   }
+
+  private runApproveBatch(comment: string): void {
+  if (!this.batchId) {
+    return;
+  }
+
+  this.isRunningBatchAction = true;
+
+  this.planningTargetsService
+    .approveBatch(this.batchId, comment)
+    .pipe(finalize(() => (this.isRunningBatchAction = false)))
+    .subscribe({
+      next: () => {
+        this.snackBar.open('Paquete aprobado.', 'Cerrar', {
+          duration: 3000,
+        });
+        this.loadBatchDetail();
+      },
+      error: () => {
+        this.snackBar.open('No se pudo aprobar el paquete.', 'Cerrar', {
+          duration: 4000,
+        });
+      },
+    });
+}
+
+private runRejectBatch(comment: string): void {
+  if (!this.batchId) {
+    return;
+  }
+
+  this.isRunningBatchAction = true;
+
+  this.planningTargetsService
+    .rejectBatch(this.batchId, comment)
+    .pipe(finalize(() => (this.isRunningBatchAction = false)))
+    .subscribe({
+      next: () => {
+        this.snackBar.open('Paquete rechazado.', 'Cerrar', {
+          duration: 3000,
+        });
+        this.loadBatchDetail();
+      },
+      error: () => {
+        this.snackBar.open('No se pudo rechazar el paquete.', 'Cerrar', {
+          duration: 4000,
+        });
+      },
+    });
+}
+
+private runPublishBatch(comment: string): void {
+  if (!this.batchId) {
+    return;
+  }
+
+  this.isRunningBatchAction = true;
+
+  this.planningTargetsService
+    .publishBatch(this.batchId, comment)
+    .pipe(finalize(() => (this.isRunningBatchAction = false)))
+    .subscribe({
+      next: () => {
+        this.snackBar.open('Paquete publicado hacia Track.', 'Cerrar', {
+          duration: 3000,
+        });
+        this.loadBatchDetail();
+      },
+      error: () => {
+        this.snackBar.open('No se pudo publicar hacia Track.', 'Cerrar', {
+          duration: 4000,
+        });
+      },
+    });
+}
+
+private runSubmitBatch(comment: string): void {
+  if (!this.batchId) {
+    return;
+  }
+
+  this.isRunningBatchAction = true;
+
+  this.planningTargetsService
+    .submitBatch(this.batchId, comment)
+    .pipe(finalize(() => (this.isRunningBatchAction = false)))
+    .subscribe({
+      next: () => {
+        this.snackBar.open('Paquete enviado a revisión.', 'Cerrar', {
+          duration: 3000,
+        });
+        this.loadBatchDetail();
+      },
+      error: () => {
+        this.snackBar.open('No se pudo enviar a revisión.', 'Cerrar', {
+          duration: 4000,
+        });
+      },
+    });
+}
 }

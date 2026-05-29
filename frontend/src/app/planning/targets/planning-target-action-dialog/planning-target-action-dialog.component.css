@@ -1,0 +1,39 @@
+/* frontend\src\app\planning\targets\planning-target-action-dialog\planning-target-action-dialog.component.css */
+
+.dialog-content {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 420px;
+}
+
+.description {
+  margin: 0;
+  color: #475467;
+  line-height: 1.45;
+}
+
+.warning-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #fedf89;
+  border-radius: 12px;
+  background: #fffaeb;
+  color: #93370d;
+}
+
+.warning-box mat-icon {
+  flex: 0 0 auto;
+}
+
+.comment-field {
+  width: 100%;
+}
+
+@media (max-width: 640px) {
+  .dialog-content {
+    min-width: 0;
+  }
+}
