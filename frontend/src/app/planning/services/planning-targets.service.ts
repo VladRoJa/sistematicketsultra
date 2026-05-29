@@ -181,6 +181,17 @@ export interface CreatePlanningTargetBatchResponse {
   model_config_id?: number | null;
 }
 
+export interface PlanningBranchPrefillResponse {
+  status: string;
+  sucursal_canon: string;
+  track_label: string;
+  target_month?: string | null;
+  m2_sin_circulaciones?: string | null;
+  source?: string | null;
+  source_track_date?: string | null;
+  source_target_month?: string | null;
+}
+
 export interface PlanningTrackBranchSummary {
   sucursal_canon: string;
   track_label: string;
@@ -266,6 +277,22 @@ export class PlanningTargetsService {
   listActiveBranches(): Observable<PlanningTrackBranchesResponse> {
     return this.http.get<PlanningTrackBranchesResponse>(
       `${this.baseUrl}/branches`,
+    );
+  }
+
+  getBranchPrefill(
+    sucursalCanon: string,
+    targetMonth?: string,
+  ): Observable<PlanningBranchPrefillResponse> {
+    let params = new HttpParams();
+
+    if (targetMonth) {
+      params = params.set('target_month', targetMonth);
+    }
+
+    return this.http.get<PlanningBranchPrefillResponse>(
+      `${this.baseUrl}/branches/${sucursalCanon}/prefill`,
+      { params },
     );
   }
 

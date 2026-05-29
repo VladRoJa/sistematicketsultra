@@ -63,6 +63,8 @@ export class PlanningTargetBatchDetailComponent implements OnInit {
   access: PlanningAccessResponse | null = null;
   activeBranches: PlanningTrackBranchSummary[] = [];
   isLoadingBranches = false;
+  isLoadingBranchPrefill = false;
+  branchPrefillSourceLabel = '';
 
   showAddBranchForm = false;
   isLoadingAccess = false;
@@ -283,9 +285,51 @@ toggleAddBranchForm(): void {
 
     if (!this.branchForm.sucursalCanon && this.activeBranches.length > 0) {
       this.branchForm.sucursalCanon = this.activeBranches[0].sucursal_canon;
+      this.prefillBranchData(this.branchForm.sucursalCanon);
     }
   }
 }
+
+  onBranchSelected(): void {
+    const sucursalCanon = this.branchForm.sucursalCanon;
+
+    if (!sucursalCanon) {
+      this.branchPrefillSourceLabel = '';
+      return;
+    }
+
+    this.prefillBranchData(sucursalCanon);
+  }
+
+  prefillBranchData(sucursalCanon: string): void {
+    this.isLoadingBranchPrefill = true;
+    this.branchPrefillSourceLabel = '';
+
+    this.planningTargetsService
+      .getBranchPrefill(sucursalCanon, this.getTargetMonthForPrefill())
+      .pipe(finalize(() => (this.isLoadingBranchPrefill = false)))
+      .subscribe({
+        next: (response) => {
+          if (response.m2_sin_circulaciones !== null && response.m2_sin_circulaciones !== undefined) {
+            this.branchForm.m2SinCirculaciones = Number(response.m2_sin_circulaciones);
+          }
+
+          if (response.source && response.source_track_date) {
+            this.branchPrefillSourceLabel = `m² precargado desde ${response.source} (${response.source_track_date})`;
+          } else {
+            this.branchPrefillSourceLabel = 'Sin m² disponible para precargar.';
+          }
+        },
+        error: () => {
+          this.branchPrefillSourceLabel = 'No se pudo precargar información de la sucursal.';
+          this.snackBar.open(
+            'No se pudo precargar información de la sucursal.',
+            'Cerrar',
+            { duration: 4000 },
+          );
+        },
+      });
+  }
 
     addBranchRow(): void {
     if (!this.batchId || !this.batch) {
@@ -422,6 +466,7 @@ toggleAddBranchForm(): void {
         riskLevel: 'MEDIO',
         notes: '',
     };
+    this.branchPrefillSourceLabel = '';
     }
 
 submitBatch(): void {
@@ -539,6 +584,10 @@ publishBatch(): void {
   getStatusClass(status: string | null | undefined): string {
     const normalizedStatus = String(status || '').toLowerCase();
     return `status-${normalizedStatus}`;
+  }
+
+  getTargetMonthForPrefill(): string | undefined {
+    return this.batch?.target_month || undefined;
   }
 
   formatMonth(value: string | null | undefined): string {

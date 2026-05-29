@@ -22,6 +22,7 @@ from app.warehouse.services.planning_targets_service import (
     create_model_config,
     create_target_batch,
     get_batch_detail,
+    get_branch_prefill,
     list_active_track_branches,
     list_model_configs,
     list_target_batches,
@@ -132,6 +133,26 @@ def list_active_track_branches_route():
             return access_error
 
         result = list_active_track_branches()
+        return _success(result)
+
+    except PlanningTargetsServiceError as exc:
+        return _service_error(exc)
+
+@planning_targets_bp.route(
+    "/branches/<string:sucursal_canon>/prefill",
+    methods=["GET"],
+)
+@jwt_required()
+def get_branch_prefill_route(sucursal_canon: str):
+    try:
+        access_error = _guard(require_planning_operator)
+        if access_error:
+            return access_error
+
+        result = get_branch_prefill(
+            sucursal_canon=sucursal_canon,
+            target_month=request.args.get("target_month"),
+        )
         return _success(result)
 
     except PlanningTargetsServiceError as exc:
