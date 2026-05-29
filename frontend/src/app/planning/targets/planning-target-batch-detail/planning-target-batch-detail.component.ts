@@ -35,6 +35,46 @@ import {
 } from '../planning-target-action-dialog/planning-target-action-dialog.component';
 
 
+type ComparisonPeriodKey =
+  | 'current_month'
+  | 'previous_month'
+  | 'same_month_last_year';
+
+interface PlanningVariationResult {
+  currentValue: number | null;
+  referenceValue: number | null;
+  absoluteVariation: number | null;
+  percentageVariation: number | null;
+  direction: 'up' | 'down' | 'neutral' | 'unknown';
+}
+
+type DecisionMetricValueType = 'money' | 'number';
+
+interface PlanningDecisionMetric {
+  label: string;
+  valueType: DecisionMetricValueType;
+  currentValue: number | null;
+  previousMonthValue: number | null;
+  sameMonthLastYearValue: number | null;
+  previousMonthVariation: PlanningVariationResult;
+  sameMonthLastYearVariation: PlanningVariationResult;
+  lowerIsBetter?: boolean;
+}
+
+type DecisionSectionKey = 'commercial' | 'users' | 'income' | 'all';
+
+interface DecisionSectionTab {
+  key: DecisionSectionKey;
+  label: string;
+  icon: string;
+}
+
+interface PlanningDecisionMetricGroup {
+  key: DecisionSectionKey;
+  title: string;
+  description: string;
+  metrics: PlanningDecisionMetric[];
+}
 
 @Component({
   selector: 'app-planning-target-batch-detail',
@@ -68,6 +108,15 @@ export class PlanningTargetBatchDetailComponent implements OnInit {
   isLoadingBranchPrefill = false;
   isLoadingBranchComparisons = false;
   branchPrefillSourceLabel = '';
+
+  activeDecisionSection: DecisionSectionKey = 'commercial';
+
+  decisionSectionTabs: DecisionSectionTab[] = [
+    { key: 'commercial', label: 'Comercial', icon: 'trending_up' },
+    { key: 'users', label: 'Usuarios', icon: 'groups' },
+    { key: 'income', label: 'Ingresos', icon: 'payments' },
+    { key: 'all', label: 'Todos', icon: 'dashboard' },
+  ];
 
   showAddBranchForm = false;
   isLoadingAccess = false;
@@ -426,6 +475,13 @@ toggleAddBranchForm(): void {
       });
   }
 
+  getComparisonNumericValue(
+    periodKey: ComparisonPeriodKey,
+    fieldKey: keyof NonNullable<PlanningBranchComparisonsResponse['items']['current_month']>,
+  ): number | null {
+    return this.toNumberOrNull(this.getComparisonValue(periodKey, fieldKey));
+  }
+
     addBranchRow(): void {
     if (!this.batchId || !this.batch) {
         this.snackBar.open('Batch inválido.', 'Cerrar', {
@@ -541,6 +597,186 @@ toggleAddBranchForm(): void {
     };
     }
 
+  getDecisionMetricGroups(): PlanningDecisionMetricGroup[] {
+    if (!this.branchComparisons) {
+      return [];
+    }
+
+    return [
+      {
+        key: 'commercial',
+        title: 'Comercial',
+        description: 'Metas comerciales principales revisadas en junta.',
+        metrics: [
+          this.buildDecisionMetric(
+            'Meta FAYCGO',
+            this.branchForm.metaFaycgoMes,
+            'meta_faycgo_mes',
+            'money',
+          ),
+          this.buildDecisionMetric(
+            'Venta nueva / clientes nuevos',
+            this.branchForm.metaClientesNuevosMes,
+            'clientes_nuevos_real_mtd',
+            'number',
+          ),
+          this.buildDecisionMetric(
+            'ARPU',
+            this.branchForm.metaArpuMes,
+            'meta_arpu_mes',
+            'money',
+          ),
+        ],
+      },
+      {
+        key: 'users',
+        title: 'Usuarios y retención',
+        description: 'Cierre de usuarios, recuperación, reactivaciones y bajas.',
+        metrics: [
+          this.buildDecisionMetric(
+            'Usuarios cierre proyectado',
+            this.branchForm.proyeccionUsuariosCierreMes,
+            'usuarios_activos_actual',
+            'number',
+          ),
+          this.buildDecisionMetric(
+            'Reactivaciones',
+            this.branchForm.metaReactivacionesMes,
+            'reactivaciones_real_mtd',
+            'number',
+          ),
+          this.buildDecisionMetric(
+            'Recuperaciones / domiciliados',
+            this.branchForm.metaNuevosDomiciliadosMes,
+            'nuevos_domiciliados_real_mtd',
+            'number',
+          ),
+          this.buildDecisionMetric(
+            'Bajas',
+            this.branchForm.metaBajasMes,
+            'bajas_reales_mtd',
+            'number',
+            true,
+          ),
+        ],
+      },
+      {
+        key: 'income',
+        title: 'Ingresos complementarios',
+        description: 'Ingresos adicionales que ayudan a revisar viabilidad.',
+        metrics: [
+          this.buildDecisionMetric(
+            'Venta tienda',
+            this.branchForm.metaVentaTiendaMes,
+            'venta_tienda_real_mtd',
+            'money',
+          ),
+          this.buildDecisionMetric(
+            'Ingreso agregadoras',
+            this.branchForm.ingresoAgregadorasEstimado,
+            'ingreso_real_agregadora_mtd',
+            'money',
+          ),
+        ],
+      },
+    ];
+  }   
+
+  formatDecisionMetricValue(
+    metric: PlanningDecisionMetric,
+    value: number | null,
+  ): string {
+    if (metric.valueType === 'money') {
+      return this.formatMoney(value);
+    }
+
+    return this.formatNumber(value);
+  }
+
+  formatDecisionMetricVariation(
+    metric: PlanningDecisionMetric,
+    variation: PlanningVariationResult,
+  ): string {
+    if (metric.valueType === 'money') {
+      return this.formatSignedMoney(variation.absoluteVariation);
+    }
+
+    return this.formatSignedNumber(variation.absoluteVariation);
+  }
+
+  getDecisionVariationClass(
+    metric: PlanningDecisionMetric,
+    variation: PlanningVariationResult,
+  ): string {
+    if (variation.direction === 'unknown' || variation.direction === 'neutral') {
+      return `decision-variation-${variation.direction}`;
+    }
+
+    if (metric.lowerIsBetter) {
+      return variation.direction === 'down'
+        ? 'decision-variation-good'
+        : 'decision-variation-bad';
+    }
+
+    return variation.direction === 'up'
+      ? 'decision-variation-good'
+      : 'decision-variation-bad';
+  }
+
+  setActiveDecisionSection(section: DecisionSectionKey): void {
+    this.activeDecisionSection = section;
+  }
+
+  isDecisionSectionActive(section: DecisionSectionKey): boolean {
+    return this.activeDecisionSection === section;
+  }
+
+  shouldShowDecisionGroup(group: PlanningDecisionMetricGroup): boolean {
+    return (
+      this.activeDecisionSection === 'all' ||
+      this.activeDecisionSection === group.key
+    );
+  }
+
+  getDecisionMetricFamilyClass(group: PlanningDecisionMetricGroup): string {
+    return `decision-family-${group.key}`;
+  }
+
+  getDecisionVariationCardClass(
+    metric: PlanningDecisionMetric,
+    variation: PlanningVariationResult,
+  ): string {
+    const variationClass = this.getDecisionVariationClass(metric, variation);
+
+    if (variationClass === 'decision-variation-good') {
+      return 'decision-card-good';
+    }
+
+    if (variationClass === 'decision-variation-bad') {
+      return 'decision-card-bad';
+    }
+
+    if (variationClass === 'decision-variation-neutral') {
+      return 'decision-card-neutral';
+    }
+
+    return 'decision-card-unknown';
+  }
+
+  trackByDecisionGroup(
+    _index: number,
+    group: PlanningDecisionMetricGroup,
+  ): string {
+    return group.key;
+  }
+
+  trackByDecisionMetric(
+    _index: number,
+    metric: PlanningDecisionMetric,
+  ): string {
+    return metric.label;
+  }
+
     resetBranchForm(): void {
     this.branchForm = {
         sucursalCanon: '',
@@ -564,6 +800,42 @@ toggleAddBranchForm(): void {
     this.branchPrefillSourceLabel = '';
     this.branchComparisons = null;
     }
+
+private buildDecisionMetric(
+  label: string,
+  currentValue: string | number | null | undefined,
+  comparisonFieldKey: keyof NonNullable<PlanningBranchComparisonsResponse['items']['current_month']>,
+  valueType: DecisionMetricValueType,
+  lowerIsBetter = false,
+): PlanningDecisionMetric {
+  const normalizedCurrentValue = this.toNumberOrNull(currentValue);
+  const previousMonthValue = this.getComparisonNumericValue(
+    'previous_month',
+    comparisonFieldKey,
+  );
+  const sameMonthLastYearValue = this.getComparisonNumericValue(
+    'same_month_last_year',
+    comparisonFieldKey,
+  );
+
+  return {
+    label,
+    valueType,
+    currentValue: normalizedCurrentValue,
+    previousMonthValue,
+    sameMonthLastYearValue,
+    previousMonthVariation: this.calculateVariation(
+      normalizedCurrentValue,
+      previousMonthValue,
+    ),
+    sameMonthLastYearVariation: this.calculateVariation(
+      normalizedCurrentValue,
+      sameMonthLastYearValue,
+    ),
+    lowerIsBetter,
+  };
+}
+
 
 submitBatch(): void {
   if (!this.batchId || !this.canSubmitBatch()) {
@@ -757,6 +1029,125 @@ publishBatch(): void {
     }
 
     return date.toLocaleString('es-MX');
+  }
+
+  toNumberOrNull(value: string | number | null | undefined): number | null {
+    if (value === null || value === undefined || value === '') {
+      return null;
+    }
+
+    const numericValue = Number(value);
+
+    if (Number.isNaN(numericValue)) {
+      return null;
+    }
+
+    return numericValue;
+  }
+
+  calculateVariation(
+    currentValue: string | number | null | undefined,
+    referenceValue: string | number | null | undefined,
+  ): PlanningVariationResult {
+    const normalizedCurrentValue = this.toNumberOrNull(currentValue);
+    const normalizedReferenceValue = this.toNumberOrNull(referenceValue);
+
+    if (
+      normalizedCurrentValue === null ||
+      normalizedReferenceValue === null ||
+      normalizedReferenceValue === 0
+    ) {
+      return {
+        currentValue: normalizedCurrentValue,
+        referenceValue: normalizedReferenceValue,
+        absoluteVariation: null,
+        percentageVariation: null,
+        direction: 'unknown',
+      };
+    }
+
+    const absoluteVariation = normalizedCurrentValue - normalizedReferenceValue;
+    const percentageVariation = (absoluteVariation / normalizedReferenceValue) * 100;
+
+    let direction: PlanningVariationResult['direction'] = 'neutral';
+
+    if (absoluteVariation > 0) {
+      direction = 'up';
+    }
+
+    if (absoluteVariation < 0) {
+      direction = 'down';
+    }
+
+    return {
+      currentValue: normalizedCurrentValue,
+      referenceValue: normalizedReferenceValue,
+      absoluteVariation,
+      percentageVariation,
+      direction,
+    };
+  }
+
+  formatSignedPercentage(value: number | null): string {
+    if (value === null || value === undefined || Number.isNaN(value)) {
+      return '—';
+    }
+
+    const sign = value > 0 ? '+' : '';
+
+    return `${sign}${value.toLocaleString('es-MX', {
+      maximumFractionDigits: 2,
+      minimumFractionDigits: 2,
+    })}%`;
+  }
+
+  formatSignedNumber(value: number | null): string {
+    if (value === null || value === undefined || Number.isNaN(value)) {
+      return '—';
+    }
+
+    const sign = value > 0 ? '+' : '';
+
+    return `${sign}${value.toLocaleString('es-MX')}`;
+  }
+
+  formatSignedMoney(value: number | null): string {
+    if (value === null || value === undefined || Number.isNaN(value)) {
+      return '—';
+    }
+
+    const sign = value > 0 ? '+' : '';
+
+    return `${sign}${value.toLocaleString('es-MX', {
+      style: 'currency',
+      currency: 'MXN',
+      maximumFractionDigits: 2,
+    })}`;
+  }
+
+  getVariationClass(direction: PlanningVariationResult['direction']): string {
+    return `variation-${direction}`;
+  }
+
+  getMetaFaycgoVsPreviousMonthVariation(): PlanningVariationResult {
+    return this.calculateVariation(
+      this.branchForm.metaFaycgoMes,
+      this.getComparisonValue('previous_month', 'meta_faycgo_mes'),
+    );
+  }
+
+  getClientesNuevosVsPreviousMonthVariation(): PlanningVariationResult {
+    return this.calculateVariation(
+      this.branchForm.metaClientesNuevosMes,
+      this.getComparisonValue('previous_month', 'clientes_nuevos_real_mtd'),
+    );
+  }
+
+  getVentaTiendaVsPreviousMonthVariation(): PlanningVariationResult {
+    return this.calculateVariation(
+      this.branchForm.metaVentaTiendaMes,
+      this.getComparisonValue('previous_month', 'venta_tienda_real_mtd'),
+    );
   }
 
   getComparisonValue(
