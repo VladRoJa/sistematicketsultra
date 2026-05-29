@@ -1337,6 +1337,51 @@ def get_branch_prefill(
             if latest_mart_row is not None
             else None
         ),
+        "usuarios_inicio_mes": (
+            latest_mart_row.usuarios_inicio_mes
+            if latest_mart_row is not None
+            else None
+        ),
+        "proyeccion_usuarios_cierre_mes": (
+            latest_mart_row.proyeccion_usuarios_cierre_mes
+            if latest_mart_row is not None
+            else None
+        ),
+        "meta_faycgo_mes": (
+            _serialize_decimal(latest_mart_row.meta_faycgo_mes)
+            if latest_mart_row is not None
+            else None
+        ),
+        "meta_clientes_nuevos_mes": (
+            latest_mart_row.meta_clientes_nuevos_mes
+            if latest_mart_row is not None
+            else None
+        ),
+        "meta_reactivaciones_mes": (
+            latest_mart_row.meta_reactivaciones_mes
+            if latest_mart_row is not None
+            else None
+        ),
+        "meta_bajas_mes": (
+            latest_mart_row.meta_bajas_mes
+            if latest_mart_row is not None
+            else None
+        ),
+        "meta_nuevos_domiciliados_mes": (
+            latest_mart_row.meta_nuevos_domiciliados_mes
+            if latest_mart_row is not None
+            else None
+        ),
+        "meta_arpu_mes": (
+            _serialize_decimal(latest_mart_row.meta_arpu_mes)
+            if latest_mart_row is not None
+            else None
+        ),
+        "meta_venta_tienda_mes": (
+            _serialize_decimal(latest_mart_row.meta_venta_tienda_mes)
+            if latest_mart_row is not None
+            else None
+        ),
         "source": "track_daily_mart" if latest_mart_row is not None else None,
         "source_track_date": (
             latest_mart_row.track_date.isoformat()

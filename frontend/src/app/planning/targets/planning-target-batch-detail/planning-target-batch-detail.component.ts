@@ -314,10 +314,71 @@ toggleAddBranchForm(): void {
             this.branchForm.m2SinCirculaciones = Number(response.m2_sin_circulaciones);
           }
 
+          if (response.usuarios_inicio_mes !== null && response.usuarios_inicio_mes !== undefined) {
+            this.branchForm.usuariosInicioMes = Number(response.usuarios_inicio_mes);
+          }
+
+          if (
+            response.proyeccion_usuarios_cierre_mes !== null &&
+            response.proyeccion_usuarios_cierre_mes !== undefined
+          ) {
+            this.branchForm.proyeccionUsuariosCierreMes = Number(
+              response.proyeccion_usuarios_cierre_mes,
+            );
+          }
+
+          if (response.meta_faycgo_mes !== null && response.meta_faycgo_mes !== undefined) {
+            this.branchForm.metaFaycgoMes = Number(response.meta_faycgo_mes);
+          }
+
+          if (
+            response.meta_clientes_nuevos_mes !== null &&
+            response.meta_clientes_nuevos_mes !== undefined
+          ) {
+            this.branchForm.metaClientesNuevosMes = Number(
+              response.meta_clientes_nuevos_mes,
+            );
+          }
+
+          if (
+            response.meta_reactivaciones_mes !== null &&
+            response.meta_reactivaciones_mes !== undefined
+          ) {
+            this.branchForm.metaReactivacionesMes = Number(
+              response.meta_reactivaciones_mes,
+            );
+          }
+
+          if (response.meta_bajas_mes !== null && response.meta_bajas_mes !== undefined) {
+            this.branchForm.metaBajasMes = Number(response.meta_bajas_mes);
+          }
+
+          if (
+            response.meta_nuevos_domiciliados_mes !== null &&
+            response.meta_nuevos_domiciliados_mes !== undefined
+          ) {
+            this.branchForm.metaNuevosDomiciliadosMes = Number(
+              response.meta_nuevos_domiciliados_mes,
+            );
+          }
+
+          if (response.meta_arpu_mes !== null && response.meta_arpu_mes !== undefined) {
+            this.branchForm.metaArpuMes = Number(response.meta_arpu_mes);
+          }
+
+          if (
+            response.meta_venta_tienda_mes !== null &&
+            response.meta_venta_tienda_mes !== undefined
+          ) {
+            this.branchForm.metaVentaTiendaMes = Number(
+              response.meta_venta_tienda_mes,
+            );
+          }
+
           if (response.source && response.source_track_date) {
-            this.branchPrefillSourceLabel = `m² precargado desde ${response.source} (${response.source_track_date})`;
+            this.branchPrefillSourceLabel = `Precargado desde ${response.source} (${response.source_track_date})`;
           } else {
-            this.branchPrefillSourceLabel = 'Sin m² disponible para precargar.';
+            this.branchPrefillSourceLabel = 'Sin datos disponibles para precargar.';
           }
         },
         error: () => {
@@ -330,7 +391,6 @@ toggleAddBranchForm(): void {
         },
       });
   }
-
     addBranchRow(): void {
     if (!this.batchId || !this.batch) {
         this.snackBar.open('Batch inválido.', 'Cerrar', {
