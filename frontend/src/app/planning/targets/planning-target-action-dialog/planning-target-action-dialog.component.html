@@ -1,0 +1,48 @@
+<!-- frontend\src\app\planning\targets\planning-target-batch-detail\planning-target-action-dialog.component.html -->
+
+
+<h2 mat-dialog-title>{{ data.title }}</h2>
+
+<mat-dialog-content class="dialog-content">
+  <p class="description">
+    {{ data.description }}
+  </p>
+
+  <div *ngIf="data.warning" class="warning-box">
+    <mat-icon>warning</mat-icon>
+    <span>{{ data.warning }}</span>
+  </div>
+
+  <mat-form-field appearance="outline" class="comment-field">
+    <mat-label>Comentario / motivo</mat-label>
+    <textarea
+      matInput
+      rows="4"
+      [(ngModel)]="comment"
+      placeholder="Escribe el motivo o contexto de esta acción"
+    ></textarea>
+    <mat-hint *ngIf="data.requireComment">
+      Requerido. Mínimo 5 caracteres.
+    </mat-hint>
+  </mat-form-field>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button
+    mat-stroked-button
+    type="button"
+    (click)="cancel()"
+  >
+    Cancelar
+  </button>
+
+  <button
+    mat-flat-button
+    type="button"
+    [color]="getConfirmColor()"
+    [disabled]="!canConfirm()"
+    (click)="confirm()"
+  >
+    {{ data.actionLabel }}
+  </button>
+</mat-dialog-actions>
