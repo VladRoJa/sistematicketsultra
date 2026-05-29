@@ -186,7 +186,19 @@ export interface PlanningBranchPrefillResponse {
   sucursal_canon: string;
   track_label: string;
   target_month?: string | null;
+
   m2_sin_circulaciones?: string | null;
+  usuarios_inicio_mes?: number | null;
+  proyeccion_usuarios_cierre_mes?: number | null;
+
+  meta_faycgo_mes?: string | null;
+  meta_clientes_nuevos_mes?: number | null;
+  meta_reactivaciones_mes?: number | null;
+  meta_bajas_mes?: number | null;
+  meta_nuevos_domiciliados_mes?: number | null;
+  meta_arpu_mes?: string | null;
+  meta_venta_tienda_mes?: string | null;
+
   source?: string | null;
   source_track_date?: string | null;
   source_target_month?: string | null;
