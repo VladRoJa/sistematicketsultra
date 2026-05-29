@@ -110,6 +110,72 @@ class PublishPlanningTargetBatchCommand:
     actor_username_snapshot: str | None = None
     comment: str | None = None
 
+def _shift_month(target_month: Any, months_delta: int):
+    normalized_target_month = _normalize_target_month(target_month)
+
+    year = normalized_target_month.year
+    month = normalized_target_month.month + months_delta
+
+    while month < 1:
+        month += 12
+        year -= 1
+
+    while month > 12:
+        month -= 12
+        year += 1
+
+    return normalized_target_month.replace(
+        year=year,
+        month=month,
+        day=1,
+    )
+
+
+def _latest_track_mart_row_for_month(
+    *,
+    sucursal_canon: str,
+    target_month: Any,
+):
+    normalized_target_month = _normalize_target_month(target_month)
+
+    return (
+        TrackDailyMartORM.query
+        .filter(
+            TrackDailyMartORM.sucursal_canon == sucursal_canon,
+            TrackDailyMartORM.target_month == normalized_target_month,
+        )
+        .order_by(
+            TrackDailyMartORM.track_date.desc(),
+            TrackDailyMartORM.id.desc(),
+        )
+        .first()
+    )
+
+
+def _serialize_track_mart_comparison_row(row) -> dict[str, Any] | None:
+    if row is None:
+        return None
+
+    return {
+        "track_date": row.track_date.isoformat() if row.track_date else None,
+        "target_month": row.target_month.isoformat() if row.target_month else None,
+        "sucursal_canon": row.sucursal_canon,
+
+        "meta_faycgo_mes": _serialize_decimal(row.meta_faycgo_mes),
+        "ingreso_real_base_mtd": _serialize_decimal(row.ingreso_real_base_mtd),
+        "ingreso_real_agregadora_mtd": _serialize_decimal(
+            row.ingreso_real_agregadora_mtd
+        ),
+        "ingreso_real_total_mtd": _serialize_decimal(row.ingreso_real_total_mtd),
+        "ingreso_real_mtd": _serialize_decimal(row.ingreso_real_mtd),
+
+        "meta_clientes_nuevos_mes": row.meta_clientes_nuevos_mes,
+        "clientes_nuevos_real_mtd": row.clientes_nuevos_real_mtd,
+
+        "usuarios_activos_actual": row.usuarios_activos_actual,
+        "venta_tienda_real_mtd": _serialize_decimal(row.venta_tienda_real_mtd),
+    }
+
 def _ensure_text(value: Any, *, field_name: str) -> str:
     normalized = str(value or "").strip()
     if not normalized:
@@ -1392,4 +1458,51 @@ def get_branch_prefill(
             if latest_mart_row is not None
             else None
         ),
+    }
+    
+def get_branch_comparisons(
+    *,
+    sucursal_canon: str,
+    target_month: Any,
+) -> dict[str, Any]:
+    normalized_sucursal_canon = _ensure_branch_exists(sucursal_canon)
+    normalized_target_month = _normalize_target_month(target_month)
+
+    current_month = normalized_target_month
+    previous_month = _shift_month(normalized_target_month, -1)
+    same_month_last_year = _shift_month(normalized_target_month, -12)
+
+    current_row = _latest_track_mart_row_for_month(
+        sucursal_canon=normalized_sucursal_canon,
+        target_month=current_month,
+    )
+
+    previous_month_row = _latest_track_mart_row_for_month(
+        sucursal_canon=normalized_sucursal_canon,
+        target_month=previous_month,
+    )
+
+    same_month_last_year_row = _latest_track_mart_row_for_month(
+        sucursal_canon=normalized_sucursal_canon,
+        target_month=same_month_last_year,
+    )
+
+    return {
+        "status": "ok",
+        "sucursal_canon": normalized_sucursal_canon,
+        "target_month": normalized_target_month.isoformat(),
+        "periods": {
+            "current_month": current_month.isoformat(),
+            "previous_month": previous_month.isoformat(),
+            "same_month_last_year": same_month_last_year.isoformat(),
+        },
+        "items": {
+            "current_month": _serialize_track_mart_comparison_row(current_row),
+            "previous_month": _serialize_track_mart_comparison_row(
+                previous_month_row
+            ),
+            "same_month_last_year": _serialize_track_mart_comparison_row(
+                same_month_last_year_row
+            ),
+        },
     }
