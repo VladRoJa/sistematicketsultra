@@ -22,6 +22,7 @@ from app.warehouse.services.planning_targets_service import (
     create_model_config,
     create_target_batch,
     get_batch_detail,
+    list_active_track_branches,
     list_model_configs,
     list_target_batches,
     publish_approved_batch_to_track,
@@ -121,6 +122,20 @@ def _service_error(exc: PlanningTargetsServiceError):
 @jwt_required()
 def get_planning_access_route():
     return _success(get_current_planning_access_payload())
+
+@planning_targets_bp.route("/branches", methods=["GET"])
+@jwt_required()
+def list_active_track_branches_route():
+    try:
+        access_error = _guard(require_planning_operator)
+        if access_error:
+            return access_error
+
+        result = list_active_track_branches()
+        return _success(result)
+
+    except PlanningTargetsServiceError as exc:
+        return _service_error(exc)
 
 def _guard(access_check):
     access_error = access_check()

@@ -1259,3 +1259,28 @@ def publish_approved_batch_to_track(
         "replaced_active_targets_count": replaced_active_targets_count,
         "event_id": event.id,
     }
+    
+def list_active_track_branches() -> dict[str, Any]:
+    rows = (
+        TrackBranchCatalogORM.query
+        .filter_by(is_track_active=True)
+        .order_by(
+            TrackBranchCatalogORM.display_order.asc(),
+            TrackBranchCatalogORM.sucursal_canon.asc(),
+        )
+        .all()
+    )
+
+    return {
+        "status": "ok",
+        "items": [
+            {
+                "sucursal_canon": row.sucursal_canon,
+                "track_label": row.track_label,
+                "display_order": row.display_order,
+                "is_track_active": row.is_track_active,
+                "notes": row.notes,
+            }
+            for row in rows
+        ],
+    }
