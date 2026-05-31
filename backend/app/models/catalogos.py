@@ -36,6 +36,10 @@ class CatalogoClasificacion(db.Model):
     parent_id = db.Column(db.Integer, db.ForeignKey('catalogo_clasificacion.id'), nullable=True)
     departamento_id = db.Column(db.Integer, db.ForeignKey('departamentos.id'), nullable=False)
     nivel = db.Column(db.Integer, nullable=False, default=1)
+
+    activo = db.Column(db.Boolean, nullable=False, default=True, server_default='true')
+    creado_en = db.Column(db.DateTime, server_default=db.func.now())
+    actualizado_en = db.Column(db.DateTime, onupdate=db.func.now())
     
     # Relaciones
     hijos = db.relationship(
