@@ -1,4 +1,4 @@
-// frontend\src\app\inventario\catalogos\clasificacion-crud\clasificacion-crud.component.ts
+// frontend/src/app/inventario/catalogos/clasificacion-crud/clasificacion-crud.component.ts
 
 import { Component, ElementRef, OnInit, ViewChild } from '@angular/core';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
@@ -70,6 +70,72 @@ export class ClasificacionCrudComponent implements OnInit {
     this.cargarClasificaciones();
   }
 
+  // ============================================================================
+  // KPIs visuales Ultra V1
+  // ============================================================================
+  // Estos getters solo leen el árbol ya cargado. No alteran la lógica validada de
+  // crear/editar/desactivar/reactivar.
+
+  get totalClasificaciones(): number {
+    return this.todasLasClasificaciones.length;
+  }
+
+  get totalActivas(): number {
+    return this.todasLasClasificaciones.filter((nodo) => this.estaActivo(nodo)).length;
+  }
+
+  get totalInactivas(): number {
+    return this.todasLasClasificaciones.filter((nodo) => !this.estaActivo(nodo)).length;
+  }
+
+  get totalRaices(): number {
+    return this.todasLasClasificaciones.filter((nodo) =>
+      nodo.parent_id === null ||
+      nodo.parent_id === undefined ||
+      Number(nodo.nivel) === 1
+    ).length;
+  }
+
+  get totalDepartamentosConCatalogo(): number {
+    const departamentosIds = this.todasLasClasificaciones
+      .map((nodo) => Number(nodo.departamento_id))
+      .filter((id) => Number.isFinite(id));
+
+    return new Set(departamentosIds).size;
+  }
+
+  get tituloFormulario(): string {
+    return this.modo === 'crear'
+      ? 'Agregar clasificación'
+      : 'Editar clasificación';
+  }
+
+  get textoBotonFormulario(): string {
+    return this.modo === 'crear'
+      ? 'Agregar'
+      : 'Actualizar';
+  }
+
+  get descripcionFormulario(): string {
+    if (this.modo === 'editar') {
+      return 'Actualiza el nombre visible de la clasificación. El histórico de tickets se conserva.';
+    }
+
+    if (this.form.get('parent_id')?.value) {
+      return 'Crea una subclasificación dentro de la rama seleccionada.';
+    }
+
+    return 'Crea una clasificación raíz para un departamento.';
+  }
+
+  get importacionDeshabilitadaTexto(): string {
+    return 'Importación protegida';
+  }
+
+  // ============================================================================
+  // Carga de datos
+  // ============================================================================
+
   cargarDepartamentos(): void {
     this.departamentoService.obtenerDepartamentos().subscribe({
       next: (resp: any) => {
@@ -98,7 +164,7 @@ export class ClasificacionCrudComponent implements OnInit {
   cargarClasificaciones(): void {
     this.loading = true;
 
-    // En administración sí cargamos activos e inactivos para poder reactivar.
+    // En administración cargamos activos e inactivos para permitir reactivación.
     this.catalogoService.getClasificacionesArbol(undefined, true).subscribe({
       next: (respuesta: any[]) => {
         this.clasificaciones = this.normalizarRespuestaArbol(respuesta);
@@ -119,18 +185,45 @@ export class ClasificacionCrudComponent implements OnInit {
       return [];
     }
 
-    // Cuando el endpoint se pide sin departamento_id, responde agrupado por departamento:
+    // Cuando el endpoint se pide sin departamento_id, responde agrupado:
     // [{ departamento_id, arbol: [...] }]
     const vieneAgrupadoPorDepartamento = respuesta.some((item: any) =>
       Array.isArray(item?.arbol)
     );
 
-    if (vieneAgrupadoPorDepartamento) {
-      return respuesta.flatMap((dep: any) => dep.arbol || []);
+    const nodos = vieneAgrupadoPorDepartamento
+      ? respuesta.flatMap((dep: any) => dep.arbol || [])
+      : respuesta;
+
+    return this.normalizarNodos(nodos);
+  }
+
+  private normalizarNodos(nodos: any[]): ClasificacionNodeConEstado[] {
+    if (!Array.isArray(nodos)) {
+      return [];
     }
 
-    // Cuando se pide por departamento_id, responde directamente el árbol.
-    return respuesta;
+    return nodos
+      .map((nodo: any) => {
+        const normalizado: ClasificacionNodeConEstado = {
+          id: Number(nodo.id),
+          nombre: String(nodo.nombre || '').trim(),
+          departamento_id: Number(nodo.departamento_id),
+          parent_id: nodo.parent_id === null || nodo.parent_id === undefined
+            ? null
+            : Number(nodo.parent_id),
+          nivel: Number(nodo.nivel || 1),
+          activo: nodo.activo !== false,
+          hijos: this.normalizarNodos(nodo.hijos || [])
+        };
+
+        return normalizado;
+      })
+      .filter((nodo) =>
+        Number.isFinite(nodo.id) &&
+        Boolean(nodo.nombre) &&
+        Number.isFinite(nodo.departamento_id)
+      );
   }
 
   private aplanarNodos(nodos: ClasificacionNodeConEstado[]): ClasificacionNodeConEstado[] {
@@ -148,6 +241,10 @@ export class ClasificacionCrudComponent implements OnInit {
 
     recorrer(nodos || []);
     return resultado;
+  }
+
+  private estaActivo(nodo: ClasificacionNodeConEstado): boolean {
+    return nodo.activo !== false;
   }
 
   private actualizarEstadoClasificacionLocal(
@@ -184,7 +281,15 @@ export class ClasificacionCrudComponent implements OnInit {
     if (nodoPlano) {
       nodoPlano.activo = activo;
     }
+
+    // Forzamos nueva referencia solo en el arreglo plano para que los KPIs se
+    // recalculen visualmente sin recargar el árbol ni cerrar ramas abiertas.
+    this.todasLasClasificaciones = [...this.todasLasClasificaciones];
   }
+
+  // ============================================================================
+  // Formulario crear / editar
+  // ============================================================================
 
   abrirFormulario(nodo: ClasificacionNodeConEstado | null = null, esHijo = false): void {
     this.mostrarFormulario = true;
@@ -290,11 +395,22 @@ export class ClasificacionCrudComponent implements OnInit {
     });
   }
 
-  // Compatibilidad temporal con el output actual del árbol:
-  // el HTML hijo todavía emite "eliminar", pero aquí ya no eliminamos físicamente.
-  eliminar(nodo: ClasificacionNodeConEstado): void {
-    this.desactivar(nodo);
+  cerrarFormulario(): void {
+    this.mostrarFormulario = false;
+    this.form.reset();
+    this.nodoEditando = null;
+    this.modo = 'crear';
   }
+
+  cancelar(): void {
+    this.cerrarFormulario();
+  }
+
+  // ============================================================================
+  // Activación segura
+  // ============================================================================
+  // No eliminamos físicamente clasificaciones: se desactivan para conservar
+  // histórico y evitar romper tickets existentes.
 
   desactivar(nodo: ClasificacionNodeConEstado): void {
     const confirmar = window.confirm(
@@ -340,16 +456,9 @@ export class ClasificacionCrudComponent implements OnInit {
     });
   }
 
-  cerrarFormulario(): void {
-    this.mostrarFormulario = false;
-    this.form.reset();
-    this.nodoEditando = null;
-    this.modo = 'crear';
-  }
-
-  cancelar(): void {
-    this.cerrarFormulario();
-  }
+  // ============================================================================
+  // Importación / exportación
+  // ============================================================================
 
   abrirDialogoImportar(): void {
     mostrarAlertaToast(

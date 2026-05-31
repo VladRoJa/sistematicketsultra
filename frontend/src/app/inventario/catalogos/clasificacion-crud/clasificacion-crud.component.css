@@ -1,190 +1,756 @@
-/* ======== SAP FIORI LIGHT THEME (ERP STYLE) ======== */
+/* ==========================================================================
+   Clasificaciones de Tickets — Suite Ultra V1
+   --------------------------------------------------------------------------
+   Pantalla de administración del catálogo jerárquico usado al crear tickets.
+   Mantiene el flujo seguro: no elimina físicamente; activa/desactiva.
+   ========================================================================== */
 
-/* Fondo base */
-body, .catalogo-module-bg {
-  background: #f7f9fb !important;
+:host {
+  display: block;
+  min-height: calc(100vh - 80px);
+  background:
+    radial-gradient(circle at top left, rgba(229, 69, 37, 0.08), transparent 32%),
+    linear-gradient(180deg, #f7f8fb 0%, #eef1f6 100%);
+  color: #1f2933;
 }
 
-/* Titulos y acciones */
-.catalogo-table h2, .text-xl, .font-bold {
-  color: #005ba1;
-  font-size: 2.1rem;
-  letter-spacing: .5px;
-  margin-bottom: 10px;
+/* ==========================================================================
+   Shell principal
+   ========================================================================== */
+
+.clasificaciones-page {
+  width: min(1480px, calc(100% - 48px));
+  margin: 0 auto;
+  padding: 28px 0 48px;
 }
 
-/* Contenedor acciones rápidas */
-.catalogo-acciones-rapidas {
+/* ==========================================================================
+   Hero Ultra V1
+   ========================================================================== */
+
+.clasificaciones-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 22px;
+  align-items: center;
+  padding: 28px;
+  border-radius: 28px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 0.9)),
+    linear-gradient(135deg, rgba(229, 69, 37, 0.14), rgba(44, 69, 149, 0.08));
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 22px 55px rgba(15, 23, 42, 0.08);
+}
+
+.clasificaciones-hero__eyebrow,
+.tree-card-header__eyebrow,
+.side-card__eyebrow,
+.clasificacion-form__eyebrow {
+  margin: 0 0 8px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  color: #e54525;
+  text-transform: uppercase;
+}
+
+.clasificaciones-hero__title-row {
   display: flex;
-  gap: 12px;
+  gap: 18px;
+  align-items: flex-start;
+  justify-content: space-between;
 }
 
-/* Botones principales */
-button[mat-flat-button], button[mat-stroked-button] {
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  padding: 7px 18px;
-  border-radius: 7px !important;
-  text-transform: none;
-  box-shadow: 0 2px 7px 0 #0001;
-  background: #fff;
-  border: 1px solid #d8e3ee;
-  color: #005ba1 !important;
-  transition: background .13s, color .13s;
+.clasificaciones-hero__title {
+  margin: 0;
+  color: #171717;
+  font-size: clamp(2rem, 4vw, 3.15rem);
+  font-weight: 900;
+  letter-spacing: -0.045em;
+  line-height: 0.96;
 }
 
-/* Importar - Accent */
-button[color="accent"], button.mat-accent {
-  background: linear-gradient(90deg, #fde3a7 0%, #a1c4fd 100%);
-  color: #333 !important;
-  border: none;
-}
-button[color="accent"]:hover {
-  background: #ffe082 !important;
+.clasificaciones-hero__subtitle {
+  max-width: 720px;
+  margin: 12px 0 0;
+  color: #667085;
+  font-size: 1rem;
+  line-height: 1.55;
 }
 
-/* Exportar - Primary */
-button[color="primary"], button.mat-primary {
-  background: linear-gradient(90deg, #a1c4fd 0%, #005ba1 100%);
+.clasificaciones-hero__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(44, 69, 149, 0.08);
+  color: #2c4595;
+  font-size: 0.82rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #18a058;
+  box-shadow: 0 0 0 5px rgba(24, 160, 88, 0.13);
+}
+
+.clasificaciones-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* ==========================================================================
+   Botones Suite Ultra
+   ========================================================================== */
+
+.btn-ultra-primary,
+.btn-ultra-secondary,
+.btn-ultra-locked,
+.btn-refresh,
+.btn-form-cancel {
+  min-height: 40px;
+  border-radius: 999px !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.01em;
+  text-transform: none !important;
+}
+
+.btn-ultra-primary {
+  background: linear-gradient(135deg, #e54525 0%, #bd3217 100%) !important;
   color: #fff !important;
-  border: none;
-}
-button[color="primary"]:hover {
-  background: #005ba1 !important;
-  color: #fff !important;
+  box-shadow: 0 14px 26px rgba(229, 69, 37, 0.25) !important;
 }
 
-/* Botón de eliminar */
-button[color="warn"], button.mat-warn {
-  background: #ffc1c1 !important;
-  color: #e2001a !important;
-  border: none;
+.btn-ultra-primary:hover {
+  filter: brightness(0.98);
+  transform: translateY(-1px);
 }
 
-/* ======================== */
-/*        FORMULARIO        */
-/* ======================== */
-.catalogo-form, .catalogo-form * {
-  color: #0c1935 !important;
-}
-mat-form-field {
+.btn-ultra-secondary {
   background: #fff !important;
-  border-radius: 7px;
-  border: 1px solid #e0e6ed;
+  color: #1f2937 !important;
+  border: 1px solid rgba(15, 23, 42, 0.1) !important;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06) !important;
 }
-mat-form-field.mat-form-field {
-  margin-right: 14px;
+
+.btn-ultra-locked {
+  background: #f4f4f5 !important;
+  color: #71717a !important;
+  border: 1px dashed rgba(113, 113, 122, 0.45) !important;
+  box-shadow: none !important;
 }
-.mat-form-field-label {
-  color: #005ba1 !important;
-  opacity: .8 !important;
+
+.btn-refresh {
+  color: #2c4595 !important;
 }
-input[matInput], .mat-input-element {
-  color: #1a2746 !important;
+
+.btn-form-cancel {
+  color: #475467 !important;
+}
+
+/* ==========================================================================
+   KPI Cards
+   ========================================================================== */
+
+.clasificaciones-kpis {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(150px, 1fr));
+  gap: 14px;
+  margin: 18px 0;
+}
+
+.kpi-card {
+  position: relative;
+  overflow: hidden;
+  min-height: 118px;
+  padding: 18px;
+  border-radius: 22px;
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 15px 32px rgba(15, 23, 42, 0.06);
+}
+
+.kpi-card::after {
+  content: '';
+  position: absolute;
+  right: -28px;
+  top: -28px;
+  width: 78px;
+  height: 78px;
+  border-radius: 999px;
+  background: rgba(229, 69, 37, 0.1);
+}
+
+.kpi-card--success::after {
+  background: rgba(24, 160, 88, 0.12);
+}
+
+.kpi-card--muted::after {
+  background: rgba(100, 116, 139, 0.13);
+}
+
+.kpi-card__label {
+  display: block;
+  color: #667085;
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.kpi-card__value {
+  display: block;
+  margin-top: 10px;
+  color: #111827;
+  font-size: 2.15rem;
+  font-weight: 900;
+  letter-spacing: -0.045em;
+  line-height: 1;
+}
+
+.kpi-card__hint {
+  display: block;
+  margin-top: 8px;
+  color: #8a94a6;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+/* ==========================================================================
+   Toolbar
+   ========================================================================== */
+
+.clasificaciones-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 18px;
+  padding: 14px 16px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(15, 23, 42, 0.07);
+  backdrop-filter: blur(10px);
+}
+
+.clasificaciones-toolbar__copy {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.toolbar-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: rgba(44, 69, 149, 0.08);
+  color: #2c4595;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.toolbar-badge mat-icon {
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+}
+
+.toolbar-badge--locked {
+  background: rgba(229, 69, 37, 0.09);
+  color: #bd3217;
+}
+
+/* ==========================================================================
+   Body principal
+   ========================================================================== */
+
+.clasificaciones-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 18px;
+  align-items: start;
+}
+
+.clasificaciones-tree-card,
+.clasificaciones-side-card {
+  border-radius: 26px !important;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.96) !important;
+  box-shadow: 0 22px 52px rgba(15, 23, 42, 0.08) !important;
+}
+
+.clasificaciones-tree-card {
+  padding: 22px !important;
+  min-height: 560px;
+}
+
+.tree-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px;
+  padding-bottom: 18px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.tree-card-header__title {
+  margin: 0;
+  color: #111827;
+  font-size: 1.45rem;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+}
+
+.tree-card-header__subtitle {
+  max-width: 760px;
+  margin: 8px 0 0;
+  color: #667085;
+  font-size: 0.94rem;
+  line-height: 1.5;
+}
+
+.tree-card-header__legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 180px;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #475467;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.legend-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+}
+
+.legend-dot--active {
+  background: #18a058;
+}
+
+.legend-dot--inactive {
+  background: #98a2b3;
+}
+
+/* ==========================================================================
+   Árbol
+   ========================================================================== */
+
+.clasificacion-arbol-wrap {
+  position: relative;
+  min-height: 420px;
+  overflow-x: auto;
+  padding: 8px 2px 16px;
+}
+
+/* Estilos sobre el componente hijo del árbol.
+   Se usa ::ng-deep porque el mat-tree vive dentro de app-arbol-clasificacion. */
+:host ::ng-deep app-arbol-clasificacion {
+  display: block;
+  width: 100%;
+}
+
+:host ::ng-deep .arbol-clasif-erp {
+  width: 100%;
+  max-width: 100% !important;
   background: transparent !important;
 }
 
-/* ======================== */
-/*        TABLA ERP         */
-/* ======================== */
-.catalogo-table {
-  border-radius: 15px;
-  overflow: hidden;
-  box-shadow: 0 2px 14px 0 #005ba114;
-  margin-top: 12px;
-  margin-bottom: 22px;
+:host ::ng-deep .arbol-clasif-erp .mat-tree-node {
+  min-height: 46px;
+  padding: 4px 6px;
+  border-radius: 14px;
+  transition:
+    background 0.15s ease,
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+:host ::ng-deep .arbol-clasif-erp .mat-tree-node:hover {
+  background: rgba(229, 69, 37, 0.055);
+  box-shadow: inset 3px 0 0 rgba(229, 69, 37, 0.7);
+}
+
+:host ::ng-deep .arbol-nodo {
+  width: 100%;
+  min-width: 520px;
+}
+
+:host ::ng-deep .arbol-nodo .font-medium {
+  color: #1f2937;
+  font-size: 0.94rem;
+  font-weight: 800;
+}
+
+:host ::ng-deep .nivel-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 22px;
+  margin-left: 8px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(44, 69, 149, 0.1);
+  color: #2c4595;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+:host ::ng-deep .estado-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  margin-left: 8px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+:host ::ng-deep .nodo-inactivo {
+  opacity: 0.62;
+}
+
+:host ::ng-deep .nodo-inactivo .font-medium {
+  text-decoration: line-through;
+}
+
+:host ::ng-deep .arbol-clasif-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  min-width: 118px;
+  margin-left: auto;
+  opacity: 0.72;
+  transition: opacity 0.15s ease;
+}
+
+:host ::ng-deep .arbol-nodo:hover .arbol-clasif-actions {
+  opacity: 1;
+}
+
+:host ::ng-deep .arbol-clasif-actions button {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px !important;
+  background: #f8fafc;
+  border: 1px solid rgba(15, 23, 42, 0.07);
+}
+
+:host ::ng-deep .arbol-clasif-actions button:hover {
   background: #fff;
-}
-.catalogo-table .mat-header-row {
-  background: #f3f6fa !important;
-}
-.catalogo-table .mat-header-cell {
-  color: #005ba1 !important;
-  font-weight: 700;
-  font-size: 1.13em;
-  border-bottom: 2px solid #d1dde7 !important;
-  letter-spacing: .7px;
-  padding: 14px 10px 11px 14px;
-}
-.catalogo-table .mat-row {
-  background: #fff !important;
-  transition: background .13s;
-}
-.catalogo-table .mat-row:hover {
-  background: #f4f9fd !important;
-}
-.catalogo-table .mat-cell {
-  color: #222d3c !important;
-  font-size: 1.05em;
-  padding: 11px 8px 10px 14px;
-  border-bottom: 1px solid #eaeef2 !important;
-}
-.catalogo-table .mat-cell:last-child {
-  text-align: right;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.1);
 }
 
-.catalogo-table .mat-icon-button {
-  margin: 0 2px;
-  background: #e5eefc !important;
-  border-radius: 7px;
-  padding: 7px;
-}
-.catalogo-table .mat-icon-button[color="primary"] mat-icon {
-  color: #005ba1 !important;
-}
-.catalogo-table .mat-icon-button[color="warn"] mat-icon {
-  color: #e2001a !important;
-}
-.catalogo-table .mat-icon {
-  font-size: 21px;
-  vertical-align: middle;
+:host ::ng-deep .arbol-clasif-actions mat-icon {
+  font-size: 20px;
+  width: 20px;
+  height: 20px;
 }
 
-.catalogo-table .mat-row:nth-child(even) {
-  background: #f7f9fc !important;
+/* ==========================================================================
+   Estados: loading / empty
+   ========================================================================== */
+
+.tree-loading,
+.tree-empty {
+  display: grid;
+  place-items: center;
+  gap: 12px;
+  min-height: 300px;
+  color: #667085;
+  text-align: center;
 }
 
-/* ======================== */
-/*      EMPTY & SPINNER     */
-/* ======================== */
-.text-gray-500, .text-center, .mt-8 {
-  color: #6a819f !important;
-  font-size: 1.15em;
-  padding-top: 2em;
+.tree-loading span {
+  font-weight: 800;
 }
 
-.mat-spinner circle {
-  stroke: #005ba1 !important;
+.tree-empty mat-icon {
+  width: 54px;
+  height: 54px;
+  font-size: 54px;
+  color: rgba(44, 69, 149, 0.35);
 }
 
-/* ======================== */
-/*    Responsive Details    */
-/* ======================== */
-@media (max-width: 800px) {
-  .catalogo-table .mat-header-cell,
-  .catalogo-table .mat-cell {
-    font-size: 0.95em;
-    padding: 8px 4px;
-  }
-  button[mat-flat-button], button[mat-stroked-button] {
-    padding: 6px 8px;
-    font-size: 0.97em;
-  }
+.tree-empty h3 {
+  margin: 0;
+  color: #1f2937;
+  font-size: 1.2rem;
+  font-weight: 900;
 }
 
+.tree-empty p {
+  max-width: 420px;
+  margin: 0;
+  color: #667085;
+}
+
+/* ==========================================================================
+   Side card
+   ========================================================================== */
+
+.clasificaciones-side-card {
+  position: sticky;
+  top: 92px;
+  padding: 22px;
+}
+
+.side-card__title {
+  margin: 0 0 16px;
+  color: #111827;
+  font-size: 1.25rem;
+  font-weight: 900;
+  letter-spacing: -0.025em;
+}
+
+.side-card__rule {
+  display: grid;
+  grid-template-columns: 38px 1fr;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 14px 0;
+  border-top: 1px solid rgba(15, 23, 42, 0.07);
+}
+
+.side-card__rule mat-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 14px;
+  background: rgba(229, 69, 37, 0.08);
+  color: #e54525;
+}
+
+.side-card__rule strong {
+  display: block;
+  color: #1f2937;
+  font-size: 0.92rem;
+  font-weight: 900;
+}
+
+.side-card__rule span {
+  display: block;
+  margin-top: 3px;
+  color: #667085;
+  font-size: 0.82rem;
+  line-height: 1.42;
+}
+
+.side-card__note {
+  margin-top: 16px;
+  padding: 14px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(44, 69, 149, 0.08), rgba(229, 69, 37, 0.08));
+  color: #344054;
+  font-size: 0.84rem;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+/* ==========================================================================
+   Formulario flotante / drawer
+   ========================================================================== */
 
 .clasificacion-form-card {
   position: fixed;
-  top: 65px;
-  right: 50px;
-  min-width: 350px;
-  max-width: 410px;
-  z-index: 40;
-  box-shadow: 0 4px 30px #0002, 0 1.5px 7px #005ba155;
-  border-radius: 17px;
-  animation: showDrawer .22s cubic-bezier(.3,1.4,.6,1) 1;
+  top: 86px;
+  right: 34px;
+  width: min(520px, calc(100vw - 48px));
+  z-index: 80;
+  overflow: hidden;
+  border-radius: 28px !important;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  background: rgba(255, 255, 255, 0.98) !important;
+  box-shadow:
+    0 28px 80px rgba(15, 23, 42, 0.22),
+    0 0 0 1px rgba(255, 255, 255, 0.7) inset !important;
+  animation: showDrawer 0.22s cubic-bezier(0.3, 1.2, 0.6, 1) 1;
 }
+
+.clasificacion-form {
+  padding: 22px;
+}
+
+.clasificacion-form__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 18px;
+}
+
+.clasificacion-form__title {
+  margin: 0;
+  color: #111827;
+  font-size: 1.35rem;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+}
+
+.clasificacion-form__subtitle {
+  margin: 8px 0 0;
+  color: #667085;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.form-close-button {
+  flex: 0 0 auto;
+  border-radius: 14px !important;
+  background: #f8fafc !important;
+  color: #475467 !important;
+}
+
+.clasificacion-form__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.clasificacion-form__grid mat-form-field {
+  width: 100%;
+}
+
+.clasificacion-form__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+/* Angular Material form fields dentro de esta pantalla */
+:host ::ng-deep .clasificacion-form-card .mat-mdc-text-field-wrapper {
+  border-radius: 16px !important;
+  background: #fff !important;
+}
+
+:host ::ng-deep .clasificacion-form-card .mat-mdc-form-field-subscript-wrapper {
+  display: none;
+}
+
+/* Spinner Ultra */
+:host ::ng-deep .mat-mdc-progress-spinner circle,
+:host ::ng-deep .mat-spinner circle {
+  stroke: #e54525 !important;
+}
+
+/* ==========================================================================
+   Animaciones
+   ========================================================================== */
+
 @keyframes showDrawer {
-  from { opacity: 0; right: 0; transform: translateX(60px);}
-  to { opacity: 1; right: 50px; transform: none; }
+  from {
+    opacity: 0;
+    transform: translateX(42px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+/* ==========================================================================
+   Responsive
+   ========================================================================== */
+
+@media (max-width: 1180px) {
+  .clasificaciones-body {
+    grid-template-columns: 1fr;
+  }
+
+  .clasificaciones-side-card {
+    position: static;
+  }
+
+  .clasificaciones-kpis {
+    grid-template-columns: repeat(3, minmax(160px, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .clasificaciones-page {
+    width: min(100% - 28px, 1480px);
+    padding-top: 18px;
+  }
+
+  .clasificaciones-hero {
+    grid-template-columns: 1fr;
+    padding: 22px;
+  }
+
+  .clasificaciones-hero__actions {
+    justify-content: flex-start;
+  }
+
+  .clasificaciones-kpis {
+    grid-template-columns: repeat(2, minmax(140px, 1fr));
+  }
+
+  .tree-card-header {
+    flex-direction: column;
+  }
+
+  .tree-card-header__legend {
+    justify-content: flex-start;
+  }
+
+  .clasificacion-form-card {
+    top: 70px;
+    right: 14px;
+    width: calc(100vw - 28px);
+  }
+
+  .clasificacion-form__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .clasificaciones-hero__title-row {
+    flex-direction: column;
+  }
+
+  .clasificaciones-kpis {
+    grid-template-columns: 1fr;
+  }
+
+  .clasificaciones-toolbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .clasificaciones-tree-card,
+  .clasificaciones-side-card {
+    border-radius: 20px !important;
+  }
 }
