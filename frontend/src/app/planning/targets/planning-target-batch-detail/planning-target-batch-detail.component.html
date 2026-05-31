@@ -149,17 +149,16 @@
           </p>
         </div>
 
-        <button
-          mat-flat-button
-          type="button"
-          color="primary"
-          *ngIf="canAddBranchRow()"
-          [disabled]="isAddingBranchRow"
-          (click)="toggleAddBranchForm()"
-        >
-          <mat-icon>{{ showAddBranchForm ? 'close' : 'add' }}</mat-icon>
-          {{ showAddBranchForm ? 'Cancelar' : 'Agregar sucursal' }}
-        </button>
+      <button
+        mat-flat-button
+        type="button"
+        color="primary"
+        [disabled]="isAddingBranchRow"
+        (click)="addBranchRow()"
+      >
+        <mat-icon>{{ isEditingBranchRow() ? 'save_as' : 'save' }}</mat-icon>
+        {{ getBranchFormActionLabel() }}
+      </button>
       </div>
 
       <div *ngIf="showAddBranchForm" class="branch-form">
@@ -220,7 +219,7 @@
             <div class="form-section proposal-section">
               <div class="form-section-header">
                 <div>
-                  <h3>Propuesta editable</h3>
+                  <h3>{{ getBranchFormTitle() }}</h3>
                   <p>
                     Valores base precargados que pueden ajustarse antes de enviar a revisión.
                   </p>
@@ -673,6 +672,22 @@
                 #{{ row.published_track_monthly_target_id }}
               </mat-chip>
               <span *ngIf="!hasPublishedTarget(row)">—</span>
+            </td>
+          </ng-container>
+          <ng-container matColumnDef="actions">
+            <th mat-header-cell *matHeaderCellDef>Acciones</th>
+            <td mat-cell *matCellDef="let row">
+              <button
+                mat-stroked-button
+                type="button"
+                color="primary"
+                *ngIf="canAddBranchRow()"
+                [disabled]="isAddingBranchRow || isRunningBatchAction"
+                (click)="editBranchRow(row)"
+              >
+                <mat-icon>edit</mat-icon>
+                Editar
+              </button>
             </td>
           </ng-container>
 

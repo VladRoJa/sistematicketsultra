@@ -83,6 +83,34 @@ class AddPlanningTargetBranchRowCommand:
     notes: str | None = None
 
 @dataclass(slots=True)
+class UpdatePlanningTargetBranchRowCommand:
+    batch_id: int
+    branch_row_id: int
+    sucursal_canon: str
+
+    m2_sin_circulaciones: Decimal
+    usuarios_inicio_mes: int
+    proyeccion_usuarios_cierre_mes: int
+
+    meta_faycgo_mes: Decimal
+    meta_clientes_nuevos_mes: int
+    meta_reactivaciones_mes: int
+    meta_bajas_mes: int
+    meta_nuevos_domiciliados_mes: int
+    meta_arpu_mes: Decimal
+    meta_venta_tienda_mes: Decimal
+
+    ingreso_agregadoras_estimado: Decimal | None = None
+    usuarios_agregadoras_estimado: int | None = None
+
+    scenario_used: str | None = None
+    trend_classification: str | None = None
+    risk_level: str | None = None
+    status: str = "PROPUESTA"
+    previous_branch_row_id: int | None = None
+    notes: str | None = None
+
+@dataclass(slots=True)
 class SubmitPlanningTargetBatchCommand:
     batch_id: int
     submitted_by_user_id: int | None = None
@@ -277,6 +305,32 @@ def _ensure_non_negative_decimal(value: Any, *, field_name: str) -> Decimal:
 
     return normalized
 
+def _normalize_optional_text(value: Any, *, field_name: str) -> str | None:
+    if value is None:
+        return None
+
+    if isinstance(value, bool):
+        raise PlanningTargetsServiceError(
+            f"El campo {field_name!r} no puede ser bool."
+        )
+
+    normalized = str(value).strip()
+
+    if not normalized:
+        return None
+
+    return normalized
+
+
+def _normalize_required_text(value: Any, *, field_name: str) -> str:
+    normalized = _normalize_optional_text(value, field_name=field_name)
+
+    if normalized is None:
+        raise PlanningTargetsServiceError(
+            f"El campo {field_name!r} es obligatorio."
+        )
+
+    return normalized
 
 def _ensure_optional_non_negative_decimal(
     value: Any,
@@ -422,6 +476,28 @@ def _get_target_batch(batch_id: int) -> PlanningTargetBatchORM:
 
     return batch
 
+def _get_branch_row_for_batch(
+    *,
+    batch_id: int,
+    branch_row_id: int,
+) -> PlanningTargetBranchRowORM:
+    normalized_branch_row_id = _ensure_positive_int(
+        branch_row_id,
+        field_name="branch_row_id",
+    )
+
+    row = PlanningTargetBranchRowORM.query.filter_by(
+        id=normalized_branch_row_id,
+        batch_id=batch_id,
+    ).first()
+
+    if row is None:
+        raise PlanningTargetsServiceError(
+            f"No existe planning_target_branch_rows.id={normalized_branch_row_id!r} "
+            f"para batch_id={batch_id!r}."
+        )
+
+    return row
 
 def _ensure_branch_exists(sucursal_canon: str) -> str:
     normalized = _ensure_text(
@@ -457,6 +533,22 @@ def _ensure_branch_row_available(
             f"y sucursal_canon={sucursal_canon!r}."
         )
 
+def _ensure_branch_row_available_for_update(
+    *,
+    batch_id: int,
+    branch_row_id: int,
+    sucursal_canon: str,
+) -> None:
+    existing = PlanningTargetBranchRowORM.query.filter_by(
+        batch_id=batch_id,
+        sucursal_canon=sucursal_canon,
+    ).first()
+
+    if existing is not None and existing.id != branch_row_id:
+        raise PlanningTargetsServiceError(
+            f"Ya existe otra fila para batch_id={batch_id!r} "
+            f"y sucursal_canon={sucursal_canon!r}."
+        )
 
 def _ensure_previous_branch_row_exists(
     previous_branch_row_id: int | None,
@@ -489,6 +581,15 @@ def _ensure_batch_can_submit(batch: PlanningTargetBatchORM) -> None:
         raise PlanningTargetsServiceError(
             f"El batch id={batch.id!r} no puede enviarse a revisión "
             "porque no tiene filas por sucursal."
+        )
+
+def _ensure_batch_can_edit_branch_rows(batch: PlanningTargetBatchORM) -> None:
+    allowed_statuses = {"BORRADOR", "PROPUESTA"}
+
+    if batch.status not in allowed_statuses:
+        raise PlanningTargetsServiceError(
+            f"El batch id={batch.id!r} no permite editar sucursales "
+            f"desde status={batch.status!r}."
         )
 
 def _ensure_batch_can_approve(batch: PlanningTargetBatchORM) -> None:
@@ -792,6 +893,121 @@ def add_branch_row_to_batch(
         "id": row.id,
         "batch_id": row.batch_id,
         "target_month": row.target_month.isoformat(),
+        "sucursal_canon": row.sucursal_canon,
+        "row_status": row.status,
+        "meta_faycgo_mes": str(row.meta_faycgo_mes),
+    }    
+    
+def update_branch_row_in_batch(
+    command: UpdatePlanningTargetBranchRowCommand,
+) -> dict[str, Any]:
+    if not isinstance(command, UpdatePlanningTargetBranchRowCommand):
+        raise PlanningTargetsServiceError(
+            "command debe ser instancia de UpdatePlanningTargetBranchRowCommand."
+        )
+
+    batch = _get_target_batch(command.batch_id)
+    _ensure_batch_can_edit_branch_rows(batch)
+
+    row = _get_branch_row_for_batch(
+        batch_id=batch.id,
+        branch_row_id=command.branch_row_id,
+    )
+
+    sucursal_canon = _ensure_branch_exists(command.sucursal_canon)
+
+    _ensure_branch_row_available_for_update(
+        batch_id=batch.id,
+        branch_row_id=row.id,
+        sucursal_canon=sucursal_canon,
+    )
+
+    previous_branch_row_id = _ensure_optional_positive_int(
+        command.previous_branch_row_id,
+        field_name="previous_branch_row_id",
+    )
+    _ensure_previous_branch_row_exists(previous_branch_row_id)
+
+    row.sucursal_canon = sucursal_canon
+    row.m2_sin_circulaciones = _ensure_non_negative_decimal(
+        command.m2_sin_circulaciones,
+        field_name="m2_sin_circulaciones",
+    )
+    row.usuarios_inicio_mes = _ensure_non_negative_int(
+        command.usuarios_inicio_mes,
+        field_name="usuarios_inicio_mes",
+    )
+    row.proyeccion_usuarios_cierre_mes = _ensure_non_negative_int(
+        command.proyeccion_usuarios_cierre_mes,
+        field_name="proyeccion_usuarios_cierre_mes",
+    )
+
+    row.meta_faycgo_mes = _ensure_non_negative_decimal(
+        command.meta_faycgo_mes,
+        field_name="meta_faycgo_mes",
+    )
+    row.meta_clientes_nuevos_mes = _ensure_non_negative_int(
+        command.meta_clientes_nuevos_mes,
+        field_name="meta_clientes_nuevos_mes",
+    )
+    row.meta_reactivaciones_mes = _ensure_non_negative_int(
+        command.meta_reactivaciones_mes,
+        field_name="meta_reactivaciones_mes",
+    )
+    row.meta_bajas_mes = _ensure_non_negative_int(
+        command.meta_bajas_mes,
+        field_name="meta_bajas_mes",
+    )
+    row.meta_nuevos_domiciliados_mes = _ensure_non_negative_int(
+        command.meta_nuevos_domiciliados_mes,
+        field_name="meta_nuevos_domiciliados_mes",
+    )
+    row.meta_arpu_mes = _ensure_non_negative_decimal(
+        command.meta_arpu_mes,
+        field_name="meta_arpu_mes",
+    )
+    row.meta_venta_tienda_mes = _ensure_non_negative_decimal(
+        command.meta_venta_tienda_mes,
+        field_name="meta_venta_tienda_mes",
+    )
+
+    row.ingreso_agregadoras_estimado = _ensure_optional_non_negative_decimal(
+        command.ingreso_agregadoras_estimado,
+        field_name="ingreso_agregadoras_estimado",
+    )
+    row.usuarios_agregadoras_estimado = _ensure_optional_non_negative_int(
+        command.usuarios_agregadoras_estimado,
+        field_name="usuarios_agregadoras_estimado",
+    )
+
+    row.scenario_used = _normalize_optional_text(
+        command.scenario_used,
+        field_name="scenario_used",
+    )
+    row.trend_classification = _normalize_optional_text(
+        command.trend_classification,
+        field_name="trend_classification",
+    )
+    row.risk_level = _normalize_optional_text(
+        command.risk_level,
+        field_name="risk_level",
+    )
+    row.status = _normalize_required_text(
+        command.status,
+        field_name="status",
+    )
+    row.previous_branch_row_id = previous_branch_row_id
+    row.notes = _normalize_optional_text(
+        command.notes,
+        field_name="notes",
+    )
+
+    db.session.commit()
+
+    return {
+        "status": "updated",
+        "id": row.id,
+        "batch_id": row.batch_id,
         "sucursal_canon": row.sucursal_canon,
         "row_status": row.status,
         "meta_faycgo_mes": str(row.meta_faycgo_mes),
