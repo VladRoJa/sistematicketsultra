@@ -156,12 +156,25 @@ def editar_catalogo(catalogo, elemento_id):
 @catalogos_bp.route('/<string:catalogo>/<int:elemento_id>', methods=['DELETE'], strict_slashes=False)
 @jwt_required()
 def eliminar_catalogo(catalogo, elemento_id):
-    model = CAT_MODELS.get(catalogo.lower())
+    catalogo_key = (catalogo or '').strip().lower()
+
+    if catalogo_key in ('clasificaciones', 'categorias'):
+        return respuesta_ok(
+            message=(
+                "No se permite eliminar físicamente clasificaciones de tickets. "
+                "Usa desactivación para conservar histórico y evitar romper tickets existentes."
+            ),
+            code=409
+        )
+
+    model = CAT_MODELS.get(catalogo_key)
     if not model:
         return respuesta_ok(message="Catálogo inválido", code=400)
+
     elemento = model.query.get(elemento_id)
     if not elemento:
         return respuesta_ok(message="Elemento no encontrado", code=404)
+
     try:
         db.session.delete(elemento)
         db.session.commit()
