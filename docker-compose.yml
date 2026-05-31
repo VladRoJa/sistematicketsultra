@@ -32,7 +32,7 @@ services:
 
     command: >
       gunicorn
-      --workers 2
+      --workers 3
       --worker-class sync
       --timeout 300
       --graceful-timeout 30
