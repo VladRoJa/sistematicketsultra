@@ -109,6 +109,9 @@ class UpdatePlanningTargetBranchRowCommand:
     status: str = "PROPUESTA"
     previous_branch_row_id: int | None = None
     notes: str | None = None
+    updated_by_user_id: int | None = None
+    actor_username_snapshot: str | None = None
+    comment: str | None = None
 
 @dataclass(slots=True)
 class SubmitPlanningTargetBatchCommand:
@@ -653,6 +656,65 @@ def _serialize_decimal(value: Any) -> str | None:
 
     return str(value)
 
+_BRANCH_ROW_AUDIT_FIELDS = (
+    "sucursal_canon",
+    "m2_sin_circulaciones",
+    "usuarios_inicio_mes",
+    "proyeccion_usuarios_cierre_mes",
+    "meta_faycgo_mes",
+    "meta_clientes_nuevos_mes",
+    "meta_reactivaciones_mes",
+    "meta_bajas_mes",
+    "meta_nuevos_domiciliados_mes",
+    "meta_arpu_mes",
+    "meta_venta_tienda_mes",
+    "ingreso_agregadoras_estimado",
+    "usuarios_agregadoras_estimado",
+    "scenario_used",
+    "trend_classification",
+    "risk_level",
+    "status",
+    "previous_branch_row_id",
+    "notes",
+)
+
+
+def _serialize_audit_value(value: Any) -> Any:
+    if value is None:
+        return None
+
+    if isinstance(value, Decimal):
+        return str(value)
+
+    return value
+
+
+def _snapshot_branch_row_for_audit(
+    row: PlanningTargetBranchRowORM,
+) -> dict[str, Any]:
+    return {
+        field_name: _serialize_audit_value(getattr(row, field_name))
+        for field_name in _BRANCH_ROW_AUDIT_FIELDS
+    }
+
+
+def _build_branch_row_audit_changes(
+    before: dict[str, Any],
+    after: dict[str, Any],
+) -> dict[str, dict[str, Any]]:
+    changes: dict[str, dict[str, Any]] = {}
+
+    for field_name in _BRANCH_ROW_AUDIT_FIELDS:
+        before_value = before.get(field_name)
+        after_value = after.get(field_name)
+
+        if before_value != after_value:
+            changes[field_name] = {
+                "before": before_value,
+                "after": after_value,
+            }
+
+    return changes
 
 def _serialize_datetime(value: Any) -> str | None:
     if value is None:
@@ -913,6 +975,9 @@ def update_branch_row_in_batch(
         batch_id=batch.id,
         branch_row_id=command.branch_row_id,
     )
+    
+    before_snapshot = _snapshot_branch_row_for_audit(row)
+    previous_status = row.status
 
     sucursal_canon = _ensure_branch_exists(command.sucursal_canon)
 
@@ -1001,8 +1066,50 @@ def update_branch_row_in_batch(
         command.notes,
         field_name="notes",
     )
+    updated_by_user_id: int | None = None
+    actor_username_snapshot: str | None = None
+    comment: str | None = None
 
-    db.session.commit()
+    after_snapshot = _snapshot_branch_row_for_audit(row)
+    changes = _build_branch_row_audit_changes(
+        before_snapshot,
+        after_snapshot,
+    )
+
+    actor_user_id = _ensure_optional_user_id(
+        command.updated_by_user_id,
+        field_name="updated_by_user_id",
+    )
+
+    event = None
+
+    if changes:
+        event = PlanningTargetApprovalEventORM(
+            batch_id=batch.id,
+            branch_row_id=row.id,
+            event_type="BRANCH_ROW_UPDATED",
+            from_status=previous_status,
+            to_status=row.status,
+            actor_user_id=actor_user_id,
+            actor_username_snapshot=_ensure_optional_text(
+                command.actor_username_snapshot
+            ),
+            comment=_ensure_optional_text(command.comment),
+            metadata_json={
+                "sucursal_canon": row.sucursal_canon,
+                "target_month": batch.target_month.isoformat(),
+                "changed_fields": list(changes.keys()),
+                "changes": changes,
+            },
+        )
+
+        db.session.add(event)
+
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
 
     return {
         "status": "updated",
@@ -1011,7 +1118,9 @@ def update_branch_row_in_batch(
         "sucursal_canon": row.sucursal_canon,
         "row_status": row.status,
         "meta_faycgo_mes": str(row.meta_faycgo_mes),
-    }    
+        "changed_fields_count": len(changes),
+        "event_id": event.id if event is not None else None,
+    }   
     
 def get_batch_detail(batch_id: int) -> dict[str, Any]:
     batch = _get_target_batch(batch_id)

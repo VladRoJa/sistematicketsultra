@@ -389,16 +389,23 @@
                 </mat-form-field>
               </div>
 
-              <mat-form-field appearance="fill" class="notes-field field-family field-context">
-                <mat-label>Notas</mat-label>
-                <textarea
-                  matInput
-                  rows="3"
-                  name="branchNotes"
-                  [(ngModel)]="branchForm.notes"
-                  placeholder="Notas o contexto de esta sucursal"
-                ></textarea>
-              </mat-form-field>
+          <mat-form-field
+            *ngIf="isEditingBranchRow()"
+            appearance="fill"
+            class="notes-field change-comment-field"
+          >
+            <mat-label>Motivo del cambio</mat-label>
+            <textarea
+              matInput
+              rows="3"
+              name="branchFormChangeComment"
+              [(ngModel)]="branchFormChangeComment"
+              placeholder="Ej. Ajuste revisado en junta con regionales"
+            ></textarea>
+            <mat-hint>
+              Este motivo quedará registrado en auditoría.
+            </mat-hint>
+          </mat-form-field>
             </div>
           </div>
 

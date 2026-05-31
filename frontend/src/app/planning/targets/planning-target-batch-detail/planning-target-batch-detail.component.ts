@@ -120,6 +120,7 @@ export class PlanningTargetBatchDetailComponent implements OnInit {
 
   showAddBranchForm = false;
   editingBranchRowId: number | null = null;
+  branchFormChangeComment = '';
   isLoadingAccess = false;
   isAddingBranchRow = false;
   isRunningBatchAction = false;
@@ -353,6 +354,7 @@ toggleAddBranchForm(): void {
 editBranchRow(row: PlanningTargetBranchRowDetail): void {
   this.editingBranchRowId = row.id;
   this.showAddBranchForm = true;
+  this.branchFormChangeComment = '';
 
   this.branchForm = {
     sucursalCanon: row.sucursal_canon,
@@ -635,6 +637,14 @@ addBranchRow(): void {
         );
         return null;
     }
+    if (this.isEditingBranchRow() && !this.branchFormChangeComment.trim()) {
+      this.snackBar.open(
+        'Captura el motivo del cambio antes de guardar.',
+        'Cerrar',
+        { duration: 4000 },
+      );
+      return null;
+    }
 
     return {
         sucursal_canon: sucursalCanon,
@@ -666,6 +676,9 @@ addBranchRow(): void {
         status: 'PROPUESTA',
         previous_branch_row_id: null,
         notes: this.branchForm.notes || null,
+        comment: this.isEditingBranchRow()
+          ? this.branchFormChangeComment.trim()
+          : null,
     };
     }
 
@@ -872,6 +885,7 @@ addBranchRow(): void {
     this.branchPrefillSourceLabel = '';
     this.branchComparisons = null;
     this.editingBranchRowId = null;
+    this.branchFormChangeComment = '';
     }
 
 private buildDecisionMetric(

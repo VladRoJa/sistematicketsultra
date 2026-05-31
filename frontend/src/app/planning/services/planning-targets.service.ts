@@ -290,6 +290,7 @@ export interface AddPlanningTargetBranchRowPayload {
   status?: string;
   previous_branch_row_id?: number | null;
   notes?: string | null;
+  comment?: string | null;
 }
 
 export interface PlanningTargetBranchRowMutationResponse {
