@@ -1,151 +1,380 @@
-.arbol-clasif-erp {
-  background: #fff;
-  border-radius: 13px;
-  box-shadow: 0 2px 10px #005ba115;
-  margin-top: 16px;
-  padding: 16px;
-}
+/* ==========================================================================
+   Árbol de Clasificaciones — Suite Ultra V1
+   --------------------------------------------------------------------------
+   Este componente solo controla el árbol jerárquico:
+   - fila completa clickeable para expandir/colapsar
+   - acciones alineadas
+   - estados activo/inactivo
+   - estilo consistente con el módulo padre Ultra V1
+   ========================================================================== */
 
-.arbol-nodo {
-  padding: 8px 0;
-  align-items: center;
-  font-size: 1.13em;
-  border-bottom: 1px solid #f1f1f1;
-  transition: background 0.13s;
-  position: relative;
+:host {
+  display: block;
+  width: 100%;
 }
-
-.arbol-nodo:hover {
-  background: #e8f1fa;
-}
-
-/* Indentación automática por nivel */
-.mat-tree-node-level-1 { padding-left: 32px !important; }
-.mat-tree-node-level-2 { padding-left: 56px !important; }
-.mat-tree-node-level-3 { padding-left: 80px !important; }
-.mat-tree-node-level-4 { padding-left: 104px !important; }
-.mat-tree-node-level-5 { padding-left: 128px !important; }
-
-/* Acciones solo al hover */
-.arbol-clasif-actions {
-  opacity: 0;
-  transition: opacity 0.14s;
-  pointer-events: none;
-}
-.arbol-nodo:hover .arbol-clasif-actions,
-.arbol-nodo:focus-within .arbol-clasif-actions {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-/* Badge de nivel (SAP style) */
-.nivel-badge {
-  background: #e1ecf7;
-  color: #005ba1;
-  border-radius: 7px;
-  padding: 2px 8px;
-  font-size: 0.79em;
-  margin-left: 8px;
-  margin-right: 6px;
-  font-weight: 500;
-  vertical-align: middle;
-  display: inline-block;
-}
-
-.mat-icon-button {
-  margin-left: 2px;
-  font-size: 19px;
-  border-radius: 8px !important;
-}
-
-/* Quita margin-left del último action */
-.arbol-clasif-actions button:last-child {
-  margin-right: 0;
-}
-
-/* Responsive */
-@media (max-width: 700px) {
-  .arbol-nodo { font-size: 1em; }
-  .nivel-badge { padding: 1px 5px; font-size: 0.7em; }
-  .mat-tree-node-level-1 { padding-left: 16px !important; }
-  .mat-tree-node-level-2 { padding-left: 32px !important; }
-  .mat-tree-node-level-3 { padding-left: 48px !important; }
-}
-
 
 /* ==========================================================================
-   Acciones del árbol de clasificaciones
-   --------------------------------------------------------------------------
-   El árbol puede tener hasta 3 acciones visibles:
-   editar, agregar hijo y desactivar/reactivar.
-   Este bloque evita que el último botón quede recortado por falta de espacio.
+   Contenedor base del árbol
    ========================================================================== */
 
 .arbol-clasif-erp {
   width: 100%;
-  max-width: 720px;
+  max-width: 100%;
+  padding: 4px 0;
+  background: transparent;
+  border-radius: 18px;
 }
 
+/* Angular Material Tree nodes */
 .arbol-clasif-erp .mat-tree-node {
   width: 100%;
-  min-height: 44px;
+  min-height: 52px;
   overflow: visible;
+  padding: 0;
 }
+
+/* ==========================================================================
+   Indentación por nivel
+   --------------------------------------------------------------------------
+   El padding vive en el nodo Material, no en el contenido.
+   Así mantenemos las acciones alineadas dentro del renglón.
+   ========================================================================== */
+
+.mat-tree-node-level-1 {
+  padding-left: 0 !important;
+}
+
+.mat-tree-node-level-2 {
+  padding-left: 28px !important;
+}
+
+.mat-tree-node-level-3 {
+  padding-left: 56px !important;
+}
+
+.mat-tree-node-level-4 {
+  padding-left: 84px !important;
+}
+
+.mat-tree-node-level-5 {
+  padding-left: 112px !important;
+}
+
+.mat-tree-node-level-6 {
+  padding-left: 140px !important;
+}
+
+/* ==========================================================================
+   Renglón del árbol
+   ========================================================================== */
 
 .arbol-nodo {
   width: 100%;
-  min-width: 420px;
-  display: flex;
+  min-width: 620px;
+  min-height: 48px;
+  display: grid;
+  grid-template-columns: 40px minmax(220px, 1fr) 132px;
   align-items: center;
-  gap: 6px;
-  overflow: visible;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 16px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.055);
+  cursor: default;
+  transition:
+    background 0.16s ease,
+    box-shadow 0.16s ease,
+    transform 0.16s ease;
 }
 
-.arbol-clasif-actions {
+.arbol-nodo--expandible {
+  cursor: pointer;
+}
+
+.arbol-nodo--expandible:hover,
+.arbol-nodo--hoja:hover {
+  background:
+    linear-gradient(90deg, rgba(229, 69, 37, 0.075), rgba(229, 69, 37, 0.025));
+  box-shadow: inset 3px 0 0 rgba(229, 69, 37, 0.82);
+}
+
+.arbol-nodo:focus-visible {
+  outline: 2px solid rgba(229, 69, 37, 0.35);
+  outline-offset: 2px;
+}
+
+/* ==========================================================================
+   Toggle / icono izquierdo
+   ========================================================================== */
+
+.arbol-toggle {
+  grid-column: 1;
+  justify-self: center;
+  align-self: center;
+  width: 34px !important;
+  height: 34px !important;
+  min-width: 34px !important;
+  padding: 0 !important;
+  border-radius: 12px !important;
+  color: #344054 !important;
+  background: transparent !important;
+  transition:
+    background 0.14s ease,
+    color 0.14s ease,
+    transform 0.14s ease;
+}
+
+.arbol-toggle:hover {
+  background: rgba(44, 69, 149, 0.08) !important;
+  color: #2c4595 !important;
+}
+
+.arbol-toggle mat-icon {
+  width: 21px;
+  height: 21px;
+  font-size: 21px;
+  line-height: 21px;
+}
+
+.arbol-toggle--placeholder {
   display: inline-flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 4px;
-  min-width: 112px;
-  margin-left: auto;
-  flex-shrink: 0;
-  opacity: 0.85;
+  justify-content: center;
+  color: rgba(100, 116, 139, 0.28);
+  pointer-events: none;
 }
 
-.arbol-nodo:hover .arbol-clasif-actions {
-  opacity: 1;
+.arbol-toggle--placeholder mat-icon {
+  width: 9px;
+  height: 9px;
+  font-size: 9px;
+  line-height: 9px;
 }
 
-.arbol-clasif-actions button {
-  width: 32px;
-  height: 32px;
-  flex: 0 0 32px;
+/* ==========================================================================
+   Contenido del nodo
+   ========================================================================== */
+
+.arbol-nodo__content {
+  grid-column: 2;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
 }
 
-.arbol-clasif-actions mat-icon {
-  font-size: 20px;
-  width: 20px;
-  height: 20px;
-  line-height: 20px;
+.arbol-nodo__nombre {
+  min-width: 0;
+  overflow: hidden;
+  color: #1f2937;
+  font-size: 0.96rem;
+  font-weight: 850;
+  letter-spacing: -0.015em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* Estado visual de nodos inactivos */
-.nodo-inactivo {
-  opacity: 0.55;
+.arbol-nodo__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
 }
 
-.nodo-inactivo .font-medium {
-  text-decoration: line-through;
+/* ==========================================================================
+   Badges
+   ========================================================================== */
+
+.nivel-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(44, 69, 149, 0.1);
+  color: #2c4595;
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1;
 }
 
 .estado-badge {
   display: inline-flex;
   align-items: center;
-  padding: 2px 7px;
+  justify-content: center;
+  height: 22px;
+  padding: 0 9px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 0.7rem;
+  font-weight: 900;
   line-height: 1;
-  background: #f1f1f1;
-  color: #666;
-  margin-left: 6px;
+}
+
+.estado-badge--activo {
+  background: rgba(24, 160, 88, 0.1);
+  color: #16834a;
+}
+
+.estado-badge--inactivo {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+/* ==========================================================================
+   Acciones
+   ========================================================================== */
+
+.arbol-clasif-actions {
+  grid-column: 3;
+  justify-self: end;
+  display: grid;
+  grid-template-columns: repeat(3, 36px);
+  align-items: center;
+  justify-content: end;
+  gap: 7px;
+  width: 132px;
+  min-width: 132px;
+  opacity: 0.72;
+  transition: opacity 0.15s ease;
+}
+
+.arbol-nodo:hover .arbol-clasif-actions,
+.arbol-nodo:focus-within .arbol-clasif-actions {
+  opacity: 1;
+}
+
+.action-button {
+  width: 36px !important;
+  height: 36px !important;
+  min-width: 36px !important;
+  padding: 0 !important;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px !important;
+  background: #f8fafc !important;
+  border: 1px solid rgba(15, 23, 42, 0.075) !important;
+  box-shadow: none !important;
+  transition:
+    background 0.14s ease,
+    border-color 0.14s ease,
+    box-shadow 0.14s ease,
+    transform 0.14s ease;
+}
+
+.action-button:hover {
+  background: #fff !important;
+  border-color: rgba(15, 23, 42, 0.13) !important;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.1) !important;
+  transform: translateY(-1px);
+}
+
+.action-button mat-icon {
+  width: 20px;
+  height: 20px;
+  font-size: 20px;
+  line-height: 20px;
+}
+
+.action-button--edit mat-icon {
+  color: #2c4595;
+}
+
+.action-button--add mat-icon {
+  color: #e54525;
+}
+
+.action-button--disable mat-icon {
+  color: #ef4444;
+}
+
+.action-button--restore mat-icon {
+  color: #16834a;
+}
+
+.action-button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  box-shadow: none !important;
+  transform: none;
+}
+
+/* ==========================================================================
+   Nodo inactivo
+   ========================================================================== */
+
+.nodo-inactivo .arbol-nodo {
+  opacity: 0.7;
+}
+
+.nodo-inactivo .arbol-nodo__nombre {
+  color: #667085;
+  text-decoration: line-through;
+}
+
+.nodo-inactivo .arbol-nodo:hover {
+  background:
+    linear-gradient(90deg, rgba(100, 116, 139, 0.085), rgba(100, 116, 139, 0.025));
+  box-shadow: inset 3px 0 0 rgba(100, 116, 139, 0.55);
+}
+
+/* ==========================================================================
+   Responsive
+   ========================================================================== */
+
+@media (max-width: 900px) {
+  .arbol-nodo {
+    min-width: 560px;
+    grid-template-columns: 38px minmax(190px, 1fr) 126px;
+  }
+
+  .arbol-clasif-actions {
+    grid-template-columns: repeat(3, 34px);
+    width: 126px;
+    min-width: 126px;
+    gap: 6px;
+  }
+
+  .action-button {
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+  }
+
+  .mat-tree-node-level-2 {
+    padding-left: 22px !important;
+  }
+
+  .mat-tree-node-level-3 {
+    padding-left: 44px !important;
+  }
+
+  .mat-tree-node-level-4 {
+    padding-left: 66px !important;
+  }
+
+  .mat-tree-node-level-5 {
+    padding-left: 88px !important;
+  }
+
+  .mat-tree-node-level-6 {
+    padding-left: 110px !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .arbol-nodo {
+    min-width: 520px;
+  }
+
+  .arbol-nodo__nombre {
+    font-size: 0.9rem;
+  }
+
+  .nivel-badge,
+  .estado-badge {
+    height: 20px;
+    font-size: 0.66rem;
+  }
 }

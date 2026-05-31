@@ -8,26 +8,54 @@
     [class]="'mat-tree-node mat-tree-node-level-' + node.nivel"
     [class.nodo-inactivo]="!estaActivo(node)"
   >
-    <div class="flex items-center arbol-nodo group">
+    <div
+      class="arbol-nodo arbol-nodo--expandible"
+      role="button"
+      tabindex="0"
+      [attr.aria-expanded]="treeControl.isExpanded(node)"
+      [attr.aria-label]="'Abrir o cerrar ' + node.nombre"
+      (click)="toggleNodeDesdeClick($event, node)"
+      (keydown)="toggleNodeDesdeTeclado($event, node)"
+    >
       <button
         mat-icon-button
-        matTreeNodeToggle
+        class="arbol-toggle"
+        type="button"
         [attr.aria-label]="'expandir/colapsar ' + node.nombre"
+        (click)="toggleNodeDesdeClick($event, node)"
       >
-        <mat-icon>{{ treeControl.isExpanded(node) ? 'expand_more' : 'chevron_right' }}</mat-icon>
+        <mat-icon>
+          {{ treeControl.isExpanded(node) ? 'expand_more' : 'chevron_right' }}
+        </mat-icon>
       </button>
 
-      <span class="ml-2 font-medium">{{ node.nombre }}</span>
-      <span class="nivel-badge">N{{ node.nivel }}</span>
+      <div class="arbol-nodo__content">
+        <span class="arbol-nodo__nombre">{{ node.nombre }}</span>
 
-      <span class="estado-badge" *ngIf="!estaActivo(node)">
-        Inactivo
-      </span>
+        <span class="arbol-nodo__meta">
+          <span class="nivel-badge">N{{ node.nivel }}</span>
 
-      <span class="arbol-clasif-actions ml-auto">
+          <span
+            class="estado-badge estado-badge--activo"
+            *ngIf="estaActivo(node)"
+          >
+            Activa
+          </span>
+
+          <span
+            class="estado-badge estado-badge--inactivo"
+            *ngIf="!estaActivo(node)"
+          >
+            Inactiva
+          </span>
+        </span>
+      </div>
+
+      <span class="arbol-clasif-actions" aria-label="Acciones de clasificación">
         <button
           mat-icon-button
-          color="primary"
+          class="action-button action-button--edit"
+          type="button"
           (click)="emitirEditarDesdeClick($event, node)"
           aria-label="Editar clasificación"
           title="Editar"
@@ -37,7 +65,8 @@
 
         <button
           mat-icon-button
-          color="accent"
+          class="action-button action-button--add"
+          type="button"
           [disabled]="!puedeAgregarHijo(node)"
           (click)="emitirCrearHijoDesdeClick($event, node)"
           aria-label="Agregar subclasificación"
@@ -49,7 +78,8 @@
         <button
           *ngIf="estaActivo(node)"
           mat-icon-button
-          color="warn"
+          class="action-button action-button--disable"
+          type="button"
           (click)="emitirDesactivarDesdeClick($event, node)"
           aria-label="Desactivar clasificación"
           title="Desactivar"
@@ -60,7 +90,8 @@
         <button
           *ngIf="!estaActivo(node)"
           mat-icon-button
-          color="primary"
+          class="action-button action-button--restore"
+          type="button"
           (click)="emitirReactivarDesdeClick($event, node)"
           aria-label="Reactivar clasificación"
           title="Reactivar"
@@ -77,20 +108,38 @@
     [class]="'mat-tree-node mat-tree-node-level-' + node.nivel"
     [class.nodo-inactivo]="!estaActivo(node)"
   >
-    <div class="flex items-center arbol-nodo group">
-      <span style="margin-left: 32px;"></span>
-
-      <span class="ml-2 font-medium">{{ node.nombre }}</span>
-      <span class="nivel-badge">N{{ node.nivel }}</span>
-
-      <span class="estado-badge" *ngIf="!estaActivo(node)">
-        Inactivo
+    <div class="arbol-nodo arbol-nodo--hoja">
+      <span class="arbol-toggle arbol-toggle--placeholder" aria-hidden="true">
+        <mat-icon>fiber_manual_record</mat-icon>
       </span>
 
-      <span class="arbol-clasif-actions ml-auto">
+      <div class="arbol-nodo__content">
+        <span class="arbol-nodo__nombre">{{ node.nombre }}</span>
+
+        <span class="arbol-nodo__meta">
+          <span class="nivel-badge">N{{ node.nivel }}</span>
+
+          <span
+            class="estado-badge estado-badge--activo"
+            *ngIf="estaActivo(node)"
+          >
+            Activa
+          </span>
+
+          <span
+            class="estado-badge estado-badge--inactivo"
+            *ngIf="!estaActivo(node)"
+          >
+            Inactiva
+          </span>
+        </span>
+      </div>
+
+      <span class="arbol-clasif-actions" aria-label="Acciones de clasificación">
         <button
           mat-icon-button
-          color="primary"
+          class="action-button action-button--edit"
+          type="button"
           (click)="emitirEditarDesdeClick($event, node)"
           aria-label="Editar clasificación"
           title="Editar"
@@ -100,7 +149,8 @@
 
         <button
           mat-icon-button
-          color="accent"
+          class="action-button action-button--add"
+          type="button"
           [disabled]="!puedeAgregarHijo(node)"
           (click)="emitirCrearHijoDesdeClick($event, node)"
           aria-label="Agregar subclasificación"
@@ -112,7 +162,8 @@
         <button
           *ngIf="estaActivo(node)"
           mat-icon-button
-          color="warn"
+          class="action-button action-button--disable"
+          type="button"
           (click)="emitirDesactivarDesdeClick($event, node)"
           aria-label="Desactivar clasificación"
           title="Desactivar"
@@ -123,7 +174,8 @@
         <button
           *ngIf="!estaActivo(node)"
           mat-icon-button
-          color="primary"
+          class="action-button action-button--restore"
+          type="button"
           (click)="emitirReactivarDesdeClick($event, node)"
           aria-label="Reactivar clasificación"
           title="Reactivar"
