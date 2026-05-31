@@ -530,6 +530,9 @@ def update_branch_row_in_batch_route(batch_id: int, branch_row_id: int):
                 status=payload.get("status", "PROPUESTA"),
                 previous_branch_row_id=payload.get("previous_branch_row_id"),
                 notes=payload.get("notes"),
+                updated_by_user_id=_current_user_id_or_none(),
+                actor_username_snapshot=_current_username_or_none(),
+                comment=payload.get("comment"),
             )
         )
 
