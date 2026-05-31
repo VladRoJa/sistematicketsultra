@@ -34,6 +34,12 @@ import {
   PlanningTargetActionDialogResult,
 } from '../planning-target-action-dialog/planning-target-action-dialog.component';
 
+interface AuditChangeEntry {
+  field: string;
+  label: string;
+  before: unknown;
+  after: unknown;
+}
 
 type ComparisonPeriodKey =
   | 'current_month'
@@ -164,9 +170,8 @@ export class PlanningTargetBatchDetailComponent implements OnInit {
 
   eventsDisplayedColumns: string[] = [
     'created_at',
-    'event_type',
-    'from_status',
-    'to_status',
+    'event_title',
+    'audit_summary',
     'actor',
     'comment',
   ];
@@ -1035,6 +1040,177 @@ publishBatch(): void {
   getApprovalEvents(): PlanningTargetApprovalEventDetail[] {
     return this.batch?.approval_events || [];
   }
+
+isRecordValue(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+getAuditEventTitle(event: PlanningTargetApprovalEventDetail): string {
+  const eventType = event.event_type;
+
+  if (eventType === 'BRANCH_ROW_UPDATED') {
+    return 'Edición de sucursal';
+  }
+
+  if (eventType === 'SUBMITTED') {
+    return 'Enviado a revisión';
+  }
+
+  if (eventType === 'APPROVED') {
+    return 'Paquete aprobado';
+  }
+
+  if (eventType === 'REJECTED') {
+    return 'Paquete rechazado';
+  }
+
+  if (eventType === 'PUBLISHED_TO_TRACK') {
+    return 'Publicado a Track';
+  }
+
+  return eventType || 'Evento';
+}
+
+getAuditEventSucursal(event: PlanningTargetApprovalEventDetail): string {
+  const metadata = event.metadata_json || {};
+  const sucursalCanon = metadata['sucursal_canon'];
+
+  if (typeof sucursalCanon === 'string' && sucursalCanon.trim()) {
+    return this.getBranchLabel(sucursalCanon);
+  }
+
+  if (event.branch_row_id) {
+    const row = this.getBranchRows().find(
+      (branchRow) => branchRow.id === event.branch_row_id,
+    );
+
+    if (row) {
+      return this.getBranchLabel(row.sucursal_canon);
+    }
+  }
+
+  return '—';
+}
+
+getAuditChangeEntries(event: PlanningTargetApprovalEventDetail): AuditChangeEntry[] {
+  const metadata = event.metadata_json || {};
+  const changes = metadata['changes'];
+
+  if (!this.isRecordValue(changes)) {
+    return [];
+  }
+
+  return Object.entries(changes)
+    .filter(([, value]) => this.isRecordValue(value))
+    .map(([field, value]) => {
+      const change = value as Record<string, unknown>;
+
+      return {
+        field,
+        label: this.getAuditFieldLabel(field),
+        before: change['before'],
+        after: change['after'],
+      };
+    });
+}
+
+getAuditFieldLabel(field: string): string {
+  const labels: Record<string, string> = {
+    sucursal_canon: 'Sucursal',
+    m2_sin_circulaciones: 'm² sin circulaciones',
+    usuarios_inicio_mes: 'Usuarios inicio mes',
+    proyeccion_usuarios_cierre_mes: 'Usuarios cierre proyectado',
+    meta_faycgo_mes: 'Meta FAYCGO',
+    meta_clientes_nuevos_mes: 'Clientes nuevos',
+    meta_reactivaciones_mes: 'Reactivaciones',
+    meta_bajas_mes: 'Bajas',
+    meta_nuevos_domiciliados_mes: 'Domiciliados / recuperaciones',
+    meta_arpu_mes: 'ARPU',
+    meta_venta_tienda_mes: 'Venta tienda',
+    ingreso_agregadoras_estimado: 'Ingreso agregadoras',
+    usuarios_agregadoras_estimado: 'Usuarios agregadoras',
+    scenario_used: 'Escenario',
+    trend_classification: 'Tendencia',
+    risk_level: 'Riesgo',
+    status: 'Estado',
+    previous_branch_row_id: 'Fila previa',
+    notes: 'Notas',
+  };
+
+  return labels[field] || field;
+}
+
+formatAuditValue(field: string, value: unknown): string {
+  if (value === null || value === undefined || value === '') {
+    return '—';
+  }
+
+  const moneyFields = new Set([
+    'meta_faycgo_mes',
+    'meta_arpu_mes',
+    'meta_venta_tienda_mes',
+    'ingreso_agregadoras_estimado',
+  ]);
+
+  const numericFields = new Set([
+    'm2_sin_circulaciones',
+    'usuarios_inicio_mes',
+    'proyeccion_usuarios_cierre_mes',
+    'meta_clientes_nuevos_mes',
+    'meta_reactivaciones_mes',
+    'meta_bajas_mes',
+    'meta_nuevos_domiciliados_mes',
+    'usuarios_agregadoras_estimado',
+    'previous_branch_row_id',
+  ]);
+
+  if (moneyFields.has(field)) {
+    return this.formatMoney(value as string | number | null);
+  }
+
+  if (numericFields.has(field)) {
+    return this.formatNumber(value as string | number | null);
+  }
+
+  return String(value);
+}
+
+getAuditEventSummary(event: PlanningTargetApprovalEventDetail): string {
+  if (event.event_type !== 'BRANCH_ROW_UPDATED') {
+    const fromStatus = event.from_status || '—';
+    const toStatus = event.to_status || '—';
+
+    return `${fromStatus} → ${toStatus}`;
+  }
+
+  const sucursal = this.getAuditEventSucursal(event);
+  const changes = this.getAuditChangeEntries(event);
+
+  if (changes.length === 0) {
+    return `${sucursal} · Sin cambios detectados`;
+  }
+
+  const firstChange = changes[0];
+
+  return `${sucursal} · ${firstChange.label} cambió de ${this.formatAuditValue(
+    firstChange.field,
+    firstChange.before,
+  )} a ${this.formatAuditValue(firstChange.field, firstChange.after)}`;
+}
+
+getAuditExtraChangesCount(event: PlanningTargetApprovalEventDetail): number {
+  const changes = this.getAuditChangeEntries(event);
+
+  return Math.max(changes.length - 1, 0);
+}
+
+getAuditActorLabel(event: PlanningTargetApprovalEventDetail): string {
+  return String(
+    event.actor_username_snapshot ||
+      event.actor_user_id ||
+      '—',
+  );
+}
 
   getStatusClass(status: string | null | undefined): string {
     const normalizedStatus = String(status || '').toLowerCase();

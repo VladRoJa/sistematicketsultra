@@ -731,24 +731,28 @@
             </td>
           </ng-container>
 
-          <ng-container matColumnDef="event_type">
+          <ng-container matColumnDef="event_title">
             <th mat-header-cell *matHeaderCellDef>Evento</th>
             <td mat-cell *matCellDef="let event">
-              {{ event.event_type }}
+              <div class="audit-event-title">
+                <strong>{{ getAuditEventTitle(event) }}</strong>
+                <span *ngIf="event.branch_row_id">
+                  Fila #{{ event.branch_row_id }}
+                </span>
+              </div>
             </td>
           </ng-container>
 
-          <ng-container matColumnDef="from_status">
-            <th mat-header-cell *matHeaderCellDef>Desde</th>
+          <ng-container matColumnDef="audit_summary">
+            <th mat-header-cell *matHeaderCellDef>Detalle</th>
             <td mat-cell *matCellDef="let event">
-              {{ event.from_status || '—' }}
-            </td>
-          </ng-container>
+              <div class="audit-summary">
+                <span>{{ getAuditEventSummary(event) }}</span>
 
-          <ng-container matColumnDef="to_status">
-            <th mat-header-cell *matHeaderCellDef>Hacia</th>
-            <td mat-cell *matCellDef="let event">
-              {{ event.to_status || '—' }}
+                <small *ngIf="getAuditExtraChangesCount(event) > 0">
+                  +{{ getAuditExtraChangesCount(event) }} cambio(s) adicional(es)
+                </small>
+              </div>
             </td>
           </ng-container>
 

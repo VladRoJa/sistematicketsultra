@@ -1012,3 +1012,44 @@
 .change-comment-field mat-hint {
   color: #b54708;
 }
+
+.audit-event-title {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.audit-event-title strong {
+  color: #101828;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.audit-event-title span {
+  color: #667085;
+  font-size: 12px;
+}
+
+.audit-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 520px;
+}
+
+.audit-summary span {
+  color: #344054;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.audit-summary small {
+  display: inline-flex;
+  width: fit-content;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #f2f4f7;
+  color: #667085;
+  font-size: 11px;
+  font-weight: 700;
+}
