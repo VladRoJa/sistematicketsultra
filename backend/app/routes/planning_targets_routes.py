@@ -30,6 +30,8 @@ from app.warehouse.services.planning_targets_service import (
     publish_approved_batch_to_track,
     reject_target_batch,
     submit_target_batch,
+    UpdatePlanningTargetBranchRowCommand,
+    update_branch_row_in_batch,
 )
 
 from app.utils.planning_access import (
@@ -462,6 +464,76 @@ def add_branch_row_to_batch_route(batch_id: int):
         )
 
         return _success(result, status_code=201)
+
+    except PlanningTargetsServiceError as exc:
+        return _service_error(exc)
+
+@planning_targets_bp.route(
+    "/batches/<int:batch_id>/branch-rows/<int:branch_row_id>",
+    methods=["PUT"],
+)
+@jwt_required()
+def update_branch_row_in_batch_route(batch_id: int, branch_row_id: int):
+    access_error = _guard(require_planning_edit)
+    if access_error:
+        return access_error
+
+    try:
+        payload = _json_payload()
+
+        result = update_branch_row_in_batch(
+            UpdatePlanningTargetBranchRowCommand(
+                batch_id=batch_id,
+                branch_row_id=branch_row_id,
+                sucursal_canon=payload.get("sucursal_canon"),
+                m2_sin_circulaciones=_required_decimal(
+                    payload,
+                    "m2_sin_circulaciones",
+                ),
+                usuarios_inicio_mes=payload.get("usuarios_inicio_mes"),
+                proyeccion_usuarios_cierre_mes=payload.get(
+                    "proyeccion_usuarios_cierre_mes"
+                ),
+                meta_faycgo_mes=_required_decimal(
+                    payload,
+                    "meta_faycgo_mes",
+                ),
+                meta_clientes_nuevos_mes=payload.get(
+                    "meta_clientes_nuevos_mes"
+                ),
+                meta_reactivaciones_mes=payload.get(
+                    "meta_reactivaciones_mes"
+                ),
+                meta_bajas_mes=payload.get("meta_bajas_mes"),
+                meta_nuevos_domiciliados_mes=payload.get(
+                    "meta_nuevos_domiciliados_mes"
+                ),
+                meta_arpu_mes=_required_decimal(
+                    payload,
+                    "meta_arpu_mes",
+                ),
+                meta_venta_tienda_mes=_required_decimal(
+                    payload,
+                    "meta_venta_tienda_mes",
+                ),
+                ingreso_agregadoras_estimado=(
+                    _required_decimal(payload, "ingreso_agregadoras_estimado")
+                    if payload.get("ingreso_agregadoras_estimado") is not None
+                    else None
+                ),
+                usuarios_agregadoras_estimado=payload.get(
+                    "usuarios_agregadoras_estimado"
+                ),
+                scenario_used=payload.get("scenario_used"),
+                trend_classification=payload.get("trend_classification"),
+                risk_level=payload.get("risk_level"),
+                status=payload.get("status", "PROPUESTA"),
+                previous_branch_row_id=payload.get("previous_branch_row_id"),
+                notes=payload.get("notes"),
+            )
+        )
+
+        return _success(result)
 
     except PlanningTargetsServiceError as exc:
         return _service_error(exc)
