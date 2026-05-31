@@ -26,12 +26,13 @@
 
 <!-- ARBOL -->
 <div class="clasificacion-arbol-wrap">
-  <app-arbol-clasificacion
-    [nodos]="clasificaciones"
-    (editar)="abrirFormulario($event)"
-    (crearHijo)="abrirFormulario($event, true)"
-    (eliminar)="eliminar($event)">
-  </app-arbol-clasificacion>
+<app-arbol-clasificacion
+  [nodos]="clasificaciones"
+  (editar)="abrirFormulario($event)"
+  (crearHijo)="abrirFormulario($event, true)"
+  (desactivar)="desactivar($event)"
+  (reactivar)="reactivar($event)">
+</app-arbol-clasificacion>
   <div style="color:red" *ngIf="!clasificaciones?.length">NO HAY CLASIFICACIONES PARA EL ÁRBOL</div>
   <div *ngIf="!loading && !clasificaciones.length" class="text-gray-500 text-center mt-8">
     No hay registros de clasificaciones.

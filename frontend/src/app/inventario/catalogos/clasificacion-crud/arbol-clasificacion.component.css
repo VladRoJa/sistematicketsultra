@@ -71,3 +71,81 @@
   .mat-tree-node-level-2 { padding-left: 32px !important; }
   .mat-tree-node-level-3 { padding-left: 48px !important; }
 }
+
+
+/* ==========================================================================
+   Acciones del árbol de clasificaciones
+   --------------------------------------------------------------------------
+   El árbol puede tener hasta 3 acciones visibles:
+   editar, agregar hijo y desactivar/reactivar.
+   Este bloque evita que el último botón quede recortado por falta de espacio.
+   ========================================================================== */
+
+.arbol-clasif-erp {
+  width: 100%;
+  max-width: 720px;
+}
+
+.arbol-clasif-erp .mat-tree-node {
+  width: 100%;
+  min-height: 44px;
+  overflow: visible;
+}
+
+.arbol-nodo {
+  width: 100%;
+  min-width: 420px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: visible;
+}
+
+.arbol-clasif-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  min-width: 112px;
+  margin-left: auto;
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.arbol-nodo:hover .arbol-clasif-actions {
+  opacity: 1;
+}
+
+.arbol-clasif-actions button {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+}
+
+.arbol-clasif-actions mat-icon {
+  font-size: 20px;
+  width: 20px;
+  height: 20px;
+  line-height: 20px;
+}
+
+/* Estado visual de nodos inactivos */
+.nodo-inactivo {
+  opacity: 0.55;
+}
+
+.nodo-inactivo .font-medium {
+  text-decoration: line-through;
+}
+
+.estado-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 1;
+  background: #f1f1f1;
+  color: #666;
+  margin-left: 6px;
+}

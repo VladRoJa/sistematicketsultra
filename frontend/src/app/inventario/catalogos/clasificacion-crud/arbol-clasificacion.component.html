@@ -1,46 +1,135 @@
-<!-- frontend-angular\src\app\inventario\catalogos\clasificacion-crud\arbol-clasificacion.component.html -->
+<!-- frontend/src/app/inventario/catalogos/clasificacion-crud/arbol-clasificacion.component.html -->
 
 <mat-tree [dataSource]="dataSource" [treeControl]="treeControl" class="arbol-clasif-erp">
+
   <!-- Nodo con hijos -->
-  <mat-tree-node *matTreeNodeDef="let node; when: hasChild" matTreeNodeToggle
-                 [class]="'mat-tree-node mat-tree-node-level-' + node.nivel">
+  <mat-tree-node
+    *matTreeNodeDef="let node; when: hasChild"
+    matTreeNodeToggle
+    [class]="'mat-tree-node mat-tree-node-level-' + node.nivel"
+    [class.nodo-inactivo]="!estaActivo(node)"
+  >
     <div class="flex items-center arbol-nodo group">
-      <button mat-icon-button matTreeNodeToggle
-        [attr.aria-label]="'expandir/collapse ' + node.nombre">
+      <button
+        mat-icon-button
+        matTreeNodeToggle
+        [attr.aria-label]="'expandir/colapsar ' + node.nombre"
+      >
         <mat-icon>{{ treeControl.isExpanded(node) ? 'expand_more' : 'chevron_right' }}</mat-icon>
       </button>
+
       <span class="ml-2 font-medium">{{ node.nombre }}</span>
       <span class="nivel-badge">N{{ node.nivel }}</span>
+
+      <span class="estado-badge" *ngIf="!estaActivo(node)">
+        Inactivo
+      </span>
+
       <span class="arbol-clasif-actions ml-auto">
-        <button mat-icon-button color="primary" (click)="editar.emit(node)" matTooltip="Editar">
+        <button
+          mat-icon-button
+          color="primary"
+          (click)="emitirEditar(node)"
+          aria-label="Editar clasificación"
+          title="Editar"
+        >
           <mat-icon>edit</mat-icon>
         </button>
-        <button mat-icon-button color="accent" (click)="crearHijo.emit(node)" matTooltip="Agregar hijo">
+
+        <button
+          mat-icon-button
+          color="accent"
+          [disabled]="!puedeAgregarHijo(node)"
+          (click)="emitirCrearHijo(node)"
+          aria-label="Agregar subclasificación"
+          title="Agregar hijo"
+        >
           <mat-icon>add</mat-icon>
         </button>
-        <button mat-icon-button color="warn" (click)="eliminar.emit(node)" matTooltip="Eliminar">
-          <mat-icon>delete</mat-icon>
+
+        <button
+          *ngIf="estaActivo(node)"
+          mat-icon-button
+          color="warn"
+          (click)="emitirDesactivar(node)"
+          aria-label="Desactivar clasificación"
+          title="Desactivar"
+        >
+          <mat-icon>block</mat-icon>
+        </button>
+
+        <button
+          *ngIf="!estaActivo(node)"
+          mat-icon-button
+          color="primary"
+          (click)="emitirReactivar(node)"
+          aria-label="Reactivar clasificación"
+          title="Reactivar"
+        >
+          <mat-icon>restore</mat-icon>
         </button>
       </span>
     </div>
   </mat-tree-node>
 
-  <!-- Nodo hoja (sin hijos) -->
-  <mat-tree-node *matTreeNodeDef="let node"
-                 [class]="'mat-tree-node mat-tree-node-level-' + node.nivel">
+  <!-- Nodo hoja -->
+  <mat-tree-node
+    *matTreeNodeDef="let node"
+    [class]="'mat-tree-node mat-tree-node-level-' + node.nivel"
+    [class.nodo-inactivo]="!estaActivo(node)"
+  >
     <div class="flex items-center arbol-nodo group">
       <span style="margin-left: 32px;"></span>
+
       <span class="ml-2 font-medium">{{ node.nombre }}</span>
       <span class="nivel-badge">N{{ node.nivel }}</span>
+
+      <span class="estado-badge" *ngIf="!estaActivo(node)">
+        Inactivo
+      </span>
+
       <span class="arbol-clasif-actions ml-auto">
-        <button mat-icon-button color="primary" (click)="editar.emit(node)" matTooltip="Editar">
+        <button
+          mat-icon-button
+          color="primary"
+          (click)="emitirEditar(node)"
+          aria-label="Editar clasificación"
+          title="Editar"
+        >
           <mat-icon>edit</mat-icon>
         </button>
-        <button mat-icon-button color="accent" (click)="crearHijo.emit(node)" matTooltip="Agregar hijo">
+
+        <button
+          mat-icon-button
+          color="accent"
+          [disabled]="!puedeAgregarHijo(node)"
+          (click)="emitirCrearHijo(node)"
+          aria-label="Agregar subclasificación"
+          title="Agregar hijo"
+        >
           <mat-icon>add</mat-icon>
         </button>
-        <button mat-icon-button color="warn" (click)="eliminar.emit(node)" matTooltip="Eliminar">
-          <mat-icon>delete</mat-icon>
+
+        <button
+          *ngIf="estaActivo(node)"
+          mat-icon-button
+          color="warn"
+          (click)="emitirDesactivar(node)"
+          aria-label="Desactivar clasificación"
+          title="Desactivar"
+        >
+          <mat-icon>block</mat-icon>
+        </button>
+
+        <button
+          *ngIf="!estaActivo(node)"
+          mat-icon-button
+          color="primary"
+          (click)="emitirReactivar(node)"
+          aria-label="Reactivar clasificación"
+          title="Reactivar"
+        >
+          <mat-icon>restore</mat-icon>
         </button>
       </span>
     </div>
