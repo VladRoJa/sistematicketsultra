@@ -1,19 +1,24 @@
-//frontend\src\app\inventario\catalogos\clasificacion-crud\clasificacion-crud.component.ts
-
+// frontend/src/app/inventario/catalogos/clasificacion-crud/clasificacion-crud.component.ts
 
 import { Component, ElementRef, OnInit, ViewChild } from '@angular/core';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { CatalogoService } from 'src/app/services/catalogo.service';
 import { ArbolClasificacionComponent, ClasificacionNode } from './arbol-clasificacion.component';
-import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { mostrarAlertaToast } from 'src/app/utils/alertas';
 import { CommonModule } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
+import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTreeModule } from '@angular/material/tree';
+import { DepartamentoService } from 'src/app/services/departamento.service';
+
+type ClasificacionNodeConEstado = ClasificacionNode & {
+  activo?: boolean;
+};
 
 @Component({
   selector: 'app-clasificacion-crud',
@@ -23,38 +28,40 @@ import { MatTreeModule } from '@angular/material/tree';
   imports: [
     CommonModule,
     ReactiveFormsModule,
-    MatDialogModule,
     MatButtonModule,
+    MatCardModule,
     MatFormFieldModule,
     MatInputModule,
-    MatSelectModule, 
-    MatIconModule, 
+    MatProgressSpinnerModule,
+    MatSelectModule,
+    MatIconModule,
     MatTreeModule,
     ArbolClasificacionComponent
   ]
 })
 export class ClasificacionCrudComponent implements OnInit {
-  clasificaciones: ClasificacionNode[] = [];
-  departamentos: { id: number, nombre: string }[] = [];
+  clasificaciones: ClasificacionNodeConEstado[] = [];
+  departamentos: { id: number; nombre: string }[] = [];
   loading = false;
   mostrarFormulario = false;
-  todasLasClasificaciones: ClasificacionNode[] = [];
-  departamentoSeleccionado: number = 1;
+  todasLasClasificaciones: ClasificacionNodeConEstado[] = [];
 
   form: FormGroup;
   modo: 'crear' | 'editar' = 'crear';
-  nodoEditando: ClasificacionNode | null = null;
+  nodoEditando: ClasificacionNodeConEstado | null = null;
+
+  @ViewChild('fileInput') fileInput!: ElementRef<HTMLInputElement>;
 
   constructor(
     private fb: FormBuilder,
     private catalogoService: CatalogoService,
-    private dialog: MatDialog
+    private departamentoService: DepartamentoService,
   ) {
     this.form = this.fb.group({
       nombre: ['', Validators.required],
       departamento_id: [null, Validators.required],
-      parent_id: [null], // Solo si no es raíz
-      nivel: [1, Validators.required]
+      parent_id: [null],
+      nivel: [{ value: 1, disabled: true }, Validators.required]
     });
   }
 
@@ -63,82 +70,254 @@ export class ClasificacionCrudComponent implements OnInit {
     this.cargarClasificaciones();
   }
 
-  cargarDepartamentos() {
-    // Puedes traerlos del backend, aquí van hardcodeados para pruebas
-    this.departamentos = [
-      { id: 1, nombre: 'Mantenimiento' },
-      { id: 2, nombre: 'Finanzas' },
-      { id: 3, nombre: 'Marketing' },
-      { id: 4, nombre: 'Gerencia Deportiva' },
-      { id: 5, nombre: 'Recursos Humanos' },
-      { id: 6, nombre: 'Compras' },
-      { id: 7, nombre: 'Sistemas' },
-      { id: 8, nombre: 'Corporativo' }
-    ];
+  // ============================================================================
+  // KPIs visuales Ultra V1
+  // ============================================================================
+  // Estos getters solo leen el árbol ya cargado. No alteran la lógica validada de
+  // crear/editar/desactivar/reactivar.
+
+  get totalClasificaciones(): number {
+    return this.todasLasClasificaciones.length;
   }
 
-cargarClasificaciones() {
-  this.loading = true;
-  // Si quieres mostrar TODO, no pases el parámetro:
-  this.catalogoService.getClasificacionesArbol().subscribe({
-    next: (todosLosArboles: any[]) => {
-      // Junta todos los árboles raíz en un solo array de nodos raíz
-      this.clasificaciones = todosLosArboles.flatMap(dep => dep.arbol);
-      this.loading = false;
-      console.log("Nodos enviados al árbol:", this.clasificaciones);
-    },
-    error: err => {
-      mostrarAlertaToast('Error al cargar clasificaciones', 'error');
-      this.loading = false;
+  get totalActivas(): number {
+    return this.todasLasClasificaciones.filter((nodo) => this.estaActivo(nodo)).length;
+  }
+
+  get totalInactivas(): number {
+    return this.todasLasClasificaciones.filter((nodo) => !this.estaActivo(nodo)).length;
+  }
+
+  get totalRaices(): number {
+    return this.todasLasClasificaciones.filter((nodo) =>
+      nodo.parent_id === null ||
+      nodo.parent_id === undefined ||
+      Number(nodo.nivel) === 1
+    ).length;
+  }
+
+  get totalDepartamentosConCatalogo(): number {
+    const departamentosIds = this.todasLasClasificaciones
+      .map((nodo) => Number(nodo.departamento_id))
+      .filter((id) => Number.isFinite(id));
+
+    return new Set(departamentosIds).size;
+  }
+
+  get tituloFormulario(): string {
+    return this.modo === 'crear'
+      ? 'Agregar clasificación'
+      : 'Editar clasificación';
+  }
+
+  get textoBotonFormulario(): string {
+    return this.modo === 'crear'
+      ? 'Agregar'
+      : 'Actualizar';
+  }
+
+  get descripcionFormulario(): string {
+    if (this.modo === 'editar') {
+      return 'Actualiza el nombre visible de la clasificación. El histórico de tickets se conserva.';
     }
-  });
-}
 
+    if (this.form.get('parent_id')?.value) {
+      return 'Crea una subclasificación dentro de la rama seleccionada.';
+    }
 
+    return 'Crea una clasificación raíz para un departamento.';
+  }
 
-  /**
-   * Convierte el array plano a jerárquico para el árbol.
-   */
-  armarArbolClasificaciones(items: ClasificacionNode[]): ClasificacionNode[] {
-    const idMap: { [key: number]: ClasificacionNode } = {};
-    const roots: ClasificacionNode[] = [];
+  get importacionDeshabilitadaTexto(): string {
+    return 'Importación protegida';
+  }
 
-    // Asigna hijos y corrige nivel raíz
-    items.forEach(item => {
-      idMap[item.id] = { ...item, hijos: [] };
-    });
+  // ============================================================================
+  // Carga de datos
+  // ============================================================================
 
-    items.forEach(item => {
-      if (item.parent_id) {
-        idMap[item.parent_id]?.hijos?.push(idMap[item.id]);
-      } else {
-        idMap[item.id].nivel = 0;  // <-- Cambia la raíz a nivel 0
-        roots.push(idMap[item.id]);
+  cargarDepartamentos(): void {
+    this.departamentoService.obtenerDepartamentos().subscribe({
+      next: (resp: any) => {
+        const departamentos = Array.isArray(resp)
+          ? resp
+          : Array.isArray(resp?.departamentos)
+            ? resp.departamentos
+            : [];
+
+        this.departamentos = departamentos
+          .map((depto: any) => ({
+            id: Number(depto.id),
+            nombre: String(depto.nombre || '').trim()
+          }))
+          .filter((depto: { id: number; nombre: string }) =>
+            Number.isFinite(depto.id) && Boolean(depto.nombre)
+          );
+      },
+      error: () => {
+        mostrarAlertaToast('Error al cargar departamentos', 'error');
+        this.departamentos = [];
       }
     });
-
-    return roots;
   }
 
+  cargarClasificaciones(): void {
+    this.loading = true;
 
+    // En administración cargamos activos e inactivos para permitir reactivación.
+    this.catalogoService.getClasificacionesArbol(undefined, true).subscribe({
+      next: (respuesta: any[]) => {
+        this.clasificaciones = this.normalizarRespuestaArbol(respuesta);
+        this.todasLasClasificaciones = this.aplanarNodos(this.clasificaciones);
+        this.loading = false;
+      },
+      error: () => {
+        mostrarAlertaToast('Error al cargar clasificaciones', 'error');
+        this.clasificaciones = [];
+        this.todasLasClasificaciones = [];
+        this.loading = false;
+      }
+    });
+  }
 
-
-  iniciarCrear(parent?: ClasificacionNode) {
-    this.modo = 'crear';
-    this.nodoEditando = null;
-    this.form.reset();
-    if (parent) {
-      this.form.patchValue({
-        parent_id: parent.id,
-        departamento_id: parent.departamento_id,
-        nivel: parent.nivel + 1
-      });
-    } else {
-      this.form.patchValue({ nivel: 1 });
+  private normalizarRespuestaArbol(respuesta: any[]): ClasificacionNodeConEstado[] {
+    if (!Array.isArray(respuesta)) {
+      return [];
     }
+
+    // Cuando el endpoint se pide sin departamento_id, responde agrupado:
+    // [{ departamento_id, arbol: [...] }]
+    const vieneAgrupadoPorDepartamento = respuesta.some((item: any) =>
+      Array.isArray(item?.arbol)
+    );
+
+    const nodos = vieneAgrupadoPorDepartamento
+      ? respuesta.flatMap((dep: any) => dep.arbol || [])
+      : respuesta;
+
+    return this.normalizarNodos(nodos);
   }
 
-  iniciarEditar(nodo: ClasificacionNode) {
+  private normalizarNodos(nodos: any[]): ClasificacionNodeConEstado[] {
+    if (!Array.isArray(nodos)) {
+      return [];
+    }
+
+    return nodos
+      .map((nodo: any) => {
+        const normalizado: ClasificacionNodeConEstado = {
+          id: Number(nodo.id),
+          nombre: String(nodo.nombre || '').trim(),
+          departamento_id: Number(nodo.departamento_id),
+          parent_id: nodo.parent_id === null || nodo.parent_id === undefined
+            ? null
+            : Number(nodo.parent_id),
+          nivel: Number(nodo.nivel || 1),
+          activo: nodo.activo !== false,
+          hijos: this.normalizarNodos(nodo.hijos || [])
+        };
+
+        return normalizado;
+      })
+      .filter((nodo) =>
+        Number.isFinite(nodo.id) &&
+        Boolean(nodo.nombre) &&
+        Number.isFinite(nodo.departamento_id)
+      );
+  }
+
+  private aplanarNodos(nodos: ClasificacionNodeConEstado[]): ClasificacionNodeConEstado[] {
+    const resultado: ClasificacionNodeConEstado[] = [];
+
+    const recorrer = (items: ClasificacionNodeConEstado[]) => {
+      items.forEach((item) => {
+        resultado.push(item);
+
+        if (Array.isArray(item.hijos) && item.hijos.length > 0) {
+          recorrer(item.hijos as ClasificacionNodeConEstado[]);
+        }
+      });
+    };
+
+    recorrer(nodos || []);
+    return resultado;
+  }
+
+  private estaActivo(nodo: ClasificacionNodeConEstado): boolean {
+    return nodo.activo !== false;
+  }
+
+  private actualizarEstadoClasificacionLocal(
+    nodoActual: ClasificacionNodeConEstado,
+    activo: boolean
+  ): void {
+    // Actualiza el nodo plano que está renderizando Angular Material Tree.
+    // Esto evita recargar el árbol completo y conserva las ramas abiertas.
+    nodoActual.activo = activo;
+
+    // También sincronizamos el árbol fuente por si después se usa para formularios,
+    // aplanados o validaciones internas del componente.
+    const actualizarEnArbol = (nodos: ClasificacionNodeConEstado[]): boolean => {
+      for (const nodo of nodos) {
+        if (Number(nodo.id) === Number(nodoActual.id)) {
+          nodo.activo = activo;
+          return true;
+        }
+
+        if (Array.isArray(nodo.hijos) && actualizarEnArbol(nodo.hijos as ClasificacionNodeConEstado[])) {
+          return true;
+        }
+      }
+
+      return false;
+    };
+
+    actualizarEnArbol(this.clasificaciones);
+
+    const nodoPlano = this.todasLasClasificaciones.find(
+      (item) => Number(item.id) === Number(nodoActual.id)
+    );
+
+    if (nodoPlano) {
+      nodoPlano.activo = activo;
+    }
+
+    // Forzamos nueva referencia solo en el arreglo plano para que los KPIs se
+    // recalculen visualmente sin recargar el árbol ni cerrar ramas abiertas.
+    this.todasLasClasificaciones = [...this.todasLasClasificaciones];
+  }
+
+  // ============================================================================
+  // Formulario crear / editar
+  // ============================================================================
+
+  abrirFormulario(nodo: ClasificacionNodeConEstado | null = null, esHijo = false): void {
+    this.mostrarFormulario = true;
+
+    if (!nodo) {
+      this.modo = 'crear';
+      this.nodoEditando = null;
+      this.form.reset();
+      this.form.patchValue({
+        nivel: 1,
+        parent_id: null,
+        departamento_id: null
+      });
+      return;
+    }
+
+    if (esHijo) {
+      this.modo = 'crear';
+      this.nodoEditando = null;
+      this.form.reset();
+      this.form.patchValue({
+        parent_id: nodo.id,
+        departamento_id: nodo.departamento_id,
+        nivel: Number(nodo.nivel || 1) + 1
+      });
+      return;
+    }
+
     this.modo = 'editar';
     this.nodoEditando = nodo;
     this.form.patchValue({
@@ -149,141 +328,173 @@ cargarClasificaciones() {
     });
   }
 
-guardar() {
-  if (this.form.invalid) return;
-  const datos = this.form.value;
+  guardar(): void {
+    if (this.form.invalid) {
+      return;
+    }
 
-  if (this.modo === 'crear') {
-    // Solo dos argumentos: catálogo, datos
-    this.catalogoService.crearElemento('clasificaciones', datos).subscribe({
+    const raw = this.form.getRawValue();
+    const nombre = String(raw.nombre || '').trim();
+
+    if (!nombre) {
+      mostrarAlertaToast('El nombre es obligatorio', 'error');
+      return;
+    }
+
+    if (this.modo === 'crear') {
+      this.crearClasificacion(nombre, raw);
+      return;
+    }
+
+    this.editarClasificacion(nombre);
+  }
+
+  private crearClasificacion(nombre: string, raw: any): void {
+    const departamentoId = Number(raw.departamento_id);
+    const parentId = raw.parent_id === null || raw.parent_id === undefined || raw.parent_id === ''
+      ? null
+      : Number(raw.parent_id);
+
+    if (!Number.isFinite(departamentoId)) {
+      mostrarAlertaToast('Selecciona un departamento válido', 'error');
+      return;
+    }
+
+    this.catalogoService.crearClasificacion({
+      nombre,
+      departamento_id: departamentoId,
+      parent_id: parentId
+    }).subscribe({
       next: () => {
         mostrarAlertaToast('Clasificación creada');
         this.cargarClasificaciones();
-        this.form.reset();
+        this.cerrarFormulario();
       },
-      error: err => mostrarAlertaToast('Error al crear', 'error')
+      error: (err) => {
+        const msg = err?.error?.message || 'Error al crear clasificación';
+        mostrarAlertaToast(msg, 'error');
+      }
     });
-  } else if (this.nodoEditando) {
-    // Solo tres argumentos: catálogo, id, datos
-    this.catalogoService.editarElemento('clasificaciones', this.nodoEditando.id, datos).subscribe({
+  }
+
+  private editarClasificacion(nombre: string): void {
+    if (!this.nodoEditando) {
+      return;
+    }
+
+    this.catalogoService.editarClasificacion(this.nodoEditando.id, { nombre }).subscribe({
       next: () => {
         mostrarAlertaToast('Clasificación actualizada');
         this.cargarClasificaciones();
-        this.form.reset();
-        this.modo = 'crear';
-        this.nodoEditando = null;
+        this.cerrarFormulario();
       },
-      error: err => mostrarAlertaToast('Error al actualizar', 'error')
+      error: (err) => {
+        const msg = err?.error?.message || 'Error al actualizar clasificación';
+        mostrarAlertaToast(msg, 'error');
+      }
     });
   }
-}
 
+  cerrarFormulario(): void {
+    this.mostrarFormulario = false;
+    this.form.reset();
+    this.nodoEditando = null;
+    this.modo = 'crear';
+  }
 
-  eliminar(nodo: ClasificacionNode) {
-    // Opcional: Diálogo de confirmación
-    this.catalogoService.eliminarElemento('clasificaciones', nodo.id).subscribe({
-      next: () => {
-        mostrarAlertaToast('Clasificación eliminada');
-        this.cargarClasificaciones();
+  cancelar(): void {
+    this.cerrarFormulario();
+  }
+
+  // ============================================================================
+  // Activación segura
+  // ============================================================================
+  // No eliminamos físicamente clasificaciones: se desactivan para conservar
+  // histórico y evitar romper tickets existentes.
+
+  desactivar(nodo: ClasificacionNodeConEstado): void {
+    const confirmar = window.confirm(
+      `¿Desactivar "${nodo.nombre}"?\n\n` +
+      'Ya no aparecerá para tickets nuevos, pero se conservará el histórico.'
+    );
+
+    if (!confirmar) {
+      return;
+    }
+
+    this.catalogoService.desactivarClasificacion(nodo.id).subscribe({
+      next: (resp: any) => {
+        this.actualizarEstadoClasificacionLocal(nodo, false);
+        mostrarAlertaToast(resp?.message || 'Clasificación desactivada');
       },
-      error: err => mostrarAlertaToast('Error al eliminar', 'error')
+      error: (err) => {
+        const msg = err?.error?.message || 'Error al desactivar clasificación';
+        mostrarAlertaToast(msg, 'error');
+      }
     });
   }
 
-  cancelar() {
-    this.form.reset();
-    this.modo = 'crear';
-    this.nodoEditando = null;
-  }
+  reactivar(nodo: ClasificacionNodeConEstado): void {
+    const confirmar = window.confirm(
+      `¿Reactivar "${nodo.nombre}"?\n\n` +
+      'Volverá a estar disponible para tickets nuevos.'
+    );
 
-  @ViewChild('fileInput') fileInput!: ElementRef<HTMLInputElement>;
+    if (!confirmar) {
+      return;
+    }
 
-abrirDialogoImportar() { this.fileInput.nativeElement.click(); }
-
-importar(event: Event) {
-  const input = event.target as HTMLInputElement;
-  if (!input.files || input.files.length === 0) return;
-  const archivo = input.files[0];
-  this.catalogoService.importarArchivo('clasificaciones', archivo).subscribe({
-    next: () => {
-      mostrarAlertaToast('Importación exitosa');
-      this.cargarClasificaciones();
-    },
-    error: err => mostrarAlertaToast('Error al importar', 'error')
-  });
-  input.value = '';
-}
-
-exportar() {
-  this.catalogoService.exportarArchivo('clasificaciones').subscribe(blob => {
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `clasificaciones.xlsx`;
-    a.click();
-    window.URL.revokeObjectURL(url);
-  });
-}
-
-descargarPlantilla() {
-  const csv = `nombre,parent_id,departamento_id,nivel
-Mantenimiento,,1,1
-Eléctrico,1,1,2
-Lámparas,2,1,3
-`;
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url = window.URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'plantilla_clasificacion.csv';
-  a.click();
-  window.URL.revokeObjectURL(url);
-}
-
-
-abrirFormulario(nodo: ClasificacionNode | null = null, esHijo = false) {
-  this.mostrarFormulario = true;
-
-  if (!nodo) {
-    this.modo = 'crear';
-    this.nodoEditando = null;
-    this.form.reset();
-    this.form.patchValue({ nivel: 1, parent_id: null });
-  } else if (esHijo) {
-    // Crear hijo de nodo actual
-    this.modo = 'crear';
-    this.nodoEditando = null;
-    this.form.reset();
-    this.form.patchValue({
-      parent_id: nodo.id,
-      departamento_id: nodo.departamento_id,
-      nivel: nodo.nivel + 1
-    });
-  } else {
-    // Editar
-    this.modo = 'editar';
-    this.nodoEditando = nodo;
-    this.form.patchValue({
-      nombre: nodo.nombre,
-      departamento_id: nodo.departamento_id,
-      parent_id: nodo.parent_id || null,
-      nivel: nodo.nivel
+    this.catalogoService.reactivarClasificacion(nodo.id).subscribe({
+      next: (resp: any) => {
+        this.actualizarEstadoClasificacionLocal(nodo, true);
+        mostrarAlertaToast(resp?.message || 'Clasificación reactivada');
+      },
+      error: (err) => {
+        const msg = err?.error?.message || 'Error al reactivar clasificación';
+        mostrarAlertaToast(msg, 'error');
+      }
     });
   }
+
+  // ============================================================================
+  // Importación / exportación
+  // ============================================================================
+
+  abrirDialogoImportar(): void {
+    mostrarAlertaToast(
+      'La importación masiva de clasificaciones está deshabilitada temporalmente para proteger la jerarquía.',
+      'error'
+    );
+  }
+
+  importar(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    input.value = '';
+    this.abrirDialogoImportar();
+  }
+
+  exportar(): void {
+    this.catalogoService.exportarArchivo('clasificaciones').subscribe({
+      next: (blob) => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+
+        a.href = url;
+        a.download = 'clasificaciones.xlsx';
+        a.click();
+
+        window.URL.revokeObjectURL(url);
+      },
+      error: () => {
+        mostrarAlertaToast('Error al exportar clasificaciones', 'error');
+      }
+    });
+  }
+
+  descargarPlantilla(): void {
+    mostrarAlertaToast(
+      'La plantilla de importación está deshabilitada hasta tener validación robusta de jerarquía.',
+      'error'
+    );
+  }
 }
-
-cerrarFormulario() {
-  this.mostrarFormulario = false;
-  this.form.reset();
-  this.nodoEditando = null;
-  this.modo = 'crear';
-}
-
-
-
-
-
-
-
-}
-

@@ -1,80 +1,291 @@
-  <!-- frontend-angular\src\app\inventario\catalogos\clasificacion-crud\clasificacion-crud.component.html -->
+<!-- frontend/src/app/inventario/catalogos/clasificacion-crud/clasificacion-crud.component.html -->
 
-<div class="flex items-center mb-4 justify-between">
-  <h2 class="text-xl font-bold">Clasificaciones</h2>
-  <button (click)="cargarClasificaciones()">Recargar</button>
-  <div>
-    <button mat-flat-button color="accent" (click)="abrirDialogoImportar()">
-      <mat-icon>file_upload</mat-icon> Importar
-    </button>
-    <button mat-flat-button color="primary" (click)="exportar()">
-      <mat-icon>file_download</mat-icon> Exportar
-    </button>
-    <button mat-flat-button color="primary" (click)="descargarPlantilla()">
-      <mat-icon>download</mat-icon> Plantilla
-    </button>
-    <input type="file" #fileInput hidden (change)="importar($event)">
-  </div>
-</div>
+<section class="clasificaciones-page">
+  <!-- HERO / HEADER ULTRA V1 -->
+  <header class="clasificaciones-hero">
+    <div class="clasificaciones-hero__content">
+      <p class="clasificaciones-hero__eyebrow">CATÁLOGOS</p>
 
-<!-- Botón FAB para agregar -->
-<div class="mb-6 flex justify-end">
-  <button mat-flat-button color="primary" (click)="abrirFormulario()">
-    <mat-icon>add</mat-icon> Agregar Clasificación
-  </button>
-</div>
+      <div class="clasificaciones-hero__title-row">
+        <div>
+          <h1 class="clasificaciones-hero__title">Clasificaciones de Tickets</h1>
+          <p class="clasificaciones-hero__subtitle">
+            Administra el árbol de clasificaciones usado al crear tickets en Suite Ultra.
+          </p>
+        </div>
 
-<!-- ARBOL -->
-<div class="clasificacion-arbol-wrap">
-  <app-arbol-clasificacion
-    [nodos]="clasificaciones"
-    (editar)="abrirFormulario($event)"
-    (crearHijo)="abrirFormulario($event, true)"
-    (eliminar)="eliminar($event)">
-  </app-arbol-clasificacion>
-  <div style="color:red" *ngIf="!clasificaciones?.length">NO HAY CLASIFICACIONES PARA EL ÁRBOL</div>
-  <div *ngIf="!loading && !clasificaciones.length" class="text-gray-500 text-center mt-8">
-    No hay registros de clasificaciones.
-  </div>
-  <div *ngIf="loading" class="flex justify-center items-center mt-8">
-    <mat-spinner diameter="40"></mat-spinner>
-  </div>
-</div>
-
-<!-- TARJETA FORMULARIO flotante (show/hide) -->
-<mat-card class="clasificacion-form-card" *ngIf="mostrarFormulario">
-  <form [formGroup]="form" (ngSubmit)="guardar()" class="p-4 flex flex-col gap-3">
-    <h3 class="mb-2 font-bold text-lg">
-      {{ modo === 'crear' ? 'Agregar Clasificación' : 'Editar Clasificación' }}
-    </h3>
-    <mat-form-field appearance="fill">
-      <mat-label>Nombre</mat-label>
-      <input matInput formControlName="nombre" required />
-    </mat-form-field>
-    <mat-form-field appearance="fill">
-      <mat-label>Departamento</mat-label>
-      <mat-select formControlName="departamento_id" required>
-        <mat-option *ngFor="let depto of departamentos" [value]="depto.id">{{ depto.nombre }}</mat-option>
-      </mat-select>
-    </mat-form-field>
-    <mat-form-field appearance="fill">
-      <mat-label>Nivel</mat-label>
-      <input matInput formControlName="nivel" type="number" readonly />
-    </mat-form-field>
-    <mat-form-field appearance="fill">
-      <mat-label>Padre</mat-label>
-      <mat-select formControlName="parent_id">
-        <mat-option [value]="null">Ninguno (raíz)</mat-option>
-        <mat-option *ngFor="let nodo of todasLasClasificaciones" [value]="nodo.id">
-          {{ nodo.nombre }}
-        </mat-option>
-      </mat-select>
-    </mat-form-field>
-    <div class="flex gap-2 justify-end mt-2">
-      <button mat-flat-button color="primary" [disabled]="form.invalid" type="submit">
-        {{ modo === 'crear' ? 'Agregar' : 'Actualizar' }}
-      </button>
-      <button mat-button color="warn" type="button" (click)="cerrarFormulario()">Cancelar</button>
+        <div class="clasificaciones-hero__status">
+          <span class="status-dot"></span>
+          <span>Catálogo protegido</span>
+        </div>
+      </div>
     </div>
-  </form>
-</mat-card>
+
+    <div class="clasificaciones-hero__actions">
+      <button
+        mat-flat-button
+        class="btn-ultra-primary"
+        type="button"
+        (click)="abrirFormulario()"
+      >
+        <mat-icon>add</mat-icon>
+        Nueva clasificación
+      </button>
+
+      <button
+        mat-flat-button
+        class="btn-ultra-secondary"
+        type="button"
+        (click)="exportar()"
+      >
+        <mat-icon>file_download</mat-icon>
+        Exportar
+      </button>
+
+      <button
+        mat-flat-button
+        class="btn-ultra-secondary"
+        type="button"
+        (click)="descargarPlantilla()"
+      >
+        <mat-icon>download</mat-icon>
+        Plantilla
+      </button>
+
+      <button
+        mat-flat-button
+        class="btn-ultra-locked"
+        type="button"
+        (click)="abrirDialogoImportar()"
+      >
+        <mat-icon>lock</mat-icon>
+        Importar
+      </button>
+
+      <input type="file" #fileInput hidden (change)="importar($event)" />
+    </div>
+  </header>
+
+  <!-- KPIs -->
+  <section class="clasificaciones-kpis" aria-label="Resumen de clasificaciones">
+    <article class="kpi-card">
+      <span class="kpi-card__label">Total</span>
+      <strong class="kpi-card__value">{{ totalClasificaciones }}</strong>
+      <span class="kpi-card__hint">clasificaciones</span>
+    </article>
+
+    <article class="kpi-card kpi-card--success">
+      <span class="kpi-card__label">Activas</span>
+      <strong class="kpi-card__value">{{ totalActivas }}</strong>
+      <span class="kpi-card__hint">disponibles</span>
+    </article>
+
+    <article class="kpi-card kpi-card--muted">
+      <span class="kpi-card__label">Inactivas</span>
+      <strong class="kpi-card__value">{{ totalInactivas }}</strong>
+      <span class="kpi-card__hint">ocultas en creación</span>
+    </article>
+
+    <article class="kpi-card">
+      <span class="kpi-card__label">Raíces</span>
+      <strong class="kpi-card__value">{{ totalRaices }}</strong>
+      <span class="kpi-card__hint">nivel principal</span>
+    </article>
+
+    <article class="kpi-card">
+      <span class="kpi-card__label">Departamentos</span>
+      <strong class="kpi-card__value">{{ totalDepartamentosConCatalogo }}</strong>
+      <span class="kpi-card__hint">con catálogo</span>
+    </article>
+  </section>
+
+  <!-- TOOLBAR -->
+  <section class="clasificaciones-toolbar">
+    <div class="clasificaciones-toolbar__copy">
+      <span class="toolbar-badge">
+        <mat-icon>account_tree</mat-icon>
+        Vista jerárquica
+      </span>
+
+      <span class="toolbar-badge toolbar-badge--locked">
+        <mat-icon>shield</mat-icon>
+        {{ importacionDeshabilitadaTexto }}
+      </span>
+    </div>
+
+    <button
+      mat-button
+      class="btn-refresh"
+      type="button"
+      (click)="cargarClasificaciones()"
+    >
+      <mat-icon>refresh</mat-icon>
+      Recargar
+    </button>
+  </section>
+
+  <!-- BODY PRINCIPAL -->
+  <section class="clasificaciones-body">
+    <mat-card class="clasificaciones-tree-card">
+      <div class="tree-card-header">
+        <div>
+          <p class="tree-card-header__eyebrow">ÁRBOL OPERATIVO</p>
+          <h2 class="tree-card-header__title">Árbol de clasificaciones</h2>
+          <p class="tree-card-header__subtitle">
+            Navega por departamento, agrega subclasificaciones y controla qué opciones estarán disponibles para tickets nuevos.
+          </p>
+        </div>
+
+        <div class="tree-card-header__legend">
+          <span class="legend-item">
+            <span class="legend-dot legend-dot--active"></span>
+            Activa
+          </span>
+          <span class="legend-item">
+            <span class="legend-dot legend-dot--inactive"></span>
+            Inactiva
+          </span>
+        </div>
+      </div>
+
+      <div class="clasificacion-arbol-wrap">
+        <app-arbol-clasificacion
+          [nodos]="clasificaciones"
+          (editar)="abrirFormulario($event)"
+          (crearHijo)="abrirFormulario($event, true)"
+          (desactivar)="desactivar($event)"
+          (reactivar)="reactivar($event)"
+        >
+        </app-arbol-clasificacion>
+
+        <div *ngIf="loading" class="tree-loading">
+          <mat-spinner diameter="42"></mat-spinner>
+          <span>Cargando clasificaciones...</span>
+        </div>
+
+        <div *ngIf="!loading && !clasificaciones.length" class="tree-empty">
+          <mat-icon>account_tree</mat-icon>
+          <h3>No hay clasificaciones registradas</h3>
+          <p>Crea una clasificación raíz para iniciar el catálogo de tickets.</p>
+          <button
+            mat-flat-button
+            class="btn-ultra-primary"
+            type="button"
+            (click)="abrirFormulario()"
+          >
+            <mat-icon>add</mat-icon>
+            Crear primera clasificación
+          </button>
+        </div>
+      </div>
+    </mat-card>
+
+    <!-- PANEL DE CONTEXTO SIMPLE -->
+    <aside class="clasificaciones-side-card">
+      <p class="side-card__eyebrow">REGLAS DEL MÓDULO</p>
+      <h3 class="side-card__title">Gobierno del catálogo</h3>
+
+      <div class="side-card__rule">
+        <mat-icon>block</mat-icon>
+        <div>
+          <strong>No se elimina físicamente</strong>
+          <span>Las clasificaciones se desactivan para conservar histórico.</span>
+        </div>
+      </div>
+
+      <div class="side-card__rule">
+        <mat-icon>history</mat-icon>
+        <div>
+          <strong>Histórico protegido</strong>
+          <span>Los tickets previos conservan su información registrada.</span>
+        </div>
+      </div>
+
+      <div class="side-card__rule">
+        <mat-icon>verified_user</mat-icon>
+        <div>
+          <strong>Backend manda</strong>
+          <span>Las reglas de permisos y jerarquía se validan en servidor.</span>
+        </div>
+      </div>
+
+      <div class="side-card__note">
+        Los cambios aplican para tickets nuevos. Las opciones inactivas ya no aparecen al crear tickets.
+      </div>
+    </aside>
+  </section>
+
+  <!-- FORMULARIO FLOTANTE -->
+  <mat-card class="clasificacion-form-card" *ngIf="mostrarFormulario">
+    <form [formGroup]="form" (ngSubmit)="guardar()" class="clasificacion-form">
+      <div class="clasificacion-form__header">
+        <div>
+          <p class="clasificacion-form__eyebrow">EDICIÓN DE CATÁLOGO</p>
+          <h3 class="clasificacion-form__title">{{ tituloFormulario }}</h3>
+          <p class="clasificacion-form__subtitle">{{ descripcionFormulario }}</p>
+        </div>
+
+        <button
+          mat-icon-button
+          type="button"
+          class="form-close-button"
+          aria-label="Cerrar formulario"
+          (click)="cerrarFormulario()"
+        >
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
+
+      <div class="clasificacion-form__grid">
+        <mat-form-field appearance="outline">
+          <mat-label>Nombre</mat-label>
+          <input matInput formControlName="nombre" required />
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Departamento</mat-label>
+          <mat-select formControlName="departamento_id" required>
+            <mat-option *ngFor="let depto of departamentos" [value]="depto.id">
+              {{ depto.nombre }}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Nivel</mat-label>
+          <input matInput formControlName="nivel" type="number" readonly />
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Padre</mat-label>
+          <mat-select formControlName="parent_id">
+            <mat-option [value]="null">Ninguno (raíz)</mat-option>
+            <mat-option *ngFor="let nodo of todasLasClasificaciones" [value]="nodo.id">
+              {{ nodo.nombre }}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
+      </div>
+
+      <div class="clasificacion-form__actions">
+        <button
+          mat-button
+          type="button"
+          class="btn-form-cancel"
+          (click)="cerrarFormulario()"
+        >
+          Cancelar
+        </button>
+
+        <button
+          mat-flat-button
+          class="btn-ultra-primary"
+          [disabled]="form.invalid"
+          type="submit"
+        >
+          {{ textoBotonFormulario }}
+        </button>
+      </div>
+    </form>
+  </mat-card>
+</section>
