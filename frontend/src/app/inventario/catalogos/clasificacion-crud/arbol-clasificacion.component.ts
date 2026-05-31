@@ -65,14 +65,45 @@ export class ArbolClasificacionComponent implements OnChanges {
       return;
     }
 
+    const expandedIds = this.obtenerIdsExpandidos();
+
     this.dataSource.data = [...(this.nodos || [])];
 
-    // Estado inicial limpio: no expandimos todo por defecto.
-    // El usuario abre solo la rama que necesita revisar.
-    setTimeout(() => this.treeControl.collapseAll(), 0);
+    setTimeout(() => {
+      if (!expandedIds.size) {
+        this.treeControl.collapseAll();
+        return;
+      }
+
+      this.restaurarNodosExpandidos(expandedIds);
+    }, 0);
   }
 
   hasChild = (_: number, node: FlatClasificacionNode): boolean => node.expandable;
+
+  private obtenerIdsExpandidos(): Set<number> {
+    const expandedIds = new Set<number>();
+
+    const dataNodes = this.treeControl.dataNodes || [];
+
+    dataNodes.forEach((node) => {
+      if (this.treeControl.isExpanded(node)) {
+        expandedIds.add(Number(node.id));
+      }
+    });
+
+    return expandedIds;
+  }
+
+  private restaurarNodosExpandidos(expandedIds: Set<number>): void {
+    const dataNodes = this.treeControl.dataNodes || [];
+
+    dataNodes.forEach((node) => {
+      if (expandedIds.has(Number(node.id))) {
+        this.treeControl.expand(node);
+      }
+    });
+  }
 
   estaActivo(node: ClasificacionNode): boolean {
     return node.activo !== false;
