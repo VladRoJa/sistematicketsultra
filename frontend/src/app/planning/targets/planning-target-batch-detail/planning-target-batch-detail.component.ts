@@ -119,9 +119,11 @@ export class PlanningTargetBatchDetailComponent implements OnInit {
   ];
 
   showAddBranchForm = false;
+  editingBranchRowId: number | null = null;
   isLoadingAccess = false;
   isAddingBranchRow = false;
   isRunningBatchAction = false;
+
 
   branchForm = {
   sucursalCanon: '',
@@ -156,6 +158,7 @@ export class PlanningTargetBatchDetailComponent implements OnInit {
     'arpu',
     'venta_tienda',
     'published_target',
+    'actions',
   ];
 
   eventsDisplayedColumns: string[] = [
@@ -334,6 +337,10 @@ toggleAddBranchForm(): void {
     if (!this.branchForm.scenarioUsed) {
       this.branchForm.scenarioUsed = 'AJUSTADO';
     }
+      if (!this.showAddBranchForm) {
+      this.resetBranchForm();
+      return;
+    }
 
   if (!this.branchForm.sucursalCanon && this.activeBranches.length > 0) {
     this.branchForm.sucursalCanon = this.activeBranches[0].sucursal_canon;
@@ -341,6 +348,49 @@ toggleAddBranchForm(): void {
     this.loadBranchComparisons(this.branchForm.sucursalCanon);
   }
   }
+}
+
+editBranchRow(row: PlanningTargetBranchRowDetail): void {
+  this.editingBranchRowId = row.id;
+  this.showAddBranchForm = true;
+
+  this.branchForm = {
+    sucursalCanon: row.sucursal_canon,
+    m2SinCirculaciones: Number(row.m2_sin_circulaciones ?? 0),
+    usuariosInicioMes: Number(row.usuarios_inicio_mes ?? 0),
+    proyeccionUsuariosCierreMes: Number(
+      row.proyeccion_usuarios_cierre_mes ?? 0,
+    ),
+
+    metaFaycgoMes: Number(row.meta_faycgo_mes ?? 0),
+    metaClientesNuevosMes: Number(row.meta_clientes_nuevos_mes ?? 0),
+    metaReactivacionesMes: Number(row.meta_reactivaciones_mes ?? 0),
+    metaBajasMes: Number(row.meta_bajas_mes ?? 0),
+    metaNuevosDomiciliadosMes: Number(
+      row.meta_nuevos_domiciliados_mes ?? 0,
+    ),
+    metaArpuMes: Number(row.meta_arpu_mes ?? 0),
+    metaVentaTiendaMes: Number(row.meta_venta_tienda_mes ?? 0),
+
+    ingresoAgregadorasEstimado:
+      row.ingreso_agregadoras_estimado === null ||
+      row.ingreso_agregadoras_estimado === undefined
+        ? null
+        : Number(row.ingreso_agregadoras_estimado),
+
+    usuariosAgregadorasEstimado:
+      row.usuarios_agregadoras_estimado === null ||
+      row.usuarios_agregadoras_estimado === undefined
+        ? null
+        : Number(row.usuarios_agregadoras_estimado),
+
+    scenarioUsed: row.scenario_used || 'AJUSTADO',
+    trendClassification: row.trend_classification || '',
+    riskLevel: row.risk_level || 'MEDIO',
+    notes: row.notes || '',
+  };
+
+  this.loadBranchComparisons(row.sucursal_canon);
 }
 
   onBranchSelected(): void {
@@ -475,6 +525,20 @@ toggleAddBranchForm(): void {
       });
   }
 
+  isEditingBranchRow(): boolean {
+    return this.editingBranchRowId !== null;
+  }
+
+  getBranchFormActionLabel(): string {
+    return this.isEditingBranchRow() ? 'Guardar cambios' : 'Agregar sucursal';
+  }
+
+  getBranchFormTitle(): string {
+    return this.isEditingBranchRow()
+      ? 'Editar propuesta de sucursal'
+      : 'Propuesta editable';
+  }
+
   getComparisonNumericValue(
     periodKey: ComparisonPeriodKey,
     fieldKey: keyof NonNullable<PlanningBranchComparisonsResponse['items']['current_month']>,
@@ -482,50 +546,58 @@ toggleAddBranchForm(): void {
     return this.toNumberOrNull(this.getComparisonValue(periodKey, fieldKey));
   }
 
-    addBranchRow(): void {
-    if (!this.batchId || !this.batch) {
-        this.snackBar.open('Batch inválido.', 'Cerrar', {
-        duration: 4000,
-        });
-        return;
-    }
+addBranchRow(): void {
+  if (!this.batch) {
+    return;
+  }
 
-    if (!this.canAddBranchRow()) {
-        this.snackBar.open('No puedes agregar sucursales en este estado.', 'Cerrar', {
-        duration: 4000,
-        });
-        return;
-    }
+  const payload = this.buildBranchRowPayload();
 
-    const payload = this.buildBranchRowPayload();
+  if (!payload) {
+    return;
+  }
 
-    if (!payload) {
-        return;
-    }
+  this.isAddingBranchRow = true;
 
-    this.isAddingBranchRow = true;
+  const request$ =
+    this.isEditingBranchRow() && this.editingBranchRowId !== null
+      ? this.planningTargetsService.updateBranchRowInBatch(
+          this.batch.id,
+          this.editingBranchRowId,
+          payload,
+        )
+      : this.planningTargetsService.addBranchRowToBatch(
+          this.batch.id,
+          payload,
+        );
 
-    this.planningTargetsService
-        .addBranchRowToBatch(this.batchId, payload)
-        .pipe(finalize(() => (this.isAddingBranchRow = false)))
-        .subscribe({
-        next: () => {
-            this.snackBar.open('Sucursal agregada al paquete.', 'Cerrar', {
-            duration: 3000,
-            });
-            this.showAddBranchForm = false;
-            this.resetBranchForm();
-            this.loadBatchDetail();
-        },
-        error: () => {
-            this.snackBar.open(
-            'No se pudo agregar la sucursal. Revisa si ya existe en el batch o si la clave es correcta.',
-            'Cerrar',
-            { duration: 5000 },
-            );
-        },
-        });
-    }
+  request$
+    .pipe(finalize(() => (this.isAddingBranchRow = false)))
+    .subscribe({
+      next: () => {
+        this.snackBar.open(
+          this.isEditingBranchRow()
+            ? 'Sucursal actualizada correctamente.'
+            : 'Sucursal agregada correctamente.',
+          'Cerrar',
+          { duration: 3000 },
+        );
+
+        this.showAddBranchForm = false;
+        this.resetBranchForm();
+        this.loadBatchDetail();
+      },
+      error: () => {
+        this.snackBar.open(
+          this.isEditingBranchRow()
+            ? 'No se pudo actualizar la sucursal.'
+            : 'No se pudo agregar la sucursal.',
+          'Cerrar',
+          { duration: 4000 },
+        );
+      },
+    });
+}
 
     buildBranchRowPayload(): AddPlanningTargetBranchRowPayload | null {
     const sucursalCanon = this.branchForm.sucursalCanon.trim().toUpperCase();
@@ -799,6 +871,7 @@ toggleAddBranchForm(): void {
     };
     this.branchPrefillSourceLabel = '';
     this.branchComparisons = null;
+    this.editingBranchRowId = null;
     }
 
 private buildDecisionMetric(

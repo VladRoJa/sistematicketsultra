@@ -292,6 +292,15 @@ export interface AddPlanningTargetBranchRowPayload {
   notes?: string | null;
 }
 
+export interface PlanningTargetBranchRowMutationResponse {
+  status: string;
+  id: number;
+  batch_id: number;
+  sucursal_canon: string;
+  row_status: string;
+  meta_faycgo_mes: string;
+}
+
 export interface AddPlanningTargetBranchRowResponse {
   status: string;
   id: number;
@@ -423,6 +432,17 @@ export class PlanningTargetsService {
   ): Observable<AddPlanningTargetBranchRowResponse> {
     return this.http.post<AddPlanningTargetBranchRowResponse>(
       `${this.baseUrl}/batches/${batchId}/branch-rows`,
+      payload,
+    );
+  }
+
+  updateBranchRowInBatch(
+    batchId: number,
+    branchRowId: number,
+    payload: AddPlanningTargetBranchRowPayload,
+  ): Observable<PlanningTargetBranchRowMutationResponse> {
+    return this.http.put<PlanningTargetBranchRowMutationResponse>(
+      `${this.baseUrl}/batches/${batchId}/branch-rows/${branchRowId}`,
       payload,
     );
   }
