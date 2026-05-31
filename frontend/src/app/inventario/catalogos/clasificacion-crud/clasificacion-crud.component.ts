@@ -150,6 +150,42 @@ export class ClasificacionCrudComponent implements OnInit {
     return resultado;
   }
 
+  private actualizarEstadoClasificacionLocal(
+    nodoActual: ClasificacionNodeConEstado,
+    activo: boolean
+  ): void {
+    // Actualiza el nodo plano que está renderizando Angular Material Tree.
+    // Esto evita recargar el árbol completo y conserva las ramas abiertas.
+    nodoActual.activo = activo;
+
+    // También sincronizamos el árbol fuente por si después se usa para formularios,
+    // aplanados o validaciones internas del componente.
+    const actualizarEnArbol = (nodos: ClasificacionNodeConEstado[]): boolean => {
+      for (const nodo of nodos) {
+        if (Number(nodo.id) === Number(nodoActual.id)) {
+          nodo.activo = activo;
+          return true;
+        }
+
+        if (Array.isArray(nodo.hijos) && actualizarEnArbol(nodo.hijos as ClasificacionNodeConEstado[])) {
+          return true;
+        }
+      }
+
+      return false;
+    };
+
+    actualizarEnArbol(this.clasificaciones);
+
+    const nodoPlano = this.todasLasClasificaciones.find(
+      (item) => Number(item.id) === Number(nodoActual.id)
+    );
+
+    if (nodoPlano) {
+      nodoPlano.activo = activo;
+    }
+  }
+
   abrirFormulario(nodo: ClasificacionNodeConEstado | null = null, esHijo = false): void {
     this.mostrarFormulario = true;
 
@@ -272,8 +308,8 @@ export class ClasificacionCrudComponent implements OnInit {
 
     this.catalogoService.desactivarClasificacion(nodo.id).subscribe({
       next: (resp: any) => {
+        this.actualizarEstadoClasificacionLocal(nodo, false);
         mostrarAlertaToast(resp?.message || 'Clasificación desactivada');
-        this.cargarClasificaciones();
       },
       error: (err) => {
         const msg = err?.error?.message || 'Error al desactivar clasificación';
@@ -294,8 +330,8 @@ export class ClasificacionCrudComponent implements OnInit {
 
     this.catalogoService.reactivarClasificacion(nodo.id).subscribe({
       next: (resp: any) => {
+        this.actualizarEstadoClasificacionLocal(nodo, true);
         mostrarAlertaToast(resp?.message || 'Clasificación reactivada');
-        this.cargarClasificaciones();
       },
       error: (err) => {
         const msg = err?.error?.message || 'Error al reactivar clasificación';
