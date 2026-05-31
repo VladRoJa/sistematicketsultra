@@ -1002,3 +1002,13 @@
     flex-direction: column;
   }
 }
+
+.change-comment-field {
+  border-left: 4px solid #f79009;
+  border-radius: 12px;
+  padding-left: 10px;
+}
+
+.change-comment-field mat-hint {
+  color: #b54708;
+}
