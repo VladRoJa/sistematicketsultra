@@ -95,4 +95,28 @@ export class ArbolClasificacionComponent implements OnChanges {
   emitirReactivar(node: ClasificacionNode): void {
     this.reactivar.emit(node);
   }
+
+  emitirEditarDesdeClick(event: MouseEvent, node: ClasificacionNode): void {
+  event.preventDefault();
+  event.stopPropagation();
+  this.emitirEditar(node);
+}
+
+  emitirCrearHijoDesdeClick(event: MouseEvent, node: ClasificacionNode): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.emitirCrearHijo(node);
+  }
+
+  emitirDesactivarDesdeClick(event: MouseEvent, node: ClasificacionNode): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.emitirDesactivar(node);
+  }
+
+  emitirReactivarDesdeClick(event: MouseEvent, node: ClasificacionNode): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.emitirReactivar(node);
+  }
 }

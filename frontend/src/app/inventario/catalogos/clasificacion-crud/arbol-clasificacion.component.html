@@ -5,7 +5,6 @@
   <!-- Nodo con hijos -->
   <mat-tree-node
     *matTreeNodeDef="let node; when: hasChild"
-    matTreeNodeToggle
     [class]="'mat-tree-node mat-tree-node-level-' + node.nivel"
     [class.nodo-inactivo]="!estaActivo(node)"
   >
@@ -29,7 +28,7 @@
         <button
           mat-icon-button
           color="primary"
-          (click)="emitirEditar(node)"
+          (click)="emitirEditarDesdeClick($event, node)"
           aria-label="Editar clasificación"
           title="Editar"
         >
@@ -40,7 +39,7 @@
           mat-icon-button
           color="accent"
           [disabled]="!puedeAgregarHijo(node)"
-          (click)="emitirCrearHijo(node)"
+          (click)="emitirCrearHijoDesdeClick($event, node)"
           aria-label="Agregar subclasificación"
           title="Agregar hijo"
         >
@@ -51,7 +50,7 @@
           *ngIf="estaActivo(node)"
           mat-icon-button
           color="warn"
-          (click)="emitirDesactivar(node)"
+          (click)="emitirDesactivarDesdeClick($event, node)"
           aria-label="Desactivar clasificación"
           title="Desactivar"
         >
@@ -62,7 +61,7 @@
           *ngIf="!estaActivo(node)"
           mat-icon-button
           color="primary"
-          (click)="emitirReactivar(node)"
+          (click)="emitirReactivarDesdeClick($event, node)"
           aria-label="Reactivar clasificación"
           title="Reactivar"
         >
@@ -92,7 +91,7 @@
         <button
           mat-icon-button
           color="primary"
-          (click)="emitirEditar(node)"
+          (click)="emitirEditarDesdeClick($event, node)"
           aria-label="Editar clasificación"
           title="Editar"
         >
@@ -103,7 +102,7 @@
           mat-icon-button
           color="accent"
           [disabled]="!puedeAgregarHijo(node)"
-          (click)="emitirCrearHijo(node)"
+          (click)="emitirCrearHijoDesdeClick($event, node)"
           aria-label="Agregar subclasificación"
           title="Agregar hijo"
         >
@@ -114,7 +113,7 @@
           *ngIf="estaActivo(node)"
           mat-icon-button
           color="warn"
-          (click)="emitirDesactivar(node)"
+          (click)="emitirDesactivarDesdeClick($event, node)"
           aria-label="Desactivar clasificación"
           title="Desactivar"
         >
@@ -125,7 +124,7 @@
           *ngIf="!estaActivo(node)"
           mat-icon-button
           color="primary"
-          (click)="emitirReactivar(node)"
+          (click)="emitirReactivarDesdeClick($event, node)"
           aria-label="Reactivar clasificación"
           title="Reactivar"
         >
