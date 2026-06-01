@@ -190,9 +190,14 @@ def _resolve_agregadoras_business_date(
     if normalized_generation_mode not in {"manual_preview", "official_closed_day"}:
         return business_date
 
+    month_start = business_date.replace(day=1)
+
     latest_available_row = (
         db.session.query(TrackSourceAgregadorasDailyORM.business_date)
-        .filter(TrackSourceAgregadorasDailyORM.business_date <= business_date)
+        .filter(
+            TrackSourceAgregadorasDailyORM.business_date >= month_start,
+            TrackSourceAgregadorasDailyORM.business_date <= business_date,
+        )
         .order_by(TrackSourceAgregadorasDailyORM.business_date.desc())
         .first()
     )
