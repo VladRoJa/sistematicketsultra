@@ -185,7 +185,9 @@ def _resolve_agregadoras_business_date(
     business_date: date,
     generation_mode: str | None = None,
 ) -> date:
-    if generation_mode != "manual_preview":
+    normalized_generation_mode = str(generation_mode or "").strip()
+
+    if normalized_generation_mode not in {"manual_preview", "official_closed_day"}:
         return business_date
 
     latest_available_row = (
