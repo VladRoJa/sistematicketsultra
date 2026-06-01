@@ -8,6 +8,7 @@ from typing import Any
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt, jwt_required
 
+from app.models.user_model import UserORM
 from app.warehouse.services.planning_targets_service import (
     AddPlanningTargetBranchRowCommand,
     ApprovePlanningTargetBatchCommand,
@@ -83,14 +84,31 @@ def _current_user_id_or_none() -> int | None:
 def _current_username_or_none() -> str | None:
     claims = get_jwt() or {}
 
-    for key in ("username", "sub", "user"):
+    for key in ("username", "user"):
         raw_value = claims.get(key)
         if raw_value is None:
             continue
 
         normalized = str(raw_value).strip()
-        if normalized:
+        if normalized and not normalized.isdigit():
             return normalized
+
+    user_id = _current_user_id_or_none()
+
+    if user_id is not None:
+        user = UserORM.get_by_id(user_id)
+
+        if user is not None and user.username:
+            return str(user.username).strip()
+
+        return f"Usuario #{user_id}"
+
+    raw_sub = claims.get("sub")
+    if raw_sub is not None:
+        normalized_sub = str(raw_sub).strip()
+
+        if normalized_sub and not normalized_sub.isdigit():
+            return normalized_sub
 
     return None
 
