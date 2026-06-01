@@ -98,6 +98,7 @@ def _require_track_read_role() -> None:
         "GERENTE",
         "GERENTE_REGIONAL",
         "SISTEMAS",
+        "GERENCIA DEPORTIVA",
     }:
         raise PermissionError("No autorizado para consultar el Track.")
 

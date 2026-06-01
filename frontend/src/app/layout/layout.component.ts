@@ -831,7 +831,8 @@ private puedeVerTrackDiarioPorRol(): boolean {
     'LECTOR_GLOBAL',
     'GERENTE',
     'GERENTE_REGIONAL',
-    'SISTEMAS'
+    'SISTEMAS',
+    "GERENCIA DEPORTIVA",
   ].includes(rol);
 }
 
