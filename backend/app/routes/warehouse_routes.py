@@ -9,6 +9,7 @@ import hashlib
 import uuid
 from sqlalchemy.orm import joinedload
 from sqlalchemy import or_
+from zoneinfo import ZoneInfo
 
 from app.extensions import db
 from app.models.warehouse import WarehouseUploadORM
@@ -39,7 +40,7 @@ warehouse_bp = Blueprint('warehouse', __name__)
 
 ALLOWED_WAREHOUSE_EXTENSIONS = {'xlsx', 'xls', 'csv', 'pdf', 'txt'}
 MAX_WAREHOUSE_FILE_SIZE_BYTES = 70 * 1024 * 1024
-
+WAREHOUSE_LOCAL_TZ = ZoneInfo("America/Tijuana")
 
 def _get_current_user_id() -> int | None:
     current_user_id = get_jwt_identity()
@@ -339,7 +340,7 @@ def _parse_iso_date(raw_value: str | None) -> date | None:
 
 
 def _build_upload_created_at_range(date_preset: str, date_from_raw: str | None, date_to_raw: str | None):
-    today = date.today()
+    today = datetime.now(WAREHOUSE_LOCAL_TZ).date()
     normalized_preset = (date_preset or 'today').strip().lower()
 
     if normalized_preset == 'all':
@@ -373,11 +374,10 @@ def _build_upload_created_at_range(date_preset: str, date_from_raw: str | None, 
     if end_day < start_day:
         start_day, end_day = end_day, start_day
 
-    start_dt = datetime.combine(start_day, time.min)
-    end_dt = datetime.combine(end_day + timedelta(days=1), time.min)
+    start_dt = datetime.combine(start_day, time.min, tzinfo=WAREHOUSE_LOCAL_TZ)
+    end_dt = datetime.combine(end_day + timedelta(days=1), time.min, tzinfo=WAREHOUSE_LOCAL_TZ)
 
     return start_dt, end_dt
-
 
 def _serialize_warehouse_upload_item(item: WarehouseUploadORM) -> dict:
     return {
