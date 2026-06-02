@@ -4,6 +4,22 @@ from werkzeug.security import check_password_hash
 from sqlalchemy import text
 from app.extensions import db
 
+usuario_sucursal = db.Table(
+    "usuario_sucursal",
+    db.Column(
+        "user_id",
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    db.Column(
+        "sucursal_id",
+        db.Integer,
+        db.ForeignKey("sucursales.sucursal_id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+)
+
 # ─────────────────────────────────────────────────────────────
 # MODELO: USUARIO
 # ─────────────────────────────────────────────────────────────
@@ -21,7 +37,7 @@ class UserORM(db.Model):
     # OJO: actualmente no es FK. Si quieres FK real: db.ForeignKey('departamentos.id') + migración.
     department_id = db.Column(db.Integer, nullable=False)
 
-    email = db.Column(db.String(120), unique=True, index=True, nullable=False)
+    email = db.Column(db.String(255), index=True, nullable=True)
 
     # ─── Relaciones ─────────────────────────────────────────
     movimientos = db.relationship('MovimientoInventario', backref='usuario', cascade='all, delete-orphan')

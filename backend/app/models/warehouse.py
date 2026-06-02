@@ -643,10 +643,10 @@ class ReporteDireccionSnapshotORM(db.Model):
 
     id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
     warehouse_upload_id = db.Column(db.BigInteger, nullable=False)
-    report_type_key = db.Column(db.Text, nullable=False)
+    report_type_key = db.Column(db.String(64), nullable=False)
     business_date = db.Column(db.Date, nullable=False)
     captured_at = db.Column(db.DateTime(timezone=True), nullable=False)
-    snapshot_kind = db.Column(db.Text, nullable=False)
+    snapshot_kind = db.Column(db.String(32), nullable=False)
     is_canonical = db.Column(db.Boolean, nullable=False, default=False)
     row_count_detected = db.Column(db.Integer, nullable=False)
     row_count_valid = db.Column(db.Integer, nullable=False)
@@ -664,8 +664,33 @@ class ReporteDireccionSnapshotRowORM(db.Model):
         db.ForeignKey("reporte_direccion_snapshots.id", ondelete="CASCADE"),
         nullable=False,
     )
-    sucursal = db.Column(db.Text, nullable=False)
+
+    sucursal = db.Column(db.String(128), nullable=False)
+
+    socios_activos_totales = db.Column(db.Integer, nullable=True)
+    socios_activos_kpi = db.Column(db.Integer, nullable=True)
+    socios_kpi_m2 = db.Column(db.Numeric(10, 2), nullable=True)
+
+    asistencia_hoy = db.Column(db.Integer, nullable=True)
+    diarios_hoy = db.Column(db.Integer, nullable=True)
+    gympass = db.Column(db.Integer, nullable=True)
+    totalpass = db.Column(db.Integer, nullable=True)
+    pases_cortesia = db.Column(db.Integer, nullable=True)
+
+    ingreso_hoy = db.Column(db.Numeric(14, 2), nullable=True)
+    ingreso_acumulado_semana_en_curso = db.Column(db.Numeric(14, 2), nullable=True)
     ingreso_acumulado_mes_en_curso = db.Column(db.Numeric(14, 2), nullable=True)
+    membresia_domiciliada_mes_en_curso = db.Column(db.Numeric(14, 2), nullable=True)
+    pago_posterior_domiciliado_mes_en_curso = db.Column(db.Numeric(14, 2), nullable=True)
+    producto_pct_venta = db.Column(db.Numeric(7, 4), nullable=True)
+    ingreso_acumulado_mismo_mes_anio_anterior = db.Column(
+        db.Numeric(14, 2),
+        nullable=True,
+    )
+
+    hora_apertura_raw = db.Column(db.String(32), nullable=True)
+    hora_clausura_raw = db.Column(db.String(32), nullable=True)
+
     created_at = db.Column(db.DateTime(timezone=True), nullable=False)
     updated_at = db.Column(db.DateTime(timezone=True), nullable=False)
     

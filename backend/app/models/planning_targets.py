@@ -6,6 +6,8 @@ from datetime import datetime, timezone
 
 from app.extensions import db
 
+from sqlalchemy.dialects.postgresql import JSONB
+
 
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
@@ -52,8 +54,8 @@ class PlanningModelConfigORM(db.Model):
         default="PROMEDIO_REGIONAL",
     )
 
-    risk_rules_json = db.Column(db.JSON, nullable=True)
-    parameters_json = db.Column(db.JSON, nullable=True)
+    risk_rules_json = db.Column(JSONB, nullable=True)
+    parameters_json = db.Column(JSONB, nullable=True)
 
     created_by_user_id = db.Column(
         db.Integer,
@@ -409,7 +411,7 @@ class PlanningTargetApprovalEventORM(db.Model):
     actor_username_snapshot = db.Column(db.Text, nullable=True)
 
     comment = db.Column(db.Text, nullable=True)
-    metadata_json = db.Column(db.JSON, nullable=True)
+    metadata_json = db.Column(JSONB, nullable=True)
 
     created_at = db.Column(
         db.DateTime(timezone=True),
