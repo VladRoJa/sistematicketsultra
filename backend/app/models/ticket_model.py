@@ -49,7 +49,7 @@ class Ticket(db.Model):
     refaccion_definida_por_jefe = db.Column(db.Boolean, default=False)
     
     # Costos y notas de cierre
-    costo_solucion = db.Column(db.Numeric(10, 2))
+    costo_solucion = db.Column(db.Numeric(12, 2))
     notas_cierre = db.Column(db.Text)
 
     # Adjuntos / extras
