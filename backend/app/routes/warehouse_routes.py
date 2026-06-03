@@ -38,7 +38,18 @@ from app.warehouse.services.warehouse_manual_ingestion_dispatcher import (
 warehouse_bp = Blueprint('warehouse', __name__)
 
 
-ALLOWED_WAREHOUSE_EXTENSIONS = {'xlsx', 'xls', 'csv', 'pdf', 'txt'}
+ALLOWED_WAREHOUSE_EXTENSIONS = {
+    "xlsx",
+    "xls",
+    "csv",
+    "pdf",
+    "txt",
+    "docx",
+    "pptx",
+    "png",
+    "jpg",
+    "jpeg",
+}
 MAX_WAREHOUSE_FILE_SIZE_BYTES = 70 * 1024 * 1024
 WAREHOUSE_LOCAL_TZ = ZoneInfo("America/Tijuana")
 

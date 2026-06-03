@@ -22,7 +22,18 @@ from app.models import (
 from app.utils.warehouse_audit import log_warehouse_audit
 
 
-ALLOWED_WAREHOUSE_EXTENSIONS = {"xlsx", "xls", "csv", "pdf", "txt"}
+ALLOWED_WAREHOUSE_EXTENSIONS = {
+    "xlsx",
+    "xls",
+    "csv",
+    "pdf",
+    "txt",
+    "docx",
+    "pptx",
+    "png",
+    "jpg",
+    "jpeg",
+}
 MAX_WAREHOUSE_FILE_SIZE_BYTES = 70 * 1024 * 1024
 
 
