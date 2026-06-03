@@ -1,6 +1,6 @@
-# Suite Ultra — Contrato Técnico F1.1 Actualizado
+# Suite Ultra — Contrato Técnico Nube Corporativa
 
-## Nube Corporativa / Portal Interno de Documentos Publicados
+## Portal Interno de Documentos Publicados
 
 ### Base documental gobernada para Suite Ultra y preparación estratégica para Módulo de Aperturas
 
@@ -12,7 +12,7 @@
 
 La F1 de Nube Corporativa ya fue implementada y desplegada en producción.
 
-Actualmente el módulo ya permite:
+Actualmente el módulo permite:
 
 * crear documentos internos como borrador,
 * subir archivos usando flujo Warehouse-first,
@@ -24,7 +24,8 @@ Actualmente el módulo ya permite:
 * publicar documentos,
 * archivar documentos,
 * descargar documentos mediante endpoint seguro con JWT,
-* usar menú dinámico dentro de Suite Ultra.
+* usar menú dinámico dentro de Suite Ultra,
+* ocultar el menú a roles no administrativos mientras el módulo madura.
 
 ### Decisión operativa temporal
 
@@ -34,8 +35,11 @@ Motivo:
 
 * el módulo ya funciona,
 * pero todavía está en etapa inicial,
+* falta pulir UX,
+* falta cerrar preview en pantalla,
+* falta definir vínculos documentales para aperturas,
 * no se quiere generar ruido operativo,
-* no se quiere que gerentes empiecen a preguntar antes de cerrar UX, permisos finos y contrato de uso.
+* no se quiere que gerentes empiecen a preguntar antes de cerrar el contrato de uso.
 
 Roles con acceso visible al menú en esta etapa:
 
@@ -62,6 +66,7 @@ Debe funcionar como un sistema documental gobernado con:
 * permisos backend,
 * auditoría,
 * descarga segura,
+* preview seguro en pantalla para PDF e imágenes,
 * búsqueda y filtros básicos,
 * preparación para vincular documentos a proyectos, aperturas, sucursales, tareas y responsables.
 
@@ -134,6 +139,7 @@ Debe ayudar a responder preguntas como:
 * ¿Está archivado?
 * ¿Hay una versión nueva?
 * ¿Dónde está la evidencia oficial?
+* ¿Puedo revisar el documento sin descargarlo?
 
 ---
 
@@ -169,6 +175,34 @@ Al reemplazar una versión:
 * la versión anterior queda oculta para usuarios normales,
 * la versión anterior queda trazable para administradores/auditoría,
 * no se sobrescribe físicamente el archivo anterior.
+
+### Descarga
+
+El módulo permite descargar documentos autorizados mediante endpoint backend protegido con JWT.
+
+La descarga no expone rutas internas ni paths del servidor.
+
+### Preview
+
+El preview de PDF e imágenes sube de prioridad.
+
+Antes estaba contemplado para F2, pero por el nuevo enfoque hacia Aperturas se considera necesario antes o junto con F1.1.
+
+Motivo:
+
+Aperturas requerirá revisar constantemente:
+
+* planos,
+* permisos,
+* fotos,
+* evidencias,
+* contratos,
+* cotizaciones,
+* checklists,
+* manuales,
+* documentos escaneados.
+
+Obligar a descargar cada archivo haría que la Nube sea lenta y poco práctica.
 
 ### Búsqueda
 
@@ -238,7 +272,7 @@ backend/migrations/versions/f57edbdac964_add_internal_documents_warehouse_report
 
 ## 6. Módulo frontend actual
 
-Ruta de usuario/admin actual:
+Ruta actual:
 
 ```text
 /#/nube-corporativa
@@ -572,6 +606,8 @@ Menú temporal:
 14. No se guardan archivos con nombres originales como path final sin sanitización.
 15. No se exponen rutas internas del volumen.
 16. La visibilidad global no se permite en documentos sensibles.
+17. El preview en pantalla debe usar Blob URL autenticado, no URL pública.
+18. El preview no debe exponer `stored_path` ni `stored_filename`.
 
 ---
 
@@ -622,7 +658,107 @@ MIME type queda registrado, pero no debe ser la única validación.
 
 ---
 
-## 12. Brecha principal para Aperturas
+## 12. Preview seguro de documentos
+
+### Decisión
+
+El preview seguro de PDF e imágenes se mueve de F2 a un bloque previo o paralelo a F1.1.
+
+Nombre sugerido:
+
+```text
+F1.0.2 — Preview seguro de PDF e imágenes
+```
+
+o:
+
+```text
+Prerequisite F1.1 — Document Preview
+```
+
+### Objetivo
+
+Permitir que el usuario revise documentos en pantalla sin tener que descargarlos siempre.
+
+Debe conservarse también la opción de descargar.
+
+### Formatos con preview inicial
+
+Soportar inicialmente:
+
+* PDF
+* PNG
+* JPG
+* JPEG
+
+No soportar preview inicial para:
+
+* DOCX
+* PPTX
+* XLSX
+* XLS
+* CSV
+* TXT
+
+Estos formatos siguen disponibles por descarga.
+
+### Arquitectura recomendada
+
+No crear URL pública.
+
+No servir archivos estáticos directamente.
+
+Usar el endpoint actual protegido:
+
+```text
+GET /api/internal-documents/<document_id>/download
+```
+
+Flujo:
+
+```text
+Angular → request con JWT → backend valida permisos → backend devuelve blob → Angular crea ObjectURL temporal → visor en pantalla
+```
+
+### UI recomendada
+
+En el detalle del documento mostrar:
+
+```text
+[Ver en pantalla] [Descargar]
+```
+
+Reglas UI:
+
+* Si el archivo es PDF o imagen: mostrar `Ver en pantalla`.
+* Si el archivo no es previsualizable: ocultar `Ver en pantalla` o mostrar mensaje “Este formato solo está disponible para descarga”.
+* Mantener botón `Descargar` siempre que tenga permiso.
+* Al cerrar preview, liberar el ObjectURL.
+
+### Riesgos técnicos
+
+* Si no se libera el ObjectURL, puede haber fuga de memoria en navegador.
+* Si se usa iframe sin sanitizar URL, Angular puede bloquearlo.
+* Si se intenta previsualizar Office sin conversión, mala UX.
+* Si se exponen rutas públicas, se rompe el modelo de seguridad.
+* Si se abre en nueva pestaña sin token, puede fallar.
+
+### Criterios de aceptación del preview
+
+1. Documento PDF se abre en pantalla.
+2. Imagen PNG/JPG/JPEG se abre en pantalla.
+3. Documento DOCX/PPTX/XLSX no muestra preview inicial.
+4. La opción Descargar se mantiene.
+5. El backend sigue validando permisos.
+6. No se expone path interno.
+7. El ObjectURL se limpia al cerrar.
+8. El preview funciona después de F5.
+9. Usuario sin permiso no puede previsualizar por request directo.
+10. No requiere migración.
+
+---
+
+## 13. Brecha principal para Aperturas
 
 La Nube actual ya resuelve:
 
@@ -634,6 +770,12 @@ La Nube actual ya resuelve:
 * descarga,
 * sensibilidad,
 * dueño documental.
+
+Con el preview seguro resolverá también:
+
+* consulta rápida de PDFs,
+* consulta rápida de imágenes,
+* revisión visual de planos/evidencias/manuales sin descargar.
 
 Pero todavía no resuelve de forma estructurada:
 
@@ -661,7 +803,7 @@ Debe agregar una capa de vinculación.
 
 ---
 
-## 13. Propuesta F1.1 real: documentos vinculables
+## 14. Propuesta F1.1 real: documentos vinculables
 
 ### Objetivo
 
@@ -738,7 +880,7 @@ Cuando existan esas tablas, `entity_id` podrá apuntar a registros reales o se p
 
 ---
 
-## 14. Metadata útil para Aperturas
+## 15. Metadata útil para Aperturas
 
 La metadata actual cubre:
 
@@ -760,29 +902,28 @@ La metadata actual cubre:
 | usuario que publicó     | cubierto                             |
 | proyecto/apertura       | no cubierto                          |
 | tarea vinculada         | no cubierto                          |
+| preview                 | pendiente F1.0.2                     |
 
 ### Ajuste mínimo recomendado
 
 No agregar todas estas columnas directo a `internal_documents`.
 
-Agregar primero:
+Orden recomendado:
 
-```text
-internal_document_links
-```
+1. Agregar preview seguro para PDF/imágenes.
+2. Agregar `internal_document_links`.
+3. Dejar para F2:
 
-Y dejar para F2:
-
-* vigencia,
-* vencimiento,
-* revisión periódica,
-* responsable operativo distinto al dueño documental,
-* aprobación documental,
-* firma de recibido.
+   * vigencia,
+   * vencimiento,
+   * revisión periódica,
+   * responsable operativo distinto al dueño documental,
+   * aprobación documental,
+   * firma de recibido.
 
 ---
 
-## 15. Estados documentales
+## 16. Estados documentales
 
 Estados actuales:
 
@@ -817,7 +958,7 @@ No hacerlo en F1.1.
 
 ---
 
-## 16. Riesgos
+## 17. Riesgos
 
 ### Riesgo 1: que se vuelva basurero documental
 
@@ -892,11 +1033,21 @@ Mitigación actual:
 * usuario nunca ve path interno,
 * descarga pasa por backend.
 
+### Riesgo 7: preview inseguro
+
+Mitigación:
+
+* no exponer rutas públicas,
+* usar blob autenticado,
+* backend valida permisos,
+* limpiar ObjectURL al cerrar,
+* no usar URLs internas del servidor en HTML.
+
 ---
 
-## 17. Pendientes UX detectados en producción
+## 18. Pendientes UX detectados en producción
 
-Pendientes inmediatos:
+Pendientes inmediatos ya detectados:
 
 1. Ocultar botón “Global” cuando el documento ya tiene `visibility_mode = GLOBAL`.
 2. Ocultar botón “Global” para documentos sensibles.
@@ -908,18 +1059,19 @@ Pendientes inmediatos:
 8. Mejorar etiqueta del botón “Global” a “Hacer visible globalmente”.
 9. Mostrar mejor el estado “Sensible”.
 10. Agregar confirmación visual al publicar.
+11. Agregar preview en pantalla para PDF e imágenes.
 
 ### Bug conocido: descarga sin extensión
 
 Problema:
 
-El frontend construye fallback de descarga con:
+El frontend construía fallback de descarga con:
 
 ```text
 document.title + version
 ```
 
-Eso puede perder `.pdf`, `.docx`, etc.
+Eso podía perder `.pdf`, `.docx`, etc.
 
 Solución recomendada:
 
@@ -929,13 +1081,13 @@ Usar primero:
 document.current_version.original_filename
 ```
 
-Si no existe, construir fallback con extensión.
+Si no existe, construir fallback con extensión por MIME type.
 
 ---
 
-## 18. Pantallas Angular objetivo
+## 19. Pantallas Angular objetivo
 
-## 18.1 Home — Nube Corporativa
+## 19.1 Home — Nube Corporativa
 
 Ruta:
 
@@ -952,7 +1104,7 @@ Elementos objetivo:
 * vista limpia para usuario final,
 * sin formulario admin visible por defecto.
 
-## 18.2 Lista de documentos
+## 19.2 Lista de documentos
 
 Elementos:
 
@@ -968,6 +1120,7 @@ Elementos:
 * acciones:
 
   * ver detalle,
+  * ver en pantalla si aplica,
   * descargar,
   * editar si admin,
   * archivar si admin.
@@ -984,7 +1137,7 @@ Columnas:
 * vínculo/contexto,
 * acciones.
 
-## 18.3 Detalle de documento
+## 19.3 Detalle de documento
 
 Elementos:
 
@@ -997,10 +1150,11 @@ Elementos:
 * estado,
 * sensibilidad,
 * vínculos contextuales,
+* botón ver en pantalla,
 * botón descargar,
 * historial básico si admin.
 
-## 18.4 Admin de documentos
+## 19.4 Admin de documentos
 
 Ruta futura:
 
@@ -1023,7 +1177,7 @@ Elementos:
 
 ---
 
-## 19. Servicio Angular actual
+## 20. Servicio Angular actual
 
 Servicio:
 
@@ -1049,6 +1203,17 @@ Métodos actuales:
 * `getAudit(id)`
 * `triggerBrowserDownload(response, fallbackName)`
 
+Métodos recomendados F1.0.2 Preview:
+
+* `openPreview(document)`
+* `closePreview()`
+* `canPreviewDocument(document)`
+* `resolvePreviewType(document)`
+* `createPreviewObjectUrl(response)`
+* `revokePreviewObjectUrl()`
+
+Estos métodos deben vivir en `.ts`, no en HTML.
+
 Métodos futuros F1.1:
 
 * `getDocumentLinks(documentId)`
@@ -1058,7 +1223,7 @@ Métodos futuros F1.1:
 
 ---
 
-## 20. Respuestas API recomendadas
+## 21. Respuestas API recomendadas
 
 Cada documento listado debe incluir capacidades calculadas por backend:
 
@@ -1095,9 +1260,9 @@ El frontend puede ocultar botones con capacidades, pero el backend debe volver a
 
 ---
 
-## 21. Flujo funcional actual F1
+## 22. Flujo funcional actual F1
 
-## 21.1 Crear borrador
+## 22.1 Crear borrador
 
 1. Admin entra a Nube Corporativa.
 2. Sube archivo.
@@ -1107,7 +1272,7 @@ El frontend puede ocultar botones con capacidades, pero el backend debe volver a
 6. Backend crea versión 1.
 7. Backend audita.
 
-## 21.2 Configurar visibilidad
+## 22.2 Configurar visibilidad
 
 1. Admin selecciona documento.
 2. Define alcance:
@@ -1120,14 +1285,14 @@ El frontend puede ocultar botones con capacidades, pero el backend debe volver a
 3. Backend guarda reglas.
 4. Backend audita.
 
-## 21.3 Publicar
+## 22.3 Publicar
 
 1. Admin presiona publicar.
 2. Backend valida metadata, dueño, versión y visibilidad.
 3. Backend cambia estado a PUBLICADO.
 4. Documento aparece a usuarios autorizados.
 
-## 21.4 Descargar
+## 22.4 Descargar
 
 1. Usuario autorizado entra a biblioteca.
 2. Backend devuelve solo documentos autorizados.
@@ -1136,7 +1301,18 @@ El frontend puede ocultar botones con capacidades, pero el backend debe volver a
 5. Backend valida permiso.
 6. Backend entrega archivo sin exponer ruta real.
 
-## 21.5 Reemplazar versión
+## 22.5 Ver en pantalla
+
+1. Usuario autorizado abre documento.
+2. Frontend valida si el formato es previsualizable.
+3. Si es PDF/imagen, muestra botón `Ver en pantalla`.
+4. Frontend solicita archivo al endpoint protegido.
+5. Backend valida permisos y entrega blob.
+6. Frontend crea ObjectURL temporal.
+7. Frontend muestra PDF/imagen en pantalla.
+8. Al cerrar, frontend libera ObjectURL.
+
+## 22.6 Reemplazar versión
 
 1. Admin abre documento.
 2. Sube nuevo archivo.
@@ -1146,7 +1322,7 @@ El frontend puede ocultar botones con capacidades, pero el backend debe volver a
 6. Backend marca nueva versión como vigente.
 7. Backend audita.
 
-## 21.6 Archivar
+## 22.7 Archivar
 
 1. Admin archiva documento.
 2. Backend cambia estado a ARCHIVADO.
@@ -1155,7 +1331,7 @@ El frontend puede ocultar botones con capacidades, pero el backend debe volver a
 
 ---
 
-## 22. Flujo futuro F1.1: vincular documento a apertura
+## 23. Flujo futuro F1.1: vincular documento a apertura
 
 1. Admin crea o selecciona documento.
 2. Admin abre sección “Vinculación”.
@@ -1189,9 +1365,9 @@ is_primary = true
 
 ---
 
-## 23. Checklist QA actual F1
+## 24. Checklist QA actual F1
 
-## 23.1 Seguridad
+## 24.1 Seguridad
 
 * Usuario sin token no accede.
 * Usuario no autorizado no ve documento.
@@ -1204,7 +1380,7 @@ is_primary = true
 * Frontend oculta botones, pero backend bloquea aunque se fuerce request.
 * Menú oculto a gerentes mientras el módulo está en beta.
 
-## 23.2 Versionado
+## 24.2 Versionado
 
 * Crear primera versión funciona.
 * Reemplazar versión crea nuevo registro.
@@ -1213,7 +1389,7 @@ is_primary = true
 * Admin puede ver historial.
 * Documento apunta a versión vigente correcta.
 
-## 23.3 Warehouse
+## 24.3 Warehouse
 
 * Archivo se registra en Warehouse.
 * Archivo tiene hash.
@@ -1222,7 +1398,7 @@ is_primary = true
 * Descarga resuelve desde Warehouse.
 * Archivo sobrevive reinicio/rebuild.
 
-## 23.4 Auditoría
+## 24.4 Auditoría
 
 * Crear documento audita.
 * Editar metadata audita.
@@ -1232,20 +1408,22 @@ is_primary = true
 * Cambiar visibilidad audita.
 * Cambiar sensibilidad audita.
 
-## 23.5 Frontend
+## 24.5 Frontend
 
 * Lista carga documentos autorizados.
 * Filtros funcionan.
 * Buscador por metadata funciona.
 * Detalle muestra metadata correcta.
 * Botón descargar funciona.
+* Preview PDF funciona.
+* Preview imagen funciona.
 * Botones admin solo aparecen si hay permisos.
 * F5 en ruta hash mantiene pantalla correcta.
 * Responsive básico funciona.
 
 ---
 
-## 24. QA pendiente inmediato en producción
+## 25. QA pendiente inmediato en producción
 
 Antes de abrirlo a más usuarios, validar:
 
@@ -1270,14 +1448,43 @@ Antes de abrirlo a más usuarios, validar:
 
 4. Descarga:
 
-   * corregir extensión,
+   * confirmar que conserva extensión,
    * confirmar que Windows reconoce el archivo.
+
+5. Preview:
+
+   * abrir PDF en pantalla,
+   * abrir imagen en pantalla,
+   * confirmar que Office docs siguen solo por descarga,
+   * confirmar que al cerrar se libera el visor.
 
 ---
 
-## 25. Orden recomendado de siguientes trabajos
+## 26. Orden recomendado de siguientes trabajos
 
-## Hotfix UX 1
+## F1.0.2 — Preview seguro de PDF e imágenes
+
+Rama sugerida:
+
+```text
+feature/internal-documents-preview
+```
+
+Incluye:
+
+* botón `Ver en pantalla`,
+* visor PDF,
+* visor imagen,
+* mantener botón Descargar,
+* ObjectURL temporal,
+* limpieza de ObjectURL al cerrar,
+* mensaje para formato no previsualizable.
+
+No requiere migración.
+
+No debería requerir backend.
+
+## Hotfix UX adicional
 
 Rama sugerida:
 
@@ -1318,10 +1525,11 @@ Incluye:
 
 * búsqueda dentro de PDF,
 * auditoría de descargas,
-* preview PDF,
-* vencimientos/vigencias,
+* preview Office vía conversión o servicio externo si aplica,
 * documentos destacados,
-* notificaciones,
+* vigencias y alertas,
+* publicación automática de reportes confiables,
+* responsables por área,
 * aprobación documental,
 * firma de recibido,
 * selector de dueños,
@@ -1349,7 +1557,7 @@ Incluirá:
 
 ---
 
-## 26. Criterio de cierre F1
+## 27. Criterio de cierre F1
 
 F1 se considera cerrada cuando:
 
@@ -1375,12 +1583,30 @@ Estado:
 
 ```text
 F1 funcional en producción.
-Pendiente pulido UX y QA final por roles.
+Pendiente QA final por roles.
 ```
 
 ---
 
-## 27. Criterio de cierre F1.1
+## 28. Criterio de cierre F1.0.2 Preview
+
+F1.0.2 se puede cerrar cuando:
+
+1. Documento PDF se puede ver en pantalla.
+2. Imagen PNG/JPG/JPEG se puede ver en pantalla.
+3. Opción Descargar sigue disponible.
+4. Office docs no intentan preview inicial.
+5. El preview usa endpoint autenticado.
+6. No se exponen rutas internas.
+7. El ObjectURL se limpia al cerrar.
+8. Usuario no autorizado no puede previsualizar.
+9. Build frontend pasa.
+10. No requiere migración.
+11. No rompe flujo actual de descarga.
+
+---
+
+## 29. Criterio de cierre F1.1
 
 F1.1 se puede cerrar cuando:
 
@@ -1423,7 +1649,7 @@ OTRO
 
 ---
 
-## 28. Pendientes para F2
+## 30. Pendientes para F2
 
 * Búsqueda dentro de PDFs.
 * Auditoría de descargas.
@@ -1433,7 +1659,7 @@ OTRO
 * Responsables por área.
 * Aprobación documental.
 * Firma de recibido.
-* Preview de PDF.
+* Preview Office vía conversión si aplica.
 * Integración con notificaciones.
 * Dashboard de documentos vencidos/no revisados.
 * Selector de usuarios/departamentos/sucursales.
