@@ -9,6 +9,10 @@ import {
   InternalDocument,
   InternalDocumentCategory,
   InternalDocumentCreatePayload,
+  InternalDocumentLink,
+  InternalDocumentLinkEntityType,
+  InternalDocumentLinkPayload,
+  InternalDocumentLinkRole,
   InternalDocumentListFilters,
   InternalDocumentStatus,
   InternalDocumentVisibilityPayload,
@@ -80,6 +84,46 @@ export class InternalDocumentsHomeComponent implements OnInit, OnDestroy  {
     version_label: '',
     change_notes: '',
   };
+
+  linksSaving = false;
+
+  linkForm = {
+    entity_type: 'OPENING' as InternalDocumentLinkEntityType,
+    entity_id: null as number | null,
+    entity_key: '',
+    link_role: 'MANUAL' as InternalDocumentLinkRole,
+    label: '',
+    is_primary: false,
+  };
+
+  readonly linkEntityTypeOptions: Array<{
+    value: InternalDocumentLinkEntityType;
+    label: string;
+  }> = [
+    { value: 'OPENING', label: 'Apertura' },
+    { value: 'PROJECT', label: 'Proyecto' },
+    { value: 'TASK', label: 'Tarea' },
+    { value: 'SUCURSAL', label: 'Sucursal' },
+    { value: 'DEPARTMENT', label: 'Departamento' },
+    { value: 'GENERAL', label: 'General' },
+  ];
+
+  readonly linkRoleOptions: Array<{
+    value: InternalDocumentLinkRole;
+    label: string;
+  }> = [
+    { value: 'PLANO', label: 'Plano' },
+    { value: 'PERMISO', label: 'Permiso' },
+    { value: 'CONTRATO', label: 'Contrato' },
+    { value: 'COTIZACION', label: 'Cotización' },
+    { value: 'CHECKLIST', label: 'Checklist' },
+    { value: 'EVIDENCIA', label: 'Evidencia' },
+    { value: 'MANUAL', label: 'Manual' },
+    { value: 'FINANCIERO', label: 'Financiero' },
+    { value: 'CONSTRUCCION', label: 'Construcción' },
+    { value: 'OPERACION', label: 'Operación' },
+    { value: 'OTRO', label: 'Otro' },
+  ];
 
   readonly statusOptions: Array<InternalDocumentStatus | 'ALL'> = [
     'ALL',
@@ -402,6 +446,177 @@ export class InternalDocumentsHomeComponent implements OnInit, OnDestroy  {
           error,
           'No se pudo reemplazar la versión.'
         );
+      },
+    });
+  }
+
+  createLinkForSelectedDocument(): void {
+    if (!this.canManageLinks(this.selectedDocument)) {
+      return;
+    }
+
+    const document = this.selectedDocument;
+
+    if (!document) {
+      return;
+    }
+
+    const payload = this.buildLinkPayload();
+
+    if (!payload) {
+      return;
+    }
+
+    this.linksSaving = true;
+    this.clearMessages();
+
+    this.internalDocumentsService.createDocumentLink(document.id, payload).subscribe({
+      next: (response) => {
+        this.linksSaving = false;
+        this.successMessage = response.message || 'Vínculo documental creado.';
+        this.resetLinkForm();
+        this.reloadSelectedDocumentDetails(document.id);
+      },
+      error: (error) => {
+        this.linksSaving = false;
+        this.errorMessage = this.resolveErrorMessage(
+          error,
+          'No se pudo crear el vínculo documental.'
+        );
+      },
+    });
+  }
+
+  deleteLinkFromSelectedDocument(link: InternalDocumentLink): void {
+    if (!this.canManageLinks(this.selectedDocument) || !this.selectedDocument) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `¿Desactivar el vínculo ${link.entity_type} / ${link.entity_key || link.entity_id || 'GENERAL'}?`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const documentId = this.selectedDocument.id;
+
+    this.linksSaving = true;
+    this.clearMessages();
+
+    this.internalDocumentsService.deleteDocumentLink(documentId, link.id).subscribe({
+      next: (response) => {
+        this.linksSaving = false;
+        this.successMessage = response.message || 'Vínculo documental desactivado.';
+        this.reloadSelectedDocumentDetails(documentId);
+      },
+      error: (error) => {
+        this.linksSaving = false;
+        this.errorMessage = this.resolveErrorMessage(
+          error,
+          'No se pudo desactivar el vínculo documental.'
+        );
+      },
+    });
+  }
+
+  canManageLinks(document: InternalDocument | null): boolean {
+    return this.canManage &&
+      Boolean(document?.capabilities?.can_edit) &&
+      document?.status !== 'ARCHIVADO';
+  }
+
+  getSelectedDocumentLinks(): InternalDocumentLink[] {
+    return this.selectedDocument?.links || [];
+  }
+
+  getEntityTypeLabel(entityType: string | null | undefined): string {
+    return this.linkEntityTypeOptions.find((item) => item.value === entityType)?.label ||
+      entityType ||
+      'Sin entidad';
+  }
+
+  getLinkRoleLabel(linkRole: string | null | undefined): string {
+    return this.linkRoleOptions.find((item) => item.value === linkRole)?.label ||
+      linkRole ||
+      'Sin rol';
+  }
+
+  getLinkContextLabel(link: InternalDocumentLink): string {
+    if (link.entity_key) {
+      return link.entity_key;
+    }
+
+    if (link.entity_id) {
+      return `ID ${link.entity_id}`;
+    }
+
+    return 'GENERAL';
+  }
+
+  isGeneralLinkEntitySelected(): boolean {
+    return this.linkForm.entity_type === 'GENERAL';
+  }
+
+  private buildLinkPayload(): InternalDocumentLinkPayload | null {
+    const entityKey = this.linkForm.entity_key.trim();
+    const label = this.linkForm.label.trim();
+
+    if (!this.linkForm.entity_type) {
+      this.errorMessage = 'Selecciona el tipo de entidad.';
+      return null;
+    }
+
+    if (!this.linkForm.link_role) {
+      this.errorMessage = 'Selecciona el rol documental.';
+      return null;
+    }
+
+    if (
+      this.linkForm.entity_type !== 'GENERAL' &&
+      !entityKey &&
+      !this.linkForm.entity_id
+    ) {
+      this.errorMessage = 'Captura entity key o entity id para vincular el documento.';
+      return null;
+    }
+
+    const payload: InternalDocumentLinkPayload = {
+      entity_type: this.linkForm.entity_type,
+      link_role: this.linkForm.link_role,
+      entity_key: entityKey || null,
+      entity_id: this.linkForm.entity_id,
+      label: label || null,
+      is_primary: this.linkForm.is_primary,
+    };
+
+    if (this.linkForm.entity_type === 'GENERAL') {
+      payload.entity_id = null;
+      payload.entity_key = entityKey || 'GENERAL';
+    }
+
+    return payload;
+  }
+
+  private resetLinkForm(): void {
+    this.linkForm = {
+      entity_type: 'OPENING',
+      entity_id: null,
+      entity_key: '',
+      link_role: 'MANUAL',
+      label: '',
+      is_primary: false,
+    };
+  }
+
+  private reloadSelectedDocumentDetails(documentId: number): void {
+    this.internalDocumentsService.getDocument(documentId).subscribe({
+      next: (item) => {
+        this.selectedDocument = item;
+      },
+      error: () => {
+        this.errorMessage = 'No se pudo recargar el detalle del documento.';
       },
     });
   }
