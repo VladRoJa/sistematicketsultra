@@ -1,4 +1,4 @@
-#app\models\__init__.py
+# app\models\__init__.py
 
 # -------------------------------------------------------------------------------
 # MODELOS: Inicialización de Modelos del Sistema
@@ -7,7 +7,12 @@
 from .ticket_model import Ticket
 from .user_model import UserORM
 from .sucursal_model import Sucursal
-from .inventario import InventarioGeneral, InventarioSucursal, MovimientoInventario, DetalleMovimiento
+from .inventario import (
+    InventarioGeneral,
+    InventarioSucursal,
+    MovimientoInventario,
+    DetalleMovimiento,
+)
 from .departamento_model import Departamento
 from .formulario_ticket import FormularioTicket, CampoFormulario
 from .pm_bitacora import PmBitacoraORM
@@ -26,7 +31,6 @@ from .warehouse import (
     KpiVentasNuevosSociosSnapshotRowORM,
     TrackSourceTiendaDailyORM,
     WarehouseCommercialCatalogORM,
-    
 )
 from .suite_governance import (
     SuiteRegionORM,
@@ -40,6 +44,17 @@ from .planning_targets import (
     PlanningTargetAdjustmentORM,
     PlanningTargetApprovalEventORM,
     PlanningOperatorORM,
+)
+from .internal_documents import (
+    InternalDocumentStatus,
+    InternalDocumentVisibilityMode,
+    InternalDocumentVisibilityType,
+    InternalDocumentAuditAction,
+    InternalDocumentCategoryORM,
+    InternalDocumentORM,
+    InternalDocumentVersionORM,
+    InternalDocumentVisibilityORM,
+    InternalDocumentAuditLogORM,
 )
 
 
@@ -55,6 +70,7 @@ __all__ = [
     "MovimientoInventario",
     "DetalleMovimiento",
     "Departamento",
+    "FormularioTicket",
     "CampoFormulario",
     "PmBitacoraORM",
     "PmValidacionORM",
@@ -80,4 +96,13 @@ __all__ = [
     "PlanningTargetAdjustmentORM",
     "PlanningTargetApprovalEventORM",
     "PlanningOperatorORM",
+    "InternalDocumentStatus",
+    "InternalDocumentVisibilityMode",
+    "InternalDocumentVisibilityType",
+    "InternalDocumentAuditAction",
+    "InternalDocumentCategoryORM",
+    "InternalDocumentORM",
+    "InternalDocumentVersionORM",
+    "InternalDocumentVisibilityORM",
+    "InternalDocumentAuditLogORM",
 ]

@@ -5,6 +5,7 @@ from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 import logging
 import os
+
 from app.config import Config
 from app.extensions import db, migrate
 from app.routes import auth_bp, ticket_bp, main_bp
@@ -24,18 +25,20 @@ from app.routes.formulario_ticket_routes import formulario_ticket_bp
 from app.routes.admin_usuarios_routes import admin_usuarios_bp
 from app.routes.pm_routes import pm_bp
 from app.routes.warehouse_routes import warehouse_bp
-from app.warehouse import register_warehouse_runtime_hooks
 from app.routes.warehouse_internal_jobs import warehouse_internal_jobs_bp
 from app.routes.track_routes import track_bp
 from app.routes.warehouse_commercial_routes import warehouse_commercial_bp
-from app.track_alerts.routes.track_alert_routes import track_alert_bp
 from app.routes.planning_targets_routes import planning_targets_bp
+from app.routes.internal_documents_routes import internal_documents_bp
+from app.track_alerts.routes.track_alert_routes import track_alert_bp
+from app.warehouse import register_warehouse_runtime_hooks
+
 
 def create_app():
     """Inicializa la aplicación principal Flask."""
     app = Flask(__name__)
     app.config.from_object(Config)
-    
+
     @app.before_request
     def skip_jwt_for_options():
         # Permite todas las preflight sin JWT
@@ -48,7 +51,7 @@ def create_app():
     db.init_app(app)
     migrate.init_app(app, db)
     JWTManager(app)
-    
+
     # ──────────────────────────────────────
     # Runtime hooks internos de Warehouse
     # ──────────────────────────────────────
@@ -62,12 +65,10 @@ def create_app():
         origins=app.config['CORS_ORIGINS'],
         supports_credentials=True,
         allow_headers=["Content-Type", "Authorization"],
-        methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+        methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     )
-    
 
-    
-        # Logging solo en desarrollo
+    # Logging solo en desarrollo
     app_env = os.getenv("APP_ENV", "local")
     if app_env == "local":
         logging.basicConfig(level=logging.INFO)
@@ -95,13 +96,19 @@ def create_app():
     app.register_blueprint(admin_usuarios_bp, url_prefix='/api/admin/usuarios')
     app.register_blueprint(pm_bp, url_prefix='/api/pm')
     app.register_blueprint(warehouse_bp, url_prefix='/api/warehouse')
-    app.register_blueprint(warehouse_internal_jobs_bp, url_prefix="/api/warehouse/internal")
+    app.register_blueprint(
+        warehouse_internal_jobs_bp,
+        url_prefix="/api/warehouse/internal",
+    )
     app.register_blueprint(track_bp, url_prefix='/api/track')
-    app.register_blueprint(warehouse_commercial_bp, url_prefix="/api/warehouse/commercial")
+    app.register_blueprint(
+        warehouse_commercial_bp,
+        url_prefix="/api/warehouse/commercial",
+    )
+    app.register_blueprint(internal_documents_bp, url_prefix="/api/internal-documents")
     app.register_blueprint(track_alert_bp)
     app.register_blueprint(planning_targets_bp)
-    
-    
+
     app.config['DEBUG'] = True
     app.config['PROPAGATE_EXCEPTIONS'] = True
 
