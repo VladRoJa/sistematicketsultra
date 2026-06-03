@@ -543,9 +543,12 @@ def internal_documents_access():
             401,
         )
 
+    allowed_roles = {"ADMIN", "ADMINISTRADOR", "SUPER_ADMIN", "SISTEMAS"}
+    allowed = context.role in allowed_roles
+
     return jsonify(
         {
-            "allowed": True,
+            "allowed": allowed,
             "module": "internal_documents",
             "user": {
                 "id": context.user_id,
@@ -555,8 +558,7 @@ def internal_documents_access():
                 "sucursales_ids": list(context.sucursales_ids),
                 "department_id": context.department_id,
             },
-            "can_manage": context.role
-            in {"ADMIN", "ADMINISTRADOR", "SUPER_ADMIN", "SISTEMAS"},
+            "can_manage": allowed,
         }
     ), 200
 
