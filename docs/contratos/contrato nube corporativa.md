@@ -1,14 +1,58 @@
-# Suite Ultra — Contrato Técnico F1.1
+# Suite Ultra — Contrato Técnico F1.1 Actualizado
 
 ## Nube Corporativa / Portal Interno de Documentos Publicados
 
-### Sin código — listo para implementación por fases
+### Base documental gobernada para Suite Ultra y preparación estratégica para Módulo de Aperturas
+
+---
+
+## 0. Estado actual del módulo
+
+### Estado general
+
+La F1 de Nube Corporativa ya fue implementada y desplegada en producción.
+
+Actualmente el módulo ya permite:
+
+* crear documentos internos como borrador,
+* subir archivos usando flujo Warehouse-first,
+* registrar versiones,
+* mantener una versión vigente,
+* ocultar versiones anteriores para usuarios normales,
+* auditar acciones administrativas,
+* configurar visibilidad,
+* publicar documentos,
+* archivar documentos,
+* descargar documentos mediante endpoint seguro con JWT,
+* usar menú dinámico dentro de Suite Ultra.
+
+### Decisión operativa temporal
+
+El menú de Nube Corporativa queda oculto para gerentes y usuarios no administrativos por ahora.
+
+Motivo:
+
+* el módulo ya funciona,
+* pero todavía está en etapa inicial,
+* no se quiere generar ruido operativo,
+* no se quiere que gerentes empiecen a preguntar antes de cerrar UX, permisos finos y contrato de uso.
+
+Roles con acceso visible al menú en esta etapa:
+
+* ADMIN
+* ADMINISTRADOR
+* SUPER_ADMIN
+* SISTEMAS
+
+---
 
 ## 1. Objetivo técnico
 
-Construir un módulo interno para publicar documentos corporativos dentro de Suite Ultra, usando el Warehouse como bóveda de archivos y trazabilidad, y una capa separada de publicación para usuarios finales.
+Construir y evolucionar un módulo interno para publicar documentos corporativos dentro de Suite Ultra, usando el Warehouse como bóveda de archivos y trazabilidad, y una capa separada de publicación para usuarios finales.
 
-La Nube Corporativa no debe comportarse como Google Drive. Debe funcionar como un sistema documental gobernado con:
+La Nube Corporativa no debe comportarse como Google Drive.
+
+Debe funcionar como un sistema documental gobernado con:
 
 * metadata obligatoria,
 * dueño documental,
@@ -18,9 +62,82 @@ La Nube Corporativa no debe comportarse como Google Drive. Debe funcionar como u
 * permisos backend,
 * auditoría,
 * descarga segura,
-* búsqueda y filtros básicos.
+* búsqueda y filtros básicos,
+* preparación para vincular documentos a proyectos, aperturas, sucursales, tareas y responsables.
 
-## 2. Decisiones cerradas F1.1
+---
+
+## 2. Nuevo contexto estratégico: preparación para Aperturas
+
+### Problema real detectado
+
+En aperturas de nuevas sucursales ha ocurrido que:
+
+* cada área maneja versiones distintas de planes,
+* hay desfases de fechas,
+* personas se dan por no enteradas,
+* documentos y planos se pierden en chats,
+* acuerdos quedan enterrados en WhatsApp,
+* no existe una fuente única de verdad,
+* las aperturas cambian constantemente,
+* se agregan tareas nuevas sobre la marcha,
+* no queda claro cuál documento es el vigente.
+
+### Apertura actual
+
+La apertura actual “Serranía” se coordina con método tradicional mediante grupo de WhatsApp:
+
+```text
+Apertura Serranía
+```
+
+Esta apertura se usará como observación real para detectar problemas, fricciones y necesidades que después se convertirán en lógica del módulo de Aperturas.
+
+### Siguiente apertura objetivo
+
+La siguiente apertura comprometida será:
+
+```text
+Egade
+```
+
+Estimación:
+
+```text
+aproximadamente 1 mes
+```
+
+Objetivo:
+
+Para Egade debe existir una versión robusta del módulo de Aperturas, no como copia de Microsoft Project, pero sí suficientemente fuerte para resolver necesidades reales de coordinación, responsables, tareas, fechas, documentos, versiones y cambios.
+
+---
+
+## 3. Principio rector
+
+La Nube Corporativa debe convertirse en la base documental gobernada de Suite Ultra.
+
+No debe ser un basurero de archivos.
+
+Debe ayudar a responder preguntas como:
+
+* ¿Cuál es el plano vigente?
+* ¿Quién subió este documento?
+* ¿Quién lo publicó?
+* ¿Qué versión reemplazó a cuál?
+* ¿A qué apertura pertenece?
+* ¿A qué tarea está vinculado?
+* ¿Qué área es responsable?
+* ¿Este documento es global o sensible?
+* ¿Quién puede verlo?
+* ¿Quién puede descargarlo?
+* ¿Está archivado?
+* ¿Hay una versión nueva?
+* ¿Dónde está la evidencia oficial?
+
+---
+
+## 4. Decisiones cerradas F1
 
 ### Arquitectura
 
@@ -38,6 +155,12 @@ En F1 solo publican:
 
 No hay aprobación formal en F1.
 
+### Menú temporalmente restringido
+
+Por ahora, el menú de Nube Corporativa solo se muestra a roles administrativos/Sistemas.
+
+La ruta puede existir, pero no se expone en menú a gerentes para evitar ruido antes de madurar el módulo.
+
 ### Versionado
 
 Al reemplazar una versión:
@@ -51,13 +174,13 @@ Al reemplazar una versión:
 
 F1 incluye búsqueda por metadata.
 
-Búsqueda dentro de PDF queda como F1.1 extendido o F2 temprano.
+Búsqueda dentro de PDF queda como F2 temprano.
 
 ### Auditoría
 
 F1 audita acciones administrativas.
 
-Auditoría de descargas se recomienda dejar lista para documentos sensibles o F2.
+Auditoría de descargas queda como pendiente recomendado para documentos sensibles o F2.
 
 ### Almacenamiento
 
@@ -65,86 +188,118 @@ F1 usa volumen persistente del servidor.
 
 No se deben guardar archivos en almacenamiento efímero del contenedor.
 
-## 3. Módulo backend sugerido
+---
 
-Crear un blueprint nuevo:
+## 5. Módulo backend actual
 
-`backend/app/routes/internal_documents_routes.py`
+Blueprint:
 
-Prefijo sugerido:
+```text
+backend/app/routes/internal_documents_routes.py
+```
 
-`/api/internal-documents`
+Prefijo:
 
-También puede llamarse:
+```text
+/api/internal-documents
+```
 
-`/api/corporate-cloud`
+Endpoints actuales:
 
-Pero para claridad técnica se recomienda:
+```text
+GET    /api/internal-documents/access
+GET    /api/internal-documents/categories
+GET    /api/internal-documents
+POST   /api/internal-documents
+GET    /api/internal-documents/<document_id>
+PATCH  /api/internal-documents/<document_id>
+POST   /api/internal-documents/<document_id>/publish
+POST   /api/internal-documents/<document_id>/archive
+GET    /api/internal-documents/<document_id>/versions
+POST   /api/internal-documents/<document_id>/versions
+PUT    /api/internal-documents/<document_id>/visibility
+GET    /api/internal-documents/<document_id>/download
+GET    /api/internal-documents/<document_id>/versions/<version_id>/download
+GET    /api/internal-documents/<document_id>/audit
+```
 
-`/api/internal-documents`
+Archivos backend actuales:
 
-## 4. Módulo frontend sugerido
+```text
+backend/app/models/internal_documents.py
+backend/app/routes/internal_documents_routes.py
+backend/app/utils/internal_documents_access.py
+backend/app/warehouse/services/warehouse_document_upload_service.py
+backend/migrations/versions/45cb1ba3f367_add_internal_documents_module.py
+backend/migrations/versions/f57edbdac964_add_internal_documents_warehouse_report_.py
+```
 
-Ruta de usuario:
+---
 
-`/#/nube-corporativa`
+## 6. Módulo frontend actual
 
-Ruta admin:
+Ruta de usuario/admin actual:
 
-`/#/nube-corporativa/admin`
+```text
+/#/nube-corporativa
+```
 
-Carpeta sugerida:
+Carpeta actual:
 
-`frontend/src/app/internal-documents/`
+```text
+frontend/src/app/internal-documents/
+```
 
-Componentes separados:
+Estructura actual:
 
 ```text
 internal-documents/
   internal-documents.routes.ts
+
+  models/
+    internal-document.model.ts
+
+  services/
+    internal-documents.service.ts
 
   pages/
     internal-documents-home/
       internal-documents-home.component.ts
       internal-documents-home.component.html
       internal-documents-home.component.css
-
-    internal-documents-list/
-      internal-documents-list.component.ts
-      internal-documents-list.component.html
-      internal-documents-list.component.css
-
-    internal-document-detail/
-      internal-document-detail.component.ts
-      internal-document-detail.component.html
-      internal-document-detail.component.css
-
-    internal-documents-admin/
-      internal-documents-admin.component.ts
-      internal-documents-admin.component.html
-      internal-documents-admin.component.css
-
-  services/
-    internal-documents.service.ts
-
-  models/
-    internal-document.model.ts
 ```
 
-Regla permanente:
+Actualmente la pantalla principal concentra:
 
-* lógica en `.ts`,
-* HTML solo estructura, bindings simples y llamadas a métodos existentes,
-* no templates inline,
-* no estilos inline.
+* listado,
+* filtros básicos,
+* creación de borrador,
+* selección de archivo,
+* publicación,
+* visibilidad global,
+* descarga,
+* archivado,
+* reemplazo de versión,
+* detalle lateral.
 
-## 5. Tablas propuestas
+Esto es aceptable para F1, pero para F2 conviene separar:
 
-## 5.1 `internal_document_categories`
+* vista usuario,
+* vista admin,
+* detalle,
+* modal/formulario de publicación,
+* configuración de visibilidad,
+* historial/auditoría.
+
+---
+
+## 7. Tablas actuales
+
+## 7.1 `internal_document_categories`
 
 Catálogo controlado de categorías.
 
-Campos conceptuales:
+Campos:
 
 | Campo       | Tipo conceptual | Regla                     |
 | ----------- | --------------- | ------------------------- |
@@ -166,13 +321,15 @@ Categorías seed F1:
 * PROCEDIMIENTOS
 * TUTORIALES
 
-## 5.2 `internal_documents`
+---
+
+## 7.2 `internal_documents`
 
 Documento lógico estable.
 
 Un documento puede tener varias versiones.
 
-Campos conceptuales:
+Campos actuales:
 
 | Campo               | Tipo conceptual | Regla                                        |
 | ------------------- | --------------- | -------------------------------------------- |
@@ -196,25 +353,26 @@ Campos conceptuales:
 | created_at          | datetime        | automático                                   |
 | updated_at          | datetime        | automático                                   |
 
-Reglas:
+Reglas actuales:
 
 * `title` obligatorio.
 * `category_id` obligatorio.
 * `status` obligatorio.
-* `created_by` obligatorio.
 * Para publicar, debe existir al menos una versión.
 * Para publicar, debe existir dueño documental.
 * Para publicar, debe existir visibilidad configurada.
-* Si `is_sensitive = true`, no permitir `GLOBAL` abierto sin permiso especial.
+* Si `is_sensitive = true`, no permitir `GLOBAL`.
 * Solo documentos `PUBLICADO` aparecen a usuarios normales.
 * Documentos `BORRADOR` solo visibles a creador/admin.
 * Documentos `ARCHIVADO` solo visibles a admin/auditoría.
 
-## 5.3 `internal_document_versions`
+---
+
+## 7.3 `internal_document_versions`
 
 Versiones del documento.
 
-Campos conceptuales:
+Campos actuales:
 
 | Campo                | Tipo conceptual | Regla                           |
 | -------------------- | --------------- | ------------------------------- |
@@ -226,6 +384,7 @@ Campos conceptuales:
 | original_filename    | string          | snapshot del nombre             |
 | file_mime_type       | string          | snapshot                        |
 | file_size_bytes      | integer         | snapshot                        |
+| file_hash_sha256     | string          | snapshot del hash               |
 | change_notes         | text            | requerido al reemplazar versión |
 | is_current           | boolean         | solo una true por documento     |
 | is_hidden_from_users | boolean         | true para versiones anteriores  |
@@ -244,11 +403,13 @@ Reglas:
   * nueva `is_current = true`,
   * documento `current_version_id` apunta a nueva versión.
 
-## 5.4 `internal_document_visibility`
+---
+
+## 7.4 `internal_document_visibility`
 
 Reglas de acceso por documento.
 
-Campos conceptuales:
+Campos actuales:
 
 | Campo           | Tipo conceptual | Regla                                        |
 | --------------- | --------------- | -------------------------------------------- |
@@ -268,34 +429,36 @@ Campos conceptuales:
 Reglas:
 
 * Un documento puede tener múltiples reglas de visibilidad.
-* El backend debe resolver si el usuario puede ver/descargar.
-* Para F1, si puede ver, puede descargar.
+* El backend resuelve si el usuario puede ver/descargar.
+* Para F1, si puede ver normalmente puede descargar.
 * `can_download` queda preparado para evolución.
-* Visibilidad default al crear documento: privada para creador/admin.
+* Visibilidad default al crear documento: privada.
 * `GLOBAL` debe usarse con cuidado.
-* `GLOBAL` no debe estar permitido para documentos sensibles salvo permiso especial.
+* `GLOBAL` no está permitido para documentos sensibles.
 
-## 5.5 `internal_document_audit_logs`
+---
+
+## 7.5 `internal_document_audit_logs`
 
 Auditoría documental.
 
-Campos conceptuales:
+Campos actuales:
 
 | Campo          | Tipo conceptual | Regla                 |
 | -------------- | --------------- | --------------------- |
 | id             | integer         | PK                    |
 | document_id    | integer         | FK internal_documents |
-| version_id     | integer         | nullable              |
+| version_id     | integer         | FK versión, nullable  |
 | actor_user_id  | integer         | FK users              |
-| action         | string          | acción auditada       |
-| old_value_json | json            | nullable              |
-| new_value_json | json            | nullable              |
-| metadata_json  | json            | nullable              |
+| action         | string          | tipo de acción        |
+| old_value_json | JSON            | snapshot anterior     |
+| new_value_json | JSON            | snapshot nuevo        |
+| metadata_json  | JSON            | contexto adicional    |
 | ip_address     | string          | opcional              |
-| user_agent     | string          | opcional              |
+| user_agent     | text            | opcional              |
 | created_at     | datetime        | automático            |
 
-Acciones F1:
+Acciones actuales:
 
 * DOCUMENT_CREATED
 * DOCUMENT_METADATA_UPDATED
@@ -307,349 +470,124 @@ Acciones F1:
 * DOCUMENT_SENSITIVITY_UPDATED
 * DOCUMENT_OWNER_UPDATED
 
-Acciones F2 posibles:
+---
 
-* DOCUMENT_DOWNLOADED
-* DOCUMENT_VIEWED
-* DOCUMENT_ACCESS_DENIED
+## 8. Warehouse
 
-## 6. Relación con Warehouse
+La Nube Corporativa usa Warehouse como bóveda de archivos.
 
-F1 debe reutilizar o extender la infraestructura de Warehouse.
+Report type creado:
 
-Flujo de subida:
+```text
+internal_documents
+```
 
-1. Usuario admin sube archivo desde Nube Corporativa.
-2. Backend valida permiso.
-3. Backend valida extensión, MIME type y tamaño.
-4. Backend registra archivo en Warehouse.
-5. Warehouse guarda archivo en volumen persistente.
-6. Warehouse calcula hash.
-7. Backend crea `internal_document_versions`.
-8. Backend crea o actualiza `internal_documents`.
-9. Backend audita acción.
+Configuración:
 
-Regla importante:
+| Campo               | Valor                |
+| ------------------- | -------------------- |
+| source              | manual               |
+| family              | catalogos_auxiliares |
+| operational_role    | CATALOGO_AUXILIAR    |
+| default_period_type | diario               |
+| active              | true                 |
 
-El Portal no debe guardar archivos propios desligados del Warehouse.
+Extensiones permitidas en Warehouse después de F1:
 
-Debe guardar referencia a:
+* xlsx
+* xls
+* csv
+* pdf
+* txt
+* docx
+* pptx
+* png
+* jpg
+* jpeg
 
-`warehouse_upload_id`
+Límite Warehouse general:
 
-## 7. Endpoints backend propuestos
+```text
+70 MB
+```
 
-## 7.1 Categorías
+Límite funcional de Nube Corporativa:
 
-### `GET /api/internal-documents/categories`
+```text
+50 MB
+```
 
-Lista categorías activas.
+---
 
-Permiso:
+## 9. Permisos actuales
 
-* usuario autenticado.
-
-Respuesta conceptual:
-
-* id
-* key
-* name
-* description
-* sort_order
-
-## 7.2 Listar documentos visibles
-
-### `GET /api/internal-documents`
-
-Lista documentos visibles para el usuario autenticado.
-
-Filtros query:
-
-* `q`
-* `category_id`
-* `status`
-* `owner_department_id`
-* `is_sensitive`
-* `published_from`
-* `published_to`
-* `page`
-* `page_size`
-
-Reglas:
-
-* Usuario normal solo ve `PUBLICADO`.
-* Admin puede ver `BORRADOR`, `PUBLICADO`, `ARCHIVADO`.
-* Backend aplica permisos de visibilidad.
-* No confiar en filtros frontend.
-
-## 7.3 Detalle de documento
-
-### `GET /api/internal-documents/:id`
-
-Devuelve metadata del documento.
-
-Reglas:
-
-* Validar permiso `can_view`.
-* Usuario normal solo ve versión vigente.
-* Admin puede ver historial básico de versiones.
-
-## 7.4 Crear documento con archivo
-
-### `POST /api/internal-documents`
-
-Crea documento y primera versión.
-
-Payload multipart conceptual:
-
-* file
-* title
-* description
-* category_id
-* owner_user_id
-* owner_department_id
-* is_sensitive
-* version_label
-* visibility rules opcionales
-
-Reglas:
-
-* Requiere permiso admin/publicador.
-* Archivo entra primero a Warehouse.
-* Documento nace en `BORRADOR`.
-* Visibilidad default privada.
-* Auditar `DOCUMENT_CREATED` y `DOCUMENT_VERSION_CREATED`.
-
-## 7.5 Editar metadata
-
-### `PATCH /api/internal-documents/:id`
-
-Permite editar:
-
-* title
-* description
-* category_id
-* owner_user_id
-* owner_department_id
-* is_sensitive
-
-Reglas:
-
-* Requiere permiso admin/publicador.
-* Auditar cambios.
-* No cambiar archivo desde este endpoint.
-
-## 7.6 Publicar documento
-
-### `POST /api/internal-documents/:id/publish`
-
-Publica documento.
-
-Reglas:
-
-Antes de publicar validar:
-
-* tiene título,
-* tiene descripción,
-* tiene categoría,
-* tiene dueño documental,
-* tiene versión vigente,
-* tiene visibilidad configurada,
-* si es sensible, no tiene visibilidad global abierta sin permiso.
-
-Efecto:
-
-* status = PUBLICADO
-* published_by = usuario actual
-* published_at = now
-* auditar DOCUMENT_PUBLISHED
-
-## 7.7 Archivar documento
-
-### `POST /api/internal-documents/:id/archive`
-
-Archiva documento.
-
-Reglas:
-
-* No borra archivo.
-* No borra versiones.
-* Deja de aparecer en biblioteca normal.
-* Auditar DOCUMENT_ARCHIVED.
-
-## 7.8 Reemplazar versión
-
-### `POST /api/internal-documents/:id/versions`
-
-Sube nueva versión.
-
-Payload multipart conceptual:
-
-* file
-* version_label
-* change_notes
-
-Reglas:
-
-* Requiere permiso admin/publicador.
-* Archivo entra primero a Warehouse.
-* Versión anterior queda oculta para usuarios normales.
-* Nueva versión queda vigente.
-* Auditar DOCUMENT_VERSION_REPLACED.
-
-## 7.9 Listar versiones
-
-### `GET /api/internal-documents/:id/versions`
-
-Reglas:
-
-* Admin ve todas.
-* Usuario normal no ve versiones ocultas.
-* Usuario normal puede ver solo versión vigente si tiene permiso al documento.
-
-## 7.10 Descargar versión vigente
-
-### `GET /api/internal-documents/:id/download`
-
-Reglas:
-
-* Validar `can_download`.
-* Validar documento publicado, salvo admin.
-* Descargar versión vigente.
-* No exponer path real del servidor.
-* No permitir acceso directo por URL pública al archivo.
-* Opcional F1: auditar solo si `is_sensitive = true`.
-* F2: auditar todas las descargas.
-
-## 7.11 Descargar versión específica admin
-
-### `GET /api/internal-documents/:id/versions/:version_id/download`
-
-Reglas:
-
-* Solo admin/publicador/auditor.
-* Permite descargar versión histórica.
-* Auditar si documento sensible.
-
-## 7.12 Actualizar visibilidad
-
-### `PUT /api/internal-documents/:id/visibility`
-
-Payload conceptual:
-
-Lista de reglas:
-
-* visibility_type
-* role
-* department_id
-* sucursal_id
-* user_id
-* can_view
-* can_download
-
-Reglas:
-
-* Requiere permiso admin/publicador.
-* Reemplaza o actualiza reglas activas.
-* Auditar DOCUMENT_VISIBILITY_UPDATED.
-* Si documento sensible, bloquear GLOBAL salvo permiso especial.
-
-## 7.13 Auditoría de documento
-
-### `GET /api/internal-documents/:id/audit`
-
-Reglas:
-
-* Solo admin/publicador/auditor.
-* Devuelve historial de acciones administrativas.
-
-## 8. Permisos backend
-
-## 8.1 Permisos conceptuales
-
-Permisos necesarios:
-
-* `internal_documents.view`
-* `internal_documents.download`
-* `internal_documents.upload`
-* `internal_documents.create`
-* `internal_documents.edit`
-* `internal_documents.publish`
-* `internal_documents.archive`
-* `internal_documents.replace_version`
-* `internal_documents.manage_visibility`
-* `internal_documents.view_sensitive`
-* `internal_documents.view_audit`
-* `internal_documents.download_historical_versions`
-
-## 8.2 Roles iniciales sugeridos
-
-F1 puede mapear contra roles existentes.
-
-Roles con administración completa:
+Roles administradores/documentales:
 
 * ADMIN
 * ADMINISTRADOR
 * SUPER_ADMIN
 * SISTEMAS
 
-Roles con lectura según visibilidad:
+Estos roles pueden:
 
-* GERENTE
-* GERENTE_REGIONAL
-* LECTOR_GLOBAL
-* GERENCIA_DEPORTIVA
-* otros roles autenticados según reglas del documento
+* crear documentos,
+* editar metadata,
+* publicar,
+* archivar,
+* reemplazar versión,
+* configurar visibilidad,
+* ver auditoría,
+* descargar versiones históricas.
 
-Regla:
+Usuarios normales:
 
-No basta con rol. También se evalúa visibilidad del documento.
+* no ven borradores,
+* no ven archivados,
+* no ven versiones históricas ocultas,
+* solo ven documentos publicados si tienen visibilidad,
+* pueden descargar solo si backend lo permite.
 
-## 8.3 Matriz F1
+Menú temporal:
 
-| Acción                             | Admin/Sistemas |          Publicador | Usuario autorizado | Usuario no autorizado |
-| ---------------------------------- | -------------: | ------------------: | -----------------: | --------------------: |
-| Ver biblioteca                     |             Sí |                  Sí |                 Sí |                    No |
-| Ver documento publicado autorizado |             Sí |                  Sí |                 Sí |                    No |
-| Descargar documento autorizado     |             Sí |                  Sí |                 Sí |                    No |
-| Ver borradores                     |             Sí |   Sí, si es creador |                 No |                    No |
-| Subir documento                    |             Sí |                  Sí |                 No |                    No |
-| Editar metadata                    |             Sí |                  Sí |                 No |                    No |
-| Publicar                           |             Sí |                  Sí |                 No |                    No |
-| Archivar                           |             Sí |                  Sí |                 No |                    No |
-| Reemplazar versión                 |             Sí |                  Sí |                 No |                    No |
-| Ver versiones históricas           |             Sí |                  Sí |                 No |                    No |
-| Ver auditoría                      |             Sí |            Opcional |                 No |                    No |
-| Ver sensible                       |             Sí | Sí si tiene permiso | Solo si autorizado |                    No |
+* visible solo para ADMIN / ADMINISTRADOR / SUPER_ADMIN / SISTEMAS.
+* oculto para gerentes, regionales y usuarios operativos hasta cerrar UX/contrato de uso.
 
-## 9. Reglas de seguridad
+---
+
+## 10. Reglas de seguridad
 
 1. Todo endpoint requiere JWT.
 2. El backend valida permisos en cada endpoint.
-3. La descarga no debe servir archivos por path público.
-4. El endpoint de descarga debe resolver archivo desde Warehouse.
-5. El backend debe validar visibilidad antes de entregar archivo.
-6. El frontend no debe ser fuente de permisos.
-7. No se debe confiar en `role` enviado por frontend.
+3. La descarga no sirve archivos por path público.
+4. El endpoint de descarga resuelve archivo desde Warehouse.
+5. El backend valida visibilidad antes de entregar archivo.
+6. El frontend no es fuente de permisos.
+7. No se confía en `role` enviado por frontend.
 8. Los documentos sensibles requieren permiso explícito.
 9. Los documentos borrador no son visibles para usuarios normales.
 10. Los documentos archivados no son visibles en biblioteca normal.
-11. El servidor no debe aceptar extensiones peligrosas.
-12. El servidor debe validar tamaño máximo.
-13. El servidor debe normalizar nombres de archivo.
-14. No guardar archivos con nombres originales como path final sin sanitización.
-15. No exponer rutas internas del volumen.
+11. El servidor no acepta extensiones peligrosas.
+12. El servidor valida tamaño máximo.
+13. El servidor normaliza nombres de archivo.
+14. No se guardan archivos con nombres originales como path final sin sanitización.
+15. No se exponen rutas internas del volumen.
+16. La visibilidad global no se permite en documentos sensibles.
 
-## 10. Reglas de validación de archivo
+---
+
+## 11. Reglas de validación de archivo
 
 Formatos permitidos F1:
 
 * PDF
 * XLSX
+* XLS
 * CSV
+* TXT
 * DOCX
 * PNG
 * JPG
+* JPEG
 * PPTX
 
 Bloqueados:
@@ -668,35 +606,353 @@ Bloqueados:
 
 Límites:
 
-* documentos normales: 25 MB
-* reportes Excel pesados: 50 MB
-* mayor a 50 MB requiere decisión posterior
+* Nube Corporativa: 50 MB.
+* Warehouse general: 70 MB.
 
 Validar:
 
 * extensión,
-* MIME type,
 * tamaño,
 * hash,
-* nombre sanitizado.
+* nombre sanitizado,
+* archivo vacío,
+* ruta segura.
 
-## 11. Pantallas Angular F1
+MIME type queda registrado, pero no debe ser la única validación.
 
-## 11.1 Home — Nube Corporativa
+---
+
+## 12. Brecha principal para Aperturas
+
+La Nube actual ya resuelve:
+
+* publicación,
+* versión vigente,
+* versiones históricas,
+* auditoría,
+* visibilidad,
+* descarga,
+* sensibilidad,
+* dueño documental.
+
+Pero todavía no resuelve de forma estructurada:
+
+* vincular documento a una apertura,
+* vincular documento a una tarea,
+* vincular documento a un proyecto,
+* vincular documento a una sucursal como contexto operativo,
+* marcar documento como principal/oficial dentro de un contexto,
+* clasificar rol del documento dentro de una apertura:
+
+  * plano,
+  * contrato,
+  * permiso,
+  * cotización,
+  * checklist,
+  * evidencia,
+  * manual,
+  * financiero,
+  * construcción,
+  * operación.
+
+Por eso el siguiente ajuste estratégico no debe rehacer `internal_documents`.
+
+Debe agregar una capa de vinculación.
+
+---
+
+## 13. Propuesta F1.1 real: documentos vinculables
+
+### Objetivo
+
+Permitir que un documento publicado o en borrador pueda vincularse a entidades futuras o existentes sin amarrar todavía la Nube al módulo completo de Aperturas.
+
+### Tabla propuesta
+
+```text
+internal_document_links
+```
+
+### Campos conceptuales
+
+| Campo       | Tipo conceptual | Regla                                                       |
+| ----------- | --------------- | ----------------------------------------------------------- |
+| id          | integer         | PK                                                          |
+| document_id | integer         | FK internal_documents                                       |
+| entity_type | string          | PROJECT / OPENING / TASK / SUCURSAL / DEPARTMENT / GENERAL  |
+| entity_id   | integer         | nullable, cuando exista entidad formal                      |
+| entity_key  | string          | nullable, ejemplo `EGADE`, `SERRANIA`, `SUCURSAL_12`        |
+| link_role   | string          | PLANO / PERMISO / CONTRATO / CHECKLIST / EVIDENCIA / MANUAL |
+| label       | string          | nombre visible opcional                                     |
+| is_primary  | boolean         | marca documento principal/oficial en ese contexto           |
+| is_active   | boolean         | default true                                                |
+| created_by  | integer         | FK users                                                    |
+| created_at  | datetime        | automático                                                  |
+| updated_at  | datetime        | automático                                                  |
+
+### Ejemplos
+
+Documento vinculado a apertura futura:
+
+```text
+document_id: 15
+entity_type: OPENING
+entity_key: EGADE
+link_role: PLANO
+is_primary: true
+```
+
+Documento vinculado a tarea futura:
+
+```text
+document_id: 22
+entity_type: TASK
+entity_key: EGADE-ELECTRICO-001
+link_role: EVIDENCIA
+is_primary: false
+```
+
+Documento vinculado a sucursal:
+
+```text
+document_id: 30
+entity_type: SUCURSAL
+entity_id: 12
+entity_key: INSURGENTES
+link_role: CONTRATO
+is_primary: true
+```
+
+### Ventaja
+
+Esta tabla permite preparar la base documental para Aperturas sin construir todavía:
+
+* tabla de aperturas,
+* tabla de tareas,
+* Gantt,
+* dependencias,
+* notificaciones,
+* responsables por tarea.
+
+Cuando existan esas tablas, `entity_id` podrá apuntar a registros reales o se podrá migrar a FKs específicas.
+
+---
+
+## 14. Metadata útil para Aperturas
+
+La metadata actual cubre:
+
+| Requisito               | Estado actual                        |
+| ----------------------- | ------------------------------------ |
+| título                  | cubierto                             |
+| descripción             | cubierto                             |
+| categoría               | cubierto                             |
+| área/departamento       | parcialmente cubierto por owner      |
+| sucursal                | cubierto en visibilidad, no contexto |
+| alcance                 | no cubierto formalmente              |
+| propietario/responsable | parcialmente cubierto por owner      |
+| estado                  | cubierto                             |
+| vigencia                | no cubierto                          |
+| versión                 | cubierto                             |
+| fecha publicación       | cubierto                             |
+| archivo asociado        | cubierto vía Warehouse               |
+| usuario que subió       | cubierto en Warehouse/version        |
+| usuario que publicó     | cubierto                             |
+| proyecto/apertura       | no cubierto                          |
+| tarea vinculada         | no cubierto                          |
+
+### Ajuste mínimo recomendado
+
+No agregar todas estas columnas directo a `internal_documents`.
+
+Agregar primero:
+
+```text
+internal_document_links
+```
+
+Y dejar para F2:
+
+* vigencia,
+* vencimiento,
+* revisión periódica,
+* responsable operativo distinto al dueño documental,
+* aprobación documental,
+* firma de recibido.
+
+---
+
+## 15. Estados documentales
+
+Estados actuales:
+
+* BORRADOR
+* PUBLICADO
+* ARCHIVADO
+
+### Sobre REEMPLAZADO
+
+No se recomienda agregar `REEMPLAZADO` todavía como estado de documento.
+
+Motivo:
+
+* el reemplazo actual ocurre a nivel de versión,
+* una versión anterior ya queda `is_current = false`,
+* una versión anterior ya queda `is_hidden_from_users = true`,
+* el documento lógico sigue vivo.
+
+Si en el futuro un documento completo reemplaza a otro documento completo, conviene manejarlo con una relación nueva:
+
+```text
+internal_document_replacements
+```
+
+o un campo:
+
+```text
+replaced_by_document_id
+```
+
+No hacerlo en F1.1.
+
+---
+
+## 16. Riesgos
+
+### Riesgo 1: que se vuelva basurero documental
+
+Mitigación:
+
+* metadata obligatoria,
+* dueño documental,
+* categoría,
+* tipo documental,
+* visibilidad,
+* vínculos contextuales,
+* auditoría,
+* filtros,
+* eventualmente vigencia/revisión.
+
+### Riesgo 2: documentos duplicados
+
+Mitigación actual:
+
+* hash en Warehouse,
+* versiones lógicas,
+* auditoría.
+
+Pendiente:
+
+* alertar si se sube archivo duplicado,
+* sugerir reemplazar versión en lugar de crear documento nuevo,
+* usar `is_primary` por contexto para evitar múltiples “oficiales”.
+
+### Riesgo 3: no saber cuál es vigente
+
+Mitigación actual:
+
+* `current_version_id`,
+* `is_current`,
+* `version_number`,
+* `version_label`.
+
+Pendiente F1.1/F2:
+
+* `is_primary` en vínculo contextual,
+* indicadores visuales de “oficial/vigente”.
+
+### Riesgo 4: exponer información sensible
+
+Mitigación actual:
+
+* `is_sensitive`,
+* bloqueo de GLOBAL sensible,
+* permisos backend.
+
+Pendiente:
+
+* UI más clara para documentos sensibles,
+* auditoría de descargas,
+* reglas custom más amigables.
+
+### Riesgo 5: amarrar la Nube a Aperturas demasiado pronto
+
+Mitigación:
+
+* usar tabla genérica `internal_document_links`,
+* no meter `opening_id` directo en `internal_documents`,
+* no crear lógica de tareas hasta que exista contrato de Aperturas.
+
+### Riesgo 6: mezclar Warehouse con portal público
+
+Mitigación actual:
+
+* Warehouse guarda archivo,
+* Nube publica documento lógico,
+* usuario nunca ve path interno,
+* descarga pasa por backend.
+
+---
+
+## 17. Pendientes UX detectados en producción
+
+Pendientes inmediatos:
+
+1. Ocultar botón “Global” cuando el documento ya tiene `visibility_mode = GLOBAL`.
+2. Ocultar botón “Global” para documentos sensibles.
+3. Corregir descarga para conservar extensión original del archivo.
+4. Formatear `published_at`, `created_at`, `updated_at` en UI.
+5. Cambiar `Owner user id` y `Owner department id` por selector o autollenado.
+6. Hacer formulario de creación colapsable.
+7. Separar vista admin y vista usuario.
+8. Mejorar etiqueta del botón “Global” a “Hacer visible globalmente”.
+9. Mostrar mejor el estado “Sensible”.
+10. Agregar confirmación visual al publicar.
+
+### Bug conocido: descarga sin extensión
+
+Problema:
+
+El frontend construye fallback de descarga con:
+
+```text
+document.title + version
+```
+
+Eso puede perder `.pdf`, `.docx`, etc.
+
+Solución recomendada:
+
+Usar primero:
+
+```text
+document.current_version.original_filename
+```
+
+Si no existe, construir fallback con extensión.
+
+---
+
+## 18. Pantallas Angular objetivo
+
+## 18.1 Home — Nube Corporativa
 
 Ruta:
 
-`/#/nube-corporativa`
+```text
+/#/nube-corporativa
+```
 
-Elementos:
+Elementos objetivo:
 
 * buscador principal,
 * tarjetas por categoría,
 * últimos publicados,
 * accesos rápidos,
-* botón admin si tiene permiso.
+* vista limpia para usuario final,
+* sin formulario admin visible por defecto.
 
-## 11.2 Lista de documentos
+## 18.2 Lista de documentos
 
 Elementos:
 
@@ -708,6 +964,7 @@ Elementos:
   * estado si admin,
   * sensible si admin,
   * fecha publicación,
+  * vínculo futuro a apertura/proyecto,
 * acciones:
 
   * ver detalle,
@@ -724,9 +981,10 @@ Columnas:
 * fecha publicación,
 * estado,
 * sensible,
+* vínculo/contexto,
 * acciones.
 
-## 11.3 Detalle de documento
+## 18.3 Detalle de documento
 
 Elementos:
 
@@ -738,14 +996,17 @@ Elementos:
 * fecha de publicación,
 * estado,
 * sensibilidad,
+* vínculos contextuales,
 * botón descargar,
 * historial básico si admin.
 
-## 11.4 Admin de documentos
+## 18.4 Admin de documentos
 
-Ruta:
+Ruta futura:
 
-`/#/nube-corporativa/admin`
+```text
+/#/nube-corporativa/admin
+```
 
 Elementos:
 
@@ -757,16 +1018,22 @@ Elementos:
 * publicar,
 * archivar,
 * reemplazar versión,
-* ver auditoría.
+* ver auditoría,
+* administrar vínculos contextuales.
 
-## 12. Servicio Angular
+---
 
-Servicio sugerido:
+## 19. Servicio Angular actual
 
-`internal-documents.service.ts`
+Servicio:
 
-Métodos conceptuales:
+```text
+frontend/src/app/internal-documents/services/internal-documents.service.ts
+```
 
+Métodos actuales:
+
+* `getAccess()`
 * `getCategories()`
 * `listDocuments(filters)`
 * `getDocument(id)`
@@ -776,23 +1043,27 @@ Métodos conceptuales:
 * `archiveDocument(id)`
 * `replaceVersion(id, payload)`
 * `getVersions(id)`
-* `downloadDocument(id)`
+* `downloadCurrentDocument(id)`
+* `downloadHistoricalVersion(id, versionId)`
 * `updateVisibility(id, payload)`
 * `getAudit(id)`
+* `triggerBrowserDownload(response, fallbackName)`
 
-Reglas:
+Métodos futuros F1.1:
 
-* Usar `environment.apiUrl`.
-* No hardcodear URLs.
-* No mezclar lógica de permisos compleja en HTML.
-* Las capacidades de UI deben venir idealmente del backend o de métodos del componente.
+* `getDocumentLinks(documentId)`
+* `upsertDocumentLink(documentId, payload)`
+* `deleteDocumentLink(documentId, linkId)`
+* `listDocumentsByEntity(entityType, entityKey/entityId)`
 
-## 13. Respuestas API recomendadas
+---
+
+## 20. Respuestas API recomendadas
 
 Cada documento listado debe incluir capacidades calculadas por backend:
 
 ```text
-permissions/capabilities:
+capabilities:
 - can_view
 - can_download
 - can_edit
@@ -801,17 +1072,34 @@ permissions/capabilities:
 - can_replace_version
 - can_manage_visibility
 - can_view_audit
+- can_download_historical_versions
 ```
 
-Esto evita duplicar demasiada lógica en Angular.
+Esto ya existe.
 
-El frontend puede ocultar botones con esas capacidades, pero el backend debe volver a validar al ejecutar la acción.
+Para F1.1 se agregaría:
 
-## 14. Flujo funcional F1
+```text
+links:
+- id
+- entity_type
+- entity_id
+- entity_key
+- link_role
+- label
+- is_primary
+- is_active
+```
 
-## 14.1 Crear borrador
+El frontend puede ocultar botones con capacidades, pero el backend debe volver a validar al ejecutar la acción.
 
-1. Admin entra a Nube Corporativa Admin.
+---
+
+## 21. Flujo funcional actual F1
+
+## 21.1 Crear borrador
+
+1. Admin entra a Nube Corporativa.
 2. Sube archivo.
 3. Completa metadata mínima.
 4. Backend guarda archivo en Warehouse.
@@ -819,7 +1107,7 @@ El frontend puede ocultar botones con esas capacidades, pero el backend debe vol
 6. Backend crea versión 1.
 7. Backend audita.
 
-## 14.2 Configurar visibilidad
+## 21.2 Configurar visibilidad
 
 1. Admin selecciona documento.
 2. Define alcance:
@@ -832,23 +1120,23 @@ El frontend puede ocultar botones con esas capacidades, pero el backend debe vol
 3. Backend guarda reglas.
 4. Backend audita.
 
-## 14.3 Publicar
+## 21.3 Publicar
 
 1. Admin presiona publicar.
 2. Backend valida metadata, dueño, versión y visibilidad.
 3. Backend cambia estado a PUBLICADO.
 4. Documento aparece a usuarios autorizados.
 
-## 14.4 Descargar
+## 21.4 Descargar
 
-1. Usuario entra a biblioteca.
+1. Usuario autorizado entra a biblioteca.
 2. Backend devuelve solo documentos autorizados.
 3. Usuario abre detalle.
 4. Usuario descarga.
 5. Backend valida permiso.
 6. Backend entrega archivo sin exponer ruta real.
 
-## 14.5 Reemplazar versión
+## 21.5 Reemplazar versión
 
 1. Admin abre documento.
 2. Sube nuevo archivo.
@@ -858,16 +1146,52 @@ El frontend puede ocultar botones con esas capacidades, pero el backend debe vol
 6. Backend marca nueva versión como vigente.
 7. Backend audita.
 
-## 14.6 Archivar
+## 21.6 Archivar
 
 1. Admin archiva documento.
 2. Backend cambia estado a ARCHIVADO.
 3. Documento desaparece de biblioteca normal.
 4. Historial queda disponible para admin.
 
-## 15. Checklist QA F1
+---
 
-## 15.1 Seguridad
+## 22. Flujo futuro F1.1: vincular documento a apertura
+
+1. Admin crea o selecciona documento.
+2. Admin abre sección “Vinculación”.
+3. Selecciona tipo de entidad:
+
+```text
+OPENING
+```
+
+4. Selecciona o captura clave:
+
+```text
+EGADE
+```
+
+5. Selecciona rol del documento:
+
+```text
+PLANO
+```
+
+6. Marca si es principal/oficial:
+
+```text
+is_primary = true
+```
+
+7. Backend crea `internal_document_links`.
+8. Backend audita.
+9. Futuro módulo de Aperturas podrá consultar documentos por apertura.
+
+---
+
+## 23. Checklist QA actual F1
+
+## 23.1 Seguridad
 
 * Usuario sin token no accede.
 * Usuario no autorizado no ve documento.
@@ -876,10 +1200,11 @@ El frontend puede ocultar botones con esas capacidades, pero el backend debe vol
 * Usuario normal no ve borradores.
 * Usuario normal no ve archivados.
 * Usuario normal no ve versiones ocultas.
-* Documento sensible no se publica globalmente por error.
+* Documento sensible no se publica globalmente.
 * Frontend oculta botones, pero backend bloquea aunque se fuerce request.
+* Menú oculto a gerentes mientras el módulo está en beta.
 
-## 15.2 Versionado
+## 23.2 Versionado
 
 * Crear primera versión funciona.
 * Reemplazar versión crea nuevo registro.
@@ -888,15 +1213,16 @@ El frontend puede ocultar botones con esas capacidades, pero el backend debe vol
 * Admin puede ver historial.
 * Documento apunta a versión vigente correcta.
 
-## 15.3 Warehouse
+## 23.3 Warehouse
 
 * Archivo se registra en Warehouse.
 * Archivo tiene hash.
 * Archivo queda en volumen persistente.
 * Portal guarda referencia a `warehouse_upload_id`.
 * Descarga resuelve desde Warehouse.
+* Archivo sobrevive reinicio/rebuild.
 
-## 15.4 Auditoría
+## 23.4 Auditoría
 
 * Crear documento audita.
 * Editar metadata audita.
@@ -906,7 +1232,7 @@ El frontend puede ocultar botones con esas capacidades, pero el backend debe vol
 * Cambiar visibilidad audita.
 * Cambiar sensibilidad audita.
 
-## 15.5 Frontend
+## 23.5 Frontend
 
 * Lista carga documentos autorizados.
 * Filtros funcionan.
@@ -917,131 +1243,115 @@ El frontend puede ocultar botones con esas capacidades, pero el backend debe vol
 * F5 en ruta hash mantiene pantalla correcta.
 * Responsive básico funciona.
 
-## 16. Orden de implementación recomendado
+---
 
-## Rama 1 — DB/Migrations
+## 24. QA pendiente inmediato en producción
 
-Nombre sugerido:
+Antes de abrirlo a más usuarios, validar:
 
-`feature/f1-internal-documents-db`
+1. Usuario no admin:
 
-Objetivo:
+   * no ve menú,
+   * si accede manualmente, backend no expone acciones admin,
+   * no ve borradores,
+   * no ve archivados.
 
-Crear tablas y catálogos base.
+2. Documento sensible:
+
+   * crear sensible,
+   * intentar hacerlo global,
+   * backend debe rechazar.
+
+3. Persistencia:
+
+   * reiniciar backend/frontend,
+   * descargar documento publicado,
+   * confirmar que el archivo sigue disponible.
+
+4. Descarga:
+
+   * corregir extensión,
+   * confirmar que Windows reconoce el archivo.
+
+---
+
+## 25. Orden recomendado de siguientes trabajos
+
+## Hotfix UX 1
+
+Rama sugerida:
+
+```text
+hotfix/internal-documents-ux-polish
+```
 
 Incluye:
 
-* modelos ORM,
+* ocultar botón Global cuando ya está en GLOBAL,
+* ocultar botón Global si documento sensible,
+* corregir nombre de descarga con extensión original,
+* formatear fecha publicada.
+
+No requiere migración.
+
+## F1.1 — Documentos vinculables
+
+Rama sugerida:
+
+```text
+feature/f1-1-internal-document-links
+```
+
+Incluye:
+
+* modelo `InternalDocumentLinkORM`,
 * migración Alembic,
-* seed de categorías,
-* relaciones con users/departments/sucursales/Warehouse.
+* endpoints para listar/crear/desactivar vínculos,
+* serializer de vínculos,
+* UI mínima admin para capturar vínculo,
+* filtros por entity_type/entity_key,
+* auditoría de vínculos.
 
-No incluye endpoints completos ni frontend.
-
-## Rama 2 — Backend base
-
-Nombre sugerido:
-
-`feature/f1-internal-documents-backend`
-
-Objetivo:
-
-Crear blueprint y endpoints base.
+## F2 — Nube Corporativa madura
 
 Incluye:
 
-* listar categorías,
-* listar documentos,
-* detalle,
-* crear documento,
-* subir archivo vía Warehouse,
-* publicar,
-* archivar,
-* reemplazar versión,
-* descarga segura,
-* auditoría.
+* búsqueda dentro de PDF,
+* auditoría de descargas,
+* preview PDF,
+* vencimientos/vigencias,
+* documentos destacados,
+* notificaciones,
+* aprobación documental,
+* firma de recibido,
+* selector de dueños,
+* reglas de visibilidad amigables,
+* separación UI admin/usuario.
 
-## Rama 3 — Permisos y seguridad
+## Aperturas — Módulo separado
 
-Nombre sugerido:
+Debe construirse después de cerrar F1.1 documental.
 
-`feature/f1-internal-documents-permissions`
+Incluirá:
 
-Objetivo:
+* apertura,
+* tareas,
+* responsables,
+* fechas,
+* dependencias,
+* cambios,
+* historial,
+* documentos vinculados,
+* notificaciones,
+* vista tipo Gantt simplificada,
+* tablero de avance,
+* control por área.
 
-Endurecer permisos backend.
+---
 
-Incluye:
+## 26. Criterio de cierre F1
 
-* helpers de permisos,
-* validación por rol,
-* validación por visibilidad,
-* documentos sensibles,
-* pruebas manuales por rol.
-
-Puede combinarse con backend si el cambio no crece demasiado, pero idealmente separarlo.
-
-## Rama 4 — Frontend admin
-
-Nombre sugerido:
-
-`feature/f1-internal-documents-admin-ui`
-
-Objetivo:
-
-Crear pantallas administrativas.
-
-Incluye:
-
-* ruta admin,
-* formulario subir/crear,
-* editar metadata,
-* publicar,
-* archivar,
-* reemplazar versión,
-* configurar visibilidad.
-
-## Rama 5 — Frontend usuario
-
-Nombre sugerido:
-
-`feature/f1-internal-documents-user-ui`
-
-Objetivo:
-
-Crear biblioteca para usuarios.
-
-Incluye:
-
-* home,
-* lista,
-* filtros,
-* detalle,
-* descarga.
-
-## Rama 6 — QA/Integración
-
-Nombre sugerido:
-
-`feature/f1-internal-documents-qa`
-
-Objetivo:
-
-Pruebas finales, limpieza e integración.
-
-Incluye:
-
-* checklist QA,
-* pruebas por rol,
-* pruebas por visibilidad,
-* pruebas de versión,
-* pruebas de descarga directa,
-* revisión visual,
-* documentación interna.
-
-## 17. Criterio de cierre F1
-
-F1 se puede cerrar cuando:
+F1 se considera cerrada cuando:
 
 1. Un admin sube un archivo y este entra al Warehouse.
 2. El Portal crea documento ligado a ese archivo.
@@ -1059,8 +1369,61 @@ F1 se puede cerrar cuando:
 14. Todo cambio administrativo queda auditado.
 15. Los archivos sobreviven reinicio/rebuild por volumen persistente.
 16. No se exponen rutas internas ni Warehouse al usuario final.
+17. El menú queda controlado para evitar exposición prematura.
 
-## 18. Pendientes para F2
+Estado:
+
+```text
+F1 funcional en producción.
+Pendiente pulido UX y QA final por roles.
+```
+
+---
+
+## 27. Criterio de cierre F1.1
+
+F1.1 se puede cerrar cuando:
+
+1. Existe tabla de vínculos documentales.
+2. Un documento puede vincularse a una entidad genérica.
+3. Se soportan al menos estos `entity_type`:
+
+```text
+OPENING
+PROJECT
+TASK
+SUCURSAL
+DEPARTMENT
+GENERAL
+```
+
+4. Se soportan al menos estos `link_role`:
+
+```text
+PLANO
+PERMISO
+CONTRATO
+COTIZACION
+CHECKLIST
+EVIDENCIA
+MANUAL
+FINANCIERO
+CONSTRUCCION
+OPERACION
+OTRO
+```
+
+5. Se puede marcar un documento como principal/oficial en un contexto.
+6. Se puede consultar documentos por `entity_type` + `entity_key`.
+7. La UI permite ver vínculos básicos.
+8. El backend valida permisos.
+9. Los cambios de vínculos se auditan.
+10. No se rompe el flujo actual de F1.
+11. No se crean dependencias directas prematuras con tablas de Aperturas que aún no existen.
+
+---
+
+## 28. Pendientes para F2
 
 * Búsqueda dentro de PDFs.
 * Auditoría de descargas.
@@ -1073,4 +1436,7 @@ F1 se puede cerrar cuando:
 * Preview de PDF.
 * Integración con notificaciones.
 * Dashboard de documentos vencidos/no revisados.
+* Selector de usuarios/departamentos/sucursales.
+* Visibilidad avanzada por proyecto/apertura.
+* Relación formal con módulo de Aperturas.
 * Migración futura a S3/R2/MinIO si el volumen crece.
