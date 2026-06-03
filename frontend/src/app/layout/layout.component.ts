@@ -10,7 +10,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { CommonModule } from '@angular/common';
 import { EliminarTicketDialogComponent } from '../eliminar-ticket-dialog/eliminar-ticket-dialog.component';
 import { environment } from 'src/environments/environment';
-import { ReportarErrorComponent } from '../reportar-error/reportar-error.component'; 
+import { ReportarErrorComponent } from '../reportar-error/reportar-error.component';
 import { mostrarAlertaToast } from '../utils/alertas';
 import { AuthService } from '../services/auth.service';
 import { ReauthModalComponent } from '../reauth-modal/reauth-modal.component';
@@ -41,7 +41,7 @@ export class LayoutComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('indicator', { static: true }) indicator!: ElementRef;
 
   esAdmin = false;
-  esSoloLectura = false; 
+  esSoloLectura = false;
   currentSubmenu: string = 'Tickets';
   submenuVisible = false;
   estiloIndicador: any = {};
@@ -55,7 +55,8 @@ export class LayoutComponent implements OnInit, AfterViewInit, OnDestroy {
   puedeVerMantenimientoOperativo = false;
   puedeVerMantenimientoGerencial = false;
   puedeVerWarehouse = false;
-  puedeVerPlanning = false; 
+  puedeVerPlanning = false;
+  puedeVerInternalDocuments = false;
 
   usuarioLabel = '';
   reporteBugFueArrastrado = false;
@@ -105,6 +106,14 @@ ngOnInit(): void {
         label: 'BI Comercial / Promociones',
         path: '/warehouse/comercial/promociones',
       },
+    ],
+  };
+
+  const menuNubeCorporativa = {
+    label: 'Nube Corporativa',
+    path: '/nube-corporativa',
+    submenu: [
+      { label: 'Biblioteca Interna', path: '/nube-corporativa' },
     ],
   };
 
@@ -256,8 +265,6 @@ const menuMantenimientoGerencial = [
     }
   ];
 
-
-
   if (this.esSoloLectura) {
     this.menuItems = soloTickets;
   } else if (this.esAdmin) {
@@ -271,6 +278,7 @@ const menuMantenimientoGerencial = [
   } else {
     this.menuItems = soloTickets;
   }
+
   if (
     this.puedeVerTrackDiarioPorRol() &&
     !this.menuItems.some((item) => item.label === 'Track')
@@ -280,8 +288,10 @@ const menuMantenimientoGerencial = [
       menuTrackDiario,
     ];
   }
+
   this.habilitarWarehouseEnMenuSiAplica(menuWarehouse);
   this.habilitarPlanningEnMenuSiAplica(menuPlanning);
+  this.habilitarInternalDocumentsEnMenuSiAplica(menuNubeCorporativa);
   this.sincronizarMenuConRutaActual();
   this.cargarTicketValidationAlertPosition();
   this.cargarTicketValidationSummary();
@@ -385,6 +395,49 @@ private habilitarPlanningEnMenuSiAplica(menuPlanning: any): void {
     });
 }
 
+private habilitarInternalDocumentsEnMenuSiAplica(menuNubeCorporativa: any): void {
+  if (this.menuItems.some((item) => item.label === 'Nube Corporativa')) {
+    return;
+  }
+
+  this.http
+    .get<any>(`${environment.apiUrl}/internal-documents/access`)
+    .subscribe({
+      next: (response) => {
+        const puedeVerInternalDocuments = Boolean(
+          response?.allowed ??
+          response?.can_view ??
+          response?.canView ??
+          response?.has_access ??
+          response?.hasAccess ??
+          response?.access?.can_view ??
+          response?.access?.canView ??
+          response?.permissions?.can_view ??
+          response?.permissions?.canView
+        );
+
+        if (!puedeVerInternalDocuments) {
+          return;
+        }
+
+        if (this.menuItems.some((item) => item.label === 'Nube Corporativa')) {
+          return;
+        }
+
+        this.puedeVerInternalDocuments = true;
+        this.menuItems = [
+          ...this.menuItems,
+          menuNubeCorporativa,
+        ];
+
+        this.sincronizarMenuConRutaActual();
+      },
+      error: () => {
+        this.puedeVerInternalDocuments = false;
+      },
+    });
+}
+
 
   // 🖱️ Lógica de inactividad
   private iniciarTimerInactividad(): void {
@@ -413,7 +466,7 @@ private habilitarPlanningEnMenuSiAplica(menuPlanning: any): void {
       return;
     }
 
-    const reauthYaAbierto = this.dialog.openDialogs.some( 
+    const reauthYaAbierto = this.dialog.openDialogs.some(
       dialogRef => dialogRef.componentInstance instanceof ReauthModalComponent
     );
 
@@ -672,7 +725,7 @@ private cargarTicketValidationAlertPosition(): void {
 
     if (!Number.isFinite(x) || !Number.isFinite(y)) {
       localStorage.removeItem(this.validationAlertPositionKey);
-      this.validationAlertPosition = { x: 0, y: 0 };
+      this.validationAlertPosition = { x, y };
       return;
     }
 
@@ -850,6 +903,7 @@ getMenuIcon(label: string): string {
     mantenimiento: 'build',
     inventario: 'inventory_2',
     warehouse: 'warehouse',
+    'nube corporativa': 'cloud',
     catálogos: 'category',
     catalogos: 'category',
     asistencia: 'event_available',
@@ -868,6 +922,10 @@ getSubmenuIcon(label: string): string {
 
   if (normalizedLabel.includes('ver')) {
     return 'visibility';
+  }
+
+  if (normalizedLabel.includes('biblioteca') || normalizedLabel.includes('nube')) {
+    return 'cloud_queue';
   }
 
   if (normalizedLabel.includes('track')) {
@@ -930,6 +988,10 @@ getSubmenuDescription(label: string): string {
 
   if (normalizedLabel === 'crear ticket') {
     return 'Crea un nuevo ticket para soporte o solicitud.';
+  }
+
+  if (normalizedLabel.includes('biblioteca') || normalizedLabel.includes('nube')) {
+    return 'Consulta documentos publicados, manuales, políticas y reportes internos.';
   }
 
   if (normalizedLabel.includes('track')) {
