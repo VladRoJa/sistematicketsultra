@@ -1,7 +1,8 @@
 // frontend/src/app/internal-documents/pages/internal-documents-home/internal-documents-home.component.ts
 
 import { CommonModule } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { FormsModule } from '@angular/forms';
 
 import {
@@ -24,7 +25,7 @@ import { InternalDocumentsService } from '../../services/internal-documents.serv
   templateUrl: './internal-documents-home.component.html',
   styleUrls: ['./internal-documents-home.component.css'],
 })
-export class InternalDocumentsHomeComponent implements OnInit {
+export class InternalDocumentsHomeComponent implements OnInit, OnDestroy  {
   loading = false;
   saving = false;
   errorMessage = '';
@@ -54,6 +55,14 @@ export class InternalDocumentsHomeComponent implements OnInit {
 
   selectedFile: File | null = null;
   versionFile: File | null = null;
+  previewOpen = false;
+  previewLoading = false;
+  previewErrorMessage = '';
+  previewTitle = '';
+  previewType: 'pdf' | 'image' | null = null;
+  previewObjectUrl: string | null = null;
+  previewSafeUrl: SafeResourceUrl | null = null;
+  previewDocument: InternalDocument | null = null;
 
   form = {
     title: '',
@@ -79,12 +88,19 @@ export class InternalDocumentsHomeComponent implements OnInit {
     'ARCHIVADO',
   ];
 
-  constructor(private internalDocumentsService: InternalDocumentsService) {}
+  constructor(
+    private internalDocumentsService: InternalDocumentsService,
+    private sanitizer: DomSanitizer,
+  ) {}
 
   ngOnInit(): void {
     this.loadAccess();
     this.loadCategories();
     this.loadDocuments();
+  }
+
+  ngOnDestroy(): void {
+    this.revokePreviewObjectUrl();
   }
 
   loadAccess(): void {
@@ -407,6 +423,103 @@ export class InternalDocumentsHomeComponent implements OnInit {
         );
       },
     });
+  }
+
+  openPreview(document: InternalDocument): void {
+    this.clearMessages();
+    this.closePreview(false);
+
+    const previewType = this.resolvePreviewType(document);
+
+    if (!previewType) {
+      this.errorMessage = 'Este formato solo está disponible para descarga.';
+      return;
+    }
+
+    this.previewOpen = true;
+    this.previewLoading = true;
+    this.previewErrorMessage = '';
+    this.previewTitle = document.title || 'Vista previa';
+    this.previewType = previewType;
+    this.previewDocument = document;
+
+    this.internalDocumentsService.downloadCurrentDocument(document.id).subscribe({
+      next: (response) => {
+        const blob = response.body;
+
+        if (!blob) {
+          this.previewLoading = false;
+          this.previewErrorMessage = 'No se pudo cargar la vista previa.';
+          return;
+        }
+
+        this.previewObjectUrl = window.URL.createObjectURL(blob);
+
+        if (previewType === 'pdf') {
+          this.previewSafeUrl = this.sanitizer.bypassSecurityTrustResourceUrl(
+            this.previewObjectUrl
+          );
+        }
+
+        this.previewLoading = false;
+      },
+      error: (error) => {
+        this.previewLoading = false;
+        this.previewErrorMessage = this.resolveErrorMessage(
+          error,
+          'No se pudo cargar la vista previa.'
+        );
+      },
+    });
+  }
+
+  closePreview(clearError = true): void {
+    this.revokePreviewObjectUrl();
+
+    this.previewOpen = false;
+    this.previewLoading = false;
+    this.previewTitle = '';
+    this.previewType = null;
+    this.previewSafeUrl = null;
+    this.previewDocument = null;
+
+    if (clearError) {
+      this.previewErrorMessage = '';
+    }
+  }
+
+  canPreviewDocument(document: InternalDocument): boolean {
+    return this.canDownload(document) && this.resolvePreviewType(document) !== null;
+  }
+
+  private resolvePreviewType(document: InternalDocument): 'pdf' | 'image' | null {
+    const mimeType = String(document.current_version?.file_mime_type || '').toLowerCase();
+    const filename = String(document.current_version?.original_filename || '').toLowerCase();
+
+    if (mimeType === 'application/pdf' || filename.endsWith('.pdf')) {
+      return 'pdf';
+    }
+
+    if (
+      mimeType === 'image/png' ||
+      mimeType === 'image/jpeg' ||
+      filename.endsWith('.png') ||
+      filename.endsWith('.jpg') ||
+      filename.endsWith('.jpeg')
+    ) {
+      return 'image';
+    }
+
+    return null;
+  }
+
+  private revokePreviewObjectUrl(): void {
+    if (!this.previewObjectUrl) {
+      return;
+    }
+
+    window.URL.revokeObjectURL(this.previewObjectUrl);
+    this.previewObjectUrl = null;
   }
 
   getCategoryName(categoryId: number | null): string {
