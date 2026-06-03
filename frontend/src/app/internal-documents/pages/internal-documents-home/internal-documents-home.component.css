@@ -408,19 +408,19 @@ dd {
 .preview-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 1000;
+  z-index: 5000;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: 96px 24px 28px;
   background: rgba(15, 23, 42, 0.72);
 }
 
 .preview-modal {
   display: flex;
   flex-direction: column;
-  width: min(1120px, 96vw);
-  height: min(860px, 92vh);
+  width: min(1120px, 94vw);
+  height: min(780px, calc(100vh - 132px));
   overflow: hidden;
   background: #ffffff;
   border-radius: 20px;
@@ -473,12 +473,12 @@ dd {
 
 @media (max-width: 720px) {
   .preview-backdrop {
-    padding: 10px;
+    padding: 78px 10px 12px;
   }
 
   .preview-modal {
-    width: 100vw;
-    height: 94vh;
+    width: 100%;
+    height: calc(100vh - 96px);
     border-radius: 16px;
   }
 
