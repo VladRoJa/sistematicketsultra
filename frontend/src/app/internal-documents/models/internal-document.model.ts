@@ -1,0 +1,219 @@
+// frontend/src/app/internal-documents/models/internal-document.model.ts
+
+export interface InternalDocumentCategory {
+  id: number;
+  key: string;
+  name: string;
+  description?: string | null;
+  is_active: boolean;
+  sort_order: number;
+}
+
+export type InternalDocumentStatus = 'BORRADOR' | 'PUBLICADO' | 'ARCHIVADO';
+export type InternalDocumentVisibilityMode = 'PRIVATE' | 'CUSTOM' | 'GLOBAL';
+export type InternalDocumentVisibilityType =
+  | 'GLOBAL'
+  | 'ROLE'
+  | 'DEPARTMENT'
+  | 'SUCURSAL'
+  | 'USER';
+
+export interface InternalDocumentCapabilities {
+  can_view: boolean;
+  can_download: boolean;
+  can_edit: boolean;
+  can_publish: boolean;
+  can_archive: boolean;
+  can_replace_version: boolean;
+  can_manage_visibility: boolean;
+  can_view_audit: boolean;
+  can_download_historical_versions: boolean;
+}
+
+export interface InternalDocumentUserSnapshot {
+  id: number | null;
+  username: string | null;
+  rol: string | null;
+}
+
+export interface InternalDocumentDepartmentSnapshot {
+  id: number | null;
+  nombre: string | null;
+}
+
+export interface InternalDocumentWarehouseUpload {
+  id: number;
+  original_filename: string | null;
+  stored_filename: string | null;
+  file_size_bytes: number | null;
+  file_hash_sha256: string | null;
+  mime_type: string | null;
+  extension: string | null;
+  report_type_id: number | null;
+  period_type: string | null;
+  cutoff_date: string | null;
+  date_from: string | null;
+  date_to: string | null;
+  status: string | null;
+}
+
+export interface InternalDocumentVersion {
+  id: number;
+  document_id: number;
+  warehouse_upload_id: number;
+  version_label: string;
+  version_number: number;
+  original_filename: string | null;
+  file_mime_type: string | null;
+  file_size_bytes: number | null;
+  file_hash_sha256: string | null;
+  change_notes: string | null;
+  is_current: boolean;
+  is_hidden_from_users: boolean;
+  created_by: number | null;
+  created_at: string | null;
+  warehouse_upload?: InternalDocumentWarehouseUpload | null;
+}
+
+export interface InternalDocumentVisibilityRule {
+  id?: number;
+  document_id?: number;
+  visibility_type: InternalDocumentVisibilityType;
+  role?: string | null;
+  department_id?: number | null;
+  sucursal_id?: number | null;
+  user_id?: number | null;
+  can_view: boolean;
+  can_download: boolean;
+  is_active?: boolean;
+  created_by?: number | null;
+  created_at?: string | null;
+}
+
+export interface InternalDocumentAuditLog {
+  id: number;
+  document_id: number;
+  version_id: number | null;
+  actor_user_id: number | null;
+  action: string;
+  old_value_json: Record<string, unknown> | null;
+  new_value_json: Record<string, unknown> | null;
+  metadata_json: Record<string, unknown> | null;
+  ip_address: string | null;
+  user_agent: string | null;
+  created_at: string | null;
+}
+
+export interface InternalDocument {
+  id: number;
+  title: string;
+  description: string | null;
+  category_id: number;
+  category: InternalDocumentCategory | null;
+  document_type: string | null;
+  owner_user_id: number | null;
+  owner_department_id: number | null;
+  owner_user: InternalDocumentUserSnapshot | null;
+  owner_department: InternalDocumentDepartmentSnapshot | null;
+  status: InternalDocumentStatus;
+  is_sensitive: boolean;
+  current_version_id: number | null;
+  current_version: InternalDocumentVersion | null;
+  visibility_mode: InternalDocumentVisibilityMode;
+  published_by: number | null;
+  published_at: string | null;
+  archived_by: number | null;
+  archived_at: string | null;
+  created_by: number | null;
+  updated_by: number | null;
+  created_at: string | null;
+  updated_at: string | null;
+  capabilities: InternalDocumentCapabilities;
+  versions?: InternalDocumentVersion[];
+  visibility_rules?: InternalDocumentVisibilityRule[];
+}
+
+export interface InternalDocumentsAccessResponse {
+  allowed: boolean;
+  module: string;
+  can_manage: boolean;
+  user: {
+    id: number;
+    username: string | null;
+    role: string;
+    sucursal_id: number | null;
+    sucursales_ids: number[];
+    department_id: number | null;
+  };
+}
+
+export interface InternalDocumentListFilters {
+  q?: string;
+  category_id?: number | null;
+  status?: InternalDocumentStatus | 'ALL' | null;
+  owner_department_id?: number | null;
+  is_sensitive?: boolean | null;
+  page?: number;
+  page_size?: number;
+}
+
+export interface InternalDocumentListResponse {
+  items: InternalDocument[];
+  page: number;
+  page_size: number;
+  total: number;
+  total_pages: number;
+  has_next: boolean;
+  has_prev: boolean;
+}
+
+export interface InternalDocumentCategoriesResponse {
+  items: InternalDocumentCategory[];
+}
+
+export interface InternalDocumentCreatePayload {
+  file: File;
+  title: string;
+  description?: string | null;
+  category_id: number;
+  document_type?: string | null;
+  owner_user_id?: number | null;
+  owner_department_id?: number | null;
+  is_sensitive?: boolean;
+  version_label?: string | null;
+  change_notes?: string | null;
+}
+
+export interface InternalDocumentUpdatePayload {
+  title?: string | null;
+  description?: string | null;
+  category_id?: number | null;
+  document_type?: string | null;
+  owner_user_id?: number | null;
+  owner_department_id?: number | null;
+  is_sensitive?: boolean;
+}
+
+export interface InternalDocumentReplaceVersionPayload {
+  file: File;
+  version_label?: string | null;
+  change_notes: string;
+}
+
+export interface InternalDocumentVisibilityPayload {
+  visibility_mode: InternalDocumentVisibilityMode;
+  rules?: InternalDocumentVisibilityRule[];
+}
+
+export interface InternalDocumentActionResponse {
+  message: string;
+  item: InternalDocument;
+}
+
+export interface InternalDocumentVersionsResponse {
+  items: InternalDocumentVersion[];
+}
+
+export interface InternalDocumentAuditResponse {
+  items: InternalDocumentAuditLog[];
+}
