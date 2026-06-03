@@ -177,7 +177,7 @@
 
       <label class="checkbox-row">
         <input type="checkbox" [(ngModel)]="form.is_sensitive" />
-        Documento sensible
+        Documento confidencial
       </label>
     </div>
 
@@ -242,11 +242,11 @@
           <button
             type="button"
             class="secondary"
-            *ngIf="canShowAdminActions(document)"
+            *ngIf="canSetGlobalVisibility(document)"
             (click)="setGlobalVisibility(document)"
-            [disabled]="saving || document.is_sensitive"
+            [disabled]="saving"
           >
-            Global
+            Hacer global
           </button>
 
           <button
@@ -314,7 +314,7 @@
           </div>
           <div>
             <dt>Publicado</dt>
-            <dd>{{ selectedDocument.published_at || 'No publicado' }}</dd>
+            <dd>{{ getDateTimeLabel(selectedDocument.published_at, 'No publicado') }}</dd>
           </div>
         </dl>
 
