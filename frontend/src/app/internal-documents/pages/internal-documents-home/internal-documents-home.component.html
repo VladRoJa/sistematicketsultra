@@ -1,0 +1,382 @@
+<!-- frontend/src/app/internal-documents/pages/internal-documents-home/internal-documents-home.component.html -->
+
+<section class="internal-documents-page">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">Suite Ultra</p>
+      <h1>Nube Corporativa</h1>
+      <p class="page-subtitle">
+        Documentos publicados, reportes, manuales, políticas, formatos y procedimientos internos.
+      </p>
+    </div>
+
+    <button
+      type="button"
+      class="refresh-button"
+      (click)="loadDocuments()"
+      [disabled]="loading || saving"
+    >
+      Actualizar
+    </button>
+  </header>
+
+  <div class="alert success" *ngIf="successMessage">
+    {{ successMessage }}
+  </div>
+
+  <div class="alert error" *ngIf="errorMessage">
+    {{ errorMessage }}
+  </div>
+
+  <section class="filters-panel">
+    <div class="field search-field">
+      <label for="document-search">Buscar</label>
+      <input
+        id="document-search"
+        type="text"
+        [(ngModel)]="filters.q"
+        placeholder="Título, descripción o tipo"
+      />
+    </div>
+
+    <div class="field">
+      <label for="document-category">Categoría</label>
+      <select id="document-category" [(ngModel)]="filters.category_id">
+        <option [ngValue]="null">Todas</option>
+        <option
+          *ngFor="let category of categories"
+          [ngValue]="category.id"
+        >
+          {{ category.name }}
+        </option>
+      </select>
+    </div>
+
+    <div class="field" *ngIf="canManage">
+      <label for="document-status">Estado</label>
+      <select id="document-status" [(ngModel)]="filters.status">
+        <option
+          *ngFor="let status of statusOptions"
+          [ngValue]="status"
+        >
+          {{ status === 'ALL' ? 'Todos' : getStatusLabel(status) }}
+        </option>
+      </select>
+    </div>
+
+    <div class="filter-actions">
+      <button type="button" (click)="applyFilters()" [disabled]="loading">
+        Aplicar
+      </button>
+      <button type="button" class="secondary" (click)="clearFilters()" [disabled]="loading">
+        Limpiar
+      </button>
+    </div>
+  </section>
+
+  <section class="create-panel" *ngIf="canManage">
+    <div class="panel-title">
+      <h2>Publicar nuevo documento</h2>
+      <p>
+        El archivo entra primero al Warehouse y después queda como borrador en la Nube Corporativa.
+      </p>
+    </div>
+
+    <div class="create-grid">
+      <div class="field">
+        <label for="new-title">Título *</label>
+        <input
+          id="new-title"
+          type="text"
+          [(ngModel)]="form.title"
+          placeholder="Ej. Manual de uso Track"
+        />
+      </div>
+
+      <div class="field">
+        <label for="new-category">Categoría *</label>
+        <select id="new-category" [(ngModel)]="form.category_id">
+          <option
+            *ngFor="let category of categories"
+            [ngValue]="category.id"
+          >
+            {{ category.name }}
+          </option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="new-document-type">Tipo</label>
+        <input
+          id="new-document-type"
+          type="text"
+          [(ngModel)]="form.document_type"
+          placeholder="Opcional"
+        />
+      </div>
+
+      <div class="field">
+        <label for="new-owner-user">Owner user id</label>
+        <input
+          id="new-owner-user"
+          type="number"
+          [(ngModel)]="form.owner_user_id"
+          placeholder="Opcional"
+        />
+      </div>
+
+      <div class="field">
+        <label for="new-owner-department">Owner department id</label>
+        <input
+          id="new-owner-department"
+          type="number"
+          [(ngModel)]="form.owner_department_id"
+          placeholder="Opcional"
+        />
+      </div>
+
+      <div class="field">
+        <label for="new-version-label">Versión</label>
+        <input
+          id="new-version-label"
+          type="text"
+          [(ngModel)]="form.version_label"
+          placeholder="1.0"
+        />
+      </div>
+
+      <div class="field field-wide">
+        <label for="new-description">Descripción</label>
+        <textarea
+          id="new-description"
+          [(ngModel)]="form.description"
+          rows="3"
+          placeholder="Describe para qué sirve este documento"
+        ></textarea>
+      </div>
+
+      <div class="field field-wide">
+        <label for="new-change-notes">Notas de versión</label>
+        <input
+          id="new-change-notes"
+          type="text"
+          [(ngModel)]="form.change_notes"
+          placeholder="Versión inicial"
+        />
+      </div>
+
+      <div class="field field-wide">
+        <label for="new-file">Archivo *</label>
+        <input
+          id="new-file"
+          type="file"
+          accept=".pdf,.xlsx,.xls,.csv,.txt,.docx,.pptx,.png,.jpg,.jpeg"
+          (change)="onFileSelected($event)"
+        />
+      </div>
+
+      <label class="checkbox-row">
+        <input type="checkbox" [(ngModel)]="form.is_sensitive" />
+        Documento sensible
+      </label>
+    </div>
+
+    <div class="create-actions">
+      <button type="button" (click)="createDraft()" [disabled]="saving">
+        Crear borrador
+      </button>
+    </div>
+  </section>
+
+  <section class="content-grid">
+    <article class="documents-list">
+      <div class="list-header">
+        <div>
+          <h2>Documentos</h2>
+          <p>{{ total }} resultados</p>
+        </div>
+      </div>
+
+      <div class="loading-state" *ngIf="loading">
+        Cargando documentos...
+      </div>
+
+      <div class="empty-state" *ngIf="!loading && documents.length === 0">
+        No hay documentos para mostrar.
+      </div>
+
+      <div
+        class="document-card"
+        *ngFor="let document of documents; trackBy: trackByDocumentId"
+        [class.selected]="selectedDocument?.id === document.id"
+        (click)="selectDocument(document)"
+      >
+        <div class="document-main">
+          <div>
+            <h3>{{ document.title }}</h3>
+            <p>{{ document.description || 'Sin descripción' }}</p>
+          </div>
+
+          <span class="status-badge" [attr.data-status]="document.status">
+            {{ getStatusLabel(document.status) }}
+          </span>
+        </div>
+
+        <div class="document-meta">
+          <span>{{ getCategoryName(document.category_id) }}</span>
+          <span>Versión {{ getCurrentVersionLabel(document) }}</span>
+          <span>{{ getVisibilityLabel(document.visibility_mode) }}</span>
+          <span *ngIf="document.is_sensitive">Sensible</span>
+        </div>
+
+        <div class="document-actions" (click)="$event.stopPropagation()">
+          <button
+            type="button"
+            class="secondary"
+            (click)="downloadDocument(document)"
+            [disabled]="!canDownload(document)"
+          >
+            Descargar
+          </button>
+
+          <button
+            type="button"
+            class="secondary"
+            *ngIf="canShowAdminActions(document)"
+            (click)="setGlobalVisibility(document)"
+            [disabled]="saving || document.is_sensitive"
+          >
+            Global
+          </button>
+
+          <button
+            type="button"
+            *ngIf="canPublish(document)"
+            (click)="publishDocument(document)"
+            [disabled]="saving"
+          >
+            Publicar
+          </button>
+
+          <button
+            type="button"
+            class="danger"
+            *ngIf="canArchive(document)"
+            (click)="archiveDocument(document)"
+            [disabled]="saving"
+          >
+            Archivar
+          </button>
+        </div>
+      </div>
+
+      <div class="pagination">
+        <button type="button" (click)="goToPreviousPage()" [disabled]="!hasPrev || loading">
+          Anterior
+        </button>
+        <span>Página {{ page }} de {{ totalPages || 1 }}</span>
+        <button type="button" (click)="goToNextPage()" [disabled]="!hasNext || loading">
+          Siguiente
+        </button>
+      </div>
+    </article>
+
+    <aside class="detail-panel">
+      <ng-container *ngIf="selectedDocument; else noSelection">
+        <div class="detail-header">
+          <p class="eyebrow">Detalle</p>
+          <h2>{{ selectedDocument.title }}</h2>
+          <span class="status-badge" [attr.data-status]="selectedDocument.status">
+            {{ getStatusLabel(selectedDocument.status) }}
+          </span>
+        </div>
+
+        <dl class="detail-list">
+          <div>
+            <dt>Categoría</dt>
+            <dd>{{ getCategoryName(selectedDocument.category_id) }}</dd>
+          </div>
+          <div>
+            <dt>Dueño</dt>
+            <dd>{{ getOwnerLabel(selectedDocument) }}</dd>
+          </div>
+          <div>
+            <dt>Visibilidad</dt>
+            <dd>{{ getVisibilityLabel(selectedDocument.visibility_mode) }}</dd>
+          </div>
+          <div>
+            <dt>Versión vigente</dt>
+            <dd>{{ getCurrentVersionLabel(selectedDocument) }}</dd>
+          </div>
+          <div>
+            <dt>Archivo</dt>
+            <dd>{{ selectedDocument.current_version?.original_filename || 'Sin archivo' }}</dd>
+          </div>
+          <div>
+            <dt>Publicado</dt>
+            <dd>{{ selectedDocument.published_at || 'No publicado' }}</dd>
+          </div>
+        </dl>
+
+        <p class="detail-description">
+          {{ selectedDocument.description || 'Sin descripción.' }}
+        </p>
+
+        <div class="detail-actions">
+          <button
+            type="button"
+            (click)="downloadDocument(selectedDocument)"
+            [disabled]="!canDownload(selectedDocument)"
+          >
+            Descargar vigente
+          </button>
+        </div>
+
+        <div class="version-panel" *ngIf="canReplaceVersion(selectedDocument)">
+          <h3>Reemplazar versión</h3>
+
+          <div class="field">
+            <label for="replace-version-label">Nueva versión</label>
+            <input
+              id="replace-version-label"
+              type="text"
+              [(ngModel)]="versionForm.version_label"
+              placeholder="Ej. 1.1"
+            />
+          </div>
+
+          <div class="field">
+            <label for="replace-change-notes">Notas de cambio *</label>
+            <textarea
+              id="replace-change-notes"
+              [(ngModel)]="versionForm.change_notes"
+              rows="3"
+              placeholder="Describe qué cambió"
+            ></textarea>
+          </div>
+
+          <div class="field">
+            <label for="replace-file">Archivo *</label>
+            <input
+              id="replace-file"
+              type="file"
+              accept=".pdf,.xlsx,.xls,.csv,.txt,.docx,.pptx,.png,.jpg,.jpeg"
+              (change)="onVersionFileSelected($event)"
+            />
+          </div>
+
+          <button type="button" (click)="replaceVersion(selectedDocument)" [disabled]="saving">
+            Reemplazar versión
+          </button>
+        </div>
+      </ng-container>
+
+      <ng-template #noSelection>
+        <div class="empty-detail">
+          <h2>Selecciona un documento</h2>
+          <p>El detalle aparecerá en este panel.</p>
+        </div>
+      </ng-template>
+    </aside>
+  </section>
+</section>
