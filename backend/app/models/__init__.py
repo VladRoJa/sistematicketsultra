@@ -46,15 +46,18 @@ from .planning_targets import (
     PlanningOperatorORM,
 )
 from .internal_documents import (
-    InternalDocumentStatus,
-    InternalDocumentVisibilityMode,
-    InternalDocumentVisibilityType,
-    InternalDocumentAuditAction,
     InternalDocumentCategoryORM,
     InternalDocumentORM,
     InternalDocumentVersionORM,
     InternalDocumentVisibilityORM,
+    InternalDocumentLinkORM,
     InternalDocumentAuditLogORM,
+    InternalDocumentStatus,
+    InternalDocumentVisibilityMode,
+    InternalDocumentVisibilityType,
+    InternalDocumentLinkEntityType,
+    InternalDocumentLinkRole,
+    InternalDocumentAuditAction,
 )
 
 
@@ -96,13 +99,16 @@ __all__ = [
     "PlanningTargetAdjustmentORM",
     "PlanningTargetApprovalEventORM",
     "PlanningOperatorORM",
-    "InternalDocumentStatus",
-    "InternalDocumentVisibilityMode",
-    "InternalDocumentVisibilityType",
-    "InternalDocumentAuditAction",
     "InternalDocumentCategoryORM",
     "InternalDocumentORM",
     "InternalDocumentVersionORM",
     "InternalDocumentVisibilityORM",
+    "InternalDocumentLinkORM",
     "InternalDocumentAuditLogORM",
+    "InternalDocumentStatus",
+    "InternalDocumentVisibilityMode",
+    "InternalDocumentVisibilityType",
+    "InternalDocumentLinkEntityType",
+    "InternalDocumentLinkRole",
+    "InternalDocumentAuditAction",
 ]

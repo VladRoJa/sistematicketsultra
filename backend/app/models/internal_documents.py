@@ -36,6 +36,50 @@ class InternalDocumentVisibilityType:
 
     ALL = (GLOBAL, ROLE, DEPARTMENT, SUCURSAL, USER)
 
+class InternalDocumentLinkEntityType:
+    PROJECT = "PROJECT"
+    OPENING = "OPENING"
+    TASK = "TASK"
+    SUCURSAL = "SUCURSAL"
+    DEPARTMENT = "DEPARTMENT"
+    GENERAL = "GENERAL"
+
+    ALL = (
+        PROJECT,
+        OPENING,
+        TASK,
+        SUCURSAL,
+        DEPARTMENT,
+        GENERAL,
+    )
+
+
+class InternalDocumentLinkRole:
+    PLANO = "PLANO"
+    PERMISO = "PERMISO"
+    CONTRATO = "CONTRATO"
+    COTIZACION = "COTIZACION"
+    CHECKLIST = "CHECKLIST"
+    EVIDENCIA = "EVIDENCIA"
+    MANUAL = "MANUAL"
+    FINANCIERO = "FINANCIERO"
+    CONSTRUCCION = "CONSTRUCCION"
+    OPERACION = "OPERACION"
+    OTRO = "OTRO"
+
+    ALL = (
+        PLANO,
+        PERMISO,
+        CONTRATO,
+        COTIZACION,
+        CHECKLIST,
+        EVIDENCIA,
+        MANUAL,
+        FINANCIERO,
+        CONSTRUCCION,
+        OPERACION,
+        OTRO,
+    )
 
 class InternalDocumentAuditAction:
     DOCUMENT_CREATED = "DOCUMENT_CREATED"
@@ -47,6 +91,9 @@ class InternalDocumentAuditAction:
     DOCUMENT_VISIBILITY_UPDATED = "DOCUMENT_VISIBILITY_UPDATED"
     DOCUMENT_SENSITIVITY_UPDATED = "DOCUMENT_SENSITIVITY_UPDATED"
     DOCUMENT_OWNER_UPDATED = "DOCUMENT_OWNER_UPDATED"
+    DOCUMENT_LINK_CREATED = "DOCUMENT_LINK_CREATED"
+    DOCUMENT_LINK_UPDATED = "DOCUMENT_LINK_UPDATED"
+    DOCUMENT_LINK_DEACTIVATED = "DOCUMENT_LINK_DEACTIVATED"
 
     ALL = (
         DOCUMENT_CREATED,
@@ -58,6 +105,9 @@ class InternalDocumentAuditAction:
         DOCUMENT_VISIBILITY_UPDATED,
         DOCUMENT_SENSITIVITY_UPDATED,
         DOCUMENT_OWNER_UPDATED,
+        DOCUMENT_LINK_CREATED,
+        DOCUMENT_LINK_UPDATED,
+        DOCUMENT_LINK_DEACTIVATED,
     )
 
 
@@ -242,6 +292,14 @@ class InternalDocumentORM(db.Model):
         back_populates="document",
         cascade="all, delete-orphan",
         lazy="dynamic",
+    )
+    
+    links = db.relationship(
+        "InternalDocumentLinkORM",
+        back_populates="document",
+        cascade="all, delete-orphan",
+        lazy="dynamic",
+        order_by="InternalDocumentLinkORM.created_at.desc()",
     )
 
     audit_logs = db.relationship(
@@ -483,6 +541,99 @@ class InternalDocumentVisibilityORM(db.Model):
             f"type={self.visibility_type!r}>"
         )
 
+class InternalDocumentLinkORM(db.Model):
+    __tablename__ = "internal_document_links"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    document_id = db.Column(
+        db.Integer,
+        db.ForeignKey("internal_documents.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    entity_type = db.Column(db.String(32), nullable=False, index=True)
+    entity_id = db.Column(db.Integer, nullable=True, index=True)
+    entity_key = db.Column(db.String(120), nullable=True, index=True)
+
+    link_role = db.Column(db.String(64), nullable=False, index=True)
+    label = db.Column(db.String(180), nullable=True)
+
+    is_primary = db.Column(db.Boolean, nullable=False, default=False, index=True)
+    is_active = db.Column(db.Boolean, nullable=False, default=True, index=True)
+
+    created_by = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    updated_by = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        index=True,
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        onupdate=utc_now,
+    )
+
+    document = db.relationship(
+        "InternalDocumentORM",
+        back_populates="links",
+    )
+
+    creator = db.relationship(
+        "UserORM",
+        foreign_keys=[created_by],
+    )
+    updater = db.relationship(
+        "UserORM",
+        foreign_keys=[updated_by],
+    )
+
+    __table_args__ = (
+        db.Index(
+            "idx_internal_document_links_document_active",
+            "document_id",
+            "is_active",
+        ),
+        db.Index(
+            "idx_internal_document_links_entity_lookup",
+            "entity_type",
+            "entity_key",
+            "is_active",
+        ),
+        db.Index(
+            "idx_internal_document_links_entity_id_lookup",
+            "entity_type",
+            "entity_id",
+            "is_active",
+        ),
+        db.Index(
+            "idx_internal_document_links_role_primary",
+            "link_role",
+            "is_primary",
+        ),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<InternalDocumentLink document_id={self.document_id} "
+            f"entity_type={self.entity_type!r} entity_key={self.entity_key!r} "
+            f"role={self.link_role!r}>"
+        )
 
 class InternalDocumentAuditLogORM(db.Model):
     __tablename__ = "internal_document_audit_logs"
