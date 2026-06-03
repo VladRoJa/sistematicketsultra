@@ -143,6 +143,12 @@ export const routes: Routes = [
         path: 'warehouse/comercial/promociones',
         component: CommercialPromotionsComponent,
       },
+      {
+        path: 'nube-corporativa',
+        loadChildren: () =>
+          import('./internal-documents/internal-documents.routes')
+            .then(m => m.INTERNAL_DOCUMENTS_ROUTES),
+      },
     ],
   },
 
