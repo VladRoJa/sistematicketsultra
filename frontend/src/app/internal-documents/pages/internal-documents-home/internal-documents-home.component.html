@@ -233,6 +233,16 @@
           <button
             type="button"
             class="secondary"
+            *ngIf="canPreviewDocument(document)"
+            (click)="openPreview(document)"
+            [disabled]="previewLoading"
+          >
+            Ver en pantalla
+          </button>
+
+          <button
+            type="button"
+            class="secondary"
             (click)="downloadDocument(document)"
             [disabled]="!canDownload(document)"
           >
@@ -325,6 +335,16 @@
         <div class="detail-actions">
           <button
             type="button"
+            class="secondary"
+            *ngIf="canPreviewDocument(selectedDocument)"
+            (click)="openPreview(selectedDocument)"
+            [disabled]="previewLoading"
+          >
+            Ver en pantalla
+          </button>
+
+          <button
+            type="button"
             (click)="downloadDocument(selectedDocument)"
             [disabled]="!canDownload(selectedDocument)"
           >
@@ -379,4 +399,54 @@
       </ng-template>
     </aside>
   </section>
+  <div class="preview-backdrop" *ngIf="previewOpen">
+  <section class="preview-modal" role="dialog" aria-modal="true">
+    <header class="preview-header">
+      <div>
+        <p class="eyebrow">Vista previa</p>
+        <h2>{{ previewTitle }}</h2>
+      </div>
+
+      <div class="preview-actions">
+        <button
+          type="button"
+          class="secondary"
+          *ngIf="previewDocument"
+          (click)="downloadDocument(previewDocument)"
+        >
+          Descargar
+        </button>
+
+        <button type="button" class="danger" (click)="closePreview()">
+          Cerrar
+        </button>
+      </div>
+    </header>
+
+    <div class="preview-body">
+      <div class="loading-state" *ngIf="previewLoading">
+        Cargando vista previa...
+      </div>
+
+      <div class="alert error" *ngIf="previewErrorMessage">
+        {{ previewErrorMessage }}
+      </div>
+
+      <iframe
+        *ngIf="!previewLoading && !previewErrorMessage && previewType === 'pdf' && previewSafeUrl"
+        class="preview-frame"
+        [src]="previewSafeUrl"
+        title="Vista previa PDF"
+      ></iframe>
+
+      <img
+        *ngIf="!previewLoading && !previewErrorMessage && previewType === 'image' && previewObjectUrl"
+        class="preview-image"
+        [src]="previewObjectUrl"
+        [alt]="previewTitle"
+      />
+    </div>
+  </section>
+</div>
 </section>
+
