@@ -445,6 +445,24 @@ export class InternalDocumentsHomeComponent implements OnInit {
     return labels[mode] || mode;
   }
 
+  getDateTimeLabel(value: string | null | undefined, emptyLabel = 'Sin fecha'): string {
+    if (!value) {
+      return emptyLabel;
+    }
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      return value;
+    }
+
+    return new Intl.DateTimeFormat('es-MX', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+      timeZone: 'America/Tijuana',
+    }).format(date);
+  }
+
   getOwnerLabel(document: InternalDocument): string {
     if (document.owner_user?.username) {
       return document.owner_user.username;
@@ -463,6 +481,14 @@ export class InternalDocumentsHomeComponent implements OnInit {
 
   canShowAdminActions(document: InternalDocument): boolean {
     return this.canManage && Boolean(document?.capabilities?.can_edit);
+  }
+
+  canSetGlobalVisibility(document: InternalDocument): boolean {
+    return this.canManage &&
+      Boolean(document?.capabilities?.can_manage_visibility) &&
+      document.status !== 'ARCHIVADO' &&
+      document.visibility_mode !== 'GLOBAL' &&
+      !document.is_sensitive;
   }
 
   canPublish(document: InternalDocument): boolean {
@@ -524,8 +550,37 @@ export class InternalDocumentsHomeComponent implements OnInit {
   }
 
   private buildFallbackDownloadName(document: InternalDocument): string {
+    const originalFilename = document.current_version?.original_filename?.trim();
+
+    if (originalFilename) {
+      return originalFilename;
+    }
+
+    const title = (document.title || 'documento').trim();
     const version = document.current_version?.version_label || 'vigente';
-    return `${document.title || 'documento'}_${version}`;
+    const extension = this.resolveFallbackExtension(
+      document.current_version?.file_mime_type
+    );
+
+    return `${title}_${version}${extension}`;
+  }
+
+  private resolveFallbackExtension(mimeType: string | null | undefined): string {
+    const normalizedMimeType = String(mimeType || '').toLowerCase();
+
+    const extensionsByMimeType: Record<string, string> = {
+      'application/pdf': '.pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation': '.pptx',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
+      'application/vnd.ms-excel': '.xls',
+      'text/csv': '.csv',
+      'text/plain': '.txt',
+      'image/png': '.png',
+      'image/jpeg': '.jpg',
+    };
+
+    return extensionsByMimeType[normalizedMimeType] || '';
   }
 
   private resolveErrorMessage(error: unknown, fallback: string): string {
