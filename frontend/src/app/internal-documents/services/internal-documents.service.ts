@@ -18,6 +18,10 @@ import {
   InternalDocumentUpdatePayload,
   InternalDocumentVersionsResponse,
   InternalDocumentVisibilityPayload,
+  InternalDocumentByLinkFilters,
+  InternalDocumentLinkActionResponse,
+  InternalDocumentLinkPayload,
+  InternalDocumentLinksResponse,
 } from '../models/internal-document.model';
 
 @Injectable({
@@ -171,6 +175,66 @@ export class InternalDocumentsService {
   getAudit(documentId: number): Observable<InternalDocumentAuditResponse> {
     return this.http.get<InternalDocumentAuditResponse>(
       `${this.baseUrl}/${documentId}/audit`
+    );
+  }
+
+  getDocumentLinks(documentId: number): Observable<InternalDocumentLinksResponse> {
+    return this.http.get<InternalDocumentLinksResponse>(
+      `${this.baseUrl}/${documentId}/links`
+    );
+  }
+
+  createDocumentLink(
+    documentId: number,
+    payload: InternalDocumentLinkPayload
+  ): Observable<InternalDocumentLinkActionResponse> {
+    return this.http.post<InternalDocumentLinkActionResponse>(
+      `${this.baseUrl}/${documentId}/links`,
+      payload
+    );
+  }
+
+  updateDocumentLink(
+    documentId: number,
+    linkId: number,
+    payload: InternalDocumentLinkPayload
+  ): Observable<InternalDocumentLinkActionResponse> {
+    return this.http.patch<InternalDocumentLinkActionResponse>(
+      `${this.baseUrl}/${documentId}/links/${linkId}`,
+      payload
+    );
+  }
+
+  deleteDocumentLink(
+    documentId: number,
+    linkId: number
+  ): Observable<InternalDocumentLinkActionResponse> {
+    return this.http.delete<InternalDocumentLinkActionResponse>(
+      `${this.baseUrl}/${documentId}/links/${linkId}`
+    );
+  }
+
+  listDocumentsByLink(
+    filters: InternalDocumentByLinkFilters
+  ): Observable<InternalDocumentListResponse> {
+    let params = new HttpParams()
+      .set('entity_type', filters.entity_type);
+
+    if (filters.entity_id !== undefined && filters.entity_id !== null) {
+      params = params.set('entity_id', String(filters.entity_id));
+    }
+
+    if (filters.entity_key) {
+      params = params.set('entity_key', filters.entity_key);
+    }
+
+    if (filters.link_role) {
+      params = params.set('link_role', filters.link_role);
+    }
+
+    return this.http.get<InternalDocumentListResponse>(
+      `${this.baseUrl}/by-link`,
+      { params }
     );
   }
 

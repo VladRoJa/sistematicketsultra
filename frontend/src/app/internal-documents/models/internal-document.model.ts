@@ -18,6 +18,27 @@ export type InternalDocumentVisibilityType =
   | 'SUCURSAL'
   | 'USER';
 
+export type InternalDocumentLinkEntityType =
+  | 'PROJECT'
+  | 'OPENING'
+  | 'TASK'
+  | 'SUCURSAL'
+  | 'DEPARTMENT'
+  | 'GENERAL';
+
+export type InternalDocumentLinkRole =
+  | 'PLANO'
+  | 'PERMISO'
+  | 'CONTRATO'
+  | 'COTIZACION'
+  | 'CHECKLIST'
+  | 'EVIDENCIA'
+  | 'MANUAL'
+  | 'FINANCIERO'
+  | 'CONSTRUCCION'
+  | 'OPERACION'
+  | 'OTRO';
+
 export interface InternalDocumentCapabilities {
   can_view: boolean;
   can_download: boolean;
@@ -90,6 +111,47 @@ export interface InternalDocumentVisibilityRule {
   created_at?: string | null;
 }
 
+export interface InternalDocumentLink {
+  id: number;
+  document_id: number;
+  entity_type: InternalDocumentLinkEntityType;
+  entity_id: number | null;
+  entity_key: string | null;
+  link_role: InternalDocumentLinkRole;
+  label: string | null;
+  is_primary: boolean;
+  is_active: boolean;
+  created_by: number | null;
+  updated_by: number | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface InternalDocumentLinkPayload {
+  entity_type: InternalDocumentLinkEntityType;
+  entity_id?: number | null;
+  entity_key?: string | null;
+  link_role: InternalDocumentLinkRole;
+  label?: string | null;
+  is_primary?: boolean;
+}
+
+export interface InternalDocumentLinksResponse {
+  items: InternalDocumentLink[];
+}
+
+export interface InternalDocumentLinkActionResponse {
+  message: string;
+  item: InternalDocumentLink;
+}
+
+export interface InternalDocumentByLinkFilters {
+  entity_type: InternalDocumentLinkEntityType;
+  entity_id?: number | null;
+  entity_key?: string | null;
+  link_role?: InternalDocumentLinkRole | null;
+}
+
 export interface InternalDocumentAuditLog {
   id: number;
   document_id: number;
@@ -131,6 +193,7 @@ export interface InternalDocument {
   capabilities: InternalDocumentCapabilities;
   versions?: InternalDocumentVersion[];
   visibility_rules?: InternalDocumentVisibilityRule[];
+  links?: InternalDocumentLink[];
 }
 
 export interface InternalDocumentsAccessResponse {
