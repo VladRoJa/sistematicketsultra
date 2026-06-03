@@ -14,8 +14,12 @@ from sqlalchemy.orm import joinedload
 
 from app.extensions import db
 from app.models import (
+    InternalDocumentAuditAction,
     InternalDocumentAuditLogORM,
     InternalDocumentCategoryORM,
+    InternalDocumentLinkEntityType,
+    InternalDocumentLinkORM,
+    InternalDocumentLinkRole,
     InternalDocumentORM,
     InternalDocumentStatus,
     InternalDocumentVersionORM,
@@ -208,6 +212,15 @@ def _get_document_or_404(document_id: int) -> InternalDocumentORM | None:
         .first()
     )
 
+def _get_document_link_or_404(
+    *,
+    document_id: int,
+    link_id: int,
+) -> InternalDocumentLinkORM | None:
+    return InternalDocumentLinkORM.query.filter_by(
+        id=link_id,
+        document_id=document_id,
+    ).first()
 
 def _get_category_or_error(category_id: int | None):
     if category_id is None:
@@ -333,6 +346,24 @@ def _serialize_visibility_rule(
         "created_at": rule.created_at.isoformat() if rule.created_at else None,
     }
 
+def _serialize_document_link(
+    link: InternalDocumentLinkORM,
+) -> dict[str, Any]:
+    return {
+        "id": link.id,
+        "document_id": link.document_id,
+        "entity_type": link.entity_type,
+        "entity_id": link.entity_id,
+        "entity_key": link.entity_key,
+        "link_role": link.link_role,
+        "label": link.label,
+        "is_primary": link.is_primary,
+        "is_active": link.is_active,
+        "created_by": link.created_by,
+        "updated_by": link.updated_by,
+        "created_at": link.created_at.isoformat() if link.created_at else None,
+        "updated_at": link.updated_at.isoformat() if link.updated_at else None,
+    }
 
 def _serialize_audit_log(item: InternalDocumentAuditLogORM) -> dict[str, Any]:
     return {
@@ -356,6 +387,7 @@ def _serialize_document(
     include_details: bool = False,
     include_versions: bool = False,
     include_visibility: bool = False,
+    include_links: bool = False,
 ) -> dict[str, Any]:
     capabilities = build_internal_document_capabilities(document)
 
@@ -417,6 +449,27 @@ def _serialize_document(
         payload["visibility_rules"] = [
             _serialize_visibility_rule(rule)
             for rule in rules
+        ]
+
+    if include_links:
+        links = (
+            InternalDocumentLinkORM.query.filter_by(
+                document_id=document.id,
+                is_active=True,
+            )
+            .order_by(
+                InternalDocumentLinkORM.entity_type.asc(),
+                InternalDocumentLinkORM.entity_key.asc(),
+                InternalDocumentLinkORM.link_role.asc(),
+                InternalDocumentLinkORM.is_primary.desc(),
+                InternalDocumentLinkORM.created_at.desc(),
+            )
+            .all()
+        )
+
+        payload["links"] = [
+            _serialize_document_link(link)
+            for link in links
         ]
 
     return payload
@@ -481,6 +534,107 @@ def _default_version_label(version_number: int) -> str:
 
     return f"1.{version_number - 1}"
 
+def _normalize_entity_key(value: Any) -> str | None:
+    normalized = _normalize_upper(value)
+    return normalized or None
+
+
+def _normalize_link_label(value: Any) -> str | None:
+    normalized = _normalize_text(value)
+    return normalized or None
+
+
+def _validate_link_payload(payload: dict[str, Any]):
+    entity_type = _normalize_upper(payload.get("entity_type"))
+    link_role = _normalize_upper(payload.get("link_role"))
+    entity_id = _parse_optional_int(payload.get("entity_id"))
+    entity_key = _normalize_entity_key(payload.get("entity_key"))
+    label = _normalize_link_label(payload.get("label"))
+    is_primary = _parse_bool(payload.get("is_primary"), default=False)
+
+    if entity_type not in InternalDocumentLinkEntityType.ALL:
+        return None, _json_error(
+            "Tipo de entidad inválido",
+            "entity_type debe ser PROJECT, OPENING, TASK, SUCURSAL, DEPARTMENT o GENERAL.",
+            400,
+        )
+
+    if link_role not in InternalDocumentLinkRole.ALL:
+        return None, _json_error(
+            "Rol documental inválido",
+            "link_role debe ser PLANO, PERMISO, CONTRATO, COTIZACION, CHECKLIST, EVIDENCIA, MANUAL, FINANCIERO, CONSTRUCCION, OPERACION u OTRO.",
+            400,
+        )
+
+    if entity_type != InternalDocumentLinkEntityType.GENERAL and not entity_id and not entity_key:
+        return None, _json_error(
+            "Entidad requerida",
+            "Debes enviar entity_id o entity_key para vincular el documento a una entidad.",
+            400,
+        )
+
+    if entity_type == InternalDocumentLinkEntityType.GENERAL:
+        entity_id = None
+        entity_key = entity_key or "GENERAL"
+
+    return {
+        "entity_type": entity_type,
+        "entity_id": entity_id,
+        "entity_key": entity_key,
+        "link_role": link_role,
+        "label": label,
+        "is_primary": is_primary,
+    }, None
+
+
+def _build_link_audit_snapshot(link: InternalDocumentLinkORM) -> dict[str, Any]:
+    return {
+        "id": link.id,
+        "document_id": link.document_id,
+        "entity_type": link.entity_type,
+        "entity_id": link.entity_id,
+        "entity_key": link.entity_key,
+        "link_role": link.link_role,
+        "label": link.label,
+        "is_primary": link.is_primary,
+        "is_active": link.is_active,
+    }
+
+
+def _unset_existing_primary_links(
+    *,
+    document_id_to_keep: int | None,
+    entity_type: str,
+    entity_id: int | None,
+    entity_key: str | None,
+    link_role: str,
+    current_user_id: int | None,
+) -> None:
+    query = InternalDocumentLinkORM.query.filter(
+        InternalDocumentLinkORM.entity_type == entity_type,
+        InternalDocumentLinkORM.link_role == link_role,
+        InternalDocumentLinkORM.is_primary.is_(True),
+        InternalDocumentLinkORM.is_active.is_(True),
+    )
+
+    if entity_id is not None:
+        query = query.filter(InternalDocumentLinkORM.entity_id == entity_id)
+    else:
+        query = query.filter(InternalDocumentLinkORM.entity_id.is_(None))
+
+    if entity_key is not None:
+        query = query.filter(InternalDocumentLinkORM.entity_key == entity_key)
+    else:
+        query = query.filter(InternalDocumentLinkORM.entity_key.is_(None))
+
+    if document_id_to_keep is not None:
+        query = query.filter(
+            InternalDocumentLinkORM.document_id != document_id_to_keep
+        )
+
+    for link in query.all():
+        link.is_primary = False
+        link.updated_by = current_user_id
 
 def _apply_document_filters(query):
     q = _normalize_text(request.args.get("q"))
@@ -691,6 +845,7 @@ def get_internal_document_detail(document_id: int):
             include_details=True,
             include_versions=include_admin_data,
             include_visibility=include_admin_data,
+            include_links=include_admin_data,
         )
     ), 200
 
@@ -1265,6 +1420,357 @@ def list_internal_document_versions(document_id: int):
         }
     ), 200
 
+@internal_documents_bp.route("/<int:document_id>/links", methods=["GET"])
+@jwt_required()
+def list_internal_document_links(document_id: int):
+    document = _get_document_or_404(document_id)
+    if not document:
+        return _json_error(
+            "Documento no encontrado",
+            f"No existe un documento interno con id {document_id}.",
+            404,
+        )
+
+    forbidden = require_internal_document_view_access(document)
+    if forbidden:
+        return forbidden
+
+    links = (
+        InternalDocumentLinkORM.query.filter_by(
+            document_id=document.id,
+            is_active=True,
+        )
+        .order_by(
+            InternalDocumentLinkORM.entity_type.asc(),
+            InternalDocumentLinkORM.entity_key.asc(),
+            InternalDocumentLinkORM.link_role.asc(),
+            InternalDocumentLinkORM.is_primary.desc(),
+            InternalDocumentLinkORM.created_at.desc(),
+        )
+        .all()
+    )
+
+    return jsonify(
+        {
+            "items": [
+                _serialize_document_link(link)
+                for link in links
+            ]
+        }
+    ), 200
+
+
+@internal_documents_bp.route("/<int:document_id>/links", methods=["POST"])
+@jwt_required()
+def create_internal_document_link(document_id: int):
+    forbidden = require_internal_document_manager()
+    if forbidden:
+        return forbidden
+
+    current_user_id, error_response = _get_current_user_id_or_response()
+    if error_response:
+        return error_response
+
+    document = _get_document_or_404(document_id)
+    if not document:
+        return _json_error(
+            "Documento no encontrado",
+            f"No existe un documento interno con id {document_id}.",
+            404,
+        )
+
+    payload = _get_json_payload()
+    normalized_payload, payload_error = _validate_link_payload(payload)
+    if payload_error:
+        return payload_error
+
+    if normalized_payload["is_primary"]:
+        _unset_existing_primary_links(
+            document_id_to_keep=None,
+            entity_type=normalized_payload["entity_type"],
+            entity_id=normalized_payload["entity_id"],
+            entity_key=normalized_payload["entity_key"],
+            link_role=normalized_payload["link_role"],
+            current_user_id=current_user_id,
+        )
+
+    link = InternalDocumentLinkORM(
+        document_id=document.id,
+        entity_type=normalized_payload["entity_type"],
+        entity_id=normalized_payload["entity_id"],
+        entity_key=normalized_payload["entity_key"],
+        link_role=normalized_payload["link_role"],
+        label=normalized_payload["label"],
+        is_primary=normalized_payload["is_primary"],
+        is_active=True,
+        created_by=current_user_id,
+        updated_by=current_user_id,
+    )
+
+    db.session.add(link)
+    db.session.flush()
+
+    _log_document_audit(
+        document_id=document.id,
+        actor_user_id=current_user_id,
+        action=InternalDocumentAuditAction.DOCUMENT_LINK_CREATED,
+        new_value_json=_build_link_audit_snapshot(link),
+    )
+
+    db.session.commit()
+
+    return jsonify(
+        {
+            "message": "Vínculo documental creado",
+            "item": _serialize_document_link(link),
+        }
+    ), 201
+
+
+@internal_documents_bp.route(
+    "/<int:document_id>/links/<int:link_id>",
+    methods=["PATCH"],
+)
+@jwt_required()
+def update_internal_document_link(document_id: int, link_id: int):
+    forbidden = require_internal_document_manager()
+    if forbidden:
+        return forbidden
+
+    current_user_id, error_response = _get_current_user_id_or_response()
+    if error_response:
+        return error_response
+
+    document = _get_document_or_404(document_id)
+    if not document:
+        return _json_error(
+            "Documento no encontrado",
+            f"No existe un documento interno con id {document_id}.",
+            404,
+        )
+
+    link = _get_document_link_or_404(
+        document_id=document.id,
+        link_id=link_id,
+    )
+    if not link:
+        return _json_error(
+            "Vínculo no encontrado",
+            f"No existe un vínculo documental con id {link_id} para este documento.",
+            404,
+        )
+
+    if not link.is_active:
+        return _json_error(
+            "Vínculo inactivo",
+            "No se puede editar un vínculo documental inactivo.",
+            400,
+        )
+
+    payload = _get_json_payload()
+    normalized_payload, payload_error = _validate_link_payload(payload)
+    if payload_error:
+        return payload_error
+
+    old_snapshot = _build_link_audit_snapshot(link)
+
+    if normalized_payload["is_primary"]:
+        _unset_existing_primary_links(
+            document_id_to_keep=None,
+            entity_type=normalized_payload["entity_type"],
+            entity_id=normalized_payload["entity_id"],
+            entity_key=normalized_payload["entity_key"],
+            link_role=normalized_payload["link_role"],
+            current_user_id=current_user_id,
+        )
+
+    link.entity_type = normalized_payload["entity_type"]
+    link.entity_id = normalized_payload["entity_id"]
+    link.entity_key = normalized_payload["entity_key"]
+    link.link_role = normalized_payload["link_role"]
+    link.label = normalized_payload["label"]
+    link.is_primary = normalized_payload["is_primary"]
+    link.updated_by = current_user_id
+
+    db.session.flush()
+
+    _log_document_audit(
+        document_id=document.id,
+        actor_user_id=current_user_id,
+        action=InternalDocumentAuditAction.DOCUMENT_LINK_UPDATED,
+        old_value_json=old_snapshot,
+        new_value_json=_build_link_audit_snapshot(link),
+    )
+
+    db.session.commit()
+
+    return jsonify(
+        {
+            "message": "Vínculo documental actualizado",
+            "item": _serialize_document_link(link),
+        }
+    ), 200
+
+
+@internal_documents_bp.route(
+    "/<int:document_id>/links/<int:link_id>",
+    methods=["DELETE"],
+)
+@jwt_required()
+def deactivate_internal_document_link(document_id: int, link_id: int):
+    forbidden = require_internal_document_manager()
+    if forbidden:
+        return forbidden
+
+    current_user_id, error_response = _get_current_user_id_or_response()
+    if error_response:
+        return error_response
+
+    document = _get_document_or_404(document_id)
+    if not document:
+        return _json_error(
+            "Documento no encontrado",
+            f"No existe un documento interno con id {document_id}.",
+            404,
+        )
+
+    link = _get_document_link_or_404(
+        document_id=document.id,
+        link_id=link_id,
+    )
+    if not link:
+        return _json_error(
+            "Vínculo no encontrado",
+            f"No existe un vínculo documental con id {link_id} para este documento.",
+            404,
+        )
+
+    if not link.is_active:
+        return _json_error(
+            "Vínculo ya inactivo",
+            "El vínculo documental ya se encontraba inactivo.",
+            400,
+        )
+
+    old_snapshot = _build_link_audit_snapshot(link)
+
+    link.is_active = False
+    link.is_primary = False
+    link.updated_by = current_user_id
+
+    _log_document_audit(
+        document_id=document.id,
+        actor_user_id=current_user_id,
+        action=InternalDocumentAuditAction.DOCUMENT_LINK_DEACTIVATED,
+        old_value_json=old_snapshot,
+        new_value_json=_build_link_audit_snapshot(link),
+    )
+
+    db.session.commit()
+
+    return jsonify(
+        {
+            "message": "Vínculo documental desactivado",
+            "item": _serialize_document_link(link),
+        }
+    ), 200
+
+
+@internal_documents_bp.route("/by-link", methods=["GET"])
+@jwt_required()
+def list_internal_documents_by_link():
+    context = get_current_internal_document_context()
+    if context is None:
+        return _json_error(
+            "Sesión inválida",
+            "No se pudo resolver el usuario autenticado actual.",
+            401,
+        )
+
+    entity_type = _normalize_upper(request.args.get("entity_type"))
+    entity_id = _parse_optional_int(request.args.get("entity_id"))
+    entity_key = _normalize_entity_key(request.args.get("entity_key"))
+    link_role = _normalize_upper(request.args.get("link_role"))
+
+    if entity_type not in InternalDocumentLinkEntityType.ALL:
+        return _json_error(
+            "Tipo de entidad inválido",
+            "entity_type debe ser PROJECT, OPENING, TASK, SUCURSAL, DEPARTMENT o GENERAL.",
+            400,
+        )
+
+    if entity_type != InternalDocumentLinkEntityType.GENERAL and not entity_id and not entity_key:
+        return _json_error(
+            "Entidad requerida",
+            "Debes enviar entity_id o entity_key para consultar documentos por vínculo.",
+            400,
+        )
+
+    query = (
+        InternalDocumentORM.query.options(
+            joinedload(InternalDocumentORM.category),
+            joinedload(InternalDocumentORM.current_version),
+            joinedload(InternalDocumentORM.owner_user),
+            joinedload(InternalDocumentORM.owner_department),
+        )
+        .join(
+            InternalDocumentLinkORM,
+            InternalDocumentLinkORM.document_id == InternalDocumentORM.id,
+        )
+        .filter(
+            InternalDocumentLinkORM.entity_type == entity_type,
+            InternalDocumentLinkORM.is_active.is_(True),
+        )
+    )
+
+    if entity_id is not None:
+        query = query.filter(InternalDocumentLinkORM.entity_id == entity_id)
+
+    if entity_key is not None:
+        query = query.filter(InternalDocumentLinkORM.entity_key == entity_key)
+
+    if link_role:
+        if link_role not in InternalDocumentLinkRole.ALL:
+            return _json_error(
+                "Rol documental inválido",
+                "link_role no es válido.",
+                400,
+            )
+
+        query = query.filter(InternalDocumentLinkORM.link_role == link_role)
+
+    can_manage = context.role in {"ADMIN", "ADMINISTRADOR", "SUPER_ADMIN", "SISTEMAS"}
+
+    if not can_manage:
+        query = query.filter(InternalDocumentORM.status == InternalDocumentStatus.PUBLISHED)
+
+    documents = (
+        query
+        .order_by(
+            InternalDocumentLinkORM.is_primary.desc(),
+            InternalDocumentLinkORM.created_at.desc(),
+            InternalDocumentORM.created_at.desc(),
+        )
+        .all()
+    )
+
+    visible_documents = [
+        document
+        for document in documents
+        if can_manage or can_view_internal_document(document, context)
+    ]
+
+    return jsonify(
+        {
+            "items": [
+                _serialize_document(
+                    document,
+                    include_links=True,
+                )
+                for document in visible_documents
+            ]
+        }
+    ), 200
 
 @internal_documents_bp.route("/<int:document_id>/visibility", methods=["PUT"])
 @jwt_required()

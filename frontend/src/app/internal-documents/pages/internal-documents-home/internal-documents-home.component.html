@@ -352,6 +352,118 @@
           </button>
         </div>
 
+        <div class="links-panel" *ngIf="canManageLinks(selectedDocument)">
+          <div class="links-header">
+            <div>
+              <h3>Vinculación documental</h3>
+              <p>
+                Relaciona este documento con aperturas, proyectos, tareas, sucursales o áreas.
+              </p>
+            </div>
+          </div>
+
+          <div class="empty-links" *ngIf="getSelectedDocumentLinks().length === 0">
+            Este documento todavía no tiene vínculos activos.
+          </div>
+
+          <div class="links-list" *ngIf="getSelectedDocumentLinks().length > 0">
+            <div class="link-card" *ngFor="let link of getSelectedDocumentLinks()">
+              <div>
+                <div class="link-title">
+                  {{ getEntityTypeLabel(link.entity_type) }} · {{ getLinkContextLabel(link) }}
+                </div>
+                <div class="link-meta">
+                  {{ getLinkRoleLabel(link.link_role) }}
+                  <span *ngIf="link.label"> · {{ link.label }}</span>
+                </div>
+              </div>
+
+              <div class="link-actions">
+                <span class="primary-pill" *ngIf="link.is_primary">Principal</span>
+                <button
+                  type="button"
+                  class="danger small-button"
+                  (click)="deleteLinkFromSelectedDocument(link)"
+                  [disabled]="linksSaving"
+                >
+                  Quitar
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="link-form">
+            <div class="field">
+              <label for="link-entity-type">Entidad</label>
+              <select id="link-entity-type" [(ngModel)]="linkForm.entity_type">
+                <option
+                  *ngFor="let option of linkEntityTypeOptions"
+                  [ngValue]="option.value"
+                >
+                  {{ option.label }}
+                </option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="link-role">Rol documental</label>
+              <select id="link-role" [(ngModel)]="linkForm.link_role">
+                <option
+                  *ngFor="let option of linkRoleOptions"
+                  [ngValue]="option.value"
+                >
+                  {{ option.label }}
+                </option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="link-entity-key">Entity key</label>
+              <input
+                id="link-entity-key"
+                type="text"
+                [(ngModel)]="linkForm.entity_key"
+                [placeholder]="isGeneralLinkEntitySelected() ? 'GENERAL' : 'Ej. EGADE'"
+              />
+            </div>
+
+            <div class="field" *ngIf="!isGeneralLinkEntitySelected()">
+              <label for="link-entity-id">Entity id</label>
+              <input
+                id="link-entity-id"
+                type="number"
+                [(ngModel)]="linkForm.entity_id"
+                placeholder="Opcional"
+              />
+            </div>
+
+            <div class="field field-wide">
+              <label for="link-label">Etiqueta visible</label>
+              <input
+                id="link-label"
+                type="text"
+                [(ngModel)]="linkForm.label"
+                placeholder="Ej. Manual operativo Gasca para apertura Egade"
+              />
+            </div>
+
+            <label class="checkbox-row field-wide">
+              <input type="checkbox" [(ngModel)]="linkForm.is_primary" />
+              Marcar como documento principal/oficial para este contexto
+            </label>
+
+            <div class="link-form-actions field-wide">
+              <button
+                type="button"
+                (click)="createLinkForSelectedDocument()"
+                [disabled]="linksSaving"
+              >
+                Agregar vínculo
+              </button>
+            </div>
+          </div>
+        </div>
+
         <div class="version-panel" *ngIf="canReplaceVersion(selectedDocument)">
           <h3>Reemplazar versión</h3>
 
