@@ -1,19 +1,25 @@
 <!-- frontend/src/app/internal-documents/pages/internal-documents-home/internal-documents-home.component.html -->
 
 <section class="internal-documents-page">
-  <header class="page-header">
-    <div>
-      <p class="eyebrow">Suite Ultra</p>
+  <header class="page-hero">
+    <div class="hero-content">
+      <div class="hero-kicker">
+        <span class="hero-dot"></span>
+        Suite Ultra · Biblioteca gobernada
+      </div>
+
       <h1>Nube Corporativa</h1>
-      <p class="page-subtitle">
-        Documentos publicados, reportes, manuales, políticas, formatos y procedimientos internos.
+
+      <p>
+        Documentos publicados, manuales, reportes, políticas, formatos y evidencia operativa
+        con control de versión, permisos y trazabilidad.
       </p>
     </div>
 
     <div class="page-actions">
       <button
         type="button"
-        class="secondary"
+        class="primary-action"
         *ngIf="canManage"
         (click)="toggleCreatePanel()"
         [disabled]="saving"
@@ -23,7 +29,7 @@
 
       <button
         type="button"
-        class="refresh-button"
+        class="secondary-action"
         (click)="loadDocuments()"
         [disabled]="loading || saving"
       >
@@ -31,6 +37,38 @@
       </button>
     </div>
   </header>
+
+  <section class="library-summary">
+    <article class="summary-card">
+      <span class="summary-label">Resultados</span>
+      <strong>{{ total }}</strong>
+      <small>Total con filtros actuales</small>
+    </article>
+
+    <article class="summary-card">
+      <span class="summary-label">Publicados</span>
+      <strong>{{ visiblePublishedCount }}</strong>
+      <small>Visibles en esta página</small>
+    </article>
+
+    <article class="summary-card" *ngIf="canManage">
+      <span class="summary-label">Borradores</span>
+      <strong>{{ visibleDraftCount }}</strong>
+      <small>Pendientes de publicar</small>
+    </article>
+
+    <article class="summary-card">
+      <span class="summary-label">Confidenciales</span>
+      <strong>{{ visibleSensitiveCount }}</strong>
+      <small>Con control sensible</small>
+    </article>
+
+    <article class="summary-card">
+      <span class="summary-label">Preview</span>
+      <strong>{{ visiblePreviewableCount }}</strong>
+      <small>PDF o imágenes</small>
+    </article>
+  </section>
 
   <div class="alert success" *ngIf="successMessage">
     {{ successMessage }}
@@ -40,58 +78,24 @@
     {{ errorMessage }}
   </div>
 
-  <section class="filters-panel">
-    <div class="field search-field">
-      <label for="document-search">Buscar</label>
-      <input
-        id="document-search"
-        type="text"
-        [(ngModel)]="filters.q"
-        placeholder="Título, descripción o tipo"
-      />
-    </div>
-
-    <div class="field">
-      <label for="document-category">Categoría</label>
-      <select id="document-category" [(ngModel)]="filters.category_id">
-        <option [ngValue]="null">Todas</option>
-        <option
-          *ngFor="let category of categories"
-          [ngValue]="category.id"
-        >
-          {{ category.name }}
-        </option>
-      </select>
-    </div>
-
-    <div class="field" *ngIf="canManage">
-      <label for="document-status">Estado</label>
-      <select id="document-status" [(ngModel)]="filters.status">
-        <option
-          *ngFor="let status of statusOptions"
-          [ngValue]="status"
-        >
-          {{ status === 'ALL' ? 'Todos' : getStatusLabel(status) }}
-        </option>
-      </select>
-    </div>
-
-    <div class="filter-actions">
-      <button type="button" (click)="applyFilters()" [disabled]="loading">
-        Aplicar
-      </button>
-      <button type="button" class="secondary" (click)="clearFilters()" [disabled]="loading">
-        Limpiar
-      </button>
-    </div>
-  </section>
-
   <section class="create-panel" *ngIf="canManage && isCreatePanelOpen">
     <div class="panel-title">
-      <h2>Nuevo documento</h2>
-      <p>
-        Carga el archivo, registra su metadata y créalo como borrador antes de publicarlo.
-      </p>
+      <div>
+        <p class="eyebrow">Alta documental</p>
+        <h2>Nuevo documento</h2>
+        <p>
+          Carga el archivo, registra su metadata y créalo como borrador antes de publicarlo.
+        </p>
+      </div>
+
+      <button
+        type="button"
+        class="ghost-action"
+        (click)="closeCreatePanel()"
+        [disabled]="saving"
+      >
+        Cerrar
+      </button>
     </div>
 
     <div class="create-grid">
@@ -118,12 +122,12 @@
       </div>
 
       <div class="field">
-        <label for="new-document-type">Tipo</label>
+        <label for="new-document-type">Tipo / Código</label>
         <input
           id="new-document-type"
           type="text"
           [(ngModel)]="form.document_type"
-          placeholder="Opcional"
+          placeholder="Ej. SOP-SIST-001"
         />
       </div>
 
@@ -177,7 +181,7 @@
         />
       </div>
 
-      <div class="field field-wide">
+      <div class="field field-wide file-field">
         <label for="new-file">Archivo *</label>
         <input
           id="new-file"
@@ -193,29 +197,91 @@
       </label>
     </div>
 
-  <div class="create-actions">
-    <button
-      type="button"
-      class="secondary"
-      (click)="closeCreatePanel()"
-      [disabled]="saving"
-    >
-      Cancelar
-    </button>
+    <div class="create-actions">
+      <button
+        type="button"
+        class="secondary-action"
+        (click)="closeCreatePanel()"
+        [disabled]="saving"
+      >
+        Cancelar
+      </button>
 
-    <button type="button" (click)="createDraft()" [disabled]="saving">
-      Crear borrador
-    </button>
-  </div>
+      <button
+        type="button"
+        class="primary-action"
+        (click)="createDraft()"
+        [disabled]="saving"
+      >
+        Crear borrador
+      </button>
+    </div>
+  </section>
+
+  <section class="library-toolbar">
+    <div class="toolbar-heading">
+      <p class="eyebrow">Biblioteca</p>
+      <h2>Explorar documentos</h2>
+    </div>
+
+    <div class="toolbar-filters">
+      <div class="field search-field">
+        <label for="document-search">Buscar</label>
+        <input
+          id="document-search"
+          type="text"
+          [(ngModel)]="filters.q"
+          placeholder="Título, descripción o tipo documental"
+        />
+      </div>
+
+      <div class="field">
+        <label for="document-category">Categoría</label>
+        <select id="document-category" [(ngModel)]="filters.category_id">
+          <option [ngValue]="null">Todas</option>
+          <option
+            *ngFor="let category of categories"
+            [ngValue]="category.id"
+          >
+            {{ category.name }}
+          </option>
+        </select>
+      </div>
+
+      <div class="field" *ngIf="canManage">
+        <label for="document-status">Estado</label>
+        <select id="document-status" [(ngModel)]="filters.status">
+          <option
+            *ngFor="let status of statusOptions"
+            [ngValue]="status"
+          >
+            {{ status === 'ALL' ? 'Todos' : getStatusLabel(status) }}
+          </option>
+        </select>
+      </div>
+
+      <div class="filter-actions">
+        <button type="button" class="primary-action" (click)="applyFilters()" [disabled]="loading">
+          Aplicar
+        </button>
+        <button type="button" class="secondary-action" (click)="clearFilters()" [disabled]="loading">
+          Limpiar
+        </button>
+      </div>
+    </div>
   </section>
 
   <section class="content-grid">
     <article class="documents-list">
       <div class="list-header">
         <div>
-          <h2>Documentos</h2>
-          <p>{{ total }} resultados</p>
+          <p class="eyebrow">Documentos</p>
+          <h2>{{ total }} resultados</h2>
         </div>
+
+        <span class="list-page-pill">
+          Página {{ page }} de {{ totalPages || 1 }}
+        </span>
       </div>
 
       <div class="loading-state" *ngIf="loading">
@@ -223,7 +289,8 @@
       </div>
 
       <div class="empty-state" *ngIf="!loading && documents.length === 0">
-        No hay documentos para mostrar.
+        <h3>No hay documentos para mostrar</h3>
+        <p>Prueba limpiar filtros o crear un nuevo documento.</p>
       </div>
 
       <div
@@ -232,38 +299,46 @@
         [class.selected]="selectedDocument?.id === document.id"
         (click)="selectDocument(document)"
       >
-        <div class="document-main">
-          <div>
-            <h3>{{ document.title }}</h3>
-            <p>{{ document.description || 'Sin descripción' }}</p>
+        <div class="document-card-top">
+          <div class="document-avatar">
+            {{ getDocumentInitial(document) }}
           </div>
 
-          <span class="status-badge" [attr.data-status]="document.status">
-            {{ getStatusLabel(document.status) }}
-          </span>
+          <div class="document-card-title">
+            <div class="document-title-row">
+              <h3>{{ document.title }}</h3>
+
+              <span class="status-badge" [attr.data-status]="document.status">
+                {{ getStatusLabel(document.status) }}
+              </span>
+            </div>
+
+            <p>{{ document.description || 'Sin descripción' }}</p>
+          </div>
         </div>
 
         <div class="document-meta">
           <span>{{ getCategoryName(document.category_id) }}</span>
+          <span>{{ getFileTypeLabel(document) }}</span>
           <span>Versión {{ getCurrentVersionLabel(document) }}</span>
           <span>{{ getVisibilityLabel(document.visibility_mode) }}</span>
-          <span *ngIf="document.is_sensitive">Sensible</span>
+          <span *ngIf="document.is_sensitive" class="sensitive-chip">Confidencial</span>
         </div>
 
         <div class="document-actions" (click)="$event.stopPropagation()">
           <button
             type="button"
-            class="secondary"
+            class="primary-action compact"
             *ngIf="canPreviewDocument(document)"
             (click)="openPreview(document)"
             [disabled]="previewLoading"
           >
-            Ver en pantalla
+            Ver
           </button>
 
           <button
             type="button"
-            class="secondary"
+            class="secondary-action compact"
             (click)="downloadDocument(document)"
             [disabled]="!canDownload(document)"
           >
@@ -272,7 +347,7 @@
 
           <button
             type="button"
-            class="secondary"
+            class="ghost-action compact"
             *ngIf="canSetGlobalVisibility(document)"
             (click)="setGlobalVisibility(document)"
             [disabled]="saving"
@@ -282,6 +357,7 @@
 
           <button
             type="button"
+            class="primary-action compact"
             *ngIf="canPublish(document)"
             (click)="publishDocument(document)"
             [disabled]="saving"
@@ -291,7 +367,7 @@
 
           <button
             type="button"
-            class="danger"
+            class="danger-action compact"
             *ngIf="canArchive(document)"
             (click)="archiveDocument(document)"
             [disabled]="saving"
@@ -302,11 +378,13 @@
       </div>
 
       <div class="pagination">
-        <button type="button" (click)="goToPreviousPage()" [disabled]="!hasPrev || loading">
+        <button type="button" class="secondary-action" (click)="goToPreviousPage()" [disabled]="!hasPrev || loading">
           Anterior
         </button>
+
         <span>Página {{ page }} de {{ totalPages || 1 }}</span>
-        <button type="button" (click)="goToNextPage()" [disabled]="!hasNext || loading">
+
+        <button type="button" class="secondary-action" (click)="goToNextPage()" [disabled]="!hasNext || loading">
           Siguiente
         </button>
       </div>
@@ -314,40 +392,24 @@
 
     <aside class="detail-panel">
       <ng-container *ngIf="selectedDocument; else noSelection">
-        <div class="detail-header">
-          <p class="eyebrow">Detalle</p>
-          <h2>{{ selectedDocument.title }}</h2>
-          <span class="status-badge" [attr.data-status]="selectedDocument.status">
-            {{ getStatusLabel(selectedDocument.status) }}
-          </span>
-        </div>
+        <div class="detail-card-header">
+          <div class="detail-avatar">
+            {{ getDocumentInitial(selectedDocument) }}
+          </div>
 
-        <dl class="detail-list">
           <div>
-            <dt>Categoría</dt>
-            <dd>{{ getCategoryName(selectedDocument.category_id) }}</dd>
+            <p class="eyebrow">Ficha documental</p>
+            <h2>{{ selectedDocument.title }}</h2>
+
+            <div class="detail-chip-row">
+              <span class="status-badge" [attr.data-status]="selectedDocument.status">
+                {{ getStatusLabel(selectedDocument.status) }}
+              </span>
+              <span>{{ getCategoryName(selectedDocument.category_id) }}</span>
+              <span>{{ getFileTypeLabel(selectedDocument) }}</span>
+            </div>
           </div>
-          <div>
-            <dt>Dueño</dt>
-            <dd>{{ getOwnerLabel(selectedDocument) }}</dd>
-          </div>
-          <div>
-            <dt>Visibilidad</dt>
-            <dd>{{ getVisibilityLabel(selectedDocument.visibility_mode) }}</dd>
-          </div>
-          <div>
-            <dt>Versión vigente</dt>
-            <dd>{{ getCurrentVersionLabel(selectedDocument) }}</dd>
-          </div>
-          <div>
-            <dt>Archivo</dt>
-            <dd>{{ selectedDocument.current_version?.original_filename || 'Sin archivo' }}</dd>
-          </div>
-          <div>
-            <dt>Publicado</dt>
-            <dd>{{ getDateTimeLabel(selectedDocument.published_at, 'No publicado') }}</dd>
-          </div>
-        </dl>
+        </div>
 
         <p class="detail-description">
           {{ selectedDocument.description || 'Sin descripción.' }}
@@ -356,7 +418,7 @@
         <div class="detail-actions">
           <button
             type="button"
-            class="secondary"
+            class="primary-action"
             *ngIf="canPreviewDocument(selectedDocument)"
             (click)="openPreview(selectedDocument)"
             [disabled]="previewLoading"
@@ -366,6 +428,7 @@
 
           <button
             type="button"
+            class="secondary-action"
             (click)="downloadDocument(selectedDocument)"
             [disabled]="!canDownload(selectedDocument)"
           >
@@ -373,13 +436,40 @@
           </button>
         </div>
 
-        <div class="links-panel" *ngIf="canManageLinks(selectedDocument)">
-          <div class="links-header">
+        <section class="detail-section">
+          <div class="section-heading">
+            <h3>Resumen</h3>
+          </div>
+
+          <dl class="detail-list">
             <div>
-              <h3>Vinculación documental</h3>
-              <p>
-                Relaciona este documento con aperturas, proyectos, tareas, sucursales o áreas.
-              </p>
+              <dt>Dueño</dt>
+              <dd>{{ getOwnerLabel(selectedDocument) }}</dd>
+            </div>
+            <div>
+              <dt>Visibilidad</dt>
+              <dd>{{ getVisibilityLabel(selectedDocument.visibility_mode) }}</dd>
+            </div>
+            <div>
+              <dt>Versión vigente</dt>
+              <dd>{{ getCurrentVersionLabel(selectedDocument) }}</dd>
+            </div>
+            <div>
+              <dt>Archivo</dt>
+              <dd>{{ getSelectedDocumentFilename() }}</dd>
+            </div>
+            <div>
+              <dt>Publicado</dt>
+              <dd>{{ getDateTimeLabel(selectedDocument.published_at, 'No publicado') }}</dd>
+            </div>
+          </dl>
+        </section>
+
+        <section class="detail-section links-panel" *ngIf="canManageLinks(selectedDocument)">
+          <div class="section-heading">
+            <div>
+              <h3>Contexto documental</h3>
+              <p>Relaciona este documento con aperturas, proyectos, tareas, sucursales o áreas.</p>
             </div>
           </div>
 
@@ -403,7 +493,7 @@
                 <span class="primary-pill" *ngIf="link.is_primary">Principal</span>
                 <button
                   type="button"
-                  class="danger small-button"
+                  class="danger-action compact"
                   (click)="deleteLinkFromSelectedDocument(link)"
                   [disabled]="linksSaving"
                 >
@@ -439,7 +529,7 @@
             </div>
 
             <div class="field">
-              <label for="link-entity-key">Entity key</label>
+              <label for="link-entity-key">Clave de contexto</label>
               <input
                 id="link-entity-key"
                 type="text"
@@ -476,6 +566,7 @@
             <div class="link-form-actions field-wide">
               <button
                 type="button"
+                class="primary-action"
                 (click)="createLinkForSelectedDocument()"
                 [disabled]="linksSaving"
               >
@@ -483,10 +574,12 @@
               </button>
             </div>
           </div>
-        </div>
+        </section>
 
-        <div class="version-panel" *ngIf="canReplaceVersion(selectedDocument)">
-          <h3>Reemplazar versión</h3>
+        <section class="detail-section version-panel" *ngIf="canReplaceVersion(selectedDocument)">
+          <div class="section-heading">
+            <h3>Reemplazar versión</h3>
+          </div>
 
           <div class="field">
             <label for="replace-version-label">Nueva versión</label>
@@ -518,68 +611,74 @@
             />
           </div>
 
-          <button type="button" (click)="replaceVersion(selectedDocument)" [disabled]="saving">
+          <button
+            type="button"
+            class="primary-action"
+            (click)="replaceVersion(selectedDocument)"
+            [disabled]="saving"
+          >
             Reemplazar versión
           </button>
-        </div>
+        </section>
       </ng-container>
 
       <ng-template #noSelection>
         <div class="empty-detail">
+          <div class="empty-detail-icon">☁</div>
           <h2>Selecciona un documento</h2>
-          <p>El detalle aparecerá en este panel.</p>
+          <p>El detalle, vista previa, descarga y contexto documental aparecerán aquí.</p>
         </div>
       </ng-template>
     </aside>
   </section>
+
   <div class="preview-backdrop" *ngIf="previewOpen">
-  <section class="preview-modal" role="dialog" aria-modal="true">
-    <header class="preview-header">
-      <div>
-        <p class="eyebrow">Vista previa</p>
-        <h2>{{ previewTitle }}</h2>
+    <section class="preview-modal" role="dialog" aria-modal="true">
+      <header class="preview-header">
+        <div>
+          <p class="eyebrow">Vista previa</p>
+          <h2>{{ previewTitle }}</h2>
+        </div>
+
+        <div class="preview-actions">
+          <button
+            type="button"
+            class="secondary-action"
+            *ngIf="previewDocument"
+            (click)="downloadDocument(previewDocument)"
+          >
+            Descargar
+          </button>
+
+          <button type="button" class="danger-action" (click)="closePreview()">
+            Cerrar
+          </button>
+        </div>
+      </header>
+
+      <div class="preview-body">
+        <div class="loading-state" *ngIf="previewLoading">
+          Cargando vista previa...
+        </div>
+
+        <div class="alert error" *ngIf="previewErrorMessage">
+          {{ previewErrorMessage }}
+        </div>
+
+        <iframe
+          *ngIf="!previewLoading && !previewErrorMessage && previewType === 'pdf' && previewSafeUrl"
+          class="preview-frame"
+          [src]="previewSafeUrl"
+          title="Vista previa PDF"
+        ></iframe>
+
+        <img
+          *ngIf="!previewLoading && !previewErrorMessage && previewType === 'image' && previewObjectUrl"
+          class="preview-image"
+          [src]="previewObjectUrl"
+          [alt]="previewTitle"
+        />
       </div>
-
-      <div class="preview-actions">
-        <button
-          type="button"
-          class="secondary"
-          *ngIf="previewDocument"
-          (click)="downloadDocument(previewDocument)"
-        >
-          Descargar
-        </button>
-
-        <button type="button" class="danger" (click)="closePreview()">
-          Cerrar
-        </button>
-      </div>
-    </header>
-
-    <div class="preview-body">
-      <div class="loading-state" *ngIf="previewLoading">
-        Cargando vista previa...
-      </div>
-
-      <div class="alert error" *ngIf="previewErrorMessage">
-        {{ previewErrorMessage }}
-      </div>
-
-      <iframe
-        *ngIf="!previewLoading && !previewErrorMessage && previewType === 'pdf' && previewSafeUrl"
-        class="preview-frame"
-        [src]="previewSafeUrl"
-        title="Vista previa PDF"
-      ></iframe>
-
-      <img
-        *ngIf="!previewLoading && !previewErrorMessage && previewType === 'image' && previewObjectUrl"
-        class="preview-image"
-        [src]="previewObjectUrl"
-        [alt]="previewTitle"
-      />
-    </div>
-  </section>
-</div>
+    </section>
+  </div>
 </section>
-
