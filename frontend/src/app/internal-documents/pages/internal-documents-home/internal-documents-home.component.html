@@ -10,14 +10,26 @@
       </p>
     </div>
 
-    <button
-      type="button"
-      class="refresh-button"
-      (click)="loadDocuments()"
-      [disabled]="loading || saving"
-    >
-      Actualizar
-    </button>
+    <div class="page-actions">
+      <button
+        type="button"
+        class="secondary"
+        *ngIf="canManage"
+        (click)="toggleCreatePanel()"
+        [disabled]="saving"
+      >
+        {{ getCreatePanelButtonLabel() }}
+      </button>
+
+      <button
+        type="button"
+        class="refresh-button"
+        (click)="loadDocuments()"
+        [disabled]="loading || saving"
+      >
+        Actualizar
+      </button>
+    </div>
   </header>
 
   <div class="alert success" *ngIf="successMessage">
@@ -74,11 +86,11 @@
     </div>
   </section>
 
-  <section class="create-panel" *ngIf="canManage">
+  <section class="create-panel" *ngIf="canManage && isCreatePanelOpen">
     <div class="panel-title">
-      <h2>Publicar nuevo documento</h2>
+      <h2>Nuevo documento</h2>
       <p>
-        El archivo entra primero al Warehouse y después queda como borrador en la Nube Corporativa.
+        Carga el archivo, registra su metadata y créalo como borrador antes de publicarlo.
       </p>
     </div>
 
@@ -181,11 +193,20 @@
       </label>
     </div>
 
-    <div class="create-actions">
-      <button type="button" (click)="createDraft()" [disabled]="saving">
-        Crear borrador
-      </button>
-    </div>
+  <div class="create-actions">
+    <button
+      type="button"
+      class="secondary"
+      (click)="closeCreatePanel()"
+      [disabled]="saving"
+    >
+      Cancelar
+    </button>
+
+    <button type="button" (click)="createDraft()" [disabled]="saving">
+      Crear borrador
+    </button>
+  </div>
   </section>
 
   <section class="content-grid">

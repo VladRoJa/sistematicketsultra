@@ -36,6 +36,7 @@ export class InternalDocumentsHomeComponent implements OnInit, OnDestroy  {
   successMessage = '';
 
   canManage = false;
+  isCreatePanelOpen = false;
 
   documents: InternalDocument[] = [];
   categories: InternalDocumentCategory[] = [];
@@ -219,6 +220,22 @@ export class InternalDocumentsHomeComponent implements OnInit, OnDestroy  {
     this.loadDocuments();
   }
 
+  toggleCreatePanel(): void {
+    if (!this.canManage) {
+      return;
+    }
+
+    this.isCreatePanelOpen = !this.isCreatePanelOpen;
+  }
+
+  closeCreatePanel(): void {
+    this.isCreatePanelOpen = false;
+  }
+
+  getCreatePanelButtonLabel(): string {
+    return this.isCreatePanelOpen ? 'Cerrar formulario' : 'Nuevo documento';
+  }
+
   goToPreviousPage(): void {
     if (!this.hasPrev) {
       return;
@@ -306,6 +323,7 @@ export class InternalDocumentsHomeComponent implements OnInit, OnDestroy  {
         this.successMessage = response.message || 'Documento creado.';
         this.selectedDocument = response.item;
         this.resetCreateForm();
+        this.closeCreatePanel();
         this.loadDocuments();
       },
       error: (error) => {

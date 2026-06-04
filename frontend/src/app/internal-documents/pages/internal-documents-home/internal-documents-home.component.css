@@ -101,6 +101,14 @@ button.danger {
   white-space: nowrap;
 }
 
+.page-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .alert {
   padding: 12px 14px;
   border-radius: 14px;
@@ -389,6 +397,11 @@ dd {
 
   .page-header {
     flex-direction: column;
+  }
+
+  .page-actions {
+    width: 100%;
+    justify-content: flex-start;
   }
 
   h1 {
