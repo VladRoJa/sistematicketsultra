@@ -529,13 +529,21 @@
             </div>
 
             <div class="field">
-              <label for="link-entity-key">Clave de contexto</label>
+              <label for="link-entity-key">{{ getLinkContextFieldLabel() }}</label>
               <input
                 id="link-entity-key"
                 type="text"
                 [(ngModel)]="linkForm.entity_key"
-                [placeholder]="isGeneralLinkEntitySelected() ? 'GENERAL' : 'Ej. EGADE'"
+                [placeholder]="getLinkContextPlaceholder()"
               />
+
+              <small class="field-help">
+                {{ getLinkContextHelpText() }}
+              </small>
+
+              <small class="field-warning" *ngIf="shouldShowLinkContextRequiredHint()">
+                Este dato es necesario para activar “Agregar vínculo”.
+              </small>
             </div>
 
             <div class="field" *ngIf="!isGeneralLinkEntitySelected()">
@@ -568,7 +576,7 @@
                 type="button"
                 class="primary-action"
                 (click)="createLinkForSelectedDocument()"
-                [disabled]="linksSaving"
+                [disabled]="!canCreateLinkForSelectedDocument()"
               >
                 Agregar vínculo
               </button>
@@ -631,6 +639,65 @@
       </ng-template>
     </aside>
   </section>
+
+    <div
+    class="suite-modal-backdrop"
+    *ngIf="isDeleteLinkModalOpen && pendingDeleteLink"
+    (click)="cancelDeleteLinkRemoval()"
+  >
+    <section
+      class="suite-confirm-modal"
+      role="dialog"
+      aria-modal="true"
+      (click)="$event.stopPropagation()"
+    >
+      <div class="confirm-icon">
+        !
+      </div>
+
+      <div class="confirm-content">
+        <p class="eyebrow">Confirmación</p>
+        <h2>Quitar vínculo documental</h2>
+
+        <p>
+          Este documento dejará de estar relacionado con este contexto. El vínculo quedará
+          desactivado y trazable en auditoría.
+        </p>
+
+        <div class="confirm-summary">
+          <span>
+            {{ getEntityTypeLabel(pendingDeleteLink.entity_type) }}
+          </span>
+          <strong>
+            {{ getLinkContextLabel(pendingDeleteLink) }}
+          </strong>
+          <small>
+            {{ getLinkRoleLabel(pendingDeleteLink.link_role) }}
+          </small>
+        </div>
+      </div>
+
+      <div class="confirm-actions">
+        <button
+          type="button"
+          class="secondary-action"
+          (click)="cancelDeleteLinkRemoval()"
+          [disabled]="linksSaving"
+        >
+          Cancelar
+        </button>
+
+        <button
+          type="button"
+          class="danger-action"
+          (click)="confirmDeleteLinkRemoval()"
+          [disabled]="linksSaving"
+        >
+          Quitar vínculo
+        </button>
+      </div>
+    </section>
+  </div>
 
   <div class="preview-backdrop" *ngIf="previewOpen">
     <section class="preview-modal" role="dialog" aria-modal="true">
