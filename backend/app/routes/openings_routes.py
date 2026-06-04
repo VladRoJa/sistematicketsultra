@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any
 
@@ -19,6 +19,9 @@ from app.models import (
     OpeningPhaseORM,
     OpeningPhaseStatus,
     OpeningStatus,
+    OpeningTaskORM,
+    OpeningTaskPriority,
+    OpeningTaskStatus,
     Sucursal,
     SucursalOperationalStatus,
 )
@@ -106,6 +109,8 @@ def _parse_decimal(value: Any) -> Decimal | None:
 
     return Decimal(str(value))
 
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
 
 def _serialize_decimal(value: Decimal | None) -> float | None:
     if value is None:
@@ -207,6 +212,35 @@ def _serialize_phase(phase: OpeningPhaseORM) -> dict[str, Any]:
         "updated_by": phase.updated_by,
         "created_at": _serialize_datetime(phase.created_at),
         "updated_at": _serialize_datetime(phase.updated_at),
+    }
+
+def _serialize_task(task: OpeningTaskORM) -> dict[str, Any]:
+    return {
+        "id": task.id,
+        "opening_id": task.opening_id,
+        "phase_id": task.phase_id,
+        "phase": _serialize_phase(task.phase) if task.phase else None,
+        "parent_task_id": task.parent_task_id,
+        "title": task.title,
+        "description": task.description,
+        "status": task.status,
+        "priority": task.priority,
+        "owner_user_id": task.owner_user_id,
+        "owner_user": _serialize_user(task.owner_user),
+        "owner_department_id": task.owner_department_id,
+        "owner_department": _serialize_department(task.owner_department),
+        "planned_start_date": _serialize_date(task.planned_start_date),
+        "planned_due_date": _serialize_date(task.planned_due_date),
+        "actual_start_date": _serialize_date(task.actual_start_date),
+        "actual_completed_at": _serialize_datetime(task.actual_completed_at),
+        "progress_percent": _serialize_decimal(task.progress_percent),
+        "sort_order": task.sort_order,
+        "requires_document": bool(task.requires_document),
+        "requires_payment": bool(task.requires_payment),
+        "created_by": task.created_by,
+        "updated_by": task.updated_by,
+        "created_at": _serialize_datetime(task.created_at),
+        "updated_at": _serialize_datetime(task.updated_at),
     }
 
 def _audit_opening(
@@ -721,3 +755,396 @@ def update_opening_phase(opening_id: int, phase_id: int):
             "error": "Conflict",
             "detail": "Ya existe una fase con ese nombre para esta apertura.",
         }), 409
+        
+@openings_bp.route("/<int:opening_id>/tasks", methods=["GET"])
+@jwt_required()
+def list_opening_tasks(opening_id: int):
+    denied = _require_openings_read()
+    if denied:
+        return denied
+
+    opening = db.session.get(OpeningORM, opening_id)
+
+    if not opening:
+        return jsonify({
+            "error": "Not Found",
+            "detail": "Apertura no encontrada.",
+        }), 404
+
+    status = (request.args.get("status") or "").strip().upper()
+    phase_id = request.args.get("phase_id", type=int)
+    owner_user_id = request.args.get("owner_user_id", type=int)
+    q = (request.args.get("q") or "").strip()
+
+    query = OpeningTaskORM.query.filter(OpeningTaskORM.opening_id == opening_id)
+
+    if status and status != "ALL":
+        query = query.filter(OpeningTaskORM.status == status)
+
+    if phase_id:
+        query = query.filter(OpeningTaskORM.phase_id == phase_id)
+
+    if owner_user_id:
+        query = query.filter(OpeningTaskORM.owner_user_id == owner_user_id)
+
+    if q:
+        like = f"%{q}%"
+        query = query.filter(
+            db.or_(
+                OpeningTaskORM.title.ilike(like),
+                OpeningTaskORM.description.ilike(like),
+            )
+        )
+
+    tasks = (
+        query
+        .order_by(
+            OpeningTaskORM.phase_id.asc().nullslast(),
+            OpeningTaskORM.sort_order.asc(),
+            OpeningTaskORM.id.asc(),
+        )
+        .all()
+    )
+
+    return jsonify({
+        "items": [_serialize_task(task) for task in tasks],
+    }), 200
+
+
+@openings_bp.route("/<int:opening_id>/tasks", methods=["POST"])
+@jwt_required()
+def create_opening_task(opening_id: int):
+    denied = _require_openings_admin()
+    if denied:
+        return denied
+
+    opening = db.session.get(OpeningORM, opening_id)
+
+    if not opening:
+        return jsonify({
+            "error": "Not Found",
+            "detail": "Apertura no encontrada.",
+        }), 404
+
+    data = request.get_json(silent=True) or {}
+
+    title = str(data.get("title") or "").strip()
+
+    if not title:
+        return jsonify({
+            "error": "Bad Request",
+            "detail": "El título de la tarea es obligatorio.",
+        }), 400
+
+    phase_id = data.get("phase_id")
+
+    if phase_id:
+        try:
+            phase_id = int(phase_id)
+        except (TypeError, ValueError):
+            return jsonify({
+                "error": "Bad Request",
+                "detail": "phase_id debe ser entero.",
+            }), 400
+
+        phase = db.session.get(OpeningPhaseORM, phase_id)
+
+        if not phase or phase.opening_id != opening_id:
+            return jsonify({
+                "error": "Bad Request",
+                "detail": "La fase no pertenece a esta apertura.",
+            }), 400
+
+    parent_task_id = data.get("parent_task_id")
+
+    if parent_task_id:
+        try:
+            parent_task_id = int(parent_task_id)
+        except (TypeError, ValueError):
+            return jsonify({
+                "error": "Bad Request",
+                "detail": "parent_task_id debe ser entero.",
+            }), 400
+
+        parent_task = db.session.get(OpeningTaskORM, parent_task_id)
+
+        if not parent_task or parent_task.opening_id != opening_id:
+            return jsonify({
+                "error": "Bad Request",
+                "detail": "La tarea padre no pertenece a esta apertura.",
+            }), 400
+
+    status = str(
+        data.get("status") or OpeningTaskStatus.NOT_STARTED
+    ).strip().upper()
+
+    if status not in OpeningTaskStatus.ALL:
+        return jsonify({
+            "error": "Bad Request",
+            "detail": "Estado de tarea inválido.",
+            "allowed": list(OpeningTaskStatus.ALL),
+        }), 400
+
+    priority = str(
+        data.get("priority") or OpeningTaskPriority.MEDIUM
+    ).strip().upper()
+
+    if priority not in OpeningTaskPriority.ALL:
+        return jsonify({
+            "error": "Bad Request",
+            "detail": "Prioridad de tarea inválida.",
+            "allowed": list(OpeningTaskPriority.ALL),
+        }), 400
+
+    progress_percent = _parse_decimal(data.get("progress_percent")) or Decimal("0")
+
+    if progress_percent < 0 or progress_percent > 100:
+        return jsonify({
+            "error": "Bad Request",
+            "detail": "El avance debe estar entre 0 y 100.",
+        }), 400
+
+    try:
+        task = OpeningTaskORM(
+            opening_id=opening_id,
+            phase_id=phase_id,
+            parent_task_id=parent_task_id,
+            title=title,
+            description=(
+                str(data.get("description")).strip()
+                if data.get("description")
+                else None
+            ),
+            status=status,
+            priority=priority,
+            owner_user_id=data.get("owner_user_id"),
+            owner_department_id=data.get("owner_department_id"),
+            planned_start_date=_parse_date(data.get("planned_start_date")),
+            planned_due_date=_parse_date(data.get("planned_due_date")),
+            actual_start_date=_parse_date(data.get("actual_start_date")),
+            actual_completed_at=_utc_now() if status == OpeningTaskStatus.COMPLETED else None,
+            progress_percent=progress_percent,
+            sort_order=int(data.get("sort_order") or 0),
+            requires_document=bool(data.get("requires_document") or False),
+            requires_payment=bool(data.get("requires_payment") or False),
+            created_by=_current_user_id(),
+            updated_by=_current_user_id(),
+        )
+
+        db.session.add(task)
+        db.session.flush()
+
+        _audit_opening(
+            opening_id,
+            OpeningAuditAction.TASK_CREATED,
+            entity_type="TASK",
+            entity_id=task.id,
+            new_value_json=_serialize_task(task),
+        )
+
+        db.session.commit()
+
+        return jsonify({
+            "message": "Tarea creada.",
+            "item": _serialize_task(task),
+        }), 201
+
+    except ValueError as exc:
+        db.session.rollback()
+        return jsonify({
+            "error": "Bad Request",
+            "detail": str(exc),
+        }), 400
+
+
+@openings_bp.route("/<int:opening_id>/tasks/<int:task_id>", methods=["PATCH"])
+@jwt_required()
+def update_opening_task(opening_id: int, task_id: int):
+    denied = _require_openings_admin()
+    if denied:
+        return denied
+
+    opening = db.session.get(OpeningORM, opening_id)
+
+    if not opening:
+        return jsonify({
+            "error": "Not Found",
+            "detail": "Apertura no encontrada.",
+        }), 404
+
+    task = db.session.get(OpeningTaskORM, task_id)
+
+    if not task or task.opening_id != opening_id:
+        return jsonify({
+            "error": "Not Found",
+            "detail": "Tarea no encontrada para esta apertura.",
+        }), 404
+
+    data = request.get_json(silent=True) or {}
+    old_value = _serialize_task(task)
+
+    try:
+        if "phase_id" in data:
+            phase_id = data.get("phase_id")
+
+            if phase_id in (None, ""):
+                task.phase_id = None
+            else:
+                phase_id = int(phase_id)
+                phase = db.session.get(OpeningPhaseORM, phase_id)
+
+                if not phase or phase.opening_id != opening_id:
+                    return jsonify({
+                        "error": "Bad Request",
+                        "detail": "La fase no pertenece a esta apertura.",
+                    }), 400
+
+                task.phase_id = phase_id
+
+        if "parent_task_id" in data:
+            parent_task_id = data.get("parent_task_id")
+
+            if parent_task_id in (None, ""):
+                task.parent_task_id = None
+            else:
+                parent_task_id = int(parent_task_id)
+
+                if parent_task_id == task.id:
+                    return jsonify({
+                        "error": "Bad Request",
+                        "detail": "Una tarea no puede ser padre de sí misma.",
+                    }), 400
+
+                parent_task = db.session.get(OpeningTaskORM, parent_task_id)
+
+                if not parent_task or parent_task.opening_id != opening_id:
+                    return jsonify({
+                        "error": "Bad Request",
+                        "detail": "La tarea padre no pertenece a esta apertura.",
+                    }), 400
+
+                task.parent_task_id = parent_task_id
+
+        if "title" in data:
+            task.title = str(data.get("title") or "").strip()
+
+            if not task.title:
+                return jsonify({
+                    "error": "Bad Request",
+                    "detail": "El título de la tarea no puede quedar vacío.",
+                }), 400
+
+        if "description" in data:
+            task.description = (
+                str(data.get("description")).strip()
+                if data.get("description")
+                else None
+            )
+
+        if "status" in data:
+            next_status = str(data.get("status") or "").strip().upper()
+
+            if next_status not in OpeningTaskStatus.ALL:
+                return jsonify({
+                    "error": "Bad Request",
+                    "detail": "Estado de tarea inválido.",
+                    "allowed": list(OpeningTaskStatus.ALL),
+                }), 400
+
+            task.status = next_status
+
+            if next_status == OpeningTaskStatus.COMPLETED:
+                task.progress_percent = Decimal("100")
+                if not task.actual_completed_at:
+                    task.actual_completed_at = _utc_now()
+            elif task.actual_completed_at and next_status != OpeningTaskStatus.COMPLETED:
+                task.actual_completed_at = None
+
+        if "priority" in data:
+            next_priority = str(data.get("priority") or "").strip().upper()
+
+            if next_priority not in OpeningTaskPriority.ALL:
+                return jsonify({
+                    "error": "Bad Request",
+                    "detail": "Prioridad de tarea inválida.",
+                    "allowed": list(OpeningTaskPriority.ALL),
+                }), 400
+
+            task.priority = next_priority
+
+        if "owner_user_id" in data:
+            task.owner_user_id = data.get("owner_user_id")
+
+        if "owner_department_id" in data:
+            task.owner_department_id = data.get("owner_department_id")
+
+        if "planned_start_date" in data:
+            task.planned_start_date = _parse_date(data.get("planned_start_date"))
+
+        if "planned_due_date" in data:
+            task.planned_due_date = _parse_date(data.get("planned_due_date"))
+
+        if "actual_start_date" in data:
+            task.actual_start_date = _parse_date(data.get("actual_start_date"))
+
+        if "progress_percent" in data:
+            next_progress = _parse_decimal(data.get("progress_percent")) or Decimal("0")
+
+            if next_progress < 0 or next_progress > 100:
+                return jsonify({
+                    "error": "Bad Request",
+                    "detail": "El avance debe estar entre 0 y 100.",
+                }), 400
+
+            task.progress_percent = next_progress
+
+            if next_progress == 100:
+                task.status = OpeningTaskStatus.COMPLETED
+                if not task.actual_completed_at:
+                    task.actual_completed_at = _utc_now()
+            elif task.status == OpeningTaskStatus.COMPLETED:
+                task.status = OpeningTaskStatus.IN_PROGRESS
+                task.actual_completed_at = None
+
+        if "sort_order" in data:
+            task.sort_order = int(data.get("sort_order") or 0)
+
+        if "requires_document" in data:
+            task.requires_document = bool(data.get("requires_document"))
+
+        if "requires_payment" in data:
+            task.requires_payment = bool(data.get("requires_payment"))
+
+        task.updated_by = _current_user_id()
+
+        action = OpeningAuditAction.TASK_UPDATED
+
+        if old_value.get("status") != task.status:
+            action = OpeningAuditAction.TASK_STATUS_CHANGED
+        elif old_value.get("planned_due_date") != _serialize_date(task.planned_due_date):
+            action = OpeningAuditAction.TASK_DUE_DATE_CHANGED
+        elif old_value.get("owner_user_id") != task.owner_user_id:
+            action = OpeningAuditAction.TASK_OWNER_CHANGED
+
+        _audit_opening(
+            opening_id,
+            action,
+            entity_type="TASK",
+            entity_id=task.id,
+            old_value_json=old_value,
+            new_value_json=_serialize_task(task),
+        )
+
+        db.session.commit()
+
+        return jsonify({
+            "message": "Tarea actualizada.",
+            "item": _serialize_task(task),
+        }), 200
+
+    except ValueError as exc:
+        db.session.rollback()
+        return jsonify({
+            "error": "Bad Request",
+            "detail": str(exc),
+        }), 400
