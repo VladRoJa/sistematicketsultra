@@ -15,17 +15,18 @@ from app.extensions import db
 from app.models import (
     OpeningAuditAction,
     OpeningAuditLogORM,
+    OpeningDependencyType,
     OpeningORM,
     OpeningPhaseORM,
     OpeningPhaseStatus,
     OpeningStatus,
+    OpeningTaskDependencyORM,
     OpeningTaskORM,
     OpeningTaskPriority,
     OpeningTaskStatus,
     Sucursal,
     SucursalOperationalStatus,
 )
-
 
 openings_bp = Blueprint("openings_bp", __name__)
 
@@ -241,6 +242,28 @@ def _serialize_task(task: OpeningTaskORM) -> dict[str, Any]:
         "updated_by": task.updated_by,
         "created_at": _serialize_datetime(task.created_at),
         "updated_at": _serialize_datetime(task.updated_at),
+    }
+
+def _serialize_task_dependency(
+    dependency: OpeningTaskDependencyORM,
+) -> dict[str, Any]:
+    return {
+        "id": dependency.id,
+        "task_id": dependency.task_id,
+        "depends_on_task_id": dependency.depends_on_task_id,
+        "dependency_type": dependency.dependency_type,
+        "task": {
+            "id": dependency.task.id,
+            "title": dependency.task.title,
+            "status": dependency.task.status,
+        } if dependency.task else None,
+        "depends_on_task": {
+            "id": dependency.depends_on_task.id,
+            "title": dependency.depends_on_task.title,
+            "status": dependency.depends_on_task.status,
+        } if dependency.depends_on_task else None,
+        "created_by": dependency.created_by,
+        "created_at": _serialize_datetime(dependency.created_at),
     }
 
 def _audit_opening(
@@ -1148,3 +1171,236 @@ def update_opening_task(opening_id: int, task_id: int):
             "error": "Bad Request",
             "detail": str(exc),
         }), 400
+        
+@openings_bp.route("/<int:opening_id>/task-dependencies", methods=["GET"])
+@jwt_required()
+def list_opening_task_dependencies(opening_id: int):
+    denied = _require_openings_read()
+    if denied:
+        return denied
+
+    opening = db.session.get(OpeningORM, opening_id)
+
+    if not opening:
+        return jsonify({
+            "error": "Not Found",
+            "detail": "Apertura no encontrada.",
+        }), 404
+
+    dependencies = (
+        OpeningTaskDependencyORM.query
+        .join(OpeningTaskORM, OpeningTaskDependencyORM.task_id == OpeningTaskORM.id)
+        .filter(OpeningTaskORM.opening_id == opening_id)
+        .order_by(
+            OpeningTaskDependencyORM.task_id.asc(),
+            OpeningTaskDependencyORM.depends_on_task_id.asc(),
+        )
+        .all()
+    )
+
+    return jsonify({
+        "items": [
+            _serialize_task_dependency(dependency)
+            for dependency in dependencies
+        ],
+    }), 200
+
+
+@openings_bp.route("/<int:opening_id>/tasks/<int:task_id>/dependencies", methods=["GET"])
+@jwt_required()
+def list_task_dependencies(opening_id: int, task_id: int):
+    denied = _require_openings_read()
+    if denied:
+        return denied
+
+    opening = db.session.get(OpeningORM, opening_id)
+
+    if not opening:
+        return jsonify({
+            "error": "Not Found",
+            "detail": "Apertura no encontrada.",
+        }), 404
+
+    task = db.session.get(OpeningTaskORM, task_id)
+
+    if not task or task.opening_id != opening_id:
+        return jsonify({
+            "error": "Not Found",
+            "detail": "Tarea no encontrada para esta apertura.",
+        }), 404
+
+    dependencies = (
+        OpeningTaskDependencyORM.query
+        .filter(OpeningTaskDependencyORM.task_id == task_id)
+        .order_by(OpeningTaskDependencyORM.id.asc())
+        .all()
+    )
+
+    return jsonify({
+        "items": [
+            _serialize_task_dependency(dependency)
+            for dependency in dependencies
+        ],
+    }), 200
+
+
+@openings_bp.route("/<int:opening_id>/tasks/<int:task_id>/dependencies", methods=["POST"])
+@jwt_required()
+def create_task_dependency(opening_id: int, task_id: int):
+    denied = _require_openings_admin()
+    if denied:
+        return denied
+
+    opening = db.session.get(OpeningORM, opening_id)
+
+    if not opening:
+        return jsonify({
+            "error": "Not Found",
+            "detail": "Apertura no encontrada.",
+        }), 404
+
+    task = db.session.get(OpeningTaskORM, task_id)
+
+    if not task or task.opening_id != opening_id:
+        return jsonify({
+            "error": "Not Found",
+            "detail": "Tarea no encontrada para esta apertura.",
+        }), 404
+
+    data = request.get_json(silent=True) or {}
+
+    depends_on_task_id = data.get("depends_on_task_id")
+
+    if not depends_on_task_id:
+        return jsonify({
+            "error": "Bad Request",
+            "detail": "depends_on_task_id es obligatorio.",
+        }), 400
+
+    try:
+        depends_on_task_id = int(depends_on_task_id)
+    except (TypeError, ValueError):
+        return jsonify({
+            "error": "Bad Request",
+            "detail": "depends_on_task_id debe ser entero.",
+        }), 400
+
+    if depends_on_task_id == task_id:
+        return jsonify({
+            "error": "Bad Request",
+            "detail": "Una tarea no puede depender de sí misma.",
+        }), 400
+
+    depends_on_task = db.session.get(OpeningTaskORM, depends_on_task_id)
+
+    if not depends_on_task or depends_on_task.opening_id != opening_id:
+        return jsonify({
+            "error": "Bad Request",
+            "detail": "La tarea dependencia no pertenece a esta apertura.",
+        }), 400
+
+    dependency_type = str(
+        data.get("dependency_type") or OpeningDependencyType.BLOCKER
+    ).strip().upper()
+
+    if dependency_type not in OpeningDependencyType.ALL:
+        return jsonify({
+            "error": "Bad Request",
+            "detail": "Tipo de dependencia inválido.",
+            "allowed": list(OpeningDependencyType.ALL),
+        }), 400
+
+    try:
+        dependency = OpeningTaskDependencyORM(
+            task_id=task_id,
+            depends_on_task_id=depends_on_task_id,
+            dependency_type=dependency_type,
+            created_by=_current_user_id(),
+        )
+
+        db.session.add(dependency)
+        db.session.flush()
+
+        serialized_dependency = _serialize_task_dependency(dependency)
+
+        _audit_opening(
+            opening_id,
+            OpeningAuditAction.TASK_DEPENDENCY_CREATED,
+            entity_type="TASK_DEPENDENCY",
+            entity_id=dependency.id,
+            new_value_json=serialized_dependency,
+            metadata_json={
+                "task_id": task_id,
+                "depends_on_task_id": depends_on_task_id,
+            },
+        )
+
+        db.session.commit()
+
+        return jsonify({
+            "message": "Dependencia creada.",
+            "item": serialized_dependency,
+        }), 201
+
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({
+            "error": "Conflict",
+            "detail": "La dependencia ya existe.",
+        }), 409
+
+
+@openings_bp.route(
+    "/<int:opening_id>/task-dependencies/<int:dependency_id>",
+    methods=["DELETE"],
+)
+@jwt_required()
+def delete_task_dependency(opening_id: int, dependency_id: int):
+    denied = _require_openings_admin()
+    if denied:
+        return denied
+
+    opening = db.session.get(OpeningORM, opening_id)
+
+    if not opening:
+        return jsonify({
+            "error": "Not Found",
+            "detail": "Apertura no encontrada.",
+        }), 404
+
+    dependency = db.session.get(OpeningTaskDependencyORM, dependency_id)
+
+    if not dependency:
+        return jsonify({
+            "error": "Not Found",
+            "detail": "Dependencia no encontrada.",
+        }), 404
+
+    task = db.session.get(OpeningTaskORM, dependency.task_id)
+
+    if not task or task.opening_id != opening_id:
+        return jsonify({
+            "error": "Not Found",
+            "detail": "Dependencia no encontrada para esta apertura.",
+        }), 404
+
+    old_value = _serialize_task_dependency(dependency)
+
+    _audit_opening(
+        opening_id,
+        OpeningAuditAction.TASK_DEPENDENCY_DELETED,
+        entity_type="TASK_DEPENDENCY",
+        entity_id=dependency.id,
+        old_value_json=old_value,
+        metadata_json={
+            "task_id": dependency.task_id,
+            "depends_on_task_id": dependency.depends_on_task_id,
+        },
+    )
+
+    db.session.delete(dependency)
+    db.session.commit()
+
+    return jsonify({
+        "message": "Dependencia eliminada.",
+    }), 200
