@@ -29,16 +29,22 @@ import { InternalDocumentsService } from '../../services/internal-documents.serv
   templateUrl: './internal-documents-home.component.html',
   styleUrls: ['./internal-documents-home.component.css'],
 })
-export class InternalDocumentsHomeComponent implements OnInit, OnDestroy  {
+export class InternalDocumentsHomeComponent implements OnInit, OnDestroy {
   loading = false;
   saving = false;
   errorMessage = '';
   successMessage = '';
 
   canManage = false;
+  isCreatePanelOpen = false;
 
   documents: InternalDocument[] = [];
   categories: InternalDocumentCategory[] = [];
+
+  visiblePublishedCount = 0;
+  visibleDraftCount = 0;
+  visibleSensitiveCount = 0;
+  visiblePreviewableCount = 0;
 
   selectedDocument: InternalDocument | null = null;
 
@@ -59,6 +65,7 @@ export class InternalDocumentsHomeComponent implements OnInit, OnDestroy  {
 
   selectedFile: File | null = null;
   versionFile: File | null = null;
+
   previewOpen = false;
   previewLoading = false;
   previewErrorMessage = '';
@@ -180,6 +187,8 @@ export class InternalDocumentsHomeComponent implements OnInit, OnDestroy  {
     this.internalDocumentsService.listDocuments(this.buildFilters()).subscribe({
       next: (response) => {
         this.documents = response.items || [];
+        this.updateVisibleDocumentSummary();
+
         this.page = response.page;
         this.pageSize = response.page_size;
         this.total = response.total;
@@ -192,7 +201,15 @@ export class InternalDocumentsHomeComponent implements OnInit, OnDestroy  {
           const refreshed = this.documents.find(
             (item) => item.id === this.selectedDocument?.id
           );
-          this.selectedDocument = refreshed || this.selectedDocument;
+
+          if (refreshed) {
+            this.selectedDocument = {
+              ...this.selectedDocument,
+              ...refreshed,
+              links: this.selectedDocument.links,
+              visibility_rules: this.selectedDocument.visibility_rules,
+            };
+          }
         }
       },
       error: () => {
@@ -217,6 +234,22 @@ export class InternalDocumentsHomeComponent implements OnInit, OnDestroy  {
     };
 
     this.loadDocuments();
+  }
+
+  toggleCreatePanel(): void {
+    if (!this.canManage) {
+      return;
+    }
+
+    this.isCreatePanelOpen = !this.isCreatePanelOpen;
+  }
+
+  closeCreatePanel(): void {
+    this.isCreatePanelOpen = false;
+  }
+
+  getCreatePanelButtonLabel(): string {
+    return this.isCreatePanelOpen ? 'Cerrar formulario' : 'Nuevo documento';
   }
 
   goToPreviousPage(): void {
@@ -306,6 +339,7 @@ export class InternalDocumentsHomeComponent implements OnInit, OnDestroy  {
         this.successMessage = response.message || 'Documento creado.';
         this.selectedDocument = response.item;
         this.resetCreateForm();
+        this.closeCreatePanel();
         this.loadDocuments();
       },
       error: (error) => {
@@ -521,106 +555,6 @@ export class InternalDocumentsHomeComponent implements OnInit, OnDestroy  {
     });
   }
 
-  canManageLinks(document: InternalDocument | null): boolean {
-    return this.canManage &&
-      Boolean(document?.capabilities?.can_edit) &&
-      document?.status !== 'ARCHIVADO';
-  }
-
-  getSelectedDocumentLinks(): InternalDocumentLink[] {
-    return this.selectedDocument?.links || [];
-  }
-
-  getEntityTypeLabel(entityType: string | null | undefined): string {
-    return this.linkEntityTypeOptions.find((item) => item.value === entityType)?.label ||
-      entityType ||
-      'Sin entidad';
-  }
-
-  getLinkRoleLabel(linkRole: string | null | undefined): string {
-    return this.linkRoleOptions.find((item) => item.value === linkRole)?.label ||
-      linkRole ||
-      'Sin rol';
-  }
-
-  getLinkContextLabel(link: InternalDocumentLink): string {
-    if (link.entity_key) {
-      return link.entity_key;
-    }
-
-    if (link.entity_id) {
-      return `ID ${link.entity_id}`;
-    }
-
-    return 'GENERAL';
-  }
-
-  isGeneralLinkEntitySelected(): boolean {
-    return this.linkForm.entity_type === 'GENERAL';
-  }
-
-  private buildLinkPayload(): InternalDocumentLinkPayload | null {
-    const entityKey = this.linkForm.entity_key.trim();
-    const label = this.linkForm.label.trim();
-
-    if (!this.linkForm.entity_type) {
-      this.errorMessage = 'Selecciona el tipo de entidad.';
-      return null;
-    }
-
-    if (!this.linkForm.link_role) {
-      this.errorMessage = 'Selecciona el rol documental.';
-      return null;
-    }
-
-    if (
-      this.linkForm.entity_type !== 'GENERAL' &&
-      !entityKey &&
-      !this.linkForm.entity_id
-    ) {
-      this.errorMessage = 'Captura entity key o entity id para vincular el documento.';
-      return null;
-    }
-
-    const payload: InternalDocumentLinkPayload = {
-      entity_type: this.linkForm.entity_type,
-      link_role: this.linkForm.link_role,
-      entity_key: entityKey || null,
-      entity_id: this.linkForm.entity_id,
-      label: label || null,
-      is_primary: this.linkForm.is_primary,
-    };
-
-    if (this.linkForm.entity_type === 'GENERAL') {
-      payload.entity_id = null;
-      payload.entity_key = entityKey || 'GENERAL';
-    }
-
-    return payload;
-  }
-
-  private resetLinkForm(): void {
-    this.linkForm = {
-      entity_type: 'OPENING',
-      entity_id: null,
-      entity_key: '',
-      link_role: 'MANUAL',
-      label: '',
-      is_primary: false,
-    };
-  }
-
-  private reloadSelectedDocumentDetails(documentId: number): void {
-    this.internalDocumentsService.getDocument(documentId).subscribe({
-      next: (item) => {
-        this.selectedDocument = item;
-      },
-      error: () => {
-        this.errorMessage = 'No se pudo recargar el detalle del documento.';
-      },
-    });
-  }
-
   downloadDocument(document: InternalDocument): void {
     this.clearMessages();
 
@@ -707,34 +641,42 @@ export class InternalDocumentsHomeComponent implements OnInit, OnDestroy  {
     return this.canDownload(document) && this.resolvePreviewType(document) !== null;
   }
 
-  private resolvePreviewType(document: InternalDocument): 'pdf' | 'image' | null {
-    const mimeType = String(document.current_version?.file_mime_type || '').toLowerCase();
-    const filename = String(document.current_version?.original_filename || '').toLowerCase();
-
-    if (mimeType === 'application/pdf' || filename.endsWith('.pdf')) {
-      return 'pdf';
-    }
-
-    if (
-      mimeType === 'image/png' ||
-      mimeType === 'image/jpeg' ||
-      filename.endsWith('.png') ||
-      filename.endsWith('.jpg') ||
-      filename.endsWith('.jpeg')
-    ) {
-      return 'image';
-    }
-
-    return null;
+  canManageLinks(document: InternalDocument | null): boolean {
+    return this.canManage &&
+      Boolean(document?.capabilities?.can_edit) &&
+      document?.status !== 'ARCHIVADO';
   }
 
-  private revokePreviewObjectUrl(): void {
-    if (!this.previewObjectUrl) {
-      return;
+  getSelectedDocumentLinks(): InternalDocumentLink[] {
+    return this.selectedDocument?.links || [];
+  }
+
+  getEntityTypeLabel(entityType: string | null | undefined): string {
+    return this.linkEntityTypeOptions.find((item) => item.value === entityType)?.label ||
+      entityType ||
+      'Sin entidad';
+  }
+
+  getLinkRoleLabel(linkRole: string | null | undefined): string {
+    return this.linkRoleOptions.find((item) => item.value === linkRole)?.label ||
+      linkRole ||
+      'Sin rol';
+  }
+
+  getLinkContextLabel(link: InternalDocumentLink): string {
+    if (link.entity_key) {
+      return link.entity_key;
     }
 
-    window.URL.revokeObjectURL(this.previewObjectUrl);
-    this.previewObjectUrl = null;
+    if (link.entity_id) {
+      return `ID ${link.entity_id}`;
+    }
+
+    return 'GENERAL';
+  }
+
+  isGeneralLinkEntitySelected(): boolean {
+    return this.linkForm.entity_type === 'GENERAL';
   }
 
   getCategoryName(categoryId: number | null): string {
@@ -807,6 +749,51 @@ export class InternalDocumentsHomeComponent implements OnInit, OnDestroy  {
     return document.current_version?.version_label || 'Sin versión';
   }
 
+  getDocumentInitial(document: InternalDocument): string {
+    const title = (document.title || 'D').trim();
+
+    return title.charAt(0).toUpperCase() || 'D';
+  }
+
+  getFileTypeLabel(document: InternalDocument): string {
+    const filename = String(document.current_version?.original_filename || '').trim();
+    const extension = filename.includes('.')
+      ? filename.split('.').pop()
+      : '';
+
+    if (extension) {
+      return extension.toUpperCase();
+    }
+
+    const mimeType = String(document.current_version?.file_mime_type || '').toLowerCase();
+
+    if (mimeType.includes('pdf')) {
+      return 'PDF';
+    }
+
+    if (mimeType.includes('image')) {
+      return 'IMG';
+    }
+
+    if (mimeType.includes('spreadsheet') || mimeType.includes('excel')) {
+      return 'XLSX';
+    }
+
+    if (mimeType.includes('word')) {
+      return 'DOCX';
+    }
+
+    if (mimeType.includes('presentation')) {
+      return 'PPTX';
+    }
+
+    return 'DOC';
+  }
+
+  getSelectedDocumentFilename(): string {
+    return this.selectedDocument?.current_version?.original_filename || 'Sin archivo';
+  }
+
   canShowAdminActions(document: InternalDocument): boolean {
     return this.canManage && Boolean(document?.capabilities?.can_edit);
   }
@@ -843,6 +830,116 @@ export class InternalDocumentsHomeComponent implements OnInit, OnDestroy  {
 
   trackByDocumentId(_index: number, document: InternalDocument): number {
     return document.id;
+  }
+
+  private updateVisibleDocumentSummary(): void {
+    this.visiblePublishedCount = this.documents.filter(
+      (document) => document.status === 'PUBLICADO'
+    ).length;
+
+    this.visibleDraftCount = this.documents.filter(
+      (document) => document.status === 'BORRADOR'
+    ).length;
+
+    this.visibleSensitiveCount = this.documents.filter(
+      (document) => Boolean(document.is_sensitive)
+    ).length;
+
+    this.visiblePreviewableCount = this.documents.filter(
+      (document) => this.canPreviewDocument(document)
+    ).length;
+  }
+
+  private buildLinkPayload(): InternalDocumentLinkPayload | null {
+    const entityKey = this.linkForm.entity_key.trim();
+    const label = this.linkForm.label.trim();
+
+    if (!this.linkForm.entity_type) {
+      this.errorMessage = 'Selecciona el tipo de entidad.';
+      return null;
+    }
+
+    if (!this.linkForm.link_role) {
+      this.errorMessage = 'Selecciona el rol documental.';
+      return null;
+    }
+
+    if (
+      this.linkForm.entity_type !== 'GENERAL' &&
+      !entityKey &&
+      !this.linkForm.entity_id
+    ) {
+      this.errorMessage = 'Captura entity key o entity id para vincular el documento.';
+      return null;
+    }
+
+    const payload: InternalDocumentLinkPayload = {
+      entity_type: this.linkForm.entity_type,
+      link_role: this.linkForm.link_role,
+      entity_key: entityKey || null,
+      entity_id: this.linkForm.entity_id,
+      label: label || null,
+      is_primary: this.linkForm.is_primary,
+    };
+
+    if (this.linkForm.entity_type === 'GENERAL') {
+      payload.entity_id = null;
+      payload.entity_key = entityKey || 'GENERAL';
+    }
+
+    return payload;
+  }
+
+  private resetLinkForm(): void {
+    this.linkForm = {
+      entity_type: 'OPENING',
+      entity_id: null,
+      entity_key: '',
+      link_role: 'MANUAL',
+      label: '',
+      is_primary: false,
+    };
+  }
+
+  private reloadSelectedDocumentDetails(documentId: number): void {
+    this.internalDocumentsService.getDocument(documentId).subscribe({
+      next: (item) => {
+        this.selectedDocument = item;
+      },
+      error: () => {
+        this.errorMessage = 'No se pudo recargar el detalle del documento.';
+      },
+    });
+  }
+
+  private resolvePreviewType(document: InternalDocument): 'pdf' | 'image' | null {
+    const mimeType = String(document.current_version?.file_mime_type || '').toLowerCase();
+    const filename = String(document.current_version?.original_filename || '').toLowerCase();
+
+    if (mimeType === 'application/pdf' || filename.endsWith('.pdf')) {
+      return 'pdf';
+    }
+
+    if (
+      mimeType === 'image/png' ||
+      mimeType === 'image/jpeg' ||
+      filename.endsWith('.png') ||
+      filename.endsWith('.jpg') ||
+      filename.endsWith('.jpeg')
+    ) {
+      return 'image';
+    }
+
+    return null;
+  }
+
+  private revokePreviewObjectUrl(): void {
+    if (!this.previewObjectUrl) {
+      return;
+    }
+
+    window.URL.revokeObjectURL(this.previewObjectUrl);
+    this.previewObjectUrl = null;
   }
 
   private buildFilters(): InternalDocumentListFilters {
