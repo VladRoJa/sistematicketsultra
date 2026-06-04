@@ -16,6 +16,8 @@ from app.models import (
     OpeningAuditAction,
     OpeningAuditLogORM,
     OpeningORM,
+    OpeningPhaseORM,
+    OpeningPhaseStatus,
     OpeningStatus,
     Sucursal,
     SucursalOperationalStatus,
@@ -174,6 +176,38 @@ def _serialize_opening(opening: OpeningORM) -> dict[str, Any]:
         "updated_at": _serialize_datetime(opening.updated_at),
     }
 
+def _serialize_department(department: Any) -> dict[str, Any] | None:
+    if not department:
+        return None
+
+    return {
+        "id": getattr(department, "id", None),
+        "nombre": getattr(department, "nombre", None),
+    }
+
+
+def _serialize_phase(phase: OpeningPhaseORM) -> dict[str, Any]:
+    return {
+        "id": phase.id,
+        "opening_id": phase.opening_id,
+        "name": phase.name,
+        "description": phase.description,
+        "sort_order": phase.sort_order,
+        "planned_start_date": _serialize_date(phase.planned_start_date),
+        "planned_end_date": _serialize_date(phase.planned_end_date),
+        "actual_start_date": _serialize_date(phase.actual_start_date),
+        "actual_end_date": _serialize_date(phase.actual_end_date),
+        "status": phase.status,
+        "owner_department_id": phase.owner_department_id,
+        "owner_department": _serialize_department(phase.owner_department),
+        "owner_user_id": phase.owner_user_id,
+        "owner_user": _serialize_user(phase.owner_user),
+        "progress_percent": _serialize_decimal(phase.progress_percent),
+        "created_by": phase.created_by,
+        "updated_by": phase.updated_by,
+        "created_at": _serialize_datetime(phase.created_at),
+        "updated_at": _serialize_datetime(phase.updated_at),
+    }
 
 def _audit_opening(
     opening_id: int,
@@ -452,3 +486,238 @@ def update_opening(opening_id: int):
             "error": "Bad Request",
             "detail": str(exc),
         }), 400
+        
+@openings_bp.route("/<int:opening_id>/phases", methods=["GET"])
+@jwt_required()
+def list_opening_phases(opening_id: int):
+    denied = _require_openings_read()
+    if denied:
+        return denied
+
+    opening = db.session.get(OpeningORM, opening_id)
+
+    if not opening:
+        return jsonify({
+            "error": "Not Found",
+            "detail": "Apertura no encontrada.",
+        }), 404
+
+    phases = (
+        OpeningPhaseORM.query
+        .filter(OpeningPhaseORM.opening_id == opening_id)
+        .order_by(OpeningPhaseORM.sort_order.asc(), OpeningPhaseORM.id.asc())
+        .all()
+    )
+
+    return jsonify({
+        "items": [_serialize_phase(phase) for phase in phases],
+    }), 200
+
+
+@openings_bp.route("/<int:opening_id>/phases", methods=["POST"])
+@jwt_required()
+def create_opening_phase(opening_id: int):
+    denied = _require_openings_admin()
+    if denied:
+        return denied
+
+    opening = db.session.get(OpeningORM, opening_id)
+
+    if not opening:
+        return jsonify({
+            "error": "Not Found",
+            "detail": "Apertura no encontrada.",
+        }), 404
+
+    data = request.get_json(silent=True) or {}
+
+    name = str(data.get("name") or "").strip()
+
+    if not name:
+        return jsonify({
+            "error": "Bad Request",
+            "detail": "El nombre de la fase es obligatorio.",
+        }), 400
+
+    status = str(
+        data.get("status") or OpeningPhaseStatus.NOT_STARTED
+    ).strip().upper()
+
+    if status not in OpeningPhaseStatus.ALL:
+        return jsonify({
+            "error": "Bad Request",
+            "detail": "Estado de fase inválido.",
+            "allowed": list(OpeningPhaseStatus.ALL),
+        }), 400
+
+    try:
+        phase = OpeningPhaseORM(
+            opening_id=opening_id,
+            name=name,
+            description=(
+                str(data.get("description")).strip()
+                if data.get("description")
+                else None
+            ),
+            sort_order=int(data.get("sort_order") or 0),
+            planned_start_date=_parse_date(data.get("planned_start_date")),
+            planned_end_date=_parse_date(data.get("planned_end_date")),
+            actual_start_date=_parse_date(data.get("actual_start_date")),
+            actual_end_date=_parse_date(data.get("actual_end_date")),
+            status=status,
+            owner_department_id=data.get("owner_department_id"),
+            owner_user_id=data.get("owner_user_id"),
+            progress_percent=_parse_decimal(data.get("progress_percent")) or Decimal("0"),
+            created_by=_current_user_id(),
+            updated_by=_current_user_id(),
+        )
+
+        db.session.add(phase)
+        db.session.flush()
+
+        _audit_opening(
+            opening_id,
+            OpeningAuditAction.PHASE_CREATED,
+            entity_type="PHASE",
+            entity_id=phase.id,
+            new_value_json=_serialize_phase(phase),
+        )
+
+        db.session.commit()
+
+        return jsonify({
+            "message": "Fase creada.",
+            "item": _serialize_phase(phase),
+        }), 201
+
+    except ValueError as exc:
+        db.session.rollback()
+        return jsonify({
+            "error": "Bad Request",
+            "detail": str(exc),
+        }), 400
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({
+            "error": "Conflict",
+            "detail": "Ya existe una fase con ese nombre para esta apertura.",
+        }), 409
+
+
+@openings_bp.route("/<int:opening_id>/phases/<int:phase_id>", methods=["PATCH"])
+@jwt_required()
+def update_opening_phase(opening_id: int, phase_id: int):
+    denied = _require_openings_admin()
+    if denied:
+        return denied
+
+    opening = db.session.get(OpeningORM, opening_id)
+
+    if not opening:
+        return jsonify({
+            "error": "Not Found",
+            "detail": "Apertura no encontrada.",
+        }), 404
+
+    phase = db.session.get(OpeningPhaseORM, phase_id)
+
+    if not phase or phase.opening_id != opening_id:
+        return jsonify({
+            "error": "Not Found",
+            "detail": "Fase no encontrada para esta apertura.",
+        }), 404
+
+    data = request.get_json(silent=True) or {}
+    old_value = _serialize_phase(phase)
+
+    try:
+        if "name" in data:
+            phase.name = str(data.get("name") or "").strip()
+
+            if not phase.name:
+                return jsonify({
+                    "error": "Bad Request",
+                    "detail": "El nombre de la fase no puede quedar vacío.",
+                }), 400
+
+        if "description" in data:
+            phase.description = (
+                str(data.get("description")).strip()
+                if data.get("description")
+                else None
+            )
+
+        if "sort_order" in data:
+            phase.sort_order = int(data.get("sort_order") or 0)
+
+        if "planned_start_date" in data:
+            phase.planned_start_date = _parse_date(data.get("planned_start_date"))
+
+        if "planned_end_date" in data:
+            phase.planned_end_date = _parse_date(data.get("planned_end_date"))
+
+        if "actual_start_date" in data:
+            phase.actual_start_date = _parse_date(data.get("actual_start_date"))
+
+        if "actual_end_date" in data:
+            phase.actual_end_date = _parse_date(data.get("actual_end_date"))
+
+        if "status" in data:
+            next_status = str(data.get("status") or "").strip().upper()
+
+            if next_status not in OpeningPhaseStatus.ALL:
+                return jsonify({
+                    "error": "Bad Request",
+                    "detail": "Estado de fase inválido.",
+                    "allowed": list(OpeningPhaseStatus.ALL),
+                }), 400
+
+            phase.status = next_status
+
+        if "owner_department_id" in data:
+            phase.owner_department_id = data.get("owner_department_id")
+
+        if "owner_user_id" in data:
+            phase.owner_user_id = data.get("owner_user_id")
+
+        if "progress_percent" in data:
+            next_progress = _parse_decimal(data.get("progress_percent")) or Decimal("0")
+
+            if next_progress < 0 or next_progress > 100:
+                return jsonify({
+                    "error": "Bad Request",
+                    "detail": "El avance debe estar entre 0 y 100.",
+                }), 400
+
+            phase.progress_percent = next_progress
+
+        phase.updated_by = _current_user_id()
+
+        _audit_opening(
+            opening_id,
+            OpeningAuditAction.PHASE_UPDATED,
+            entity_type="PHASE",
+            entity_id=phase.id,
+            old_value_json=old_value,
+            new_value_json=_serialize_phase(phase),
+        )
+
+        db.session.commit()
+
+        return jsonify({
+            "message": "Fase actualizada.",
+            "item": _serialize_phase(phase),
+        }), 200
+
+    except ValueError as exc:
+        db.session.rollback()
+        return jsonify({
+            "error": "Bad Request",
+            "detail": str(exc),
+        }), 400
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({
+            "error": "Conflict",
+            "detail": "Ya existe una fase con ese nombre para esta apertura.",
+        }), 409
