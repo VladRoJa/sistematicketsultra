@@ -93,6 +93,8 @@ export class InternalDocumentsHomeComponent implements OnInit, OnDestroy {
   };
 
   linksSaving = false;
+  pendingDeleteLink: InternalDocumentLink | null = null;
+  isDeleteLinkModalOpen = false;
 
   linkForm = {
     entity_type: 'OPENING' as InternalDocumentLinkEntityType,
@@ -526,23 +528,32 @@ export class InternalDocumentsHomeComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const confirmed = window.confirm(
-      `¿Desactivar el vínculo ${link.entity_type} / ${link.entity_key || link.entity_id || 'GENERAL'}?`
-    );
+    this.pendingDeleteLink = link;
+    this.isDeleteLinkModalOpen = true;
+  }
 
-    if (!confirmed) {
+  cancelDeleteLinkRemoval(): void {
+    this.pendingDeleteLink = null;
+    this.isDeleteLinkModalOpen = false;
+  }
+
+  confirmDeleteLinkRemoval(): void {
+    if (!this.selectedDocument || !this.pendingDeleteLink) {
+      this.cancelDeleteLinkRemoval();
       return;
     }
 
     const documentId = this.selectedDocument.id;
+    const linkId = this.pendingDeleteLink.id;
 
     this.linksSaving = true;
     this.clearMessages();
 
-    this.internalDocumentsService.deleteDocumentLink(documentId, link.id).subscribe({
+    this.internalDocumentsService.deleteDocumentLink(documentId, linkId).subscribe({
       next: (response) => {
         this.linksSaving = false;
         this.successMessage = response.message || 'Vínculo documental desactivado.';
+        this.cancelDeleteLinkRemoval();
         this.reloadSelectedDocumentDetails(documentId);
       },
       error: (error) => {
@@ -677,6 +688,66 @@ export class InternalDocumentsHomeComponent implements OnInit, OnDestroy {
 
   isGeneralLinkEntitySelected(): boolean {
     return this.linkForm.entity_type === 'GENERAL';
+  }
+
+  canCreateLinkForSelectedDocument(): boolean {
+    if (!this.canManageLinks(this.selectedDocument) || this.linksSaving) {
+      return false;
+    }
+
+    if (!this.linkForm.entity_type || !this.linkForm.link_role) {
+      return false;
+    }
+
+    if (this.linkForm.entity_type === 'GENERAL') {
+      return true;
+    }
+
+    const entityKey = this.linkForm.entity_key.trim();
+
+    return Boolean(entityKey || this.linkForm.entity_id);
+  }
+
+  getLinkContextFieldLabel(): string {
+    const labels: Record<InternalDocumentLinkEntityType, string> = {
+      OPENING: 'Apertura',
+      PROJECT: 'Proyecto',
+      TASK: 'Tarea',
+      SUCURSAL: 'Sucursal',
+      DEPARTMENT: 'Departamento / Área',
+      GENERAL: 'Contexto general',
+    };
+
+    return labels[this.linkForm.entity_type] || 'Contexto';
+  }
+
+  getLinkContextPlaceholder(): string {
+    const placeholders: Record<InternalDocumentLinkEntityType, string> = {
+      OPENING: 'Ej. EGADE o SERRANIA',
+      PROJECT: 'Ej. PROYECTO_EGADE',
+      TASK: 'Ej. EGADE-ELECTRICO-001',
+      SUCURSAL: 'Ej. INSURGENTES',
+      DEPARTMENT: 'Ej. SISTEMAS',
+      GENERAL: 'GENERAL',
+    };
+
+    return placeholders[this.linkForm.entity_type] || 'Ej. EGADE';
+  }
+
+  getLinkContextHelpText(): string {
+    if (this.linkForm.entity_type === 'GENERAL') {
+      return 'Para contexto general se usará GENERAL automáticamente si lo dejas vacío.';
+    }
+
+    return 'Campo requerido. Usa una clave fácil de reconocer, por ejemplo EGADE, SERRANIA o INSURGENTES.';
+  }
+
+  shouldShowLinkContextRequiredHint(): boolean {
+    if (this.linkForm.entity_type === 'GENERAL') {
+      return false;
+    }
+
+    return !this.linkForm.entity_key.trim() && !this.linkForm.entity_id;
   }
 
   getCategoryName(categoryId: number | null): string {
