@@ -32,6 +32,7 @@ from app.routes.planning_targets_routes import planning_targets_bp
 from app.routes.internal_documents_routes import internal_documents_bp
 from app.track_alerts.routes.track_alert_routes import track_alert_bp
 from app.warehouse import register_warehouse_runtime_hooks
+from app.routes.openings_routes import openings_bp
 
 
 def create_app():
@@ -108,6 +109,7 @@ def create_app():
     app.register_blueprint(internal_documents_bp, url_prefix="/api/internal-documents")
     app.register_blueprint(track_alert_bp)
     app.register_blueprint(planning_targets_bp)
+    app.register_blueprint(openings_bp, url_prefix="/api/openings")
 
     app.config['DEBUG'] = True
     app.config['PROPAGATE_EXCEPTIONS'] = True
