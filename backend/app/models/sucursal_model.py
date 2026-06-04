@@ -6,6 +6,23 @@ from app. extensions import db
 # MODELO: SUCURSAL
 # ─────────────────────────────────────────────────────────────
 
+class SucursalOperationalStatus:
+    PLANEADA = "PLANEADA"
+    EN_APERTURA = "EN_APERTURA"
+    ACTIVA = "ACTIVA"
+    PAUSADA = "PAUSADA"
+    CANCELADA = "CANCELADA"
+    CERRADA = "CERRADA"
+
+    ALL = (
+        PLANEADA,
+        EN_APERTURA,
+        ACTIVA,
+        PAUSADA,
+        CANCELADA,
+        CERRADA,
+    )
+
 class Sucursal(db.Model):
     __tablename__ = 'sucursales'
 
@@ -15,6 +32,13 @@ class Sucursal(db.Model):
     serie = db.Column(db.String(10), nullable=False)
     sucursal = db.Column(db.String(100), nullable=False)
     estado = db.Column(db.String(100), nullable=False)
+    operational_status = db.Column(
+        db.String(32),
+        nullable=False,
+        default=SucursalOperationalStatus.ACTIVA,
+        server_default=SucursalOperationalStatus.ACTIVA,
+        index=True,
+    )
     municipio = db.Column(db.String(100), nullable=False)
     direccion = db.Column(db.String(255), nullable=False)
 
