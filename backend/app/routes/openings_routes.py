@@ -20,6 +20,7 @@ from app.models import (
     OpeningPhaseORM,
     OpeningPhaseStatus,
     OpeningStatus,
+    OpeningTaskCommentORM,
     OpeningTaskDependencyORM,
     OpeningTaskORM,
     OpeningTaskPriority,
@@ -264,6 +265,18 @@ def _serialize_task_dependency(
         } if dependency.depends_on_task else None,
         "created_by": dependency.created_by,
         "created_at": _serialize_datetime(dependency.created_at),
+    }
+
+def _serialize_task_comment(comment: OpeningTaskCommentORM) -> dict[str, Any]:
+    return {
+        "id": comment.id,
+        "opening_id": comment.opening_id,
+        "task_id": comment.task_id,
+        "comment": comment.comment,
+        "is_system_event": bool(comment.is_system_event),
+        "created_by": comment.created_by,
+        "creator": _serialize_user(comment.creator),
+        "created_at": _serialize_datetime(comment.created_at),
     }
 
 def _audit_opening(
@@ -1404,3 +1417,107 @@ def delete_task_dependency(opening_id: int, dependency_id: int):
     return jsonify({
         "message": "Dependencia eliminada.",
     }), 200
+    
+@openings_bp.route("/<int:opening_id>/tasks/<int:task_id>/comments", methods=["GET"])
+@jwt_required()
+def list_task_comments(opening_id: int, task_id: int):
+    denied = _require_openings_read()
+    if denied:
+        return denied
+
+    opening = db.session.get(OpeningORM, opening_id)
+
+    if not opening:
+        return jsonify({
+            "error": "Not Found",
+            "detail": "Apertura no encontrada.",
+        }), 404
+
+    task = db.session.get(OpeningTaskORM, task_id)
+
+    if not task or task.opening_id != opening_id:
+        return jsonify({
+            "error": "Not Found",
+            "detail": "Tarea no encontrada para esta apertura.",
+        }), 404
+
+    comments = (
+        OpeningTaskCommentORM.query
+        .filter(
+            OpeningTaskCommentORM.opening_id == opening_id,
+            OpeningTaskCommentORM.task_id == task_id,
+        )
+        .order_by(OpeningTaskCommentORM.created_at.asc(), OpeningTaskCommentORM.id.asc())
+        .all()
+    )
+
+    return jsonify({
+        "items": [
+            _serialize_task_comment(comment)
+            for comment in comments
+        ],
+    }), 200
+
+
+@openings_bp.route("/<int:opening_id>/tasks/<int:task_id>/comments", methods=["POST"])
+@jwt_required()
+def create_task_comment(opening_id: int, task_id: int):
+    denied = _require_openings_read()
+    if denied:
+        return denied
+
+    opening = db.session.get(OpeningORM, opening_id)
+
+    if not opening:
+        return jsonify({
+            "error": "Not Found",
+            "detail": "Apertura no encontrada.",
+        }), 404
+
+    task = db.session.get(OpeningTaskORM, task_id)
+
+    if not task or task.opening_id != opening_id:
+        return jsonify({
+            "error": "Not Found",
+            "detail": "Tarea no encontrada para esta apertura.",
+        }), 404
+
+    data = request.get_json(silent=True) or {}
+    comment_text = str(data.get("comment") or "").strip()
+
+    if not comment_text:
+        return jsonify({
+            "error": "Bad Request",
+            "detail": "El comentario es obligatorio.",
+        }), 400
+
+    comment = OpeningTaskCommentORM(
+        opening_id=opening_id,
+        task_id=task_id,
+        comment=comment_text,
+        is_system_event=bool(data.get("is_system_event") or False),
+        created_by=_current_user_id(),
+    )
+
+    db.session.add(comment)
+    db.session.flush()
+
+    serialized_comment = _serialize_task_comment(comment)
+
+    _audit_opening(
+        opening_id,
+        OpeningAuditAction.TASK_COMMENT_CREATED,
+        entity_type="TASK_COMMENT",
+        entity_id=comment.id,
+        new_value_json=serialized_comment,
+        metadata_json={
+            "task_id": task_id,
+        },
+    )
+
+    db.session.commit()
+
+    return jsonify({
+        "message": "Comentario agregado.",
+        "item": serialized_comment,
+    }), 201
