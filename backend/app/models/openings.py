@@ -108,6 +108,7 @@ class OpeningAuditAction:
     TASK_OWNER_CHANGED = "TASK_OWNER_CHANGED"
     TASK_DEPENDENCY_CREATED = "TASK_DEPENDENCY_CREATED"
     TASK_DEPENDENCY_DELETED = "TASK_DEPENDENCY_DELETED"
+    TASK_COMMENT_CREATED = "TASK_COMMENT_CREATED"
     DOCUMENT_LINKED = "DOCUMENT_LINKED"
     DOCUMENT_UNLINKED = "DOCUMENT_UNLINKED"
 
@@ -123,6 +124,7 @@ class OpeningAuditAction:
         TASK_OWNER_CHANGED,
         TASK_DEPENDENCY_CREATED,
         TASK_DEPENDENCY_DELETED,
+        TASK_COMMENT_CREATED,
         DOCUMENT_LINKED,
         DOCUMENT_UNLINKED,
     )
@@ -452,6 +454,13 @@ class OpeningTaskORM(db.Model):
         cascade="all, delete-orphan",
         lazy="dynamic",
     )
+    
+    comments = db.relationship(
+        "OpeningTaskCommentORM",
+        back_populates="task",
+        cascade="all, delete-orphan",
+        lazy="dynamic",
+    )    
 
     __table_args__ = (
         db.Index("idx_opening_tasks_opening_phase_order", "opening_id", "phase_id", "sort_order"),
@@ -532,6 +541,60 @@ class OpeningTaskDependencyORM(db.Model):
             f"depends_on_task_id={self.depends_on_task_id}>"
         )
 
+class OpeningTaskCommentORM(db.Model):
+    __tablename__ = "opening_task_comments"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    opening_id = db.Column(
+        db.Integer,
+        db.ForeignKey("openings.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    task_id = db.Column(
+        db.Integer,
+        db.ForeignKey("opening_tasks.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    comment = db.Column(db.Text, nullable=False)
+
+    is_system_event = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+        index=True,
+    )
+
+    created_by = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        index=True,
+    )
+
+    opening = db.relationship("OpeningORM")
+    task = db.relationship("OpeningTaskORM", back_populates="comments")
+    creator = db.relationship("UserORM", foreign_keys=[created_by])
+
+    __table_args__ = (
+        db.Index("idx_opening_task_comments_task_created", "task_id", "created_at"),
+        db.Index("idx_opening_task_comments_opening_created", "opening_id", "created_at"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<OpeningTaskComment task_id={self.task_id} created_by={self.created_by}>"
 
 class OpeningAuditLogORM(db.Model):
     __tablename__ = "opening_audit_logs"

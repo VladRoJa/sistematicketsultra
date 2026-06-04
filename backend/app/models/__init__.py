@@ -67,6 +67,7 @@ from .openings import (
     OpeningPhaseORM,
     OpeningPhaseStatus,
     OpeningStatus,
+    OpeningTaskCommentORM,
     OpeningTaskDependencyORM,
     OpeningTaskORM,
     OpeningTaskPriority,
@@ -136,4 +137,5 @@ __all__ = [
     "OpeningTaskORM",
     "OpeningTaskPriority",
     "OpeningTaskStatus",
+    "OpeningTaskCommentORM",
 ]
