@@ -1271,3 +1271,78 @@ textarea:focus {
     linear-gradient(180deg, rgba(229, 69, 37, 0.08), rgba(229, 69, 37, 0.02)),
     #f9fafb;
 }
+
+.gantt-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.gantt-actions .mini-action.active {
+  color: #ffffff;
+  background: #111827;
+}
+
+.phase-row-actions {
+  margin-top: 8px;
+}
+
+.phase-toggle {
+  padding: 6px 10px;
+  border-radius: 999px;
+  color: #e54525;
+  background: rgba(229, 69, 37, 0.10);
+  font-size: 11px;
+  font-weight: 950;
+}
+
+.phase-toggle:hover:not(:disabled) {
+  background: rgba(229, 69, 37, 0.16);
+}
+
+.gantt-collapsed-row .gantt-row-label {
+  background: #f8fafc;
+}
+
+.collapsed-label {
+  display: grid;
+  gap: 3px;
+}
+
+.collapsed-label span {
+  color: #6b7280;
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.collapsed-label strong {
+  color: #111827;
+  font-size: 12px;
+}
+
+.collapsed-cell {
+  height: 30px;
+  background:
+    repeating-linear-gradient(
+      45deg,
+      #f8fafc,
+      #f8fafc 6px,
+      #f1f5f9 6px,
+      #f1f5f9 12px
+    );
+}
+
+.gantt-collapsed-row .today-cell::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  background: rgba(229, 69, 37, 0.45);
+  transform: translateX(-50%);
+}

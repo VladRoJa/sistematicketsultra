@@ -355,6 +355,34 @@
             >
               Ir a hoy
             </button>
+
+            <div class="gantt-actions">
+              <button
+                type="button"
+                class="mini-action"
+                (click)="expandAllGanttPhases()"
+              >
+                Expandir fases
+              </button>
+
+              <button
+                type="button"
+                class="mini-action"
+                (click)="collapseAllGanttPhases()"
+              >
+                Contraer fases
+              </button>
+
+              <button
+                type="button"
+                class="mini-action"
+                [class.active]="hideCompletedTasksInGantt"
+                (click)="toggleCompletedTasksInGantt()"
+              >
+                {{ hideCompletedTasksInGantt ? 'Mostrar completadas' : 'Ocultar completadas' }}
+              </button>
+            </div>            
+
             <div class="gantt-legend">
               <span><i class="legend-phase"></i> Fase</span>
               <span><i class="legend-task"></i> Tarea</span>
@@ -385,15 +413,28 @@
                 <ng-container *ngFor="let phase of getVisiblePhases(); trackBy: trackByPhaseId">
                   <tr class="gantt-phase-row">
                     <th class="gantt-row-label">
-                      <div class="gantt-label-title">
-                        <strong>{{ phase.name }}</strong>
-                        <span>{{ getPhaseProgress(phase) }}%</span>
-                      </div>
+                    <div class="gantt-label-title">
+                      <strong>{{ phase.name }}</strong>
+                      <span>{{ getPhaseProgress(phase) }}%</span>
+                    </div>
 
-                      <small>
-                        {{ getTasksForPhase(phase.id).length }} tareas ·
-                        {{ getStatusLabel(phase.status) }}
-                      </small>
+                    <div class="phase-row-actions">
+                      <button
+                        type="button"
+                        class="phase-toggle"
+                        (click)="toggleGanttPhase(phase); $event.stopPropagation()"
+                      >
+                        {{ getGanttPhaseToggleLabel(phase) }}
+                      </button>
+                    </div>
+
+                    <small>
+                      {{ getTasksForPhase(phase.id).length }} tareas ·
+                      {{ getStatusLabel(phase.status) }}
+                      <ng-container *ngIf="getHiddenCompletedTasksForPhaseCount(phase) > 0">
+                        · {{ getHiddenCompletedTasksForPhaseCount(phase) }} completadas ocultas
+                      </ng-container>
+                    </small>
                     </th>
 
                     <td
@@ -412,7 +453,7 @@
 
                   <tr
                     class="gantt-task-row"
-                    *ngFor="let task of getTasksForPhase(phase.id); trackBy: trackByTaskId"
+                    *ngFor="let task of getGanttTasksForPhase(phase); trackBy: trackByTaskId"
                     [class.selected-task-row]="selectedTask?.id === task.id"
                   >
                     <th class="gantt-row-label task-label" (click)="selectTask(task)">
@@ -450,6 +491,21 @@
                         {{ getGanttTaskLabelForCell(task, day) }}
                       </span>
                     </td>
+                  </tr>
+                  <tr
+                    class="gantt-collapsed-row"
+                    *ngIf="isGanttPhaseCollapsed(phase)"
+                  >
+                    <th class="gantt-row-label collapsed-label">
+                      <span>Fase contraída</span>
+                      <strong>{{ getTasksForPhase(phase.id).length }} tareas ocultas</strong>
+                    </th>
+
+                    <td
+                      class="gantt-cell collapsed-cell"
+                      *ngFor="let day of getGanttDays()"
+                      [class.today-cell]="isGanttToday(day)"
+                    ></td>
                   </tr>
                 </ng-container>
               </tbody>
