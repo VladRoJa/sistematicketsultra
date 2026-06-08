@@ -47,7 +47,11 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
 
   selectedTask: OpeningTask | null = null;
   selectedPhaseId: number | 'ALL' = 'ALL';
-  activeView: OpeningDetailView = 'DASHBOARD';
+  activeView: OpeningDetailView = 'GANTT';
+  hideCompletedTasksInGantt = true;
+
+  private collapsedGanttPhaseIds = new Set<number>();
+  private hasInitializedGanttCollapse = false;
 
   loading = false;
   savingTask = false;
@@ -139,6 +143,8 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
         this.phases = phasesResponse.items || [];
         this.tasks = tasksResponse.items || [];
         this.dependencies = dependenciesResponse.items || [];
+        
+        this.initializeGanttCollapsedPhases();
 
         if (this.selectedTask) {
           const refreshedTask = this.tasks.find((task) => task.id === this.selectedTask?.id);
@@ -1006,6 +1012,81 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
     const day = String(date.getDate()).padStart(2, '0');
 
     return `${year}-${month}-${day}`;
+  }
+
+  isGanttPhaseCollapsed(phase: OpeningPhase): boolean {
+    return this.collapsedGanttPhaseIds.has(phase.id);
+  }
+
+  toggleGanttPhase(phase: OpeningPhase): void {
+    if (this.collapsedGanttPhaseIds.has(phase.id)) {
+      this.collapsedGanttPhaseIds.delete(phase.id);
+      return;
+    }
+
+    this.collapsedGanttPhaseIds.add(phase.id);
+  }
+
+  expandAllGanttPhases(): void {
+    this.collapsedGanttPhaseIds.clear();
+  }
+
+  collapseAllGanttPhases(): void {
+    this.collapsedGanttPhaseIds = new Set(
+      this.getVisiblePhases().map((phase) => phase.id),
+    );
+  }
+
+  toggleCompletedTasksInGantt(): void {
+    this.hideCompletedTasksInGantt = !this.hideCompletedTasksInGantt;
+  }
+
+  getGanttTasksForPhase(phase: OpeningPhase): OpeningTask[] {
+    if (this.isGanttPhaseCollapsed(phase)) {
+      return [];
+    }
+
+    const tasks = this.getTasksForPhase(phase.id);
+
+    if (!this.hideCompletedTasksInGantt) {
+      return tasks;
+    }
+
+    return tasks.filter((task) => task.status !== 'COMPLETADA');
+  }
+
+  getCompletedTasksForPhaseCount(phase: OpeningPhase): number {
+    return this.getTasksForPhase(phase.id)
+      .filter((task) => task.status === 'COMPLETADA')
+      .length;
+  }
+
+  getHiddenCompletedTasksForPhaseCount(phase: OpeningPhase): number {
+    if (!this.hideCompletedTasksInGantt) {
+      return 0;
+    }
+
+    return this.getCompletedTasksForPhaseCount(phase);
+  }
+
+  getGanttPhaseVisibleTasksCount(phase: OpeningPhase): number {
+    return this.getGanttTasksForPhase(phase).length;
+  }
+
+  getGanttPhaseToggleLabel(phase: OpeningPhase): string {
+    return this.isGanttPhaseCollapsed(phase) ? 'Expandir' : 'Contraer';
+  }
+
+  private initializeGanttCollapsedPhases(): void {
+    if (this.hasInitializedGanttCollapse) {
+      return;
+    }
+
+    this.collapsedGanttPhaseIds = new Set(
+      this.getVisiblePhases().map((phase) => phase.id),
+    );
+
+    this.hasInitializedGanttCollapse = true;
   }
 
   trackByPhaseId(_index: number, phase: OpeningPhase): number {
