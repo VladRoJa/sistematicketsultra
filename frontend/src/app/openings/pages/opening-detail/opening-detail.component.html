@@ -1,0 +1,604 @@
+<!-- frontend\src\app\openings\pages\opening-detail\opening-detail.component.html -->
+
+
+<section class="opening-detail-page">
+  <div class="alert success" *ngIf="successMessage">
+    {{ successMessage }}
+  </div>
+
+  <div class="alert error" *ngIf="errorMessage">
+    {{ errorMessage }}
+  </div>
+
+  <section class="loading-state" *ngIf="loading">
+    Cargando centro de control...
+  </section>
+
+  <ng-container *ngIf="!loading && opening">
+    <header class="opening-hero">
+      <div class="hero-left">
+        <button type="button" class="back-action" (click)="goBack()">
+          ← Aperturas
+        </button>
+
+        <div class="hero-main">
+          <div class="opening-avatar">
+            {{ getOpeningInitial() }}
+          </div>
+
+          <div>
+            <p class="eyebrow">Centro de control · {{ opening.opening_key }}</p>
+            <h1>{{ opening.name }}</h1>
+            <p class="hero-subtitle">
+              {{ getOpeningLocation() }} · {{ getOwnerLabel() }}
+            </p>
+
+            <div class="hero-badges">
+              <span
+                class="status-badge"
+                [attr.data-tone]="getStatusTone(opening.status)"
+              >
+                {{ getOpeningStatusLabel() }}
+              </span>
+
+              <span
+                class="days-pill"
+                [attr.data-tone]="getDaysRemainingTone()"
+              >
+                {{ getDaysRemainingLabel() }}
+              </span>
+
+              <span class="budget-pill">
+                {{ getMoneyLabel(opening.budget_authorized_total, opening.budget_currency_code) }}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="hero-actions">
+        <button type="button" class="secondary-action" (click)="loadDashboard()">
+          Actualizar
+        </button>
+
+        <button type="button" class="primary-action" (click)="openCreateTaskPanel()">
+          Nueva tarea
+        </button>
+      </div>
+    </header>
+
+    <section class="kpi-grid">
+      <article class="kpi-card main-kpi">
+        <span>Avance general</span>
+        <strong>{{ getGeneralProgress() }}%</strong>
+
+        <div class="progress-track">
+          <div class="progress-fill" [style.width.%]="getGeneralProgress()"></div>
+        </div>
+
+        <small>{{ getCompletedTasksCount() }} de {{ tasks.length }} tareas completadas</small>
+      </article>
+
+      <article class="kpi-card">
+        <span>Tareas activas</span>
+        <strong>{{ getActiveTasksCount() }}</strong>
+        <small>En seguimiento operativo</small>
+      </article>
+
+      <article class="kpi-card danger-kpi">
+        <span>Bloqueadas</span>
+        <strong>{{ getBlockedTasksCount() }}</strong>
+        <small>Requieren desbloqueo</small>
+      </article>
+
+      <article class="kpi-card warning-kpi">
+        <span>En riesgo</span>
+        <strong>{{ getAtRiskTasksCount() }}</strong>
+        <small>Atrasadas o por vencer</small>
+      </article>
+
+      <article class="kpi-card">
+        <span>Fases</span>
+        <strong>{{ phases.length }}</strong>
+        <small>Estructura de apertura</small>
+      </article>
+    </section>
+
+    <section class="create-task-panel" *ngIf="isCreateTaskPanelOpen">
+      <div class="panel-heading">
+        <div>
+          <p class="eyebrow">Alta rápida</p>
+          <h2>Nueva tarea operativa</h2>
+          <p>
+            Crea trabajo accionable con fase, prioridad, fecha y requisitos documentales o de pago.
+          </p>
+        </div>
+
+        <button type="button" class="ghost-action" (click)="closeCreateTaskPanel()">
+          Cerrar
+        </button>
+      </div>
+
+      <div class="task-form-grid">
+        <div class="field">
+          <label for="task-phase">Fase</label>
+          <select id="task-phase" [(ngModel)]="taskForm.phase_id">
+            <option [ngValue]="null">Sin fase</option>
+            <option
+              *ngFor="let phase of getVisiblePhases(); trackBy: trackByPhaseId"
+              [ngValue]="phase.id"
+            >
+              {{ phase.name }}
+            </option>
+          </select>
+        </div>
+
+        <div class="field field-wide">
+          <label for="task-title">Título *</label>
+          <input
+            id="task-title"
+            type="text"
+            [(ngModel)]="taskForm.title"
+            placeholder="Ej. Validar infraestructura de red y control de acceso"
+          />
+        </div>
+
+        <div class="field">
+          <label for="task-status">Estado</label>
+          <select id="task-status" [(ngModel)]="taskForm.status">
+            <option *ngFor="let status of taskStatusOptions" [ngValue]="status">
+              {{ getStatusLabel(status) }}
+            </option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="task-priority">Prioridad</label>
+          <select id="task-priority" [(ngModel)]="taskForm.priority">
+            <option *ngFor="let priority of taskPriorityOptions" [ngValue]="priority">
+              {{ getPriorityLabel(priority) }}
+            </option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="task-start">Inicio planeado</label>
+          <input
+            id="task-start"
+            type="date"
+            [(ngModel)]="taskForm.planned_start_date"
+          />
+        </div>
+
+        <div class="field">
+          <label for="task-due">Fecha compromiso</label>
+          <input
+            id="task-due"
+            type="date"
+            [(ngModel)]="taskForm.planned_due_date"
+          />
+        </div>
+
+        <div class="field">
+          <label for="task-progress">Avance %</label>
+          <input
+            id="task-progress"
+            type="number"
+            min="0"
+            max="100"
+            [(ngModel)]="taskForm.progress_percent"
+          />
+        </div>
+
+        <div class="field">
+          <label for="task-order">Orden</label>
+          <input
+            id="task-order"
+            type="number"
+            min="0"
+            [(ngModel)]="taskForm.sort_order"
+          />
+        </div>
+
+        <div class="field field-wide">
+          <label for="task-description">Descripción</label>
+          <textarea
+            id="task-description"
+            rows="3"
+            [(ngModel)]="taskForm.description"
+            placeholder="Contexto, entregable esperado o detalle operativo"
+          ></textarea>
+        </div>
+
+        <label class="check-card">
+          <input type="checkbox" [(ngModel)]="taskForm.requires_document" />
+          <span>
+            <strong>Requiere documento</strong>
+            <small>Plano, permiso, evidencia, contrato o checklist.</small>
+          </span>
+        </label>
+
+        <label class="check-card">
+          <input type="checkbox" [(ngModel)]="taskForm.requires_payment" />
+          <span>
+            <strong>Requiere pago</strong>
+            <small>Se relacionará con presupuesto/partida en fases futuras.</small>
+          </span>
+        </label>
+      </div>
+
+      <div class="panel-actions">
+        <button type="button" class="secondary-action" (click)="closeCreateTaskPanel()">
+          Cancelar
+        </button>
+
+        <button
+          type="button"
+          class="primary-action"
+          (click)="createTask()"
+          [disabled]="!canCreateTask()"
+        >
+          Crear tarea
+        </button>
+      </div>
+    </section>
+
+    <main class="control-layout">
+      <section class="main-column">
+        <section class="timeline-card">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Timeline operativo</p>
+              <h2>Fases de apertura</h2>
+            </div>
+
+            <div class="phase-filter">
+              <button
+                type="button"
+                [class.active]="selectedPhaseId === 'ALL'"
+                (click)="setPhaseFilter('ALL')"
+              >
+                Todas
+              </button>
+            </div>
+          </div>
+
+          <div class="phase-timeline">
+            <article
+              class="phase-node"
+              *ngFor="let phase of getVisiblePhases(); trackBy: trackByPhaseId"
+              [class.active]="selectedPhaseId === phase.id"
+              (click)="setPhaseFilter(phase.id)"
+            >
+              <div class="phase-dot"></div>
+
+              <div class="phase-content">
+                <div class="phase-title">
+                  <h3>{{ phase.name }}</h3>
+                  <span
+                    class="status-badge"
+                    [attr.data-tone]="getStatusTone(phase.status)"
+                  >
+                    {{ getStatusLabel(phase.status) }}
+                  </span>
+                </div>
+
+                <p>
+                  {{ getPhaseCompletedTasks(phase) }} /
+                  {{ getTasksForPhase(phase.id).length }} tareas completadas
+                </p>
+
+                <div class="progress-track">
+                  <div class="progress-fill" [style.width.%]="getPhaseProgress(phase)"></div>
+                </div>
+
+                <small>
+                  {{ getDateLabel(phase.planned_start_date) }} →
+                  {{ getDateLabel(phase.planned_end_date) }}
+                </small>
+
+                <button
+                  type="button"
+                  class="mini-action"
+                  (click)="openCreateTaskPanel(phase); $event.stopPropagation()"
+                >
+                  + tarea
+                </button>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="tasks-card">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Trabajo accionable</p>
+              <h2>Tareas por fase</h2>
+            </div>
+
+            <span class="count-pill">
+              {{ getVisibleTasks().length }} tareas visibles
+            </span>
+          </div>
+
+          <div class="tasks-groups">
+            <article
+              class="phase-task-group"
+              *ngFor="let phase of getVisiblePhases(); trackBy: trackByPhaseId"
+              [hidden]="selectedPhaseId !== 'ALL' && selectedPhaseId !== phase.id"
+            >
+              <div class="group-header">
+                <div>
+                  <h3>{{ phase.name }}</h3>
+                  <p>{{ getTasksForPhase(phase.id).length }} tareas</p>
+                </div>
+              </div>
+
+              <div class="task-list" *ngIf="getTasksForPhase(phase.id).length > 0">
+                <article
+                  class="task-card"
+                  *ngFor="let task of getTasksForPhase(phase.id); trackBy: trackByTaskId"
+                  [class.selected]="selectedTask?.id === task.id"
+                  (click)="selectTask(task)"
+                >
+                  <div class="task-card-main">
+                    <div>
+                      <h4>{{ task.title }}</h4>
+                      <p>{{ task.description || 'Sin descripción' }}</p>
+                    </div>
+
+                    <span
+                      class="priority-badge"
+                      [attr.data-tone]="getPriorityTone(task.priority)"
+                    >
+                      {{ getPriorityLabel(task.priority) }}
+                    </span>
+                  </div>
+
+                  <div class="task-card-footer">
+                    <span
+                      class="status-badge"
+                      [attr.data-tone]="getStatusTone(task.status)"
+                    >
+                      {{ getStatusLabel(task.status) }}
+                    </span>
+
+                    <span
+                      class="due-pill"
+                      [attr.data-tone]="getTaskDueTone(task)"
+                    >
+                      {{ getDateLabel(task.planned_due_date, 'Sin compromiso') }}
+                    </span>
+
+                    <span class="progress-pill">
+                      {{ task.progress_percent || 0 }}%
+                    </span>
+                  </div>
+                </article>
+              </div>
+
+              <div class="empty-group" *ngIf="getTasksForPhase(phase.id).length === 0">
+                Sin tareas en esta fase.
+              </div>
+            </article>
+
+            <article
+              class="phase-task-group"
+              *ngIf="selectedPhaseId === 'ALL' && getTasksWithoutPhase().length > 0"
+            >
+              <div class="group-header">
+                <div>
+                  <h3>Sin fase</h3>
+                  <p>{{ getTasksWithoutPhase().length }} tareas</p>
+                </div>
+              </div>
+
+              <div class="task-list">
+                <article
+                  class="task-card"
+                  *ngFor="let task of getTasksWithoutPhase(); trackBy: trackByTaskId"
+                  [class.selected]="selectedTask?.id === task.id"
+                  (click)="selectTask(task)"
+                >
+                  <div class="task-card-main">
+                    <div>
+                      <h4>{{ task.title }}</h4>
+                      <p>{{ task.description || 'Sin descripción' }}</p>
+                    </div>
+
+                    <span
+                      class="priority-badge"
+                      [attr.data-tone]="getPriorityTone(task.priority)"
+                    >
+                      {{ getPriorityLabel(task.priority) }}
+                    </span>
+                  </div>
+
+                  <div class="task-card-footer">
+                    <span
+                      class="status-badge"
+                      [attr.data-tone]="getStatusTone(task.status)"
+                    >
+                      {{ getStatusLabel(task.status) }}
+                    </span>
+
+                    <span
+                      class="due-pill"
+                      [attr.data-tone]="getTaskDueTone(task)"
+                    >
+                      {{ getDateLabel(task.planned_due_date, 'Sin compromiso') }}
+                    </span>
+
+                    <span class="progress-pill">
+                      {{ task.progress_percent || 0 }}%
+                    </span>
+                  </div>
+                </article>
+              </div>
+            </article>
+          </div>
+        </section>
+      </section>
+
+      <aside class="task-panel" [class.open]="isTaskPanelOpen">
+        <ng-container *ngIf="selectedTask; else noTaskSelected">
+          <div class="task-panel-header">
+            <div>
+              <p class="eyebrow">Detalle de tarea</p>
+              <h2>{{ selectedTask.title }}</h2>
+              <p>{{ getPhaseNameById(selectedTask.phase_id) }}</p>
+            </div>
+
+            <button type="button" class="ghost-action" (click)="closeTaskPanel()">
+              Cerrar
+            </button>
+          </div>
+
+          <div class="panel-status-row">
+            <span
+              class="status-badge"
+              [attr.data-tone]="getStatusTone(selectedTask.status)"
+            >
+              {{ getStatusLabel(selectedTask.status) }}
+            </span>
+
+            <span
+              class="priority-badge"
+              [attr.data-tone]="getPriorityTone(selectedTask.priority)"
+            >
+              {{ getPriorityLabel(selectedTask.priority) }}
+            </span>
+          </div>
+
+          <div class="task-detail-grid">
+            <div>
+              <span>Responsable</span>
+              <strong>{{ getTaskOwnerLabel(selectedTask) }}</strong>
+            </div>
+
+            <div>
+              <span>Fecha compromiso</span>
+              <strong>{{ getDateLabel(selectedTask.planned_due_date) }}</strong>
+            </div>
+
+            <div>
+              <span>Avance</span>
+              <strong>{{ selectedTask.progress_percent || 0 }}%</strong>
+            </div>
+
+            <div>
+              <span>Completada</span>
+              <strong>{{ getDateTimeLabel(selectedTask.actual_completed_at) }}</strong>
+            </div>
+          </div>
+
+          <div class="task-description">
+            <span>Descripción</span>
+            <p>{{ selectedTask.description || 'Sin descripción capturada.' }}</p>
+          </div>
+
+          <div class="quick-actions">
+            <button
+              type="button"
+              class="secondary-action"
+              (click)="updateSelectedTaskStatus('EN_PROCESO')"
+              [disabled]="savingTask"
+            >
+              En proceso
+            </button>
+
+            <button
+              type="button"
+              class="warning-action"
+              (click)="updateSelectedTaskStatus('BLOQUEADA')"
+              [disabled]="savingTask"
+            >
+              Bloquear
+            </button>
+
+            <button
+              type="button"
+              class="success-action"
+              (click)="updateSelectedTaskStatus('COMPLETADA')"
+              [disabled]="savingTask"
+            >
+              Completar
+            </button>
+          </div>
+
+          <section class="side-section">
+            <div class="side-heading">
+              <h3>Dependencias</h3>
+              <span>{{ getTaskDependencies(selectedTask).length }}</span>
+            </div>
+
+            <div
+              class="dependency-item"
+              *ngFor="let dependency of getTaskDependencies(selectedTask); trackBy: trackByDependencyId"
+            >
+              <span>Depende de</span>
+              <strong>{{ dependency.depends_on_task?.title || dependency.depends_on_task_id }}</strong>
+              <small>{{ dependency.dependency_type }}</small>
+            </div>
+
+            <div class="empty-side" *ngIf="getTaskDependencies(selectedTask).length === 0">
+              Sin dependencias registradas.
+            </div>
+          </section>
+
+          <section class="side-section">
+            <div class="side-heading">
+              <h3>Comentarios</h3>
+              <span>{{ selectedTaskComments.length }}</span>
+            </div>
+
+            <div class="comment-box">
+              <textarea
+                rows="3"
+                [(ngModel)]="commentDraft"
+                placeholder="Agrega seguimiento, bloqueo, acuerdo o actualización..."
+              ></textarea>
+
+              <button
+                type="button"
+                class="primary-action"
+                (click)="addComment()"
+                [disabled]="!canAddComment()"
+              >
+                Agregar comentario
+              </button>
+            </div>
+
+            <div class="comments-list">
+              <article
+                class="comment-item"
+                *ngFor="let comment of selectedTaskComments; trackBy: trackByCommentId"
+              >
+                <div class="comment-meta">
+                  <strong>{{ comment.creator?.username || 'Usuario' }}</strong>
+                  <span>{{ getDateTimeLabel(comment.created_at) }}</span>
+                </div>
+
+                <p>{{ comment.comment }}</p>
+              </article>
+            </div>
+
+            <div class="empty-side" *ngIf="selectedTaskComments.length === 0">
+              Sin comentarios todavía.
+            </div>
+          </section>
+        </ng-container>
+
+        <ng-template #noTaskSelected>
+          <div class="no-task-panel">
+            <div class="empty-icon">↳</div>
+            <h3>Selecciona una tarea</h3>
+            <p>
+              Aquí verás responsable, fechas, dependencias, documentos, pagos y comentarios.
+            </p>
+          </div>
+        </ng-template>
+      </aside>
+    </main>
+  </ng-container>
+</section>
