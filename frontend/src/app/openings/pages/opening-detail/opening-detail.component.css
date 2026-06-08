@@ -966,6 +966,7 @@ textarea:focus {
   overflow-y: auto;
   max-width: 100%;
   min-width: 0;
+  max-height: calc(100vh - 260px);
   margin-top: 16px;
   border: 1px solid #e5e7eb;
   border-radius: 20px;
@@ -1345,4 +1346,51 @@ textarea:focus {
   width: 2px;
   background: rgba(229, 69, 37, 0.45);
   transform: translateX(-50%);
+}
+
+.gantt-table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.gantt-table thead th {
+  position: sticky;
+  top: 0;
+  background: #ffffff;
+}
+
+.gantt-label-header {
+  position: sticky;
+  top: 0;
+  left: 0;
+  z-index: 80;
+  background: #ffffff;
+  box-shadow:
+    1px 0 0 #e5e7eb,
+    inset 0 -1px 0 #e5e7eb;
+}
+
+.gantt-day-header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: #ffffff;
+  box-shadow: inset 0 -1px 0 #e5e7eb;
+}
+
+.today-header {
+  z-index: 45;
+}
+
+.gantt-row-label {
+  position: sticky;
+  left: 0;
+  z-index: 50;
+  background: #ffffff;
+  box-shadow: 1px 0 0 #e5e7eb;
+}
+
+.gantt-phase-row .gantt-row-label,
+.gantt-collapsed-row .gantt-row-label {
+  background: #f8fafc;
 }
