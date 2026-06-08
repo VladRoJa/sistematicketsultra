@@ -500,14 +500,27 @@ textarea:focus {
 
 .control-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 420px;
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
   align-items: start;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.control-layout.panel-open {
+  grid-template-columns: minmax(0, 1fr) 420px;
+}
+
+.control-layout.gantt-mode.panel-open {
+  grid-template-columns: minmax(0, 1fr) 360px;
 }
 
 .main-column {
   display: grid;
   gap: 16px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .phase-filter button {
@@ -676,8 +689,8 @@ textarea:focus {
   min-height: 520px;
   padding: 20px;
   border-radius: 24px;
+  min-width: 0;
 }
-
 .task-panel-header p {
   color: #6b7280;
 }
@@ -896,6 +909,9 @@ textarea:focus {
 }
 
 .gantt-card {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
   padding: 20px;
   border: 1px solid rgba(229, 231, 235, 0.95);
   border-radius: 24px;
@@ -946,11 +962,15 @@ textarea:focus {
 }
 
 .gantt-scroll {
-  overflow: auto;
+  overflow-x: auto;
+  overflow-y: auto;
+  max-width: 100%;
+  min-width: 0;
   margin-top: 16px;
   border: 1px solid #e5e7eb;
   border-radius: 20px;
   background: #f8fafc;
+  scroll-behavior: smooth;
 }
 
 .gantt-table {
@@ -970,9 +990,9 @@ textarea:focus {
   position: sticky;
   left: 0;
   z-index: 3;
-  width: 290px;
-  min-width: 290px;
-  max-width: 290px;
+  width: 250px;
+  min-width: 250px;
+  max-width: 250px;
   background: #ffffff;
   box-shadow: 8px 0 18px rgba(15, 23, 42, 0.05);
 }
@@ -1230,4 +1250,24 @@ textarea:focus {
     width: 52px;
     min-width: 52px;
   }
+}
+
+.gantt-scroll {
+  scroll-behavior: smooth;
+}
+
+.today-header {
+  box-shadow: inset 0 3px 0 #e54525;
+}
+
+.gantt-cell.today-cell {
+  background:
+    linear-gradient(180deg, rgba(229, 69, 37, 0.08), rgba(229, 69, 37, 0.02)),
+    #ffffff;
+}
+
+.gantt-phase-row .gantt-cell.today-cell {
+  background:
+    linear-gradient(180deg, rgba(229, 69, 37, 0.08), rgba(229, 69, 37, 0.02)),
+    #f9fafb;
 }

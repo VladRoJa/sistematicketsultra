@@ -269,7 +269,11 @@
       </div>
     </section>
 
-    <main class="control-layout">
+          <main
+        class="control-layout"
+        [class.panel-open]="isTaskPanelOpen"
+        [class.gantt-mode]="isActiveView('GANTT')"
+      >
       <section class="main-column">
         <section class="timeline-card" *ngIf="isActiveView('DASHBOARD')">
           <div class="section-heading">
@@ -344,7 +348,13 @@
                 {{ getGanttVisibleRangeLabel() }} · click en una tarea para ver seguimiento.
               </p>
             </div>
-
+            <button
+              type="button"
+              class="mini-action"
+              (click)="scheduleGanttScrollToToday()"
+            >
+              Ir a hoy
+            </button>
             <div class="gantt-legend">
               <span><i class="legend-phase"></i> Fase</span>
               <span><i class="legend-task"></i> Tarea</span>
@@ -352,17 +362,18 @@
             </div>
           </div>
 
-          <div class="gantt-scroll">
+          <div class="gantt-scroll" #ganttScroll>
             <table class="gantt-table">
               <thead>
                 <tr>
                   <th class="gantt-label-header">Elemento</th>
 
-                  <th
-                    class="gantt-day-header"
-                    *ngFor="let day of getGanttDays()"
-                    [class.today-header]="isGanttToday(day)"
-                  >
+                    <th
+                      class="gantt-day-header"
+                      *ngFor="let day of getGanttDays()"
+                      [class.today-header]="isGanttToday(day)"
+                      [attr.data-gantt-day]="day"
+                    >
                     <span>{{ getGanttWeekday(day) }}</span>
                     <strong>{{ getGanttDayNumber(day) }}</strong>
                     <small>{{ getGanttMonth(day) }}</small>
@@ -590,7 +601,11 @@
         </section>
       </section>
 
-      <aside class="task-panel" [class.open]="isTaskPanelOpen">
+      <aside
+          class="task-panel"
+          [class.open]="isTaskPanelOpen"
+          *ngIf="isTaskPanelOpen"
+        >
         <ng-container *ngIf="selectedTask; else noTaskSelected">
           <div class="task-panel-header">
             <div>

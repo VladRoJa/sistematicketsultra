@@ -2,7 +2,7 @@
 
 
 import { CommonModule } from '@angular/common';
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { forkJoin, Subscription } from 'rxjs';
@@ -32,8 +32,13 @@ type GanttCellState = 'empty' | 'single' | 'start' | 'middle' | 'end';
   styleUrls: ['./opening-detail.component.css'],
 })
 export class OpeningDetailComponent implements OnInit, OnDestroy {
+  @ViewChild('ganttScroll') ganttScroll?: ElementRef<HTMLElement>;
+
   openingId = 0;
 
+  private ganttScrollTimeoutId: number | null = null;
+
+  private ganttScrollAttempt = 0;
   opening: Opening | null = null;
   phases: OpeningPhase[] = [];
   tasks: OpeningTask[] = [];
@@ -109,6 +114,10 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.routeSub?.unsubscribe();
+
+    if (this.ganttScrollTimeoutId !== null) {
+      window.clearTimeout(this.ganttScrollTimeoutId);
+    }
   }
 
   loadDashboard(): void {
@@ -137,6 +146,10 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
         }
 
         this.loading = false;
+
+        if (this.isActiveView('GANTT')) {
+          this.scheduleGanttScrollToToday();
+        }
       },
       error: (error) => {
         this.loading = false;
@@ -626,6 +639,10 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
 
   setActiveView(view: OpeningDetailView): void {
     this.activeView = view;
+
+    if (view === 'GANTT') {
+      this.scheduleGanttScrollToToday();
+    }
   }
 
   isActiveView(view: OpeningDetailView): boolean {
@@ -645,6 +662,65 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
     }
 
     return days;
+  }
+
+  scheduleGanttScrollToToday(): void {
+    if (this.ganttScrollTimeoutId !== null) {
+      window.clearTimeout(this.ganttScrollTimeoutId);
+    }
+
+    this.ganttScrollAttempt = 0;
+    this.tryScrollGanttToToday();
+  }
+
+  private tryScrollGanttToToday(): void {
+    this.ganttScrollTimeoutId = window.setTimeout(() => {
+      const didScroll = this.scrollGanttToToday();
+
+      if (!didScroll && this.ganttScrollAttempt < 12) {
+        this.ganttScrollAttempt += 1;
+        this.tryScrollGanttToToday();
+      }
+    }, 120);
+  }
+
+  private scrollGanttToToday(): boolean {
+    const scrollElement = this.ganttScroll?.nativeElement;
+
+    if (!scrollElement) {
+      return false;
+    }
+
+    const todayIso = this.toIsoDate(new Date());
+    const todayHeader = scrollElement.querySelector<HTMLElement>(
+      `[data-gantt-day="${todayIso}"]`,
+    );
+
+    const labelHeader = scrollElement.querySelector<HTMLElement>('.gantt-label-header');
+
+    if (!todayHeader) {
+      return false;
+    }
+
+    if (scrollElement.scrollWidth <= scrollElement.clientWidth) {
+      return false;
+    }
+
+    const labelWidth = labelHeader?.offsetWidth || 260;
+    const dayWidth = todayHeader.offsetWidth || 58;
+    const contextDaysBeforeToday = 4;
+
+    const targetLeft = Math.max(
+      todayHeader.offsetLeft - labelWidth - dayWidth * contextDaysBeforeToday,
+      0,
+    );
+
+    scrollElement.scrollTo({
+      left: targetLeft,
+      behavior: 'smooth',
+    });
+
+    return true;
   }
 
   getGanttDayNumber(dayIso: string): string {
@@ -819,7 +895,7 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
       : detectedEnd;
 
     const maxAllowedEnd = new Date(start);
-    maxAllowedEnd.setDate(maxAllowedEnd.getDate() + 56);
+    maxAllowedEnd.setDate(maxAllowedEnd.getDate() + 120);
 
     if (end.getTime() > maxAllowedEnd.getTime()) {
       return maxAllowedEnd;
