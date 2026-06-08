@@ -1,0 +1,384 @@
+<!-- frontend/src/app/openings/pages/openings-list/openings-list.component.html -->
+
+
+<section class="openings-page">
+  <header class="page-hero">
+    <div class="hero-content">
+      <div class="hero-kicker">
+        <span class="hero-dot"></span>
+        Suite Ultra · Centro de control
+      </div>
+
+      <h1>Aperturas</h1>
+
+      <p>
+        Coordina nuevas sucursales desde una cabina operativa: fases, responsables,
+        fechas, riesgos, presupuesto, documentos y seguimiento real.
+      </p>
+    </div>
+
+    <div class="hero-actions">
+      <button
+        type="button"
+        class="primary-action"
+        (click)="toggleCreatePanel()"
+        [disabled]="saving"
+      >
+        {{ getCreatePanelButtonLabel() }}
+      </button>
+
+      <button
+        type="button"
+        class="secondary-action"
+        (click)="loadOpenings()"
+        [disabled]="loading || saving"
+      >
+        Actualizar
+      </button>
+    </div>
+  </header>
+
+  <section class="summary-grid">
+    <article class="summary-card">
+      <span class="summary-label">Aperturas</span>
+      <strong>{{ total }}</strong>
+      <small>Total con filtros actuales</small>
+    </article>
+
+    <article class="summary-card">
+      <span class="summary-label">En curso</span>
+      <strong>{{ getTotalInProgress() }}</strong>
+      <small>Planeadas, ejecución o riesgo</small>
+    </article>
+
+    <article class="summary-card danger-card">
+      <span class="summary-label">En riesgo</span>
+      <strong>{{ getTotalAtRisk() }}</strong>
+      <small>Requieren atención</small>
+    </article>
+
+    <article class="summary-card">
+      <span class="summary-label">Abiertas</span>
+      <strong>{{ getTotalOpened() }}</strong>
+      <small>Marcadas como abiertas</small>
+    </article>
+
+    <article class="summary-card budget-card">
+      <span class="summary-label">Presupuesto</span>
+      <strong>{{ getMoneyLabel(getTotalBudget()) }}</strong>
+      <small>Suma visible de aperturas</small>
+    </article>
+  </section>
+
+  <div class="alert success" *ngIf="successMessage">
+    {{ successMessage }}
+  </div>
+
+  <div class="alert error" *ngIf="errorMessage">
+    {{ errorMessage }}
+  </div>
+
+  <section class="create-panel" *ngIf="isCreatePanelOpen">
+    <div class="panel-heading">
+      <div>
+        <p class="eyebrow">Alta de apertura</p>
+        <h2>Nueva apertura</h2>
+        <p>
+          Crea la ficha ejecutiva inicial. Las fases, tareas y seguimiento se gestionan
+          dentro del detalle de la apertura.
+        </p>
+      </div>
+
+      <button
+        type="button"
+        class="ghost-action"
+        (click)="closeCreatePanel()"
+        [disabled]="saving"
+      >
+        Cerrar
+      </button>
+    </div>
+
+    <div class="create-grid">
+      <div class="field">
+        <label for="opening-sucursal">Sucursal *</label>
+        <select id="opening-sucursal" [(ngModel)]="form.sucursal_id">
+          <option [ngValue]="null">Selecciona sucursal</option>
+          <option
+            *ngFor="let sucursal of sucursales"
+            [ngValue]="sucursal.sucursal_id"
+          >
+            {{ sucursal.sucursal }}
+          </option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="opening-key">Clave *</label>
+        <input
+          id="opening-key"
+          type="text"
+          [(ngModel)]="form.opening_key"
+          placeholder="Ej. EGADE"
+        />
+        <small>Clave corta para documentos, tareas y búsqueda.</small>
+      </div>
+
+      <div class="field">
+        <label for="opening-name">Nombre *</label>
+        <input
+          id="opening-name"
+          type="text"
+          [(ngModel)]="form.name"
+          placeholder="Ej. Apertura Egade"
+        />
+      </div>
+
+      <div class="field">
+        <label for="opening-status">Estado</label>
+        <select id="opening-status" [(ngModel)]="form.status">
+          <option
+            *ngFor="let status of createStatusOptions"
+            [ngValue]="status"
+          >
+            {{ getStatusLabel(status) }}
+          </option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="opening-start">Inicio planeado</label>
+        <input
+          id="opening-start"
+          type="date"
+          [(ngModel)]="form.planned_start_date"
+        />
+      </div>
+
+      <div class="field">
+        <label for="opening-target">Fecha objetivo</label>
+        <input
+          id="opening-target"
+          type="date"
+          [(ngModel)]="form.target_opening_date"
+        />
+      </div>
+
+      <div class="field">
+        <label for="opening-budget">Presupuesto autorizado</label>
+        <input
+          id="opening-budget"
+          type="number"
+          min="0"
+          [(ngModel)]="form.budget_authorized_total"
+          placeholder="15000000"
+        />
+      </div>
+
+      <div class="field">
+        <label for="opening-currency">Moneda</label>
+        <select id="opening-currency" [(ngModel)]="form.budget_currency_code">
+          <option value="MXN">MXN</option>
+          <option value="USD">USD</option>
+        </select>
+      </div>
+
+      <div class="field field-wide">
+        <label for="opening-description">Descripción</label>
+        <textarea
+          id="opening-description"
+          rows="3"
+          [(ngModel)]="form.description"
+          placeholder="Contexto ejecutivo de la apertura"
+        ></textarea>
+      </div>
+    </div>
+
+    <div class="create-actions">
+      <button
+        type="button"
+        class="secondary-action"
+        (click)="closeCreatePanel()"
+        [disabled]="saving"
+      >
+        Cancelar
+      </button>
+
+      <button
+        type="button"
+        class="primary-action"
+        (click)="createOpening()"
+        [disabled]="!canCreateOpening()"
+      >
+        Crear apertura
+      </button>
+    </div>
+  </section>
+
+  <section class="toolbar-card">
+    <div class="toolbar-heading">
+      <p class="eyebrow">Portafolio de aperturas</p>
+      <h2>Control operativo</h2>
+    </div>
+
+    <div class="toolbar-filters">
+      <div class="field search-field">
+        <label for="opening-search">Buscar</label>
+        <input
+          id="opening-search"
+          type="text"
+          [(ngModel)]="filters.q"
+          placeholder="Egade, Serranía, sucursal, descripción"
+        />
+      </div>
+
+      <div class="field">
+        <label for="opening-filter-status">Estado</label>
+        <select id="opening-filter-status" [(ngModel)]="filters.status">
+          <option
+            *ngFor="let status of statusOptions"
+            [ngValue]="status"
+          >
+            {{ getStatusLabel(status) }}
+          </option>
+        </select>
+      </div>
+
+      <div class="filter-actions">
+        <button
+          type="button"
+          class="primary-action"
+          (click)="applyFilters()"
+          [disabled]="loading"
+        >
+          Aplicar
+        </button>
+
+        <button
+          type="button"
+          class="secondary-action"
+          (click)="clearFilters()"
+          [disabled]="loading"
+        >
+          Limpiar
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <section class="openings-shell">
+    <div class="list-header">
+      <div>
+        <p class="eyebrow">Aperturas registradas</p>
+        <h2>{{ total }} resultados</h2>
+      </div>
+
+      <span class="page-pill">
+        Página {{ page }} de {{ totalPages || 1 }}
+      </span>
+    </div>
+
+    <div class="loading-state" *ngIf="loading">
+      Cargando aperturas...
+    </div>
+
+    <div class="empty-state" *ngIf="!loading && openings.length === 0">
+      <div class="empty-icon">⌁</div>
+      <h3>No hay aperturas para mostrar</h3>
+      <p>Crea la primera apertura o limpia los filtros actuales.</p>
+    </div>
+
+    <div class="openings-grid" *ngIf="!loading && openings.length > 0">
+      <article
+        class="opening-card"
+        *ngFor="let opening of openings; trackBy: trackByOpeningId"
+        (click)="goToOpening(opening)"
+      >
+        <div class="card-top">
+          <div class="opening-avatar">
+            {{ getOpeningInitial(opening) }}
+          </div>
+
+          <div class="opening-title">
+            <div class="title-row">
+              <h3>{{ opening.name }}</h3>
+              <span
+                class="status-badge"
+                [attr.data-tone]="getOpeningStatusTone(opening)"
+              >
+                {{ getStatusLabel(opening.status) }}
+              </span>
+            </div>
+
+            <p>{{ getOpeningSubtitle(opening) }}</p>
+          </div>
+        </div>
+
+        <div class="opening-main-metric">
+          <span
+            class="days-pill"
+            [attr.data-tone]="getDaysRemainingTone(opening)"
+          >
+            {{ getDaysRemainingLabel(opening) }}
+          </span>
+        </div>
+
+        <div class="opening-meta-grid">
+          <div>
+            <span>Clave</span>
+            <strong>{{ opening.opening_key }}</strong>
+          </div>
+
+          <div>
+            <span>Sucursal</span>
+            <strong>{{ getSucursalName(opening) }}</strong>
+          </div>
+
+          <div>
+            <span>Inicio</span>
+            <strong>{{ getDateLabel(opening.planned_start_date) }}</strong>
+          </div>
+
+          <div>
+            <span>Objetivo</span>
+            <strong>{{ getDateLabel(opening.target_opening_date) }}</strong>
+          </div>
+        </div>
+
+        <div class="budget-strip">
+          <span>Presupuesto autorizado</span>
+          <strong>
+            {{ getMoneyLabel(opening.budget_authorized_total, opening.budget_currency_code) }}
+          </strong>
+        </div>
+
+        <div class="card-footer">
+          <span>Ver centro de control</span>
+          <strong>→</strong>
+        </div>
+      </article>
+    </div>
+
+    <div class="pagination" *ngIf="!loading && total > 0">
+      <button
+        type="button"
+        class="secondary-action"
+        (click)="goToPreviousPage()"
+        [disabled]="!hasPrev || loading"
+      >
+        Anterior
+      </button>
+
+      <span>Página {{ page }} de {{ totalPages || 1 }}</span>
+
+      <button
+        type="button"
+        class="secondary-action"
+        (click)="goToNextPage()"
+        [disabled]="!hasNext || loading"
+      >
+        Siguiente
+      </button>
+    </div>
+  </section>
+</section>

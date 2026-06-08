@@ -149,6 +149,11 @@ export const routes: Routes = [
           import('./internal-documents/internal-documents.routes')
             .then(m => m.INTERNAL_DOCUMENTS_ROUTES),
       },
+      {
+        path: 'aperturas',
+        loadChildren: () =>
+          import('./openings/openings.routes').then((m) => m.OPENINGS_ROUTES),
+      },
     ],
   },
 

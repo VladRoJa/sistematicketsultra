@@ -57,6 +57,7 @@ export class LayoutComponent implements OnInit, AfterViewInit, OnDestroy {
   puedeVerWarehouse = false;
   puedeVerPlanning = false;
   puedeVerInternalDocuments = false;
+  puedeVerOpenings = false;
 
   usuarioLabel = '';
   reporteBugFueArrastrado = false;
@@ -127,6 +128,14 @@ ngOnInit(): void {
     path: '/planeacion/metas',
     submenu: [
       { label: 'Metas Comerciales', path: '/planeacion/metas' },
+    ],
+  };
+
+  const menuAperturas = {
+    label: 'Aperturas',
+    path: '/aperturas',
+    submenu: [
+      { label: 'Centro de control', path: '/aperturas' },
     ],
   };
 
@@ -279,17 +288,28 @@ const menuMantenimientoGerencial = [
     this.menuItems = soloTickets;
   }
 
-  if (
-    this.puedeVerTrackDiarioPorRol() &&
-    !this.menuItems.some((item) => item.label === 'Track')
-  ) {
-    this.menuItems = [
-      ...this.menuItems,
-      menuTrackDiario,
-    ];
-  }
+if (
+  this.puedeVerTrackDiarioPorRol() &&
+  !this.menuItems.some((item) => item.label === 'Track')
+) {
+  this.menuItems = [
+    ...this.menuItems,
+    menuTrackDiario,
+  ];
+}
 
-  this.habilitarWarehouseEnMenuSiAplica(menuWarehouse);
+if (
+  this.puedeVerAperturasPorRol() &&
+  !this.menuItems.some((item) => item.label === 'Aperturas')
+) {
+  this.puedeVerOpenings = true;
+  this.menuItems = [
+    ...this.menuItems,
+    menuAperturas,
+  ];
+}
+
+this.habilitarWarehouseEnMenuSiAplica(menuWarehouse);
   this.habilitarPlanningEnMenuSiAplica(menuPlanning);
   this.habilitarInternalDocumentsEnMenuSiAplica(menuNubeCorporativa);
   this.sincronizarMenuConRutaActual();
@@ -889,7 +909,18 @@ private puedeVerTrackDiarioPorRol(): boolean {
   ].includes(rol);
 }
 
+private puedeVerAperturasPorRol(): boolean {
+  const user = this.authService.getUser();
+  const rol = (user?.rol || '').toString().trim().toUpperCase();
 
+  return [
+    'ADMIN',
+    'ADMINISTRADOR',
+    'SUPER_ADMIN',
+    'SISTEMAS',
+    'APERTURAS_ADMIN',
+  ].includes(rol);
+}
 
 
   // ============================================================================
@@ -903,6 +934,7 @@ getMenuIcon(label: string): string {
     mantenimiento: 'build',
     inventario: 'inventory_2',
     warehouse: 'warehouse',
+    aperturas: 'domain_add',
     'nube corporativa': 'cloud',
     catálogos: 'category',
     catalogos: 'category',
@@ -930,6 +962,10 @@ getSubmenuIcon(label: string): string {
 
   if (normalizedLabel.includes('track')) {
     return 'monitoring';
+  }
+
+  if (normalizedLabel.includes('centro de control') || normalizedLabel.includes('aperturas')) {
+    return 'dashboard_customize';
   }
 
   if (normalizedLabel.includes('promociones') || normalizedLabel.includes('comercial')) {
@@ -996,6 +1032,10 @@ getSubmenuDescription(label: string): string {
 
   if (normalizedLabel.includes('track')) {
     return 'Consulta indicadores diarios, metas y avance por club.';
+  }
+
+  if (normalizedLabel.includes('centro de control') || normalizedLabel.includes('aperturas')) {
+    return 'Coordina fases, tareas, responsables, fechas y seguimiento de aperturas.';
   }
 
   if (normalizedLabel.includes('promociones') || normalizedLabel.includes('comercial')) {
