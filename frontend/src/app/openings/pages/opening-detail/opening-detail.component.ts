@@ -18,6 +18,9 @@ import {
 } from '../../models/opening.model';
 import { OpeningsService } from '../../services/openings.service';
 
+type OpeningDetailView = 'DASHBOARD' | 'GANTT' | 'TASKS';
+type GanttCellState = 'empty' | 'single' | 'start' | 'middle' | 'end';
+
 @Component({
   selector: 'app-opening-detail',
   standalone: true,
@@ -39,6 +42,7 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
 
   selectedTask: OpeningTask | null = null;
   selectedPhaseId: number | 'ALL' = 'ALL';
+  activeView: OpeningDetailView = 'DASHBOARD';
 
   loading = false;
   savingTask = false;
@@ -618,6 +622,314 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
     const source = this.opening?.opening_key || this.opening?.name || 'A';
 
     return source.trim().charAt(0).toUpperCase() || 'A';
+  }
+
+  setActiveView(view: OpeningDetailView): void {
+    this.activeView = view;
+  }
+
+  isActiveView(view: OpeningDetailView): boolean {
+    return this.activeView === view;
+  }
+
+  getGanttDays(): string[] {
+    const start = this.getGanttRangeStart();
+    const end = this.getGanttRangeEnd(start);
+    const days: string[] = [];
+
+    const cursor = new Date(start);
+
+    while (cursor.getTime() <= end.getTime()) {
+      days.push(this.toIsoDate(cursor));
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    return days;
+  }
+
+  getGanttDayNumber(dayIso: string): string {
+    const date = this.parseDateOnly(dayIso);
+
+    if (!date) {
+      return '';
+    }
+
+    return new Intl.DateTimeFormat('es-MX', {
+      day: '2-digit',
+      timeZone: 'America/Tijuana',
+    }).format(date);
+  }
+
+  getGanttWeekday(dayIso: string): string {
+    const date = this.parseDateOnly(dayIso);
+
+    if (!date) {
+      return '';
+    }
+
+    return new Intl.DateTimeFormat('es-MX', {
+      weekday: 'short',
+      timeZone: 'America/Tijuana',
+    }).format(date).replace('.', '');
+  }
+
+  getGanttMonth(dayIso: string): string {
+    const date = this.parseDateOnly(dayIso);
+
+    if (!date) {
+      return '';
+    }
+
+    return new Intl.DateTimeFormat('es-MX', {
+      month: 'short',
+      timeZone: 'America/Tijuana',
+    }).format(date).replace('.', '');
+  }
+
+  isGanttToday(dayIso: string): boolean {
+    return dayIso === this.toIsoDate(new Date());
+  }
+
+  getGanttPhaseCellState(phase: OpeningPhase, dayIso: string): GanttCellState {
+    return this.getGanttCellState(
+      this.getPhaseGanttStart(phase),
+      this.getPhaseGanttEnd(phase),
+      dayIso,
+    );
+  }
+
+  getGanttTaskCellState(task: OpeningTask, dayIso: string): GanttCellState {
+    return this.getGanttCellState(
+      this.getTaskGanttStart(task),
+      this.getTaskGanttEnd(task),
+      dayIso,
+    );
+  }
+
+  isGanttPhaseCellActive(phase: OpeningPhase, dayIso: string): boolean {
+    return this.getGanttPhaseCellState(phase, dayIso) !== 'empty';
+  }
+
+  isGanttTaskCellActive(task: OpeningTask, dayIso: string): boolean {
+    return this.getGanttTaskCellState(task, dayIso) !== 'empty';
+  }
+
+  isGanttPhaseCellStart(phase: OpeningPhase, dayIso: string): boolean {
+    const state = this.getGanttPhaseCellState(phase, dayIso);
+
+    return state === 'start' || state === 'single';
+  }
+
+  isGanttPhaseCellEnd(phase: OpeningPhase, dayIso: string): boolean {
+    const state = this.getGanttPhaseCellState(phase, dayIso);
+
+    return state === 'end' || state === 'single';
+  }
+
+  isGanttTaskCellStart(task: OpeningTask, dayIso: string): boolean {
+    const state = this.getGanttTaskCellState(task, dayIso);
+
+    return state === 'start' || state === 'single';
+  }
+
+  isGanttTaskCellEnd(task: OpeningTask, dayIso: string): boolean {
+    const state = this.getGanttTaskCellState(task, dayIso);
+
+    return state === 'end' || state === 'single';
+  }
+
+  getGanttPhaseLabelForCell(phase: OpeningPhase, dayIso: string): string {
+    if (!this.isGanttPhaseCellStart(phase, dayIso)) {
+      return '';
+    }
+
+    return phase.name;
+  }
+
+  getGanttTaskLabelForCell(task: OpeningTask, dayIso: string): string {
+    if (!this.isGanttTaskCellStart(task, dayIso)) {
+      return '';
+    }
+
+    return task.title;
+  }
+
+  getTasksWithoutGanttDates(): OpeningTask[] {
+    return this.tasks.filter((task) => {
+      return !this.getTaskGanttStart(task) || !this.getTaskGanttEnd(task);
+    });
+  }
+
+  getGanttVisibleRangeLabel(): string {
+    const days = this.getGanttDays();
+
+    if (days.length === 0) {
+      return 'Sin rango';
+    }
+
+    const first = this.getDateLabel(days[0]);
+    const last = this.getDateLabel(days[days.length - 1]);
+
+    return `${first} → ${last}`;
+  }
+
+  private getGanttRangeStart(): Date {
+    const candidates = [
+      this.opening?.planned_start_date,
+      ...this.phases.map((phase) => phase.planned_start_date),
+      ...this.tasks.map((task) => task.planned_start_date || task.planned_due_date),
+    ]
+      .map((value) => this.parseDateOnly(value))
+      .filter((value): value is Date => Boolean(value));
+
+    if (candidates.length === 0) {
+      const today = new Date();
+      return new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    }
+
+    const minTime = Math.min(...candidates.map((date) => date.getTime()));
+    const start = new Date(minTime);
+    start.setDate(start.getDate() - 1);
+
+    return start;
+  }
+
+  private getGanttRangeEnd(start: Date): Date {
+    const candidates = [
+      this.opening?.target_opening_date,
+      ...this.phases.map((phase) => phase.planned_end_date || phase.planned_start_date),
+      ...this.tasks.map((task) => task.planned_due_date || task.planned_start_date),
+    ]
+      .map((value) => this.parseDateOnly(value))
+      .filter((value): value is Date => Boolean(value));
+
+    const minimumEnd = new Date(start);
+    minimumEnd.setDate(minimumEnd.getDate() + 21);
+
+    if (candidates.length === 0) {
+      return minimumEnd;
+    }
+
+    const maxTime = Math.max(...candidates.map((date) => date.getTime()));
+    const detectedEnd = new Date(maxTime);
+    detectedEnd.setDate(detectedEnd.getDate() + 2);
+
+    const end = detectedEnd.getTime() < minimumEnd.getTime()
+      ? minimumEnd
+      : detectedEnd;
+
+    const maxAllowedEnd = new Date(start);
+    maxAllowedEnd.setDate(maxAllowedEnd.getDate() + 56);
+
+    if (end.getTime() > maxAllowedEnd.getTime()) {
+      return maxAllowedEnd;
+    }
+
+    return end;
+  }
+
+  private getPhaseGanttStart(phase: OpeningPhase): string | null {
+    if (phase.planned_start_date) {
+      return phase.planned_start_date;
+    }
+
+    const tasks = this.getTasksForPhase(phase.id);
+    const starts = tasks
+      .map((task) => this.getTaskGanttStart(task))
+      .filter((value): value is string => Boolean(value));
+
+    return this.getMinIsoDate(starts);
+  }
+
+  private getPhaseGanttEnd(phase: OpeningPhase): string | null {
+    if (phase.planned_end_date) {
+      return phase.planned_end_date;
+    }
+
+    const tasks = this.getTasksForPhase(phase.id);
+    const ends = tasks
+      .map((task) => this.getTaskGanttEnd(task))
+      .filter((value): value is string => Boolean(value));
+
+    return this.getMaxIsoDate(ends) || this.getPhaseGanttStart(phase);
+  }
+
+  private getTaskGanttStart(task: OpeningTask): string | null {
+    return task.planned_start_date || task.planned_due_date || null;
+  }
+
+  private getTaskGanttEnd(task: OpeningTask): string | null {
+    return task.planned_due_date || task.planned_start_date || null;
+  }
+
+  private getGanttCellState(
+    startIso: string | null,
+    endIso: string | null,
+    dayIso: string,
+  ): GanttCellState {
+    if (!startIso || !endIso) {
+      return 'empty';
+    }
+
+    const start = startIso <= endIso ? startIso : endIso;
+    const end = startIso <= endIso ? endIso : startIso;
+
+    if (dayIso < start || dayIso > end) {
+      return 'empty';
+    }
+
+    if (start === end && dayIso === start) {
+      return 'single';
+    }
+
+    if (dayIso === start) {
+      return 'start';
+    }
+
+    if (dayIso === end) {
+      return 'end';
+    }
+
+    return 'middle';
+  }
+
+  private getMinIsoDate(values: string[]): string | null {
+    if (values.length === 0) {
+      return null;
+    }
+
+    return [...values].sort()[0];
+  }
+
+  private getMaxIsoDate(values: string[]): string | null {
+    if (values.length === 0) {
+      return null;
+    }
+
+    return [...values].sort().reverse()[0];
+  }
+
+  private parseDateOnly(value: string | null | undefined): Date | null {
+    if (!value) {
+      return null;
+    }
+
+    const normalized = value.includes('T') ? value.split('T')[0] : value;
+    const date = new Date(`${normalized}T00:00:00`);
+
+    if (Number.isNaN(date.getTime())) {
+      return null;
+    }
+
+    return date;
+  }
+
+  private toIsoDate(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+
+    return `${year}-${month}-${day}`;
   }
 
   trackByPhaseId(_index: number, phase: OpeningPhase): number {

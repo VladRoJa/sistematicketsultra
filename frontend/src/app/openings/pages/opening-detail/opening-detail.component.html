@@ -104,6 +104,32 @@
       </article>
     </section>
 
+    <nav class="view-switcher">
+      <button
+        type="button"
+        [class.active]="isActiveView('DASHBOARD')"
+        (click)="setActiveView('DASHBOARD')"
+      >
+        Dashboard
+      </button>
+
+      <button
+        type="button"
+        [class.active]="isActiveView('GANTT')"
+        (click)="setActiveView('GANTT')"
+      >
+        Gantt
+      </button>
+
+      <button
+        type="button"
+        [class.active]="isActiveView('TASKS')"
+        (click)="setActiveView('TASKS')"
+      >
+        Tareas
+      </button>
+    </nav>
+
     <section class="create-task-panel" *ngIf="isCreateTaskPanelOpen">
       <div class="panel-heading">
         <div>
@@ -245,7 +271,7 @@
 
     <main class="control-layout">
       <section class="main-column">
-        <section class="timeline-card">
+        <section class="timeline-card" *ngIf="isActiveView('DASHBOARD')">
           <div class="section-heading">
             <div>
               <p class="eyebrow">Timeline operativo</p>
@@ -309,7 +335,131 @@
           </div>
         </section>
 
-        <section class="tasks-card">
+        <section class="gantt-card" *ngIf="isActiveView('GANTT')">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Gantt operativo</p>
+              <h2>Calendario de fases y tareas</h2>
+              <p class="section-subtitle">
+                {{ getGanttVisibleRangeLabel() }} · click en una tarea para ver seguimiento.
+              </p>
+            </div>
+
+            <div class="gantt-legend">
+              <span><i class="legend-phase"></i> Fase</span>
+              <span><i class="legend-task"></i> Tarea</span>
+              <span><i class="legend-today"></i> Hoy</span>
+            </div>
+          </div>
+
+          <div class="gantt-scroll">
+            <table class="gantt-table">
+              <thead>
+                <tr>
+                  <th class="gantt-label-header">Elemento</th>
+
+                  <th
+                    class="gantt-day-header"
+                    *ngFor="let day of getGanttDays()"
+                    [class.today-header]="isGanttToday(day)"
+                  >
+                    <span>{{ getGanttWeekday(day) }}</span>
+                    <strong>{{ getGanttDayNumber(day) }}</strong>
+                    <small>{{ getGanttMonth(day) }}</small>
+                  </th>
+                </tr>
+              </thead>
+
+              <tbody>
+                <ng-container *ngFor="let phase of getVisiblePhases(); trackBy: trackByPhaseId">
+                  <tr class="gantt-phase-row">
+                    <th class="gantt-row-label">
+                      <div class="gantt-label-title">
+                        <strong>{{ phase.name }}</strong>
+                        <span>{{ getPhaseProgress(phase) }}%</span>
+                      </div>
+
+                      <small>
+                        {{ getTasksForPhase(phase.id).length }} tareas ·
+                        {{ getStatusLabel(phase.status) }}
+                      </small>
+                    </th>
+
+                    <td
+                      class="gantt-cell phase-cell"
+                      *ngFor="let day of getGanttDays()"
+                      [class.today-cell]="isGanttToday(day)"
+                      [class.cell-active]="isGanttPhaseCellActive(phase, day)"
+                      [class.cell-start]="isGanttPhaseCellStart(phase, day)"
+                      [class.cell-end]="isGanttPhaseCellEnd(phase, day)"
+                    >
+                      <span class="gantt-bar-label" *ngIf="getGanttPhaseLabelForCell(phase, day)">
+                        {{ getGanttPhaseLabelForCell(phase, day) }}
+                      </span>
+                    </td>
+                  </tr>
+
+                  <tr
+                    class="gantt-task-row"
+                    *ngFor="let task of getTasksForPhase(phase.id); trackBy: trackByTaskId"
+                    [class.selected-task-row]="selectedTask?.id === task.id"
+                  >
+                    <th class="gantt-row-label task-label" (click)="selectTask(task)">
+                      <div class="gantt-label-title">
+                        <strong>{{ task.title }}</strong>
+
+                        <span
+                          class="mini-status"
+                          [attr.data-tone]="getStatusTone(task.status)"
+                        >
+                          {{ getStatusLabel(task.status) }}
+                        </span>
+                      </div>
+
+                      <small>
+                        {{ getPriorityLabel(task.priority) }}
+                        <ng-container *ngIf="task.requires_document"> · doc</ng-container>
+                        <ng-container *ngIf="task.requires_payment"> · pago</ng-container>
+                      </small>
+                    </th>
+
+                    <td
+                      class="gantt-cell task-cell"
+                      *ngFor="let day of getGanttDays()"
+                      (click)="selectTask(task)"
+                      [class.today-cell]="isGanttToday(day)"
+                      [class.cell-active]="isGanttTaskCellActive(task, day)"
+                      [class.cell-start]="isGanttTaskCellStart(task, day)"
+                      [class.cell-end]="isGanttTaskCellEnd(task, day)"
+                      [class.overdue-cell]="isTaskOverdue(task)"
+                      [class.completed-cell]="task.status === 'COMPLETADA'"
+                      [class.blocked-cell]="task.status === 'BLOQUEADA'"
+                    >
+                      <span class="gantt-bar-label" *ngIf="getGanttTaskLabelForCell(task, day)">
+                        {{ getGanttTaskLabelForCell(task, day) }}
+                      </span>
+                    </td>
+                  </tr>
+                </ng-container>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="gantt-no-dates" *ngIf="getTasksWithoutGanttDates().length > 0">
+            <h3>Tareas sin fecha</h3>
+
+            <button
+              type="button"
+              class="no-date-task"
+              *ngFor="let task of getTasksWithoutGanttDates(); trackBy: trackByTaskId"
+              (click)="selectTask(task)"
+            >
+              {{ task.title }}
+            </button>
+          </div>
+        </section>
+
+        <section class="tasks-card" *ngIf="isActiveView('DASHBOARD') || isActiveView('TASKS')">
           <div class="section-heading">
             <div>
               <p class="eyebrow">Trabajo accionable</p>
