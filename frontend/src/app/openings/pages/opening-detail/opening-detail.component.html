@@ -130,11 +130,18 @@
       </button>
     </nav>
 
-    <section class="create-task-panel" *ngIf="isCreateTaskPanelOpen">
+    <section
+        class="create-task-modal-backdrop"
+        *ngIf="isCreateTaskPanelOpen"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="create-task-modal-title"
+      >
+        <div class="create-task-panel create-task-modal">
       <div class="panel-heading">
         <div>
           <p class="eyebrow">Alta rápida</p>
-          <h2>Nueva tarea operativa</h2>
+          <h2 id="create-task-modal-title">Nueva tarea operativa</h2>
           <p>
             Crea trabajo accionable con fase, prioridad, fecha y requisitos documentales o de pago.
           </p>
@@ -267,9 +274,10 @@
           Crear tarea
         </button>
       </div>
-    </section>
+        </div>
+      </section>
 
-          <main
+      <main
         class="control-layout"
         [class.panel-open]="isTaskPanelOpen"
         [class.gantt-mode]="isActiveView('GANTT')"
