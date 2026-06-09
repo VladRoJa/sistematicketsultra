@@ -1394,3 +1394,63 @@ textarea:focus {
 .gantt-collapsed-row .gantt-row-label {
   background: #f8fafc;
 }
+
+.create-task-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  background:
+    radial-gradient(circle at top left, rgba(229, 69, 37, 0.14), transparent 34%),
+    rgba(15, 23, 42, 0.52);
+  backdrop-filter: blur(8px);
+}
+
+.create-task-modal.create-task-panel {
+  width: min(1040px, calc(100vw - 48px));
+  max-height: calc(100vh - 80px);
+  margin: 0;
+  overflow-y: auto;
+  border: 1px solid rgba(226, 232, 240, 0.96);
+  border-radius: 28px;
+  background: #ffffff;
+  box-shadow:
+    0 28px 80px rgba(15, 23, 42, 0.28),
+    0 8px 24px rgba(15, 23, 42, 0.16);
+}
+
+.create-task-modal .panel-heading {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background:
+    linear-gradient(180deg, #ffffff 0%, rgba(255, 255, 255, 0.96) 100%);
+  border-bottom: 1px solid #eef2f7;
+}
+
+.create-task-modal .panel-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  margin-top: 18px;
+  padding-top: 16px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.72) 0%, #ffffff 42%);
+  border-top: 1px solid #eef2f7;
+}
+
+@media (max-width: 760px) {
+  .create-task-modal-backdrop {
+    align-items: stretch;
+    padding: 12px;
+  }
+
+  .create-task-modal.create-task-panel {
+    width: 100%;
+    max-height: calc(100vh - 24px);
+    border-radius: 22px;
+  }
+}

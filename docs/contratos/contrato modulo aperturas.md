@@ -4,7 +4,36 @@
 
 ---
 
-## 0. Separación de contratos
+## Estado general del contrato
+
+Este contrato define el Módulo de Aperturas como un centro de control operativo-financiero para coordinar nuevas sucursales Ultra desde planeación hasta entrega operativa.
+
+Estado actual del módulo:
+
+```text
+✅ Backend base implementado
+✅ Modelos y migraciones F1 implementados
+✅ Frontend premium F1 implementado
+✅ Gantt visual implementado
+✅ Carga real inicial de Serranía probada en local
+🟡 Polish UX en curso
+🟠 Funciones operativas avanzadas definidas para siguiente fase
+🔵 Notificaciones, alertas avanzadas y ruta crítica quedan para roadmap
+```
+
+Leyenda:
+
+```text
+✅ LISTO / IMPLEMENTADO
+🟡 POLISH UX DEFINIDO / EN AJUSTE
+🟠 SIGUIENTE FASE FUNCIONAL
+🔵 ROADMAP / FUTURO
+⚠️ DECISIÓN O RIESGO PENDIENTE
+```
+
+---
+
+# 0. Separación de contratos
 
 Este contrato corresponde únicamente al:
 
@@ -25,9 +54,17 @@ Aperturas no debe reimplementar almacenamiento documental, versionado, preview n
 
 Aperturas debe consumir documentos desde Nube mediante vínculos documentales.
 
+Estado actual:
+
+```text
+✅ Separación conceptual definida
+✅ Nube Corporativa existe como módulo separado
+🟠 Falta capa formal de vinculación entre documentos y aperturas/tareas
+```
+
 ---
 
-## 1. Principio rector
+# 1. Principio rector
 
 No estamos construyendo una copia de Microsoft Project.
 
@@ -56,59 +93,109 @@ Suite Ultra debe ser fuerte en:
 contexto operativo + presupuesto + pagos + documentos + responsables + trazabilidad
 ```
 
+Estado actual:
+
+```text
+✅ Principio rector definido
+✅ Gantt F1 implementado
+✅ Operación base implementada
+🟠 Control financiero queda para F2
+🟠 Control documental vinculado queda para F2/F3
+```
+
 ---
 
-## 2. Objetivo del módulo
+# 2. Objetivo del módulo
 
 Construir un módulo robusto para coordinar aperturas de nuevas sucursales, integrando:
 
-* cronograma,
-* fases,
-* tareas,
-* responsables,
-* fechas,
-* dependencias,
-* presupuesto autorizado,
-* partidas,
-* solicitudes de pago,
-* proveedores,
-* facturas,
-* documentos oficiales,
-* cambios,
-* bitácora,
-* alertas,
-* tablero ejecutivo.
+```text
+cronograma
+fases
+tareas
+responsables
+fechas
+dependencias
+presupuesto autorizado
+partidas
+solicitudes de pago
+proveedores
+facturas
+documentos oficiales
+cambios
+bitácora
+alertas
+tablero ejecutivo
+```
 
 El objetivo no es solo ver tareas.
 
 El objetivo es controlar una apertura completa desde planeación hasta entrega operativa.
 
+Estado actual:
+
+```text
+✅ Cronograma base
+✅ Fases
+✅ Tareas
+✅ Fechas
+✅ Dependencias base backend
+✅ Comentarios
+✅ Auditoría básica
+✅ Tablero/visualización inicial
+🟠 Dependencias editables desde UI
+🟠 Presupuesto/partidas/pagos
+🟠 Documentos oficiales vinculados
+🔵 Alertas automáticas y notificaciones
+```
+
 ---
 
-## 3. Contexto operativo
+# 3. Contexto operativo
 
 La apertura actual **Serranía** se está coordinando con el método tradicional, principalmente mediante grupo de WhatsApp y archivos compartidos.
 
-Serranía se usará como caso real para aprender problemas operativos.
+Serranía se usa como caso real para aprender problemas operativos.
 
 La siguiente apertura objetivo es **Egade**, estimada aproximadamente en un mes.
 
 El módulo debe estar pensado para que Egade sea la primera apertura gestionada de forma seria desde Suite Ultra.
 
+Estado actual:
+
+```text
+✅ Serranía cargada como caso real de prueba local
+✅ Gantt real de Serranía importado parcialmente a estructura Suite
+✅ Se detectaron necesidades reales de UX y operación
+🟡 Polish UX en curso para que el módulo sea presentable y usable
+```
+
 ---
 
-## 4. Principios UX obligatorios
+# 4. Principios UX obligatorios
 
 La UX es requisito de éxito, no cosmético.
 
 Si la pantalla se siente como tabla genérica, Excel web o Project mal copiado, el módulo pierde valor.
 
-### 4.1 Vista ejecutiva primero
+---
 
-Al entrar a una apertura, lo primero debe verse como tablero ejecutivo:
+## 4.1 Vista ejecutiva primero
+
+Al entrar a una apertura, la primera vista debe responder:
 
 ```text
-Apertura Egade
+¿Cómo va la apertura?
+¿Qué está atorado?
+Qué urge?
+Quién debe moverse?
+Qué impacto financiero hay?
+```
+
+Elementos esperados:
+
+```text
+Apertura
 Estado general
 % avance
 Fecha objetivo
@@ -121,17 +208,59 @@ Pagos pendientes
 Documentos críticos faltantes
 ```
 
-La vista inicial debe responder en menos de 10 segundos:
+Estado actual:
 
 ```text
-¿Cómo va la apertura?
-¿Qué está atorado?
-Qué urge?
-Quién debe moverse?
-Qué impacto financiero hay?
+✅ Dashboard base implementado
+✅ KPIs iniciales implementados
+✅ Timeline de fases implementado
+🟡 Decisión UX actual: abrir directamente en Gantt para demo/operación
+🟠 KPIs financieros dependen de F2 presupuesto/pagos
 ```
 
-### 4.2 Detalle después
+---
+
+## 4.2 Gantt como vista operativa principal
+
+Para el caso de Aperturas, el Gantt debe ser una vista central porque permite entender rápido:
+
+```text
+fases
+fechas
+duración
+tareas largas
+tareas críticas
+bloqueos
+avance del proyecto
+contexto del día actual
+```
+
+Estado actual:
+
+```text
+✅ Gantt visual F1 implementado
+✅ Auto-scroll al día actual implementado
+✅ Botón “Ir a hoy” implementado
+✅ Scroll horizontal contenido dentro del Gantt implementado
+✅ Panel lateral de tarea ocultable implementado
+✅ Header de fechas sticky definido y probado localmente
+🟡 Abrir detalle directamente en Gantt definido como polish
+🟡 Fases contraídas por default definido como polish
+🟡 Ocultar tareas completadas por default definido como polish
+```
+
+Regla UX:
+
+```text
+Al abrir una apertura, el usuario debe caer cerca del día actual.
+El Gantt debe permitir volver al día actual con un botón.
+La fila de fechas debe permanecer visible al hacer scroll vertical.
+La columna de elementos debe mantenerse visible al hacer scroll horizontal.
+```
+
+---
+
+## 4.3 Detalle después
 
 El detalle debe existir, pero no dominar la primera vista.
 
@@ -141,1372 +270,1239 @@ El módulo debe permitir bajar de nivel:
 Apertura → Fase → Tarea → Pago / Documento / Comentario / Cambio
 ```
 
-### 4.3 No saturar con tablas
+Estado actual:
+
+```text
+✅ Panel lateral de tarea implementado
+✅ Panel lateral ocultable implementado
+✅ Comentarios por tarea implementados
+✅ Acciones rápidas de tarea implementadas
+🟠 Dependencias editables desde panel pendiente
+🟠 Bloqueos operativos con causa pendiente
+🟠 Checklist por tarea pendiente
+```
+
+---
+
+## 4.4 No saturar con tablas
 
 Las tablas son necesarias, pero no deben ser la experiencia principal.
 
 Se deben usar:
 
-* cards ejecutivas,
-* timeline por fases,
-* lista compacta de pendientes,
-* panel lateral de detalle,
-* semáforos,
-* chips de estado,
-* badges de riesgo,
-* filtros inteligentes.
+```text
+cards ejecutivas
+timeline por fases
+Gantt operativo
+panel lateral de detalle
+semáforos
+chips de estado
+badges de riesgo
+filtros inteligentes
+modales para acciones puntuales
+```
 
-### 4.4 Gantt simple, no Project completo
+Estado actual:
 
-Debe existir una vista de línea de tiempo/Gantt simplificado.
+```text
+✅ Cards ejecutivas implementadas
+✅ Timeline implementado
+✅ Gantt implementado
+✅ Panel lateral implementado
+✅ Chips/estados visuales implementados
+🟡 Crear tarea desde modal flotante definido como polish
+```
 
-Pero no se busca replicar toda la complejidad de Microsoft Project.
+---
 
-El Gantt debe servir para:
-
-* visualizar fases,
-* fechas inicio/fin,
-* atrasos,
-* dependencias críticas,
-* carga por área,
-* tareas bloqueadas.
-
-No debe volverse una herramienta pesada de planeación avanzada.
-
-### 4.5 Mobile controlado
+## 4.5 Mobile controlado
 
 Móvil no será para planear toda una apertura.
 
 Móvil debe servir para:
 
-* revisar estado,
-* comentar,
-* aprobar/rechazar,
-* marcar avance rápido,
-* ver documentos,
-* subir evidencia,
-* responder alertas.
+```text
+revisar estado
+comentar
+aprobar/rechazar
+marcar avance rápido
+ver documentos
+subir evidencia
+responder alertas
+```
 
 Desktop será para planeación completa.
 
+Estado actual:
+
+```text
+🟠 No implementado todavía
+🔵 Relevante para aprobaciones, bloqueos y notificaciones
+```
+
 ---
 
-## 5. Pilares funcionales
+# 5. Pilares funcionales
 
-El módulo se divide en cuatro pilares:
+---
 
-### 5.1 Control operativo
+## 5.1 Control operativo
 
 Incluye:
 
-* apertura,
-* fases,
-* tareas,
-* responsables,
-* fechas,
-* dependencias,
-* estados,
-* avances,
-* comentarios,
-* cambios.
+```text
+apertura
+fases
+tareas
+responsables
+fechas
+dependencias
+estados
+avances
+comentarios
+cambios
+bloqueos
+checklists
+```
 
-### 5.2 Control financiero
+Estado actual:
+
+```text
+✅ Apertura
+✅ Fases
+✅ Tareas
+✅ Fechas
+✅ Estados
+✅ Avances
+✅ Comentarios
+✅ Auditoría básica
+✅ Dependencias base backend
+🟠 Dependencias editables desde UI
+🟠 Bloqueos operativos estructurados
+🟠 Checklist por tarea
+🟠 Edición de fechas con preview de impacto
+```
+
+---
+
+## 5.2 Control financiero
 
 Incluye:
-
-* presupuesto autorizado,
-* partidas presupuestales,
-* solicitudes de pago,
-* proveedores,
-* cuentas bancarias,
-* facturas,
-* comprobantes,
-* estatus con Finanzas,
-* saldos por partida.
-
-### 5.3 Control documental
-
-Incluye:
-
-* documentos vinculados desde Nube,
-* planos,
-* contratos,
-* permisos,
-* cotizaciones,
-* facturas,
-* evidencias,
-* checklists,
-* manuales.
-
-### 5.4 Control de cambios
-
-Incluye:
-
-* bitácora,
-* historial de cambios,
-* responsables,
-* fecha/hora,
-* antes/después,
-* comentarios obligatorios en cambios sensibles.
-
----
-
-## 6. Entidades principales
-
-## 6.1 Sucursal
-
-Ya existe una tabla de sucursales en Suite Ultra.
-
-Aperturas debe reutilizar la base de datos de sucursales.
-
-Pero no se recomienda meter toda la lógica de apertura dentro de la tabla `sucursales`.
-
-### Ajuste recomendado a sucursales
-
-Agregar campo de estado operativo o lifecycle:
-
-```text
-PLANEADA
-EN_APERTURA
-ACTIVA
-PAUSADA
-CANCELADA
-CERRADA
-```
-
-El módulo de Aperturas debe mostrar principalmente sucursales en:
-
-```text
-EN_APERTURA
-```
-
-o equivalentes.
-
-### Regla
-
-```text
-Sucursal = entidad física/operativa
-Apertura = proyecto temporal para poner esa sucursal en marcha
-```
-
----
-
-## 6.2 Apertura
-
-Tabla propuesta:
-
-```text
-openings
-```
-
-Representa el proyecto de apertura de una sucursal.
-
-Campos conceptuales:
-
-| Campo                   | Uso                          |
-| ----------------------- | ---------------------------- |
-| id                      | PK                           |
-| sucursal_id             | FK sucursal                  |
-| opening_key             | Clave legible, ejemplo EGADE |
-| name                    | Nombre visible               |
-| description             | Descripción                  |
-| status                  | Estado de apertura           |
-| planned_start_date      | Fecha planeada de inicio     |
-| target_opening_date     | Fecha objetivo de apertura   |
-| actual_opening_date     | Fecha real                   |
-| general_owner_user_id   | Responsable general          |
-| region_id               | Región si aplica             |
-| budget_authorized_total | Presupuesto autorizado       |
-| budget_currency_id      | Moneda                       |
-| created_by              | Usuario creador              |
-| updated_by              | Último editor                |
-| created_at              | Fecha creación               |
-| updated_at              | Fecha actualización          |
-
-Estados sugeridos:
-
-```text
-BORRADOR
-PLANEADA
-EN_EJECUCION
-EN_RIESGO
-PAUSADA
-ABIERTA
-CANCELADA
-CERRADA
-```
-
----
-
-## 6.3 Fases
-
-Tabla propuesta:
-
-```text
-opening_phases
-```
-
-Representa bloques grandes de trabajo.
-
-Fases base sugeridas por experiencia de Serranía:
-
-* Preliminares
-* Legal
-* Finanzas
-* Construcción
-* Compras
-* Sistemas
-* Deportivo
-* Capital Humano
-* Marketing / Preventa
-* Operaciones
-* Apertura / Entrega
-
-Campos:
-
-| Campo               | Uso                 |
-| ------------------- | ------------------- |
-| id                  | PK                  |
-| opening_id          | FK apertura         |
-| name                | Nombre fase         |
-| description         | Descripción         |
-| sort_order          | Orden               |
-| planned_start_date  | Inicio planeado     |
-| planned_end_date    | Fin planeado        |
-| actual_start_date   | Inicio real         |
-| actual_end_date     | Fin real            |
-| status              | Estado              |
-| owner_department_id | Área responsable    |
-| owner_user_id       | Responsable         |
-| progress_percent    | Avance              |
-| created_at          | Fecha creación      |
-| updated_at          | Fecha actualización |
-
-Estados:
-
-```text
-NO_INICIADA
-EN_PROCESO
-BLOQUEADA
-EN_RIESGO
-COMPLETADA
-CANCELADA
-```
-
----
-
-## 6.4 Tareas
-
-Tabla propuesta:
-
-```text
-opening_tasks
-```
-
-Campos:
-
-| Campo               | Uso                 |
-| ------------------- | ------------------- |
-| id                  | PK                  |
-| opening_id          | FK apertura         |
-| phase_id            | FK fase             |
-| parent_task_id      | Para subtareas      |
-| title               | Título              |
-| description         | Descripción         |
-| status              | Estado              |
-| priority            | Prioridad           |
-| owner_user_id       | Responsable         |
-| owner_department_id | Área responsable    |
-| planned_start_date  | Inicio planeado     |
-| planned_due_date    | Fecha compromiso    |
-| actual_start_date   | Inicio real         |
-| actual_completed_at | Cierre real         |
-| progress_percent    | Avance              |
-| sort_order          | Orden               |
-| requires_document   | Requiere documento  |
-| requires_payment    | Requiere pago       |
-| created_by          | Usuario creador     |
-| updated_by          | Último editor       |
-| created_at          | Fecha creación      |
-| updated_at          | Fecha actualización |
-
-Estados:
-
-```text
-NO_INICIADA
-EN_PROCESO
-BLOQUEADA
-EN_REVISION
-COMPLETADA
-CANCELADA
-```
-
-Prioridades:
-
-```text
-BAJA
-MEDIA
-ALTA
-CRITICA
-```
-
----
-
-## 6.5 Dependencias
-
-Tabla propuesta:
-
-```text
-opening_task_dependencies
-```
-
-Campos:
-
-| Campo              | Uso               |
-| ------------------ | ----------------- |
-| id                 | PK                |
-| task_id            | Tarea dependiente |
-| depends_on_task_id | Tarea que bloquea |
-| dependency_type    | Tipo              |
-| created_by         | Usuario creador   |
-| created_at         | Fecha             |
-
-Tipos:
-
-```text
-FINISH_TO_START
-START_TO_START
-FINISH_TO_FINISH
-BLOCKER
-```
-
-Para F1 puede bastar con:
-
-```text
-BLOCKER
-```
-
----
-
-## 6.6 Comentarios / bitácora de tarea
-
-Tabla propuesta:
-
-```text
-opening_task_comments
-```
-
-Campos:
-
-| Campo           | Uso               |
-| --------------- | ----------------- |
-| id              | PK                |
-| opening_id      | FK apertura       |
-| task_id         | FK tarea          |
-| comment         | Comentario        |
-| created_by      | Usuario           |
-| created_at      | Fecha             |
-| is_system_event | Evento automático |
-
-Debe servir para:
-
-* acuerdos,
-* actualizaciones,
-* justificaciones,
-* seguimiento,
-* evidencia narrativa.
-
----
-
-## 6.7 Auditoría / eventos
-
-Tabla propuesta:
-
-```text
-opening_audit_logs
-```
-
-Acciones auditables:
-
-```text
-OPENING_CREATED
-OPENING_UPDATED
-PHASE_CREATED
-PHASE_UPDATED
-TASK_CREATED
-TASK_UPDATED
-TASK_STATUS_CHANGED
-TASK_DUE_DATE_CHANGED
-TASK_OWNER_CHANGED
-BUDGET_IMPORTED
-BUDGET_ITEM_CREATED
-BUDGET_ITEM_UPDATED
-PAYMENT_REQUEST_CREATED
-PAYMENT_REQUEST_SUBMITTED
-PAYMENT_REQUEST_STATUS_CHANGED
-DOCUMENT_LINKED
-DOCUMENT_UNLINKED
-```
-
-Campos:
-
-| Campo          | Uso                                       |
-| -------------- | ----------------------------------------- |
-| id             | PK                                        |
-| opening_id     | FK apertura                               |
-| entity_type    | OPENING / PHASE / TASK / PAYMENT / BUDGET |
-| entity_id      | ID relacionado                            |
-| action         | Acción                                    |
-| old_value_json | Antes                                     |
-| new_value_json | Después                                   |
-| metadata_json  | Contexto                                  |
-| actor_user_id  | Usuario                                   |
-| created_at     | Fecha                                     |
-
----
-
-# 7. Presupuesto
-
-## 7.1 Presupuesto autorizado
-
-Tabla propuesta:
-
-```text
-opening_budgets
-```
-
-Campos:
-
-| Campo              | Uso                                 |
-| ------------------ | ----------------------------------- |
-| id                 | PK                                  |
-| opening_id         | FK apertura                         |
-| version_label      | Versión                             |
-| status             | BORRADOR / AUTORIZADO / REEMPLAZADO |
-| currency_id        | Moneda                              |
-| authorized_total   | Total autorizado                    |
-| source_document_id | Documento Nube                      |
-| created_by         | Usuario                             |
-| authorized_by      | Usuario autorizador                 |
-| authorized_at      | Fecha autorización                  |
-| created_at         | Fecha creación                      |
-
-Regla:
-
-El presupuesto autorizado no debe sobrescribirse silenciosamente.
-
-Si cambia, debe crearse nueva versión o evento auditado.
-
----
-
-## 7.2 Partidas presupuestales
-
-Tabla propuesta:
-
-```text
-opening_budget_items
-```
-
-La columna B del archivo de presupuesto actual corresponde conceptualmente a las partidas.
-
-Campos:
-
-| Campo             | Uso                |
-| ----------------- | ------------------ |
-| id                | PK                 |
-| opening_budget_id | FK presupuesto     |
-| opening_id        | FK apertura        |
-| area_key          | Área               |
-| item_key          | Clave normalizada  |
-| name              | Nombre de partida  |
-| description       | Descripción        |
-| authorized_amount | Monto autorizado   |
-| committed_amount  | Monto comprometido |
-| paid_amount       | Monto pagado       |
-| currency_id       | Moneda             |
-| status            | Estado             |
-| created_by        | Usuario            |
-| updated_by        | Usuario            |
-| created_at        | Fecha              |
-| updated_at        | Fecha              |
-
-Estados:
-
-```text
-ACTIVA
-PROPUESTA
-APROBADA
-RECHAZADA
-CANCELADA
-```
-
-### Regla de nuevas partidas
-
-Se pueden agregar partidas nuevas, pero no como texto libre silencioso.
-
-Si una partida no existe:
-
-* puede proponerse,
-* debe auditarse,
-* puede requerir aprobación si implica incremento presupuestal.
-
----
-
-## 7.3 Control de saldo
-
-Cada partida debe mostrar:
 
 ```text
 presupuesto autorizado
-monto solicitado
-monto programado
-monto pagado
-saldo disponible
+partidas presupuestales
+solicitudes de pago
+proveedores
+cuentas bancarias
+facturas
+comprobantes
+estatus con Finanzas
+saldos por partida
 ```
 
-Fórmula conceptual:
+Estado actual:
 
 ```text
-saldo disponible = autorizado - comprometido - pagado
-```
-
-Donde:
-
-```text
-comprometido = solicitudes enviadas/programadas no pagadas
-pagado = pagos confirmados por Finanzas
+🟠 Definido para F2
+🟠 Hay documentos reales de pago/presupuesto de Serranía como insumo
+🟠 Falta modelo financiero formal
 ```
 
 ---
 
-# 8. Solicitudes de pago a proveedores
+## 5.3 Control documental
 
-## 8.1 Objetivo
-
-Convertir el formato Excel de solicitud de pago a proveedores en un flujo dentro de Suite Ultra.
-
-El MVP no leerá automáticamente facturas.
-
-El MVP debe estructurar correctamente:
+Incluye documentos vinculados desde Nube:
 
 ```text
-apertura → partida → proveedor → factura → solicitud de pago → Finanzas
+planos
+contratos
+permisos
+cotizaciones
+facturas
+evidencias
+checklists
+manuales
 ```
 
----
-
-## 8.2 Tabla propuesta
+Estado actual:
 
 ```text
-opening_payment_requests
+✅ Nube Corporativa existe como módulo separado
+✅ Warehouse soporta almacenamiento documental
+✅ Nube maneja versiones, publicación, visibilidad y auditoría
+🟠 Falta vínculo formal documento → apertura / fase / tarea
 ```
-
-Campos:
-
-| Campo                    | Uso                      |
-| ------------------------ | ------------------------ |
-| id                       | PK                       |
-| opening_id               | FK apertura              |
-| budget_item_id           | FK partida               |
-| requested_by             | Usuario solicitante      |
-| provider_id              | FK proveedor             |
-| provider_bank_account_id | FK cuenta bancaria       |
-| concept                  | Concepto                 |
-| invoice_date             | Fecha factura            |
-| requested_payment_date   | Fecha solicitud          |
-| subtotal                 | Subtotal                 |
-| tax_amount               | IVA                      |
-| tax_rate                 | Tasa IVA                 |
-| total_amount             | Total con IVA incluido   |
-| currency_id              | Moneda                   |
-| fiscal_uuid              | Folio fiscal             |
-| invoice_number           | Número/factura           |
-| notes                    | Notas                    |
-| status                   | Estado                   |
-| finance_reviewed_by      | Usuario Finanzas         |
-| finance_reviewed_at      | Fecha revisión           |
-| scheduled_payment_date   | Fecha programada         |
-| paid_at                  | Fecha pago               |
-| proof_document_id        | Comprobante pago en Nube |
-| invoice_document_id      | Factura en Nube          |
-| created_at               | Fecha creación           |
-| updated_at               | Fecha actualización      |
-
----
-
-## 8.3 Estados de solicitud
-
-Estados propuestos:
-
-```text
-BORRADOR
-ENVIADA
-EN_REVISION_FINANZAS
-PROGRAMADA
-PAGADA
-RECHAZADA
-CANCELADA
-```
-
-### Reglas
-
-BORRADOR:
-
-* editable por solicitante/admin.
-
-ENVIADA:
-
-* ya no debería editarse libremente.
-* queda en espera de revisión.
-
-EN_REVISION_FINANZAS:
-
-* Finanzas está validando.
-
-PROGRAMADA:
-
-* Finanzas ya definió fecha o intención de pago.
-
-PAGADA:
-
-* pago liberado.
-* debe poder anexarse comprobante.
-
-RECHAZADA:
-
-* requiere motivo.
-
-CANCELADA:
-
-* no debe afectar saldo activo.
-
----
-
-## 8.4 Campos obligatorios para enviar a Finanzas
-
-Para pasar de BORRADOR a ENVIADA:
-
-* apertura,
-* partida,
-* proveedor,
-* cuenta bancaria/CLABE,
-* concepto,
-* total con IVA incluido,
-* moneda,
-* folio fiscal,
-* número/factura cuando aplique,
-* factura adjunta,
-* notas si hay condición especial.
-
----
-
-## 8.5 Factura adjunta
-
-La factura debe adjuntarse obligatoriamente para enviar a Finanzas.
-
-La factura debe vivir en Nube Corporativa.
-
-La solicitud de pago debe guardar referencia:
-
-```text
-invoice_document_id
-```
-
-La Nube debe mantener:
-
-* archivo,
-* versión,
-* preview,
-* descarga,
-* auditoría documental.
-
-Aperturas solo referencia el documento.
-
----
-
-## 8.6 Folio fiscal
-
-El folio fiscal es obligatorio.
-
-Regla mínima:
-
-```text
-No permitir folio fiscal duplicado dentro de la misma apertura.
-```
-
-Regla recomendada:
-
-```text
-No permitir folio fiscal duplicado globalmente en solicitudes activas.
-```
-
-Esto evita riesgo de doble pago.
-
----
-
-## 8.7 IVA
-
-La UI F1 debe pedir:
-
-```text
-Total con IVA incluido
-```
-
-Debe permitir calcular como apoyo:
-
-```text
-subtotal = total / (1 + tax_rate)
-iva = total - subtotal
-```
-
-Default:
-
-```text
-tax_rate = 16%
-```
-
-Pero debe poder ajustarse a:
-
-```text
-0%
-8%
-16%
-otro
-```
-
-No asumir que todas las facturas siempre tendrán 16%.
-
----
-
-# 9. Proveedores
-
-## 9.1 Catálogo de proveedores
-
-Tabla propuesta:
-
-```text
-providers
-```
-
-Campos:
-
-| Campo             | Uso              |
-| ----------------- | ---------------- |
-| id                | PK               |
-| legal_name        | Razón social     |
-| trade_name        | Nombre comercial |
-| rfc               | RFC              |
-| provider_area_key | Área/categoría   |
-| status            | Activo/Inactivo  |
-| notes             | Notas            |
-| created_by        | Usuario          |
-| updated_by        | Usuario          |
-| created_at        | Fecha            |
-| updated_at        | Fecha            |
-
-Áreas/categorías sugeridas:
-
-```text
-SISTEMAS
-MANTENIMIENTO
-RH
-CONSTRUCCION
-COMPRAS
-MARKETING
-LEGAL
-DEPORTIVO
-OPERACION
-FINANZAS
-OTRO
-```
-
----
-
-## 9.2 Cuentas bancarias de proveedores
-
-Tabla propuesta:
-
-```text
-provider_bank_accounts
-```
-
-Campos:
-
-| Campo          | Uso            |
-| -------------- | -------------- |
-| id             | PK             |
-| provider_id    | FK proveedor   |
-| bank_name      | Banco          |
-| clabe          | CLABE          |
-| account_holder | Titular        |
-| currency_id    | Moneda         |
-| is_default     | Cuenta default |
-| is_active      | Activa         |
-| created_at     | Fecha          |
-| updated_at     | Fecha          |
 
 Regla:
 
-La CLABE debe buscarse/seleccionarse desde cuenta bancaria del proveedor.
-
-No debe capturarse como texto libre principal en cada solicitud.
-
-### Seguridad
-
-Datos bancarios de proveedores son sensibles.
-
-Deben tener permisos más estrictos que catálogos simples.
+```text
+Aperturas no guarda archivos directamente.
+Aperturas vincula documentos publicados o controlados desde Nube Corporativa.
+```
 
 ---
 
-# 10. Monedas
+## 5.4 Control de cambios y auditoría
 
-No mezclar monedas con unidades de medida.
-
-Crear catálogo propio:
+Toda operación relevante debe poder responder:
 
 ```text
-currencies
+Qué cambió
+Quién lo cambió
+Cuándo lo cambió
+Valor anterior
+Valor nuevo
+Motivo o comentario
+```
+
+Estado actual:
+
+```text
+✅ Auditoría básica de apertura/fase/tarea/comentario/dependencia implementada
+🟠 Falta auditoría específica para bloqueos
+🟠 Falta auditoría de impacto por cambio de fechas
+🟠 Falta auditoría documental vinculada a Aperturas
+```
+
+---
+
+# 6. Modelo funcional F1 implementado
+
+## 6.1 Tablas / entidades F1
+
+Estado:
+
+```text
+✅ LISTO
+```
+
+Entidades implementadas:
+
+```text
+openings
+opening_phases
+opening_tasks
+opening_task_dependencies
+opening_task_comments
+opening_audit_logs
+```
+
+También se agregó estado operativo a sucursales:
+
+```text
+sucursales.operational_status
+```
+
+Estados operativos de sucursal:
+
+```text
+PLANEADA
+EN_APERTURA
+ACTIVA
+PAUSADA
+CANCELADA
+CERRADA
+```
+
+Estado actual:
+
+```text
+✅ Sucursal Serranía puede existir como EN_APERTURA
+✅ Apertura Serranía puede vincularse a sucursal
+```
+
+---
+
+## 6.2 Backend F1
+
+Estado:
+
+```text
+✅ LISTO
+```
+
+Endpoints base implementados:
+
+```text
+GET    /api/openings
+POST   /api/openings
+GET    /api/openings/<opening_id>
+PATCH  /api/openings/<opening_id>
+
+GET    /api/openings/<opening_id>/phases
+POST   /api/openings/<opening_id>/phases
+PATCH  /api/openings/<opening_id>/phases/<phase_id>
+
+GET    /api/openings/<opening_id>/tasks
+POST   /api/openings/<opening_id>/tasks
+PATCH  /api/openings/<opening_id>/tasks/<task_id>
+
+GET    /api/openings/<opening_id>/task-dependencies
+GET    /api/openings/<opening_id>/tasks/<task_id>/dependencies
+POST   /api/openings/<opening_id>/tasks/<task_id>/dependencies
+DELETE /api/openings/<opening_id>/task-dependencies/<dependency_id>
+
+GET    /api/openings/<opening_id>/tasks/<task_id>/comments
+POST   /api/openings/<opening_id>/tasks/<task_id>/comments
+```
+
+Validaciones implementadas:
+
+```text
+✅ JWT requerido
+✅ Roles de lectura/admin
+✅ Apertura existente
+✅ Fase dentro de apertura
+✅ Tarea dentro de apertura
+✅ Dependencia dentro de apertura
+✅ No dependencia consigo misma
+✅ Anti-duplicado de dependencia
+✅ Estados válidos
+✅ Prioridades válidas
+✅ Avance 0-100
+✅ Comentario no vacío
+```
+
+---
+
+## 6.3 Frontend F1
+
+Estado:
+
+```text
+✅ LISTO
+```
+
+Ruta:
+
+```text
+/#/aperturas
+/#/aperturas/:openingId
+```
+
+Archivos principales:
+
+```text
+frontend/src/app/openings/openings.routes.ts
+frontend/src/app/openings/models/opening.model.ts
+frontend/src/app/openings/services/openings.service.ts
+frontend/src/app/openings/pages/openings-list/
+frontend/src/app/openings/pages/opening-detail/
+```
+
+Funcionalidades implementadas:
+
+```text
+✅ Listado de aperturas
+✅ Alta rápida de apertura
+✅ Detalle de apertura
+✅ Dashboard visual
+✅ Timeline por fases
+✅ Tareas agrupadas por fase
+✅ Panel lateral de tarea
+✅ Comentarios
+✅ Dependencias visibles
+✅ Acciones rápidas
+✅ Gantt visual
+✅ Botón Ir a hoy
+✅ Auto-scroll al día actual
+✅ Panel lateral ocultable
+✅ Scroll horizontal contenido
+✅ Header de fechas sticky probado localmente
+```
+
+---
+
+# 7. Gantt F1
+
+## 7.1 Función del Gantt
+
+El Gantt debe permitir ver:
+
+```text
+fases
+rango de fechas
+tareas
+tareas sin fecha
+avance
+estado
+día actual
+bloqueos
+dependencias relevantes
+```
+
+Estado actual:
+
+```text
+✅ Gantt visual implementado
+✅ Día actual visible
+✅ Navegación a hoy implementada
+✅ Scroll interno implementado
+✅ Corrección de encimado entre fechas y columna Elemento definida/probada
+```
+
+---
+
+## 7.2 Reglas UX del Gantt
+
+Reglas actuales y próximas:
+
+```text
+✅ El Gantt debe hacer auto-scroll al día actual.
+✅ Debe existir botón “Ir a hoy”.
+✅ La fila de fechas debe quedar visible al hacer scroll vertical.
+✅ La columna Elemento debe quedar fija al hacer scroll horizontal.
+🟡 Al abrir un proyecto, debe iniciar en Gantt.
+🟡 Las fases deben iniciar contraídas para vista general.
+🟡 Las tareas completadas deben poder ocultarse/mostrarse.
+🟡 Cada fase debe poder expandirse/contraerse individualmente.
+```
+
+---
+
+# 8. Carga real de Serranía
+
+Estado:
+
+```text
+✅ LISTO EN LOCAL
+```
+
+Se cargó el cronograma real de Serranía como caso de prueba.
+
+Fuente:
+
+```text
+Cronograma Apertura Plaza Serranía Mty NL 110526
+```
+
+Fases detectadas:
+
+```text
+Proyecto Arq.
+Arranque preventa
+Operaciones - Deportes
+Soft opening
+```
+
+Tareas cargadas:
+
+```text
+30 tareas base
+```
+
+Regla aplicada:
+
+```text
+Cuando una tarea trae barras partidas en el Excel, F1 consolida como:
+fecha_inicio = primera barra detectada
+fecha_compromiso = última barra detectada
+```
+
+Riesgo:
+
+```text
+⚠️ Si las barras partidas representan tramos reales, en futuro conviene soportar segmentos de tarea.
+```
+
+---
+
+# 9. Dependencias
+
+## 9.1 Dependencias base
+
+Estado:
+
+```text
+✅ Backend listo
+✅ Visibilidad base lista
+🟠 Edición desde UI pendiente
+```
+
+La dependencia representa una relación planeada:
+
+```text
+Tarea B depende de Tarea A
+```
+
+Ejemplo:
+
+```text
+Armado de equipos depende de Recepción de equipo de gimnasio en local
+```
+
+---
+
+## 9.2 Dependencias editables desde panel lateral
+
+Estado:
+
+```text
+🟠 SIGUIENTE FASE FUNCIONAL
+```
+
+Regla propuesta:
+
+```text
+Click en tarea del Gantt
+→ abre panel lateral
+→ sección “Esta tarea depende de”
+→ botón “Agregar dependencia”
+→ seleccionar tarea requerida
+→ guardar
+→ la dependencia queda registrada y auditada
+```
+
+Debe permitir:
+
+```text
+agregar dependencia
+eliminar dependencia
+evitar dependencia consigo misma
+evitar duplicados
+mostrar tarea bloqueante/requerida
+```
+
+No debe incluir todavía:
+
+```text
+drag & drop entre barras
+líneas visuales avanzadas
+reprogramación automática
+ruta crítica
+```
+
+---
+
+# 10. Bloqueos operativos
+
+Estado:
+
+```text
+🟠 DEFINIDO PARA SIGUIENTE FASE
+```
+
+Diferencia conceptual:
+
+```text
+Dependencia = relación planeada
+Bloqueo = problema activo
+```
+
+Ejemplo de dependencia:
+
+```text
+Armado de equipos depende de Recepción de equipo.
+```
+
+Ejemplo de bloqueo:
+
+```text
+Armado de equipos está bloqueado porque el equipo no ha llegado al local.
+```
+
+El botón actual de bloquear no debe quedarse como solo cambio de estado.
+
+Regla futura:
+
+```text
+Bloquear tarea debe pedir causa.
+```
+
+Causas posibles:
+
+```text
+Otra tarea del proyecto
+Proveedor
+Pago / presupuesto
+Permiso / licencia
+Documento pendiente
+Decisión pendiente
+Otro
+```
+
+Campos sugeridos:
+
+```text
+blocked_task_id
+blocker_type
+blocking_task_id
+reason
+impact_level
+status
+created_by_user_id
+resolved_by_user_id
+created_at
+resolved_at
+```
+
+Cuando existan notificaciones:
+
+```text
+Si una tarea se bloquea por otra tarea:
+→ notificar responsable de la tarea bloqueante
+→ notificar responsable de la tarea bloqueada
+→ notificar líder de apertura
+→ registrar auditoría
+```
+
+---
+
+# 11. Creación de nuevas tareas
+
+Estado actual:
+
+```text
+✅ Crear tarea existe
+🟡 Mejorar UX a modal flotante
+```
+
+Problema actual:
+
+```text
+El formulario plano ocupa espacio permanente dentro de la pantalla.
+Compite contra el Gantt y el detalle operativo.
+```
+
+Regla propuesta:
+
+```text
+La creación de nuevas tareas debe ejecutarse desde un modal flotante.
+```
+
+Flujo esperado:
+
+```text
+Botón “Nueva tarea”
+→ abre modal
+→ capturar datos
+→ guardar
+→ cerrar modal
+→ refrescar Gantt
+```
+
+También debe poder abrirse desde una fase:
+
+```text
+Fase → + Tarea
+```
+
+Al abrir desde una fase:
+
+```text
+la fase debe venir preseleccionada
+```
+
+Campos mínimos:
+
+```text
+Título
+Fase
+Fecha inicio
+Fecha compromiso
+Prioridad
+Responsable
+Descripción
+Requiere documento
+Requiere pago
+```
+
+---
+
+# 12. Checklist y subtareas
+
+Estado:
+
+```text
+🔵 ROADMAP / FUTURO
+```
+
+Decisión técnica actual:
+
+```text
+Primero checklist por tarea.
+Después subtareas reales si el proceso lo exige.
+```
+
+No se recomienda simular subtareas como tareas normales con prefijo visual.
+
+Motivo:
+
+```text
+ensucia reportes
+confunde avance
+rompe orden
+complica dependencias
+debilita auditoría
+```
+
+Fase recomendada:
+
+## Fase 1: Checklist por tarea
+
+Ejemplo:
+
+```text
+Remodelación
+☐ Demolición
+☐ Piso
+☐ Pintura
+☐ Baños
+☐ Espejos
+☐ Eléctrico
+☐ Entrega final
+```
+
+Tabla futura sugerida:
+
+```text
+opening_task_checklist_items
 ```
 
 Campos:
 
-| Campo     | Uso                   |
-| --------- | --------------------- |
-| id        | PK                    |
-| code      | MXN / USD             |
-| name      | Peso mexicano / Dólar |
-| symbol    | $ / US$               |
-| decimals  | 2                     |
-| is_active | Activa                |
+```text
+id
+opening_id
+task_id
+title
+status
+sort_order
+completed_at
+completed_by_user_id
+created_at
+updated_at
+```
 
-Monedas iniciales:
+## Fase 2: Subtareas reales
+
+Solo si se requiere:
 
 ```text
-MXN
-USD
+parent_task_id en opening_tasks
+```
+
+Esto implicaría decidir:
+
+```text
+si el avance padre se calcula desde hijas
+si las hijas tienen dependencias
+si las hijas tienen comentarios
+si aparecen en dashboard
+si heredan fechas
+si pueden bloquear/desbloquear tareas
 ```
 
 ---
 
-# 11. Documentos vinculados desde Nube
+# 13. Edición de fechas con preview de impacto
 
-Aperturas debe consumir documentos desde Nube Corporativa mediante:
-
-```text
-internal_document_links
-```
-
-Ejemplos:
+Estado:
 
 ```text
-OPENING / EGADE / PLANO
-OPENING / EGADE / CONTRATO
-OPENING / EGADE / PERMISO
-OPENING / EGADE / FACTURA
-TASK / EGADE-ELECTRICO-001 / EVIDENCIA
+🟠 DEFINIDO PARA SIGUIENTE FASE
 ```
 
-### Ajuste requerido a Nube
-
-Agregar roles documentales adicionales:
+Objetivo:
 
 ```text
-FACTURA
-COMPROBANTE_PAGO
-PRESUPUESTO
-CRONOGRAMA
+Permitir modificar fechas de una tarea mostrando antes el impacto sobre tareas dependientes.
 ```
 
-Esto puede hacerse cuando inicie la integración formal.
-
----
-
-# 12. UX objetivo del módulo
-
-## 12.1 Pantalla inicial: listado de aperturas
-
-Debe mostrar cards de aperturas:
+Regla:
 
 ```text
-Egade
-Serranía
-Estado
-Fecha objetivo
-Avance %
-Presupuesto autorizado
-Pagos pendientes
-Tareas atrasadas
-Riesgos
+El sistema no debe reprogramar automáticamente en primera versión.
+Debe mostrar impacto y pedir confirmación.
 ```
 
-Filtros:
-
-* estado,
-* región,
-* responsable,
-* fecha objetivo,
-* riesgo,
-* avance.
-
----
-
-## 12.2 Dashboard de apertura
-
-Al entrar a una apertura:
-
-### Header
+Ejemplo:
 
 ```text
-Apertura Egade
-Estado: En ejecución
-Fecha objetivo: dd/mm/yyyy
-Días restantes
-Responsable general
+Tarea: Remodelación
+Fecha actual: 15 jun → 25 jul
+Nueva fecha: 20 jun → 28 jul
 ```
 
-### KPIs principales
-
-* avance general,
-* tareas completadas,
-* tareas atrasadas,
-* tareas bloqueadas,
-* presupuesto autorizado,
-* comprometido,
-* pagado,
-* saldo disponible,
-* pagos pendientes,
-* documentos críticos faltantes.
-
-### Secciones principales
-
-* Timeline / fases
-* Tareas
-* Presupuesto
-* Solicitudes de pago
-* Documentos
-* Cambios / bitácora
-
----
-
-## 12.3 Timeline / Gantt simple
-
-Debe mostrar fases con barras.
-
-Cada fase puede expandirse a tareas.
-
-Debe resaltar:
-
-* atrasos,
-* bloqueos,
-* dependencias,
-* tareas críticas.
-
-No debe intentar copiar Project completo.
-
----
-
-## 12.4 Panel lateral de tarea
-
-Al seleccionar tarea:
-
-* título,
-* estado,
-* prioridad,
-* responsable,
-* área,
-* fecha compromiso,
-* dependencias,
-* documentos vinculados,
-* partida presupuestal,
-* solicitudes de pago relacionadas,
-* comentarios,
-* historial.
-
----
-
-## 12.5 Vista financiera
-
-Debe mostrar:
-
-* presupuesto por área,
-* partidas,
-* autorizado,
-* comprometido,
-* pagado,
-* saldo,
-* solicitudes pendientes,
-* alertas de sobrepresupuesto.
-
-Debe permitir navegar:
+Preview esperado:
 
 ```text
-Partida → solicitudes de pago → factura → proveedor
+Impacto crítico:
+- Armado de equipos inicia el 13 jul, pero depende de Remodelación que terminaría el 28 jul.
+- Pruebas de equipos inicia el 21 jul, pero la tarea previa terminaría el 28 jul.
+
+Impacto moderado:
+- Limpieza profunda queda con poco margen antes de apertura.
 ```
 
----
-
-## 12.6 Vista solicitudes de pago
-
-Debe mostrar:
-
-* folio interno,
-* proveedor,
-* partida,
-* concepto,
-* total,
-* moneda,
-* folio fiscal,
-* estado,
-* fecha solicitud,
-* fecha programada,
-* comprobante.
-
-Acciones:
-
-* crear borrador,
-* enviar a Finanzas,
-* revisar,
-* programar,
-* marcar pagada,
-* rechazar,
-* cancelar.
-
----
-
-# 13. Permisos
-
-Roles sugeridos:
+Tipos de alerta:
 
 ```text
-APERTURAS_ADMIN
-APERTURAS_MANAGER
-APERTURAS_COLABORADOR
-APERTURAS_FINANZAS
-APERTURAS_LECTOR
-SISTEMAS
-ADMIN
-SUPER_ADMIN
+Crítica:
+La tarea dependiente queda programada antes de que termine su predecesora.
+
+Moderada:
+No rompe dependencia, pero reduce margen operativo.
+
+Informativa:
+El cambio no rompe nada, pero modifica el plan.
 ```
 
-### Capacidades
+Orden recomendado:
 
-ADMIN / SUPER_ADMIN / SISTEMAS:
-
-* todo.
-
-APERTURAS_ADMIN:
-
-* crear apertura,
-* editar fases/tareas,
-* asignar responsables,
-* administrar presupuesto,
-* ver pagos,
-* gestionar documentos.
-
-APERTURAS_MANAGER:
-
-* editar tareas asignadas,
-* comentar,
-* subir evidencia,
-* crear solicitudes de pago si aplica.
-
-APERTURAS_FINANZAS:
-
-* revisar solicitudes,
-* programar pago,
-* marcar pagado,
-* rechazar,
-* adjuntar comprobantes.
-
-APERTURAS_COLABORADOR:
-
-* ver tareas asignadas,
-* actualizar avance,
-* comentar,
-* subir evidencia.
-
-APERTURAS_LECTOR:
-
-* solo consulta.
+```text
+1. Dependencias editables
+2. Edición de fechas
+3. Preview de impacto
+4. Guardar con auditoría
+5. Futuro: guardar y notificar
+```
 
 ---
 
 # 14. Notificaciones
 
-Eventos notificables:
+Estado:
 
-* tarea asignada,
-* tarea próxima a vencer,
-* tarea atrasada,
-* tarea bloqueada,
-* cambio de fecha,
-* cambio de responsable,
-* solicitud de pago enviada,
-* solicitud rechazada,
-* pago programado,
-* pago liberado,
-* presupuesto excedido,
-* documento crítico faltante,
-* apertura cambia de estado.
+```text
+🔵 ROADMAP / FUTURO
+```
+
+Casos relevantes:
+
+```text
+tarea bloqueada
+tarea desbloqueada
+cambio de fecha con impacto
+nueva dependencia
+comentario crítico
+documento requerido faltante
+pago pendiente
+aprobación/rechazo
+```
 
 Canales posibles:
 
-* notificación interna Suite,
-* correo,
-* Telegram futuro,
-* WhatsApp no directo en F1.
-
----
-
-# 15. Roadmap
-
-## F0 — Contrato y diseño
-
-* cerrar contrato,
-* revisar Serranía,
-* extraer fases/tareas reales,
-* mapear presupuesto,
-* definir UX inicial.
-
-## F1 — Base de Aperturas
-
-Incluye:
-
-* tabla `openings`,
-* relación con sucursales,
-* estados de apertura,
-* fases,
-* tareas,
-* responsables,
-* fechas,
-* dependencias simples,
-* dashboard básico,
-* timeline simple.
-
-No incluye aún pagos complejos.
-
-## F2 — Presupuesto y partidas
-
-Incluye:
-
-* presupuesto de apertura,
-* partidas,
-* carga manual o importación base,
-* saldos,
-* avance financiero por partida.
-
-## F3 — Solicitudes de pago
-
-Incluye:
-
-* proveedores,
-* cuentas bancarias,
-* monedas,
-* solicitudes de pago,
-* factura adjunta,
-* estados con Finanzas,
-* folio fiscal obligatorio,
-* validación de duplicados.
-
-## F4 — Integración documental completa
-
-Incluye:
-
-* documentos requeridos por fase/tarea,
-* consumo avanzado de Nube,
-* roles documentales FACTURA, COMPROBANTE_PAGO, PRESUPUESTO, CRONOGRAMA,
-* documentos críticos faltantes.
-
-## F5 — Notificaciones y control de cambios
-
-Incluye:
-
-* alertas,
-* bitácora visual,
-* cambios sensibles con motivo,
-* recordatorios.
-
-## F6 — Automatización inteligente
-
-Incluye:
-
-* lectura de XML/PDF de facturas,
-* autollenado proveedor/folio/total,
-* detección avanzada de duplicados,
-* sugerencias de partida,
-* reportes ejecutivos automáticos.
-
----
-
-# 16. MVP robusto para Egade
-
-El MVP para Egade debe incluir mínimo:
-
 ```text
-1. Crear apertura Egade vinculada a sucursal en estado EN_APERTURA.
-2. Crear fases base.
-3. Crear tareas con responsable, área y fecha.
-4. Ver dashboard ejecutivo.
-5. Ver timeline simple.
-6. Registrar presupuesto base.
-7. Registrar partidas.
-8. Crear solicitud de pago contra partida.
-9. Seleccionar proveedor.
-10. Seleccionar cuenta bancaria.
-11. Capturar total con IVA.
-12. Capturar folio fiscal.
-13. Adjuntar factura desde Nube.
-14. Enviar solicitud a Finanzas.
-15. Cambiar estados de pago.
-16. Ver documentos vinculados.
-17. Ver bitácora de cambios.
+notificación interna Suite
+correo
+Telegram operativo
+WhatsApp futuro si se decide
 ```
 
-Esto ya sería suficientemente fuerte para demostrar valor real.
-
----
-
-# 17. Riesgos
-
-### Riesgo 1: copiar Project y perder diferenciación
-
-Mitigación:
-
-* UX ejecutiva primero,
-* integración financiera/documental,
-* Gantt simple,
-* contexto Ultra.
-
-### Riesgo 2: volverse otro Excel
-
-Mitigación:
-
-* catálogos,
-* estados,
-* permisos,
-* validaciones,
-* trazabilidad,
-* dashboards.
-
-### Riesgo 3: sobreconstruir antes de Egade
-
-Mitigación:
-
-* F1 operativo,
-* F2 financiero,
-* F3 pagos,
-* no meter OCR ni automatización fiscal al inicio.
-
-### Riesgo 4: pagos sin control
-
-Mitigación:
-
-* partida obligatoria,
-* factura obligatoria,
-* folio fiscal obligatorio,
-* proveedor/cuenta bancaria por catálogo,
-* auditoría.
-
-### Riesgo 5: presupuesto se vuelve flexible sin control
-
-Mitigación:
-
-* presupuesto versionado,
-* partidas nuevas auditadas,
-* incrementos con aprobación,
-* saldos por partida.
-
-### Riesgo 6: UX pesada
-
-Mitigación:
-
-* dashboard primero,
-* panel lateral,
-* acciones rápidas,
-* móvil limitado,
-* no saturar con tablas.
-
----
-
-# 18. Criterios de aceptación F1
-
-F1 se considera completo cuando:
-
-1. Se puede crear una apertura.
-2. Se puede vincular a sucursal.
-3. Se pueden crear fases.
-4. Se pueden crear tareas.
-5. Las tareas tienen responsable, área, estado y fecha.
-6. Se pueden marcar tareas como completadas/bloqueadas.
-7. Se puede ver dashboard ejecutivo.
-8. Se puede ver timeline simple.
-9. Se puede consultar detalle de tarea.
-10. Se puede comentar en tarea.
-11. Se auditan cambios importantes.
-12. El backend valida permisos.
-13. La UI se siente como centro de control, no como tabla MVP.
-
----
-
-# 19. Criterios de aceptación F3 pagos
-
-F3 se considera completo cuando:
-
-1. Se puede crear proveedor.
-2. Se puede registrar cuenta bancaria.
-3. Se puede crear solicitud de pago.
-4. La solicitud exige apertura.
-5. La solicitud exige partida.
-6. La solicitud exige proveedor.
-7. La solicitud exige total.
-8. La solicitud exige folio fiscal.
-9. La solicitud exige factura adjunta.
-10. Se valida duplicado de folio fiscal.
-11. Se puede enviar a Finanzas.
-12. Finanzas puede revisar/programar/pagar/rechazar.
-13. Se actualizan saldos de partida.
-14. Se auditan cambios.
-15. Se puede consultar por apertura, proveedor, partida y estado.
-
----
-
-# 20. No incluido en MVP
-
-No incluir inicialmente:
-
-* OCR automático,
-* validación SAT,
-* integración bancaria,
-* Project avanzado,
-* WhatsApp automático,
-* IA sobre documentos,
-* firma digital,
-* aprobaciones complejas multi-nivel,
-* forecast financiero avanzado.
-
----
-
-# 21. Próximo paso
-
-Después de cerrar este contrato:
-
-1. Crear rama documental.
-2. Guardar contrato en:
+Regla:
 
 ```text
-docs/contratos/contrato modulo aperturas.md
+Las notificaciones deben venir después de tener bien definidos dependencias, bloqueos y responsables.
 ```
 
-3. Revisarlo.
-4. Crear F1 de implementación con contrato micro:
+---
+
+# 15. Control financiero F2
+
+Estado:
 
 ```text
-F1 — Base de Aperturas
+🟠 F2
 ```
 
-5. Implementar paso a paso:
+Debe incluir:
 
 ```text
-DB → Backend → Frontend → QA
+presupuesto autorizado por apertura
+partidas presupuestales
+proveedores
+cuentas bancarias
+solicitudes de pago
+facturas
+comprobantes
+estatus Finanzas
+saldos
 ```
+
+Flujo conceptual:
+
+```text
+Apertura
+→ Partida presupuestal
+→ Solicitud de pago
+→ Proveedor
+→ Factura/comprobante
+→ Validación Finanzas
+→ Programado/Pagado
+```
+
+No debe mezclarse de forma desordenada con tareas.
+
+La relación correcta es:
+
+```text
+Una tarea puede requerir pago.
+Una tarea puede estar vinculada a una solicitud de pago.
+Una solicitud de pago pertenece a una partida.
+Una partida pertenece al presupuesto de apertura.
+```
+
+---
+
+# 16. Control documental vinculado F2/F3
+
+Estado:
+
+```text
+🟠 F2/F3
+```
+
+Aperturas debe consumir documentos desde Nube Corporativa.
+
+Entidad propuesta:
+
+```text
+internal_document_links
+```
+
+Debe permitir vincular documentos a:
+
+```text
+OPENING
+PHASE
+TASK
+SUCURSAL
+PROVIDER
+PAYMENT_REQUEST
+GENERAL
+```
+
+Roles documentales:
+
+```text
+PLANO
+PERMISO
+CONTRATO
+COTIZACION
+FACTURA
+COMPROBANTE
+CHECKLIST
+EVIDENCIA
+MANUAL
+FINANCIERO
+CONSTRUCCION
+OPERACION
+```
+
+Reglas:
+
+```text
+Un documento puede estar vinculado a múltiples entidades.
+Un vínculo puede marcarse como principal/oficial.
+La Nube mantiene versión y visibilidad.
+Aperturas solo muestra el vínculo y contexto operativo.
+```
+
+---
+
+# 17. Permisos
+
+Estado:
+
+```text
+✅ Base implementada
+🟠 Refinamiento futuro por roles específicos
+```
+
+Roles actuales de administración/lectura:
+
+```text
+ADMIN
+ADMINISTRADOR
+SUPER_ADMIN
+SISTEMAS
+APERTURAS_ADMIN
+APERTURAS_MANAGER
+APERTURAS_COLABORADOR
+APERTURAS_FINANZAS
+APERTURAS_LECTOR
+GERENTE_REGIONAL
+LECTOR_GLOBAL
+```
+
+Regla:
+
+```text
+El backend es la fuente real de permisos.
+El frontend solo oculta o guía la UI.
+```
+
+Pendiente futuro:
+
+```text
+permisos por apertura
+permisos por área
+permisos financieros separados
+permisos de aprobación
+permisos de bloqueo/desbloqueo
+permisos de edición de fechas
+```
+
+---
+
+# 18. Riesgos y decisiones pendientes
+
+## Riesgo 1: Que el módulo se vuelva otro Excel visual
+
+Mitigación:
+
+```text
+Gantt ejecutivo
+panel lateral
+modales
+fases contraídas
+acciones contextuales
+menos formularios planos
+```
+
+Estado:
+
+```text
+🟡 En polish UX
+```
+
+---
+
+## Riesgo 2: Dependencias sin gobierno
+
+Si las dependencias se agregan sin claridad, pueden confundir.
+
+Mitigación:
+
+```text
+Nombrar claramente “Esta tarea depende de”
+evitar duplicados
+evitar dependencia consigo misma
+auditar cambios
+```
+
+Estado:
+
+```text
+🟠 Pendiente UI
+```
+
+---
+
+## Riesgo 3: Botón bloquear incompleto
+
+Bloquear solo como estado rojo no basta.
+
+Mitigación:
+
+```text
+Convertir bloqueo en evento operativo con causa, impacto y responsable.
+```
+
+Estado:
+
+```text
+🟠 Definido para siguiente fase
+```
+
+---
+
+## Riesgo 4: Subtareas mal modeladas
+
+Crear subtareas como tareas falsas ensucia el sistema.
+
+Mitigación:
+
+```text
+Primero checklist por tarea.
+Después tareas hijas reales si se requiere.
+```
+
+Estado:
+
+```text
+🔵 Roadmap
+```
+
+---
+
+## Riesgo 5: Reprogramación automática peligrosa
+
+Mover fechas automáticamente puede romper acuerdos reales.
+
+Mitigación:
+
+```text
+Primero preview de impacto.
+No mover automáticamente sin confirmación.
+```
+
+Estado:
+
+```text
+🟠 Definido para siguiente fase
+```
+
+---
+
+# 19. Orden recomendado de implementación desde este punto
+
+## F1 Polish UX inmediato
+
+Estado:
+
+```text
+🟡 EN CURSO
+```
+
+Prioridad:
+
+```text
+1. Gantt abre por default
+2. Fases contraídas por default
+3. Ocultar/mostrar tareas completadas
+4. Header de fechas sticky
+5. Columna Elemento fija sin encimarse
+6. Crear tarea desde modal flotante
+```
+
+---
+
+## F1.1 Operación viva
+
+Estado:
+
+```text
+🟠 SIGUIENTE FASE FUNCIONAL
+```
+
+Prioridad:
+
+```text
+1. Dependencias editables desde panel lateral
+2. Eliminar dependencias desde panel lateral
+3. Bloqueos operativos con causa
+4. Edición de fechas con preview de impacto
+5. Auditoría reforzada de cambios operativos
+```
+
+---
+
+## F2 Financiero
+
+Estado:
+
+```text
+🟠 F2
+```
+
+Prioridad:
+
+```text
+1. Presupuesto autorizado
+2. Partidas
+3. Proveedores
+4. Solicitudes de pago
+5. Facturas/comprobantes
+6. Estatus Finanzas
+7. Saldos por partida
+```
+
+---
+
+## F3 Documental vinculado
+
+Estado:
+
+```text
+🟠 F3
+```
+
+Prioridad:
+
+```text
+1. Vincular documentos desde Nube a apertura/fase/tarea
+2. Marcar documento oficial/principal
+3. Mostrar documentos críticos faltantes
+4. Evidencias por tarea
+5. Historial documental contextual
+```
+
+---
+
+## F4 Notificaciones y alertas
+
+Estado:
+
+```text
+🔵 ROADMAP
+```
+
+Prioridad:
+
+```text
+1. Notificar bloqueo
+2. Notificar cambio de fecha con impacto
+3. Notificar tarea crítica atrasada
+4. Notificar documento faltante
+5. Notificar pago pendiente
+6. Integración Telegram/correo
+```
+
+---
+
+# 20. Criterio de cierre F1
+
+F1 puede considerarse cerrada cuando:
+
+```text
+✅ Existe apertura vinculada a sucursal.
+✅ Existen fases.
+✅ Existen tareas.
+✅ Existen fechas.
+✅ Existe Gantt visual.
+✅ El Gantt abre en contexto del día actual.
+✅ La fila de fechas permanece visible.
+✅ La columna Elemento permanece visible.
+✅ El panel lateral no estorba cuando no se usa.
+✅ Se pueden ver comentarios.
+✅ Se pueden ver dependencias existentes.
+✅ Se puede crear nueva tarea sin saturar la pantalla.
+✅ Se puede usar Serranía como caso real de demostración.
+✅ La UI se entiende en menos de 30 segundos.
+```
+
+Estado actual:
+
+```text
+✅ Gran parte de F1 ya está implementada.
+🟡 Faltan polish UX menores antes de considerar F1 presentable.
+```
+
+---
+
+# 21. Mensaje ejecutivo para presentar
+
+Suite Ultra Aperturas no es un Gantt aislado.
+
+Es la base de un sistema interno para controlar aperturas de sucursales completas, conectando operación, fechas, responsables, presupuesto, pagos, proveedores, documentos y trazabilidad.
+
+La primera versión ya permite convertir un cronograma real como Serranía en una vista operativa dentro de Suite. El siguiente paso no es hacer “más pantallas”, sino cerrar el ciclo operativo:
+
+```text
+planear
+asignar
+bloquear
+depender
+ajustar fechas
+medir impacto
+documentar
+pagar
+auditar
+notificar
+```
+
+Esto permite que futuras aperturas como Egade no dependan únicamente de WhatsApp, archivos dispersos y seguimiento manual.
