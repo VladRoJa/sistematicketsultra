@@ -9,6 +9,7 @@ import { forkJoin, Subscription } from 'rxjs';
 
 import {
   Opening,
+  OpeningDependencyType,
   OpeningPhase,
   OpeningTask,
   OpeningTaskComment,
@@ -56,6 +57,13 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
   loading = false;
   savingTask = false;
   savingComment = false;
+  savingDependency = false;
+  isDependencyFormOpen = false;
+
+  dependencyForm = {
+    depends_on_task_id: null as number | null,
+    dependency_type: 'FINISH_TO_START' as OpeningDependencyType,
+  };
   errorMessage = '';
   successMessage = '';
 
@@ -368,6 +376,119 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
     }
 
     return this.dependencies.filter((dependency) => dependency.task_id === task.id);
+  }
+
+  openDependencyForm(): void {
+    this.isDependencyFormOpen = true;
+    this.resetDependencyForm();
+  }
+
+  closeDependencyForm(): void {
+    this.isDependencyFormOpen = false;
+    this.resetDependencyForm();
+  }
+
+  canCreateDependency(): boolean {
+    return Boolean(
+      this.selectedTask &&
+      this.dependencyForm.depends_on_task_id &&
+      !this.savingDependency &&
+      !this.isDependencyAlreadyRegistered(this.dependencyForm.depends_on_task_id),
+    );
+  }
+
+  createDependency(): void {
+    if (!this.selectedTask || !this.canCreateDependency()) {
+      return;
+    }
+
+    const dependsOnTaskId = this.dependencyForm.depends_on_task_id;
+
+    if (!dependsOnTaskId) {
+      return;
+    }
+
+    this.savingDependency = true;
+    this.clearMessages();
+
+    this.openingsService.createTaskDependency(this.openingId, this.selectedTask.id, {
+      depends_on_task_id: dependsOnTaskId,
+      dependency_type: this.dependencyForm.dependency_type,
+    }).subscribe({
+      next: (response) => {
+        this.savingDependency = false;
+        this.dependencies = [...this.dependencies, response.item];
+        this.successMessage = response.message || 'Dependencia agregada.';
+        this.closeDependencyForm();
+      },
+      error: (error) => {
+        this.savingDependency = false;
+        this.errorMessage = error?.error?.error || 'No se pudo agregar la dependencia.';
+      },
+    });
+  }
+
+  deleteDependency(dependencyId: number): void {
+    if (!this.selectedTask || this.savingDependency) {
+      return;
+    }
+
+    this.savingDependency = true;
+    this.clearMessages();
+
+    this.openingsService.deleteTaskDependency(this.openingId, dependencyId).subscribe({
+      next: (response) => {
+        this.savingDependency = false;
+        this.dependencies = this.dependencies.filter((dependency) => dependency.id !== dependencyId);
+        this.successMessage = response.message || 'Dependencia eliminada.';
+      },
+      error: (error) => {
+        this.savingDependency = false;
+        this.errorMessage = error?.error?.error || 'No se pudo eliminar la dependencia.';
+      },
+    });
+  }
+
+  getAvailableDependencyTasks(): OpeningTask[] {
+    if (!this.selectedTask) {
+      return [];
+    }
+
+    return this.tasks
+      .filter((task) => task.id !== this.selectedTask?.id)
+      .filter((task) => !this.isDependencyAlreadyRegistered(task.id))
+      .sort((a, b) => {
+        return (a.phase_id || 0) - (b.phase_id || 0) ||
+          (a.sort_order || 0) - (b.sort_order || 0) ||
+          a.id - b.id;
+      });
+  }
+
+  isDependencyAlreadyRegistered(taskId: number | null): boolean {
+    if (!this.selectedTask || !taskId) {
+      return false;
+    }
+
+    return this.getTaskDependencies(this.selectedTask)
+      .some((dependency) => dependency.depends_on_task_id === taskId);
+  }
+
+  getDependencyTypeLabel(type: OpeningDependencyType): string {
+    const labels: Record<OpeningDependencyType, string> = {
+      BLOCKER: 'Bloqueo',
+      FINISH_TO_START: 'Finaliza antes de iniciar',
+      START_TO_START: 'Inician juntas',
+      FINISH_TO_FINISH: 'Finalizan juntas',
+    };
+
+    return labels[type] || type;
+  }
+
+  private resetDependencyForm(): void {
+    this.dependencyForm = {
+      depends_on_task_id: null,
+      dependency_type: 'FINISH_TO_START',
+    };
   }
 
   getBlockedTasksCount(): number {

@@ -756,24 +756,97 @@
           </div>
 
           <section class="side-section">
-            <div class="side-heading">
-              <h3>Dependencias</h3>
-              <span>{{ getTaskDependencies(selectedTask).length }}</span>
+          <div class="side-heading">
+            <h3>Dependencias</h3>
+            <span>{{ getTaskDependencies(selectedTask).length }}</span>
+          </div>
+
+          <button
+            type="button"
+            class="mini-action dependency-add-action"
+            *ngIf="selectedTask && !isDependencyFormOpen"
+            (click)="openDependencyForm()"
+          >
+            + Agregar dependencia
+          </button>
+
+          <div class="dependency-form" *ngIf="isDependencyFormOpen && selectedTask">
+            <div class="field">
+              <label for="dependency-task">Esta tarea depende de</label>
+              <select
+                id="dependency-task"
+                [(ngModel)]="dependencyForm.depends_on_task_id"
+              >
+                <option [ngValue]="null">Selecciona tarea requerida</option>
+                <option
+                  *ngFor="let task of getAvailableDependencyTasks(); trackBy: trackByTaskId"
+                  [ngValue]="task.id"
+                >
+                  {{ getPhaseNameById(task.phase_id) }} · {{ task.title }}
+                </option>
+              </select>
             </div>
 
-            <div
-              class="dependency-item"
-              *ngFor="let dependency of getTaskDependencies(selectedTask); trackBy: trackByDependencyId"
-            >
+            <div class="field">
+              <label for="dependency-type">Tipo</label>
+              <select
+                id="dependency-type"
+                [(ngModel)]="dependencyForm.dependency_type"
+              >
+                <option [ngValue]="'FINISH_TO_START'">Finaliza antes de iniciar</option>
+                <option [ngValue]="'START_TO_START'">Inician juntas</option>
+                <option [ngValue]="'FINISH_TO_FINISH'">Finalizan juntas</option>
+                <option [ngValue]="'BLOCKER'">Bloqueo</option>
+              </select>
+            </div>
+
+            <div class="dependency-actions">
+              <button
+                type="button"
+                class="secondary-action"
+                (click)="closeDependencyForm()"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                class="primary-action"
+                (click)="createDependency()"
+                [disabled]="!canCreateDependency()"
+              >
+                Guardar dependencia
+              </button>
+            </div>
+          </div>
+
+          <article
+            class="dependency-card"
+            *ngFor="let dependency of getTaskDependencies(selectedTask); trackBy: trackByDependencyId"
+          >
+            <div>
               <span>Depende de</span>
               <strong>{{ dependency.depends_on_task?.title || dependency.depends_on_task_id }}</strong>
-              <small>{{ dependency.dependency_type }}</small>
+              <small>{{ getDependencyTypeLabel(dependency.dependency_type) }}</small>
             </div>
 
-            <div class="empty-side" *ngIf="getTaskDependencies(selectedTask).length === 0">
-              Sin dependencias registradas.
-            </div>
-          </section>
+            <button
+              type="button"
+              class="danger-mini-action"
+              (click)="deleteDependency(dependency.id)"
+              [disabled]="savingDependency"
+            >
+              Eliminar
+            </button>
+          </article>
+
+          <div
+            class="empty-side"
+            *ngIf="getTaskDependencies(selectedTask).length === 0 && !isDependencyFormOpen"
+          >
+            Sin dependencias registradas.
+          </div>
+        </section>
 
           <section class="side-section">
             <div class="side-heading">
