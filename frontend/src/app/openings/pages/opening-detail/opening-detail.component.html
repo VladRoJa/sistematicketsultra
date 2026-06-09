@@ -293,10 +293,18 @@
             <div class="phase-filter">
               <button
                 type="button"
-                [class.active]="selectedPhaseId === 'ALL'"
-                (click)="setPhaseFilter('ALL')"
+                class="mini-action"
+                (click)="expandAllDashboardPhases()"
               >
-                Todas
+                Expandir fases
+              </button>
+
+              <button
+                type="button"
+                class="mini-action"
+                (click)="collapseAllDashboardPhases()"
+              >
+                Contraer fases
               </button>
             </div>
           </div>
@@ -305,44 +313,100 @@
             <article
               class="phase-node"
               *ngFor="let phase of getVisiblePhases(); trackBy: trackByPhaseId"
-              [class.active]="selectedPhaseId === phase.id"
-              (click)="setPhaseFilter(phase.id)"
+              [class.active]="isDashboardPhaseExpanded(phase)"
+              (click)="toggleDashboardPhase(phase)"
             >
               <div class="phase-dot"></div>
 
-              <div class="phase-content">
-                <div class="phase-title">
-                  <h3>{{ phase.name }}</h3>
-                  <span
-                    class="status-badge"
-                    [attr.data-tone]="getStatusTone(phase.status)"
-                  >
-                    {{ getStatusLabel(phase.status) }}
-                  </span>
-                </div>
+      <div class="phase-content">
+        <div class="phase-sticky-header">
+          <div class="phase-title">
+            <h3>{{ phase.name }}</h3>
+            <span
+              class="status-badge"
+              [attr.data-tone]="getStatusTone(phase.status)"
+            >
+              {{ getStatusLabel(phase.status) }}
+            </span>
+          </div>
 
-                <p>
-                  {{ getPhaseCompletedTasks(phase) }} /
-                  {{ getTasksForPhase(phase.id).length }} tareas completadas
-                </p>
+          <p>
+            {{ getPhaseCompletedTasks(phase) }} /
+            {{ getTasksForPhase(phase.id).length }} tareas completadas
+          </p>
 
-                <div class="progress-track">
-                  <div class="progress-fill" [style.width.%]="getPhaseProgress(phase)"></div>
-                </div>
+          <div class="progress-track">
+            <div class="progress-fill" [style.width.%]="getPhaseProgress(phase)"></div>
+          </div>
 
-                <small>
-                  {{ getDateLabel(phase.planned_start_date) }} →
-                  {{ getDateLabel(phase.planned_end_date) }}
-                </small>
+          <small>
+            {{ getDateLabel(phase.planned_start_date) }} →
+            {{ getDateLabel(phase.planned_end_date) }}
+          </small>
 
-                <button
-                  type="button"
-                  class="mini-action"
-                  (click)="openCreateTaskPanel(phase); $event.stopPropagation()"
-                >
-                  + tarea
-                </button>
-              </div>
+          <div class="phase-inline-actions">
+            <button
+              type="button"
+              class="mini-action"
+              (click)="toggleDashboardPhase(phase); $event.stopPropagation()"
+            >
+              {{ getDashboardPhaseToggleLabel(phase) }}
+            </button>
+
+            <button
+              type="button"
+              class="mini-action"
+              (click)="openCreateTaskPanel(phase); $event.stopPropagation()"
+            >
+              + tarea
+            </button>
+          </div>
+        </div>
+
+        <div
+          class="phase-inline-tasks"
+          *ngIf="isDashboardPhaseExpanded(phase)"
+        >
+          <article
+            class="phase-inline-task"
+            *ngFor="let task of getTasksForPhase(phase.id); trackBy: trackByTaskId"
+            [class.selected]="selectedTask?.id === task.id"
+            (click)="selectTask(task); $event.stopPropagation()"
+          >
+            <div>
+              <h4>{{ task.title }}</h4>
+              <p>{{ task.description || 'Sin descripción' }}</p>
+            </div>
+
+            <div class="phase-inline-task-meta">
+              <span
+                class="status-badge"
+                [attr.data-tone]="getStatusTone(task.status)"
+              >
+                {{ getStatusLabel(task.status) }}
+              </span>
+
+              <span
+                class="due-pill"
+                [attr.data-tone]="getTaskDueTone(task)"
+              >
+                {{ getDateLabel(task.planned_due_date, 'Sin compromiso') }}
+              </span>
+
+              <span class="progress-pill">
+                {{ task.progress_percent || 0 }}%
+              </span>
+            </div>
+          </article>
+
+          <div
+            class="empty-group"
+            *ngIf="getTasksForPhase(phase.id).length === 0"
+          >
+            Sin tareas en esta fase.
+          </div>
+        </div>
+      </div>
             </article>
           </div>
         </section>
@@ -534,7 +598,7 @@
           </div>
         </section>
 
-        <section class="tasks-card" *ngIf="isActiveView('DASHBOARD') || isActiveView('TASKS')">
+        <section class="tasks-card" *ngIf="isActiveView('TASKS')">
           <div class="section-heading">
             <div>
               <p class="eyebrow">Trabajo accionable</p>
