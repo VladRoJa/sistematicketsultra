@@ -48,6 +48,7 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
 
   selectedTask: OpeningTask | null = null;
   selectedPhaseId: number | 'ALL' = 'ALL';
+  private expandedDashboardPhaseIds = new Set<number>();
   activeView: OpeningDetailView = 'GANTT';
   hideCompletedTasksInGantt = true;
 
@@ -153,6 +154,7 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
         this.dependencies = dependenciesResponse.items || [];
         
         this.initializeGanttCollapsedPhases();
+        this.initializeDashboardExpandedPhases();
 
         if (this.selectedTask) {
           const refreshedTask = this.tasks.find((task) => task.id === this.selectedTask?.id);
@@ -1210,6 +1212,38 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
     this.hasInitializedGanttCollapse = true;
   }
 
+  isDashboardPhaseExpanded(phase: OpeningPhase): boolean {
+    return this.expandedDashboardPhaseIds.has(phase.id);
+  }
+
+  toggleDashboardPhase(phase: OpeningPhase): void {
+    if (this.expandedDashboardPhaseIds.has(phase.id)) {
+      this.expandedDashboardPhaseIds.delete(phase.id);
+      return;
+    }
+
+    this.expandedDashboardPhaseIds.add(phase.id);
+  }
+
+  expandAllDashboardPhases(): void {
+    this.expandedDashboardPhaseIds = new Set(
+      this.getVisiblePhases().map((phase) => phase.id),
+    );
+  }
+
+  collapseAllDashboardPhases(): void {
+    this.expandedDashboardPhaseIds.clear();
+  }
+
+  getDashboardPhaseToggleLabel(phase: OpeningPhase): string {
+    return this.isDashboardPhaseExpanded(phase) ? 'Ocultar tareas' : 'Ver tareas';
+  }
+
+  private initializeDashboardExpandedPhases(): void {
+    // Intencionalmente vacío:
+    // el Dashboard debe iniciar con todas las fases contraídas.
+    // El usuario expande manualmente la fase que quiera revisar.
+  }
   trackByPhaseId(_index: number, phase: OpeningPhase): number {
     return phase.id;
   }

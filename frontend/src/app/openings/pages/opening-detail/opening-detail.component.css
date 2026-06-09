@@ -505,6 +505,10 @@ textarea:focus {
   align-items: start;
   min-width: 0;
   max-width: 100%;
+  overflow: visible;
+}
+
+.control-layout.gantt-mode {
   overflow-x: hidden;
 }
 
@@ -1533,4 +1537,113 @@ textarea:focus {
 .danger-mini-action:disabled {
   cursor: not-allowed;
   opacity: 0.55;
+}
+
+.phase-inline-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.phase-inline-tasks {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid #eef2f7;
+}
+
+.phase-inline-task {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 13px;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  background: #f8fafc;
+  cursor: pointer;
+  transition:
+    border-color 0.14s ease,
+    box-shadow 0.14s ease,
+    transform 0.14s ease,
+    background 0.14s ease;
+}
+
+.phase-inline-task:hover,
+.phase-inline-task.selected {
+  border-color: rgba(229, 69, 37, 0.58);
+  background: #fff7ed;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
+}
+
+.phase-inline-task h4 {
+  margin-bottom: 4px;
+  color: #111827;
+}
+
+.phase-inline-task p {
+  margin-bottom: 0;
+  color: #6b7280;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.phase-inline-task-meta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 880px) {
+  .phase-inline-task {
+    grid-template-columns: 1fr;
+  }
+
+  .phase-inline-task-meta {
+    justify-content: flex-start;
+  }
+}
+
+.phase-node {
+  align-items: start;
+}
+
+.phase-content {
+  overflow: visible;
+  padding: 0;
+}
+
+.phase-sticky-header {
+  position: sticky;
+  top: 95px;
+  z-index: 35;
+  padding: 14px;
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, #ffffff 0%, rgba(255, 255, 255, 0.96) 100%);
+  box-shadow:
+    0 10px 24px rgba(15, 23, 42, 0.08),
+    inset 0 0 0 1px #e5e7eb;
+  backdrop-filter: blur(10px);
+}
+
+.phase-node.active .phase-sticky-header {
+  box-shadow:
+    0 12px 28px rgba(229, 69, 37, 0.12),
+    inset 0 0 0 1px rgba(229, 69, 37, 0.36);
+}
+
+.phase-inline-tasks {
+  padding: 14px;
+  padding-top: 16px;
+}
+
+.phase-content > .phase-inline-tasks:first-child {
+  margin-top: 0;
 }
