@@ -34,12 +34,13 @@ MONTH_NAMES_ES = {
 
 TRACK_START_ROW = 4
 TRACK_FIRST_COL = 2
-TRACK_LAST_COL = 55
+TRACK_LAST_COL = 54
 
-CURRENCY_FORMAT = '$#,##0.00;[Red]-$#,##0.00;$0.00'
-INTEGER_FORMAT = '#,##0'
-DECIMAL_FORMAT = '#,##0.00'
-PERCENT_FORMAT = '0.0%'
+CURRENCY_FORMAT = '$#,##0.00;$#,##0.00;$0.00'
+INTEGER_FORMAT = '#,##0;#,##0;0'
+DECIMAL_FORMAT = '#,##0.00;#,##0.00;0.00'
+OCCUPANCY_DECIMAL_FORMAT = '#,##0.00000;#,##0.00000;0.00000'
+PERCENT_FORMAT = '0.0%;0.0%;0.0%'
 
 ULTRA_ORANGE = "E54525"
 ULTRA_BLUE = "2C4595"
@@ -66,8 +67,8 @@ TRACK_GROUPS = [
     ("Z2:AI2", "V e n t a s   n u e v a s     y     R e a c t i v a c i o n e s "),
     ("AJ2:AQ2", "B a j a s  & Churn"),
     ("AR2:AT2", "D o m i c i l i a d o s"),
-    ("AU2:AY2", "A  R  P  U"),
-    ("AZ2:BC2", "Tienda"),
+    ("AU2:AX2", "A  R  P  U"),
+    ("AY2:BB2", "Tienda"),
 ]
 
 TRACK_BRANCH_ORDER = [
@@ -156,13 +157,12 @@ BASE_HEADERS = {
     "AT": "% alcance {day_month}",
     "AU": "Meta ARPU ",
     "AV": "Real ARPU {day_month}",
-    "AW": "ARPU TEORICO ",
-    "AX": "Dif $$ ARPU",
-    "AY": "% Alcance ARPU",
-    "AZ": "Meta venta Tienda",
-    "BA": "Real {day_month}",
-    "BB": "Diferencia $$",
-    "BC": "% alcance real",
+    "AW": "Dif $$ ARPU",
+    "AX": "% Alcance ARPU",
+    "AY": "Meta venta Tienda",
+    "AZ": "Real {day_month}",
+    "BA": "Diferencia $$",
+    "BB": "% alcance real",
 }
 
 
@@ -385,14 +385,13 @@ def _write_track_data_row(
 
     worksheet[f"AU{excel_row}"] = _to_number(getattr(mart_row, "meta_arpu_mes", None))
     worksheet[f"AV{excel_row}"] = f"=IFERROR(V{excel_row}/M{excel_row},0)"
-    worksheet[f"AW{excel_row}"] = f"=IFERROR(S{excel_row}/M{excel_row},0)"
-    worksheet[f"AX{excel_row}"] = f"=AV{excel_row}-AU{excel_row}"
-    worksheet[f"AY{excel_row}"] = f"=IFERROR(AV{excel_row}/AU{excel_row},0)"
+    worksheet[f"AW{excel_row}"] = f"=AV{excel_row}-AU{excel_row}"
+    worksheet[f"AX{excel_row}"] = f"=IFERROR(AV{excel_row}/AU{excel_row},0)"
 
-    worksheet[f"AZ{excel_row}"] = _to_number(getattr(mart_row, "meta_venta_tienda_mes", None))
-    worksheet[f"BA{excel_row}"] = _to_number(getattr(mart_row, "venta_tienda_real_mtd", None))
-    worksheet[f"BB{excel_row}"] = f"=AZ{excel_row}-BA{excel_row}"
-    worksheet[f"BC{excel_row}"] = f"=IFERROR(BA{excel_row}/AZ{excel_row},0)"
+    worksheet[f"AY{excel_row}"] = _to_number(getattr(mart_row, "meta_venta_tienda_mes", None))
+    worksheet[f"AZ{excel_row}"] = _to_number(getattr(mart_row, "venta_tienda_real_mtd", None))
+    worksheet[f"BA{excel_row}"] = f"=AY{excel_row}-AZ{excel_row}"
+    worksheet[f"BB{excel_row}"] = f"=IFERROR(AZ{excel_row}/AY{excel_row},0)"
 
 
 def _write_subtotal_row(
@@ -414,7 +413,7 @@ def _write_subtotal_row(
     sum_columns = [
         "D", "K", "L", "M", "N", "O", "R", "S", "T", "U", "V", "X", "Y",
         "Z", "AA", "AB", "AC", "AE", "AF", "AG", "AH", "AJ", "AK", "AL", "AM",
-        "AR", "AS", "AZ", "BA", "BB",
+        "AR", "AS", "AY", "AZ", "BA",
     ]
 
     for column_letter in sum_columns:
@@ -440,10 +439,9 @@ def _write_subtotal_row(
     worksheet[f"AT{totals_row}"] = f"=IFERROR(AS{totals_row}/AR{totals_row},0)"
     worksheet[f"AU{totals_row}"] = f"=AVERAGE(AU{first_data_row}:AU{last_data_row})"
     worksheet[f"AV{totals_row}"] = f"=IFERROR(V{totals_row}/M{totals_row},0)"
-    worksheet[f"AW{totals_row}"] = f"=IFERROR(S{totals_row}/M{totals_row},0)"
-    worksheet[f"AX{totals_row}"] = f"=AV{totals_row}-AU{totals_row}"
-    worksheet[f"AY{totals_row}"] = f"=IFERROR(AV{totals_row}/AU{totals_row},0)"
-    worksheet[f"BC{totals_row}"] = f"=IFERROR(BA{totals_row}/AZ{totals_row},0)"
+    worksheet[f"AW{totals_row}"] = f"=AV{totals_row}-AU{totals_row}"
+    worksheet[f"AX{totals_row}"] = f"=IFERROR(AV{totals_row}/AU{totals_row},0)"
+    worksheet[f"BB{totals_row}"] = f"=IFERROR(AZ{totals_row}/AY{totals_row},0)"
 
 
 def _write_general_totals_row(
@@ -458,7 +456,7 @@ def _write_general_totals_row(
     sum_columns = [
         "D", "F", "K", "L", "M", "N", "O", "R", "S", "T", "U", "V", "X", "Y",
         "Z", "AA", "AB", "AC", "AE", "AF", "AG", "AH", "AJ", "AK", "AL", "AM",
-        "AR", "AS", "AZ", "BA", "BB",
+        "AR", "AS", "AY", "AZ", "BA",
     ]
 
     for column_letter in sum_columns:
@@ -483,10 +481,9 @@ def _write_general_totals_row(
     worksheet[f"AT{totals_row}"] = f"=IFERROR(AS{totals_row}/AR{totals_row},0)"
     worksheet[f"AU{totals_row}"] = f"=AVERAGE(AU{base_totals_row}:AU{new_totals_row})"
     worksheet[f"AV{totals_row}"] = f"=IFERROR(V{totals_row}/M{totals_row},0)"
-    worksheet[f"AW{totals_row}"] = f"=IFERROR(S{totals_row}/M{totals_row},0)"
-    worksheet[f"AX{totals_row}"] = f"=AV{totals_row}-AU{totals_row}"
-    worksheet[f"AY{totals_row}"] = f"=IFERROR(AV{totals_row}/AU{totals_row},0)"
-    worksheet[f"BC{totals_row}"] = f"=IFERROR(BA{totals_row}/AZ{totals_row},0)"
+    worksheet[f"AW{totals_row}"] = f"=AV{totals_row}-AU{totals_row}"
+    worksheet[f"AX{totals_row}"] = f"=IFERROR(AV{totals_row}/AU{totals_row},0)"
+    worksheet[f"BB{totals_row}"] = f"=IFERROR(AZ{totals_row}/AY{totals_row},0)"
 
 def _apply_track_sheet_formatting(*, worksheet: Worksheet, last_row: int) -> None:
     black_fill = PatternFill("solid", fgColor="1F1F1F")
@@ -543,7 +540,7 @@ def _apply_track_sheet_formatting(*, worksheet: Worksheet, last_row: int) -> Non
 
     _set_number_format(
         worksheet=worksheet,
-        column_letters=["R", "S", "T", "U", "V", "X", "Y", "AU", "AV", "AW", "AX", "AZ", "BA", "BB"],
+        column_letters=["R", "S", "T", "U", "V", "X", "Y", "AU", "AV", "AW", "AY", "AZ", "BA"],
         start_row=TRACK_START_ROW,
         end_row=last_row,
         number_format=CURRENCY_FORMAT,
@@ -564,11 +561,19 @@ def _apply_track_sheet_formatting(*, worksheet: Worksheet, last_row: int) -> Non
     )
     _set_number_format(
         worksheet=worksheet,
-        column_letters=["E", "G", "H", "I", "J", "P", "Q", "W", "AD", "AI", "AN", "AO", "AP", "AQ", "AT", "AY", "BC"],
+        column_letters=["E", "G", "H", "I"],
+        start_row=TRACK_START_ROW,
+        end_row=last_row,
+        number_format=OCCUPANCY_DECIMAL_FORMAT,
+    )
+
+    _set_number_format(
+        worksheet=worksheet,
+        column_letters=["J", "P", "Q", "W", "AD", "AI", "AN", "AO", "AP", "AQ", "AT", "AX", "BB"],
         start_row=TRACK_START_ROW,
         end_row=last_row,
         number_format=PERCENT_FORMAT,
-    )
+    )   
 
     widths = {
         "B": 6,
@@ -613,7 +618,7 @@ def _apply_track_sheet_formatting(*, worksheet: Worksheet, last_row: int) -> Non
         last_row=last_row,
     )
 
-    worksheet.auto_filter.ref = f"B3:BC{last_row}"
+    worksheet.auto_filter.ref = f"B3:BB{last_row}"
 
 def _apply_zebra_rows(
     *,
@@ -679,7 +684,7 @@ def _apply_track_segment_formatting(
         "AJ": ULTRA_CHARCOAL,
         "AR": ULTRA_BLUE,
         "AU": ULTRA_CHARCOAL,
-        "AZ": ULTRA_ORANGE,
+        "AY": ULTRA_ORANGE,
     }
 
     segment_ranges = [
@@ -689,8 +694,8 @@ def _apply_track_segment_formatting(
         ("Z", "AI", "Ventas nuevas y Reactivaciones"),
         ("AJ", "AQ", "Bajas & Churn"),
         ("AR", "AT", "Domiciliados"),
-        ("AU", "AY", "ARPU"),
-        ("AZ", "BC", "Tienda"),
+        ("AU", "AX", "ARPU"),
+        ("AY", "BB", "Tienda"),
     ]
 
     header_fill = PatternFill("solid", fgColor=HEADER_DARK)
@@ -742,9 +747,9 @@ def _apply_track_segment_formatting(
         "AM": ULTRA_ORANGE,
         "AQ": ULTRA_ORANGE,
         "AT": ULTRA_BLUE,
-        "AX": ULTRA_ORANGE,
-        "BB": ULTRA_ORANGE,
-        "BC": ULTRA_BLUE,
+        "AW": ULTRA_ORANGE,
+        "BA": ULTRA_ORANGE,
+        "BB": ULTRA_BLUE,
     }
 
     for column_letter, color in highlighted_header_columns.items():
@@ -777,14 +782,14 @@ def _apply_track_conditional_formatting(
         "X",   # Meta del día ingresos
         "Y",   # Dif $$ Real vs Meta
         "AC",  # Diferencia clientes nuevos
-        "AX",  # Dif $$ ARPU
+        "AW",  # Dif $$ ARPU
     ]
 
     positive_is_bad_columns = [
         "AH",  # Meta del día reactivaciones, positivo = falta
         "AM",  # Bajas sobre ideal, positivo = mal
         "AQ",  # Churn sobre ideal, positivo = mal
-        "BB",  # Diferencia tienda, positivo = falta
+        "BA",  # Diferencia tienda, positivo = falta
     ]
 
     percent_goal_columns = [
@@ -793,8 +798,8 @@ def _apply_track_conditional_formatting(
         "AD",  # % alcance nuevos
         "AI",  # % alcance reactivaciones
         "AT",  # % alcance domiciliados
-        "AY",  # % alcance ARPU
-        "BC",  # % alcance tienda
+        "AX",  # % alcance ARPU
+        "BB",  # % alcance tienda
     ]
 
     for column_letter in positive_is_good_columns:
