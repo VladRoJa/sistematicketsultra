@@ -27,6 +27,10 @@ from app.models import (
     OpeningTaskStatus,
     Sucursal,
     SucursalOperationalStatus,
+    OpeningTaskBlockerImpact,
+    OpeningTaskBlockerORM,
+    OpeningTaskBlockerStatus,
+    OpeningTaskBlockerType,
 )
 
 openings_bp = Blueprint("openings_bp", __name__)
@@ -277,6 +281,44 @@ def _serialize_task_comment(comment: OpeningTaskCommentORM) -> dict[str, Any]:
         "created_by": comment.created_by,
         "creator": _serialize_user(comment.creator),
         "created_at": _serialize_datetime(comment.created_at),
+    }
+
+def _serialize_task_summary(task: OpeningTaskORM | None) -> dict[str, Any] | None:
+    if not task:
+        return None
+
+    return {
+        "id": task.id,
+        "opening_id": task.opening_id,
+        "phase_id": task.phase_id,
+        "title": task.title,
+        "status": task.status,
+        "priority": task.priority,
+        "planned_start_date": _serialize_date(task.planned_start_date),
+        "planned_due_date": _serialize_date(task.planned_due_date),
+        "progress_percent": _serialize_decimal(task.progress_percent),
+    }
+
+
+def _serialize_task_blocker(blocker: OpeningTaskBlockerORM) -> dict[str, Any]:
+    return {
+        "id": blocker.id,
+        "opening_id": blocker.opening_id,
+        "blocked_task_id": blocker.blocked_task_id,
+        "blocked_task": _serialize_task_summary(blocker.blocked_task),
+        "blocker_type": blocker.blocker_type,
+        "blocking_task_id": blocker.blocking_task_id,
+        "blocking_task": _serialize_task_summary(blocker.blocking_task),
+        "reason": blocker.reason,
+        "impact_level": blocker.impact_level,
+        "status": blocker.status,
+        "created_by": blocker.created_by,
+        "creator": _serialize_user(blocker.creator),
+        "resolved_by": blocker.resolved_by,
+        "resolver": _serialize_user(blocker.resolver),
+        "created_at": _serialize_datetime(blocker.created_at),
+        "resolved_at": _serialize_datetime(blocker.resolved_at),
+        "resolution_comment": blocker.resolution_comment,
     }
 
 def _audit_opening(
@@ -1417,6 +1459,296 @@ def delete_task_dependency(opening_id: int, dependency_id: int):
     return jsonify({
         "message": "Dependencia eliminada.",
     }), 200
+    
+@openings_bp.route("/<int:opening_id>/task-blockers", methods=["GET"])
+@jwt_required()
+def list_opening_task_blockers(opening_id: int):
+    denied = _require_openings_read()
+    if denied:
+        return denied
+
+    opening = db.session.get(OpeningORM, opening_id)
+
+    if not opening:
+        return jsonify({
+            "error": "Not Found",
+            "detail": "Apertura no encontrada.",
+        }), 404
+
+    status = (request.args.get("status") or "").strip().upper()
+    task_id = request.args.get("task_id", default=None, type=int)
+
+    query = OpeningTaskBlockerORM.query.filter(
+        OpeningTaskBlockerORM.opening_id == opening_id,
+    )
+
+    if status:
+        if status not in OpeningTaskBlockerStatus.ALL:
+            return jsonify({
+                "error": "Bad Request",
+                "detail": "Estatus de bloqueo inválido.",
+            }), 400
+
+        query = query.filter(OpeningTaskBlockerORM.status == status)
+
+    if task_id:
+        task = db.session.get(OpeningTaskORM, task_id)
+
+        if not task or task.opening_id != opening_id:
+            return jsonify({
+                "error": "Not Found",
+                "detail": "Tarea no encontrada para esta apertura.",
+            }), 404
+
+        query = query.filter(OpeningTaskBlockerORM.blocked_task_id == task_id)
+
+    blockers = (
+        query
+        .order_by(
+            OpeningTaskBlockerORM.status.asc(),
+            OpeningTaskBlockerORM.created_at.desc(),
+            OpeningTaskBlockerORM.id.desc(),
+        )
+        .all()
+    )
+
+    return jsonify({
+        "items": [
+            _serialize_task_blocker(blocker)
+            for blocker in blockers
+        ],
+    }), 200
+
+
+@openings_bp.route("/<int:opening_id>/tasks/<int:task_id>/blockers", methods=["POST"])
+@jwt_required()
+def create_task_blocker(opening_id: int, task_id: int):
+    denied = _require_openings_admin()
+    if denied:
+        return denied
+
+    opening = db.session.get(OpeningORM, opening_id)
+
+    if not opening:
+        return jsonify({
+            "error": "Not Found",
+            "detail": "Apertura no encontrada.",
+        }), 404
+
+    task = db.session.get(OpeningTaskORM, task_id)
+
+    if not task or task.opening_id != opening_id:
+        return jsonify({
+            "error": "Not Found",
+            "detail": "Tarea no encontrada para esta apertura.",
+        }), 404
+
+    data = request.get_json(silent=True) or {}
+
+    blocker_type = str(
+        data.get("blocker_type") or OpeningTaskBlockerType.OTHER
+    ).strip().upper()
+
+    impact_level = str(
+        data.get("impact_level") or OpeningTaskBlockerImpact.MEDIUM
+    ).strip().upper()
+
+    reason = str(data.get("reason") or "").strip()
+    blocking_task_id = data.get("blocking_task_id")
+
+    if blocker_type not in OpeningTaskBlockerType.ALL:
+        return jsonify({
+            "error": "Bad Request",
+            "detail": "Tipo de bloqueo inválido.",
+        }), 400
+
+    if impact_level not in OpeningTaskBlockerImpact.ALL:
+        return jsonify({
+            "error": "Bad Request",
+            "detail": "Nivel de impacto inválido.",
+        }), 400
+
+    if not reason:
+        return jsonify({
+            "error": "Bad Request",
+            "detail": "El motivo del bloqueo es obligatorio.",
+        }), 400
+
+    parsed_blocking_task_id = None
+
+    if blocker_type == OpeningTaskBlockerType.TASK:
+        if not blocking_task_id:
+            return jsonify({
+                "error": "Bad Request",
+                "detail": "El bloqueo por tarea requiere una tarea bloqueante.",
+            }), 400
+
+        try:
+            parsed_blocking_task_id = int(blocking_task_id)
+        except (TypeError, ValueError):
+            return jsonify({
+                "error": "Bad Request",
+                "detail": "La tarea bloqueante es inválida.",
+            }), 400
+
+        if parsed_blocking_task_id == task_id:
+            return jsonify({
+                "error": "Bad Request",
+                "detail": "Una tarea no puede bloquearse a sí misma.",
+            }), 400
+
+        blocking_task = db.session.get(OpeningTaskORM, parsed_blocking_task_id)
+
+        if not blocking_task or blocking_task.opening_id != opening_id:
+            return jsonify({
+                "error": "Bad Request",
+                "detail": "La tarea bloqueante no pertenece a esta apertura.",
+            }), 400
+
+    elif blocking_task_id:
+        try:
+            parsed_blocking_task_id = int(blocking_task_id)
+        except (TypeError, ValueError):
+            return jsonify({
+                "error": "Bad Request",
+                "detail": "La tarea bloqueante es inválida.",
+            }), 400
+
+        if parsed_blocking_task_id == task_id:
+            return jsonify({
+                "error": "Bad Request",
+                "detail": "Una tarea no puede bloquearse a sí misma.",
+            }), 400
+
+        blocking_task = db.session.get(OpeningTaskORM, parsed_blocking_task_id)
+
+        if not blocking_task or blocking_task.opening_id != opening_id:
+            return jsonify({
+                "error": "Bad Request",
+                "detail": "La tarea bloqueante no pertenece a esta apertura.",
+            }), 400
+
+    existing_active = (
+        OpeningTaskBlockerORM.query
+        .filter(
+            OpeningTaskBlockerORM.opening_id == opening_id,
+            OpeningTaskBlockerORM.blocked_task_id == task_id,
+            OpeningTaskBlockerORM.status == OpeningTaskBlockerStatus.ACTIVE,
+            OpeningTaskBlockerORM.blocker_type == blocker_type,
+            OpeningTaskBlockerORM.blocking_task_id == parsed_blocking_task_id,
+        )
+        .first()
+    )
+
+    if existing_active:
+        return jsonify({
+            "error": "Conflict",
+            "detail": "Ya existe un bloqueo activo equivalente para esta tarea.",
+            "item": _serialize_task_blocker(existing_active),
+        }), 409
+
+    blocker = OpeningTaskBlockerORM(
+        opening_id=opening_id,
+        blocked_task_id=task_id,
+        blocker_type=blocker_type,
+        blocking_task_id=parsed_blocking_task_id,
+        reason=reason,
+        impact_level=impact_level,
+        status=OpeningTaskBlockerStatus.ACTIVE,
+        created_by=_current_user_id(),
+    )
+
+    db.session.add(blocker)
+    db.session.flush()
+
+    serialized_blocker = _serialize_task_blocker(blocker)
+
+    _audit_opening(
+        opening_id,
+        OpeningAuditAction.TASK_BLOCKER_CREATED,
+        entity_type="TASK_BLOCKER",
+        entity_id=blocker.id,
+        new_value_json=serialized_blocker,
+        metadata_json={
+            "blocked_task_id": task_id,
+            "blocking_task_id": parsed_blocking_task_id,
+            "blocker_type": blocker_type,
+            "impact_level": impact_level,
+        },
+    )
+
+    db.session.commit()
+
+    return jsonify({
+        "message": "Bloqueo creado.",
+        "item": serialized_blocker,
+    }), 201
+
+
+@openings_bp.route(
+    "/<int:opening_id>/task-blockers/<int:blocker_id>/resolve",
+    methods=["PATCH"],
+)
+@jwt_required()
+def resolve_task_blocker(opening_id: int, blocker_id: int):
+    denied = _require_openings_admin()
+    if denied:
+        return denied
+
+    opening = db.session.get(OpeningORM, opening_id)
+
+    if not opening:
+        return jsonify({
+            "error": "Not Found",
+            "detail": "Apertura no encontrada.",
+        }), 404
+
+    blocker = db.session.get(OpeningTaskBlockerORM, blocker_id)
+
+    if not blocker or blocker.opening_id != opening_id:
+        return jsonify({
+            "error": "Not Found",
+            "detail": "Bloqueo no encontrado para esta apertura.",
+        }), 404
+
+    if blocker.status == OpeningTaskBlockerStatus.RESOLVED:
+        return jsonify({
+            "error": "Conflict",
+            "detail": "El bloqueo ya está resuelto.",
+            "item": _serialize_task_blocker(blocker),
+        }), 409
+
+    data = request.get_json(silent=True) or {}
+    resolution_comment = str(data.get("resolution_comment") or "").strip()
+
+    old_value = _serialize_task_blocker(blocker)
+
+    blocker.status = OpeningTaskBlockerStatus.RESOLVED
+    blocker.resolved_by = _current_user_id()
+    blocker.resolved_at = _utc_now()
+    blocker.resolution_comment = resolution_comment or None
+
+    serialized_blocker = _serialize_task_blocker(blocker)
+
+    _audit_opening(
+        opening_id,
+        OpeningAuditAction.TASK_BLOCKER_RESOLVED,
+        entity_type="TASK_BLOCKER",
+        entity_id=blocker.id,
+        old_value_json=old_value,
+        new_value_json=serialized_blocker,
+        metadata_json={
+            "blocked_task_id": blocker.blocked_task_id,
+            "blocking_task_id": blocker.blocking_task_id,
+        },
+    )
+
+    db.session.commit()
+
+    return jsonify({
+        "message": "Bloqueo resuelto.",
+        "item": serialized_blocker,
+    }), 200    
     
 @openings_bp.route("/<int:opening_id>/tasks/<int:task_id>/comments", methods=["GET"])
 @jwt_required()

@@ -39,6 +39,25 @@ export type OpeningDependencyType =
   | 'START_TO_START'
   | 'FINISH_TO_FINISH';
 
+export type OpeningTaskBlockerType =
+  | 'TASK'
+  | 'PROVIDER'
+  | 'PAYMENT'
+  | 'PERMIT'
+  | 'DOCUMENT'
+  | 'DECISION'
+  | 'OTHER';
+
+export type OpeningTaskBlockerImpact =
+  | 'LOW'
+  | 'MEDIUM'
+  | 'HIGH'
+  | 'CRITICAL';
+
+export type OpeningTaskBlockerStatus =
+  | 'ACTIVE'
+  | 'RESOLVED';
+
 export interface OpeningUserSummary {
   id: number | null;
   username: string | null;
@@ -142,6 +161,38 @@ export interface OpeningTaskDependency {
   created_at: string | null;
 }
 
+export interface OpeningTaskSummary {
+  id: number;
+  opening_id: number;
+  phase_id: number | null;
+  title: string;
+  status: OpeningTaskStatus;
+  priority: OpeningTaskPriority;
+  planned_start_date: string | null;
+  planned_due_date: string | null;
+  progress_percent: number | null;
+}
+
+export interface OpeningTaskBlocker {
+  id: number;
+  opening_id: number;
+  blocked_task_id: number;
+  blocked_task: OpeningTaskSummary | null;
+  blocker_type: OpeningTaskBlockerType;
+  blocking_task_id: number | null;
+  blocking_task: OpeningTaskSummary | null;
+  reason: string;
+  impact_level: OpeningTaskBlockerImpact;
+  status: OpeningTaskBlockerStatus;
+  created_by: number | null;
+  creator: OpeningUserSummary | null;
+  resolved_by: number | null;
+  resolver: OpeningUserSummary | null;
+  created_at: string | null;
+  resolved_at: string | null;
+  resolution_comment: string | null;
+}
+
 export interface OpeningTaskComment {
   id: number;
   opening_id: number;
@@ -192,6 +243,15 @@ export interface OpeningTaskDependencyListResponse {
 
 export interface OpeningTaskDependencySingleResponse {
   item: OpeningTaskDependency;
+  message?: string;
+}
+
+export interface OpeningTaskBlockerListResponse {
+  items: OpeningTaskBlocker[];
+}
+
+export interface OpeningTaskBlockerSingleResponse {
+  item: OpeningTaskBlocker;
   message?: string;
 }
 
@@ -255,6 +315,17 @@ export interface OpeningTaskPayload {
 export interface OpeningDependencyPayload {
   depends_on_task_id: number;
   dependency_type?: OpeningDependencyType;
+}
+
+export interface OpeningTaskBlockerPayload {
+  blocker_type: OpeningTaskBlockerType;
+  impact_level: OpeningTaskBlockerImpact;
+  reason: string;
+  blocking_task_id?: number | null;
+}
+
+export interface OpeningTaskBlockerResolvePayload {
+  resolution_comment?: string | null;
 }
 
 export interface OpeningCommentPayload {
