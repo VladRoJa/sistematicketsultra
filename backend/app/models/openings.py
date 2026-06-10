@@ -96,6 +96,49 @@ class OpeningDependencyType:
     )
 
 
+class OpeningTaskBlockerType:
+    TASK = "TASK"
+    PROVIDER = "PROVIDER"
+    PAYMENT = "PAYMENT"
+    PERMIT = "PERMIT"
+    DOCUMENT = "DOCUMENT"
+    DECISION = "DECISION"
+    OTHER = "OTHER"
+
+    ALL = (
+        TASK,
+        PROVIDER,
+        PAYMENT,
+        PERMIT,
+        DOCUMENT,
+        DECISION,
+        OTHER,
+    )
+
+
+class OpeningTaskBlockerImpact:
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    CRITICAL = "CRITICAL"
+
+    ALL = (
+        LOW,
+        MEDIUM,
+        HIGH,
+        CRITICAL,
+    )
+
+
+class OpeningTaskBlockerStatus:
+    ACTIVE = "ACTIVE"
+    RESOLVED = "RESOLVED"
+
+    ALL = (
+        ACTIVE,
+        RESOLVED,
+    )
+
 class OpeningAuditAction:
     OPENING_CREATED = "OPENING_CREATED"
     OPENING_UPDATED = "OPENING_UPDATED"
@@ -111,6 +154,8 @@ class OpeningAuditAction:
     TASK_COMMENT_CREATED = "TASK_COMMENT_CREATED"
     DOCUMENT_LINKED = "DOCUMENT_LINKED"
     DOCUMENT_UNLINKED = "DOCUMENT_UNLINKED"
+    TASK_BLOCKER_CREATED = "TASK_BLOCKER_CREATED"
+    TASK_BLOCKER_RESOLVED = "TASK_BLOCKER_RESOLVED"
 
     ALL = (
         OPENING_CREATED,
@@ -125,6 +170,8 @@ class OpeningAuditAction:
         TASK_DEPENDENCY_CREATED,
         TASK_DEPENDENCY_DELETED,
         TASK_COMMENT_CREATED,
+        TASK_BLOCKER_CREATED,
+        TASK_BLOCKER_RESOLVED,
         DOCUMENT_LINKED,
         DOCUMENT_UNLINKED,
     )
@@ -461,6 +508,14 @@ class OpeningTaskORM(db.Model):
         cascade="all, delete-orphan",
         lazy="dynamic",
     )    
+    
+    blockers = db.relationship(
+        "OpeningTaskBlockerORM",
+        foreign_keys="OpeningTaskBlockerORM.blocked_task_id",
+        back_populates="blocked_task",
+        cascade="all, delete-orphan",
+        lazy="dynamic",
+    )
 
     __table_args__ = (
         db.Index("idx_opening_tasks_opening_phase_order", "opening_id", "phase_id", "sort_order"),
@@ -595,6 +650,114 @@ class OpeningTaskCommentORM(db.Model):
 
     def __repr__(self) -> str:
         return f"<OpeningTaskComment task_id={self.task_id} created_by={self.created_by}>"
+
+class OpeningTaskBlockerORM(db.Model):
+    __tablename__ = "opening_task_blockers"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    opening_id = db.Column(
+        db.Integer,
+        db.ForeignKey("openings.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    blocked_task_id = db.Column(
+        db.Integer,
+        db.ForeignKey("opening_tasks.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    blocker_type = db.Column(
+        db.String(32),
+        nullable=False,
+        default=OpeningTaskBlockerType.OTHER,
+        server_default=OpeningTaskBlockerType.OTHER,
+        index=True,
+    )
+
+    blocking_task_id = db.Column(
+        db.Integer,
+        db.ForeignKey("opening_tasks.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    reason = db.Column(db.Text, nullable=False)
+
+    impact_level = db.Column(
+        db.String(20),
+        nullable=False,
+        default=OpeningTaskBlockerImpact.MEDIUM,
+        server_default=OpeningTaskBlockerImpact.MEDIUM,
+        index=True,
+    )
+
+    status = db.Column(
+        db.String(20),
+        nullable=False,
+        default=OpeningTaskBlockerStatus.ACTIVE,
+        server_default=OpeningTaskBlockerStatus.ACTIVE,
+        index=True,
+    )
+
+    created_by = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    resolved_by = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        index=True,
+    )
+
+    resolved_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=True,
+    )
+
+    resolution_comment = db.Column(db.Text, nullable=True)
+
+    opening = db.relationship("OpeningORM")
+    blocked_task = db.relationship(
+        "OpeningTaskORM",
+        foreign_keys=[blocked_task_id],
+        back_populates="blockers",
+    )
+    blocking_task = db.relationship(
+        "OpeningTaskORM",
+        foreign_keys=[blocking_task_id],
+    )
+    creator = db.relationship("UserORM", foreign_keys=[created_by])
+    resolver = db.relationship("UserORM", foreign_keys=[resolved_by])
+
+    __table_args__ = (
+        db.Index("idx_opening_task_blockers_opening_status", "opening_id", "status"),
+        db.Index("idx_opening_task_blockers_blocked_status", "blocked_task_id", "status"),
+        db.CheckConstraint(
+            "blocking_task_id IS NULL OR blocked_task_id <> blocking_task_id",
+            name="ck_opening_task_blockers_no_self_task",
+        ),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<OpeningTaskBlocker blocked_task_id={self.blocked_task_id} "
+            f"status={self.status!r}>"
+        )
 
 class OpeningAuditLogORM(db.Model):
     __tablename__ = "opening_audit_logs"

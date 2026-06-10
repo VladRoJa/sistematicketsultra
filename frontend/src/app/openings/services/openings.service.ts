@@ -25,6 +25,12 @@ import {
   OpeningTaskPayload,
   OpeningTaskSingleResponse,
   OpeningUpdatePayload,
+  OpeningTaskBlockerImpact,
+  OpeningTaskBlockerListResponse,
+  OpeningTaskBlockerPayload,
+  OpeningTaskBlockerResolvePayload,
+  OpeningTaskBlockerSingleResponse,
+  OpeningTaskBlockerStatus,
   SucursalOption,
 } from '../models/opening.model';
 
@@ -184,6 +190,64 @@ export class OpeningsService {
   deleteTaskDependency(openingId: number, dependencyId: number): Observable<{ message: string }> {
     return this.http.delete<{ message: string }>(
       `${this.baseUrl}/${openingId}/task-dependencies/${dependencyId}`,
+    );
+  }
+
+  listAllBlockers(
+    openingId: number,
+    filters?: {
+      status?: OpeningTaskBlockerStatus | '';
+      task_id?: number | null;
+    },
+  ): Observable<OpeningTaskBlockerListResponse> {
+    let params = new HttpParams();
+
+    if (filters?.status) {
+      params = params.set('status', filters.status);
+    }
+
+    if (filters?.task_id) {
+      params = params.set('task_id', String(filters.task_id));
+    }
+
+    return this.http.get<OpeningTaskBlockerListResponse>(
+      `${this.baseUrl}/${openingId}/task-blockers`,
+      { params },
+    );
+  }
+
+  listTaskBlockers(
+    openingId: number,
+    taskId: number,
+    filters?: {
+      status?: OpeningTaskBlockerStatus | '';
+    },
+  ): Observable<OpeningTaskBlockerListResponse> {
+    return this.listAllBlockers(openingId, {
+      status: filters?.status,
+      task_id: taskId,
+    });
+  }
+
+  createTaskBlocker(
+    openingId: number,
+    taskId: number,
+    payload: OpeningTaskBlockerPayload,
+  ): Observable<OpeningTaskBlockerSingleResponse> {
+    return this.http.post<OpeningTaskBlockerSingleResponse>(
+      `${this.baseUrl}/${openingId}/tasks/${taskId}/blockers`,
+      payload,
+    );
+  }
+
+  resolveTaskBlocker(
+    openingId: number,
+    blockerId: number,
+    payload: OpeningTaskBlockerResolvePayload,
+  ): Observable<OpeningTaskBlockerSingleResponse> {
+    return this.http.patch<OpeningTaskBlockerSingleResponse>(
+      `${this.baseUrl}/${openingId}/task-blockers/${blockerId}/resolve`,
+      payload,
     );
   }
 

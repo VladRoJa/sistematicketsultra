@@ -85,10 +85,19 @@
         <small>En seguimiento operativo</small>
       </article>
 
-      <article class="kpi-card danger-kpi">
+      <article
+        class="kpi-card danger-kpi kpi-action-card"
+        [class.disabled]="getBlockedTasksCount() === 0"
+        [attr.role]="getBlockedTasksCount() > 0 ? 'button' : null"
+        [attr.tabindex]="getBlockedTasksCount() > 0 ? 0 : null"
+        (click)="focusFirstBlockedTask()"
+        (keydown.enter)="focusFirstBlockedTask()"
+      >
         <span>Bloqueadas</span>
         <strong>{{ getBlockedTasksCount() }}</strong>
-        <small>Requieren desbloqueo</small>
+        <small>
+          {{ getBlockedTasksCount() > 0 ? 'Click para revisar' : 'Sin bloqueos activos' }}
+        </small>
       </article>
 
       <article class="kpi-card warning-kpi">
@@ -110,7 +119,7 @@
         [class.active]="isActiveView('DASHBOARD')"
         (click)="setActiveView('DASHBOARD')"
       >
-        Dashboard
+        Seguimiento
       </button>
 
       <button
@@ -121,13 +130,6 @@
         Gantt
       </button>
 
-      <button
-        type="button"
-        [class.active]="isActiveView('TASKS')"
-        (click)="setActiveView('TASKS')"
-      >
-        Tareas
-      </button>
     </nav>
 
     <section
@@ -286,8 +288,8 @@
         <section class="timeline-card" *ngIf="isActiveView('DASHBOARD')">
           <div class="section-heading">
             <div>
-              <p class="eyebrow">Timeline operativo</p>
-              <h2>Fases de apertura</h2>
+            <p class="eyebrow">Seguimiento operativo</p>
+            <h2>Fases y tareas de apertura</h2>
             </div>
 
             <div class="phase-filter">
@@ -367,12 +369,14 @@
           class="phase-inline-tasks"
           *ngIf="isDashboardPhaseExpanded(phase)"
         >
-          <article
-            class="phase-inline-task"
-            *ngFor="let task of getTasksForPhase(phase.id); trackBy: trackByTaskId"
-            [class.selected]="selectedTask?.id === task.id"
-            (click)="selectTask(task); $event.stopPropagation()"
-          >
+            <article
+              class="phase-inline-task"
+              [id]="getTaskCardDomId(task)"
+              *ngFor="let task of getTasksForPhase(phase.id); trackBy: trackByTaskId"
+              [class.selected]="selectedTask?.id === task.id"
+              [class.has-active-blocker]="hasActiveBlockers(task)"
+              (click)="selectTask(task); $event.stopPropagation()"
+            >
             <div>
               <h4>{{ task.title }}</h4>
               <p>{{ task.description || 'Sin descripción' }}</p>
@@ -385,7 +389,13 @@
               >
                 {{ getStatusLabel(task.status) }}
               </span>
-
+              <span
+                class="blocker-pill"
+                *ngIf="hasActiveBlockers(task)"
+                data-tone="danger"
+              >
+                Bloqueo activo · {{ getActiveBlockersCountForTask(task) }}
+              </span>
               <span
                 class="due-pill"
                 [attr.data-tone]="getTaskDueTone(task)"
@@ -523,11 +533,12 @@
                     </td>
                   </tr>
 
-                  <tr
-                    class="gantt-task-row"
-                    *ngFor="let task of getGanttTasksForPhase(phase); trackBy: trackByTaskId"
-                    [class.selected-task-row]="selectedTask?.id === task.id"
-                  >
+                    <tr
+                      class="gantt-task-row"
+                      *ngFor="let task of getGanttTasksForPhase(phase); trackBy: trackByTaskId"
+                      [class.selected-task-row]="selectedTask?.id === task.id"
+                      [class.has-active-blocker]="hasActiveBlockers(task)"
+                    >
                     <th class="gantt-row-label task-label" (click)="selectTask(task)">
                       <div class="gantt-label-title">
                         <strong>{{ task.title }}</strong>
@@ -537,6 +548,13 @@
                           [attr.data-tone]="getStatusTone(task.status)"
                         >
                           {{ getStatusLabel(task.status) }}
+                        </span>
+                        <span
+                          class="blocker-pill compact"
+                          *ngIf="hasActiveBlockers(task)"
+                          data-tone="danger"
+                        >
+                          Bloqueada
                         </span>
                       </div>
 
@@ -624,12 +642,14 @@
               </div>
 
               <div class="task-list" *ngIf="getTasksForPhase(phase.id).length > 0">
-                <article
-                  class="task-card"
-                  *ngFor="let task of getTasksForPhase(phase.id); trackBy: trackByTaskId"
-                  [class.selected]="selectedTask?.id === task.id"
-                  (click)="selectTask(task)"
-                >
+                  <article
+                    class="task-card"
+                    [id]="getTaskCardDomId(task)"
+                    *ngFor="let task of getTasksForPhase(phase.id); trackBy: trackByTaskId"
+                    [class.selected]="selectedTask?.id === task.id"
+                    [class.has-active-blocker]="hasActiveBlockers(task)"
+                    (click)="selectTask(task)"
+                  >
                   <div class="task-card-main">
                     <div>
                       <h4>{{ task.title }}</h4>
@@ -651,7 +671,13 @@
                     >
                       {{ getStatusLabel(task.status) }}
                     </span>
-
+                    <span
+                      class="blocker-pill"
+                      *ngIf="hasActiveBlockers(task)"
+                      data-tone="danger"
+                    >
+                      Bloqueo activo · {{ getActiveBlockersCountForTask(task) }}
+                    </span>
                     <span
                       class="due-pill"
                       [attr.data-tone]="getTaskDueTone(task)"
@@ -683,12 +709,14 @@
               </div>
 
               <div class="task-list">
-                <article
-                  class="task-card"
-                  *ngFor="let task of getTasksWithoutPhase(); trackBy: trackByTaskId"
-                  [class.selected]="selectedTask?.id === task.id"
-                  (click)="selectTask(task)"
-                >
+                  <article
+                    class="task-card"
+                    [id]="getTaskCardDomId(task)"
+                    *ngFor="let task of getTasksWithoutPhase(); trackBy: trackByTaskId"
+                    [class.selected]="selectedTask?.id === task.id"
+                    [class.has-active-blocker]="hasActiveBlockers(task)"
+                    (click)="selectTask(task)"
+                  >
                   <div class="task-card-main">
                     <div>
                       <h4>{{ task.title }}</h4>
@@ -710,7 +738,13 @@
                     >
                       {{ getStatusLabel(task.status) }}
                     </span>
-
+                    <span
+                      class="blocker-pill"
+                      *ngIf="hasActiveBlockers(task)"
+                      data-tone="danger"
+                    >
+                      Bloqueo activo · {{ getActiveBlockersCountForTask(task) }}
+                    </span>
                     <span
                       class="due-pill"
                       [attr.data-tone]="getTaskDueTone(task)"
@@ -761,6 +795,13 @@
             >
               {{ getPriorityLabel(selectedTask.priority) }}
             </span>
+            <span
+              class="blocker-pill"
+              *ngIf="hasActiveBlockers(selectedTask)"
+              data-tone="danger"
+            >
+              {{ getActiveBlockersCountForTask(selectedTask) }} bloqueo(s) activo(s)
+            </span>            
           </div>
 
           <div class="task-detail-grid">
@@ -803,12 +844,11 @@
             <button
               type="button"
               class="warning-action"
-              (click)="updateSelectedTaskStatus('BLOQUEADA')"
-              [disabled]="savingTask"
+              (click)="openBlockerForm()"
+              [disabled]="savingBlocker || isBlockerFormOpen"
             >
-              Bloquear
+              Nuevo bloqueo
             </button>
-
             <button
               type="button"
               class="success-action"
@@ -818,7 +858,158 @@
               Completar
             </button>
           </div>
+          <section class="side-section">
+            <div class="side-heading">
+              <h3>Bloqueos activos</h3>
+              <span>{{ getTaskBlockers(selectedTask).length }}</span>
+            </div>
 
+            <button
+              type="button"
+              class="mini-action blocker-add-action"
+              *ngIf="selectedTask && !isBlockerFormOpen"
+              (click)="openBlockerForm()"
+            >
+              + Registrar bloqueo
+            </button>
+
+            <div class="blocker-form" *ngIf="isBlockerFormOpen && selectedTask">
+              <div class="field">
+                <label for="blocker-type">Tipo de bloqueo</label>
+                <select id="blocker-type" [(ngModel)]="blockerForm.blocker_type">
+                  <option
+                    *ngFor="let option of blockerTypeOptions"
+                    [ngValue]="option.value"
+                  >
+                    {{ option.label }}
+                  </option>
+                </select>
+              </div>
+
+              <div class="field">
+                <label for="blocker-impact">Impacto</label>
+                <select id="blocker-impact" [(ngModel)]="blockerForm.impact_level">
+                  <option
+                    *ngFor="let option of blockerImpactOptions"
+                    [ngValue]="option.value"
+                  >
+                    {{ option.label }}
+                  </option>
+                </select>
+              </div>
+
+              <div class="field" *ngIf="isTaskBlockerFormType()">
+                <label for="blocking-task">Tarea que bloquea</label>
+                <select id="blocking-task" [(ngModel)]="blockerForm.blocking_task_id">
+                  <option [ngValue]="null">Selecciona tarea bloqueante</option>
+                  <option
+                    *ngFor="let task of getAvailableBlockingTasks(); trackBy: trackByTaskId"
+                    [ngValue]="task.id"
+                  >
+                    {{ getPhaseNameById(task.phase_id) }} · {{ task.title }}
+                  </option>
+                </select>
+              </div>
+
+              <div class="field">
+                <label for="blocker-reason">Motivo</label>
+                <textarea
+                  id="blocker-reason"
+                  rows="3"
+                  [(ngModel)]="blockerForm.reason"
+                  placeholder="Ej. Falta liberar pago, proveedor no confirma entrega, permiso pendiente..."
+                ></textarea>
+              </div>
+
+              <div class="blocker-form-actions">
+                <button
+                  type="button"
+                  class="secondary-action"
+                  (click)="closeBlockerForm()"
+                  [disabled]="savingBlocker"
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="button"
+                  class="primary-action"
+                  (click)="createBlocker()"
+                  [disabled]="!canCreateBlocker()"
+                >
+                  Guardar bloqueo
+                </button>
+              </div>
+            </div>            
+
+            <article
+              class="blocker-card"
+              *ngFor="let blocker of getTaskBlockers(selectedTask); trackBy: trackByBlockerId"
+              [attr.data-tone]="getBlockerImpactTone(blocker.impact_level)"
+            >
+              <div>
+                <span>{{ getBlockerTypeLabel(blocker.blocker_type) }}</span>
+                <strong>{{ getBlockerImpactLabel(blocker.impact_level) }}</strong>
+                <p>{{ blocker.reason }}</p>
+
+                <small *ngIf="blocker.blocking_task">
+                  Bloqueado por: {{ blocker.blocking_task.title }}
+                </small>
+
+                <small>
+                  Registrado: {{ getDateTimeLabel(blocker.created_at) }}
+                </small>
+              </div>
+
+        <div class="blocker-actions" *ngIf="resolvingBlockerId !== blocker.id">
+          <button
+            type="button"
+            class="resolve-blocker-action"
+            (click)="openResolveBlockerForm(blocker.id)"
+            [disabled]="savingBlocker"
+          >
+            Resolver bloqueo
+          </button>
+        </div>
+
+        <div class="blocker-resolution-form" *ngIf="resolvingBlockerId === blocker.id">
+          <label for="blocker-resolution-comment-{{ blocker.id }}">
+            Comentario de resolución
+          </label>
+
+          <textarea
+            id="blocker-resolution-comment-{{ blocker.id }}"
+            rows="3"
+            [(ngModel)]="blockerResolutionComment"
+            placeholder="Ej. Proveedor confirmó entrega, pago liberado, permiso recibido..."
+          ></textarea>
+
+          <div class="blocker-resolution-actions">
+            <button
+              type="button"
+              class="secondary-action"
+              (click)="cancelResolveBlocker()"
+              [disabled]="savingBlocker"
+            >
+              Cancelar
+            </button>
+
+            <button
+              type="button"
+              class="success-action"
+              (click)="resolveBlocker(blocker.id)"
+              [disabled]="!canConfirmResolveBlocker()"
+            >
+              Confirmar resolución
+            </button>
+          </div>
+        </div>
+            </article>
+
+            <div class="empty-side" *ngIf="getTaskBlockers(selectedTask).length === 0">
+              Sin bloqueos activos.
+            </div>
+          </section>
           <section class="side-section">
           <div class="side-heading">
             <h3>Dependencias</h3>

@@ -16,6 +16,9 @@ import {
   OpeningTaskDependency,
   OpeningTaskPriority,
   OpeningTaskStatus,
+  OpeningTaskBlocker,
+  OpeningTaskBlockerImpact,
+  OpeningTaskBlockerType,
 } from '../../models/opening.model';
 import { OpeningsService } from '../../services/openings.service';
 
@@ -45,6 +48,7 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
   tasks: OpeningTask[] = [];
   dependencies: OpeningTaskDependency[] = [];
   selectedTaskComments: OpeningTaskComment[] = [];
+  taskBlockers: OpeningTaskBlocker[] = [];
 
   selectedTask: OpeningTask | null = null;
   selectedPhaseId: number | 'ALL' = 'ALL';
@@ -60,6 +64,35 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
   savingComment = false;
   savingDependency = false;
   isDependencyFormOpen = false;
+  savingBlocker = false;
+  resolvingBlockerId: number | null = null;
+  blockerResolutionComment = '';
+  isBlockerFormOpen = false;
+
+  blockerForm = {
+    blocker_type: 'OTHER' as OpeningTaskBlockerType,
+    impact_level: 'MEDIUM' as OpeningTaskBlockerImpact,
+    reason: '',
+    blocking_task_id: null as number | null,
+  };
+
+  readonly blockerTypeOptions: Array<{ value: OpeningTaskBlockerType; label: string }> = [
+    { value: 'OTHER', label: 'Otro' },
+    { value: 'TASK', label: 'Tarea' },
+    { value: 'PROVIDER', label: 'Proveedor' },
+    { value: 'PAYMENT', label: 'Pago' },
+    { value: 'PERMIT', label: 'Permiso' },
+    { value: 'DOCUMENT', label: 'Documento' },
+    { value: 'DECISION', label: 'Decisión' },
+  ];
+
+  readonly blockerImpactOptions: Array<{ value: OpeningTaskBlockerImpact; label: string }> = [
+    { value: 'LOW', label: 'Bajo' },
+    { value: 'MEDIUM', label: 'Medio' },
+    { value: 'HIGH', label: 'Alto' },
+    { value: 'CRITICAL', label: 'Crítico' },
+  ];
+
 
   dependencyForm = {
     depends_on_task_id: null as number | null,
@@ -146,12 +179,14 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
       phasesResponse: this.openingsService.listPhases(this.openingId),
       tasksResponse: this.openingsService.listTasks(this.openingId),
       dependenciesResponse: this.openingsService.listAllDependencies(this.openingId),
+      blockersResponse: this.openingsService.listAllBlockers(this.openingId, { status: 'ACTIVE' }),
     }).subscribe({
-      next: ({ openingResponse, phasesResponse, tasksResponse, dependenciesResponse }) => {
+      next: ({ openingResponse, phasesResponse, tasksResponse, dependenciesResponse, blockersResponse }) => {
         this.opening = openingResponse.item;
         this.phases = phasesResponse.items || [];
         this.tasks = tasksResponse.items || [];
         this.dependencies = dependenciesResponse.items || [];
+        this.taskBlockers = blockersResponse.items || [];
         
         this.initializeGanttCollapsedPhases();
         this.initializeDashboardExpandedPhases();
@@ -253,6 +288,8 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
     this.selectedTask = null;
     this.selectedTaskComments = [];
     this.commentDraft = '';
+    this.closeBlockerForm();
+    this.cancelResolveBlocker();
     this.isTaskPanelOpen = false;
   }
 
@@ -380,6 +417,224 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
     return this.dependencies.filter((dependency) => dependency.task_id === task.id);
   }
 
+  getTaskBlockers(task: OpeningTask | null): OpeningTaskBlocker[] {
+    if (!task) {
+      return [];
+    }
+
+    return this.taskBlockers.filter((blocker) => {
+      return blocker.blocked_task_id === task.id && blocker.status === 'ACTIVE';
+    });
+  }
+
+  getTaskCardDomId(task: OpeningTask | null): string {
+    return task ? `opening-task-card-${task.id}` : '';
+  }
+
+  openBlockerForm(): void {
+    if (!this.selectedTask) {
+      return;
+    }
+
+    this.isBlockerFormOpen = true;
+    this.resolvingBlockerId = null;
+    this.blockerResolutionComment = '';
+    this.resetBlockerForm();
+    this.clearMessages();
+  }
+
+  closeBlockerForm(): void {
+    this.isBlockerFormOpen = false;
+    this.resetBlockerForm();
+  }
+
+  isTaskBlockerFormType(): boolean {
+    return this.blockerForm.blocker_type === 'TASK';
+  }
+
+  canCreateBlocker(): boolean {
+    if (!this.selectedTask || this.savingBlocker) {
+      return false;
+    }
+
+    if (!this.blockerForm.reason.trim()) {
+      return false;
+    }
+
+    if (this.isTaskBlockerFormType() && !this.blockerForm.blocking_task_id) {
+      return false;
+    }
+
+    return true;
+  }
+
+  getAvailableBlockingTasks(): OpeningTask[] {
+    if (!this.selectedTask) {
+      return [];
+    }
+
+    return this.tasks
+      .filter((task) => task.id !== this.selectedTask?.id)
+      .sort((a, b) => {
+        return (a.phase_id || 0) - (b.phase_id || 0) ||
+          (a.sort_order || 0) - (b.sort_order || 0) ||
+          a.id - b.id;
+      });
+  }
+
+  createBlocker(): void {
+    if (!this.selectedTask || !this.canCreateBlocker()) {
+      return;
+    }
+
+    this.savingBlocker = true;
+    this.clearMessages();
+
+    this.openingsService.createTaskBlocker(this.openingId, this.selectedTask.id, {
+      blocker_type: this.blockerForm.blocker_type,
+      impact_level: this.blockerForm.impact_level,
+      reason: this.blockerForm.reason.trim(),
+      blocking_task_id: this.isTaskBlockerFormType()
+        ? this.blockerForm.blocking_task_id
+        : null,
+    }).subscribe({
+      next: (response) => {
+        this.savingBlocker = false;
+        this.taskBlockers = [...this.taskBlockers, response.item];
+        this.successMessage = response.message || 'Bloqueo creado.';
+        this.closeBlockerForm();
+      },
+      error: (error) => {
+        this.savingBlocker = false;
+        this.errorMessage = this.resolveErrorMessage(
+          error,
+          'No se pudo crear el bloqueo.',
+        );
+      },
+    });
+  }
+
+  private resetBlockerForm(): void {
+    this.blockerForm = {
+      blocker_type: 'OTHER',
+      impact_level: 'MEDIUM',
+      reason: '',
+      blocking_task_id: null,
+    };
+  }
+
+  private scrollToTaskCard(taskId: number): void {
+    window.setTimeout(() => {
+      const element = document.getElementById(`opening-task-card-${taskId}`);
+
+      if (!element) {
+        return;
+      }
+
+      element.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+        inline: 'nearest',
+      });
+    }, 220);
+  }
+
+  resolveBlocker(blockerId: number): void {
+    if (!this.selectedTask || this.savingBlocker || !this.canConfirmResolveBlocker()) {
+      return;
+    }
+
+    this.savingBlocker = true;
+    this.clearMessages();
+
+    this.openingsService.resolveTaskBlocker(this.openingId, blockerId, {
+      resolution_comment: this.blockerResolutionComment.trim(),
+    }).subscribe({
+      next: (response) => {
+        this.savingBlocker = false;
+
+        this.taskBlockers = this.taskBlockers.filter((blocker) => {
+          return blocker.id !== blockerId;
+        });
+
+        this.resolvingBlockerId = null;
+        this.blockerResolutionComment = '';
+        this.successMessage = response.message || 'Bloqueo resuelto.';
+      },
+      error: (error) => {
+        this.savingBlocker = false;
+        this.errorMessage = this.resolveErrorMessage(
+          error,
+          'No se pudo resolver el bloqueo.',
+        );
+      },
+    });
+  }
+
+  openResolveBlockerForm(blockerId: number): void {
+    this.resolvingBlockerId = blockerId;
+    this.blockerResolutionComment = '';
+    this.clearMessages();
+  }
+
+  cancelResolveBlocker(): void {
+    this.resolvingBlockerId = null;
+    this.blockerResolutionComment = '';
+  }
+
+  canConfirmResolveBlocker(): boolean {
+    return Boolean(
+      this.selectedTask &&
+      this.resolvingBlockerId &&
+      this.blockerResolutionComment.trim() &&
+      !this.savingBlocker,
+    );
+  }
+
+  hasActiveBlockers(task: OpeningTask | null): boolean {
+    return this.getTaskBlockers(task).length > 0;
+  }
+
+  getActiveBlockersCountForTask(task: OpeningTask | null): number {
+    return this.getTaskBlockers(task).length;
+  }
+
+  getBlockerTypeLabel(type: OpeningTaskBlockerType | string | null | undefined): string {
+    const labels: Record<string, string> = {
+      TASK: 'Tarea',
+      PROVIDER: 'Proveedor',
+      PAYMENT: 'Pago',
+      PERMIT: 'Permiso',
+      DOCUMENT: 'Documento',
+      DECISION: 'Decisión',
+      OTHER: 'Otro',
+    };
+
+    return labels[String(type || '')] || String(type || 'Otro');
+  }
+
+  getBlockerImpactLabel(impact: OpeningTaskBlockerImpact | string | null | undefined): string {
+    const labels: Record<string, string> = {
+      LOW: 'Bajo',
+      MEDIUM: 'Medio',
+      HIGH: 'Alto',
+      CRITICAL: 'Crítico',
+    };
+
+    return labels[String(impact || '')] || String(impact || 'Medio');
+  }
+
+  getBlockerImpactTone(impact: OpeningTaskBlockerImpact | string | null | undefined): string {
+    const tones: Record<string, string> = {
+      LOW: 'neutral',
+      MEDIUM: 'warning',
+      HIGH: 'danger',
+      CRITICAL: 'critical',
+    };
+
+    return tones[String(impact || '')] || 'warning';
+  }
+
   openDependencyForm(): void {
     this.isDependencyFormOpen = true;
     this.resetDependencyForm();
@@ -494,7 +749,28 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
   }
 
   getBlockedTasksCount(): number {
-    return this.tasks.filter((task) => task.status === 'BLOQUEADA').length;
+    return this.getBlockedTasks().length;
+  }
+  
+  getBlockedTasks(): OpeningTask[] {
+    return this.tasks.filter((task) => {
+      return task.status === 'BLOQUEADA' || this.hasActiveBlockers(task);
+    });
+  }
+
+  focusFirstBlockedTask(): void {
+    const blockedTask = this.getBlockedTasks()[0];
+
+    if (!blockedTask) {
+      this.successMessage = '';
+      this.errorMessage = 'No hay tareas bloqueadas por revisar.';
+      return;
+    }
+
+    this.setActiveView('DASHBOARD');
+    this.expandDashboardPhaseForTask(blockedTask);
+    this.selectTask(blockedTask);
+    this.scrollToTaskCard(blockedTask.id);
   }
 
   getAtRiskTasksCount(): number {
@@ -850,6 +1126,14 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
     });
 
     return true;
+  }
+
+  private expandDashboardPhaseForTask(task: OpeningTask): void {
+    if (!task.phase_id) {
+      return;
+    }
+
+    this.expandedDashboardPhaseIds.add(task.phase_id);
   }
 
   getGanttDayNumber(dayIso: string): string {
@@ -1255,6 +1539,10 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
   trackByDependencyId(_index: number, dependency: OpeningTaskDependency): number {
     return dependency.id;
   }
+
+  trackByBlockerId(_index: number, blocker: OpeningTaskBlocker): number {
+    return blocker.id;
+  }  
 
   trackByCommentId(_index: number, comment: OpeningTaskComment): number {
     return comment.id;
