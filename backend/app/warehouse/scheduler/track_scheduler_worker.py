@@ -21,7 +21,9 @@ from app.warehouse.services.track_daily_version_service import (
 from app.warehouse.services.track_source_agregadoras_daily_service import (
     resolve_exact_agregadoras_snapshot_status_for_date,
 )
-
+from app.warehouse.services.warehouse_retention_service import (
+    purge_venta_total_non_canonical_snapshots,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -35,6 +37,11 @@ DEFAULT_NIGHTLY_BASE_MINUTE = 30
 DEFAULT_NIGHTLY_RETRY_HOUR = 0
 DEFAULT_NIGHTLY_RETRY_MINUTE = 30
 DEFAULT_CLOSE_LOOKBACK_DAYS = 7
+DEFAULT_WAREHOUSE_RETENTION_HOUR = 1
+DEFAULT_WAREHOUSE_RETENTION_MINUTE = 10
+DEFAULT_WAREHOUSE_RETENTION_DAYS = 7
+DEFAULT_WAREHOUSE_RETENTION_BATCH_LIMIT = 100
+DEFAULT_WAREHOUSE_RETENTION_MAX_BATCHES = 20
 
 
 @dataclass(frozen=True)
@@ -261,6 +268,44 @@ def execute_track_scheduler_decision(decision: TrackSchedulerDecision) -> dict:
 
     raise RuntimeError(f"Acción scheduler no soportada: {decision.action!r}")
 
+def execute_warehouse_retention() -> dict:
+    retention_days = _env_int(
+        "WAREHOUSE_RETENTION_DAYS",
+        DEFAULT_WAREHOUSE_RETENTION_DAYS,
+    )
+    batch_limit = _env_int(
+        "WAREHOUSE_RETENTION_BATCH_LIMIT",
+        DEFAULT_WAREHOUSE_RETENTION_BATCH_LIMIT,
+    )
+    max_batches = _env_int(
+        "WAREHOUSE_RETENTION_MAX_BATCHES",
+        DEFAULT_WAREHOUSE_RETENTION_MAX_BATCHES,
+    )
+
+    LOGGER.info(
+        "Ejecutando retención Warehouse: report_type=venta_total retention_days=%s batch_limit=%s max_batches=%s",
+        retention_days,
+        batch_limit,
+        max_batches,
+    )
+
+    result = purge_venta_total_non_canonical_snapshots(
+        retention_days=retention_days,
+        batch_limit=batch_limit,
+        max_batches=max_batches,
+        dry_run=False,
+    )
+
+    LOGGER.info(
+        "Retención Warehouse terminó: report_type=%s deleted_snapshots=%s deleted_rows=%s batches=%s cutoff_date=%s",
+        result.get("report_type_key"),
+        result.get("deleted_snapshots"),
+        result.get("deleted_rows"),
+        result.get("batches"),
+        result.get("cutoff_date"),
+    )
+
+    return result
 
 def run_scheduler_loop() -> None:
     poll_interval_seconds = _env_int(
@@ -275,6 +320,7 @@ def run_scheduler_loop() -> None:
     )
 
     app = create_app()
+    last_warehouse_retention_run_date: date | None = None
 
     with app.app_context():
         while True:
@@ -297,6 +343,31 @@ def run_scheduler_loop() -> None:
                             decision.action,
                             decision.track_date.isoformat(),
                         )
+                    retention_hour = _env_int(
+                        "WAREHOUSE_RETENTION_HOUR",
+                        DEFAULT_WAREHOUSE_RETENTION_HOUR,
+                    )
+                    retention_minute = _env_int(
+                        "WAREHOUSE_RETENTION_MINUTE",
+                        DEFAULT_WAREHOUSE_RETENTION_MINUTE,
+                    )
+
+                    if (
+                        _is_exact_minute(
+                            now_local,
+                            hour=retention_hour,
+                            minute=retention_minute,
+                        )
+                        and last_warehouse_retention_run_date != now_local.date()
+                    ):
+                        try:
+                            execute_warehouse_retention()
+                            last_warehouse_retention_run_date = now_local.date()
+                        except Exception:
+                            LOGGER.exception(
+                                "Retención Warehouse falló para fecha local=%s",
+                                now_local.date().isoformat(),
+                            )    
             finally:
                 db.session.remove()
 
