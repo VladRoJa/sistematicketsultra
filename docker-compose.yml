@@ -74,6 +74,13 @@ services:
       - .env.docker
     environment:
       APP_ENV: "prod"
+
+      WAREHOUSE_RETENTION_HOUR: "1"
+      WAREHOUSE_RETENTION_MINUTE: "10"
+      WAREHOUSE_RETENTION_DAYS: "7"
+      WAREHOUSE_RETENTION_BATCH_LIMIT: "100"
+      WAREHOUSE_RETENTION_MAX_BATCHES: "20"
+
     command: python -m app.warehouse.scheduler.track_scheduler_worker
     restart: unless-stopped
     init: true
