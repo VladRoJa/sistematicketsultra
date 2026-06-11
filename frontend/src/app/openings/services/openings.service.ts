@@ -31,6 +31,7 @@ import {
   OpeningTaskBlockerResolvePayload,
   OpeningTaskBlockerSingleResponse,
   OpeningTaskBlockerStatus,
+  OpeningTaskTimelineResponse,
   SucursalOption,
 } from '../models/opening.model';
 
@@ -250,6 +251,15 @@ export class OpeningsService {
       payload,
     );
   }
+
+  listTaskTimeline(
+    openingId: number,
+    taskId: number,
+  ): Observable<OpeningTaskTimelineResponse> {
+    return this.http.get<OpeningTaskTimelineResponse>(
+      `${this.baseUrl}/${openingId}/tasks/${taskId}/timeline`,
+    );
+  }  
 
   listTaskComments(
     openingId: number,

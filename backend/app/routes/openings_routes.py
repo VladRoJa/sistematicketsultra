@@ -321,6 +321,173 @@ def _serialize_task_blocker(blocker: OpeningTaskBlockerORM) -> dict[str, Any]:
         "resolution_comment": blocker.resolution_comment,
     }
 
+def _safe_json_int(payload: dict[str, Any] | None, key: str) -> int | None:
+    if not payload:
+        return None
+
+    value = payload.get(key)
+
+    if value is None:
+        return None
+
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _safe_json_text(payload: dict[str, Any] | None, key: str) -> str | None:
+    if not payload:
+        return None
+
+    value = payload.get(key)
+
+    if value is None:
+        return None
+
+    return str(value)
+
+
+def _audit_log_belongs_to_task(audit_log: OpeningAuditLogORM, task_id: int) -> bool:
+    if audit_log.entity_type == "TASK" and audit_log.entity_id == task_id:
+        return True
+
+    payloads = (
+        audit_log.metadata_json or {},
+        audit_log.old_value_json or {},
+        audit_log.new_value_json or {},
+    )
+
+    task_keys = (
+        "task_id",
+        "blocked_task_id",
+        "blocking_task_id",
+        "depends_on_task_id",
+    )
+
+    for payload in payloads:
+        for key in task_keys:
+            if _safe_json_int(payload, key) == task_id:
+                return True
+
+    return False
+
+
+def _build_task_audit_timeline_event(audit_log: OpeningAuditLogORM) -> dict[str, Any]:
+    old_value = audit_log.old_value_json or {}
+    new_value = audit_log.new_value_json or {}
+    metadata = audit_log.metadata_json or {}
+
+    title = "Actualización"
+    description = "Se registró un movimiento en la tarea."
+    event_type = "AUDIT"
+
+    if audit_log.action == OpeningAuditAction.TASK_CREATED:
+        title = "Tarea creada"
+        description = _safe_json_text(new_value, "title") or "Se creó la tarea."
+
+    elif audit_log.action == OpeningAuditAction.TASK_UPDATED:
+        title = "Tarea actualizada"
+        description = "Se actualizaron datos generales de la tarea."
+
+    elif audit_log.action == OpeningAuditAction.TASK_STATUS_CHANGED:
+        title = "Estado actualizado"
+        old_status = _safe_json_text(old_value, "status") or "Sin estado"
+        new_status = _safe_json_text(new_value, "status") or "Sin estado"
+        description = f"{old_status} → {new_status}"
+
+    elif audit_log.action == OpeningAuditAction.TASK_DUE_DATE_CHANGED:
+        title = "Fecha compromiso actualizada"
+        old_due_date = _safe_json_text(old_value, "planned_due_date") or "Sin fecha"
+        new_due_date = _safe_json_text(new_value, "planned_due_date") or "Sin fecha"
+        description = f"{old_due_date} → {new_due_date}"
+
+    elif audit_log.action == OpeningAuditAction.TASK_OWNER_CHANGED:
+        title = "Responsable actualizado"
+        old_owner = _safe_json_text(old_value, "owner_user_id") or "Sin responsable"
+        new_owner = _safe_json_text(new_value, "owner_user_id") or "Sin responsable"
+        description = f"{old_owner} → {new_owner}"
+
+    elif audit_log.action == OpeningAuditAction.TASK_DEPENDENCY_CREATED:
+        event_type = "DEPENDENCY"
+        title = "Dependencia agregada"
+        depends_on_title = None
+
+        depends_on_task = new_value.get("depends_on_task") if isinstance(new_value, dict) else None
+        if isinstance(depends_on_task, dict):
+            depends_on_title = depends_on_task.get("title")
+
+        description = f"Depende de: {depends_on_title or metadata.get('depends_on_task_id') or 'tarea'}"
+
+    elif audit_log.action == OpeningAuditAction.TASK_DEPENDENCY_DELETED:
+        event_type = "DEPENDENCY"
+        title = "Dependencia eliminada"
+        depends_on_title = None
+
+        depends_on_task = old_value.get("depends_on_task") if isinstance(old_value, dict) else None
+        if isinstance(depends_on_task, dict):
+            depends_on_title = depends_on_task.get("title")
+
+        description = f"Se eliminó dependencia con: {depends_on_title or metadata.get('depends_on_task_id') or 'tarea'}"
+
+    elif audit_log.action == OpeningAuditAction.TASK_BLOCKER_CREATED:
+        event_type = "BLOCKER"
+        title = "Bloqueo creado"
+
+        blocker_type = _safe_json_text(new_value, "blocker_type") or "OTHER"
+        impact_level = _safe_json_text(new_value, "impact_level") or "MEDIUM"
+        reason = _safe_json_text(new_value, "reason") or "Sin motivo capturado."
+
+        description = f"{blocker_type} · {impact_level} · {reason}"
+
+    elif audit_log.action == OpeningAuditAction.TASK_BLOCKER_RESOLVED:
+        event_type = "BLOCKER"
+        title = "Bloqueo resuelto"
+
+        resolution_comment = (
+            _safe_json_text(new_value, "resolution_comment")
+            or "Sin comentario de resolución."
+        )
+
+        description = resolution_comment
+
+    return {
+        "id": f"audit-{audit_log.id}",
+        "source": "AUDIT",
+        "event_type": event_type,
+        "action": audit_log.action,
+        "title": title,
+        "description": description,
+        "created_at": _serialize_datetime(audit_log.created_at),
+        "actor": _serialize_user(audit_log.actor_user),
+        "entity_type": audit_log.entity_type,
+        "entity_id": audit_log.entity_id,
+        "old_value_json": old_value or None,
+        "new_value_json": new_value or None,
+        "metadata_json": metadata or None,
+    }
+
+
+def _build_task_comment_timeline_event(comment: OpeningTaskCommentORM) -> dict[str, Any]:
+    return {
+        "id": f"comment-{comment.id}",
+        "source": "COMMENT",
+        "event_type": "COMMENT",
+        "action": "TASK_COMMENT_CREATED",
+        "title": "Comentario agregado",
+        "description": comment.comment,
+        "created_at": _serialize_datetime(comment.created_at),
+        "actor": _serialize_user(comment.creator),
+        "entity_type": "TASK_COMMENT",
+        "entity_id": comment.id,
+        "old_value_json": None,
+        "new_value_json": _serialize_task_comment(comment),
+        "metadata_json": {
+            "task_id": comment.task_id,
+            "is_system_event": bool(comment.is_system_event),
+        },
+    }
+
 def _audit_opening(
     opening_id: int,
     action: str,
@@ -1853,3 +2020,81 @@ def create_task_comment(opening_id: int, task_id: int):
         "message": "Comentario agregado.",
         "item": serialized_comment,
     }), 201
+    
+@openings_bp.route("/<int:opening_id>/tasks/<int:task_id>/timeline", methods=["GET"])
+@jwt_required()
+def get_task_timeline(opening_id: int, task_id: int):
+    denied = _require_openings_read()
+    if denied:
+        return denied
+
+    opening = db.session.get(OpeningORM, opening_id)
+
+    if not opening:
+        return jsonify({
+            "error": "Not Found",
+            "detail": "Apertura no encontrada.",
+        }), 404
+
+    task = db.session.get(OpeningTaskORM, task_id)
+
+    if not task or task.opening_id != opening_id:
+        return jsonify({
+            "error": "Not Found",
+            "detail": "Tarea no encontrada para esta apertura.",
+        }), 404
+
+    audit_logs = (
+        OpeningAuditLogORM.query
+        .filter(
+            OpeningAuditLogORM.opening_id == opening_id,
+            OpeningAuditLogORM.entity_type.in_(
+                (
+                    "TASK",
+                    "TASK_DEPENDENCY",
+                    "TASK_BLOCKER",
+                )
+            ),
+        )
+        .order_by(
+            OpeningAuditLogORM.created_at.desc(),
+            OpeningAuditLogORM.id.desc(),
+        )
+        .all()
+    )
+
+    comments = (
+        OpeningTaskCommentORM.query
+        .filter(
+            OpeningTaskCommentORM.opening_id == opening_id,
+            OpeningTaskCommentORM.task_id == task_id,
+        )
+        .order_by(
+            OpeningTaskCommentORM.created_at.desc(),
+            OpeningTaskCommentORM.id.desc(),
+        )
+        .all()
+    )
+
+    events = [
+        _build_task_audit_timeline_event(audit_log)
+        for audit_log in audit_logs
+        if _audit_log_belongs_to_task(audit_log, task_id)
+    ]
+
+    events.extend(
+        _build_task_comment_timeline_event(comment)
+        for comment in comments
+    )
+
+    events.sort(
+        key=lambda event: (
+            event.get("created_at") or "",
+            str(event.get("id") or ""),
+        ),
+        reverse=True,
+    )
+
+    return jsonify({
+        "items": events,
+    }), 200
