@@ -19,11 +19,13 @@ import {
   OpeningTaskBlocker,
   OpeningTaskBlockerImpact,
   OpeningTaskBlockerType,
+  OpeningTaskTimelineEvent,
 } from '../../models/opening.model';
 import { OpeningsService } from '../../services/openings.service';
 
 type OpeningDetailView = 'DASHBOARD' | 'GANTT' | 'TASKS';
 type GanttCellState = 'empty' | 'single' | 'start' | 'middle' | 'end';
+type TaskPanelTab = 'BLOCKERS' | 'TIMELINE' | 'DEPENDENCIES' | 'COMMENTS';
 
 @Component({
   selector: 'app-opening-detail',
@@ -49,8 +51,11 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
   dependencies: OpeningTaskDependency[] = [];
   selectedTaskComments: OpeningTaskComment[] = [];
   taskBlockers: OpeningTaskBlocker[] = [];
+  selectedTaskTimeline: OpeningTaskTimelineEvent[] = [];
+  loadingTimeline = false;
 
   selectedTask: OpeningTask | null = null;
+  activeTaskPanelTab: TaskPanelTab = 'TIMELINE';
   selectedPhaseId: number | 'ALL' = 'ALL';
   private expandedDashboardPhaseIds = new Set<number>();
   activeView: OpeningDetailView = 'GANTT';
@@ -280,14 +285,18 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
   selectTask(task: OpeningTask): void {
     this.selectedTask = task;
     this.isTaskPanelOpen = true;
+    this.setDefaultTaskPanelTab(task);
     this.commentDraft = '';
     this.loadSelectedTaskComments();
+    this.loadTaskTimeline(task.id);
   }
 
   closeTaskPanel(): void {
     this.selectedTask = null;
     this.selectedTaskComments = [];
+    this.selectedTaskTimeline = [];
     this.commentDraft = '';
+    this.loadingTimeline = false;
     this.closeBlockerForm();
     this.cancelResolveBlocker();
     this.isTaskPanelOpen = false;
@@ -310,6 +319,26 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
         },
       });
   }
+
+  private loadTaskTimeline(taskId: number): void {
+    this.loadingTimeline = true;
+    this.selectedTaskTimeline = [];
+
+    this.openingsService.listTaskTimeline(this.openingId, taskId).subscribe({
+      next: (response) => {
+        this.loadingTimeline = false;
+        this.selectedTaskTimeline = response.items || [];
+      },
+      error: (error) => {
+        this.loadingTimeline = false;
+        this.selectedTaskTimeline = [];
+        this.errorMessage = this.resolveErrorMessage(
+          error,
+          'No se pudo cargar la bitácora de la tarea.',
+        );
+      },
+    });
+    }
 
   canAddComment(): boolean {
     return Boolean(this.selectedTask && this.commentDraft.trim() && !this.savingComment);
@@ -431,6 +460,78 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
     return task ? `opening-task-card-${task.id}` : '';
   }
 
+  getTimelineEventTone(event: OpeningTaskTimelineEvent): string {
+    const eventType = String(event.event_type || '').toUpperCase();
+
+    if (eventType === 'BLOCKER') {
+      return 'danger';
+    }
+
+    if (eventType === 'DEPENDENCY') {
+      return 'warning';
+    }
+
+    if (eventType === 'COMMENT') {
+      return 'neutral';
+    }
+
+    return 'primary';
+  }
+
+  getTimelineEventLabel(event: OpeningTaskTimelineEvent): string {
+    const eventType = String(event.event_type || '').toUpperCase();
+
+    const labels: Record<string, string> = {
+      AUDIT: 'Sistema',
+      COMMENT: 'Comentario',
+      BLOCKER: 'Bloqueo',
+      DEPENDENCY: 'Dependencia',
+    };
+
+    return labels[eventType] || 'Evento';
+  }
+
+  getTimelineActorLabel(event: OpeningTaskTimelineEvent): string {
+    return event.actor?.username || 'Sistema';
+  }
+
+setTaskPanelTab(tab: TaskPanelTab): void {
+  this.activeTaskPanelTab = tab;
+}
+
+isTaskPanelTab(tab: TaskPanelTab): boolean {
+  return this.activeTaskPanelTab === tab;
+}
+
+getTaskPanelTabCount(tab: TaskPanelTab): number {
+  if (tab === 'BLOCKERS') {
+    return this.getTaskBlockers(this.selectedTask).length;
+  }
+
+  if (tab === 'TIMELINE') {
+    return this.selectedTaskTimeline.length;
+  }
+
+  if (tab === 'DEPENDENCIES') {
+    return this.getTaskDependencies(this.selectedTask).length;
+  }
+
+  if (tab === 'COMMENTS') {
+    return this.selectedTaskComments.length;
+  }
+
+  return 0;
+}
+
+private setDefaultTaskPanelTab(task: OpeningTask): void {
+  if (this.hasActiveBlockers(task)) {
+    this.activeTaskPanelTab = 'BLOCKERS';
+    return;
+  }
+
+  this.activeTaskPanelTab = 'TIMELINE';
+}  
+
   openBlockerForm(): void {
     if (!this.selectedTask) {
       return;
@@ -501,6 +602,11 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
       next: (response) => {
         this.savingBlocker = false;
         this.taskBlockers = [...this.taskBlockers, response.item];
+        if (this.selectedTask) {
+          this.loadTaskTimeline(this.selectedTask.id);
+        }
+
+        this.activeTaskPanelTab = 'BLOCKERS';
         this.successMessage = response.message || 'Bloqueo creado.';
         this.closeBlockerForm();
       },
@@ -556,6 +662,12 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
         this.taskBlockers = this.taskBlockers.filter((blocker) => {
           return blocker.id !== blockerId;
         });
+
+        if (this.selectedTask) {
+          this.loadTaskTimeline(this.selectedTask.id);
+        }
+
+        this.activeTaskPanelTab = 'TIMELINE';
 
         this.resolvingBlockerId = null;
         this.blockerResolutionComment = '';
@@ -1546,6 +1658,10 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
 
   trackByCommentId(_index: number, comment: OpeningTaskComment): number {
     return comment.id;
+  }
+
+  trackByTimelineEventId(_index: number, event: OpeningTaskTimelineEvent): string {
+    return event.id;
   }
 
   private resetTaskForm(): void {

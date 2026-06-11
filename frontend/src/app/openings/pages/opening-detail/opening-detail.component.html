@@ -858,7 +858,44 @@
               Completar
             </button>
           </div>
-          <section class="side-section">
+          <nav class="task-panel-tabs" *ngIf="selectedTask">
+            <button
+              type="button"
+              [class.active]="isTaskPanelTab('BLOCKERS')"
+              (click)="setTaskPanelTab('BLOCKERS')"
+            >
+              Bloqueos
+              <span>{{ getTaskPanelTabCount('BLOCKERS') }}</span>
+            </button>
+
+            <button
+              type="button"
+              [class.active]="isTaskPanelTab('TIMELINE')"
+              (click)="setTaskPanelTab('TIMELINE')"
+            >
+              Bitácora
+              <span>{{ getTaskPanelTabCount('TIMELINE') }}</span>
+            </button>
+
+            <button
+              type="button"
+              [class.active]="isTaskPanelTab('DEPENDENCIES')"
+              (click)="setTaskPanelTab('DEPENDENCIES')"
+            >
+              Dependencias
+              <span>{{ getTaskPanelTabCount('DEPENDENCIES') }}</span>
+            </button>
+
+            <button
+              type="button"
+              [class.active]="isTaskPanelTab('COMMENTS')"
+              (click)="setTaskPanelTab('COMMENTS')"
+            >
+              Comentarios
+              <span>{{ getTaskPanelTabCount('COMMENTS') }}</span>
+            </button>
+          </nav>
+          <section class="side-section" *ngIf="isTaskPanelTab('BLOCKERS')">
             <div class="side-heading">
               <h3>Bloqueos activos</h3>
               <span>{{ getTaskBlockers(selectedTask).length }}</span>
@@ -1010,7 +1047,48 @@
               Sin bloqueos activos.
             </div>
           </section>
-          <section class="side-section">
+          <section class="side-section" *ngIf="isTaskPanelTab('TIMELINE')">
+            <div class="side-heading">
+              <h3>Bitácora</h3>
+              <span>{{ selectedTaskTimeline.length }}</span>
+            </div>
+
+            <div class="timeline-loading" *ngIf="loadingTimeline">
+              Cargando bitácora...
+            </div>
+
+            <article
+              class="timeline-event-card"
+              *ngFor="let event of selectedTaskTimeline; trackBy: trackByTimelineEventId"
+              [attr.data-tone]="getTimelineEventTone(event)"
+            >
+              <div class="timeline-event-marker"></div>
+
+              <div class="timeline-event-content">
+                <div class="timeline-event-top">
+                  <span>{{ getTimelineEventLabel(event) }}</span>
+                  <small>{{ getDateTimeLabel(event.created_at) }}</small>
+                </div>
+
+                <strong>{{ event.title }}</strong>
+
+                <p>{{ event.description }}</p>
+
+                <div class="timeline-event-meta">
+                  <span>{{ getTimelineActorLabel(event) }}</span>
+                  <span>{{ event.action }}</span>
+                </div>
+              </div>
+            </article>
+
+            <div
+              class="empty-side"
+              *ngIf="!loadingTimeline && selectedTaskTimeline.length === 0"
+            >
+              Sin eventos registrados para esta tarea.
+            </div>
+          </section>
+          <section class="side-section" *ngIf="isTaskPanelTab('DEPENDENCIES')">
           <div class="side-heading">
             <h3>Dependencias</h3>
             <span>{{ getTaskDependencies(selectedTask).length }}</span>
@@ -1103,7 +1181,7 @@
           </div>
         </section>
 
-          <section class="side-section">
+          <section class="side-section" *ngIf="isTaskPanelTab('COMMENTS')">
             <div class="side-heading">
               <h3>Comentarios</h3>
               <span>{{ selectedTaskComments.length }}</span>

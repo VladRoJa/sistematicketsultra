@@ -58,6 +58,14 @@ export type OpeningTaskBlockerStatus =
   | 'ACTIVE'
   | 'RESOLVED';
 
+export type OpeningTaskTimelineSource = 'AUDIT' | 'COMMENT';
+
+export type OpeningTaskTimelineEventType =
+  | 'AUDIT'
+  | 'COMMENT'
+  | 'BLOCKER'
+  | 'DEPENDENCY';
+
 export interface OpeningUserSummary {
   id: number | null;
   username: string | null;
@@ -331,6 +339,26 @@ export interface OpeningTaskBlockerResolvePayload {
 export interface OpeningCommentPayload {
   comment: string;
   is_system_event?: boolean;
+}
+
+export interface OpeningTaskTimelineEvent {
+  id: string;
+  source: OpeningTaskTimelineSource;
+  event_type: OpeningTaskTimelineEventType | string;
+  action: string;
+  title: string;
+  description: string;
+  created_at: string | null;
+  actor: OpeningUserSummary | null;
+  entity_type: string;
+  entity_id: number | null;
+  old_value_json: Record<string, unknown> | null;
+  new_value_json: Record<string, unknown> | null;
+  metadata_json: Record<string, unknown> | null;
+}
+
+export interface OpeningTaskTimelineResponse {
+  items: OpeningTaskTimelineEvent[];
 }
 
 export interface SucursalOption {
