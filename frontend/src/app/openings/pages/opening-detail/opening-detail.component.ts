@@ -495,42 +495,85 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
     return event.actor?.username || 'Sistema';
   }
 
-setTaskPanelTab(tab: TaskPanelTab): void {
-  this.activeTaskPanelTab = tab;
-}
+  getTimelineActionLabel(event: OpeningTaskTimelineEvent): string {
+    const labels: Record<string, string> = {
+      TASK_CREATED: 'Tarea creada',
+      TASK_UPDATED: 'Tarea actualizada',
+      TASK_STATUS_CHANGED: 'Estado actualizado',
+      TASK_DUE_DATE_CHANGED: 'Fecha compromiso actualizada',
+      TASK_OWNER_CHANGED: 'Responsable actualizado',
+      TASK_DEPENDENCY_CREATED: 'Dependencia agregada',
+      TASK_DEPENDENCY_DELETED: 'Dependencia eliminada',
+      TASK_COMMENT_CREATED: 'Comentario agregado',
+      TASK_BLOCKER_CREATED: 'Bloqueo creado',
+      TASK_BLOCKER_RESOLVED: 'Bloqueo resuelto',
+    };
 
-isTaskPanelTab(tab: TaskPanelTab): boolean {
-  return this.activeTaskPanelTab === tab;
-}
-
-getTaskPanelTabCount(tab: TaskPanelTab): number {
-  if (tab === 'BLOCKERS') {
-    return this.getTaskBlockers(this.selectedTask).length;
+    return labels[event.action] || event.title || 'Evento registrado';
   }
 
-  if (tab === 'TIMELINE') {
-    return this.selectedTaskTimeline.length;
+  getTimelineDescription(event: OpeningTaskTimelineEvent): string {
+    if (event.action === 'TASK_BLOCKER_CREATED') {
+      const blockerType = this.getBlockerTypeLabel(
+        String(event.new_value_json?.['blocker_type'] || ''),
+      );
+
+      const impact = this.getBlockerImpactLabel(
+        String(event.new_value_json?.['impact_level'] || ''),
+      );
+
+      const reason = String(event.new_value_json?.['reason'] || '').trim();
+
+      return `${blockerType} · Impacto ${impact.toLowerCase()} · ${reason || 'Sin motivo capturado.'}`;
+    }
+
+    if (event.action === 'TASK_BLOCKER_RESOLVED') {
+      const resolutionComment = String(
+        event.new_value_json?.['resolution_comment'] || '',
+      ).trim();
+
+      return resolutionComment || 'Bloqueo resuelto sin comentario.';
+    }
+
+    return event.description || 'Sin detalle adicional.';
   }
 
-  if (tab === 'DEPENDENCIES') {
-    return this.getTaskDependencies(this.selectedTask).length;
+  setTaskPanelTab(tab: TaskPanelTab): void {
+    this.activeTaskPanelTab = tab;
   }
 
-  if (tab === 'COMMENTS') {
-    return this.selectedTaskComments.length;
+  isTaskPanelTab(tab: TaskPanelTab): boolean {
+    return this.activeTaskPanelTab === tab;
   }
 
-  return 0;
-}
+  getTaskPanelTabCount(tab: TaskPanelTab): number {
+    if (tab === 'BLOCKERS') {
+      return this.getTaskBlockers(this.selectedTask).length;
+    }
 
-private setDefaultTaskPanelTab(task: OpeningTask): void {
-  if (this.hasActiveBlockers(task)) {
-    this.activeTaskPanelTab = 'BLOCKERS';
-    return;
+    if (tab === 'TIMELINE') {
+      return this.selectedTaskTimeline.length;
+    }
+
+    if (tab === 'DEPENDENCIES') {
+      return this.getTaskDependencies(this.selectedTask).length;
+    }
+
+    if (tab === 'COMMENTS') {
+      return this.selectedTaskComments.length;
+    }
+
+    return 0;
   }
 
-  this.activeTaskPanelTab = 'TIMELINE';
-}  
+  private setDefaultTaskPanelTab(task: OpeningTask): void {
+    if (this.hasActiveBlockers(task)) {
+      this.activeTaskPanelTab = 'BLOCKERS';
+      return;
+    }
+
+    this.activeTaskPanelTab = 'TIMELINE';
+  }  
 
   openBlockerForm(): void {
     if (!this.selectedTask) {

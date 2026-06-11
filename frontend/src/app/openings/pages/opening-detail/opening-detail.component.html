@@ -1070,14 +1070,14 @@
                   <small>{{ getDateTimeLabel(event.created_at) }}</small>
                 </div>
 
-                <strong>{{ event.title }}</strong>
+              <strong>{{ getTimelineActionLabel(event) }}</strong>
 
-                <p>{{ event.description }}</p>
+              <p>{{ getTimelineDescription(event) }}</p>
 
-                <div class="timeline-event-meta">
-                  <span>{{ getTimelineActorLabel(event) }}</span>
-                  <span>{{ event.action }}</span>
-                </div>
+              <div class="timeline-event-meta">
+                <span>{{ getTimelineActorLabel(event) }}</span>
+                <span>{{ getTimelineEventLabel(event) }}</span>
+              </div>
               </div>
             </article>
 
