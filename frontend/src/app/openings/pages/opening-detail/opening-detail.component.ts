@@ -20,12 +20,18 @@ import {
   OpeningTaskBlockerImpact,
   OpeningTaskBlockerType,
   OpeningTaskTimelineEvent,
+  OpeningTaskDocumentLink,
 } from '../../models/opening.model';
 import { OpeningsService } from '../../services/openings.service';
 
 type OpeningDetailView = 'DASHBOARD' | 'GANTT' | 'TASKS';
 type GanttCellState = 'empty' | 'single' | 'start' | 'middle' | 'end';
-type TaskPanelTab = 'BLOCKERS' | 'TIMELINE' | 'DEPENDENCIES' | 'COMMENTS';
+type TaskPanelTab =
+  | 'BLOCKERS'
+  | 'TIMELINE'
+  | 'DEPENDENCIES'
+  | 'DOCUMENTS'
+  | 'COMMENTS';
 
 @Component({
   selector: 'app-opening-detail',
@@ -53,6 +59,15 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
   taskBlockers: OpeningTaskBlocker[] = [];
   selectedTaskTimeline: OpeningTaskTimelineEvent[] = [];
   loadingTimeline = false;
+  selectedTaskDocuments: OpeningTaskDocumentLink[] = [];
+  loadingTaskDocuments = false;
+  uploadingTaskDocument = false;
+  selectedTaskDocumentFile: File | null = null;
+
+  taskDocumentForm = {
+    document_role: 'EVIDENCE',
+    notes: '',
+  };
   isTaskDateFormOpen = false;
   savingTaskDates = false;
 
@@ -294,7 +309,10 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
     this.isTaskPanelOpen = true;
     this.setDefaultTaskPanelTab(task);
     this.commentDraft = '';
+    this.selectedTaskDocumentFile = null;
+    this.resetTaskDocumentForm();
     this.loadSelectedTaskComments();
+    this.loadSelectedTaskDocuments();
     this.loadTaskTimeline(task.id);
   }
 
@@ -302,8 +320,13 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
     this.selectedTask = null;
     this.selectedTaskComments = [];
     this.selectedTaskTimeline = [];
+    this.selectedTaskDocuments = [];
     this.commentDraft = '';
+    this.selectedTaskDocumentFile = null;
     this.loadingTimeline = false;
+    this.loadingTaskDocuments = false;
+    this.uploadingTaskDocument = false;
+    this.resetTaskDocumentForm();
     this.closeBlockerForm();
     this.cancelResolveBlocker();
     this.closeTaskDateForm();
@@ -326,6 +349,87 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
           this.selectedTaskComments = [];
         },
       });
+  }
+
+  loadSelectedTaskDocuments(): void {
+    if (!this.selectedTask) {
+      this.selectedTaskDocuments = [];
+      return;
+    }
+
+    this.loadingTaskDocuments = true;
+
+    this.openingsService
+      .listTaskDocuments(this.openingId, this.selectedTask.id)
+      .subscribe({
+        next: (response) => {
+          this.loadingTaskDocuments = false;
+          this.selectedTaskDocuments = response.items || [];
+        },
+        error: () => {
+          this.loadingTaskDocuments = false;
+          this.selectedTaskDocuments = [];
+        },
+      });
+  }
+
+  resetTaskDocumentForm(): void {
+    this.taskDocumentForm = {
+      document_role: 'EVIDENCE',
+      notes: '',
+    };
+  }
+
+  onTaskDocumentFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0] || null;
+
+    this.selectedTaskDocumentFile = file;
+  }
+
+  canUploadTaskDocument(): boolean {
+    return Boolean(
+      this.selectedTask &&
+      this.selectedTaskDocumentFile &&
+      !this.uploadingTaskDocument,
+    );
+  }
+
+  uploadSelectedTaskDocument(): void {
+    if (!this.selectedTask || !this.selectedTaskDocumentFile || !this.canUploadTaskDocument()) {
+      return;
+    }
+
+    this.uploadingTaskDocument = true;
+    this.clearMessages();
+
+    this.openingsService.uploadTaskDocument(this.openingId, this.selectedTask.id, {
+      file: this.selectedTaskDocumentFile,
+      report_type_key: 'internal_documents',
+      document_role: this.taskDocumentForm.document_role || 'EVIDENCE',
+      notes: this.taskDocumentForm.notes || null,
+      cutoff_date:
+        this.selectedTask.planned_due_date ||
+        this.selectedTask.planned_start_date ||
+        null,
+    }).subscribe({
+      next: (response) => {
+        this.uploadingTaskDocument = false;
+        this.successMessage = response.message || 'Documento vinculado.';
+        this.selectedTaskDocumentFile = null;
+        this.resetTaskDocumentForm();
+        this.loadSelectedTaskDocuments();
+        this.loadTaskTimeline(this.selectedTask!.id);
+        this.activeTaskPanelTab = 'DOCUMENTS';
+      },
+      error: (error) => {
+        this.uploadingTaskDocument = false;
+        this.errorMessage = this.resolveErrorMessage(
+          error,
+          'No se pudo subir el documento.',
+        );
+      },
+    });
   }
 
   openTaskDateForm(): void {
@@ -645,6 +749,10 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
       return this.getTaskDependencies(this.selectedTask).length;
     }
 
+    if (tab === 'DOCUMENTS') {
+      return this.selectedTaskDocuments.length;
+    }
+
     if (tab === 'COMMENTS') {
       return this.selectedTaskComments.length;
     }
@@ -658,8 +766,13 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
       return;
     }
 
+    if (task.requires_document) {
+      this.activeTaskPanelTab = 'DOCUMENTS';
+      return;
+    }
+
     this.activeTaskPanelTab = 'TIMELINE';
-  }  
+  }
 
   openBlockerForm(): void {
     if (!this.selectedTask) {

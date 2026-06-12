@@ -32,6 +32,9 @@ import {
   OpeningTaskBlockerSingleResponse,
   OpeningTaskBlockerStatus,
   OpeningTaskTimelineResponse,
+  OpeningTaskDocumentListResponse,
+  OpeningTaskDocumentUploadPayload,
+  OpeningTaskDocumentUploadResponse,
   SucursalOption,
 } from '../models/opening.model';
 
@@ -260,6 +263,40 @@ export class OpeningsService {
       `${this.baseUrl}/${openingId}/tasks/${taskId}/timeline`,
     );
   }  
+
+  listTaskDocuments(
+    openingId: number,
+    taskId: number,
+  ): Observable<OpeningTaskDocumentListResponse> {
+    return this.http.get<OpeningTaskDocumentListResponse>(
+      `${this.baseUrl}/${openingId}/tasks/${taskId}/documents`,
+    );
+  }
+
+  uploadTaskDocument(
+    openingId: number,
+    taskId: number,
+    payload: OpeningTaskDocumentUploadPayload,
+  ): Observable<OpeningTaskDocumentUploadResponse> {
+    const formData = new FormData();
+
+    formData.append('file', payload.file);
+    formData.append('report_type_key', payload.report_type_key || 'internal_documents');
+    formData.append('document_role', payload.document_role || 'EVIDENCE');
+
+    if (payload.notes) {
+      formData.append('notes', payload.notes);
+    }
+
+    if (payload.cutoff_date) {
+      formData.append('cutoff_date', payload.cutoff_date);
+    }
+
+    return this.http.post<OpeningTaskDocumentUploadResponse>(
+      `${this.baseUrl}/${openingId}/tasks/${taskId}/documents/upload`,
+      formData,
+    );
+  }
 
   listTaskComments(
     openingId: number,
