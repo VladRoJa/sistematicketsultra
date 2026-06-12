@@ -1,3 +1,227 @@
+## Actualización de estado — Junio 2026
+
+Este contrato se actualiza después de la implementación real del módulo de Aperturas usando Serranía como caso operativo.
+
+### Estado actual del módulo
+
+```text
+✅ Backend base F1 implementado
+✅ Modelos y migraciones F1 implementados
+✅ Frontend F1 implementado
+✅ Gantt operativo implementado
+✅ Apertura Serranía cargada en servidor
+✅ Fases reales de Serranía cargadas
+✅ Tareas reales de Serranía cargadas
+✅ Tareas sin fecha soportadas como checklist operativo
+✅ Edición de inicio programado y fecha compromiso desde panel lateral
+✅ Dependencias visibles y editables desde UI
+✅ Bloqueos operativos con causa, tipo e impacto
+✅ Resolución de bloqueos con comentario obligatorio
+✅ Bitácora visible por tarea
+✅ Panel lateral reorganizado por tabs internos
+✅ KPI de tareas bloqueadas con navegación contextual
+✅ Alta operativa de Serranía en sucursales
+✅ Vinculación de SERRANIA en track_branch_catalog con sucursal operativa
+🟠 Control financiero pendiente para F2
+🟠 Partidas presupuestales pendiente para F2
+🟠 Solicitudes de pago pendiente para F3
+🟠 Vínculos documentales con Nube pendiente para F2/F3
+🔵 Notificaciones y alertas avanzadas en roadmap
+⚠️ Fuente de verdad de sucursales pendiente
+```
+
+### Cambio de estatus F1
+
+F1 ya no debe considerarse solo “en curso”.
+
+F1 puede considerarse funcionalmente cerrada para operación base, con Serranía como caso real cargado en servidor.
+
+F1 cubre actualmente:
+
+```text
+apertura
+sucursal
+fases
+tareas
+fechas
+Gantt
+seguimiento por fase
+tareas sin fecha
+edición de fechas
+dependencias
+bloqueos
+comentarios
+bitácora
+panel lateral usable
+auditoría base
+```
+
+Quedan como polish F1 menor:
+
+```text
+mejorar textos finales de UI
+compactar algunas secciones visuales
+mejorar lectura ejecutiva
+agregar filtros operativos de bitácora
+```
+
+### Hallazgo estructural: fuente de verdad de sucursales
+
+Durante la carga de Serranía se detectó un problema estructural importante:
+
+```text
+Track ya conocía SERRANIA.
+sucursales no conocía Serranía como entidad operativa.
+Aperturas necesitaba una sucursal_id real para poder crear la apertura.
+```
+
+Esto confirma que la Suite tiene varias fuentes parciales de sucursal:
+
+```text
+sucursales
+track_branch_catalog
+track_branch_aliases
+aperturas
+tickets
+PM
+inventario
+warehouse / track_daily_mart
+```
+
+Caso detectado:
+
+```text
+track_branch_catalog tenía SERRANIA activa,
+pero con sucursal_id = null.
+
+track_branch_aliases ya tenía aliases formales para:
+- gasca_family
+- manual_targets
+- domiciliados_total
+- wellhub_family
+- totalpass_family
+```
+
+Resolución aplicada para operación inmediata:
+
+```text
+Se creó Serranía en sucursales como sucursal operativa.
+Se vinculó track_branch_catalog.sucursal_id con la sucursal operativa.
+```
+
+Pendiente estructural:
+
+```text
+Crear una fuente de verdad de sucursales que unifique:
+- alta
+- estado operativo
+- alias Track
+- visibilidad por módulo
+- relación con aperturas
+- relación con tickets / PM / inventario
+```
+
+### Regla nueva del módulo Aperturas
+
+Una apertura real no debe cargarse contra una sucursal improvisada.
+
+Antes de crear una apertura productiva debe existir:
+
+```text
+1. sucursal operativa en sucursales
+2. estado operativo correcto
+3. si aplica, registro en track_branch_catalog
+4. aliases de Track si ya existe en fuentes BI
+```
+
+Si Track conoce una sucursal y sucursales no, se debe resolver el catálogo antes de cargar cronogramas operativos.
+
+### Estado actualizado de Serranía
+
+Serranía ya funciona como caso real en servidor.
+
+Estado actual:
+
+```text
+✅ Sucursal operativa creada
+✅ Track catalog alineado con sucursal_id
+✅ Apertura creada
+✅ Fases importadas
+✅ Tareas importadas
+✅ Tareas sin fecha preservadas
+✅ Fechas editables desde UI
+✅ Gantt usable
+✅ Panel lateral usable
+✅ Bloqueos y bitácora disponibles
+```
+
+Serranía deja de ser solo prueba local y pasa a ser caso operativo real de Aperturas.
+
+### Siguiente fase recomendada
+
+La siguiente fase no debe ser más Gantt.
+
+La siguiente fase debe ser control operativo-financiero:
+
+```text
+F2 — Presupuesto y partidas
+F3 — Solicitudes de pago
+F2/F3 — Documentos vinculados desde Nube
+```
+
+Orden recomendado:
+
+```text
+1. Modelo de presupuesto de apertura
+2. Partidas presupuestales
+3. Proveedores y cuentas bancarias
+4. Solicitudes de pago
+5. Estados con Finanzas
+6. Facturas y comprobantes vinculados desde Nube
+7. Saldos por partida
+8. Bitácora financiera
+```
+
+### Criterio actualizado de cierre F1
+
+F1 se considera cerrado cuando:
+
+```text
+✅ Se puede crear apertura vinculada a sucursal
+✅ Se pueden crear fases
+✅ Se pueden crear tareas
+✅ Se pueden importar tareas reales
+✅ Se pueden manejar tareas sin fecha
+✅ Se pueden editar fechas desde UI
+✅ Se puede ver Gantt
+✅ Se puede navegar por seguimiento operativo
+✅ Se pueden crear dependencias
+✅ Se pueden crear bloqueos operativos
+✅ Se pueden resolver bloqueos con comentario
+✅ Se conserva bitácora visible por tarea
+✅ El panel lateral no se vuelve una cinta infinita
+✅ Se puede operar Serranía desde servidor
+✅ El backend valida permisos
+```
+
+Pendiente fuera de F1:
+
+```text
+control financiero
+documentos vinculados
+notificaciones
+fuente de verdad de sucursales
+```
+
+
+
+
+
+
+
+
+
+
 # Suite Ultra — Contrato Técnico Módulo de Aperturas
 
 ## Centro de control operativo-financiero para aperturas Ultra
