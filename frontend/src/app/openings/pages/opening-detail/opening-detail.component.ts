@@ -53,6 +53,13 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
   taskBlockers: OpeningTaskBlocker[] = [];
   selectedTaskTimeline: OpeningTaskTimelineEvent[] = [];
   loadingTimeline = false;
+  isTaskDateFormOpen = false;
+  savingTaskDates = false;
+
+  taskDateForm = {
+    planned_start_date: '',
+    planned_due_date: '',
+  };
 
   selectedTask: OpeningTask | null = null;
   activeTaskPanelTab: TaskPanelTab = 'TIMELINE';
@@ -299,6 +306,7 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
     this.loadingTimeline = false;
     this.closeBlockerForm();
     this.cancelResolveBlocker();
+    this.closeTaskDateForm();
     this.isTaskPanelOpen = false;
   }
 
@@ -318,6 +326,84 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
           this.selectedTaskComments = [];
         },
       });
+  }
+
+  openTaskDateForm(): void {
+    if (!this.selectedTask) {
+      return;
+    }
+
+    this.isTaskDateFormOpen = true;
+    this.taskDateForm = {
+      planned_start_date: this.selectedTask.planned_start_date || '',
+      planned_due_date: this.selectedTask.planned_due_date || '',
+    };
+
+    this.clearMessages();
+  }
+
+  closeTaskDateForm(): void {
+    this.isTaskDateFormOpen = false;
+    this.taskDateForm = {
+      planned_start_date: '',
+      planned_due_date: '',
+    };
+  }
+
+  canSaveTaskDates(): boolean {
+    if (!this.selectedTask || this.savingTaskDates) {
+      return false;
+    }
+
+    if (!this.taskDateForm.planned_start_date && !this.taskDateForm.planned_due_date) {
+      return false;
+    }
+
+    if (
+      this.taskDateForm.planned_start_date &&
+      this.taskDateForm.planned_due_date &&
+      this.taskDateForm.planned_start_date > this.taskDateForm.planned_due_date
+    ) {
+      return false;
+    }
+
+    return true;
+  }
+
+  saveTaskDates(): void {
+    if (!this.selectedTask || !this.canSaveTaskDates()) {
+      return;
+    }
+
+    this.savingTaskDates = true;
+    this.clearMessages();
+
+    this.openingsService.updateTask(this.openingId, this.selectedTask.id, {
+      planned_start_date: this.taskDateForm.planned_start_date || null,
+      planned_due_date: this.taskDateForm.planned_due_date || null,
+    }).subscribe({
+      next: (response) => {
+        this.savingTaskDates = false;
+
+        const updatedTask = response.item;
+        this.selectedTask = updatedTask;
+
+        this.tasks = this.tasks.map((task) => {
+          return task.id === updatedTask.id ? updatedTask : task;
+        });
+
+        this.successMessage = response.message || 'Fechas actualizadas.';
+        this.closeTaskDateForm();
+        this.loadTaskTimeline(updatedTask.id);
+      },
+      error: (error) => {
+        this.savingTaskDates = false;
+        this.errorMessage = this.resolveErrorMessage(
+          error,
+          'No se pudieron actualizar las fechas.',
+        );
+      },
+    });
   }
 
   private loadTaskTimeline(taskId: number): void {

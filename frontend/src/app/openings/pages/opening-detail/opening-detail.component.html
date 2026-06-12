@@ -825,6 +825,65 @@
               <strong>{{ getDateTimeLabel(selectedTask.actual_completed_at) }}</strong>
             </div>
           </div>
+          <button
+            type="button"
+            class="date-edit-action"
+            *ngIf="selectedTask && !isTaskDateFormOpen"
+            (click)="openTaskDateForm()"
+          >
+            Editar fechas
+          </button>
+
+          <div class="task-date-form" *ngIf="isTaskDateFormOpen && selectedTask">
+            <div class="field">
+              <label for="task-start-date">Inicio planificado</label>
+              <input
+                id="task-start-date"
+                type="date"
+                [(ngModel)]="taskDateForm.planned_start_date"
+              />
+            </div>
+
+            <div class="field">
+              <label for="task-due-date">Fecha compromiso</label>
+              <input
+                id="task-due-date"
+                type="date"
+                [(ngModel)]="taskDateForm.planned_due_date"
+              />
+            </div>
+
+            <small
+              class="form-warning"
+              *ngIf="
+                taskDateForm.planned_start_date &&
+                taskDateForm.planned_due_date &&
+                taskDateForm.planned_start_date > taskDateForm.planned_due_date
+              "
+            >
+              La fecha de inicio no puede ser mayor que la fecha compromiso.
+            </small>
+
+            <div class="task-date-actions">
+              <button
+                type="button"
+                class="secondary-action"
+                (click)="closeTaskDateForm()"
+                [disabled]="savingTaskDates"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                class="primary-action"
+                (click)="saveTaskDates()"
+                [disabled]="!canSaveTaskDates()"
+              >
+                Guardar fechas
+              </button>
+            </div>
+          </div>
 
           <div class="task-description">
             <span>Descripción</span>
