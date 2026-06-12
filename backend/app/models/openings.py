@@ -651,6 +651,93 @@ class OpeningTaskCommentORM(db.Model):
     def __repr__(self) -> str:
         return f"<OpeningTaskComment task_id={self.task_id} created_by={self.created_by}>"
 
+class OpeningTaskDocumentLinkORM(db.Model):
+    __tablename__ = "opening_task_document_links"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    opening_id = db.Column(
+        db.Integer,
+        db.ForeignKey("openings.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    task_id = db.Column(
+        db.Integer,
+        db.ForeignKey("opening_tasks.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    warehouse_upload_id = db.Column(
+        db.Integer,
+        db.ForeignKey("warehouse_uploads.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+
+    document_role = db.Column(
+        db.String(80),
+        nullable=False,
+        default="EVIDENCE",
+        server_default="EVIDENCE",
+    )
+
+    notes = db.Column(db.Text, nullable=True)
+
+    status = db.Column(
+        db.String(20),
+        nullable=False,
+        default="ACTIVE",
+        server_default="ACTIVE",
+    )
+
+    linked_by = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id"),
+        nullable=False,
+    )
+
+    linked_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        server_default=db.func.now(),
+    )
+
+    unlinked_by = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id"),
+        nullable=True,
+    )
+
+    unlinked_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=True,
+    )
+
+    opening = db.relationship("OpeningORM")
+    task = db.relationship("OpeningTaskORM")
+    warehouse_upload = db.relationship("WarehouseUploadORM")
+    linker = db.relationship("UserORM", foreign_keys=[linked_by])
+    unlinker = db.relationship("UserORM", foreign_keys=[unlinked_by])
+
+    __table_args__ = (
+        db.Index(
+            "ix_opening_task_document_links_opening_task_status",
+            "opening_id",
+            "task_id",
+            "status",
+        ),
+        db.Index(
+            "ix_opening_task_document_links_task_upload_status",
+            "task_id",
+            "warehouse_upload_id",
+            "status",
+        ),
+    )
+
 class OpeningTaskBlockerORM(db.Model):
     __tablename__ = "opening_task_blockers"
 

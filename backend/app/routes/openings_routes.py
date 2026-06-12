@@ -7,7 +7,7 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, current_app
 from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required
 from sqlalchemy.exc import IntegrityError
 
@@ -27,11 +27,19 @@ from app.models import (
     OpeningTaskStatus,
     Sucursal,
     SucursalOperationalStatus,
+    OpeningTaskDocumentLinkORM,
     OpeningTaskBlockerImpact,
     OpeningTaskBlockerORM,
     OpeningTaskBlockerStatus,
     OpeningTaskBlockerType,
 )
+from app.warehouse.services.warehouse_document_upload_service import (
+    create_warehouse_document_upload,
+    WarehouseDocumentUploadError,
+    WarehouseDocumentValidationError,
+)
+
+
 
 openings_bp = Blueprint("openings_bp", __name__)
 
@@ -281,6 +289,41 @@ def _serialize_task_comment(comment: OpeningTaskCommentORM) -> dict[str, Any]:
         "created_by": comment.created_by,
         "creator": _serialize_user(comment.creator),
         "created_at": _serialize_datetime(comment.created_at),
+    }
+
+def _serialize_task_document_link(link: OpeningTaskDocumentLinkORM) -> dict[str, Any]:
+    upload = link.warehouse_upload
+
+    return {
+        "id": link.id,
+        "opening_id": link.opening_id,
+        "task_id": link.task_id,
+        "warehouse_upload_id": link.warehouse_upload_id,
+        "document_role": link.document_role,
+        "notes": link.notes,
+        "status": link.status,
+        "linked_by": link.linked_by,
+        "linked_by_user": _serialize_user(link.linker),
+        "linked_at": _serialize_datetime(link.linked_at),
+        "unlinked_by": link.unlinked_by,
+        "unlinked_by_user": _serialize_user(link.unlinker),
+        "unlinked_at": _serialize_datetime(link.unlinked_at),
+        "upload": {
+            "id": upload.id,
+            "original_filename": upload.original_filename,
+            "stored_filename": upload.stored_filename,
+            "file_size_bytes": upload.file_size_bytes,
+            "file_hash_sha256": upload.file_hash_sha256,
+            "mime_type": upload.mime_type,
+            "extension": upload.extension,
+            "status": upload.status,
+            "report_type_key": upload.report_type.key if upload.report_type else None,
+            "report_type_label": upload.report_type.label if upload.report_type else None,
+            "uploaded_by_user_id": upload.uploaded_by_user_id,
+            "uploaded_by_username": upload.uploader.username if upload.uploader else None,
+            "created_at": _serialize_datetime(upload.created_at),
+            "download_url": f"/api/warehouse/uploads/{upload.id}/download",
+        } if upload else None,
     }
 
 def _serialize_task_summary(task: OpeningTaskORM | None) -> dict[str, Any] | None:
@@ -1916,7 +1959,215 @@ def resolve_task_blocker(opening_id: int, blocker_id: int):
         "message": "Bloqueo resuelto.",
         "item": serialized_blocker,
     }), 200    
+
+@openings_bp.route("/<int:opening_id>/tasks/<int:task_id>/documents", methods=["GET"])
+@jwt_required()
+def list_task_documents(opening_id: int, task_id: int):
+    denied = _require_openings_read()
+    if denied:
+        return denied
+
+    opening = db.session.get(OpeningORM, opening_id)
+
+    if not opening:
+        return jsonify({
+            "error": "Not Found",
+            "detail": "Apertura no encontrada.",
+        }), 404
+
+    task = db.session.get(OpeningTaskORM, task_id)
+
+    if not task or task.opening_id != opening_id:
+        return jsonify({
+            "error": "Not Found",
+            "detail": "Tarea no encontrada para esta apertura.",
+        }), 404
+
+    links = (
+        OpeningTaskDocumentLinkORM.query
+        .filter(
+            OpeningTaskDocumentLinkORM.opening_id == opening_id,
+            OpeningTaskDocumentLinkORM.task_id == task_id,
+            OpeningTaskDocumentLinkORM.status == "ACTIVE",
+        )
+        .order_by(OpeningTaskDocumentLinkORM.linked_at.desc())
+        .all()
+    )
+
+    return jsonify({
+        "items": [
+            _serialize_task_document_link(link)
+            for link in links
+        ],
+    }), 200
     
+@openings_bp.route("/<int:opening_id>/tasks/<int:task_id>/documents/upload", methods=["POST"])
+@jwt_required()
+def upload_task_document(opening_id: int, task_id: int):
+    denied = _require_openings_admin()
+    if denied:
+        return denied
+
+    opening = db.session.get(OpeningORM, opening_id)
+
+    if not opening:
+        return jsonify({
+            "error": "Not Found",
+            "detail": "Apertura no encontrada.",
+        }), 404
+
+    task = db.session.get(OpeningTaskORM, task_id)
+
+    if not task or task.opening_id != opening_id:
+        return jsonify({
+            "error": "Not Found",
+            "detail": "Tarea no encontrada para esta apertura.",
+        }), 404
+
+    if "file" not in request.files:
+        return jsonify({
+            "error": "Bad Request",
+            "detail": "Debes enviar un archivo en el campo 'file'.",
+        }), 400
+
+    uploaded_file = request.files["file"]
+
+    if not uploaded_file or not uploaded_file.filename:
+        return jsonify({
+            "error": "Bad Request",
+            "detail": "El archivo enviado no tiene nombre válido.",
+        }), 400
+
+    current_user_id = _current_user_id()
+
+    if not current_user_id:
+        return jsonify({
+            "error": "Unauthorized",
+            "detail": "No se pudo resolver el usuario autenticado actual.",
+        }), 401
+
+    report_type_key = (
+        request.form.get("report_type_key")
+        or "internal_documents"
+    ).strip()
+
+    document_role = (
+        request.form.get("document_role")
+        or "EVIDENCE"
+    ).strip().upper()
+
+    notes = str(request.form.get("notes") or "").strip() or None
+    
+    cutoff_date = (
+    request.form.get("cutoff_date")
+        or _serialize_date(task.planned_due_date)
+        or _serialize_date(task.planned_start_date)
+        or _serialize_date(opening.target_opening_date)
+        or _serialize_date(opening.planned_start_date)
+        or _utc_now().date().isoformat()
+    )
+
+    try:
+        file_bytes = uploaded_file.read()
+
+        upload_result = create_warehouse_document_upload(
+            report_type_key=report_type_key,
+            original_filename=uploaded_file.filename,
+            content_type=uploaded_file.mimetype,
+            file_bytes=file_bytes,
+            uploaded_by_user_id=current_user_id,
+            cutoff_date=cutoff_date,
+            audit_details={
+                "upload_origin": "openings_task_document",
+                "opening_id": opening_id,
+                "task_id": task_id,
+                "document_role": document_role,
+                "cutoff_date_source": "task_or_opening_context",
+            },
+        )
+
+        warehouse_upload_id = int(upload_result["upload_id"])
+
+        existing_link = (
+            OpeningTaskDocumentLinkORM.query
+            .filter(
+                OpeningTaskDocumentLinkORM.opening_id == opening_id,
+                OpeningTaskDocumentLinkORM.task_id == task_id,
+                OpeningTaskDocumentLinkORM.warehouse_upload_id == warehouse_upload_id,
+                OpeningTaskDocumentLinkORM.status == "ACTIVE",
+            )
+            .first()
+        )
+
+        if existing_link:
+            return jsonify({
+                "error": "Conflict",
+                "detail": "Este documento ya está vinculado activamente a la tarea.",
+                "item": _serialize_task_document_link(existing_link),
+            }), 409
+
+        link = OpeningTaskDocumentLinkORM(
+            opening_id=opening_id,
+            task_id=task_id,
+            warehouse_upload_id=warehouse_upload_id,
+            document_role=document_role,
+            notes=notes,
+            status="ACTIVE",
+            linked_by=current_user_id,
+        )
+
+        db.session.add(link)
+        db.session.flush()
+
+        serialized_link = _serialize_task_document_link(link)
+
+        _audit_opening(
+            opening_id,
+            OpeningAuditAction.DOCUMENT_LINKED,
+            entity_type="TASK_DOCUMENT_LINK",
+            entity_id=link.id,
+            new_value_json=serialized_link,
+            metadata_json={
+                "task_id": task_id,
+                "warehouse_upload_id": warehouse_upload_id,
+                "document_role": document_role,
+                "duplicate_detected": upload_result.get("duplicate_detected"),
+                "duplicate_upload_id": upload_result.get("duplicate_upload_id"),
+            },
+        )
+
+        db.session.commit()
+
+        return jsonify({
+            "message": "Documento subido y vinculado correctamente.",
+            "item": serialized_link,
+            "upload": upload_result,
+        }), 201
+
+    except WarehouseDocumentValidationError as exc:
+        db.session.rollback()
+        return jsonify({
+            "error": "Bad Request",
+            "detail": str(exc),
+        }), 400
+
+    except WarehouseDocumentUploadError as exc:
+        db.session.rollback()
+        return jsonify({
+            "error": "Upload Error",
+            "detail": str(exc),
+        }), 500
+
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception(
+            "Error inesperado subiendo documento de tarea de apertura."
+        )
+        return jsonify({
+            "error": "Internal Server Error",
+            "detail": "Ocurrió un error al subir y vincular el documento.",
+        }), 500
+
 @openings_bp.route("/<int:opening_id>/tasks/<int:task_id>/comments", methods=["GET"])
 @jwt_required()
 def list_task_comments(opening_id: int, task_id: int):

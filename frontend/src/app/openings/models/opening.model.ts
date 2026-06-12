@@ -212,6 +212,76 @@ export interface OpeningTaskComment {
   created_at: string | null;
 }
 
+export interface OpeningTaskDocumentUploadSummary {
+  id: number;
+  original_filename: string;
+  stored_filename: string;
+  file_size_bytes: number;
+  file_hash_sha256: string;
+  mime_type: string | null;
+  extension: string;
+  status: string;
+  report_type_key: string | null;
+  report_type_label: string | null;
+  uploaded_by_user_id: number | null;
+  uploaded_by_username: string | null;
+  created_at: string | null;
+  download_url: string | null;
+}
+
+export interface OpeningTaskDocumentLink {
+  id: number;
+  opening_id: number;
+  task_id: number;
+  warehouse_upload_id: number;
+  document_role: string;
+  notes: string | null;
+  status: string;
+  linked_by: number | null;
+  linked_by_user: OpeningUserSummary | null;
+  linked_at: string | null;
+  unlinked_by: number | null;
+  unlinked_by_user: OpeningUserSummary | null;
+  unlinked_at: string | null;
+  upload: OpeningTaskDocumentUploadSummary | null;
+}
+
+export interface OpeningTaskDocumentListResponse {
+  items: OpeningTaskDocumentLink[];
+}
+
+export interface OpeningTaskDocumentUploadPayload {
+  file: File;
+  report_type_key?: string;
+  document_role?: string;
+  notes?: string | null;
+  cutoff_date?: string | null;
+}
+
+export interface OpeningTaskDocumentUploadResponse {
+  message: string;
+  item: OpeningTaskDocumentLink;
+  upload: {
+    upload_id: number;
+    filename: string;
+    stored_filename: string;
+    stored_path: string;
+    file_size_bytes: number;
+    file_hash_sha256: string;
+    report_type_key: string;
+    report_type_id: number;
+    family_id: number;
+    source_id: number;
+    operational_role_id: number;
+    period_type: string;
+    cutoff_date: string | null;
+    date_from: string | null;
+    date_to: string | null;
+    duplicate_detected: boolean;
+    duplicate_upload_id: number | null;
+  };
+}
+
 export interface OpeningListResponse {
   items: Opening[];
   page: number;
