@@ -1249,8 +1249,54 @@
         <section class="side-section" *ngIf="isTaskPanelTab('DOCUMENTS')">
           <div class="side-heading">
             <h3>Documentos</h3>
-            <span>{{ selectedTaskDocuments.length }}</span>
+            <span>{{ selectedTaskOfficialDocuments.length + selectedTaskDocuments.length }}</span>
           </div>
+          <div class="document-group">
+            <div class="document-group-heading">
+              <h4>Documentos oficiales de Nube</h4>
+              <span>{{ selectedTaskOfficialDocuments.length }}</span>
+            </div>
+
+            <div class="timeline-loading" *ngIf="loadingTaskOfficialDocuments">
+              Cargando documentos oficiales...
+            </div>
+
+            <div
+              class="empty-side"
+              *ngIf="!loadingTaskOfficialDocuments && selectedTaskOfficialDocuments.length === 0"
+            >
+              Sin documentos oficiales vinculados desde Nube.
+            </div>
+
+            <div class="documents-list" *ngIf="!loadingTaskOfficialDocuments">
+              <article
+                class="document-card official-document-card"
+                *ngFor="let officialDocument of selectedTaskOfficialDocuments"
+              >
+                <div>
+                  <span>{{ officialDocument.status }}</span>
+
+                  <strong>
+                    {{ officialDocument.title }}
+                  </strong>
+
+                  <small>
+                    {{ officialDocument.description || 'Sin descripción' }}
+                  </small>
+
+                  <small>
+                    Archivo:
+                    {{ officialDocument.current_version?.original_filename || 'Sin archivo vigente' }}
+                  </small>
+
+                  <small *ngIf="officialDocument.is_sensitive">
+                    Documento confidencial
+                  </small>
+                </div>
+              </article>
+            </div>
+          </div>          
+
 
           <div class="document-upload-box">
             <div class="field">
@@ -1340,6 +1386,154 @@
             Sin documentos vinculados.
           </div>
         </section>
+        <section class="side-section">
+          <div class="side-heading">
+            <h3>Documentos</h3>
+            <span>{{ selectedTaskOfficialDocuments.length + selectedTaskDocuments.length }}</span>
+          </div>
+
+          <div class="document-group">
+            <div class="document-group-heading">
+              <h4>Documentos oficiales de Nube</h4>
+              <span>{{ selectedTaskOfficialDocuments.length }}</span>
+            </div>
+
+            <div class="timeline-loading" *ngIf="loadingTaskOfficialDocuments">
+              Cargando documentos oficiales...
+            </div>
+
+            <div
+              class="empty-side"
+              *ngIf="!loadingTaskOfficialDocuments && selectedTaskOfficialDocuments.length === 0"
+            >
+              Sin documentos oficiales vinculados desde Nube.
+            </div>
+
+            <div class="documents-list" *ngIf="!loadingTaskOfficialDocuments">
+              <article
+                class="document-card official-document-card"
+                *ngFor="let officialDocument of selectedTaskOfficialDocuments"
+              >
+                <div>
+                  <span>{{ officialDocument.status }}</span>
+
+                  <strong>
+                    {{ officialDocument.title }}
+                  </strong>
+
+                  <small>
+                    {{ officialDocument.description || 'Sin descripción' }}
+                  </small>
+
+                  <small>
+                    Archivo:
+                    {{ officialDocument.current_version?.original_filename || 'Sin archivo vigente' }}
+                  </small>
+
+                  <small *ngIf="officialDocument.is_sensitive">
+                    Documento confidencial
+                  </small>
+                </div>
+              </article>
+            </div>
+          </div>
+
+          <div class="document-group">
+            <div class="document-group-heading">
+              <h4>Evidencia operativa</h4>
+              <span>{{ selectedTaskDocuments.length }}</span>
+            </div>
+
+            <div class="document-upload-box">
+              <div class="field">
+                <label for="task-document-role">Tipo de documento</label>
+                <select
+                  id="task-document-role"
+                  [(ngModel)]="taskDocumentForm.document_role"
+                >
+                  <option value="EVIDENCE">Evidencia</option>
+                  <option value="LAYOUT">Layout</option>
+                  <option value="QUOTE">Cotización</option>
+                  <option value="PAYMENT">Pago</option>
+                  <option value="PERMIT">Permiso</option>
+                  <option value="OTHER">Otro</option>
+                </select>
+              </div>
+
+              <div class="field">
+                <label for="task-document-notes">Notas</label>
+                <textarea
+                  id="task-document-notes"
+                  rows="2"
+                  [(ngModel)]="taskDocumentForm.notes"
+                  placeholder="Ej. Layout inicial, comprobante, autorización o evidencia de avance..."
+                ></textarea>
+              </div>
+
+              <div class="field">
+                <label for="task-document-file">Archivo</label>
+                <input
+                  id="task-document-file"
+                  type="file"
+                  (change)="onTaskDocumentFileSelected($event)"
+                />
+              </div>
+
+              <button
+                type="button"
+                class="primary-action"
+                (click)="uploadSelectedTaskDocument()"
+                [disabled]="!canUploadTaskDocument()"
+              >
+                {{ uploadingTaskDocument ? 'Subiendo...' : 'Subir evidencia' }}
+              </button>
+            </div>
+
+            <div class="timeline-loading" *ngIf="loadingTaskDocuments">
+              Cargando evidencia...
+            </div>
+
+            <div class="documents-list" *ngIf="!loadingTaskDocuments">
+              <article
+                class="document-card"
+                *ngFor="let taskDocument of selectedTaskDocuments"
+              >
+                <div>
+                  <span>{{ taskDocument.document_role }}</span>
+
+                  <strong>
+                    {{ taskDocument.upload?.original_filename || 'Documento sin nombre' }}
+                  </strong>
+
+                  <small>
+                    Vinculado: {{ getDateTimeLabel(taskDocument.linked_at) }}
+                  </small>
+
+                  <small *ngIf="taskDocument.notes">
+                    {{ taskDocument.notes }}
+                  </small>
+                </div>
+
+                <a
+                  *ngIf="taskDocument.upload?.download_url"
+                  class="mini-action document-download-action"
+                  [href]="taskDocument.upload?.download_url"
+                  target="_blank"
+                  rel="noopener"
+                >
+                  Descargar
+                </a>
+              </article>
+            </div>
+
+            <div
+              class="empty-side"
+              *ngIf="!loadingTaskDocuments && selectedTaskDocuments.length === 0"
+            >
+              Sin evidencia operativa vinculada.
+            </div>
+          </div>
+        </section>        
           <section class="side-section" *ngIf="isTaskPanelTab('COMMENTS')">
             <div class="side-heading">
               <h3>Comentarios</h3>
