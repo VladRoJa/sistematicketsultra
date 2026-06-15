@@ -1918,7 +1918,7 @@ unexplained_adjustment = real_growth - reported_movement
 
 ## 24. Bases para Fase 3
 
-### Secciones futuras
+### Secciones futuras 
 
 ```json
 [
