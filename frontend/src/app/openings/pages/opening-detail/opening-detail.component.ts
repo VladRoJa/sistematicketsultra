@@ -23,6 +23,8 @@ import {
   OpeningTaskDocumentLink,
 } from '../../models/opening.model';
 import { OpeningsService } from '../../services/openings.service';
+import { InternalDocument } from '../../../internal-documents/models/internal-document.model';
+import { InternalDocumentsService } from '../../../internal-documents/services/internal-documents.service';
 
 type OpeningDetailView = 'DASHBOARD' | 'GANTT' | 'TASKS';
 type GanttCellState = 'empty' | 'single' | 'start' | 'middle' | 'end';
@@ -63,6 +65,8 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
   loadingTaskDocuments = false;
   uploadingTaskDocument = false;
   selectedTaskDocumentFile: File | null = null;
+  selectedTaskOfficialDocuments: InternalDocument[] = [];
+  loadingTaskOfficialDocuments = false;
 
   taskDocumentForm = {
     document_role: 'EVIDENCE',
@@ -169,6 +173,7 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
     private route: ActivatedRoute,
     private router: Router,
     private openingsService: OpeningsService,
+    private internalDocumentsService: InternalDocumentsService,
   ) {}
 
   ngOnInit(): void {
@@ -313,6 +318,7 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
     this.resetTaskDocumentForm();
     this.loadSelectedTaskComments();
     this.loadSelectedTaskDocuments();
+    this.loadSelectedTaskOfficialDocuments();
     this.loadTaskTimeline(task.id);
   }
 
@@ -327,6 +333,8 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
     this.loadingTaskDocuments = false;
     this.uploadingTaskDocument = false;
     this.resetTaskDocumentForm();
+    this.selectedTaskOfficialDocuments = [];
+    this.loadingTaskOfficialDocuments = false;
     this.closeBlockerForm();
     this.cancelResolveBlocker();
     this.closeTaskDateForm();
@@ -369,6 +377,31 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
         error: () => {
           this.loadingTaskDocuments = false;
           this.selectedTaskDocuments = [];
+        },
+      });
+  }
+
+  loadSelectedTaskOfficialDocuments(): void {
+    if (!this.selectedTask) {
+      this.selectedTaskOfficialDocuments = [];
+      return;
+    }
+
+    this.loadingTaskOfficialDocuments = true;
+
+    this.internalDocumentsService
+      .listDocumentsByLink({
+        entity_type: 'TASK',
+        entity_id: this.selectedTask.id,
+      })
+      .subscribe({
+        next: (response) => {
+          this.loadingTaskOfficialDocuments = false;
+          this.selectedTaskOfficialDocuments = response.items || [];
+        },
+        error: () => {
+          this.loadingTaskOfficialDocuments = false;
+          this.selectedTaskOfficialDocuments = [];
         },
       });
   }
@@ -750,7 +783,7 @@ export class OpeningDetailComponent implements OnInit, OnDestroy {
     }
 
     if (tab === 'DOCUMENTS') {
-      return this.selectedTaskDocuments.length;
+      return this.selectedTaskDocuments.length + this.selectedTaskOfficialDocuments.length;
     }
 
     if (tab === 'COMMENTS') {
