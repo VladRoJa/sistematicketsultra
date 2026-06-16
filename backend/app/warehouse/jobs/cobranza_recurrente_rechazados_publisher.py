@@ -2,25 +2,30 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from datetime import date
 from pathlib import Path
 from typing import Any
 
-from app.warehouse.services.warehouse_document_upload_service import (
-    create_warehouse_document_upload,
-)
 from app.internal_documents.services.internal_document_publication_service import (
     publish_internal_document_from_warehouse_upload,
 )
-from app.models import InternalDocumentVisibilityMode
+from app.models import InternalDocumentORM, InternalDocumentVisibilityMode
+from app.warehouse.services.warehouse_document_upload_service import (
+    create_warehouse_document_upload,
+)
+
+logger = logging.getLogger(__name__)
 
 REPORT_TYPE_KEY = "cobranza_recurrente_rechazados"
 JOB_KEY = "cobranza_recurrente_rechazados"
 XLSX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
 INTERNAL_DOCUMENT_CATEGORY_KEY = "REPORTES"
 INTERNAL_DOCUMENT_TYPE = "REPORTE_OPERATIVO"
 INTERNAL_DOCUMENT_LINK_ROLE = "FINANCIERO"
+
 
 class CobranzaRecurrentePublishError(RuntimeError):
     """Error publicando artifacts de cobranza recurrente en Warehouse/Nube."""
@@ -91,6 +96,7 @@ def _publish_single_file(
         },
     )
 
+
 def _extract_warehouse_upload_id(upload_result: dict[str, Any]) -> int:
     raw_id = (
         upload_result.get("warehouse_upload_id")
@@ -112,6 +118,33 @@ def _extract_warehouse_upload_id(upload_result: dict[str, Any]) -> int:
 
     return upload_id
 
+
+def _build_internal_document_title(
+    *,
+    sucursal_raw: str,
+    business_date: date,
+) -> str:
+    clean_sucursal = sucursal_raw.strip() or "SIN SUCURSAL"
+
+    return (
+        "Cobranza recurrente rechazados - "
+        f"{clean_sucursal} - {business_date.isoformat()}"
+    )
+
+
+def _find_existing_published_internal_document(
+    *,
+    title: str,
+) -> InternalDocumentORM | None:
+    return (
+        InternalDocumentORM.query
+        .filter(InternalDocumentORM.title == title)
+        .filter(InternalDocumentORM.status == "PUBLICADO")
+        .order_by(InternalDocumentORM.created_at.asc(), InternalDocumentORM.id.asc())
+        .first()
+    )
+
+
 def _publish_sucursal_upload_to_internal_documents(
     *,
     warehouse_upload_id: int,
@@ -122,10 +155,31 @@ def _publish_sucursal_upload_to_internal_documents(
 ) -> dict[str, Any]:
     clean_sucursal = sucursal_raw.strip() or "SIN SUCURSAL"
 
-    title = (
-        f"Cobranza recurrente rechazados - "
-        f"{clean_sucursal} - {business_date.isoformat()}"
+    title = _build_internal_document_title(
+        sucursal_raw=clean_sucursal,
+        business_date=business_date,
     )
+
+    existing_document = _find_existing_published_internal_document(title=title)
+
+    if existing_document:
+        logger.info(
+            "Documento Nube ya existe para cobranza recurrente. "
+            "Se omite publicación duplicada. document_id=%s title=%s",
+            existing_document.id,
+            title,
+        )
+
+        return {
+            "skipped": True,
+            "reason": "already_published",
+            "internal_document_id": existing_document.id,
+            "title": title,
+            "warehouse_upload_id": warehouse_upload_id,
+            "sucursal_raw": clean_sucursal,
+            "business_date": business_date.isoformat(),
+            "rows_count": rows_count,
+        }
 
     audit_metadata = {
         "origin": "automation",
@@ -137,7 +191,7 @@ def _publish_sucursal_upload_to_internal_documents(
         "rows_count": rows_count,
     }
 
-    return publish_internal_document_from_warehouse_upload(
+    publication_result = publish_internal_document_from_warehouse_upload(
         warehouse_upload_id=warehouse_upload_id,
         title=title,
         category_key=INTERNAL_DOCUMENT_CATEGORY_KEY,
@@ -165,6 +219,17 @@ def _publish_sucursal_upload_to_internal_documents(
         audit_metadata=audit_metadata,
     )
 
+    if isinstance(publication_result, dict):
+        publication_result.setdefault("skipped", False)
+        publication_result.setdefault("title", title)
+        publication_result.setdefault("warehouse_upload_id", warehouse_upload_id)
+        publication_result.setdefault("sucursal_raw", clean_sucursal)
+        publication_result.setdefault("business_date", business_date.isoformat())
+        publication_result.setdefault("rows_count", rows_count)
+
+    return publication_result
+
+
 def publish_cobranza_recurrente_rechazados_outputs(
     *,
     business_date: date | str,
@@ -188,6 +253,8 @@ def publish_cobranza_recurrente_rechazados_outputs(
     )
 
     artifact_uploads: list[dict[str, Any]] = []
+    created_internal_documents: list[dict[str, Any]] = []
+    skipped_internal_documents: list[dict[str, Any]] = []
 
     for artifact in artifacts:
         artifact_path_raw = artifact.get("path")
@@ -225,6 +292,11 @@ def publish_cobranza_recurrente_rechazados_outputs(
             )
         )
 
+        if internal_document_publication.get("skipped"):
+            skipped_internal_documents.append(internal_document_publication)
+        else:
+            created_internal_documents.append(internal_document_publication)
+
         artifact_uploads.append(
             {
                 "sucursal_raw": sucursal_raw,
@@ -234,15 +306,12 @@ def publish_cobranza_recurrente_rechazados_outputs(
             }
         )
 
-    created_internal_documents = [
-        item.get("internal_document_publication")
-        for item in artifact_uploads
-        if item.get("internal_document_publication")
-    ]
-
     return {
         "raw_upload": raw_upload,
         "artifact_uploads": artifact_uploads,
         "total_uploads": 1 + len(artifact_uploads),
         "total_internal_documents": len(created_internal_documents),
+        "total_skipped_internal_documents": len(skipped_internal_documents),
+        "created_internal_documents": created_internal_documents,
+        "skipped_internal_documents": skipped_internal_documents,
     }
