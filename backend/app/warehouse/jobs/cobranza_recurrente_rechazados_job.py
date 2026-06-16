@@ -781,8 +781,9 @@ def run_once(business_date: date | None = None) -> dict:
                 artifacts=processing_result["artifacts"],
             )
             logger.info(
-                "Publicación Warehouse/Nube OK. uploads=%s",
+                "Publicación Warehouse/Nube OK. uploads=%s internal_documents=%s",
                 publication_result["total_uploads"],
+                publication_result.get("total_internal_documents", 0),
             )
         finally:
             browser.close()
@@ -861,7 +862,7 @@ def main() -> int:
 
             publication = result.get("warehouse_publication") or {}
             if publication:
-                print(f"Uploads Warehouse/Nube: {publication.get('total_uploads')}")
+                print(f"Documentos Nube: {publication.get('total_internal_documents', 0)}")
 
             return 0
         finally:

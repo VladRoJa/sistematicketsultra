@@ -10,11 +10,17 @@ from typing import Any
 from app.warehouse.services.warehouse_document_upload_service import (
     create_warehouse_document_upload,
 )
+from app.internal_documents.services.internal_document_publication_service import (
+    publish_internal_document_from_warehouse_upload,
+)
+from app.models import InternalDocumentVisibilityMode
 
 REPORT_TYPE_KEY = "cobranza_recurrente_rechazados"
 JOB_KEY = "cobranza_recurrente_rechazados"
 XLSX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-
+INTERNAL_DOCUMENT_CATEGORY_KEY = "REPORTES"
+INTERNAL_DOCUMENT_TYPE = "REPORTE_OPERATIVO"
+INTERNAL_DOCUMENT_LINK_ROLE = "FINANCIERO"
 
 class CobranzaRecurrentePublishError(RuntimeError):
     """Error publicando artifacts de cobranza recurrente en Warehouse/Nube."""
@@ -85,6 +91,79 @@ def _publish_single_file(
         },
     )
 
+def _extract_warehouse_upload_id(upload_result: dict[str, Any]) -> int:
+    raw_id = (
+        upload_result.get("warehouse_upload_id")
+        or upload_result.get("id")
+        or upload_result.get("upload_id")
+    )
+
+    try:
+        upload_id = int(raw_id)
+    except (TypeError, ValueError) as exc:
+        raise CobranzaRecurrentePublishError(
+            f"No se pudo resolver warehouse_upload_id desde: {upload_result!r}"
+        ) from exc
+
+    if upload_id <= 0:
+        raise CobranzaRecurrentePublishError(
+            f"warehouse_upload_id inválido: {upload_id!r}"
+        )
+
+    return upload_id
+
+def _publish_sucursal_upload_to_internal_documents(
+    *,
+    warehouse_upload_id: int,
+    business_date: date,
+    sucursal_raw: str,
+    rows_count: Any,
+    uploaded_by_user_id: int,
+) -> dict[str, Any]:
+    clean_sucursal = sucursal_raw.strip() or "SIN SUCURSAL"
+
+    title = (
+        f"Cobranza recurrente rechazados - "
+        f"{clean_sucursal} - {business_date.isoformat()}"
+    )
+
+    audit_metadata = {
+        "origin": "automation",
+        "job_key": JOB_KEY,
+        "source": "gasca_auto",
+        "business_date": business_date.isoformat(),
+        "warehouse_upload_id": warehouse_upload_id,
+        "sucursal_raw": clean_sucursal,
+        "rows_count": rows_count,
+    }
+
+    return publish_internal_document_from_warehouse_upload(
+        warehouse_upload_id=warehouse_upload_id,
+        title=title,
+        category_key=INTERNAL_DOCUMENT_CATEGORY_KEY,
+        created_by_user_id=uploaded_by_user_id,
+        description=(
+            "Reporte automático de cobranza recurrente rechazada "
+            f"para {clean_sucursal}, corte {business_date.isoformat()}."
+        ),
+        document_type=INTERNAL_DOCUMENT_TYPE,
+        is_sensitive=True,
+        visibility_mode=InternalDocumentVisibilityMode.PRIVATE,
+        visibility_rules=None,
+        links=[
+            {
+                "entity_type": "SUCURSAL",
+                "entity_key": clean_sucursal,
+                "link_role": INTERNAL_DOCUMENT_LINK_ROLE,
+                "label": "Cobranza recurrente rechazados",
+                "is_primary": False,
+            }
+        ],
+        publish_now=True,
+        version_label=business_date.isoformat(),
+        change_notes="Publicación automática desde reporte Gasca.",
+        audit_metadata=audit_metadata,
+    )
 
 def publish_cobranza_recurrente_rechazados_outputs(
     *,
@@ -134,16 +213,36 @@ def publish_cobranza_recurrente_rechazados_outputs(
             },
         )
 
+        warehouse_upload_id = _extract_warehouse_upload_id(upload)
+
+        internal_document_publication = (
+            _publish_sucursal_upload_to_internal_documents(
+                warehouse_upload_id=warehouse_upload_id,
+                business_date=resolved_business_date,
+                sucursal_raw=sucursal_raw,
+                rows_count=rows_count,
+                uploaded_by_user_id=automation_user_id,
+            )
+        )
+
         artifact_uploads.append(
             {
                 "sucursal_raw": sucursal_raw,
                 "rows_count": rows_count,
                 "upload": upload,
+                "internal_document_publication": internal_document_publication,
             }
         )
+
+    created_internal_documents = [
+        item.get("internal_document_publication")
+        for item in artifact_uploads
+        if item.get("internal_document_publication")
+    ]
 
     return {
         "raw_upload": raw_upload,
         "artifact_uploads": artifact_uploads,
         "total_uploads": 1 + len(artifact_uploads),
+        "total_internal_documents": len(created_internal_documents),
     }
