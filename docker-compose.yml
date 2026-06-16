@@ -91,7 +91,35 @@ services:
       - /home/adminrdp/sistematicketsultra/uploads:/uploads
     profiles:
       - scheduler
-      
+    
+  reports-scheduler:
+    build:
+      context: ./backend
+    depends_on:
+      - db
+    env_file:
+      - .env.docker
+    environment:
+      APP_ENV: "prod"
+
+      REPORTS_SCHEDULER_ENABLED: "true"
+      REPORTS_SCHEDULER_TZ: "America/Tijuana"
+      REPORTS_SCHEDULER_SLEEP_SECONDS: "60"
+
+      COBRANZA_RECURRENTE_ENABLED: "false"
+      COBRANZA_RECURRENTE_RUN_HOUR: "7"
+      COBRANZA_RECURRENTE_RUN_MINUTE: "10"
+
+    command: python -m app.warehouse.scheduler.reports_scheduler_worker
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 120s
+    networks:
+      - backend-net
+    volumes:
+      - /home/adminrdp/sistematicketsultra/uploads:/uploads
+    profiles:
+      - scheduler
 
 volumes:
   postgres_data:

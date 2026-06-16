@@ -24,3 +24,6 @@ wal-archive/
 
 
 /uploads/
+
+# Local/generated Warehouse automation outputs
+backend/storage/
