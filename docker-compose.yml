@@ -91,8 +91,26 @@ services:
       - /home/adminrdp/sistematicketsultra/uploads:/uploads
     profiles:
       - scheduler
-      
-
+    
+  reports-scheduler:
+    build:
+      context: ./backend
+    depends_on:
+      - db
+    env_file:
+      - .env.docker
+    environment:
+      APP_ENV: "prod"
+    command: python -m app.warehouse.scheduler.reports_scheduler_worker
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 120s
+    networks:
+      - backend-net
+    volumes:
+      - /home/adminrdp/sistematicketsultra/uploads:/uploads
+    profiles:
+      - scheduler
 volumes:
   postgres_data:
 

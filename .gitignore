@@ -22,5 +22,9 @@ RUNBOOK.local.md
 # Postgres WAL archive (server runtime)
 wal-archive/
 
+# Local/generated upload storage
+uploads/
 
-/uploads/
+# Local/generated Warehouse automation outputs
+backend/storage/
+
