@@ -201,13 +201,16 @@ def _build_upload_display_filename(
 ) -> str:
     extension = _resolve_upload_display_extension(original_filename)
 
+    if report_type_key == "cobranza_recurrente_rechazados":
+        safe_name = Path(original_filename or "").name or f"{report_type_key}{extension}"
+
+        if cutoff_date:
+            return f"{cutoff_date}_{safe_name}"
+
+        return safe_name
+
     if period_type == "diario" and cutoff_date:
         return f"{report_type_key}_{cutoff_date}{extension}"
-
-    if period_type == "rango" and date_from and date_to:
-        return f"{report_type_key}_{date_from}_a_{date_to}{extension}"
-
-    return f"{report_type_key}{extension}"
 
 def create_warehouse_document_upload(
     *,

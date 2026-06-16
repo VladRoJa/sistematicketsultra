@@ -16,6 +16,9 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import Page, sync_playwright
 
 from app.warehouse.jobs._cobranza_recurrente_rechazados_xlsx import procesar_archivo
+from app.warehouse.jobs.cobranza_recurrente_rechazados_publisher import (
+    publish_cobranza_recurrente_rechazados_outputs,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -770,6 +773,17 @@ def run_once(business_date: date | None = None) -> dict:
             logger.info("Procesando archivo descargado...")
             processing_result = procesar_archivo(raw_file, clubs_dir)
             logger.info("Archivo procesado y separado por sucursal.")
+
+            logger.info("Publicando archivos en Warehouse/Nube...")
+            publication_result = publish_cobranza_recurrente_rechazados_outputs(
+                business_date=today_str,
+                raw_file=raw_file,
+                artifacts=processing_result["artifacts"],
+            )
+            logger.info(
+                "Publicación Warehouse/Nube OK. uploads=%s",
+                publication_result["total_uploads"],
+            )
         finally:
             browser.close()
 
@@ -784,6 +798,7 @@ def run_once(business_date: date | None = None) -> dict:
         "total_rows": processing_result["total_rows"],
         "total_files": processing_result["total_files"],
         "artifacts": processing_result["artifacts"],
+        "warehouse_publication": publication_result,
         "duration_seconds": round(duration_seconds, 2),
     }
 
@@ -827,18 +842,30 @@ def main() -> int:
         format="%(asctime)s [%(levelname)s] [%(name)s] %(message)s",
     )
 
-    result = run_job()
+    from app import create_app
+    from app.extensions import db
 
-    print("Proceso terminado correctamente.")
-    print(f"Fecha negocio: {result['business_date']}")
-    print(f"Archivo raw: {result['raw_file']}")
-    print(f"Carpeta salida: {result['output_dir']}")
-    print(f"Filas exportadas: {result['total_rows']}")
-    print(f"Archivos generados: {result['total_files']}")
-    print(f"Duración: {result['duration_seconds']}s")
+    app = create_app()
 
-    return 0
+    with app.app_context():
+        try:
+            result = run_job()
 
+            print("Proceso terminado correctamente.")
+            print(f"Fecha negocio: {result['business_date']}")
+            print(f"Archivo raw: {result['raw_file']}")
+            print(f"Carpeta salida: {result['output_dir']}")
+            print(f"Filas exportadas: {result['total_rows']}")
+            print(f"Archivos generados: {result['total_files']}")
+            print(f"Duración: {result['duration_seconds']}s")
+
+            publication = result.get("warehouse_publication") or {}
+            if publication:
+                print(f"Uploads Warehouse/Nube: {publication.get('total_uploads')}")
+
+            return 0
+        finally:
+            db.session.remove()
 
 if __name__ == "__main__":
     raise SystemExit(main())
