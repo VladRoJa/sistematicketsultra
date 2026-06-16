@@ -67,6 +67,26 @@ LOGIN_BUTTONS = [
     ("css", "input[type='submit']"),
 ]
 
+class CobranzaRecurrenteNotReadyError(RuntimeError):
+    """El reporte de cobranza recurrente todavía no tiene datos útiles."""
+
+def validate_publication_environment() -> None:
+    required_vars = [
+        "WAREHOUSE_AUTOMATION_USER_ID",
+    ]
+
+    missing = [
+        var_name
+        for var_name in required_vars
+        if not str(os.getenv(var_name, "")).strip()
+    ]
+
+    if missing:
+        raise RuntimeError(
+            "Faltan variables requeridas para publicar en Warehouse/Nube: "
+            + ", ".join(missing)
+        )
+
 
 def _env_bool(name: str, default: bool = False) -> bool:
     value = os.getenv(name)
@@ -566,6 +586,31 @@ def rellenar_fechas(
     return report_date
 
 
+def cleanup_not_ready_outputs(*paths: Path | str | None) -> None:
+    for raw_path in paths:
+        if not raw_path:
+            continue
+
+        path = Path(raw_path)
+
+        try:
+            if path.is_file():
+                path.unlink()
+            elif path.is_dir():
+                for child in sorted(path.rglob("*"), reverse=True):
+                    if child.is_file():
+                        child.unlink()
+                    elif child.is_dir():
+                        child.rmdir()
+
+                path.rmdir()
+        except Exception:
+            logger.warning(
+                "No se pudo limpiar output no listo: %s",
+                path,
+                exc_info=True,
+            )
+
 def _table_status(page: Page) -> dict:
     return page.evaluate(
         r"""
@@ -743,6 +788,7 @@ def descargar_excel(page: Page, raw_dir: Path, today_str: str) -> Path:
 def run_once(business_date: date | None = None) -> dict:
     config = load_config()
     validate_config(config)
+    validate_publication_environment()
 
     today_str, raw_dir, clubs_dir = get_day_folders(config, business_date)
 
@@ -773,6 +819,24 @@ def run_once(business_date: date | None = None) -> dict:
             logger.info("Procesando archivo descargado...")
             processing_result = procesar_archivo(raw_file, clubs_dir)
             logger.info("Archivo procesado y separado por sucursal.")
+
+            total_rows = int(processing_result.get("total_rows") or 0)
+            total_files = int(processing_result.get("total_files") or 0)
+
+            if total_rows <= 0 or total_files <= 0:
+                logger.warning(
+                    "Reporte de cobranza recurrente aún no listo. "
+                    "rows=%s files=%s. Se limpiarán archivos temporales y no se publicará.",
+                    total_rows,
+                    total_files,
+                )
+
+                cleanup_not_ready_outputs(raw_file, clubs_dir)
+
+                raise CobranzaRecurrenteNotReadyError(
+                    "El reporte de cobranza recurrente salió vacío; "
+                    "probablemente la cobranza efectiva aún no está cargada."
+                )
 
             logger.info("Publicando archivos en Warehouse/Nube...")
             publication_result = publish_cobranza_recurrente_rechazados_outputs(
@@ -824,6 +888,13 @@ def run_job(business_date: date | None = None) -> dict:
         try:
             logger.info("Intento %s/%s", intento, config.max_retries)
             return run_once(business_date)
+        except CobranzaRecurrenteNotReadyError:
+            logger.warning(
+                "Reporte no listo. No se harán reintentos inmediatos; "
+                "el scheduler deberá reintentar según intervalo configurado.",
+                exc_info=True,
+            )
+            raise
         except Exception as exc:  # noqa: BLE001
             last_error = exc
             logger.exception("Fallo en intento %s/%s", intento, config.max_retries)
