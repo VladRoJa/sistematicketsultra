@@ -25,7 +25,20 @@ XLSX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sh
 INTERNAL_DOCUMENT_CATEGORY_KEY = "REPORTES"
 INTERNAL_DOCUMENT_TYPE = "REPORTE_OPERATIVO"
 INTERNAL_DOCUMENT_LINK_ROLE = "FINANCIERO"
-
+SPANISH_MONTH_NAMES = {
+    1: "enero",
+    2: "febrero",
+    3: "marzo",
+    4: "abril",
+    5: "mayo",
+    6: "junio",
+    7: "julio",
+    8: "agosto",
+    9: "septiembre",
+    10: "octubre",
+    11: "noviembre",
+    12: "diciembre",
+}
 
 class CobranzaRecurrentePublishError(RuntimeError):
     """Error publicando artifacts de cobranza recurrente en Warehouse/Nube."""
@@ -119,7 +132,26 @@ def _extract_warehouse_upload_id(upload_result: dict[str, Any]) -> int:
     return upload_id
 
 
+def _format_business_date_es(value: date) -> str:
+    month_name = SPANISH_MONTH_NAMES.get(value.month, str(value.month))
+
+    return f"{value.day} {month_name} {value.year}"
+
+
 def _build_internal_document_title(
+    *,
+    sucursal_raw: str,
+    business_date: date,
+) -> str:
+    clean_sucursal = sucursal_raw.strip() or "SIN SUCURSAL"
+
+    return (
+        "Cobranza recurrente rechazados - "
+        f"{clean_sucursal} - {_format_business_date_es(business_date)}"
+    )
+
+
+def _build_legacy_internal_document_title(
     *,
     sucursal_raw: str,
     business_date: date,
@@ -134,11 +166,20 @@ def _build_internal_document_title(
 
 def _find_existing_published_internal_document(
     *,
-    title: str,
+    titles: list[str],
 ) -> InternalDocumentORM | None:
+    normalized_titles = [
+        title.strip()
+        for title in titles
+        if title and title.strip()
+    ]
+
+    if not normalized_titles:
+        return None
+
     return (
         InternalDocumentORM.query
-        .filter(InternalDocumentORM.title == title)
+        .filter(InternalDocumentORM.title.in_(normalized_titles))
         .filter(InternalDocumentORM.status == "PUBLICADO")
         .order_by(InternalDocumentORM.created_at.asc(), InternalDocumentORM.id.asc())
         .first()
@@ -159,8 +200,14 @@ def _publish_sucursal_upload_to_internal_documents(
         sucursal_raw=clean_sucursal,
         business_date=business_date,
     )
+    legacy_title = _build_legacy_internal_document_title(
+        sucursal_raw=clean_sucursal,
+        business_date=business_date,
+    )
 
-    existing_document = _find_existing_published_internal_document(title=title)
+    existing_document = _find_existing_published_internal_document(
+        titles=[title, legacy_title],
+    )
 
     if existing_document:
         logger.info(
@@ -175,6 +222,8 @@ def _publish_sucursal_upload_to_internal_documents(
             "reason": "already_published",
             "internal_document_id": existing_document.id,
             "title": title,
+            "existing_title": existing_document.title,
+            "legacy_title": legacy_title,
             "warehouse_upload_id": warehouse_upload_id,
             "sucursal_raw": clean_sucursal,
             "business_date": business_date.isoformat(),
