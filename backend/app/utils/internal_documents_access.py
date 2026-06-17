@@ -143,9 +143,9 @@ def _get_user_sucursal_keys(context: InternalDocumentUserContext) -> set[str]:
                 db.session.execute(
                     text(
                         """
-                        select nombre
+                        select sucursal
                         from sucursales
-                        where id = :sucursal_id
+                        where sucursal_id = :sucursal_id
                         limit 1
                         """
                     ),
@@ -155,8 +155,8 @@ def _get_user_sucursal_keys(context: InternalDocumentUserContext) -> set[str]:
                 .first()
             )
 
-            if row and row.get("nombre"):
-                sucursal_keys.add(_normalize_access_key(row.get("nombre")))
+            if row and row.get("sucursal"):
+                sucursal_keys.add(_normalize_access_key(row.get("sucursal")))
     except Exception:
         # Si por algún motivo no se puede resolver el nombre, no rompemos Nube.
         # El acceso seguirá intentando cruzar por id.
@@ -164,6 +164,68 @@ def _get_user_sucursal_keys(context: InternalDocumentUserContext) -> set[str]:
 
     return sucursal_keys
 
+def _get_user_sucursal_ids(context: InternalDocumentUserContext) -> set[int]:
+    sucursal_ids: set[int] = set()
+
+    if context.sucursal_id is not None:
+        sucursal_ids.add(int(context.sucursal_id))
+
+    for sucursal_id in context.sucursales_ids or tuple():
+        if sucursal_id is not None:
+            sucursal_ids.add(int(sucursal_id))
+
+    return sucursal_ids
+
+
+def _get_document_sucursal_ids(document: InternalDocumentORM) -> set[int]:
+    document_sucursal_ids: set[int] = set()
+    document_sucursal_keys = _get_document_sucursal_keys(document)
+
+    for document_sucursal_key in document_sucursal_keys:
+        direct_row = (
+            db.session.execute(
+                text(
+                    """
+                    select sucursal_id
+                    from sucursales
+                    where upper(trim(sucursal)) = :document_sucursal_key
+                    limit 1
+                    """
+                ),
+                {"document_sucursal_key": document_sucursal_key},
+            )
+            .mappings()
+            .first()
+        )
+
+        if direct_row and direct_row.get("sucursal_id") is not None:
+            document_sucursal_ids.add(int(direct_row["sucursal_id"]))
+
+        alias_rows = (
+            db.session.execute(
+                text(
+                    """
+                    select distinct c.sucursal_id
+                    from track_branch_aliases a
+                    join track_branch_catalog c
+                        on c.sucursal_canon = a.sucursal_canon
+                    where upper(trim(a.raw_branch_name)) = :document_sucursal_key
+                      and a.is_active = true
+                      and c.is_track_active = true
+                      and c.sucursal_id is not null
+                    """
+                ),
+                {"document_sucursal_key": document_sucursal_key},
+            )
+            .mappings()
+            .all()
+        )
+
+        for row in alias_rows:
+            if row.get("sucursal_id") is not None:
+                document_sucursal_ids.add(int(row["sucursal_id"]))
+
+    return document_sucursal_ids
 
 def can_view_cobranza_recurrente_document(
     document: InternalDocumentORM,
@@ -179,13 +241,13 @@ def can_view_cobranza_recurrente_document(
     if role not in COBRANZA_RECURRENTE_ALLOWED_ROLES:
         return False
 
-    document_sucursales = _get_document_sucursal_keys(document)
-    user_sucursales = _get_user_sucursal_keys(context)
+    document_sucursal_ids = _get_document_sucursal_ids(document)
+    user_sucursal_ids = _get_user_sucursal_ids(context)
 
-    if not document_sucursales or not user_sucursales:
+    if not document_sucursal_ids or not user_sucursal_ids:
         return False
 
-    return bool(document_sucursales.intersection(user_sucursales))
+    return bool(document_sucursal_ids.intersection(user_sucursal_ids))
 
 def get_current_user_id() -> int | None:
     """
