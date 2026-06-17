@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -31,6 +31,7 @@ from app.models import (
 from app.utils.internal_documents_access import (
     build_internal_document_capabilities,
     can_download_historical_internal_document_version,
+    can_manage_internal_documents,
     can_view_internal_document,
     can_view_internal_document_audit,
     get_current_internal_document_context,
@@ -74,6 +75,166 @@ def _now_tijuana() -> datetime:
 def _today_tijuana() -> date:
     return _now_tijuana().date()
 
+def _parse_iso_date(raw_value: Any) -> date | None:
+    value = _normalize_text(raw_value)
+
+    if not value:
+        return None
+
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def _start_of_day_tijuana(value: date) -> datetime:
+    return datetime.combine(
+        value,
+        time.min,
+        tzinfo=INTERNAL_DOCUMENTS_LOCAL_TZ,
+    )
+
+
+def _exclusive_end_of_day_tijuana(value: date) -> datetime:
+    return datetime.combine(
+        value + timedelta(days=1),
+        time.min,
+        tzinfo=INTERNAL_DOCUMENTS_LOCAL_TZ,
+    )
+
+
+def _resolve_document_period_filter():
+    period = _normalize_text(request.args.get("period")).lower()
+    raw_date_from = request.args.get("date_from")
+    raw_date_to = request.args.get("date_to")
+
+    date_from = _parse_iso_date(raw_date_from)
+    date_to = _parse_iso_date(raw_date_to)
+
+    today = _today_tijuana()
+
+    if raw_date_from and date_from is None:
+        return None, _json_error(
+            "Fecha inválida",
+            "date_from debe tener formato YYYY-MM-DD.",
+            400,
+        )
+
+    if raw_date_to and date_to is None:
+        return None, _json_error(
+            "Fecha inválida",
+            "date_to debe tener formato YYYY-MM-DD.",
+            400,
+        )
+
+    if period not in {
+        "",
+        "today",
+        "yesterday",
+        "last_7_days",
+        "month",
+        "custom",
+        "all",
+    }:
+        return None, _json_error(
+            "Periodo inválido",
+            "period debe ser today, yesterday, last_7_days, month, custom o all.",
+            400,
+        )
+
+    if period == "all":
+        return {
+            "period": "all",
+            "date_from": None,
+            "date_to": None,
+        }, None
+
+    if period == "custom":
+        if not date_from or not date_to:
+            return None, _json_error(
+                "Rango requerido",
+                "period=custom requiere date_from y date_to.",
+                400,
+            )
+
+        if date_from > date_to:
+            return None, _json_error(
+                "Rango inválido",
+                "date_from no puede ser mayor que date_to.",
+                400,
+            )
+
+        return {
+            "period": "custom",
+            "date_from": date_from,
+            "date_to": date_to,
+        }, None
+
+    if date_from or date_to:
+        resolved_from = date_from or date_to
+        resolved_to = date_to or date_from or today
+
+        if resolved_from and resolved_to and resolved_from > resolved_to:
+            return None, _json_error(
+                "Rango inválido",
+                "date_from no puede ser mayor que date_to.",
+                400,
+            )
+
+        return {
+            "period": period or "custom",
+            "date_from": resolved_from,
+            "date_to": resolved_to,
+        }, None
+
+    if period == "yesterday":
+        yesterday = today - timedelta(days=1)
+        return {
+            "period": "yesterday",
+            "date_from": yesterday,
+            "date_to": yesterday,
+        }, None
+
+    if period == "last_7_days":
+        return {
+            "period": "last_7_days",
+            "date_from": today - timedelta(days=6),
+            "date_to": today,
+        }, None
+
+    if period == "month":
+        first_day = today.replace(day=1)
+        return {
+            "period": "month",
+            "date_from": first_day,
+            "date_to": today,
+        }, None
+
+    return {
+        "period": "today",
+        "date_from": today,
+        "date_to": today,
+    }, None
+
+
+def _apply_document_period_filter(query, period_filter: dict[str, Any]):
+    date_from = period_filter.get("date_from")
+    date_to = period_filter.get("date_to")
+
+    if date_from is None and date_to is None:
+        return query
+
+    if date_from is not None:
+        query = query.filter(
+            InternalDocumentORM.created_at >= _start_of_day_tijuana(date_from)
+        )
+
+    if date_to is not None:
+        query = query.filter(
+            InternalDocumentORM.created_at < _exclusive_end_of_day_tijuana(date_to)
+        )
+
+    return query
 
 def _json_error(error: str, detail: str, status_code: int):
     return jsonify({"error": error, "detail": detail}), status_code
@@ -685,6 +846,45 @@ def _paginate_python_items(items: list[Any], *, page: int, page_size: int):
         "has_prev": page > 1,
     }
 
+def _build_pagination_response(
+    *,
+    items: list[Any],
+    total: int,
+    page: int,
+    page_size: int,
+    offset: int,
+    limit: int,
+    period_filter: dict[str, Any],
+):
+    total_pages = (total + page_size - 1) // page_size if total else 0
+    returned = len(items)
+    next_offset = offset + limit if offset + returned < total else None
+
+    return {
+        "items": items,
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "total_pages": total_pages,
+        "has_next": page < total_pages,
+        "has_prev": page > 1,
+        "offset": offset,
+        "limit": limit,
+        "returned": returned,
+        "has_more": next_offset is not None,
+        "next_offset": next_offset,
+        "period": period_filter.get("period"),
+        "date_from": (
+            period_filter["date_from"].isoformat()
+            if period_filter.get("date_from")
+            else None
+        ),
+        "date_to": (
+            period_filter["date_to"].isoformat()
+            if period_filter.get("date_to")
+            else None
+        ),
+    }
 
 @internal_documents_bp.route("/access", methods=["GET"])
 @jwt_required()
@@ -697,12 +897,11 @@ def internal_documents_access():
             401,
         )
 
-    allowed_roles = {"ADMIN", "ADMINISTRADOR", "SUPER_ADMIN", "SISTEMAS"}
-    allowed = context.role in allowed_roles
+    can_manage = can_manage_internal_documents(context)
 
     return jsonify(
         {
-            "allowed": allowed,
+            "allowed": True,
             "module": "internal_documents",
             "user": {
                 "id": context.user_id,
@@ -712,10 +911,9 @@ def internal_documents_access():
                 "sucursales_ids": list(context.sucursales_ids),
                 "department_id": context.department_id,
             },
-            "can_manage": allowed,
+            "can_manage": can_manage,
         }
     ), 200
-
 
 @internal_documents_bp.route("/categories", methods=["GET"])
 @jwt_required()
@@ -743,17 +941,42 @@ def list_internal_documents():
             401,
         )
 
+    period_filter, period_error = _resolve_document_period_filter()
+    if period_error:
+        return period_error
+
     page = _parse_positive_int(
         request.args.get("page"),
         default=1,
         minimum=1,
     )
+
     page_size = _parse_positive_int(
         request.args.get("page_size"),
         default=25,
         minimum=1,
-        maximum=100,
+        maximum=25,
     )
+
+    requested_limit = _parse_positive_int(
+        request.args.get("limit"),
+        default=page_size,
+        minimum=1,
+        maximum=200,
+    )
+
+    requested_offset = request.args.get("offset")
+
+    if requested_offset is not None and str(requested_offset).strip() != "":
+        offset = _parse_positive_int(
+            requested_offset,
+            default=0,
+            minimum=0,
+        )
+    else:
+        offset = (page - 1) * page_size
+
+    limit = requested_limit
 
     query = InternalDocumentORM.query.options(
         joinedload(InternalDocumentORM.category),
@@ -762,64 +985,87 @@ def list_internal_documents():
         joinedload(InternalDocumentORM.owner_department),
     )
 
+    query = _apply_document_period_filter(query, period_filter)
     query = _apply_document_filters(query)
 
     requested_status = _normalize_upper(request.args.get("status"))
 
-    can_manage = context.role in {"ADMIN", "ADMINISTRADOR", "SUPER_ADMIN", "SISTEMAS"}
+    can_manage = can_manage_internal_documents(context)
 
     if can_manage:
         if requested_status and requested_status != "ALL":
             query = query.filter(InternalDocumentORM.status == requested_status)
     else:
-        query = query.filter(InternalDocumentORM.status == InternalDocumentStatus.PUBLISHED)
-
-    query = query.order_by(InternalDocumentORM.created_at.desc())
-
-    if can_manage:
-        pagination = query.paginate(
-            page=page,
-            per_page=page_size,
-            error_out=False,
+        query = query.filter(
+            InternalDocumentORM.status == InternalDocumentStatus.PUBLISHED
         )
 
-        return jsonify(
-            {
-                "items": [
-                    _serialize_document(item)
-                    for item in pagination.items
-                ],
-                "page": pagination.page,
-                "page_size": pagination.per_page,
-                "total": pagination.total,
-                "total_pages": pagination.pages,
-                "has_next": pagination.has_next,
-                "has_prev": pagination.has_prev,
-            }
-        ), 200
-
-    visible_items = [
-        item
-        for item in query.all()
-        if can_view_internal_document(item, context)
-    ]
-
-    paginated = _paginate_python_items(
-        visible_items,
-        page=page,
-        page_size=page_size,
+    query = query.order_by(
+        InternalDocumentORM.created_at.desc(),
+        InternalDocumentORM.id.desc(),
     )
 
-    return jsonify(
-        {
-            **paginated,
-            "items": [
-                _serialize_document(item)
-                for item in paginated["items"]
-            ],
-        }
-    ), 200
+    if can_manage:
+        total = query.count()
+        items = query.offset(offset).limit(limit).all()
 
+        payload = _build_pagination_response(
+            items=[
+                _serialize_document(item)
+                for item in items
+            ],
+            total=total,
+            page=page,
+            page_size=page_size,
+            offset=offset,
+            limit=limit,
+            period_filter=period_filter,
+        )
+
+        return jsonify(payload), 200
+
+    candidate_limit = max(limit * 4, 100)
+    candidate_offset = 0
+    visible_items: list[InternalDocumentORM] = []
+    total_visible = 0
+
+    while True:
+        candidates = (
+            query
+            .offset(candidate_offset)
+            .limit(candidate_limit)
+            .all()
+        )
+
+        if not candidates:
+            break
+
+        for item in candidates:
+            if can_view_internal_document(item, context):
+                if total_visible >= offset and len(visible_items) < limit:
+                    visible_items.append(item)
+
+                total_visible += 1
+
+        candidate_offset += candidate_limit
+
+        if len(candidates) < candidate_limit:
+            break
+
+    payload = _build_pagination_response(
+        items=[
+            _serialize_document(item)
+            for item in visible_items
+        ],
+        total=total_visible,
+        page=page,
+        page_size=page_size,
+        offset=offset,
+        limit=limit,
+        period_filter=period_filter,
+    )
+
+    return jsonify(payload), 200
 
 @internal_documents_bp.route("/<int:document_id>", methods=["GET"])
 @jwt_required()
@@ -1739,7 +1985,7 @@ def list_internal_documents_by_link():
 
         query = query.filter(InternalDocumentLinkORM.link_role == link_role)
 
-    can_manage = context.role in {"ADMIN", "ADMINISTRADOR", "SUPER_ADMIN", "SISTEMAS"}
+    can_manage = can_manage_internal_documents(context)
 
     if not can_manage:
         query = query.filter(InternalDocumentORM.status == InternalDocumentStatus.PUBLISHED)
