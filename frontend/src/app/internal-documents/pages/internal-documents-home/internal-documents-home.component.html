@@ -11,8 +11,7 @@
       <h1>Nube Corporativa</h1>
 
       <p>
-        Documentos publicados, manuales, reportes, políticas, formatos y evidencia operativa
-        con control de versión, permisos y trazabilidad.
+        {{ getHeroDescription() }}
       </p>
     </div>
 
@@ -201,7 +200,7 @@
 <section class="library-toolbar">
   <div class="toolbar-heading">
     <p class="eyebrow">Biblioteca</p>
-    <h2>Explorar documentos</h2>
+    <h2>{{ getLibraryTitle() }}</h2>
   </div>
 
   <div
@@ -317,8 +316,8 @@
       </div>
 
       <div class="empty-state" *ngIf="!loading && documents.length === 0">
-        <h3>No hay documentos para mostrar</h3>
-        <p>Prueba limpiar filtros o crear un nuevo documento.</p>
+        <h3>{{ getEmptyStateTitle() }}</h3>
+        <p>{{ getEmptyStateDescription() }}</p>
       </div>
 
       <div
@@ -336,9 +335,13 @@
             <div class="document-title-row">
               <h3>{{ document.title }}</h3>
 
-              <span class="status-badge" [attr.data-status]="document.status">
-                {{ getStatusLabel(document.status) }}
-              </span>
+            <span
+              class="status-badge"
+              *ngIf="shouldShowDocumentStatus(document)"
+              [attr.data-status]="document.status"
+            >
+              {{ getStatusLabel(document.status) }}
+            </span>
             </div>
 
             <p>{{ document.description || 'Sin descripción' }}</p>
@@ -346,11 +349,11 @@
         </div>
 
         <div class="document-meta">
-          <span>{{ getCategoryName(document.category_id) }}</span>
-          <span>{{ getFileTypeLabel(document) }}</span>
-          <span>Versión {{ getCurrentVersionLabel(document) }}</span>
-          <span>{{ getVisibilityLabel(document.visibility_mode) }}</span>
-          <span *ngIf="document.is_sensitive" class="sensitive-chip">Confidencial</span>
+        <span>{{ getCategoryName(document.category_id) }}</span>
+        <span>{{ getFileTypeLabel(document) }}</span>
+        <span *ngIf="shouldShowVersionLabel()">Versión {{ getCurrentVersionLabel(document) }}</span>
+        <span *ngIf="shouldShowDocumentVisibility()">{{ getVisibilityLabel(document.visibility_mode) }}</span>
+        <span *ngIf="shouldShowSensitiveChip(document)" class="sensitive-chip">Confidencial</span>
         </div>
 
         <div class="document-actions" (click)="$event.stopPropagation()">
@@ -426,7 +429,7 @@
           </div>
 
           <div>
-            <p class="eyebrow">Ficha documental</p>
+            <p class="eyebrow">{{ getDetailPanelTitle() }}</p>
             <h2>{{ selectedDocument.title }}</h2>
 
             <div class="detail-chip-row">
@@ -470,11 +473,11 @@
           </div>
 
           <dl class="detail-list">
-            <div>
+            <div *ngIf="shouldShowOwnerLabel()">
               <dt>Dueño</dt>
               <dd>{{ getOwnerLabel(selectedDocument) }}</dd>
             </div>
-            <div>
+            <div *ngIf="shouldShowDocumentVisibility()">
               <dt>Visibilidad</dt>
               <dd>{{ getVisibilityLabel(selectedDocument.visibility_mode) }}</dd>
             </div>
@@ -493,7 +496,7 @@
           </dl>
         </section>
 
-        <section class="detail-section links-panel" *ngIf="canManageLinks(selectedDocument)">
+        <section class="detail-section links-panel" *ngIf="shouldShowLinksPanel(selectedDocument)">
           <div class="section-heading">
             <div>
               <h3>Contexto documental</h3>
@@ -612,7 +615,7 @@
           </div>
         </section>
 
-        <section class="detail-section version-panel" *ngIf="canReplaceVersion(selectedDocument)">
+        <section class="detail-section version-panel" *ngIf="shouldShowVersionPanel(selectedDocument)">
           <div class="section-heading">
             <h3>Reemplazar versión</h3>
           </div>
@@ -661,8 +664,8 @@
       <ng-template #noSelection>
         <div class="empty-detail">
           <div class="empty-detail-icon">☁</div>
-          <h2>Selecciona un documento</h2>
-          <p>El detalle, vista previa, descarga y contexto documental aparecerán aquí.</p>
+          <h2>{{ getDetailPanelEmptyTitle() }}</h2>
+          <p>{{ getDetailPanelEmptyDescription() }}</p>
         </div>
       </ng-template>
     </aside>

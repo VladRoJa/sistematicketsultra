@@ -1141,3 +1141,15 @@ dd {
     flex: 1;
   }
 }
+
+.document-card-title p {
+  line-height: 1.35;
+}
+
+.detail-description {
+  line-height: 1.5;
+}
+
+.detail-panel .detail-actions {
+  gap: 10px;
+}

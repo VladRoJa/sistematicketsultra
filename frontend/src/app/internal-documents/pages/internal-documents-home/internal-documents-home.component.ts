@@ -878,6 +878,80 @@ export class InternalDocumentsHomeComponent implements OnInit, OnDestroy {
     return `${start}-${end} de ${this.total} documentos`;
   }
 
+  getHeroDescription(): string {
+    if (this.canManage) {
+      return 'Documentos publicados, manuales, reportes, políticas, formatos y evidencia operativa con control de versión, permisos y trazabilidad.';
+    }
+
+    return 'Consulta y descarga documentos corporativos disponibles para tu operación.';
+  }
+
+  getLibraryTitle(): string {
+    return this.canManage ? 'Explorar documentos' : 'Buscar documentos';
+  }
+
+  getEmptyStateTitle(): string {
+    return this.canManage
+      ? 'No hay documentos para mostrar'
+      : 'No encontramos documentos disponibles';
+  }
+
+  getEmptyStateDescription(): string {
+    return this.canManage
+      ? 'Prueba limpiar filtros o crear un nuevo documento.'
+      : 'Prueba cambiar el periodo, la categoría o el texto de búsqueda.';
+  }
+
+  getDetailPanelTitle(): string {
+    return this.canManage ? 'Ficha documental' : 'Documento disponible';
+  }
+
+  getDetailPanelEmptyTitle(): string {
+    return this.canManage ? 'Selecciona un documento' : 'Elige un documento';
+  }
+
+  getDetailPanelEmptyDescription(): string {
+    return this.canManage
+      ? 'El detalle, vista previa, descarga y contexto documental aparecerán aquí.'
+      : 'Aquí podrás ver el resumen y descargar el archivo seleccionado.';
+  }
+
+  shouldShowAdminMetadata(): boolean {
+    return this.canManage;
+  }
+
+  shouldShowDocumentStatus(document: InternalDocument): boolean {
+    return this.canManage || document.status !== 'PUBLICADO';
+  }
+
+  shouldShowDocumentVisibility(): boolean {
+    return this.canManage;
+  }
+
+  shouldShowSensitiveChip(document: InternalDocument): boolean {
+    return this.canManage && Boolean(document.is_sensitive);
+  }
+
+  shouldShowVersionLabel(): boolean {
+    return this.canManage;
+  }
+
+  shouldShowOwnerLabel(): boolean {
+    return this.canManage;
+  }
+
+  shouldShowLinksPanel(document: InternalDocument | null): boolean {
+    return this.canManageLinks(document);
+  }
+
+  shouldShowVersionPanel(document: InternalDocument | null): boolean {
+    if (!document) {
+      return false;
+    }
+
+    return this.canReplaceVersion(document);
+  }
+
   getOwnerLabel(document: InternalDocument): string {
     if (document.owner_user?.username) {
       return document.owner_user.username;
