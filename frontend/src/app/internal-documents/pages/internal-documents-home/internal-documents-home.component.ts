@@ -14,6 +14,8 @@ import {
   InternalDocumentLinkPayload,
   InternalDocumentLinkRole,
   InternalDocumentListFilters,
+  InternalDocumentListResponse,
+  InternalDocumentPeriodFilter,
   InternalDocumentStatus,
   InternalDocumentVisibilityPayload,
 } from '../../models/internal-document.model';
@@ -52,8 +54,13 @@ export class InternalDocumentsHomeComponent implements OnInit, OnDestroy {
     q: '',
     category_id: null,
     status: 'ALL',
+    period: 'today',
+    date_from: null,
+    date_to: null,
     page: 1,
     page_size: 25,
+    offset: 0,
+    limit: 25,
   };
 
   total = 0;
@@ -62,6 +69,26 @@ export class InternalDocumentsHomeComponent implements OnInit, OnDestroy {
   totalPages = 0;
   hasNext = false;
   hasPrev = false;
+  readonly visiblePageSize = 25;
+  readonly allPeriodBlockSize = 200;
+
+  private cachedBlockSignature = '';
+  private cachedBlockOffset = -1;
+  private cachedBlockItems: InternalDocument[] = [];
+  private cachedBlockTotal = 0;
+  private cachedBlockTotalPages = 0;
+
+  readonly periodOptions: Array<{
+    value: InternalDocumentPeriodFilter;
+    label: string;
+  }> = [
+    { value: 'today', label: 'Hoy' },
+    { value: 'yesterday', label: 'Ayer' },
+    { value: 'last_7_days', label: 'Últimos 7 días' },
+    { value: 'month', label: 'Este mes' },
+    { value: 'all', label: 'Todo' },
+    { value: 'custom', label: 'Personalizado' },
+  ];
 
   selectedFile: File | null = null;
   versionFile: File | null = null;
@@ -183,36 +210,33 @@ export class InternalDocumentsHomeComponent implements OnInit, OnDestroy {
   }
 
   loadDocuments(): void {
+    const requestFilters = this.buildFilters();
+    const requestOffset = requestFilters.offset || 0;
+    const requestSignature = this.buildListSignature(requestFilters);
+
+    if (this.canUseCachedBlock(requestSignature, requestOffset)) {
+      this.applyCachedBlock(requestOffset);
+      return;
+    }
+
     this.loading = true;
     this.clearMessages();
 
-    this.internalDocumentsService.listDocuments(this.buildFilters()).subscribe({
+    this.internalDocumentsService.listDocuments(requestFilters).subscribe({
       next: (response) => {
-        this.documents = response.items || [];
-        this.updateVisibleDocumentSummary();
+        const blockItems = response.items || [];
+        const responseOffset = response.offset ?? requestOffset;
 
-        this.page = response.page;
-        this.pageSize = response.page_size;
-        this.total = response.total;
-        this.totalPages = response.total_pages;
-        this.hasNext = response.has_next;
-        this.hasPrev = response.has_prev;
+        this.cachedBlockSignature = requestSignature;
+        this.cachedBlockOffset = responseOffset;
+        this.cachedBlockItems = blockItems;
+        this.cachedBlockTotal = response.total || 0;
+        this.cachedBlockTotalPages = response.total_pages || 0;
+
+        this.applyResponseBlock(blockItems, responseOffset, response);
+        this.refreshSelectedDocumentFromCurrentPage();
+
         this.loading = false;
-
-        if (this.selectedDocument) {
-          const refreshed = this.documents.find(
-            (item) => item.id === this.selectedDocument?.id
-          );
-
-          if (refreshed) {
-            this.selectedDocument = {
-              ...this.selectedDocument,
-              ...refreshed,
-              links: this.selectedDocument.links,
-              visibility_rules: this.selectedDocument.visibility_rules,
-            };
-          }
-        }
       },
       error: () => {
         this.loading = false;
@@ -223,6 +247,7 @@ export class InternalDocumentsHomeComponent implements OnInit, OnDestroy {
 
   applyFilters(): void {
     this.filters.page = 1;
+    this.resetListCache();
     this.loadDocuments();
   }
 
@@ -231,10 +256,16 @@ export class InternalDocumentsHomeComponent implements OnInit, OnDestroy {
       q: '',
       category_id: null,
       status: this.canManage ? 'ALL' : null,
+      period: 'today',
+      date_from: null,
+      date_to: null,
       page: 1,
-      page_size: 25,
+      page_size: this.visiblePageSize,
+      offset: 0,
+      limit: this.visiblePageSize,
     };
 
+    this.resetListCache();
     this.loadDocuments();
   }
 
@@ -270,6 +301,16 @@ export class InternalDocumentsHomeComponent implements OnInit, OnDestroy {
 
     this.filters.page = (this.filters.page || 1) + 1;
     this.loadDocuments();
+  }
+
+  onPeriodChanged(): void {
+    if (this.filters.period !== 'custom') {
+      this.filters.date_from = null;
+      this.filters.date_to = null;
+    }
+
+    this.filters.page = 1;
+    this.resetListCache();
   }
 
   selectDocument(document: InternalDocument): void {
@@ -804,6 +845,39 @@ export class InternalDocumentsHomeComponent implements OnInit, OnDestroy {
     }).format(date);
   }
 
+  isCustomPeriodSelected(): boolean {
+    return this.filters.period === 'custom';
+  }
+
+  getPeriodLabel(period: string | null | undefined = this.filters.period): string {
+    const option = this.periodOptions.find((item) => item.value === period);
+    return option?.label || 'Hoy';
+  }
+
+  getLibraryContextLabel(): string {
+    const totalLabel = `${this.total} documento${this.total === 1 ? '' : 's'}`;
+
+    if (this.filters.period === 'custom') {
+      const from = this.filters.date_from || 'inicio';
+      const to = this.filters.date_to || 'fin';
+
+      return `Personalizado · ${from} a ${to} · ${totalLabel}`;
+    }
+
+    return `${this.getPeriodLabel()} · ${totalLabel}`;
+  }
+
+  getPaginationRangeLabel(): string {
+    if (!this.total) {
+      return '0 documentos';
+    }
+
+    const start = ((this.page || 1) - 1) * this.pageSize + 1;
+    const end = Math.min(start + this.documents.length - 1, this.total);
+
+    return `${start}-${end} de ${this.total} documentos`;
+  }
+
   getOwnerLabel(document: InternalDocument): string {
     if (document.owner_user?.username) {
       return document.owner_user.username;
@@ -1014,15 +1088,149 @@ export class InternalDocumentsHomeComponent implements OnInit, OnDestroy {
   }
 
   private buildFilters(): InternalDocumentListFilters {
+    const page = this.filters.page || 1;
+    const pageSize = this.visiblePageSize;
+    const offset = this.getRequestOffsetForPage(page);
+    const limit = this.getRequestLimit();
+
     return {
       q: this.filters.q || '',
       category_id: this.filters.category_id || null,
       status: this.canManage ? (this.filters.status || 'ALL') : null,
       owner_department_id: this.filters.owner_department_id || null,
       is_sensitive: this.filters.is_sensitive ?? null,
-      page: this.filters.page || 1,
-      page_size: this.filters.page_size || 25,
+      period: this.filters.period || 'today',
+      date_from: this.filters.date_from || null,
+      date_to: this.filters.date_to || null,
+      page,
+      page_size: pageSize,
+      offset,
+      limit,
     };
+  }
+
+  private getRequestOffsetForPage(page: number): number {
+    const pageOffset = Math.max(page - 1, 0) * this.visiblePageSize;
+
+    if (this.filters.period === 'all') {
+      return Math.floor(pageOffset / this.allPeriodBlockSize) * this.allPeriodBlockSize;
+    }
+
+    return pageOffset;
+  }
+
+  private getRequestLimit(): number {
+    return this.filters.period === 'all'
+      ? this.allPeriodBlockSize
+      : this.visiblePageSize;
+  }
+
+  private buildListSignature(filters: InternalDocumentListFilters): string {
+    return JSON.stringify({
+      q: filters.q || '',
+      category_id: filters.category_id || null,
+      status: filters.status || null,
+      owner_department_id: filters.owner_department_id || null,
+      is_sensitive: filters.is_sensitive ?? null,
+      period: filters.period || 'today',
+      date_from: filters.date_from || null,
+      date_to: filters.date_to || null,
+    });
+  }
+
+  private canUseCachedBlock(signature: string, requestedOffset: number): boolean {
+    if (!this.cachedBlockItems.length) {
+      return false;
+    }
+
+    if (this.cachedBlockSignature !== signature) {
+      return false;
+    }
+
+    const pageOffset = Math.max((this.filters.page || 1) - 1, 0) * this.visiblePageSize;
+    const cachedStart = this.cachedBlockOffset;
+    const cachedEnd = this.cachedBlockOffset + this.cachedBlockItems.length;
+
+    return pageOffset >= cachedStart && pageOffset < cachedEnd;
+  }
+
+  private applyCachedBlock(requestedOffset: number): void {
+    this.applyResponseBlock(
+      this.cachedBlockItems,
+      this.cachedBlockOffset,
+      {
+        items: this.cachedBlockItems,
+        page: this.filters.page || 1,
+        page_size: this.visiblePageSize,
+        total: this.cachedBlockTotal,
+        total_pages: this.cachedBlockTotalPages,
+        has_next: (this.filters.page || 1) < this.cachedBlockTotalPages,
+        has_prev: (this.filters.page || 1) > 1,
+        offset: requestedOffset,
+        limit: this.getRequestLimit(),
+        returned: this.cachedBlockItems.length,
+        has_more: false,
+        next_offset: null,
+        period: this.filters.period || 'today',
+        date_from: this.filters.date_from || null,
+        date_to: this.filters.date_to || null,
+      } as InternalDocumentListResponse
+    );
+
+    this.refreshSelectedDocumentFromCurrentPage();
+  }
+
+  private applyResponseBlock(
+    blockItems: InternalDocument[],
+    blockOffset: number,
+    response: InternalDocumentListResponse
+  ): void {
+    this.page = this.filters.page || response.page || 1;
+    this.pageSize = this.visiblePageSize;
+    this.total = response.total || 0;
+    this.totalPages = response.total_pages || 0;
+
+    const pageOffset = Math.max(this.page - 1, 0) * this.visiblePageSize;
+    const startWithinBlock = Math.max(pageOffset - blockOffset, 0);
+
+    this.documents = blockItems.slice(
+      startWithinBlock,
+      startWithinBlock + this.visiblePageSize
+    );
+
+    this.hasPrev = this.page > 1;
+    this.hasNext = this.page < (this.totalPages || 0);
+
+    this.updateVisibleDocumentSummary();
+  }
+
+  private refreshSelectedDocumentFromCurrentPage(): void {
+    if (!this.selectedDocument) {
+      return;
+    }
+
+    const refreshed = this.documents.find(
+      (item) => item.id === this.selectedDocument?.id
+    );
+
+    if (!refreshed) {
+      return;
+    }
+
+    this.selectedDocument = {
+      ...this.selectedDocument,
+      ...refreshed,
+      links: this.selectedDocument.links,
+      visibility_rules: this.selectedDocument.visibility_rules,
+    };
+  }
+
+  private resetListCache(): void {
+    this.cachedBlockSignature = '';
+    this.cachedBlockOffset = -1;
+    this.cachedBlockItems = [];
+    this.cachedBlockTotal = 0;
+    this.cachedBlockTotalPages = 0;
   }
 
   private resetCreateForm(): void {

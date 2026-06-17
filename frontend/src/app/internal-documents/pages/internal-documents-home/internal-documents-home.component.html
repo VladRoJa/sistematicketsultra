@@ -38,36 +38,16 @@
     </div>
   </header>
 
-  <section class="library-summary">
-    <article class="summary-card">
-      <span class="summary-label">Resultados</span>
-      <strong>{{ total }}</strong>
-      <small>Total con filtros actuales</small>
-    </article>
+  <section class="library-context-bar">
+    <div>
+      <span class="context-label">Mostrando</span>
+      <strong>{{ getLibraryContextLabel() }}</strong>
+    </div>
 
-    <article class="summary-card">
-      <span class="summary-label">Publicados</span>
-      <strong>{{ visiblePublishedCount }}</strong>
-      <small>Visibles en esta página</small>
-    </article>
-
-    <article class="summary-card" *ngIf="canManage">
-      <span class="summary-label">Borradores</span>
-      <strong>{{ visibleDraftCount }}</strong>
-      <small>Pendientes de publicar</small>
-    </article>
-
-    <article class="summary-card">
-      <span class="summary-label">Confidenciales</span>
-      <strong>{{ visibleSensitiveCount }}</strong>
-      <small>Con control sensible</small>
-    </article>
-
-    <article class="summary-card">
-      <span class="summary-label">Preview</span>
-      <strong>{{ visiblePreviewableCount }}</strong>
-      <small>PDF o imágenes</small>
-    </article>
+    <div class="context-meta">
+      <span>{{ getPaginationRangeLabel() }}</span>
+      <span>Página {{ page }} de {{ totalPages || 1 }}</span>
+    </div>
   </section>
 
   <div class="alert success" *ngIf="successMessage">
@@ -218,65 +198,113 @@
     </div>
   </section>
 
-  <section class="library-toolbar">
-    <div class="toolbar-heading">
-      <p class="eyebrow">Biblioteca</p>
-      <h2>Explorar documentos</h2>
+<section class="library-toolbar">
+  <div class="toolbar-heading">
+    <p class="eyebrow">Biblioteca</p>
+    <h2>Explorar documentos</h2>
+  </div>
+
+  <div
+      class="toolbar-filters"
+      [class.custom-period]="isCustomPeriodSelected()"
+    >
+    <div class="field search-field">
+      <label for="document-search">Buscar</label>
+      <input
+        id="document-search"
+        type="text"
+        [(ngModel)]="filters.q"
+        placeholder="Título, descripción o tipo documental"
+      />
     </div>
 
-    <div class="toolbar-filters">
-      <div class="field search-field">
-        <label for="document-search">Buscar</label>
-        <input
-          id="document-search"
-          type="text"
-          [(ngModel)]="filters.q"
-          placeholder="Título, descripción o tipo documental"
-        />
-      </div>
-
-      <div class="field">
-        <label for="document-category">Categoría</label>
-        <select id="document-category" [(ngModel)]="filters.category_id">
-          <option [ngValue]="null">Todas</option>
-          <option
-            *ngFor="let category of categories"
-            [ngValue]="category.id"
-          >
-            {{ category.name }}
-          </option>
-        </select>
-      </div>
-
-      <div class="field" *ngIf="canManage">
-        <label for="document-status">Estado</label>
-        <select id="document-status" [(ngModel)]="filters.status">
-          <option
-            *ngFor="let status of statusOptions"
-            [ngValue]="status"
-          >
-            {{ status === 'ALL' ? 'Todos' : getStatusLabel(status) }}
-          </option>
-        </select>
-      </div>
-
-      <div class="filter-actions">
-        <button type="button" class="primary-action" (click)="applyFilters()" [disabled]="loading">
-          Aplicar
-        </button>
-        <button type="button" class="secondary-action" (click)="clearFilters()" [disabled]="loading">
-          Limpiar
-        </button>
-      </div>
+    <div class="field">
+      <label for="document-period">Periodo</label>
+      <select
+        id="document-period"
+        [(ngModel)]="filters.period"
+        (ngModelChange)="onPeriodChanged()"
+      >
+        <option
+          *ngFor="let option of periodOptions"
+          [ngValue]="option.value"
+        >
+          {{ option.label }}
+        </option>
+      </select>
     </div>
-  </section>
+
+    <div class="field" *ngIf="isCustomPeriodSelected()">
+      <label for="document-date-from">Desde</label>
+      <input
+        id="document-date-from"
+        type="date"
+        [(ngModel)]="filters.date_from"
+      />
+    </div>
+
+    <div class="field" *ngIf="isCustomPeriodSelected()">
+      <label for="document-date-to">Hasta</label>
+      <input
+        id="document-date-to"
+        type="date"
+        [(ngModel)]="filters.date_to"
+      />
+    </div>
+
+    <div class="field">
+      <label for="document-category">Categoría</label>
+      <select id="document-category" [(ngModel)]="filters.category_id">
+        <option [ngValue]="null">Todas</option>
+        <option
+          *ngFor="let category of categories"
+          [ngValue]="category.id"
+        >
+          {{ category.name }}
+        </option>
+      </select>
+    </div>
+
+    <div class="field" *ngIf="canManage">
+      <label for="document-status">Estado</label>
+      <select id="document-status" [(ngModel)]="filters.status">
+        <option
+          *ngFor="let status of statusOptions"
+          [ngValue]="status"
+        >
+          {{ status === 'ALL' ? 'Todos' : getStatusLabel(status) }}
+        </option>
+      </select>
+    </div>
+
+    <div class="filter-actions">
+      <button
+        type="button"
+        class="primary-action"
+        (click)="applyFilters()"
+        [disabled]="loading"
+      >
+        Aplicar
+      </button>
+
+      <button
+        type="button"
+        class="secondary-action"
+        (click)="clearFilters()"
+        [disabled]="loading"
+      >
+        Limpiar
+      </button>
+    </div>
+  </div>
+</section>
 
   <section class="content-grid">
     <article class="documents-list">
       <div class="list-header">
         <div>
           <p class="eyebrow">Documentos</p>
-          <h2>{{ total }} resultados</h2>
+          <h2>{{ getPaginationRangeLabel() }}</h2>
         </div>
 
         <span class="list-page-pill">
