@@ -7,7 +7,9 @@ from typing import Any
 
 from flask import jsonify
 from flask_jwt_extended import get_jwt, get_jwt_identity
+from sqlalchemy import text
 
+from app import db
 from app.models.user_model import UserORM
 from app.models.internal_documents import (
     InternalDocumentORM,
@@ -25,7 +27,12 @@ INTERNAL_DOCUMENT_MANAGER_ROLES = {
 INTERNAL_DOCUMENT_MANAGER_USERS = {
     "ADMICORP",
 }
+COBRANZA_RECURRENTE_TITLE_PREFIX = "COBRANZA RECURRENTE RECHAZADOS"
 
+COBRANZA_RECURRENTE_ALLOWED_ROLES = {
+    "GERENTE",
+    "GERENTE_REGIONAL",
+}
 
 @dataclass(frozen=True)
 class InternalDocumentUserContext:
@@ -76,6 +83,109 @@ def _normalize_int_tuple(values: Any) -> tuple[int, ...]:
 
     return tuple(normalized)
 
+def _normalize_access_key(value: Any) -> str:
+    return str(value or "").strip().upper()
+
+
+def _document_is_cobranza_recurrente(document: InternalDocumentORM) -> bool:
+    title = _normalize_access_key(getattr(document, "title", None))
+
+    return title.startswith(COBRANZA_RECURRENTE_TITLE_PREFIX)
+
+
+def _get_document_sucursal_keys(document: InternalDocumentORM) -> set[str]:
+    sucursal_keys: set[str] = set()
+
+    for link in getattr(document, "links", []) or []:
+        if not getattr(link, "is_active", True):
+            continue
+
+        entity_type = _normalize_access_key(getattr(link, "entity_type", None))
+        entity_key = _normalize_access_key(getattr(link, "entity_key", None))
+
+        if entity_type == "SUCURSAL" and entity_key:
+            sucursal_keys.add(entity_key)
+
+    return sucursal_keys
+
+
+def _get_user_sucursal_keys(context: InternalDocumentUserContext) -> set[str]:
+    """
+    Devuelve llaves de sucursal del usuario para comparar contra vínculos documentales.
+
+    Incluye:
+    - ids de sucursal como texto
+    - nombres de sucursal desde tabla sucursales
+
+    Esto es necesario porque los documentos automáticos de cobranza se vinculan
+    con entity_key textual, por ejemplo: VILLAS DEL REY.
+    """
+    sucursal_keys: set[str] = set()
+
+    sucursal_ids: set[int] = set()
+
+    if context.sucursal_id is not None:
+        sucursal_ids.add(int(context.sucursal_id))
+
+    for sucursal_id in context.sucursales_ids or tuple():
+        if sucursal_id is not None:
+            sucursal_ids.add(int(sucursal_id))
+
+    for sucursal_id in sucursal_ids:
+        sucursal_keys.add(str(sucursal_id).strip().upper())
+
+    if not sucursal_ids:
+        return sucursal_keys
+
+    try:
+        for sucursal_id in sucursal_ids:
+            row = (
+                db.session.execute(
+                    text(
+                        """
+                        select nombre
+                        from sucursales
+                        where id = :sucursal_id
+                        limit 1
+                        """
+                    ),
+                    {"sucursal_id": sucursal_id},
+                )
+                .mappings()
+                .first()
+            )
+
+            if row and row.get("nombre"):
+                sucursal_keys.add(_normalize_access_key(row.get("nombre")))
+    except Exception:
+        # Si por algún motivo no se puede resolver el nombre, no rompemos Nube.
+        # El acceso seguirá intentando cruzar por id.
+        return sucursal_keys
+
+    return sucursal_keys
+
+
+def can_view_cobranza_recurrente_document(
+    document: InternalDocumentORM,
+    context: InternalDocumentUserContext,
+) -> bool:
+    if document is None or context is None:
+        return False
+
+    if not _document_is_cobranza_recurrente(document):
+        return False
+
+    role = _normalize_access_key(context.role)
+    if role not in COBRANZA_RECURRENTE_ALLOWED_ROLES:
+        return False
+
+    document_sucursales = _get_document_sucursal_keys(document)
+    user_sucursales = _get_user_sucursal_keys(context)
+
+    if not document_sucursales or not user_sucursales:
+        return False
+
+    return bool(document_sucursales.intersection(user_sucursales))
 
 def get_current_user_id() -> int | None:
     """
@@ -382,6 +492,9 @@ def can_view_internal_document(
     if document.status != InternalDocumentStatus.PUBLISHED:
         return False
 
+    if can_view_cobranza_recurrente_document(document, context):
+        return True
+
     return has_document_visibility_access(document, context, action="view")
 
 
@@ -412,6 +525,9 @@ def can_download_internal_document(
 
     if not can_view_internal_document(document, context):
         return False
+
+    if can_view_cobranza_recurrente_document(document, context):
+        return True
 
     return has_document_visibility_access(document, context, action="download")
 
