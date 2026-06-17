@@ -31,6 +31,7 @@ from app.models import (
 from app.utils.internal_documents_access import (
     build_internal_document_capabilities,
     can_download_historical_internal_document_version,
+    can_manage_internal_documents,
     can_view_internal_document,
     can_view_internal_document_audit,
     get_current_internal_document_context,
@@ -896,12 +897,11 @@ def internal_documents_access():
             401,
         )
 
-    allowed_roles = {"ADMIN", "ADMINISTRADOR", "SUPER_ADMIN", "SISTEMAS"}
-    allowed = context.role in allowed_roles
+    can_manage = can_manage_internal_documents(context)
 
     return jsonify(
         {
-            "allowed": allowed,
+            "allowed": True,
             "module": "internal_documents",
             "user": {
                 "id": context.user_id,
@@ -911,10 +911,9 @@ def internal_documents_access():
                 "sucursales_ids": list(context.sucursales_ids),
                 "department_id": context.department_id,
             },
-            "can_manage": allowed,
+            "can_manage": can_manage,
         }
     ), 200
-
 
 @internal_documents_bp.route("/categories", methods=["GET"])
 @jwt_required()
@@ -991,7 +990,7 @@ def list_internal_documents():
 
     requested_status = _normalize_upper(request.args.get("status"))
 
-    can_manage = context.role in {"ADMIN", "ADMINISTRADOR", "SUPER_ADMIN", "SISTEMAS"}
+    can_manage = can_manage_internal_documents(context)
 
     if can_manage:
         if requested_status and requested_status != "ALL":
@@ -1986,7 +1985,7 @@ def list_internal_documents_by_link():
 
         query = query.filter(InternalDocumentLinkORM.link_role == link_role)
 
-    can_manage = context.role in {"ADMIN", "ADMINISTRADOR", "SUPER_ADMIN", "SISTEMAS"}
+    can_manage = can_manage_internal_documents(context)
 
     if not can_manage:
         query = query.filter(InternalDocumentORM.status == InternalDocumentStatus.PUBLISHED)

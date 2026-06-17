@@ -18,18 +18,12 @@ from app.models.internal_documents import (
 )
 
 
-INTERNAL_DOCUMENT_ADMIN_ROLES = {
-    "ADMIN",
-    "ADMINISTRADOR",
-    "SUPER_ADMIN",
+INTERNAL_DOCUMENT_MANAGER_ROLES = {
     "SISTEMAS",
 }
 
-INTERNAL_DOCUMENT_PUBLISHER_ROLES = {
-    "ADMIN",
-    "ADMINISTRADOR",
-    "SUPER_ADMIN",
-    "SISTEMAS",
+INTERNAL_DOCUMENT_MANAGER_USERS = {
+    "ADMICORP",
 }
 
 
@@ -169,27 +163,33 @@ def is_internal_document_admin(
     if context is None:
         return False
 
-    return context.role in INTERNAL_DOCUMENT_ADMIN_ROLES
+    role = _normalize_role(context.role)
+    username = _normalize_role(context.username)
+
+    return (
+        role in INTERNAL_DOCUMENT_MANAGER_ROLES
+        or username in INTERNAL_DOCUMENT_MANAGER_USERS
+    )
 
 
 def is_internal_document_publisher(
     context: InternalDocumentUserContext | None = None,
 ) -> bool:
-    context = context or get_current_internal_document_context()
-    if context is None:
-        return False
-
-    return context.role in INTERNAL_DOCUMENT_PUBLISHER_ROLES
+    return is_internal_document_admin(context)
 
 
 def can_manage_internal_documents(
     context: InternalDocumentUserContext | None = None,
 ) -> bool:
     """
-    Permiso F1 para crear, editar metadata, publicar, archivar,
+    Permiso para crear, editar metadata, publicar, archivar,
     reemplazar versiones y administrar visibilidad.
+
+    Regla actual:
+    - ADMICORP
+    - Rol SISTEMAS
     """
-    return is_internal_document_publisher(context)
+    return is_internal_document_admin(context)
 
 
 def require_internal_document_manager():
