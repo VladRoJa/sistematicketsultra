@@ -77,6 +77,10 @@ export class InternalDocumentsHomeComponent implements OnInit, OnDestroy {
   private cachedBlockItems: InternalDocument[] = [];
   private cachedBlockTotal = 0;
   private cachedBlockTotalPages = 0;
+  private searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private searchForcedAllPeriod = false;
+
+  readonly searchDebounceMs = 350;
 
   readonly periodOptions: Array<{
     value: InternalDocumentPeriodFilter;
@@ -180,6 +184,7 @@ export class InternalDocumentsHomeComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.cancelScheduledSearchReload();
     this.revokePreviewObjectUrl();
   }
 
@@ -252,6 +257,9 @@ export class InternalDocumentsHomeComponent implements OnInit, OnDestroy {
   }
 
   clearFilters(): void {
+    this.cancelScheduledSearchReload();
+    this.searchForcedAllPeriod = false;
+    
     this.filters = {
       q: '',
       category_id: null,
@@ -304,12 +312,16 @@ export class InternalDocumentsHomeComponent implements OnInit, OnDestroy {
   }
 
   onPeriodChanged(): void {
+    this.searchForcedAllPeriod = false;
+
     if (this.filters.period !== 'custom') {
       this.filters.date_from = null;
       this.filters.date_to = null;
     }
 
+    this.page = 1;
     this.filters.page = 1;
+    this.filters.offset = 0;
     this.resetListCache();
   }
 
@@ -394,6 +406,34 @@ export class InternalDocumentsHomeComponent implements OnInit, OnDestroy {
       },
     });
   }
+
+  onSearchTextChanged(value: string): void {
+    this.filters.q = value;
+
+    const cleanSearch = (value || '').trim();
+
+    if (cleanSearch) {
+      if (this.filters.period !== 'all') {
+        this.searchForcedAllPeriod = true;
+        this.filters.period = 'all';
+        this.filters.date_from = null;
+        this.filters.date_to = null;
+      }
+    } else if (this.searchForcedAllPeriod) {
+      this.searchForcedAllPeriod = false;
+      this.filters.period = 'today';
+      this.filters.date_from = null;
+      this.filters.date_to = null;
+    }
+
+    this.page = 1;
+    this.filters.page = 1;
+    this.filters.offset = 0;
+
+    this.scheduleSearchReload();
+  }
+
+
 
   setGlobalVisibility(document: InternalDocument): void {
     if (!this.canManage) {
@@ -1161,21 +1201,54 @@ export class InternalDocumentsHomeComponent implements OnInit, OnDestroy {
     this.previewObjectUrl = null;
   }
 
+  private scheduleSearchReload(): void {
+    this.cancelScheduledSearchReload();
+
+    this.searchDebounceTimer = setTimeout(() => {
+      this.searchDebounceTimer = null;
+      this.resetListCache();
+      this.loadDocuments();
+    }, this.searchDebounceMs);
+  }
+
+  private cancelScheduledSearchReload(): void {
+    if (!this.searchDebounceTimer) {
+      return;
+    }
+
+    clearTimeout(this.searchDebounceTimer);
+    this.searchDebounceTimer = null;
+  }
+
+  private getEffectivePeriod(): InternalDocumentPeriodFilter {
+    const cleanSearch = (this.filters.q || '').trim();
+
+    if (cleanSearch) {
+      return 'all';
+    }
+
+    return this.filters.period || 'today';
+  }
+
   private buildFilters(): InternalDocumentListFilters {
+    const cleanSearch = (this.filters.q || '').trim();
+    const hasSearch = cleanSearch.length > 0;
+    const effectivePeriod = this.getEffectivePeriod();
+
     const page = this.filters.page || 1;
     const pageSize = this.visiblePageSize;
     const offset = this.getRequestOffsetForPage(page);
     const limit = this.getRequestLimit();
 
     return {
-      q: this.filters.q || '',
+      q: cleanSearch,
       category_id: this.filters.category_id || null,
       status: this.canManage ? (this.filters.status || 'ALL') : null,
       owner_department_id: this.filters.owner_department_id || null,
       is_sensitive: this.filters.is_sensitive ?? null,
-      period: this.filters.period || 'today',
-      date_from: this.filters.date_from || null,
-      date_to: this.filters.date_to || null,
+      period: effectivePeriod,
+      date_from: hasSearch ? null : (this.filters.date_from || null),
+      date_to: hasSearch ? null : (this.filters.date_to || null),
       page,
       page_size: pageSize,
       offset,
@@ -1186,7 +1259,7 @@ export class InternalDocumentsHomeComponent implements OnInit, OnDestroy {
   private getRequestOffsetForPage(page: number): number {
     const pageOffset = Math.max(page - 1, 0) * this.visiblePageSize;
 
-    if (this.filters.period === 'all') {
+    if (this.getEffectivePeriod() === 'all') {
       return Math.floor(pageOffset / this.allPeriodBlockSize) * this.allPeriodBlockSize;
     }
 
@@ -1194,7 +1267,7 @@ export class InternalDocumentsHomeComponent implements OnInit, OnDestroy {
   }
 
   private getRequestLimit(): number {
-    return this.filters.period === 'all'
+    return this.getEffectivePeriod() === 'all'
       ? this.allPeriodBlockSize
       : this.visiblePageSize;
   }
@@ -1245,7 +1318,7 @@ export class InternalDocumentsHomeComponent implements OnInit, OnDestroy {
         returned: this.cachedBlockItems.length,
         has_more: false,
         next_offset: null,
-        period: this.filters.period || 'today',
+        period: this.getEffectivePeriod(),
         date_from: this.filters.date_from || null,
         date_to: this.filters.date_to || null,
       } as InternalDocumentListResponse

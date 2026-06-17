@@ -213,6 +213,7 @@
         id="document-search"
         type="text"
         [(ngModel)]="filters.q"
+        (ngModelChange)="onSearchTextChanged($event)"
         placeholder="Título, descripción o tipo documental"
       />
     </div>
