@@ -72,6 +72,25 @@ export class InternalDocumentsService {
     if (filters.is_sensitive !== undefined && filters.is_sensitive !== null) {
       params = params.set('is_sensitive', String(filters.is_sensitive));
     }
+        if (filters.period) {
+      params = params.set('period', filters.period);
+    }
+
+    if (filters.date_from) {
+      params = params.set('date_from', filters.date_from);
+    }
+
+    if (filters.date_to) {
+      params = params.set('date_to', filters.date_to);
+    }
+
+    if (filters.offset !== undefined && filters.offset !== null) {
+      params = params.set('offset', String(filters.offset));
+    }
+
+    if (filters.limit !== undefined && filters.limit !== null) {
+      params = params.set('limit', String(filters.limit));
+    }
 
     if (filters.page) {
       params = params.set('page', String(filters.page));

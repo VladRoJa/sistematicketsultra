@@ -210,17 +210,41 @@ export interface InternalDocumentsAccessResponse {
   };
 }
 
+export type InternalDocumentPeriodFilter =
+  | 'today'
+  | 'yesterday'
+  | 'last_7_days'
+  | 'month'
+  | 'custom'
+  | 'all';
+
 export interface InternalDocumentListFilters {
-  q?: string;
+  q?: string | null;
   category_id?: number | null;
   status?: InternalDocumentStatus | 'ALL' | null;
   owner_department_id?: number | null;
   is_sensitive?: boolean | null;
-  page?: number;
-  page_size?: number;
+
+  period?: InternalDocumentPeriodFilter | null;
+  date_from?: string | null;
+  date_to?: string | null;
+
+  page?: number | null;
+  page_size?: number | null;
+
+  offset?: number | null;
+  limit?: number | null;
 }
 
 export interface InternalDocumentListResponse {
+  offset?: number;
+  limit?: number;
+  returned?: number;
+  has_more?: boolean;
+  next_offset?: number | null;
+  period?: InternalDocumentPeriodFilter | string | null;
+  date_from?: string | null;
+  date_to?: string | null;
   items: InternalDocument[];
   page: number;
   page_size: number;
