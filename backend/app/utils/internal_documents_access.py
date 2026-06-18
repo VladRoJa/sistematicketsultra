@@ -593,11 +593,15 @@ def can_download_internal_document(
 
     return has_document_visibility_access(document, context, action="download")
 
+def _is_archived_document(document: InternalDocumentORM | None) -> bool:
+    return bool(document and document.status == InternalDocumentStatus.ARCHIVED)
 
 def can_edit_internal_document(
     document: InternalDocumentORM | None = None,
     context: InternalDocumentUserContext | None = None,
 ) -> bool:
+    if _is_archived_document(document):
+        return False
     return can_manage_internal_documents(context)
 
 
@@ -605,6 +609,8 @@ def can_publish_internal_document(
     document: InternalDocumentORM | None = None,
     context: InternalDocumentUserContext | None = None,
 ) -> bool:
+    if _is_archived_document(document):
+        return False
     return can_manage_internal_documents(context)
 
 
@@ -612,6 +618,8 @@ def can_archive_internal_document(
     document: InternalDocumentORM | None = None,
     context: InternalDocumentUserContext | None = None,
 ) -> bool:
+    if _is_archived_document(document):
+        return False    
     return can_manage_internal_documents(context)
 
 
@@ -619,6 +627,8 @@ def can_replace_internal_document_version(
     document: InternalDocumentORM | None = None,
     context: InternalDocumentUserContext | None = None,
 ) -> bool:
+    if _is_archived_document(document):
+        return False    
     return can_manage_internal_documents(context)
 
 
@@ -626,6 +636,8 @@ def can_manage_internal_document_visibility(
     document: InternalDocumentORM | None = None,
     context: InternalDocumentUserContext | None = None,
 ) -> bool:
+    if _is_archived_document(document):
+        return False    
     return can_manage_internal_documents(context)
 
 

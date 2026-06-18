@@ -1480,9 +1480,9 @@ getPublishRequirementsMessage(document: InternalDocument): string {
 
   canReplaceVersion(document: InternalDocument): boolean {
     return this.canManage &&
-      Boolean(document?.capabilities?.can_replace_version);
+      Boolean(document?.capabilities?.can_replace_version) &&
+      document.status !== 'ARCHIVADO';
   }
-
   canDownload(document: InternalDocument): boolean {
     return Boolean(document?.capabilities?.can_download);
   }
