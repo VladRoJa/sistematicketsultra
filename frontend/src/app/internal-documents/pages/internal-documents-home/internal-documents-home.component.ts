@@ -18,6 +18,8 @@ import {
   InternalDocumentPeriodFilter,
   InternalDocumentStatus,
   InternalDocumentVisibilityPayload,
+  InternalDocumentExternalResource,
+  InternalDocumentExternalResourcePayload,
 } from '../../models/internal-document.model';
 import { InternalDocumentsService } from '../../services/internal-documents.service';
 
@@ -197,6 +199,16 @@ readonly discoveryCards: InternalDocumentDiscoveryCard[] = [
   linksSaving = false;
   pendingDeleteLink: InternalDocumentLink | null = null;
   isDeleteLinkModalOpen = false;
+  externalResourcesLoading = false;
+  externalResourcesSaving = false;
+  externalResources: InternalDocumentExternalResource[] = [];
+
+  externalResourceForm = {
+    original_url: '',
+    title: '',
+    description: '',
+    is_primary: true,
+  };  
 
   linkForm = {
     entity_type: 'OPENING' as InternalDocumentLinkEntityType,
@@ -422,6 +434,7 @@ applyDiscoveryTarget(card: InternalDocumentDiscoveryCard): void {
 
   this.page = 1;
   this.selectedDocument = null;
+  this.externalResources = [];
 
   this.resetListCache();
   this.loadDocuments();
@@ -521,6 +534,8 @@ private normalizeDiscoveryText(value: string | null | undefined): string {
     this.internalDocumentsService.getDocument(document.id).subscribe({
       next: (item) => {
         this.selectedDocument = item;
+        this.externalResources = [];
+        this.loadExternalResourcesForSelectedDocument();
         this.loading = false;
       },
       error: () => {
@@ -1280,6 +1295,44 @@ private normalizeDiscoveryText(value: string | null | undefined): string {
     return document.id;
   }
 
+  hasExternalResources(): boolean {
+    return this.externalResources.length > 0;
+  }  
+
+createExternalResourceForSelectedDocument(): void {
+  if (!this.canManage || !this.selectedDocument) {
+    return;
+  }
+
+  const payload = this.buildExternalResourcePayload();
+
+  if (!payload) {
+    return;
+  }
+
+  this.externalResourcesSaving = true;
+  this.clearMessages();
+
+  this.internalDocumentsService.createExternalResource(
+    this.selectedDocument.id,
+    payload
+  ).subscribe({
+    next: (response) => {
+      this.externalResourcesSaving = false;
+      this.successMessage = response.message || 'Recurso externo creado.';
+      this.resetExternalResourceForm();
+      this.loadExternalResourcesForSelectedDocument();
+    },
+    error: (error) => {
+      this.externalResourcesSaving = false;
+      this.errorMessage = this.resolveErrorMessage(
+        error,
+        'No se pudo crear el recurso externo.'
+      );
+    },
+  });
+}
+
   private updateVisibleDocumentSummary(): void {
     this.visiblePublishedCount = this.documents.filter(
       (document) => document.status === 'PUBLICADO'
@@ -1338,6 +1391,26 @@ private normalizeDiscoveryText(value: string | null | undefined): string {
     return payload;
   }
 
+private buildExternalResourcePayload(): InternalDocumentExternalResourcePayload | null {
+  const originalUrl = this.externalResourceForm.original_url.trim();
+  const title = this.externalResourceForm.title.trim();
+  const description = this.externalResourceForm.description.trim();
+
+  if (!originalUrl) {
+    this.errorMessage = 'Captura el link de Google Drive.';
+    return null;
+  }
+
+  return {
+    provider: 'GOOGLE_DRIVE',
+    resource_kind: 'VIDEO',
+    original_url: originalUrl,
+    title: title || null,
+    description: description || null,
+    is_primary: this.externalResourceForm.is_primary,
+  };
+}
+
   private resetLinkForm(): void {
     this.linkForm = {
       entity_type: 'OPENING',
@@ -1349,6 +1422,15 @@ private normalizeDiscoveryText(value: string | null | undefined): string {
     };
   }
 
+private resetExternalResourceForm(): void {
+  this.externalResourceForm = {
+    original_url: '',
+    title: '',
+    description: '',
+    is_primary: true,
+  };
+}
+
   private reloadSelectedDocumentDetails(documentId: number): void {
     this.internalDocumentsService.getDocument(documentId).subscribe({
       next: (item) => {
@@ -1356,6 +1438,29 @@ private normalizeDiscoveryText(value: string | null | undefined): string {
       },
       error: () => {
         this.errorMessage = 'No se pudo recargar el detalle del documento.';
+      },
+    });
+  }
+
+  loadExternalResourcesForSelectedDocument(): void {
+    const document = this.selectedDocument;
+
+    if (!document) {
+      this.externalResources = [];
+      return;
+    }
+
+    this.externalResourcesLoading = true;
+
+    this.internalDocumentsService.getExternalResources(document.id).subscribe({
+      next: (response) => {
+        this.externalResources = response.items || [];
+        this.externalResourcesLoading = false;
+      },
+      error: () => {
+        this.externalResources = [];
+        this.externalResourcesLoading = false;
+        this.errorMessage = 'No se pudieron cargar los recursos externos del documento.';
       },
     });
   }
