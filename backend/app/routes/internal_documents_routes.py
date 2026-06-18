@@ -6,6 +6,7 @@ from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
+from urllib.parse import parse_qs, urlparse
 
 from flask import Blueprint, current_app, jsonify, request, send_file
 from flask_jwt_extended import jwt_required
@@ -27,6 +28,9 @@ from app.models import (
     InternalDocumentVisibilityORM,
     InternalDocumentVisibilityType,
     WarehouseUploadORM,
+    InternalDocumentExternalProvider,
+    InternalDocumentExternalResourceKind,
+    InternalDocumentExternalResourceORM,
 )
 from app.utils.internal_documents_access import (
     build_internal_document_capabilities,
@@ -526,6 +530,27 @@ def _serialize_document_link(
         "updated_at": link.updated_at.isoformat() if link.updated_at else None,
     }
 
+def _serialize_external_resource(
+    resource: InternalDocumentExternalResourceORM,
+) -> dict[str, Any]:
+    return {
+        "id": resource.id,
+        "document_id": resource.document_id,
+        "provider": resource.provider,
+        "resource_kind": resource.resource_kind,
+        "original_url": resource.original_url,
+        "external_file_id": resource.external_file_id,
+        "preview_url": resource.preview_url,
+        "title": resource.title,
+        "description": resource.description,
+        "is_primary": resource.is_primary,
+        "is_active": resource.is_active,
+        "created_by": resource.created_by,
+        "updated_by": resource.updated_by,
+        "created_at": resource.created_at.isoformat() if resource.created_at else None,
+        "updated_at": resource.updated_at.isoformat() if resource.updated_at else None,
+    }
+
 def _serialize_audit_log(item: InternalDocumentAuditLogORM) -> dict[str, Any]:
     return {
         "id": item.id,
@@ -747,6 +772,94 @@ def _validate_link_payload(payload: dict[str, Any]):
         "is_primary": is_primary,
     }, None
 
+def _extract_google_drive_file_id(raw_url: str) -> str | None:
+    parsed_url = urlparse(raw_url)
+    hostname = (parsed_url.hostname or "").lower()
+
+    if hostname not in {"drive.google.com", "www.drive.google.com"}:
+        return None
+
+    path_parts = [
+        part
+        for part in parsed_url.path.split("/")
+        if part
+    ]
+
+    if "file" in path_parts and "d" in path_parts:
+        file_index = path_parts.index("file")
+        d_index = path_parts.index("d")
+
+        if d_index == file_index + 1 and len(path_parts) > d_index + 1:
+            return path_parts[d_index + 1]
+
+    query_params = parse_qs(parsed_url.query)
+    file_ids = query_params.get("id") or []
+
+    if file_ids:
+        return file_ids[0]
+
+    return None
+
+
+def _build_google_drive_preview_url(file_id: str) -> str:
+    return f"https://drive.google.com/file/d/{file_id}/preview"
+
+
+def _validate_external_resource_payload(payload: dict[str, Any]):
+    provider = _normalize_upper(payload.get("provider")) or InternalDocumentExternalProvider.GOOGLE_DRIVE
+    resource_kind = _normalize_upper(payload.get("resource_kind")) or InternalDocumentExternalResourceKind.VIDEO
+    original_url = _normalize_text(payload.get("original_url"))
+    title = _normalize_text(payload.get("title"))
+    description = _normalize_text(payload.get("description"))
+    is_primary = _parse_bool(payload.get("is_primary"), default=False)
+
+    if provider not in InternalDocumentExternalProvider.ALL:
+        return None, _json_error(
+            "Proveedor externo inválido",
+            "provider debe ser GOOGLE_DRIVE.",
+            400,
+        )
+
+    if resource_kind not in InternalDocumentExternalResourceKind.ALL:
+        return None, _json_error(
+            "Tipo de recurso externo inválido",
+            "resource_kind debe ser VIDEO, FOLDER o LINK.",
+            400,
+        )
+
+    if provider == InternalDocumentExternalProvider.GOOGLE_DRIVE and resource_kind != InternalDocumentExternalResourceKind.VIDEO:
+        return None, _json_error(
+            "Recurso no soportado todavía",
+            "Por ahora Nube solo acepta recursos VIDEO de Google Drive.",
+            400,
+        )
+
+    if not original_url:
+        return None, _json_error(
+            "URL requerida",
+            "Debes enviar original_url con un link válido de Google Drive.",
+            400,
+        )
+
+    external_file_id = _extract_google_drive_file_id(original_url)
+
+    if not external_file_id:
+        return None, _json_error(
+            "Link de Google Drive inválido",
+            "Usa un link tipo https://drive.google.com/file/d/<file_id>/view.",
+            400,
+        )
+
+    return {
+        "provider": provider,
+        "resource_kind": resource_kind,
+        "original_url": original_url,
+        "external_file_id": external_file_id,
+        "preview_url": _build_google_drive_preview_url(external_file_id),
+        "title": title,
+        "description": description,
+        "is_primary": is_primary,
+    }, None
 
 def _build_link_audit_snapshot(link: InternalDocumentLinkORM) -> dict[str, Any]:
     return {
@@ -761,6 +874,22 @@ def _build_link_audit_snapshot(link: InternalDocumentLinkORM) -> dict[str, Any]:
         "is_active": link.is_active,
     }
 
+def _build_external_resource_audit_snapshot(
+    resource: InternalDocumentExternalResourceORM,
+) -> dict[str, Any]:
+    return {
+        "id": resource.id,
+        "document_id": resource.document_id,
+        "provider": resource.provider,
+        "resource_kind": resource.resource_kind,
+        "original_url": resource.original_url,
+        "external_file_id": resource.external_file_id,
+        "preview_url": resource.preview_url,
+        "title": resource.title,
+        "description": resource.description,
+        "is_primary": resource.is_primary,
+        "is_active": resource.is_active,
+    }
 
 def _unset_existing_primary_links(
     *,
@@ -796,6 +925,22 @@ def _unset_existing_primary_links(
     for link in query.all():
         link.is_primary = False
         link.updated_by = current_user_id
+
+def _unset_existing_primary_external_resources(
+    *,
+    document_id: int,
+    current_user_id: int | None,
+) -> None:
+    existing_primary_resources = InternalDocumentExternalResourceORM.query.filter_by(
+        document_id=document_id,
+        is_primary=True,
+        is_active=True,
+    ).all()
+
+    for resource in existing_primary_resources:
+        resource.is_primary = False
+        resource.updated_by = current_user_id
+        resource.updated_at = _now_tijuana()
 
 def _apply_document_filters(query):
     q = _normalize_text(request.args.get("q"))
@@ -1921,6 +2066,113 @@ def deactivate_internal_document_link(document_id: int, link_id: int):
         }
     ), 200
 
+@internal_documents_bp.route("/<int:document_id>/external-resources", methods=["GET"])
+@jwt_required()
+def list_internal_document_external_resources(document_id: int):
+    document = _get_document_or_404(document_id)
+    if not document:
+        return _json_error(
+            "Documento no encontrado",
+            f"No existe un documento interno con id {document_id}.",
+            404,
+        )
+
+    forbidden = require_internal_document_view_access(document)
+    if forbidden:
+        return forbidden
+
+    resources = (
+        InternalDocumentExternalResourceORM.query.filter_by(
+            document_id=document.id,
+            is_active=True,
+        )
+        .order_by(
+            InternalDocumentExternalResourceORM.is_primary.desc(),
+            InternalDocumentExternalResourceORM.created_at.desc(),
+        )
+        .all()
+    )
+
+    return jsonify(
+        {
+            "items": [
+                _serialize_external_resource(resource)
+                for resource in resources
+            ]
+        }
+    ), 200
+
+
+@internal_documents_bp.route("/<int:document_id>/external-resources", methods=["POST"])
+@jwt_required()
+def create_internal_document_external_resource(document_id: int):
+    forbidden = require_internal_document_manager()
+    if forbidden:
+        return forbidden
+
+    current_user_id, error_response = _get_current_user_id_or_response()
+    if error_response:
+        return error_response
+
+    document = _get_document_or_404(document_id)
+    if not document:
+        return _json_error(
+            "Documento no encontrado",
+            f"No existe un documento interno con id {document_id}.",
+            404,
+        )
+
+    if document.status == InternalDocumentStatus.ARCHIVADO:
+        return _json_error(
+            "Documento archivado",
+            "No se pueden agregar recursos externos a un documento archivado.",
+            400,
+        )
+
+    payload = _get_json_payload()
+    normalized_payload, payload_error = _validate_external_resource_payload(payload)
+    if payload_error:
+        return payload_error
+
+    if normalized_payload["is_primary"]:
+        _unset_existing_primary_external_resources(
+            document_id=document.id,
+            current_user_id=current_user_id,
+        )
+
+    resource = InternalDocumentExternalResourceORM(
+        document_id=document.id,
+        provider=normalized_payload["provider"],
+        resource_kind=normalized_payload["resource_kind"],
+        original_url=normalized_payload["original_url"],
+        external_file_id=normalized_payload["external_file_id"],
+        preview_url=normalized_payload["preview_url"],
+        title=normalized_payload["title"],
+        description=normalized_payload["description"],
+        is_primary=normalized_payload["is_primary"],
+        is_active=True,
+        created_by=current_user_id,
+        updated_by=current_user_id,
+    )
+
+    db.session.add(resource)
+    db.session.flush()
+
+    _log_document_audit(
+        document_id=document.id,
+        actor_user_id=current_user_id,
+        action=InternalDocumentAuditAction.EXTERNAL_RESOURCE_CREATED,
+        new_value_json=_build_external_resource_audit_snapshot(resource),
+    )
+
+    db.session.commit()
+
+    return jsonify(
+        {
+            "message": "Recurso externo creado",
+            "item": _serialize_external_resource(resource),
+        }
+    ), 201
 
 @internal_documents_bp.route("/by-link", methods=["GET"])
 @jwt_required()
