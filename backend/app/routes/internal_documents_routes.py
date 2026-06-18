@@ -551,6 +551,31 @@ def _serialize_external_resource(
         "updated_at": resource.updated_at.isoformat() if resource.updated_at else None,
     }
 
+def _get_document_external_resources_summary(document_id: int) -> dict[str, Any]:
+    resources = (
+        InternalDocumentExternalResourceORM.query.filter_by(
+            document_id=document_id,
+            is_active=True,
+        )
+        .order_by(
+            InternalDocumentExternalResourceORM.is_primary.desc(),
+            InternalDocumentExternalResourceORM.created_at.desc(),
+        )
+        .all()
+    )
+
+    primary_resource = resources[0] if resources else None
+
+    return {
+        "has_external_resources": len(resources) > 0,
+        "external_resources_count": len(resources),
+        "primary_external_resource": (
+            _serialize_external_resource(primary_resource)
+            if primary_resource
+            else None
+        ),
+    }
+
 def _serialize_audit_log(item: InternalDocumentAuditLogORM) -> dict[str, Any]:
     return {
         "id": item.id,
@@ -601,7 +626,13 @@ def _serialize_document(
         "created_at": document.created_at.isoformat() if document.created_at else None,
         "updated_at": document.updated_at.isoformat() if document.updated_at else None,
         "capabilities": capabilities,
+        "has_external_resources": False,
+        "external_resources_count": 0,
+        "primary_external_resource": None,
     }
+    payload.update(
+        _get_document_external_resources_summary(document.id)
+    )
 
     if document.current_version:
         payload["current_version"] = _serialize_version(
@@ -2122,7 +2153,7 @@ def create_internal_document_external_resource(document_id: int):
             404,
         )
 
-    if document.status == InternalDocumentStatus.ARCHIVADO:
+    if document.status == InternalDocumentStatus.ARCHIVED:
         return _json_error(
             "Documento archivado",
             "No se pueden agregar recursos externos a un documento archivado.",

@@ -238,6 +238,9 @@ export interface InternalDocument {
   visibility_rules?: InternalDocumentVisibilityRule[];
   links?: InternalDocumentLink[];
   external_resources?: InternalDocumentExternalResource[];
+  has_external_resources?: boolean;
+  external_resources_count?: number;
+  primary_external_resource?: InternalDocumentExternalResource | null;
 }
 
 export interface InternalDocumentsAccessResponse {

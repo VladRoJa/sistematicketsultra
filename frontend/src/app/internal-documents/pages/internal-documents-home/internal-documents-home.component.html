@@ -95,209 +95,230 @@
 </div>
 </section>
 
-  <div class="alert success" *ngIf="successMessage">
-    {{ successMessage }}
-  </div>
-
-  <div class="alert error" *ngIf="errorMessage">
-    {{ errorMessage }}
-  </div>
-
-  <section class="create-panel" *ngIf="canManage && isCreatePanelOpen">
-    <div class="panel-title">
-      <div>
-        <p class="eyebrow">Alta documental</p>
-        <h2>Nuevo documento</h2>
-        <p>
-          Carga el archivo, registra su metadata y créalo como borrador antes de publicarlo.
-        </p>
-      </div>
-
-      <button
-        type="button"
-        class="ghost-action"
-        (click)="closeCreatePanel()"
-        [disabled]="saving"
-      >
-        Cerrar
-      </button>
-    </div>
-
-    <div class="create-grid">
-      <div class="field">
-        <label for="new-title">Título *</label>
-        <input
-          id="new-title"
-          type="text"
-          [(ngModel)]="form.title"
-          placeholder="Ej. Manual de uso Track"
-        />
-      </div>
-
-      <div class="field">
-        <label for="new-category">Categoría *</label>
-        <select id="new-category" [(ngModel)]="form.category_id">
-          <option
-            *ngFor="let category of categories"
-            [ngValue]="category.id"
-          >
-            {{ category.name }}
-          </option>
-        </select>
-      </div>
-
-      <div class="field">
-        <label for="new-document-type">Tipo / Código</label>
-        <input
-          id="new-document-type"
-          type="text"
-          [(ngModel)]="form.document_type"
-          placeholder="Ej. SOP-SIST-001"
-        />
-      </div>
-
-      <div class="field">
-        <label for="new-owner-user">Owner user id</label>
-        <input
-          id="new-owner-user"
-          type="number"
-          [(ngModel)]="form.owner_user_id"
-          placeholder="Opcional"
-        />
-      </div>
-
-      <div class="field">
-        <label for="new-owner-department">Owner department id</label>
-        <input
-          id="new-owner-department"
-          type="number"
-          [(ngModel)]="form.owner_department_id"
-          placeholder="Opcional"
-        />
-      </div>
-
-      <div class="field">
-        <label for="new-version-label">Versión</label>
-        <input
-          id="new-version-label"
-          type="text"
-          [(ngModel)]="form.version_label"
-          placeholder="1.0"
-        />
-      </div>
-
-      <div class="field field-wide">
-        <label for="new-description">Descripción</label>
-        <textarea
-          id="new-description"
-          [(ngModel)]="form.description"
-          rows="3"
-          placeholder="Describe para qué sirve este documento"
-        ></textarea>
-      </div>
-
-      <div class="field field-wide">
-        <label for="new-change-notes">Notas de versión</label>
-        <input
-          id="new-change-notes"
-          type="text"
-          [(ngModel)]="form.change_notes"
-          placeholder="Versión inicial"
-        />
-      </div>
-
-<div class="field field-wide file-field">
-  <label for="new-file">Archivo *</label>
-  <input
-    id="new-file"
-    type="file"
-    accept=".pdf,.xlsx,.xls,.csv,.txt,.docx,.pptx,.png,.jpg,.jpeg"
-    (change)="onFileSelected($event)"
-  />
+<div class="alert success" *ngIf="successMessage && !isCreatePanelOpen">
+  {{ successMessage }}
 </div>
 
-<div class="create-video-panel field-wide">
-  <div class="create-video-heading">
-    <div>
-      <p class="eyebrow">Video de apoyo</p>
-      <h3>Google Drive opcional</h3>
-      <p>
-        Asocia un video tutorial o explicación al documento desde su alta.
-      </p>
-    </div>
-  </div>
-
-  <div class="create-video-grid">
-    <div class="field field-wide">
-      <label for="new-external-resource-url">Link de Google Drive</label>
-      <input
-        id="new-external-resource-url"
-        type="text"
-        [(ngModel)]="externalResourceForm.original_url"
-        placeholder="https://drive.google.com/file/d/.../view"
-      />
-
-      <small class="field-help">
-        Opcional. Por ahora solo se aceptan videos de Google Drive.
-      </small>
-    </div>
-
-    <div class="field">
-      <label for="new-external-resource-title">Título del video</label>
-      <input
-        id="new-external-resource-title"
-        type="text"
-        [(ngModel)]="externalResourceForm.title"
-        placeholder="Ej. Tutorial de uso"
-      />
-    </div>
-
-    <div class="field">
-      <label for="new-external-resource-description">Descripción</label>
-      <input
-        id="new-external-resource-description"
-        type="text"
-        [(ngModel)]="externalResourceForm.description"
-        placeholder="Opcional"
-      />
-    </div>
-
-    <label class="checkbox-row field-wide">
-      <input
-        type="checkbox"
-        [(ngModel)]="externalResourceForm.is_primary"
-      />
-      Marcar como video principal
-    </label>
-  </div>
+<div class="alert error" *ngIf="errorMessage && !isCreatePanelOpen">
+  {{ errorMessage }}
 </div>
 
-<label class="checkbox-row">
-  <input type="checkbox" [(ngModel)]="form.is_sensitive" />
-  Documento confidencial
-</label>
-    </div>
+  <div
+    class="create-modal-backdrop"
+    *ngIf="canManage && isCreatePanelOpen"
+    (click)="closeCreatePanel()"
+  >
+    <section
+      class="create-panel create-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="create-document-title"
+      (click)="$event.stopPropagation()"
+    >
+      <header class="panel-title create-modal-header">
+        <div>
+          <p class="eyebrow">Alta documental</p>
+          <h2 id="create-document-title">Nuevo documento</h2>
+          <p>
+            Carga el archivo, registra su metadata y créalo como borrador antes de publicarlo.
+          </p>
+          <div class="alert success modal-alert" *ngIf="successMessage">
+  {{ successMessage }}
+</div>
 
-    <div class="create-actions">
-      <button
-        type="button"
-        class="secondary-action"
-        (click)="closeCreatePanel()"
-        [disabled]="saving"
-      >
-        Cancelar
-      </button>
+<div class="alert error modal-alert" *ngIf="errorMessage">
+  {{ errorMessage }}
+</div>
+        </div>
 
-      <button
-        type="button"
-        class="primary-action"
-        (click)="createDraft()"
-        [disabled]="saving"
-      >
-        Crear borrador
-      </button>
-    </div>
-  </section>
+        <button
+          type="button"
+          class="ghost-action"
+          (click)="closeCreatePanel()"
+          [disabled]="saving"
+        >
+          Cerrar
+        </button>
+      </header>
+
+      <div class="create-modal-body">
+        <div class="create-grid">
+          <div class="field">
+            <label for="new-title">Título *</label>
+            <input
+              id="new-title"
+              type="text"
+              [(ngModel)]="form.title"
+              placeholder="Ej. Manual de uso Track"
+            />
+          </div>
+
+          <div class="field">
+            <label for="new-category">Categoría *</label>
+            <select id="new-category" [(ngModel)]="form.category_id">
+              <option
+                *ngFor="let category of categories"
+                [ngValue]="category.id"
+              >
+                {{ category.name }}
+              </option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="new-document-type">Tipo / Código</label>
+            <input
+              id="new-document-type"
+              type="text"
+              [(ngModel)]="form.document_type"
+              placeholder="Ej. SOP-SIST-001"
+            />
+          </div>
+
+          <div class="field">
+            <label for="new-owner-user">Owner user id</label>
+            <input
+              id="new-owner-user"
+              type="number"
+              [(ngModel)]="form.owner_user_id"
+              placeholder="Opcional"
+            />
+          </div>
+
+          <div class="field">
+            <label for="new-owner-department">Owner department id</label>
+            <input
+              id="new-owner-department"
+              type="number"
+              [(ngModel)]="form.owner_department_id"
+              placeholder="Opcional"
+            />
+          </div>
+
+          <div class="field">
+            <label for="new-version-label">Versión</label>
+            <input
+              id="new-version-label"
+              type="text"
+              [(ngModel)]="form.version_label"
+              placeholder="1.0"
+            />
+          </div>
+
+          <div class="field field-wide">
+            <label for="new-description">Descripción *</label>
+            <textarea
+              id="new-description"
+              [(ngModel)]="form.description"
+              rows="3"
+              placeholder="Describe para qué sirve este documento"
+            ></textarea>
+          </div>
+
+          <div class="field field-wide">
+            <label for="new-change-notes">Notas de versión</label>
+            <input
+              id="new-change-notes"
+              type="text"
+              [(ngModel)]="form.change_notes"
+              placeholder="Versión inicial"
+            />
+          </div>
+
+          <div class="field field-wide file-field">
+            <label for="new-file">Archivo *</label>
+            <input
+              id="new-file"
+              type="file"
+              accept=".pdf,.xlsx,.xls,.csv,.txt,.docx,.pptx,.png,.jpg,.jpeg"
+              (change)="onFileSelected($event)"
+            />
+          </div>
+
+          <div class="create-video-panel field-wide">
+            <div class="create-video-heading">
+              <div>
+                <p class="eyebrow">Video de apoyo</p>
+                <h3>Google Drive opcional</h3>
+                <p>
+                  Asocia un video tutorial o explicación al documento desde su alta.
+                </p>
+              </div>
+            </div>
+
+            <div class="create-video-grid">
+              <div class="field field-wide">
+                <label for="new-external-resource-url">Link de Google Drive</label>
+                <input
+                  id="new-external-resource-url"
+                  type="text"
+                  [(ngModel)]="externalResourceForm.original_url"
+                  placeholder="https://drive.google.com/file/d/.../view"
+                />
+
+                <small class="field-help">
+                  Opcional. Por ahora solo se aceptan videos de Google Drive.
+                </small>
+              </div>
+
+              <div class="field">
+                <label for="new-external-resource-title">Título del video</label>
+                <input
+                  id="new-external-resource-title"
+                  type="text"
+                  [(ngModel)]="externalResourceForm.title"
+                  placeholder="Ej. Tutorial de uso"
+                />
+              </div>
+
+              <div class="field">
+                <label for="new-external-resource-description">Descripción</label>
+                <input
+                  id="new-external-resource-description"
+                  type="text"
+                  [(ngModel)]="externalResourceForm.description"
+                  placeholder="Opcional"
+                />
+              </div>
+
+              <label class="checkbox-row field-wide">
+                <input
+                  type="checkbox"
+                  [(ngModel)]="externalResourceForm.is_primary"
+                />
+                Marcar como video principal
+              </label>
+            </div>
+          </div>
+
+          <label class="checkbox-row">
+            <input type="checkbox" [(ngModel)]="form.is_sensitive" />
+            Documento confidencial
+          </label>
+        </div>
+      </div>
+
+      <footer class="create-actions create-modal-footer">
+        <button
+          type="button"
+          class="secondary-action"
+          (click)="closeCreatePanel()"
+          [disabled]="saving"
+        >
+          Cancelar
+        </button>
+
+<button
+  type="button"
+  class="primary-action"
+  (click)="createDraft()"
+  [disabled]="!canCreateDraft()"
+>
+  Crear borrador
+</button>
+      </footer>
+    </section>
+  </div>
 
 <section class="library-toolbar">
   <div class="toolbar-heading">
@@ -469,7 +490,14 @@
           >
             Ver
           </button>
-
+          <button
+            type="button"
+            class="primary-action compact video-action"
+            *ngIf="canPreviewDocumentVideo(document)"
+            (click)="openDocumentVideo(document)"
+          >
+            Video
+          </button>
           <button
             type="button"
             class="secondary-action compact"
@@ -867,10 +895,12 @@
         </div>
 
         <iframe
-          *ngIf="!previewLoading && !previewErrorMessage && previewType === 'pdf' && previewSafeUrl"
+          *ngIf="!previewLoading && !previewErrorMessage && (previewType === 'pdf' || previewType === 'drive-video') && previewSafeUrl"
           class="preview-frame"
           [src]="previewSafeUrl"
-          title="Vista previa PDF"
+          [title]="previewType === 'drive-video' ? 'Vista previa de video' : 'Vista previa PDF'"
+          allow="autoplay; encrypted-media; fullscreen"
+          allowfullscreen
         ></iframe>
 
         <img

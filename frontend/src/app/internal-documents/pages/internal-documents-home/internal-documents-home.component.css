@@ -16,7 +16,6 @@
 
 .page-hero,
 .library-toolbar,
-.create-panel,
 .documents-list,
 .detail-panel,
 .summary-card,
@@ -364,10 +363,31 @@ textarea:focus {
   flex-wrap: wrap;
 }
 
+.create-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 5400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 88px 24px 24px;
+  background: rgba(15, 23, 42, 0.72);
+  backdrop-filter: blur(4px);
+}
+
 .create-panel {
-  padding: 20px;
-  margin-bottom: 16px;
   border-radius: 22px;
+}
+
+.create-modal {
+  display: flex;
+  flex-direction: column;
+  width: min(1080px, 96vw);
+  max-height: calc(100vh - 112px);
+  overflow: hidden;
+  border: 1px solid rgba(229, 231, 235, 0.95);
+  background: #ffffff;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.32);
 }
 
 .panel-title {
@@ -376,6 +396,40 @@ textarea:focus {
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 18px;
+}
+
+.create-modal-header {
+  flex: 0 0 auto;
+  margin-bottom: 0;
+  padding: 20px 22px;
+  border-bottom: 1px solid #eef2f7;
+  background:
+    linear-gradient(135deg, rgba(229, 69, 37, 0.08), transparent 42%),
+    #ffffff;
+}
+
+.create-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 20px 22px;
+}
+
+.create-modal-footer {
+  position: sticky;
+  bottom: 0;
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  margin-top: 0;
+  padding: 14px 22px;
+  border-top: 1px solid #eef2f7;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 -12px 28px rgba(15, 23, 42, 0.06);
+  backdrop-filter: blur(10px);
+}
+
+.create-modal-footer button {
+  min-width: 132px;
 }
 
 .create-grid {
@@ -905,6 +959,33 @@ dd {
     height: calc(100vh - 96px);
     border-radius: 16px;
   }
+
+  .create-modal-backdrop {
+    align-items: stretch;
+    padding: 72px 10px 10px;
+  }
+
+  .create-modal {
+    width: 100%;
+    max-height: calc(100vh - 82px);
+    border-radius: 18px;
+  }
+
+  .create-modal-header,
+  .create-modal-body,
+  .create-modal-footer {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .create-modal-footer {
+    flex-direction: column-reverse;
+  }
+
+  .create-modal-footer button {
+    width: 100%;
+  }
+
 }
 
 .field-help,
@@ -1466,4 +1547,132 @@ dd {
   .create-video-grid {
     grid-template-columns: 1fr;
   }
+}
+
+.document-videos-panel {
+  margin-top: 18px;
+}
+
+.document-video-list {
+  display: grid;
+  gap: 10px;
+}
+
+.document-video-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid rgba(229, 69, 37, 0.16);
+  border-radius: 16px;
+  background:
+    linear-gradient(135deg, rgba(229, 69, 37, 0.06), transparent 48%),
+    #ffffff;
+}
+
+.document-video-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  min-width: 42px;
+  height: 34px;
+  padding: 0 9px;
+  border-radius: 12px;
+  color: #ffffff;
+  background: linear-gradient(135deg, #111827, #2c4595);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+}
+
+.document-video-content {
+  min-width: 0;
+  flex: 1;
+}
+
+.document-video-title {
+  color: #111827;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+.document-video-content p {
+  margin: 6px 0 0;
+  color: #6b7280;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.document-video-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.document-video-meta span {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 8px;
+  color: #4b5563;
+  background: #f3f4f6;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.document-video-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.document-video-actions a {
+  color: #e54525;
+  font-size: 12px;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.document-video-actions a:hover {
+  text-decoration: underline;
+}
+
+.compact-state {
+  padding: 16px;
+}
+
+@media (max-width: 720px) {
+  .document-video-card {
+    flex-direction: column;
+  }
+}
+
+.document-requirements-warning {
+  margin-top: 10px;
+  padding: 9px 11px;
+  border: 1px solid #fed7aa;
+  border-radius: 13px;
+  color: #9a3412;
+  background: #fff7ed;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.modal-alert {
+  margin-top: 14px;
+  margin-bottom: 0;
+}
+
+.video-action {
+  background: linear-gradient(135deg, #2c4595, #111827);
+  box-shadow: 0 12px 24px rgba(44, 69, 149, 0.18);
+}
+
+.video-action:hover:not(:disabled) {
+  box-shadow: 0 16px 30px rgba(44, 69, 149, 0.24);
 }
