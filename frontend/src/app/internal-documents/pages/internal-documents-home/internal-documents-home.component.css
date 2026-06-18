@@ -1774,3 +1774,119 @@ dd {
     width: 100%;
   }
 }
+
+.replace-version-modal-backdrop {
+  z-index: 5250;
+}
+
+.suite-replace-version-modal {
+  display: flex;
+  flex-direction: column;
+  width: min(720px, 94vw);
+  max-height: min(760px, calc(100vh - 96px));
+  overflow: hidden;
+  border-radius: 22px;
+  background: #ffffff;
+  box-shadow: 0 26px 70px rgba(15, 23, 42, 0.28);
+}
+
+.replace-version-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px 22px 18px;
+  border-bottom: 1px solid #eef2f7;
+  background:
+    linear-gradient(135deg, rgba(229, 69, 37, 0.06), transparent 48%),
+    #ffffff;
+}
+
+.replace-version-modal-header h2 {
+  margin: 2px 0 6px;
+  color: #111827;
+  font-size: 24px;
+  font-weight: 900;
+}
+
+.replace-version-modal-header p {
+  margin: 0;
+  color: #6b7280;
+  line-height: 1.45;
+}
+
+.replace-version-modal-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 18px 22px;
+  background: #ffffff;
+}
+
+.replace-version-document-summary {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  border: 1px solid #eef2f7;
+  border-radius: 16px;
+  background: #f9fafb;
+}
+
+.replace-version-document-summary span {
+  color: #6b7280;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.replace-version-document-summary strong {
+  color: #111827;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.replace-version-document-summary small {
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.replace-version-form {
+  display: grid;
+  gap: 14px;
+}
+
+.replace-version-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 22px;
+  border-top: 1px solid #eef2f7;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 -12px 28px rgba(15, 23, 42, 0.06);
+}
+
+.replace-version-action {
+  border-color: rgba(229, 69, 37, 0.2);
+  color: #e54525;
+}
+
+@media (max-width: 720px) {
+  .suite-replace-version-modal {
+    width: 96vw;
+    max-height: calc(100vh - 40px);
+  }
+
+  .replace-version-modal-header {
+    flex-direction: column;
+  }
+
+  .replace-version-modal-footer {
+    flex-direction: column-reverse;
+  }
+
+  .replace-version-modal-footer button {
+    width: 100%;
+  }
+}

@@ -518,7 +518,15 @@
   >
     Asignar a...
   </button>
-
+<button
+  type="button"
+  class="ghost-action compact replace-version-action"
+  *ngIf="canReplaceVersion(document)"
+  (click)="openReplaceVersionModal(document)"
+  [disabled]="saving"
+>
+  Reemplazar versión
+</button>
   <button
     type="button"
     class="ghost-action compact"
@@ -612,51 +620,6 @@
             </div>
           </dl>
         </section>
-
-        <section class="detail-section version-panel" *ngIf="shouldShowVersionPanel(selectedDocument)">
-          <div class="section-heading">
-            <h3>Reemplazar versión</h3>
-          </div>
-
-          <div class="field">
-            <label for="replace-version-label">Nueva versión</label>
-            <input
-              id="replace-version-label"
-              type="text"
-              [(ngModel)]="versionForm.version_label"
-              placeholder="Ej. 1.1"
-            />
-          </div>
-
-          <div class="field">
-            <label for="replace-change-notes">Notas de cambio *</label>
-            <textarea
-              id="replace-change-notes"
-              [(ngModel)]="versionForm.change_notes"
-              rows="3"
-              placeholder="Describe qué cambió"
-            ></textarea>
-          </div>
-
-          <div class="field">
-            <label for="replace-file">Archivo *</label>
-            <input
-              id="replace-file"
-              type="file"
-              accept=".pdf,.xlsx,.xls,.csv,.txt,.docx,.pptx,.png,.jpg,.jpeg"
-              (change)="onVersionFileSelected($event)"
-            />
-          </div>
-
-          <button
-            type="button"
-            class="primary-action"
-            (click)="replaceVersion(selectedDocument)"
-            [disabled]="saving"
-          >
-            Reemplazar versión
-          </button>
-        </section>
       </ng-container>
 
       <ng-template #noSelection>
@@ -668,6 +631,98 @@
       </ng-template>
     </aside>
   </section>
+  <div
+  class="suite-modal-backdrop replace-version-modal-backdrop"
+  *ngIf="isReplaceVersionModalOpen && selectedDocument"
+  (click)="closeReplaceVersionModal()"
+>
+  <section
+    class="suite-replace-version-modal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="replace-version-title"
+    (click)="$event.stopPropagation()"
+  >
+    <header class="replace-version-modal-header">
+      <div>
+        <p class="eyebrow">Control documental</p>
+        <h2 id="replace-version-title">Reemplazar versión</h2>
+        <p>
+          Carga una nueva versión del archivo para mantener trazabilidad sin perder el historial.
+        </p>
+      </div>
+
+      <button
+        type="button"
+        class="ghost-action"
+        (click)="closeReplaceVersionModal()"
+        [disabled]="saving"
+      >
+        Cerrar
+      </button>
+    </header>
+
+    <div class="replace-version-modal-body">
+      <div class="replace-version-document-summary">
+        <span>Documento</span>
+        <strong>{{ selectedDocument.title }}</strong>
+        <small>{{ getSelectedDocumentFilename() }}</small>
+      </div>
+
+      <div class="replace-version-form">
+        <div class="field">
+          <label for="replace-version-label">Nueva versión</label>
+          <input
+            id="replace-version-label"
+            type="text"
+            [(ngModel)]="versionForm.version_label"
+            placeholder="Ej. 1.1"
+          />
+        </div>
+
+        <div class="field">
+          <label for="replace-change-notes">Notas de cambio *</label>
+          <textarea
+            id="replace-change-notes"
+            [(ngModel)]="versionForm.change_notes"
+            rows="3"
+            placeholder="Describe qué cambió"
+          ></textarea>
+        </div>
+
+        <div class="field">
+          <label for="replace-file">Archivo *</label>
+          <input
+            id="replace-file"
+            type="file"
+            accept=".pdf,.xlsx,.xls,.csv,.txt,.docx,.pptx,.png,.jpg,.jpeg"
+            (change)="onVersionFileSelected($event)"
+          />
+        </div>
+      </div>
+    </div>
+
+    <footer class="replace-version-modal-footer">
+      <button
+        type="button"
+        class="secondary-action"
+        (click)="closeReplaceVersionModal()"
+        [disabled]="saving"
+      >
+        Cancelar
+      </button>
+
+      <button
+        type="button"
+        class="primary-action"
+        (click)="replaceVersion(selectedDocument)"
+        [disabled]="saving"
+      >
+        Reemplazar versión
+      </button>
+    </footer>
+  </section>
+</div>
 <div
   class="suite-modal-backdrop assign-modal-backdrop"
   *ngIf="isAssignDocumentModalOpen && selectedDocument"
@@ -681,6 +736,7 @@
     (click)="$event.stopPropagation()"
   >
     <header class="assign-modal-header">
+      
       <div>
         <p class="eyebrow">Asignación documental</p>
         <h2 id="assign-document-title">Asignar documento a...</h2>

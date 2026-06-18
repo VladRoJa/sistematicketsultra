@@ -191,6 +191,7 @@ readonly discoveryCards: InternalDocumentDiscoveryCard[] = [
 
   linksSaving = false;
   isAssignDocumentModalOpen = false;
+  isReplaceVersionModalOpen = false;
   pendingDeleteLink: InternalDocumentLink | null = null;
   isDeleteLinkModalOpen = false;
   externalResourcesLoading = false;
@@ -807,6 +808,7 @@ private normalizeDiscoveryText(value: string | null | undefined): string {
           version_label: '',
           change_notes: '',
         };
+        this.isReplaceVersionModalOpen = false;
         this.loadDocuments();
       },
       error: (error) => {
@@ -911,6 +913,30 @@ private normalizeDiscoveryText(value: string | null | undefined): string {
     }
 
     this.isAssignDocumentModalOpen = false;
+  }
+
+  openReplaceVersionModal(document: InternalDocument): void {
+    this.clearMessages();
+    this.selectDocument(document);
+    this.versionFile = null;
+    this.versionForm = {
+      version_label: '',
+      change_notes: '',
+    };
+    this.isReplaceVersionModalOpen = true;
+  }
+
+  closeReplaceVersionModal(): void {
+    if (this.saving) {
+      return;
+    }
+
+    this.isReplaceVersionModalOpen = false;
+    this.versionFile = null;
+    this.versionForm = {
+      version_label: '',
+      change_notes: '',
+    };
   }
 
   downloadDocument(document: InternalDocument): void {
