@@ -58,6 +58,9 @@ from .internal_documents import (
     InternalDocumentLinkEntityType,
     InternalDocumentLinkRole,
     InternalDocumentAuditAction,
+    InternalDocumentExternalResourceORM,
+    InternalDocumentExternalProvider,
+    InternalDocumentExternalResourceKind,
 )
 from .openings import (
     OpeningAuditAction,
@@ -130,6 +133,9 @@ __all__ = [
     "InternalDocumentLinkEntityType",
     "InternalDocumentLinkRole",
     "InternalDocumentAuditAction",
+    "InternalDocumentExternalResourceORM",
+    "InternalDocumentExternalProvider",
+    "InternalDocumentExternalResourceKind",
     "SucursalOperationalStatus",
     "OpeningAuditAction",
     "OpeningAuditLogORM",
