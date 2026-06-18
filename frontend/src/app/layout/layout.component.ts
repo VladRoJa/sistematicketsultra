@@ -906,6 +906,7 @@ private puedeVerTrackDiarioPorRol(): boolean {
     'GERENTE_REGIONAL',
     'SISTEMAS',
     "GERENCIA DEPORTIVA",
+    'MARKETING',
   ].includes(rol);
 }
 
