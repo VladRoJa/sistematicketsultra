@@ -39,6 +39,49 @@ export type InternalDocumentLinkRole =
   | 'OPERACION'
   | 'OTRO';
 
+export type InternalDocumentExternalProvider = 'GOOGLE_DRIVE';
+
+export type InternalDocumentExternalResourceKind =
+  | 'VIDEO'
+  | 'FOLDER'
+  | 'LINK';
+
+export interface InternalDocumentExternalResource {
+  id: number;
+  document_id: number;
+  provider: InternalDocumentExternalProvider;
+  resource_kind: InternalDocumentExternalResourceKind;
+  original_url: string;
+  external_file_id: string | null;
+  preview_url: string | null;
+  title: string | null;
+  description: string | null;
+  is_primary: boolean;
+  is_active: boolean;
+  created_by: number | null;
+  updated_by: number | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface InternalDocumentExternalResourcePayload {
+  provider?: InternalDocumentExternalProvider;
+  resource_kind?: InternalDocumentExternalResourceKind;
+  original_url: string;
+  title?: string | null;
+  description?: string | null;
+  is_primary?: boolean;
+}
+
+export interface InternalDocumentExternalResourcesResponse {
+  items: InternalDocumentExternalResource[];
+}
+
+export interface InternalDocumentExternalResourceActionResponse {
+  message: string;
+  item: InternalDocumentExternalResource;
+}
+
 export interface InternalDocumentCapabilities {
   can_view: boolean;
   can_download: boolean;
@@ -194,6 +237,10 @@ export interface InternalDocument {
   versions?: InternalDocumentVersion[];
   visibility_rules?: InternalDocumentVisibilityRule[];
   links?: InternalDocumentLink[];
+  external_resources?: InternalDocumentExternalResource[];
+  has_external_resources?: boolean;
+  external_resources_count?: number;
+  primary_external_resource?: InternalDocumentExternalResource | null;
 }
 
 export interface InternalDocumentsAccessResponse {

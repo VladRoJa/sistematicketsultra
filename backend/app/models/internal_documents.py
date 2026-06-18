@@ -81,6 +81,25 @@ class InternalDocumentLinkRole:
         OTRO,
     )
 
+class InternalDocumentExternalProvider:
+    GOOGLE_DRIVE = "GOOGLE_DRIVE"
+
+    ALL = {
+        GOOGLE_DRIVE,
+    }
+
+
+class InternalDocumentExternalResourceKind:
+    VIDEO = "VIDEO"
+    FOLDER = "FOLDER"
+    LINK = "LINK"
+
+    ALL = {
+        VIDEO,
+        FOLDER,
+        LINK,
+    }
+
 class InternalDocumentAuditAction:
     DOCUMENT_CREATED = "DOCUMENT_CREATED"
     DOCUMENT_METADATA_UPDATED = "DOCUMENT_METADATA_UPDATED"
@@ -94,6 +113,9 @@ class InternalDocumentAuditAction:
     DOCUMENT_LINK_CREATED = "DOCUMENT_LINK_CREATED"
     DOCUMENT_LINK_UPDATED = "DOCUMENT_LINK_UPDATED"
     DOCUMENT_LINK_DEACTIVATED = "DOCUMENT_LINK_DEACTIVATED"
+    EXTERNAL_RESOURCE_CREATED = "EXTERNAL_RESOURCE_CREATED"
+    EXTERNAL_RESOURCE_UPDATED = "EXTERNAL_RESOURCE_UPDATED"
+    EXTERNAL_RESOURCE_DEACTIVATED = "EXTERNAL_RESOURCE_DEACTIVATED"
 
     ALL = (
         DOCUMENT_CREATED,
@@ -108,6 +130,9 @@ class InternalDocumentAuditAction:
         DOCUMENT_LINK_CREATED,
         DOCUMENT_LINK_UPDATED,
         DOCUMENT_LINK_DEACTIVATED,
+        EXTERNAL_RESOURCE_CREATED,
+        EXTERNAL_RESOURCE_UPDATED,
+        EXTERNAL_RESOURCE_DEACTIVATED
     )
 
 
@@ -308,6 +333,13 @@ class InternalDocumentORM(db.Model):
         cascade="all, delete-orphan",
         lazy="dynamic",
         order_by="InternalDocumentAuditLogORM.created_at.desc()",
+    )
+    
+    external_resources = db.relationship(
+        "InternalDocumentExternalResourceORM",
+        back_populates="document",
+        cascade="all, delete-orphan",
+        order_by="InternalDocumentExternalResourceORM.created_at.desc()",
     )
 
     __table_args__ = (
@@ -633,6 +665,101 @@ class InternalDocumentLinkORM(db.Model):
             f"<InternalDocumentLink document_id={self.document_id} "
             f"entity_type={self.entity_type!r} entity_key={self.entity_key!r} "
             f"role={self.link_role!r}>"
+        )
+
+class InternalDocumentExternalResourceORM(db.Model):
+    __tablename__ = "internal_document_external_resources"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    document_id = db.Column(
+        db.Integer,
+        db.ForeignKey("internal_documents.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    provider = db.Column(db.String(40), nullable=False, index=True)
+    resource_kind = db.Column(db.String(40), nullable=False, index=True)
+
+    original_url = db.Column(db.Text, nullable=False)
+    external_file_id = db.Column(db.String(255), nullable=True, index=True)
+    preview_url = db.Column(db.Text, nullable=True)
+
+    title = db.Column(db.String(255), nullable=True)
+    description = db.Column(db.Text, nullable=True)
+
+    is_primary = db.Column(db.Boolean, nullable=False, default=False, index=True)
+    is_active = db.Column(db.Boolean, nullable=False, default=True, index=True)
+
+    created_by = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        server_default=db.func.now(),
+        index=True,
+    )
+
+    updated_by = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=True,
+    )
+
+    document = db.relationship(
+        "InternalDocumentORM",
+        back_populates="external_resources",
+    )
+
+    creator = db.relationship(
+        "UserORM",
+        foreign_keys=[created_by],
+    )
+
+    updater = db.relationship(
+        "UserORM",
+        foreign_keys=[updated_by],
+    )
+
+    __table_args__ = (
+        db.Index(
+            "idx_internal_document_external_resources_document_active",
+            "document_id",
+            "is_active",
+        ),
+        db.Index(
+            "idx_internal_document_external_resources_provider_file",
+            "provider",
+            "external_file_id",
+        ),
+        db.Index(
+            "idx_internal_document_external_resources_kind_active",
+            "resource_kind",
+            "is_active",
+        ),
+        db.Index(
+            "idx_internal_document_external_resources_primary",
+            "document_id",
+            "is_primary",
+            "is_active",
+        ),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<InternalDocumentExternalResource id={self.id} "
+            f"document_id={self.document_id} provider={self.provider!r} "
+            f"kind={self.resource_kind!r}>"
         )
 
 class InternalDocumentAuditLogORM(db.Model):

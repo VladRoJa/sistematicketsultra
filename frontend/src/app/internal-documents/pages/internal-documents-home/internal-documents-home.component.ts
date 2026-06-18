@@ -18,6 +18,8 @@ import {
   InternalDocumentPeriodFilter,
   InternalDocumentStatus,
   InternalDocumentVisibilityPayload,
+  InternalDocumentExternalResource,
+  InternalDocumentExternalResourcePayload,
 } from '../../models/internal-document.model';
 import { InternalDocumentsService } from '../../services/internal-documents.service';
 
@@ -50,6 +52,7 @@ export class InternalDocumentsHomeComponent implements OnInit, OnDestroy {
 
   canManage = false;
   isCreatePanelOpen = false;
+  currentUserId: number | null = null;
 
   documents: InternalDocument[] = [];
   categories: InternalDocumentCategory[] = [];
@@ -117,15 +120,6 @@ readonly discoveryCards: InternalDocumentDiscoveryCard[] = [
     period: 'all',
   },
   {
-    key: 'tutoriales',
-    title: 'Tutoriales',
-    description: 'Guías paso a paso y material de capacitación.',
-    icon: 'TUT',
-    query: 'tutorial',
-    categoryName: 'Tutoriales',
-    period: 'all',
-  },
-  {
     key: 'formatos',
     title: 'Formatos',
     description: 'Plantillas, checklists y archivos reutilizables.',
@@ -172,10 +166,11 @@ readonly discoveryCards: InternalDocumentDiscoveryCard[] = [
   previewLoading = false;
   previewErrorMessage = '';
   previewTitle = '';
-  previewType: 'pdf' | 'image' | null = null;
+  previewType: 'pdf' | 'image' | 'drive-video' | null = null;
   previewObjectUrl: string | null = null;
   previewSafeUrl: SafeResourceUrl | null = null;
   previewDocument: InternalDocument | null = null;
+  previewExternalResource: InternalDocumentExternalResource | null = null;
 
   form = {
     title: '',
@@ -195,8 +190,20 @@ readonly discoveryCards: InternalDocumentDiscoveryCard[] = [
   };
 
   linksSaving = false;
+  isAssignDocumentModalOpen = false;
+  isReplaceVersionModalOpen = false;
   pendingDeleteLink: InternalDocumentLink | null = null;
   isDeleteLinkModalOpen = false;
+  externalResourcesLoading = false;
+  externalResourcesSaving = false;
+  externalResources: InternalDocumentExternalResource[] = [];
+
+  externalResourceForm = {
+    original_url: '',
+    title: '',
+    description: '',
+    is_primary: true,
+  };  
 
   linkForm = {
     entity_type: 'OPENING' as InternalDocumentLinkEntityType,
@@ -263,6 +270,11 @@ readonly discoveryCards: InternalDocumentDiscoveryCard[] = [
     this.internalDocumentsService.getAccess().subscribe({
       next: (response) => {
         this.canManage = Boolean(response?.can_manage);
+        this.currentUserId = response?.user?.id ?? null;
+
+        if (!this.form.owner_user_id && this.currentUserId) {
+          this.form.owner_user_id = this.currentUserId;
+        }
       },
       error: () => {
         this.canManage = false;
@@ -422,6 +434,7 @@ applyDiscoveryTarget(card: InternalDocumentDiscoveryCard): void {
 
   this.page = 1;
   this.selectedDocument = null;
+  this.externalResources = [];
 
   this.resetListCache();
   this.loadDocuments();
@@ -521,6 +534,8 @@ private normalizeDiscoveryText(value: string | null | undefined): string {
     this.internalDocumentsService.getDocument(document.id).subscribe({
       next: (item) => {
         this.selectedDocument = item;
+        this.externalResources = [];
+        this.loadExternalResourcesForSelectedDocument();
         this.loading = false;
       },
       error: () => {
@@ -561,6 +576,24 @@ private normalizeDiscoveryText(value: string | null | undefined): string {
       return;
     }
 
+    if (!this.form.description.trim()) {
+      this.errorMessage = 'La descripción es obligatoria.';
+      return;
+    }
+
+    if (!this.hasCreateDocumentOwner()) {
+      this.errorMessage = 'El dueño documental es obligatorio.';
+      return;
+    }
+
+    const externalResourcePayload = this.buildExternalResourcePayload({
+      requireUrl: false,
+    });
+
+    if (this.errorMessage) {
+      return;
+    }
+
     const payload: InternalDocumentCreatePayload = {
       file: this.selectedFile,
       title: this.form.title.trim(),
@@ -579,12 +612,43 @@ private normalizeDiscoveryText(value: string | null | undefined): string {
 
     this.internalDocumentsService.createDocument(payload).subscribe({
       next: (response) => {
-        this.saving = false;
-        this.successMessage = response.message || 'Documento creado.';
-        this.selectedDocument = response.item;
-        this.resetCreateForm();
-        this.closeCreatePanel();
-        this.loadDocuments();
+        const createdDocument = response.item;
+
+        if (!externalResourcePayload) {
+          this.saving = false;
+          this.successMessage = response.message || 'Documento creado.';
+          this.selectedDocument = createdDocument;
+          this.externalResources = [];
+          this.resetCreateForm();
+          this.closeCreatePanel();
+          this.loadDocuments();
+          return;
+        }
+
+        this.internalDocumentsService.createExternalResource(
+          createdDocument.id,
+          externalResourcePayload
+        ).subscribe({
+          next: (resourceResponse) => {
+            this.saving = false;
+            this.successMessage = 'Documento creado y video registrado.';
+            this.selectedDocument = createdDocument;
+            this.externalResources = resourceResponse.item ? [resourceResponse.item] : [];
+            this.resetCreateForm();
+            this.closeCreatePanel();
+            this.loadDocuments();
+          },
+          error: (error) => {
+            this.saving = false;
+            this.selectedDocument = createdDocument;
+            this.successMessage = 'Documento creado, pero no se pudo registrar el video.';
+            this.errorMessage = this.resolveErrorMessage(
+              error,
+              'No se pudo registrar el video externo.'
+            );
+            this.loadDocuments();
+          },
+        });
       },
       error: (error) => {
         this.saving = false;
@@ -744,6 +808,7 @@ private normalizeDiscoveryText(value: string | null | undefined): string {
           version_label: '',
           change_notes: '',
         };
+        this.isReplaceVersionModalOpen = false;
         this.loadDocuments();
       },
       error: (error) => {
@@ -836,6 +901,44 @@ private normalizeDiscoveryText(value: string | null | undefined): string {
     });
   }
 
+  openAssignDocumentModal(document: InternalDocument): void {
+    this.clearMessages();
+    this.selectDocument(document);
+    this.isAssignDocumentModalOpen = true;
+  }
+
+  closeAssignDocumentModal(): void {
+    if (this.linksSaving) {
+      return;
+    }
+
+    this.isAssignDocumentModalOpen = false;
+  }
+
+  openReplaceVersionModal(document: InternalDocument): void {
+    this.clearMessages();
+    this.selectDocument(document);
+    this.versionFile = null;
+    this.versionForm = {
+      version_label: '',
+      change_notes: '',
+    };
+    this.isReplaceVersionModalOpen = true;
+  }
+
+  closeReplaceVersionModal(): void {
+    if (this.saving) {
+      return;
+    }
+
+    this.isReplaceVersionModalOpen = false;
+    this.versionFile = null;
+    this.versionForm = {
+      version_label: '',
+      change_notes: '',
+    };
+  }
+
   downloadDocument(document: InternalDocument): void {
     this.clearMessages();
 
@@ -912,11 +1015,48 @@ private normalizeDiscoveryText(value: string | null | undefined): string {
     this.previewType = null;
     this.previewSafeUrl = null;
     this.previewDocument = null;
+    this.previewExternalResource = null;
 
     if (clearError) {
       this.previewErrorMessage = '';
     }
   }
+
+getDocumentPrimaryExternalResource(
+  document: InternalDocument
+): InternalDocumentExternalResource | null {
+  if (document.primary_external_resource) {
+    return document.primary_external_resource;
+  }
+
+  if (this.selectedDocument?.id === document.id) {
+    return this.getPrimaryExternalResource();
+  }
+
+  return null;
+}
+
+canPreviewDocumentVideo(document: InternalDocument): boolean {
+  const resource = this.getDocumentPrimaryExternalResource(document);
+
+  return Boolean(
+    document.has_external_resources &&
+    resource &&
+    resource.resource_kind === 'VIDEO' &&
+    resource.preview_url
+  );
+}
+
+openDocumentVideo(document: InternalDocument): void {
+  const resource = this.getDocumentPrimaryExternalResource(document);
+
+  if (!resource) {
+    this.errorMessage = 'Este documento no tiene video disponible.';
+    return;
+  }
+
+  this.openExternalResourcePreview(resource);
+}
 
   canPreviewDocument(document: InternalDocument): boolean {
     return this.canDownload(document) && this.resolvePreviewType(document) !== null;
@@ -1267,6 +1407,77 @@ private normalizeDiscoveryText(value: string | null | undefined): string {
       document.status !== 'ARCHIVADO';
   }
 
+hasCreateDocumentOwner(): boolean {
+  return Boolean(this.form.owner_user_id || this.form.owner_department_id);
+}
+
+hasCreateDescription(): boolean {
+  return Boolean(this.form.description.trim());
+}
+
+hasValidOptionalExternalResourceData(): boolean {
+  const originalUrl = this.externalResourceForm.original_url.trim();
+  const title = this.externalResourceForm.title.trim();
+  const description = this.externalResourceForm.description.trim();
+
+  if (!title && !description) {
+    return true;
+  }
+
+  return Boolean(originalUrl);
+}
+
+canCreateDraft(): boolean {
+  return !this.saving &&
+    Boolean(this.selectedFile) &&
+    Boolean(this.form.title.trim()) &&
+    Boolean(this.form.category_id) &&
+    this.hasCreateDescription() &&
+    this.hasCreateDocumentOwner() &&
+    this.hasValidOptionalExternalResourceData();
+}
+
+shouldShowCreateDescriptionRequiredHint(): boolean {
+  return !this.hasCreateDescription();
+}
+
+shouldShowCreateOwnerRequiredHint(): boolean {
+  return !this.hasCreateDocumentOwner();
+}
+
+shouldShowCreateVideoUrlRequiredHint(): boolean {
+  const originalUrl = this.externalResourceForm.original_url.trim();
+  const title = this.externalResourceForm.title.trim();
+  const description = this.externalResourceForm.description.trim();
+
+  return !originalUrl && Boolean(title || description);
+}
+
+hasPublishRequirements(document: InternalDocument): boolean {
+  return Boolean(
+    document.description?.trim() &&
+    (document.owner_user_id || document.owner_department_id)
+  );
+}
+
+getPublishRequirementsMessage(document: InternalDocument): string {
+  const missing: string[] = [];
+
+  if (!document.description?.trim()) {
+    missing.push('descripción');
+  }
+
+  if (!document.owner_user_id && !document.owner_department_id) {
+    missing.push('dueño documental');
+  }
+
+  if (!missing.length) {
+    return '';
+  }
+
+  return `Para publicar falta: ${missing.join(' y ')}.`;
+}
+
   canReplaceVersion(document: InternalDocument): boolean {
     return this.canManage &&
       Boolean(document?.capabilities?.can_replace_version);
@@ -1279,6 +1490,79 @@ private normalizeDiscoveryText(value: string | null | undefined): string {
   trackByDocumentId(_index: number, document: InternalDocument): number {
     return document.id;
   }
+
+  hasExternalResources(): boolean {
+    return this.externalResources.length > 0;
+  }  
+
+  getPrimaryExternalResource(): InternalDocumentExternalResource | null {
+  return this.externalResources.find((resource) => resource.is_primary) ||
+    this.externalResources[0] ||
+    null;
+}
+
+getExternalResourceTitle(resource: InternalDocumentExternalResource): string {
+  return resource.title || 'Video de Google Drive';
+}
+
+canPreviewExternalResource(resource: InternalDocumentExternalResource): boolean {
+  return Boolean(resource.preview_url && resource.resource_kind === 'VIDEO');
+}
+
+openExternalResourcePreview(resource: InternalDocumentExternalResource): void {
+  if (!resource.preview_url) {
+    this.errorMessage = 'Este video no tiene URL de vista previa.';
+    return;
+  }
+
+  this.clearMessages();
+  this.closePreview(false);
+
+  this.previewOpen = true;
+  this.previewLoading = false;
+  this.previewErrorMessage = '';
+  this.previewTitle = this.getExternalResourceTitle(resource);
+  this.previewType = 'drive-video';
+  this.previewDocument = null;
+  this.previewExternalResource = resource;
+  this.previewSafeUrl = this.sanitizer.bypassSecurityTrustResourceUrl(
+    resource.preview_url
+  );
+}
+
+createExternalResourceForSelectedDocument(): void {
+  if (!this.canManage || !this.selectedDocument) {
+    return;
+  }
+
+  const payload = this.buildExternalResourcePayload();
+
+  if (!payload) {
+    return;
+  }
+
+  this.externalResourcesSaving = true;
+  this.clearMessages();
+
+  this.internalDocumentsService.createExternalResource(
+    this.selectedDocument.id,
+    payload
+  ).subscribe({
+    next: (response) => {
+      this.externalResourcesSaving = false;
+      this.successMessage = response.message || 'Recurso externo creado.';
+      this.resetExternalResourceForm();
+      this.loadExternalResourcesForSelectedDocument();
+    },
+    error: (error) => {
+      this.externalResourcesSaving = false;
+      this.errorMessage = this.resolveErrorMessage(
+        error,
+        'No se pudo crear el recurso externo.'
+      );
+    },
+  });
+}
 
   private updateVisibleDocumentSummary(): void {
     this.visiblePublishedCount = this.documents.filter(
@@ -1338,6 +1622,36 @@ private normalizeDiscoveryText(value: string | null | undefined): string {
     return payload;
   }
 
+private buildExternalResourcePayload(
+  options: { requireUrl?: boolean } = {}
+): InternalDocumentExternalResourcePayload | null {
+  const requireUrl = options.requireUrl ?? true;
+
+  const originalUrl = this.externalResourceForm.original_url.trim();
+  const title = this.externalResourceForm.title.trim();
+  const description = this.externalResourceForm.description.trim();
+
+  const hasAnyResourceData = Boolean(originalUrl || title || description);
+
+  if (!originalUrl) {
+    if (!requireUrl && !hasAnyResourceData) {
+      return null;
+    }
+
+    this.errorMessage = 'Captura el link de Google Drive para registrar el video.';
+    return null;
+  }
+
+  return {
+    provider: 'GOOGLE_DRIVE',
+    resource_kind: 'VIDEO',
+    original_url: originalUrl,
+    title: title || null,
+    description: description || null,
+    is_primary: this.externalResourceForm.is_primary,
+  };
+}
+
   private resetLinkForm(): void {
     this.linkForm = {
       entity_type: 'OPENING',
@@ -1349,6 +1663,15 @@ private normalizeDiscoveryText(value: string | null | undefined): string {
     };
   }
 
+private resetExternalResourceForm(): void {
+  this.externalResourceForm = {
+    original_url: '',
+    title: '',
+    description: '',
+    is_primary: true,
+  };
+}
+
   private reloadSelectedDocumentDetails(documentId: number): void {
     this.internalDocumentsService.getDocument(documentId).subscribe({
       next: (item) => {
@@ -1356,6 +1679,29 @@ private normalizeDiscoveryText(value: string | null | undefined): string {
       },
       error: () => {
         this.errorMessage = 'No se pudo recargar el detalle del documento.';
+      },
+    });
+  }
+
+  loadExternalResourcesForSelectedDocument(): void {
+    const document = this.selectedDocument;
+
+    if (!document) {
+      this.externalResources = [];
+      return;
+    }
+
+    this.externalResourcesLoading = true;
+
+    this.internalDocumentsService.getExternalResources(document.id).subscribe({
+      next: (response) => {
+        this.externalResources = response.items || [];
+        this.externalResourcesLoading = false;
+      },
+      error: () => {
+        this.externalResources = [];
+        this.externalResourcesLoading = false;
+        this.errorMessage = 'No se pudieron cargar los recursos externos del documento.';
       },
     });
   }
@@ -1576,14 +1922,15 @@ private normalizeDiscoveryText(value: string | null | undefined): string {
       description: '',
       category_id: this.categories[0]?.id || null,
       document_type: '',
-      owner_user_id: null,
+      owner_user_id: this.currentUserId,
       owner_department_id: null,
       is_sensitive: false,
       version_label: '1.0',
       change_notes: 'Versión inicial',
     };
-  }
 
+    this.resetExternalResourceForm();
+  }
   private clearMessages(): void {
     this.errorMessage = '';
     this.successMessage = '';
