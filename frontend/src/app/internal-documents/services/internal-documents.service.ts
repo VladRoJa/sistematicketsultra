@@ -22,6 +22,9 @@ import {
   InternalDocumentLinkActionResponse,
   InternalDocumentLinkPayload,
   InternalDocumentLinksResponse,
+  InternalDocumentExternalResourceActionResponse,
+  InternalDocumentExternalResourcePayload,
+  InternalDocumentExternalResourcesResponse,
 } from '../models/internal-document.model';
 
 @Injectable({
@@ -230,6 +233,24 @@ export class InternalDocumentsService {
   ): Observable<InternalDocumentLinkActionResponse> {
     return this.http.delete<InternalDocumentLinkActionResponse>(
       `${this.baseUrl}/${documentId}/links/${linkId}`
+    );
+  }
+
+  getExternalResources(
+    documentId: number
+  ): Observable<InternalDocumentExternalResourcesResponse> {
+    return this.http.get<InternalDocumentExternalResourcesResponse>(
+      `${this.baseUrl}/${documentId}/external-resources`
+    );
+  }
+
+  createExternalResource(
+    documentId: number,
+    payload: InternalDocumentExternalResourcePayload
+  ): Observable<InternalDocumentExternalResourceActionResponse> {
+    return this.http.post<InternalDocumentExternalResourceActionResponse>(
+      `${this.baseUrl}/${documentId}/external-resources`,
+      payload
     );
   }
 
