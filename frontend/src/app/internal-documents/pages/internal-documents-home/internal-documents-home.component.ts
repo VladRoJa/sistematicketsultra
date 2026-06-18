@@ -21,6 +21,17 @@ import {
 } from '../../models/internal-document.model';
 import { InternalDocumentsService } from '../../services/internal-documents.service';
 
+interface InternalDocumentDiscoveryCard {
+  key: string;
+  title: string;
+  description: string;
+  icon: string;
+  query?: string;
+  categoryName?: string;
+  period: InternalDocumentPeriodFilter;
+  children?: InternalDocumentDiscoveryCard[];
+}
+
 @Component({
   selector: 'app-internal-documents-home',
   standalone: true,
@@ -79,6 +90,7 @@ export class InternalDocumentsHomeComponent implements OnInit, OnDestroy {
   private cachedBlockTotalPages = 0;
   private searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   private searchForcedAllPeriod = false;
+  expandedDiscoveryCardKey: string | null = null;
 
   readonly searchDebounceMs = 350;
 
@@ -93,6 +105,65 @@ export class InternalDocumentsHomeComponent implements OnInit, OnDestroy {
     { value: 'all', label: 'Todo' },
     { value: 'custom', label: 'Personalizado' },
   ];
+
+readonly discoveryCards: InternalDocumentDiscoveryCard[] = [
+  {
+    key: 'manuales',
+    title: 'Manuales',
+    description: 'Procesos, instructivos y documentación operativa.',
+    icon: 'MAN',
+    query: 'manual',
+    categoryName: 'Manuales',
+    period: 'all',
+  },
+  {
+    key: 'tutoriales',
+    title: 'Tutoriales',
+    description: 'Guías paso a paso y material de capacitación.',
+    icon: 'TUT',
+    query: 'tutorial',
+    categoryName: 'Tutoriales',
+    period: 'all',
+  },
+  {
+    key: 'formatos',
+    title: 'Formatos',
+    description: 'Plantillas, checklists y archivos reutilizables.',
+    icon: 'FOR',
+    query: 'formato',
+    categoryName: 'Formatos',
+    period: 'all',
+  },
+  {
+    key: 'comunicados',
+    title: 'Comunicados',
+    description: 'Avisos e información interna publicada.',
+    icon: 'COM',
+    query: 'comunicado',
+    categoryName: 'Comunicados',
+    period: 'all',
+  },
+  {
+    key: 'reportes',
+    title: 'Reportes',
+    description: 'Archivos operativos, administrativos y de seguimiento.',
+    icon: 'REP',
+    query: 'reporte',
+    categoryName: 'Reportes',
+    period: 'all',
+    children: [
+      {
+        key: 'reportes-cobranza',
+        title: 'Cobranza recurrente',
+        description: 'Archivos diarios de cobranza recurrente por sucursal.',
+        icon: 'COB',
+        query: 'Cobranza recurrente rechazados',
+        categoryName: 'Reportes',
+        period: 'all',
+      },
+    ],
+  },
+];
 
   selectedFile: File | null = null;
   versionFile: File | null = null;
@@ -276,6 +347,124 @@ export class InternalDocumentsHomeComponent implements OnInit, OnDestroy {
     this.resetListCache();
     this.loadDocuments();
   }
+
+applyDiscoveryCard(card: InternalDocumentDiscoveryCard): void {
+  if (card.children?.length) {
+    this.expandedDiscoveryCardKey =
+      this.expandedDiscoveryCardKey === card.key ? null : card.key;
+
+    return;
+  }
+
+  this.applyDiscoveryTarget(card);
+}
+
+isDiscoveryCardActive(card: InternalDocumentDiscoveryCard): boolean {
+  if (card.children?.length) {
+    return this.isDiscoveryCardExpanded(card);
+  }
+
+  const currentSearch = (this.filters.q || '').trim().toLowerCase();
+  const cardSearch = (card.query || '').trim().toLowerCase();
+  const categoryId = this.resolveCategoryIdByName(card.categoryName);
+  const hasCategoryTarget = Boolean(card.categoryName);
+  const categoryWasResolved = !hasCategoryTarget || categoryId !== null;
+
+  const isChildTarget = this.discoveryCards.some((parent) =>
+    (parent.children || []).some((child) => child.key === card.key)
+  );
+
+  const expectedSearch = isChildTarget || !card.categoryName || !categoryWasResolved
+    ? cardSearch
+    : '';
+
+  const matchesSearch = currentSearch === expectedSearch;
+  const matchesCategory = categoryWasResolved
+    ? this.filters.category_id === categoryId
+    : this.filters.category_id === null;
+
+  return matchesSearch && matchesCategory && this.filters.period === card.period;
+}
+
+  trackByDiscoveryCardKey(_index: number, card: InternalDocumentDiscoveryCard): string {
+    return card.key;
+  }
+
+applyDiscoveryTarget(card: InternalDocumentDiscoveryCard): void {
+  this.cancelScheduledSearchReload();
+  this.searchForcedAllPeriod = false;
+
+  const categoryId = this.resolveCategoryIdByName(card.categoryName);
+  const hasCategoryTarget = Boolean(card.categoryName);
+  const categoryWasResolved = !hasCategoryTarget || categoryId !== null;
+  const isChildTarget = this.discoveryCards.some((parent) =>
+    (parent.children || []).some((child) => child.key === card.key)
+  );
+
+  const fallbackQuery = card.query || card.title || '';
+  const query = isChildTarget || !card.categoryName || !categoryWasResolved
+    ? fallbackQuery
+    : '';
+
+  this.filters = {
+    ...this.filters,
+    q: query,
+    category_id: categoryWasResolved ? categoryId : null,
+    status: this.canManage ? 'ALL' : null,
+    period: card.period,
+    date_from: null,
+    date_to: null,
+    page: 1,
+    page_size: this.visiblePageSize,
+    offset: 0,
+    limit: card.period === 'all' ? this.allPeriodBlockSize : this.visiblePageSize,
+  };
+
+  this.page = 1;
+  this.selectedDocument = null;
+
+  this.resetListCache();
+  this.loadDocuments();
+}
+
+isDiscoveryCardExpanded(card: InternalDocumentDiscoveryCard): boolean {
+  return this.expandedDiscoveryCardKey === card.key;
+}
+
+getExpandedDiscoveryCard(): InternalDocumentDiscoveryCard | null {
+  if (!this.expandedDiscoveryCardKey) {
+    return null;
+  }
+
+  return this.discoveryCards.find(
+    (card) => card.key === this.expandedDiscoveryCardKey
+  ) || null;
+}
+
+getExpandedDiscoveryChildren(): InternalDocumentDiscoveryCard[] {
+  return this.getExpandedDiscoveryCard()?.children || [];
+}
+
+private resolveCategoryIdByName(categoryName: string | null | undefined): number | null {
+  if (!categoryName) {
+    return null;
+  }
+
+  const normalizedCategoryName = this.normalizeDiscoveryText(categoryName);
+
+  return this.categories.find((category) => {
+    return this.normalizeDiscoveryText(category.name) === normalizedCategoryName ||
+      this.normalizeDiscoveryText(category.key) === normalizedCategoryName;
+  })?.id || null;
+}
+
+private normalizeDiscoveryText(value: string | null | undefined): string {
+  return String(value || '')
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
 
   toggleCreatePanel(): void {
     if (!this.canManage) {
@@ -1223,7 +1412,7 @@ export class InternalDocumentsHomeComponent implements OnInit, OnDestroy {
   private getEffectivePeriod(): InternalDocumentPeriodFilter {
     const cleanSearch = (this.filters.q || '').trim();
 
-    if (cleanSearch) {
+    if (cleanSearch && this.searchForcedAllPeriod) {
       return 'all';
     }
 

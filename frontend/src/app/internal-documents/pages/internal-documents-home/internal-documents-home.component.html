@@ -5,7 +5,6 @@
     <div class="hero-content">
       <div class="hero-kicker">
         <span class="hero-dot"></span>
-        Suite Ultra · Biblioteca gobernada
       </div>
 
       <h1>Nube Corporativa</h1>
@@ -37,17 +36,64 @@
     </div>
   </header>
 
-  <section class="library-context-bar">
+  <section class="discovery-panel">
+  <div class="discovery-heading">
     <div>
-      <span class="context-label">Mostrando</span>
-      <strong>{{ getLibraryContextLabel() }}</strong>
+      <p class="eyebrow">Accesos rápidos</p>
+      <h2>¿Qué necesitas consultar?</h2>
     </div>
+  </div>
 
-    <div class="context-meta">
-      <span>{{ getPaginationRangeLabel() }}</span>
-      <span>Página {{ page }} de {{ totalPages || 1 }}</span>
-    </div>
-  </section>
+  <div class="discovery-grid">
+    <button
+      type="button"
+      class="discovery-card"
+      *ngFor="let card of discoveryCards; trackBy: trackByDiscoveryCardKey"
+      [class.active]="isDiscoveryCardActive(card)"
+      (click)="applyDiscoveryCard(card)"
+      [disabled]="loading"
+    >
+      <span class="discovery-icon">{{ card.icon }}</span>
+
+      <span class="discovery-title">{{ card.title }}</span>
+
+      <span class="discovery-description">
+        {{ card.description }}
+      </span>
+
+        <span class="discovery-action">
+          {{ card.children?.length ? 'Ver opciones' : 'Ver documentos' }}
+        </span>
+    </button>
+  </div>
+  <div
+  class="discovery-sublevel"
+  *ngIf="getExpandedDiscoveryChildren().length > 0"
+>
+  <div class="discovery-sublevel-heading">
+    <p class="eyebrow">Tipos de {{ getExpandedDiscoveryCard()?.title }}</p>
+    <h3>Selecciona una opción</h3>
+  </div>
+
+  <div class="discovery-subgrid">
+    <button
+      type="button"
+      class="discovery-subcard"
+      *ngFor="let child of getExpandedDiscoveryChildren(); trackBy: trackByDiscoveryCardKey"
+      [class.active]="isDiscoveryCardActive(child)"
+      (click)="applyDiscoveryTarget(child)"
+      [disabled]="loading"
+    >
+      <span class="discovery-icon">{{ child.icon }}</span>
+
+      <span>
+        <strong>{{ child.title }}</strong>
+        <small>{{ child.description }}</small>
+      </span>
+    </button>
+  </div>
+</div>
+</section>
 
   <div class="alert success" *ngIf="successMessage">
     {{ successMessage }}
