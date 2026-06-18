@@ -120,15 +120,6 @@ readonly discoveryCards: InternalDocumentDiscoveryCard[] = [
     period: 'all',
   },
   {
-    key: 'tutoriales',
-    title: 'Tutoriales',
-    description: 'Guías paso a paso y material de capacitación.',
-    icon: 'TUT',
-    query: 'tutorial',
-    categoryName: 'Tutoriales',
-    period: 'all',
-  },
-  {
     key: 'formatos',
     title: 'Formatos',
     description: 'Plantillas, checklists y archivos reutilizables.',
@@ -199,6 +190,7 @@ readonly discoveryCards: InternalDocumentDiscoveryCard[] = [
   };
 
   linksSaving = false;
+  isAssignDocumentModalOpen = false;
   pendingDeleteLink: InternalDocumentLink | null = null;
   isDeleteLinkModalOpen = false;
   externalResourcesLoading = false;
@@ -905,6 +897,20 @@ private normalizeDiscoveryText(value: string | null | undefined): string {
         );
       },
     });
+  }
+
+  openAssignDocumentModal(document: InternalDocument): void {
+    this.clearMessages();
+    this.selectDocument(document);
+    this.isAssignDocumentModalOpen = true;
+  }
+
+  closeAssignDocumentModal(): void {
+    if (this.linksSaving) {
+      return;
+    }
+
+    this.isAssignDocumentModalOpen = false;
   }
 
   downloadDocument(document: InternalDocument): void {

@@ -480,63 +480,75 @@
         <span *ngIf="shouldShowSensitiveChip(document)" class="sensitive-chip">Confidencial</span>
         </div>
 
-        <div class="document-actions" (click)="$event.stopPropagation()">
-          <button
-            type="button"
-            class="primary-action compact"
-            *ngIf="canPreviewDocument(document)"
-            (click)="openPreview(document)"
-            [disabled]="previewLoading"
-          >
-            Ver
-          </button>
-          <button
-            type="button"
-            class="primary-action compact video-action"
-            *ngIf="canPreviewDocumentVideo(document)"
-            (click)="openDocumentVideo(document)"
-          >
-            Video
-          </button>
-          <button
-            type="button"
-            class="secondary-action compact"
-            (click)="downloadDocument(document)"
-            [disabled]="!canDownload(document)"
-          >
-            Descargar
-          </button>
+<div class="document-actions" (click)="$event.stopPropagation()">
+  <button
+    type="button"
+    class="primary-action compact"
+    *ngIf="canPreviewDocument(document)"
+    (click)="openPreview(document)"
+    [disabled]="previewLoading"
+  >
+    Ver
+  </button>
 
-          <button
-            type="button"
-            class="ghost-action compact"
-            *ngIf="canSetGlobalVisibility(document)"
-            (click)="setGlobalVisibility(document)"
-            [disabled]="saving"
-          >
-            Hacer global
-          </button>
+  <button
+    type="button"
+    class="primary-action compact video-action"
+    *ngIf="canPreviewDocumentVideo(document)"
+    (click)="openDocumentVideo(document)"
+  >
+    Ver video
+  </button>
 
-          <button
-            type="button"
-            class="primary-action compact"
-            *ngIf="canPublish(document)"
-            (click)="publishDocument(document)"
-            [disabled]="saving"
-          >
-            Publicar
-          </button>
+  <button
+    type="button"
+    class="secondary-action compact"
+    (click)="downloadDocument(document)"
+    [disabled]="!canDownload(document)"
+  >
+    Descargar
+  </button>
 
-          <button
-            type="button"
-            class="danger-action compact"
-            *ngIf="canArchive(document)"
-            (click)="archiveDocument(document)"
-            [disabled]="saving"
-          >
-            Archivar
-          </button>
-        </div>
+  <button
+    type="button"
+    class="ghost-action compact assign-action"
+    *ngIf="shouldShowLinksPanel(document)"
+    (click)="openAssignDocumentModal(document)"
+    [disabled]="linksSaving"
+  >
+    Asignar a...
+  </button>
+
+  <button
+    type="button"
+    class="ghost-action compact"
+    *ngIf="canSetGlobalVisibility(document)"
+    (click)="setGlobalVisibility(document)"
+    [disabled]="saving"
+  >
+    Hacer global
+  </button>
+
+  <button
+    type="button"
+    class="primary-action compact"
+    *ngIf="canPublish(document)"
+    (click)="publishDocument(document)"
+    [disabled]="saving"
+  >
+    Publicar
+  </button>
+
+  <button
+    type="button"
+    class="danger-action compact"
+    *ngIf="canArchive(document)"
+    (click)="archiveDocument(document)"
+    [disabled]="saving"
+  >
+    Archivar
+  </button>
+</div>
       </div>
 
       <div class="pagination">
@@ -572,32 +584,6 @@
             </div>
           </div>
         </div>
-
-        <p class="detail-description">
-          {{ selectedDocument.description || 'Sin descripción.' }}
-        </p>
-
-        <div class="detail-actions">
-          <button
-            type="button"
-            class="primary-action"
-            *ngIf="canPreviewDocument(selectedDocument)"
-            (click)="openPreview(selectedDocument)"
-            [disabled]="previewLoading"
-          >
-            Ver en pantalla
-          </button>
-
-          <button
-            type="button"
-            class="secondary-action"
-            (click)="downloadDocument(selectedDocument)"
-            [disabled]="!canDownload(selectedDocument)"
-          >
-            Descargar vigente
-          </button>
-        </div>
-
         <section class="detail-section">
           <div class="section-heading">
             <h3>Resumen</h3>
@@ -625,125 +611,6 @@
               <dd>{{ getDateTimeLabel(selectedDocument.published_at, 'No publicado') }}</dd>
             </div>
           </dl>
-        </section>
-
-        <section class="detail-section links-panel" *ngIf="shouldShowLinksPanel(selectedDocument)">
-          <div class="section-heading">
-            <div>
-              <h3>Contexto documental</h3>
-              <p>Relaciona este documento con aperturas, proyectos, tareas, sucursales o áreas.</p>
-            </div>
-          </div>
-
-          <div class="empty-links" *ngIf="getSelectedDocumentLinks().length === 0">
-            Este documento todavía no tiene vínculos activos.
-          </div>
-
-          <div class="links-list" *ngIf="getSelectedDocumentLinks().length > 0">
-            <div class="link-card" *ngFor="let link of getSelectedDocumentLinks()">
-              <div>
-                <div class="link-title">
-                  {{ getEntityTypeLabel(link.entity_type) }} · {{ getLinkContextLabel(link) }}
-                </div>
-                <div class="link-meta">
-                  {{ getLinkRoleLabel(link.link_role) }}
-                  <span *ngIf="link.label"> · {{ link.label }}</span>
-                </div>
-              </div>
-
-              <div class="link-actions">
-                <span class="primary-pill" *ngIf="link.is_primary">Principal</span>
-                <button
-                  type="button"
-                  class="danger-action compact"
-                  (click)="deleteLinkFromSelectedDocument(link)"
-                  [disabled]="linksSaving"
-                >
-                  Quitar
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div class="link-form">
-            <div class="field">
-              <label for="link-entity-type">Entidad</label>
-              <select id="link-entity-type" [(ngModel)]="linkForm.entity_type">
-                <option
-                  *ngFor="let option of linkEntityTypeOptions"
-                  [ngValue]="option.value"
-                >
-                  {{ option.label }}
-                </option>
-              </select>
-            </div>
-
-            <div class="field">
-              <label for="link-role">Rol documental</label>
-              <select id="link-role" [(ngModel)]="linkForm.link_role">
-                <option
-                  *ngFor="let option of linkRoleOptions"
-                  [ngValue]="option.value"
-                >
-                  {{ option.label }}
-                </option>
-              </select>
-            </div>
-
-            <div class="field">
-              <label for="link-entity-key">{{ getLinkContextFieldLabel() }}</label>
-              <input
-                id="link-entity-key"
-                type="text"
-                [(ngModel)]="linkForm.entity_key"
-                [placeholder]="getLinkContextPlaceholder()"
-              />
-
-              <small class="field-help">
-                {{ getLinkContextHelpText() }}
-              </small>
-
-              <small class="field-warning" *ngIf="shouldShowLinkContextRequiredHint()">
-                Este dato es necesario para activar “Agregar vínculo”.
-              </small>
-            </div>
-
-            <div class="field" *ngIf="!isGeneralLinkEntitySelected()">
-              <label for="link-entity-id">Entity id</label>
-              <input
-                id="link-entity-id"
-                type="number"
-                [(ngModel)]="linkForm.entity_id"
-                placeholder="Opcional"
-              />
-            </div>
-
-            <div class="field field-wide">
-              <label for="link-label">Etiqueta visible</label>
-              <input
-                id="link-label"
-                type="text"
-                [(ngModel)]="linkForm.label"
-                placeholder="Ej. Manual operativo Gasca para apertura Egade"
-              />
-            </div>
-
-            <label class="checkbox-row field-wide">
-              <input type="checkbox" [(ngModel)]="linkForm.is_primary" />
-              Marcar como documento principal/oficial para este contexto
-            </label>
-
-            <div class="link-form-actions field-wide">
-              <button
-                type="button"
-                class="primary-action"
-                (click)="createLinkForSelectedDocument()"
-                [disabled]="!canCreateLinkForSelectedDocument()"
-              >
-                Agregar vínculo
-              </button>
-            </div>
-          </div>
         </section>
 
         <section class="detail-section version-panel" *ngIf="shouldShowVersionPanel(selectedDocument)">
@@ -801,7 +668,179 @@
       </ng-template>
     </aside>
   </section>
+<div
+  class="suite-modal-backdrop assign-modal-backdrop"
+  *ngIf="isAssignDocumentModalOpen && selectedDocument"
+  (click)="closeAssignDocumentModal()"
+>
+  <section
+    class="suite-assign-modal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="assign-document-title"
+    (click)="$event.stopPropagation()"
+  >
+    <header class="assign-modal-header">
+      <div>
+        <p class="eyebrow">Asignación documental</p>
+        <h2 id="assign-document-title">Asignar documento a...</h2>
+        <p>
+          Relaciona este documento con aperturas, sucursales, proyectos, tareas o áreas.
+        </p>
+      </div>
 
+      <button
+        type="button"
+        class="ghost-action"
+        (click)="closeAssignDocumentModal()"
+        [disabled]="linksSaving"
+      >
+        Cerrar
+      </button>
+    </header>
+
+    <div class="assign-modal-body">
+      <section class="assign-current-links">
+        <div class="section-heading">
+          <div>
+            <h3>Asignaciones actuales</h3>
+            <p>{{ selectedDocument.title }}</p>
+          </div>
+        </div>
+
+        <div class="empty-links" *ngIf="getSelectedDocumentLinks().length === 0">
+          Este documento todavía no tiene asignaciones activas.
+        </div>
+
+        <div class="links-list" *ngIf="getSelectedDocumentLinks().length > 0">
+          <div class="link-card" *ngFor="let link of getSelectedDocumentLinks()">
+            <div>
+              <div class="link-title">
+                {{ getEntityTypeLabel(link.entity_type) }} · {{ getLinkContextLabel(link) }}
+              </div>
+
+              <div class="link-meta">
+                {{ getLinkRoleLabel(link.link_role) }}
+                <span *ngIf="link.label"> · {{ link.label }}</span>
+              </div>
+            </div>
+
+            <div class="link-actions">
+              <span class="primary-pill" *ngIf="link.is_primary">Principal</span>
+
+              <button
+                type="button"
+                class="danger-action compact"
+                (click)="deleteLinkFromSelectedDocument(link)"
+                [disabled]="linksSaving"
+              >
+                Quitar
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="assign-form-section">
+        <div class="section-heading">
+          <div>
+            <h3>Agregar asignación</h3>
+            <p>Define dónde debe aparecer o relacionarse este documento.</p>
+          </div>
+        </div>
+
+        <div class="link-form assign-link-form">
+          <div class="field">
+            <label for="assign-link-entity-type">Entidad</label>
+            <select id="assign-link-entity-type" [(ngModel)]="linkForm.entity_type">
+              <option
+                *ngFor="let option of linkEntityTypeOptions"
+                [ngValue]="option.value"
+              >
+                {{ option.label }}
+              </option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="assign-link-role">Rol documental</label>
+            <select id="assign-link-role" [(ngModel)]="linkForm.link_role">
+              <option
+                *ngFor="let option of linkRoleOptions"
+                [ngValue]="option.value"
+              >
+                {{ option.label }}
+              </option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="assign-link-entity-key">{{ getLinkContextFieldLabel() }}</label>
+            <input
+              id="assign-link-entity-key"
+              type="text"
+              [(ngModel)]="linkForm.entity_key"
+              [placeholder]="getLinkContextPlaceholder()"
+            />
+
+            <small class="field-help">
+              {{ getLinkContextHelpText() }}
+            </small>
+
+            <small class="field-warning" *ngIf="shouldShowLinkContextRequiredHint()">
+              Este dato es necesario para activar “Agregar asignación”.
+            </small>
+          </div>
+
+          <div class="field" *ngIf="!isGeneralLinkEntitySelected()">
+            <label for="assign-link-entity-id">Entity id</label>
+            <input
+              id="assign-link-entity-id"
+              type="number"
+              [(ngModel)]="linkForm.entity_id"
+              placeholder="Opcional"
+            />
+          </div>
+
+          <div class="field field-wide">
+            <label for="assign-link-label">Etiqueta visible</label>
+            <input
+              id="assign-link-label"
+              type="text"
+              [(ngModel)]="linkForm.label"
+              placeholder="Ej. Manual operativo Gasca para apertura Egade"
+            />
+          </div>
+
+          <label class="checkbox-row field-wide">
+            <input type="checkbox" [(ngModel)]="linkForm.is_primary" />
+            Marcar como documento principal/oficial para esta asignación
+          </label>
+        </div>
+      </section>
+    </div>
+
+    <footer class="assign-modal-footer">
+      <button
+        type="button"
+        class="secondary-action"
+        (click)="closeAssignDocumentModal()"
+        [disabled]="linksSaving"
+      >
+        Cancelar
+      </button>
+
+      <button
+        type="button"
+        class="primary-action"
+        (click)="createLinkForSelectedDocument()"
+        [disabled]="!canCreateLinkForSelectedDocument()"
+      >
+        Agregar asignación
+      </button>
+    </footer>
+  </section>
+</div>
     <div
     class="suite-modal-backdrop"
     *ngIf="isDeleteLinkModalOpen && pendingDeleteLink"
@@ -913,3 +952,4 @@
     </section>
   </div>
 </section>
+
