@@ -575,6 +575,13 @@ private normalizeDiscoveryText(value: string | null | undefined): string {
       this.errorMessage = 'Selecciona una categoría.';
       return;
     }
+    const externalResourcePayload = this.buildExternalResourcePayload({
+      requireUrl: false,
+    });
+
+    if (this.errorMessage) {
+      return;
+    }
 
     const payload: InternalDocumentCreatePayload = {
       file: this.selectedFile,
@@ -594,12 +601,43 @@ private normalizeDiscoveryText(value: string | null | undefined): string {
 
     this.internalDocumentsService.createDocument(payload).subscribe({
       next: (response) => {
-        this.saving = false;
-        this.successMessage = response.message || 'Documento creado.';
-        this.selectedDocument = response.item;
-        this.resetCreateForm();
-        this.closeCreatePanel();
-        this.loadDocuments();
+        const createdDocument = response.item;
+
+        if (!externalResourcePayload) {
+          this.saving = false;
+          this.successMessage = response.message || 'Documento creado.';
+          this.selectedDocument = createdDocument;
+          this.externalResources = [];
+          this.resetCreateForm();
+          this.closeCreatePanel();
+          this.loadDocuments();
+          return;
+        }
+
+        this.internalDocumentsService.createExternalResource(
+          createdDocument.id,
+          externalResourcePayload
+        ).subscribe({
+          next: () => {
+            this.saving = false;
+            this.successMessage = 'Documento creado y video registrado.';
+            this.selectedDocument = createdDocument;
+            this.externalResources = [];
+            this.resetCreateForm();
+            this.closeCreatePanel();
+            this.loadDocuments();
+          },
+          error: (error) => {
+            this.saving = false;
+            this.selectedDocument = createdDocument;
+            this.successMessage = 'Documento creado, pero no se pudo registrar el video.';
+            this.errorMessage = this.resolveErrorMessage(
+              error,
+              'No se pudo registrar el video externo.'
+            );
+            this.loadDocuments();
+          },
+        });
       },
       error: (error) => {
         this.saving = false;
@@ -1391,13 +1429,23 @@ createExternalResourceForSelectedDocument(): void {
     return payload;
   }
 
-private buildExternalResourcePayload(): InternalDocumentExternalResourcePayload | null {
+private buildExternalResourcePayload(
+  options: { requireUrl?: boolean } = {}
+): InternalDocumentExternalResourcePayload | null {
+  const requireUrl = options.requireUrl ?? true;
+
   const originalUrl = this.externalResourceForm.original_url.trim();
   const title = this.externalResourceForm.title.trim();
   const description = this.externalResourceForm.description.trim();
 
+  const hasAnyResourceData = Boolean(originalUrl || title || description);
+
   if (!originalUrl) {
-    this.errorMessage = 'Captura el link de Google Drive.';
+    if (!requireUrl && !hasAnyResourceData) {
+      return null;
+    }
+
+    this.errorMessage = 'Captura el link de Google Drive para registrar el video.';
     return null;
   }
 
@@ -1687,8 +1735,9 @@ private resetExternalResourceForm(): void {
       version_label: '1.0',
       change_notes: 'Versión inicial',
     };
-  }
 
+    this.resetExternalResourceForm();
+  }
   private clearMessages(): void {
     this.errorMessage = '';
     this.successMessage = '';

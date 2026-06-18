@@ -1337,3 +1337,133 @@ dd {
     grid-template-columns: 1fr;
   }
 }
+
+
+
+.external-resource-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  min-width: 42px;
+  height: 34px;
+  padding: 0 9px;
+  border-radius: 12px;
+  color: #ffffff;
+  background: linear-gradient(135deg, #111827, #2c4595);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+}
+
+.external-resource-content {
+  min-width: 0;
+  flex: 1;
+}
+
+.external-resource-title {
+  color: #111827;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+.external-resource-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.external-resource-meta span {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 8px;
+  color: #4b5563;
+  background: #f3f4f6;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.external-resource-content p {
+  margin: 8px 0 0;
+  color: #6b7280;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.external-resource-content a {
+  display: inline-flex;
+  margin-top: 9px;
+  color: #e54525;
+  font-size: 12px;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.external-resource-content a:hover {
+  text-decoration: underline;
+}
+
+
+.external-resource-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.compact-state {
+  padding: 16px;
+}
+
+@media (max-width: 720px) {
+  .external-resource-card {
+    flex-direction: column;
+  }
+
+  .external-resource-form {
+    grid-template-columns: 1fr;
+  }
+
+  .external-resource-actions {
+    justify-content: stretch;
+  }
+
+  .external-resource-actions button {
+    width: 100%;
+  }
+}
+
+.create-video-panel {
+  padding: 14px;
+  border: 1px solid rgba(229, 69, 37, 0.16);
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, rgba(229, 69, 37, 0.06), transparent 48%),
+    #f9fafb;
+}
+
+.create-video-heading {
+  margin-bottom: 12px;
+}
+
+.create-video-heading h3 {
+  margin-bottom: 4px;
+}
+
+.create-video-heading p:not(.eyebrow) {
+  margin-bottom: 0;
+  color: #6b7280;
+  line-height: 1.45;
+}
+
+.create-video-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 720px) {
+  .create-video-grid {
+    grid-template-columns: 1fr;
+  }
+}
