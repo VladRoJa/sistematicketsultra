@@ -135,19 +135,122 @@
         </li>
       </ul>
     </section>
-
     <section
       *ngIf="weeklySection"
-      class="content-card"
+      class="content-card chart-card"
     >
       <div class="section-heading">
         <div>
-          <h2>{{ weeklySection.title }}</h2>
-          <p>Último snapshot canónico disponible dentro de cada bloque semanal.</p>
+          <h2>Crecimiento promedio semanal de socios</h2>
+          <p>Comparativo por sucursal usando el último snapshot canónico de cada bloque semanal.</p>
         </div>
       </div>
 
-      <div class="period-grid">
+      <div
+        *ngIf="weeklyChart"
+        class="chart-shell"
+      >
+        <div class="chart-scroll">
+          <svg
+            class="weekly-chart"
+            [attr.viewBox]="'0 0 ' + weeklyChart.width + ' ' + weeklyChart.height"
+            [attr.width]="weeklyChart.width"
+            [attr.height]="weeklyChart.height"
+            role="img"
+            aria-label="Crecimiento promedio semanal de socios"
+          >
+            <g class="grid-layer">
+              <g *ngFor="let tick of weeklyChart.ticks">
+                <line
+                  [attr.x1]="weeklyChart.plotX"
+                  [attr.x2]="weeklyChart.plotX + weeklyChart.plotWidth"
+                  [attr.y1]="weeklyChart.plotY + weeklyChart.plotHeight - ((tick / weeklyChart.maxValue) * weeklyChart.plotHeight)"
+                  [attr.y2]="weeklyChart.plotY + weeklyChart.plotHeight - ((tick / weeklyChart.maxValue) * weeklyChart.plotHeight)"
+                ></line>
+                <text
+                  [attr.x]="weeklyChart.plotX - 10"
+                  [attr.y]="weeklyChart.plotY + weeklyChart.plotHeight - ((tick / weeklyChart.maxValue) * weeklyChart.plotHeight) + 4"
+                  text-anchor="start"
+                >
+                  {{ formatNumber(tick) }}
+                </text>
+              </g>
+            </g>
+
+            <g class="reference-layer">
+              <g
+                *ngFor="let line of weeklyChart.referenceLines; trackBy: trackByReferenceLine"
+                [attr.class]="line.className"
+              >
+                <line
+                  [attr.x1]="weeklyChart.plotX"
+                  [attr.x2]="weeklyChart.plotX + weeklyChart.plotWidth"
+                  [attr.y1]="line.y"
+                  [attr.y2]="line.y"
+                ></line>
+                <text
+                  [attr.x]="weeklyChart.plotX + weeklyChart.plotWidth + 12"
+                  [attr.y]="line.y - 6"
+                  text-anchor="start"
+                >
+                  {{ line.label }}
+                </text>
+              </g>
+            </g>
+
+            <g class="bar-layer">
+              <rect
+                *ngFor="let bar of weeklyChart.bars; trackBy: trackByWeeklyChartBar"
+                [attr.x]="bar.x"
+                [attr.y]="bar.y"
+                [attr.width]="bar.width"
+                [attr.height]="bar.height"
+                [attr.fill]="bar.color"
+                rx="2"
+              >
+                <title>
+                  {{ bar.branchLabel }} · {{ bar.periodLabel }} · {{ formatNumber(bar.value) }}
+                </title>
+              </rect>
+            </g>
+
+            <g class="axis-layer">
+              <line
+                [attr.x1]="weeklyChart.plotX"
+                [attr.x2]="weeklyChart.plotX + weeklyChart.plotWidth"
+                [attr.y1]="weeklyChart.plotY + weeklyChart.plotHeight"
+                [attr.y2]="weeklyChart.plotY + weeklyChart.plotHeight"
+              ></line>
+
+              <g
+                *ngFor="let branch of weeklyChart.branches; trackBy: trackByWeeklyChartBranch"
+              >
+                <text
+                  [attr.x]="branch.x"
+                  [attr.y]="weeklyChart.plotY + weeklyChart.plotHeight + 58"
+                  text-anchor="end"
+                  [attr.transform]="'rotate(-35 ' + branch.x + ' ' + (weeklyChart.plotY + weeklyChart.plotHeight + 58) + ')'"
+                >
+                  {{ branch.label }}
+                </text>
+              </g>
+            </g>
+          </svg>
+        </div>
+
+        <div class="chart-legend">
+          <span
+            *ngFor="let item of weeklyChart.legend; trackBy: trackByWeeklyLegendItem"
+            class="legend-item"
+          >
+            <i [style.background]="item.color"></i>
+            <span>{{ item.label }}</span>
+            <small>{{ item.snapshotLabel }}</small>
+          </span>
+        </div>
+      </div>
+
+      <div class="period-grid compact-periods">
         <article
           *ngFor="let period of weeklyPeriods; trackBy: trackByWeeklyPeriod"
           class="period-card"
@@ -256,3 +359,8 @@
     </section>
   </ng-container>
 </section>
+
+
+
+
+

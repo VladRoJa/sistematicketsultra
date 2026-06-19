@@ -346,3 +346,120 @@ td {
     grid-template-columns: 1fr;
   }
 }
+
+.chart-card {
+  overflow: hidden;
+}
+
+.chart-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.chart-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 8px 4px 2px;
+  border: 1px solid rgba(23, 32, 51, 0.08);
+  border-radius: 16px;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
+}
+
+.weekly-chart {
+  display: block;
+  min-width: 100%;
+  font-family: inherit;
+}
+
+.grid-layer line {
+  stroke: rgba(23, 32, 51, 0.1);
+  stroke-width: 1;
+}
+
+.grid-layer text {
+  fill: #667085;
+  font-size: 11px;
+}
+
+.reference-layer line {
+  stroke-width: 1.5;
+  stroke-dasharray: 8 6;
+}
+
+.reference-layer text {
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.reference-layer .target-line line {
+  stroke: #111827;
+}
+
+.reference-layer .target-line text {
+  fill: #111827;
+}
+
+.reference-layer .warning-line line {
+  stroke: #ef4444;
+}
+
+.reference-layer .warning-line text {
+  fill: #b42318;
+}
+
+.bar-layer rect {
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.bar-layer rect:hover {
+  opacity: 0.72;
+}
+
+.axis-layer line {
+  stroke: rgba(23, 32, 51, 0.26);
+  stroke-width: 1;
+}
+
+.axis-layer text {
+  fill: #475467;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  padding: 4px 2px;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #172033;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.legend-item i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.legend-item small {
+  color: #667085;
+  font-weight: 600;
+}
+
+.compact-periods {
+  margin-top: 8px;
+}
+
+.axis-layer text {
+  font-size: 9px;
+  letter-spacing: -0.02em;
+}
