@@ -27,6 +27,7 @@ from app.routes.pm_routes import pm_bp
 from app.routes.warehouse_routes import warehouse_bp
 from app.routes.warehouse_internal_jobs import warehouse_internal_jobs_bp
 from app.routes.track_routes import track_bp
+from app.routes.track_kpi_desempeno_routes import track_kpi_desempeno_bp
 from app.routes.warehouse_commercial_routes import warehouse_commercial_bp
 from app.routes.planning_targets_routes import planning_targets_bp
 from app.routes.internal_documents_routes import internal_documents_bp
@@ -102,6 +103,7 @@ def create_app():
         url_prefix="/api/warehouse/internal",
     )
     app.register_blueprint(track_bp, url_prefix='/api/track')
+    app.register_blueprint(track_kpi_desempeno_bp, url_prefix='/api/track/kpi-desempeno')
     app.register_blueprint(
         warehouse_commercial_bp,
         url_prefix="/api/warehouse/commercial",

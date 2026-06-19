@@ -117,10 +117,21 @@ ngOnInit(): void {
       { label: 'Biblioteca Interna', path: '/nube-corporativa' },
     ],
   };
+  const trackSubmenu = [
+    { label: 'Track Diario', path: '/warehouse/track' },
+  ];
+
+  if (this.puedeVerKpiDesempenoPorRol()) {
+    trackSubmenu.push({
+      label: 'KPI Desempeño',
+      path: '/warehouse/track/kpi-desempeno',
+    });
+  }
 
   const menuTrackDiario = {
     label: 'Track',
     path: '/warehouse/track',
+    submenu: trackSubmenu,
   };
 
   const menuPlanning = {
@@ -893,6 +904,17 @@ onClickReporteBug(): void {
 }
 
 
+private puedeVerKpiDesempenoPorRol(): boolean {
+  const user = this.authService.getUser();
+  const rol = (user?.rol || '').toString().trim().toUpperCase();
+
+  return [
+    'ADMIN',
+    'ADMINISTRADOR',
+    'SUPER_ADMIN',
+  ].includes(rol);
+}
+
 private puedeVerTrackDiarioPorRol(): boolean {
   const user = this.authService.getUser();
   const rol = (user?.rol || '').toString().trim().toUpperCase();
@@ -1092,3 +1114,4 @@ onMainMenuClick(item: any): void {
   // Fin Suite Ultra UI v1 - Helpers visuales del menú principal
   // ============================================================================
 }
+
