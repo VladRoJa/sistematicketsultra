@@ -101,7 +101,7 @@ def get_kpi_desempeno_monthly_report_endpoint():
                 "timezone": "America/Tijuana",
                 "permissions_mode": "beta_admin_only",
             },
-                "sections": [
+            "sections": [
                 weekly_branch_series_section,
                 weekly_closing_section,
                 monthly_closing_section,
