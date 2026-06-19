@@ -973,3 +973,321 @@ def build_historical_closing_section(
         "data": data,
     }
 
+
+def _iter_continuous_week_ranges(
+    *,
+    start_month: Any,
+    end_month: Any,
+) -> list[dict[str, Any]]:
+    start_year, start_month_number, normalized_start_month = _ensure_target_month(
+        start_month
+    )
+    end_year, end_month_number, normalized_end_month = _ensure_target_month(
+        end_month
+    )
+
+    current_start, _ = _month_bounds(
+        year=start_year,
+        month=start_month_number,
+    )
+    _, end_next_month_start = _month_bounds(
+        year=end_year,
+        month=end_month_number,
+    )
+    final_date = end_next_month_start - timedelta(days=1)
+
+    if current_start > final_date:
+        raise KpiDesempenoQueryServiceError(
+            "start_month no puede ser mayor que end_month."
+        )
+
+    periods: list[dict[str, Any]] = []
+    week_number = 1
+
+    while current_start <= final_date:
+        current_end = min(
+            current_start + timedelta(days=6),
+            final_date,
+        )
+
+        period_key = (
+            f"WEEK_{week_number:03d}_"
+            f"{current_start.strftime('%Y%m%d')}_"
+            f"{current_end.strftime('%Y%m%d')}"
+        )
+
+        periods.append(
+            {
+                "period_key": period_key,
+                "label": _format_week_range_label(
+                    start_date=current_start,
+                    end_date=current_end,
+                ),
+                "date_from": current_start,
+                "date_to": current_end,
+                "start_month": normalized_start_month,
+                "end_month": normalized_end_month,
+                "week_number": week_number,
+            }
+        )
+
+        week_number += 1
+        current_start = current_end + timedelta(days=1)
+
+    return periods
+
+
+def _format_week_range_label(
+    *,
+    start_date: date,
+    end_date: date,
+) -> str:
+    if start_date.year == end_date.year and start_date.month == end_date.month:
+        return (
+            f"{start_date.day} al {end_date.day} "
+            f"{_spanish_month_name(start_date.month)} {start_date.year}"
+        )
+
+    return (
+        f"{start_date.day} {_spanish_month_abbrev(start_date.month)} "
+        f"al {end_date.day} {_spanish_month_abbrev(end_date.month)} "
+        f"{end_date.year}"
+    )
+
+
+def _spanish_month_name(month: int) -> str:
+    names = {
+        1: "enero",
+        2: "febrero",
+        3: "marzo",
+        4: "abril",
+        5: "mayo",
+        6: "junio",
+        7: "julio",
+        8: "agosto",
+        9: "septiembre",
+        10: "octubre",
+        11: "noviembre",
+        12: "diciembre",
+    }
+
+    return names.get(month, str(month))
+
+
+def _spanish_month_abbrev(month: int) -> str:
+    names = {
+        1: "ene",
+        2: "feb",
+        3: "mar",
+        4: "abr",
+        5: "may",
+        6: "jun",
+        7: "jul",
+        8: "ago",
+        9: "sep",
+        10: "oct",
+        11: "nov",
+        12: "dic",
+    }
+
+    return names.get(month, str(month))
+
+
+def _is_excluded_weekly_branch_series_row(
+    *,
+    row: KpiDesempenoSnapshotRowORM,
+    sucursal_canon: str | None,
+    branch_catalog: TrackBranchCatalogORM | None,
+) -> bool:
+    raw_branch_name = _normalize_raw_branch_name(row.sucursal)
+    normalized_raw = raw_branch_name.strip().upper()
+    normalized_canon = str(sucursal_canon or "").strip().upper()
+
+    if normalized_raw in {
+        "BECA",
+        "LA VIGA",
+        "LA_VIGA",
+    }:
+        return True
+
+    if normalized_canon in {
+        "LA_VIGA",
+    }:
+        return True
+
+    if branch_catalog is not None and branch_catalog.is_track_active is False:
+        return True
+
+    return False
+
+
+def _build_weekly_branch_series_period_payload(
+    *,
+    period: dict[str, Any],
+    snapshot: KpiDesempenoSnapshotORM | None,
+) -> dict[str, Any]:
+    return {
+        "period_key": period["period_key"],
+        "label": period["label"],
+        "week_number": period["week_number"],
+        "date_from": period["date_from"].isoformat(),
+        "date_to": period["date_to"].isoformat(),
+        "resolved_snapshot": (
+            {
+                "snapshot_id": snapshot.id,
+                "business_date": snapshot.business_date.isoformat(),
+                "captured_at": (
+                    snapshot.captured_at.isoformat()
+                    if snapshot.captured_at
+                    else None
+                ),
+                "row_count_valid": snapshot.row_count_valid,
+                "row_count_rejected": snapshot.row_count_rejected,
+            }
+            if snapshot is not None
+            else None
+        ),
+    }
+
+
+def build_weekly_branch_series_section(
+    *,
+    start_month: Any,
+    end_month: Any,
+) -> dict[str, Any]:
+    periods = _iter_continuous_week_ranges(
+        start_month=start_month,
+        end_month=end_month,
+    )
+
+    warnings: list[dict[str, Any]] = []
+    period_payloads: list[dict[str, Any]] = []
+    data: list[dict[str, Any]] = []
+
+    for period in periods:
+        snapshot = _resolve_last_canonical_snapshot_for_date_range(
+            start_date=period["date_from"],
+            end_date=period["date_to"],
+        )
+
+        period_payloads.append(
+            _build_weekly_branch_series_period_payload(
+                period=period,
+                snapshot=snapshot,
+            )
+        )
+
+        if snapshot is None:
+            warnings.append(
+                {
+                    "code": "no_canonical_snapshot_for_weekly_series_period",
+                    "message": "No existe snapshot canónico KPI Desempeño para el periodo semanal solicitado.",
+                    "period_key": period["period_key"],
+                    "label": period["label"],
+                    "date_from": period["date_from"].isoformat(),
+                    "date_to": period["date_to"].isoformat(),
+                }
+            )
+            continue
+
+        raw_rows = _fetch_snapshot_rows(snapshot_id=snapshot.id)
+        rows = [
+            row
+            for row in raw_rows
+            if not _is_out_of_scope_raw_branch(_normalize_raw_branch_name(row.sucursal))
+        ]
+
+        canon_by_row_id, alias_warnings = _resolve_rows_branch_canon(rows=rows)
+        warnings.extend(alias_warnings)
+
+        sucursales_canon = {
+            sucursal_canon
+            for sucursal_canon in canon_by_row_id.values()
+            if sucursal_canon
+        }
+
+        branch_catalog_by_canon = _fetch_branch_catalog_by_canon(
+            sucursales_canon=sucursales_canon,
+        )
+
+        for row in rows:
+            sucursal_canon = canon_by_row_id.get(row.id)
+            branch_catalog = (
+                branch_catalog_by_canon.get(sucursal_canon)
+                if sucursal_canon
+                else None
+            )
+
+            if _is_excluded_weekly_branch_series_row(
+                row=row,
+                sucursal_canon=sucursal_canon,
+                branch_catalog=branch_catalog,
+            ):
+                continue
+
+            socios_cierre = int(row.socios_activos_del_mes or 0)
+
+            if socios_cierre <= 0:
+                continue
+
+            data.append(
+                {
+                    "period": {
+                        "period_key": period["period_key"],
+                        "label": period["label"],
+                        "week_number": period["week_number"],
+                        "date_from": period["date_from"].isoformat(),
+                        "date_to": period["date_to"].isoformat(),
+                    },
+                    "branch": _build_branch_payload(
+                        row=row,
+                        sucursal_canon=sucursal_canon,
+                        branch_catalog_by_canon=branch_catalog_by_canon,
+                    ),
+                    "metrics": {
+                        "socios_activos_cierre_semana": socios_cierre,
+                        "socios_activos_inicio_mes": int(row.socios_activos_inicio_mes or 0),
+                        "clientes_nuevos_mtd": int(row.clientes_nuevo_real or 0),
+                        "reactivaciones_mtd": int(row.reactivaciones or 0),
+                        "bajas_mtd": int(row.bajas or 0),
+                    },
+                    "source": {
+                        "snapshot_id": snapshot.id,
+                        "business_date": snapshot.business_date.isoformat(),
+                        "report_type_key": snapshot.report_type_key,
+                        "snapshot_kind": snapshot.snapshot_kind,
+                        "is_canonical": snapshot.is_canonical,
+                    },
+                }
+            )
+
+    data = sorted(
+        data,
+        key=lambda item: (
+            item["branch"]["display_order"]
+            if item["branch"]["display_order"] is not None
+            else 999999,
+            item["branch"]["track_label"] or "",
+            item["period"]["week_number"],
+        ),
+    )
+
+    return {
+        "key": "weekly_branch_series",
+        "title": "Crecimiento promedio semanal de socios",
+        "chart_type": "grouped_bar",
+        "status": "ok" if data else "empty",
+        "start_month": str(start_month),
+        "end_month": str(end_month),
+        "rule": {
+            "description": "Último snapshot canónico disponible dentro de cada bloque semanal continuo del rango histórico.",
+            "report_type_key": KPI_DESEMPENO_REPORT_TYPE_KEY,
+            "snapshot_kind": KPI_DESEMPENO_SNAPSHOT_KIND,
+            "canonical_only": True,
+            "metric": "socios_activos_del_mes",
+            "week_definition": "Bloques continuos de 7 días iniciando el día 1 del start_month.",
+        },
+        "periods": period_payloads,
+        "warnings": warnings,
+        "data": data,
+    }

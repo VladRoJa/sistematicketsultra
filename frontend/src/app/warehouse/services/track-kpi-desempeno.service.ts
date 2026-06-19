@@ -144,6 +144,13 @@ export interface KpiDesempenoWeeklySection extends KpiDesempenoBaseSection {
   data: KpiDesempenoWeeklyRow[];
 }
 
+export interface KpiDesempenoWeeklyBranchSeriesSection extends KpiDesempenoBaseSection {
+  key: 'weekly_branch_series';
+  start_month: string;
+  end_month: string;
+  periods: KpiDesempenoWeeklyPeriod[];
+  data: KpiDesempenoWeeklyRow[];
+}
 export interface KpiDesempenoMonthlySection extends KpiDesempenoBaseSection {
   key: 'monthly_closing';
   resolved_snapshot: KpiDesempenoResolvedSnapshot | null;
@@ -162,6 +169,7 @@ export interface KpiDesempenoHistoricalSection extends KpiDesempenoBaseSection {
 }
 
 export type KpiDesempenoSection =
+  | KpiDesempenoWeeklyBranchSeriesSection
   | KpiDesempenoWeeklySection
   | KpiDesempenoMonthlySection
   | KpiDesempenoHistoricalSection;
@@ -206,3 +214,6 @@ export class TrackKpiDesempenoService {
     );
   }
 }
+
+
+

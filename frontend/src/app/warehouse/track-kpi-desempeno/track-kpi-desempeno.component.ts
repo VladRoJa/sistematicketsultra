@@ -11,6 +11,7 @@ import {
   KpiDesempenoMonthlyReportResponse,
   KpiDesempenoWarning,
   KpiDesempenoWeeklyPeriod,
+  KpiDesempenoWeeklyBranchSeriesSection,
   KpiDesempenoWeeklyRow,
   KpiDesempenoWeeklySection,
   TrackKpiDesempenoService,
@@ -124,6 +125,14 @@ export class TrackKpiDesempenoComponent implements OnInit {
     );
   }
 
+  get weeklyBranchSeriesSection(): KpiDesempenoWeeklyBranchSeriesSection | null {
+    return (
+      this.report?.sections.find(
+        (section): section is KpiDesempenoWeeklyBranchSeriesSection =>
+          section.key === 'weekly_branch_series',
+      ) ?? null
+    );
+  }
   get monthlySection(): KpiDesempenoMonthlySection | null {
     return (
       this.report?.sections.find(
@@ -238,6 +247,7 @@ export class TrackKpiDesempenoComponent implements OnInit {
   trackByWeeklyPeriod(
     _index: number,
     period: KpiDesempenoWeeklyPeriod,
+  KpiDesempenoWeeklyBranchSeriesSection,
   ): string {
     return period.period_key;
   }
@@ -278,7 +288,7 @@ export class TrackKpiDesempenoComponent implements OnInit {
   }
 
   private buildWeeklyChart(): KpiWeeklyChartModel | null {
-    const section = this.weeklySection;
+    const section = this.weeklyBranchSeriesSection;
 
     if (!section || !section.data.length) {
       return null;
@@ -292,7 +302,7 @@ export class TrackKpiDesempenoComponent implements OnInit {
       return null;
     }
 
-    const width = Math.max(1280, (branchLabels.length * 78) + 150);
+    const width = Math.max(1800, (branchLabels.length * Math.max(110, periodKeys.length * 10)) + 180);
     const height = 500;
     const plotX = 54;
     const plotY = 26;
@@ -304,12 +314,12 @@ export class TrackKpiDesempenoComponent implements OnInit {
       plotY + plotHeight - ((value / maxValue) * plotHeight);
 
     const branchSlotWidth = plotWidth / branchLabels.length;
-    const groupInnerPadding = 18;
+    const groupInnerPadding = 26;
     const availableGroupWidth = Math.max(
       24,
       branchSlotWidth - groupInnerPadding,
     );
-    const barGap = 2;
+    const barGap = 1;
     const barWidth = Math.max(
       4,
       (availableGroupWidth - (barGap * Math.max(0, periodKeys.length - 1))) /
@@ -425,7 +435,7 @@ export class TrackKpiDesempenoComponent implements OnInit {
     });
   }
   private resolveWeeklyPeriodKeys(
-    section: KpiDesempenoWeeklySection,
+    section: KpiDesempenoWeeklySection | KpiDesempenoWeeklyBranchSeriesSection,
   ): string[] {
     return section.periods
       .filter((period) => period.resolved_snapshot)
@@ -487,7 +497,7 @@ export class TrackKpiDesempenoComponent implements OnInit {
   }
 
   private resolvePeriodLabel(
-    section: KpiDesempenoWeeklySection,
+    section: KpiDesempenoWeeklySection | KpiDesempenoWeeklyBranchSeriesSection,
     periodKey: string,
   ): string {
     return (
@@ -497,7 +507,7 @@ export class TrackKpiDesempenoComponent implements OnInit {
   }
 
   private buildWeeklyChartLegend(
-    section: KpiDesempenoWeeklySection,
+    section: KpiDesempenoWeeklySection | KpiDesempenoWeeklyBranchSeriesSection,
     periodKeys: string[],
   ): KpiWeeklyChartLegendItem[] {
     return periodKeys.map((periodKey, index) => {
@@ -563,6 +573,12 @@ export class TrackKpiDesempenoComponent implements OnInit {
     return 'No se pudo cargar KPI Desempeño.';
   }
 }
+
+
+
+
+
+
 
 
 
