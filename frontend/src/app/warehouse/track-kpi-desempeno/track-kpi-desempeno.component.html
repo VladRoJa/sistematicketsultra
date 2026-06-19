@@ -1,0 +1,258 @@
+<section class="kpi-page">
+  <header class="kpi-hero">
+    <div>
+      <p class="eyebrow">Track / BI</p>
+      <h1>KPI Desempeño</h1>
+      <p class="subtitle">
+        Cierre semanal, cierre mensual e histórico de socios desde Warehouse.
+      </p>
+    </div>
+
+    <div class="hero-badge">
+      <span>Fase 1</span>
+      <strong>Beta interna</strong>
+    </div>
+  </header>
+
+  <section class="filters-card">
+    <div class="filter-field">
+      <label for="targetMonth">Mes de corte</label>
+      <input
+        id="targetMonth"
+        type="month"
+        [(ngModel)]="targetMonth"
+      />
+    </div>
+
+    <div class="filter-field">
+      <label for="startMonth">Inicio histórico</label>
+      <input
+        id="startMonth"
+        type="month"
+        [(ngModel)]="startMonth"
+      />
+    </div>
+
+    <div class="filter-field">
+      <label for="historyGranularity">Granularidad</label>
+      <select
+        id="historyGranularity"
+        [(ngModel)]="historyGranularity"
+      >
+        <option
+          *ngFor="let option of granularityOptions"
+          [ngValue]="option.value"
+        >
+          {{ option.label }}
+        </option>
+      </select>
+    </div>
+
+    <button
+      type="button"
+      class="primary-button"
+      [disabled]="loading"
+      (click)="loadReport()"
+    >
+      {{ loading ? 'Cargando...' : 'Actualizar' }}
+    </button>
+  </section>
+
+  <div
+    *ngIf="errorMessage"
+    class="error-card"
+  >
+    {{ errorMessage }}
+  </div>
+
+  <div
+    *ngIf="loading"
+    class="loading-card"
+  >
+    Cargando KPI Desempeño...
+  </div>
+
+  <ng-container *ngIf="!loading && report">
+    <section class="summary-grid">
+      <article class="summary-card">
+        <span>Cierre mensual</span>
+        <strong>
+          {{ formatNumber(monthlySection?.totals?.['socios_activos_cierre_mes']) }}
+        </strong>
+        <small>
+          Snapshot:
+          {{ monthlySection?.resolved_snapshot?.business_date || 'Sin snapshot' }}
+        </small>
+      </article>
+
+      <article class="summary-card">
+        <span>Crecimiento real</span>
+        <strong
+          [class]="resolveMovementClass(monthlySection?.totals?.['crecimiento_real'])"
+        >
+          {{ formatSignedNumber(monthlySection?.totals?.['crecimiento_real']) }}
+        </strong>
+        <small>
+          Cierre - inicio de mes
+        </small>
+      </article>
+
+      <article class="summary-card">
+        <span>Movimiento reportado</span>
+        <strong
+          [class]="resolveMovementClass(monthlySection?.totals?.['movimiento_reportado'])"
+        >
+          {{ formatSignedNumber(monthlySection?.totals?.['movimiento_reportado']) }}
+        </strong>
+        <small>
+          Nuevos + reactivaciones - bajas
+        </small>
+      </article>
+
+      <article class="summary-card">
+        <span>Ajuste no explicado</span>
+        <strong
+          [class]="resolveMovementClass(monthlySection?.totals?.['ajuste_no_explicado'])"
+        >
+          {{ formatSignedNumber(monthlySection?.totals?.['ajuste_no_explicado']) }}
+        </strong>
+        <small>
+          Diferencia de auditoría
+        </small>
+      </article>
+    </section>
+
+    <section
+      *ngIf="allWarnings.length > 0"
+      class="warnings-card"
+    >
+      <h2>Advertencias de cobertura</h2>
+
+      <ul>
+        <li *ngFor="let warning of allWarnings">
+          <strong>{{ warning.code }}</strong>
+          <span>{{ warning.message }}</span>
+        </li>
+      </ul>
+    </section>
+
+    <section
+      *ngIf="weeklySection"
+      class="content-card"
+    >
+      <div class="section-heading">
+        <div>
+          <h2>{{ weeklySection.title }}</h2>
+          <p>Último snapshot canónico disponible dentro de cada bloque semanal.</p>
+        </div>
+      </div>
+
+      <div class="period-grid">
+        <article
+          *ngFor="let period of weeklyPeriods; trackBy: trackByWeeklyPeriod"
+          class="period-card"
+          [class.missing]="!period.resolved_snapshot"
+        >
+          <span>{{ period.label }}</span>
+          <strong>{{ formatSnapshotLabel(period) }}</strong>
+          <small>
+            {{ formatDate(period.date_from) }} → {{ formatDate(period.date_to) }}
+          </small>
+        </article>
+      </div>
+    </section>
+
+    <section
+      *ngIf="monthlySection"
+      class="content-card"
+    >
+      <div class="section-heading">
+        <div>
+          <h2>{{ monthlySection.title }}</h2>
+          <p>Cierre por sucursal con crecimiento real y ajuste de auditoría.</p>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Sucursal</th>
+              <th>Inicio</th>
+              <th>Cierre</th>
+              <th>Nuevos</th>
+              <th>Reactiv.</th>
+              <th>Bajas</th>
+              <th>Crec. real</th>
+              <th>Ajuste</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            <tr
+              *ngFor="let row of monthlyRows; trackBy: trackByBranchCanon"
+            >
+              <td>{{ row.branch.track_label }}</td>
+              <td>{{ formatNumber(row.metrics.socios_activos_inicio_mes) }}</td>
+              <td>{{ formatNumber(row.metrics.socios_activos_cierre_mes) }}</td>
+              <td>{{ formatNumber(row.metrics.clientes_nuevos) }}</td>
+              <td>{{ formatNumber(row.metrics.reactivaciones) }}</td>
+              <td>{{ formatNumber(row.metrics.bajas) }}</td>
+              <td
+                [class]="resolveMovementClass(row.metrics.crecimiento_real)"
+              >
+                {{ formatSignedNumber(row.metrics.crecimiento_real) }}
+              </td>
+              <td
+                [class]="resolveMovementClass(row.metrics.ajuste_no_explicado)"
+              >
+                {{ formatSignedNumber(row.metrics.ajuste_no_explicado) }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section
+      *ngIf="historicalSection"
+      class="content-card"
+    >
+      <div class="section-heading">
+        <div>
+          <h2>{{ historicalSection.title }}</h2>
+          <p>
+            {{ historicalSection.resolved_periods_count }}
+            de
+            {{ historicalSection.periods_count }}
+            periodos con snapshot resuelto.
+          </p>
+        </div>
+      </div>
+
+      <div class="history-list">
+        <article
+          *ngFor="let row of historicalRows; trackBy: trackByHistoricalPeriod"
+          class="history-row"
+          [class.missing]="!row.resolved_snapshot"
+        >
+          <div>
+            <span>{{ row.label }}</span>
+            <small>
+              {{ formatDate(row.date_from) }} → {{ formatDate(row.date_to) }}
+            </small>
+          </div>
+
+          <strong>
+            {{ formatNumber(row.metrics?.socios_activos_cierre_periodo) }}
+          </strong>
+
+          <small>
+            Snapshot:
+            {{ row.resolved_snapshot?.business_date || 'Sin snapshot' }}
+          </small>
+        </article>
+      </div>
+    </section>
+  </ng-container>
+</section>
