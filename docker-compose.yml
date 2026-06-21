@@ -63,6 +63,7 @@ services:
       - backend-net
     volumes:
       - /home/adminrdp/sistematicketsultra/uploads:/usr/share/nginx/html/uploads:ro
+      - ./certbot/www:/var/www/certbot:ro
 
 
   track-scheduler:
