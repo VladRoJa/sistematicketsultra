@@ -51,12 +51,24 @@ export interface KpiDesempenoSource {
   is_canonical: boolean;
 }
 
+export interface KpiDesempenoBranchCapacity {
+  m2_sin_circulaciones: number;
+  target_1_5: number;
+  target_2_0: number;
+  source?: {
+    track_daily_mart_id?: number | null;
+    track_date?: string | null;
+    target_month?: string | null;
+  } | null;
+}
+
 export interface KpiDesempenoBranch {
   sucursal_raw: string;
   sucursal_canon: string | null;
   track_label: string;
   display_order: number | null;
   is_track_active: boolean | null;
+  capacity?: KpiDesempenoBranchCapacity | null;
 }
 
 export interface KpiDesempenoMonthlyMetrics {
@@ -144,6 +156,13 @@ export interface KpiDesempenoWeeklySection extends KpiDesempenoBaseSection {
   data: KpiDesempenoWeeklyRow[];
 }
 
+export interface KpiDesempenoWeeklyBranchSeriesSection extends KpiDesempenoBaseSection {
+  key: 'weekly_branch_series';
+  start_month: string;
+  end_month: string;
+  periods: KpiDesempenoWeeklyPeriod[];
+  data: KpiDesempenoWeeklyRow[];
+}
 export interface KpiDesempenoMonthlySection extends KpiDesempenoBaseSection {
   key: 'monthly_closing';
   resolved_snapshot: KpiDesempenoResolvedSnapshot | null;
@@ -162,6 +181,7 @@ export interface KpiDesempenoHistoricalSection extends KpiDesempenoBaseSection {
 }
 
 export type KpiDesempenoSection =
+  | KpiDesempenoWeeklyBranchSeriesSection
   | KpiDesempenoWeeklySection
   | KpiDesempenoMonthlySection
   | KpiDesempenoHistoricalSection;
@@ -206,3 +226,6 @@ export class TrackKpiDesempenoService {
     );
   }
 }
+
+
+
