@@ -226,6 +226,7 @@
                 [attr.y]="bar.y"
                 [attr.width]="bar.width"
                 [attr.height]="bar.height"
+                [attr.class]="bar.className"
                 [attr.fill]="bar.color"
                 rx="2"
               >
@@ -234,6 +235,7 @@
                 </title>
               </rect>
             </g>
+
 
             <g class="capacity-target-layer">
               <polygon
@@ -272,16 +274,7 @@
           </svg>
         </div>
 
-        <div class="chart-legend">
-          <span
-            *ngFor="let item of weeklyChart.legend; trackBy: trackByWeeklyLegendItem"
-            class="legend-item"
-          >
-            <i [style.background]="item.color"></i>
-            <span>{{ item.label }}</span>
-            <small>{{ item.snapshotLabel }}</small>
-          </span>
-        </div>
+
         <div
           *ngIf="weeklyChart.capacityLines.length"
           class="capacity-legend"
@@ -293,6 +286,26 @@
           <span>
             <i class="capacity-marker-icon target-2-0"></i>
             Meta por sucursal 2.0 socios/m²
+          </span>
+        </div>
+        <div class="extreme-legend">
+          <span>
+            <i class="highest-in-branch"></i>
+            Punto más alto por sucursal
+          </span>
+          <span>
+            <i class="lowest-in-branch"></i>
+            Punto más bajo por sucursal
+          </span>
+        </div>
+                <div class="chart-legend">
+          <span
+            *ngFor="let item of weeklyChart.legend; trackBy: trackByWeeklyLegendItem"
+            class="legend-item"
+          >
+            <i [style.background]="item.color"></i>
+            <span>{{ item.label }}</span>
+            <small>{{ item.snapshotLabel }}</small>
           </span>
         </div>
       </div>

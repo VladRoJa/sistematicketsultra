@@ -580,3 +580,61 @@ td {
 .capacity-target-layer polygon.capacity-line.target-2-0 {
   fill: #16a34a;
 }
+
+/* Weekly branch max/min solid bar highlights */
+.bar-layer rect.weekly-bar {
+  transition: opacity 0.16s ease, transform 0.16s ease, filter 0.16s ease;
+}
+
+.bar-layer rect.weekly-bar:hover {
+  opacity: 0.85;
+}
+
+.bar-layer rect.weekly-bar.highest-in-branch {
+  fill: #39ff14;
+  stroke: #1f8f14;
+  stroke-width: 2;
+  filter: drop-shadow(0 0 6px rgba(57, 255, 20, 0.45));
+}
+
+.bar-layer rect.weekly-bar.lowest-in-branch {
+  fill: #5b0a0a;
+  stroke: #2f0505;
+  stroke-width: 2;
+  filter: drop-shadow(0 0 5px rgba(91, 10, 10, 0.35));
+}
+
+.extreme-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  align-items: center;
+  padding: 0 2px 6px;
+  color: #475467;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.extreme-legend span {
+  display: inline-flex;
+  gap: 7px;
+  align-items: center;
+}
+
+.extreme-legend i {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+
+.extreme-legend i.highest-in-branch {
+  background: #39ff14;
+  border: 1px solid #1f8f14;
+}
+
+.extreme-legend i.lowest-in-branch {
+  background: #5b0a0a;
+  border: 1px solid #2f0505;
+}
+

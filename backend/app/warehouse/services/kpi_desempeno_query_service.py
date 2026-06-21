@@ -1239,7 +1239,10 @@ def build_weekly_branch_series_section(
             warnings.append(
                 {
                     "code": "no_canonical_snapshot_for_weekly_series_period",
-                    "message": "No existe snapshot canónico KPI Desempeño para el periodo semanal solicitado.",
+                    "message": (
+                        f"No existe snapshot canónico KPI Desempeño para la semana {period['label']} "
+                        f"({period['date_from'].isoformat()} -> {period['date_to'].isoformat()})."
+                    ),
                     "period_key": period["period_key"],
                     "label": period["label"],
                     "date_from": period["date_from"].isoformat(),
@@ -1355,6 +1358,7 @@ def build_weekly_branch_series_section(
         "warnings": warnings,
         "data": data,
     }
+
 
 
 
