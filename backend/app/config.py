@@ -49,6 +49,10 @@ class Config:
         "https://sistematicketsultra-backend.onrender.com",
         "http://184.107.165.75",
         "http://184.107.165.75:80",
+        "http://suiteultragym.com",
+        "http://www.suiteultragym.com",
+        "https://suiteultragym.com",
+        "https://www.suiteultragym.com",
         "http://192.168.100.53:4200",
     ]
 
