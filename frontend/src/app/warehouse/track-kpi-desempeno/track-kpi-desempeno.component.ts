@@ -23,6 +23,7 @@ interface KpiWeeklyChartBar {
   width: number;
   height: number;
   color: string;
+  className: string;
   label: string;
   value: number;
   branchLabel: string;
@@ -63,6 +64,7 @@ interface KpiWeeklyChartCapacityLine {
   label: string;
   className: string;
 }
+
 
 interface KpiWeeklyChartModel {
   width: number;
@@ -429,6 +431,32 @@ export class TrackKpiDesempenoComponent implements OnInit {
         });
       }
 
+      const branchPoints = periodKeys
+        .map((periodKey) => {
+          const row = rowsByBranchAndPeriod.get(`${branchLabel}__${periodKey}`);
+
+          return {
+            periodKey,
+            value: Number(row?.metrics.socios_activos_cierre_semana || 0),
+          };
+        })
+        .filter((point) => point.value > 0);
+
+      const branchMaxPoint = branchPoints.length > 1
+        ? branchPoints.reduce((maxPoint, point) =>
+            point.value > maxPoint.value ? point : maxPoint,
+          )
+        : null;
+      const branchMinPoint = branchPoints.length > 1
+        ? branchPoints.reduce((minPoint, point) =>
+            point.value < minPoint.value ? point : minPoint,
+          )
+        : null;
+      const highlightIsUseful =
+        branchMaxPoint !== null &&
+        branchMinPoint !== null &&
+        branchMaxPoint.value !== branchMinPoint.value;
+
       periodKeys.forEach((periodKey, periodIndex) => {
         const row = rowsByBranchAndPeriod.get(`${branchLabel}__${periodKey}`);
         const value = Number(row?.metrics.socios_activos_cierre_semana || 0);
@@ -436,6 +464,23 @@ export class TrackKpiDesempenoComponent implements OnInit {
         const barHeight = plotY + plotHeight - y;
 
         const barX = groupX + (periodIndex * (barWidth + barGap));
+        const periodLabel = this.resolvePeriodLabel(section, periodKey);
+
+        let className = 'weekly-bar';
+
+        if (
+          highlightIsUseful &&
+          branchMaxPoint &&
+          periodKey === branchMaxPoint.periodKey
+        ) {
+          className += ' highest-in-branch';
+        } else if (
+          highlightIsUseful &&
+          branchMinPoint &&
+          periodKey === branchMinPoint.periodKey
+        ) {
+          className += ' lowest-in-branch';
+        }
 
         bars.push({
           x: barX,
@@ -445,11 +490,13 @@ export class TrackKpiDesempenoComponent implements OnInit {
           color: this.weeklyChartColors[
             periodIndex % this.weeklyChartColors.length
           ],
+          className,
           label: this.formatNumber(value),
           value,
           branchLabel,
-          periodLabel: this.resolvePeriodLabel(section, periodKey),
+          periodLabel,
         });
+
 
       });
 
@@ -551,6 +598,7 @@ export class TrackKpiDesempenoComponent implements OnInit {
 
     return labels;
   }
+
 
   private resolveWeeklyChartMaxValue(
     rows: KpiDesempenoWeeklyRow[],
