@@ -28,3 +28,6 @@ uploads/
 # Local/generated Warehouse automation outputs
 backend/storage/
 
+
+# Let's Encrypt / Certbot runtime files
+certbot/
