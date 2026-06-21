@@ -57,6 +57,7 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
+      - "443:443"
     depends_on:
       - backend
     networks:
@@ -64,6 +65,7 @@ services:
     volumes:
       - /home/adminrdp/sistematicketsultra/uploads:/usr/share/nginx/html/uploads:ro
       - ./certbot/www:/var/www/certbot:ro
+      - ./certbot/conf:/etc/letsencrypt:ro
 
 
   track-scheduler:
