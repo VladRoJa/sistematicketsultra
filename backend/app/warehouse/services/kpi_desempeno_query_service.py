@@ -10,6 +10,7 @@ from app.models.warehouse import (
     KpiDesempenoSnapshotORM,
     KpiDesempenoSnapshotRowORM,
     TrackBranchCatalogORM,
+    TrackDailyMartORM,
 )
 from app.warehouse.services.track_branch_alias_resolver_service import (
     resolve_track_branch_alias,
@@ -131,6 +132,55 @@ def _fetch_branch_catalog_by_canon(
     return {branch.sucursal_canon: branch for branch in branches}
 
 
+
+def _fetch_branch_capacity_targets_by_canon(
+    *,
+    sucursales_canon: set[str],
+    target_month: Any,
+) -> dict[str, dict[str, Any]]:
+    if not sucursales_canon:
+        return {}
+
+    target_year, target_month_number, _ = _ensure_target_month(target_month)
+    normalized_target_month, _ = _month_bounds(
+        year=target_year,
+        month=target_month_number,
+    )
+
+    capacity_by_canon: dict[str, dict[str, Any]] = {}
+
+    for sucursal_canon in sorted(sucursales_canon):
+        mart_row = (
+            TrackDailyMartORM.query.filter(
+                TrackDailyMartORM.sucursal_canon == sucursal_canon,
+                TrackDailyMartORM.target_month <= normalized_target_month,
+                TrackDailyMartORM.m2_sin_circulaciones.isnot(None),
+            )
+            .order_by(
+                TrackDailyMartORM.track_date.desc(),
+                TrackDailyMartORM.id.desc(),
+            )
+            .first()
+        )
+
+        if mart_row is None or mart_row.m2_sin_circulaciones is None:
+            continue
+
+        m2_value = float(mart_row.m2_sin_circulaciones)
+
+        capacity_by_canon[sucursal_canon] = {
+            "m2_sin_circulaciones": m2_value,
+            "target_1_5": round(m2_value * 1.5),
+            "target_2_0": round(m2_value * 2.0),
+            "source": {
+                "track_daily_mart_id": mart_row.id,
+                "track_date": mart_row.track_date.isoformat(),
+                "target_month": mart_row.target_month.isoformat(),
+            },
+        }
+
+    return capacity_by_canon
+
 def _resolve_rows_branch_canon(
     *,
     rows: list[KpiDesempenoSnapshotRowORM],
@@ -170,6 +220,7 @@ def _build_branch_payload(
     row: KpiDesempenoSnapshotRowORM,
     sucursal_canon: str | None,
     branch_catalog_by_canon: dict[str, TrackBranchCatalogORM],
+    capacity_by_canon: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     branch_catalog = (
         branch_catalog_by_canon.get(sucursal_canon)
@@ -181,6 +232,12 @@ def _build_branch_payload(
         branch_catalog.track_label
         if branch_catalog is not None
         else _normalize_raw_branch_name(row.sucursal)
+    )
+
+    capacity = (
+        capacity_by_canon.get(sucursal_canon)
+        if capacity_by_canon is not None and sucursal_canon
+        else None
     )
 
     return {
@@ -197,6 +254,7 @@ def _build_branch_payload(
             if branch_catalog is not None
             else None
         ),
+        "capacity": capacity,
     }
 
 
@@ -1210,6 +1268,11 @@ def build_weekly_branch_series_section(
             sucursales_canon=sucursales_canon,
         )
 
+        capacity_by_canon = _fetch_branch_capacity_targets_by_canon(
+            sucursales_canon=sucursales_canon,
+            target_month=end_month,
+        )
+
         for row in rows:
             sucursal_canon = canon_by_row_id.get(row.id)
             branch_catalog = (
@@ -1243,6 +1306,7 @@ def build_weekly_branch_series_section(
                         row=row,
                         sucursal_canon=sucursal_canon,
                         branch_catalog_by_canon=branch_catalog_by_canon,
+                        capacity_by_canon=capacity_by_canon,
                     ),
                     "metrics": {
                         "socios_activos_cierre_semana": socios_cierre,
@@ -1291,3 +1355,7 @@ def build_weekly_branch_series_section(
         "warnings": warnings,
         "data": data,
     }
+
+
+
+

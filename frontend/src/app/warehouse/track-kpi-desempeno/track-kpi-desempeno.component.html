@@ -159,6 +159,17 @@
             role="img"
             aria-label="Crecimiento promedio semanal de socios"
           >
+            <g class="branch-band-layer">
+              <rect
+                *ngFor="let branch of weeklyChart.branches; trackBy: trackByWeeklyChartBranch"
+                [attr.x]="branch.bandX"
+                [attr.y]="weeklyChart.plotY"
+                [attr.width]="branch.bandWidth"
+                [attr.height]="weeklyChart.plotHeight"
+                [attr.class]="branch.bandClass"
+              ></rect>
+            </g>
+
             <g class="grid-layer">
               <g *ngFor="let tick of weeklyChart.ticks">
                 <line
@@ -198,6 +209,16 @@
               </g>
             </g>
 
+            <g class="branch-separator-layer">
+              <line
+                *ngFor="let branch of weeklyChart.branches; trackBy: trackByWeeklyChartBranch"
+                [attr.x1]="branch.separatorX"
+                [attr.x2]="branch.separatorX"
+                [attr.y1]="weeklyChart.plotY"
+                [attr.y2]="weeklyChart.plotY + weeklyChart.plotHeight + 12"
+              ></line>
+            </g>
+
             <g class="bar-layer">
               <rect
                 *ngFor="let bar of weeklyChart.bars; trackBy: trackByWeeklyChartBar"
@@ -213,6 +234,19 @@
                 </title>
               </rect>
             </g>
+
+            <g class="capacity-target-layer">
+              <polygon
+                *ngFor="let line of weeklyChart.capacityLines; trackBy: trackByCapacityLine"
+                [attr.points]="line.markerPoints"
+                [attr.class]="line.className"
+              >
+                <title>
+                  {{ line.branchLabel }} · {{ line.label }} · {{ formatNumber(line.value) }}
+                </title>
+              </polygon>
+            </g>
+
 
             <g class="axis-layer">
               <line
@@ -246,6 +280,19 @@
             <i [style.background]="item.color"></i>
             <span>{{ item.label }}</span>
             <small>{{ item.snapshotLabel }}</small>
+          </span>
+        </div>
+        <div
+          *ngIf="weeklyChart.capacityLines.length"
+          class="capacity-legend"
+        >
+          <span>
+            <i class="capacity-marker-icon target-1-5"></i>
+            Meta por sucursal 1.5 socios/m²
+          </span>
+          <span>
+            <i class="capacity-marker-icon target-2-0"></i>
+            Meta por sucursal 2.0 socios/m²
           </span>
         </div>
       </div>
@@ -359,6 +406,8 @@
     </section>
   </ng-container>
 </section>
+
+
 
 
 

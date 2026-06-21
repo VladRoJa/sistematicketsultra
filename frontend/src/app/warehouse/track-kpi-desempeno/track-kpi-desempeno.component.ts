@@ -33,7 +33,12 @@ interface KpiWeeklyChartBranch {
   label: string;
   x: number;
   width: number;
+  bandX: number;
+  bandWidth: number;
+  bandClass: string;
+  separatorX: number;
 }
+
 
 interface KpiWeeklyChartLegendItem {
   label: string;
@@ -43,6 +48,17 @@ interface KpiWeeklyChartLegendItem {
 
 interface KpiWeeklyChartReferenceLine {
   y: number;
+  value: number;
+  label: string;
+  className: string;
+}
+
+interface KpiWeeklyChartCapacityLine {
+  branchLabel: string;
+  x1: number;
+  x2: number;
+  y: number;
+  markerPoints: string;
   value: number;
   label: string;
   className: string;
@@ -61,6 +77,7 @@ interface KpiWeeklyChartModel {
   branches: KpiWeeklyChartBranch[];
   legend: KpiWeeklyChartLegendItem[];
   referenceLines: KpiWeeklyChartReferenceLine[];
+  capacityLines: KpiWeeklyChartCapacityLine[];
 }
 
 @Component({
@@ -247,7 +264,6 @@ export class TrackKpiDesempenoComponent implements OnInit {
   trackByWeeklyPeriod(
     _index: number,
     period: KpiDesempenoWeeklyPeriod,
-  KpiDesempenoWeeklyBranchSeriesSection,
   ): string {
     return period.period_key;
   }
@@ -287,6 +303,13 @@ export class TrackKpiDesempenoComponent implements OnInit {
     return item.label;
   }
 
+  trackByCapacityLine(
+    _index: number,
+    item: KpiWeeklyChartCapacityLine,
+  ): string {
+    return `${item.branchLabel}-${item.label}`;
+  }
+
   private buildWeeklyChart(): KpiWeeklyChartModel | null {
     const section = this.weeklyBranchSeriesSection;
 
@@ -302,7 +325,11 @@ export class TrackKpiDesempenoComponent implements OnInit {
       return null;
     }
 
-    const width = Math.max(1800, (branchLabels.length * Math.max(110, periodKeys.length * 10)) + 180);
+    const minBranchSlotWidth = Math.max(132, periodKeys.length * 14);
+    const width = Math.max(
+      2800,
+      (branchLabels.length * minBranchSlotWidth) + 280,
+    );
     const height = 500;
     const plotX = 54;
     const plotY = 26;
@@ -327,18 +354,80 @@ export class TrackKpiDesempenoComponent implements OnInit {
     );
 
     const rowsByBranchAndPeriod = this.indexWeeklyRowsByBranchAndPeriod(rows);
+    const capacityByBranch = this.indexWeeklyCapacityByBranch(rows);
     const bars: KpiWeeklyChartBar[] = [];
     const branches: KpiWeeklyChartBranch[] = [];
+    const capacityLines: KpiWeeklyChartCapacityLine[] = [];
 
     branchLabels.forEach((branchLabel, branchIndex) => {
       const slotX = plotX + (branchIndex * branchSlotWidth);
       const groupX = slotX + ((branchSlotWidth - availableGroupWidth) / 2);
 
+      const branchCapacity = capacityByBranch.get(branchLabel);
+      const latestVisibleValue = this.resolveLatestWeeklyBranchValue(
+        branchLabel,
+        periodKeys,
+        rows,
+      );
+      const branchCapacityStatus = this.resolveWeeklyBranchCapacityStatus(
+        latestVisibleValue,
+        branchCapacity,
+      );
+
       branches.push({
         label: branchLabel,
         x: slotX + (branchSlotWidth / 2),
         width: branchSlotWidth,
+        bandX: slotX,
+        bandWidth: branchSlotWidth,
+        bandClass: branchIndex % 2 === 0 ? 'branch-band even' : 'branch-band odd',
+        separatorX: slotX + branchSlotWidth,
       });
+
+      if (branchCapacity) {
+        [
+          {
+            value: Number(branchCapacity.target_1_5 || 0),
+            label: 'Meta 1.5 socios/m²',
+            className: 'capacity-line target-1-5',
+          },
+          {
+            value: Number(branchCapacity.target_2_0 || 0),
+            label: 'Meta 2.0 socios/m²',
+            className: 'capacity-line target-2-0',
+          },
+        ].forEach((targetLine) => {
+          if (targetLine.value <= 0 || targetLine.value > maxValue) {
+            return;
+          }
+
+          const markerY = scaleY(targetLine.value);
+
+          /**
+           * Ambos marcadores deben ir alineados en la misma vertical.
+           * Solo cambia su Y según la meta (1.5 o 2.0).
+           */
+          const markerOffset = 2;
+          const markerWidth = 13;
+          const markerHalfHeight = 6;
+
+          const markerX = Math.min(
+            plotX + plotWidth - 18,
+            groupX + availableGroupWidth + markerOffset,
+          );
+
+          capacityLines.push({
+            branchLabel,
+            x1: markerX,
+            x2: markerX + markerWidth,
+            y: markerY,
+            markerPoints: `${markerX},${markerY} ${markerX + markerWidth},${markerY - markerHalfHeight} ${markerX + markerWidth},${markerY + markerHalfHeight}`,
+            value: targetLine.value,
+            label: targetLine.label,
+            className: targetLine.className,
+          });
+        });
+      }
 
       periodKeys.forEach((periodKey, periodIndex) => {
         const row = rowsByBranchAndPeriod.get(`${branchLabel}__${periodKey}`);
@@ -346,8 +435,10 @@ export class TrackKpiDesempenoComponent implements OnInit {
         const y = scaleY(value);
         const barHeight = plotY + plotHeight - y;
 
+        const barX = groupX + (periodIndex * (barWidth + barGap));
+
         bars.push({
-          x: groupX + (periodIndex * (barWidth + barGap)),
+          x: barX,
           y,
           width: barWidth,
           height: barHeight,
@@ -359,7 +450,9 @@ export class TrackKpiDesempenoComponent implements OnInit {
           branchLabel,
           periodLabel: this.resolvePeriodLabel(section, periodKey),
         });
+
       });
+
     });
 
     return {
@@ -374,7 +467,8 @@ export class TrackKpiDesempenoComponent implements OnInit {
       bars,
       branches,
       legend: this.buildWeeklyChartLegend(section, periodKeys),
-      referenceLines: this.buildWeeklyReferenceLines(scaleY, maxValue),
+      referenceLines: [],
+      capacityLines,
     };
   }
 
@@ -483,6 +577,119 @@ export class TrackKpiDesempenoComponent implements OnInit {
     ];
   }
 
+  private resolveLatestWeeklyBranchValue(
+    branchLabel: string,
+    periodKeys: string[],
+    rows: KpiDesempenoWeeklyRow[],
+  ): number | null {
+    const periodIndexByKey = new Map<string, number>();
+
+    periodKeys.forEach((periodKey, index) => {
+      periodIndexByKey.set(periodKey, index);
+    });
+
+    const branchRows = rows
+      .filter((row) => {
+        const rowBranchLabel =
+          row.branch?.track_label ||
+          row.branch?.sucursal_canon ||
+          row.branch?.sucursal_raw ||
+          'Sin sucursal';
+
+        return (
+          rowBranchLabel === branchLabel &&
+          periodIndexByKey.has(row.period.period_key)
+        );
+      })
+      .sort((a, b) => {
+        const periodA = periodIndexByKey.get(a.period.period_key) ?? -1;
+        const periodB = periodIndexByKey.get(b.period.period_key) ?? -1;
+
+        return periodB - periodA;
+      });
+
+    for (const row of branchRows) {
+      const value = Number(row.metrics.socios_activos_cierre_semana || 0);
+
+      if (value > 0) {
+        return value;
+      }
+    }
+
+    return null;
+  }
+
+  private resolveWeeklyBranchCapacityStatus(
+    latestVisibleValue: number | null,
+    capacity:
+      | NonNullable<KpiDesempenoWeeklyRow['branch']['capacity']>
+      | undefined,
+  ): { className: string; title: string } {
+    if (
+      latestVisibleValue === null ||
+      !capacity ||
+      !capacity.m2_sin_circulaciones
+    ) {
+      return {
+        className: 'branch-status-dot unknown',
+        title: 'Sin dato de ocupación disponible',
+      };
+    }
+
+    const m2 = Number(capacity.m2_sin_circulaciones || 0);
+
+    if (m2 <= 0) {
+      return {
+        className: 'branch-status-dot unknown',
+        title: 'Sin m² válidos para calcular ocupación',
+      };
+    }
+
+    const occupancyRatio = latestVisibleValue / m2;
+    const formattedRatio = occupancyRatio.toFixed(2);
+
+    if (occupancyRatio >= 2) {
+      return {
+        className: 'branch-status-dot target-2-0',
+        title: `Ocupación ${formattedRatio} socios/m² · supera meta 2.0`,
+      };
+    }
+
+    if (occupancyRatio >= 1.5) {
+      return {
+        className: 'branch-status-dot target-1-5',
+        title: `Ocupación ${formattedRatio} socios/m² · supera meta 1.5`,
+      };
+    }
+
+    return {
+      className: 'branch-status-dot below-target',
+      title: `Ocupación ${formattedRatio} socios/m² · debajo de meta 1.5`,
+    };
+  }
+
+  private indexWeeklyCapacityByBranch(
+    rows: KpiDesempenoWeeklyRow[],
+  ): Map<string, NonNullable<KpiDesempenoWeeklyRow['branch']['capacity']>> {
+    const index = new Map<string, NonNullable<KpiDesempenoWeeklyRow['branch']['capacity']>>();
+
+    rows.forEach((row) => {
+      const branchLabel =
+        row.branch?.track_label ||
+        row.branch?.sucursal_canon ||
+        row.branch?.sucursal_raw ||
+        'Sin sucursal';
+
+      const capacity = row.branch?.capacity;
+
+      if (!index.has(branchLabel) && capacity) {
+        index.set(branchLabel, capacity);
+      }
+    });
+
+    return index;
+  }
+
   private indexWeeklyRowsByBranchAndPeriod(
     rows: KpiDesempenoWeeklyRow[],
   ): Map<string, KpiDesempenoWeeklyRow> {
@@ -573,6 +780,11 @@ export class TrackKpiDesempenoComponent implements OnInit {
     return 'No se pudo cargar KPI Desempeño.';
   }
 }
+
+
+
+
+
 
 
 
