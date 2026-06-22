@@ -11,10 +11,14 @@ export type KpiDesempenoHistoryGranularity =
   | 'bimonthly'
   | 'quarterly';
 
+export type KpiDesempenoDisplayGranularity =
+  | 'weekly'
+  | KpiDesempenoHistoryGranularity;
+
 export interface KpiDesempenoMonthlyReportParams {
   targetMonth: string;
   startMonth?: string;
-  historyGranularity?: KpiDesempenoHistoryGranularity;
+  historyGranularity?: KpiDesempenoDisplayGranularity;
 }
 
 export interface KpiDesempenoMetadata {
@@ -91,6 +95,7 @@ export interface KpiDesempenoMonthlyRow {
 export interface KpiDesempenoWeeklyPeriod {
   period_key: string;
   label: string;
+  granularity?: KpiDesempenoHistoryGranularity;
   date_from: string;
   date_to: string;
   resolved_snapshot: KpiDesempenoResolvedSnapshot | null;
@@ -99,6 +104,7 @@ export interface KpiDesempenoWeeklyPeriod {
 export interface KpiDesempenoWeeklyMetrics {
   socios_activos_inicio_mes: number;
   socios_activos_cierre_semana: number;
+  socios_activos_cierre_periodo?: number;
   clientes_nuevos_mtd: number;
   reactivaciones_mtd: number;
   bajas_mtd: number;
@@ -111,6 +117,7 @@ export interface KpiDesempenoWeeklyRow {
   period: {
     period_key: string;
     label: string;
+    granularity?: KpiDesempenoHistoryGranularity;
     date_from: string;
     date_to: string;
   };
@@ -163,6 +170,14 @@ export interface KpiDesempenoWeeklyBranchSeriesSection extends KpiDesempenoBaseS
   periods: KpiDesempenoWeeklyPeriod[];
   data: KpiDesempenoWeeklyRow[];
 }
+export interface KpiDesempenoHistoricalBranchSeriesSection extends KpiDesempenoBaseSection {
+  key: 'historical_branch_series';
+  start_month: string;
+  end_month: string;
+  granularity: KpiDesempenoHistoryGranularity;
+  periods: KpiDesempenoWeeklyPeriod[];
+  data: KpiDesempenoWeeklyRow[];
+}
 export interface KpiDesempenoMonthlySection extends KpiDesempenoBaseSection {
   key: 'monthly_closing';
   resolved_snapshot: KpiDesempenoResolvedSnapshot | null;
@@ -181,6 +196,7 @@ export interface KpiDesempenoHistoricalSection extends KpiDesempenoBaseSection {
 }
 
 export type KpiDesempenoSection =
+  | KpiDesempenoHistoricalBranchSeriesSection
   | KpiDesempenoWeeklyBranchSeriesSection
   | KpiDesempenoWeeklySection
   | KpiDesempenoMonthlySection
@@ -211,7 +227,7 @@ export class TrackKpiDesempenoService {
       httpParams = httpParams.set('start_month', params.startMonth);
     }
 
-    if (params.historyGranularity) {
+    if (params.historyGranularity && params.historyGranularity !== 'weekly') {
       httpParams = httpParams.set(
         'history_granularity',
         params.historyGranularity,

@@ -3,6 +3,8 @@ import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
 import {
+  KpiDesempenoDisplayGranularity,
+  KpiDesempenoHistoricalBranchSeriesSection,
   KpiDesempenoHistoricalRow,
   KpiDesempenoHistoricalSection,
   KpiDesempenoHistoryGranularity,
@@ -30,6 +32,22 @@ interface KpiWeeklyChartBar {
   periodLabel: string;
 }
 
+interface KpiWeeklyTargetProgress {
+  x: number;
+  y: number;
+  width: number;
+  fillWidth: number;
+  labelX: number;
+  labelY: number;
+  percentLabel: string;
+  tooltip: string;
+  className: string;
+  hitboxX: number;
+  hitboxY: number;
+  hitboxWidth: number;
+  hitboxHeight: number;
+}
+
 interface KpiWeeklyChartBranch {
   label: string;
   x: number;
@@ -38,6 +56,7 @@ interface KpiWeeklyChartBranch {
   bandWidth: number;
   bandClass: string;
   separatorX: number;
+  targetProgress: KpiWeeklyTargetProgress | null;
 }
 
 
@@ -82,6 +101,10 @@ interface KpiWeeklyChartModel {
   capacityLines: KpiWeeklyChartCapacityLine[];
 }
 
+type KpiBranchSeriesSection =
+  | KpiDesempenoHistoricalBranchSeriesSection
+  | KpiDesempenoWeeklyBranchSeriesSection;
+
 @Component({
   selector: 'app-track-kpi-desempeno',
   standalone: true,
@@ -92,18 +115,23 @@ interface KpiWeeklyChartModel {
 export class TrackKpiDesempenoComponent implements OnInit {
   targetMonth = '2026-05';
   startMonth = '2026-03';
-  historyGranularity: KpiDesempenoHistoryGranularity = 'monthly';
+  historyGranularity: KpiDesempenoDisplayGranularity = 'weekly';
 
   loading = false;
   errorMessage = '';
+  showCoverageWarnings = false;
 
   report: KpiDesempenoMonthlyReportResponse | null = null;
   weeklyChart: KpiWeeklyChartModel | null = null;
 
   readonly granularityOptions: Array<{
-    value: KpiDesempenoHistoryGranularity;
+    value: KpiDesempenoDisplayGranularity;
     label: string;
   }> = [
+    {
+      value: 'weekly',
+      label: 'Semanal',
+    },
     {
       value: 'monthly',
       label: 'Mensual',
@@ -152,6 +180,37 @@ export class TrackKpiDesempenoComponent implements OnInit {
       ) ?? null
     );
   }
+
+  get historicalBranchSeriesSection(): KpiDesempenoHistoricalBranchSeriesSection | null {
+    return (
+      this.report?.sections.find(
+        (section): section is KpiDesempenoHistoricalBranchSeriesSection =>
+          section.key === 'historical_branch_series',
+      ) ?? null
+    );
+  }
+
+  get activeBranchSeriesSection(): KpiBranchSeriesSection | null {
+    if (this.historyGranularity === 'weekly') {
+      return this.weeklyBranchSeriesSection;
+    }
+
+    return this.historicalBranchSeriesSection ?? this.weeklyBranchSeriesSection;
+  }
+
+  get activeBranchSeriesTitle(): string {
+    return this.activeBranchSeriesSection?.title || 'Crecimiento promedio de socios';
+  }
+
+  get activeBranchSeriesDescription(): string {
+    const section = this.activeBranchSeriesSection;
+
+    if (section?.key === 'historical_branch_series') {
+      return `Comparativo histórico por sucursal con granularidad ${this.formatGranularityLabel(section.granularity).toLowerCase()}.`;
+    }
+
+    return 'Comparativo histórico por sucursal usando el último snapshot canónico disponible de cada semana.';
+  }
   get monthlySection(): KpiDesempenoMonthlySection | null {
     return (
       this.report?.sections.find(
@@ -176,6 +235,79 @@ export class TrackKpiDesempenoComponent implements OnInit {
     ) ?? [];
   }
 
+  get coverageWarnings(): KpiDesempenoWarning[] {
+    return this.activeBranchSeriesSection?.warnings ?? [];
+  }
+
+  toggleCoverageWarnings(): void {
+    this.showCoverageWarnings = !this.showCoverageWarnings;
+  }
+
+  formatCoverageWarning(warning: KpiDesempenoWarning): string {
+    const dateFrom = String(warning['date_from'] || '');
+    const dateTo = String(warning['date_to'] || '');
+
+    if (dateFrom && dateTo) {
+      return `Falta snapshot del ${this.formatShortSpanishDateRange(dateFrom, dateTo)}.`;
+    }
+
+    return String(warning.message || 'Falta snapshot para el periodo.');
+  }
+
+  private formatShortSpanishDateRange(dateFrom: string, dateTo: string): string {
+    const fromParts = this.parseIsoDateParts(dateFrom);
+    const toParts = this.parseIsoDateParts(dateTo);
+
+    if (!fromParts || !toParts) {
+      return `${dateFrom} a ${dateTo}`;
+    }
+
+    const monthNames = [
+      'enero',
+      'febrero',
+      'marzo',
+      'abril',
+      'mayo',
+      'junio',
+      'julio',
+      'agosto',
+      'septiembre',
+      'octubre',
+      'noviembre',
+      'diciembre',
+    ];
+
+    const fromMonth = monthNames[fromParts.month - 1] || '';
+    const toMonth = monthNames[toParts.month - 1] || '';
+
+    if (
+      fromParts.month === toParts.month &&
+      fromParts.year === toParts.year
+    ) {
+      return `${fromParts.day} al ${toParts.day} de ${fromMonth} ${fromParts.year}`;
+    }
+
+    if (fromParts.year === toParts.year) {
+      return `${fromParts.day} de ${fromMonth} al ${toParts.day} de ${toMonth} ${fromParts.year}`;
+    }
+
+    return `${fromParts.day} de ${fromMonth} ${fromParts.year} al ${toParts.day} de ${toMonth} ${toParts.year}`;
+  }
+
+  private parseIsoDateParts(value: string): { year: number; month: number; day: number } | null {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+
+    if (!match) {
+      return null;
+    }
+
+    return {
+      year: Number(match[1]),
+      month: Number(match[2]),
+      day: Number(match[3]),
+    };
+  }
+
   get monthlyRows(): KpiDesempenoMonthlyRow[] {
     return this.monthlySection?.data ?? [];
   }
@@ -185,7 +317,7 @@ export class TrackKpiDesempenoComponent implements OnInit {
   }
 
   get weeklyPeriods(): KpiDesempenoWeeklyPeriod[] {
-    return this.weeklySection?.periods ?? [];
+    return this.activeBranchSeriesSection?.periods ?? [];
   }
 
   loadReport(): void {
@@ -209,6 +341,14 @@ export class TrackKpiDesempenoComponent implements OnInit {
         this.loading = false;
       },
     });
+  }
+
+  formatGranularityLabel(value: KpiDesempenoDisplayGranularity | string | null | undefined): string {
+    const option = this.granularityOptions.find(
+      (item) => item.value === value,
+    );
+
+    return option?.label || 'Sin granularidad';
   }
 
   formatNumber(value: number | null | undefined): string {
@@ -313,7 +453,7 @@ export class TrackKpiDesempenoComponent implements OnInit {
   }
 
   private buildWeeklyChart(): KpiWeeklyChartModel | null {
-    const section = this.weeklyBranchSeriesSection;
+    const section = this.activeBranchSeriesSection;
 
     if (!section || !section.data.length) {
       return null;
@@ -376,6 +516,80 @@ export class TrackKpiDesempenoComponent implements OnInit {
         branchCapacity,
       );
 
+      const target20 = Number(branchCapacity?.target_2_0 || 0);
+      const target15 = Number(branchCapacity?.target_1_5 || 0);
+      const m2SinCirculaciones = Number(branchCapacity?.m2_sin_circulaciones || 0);
+      const targetProgressWidth = Math.min(
+        94,
+        Math.max(48, branchSlotWidth * 0.42),
+      );
+      const targetProgressX = slotX + ((branchSlotWidth - targetProgressWidth) / 2);
+      const targetProgressY = plotY + plotHeight + 18;
+      const targetProgressPercent =
+        latestVisibleValue !== null && target20 > 0
+          ? (latestVisibleValue / target20) * 100
+          : 0;
+      const targetProgressFillWidth =
+        targetProgressPercent > 0
+          ? Math.max(
+              2,
+              Math.min(
+                targetProgressWidth,
+                (Math.min(targetProgressPercent, 100) / 100) *
+                  targetProgressWidth,
+              ),
+            )
+          : 0;
+      const currentDensity =
+        latestVisibleValue !== null && m2SinCirculaciones > 0
+          ? latestVisibleValue / m2SinCirculaciones
+          : null;
+      const missingForTarget20 =
+        latestVisibleValue !== null
+          ? Math.max(0, target20 - latestVisibleValue)
+          : 0;
+      const targetProgressClass =
+        targetProgressPercent >= 100
+          ? 'branch-target-progress-fill complete'
+          : targetProgressPercent >= 75
+            ? 'branch-target-progress-fill warning'
+            : 'branch-target-progress-fill danger';
+      const targetProgress =
+        latestVisibleValue !== null && target20 > 0
+          ? {
+              x: targetProgressX,
+              y: targetProgressY,
+              width: targetProgressWidth,
+              fillWidth: targetProgressFillWidth,
+              labelX: targetProgressX + (targetProgressWidth / 2),
+              labelY: targetProgressY + 18,
+              percentLabel: `${targetProgressPercent.toFixed(0)}%`,
+              className: targetProgressClass,
+              hitboxX: slotX,
+              hitboxY: plotY + plotHeight + 8,
+              hitboxWidth: branchSlotWidth,
+              hitboxHeight: 64,
+              tooltip: [
+                `Sucursal: ${branchLabel}`,
+                `Socios actuales: ${this.formatNumber(latestVisibleValue)}`,
+                m2SinCirculaciones > 0
+                  ? `m² sin circulaciones: ${this.formatNumber(m2SinCirculaciones)}`
+                  : 'm² sin circulaciones: Sin dato',
+                currentDensity !== null
+                  ? `Ocupación actual: ${currentDensity.toFixed(2)} socios/m²`
+                  : 'Ocupación actual: Sin dato',
+                target15 > 0
+                  ? `Meta 1.5: ${this.formatNumber(target15)} socios`
+                  : 'Meta 1.5: Sin dato',
+                `Meta 2.0: ${this.formatNumber(target20)} socios`,
+                `Avance a meta 2.0: ${targetProgressPercent.toFixed(1)}%`,
+                missingForTarget20 > 0
+                  ? `Faltan: ${this.formatNumber(missingForTarget20)} socios para 2.0`
+                  : 'Meta 2.0 cumplida',
+              ].join('\n'),
+            }
+          : null;
+
       branches.push({
         label: branchLabel,
         x: slotX + (branchSlotWidth / 2),
@@ -384,6 +598,7 @@ export class TrackKpiDesempenoComponent implements OnInit {
         bandWidth: branchSlotWidth,
         bandClass: branchIndex % 2 === 0 ? 'branch-band even' : 'branch-band odd',
         separatorX: slotX + branchSlotWidth,
+        targetProgress,
       });
 
       if (branchCapacity) {
@@ -437,7 +652,7 @@ export class TrackKpiDesempenoComponent implements OnInit {
 
           return {
             periodKey,
-            value: Number(row?.metrics.socios_activos_cierre_semana || 0),
+            value: row ? this.resolveBranchSeriesValue(row) : 0,
           };
         })
         .filter((point) => point.value > 0);
@@ -459,7 +674,7 @@ export class TrackKpiDesempenoComponent implements OnInit {
 
       periodKeys.forEach((periodKey, periodIndex) => {
         const row = rowsByBranchAndPeriod.get(`${branchLabel}__${periodKey}`);
-        const value = Number(row?.metrics.socios_activos_cierre_semana || 0);
+        const value = row ? this.resolveBranchSeriesValue(row) : 0;
         const y = scaleY(value);
         const barHeight = plotY + plotHeight - y;
 
@@ -571,12 +786,12 @@ export class TrackKpiDesempenoComponent implements OnInit {
 
       return (
         sameBranch &&
-        Number(candidate.metrics.socios_activos_cierre_semana || 0) > 0
+        this.resolveBranchSeriesValue(candidate) > 0
       );
     });
   }
   private resolveWeeklyPeriodKeys(
-    section: KpiDesempenoWeeklySection | KpiDesempenoWeeklyBranchSeriesSection,
+    section: KpiDesempenoWeeklySection | KpiDesempenoWeeklyBranchSeriesSection | KpiDesempenoHistoricalBranchSeriesSection,
   ): string[] {
     return section.periods
       .filter((period) => period.resolved_snapshot)
@@ -600,12 +815,20 @@ export class TrackKpiDesempenoComponent implements OnInit {
   }
 
 
+  private resolveBranchSeriesValue(row: KpiDesempenoWeeklyRow): number {
+    return Number(
+      row.metrics.socios_activos_cierre_periodo ??
+      row.metrics.socios_activos_cierre_semana ??
+      0,
+    );
+  }
+
   private resolveWeeklyChartMaxValue(
     rows: KpiDesempenoWeeklyRow[],
   ): number {
     const maxFromRows = Math.max(
       ...rows.map((row) =>
-        Number(row.metrics.socios_activos_cierre_semana || 0),
+        this.resolveBranchSeriesValue(row),
       ),
       0,
     );
@@ -664,7 +887,7 @@ export class TrackKpiDesempenoComponent implements OnInit {
       });
 
     for (const row of branchRows) {
-      const value = Number(row.metrics.socios_activos_cierre_semana || 0);
+      const value = this.resolveBranchSeriesValue(row);
 
       if (value > 0) {
         return value;
@@ -759,7 +982,7 @@ export class TrackKpiDesempenoComponent implements OnInit {
   }
 
   private resolvePeriodLabel(
-    section: KpiDesempenoWeeklySection | KpiDesempenoWeeklyBranchSeriesSection,
+    section: KpiDesempenoWeeklySection | KpiDesempenoWeeklyBranchSeriesSection | KpiDesempenoHistoricalBranchSeriesSection,
     periodKey: string,
   ): string {
     return (
@@ -769,7 +992,7 @@ export class TrackKpiDesempenoComponent implements OnInit {
   }
 
   private buildWeeklyChartLegend(
-    section: KpiDesempenoWeeklySection | KpiDesempenoWeeklyBranchSeriesSection,
+    section: KpiDesempenoWeeklySection | KpiDesempenoWeeklyBranchSeriesSection | KpiDesempenoHistoricalBranchSeriesSection,
     periodKeys: string[],
   ): KpiWeeklyChartLegendItem[] {
     return periodKeys.map((periodKey, index) => {

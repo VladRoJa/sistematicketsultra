@@ -9,6 +9,7 @@ from flask_jwt_extended import get_jwt, jwt_required
 
 from app.warehouse.services.kpi_desempeno_query_service import (
     KpiDesempenoQueryServiceError,
+    build_historical_branch_series_section,
     build_historical_closing_section,
     build_monthly_closing_section,
     build_weekly_closing_section,
@@ -72,6 +73,12 @@ def get_kpi_desempeno_monthly_report_endpoint():
             end_month=target_month,
         )
 
+        historical_branch_series_section = build_historical_branch_series_section(
+            start_month=start_month,
+            end_month=target_month,
+            granularity=history_granularity,
+        )
+
         weekly_closing_section = build_weekly_closing_section(
             target_month=target_month,
         )
@@ -103,6 +110,7 @@ def get_kpi_desempeno_monthly_report_endpoint():
             },
             "sections": [
                 weekly_branch_series_section,
+                historical_branch_series_section,
                 weekly_closing_section,
                 monthly_closing_section,
                 historical_closing_section,
