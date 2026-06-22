@@ -179,9 +179,9 @@
                   [attr.y2]="weeklyChart.plotY + weeklyChart.plotHeight - ((tick / weeklyChart.maxValue) * weeklyChart.plotHeight)"
                 ></line>
                 <text
-                  [attr.x]="weeklyChart.plotX - 10"
+                  [attr.x]="weeklyChart.plotX - 12"
                   [attr.y]="weeklyChart.plotY + weeklyChart.plotHeight - ((tick / weeklyChart.maxValue) * weeklyChart.plotHeight) + 4"
-                  text-anchor="start"
+                  text-anchor="end"
                 >
                   {{ formatNumber(tick) }}
                 </text>

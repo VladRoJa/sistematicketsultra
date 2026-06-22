@@ -332,11 +332,11 @@ export class TrackKpiDesempenoComponent implements OnInit {
       2800,
       (branchLabels.length * minBranchSlotWidth) + 280,
     );
-    const height = 500;
+    const height = 520;
     const plotX = 54;
     const plotY = 26;
     const plotWidth = width - 190;
-    const plotHeight = 250;
+    const plotHeight = 380;
     const maxValue = this.resolveWeeklyChartMaxValue(rows);
     const ticks = this.buildChartTicks(maxValue);
     const scaleY = (value: number): number =>
@@ -614,15 +614,22 @@ export class TrackKpiDesempenoComponent implements OnInit {
   }
 
   private buildChartTicks(maxValue: number): number[] {
-    const step = Math.max(100, Math.ceil((maxValue / 4) / 100) * 100);
+    const desiredTickCount = 8;
+    const step = Math.max(
+      100,
+      Math.ceil((maxValue / desiredTickCount) / 100) * 100,
+    );
+    const ticks: number[] = [];
 
-    return [
-      0,
-      step,
-      step * 2,
-      step * 3,
-      Math.max(maxValue, step * 4),
-    ];
+    for (let tick = 0; tick <= maxValue; tick += step) {
+      ticks.push(tick);
+    }
+
+    if (ticks[ticks.length - 1] !== maxValue) {
+      ticks.push(maxValue);
+    }
+
+    return ticks;
   }
 
   private resolveLatestWeeklyBranchValue(
