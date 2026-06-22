@@ -73,55 +73,6 @@
   </div>
 
   <ng-container *ngIf="!loading && report">
-    <section class="summary-grid">
-      <article class="summary-card">
-        <span>Cierre mensual</span>
-        <strong>
-          {{ formatNumber(monthlySection?.totals?.['socios_activos_cierre_mes']) }}
-        </strong>
-        <small>
-          Snapshot:
-          {{ monthlySection?.resolved_snapshot?.business_date || 'Sin snapshot' }}
-        </small>
-      </article>
-
-      <article class="summary-card">
-        <span>Crecimiento real</span>
-        <strong
-          [class]="resolveMovementClass(monthlySection?.totals?.['crecimiento_real'])"
-        >
-          {{ formatSignedNumber(monthlySection?.totals?.['crecimiento_real']) }}
-        </strong>
-        <small>
-          Cierre - inicio de mes
-        </small>
-      </article>
-
-      <article class="summary-card">
-        <span>Movimiento reportado</span>
-        <strong
-          [class]="resolveMovementClass(monthlySection?.totals?.['movimiento_reportado'])"
-        >
-          {{ formatSignedNumber(monthlySection?.totals?.['movimiento_reportado']) }}
-        </strong>
-        <small>
-          Nuevos + reactivaciones - bajas
-        </small>
-      </article>
-
-      <article class="summary-card">
-        <span>Ajuste no explicado</span>
-        <strong
-          [class]="resolveMovementClass(monthlySection?.totals?.['ajuste_no_explicado'])"
-        >
-          {{ formatSignedNumber(monthlySection?.totals?.['ajuste_no_explicado']) }}
-        </strong>
-        <small>
-          Diferencia de auditoría
-        </small>
-      </article>
-    </section>
-
     <section
       *ngIf="coverageWarnings.length"
       class="warnings-card compact-warnings"
@@ -389,7 +340,7 @@
       <div class="section-heading">
         <div>
           <h2>{{ monthlySection.title }}</h2>
-          <p>Cierre por sucursal con crecimiento real y ajuste de auditoría.</p>
+          <p>Cierre mensual por sucursal con inicio, cierre, nuevos, reactivaciones y bajas.</p>
         </div>
       </div>
 
