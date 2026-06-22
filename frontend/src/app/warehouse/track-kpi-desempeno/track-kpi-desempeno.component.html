@@ -123,17 +123,31 @@
     </section>
 
     <section
-      *ngIf="allWarnings.length > 0"
-      class="warnings-card"
+      *ngIf="coverageWarnings.length"
+      class="warnings-card compact-warnings"
     >
-      <h2>Advertencias de cobertura</h2>
+      <button
+        type="button"
+        class="warnings-toggle"
+        (click)="toggleCoverageWarnings()"
+      >
+        <span>
+          Advertencias de cobertura
+          <strong>{{ coverageWarnings.length }}</strong>
+        </span>
+        <small>
+          {{ showCoverageWarnings ? 'Ocultar detalle' : 'Ver detalle' }}
+        </small>
+      </button>
 
-      <ul>
-        <li *ngFor="let warning of allWarnings">
-          <strong>{{ warning.code }}</strong>
-          <span>{{ warning.message }}</span>
-        </li>
-      </ul>
+      <div
+        *ngIf="showCoverageWarnings"
+        class="warnings-list"
+      >
+        <p *ngFor="let warning of coverageWarnings">
+          {{ formatCoverageWarning(warning) }}
+        </p>
+      </div>
     </section>
     <section
       *ngIf="weeklySection"
@@ -141,8 +155,8 @@
     >
       <div class="section-heading">
         <div>
-          <h2>Crecimiento promedio semanal de socios</h2>
-          <p>Comparativo histórico por sucursal usando el último snapshot canónico disponible de cada semana.</p>
+          <h2>{{ activeBranchSeriesTitle }}</h2>
+          <p>{{ activeBranchSeriesDescription }}</p>
         </div>
       </div>
 
@@ -157,7 +171,7 @@
             [attr.width]="weeklyChart.width"
             [attr.height]="weeklyChart.height"
             role="img"
-            aria-label="Crecimiento promedio semanal de socios"
+            [attr.aria-label]="activeBranchSeriesTitle"
           >
             <g class="branch-band-layer">
               <rect
@@ -249,6 +263,49 @@
               </polygon>
             </g>
 
+
+            <g class="branch-target-progress-layer">
+              <g
+                *ngFor="let branch of weeklyChart.branches; trackBy: trackByWeeklyChartBranch"
+              >
+                <g *ngIf="branch.targetProgress as progress">
+                  <rect
+                    class="branch-target-progress-hitbox"
+                    [attr.x]="progress.hitboxX"
+                    [attr.y]="progress.hitboxY"
+                    [attr.width]="progress.hitboxWidth"
+                    [attr.height]="progress.hitboxHeight"
+                    rx="6"
+                  >
+                    <title>{{ progress.tooltip }}</title>
+                  </rect>
+                  <rect
+                    class="branch-target-progress-track"
+                    [attr.x]="progress.x"
+                    [attr.y]="progress.y"
+                    [attr.width]="progress.width"
+                    height="6"
+                    rx="3"
+                  ></rect>
+                  <rect
+                    [attr.class]="progress.className"
+                    [attr.x]="progress.x"
+                    [attr.y]="progress.y"
+                    [attr.width]="progress.fillWidth"
+                    height="6"
+                    rx="3"
+                  ></rect>
+                  <text
+                    class="branch-target-progress-label"
+                    [attr.x]="progress.labelX"
+                    [attr.y]="progress.labelY"
+                    text-anchor="middle"
+                  >
+                    {{ progress.percentLabel }}
+                  </text>
+                </g>
+              </g>
+            </g>
 
             <g class="axis-layer">
               <line

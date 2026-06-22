@@ -1208,6 +1208,219 @@ def _build_weekly_branch_series_period_payload(
     }
 
 
+
+def _build_historical_branch_series_period_payload(
+    *,
+    period: dict[str, Any],
+    snapshot: KpiDesempenoSnapshotORM | None,
+) -> dict[str, Any]:
+    return {
+        "period_key": period["period_key"],
+        "label": period["label"],
+        "granularity": period["granularity"],
+        "date_from": period["date_from"].isoformat(),
+        "date_to": period["date_to"].isoformat(),
+        "resolved_snapshot": (
+            {
+                "snapshot_id": snapshot.id,
+                "business_date": snapshot.business_date.isoformat(),
+                "captured_at": (
+                    snapshot.captured_at.isoformat()
+                    if snapshot.captured_at
+                    else None
+                ),
+                "row_count_valid": snapshot.row_count_valid,
+                "row_count_rejected": snapshot.row_count_rejected,
+            }
+            if snapshot is not None
+            else None
+        ),
+    }
+
+
+def _historical_branch_series_title(*, granularity: str) -> str:
+    if granularity == "monthly":
+        return "Crecimiento promedio mensual de socios"
+
+    if granularity == "bimonthly":
+        return "Crecimiento promedio bimestral de socios"
+
+    if granularity == "quarterly":
+        return "Crecimiento promedio trimestral de socios"
+
+    return "Crecimiento promedio histórico de socios"
+
+
+def build_historical_branch_series_section(
+    *,
+    start_month: Any,
+    end_month: Any,
+    granularity: Any = "monthly",
+) -> dict[str, Any]:
+    normalized_granularity = _ensure_history_granularity(granularity)
+
+    periods = _iter_history_period_ranges(
+        start_month=start_month,
+        end_month=end_month,
+        granularity=normalized_granularity,
+    )
+
+    warnings: list[dict[str, Any]] = []
+    period_payloads: list[dict[str, Any]] = []
+    data: list[dict[str, Any]] = []
+
+    period_order_by_key = {
+        period["period_key"]: index
+        for index, period in enumerate(periods)
+    }
+
+    for period in periods:
+        snapshot = _resolve_last_canonical_snapshot_for_date_range(
+            start_date=period["date_from"],
+            end_date=period["date_to"],
+        )
+
+        period_payloads.append(
+            _build_historical_branch_series_period_payload(
+                period=period,
+                snapshot=snapshot,
+            )
+        )
+
+        if snapshot is None:
+            warnings.append(
+                {
+                    "code": "no_canonical_snapshot_for_historical_branch_series_period",
+                    "message": (
+                        f"No existe snapshot canónico KPI Desempeño para el periodo "
+                        f"{period['label']} ({period['date_from'].isoformat()} -> "
+                        f"{period['date_to'].isoformat()})."
+                    ),
+                    "period_key": period["period_key"],
+                    "label": period["label"],
+                    "date_from": period["date_from"].isoformat(),
+                    "date_to": period["date_to"].isoformat(),
+                    "granularity": normalized_granularity,
+                }
+            )
+            continue
+
+        raw_rows = _fetch_snapshot_rows(snapshot_id=snapshot.id)
+        rows = [
+            row
+            for row in raw_rows
+            if not _is_out_of_scope_raw_branch(_normalize_raw_branch_name(row.sucursal))
+        ]
+
+        canon_by_row_id, alias_warnings = _resolve_rows_branch_canon(rows=rows)
+        warnings.extend(alias_warnings)
+
+        sucursales_canon = {
+            sucursal_canon
+            for sucursal_canon in canon_by_row_id.values()
+            if sucursal_canon
+        }
+
+        branch_catalog_by_canon = _fetch_branch_catalog_by_canon(
+            sucursales_canon=sucursales_canon,
+        )
+
+        capacity_by_canon = _fetch_branch_capacity_targets_by_canon(
+            sucursales_canon=sucursales_canon,
+            target_month=end_month,
+        )
+
+        for row in rows:
+            sucursal_canon = canon_by_row_id.get(row.id)
+            branch_catalog = (
+                branch_catalog_by_canon.get(sucursal_canon)
+                if sucursal_canon
+                else None
+            )
+
+            if _is_excluded_weekly_branch_series_row(
+                row=row,
+                sucursal_canon=sucursal_canon,
+                branch_catalog=branch_catalog,
+            ):
+                continue
+
+            socios_cierre = int(row.socios_activos_del_mes or 0)
+
+            if socios_cierre <= 0:
+                continue
+
+            data.append(
+                {
+                    "period": {
+                        "period_key": period["period_key"],
+                        "label": period["label"],
+                        "granularity": normalized_granularity,
+                        "date_from": period["date_from"].isoformat(),
+                        "date_to": period["date_to"].isoformat(),
+                    },
+                    "branch": _build_branch_payload(
+                        row=row,
+                        sucursal_canon=sucursal_canon,
+                        branch_catalog_by_canon=branch_catalog_by_canon,
+                        capacity_by_canon=capacity_by_canon,
+                    ),
+                    "metrics": {
+                        "socios_activos_cierre_periodo": socios_cierre,
+                        "socios_activos_inicio_mes": int(row.socios_activos_inicio_mes or 0),
+                        "clientes_nuevos_mtd": int(row.clientes_nuevo_real or 0),
+                        "reactivaciones_mtd": int(row.reactivaciones or 0),
+                        "bajas_mtd": int(row.bajas or 0),
+                    },
+                    "source": {
+                        "snapshot_id": snapshot.id,
+                        "business_date": snapshot.business_date.isoformat(),
+                        "report_type_key": snapshot.report_type_key,
+                        "snapshot_kind": snapshot.snapshot_kind,
+                        "is_canonical": snapshot.is_canonical,
+                    },
+                }
+            )
+
+    data = sorted(
+        data,
+        key=lambda item: (
+            item["branch"]["display_order"]
+            if item["branch"]["display_order"] is not None
+            else 999999,
+            item["branch"]["track_label"] or "",
+            period_order_by_key.get(item["period"]["period_key"], 999999),
+        ),
+    )
+
+    return {
+        "key": "historical_branch_series",
+        "title": _historical_branch_series_title(
+            granularity=normalized_granularity,
+        ),
+        "chart_type": "grouped_bar",
+        "status": "ok" if data else "empty",
+        "start_month": str(start_month),
+        "end_month": str(end_month),
+        "granularity": normalized_granularity,
+        "rule": {
+            "description": "Último snapshot canónico disponible dentro de cada periodo histórico por sucursal.",
+            "report_type_key": KPI_DESEMPENO_REPORT_TYPE_KEY,
+            "snapshot_kind": KPI_DESEMPENO_SNAPSHOT_KIND,
+            "canonical_only": True,
+            "metric": "socios_activos_del_mes",
+            "available_granularities": [
+                "monthly",
+                "bimonthly",
+                "quarterly",
+            ],
+        },
+        "periods": period_payloads,
+        "warnings": warnings,
+        "data": data,
+    }
+
+
 def build_weekly_branch_series_section(
     *,
     start_month: Any,
