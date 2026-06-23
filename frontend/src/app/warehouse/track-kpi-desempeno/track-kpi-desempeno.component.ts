@@ -589,7 +589,7 @@ export class TrackKpiDesempenoComponent implements OnInit {
     this.selectedYearOverlayCompareYear = section.end_year;
 
     if (!this.selectedYearOverlayBaseYear || !section.years.includes(this.selectedYearOverlayBaseYear)) {
-      this.selectedYearOverlayBaseYear = section.years[0];
+      this.selectedYearOverlayBaseYear = section.end_year;
     }
   }
 
