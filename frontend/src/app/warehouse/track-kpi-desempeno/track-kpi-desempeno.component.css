@@ -698,3 +698,158 @@ td {
   pointer-events: all;
   cursor: help;
 }
+
+.year-overlay-card {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.year-overlay-heading {
+  align-items: flex-start;
+}
+
+.year-overlay-coverage {
+  min-width: 150px;
+  padding: 12px 14px;
+  border: 1px solid rgba(23, 32, 51, 0.08);
+  border-radius: 14px;
+  background: #f8fafc;
+  text-align: right;
+}
+
+.year-overlay-coverage span,
+.year-overlay-coverage small {
+  display: block;
+  color: #667085;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.year-overlay-coverage strong {
+  display: block;
+  color: #172033;
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+.year-overlay-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.year-overlay-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #eef2f7;
+  color: #667085;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.year-overlay-legend span::before {
+  width: 18px;
+  height: 3px;
+  border-radius: 999px;
+  background: #98a2b3;
+  content: '';
+}
+
+.year-overlay-legend span.current {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.year-overlay-legend span.current::before {
+  background: #f97316;
+}
+
+.year-overlay-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.year-overlay-mini-card {
+  overflow: hidden;
+  border: 1px solid rgba(23, 32, 51, 0.08);
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+}
+
+.year-overlay-mini-card header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px 0;
+}
+
+.year-overlay-mini-card header strong {
+  color: #172033;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.year-overlay-mini-card header span {
+  color: #667085;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.year-overlay-chart {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.year-overlay-gridlines line {
+  stroke: rgba(15, 23, 42, 0.08);
+  stroke-width: 1;
+}
+
+.year-overlay-axis-labels text {
+  fill: #98a2b3;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.year-overlay-line {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.year-overlay-line.shadow {
+  stroke: #98a2b3;
+  stroke-width: 2;
+  opacity: 0.38;
+}
+
+.year-overlay-line.current {
+  stroke: #f97316;
+  stroke-width: 3.2;
+  opacity: 1;
+}
+
+.year-overlay-line.point {
+  fill: #ffffff;
+}
+
+.year-overlay-line.shadow.point {
+  stroke: #98a2b3;
+  stroke-width: 1.6;
+  opacity: 0.7;
+}
+
+.year-overlay-line.current.point {
+  stroke: #f97316;
+  stroke-width: 2.4;
+  opacity: 1;
+}

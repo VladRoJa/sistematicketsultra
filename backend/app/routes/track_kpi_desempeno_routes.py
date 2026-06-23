@@ -12,6 +12,7 @@ from app.warehouse.services.kpi_desempeno_query_service import (
     build_historical_branch_series_section,
     build_historical_closing_section,
     build_monthly_closing_section,
+    build_monthly_branch_year_overlay_section,
     build_weekly_closing_section,
     build_weekly_branch_series_section,
 )
@@ -79,6 +80,11 @@ def get_kpi_desempeno_monthly_report_endpoint():
             granularity=history_granularity,
         )
 
+        monthly_branch_year_overlay_section = build_monthly_branch_year_overlay_section(
+            start_year=2023,
+            end_month=target_month,
+        )
+
         weekly_closing_section = build_weekly_closing_section(
             target_month=target_month,
         )
@@ -111,6 +117,7 @@ def get_kpi_desempeno_monthly_report_endpoint():
             "sections": [
                 weekly_branch_series_section,
                 historical_branch_series_section,
+                monthly_branch_year_overlay_section,
                 weekly_closing_section,
                 monthly_closing_section,
                 historical_closing_section,

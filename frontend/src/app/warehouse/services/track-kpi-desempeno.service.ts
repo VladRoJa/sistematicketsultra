@@ -178,6 +178,42 @@ export interface KpiDesempenoHistoricalBranchSeriesSection extends KpiDesempenoB
   periods: KpiDesempenoWeeklyPeriod[];
   data: KpiDesempenoWeeklyRow[];
 }
+export interface KpiDesempenoYearOverlayMonth {
+  month: number;
+  label: string;
+  socios_activos_cierre_mes: number | null;
+  source: KpiDesempenoSource | null;
+}
+
+export interface KpiDesempenoYearOverlaySeries {
+  year: number;
+  months: KpiDesempenoYearOverlayMonth[];
+}
+
+export interface KpiDesempenoYearOverlayCoverage {
+  expected_snapshots_count: number;
+  resolved_snapshots_count: number;
+}
+
+export interface KpiDesempenoMonthlyBranchYearOverlayRow {
+  branch: KpiDesempenoBranch;
+  series: KpiDesempenoYearOverlaySeries[];
+}
+
+export interface KpiDesempenoMonthlyBranchYearOverlaySection extends KpiDesempenoBaseSection {
+  key: 'monthly_branch_year_overlay';
+  start_year: number;
+  end_year: number;
+  end_month: string;
+  years: number[];
+  months: Array<{
+    month: number;
+    label: string;
+  }>;
+  coverage: KpiDesempenoYearOverlayCoverage;
+  data: KpiDesempenoMonthlyBranchYearOverlayRow[];
+}
+
 export interface KpiDesempenoMonthlySection extends KpiDesempenoBaseSection {
   key: 'monthly_closing';
   resolved_snapshot: KpiDesempenoResolvedSnapshot | null;
@@ -196,6 +232,7 @@ export interface KpiDesempenoHistoricalSection extends KpiDesempenoBaseSection {
 }
 
 export type KpiDesempenoSection =
+  | KpiDesempenoMonthlyBranchYearOverlaySection
   | KpiDesempenoHistoricalBranchSeriesSection
   | KpiDesempenoWeeklyBranchSeriesSection
   | KpiDesempenoWeeklySection
