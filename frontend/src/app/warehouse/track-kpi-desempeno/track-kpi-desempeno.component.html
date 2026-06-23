@@ -366,10 +366,96 @@
         </span>
       </div>
 
+      <article
+        *ngIf="selectedYearOverlayChart as selectedChart"
+        class="year-overlay-detail-card"
+      >
+        <header>
+          <div>
+            <span>Sucursal seleccionada</span>
+            <strong>{{ selectedChart.branchLabel }}</strong>
+          </div>
+
+          <button
+            type="button"
+            class="year-overlay-clear-button"
+            (click)="selectYearOverlayChart(selectedChart)"
+          >
+            Cerrar detalle
+          </button>
+        </header>
+
+        <svg
+          class="year-overlay-detail-chart"
+          [attr.viewBox]="'0 0 ' + selectedChart.width + ' ' + selectedChart.height"
+          [attr.width]="selectedChart.width"
+          [attr.height]="selectedChart.height"
+          role="img"
+          [attr.aria-label]="'Detalle comparativo mensual histórico de ' + selectedChart.branchLabel"
+        >
+          <g class="year-overlay-gridlines">
+            <line
+              *ngFor="let tick of selectedChart.ticks"
+              [attr.x1]="selectedChart.plotX"
+              [attr.x2]="selectedChart.plotX + selectedChart.plotWidth"
+              [attr.y1]="tick.y"
+              [attr.y2]="tick.y"
+            ></line>
+          </g>
+
+          <g class="year-overlay-axis-labels">
+            <text
+              *ngFor="let tick of selectedChart.ticks"
+              [attr.x]="selectedChart.plotX - 8"
+              [attr.y]="tick.y + 4"
+              text-anchor="end"
+            >
+              {{ tick.label }}
+            </text>
+
+            <text
+              *ngFor="let month of selectedChart.monthLabels"
+              [attr.x]="month.x"
+              [attr.y]="selectedChart.plotY + selectedChart.plotHeight + 24"
+              text-anchor="middle"
+            >
+              {{ month.label }}
+            </text>
+          </g>
+
+          <g class="year-overlay-lines">
+            <polyline
+              *ngFor="let serie of selectedChart.series"
+              [attr.class]="serie.className"
+              [attr.points]="serie.polylinePoints"
+            ></polyline>
+          </g>
+
+          <g class="year-overlay-points">
+            <g *ngFor="let serie of selectedChart.series">
+              <circle
+                *ngFor="let point of serie.points"
+                [attr.class]="serie.className + ' point'"
+                [attr.cx]="point.x"
+                [attr.cy]="point.y"
+                r="3.6"
+              >
+                <title>{{ point.tooltip }}</title>
+              </circle>
+            </g>
+          </g>
+        </svg>
+      </article>
+
       <div class="year-overlay-grid">
         <article
           *ngFor="let chart of yearOverlayCharts"
           class="year-overlay-mini-card"
+          [class.selected]="isYearOverlayChartSelected(chart)"
+          role="button"
+          tabindex="0"
+          (click)="selectYearOverlayChart(chart)"
+          (keydown.enter)="selectYearOverlayChart(chart)"
         >
           <header>
             <strong>{{ chart.branchLabel }}</strong>
