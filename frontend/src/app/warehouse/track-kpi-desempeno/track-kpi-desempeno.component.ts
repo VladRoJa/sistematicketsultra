@@ -168,6 +168,7 @@ export class TrackKpiDesempenoComponent implements OnInit {
   report: KpiDesempenoMonthlyReportResponse | null = null;
   weeklyChart: KpiWeeklyChartModel | null = null;
   yearOverlayCharts: KpiYearOverlayChartModel[] = [];
+  selectedYearOverlayBranchLabel: string | null = null;
 
   readonly granularityOptions: Array<{
     value: KpiDesempenoDisplayGranularity;
@@ -387,6 +388,15 @@ export class TrackKpiDesempenoComponent implements OnInit {
         this.report = response;
         this.weeklyChart = this.buildWeeklyChart();
         this.yearOverlayCharts = this.buildYearOverlayCharts();
+
+        if (
+          this.selectedYearOverlayBranchLabel &&
+          !this.yearOverlayCharts.some(
+            (chart) => chart.branchLabel === this.selectedYearOverlayBranchLabel,
+          )
+        ) {
+          this.selectedYearOverlayBranchLabel = null;
+        }
         this.loading = false;
       },
       error: (error) => {
@@ -505,6 +515,29 @@ export class TrackKpiDesempenoComponent implements OnInit {
     item: KpiWeeklyChartCapacityLine,
   ): string {
     return `${item.branchLabel}-${item.label}`;
+  }
+
+  get selectedYearOverlayChart(): KpiYearOverlayChartModel | null {
+    if (!this.selectedYearOverlayBranchLabel) {
+      return null;
+    }
+
+    return (
+      this.yearOverlayCharts.find(
+        (chart) => chart.branchLabel === this.selectedYearOverlayBranchLabel,
+      ) ?? null
+    );
+  }
+
+  selectYearOverlayChart(chart: KpiYearOverlayChartModel): void {
+    this.selectedYearOverlayBranchLabel =
+      this.selectedYearOverlayBranchLabel === chart.branchLabel
+        ? null
+        : chart.branchLabel;
+  }
+
+  isYearOverlayChartSelected(chart: KpiYearOverlayChartModel): boolean {
+    return this.selectedYearOverlayBranchLabel === chart.branchLabel;
   }
 
   private buildYearOverlayCharts(): KpiYearOverlayChartModel[] {
