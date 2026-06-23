@@ -102,12 +102,31 @@ def parse_corte_caja_xlsx(
             skipped_rows += 1
             continue
 
+        folio_raw = row.get("Folio")
+        importe_raw = row.get("Importe")
+
+        if _is_blank_value(folio_raw):
+            importe = _coerce_decimal_money(
+                importe_raw,
+                column_name="Importe",
+                row_index=source_row_index,
+            )
+
+            if importe == Decimal("0"):
+                skipped_rows += 1
+                continue
+
+            raise CorteCajaContentError(
+                f"Valor vacío en columna 'Folio' con importe distinto de 0 "
+                f"para row_index={source_row_index}."
+            )
+
         parsed_rows.append(
             CorteCajaParsedRow(
                 row_index=int(source_row_index),
                 clave=_normalize_text(row.get("Clave")),
                 folio=_normalize_required_text(
-                    row.get("Folio"),
+                    folio_raw,
                     column_name="Folio",
                     row_index=source_row_index,
                 ),
@@ -223,6 +242,18 @@ def _normalize_header_token(value: Any) -> str:
 def _normalize_header_name(value: Any) -> str:
     return _normalize_text(value)
 
+
+def _is_blank_value(value: Any) -> bool:
+    if value is None:
+        return True
+
+    try:
+        if pd.isna(value):
+            return True
+    except TypeError:
+        pass
+
+    return str(value).strip() == ""
 
 def _normalize_text(value: Any) -> str:
     if value is None:
