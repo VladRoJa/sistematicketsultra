@@ -358,12 +358,16 @@
       </div>
 
       <div class="year-overlay-legend">
-        <span
+        <button
           *ngFor="let year of monthlyBranchYearOverlaySection?.years"
-          [class.current]="year === monthlyBranchYearOverlaySection?.end_year"
+          type="button"
+          [class.current]="isYearOverlayYearSelected(year)"
+          [style.--year-color]="getYearOverlayColor(year)"
+          [attr.aria-pressed]="isYearOverlayYearSelected(year)"
+          (click)="selectYearOverlayYear(year)"
         >
           {{ year }}
-        </span>
+        </button>
       </div>
 
       <article
@@ -384,6 +388,71 @@
             Cerrar detalle
           </button>
         </header>
+
+        <div class="year-overlay-comparison-panel">
+          <div class="year-overlay-comparison-controls">
+            <div>
+              <span>Base</span>
+              <div class="year-overlay-comparison-years">
+                <button
+                  *ngFor="let year of monthlyBranchYearOverlaySection?.years"
+                  type="button"
+                  [class.current]="isYearOverlayBaseYearSelected(year)"
+                  [style.--year-color]="getYearOverlayColor(year)"
+                  (click)="selectYearOverlayBaseYear(year); $event.stopPropagation()"
+                >
+                  {{ year }}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <span>Comparar</span>
+              <div class="year-overlay-comparison-years">
+                <button
+                  *ngFor="let year of monthlyBranchYearOverlaySection?.years"
+                  type="button"
+                  [class.current]="isYearOverlayCompareYearSelected(year)"
+                  [style.--year-color]="getYearOverlayColor(year)"
+                  (click)="selectYearOverlayCompareYear(year); $event.stopPropagation()"
+                >
+                  {{ year }}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div
+            *ngIf="selectedYearOverlayComparison as comparison; else noYearOverlayComparison"
+            class="year-overlay-comparison-summary"
+          >
+            <span>Último dato disponible</span>
+            <strong
+              [class.positive]="comparison.diffValue > 0"
+              [class.negative]="comparison.diffValue < 0"
+            >
+              {{ comparison.percentLabel }}
+            </strong>
+            <small>
+              {{ comparison.diffLabel }} socios ·
+              {{ comparison.baseYear }} {{ comparison.baseMonthLabel }}:
+              {{ comparison.baseValueLabel }}
+              vs
+              {{ comparison.compareYear }} {{ comparison.compareMonthLabel }}:
+              {{ comparison.compareValueLabel }}
+            </small>
+          </div>
+
+          <ng-template #noYearOverlayComparison>
+            <div class="year-overlay-comparison-summary muted">
+              <span>Sin comparación</span>
+              <strong>N/A</strong>
+              <small>
+                El año base o comparado no tiene dato disponible para esta sucursal.
+              </small>
+            </div>
+          </ng-template>
+        </div>
 
         <svg
           class="year-overlay-detail-chart"
@@ -424,11 +493,20 @@
           </g>
 
           <g class="year-overlay-lines">
-            <polyline
-              *ngFor="let serie of selectedChart.series"
-              [attr.class]="serie.className"
-              [attr.points]="serie.polylinePoints"
-            ></polyline>
+            <g *ngFor="let serie of selectedChart.series">
+              <polyline
+                class="year-overlay-hitline"
+                [attr.points]="serie.polylinePoints"
+                (click)="selectYearOverlayYear(serie.year); $event.stopPropagation()"
+              ></polyline>
+
+              <polyline
+                [attr.class]="serie.className"
+                [attr.points]="serie.polylinePoints"
+                [style.stroke]="serie.color"
+                (click)="selectYearOverlayYear(serie.year); $event.stopPropagation()"
+              ></polyline>
+            </g>
           </g>
 
           <g class="year-overlay-points">
@@ -438,7 +516,9 @@
                 [attr.class]="serie.className + ' point'"
                 [attr.cx]="point.x"
                 [attr.cy]="point.y"
+                [style.stroke]="serie.color"
                 r="3.6"
+                (click)="selectYearOverlayYear(serie.year); $event.stopPropagation()"
               >
                 <title>{{ point.tooltip }}</title>
               </circle>
@@ -505,11 +585,20 @@
             </g>
 
             <g class="year-overlay-lines">
-              <polyline
-                *ngFor="let serie of chart.series"
-                [attr.class]="serie.className"
-                [attr.points]="serie.polylinePoints"
-              ></polyline>
+              <g *ngFor="let serie of chart.series">
+                <polyline
+                  class="year-overlay-hitline"
+                  [attr.points]="serie.polylinePoints"
+                  (click)="selectYearOverlayYear(serie.year); $event.stopPropagation()"
+                ></polyline>
+
+                <polyline
+                  [attr.class]="serie.className"
+                  [attr.points]="serie.polylinePoints"
+                  [style.stroke]="serie.color"
+                  (click)="selectYearOverlayYear(serie.year); $event.stopPropagation()"
+                ></polyline>
+              </g>
             </g>
 
             <g class="year-overlay-points">
@@ -519,7 +608,9 @@
                   [attr.class]="serie.className + ' point'"
                   [attr.cx]="point.x"
                   [attr.cy]="point.y"
+                  [style.stroke]="serie.color"
                   r="3"
+                  (click)="selectYearOverlayYear(serie.year); $event.stopPropagation()"
                 >
                   <title>{{ point.tooltip }}</title>
                 </circle>

@@ -954,3 +954,356 @@ td {
 .year-overlay-mini-card.selected header strong {
   color: #c2410c;
 }
+
+.year-overlay-legend button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 999px;
+  background: #eef2f7;
+  color: #667085;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 900;
+  padding: 6px 10px;
+}
+
+.year-overlay-legend button::before {
+  width: 18px;
+  height: 3px;
+  border-radius: 999px;
+  background: #98a2b3;
+  content: '';
+}
+
+.year-overlay-legend button:hover {
+  background: #e2e8f0;
+}
+
+.year-overlay-legend button.current {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.year-overlay-legend button.current::before {
+  background: #f97316;
+}
+
+.year-overlay-legend button:focus-visible {
+  outline: 3px solid rgba(249, 115, 22, 0.28);
+  outline-offset: 2px;
+}
+
+.year-overlay-legend button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 999px;
+  background: #eef2f7;
+  color: #475467;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 900;
+  padding: 6px 10px;
+}
+
+.year-overlay-legend button::before {
+  width: 18px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--year-color);
+  content: '';
+}
+
+.year-overlay-legend button:hover {
+  background: #e2e8f0;
+}
+
+.year-overlay-legend button.current {
+  background: color-mix(in srgb, var(--year-color) 12%, white);
+  color: #172033;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--year-color) 18%, transparent);
+}
+
+.year-overlay-legend button:focus-visible {
+  outline: 3px solid rgba(249, 115, 22, 0.28);
+  outline-offset: 2px;
+}
+
+.year-overlay-hitline {
+  fill: none;
+  stroke: transparent;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 16;
+  cursor: pointer;
+}
+
+.year-overlay-line {
+  cursor: pointer;
+}
+
+.year-overlay-line.shadow {
+  stroke-width: 2.2;
+  opacity: 0.28;
+}
+
+.year-overlay-line.current {
+  stroke-width: 3.8;
+  opacity: 1;
+  filter: drop-shadow(0 4px 7px rgba(15, 23, 42, 0.16));
+}
+
+.year-overlay-line.point {
+  cursor: pointer;
+  fill: #ffffff;
+}
+
+.year-overlay-line.shadow.point {
+  stroke-width: 1.8;
+  opacity: 0.42;
+}
+
+.year-overlay-line.current.point {
+  stroke-width: 2.8;
+  opacity: 1;
+}
+
+.year-overlay-hitline {
+  pointer-events: stroke;
+}
+
+.year-overlay-line {
+  pointer-events: stroke;
+}
+
+.year-overlay-line.point {
+  pointer-events: all;
+}
+
+/* KPI Desempeño year overlay legend color override */
+.year-overlay-legend button::before {
+  background: var(--year-color) !important;
+}
+
+.year-overlay-legend button.current {
+  background: color-mix(in srgb, var(--year-color) 12%, white) !important;
+  color: #172033;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--year-color) 20%, transparent);
+}
+
+.year-overlay-legend button.current::before {
+  background: var(--year-color) !important;
+}
+
+.year-overlay-legend button:focus-visible {
+  outline-color: color-mix(in srgb, var(--year-color) 35%, transparent);
+}
+
+/* KPI Desempeño year overlay legend line restore */
+.year-overlay-legend button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.year-overlay-legend button::before {
+  display: inline-block !important;
+  flex: 0 0 20px;
+  width: 20px !important;
+  height: 4px !important;
+  border-radius: 999px;
+  background-color: var(--year-color) !important;
+  content: '' !important;
+}
+
+.year-overlay-legend button.current::before {
+  background-color: var(--year-color) !important;
+}
+
+.year-overlay-comparison-panel {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 18px;
+  margin: 8px 18px 0;
+  padding: 12px 14px;
+  border: 1px solid #fed7aa;
+  border-radius: 18px;
+  background: rgba(255, 247, 237, 0.72);
+}
+
+.year-overlay-comparison-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.year-overlay-comparison-controls > div {
+  display: grid;
+  gap: 7px;
+}
+
+.year-overlay-comparison-controls span,
+.year-overlay-comparison-summary span {
+  color: #c2410c;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.year-overlay-comparison-years {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.year-overlay-comparison-years button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #334155;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 900;
+  padding: 6px 10px;
+}
+
+.year-overlay-comparison-years button::before {
+  display: inline-block;
+  flex: 0 0 18px;
+  width: 18px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--year-color);
+  content: '';
+}
+
+.year-overlay-comparison-years button.current {
+  background: color-mix(in srgb, var(--year-color) 14%, white);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--year-color) 22%, transparent);
+}
+
+.year-overlay-comparison-summary {
+  display: grid;
+  min-width: 280px;
+  align-content: center;
+  justify-items: end;
+  gap: 4px;
+  text-align: right;
+}
+
+.year-overlay-comparison-summary strong {
+  color: #475467;
+  font-size: 28px;
+  font-weight: 1000;
+  line-height: 1;
+}
+
+.year-overlay-comparison-summary strong.positive {
+  color: #16a34a;
+}
+
+.year-overlay-comparison-summary strong.negative {
+  color: #dc2626;
+}
+
+.year-overlay-comparison-summary small {
+  color: #475467;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+@media (max-width: 900px) {
+  .year-overlay-comparison-panel {
+    flex-direction: column;
+  }
+
+  .year-overlay-comparison-summary {
+    justify-items: start;
+    text-align: left;
+  }
+}
+
+/* KPI Desempeño year comparison layout fix */
+.year-overlay-comparison-panel {
+  display: grid;
+  grid-template-columns: minmax(520px, 1fr) minmax(280px, 420px);
+  align-items: center;
+  gap: 18px;
+}
+
+.year-overlay-comparison-controls {
+  min-width: 0;
+}
+
+.year-overlay-comparison-summary {
+  min-width: 0;
+}
+
+.year-overlay-comparison-summary.muted strong {
+  color: #98a2b3;
+}
+
+.year-overlay-comparison-summary.muted small {
+  color: #667085;
+}
+
+.year-overlay-comparison-years button {
+  white-space: nowrap;
+}
+
+@media (max-width: 1100px) {
+  .year-overlay-comparison-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .year-overlay-comparison-summary {
+    justify-items: start;
+    text-align: left;
+  }
+}
+
+/* KPI Desempeño year overlay base vs compare highlight */
+polyline.year-overlay-line.base {
+  stroke-dasharray: 7 5;
+  stroke-width: 3.2;
+  opacity: 0.92;
+}
+
+polyline.year-overlay-line.compare {
+  stroke-dasharray: none;
+  stroke-width: 4;
+  opacity: 1;
+}
+
+polyline.year-overlay-line.base.compare {
+  stroke-dasharray: none;
+  stroke-width: 4.4;
+  opacity: 1;
+}
+
+circle.year-overlay-line.base.point {
+  stroke-width: 2.6;
+  opacity: 0.9;
+}
+
+circle.year-overlay-line.compare.point {
+  stroke-width: 3;
+  opacity: 1;
+}
+
+circle.year-overlay-line.base.compare.point {
+  stroke-width: 3.4;
+  opacity: 1;
+}
+
+.year-overlay-line.shadow {
+  opacity: 0.18;
+}
