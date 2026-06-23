@@ -212,6 +212,11 @@ def _build_upload_display_filename(
     if period_type == "diario" and cutoff_date:
         return f"{report_type_key}_{cutoff_date}{extension}"
 
+    if period_type == "rango" and date_from and date_to:
+        return f"{report_type_key}_{date_from}_a_{date_to}{extension}"
+
+    return Path(original_filename or "").name or f"{report_type_key}{extension}"
+
 def create_warehouse_document_upload(
     *,
     report_type_key: str,
