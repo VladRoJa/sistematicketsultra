@@ -8,6 +8,7 @@ import {
   KpiDesempenoHistoricalRow,
   KpiDesempenoHistoricalSection,
   KpiDesempenoHistoryGranularity,
+  KpiDesempenoMonthlyBranchYearOverlaySection,
   KpiDesempenoMonthlyRow,
   KpiDesempenoMonthlySection,
   KpiDesempenoMonthlyReportResponse,
@@ -101,6 +102,49 @@ interface KpiWeeklyChartModel {
   capacityLines: KpiWeeklyChartCapacityLine[];
 }
 
+
+interface KpiYearOverlayPoint {
+  x: number;
+  y: number;
+  value: number;
+  month: number;
+  label: string;
+  tooltip: string;
+}
+
+interface KpiYearOverlaySeriesModel {
+  year: number;
+  className: string;
+  polylinePoints: string;
+  points: KpiYearOverlayPoint[];
+}
+
+interface KpiYearOverlayTick {
+  value: number;
+  y: number;
+  label: string;
+}
+
+interface KpiYearOverlayMonthLabel {
+  x: number;
+  label: string;
+}
+
+interface KpiYearOverlayChartModel {
+  branchLabel: string;
+  width: number;
+  height: number;
+  plotX: number;
+  plotY: number;
+  plotWidth: number;
+  plotHeight: number;
+  minValue: number;
+  maxValue: number;
+  ticks: KpiYearOverlayTick[];
+  monthLabels: KpiYearOverlayMonthLabel[];
+  series: KpiYearOverlaySeriesModel[];
+}
+
 type KpiBranchSeriesSection =
   | KpiDesempenoHistoricalBranchSeriesSection
   | KpiDesempenoWeeklyBranchSeriesSection;
@@ -123,6 +167,7 @@ export class TrackKpiDesempenoComponent implements OnInit {
 
   report: KpiDesempenoMonthlyReportResponse | null = null;
   weeklyChart: KpiWeeklyChartModel | null = null;
+  yearOverlayCharts: KpiYearOverlayChartModel[] = [];
 
   readonly granularityOptions: Array<{
     value: KpiDesempenoDisplayGranularity;
@@ -216,6 +261,15 @@ export class TrackKpiDesempenoComponent implements OnInit {
       this.report?.sections.find(
         (section): section is KpiDesempenoMonthlySection =>
           section.key === 'monthly_closing',
+      ) ?? null
+    );
+  }
+
+  get monthlyBranchYearOverlaySection(): KpiDesempenoMonthlyBranchYearOverlaySection | null {
+    return (
+      this.report?.sections.find(
+        (section): section is KpiDesempenoMonthlyBranchYearOverlaySection =>
+          section.key === 'monthly_branch_year_overlay',
       ) ?? null
     );
   }
@@ -332,6 +386,7 @@ export class TrackKpiDesempenoComponent implements OnInit {
       next: (response) => {
         this.report = response;
         this.weeklyChart = this.buildWeeklyChart();
+        this.yearOverlayCharts = this.buildYearOverlayCharts();
         this.loading = false;
       },
       error: (error) => {
@@ -450,6 +505,123 @@ export class TrackKpiDesempenoComponent implements OnInit {
     item: KpiWeeklyChartCapacityLine,
   ): string {
     return `${item.branchLabel}-${item.label}`;
+  }
+
+  private buildYearOverlayCharts(): KpiYearOverlayChartModel[] {
+    const section = this.monthlyBranchYearOverlaySection;
+
+    if (!section?.data?.length) {
+      return [];
+    }
+
+    const width = 360;
+    const height = 220;
+    const plotX = 46;
+    const plotY = 22;
+    const plotWidth = 284;
+    const plotHeight = 132;
+
+    return section.data.map((row) => {
+      const values = row.series
+        .flatMap((series) => series.months)
+        .map((month) => month.socios_activos_cierre_mes)
+        .filter((value): value is number => value !== null && Number.isFinite(value));
+
+      let minValue = values.length ? Math.min(...values) : 0;
+      let maxValue = values.length ? Math.max(...values) : 100;
+
+      if (minValue === maxValue) {
+        minValue = Math.max(0, minValue - 50);
+        maxValue += 50;
+      } else {
+        const padding = (maxValue - minValue) * 0.08;
+        minValue = Math.max(0, Math.floor((minValue - padding) / 50) * 50);
+        maxValue = Math.ceil((maxValue + padding) / 50) * 50;
+      }
+
+      const valueRange = Math.max(1, maxValue - minValue);
+      const resolveX = (monthNumber: number): number =>
+        plotX + ((monthNumber - 1) / 11) * plotWidth;
+      const resolveY = (value: number): number =>
+        plotY + plotHeight - ((value - minValue) / valueRange) * plotHeight;
+
+      const ticks: KpiYearOverlayTick[] = [
+        {
+          value: maxValue,
+          y: resolveY(maxValue),
+          label: this.formatNumber(maxValue),
+        },
+        {
+          value: Math.round((minValue + maxValue) / 2),
+          y: resolveY(Math.round((minValue + maxValue) / 2)),
+          label: this.formatNumber(Math.round((minValue + maxValue) / 2)),
+        },
+        {
+          value: minValue,
+          y: resolveY(minValue),
+          label: this.formatNumber(minValue),
+        },
+      ];
+
+      const monthLabels: KpiYearOverlayMonthLabel[] = section.months
+        .filter((month) => [1, 3, 6, 9, 12].includes(month.month))
+        .map((month) => ({
+          x: resolveX(month.month),
+          label: month.label,
+        }));
+
+      const series: KpiYearOverlaySeriesModel[] = row.series.map((yearSeries) => {
+        const points = yearSeries.months
+          .filter((month) => month.socios_activos_cierre_mes !== null)
+          .map((month) => {
+            const value = Number(month.socios_activos_cierre_mes);
+
+            return {
+              x: resolveX(month.month),
+              y: resolveY(value),
+              value,
+              month: month.month,
+              label: month.label,
+              tooltip: [
+                `Sucursal: ${row.branch.track_label}`,
+                `Año: ${yearSeries.year}`,
+                `Mes: ${month.label}`,
+                `Socios cierre: ${this.formatNumber(value)}`,
+                month.source?.business_date
+                  ? `Snapshot: ${month.source.business_date}`
+                  : 'Snapshot: Sin dato',
+              ].join('\n'),
+            };
+          });
+
+        return {
+          year: yearSeries.year,
+          className:
+            yearSeries.year === section.end_year
+              ? 'year-overlay-line current'
+              : 'year-overlay-line shadow',
+          polylinePoints: points
+            .map((point) => `${point.x.toFixed(2)},${point.y.toFixed(2)}`)
+            .join(' '),
+          points,
+        };
+      });
+
+      return {
+        branchLabel: row.branch.track_label,
+        width,
+        height,
+        plotX,
+        plotY,
+        plotWidth,
+        plotHeight,
+        minValue,
+        maxValue,
+        ticks,
+        monthLabels,
+        series,
+      };
+    });
   }
 
   private buildWeeklyChart(): KpiWeeklyChartModel | null {

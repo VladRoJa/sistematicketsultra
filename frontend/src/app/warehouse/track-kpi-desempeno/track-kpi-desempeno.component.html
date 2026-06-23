@@ -334,6 +334,117 @@
     </section>
 
     <section
+      *ngIf="yearOverlayCharts.length"
+      class="content-card year-overlay-card"
+    >
+      <div class="section-heading year-overlay-heading">
+        <div>
+          <h2>{{ monthlyBranchYearOverlaySection?.title }}</h2>
+          <p>
+            Años superpuestos por sucursal para comparar si el cierre mensual va
+            mejor, igual o peor contra años anteriores.
+          </p>
+        </div>
+
+        <div class="year-overlay-coverage">
+          <span>Cobertura</span>
+          <strong>
+            {{ monthlyBranchYearOverlaySection?.coverage?.resolved_snapshots_count }}
+            /
+            {{ monthlyBranchYearOverlaySection?.coverage?.expected_snapshots_count }}
+          </strong>
+          <small>snapshots mensuales</small>
+        </div>
+      </div>
+
+      <div class="year-overlay-legend">
+        <span
+          *ngFor="let year of monthlyBranchYearOverlaySection?.years"
+          [class.current]="year === monthlyBranchYearOverlaySection?.end_year"
+        >
+          {{ year }}
+        </span>
+      </div>
+
+      <div class="year-overlay-grid">
+        <article
+          *ngFor="let chart of yearOverlayCharts"
+          class="year-overlay-mini-card"
+        >
+          <header>
+            <strong>{{ chart.branchLabel }}</strong>
+            <span>
+              {{ formatNumber(chart.minValue) }}
+              -
+              {{ formatNumber(chart.maxValue) }}
+            </span>
+          </header>
+
+          <svg
+            class="year-overlay-chart"
+            [attr.viewBox]="'0 0 ' + chart.width + ' ' + chart.height"
+            [attr.width]="chart.width"
+            [attr.height]="chart.height"
+            role="img"
+            [attr.aria-label]="'Comparativo mensual histórico de ' + chart.branchLabel"
+          >
+            <g class="year-overlay-gridlines">
+              <line
+                *ngFor="let tick of chart.ticks"
+                [attr.x1]="chart.plotX"
+                [attr.x2]="chart.plotX + chart.plotWidth"
+                [attr.y1]="tick.y"
+                [attr.y2]="tick.y"
+              ></line>
+            </g>
+
+            <g class="year-overlay-axis-labels">
+              <text
+                *ngFor="let tick of chart.ticks"
+                [attr.x]="chart.plotX - 8"
+                [attr.y]="tick.y + 4"
+                text-anchor="end"
+              >
+                {{ tick.label }}
+              </text>
+
+              <text
+                *ngFor="let month of chart.monthLabels"
+                [attr.x]="month.x"
+                [attr.y]="chart.plotY + chart.plotHeight + 24"
+                text-anchor="middle"
+              >
+                {{ month.label }}
+              </text>
+            </g>
+
+            <g class="year-overlay-lines">
+              <polyline
+                *ngFor="let serie of chart.series"
+                [attr.class]="serie.className"
+                [attr.points]="serie.polylinePoints"
+              ></polyline>
+            </g>
+
+            <g class="year-overlay-points">
+              <g *ngFor="let serie of chart.series">
+                <circle
+                  *ngFor="let point of serie.points"
+                  [attr.class]="serie.className + ' point'"
+                  [attr.cx]="point.x"
+                  [attr.cy]="point.y"
+                  r="3"
+                >
+                  <title>{{ point.tooltip }}</title>
+                </circle>
+              </g>
+            </g>
+          </svg>
+        </article>
+      </div>
+    </section>
+
+    <section
       *ngIf="monthlySection"
       class="content-card"
     >

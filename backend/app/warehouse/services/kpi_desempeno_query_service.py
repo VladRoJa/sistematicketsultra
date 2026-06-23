@@ -1251,6 +1251,245 @@ def _historical_branch_series_title(*, granularity: str) -> str:
     return "Crecimiento promedio histórico de socios"
 
 
+
+KPI_DESEMPENO_MONTH_LABELS_ES = {
+    1: "Ene",
+    2: "Feb",
+    3: "Mar",
+    4: "Abr",
+    5: "May",
+    6: "Jun",
+    7: "Jul",
+    8: "Ago",
+    9: "Sep",
+    10: "Oct",
+    11: "Nov",
+    12: "Dic",
+}
+
+
+def _build_year_overlay_month_payload(
+    *,
+    month_number: int,
+    snapshot: KpiDesempenoSnapshotORM | None,
+    row: KpiDesempenoSnapshotRowORM | None,
+) -> dict[str, Any]:
+    return {
+        "month": month_number,
+        "label": KPI_DESEMPENO_MONTH_LABELS_ES.get(month_number, str(month_number)),
+        "socios_activos_cierre_mes": (
+            int(row.socios_activos_del_mes or 0)
+            if row is not None
+            else None
+        ),
+        "source": (
+            {
+                "snapshot_id": snapshot.id,
+                "business_date": snapshot.business_date.isoformat(),
+                "report_type_key": snapshot.report_type_key,
+                "snapshot_kind": snapshot.snapshot_kind,
+                "is_canonical": snapshot.is_canonical,
+            }
+            if snapshot is not None and row is not None
+            else None
+        ),
+    }
+
+
+def _build_empty_year_overlay_series(
+    *,
+    years: list[int],
+) -> dict[int, dict[str, Any]]:
+    return {
+        year: {
+            "year": year,
+            "months": [
+                _build_year_overlay_month_payload(
+                    month_number=month_number,
+                    snapshot=None,
+                    row=None,
+                )
+                for month_number in range(1, 13)
+            ],
+        }
+        for year in years
+    }
+
+
+def build_monthly_branch_year_overlay_section(
+    *,
+    start_year: Any = 2023,
+    end_month: Any,
+) -> dict[str, Any]:
+    end_year, end_month_number, normalized_end_month = _ensure_target_month(end_month)
+
+    try:
+        normalized_start_year = int(start_year)
+    except (TypeError, ValueError) as exc:
+        raise KpiDesempenoQueryServiceError(
+            "start_year debe ser un año válido."
+        ) from exc
+
+    if normalized_start_year > end_year:
+        raise KpiDesempenoQueryServiceError(
+            "start_year no puede ser mayor al año del mes de corte."
+        )
+
+    years = list(range(normalized_start_year, end_year + 1))
+    months = [
+        {
+            "month": month_number,
+            "label": KPI_DESEMPENO_MONTH_LABELS_ES.get(
+                month_number,
+                str(month_number),
+            ),
+        }
+        for month_number in range(1, 13)
+    ]
+
+    warnings: list[dict[str, Any]] = []
+    data_by_canon: dict[str, dict[str, Any]] = {}
+    resolved_snapshots_count = 0
+    expected_snapshots_count = 0
+
+    for year in years:
+        missing_months: list[int] = []
+
+        for month_number in range(1, 13):
+            is_future_month = year == end_year and month_number > end_month_number
+
+            if is_future_month:
+                continue
+
+            expected_snapshots_count += 1
+
+            snapshot = _resolve_last_canonical_snapshot_for_month(
+                year=year,
+                month=month_number,
+            )
+
+            if snapshot is None:
+                missing_months.append(month_number)
+                continue
+
+            resolved_snapshots_count += 1
+
+            raw_rows = _fetch_snapshot_rows(snapshot_id=snapshot.id)
+            rows = [
+                row
+                for row in raw_rows
+                if not _is_out_of_scope_raw_branch(
+                    _normalize_raw_branch_name(row.sucursal)
+                )
+            ]
+
+            canon_by_row_id, alias_warnings = _resolve_rows_branch_canon(rows=rows)
+            warnings.extend(alias_warnings)
+
+            sucursales_canon = {
+                sucursal_canon
+                for sucursal_canon in canon_by_row_id.values()
+                if sucursal_canon
+            }
+            branch_catalog_by_canon = _fetch_branch_catalog_by_canon(
+                sucursales_canon=sucursales_canon,
+            )
+
+            for row in rows:
+                sucursal_canon = canon_by_row_id.get(row.id)
+
+                if not sucursal_canon:
+                    continue
+
+                branch_catalog = branch_catalog_by_canon.get(sucursal_canon)
+
+                if (
+                    branch_catalog is not None
+                    and getattr(branch_catalog, "is_track_active", None) is False
+                ):
+                    continue
+
+                if sucursal_canon not in data_by_canon:
+                    data_by_canon[sucursal_canon] = {
+                        "branch": _build_branch_payload(
+                            row=row,
+                            sucursal_canon=sucursal_canon,
+                            branch_catalog_by_canon=branch_catalog_by_canon,
+                        ),
+                        "series": _build_empty_year_overlay_series(years=years),
+                    }
+
+                data_by_canon[sucursal_canon]["series"][year]["months"][
+                    month_number - 1
+                ] = _build_year_overlay_month_payload(
+                    month_number=month_number,
+                    snapshot=snapshot,
+                    row=row,
+                )
+
+        if missing_months:
+            warnings.append(
+                {
+                    "code": "missing_canonical_snapshots_for_year_overlay",
+                    "message": (
+                        "Faltan snapshots canónicos KPI Desempeño para algunos meses "
+                        "del comparativo anual."
+                    ),
+                    "year": year,
+                    "months": missing_months,
+                    "month_labels": [
+                        KPI_DESEMPENO_MONTH_LABELS_ES.get(month_number, str(month_number))
+                        for month_number in missing_months
+                    ],
+                }
+            )
+
+    data = []
+
+    for item in data_by_canon.values():
+        item["series"] = [
+            item["series"][year]
+            for year in years
+        ]
+        data.append(item)
+
+    data = sorted(
+        data,
+        key=lambda item: (
+            item["branch"].get("display_order") is None,
+            item["branch"].get("display_order") or 9999,
+            item["branch"].get("track_label") or "",
+        ),
+    )
+
+    return {
+        "key": "monthly_branch_year_overlay",
+        "title": "Comparativo mensual histórico por sucursal",
+        "chart_type": "small_multiple_line",
+        "status": "ok" if data else "empty",
+        "start_year": normalized_start_year,
+        "end_year": end_year,
+        "end_month": normalized_end_month,
+        "years": years,
+        "months": months,
+        "rule": {
+            "description": (
+                "Último snapshot canónico disponible de cada mes, agrupado por "
+                "sucursal y año para comparar enero-diciembre."
+            ),
+            "report_type_key": KPI_DESEMPENO_REPORT_TYPE_KEY,
+            "snapshot_kind": KPI_DESEMPENO_SNAPSHOT_KIND,
+            "canonical_only": True,
+            "metric": "socios_activos_del_mes",
+        },
+        "coverage": {
+            "expected_snapshots_count": expected_snapshots_count,
+            "resolved_snapshots_count": resolved_snapshots_count,
+        },
+        "warnings": warnings,
+        "data": data,
+    }
+
 def build_historical_branch_series_section(
     *,
     start_month: Any,
