@@ -117,7 +117,9 @@ interface KpiYearOverlaySeriesModel {
   className: string;
   color: string;
   polylinePoints: string;
+  detailPolylinePoints: string;
   points: KpiYearOverlayPoint[];
+  detailPoints: KpiYearOverlayPoint[];
 }
 
 interface KpiYearOverlayTick {
@@ -147,14 +149,22 @@ interface KpiYearOverlayChartModel {
   branchLabel: string;
   width: number;
   height: number;
+  detailWidth: number;
+  detailHeight: number;
   plotX: number;
   plotY: number;
   plotWidth: number;
   plotHeight: number;
+  detailPlotX: number;
+  detailPlotY: number;
+  detailPlotWidth: number;
+  detailPlotHeight: number;
   minValue: number;
   maxValue: number;
   ticks: KpiYearOverlayTick[];
+  detailTicks: KpiYearOverlayTick[];
   monthLabels: KpiYearOverlayMonthLabel[];
+  detailMonthLabels: KpiYearOverlayMonthLabel[];
   series: KpiYearOverlaySeriesModel[];
 }
 
@@ -734,6 +744,13 @@ export class TrackKpiDesempenoComponent implements OnInit {
     const plotWidth = 284;
     const plotHeight = 132;
 
+    const detailWidth = 1200;
+    const detailHeight = 430;
+    const detailPlotX = 86;
+    const detailPlotY = 36;
+    const detailPlotWidth = 1048;
+    const detailPlotHeight = 300;
+
     return section.data.map((row) => {
       const values = row.series
         .flatMap((series) => series.months)
@@ -757,6 +774,10 @@ export class TrackKpiDesempenoComponent implements OnInit {
         plotX + ((monthNumber - 1) / 11) * plotWidth;
       const resolveY = (value: number): number =>
         plotY + plotHeight - ((value - minValue) / valueRange) * plotHeight;
+      const detailResolveX = (monthNumber: number): number =>
+        detailPlotX + ((monthNumber - 1) / 11) * detailPlotWidth;
+      const detailResolveY = (value: number): number =>
+        detailPlotY + detailPlotHeight - ((value - minValue) / valueRange) * detailPlotHeight;
 
       const ticks: KpiYearOverlayTick[] = [
         {
@@ -776,12 +797,80 @@ export class TrackKpiDesempenoComponent implements OnInit {
         },
       ];
 
+      const detailTicks: KpiYearOverlayTick[] = Array.from(
+        { length: 6 },
+        (_, index) => Math.round(maxValue - ((maxValue - minValue) / 5) * index),
+      ).map((value) => ({
+        value,
+        y: detailResolveY(value),
+        label: this.formatNumber(value),
+      }));
+
       const monthLabels: KpiYearOverlayMonthLabel[] = section.months
         .filter((month) => [1, 3, 6, 9, 12].includes(month.month))
         .map((month) => ({
           x: resolveX(month.month),
           label: month.label,
         }));
+
+      const detailMonthLabels: KpiYearOverlayMonthLabel[] = section.months.map((month) => ({
+        x: detailResolveX(month.month),
+        label: month.label,
+      }));
+
+      const monthComparisonTooltipByMonth = new Map<number, string>();
+
+      section.months.forEach((monthMeta) => {
+        const monthRows = row.series
+          .map((yearSeries) => {
+            const monthData = yearSeries.months.find(
+              (item) => item.month === monthMeta.month,
+            );
+            const value = monthData?.socios_activos_cierre_mes;
+
+            if (value === null || value === undefined || !Number.isFinite(Number(value))) {
+              return null;
+            }
+
+            return {
+              year: yearSeries.year,
+              value: Number(value),
+            };
+          })
+          .filter(
+            (item): item is { year: number; value: number } => item !== null,
+          )
+          .sort((left, right) => right.year - left.year);
+
+        if (!monthRows.length) {
+          return;
+        }
+
+        const tooltipLines = [
+          `Sucursal: ${row.branch.track_label}`,
+          `Mes: ${monthMeta.label}`,
+          '',
+        ];
+
+        monthRows.forEach((item, index) => {
+          const previousYearItem = monthRows[index + 1];
+          const percentChange =
+            previousYearItem && previousYearItem.value !== 0
+              ? ((item.value - previousYearItem.value) / previousYearItem.value) * 100
+              : null;
+
+          const percentLabel =
+            percentChange === null
+              ? 'base'
+              : `${percentChange > 0 ? '+' : ''}${percentChange.toFixed(1)}% vs ${previousYearItem.year}`;
+
+          tooltipLines.push(
+            `Año ${item.year}: ${this.formatNumber(item.value)} socios (${percentLabel})`,
+          );
+        });
+
+        monthComparisonTooltipByMonth.set(monthMeta.month, tooltipLines.join('\n'));
+      });
 
       const series: KpiYearOverlaySeriesModel[] = row.series.map((yearSeries) => {
         const points = yearSeries.months
@@ -795,17 +884,25 @@ export class TrackKpiDesempenoComponent implements OnInit {
               value,
               month: month.month,
               label: month.label,
-              tooltip: [
-                `Sucursal: ${row.branch.track_label}`,
-                `Año: ${yearSeries.year}`,
-                `Mes: ${month.label}`,
-                `Socios cierre: ${this.formatNumber(value)}`,
-                month.source?.business_date
-                  ? `Snapshot: ${month.source.business_date}`
-                  : 'Snapshot: Sin dato',
-              ].join('\n'),
+              tooltip:
+                monthComparisonTooltipByMonth.get(month.month) ||
+                [
+                  `Sucursal: ${row.branch.track_label}`,
+                  `Año: ${yearSeries.year}`,
+                  `Mes: ${month.label}`,
+                  `Socios cierre: ${this.formatNumber(value)}`,
+                  month.source?.business_date
+                    ? `Snapshot: ${month.source.business_date}`
+                    : 'Snapshot: Sin dato',
+                ].join('\n'),
             };
           });
+
+        const detailPoints = points.map((point) => ({
+          ...point,
+          x: detailResolveX(point.month),
+          y: detailResolveY(point.value),
+        }));
 
         return {
           year: yearSeries.year,
@@ -814,7 +911,11 @@ export class TrackKpiDesempenoComponent implements OnInit {
           polylinePoints: points
             .map((point) => `${point.x.toFixed(2)},${point.y.toFixed(2)}`)
             .join(' '),
+          detailPolylinePoints: detailPoints
+            .map((point) => `${point.x.toFixed(2)},${point.y.toFixed(2)}`)
+            .join(' '),
           points,
+          detailPoints,
         };
       });
 
@@ -822,14 +923,22 @@ export class TrackKpiDesempenoComponent implements OnInit {
         branchLabel: row.branch.track_label,
         width,
         height,
+        detailWidth,
+        detailHeight,
         plotX,
         plotY,
         plotWidth,
         plotHeight,
+        detailPlotX,
+        detailPlotY,
+        detailPlotWidth,
+        detailPlotHeight,
         minValue,
         maxValue,
         ticks,
+        detailTicks,
         monthLabels,
+        detailMonthLabels,
         series,
       };
     });

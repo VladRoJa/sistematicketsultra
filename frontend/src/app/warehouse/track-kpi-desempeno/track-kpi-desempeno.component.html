@@ -456,17 +456,17 @@
 
         <svg
           class="year-overlay-detail-chart"
-          [attr.viewBox]="'0 0 ' + selectedChart.width + ' ' + selectedChart.height"
-          [attr.width]="selectedChart.width"
-          [attr.height]="selectedChart.height"
+          [attr.viewBox]="'0 0 ' + selectedChart.detailWidth + ' ' + selectedChart.detailHeight"
+          [attr.width]="selectedChart.detailWidth"
+          [attr.height]="selectedChart.detailHeight"
           role="img"
           [attr.aria-label]="'Detalle comparativo mensual histórico de ' + selectedChart.branchLabel"
         >
           <g class="year-overlay-gridlines">
             <line
-              *ngFor="let tick of selectedChart.ticks"
-              [attr.x1]="selectedChart.plotX"
-              [attr.x2]="selectedChart.plotX + selectedChart.plotWidth"
+              *ngFor="let tick of selectedChart.detailTicks"
+              [attr.x1]="selectedChart.detailPlotX"
+              [attr.x2]="selectedChart.detailPlotX + selectedChart.detailPlotWidth"
               [attr.y1]="tick.y"
               [attr.y2]="tick.y"
             ></line>
@@ -474,8 +474,8 @@
 
           <g class="year-overlay-axis-labels">
             <text
-              *ngFor="let tick of selectedChart.ticks"
-              [attr.x]="selectedChart.plotX - 8"
+              *ngFor="let tick of selectedChart.detailTicks"
+              [attr.x]="selectedChart.detailPlotX - 8"
               [attr.y]="tick.y + 4"
               text-anchor="end"
             >
@@ -483,9 +483,9 @@
             </text>
 
             <text
-              *ngFor="let month of selectedChart.monthLabels"
+              *ngFor="let month of selectedChart.detailMonthLabels"
               [attr.x]="month.x"
-              [attr.y]="selectedChart.plotY + selectedChart.plotHeight + 24"
+              [attr.y]="selectedChart.detailPlotY + selectedChart.detailPlotHeight + 24"
               text-anchor="middle"
             >
               {{ month.label }}
@@ -496,13 +496,13 @@
             <g *ngFor="let serie of selectedChart.series">
               <polyline
                 class="year-overlay-hitline"
-                [attr.points]="serie.polylinePoints"
+                [attr.points]="serie.detailPolylinePoints"
                 (click)="selectYearOverlayYear(serie.year); $event.stopPropagation()"
               ></polyline>
 
               <polyline
                 [attr.class]="serie.className"
-                [attr.points]="serie.polylinePoints"
+                [attr.points]="serie.detailPolylinePoints"
                 [style.stroke]="serie.color"
                 (click)="selectYearOverlayYear(serie.year); $event.stopPropagation()"
               ></polyline>
@@ -512,7 +512,7 @@
           <g class="year-overlay-points">
             <g *ngFor="let serie of selectedChart.series">
               <circle
-                *ngFor="let point of serie.points"
+                *ngFor="let point of serie.detailPoints"
                 [attr.class]="serie.className + ' point'"
                 [attr.cx]="point.x"
                 [attr.cy]="point.y"

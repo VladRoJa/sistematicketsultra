@@ -1307,3 +1307,66 @@ circle.year-overlay-line.base.compare.point {
 .year-overlay-line.shadow {
   opacity: 0.18;
 }
+
+/* KPI Desempeño year overlay detail width */
+.year-overlay-detail-chart {
+  width: min(100%, 1280px);
+  max-width: 1280px;
+  margin: 8px auto 0;
+}
+
+/* KPI Desempeño detail chart real wide canvas */
+.year-overlay-detail-chart {
+  display: block;
+  width: min(100%, 1380px);
+  max-width: 1380px;
+  height: auto;
+  min-height: 0;
+  margin: 8px auto 0;
+}
+
+/* KPI Desempeño detail chart readability */
+.year-overlay-detail-card .year-overlay-axis-labels text {
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.year-overlay-detail-card .year-overlay-gridlines line {
+  stroke-width: 1.4;
+}
+
+.year-overlay-detail-card polyline.year-overlay-line.shadow {
+  stroke-width: 3.2;
+  opacity: 0.22;
+}
+
+.year-overlay-detail-card polyline.year-overlay-line.base {
+  stroke-width: 4.2;
+  opacity: 0.92;
+}
+
+.year-overlay-detail-card polyline.year-overlay-line.compare {
+  stroke-width: 5;
+  opacity: 1;
+}
+
+.year-overlay-detail-card polyline.year-overlay-line.base.compare {
+  stroke-width: 5.4;
+  opacity: 1;
+}
+
+.year-overlay-detail-card circle.year-overlay-line.point {
+  r: 5;
+}
+
+.year-overlay-detail-card circle.year-overlay-line.base.point {
+  stroke-width: 3.2;
+}
+
+.year-overlay-detail-card circle.year-overlay-line.compare.point {
+  stroke-width: 3.6;
+}
+
+.year-overlay-detail-card circle.year-overlay-line.base.compare.point {
+  stroke-width: 4;
+}
