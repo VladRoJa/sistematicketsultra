@@ -152,6 +152,19 @@ def _es_gerente_para_cierre_desde_cero(user: UserORM) -> bool:
     rol = (user.rol or "").upper()
     return rol == "GERENTE"
 
+
+def _require_ticket_admin_action():
+    user = UserORM.get_by_id(get_jwt_identity())
+    if not user:
+        return None, (jsonify({"mensaje": "Usuario no encontrado"}), 404)
+
+    rol = (user.rol or "").upper()
+    if rol not in {"ADMIN", "ADMINISTRADOR", "SUPER_ADMIN"}:
+        return None, (jsonify({"mensaje": "No autorizado"}), 403)
+
+    return user, None
+
+
 def _es_admin_para_validar_cierre(user: UserORM) -> bool:
     rol = (user.rol or "").upper()
     return rol in {"ADMIN", "ADMINISTRADOR", "SUPER_ADMIN"}
@@ -1578,7 +1591,9 @@ def export_excel():
 @jwt_required()
 @bloquea_lectores_globales
 def migrar_historial_local():
-
+    _, forbidden = _require_ticket_admin_action()
+    if forbidden:
+        return forbidden
 
     tz_mx = pytz.timezone("America/Tijuana")
     tickets = Ticket.query.all()
