@@ -14,7 +14,6 @@ from app.routes.permisos_routes import permisos_bp
 from app.routes.departamentos_routes import departamentos_bp
 from app.routes.reportes import reportes_bp
 from app.routes.sucursales import sucursales_bp
-from app.routes.importar_inventario import bp_importar
 from app.routes.catalogos_routes import catalogos_bp
 from app.routes.usuarios_routes import usuarios_bp
 from app.routes.formulario_ticket_routes import formulario_ticket_bp
@@ -83,7 +82,6 @@ def create_app():
     app.register_blueprint(departamentos_bp, url_prefix='/api/departamentos')
     app.register_blueprint(reportes_bp, url_prefix='/api/reportes')
     app.register_blueprint(sucursales_bp, url_prefix='/api/sucursales')
-    app.register_blueprint(bp_importar, url_prefix='/api/importar')
     app.register_blueprint(catalogos_bp, url_prefix='/api/catalogos')
     app.register_blueprint(usuarios_bp, url_prefix='/api/usuarios')
     app.register_blueprint(formulario_ticket_bp, url_prefix='/api/formulario_ticket')
