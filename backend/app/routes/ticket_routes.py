@@ -499,9 +499,20 @@ def list_tickets_with_filters():
 def update_ticket_status(id):
     try:
         actor = UserORM.get_by_id(get_jwt_identity())
+        if not actor:
+            return jsonify({"mensaje": "Usuario no encontrado"}), 404
+
         ticket = Ticket.query.get(id)
         if not ticket:
             return jsonify({"mensaje": "Ticket no encontrado"}), 404
+
+        ticket_en_scope = (
+            filtrar_tickets_por_usuario(actor)
+            .filter(Ticket.id == id)
+            .first()
+        )
+        if not ticket_en_scope:
+            return jsonify({"mensaje": "No autorizado para actualizar este ticket"}), 403
 
         data = request.get_json() or {}
         estado = data.get("estado")
