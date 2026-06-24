@@ -13,7 +13,12 @@ from zoneinfo import ZoneInfo
 
 from app.extensions import db
 from app.models.warehouse import WarehouseUploadORM
-from app.utils.warehouse_access import require_warehouse_operator
+from app.utils.warehouse_access import (
+    require_warehouse_archive,
+    require_warehouse_operator,
+    require_warehouse_upload,
+    require_warehouse_view,
+)
 from app.models import (
     WarehouseSourceORM,
     WarehouseFamilyORM,
@@ -168,7 +173,7 @@ def warehouse_catalogs():
 @warehouse_bp.route('/uploads', methods=['POST'])
 @jwt_required()
 def warehouse_create_upload():
-    forbidden = require_warehouse_operator()
+    forbidden = require_warehouse_upload()
     if forbidden:
         return forbidden
 
@@ -441,7 +446,7 @@ def _serialize_warehouse_upload_item(item: WarehouseUploadORM) -> dict:
 @warehouse_bp.route('/uploads', methods=['GET'])
 @jwt_required()
 def warehouse_list_uploads():
-    forbidden = require_warehouse_operator()
+    forbidden = require_warehouse_view()
     if forbidden:
         return forbidden
 
@@ -540,7 +545,7 @@ def warehouse_list_uploads():
 @warehouse_bp.route('/uploads/<int:upload_id>', methods=['GET'])
 @jwt_required()
 def warehouse_get_upload_detail(upload_id: int):
-    forbidden = require_warehouse_operator()
+    forbidden = require_warehouse_view()
     if forbidden:
         return forbidden
 
@@ -606,7 +611,7 @@ def warehouse_get_upload_detail(upload_id: int):
 @warehouse_bp.route('/uploads/<int:upload_id>/download', methods=['GET'])
 @jwt_required()
 def warehouse_download_upload(upload_id: int):
-    forbidden = require_warehouse_operator()
+    forbidden = require_warehouse_view()
     if forbidden:
         return forbidden
 
@@ -662,7 +667,7 @@ def warehouse_download_upload(upload_id: int):
 @warehouse_bp.route('/uploads/<int:upload_id>/archive', methods=['PATCH'])
 @jwt_required()
 def warehouse_archive_upload(upload_id: int):
-    forbidden = require_warehouse_operator()
+    forbidden = require_warehouse_archive()
     if forbidden:
         return forbidden
 
@@ -712,7 +717,7 @@ def warehouse_archive_upload(upload_id: int):
 @warehouse_bp.route('/uploads/<int:upload_id>/audit', methods=['GET'])
 @jwt_required()
 def warehouse_get_upload_audit(upload_id: int):
-    forbidden = require_warehouse_operator()
+    forbidden = require_warehouse_view()
     if forbidden:
         return forbidden
 
