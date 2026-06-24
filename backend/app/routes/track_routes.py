@@ -8,10 +8,11 @@ from zoneinfo import ZoneInfo
 from decimal import Decimal
 from typing import Any
 from app.extensions import db
+from app.models.user_model import UserORM
 from io import BytesIO
 
 from flask import Blueprint, jsonify, request, send_file
-from flask_jwt_extended import get_jwt, jwt_required
+from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from app.models.warehouse import TrackDailyMartORM
 from app.warehouse.services.track_daily_version_service import (
@@ -76,8 +77,16 @@ def _ensure_target_month(value: Any, *, field_name: str) -> tuple[int, int]:
 
 
 def _get_current_role() -> str:
-    claims = get_jwt()
-    return str(claims.get("rol") or "").strip().upper()
+    try:
+        user_id = int(get_jwt_identity())
+    except (TypeError, ValueError):
+        return ""
+
+    user = UserORM.get_by_id(user_id)
+    if not user:
+        return ""
+
+    return str(getattr(user, "rol", "") or "").strip().upper()
 
 
 def _require_track_admin_role() -> None:
