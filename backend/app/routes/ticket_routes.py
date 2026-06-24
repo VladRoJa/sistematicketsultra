@@ -1873,6 +1873,15 @@ def notify_ticket(ticket_id):
     t = Ticket.query.get(ticket_id)
     if not t:
         return jsonify({"mensaje":"Ticket no encontrado"}), 404
+
+    ticket_en_scope = (
+        filtrar_tickets_por_usuario(user)
+        .filter(Ticket.id == ticket_id)
+        .first()
+    )
+    if not ticket_en_scope:
+        return jsonify({"mensaje": "No autorizado para notificar este ticket"}), 403
+
     td = t.to_dict()  # usa tu to_dict que ya trae inventario, historial, etc.
 
     results = {}
