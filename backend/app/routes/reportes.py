@@ -25,6 +25,25 @@ from app.utils.local_upload import upload_image_to_local
 
 reportes_bp = Blueprint('reportes', __name__, url_prefix='/api/reportes')
 
+INVENTORY_REPORT_ADMIN_ROLES = {"ADMIN", "ADMINISTRADOR", "SUPER_ADMIN"}
+
+
+def _require_inventory_report_admin():
+    user_id = get_jwt_identity()
+    user = UserORM.get_by_id(user_id)
+
+    if not user:
+        return jsonify({"error": "Usuario no encontrado"}), 404
+
+    rol = (getattr(user, "rol", "") or "").upper()
+    if rol not in INVENTORY_REPORT_ADMIN_ROLES:
+        return jsonify({
+            "error": "No autorizado para consultar reportes de inventario"
+        }), 403
+
+    return None
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # EXPORTAR INVENTARIO GENERAL (con filtros avanzados)
 # ═══════════════════════════════════════════════════════════════════════
@@ -32,6 +51,10 @@ reportes_bp = Blueprint('reportes', __name__, url_prefix='/api/reportes')
 @reportes_bp.route('/exportar-inventario', methods=['GET'])
 @jwt_required()
 def exportar_inventario():
+    forbidden = _require_inventory_report_admin()
+    if forbidden:
+        return forbidden
+
     try:
         # Filtros por query params
         categoria = request.args.get('categoria') 
@@ -99,6 +122,10 @@ def exportar_inventario():
 @reportes_bp.route('/exportar-movimientos', methods=['GET'])
 @jwt_required()
 def exportar_movimientos():
+    forbidden = _require_inventory_report_admin()
+    if forbidden:
+        return forbidden
+
     try:
         # Filtros avanzados
         fecha_desde = request.args.get('fecha_desde')
@@ -177,6 +204,10 @@ def exportar_movimientos():
 @reportes_bp.route('/inventario-resumen-sucursales', methods=['GET'])
 @jwt_required()
 def inventario_resumen_sucursales():
+    forbidden = _require_inventory_report_admin()
+    if forbidden:
+        return forbidden
+
     try:
         sucursales = Sucursal.query.all()
         data = []
@@ -199,6 +230,10 @@ def inventario_resumen_sucursales():
 @reportes_bp.route('/inventario-resumen-categorias', methods=['GET'])
 @jwt_required()
 def inventario_resumen_categorias():
+    forbidden = _require_inventory_report_admin()
+    if forbidden:
+        return forbidden
+
     try:
         rows = db.session.query(
             InventarioGeneral.categoria,
@@ -222,6 +257,10 @@ def inventario_resumen_categorias():
 @reportes_bp.route('/inventario-bajo-stock', methods=['GET'])
 @jwt_required()
 def inventario_bajo_stock():
+    forbidden = _require_inventory_report_admin()
+    if forbidden:
+        return forbidden
+
     try:
         umbral = request.args.get('umbral', default=10, type=int)
         query = InventarioSucursal.query.filter(InventarioSucursal.stock <= umbral)
