@@ -89,6 +89,62 @@ def _get_user_sucursales_scope_from_db(user_id):
 
 
 
+
+def _resolve_inventory_read_sucursal_ids(requested_sucursal_id=None):
+    claims = get_jwt() or {}
+    rol = (claims.get("rol") or "").strip().upper()
+    current_user_id = _coerce_int_or_none(get_jwt_identity())
+    requested_sucursal_id = _coerce_int_or_none(requested_sucursal_id)
+
+    if rol in INVENTORY_GLOBAL_WRITE_ROLES:
+        if requested_sucursal_id is not None:
+            return [requested_sucursal_id], None
+        return None, None
+
+    allowed_sucursales = []
+
+    if rol == "SR_MANTENIMIENTO":
+        allowed_sucursales = _normalize_sucursales_ids(claims.get("sucursales_ids"))
+
+        if not allowed_sucursales and current_user_id is not None:
+            allowed_sucursales = _get_user_sucursales_scope_from_db(current_user_id)
+
+    elif rol == "AUX_MANTENIMIENTO":
+        user_sucursal_id = _coerce_int_or_none(claims.get("sucursal_id"))
+        if user_sucursal_id is not None:
+            allowed_sucursales = [user_sucursal_id]
+
+    else:
+        user_sucursal_id = _coerce_int_or_none(claims.get("sucursal_id"))
+        if user_sucursal_id is not None:
+            allowed_sucursales = [user_sucursal_id]
+
+    allowed_sucursales = sorted(set(allowed_sucursales))
+
+    if not allowed_sucursales:
+        return None, (
+            jsonify({
+                "error": "Forbidden",
+                "detail": "No tienes sucursales asignadas para consultar existencias.",
+            }),
+            403,
+        )
+
+    if requested_sucursal_id is not None:
+        if requested_sucursal_id not in allowed_sucursales:
+            return None, (
+                jsonify({
+                    "error": "Forbidden",
+                    "detail": "No tienes acceso para consultar existencias de esta sucursal.",
+                }),
+                403,
+            )
+
+        return [requested_sucursal_id], None
+
+    return allowed_sucursales, None
+
+
 def _require_inventory_global_write():
     claims = get_jwt() or {}
     rol = (claims.get("rol") or "").strip().upper()
@@ -477,6 +533,11 @@ def historial_movimientos():
 @jwt_required()
 def ver_existencias():
     try:
+        requested_sucursal_id = request.args.get('sucursal_id', type=int)
+        allowed_sucursales, forbidden = _resolve_inventory_read_sucursal_ids(requested_sucursal_id)
+        if forbidden:
+            return forbidden
+
         def descripcion_larga(inv):
             partes = [
                 inv.nombre,
@@ -487,7 +548,12 @@ def ver_existencias():
             ]
             return " - ".join([str(p) for p in partes if p])
 
-        inventario = InventarioSucursal.query.all()
+        query = InventarioSucursal.query
+
+        if allowed_sucursales is not None:
+            query = query.filter(InventarioSucursal.sucursal_id.in_(allowed_sucursales))
+
+        inventario = query.all()
         data = []
 
         for item in inventario:
