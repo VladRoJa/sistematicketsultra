@@ -28,6 +28,104 @@ inventario_bp = Blueprint('inventario', __name__, url_prefix='/api/inventario')
 
 tz = pytz.timezone('America/Tijuana')
 
+
+INVENTORY_ADMIN_ROLES = {"ADMIN", "ADMINISTRADOR", "SUPER_ADMIN"}
+INVENTORY_GLOBAL_WRITE_ROLES = INVENTORY_ADMIN_ROLES | {"MANTENIMIENTO", "SISTEMAS", "TECNICO"}
+INVENTORY_SCOPED_WRITE_ROLES = {"SR_MANTENIMIENTO", "AUX_MANTENIMIENTO"}
+
+
+def _coerce_int_or_none(value):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_required_int(value, field_name):
+    parsed = _coerce_int_or_none(value)
+    if parsed is None:
+        return None, (
+            jsonify({
+                "error": "Payload inválido",
+                "detail": f"{field_name} es requerido y debe ser entero",
+            }),
+            400,
+        )
+    return parsed, None
+
+
+def _get_current_user_id_required():
+    user_id = _coerce_int_or_none(get_jwt_identity())
+    if user_id is None:
+        return None, (
+            jsonify({
+                "error": "Sesión inválida",
+                "detail": "No se pudo resolver el usuario autenticado actual.",
+            }),
+            401,
+        )
+    return user_id, None
+
+
+def _normalize_sucursales_ids(raw_value):
+    if not isinstance(raw_value, list):
+        return []
+
+    normalized = []
+    for item in raw_value:
+        parsed = _coerce_int_or_none(item)
+        if parsed is not None:
+            normalized.append(parsed)
+
+    return sorted(set(normalized))
+
+
+def _get_user_sucursales_scope_from_db(user_id):
+    rows = db.session.execute(
+        db.text("SELECT sucursal_id FROM usuario_sucursal WHERE user_id = :uid"),
+        {"uid": user_id},
+    ).fetchall()
+    return sorted({int(row[0]) for row in rows if row[0] is not None})
+
+
+def _require_inventory_movement_write(sucursal_id):
+    claims = get_jwt() or {}
+    rol = (claims.get("rol") or "").strip().upper()
+    current_user_id = _coerce_int_or_none(get_jwt_identity())
+
+    if rol in INVENTORY_GLOBAL_WRITE_ROLES:
+        return None
+
+    if rol == "AUX_MANTENIMIENTO":
+        user_sucursal_id = _coerce_int_or_none(claims.get("sucursal_id"))
+        if user_sucursal_id is not None and int(sucursal_id) == user_sucursal_id:
+            return None
+
+        return jsonify({
+            "error": "Forbidden",
+            "detail": "No tienes acceso para modificar inventario de esta sucursal.",
+        }), 403
+
+    if rol == "SR_MANTENIMIENTO":
+        allowed_sucursales = _normalize_sucursales_ids(claims.get("sucursales_ids"))
+
+        if not allowed_sucursales and current_user_id is not None:
+            allowed_sucursales = _get_user_sucursales_scope_from_db(current_user_id)
+
+        if int(sucursal_id) in allowed_sucursales:
+            return None
+
+        return jsonify({
+            "error": "Forbidden",
+            "detail": "No tienes acceso para modificar inventario de esta sucursal.",
+        }), 403
+
+    return jsonify({
+        "error": "Forbidden",
+        "detail": "No tienes permiso para modificar movimientos de inventario.",
+    }), 403
+
+
 # ----------------------------------------------------------------------
 # UTILIDADES
 # ----------------------------------------------------------------------
@@ -218,10 +316,21 @@ def obtener_inventario():
 @jwt_required()
 def registrar_movimiento():
     try:
-        data = request.get_json()
+        data = request.get_json() or {}
         tipo = data.get('tipo_movimiento')
-        sucursal_id = data.get('sucursal_id')
-        usuario_id = data.get('usuario_id')
+
+        sucursal_id, sucursal_error = _parse_required_int(data.get('sucursal_id'), 'sucursal_id')
+        if sucursal_error:
+            return sucursal_error
+
+        usuario_id, usuario_error = _get_current_user_id_required()
+        if usuario_error:
+            return usuario_error
+
+        forbidden = _require_inventory_movement_write(sucursal_id)
+        if forbidden:
+            return forbidden
+
         inventarios = data.get('inventarios', [])
         observaciones = data.get('observaciones', '')
 
@@ -600,6 +709,10 @@ def eliminar_movimiento(id):
         mov = MovimientoInventario.query.get(id)
         if not mov:
             return jsonify({"error": "Movimiento no encontrado"}), 404
+
+        forbidden = _require_inventory_movement_write(mov.sucursal_id)
+        if forbidden:
+            return forbidden
 
         # Ajustar stock antes de eliminar detalles
         for det in mov.detalles:
