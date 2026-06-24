@@ -1645,10 +1645,21 @@ def migrar_historial_local():
 @jwt_required()
 def eliminar_todos_los_tickets():
     try:
+        _, forbidden = _require_ticket_admin_action()
+        if forbidden:
+            return forbidden
+
+        if os.getenv("ALLOW_TICKET_DELETE_ALL", "false").lower() != "true":
+            return jsonify({
+                "mensaje": "Operación deshabilitada por seguridad.",
+                "code": "TICKET_DELETE_ALL_DISABLED",
+            }), 403
+
         cantidad = Ticket.query.delete()
         db.session.commit()
         return jsonify({"mensaje": f"🧨 Se eliminaron {cantidad} tickets."}), 200
     except Exception as e:
+        db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
 # ─────────────────────────────────────────────────────────────
