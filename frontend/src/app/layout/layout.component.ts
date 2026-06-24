@@ -268,15 +268,7 @@ const menuMantenimientoGerencial = [
         { label: 'Categorias de Inventario', path: '/catalogos/categorias' },
       ]
     },
-    {
-      label: 'Asistencia',
-      path: '/asistencia/registrar',
-      submenu: [
-        { label: 'Registrar Asistencia', path: '/asistencia/registrar' },
-        { label: 'Reportes', path: '/asistencia/reportes' }
-      ]
-    },
-    {
+{
       label: 'Permisos',
       path: '/admin-usuarios-sucursales/1',
       submenu: [
@@ -961,7 +953,6 @@ getMenuIcon(label: string): string {
     'nube corporativa': 'cloud',
     catálogos: 'category',
     catalogos: 'category',
-    asistencia: 'event_available',
     permisos: 'admin_panel_settings',
   };
 
