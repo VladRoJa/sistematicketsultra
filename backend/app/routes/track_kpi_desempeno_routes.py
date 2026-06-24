@@ -5,8 +5,9 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from flask import Blueprint, jsonify, request
-from flask_jwt_extended import get_jwt, jwt_required
+from flask_jwt_extended import get_jwt_identity, jwt_required
 
+from app.models.user_model import UserORM
 from app.warehouse.services.kpi_desempeno_query_service import (
     KpiDesempenoQueryServiceError,
     build_historical_branch_series_section,
@@ -25,8 +26,16 @@ track_kpi_desempeno_bp = Blueprint(
 
 
 def _get_current_role() -> str:
-    claims = get_jwt()
-    return str(claims.get("rol") or "").strip().upper()
+    try:
+        user_id = int(get_jwt_identity())
+    except (TypeError, ValueError):
+        return ""
+
+    user = UserORM.get_by_id(user_id)
+    if not user:
+        return ""
+
+    return str(getattr(user, "rol", "") or "").strip().upper()
 
 
 def _require_kpi_desempeno_read_role() -> None:
