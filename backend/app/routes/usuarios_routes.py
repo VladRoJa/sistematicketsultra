@@ -4,7 +4,7 @@ from werkzeug.security import generate_password_hash
 from app.extensions import db
 from app.models.user_model import UserORM
 import re
-from flask_jwt_extended import jwt_required, get_jwt
+from flask_jwt_extended import jwt_required, get_jwt_identity
 
 usuarios_bp = Blueprint('usuarios', __name__)
 
@@ -13,11 +13,14 @@ def _is_valid_email(s: str | None) -> bool:
     return bool(s and EMAIL_RE.match(s))
 
 def _require_admin():
-    claims = get_jwt() or {}
-    rol = (claims.get("rol") or "").strip().lower()
+    current_user_id = get_jwt_identity()
+    user = UserORM.get_by_id(current_user_id)
 
-    # Roles admin reales en tu sistema
-    allowed = {"administrador", "super_admin", "admin"}
+    if not user:
+        return jsonify({"error": "Unauthorized", "detail": "Usuario no encontrado"}), 401
+
+    rol = (user.rol or "").strip().upper()
+    allowed = {"ADMIN", "ADMINISTRADOR", "SUPER_ADMIN"}
 
     if rol not in allowed:
         return jsonify({"error": "Forbidden"}), 403
