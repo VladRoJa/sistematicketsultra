@@ -303,7 +303,12 @@ def crear_inventario():
 @jwt_required()
 def obtener_inventario():
     try:
-        sucursal_id = request.args.get('sucursal_id', type=int)
+        requested_sucursal_id = request.args.get('sucursal_id', type=int)
+        allowed_sucursales, forbidden = _resolve_inventory_read_sucursal_ids(requested_sucursal_id)
+        if forbidden:
+            return forbidden
+
+        sucursal_id = requested_sucursal_id
         categoria_inventario_id = request.args.get('categoria_inventario_id', type=int)
 
         def _resolver_categoria(inv):
@@ -315,10 +320,14 @@ def obtener_inventario():
             return (inv.categoria or ''), (inv.subcategoria or '')
 
         # ---------- Con sucursal (JOIN) ----------
-        if sucursal_id is not None:
+        if sucursal_id is not None or allowed_sucursales is not None:
             q = (db.session.query(InventarioGeneral, InventarioSucursal.stock)
-                 .join(InventarioSucursal, InventarioSucursal.inventario_id == InventarioGeneral.id)
-                 .filter(InventarioSucursal.sucursal_id == sucursal_id))
+                 .join(InventarioSucursal, InventarioSucursal.inventario_id == InventarioGeneral.id))
+
+            if sucursal_id is not None:
+                q = q.filter(InventarioSucursal.sucursal_id == sucursal_id)
+            elif allowed_sucursales is not None:
+                q = q.filter(InventarioSucursal.sucursal_id.in_(allowed_sucursales))
             if categoria_inventario_id is not None:
                 q = q.filter(InventarioGeneral.categoria_inventario_id == categoria_inventario_id)
             # opcional: solo con stock
@@ -1082,22 +1091,30 @@ def listar_inventario_filtrado():
         tipo = request.args.get('tipo', '').strip().lower()
         sucursal_id = request.args.get('sucursal_id', type=int)
 
+        allowed_sucursales, forbidden = _resolve_inventory_read_sucursal_ids(sucursal_id)
+        if forbidden:
+            return forbidden
+
         query = InventarioGeneral.query
 
         if tipo:
             query = query.filter(InventarioGeneral.tipo.ilike(f'%{tipo}%'))
 
-        # Si se quiere filtrar por sucursal, devolver SOLO los que tengan stock > 0 en esa sucursal
-        if sucursal_id:
-            ids_en_sucursal = [inv.inventario_id for inv in InventarioSucursal.query.filter_by(sucursal_id=sucursal_id).filter(InventarioSucursal.stock > 0).all()]
-            query = query.filter(InventarioGeneral.id.in_(ids_en_sucursal))
+        # Si se consulta una sucursal específica, ya fue validada contra el scope.
+        # Si no se manda sucursal y el usuario no es global, se filtra por sus sucursales permitidas.
+        scoped_sucursales = [sucursal_id] if sucursal_id else allowed_sucursales
 
-        # Si no eres admin, filtra solo por tu sucursal
-        user = UserORM.get_by_id(get_jwt_identity())
-        if user and not (user.rol == "ADMINISTRADOR" or user.sucursal_id == 1000 or user.sucursal_id == 100):
-            if not sucursal_id:
-                ids_en_sucursal = [inv.inventario_id for inv in InventarioSucursal.query.filter_by(sucursal_id=user.sucursal_id).filter(InventarioSucursal.stock > 0).all()]
-                query = query.filter(InventarioGeneral.id.in_(ids_en_sucursal))
+        if scoped_sucursales is not None:
+            ids_en_sucursal = [
+                inv.inventario_id
+                for inv in (
+                    InventarioSucursal.query
+                    .filter(InventarioSucursal.sucursal_id.in_(scoped_sucursales))
+                    .filter(InventarioSucursal.stock > 0)
+                    .all()
+                )
+            ]
+            query = query.filter(InventarioGeneral.id.in_(ids_en_sucursal))
 
         inventarios = query.order_by(InventarioGeneral.nombre).all()
         data = [{
