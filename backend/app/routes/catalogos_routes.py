@@ -507,6 +507,20 @@ def eliminar_catalogo(catalogo, elemento_id):
         return respuesta_ok(message="Elemento no encontrado", code=404)
 
     try:
+        if hasattr(elemento, "activo"):
+            if elemento.activo is False:
+                return respuesta_ok(message="El elemento ya estaba desactivado")
+
+            elemento.activo = False
+            db.session.commit()
+            return respuesta_ok(message="Elemento desactivado correctamente")
+
+        if os.getenv("ALLOW_CATALOG_HARD_DELETE", "false").lower() != "true":
+            return respuesta_ok(
+                message="El borrado físico de catálogos está deshabilitado por seguridad.",
+                code=403,
+            )
+
         db.session.delete(elemento)
         db.session.commit()
         return respuesta_ok(message="Elemento eliminado")
