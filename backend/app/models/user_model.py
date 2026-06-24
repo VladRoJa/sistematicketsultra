@@ -41,7 +41,6 @@ class UserORM(db.Model):
 
     # ─── Relaciones ─────────────────────────────────────────
     movimientos = db.relationship('MovimientoInventario', backref='usuario', cascade='all, delete-orphan')
-    asistencias = db.relationship('RegistroAsistencia', backref='usuario', cascade='all, delete-orphan')
 
     # ─── Constantes de rol (usadas en permisos) ─────────────
     # Ajusta nombres a los que realmente usas en tu app.
