@@ -6,11 +6,12 @@ import tempfile
 
 import pandas as pd
 from flask import Blueprint, jsonify, request, send_file
-from flask_jwt_extended import get_jwt, jwt_required
+from flask_jwt_extended import get_jwt_identity, jwt_required
 from rapidfuzz import fuzz
 from werkzeug.utils import secure_filename
 
 from app.extensions import db
+from app.models.user_model import UserORM
 from app.models.catalogos import (
     CatalogoClasificacion,
     CategoriaInventario,
@@ -96,8 +97,12 @@ def buscar_similares(model, nombre, umbral=80):
 
 
 def _puede_administrar_catalogos():
-    claims = get_jwt() or {}
-    rol = (claims.get("rol") or claims.get("role") or "").strip().upper()
+    current_user_id = get_jwt_identity()
+    user = UserORM.get_by_id(current_user_id)
+    if not user:
+        return False
+
+    rol = (user.rol or "").strip().upper()
     return rol in ADMIN_CATALOG_ROLES
 
 
