@@ -6,11 +6,15 @@ from dataclasses import asdict, dataclass
 from http import HTTPStatus
 from typing import Any
 
+import hmac
+import os
+
 from flask import Blueprint, current_app, jsonify, request
 
 
 warehouse_internal_jobs_bp = Blueprint( "warehouse_internal_jobs", __name__)
 
+INTERNAL_JOBS_TOKEN_HEADER = "X-Suite-Internal-Token"
 
 SUPPORTED_REPORT_TYPES = frozenset(
     {
@@ -90,6 +94,40 @@ def _json_error(
 
     return jsonify(payload), status_code
 
+def _require_internal_job_token():
+    expected_token = (
+        current_app.config.get("WAREHOUSE_INTERNAL_JOBS_TOKEN")
+        or os.environ.get("WAREHOUSE_INTERNAL_JOBS_TOKEN")
+    )
+
+    if not expected_token:
+        current_app.logger.error(
+            "WAREHOUSE_INTERNAL_JOBS_TOKEN no está configurado; "
+            "rechazando ejecución de endpoint interno Warehouse."
+        )
+        return _json_error(
+            "No autorizado.",
+            HTTPStatus.FORBIDDEN,
+            code="INTERNAL_JOB_FORBIDDEN",
+        )
+
+    provided_token = request.headers.get(INTERNAL_JOBS_TOKEN_HEADER)
+
+    if not provided_token or not hmac.compare_digest(
+        str(provided_token),
+        str(expected_token),
+    ):
+        current_app.logger.warning(
+            "Intento no autorizado de ejecutar Warehouse internal job desde ip=%s",
+            request.remote_addr,
+        )
+        return _json_error(
+            "No autorizado.",
+            HTTPStatus.FORBIDDEN,
+            code="INTERNAL_JOB_FORBIDDEN",
+        )
+
+    return None
 
 def _normalize_str(value: Any) -> str | None:
     if value is None:
@@ -205,6 +243,10 @@ def create_gasca_report_job():
     - kpi_desempeno y kpi_ventas_nuevos_socios no aceptan scheduled_month_end_close
     - snapshot_kind se resuelve aquí, no en parser ni en el servicio de ingesta
     """
+    forbidden = _require_internal_job_token()
+    if forbidden:
+        return forbidden
+
     payload = request.get_json(silent=True)
 
     if payload is None:
