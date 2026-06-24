@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from flask import jsonify
-from flask_jwt_extended import get_jwt, get_jwt_identity
+from flask_jwt_extended import get_jwt_identity
 from sqlalchemy import text
 
 from app import db
@@ -280,50 +280,61 @@ def get_current_internal_document_context() -> InternalDocumentUserContext | Non
     """
     Construye contexto de permisos para Nube Corporativa.
 
-    Fuente primaria:
-    - JWT claims para rol/sucursal/sucursales/department_id.
+    Fuente real:
+    - DB user actual resuelto desde get_jwt_identity().
 
-    Respaldo:
-    - DB user si algún claim falta o llega incompleto.
+    Motivo:
+    - Evitar depender de claims viejos de JWT para rol, sucursal,
+      sucursales asignadas o departamento.
     """
     user_id = get_current_user_id()
     if user_id is None:
         return None
 
-    try:
-        claims = get_jwt() or {}
-    except Exception:
-        claims = {}
-
     user = UserORM.get_by_id(user_id)
+    if user is None:
+        return None
 
-    role = _normalize_role(claims.get("rol"))
-    if not role and user is not None:
-        role = _normalize_role(getattr(user, "rol", None))
+    role = _normalize_role(getattr(user, "rol", None))
+    username = getattr(user, "username", None)
 
-    username = getattr(user, "username", None) if user is not None else None
+    sucursal_id = _normalize_optional_int(getattr(user, "sucursal_id", None))
 
-    sucursal_id = _normalize_optional_int(claims.get("sucursal_id"))
-    if sucursal_id is None and user is not None:
-        sucursal_id = _normalize_optional_int(getattr(user, "sucursal_id", None))
+    sucursal_values: list[int] = []
 
-    sucursales_ids = _normalize_int_tuple(claims.get("sucursales_ids"))
-    if not sucursales_ids and user is not None:
-        sucursales_ids = _normalize_int_tuple(getattr(user, "sucursales_ids", None))
+    if sucursal_id is not None:
+        sucursal_values.append(sucursal_id)
 
-    if sucursal_id is not None and sucursal_id not in sucursales_ids:
-        sucursales_ids = tuple([sucursal_id, *sucursales_ids])
+    for attr_name in ("sucursales_ids", "sucursal_ids"):
+        raw_values = getattr(user, attr_name, None)
+        for value in _normalize_int_tuple(raw_values):
+            if value not in sucursal_values:
+                sucursal_values.append(value)
 
-    department_id = _normalize_optional_int(claims.get("department_id"))
-    if department_id is None and user is not None:
-        department_id = _normalize_optional_int(getattr(user, "department_id", None))
+    try:
+        user_sucursales = getattr(user, "sucursales", None)
+        if user_sucursales:
+            for sucursal in user_sucursales:
+                value = (
+                    getattr(sucursal, "sucursal_id", None)
+                    or getattr(sucursal, "id", None)
+                )
+                normalized = _normalize_optional_int(value)
+                if normalized is not None and normalized not in sucursal_values:
+                    sucursal_values.append(normalized)
+    except TypeError:
+        # Si la relación no es iterable en algún contexto, conservamos
+        # la sucursal principal resuelta desde DB.
+        pass
+
+    department_id = _normalize_optional_int(getattr(user, "department_id", None))
 
     return InternalDocumentUserContext(
         user_id=user_id,
         username=username,
         role=role,
         sucursal_id=sucursal_id,
-        sucursales_ids=sucursales_ids,
+        sucursales_ids=tuple(sucursal_values),
         department_id=department_id,
     )
 
