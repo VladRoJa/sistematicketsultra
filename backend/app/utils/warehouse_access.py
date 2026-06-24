@@ -63,6 +63,17 @@ def require_warehouse_view():
     return None
 
 
+def require_warehouse_catalogs():
+    operator = get_current_warehouse_operator()
+
+    if operator is None or not (
+        bool(operator.can_view) or bool(operator.can_upload)
+    ):
+        return _forbidden_response("No autorizado para consultar catálogos de Warehouse")
+
+    return None
+
+
 def require_warehouse_upload():
     operator = get_current_warehouse_operator()
 
