@@ -8,7 +8,7 @@ from decimal import Decimal
 from typing import Any
 
 from flask import Blueprint, jsonify, request, current_app
-from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required
+from flask_jwt_extended import get_jwt_identity, jwt_required
 from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
@@ -28,6 +28,7 @@ from app.models import (
     Sucursal,
     SucursalOperationalStatus,
     OpeningTaskDocumentLinkORM,
+    UserORM,
     OpeningTaskBlockerImpact,
     OpeningTaskBlockerORM,
     OpeningTaskBlockerStatus,
@@ -64,21 +65,23 @@ OPENINGS_READ_ROLES = {
 
 
 def _current_role() -> str:
-    claims = get_jwt()
-    return str(claims.get("rol") or claims.get("role") or "").strip().upper()
+    user_id = get_jwt_identity()
+
+    try:
+        user_id = int(user_id)
+    except (TypeError, ValueError):
+        return ""
+
+    user = UserORM.get_by_id(user_id)
+    if not user:
+        return ""
+
+    return str(getattr(user, "rol", "") or "").strip().upper()
 
 
 def _current_user_id() -> int | None:
-    claims = get_jwt()
-    raw_user_id = (
-        claims.get("user_id")
-        or claims.get("id")
-        or claims.get("sub_id")
-        or get_jwt_identity()
-    )
-
     try:
-        return int(raw_user_id)
+        return int(get_jwt_identity())
     except (TypeError, ValueError):
         return None
 
