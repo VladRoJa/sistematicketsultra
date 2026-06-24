@@ -4,8 +4,8 @@
 # BLUEPRINT: GESTIÓN DE PERMISOS DE USUARIOS A DEPARTAMENTOS
 # ------------------------------------------------------------------------------
 
-from flask import Blueprint, jsonify, request
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask import Blueprint, current_app, jsonify, request
+from flask_jwt_extended import get_jwt, jwt_required, get_jwt_identity
 from app. extensions import db
 from app.models.permiso_model import Permiso
 from app.models.departamento_model import Departamento
@@ -13,12 +13,33 @@ from app. utils.error_handler import manejar_error
 
 permisos_bp = Blueprint('permisos', __name__, url_prefix='/api/permisos')
 
+PERMISOS_ADMIN_ROLES = {"ADMIN", "ADMINISTRADOR", "SUPER_ADMIN"}
+
+
+def _require_permisos_admin():
+    claims = get_jwt() or {}
+    rol = (claims.get("rol") or claims.get("role") or "").strip().upper()
+
+    if rol not in PERMISOS_ADMIN_ROLES:
+        current_app.logger.warning(
+            "Intento no autorizado de acceder a permisos legacy: identity=%s rol=%s",
+            get_jwt_identity(),
+            rol or "<sin_rol>",
+        )
+        return jsonify({"error": "No autorizado"}), 403
+
+    return None
+
 # ------------------------------------------------------------------------------
 # RUTA: Asignar permiso a un usuario sobre un departamento
 # ------------------------------------------------------------------------------
 @permisos_bp.route('/asignar', methods=['POST'])
 @jwt_required()
 def asignar_permiso():
+    forbidden = _require_permisos_admin()
+    if forbidden:
+        return forbidden
+
     try:
         data = request.json
         user_id = data.get('user_id')
@@ -49,6 +70,10 @@ def asignar_permiso():
 @permisos_bp.route('/listar/<int:user_id>', methods=['GET'])
 @jwt_required()
 def listar_permisos(user_id):
+    forbidden = _require_permisos_admin()
+    if forbidden:
+        return forbidden
+
     try:
         permisos = Permiso.query.filter_by(user_id=user_id).all()
         resultado = [{
@@ -71,6 +96,10 @@ def listar_permisos(user_id):
 @permisos_bp.route('/eliminar', methods=['DELETE'])
 @jwt_required()
 def eliminar_permiso():
+    forbidden = _require_permisos_admin()
+    if forbidden:
+        return forbidden
+
     try:
         data = request.json
         user_id = data.get('user_id')
@@ -99,6 +128,10 @@ def eliminar_permiso():
 @permisos_bp.route('/listar', methods=['GET'])
 @jwt_required()
 def listar_todos_los_permisos():
+    forbidden = _require_permisos_admin()
+    if forbidden:
+        return forbidden
+
     try:
         permisos = Permiso.query.all()
         resultado = [{
