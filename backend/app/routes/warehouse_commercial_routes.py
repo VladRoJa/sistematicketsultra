@@ -6,7 +6,7 @@ from decimal import Decimal
 from flask import Blueprint, current_app, jsonify
 from flask_jwt_extended import jwt_required
 
-from app.utils.warehouse_access import require_warehouse_operator
+from app.utils.warehouse_access import require_warehouse_view
 from app.warehouse.services.commercial_promotions_service import (
     CommercialPromotionsService,
 )
@@ -47,7 +47,7 @@ def _serialize_row(row: dict) -> dict:
 @warehouse_commercial_bp.route("/promotions/ranking", methods=["GET"])
 @jwt_required()
 def get_promotions_ranking():
-    forbidden = require_warehouse_operator()
+    forbidden = require_warehouse_view()
     if forbidden:
         return forbidden
 
@@ -89,7 +89,7 @@ def get_promotions_ranking():
 @warehouse_commercial_bp.route("/promotions/by-month", methods=["GET"])
 @jwt_required()
 def get_promotions_by_month():
-    forbidden = require_warehouse_operator()
+    forbidden = require_warehouse_view()
     if forbidden:
         return forbidden
 
@@ -132,7 +132,7 @@ def get_promotions_by_month():
 @warehouse_commercial_bp.route("/promotions/by-branch", methods=["GET"])
 @jwt_required()
 def get_promotions_by_branch():
-    forbidden = require_warehouse_operator()
+    forbidden = require_warehouse_view()
     if forbidden:
         return forbidden
 
@@ -179,7 +179,7 @@ def get_promotions_by_branch():
 @warehouse_commercial_bp.route("/promotions/unmapped", methods=["GET"])
 @jwt_required()
 def get_promotions_unmapped():
-    forbidden = require_warehouse_operator()
+    forbidden = require_warehouse_view()
     if forbidden:
         return forbidden
 
@@ -230,7 +230,7 @@ def get_promotions_unmapped():
 @warehouse_commercial_bp.route("/promotions/summary", methods=["GET"])
 @jwt_required()
 def get_promotions_summary():
-    forbidden = require_warehouse_operator()
+    forbidden = require_warehouse_view()
     if forbidden:
         return forbidden
 
