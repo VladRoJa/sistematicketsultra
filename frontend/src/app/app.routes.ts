@@ -8,7 +8,6 @@ import { AdminPermisosComponent } from './admin-permisos/admin-permisos.componen
 import { AuthGuard } from './guards/auth.guard';
 import { AdminGuard } from './guards/admin.guard';
 import { LayoutComponent } from './layout/layout.component';
-import { RegistrarAsistenciaComponent } from './registrar-asistencia/registrar-asistencia.component';
 import { AdminPanelComponent } from './admin-panel/admin-panel.component';
 import { CrearTicketRefactorComponent } from './pantalla-crear-ticket/crear-ticket-refactor.component';
 import { PmBitacorasMobileComponent } from './pm/pm-bitacoras-mobile/pm-bitacoras-mobile.component';
@@ -106,11 +105,7 @@ export const routes: Routes = [
           import('./pages/admin-usuarios-sucursales/admin-usuarios-sucursales.component')
             .then(m => m.AdminUsuariosSucursalesComponent),
       },
-      {
-        path: 'asistencia/registrar',
-        loadComponent: () => import('./registrar-asistencia/registrar-asistencia.component').then(m => m.RegistrarAsistenciaComponent)
-      },
-      {
+{
         path: 'planeacion/metas',
         loadComponent: () =>
           import('./planning/targets/planning-targets-home/planning-targets-home.component')
