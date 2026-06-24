@@ -4,6 +4,7 @@ from werkzeug.security import generate_password_hash
 from app.extensions import db
 from app.models.user_model import UserORM
 import re
+import os
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
 usuarios_bp = Blueprint('usuarios', __name__)
@@ -152,10 +153,31 @@ def editar_usuario(user_id):
 def eliminar_usuario(user_id):
     forbidden = _require_admin()
     if forbidden:
-        return jsonify({"error": "Forbidden", "detail": "Se requiere rol admin"}), 403   
+        return forbidden
+
+    if os.getenv("ALLOW_USER_HARD_DELETE", "false").lower() != "true":
+        return jsonify({
+            "error": "Forbidden",
+            "detail": "El borrado físico de usuarios está deshabilitado por seguridad.",
+            "code": "USER_HARD_DELETE_DISABLED",
+        }), 403
+
+    current_user_id = get_jwt_identity()
+    if str(current_user_id) == str(user_id):
+        return jsonify({
+            "error": "Forbidden",
+            "detail": "No puedes eliminar tu propio usuario.",
+            "code": "SELF_DELETE_BLOCKED",
+        }), 403
+
     u = UserORM.get_by_id(user_id)
     if not u:
         return jsonify({"error": "Usuario no encontrado"}), 404
-    db.session.delete(u)
-    db.session.commit()
-    return jsonify({"msg": "Usuario eliminado correctamente"}), 200
+
+    try:
+        db.session.delete(u)
+        db.session.commit()
+        return jsonify({"msg": "Usuario eliminado correctamente"}), 200
+    except Exception:
+        db.session.rollback()
+        return jsonify({"error": "Error al eliminar usuario"}), 500
