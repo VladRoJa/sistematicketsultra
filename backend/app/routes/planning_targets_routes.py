@@ -280,7 +280,7 @@ def create_model_config_route():
 )
 @jwt_required()
 def approve_target_batch_route(batch_id: int):
-    access_error = _guard(require_planning_submit)
+    access_error = _guard(require_planning_approve)
     if access_error:
         return access_error    
     try:
@@ -314,7 +314,7 @@ def approve_target_batch_route(batch_id: int):
 )
 @jwt_required()
 def reject_target_batch_route(batch_id: int):
-    access_error = _guard(require_planning_submit)
+    access_error = _guard(require_planning_approve)
     if access_error:
         return access_error    
     try:
@@ -347,7 +347,7 @@ def reject_target_batch_route(batch_id: int):
 )
 @jwt_required()
 def publish_approved_batch_to_track_route(batch_id: int):
-    access_error = _guard(require_planning_submit)
+    access_error = _guard(require_planning_publish)
     if access_error:
         return access_error
     try:
