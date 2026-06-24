@@ -7,6 +7,8 @@ from app.models.user_model import UserORM
 
 admin_usuarios_bp = Blueprint("admin_usuarios", __name__)
 
+ADMIN_USUARIOS_ROLES = {"ADMIN", "ADMINISTRADOR", "SUPER_ADMIN"}
+
 
 def _get_current_user_admin():
     """Retorna (user, None) o (None, (json, status)) si no autorizado."""
@@ -14,7 +16,8 @@ def _get_current_user_admin():
     user = UserORM.get_by_id(current_user_id)
     if not user:
         return None, (jsonify({"mensaje": "No autenticado"}), 401)
-    if not user.es_admin():
+    rol = (user.rol or "").strip().upper()
+    if rol not in ADMIN_USUARIOS_ROLES:
         return None, (jsonify({"mensaje": "No autorizado"}), 403)
     return user, None
 
