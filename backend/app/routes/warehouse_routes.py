@@ -15,6 +15,7 @@ from app.extensions import db
 from app.models.warehouse import WarehouseUploadORM
 from app.utils.warehouse_access import (
     require_warehouse_archive,
+    require_warehouse_catalogs,
     require_warehouse_operator,
     require_warehouse_upload,
     require_warehouse_view,
@@ -111,7 +112,7 @@ def warehouse_access():
 @warehouse_bp.route('/catalogs', methods=['GET'])
 @jwt_required()
 def warehouse_catalogs():
-    forbidden = require_warehouse_operator()
+    forbidden = require_warehouse_catalogs()
     if forbidden:
         return forbidden
 
