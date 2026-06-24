@@ -338,6 +338,7 @@ def _serialize_track_daily_mart_row(row: TrackDailyMartORM) -> dict[str, Any]:
 @jwt_required()
 def run_track_daily_pipeline_endpoint():
     try:
+        _require_track_admin_role()
 
         payload = request.get_json(silent=True) or {}
 
