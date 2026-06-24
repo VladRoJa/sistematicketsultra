@@ -88,6 +88,20 @@ def _get_user_sucursales_scope_from_db(user_id):
     return sorted({int(row[0]) for row in rows if row[0] is not None})
 
 
+
+def _require_inventory_global_write():
+    claims = get_jwt() or {}
+    rol = (claims.get("rol") or "").strip().upper()
+
+    if rol in INVENTORY_GLOBAL_WRITE_ROLES:
+        return None
+
+    return jsonify({
+        "error": "Forbidden",
+        "detail": "No tienes permiso para administrar el inventario maestro.",
+    }), 403
+
+
 def _require_inventory_movement_write(sucursal_id):
     claims = get_jwt() or {}
     rol = (claims.get("rol") or "").strip().upper()
@@ -170,6 +184,10 @@ def _parse_int_nonneg(val, field_name):
 @jwt_required()
 def crear_inventario():
     try:
+        forbidden = _require_inventory_global_write()
+        if forbidden:
+            return forbidden
+
         data = request.get_json()
         if not data.get('nombre') or not data.get('categoria'):
             return error_response('Nombre y categoría son obligatorios')
@@ -566,6 +584,10 @@ def listar_sucursales():
 @jwt_required()
 def editar_inventario(inventario_id):
     try:
+        forbidden = _require_inventory_global_write()
+        if forbidden:
+            return forbidden
+
         inventario = InventarioGeneral.query.get(inventario_id)
         if not inventario:
             return error_response('Inventario no encontrado', 404)
@@ -616,6 +638,10 @@ def editar_inventario(inventario_id):
 @jwt_required()
 def eliminar_inventario(inventario_id):
     try:
+        forbidden = _require_inventory_global_write()
+        if forbidden:
+            return forbidden
+
         inventario = InventarioGeneral.query.get(inventario_id)
         if not inventario:
             return error_response('Inventario no encontrado', 404)
@@ -1142,6 +1168,10 @@ def historial_aparato(inventario_id):
 @inventario_bp.route('/importar', methods=['POST'], strict_slashes=False)
 @jwt_required()
 def importar_inventario():
+    forbidden = _require_inventory_global_write()
+    if forbidden:
+        return forbidden
+
     file = request.files.get('file')
     if not file:
         return jsonify({"message": "No se subió archivo"}), 400
@@ -1219,6 +1249,10 @@ def plantilla_inventario():
 @inventario_bp.route('/exportar', methods=['GET'], strict_slashes=False)
 @jwt_required()
 def exportar_inventario():
+    forbidden = _require_inventory_global_write()
+    if forbidden:
+        return forbidden
+
     registros = InventarioGeneral.query.all()
     # Extrae los campos igual que en la plantilla, agrega los que uses
     data = [
