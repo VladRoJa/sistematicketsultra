@@ -13,7 +13,6 @@ from app.models.pm_preventivo import PmPreventivoConfigORM
 from app.models.inventario import InventarioGeneral, InventarioSucursal
 from app.models.sucursal_model import Sucursal
 from app.models.pm_validacion import PmValidacionORM
-from app.utils.scope_utils import can_claims_access_branch
 from app.utils.pm_permissions import (
     require_pm_execute,
     require_pm_validate,

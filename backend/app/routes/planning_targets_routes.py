@@ -6,7 +6,7 @@ from decimal import Decimal
 from typing import Any
 
 from flask import Blueprint, jsonify, request
-from flask_jwt_extended import get_jwt, jwt_required
+from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from app.models.user_model import UserORM
 from app.warehouse.services.planning_targets_service import (
@@ -64,53 +64,25 @@ def _json_payload() -> dict[str, Any]:
 
 
 def _current_user_id_or_none() -> int | None:
-    claims = get_jwt() or {}
+    try:
+        return int(get_jwt_identity())
+    except (TypeError, ValueError):
+        return None
 
-    for key in ("user_id", "id", "sub"):
-        raw_value = claims.get(key)
-        if raw_value is None:
-            continue
-
-        try:
-            value = int(raw_value)
-        except Exception:
-            continue
-
-        if value > 0:
-            return value
-
-    return None
 
 def _current_username_or_none() -> str | None:
-    claims = get_jwt() or {}
-
-    for key in ("username", "user"):
-        raw_value = claims.get(key)
-        if raw_value is None:
-            continue
-
-        normalized = str(raw_value).strip()
-        if normalized and not normalized.isdigit():
-            return normalized
-
     user_id = _current_user_id_or_none()
+    if user_id is None:
+        return None
 
-    if user_id is not None:
-        user = UserORM.get_by_id(user_id)
+    user = UserORM.get_by_id(user_id)
+    username = str(getattr(user, "username", "") or "").strip() if user else ""
 
-        if user is not None and user.username:
-            return str(user.username).strip()
+    if username:
+        return username
 
-        return f"Usuario #{user_id}"
+    return f"Usuario #{user_id}"
 
-    raw_sub = claims.get("sub")
-    if raw_sub is not None:
-        normalized_sub = str(raw_sub).strip()
-
-        if normalized_sub and not normalized_sub.isdigit():
-            return normalized_sub
-
-    return None
 
 def _optional_decimal(value: Any) -> Decimal | None:
     if value is None:
