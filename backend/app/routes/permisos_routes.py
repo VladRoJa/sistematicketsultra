@@ -5,7 +5,8 @@
 # ------------------------------------------------------------------------------
 
 from flask import Blueprint, current_app, jsonify, request
-from flask_jwt_extended import get_jwt, jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from app.models.user_model import UserORM
 from app. extensions import db
 from app.models.permiso_model import Permiso
 from app.models.departamento_model import Departamento
@@ -17,18 +18,33 @@ PERMISOS_ADMIN_ROLES = {"ADMIN", "ADMINISTRADOR", "SUPER_ADMIN"}
 
 
 def _require_permisos_admin():
-    claims = get_jwt() or {}
-    rol = (claims.get("rol") or claims.get("role") or "").strip().upper()
+    try:
+        user_id = int(get_jwt_identity())
+    except (TypeError, ValueError):
+        current_app.logger.warning(
+            "Intento no autorizado de acceder a permisos legacy: identity inválida"
+        )
+        return jsonify({
+            "error": "Forbidden",
+            "detail": "No autorizado para administrar permisos legacy.",
+        }), 403
+
+    user = UserORM.get_by_id(user_id)
+    rol = str(getattr(user, "rol", "") or "").strip().upper() if user else ""
 
     if rol not in PERMISOS_ADMIN_ROLES:
         current_app.logger.warning(
             "Intento no autorizado de acceder a permisos legacy: identity=%s rol=%s",
-            get_jwt_identity(),
+            user_id,
             rol or "<sin_rol>",
         )
-        return jsonify({"error": "No autorizado"}), 403
+        return jsonify({
+            "error": "Forbidden",
+            "detail": "No autorizado para administrar permisos legacy.",
+        }), 403
 
     return None
+
 
 # ------------------------------------------------------------------------------
 # RUTA: Asignar permiso a un usuario sobre un departamento
