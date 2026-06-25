@@ -2,7 +2,7 @@
 
 
 from flask import Blueprint, jsonify, request
-from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime, date, timedelta
 from sqlalchemy import func
 from calendar import monthrange
@@ -115,6 +115,30 @@ def _verificar_permiso_sucursal(user, sucursal_id_int):
     return (
         {"error": "Forbidden", "detail": "No tienes acceso a esta sucursal"},
         403,
+    )
+
+
+def _pm_user_role(user) -> str:
+    return str(getattr(user, "rol", "") or "").strip().upper()
+
+
+def _pm_user_department_id(user):
+    try:
+        return int(getattr(user, "department_id", None))
+    except (TypeError, ValueError):
+        return None
+
+
+def _pm_user_primary_sucursal_id(user):
+    try:
+        return int(getattr(user, "sucursal_id", None))
+    except (TypeError, ValueError):
+        return None
+
+
+def _pm_user_assigned_sucursales(user):
+    return _normalizar_pm_sucursales_ids(
+        getattr(user, "sucursales_ids", [])
     )
 
 def _normalizar_texto_pm(value) -> str:
@@ -978,7 +1002,6 @@ def pm_obtener_bitacora_detalle(bitacora_pm_id):
 @pm_bp.route("/bitacoras", methods=["GET"])
 @jwt_required()
 def pm_listar_bitacoras():
-    claims = get_jwt() or {}
     user_id = get_jwt_identity()
 
     user, user_err = _obtener_usuario_actual_pm(user_id)
@@ -1015,8 +1038,8 @@ def pm_listar_bitacoras():
         )
     )
     
-    department_id = claims.get("department_id")
-    rol = (claims.get("rol") or "").strip().upper()
+    department_id = _pm_user_department_id(user)
+    rol = _pm_user_role(user)
 
     if department_id == 1 or rol in {"MANTENIMIENTO", "SR_MANTENIMIENTO", "AUX_MANTENIMIENTO"}:
         query = query.filter(db.func.upper(InventarioGeneral.tipo) == "APARATOS")
@@ -1032,11 +1055,11 @@ def pm_listar_bitacoras():
             return jsonify(denied[0]), denied[1]
         query = query.filter(PmBitacoraORM.sucursal_id == sucursal_id)
     else:
-        rol = (claims.get("rol") or "").strip().upper()
+        rol = _pm_user_role(user)
 
         if rol not in _ADMIN_ROLES and rol != "MANTENIMIENTO":
             if rol == "AUX_MANTENIMIENTO":
-                user_sucursal = claims.get("sucursal_id")
+                user_sucursal = _pm_user_primary_sucursal_id(user)
                 try:
                     user_sucursal = int(user_sucursal) if user_sucursal is not None else None
                 except Exception:
@@ -1047,7 +1070,7 @@ def pm_listar_bitacoras():
 
                 query = query.filter(PmBitacoraORM.sucursal_id == user_sucursal)
             else:
-                allowed = claims.get("sucursales_ids") or []
+                allowed = _pm_user_assigned_sucursales(user)
                 try:
                     allowed = [int(x) for x in allowed]
                 except Exception:
@@ -1089,7 +1112,6 @@ def pm_listar_bitacoras():
 @pm_bp.route("/configuraciones", methods=["GET"])
 @jwt_required()
 def pm_listar_configuraciones():
-    claims = get_jwt() or {}
     user_id = get_jwt_identity()
     sucursal_id = request.args.get("sucursal_id", type=int)
 
@@ -1117,8 +1139,8 @@ def pm_listar_configuraciones():
         )
     )
 
-    department_id = claims.get("department_id")
-    rol = (claims.get("rol") or "").strip().upper()
+    department_id = _pm_user_department_id(user)
+    rol = _pm_user_role(user)
 
     if department_id == 1 or rol in {"MANTENIMIENTO", "SR_MANTENIMIENTO", "AUX_MANTENIMIENTO"}:
         query = query.filter(db.func.upper(InventarioGeneral.tipo) == "APARATOS")
@@ -1134,7 +1156,7 @@ def pm_listar_configuraciones():
     else:
         if rol not in _ADMIN_ROLES and rol != "MANTENIMIENTO":
             if rol == "AUX_MANTENIMIENTO":
-                user_sucursal = claims.get("sucursal_id")
+                user_sucursal = _pm_user_primary_sucursal_id(user)
                 try:
                     user_sucursal = int(user_sucursal) if user_sucursal is not None else None
                 except Exception:
@@ -1145,7 +1167,7 @@ def pm_listar_configuraciones():
 
                 query = query.filter(PmPreventivoConfigORM.sucursal_id == user_sucursal)
             else:
-                allowed = claims.get("sucursales_ids") or []
+                allowed = _pm_user_assigned_sucursales(user)
                 try:
                     allowed = [int(x) for x in allowed]
                 except Exception:
@@ -1218,7 +1240,6 @@ def pm_actualizar_configuracion(config_id):
 @pm_bp.route("/preventivo/dashboard", methods=["GET"])
 @jwt_required()
 def pm_preventivo_dashboard():
-    claims = get_jwt() or {}
     user_id = get_jwt_identity()
 
     user, user_err = _obtener_usuario_actual_pm(user_id)
@@ -1319,8 +1340,8 @@ def pm_preventivo_dashboard():
         )
     )
 
-    rol = (claims.get("rol") or "").strip().upper()
-    department_id = claims.get("department_id")
+    rol = _pm_user_role(user)
+    department_id = _pm_user_department_id(user)
 
     if department_id == 1 or rol in {"MANTENIMIENTO", "SR_MANTENIMIENTO", "AUX_MANTENIMIENTO"}:
         query = query.filter(db.func.upper(InventarioGeneral.tipo) == "APARATOS")
@@ -1435,7 +1456,6 @@ def pm_preventivo_dashboard():
 @pm_bp.route("/calendario", methods=["GET"])
 @jwt_required()
 def pm_calendario():
-    claims = get_jwt() or {}
     user_id = get_jwt_identity()
 
     user, user_err = _obtener_usuario_actual_pm(user_id)
@@ -1504,8 +1524,8 @@ def pm_calendario():
     if subcategoria:
         query = query.filter(db.func.lower(InventarioGeneral.subcategoria) == subcategoria)
 
-    department_id = claims.get("department_id")
-    rol = (claims.get("rol") or "").strip().upper()
+    department_id = _pm_user_department_id(user)
+    rol = _pm_user_role(user)
 
     if department_id == 1 or rol in {"MANTENIMIENTO", "SR_MANTENIMIENTO", "AUX_MANTENIMIENTO"}:
         query = query.filter(db.func.upper(InventarioGeneral.tipo) == "APARATOS")
@@ -1520,11 +1540,11 @@ def pm_calendario():
 
         query = query.filter(PmPreventivoConfigORM.sucursal_id.in_(sucursales_ids))
     else:
-        rol = (claims.get("rol") or "").strip().upper()
+        rol = _pm_user_role(user)
 
         if rol not in _ADMIN_ROLES and rol not in {"MANTENIMIENTO", "SISTEMAS", "TECNICO"}:
             if rol == "AUX_MANTENIMIENTO":
-                user_sucursal = claims.get("sucursal_id")
+                user_sucursal = _pm_user_primary_sucursal_id(user)
                 try:
                     user_sucursal = int(user_sucursal) if user_sucursal is not None else None
                 except Exception:
@@ -1535,7 +1555,7 @@ def pm_calendario():
 
                 query = query.filter(PmPreventivoConfigORM.sucursal_id == user_sucursal)
             else:
-                allowed = claims.get("sucursales_ids") or []
+                allowed = _pm_user_assigned_sucursales(user)
                 try:
                     allowed = [int(x) for x in allowed]
                 except Exception:
