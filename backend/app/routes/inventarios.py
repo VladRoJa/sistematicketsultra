@@ -67,6 +67,14 @@ def _get_current_user_id_required():
     return user_id, None
 
 
+def _get_current_inventory_user():
+    current_user_id = _coerce_int_or_none(get_jwt_identity())
+    if current_user_id is None:
+        return None
+
+    return UserORM.get_by_id(current_user_id)
+
+
 def _normalize_sucursales_ids(raw_value):
     if not isinstance(raw_value, list):
         return []
@@ -90,11 +98,21 @@ def _get_user_sucursales_scope_from_db(user_id):
 
 
 
+
 def _resolve_inventory_read_sucursal_ids(requested_sucursal_id=None):
-    claims = get_jwt() or {}
-    rol = (claims.get("rol") or "").strip().upper()
-    current_user_id = _coerce_int_or_none(get_jwt_identity())
+    user = _get_current_inventory_user()
     requested_sucursal_id = _coerce_int_or_none(requested_sucursal_id)
+
+    if not user:
+        return None, (
+            jsonify({
+                "error": "Unauthorized",
+                "detail": "Sesión inválida.",
+            }),
+            401,
+        )
+
+    rol = str(getattr(user, "rol", "") or "").strip().upper()
 
     if rol in INVENTORY_GLOBAL_WRITE_ROLES:
         if requested_sucursal_id is not None:
@@ -104,18 +122,20 @@ def _resolve_inventory_read_sucursal_ids(requested_sucursal_id=None):
     allowed_sucursales = []
 
     if rol == "SR_MANTENIMIENTO":
-        allowed_sucursales = _normalize_sucursales_ids(claims.get("sucursales_ids"))
+        allowed_sucursales = _normalize_sucursales_ids(
+            getattr(user, "sucursales_ids", [])
+        )
 
-        if not allowed_sucursales and current_user_id is not None:
-            allowed_sucursales = _get_user_sucursales_scope_from_db(current_user_id)
+        if not allowed_sucursales:
+            allowed_sucursales = _get_user_sucursales_scope_from_db(user.id)
 
     elif rol == "AUX_MANTENIMIENTO":
-        user_sucursal_id = _coerce_int_or_none(claims.get("sucursal_id"))
+        user_sucursal_id = _coerce_int_or_none(getattr(user, "sucursal_id", None))
         if user_sucursal_id is not None:
             allowed_sucursales = [user_sucursal_id]
 
     else:
-        user_sucursal_id = _coerce_int_or_none(claims.get("sucursal_id"))
+        user_sucursal_id = _coerce_int_or_none(getattr(user, "sucursal_id", None))
         if user_sucursal_id is not None:
             allowed_sucursales = [user_sucursal_id]
 
@@ -146,8 +166,8 @@ def _resolve_inventory_read_sucursal_ids(requested_sucursal_id=None):
 
 
 def _require_inventory_global_write():
-    claims = get_jwt() or {}
-    rol = (claims.get("rol") or "").strip().upper()
+    user = _get_current_inventory_user()
+    rol = str(getattr(user, "rol", "") or "").strip().upper() if user else ""
 
     if rol in INVENTORY_GLOBAL_WRITE_ROLES:
         return None
@@ -159,16 +179,29 @@ def _require_inventory_global_write():
 
 
 def _require_inventory_movement_write(sucursal_id):
-    claims = get_jwt() or {}
-    rol = (claims.get("rol") or "").strip().upper()
-    current_user_id = _coerce_int_or_none(get_jwt_identity())
+    user = _get_current_inventory_user()
+    target_sucursal_id = _coerce_int_or_none(sucursal_id)
+
+    if not user:
+        return jsonify({
+            "error": "Unauthorized",
+            "detail": "Sesión inválida.",
+        }), 401
+
+    if target_sucursal_id is None:
+        return jsonify({
+            "error": "Bad Request",
+            "detail": "sucursal_id inválido.",
+        }), 400
+
+    rol = str(getattr(user, "rol", "") or "").strip().upper()
 
     if rol in INVENTORY_GLOBAL_WRITE_ROLES:
         return None
 
     if rol == "AUX_MANTENIMIENTO":
-        user_sucursal_id = _coerce_int_or_none(claims.get("sucursal_id"))
-        if user_sucursal_id is not None and int(sucursal_id) == user_sucursal_id:
+        user_sucursal_id = _coerce_int_or_none(getattr(user, "sucursal_id", None))
+        if user_sucursal_id is not None and target_sucursal_id == user_sucursal_id:
             return None
 
         return jsonify({
@@ -177,12 +210,14 @@ def _require_inventory_movement_write(sucursal_id):
         }), 403
 
     if rol == "SR_MANTENIMIENTO":
-        allowed_sucursales = _normalize_sucursales_ids(claims.get("sucursales_ids"))
+        allowed_sucursales = _normalize_sucursales_ids(
+            getattr(user, "sucursales_ids", [])
+        )
 
-        if not allowed_sucursales and current_user_id is not None:
-            allowed_sucursales = _get_user_sucursales_scope_from_db(current_user_id)
+        if not allowed_sucursales:
+            allowed_sucursales = _get_user_sucursales_scope_from_db(user.id)
 
-        if int(sucursal_id) in allowed_sucursales:
+        if target_sucursal_id in allowed_sucursales:
             return None
 
         return jsonify({
@@ -194,7 +229,6 @@ def _require_inventory_movement_write(sucursal_id):
         "error": "Forbidden",
         "detail": "No tienes permiso para modificar movimientos de inventario.",
     }), 403
-
 
 # ----------------------------------------------------------------------
 # UTILIDADES
