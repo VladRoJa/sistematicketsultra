@@ -82,6 +82,12 @@ from .openings import (
     OpeningTaskStatus,
 )
 
+from .permissions import (
+    PermissionModuleORM,
+    PermissionActionORM,
+    PermissionRouteMapORM,
+)
+
 
 # -------------------------------------------------------------------------------
 # EXPORTACIONES: Control de qué modelos estarán disponibles al importar app.models
@@ -154,4 +160,7 @@ __all__ = [
     "OpeningTaskPriority",
     "OpeningTaskStatus",
     "OpeningTaskCommentORM",
+    "PermissionModuleORM",
+    "PermissionActionORM",
+    "PermissionRouteMapORM",
 ]
