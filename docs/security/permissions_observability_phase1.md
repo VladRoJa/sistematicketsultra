@@ -59,5 +59,6 @@ Esta fase funciona como mapa base para construir observabilidad de accesos en Su
 ## Archivos relacionados
 
 - `docs/security/permissions_routes_catalog.csv`
-- `permissions_routes_inventory.json`
-- `permissions_routes_summary.json`
+- `docs/security/permissions_high_risk_routes_review.csv`
+
+Los archivos temporales usados para generar el inventario no se versionan en el repo raíz.
