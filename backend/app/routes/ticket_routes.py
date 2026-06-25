@@ -29,9 +29,6 @@ from app.utils.auth_utils import bloquea_lectores_globales
 from decimal import Decimal, InvalidOperation
 
 
-
-
-
 # ─────────────────────────────────────────────────────────────
 # BLUEPRINT: TICKETS
 # ─────────────────────────────────────────────────────────────
@@ -500,7 +497,6 @@ def list_tickets_with_filters():
         return manejar_error(e, "list_tickets_with_filters")
 
 
-
 # ─────────────────────────────────────────────────────────────
 # RUTA: Actualizar estado de un ticket
 # ─────────────────────────────────────────────────────────────
@@ -696,7 +692,6 @@ def update_ticket_status(id):
 # ─────────────────────────────────────────────────────────────
 # RUTA: Exportar tickets a Excel (con filtros)
 # ─────────────────────────────────────────────────────────────
-
 
 
 @ticket_bp.route('/export-excel', methods=['GET'])
@@ -1633,7 +1628,6 @@ def migrar_historial_local():
         return jsonify({"mensaje": "⚠️ No se encontraron entradas para actualizar."}), 200
 
 
-
 # ─────────────────────────────────────────────────────────────
 # RUTA: eliminar todos tickets
 # ─────────────────────────────────────────────────────────────
@@ -1900,68 +1894,6 @@ def notify_ticket(ticket_id):
 # ─────────────────────────────────────────────────────────────
 
 
-@ticket_bp.route('/rrhh/solicitar/<int:ticket_id>', methods=['POST'])
-@jwt_required()
-def rrhh_solicitar(ticket_id):
-    user = UserORM.get_by_id(get_jwt_identity())
-    t = Ticket.query.get(ticket_id)
-    if not t:
-        return jsonify({"mensaje":"Ticket no encontrado"}), 404
-
-    # Permite: admin/corporativo o jefe del depto del ticket
-    if not (_es_admin_o_corporativo(user) or _es_jefe_depto(user, t)):
-        return jsonify({"mensaje":"No autorizado"}), 403
-
-    aprobador_username = (request.json or {}).get("aprobador_username")
-    t.marcar_para_aprobacion_rrhh(aprobador_username=aprobador_username)
-    return jsonify({"mensaje":"Ticket marcado para aprobación RRHH"}), 200
-
-
-# ─────────────────────────────────────────────────────────────
-# RUTA: Aprobar ticket por RRHH
-# ─────────────────────────────────────────────────────────────
-
-
-@ticket_bp.route('/rrhh/aprobar/<int:ticket_id>', methods=['POST'])
-@jwt_required()
-def rrhh_aprobar(ticket_id):
-    user = UserORM.get_by_id(get_jwt_identity())
-    t = Ticket.query.get(ticket_id)
-    if not t:
-        return jsonify({"mensaje":"Ticket no encontrado"}), 404
-
-    # Solo gerente general/regional (trátalo como corporativo/admin) o el username designado como aprobador
-    comentario = (request.json or {}).get("comentario")
-    if not (_es_admin_o_corporativo(user) or _es_gerente_regional(user) or user.username == t.aprobador_username):
-        return jsonify({"mensaje":"No autorizado"}), 403
-
-
-    t.aprobar_rrhh(user.username, comentario)
-    return jsonify({"mensaje":"Aprobado por RRHH/gerencia"}), 200
-
-
-
-# ─────────────────────────────────────────────────────────────
-# RUTA: Rechazar ticket por RRHH
-# ─────────────────────────────────────────────────────────────
-
-@ticket_bp.route('/rrhh/rechazar/<int:ticket_id>', methods=['POST'])
-@jwt_required()
-def rrhh_rechazar(ticket_id):
-    user = UserORM.get_by_id(get_jwt_identity())
-    t = Ticket.query.get(ticket_id)
-    if not t:
-        return jsonify({"mensaje":"Ticket no encontrado"}), 404
-
-    comentario = (request.json or {}).get("comentario")
-    if not (_es_admin_o_corporativo(user) or _es_gerente_regional(user) or user.username == t.aprobador_username):
-        return jsonify({"mensaje":"No autorizado"}), 403
-
-
-    t.rechazar_rrhh(user.username, comentario)
-    return jsonify({"mensaje":"Rechazado por RRHH/gerencia"}), 200
-
-
 
 # ─────────────────────────────────────────────────────────────
 # RUTA: Establecer compromiso de solución y refacción
@@ -2001,7 +1933,6 @@ def set_compromiso(ticket_id):
         return jsonify({
             "mensaje": "Refacción solo se define aquí para tickets de Mantenimiento o Sistemas."
         }), 400
-
 
 
     try:
@@ -2116,7 +2047,6 @@ def cierre_gerente_desde_cero(ticket_id):
 # ─────────────────────────────────────────────────────────────
 
 
-
 @ticket_bp.route('/cierre/solicitar/<int:ticket_id>', methods=['POST'])
 @jwt_required()
 def cierre_solicitar(ticket_id):
@@ -2162,7 +2092,6 @@ def cierre_solicitar(ticket_id):
         "notas_cierre": t.notas_cierre,
         "notificados": notificados
     }), 200
-
 
 
 # ─────────────────────────────────────────────────────────────
@@ -2294,7 +2223,3 @@ def cierre_rechazar_creador(ticket_id):
         "historial_fechas": t.historial_fechas or [],
         "notificados": notificados
     }), 200
-
-
-
-
