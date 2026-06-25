@@ -46,21 +46,70 @@ _PM_TIPOS_MANTENIMIENTO_VALIDOS = {
 # ────────────────────────────────────────────────────────────
 # HELPERS 
 # ────────────────────────────────────────────────────────────
-def _verificar_permiso_sucursal(claims, sucursal_id_int):
+
+def _normalizar_pm_sucursales_ids(raw_value):
+    if raw_value is None:
+        return []
+
+    if not isinstance(raw_value, (list, tuple, set)):
+        return []
+
+    normalized = []
+    for item in raw_value:
+        try:
+            parsed = int(item)
+        except (TypeError, ValueError):
+            continue
+
+        normalized.append(parsed)
+
+    return sorted(set(normalized))
+
+
+def _verificar_permiso_sucursal(user, sucursal_id_int):
     """
-    Valida que el token tenga acceso a la sucursal indicada.
-    Retorna None si OK, o (response_dict, status_code) si denegado.
+    Valida acceso a sucursal usando usuario actual desde DB.
 
     PM conserva por ahora el comportamiento legacy:
     - ADMINISTRADOR / SUPER_ADMIN / ADMIN: global.
     - MANTENIMIENTO / SISTEMAS / TECNICO: global.
     - Resto: scope por usuario_sucursal o sucursal principal.
     """
-    if can_claims_access_branch(
-        claims,
-        sucursal_id_int,
-        global_roles=_PM_LEGACY_GLOBAL_SCOPE_ROLES,
-    ):
+    try:
+        target_sucursal_id = int(sucursal_id_int)
+    except (TypeError, ValueError):
+        return (
+            {"error": "Bad Request", "detail": "sucursal_id inválido"},
+            400,
+        )
+
+    if not user:
+        return (
+            {"error": "Unauthorized", "detail": "Usuario no encontrado."},
+            401,
+        )
+
+    rol = str(getattr(user, "rol", "") or "").strip().upper()
+
+    if rol in _PM_LEGACY_GLOBAL_SCOPE_ROLES:
+        return None
+
+    allowed_sucursales = _normalizar_pm_sucursales_ids(
+        getattr(user, "sucursales_ids", [])
+    )
+
+    primary_sucursal_id = getattr(user, "sucursal_id", None)
+    try:
+        primary_sucursal_id = int(primary_sucursal_id) if primary_sucursal_id is not None else None
+    except (TypeError, ValueError):
+        primary_sucursal_id = None
+
+    if primary_sucursal_id is not None:
+        allowed_sucursales.append(primary_sucursal_id)
+
+    allowed_sucursales = sorted(set(allowed_sucursales))
+
+    if target_sucursal_id in allowed_sucursales:
         return None
 
     return (
@@ -83,7 +132,7 @@ def _buscar_bitacora_preventiva_existente(inventario_id: int, sucursal_id: int, 
         .first()
     )
 
-def _crear_bitacora(data, claims, user_id):
+def _crear_bitacora(data, user_id):
     """
     Valida, verifica permisos e inserta una PmBitacoraORM.
     Retorna (bitacora, None) si OK, o (None, (response_dict, status_code)) si error.
@@ -169,7 +218,7 @@ def _crear_bitacora(data, claims, user_id):
         return None, denied_action
 
     # 5) Scope por sucursal
-    denied = _verificar_permiso_sucursal(claims, sucursal_id_int)
+    denied = _verificar_permiso_sucursal(user, sucursal_id_int)
     if denied:
         return None, denied
 
@@ -238,7 +287,7 @@ def _crear_bitacora(data, claims, user_id):
 
     return bit, None
 
-def _crear_validacion_pm(data, claims, user_id):
+def _crear_validacion_pm(data, user_id):
     """
     Valida e inserta una PmValidacionORM.
     Retorna (validacion, None) si OK, o (None, (response_dict, status_code)) si error.
@@ -325,7 +374,7 @@ def _crear_validacion_pm(data, claims, user_id):
         return None, denied_action
 
     # 8) Scope check usando la sucursal de la bitácora
-    denied = _verificar_permiso_sucursal(claims, bitacora.sucursal_id)
+    denied = _verificar_permiso_sucursal(user, bitacora.sucursal_id)
     if denied:
         return None, denied
 
@@ -420,7 +469,7 @@ def _obtener_usuario_actual_pm(user_id):
 
     return user, None
 
-def _crear_configuracion_pm(data, claims, user_id):
+def _crear_configuracion_pm(data, user_id):
     inventario_id = data.get("inventario_id")
     sucursal_id = data.get("sucursal_id")
     frecuencia_dias = data.get("frecuencia_dias")
@@ -485,7 +534,7 @@ def _crear_configuracion_pm(data, claims, user_id):
     if denied_action:
         return None, denied_action
 
-    denied = _verificar_permiso_sucursal(claims, sucursal_id_int)
+    denied = _verificar_permiso_sucursal(user, sucursal_id_int)
     if denied:
         return None, denied
 
@@ -538,7 +587,7 @@ def _crear_configuracion_pm(data, claims, user_id):
 
     return cfg, None
 
-def _actualizar_configuracion_pm(config_id, data, claims, user_id):
+def _actualizar_configuracion_pm(config_id, data, user_id):
     try:
         config_id_int = int(config_id)
     except (TypeError, ValueError):
@@ -562,7 +611,7 @@ def _actualizar_configuracion_pm(config_id, data, claims, user_id):
     if denied_action:
         return None, denied_action
 
-    denied = _verificar_permiso_sucursal(claims, cfg.sucursal_id)
+    denied = _verificar_permiso_sucursal(user, cfg.sucursal_id)
     if denied:
         return None, denied
 
@@ -843,9 +892,8 @@ def _asignar_bitacoras_a_ocurrencias_con_ventana(
 def pm_mobile_crear_bitacora():
     user_id = get_jwt_identity()
     data = request.get_json(silent=True) or {}
-    claims = get_jwt() or {}
 
-    bit, err = _crear_bitacora(data, claims, user_id)
+    bit, err = _crear_bitacora(data, user_id)
     if err:
         return jsonify(err[0]), err[1]
 
@@ -860,9 +908,8 @@ def pm_mobile_crear_bitacora():
 def pm_preventivo_registrar():
     user_id = get_jwt_identity()
     data = request.get_json(silent=True) or {}
-    claims = get_jwt() or {}
 
-    bit, err = _crear_bitacora(data, claims, user_id)
+    bit, err = _crear_bitacora(data, user_id)
     if err:
         return jsonify(err[0]), err[1]
 
@@ -877,9 +924,8 @@ def pm_preventivo_registrar():
 def pm_crear_validacion():
     user_id = get_jwt_identity()
     data = request.get_json(silent=True) or {}
-    claims = get_jwt() or {}
 
-    validacion, err = _crear_validacion_pm(data, claims, user_id)
+    validacion, err = _crear_validacion_pm(data, user_id)
     if err:
         return jsonify(err[0]), err[1]
 
@@ -899,7 +945,6 @@ def pm_crear_validacion():
 @pm_bp.route("/bitacoras/<int:bitacora_pm_id>", methods=["GET"])
 @jwt_required()
 def pm_obtener_bitacora_detalle(bitacora_pm_id):
-    claims = get_jwt() or {}
     user_id = get_jwt_identity()
 
     user, user_err = _obtener_usuario_actual_pm(user_id)
@@ -919,7 +964,7 @@ def pm_obtener_bitacora_detalle(bitacora_pm_id):
             }
         ), 404
 
-    denied = _verificar_permiso_sucursal(claims, bitacora.sucursal_id)
+    denied = _verificar_permiso_sucursal(user, bitacora.sucursal_id)
     if denied:
         return jsonify(denied[0]), denied[1]
 
@@ -982,7 +1027,7 @@ def pm_listar_bitacoras():
         query = query.filter(db.func.lower(InventarioGeneral.subcategoria) == subcategoria)
     
     if sucursal_id:
-        denied = _verificar_permiso_sucursal(claims, sucursal_id)
+        denied = _verificar_permiso_sucursal(user, sucursal_id)
         if denied:
             return jsonify(denied[0]), denied[1]
         query = query.filter(PmBitacoraORM.sucursal_id == sucursal_id)
@@ -1081,7 +1126,7 @@ def pm_listar_configuraciones():
         query = query.filter(db.func.upper(InventarioGeneral.tipo) == "DISPOSITIVOS")
 
     if sucursal_id:
-        denied = _verificar_permiso_sucursal(claims, sucursal_id)
+        denied = _verificar_permiso_sucursal(user, sucursal_id)
         if denied:
             return jsonify(denied[0]), denied[1]
 
@@ -1132,10 +1177,9 @@ def pm_listar_configuraciones():
 @jwt_required()
 def pm_crear_configuracion():
     data = request.get_json(silent=True) or {}
-    claims = get_jwt() or {}
     user_id = get_jwt_identity()
 
-    cfg, err = _crear_configuracion_pm(data, claims, user_id)
+    cfg, err = _crear_configuracion_pm(data, user_id)
     if err:
         return jsonify(err[0]), err[1]
 
@@ -1154,10 +1198,9 @@ def pm_crear_configuracion():
 @jwt_required()
 def pm_actualizar_configuracion(config_id):
     data = request.get_json(silent=True) or {}
-    claims = get_jwt() or {}
     user_id = get_jwt_identity()
 
-    cfg, err = _actualizar_configuracion_pm(config_id, data, claims, user_id)
+    cfg, err = _actualizar_configuracion_pm(config_id, data, user_id)
     if err:
         return jsonify(err[0]), err[1]
 
@@ -1207,7 +1250,7 @@ def pm_preventivo_dashboard():
     subcategoria = (request.args.get("subcategoria") or "").strip().lower()    
 
     # ──  Scope check ──
-    denied = _verificar_permiso_sucursal(claims, sucursal_id_int)
+    denied = _verificar_permiso_sucursal(user, sucursal_id_int)
     if denied:
         return jsonify(denied[0]), denied[1]
 
@@ -1471,7 +1514,7 @@ def pm_calendario():
 
     if sucursales_ids:
         for sucursal_id in sucursales_ids:
-            denied = _verificar_permiso_sucursal(claims, sucursal_id)
+            denied = _verificar_permiso_sucursal(user, sucursal_id)
             if denied:
                 return jsonify(denied[0]), denied[1]
 
