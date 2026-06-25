@@ -1,13 +1,46 @@
 # Contrato funcional, visual y técnico — KPI Desempeño / Núcleo Ultra 2.0
 
-**Versión:** v0.3  
-**Estado:** Contrato de producto en planeación  
-**Implementación inicial:** Fase 1 únicamente  
+**Versión:** v0.4  
+**Estado:** Contrato actualizado con Fase 1 extendida implementada  
+**Implementación inicial:** Fase 1 extendida implementada; tendencias futuras quedan como evolución estratégica  
 **Proyecto:** Suite Ultra  
 **Módulo:** KPI Desempeño  
 **Nombre estratégico interno:** Núcleo Ultra 2.0  
 
 ---
+
+## Changelog v0.4 — actualización posterior a implementación
+
+### Estado real del módulo
+
+La Fase 1 dejó de ser únicamente planeación. El módulo ya cuenta con una primera implementación operativa dentro de Suite Ultra.
+
+### Implementado
+
+- Endpoint principal de reporte mensual en Track/KPI Desempeño.
+- Secciones base de Fase 1:
+  - cierre semanal
+  - cierre mensual
+  - histórico
+- Secciones visuales adicionales para lectura por sucursal:
+  - series semanales por sucursal
+  - series históricas por sucursal
+  - comparativo mensual histórico por sucursal con años superpuestos
+- Comparador visual por año base vs año comparado.
+- Tooltip comparativo del mismo mes contra años anteriores.
+- Gráfica ampliada por sucursal con 12 meses y más detalle en eje Y.
+- Colores por año, selección desde leyenda, líneas y puntos.
+- Permisos beta para roles administrativos.
+
+### Lectura del avance
+
+La implementación actual ya no es una simple réplica del PowerPoint. La Fase 1 evolucionó a una **Fase 1 extendida**, donde el informe mensual vivo ya permite análisis comparativo básico sin convertirse todavía en un dashboard complejo.
+
+### Dirección futura
+
+El futuro natural del módulo es avanzar hacia **tendencias futuras**, proyecciones y lectura predictiva controlada. Esto no debe mezclarse aún con la Fase 1 operativa, sino reservarse como una evolución posterior del Núcleo Ultra 2.0.
+
+
 
 ## 1. Contexto general
 
@@ -106,6 +139,10 @@ Replicar las gráficas conocidas del PowerPoint mensual, pero alimentadas desde 
 1. **Cierre semanal de socios**.
 2. **Cierre mensual de socios**.
 3. **Histórico de socios desde 2023**.
+4. **Comparativo mensual histórico por sucursal con años superpuestos**.
+5. **Detalle ampliado por sucursal**.
+6. **Comparador año base vs año comparado**.
+7. **Tooltip comparativo por mismo mes contra años anteriores**.
 
 ### No incluye
 
@@ -113,12 +150,16 @@ Replicar las gráficas conocidas del PowerPoint mensual, pero alimentadas desde 
 - Trainingym.
 - Nueva app Gasca.
 - Metas históricas.
-- Ranking por sucursal.
-- Motor de crecimiento.
-- Pulso semanal.
+- Ranking por sucursal como módulo independiente.
+- Motor de crecimiento completo.
+- Pulso semanal como módulo independiente.
 - IA narrativa.
 - Proyecciones.
 - Forecast.
+
+### Nota v0.4
+
+Los **comparativos rápidos** ya iniciaron parcialmente dentro de Fase 1 extendida mediante el comparativo anual por sucursal. Sin embargo, el motor formal de comparativos, rankings, alertas y lecturas operativas sigue reservado para Fase 2.
 
 ### Regla central de Fase 1
 
@@ -128,6 +169,52 @@ Usar snapshots canónicos de KPI Desempeño:
 report_type_key = 'kpi_desempeno'
 snapshot_kind = 'daily'
 is_canonical = true
+```
+
+---
+
+## Fase 1.1 — Comparativo anual por sucursal implementado
+
+### Objetivo
+
+Representar el comportamiento mensual de cada sucursal comparando años completos sobre el mismo eje de meses.
+
+### Sección backend
+
+```text
+monthly_branch_year_overlay
+```
+
+### Visual implementado
+
+- Mini gráfica por sucursal.
+- Años superpuestos con color propio.
+- Año seleccionado resaltado.
+- Detalle ampliado al seleccionar una sucursal.
+- Selector de año base.
+- Selector de año comparado.
+- Base resaltada con línea punteada.
+- Año comparado resaltado con línea sólida.
+- Tooltip comparativo por mismo mes.
+
+### Regla comparativa
+
+Para cada sucursal y mes:
+
+```text
+valor_mes_año = socios_activos_cierre_mes del último snapshot canónico mensual
+```
+
+Para tooltip comparativo:
+
+```text
+variación_vs_año_anterior = (valor_año_actual - valor_año_anterior_disponible) / valor_año_anterior_disponible
+```
+
+### Estado
+
+```text
+implementado
 ```
 
 ---
@@ -202,6 +289,55 @@ Convertir KPI Desempeño en una capa ejecutiva de lectura estratégica.
 La penetración tecnológica queda fuera de Fase 1 porque Gasca está en proceso de crear una nueva app que suplirá a Trainingym.
 
 No tiene sentido generar un reporte basado en Trainingym si la fuente será reemplazada. Esta vista debe retomarse cuando la nueva app Gasca esté liberada y los datos sean estables.
+
+---
+
+## Fase 4 — Tendencias futuras y proyección controlada
+
+### Objetivo
+
+Convertir el histórico de KPI Desempeño en una herramienta de lectura futura, sin presentar predicciones como certeza.
+
+### Vistas candidatas
+
+1. **Tendencia futura por sucursal**.
+2. **Proyección de cierre mensual**.
+3. **Riesgo de caída vs mismo mes año anterior**.
+4. **Semáforo de tendencia**.
+5. **Escenarios conservador / esperado / agresivo**.
+6. **Detección temprana de desaceleración**.
+
+### Principio de diseño
+
+El módulo no debe decir “esto va a pasar” como una verdad absoluta. Debe decir:
+
+```text
+Con la tendencia actual, el cierre probable se ubica en este rango.
+```
+
+### Reglas iniciales candidatas
+
+```text
+proyección_lineal = valor_actual + tendencia_diaria_promedio * días_restantes
+```
+
+```text
+rango_conservador = proyección basada en percentil bajo histórico
+rango_esperado = proyección basada en tendencia actual
+rango_agresivo = proyección basada en percentil alto histórico
+```
+
+### Fuente base
+
+- KPI Desempeño histórico.
+- Snapshots canónicos.
+- Comparativo mismo mes año anterior.
+- Comportamiento por sucursal.
+- Cierres mensuales anteriores.
+
+### Restricción
+
+No implementar forecast hasta que existan reglas claras de explicación, confiabilidad y comunicación ejecutiva.
 
 ---
 
@@ -969,9 +1105,17 @@ Preparada para Fase 2 y Fase 3
 Fuente:
 Warehouse · KPI Desempeño · snapshots canónicos
 
-Pendiente antes de código:
-Contrato JSON exacto de Fase 1
-Validación de campos reales en DB/modelos
+Implementado:
+Endpoint mensual de KPI Desempeño
+Secciones base de Fase 1
+Comparativo anual por sucursal
+Detalle ampliado
+Tooltip comparativo por mismo mes
+
+Pendiente:
+Formalizar Fase 2
+Definir reglas de tendencias futuras / forecast
+Definir criterios de confianza para proyecciones
 ```
 
 ---
@@ -993,14 +1137,25 @@ Validación de campos reales en DB/modelos
 
 ## 22. Decisiones pendientes
 
-1. Validar nombres exactos de campos en `kpi_desempeno_snapshot_rows`.
-2. Definir si las gráficas serán barras agrupadas, líneas o combinación según legibilidad.
-3. Definir librería visual si la actual de Suite no cubre bien estas gráficas.
-4. Definir contrato JSON exacto de Fase 1.
-5. Definir permisos finales por rol/sucursal/región.
-6. Definir si el histórico nacional y por sucursal se muestran en la misma gráfica o en modo alterno.
-7. Definir fecha oficial para análisis antes/después de Julián en Fase 3.
-8. Definir fuente definitiva para penetración tecnológica cuando Gasca libere la app.
+### Cerradas por implementación v0.4
+
+1. Los campos reales ya fueron validados durante la implementación.
+2. La gráfica histórica por sucursal se resolvió como líneas superpuestas tipo small multiples.
+3. No se requirió librería visual externa; se resolvió con SVG controlado en Angular.
+4. El contrato JSON base quedó materializado en endpoint por secciones.
+5. El histórico por sucursal se separó en mini gráficas y detalle ampliado, no en una sola gráfica saturada.
+
+### Pendientes vigentes
+
+1. Definir permisos finales por rol/sucursal/región fuera del modo beta.
+2. Definir fecha oficial para análisis antes/después de Julián en Fase 3.
+3. Definir fuente definitiva para penetración tecnológica cuando Gasca libere la app.
+4. Definir reglas de tendencias futuras:
+   - método de proyección
+   - nivel de confianza
+   - periodos mínimos de histórico
+   - forma correcta de comunicar escenarios
+5. Definir si las tendencias futuras se calculan solo nacional, por región o por sucursal.
 
 ---
 
@@ -1236,10 +1391,13 @@ Valores permitidos:
 
 ### `section.key`
 
-Valores Fase 1:
+Valores Fase 1 / Fase 1 extendida:
 
 ```json
 [
+  "weekly_branch_series",
+  "historical_branch_series",
+  "monthly_branch_year_overlay",
   "weekly_closing",
   "monthly_closing",
   "historical_closing"
@@ -1248,13 +1406,14 @@ Valores Fase 1:
 
 ### `chart_type`
 
-Valores Fase 1:
+Valores Fase 1 / Fase 1 extendida:
 
 ```json
 [
   "grouped_bar",
   "line",
-  "table"
+  "table",
+  "small_multiple_line"
 ]
 ```
 
@@ -1678,6 +1837,96 @@ quarterly
 
 ---
 
+## 16.1 Section adicional — Monthly branch year overlay
+
+### Key
+
+```text
+monthly_branch_year_overlay
+```
+
+### Título UI
+
+```text
+Comparativo mensual histórico por sucursal
+```
+
+### Descripción UI
+
+```text
+Años superpuestos por sucursal para comparar si el cierre mensual va mejor, igual o peor contra años anteriores.
+```
+
+### Chart type
+
+```text
+small_multiple_line
+```
+
+### Regla
+
+Para cada sucursal y cada año:
+
+```text
+usar último snapshot canónico disponible de cada mes
+```
+
+### Estructura conceptual
+
+```json
+{
+  "key": "monthly_branch_year_overlay",
+  "title": "Comparativo mensual histórico por sucursal",
+  "chart_type": "small_multiple_line",
+  "status": "ready",
+  "start_year": 2023,
+  "end_year": 2026,
+  "years": [2023, 2024, 2025, 2026],
+  "months": [
+    { "month": 1, "label": "Ene" },
+    { "month": 2, "label": "Feb" }
+  ],
+  "coverage": {
+    "expected_snapshots_count": 0,
+    "resolved_snapshots_count": 0
+  },
+  "data": [
+    {
+      "branch": {},
+      "series": [
+        {
+          "year": 2026,
+          "months": [
+            {
+              "month": 5,
+              "label": "May",
+              "socios_activos_cierre_mes": 1142,
+              "source": {
+                "snapshot_id": 0,
+                "business_date": "2026-05-31"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+### Reglas frontend implementadas
+
+- Miniaturas compactas por sucursal.
+- Detalle ampliado con 12 meses.
+- Más marcas en eje Y en vista ampliada.
+- Tooltip comparativo por mismo mes.
+- Selector de año base y año comparado.
+- Base punteada y comparado sólido.
+- Al cargar, base y comparado inician en `end_year`.
+
+---
+
+
 ## 17. Warnings
 
 El backend debe devolver advertencias no fatales cuando haya datos incompletos, decisiones automáticas o casos relevantes.
@@ -1925,6 +2174,8 @@ unexplained_adjustment = real_growth - reported_movement
   "executive_summary",
   "year_over_year_comparison",
   "previous_month_comparison",
+  "future_trends",
+  "forecast_scenarios",
   "before_after_julian",
   "technology_penetration"
 ]
@@ -1952,6 +2203,10 @@ La Fase 1 se considera correcta cuando:
 8. El frontend no calcula reglas de negocio.
 9. El JSON responde por secciones.
 10. La estructura permite agregar Fase 2 y 3 sin romper contrato.
+11. El comparativo anual por sucursal muestra años con colores diferenciados.
+12. El detalle ampliado permite comparar año base vs año comparado.
+13. El tooltip muestra comparativo del mismo mes contra años anteriores.
+14. La vista inicial no debe cargar contaminada con comparaciones históricas; por default base y comparado deben iniciar en el año de corte.
 
 ---
 
