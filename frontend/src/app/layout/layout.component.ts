@@ -315,6 +315,7 @@ if (
 this.habilitarWarehouseEnMenuSiAplica(menuWarehouse);
   this.habilitarPlanningEnMenuSiAplica(menuPlanning);
   this.habilitarInternalDocumentsEnMenuSiAplica(menuNubeCorporativa);
+  this.habilitarPermisosObservabilidadEnMenuSiAplica();
   this.sincronizarMenuConRutaActual();
   this.cargarTicketValidationAlertPosition();
   this.cargarTicketValidationSummary();
@@ -328,6 +329,52 @@ this.habilitarWarehouseEnMenuSiAplica(menuWarehouse);
       this.cargarTicketValidationSummary();
     });
   }
+
+
+private habilitarPermisosObservabilidadEnMenuSiAplica(): void {
+  const user = this.session.getUser();
+  const rol = (user?.rol || '').toString().trim().toUpperCase();
+
+  if (!['ADMIN', 'ADMINISTRADOR', 'SUPER_ADMIN'].includes(rol)) {
+    return;
+  }
+
+  const observabilitySubmenu = {
+    label: 'Observabilidad de permisos',
+    path: '/admin/permisos-observabilidad',
+  };
+
+  const permisosMenu = this.menuItems.find((item) => item.label === 'Permisos');
+
+  if (permisosMenu) {
+    const submenu = Array.isArray(permisosMenu.submenu) ? permisosMenu.submenu : [];
+    const alreadyExists = submenu.some(
+      (item: { path: string }) => item.path === observabilitySubmenu.path
+    );
+
+    if (!alreadyExists) {
+      permisosMenu.submenu = [
+        ...submenu,
+        observabilitySubmenu,
+      ];
+    }
+
+    return;
+  }
+
+  this.menuItems = [
+    ...this.menuItems,
+    {
+      label: 'Permisos',
+      path: '/admin/permisos-observabilidad',
+      submenu: [
+        observabilitySubmenu,
+      ],
+    },
+  ];
+
+  this.sincronizarMenuConRutaActual();
+}
 
 private habilitarWarehouseEnMenuSiAplica(menuWarehouse: any): void {
   if (this.menuItems.some((item) => item.label === 'Warehouse')) {

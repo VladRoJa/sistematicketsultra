@@ -1,0 +1,318 @@
+<!-- frontend/src/app/permissions-observability/permissions-observability.component.html -->
+
+<div class="permissions-page">
+  <section class="permissions-hero">
+    <div>
+      <p class="permissions-kicker">ADMIN / OBSERVABILIDAD</p>
+      <h1>{{ pageTitle }}</h1>
+      <p>{{ pageSubtitle }}</p>
+    </div>
+
+    <button
+      type="button"
+      class="permissions-secondary-button"
+      (click)="loadCatalog()"
+      [disabled]="isLoadingCatalog"
+    >
+      {{ isLoadingCatalog ? 'Actualizando...' : 'Actualizar catálogo' }}
+    </button>
+  </section>
+
+  <section
+    class="permissions-feedback permissions-feedback--error"
+    *ngIf="errorMessage"
+  >
+    {{ errorMessage }}
+  </section>
+
+  <section class="permissions-summary-grid">
+    <article
+      *ngFor="let card of summaryCards"
+      [class]="getSummaryCardClass(card)"
+    >
+      <span>{{ card.label }}</span>
+      <strong>{{ card.value }}</strong>
+    </article>
+  </section>
+
+  <section class="permissions-panel">
+    <div class="permissions-tabs">
+      <button
+        type="button"
+        [class]="getTabClass('modules')"
+        (click)="setActiveTab('modules')"
+      >
+        Módulos
+      </button>
+
+      <button
+        type="button"
+        [class]="getTabClass('actions')"
+        (click)="setActiveTab('actions')"
+      >
+        Acciones
+      </button>
+
+      <button
+        type="button"
+        [class]="getTabClass('routes')"
+        (click)="setActiveTab('routes')"
+      >
+        Rutas high-risk
+      </button>
+
+      <button
+        type="button"
+        [class]="getTabClass('effective')"
+        (click)="setActiveTab('effective')"
+      >
+        Usuario efectivo
+      </button>
+    </div>
+
+    <div class="permissions-filters">
+      <label>
+        Módulo
+        <select [(ngModel)]="selectedModuleKey">
+          <option value="">Todos</option>
+          <option
+            *ngFor="let module of modules; trackBy: trackByModuleKey"
+            [value]="module.key"
+          >
+            {{ module.name }}
+          </option>
+        </select>
+      </label>
+
+      <label *ngIf="activeTab === 'actions'">
+        Riesgo
+        <select [(ngModel)]="selectedRiskLevel">
+          <option value="">Todos</option>
+          <option
+            *ngFor="let risk of riskLevels"
+            [value]="risk"
+          >
+            {{ risk }}
+          </option>
+        </select>
+      </label>
+
+      <label *ngIf="activeTab === 'routes'">
+        Revisión
+        <select [(ngModel)]="selectedReviewStatus">
+          <option value="">Todas</option>
+          <option
+            *ngFor="let status of reviewStatuses"
+            [value]="status"
+          >
+            {{ status }}
+          </option>
+        </select>
+      </label>
+
+      <label
+        class="permissions-checkbox"
+        *ngIf="activeTab === 'routes'"
+      >
+        <input
+          type="checkbox"
+          [(ngModel)]="showInactiveRoutes"
+        />
+        Mostrar inactivas
+      </label>
+    </div>
+
+    <div
+      class="permissions-section"
+      *ngIf="activeTab === 'modules'"
+    >
+      <div class="permissions-card-grid">
+        <article
+          class="permissions-module-card"
+          *ngFor="let module of modules; trackBy: trackByModuleKey"
+        >
+          <div>
+            <span class="permissions-module-key">{{ module.key }}</span>
+            <h3>{{ module.name }}</h3>
+          </div>
+
+          <p>{{ module.description }}</p>
+
+          <div class="permissions-card-meta">
+            <span>{{ module.actions_count }} acciones</span>
+            <span
+              class="permissions-badge"
+              [class.permissions-badge--success]="module.is_active"
+              [class.permissions-badge--warning]="!module.is_active"
+            >
+              {{ module.is_active ? 'Activo' : 'Inactivo' }}
+            </span>
+          </div>
+        </article>
+      </div>
+    </div>
+
+    <div
+      class="permissions-section"
+      *ngIf="activeTab === 'actions'"
+    >
+      <div class="permissions-table-wrapper">
+        <table class="permissions-table">
+          <thead>
+            <tr>
+              <th>Módulo</th>
+              <th>Acción</th>
+              <th>Nombre</th>
+              <th>Riesgo</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            <tr
+              *ngFor="let action of filteredActions; trackBy: trackByActionFullKey"
+            >
+              <td>{{ getModuleName(action.module_key) }}</td>
+              <td><code>{{ action.full_key }}</code></td>
+              <td>
+                <strong>{{ action.name }}</strong>
+                <span>{{ action.description }}</span>
+              </td>
+              <td>
+                <span [class]="getRiskBadgeClass(action.risk_level)">
+                  {{ action.risk_level }}
+                </span>
+              </td>
+              <td>{{ action.is_active ? 'Activa' : 'Inactiva' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div
+      class="permissions-section"
+      *ngIf="activeTab === 'routes'"
+    >
+      <div class="permissions-table-wrapper">
+        <table class="permissions-table permissions-table--routes">
+          <thead>
+            <tr>
+              <th>Método</th>
+              <th>Ruta</th>
+              <th>Función</th>
+              <th>Módulo</th>
+              <th>Acción</th>
+              <th>Guard actual</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            <tr
+              *ngFor="let route of filteredRoutes; trackBy: trackByRouteId"
+              [class.permissions-row--inactive]="!route.is_active"
+            >
+              <td><strong>{{ route.method }}</strong></td>
+              <td><code>{{ route.route }}</code></td>
+              <td>{{ route.endpoint_function }}</td>
+              <td>{{ getModuleName(route.module_key) }}</td>
+              <td><code>{{ route.action_full_key || 'Sin acción activa' }}</code></td>
+              <td>
+                <span>{{ route.current_guard || 'Sin guard documentado' }}</span>
+                <small>{{ route.current_scope }}</small>
+              </td>
+              <td>
+                <span [class]="getRouteStatusClass(route)">
+                  {{ route.review_status }}
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div
+      class="permissions-section"
+      *ngIf="activeTab === 'effective'"
+    >
+      <div class="permissions-user-search">
+        <label>
+          ID de usuario
+          <input
+            type="number"
+            min="1"
+            [(ngModel)]="userIdInput"
+            placeholder="Ej. 1"
+          />
+        </label>
+
+        <button
+          type="button"
+          class="permissions-primary-button"
+          (click)="loadEffectivePermissions()"
+          [disabled]="isLoadingEffective"
+        >
+          {{ isLoadingEffective ? 'Consultando...' : 'Consultar usuario' }}
+        </button>
+      </div>
+
+      <ng-container *ngIf="effectivePermissions">
+        <div class="permissions-effective-header">
+          <div>
+            <p class="permissions-kicker">USUARIO</p>
+            <h2>
+              {{ effectivePermissions.user.username }}
+              <span>#{{ effectivePermissions.user.id }}</span>
+            </h2>
+            <p>
+              Rol: <strong>{{ effectivePermissions.user.role }}</strong>
+              · Departamento: <strong>{{ effectivePermissions.user.department_id }}</strong>
+            </p>
+          </div>
+
+          <div class="permissions-effective-summary">
+            <span>Permitidas: <strong>{{ effectivePermissions.summary.allowed_count }}</strong></span>
+            <span>Denegadas: <strong>{{ effectivePermissions.summary.denied_count }}</strong></span>
+            <span>Total: <strong>{{ effectivePermissions.summary.actions_total }}</strong></span>
+          </div>
+        </div>
+
+        <div class="permissions-effective-layout">
+          <section>
+            <h3>Permitidas</h3>
+
+            <article
+              class="permissions-decision-card"
+              *ngFor="let action of allowedEffectiveActions; trackBy: trackByEffectiveAction"
+            >
+              <div>
+                <code>{{ action.full_key }}</code>
+                <span [class]="getDecisionBadgeClass(action)">Permitido</span>
+              </div>
+              <p>{{ action.reason }}</p>
+              <small>{{ action.source }} · {{ action.scope_type }}</small>
+            </article>
+          </section>
+
+          <section>
+            <h3>Denegadas</h3>
+
+            <article
+              class="permissions-decision-card permissions-decision-card--denied"
+              *ngFor="let action of deniedEffectiveActions; trackBy: trackByEffectiveAction"
+            >
+              <div>
+                <code>{{ action.full_key }}</code>
+                <span [class]="getDecisionBadgeClass(action)">Denegado</span>
+              </div>
+              <p>{{ action.reason }}</p>
+              <small>{{ action.source }} · {{ action.scope_type }}</small>
+            </article>
+          </section>
+        </div>
+      </ng-container>
+    </div>
+  </section>
+</div>
