@@ -18,6 +18,7 @@ import {
 
 type PermissionsTab = 'modules' | 'actions' | 'routes' | 'effective';
 type EffectiveDecisionFilter = 'all' | 'allowed' | 'denied';
+type RouteAuditFilter = 'all' | 'active' | 'inactive' | 'without_action';
 
 interface SummaryCard {
   label: string;
@@ -50,6 +51,11 @@ export class PermissionsObservabilityComponent implements OnInit {
   selectedRiskLevel = '';
   selectedReviewStatus = '';
   showInactiveRoutes = true;
+  routeSearchTerm = '';
+  routeAuditFilter: RouteAuditFilter = 'all';
+  selectedRouteRiskLevel = '';
+  selectedRouteGuard = '';
+  selectedRouteScope = '';
   effectiveSearchTerm = '';
   effectiveDecisionFilter: EffectiveDecisionFilter = 'all';
 
@@ -220,8 +226,22 @@ export class PermissionsObservabilityComponent implements OnInit {
   }
 
   get filteredRoutes(): PermissionRouteMap[] {
+    const searchTerm = this.routeSearchTerm.trim().toLowerCase();
+
     return this.routes.filter((route) => {
       if (!this.showInactiveRoutes && !route.is_active) {
+        return false;
+      }
+
+      if (this.routeAuditFilter === 'active' && !route.is_active) {
+        return false;
+      }
+
+      if (this.routeAuditFilter === 'inactive' && route.is_active) {
+        return false;
+      }
+
+      if (this.routeAuditFilter === 'without_action' && route.action_id !== null) {
         return false;
       }
 
@@ -233,7 +253,43 @@ export class PermissionsObservabilityComponent implements OnInit {
         return false;
       }
 
-      return true;
+      if (this.selectedRouteGuard && route.current_guard !== this.selectedRouteGuard) {
+        return false;
+      }
+
+      if (this.selectedRouteScope && route.current_scope !== this.selectedRouteScope) {
+        return false;
+      }
+
+      if (this.selectedRouteRiskLevel) {
+        const riskLevel = this.getRouteRiskLevel(route);
+        if (riskLevel !== this.selectedRouteRiskLevel) {
+          return false;
+        }
+      }
+
+      if (!searchTerm) {
+        return true;
+      }
+
+      const searchable = [
+        route.method,
+        route.route,
+        route.endpoint_function,
+        route.source_file,
+        route.module_key,
+        route.action_full_key,
+        route.current_guard,
+        route.current_scope,
+        route.review_status,
+        route.notes,
+        this.getRouteRiskLevel(route),
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      return searchable.includes(searchTerm);
     });
   }
 
@@ -310,6 +366,79 @@ export class PermissionsObservabilityComponent implements OnInit {
     ).sort();
   }
 
+  get routeGuards(): string[] {
+    return Array.from(
+      new Set(
+        this.routes
+          .map((route) => route.current_guard)
+          .filter((value): value is string => Boolean(value)),
+      ),
+    ).sort();
+  }
+
+  get routeScopes(): string[] {
+    return Array.from(
+      new Set(
+        this.routes
+          .map((route) => route.current_scope)
+          .filter((value): value is string => Boolean(value)),
+      ),
+    ).sort();
+  }
+
+  get routeRiskLevels(): string[] {
+    return Array.from(
+      new Set(
+        this.routes
+          .map((route) => this.getRouteRiskLevel(route))
+          .filter((value): value is string => Boolean(value)),
+      ),
+    ).sort();
+  }
+
+  get activeRoutesCount(): number {
+    return this.routes.filter((route) => route.is_active).length;
+  }
+
+  get inactiveRoutesCount(): number {
+    return this.routes.filter((route) => !route.is_active).length;
+  }
+
+  get routesWithoutActionCount(): number {
+    return this.routes.filter((route) => route.action_id === null).length;
+  }
+
+  get criticalRoutesCount(): number {
+    return this.routes.filter((route) => this.getRouteRiskLevel(route) === 'critical').length;
+  }
+
+  get highRoutesCount(): number {
+    return this.routes.filter((route) => this.getRouteRiskLevel(route) === 'high').length;
+  }
+
+  get filteredRoutesCount(): number {
+    return this.filteredRoutes.length;
+  }
+
+  getRouteRiskLevel(route: PermissionRouteMap): string {
+    if (!route.action_full_key) {
+      return '';
+    }
+
+    const action = this.actions.find((item) => item.full_key === route.action_full_key);
+    return action?.risk_level || '';
+  }
+
+  getRouteAuditButtonClass(filter: RouteAuditFilter): string {
+    return this.routeAuditFilter === filter
+      ? 'permissions-audit-button permissions-audit-button--active'
+      : 'permissions-audit-button';
+  }
+
+  setRouteAuditFilter(filter: RouteAuditFilter): void {
+    this.routeAuditFilter = filter;
+  }
+
   getModuleName(moduleKey?: string | null): string {
     const module = this.modules.find((item) => item.key === moduleKey);
     return module?.name || moduleKey || 'Sin módulo';
@@ -330,6 +459,10 @@ export class PermissionsObservabilityComponent implements OnInit {
   }
 
   getRouteStatusClass(route: PermissionRouteMap): string {
+    if (route.action_id === null) {
+      return 'permissions-badge permissions-badge--danger';
+    }
+
     return route.is_active
       ? 'permissions-badge permissions-badge--success'
       : 'permissions-badge permissions-badge--warning';
