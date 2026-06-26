@@ -308,6 +308,34 @@
         </button>
       </div>
 
+      <div
+        class="permissions-effective-filters"
+        *ngIf="effectivePermissions"
+      >
+        <label>
+          Buscar acción
+          <input
+            type="text"
+            [(ngModel)]="effectiveSearchTerm"
+            placeholder="Acción, reason, source o riesgo"
+          />
+        </label>
+
+        <label>
+          Decisión
+          <select [(ngModel)]="effectiveDecisionFilter">
+            <option value="all">Todas</option>
+            <option value="allowed">Permitidas</option>
+            <option value="denied">Denegadas</option>
+          </select>
+        </label>
+
+        <div class="permissions-effective-filter-summary">
+          <span>Filtradas permitidas: <strong>{{ filteredEffectiveAllowedCount }}</strong></span>
+          <span>Filtradas denegadas: <strong>{{ filteredEffectiveDeniedCount }}</strong></span>
+        </div>
+      </div>
+
       <ng-container *ngIf="effectivePermissions">
         <div class="permissions-effective-header">
           <div>
@@ -329,8 +357,15 @@
           </div>
         </div>
 
+        <div
+          class="permissions-empty-filter-state"
+          *ngIf="filteredEffectiveActions.length === 0"
+        >
+          No hay acciones que coincidan con los filtros seleccionados.
+        </div>
+
         <div class="permissions-effective-layout">
-          <section>
+          <section *ngIf="shouldShowAllowedEffectiveSection()">
             <h3>Permitidas</h3>
 
             <article
@@ -346,7 +381,7 @@
             </article>
           </section>
 
-          <section>
+          <section *ngIf="shouldShowDeniedEffectiveSection()">
             <h3>Denegadas</h3>
 
             <article

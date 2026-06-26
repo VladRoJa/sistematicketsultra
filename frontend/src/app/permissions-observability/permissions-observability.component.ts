@@ -17,6 +17,7 @@ import {
 } from './permissions-observability.service';
 
 type PermissionsTab = 'modules' | 'actions' | 'routes' | 'effective';
+type EffectiveDecisionFilter = 'all' | 'allowed' | 'denied';
 
 interface SummaryCard {
   label: string;
@@ -49,6 +50,8 @@ export class PermissionsObservabilityComponent implements OnInit {
   selectedRiskLevel = '';
   selectedReviewStatus = '';
   showInactiveRoutes = true;
+  effectiveSearchTerm = '';
+  effectiveDecisionFilter: EffectiveDecisionFilter = 'all';
 
   userIdInput = '';
   userSearchTerm = '';
@@ -234,12 +237,65 @@ export class PermissionsObservabilityComponent implements OnInit {
     });
   }
 
+  get filteredEffectiveActions(): EffectivePermissionAction[] {
+    const actions = this.effectivePermissions?.actions || [];
+    const searchTerm = this.effectiveSearchTerm.trim().toLowerCase();
+
+    return actions.filter((action) => {
+      if (this.selectedModuleKey && action.module_key !== this.selectedModuleKey) {
+        return false;
+      }
+
+      if (this.effectiveDecisionFilter === 'allowed' && !action.allowed) {
+        return false;
+      }
+
+      if (this.effectiveDecisionFilter === 'denied' && action.allowed) {
+        return false;
+      }
+
+      if (!searchTerm) {
+        return true;
+      }
+
+      const searchable = [
+        action.full_key,
+        action.name,
+        action.reason,
+        action.source,
+        action.scope_type,
+        action.risk_level,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      return searchable.includes(searchTerm);
+    });
+  }
+
   get allowedEffectiveActions(): EffectivePermissionAction[] {
-    return this.effectivePermissions?.actions?.filter((action) => action.allowed) || [];
+    return this.filteredEffectiveActions.filter((action) => action.allowed);
   }
 
   get deniedEffectiveActions(): EffectivePermissionAction[] {
-    return this.effectivePermissions?.actions?.filter((action) => !action.allowed) || [];
+    return this.filteredEffectiveActions.filter((action) => !action.allowed);
+  }
+
+  get filteredEffectiveAllowedCount(): number {
+    return this.allowedEffectiveActions.length;
+  }
+
+  get filteredEffectiveDeniedCount(): number {
+    return this.deniedEffectiveActions.length;
+  }
+
+  shouldShowAllowedEffectiveSection(): boolean {
+    return this.effectiveDecisionFilter !== 'denied';
+  }
+
+  shouldShowDeniedEffectiveSection(): boolean {
+    return this.effectiveDecisionFilter !== 'allowed';
   }
 
   get riskLevels(): string[] {
