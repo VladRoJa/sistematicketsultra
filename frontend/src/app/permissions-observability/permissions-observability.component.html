@@ -239,7 +239,42 @@
     >
       <div class="permissions-user-search">
         <label>
-          ID de usuario
+          Buscar usuario
+          <input
+            type="text"
+            [(ngModel)]="userSearchTerm"
+            (keyup.enter)="loadUserOptions()"
+            placeholder="Nombre, correo, rol o ID"
+          />
+        </label>
+
+        <button
+          type="button"
+          class="permissions-secondary-button"
+          (click)="loadUserOptions()"
+          [disabled]="isLoadingUsers"
+        >
+          {{ isLoadingUsers ? 'Buscando...' : 'Buscar' }}
+        </button>
+
+        <label>
+          Seleccionar usuario
+          <select
+            [(ngModel)]="selectedUserOptionId"
+            (ngModelChange)="onSelectedUserOptionChanged()"
+          >
+            <option [ngValue]="null">Selecciona un usuario</option>
+            <option
+              *ngFor="let user of userOptions; trackBy: trackByUserId"
+              [ngValue]="user.id"
+            >
+              {{ user.username }} · {{ user.rol }} · #{{ user.id }}
+            </option>
+          </select>
+        </label>
+
+        <label>
+          ID manual
           <input
             type="number"
             min="1"
@@ -255,6 +290,21 @@
           [disabled]="isLoadingEffective"
         >
           {{ isLoadingEffective ? 'Consultando...' : 'Consultar usuario' }}
+        </button>
+      </div>
+
+      <div
+        class="permissions-user-results"
+        *ngIf="userOptions.length > 0"
+      >
+        <button
+          type="button"
+          class="permissions-user-chip"
+          *ngFor="let user of userOptions; trackBy: trackByUserId"
+          (click)="selectUserForEffectivePermissions(user)"
+        >
+          <strong>{{ user.username }}</strong>
+          <span>{{ user.rol }} · #{{ user.id }}</span>
         </button>
       </div>
 
