@@ -194,6 +194,113 @@
       class="permissions-section"
       *ngIf="activeTab === 'routes'"
     >
+      <div class="permissions-route-audit-bar">
+        <button
+          type="button"
+          [class]="getRouteAuditButtonClass('all')"
+          (click)="setRouteAuditFilter('all')"
+        >
+          Todas
+          <strong>{{ routes.length }}</strong>
+        </button>
+
+        <button
+          type="button"
+          [class]="getRouteAuditButtonClass('active')"
+          (click)="setRouteAuditFilter('active')"
+        >
+          Activas
+          <strong>{{ activeRoutesCount }}</strong>
+        </button>
+
+        <button
+          type="button"
+          [class]="getRouteAuditButtonClass('inactive')"
+          (click)="setRouteAuditFilter('inactive')"
+        >
+          Inactivas
+          <strong>{{ inactiveRoutesCount }}</strong>
+        </button>
+
+        <button
+          type="button"
+          [class]="getRouteAuditButtonClass('without_action')"
+          (click)="setRouteAuditFilter('without_action')"
+        >
+          Sin acción
+          <strong>{{ routesWithoutActionCount }}</strong>
+        </button>
+
+        <span class="permissions-route-audit-pill">
+          Critical: <strong>{{ criticalRoutesCount }}</strong>
+        </span>
+
+        <span class="permissions-route-audit-pill">
+          High: <strong>{{ highRoutesCount }}</strong>
+        </span>
+
+        <span class="permissions-route-audit-pill">
+          Filtradas: <strong>{{ filteredRoutesCount }}</strong>
+        </span>
+      </div>
+
+      <div class="permissions-route-filters">
+        <label>
+          Buscar ruta
+          <input
+            type="text"
+            [(ngModel)]="routeSearchTerm"
+            placeholder="Ruta, función, guard, scope o acción"
+          />
+        </label>
+
+        <label>
+          Riesgo
+          <select [(ngModel)]="selectedRouteRiskLevel">
+            <option value="">Todos</option>
+            <option
+              *ngFor="let risk of routeRiskLevels"
+              [value]="risk"
+            >
+              {{ risk }}
+            </option>
+          </select>
+        </label>
+
+        <label>
+          Guard
+          <select [(ngModel)]="selectedRouteGuard">
+            <option value="">Todos</option>
+            <option
+              *ngFor="let guard of routeGuards"
+              [value]="guard"
+            >
+              {{ guard }}
+            </option>
+          </select>
+        </label>
+
+        <label>
+          Scope
+          <select [(ngModel)]="selectedRouteScope">
+            <option value="">Todos</option>
+            <option
+              *ngFor="let scope of routeScopes"
+              [value]="scope"
+            >
+              {{ scope }}
+            </option>
+          </select>
+        </label>
+      </div>
+
+      <div
+        class="permissions-empty-filter-state"
+        *ngIf="filteredRoutes.length === 0"
+      >
+        No hay rutas que coincidan con los filtros seleccionados.
+      </div>
+
       <div class="permissions-table-wrapper">
         <table class="permissions-table permissions-table--routes">
           <thead>
