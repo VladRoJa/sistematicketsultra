@@ -156,6 +156,19 @@
       class="permissions-section"
       *ngIf="activeTab === 'actions'"
     >
+      <div class="permissions-export-bar">
+        <button
+          type="button"
+          class="permissions-export-button"
+          (click)="exportFilteredActionsCsv()"
+          [disabled]="filteredActions.length === 0"
+        >
+          Exportar acciones filtradas CSV
+        </button>
+
+        <span>{{ filteredActions.length }} acciones filtradas</span>
+      </div>
+
       <div class="permissions-table-wrapper">
         <table class="permissions-table">
           <thead>
@@ -299,6 +312,19 @@
         *ngIf="filteredRoutes.length === 0"
       >
         No hay rutas que coincidan con los filtros seleccionados.
+      </div>
+
+      <div class="permissions-export-bar">
+        <button
+          type="button"
+          class="permissions-export-button"
+          (click)="exportFilteredRoutesCsv()"
+          [disabled]="filteredRoutes.length === 0"
+        >
+          Exportar rutas filtradas CSV
+        </button>
+
+        <span>{{ filteredRoutes.length }} rutas filtradas</span>
       </div>
 
       <div class="permissions-table-wrapper">
@@ -469,6 +495,19 @@
           *ngIf="filteredEffectiveActions.length === 0"
         >
           No hay acciones que coincidan con los filtros seleccionados.
+        </div>
+
+        <div class="permissions-export-bar">
+          <button
+            type="button"
+            class="permissions-export-button"
+            (click)="exportFilteredEffectivePermissionsCsv()"
+            [disabled]="filteredEffectiveActions.length === 0"
+          >
+            Exportar permisos efectivos CSV
+          </button>
+
+          <span>{{ filteredEffectiveActions.length }} acciones filtradas</span>
         </div>
 
         <div class="permissions-effective-layout">
