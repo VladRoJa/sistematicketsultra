@@ -56,6 +56,13 @@ export const routes: Routes = [
         canActivate: [AdminGuard],
       },
       {
+        path: 'admin/permisos-observabilidad',
+        canActivate: [AdminGuard],
+        loadComponent: () =>
+          import('./permissions-observability/permissions-observability.component')
+            .then(m => m.PermissionsObservabilityComponent),
+      },
+      {
         path: 'inventario',
         canActivate: [AuthGuard],
         loadChildren: () => import('./inventario/inventario.routes').then(m => m.INVENTARIO_ROUTES)
