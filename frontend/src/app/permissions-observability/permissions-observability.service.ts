@@ -6,6 +6,17 @@ import { Observable } from 'rxjs';
 
 import { environment } from 'src/environments/environment';
 
+
+export interface PermissionUserOption {
+  id: number;
+  username: string;
+  email?: string | null;
+  rol: string;
+  department_id?: number | null;
+  sucursal_id?: number | null;
+  sucursales_ids: number[];
+}
+
 export interface PermissionModule {
   id: number;
   key: string;
@@ -91,6 +102,20 @@ export class PermissionsObservabilityService {
   private readonly apiUrl = `${environment.apiUrl}/permissions/catalog`;
 
   constructor(private readonly http: HttpClient) {}
+
+
+  searchUsers(q: string = '', limit: number = 25): Observable<{ users: PermissionUserOption[] }> {
+    let params = new HttpParams().set('limit', String(limit));
+
+    if (q.trim()) {
+      params = params.set('q', q.trim());
+    }
+
+    return this.http.get<{ users: PermissionUserOption[] }>(
+      `${this.apiUrl}/users/search`,
+      { params },
+    );
+  }
 
   getModules(active: 'true' | 'false' | 'all' = 'true'): Observable<{ modules: PermissionModule[] }> {
     const params = new HttpParams().set('active', active);

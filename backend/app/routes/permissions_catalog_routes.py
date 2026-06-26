@@ -776,3 +776,64 @@ def get_user_effective_permissions(user_id: int):
         "actions": effective_actions,
     }), 200
 
+@permissions_catalog_bp.route("/users/search", methods=["GET"])
+@jwt_required()
+def search_permission_users():
+    _, error = _current_admin_user_or_error()
+    if error:
+        return error
+
+    q = str(request.args.get("q", "") or "").strip()
+    raw_limit = request.args.get("limit", 25)
+
+    try:
+        limit = int(raw_limit)
+    except (TypeError, ValueError):
+        limit = 25
+
+    limit = max(1, min(limit, 100))
+
+    query = UserORM.query
+
+    if q:
+        q_like = f"%{q.lower()}%"
+        filters = [
+            db.func.lower(UserORM.username).like(q_like),
+            db.func.lower(UserORM.rol).like(q_like),
+        ]
+
+        if hasattr(UserORM, "email"):
+            filters.append(db.func.lower(UserORM.email).like(q_like))
+
+        try:
+            q_id = int(q)
+        except (TypeError, ValueError):
+            q_id = None
+
+        if q_id is not None:
+            filters.append(UserORM.id == q_id)
+
+        query = query.filter(db.or_(*filters))
+
+    users = (
+        query
+        .order_by(UserORM.username.asc())
+        .limit(limit)
+        .all()
+    )
+
+    return jsonify({
+        "users": [
+            {
+                "id": user.id,
+                "username": user.username,
+                "email": getattr(user, "email", None),
+                "rol": user.rol,
+                "department_id": user.department_id,
+                "sucursal_id": user.sucursal_id,
+                "sucursales_ids": user.sucursales_ids,
+            }
+            for user in users
+        ]
+    }), 200
+

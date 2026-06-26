@@ -391,3 +391,46 @@
     flex-direction: column;
   }
 }
+
+.permissions-user-results {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.permissions-user-chip {
+  border: 1px solid #dbe2ea;
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: #ffffff;
+  color: #0f172a;
+  cursor: pointer;
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.permissions-user-chip:hover {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
+.permissions-user-chip strong {
+  font-size: 13px;
+}
+
+.permissions-user-chip span {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.permissions-user-search select {
+  height: 38px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 0 12px;
+  background: #ffffff;
+  color: #0f172a;
+}
+

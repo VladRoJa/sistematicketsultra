@@ -12,6 +12,7 @@ import {
   PermissionAction,
   PermissionModule,
   PermissionRouteMap,
+  PermissionUserOption,
   PermissionsObservabilityService,
 } from './permissions-observability.service';
 
@@ -50,9 +51,13 @@ export class PermissionsObservabilityComponent implements OnInit {
   showInactiveRoutes = true;
 
   userIdInput = '';
+  userSearchTerm = '';
+  userOptions: PermissionUserOption[] = [];
+  selectedUserOptionId: number | null = null;
   effectivePermissions: EffectivePermissionResponse | null = null;
 
   isLoadingCatalog = false;
+  isLoadingUsers = false;
   isLoadingEffective = false;
   errorMessage = '';
 
@@ -66,6 +71,7 @@ export class PermissionsObservabilityComponent implements OnInit {
     this.userIdInput = currentUser?.id ? String(currentUser.id) : '';
 
     this.loadCatalog();
+    this.loadUserOptions();
 
     if (this.userIdInput) {
       this.loadEffectivePermissions();
@@ -98,6 +104,47 @@ export class PermissionsObservabilityComponent implements OnInit {
           this.errorMessage = 'No se pudo cargar el catálogo de permisos.';
         },
       });
+  }
+
+
+  loadUserOptions(): void {
+    this.errorMessage = '';
+    this.isLoadingUsers = true;
+
+    this.permissionsService
+      .searchUsers(this.userSearchTerm, 50)
+      .pipe(finalize(() => {
+        this.isLoadingUsers = false;
+      }))
+      .subscribe({
+        next: (response) => {
+          this.userOptions = response.users || [];
+
+          const currentUserId = Number(this.userIdInput);
+          if (currentUserId > 0) {
+            const exists = this.userOptions.some((user) => user.id === currentUserId);
+            this.selectedUserOptionId = exists ? currentUserId : null;
+          }
+        },
+        error: () => {
+          this.errorMessage = 'No se pudo buscar usuarios.';
+        },
+      });
+  }
+
+  selectUserForEffectivePermissions(user: PermissionUserOption): void {
+    this.selectedUserOptionId = user.id;
+    this.userIdInput = String(user.id);
+    this.loadEffectivePermissions();
+  }
+
+  onSelectedUserOptionChanged(): void {
+    if (!this.selectedUserOptionId) {
+      return;
+    }
+
+    this.userIdInput = String(this.selectedUserOptionId);
+    this.loadEffectivePermissions();
   }
 
   loadEffectivePermissions(): void {
@@ -252,5 +299,9 @@ export class PermissionsObservabilityComponent implements OnInit {
 
   trackByEffectiveAction(_: number, action: EffectivePermissionAction): string {
     return action.full_key;
+  }
+
+  trackByUserId(_: number, user: PermissionUserOption): number {
+    return user.id;
   }
 }
