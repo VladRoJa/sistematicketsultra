@@ -474,6 +474,143 @@ export class PermissionsObservabilityComponent implements OnInit {
       : 'permissions-badge permissions-badge--danger';
   }
 
+
+  exportFilteredActionsCsv(): void {
+    const rows = this.filteredActions.map((action) => ({
+      module_key: action.module_key || '',
+      module_name: this.getModuleName(action.module_key),
+      full_key: action.full_key,
+      key: action.key,
+      name: action.name,
+      description: action.description || '',
+      risk_level: action.risk_level,
+      is_active: action.is_active ? 'true' : 'false',
+    }));
+
+    this.downloadCsv(
+      `suite_permissions_actions_${this.buildExportTimestamp()}.csv`,
+      rows,
+    );
+  }
+
+  exportFilteredRoutesCsv(): void {
+    const rows = this.filteredRoutes.map((route) => ({
+      method: route.method,
+      route: route.route,
+      endpoint_function: route.endpoint_function,
+      source_file: route.source_file,
+      module_key: route.module_key || '',
+      module_name: this.getModuleName(route.module_key),
+      action_full_key: route.action_full_key || '',
+      risk_level: this.getRouteRiskLevel(route) || '',
+      current_guard: route.current_guard || '',
+      current_scope: route.current_scope || '',
+      review_status: route.review_status,
+      is_active: route.is_active ? 'true' : 'false',
+      notes: route.notes || '',
+    }));
+
+    this.downloadCsv(
+      `suite_permissions_routes_${this.buildExportTimestamp()}.csv`,
+      rows,
+    );
+  }
+
+  exportFilteredEffectivePermissionsCsv(): void {
+    if (!this.effectivePermissions) {
+      this.errorMessage = 'Consulta primero un usuario para exportar permisos efectivos.';
+      return;
+    }
+
+    const rows = this.filteredEffectiveActions.map((action) => ({
+      user_id: this.effectivePermissions?.user?.id || '',
+      username: this.effectivePermissions?.user?.username || '',
+      user_role: this.effectivePermissions?.user?.role || '',
+      module_key: action.module_key || '',
+      module_name: this.getModuleName(action.module_key),
+      full_key: action.full_key,
+      name: action.name,
+      risk_level: action.risk_level,
+      allowed: action.allowed ? 'true' : 'false',
+      source: action.source,
+      reason: action.reason,
+      scope_type: action.scope_type,
+      scope_values: JSON.stringify(action.scope_values || []),
+    }));
+
+    const username = this.sanitizeFilenamePart(
+      this.effectivePermissions.user.username || 'usuario',
+    );
+
+    this.downloadCsv(
+      `suite_permissions_effective_${username}_${this.buildExportTimestamp()}.csv`,
+      rows,
+    );
+  }
+
+  private downloadCsv(filename: string, rows: Array<Record<string, unknown>>): void {
+    if (!rows.length) {
+      this.errorMessage = 'No hay registros para exportar con los filtros actuales.';
+      return;
+    }
+
+    this.errorMessage = '';
+
+    const headers = Object.keys(rows[0]);
+    const csvLines = [
+      headers.map((header) => this.escapeCsvValue(header)).join(','),
+      ...rows.map((row) =>
+        headers
+          .map((header) => this.escapeCsvValue(row[header]))
+          .join(','),
+      ),
+    ];
+
+    const csvContent = `\ufeff${csvLines.join('\r\n')}`;
+    const blob = new Blob([csvContent], {
+      type: 'text/csv;charset=utf-8;',
+    });
+
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+
+    link.href = url;
+    link.download = filename;
+    link.click();
+
+    window.URL.revokeObjectURL(url);
+  }
+
+  private escapeCsvValue(value: unknown): string {
+    if (value === null || value === undefined) {
+      return '""';
+    }
+
+    const normalized = String(value).replace(/"/g, '""');
+    return `"${normalized}"`;
+  }
+
+  private buildExportTimestamp(): string {
+    const now = new Date();
+    const pad = (value: number) => String(value).padStart(2, '0');
+
+    return [
+      now.getFullYear(),
+      pad(now.getMonth() + 1),
+      pad(now.getDate()),
+      `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`,
+    ].join('_');
+  }
+
+  private sanitizeFilenamePart(value: string): string {
+    return value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/gi, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_|_$/g, '') || 'usuario';
+  }
+
   trackByModuleKey(_: number, module: PermissionModule): string {
     return module.key;
   }
