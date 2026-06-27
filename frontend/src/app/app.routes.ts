@@ -161,6 +161,12 @@ export const routes: Routes = [
         loadChildren: () =>
           import('./openings/openings.routes').then((m) => m.OPENINGS_ROUTES),
       },
+      {
+        path: 'rpa/gasca-sms',
+        loadComponent: () =>
+          import('./rpa/gasca-sms/gasca-sms-requests.component')
+            .then(m => m.GascaSmsRequestsComponent),
+      },
     ],
   },
 

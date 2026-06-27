@@ -1,0 +1,159 @@
+<div class="gasca-sms-page">
+  <mat-card class="page-card">
+    <mat-card-header>
+      <mat-card-title>Reenvío de códigos Gasca</mat-card-title>
+      <mat-card-subtitle>
+        Consulta Gasca y valida PIN, teléfono, fecha y uso antes de permitir el envío.
+      </mat-card-subtitle>
+    </mat-card-header>
+
+    <mat-card-content>
+      <form class="request-form" [formGroup]="form" (ngSubmit)="submit()">
+        <mat-form-field appearance="fill">
+          <mat-label>PIN</mat-label>
+          <input matInput formControlName="pin" inputmode="numeric" maxlength="5" placeholder="Ej. 8123" />
+          <mat-hint>Se normaliza a 5 dígitos en backend.</mat-hint>
+          <mat-error>{{ pinError }}</mat-error>
+        </mat-form-field>
+
+        <mat-form-field appearance="fill">
+          <mat-label>Teléfono</mat-label>
+          <input matInput formControlName="telefono" placeholder="+528781175574" />
+          <mat-hint>Debe coincidir con el teléfono registrado en Gasca.</mat-hint>
+          <mat-error>{{ telefonoError }}</mat-error>
+        </mat-form-field>
+
+        <mat-form-field appearance="fill">
+          <mat-label>Motivo</mat-label>
+          <mat-select formControlName="motivo">
+            <mat-option *ngFor="let motivo of motivoOptions" [value]="motivo.value">
+              {{ motivo.label }}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
+
+        <mat-form-field appearance="fill" class="detail-field">
+          <mat-label>Detalle opcional</mat-label>
+          <textarea matInput rows="2" formControlName="motivo_detalle"></textarea>
+        </mat-form-field>
+
+        <div class="actions">
+          <button mat-raised-button color="primary" type="submit" [disabled]="creating">
+            <mat-icon>send</mat-icon>
+            Procesar solicitud
+          </button>
+
+          <button mat-button type="button" (click)="clearForm()" [disabled]="creating">
+            Limpiar
+          </button>
+
+          <mat-spinner *ngIf="creating" diameter="28"></mat-spinner>
+        </div>
+      </form>
+
+      <div *ngIf="latestResult" class="result-card" [ngClass]="{ success: latestResultIsSuccess, blocked: latestResultIsBlocked }">
+        <div class="result-icon">
+          <mat-icon *ngIf="latestResultIsSuccess">check_circle</mat-icon>
+          <mat-icon *ngIf="latestResultIsBlocked">warning</mat-icon>
+        </div>
+
+        <div class="result-content">
+          <h3>{{ statusLabel(latestResult.status) }}</h3>
+          <p>{{ latestResult.user_message }}</p>
+
+          <div class="result-grid">
+            <span>PIN</span>
+            <strong>{{ latestResult.pin_normalized }}</strong>
+
+            <span>Teléfono capturado</span>
+            <strong>{{ latestResult.requested_phone_masked }}</strong>
+
+            <span>Teléfono Gasca</span>
+            <strong>{{ latestResult.gasca_phone_masked || '—' }}</strong>
+
+            <span>Código Gasca</span>
+            <strong>{{ latestResult.gasca_code_masked || '—' }}</strong>
+
+            <span>Generado</span>
+            <strong>{{ latestResult.gasca_generated_raw || '—' }}</strong>
+
+            <span>Utilizado</span>
+            <strong>{{ latestResult.gasca_used_raw || '—' }}</strong>
+
+            <span>Sucursal</span>
+            <strong>{{ latestResult.gasca_sucursal || '—' }}</strong>
+          </div>
+        </div>
+      </div>
+    </mat-card-content>
+  </mat-card>
+
+  <mat-card class="page-card">
+    <mat-card-header>
+      <mat-card-title>Historial reciente</mat-card-title>
+      <mat-card-subtitle>
+        Últimas solicitudes procesadas.
+      </mat-card-subtitle>
+    </mat-card-header>
+
+    <mat-card-content>
+      <div class="loading-row" *ngIf="loadingList">
+        <mat-spinner diameter="28"></mat-spinner>
+        <span>Cargando historial...</span>
+      </div>
+
+      <div class="table-wrapper" *ngIf="!loadingList">
+        <table mat-table [dataSource]="items" class="requests-table">
+          <ng-container matColumnDef="created_at">
+            <th mat-header-cell *matHeaderCellDef>Fecha</th>
+            <td mat-cell *matCellDef="let item">{{ formatDateTime(item.created_at) }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="pin">
+            <th mat-header-cell *matHeaderCellDef>PIN</th>
+            <td mat-cell *matCellDef="let item">{{ item.pin_normalized }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="telefono">
+            <th mat-header-cell *matHeaderCellDef>Teléfono</th>
+            <td mat-cell *matCellDef="let item">{{ item.requested_phone_masked }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="motivo">
+            <th mat-header-cell *matHeaderCellDef>Motivo</th>
+            <td mat-cell *matCellDef="let item">{{ motivoLabel(item.motivo) }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="status">
+            <th mat-header-cell *matHeaderCellDef>Estado</th>
+            <td mat-cell *matCellDef="let item">
+              <span class="status-pill" [ngClass]="rowStatusClass(item)">
+                {{ statusLabel(item.status) }}
+              </span>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="mensaje">
+            <th mat-header-cell *matHeaderCellDef>Mensaje</th>
+            <td mat-cell *matCellDef="let item">{{ item.user_message || '—' }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="gasca">
+            <th mat-header-cell *matHeaderCellDef>Club</th>
+            <td mat-cell *matCellDef="let item">
+              {{ item.gasca_sucursal || '—' }}
+              <span *ngIf="item.gasca_generated_raw"> · {{ item.gasca_generated_raw }}</span>
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+        </table>
+
+        <div class="empty-state" *ngIf="items.length === 0">
+          No hay solicitudes recientes.
+        </div>
+      </div>
+    </mat-card-content>
+  </mat-card>
+</div>

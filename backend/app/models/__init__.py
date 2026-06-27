@@ -89,6 +89,11 @@ from .permissions import (
 )
 
 
+from .rpa import (
+    GascaSmsRequestORM,
+    GascaSmsRequestStatus,
+)
+
 # -------------------------------------------------------------------------------
 # EXPORTACIONES: Control de qué modelos estarán disponibles al importar app.models
 # -------------------------------------------------------------------------------
@@ -163,4 +168,6 @@ __all__ = [
     "PermissionModuleORM",
     "PermissionActionORM",
     "PermissionRouteMapORM",
+    "GascaSmsRequestORM",
+    "GascaSmsRequestStatus",
 ]
