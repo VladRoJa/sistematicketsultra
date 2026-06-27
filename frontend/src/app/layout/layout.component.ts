@@ -150,6 +150,14 @@ ngOnInit(): void {
     ],
   };
 
+  const menuAutomatizacion = {
+    label: 'Automatización',
+    path: '/rpa/gasca-sms',
+    submenu: [
+      { label: 'Códigos Gasca SMS', path: '/rpa/gasca-sms' },
+    ],
+  };
+
   const soloTickets = [
     {
       label: 'Tickets',
@@ -309,6 +317,16 @@ if (
   this.menuItems = [
     ...this.menuItems,
     menuAperturas,
+  ];
+}
+
+if (
+  this.puedeVerGascaSmsPorRol() &&
+  !this.menuItems.some((item) => item.label === 'Automatización')
+) {
+  this.menuItems = [
+    ...this.menuItems,
+    menuAutomatizacion,
   ];
 }
 
@@ -971,6 +989,20 @@ private puedeVerTrackDiarioPorRol(): boolean {
   ].includes(rol);
 }
 
+private puedeVerGascaSmsPorRol(): boolean {
+  const user = this.authService.getUser();
+  const rol = (user?.rol || '').toString().trim().toUpperCase();
+
+  return [
+    'ADMIN',
+    'ADMINISTRADOR',
+    'SUPER_ADMIN',
+    'SISTEMAS',
+    'GERENTE',
+    'GERENTE_REGIONAL',
+  ].includes(rol);
+}
+
 private puedeVerAperturasPorRol(): boolean {
   const user = this.authService.getUser();
   const rol = (user?.rol || '').toString().trim().toUpperCase();
@@ -997,6 +1029,8 @@ getMenuIcon(label: string): string {
     inventario: 'inventory_2',
     warehouse: 'warehouse',
     aperturas: 'domain_add',
+    automatización: 'smart_toy',
+    automatizacion: 'smart_toy',
     'nube corporativa': 'cloud',
     catálogos: 'category',
     catalogos: 'category',
@@ -1023,6 +1057,14 @@ getSubmenuIcon(label: string): string {
 
   if (normalizedLabel.includes('track')) {
     return 'monitoring';
+  }
+
+  if (
+    normalizedLabel.includes('códigos gasca') ||
+    normalizedLabel.includes('codigos gasca') ||
+    normalizedLabel.includes('sms')
+  ) {
+    return 'sms';
   }
 
   if (normalizedLabel.includes('centro de control') || normalizedLabel.includes('aperturas')) {
@@ -1093,6 +1135,14 @@ getSubmenuDescription(label: string): string {
 
   if (normalizedLabel.includes('track')) {
     return 'Consulta indicadores diarios, metas y avance por club.';
+  }
+
+  if (
+    normalizedLabel.includes('códigos gasca') ||
+    normalizedLabel.includes('codigos gasca') ||
+    normalizedLabel.includes('sms')
+  ) {
+    return 'Consulta Gasca, valida el código y deja bitácora del resultado.';
   }
 
   if (normalizedLabel.includes('centro de control') || normalizedLabel.includes('aperturas')) {
