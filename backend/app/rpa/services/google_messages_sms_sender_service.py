@@ -183,15 +183,89 @@ def _fill_recipient(page: Page, phone_digits: str, config: GoogleMessagesSmsConf
     _wait_for_recipient_option(page, phone_digits, config.timeout_ms)
 
 
+def _wait_until_url_not_contains(page: Page, fragment: str, timeout_ms: int) -> None:
+    deadline = time.monotonic() + (timeout_ms / 1000)
+    last_url = page.url
+
+    while time.monotonic() < deadline:
+        last_url = page.url
+        if fragment not in last_url:
+            return
+
+        page.wait_for_timeout(250)
+
+    raise GoogleMessagesSmsSenderError(
+        f"Google Messages no cambió de URL después de seleccionar destinatario. URL actual: {last_url}"
+    )
+
+
+def _wait_until_locator_value_contains(locator, expected: str, timeout_ms: int) -> None:
+    deadline = time.monotonic() + (timeout_ms / 1000)
+    last_value = ""
+
+    while time.monotonic() < deadline:
+        try:
+            last_value = locator.input_value(timeout=500)
+        except Exception:
+            last_value = ""
+
+        if expected in last_value:
+            return
+
+        time.sleep(0.25)
+
+    raise GoogleMessagesSmsSenderError(
+        "Google Messages no confirmó que el texto del SMS quedara capturado en la caja de mensaje."
+    )
+
+
+def _wait_until_locator_empty(locator, timeout_ms: int) -> None:
+    deadline = time.monotonic() + (timeout_ms / 1000)
+    last_value = None
+
+    while time.monotonic() < deadline:
+        try:
+            last_value = locator.input_value(timeout=500)
+        except Exception:
+            last_value = None
+
+        if last_value == "":
+            return
+
+        time.sleep(0.25)
+
+    raise GoogleMessagesSmsSenderError(
+        "Google Messages no limpió la caja de mensaje después de presionar Enter."
+    )
+
+
+def _wait_until_body_contains(page: Page, expected: str, timeout_ms: int) -> None:
+    deadline = time.monotonic() + (timeout_ms / 1000)
+    body = page.locator("body").first
+    last_text = ""
+
+    while time.monotonic() < deadline:
+        try:
+            last_text = body.inner_text(timeout=1000)
+        except Exception:
+            last_text = ""
+
+        if expected in last_text:
+            return
+
+        time.sleep(0.25)
+
+    raise GoogleMessagesSmsSenderError(
+        "Google Messages no mostró el mensaje enviado en la conversación después del envío."
+    )
+
+
 def _select_recipient(page: Page, phone_digits: str, config: GoogleMessagesSmsConfig) -> str:
     option_text = _wait_for_recipient_option(page, phone_digits, config.timeout_ms)
 
     page.get_by_text(option_text, exact=False).first.click(timeout=config.timeout_ms)
 
-    page.wait_for_function(
-        "() => !window.location.href.includes('/conversations/new')",
-        timeout=config.timeout_ms,
-    )
+    _wait_until_url_not_contains(page, "/conversations/new", config.timeout_ms)
 
     if "/conversations/new" in page.url:
         raise GoogleMessagesSmsSenderError(
@@ -215,14 +289,7 @@ def _fill_message(page: Page, message: str, config: GoogleMessagesSmsConfig) -> 
     page.keyboard.press("Backspace")
     page.keyboard.type(message, delay=config.key_type_delay_ms)
 
-    page.wait_for_function(
-        """(data) => {
-            const el = document.querySelector(data.selector);
-            return el && el.value && el.value.includes(data.expected);
-        }""",
-        arg={"selector": selector, "expected": message},
-        timeout=config.timeout_ms,
-    )
+    _wait_until_locator_value_contains(message_box, message, config.timeout_ms)
 
     return selector
 
@@ -239,22 +306,9 @@ def _send_by_enter(
     message_box.click(timeout=config.timeout_ms)
     page.keyboard.press("Enter")
 
-    page.wait_for_function(
-        """(selector) => {
-            const el = document.querySelector(selector);
-            return el && !el.value;
-        }""",
-        arg=message_selector,
-        timeout=config.timeout_ms,
-    )
+    _wait_until_locator_empty(message_box, config.timeout_ms)
 
-    page.wait_for_function(
-        """(expected) => {
-            return document.body && document.body.innerText.includes(expected);
-        }""",
-        arg=message,
-        timeout=config.timeout_ms,
-    )
+    _wait_until_body_contains(page, message, config.timeout_ms)
 
     page.wait_for_timeout(config.settle_after_send_ms)
 
