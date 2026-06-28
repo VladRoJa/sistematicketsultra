@@ -28,7 +28,10 @@ RUN apt-get update && \
         libasound2t64 \
         libcups2t64 \
         libcairo2 \
-        libpango-1.0-0 && \
+        libpango-1.0-0 \
+        xvfb \
+        x11vnc \
+        fluxbox && \
     pip install --upgrade pip && \
     pip install -r requirements.txt && \
     python -m playwright install chromium && \

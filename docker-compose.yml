@@ -45,6 +45,7 @@ services:
       app.wsgi:app
     ports:
       - "5000:5000"
+      - "127.0.0.1:5901:5901"
     networks:
       - backend-net
     volumes:
