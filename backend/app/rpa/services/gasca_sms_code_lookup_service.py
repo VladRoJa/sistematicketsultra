@@ -54,18 +54,22 @@ class GascaSmsRow:
             return None
 
 
-def resolve_config_from_env(*, headless: bool = True) -> GascaSmsLookupConfig:
-    base_url = (os.getenv("GASCA_BASE_URL") or "").strip()
-    user = (os.getenv("GASCA_USER") or "").strip()
-    password = (os.getenv("GASCA_PASS") or "").strip()
+def resolve_config_from_env(headless: bool = True) -> GascaSmsLookupConfig:
+    base_url = (
+        os.getenv("GASCA_BASE_URL")
+        or os.getenv("GASCA_BASE")
+        or "https://ultragimnasios.com"
+    )
+    user = os.getenv("GASCA_USER")
+    password = os.getenv("GASCA_PASSWORD") or os.getenv("GASCA_PASS")
 
-    missing: list[str] = []
+    missing = []
     if not base_url:
         missing.append("GASCA_BASE_URL")
     if not user:
         missing.append("GASCA_USER")
     if not password:
-        missing.append("GASCA_PASS")
+        missing.append("GASCA_PASSWORD/GASCA_PASS")
 
     if missing:
         raise GascaSmsCodeLookupError(
@@ -73,11 +77,25 @@ def resolve_config_from_env(*, headless: bool = True) -> GascaSmsLookupConfig:
         )
 
     return GascaSmsLookupConfig(
-        base_url=base_url,
+        base_url=base_url.rstrip("/"),
         user=user,
         password=password,
         headless=headless,
     )
+
+
+def suite_local_today() -> date:
+    timezone_name = (
+        os.getenv("SUITE_TIMEZONE")
+        or os.getenv("APP_TIMEZONE")
+        or os.getenv("TZ")
+        or "America/Tijuana"
+    )
+
+    try:
+        return datetime.now(ZoneInfo(timezone_name)).date()
+    except Exception:
+        return datetime.now(ZoneInfo("America/Tijuana")).date()
 
 
 def normalize_pin(pin_raw: str) -> str:
@@ -370,7 +388,7 @@ def lookup_gasca_sms_code(
     show_sensitive: bool = False,
 ) -> dict[str, Any]:
     runtime = config or resolve_config_from_env()
-    lookup_today = today or date.today()
+    lookup_today = today or suite_local_today()
     pin_normalized = normalize_pin(pin_raw)
     login_url, codes_url = resolve_gasca_urls(runtime)
 
