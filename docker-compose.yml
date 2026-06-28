@@ -29,20 +29,16 @@ services:
     environment:
       APP_ENV: "prod"
 
-    command: >
-      gunicorn
-      --workers 3
-      --worker-class sync
-      --timeout 300
-      --graceful-timeout 30
-      --keep-alive 5
-      --max-requests 1000
-      --max-requests-jitter 100
-      --access-logfile -
-      --error-logfile -
-      --capture-output
-      -b 0.0.0.0:5000
-      app.wsgi:app
+      DISPLAY: ":99"
+      GOOGLE_MESSAGES_HEADLESS: "0"
+      GOOGLE_MESSAGES_PROFILE_DIR: "/app/.playwright/google_messages_profile"
+    command:
+      - sh
+      - -lc
+      - |
+        mkdir -p /app/.playwright/google_messages_profile
+        Xvfb :99 -screen 0 1368x900x24 >/tmp/suite_xvfb.log 2>&1 &
+        exec gunicorn --workers 3 --worker-class sync --timeout 300 --graceful-timeout 30 --keep-alive 5 --max-requests 1000 --max-requests-jitter 100 --access-logfile - --error-logfile - --capture-output -b 0.0.0.0:5000 app.wsgi:app
     ports:
       - "5000:5000"
       - "127.0.0.1:5901:5901"
