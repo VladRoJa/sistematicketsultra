@@ -995,7 +995,7 @@ private puedeVerGascaSmsPorRol(): boolean {
     const username = (user?.username || '').toString().trim().toUpperCase();
     const rol = ((user as any)?.rol || (user as any)?.role || '').toString().trim().toUpperCase();
 
-    return (userId === 47 && username === 'ADMICORP') || rol === 'SISTEMAS';
+    return (userId === 47 && username === 'ADMICORP') || rol === 'SISTEMAS'; 
   }
 
 private puedeVerAperturasPorRol(): boolean {
