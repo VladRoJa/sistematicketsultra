@@ -4,6 +4,7 @@ import os
 import re
 from dataclasses import asdict, dataclass
 from datetime import date, datetime
+from zoneinfo import ZoneInfo
 from typing import Any
 
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
