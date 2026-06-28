@@ -990,15 +990,13 @@ private puedeVerTrackDiarioPorRol(): boolean {
 }
 
 private puedeVerGascaSmsPorRol(): boolean {
-  const user = this.authService.getUser();
+    const user = this.authService.getUser();
+    const userId = Number(user?.id || 0);
+    const username = (user?.username || '').toString().trim().toUpperCase();
+    const rol = ((user as any)?.rol || (user as any)?.role || '').toString().trim().toUpperCase();
 
-  const userId = Number(user?.id || 0);
-  const username = (user?.username || '').toString().trim().toUpperCase();
-
-  // Canary temporal:
-  // Solo Vladimir / ADMICORP puede ver el módulo en menú durante piloto prod.
-  return userId === 47 && username === 'ADMICORP';
-}
+    return (userId === 47 && username === 'ADMICORP') || rol === 'SISTEMAS';
+  }
 
 private puedeVerAperturasPorRol(): boolean {
   const user = this.authService.getUser();
