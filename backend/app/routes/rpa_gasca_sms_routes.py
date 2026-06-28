@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from flask import Blueprint, current_app, jsonify, request
+import csv
+import io
+from datetime import date, datetime, time, timedelta
+
+from flask import Blueprint, Response, current_app, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from app.extensions import db
@@ -91,6 +95,103 @@ def _parse_optional_int(value, field_name: str):
         raise ValueError(f"{field_name} inválido.")
 
 
+def _parse_optional_date(value, field_name: str) -> date | None:
+    if value in (None, ""):
+        return None
+
+    try:
+        return date.fromisoformat(str(value))
+    except (TypeError, ValueError):
+        raise ValueError(f"{field_name} inválido. Formato esperado: YYYY-MM-DD.")
+
+
+def _start_of_day(value: date) -> datetime:
+    return datetime.combine(value, time.min)
+
+
+def _exclusive_next_day(value: date) -> datetime:
+    return datetime.combine(value + timedelta(days=1), time.min)
+
+
+def _resolve_date_range(args) -> tuple[datetime | None, datetime | None, str]:
+    preset = (args.get("date_preset") or "today").strip().lower()
+
+    # Soportar alias simples por si el frontend manda period como Nube.
+    if args.get("period") and not args.get("date_preset"):
+        preset = str(args.get("period") or "today").strip().lower()
+
+    today_value = date.today()
+
+    if preset in {"all", "todo"}:
+        return None, None, "all"
+
+    if preset == "yesterday":
+        target = today_value - timedelta(days=1)
+        return _start_of_day(target), _exclusive_next_day(target), "yesterday"
+
+    if preset in {"last_7_days", "last7", "7d"}:
+        start = today_value - timedelta(days=6)
+        return _start_of_day(start), _exclusive_next_day(today_value), "last_7_days"
+
+    if preset in {"month", "this_month"}:
+        start = today_value.replace(day=1)
+        return _start_of_day(start), _exclusive_next_day(today_value), "month"
+
+    if preset == "custom":
+        date_from = _parse_optional_date(args.get("date_from"), "date_from")
+        date_to = _parse_optional_date(args.get("date_to"), "date_to")
+
+        if not date_from or not date_to:
+            raise ValueError("date_from y date_to son obligatorios para date_preset=custom.")
+
+        if date_from > date_to:
+            raise ValueError("date_from no puede ser mayor que date_to.")
+
+        return _start_of_day(date_from), _exclusive_next_day(date_to), "custom"
+
+    # Default operativo: hoy.
+    return _start_of_day(today_value), _exclusive_next_day(today_value), "today"
+
+
+def _pin_filter_candidates(pin_raw: str) -> list[str]:
+    digits = "".join(
+        char for char in str(pin_raw or "").strip()
+        if char.isdigit()
+    )
+
+    if not digits:
+        return []
+
+    candidates = [
+        digits,
+        digits.lstrip("0") or "0",
+        digits.zfill(5),
+    ]
+
+    unique: list[str] = []
+    for candidate in candidates:
+        if candidate and candidate not in unique:
+            unique.append(candidate)
+
+    return unique
+
+
+def _parse_page_args(args) -> tuple[int, int]:
+    page = _parse_optional_int(args.get("page"), "page") or 1
+
+    raw_page_size = (
+        args.get("page_size")
+        or args.get("per_page")
+        or args.get("limit")
+    )
+    page_size = _parse_optional_int(raw_page_size, "page_size") or 25
+
+    page = max(1, page)
+    page_size = max(1, min(page_size, 100))
+
+    return page, page_size
+
+
 def _require_module_access(user: UserORM | None):
     if not user:
         return jsonify({"error": "Unauthorized", "detail": "Usuario no encontrado."}), 401
@@ -137,6 +238,65 @@ def _request_visible_for_user(user: UserORM | None, item: GascaSmsRequestORM) ->
         return False
 
     return item.sucursal_id in _allowed_sucursales_for_user(user)
+
+
+def _apply_gasca_sms_request_filters(user: UserORM, args):
+    date_start, date_end, date_preset = _resolve_date_range(args)
+
+    status = (args.get("status") or "").strip()
+    pin = (args.get("pin") or "").strip()
+    gasca_sucursal = (args.get("gasca_sucursal") or "").strip()
+    sucursal_id = _parse_optional_int(args.get("sucursal_id"), "sucursal_id")
+
+    query = GascaSmsRequestORM.query
+
+    if not _is_global_user(user):
+        allowed_sucursales = _allowed_sucursales_for_user(user)
+        query = query.filter(GascaSmsRequestORM.sucursal_id.in_(allowed_sucursales or [-1]))
+
+    if sucursal_id is not None:
+        forbidden = _require_sucursal_access(user, sucursal_id)
+        if forbidden:
+            return None, date_preset, forbidden
+
+        query = query.filter(GascaSmsRequestORM.sucursal_id == sucursal_id)
+
+    if date_start is not None:
+        query = query.filter(GascaSmsRequestORM.created_at >= date_start)
+
+    if date_end is not None:
+        query = query.filter(GascaSmsRequestORM.created_at < date_end)
+
+    if status and status.upper() != "ALL":
+        query = query.filter(GascaSmsRequestORM.status == status)
+
+    if pin:
+        candidates = _pin_filter_candidates(pin)
+        if candidates:
+            query = query.filter(GascaSmsRequestORM.pin_normalized.in_(candidates))
+
+    if gasca_sucursal:
+        query = query.filter(
+            GascaSmsRequestORM.gasca_sucursal.ilike(f"%{gasca_sucursal}%")
+        )
+
+    return query, date_preset, None
+
+
+def _csv_safe(value) -> str:
+    if value is None:
+        return ""
+
+    return str(value)
+
+
+def _gasca_sms_export_filename(date_preset: str) -> str:
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_preset = "".join(
+        char if char.isalnum() or char in {"-", "_"} else "_"
+        for char in str(date_preset or "export")
+    )
+    return f"gasca_sms_{safe_preset}_{stamp}.csv"
 
 
 @rpa_gasca_sms_bp.route("/catalogs", methods=["GET"])
@@ -215,11 +375,12 @@ def list_gasca_sms_requests_route():
         return forbidden
 
     try:
-        limit = _parse_optional_int(request.args.get("limit"), "limit") or 50
-        limit = max(1, min(limit, 100))
+        page, page_size = _parse_page_args(request.args)
+        date_start, date_end, date_preset = _resolve_date_range(request.args)
 
         status = (request.args.get("status") or "").strip()
         pin = (request.args.get("pin") or "").strip()
+        gasca_sucursal = (request.args.get("gasca_sucursal") or "").strip()
         sucursal_id = _parse_optional_int(request.args.get("sucursal_id"), "sucursal_id")
 
         query = GascaSmsRequestORM.query
@@ -234,24 +395,143 @@ def list_gasca_sms_requests_route():
                 return forbidden
             query = query.filter(GascaSmsRequestORM.sucursal_id == sucursal_id)
 
-        if status:
+        if date_start is not None:
+            query = query.filter(GascaSmsRequestORM.created_at >= date_start)
+
+        if date_end is not None:
+            query = query.filter(GascaSmsRequestORM.created_at < date_end)
+
+        if status and status.upper() != "ALL":
             query = query.filter(GascaSmsRequestORM.status == status)
 
         if pin:
-            query = query.filter(GascaSmsRequestORM.pin_normalized == pin.zfill(5))
+            candidates = _pin_filter_candidates(pin)
+            if candidates:
+                query = query.filter(GascaSmsRequestORM.pin_normalized.in_(candidates))
+
+        if gasca_sucursal:
+            query = query.filter(
+                GascaSmsRequestORM.gasca_sucursal.ilike(f"%{gasca_sucursal}%")
+            )
+
+        total = query.count()
+        total_pages = (total + page_size - 1) // page_size if total else 0
+
+        if total_pages and page > total_pages:
+            page = total_pages
+
+        offset = (page - 1) * page_size
 
         items = (
             query
             .order_by(GascaSmsRequestORM.created_at.desc())
-            .limit(limit)
+            .offset(offset)
+            .limit(page_size)
             .all()
         )
 
         return jsonify({
             "items": [item.to_public_dict() for item in items],
             "count": len(items),
-            "limit": limit,
+            "limit": page_size,
+            "page": page,
+            "page_size": page_size,
+            "total": total,
+            "total_pages": total_pages,
+            "has_next": page < total_pages,
+            "has_prev": page > 1,
+            "date_preset": date_preset,
         }), 200
+
+    except ValueError as exc:
+        return jsonify({"error": "Bad Request", "detail": str(exc)}), 400
+
+
+@rpa_gasca_sms_bp.route("/requests/export", methods=["GET"])
+@jwt_required()
+def export_gasca_sms_requests_route():
+    user = _get_current_user()
+    forbidden = _require_module_access(user)
+    if forbidden:
+        return forbidden
+
+    try:
+        query, date_preset, forbidden = _apply_gasca_sms_request_filters(user, request.args)
+        if forbidden:
+            return forbidden
+
+        # Límite defensivo para evitar exportaciones accidentales enormes.
+        export_limit = _parse_optional_int(request.args.get("export_limit"), "export_limit") or 5000
+        export_limit = max(1, min(export_limit, 20000))
+
+        items = (
+            query
+            .order_by(GascaSmsRequestORM.created_at.desc())
+            .limit(export_limit)
+            .all()
+        )
+
+        output = io.StringIO()
+        output.write("\ufeff")
+
+        writer = csv.writer(output)
+        writer.writerow([
+            "ID",
+            "Fecha solicitud",
+            "PIN",
+            "Telefono capturado",
+            "Motivo",
+            "Detalle motivo",
+            "Estado",
+            "Mensaje",
+            "Sucursal Suite ID",
+            "Usuario ID",
+            "Nombre Gasca",
+            "Telefono Gasca",
+            "Codigo Gasca",
+            "Generado Gasca",
+            "Utilizado Gasca",
+            "Sucursal Gasca",
+            "Proveedor SMS",
+            "Intentos",
+            "Procesado",
+            "Enviado",
+        ])
+
+        for item in items:
+            writer.writerow([
+                item.id,
+                _csv_safe(item.created_at.isoformat() if item.created_at else ""),
+                _csv_safe(item.pin_normalized),
+                _csv_safe(item.requested_phone_masked),
+                _csv_safe(item.motivo),
+                _csv_safe(item.motivo_detalle),
+                _csv_safe(item.status),
+                _csv_safe(item.user_message),
+                _csv_safe(item.sucursal_id),
+                _csv_safe(item.requested_by_user_id),
+                _csv_safe(item.gasca_nombre_masked),
+                _csv_safe(item.gasca_phone_masked),
+                _csv_safe(item.gasca_code_masked),
+                _csv_safe(item.gasca_generated_raw),
+                _csv_safe(item.gasca_used_raw),
+                _csv_safe(item.gasca_sucursal),
+                _csv_safe(item.sms_provider),
+                _csv_safe(item.attempt_count),
+                _csv_safe(item.processed_at.isoformat() if item.processed_at else ""),
+                _csv_safe(item.sent_at.isoformat() if item.sent_at else ""),
+            ])
+
+        filename = _gasca_sms_export_filename(date_preset)
+
+        return Response(
+            output.getvalue(),
+            mimetype="text/csv; charset=utf-8",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "X-Exported-Rows": str(len(items)),
+            },
+        )
 
     except ValueError as exc:
         return jsonify({"error": "Bad Request", "detail": str(exc)}), 400

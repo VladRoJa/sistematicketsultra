@@ -12,6 +12,10 @@ from app.rpa.services.gasca_sms_code_lookup_service import (
     normalize_pin,
     phone_digits,
 )
+from app.rpa.services.google_messages_sms_sender_service import (
+    GoogleMessagesSmsSenderError,
+    send_sms_via_google_messages,
+)
 
 
 class GascaSmsRequestServiceError(RuntimeError):
@@ -54,6 +58,35 @@ def validate_phone_digits(phone_raw: str) -> str:
         raise ValueError("Teléfono inválido: se esperaban máximo 15 dígitos.")
 
     return digits
+
+
+def build_gasca_sms_message(code: str) -> str:
+    clean_code = (code or "").strip()
+
+    if not clean_code:
+        raise GascaSmsRequestServiceError(
+            "No se puede enviar SMS porque Gasca no devolvió código."
+        )
+
+    return f"Ultra Gym: tu código de acceso es {clean_code}. No compartas este código."
+
+
+def sanitize_lookup_result_for_storage(result: dict) -> dict:
+    sanitized = dict(result or {})
+    selected = dict(sanitized.get("selected") or {})
+
+    if selected:
+        selected["telefono"] = mask_phone(selected.get("telefono") or "")
+        selected["codigo"] = mask_code(selected.get("codigo") or "")
+
+    sanitized["selected"] = selected
+    return sanitized
+
+
+def mask_sms_message_for_storage(message: str, code: str) -> str:
+    masked_code = mask_code(code)
+    return (message or "").replace(code, masked_code)
+
 
 
 def _apply_lookup_result_to_request(
@@ -131,16 +164,56 @@ def process_gasca_sms_request(
             phone_raw=request.requested_phone_raw,
             config=resolve_config_from_env(headless=headless),
             today=today,
-            show_sensitive=False,
+            show_sensitive=True,
         )
 
-        _apply_lookup_result_to_request(request, result)
+        selected = result.get("selected") or {}
+        gasca_code_real = (selected.get("codigo") or "").strip()
+
+        _apply_lookup_result_to_request(
+            request,
+            sanitize_lookup_result_for_storage(result),
+        )
         request.processed_at = db.func.now()
+
+        if request.status == GascaSmsRequestStatus.READY_TO_SEND:
+            sms_message = build_gasca_sms_message(gasca_code_real)
+
+            request.status = GascaSmsRequestStatus.SMS_SENDING
+            request.sms_provider = "google_messages_web"
+            request.sms_message_masked = mask_sms_message_for_storage(
+                sms_message,
+                gasca_code_real,
+            )
+            db.session.flush()
+
+            sms_result = send_sms_via_google_messages(
+                phone=request.requested_phone_raw,
+                message=sms_message,
+            )
+
+            if not sms_result.get("ok"):
+                raise GoogleMessagesSmsSenderError(
+                    f"Google Messages no confirmó envío: {sms_result}"
+                )
+
+            request.status = GascaSmsRequestStatus.SENT
+            request.user_message = "SMS enviado correctamente por Google Messages."
+            request.sent_at = db.func.now()
+            request.processed_at = db.func.now()
 
     except (GascaSmsCodeLookupError, ValueError) as exc:
         request.status = GascaSmsRequestStatus.FAILED
         request.user_message = (
             "No se pudo procesar la solicitud. No fue posible consultar Gasca en este momento."
+        )
+        request.internal_error = str(exc)
+        request.processed_at = db.func.now()
+
+    except GoogleMessagesSmsSenderError as exc:
+        request.status = GascaSmsRequestStatus.FAILED
+        request.user_message = (
+            "El código fue validado en Gasca, pero no se pudo enviar el SMS por Google Messages."
         )
         request.internal_error = str(exc)
         request.processed_at = db.func.now()

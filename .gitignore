@@ -31,3 +31,4 @@ backend/storage/
 
 # Let's Encrypt / Certbot runtime files
 certbot/
+backend/.playwright/

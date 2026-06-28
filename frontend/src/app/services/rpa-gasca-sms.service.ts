@@ -73,6 +73,13 @@ export interface GascaSmsRequestsListResponse {
   items: GascaSmsRequest[];
   count: number;
   limit: number;
+  page: number;
+  page_size: number;
+  total: number;
+  total_pages: number;
+  has_next: boolean;
+  has_prev: boolean;
+  date_preset?: string;
 }
 
 export interface GascaSmsRequestDetailResponse {
@@ -80,9 +87,15 @@ export interface GascaSmsRequestDetailResponse {
 }
 
 export interface GascaSmsRequestsListParams {
+  page?: number;
+  page_size?: number;
   limit?: number;
+  date_preset?: string;
+  date_from?: string | null;
+  date_to?: string | null;
   status?: string;
   pin?: string;
+  gasca_sucursal?: string;
   sucursal_id?: number | null;
 }
 
@@ -110,10 +123,50 @@ export class RpaGascaSmsService {
   listRequests(
     params: GascaSmsRequestsListParams = {},
   ): Observable<GascaSmsRequestsListResponse> {
+    const httpParams = this.buildListHttpParams(params);
+
+    return this.http.get<GascaSmsRequestsListResponse>(
+      `${this.apiUrl}/requests`,
+      { params: httpParams },
+    );
+  }
+
+  exportRequests(
+    params: GascaSmsRequestsListParams = {},
+  ): Observable<Blob> {
+    const httpParams = this.buildListHttpParams(params);
+
+    return this.http.get(`${this.apiUrl}/requests/export`, {
+      params: httpParams,
+      responseType: 'blob',
+    });
+  }
+
+  private buildListHttpParams(params: GascaSmsRequestsListParams): HttpParams {
     let httpParams = new HttpParams();
+
+    if (params.page != null) {
+      httpParams = httpParams.set('page', String(params.page));
+    }
+
+    if (params.page_size != null) {
+      httpParams = httpParams.set('page_size', String(params.page_size));
+    }
 
     if (params.limit != null) {
       httpParams = httpParams.set('limit', String(params.limit));
+    }
+
+    if (params.date_preset) {
+      httpParams = httpParams.set('date_preset', params.date_preset);
+    }
+
+    if (params.date_from) {
+      httpParams = httpParams.set('date_from', params.date_from);
+    }
+
+    if (params.date_to) {
+      httpParams = httpParams.set('date_to', params.date_to);
     }
 
     if (params.status) {
@@ -124,14 +177,15 @@ export class RpaGascaSmsService {
       httpParams = httpParams.set('pin', params.pin);
     }
 
+    if (params.gasca_sucursal) {
+      httpParams = httpParams.set('gasca_sucursal', params.gasca_sucursal);
+    }
+
     if (params.sucursal_id != null) {
       httpParams = httpParams.set('sucursal_id', String(params.sucursal_id));
     }
 
-    return this.http.get<GascaSmsRequestsListResponse>(
-      `${this.apiUrl}/requests`,
-      { params: httpParams },
-    );
+    return httpParams;
   }
 
   getRequest(id: number): Observable<GascaSmsRequestDetailResponse> {
