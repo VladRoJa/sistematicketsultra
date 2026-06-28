@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import csv
+import os
 import io
 from datetime import date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 from flask import Blueprint, Response, current_app, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
@@ -105,12 +107,30 @@ def _parse_optional_date(value, field_name: str) -> date | None:
         raise ValueError(f"{field_name} inválido. Formato esperado: YYYY-MM-DD.")
 
 
+def _suite_timezone() -> ZoneInfo:
+    timezone_name = (
+        os.getenv("SUITE_TIMEZONE")
+        or os.getenv("APP_TIMEZONE")
+        or os.getenv("TZ")
+        or "America/Tijuana"
+    )
+
+    try:
+        return ZoneInfo(timezone_name)
+    except Exception:
+        return ZoneInfo("America/Tijuana")
+
+
+def _suite_local_today() -> date:
+    return datetime.now(_suite_timezone()).date()
+
+
 def _start_of_day(value: date) -> datetime:
-    return datetime.combine(value, time.min)
+    return datetime.combine(value, time.min, tzinfo=_suite_timezone())
 
 
 def _exclusive_next_day(value: date) -> datetime:
-    return datetime.combine(value + timedelta(days=1), time.min)
+    return datetime.combine(value + timedelta(days=1), time.min, tzinfo=_suite_timezone())
 
 
 def _resolve_date_range(args) -> tuple[datetime | None, datetime | None, str]:
@@ -120,7 +140,7 @@ def _resolve_date_range(args) -> tuple[datetime | None, datetime | None, str]:
     if args.get("period") and not args.get("date_preset"):
         preset = str(args.get("period") or "today").strip().lower()
 
-    today_value = date.today()
+    today_value = _suite_local_today()
 
     if preset in {"all", "todo"}:
         return None, None, "all"
