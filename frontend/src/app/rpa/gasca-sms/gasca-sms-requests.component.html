@@ -1,159 +1,481 @@
-<div class="gasca-sms-page">
-  <mat-card class="page-card">
-    <mat-card-header>
-      <mat-card-title>Reenvío de códigos Gasca</mat-card-title>
-      <mat-card-subtitle>
-        Consulta Gasca y valida PIN, teléfono, fecha y uso antes de permitir el envío.
-      </mat-card-subtitle>
-    </mat-card-header>
+<section class="gasca-sms-page">
+  <div class="gasca-sms-hero">
+    <div class="gasca-sms-hero__content">
+      <span class="gasca-sms-hero__eyebrow">Automatización operativa</span>
 
-    <mat-card-content>
-      <form class="request-form" [formGroup]="form" (ngSubmit)="submit()">
-        <mat-form-field appearance="fill">
-          <mat-label>PIN</mat-label>
-          <input matInput formControlName="pin" inputmode="numeric" maxlength="5" placeholder="Ej. 8123" />
-          <mat-hint>Se normaliza a 5 dígitos en backend.</mat-hint>
-          <mat-error>{{ pinError }}</mat-error>
-        </mat-form-field>
+      <h1>Reenvío de códigos Gasca</h1>
 
-        <mat-form-field appearance="fill">
-          <mat-label>Teléfono</mat-label>
-          <input matInput formControlName="telefono" placeholder="+528781175574" />
-          <mat-hint>Debe coincidir con el teléfono registrado en Gasca.</mat-hint>
-          <mat-error>{{ telefonoError }}</mat-error>
-        </mat-form-field>
+      <p>
+        Consulta Gasca, valida PIN, teléfono, fecha y uso del código antes de
+        enviar el SMS al socio.
+      </p>
+    </div>
 
-        <mat-form-field appearance="fill">
-          <mat-label>Motivo</mat-label>
-          <mat-select formControlName="motivo">
-            <mat-option *ngFor="let motivo of motivoOptions" [value]="motivo.value">
-              {{ motivo.label }}
-            </mat-option>
-          </mat-select>
-        </mat-form-field>
+    <div class="gasca-sms-hero__status">
+      <mat-icon>verified_user</mat-icon>
+      <div>
+        <strong>Validación estricta</strong>
+        <span>PIN + teléfono + fecha + uso</span>
+      </div>
+    </div>
+  </div>
 
-        <mat-form-field appearance="fill" class="detail-field">
-          <mat-label>Detalle opcional</mat-label>
-          <textarea matInput rows="2" formControlName="motivo_detalle"></textarea>
-        </mat-form-field>
-
-        <div class="actions">
-          <button mat-raised-button color="primary" type="submit" [disabled]="creating">
-            <mat-icon>send</mat-icon>
-            Procesar solicitud
-          </button>
-
-          <button mat-button type="button" (click)="clearForm()" [disabled]="creating">
-            Limpiar
-          </button>
-
-          <mat-spinner *ngIf="creating" diameter="28"></mat-spinner>
-        </div>
-      </form>
-
-      <div *ngIf="latestResult" class="result-card" [ngClass]="{ success: latestResultIsSuccess, blocked: latestResultIsBlocked }">
-        <div class="result-icon">
-          <mat-icon *ngIf="latestResultIsSuccess">check_circle</mat-icon>
-          <mat-icon *ngIf="latestResultIsBlocked">warning</mat-icon>
+  <div class="gasca-sms-layout">
+    <mat-card class="suite-card suite-card--form">
+      <mat-card-header>
+        <div mat-card-avatar class="suite-card__avatar">
+          <mat-icon>sms</mat-icon>
         </div>
 
-        <div class="result-content">
-          <h3>{{ statusLabel(latestResult.status) }}</h3>
-          <p>{{ latestResult.user_message }}</p>
+        <mat-card-title>Nueva solicitud</mat-card-title>
 
-          <div class="result-grid">
-            <span>PIN</span>
-            <strong>{{ latestResult.pin_normalized }}</strong>
+        <mat-card-subtitle>
+          Captura los datos enviados por la sucursal. Suite solo enviará el SMS
+          si Gasca devuelve un código válido.
+        </mat-card-subtitle>
+      </mat-card-header>
 
-            <span>Teléfono capturado</span>
-            <strong>{{ latestResult.requested_phone_masked }}</strong>
+      <mat-card-content>
+        <form class="request-form" [formGroup]="form" (ngSubmit)="submit()">
+          <div class="request-form__grid">
+            <mat-form-field appearance="fill" class="request-form__field">
+              <mat-label>PIN</mat-label>
 
-            <span>Teléfono Gasca</span>
-            <strong>{{ latestResult.gasca_phone_masked || '—' }}</strong>
+              <input
+                matInput
+                formControlName="pin"
+                inputmode="numeric"
+                maxlength="5"
+                placeholder="Ej. 8123"
+              />
 
-            <span>Código Gasca</span>
-            <strong>{{ latestResult.gasca_code_masked || '—' }}</strong>
+              <mat-hint>Puedes capturar 8123 u 08123; Suite los trata como el mismo PIN.</mat-hint>
+              <mat-error>{{ pinError }}</mat-error>
+            </mat-form-field>
 
-            <span>Generado</span>
-            <strong>{{ latestResult.gasca_generated_raw || '—' }}</strong>
+            <mat-form-field appearance="fill" class="request-form__field">
+              <mat-label>Teléfono</mat-label>
 
-            <span>Utilizado</span>
-            <strong>{{ latestResult.gasca_used_raw || '—' }}</strong>
+              <input
+                matInput
+                formControlName="telefono"
+                placeholder="+528781175574"
+              />
 
-            <span>Sucursal</span>
-            <strong>{{ latestResult.gasca_sucursal || '—' }}</strong>
+              <mat-hint>Debe coincidir con el teléfono registrado en Gasca.</mat-hint>
+              <mat-error>{{ telefonoError }}</mat-error>
+            </mat-form-field>
+
+            <mat-form-field appearance="fill" class="request-form__field">
+              <mat-label>Motivo</mat-label>
+
+              <mat-select formControlName="motivo">
+                <mat-option
+                  *ngFor="let motivo of motivoOptions"
+                  [value]="motivo.value"
+                >
+                  {{ motivo.label }}
+                </mat-option>
+              </mat-select>
+            </mat-form-field>
+          </div>
+
+          <mat-form-field appearance="fill" class="detail-field">
+            <mat-label>Detalle opcional</mat-label>
+
+            <textarea
+              matInput
+              rows="3"
+              formControlName="motivo_detalle"
+              placeholder="Ej. La sucursal reporta que el socio no recibió el SMS original."
+            ></textarea>
+          </mat-form-field>
+
+          <div class="rules-strip">
+            <div class="rules-strip__item">
+              <mat-icon>pin</mat-icon>
+              <span>PIN equivalente con/sin cero inicial</span>
+            </div>
+
+            <div class="rules-strip__item">
+              <mat-icon>phone_iphone</mat-icon>
+              <span>Teléfono debe coincidir</span>
+            </div>
+
+            <div class="rules-strip__item">
+              <mat-icon>today</mat-icon>
+              <span>Código generado hoy</span>
+            </div>
+
+            <div class="rules-strip__item">
+              <mat-icon>lock_open</mat-icon>
+              <span>Código no utilizado</span>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button
+              mat-raised-button
+              color="primary"
+              type="submit"
+              [disabled]="creating"
+              class="actions__primary"
+            >
+              <mat-icon>send</mat-icon>
+              Procesar solicitud
+            </button>
+
+            <button
+              mat-button
+              type="button"
+              (click)="clearForm()"
+              [disabled]="creating"
+            >
+              Limpiar
+            </button>
+
+            <div class="actions__loading" *ngIf="creating">
+              <mat-spinner diameter="24"></mat-spinner>
+              <span>Procesando...</span>
+            </div>
+          </div>
+        </form>
+
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card class="suite-card suite-card--history">
+      <mat-card-header>
+        <div mat-card-avatar class="suite-card__avatar suite-card__avatar--history">
+          <mat-icon>history</mat-icon>
+        </div>
+
+        <mat-card-title>Historial operativo</mat-card-title>
+
+        <mat-card-subtitle>
+          Solicitudes filtradas procesadas desde este módulo.
+        </mat-card-subtitle>
+      </mat-card-header>
+
+      <mat-card-content>
+        <div class="loading-row" *ngIf="loadingList">
+          <mat-spinner diameter="28"></mat-spinner>
+          <span>Cargando historial...</span>
+        </div>
+
+        <div class="table-wrapper" *ngIf="!loadingList">
+  
+        <div class="history-filters history-filters--compact">
+          <div class="history-filters__title">
+            <span>Filtros</span>
+            <strong>Consultar solicitudes</strong>
+          </div>
+
+          <div class="history-filters__body">
+            <div class="history-filters__fields">
+              <mat-form-field appearance="fill" class="history-filter-field history-filter-field--period">
+                <mat-label>Periodo</mat-label>
+                <mat-select
+                  [value]="listFilters.date_preset"
+                  (selectionChange)="setListDatePreset($event.value)"
+                >
+                  <mat-option
+                    *ngFor="let option of datePresetOptions"
+                    [value]="option.value"
+                  >
+                    {{ option.label }}
+                  </mat-option>
+                </mat-select>
+              </mat-form-field>
+
+              <mat-form-field
+                appearance="fill"
+                class="history-filter-field history-filter-field--date"
+                *ngIf="shouldShowCustomDateRange()"
+              >
+                <mat-label>Desde</mat-label>
+                <input
+                  #dateFromFilter
+                  matInput
+                  type="date"
+                  [value]="listFilters.date_from"
+                  (input)="setListDateFrom(dateFromFilter.value)"
+                />
+              </mat-form-field>
+
+              <mat-form-field
+                appearance="fill"
+                class="history-filter-field history-filter-field--date"
+                *ngIf="shouldShowCustomDateRange()"
+              >
+                <mat-label>Hasta</mat-label>
+                <input
+                  #dateToFilter
+                  matInput
+                  type="date"
+                  [value]="listFilters.date_to"
+                  (input)="setListDateTo(dateToFilter.value)"
+                />
+              </mat-form-field>
+
+              <mat-form-field appearance="fill" class="history-filter-field history-filter-field--pin">
+                <mat-label>PIN</mat-label>
+                <input
+                  #pinFilter
+                  matInput
+                  [value]="listFilters.pin"
+                  (input)="setListPin(pinFilter.value)"
+                  placeholder="8123 o 08123"
+                />
+              </mat-form-field>
+
+              <mat-form-field appearance="fill" class="history-filter-field history-filter-field--status">
+                <mat-label>Estado</mat-label>
+                <mat-select
+                  [value]="listFilters.status"
+                  (selectionChange)="setListStatus($event.value)"
+                >
+                  <mat-option
+                    *ngFor="let option of statusOptions"
+                    [value]="option.value"
+                  >
+                    {{ option.label }}
+                  </mat-option>
+                </mat-select>
+              </mat-form-field>
+
+              <mat-form-field appearance="fill" class="history-filter-field history-filter-field--club">
+                <mat-label>Club Gasca</mat-label>
+                <input
+                  #gascaSucursalFilter
+                  matInput
+                  [value]="listFilters.gasca_sucursal"
+                  (input)="setListGascaSucursal(gascaSucursalFilter.value)"
+                  placeholder="INSURGENTES"
+                />
+              </mat-form-field>
+            </div>
+
+            <div class="history-filters__actions">
+              <button
+                mat-stroked-button
+                class="history-filter-button history-filter-button--export"
+                type="button"
+                (click)="exportFilteredRequests()"
+                [disabled]="loadingList || exportingList"
+              >
+                <mat-icon>download</mat-icon>
+                {{ exportingList ? 'Exportando...' : 'Exportar Excel' }}
+              </button>
+
+              <button
+                mat-raised-button
+                class="history-filter-button history-filter-button--apply"
+                type="button"
+                (click)="applyListFilters()"
+                [disabled]="loadingList"
+              >
+                Aplicar
+              </button>
+
+              <button
+                mat-raised-button
+                class="history-filter-button history-filter-button--clear"
+                type="button"
+                (click)="clearListFilters()"
+                [disabled]="loadingList"
+              >
+                Limpiar
+              </button>
+            </div>
           </div>
         </div>
-      </div>
-    </mat-card-content>
-  </mat-card>
 
-  <mat-card class="page-card">
-    <mat-card-header>
-      <mat-card-title>Historial reciente</mat-card-title>
-      <mat-card-subtitle>
-        Últimas solicitudes procesadas.
-      </mat-card-subtitle>
-    </mat-card-header>
-
-    <mat-card-content>
-      <div class="loading-row" *ngIf="loadingList">
-        <mat-spinner diameter="28"></mat-spinner>
-        <span>Cargando historial...</span>
-      </div>
-
-      <div class="table-wrapper" *ngIf="!loadingList">
         <table mat-table [dataSource]="items" class="requests-table">
-          <ng-container matColumnDef="created_at">
-            <th mat-header-cell *matHeaderCellDef>Fecha</th>
-            <td mat-cell *matCellDef="let item">{{ formatDateTime(item.created_at) }}</td>
-          </ng-container>
+            <ng-container matColumnDef="created_at">
+              <th mat-header-cell *matHeaderCellDef>Fecha</th>
+              <td mat-cell *matCellDef="let item">
+                {{ formatDateTime(item.created_at) }}
+              </td>
+            </ng-container>
 
-          <ng-container matColumnDef="pin">
-            <th mat-header-cell *matHeaderCellDef>PIN</th>
-            <td mat-cell *matCellDef="let item">{{ item.pin_normalized }}</td>
-          </ng-container>
+            <ng-container matColumnDef="pin">
+              <th mat-header-cell *matHeaderCellDef>PIN</th>
+              <td mat-cell *matCellDef="let item">
+                <strong class="mono-value">{{ item.pin_normalized }}</strong>
+              </td>
+            </ng-container>
 
-          <ng-container matColumnDef="telefono">
-            <th mat-header-cell *matHeaderCellDef>Teléfono</th>
-            <td mat-cell *matCellDef="let item">{{ item.requested_phone_masked }}</td>
-          </ng-container>
+            <ng-container matColumnDef="telefono">
+              <th mat-header-cell *matHeaderCellDef>Teléfono</th>
+              <td mat-cell *matCellDef="let item">
+                {{ item.requested_phone_masked }}
+              </td>
+            </ng-container>
 
-          <ng-container matColumnDef="motivo">
-            <th mat-header-cell *matHeaderCellDef>Motivo</th>
-            <td mat-cell *matCellDef="let item">{{ motivoLabel(item.motivo) }}</td>
-          </ng-container>
+            <ng-container matColumnDef="motivo">
+              <th mat-header-cell *matHeaderCellDef>Motivo</th>
+              <td mat-cell *matCellDef="let item">
+                {{ motivoLabel(item.motivo) }}
+              </td>
+            </ng-container>
 
-          <ng-container matColumnDef="status">
-            <th mat-header-cell *matHeaderCellDef>Estado</th>
-            <td mat-cell *matCellDef="let item">
-              <span class="status-pill" [ngClass]="rowStatusClass(item)">
-                {{ statusLabel(item.status) }}
-              </span>
-            </td>
-          </ng-container>
+            <ng-container matColumnDef="status">
+              <th mat-header-cell *matHeaderCellDef>Estado</th>
+              <td mat-cell *matCellDef="let item">
+                <span class="status-pill" [ngClass]="rowStatusClass(item)">
+                  {{ statusLabel(item.status) }}
+                </span>
+              </td>
+            </ng-container>
 
-          <ng-container matColumnDef="mensaje">
-            <th mat-header-cell *matHeaderCellDef>Mensaje</th>
-            <td mat-cell *matCellDef="let item">{{ item.user_message || '—' }}</td>
-          </ng-container>
+            <ng-container matColumnDef="mensaje">
+              <th mat-header-cell *matHeaderCellDef>Mensaje</th>
+              <td mat-cell *matCellDef="let item" class="message-cell">
+                {{ item.user_message || '—' }}
+              </td>
+            </ng-container>
 
-          <ng-container matColumnDef="gasca">
-            <th mat-header-cell *matHeaderCellDef>Club</th>
-            <td mat-cell *matCellDef="let item">
-              {{ item.gasca_sucursal || '—' }}
-              <span *ngIf="item.gasca_generated_raw"> · {{ item.gasca_generated_raw }}</span>
-            </td>
-          </ng-container>
+            <ng-container matColumnDef="gasca">
+              <th mat-header-cell *matHeaderCellDef>Club</th>
+              <td mat-cell *matCellDef="let item">
+                <div class="gasca-cell">
+                  <strong>{{ item.gasca_sucursal || '—' }}</strong>
+                  <span *ngIf="item.gasca_generated_raw">
+                    {{ item.gasca_generated_raw }}
+                  </span>
+                </div>
+              </td>
+            </ng-container>
 
-          <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-          <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
-        </table>
+            <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+            <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+          </table>
 
-        <div class="empty-state" *ngIf="items.length === 0">
-          No hay solicitudes recientes.
+          <div class="empty-state" *ngIf="items.length === 0">
+            <mat-icon>inbox</mat-icon>
+            <strong>No hay solicitudes recientes</strong>
+            <span>Cuando proceses una solicitud aparecerá aquí.</span>
+          </div>
+        </div>
+      
+        <div class="history-pager">
+          <div class="history-pager__summary">
+            <strong>{{ getListSummary() }}</strong>
+            <span>Página {{ listPage }} de {{ listTotalPages || 1 }}</span>
+          </div>
+
+          <div class="history-pager__actions">
+            <button
+              mat-stroked-button
+              type="button"
+              (click)="goToPreviousListPage()"
+              [disabled]="!listHasPrev || loadingList"
+            >
+              <mat-icon>chevron_left</mat-icon>
+              Anterior
+            </button>
+
+            <button
+              mat-stroked-button
+              type="button"
+              (click)="goToNextListPage()"
+              [disabled]="!listHasNext || loadingList"
+            >
+              Siguiente
+              <mat-icon>chevron_right</mat-icon>
+            </button>
+          </div>
+        </div>
+
+</mat-card-content>
+    </mat-card>
+  </div>
+  <div
+    class="result-modal-backdrop"
+    *ngIf="latestResult && resultModalOpen"
+    (click)="closeResultModal()"
+  >
+    <section
+      class="result-modal"
+      [ngClass]="{
+        success: latestResultIsSuccess,
+        blocked: latestResultIsBlocked
+      }"
+      (click)="$event.stopPropagation()"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Resultado de solicitud Gasca SMS"
+    >
+      <button
+        type="button"
+        class="result-modal__close"
+        (click)="closeResultModal()"
+        aria-label="Cerrar resultado"
+        title="Cerrar"
+      >
+        <mat-icon>close</mat-icon>
+      </button>
+
+      <div class="result-modal__icon">
+        <mat-icon *ngIf="latestResultIsSuccess">check_circle</mat-icon>
+        <mat-icon *ngIf="latestResultIsBlocked">warning</mat-icon>
+      </div>
+
+      <div class="result-modal__header">
+        <span>Resultado de la solicitud</span>
+        <h2>{{ statusLabel(latestResult.status) }}</h2>
+        <p>{{ latestResult.user_message }}</p>
+      </div>
+
+      <div class="result-grid result-grid--modal">
+        <div class="result-grid__item">
+          <span>PIN</span>
+          <strong>{{ latestResult.pin_normalized }}</strong>
+        </div>
+
+        <div class="result-grid__item">
+          <span>Teléfono capturado</span>
+          <strong>{{ latestResult.requested_phone_masked }}</strong>
+        </div>
+
+        <div class="result-grid__item">
+          <span>Teléfono Gasca</span>
+          <strong>{{ latestResult.gasca_phone_masked || '—' }}</strong>
+        </div>
+
+        <div class="result-grid__item">
+          <span>Código Gasca</span>
+          <strong>{{ latestResult.gasca_code_masked || '—' }}</strong>
+        </div>
+
+        <div class="result-grid__item">
+          <span>Generado</span>
+          <strong>{{ latestResult.gasca_generated_raw || '—' }}</strong>
+        </div>
+
+        <div class="result-grid__item">
+          <span>Utilizado</span>
+          <strong>{{ latestResult.gasca_used_raw || '—' }}</strong>
+        </div>
+
+        <div class="result-grid__item result-grid__item--wide">
+          <span>Sucursal Gasca</span>
+          <strong>{{ latestResult.gasca_sucursal || '—' }}</strong>
         </div>
       </div>
-    </mat-card-content>
-  </mat-card>
-</div>
+
+      <div class="result-modal__actions">
+        <button
+          mat-raised-button
+          color="primary"
+          type="button"
+          (click)="closeResultModal()"
+        >
+          Cerrar
+        </button>
+      </div>
+    </section>
+  </div>
+
+</section>

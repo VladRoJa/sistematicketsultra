@@ -81,14 +81,56 @@ def resolve_config_from_env(*, headless: bool = True) -> GascaSmsLookupConfig:
 
 
 def normalize_pin(pin_raw: str) -> str:
-    digits = re.sub(r"\D", "", pin_raw or "")
+    digits = "".join(
+        char for char in str(pin_raw or "").strip()
+        if char.isdigit()
+    )
+
     if not digits:
         raise ValueError("PIN vacío o inválido.")
+
     if len(digits) > 5:
-        raise ValueError(
-            f"PIN inválido: se esperaban máximo 5 dígitos y llegaron {len(digits)}."
-        )
-    return digits.zfill(5)
+        raise ValueError("PIN inválido: se esperaban máximo 5 dígitos.")
+
+    return digits
+
+
+def pin_match_key(pin_raw: str) -> str:
+    digits = "".join(
+        char for char in str(pin_raw or "").strip()
+        if char.isdigit()
+    )
+
+    if not digits:
+        return ""
+
+    return digits.lstrip("0") or "0"
+
+
+def pins_match(requested_pin: str, gasca_pin: str) -> bool:
+    requested_key = pin_match_key(requested_pin)
+    gasca_key = pin_match_key(gasca_pin)
+
+    return bool(requested_key and gasca_key and requested_key == gasca_key)
+
+
+def gasca_search_pin_candidates(pin_raw: str) -> list[str]:
+    digits = normalize_pin(pin_raw)
+
+    candidates = [
+        digits,
+        digits.lstrip("0") or "0",
+    ]
+
+    if len(digits) <= 5:
+        candidates.append(digits.zfill(5))
+
+    unique: list[str] = []
+    for candidate in candidates:
+        if candidate and candidate not in unique:
+            unique.append(candidate)
+
+    return unique
 
 
 def phone_digits(phone: str) -> str:
@@ -173,7 +215,7 @@ def build_lookup_result(
     today: date,
     show_sensitive: bool = False,
 ) -> dict[str, Any]:
-    pin_rows = [row for row in rows if row.pin == pin_normalized]
+    pin_rows = [row for row in rows if pins_match(pin_normalized, row.pin)]
 
     if not pin_rows:
         return {
@@ -342,12 +384,46 @@ def lookup_gasca_sms_code(
 
         try:
             do_login(page, login_url=login_url, config=runtime)
-            rows = search_pin_rows(
-                page,
-                codes_url=codes_url,
-                pin_normalized=pin_normalized,
-                timeout_ms=runtime.timeout_ms,
-            )
+            rows: list[GascaSmsRow] = []
+
+            for pin_candidate in gasca_search_pin_candidates(pin_normalized):
+                candidate_rows = search_pin_rows(
+                    page,
+                    codes_url=codes_url,
+                    pin_normalized=pin_candidate,
+                    timeout_ms=runtime.timeout_ms,
+                )
+
+                rows_by_key = {
+                    (
+                        row.pin,
+                        row.nombre,
+                        row.telefono,
+                        row.codigo,
+                        row.generado,
+                        row.utilizado,
+                        row.sucursal,
+                    ): row
+                    for row in rows
+                }
+
+                for row in candidate_rows:
+                    rows_by_key[
+                        (
+                            row.pin,
+                            row.nombre,
+                            row.telefono,
+                            row.codigo,
+                            row.generado,
+                            row.utilizado,
+                            row.sucursal,
+                        )
+                    ] = row
+
+                rows = list(rows_by_key.values())
+
+                if any(pins_match(pin_normalized, row.pin) for row in rows):
+                    break
 
             result = build_lookup_result(
                 pin_normalized=pin_normalized,

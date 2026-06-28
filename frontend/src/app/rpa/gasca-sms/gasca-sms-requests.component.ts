@@ -17,6 +17,7 @@ import {
   CreateGascaSmsRequestPayload,
   GascaSmsMotivo,
   GascaSmsRequest,
+  GascaSmsRequestsListParams,
   GascaSmsRequestStatus,
   RpaGascaSmsService,
 } from '../../services/rpa-gasca-sms.service';
@@ -24,6 +25,23 @@ import {
 interface MotivoOption {
   value: GascaSmsMotivo;
   label: string;
+}
+
+type GascaSmsDatePreset =
+  | 'today'
+  | 'yesterday'
+  | 'last_7_days'
+  | 'month'
+  | 'custom'
+  | 'all';
+
+interface GascaSmsListFilterState {
+  date_preset: GascaSmsDatePreset;
+  date_from: string;
+  date_to: string;
+  status: string;
+  pin: string;
+  gasca_sucursal: string;
 }
 
 @Component({
@@ -63,6 +81,25 @@ export class GascaSmsRequestsComponent implements OnInit {
     { value: 'OTRO', label: 'Otro' },
   ];
 
+  readonly datePresetOptions: Array<{ value: GascaSmsDatePreset; label: string }> = [
+    { value: 'today', label: 'Hoy' },
+    { value: 'yesterday', label: 'Ayer' },
+    { value: 'last_7_days', label: 'Últimos 7 días' },
+    { value: 'month', label: 'Este mes' },
+    { value: 'custom', label: 'Personalizado' },
+    { value: 'all', label: 'Todo' },
+  ];
+
+  readonly statusOptions: Array<{ value: string; label: string }> = [
+    { value: 'ALL', label: 'Todos' },
+    { value: 'sent', label: 'SMS enviado' },
+    { value: 'code_already_used', label: 'Código utilizado' },
+    { value: 'code_not_found', label: 'Código no encontrado' },
+    { value: 'phone_not_found_for_pin', label: 'Teléfono no coincide' },
+    { value: 'code_not_generated_today', label: 'Código no es de hoy' },
+    { value: 'failed', label: 'Error' },
+  ];
+
   form = this.fb.group({
     pin: ['', [Validators.required, Validators.pattern(/^\d{1,5}$/)]],
     telefono: ['', [Validators.required, Validators.minLength(8), Validators.maxLength(24)]],
@@ -73,9 +110,27 @@ export class GascaSmsRequestsComponent implements OnInit {
   loadingCatalogs = false;
   creating = false;
   loadingList = false;
+  exportingList = false;
 
   latestResult: GascaSmsRequest | null = null;
+  resultModalOpen = false;
   items: GascaSmsRequest[] = [];
+
+  listFilters: GascaSmsListFilterState = {
+    date_preset: 'today',
+    date_from: '',
+    date_to: '',
+    status: 'ALL',
+    pin: '',
+    gasca_sucursal: '',
+  };
+
+  listPage = 1;
+  listPageSize = 25;
+  listTotal = 0;
+  listTotalPages = 0;
+  listHasNext = false;
+  listHasPrev = false;
 
   globalAccess = false;
   allowedSucursalesIds: number[] | null = null;
@@ -108,18 +163,169 @@ export class GascaSmsRequestsComponent implements OnInit {
   }
 
   loadRecentRequests(): void {
-    this.loadingList = true;
+    this.loadRequests(1);
+  }
 
-    this.gascaSmsService.listRequests({ limit: 10 })
+  loadRequests(page: number = this.listPage): void {
+    this.loadingList = true;
+    this.listPage = Math.max(1, page);
+
+    const params = this.buildListParams();
+
+    this.gascaSmsService.listRequests(params)
       .pipe(finalize(() => this.loadingList = false))
       .subscribe({
         next: (response) => {
           this.items = response.items || [];
+          this.listPage = response.page || this.listPage;
+          this.listPageSize = response.page_size || this.listPageSize;
+          this.listTotal = response.total || 0;
+          this.listTotalPages = response.total_pages || 0;
+          this.listHasNext = !!response.has_next;
+          this.listHasPrev = !!response.has_prev;
         },
         error: () => {
-          this.showSnack('No se pudo cargar el historial reciente.');
+          this.items = [];
+          this.listTotal = 0;
+          this.listTotalPages = 0;
+          this.listHasNext = false;
+          this.listHasPrev = false;
+          this.showSnack('No se pudo cargar el historial filtrado.');
         },
       });
+  }
+
+  exportFilteredRequests(): void {
+    if (this.exportingList) {
+      return;
+    }
+
+    this.exportingList = true;
+
+    this.gascaSmsService.exportRequests(this.buildListParams())
+      .pipe(finalize(() => this.exportingList = false))
+      .subscribe({
+        next: (blob) => {
+          this.downloadBlob(blob, this.buildExportFilename());
+        },
+        error: () => {
+          this.showSnack('No se pudo exportar el historial filtrado.');
+        },
+      });
+  }
+
+  private downloadBlob(blob: Blob, filename: string): void {
+    const objectUrl = window.URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+
+    anchor.href = objectUrl;
+    anchor.download = filename;
+    anchor.click();
+
+    window.URL.revokeObjectURL(objectUrl);
+  }
+
+  private buildExportFilename(): string {
+    const now = new Date();
+    const stamp = now.toISOString().slice(0, 19).replace(/[-:T]/g, '');
+    const preset = this.listFilters.date_preset || 'export';
+
+    return `gasca_sms_${preset}_${stamp}.csv`;
+  }
+
+  private buildListParams(): GascaSmsRequestsListParams {
+    return {
+      page: this.listPage,
+      page_size: this.listPageSize,
+      date_preset: this.listFilters.date_preset,
+      date_from: this.listFilters.date_preset === 'custom'
+        ? this.listFilters.date_from
+        : '',
+      date_to: this.listFilters.date_preset === 'custom'
+        ? this.listFilters.date_to
+        : '',
+      status: this.listFilters.status,
+      pin: this.listFilters.pin.trim(),
+      gasca_sucursal: this.listFilters.gasca_sucursal.trim(),
+    };
+  }
+
+  applyListFilters(): void {
+    this.loadRequests(1);
+  }
+
+  clearListFilters(): void {
+    this.listFilters = {
+      date_preset: 'today',
+      date_from: '',
+      date_to: '',
+      status: 'ALL',
+      pin: '',
+      gasca_sucursal: '',
+    };
+
+    this.loadRequests(1);
+  }
+
+  goToPreviousListPage(): void {
+    if (!this.listHasPrev || this.loadingList) {
+      return;
+    }
+
+    this.loadRequests(this.listPage - 1);
+  }
+
+  goToNextListPage(): void {
+    if (!this.listHasNext || this.loadingList) {
+      return;
+    }
+
+    this.loadRequests(this.listPage + 1);
+  }
+
+  shouldShowCustomDateRange(): boolean {
+    return this.listFilters.date_preset === 'custom';
+  }
+
+  getListSummary(): string {
+    if (this.listTotal === 0) {
+      return 'Sin solicitudes encontradas';
+    }
+
+    const visibleCount = this.items.length;
+    const start = ((this.listPage - 1) * this.listPageSize) + 1;
+    const end = start + visibleCount - 1;
+
+    return `${start}-${end} de ${this.listTotal} solicitudes`;
+  }
+
+  setListDatePreset(value: string): void {
+    this.listFilters.date_preset = value as GascaSmsDatePreset;
+
+    if (this.listFilters.date_preset !== 'custom') {
+      this.listFilters.date_from = '';
+      this.listFilters.date_to = '';
+    }
+  }
+
+  setListDateFrom(value: string): void {
+    this.listFilters.date_from = value;
+  }
+
+  setListDateTo(value: string): void {
+    this.listFilters.date_to = value;
+  }
+
+  setListStatus(value: string): void {
+    this.listFilters.status = value;
+  }
+
+  setListPin(value: string): void {
+    this.listFilters.pin = value;
+  }
+
+  setListGascaSucursal(value: string): void {
+    this.listFilters.gasca_sucursal = value;
   }
 
   submit(): void {
@@ -143,8 +349,8 @@ export class GascaSmsRequestsComponent implements OnInit {
       .subscribe({
         next: (response) => {
           this.latestResult = response.request;
-          this.showSnack(response.message || 'Solicitud procesada.');
-          this.loadRecentRequests();
+          this.resultModalOpen = true;
+          this.loadRequests(1);
         },
         error: (error) => {
           const detail = error?.error?.detail || 'No se pudo crear la solicitud.';
@@ -161,6 +367,11 @@ export class GascaSmsRequestsComponent implements OnInit {
       motivo_detalle: '',
     });
     this.latestResult = null;
+    this.resultModalOpen = false;
+  }
+
+  closeResultModal(): void {
+    this.resultModalOpen = false;
   }
 
   get pinValue(): string {

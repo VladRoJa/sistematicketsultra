@@ -991,16 +991,13 @@ private puedeVerTrackDiarioPorRol(): boolean {
 
 private puedeVerGascaSmsPorRol(): boolean {
   const user = this.authService.getUser();
-  const rol = (user?.rol || '').toString().trim().toUpperCase();
 
-  return [
-    'ADMIN',
-    'ADMINISTRADOR',
-    'SUPER_ADMIN',
-    'SISTEMAS',
-    'GERENTE',
-    'GERENTE_REGIONAL',
-  ].includes(rol);
+  const userId = Number(user?.id || 0);
+  const username = (user?.username || '').toString().trim().toUpperCase();
+
+  // Canary temporal:
+  // Solo Vladimir / ADMICORP puede ver el módulo en menú durante piloto prod.
+  return userId === 47 && username === 'ADMICORP';
 }
 
 private puedeVerAperturasPorRol(): boolean {
