@@ -49,6 +49,7 @@ services:
       - backend-net
     volumes:
       - /home/adminrdp/sistematicketsultra/uploads:/uploads
+      - ./backend/.playwright:/app/.playwright
 
 
 
