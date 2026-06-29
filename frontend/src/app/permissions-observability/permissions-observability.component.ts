@@ -10,13 +10,15 @@ import {
   EffectivePermissionAction,
   EffectivePermissionResponse,
   PermissionAction,
+  PermissionGrant,
+  PermissionGrantAuditLog,
   PermissionModule,
   PermissionRouteMap,
   PermissionUserOption,
   PermissionsObservabilityService,
 } from './permissions-observability.service';
 
-type PermissionsTab = 'modules' | 'actions' | 'routes' | 'effective';
+type PermissionsTab = 'modules' | 'actions' | 'routes' | 'effective' | 'grants';
 type EffectiveDecisionFilter = 'all' | 'allowed' | 'denied';
 type RouteAuditFilter = 'all' | 'active' | 'inactive' | 'without_action';
 
@@ -46,6 +48,9 @@ export class PermissionsObservabilityComponent implements OnInit {
   modules: PermissionModule[] = [];
   actions: PermissionAction[] = [];
   routes: PermissionRouteMap[] = [];
+  grants: PermissionGrant[] = [];
+  selectedGrantForAudit: PermissionGrant | null = null;
+  selectedGrantAuditLogs: PermissionGrantAuditLog[] = [];
 
   selectedModuleKey = '';
   selectedRiskLevel = '';
@@ -59,6 +64,16 @@ export class PermissionsObservabilityComponent implements OnInit {
   effectiveSearchTerm = '';
   effectiveDecisionFilter: EffectiveDecisionFilter = 'all';
 
+  grantSearchTerm = '';
+  grantActiveFilter: 'true' | 'false' | 'all' = 'all';
+  grantPrincipalTypeFilter = '';
+  grantPrincipalUserIdFilter = '';
+  grantPrincipalRoleKeyFilter = '';
+  grantModuleKeyFilter = '';
+  grantActionFullKeyFilter = '';
+  grantEffectFilter = '';
+  grantScopeTypeFilter = '';
+
   userIdInput = '';
   userSearchTerm = '';
   userOptions: PermissionUserOption[] = [];
@@ -68,6 +83,8 @@ export class PermissionsObservabilityComponent implements OnInit {
   isLoadingCatalog = false;
   isLoadingUsers = false;
   isLoadingEffective = false;
+  isLoadingGrants = false;
+  isLoadingGrantAudit = false;
   errorMessage = '';
 
   constructor(
@@ -80,6 +97,7 @@ export class PermissionsObservabilityComponent implements OnInit {
     this.userIdInput = currentUser?.id ? String(currentUser.id) : '';
 
     this.loadCatalog();
+    this.loadGrants();
     this.loadUserOptions();
 
     if (this.userIdInput) {
@@ -156,6 +174,76 @@ export class PermissionsObservabilityComponent implements OnInit {
     this.loadEffectivePermissions();
   }
 
+  loadGrants(): void {
+    this.errorMessage = '';
+    this.isLoadingGrants = true;
+
+    const principalUserId = Number(this.grantPrincipalUserIdFilter);
+
+    this.permissionsService
+      .getGrants({
+        active: this.grantActiveFilter,
+        principal_type: this.grantPrincipalTypeFilter,
+        principal_user_id: Number.isInteger(principalUserId) && principalUserId > 0
+          ? principalUserId
+          : null,
+        principal_role_key: this.grantPrincipalRoleKeyFilter.trim(),
+        module_key: this.grantModuleKeyFilter.trim(),
+        action_full_key: this.grantActionFullKeyFilter.trim(),
+        effect: this.grantEffectFilter,
+        scope_type: this.grantScopeTypeFilter,
+        limit: 200,
+        offset: 0,
+      })
+      .pipe(finalize(() => {
+        this.isLoadingGrants = false;
+      }))
+      .subscribe({
+        next: (response) => {
+          this.grants = response.grants || [];
+
+          if (
+            this.selectedGrantForAudit &&
+            !this.grants.some((grant) => grant.id === this.selectedGrantForAudit?.id)
+          ) {
+            this.clearGrantAudit();
+          }
+        },
+        error: () => {
+          this.errorMessage = 'No se pudieron consultar los grants.';
+        },
+      });
+  }
+
+  loadGrantAudit(grant: PermissionGrant): void {
+    this.errorMessage = '';
+    this.selectedGrantForAudit = grant;
+    this.selectedGrantAuditLogs = [];
+    this.isLoadingGrantAudit = true;
+
+    this.permissionsService
+      .getGrantAudit(grant.id, {
+        limit: 100,
+        offset: 0,
+      })
+      .pipe(finalize(() => {
+        this.isLoadingGrantAudit = false;
+      }))
+      .subscribe({
+        next: (response) => {
+          this.selectedGrantForAudit = response.grant;
+          this.selectedGrantAuditLogs = response.audit_logs || [];
+        },
+        error: () => {
+          this.errorMessage = 'No se pudo consultar la auditoría del grant.';
+        },
+      });
+  }
+
+  clearGrantAudit(): void {
+    this.selectedGrantForAudit = null;
+    this.selectedGrantAuditLogs = [];
+  }
   loadEffectivePermissions(): void {
     const userId = Number(this.userIdInput);
 
@@ -211,6 +299,68 @@ export class PermissionsObservabilityComponent implements OnInit {
     ];
   }
 
+  get filteredGrants(): PermissionGrant[] {
+    const searchTerm = this.grantSearchTerm.trim().toLowerCase();
+
+    if (!searchTerm) {
+      return this.grants;
+    }
+
+    return this.grants.filter((grant) => {
+      const searchable = [
+        grant.id,
+        grant.principal_type,
+        grant.principal_user?.username,
+        grant.principal_user?.email,
+        grant.principal_role_key,
+        grant.module_key,
+        grant.module_name,
+        grant.action_full_key,
+        grant.action_name,
+        grant.action_risk_level,
+        grant.effect,
+        grant.scope_type,
+        grant.scope_branch_id,
+        grant.scope_department_id,
+        grant.reason,
+        grant.created_by_user?.username,
+        grant.updated_by_user?.username,
+      ]
+        .filter((value) => value !== null && value !== undefined)
+        .join(' ')
+        .toLowerCase();
+
+      return searchable.includes(searchTerm);
+    });
+  }
+
+  get activeGrantsCount(): number {
+    return this.grants.filter((grant) => grant.is_active).length;
+  }
+
+  get inactiveGrantsCount(): number {
+    return this.grants.filter((grant) => !grant.is_active).length;
+  }
+
+  get allowGrantsCount(): number {
+    return this.grants.filter((grant) => grant.effect === 'allow').length;
+  }
+
+  get denyGrantsCount(): number {
+    return this.grants.filter((grant) => grant.effect === 'deny').length;
+  }
+
+  get grantPrincipalTypes(): string[] {
+    return ['user', 'role'];
+  }
+
+  get grantEffects(): string[] {
+    return ['allow', 'deny'];
+  }
+
+  get grantScopeTypes(): string[] {
+    return ['global', 'branch', 'branch_list', 'department', 'module', 'custom'];
+  }
   get filteredActions(): PermissionAction[] {
     return this.actions.filter((action) => {
       if (this.selectedModuleKey && action.module_key !== this.selectedModuleKey) {
@@ -468,6 +618,27 @@ export class PermissionsObservabilityComponent implements OnInit {
       : 'permissions-badge permissions-badge--warning';
   }
 
+  getGrantEffectBadgeClass(grant: PermissionGrant): string {
+    return grant.effect === 'deny'
+      ? 'permissions-badge permissions-badge--danger'
+      : 'permissions-badge permissions-badge--success';
+  }
+
+  getGrantStatusBadgeClass(grant: PermissionGrant): string {
+    return grant.is_active
+      ? 'permissions-badge permissions-badge--success'
+      : 'permissions-badge permissions-badge--warning';
+  }
+
+  getGrantPrincipalLabel(grant: PermissionGrant): string {
+    if (grant.principal_type === 'user') {
+      return grant.principal_user
+        ? `${grant.principal_user.username} #${grant.principal_user.id}`
+        : `Usuario #${grant.principal_user_id || 'sin id'}`;
+    }
+
+    return grant.principal_role_key || 'Rol sin clave';
+  }
   getDecisionBadgeClass(action: EffectivePermissionAction): string {
     return action.allowed
       ? 'permissions-badge permissions-badge--success'
@@ -631,3 +802,7 @@ export class PermissionsObservabilityComponent implements OnInit {
     return user.id;
   }
 }
+
+
+
+

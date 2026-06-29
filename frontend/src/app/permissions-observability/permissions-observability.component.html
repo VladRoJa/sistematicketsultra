@@ -63,6 +63,14 @@
 
       <button
         type="button"
+        [class]="getTabClass('grants')"
+        (click)="setActiveTab('grants')"
+      >
+        Grants beta
+      </button>
+
+      <button
+        type="button"
         [class]="getTabClass('effective')"
         (click)="setActiveTab('effective')"
       >
@@ -364,6 +372,234 @@
           </tbody>
         </table>
       </div>
+    </div>
+
+    <div
+      class="permissions-section"
+      *ngIf="activeTab === 'grants'"
+    >
+      <div class="permissions-effective-header">
+        <div>
+          <p class="permissions-kicker">GRANTS BETA</p>
+          <h2>Permission grants</h2>
+          <p>
+            Vista solo lectura. Esta pestaña no crea, edita, borra ni aplica permisos reales.
+          </p>
+        </div>
+
+        <div class="permissions-effective-summary">
+          <span>Total: <strong>{{ grants.length }}</strong></span>
+          <span>Activos: <strong>{{ activeGrantsCount }}</strong></span>
+          <span>Inactivos: <strong>{{ inactiveGrantsCount }}</strong></span>
+          <span>Allow: <strong>{{ allowGrantsCount }}</strong></span>
+          <span>Deny: <strong>{{ denyGrantsCount }}</strong></span>
+        </div>
+      </div>
+
+      <div class="permissions-effective-filters">
+        <label>
+          Buscar
+          <input
+            type="text"
+            [(ngModel)]="grantSearchTerm"
+            placeholder="Usuario, rol, módulo, acción, motivo"
+          />
+        </label>
+
+        <label>
+          Activo
+          <select [(ngModel)]="grantActiveFilter">
+            <option value="all">Todos</option>
+            <option value="true">Activos</option>
+            <option value="false">Inactivos</option>
+          </select>
+        </label>
+
+        <label>
+          Effect
+          <select [(ngModel)]="grantEffectFilter">
+            <option value="">Todos</option>
+            <option
+              *ngFor="let effect of grantEffects"
+              [value]="effect"
+            >
+              {{ effect }}
+            </option>
+          </select>
+        </label>
+
+        <label>
+          Scope
+          <select [(ngModel)]="grantScopeTypeFilter">
+            <option value="">Todos</option>
+            <option
+              *ngFor="let scopeType of grantScopeTypes"
+              [value]="scopeType"
+            >
+              {{ scopeType }}
+            </option>
+          </select>
+        </label>
+
+        <button
+          type="button"
+          class="permissions-export-button"
+          (click)="loadGrants()"
+          [disabled]="isLoadingGrants"
+        >
+          {{ isLoadingGrants ? 'Consultando...' : 'Aplicar filtros' }}
+        </button>
+      </div>
+
+      <div class="permissions-effective-filter-summary">
+        <span>Filtrados: <strong>{{ filteredGrants.length }}</strong></span>
+        <span>Fuente: <strong>permission_grants_readonly_v1</strong></span>
+      </div>
+
+      <div
+        class="permissions-empty-filter-state"
+        *ngIf="filteredGrants.length === 0"
+      >
+        No hay grants que coincidan con los filtros actuales. Esto es normal si todavía no se han creado grants beta.
+      </div>
+
+      <div
+        class="permissions-table-wrapper"
+        *ngIf="filteredGrants.length > 0"
+      >
+        <table class="permissions-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Principal</th>
+              <th>Acción</th>
+              <th>Effect</th>
+              <th>Scope</th>
+              <th>Estado</th>
+              <th>Motivo</th>
+              <th>Auditoría</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              *ngFor="let grant of filteredGrants; trackBy: trackByGrantId"
+            >
+              <td>#{{ grant.id }}</td>
+              <td>
+                <strong>{{ getGrantPrincipalLabel(grant) }}</strong>
+                <small>{{ grant.principal_type }}</small>
+              </td>
+              <td>
+                <code>{{ grant.action_full_key || grant.module_key || 'Sin acción' }}</code>
+                <small>{{ grant.action_name || grant.module_name || 'Grant por módulo' }}</small>
+              </td>
+              <td>
+                <span [class]="getGrantEffectBadgeClass(grant)">
+                  {{ grant.effect }}
+                </span>
+              </td>
+              <td>
+                <strong>{{ grant.scope_type }}</strong>
+                <small>
+                  Sucursal: {{ grant.scope_branch_id || 'N/A' }}
+                  · Depto: {{ grant.scope_department_id || 'N/A' }}
+                </small>
+              </td>
+              <td>
+                <span [class]="getGrantStatusBadgeClass(grant)">
+                  {{ grant.is_active ? 'Activo' : 'Inactivo' }}
+                </span>
+              </td>
+              <td>
+                <span>{{ grant.reason }}</span>
+                <small>Creado: {{ grant.created_at || 'N/A' }}</small>
+              </td>
+              <td>
+                <button
+                  type="button"
+                  class="permissions-export-button"
+                  (click)="loadGrantAudit(grant)"
+                  [disabled]="isLoadingGrantAudit"
+                >
+                  Ver audit log
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <section
+        class="permissions-grant-audit-panel"
+        *ngIf="selectedGrantForAudit"
+      >
+        <div class="permissions-effective-header">
+          <div>
+            <p class="permissions-kicker">AUDIT LOG</p>
+            <h2>Grant #{{ selectedGrantForAudit.id }}</h2>
+            <p>
+              {{ selectedGrantForAudit.action_full_key || selectedGrantForAudit.module_key }}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            class="permissions-export-button"
+            (click)="clearGrantAudit()"
+          >
+            Cerrar audit log
+          </button>
+        </div>
+
+        <div
+          class="permissions-empty-filter-state"
+          *ngIf="selectedGrantAuditLogs.length === 0 && !isLoadingGrantAudit"
+        >
+          Este grant no tiene eventos de auditoría registrados todavía.
+        </div>
+
+        <div
+          class="permissions-empty-filter-state"
+          *ngIf="isLoadingGrantAudit"
+        >
+          Consultando auditoría...
+        </div>
+
+        <div
+          class="permissions-table-wrapper"
+          *ngIf="selectedGrantAuditLogs.length > 0"
+        >
+          <table class="permissions-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Evento</th>
+                <th>Usuario</th>
+                <th>Motivo</th>
+                <th>Fecha</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                *ngFor="let auditLog of selectedGrantAuditLogs; trackBy: trackByGrantAuditLogId"
+              >
+                <td>#{{ auditLog.id }}</td>
+                <td>
+                  <span class="permissions-badge permissions-badge--warning">
+                    {{ auditLog.event_type }}
+                  </span>
+                </td>
+                <td>
+                  <span>{{ auditLog.changed_by_user?.username || 'Sistema / N/A' }}</span>
+                  <small>#{{ auditLog.changed_by_user_id || 'N/A' }}</small>
+                </td>
+                <td>{{ auditLog.reason || 'Sin motivo' }}</td>
+                <td>{{ auditLog.created_at || 'N/A' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
     </div>
 
     <div

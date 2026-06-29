@@ -95,6 +95,105 @@ export interface EffectivePermissionResponse {
   actions: EffectivePermissionAction[];
 }
 
+
+export interface PermissionGrantRelatedUser {
+  id: number;
+  username: string;
+  email?: string | null;
+  rol: string;
+}
+
+export interface PermissionGrant {
+  id: number;
+  principal_type: string;
+  principal_user_id?: number | null;
+  principal_user?: PermissionGrantRelatedUser | null;
+  principal_role_key?: string | null;
+  module_id?: number | null;
+  module_key?: string | null;
+  module_name?: string | null;
+  action_id?: number | null;
+  action_full_key?: string | null;
+  action_name?: string | null;
+  action_risk_level?: string | null;
+  effect: string;
+  scope_type: string;
+  scope_branch_id?: number | null;
+  scope_branch_ids: number[];
+  scope_department_id?: number | null;
+  scope_payload: Record<string, unknown>;
+  reason: string;
+  is_active: boolean;
+  starts_at?: string | null;
+  expires_at?: string | null;
+  created_by_user_id?: number | null;
+  created_by_user?: PermissionGrantRelatedUser | null;
+  updated_by_user_id?: number | null;
+  updated_by_user?: PermissionGrantRelatedUser | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  deleted_at?: string | null;
+}
+
+export interface PermissionGrantAuditLog {
+  id: number;
+  grant_id?: number | null;
+  event_type: string;
+  before_payload: Record<string, unknown>;
+  after_payload: Record<string, unknown>;
+  changed_by_user_id?: number | null;
+  changed_by_user?: PermissionGrantRelatedUser | null;
+  reason?: string | null;
+  request_ip?: string | null;
+  user_agent?: string | null;
+  created_at?: string | null;
+}
+
+export interface PermissionGrantsResponse {
+  status: string;
+  mode: string;
+  note: string;
+  summary: {
+    total: number;
+    limit: number;
+    offset: number;
+  };
+  grants: PermissionGrant[];
+}
+
+export interface PermissionGrantAuditResponse {
+  status: string;
+  mode: string;
+  grant: PermissionGrant;
+  summary: {
+    total: number;
+    limit: number;
+    offset: number;
+  };
+  audit_logs: PermissionGrantAuditLog[];
+}
+
+export interface PermissionGrantFilters {
+  active?: 'true' | 'false' | 'all';
+  principal_type?: string;
+  principal_user_id?: number | null;
+  principal_role_key?: string;
+  module_id?: number | null;
+  module_key?: string;
+  action_id?: number | null;
+  action_full_key?: string;
+  effect?: string;
+  scope_type?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface PermissionGrantAuditFilters {
+  event_type?: string;
+  limit?: number;
+  offset?: number;
+}
+
 @Injectable({
   providedIn: 'root',
 })
@@ -167,5 +266,70 @@ export class PermissionsObservabilityService {
       `${this.apiUrl}/users/${userId}/effective`,
       { params },
     );
+  }
+
+  getGrants(filters?: PermissionGrantFilters): Observable<PermissionGrantsResponse> {
+    let params = new HttpParams()
+      .set('active', filters?.active || 'true')
+      .set('limit', String(filters?.limit ?? 50))
+      .set('offset', String(filters?.offset ?? 0));
+
+    if (filters?.principal_type) {
+      params = params.set('principal_type', filters.principal_type);
+    }
+
+    if (filters?.principal_user_id) {
+      params = params.set('principal_user_id', String(filters.principal_user_id));
+    }
+
+    if (filters?.principal_role_key) {
+      params = params.set('principal_role_key', filters.principal_role_key);
+    }
+
+    if (filters?.module_id) {
+      params = params.set('module_id', String(filters.module_id));
+    }
+
+    if (filters?.module_key) {
+      params = params.set('module_key', filters.module_key);
+    }
+
+    if (filters?.action_id) {
+      params = params.set('action_id', String(filters.action_id));
+    }
+
+    if (filters?.action_full_key) {
+      params = params.set('action_full_key', filters.action_full_key);
+    }
+
+    if (filters?.effect) {
+      params = params.set('effect', filters.effect);
+    }
+
+    if (filters?.scope_type) {
+      params = params.set('scope_type', filters.scope_type);
+    }
+
+    return this.http.get<PermissionGrantsResponse>(`${this.apiUrl}/grants`, { params });
+  }
+
+  getGrantAudit(
+    grantId: number,
+    filters?: PermissionGrantAuditFilters,
+  ): Observable<PermissionGrantAuditResponse> {
+    let params = new HttpParams()
+      .set('limit', String(filters?.limit ?? 50))
+      .set('offset', String(filters?.offset ?? 0));
+
+    if (filters?.event_type) {
+      params = params.set('event_type', filters.event_type);
+    }
+
+    return this.http.get<PermissionGrantAuditResponse>(
+      `${this.apiUrl}/grants/${grantId}/audit`,
+      { params },
+    );
   }
 }
+
+
