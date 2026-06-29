@@ -168,6 +168,9 @@ __all__ = [
     "PermissionModuleORM",
     "PermissionActionORM",
     "PermissionRouteMapORM",
+    "PermissionGrantORM",
+    "PermissionGrantAuditLogORM",
     "GascaSmsRequestORM",
     "GascaSmsRequestStatus",
 ]
+
