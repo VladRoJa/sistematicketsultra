@@ -179,11 +179,27 @@ def _effective_action_decision(action, user, context: dict) -> dict:
     is_admin = _is_admin_role(role)
 
     # Usuarios / catálogos
+    if full_key == "users.view":
+        return _decision(
+            allowed=is_admin,
+            source="legacy_role",
+            reason="users_view_admin_only_v1",
+            scope_type="global" if is_admin else "none",
+        )
+
     if full_key == "users.manage":
         return _decision(
             allowed=is_admin,
             source="legacy_role",
             reason="admin_role_required",
+            scope_type="global" if is_admin else "none",
+        )
+
+    if full_key == "catalogs.view":
+        return _decision(
+            allowed=is_admin,
+            source="legacy_role",
+            reason="catalogs_view_admin_only_v1",
             scope_type="global" if is_admin else "none",
         )
 
@@ -517,6 +533,96 @@ def _serialize_effective_action(action, user, context: dict) -> dict:
     }
 
 
+def _get_latest_active_grants_by_action(*, user, action_ids: list[int]) -> dict:
+    if not action_ids:
+        return {
+            "user": {},
+            "role": {},
+        }
+
+    role = _normalize_role(user)
+
+    user_grants = (
+        PermissionGrantORM.query
+        .filter(
+            PermissionGrantORM.is_active.is_(True),
+            PermissionGrantORM.deleted_at.is_(None),
+            PermissionGrantORM.principal_type == "user",
+            PermissionGrantORM.principal_user_id == user.id,
+            PermissionGrantORM.action_id.in_(action_ids),
+        )
+        .order_by(
+            PermissionGrantORM.updated_at.desc(),
+            PermissionGrantORM.id.desc(),
+        )
+        .all()
+    )
+
+    role_grants = []
+    if role:
+        role_grants = (
+            PermissionGrantORM.query
+            .filter(
+                PermissionGrantORM.is_active.is_(True),
+                PermissionGrantORM.deleted_at.is_(None),
+                PermissionGrantORM.principal_type == "role",
+                PermissionGrantORM.principal_role_key == role,
+                PermissionGrantORM.action_id.in_(action_ids),
+            )
+            .order_by(
+                PermissionGrantORM.updated_at.desc(),
+                PermissionGrantORM.id.desc(),
+            )
+            .all()
+        )
+
+    grants_by_action = {
+        "user": {},
+        "role": {},
+    }
+
+    for grant in user_grants:
+        grants_by_action["user"].setdefault(grant.action_id, grant)
+
+    for grant in role_grants:
+        grants_by_action["role"].setdefault(grant.action_id, grant)
+
+    return grants_by_action
+
+
+def _apply_module_access_override(*, legacy_decision: dict, user_grant, role_grant) -> dict:
+    if user_grant:
+        allowed = user_grant.effect == "allow"
+        return {
+            "effective_allowed": allowed,
+            "source": "explicit_user_grant",
+            "override": user_grant.effect,
+            "override_source": "user",
+            "grant_id": user_grant.id,
+            "reason": user_grant.reason,
+        }
+
+    if role_grant:
+        allowed = role_grant.effect == "allow"
+        return {
+            "effective_allowed": allowed,
+            "source": "explicit_role_grant",
+            "override": role_grant.effect,
+            "override_source": "role",
+            "grant_id": role_grant.id,
+            "reason": role_grant.reason,
+        }
+
+    return {
+        "effective_allowed": bool(legacy_decision["allowed"]),
+        "source": legacy_decision["source"],
+        "override": "inherit",
+        "override_source": None,
+        "grant_id": None,
+        "reason": legacy_decision["reason"],
+    }
+
+
 def _current_admin_user_or_error():
     try:
         user_id = int(get_jwt_identity())
@@ -777,6 +883,148 @@ def get_user_effective_permissions(user_id: int):
         },
         "actions": effective_actions,
     }), 200
+
+@permissions_catalog_bp.route("/users/<int:user_id>/module-access", methods=["GET"])
+@jwt_required()
+def get_user_module_access(user_id: int):
+    _, error = _current_admin_user_or_error()
+    if error:
+        return error
+
+    target_user = UserORM.query.get(user_id)
+    if not target_user:
+        return jsonify({
+            "error": "Not found",
+            "detail": "Usuario no encontrado.",
+        }), 404
+
+    modules = (
+        PermissionModuleORM.query
+        .filter(
+            PermissionModuleORM.is_active.is_(True),
+            PermissionModuleORM.is_assignable.is_(True),
+        )
+        .order_by(
+            PermissionModuleORM.sort_order.asc(),
+            PermissionModuleORM.key.asc(),
+        )
+        .all()
+    )
+
+    action_ids = [
+        module.base_action_id
+        for module in modules
+        if module.base_action_id is not None
+    ]
+
+    grants_by_action = _get_latest_active_grants_by_action(
+        user=target_user,
+        action_ids=action_ids,
+    )
+    context = _get_target_context(target_user)
+
+    module_access = []
+
+    for module in modules:
+        action = module.base_action
+
+        if not action:
+            legacy_decision = _decision(
+                allowed=False,
+                source="missing_base_action",
+                reason="module_without_base_action",
+                scope_type="none",
+            )
+            override_decision = _apply_module_access_override(
+                legacy_decision=legacy_decision,
+                user_grant=None,
+                role_grant=None,
+            )
+            module_access.append({
+                "module_id": module.id,
+                "module_key": module.key,
+                "module_name": module.name,
+                "module_description": module.description,
+                "menu_key": module.menu_key,
+                "sort_order": module.sort_order,
+                "base_action_id": None,
+                "base_action_full_key": None,
+                "base_action_name": None,
+                "base_action_risk_level": None,
+                "legacy_allowed": False,
+                "legacy_source": legacy_decision["source"],
+                "legacy_reason": legacy_decision["reason"],
+                "legacy_scope_type": legacy_decision["scope_type"],
+                "legacy_scope_values": legacy_decision["scope_values"],
+                **override_decision,
+            })
+            continue
+
+        legacy_decision = _effective_action_decision(action, target_user, context)
+        user_grant = grants_by_action["user"].get(action.id)
+        role_grant = grants_by_action["role"].get(action.id)
+
+        override_decision = _apply_module_access_override(
+            legacy_decision=legacy_decision,
+            user_grant=user_grant,
+            role_grant=role_grant,
+        )
+
+        module_access.append({
+            "module_id": module.id,
+            "module_key": module.key,
+            "module_name": module.name,
+            "module_description": module.description,
+            "menu_key": module.menu_key,
+            "sort_order": module.sort_order,
+            "base_action_id": action.id,
+            "base_action_full_key": action.full_key,
+            "base_action_name": action.name,
+            "base_action_risk_level": action.risk_level,
+            "legacy_allowed": bool(legacy_decision["allowed"]),
+            "legacy_source": legacy_decision["source"],
+            "legacy_reason": legacy_decision["reason"],
+            "legacy_scope_type": legacy_decision["scope_type"],
+            "legacy_scope_values": legacy_decision["scope_values"],
+            **override_decision,
+        })
+
+    allowed_count = sum(1 for item in module_access if item["effective_allowed"])
+    denied_count = len(module_access) - allowed_count
+    user_override_count = sum(
+        1 for item in module_access
+        if item["override_source"] == "user"
+    )
+    role_override_count = sum(
+        1 for item in module_access
+        if item["override_source"] == "role"
+    )
+
+    return jsonify({
+        "mode": "module_access_readonly_v1",
+        "note": (
+            "Endpoint de lectura para pantalla de checks. "
+            "No crea, edita, borra ni aplica grants."
+        ),
+        "user": {
+            "id": target_user.id,
+            "username": target_user.username,
+            "nombre": getattr(target_user, "nombre", None),
+            "email": getattr(target_user, "email", None),
+            "rol": target_user.rol,
+            "normalized_role": _normalize_role(target_user),
+            "is_active": _safe_bool(getattr(target_user, "is_active", True)),
+        },
+        "summary": {
+            "modules_total": len(module_access),
+            "allowed_count": allowed_count,
+            "denied_count": denied_count,
+            "user_override_count": user_override_count,
+            "role_override_count": role_override_count,
+        },
+        "modules": module_access,
+    }), 200
+
 
 @permissions_catalog_bp.route("/users/search", methods=["GET"])
 @jwt_required()
