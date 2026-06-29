@@ -10,7 +10,7 @@ from playwright.sync_api import Page, sync_playwright
 
 
 MESSAGES_NEW_URL = "https://messages.google.com/web/conversations/new"
-DEFAULT_TIMEOUT_MS = 8000
+DEFAULT_TIMEOUT_MS = 25000
 DEFAULT_SETTLE_AFTER_SEND_MS = 2500
 
 
@@ -329,12 +329,51 @@ def _select_recipient(page: Page, phone_digits: str, config: GoogleMessagesSmsCo
     return option_text
 
 
+def _resolve_message_box(page: Page, timeout_ms: int):
+    selectors = [
+        "textarea[aria-label^='Escribir un mensaje']",
+        "textarea[aria-label*='Escribir']",
+        "textarea[aria-label*='mensaje']",
+        "textarea[aria-label*='Mensaje']",
+        "textarea[aria-label*='Text message']",
+        "textarea[aria-label*='Send message']",
+        "div[contenteditable='true'][aria-label^='Escribir']",
+        "div[contenteditable='true'][aria-label*='mensaje']",
+        "div[contenteditable='true'][aria-label*='Mensaje']",
+        "div[contenteditable='true'][aria-label*='Text message']",
+        "div[contenteditable='true'][role='textbox']",
+        "[role='textbox'][contenteditable='true']",
+    ]
+
+    deadline = time.monotonic() + (timeout_ms / 1000)
+    last_error = ""
+
+    while time.monotonic() < deadline:
+        for selector in selectors:
+            locator = page.locator(selector).last
+
+            try:
+                if locator.count() < 1:
+                    continue
+
+                if locator.is_visible(timeout=500):
+                    return selector, locator
+            except Exception as exc:
+                last_error = f"{selector}: {type(exc).__name__}: {exc}"
+
+        time.sleep(0.25)
+
+    raise GoogleMessagesSmsSenderError(
+        "Google Messages no mostró la caja para escribir el SMS. "
+        f"Último error selector: {last_error}"
+    )
+
+
 def _fill_message(page: Page, message: str, config: GoogleMessagesSmsConfig) -> str:
     if not message or not message.strip():
         raise GoogleMessagesSmsSenderError("El mensaje SMS está vacío.")
 
-    selector = "textarea[aria-label^='Escribir un mensaje']"
-    message_box = page.locator(selector).first
+    selector, message_box = _resolve_message_box(page, config.timeout_ms)
 
     message_box.wait_for(state="visible", timeout=config.timeout_ms)
     message_box.click(timeout=config.timeout_ms)
@@ -355,7 +394,7 @@ def _send_by_enter(
     message: str,
     config: GoogleMessagesSmsConfig,
 ) -> dict[str, Any]:
-    message_box = page.locator(message_selector).first
+    message_box = page.locator(message_selector).last
 
     message_box.wait_for(state="visible", timeout=config.timeout_ms)
     message_box.click(timeout=config.timeout_ms)
