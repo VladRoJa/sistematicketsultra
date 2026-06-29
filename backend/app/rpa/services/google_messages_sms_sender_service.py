@@ -199,6 +199,60 @@ def _wait_until_url_not_contains(page: Page, fragment: str, timeout_ms: int) -> 
     )
 
 
+def _read_locator_value(locator, timeout_ms: int = 1000) -> str:
+    try:
+        return locator.input_value(timeout=min(timeout_ms, 1000)) or ""
+    except Exception:
+        return ""
+
+
+def _assert_message_box_contains_expected_text(locator, expected: str, timeout_ms: int) -> None:
+    current_value = _read_locator_value(locator, timeout_ms=timeout_ms).strip()
+
+    if not current_value:
+        raise GoogleMessagesSmsSenderError(
+            "Google Messages dejó vacía la caja de mensaje; se cancela envío para evitar SMS vacío."
+        )
+
+    if expected not in current_value:
+        raise GoogleMessagesSmsSenderError(
+            "Google Messages capturó un texto distinto al SMS esperado; se cancela envío."
+        )
+
+
+def _click_send_button_if_available(page: Page, timeout_ms: int) -> bool:
+    selectors = [
+        "button[aria-label^='Enviar']",
+        "button[aria-label*='Enviar']",
+        "[role='button'][aria-label^='Enviar']",
+        "[role='button'][aria-label*='Enviar']",
+        "button[aria-label^='Send']",
+        "button[aria-label*='Send']",
+        "[role='button'][aria-label^='Send']",
+        "[role='button'][aria-label*='Send']",
+    ]
+
+    for selector in selectors:
+        candidate = page.locator(selector).last
+
+        try:
+            if candidate.count() < 1:
+                continue
+
+            if not candidate.is_visible(timeout=500):
+                continue
+
+            if not candidate.is_enabled(timeout=500):
+                continue
+
+            candidate.click(timeout=min(timeout_ms, 3000))
+            return True
+        except Exception:
+            continue
+
+    return False
+
+
 def _wait_until_locator_value_contains(locator, expected: str, timeout_ms: int) -> None:
     deadline = time.monotonic() + (timeout_ms / 1000)
     last_value = ""
@@ -290,6 +344,7 @@ def _fill_message(page: Page, message: str, config: GoogleMessagesSmsConfig) -> 
     page.keyboard.type(message, delay=config.key_type_delay_ms)
 
     _wait_until_locator_value_contains(message_box, message, config.timeout_ms)
+    _assert_message_box_contains_expected_text(message_box, message, config.timeout_ms)
 
     return selector
 
@@ -304,7 +359,12 @@ def _send_by_enter(
 
     message_box.wait_for(state="visible", timeout=config.timeout_ms)
     message_box.click(timeout=config.timeout_ms)
-    page.keyboard.press("Enter")
+
+    _assert_message_box_contains_expected_text(message_box, message, config.timeout_ms)
+
+    sent_by_button = _click_send_button_if_available(page, config.timeout_ms)
+    if not sent_by_button:
+        page.keyboard.press("Enter")
 
     _wait_until_locator_empty(message_box, config.timeout_ms)
 
