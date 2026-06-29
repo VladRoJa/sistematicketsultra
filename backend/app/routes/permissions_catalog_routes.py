@@ -10,6 +10,8 @@ from app.models.permissions import (
     PermissionActionORM,
     PermissionModuleORM,
     PermissionRouteMapORM,
+    PermissionGrantORM,
+    PermissionGrantAuditLogORM,
 )
 from app.models.sucursal_model import Sucursal
 from app.models.user_model import UserORM
@@ -837,3 +839,285 @@ def search_permission_users():
         ]
     }), 200
 
+
+
+
+def _to_iso(value):
+    return value.isoformat() if value else None
+
+
+def _serialize_user_payload(user) -> dict | None:
+    if not user:
+        return None
+
+    return {
+        "id": user.id,
+        "username": user.username,
+        "email": getattr(user, "email", None),
+        "rol": user.rol,
+    }
+
+
+def _serialize_permission_grant(grant) -> dict:
+    return {
+        "id": grant.id,
+        "principal_type": grant.principal_type,
+        "principal_user_id": grant.principal_user_id,
+        "principal_user": _serialize_user_payload(grant.principal_user),
+        "principal_role_key": grant.principal_role_key,
+        "module_id": grant.module_id,
+        "module_key": grant.module.key if grant.module else None,
+        "module_name": grant.module.name if grant.module else None,
+        "action_id": grant.action_id,
+        "action_full_key": grant.action.full_key if grant.action else None,
+        "action_name": grant.action.name if grant.action else None,
+        "action_risk_level": grant.action.risk_level if grant.action else None,
+        "effect": grant.effect,
+        "scope_type": grant.scope_type,
+        "scope_branch_id": grant.scope_branch_id,
+        "scope_branch_ids": grant.scope_branch_ids or [],
+        "scope_department_id": grant.scope_department_id,
+        "scope_payload": grant.scope_payload or {},
+        "reason": grant.reason,
+        "is_active": grant.is_active,
+        "starts_at": _to_iso(grant.starts_at),
+        "expires_at": _to_iso(grant.expires_at),
+        "created_by_user_id": grant.created_by_user_id,
+        "created_by_user": _serialize_user_payload(grant.created_by_user),
+        "updated_by_user_id": grant.updated_by_user_id,
+        "updated_by_user": _serialize_user_payload(grant.updated_by_user),
+        "created_at": _to_iso(grant.created_at),
+        "updated_at": _to_iso(grant.updated_at),
+        "deleted_at": _to_iso(grant.deleted_at),
+    }
+
+
+def _serialize_permission_grant_audit_log(entry) -> dict:
+    return {
+        "id": entry.id,
+        "grant_id": entry.grant_id,
+        "event_type": entry.event_type,
+        "before_payload": entry.before_payload or {},
+        "after_payload": entry.after_payload or {},
+        "changed_by_user_id": entry.changed_by_user_id,
+        "changed_by_user": _serialize_user_payload(entry.changed_by_user),
+        "reason": entry.reason,
+        "request_ip": entry.request_ip,
+        "user_agent": entry.user_agent,
+        "created_at": _to_iso(entry.created_at),
+    }
+
+
+def _parse_optional_int_arg(arg_name: str):
+    value = request.args.get(arg_name)
+
+    if value is None or str(value).strip() == "":
+        return None, None
+
+    try:
+        return int(value), None
+    except (TypeError, ValueError):
+        return None, (
+            jsonify({
+                "error": "Bad request",
+                "detail": f"El filtro {arg_name} debe ser numérico.",
+            }),
+            400,
+        )
+
+
+def _parse_limit_offset(default_limit: int = 50, max_limit: int = 200):
+    raw_limit = request.args.get("limit", default_limit)
+    raw_offset = request.args.get("offset", 0)
+
+    try:
+        limit = int(raw_limit)
+    except (TypeError, ValueError):
+        limit = default_limit
+
+    try:
+        offset = int(raw_offset)
+    except (TypeError, ValueError):
+        offset = 0
+
+    limit = max(1, min(limit, max_limit))
+    offset = max(0, offset)
+
+    return limit, offset
+
+
+def _apply_permission_grant_filters(query):
+    active_filter = _parse_active_filter()
+    principal_type = str(request.args.get("principal_type", "") or "").strip().lower()
+    principal_role_key = str(request.args.get("principal_role_key", "") or "").strip().upper()
+    module_key = str(request.args.get("module_key", "") or "").strip()
+    action_full_key = str(request.args.get("action_full_key", "") or "").strip()
+    effect = str(request.args.get("effect", "") or "").strip().lower()
+    scope_type = str(request.args.get("scope_type", "") or "").strip().lower()
+
+    principal_user_id, error = _parse_optional_int_arg("principal_user_id")
+    if error:
+        return None, error
+
+    module_id, error = _parse_optional_int_arg("module_id")
+    if error:
+        return None, error
+
+    action_id, error = _parse_optional_int_arg("action_id")
+    if error:
+        return None, error
+
+    if active_filter is not None:
+        query = query.filter(PermissionGrantORM.is_active.is_(active_filter))
+
+    if principal_type:
+        query = query.filter(PermissionGrantORM.principal_type == principal_type)
+
+    if principal_user_id is not None:
+        query = query.filter(PermissionGrantORM.principal_user_id == principal_user_id)
+
+    if principal_role_key:
+        query = query.filter(PermissionGrantORM.principal_role_key == principal_role_key)
+
+    if module_id is not None:
+        query = query.filter(PermissionGrantORM.module_id == module_id)
+
+    if module_key:
+        query = query.filter(PermissionModuleORM.key == module_key)
+
+    if action_id is not None:
+        query = query.filter(PermissionGrantORM.action_id == action_id)
+
+    if action_full_key:
+        query = query.filter(PermissionActionORM.full_key == action_full_key)
+
+    if effect:
+        query = query.filter(PermissionGrantORM.effect == effect)
+
+    if scope_type:
+        query = query.filter(PermissionGrantORM.scope_type == scope_type)
+
+    return query, None
+
+
+@permissions_catalog_bp.route("/grants", methods=["GET"])
+@jwt_required()
+def list_permission_grants():
+    _, error = _current_admin_user_or_error()
+    if error:
+        return error
+
+    query = (
+        PermissionGrantORM.query
+        .outerjoin(PermissionModuleORM, PermissionGrantORM.module_id == PermissionModuleORM.id)
+        .outerjoin(PermissionActionORM, PermissionGrantORM.action_id == PermissionActionORM.id)
+    )
+
+    query, error = _apply_permission_grant_filters(query)
+    if error:
+        return error
+
+    total = query.count()
+    limit, offset = _parse_limit_offset()
+
+    grants = (
+        query
+        .order_by(
+            PermissionGrantORM.created_at.desc(),
+            PermissionGrantORM.id.desc(),
+        )
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+    return jsonify({
+        "status": "ok",
+        "mode": "permission_grants_readonly_v1",
+        "note": "Endpoint diagnóstico. No crea, edita, borra ni aplica grants.",
+        "summary": {
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+        },
+        "grants": [
+            _serialize_permission_grant(grant)
+            for grant in grants
+        ],
+    }), 200
+
+
+@permissions_catalog_bp.route("/grants/<int:grant_id>", methods=["GET"])
+@jwt_required()
+def get_permission_grant(grant_id: int):
+    _, error = _current_admin_user_or_error()
+    if error:
+        return error
+
+    grant = PermissionGrantORM.query.get(grant_id)
+
+    if not grant:
+        return jsonify({
+            "error": "Not found",
+            "detail": "Grant no encontrado.",
+        }), 404
+
+    return jsonify({
+        "status": "ok",
+        "mode": "permission_grants_readonly_v1",
+        "grant": _serialize_permission_grant(grant),
+    }), 200
+
+
+@permissions_catalog_bp.route("/grants/<int:grant_id>/audit", methods=["GET"])
+@jwt_required()
+def list_permission_grant_audit_logs(grant_id: int):
+    _, error = _current_admin_user_or_error()
+    if error:
+        return error
+
+    grant = PermissionGrantORM.query.get(grant_id)
+
+    if not grant:
+        return jsonify({
+            "error": "Not found",
+            "detail": "Grant no encontrado.",
+        }), 404
+
+    event_type = str(request.args.get("event_type", "") or "").strip().lower()
+    limit, offset = _parse_limit_offset(default_limit=50, max_limit=200)
+
+    query = PermissionGrantAuditLogORM.query.filter(
+        PermissionGrantAuditLogORM.grant_id == grant_id,
+    )
+
+    if event_type:
+        query = query.filter(PermissionGrantAuditLogORM.event_type == event_type)
+
+    total = query.count()
+
+    audit_logs = (
+        query
+        .order_by(
+            PermissionGrantAuditLogORM.created_at.desc(),
+            PermissionGrantAuditLogORM.id.desc(),
+        )
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+    return jsonify({
+        "status": "ok",
+        "mode": "permission_grants_audit_readonly_v1",
+        "grant": _serialize_permission_grant(grant),
+        "summary": {
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+        },
+        "audit_logs": [
+            _serialize_permission_grant_audit_log(entry)
+            for entry in audit_logs
+        ],
+    }), 200
