@@ -14,6 +14,16 @@ class PermissionModuleORM(db.Model):
 
     is_active = db.Column(db.Boolean, nullable=False, default=True)
 
+    is_assignable = db.Column(db.Boolean, nullable=False, default=False)
+    menu_key = db.Column(db.String(160), nullable=True, index=True)
+    sort_order = db.Column(db.Integer, nullable=False, default=0)
+    base_action_id = db.Column(
+        db.Integer,
+        db.ForeignKey("permission_actions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
     created_at = db.Column(
         db.DateTime(timezone=True),
         nullable=False,
@@ -29,12 +39,20 @@ class PermissionModuleORM(db.Model):
     actions = db.relationship(
         "PermissionActionORM",
         back_populates="module",
+        foreign_keys="PermissionActionORM.module_id",
         cascade="all, delete-orphan",
     )
 
     route_maps = db.relationship(
         "PermissionRouteMapORM",
         back_populates="module",
+    )
+
+    base_action = db.relationship(
+        "PermissionActionORM",
+        foreign_keys=[base_action_id],
+        uselist=False,
+        post_update=True,
     )
 
     __table_args__ = (
@@ -80,6 +98,7 @@ class PermissionActionORM(db.Model):
     module = db.relationship(
         "PermissionModuleORM",
         back_populates="actions",
+        foreign_keys=[module_id],
     )
 
     route_maps = db.relationship(
