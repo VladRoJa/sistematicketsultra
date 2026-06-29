@@ -314,6 +314,101 @@ def _wait_until_body_contains(page: Page, expected: str, timeout_ms: int) -> Non
     )
 
 
+_GOOGLE_MESSAGES_SEND_FAILURE_MARKERS = [
+    "no se pudo enviar",
+    "no enviado",
+    "mensaje no enviado",
+    "error al enviar",
+    "no se envió",
+    "failed to send",
+    "couldn't send",
+    "could not send",
+    "not sent",
+    "message not sent",
+    "tap to try again",
+    "try again",
+    "retry",
+    "reintentar",
+]
+
+
+def _normalize_match_text(value: str) -> str:
+    return " ".join((value or "").split())
+
+
+def _read_body_text(page: Page, timeout_ms: int = 1000) -> str:
+    try:
+        return page.locator("body").first.inner_text(timeout=min(timeout_ms, 1000)) or ""
+    except Exception:
+        return ""
+
+
+def _body_message_occurrence_count(page: Page, expected: str) -> int:
+    body_text = _normalize_match_text(_read_body_text(page))
+    expected_text = _normalize_match_text(expected)
+
+    if not expected_text:
+        return 0
+
+    return body_text.count(expected_text)
+
+
+def _send_failure_marker_count(page: Page) -> int:
+    body_text = _normalize_match_text(_read_body_text(page)).lower()
+
+    return sum(
+        body_text.count(marker)
+        for marker in _GOOGLE_MESSAGES_SEND_FAILURE_MARKERS
+    )
+
+
+def _wait_until_post_send_confirmed(
+    page: Page,
+    expected: str,
+    *,
+    body_count_before_send: int,
+    failure_count_before_send: int,
+    timeout_ms: int,
+) -> None:
+    deadline = time.monotonic() + (timeout_ms / 1000)
+    stable_since = None
+    last_message_count = 0
+    last_failure_count = failure_count_before_send
+
+    while time.monotonic() < deadline:
+        last_failure_count = _send_failure_marker_count(page)
+        if last_failure_count > failure_count_before_send:
+            raise GoogleMessagesSmsSenderError(
+                "Google Messages mostró un error después de intentar enviar el SMS."
+            )
+
+        last_message_count = _body_message_occurrence_count(page, expected)
+
+        message_visible_after_send = (
+            last_message_count > body_count_before_send
+            or (body_count_before_send > 0 and last_message_count >= body_count_before_send)
+        )
+
+        if message_visible_after_send:
+            if stable_since is None:
+                stable_since = time.monotonic()
+
+            if time.monotonic() - stable_since >= 8:
+                return
+        else:
+            stable_since = None
+
+        time.sleep(0.5)
+
+    raise GoogleMessagesSmsSenderError(
+        "Google Messages no confirmó de forma estable que el SMS apareciera como enviado. "
+        f"message_count_before={body_count_before_send}, "
+        f"message_count_last={last_message_count}, "
+        f"failure_count_before={failure_count_before_send}, "
+        f"failure_count_last={last_failure_count}"
+    )
+
+
 def _select_recipient(page: Page, phone_digits: str, config: GoogleMessagesSmsConfig) -> str:
     option_text = _wait_for_recipient_option(page, phone_digits, config.timeout_ms)
 
@@ -401,13 +496,22 @@ def _send_by_enter(
 
     _assert_message_box_contains_expected_text(message_box, message, config.timeout_ms)
 
+    body_count_before_send = _body_message_occurrence_count(page, message)
+    failure_count_before_send = _send_failure_marker_count(page)
+
     sent_by_button = _click_send_button_if_available(page, config.timeout_ms)
     if not sent_by_button:
         page.keyboard.press("Enter")
 
     _wait_until_locator_empty(message_box, config.timeout_ms)
 
-    _wait_until_body_contains(page, message, config.timeout_ms)
+    _wait_until_post_send_confirmed(
+        page,
+        message,
+        body_count_before_send=body_count_before_send,
+        failure_count_before_send=failure_count_before_send,
+        timeout_ms=config.timeout_ms,
+    )
 
     page.wait_for_timeout(config.settle_after_send_ms)
 
