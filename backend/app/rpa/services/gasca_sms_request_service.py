@@ -68,7 +68,7 @@ def build_gasca_sms_message(code: str) -> str:
             "No se puede enviar SMS porque Gasca no devolvió código."
         )
 
-    return f"Ultra Gym: tu código de acceso es {clean_code}. No compartas este código."
+    return f"ULTRA GYM: tu código de acceso es {clean_code}. Comparte este código en recepcion."
 
 
 def sanitize_lookup_result_for_storage(result: dict) -> dict:
