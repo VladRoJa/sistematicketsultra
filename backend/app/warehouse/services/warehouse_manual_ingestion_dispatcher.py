@@ -12,12 +12,14 @@ from flask import current_app
 MANUAL_STRUCTURED_TOTALPASS_REPORT_TYPE_KEY = "ingresos_totalpass"
 MANUAL_STRUCTURED_WELLHUB_REPORT_TYPE_KEY = "ingresos_wellhub"
 MANUAL_STRUCTURED_TRACK_MONTHLY_TARGETS_REPORT_TYPE_KEY = "track_monthly_targets"
+MANUAL_STRUCTURED_VENTA_TOTAL_REPORT_TYPE_KEY = "venta_total"
 
 SUPPORTED_MANUAL_STRUCTURED_REPORT_TYPES = frozenset(
     {
         MANUAL_STRUCTURED_TOTALPASS_REPORT_TYPE_KEY,
         MANUAL_STRUCTURED_WELLHUB_REPORT_TYPE_KEY,
         MANUAL_STRUCTURED_TRACK_MONTHLY_TARGETS_REPORT_TYPE_KEY,
+        MANUAL_STRUCTURED_VENTA_TOTAL_REPORT_TYPE_KEY,
     }
 )
 
@@ -164,6 +166,15 @@ def _resolve_wellhub_ingestor() -> Callable[..., Any]:
         description="ingestor estructurado de ingresos_wellhub",
     )
 
+def _resolve_venta_total_ingestor() -> Callable[..., Any]:
+    return _resolve_callable(
+        direct_callable_key="WAREHOUSE_VENTA_TOTAL_INGESTOR",
+        module_key="WAREHOUSE_VENTA_TOTAL_INGESTOR_MODULE",
+        entrypoint_key="WAREHOUSE_VENTA_TOTAL_INGESTOR_ENTRYPOINT",
+        description="ingestor estructurado de venta_total",
+    )
+
+
 def _resolve_track_monthly_targets_ingestor() -> Callable[..., Any]:
     return _resolve_callable(
         direct_callable_key="WAREHOUSE_TRACK_MONTHLY_TARGETS_INGESTOR",
@@ -201,6 +212,7 @@ def _resolve_snapshot_kind_for_manual_upload(
     if report_type_key in {
         MANUAL_STRUCTURED_TOTALPASS_REPORT_TYPE_KEY,
         MANUAL_STRUCTURED_WELLHUB_REPORT_TYPE_KEY,
+        MANUAL_STRUCTURED_VENTA_TOTAL_REPORT_TYPE_KEY,
     }:
         return "daily"
 
@@ -265,6 +277,35 @@ def _dispatch_wellhub_ingestion(
         "El ingestor manual de ingresos_wellhub devolvió un tipo no soportado. "
         "Debe devolver dict."
     )
+
+def _dispatch_venta_total_ingestion(
+    *,
+    warehouse_upload_id: int,
+    requested_by: str | None,
+    ingestion_source: str | None,
+    snapshot_kind: str,
+) -> dict[str, Any]:
+    ingestor = _resolve_venta_total_ingestor()
+
+    raw_result = _invoke_callable_flexibly(
+        ingestor,
+        kwargs={
+            "warehouse_upload_id": warehouse_upload_id,
+            "snapshot_kind": snapshot_kind,
+            "requested_by": requested_by,
+            "ingestion_source": ingestion_source,
+        },
+        description="ingestor estructurado manual de venta_total",
+    )
+
+    if isinstance(raw_result, dict):
+        return raw_result
+
+    raise WarehouseManualIngestionDispatcherError(
+        "El ingestor manual de venta_total devolvió un tipo no soportado. "
+        "Debe devolver dict."
+    )
+
 
 def _dispatch_track_monthly_targets_ingestion(
     *,
@@ -363,6 +404,21 @@ def dispatch_manual_structured_ingestion(
 
     if report_type_key == MANUAL_STRUCTURED_WELLHUB_REPORT_TYPE_KEY:
         ingestion_result = _dispatch_wellhub_ingestion(
+            warehouse_upload_id=warehouse_upload_id,
+            requested_by=requested_by,
+            ingestion_source=ingestion_source,
+            snapshot_kind=snapshot_kind,
+        )
+        return {
+            "ingestion_status": ingestion_result.get("status", "ingested"),
+            "warehouse_upload_id": warehouse_upload_id,
+            "report_type_key": report_type_key,
+            "snapshot_kind": snapshot_kind,
+            "structured_result": ingestion_result,
+        }
+
+    if report_type_key == MANUAL_STRUCTURED_VENTA_TOTAL_REPORT_TYPE_KEY:
+        ingestion_result = _dispatch_venta_total_ingestion(
             warehouse_upload_id=warehouse_upload_id,
             requested_by=requested_by,
             ingestion_source=ingestion_source,
