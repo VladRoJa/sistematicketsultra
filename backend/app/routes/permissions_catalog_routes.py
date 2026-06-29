@@ -884,6 +884,45 @@ def get_user_effective_permissions(user_id: int):
         "actions": effective_actions,
     }), 200
 
+def _permission_grant_audit_payload(grant) -> dict | None:
+    if not grant:
+        return None
+
+    return {
+        "id": grant.id,
+        "principal_type": grant.principal_type,
+        "principal_user_id": grant.principal_user_id,
+        "principal_role_key": grant.principal_role_key,
+        "module_id": grant.module_id,
+        "module_key": grant.module.key if grant.module else None,
+        "action_id": grant.action_id,
+        "action_full_key": grant.action.full_key if grant.action else None,
+        "effect": grant.effect,
+        "scope_type": grant.scope_type,
+        "scope_branch_id": grant.scope_branch_id,
+        "scope_branch_ids": grant.scope_branch_ids or [],
+        "scope_department_id": grant.scope_department_id,
+        "scope_payload": grant.scope_payload or {},
+        "reason": grant.reason,
+        "is_active": grant.is_active,
+        "starts_at": _to_iso(grant.starts_at),
+        "expires_at": _to_iso(grant.expires_at),
+        "created_by_user_id": grant.created_by_user_id,
+        "updated_by_user_id": grant.updated_by_user_id,
+        "created_at": _to_iso(grant.created_at),
+        "updated_at": _to_iso(grant.updated_at),
+        "deleted_at": _to_iso(grant.deleted_at),
+    }
+
+
+def _permission_grant_request_ip() -> str | None:
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+
+    return request.remote_addr
+
+
 @permissions_catalog_bp.route("/users/<int:user_id>/module-access", methods=["GET"])
 @jwt_required()
 def get_user_module_access(user_id: int):
@@ -1023,6 +1062,295 @@ def get_user_module_access(user_id: int):
             "role_override_count": role_override_count,
         },
         "modules": module_access,
+    }), 200
+
+
+@permissions_catalog_bp.route("/users/<int:user_id>/module-access", methods=["PUT"])
+@jwt_required()
+def update_user_module_access(user_id: int):
+    current_admin, error = _current_admin_user_or_error()
+    if error:
+        return error
+
+    target_user = UserORM.query.get(user_id)
+    if not target_user:
+        return jsonify({
+            "error": "Not found",
+            "detail": "Usuario no encontrado.",
+        }), 404
+
+    payload = request.get_json(silent=True) or {}
+    changes = payload.get("changes")
+
+    if not isinstance(changes, list):
+        return jsonify({
+            "error": "Bad request",
+            "detail": "El body debe incluir una lista changes.",
+        }), 400
+
+    if len(changes) > 50:
+        return jsonify({
+            "error": "Bad request",
+            "detail": "Máximo 50 cambios por request.",
+        }), 400
+
+    valid_overrides = {"allow", "deny", "inherit"}
+    validated_changes = []
+
+    for index, change in enumerate(changes):
+        if not isinstance(change, dict):
+            return jsonify({
+                "error": "Bad request",
+                "detail": f"El cambio #{index + 1} debe ser un objeto.",
+            }), 400
+
+        module_key = str(change.get("module_key", "") or "").strip()
+        override = str(change.get("override", "") or "").strip().lower()
+        reason = str(change.get("reason", "") or "").strip()
+
+        if not module_key:
+            return jsonify({
+                "error": "Bad request",
+                "detail": f"El cambio #{index + 1} no tiene module_key.",
+            }), 400
+
+        if override not in valid_overrides:
+            return jsonify({
+                "error": "Bad request",
+                "detail": (
+                    f"El cambio #{index + 1} tiene override inválido. "
+                    "Usa allow, deny o inherit."
+                ),
+            }), 400
+
+        module = (
+            PermissionModuleORM.query
+            .filter(
+                PermissionModuleORM.key == module_key,
+                PermissionModuleORM.is_active.is_(True),
+                PermissionModuleORM.is_assignable.is_(True),
+            )
+            .first()
+        )
+
+        if not module:
+            return jsonify({
+                "error": "Bad request",
+                "detail": f"Módulo no asignable o inexistente: {module_key}",
+            }), 400
+
+        if not module.base_action:
+            return jsonify({
+                "error": "Bad request",
+                "detail": f"El módulo {module_key} no tiene acción base configurada.",
+            }), 400
+
+        if not reason:
+            if override == "inherit":
+                reason = "Override removido desde Permisos V1"
+            else:
+                reason = "Permiso actualizado desde Permisos V1"
+
+        validated_changes.append({
+            "module": module,
+            "action": module.base_action,
+            "override": override,
+            "reason": reason,
+        })
+
+    results = []
+    created_count = 0
+    updated_count = 0
+    deactivated_count = 0
+
+    request_ip = _permission_grant_request_ip()
+    user_agent = request.headers.get("User-Agent")
+
+    for item in validated_changes:
+        module = item["module"]
+        action = item["action"]
+        override = item["override"]
+        reason = item["reason"]
+
+        active_grants = (
+            PermissionGrantORM.query
+            .filter(
+                PermissionGrantORM.is_active.is_(True),
+                PermissionGrantORM.deleted_at.is_(None),
+                PermissionGrantORM.principal_type == "user",
+                PermissionGrantORM.principal_user_id == target_user.id,
+                PermissionGrantORM.action_id == action.id,
+            )
+            .order_by(
+                PermissionGrantORM.updated_at.desc(),
+                PermissionGrantORM.id.desc(),
+            )
+            .all()
+        )
+
+        result = {
+            "module_key": module.key,
+            "module_name": module.name,
+            "action_id": action.id,
+            "action_full_key": action.full_key,
+            "override": override,
+            "grant_id": None,
+            "event_type": None,
+            "deactivated_grant_ids": [],
+        }
+
+        if override == "inherit":
+            for grant in active_grants:
+                before_payload = _permission_grant_audit_payload(grant)
+
+                grant.is_active = False
+                grant.updated_by_user_id = current_admin.id
+                grant.reason = reason
+
+                after_payload = _permission_grant_audit_payload(grant)
+
+                db.session.add(PermissionGrantAuditLogORM(
+                    grant_id=grant.id,
+                    event_type="disabled",
+                    before_payload=before_payload,
+                    after_payload=after_payload,
+                    changed_by_user_id=current_admin.id,
+                    reason=reason,
+                    request_ip=request_ip,
+                    user_agent=user_agent,
+                ))
+
+                deactivated_count += 1
+                result["deactivated_grant_ids"].append(grant.id)
+
+            result["event_type"] = "inherit"
+            results.append(result)
+            continue
+
+        primary_grant = active_grants[0] if active_grants else None
+
+        if primary_grant:
+            before_payload = _permission_grant_audit_payload(primary_grant)
+
+            primary_grant.module_id = module.id
+            primary_grant.action_id = action.id
+            primary_grant.effect = override
+            primary_grant.scope_type = "global"
+            primary_grant.scope_branch_id = None
+            primary_grant.scope_branch_ids = []
+            primary_grant.scope_department_id = None
+            primary_grant.scope_payload = None
+            primary_grant.reason = reason
+            primary_grant.is_active = True
+            primary_grant.updated_by_user_id = current_admin.id
+
+            after_payload = _permission_grant_audit_payload(primary_grant)
+
+            db.session.add(PermissionGrantAuditLogORM(
+                grant_id=primary_grant.id,
+                event_type="updated",
+                before_payload=before_payload,
+                after_payload=after_payload,
+                changed_by_user_id=current_admin.id,
+                reason=reason,
+                request_ip=request_ip,
+                user_agent=user_agent,
+            ))
+
+            updated_count += 1
+            result["grant_id"] = primary_grant.id
+            result["event_type"] = "updated"
+        else:
+            primary_grant = PermissionGrantORM(
+                principal_type="user",
+                principal_user_id=target_user.id,
+                principal_role_key=None,
+                module_id=module.id,
+                action_id=action.id,
+                effect=override,
+                scope_type="global",
+                scope_branch_id=None,
+                scope_branch_ids=[],
+                scope_department_id=None,
+                scope_payload=None,
+                reason=reason,
+                is_active=True,
+                created_by_user_id=current_admin.id,
+                updated_by_user_id=current_admin.id,
+            )
+            db.session.add(primary_grant)
+            db.session.flush()
+
+            after_payload = _permission_grant_audit_payload(primary_grant)
+
+            db.session.add(PermissionGrantAuditLogORM(
+                grant_id=primary_grant.id,
+                event_type="created",
+                before_payload=None,
+                after_payload=after_payload,
+                changed_by_user_id=current_admin.id,
+                reason=reason,
+                request_ip=request_ip,
+                user_agent=user_agent,
+            ))
+
+            created_count += 1
+            result["grant_id"] = primary_grant.id
+            result["event_type"] = "created"
+
+        duplicate_grants = active_grants[1:] if active_grants else []
+        for duplicate_grant in duplicate_grants:
+            before_payload = _permission_grant_audit_payload(duplicate_grant)
+
+            duplicate_grant.is_active = False
+            duplicate_grant.updated_by_user_id = current_admin.id
+            duplicate_grant.reason = (
+                "Grant duplicado desactivado automáticamente desde Permisos V1"
+            )
+
+            after_payload = _permission_grant_audit_payload(duplicate_grant)
+
+            db.session.add(PermissionGrantAuditLogORM(
+                grant_id=duplicate_grant.id,
+                event_type="disabled",
+                before_payload=before_payload,
+                after_payload=after_payload,
+                changed_by_user_id=current_admin.id,
+                reason=duplicate_grant.reason,
+                request_ip=request_ip,
+                user_agent=user_agent,
+            ))
+
+            deactivated_count += 1
+            result["deactivated_grant_ids"].append(duplicate_grant.id)
+
+        results.append(result)
+
+    db.session.commit()
+
+    return jsonify({
+        "mode": "module_access_write_v1",
+        "note": (
+            "Endpoint de escritura para overrides de permisos por módulo. "
+            "Guarda permission_grants, pero no cambia enforcement legacy todavía."
+        ),
+        "user": {
+            "id": target_user.id,
+            "username": target_user.username,
+            "nombre": getattr(target_user, "nombre", None),
+            "email": getattr(target_user, "email", None),
+            "rol": target_user.rol,
+            "normalized_role": _normalize_role(target_user),
+            "is_active": _safe_bool(getattr(target_user, "is_active", True)),
+        },
+        "summary": {
+            "changes_received": len(changes),
+            "changes_processed": len(results),
+            "created_count": created_count,
+            "updated_count": updated_count,
+            "deactivated_count": deactivated_count,
+        },
+        "results": results,
     }), 200
 
 
@@ -1369,3 +1697,4 @@ def list_permission_grant_audit_logs(grant_id: int):
             for entry in audit_logs
         ],
     }), 200
+
