@@ -225,6 +225,16 @@ def _assert_message_box_contains_expected_text(locator, expected: str, timeout_m
 
 def _click_send_button_if_available(page: Page, timeout_ms: int) -> bool:
     selectors = [
+        "mws-message-compose mws-message-send-button.inline-send-button",
+        "mws-message-compose mws-message-send-button",
+        "mws-message-compose mw-message-send-button",
+        "mws-message-send-button.inline-send-button",
+        "mws-message-send-button",
+        "mw-message-send-button",
+        ".compose-container mws-message-send-button",
+        ".compose-container mw-message-send-button",
+        ".input-row mws-message-send-button",
+        ".input-row mw-message-send-button",
         "button[aria-label^='Enviar']",
         "button[aria-label*='Enviar']",
         "[role='button'][aria-label^='Enviar']",
@@ -242,11 +252,18 @@ def _click_send_button_if_available(page: Page, timeout_ms: int) -> bool:
             if candidate.count() < 1:
                 continue
 
-            if not candidate.is_visible(timeout=500):
-                continue
+            candidate.wait_for(state="visible", timeout=1000)
 
-            if not candidate.is_enabled(timeout=500):
-                continue
+            try:
+                if not candidate.is_enabled(timeout=500):
+                    continue
+            except Exception:
+                pass
+
+            try:
+                candidate.scroll_into_view_if_needed(timeout=1000)
+            except Exception:
+                pass
 
             candidate.click(timeout=min(timeout_ms, 3000))
             return True
@@ -540,7 +557,9 @@ def _send_by_enter(
 
         sent_by_button = _click_send_button_if_available(page, config.timeout_ms)
         if not sent_by_button:
-            page.keyboard.press("Enter")
+            raise GoogleMessagesSmsSenderError(
+                "Google Messages no mostró un botón real de enviar visible/habilitado."
+            )
 
         _wait_until_locator_empty(message_box, config.timeout_ms)
 
