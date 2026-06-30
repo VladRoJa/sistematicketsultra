@@ -102,7 +102,7 @@ class VentaTotalParsedRow:
     estatus: str
     motivo: str | None
     realizo_venta: str | None
-    hora: str
+    hora: str | None
     id_orden: str | None
     encuesta: str | None
     capturista: str | None
@@ -225,11 +225,7 @@ def parse_venta_total_xlsx(
                 ),
                 motivo=_normalize_optional_text(row.get("Motivo")),
                 realizo_venta=_normalize_optional_text(row.get("Realizo Venta")),
-                hora=_normalize_required_text(
-                    row.get("Hora"),
-                    field_name="Hora",
-                    row_index=source_row_index,
-                ),
+                hora=_normalize_optional_text(row.get("Hora")),
                 id_orden=_normalize_optional_text(row.get("IDOrden")),
                 encuesta=_normalize_optional_text(row.get("Encuesta")),
                 capturista=_normalize_optional_text(row.get("Capturista")),
