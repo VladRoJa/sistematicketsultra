@@ -12,6 +12,7 @@ from playwright.sync_api import Page, sync_playwright
 MESSAGES_NEW_URL = "https://messages.google.com/web/conversations/new"
 DEFAULT_TIMEOUT_MS = 25000
 DEFAULT_SETTLE_AFTER_SEND_MS = 2500
+DEFAULT_SEND_ATTEMPTS = 2
 
 
 class GoogleMessagesSmsSenderError(RuntimeError):
@@ -25,6 +26,7 @@ class GoogleMessagesSmsConfig:
     timeout_ms: int = DEFAULT_TIMEOUT_MS
     settle_after_send_ms: int = DEFAULT_SETTLE_AFTER_SEND_MS
     key_type_delay_ms: int = 5
+    send_attempts: int = DEFAULT_SEND_ATTEMPTS
 
 
 def _bool_from_env(value: str | None, default: bool = False) -> bool:
@@ -58,6 +60,7 @@ def resolve_config_from_env() -> GoogleMessagesSmsConfig:
         timeout_ms=timeout_ms,
         settle_after_send_ms=settle_after_send_ms,
         key_type_delay_ms=int(os.getenv("GOOGLE_MESSAGES_KEY_DELAY_MS", "5")),
+        send_attempts=int(os.getenv("GOOGLE_MESSAGES_SEND_ATTEMPTS", str(DEFAULT_SEND_ATTEMPTS))),
     )
 
 
@@ -353,13 +356,17 @@ def _body_message_occurrence_count(page: Page, expected: str) -> int:
     return body_text.count(expected_text)
 
 
-def _send_failure_marker_count(page: Page) -> int:
+def _send_failure_marker_counts(page: Page) -> dict[str, int]:
     body_text = _normalize_match_text(_read_body_text(page)).lower()
 
-    return sum(
-        body_text.count(marker)
+    return {
+        marker: body_text.count(marker)
         for marker in _GOOGLE_MESSAGES_SEND_FAILURE_MARKERS
-    )
+    }
+
+
+def _send_failure_marker_count(page: Page) -> int:
+    return sum(_send_failure_marker_counts(page).values())
 
 
 def _wait_until_post_send_confirmed(
@@ -376,18 +383,24 @@ def _wait_until_post_send_confirmed(
     last_failure_count = failure_count_before_send
 
     while time.monotonic() < deadline:
-        last_failure_count = _send_failure_marker_count(page)
+        failure_marker_counts = _send_failure_marker_counts(page)
+        last_failure_count = sum(failure_marker_counts.values())
+
         if last_failure_count > failure_count_before_send:
+            active_markers = [
+                f"{marker}={count}"
+                for marker, count in failure_marker_counts.items()
+                if count > 0
+            ]
+
             raise GoogleMessagesSmsSenderError(
-                "Google Messages mostró un error después de intentar enviar el SMS."
+                "Google Messages mostró un error después de intentar enviar el SMS. "
+                f"Marcadores visibles: {', '.join(active_markers)}"
             )
 
         last_message_count = _body_message_occurrence_count(page, expected)
 
-        message_visible_after_send = (
-            last_message_count > body_count_before_send
-            or (body_count_before_send > 0 and last_message_count >= body_count_before_send)
-        )
+        message_visible_after_send = last_message_count > body_count_before_send
 
         if message_visible_after_send:
             if stable_since is None:
@@ -483,42 +496,86 @@ def _fill_message(page: Page, message: str, config: GoogleMessagesSmsConfig) -> 
     return selector
 
 
+def _ensure_message_box_contains_message(
+    page: Page,
+    message_box,
+    message: str,
+    config: GoogleMessagesSmsConfig,
+) -> None:
+    message_box.wait_for(state="visible", timeout=config.timeout_ms)
+    message_box.click(timeout=config.timeout_ms)
+
+    current_value = _read_locator_value(message_box, timeout_ms=config.timeout_ms)
+
+    if message not in current_value:
+        page.keyboard.press("Control+A")
+        page.keyboard.press("Backspace")
+        page.keyboard.type(message, delay=config.key_type_delay_ms)
+        _wait_until_locator_value_contains(message_box, message, config.timeout_ms)
+
+    _assert_message_box_contains_expected_text(message_box, message, config.timeout_ms)
+
+
 def _send_by_enter(
     page: Page,
     message_selector: str,
     message: str,
     config: GoogleMessagesSmsConfig,
 ) -> dict[str, Any]:
-    message_box = page.locator(message_selector).last
+    max_attempts = max(1, int(getattr(config, "send_attempts", DEFAULT_SEND_ATTEMPTS)))
+    last_error: Exception | None = None
 
-    message_box.wait_for(state="visible", timeout=config.timeout_ms)
-    message_box.click(timeout=config.timeout_ms)
+    for attempt_index in range(1, max_attempts + 1):
+        message_box = page.locator(message_selector).last
 
-    _assert_message_box_contains_expected_text(message_box, message, config.timeout_ms)
+        body_count_before_attempt = _body_message_occurrence_count(page, message)
+        failure_count_before_attempt = _send_failure_marker_count(page)
 
-    body_count_before_send = _body_message_occurrence_count(page, message)
-    failure_count_before_send = _send_failure_marker_count(page)
+        _ensure_message_box_contains_message(
+            page,
+            message_box,
+            message,
+            config,
+        )
 
-    sent_by_button = _click_send_button_if_available(page, config.timeout_ms)
-    if not sent_by_button:
-        page.keyboard.press("Enter")
+        sent_by_button = _click_send_button_if_available(page, config.timeout_ms)
+        if not sent_by_button:
+            page.keyboard.press("Enter")
 
-    _wait_until_locator_empty(message_box, config.timeout_ms)
+        _wait_until_locator_empty(message_box, config.timeout_ms)
 
-    _wait_until_post_send_confirmed(
-        page,
-        message,
-        body_count_before_send=body_count_before_send,
-        failure_count_before_send=failure_count_before_send,
-        timeout_ms=config.timeout_ms,
+        try:
+            _wait_until_post_send_confirmed(
+                page,
+                message,
+                body_count_before_send=body_count_before_attempt,
+                failure_count_before_send=failure_count_before_attempt,
+                timeout_ms=config.timeout_ms,
+            )
+
+            page.wait_for_timeout(config.settle_after_send_ms)
+
+            return {
+                "strategy": "google_messages_send_retry",
+                "evidence": "composer_cleared_and_new_message_visible_without_failure_marker",
+                "sent_by_button": sent_by_button,
+                "send_attempt": attempt_index,
+                "send_attempts_max": max_attempts,
+            }
+        except GoogleMessagesSmsSenderError as exc:
+            last_error = exc
+
+            if attempt_index >= max_attempts:
+                raise GoogleMessagesSmsSenderError(
+                    f"Google Messages falló después de {max_attempts} intentos de envío. "
+                    f"Último error: {exc}"
+                ) from exc
+
+            page.wait_for_timeout(2500)
+
+    raise GoogleMessagesSmsSenderError(
+        f"Google Messages no pudo enviar el SMS. Último error: {last_error}"
     )
-
-    page.wait_for_timeout(config.settle_after_send_ms)
-
-    return {
-        "strategy": "keyboard_enter_fallback",
-        "evidence": "message_box_cleared_and_message_text_present",
-    }
 
 
 def send_sms_via_google_messages(
