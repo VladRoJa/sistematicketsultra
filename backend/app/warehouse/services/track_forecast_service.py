@@ -31,6 +31,10 @@ def _first_day_of_month(value: date) -> date:
     return date(value.year, value.month, 1)
 
 
+def _build_history_window(target_month: date) -> tuple[date, date]:
+    return date(target_month.year - 3, 1, 1), date(target_month.year, 1, 1)
+
+
 def _confidence_from_months(months_count: int) -> str:
     if months_count >= 24:
         return "alta"
@@ -158,9 +162,13 @@ def _build_historical_curve(
     scope: str,
     branch: str | None,
 ) -> dict[str, Any]:
+    history_start_date, history_end_date = _build_history_window(target_month)
+
     params: dict[str, Any] = {
         "target_month_number": target_month.month,
         "excluded_branches": tuple(EXCLUDED_BRANCHES),
+        "history_start_date": history_start_date,
+        "history_end_date": history_end_date,
     }
 
     branch_join_filter = ""
@@ -184,7 +192,8 @@ def _build_historical_curve(
                 WHERE s.report_type_key = 'venta_total'
                   AND s.snapshot_kind = 'daily'
                   AND s.is_canonical = true
-                  AND s.business_date BETWEEN '2023-01-01' AND '2025-12-31'
+                  AND s.business_date >= :history_start_date
+                  AND s.business_date < :history_end_date
                   AND EXTRACT(MONTH FROM s.business_date)::int = :target_month_number
             ),
             clean AS (
@@ -259,9 +268,13 @@ def _build_historical_curve(
     }
 
 
-def _build_history_coverage(*, branch: str | None) -> dict[str, Any]:
+def _build_history_coverage(*, target_month: date, branch: str | None) -> dict[str, Any]:
+    history_start_date, history_end_date = _build_history_window(target_month)
+
     params: dict[str, Any] = {
         "excluded_branches": tuple(EXCLUDED_BRANCHES),
+        "history_start_date": history_start_date,
+        "history_end_date": history_end_date,
     }
 
     branch_filter = ""
@@ -281,7 +294,8 @@ def _build_history_coverage(*, branch: str | None) -> dict[str, Any]:
                 WHERE s.report_type_key = 'venta_total'
                   AND s.snapshot_kind = 'daily'
                   AND s.is_canonical = true
-                  AND s.business_date BETWEEN '2023-01-01' AND '2025-12-31'
+                  AND s.business_date >= :history_start_date
+                  AND s.business_date < :history_end_date
             ),
             clean AS (
                 SELECT DISTINCT
@@ -337,6 +351,7 @@ def build_venta_total_forecast(
 
     target_month = _first_day_of_month(track_date)
     cutoff_day = min(track_date.day, monthrange(track_date.year, track_date.month)[1])
+    history_start_date, history_end_date = _build_history_window(target_month)
 
     mart_rows = _get_selected_mart_rows(
         track_daily_version_id=track_daily_version_id,
@@ -424,6 +439,7 @@ def build_venta_total_forecast(
             )
 
     coverage = _build_history_coverage(
+        target_month=target_month,
         branch=branch if scope == "branch" else None,
     )
 
@@ -438,6 +454,10 @@ def build_venta_total_forecast(
             "branch": branch.strip().upper() if branch else None,
             "selected_branches_count": len(selected_branches),
             "excluded_branches": sorted(EXCLUDED_BRANCHES),
+            "history_window": {
+                "start": history_start_date.isoformat(),
+                "end_exclusive": history_end_date.isoformat(),
+            },
         },
         "data_quality": {
             "goal_status": goal_status,
