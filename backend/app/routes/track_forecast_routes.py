@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import os
+
 from flask import Blueprint, jsonify, request
-from flask_jwt_extended import jwt_required
+from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from app.routes.track_routes import (
     ALLOWED_GENERATION_MODES,
@@ -17,11 +19,53 @@ from app.warehouse.services.track_forecast_service import (
 track_forecast_bp = Blueprint("track_forecast_bp", __name__)
 
 
+def _get_forecast_beta_user_ids() -> set[int]:
+    raw_value = os.environ.get("TRACK_FORECAST_BETA_USER_IDS", "").strip()
+
+    if not raw_value:
+        return set()
+
+    user_ids: set[int] = set()
+
+    for raw_part in raw_value.split(","):
+        part = raw_part.strip()
+
+        if not part:
+            continue
+
+        try:
+            user_ids.add(int(part))
+        except ValueError as exc:
+            raise ValueError(
+                "TRACK_FORECAST_BETA_USER_IDS debe contener solo IDs numéricos separados por coma."
+            ) from exc
+
+    return user_ids
+
+
+def _require_track_forecast_beta_user() -> None:
+    allowed_user_ids = _get_forecast_beta_user_ids()
+
+    if not allowed_user_ids:
+        raise PermissionError(
+            "Proyección y Metas está en beta privada y no tiene usuarios habilitados."
+        )
+
+    try:
+        current_user_id = int(get_jwt_identity())
+    except (TypeError, ValueError) as exc:
+        raise PermissionError("No autorizado para consultar Proyección y Metas.") from exc
+
+    if current_user_id not in allowed_user_ids:
+        raise PermissionError("No autorizado para consultar Proyección y Metas.")
+
+
 @track_forecast_bp.route("/venta-total", methods=["GET"])
 @jwt_required()
 def get_venta_total_forecast_endpoint():
     try:
         _require_track_read_role()
+        _require_track_forecast_beta_user()
 
         track_date = _ensure_date(
             request.args.get("track_date"),
