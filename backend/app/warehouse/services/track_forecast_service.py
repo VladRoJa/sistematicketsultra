@@ -284,21 +284,47 @@ def _build_historical_curve(
 def _build_history_coverage(*, target_month: date, branch: str | None) -> dict[str, Any]:
     history_start_date, history_end_date = _build_history_window(target_month)
 
+    if not branch:
+        rows = db.session.execute(
+            text(
+                """
+                SELECT
+                    COUNT(DISTINCT date_trunc('month', business_date)::date) AS months_count,
+                    MIN(date_trunc('month', business_date)::date) AS first_month,
+                    MAX(date_trunc('month', business_date)::date) AS last_month
+                FROM venta_total_snapshots
+                WHERE report_type_key = 'venta_total'
+                  AND snapshot_kind = 'daily'
+                  AND is_canonical = true
+                  AND business_date >= :history_start_date
+                  AND business_date < :history_end_date
+                """
+            ),
+            {
+                "history_start_date": history_start_date,
+                "history_end_date": history_end_date,
+            },
+        ).mappings().first()
+
+        months_count = int(rows["months_count"] or 0) if rows else 0
+
+        return {
+            "months_count": months_count,
+            "first_month": rows["first_month"].isoformat() if rows and rows["first_month"] else None,
+            "last_month": rows["last_month"].isoformat() if rows and rows["last_month"] else None,
+            "confidence": _confidence_from_coverage_months(months_count),
+        }
+
     params: dict[str, Any] = {
         "excluded_branches": tuple(EXCLUDED_BRANCHES),
         "history_start_date": history_start_date,
         "history_end_date": history_end_date,
+        "branch": branch.strip().upper(),
     }
-
-    branch_filter = ""
-
-    if branch:
-        params["branch"] = branch.strip().upper()
-        branch_filter = "AND upper(trim(a.sucursal_canon)) = :branch"
 
     rows = db.session.execute(
         text(
-            f"""
+            """
             WITH canonical AS (
                 SELECT
                     s.id AS snapshot_id,
@@ -327,7 +353,7 @@ def _build_history_coverage(*, target_month: date, branch: str | None) -> dict[s
                   AND to_date(r.fecha, 'DD-MM-YY') < (c.snapshot_month + interval '1 month')
                   AND upper(trim(r.sucursal)) NOT IN :excluded_branches
                   AND upper(trim(a.sucursal_canon)) NOT IN :excluded_branches
-                  {branch_filter}
+                  AND upper(trim(a.sucursal_canon)) = :branch
             )
             SELECT
                 COUNT(DISTINCT snapshot_month) AS months_count,
@@ -347,6 +373,7 @@ def _build_history_coverage(*, target_month: date, branch: str | None) -> dict[s
         "last_month": rows["last_month"].isoformat() if rows and rows["last_month"] else None,
         "confidence": _confidence_from_coverage_months(months_count),
     }
+
 
 
 def build_venta_total_forecast(
