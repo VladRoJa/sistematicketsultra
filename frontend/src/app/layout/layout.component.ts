@@ -128,6 +128,13 @@ ngOnInit(): void {
     });
   }
 
+  if (this.puedeVerTrackForecastBeta()) {
+    trackSubmenu.push({
+      label: 'Proyección y Metas',
+      path: '/warehouse/track/forecast',
+    });
+  }
+
   const menuTrackDiario = {
     label: 'Track',
     path: '/warehouse/track',
@@ -960,6 +967,13 @@ onClickReporteBug(): void {
   this.abrirModalReporte();
 }
 
+
+private puedeVerTrackForecastBeta(): boolean {
+  const user = this.authService.getUser() as any;
+  const userId = Number(user?.id ?? user?.user_id ?? user?.usuario_id ?? 0);
+
+  return userId === 47;
+}
 
 private puedeVerKpiDesempenoPorRol(): boolean {
   const user = this.authService.getUser();
