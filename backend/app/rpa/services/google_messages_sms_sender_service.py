@@ -174,10 +174,67 @@ def _assert_google_messages_session_ready(page: Page) -> None:
         )
 
 
-def _fill_recipient(page: Page, phone_digits: str, config: GoogleMessagesSmsConfig) -> None:
-    recipient_input = page.locator("input[type='text']").first
+def _wait_for_google_messages_loader_idle(page: Page, timeout_ms: int) -> None:
+    deadline = time.monotonic() + (timeout_ms / 1000)
+    last_state = ""
+
+    while time.monotonic() < deadline:
+        loader = page.locator("#loader").last
+
+        try:
+            if loader.count() < 1:
+                return
+
+            if not loader.is_visible(timeout=500):
+                return
+
+            last_state = "#loader visible"
+        except Exception as exc:
+            last_state = f"#loader check exception: {type(exc).__name__}: {exc}"
+            return
+
+        time.sleep(0.25)
+
+    raise GoogleMessagesSmsSenderError(
+        "Google Messages no terminó de cargar antes de capturar destinatario. "
+        f"Estado final: {last_state}"
+    )
+
+
+def _click_or_focus_recipient_input(page: Page, recipient_input, config: GoogleMessagesSmsConfig) -> None:
+    _wait_for_google_messages_loader_idle(page, config.timeout_ms)
+
     recipient_input.wait_for(state="visible", timeout=config.timeout_ms)
-    recipient_input.click(timeout=config.timeout_ms)
+
+    try:
+        recipient_input.click(timeout=config.timeout_ms)
+        return
+    except Exception as click_exc:
+        click_message = str(click_exc)
+
+        if "intercepts pointer events" in click_message or "loader" in click_message.lower():
+            _wait_for_google_messages_loader_idle(page, config.timeout_ms)
+
+            try:
+                recipient_input.click(timeout=config.timeout_ms)
+                return
+            except Exception:
+                pass
+
+        try:
+            recipient_input.focus(timeout=config.timeout_ms)
+            return
+        except Exception as focus_exc:
+            raise GoogleMessagesSmsSenderError(
+                "Google Messages no permitió activar el input de destinatario "
+                "después de esperar el loader."
+            ) from focus_exc
+
+
+def _fill_recipient(page: Page, phone_digits: str, config: GoogleMessagesSmsConfig) -> None:
+    recipient_input = page.locator("input[data-e2e-contact-input], input[type='text']").first
+
+    _click_or_focus_recipient_input(page, recipient_input, config)
 
     page.keyboard.press("Control+A")
     page.keyboard.press("Backspace")
