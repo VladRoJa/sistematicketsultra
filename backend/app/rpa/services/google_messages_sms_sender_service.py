@@ -215,6 +215,12 @@ def _click_or_focus_recipient_input(page: Page, recipient_input, config: GoogleM
         if "intercepts pointer events" in click_message or "loader" in click_message.lower():
             _wait_for_google_messages_loader_idle(page, config.timeout_ms)
 
+            try:
+                recipient_input.click(timeout=config.timeout_ms)
+                return
+            except Exception:
+                pass
+
         try:
             recipient_input.focus(timeout=config.timeout_ms)
             return
