@@ -17,6 +17,7 @@ import { PmCalendarioComponent } from './pm/pm-calendario/pm-calendario.componen
 import { WarehouseHomeComponent } from './warehouse/warehouse-home.component';
 import { TrackDashboardComponent } from './warehouse/track-dashboard/track-dashboard.component';
 import { TrackKpiDesempenoComponent } from './warehouse/track-kpi-desempeno/track-kpi-desempeno.component';
+import { TrackForecastComponent } from './warehouse/track-forecast/track-forecast.component';
 import { TrackBranchHistoryComponent } from './warehouse/track-dashboard/track-branch-history/track-branch-history.component';
 import { CommercialPromotionsComponent } from './warehouse/commercial-promotions/commercial-promotions.component';
 
@@ -135,6 +136,10 @@ export const routes: Routes = [
       {
         path: 'warehouse/track/kpi-desempeno',
         component: TrackKpiDesempenoComponent,
+      },
+      {
+        path: 'warehouse/track/forecast',
+        component: TrackForecastComponent,
       },
       {
         path: 'warehouse/track-intelligence/regional',

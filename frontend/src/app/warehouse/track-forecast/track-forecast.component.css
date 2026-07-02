@@ -1,0 +1,134 @@
+.track-forecast-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: 1.5rem;
+}
+
+.track-forecast-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.track-forecast-header h1 {
+  margin: 0;
+  font-size: 2rem;
+}
+
+.track-forecast-header p {
+  margin: 0.35rem 0 0;
+  color: #64748b;
+}
+
+.track-forecast-eyebrow {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.primary-button {
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  font-weight: 700;
+  padding: 0.75rem 1.1rem;
+}
+
+.primary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.track-forecast-disclaimer {
+  border-radius: 1rem;
+  padding: 1rem;
+}
+
+.track-forecast-filters {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
+.track-forecast-filters label {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.82rem;
+  font-weight: 700;
+  gap: 0.35rem;
+}
+
+.track-forecast-filters input,
+.track-forecast-filters select {
+  border: 1px solid #cbd5e1;
+  border-radius: 0.75rem;
+  padding: 0.65rem 0.75rem;
+}
+
+.track-forecast-message {
+  border-radius: 0.85rem;
+  padding: 0.85rem 1rem;
+}
+
+.track-forecast-message--error {
+  color: #991b1b;
+}
+
+.track-forecast-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.track-forecast-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 1rem;
+}
+
+.track-forecast-card span,
+.track-forecast-detail span {
+  color: #64748b;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.track-forecast-card strong {
+  font-size: 1.55rem;
+}
+
+.track-forecast-card small {
+  color: #64748b;
+}
+
+.track-forecast-card--main strong {
+  font-size: 1.9rem;
+}
+
+.track-forecast-detail {
+  border: 1px solid #e2e8f0;
+  border-radius: 1.1rem;
+  padding: 1rem;
+}
+
+.track-forecast-detail h2 {
+  margin: 0 0 1rem;
+}
+
+.track-forecast-detail-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.track-forecast-detail-grid div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}

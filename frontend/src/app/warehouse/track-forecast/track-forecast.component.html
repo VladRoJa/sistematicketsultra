@@ -1,0 +1,123 @@
+<section class="track-forecast-page">
+  <header class="track-forecast-header">
+    <div>
+      <p class="track-forecast-eyebrow">Track / Beta</p>
+      <h1>Proyección y Metas</h1>
+      <p>
+        Proyección de cierre basada en Venta Total histórica, avance actual y ritmo esperado del mes.
+      </p>
+    </div>
+
+    <button type="button" class="primary-button" (click)="cargarForecast()" [disabled]="loading">
+      {{ loading ? 'Cargando...' : 'Actualizar' }}
+    </button>
+  </header>
+
+  <section class="track-forecast-disclaimer">
+    Esta es una proyección estadística basada en histórico y tendencia actual.
+    No representa meta, garantía ni compromiso de cierre. Puede variar por promociones,
+    campañas, cierres, clima, incidencias operativas o cambios comerciales.
+  </section>
+
+  <section class="track-forecast-filters">
+    <label>
+      Fecha Track
+      <input type="date" [(ngModel)]="trackDate" />
+    </label>
+
+    <label>
+      Modo
+      <select [(ngModel)]="generationMode">
+        <option value="manual_preview">Preview operativo</option>
+        <option value="official_closed_day">Día cerrado oficial</option>
+      </select>
+    </label>
+
+    <label>
+      Alcance
+      <select [(ngModel)]="scope">
+        <option value="national">Nacional</option>
+        <option value="branch">Sucursal</option>
+      </select>
+    </label>
+
+    <label *ngIf="scope === 'branch'">
+      Sucursal canon
+      <input type="text" [(ngModel)]="branch" placeholder="Ej. FAYCGO" />
+    </label>
+  </section>
+
+  <p class="track-forecast-message track-forecast-message--error" *ngIf="errorMessage">
+    {{ errorMessage }}
+  </p>
+
+  <p class="track-forecast-message" *ngIf="loading">
+    Calculando proyección...
+  </p>
+
+  <ng-container *ngIf="summary as s">
+    <section class="track-forecast-grid">
+      <article class="track-forecast-card track-forecast-card--main">
+        <span>Proyección de cierre</span>
+        <strong>{{ formatCurrency(s.projected_close) }}</strong>
+        <small>Confianza: {{ s.confidence }}</small>
+      </article>
+
+      <article class="track-forecast-card">
+        <span>Real MTD</span>
+        <strong>{{ formatCurrency(s.real_mtd) }}</strong>
+        <small>Base {{ formatCurrency(s.real_base_mtd) }} · Agregadoras {{ formatCurrency(s.real_agregadora_mtd) }}</small>
+      </article>
+
+      <article class="track-forecast-card">
+        <span>Avance histórico esperado</span>
+        <strong>{{ formatPercent(s.historical_progress_pct) }}</strong>
+        <small>Esperado MTD {{ formatCurrency(s.historical_expected_mtd) }}</small>
+      </article>
+
+      <article class="track-forecast-card">
+        <span>Factor tendencia</span>
+        <strong>{{ formatNumber(s.trend_factor_raw) }}</strong>
+        <small>Real MTD / Histórico esperado MTD</small>
+      </article>
+
+      <article class="track-forecast-card">
+        <span>Meta mensual</span>
+        <strong>{{ formatCurrency(s.goal_month) }}</strong>
+        <small>{{ goalStatusMessage || 'Meta disponible' }}</small>
+      </article>
+
+      <article class="track-forecast-card">
+        <span>Meta ponderada MTD</span>
+        <strong>{{ formatCurrency(s.weighted_goal_mtd) }}</strong>
+        <small>Brecha: {{ formatCurrency(s.gap_vs_weighted_goal) }}</small>
+      </article>
+    </section>
+
+    <section class="track-forecast-detail">
+      <h2>Calidad y trazabilidad</h2>
+
+      <div class="track-forecast-detail-grid">
+        <div>
+          <span>Curva histórica</span>
+          <strong>{{ historyConfidence }}</strong>
+        </div>
+
+        <div>
+          <span>Cobertura histórica</span>
+          <strong>{{ historyCoverageLabel }}</strong>
+        </div>
+
+        <div>
+          <span>Versión Track</span>
+          <strong>{{ resolvedVersionLabel }}</strong>
+        </div>
+
+        <div>
+          <span>Sucursales seleccionadas</span>
+          <strong>{{ forecast?.metadata?.selected_branches_count || 0 }}</strong>
+        </div>
+      </div>
+    </section>
+  </ng-container>
+</section>

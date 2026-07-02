@@ -44,6 +44,87 @@ export interface TrackResolvedVersion {
   finished_at_utc: string | null;
 }
 
+
+export type TrackVentaTotalForecastScope = 'national' | 'branch';
+
+export type TrackVentaTotalGoalStatus = 'pending' | 'partial' | 'ready';
+
+export interface TrackVentaTotalForecastResolvedVersion {
+  id: number;
+  version_type: string;
+  status: string;
+  generated_at_utc: string | null;
+  started_at_utc: string | null;
+  finished_at_utc: string | null;
+}
+
+export interface TrackVentaTotalForecastHistoryCoverage {
+  months_count: number;
+  first_month: string | null;
+  last_month: string | null;
+  confidence: string;
+}
+
+export interface TrackVentaTotalForecastDataQuality {
+  goal_status: TrackVentaTotalGoalStatus;
+  goal_status_message: string | null;
+  history_coverage: TrackVentaTotalForecastHistoryCoverage;
+}
+
+export interface TrackVentaTotalForecastHistoricalCurve {
+  source: TrackVentaTotalForecastScope;
+  historical_months: number;
+  historical_month_total: number | null;
+  historical_mtd_total: number | null;
+  historical_remaining_total: number | null;
+  historical_progress_pct: number | null;
+  distinct_days: number;
+  confidence: string;
+}
+
+export interface TrackVentaTotalForecastSummary {
+  real_mtd: number;
+  real_base_mtd: number;
+  real_agregadora_mtd: number;
+  goal_month: number | null;
+  historical_progress_pct: number | null;
+  historical_expected_mtd: number | null;
+  historical_expected_remaining: number | null;
+  trend_factor_raw: number | null;
+  projected_close: number | null;
+  weighted_goal_mtd: number | null;
+  gap_vs_weighted_goal: number | null;
+  gap_vs_weighted_goal_pct: number | null;
+  status_vs_goal: string | null;
+  confidence: string;
+}
+
+export interface TrackVentaTotalForecastMetadata {
+  track_date: string;
+  target_month: string;
+  generation_mode: TrackGenerationMode;
+  track_daily_version_id: number;
+  scope: TrackVentaTotalForecastScope;
+  branch: string | null;
+  selected_branches_count: number;
+  excluded_branches: string[];
+  history_window?: {
+    start: string;
+    end_exclusive: string;
+  };
+  resolved_version?: TrackVentaTotalForecastResolvedVersion;
+}
+
+export interface TrackVentaTotalForecastResponse {
+  status: 'ok' | 'error';
+  metadata?: TrackVentaTotalForecastMetadata;
+  data_quality?: TrackVentaTotalForecastDataQuality;
+  summary?: TrackVentaTotalForecastSummary;
+  historical_curve?: TrackVentaTotalForecastHistoricalCurve;
+  message?: string;
+  detail?: string;
+}
+
 export interface TrackDailyMartRow {
   track_daily_version_id?: number | null;
   track_date: string;
@@ -269,6 +350,29 @@ export class TrackService {
     );
   }
 
+  getVentaTotalForecast(
+    trackDate: string,
+    generationMode: TrackGenerationMode,
+    scope: TrackVentaTotalForecastScope = 'national',
+    branch?: string | null,
+  ): Observable<TrackVentaTotalForecastResponse> {
+    let params = new HttpParams()
+      .set('track_date', trackDate)
+      .set('generation_mode', generationMode)
+      .set('scope', scope);
+
+    const branchValue = (branch || '').trim();
+
+    if (scope === 'branch' && branchValue) {
+      params = params.set('branch', branchValue.toUpperCase());
+    }
+
+    return this.http.get<TrackVentaTotalForecastResponse>(
+      `${this.baseUrl}/forecast/venta-total`,
+      { params },
+    );
+  }
+
   getBranchHistory(
     sucursalCanon: string,
     targetMonth: string,
@@ -288,17 +392,6 @@ export class TrackService {
 
 
 
-
-export interface TrackBranchHistoryResponse {
-  status: 'ok' | 'error';
-  sucursal_canon?: string;
-  generation_mode?: TrackGenerationMode;
-  days_requested?: number;
-  total_rows?: number;
-  rows?: TrackDailyMartRow[];
-  message?: string;
-  detail?: string;
-}
 
 export interface TrackBranchHistoryResponse {
   status: 'ok' | 'error';
