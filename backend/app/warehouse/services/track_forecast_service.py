@@ -35,7 +35,7 @@ def _build_history_window(target_month: date) -> tuple[date, date]:
     return date(target_month.year - 3, 1, 1), date(target_month.year, 1, 1)
 
 
-def _confidence_from_months(months_count: int) -> str:
+def _confidence_from_coverage_months(months_count: int) -> str:
     if months_count >= 24:
         return "alta"
 
@@ -43,6 +43,19 @@ def _confidence_from_months(months_count: int) -> str:
         return "media"
 
     if months_count >= 1:
+        return "baja"
+
+    return "sin_historia"
+
+
+def _confidence_from_comparable_months(months_count: int) -> str:
+    if months_count >= 3:
+        return "alta"
+
+    if months_count == 2:
+        return "media"
+
+    if months_count == 1:
         return "baja"
 
     return "sin_historia"
@@ -264,7 +277,7 @@ def _build_historical_curve(
         "historical_remaining_total": max(historical_month_total - historical_mtd_total, 0.0),
         "historical_progress_pct": progress_pct,
         "distinct_days": distinct_days,
-        "confidence": _confidence_from_months(historical_months),
+        "confidence": _confidence_from_comparable_months(historical_months),
     }
 
 
@@ -332,7 +345,7 @@ def _build_history_coverage(*, target_month: date, branch: str | None) -> dict[s
         "months_count": months_count,
         "first_month": rows["first_month"].isoformat() if rows and rows["first_month"] else None,
         "last_month": rows["last_month"].isoformat() if rows and rows["last_month"] else None,
-        "confidence": _confidence_from_months(months_count),
+        "confidence": _confidence_from_coverage_months(months_count),
     }
 
 
