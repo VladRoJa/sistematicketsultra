@@ -591,6 +591,138 @@ def _build_forecast_explanation(
 
 
 
+
+def _build_same_day_history(
+    *,
+    target_month: date,
+    cutoff_day: int,
+    scope: str,
+    branch: str | None,
+    real_mtd: float,
+    projected_close: float | None,
+    progress_pct: float | None,
+    trend_factor: float | None,
+) -> dict[str, Any]:
+    history_start_date, history_end_date = _build_history_window(target_month)
+
+    params: dict[str, Any] = {
+        "history_start_date": history_start_date,
+        "history_end_date": history_end_date,
+        "target_month_number": target_month.month,
+        "cutoff_day": cutoff_day,
+        "excluded_branches": tuple(EXCLUDED_BRANCHES),
+    }
+
+    branch_filter = ""
+
+    if scope == "branch" and branch:
+        branch_filter = "AND upper(trim(a.sucursal_canon)) = :branch"
+        params["branch"] = branch.strip().upper()
+
+    rows = db.session.execute(
+        text(
+            f"""
+            WITH yearly AS (
+                SELECT
+                    EXTRACT(YEAR FROM a.business_month)::int AS year,
+                    a.business_month,
+                    COALESCE(SUM(a.total), 0)::numeric AS month_total,
+                    COALESCE(SUM(CASE WHEN a.day_of_month <= :cutoff_day THEN a.total ELSE 0 END), 0)::numeric AS mtd_total,
+                    COALESCE(SUM(CASE WHEN a.day_of_month > :cutoff_day THEN a.total ELSE 0 END), 0)::numeric AS remaining_total,
+                    COUNT(DISTINCT CASE WHEN a.day_of_month <= :cutoff_day THEN a.day_of_month END)::int AS mtd_days,
+                    COUNT(DISTINCT a.day_of_month)::int AS month_days
+                FROM track_venta_total_daily_branch_agg a
+                JOIN venta_total_snapshots s
+                  ON s.id = a.snapshot_id
+                WHERE s.report_type_key = 'venta_total'
+                  AND s.snapshot_kind = 'daily'
+                  AND s.is_canonical = true
+                  AND a.business_month >= :history_start_date
+                  AND a.business_month < :history_end_date
+                  AND EXTRACT(MONTH FROM a.business_month)::int = :target_month_number
+                  AND upper(trim(a.sucursal_canon)) NOT IN :excluded_branches
+                  {branch_filter}
+                GROUP BY
+                    EXTRACT(YEAR FROM a.business_month)::int,
+                    a.business_month
+            )
+            SELECT
+                year,
+                business_month,
+                month_total,
+                mtd_total,
+                remaining_total,
+                mtd_days,
+                month_days
+            FROM yearly
+            ORDER BY year
+            """
+        ).bindparams(bindparam("excluded_branches", expanding=True)),
+        params,
+    ).mappings().all()
+
+    items: list[dict[str, Any]] = []
+
+    for row in rows:
+        mtd_total = float(row["mtd_total"] or 0)
+        month_total = float(row["month_total"] or 0)
+        remaining_total = float(row["remaining_total"] or 0)
+
+        progress = None
+        gap_current_vs_mtd = None
+        gap_current_vs_mtd_pct = None
+
+        if month_total > 0:
+            progress = mtd_total / month_total
+
+        if mtd_total > 0:
+            gap_current_vs_mtd = real_mtd - mtd_total
+            gap_current_vs_mtd_pct = gap_current_vs_mtd / mtd_total
+
+        items.append({
+            "year": int(row["year"]),
+            "business_month": row["business_month"].isoformat() if row["business_month"] else None,
+            "mtd_total": mtd_total,
+            "month_total": month_total,
+            "remaining_total": remaining_total,
+            "progress_pct": progress,
+            "mtd_days": int(row["mtd_days"] or 0),
+            "month_days": int(row["month_days"] or 0),
+            "gap_current_vs_mtd": gap_current_vs_mtd,
+            "gap_current_vs_mtd_pct": gap_current_vs_mtd_pct,
+        })
+
+    historical_mtd_values = [float(item["mtd_total"] or 0) for item in items if float(item["mtd_total"] or 0) > 0]
+    historical_month_values = [float(item["month_total"] or 0) for item in items if float(item["month_total"] or 0) > 0]
+
+    average_mtd = sum(historical_mtd_values) / len(historical_mtd_values) if historical_mtd_values else None
+    average_month = sum(historical_month_values) / len(historical_month_values) if historical_month_values else None
+    gap_current_vs_average_mtd = real_mtd - average_mtd if average_mtd else None
+    gap_current_vs_average_mtd_pct = gap_current_vs_average_mtd / average_mtd if average_mtd else None
+
+    return {
+        "source": "branch" if scope == "branch" else "national",
+        "branch": branch.strip().upper() if branch else None,
+        "target_month": target_month.isoformat(),
+        "cutoff_day": cutoff_day,
+        "historical_years": len(items),
+        "confidence": _confidence_from_comparable_months(len(items)),
+        "average": {
+            "mtd_total": average_mtd,
+            "month_total": average_month,
+            "gap_current_vs_average_mtd": gap_current_vs_average_mtd,
+            "gap_current_vs_average_mtd_pct": gap_current_vs_average_mtd_pct,
+        },
+        "current": {
+            "year": target_month.year,
+            "mtd_total": real_mtd,
+            "projected_close": projected_close,
+            "historical_progress_pct": progress_pct,
+            "trend_factor": trend_factor,
+        },
+        "items": items,
+    }
+
 def _resolve_branch_projection_quality_issue(
     *,
     scope: str,
@@ -837,6 +969,17 @@ def build_venta_total_forecast(
         trend_factor=trend_factor,
     )
 
+    same_day_history = _build_same_day_history(
+        target_month=target_month,
+        cutoff_day=cutoff_day,
+        scope=scope,
+        branch=branch,
+        real_mtd=real_mtd,
+        projected_close=projected_close,
+        progress_pct=progress_pct,
+        trend_factor=trend_factor,
+    )
+
     warnings = _build_forecast_warnings(
         generation_mode=generation_mode,
         goal_status=goal_status,
@@ -864,6 +1007,7 @@ def build_venta_total_forecast(
         "forecast_cutoff": forecast_cutoff,
         "executive_status": executive_status,
         "forecast_explanation": forecast_explanation,
+        "same_day_history": same_day_history,
         "warnings": warnings,
         "data_quality": {
             "goal_status": goal_status,
