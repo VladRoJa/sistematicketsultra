@@ -77,6 +77,12 @@
   padding: 0.65rem 0.75rem;
 }
 
+.track-forecast-filter-help {
+  color: #64748b;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
 .track-forecast-message {
   background: #f8fafc;
   border-radius: 0.85rem;
