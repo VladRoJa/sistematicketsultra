@@ -11,6 +11,7 @@ from app.routes.track_routes import (
     _require_track_read_role,
     _resolve_current_track_daily_version_for_query,
 )
+from app.models.warehouse import TrackBranchCatalogORM
 from app.warehouse.services.track_forecast_service import (
     build_venta_total_forecast,
 )
@@ -148,3 +149,34 @@ def get_venta_total_forecast_endpoint():
                 "detail": str(exc),
             }
         ), 500
+
+@track_forecast_bp.get("/branches")
+@jwt_required()
+def list_track_forecast_branches():
+    _require_track_read_role()
+    _require_track_forecast_beta_user()
+
+    rows = (
+        TrackBranchCatalogORM.query
+        .filter(TrackBranchCatalogORM.is_track_active.is_(True))
+        .order_by(
+            TrackBranchCatalogORM.display_order.asc(),
+            TrackBranchCatalogORM.track_label.asc(),
+            TrackBranchCatalogORM.sucursal_canon.asc(),
+        )
+        .all()
+    )
+
+    return jsonify({
+        "status": "ok",
+        "items": [
+            {
+                "sucursal_canon": row.sucursal_canon,
+                "track_label": row.track_label,
+                "display_order": row.display_order,
+                "sucursal_id": row.sucursal_id,
+            }
+            for row in rows
+        ],
+    })
+
