@@ -45,6 +45,21 @@ export interface TrackResolvedVersion {
 }
 
 
+
+export interface TrackForecastBranchOption {
+  sucursal_canon: string;
+  track_label: string;
+  display_order?: number | null;
+  sucursal_id?: number | null;
+}
+
+export interface TrackForecastBranchesResponse {
+  status: string;
+  items: TrackForecastBranchOption[];
+  message?: string;
+  detail?: string;
+}
+
 export type TrackVentaTotalForecastScope = 'national' | 'branch';
 
 export type TrackVentaTotalGoalStatus = 'pending' | 'partial' | 'ready';
@@ -347,6 +362,13 @@ export class TrackService {
     return this.http.get<TrackRegionalDetailResponse>(
       `${this.trackAlertsBaseUrl}/regional-detail`,
       { params },
+    );
+  }
+
+
+  getForecastBranches(): Observable<TrackForecastBranchesResponse> {
+    return this.http.get<TrackForecastBranchesResponse>(
+      `${this.baseUrl}/forecast/branches`,
     );
   }
 

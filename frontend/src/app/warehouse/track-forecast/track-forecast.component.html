@@ -35,15 +35,24 @@
 
     <label>
       Alcance
-      <select [(ngModel)]="scope">
+      <select [(ngModel)]="scope" (ngModelChange)="onScopeChange()">
         <option value="national">Nacional</option>
         <option value="branch">Sucursal</option>
       </select>
     </label>
 
     <label *ngIf="scope === 'branch'">
-      Sucursal canon
-      <input type="text" [(ngModel)]="branch" placeholder="Ej. FAYCGO" />
+      Sucursal Track
+      <select [(ngModel)]="branch" [disabled]="branchSelectDisabled">
+        <option value="" disabled>Selecciona una sucursal</option>
+        <option
+          *ngFor="let option of branchOptions"
+          [value]="option.sucursal_canon"
+        >
+          {{ option.track_label || option.sucursal_canon }}
+        </option>
+      </select>
+      <small class="track-forecast-filter-help">{{ branchCatalogStatusLabel }}</small>
     </label>
   </section>
 

@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 
 import { AuthService } from '../../services/auth.service';
 import {
+  TrackForecastBranchOption,
   TrackGenerationMode,
   TrackService,
   TrackVentaTotalForecastResponse,
@@ -73,8 +74,11 @@ export class TrackForecastComponent implements OnInit {
   branch = '';
 
   loading = false;
+  loadingBranches = false;
   errorMessage = '';
+  branchCatalogMessage = '';
   forecast: TrackVentaTotalForecastResponse | null = null;
+  branchOptions: TrackForecastBranchOption[] = [];
 
   private readonly betaUserId = 47;
 
@@ -89,6 +93,7 @@ export class TrackForecastComponent implements OnInit {
       return;
     }
 
+    this.cargarSucursalesForecast();
     this.cargarForecast();
   }
 
@@ -99,9 +104,54 @@ export class TrackForecastComponent implements OnInit {
     return userId === this.betaUserId;
   }
 
+  cargarSucursalesForecast(): void {
+    this.loadingBranches = true;
+    this.branchCatalogMessage = '';
+
+    this.trackService.getForecastBranches().subscribe({
+      next: (response) => {
+        this.loadingBranches = false;
+
+        if (response.status !== 'ok') {
+          this.branchCatalogMessage = response.message || response.detail || 'No fue posible cargar sucursales Track.';
+          return;
+        }
+
+        this.branchOptions = response.items || [];
+
+        if (this.scope === 'branch' && !this.branch && this.branchOptions.length) {
+          this.branch = this.branchOptions[0].sucursal_canon;
+        }
+      },
+      error: (error) => {
+        this.loadingBranches = false;
+        this.branchCatalogMessage =
+          error?.error?.message ||
+          error?.error?.detail ||
+          'No fue posible cargar sucursales Track.';
+      },
+    });
+  }
+
+  onScopeChange(): void {
+    if (this.scope === 'national') {
+      this.branch = '';
+      return;
+    }
+
+    if (!this.branch && this.branchOptions.length) {
+      this.branch = this.branchOptions[0].sucursal_canon;
+    }
+  }
+
   cargarForecast(): void {
     if (!this.puedeVerForecastBeta()) {
       this.errorMessage = 'No tienes acceso beta a Proyección y Metas.';
+      return;
+    }
+
+    if (this.scope === 'branch' && !this.branch.trim()) {
+      this.errorMessage = 'Selecciona una sucursal Track para consultar el forecast.';
       return;
     }
 
@@ -155,6 +205,30 @@ export class TrackForecastComponent implements OnInit {
 
   get forecastCutoff(): ForecastCutoff | null {
     return ((this.forecast as any)?.forecast_cutoff ?? null) as ForecastCutoff | null;
+  }
+
+  get branchSelectDisabled(): boolean {
+    return this.loadingBranches || !this.branchOptions.length;
+  }
+
+  get branchCatalogStatusLabel(): string {
+    if (this.loadingBranches) {
+      return 'Cargando sucursales Track...';
+    }
+
+    if (this.branchCatalogMessage) {
+      return this.branchCatalogMessage;
+    }
+
+    return `${this.branchOptions.length} sucursales Track activas`;
+  }
+
+  get selectedBranchLabel(): string {
+    const selected = this.branchOptions.find(
+      (item) => item.sucursal_canon === this.branch,
+    );
+
+    return selected?.track_label || selected?.sucursal_canon || this.branch || 'Sucursal';
   }
 
   get executiveLevelClass(): string {
@@ -230,7 +304,7 @@ export class TrackForecastComponent implements OnInit {
 
   get scopeLabel(): string {
     if (this.scope === 'branch') {
-      return this.branch ? `Sucursal ${this.branch.toUpperCase()}` : 'Sucursal';
+      return this.selectedBranchLabel;
     }
 
     return 'Nacional';
