@@ -23,17 +23,20 @@
 }
 
 .track-forecast-eyebrow {
+  color: #475569;
   font-size: 0.78rem;
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .primary-button {
+  background: #111827;
   border: 0;
   border-radius: 999px;
+  color: #ffffff;
   cursor: pointer;
-  font-weight: 700;
+  font-weight: 800;
   padding: 0.75rem 1.1rem;
 }
 
@@ -43,7 +46,10 @@
 }
 
 .track-forecast-disclaimer {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
   border-radius: 1rem;
+  color: #475569;
   padding: 1rem;
 }
 
@@ -54,36 +60,161 @@
 }
 
 .track-forecast-filters label {
+  color: #334155;
   display: flex;
   flex-direction: column;
   font-size: 0.82rem;
-  font-weight: 700;
+  font-weight: 800;
   gap: 0.35rem;
 }
 
 .track-forecast-filters input,
 .track-forecast-filters select {
+  background: #ffffff;
   border: 1px solid #cbd5e1;
   border-radius: 0.75rem;
+  color: #0f172a;
   padding: 0.65rem 0.75rem;
 }
 
 .track-forecast-message {
+  background: #f8fafc;
   border-radius: 0.85rem;
+  color: #334155;
   padding: 0.85rem 1rem;
 }
 
 .track-forecast-message--error {
+  background: #fef2f2;
   color: #991b1b;
+}
+
+.track-forecast-hero {
+  border: 1px solid #e2e8f0;
+  border-radius: 1.35rem;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1.5fr) minmax(280px, 0.9fr);
+  overflow: hidden;
+}
+
+.track-forecast-hero-main {
+  padding: 1.35rem;
+}
+
+.track-forecast-hero-topline,
+.track-forecast-hero-meta {
+  align-items: center;
+  color: #64748b;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+  font-weight: 800;
+  gap: 0.6rem;
+}
+
+.track-forecast-badge {
+  border-radius: 999px;
+  padding: 0.3rem 0.7rem;
+}
+
+.track-forecast-hero h2 {
+  color: #0f172a;
+  font-size: 1.7rem;
+  margin: 1rem 0 0.35rem;
+}
+
+.track-forecast-hero-main strong {
+  color: #0f172a;
+  display: block;
+  font-size: 2.45rem;
+  letter-spacing: -0.05em;
+  line-height: 1;
+}
+
+.track-forecast-hero-main p {
+  color: #475569;
+  font-size: 1rem;
+  line-height: 1.5;
+  margin: 0.85rem 0 1rem;
+}
+
+.track-forecast-hero-side {
+  background: #f8fafc;
+  display: grid;
+  gap: 0.85rem;
+  padding: 1rem;
+}
+
+.track-forecast-hero-side div {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.9rem;
+}
+
+.track-forecast-hero-side span,
+.track-forecast-card span,
+.track-forecast-detail span,
+.track-forecast-explanation span {
+  color: #64748b;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.track-forecast-hero-side strong {
+  color: #0f172a;
+  font-size: 1.3rem;
+}
+
+.track-forecast-hero-side small,
+.track-forecast-card small {
+  color: #64748b;
+}
+
+.track-forecast-hero--danger {
+  border-color: #fecaca;
+}
+
+.track-forecast-hero--danger .track-forecast-badge {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.track-forecast-hero--warning {
+  border-color: #fed7aa;
+}
+
+.track-forecast-hero--warning .track-forecast-badge {
+  background: #ffedd5;
+  color: #9a3412;
+}
+
+.track-forecast-hero--success {
+  border-color: #bbf7d0;
+}
+
+.track-forecast-hero--success .track-forecast-badge {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.track-forecast-hero--neutral .track-forecast-badge {
+  background: #e2e8f0;
+  color: #334155;
 }
 
 .track-forecast-grid {
   display: grid;
   gap: 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
 }
 
 .track-forecast-card {
+  background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 1.1rem;
   display: flex;
@@ -92,33 +223,87 @@
   padding: 1rem;
 }
 
-.track-forecast-card span,
-.track-forecast-detail span {
-  color: #64748b;
-  font-size: 0.82rem;
-  font-weight: 700;
-}
-
 .track-forecast-card strong {
-  font-size: 1.55rem;
+  color: #0f172a;
+  font-size: 1.45rem;
 }
 
-.track-forecast-card small {
-  color: #64748b;
+.track-forecast-explanation {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
 }
 
-.track-forecast-card--main strong {
-  font-size: 1.9rem;
-}
-
-.track-forecast-detail {
+.track-forecast-explanation article,
+.track-forecast-detail,
+.track-forecast-warnings {
+  background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 1.1rem;
   padding: 1rem;
 }
 
+.track-forecast-explanation h2 {
+  color: #0f172a;
+  font-size: 1.15rem;
+  line-height: 1.45;
+  margin: 0.5rem 0 0.8rem;
+}
+
+.track-forecast-explanation p {
+  color: #475569;
+  margin: 0.5rem 0 0;
+}
+
+.track-forecast-explanation code {
+  background: #f1f5f9;
+  border-radius: 0.75rem;
+  color: #334155;
+  display: block;
+  font-size: 0.85rem;
+  padding: 0.75rem;
+  white-space: normal;
+}
+
+.track-forecast-warnings {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.track-forecast-warnings h2,
 .track-forecast-detail h2 {
-  margin: 0 0 1rem;
+  color: #0f172a;
+  margin: 0 0 0.25rem;
+}
+
+.track-forecast-warning {
+  border-radius: 0.9rem;
+  padding: 0.85rem;
+}
+
+.track-forecast-warning strong {
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.track-forecast-warning p {
+  margin: 0;
+}
+
+.track-forecast-warning--info {
+  background: #eff6ff;
+  color: #1e40af;
+}
+
+.track-forecast-warning--warning {
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+.track-forecast-warning--danger {
+  background: #fef2f2;
+  color: #991b1b;
 }
 
 .track-forecast-detail-grid {
@@ -131,4 +316,24 @@
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+}
+
+.track-forecast-detail-grid strong {
+  color: #0f172a;
+}
+
+@media (max-width: 900px) {
+  .track-forecast-header,
+  .track-forecast-hero,
+  .track-forecast-explanation {
+    grid-template-columns: 1fr;
+  }
+
+  .track-forecast-header {
+    flex-direction: column;
+  }
+
+  .track-forecast-hero-main strong {
+    font-size: 2rem;
+  }
 }
