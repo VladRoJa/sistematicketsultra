@@ -4,7 +4,7 @@
       <p class="track-forecast-eyebrow">Track / Beta</p>
       <h1>Proyección y Metas</h1>
       <p>
-        Proyección de cierre basada en Venta Total histórica, avance actual y ritmo esperado del mes.
+        Proyección ejecutiva de cierre, ritmo histórico y trazabilidad del corte usado.
       </p>
     </div>
 
@@ -56,29 +56,56 @@
   </p>
 
   <ng-container *ngIf="summary as s">
+    <section class="track-forecast-hero" [ngClass]="executiveLevelClass">
+      <article class="track-forecast-hero-main">
+        <div class="track-forecast-hero-topline">
+          <span class="track-forecast-badge">{{ executiveBadgeLabel }}</span>
+          <span>{{ scopeLabel }}</span>
+        </div>
+
+        <h2>{{ executiveTitle }}</h2>
+        <strong>{{ formatCurrency(executivePrimaryValue) }}</strong>
+        <p>{{ executiveMessage }}</p>
+
+        <div class="track-forecast-hero-meta">
+          <span>{{ forecastBasisLabel }}</span>
+          <span>{{ cutoffDateLabel }}</span>
+          <span>Confianza {{ s.confidence }}</span>
+        </div>
+      </article>
+
+      <aside class="track-forecast-hero-side">
+        <div>
+          <span>Real MTD</span>
+          <strong>{{ formatCurrency(s.real_mtd) }}</strong>
+          <small>Base {{ formatCurrency(s.real_base_mtd) }} · Agregadoras {{ formatCurrency(s.real_agregadora_mtd) }}</small>
+        </div>
+
+        <div>
+          <span>Avance histórico esperado</span>
+          <strong>{{ formatPercent(s.historical_progress_pct) }}</strong>
+          <small>Esperado MTD {{ formatCurrency(s.historical_expected_mtd) }}</small>
+        </div>
+
+        <div>
+          <span>Factor tendencia</span>
+          <strong>{{ formatPercent(s.trend_factor_raw) }}</strong>
+          <small>Real MTD / histórico esperado MTD</small>
+        </div>
+      </aside>
+    </section>
+
     <section class="track-forecast-grid">
-      <article class="track-forecast-card track-forecast-card--main">
+      <article class="track-forecast-card">
         <span>Proyección de cierre</span>
         <strong>{{ formatCurrency(s.projected_close) }}</strong>
-        <small>Confianza: {{ s.confidence }}</small>
+        <small>Calculada contra avance histórico esperado.</small>
       </article>
 
       <article class="track-forecast-card">
-        <span>Real MTD</span>
-        <strong>{{ formatCurrency(s.real_mtd) }}</strong>
-        <small>Base {{ formatCurrency(s.real_base_mtd) }} · Agregadoras {{ formatCurrency(s.real_agregadora_mtd) }}</small>
-      </article>
-
-      <article class="track-forecast-card">
-        <span>Avance histórico esperado</span>
-        <strong>{{ formatPercent(s.historical_progress_pct) }}</strong>
-        <small>Esperado MTD {{ formatCurrency(s.historical_expected_mtd) }}</small>
-      </article>
-
-      <article class="track-forecast-card">
-        <span>Factor tendencia</span>
-        <strong>{{ formatNumber(s.trend_factor_raw) }}</strong>
-        <small>Real MTD / Histórico esperado MTD</small>
+        <span>Histórico restante esperado</span>
+        <strong>{{ formatCurrency(s.historical_expected_remaining) }}</strong>
+        <small>Base comparable del resto del mes.</small>
       </article>
 
       <article class="track-forecast-card">
@@ -92,6 +119,33 @@
         <strong>{{ formatCurrency(s.weighted_goal_mtd) }}</strong>
         <small>Brecha: {{ formatCurrency(s.gap_vs_weighted_goal) }}</small>
       </article>
+    </section>
+
+    <section class="track-forecast-explanation">
+      <article>
+        <span>Lectura del cálculo</span>
+        <h2>{{ forecastExplanationText }}</h2>
+        <code>{{ forecastFormula }}</code>
+      </article>
+
+      <article>
+        <span>Corte usado</span>
+        <h2>{{ forecastCutoffMessage }}</h2>
+        <p>{{ canonicalCutoffLabel }}</p>
+      </article>
+    </section>
+
+    <section class="track-forecast-warnings" *ngIf="forecastWarnings.length">
+      <h2>Advertencias</h2>
+
+      <div
+        class="track-forecast-warning"
+        *ngFor="let warning of forecastWarnings"
+        [ngClass]="getWarningClass(warning)"
+      >
+        <strong>{{ getWarningTitle(warning) }}</strong>
+        <p>{{ warning.message }}</p>
+      </div>
     </section>
 
     <section class="track-forecast-detail">
@@ -115,7 +169,7 @@
 
         <div>
           <span>Sucursales seleccionadas</span>
-          <strong>{{ forecast?.metadata?.selected_branches_count || 0 }}</strong>
+          <strong>{{ selectedBranchesCount }}</strong>
         </div>
       </div>
     </section>
