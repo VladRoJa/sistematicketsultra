@@ -191,6 +191,87 @@ def backfill_venta_total_daily_branch_agg(
     }
 
 
+
+def aggregate_missing_venta_total_snapshots(
+    *,
+    start_month: date | None = None,
+    end_month_exclusive: date | None = None,
+    max_business_date: date | None = None,
+    limit: int | None = None,
+) -> dict[str, Any]:
+    """
+    Aggregates canonical venta_total daily snapshots that do not have derived rows yet.
+
+    max_business_date is useful for official forecast flows where the current
+    in-progress day should not be included until it becomes a closed day.
+    """
+    params: dict[str, Any] = {}
+
+    filters = [
+        "s.report_type_key = 'venta_total'",
+        "s.snapshot_kind = 'daily'",
+        "s.is_canonical = true",
+        "a.snapshot_id IS NULL",
+    ]
+
+    if start_month:
+        filters.append("date_trunc('month', s.business_date)::date >= :start_month")
+        params["start_month"] = start_month
+
+    if end_month_exclusive:
+        filters.append("date_trunc('month', s.business_date)::date < :end_month_exclusive")
+        params["end_month_exclusive"] = end_month_exclusive
+
+    if max_business_date:
+        filters.append("s.business_date <= :max_business_date")
+        params["max_business_date"] = max_business_date
+
+    limit_sql = ""
+
+    if limit is not None:
+        limit_sql = "LIMIT :limit"
+        params["limit"] = int(limit)
+
+    snapshots = db.session.execute(
+        text(
+            f"""
+            SELECT
+                s.id,
+                s.business_date,
+                date_trunc('month', s.business_date)::date AS business_month
+            FROM venta_total_snapshots s
+            LEFT JOIN (
+                SELECT DISTINCT snapshot_id
+                FROM track_venta_total_daily_branch_agg
+            ) a
+              ON a.snapshot_id = s.id
+            WHERE {' AND '.join(filters)}
+            ORDER BY s.business_date, s.id
+            {limit_sql}
+            """
+        ),
+        params,
+    ).mappings().all()
+
+    results: list[dict[str, Any]] = []
+    total_inserted = 0
+    total_deleted = 0
+
+    for snapshot in snapshots:
+        result = aggregate_venta_total_snapshot(int(snapshot["id"]), commit=True)
+        results.append(result)
+        total_inserted += int(result.get("rows_inserted") or 0)
+        total_deleted += int(result.get("rows_deleted") or 0)
+
+    return {
+        "status": "ok",
+        "snapshots_processed": len(results),
+        "rows_deleted": total_deleted,
+        "rows_inserted": total_inserted,
+        "max_business_date": max_business_date.isoformat() if max_business_date else None,
+        "results": results,
+    }
+
 def get_venta_total_daily_branch_agg_health() -> dict[str, Any]:
     row = db.session.execute(
         text(
