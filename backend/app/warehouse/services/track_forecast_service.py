@@ -463,7 +463,19 @@ def _build_executive_status(
     trend_factor: float | None,
     goal_status: str,
     gap_vs_weighted_goal_pct: float | None,
+    branch_projection_quality_issue: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    if branch_projection_quality_issue:
+        return {
+            "level": "warning",
+            "code": "insufficient_branch_history",
+            "title": "Histórico insuficiente para proyectar sucursal",
+            "message": branch_projection_quality_issue["message"],
+            "primary_metric_label": "Proyección de cierre",
+            "primary_metric_value": None,
+            "primary_metric_unit": "MXN",
+        }
+
     if projected_close is None:
         return {
             "level": "neutral",
@@ -578,12 +590,56 @@ def _build_forecast_explanation(
     }
 
 
+
+def _resolve_branch_projection_quality_issue(
+    *,
+    scope: str,
+    curve: dict[str, Any],
+    trend_factor: float | None,
+) -> dict[str, Any] | None:
+    if scope != "branch":
+        return None
+
+    historical_months = int(curve.get("historical_months") or 0)
+    historical_mtd_total = float(curve.get("historical_mtd_total") or 0)
+    confidence = str(curve.get("confidence") or "sin_historia")
+
+    reasons: list[str] = []
+
+    if historical_months < 3:
+        reasons.append("La sucursal tiene menos de 3 meses comparables para este mes.")
+
+    if confidence != "alta":
+        reasons.append(f"La confianza histórica de la sucursal es {confidence}.")
+
+    if historical_mtd_total < 50000:
+        reasons.append("El histórico esperado MTD de la sucursal es demasiado bajo para proyectar con estabilidad.")
+
+    if trend_factor is not None and trend_factor > 3:
+        reasons.append("El factor de tendencia es extremo contra el histórico esperado de la sucursal.")
+
+    if not reasons:
+        return None
+
+    return {
+        "code": "insufficient_branch_history",
+        "severity": "warning",
+        "message": "Histórico insuficiente para proyectar esta sucursal con estabilidad.",
+        "reasons": reasons,
+        "thresholds": {
+            "min_historical_months": 3,
+            "min_historical_mtd_total": 50000,
+            "max_trend_factor": 3,
+        },
+    }
+
 def _build_forecast_warnings(
     *,
     generation_mode: str,
     goal_status: str,
     curve: dict[str, Any],
     canonical_cutoff: dict[str, Any] | None,
+    branch_projection_quality_issue: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     warnings: list[dict[str, Any]] = []
 
@@ -620,6 +676,9 @@ def _build_forecast_warnings(
             "severity": "warning",
             "message": "La curva histórica tiene menos de 3 meses comparables.",
         })
+
+    if branch_projection_quality_issue:
+        warnings.append(branch_projection_quality_issue)
 
     return warnings
 
@@ -725,6 +784,19 @@ def build_venta_total_forecast(
                 progress_pct=progress_pct,
             )
 
+    branch_projection_quality_issue = _resolve_branch_projection_quality_issue(
+        scope=scope,
+        curve=curve,
+        trend_factor=trend_factor,
+    )
+
+    if branch_projection_quality_issue:
+        projected_close = None
+        weighted_goal_mtd = None
+        gap_vs_weighted_goal = None
+        gap_vs_weighted_goal_pct = None
+        status_vs_goal = None
+
     coverage = _build_history_coverage(
         target_month=target_month,
         branch=branch if scope == "branch" else None,
@@ -753,6 +825,7 @@ def build_venta_total_forecast(
         trend_factor=trend_factor,
         goal_status=goal_status,
         gap_vs_weighted_goal_pct=gap_vs_weighted_goal_pct,
+        branch_projection_quality_issue=branch_projection_quality_issue,
     )
 
     forecast_explanation = _build_forecast_explanation(
@@ -769,6 +842,7 @@ def build_venta_total_forecast(
         goal_status=goal_status,
         curve=curve,
         canonical_cutoff=canonical_cutoff,
+        branch_projection_quality_issue=branch_projection_quality_issue,
     )
 
     return {
@@ -795,6 +869,7 @@ def build_venta_total_forecast(
             "goal_status": goal_status,
             "goal_status_message": goal_status_message,
             "history_coverage": coverage,
+            "branch_projection_quality_issue": branch_projection_quality_issue,
         },
         "summary": {
             "real_mtd": real_mtd,
