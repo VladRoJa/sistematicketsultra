@@ -178,107 +178,75 @@ def _build_historical_curve(
     history_start_date, history_end_date = _build_history_window(target_month)
 
     params: dict[str, Any] = {
-        "target_month_number": target_month.month,
-        "excluded_branches": tuple(EXCLUDED_BRANCHES),
         "history_start_date": history_start_date,
         "history_end_date": history_end_date,
+        "target_month_number": target_month.month,
+        "cutoff_day": cutoff_day,
+        "excluded_branches": tuple(EXCLUDED_BRANCHES),
     }
 
-    branch_join_filter = ""
+    branch_filter = ""
 
-    if scope == "branch":
-        if not branch:
-            raise ValueError("branch es requerido cuando scope=branch.")
-
+    if scope == "branch" and branch:
+        branch_filter = "AND upper(trim(a.sucursal_canon)) = :branch"
         params["branch"] = branch.strip().upper()
-        branch_join_filter = "AND upper(trim(a.sucursal_canon)) = :branch"
 
-    rows = db.session.execute(
+    row = db.session.execute(
         text(
             f"""
-            WITH canonical AS (
+            WITH historical AS (
                 SELECT
-                    s.id AS snapshot_id,
-                    s.business_date,
-                    date_trunc('month', s.business_date)::date AS snapshot_month
-                FROM venta_total_snapshots s
+                    a.business_month,
+                    a.sale_date,
+                    a.day_of_month,
+                    upper(trim(a.sucursal_canon)) AS sucursal_canon,
+                    a.total
+                FROM track_venta_total_daily_branch_agg a
+                JOIN venta_total_snapshots s
+                  ON s.id = a.snapshot_id
                 WHERE s.report_type_key = 'venta_total'
                   AND s.snapshot_kind = 'daily'
                   AND s.is_canonical = true
-                  AND s.business_date >= :history_start_date
-                  AND s.business_date < :history_end_date
-                  AND EXTRACT(MONTH FROM s.business_date)::int = :target_month_number
-            ),
-            clean AS (
-                SELECT
-                    c.snapshot_month,
-                    a.sucursal_canon,
-                    to_date(r.fecha, 'DD-MM-YY') AS fecha_venta,
-                    EXTRACT(DAY FROM to_date(r.fecha, 'DD-MM-YY'))::int AS day_of_month,
-                    r.total
-                FROM canonical c
-                JOIN venta_total_snapshot_rows r
-                  ON r.snapshot_id = c.snapshot_id
-                JOIN track_branch_aliases a
-                  ON a.source_family = 'gasca_family'
-                 AND a.is_active = true
-                 AND upper(trim(a.raw_branch_name)) = upper(trim(r.sucursal))
-                WHERE upper(trim(r.estatus)) = 'ACTIVO'
-                  AND r.total > 0
-                  AND to_date(r.fecha, 'DD-MM-YY') >= c.snapshot_month
-                  AND to_date(r.fecha, 'DD-MM-YY') < (c.snapshot_month + interval '1 month')
-                  AND upper(trim(r.sucursal)) NOT IN :excluded_branches
+                  AND a.business_month >= :history_start_date
+                  AND a.business_month < :history_end_date
+                  AND EXTRACT(MONTH FROM a.business_month)::int = :target_month_number
                   AND upper(trim(a.sucursal_canon)) NOT IN :excluded_branches
-                  {branch_join_filter}
-            ),
-            daily AS (
-                SELECT
-                    snapshot_month,
-                    day_of_month,
-                    SUM(total) AS daily_total
-                FROM clean
-                GROUP BY snapshot_month, day_of_month
+                  {branch_filter}
             )
             SELECT
-                COUNT(DISTINCT snapshot_month) AS historical_months,
-                COALESCE(SUM(daily_total), 0) AS historical_month_total,
-                COALESCE(SUM(daily_total) FILTER (WHERE day_of_month <= :cutoff_day), 0) AS historical_mtd_total,
-                COUNT(DISTINCT day_of_month) AS distinct_days
-            FROM daily
+                COUNT(DISTINCT business_month) AS historical_months,
+                COALESCE(SUM(total), 0)::numeric AS historical_month_total,
+                COALESCE(SUM(CASE WHEN day_of_month <= :cutoff_day THEN total ELSE 0 END), 0)::numeric AS historical_mtd_total,
+                COALESCE(SUM(CASE WHEN day_of_month > :cutoff_day THEN total ELSE 0 END), 0)::numeric AS historical_remaining_total,
+                COUNT(DISTINCT day_of_month)::int AS distinct_days
+            FROM historical
             """
         ).bindparams(bindparam("excluded_branches", expanding=True)),
-        {
-            **params,
-            "cutoff_day": cutoff_day,
-        },
+        params,
     ).mappings().first()
 
-    if not rows:
-        historical_months = 0
-        historical_month_total = 0.0
-        historical_mtd_total = 0.0
-        distinct_days = 0
-    else:
-        historical_months = int(rows["historical_months"] or 0)
-        historical_month_total = _to_float(rows["historical_month_total"]) or 0.0
-        historical_mtd_total = _to_float(rows["historical_mtd_total"]) or 0.0
-        distinct_days = int(rows["distinct_days"] or 0)
+    historical_months = int(row["historical_months"] or 0) if row else 0
+    historical_month_total = float(row["historical_month_total"] or 0) if row else 0.0
+    historical_mtd_total = float(row["historical_mtd_total"] or 0) if row else 0.0
+    historical_remaining_total = float(row["historical_remaining_total"] or 0) if row else 0.0
+    distinct_days = int(row["distinct_days"] or 0) if row else 0
 
-    progress_pct = None
+    historical_progress_pct = None
 
     if historical_month_total > 0:
-        progress_pct = historical_mtd_total / historical_month_total
+        historical_progress_pct = historical_mtd_total / historical_month_total
 
     return {
         "source": "branch" if scope == "branch" else "national",
         "historical_months": historical_months,
         "historical_month_total": historical_month_total,
         "historical_mtd_total": historical_mtd_total,
-        "historical_remaining_total": max(historical_month_total - historical_mtd_total, 0.0),
-        "historical_progress_pct": progress_pct,
+        "historical_remaining_total": historical_remaining_total,
+        "historical_progress_pct": historical_progress_pct,
         "distinct_days": distinct_days,
         "confidence": _confidence_from_comparable_months(historical_months),
     }
+
 
 
 def _build_history_coverage(*, target_month: date, branch: str | None) -> dict[str, Any]:
