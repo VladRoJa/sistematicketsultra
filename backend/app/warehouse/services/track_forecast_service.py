@@ -344,6 +344,285 @@ def _build_history_coverage(*, target_month: date, branch: str | None) -> dict[s
 
 
 
+
+def _format_currency_mxn(value: float | None) -> str:
+    if value is None:
+        return "sin dato"
+
+    return f"${value:,.0f} MXN"
+
+
+def _format_percent(value: float | None) -> str:
+    if value is None:
+        return "sin dato"
+
+    return f"{value * 100:.1f}%"
+
+
+def _goal_status_message(goal_status: str) -> str | None:
+    if goal_status == "pending":
+        return "Meta mensual no cargada. El ritmo contra meta se activará automáticamente cuando exista meta_faycgo_mes."
+
+    if goal_status == "partial":
+        return "Meta mensual parcialmente cargada. El ritmo contra meta se mantiene desactivado hasta tener metas completas."
+
+    return None
+
+
+def _resolve_aggregated_canonical_cutoff(
+    *,
+    target_month: date,
+    track_date: date,
+    scope: str,
+    branch: str | None,
+) -> dict[str, Any] | None:
+    params: dict[str, Any] = {
+        "target_month": target_month,
+        "track_date": track_date,
+    }
+
+    branch_filter = ""
+
+    if scope == "branch" and branch:
+        branch_filter = "AND upper(trim(a.sucursal_canon)) = :branch"
+        params["branch"] = branch.strip().upper()
+
+    row = db.session.execute(
+        text(
+            f"""
+            SELECT
+                s.id AS snapshot_id,
+                s.business_date,
+                COUNT(*)::int AS aggregate_rows,
+                MIN(a.sale_date)::date AS first_sale_date,
+                MAX(a.sale_date)::date AS last_sale_date,
+                COUNT(DISTINCT a.sucursal_canon)::int AS branches
+            FROM track_venta_total_daily_branch_agg a
+            JOIN venta_total_snapshots s
+              ON s.id = a.snapshot_id
+            WHERE s.report_type_key = 'venta_total'
+              AND s.snapshot_kind = 'daily'
+              AND s.is_canonical = true
+              AND a.business_month = :target_month
+              AND s.business_date <= :track_date
+              {branch_filter}
+            GROUP BY
+                s.id,
+                s.business_date
+            ORDER BY
+                s.business_date DESC,
+                s.id DESC
+            LIMIT 1
+            """
+        ),
+        params,
+    ).mappings().first()
+
+    if not row:
+        return None
+
+    return {
+        "snapshot_id": int(row["snapshot_id"]),
+        "business_date": row["business_date"].isoformat() if row["business_date"] else None,
+        "aggregate_rows": int(row["aggregate_rows"] or 0),
+        "first_sale_date": row["first_sale_date"].isoformat() if row["first_sale_date"] else None,
+        "last_sale_date": row["last_sale_date"].isoformat() if row["last_sale_date"] else None,
+        "branches": int(row["branches"] or 0),
+    }
+
+
+def _build_forecast_cutoff(
+    *,
+    track_date: date,
+    target_month: date,
+    cutoff_day: int,
+    generation_mode: str,
+    canonical_cutoff: dict[str, Any] | None,
+) -> dict[str, Any]:
+    is_official = generation_mode == "official_closed_day"
+
+    return {
+        "track_date": track_date.isoformat(),
+        "target_month": target_month.isoformat(),
+        "cutoff_day": cutoff_day,
+        "generation_mode": generation_mode,
+        "is_official_forecast": is_official,
+        "basis": "official_closed_day" if is_official else "preview_operativo",
+        "canonical_cutoff": canonical_cutoff,
+        "message": (
+            "Proyección basada en día cerrado oficial."
+            if is_official
+            else "Proyección basada en preview operativo; debe leerse como pulso preliminar, no como cierre oficial."
+        ),
+    }
+
+
+def _build_executive_status(
+    *,
+    projected_close: float | None,
+    trend_factor: float | None,
+    goal_status: str,
+    gap_vs_weighted_goal_pct: float | None,
+) -> dict[str, Any]:
+    if projected_close is None:
+        return {
+            "level": "neutral",
+            "code": "no_projection",
+            "title": "Sin proyección disponible",
+            "message": "No hay histórico suficiente para calcular una proyección confiable.",
+            "primary_metric_label": "Proyección de cierre",
+            "primary_metric_value": None,
+            "primary_metric_unit": "MXN",
+        }
+
+    if goal_status == "available" and gap_vs_weighted_goal_pct is not None:
+        if gap_vs_weighted_goal_pct <= -0.05:
+            level = "danger"
+            code = "below_weighted_goal"
+            title = "Por debajo de la meta ponderada"
+        elif gap_vs_weighted_goal_pct < -0.02:
+            level = "warning"
+            code = "slightly_below_weighted_goal"
+            title = "Ligeramente por debajo de la meta ponderada"
+        elif gap_vs_weighted_goal_pct > 0.02:
+            level = "success"
+            code = "above_weighted_goal"
+            title = "Por encima de la meta ponderada"
+        else:
+            level = "neutral"
+            code = "near_weighted_goal"
+            title = "Cerca de la meta ponderada"
+
+        return {
+            "level": level,
+            "code": code,
+            "title": title,
+            "message": f"La proyección actual de cierre es {_format_currency_mxn(projected_close)}.",
+            "primary_metric_label": "Proyección de cierre",
+            "primary_metric_value": projected_close,
+            "primary_metric_unit": "MXN",
+        }
+
+    if trend_factor is None:
+        return {
+            "level": "neutral",
+            "code": "projection_without_trend_factor",
+            "title": "Proyección calculada sin factor de tendencia",
+            "message": f"La proyección actual de cierre es {_format_currency_mxn(projected_close)}.",
+            "primary_metric_label": "Proyección de cierre",
+            "primary_metric_value": projected_close,
+            "primary_metric_unit": "MXN",
+        }
+
+    if trend_factor < 0.85:
+        level = "danger"
+        code = "well_below_historical_pace"
+        title = "Ritmo muy por debajo del histórico"
+    elif trend_factor < 0.95:
+        level = "warning"
+        code = "below_historical_pace"
+        title = "Ritmo por debajo del histórico"
+    elif trend_factor <= 1.05:
+        level = "neutral"
+        code = "near_historical_pace"
+        title = "Ritmo cercano al histórico"
+    else:
+        level = "success"
+        code = "above_historical_pace"
+        title = "Ritmo por encima del histórico"
+
+    return {
+        "level": level,
+        "code": code,
+        "title": title,
+        "message": (
+            f"El real MTD equivale al {_format_percent(trend_factor)} del avance histórico esperado. "
+            f"La proyección actual de cierre es {_format_currency_mxn(projected_close)}."
+        ),
+        "primary_metric_label": "Proyección de cierre",
+        "primary_metric_value": projected_close,
+        "primary_metric_unit": "MXN",
+    }
+
+
+def _build_forecast_explanation(
+    *,
+    cutoff_day: int,
+    real_mtd: float,
+    projected_close: float | None,
+    progress_pct: float | None,
+    historical_mtd_total: float | None,
+    trend_factor: float | None,
+) -> dict[str, Any]:
+    if projected_close is None or progress_pct is None:
+        plain_text = "No hay histórico suficiente para explicar la proyección."
+    else:
+        plain_text = (
+            f"Históricamente, al día {cutoff_day} se lleva {_format_percent(progress_pct)} del mes. "
+            f"Con un real MTD de {_format_currency_mxn(real_mtd)}, "
+            f"el cierre proyectado es {_format_currency_mxn(projected_close)}."
+        )
+
+    return {
+        "formula_key": "real_mtd_divided_by_historical_progress_pct",
+        "formula": "projected_close = real_mtd / historical_progress_pct",
+        "plain_text": plain_text,
+        "components": {
+            "cutoff_day": cutoff_day,
+            "real_mtd": real_mtd,
+            "historical_progress_pct": progress_pct,
+            "historical_expected_mtd": historical_mtd_total,
+            "trend_factor": trend_factor,
+            "projected_close": projected_close,
+        },
+    }
+
+
+def _build_forecast_warnings(
+    *,
+    generation_mode: str,
+    goal_status: str,
+    curve: dict[str, Any],
+    canonical_cutoff: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    warnings: list[dict[str, Any]] = []
+
+    if generation_mode != "official_closed_day":
+        warnings.append({
+            "code": "preview_operativo",
+            "severity": "warning",
+            "message": "La proyección usa preview operativo; si el día aún no está cerrado, puede variar o subestimar el cierre.",
+        })
+
+    if goal_status == "pending":
+        warnings.append({
+            "code": "goal_pending",
+            "severity": "info",
+            "message": "La meta mensual no está cargada. La brecha contra meta se activará cuando exista meta_faycgo_mes.",
+        })
+    elif goal_status == "partial":
+        warnings.append({
+            "code": "goal_partial",
+            "severity": "warning",
+            "message": "La meta mensual está parcialmente cargada. El ritmo contra meta se mantiene desactivado.",
+        })
+
+    if not canonical_cutoff:
+        warnings.append({
+            "code": "canonical_cutoff_missing",
+            "severity": "warning",
+            "message": "No se encontró corte canónico agregado para el mes y fecha solicitados.",
+        })
+
+    if int(curve.get("historical_months") or 0) < 3:
+        warnings.append({
+            "code": "low_comparable_history",
+            "severity": "warning",
+            "message": "La curva histórica tiene menos de 3 meses comparables.",
+        })
+
+    return warnings
+
 def build_venta_total_forecast(
     *,
     track_date: date,
@@ -451,6 +730,47 @@ def build_venta_total_forecast(
         branch=branch if scope == "branch" else None,
     )
 
+    confidence = coverage["confidence"] if scope == "branch" else curve["confidence"]
+    goal_status_message = _goal_status_message(goal_status)
+
+    canonical_cutoff = _resolve_aggregated_canonical_cutoff(
+        target_month=target_month,
+        track_date=track_date,
+        scope=scope,
+        branch=branch,
+    )
+
+    forecast_cutoff = _build_forecast_cutoff(
+        track_date=track_date,
+        target_month=target_month,
+        cutoff_day=cutoff_day,
+        generation_mode=generation_mode,
+        canonical_cutoff=canonical_cutoff,
+    )
+
+    executive_status = _build_executive_status(
+        projected_close=projected_close,
+        trend_factor=trend_factor,
+        goal_status=goal_status,
+        gap_vs_weighted_goal_pct=gap_vs_weighted_goal_pct,
+    )
+
+    forecast_explanation = _build_forecast_explanation(
+        cutoff_day=cutoff_day,
+        real_mtd=real_mtd,
+        projected_close=projected_close,
+        progress_pct=progress_pct,
+        historical_mtd_total=curve["historical_mtd_total"],
+        trend_factor=trend_factor,
+    )
+
+    warnings = _build_forecast_warnings(
+        generation_mode=generation_mode,
+        goal_status=goal_status,
+        curve=curve,
+        canonical_cutoff=canonical_cutoff,
+    )
+
     return {
         "status": "ok",
         "metadata": {
@@ -467,17 +787,13 @@ def build_venta_total_forecast(
                 "end_exclusive": history_end_date.isoformat(),
             },
         },
+        "forecast_cutoff": forecast_cutoff,
+        "executive_status": executive_status,
+        "forecast_explanation": forecast_explanation,
+        "warnings": warnings,
         "data_quality": {
             "goal_status": goal_status,
-            "goal_status_message": (
-                "Meta mensual no cargada. El ritmo contra meta se activará automáticamente cuando exista meta_faycgo_mes."
-                if goal_status == "pending"
-                else (
-                    "Meta mensual parcialmente cargada. El ritmo contra meta se mantiene desactivado hasta tener metas completas."
-                    if goal_status == "partial"
-                    else None
-                )
-            ),
+            "goal_status_message": goal_status_message,
             "history_coverage": coverage,
         },
         "summary": {
@@ -494,7 +810,7 @@ def build_venta_total_forecast(
             "gap_vs_weighted_goal": gap_vs_weighted_goal,
             "gap_vs_weighted_goal_pct": gap_vs_weighted_goal_pct,
             "status_vs_goal": status_vs_goal,
-            "confidence": coverage["confidence"] if scope == "branch" else curve["confidence"],
+            "confidence": confidence,
         },
         "historical_curve": curve,
     }
