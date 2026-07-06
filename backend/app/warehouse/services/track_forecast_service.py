@@ -819,6 +819,231 @@ def _build_forecast_warnings(
 
     return warnings
 
+
+def _build_branch_drivers(
+    *,
+    target_month: date,
+    cutoff_day: int,
+    scope: str,
+    mart_rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    if scope != "national":
+        return {
+            "status": "not_applicable",
+            "scope": scope,
+            "metric": "real_mtd_vs_historical_expected_mtd",
+            "items": [],
+        }
+
+    if not mart_rows:
+        return {
+            "status": "empty",
+            "scope": scope,
+            "metric": "real_mtd_vs_historical_expected_mtd",
+            "items": [],
+        }
+
+    history_start_date, history_end_date = _build_history_window(target_month)
+
+    real_by_branch: dict[str, dict[str, Any]] = {}
+
+    for row in mart_rows:
+        sucursal_canon = str(row.get("sucursal_canon") or "").strip().upper()
+
+        if not sucursal_canon:
+            continue
+
+        real_by_branch[sucursal_canon] = {
+            "sucursal_canon": sucursal_canon,
+            "real_mtd": _to_float(row.get("real_mtd")) or 0.0,
+            "real_base_mtd": _to_float(row.get("ingreso_real_base_mtd")) or 0.0,
+            "real_agregadora_mtd": _to_float(row.get("ingreso_real_agregadora_mtd")) or 0.0,
+        }
+
+    selected_branches = tuple(real_by_branch.keys())
+
+    if not selected_branches:
+        return {
+            "status": "empty",
+            "scope": scope,
+            "metric": "real_mtd_vs_historical_expected_mtd",
+            "items": [],
+        }
+
+    rows = db.session.execute(
+        text(
+            """
+            WITH historical AS (
+                SELECT
+                    upper(trim(a.sucursal_canon)) AS sucursal_canon,
+                    a.business_month,
+                    a.day_of_month,
+                    a.total
+                FROM track_venta_total_daily_branch_agg a
+                JOIN venta_total_snapshots s
+                  ON s.id = a.snapshot_id
+                WHERE s.report_type_key = 'venta_total'
+                  AND s.snapshot_kind = 'daily'
+                  AND s.is_canonical = true
+                  AND a.business_month >= :history_start_date
+                  AND a.business_month < :history_end_date
+                  AND EXTRACT(MONTH FROM a.business_month)::int = :target_month_number
+                  AND upper(trim(a.sucursal_canon)) IN :selected_branches
+                  AND upper(trim(a.sucursal_canon)) NOT IN :excluded_branches
+            )
+            SELECT
+                h.sucursal_canon,
+                COALESCE(c.track_label, h.sucursal_canon) AS track_label,
+                c.display_order,
+                COUNT(DISTINCT h.business_month)::int AS historical_months,
+                COALESCE(SUM(h.total), 0)::numeric AS historical_month_total,
+                COALESCE(SUM(CASE WHEN h.day_of_month <= :cutoff_day THEN h.total ELSE 0 END), 0)::numeric AS historical_mtd_total,
+                COALESCE(SUM(CASE WHEN h.day_of_month > :cutoff_day THEN h.total ELSE 0 END), 0)::numeric AS historical_remaining_total
+            FROM historical h
+            LEFT JOIN track_branch_catalog c
+              ON upper(trim(c.sucursal_canon)) = h.sucursal_canon
+            GROUP BY
+                h.sucursal_canon,
+                c.track_label,
+                c.display_order
+            """
+        ).bindparams(
+            bindparam("selected_branches", expanding=True),
+            bindparam("excluded_branches", expanding=True),
+        ),
+        {
+            "history_start_date": history_start_date,
+            "history_end_date": history_end_date,
+            "target_month_number": target_month.month,
+            "cutoff_day": cutoff_day,
+            "selected_branches": selected_branches,
+            "excluded_branches": tuple(EXCLUDED_BRANCHES),
+        },
+    ).mappings().all()
+
+    historical_by_branch = {
+        str(row["sucursal_canon"]).strip().upper(): row
+        for row in rows
+    }
+
+    items: list[dict[str, Any]] = []
+
+    for sucursal_canon, real_row in real_by_branch.items():
+        historical_row = historical_by_branch.get(sucursal_canon)
+
+        historical_months = int(historical_row["historical_months"] or 0) if historical_row else 0
+        historical_month_total = float(historical_row["historical_month_total"] or 0) if historical_row else 0.0
+        historical_mtd_total = float(historical_row["historical_mtd_total"] or 0) if historical_row else 0.0
+        historical_remaining_total = float(historical_row["historical_remaining_total"] or 0) if historical_row else 0.0
+
+        historical_expected_mtd = None
+        historical_expected_month_total = None
+        historical_progress_pct = None
+        gap = None
+        gap_pct = None
+        trend_factor = None
+        projected_close = None
+
+        if historical_months > 0:
+            historical_expected_mtd = historical_mtd_total / historical_months
+            historical_expected_month_total = historical_month_total / historical_months
+
+        if historical_month_total > 0:
+            historical_progress_pct = historical_mtd_total / historical_month_total
+
+        real_mtd = float(real_row["real_mtd"] or 0)
+
+        if historical_expected_mtd and historical_expected_mtd > 0:
+            gap = real_mtd - historical_expected_mtd
+            gap_pct = gap / historical_expected_mtd
+            trend_factor = real_mtd / historical_expected_mtd
+
+        if historical_progress_pct and historical_progress_pct > 0:
+            projected_close = real_mtd / historical_progress_pct
+
+        confidence = _confidence_from_comparable_months(historical_months)
+
+        projection_quality_issue = _resolve_branch_projection_quality_issue(
+            scope="branch",
+            curve={
+                "historical_months": historical_months,
+                "historical_mtd_total": historical_mtd_total,
+                "confidence": confidence,
+            },
+            trend_factor=trend_factor,
+        )
+
+        if projection_quality_issue:
+            projected_close = None
+
+        items.append({
+            "sucursal_canon": sucursal_canon,
+            "track_label": (
+                str(historical_row["track_label"]).strip()
+                if historical_row and historical_row["track_label"]
+                else sucursal_canon
+            ),
+            "display_order": (
+                int(historical_row["display_order"])
+                if historical_row and historical_row["display_order"] is not None
+                else None
+            ),
+            "real_mtd": real_mtd,
+            "real_base_mtd": real_row["real_base_mtd"],
+            "real_agregadora_mtd": real_row["real_agregadora_mtd"],
+            "historical_months": historical_months,
+            "historical_expected_mtd": historical_expected_mtd,
+            "historical_expected_month_total": historical_expected_month_total,
+            "historical_progress_pct": historical_progress_pct,
+            "gap_vs_historical_expected": gap,
+            "gap_vs_historical_expected_pct": gap_pct,
+            "trend_factor": trend_factor,
+            "projected_close": projected_close,
+            "confidence": confidence,
+            "projection_quality_issue": projection_quality_issue,
+        })
+
+    negative_gap_total = sum(
+        abs(float(item["gap_vs_historical_expected"] or 0))
+        for item in items
+        if (item["gap_vs_historical_expected"] or 0) < 0
+    )
+
+    for item in items:
+        gap = float(item["gap_vs_historical_expected"] or 0)
+
+        item["impact_share_pct"] = (
+            abs(gap) / negative_gap_total
+            if gap < 0 and negative_gap_total > 0
+            else 0.0
+        )
+
+    items = sorted(
+        items,
+        key=lambda item: (
+            item["gap_vs_historical_expected"] is None,
+            item["gap_vs_historical_expected"] if item["gap_vs_historical_expected"] is not None else 0,
+            item["display_order"] is None,
+            item["display_order"] or 9999,
+            item["track_label"],
+        ),
+    )
+
+    return {
+        "status": "ok" if items else "empty",
+        "scope": scope,
+        "metric": "real_mtd_vs_historical_expected_mtd",
+        "target_month": target_month.isoformat(),
+        "cutoff_day": cutoff_day,
+        "history_window": {
+            "start": history_start_date.isoformat(),
+            "end_exclusive": history_end_date.isoformat(),
+        },
+        "items_count": len(items),
+        "negative_gap_total": negative_gap_total,
+        "items": items,
+    }
+
 def build_venta_total_forecast(
     *,
     track_date: date,
@@ -993,6 +1218,13 @@ def build_venta_total_forecast(
         trend_factor=trend_factor,
     )
 
+    branch_drivers = _build_branch_drivers(
+        target_month=target_month,
+        cutoff_day=cutoff_day,
+        scope=scope,
+        mart_rows=mart_rows,
+    )
+
     warnings = _build_forecast_warnings(
         generation_mode=generation_mode,
         goal_status=goal_status,
@@ -1021,6 +1253,7 @@ def build_venta_total_forecast(
         "executive_status": executive_status,
         "forecast_explanation": forecast_explanation,
         "same_day_history": same_day_history,
+        "branch_drivers": branch_drivers,
         "warnings": warnings,
         "data_quality": {
             "goal_status": goal_status,
