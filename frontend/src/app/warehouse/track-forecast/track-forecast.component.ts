@@ -50,6 +50,43 @@ type SameDayHistory = {
 };
 
 
+
+type CohortForecastItem = {
+  cohort_key?: string;
+  label?: string;
+  branches_count?: number | null;
+  branches?: string[];
+  real_mtd?: number | null;
+  real_base_mtd?: number | null;
+  real_agregadora_mtd?: number | null;
+  historical_months?: number | null;
+  historical_expected_mtd?: number | null;
+  historical_expected_remaining?: number | null;
+  historical_expected_month_total?: number | null;
+  historical_progress_pct?: number | null;
+  trend_factor?: number | null;
+  gap_vs_expected_mtd?: number | null;
+  gap_vs_expected_mtd_pct?: number | null;
+  projected_close?: number | null;
+  projected_close_experimental?: number | null;
+  confidence?: string;
+  projection_quality_issue?: {
+    code?: string;
+    severity?: string;
+    message?: string;
+    reasons?: string[];
+  } | null;
+};
+
+type CohortForecast = {
+  status?: string;
+  method?: string;
+  scope?: string;
+  target_month?: string;
+  cutoff_day?: number;
+  items?: CohortForecastItem[];
+};
+
 type BranchDriverItem = {
   sucursal_canon?: string;
   track_label?: string;
@@ -328,6 +365,104 @@ export class TrackForecastComponent implements OnInit {
     return `${this.formatPercent(Math.abs(gapPct))} abajo del promedio`;
   }
 
+
+
+  get cohortForecast(): CohortForecast | null {
+    return ((this.forecast as any)?.cohort_forecast ?? null) as CohortForecast | null;
+  }
+
+  get cohortForecastItems(): CohortForecastItem[] {
+    return this.cohortForecast?.items || [];
+  }
+
+  get hasCohortForecast(): boolean {
+    return this.cohortForecastItems.length > 0;
+  }
+
+  get cohortForecastTitle(): string {
+    const cutoffDay = this.cohortForecast?.cutoff_day || this.forecastCutoff?.cutoff_day || '—';
+    return `Proyección por cohortes · día ${cutoffDay}`;
+  }
+
+  get cohortForecastSubtitle(): string {
+    return 'ULTRA GYM = ULTRA 21 GYMS + ULTRA NUEVOS';
+  }
+
+  get cohortForecastMainMessage(): string {
+    const total = this.cohortForecastItems.find(
+      (item) => item.cohort_key === 'total_ultra',
+    );
+
+    if (!total) {
+      return 'Sin lectura consolidada.';
+    }
+
+    if (total.projection_quality_issue) {
+      return total.projection_quality_issue.message || 'La proyección consolidada requiere revisión de calidad.';
+    }
+
+    return 'Proyección consolidada disponible.';
+  }
+
+  getCohortProjectionLabel(item: CohortForecastItem): string {
+    if (item.projected_close === null || item.projected_close === undefined) {
+      return 'Sin proyección estable';
+    }
+
+    return this.formatCurrency(item.projected_close);
+  }
+
+  getCohortExperimentalLabel(item: CohortForecastItem): string {
+    if (item.projected_close_experimental === null || item.projected_close_experimental === undefined) {
+      return '—';
+    }
+
+    return this.formatCurrency(item.projected_close_experimental);
+  }
+
+  getCohortQualityLabel(item: CohortForecastItem): string {
+    const issueCode = item.projection_quality_issue?.code;
+
+    if (issueCode === 'partial_cohort_history') {
+      return 'Parcial';
+    }
+
+    if (issueCode === 'insufficient_cohort_history') {
+      return 'Histórico débil';
+    }
+
+    return item.confidence || '—';
+  }
+
+  getCohortQualityClass(item: CohortForecastItem): string {
+    if (item.projection_quality_issue) {
+      return 'track-forecast-cohort-quality--warning';
+    }
+
+    if (item.confidence === 'alta') {
+      return 'track-forecast-cohort-quality--success';
+    }
+
+    return 'track-forecast-cohort-quality--neutral';
+  }
+
+  getCohortTrendClass(item: CohortForecastItem): string {
+    const trend = item.trend_factor;
+
+    if (trend === null || trend === undefined) {
+      return 'track-forecast-delta--neutral';
+    }
+
+    if (trend < 0.95) {
+      return 'track-forecast-delta--negative';
+    }
+
+    if (trend > 1.05) {
+      return 'track-forecast-delta--positive';
+    }
+
+    return 'track-forecast-delta--neutral';
+  }
 
   get branchDrivers(): BranchDrivers | null {
     return ((this.forecast as any)?.branch_drivers ?? null) as BranchDrivers | null;
