@@ -29,7 +29,7 @@ def get_track_branch_cohort_definitions() -> list[dict[str, Any]]:
     return [
         {
             "key": TRACK_BRANCH_COHORT_LEGACY_21,
-            "label": "ULTRA 21",
+            "label": "ULTRA 21 GYMS",
             "description": "Sucursales históricas Ultra con display_order del 1 al 21.",
             "display_order": 1,
         },
@@ -41,7 +41,7 @@ def get_track_branch_cohort_definitions() -> list[dict[str, Any]]:
         },
         {
             "key": TRACK_BRANCH_COHORT_TOTAL_ULTRA,
-            "label": "ULTRA TOTAL",
+            "label": "ULTRA GYM",
             "description": "Total Ultra combinando sucursales históricas y nuevas.",
             "display_order": 3,
         },
