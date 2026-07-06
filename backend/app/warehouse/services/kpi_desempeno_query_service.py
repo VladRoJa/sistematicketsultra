@@ -25,6 +25,15 @@ OUT_OF_SCOPE_RAW_BRANCHES = {
     "BECA",
 }
 
+from app.warehouse.services.track_branch_cohort_service import (
+    TRACK_BRANCH_COHORT_LEGACY_21,
+    TRACK_BRANCH_COHORT_NEW_GYMS,
+    TRACK_BRANCH_COHORT_TOTAL_ULTRA,
+    build_track_branch_cohort_lookup,
+    get_track_branch_cohort_definitions,
+    get_track_branch_cohort_key,
+)
+
 
 class KpiDesempenoQueryServiceError(RuntimeError):
     """Error base para consultas BI de KPI Desempeño."""
@@ -416,6 +425,11 @@ def build_monthly_closing_section(
             "snapshot_kind": KPI_DESEMPENO_SNAPSHOT_KIND,
             "canonical_only": True,
             "metric": "socios_activos_del_mes",
+            "synthetic_cohorts": [
+                "ULTRA TOTAL",
+                "ULTRA 21",
+                "ULTRA NUEVOS",
+            ],
         },
         "resolved_snapshot": {
             "snapshot_id": snapshot.id,
@@ -1316,6 +1330,172 @@ def _build_empty_year_overlay_series(
     }
 
 
+
+def _as_optional_number(value: Any) -> float | int | None:
+    if value is None:
+        return None
+
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _has_year_overlay_month_value(month_payload: dict[str, Any]) -> bool:
+    return month_payload.get("socios_activos_cierre_mes") is not None
+
+
+def _build_cohort_year_overlay_branch_payload(
+    *,
+    cohort_key: str,
+    label: str,
+    display_order: int,
+) -> dict[str, Any]:
+    return {
+        "sucursal_canon": cohort_key.upper(),
+        "raw_branch_name": label,
+        "track_label": label,
+        "display_order": display_order,
+        "is_synthetic": True,
+        "synthetic_kind": "track_branch_cohort",
+        "cohort_key": cohort_key,
+    }
+
+
+def _accumulate_year_overlay_month_payload(
+    *,
+    target_month: dict[str, Any],
+    source_month: dict[str, Any],
+) -> None:
+    source_value = _as_optional_number(source_month.get("socios_activos_cierre_mes"))
+
+    if source_value is None:
+        return
+
+    current_value = _as_optional_number(target_month.get("socios_activos_cierre_mes")) or 0
+
+    target_month["socios_activos_cierre_mes"] = current_value + source_value
+    target_month["source"] = {
+        "kind": "track_branch_cohort_aggregate",
+        "source_rows_count": int(
+            (target_month.get("source") or {}).get("source_rows_count", 0)
+        ) + 1,
+    }
+
+
+def _accumulate_year_overlay_series(
+    *,
+    target_series_by_year: dict[int, dict[str, Any]],
+    source_series_by_year: dict[int, dict[str, Any]],
+    years: list[int],
+) -> None:
+    for year in years:
+        target_year = target_series_by_year.get(year)
+        source_year = source_series_by_year.get(year)
+
+        if not target_year or not source_year:
+            continue
+
+        target_months = target_year.get("months") or []
+        source_months = source_year.get("months") or []
+
+        for index, source_month in enumerate(source_months):
+            if index >= len(target_months):
+                continue
+
+            _accumulate_year_overlay_month_payload(
+                target_month=target_months[index],
+                source_month=source_month,
+            )
+
+
+def _year_overlay_item_has_values(item: dict[str, Any], years: list[int]) -> bool:
+    series_by_year = item.get("series") or {}
+
+    for year in years:
+        year_payload = series_by_year.get(year) or {}
+        months = year_payload.get("months") or []
+
+        if any(_has_year_overlay_month_value(month) for month in months):
+            return True
+
+    return False
+
+
+def _build_monthly_year_overlay_cohort_items(
+    *,
+    data_by_canon: dict[str, dict[str, Any]],
+    years: list[int],
+) -> list[dict[str, Any]]:
+    cohort_lookup = build_track_branch_cohort_lookup(
+        sucursales_canon=set(data_by_canon.keys()),
+        active_only=True,
+    )
+
+    definitions_by_key = {
+        item["key"]: item
+        for item in get_track_branch_cohort_definitions()
+    }
+
+    cohort_order = [
+        TRACK_BRANCH_COHORT_TOTAL_ULTRA,
+        TRACK_BRANCH_COHORT_LEGACY_21,
+        TRACK_BRANCH_COHORT_NEW_GYMS,
+    ]
+
+    cohort_display_order_by_key = {
+        TRACK_BRANCH_COHORT_TOTAL_ULTRA: -3,
+        TRACK_BRANCH_COHORT_LEGACY_21: -2,
+        TRACK_BRANCH_COHORT_NEW_GYMS: -1,
+    }
+
+    cohort_items: dict[str, dict[str, Any]] = {}
+
+    for cohort_key in cohort_order:
+        definition = definitions_by_key.get(cohort_key, {})
+        label = str(definition.get("label") or cohort_key).strip().upper()
+
+        cohort_items[cohort_key] = {
+            "branch": _build_cohort_year_overlay_branch_payload(
+                cohort_key=cohort_key,
+                label=label,
+                display_order=cohort_display_order_by_key[cohort_key],
+            ),
+            "series": _build_empty_year_overlay_series(years=years),
+        }
+
+    for sucursal_canon, item in data_by_canon.items():
+        cohort_key = get_track_branch_cohort_key(
+            sucursal_canon=sucursal_canon,
+            cohort_lookup=cohort_lookup,
+        )
+
+        if cohort_key not in {
+            TRACK_BRANCH_COHORT_LEGACY_21,
+            TRACK_BRANCH_COHORT_NEW_GYMS,
+        }:
+            continue
+
+        source_series = item.get("series") or {}
+
+        _accumulate_year_overlay_series(
+            target_series_by_year=cohort_items[cohort_key]["series"],
+            source_series_by_year=source_series,
+            years=years,
+        )
+
+        _accumulate_year_overlay_series(
+            target_series_by_year=cohort_items[TRACK_BRANCH_COHORT_TOTAL_ULTRA]["series"],
+            source_series_by_year=source_series,
+            years=years,
+        )
+
+    return [
+        cohort_items[cohort_key]
+        for cohort_key in cohort_order
+        if _year_overlay_item_has_values(cohort_items[cohort_key], years)
+    ]
+
 def build_monthly_branch_year_overlay_section(
     *,
     start_year: Any = 2023,
@@ -1444,7 +1624,19 @@ def build_monthly_branch_year_overlay_section(
                 }
             )
 
+    cohort_items = _build_monthly_year_overlay_cohort_items(
+        data_by_canon=data_by_canon,
+        years=years,
+    )
+
     data = []
+
+    for item in cohort_items:
+        item["series"] = [
+            item["series"][year]
+            for year in years
+        ]
+        data.append(item)
 
     for item in data_by_canon.values():
         item["series"] = [
