@@ -192,6 +192,71 @@
       </div>
     </section>
 
+
+    <section class="track-forecast-branch-drivers" *ngIf="hasBranchDrivers">
+      <div class="track-forecast-section-header">
+        <div>
+          <span>Diagnóstico operativo</span>
+          <h2>{{ branchDriversTitle }}</h2>
+          <p>{{ branchDriversSubtitle }}</p>
+        </div>
+
+        <div class="track-forecast-driver-summary">
+          <div>
+            <span>Gap negativo total</span>
+            <strong>{{ negativeGapTotalLabel }}</strong>
+          </div>
+
+          <div>
+            <span>Mayor impacto</span>
+            <strong>{{ topNegativeDriverLabel }}</strong>
+          </div>
+        </div>
+      </div>
+
+      <div class="track-forecast-table-wrap">
+        <table class="track-forecast-table">
+          <thead>
+            <tr>
+              <th>Sucursal</th>
+              <th>Real MTD</th>
+              <th>Esperado MTD</th>
+              <th>Gap</th>
+              <th>Ritmo</th>
+              <th>Impacto</th>
+              <th>Confianza</th>
+              <th>Proyección</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            <tr *ngFor="let item of negativeBranchDrivers">
+              <td>
+                <strong>{{ item.track_label || item.sucursal_canon }}</strong>
+                <small>{{ item.sucursal_canon }}</small>
+              </td>
+
+              <td>{{ formatCurrency(item.real_mtd) }}</td>
+              <td>{{ formatCurrency(item.historical_expected_mtd) }}</td>
+
+              <td>
+                <span class="track-forecast-delta" [ngClass]="getDriverTrendClass(item)">
+                  {{ formatCurrency(item.gap_vs_historical_expected) }}
+                  ·
+                  {{ formatPercent(item.gap_vs_historical_expected_pct) }}
+                </span>
+              </td>
+
+              <td>{{ formatPercent(item.trend_factor) }}</td>
+              <td>{{ formatPercent(item.impact_share_pct) }}</td>
+              <td>{{ item.confidence || '—' }}</td>
+              <td>{{ getDriverProjectionLabel(item) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
     <section class="track-forecast-explanation">
       <article>
         <span>Lectura del cálculo</span>

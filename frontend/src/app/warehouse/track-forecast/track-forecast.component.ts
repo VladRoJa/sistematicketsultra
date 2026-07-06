@@ -49,6 +49,43 @@ type SameDayHistory = {
   items?: SameDayHistoryItem[];
 };
 
+
+type BranchDriverItem = {
+  sucursal_canon?: string;
+  track_label?: string;
+  display_order?: number | null;
+  real_mtd?: number | null;
+  real_base_mtd?: number | null;
+  real_agregadora_mtd?: number | null;
+  historical_months?: number | null;
+  historical_expected_mtd?: number | null;
+  historical_expected_month_total?: number | null;
+  historical_progress_pct?: number | null;
+  gap_vs_historical_expected?: number | null;
+  gap_vs_historical_expected_pct?: number | null;
+  trend_factor?: number | null;
+  projected_close?: number | null;
+  impact_share_pct?: number | null;
+  confidence?: string;
+  projection_quality_issue?: {
+    code?: string;
+    severity?: string;
+    message?: string;
+    reasons?: string[];
+  } | null;
+};
+
+type BranchDrivers = {
+  status?: string;
+  scope?: string;
+  metric?: string;
+  target_month?: string;
+  cutoff_day?: number;
+  items_count?: number;
+  negative_gap_total?: number | null;
+  items?: BranchDriverItem[];
+};
+
 type ForecastExecutiveStatus = {
   level?: 'success' | 'warning' | 'danger' | 'neutral' | string;
   code?: string;
@@ -289,6 +326,71 @@ export class TrackForecastComponent implements OnInit {
     }
 
     return `${this.formatPercent(Math.abs(gapPct))} abajo del promedio`;
+  }
+
+
+  get branchDrivers(): BranchDrivers | null {
+    return ((this.forecast as any)?.branch_drivers ?? null) as BranchDrivers | null;
+  }
+
+  get branchDriverItems(): BranchDriverItem[] {
+    return this.branchDrivers?.items || [];
+  }
+
+  get negativeBranchDrivers(): BranchDriverItem[] {
+    return this.branchDriverItems
+      .filter((item) => (item.gap_vs_historical_expected ?? 0) < 0)
+      .slice(0, 12);
+  }
+
+  get hasBranchDrivers(): boolean {
+    return this.negativeBranchDrivers.length > 0;
+  }
+
+  get branchDriversTitle(): string {
+    const cutoffDay = this.branchDrivers?.cutoff_day || this.forecastCutoff?.cutoff_day || '—';
+    return `Tendencias por sucursal · día ${cutoffDay}`;
+  }
+
+  get branchDriversSubtitle(): string {
+    const count = this.branchDrivers?.items_count || this.branchDriverItems.length || 0;
+    return `${count} sucursales analizadas · ordenado por mayor gap negativo`;
+  }
+
+  get negativeGapTotalLabel(): string {
+    return this.formatCurrency(this.branchDrivers?.negative_gap_total);
+  }
+
+  get topNegativeDriverLabel(): string {
+    const top = this.negativeBranchDrivers[0];
+
+    if (!top) {
+      return 'Sin rezagos detectados';
+    }
+
+    return `${top.track_label || top.sucursal_canon} · ${this.formatPercent(top.impact_share_pct)} del gap`;
+  }
+
+  getDriverTrendClass(item: BranchDriverItem): string {
+    const gap = item.gap_vs_historical_expected ?? 0;
+
+    if (gap < 0) {
+      return 'track-forecast-delta--negative';
+    }
+
+    if (gap > 0) {
+      return 'track-forecast-delta--positive';
+    }
+
+    return 'track-forecast-delta--neutral';
+  }
+
+  getDriverProjectionLabel(item: BranchDriverItem): string {
+    if (item.projection_quality_issue) {
+      return 'Sin proyección estable';
+    }
+
+    return this.formatCurrency(item.projected_close);
   }
 
   get branchSelectDisabled(): boolean {
