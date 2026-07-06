@@ -1012,6 +1012,9 @@ private puedeVerGascaSmsPorRol(): boolean {
     'ADMINISTRADOR',
     'SUPER_ADMIN',
     'GERENTE',
+    'SISTEMAS',
+    'GERENTE_REGIONAL',
+
   ].includes(rol);
 }
 

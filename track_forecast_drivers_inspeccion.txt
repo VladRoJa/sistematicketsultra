@@ -1,0 +1,441 @@
+# TRACK FORECAST SERVICE - INSPECCION DRIVERS
+
+> backend\app\warehouse\services\track_forecast_service.py:96:def _get_selected_mart_rows(
+  backend\app\warehouse\services\track_forecast_service.py:97:    *,
+  backend\app\warehouse\services\track_forecast_service.py:98:    track_daily_version_id: int,
+  backend\app\warehouse\services\track_forecast_service.py:99:    scope: str,
+  backend\app\warehouse\services\track_forecast_service.py:100:    branch: str | None,
+  backend\app\warehouse\services\track_forecast_service.py:101:) -> list[dict[str, Any]]:
+  backend\app\warehouse\services\track_forecast_service.py:102:    params: dict[str, Any] = {
+  backend\app\warehouse\services\track_forecast_service.py:103:        "track_daily_version_id": track_daily_version_id,
+  backend\app\warehouse\services\track_forecast_service.py:104:        "excluded_branches": tuple(EXCLUDED_BRANCHES),
+  backend\app\warehouse\services\track_forecast_service.py:105:    }
+  backend\app\warehouse\services\track_forecast_service.py:106:
+  backend\app\warehouse\services\track_forecast_service.py:107:    branch_filter = ""
+  backend\app\warehouse\services\track_forecast_service.py:108:
+  backend\app\warehouse\services\track_forecast_service.py:109:    if scope == "branch":
+  backend\app\warehouse\services\track_forecast_service.py:110:        if not branch:
+  backend\app\warehouse\services\track_forecast_service.py:111:            raise ValueError("branch es requerido cuando scope=branch.")
+  backend\app\warehouse\services\track_forecast_service.py:112:
+  backend\app\warehouse\services\track_forecast_service.py:113:        params["branch"] = branch.strip().upper()
+  backend\app\warehouse\services\track_forecast_service.py:114:        branch_filter = "AND upper(trim(sucursal_canon)) = :branch"
+  backend\app\warehouse\services\track_forecast_service.py:115:
+  backend\app\warehouse\services\track_forecast_service.py:116:    rows = db.session.execute(
+  backend\app\warehouse\services\track_forecast_service.py:117:        text(
+  backend\app\warehouse\services\track_forecast_service.py:118:            f"""
+  backend\app\warehouse\services\track_forecast_service.py:119:            SELECT
+  backend\app\warehouse\services\track_forecast_service.py:120:                sucursal_canon,
+  backend\app\warehouse\services\track_forecast_service.py:121:                target_month,
+  backend\app\warehouse\services\track_forecast_service.py:122:                COALESCE(ingreso_real_total_mtd, ingreso_real_mtd, 0) AS real_mtd,
+  backend\app\warehouse\services\track_forecast_service.py:123:                ingreso_real_base_mtd,
+  backend\app\warehouse\services\track_forecast_service.py:124:                ingreso_real_agregadora_mtd,
+  backend\app\warehouse\services\track_forecast_service.py:125:                meta_faycgo_mes
+  backend\app\warehouse\services\track_forecast_service.py:126:            FROM track_daily_mart
+  backend\app\warehouse\services\track_forecast_service.py:127:            WHERE track_daily_version_id = :track_daily_version_id
+  backend\app\warehouse\services\track_forecast_service.py:128:              AND upper(trim(sucursal_canon)) NOT IN :excluded_branches
+  backend\app\warehouse\services\track_forecast_service.py:129:              {branch_filter}
+  backend\app\warehouse\services\track_forecast_service.py:130:            ORDER BY sucursal_canon
+  backend\app\warehouse\services\track_forecast_service.py:131:            """
+  backend\app\warehouse\services\track_forecast_service.py:132:        ).bindparams(bindparam("excluded_branches", expanding=True)),
+  backend\app\warehouse\services\track_forecast_service.py:133:        params,
+  backend\app\warehouse\services\track_forecast_service.py:134:    ).mappings().all()
+  backend\app\warehouse\services\track_forecast_service.py:135:
+  backend\app\warehouse\services\track_forecast_service.py:136:    return [dict(row) for row in rows]
+  backend\app\warehouse\services\track_forecast_service.py:137:
+  backend\app\warehouse\services\track_forecast_service.py:138:
+  backend\app\warehouse\services\track_forecast_service.py:139:def _resolve_goal_from_track_monthly_targets(
+  backend\app\warehouse\services\track_forecast_service.py:140:    *,
+  backend\app\warehouse\services\track_forecast_service.py:141:    target_month: date,
+  backend\app\warehouse\services\track_forecast_service.py:142:    selected_branches: list[str],
+  backend\app\warehouse\services\track_forecast_service.py:143:) -> tuple[float | None, int]:
+  backend\app\warehouse\services\track_forecast_service.py:144:    if not selected_branches:
+  backend\app\warehouse\services\track_forecast_service.py:145:        return None, 0
+  backend\app\warehouse\services\track_forecast_service.py:146:
+  backend\app\warehouse\services\track_forecast_service.py:147:    rows = db.session.execute(
+  backend\app\warehouse\services\track_forecast_service.py:148:        text(
+  backend\app\warehouse\services\track_forecast_service.py:149:            """
+  backend\app\warehouse\services\track_forecast_service.py:150:            SELECT
+  backend\app\warehouse\services\track_forecast_service.py:151:                COUNT(*) FILTER (WHERE meta_faycgo_mes IS NOT NULL) AS available_count,
+  backend\app\warehouse\services\track_forecast_service.py:152:                SUM(meta_faycgo_mes) AS goal_month
+  backend\app\warehouse\services\track_forecast_service.py:153:            FROM track_monthly_targets
+  backend\app\warehouse\services\track_forecast_service.py:154:            WHERE target_month = :target_month
+  backend\app\warehouse\services\track_forecast_service.py:155:              AND is_active = true
+  backend\app\warehouse\services\track_forecast_service.py:156:              AND sucursal_canon IN :selected_branches
+  backend\app\warehouse\services\track_forecast_service.py:157:            """
+  backend\app\warehouse\services\track_forecast_service.py:158:        ).bindparams(bindparam("selected_branches", expanding=True)),
+  backend\app\warehouse\services\track_forecast_service.py:159:        {
+  backend\app\warehouse\services\track_forecast_service.py:160:            "target_month": target_month,
+  backend\app\warehouse\services\track_forecast_service.py:161:            "selected_branches": tuple(selected_branches),
+  backend\app\warehouse\services\track_forecast_service.py:162:        },
+  backend\app\warehouse\services\track_forecast_service.py:163:    ).mappings().first()
+  backend\app\warehouse\services\track_forecast_service.py:164:
+  backend\app\warehouse\services\track_forecast_service.py:165:    if not rows:
+  backend\app\warehouse\services\track_forecast_service.py:166:        return None, 0
+  backend\app\warehouse\services\track_forecast_service.py:167:
+  backend\app\warehouse\services\track_forecast_service.py:168:    return _to_float(rows["goal_month"]), int(rows["available_count"] or 0)
+  backend\app\warehouse\services\track_forecast_service.py:169:
+  backend\app\warehouse\services\track_forecast_service.py:170:
+> backend\app\warehouse\services\track_forecast_service.py:171:def _build_historical_curve(
+  backend\app\warehouse\services\track_forecast_service.py:172:    *,
+  backend\app\warehouse\services\track_forecast_service.py:173:    target_month: date,
+  backend\app\warehouse\services\track_forecast_service.py:174:    cutoff_day: int,
+  backend\app\warehouse\services\track_forecast_service.py:175:    scope: str,
+  backend\app\warehouse\services\track_forecast_service.py:176:    branch: str | None,
+  backend\app\warehouse\services\track_forecast_service.py:177:) -> dict[str, Any]:
+  backend\app\warehouse\services\track_forecast_service.py:178:    history_start_date, history_end_date = _build_history_window(target_month)
+  backend\app\warehouse\services\track_forecast_service.py:179:
+  backend\app\warehouse\services\track_forecast_service.py:180:    params: dict[str, Any] = {
+  backend\app\warehouse\services\track_forecast_service.py:181:        "history_start_date": history_start_date,
+  backend\app\warehouse\services\track_forecast_service.py:182:        "history_end_date": history_end_date,
+  backend\app\warehouse\services\track_forecast_service.py:183:        "target_month_number": target_month.month,
+  backend\app\warehouse\services\track_forecast_service.py:184:        "cutoff_day": cutoff_day,
+  backend\app\warehouse\services\track_forecast_service.py:185:        "excluded_branches": tuple(EXCLUDED_BRANCHES),
+  backend\app\warehouse\services\track_forecast_service.py:186:    }
+  backend\app\warehouse\services\track_forecast_service.py:187:
+  backend\app\warehouse\services\track_forecast_service.py:188:    branch_filter = ""
+  backend\app\warehouse\services\track_forecast_service.py:189:
+  backend\app\warehouse\services\track_forecast_service.py:190:    if scope == "branch" and branch:
+  backend\app\warehouse\services\track_forecast_service.py:191:        branch_filter = "AND upper(trim(a.sucursal_canon)) = :branch"
+  backend\app\warehouse\services\track_forecast_service.py:192:        params["branch"] = branch.strip().upper()
+  backend\app\warehouse\services\track_forecast_service.py:193:
+  backend\app\warehouse\services\track_forecast_service.py:194:    row = db.session.execute(
+  backend\app\warehouse\services\track_forecast_service.py:195:        text(
+  backend\app\warehouse\services\track_forecast_service.py:196:            f"""
+  backend\app\warehouse\services\track_forecast_service.py:197:            WITH historical AS (
+  backend\app\warehouse\services\track_forecast_service.py:198:                SELECT
+  backend\app\warehouse\services\track_forecast_service.py:199:                    a.business_month,
+  backend\app\warehouse\services\track_forecast_service.py:200:                    a.sale_date,
+  backend\app\warehouse\services\track_forecast_service.py:201:                    a.day_of_month,
+  backend\app\warehouse\services\track_forecast_service.py:202:                    upper(trim(a.sucursal_canon)) AS sucursal_canon,
+  backend\app\warehouse\services\track_forecast_service.py:203:                    a.total
+  backend\app\warehouse\services\track_forecast_service.py:204:                FROM track_venta_total_daily_branch_agg a
+  backend\app\warehouse\services\track_forecast_service.py:205:                JOIN venta_total_snapshots s
+  backend\app\warehouse\services\track_forecast_service.py:206:                  ON s.id = a.snapshot_id
+  backend\app\warehouse\services\track_forecast_service.py:207:                WHERE s.report_type_key = 'venta_total'
+  backend\app\warehouse\services\track_forecast_service.py:208:                  AND s.snapshot_kind = 'daily'
+  backend\app\warehouse\services\track_forecast_service.py:209:                  AND s.is_canonical = true
+  backend\app\warehouse\services\track_forecast_service.py:210:                  AND a.business_month >= :history_start_date
+  backend\app\warehouse\services\track_forecast_service.py:211:                  AND a.business_month < :history_end_date
+  backend\app\warehouse\services\track_forecast_service.py:212:                  AND EXTRACT(MONTH FROM a.business_month)::int = :target_month_number
+  backend\app\warehouse\services\track_forecast_service.py:213:                  AND upper(trim(a.sucursal_canon)) NOT IN :excluded_branches
+  backend\app\warehouse\services\track_forecast_service.py:214:                  {branch_filter}
+  backend\app\warehouse\services\track_forecast_service.py:215:            )
+  backend\app\warehouse\services\track_forecast_service.py:216:            SELECT
+  backend\app\warehouse\services\track_forecast_service.py:217:                COUNT(DISTINCT business_month) AS historical_months,
+  backend\app\warehouse\services\track_forecast_service.py:218:                COALESCE(SUM(total), 0)::numeric AS historical_month_total,
+  backend\app\warehouse\services\track_forecast_service.py:219:                COALESCE(SUM(CASE WHEN day_of_month <= :cutoff_day THEN total ELSE 0 END), 0)::numeric AS historical_mtd_total,
+  backend\app\warehouse\services\track_forecast_service.py:220:                COALESCE(SUM(CASE WHEN day_of_month > :cutoff_day THEN total ELSE 0 END), 0)::numeric AS historical_remaining_total,
+  backend\app\warehouse\services\track_forecast_service.py:221:                COUNT(DISTINCT day_of_month)::int AS distinct_days
+  backend\app\warehouse\services\track_forecast_service.py:222:            FROM historical
+  backend\app\warehouse\services\track_forecast_service.py:223:            """
+  backend\app\warehouse\services\track_forecast_service.py:224:        ).bindparams(bindparam("excluded_branches", expanding=True)),
+  backend\app\warehouse\services\track_forecast_service.py:225:        params,
+  backend\app\warehouse\services\track_forecast_service.py:226:    ).mappings().first()
+  backend\app\warehouse\services\track_forecast_service.py:227:
+  backend\app\warehouse\services\track_forecast_service.py:228:    historical_months = int(row["historical_months"] or 0) if row else 0
+  backend\app\warehouse\services\track_forecast_service.py:229:    historical_month_total = float(row["historical_month_total"] or 0) if row else 0.0
+  backend\app\warehouse\services\track_forecast_service.py:230:    historical_mtd_total = float(row["historical_mtd_total"] or 0) if row else 0.0
+  backend\app\warehouse\services\track_forecast_service.py:231:    historical_remaining_total = float(row["historical_remaining_total"] or 0) if row else 0.0
+  backend\app\warehouse\services\track_forecast_service.py:232:    distinct_days = int(row["distinct_days"] or 0) if row else 0
+  backend\app\warehouse\services\track_forecast_service.py:233:
+  backend\app\warehouse\services\track_forecast_service.py:234:    historical_progress_pct = None
+  backend\app\warehouse\services\track_forecast_service.py:235:
+  backend\app\warehouse\services\track_forecast_service.py:236:    if historical_month_total > 0:
+  backend\app\warehouse\services\track_forecast_service.py:237:        historical_progress_pct = historical_mtd_total / historical_month_total
+  backend\app\warehouse\services\track_forecast_service.py:238:
+  backend\app\warehouse\services\track_forecast_service.py:239:    return {
+  backend\app\warehouse\services\track_forecast_service.py:240:        "source": "branch" if scope == "branch" else "national",
+  backend\app\warehouse\services\track_forecast_service.py:241:        "historical_months": historical_months,
+  backend\app\warehouse\services\track_forecast_service.py:242:        "historical_month_total": historical_month_total,
+  backend\app\warehouse\services\track_forecast_service.py:243:        "historical_mtd_total": historical_mtd_total,
+  backend\app\warehouse\services\track_forecast_service.py:244:        "historical_remaining_total": historical_remaining_total,
+  backend\app\warehouse\services\track_forecast_service.py:245:        "historical_progress_pct": historical_progress_pct,
+  backend\app\warehouse\services\track_forecast_service.py:246:        "distinct_days": distinct_days,
+  backend\app\warehouse\services\track_forecast_service.py:247:        "confidence": _confidence_from_comparable_months(historical_months),
+  backend\app\warehouse\services\track_forecast_service.py:248:    }
+  backend\app\warehouse\services\track_forecast_service.py:249:
+  backend\app\warehouse\services\track_forecast_service.py:250:
+  backend\app\warehouse\services\track_forecast_service.py:251:
+  backend\app\warehouse\services\track_forecast_service.py:252:def _build_history_coverage(*, target_month: date, branch: str | None) -> dict[str, Any]:
+  backend\app\warehouse\services\track_forecast_service.py:253:    history_start_date, history_end_date = _build_history_window(target_month)
+  backend\app\warehouse\services\track_forecast_service.py:254:
+  backend\app\warehouse\services\track_forecast_service.py:255:    if not branch:
+  backend\app\warehouse\services\track_forecast_service.py:256:        rows = db.session.execute(
+  backend\app\warehouse\services\track_forecast_service.py:257:            text(
+  backend\app\warehouse\services\track_forecast_service.py:258:                """
+  backend\app\warehouse\services\track_forecast_service.py:259:                SELECT
+  backend\app\warehouse\services\track_forecast_service.py:260:                    COUNT(DISTINCT date_trunc('month', business_date)::date) AS months_count,
+  backend\app\warehouse\services\track_forecast_service.py:261:                    MIN(date_trunc('month', business_date)::date) AS first_month,
+  backend\app\warehouse\services\track_forecast_service.py:262:                    MAX(date_trunc('month', business_date)::date) AS last_month
+  backend\app\warehouse\services\track_forecast_service.py:263:                FROM venta_total_snapshots
+  backend\app\warehouse\services\track_forecast_service.py:264:                WHERE report_type_key = 'venta_total'
+  backend\app\warehouse\services\track_forecast_service.py:265:                  AND snapshot_kind = 'daily'
+  backend\app\warehouse\services\track_forecast_service.py:266:                  AND is_canonical = true
+  backend\app\warehouse\services\track_forecast_service.py:267:                  AND business_date >= :history_start_date
+  backend\app\warehouse\services\track_forecast_service.py:268:                  AND business_date < :history_end_date
+  backend\app\warehouse\services\track_forecast_service.py:269:                """
+  backend\app\warehouse\services\track_forecast_service.py:270:            ),
+  backend\app\warehouse\services\track_forecast_service.py:271:            {
+  backend\app\warehouse\services\track_forecast_service.py:272:                "history_start_date": history_start_date,
+  backend\app\warehouse\services\track_forecast_service.py:273:                "history_end_date": history_end_date,
+  backend\app\warehouse\services\track_forecast_service.py:274:            },
+  backend\app\warehouse\services\track_forecast_service.py:275:        ).mappings().first()
+  backend\app\warehouse\services\track_forecast_service.py:276:
+  backend\app\warehouse\services\track_forecast_service.py:277:        months_count = int(rows["months_count"] or 0) if rows else 0
+  backend\app\warehouse\services\track_forecast_service.py:278:
+  backend\app\warehouse\services\track_forecast_service.py:279:        return {
+  backend\app\warehouse\services\track_forecast_service.py:280:            "months_count": months_count,
+  backend\app\warehouse\services\track_forecast_service.py:281:            "first_month": rows["first_month"].isoformat() if rows and rows["first_month"] else None,
+  backend\app\warehouse\services\track_forecast_service.py:282:            "last_month": rows["last_month"].isoformat() if rows and rows["last_month"] else None,
+  backend\app\warehouse\services\track_forecast_service.py:283:            "confidence": _confidence_from_coverage_months(months_count),
+  backend\app\warehouse\services\track_forecast_service.py:284:        }
+  backend\app\warehouse\services\track_forecast_service.py:285:
+  backend\app\warehouse\services\track_forecast_service.py:286:    params: dict[str, Any] = {
+  backend\app\warehouse\services\track_forecast_service.py:287:        "excluded_branches": tuple(EXCLUDED_BRANCHES),
+  backend\app\warehouse\services\track_forecast_service.py:288:        "history_start_date": history_start_date,
+  backend\app\warehouse\services\track_forecast_service.py:289:        "history_end_date": history_end_date,
+  backend\app\warehouse\services\track_forecast_service.py:290:        "branch": branch.strip().upper(),
+  backend\app\warehouse\services\track_forecast_service.py:291:    }
+> backend\app\warehouse\services\track_forecast_service.py:595:def _build_same_day_history(
+  backend\app\warehouse\services\track_forecast_service.py:596:    *,
+  backend\app\warehouse\services\track_forecast_service.py:597:    target_month: date,
+  backend\app\warehouse\services\track_forecast_service.py:598:    cutoff_day: int,
+  backend\app\warehouse\services\track_forecast_service.py:599:    scope: str,
+  backend\app\warehouse\services\track_forecast_service.py:600:    branch: str | None,
+  backend\app\warehouse\services\track_forecast_service.py:601:    real_mtd: float,
+  backend\app\warehouse\services\track_forecast_service.py:602:    projected_close: float | None,
+  backend\app\warehouse\services\track_forecast_service.py:603:    progress_pct: float | None,
+  backend\app\warehouse\services\track_forecast_service.py:604:    trend_factor: float | None,
+  backend\app\warehouse\services\track_forecast_service.py:605:) -> dict[str, Any]:
+  backend\app\warehouse\services\track_forecast_service.py:606:    history_start_date, history_end_date = _build_history_window(target_month)
+  backend\app\warehouse\services\track_forecast_service.py:607:
+  backend\app\warehouse\services\track_forecast_service.py:608:    params: dict[str, Any] = {
+  backend\app\warehouse\services\track_forecast_service.py:609:        "history_start_date": history_start_date,
+  backend\app\warehouse\services\track_forecast_service.py:610:        "history_end_date": history_end_date,
+  backend\app\warehouse\services\track_forecast_service.py:611:        "target_month_number": target_month.month,
+  backend\app\warehouse\services\track_forecast_service.py:612:        "cutoff_day": cutoff_day,
+  backend\app\warehouse\services\track_forecast_service.py:613:        "excluded_branches": tuple(EXCLUDED_BRANCHES),
+  backend\app\warehouse\services\track_forecast_service.py:614:    }
+  backend\app\warehouse\services\track_forecast_service.py:615:
+  backend\app\warehouse\services\track_forecast_service.py:616:    branch_filter = ""
+  backend\app\warehouse\services\track_forecast_service.py:617:
+  backend\app\warehouse\services\track_forecast_service.py:618:    if scope == "branch" and branch:
+  backend\app\warehouse\services\track_forecast_service.py:619:        branch_filter = "AND upper(trim(a.sucursal_canon)) = :branch"
+  backend\app\warehouse\services\track_forecast_service.py:620:        params["branch"] = branch.strip().upper()
+  backend\app\warehouse\services\track_forecast_service.py:621:
+  backend\app\warehouse\services\track_forecast_service.py:622:    rows = db.session.execute(
+  backend\app\warehouse\services\track_forecast_service.py:623:        text(
+  backend\app\warehouse\services\track_forecast_service.py:624:            f"""
+  backend\app\warehouse\services\track_forecast_service.py:625:            WITH yearly AS (
+  backend\app\warehouse\services\track_forecast_service.py:626:                SELECT
+  backend\app\warehouse\services\track_forecast_service.py:627:                    EXTRACT(YEAR FROM a.business_month)::int AS year,
+  backend\app\warehouse\services\track_forecast_service.py:628:                    a.business_month,
+  backend\app\warehouse\services\track_forecast_service.py:629:                    COALESCE(SUM(a.total), 0)::numeric AS month_total,
+  backend\app\warehouse\services\track_forecast_service.py:630:                    COALESCE(SUM(CASE WHEN a.day_of_month <= :cutoff_day THEN a.total ELSE 0 END), 0)::numeric AS mtd_total,
+  backend\app\warehouse\services\track_forecast_service.py:631:                    COALESCE(SUM(CASE WHEN a.day_of_month > :cutoff_day THEN a.total ELSE 0 END), 0)::numeric AS remaining_total,
+  backend\app\warehouse\services\track_forecast_service.py:632:                    COUNT(DISTINCT CASE WHEN a.day_of_month <= :cutoff_day THEN a.day_of_month END)::int AS mtd_days,
+  backend\app\warehouse\services\track_forecast_service.py:633:                    COUNT(DISTINCT a.day_of_month)::int AS month_days
+  backend\app\warehouse\services\track_forecast_service.py:634:                FROM track_venta_total_daily_branch_agg a
+  backend\app\warehouse\services\track_forecast_service.py:635:                JOIN venta_total_snapshots s
+  backend\app\warehouse\services\track_forecast_service.py:636:                  ON s.id = a.snapshot_id
+  backend\app\warehouse\services\track_forecast_service.py:637:                WHERE s.report_type_key = 'venta_total'
+  backend\app\warehouse\services\track_forecast_service.py:638:                  AND s.snapshot_kind = 'daily'
+  backend\app\warehouse\services\track_forecast_service.py:639:                  AND s.is_canonical = true
+  backend\app\warehouse\services\track_forecast_service.py:640:                  AND a.business_month >= :history_start_date
+  backend\app\warehouse\services\track_forecast_service.py:641:                  AND a.business_month < :history_end_date
+  backend\app\warehouse\services\track_forecast_service.py:642:                  AND EXTRACT(MONTH FROM a.business_month)::int = :target_month_number
+  backend\app\warehouse\services\track_forecast_service.py:643:                  AND upper(trim(a.sucursal_canon)) NOT IN :excluded_branches
+  backend\app\warehouse\services\track_forecast_service.py:644:                  {branch_filter}
+  backend\app\warehouse\services\track_forecast_service.py:645:                GROUP BY
+  backend\app\warehouse\services\track_forecast_service.py:646:                    EXTRACT(YEAR FROM a.business_month)::int,
+  backend\app\warehouse\services\track_forecast_service.py:647:                    a.business_month
+  backend\app\warehouse\services\track_forecast_service.py:648:            )
+  backend\app\warehouse\services\track_forecast_service.py:649:            SELECT
+  backend\app\warehouse\services\track_forecast_service.py:650:                year,
+  backend\app\warehouse\services\track_forecast_service.py:651:                business_month,
+  backend\app\warehouse\services\track_forecast_service.py:652:                month_total,
+  backend\app\warehouse\services\track_forecast_service.py:653:                mtd_total,
+  backend\app\warehouse\services\track_forecast_service.py:654:                remaining_total,
+  backend\app\warehouse\services\track_forecast_service.py:655:                mtd_days,
+  backend\app\warehouse\services\track_forecast_service.py:656:                month_days
+  backend\app\warehouse\services\track_forecast_service.py:657:            FROM yearly
+  backend\app\warehouse\services\track_forecast_service.py:658:            ORDER BY year
+  backend\app\warehouse\services\track_forecast_service.py:659:            """
+  backend\app\warehouse\services\track_forecast_service.py:660:        ).bindparams(bindparam("excluded_branches", expanding=True)),
+  backend\app\warehouse\services\track_forecast_service.py:661:        params,
+  backend\app\warehouse\services\track_forecast_service.py:662:    ).mappings().all()
+  backend\app\warehouse\services\track_forecast_service.py:663:
+  backend\app\warehouse\services\track_forecast_service.py:664:    items: list[dict[str, Any]] = []
+  backend\app\warehouse\services\track_forecast_service.py:665:
+  backend\app\warehouse\services\track_forecast_service.py:666:    for row in rows:
+  backend\app\warehouse\services\track_forecast_service.py:667:        mtd_total = float(row["mtd_total"] or 0)
+  backend\app\warehouse\services\track_forecast_service.py:668:        month_total = float(row["month_total"] or 0)
+  backend\app\warehouse\services\track_forecast_service.py:669:        remaining_total = float(row["remaining_total"] or 0)
+  backend\app\warehouse\services\track_forecast_service.py:670:
+  backend\app\warehouse\services\track_forecast_service.py:671:        progress = None
+  backend\app\warehouse\services\track_forecast_service.py:672:        gap_current_vs_mtd = None
+  backend\app\warehouse\services\track_forecast_service.py:673:        gap_current_vs_mtd_pct = None
+  backend\app\warehouse\services\track_forecast_service.py:674:
+  backend\app\warehouse\services\track_forecast_service.py:675:        if month_total > 0:
+  backend\app\warehouse\services\track_forecast_service.py:676:            progress = mtd_total / month_total
+  backend\app\warehouse\services\track_forecast_service.py:677:
+  backend\app\warehouse\services\track_forecast_service.py:678:        if mtd_total > 0:
+  backend\app\warehouse\services\track_forecast_service.py:679:            gap_current_vs_mtd = real_mtd - mtd_total
+  backend\app\warehouse\services\track_forecast_service.py:680:            gap_current_vs_mtd_pct = gap_current_vs_mtd / mtd_total
+  backend\app\warehouse\services\track_forecast_service.py:681:
+  backend\app\warehouse\services\track_forecast_service.py:682:        items.append({
+  backend\app\warehouse\services\track_forecast_service.py:683:            "year": int(row["year"]),
+  backend\app\warehouse\services\track_forecast_service.py:684:            "business_month": row["business_month"].isoformat() if row["business_month"] else None,
+  backend\app\warehouse\services\track_forecast_service.py:685:            "mtd_total": mtd_total,
+  backend\app\warehouse\services\track_forecast_service.py:686:            "month_total": month_total,
+  backend\app\warehouse\services\track_forecast_service.py:687:            "remaining_total": remaining_total,
+  backend\app\warehouse\services\track_forecast_service.py:688:            "progress_pct": progress,
+  backend\app\warehouse\services\track_forecast_service.py:689:            "mtd_days": int(row["mtd_days"] or 0),
+  backend\app\warehouse\services\track_forecast_service.py:690:            "month_days": int(row["month_days"] or 0),
+  backend\app\warehouse\services\track_forecast_service.py:691:            "gap_current_vs_mtd": gap_current_vs_mtd,
+  backend\app\warehouse\services\track_forecast_service.py:692:            "gap_current_vs_mtd_pct": gap_current_vs_mtd_pct,
+  backend\app\warehouse\services\track_forecast_service.py:693:        })
+  backend\app\warehouse\services\track_forecast_service.py:694:
+  backend\app\warehouse\services\track_forecast_service.py:695:    historical_mtd_values = [float(item["mtd_total"] or 0) for item in items if float(item["mtd_total"] or 0) > 0]
+  backend\app\warehouse\services\track_forecast_service.py:696:    historical_month_values = [float(item["month_total"] or 0) for item in items if float(item["month_total"] or 0) > 0]
+  backend\app\warehouse\services\track_forecast_service.py:697:
+  backend\app\warehouse\services\track_forecast_service.py:698:    average_mtd = sum(historical_mtd_values) / len(historical_mtd_values) if historical_mtd_values else None
+  backend\app\warehouse\services\track_forecast_service.py:699:    average_month = sum(historical_month_values) / len(historical_month_values) if historical_month_values else None
+  backend\app\warehouse\services\track_forecast_service.py:700:    gap_current_vs_average_mtd = real_mtd - average_mtd if average_mtd else None
+  backend\app\warehouse\services\track_forecast_service.py:701:    gap_current_vs_average_mtd_pct = gap_current_vs_average_mtd / average_mtd if average_mtd else None
+  backend\app\warehouse\services\track_forecast_service.py:702:
+  backend\app\warehouse\services\track_forecast_service.py:703:    return {
+  backend\app\warehouse\services\track_forecast_service.py:704:        "source": "branch" if scope == "branch" else "national",
+  backend\app\warehouse\services\track_forecast_service.py:705:        "branch": branch.strip().upper() if branch else None,
+  backend\app\warehouse\services\track_forecast_service.py:706:        "target_month": target_month.isoformat(),
+  backend\app\warehouse\services\track_forecast_service.py:707:        "cutoff_day": cutoff_day,
+  backend\app\warehouse\services\track_forecast_service.py:708:        "historical_years": len(items),
+  backend\app\warehouse\services\track_forecast_service.py:709:        "confidence": _confidence_from_comparable_months(len(items)),
+  backend\app\warehouse\services\track_forecast_service.py:710:        "average": {
+  backend\app\warehouse\services\track_forecast_service.py:711:            "mtd_total": average_mtd,
+  backend\app\warehouse\services\track_forecast_service.py:712:            "month_total": average_month,
+  backend\app\warehouse\services\track_forecast_service.py:713:            "gap_current_vs_average_mtd": gap_current_vs_average_mtd,
+  backend\app\warehouse\services\track_forecast_service.py:714:            "gap_current_vs_average_mtd_pct": gap_current_vs_average_mtd_pct,
+  backend\app\warehouse\services\track_forecast_service.py:715:        },
+> backend\app\warehouse\services\track_forecast_service.py:817:def build_venta_total_forecast(
+  backend\app\warehouse\services\track_forecast_service.py:818:    *,
+  backend\app\warehouse\services\track_forecast_service.py:819:    track_date: date,
+  backend\app\warehouse\services\track_forecast_service.py:820:    generation_mode: str,
+  backend\app\warehouse\services\track_forecast_service.py:821:    track_daily_version_id: int,
+  backend\app\warehouse\services\track_forecast_service.py:822:    scope: str = "national",
+  backend\app\warehouse\services\track_forecast_service.py:823:    branch: str | None = None,
+  backend\app\warehouse\services\track_forecast_service.py:824:) -> dict[str, Any]:
+  backend\app\warehouse\services\track_forecast_service.py:825:    scope = (scope or "national").strip().lower()
+  backend\app\warehouse\services\track_forecast_service.py:826:
+  backend\app\warehouse\services\track_forecast_service.py:827:    if scope not in {"national", "branch"}:
+  backend\app\warehouse\services\track_forecast_service.py:828:        raise ValueError("scope inválido. Usa national o branch.")
+  backend\app\warehouse\services\track_forecast_service.py:829:
+  backend\app\warehouse\services\track_forecast_service.py:830:    target_month = _first_day_of_month(track_date)
+  backend\app\warehouse\services\track_forecast_service.py:831:    cutoff_day = min(track_date.day, monthrange(track_date.year, track_date.month)[1])
+  backend\app\warehouse\services\track_forecast_service.py:832:    history_start_date, history_end_date = _build_history_window(target_month)
+  backend\app\warehouse\services\track_forecast_service.py:833:
+  backend\app\warehouse\services\track_forecast_service.py:834:    mart_rows = _get_selected_mart_rows(
+  backend\app\warehouse\services\track_forecast_service.py:835:        track_daily_version_id=track_daily_version_id,
+  backend\app\warehouse\services\track_forecast_service.py:836:        scope=scope,
+  backend\app\warehouse\services\track_forecast_service.py:837:        branch=branch,
+  backend\app\warehouse\services\track_forecast_service.py:838:    )
+  backend\app\warehouse\services\track_forecast_service.py:839:
+  backend\app\warehouse\services\track_forecast_service.py:840:    if scope == "branch" and not mart_rows:
+  backend\app\warehouse\services\track_forecast_service.py:841:        raise ValueError(f"No existe fila Track para branch={branch!r} en la versión resuelta.")
+  backend\app\warehouse\services\track_forecast_service.py:842:
+  backend\app\warehouse\services\track_forecast_service.py:843:    selected_branches = [str(row["sucursal_canon"]) for row in mart_rows]
+  backend\app\warehouse\services\track_forecast_service.py:844:
+  backend\app\warehouse\services\track_forecast_service.py:845:    real_mtd = sum((_to_float(row["real_mtd"]) or 0.0) for row in mart_rows)
+  backend\app\warehouse\services\track_forecast_service.py:846:    real_base_mtd = sum((_to_float(row["ingreso_real_base_mtd"]) or 0.0) for row in mart_rows)
+  backend\app\warehouse\services\track_forecast_service.py:847:    real_agregadora_mtd = sum((_to_float(row["ingreso_real_agregadora_mtd"]) or 0.0) for row in mart_rows)
+  backend\app\warehouse\services\track_forecast_service.py:848:
+  backend\app\warehouse\services\track_forecast_service.py:849:    mart_goal_available_count = sum(1 for row in mart_rows if row.get("meta_faycgo_mes") is not None)
+  backend\app\warehouse\services\track_forecast_service.py:850:    mart_goal_total = sum((_to_float(row["meta_faycgo_mes"]) or 0.0) for row in mart_rows)
+  backend\app\warehouse\services\track_forecast_service.py:851:
+  backend\app\warehouse\services\track_forecast_service.py:852:    expected_goal_count = len(mart_rows)
+  backend\app\warehouse\services\track_forecast_service.py:853:    goal_status = _goal_status_from_count(
+  backend\app\warehouse\services\track_forecast_service.py:854:        expected_count=expected_goal_count,
+  backend\app\warehouse\services\track_forecast_service.py:855:        available_count=mart_goal_available_count,
+  backend\app\warehouse\services\track_forecast_service.py:856:    )
+  backend\app\warehouse\services\track_forecast_service.py:857:
+  backend\app\warehouse\services\track_forecast_service.py:858:    goal_month: float | None = None
+  backend\app\warehouse\services\track_forecast_service.py:859:
+  backend\app\warehouse\services\track_forecast_service.py:860:    if goal_status == "available":
+  backend\app\warehouse\services\track_forecast_service.py:861:        goal_month = mart_goal_total
+  backend\app\warehouse\services\track_forecast_service.py:862:    else:
+  backend\app\warehouse\services\track_forecast_service.py:863:        fallback_goal, fallback_available_count = _resolve_goal_from_track_monthly_targets(
+  backend\app\warehouse\services\track_forecast_service.py:864:            target_month=target_month,
+  backend\app\warehouse\services\track_forecast_service.py:865:            selected_branches=selected_branches,
+  backend\app\warehouse\services\track_forecast_service.py:866:        )
+  backend\app\warehouse\services\track_forecast_service.py:867:
+  backend\app\warehouse\services\track_forecast_service.py:868:        fallback_status = _goal_status_from_count(
+  backend\app\warehouse\services\track_forecast_service.py:869:            expected_count=expected_goal_count,
+  backend\app\warehouse\services\track_forecast_service.py:870:            available_count=fallback_available_count,
+  backend\app\warehouse\services\track_forecast_service.py:871:        )
+  backend\app\warehouse\services\track_forecast_service.py:872:
+  backend\app\warehouse\services\track_forecast_service.py:873:        if fallback_status == "available":
+  backend\app\warehouse\services\track_forecast_service.py:874:            goal_status = "available"
+  backend\app\warehouse\services\track_forecast_service.py:875:            goal_month = fallback_goal
+  backend\app\warehouse\services\track_forecast_service.py:876:        elif fallback_status == "partial":
+  backend\app\warehouse\services\track_forecast_service.py:877:            goal_status = "partial"
+  backend\app\warehouse\services\track_forecast_service.py:878:            goal_month = None
+  backend\app\warehouse\services\track_forecast_service.py:879:        else:
+  backend\app\warehouse\services\track_forecast_service.py:880:            goal_status = "pending"
+  backend\app\warehouse\services\track_forecast_service.py:881:            goal_month = None
+  backend\app\warehouse\services\track_forecast_service.py:882:
+  backend\app\warehouse\services\track_forecast_service.py:883:    curve = _build_historical_curve(
+  backend\app\warehouse\services\track_forecast_service.py:884:        target_month=target_month,
+  backend\app\warehouse\services\track_forecast_service.py:885:        cutoff_day=cutoff_day,
+  backend\app\warehouse\services\track_forecast_service.py:886:        scope=scope,
+  backend\app\warehouse\services\track_forecast_service.py:887:        branch=branch,
+  backend\app\warehouse\services\track_forecast_service.py:888:    )
+  backend\app\warehouse\services\track_forecast_service.py:889:
+  backend\app\warehouse\services\track_forecast_service.py:890:    progress_pct = curve["historical_progress_pct"]
+  backend\app\warehouse\services\track_forecast_service.py:891:
+  backend\app\warehouse\services\track_forecast_service.py:892:    projected_close = None
+  backend\app\warehouse\services\track_forecast_service.py:893:    trend_factor = None
+  backend\app\warehouse\services\track_forecast_service.py:894:    weighted_goal_mtd = None
+  backend\app\warehouse\services\track_forecast_service.py:895:    gap_vs_weighted_goal = None
+  backend\app\warehouse\services\track_forecast_service.py:896:    gap_vs_weighted_goal_pct = None
+  backend\app\warehouse\services\track_forecast_service.py:897:    status_vs_goal = None
+  backend\app\warehouse\services\track_forecast_service.py:898:
+  backend\app\warehouse\services\track_forecast_service.py:899:    if progress_pct and progress_pct > 0:
+  backend\app\warehouse\services\track_forecast_service.py:900:        projected_close = real_mtd / progress_pct
+  backend\app\warehouse\services\track_forecast_service.py:901:
+  backend\app\warehouse\services\track_forecast_service.py:902:        historical_mtd_total = curve["historical_mtd_total"]
+  backend\app\warehouse\services\track_forecast_service.py:903:
+  backend\app\warehouse\services\track_forecast_service.py:904:        if historical_mtd_total > 0:
+  backend\app\warehouse\services\track_forecast_service.py:905:            trend_factor = real_mtd / historical_mtd_total
+  backend\app\warehouse\services\track_forecast_service.py:906:
+  backend\app\warehouse\services\track_forecast_service.py:907:        if goal_status == "available" and goal_month is not None:
+  backend\app\warehouse\services\track_forecast_service.py:908:            weighted_goal_mtd = goal_month * progress_pct
+  backend\app\warehouse\services\track_forecast_service.py:909:            gap_vs_weighted_goal = real_mtd - weighted_goal_mtd
+  backend\app\warehouse\services\track_forecast_service.py:910:
+  backend\app\warehouse\services\track_forecast_service.py:911:            if weighted_goal_mtd > 0:
+  backend\app\warehouse\services\track_forecast_service.py:912:                gap_vs_weighted_goal_pct = gap_vs_weighted_goal / weighted_goal_mtd
+  backend\app\warehouse\services\track_forecast_service.py:913:
+  backend\app\warehouse\services\track_forecast_service.py:914:            status_vs_goal = _status_vs_goal(
+  backend\app\warehouse\services\track_forecast_service.py:915:                gap_pct=gap_vs_weighted_goal_pct,
+  backend\app\warehouse\services\track_forecast_service.py:916:                progress_pct=progress_pct,
+  backend\app\warehouse\services\track_forecast_service.py:917:            )
+  backend\app\warehouse\services\track_forecast_service.py:918:
+  backend\app\warehouse\services\track_forecast_service.py:919:    branch_projection_quality_issue = _resolve_branch_projection_quality_issue(
+  backend\app\warehouse\services\track_forecast_service.py:920:        scope=scope,
+  backend\app\warehouse\services\track_forecast_service.py:921:        curve=curve,
+  backend\app\warehouse\services\track_forecast_service.py:922:        trend_factor=trend_factor,
+  backend\app\warehouse\services\track_forecast_service.py:923:    )
+  backend\app\warehouse\services\track_forecast_service.py:924:
+  backend\app\warehouse\services\track_forecast_service.py:925:    if branch_projection_quality_issue:
+  backend\app\warehouse\services\track_forecast_service.py:926:        projected_close = None
+  backend\app\warehouse\services\track_forecast_service.py:927:        weighted_goal_mtd = None
+  backend\app\warehouse\services\track_forecast_service.py:928:        gap_vs_weighted_goal = None
+  backend\app\warehouse\services\track_forecast_service.py:929:        gap_vs_weighted_goal_pct = None
+  backend\app\warehouse\services\track_forecast_service.py:930:        status_vs_goal = None
+  backend\app\warehouse\services\track_forecast_service.py:931:
+  backend\app\warehouse\services\track_forecast_service.py:932:    coverage = _build_history_coverage(
+  backend\app\warehouse\services\track_forecast_service.py:933:        target_month=target_month,
+  backend\app\warehouse\services\track_forecast_service.py:934:        branch=branch if scope == "branch" else None,
+  backend\app\warehouse\services\track_forecast_service.py:935:    )
+  backend\app\warehouse\services\track_forecast_service.py:936:
+  backend\app\warehouse\services\track_forecast_service.py:937:    confidence = coverage["confidence"] if scope == "branch" else curve["confidence"]
+
