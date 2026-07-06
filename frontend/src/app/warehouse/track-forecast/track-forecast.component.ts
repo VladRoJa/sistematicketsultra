@@ -12,6 +12,43 @@ import {
   TrackVentaTotalForecastSummary,
 } from '../../services/track.service';
 
+
+type SameDayHistoryItem = {
+  year?: number;
+  business_month?: string | null;
+  mtd_total?: number | null;
+  month_total?: number | null;
+  remaining_total?: number | null;
+  progress_pct?: number | null;
+  mtd_days?: number | null;
+  month_days?: number | null;
+  gap_current_vs_mtd?: number | null;
+  gap_current_vs_mtd_pct?: number | null;
+};
+
+type SameDayHistory = {
+  source?: 'national' | 'branch' | string;
+  branch?: string | null;
+  target_month?: string;
+  cutoff_day?: number;
+  historical_years?: number;
+  confidence?: string;
+  average?: {
+    mtd_total?: number | null;
+    month_total?: number | null;
+    gap_current_vs_average_mtd?: number | null;
+    gap_current_vs_average_mtd_pct?: number | null;
+  };
+  current?: {
+    year?: number;
+    mtd_total?: number | null;
+    projected_close?: number | null;
+    historical_progress_pct?: number | null;
+    trend_factor?: number | null;
+  };
+  items?: SameDayHistoryItem[];
+};
+
 type ForecastExecutiveStatus = {
   level?: 'success' | 'warning' | 'danger' | 'neutral' | string;
   code?: string;
@@ -205,6 +242,53 @@ export class TrackForecastComponent implements OnInit {
 
   get forecastCutoff(): ForecastCutoff | null {
     return ((this.forecast as any)?.forecast_cutoff ?? null) as ForecastCutoff | null;
+  }
+
+
+  get sameDayHistory(): SameDayHistory | null {
+    return ((this.forecast as any)?.same_day_history ?? null) as SameDayHistory | null;
+  }
+
+  get sameDayHistoryItems(): SameDayHistoryItem[] {
+    return this.sameDayHistory?.items || [];
+  }
+
+  get sameDayHistoryCurrent(): SameDayHistory['current'] | null {
+    return this.sameDayHistory?.current || null;
+  }
+
+  get sameDayHistoryAverage(): SameDayHistory['average'] | null {
+    return this.sameDayHistory?.average || null;
+  }
+
+  get sameDayHistoryTitle(): string {
+    const cutoffDay = this.sameDayHistory?.cutoff_day || this.forecastCutoff?.cutoff_day || '—';
+    return `Comparativo mismo día · día ${cutoffDay}`;
+  }
+
+  get sameDayHistorySubtitle(): string {
+    const years = this.sameDayHistory?.historical_years ?? 0;
+    const confidence = this.sameDayHistory?.confidence || 'sin dato';
+
+    return `${years} años comparables · confianza ${confidence}`;
+  }
+
+  get hasSameDayHistory(): boolean {
+    return this.sameDayHistoryItems.length > 0;
+  }
+
+  get currentSameDayGapVsAverageLabel(): string {
+    const gapPct = this.sameDayHistoryAverage?.gap_current_vs_average_mtd_pct;
+
+    if (gapPct === null || gapPct === undefined) {
+      return 'Sin promedio comparable';
+    }
+
+    if (gapPct >= 0) {
+      return `${this.formatPercent(gapPct)} arriba del promedio`;
+    }
+
+    return `${this.formatPercent(Math.abs(gapPct))} abajo del promedio`;
   }
 
   get branchSelectDisabled(): boolean {
