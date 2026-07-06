@@ -548,7 +548,7 @@ def _build_executive_status(
         "code": code,
         "title": title,
         "message": (
-            f"El real MTD equivale al {_format_percent(trend_factor)} del avance histórico esperado. "
+            f"El real MTD equivale al {_format_percent(trend_factor)} del promedio histórico esperado al corte. "
             f"La proyección actual de cierre es {_format_currency_mxn(projected_close)}."
         ),
         "primary_metric_label": "Proyección de cierre",
@@ -734,6 +734,11 @@ def _resolve_branch_projection_quality_issue(
 
     historical_months = int(curve.get("historical_months") or 0)
     historical_mtd_total = float(curve.get("historical_mtd_total") or 0)
+    historical_expected_mtd = (
+        historical_mtd_total / historical_months
+        if historical_months > 0
+        else 0.0
+    )
     confidence = str(curve.get("confidence") or "sin_historia")
 
     reasons: list[str] = []
@@ -744,8 +749,8 @@ def _resolve_branch_projection_quality_issue(
     if confidence != "alta":
         reasons.append(f"La confianza histórica de la sucursal es {confidence}.")
 
-    if historical_mtd_total < 50000:
-        reasons.append("El histórico esperado MTD de la sucursal es demasiado bajo para proyectar con estabilidad.")
+    if historical_expected_mtd < 50000:
+        reasons.append("El promedio histórico esperado MTD de la sucursal es demasiado bajo para proyectar con estabilidad.")
 
     if trend_factor is not None and trend_factor > 3:
         reasons.append("El factor de tendencia es extremo contra el histórico esperado de la sucursal.")
@@ -888,6 +893,16 @@ def build_venta_total_forecast(
     )
 
     progress_pct = curve["historical_progress_pct"]
+    historical_months = int(curve.get("historical_months") or 0)
+
+    historical_expected_mtd = None
+    historical_expected_remaining = None
+    historical_expected_month_total = None
+
+    if historical_months > 0:
+        historical_expected_mtd = curve["historical_mtd_total"] / historical_months
+        historical_expected_remaining = curve["historical_remaining_total"] / historical_months
+        historical_expected_month_total = curve["historical_month_total"] / historical_months
 
     projected_close = None
     trend_factor = None
@@ -899,10 +914,8 @@ def build_venta_total_forecast(
     if progress_pct and progress_pct > 0:
         projected_close = real_mtd / progress_pct
 
-        historical_mtd_total = curve["historical_mtd_total"]
-
-        if historical_mtd_total > 0:
-            trend_factor = real_mtd / historical_mtd_total
+        if historical_expected_mtd and historical_expected_mtd > 0:
+            trend_factor = real_mtd / historical_expected_mtd
 
         if goal_status == "available" and goal_month is not None:
             weighted_goal_mtd = goal_month * progress_pct
@@ -965,7 +978,7 @@ def build_venta_total_forecast(
         real_mtd=real_mtd,
         projected_close=projected_close,
         progress_pct=progress_pct,
-        historical_mtd_total=curve["historical_mtd_total"],
+        historical_mtd_total=historical_expected_mtd,
         trend_factor=trend_factor,
     )
 
@@ -1021,8 +1034,12 @@ def build_venta_total_forecast(
             "real_agregadora_mtd": real_agregadora_mtd,
             "goal_month": goal_month,
             "historical_progress_pct": progress_pct,
-            "historical_expected_mtd": curve["historical_mtd_total"],
-            "historical_expected_remaining": curve["historical_remaining_total"],
+            "historical_expected_mtd": historical_expected_mtd,
+            "historical_expected_remaining": historical_expected_remaining,
+            "historical_expected_month_total": historical_expected_month_total,
+            "historical_expected_mtd_aggregate": curve["historical_mtd_total"],
+            "historical_expected_remaining_aggregate": curve["historical_remaining_total"],
+            "historical_expected_month_total_aggregate": curve["historical_month_total"],
             "trend_factor_raw": trend_factor,
             "projected_close": projected_close,
             "weighted_goal_mtd": weighted_goal_mtd,
