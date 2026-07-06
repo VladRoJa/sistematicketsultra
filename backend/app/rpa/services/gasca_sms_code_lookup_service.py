@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import asdict, dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 from typing import Any
 
@@ -13,6 +13,7 @@ from playwright.sync_api import sync_playwright
 
 SMS_CODES_PATH = "/Catalogo/PaseCortesia/BuscarCodigosSms"
 DATE_FORMAT = "%d-%m-%Y %H:%M:%S"
+CODE_GENERATED_WINDOW_DAYS = 2
 
 
 class GascaSmsCodeLookupError(RuntimeError):
@@ -263,13 +264,18 @@ def build_lookup_result(
         }
 
     matched_rows = [row for row, _mode in phone_matches]
-    today_rows = [
+    oldest_allowed_date = today - timedelta(days=CODE_GENERATED_WINDOW_DAYS)
+
+    date_window_rows = [
         row
         for row in matched_rows
-        if row.generado_dt is not None and row.generado_dt.date() == today
+        if (
+            row.generado_dt is not None
+            and oldest_allowed_date <= row.generado_dt.date() <= today
+        )
     ]
 
-    if not today_rows:
+    if not date_window_rows:
         newest = max(
             (row for row in matched_rows if row.generado_dt is not None),
             key=lambda row: row.generado_dt,
@@ -278,36 +284,48 @@ def build_lookup_result(
         return {
             "ok": False,
             "status": "code_not_generated_today",
-            "user_message": "No se envió SMS. Se encontró registro para el PIN y teléfono, pero el código no fue generado hoy.",
+            "user_message": (
+                "No se envió SMS. Se encontró registro para el PIN y teléfono, "
+                "pero el código no está dentro del margen permitido de 2 días."
+            ),
             "pin_normalized": pin_normalized,
             "selected": row_for_output(newest, show_sensitive=show_sensitive),
             "today": today.isoformat(),
+            "oldest_allowed_date": oldest_allowed_date.isoformat(),
+            "code_generated_window_days": CODE_GENERATED_WINDOW_DAYS,
         }
 
-    unused_today_rows = [row for row in today_rows if not row.utilizado.strip()]
+    unused_date_window_rows = [
+        row
+        for row in date_window_rows
+        if not row.utilizado.strip()
+    ]
 
-    if not unused_today_rows:
-        newest_today = max(
-            (row for row in today_rows if row.generado_dt is not None),
+    if not unused_date_window_rows:
+        newest_in_window = max(
+            (row for row in date_window_rows if row.generado_dt is not None),
             key=lambda row: row.generado_dt,
-            default=today_rows[0],
+            default=date_window_rows[0],
         )
         return {
             "ok": False,
             "status": "code_already_used",
             "user_message": "No se envió SMS. El código encontrado ya aparece como utilizado en Gasca.",
             "pin_normalized": pin_normalized,
-            "selected": row_for_output(newest_today, show_sensitive=show_sensitive),
+            "selected": row_for_output(newest_in_window, show_sensitive=show_sensitive),
+            "today": today.isoformat(),
+            "oldest_allowed_date": oldest_allowed_date.isoformat(),
+            "code_generated_window_days": CODE_GENERATED_WINDOW_DAYS,
         }
 
     selected = max(
-        (row for row in unused_today_rows if row.generado_dt is not None),
+        (row for row in unused_date_window_rows if row.generado_dt is not None),
         key=lambda row: row.generado_dt,
-        default=unused_today_rows[0],
+        default=unused_date_window_rows[0],
     )
 
     status = "ready_to_send"
-    if len(unused_today_rows) > 1:
+    if len(unused_date_window_rows) > 1:
         status = "multiple_candidates_selected_latest"
 
     return {
@@ -316,7 +334,10 @@ def build_lookup_result(
         "user_message": "Código vigente encontrado. Listo para enviar SMS.",
         "pin_normalized": pin_normalized,
         "selected": row_for_output(selected, show_sensitive=show_sensitive),
-        "valid_candidates": len(unused_today_rows),
+        "valid_candidates": len(unused_date_window_rows),
+        "today": today.isoformat(),
+        "oldest_allowed_date": oldest_allowed_date.isoformat(),
+        "code_generated_window_days": CODE_GENERATED_WINDOW_DAYS,
     }
 
 
