@@ -125,6 +125,71 @@
     </section>
 
 
+
+    <section class="track-forecast-cohorts" *ngIf="hasCohortForecast">
+      <div class="track-forecast-section-header">
+        <div>
+          <span>Método alterno</span>
+          <h2>{{ cohortForecastTitle }}</h2>
+          <p>{{ cohortForecastSubtitle }}</p>
+        </div>
+
+        <div class="track-forecast-cohort-message">
+          <span>Lectura</span>
+          <strong>{{ cohortForecastMainMessage }}</strong>
+        </div>
+      </div>
+
+      <div class="track-forecast-table-wrap">
+        <table class="track-forecast-table">
+          <thead>
+            <tr>
+              <th>Cohorte</th>
+              <th>Gyms</th>
+              <th>Real MTD</th>
+              <th>Esperado MTD</th>
+              <th>Gap</th>
+              <th>Ritmo</th>
+              <th>Proyección estable</th>
+              <th>Referencia experimental</th>
+              <th>Calidad</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            <tr *ngFor="let item of cohortForecastItems">
+              <td>
+                <strong>{{ item.label || item.cohort_key }}</strong>
+                <small>{{ item.cohort_key }}</small>
+              </td>
+
+              <td>{{ formatNumber(item.branches_count) }}</td>
+              <td>{{ formatCurrency(item.real_mtd) }}</td>
+              <td>{{ formatCurrency(item.historical_expected_mtd) }}</td>
+
+              <td>
+                <span class="track-forecast-delta" [ngClass]="getCohortTrendClass(item)">
+                  {{ formatCurrency(item.gap_vs_expected_mtd) }}
+                  ·
+                  {{ formatPercent(item.gap_vs_expected_mtd_pct) }}
+                </span>
+              </td>
+
+              <td>{{ formatPercent(item.trend_factor) }}</td>
+              <td>{{ getCohortProjectionLabel(item) }}</td>
+              <td>{{ getCohortExperimentalLabel(item) }}</td>
+
+              <td>
+                <span class="track-forecast-cohort-quality" [ngClass]="getCohortQualityClass(item)">
+                  {{ getCohortQualityLabel(item) }}
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
     <section class="track-forecast-same-day" *ngIf="hasSameDayHistory">
       <div class="track-forecast-section-header">
         <div>
