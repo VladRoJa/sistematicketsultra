@@ -1253,6 +1253,36 @@ def _build_cohort_forecast(
 
         confidence = _confidence_from_comparable_months(historical_months)
 
+        projected_close_experimental = projected_close
+        projection_quality_issue = None
+        quality_reasons: list[str] = []
+
+        if historical_months < 3:
+            quality_reasons.append("La cohorte tiene menos de 3 meses comparables para este mes.")
+
+        if confidence != "alta":
+            quality_reasons.append(f"La confianza histórica de la cohorte es {confidence}.")
+
+        if historical_expected_mtd is None or historical_expected_mtd < 50000:
+            quality_reasons.append("El promedio histórico esperado MTD de la cohorte es demasiado bajo para proyectar con estabilidad.")
+
+        if trend_factor is not None and trend_factor > 3:
+            quality_reasons.append("El factor de tendencia de la cohorte es extremo contra su histórico esperado.")
+
+        if quality_reasons:
+            projection_quality_issue = {
+                "code": "insufficient_cohort_history",
+                "severity": "warning",
+                "message": "Histórico insuficiente para proyectar esta cohorte con estabilidad.",
+                "reasons": quality_reasons,
+                "thresholds": {
+                    "min_historical_months": 3,
+                    "min_historical_expected_mtd": 50000,
+                    "max_trend_factor": 3,
+                },
+            }
+            projected_close = None
+
         return {
             "cohort_key": cohort_key,
             "label": accumulator["label"],
@@ -1270,7 +1300,9 @@ def _build_cohort_forecast(
             "gap_vs_expected_mtd": gap_vs_expected_mtd,
             "gap_vs_expected_mtd_pct": gap_vs_expected_mtd_pct,
             "projected_close": projected_close,
+            "projected_close_experimental": projected_close_experimental,
             "confidence": confidence,
+            "projection_quality_issue": projection_quality_issue,
             "history_months": sorted(months, key=lambda month: month["business_month"]),
         }
 
@@ -1278,6 +1310,43 @@ def _build_cohort_forecast(
         build_item(cohort_key, cohort_accumulators[cohort_key])
         for cohort_key in cohort_keys
     ]
+
+    component_quality_issues = [
+        item
+        for item in items
+        if item.get("projection_quality_issue") or item.get("projected_close") is None
+    ]
+
+    total_projected_close_experimental = sum(
+        float(
+            item.get("projected_close_experimental")
+            if item.get("projected_close_experimental") is not None
+            else item.get("projected_close") or 0
+        )
+        for item in items
+    )
+
+    total_projected_close = (
+        None
+        if component_quality_issues
+        else sum(float(item.get("projected_close") or 0) for item in items)
+    )
+
+    total_projection_quality_issue = None
+
+    if component_quality_issues:
+        total_projection_quality_issue = {
+            "code": "partial_cohort_history",
+            "severity": "warning",
+            "message": "No se puede consolidar una proyección confiable por cohortes porque una o más cohortes tienen histórico insuficiente.",
+            "reasons": [
+                (
+                    f"{item.get('label')}: "
+                    f"{(item.get('projection_quality_issue') or {}).get('message', 'Sin proyección estable.')}"
+                )
+                for item in component_quality_issues
+            ],
+        }
 
     total_item = {
         "cohort_key": TRACK_BRANCH_COHORT_TOTAL_ULTRA,
@@ -1299,8 +1368,10 @@ def _build_cohort_forecast(
         "trend_factor": None,
         "gap_vs_expected_mtd": None,
         "gap_vs_expected_mtd_pct": None,
-        "projected_close": sum(float(item["projected_close"] or 0) for item in items),
+        "projected_close": total_projected_close,
+        "projected_close_experimental": total_projected_close_experimental,
         "confidence": "mixta",
+        "projection_quality_issue": total_projection_quality_issue,
         "history_months": [],
     }
 
