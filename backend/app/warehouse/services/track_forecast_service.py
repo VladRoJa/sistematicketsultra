@@ -9,6 +9,15 @@ from sqlalchemy import bindparam, text
 
 from app.extensions import db
 
+from app.warehouse.services.track_branch_cohort_service import (
+    TRACK_BRANCH_COHORT_LEGACY_21,
+    TRACK_BRANCH_COHORT_NEW_GYMS,
+    TRACK_BRANCH_COHORT_TOTAL_ULTRA,
+    build_track_branch_cohort_lookup,
+    get_track_branch_cohort_definitions,
+    get_track_branch_cohort_key,
+)
+
 
 EXCLUDED_BRANCHES = {
     "CORPORATIVO",
@@ -1044,6 +1053,282 @@ def _build_branch_drivers(
         "items": items,
     }
 
+
+def _build_cohort_forecast(
+    *,
+    target_month: date,
+    cutoff_day: int,
+    scope: str,
+    mart_rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    if scope != "national":
+        return {
+            "status": "not_applicable",
+            "method": "legacy_21_plus_new_gyms",
+            "scope": scope,
+            "items": [],
+        }
+
+    history_start_date, history_end_date = _build_history_window(target_month)
+
+    selected_branches = {
+        str(row.get("sucursal_canon") or "").strip().upper()
+        for row in mart_rows
+        if str(row.get("sucursal_canon") or "").strip()
+    }
+
+    if not selected_branches:
+        return {
+            "status": "empty",
+            "method": "legacy_21_plus_new_gyms",
+            "scope": scope,
+            "items": [],
+        }
+
+    cohort_lookup = build_track_branch_cohort_lookup(
+        sucursales_canon=selected_branches,
+        active_only=True,
+    )
+
+    definitions_by_key = {
+        item["key"]: item
+        for item in get_track_branch_cohort_definitions()
+    }
+
+    cohort_keys = [
+        TRACK_BRANCH_COHORT_LEGACY_21,
+        TRACK_BRANCH_COHORT_NEW_GYMS,
+    ]
+
+    cohort_accumulators: dict[str, dict[str, Any]] = {
+        cohort_key: {
+            "cohort_key": cohort_key,
+            "label": definitions_by_key.get(cohort_key, {}).get("label", cohort_key),
+            "real_mtd": 0.0,
+            "real_base_mtd": 0.0,
+            "real_agregadora_mtd": 0.0,
+            "branches_count": 0,
+            "branches": [],
+            "history_by_month": {},
+        }
+        for cohort_key in cohort_keys
+    }
+
+    for row in mart_rows:
+        sucursal_canon = str(row.get("sucursal_canon") or "").strip().upper()
+
+        if not sucursal_canon:
+            continue
+
+        cohort_key = get_track_branch_cohort_key(
+            sucursal_canon=sucursal_canon,
+            cohort_lookup=cohort_lookup,
+        )
+
+        if cohort_key not in cohort_accumulators:
+            continue
+
+        accumulator = cohort_accumulators[cohort_key]
+
+        accumulator["real_mtd"] += _to_float(row.get("real_mtd")) or 0.0
+        accumulator["real_base_mtd"] += _to_float(row.get("ingreso_real_base_mtd")) or 0.0
+        accumulator["real_agregadora_mtd"] += _to_float(row.get("ingreso_real_agregadora_mtd")) or 0.0
+        accumulator["branches_count"] += 1
+        accumulator["branches"].append(sucursal_canon)
+
+    rows = db.session.execute(
+        text(
+            """
+            WITH historical AS (
+                SELECT
+                    upper(trim(a.sucursal_canon)) AS sucursal_canon,
+                    a.business_month,
+                    a.day_of_month,
+                    a.total
+                FROM track_venta_total_daily_branch_agg a
+                JOIN venta_total_snapshots s
+                  ON s.id = a.snapshot_id
+                WHERE s.report_type_key = 'venta_total'
+                  AND s.snapshot_kind = 'daily'
+                  AND s.is_canonical = true
+                  AND a.business_month >= :history_start_date
+                  AND a.business_month < :history_end_date
+                  AND EXTRACT(MONTH FROM a.business_month)::int = :target_month_number
+                  AND upper(trim(a.sucursal_canon)) IN :selected_branches
+                  AND upper(trim(a.sucursal_canon)) NOT IN :excluded_branches
+            )
+            SELECT
+                sucursal_canon,
+                business_month,
+                COALESCE(SUM(total), 0)::numeric AS month_total,
+                COALESCE(SUM(CASE WHEN day_of_month <= :cutoff_day THEN total ELSE 0 END), 0)::numeric AS mtd_total,
+                COALESCE(SUM(CASE WHEN day_of_month > :cutoff_day THEN total ELSE 0 END), 0)::numeric AS remaining_total
+            FROM historical
+            GROUP BY
+                sucursal_canon,
+                business_month
+            """
+        ).bindparams(
+            bindparam("selected_branches", expanding=True),
+            bindparam("excluded_branches", expanding=True),
+        ),
+        {
+            "history_start_date": history_start_date,
+            "history_end_date": history_end_date,
+            "target_month_number": target_month.month,
+            "cutoff_day": cutoff_day,
+            "selected_branches": tuple(selected_branches),
+            "excluded_branches": tuple(EXCLUDED_BRANCHES),
+        },
+    ).mappings().all()
+
+    for row in rows:
+        sucursal_canon = str(row["sucursal_canon"] or "").strip().upper()
+        cohort_key = get_track_branch_cohort_key(
+            sucursal_canon=sucursal_canon,
+            cohort_lookup=cohort_lookup,
+        )
+
+        if cohort_key not in cohort_accumulators:
+            continue
+
+        business_month = row["business_month"]
+        month_key = business_month.isoformat() if business_month else None
+
+        if not month_key:
+            continue
+
+        history_by_month = cohort_accumulators[cohort_key]["history_by_month"]
+
+        if month_key not in history_by_month:
+            history_by_month[month_key] = {
+                "business_month": month_key,
+                "month_total": 0.0,
+                "mtd_total": 0.0,
+                "remaining_total": 0.0,
+            }
+
+        history_by_month[month_key]["month_total"] += float(row["month_total"] or 0)
+        history_by_month[month_key]["mtd_total"] += float(row["mtd_total"] or 0)
+        history_by_month[month_key]["remaining_total"] += float(row["remaining_total"] or 0)
+
+    def build_item(cohort_key: str, accumulator: dict[str, Any]) -> dict[str, Any]:
+        months = list(accumulator["history_by_month"].values())
+        historical_months = len([
+            month
+            for month in months
+            if float(month.get("month_total") or 0) > 0
+        ])
+
+        historical_month_total_aggregate = sum(float(month.get("month_total") or 0) for month in months)
+        historical_mtd_total_aggregate = sum(float(month.get("mtd_total") or 0) for month in months)
+        historical_remaining_total_aggregate = sum(float(month.get("remaining_total") or 0) for month in months)
+
+        historical_expected_month_total = None
+        historical_expected_mtd = None
+        historical_expected_remaining = None
+        historical_progress_pct = None
+        trend_factor = None
+        projected_close = None
+        gap_vs_expected_mtd = None
+        gap_vs_expected_mtd_pct = None
+
+        if historical_months > 0:
+            historical_expected_month_total = historical_month_total_aggregate / historical_months
+            historical_expected_mtd = historical_mtd_total_aggregate / historical_months
+            historical_expected_remaining = historical_remaining_total_aggregate / historical_months
+
+        if historical_month_total_aggregate > 0:
+            historical_progress_pct = historical_mtd_total_aggregate / historical_month_total_aggregate
+
+        real_mtd = float(accumulator["real_mtd"] or 0)
+
+        if historical_expected_mtd and historical_expected_mtd > 0:
+            trend_factor = real_mtd / historical_expected_mtd
+            gap_vs_expected_mtd = real_mtd - historical_expected_mtd
+            gap_vs_expected_mtd_pct = gap_vs_expected_mtd / historical_expected_mtd
+
+        if historical_progress_pct and historical_progress_pct > 0:
+            projected_close = real_mtd / historical_progress_pct
+
+        confidence = _confidence_from_comparable_months(historical_months)
+
+        return {
+            "cohort_key": cohort_key,
+            "label": accumulator["label"],
+            "branches_count": int(accumulator["branches_count"] or 0),
+            "branches": sorted(accumulator["branches"]),
+            "real_mtd": real_mtd,
+            "real_base_mtd": float(accumulator["real_base_mtd"] or 0),
+            "real_agregadora_mtd": float(accumulator["real_agregadora_mtd"] or 0),
+            "historical_months": historical_months,
+            "historical_expected_mtd": historical_expected_mtd,
+            "historical_expected_remaining": historical_expected_remaining,
+            "historical_expected_month_total": historical_expected_month_total,
+            "historical_progress_pct": historical_progress_pct,
+            "trend_factor": trend_factor,
+            "gap_vs_expected_mtd": gap_vs_expected_mtd,
+            "gap_vs_expected_mtd_pct": gap_vs_expected_mtd_pct,
+            "projected_close": projected_close,
+            "confidence": confidence,
+            "history_months": sorted(months, key=lambda month: month["business_month"]),
+        }
+
+    items = [
+        build_item(cohort_key, cohort_accumulators[cohort_key])
+        for cohort_key in cohort_keys
+    ]
+
+    total_item = {
+        "cohort_key": TRACK_BRANCH_COHORT_TOTAL_ULTRA,
+        "label": definitions_by_key.get(TRACK_BRANCH_COHORT_TOTAL_ULTRA, {}).get("label", "ULTRA TOTAL"),
+        "branches_count": sum(int(item["branches_count"] or 0) for item in items),
+        "branches": sorted({
+            branch
+            for item in items
+            for branch in item.get("branches", [])
+        }),
+        "real_mtd": sum(float(item["real_mtd"] or 0) for item in items),
+        "real_base_mtd": sum(float(item["real_base_mtd"] or 0) for item in items),
+        "real_agregadora_mtd": sum(float(item["real_agregadora_mtd"] or 0) for item in items),
+        "historical_months": None,
+        "historical_expected_mtd": sum(float(item["historical_expected_mtd"] or 0) for item in items),
+        "historical_expected_remaining": sum(float(item["historical_expected_remaining"] or 0) for item in items),
+        "historical_expected_month_total": sum(float(item["historical_expected_month_total"] or 0) for item in items),
+        "historical_progress_pct": None,
+        "trend_factor": None,
+        "gap_vs_expected_mtd": None,
+        "gap_vs_expected_mtd_pct": None,
+        "projected_close": sum(float(item["projected_close"] or 0) for item in items),
+        "confidence": "mixta",
+        "history_months": [],
+    }
+
+    if total_item["historical_expected_mtd"] and total_item["historical_expected_mtd"] > 0:
+        total_item["trend_factor"] = total_item["real_mtd"] / total_item["historical_expected_mtd"]
+        total_item["gap_vs_expected_mtd"] = total_item["real_mtd"] - total_item["historical_expected_mtd"]
+        total_item["gap_vs_expected_mtd_pct"] = total_item["gap_vs_expected_mtd"] / total_item["historical_expected_mtd"]
+
+    if total_item["historical_expected_month_total"] and total_item["historical_expected_month_total"] > 0:
+        total_item["historical_progress_pct"] = (
+            total_item["historical_expected_mtd"] / total_item["historical_expected_month_total"]
+        )
+
+    all_items = [total_item] + items
+
+    return {
+        "status": "ok",
+        "method": "legacy_21_plus_new_gyms",
+        "scope": scope,
+        "target_month": target_month.isoformat(),
+        "cutoff_day": cutoff_day,
+        "history_window": {
+            "start": history_start_date.isoformat(),
+            "end_exclusive": history_end_date.isoformat(),
+        },
+        "items": all_items,
+    }
+
 def build_venta_total_forecast(
     *,
     track_date: date,
@@ -1225,6 +1510,13 @@ def build_venta_total_forecast(
         mart_rows=mart_rows,
     )
 
+    cohort_forecast = _build_cohort_forecast(
+        target_month=target_month,
+        cutoff_day=cutoff_day,
+        scope=scope,
+        mart_rows=mart_rows,
+    )
+
     warnings = _build_forecast_warnings(
         generation_mode=generation_mode,
         goal_status=goal_status,
@@ -1254,6 +1546,7 @@ def build_venta_total_forecast(
         "forecast_explanation": forecast_explanation,
         "same_day_history": same_day_history,
         "branch_drivers": branch_drivers,
+        "cohort_forecast": cohort_forecast,
         "warnings": warnings,
         "data_quality": {
             "goal_status": goal_status,
