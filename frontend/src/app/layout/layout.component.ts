@@ -1004,13 +1004,16 @@ private puedeVerTrackDiarioPorRol(): boolean {
 }
 
 private puedeVerGascaSmsPorRol(): boolean {
-    const user = this.authService.getUser();
-    const userId = Number(user?.id || 0);
-    const username = (user?.username || '').toString().trim().toUpperCase();
-    const rol = ((user as any)?.rol || (user as any)?.role || '').toString().trim().toUpperCase();
+  const user = this.authService.getUser();
+  const rol = (user?.rol || '').toString().trim().toUpperCase();
 
-    return (userId === 47 && username === 'ADMICORP') || rol === 'SISTEMAS'; 
-  }
+  return [
+    'ADMIN',
+    'ADMINISTRADOR',
+    'SUPER_ADMIN',
+    'GERENTE',
+  ].includes(rol);
+}
 
 private puedeVerAperturasPorRol(): boolean {
   const user = this.authService.getUser();
