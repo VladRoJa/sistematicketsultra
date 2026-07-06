@@ -112,12 +112,6 @@
       </article>
 
       <article class="track-forecast-card">
-        <span>Histórico restante esperado</span>
-        <strong>{{ formatCurrency(s.historical_expected_remaining) }}</strong>
-        <small>Base comparable del resto del mes.</small>
-      </article>
-
-      <article class="track-forecast-card">
         <span>Meta mensual</span>
         <strong>{{ formatCurrency(s.goal_month) }}</strong>
         <small>{{ goalStatusMessage || 'Meta disponible' }}</small>
@@ -128,6 +122,74 @@
         <strong>{{ formatCurrency(s.weighted_goal_mtd) }}</strong>
         <small>Brecha: {{ formatCurrency(s.gap_vs_weighted_goal) }}</small>
       </article>
+    </section>
+
+
+    <section class="track-forecast-same-day" *ngIf="hasSameDayHistory">
+      <div class="track-forecast-section-header">
+        <div>
+          <span>Histórico comparable</span>
+          <h2>{{ sameDayHistoryTitle }}</h2>
+          <p>{{ sameDayHistorySubtitle }}</p>
+        </div>
+
+        <div class="track-forecast-same-day-summary">
+          <span>Actual vs promedio</span>
+          <strong>{{ currentSameDayGapVsAverageLabel }}</strong>
+        </div>
+      </div>
+
+      <div class="track-forecast-table-wrap">
+        <table class="track-forecast-table">
+          <thead>
+            <tr>
+              <th>Año</th>
+              <th>MTD mismo día</th>
+              <th>Cierre mensual</th>
+              <th>Avance del mes</th>
+              <th>Vs actual</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            <tr *ngFor="let item of sameDayHistoryItems">
+              <td>
+                <strong>{{ item.year }}</strong>
+              </td>
+              <td>{{ formatCurrency(item.mtd_total) }}</td>
+              <td>{{ formatCurrency(item.month_total) }}</td>
+              <td>{{ formatPercent(item.progress_pct) }}</td>
+              <td>
+                <span
+                  class="track-forecast-delta"
+                  [class.track-forecast-delta--positive]="(item.gap_current_vs_mtd || 0) >= 0"
+                  [class.track-forecast-delta--negative]="(item.gap_current_vs_mtd || 0) < 0"
+                >
+                  {{ formatCurrency(item.gap_current_vs_mtd) }}
+                  ·
+                  {{ formatPercent(item.gap_current_vs_mtd_pct) }}
+                </span>
+              </td>
+            </tr>
+
+            <tr class="track-forecast-table-current">
+              <td>
+                <strong>{{ sameDayHistoryCurrent?.year || forecast?.metadata?.target_month?.slice(0, 4) }}</strong>
+                <small>Actual</small>
+              </td>
+              <td>{{ formatCurrency(sameDayHistoryCurrent?.mtd_total || s.real_mtd) }}</td>
+              <td>
+                <span *ngIf="sameDayHistoryCurrent?.projected_close !== null; else noProjection">
+                  {{ formatCurrency(sameDayHistoryCurrent?.projected_close) }}
+                </span>
+                <ng-template #noProjection>Sin proyección</ng-template>
+              </td>
+              <td>{{ formatPercent(sameDayHistoryCurrent?.historical_progress_pct || s.historical_progress_pct) }}</td>
+              <td>{{ formatPercent(sameDayHistoryCurrent?.trend_factor || s.trend_factor_raw) }} del ritmo esperado</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </section>
 
     <section class="track-forecast-explanation">
