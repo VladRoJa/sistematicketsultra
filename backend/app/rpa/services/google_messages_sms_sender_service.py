@@ -202,9 +202,35 @@ def _wait_for_google_messages_loader_idle(page: Page, timeout_ms: int) -> None:
 
 
 def _click_or_focus_recipient_input(page: Page, recipient_input, config: GoogleMessagesSmsConfig) -> None:
-    _wait_for_google_messages_loader_idle(page, config.timeout_ms)
+    last_wait_error: Exception | None = None
 
-    recipient_input.wait_for(state="visible", timeout=config.timeout_ms)
+    for attempt in range(1, 3):
+        _wait_for_google_messages_loader_idle(page, config.timeout_ms)
+
+        try:
+            recipient_input.wait_for(state="visible", timeout=config.timeout_ms)
+            break
+        except Exception as wait_exc:
+            last_wait_error = wait_exc
+
+            if attempt >= 2:
+                raise GoogleMessagesSmsSenderError(
+                    "Google Messages no mostró el input de destinatario después de reabrir nueva conversación."
+                ) from wait_exc
+
+            try:
+                page.goto(
+                    MESSAGES_NEW_URL,
+                    wait_until="domcontentloaded",
+                    timeout=config.timeout_ms,
+                )
+                page.wait_for_timeout(1500)
+            except Exception:
+                pass
+    else:
+        raise GoogleMessagesSmsSenderError(
+            f"Google Messages no mostró el input de destinatario. Último error: {last_wait_error}"
+        )
 
     try:
         recipient_input.click(timeout=config.timeout_ms)
