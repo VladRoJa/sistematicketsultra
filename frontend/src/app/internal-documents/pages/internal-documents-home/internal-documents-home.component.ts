@@ -137,6 +137,15 @@ readonly discoveryCards: InternalDocumentDiscoveryCard[] = [
     categoryName: 'Comunicados',
     period: 'all',
   },
+    {
+    key: 'politicas',
+    title: 'Politicas',
+    description: 'Avisos e información interna publicada.',
+    icon: 'POL',
+    query: 'politica',
+    categoryName: 'Politicas',
+    period: 'all',
+  },
   {
     key: 'reportes',
     title: 'Reportes',
