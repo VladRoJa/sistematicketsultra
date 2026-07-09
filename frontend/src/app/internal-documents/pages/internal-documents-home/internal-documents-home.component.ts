@@ -714,7 +714,7 @@ private normalizeDiscoveryText(value: string | null | undefined): string {
       next: (response) => {
         this.saving = false;
         this.successMessage = response.message || 'Visibilidad actualizada.';
-        this.selectedDocument = response.item;
+        this.applyDocumentUpdateToCurrentList(response.item);
         this.loadDocuments();
       },
       error: (error) => {
@@ -739,7 +739,7 @@ private normalizeDiscoveryText(value: string | null | undefined): string {
       next: (response) => {
         this.saving = false;
         this.successMessage = response.message || 'Documento publicado.';
-        this.selectedDocument = response.item;
+        this.applyDocumentUpdateToCurrentList(response.item);
         this.loadDocuments();
       },
       error: (error) => {
@@ -1589,6 +1589,18 @@ createExternalResourceForSelectedDocument(): void {
     this.visiblePreviewableCount = this.documents.filter(
       (document) => this.canPreviewDocument(document)
     ).length;
+  }
+
+  private applyDocumentUpdateToCurrentList(updatedDocument: InternalDocument): void {
+    this.documents = this.documents.map((document) =>
+      document.id === updatedDocument.id ? updatedDocument : document
+    );
+
+    if (this.selectedDocument?.id === updatedDocument.id) {
+      this.selectedDocument = updatedDocument;
+    }
+
+    this.updateVisibleDocumentSummary();
   }
 
   private buildLinkPayload(): InternalDocumentLinkPayload | null {
