@@ -1001,6 +1001,7 @@ private puedeVerTrackDiarioPorRol(): boolean {
     'SISTEMAS',
     "GERENCIA DEPORTIVA",
     'MARKETING',
+    'TIENDA',
   ].includes(rol);
 }
 
