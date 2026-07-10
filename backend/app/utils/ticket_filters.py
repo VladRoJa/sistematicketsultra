@@ -1,5 +1,5 @@
 # backend/app/utils/ticket_filters.py
-from sqlalchemy import or_, and_
+from sqlalchemy import or_, and_, func
 from app.models import Ticket
 
 GERENTE_ROLES = {"GERENTE", "GERENTE_SUCURSAL", "GERENTE_GENERAL", "GERENTE_DEPTO"}
@@ -9,38 +9,51 @@ ADMIN_ROLES = {"ADMINISTRADOR", "SUPER_ADMIN", "EDITOR_CORPORATIVO", "LECTOR_GLO
 TECH_ROLES = {"TECNICO", "SOPORTE", "SOPORTE_SISTEMAS","SR_MANTENIMIENTO"}
 
 
-def _filtro_solo_sucursal(query, sucursal_id: int):
-    return query.filter(
-        or_(
-            Ticket.sucursal_id_destino == int(sucursal_id),
-            and_(
-                Ticket.sucursal_id_destino.is_(None),
-                Ticket.sucursal_id == int(sucursal_id)
-            )
-        )
-    )
+def _condicion_creador(user):
+    username = (getattr(user, "username", None) or "").strip()
+
+    if not username:
+        return None
+
+    return func.lower(Ticket.username) == username.lower()
 
 
-def _filtro_multiples_sucursales(query, sucursales_ids: list[int]):
-    """
-    Mismo criterio que _filtro_solo_sucursal, pero para un set de sucursales.
-    - Prioriza sucursal_id_destino IN (scope)
-    - Si sucursal_id_destino es NULL, cae a Ticket.sucursal_id IN (scope)
-    """
-    ids = [int(x) for x in (sucursales_ids or [])]
-    if not ids:
+def _filtrar_scope_o_creador(query, user, *scope_conditions):
+    conditions = [condition for condition in scope_conditions if condition is not None]
+
+    creator_condition = _condicion_creador(user)
+    if creator_condition is not None:
+        conditions.append(creator_condition)
+
+    if not conditions:
         return query.filter(False)
 
-    return query.filter(
-        or_(
-            Ticket.sucursal_id_destino.in_(ids),
-            and_(
-                Ticket.sucursal_id_destino.is_(None),
-                Ticket.sucursal_id.in_(ids)
-            )
+    return query.filter(or_(*conditions))
+
+
+def _condicion_solo_sucursal(sucursal_id: int):
+    return or_(
+        Ticket.sucursal_id_destino == int(sucursal_id),
+        and_(
+            Ticket.sucursal_id_destino.is_(None),
+            Ticket.sucursal_id == int(sucursal_id)
         )
     )
 
+
+def _condicion_multiples_sucursales(sucursales_ids: list[int]):
+    ids = [int(x) for x in (sucursales_ids or [])]
+
+    if not ids:
+        return None
+
+    return or_(
+        Ticket.sucursal_id_destino.in_(ids),
+        and_(
+            Ticket.sucursal_id_destino.is_(None),
+            Ticket.sucursal_id.in_(ids)
+        )
+    )
 
 def filtrar_tickets_por_usuario(user):
     q = Ticket.query
@@ -54,20 +67,20 @@ def filtrar_tickets_por_usuario(user):
 
     # 1) Admins por rol (ALL)
     if rol in ADMIN_ROLES:
-        print(f"[PERM] {user.username} rol={rol} suc={suc} -> ALL (ADMIN_ROLES)")
         return q
 
     # 2) Gerente regional: SIEMPRE por scope (aunque suc=1000)
     if rol == "GERENTE_REGIONAL":
         if not scope:
-            print(f"[PERM] {user.username} rol={rol} SIN sucursales_ids -> 0")
-            return q.filter(False)
-        print(f"[PERM] {user.username} rol={rol} scope={scope} -> MULTI SUCURSAL")
-        return _filtro_multiples_sucursales(q, scope)
+            return _filtrar_scope_o_creador(q, user)
+        return _filtrar_scope_o_creador(
+            q,
+            user,
+            _condicion_multiples_sucursales(scope),
+        )
 
     # 3) sucursal_id == 1000 SOLO otorga ALL si el rol realmente es admin/super_admin
     if suc == 1000 and rol in {"ADMINISTRADOR", "SUPER_ADMIN"}:
-        print(f"[PERM] {user.username} rol={rol} suc={suc} -> ALL (suc=1000 admin)")
         return q
 
     # 4) Técnicos/Soporte con department_id:
@@ -77,41 +90,53 @@ def filtrar_tickets_por_usuario(user):
         try:
             depto_int = int(depto)
         except Exception:
-            print(f"[PERM] {user.username} rol={rol} depto inválido={depto} -> 0")
-            return q.filter(False)
-
-        base = q.filter(Ticket.departamento_id == depto_int)
+            return _filtrar_scope_o_creador(q, user)
 
         if scope:
-            print(f"[PERM] {user.username} rol={rol} depto={depto_int} scope={scope} -> DEPTO + MULTI SUCURSAL")
-            return _filtro_multiples_sucursales(base, scope)
+            return _filtrar_scope_o_creador(
+                q,
+                user,
+                and_(
+                    Ticket.departamento_id == depto_int,
+                    _condicion_multiples_sucursales(scope),
+                ),
+            )
 
-        print(f"[PERM] {user.username} rol={rol} depto={depto_int} -> SOLO DEPARTAMENTO (sin scope)")
-        return base
+        return _filtrar_scope_o_creador(
+            q,
+            user,
+            Ticket.departamento_id == depto_int,
+        )
 
     # 5) Gerentes: por SUCURSAL (1)
     if rol in GERENTE_ROLES:
         if not suc:
-            print(f"[PERM] {user.username} rol={rol} SIN sucursal -> 0")
-            return q.filter(False)
-        print(f"[PERM] {user.username} rol={rol} suc={suc} -> SOLO SUCURSAL")
-        return _filtro_solo_sucursal(q, suc)
+            return _filtrar_scope_o_creador(q, user)
+        return _filtrar_scope_o_creador(
+            q,
+            user,
+            _condicion_solo_sucursal(suc),
+        )
 
     # 6) Jefaturas / encargados con department_id: por DEPARTAMENTO (todas las sucursales)
     if depto:
         try:
             depto_int = int(depto)
         except Exception:
-            print(f"[PERM] {user.username} depto inválido={depto} -> 0")
-            return q.filter(False)
-        print(f"[PERM] {user.username} depto={depto_int} -> SOLO DEPARTAMENTO (todas las sucursales)")
-        return q.filter(Ticket.departamento_id == depto_int)
+            return _filtrar_scope_o_creador(q, user)
+        return _filtrar_scope_o_creador(
+            q,
+            user,
+            Ticket.departamento_id == depto_int,
+        )
 
     # 7) Operativos: por SUCURSAL
     if suc:
-        print(f"[PERM] {user.username} rol={rol} suc={suc} -> SOLO SUCURSAL")
-        return _filtro_solo_sucursal(q, suc)
+        return _filtrar_scope_o_creador(
+            q,
+            user,
+            _condicion_solo_sucursal(suc),
+        )
 
     # 8) Fallback
-    print(f"[PERM] {user.username} sin reglas -> 0")
-    return q.filter(False)
+    return _filtrar_scope_o_creador(q, user)
