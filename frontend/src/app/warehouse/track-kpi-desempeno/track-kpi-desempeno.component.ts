@@ -180,8 +180,8 @@ type KpiBranchSeriesSection =
   styleUrls: ['./track-kpi-desempeno.component.css'],
 })
 export class TrackKpiDesempenoComponent implements OnInit {
-  targetMonth = '2026-05';
-  startMonth = '2026-03';
+  targetMonth = '';
+  startMonth = '';
   historyGranularity: KpiDesempenoDisplayGranularity = 'weekly';
 
   loading = false;
@@ -241,7 +241,54 @@ export class TrackKpiDesempenoComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
+    this.initializeDefaultMonths();
     this.loadReport();
+  }
+
+  private initializeDefaultMonths(): void {
+    const currentMonth = this.getCurrentBusinessMonth();
+
+    this.targetMonth = this.shiftMonth(currentMonth, -1);
+    this.startMonth = this.shiftMonth(this.targetMonth, -3);
+  }
+
+  private getCurrentBusinessMonth(): string {
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Tijuana',
+      year: 'numeric',
+      month: '2-digit',
+    });
+
+    const parts = formatter.formatToParts(new Date());
+    const year = parts.find((part) => part.type === 'year')?.value;
+    const month = parts.find((part) => part.type === 'month')?.value;
+
+    if (!year || !month) {
+      throw new Error(
+        'No fue posible determinar el mes actual de America/Tijuana.',
+      );
+    }
+
+    return `${year}-${month}`;
+  }
+
+  private shiftMonth(value: string, offsetMonths: number): string {
+    const match = /^(\d{4})-(\d{2})$/.exec(value);
+
+    if (!match) {
+      throw new Error(`Formato de mes inválido: ${value}`);
+    }
+
+    const year = Number(match[1]);
+    const monthIndex = Number(match[2]) - 1;
+    const shiftedDate = new Date(
+      Date.UTC(year, monthIndex + offsetMonths, 1),
+    );
+
+    return [
+      shiftedDate.getUTCFullYear(),
+      String(shiftedDate.getUTCMonth() + 1).padStart(2, '0'),
+    ].join('-');
   }
 
   get weeklySection(): KpiDesempenoWeeklySection | null {
