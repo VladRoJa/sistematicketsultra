@@ -45,6 +45,8 @@ def _require_kpi_desempeno_read_role() -> None:
         "ADMIN",
         "ADMINISTRADOR",
         "SUPER_ADMIN",
+        "LECTOR_GLOBAL",
+        
     }:
         raise PermissionError("No autorizado para consultar KPI Desempeño.")
 
