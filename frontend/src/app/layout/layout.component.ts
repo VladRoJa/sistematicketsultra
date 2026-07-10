@@ -983,6 +983,7 @@ private puedeVerKpiDesempenoPorRol(): boolean {
     'ADMIN',
     'ADMINISTRADOR',
     'SUPER_ADMIN',
+    'LECTOR_GLOBAL',
   ].includes(rol);
 }
 
