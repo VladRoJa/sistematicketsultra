@@ -1,0 +1,23 @@
+# Graphify-specific exclusions.
+# Existing .gitignore rules are also respected.
+
+# Graphify generated output: never index the graph itself.
+graphify-out/
+
+# Angular generated artifacts.
+frontend/dist/
+frontend/.angular/
+
+# Local inspection and agent-tool configuration.
+_inspections/
+.agents/
+.continue/
+.qodo/
+.vscode/
+
+# Runtime/local data directories.
+data/
+flask_session/
+instance/
+logs/
+uploads/
