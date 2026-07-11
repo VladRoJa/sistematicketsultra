@@ -32,3 +32,6 @@ backend/storage/
 # Let's Encrypt / Certbot runtime files
 certbot/
 backend/.playwright/
+
+# Local/generated Graphify knowledge graph
+graphify-out/
