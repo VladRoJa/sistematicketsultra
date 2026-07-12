@@ -174,6 +174,41 @@ export interface TrackVentaTotalForecastExplanation {
   components: TrackVentaTotalForecastExplanationComponents;
 }
 
+export interface TrackVentaTotalForecastInfoWarning {
+  code: 'goal_pending';
+  severity: 'info';
+  message: string;
+}
+
+export interface TrackVentaTotalForecastStandardWarning {
+  code:
+    | 'preview_operativo'
+    | 'goal_partial'
+    | 'canonical_cutoff_missing'
+    | 'low_comparable_history';
+  severity: 'warning';
+  message: string;
+}
+
+export interface TrackVentaTotalForecastBranchHistoryWarningThresholds {
+  min_historical_months: number;
+  min_historical_mtd_total: number;
+  max_trend_factor: number;
+}
+
+export interface TrackVentaTotalForecastBranchHistoryWarning {
+  code: 'insufficient_branch_history';
+  severity: 'warning';
+  message: string;
+  reasons: string[];
+  thresholds: TrackVentaTotalForecastBranchHistoryWarningThresholds;
+}
+
+export type TrackVentaTotalForecastWarning =
+  | TrackVentaTotalForecastInfoWarning
+  | TrackVentaTotalForecastStandardWarning
+  | TrackVentaTotalForecastBranchHistoryWarning;
+
 export interface TrackVentaTotalForecastSummary {
   real_mtd: number;
   real_base_mtd: number;
@@ -216,6 +251,7 @@ export interface TrackVentaTotalForecastResponse {
   same_day_history?: TrackVentaTotalForecastSameDayHistory;
   executive_status?: TrackVentaTotalForecastExecutiveStatus;
   forecast_explanation?: TrackVentaTotalForecastExplanation;
+  warnings?: TrackVentaTotalForecastWarning[];
   message?: string;
   detail?: string;
 }
