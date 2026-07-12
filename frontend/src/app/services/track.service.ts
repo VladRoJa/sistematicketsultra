@@ -137,6 +137,27 @@ export interface TrackVentaTotalForecastSameDayHistory {
   items: TrackVentaTotalForecastSameDayHistoryItem[];
 }
 
+export interface TrackVentaTotalForecastExecutiveStatus {
+  level: 'warning' | 'neutral' | 'danger' | 'success';
+  code:
+    | 'insufficient_branch_history'
+    | 'no_projection'
+    | 'below_weighted_goal'
+    | 'slightly_below_weighted_goal'
+    | 'above_weighted_goal'
+    | 'near_weighted_goal'
+    | 'projection_without_trend_factor'
+    | 'well_below_historical_pace'
+    | 'below_historical_pace'
+    | 'near_historical_pace'
+    | 'above_historical_pace';
+  title: string;
+  message: string;
+  primary_metric_label: string;
+  primary_metric_value: number | null;
+  primary_metric_unit: 'MXN';
+}
+
 export interface TrackVentaTotalForecastSummary {
   real_mtd: number;
   real_base_mtd: number;
@@ -177,6 +198,7 @@ export interface TrackVentaTotalForecastResponse {
   summary?: TrackVentaTotalForecastSummary;
   historical_curve?: TrackVentaTotalForecastHistoricalCurve;
   same_day_history?: TrackVentaTotalForecastSameDayHistory;
+  executive_status?: TrackVentaTotalForecastExecutiveStatus;
   message?: string;
   detail?: string;
 }
