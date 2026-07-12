@@ -293,6 +293,118 @@ export type TrackVentaTotalForecastBranchDrivers =
   | TrackVentaTotalForecastBranchDriversEmpty
   | TrackVentaTotalForecastBranchDriversResult;
 
+export interface TrackVentaTotalForecastCohortHistoryMonth {
+  business_month: string;
+  month_total: number;
+  mtd_total: number;
+  remaining_total: number;
+}
+
+export interface TrackVentaTotalForecastCohortHistoryWindow {
+  start: string;
+  end_exclusive: string;
+}
+
+export interface TrackVentaTotalForecastCohortQualityThresholds {
+  min_historical_months: number;
+  min_historical_expected_mtd: number;
+  max_trend_factor: number;
+}
+
+export interface TrackVentaTotalForecastCohortQualityIssue {
+  code: 'insufficient_cohort_history';
+  severity: 'warning';
+  message: string;
+  reasons: string[];
+  thresholds: TrackVentaTotalForecastCohortQualityThresholds;
+}
+
+export interface TrackVentaTotalForecastCohortTotalQualityIssue {
+  code: 'partial_cohort_history';
+  severity: 'warning';
+  message: string;
+  reasons: string[];
+}
+
+export interface TrackVentaTotalForecastCohortComponentItem {
+  cohort_key: 'legacy_21' | 'new_gyms';
+  label: string;
+  branches_count: number;
+  branches: string[];
+  real_mtd: number;
+  real_base_mtd: number;
+  real_agregadora_mtd: number;
+  historical_months: number;
+  historical_expected_mtd: number | null;
+  historical_expected_remaining: number | null;
+  historical_expected_month_total: number | null;
+  historical_progress_pct: number | null;
+  trend_factor: number | null;
+  gap_vs_expected_mtd: number | null;
+  gap_vs_expected_mtd_pct: number | null;
+  projected_close: number | null;
+  projected_close_experimental: number | null;
+  confidence: 'alta' | 'media' | 'baja' | 'sin_historia';
+  projection_quality_issue: TrackVentaTotalForecastCohortQualityIssue | null;
+  history_months: TrackVentaTotalForecastCohortHistoryMonth[];
+}
+
+export interface TrackVentaTotalForecastCohortTotalItem {
+  cohort_key: 'total_ultra';
+  label: string;
+  branches_count: number;
+  branches: string[];
+  real_mtd: number;
+  real_base_mtd: number;
+  real_agregadora_mtd: number;
+  historical_months: null;
+  historical_expected_mtd: number;
+  historical_expected_remaining: number;
+  historical_expected_month_total: number;
+  historical_progress_pct: number | null;
+  trend_factor: number | null;
+  gap_vs_expected_mtd: number | null;
+  gap_vs_expected_mtd_pct: number | null;
+  projected_close: number | null;
+  projected_close_experimental: number;
+  confidence: 'mixta';
+  projection_quality_issue: TrackVentaTotalForecastCohortTotalQualityIssue | null;
+  history_months: [];
+}
+
+export type TrackVentaTotalForecastCohortItem =
+  | TrackVentaTotalForecastCohortComponentItem
+  | TrackVentaTotalForecastCohortTotalItem;
+
+export interface TrackVentaTotalForecastCohortForecastNotApplicable {
+  status: 'not_applicable';
+  method: 'legacy_21_plus_new_gyms';
+  scope: 'branch';
+  items: [];
+}
+
+export interface TrackVentaTotalForecastCohortForecastEmpty {
+  status: 'empty';
+  method: 'legacy_21_plus_new_gyms';
+  scope: 'national';
+  items: [];
+}
+
+export interface TrackVentaTotalForecastCohortForecastResult {
+  status: 'ok';
+  method: 'legacy_21_plus_new_gyms';
+  scope: 'national';
+  target_month: string;
+  cutoff_day: number;
+  history_window: TrackVentaTotalForecastCohortHistoryWindow;
+  items: TrackVentaTotalForecastCohortItem[];
+}
+
+export type TrackVentaTotalForecastCohortForecast =
+  | TrackVentaTotalForecastCohortForecastNotApplicable
+  | TrackVentaTotalForecastCohortForecastEmpty
+  | TrackVentaTotalForecastCohortForecastResult;
+
 export interface TrackVentaTotalForecastSummary {
   real_mtd: number;
   real_base_mtd: number;
@@ -338,6 +450,7 @@ export interface TrackVentaTotalForecastResponse {
   warnings?: TrackVentaTotalForecastWarning[];
   forecast_cutoff?: TrackVentaTotalForecastCutoff;
   branch_drivers?: TrackVentaTotalForecastBranchDrivers;
+  cohort_forecast?: TrackVentaTotalForecastCohortForecast;
   message?: string;
   detail?: string;
 }
