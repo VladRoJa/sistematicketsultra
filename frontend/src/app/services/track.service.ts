@@ -209,6 +209,26 @@ export type TrackVentaTotalForecastWarning =
   | TrackVentaTotalForecastStandardWarning
   | TrackVentaTotalForecastBranchHistoryWarning;
 
+export interface TrackVentaTotalForecastCanonicalCutoff {
+  snapshot_id: number;
+  business_date: string | null;
+  aggregate_rows: number;
+  first_sale_date: string | null;
+  last_sale_date: string | null;
+  branches: number;
+}
+
+export interface TrackVentaTotalForecastCutoff {
+  track_date: string;
+  target_month: string;
+  cutoff_day: number;
+  generation_mode: TrackGenerationMode;
+  is_official_forecast: boolean;
+  basis: 'official_closed_day' | 'preview_operativo';
+  canonical_cutoff: TrackVentaTotalForecastCanonicalCutoff | null;
+  message: string;
+}
+
 export interface TrackVentaTotalForecastSummary {
   real_mtd: number;
   real_base_mtd: number;
@@ -252,6 +272,7 @@ export interface TrackVentaTotalForecastResponse {
   executive_status?: TrackVentaTotalForecastExecutiveStatus;
   forecast_explanation?: TrackVentaTotalForecastExplanation;
   warnings?: TrackVentaTotalForecastWarning[];
+  forecast_cutoff?: TrackVentaTotalForecastCutoff;
   message?: string;
   detail?: string;
 }
