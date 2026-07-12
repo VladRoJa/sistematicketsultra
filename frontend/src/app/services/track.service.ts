@@ -229,6 +229,70 @@ export interface TrackVentaTotalForecastCutoff {
   message: string;
 }
 
+export interface TrackVentaTotalForecastBranchDriverQualityIssue {
+  code: 'insufficient_branch_history';
+  severity: 'warning';
+  message: string;
+  reasons: string[];
+  thresholds: TrackVentaTotalForecastBranchHistoryWarningThresholds;
+}
+
+export interface TrackVentaTotalForecastBranchDriverItem {
+  sucursal_canon: string;
+  track_label: string;
+  display_order: number | null;
+  real_mtd: number;
+  real_base_mtd: number;
+  real_agregadora_mtd: number;
+  historical_months: number;
+  historical_expected_mtd: number | null;
+  historical_expected_month_total: number | null;
+  historical_progress_pct: number | null;
+  gap_vs_historical_expected: number | null;
+  gap_vs_historical_expected_pct: number | null;
+  trend_factor: number | null;
+  projected_close: number | null;
+  confidence: 'alta' | 'media' | 'baja' | 'sin_historia';
+  projection_quality_issue: TrackVentaTotalForecastBranchDriverQualityIssue | null;
+  impact_share_pct: number;
+}
+
+export interface TrackVentaTotalForecastBranchDriversHistoryWindow {
+  start: string;
+  end_exclusive: string;
+}
+
+export interface TrackVentaTotalForecastBranchDriversNotApplicable {
+  status: 'not_applicable';
+  scope: 'branch';
+  metric: 'real_mtd_vs_historical_expected_mtd';
+  items: [];
+}
+
+export interface TrackVentaTotalForecastBranchDriversEmpty {
+  status: 'empty';
+  scope: 'national';
+  metric: 'real_mtd_vs_historical_expected_mtd';
+  items: [];
+}
+
+export interface TrackVentaTotalForecastBranchDriversResult {
+  status: 'ok';
+  scope: 'national';
+  metric: 'real_mtd_vs_historical_expected_mtd';
+  target_month: string;
+  cutoff_day: number;
+  history_window: TrackVentaTotalForecastBranchDriversHistoryWindow;
+  items_count: number;
+  negative_gap_total: number;
+  items: TrackVentaTotalForecastBranchDriverItem[];
+}
+
+export type TrackVentaTotalForecastBranchDrivers =
+  | TrackVentaTotalForecastBranchDriversNotApplicable
+  | TrackVentaTotalForecastBranchDriversEmpty
+  | TrackVentaTotalForecastBranchDriversResult;
+
 export interface TrackVentaTotalForecastSummary {
   real_mtd: number;
   real_base_mtd: number;
@@ -273,6 +337,7 @@ export interface TrackVentaTotalForecastResponse {
   forecast_explanation?: TrackVentaTotalForecastExplanation;
   warnings?: TrackVentaTotalForecastWarning[];
   forecast_cutoff?: TrackVentaTotalForecastCutoff;
+  branch_drivers?: TrackVentaTotalForecastBranchDrivers;
   message?: string;
   detail?: string;
 }
