@@ -97,6 +97,46 @@ export interface TrackVentaTotalForecastHistoricalCurve {
   confidence: string;
 }
 
+export interface TrackVentaTotalForecastSameDayHistoryItem {
+  year: number;
+  business_month: string | null;
+  mtd_total: number;
+  month_total: number;
+  remaining_total: number;
+  progress_pct: number | null;
+  mtd_days: number;
+  month_days: number;
+  gap_current_vs_mtd: number | null;
+  gap_current_vs_mtd_pct: number | null;
+}
+
+export interface TrackVentaTotalForecastSameDayHistoryAverage {
+  mtd_total: number | null;
+  month_total: number | null;
+  gap_current_vs_average_mtd: number | null;
+  gap_current_vs_average_mtd_pct: number | null;
+}
+
+export interface TrackVentaTotalForecastSameDayHistoryCurrent {
+  year: number;
+  mtd_total: number;
+  projected_close: number | null;
+  historical_progress_pct: number | null;
+  trend_factor: number | null;
+}
+
+export interface TrackVentaTotalForecastSameDayHistory {
+  source: TrackVentaTotalForecastScope;
+  branch: string | null;
+  target_month: string;
+  cutoff_day: number;
+  historical_years: number;
+  confidence: string;
+  average: TrackVentaTotalForecastSameDayHistoryAverage;
+  current: TrackVentaTotalForecastSameDayHistoryCurrent;
+  items: TrackVentaTotalForecastSameDayHistoryItem[];
+}
+
 export interface TrackVentaTotalForecastSummary {
   real_mtd: number;
   real_base_mtd: number;
@@ -136,6 +176,7 @@ export interface TrackVentaTotalForecastResponse {
   data_quality?: TrackVentaTotalForecastDataQuality;
   summary?: TrackVentaTotalForecastSummary;
   historical_curve?: TrackVentaTotalForecastHistoricalCurve;
+  same_day_history?: TrackVentaTotalForecastSameDayHistory;
   message?: string;
   detail?: string;
 }
