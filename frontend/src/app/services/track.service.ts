@@ -405,6 +405,161 @@ export type TrackVentaTotalForecastCohortForecast =
   | TrackVentaTotalForecastCohortForecastEmpty
   | TrackVentaTotalForecastCohortForecastResult;
 
+export interface TrackVentaTotalForecastAnchoredSeasonalSample {
+  year: number;
+  business_month: string;
+  previous_month: string;
+  previous_total: number;
+  month_total: number;
+  factor: number;
+}
+
+export interface TrackVentaTotalForecastAnchoredCumulativeSample {
+  year: number;
+  business_month: string;
+  mtd_total: number;
+  month_total: number;
+  cumulative_pct: number;
+}
+
+export interface TrackVentaTotalForecastAnchoredQualityIssue {
+  code: 'insufficient_anchor_history';
+  severity: 'warning';
+  message: string;
+  reasons: string[];
+}
+
+export interface TrackVentaTotalForecastAnchoredTotalQualityIssue {
+  code: 'partial_anchor_history';
+  severity: 'warning';
+  message: string;
+}
+
+export interface TrackVentaTotalForecastAnchoredLegacyItem {
+  cohort_key: 'legacy_21';
+  label: string;
+  branches_count: number;
+  branches: string[];
+  current_base_mtd: number;
+  current_agregadora_mtd: number;
+  current_total_mtd: number;
+  previous_base_total: number | null;
+  previous_agregadora_total: number | null;
+  previous_closed_total: number | null;
+  seasonal_factor: number | null;
+  seasonal_factor_applied: number | null;
+  seasonal_factor_source: 'same_month_historical_factor';
+  seasonal_years: number;
+  expected_cumulative_pct: number | null;
+  expected_cumulative_method: 'same_month_history';
+  cumulative_years: number;
+  expected_close_before_cutoff: number | null;
+  expected_mtd_at_cutoff: number | null;
+  expected_remaining: number | null;
+  gap_vs_expected_mtd: number | null;
+  gap_vs_expected_mtd_pct: number | null;
+  projected_close: number | null;
+  confidence: 'alta' | 'media';
+  projection_quality_issue: TrackVentaTotalForecastAnchoredQualityIssue | null;
+  seasonal_samples: TrackVentaTotalForecastAnchoredSeasonalSample[];
+  cumulative_samples: TrackVentaTotalForecastAnchoredCumulativeSample[];
+}
+
+export interface TrackVentaTotalForecastAnchoredNewGymsItem {
+  cohort_key: 'new_gyms';
+  label: string;
+  branches_count: number;
+  branches: string[];
+  current_base_mtd: number;
+  current_agregadora_mtd: number;
+  current_total_mtd: number;
+  previous_base_total: number | null;
+  previous_agregadora_total: number | null;
+  previous_closed_total: number | null;
+  seasonal_factor: number | null;
+  seasonal_factor_applied: 1;
+  seasonal_factor_source: 'previous_close_no_seasonal_factor';
+  seasonal_years: number;
+  expected_cumulative_pct: number | null;
+  expected_cumulative_method: 'recent_available_history';
+  cumulative_years: number;
+  expected_close_before_cutoff: number | null;
+  expected_mtd_at_cutoff: number | null;
+  expected_remaining: number | null;
+  gap_vs_expected_mtd: number | null;
+  gap_vs_expected_mtd_pct: number | null;
+  projected_close: number | null;
+  confidence: 'media' | 'baja';
+  projection_quality_issue: TrackVentaTotalForecastAnchoredQualityIssue | null;
+  seasonal_samples: TrackVentaTotalForecastAnchoredSeasonalSample[];
+  cumulative_samples: TrackVentaTotalForecastAnchoredCumulativeSample[];
+}
+
+export interface TrackVentaTotalForecastAnchoredTotalItem {
+  cohort_key: 'total_ultra';
+  label: string;
+  branches_count: number;
+  branches: string[];
+  current_base_mtd: number;
+  current_agregadora_mtd: number;
+  current_total_mtd: number;
+  previous_base_total: number;
+  previous_agregadora_total: number;
+  previous_closed_total: number;
+  seasonal_factor: null;
+  seasonal_factor_applied: null;
+  seasonal_factor_source: 'sum_of_cohorts';
+  seasonal_years: null;
+  expected_cumulative_pct: null;
+  expected_cumulative_method: 'sum_of_cohorts';
+  cumulative_years: null;
+  expected_close_before_cutoff: number;
+  expected_mtd_at_cutoff: number;
+  expected_remaining: number;
+  gap_vs_expected_mtd: number;
+  gap_vs_expected_mtd_pct: number | null;
+  projected_close: number | null;
+  confidence: 'mixta';
+  projection_quality_issue: TrackVentaTotalForecastAnchoredTotalQualityIssue | null;
+  seasonal_samples: [];
+  cumulative_samples: [];
+}
+
+export type TrackVentaTotalForecastAnchoredItem =
+  | TrackVentaTotalForecastAnchoredLegacyItem
+  | TrackVentaTotalForecastAnchoredNewGymsItem
+  | TrackVentaTotalForecastAnchoredTotalItem;
+
+export interface TrackVentaTotalForecastAnchoredRemainingForecastNotApplicable {
+  status: 'not_applicable';
+  method: 'previous_close_plus_expected_remaining';
+  scope: 'branch';
+  items: [];
+}
+
+export interface TrackVentaTotalForecastAnchoredRemainingForecastEmpty {
+  status: 'empty';
+  method: 'previous_close_plus_expected_remaining';
+  scope: 'national';
+  items: [];
+}
+
+export interface TrackVentaTotalForecastAnchoredRemainingForecastResult {
+  status: 'ok';
+  method: 'previous_close_plus_expected_remaining';
+  scope: 'national';
+  target_month: string;
+  cutoff_day: number;
+  previous_month: string;
+  previous_month_end: string;
+  items: TrackVentaTotalForecastAnchoredItem[];
+}
+
+export type TrackVentaTotalForecastAnchoredRemainingForecast =
+  | TrackVentaTotalForecastAnchoredRemainingForecastNotApplicable
+  | TrackVentaTotalForecastAnchoredRemainingForecastEmpty
+  | TrackVentaTotalForecastAnchoredRemainingForecastResult;
+
 export interface TrackVentaTotalForecastSummary {
   real_mtd: number;
   real_base_mtd: number;
@@ -451,6 +606,7 @@ export interface TrackVentaTotalForecastResponse {
   forecast_cutoff?: TrackVentaTotalForecastCutoff;
   branch_drivers?: TrackVentaTotalForecastBranchDrivers;
   cohort_forecast?: TrackVentaTotalForecastCohortForecast;
+  anchored_remaining_forecast?: TrackVentaTotalForecastAnchoredRemainingForecast;
   message?: string;
   detail?: string;
 }
