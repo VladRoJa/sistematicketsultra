@@ -62,7 +62,7 @@ export interface TrackForecastBranchesResponse {
 
 export type TrackVentaTotalForecastScope = 'national' | 'branch';
 
-export type TrackVentaTotalGoalStatus = 'pending' | 'partial' | 'ready';
+export type TrackVentaTotalGoalStatus = 'pending' | 'partial' | 'available';
 
 export interface TrackVentaTotalForecastResolvedVersion {
   id: number;
