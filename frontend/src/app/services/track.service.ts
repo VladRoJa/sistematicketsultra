@@ -158,6 +158,22 @@ export interface TrackVentaTotalForecastExecutiveStatus {
   primary_metric_unit: 'MXN';
 }
 
+export interface TrackVentaTotalForecastExplanationComponents {
+  cutoff_day: number;
+  real_mtd: number;
+  historical_progress_pct: number | null;
+  historical_expected_mtd: number | null;
+  trend_factor: number | null;
+  projected_close: number | null;
+}
+
+export interface TrackVentaTotalForecastExplanation {
+  formula_key: 'real_mtd_divided_by_historical_progress_pct';
+  formula: string;
+  plain_text: string;
+  components: TrackVentaTotalForecastExplanationComponents;
+}
+
 export interface TrackVentaTotalForecastSummary {
   real_mtd: number;
   real_base_mtd: number;
@@ -199,6 +215,7 @@ export interface TrackVentaTotalForecastResponse {
   historical_curve?: TrackVentaTotalForecastHistoricalCurve;
   same_day_history?: TrackVentaTotalForecastSameDayHistory;
   executive_status?: TrackVentaTotalForecastExecutiveStatus;
+  forecast_explanation?: TrackVentaTotalForecastExplanation;
   message?: string;
   detail?: string;
 }
