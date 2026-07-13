@@ -3,12 +3,16 @@ from __future__ import annotations
 from calendar import monthrange
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import Any, TypedDict
+from typing import Any, Literal, Sequence, TypedDict
 
-from sqlalchemy import and_, bindparam, func, or_, text
+from sqlalchemy import Date, Integer, Numeric, and_, bindparam, func, or_, text
 
 from app.extensions import db
-from app.models.warehouse import TrackDailyMartORM, TrackDailyVersionORM
+from app.models.warehouse import (
+    TrackDailyMartORM,
+    TrackDailyVersionORM,
+    VentaTotalSnapshotORM,
+)
 
 from app.warehouse.services.track_branch_cohort_service import (
     TRACK_BRANCH_COHORT_LEGACY_21,
@@ -56,6 +60,33 @@ class _TrackDailyBranchVersionCandidate(TypedDict):
     ingreso_real_base_mtd: Decimal | None
     ingreso_real_agregadora_mtd: Decimal | None
     ingreso_real_total_mtd: Decimal | None
+
+
+class BranchHistoricalDailyPoint(TypedDict):
+    day: int
+    date: date
+    daily_total: Decimal
+    cumulative_total: Decimal
+    has_positive_sale_row: bool
+
+
+class BranchHistoricalYearSeries(TypedDict):
+    year: int
+    business_month: date
+    status: Literal[
+        "available",
+        "no_canonical_snapshot",
+        "no_branch_rows",
+    ]
+    snapshot_id: int | None
+    snapshot_business_date: date | None
+    days_in_month: int
+    days_with_positive_sale_row: int
+    first_positive_sale_date: date | None
+    last_positive_sale_date: date | None
+    mtd_at_cutoff: Decimal | None
+    full_month_total: Decimal | None
+    points: list[BranchHistoricalDailyPoint]
 
 
 def _get_track_daily_branch_version_candidates(
@@ -218,6 +249,248 @@ def select_track_daily_branch_versions(
         )
         for candidate, selection_reason in selected_candidates
     ]
+
+
+def _next_month(value: date) -> date:
+    if value.month == 12:
+        return date(value.year + 1, 1, 1)
+
+    return date(value.year, value.month + 1, 1)
+
+
+def _resolve_latest_canonical_snapshots_by_year(
+    *,
+    business_months: Sequence[date],
+) -> dict[int, VentaTotalSnapshotORM]:
+    if not business_months:
+        return {}
+
+    month_filters = [
+        and_(
+            VentaTotalSnapshotORM.business_date >= business_month,
+            VentaTotalSnapshotORM.business_date < _next_month(business_month),
+        )
+        for business_month in business_months
+    ]
+    snapshots = (
+        db.session.query(VentaTotalSnapshotORM)
+        .filter(
+            VentaTotalSnapshotORM.report_type_key == "venta_total",
+            VentaTotalSnapshotORM.snapshot_kind == "daily",
+            VentaTotalSnapshotORM.is_canonical.is_(True),
+            or_(*month_filters),
+        )
+        .all()
+    )
+
+    selected_by_year: dict[int, VentaTotalSnapshotORM] = {}
+    for snapshot in snapshots:
+        year = snapshot.business_date.year
+        current = selected_by_year.get(year)
+        if current is None or (
+            snapshot.business_date,
+            snapshot.captured_at,
+            snapshot.id,
+        ) > (
+            current.business_date,
+            current.captured_at,
+            current.id,
+        ):
+            selected_by_year[year] = snapshot
+
+    return selected_by_year
+
+
+def _load_branch_daily_totals_by_snapshot(
+    *,
+    snapshot_ids: Sequence[int],
+    sucursal_canon: str,
+) -> dict[int, dict[date, Decimal]]:
+    if not snapshot_ids:
+        return {}
+
+    statement = (
+        text(
+            """
+            SELECT
+                snapshot_id,
+                sale_date,
+                total
+            FROM track_venta_total_daily_branch_agg
+            WHERE snapshot_id IN :snapshot_ids
+              AND upper(trim(sucursal_canon)) = :sucursal_canon
+            ORDER BY snapshot_id, sale_date
+            """
+        )
+        .bindparams(bindparam("snapshot_ids", expanding=True))
+        .columns(
+            snapshot_id=Integer,
+            sale_date=Date,
+            total=Numeric(18, 2),
+        )
+    )
+    rows = db.session.execute(
+        statement,
+        {
+            "snapshot_ids": tuple(snapshot_ids),
+            "sucursal_canon": sucursal_canon,
+        },
+    ).mappings().all()
+
+    totals_by_snapshot: dict[int, dict[date, Decimal]] = {}
+    for row in rows:
+        snapshot_id = int(row["snapshot_id"])
+        sale_date = row["sale_date"]
+        total = row["total"]
+        decimal_total = (
+            total if isinstance(total, Decimal) else Decimal(str(total))
+        )
+        daily_totals = totals_by_snapshot.setdefault(snapshot_id, {})
+        daily_totals[sale_date] = (
+            daily_totals.get(sale_date, Decimal("0")) + decimal_total
+        )
+
+    return totals_by_snapshot
+
+
+def _build_available_branch_historical_year_series(
+    *,
+    year: int,
+    business_month: date,
+    snapshot: VentaTotalSnapshotORM,
+    daily_totals: dict[date, Decimal],
+    cutoff_day: int,
+) -> BranchHistoricalYearSeries:
+    days_in_month = monthrange(year, business_month.month)[1]
+    cumulative_total = Decimal("0")
+    points: list[BranchHistoricalDailyPoint] = []
+
+    for day in range(1, days_in_month + 1):
+        point_date = date(year, business_month.month, day)
+        has_positive_sale_row = point_date in daily_totals
+        daily_total = daily_totals.get(point_date, Decimal("0"))
+        cumulative_total += daily_total
+        points.append(
+            {
+                "day": day,
+                "date": point_date,
+                "daily_total": daily_total,
+                "cumulative_total": cumulative_total,
+                "has_positive_sale_row": has_positive_sale_row,
+            }
+        )
+
+    positive_sale_dates = sorted(daily_totals)
+    effective_cutoff_day = min(cutoff_day, days_in_month)
+    return {
+        "year": year,
+        "business_month": business_month,
+        "status": "available",
+        "snapshot_id": snapshot.id,
+        "snapshot_business_date": snapshot.business_date,
+        "days_in_month": days_in_month,
+        "days_with_positive_sale_row": len(positive_sale_dates),
+        "first_positive_sale_date": positive_sale_dates[0],
+        "last_positive_sale_date": positive_sale_dates[-1],
+        "mtd_at_cutoff": points[effective_cutoff_day - 1]["cumulative_total"],
+        "full_month_total": cumulative_total,
+        "points": points,
+    }
+
+
+def _build_empty_branch_historical_year_series(
+    *,
+    year: int,
+    business_month: date,
+    status: Literal["no_canonical_snapshot", "no_branch_rows"],
+    snapshot: VentaTotalSnapshotORM | None,
+) -> BranchHistoricalYearSeries:
+    return {
+        "year": year,
+        "business_month": business_month,
+        "status": status,
+        "snapshot_id": snapshot.id if snapshot is not None else None,
+        "snapshot_business_date": (
+            snapshot.business_date if snapshot is not None else None
+        ),
+        "days_in_month": monthrange(year, business_month.month)[1],
+        "days_with_positive_sale_row": 0,
+        "first_positive_sale_date": None,
+        "last_positive_sale_date": None,
+        "mtd_at_cutoff": None,
+        "full_month_total": None,
+        "points": [],
+    }
+
+
+def build_branch_historical_daily_series(
+    *,
+    sucursal_canon: str,
+    target_month: date,
+    comparison_years: Sequence[int],
+    cutoff_day: int,
+) -> list[BranchHistoricalYearSeries]:
+    normalized_branch = str(sucursal_canon or "").strip().upper()
+    if not normalized_branch:
+        raise ValueError("sucursal_canon es requerido.")
+
+    if cutoff_day < 1:
+        raise ValueError("cutoff_day debe ser mayor o igual a 1.")
+
+    if any(not isinstance(year, int) or not 1 <= year <= 9999 for year in comparison_years):
+        raise ValueError("comparison_years debe contener años válidos.")
+
+    years = sorted(set(comparison_years))
+    business_months = [
+        date(year, target_month.month, 1)
+        for year in years
+    ]
+    snapshots_by_year = _resolve_latest_canonical_snapshots_by_year(
+        business_months=business_months,
+    )
+    daily_totals_by_snapshot = _load_branch_daily_totals_by_snapshot(
+        snapshot_ids=[snapshot.id for snapshot in snapshots_by_year.values()],
+        sucursal_canon=normalized_branch,
+    )
+
+    series: list[BranchHistoricalYearSeries] = []
+    for business_month in business_months:
+        year = business_month.year
+        snapshot = snapshots_by_year.get(year)
+        if snapshot is None:
+            series.append(
+                _build_empty_branch_historical_year_series(
+                    year=year,
+                    business_month=business_month,
+                    status="no_canonical_snapshot",
+                    snapshot=None,
+                )
+            )
+            continue
+
+        daily_totals = daily_totals_by_snapshot.get(snapshot.id)
+        if not daily_totals:
+            series.append(
+                _build_empty_branch_historical_year_series(
+                    year=year,
+                    business_month=business_month,
+                    status="no_branch_rows",
+                    snapshot=snapshot,
+                )
+            )
+            continue
+
+        series.append(
+            _build_available_branch_historical_year_series(
+                year=year,
+                business_month=business_month,
+                snapshot=snapshot,
+                daily_totals=daily_totals,
+                cutoff_day=cutoff_day,
+            )
+        )
+
+    return series
 
 
 def _to_float(value: Any) -> float | None:

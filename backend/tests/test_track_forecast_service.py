@@ -4,10 +4,16 @@ import unittest
 from unittest.mock import patch
 
 from flask import Flask
+from sqlalchemy import text
 
 from app.extensions import db
-from app.models.warehouse import TrackDailyMartORM, TrackDailyVersionORM
+from app.models.warehouse import (
+    TrackDailyMartORM,
+    TrackDailyVersionORM,
+    VentaTotalSnapshotORM,
+)
 from app.warehouse.services.track_forecast_service import (
+    build_branch_historical_daily_series,
     build_venta_total_forecast,
     select_track_daily_branch_versions,
 )
@@ -400,3 +406,336 @@ class TrackDailyBranchVersionSelectorTest(unittest.TestCase):
         result = self._select()
 
         self.assertEqual([item["version_id"] for item in result], [900])
+
+
+class BranchHistoricalDailySeriesTest(unittest.TestCase):
+    BRANCH = "SANTA_FE"
+    TARGET_MONTH = date(2025, 7, 1)
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = Flask(__name__)
+        cls.app.config.update(
+            TESTING=True,
+            SQLALCHEMY_DATABASE_URI="sqlite:///:memory:",
+            SQLALCHEMY_TRACK_MODIFICATIONS=False,
+        )
+        db.init_app(cls.app)
+        cls.app_context = cls.app.app_context()
+        cls.app_context.push()
+        VentaTotalSnapshotORM.__table__.create(db.engine)
+        db.session.execute(
+            text(
+                """
+                CREATE TABLE track_venta_total_daily_branch_agg (
+                    id INTEGER PRIMARY KEY,
+                    snapshot_id INTEGER NOT NULL,
+                    business_month DATE NOT NULL,
+                    sale_date DATE NOT NULL,
+                    day_of_month INTEGER NOT NULL,
+                    sucursal_canon TEXT NOT NULL,
+                    total NUMERIC(18, 2) NOT NULL
+                )
+                """
+            )
+        )
+        db.session.commit()
+
+    @classmethod
+    def tearDownClass(cls):
+        db.session.remove()
+        db.session.execute(text("DROP TABLE track_venta_total_daily_branch_agg"))
+        VentaTotalSnapshotORM.__table__.drop(db.engine)
+        cls.app_context.pop()
+
+    def setUp(self):
+        db.session.execute(text("DELETE FROM track_venta_total_daily_branch_agg"))
+        db.session.query(VentaTotalSnapshotORM).delete()
+        db.session.commit()
+        self._next_agg_id = 1
+
+    def tearDown(self):
+        db.session.rollback()
+
+    def _add_snapshot(
+        self,
+        *,
+        snapshot_id: int,
+        business_date: date,
+        captured_hour: int = 12,
+        is_canonical: bool = True,
+    ) -> None:
+        captured_at = datetime(
+            business_date.year,
+            business_date.month,
+            business_date.day,
+            captured_hour,
+            tzinfo=timezone.utc,
+        )
+        db.session.add(
+            VentaTotalSnapshotORM(
+                id=snapshot_id,
+                warehouse_upload_id=snapshot_id,
+                report_type_key="venta_total",
+                business_date=business_date,
+                captured_at=captured_at,
+                snapshot_kind="daily",
+                is_canonical=is_canonical,
+                row_count_detected=1,
+                row_count_valid=1,
+                row_count_rejected=0,
+                created_at=captured_at,
+                updated_at=captured_at,
+            )
+        )
+
+    def _add_daily_total(
+        self,
+        *,
+        snapshot_id: int,
+        sale_date: date,
+        total: str,
+        branch: str = BRANCH,
+    ) -> None:
+        db.session.execute(
+            text(
+                """
+                INSERT INTO track_venta_total_daily_branch_agg (
+                    id,
+                    snapshot_id,
+                    business_month,
+                    sale_date,
+                    day_of_month,
+                    sucursal_canon,
+                    total
+                ) VALUES (
+                    :id,
+                    :snapshot_id,
+                    :business_month,
+                    :sale_date,
+                    :day_of_month,
+                    :sucursal_canon,
+                    :total
+                )
+                """
+            ),
+            {
+                "id": self._next_agg_id,
+                "snapshot_id": snapshot_id,
+                "business_month": sale_date.replace(day=1),
+                "sale_date": sale_date,
+                "day_of_month": sale_date.day,
+                "sucursal_canon": branch,
+                "total": total,
+            },
+        )
+        self._next_agg_id += 1
+
+    def _build(
+        self,
+        *,
+        years: list[int] | None = None,
+        cutoff_day: int = 12,
+    ):
+        db.session.commit()
+        return build_branch_historical_daily_series(
+            sucursal_canon=self.BRANCH,
+            target_month=self.TARGET_MONTH,
+            comparison_years=years or [2025],
+            cutoff_day=cutoff_day,
+        )
+
+    def test_builds_complete_31_day_series(self):
+        self._add_snapshot(snapshot_id=101, business_date=date(2025, 7, 31))
+        for day in range(1, 32):
+            self._add_daily_total(
+                snapshot_id=101,
+                sale_date=date(2025, 7, day),
+                total="1.00",
+            )
+
+        item = self._build()[0]
+
+        self.assertEqual(item["status"], "available")
+        self.assertEqual(item["days_in_month"], 31)
+        self.assertEqual(len(item["points"]), 31)
+        self.assertEqual(item["full_month_total"], Decimal("31.00"))
+
+    def test_days_without_rows_are_zero_and_preserve_cumulative_total(self):
+        self._add_snapshot(snapshot_id=102, business_date=date(2025, 7, 31))
+        self._add_daily_total(
+            snapshot_id=102,
+            sale_date=date(2025, 7, 1),
+            total="10.00",
+        )
+        self._add_daily_total(
+            snapshot_id=102,
+            sale_date=date(2025, 7, 3),
+            total="5.00",
+        )
+
+        points = self._build()[0]["points"]
+
+        self.assertEqual(points[1]["daily_total"], Decimal("0"))
+        self.assertEqual(points[1]["cumulative_total"], Decimal("10.00"))
+        self.assertFalse(points[1]["has_positive_sale_row"])
+
+    def test_multiple_years_are_ordered_and_keep_their_snapshot(self):
+        self._add_snapshot(snapshot_id=203, business_date=date(2023, 7, 31))
+        self._add_snapshot(snapshot_id=205, business_date=date(2025, 7, 31))
+        self._add_daily_total(
+            snapshot_id=203,
+            sale_date=date(2023, 7, 1),
+            total="3.00",
+        )
+        self._add_daily_total(
+            snapshot_id=205,
+            sale_date=date(2025, 7, 1),
+            total="5.00",
+        )
+
+        result = self._build(years=[2025, 2023])
+
+        self.assertEqual([item["year"] for item in result], [2023, 2025])
+        self.assertEqual([item["snapshot_id"] for item in result], [203, 205])
+
+    def test_uses_only_latest_canonical_snapshot_for_month(self):
+        self._add_snapshot(
+            snapshot_id=301,
+            business_date=date(2025, 7, 31),
+            captured_hour=10,
+        )
+        self._add_snapshot(
+            snapshot_id=302,
+            business_date=date(2025, 7, 31),
+            captured_hour=11,
+        )
+        self._add_daily_total(
+            snapshot_id=301,
+            sale_date=date(2025, 7, 1),
+            total="100.00",
+        )
+        self._add_daily_total(
+            snapshot_id=302,
+            sale_date=date(2025, 7, 1),
+            total="7.00",
+        )
+
+        item = self._build()[0]
+
+        self.assertEqual(item["snapshot_id"], 302)
+        self.assertEqual(item["full_month_total"], Decimal("7.00"))
+
+    def test_mtd_at_cutoff_matches_requested_day(self):
+        self._add_snapshot(snapshot_id=401, business_date=date(2025, 7, 31))
+        for day, total in ((1, "2.00"), (2, "3.00"), (3, "4.00")):
+            self._add_daily_total(
+                snapshot_id=401,
+                sale_date=date(2025, 7, day),
+                total=total,
+            )
+
+        item = self._build(cutoff_day=2)[0]
+
+        self.assertEqual(item["mtd_at_cutoff"], Decimal("5.00"))
+
+    def test_cutoff_after_month_end_is_clamped_without_changing_full_total(self):
+        self._add_snapshot(snapshot_id=402, business_date=date(2025, 7, 31))
+        self._add_daily_total(
+            snapshot_id=402,
+            sale_date=date(2025, 7, 31),
+            total="9.00",
+        )
+
+        item = self._build(cutoff_day=40)[0]
+
+        self.assertEqual(item["mtd_at_cutoff"], Decimal("9.00"))
+        self.assertEqual(item["full_month_total"], Decimal("9.00"))
+
+    def test_leap_year_february_has_29_points(self):
+        self.TARGET_MONTH = date(2025, 2, 1)
+        self.addCleanup(setattr, self, "TARGET_MONTH", date(2025, 7, 1))
+        self._add_snapshot(snapshot_id=501, business_date=date(2024, 2, 29))
+        self._add_daily_total(
+            snapshot_id=501,
+            sale_date=date(2024, 2, 29),
+            total="1.00",
+        )
+
+        item = self._build(years=[2024])[0]
+
+        self.assertEqual(item["days_in_month"], 29)
+        self.assertEqual(len(item["points"]), 29)
+
+    def test_month_without_canonical_snapshot_has_empty_points(self):
+        item = self._build()[0]
+
+        self.assertEqual(item["status"], "no_canonical_snapshot")
+        self.assertEqual(item["points"], [])
+        self.assertIsNone(item["snapshot_id"])
+
+    def test_snapshot_without_branch_rows_has_empty_points(self):
+        self._add_snapshot(snapshot_id=601, business_date=date(2025, 7, 31))
+        self._add_daily_total(
+            snapshot_id=601,
+            sale_date=date(2025, 7, 1),
+            total="8.00",
+            branch="TIJUANA",
+        )
+
+        item = self._build()[0]
+
+        self.assertEqual(item["status"], "no_branch_rows")
+        self.assertEqual(item["points"], [])
+        self.assertEqual(item["snapshot_id"], 601)
+
+    def test_excludes_other_branches(self):
+        self._add_snapshot(snapshot_id=701, business_date=date(2025, 7, 31))
+        self._add_daily_total(
+            snapshot_id=701,
+            sale_date=date(2025, 7, 1),
+            total="4.00",
+        )
+        self._add_daily_total(
+            snapshot_id=701,
+            sale_date=date(2025, 7, 1),
+            total="100.00",
+            branch="TIJUANA",
+        )
+
+        item = self._build()[0]
+
+        self.assertEqual(item["full_month_total"], Decimal("4.00"))
+
+    def test_available_totals_remain_decimal(self):
+        self._add_snapshot(snapshot_id=801, business_date=date(2025, 7, 31))
+        self._add_daily_total(
+            snapshot_id=801,
+            sale_date=date(2025, 7, 1),
+            total="1.25",
+        )
+
+        item = self._build()[0]
+        point = item["points"][0]
+
+        self.assertIsInstance(point["daily_total"], Decimal)
+        self.assertIsInstance(point["cumulative_total"], Decimal)
+        self.assertIsInstance(item["mtd_at_cutoff"], Decimal)
+        self.assertIsInstance(item["full_month_total"], Decimal)
+
+    def test_non_canonical_snapshots_are_not_used(self):
+        self._add_snapshot(
+            snapshot_id=901,
+            business_date=date(2025, 7, 31),
+            is_canonical=False,
+        )
+        self._add_daily_total(
+            snapshot_id=901,
+            sale_date=date(2025, 7, 1),
+            total="99.00",
+        )
+
+        item = self._build()[0]
+
+        self.assertEqual(item["status"], "no_canonical_snapshot")
+        self.assertEqual(item["points"], [])
