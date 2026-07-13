@@ -1,23 +1,22 @@
 <section class="track-forecast-page">
   <header class="track-forecast-header">
-    <div>
-      <p class="track-forecast-eyebrow">Track / Beta</p>
-      <h1>Proyección y Metas</h1>
-      <p>
-        Proyección ejecutiva de cierre, ritmo histórico y trazabilidad del corte usado.
-      </p>
+    <div class="track-trend-heading">
+      <p class="track-forecast-eyebrow">Track</p>
+      <h1>Tendencias</h1>
+      <p>Ritmo de ingreso y proyección de cierre</p>
+
+      <div class="track-trend-context" *ngIf="forecast?.metadata">
+        <span>Corte {{ trackContextDateLabel }}</span>
+        <span>{{ trackContextBranchesLabel }}</span>
+        <span>{{ trackContextVersionLabel }}</span>
+        <span>{{ generationModeDisplayLabel }}</span>
+      </div>
     </div>
 
     <button type="button" class="primary-button" (click)="cargarForecast()" [disabled]="loading">
       {{ loading ? 'Cargando...' : 'Actualizar' }}
     </button>
   </header>
-
-  <section class="track-forecast-disclaimer">
-    Esta es una proyección estadística basada en histórico y tendencia actual.
-    No representa meta, garantía ni compromiso de cierre. Puede variar por promociones,
-    campañas, cierres, clima, incidencias operativas o cambios comerciales.
-  </section>
 
   <section class="track-forecast-filters">
     <label>
@@ -56,6 +55,12 @@
     </label>
   </section>
 
+  <section class="track-forecast-disclaimer">
+    Esta es una proyección estadística basada en histórico y tendencia actual.
+    No representa meta, garantía ni compromiso de cierre. Puede variar por promociones,
+    campañas, cierres, clima, incidencias operativas o cambios comerciales.
+  </section>
+
   <p class="track-forecast-message track-forecast-message--error" *ngIf="errorMessage">
     {{ errorMessage }}
   </p>
@@ -65,66 +70,98 @@
   </p>
 
   <ng-container *ngIf="summary as s">
-    <section class="track-forecast-hero" [ngClass]="executiveLevelClass">
-      <article class="track-forecast-hero-main">
-        <div class="track-forecast-hero-topline">
-          <span class="track-forecast-badge">{{ executiveBadgeLabel }}</span>
-          <span>{{ scopeLabel }}</span>
-        </div>
-
-        <h2>{{ executiveTitle }}</h2>
-        <strong>{{ formatCurrency(executivePrimaryValue) }}</strong>
-        <p>{{ executiveMessage }}</p>
-
-        <div class="track-forecast-hero-meta">
-          <span>{{ forecastBasisLabel }}</span>
-          <span>{{ cutoffDateLabel }}</span>
-          <span>Confianza {{ s.confidence }}</span>
-        </div>
+    <section class="track-trend-kpis" aria-label="Indicadores principales de Tendencias">
+      <article class="track-trend-kpi track-trend-tone--neutral">
+        <span>Real MTD</span>
+        <strong>{{ formatCurrency(s.real_mtd) }}</strong>
+        <small>Base {{ formatCurrency(s.real_base_mtd) }} · Agregadoras {{ formatCurrency(s.real_agregadora_mtd) }}</small>
       </article>
 
-      <aside class="track-forecast-hero-side">
-        <div>
-          <span>Real MTD</span>
-          <strong>{{ formatCurrency(s.real_mtd) }}</strong>
-          <small>Base {{ formatCurrency(s.real_base_mtd) }} · Agregadoras {{ formatCurrency(s.real_agregadora_mtd) }}</small>
-        </div>
+      <article class="track-trend-kpi track-trend-tone--neutral">
+        <span>Esperado histórico MTD</span>
+        <strong>{{ historicalExpectedMtdLabel }}</strong>
+        <small>Promedio histórico comparable al mismo corte</small>
+      </article>
 
-        <div>
-          <span>Avance histórico esperado</span>
-          <strong>{{ formatPercent(s.historical_progress_pct) }}</strong>
-          <small>Esperado MTD {{ formatCurrency(s.historical_expected_mtd) }}</small>
-        </div>
+      <article class="track-trend-kpi" [ngClass]="executiveToneClass">
+        <span>Factor de tendencia</span>
+        <strong>{{ formatPercent(s.trend_factor_raw) }}</strong>
+        <small>Ritmo actual respecto al esperado histórico</small>
+      </article>
 
-        <div>
-          <span>Factor tendencia</span>
-          <strong>{{ formatPercent(s.trend_factor_raw) }}</strong>
-          <small>Real MTD / histórico esperado MTD</small>
-        </div>
-      </aside>
-    </section>
-
-    <section class="track-forecast-grid">
-      <article class="track-forecast-card">
+      <article class="track-trend-kpi track-trend-kpi--primary" [ngClass]="executiveToneClass">
         <span>Proyección de cierre</span>
-        <strong>{{ formatCurrency(s.projected_close) }}</strong>
-        <small>Calculada contra avance histórico esperado.</small>
+        <strong>{{ projectedCloseLabel }}</strong>
+        <small>{{ projectionSupportText }}</small>
       </article>
 
-      <article class="track-forecast-card">
+      <article class="track-trend-kpi" [ngClass]="goalToneClass">
         <span>Meta mensual</span>
-        <strong>{{ formatCurrency(s.goal_month) }}</strong>
-        <small>{{ goalStatusMessage || 'Meta disponible' }}</small>
-      </article>
-
-      <article class="track-forecast-card">
-        <span>Meta ponderada MTD</span>
-        <strong>{{ formatCurrency(s.weighted_goal_mtd) }}</strong>
-        <small>Brecha: {{ formatCurrency(s.gap_vs_weighted_goal) }}</small>
+        <strong>{{ goalValueLabel }}</strong>
+        <small>{{ goalSupportText }}</small>
       </article>
     </section>
 
+    <aside class="track-trend-explanation" *ngIf="forecastExplanation">
+      <span>Cómo leer la proyección</span>
+      <p>{{ forecastExplanationText }}</p>
+    </aside>
 
+    <section class="track-trend-comparable">
+      <div class="track-trend-comparable-header">
+        <div>
+          <span>Histórico comparable</span>
+          <h2>{{ sameDayHistoryTitle }}</h2>
+          <p>{{ sameDayHistorySubtitle }}</p>
+        </div>
+
+        <div class="track-trend-legend" aria-label="Leyenda de gráfica">
+          <span><i class="track-trend-legend-mark track-trend-legend-mark--mtd"></i>MTD mismo día</span>
+          <span><i class="track-trend-legend-mark track-trend-legend-mark--month"></i>Cierre mensual</span>
+        </div>
+      </div>
+
+      <div class="track-trend-chart" *ngIf="hasComparableChart; else noComparableChart">
+        <article
+          class="track-trend-chart-row"
+          *ngFor="let item of comparableChartBars"
+          [class.track-trend-chart-row--current]="item.isCurrent"
+        >
+          <div class="track-trend-chart-year">
+            <strong>{{ item.year }}</strong>
+            <small *ngIf="item.isCurrent">Actual</small>
+          </div>
+
+          <div class="track-trend-chart-series">
+            <div class="track-trend-chart-label">
+              <span>MTD mismo día</span>
+              <strong>{{ formatCurrency(item.mtdValue) }}</strong>
+            </div>
+            <div class="track-trend-chart-track">
+              <span class="track-trend-chart-bar track-trend-chart-bar--mtd" [style.width.%]="item.mtdBarPct"></span>
+            </div>
+          </div>
+
+          <div class="track-trend-chart-series">
+            <div class="track-trend-chart-label">
+              <span>{{ item.monthLabel }}</span>
+              <strong>{{ item.monthValueLabel }}</strong>
+            </div>
+            <div class="track-trend-chart-track">
+              <span class="track-trend-chart-bar track-trend-chart-bar--month" [style.width.%]="item.monthBarPct"></span>
+            </div>
+          </div>
+        </article>
+      </div>
+
+      <ng-template #noComparableChart>
+        <p class="track-trend-empty">Sin histórico comparable para construir la gráfica.</p>
+      </ng-template>
+
+      <p class="track-trend-comparison" *ngIf="currentSameDayGapVsAverageLabel">
+        {{ currentSameDayGapVsAverageLabel }}
+      </p>
+    </section>
 
     <section class="track-forecast-cohorts" *ngIf="hasCohortForecast">
       <div class="track-forecast-section-header">
@@ -189,74 +226,6 @@
         </table>
       </div>
     </section>
-
-    <section class="track-forecast-same-day" *ngIf="hasSameDayHistory">
-      <div class="track-forecast-section-header">
-        <div>
-          <span>Histórico comparable</span>
-          <h2>{{ sameDayHistoryTitle }}</h2>
-          <p>{{ sameDayHistorySubtitle }}</p>
-        </div>
-
-        <div class="track-forecast-same-day-summary">
-          <span>Actual vs promedio</span>
-          <strong>{{ currentSameDayGapVsAverageLabel }}</strong>
-        </div>
-      </div>
-
-      <div class="track-forecast-table-wrap">
-        <table class="track-forecast-table">
-          <thead>
-            <tr>
-              <th>Año</th>
-              <th>MTD mismo día</th>
-              <th>Cierre mensual</th>
-              <th>Avance del mes</th>
-              <th>Vs actual</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            <tr *ngFor="let item of sameDayHistoryItems">
-              <td>
-                <strong>{{ item.year }}</strong>
-              </td>
-              <td>{{ formatCurrency(item.mtd_total) }}</td>
-              <td>{{ formatCurrency(item.month_total) }}</td>
-              <td>{{ formatPercent(item.progress_pct) }}</td>
-              <td>
-                <span
-                  class="track-forecast-delta"
-                  [class.track-forecast-delta--positive]="(item.gap_current_vs_mtd || 0) >= 0"
-                  [class.track-forecast-delta--negative]="(item.gap_current_vs_mtd || 0) < 0"
-                >
-                  {{ formatCurrency(item.gap_current_vs_mtd) }}
-                  ·
-                  {{ formatPercent(item.gap_current_vs_mtd_pct) }}
-                </span>
-              </td>
-            </tr>
-
-            <tr class="track-forecast-table-current">
-              <td>
-                <strong>{{ sameDayHistoryCurrent?.year || forecast?.metadata?.target_month?.slice(0, 4) }}</strong>
-                <small>Actual</small>
-              </td>
-              <td>{{ formatCurrency(sameDayHistoryCurrent?.mtd_total || s.real_mtd) }}</td>
-              <td>
-                <span *ngIf="sameDayHistoryCurrent?.projected_close !== null; else noProjection">
-                  {{ formatCurrency(sameDayHistoryCurrent?.projected_close) }}
-                </span>
-                <ng-template #noProjection>Sin proyección</ng-template>
-              </td>
-              <td>{{ formatPercent(sameDayHistoryCurrent?.historical_progress_pct || s.historical_progress_pct) }}</td>
-              <td>{{ formatPercent(sameDayHistoryCurrent?.trend_factor || s.trend_factor_raw) }} del ritmo esperado</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
 
     <section class="track-forecast-branch-drivers" *ngIf="hasBranchDrivers">
       <div class="track-forecast-section-header">
