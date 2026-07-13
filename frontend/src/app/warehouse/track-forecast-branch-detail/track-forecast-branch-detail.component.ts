@@ -9,6 +9,7 @@ import {
   GridComponent,
   LegendComponent,
   LegendScrollComponent,
+  MarkLineComponent,
   TooltipComponent,
 } from 'echarts/components';
 import * as echarts from 'echarts/core';
@@ -31,6 +32,7 @@ echarts.use([
   TooltipComponent,
   LegendComponent,
   LegendScrollComponent,
+  MarkLineComponent,
   AriaComponent,
   CanvasRenderer,
 ]);
@@ -252,7 +254,14 @@ export class TrackForecastBranchDetailComponent implements OnInit {
         'Brecha precalculada por el backend contra el promedio comparable al corte.',
         'neutral',
       ),
-      this.toSummaryCard('Proyección total Track', summary.projected_close, unavailableSupport, 'total'),
+      this.toSummaryCard(
+        'Proyección total Track',
+        summary.projected_close,
+        summary.projected_close === null
+          ? 'No existe una proyección total disponible para este corte.'
+          : 'Cierre proyectado de venta total Track, incluyendo agregadoras.',
+        'total',
+      ),
       this.toSummaryCard(
         'Proyección base comparable',
         response.series.comparable_base_projection.projected_close,
@@ -281,23 +290,36 @@ export class TrackForecastBranchDetailComponent implements OnInit {
   private buildChartOption(response: TrackBranchForecastDetailResponse): EChartsCoreOption {
     const lineSeries: LineSeriesOption[] = [];
     const monthLabel = this.formatMonth(response.metadata.target_month);
-    const historicalColors = ['#8290a3', '#6f7f91', '#9aa6b5', '#59697c'];
-
-    response.series.historical_years.items
+    const historicalColors = ['#59697c', '#8a6742', '#6f567d', '#46766f'];
+    const daysInTargetMonth = this.daysInMonth(response.metadata.target_month);
+    const cutoffDay = response.metadata.cutoff_day;
+    const showCutoffMarker = Number.isInteger(cutoffDay)
+      && cutoffDay >= 1
+      && cutoffDay <= daysInTargetMonth;
+    const historicalItems = response.series.historical_years.items
       .filter((item) => item.status === 'available' && item.points.length > 0)
-      .forEach((item, index) => {
-        lineSeries.push({
-          name: `${monthLabel} ${item.year}`,
-          type: 'line',
-          data: item.points.map((point) => [point.day, point.cumulative_total]),
-          showSymbol: false,
-          symbol: 'circle',
-          symbolSize: 5,
-          lineStyle: { color: historicalColors[index % historicalColors.length], width: 1.5, opacity: 0.8 },
-          itemStyle: { color: historicalColors[index % historicalColors.length] },
-          emphasis: { focus: 'series' },
-        });
+      .sort((left, right) => left.year - right.year);
+
+    historicalItems.forEach((item, index) => {
+      const lineType = this.getHistoricalLineType(index, historicalItems.length);
+      const isMostRecent = index === historicalItems.length - 1;
+      lineSeries.push({
+        name: `${monthLabel} ${item.year}`,
+        type: 'line',
+        data: item.points.map((point) => [point.day, point.cumulative_total]),
+        showSymbol: false,
+        symbol: 'circle',
+        symbolSize: 5,
+        lineStyle: {
+          color: historicalColors[index % historicalColors.length],
+          width: isMostRecent ? 2.25 : 1.9,
+          type: lineType,
+          opacity: 1,
+        },
+        itemStyle: { color: historicalColors[index % historicalColors.length] },
+        emphasis: { focus: 'series' },
       });
+    });
 
     const currentPoints = response.series.current_track.points;
     if (currentPoints.length) {
@@ -310,10 +332,26 @@ export class TrackForecastBranchDetailComponent implements OnInit {
         showSymbol: false,
         symbol: 'circle',
         symbolSize: 6,
-        lineStyle: { color: '#315f8c', width: 3 },
+        lineStyle: { color: '#315f8c', width: 3.5, type: 'solid', opacity: 1 },
         itemStyle: { color: '#315f8c' },
         emphasis: { focus: 'series' },
-        z: 4,
+        markLine: showCutoffMarker ? {
+          silent: true,
+          symbol: 'none',
+          label: {
+            formatter: 'Corte actual',
+            position: 'insideEndTop',
+            color: '#526075',
+          },
+          lineStyle: {
+            color: '#687386',
+            type: 'dashed',
+            width: 1.25,
+            opacity: 1,
+          },
+          data: [{ xAxis: cutoffDay }],
+        } : undefined,
+        z: 6,
       });
     }
 
@@ -364,9 +402,8 @@ export class TrackForecastBranchDetailComponent implements OnInit {
       },
       xAxis: {
         type: 'value',
-        name: 'Día del mes',
         min: 1,
-        max: this.daysInMonth(response.metadata.target_month),
+        max: daysInTargetMonth,
         minInterval: 1,
         axisLabel: { formatter: (value: number) => Number.isInteger(value) ? String(value) : '' },
       },
@@ -377,6 +414,21 @@ export class TrackForecastBranchDetailComponent implements OnInit {
       },
       series: lineSeries,
     };
+  }
+
+  private getHistoricalLineType(
+    index: number,
+    total: number,
+  ): 'dotted' | 'dashed' | 'solid' {
+    if (total <= 1 || index === total - 1) {
+      return 'solid';
+    }
+
+    if (index === 0) {
+      return 'dotted';
+    }
+
+    return 'dashed';
   }
 
   private buildAnnualRows(response: TrackBranchForecastDetailResponse): BranchDetailAnnualRow[] {
