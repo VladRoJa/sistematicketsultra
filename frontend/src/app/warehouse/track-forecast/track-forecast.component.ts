@@ -472,6 +472,11 @@ export class TrackForecastComponent implements OnInit {
   }
 
   get branchDriverViewModels(): TrackForecastBranchDriverViewModel[] {
+    const maxImpact = Math.max(
+      0,
+      ...this.negativeBranchDrivers.map((item) => item.impact_share_pct),
+    );
+
     return this.negativeBranchDrivers.map((item, index) => ({
       rank: index + 1,
       track_label: item.track_label || item.sucursal_canon,
@@ -485,7 +490,9 @@ export class TrackForecastComponent implements OnInit {
       impact_share_pct: item.impact_share_pct,
       confidence: item.confidence,
       projection_quality_issue: item.projection_quality_issue,
-      impactBarPct: Math.min(100, Math.max(0, item.impact_share_pct)),
+      impactBarPct: maxImpact > 0
+        ? Math.min(100, Math.max(0, (item.impact_share_pct / maxImpact) * 100))
+        : 0,
       visualTone: 'negative',
     }));
   }
