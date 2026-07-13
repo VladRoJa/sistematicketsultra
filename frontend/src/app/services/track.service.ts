@@ -565,9 +565,13 @@ export interface TrackVentaTotalForecastSummary {
   real_base_mtd: number;
   real_agregadora_mtd: number;
   goal_month: number | null;
-  historical_progress_pct: number | null;
   historical_expected_mtd: number | null;
   historical_expected_remaining: number | null;
+  historical_expected_month_total: number | null;
+  historical_expected_mtd_aggregate: number;
+  historical_expected_remaining_aggregate: number;
+  historical_expected_month_total_aggregate: number;
+  historical_progress_pct: number | null;
   trend_factor_raw: number | null;
   projected_close: number | null;
   weighted_goal_mtd: number | null;
