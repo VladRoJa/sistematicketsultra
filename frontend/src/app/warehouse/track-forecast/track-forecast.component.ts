@@ -33,6 +33,58 @@ type TrackForecastComparableBar = {
   monthValueLabel: string;
 };
 
+type TrackForecastCohortViewModel = {
+  cohort_key: TrackVentaTotalForecastCohortItem['cohort_key'];
+  label: string;
+  branches_count: number;
+  real_mtd: number;
+  historical_expected_mtd: number | null;
+  gap_vs_expected_mtd: number | null;
+  gap_vs_expected_mtd_pct: number | null;
+  trend_factor: number | null;
+  projected_close: number | null;
+  projected_close_experimental: number | null;
+  confidence: string;
+  projection_quality_issue: TrackVentaTotalForecastCohortItem['projection_quality_issue'];
+  visualTone: string;
+  gapLabel: string;
+  trendLabel: string;
+  projectionLabel: string;
+  experimentalLabel: string;
+};
+
+type TrackForecastBranchDriverViewModel = {
+  rank: number;
+  track_label: string;
+  sucursal_canon: string;
+  real_mtd: number;
+  historical_expected_mtd: number | null;
+  gap_vs_historical_expected: number | null;
+  gap_vs_historical_expected_pct: number | null;
+  trend_factor: number | null;
+  projected_close: number | null;
+  impact_share_pct: number;
+  confidence: string;
+  projection_quality_issue: TrackVentaTotalForecastBranchDriverItem['projection_quality_issue'];
+  impactBarPct: number;
+  visualTone: string;
+};
+
+type TrackForecastAlertViewModel = {
+  code: string;
+  severity: string;
+  title: string;
+  message: string;
+  reasons: string[];
+  sourceLabel: string;
+  tone: string;
+};
+
+type TrackForecastTraceItem = {
+  label: string;
+  value: string;
+};
+
 @Component({
   selector: 'app-track-forecast',
   standalone: true,
@@ -372,96 +424,36 @@ export class TrackForecastComponent implements OnInit {
     return forecast?.status === 'ok' ? forecast.items : [];
   }
 
-  get hasCohortForecast(): boolean {
-    return this.cohortForecastItems.length > 0;
+  get cohortViewModels(): TrackForecastCohortViewModel[] {
+    const order: TrackVentaTotalForecastCohortItem['cohort_key'][] = ['total_ultra', 'legacy_21', 'new_gyms'];
+
+    return [...this.cohortForecastItems]
+      .sort((left, right) => order.indexOf(left.cohort_key) - order.indexOf(right.cohort_key))
+      .map((item) => ({
+        cohort_key: item.cohort_key,
+        label: item.label || item.cohort_key,
+        branches_count: item.branches_count,
+        real_mtd: item.real_mtd,
+        historical_expected_mtd: item.historical_expected_mtd,
+        gap_vs_expected_mtd: item.gap_vs_expected_mtd,
+        gap_vs_expected_mtd_pct: item.gap_vs_expected_mtd_pct,
+        trend_factor: item.trend_factor,
+        projected_close: item.projected_close,
+        projected_close_experimental: item.projected_close_experimental,
+        confidence: item.confidence,
+        projection_quality_issue: item.projection_quality_issue,
+        visualTone: item.gap_vs_expected_mtd !== null && item.gap_vs_expected_mtd < 0 ? 'negative' : 'neutral',
+        gapLabel: `${this.formatCurrency(item.gap_vs_expected_mtd)} · ${this.formatPercent(item.gap_vs_expected_mtd_pct)}`,
+        trendLabel: this.formatPercent(item.trend_factor),
+        projectionLabel: item.projected_close === null ? 'Sin proyección estable' : this.formatCurrency(item.projected_close),
+        experimentalLabel: item.projected_close_experimental === null ? '—' : this.formatCurrency(item.projected_close_experimental),
+      }));
   }
 
-  get cohortForecastTitle(): string {
-    const forecast = this.cohortForecast;
-    const cutoffDay = (
-      forecast?.status === 'ok' ? forecast.cutoff_day : null
-    ) || this.forecastCutoff?.cutoff_day || '—';
-    return `Proyección por cohortes · día ${cutoffDay}`;
-  }
-
-  get cohortForecastSubtitle(): string {
-    return 'ULTRA GYM = ULTRA 21 GYMS + ULTRA NUEVOS';
-  }
-
-  get cohortForecastMainMessage(): string {
-    const total = this.cohortForecastItems.find(
-      (item) => item.cohort_key === 'total_ultra',
-    );
-
-    if (!total) {
-      return 'Sin lectura consolidada.';
-    }
-
-    if (total.projection_quality_issue) {
-      return total.projection_quality_issue.message || 'La proyección consolidada requiere revisión de calidad.';
-    }
-
-    return 'Proyección consolidada disponible.';
-  }
-
-  getCohortProjectionLabel(item: TrackVentaTotalForecastCohortItem): string {
-    if (item.projected_close === null || item.projected_close === undefined) {
-      return 'Sin proyección estable';
-    }
-
-    return this.formatCurrency(item.projected_close);
-  }
-
-  getCohortExperimentalLabel(item: TrackVentaTotalForecastCohortItem): string {
-    if (item.projected_close_experimental === null || item.projected_close_experimental === undefined) {
-      return '—';
-    }
-
-    return this.formatCurrency(item.projected_close_experimental);
-  }
-
-  getCohortQualityLabel(item: TrackVentaTotalForecastCohortItem): string {
-    const issueCode = item.projection_quality_issue?.code;
-
-    if (issueCode === 'partial_cohort_history') {
-      return 'Parcial';
-    }
-
-    if (issueCode === 'insufficient_cohort_history') {
-      return 'Histórico débil';
-    }
-
-    return item.confidence || '—';
-  }
-
-  getCohortQualityClass(item: TrackVentaTotalForecastCohortItem): string {
-    if (item.projection_quality_issue) {
-      return 'track-forecast-cohort-quality--warning';
-    }
-
-    if (item.confidence === 'alta') {
-      return 'track-forecast-cohort-quality--success';
-    }
-
-    return 'track-forecast-cohort-quality--neutral';
-  }
-
-  getCohortTrendClass(item: TrackVentaTotalForecastCohortItem): string {
-    const trend = item.trend_factor;
-
-    if (trend === null || trend === undefined) {
-      return 'track-forecast-delta--neutral';
-    }
-
-    if (trend < 0.95) {
-      return 'track-forecast-delta--negative';
-    }
-
-    if (trend > 1.05) {
-      return 'track-forecast-delta--positive';
-    }
-
-    return 'track-forecast-delta--neutral';
+  get cohortEmptyMessage(): string {
+    return this.cohortForecast?.status === 'not_applicable'
+      ? 'La composición por cohortes no aplica para el alcance por sucursal.'
+      : 'No hay cohortes disponibles para este corte.';
   }
 
   get branchDrivers(): TrackVentaTotalForecastBranchDrivers | null {
@@ -479,63 +471,29 @@ export class TrackForecastComponent implements OnInit {
       .slice(0, 12);
   }
 
-  get hasBranchDrivers(): boolean {
-    return this.negativeBranchDrivers.length > 0;
+  get branchDriverViewModels(): TrackForecastBranchDriverViewModel[] {
+    return this.negativeBranchDrivers.map((item, index) => ({
+      rank: index + 1,
+      track_label: item.track_label || item.sucursal_canon,
+      sucursal_canon: item.sucursal_canon,
+      real_mtd: item.real_mtd,
+      historical_expected_mtd: item.historical_expected_mtd,
+      gap_vs_historical_expected: item.gap_vs_historical_expected,
+      gap_vs_historical_expected_pct: item.gap_vs_historical_expected_pct,
+      trend_factor: item.trend_factor,
+      projected_close: item.projected_close,
+      impact_share_pct: item.impact_share_pct,
+      confidence: item.confidence,
+      projection_quality_issue: item.projection_quality_issue,
+      impactBarPct: Math.min(100, Math.max(0, item.impact_share_pct)),
+      visualTone: 'negative',
+    }));
   }
 
-  get branchDriversTitle(): string {
-    const drivers = this.branchDrivers;
-    const cutoffDay = (
-      drivers?.status === 'ok' ? drivers.cutoff_day : null
-    ) || this.forecastCutoff?.cutoff_day || '—';
-    return `Tendencias por sucursal · día ${cutoffDay}`;
-  }
-
-  get branchDriversSubtitle(): string {
-    const drivers = this.branchDrivers;
-    const count = (
-      drivers?.status === 'ok' ? drivers.items_count : null
-    ) || this.branchDriverItems.length || 0;
-    return `${count} sucursales analizadas · ordenado por mayor gap negativo`;
-  }
-
-  get negativeGapTotalLabel(): string {
-    const drivers = this.branchDrivers;
-    return this.formatCurrency(
-      drivers?.status === 'ok' ? drivers.negative_gap_total : null,
-    );
-  }
-
-  get topNegativeDriverLabel(): string {
-    const top = this.negativeBranchDrivers[0];
-
-    if (!top) {
-      return 'Sin rezagos detectados';
-    }
-
-    return `${top.track_label || top.sucursal_canon} · ${this.formatPercent(top.impact_share_pct)} del gap`;
-  }
-
-  getDriverTrendClass(item: TrackVentaTotalForecastBranchDriverItem): string {
-    const gap = item.gap_vs_historical_expected ?? 0;
-
-    if (gap < 0) {
-      return 'track-forecast-delta--negative';
-    }
-
-    if (gap > 0) {
-      return 'track-forecast-delta--positive';
-    }
-
-    return 'track-forecast-delta--neutral';
-  }
-
-  getDriverProjectionLabel(item: TrackVentaTotalForecastBranchDriverItem): string {
-    if (item.projection_quality_issue) {
-      return 'Sin proyección estable';
-    }
-
-    return this.formatCurrency(item.projected_close);
+  get branchDriversEmptyMessage(): string {
+    return this.branchDrivers?.status === 'not_applicable'
+      ? 'El ranking nacional no aplica para el alcance por sucursal.'
+      : 'No hay sucursales con brecha negativa frente al esperado histórico.';
   }
 
   get branchSelectDisabled(): boolean {
@@ -675,7 +633,69 @@ export class TrackForecastComponent implements OnInit {
     return this.forecast?.metadata?.selected_branches_count || 0;
   }
 
-  getWarningTitle(warning: TrackVentaTotalForecastWarning): string {
+  get forecastAlerts(): TrackForecastAlertViewModel[] {
+    const alerts: TrackForecastAlertViewModel[] = this.forecastWarnings.map((warning) => ({
+      code: warning.code,
+      severity: warning.severity,
+      title: this.getWarningTitle(warning),
+      message: warning.message,
+      reasons: 'reasons' in warning ? warning.reasons : [],
+      sourceLabel: 'Warnings',
+      tone: warning.severity === 'warning' ? 'warning' : 'info',
+    }));
+    const branchIssue = this.forecast?.data_quality?.branch_projection_quality_issue;
+
+    if (branchIssue) {
+      alerts.push(this.toQualityAlert(branchIssue, 'Calidad de proyección por sucursal'));
+    }
+
+    this.cohortForecastItems.forEach((item) => {
+      if (item.projection_quality_issue) {
+        alerts.push(this.toQualityAlert(item.projection_quality_issue, `Cohorte: ${item.label}`));
+      }
+    });
+
+    this.negativeBranchDrivers.forEach((item) => {
+      if (item.projection_quality_issue) {
+        alerts.push(this.toQualityAlert(item.projection_quality_issue, `Sucursal: ${item.track_label || item.sucursal_canon}`));
+      }
+    });
+
+    const uniqueAlerts = new Map<string, TrackForecastAlertViewModel>();
+    alerts.forEach((alert) => {
+      const key = `${alert.code}|${alert.message}|${alert.sourceLabel}`;
+      if (!uniqueAlerts.has(key)) {
+        uniqueAlerts.set(key, alert);
+      }
+    });
+    return Array.from(uniqueAlerts.values());
+  }
+
+  get traceItems(): TrackForecastTraceItem[] {
+    const metadata = this.forecast?.metadata;
+    const curve = this.forecast?.historical_curve;
+    const coverage = this.forecast?.data_quality?.history_coverage;
+    const canonical = this.forecastCutoff?.canonical_cutoff;
+    return [
+      { label: 'Fecha Track', value: metadata?.track_date ? this.formatShortDate(metadata.track_date) : '—' },
+      { label: 'Versión Track', value: this.resolvedVersionLabel },
+      { label: 'Modo', value: this.generationModeDisplayLabel },
+      { label: 'Scope', value: metadata?.scope || this.scope },
+      ...(metadata?.branch ? [{ label: 'Sucursal', value: metadata.branch }] : []),
+      { label: 'Ventana histórica', value: metadata ? `${metadata.history_window.start} a ${metadata.history_window.end_exclusive}` : '—' },
+      { label: 'Fuente del histórico', value: curve?.source || '—' },
+      { label: 'Meses históricos', value: this.formatNumber(curve?.historical_months ?? coverage?.months_count) },
+      { label: 'Días comparables', value: this.formatNumber(curve?.distinct_days) },
+      { label: 'Confianza histórica', value: curve?.confidence || coverage?.confidence || '—' },
+      { label: 'Último corte canónico disponible', value: canonical ? 'Disponible' : 'No disponible' },
+      { label: 'Snapshot canónico', value: canonical ? this.formatNumber(canonical.snapshot_id) : '—' },
+      { label: 'Fecha comercial canónica', value: canonical?.business_date || '—' },
+      { label: 'Sucursales del snapshot', value: this.formatNumber(canonical?.branches) },
+      { label: 'Mensaje de forecast_cutoff', value: this.forecastCutoffMessage },
+    ];
+  }
+
+  private getWarningTitle(warning: TrackVentaTotalForecastWarning): string {
     if (warning.code === 'preview_operativo') {
       return 'Preview operativo';
     }
@@ -699,9 +719,32 @@ export class TrackForecastComponent implements OnInit {
     return warning.code || 'Advertencia';
   }
 
-  getWarningClass(warning: TrackVentaTotalForecastWarning): string {
-    const severity = warning.severity || 'info';
-    return `track-forecast-warning--${severity}`;
+  private toQualityAlert(
+    issue: { code: string; severity: string; message: string; reasons: string[] },
+    sourceLabel: string,
+  ): TrackForecastAlertViewModel {
+    return {
+      code: issue.code,
+      severity: issue.severity,
+      title: this.getQualityIssueTitle(issue.code),
+      message: issue.message,
+      reasons: issue.reasons,
+      sourceLabel,
+      tone: issue.severity === 'warning' ? 'warning' : 'info',
+    };
+  }
+
+  private getQualityIssueTitle(code: string): string {
+    if (code === 'partial_cohort_history') {
+      return 'Histórico parcial por cohorte';
+    }
+    if (code === 'insufficient_cohort_history') {
+      return 'Histórico de cohorte insuficiente';
+    }
+    if (code === 'insufficient_branch_history') {
+      return 'Histórico de sucursal insuficiente';
+    }
+    return code;
   }
 
   formatCurrency(value: number | null | undefined): string {
