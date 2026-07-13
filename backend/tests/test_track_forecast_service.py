@@ -1,5 +1,6 @@
 from datetime import date, datetime, timezone
 from decimal import Decimal
+from copy import deepcopy
 import unittest
 from unittest.mock import patch
 
@@ -13,6 +14,8 @@ from app.models.warehouse import (
     VentaTotalSnapshotORM,
 )
 from app.warehouse.services.track_forecast_service import (
+    BranchForecastDetailConsistencyError,
+    build_branch_forecast_detail,
     build_branch_historical_expected_daily_curve,
     build_branch_historical_daily_series,
     build_branch_projected_daily_path,
@@ -109,6 +112,365 @@ class TrackForecastServiceCharacterizationTest(unittest.TestCase):
             result["summary"],
         )
         self.assertNotIn("projected_daily_path", result)
+
+
+class BranchForecastDetailOrchestratorTest(unittest.TestCase):
+    TRACK_DATE = date(2026, 7, 12)
+    TARGET_MONTH = date(2026, 7, 1)
+    BRANCH = "TIJUANA"
+    VERSION_ID = 987
+
+    def _forecast(self, *, quality_issue=None, progress=0.5):
+        return {
+            "status": "ok",
+            "metadata": {
+                "track_date": self.TRACK_DATE.isoformat(),
+                "target_month": self.TARGET_MONTH.isoformat(),
+                "generation_mode": "manual_preview",
+                "track_daily_version_id": self.VERSION_ID,
+                "scope": "branch",
+                "branch": self.BRANCH,
+                "history_window": {
+                    "start": "2023-01-01",
+                    "end_exclusive": "2026-01-01",
+                },
+            },
+            "forecast_cutoff": {"status": "available"},
+            "same_day_history": {"status": "available"},
+            "warnings": [{"code": "fixture_warning"}],
+            "data_quality": {
+                "history_coverage": {"confidence": "alta"},
+                "branch_projection_quality_issue": quality_issue,
+            },
+            "summary": {
+                "real_mtd": 120.0,
+                "real_base_mtd": 100.0,
+                "real_agregadora_mtd": 20.0,
+                "historical_progress_pct": progress,
+                "historical_expected_mtd": (
+                    100.0 if progress == 0.5 else None
+                ),
+                "historical_expected_month_total": (
+                    200.0 if progress == 0.5 else None
+                ),
+                "projected_close": 240.0,
+                "confidence": "alta",
+            },
+        }
+
+    def _selections(self):
+        return [
+            {
+                "track_date": date(2026, 7, 2),
+                "version_id": 100,
+                "version_type": "cierre_canonico",
+                "selection_reason": "current_canonical_close",
+                "ingreso_real_base_mtd": Decimal("10"),
+                "ingreso_real_agregadora_mtd": Decimal("2"),
+                "ingreso_real_total_mtd": Decimal("12"),
+            },
+            {
+                "track_date": self.TRACK_DATE,
+                "version_id": self.VERSION_ID,
+                "version_type": "preview_operativo",
+                "selection_reason": "resolved_cutoff_version",
+                "ingreso_real_base_mtd": Decimal("100"),
+                "ingreso_real_agregadora_mtd": Decimal("20"),
+                "ingreso_real_total_mtd": Decimal("120"),
+            },
+        ]
+
+    def _historical_series(self):
+        return [
+            {
+                "year": 2023,
+                "business_month": date(2023, 7, 1),
+                "status": "available",
+                "snapshot_id": 10,
+                "snapshot_business_date": date(2023, 7, 31),
+                "days_in_month": 31,
+                "days_with_positive_sale_row": 31,
+                "first_positive_sale_date": date(2023, 7, 1),
+                "last_positive_sale_date": date(2023, 7, 31),
+                "mtd_at_cutoff": Decimal("50"),
+                "full_month_total": Decimal("100"),
+                "points": [],
+            },
+            {
+                "year": 2024,
+                "business_month": date(2024, 7, 1),
+                "status": "no_canonical_snapshot",
+                "snapshot_id": None,
+                "snapshot_business_date": None,
+                "days_in_month": 31,
+                "days_with_positive_sale_row": 0,
+                "first_positive_sale_date": None,
+                "last_positive_sale_date": None,
+                "mtd_at_cutoff": None,
+                "full_month_total": None,
+                "points": [],
+            },
+        ]
+
+    def _expected_curve(self, *, status="available"):
+        if status != "available":
+            return {
+                "status": status,
+                "method": "fixture",
+                "target_month": self.TARGET_MONTH,
+                "cutoff_day": 12,
+                "comparison_years_requested": [2023, 2024, 2025],
+                "comparison_years_used": [],
+                "comparison_years_excluded": [],
+                "samples_count": 0,
+                "historical_expected_month_total": None,
+                "historical_progress_pct_at_cutoff": None,
+                "historical_expected_mtd_at_cutoff": None,
+                "points": [],
+            }
+
+        points = []
+        previous_expected = Decimal("0")
+        for day in range(1, 32):
+            if day <= 12:
+                progress = Decimal(day) / Decimal("24")
+            else:
+                progress = Decimal("0.5") + (
+                    Decimal(day - 12) * Decimal("0.5") / Decimal("19")
+                )
+            if day == 31:
+                progress = Decimal("1")
+            expected = Decimal("200") * progress
+            points.append(
+                {
+                    "day": day,
+                    "date": date(2026, 7, day),
+                    "historical_progress_pct": progress,
+                    "expected_daily_total": expected - previous_expected,
+                    "expected_cumulative_total": expected,
+                    "sample_years": [2023, 2025],
+                    "samples_count": 2,
+                }
+            )
+            previous_expected = expected
+        return {
+            "status": "available",
+            "method": "fixture",
+            "target_month": self.TARGET_MONTH,
+            "cutoff_day": 12,
+            "comparison_years_requested": [2023, 2024, 2025],
+            "comparison_years_used": [2023, 2025],
+            "comparison_years_excluded": [
+                {"year": 2024, "reason": "no_canonical_snapshot"}
+            ],
+            "samples_count": 2,
+            "historical_expected_month_total": Decimal("200"),
+            "historical_progress_pct_at_cutoff": Decimal("0.5"),
+            "historical_expected_mtd_at_cutoff": Decimal("100"),
+            "points": points,
+        }
+
+    def _build(self, *, forecast=None, selections=None, expected_curve=None):
+        forecast = forecast or self._forecast()
+        selections = selections if selections is not None else self._selections()
+        expected_curve = expected_curve or self._expected_curve()
+        with (
+            patch(
+                "app.warehouse.services.track_forecast_service.build_venta_total_forecast",
+                return_value=forecast,
+            ) as base_mock,
+            patch(
+                "app.warehouse.services.track_forecast_service.select_track_daily_branch_versions",
+                return_value=selections,
+            ) as select_mock,
+            patch(
+                "app.warehouse.services.track_forecast_service.build_branch_historical_daily_series",
+                return_value=self._historical_series(),
+            ) as history_mock,
+            patch(
+                "app.warehouse.services.track_forecast_service.build_branch_historical_expected_daily_curve",
+                return_value=expected_curve,
+            ),
+        ):
+            result = build_branch_forecast_detail(
+                sucursal_canon=" tijuana ",
+                track_date=self.TRACK_DATE,
+                generation_mode="manual_preview",
+                track_daily_version_id=self.VERSION_ID,
+            )
+        return result, base_mock, select_mock, history_mock
+
+    def test_complete_detail_uses_sources_and_preserves_total_projection(self):
+        result, base_mock, _, _ = self._build()
+
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["metadata"]["sucursal_canon"], self.BRANCH)
+        self.assertEqual(
+            result["series"]["current_track"]["source_basis"],
+            "track_daily_mart",
+        )
+        self.assertEqual(
+            result["series"]["historical_years"]["source_basis"],
+            "venta_total_base",
+        )
+        self.assertEqual(result["summary"]["projected_close"], 240.0)
+        self.assertEqual(
+            result["summary"]["total_projection_basis"]["metric_basis"],
+            "total_mtd",
+        )
+        base_mock.assert_called_once_with(
+            track_date=self.TRACK_DATE,
+            generation_mode="manual_preview",
+            track_daily_version_id=self.VERSION_ID,
+            scope="branch",
+            branch=self.BRANCH,
+        )
+
+    def test_resolved_cutoff_version_and_series_order_are_exact(self):
+        result, _, select_mock, _ = self._build()
+
+        select_mock.assert_called_once_with(
+            sucursal_canon=self.BRANCH,
+            start_date=self.TARGET_MONTH,
+            cutoff_date=self.TRACK_DATE,
+            resolved_cutoff_version_id=self.VERSION_ID,
+        )
+        points = result["series"]["current_track"]["points"]
+        self.assertEqual([point["day"] for point in points], [2, 12])
+        self.assertEqual(points[-1]["selection_reason"], "resolved_cutoff_version")
+
+    def test_dynamic_history_years_and_unavailable_year_are_preserved(self):
+        result, _, _, history_mock = self._build()
+
+        self.assertEqual(result["metadata"]["comparison_years"], [2023, 2024, 2025])
+        self.assertEqual(
+            history_mock.call_args.kwargs["comparison_years"],
+            [2023, 2024, 2025],
+        )
+        unavailable = result["series"]["historical_years"]["items"][1]
+        self.assertEqual(unavailable["status"], "no_canonical_snapshot")
+        self.assertEqual(unavailable["points"], [])
+
+    def test_base_projection_uses_base_and_ends_at_its_own_close(self):
+        result, _, _, _ = self._build()
+
+        projection = result["series"]["comparable_base_projection"]
+        self.assertEqual(projection["status"], "available")
+        self.assertEqual(projection["method"], "stable_historical_pace_base")
+        self.assertEqual(projection["metric_basis"], "base_mtd")
+        self.assertEqual(projection["projected_close"], Decimal("200"))
+        self.assertNotEqual(projection["projected_close"], Decimal("240"))
+        self.assertEqual(
+            projection["path"]["points"][-1]["projected_cumulative_total"],
+            Decimal("200"),
+        )
+
+    def test_forecast_quality_issue_blocks_base_path(self):
+        issue = {"code": "insufficient_history", "message": "fixture"}
+        forecast = self._forecast(quality_issue=issue)
+        with patch(
+            "app.warehouse.services.track_forecast_service.build_branch_projected_daily_path"
+        ) as path_mock:
+            result, _, _, _ = self._build(forecast=forecast)
+
+        projection = result["series"]["comparable_base_projection"]
+        self.assertEqual(projection["status"], "blocked_by_forecast_quality")
+        self.assertEqual(projection["quality_issue"], issue)
+        path_mock.assert_not_called()
+
+    def test_invalid_historical_progress_blocks_base_path(self):
+        forecast = self._forecast(progress=0)
+        result, _, _, _ = self._build(
+            forecast=forecast,
+            expected_curve=self._expected_curve(status="no_comparable_history"),
+        )
+
+        self.assertEqual(
+            result["series"]["comparable_base_projection"]["status"],
+            "invalid_historical_progress",
+        )
+
+    def test_missing_base_mtd_blocks_base_path(self):
+        forecast = self._forecast()
+        forecast["summary"]["real_base_mtd"] = None
+        selections = self._selections()
+        selections[-1]["ingreso_real_base_mtd"] = None
+
+        result, _, _, _ = self._build(
+            forecast=forecast,
+            selections=selections,
+        )
+
+        self.assertEqual(
+            result["series"]["comparable_base_projection"]["status"],
+            "missing_base_mtd",
+        )
+
+    def test_unavailable_projected_path_has_explicit_status(self):
+        unavailable_path = {
+            "status": "expected_curve_unavailable",
+            "points": [],
+        }
+        with patch(
+            "app.warehouse.services.track_forecast_service.build_branch_projected_daily_path",
+            return_value=unavailable_path,
+        ):
+            result, _, _, _ = self._build()
+
+        projection = result["series"]["comparable_base_projection"]
+        self.assertEqual(projection["status"], "projected_path_unavailable")
+        self.assertEqual(projection["path"], unavailable_path)
+
+    def test_missing_cutoff_point_is_explicit_inconsistency(self):
+        with self.assertRaisesRegex(
+            BranchForecastDetailConsistencyError,
+            "día de corte",
+        ):
+            self._build(selections=self._selections()[:-1])
+
+    def test_cutoff_values_must_match_forecast_summary(self):
+        selections = self._selections()
+        selections[-1]["ingreso_real_base_mtd"] = Decimal("99")
+        with self.assertRaisesRegex(
+            BranchForecastDetailConsistencyError,
+            "base_mtd",
+        ):
+            self._build(selections=selections)
+
+    def test_expected_curve_cutoff_progress_must_match_forecast(self):
+        expected_curve = self._expected_curve()
+        expected_curve["historical_progress_pct_at_cutoff"] = Decimal("0.4")
+        with self.assertRaisesRegex(
+            BranchForecastDetailConsistencyError,
+            "progress_pct",
+        ):
+            self._build(expected_curve=expected_curve)
+
+    def test_expected_curve_cutoff_expected_mtd_must_match_forecast(self):
+        expected_curve = self._expected_curve()
+        expected_curve["historical_expected_mtd_at_cutoff"] = Decimal("99")
+        with self.assertRaisesRegex(
+            BranchForecastDetailConsistencyError,
+            "expected_mtd",
+        ):
+            self._build(expected_curve=expected_curve)
+
+    def test_expected_curve_month_end_must_match_forecast(self):
+        expected_curve = self._expected_curve()
+        expected_curve["points"][-1]["expected_cumulative_total"] = Decimal("199")
+        with self.assertRaisesRegex(
+            BranchForecastDetailConsistencyError,
+            "month_end",
+        ):
+            self._build(expected_curve=expected_curve)
+
+    def test_base_forecast_payload_is_not_mutated(self):
+        forecast = self._forecast()
+        original = deepcopy(forecast)
+
+        self._build(forecast=forecast)
+
+        self.assertEqual(forecast, original)
 
 
 class TrackDailyBranchVersionSelectorTest(unittest.TestCase):

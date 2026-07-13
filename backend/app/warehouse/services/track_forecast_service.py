@@ -161,6 +161,10 @@ class BranchProjectedDailyPath(TypedDict):
     points: list[BranchProjectedDailyPoint]
 
 
+class BranchForecastDetailConsistencyError(RuntimeError):
+    """Raised when detail sources disagree with the resolved base forecast."""
+
+
 def _get_track_daily_branch_version_candidates(
     *,
     sucursal_canon: str,
@@ -3018,4 +3022,360 @@ def build_venta_total_forecast(
             "confidence": confidence,
         },
         "historical_curve": curve,
+    }
+
+
+def _detail_decimal(value: Any, *, field_name: str) -> Decimal | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        raise BranchForecastDetailConsistencyError(
+            f"{field_name} contiene un valor booleano inesperado."
+        )
+    try:
+        return value if isinstance(value, Decimal) else Decimal(str(value))
+    except Exception as exc:
+        raise BranchForecastDetailConsistencyError(
+            f"{field_name} no contiene un valor numérico válido."
+        ) from exc
+
+
+def _require_detail_match(
+    *,
+    actual: Any,
+    expected: Any,
+    field_name: str,
+    tolerance: Decimal = Decimal("0.000000001"),
+) -> None:
+    actual_decimal = _detail_decimal(actual, field_name=f"{field_name}.actual")
+    expected_decimal = _detail_decimal(
+        expected,
+        field_name=f"{field_name}.expected",
+    )
+    if actual_decimal is None or expected_decimal is None:
+        if actual_decimal is expected_decimal:
+            return
+        raise BranchForecastDetailConsistencyError(
+            f"Inconsistencia en {field_name}: uno de los valores es nulo."
+        )
+    if abs(actual_decimal - expected_decimal) > tolerance:
+        raise BranchForecastDetailConsistencyError(
+            f"Inconsistencia en {field_name}: el detalle no coincide con el forecast base."
+        )
+
+
+def _build_detail_comparison_years(
+    *,
+    target_month: date,
+    history_window: dict[str, Any],
+) -> list[int]:
+    try:
+        history_start = date.fromisoformat(str(history_window["start"]))
+        history_end = date.fromisoformat(str(history_window["end_exclusive"]))
+    except (KeyError, TypeError, ValueError) as exc:
+        raise BranchForecastDetailConsistencyError(
+            "El forecast base no contiene una ventana histórica válida."
+        ) from exc
+
+    return [
+        year
+        for year in range(history_start.year, history_end.year + 1)
+        if history_start
+        <= date(year, target_month.month, 1)
+        < history_end
+    ]
+
+
+def _build_current_track_detail(
+    *,
+    sucursal_canon: str,
+    target_month: date,
+    track_date: date,
+    resolved_cutoff_version_id: int,
+    forecast_summary: dict[str, Any],
+) -> dict[str, Any]:
+    try:
+        selections = select_track_daily_branch_versions(
+            sucursal_canon=sucursal_canon,
+            start_date=target_month,
+            cutoff_date=track_date,
+            resolved_cutoff_version_id=resolved_cutoff_version_id,
+        )
+    except ValueError as exc:
+        if "versión resuelta del corte" in str(exc):
+            raise BranchForecastDetailConsistencyError(str(exc)) from exc
+        raise
+
+    points = [
+        {
+            "day": item["track_date"].day,
+            "date": item["track_date"],
+            "version_id": item["version_id"],
+            "version_type": item["version_type"],
+            "selection_reason": item["selection_reason"],
+            "base_mtd": item["ingreso_real_base_mtd"],
+            "agregadora_mtd": item["ingreso_real_agregadora_mtd"],
+            "total_mtd": item["ingreso_real_total_mtd"],
+        }
+        for item in selections
+    ]
+    if not points or points[-1]["date"] != track_date:
+        raise BranchForecastDetailConsistencyError(
+            "La serie Track no contiene el punto correspondiente al día de corte."
+        )
+
+    cutoff_point = points[-1]
+    if cutoff_point["version_id"] != resolved_cutoff_version_id:
+        raise BranchForecastDetailConsistencyError(
+            "La serie Track no utilizó la versión resuelta para el día de corte."
+        )
+    _require_detail_match(
+        actual=cutoff_point["base_mtd"],
+        expected=forecast_summary.get("real_base_mtd"),
+        field_name="current_track.cutoff.base_mtd",
+    )
+    _require_detail_match(
+        actual=cutoff_point["agregadora_mtd"],
+        expected=forecast_summary.get("real_agregadora_mtd"),
+        field_name="current_track.cutoff.agregadora_mtd",
+    )
+    _require_detail_match(
+        actual=cutoff_point["total_mtd"],
+        expected=forecast_summary.get("real_mtd"),
+        field_name="current_track.cutoff.total_mtd",
+    )
+
+    selected_dates = {point["date"] for point in points}
+    expected_dates = [
+        target_month + timedelta(days=offset)
+        for offset in range((track_date - target_month).days + 1)
+    ]
+    return {
+        "source_basis": "track_daily_mart",
+        "points_count": len(points),
+        "expected_days_to_cutoff": len(expected_dates),
+        "selected_days": [point["day"] for point in points],
+        "missing_dates": [
+            expected_date
+            for expected_date in expected_dates
+            if expected_date not in selected_dates
+        ],
+        "points": points,
+    }
+
+
+def _validate_historical_expected_detail(
+    *,
+    expected_curve: BranchHistoricalExpectedCurve,
+    forecast_summary: dict[str, Any],
+) -> None:
+    if expected_curve["status"] != "available":
+        return
+    if not expected_curve["points"]:
+        raise BranchForecastDetailConsistencyError(
+            "La curva histórica esperada disponible no contiene puntos."
+        )
+    _require_detail_match(
+        actual=expected_curve["historical_progress_pct_at_cutoff"],
+        expected=forecast_summary.get("historical_progress_pct"),
+        field_name="historical_expected.cutoff.progress_pct",
+    )
+    _require_detail_match(
+        actual=expected_curve["historical_expected_mtd_at_cutoff"],
+        expected=forecast_summary.get("historical_expected_mtd"),
+        field_name="historical_expected.cutoff.expected_mtd",
+    )
+    _require_detail_match(
+        actual=expected_curve["points"][-1]["expected_cumulative_total"],
+        expected=forecast_summary.get("historical_expected_month_total"),
+        field_name="historical_expected.month_end.expected_total",
+    )
+
+
+def _build_comparable_base_projection_detail(
+    *,
+    expected_curve: BranchHistoricalExpectedCurve,
+    target_month: date,
+    cutoff_day: int,
+    forecast_summary: dict[str, Any],
+    projection_quality_issue: Any,
+) -> dict[str, Any]:
+    method = "stable_historical_pace_base"
+    formula = "base_projected_close = real_base_mtd / historical_progress_pct"
+    confidence = forecast_summary.get("confidence")
+    current_base_mtd = _detail_decimal(
+        forecast_summary.get("real_base_mtd"),
+        field_name="summary.real_base_mtd",
+    )
+    historical_progress_pct = _detail_decimal(
+        forecast_summary.get("historical_progress_pct"),
+        field_name="summary.historical_progress_pct",
+    )
+
+    empty_result = {
+        "method": method,
+        "formula": formula,
+        "metric_basis": "base_mtd",
+        "projected_close": None,
+        "confidence": confidence,
+        "quality_issue": projection_quality_issue,
+        "path": None,
+    }
+    if projection_quality_issue:
+        return {"status": "blocked_by_forecast_quality", **empty_result}
+    if current_base_mtd is None:
+        return {"status": "missing_base_mtd", **empty_result}
+    if historical_progress_pct is None or historical_progress_pct <= 0:
+        return {"status": "invalid_historical_progress", **empty_result}
+
+    base_projected_close = current_base_mtd / historical_progress_pct
+    path = build_branch_projected_daily_path(
+        expected_curve=expected_curve,
+        target_month=target_month,
+        cutoff_day=cutoff_day,
+        metric_basis="base_mtd",
+        current_mtd_at_cutoff=current_base_mtd,
+        projected_close=base_projected_close,
+    )
+    status = (
+        "available"
+        if path["status"] == "available"
+        else "projected_path_unavailable"
+    )
+    return {
+        "status": status,
+        "method": method,
+        "formula": formula,
+        "metric_basis": "base_mtd",
+        "projected_close": base_projected_close,
+        "confidence": confidence,
+        "quality_issue": projection_quality_issue,
+        "path": path,
+    }
+
+
+def build_branch_forecast_detail(
+    *,
+    sucursal_canon: str,
+    track_date: date,
+    generation_mode: str,
+    track_daily_version_id: int,
+) -> dict[str, Any]:
+    normalized_branch = str(sucursal_canon or "").strip().upper()
+    if not normalized_branch:
+        raise ValueError("sucursal_canon es requerido.")
+    if normalized_branch in EXCLUDED_BRANCHES:
+        raise ValueError("La sucursal solicitada está excluida de Track.")
+
+    forecast = build_venta_total_forecast(
+        track_date=track_date,
+        generation_mode=generation_mode,
+        track_daily_version_id=track_daily_version_id,
+        scope="branch",
+        branch=normalized_branch,
+    )
+    forecast_metadata = forecast["metadata"]
+    forecast_summary = forecast["summary"]
+    resolved_cutoff_version_id = int(
+        forecast_metadata["track_daily_version_id"]
+    )
+    target_month = date.fromisoformat(forecast_metadata["target_month"])
+    cutoff_day = track_date.day
+    comparison_years = _build_detail_comparison_years(
+        target_month=target_month,
+        history_window=forecast_metadata["history_window"],
+    )
+
+    current_track = _build_current_track_detail(
+        sucursal_canon=normalized_branch,
+        target_month=target_month,
+        track_date=track_date,
+        resolved_cutoff_version_id=resolved_cutoff_version_id,
+        forecast_summary=forecast_summary,
+    )
+    historical_series = build_branch_historical_daily_series(
+        sucursal_canon=normalized_branch,
+        target_month=target_month,
+        comparison_years=comparison_years,
+        cutoff_day=cutoff_day,
+    )
+    historical_expected_month_total = _detail_decimal(
+        forecast_summary.get("historical_expected_month_total"),
+        field_name="summary.historical_expected_month_total",
+    )
+    historical_expected = build_branch_historical_expected_daily_curve(
+        historical_series=historical_series,
+        target_month=target_month,
+        cutoff_day=cutoff_day,
+        historical_expected_month_total=historical_expected_month_total,
+    )
+    _validate_historical_expected_detail(
+        expected_curve=historical_expected,
+        forecast_summary=forecast_summary,
+    )
+
+    forecast_data_quality = forecast["data_quality"]
+    projection_quality_issue = forecast_data_quality.get(
+        "branch_projection_quality_issue"
+    )
+    comparable_base_projection = _build_comparable_base_projection_detail(
+        expected_curve=historical_expected,
+        target_month=target_month,
+        cutoff_day=cutoff_day,
+        forecast_summary=forecast_summary,
+        projection_quality_issue=projection_quality_issue,
+    )
+
+    summary = dict(forecast_summary)
+    summary["total_projection_basis"] = {
+        "metric_basis": "total_mtd",
+        "includes_agregadoras": True,
+        "source": "existing_stable_forecast",
+    }
+    return {
+        "status": "ok",
+        "metadata": {
+            "sucursal_canon": normalized_branch,
+            "track_date": track_date,
+            "target_month": target_month,
+            "cutoff_day": cutoff_day,
+            "generation_mode": generation_mode,
+            "resolved_version": {"id": resolved_cutoff_version_id},
+            "history_window": dict(forecast_metadata["history_window"]),
+            "comparison_years": comparison_years,
+        },
+        "summary": summary,
+        "forecast_context": {
+            "forecast_cutoff": forecast["forecast_cutoff"],
+            "same_day_history": forecast["same_day_history"],
+        },
+        "series": {
+            "current_track": current_track,
+            "historical_years": {
+                "source_basis": "venta_total_base",
+                "items": historical_series,
+            },
+            "historical_expected": {
+                "source_basis": "venta_total_base",
+                **historical_expected,
+            },
+            "comparable_base_projection": comparable_base_projection,
+        },
+        "data_quality": {
+            "forecast": forecast_data_quality,
+            "current_series": {
+                "points_count": current_track["points_count"],
+                "expected_days_to_cutoff": current_track[
+                    "expected_days_to_cutoff"
+                ],
+                "missing_dates": current_track["missing_dates"],
+            },
+            "source_comparability": {
+                "historical_basis": "venta_total_base",
+                "current_comparable_basis": "base_mtd",
+                "executive_total_basis": "total_mtd",
+                "agregadoras_not_present_in_historical_series": True,
+            },
+            "warnings": list(forecast["warnings"]),
+        },
     }
