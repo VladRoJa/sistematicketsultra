@@ -1,0 +1,146 @@
+<section class="branch-detail-page">
+  <header class="branch-detail-header">
+    <div>
+      <p class="branch-detail-breadcrumb">Tendencias &gt; {{ branchDisplayName }}</p>
+      <h1>{{ branchDisplayName }}</h1>
+      <p>Detalle profundo del ritmo mensual por sucursal</p>
+    </div>
+    <button type="button" class="branch-detail-back" (click)="backToForecast()">
+      Volver a Tendencias
+    </button>
+  </header>
+
+  <div class="branch-detail-context" *ngIf="detail">
+    <span>Fecha de corte <strong>{{ headerCutoffLabel }}</strong></span>
+    <span>Modo <strong>{{ generationModeLabel }}</strong></span>
+    <span>Versión Track <strong>{{ versionLabel }}</strong></span>
+    <span>Tipo de versión <strong>{{ versionTypeLabel }}</strong></span>
+    <span>Confianza <strong>{{ confidenceLabel }}</strong></span>
+  </div>
+
+  <p class="branch-detail-message" *ngIf="loading">Cargando detalle de la sucursal...</p>
+
+  <section class="branch-detail-error" *ngIf="errorMessage" role="alert">
+    <strong>No fue posible mostrar el detalle</strong>
+    <p>{{ errorMessage }}</p>
+    <button type="button" class="branch-detail-back" (click)="backToForecast()">
+      Volver a Tendencias
+    </button>
+  </section>
+
+  <ng-container *ngIf="detail">
+    <section class="branch-detail-summary" aria-label="Resumen del detalle por sucursal">
+      <article
+        *ngFor="let card of summaryCards"
+        class="branch-detail-summary-card"
+        [class.branch-detail-summary-card--total]="card.emphasis === 'total'"
+        [class.branch-detail-summary-card--base]="card.emphasis === 'base'"
+      >
+        <span>{{ card.label }}</span>
+        <strong>{{ card.value }}</strong>
+        <small>{{ card.support }}</small>
+      </article>
+    </section>
+
+    <p class="branch-detail-basis-note">
+      La proyección total incluye agregadoras. La gráfica histórica comparable usa venta base.
+    </p>
+
+    <section class="branch-detail-panel branch-detail-chart-panel">
+      <header class="branch-detail-section-heading">
+        <span>Comparabilidad base</span>
+        <h2>Ritmo acumulado de venta base</h2>
+        <p>Comparación diaria contra años históricos, trayectoria esperada y proyección base.</p>
+      </header>
+
+      <div
+        *ngIf="hasChartSeries"
+        echarts
+        [options]="chartOption"
+        class="branch-detail-chart"
+        aria-label="Gráfica de ritmo acumulado de venta base"
+      ></div>
+
+      <p class="branch-detail-empty" *ngIf="!hasChartSeries">
+        No hay series disponibles para construir la gráfica.
+      </p>
+
+      <ul class="branch-detail-chart-notes" *ngIf="chartNotes.length">
+        <li *ngFor="let note of chartNotes">{{ note }}</li>
+      </ul>
+    </section>
+
+    <section class="branch-detail-panel">
+      <header class="branch-detail-section-heading">
+        <span>Lectura anual</span>
+        <h2>Comparativo por año</h2>
+        <p>Venta base al mismo día, cierre observado y disponibilidad de la fuente.</p>
+      </header>
+
+      <div class="branch-detail-table-wrap">
+        <table class="branch-detail-table">
+          <thead>
+            <tr>
+              <th scope="col">Año</th>
+              <th scope="col">Estado</th>
+              <th scope="col">MTD al mismo día</th>
+              <th scope="col">Cierre mensual</th>
+              <th scope="col">Días con venta positiva</th>
+              <th scope="col">Snapshot business date</th>
+              <th scope="col">Disponibilidad</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let row of annualRows" [class.branch-detail-table-current]="row.isCurrent">
+              <td data-label="Año"><strong>{{ row.yearLabel }}</strong></td>
+              <td data-label="Estado">{{ row.statusLabel }}</td>
+              <td data-label="MTD al mismo día">{{ row.mtdLabel }}</td>
+              <td data-label="Cierre mensual">{{ row.closeLabel }}</td>
+              <td data-label="Días con venta positiva">{{ row.positiveDaysLabel }}</td>
+              <td data-label="Snapshot business date">{{ row.snapshotDateLabel }}</td>
+              <td data-label="Disponibilidad">
+                <span class="branch-detail-availability" [class.branch-detail-availability--missing]="!row.available">
+                  {{ row.availabilityLabel }}
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="branch-detail-disclosures">
+      <details class="branch-detail-panel">
+        <summary>Calidad y comparabilidad</summary>
+        <div class="branch-detail-disclosure-body">
+          <dl class="branch-detail-facts">
+            <div *ngFor="let item of qualityItems">
+              <dt>{{ item.label }}</dt>
+              <dd>{{ item.value }}</dd>
+            </div>
+            <div><dt>Años usados</dt><dd>{{ usedYearsLabel }}</dd></div>
+            <div><dt>Años excluidos</dt><dd>{{ excludedYearsLabel }}</dd></div>
+          </dl>
+
+          <div class="branch-detail-warning-list" *ngIf="warningMessages.length">
+            <h3>Warnings</h3>
+            <ul><li *ngFor="let warning of warningMessages">{{ warning }}</li></ul>
+          </div>
+          <p class="branch-detail-empty" *ngIf="!warningMessages.length">Sin warnings reportados.</p>
+        </div>
+      </details>
+
+      <details class="branch-detail-panel">
+        <summary>Trazabilidad del corte</summary>
+        <div class="branch-detail-disclosure-body">
+          <dl class="branch-detail-facts">
+            <div *ngFor="let item of traceItems">
+              <dt>{{ item.label }}</dt>
+              <dd>{{ item.value }}</dd>
+            </div>
+          </dl>
+        </div>
+      </details>
+    </section>
+  </ng-container>
+</section>

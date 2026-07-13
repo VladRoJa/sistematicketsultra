@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute, Router } from '@angular/router';
 
 import { AuthService } from '../../services/auth.service';
 import {
@@ -129,13 +130,18 @@ export class TrackForecastComponent implements OnInit {
   selectedCohortKey: TrackVentaTotalForecastCohortItem['cohort_key'] | null = null;
 
   private readonly betaUserId = 47;
+  private pendingCohortKey: TrackVentaTotalForecastCohortItem['cohort_key'] | null = null;
 
   constructor(
     private readonly trackService: TrackService,
     private readonly authService: AuthService,
+    private readonly route: ActivatedRoute,
+    private readonly router: Router,
   ) {}
 
   ngOnInit(): void {
+    this.restoreQueryState();
+
     if (!this.puedeVerForecastBeta()) {
       this.errorMessage = 'No tienes acceso beta a Proyección y Metas.';
       return;
@@ -146,7 +152,7 @@ export class TrackForecastComponent implements OnInit {
   }
 
   puedeVerForecastBeta(): boolean {
-    const user = this.authService.getUser() as any;
+    const user = this.authService.getUser();
     const userId = Number(user?.id ?? user?.user_id ?? user?.usuario_id ?? 0);
 
     return userId === this.betaUserId;
@@ -225,6 +231,7 @@ export class TrackForecastComponent implements OnInit {
           }
 
           this.forecast = response;
+          this.restorePendingCohort();
         },
         error: (error) => {
           this.loading = false;
@@ -516,6 +523,26 @@ export class TrackForecastComponent implements OnInit {
     }
 
     this.selectedCohortKey = this.selectedCohortKey === cohortKey ? null : cohortKey;
+  }
+
+  openBranchDetail(row: TrackVentaTotalForecastBranchDriverItem): void {
+    const queryParams: {
+      track_date: string;
+      generation_mode: TrackGenerationMode;
+      cohort?: TrackVentaTotalForecastCohortItem['cohort_key'];
+    } = {
+      track_date: this.trackDate,
+      generation_mode: this.generationMode,
+    };
+
+    if (this.selectedCohortKey) {
+      queryParams.cohort = this.selectedCohortKey;
+    }
+
+    void this.router.navigate(
+      ['/warehouse/track/forecast/branches', row.sucursal_canon],
+      { queryParams },
+    );
   }
 
   isCohortSelected(cohortKey: TrackVentaTotalForecastCohortItem['cohort_key']): boolean {
@@ -899,5 +926,36 @@ export class TrackForecastComponent implements OnInit {
     now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
 
     return now.toISOString().slice(0, 10);
+  }
+
+  private restoreQueryState(): void {
+    const trackDate = this.route.snapshot.queryParamMap.get('track_date');
+    const generationMode = this.route.snapshot.queryParamMap.get('generation_mode');
+    const cohort = this.route.snapshot.queryParamMap.get('cohort');
+
+    if (trackDate && /^\d{4}-\d{2}-\d{2}$/.test(trackDate)) {
+      this.trackDate = trackDate;
+    }
+
+    if (generationMode === 'manual_preview' || generationMode === 'official_closed_day') {
+      this.generationMode = generationMode;
+    }
+
+    if (cohort === 'legacy_21' || cohort === 'new_gyms' || cohort === 'total_ultra') {
+      this.pendingCohortKey = cohort;
+    }
+  }
+
+  private restorePendingCohort(): void {
+    if (!this.pendingCohortKey) {
+      return;
+    }
+
+    const cohortExists = this.cohortForecastItems.some(
+      (item) => item.cohort_key === this.pendingCohortKey,
+    );
+
+    this.selectedCohortKey = cohortExists ? this.pendingCohortKey : null;
+    this.pendingCohortKey = null;
   }
 }

@@ -768,6 +768,220 @@ export interface TrackRegionalDetailResponse {
   business_rules: TrackRegionalBusinessRule[];
 }
 
+export interface TrackBranchForecastDetailResolvedVersion {
+  id: number;
+}
+
+export interface TrackBranchForecastDetailMetadata {
+  sucursal_canon: string;
+  track_date: string;
+  target_month: string;
+  cutoff_day: number;
+  generation_mode: TrackGenerationMode;
+  resolved_version: TrackBranchForecastDetailResolvedVersion;
+  history_window: TrackVentaTotalForecastHistoryWindow;
+  comparison_years: number[];
+}
+
+export interface TrackBranchForecastDetailTotalProjectionBasis {
+  metric_basis: 'total_mtd';
+  includes_agregadoras: true;
+  source: 'existing_stable_forecast';
+}
+
+export interface TrackBranchForecastDetailSummary
+  extends Omit<TrackVentaTotalForecastSummary, 'real_base_mtd'> {
+  real_base_mtd: number | null;
+  total_projection_basis: TrackBranchForecastDetailTotalProjectionBasis;
+}
+
+export interface TrackBranchForecastDetailForecastContext {
+  forecast_cutoff: TrackVentaTotalForecastCutoff;
+  same_day_history: TrackVentaTotalForecastSameDayHistory;
+}
+
+export interface TrackBranchForecastDetailCurrentPoint {
+  day: number;
+  date: string;
+  version_id: number;
+  version_type: string;
+  selection_reason: string;
+  base_mtd: number | null;
+  agregadora_mtd: number | null;
+  total_mtd: number | null;
+}
+
+export interface TrackBranchForecastDetailCurrentTrackSeries {
+  source_basis: 'track_daily_mart';
+  points_count: number;
+  expected_days_to_cutoff: number;
+  selected_days: number[];
+  missing_dates: string[];
+  points: TrackBranchForecastDetailCurrentPoint[];
+}
+
+export interface TrackBranchForecastDetailHistoricalDailyPoint {
+  day: number;
+  date: string;
+  daily_total: number;
+  cumulative_total: number;
+  has_positive_sale_row: boolean;
+}
+
+export type TrackBranchForecastDetailHistoricalYearStatus =
+  | 'available'
+  | 'no_canonical_snapshot'
+  | 'no_branch_rows';
+
+export interface TrackBranchForecastDetailHistoricalYearItem {
+  year: number;
+  business_month: string;
+  status: TrackBranchForecastDetailHistoricalYearStatus;
+  snapshot_id: number | null;
+  snapshot_business_date: string | null;
+  days_in_month: number;
+  days_with_positive_sale_row: number;
+  first_positive_sale_date: string | null;
+  last_positive_sale_date: string | null;
+  mtd_at_cutoff: number | null;
+  full_month_total: number | null;
+  points: TrackBranchForecastDetailHistoricalDailyPoint[];
+}
+
+export interface TrackBranchForecastDetailHistoricalYearsCollection {
+  source_basis: 'venta_total_base';
+  items: TrackBranchForecastDetailHistoricalYearItem[];
+}
+
+export interface TrackBranchForecastDetailHistoricalExpectedPoint {
+  day: number;
+  date: string;
+  historical_progress_pct: number;
+  expected_daily_total: number;
+  expected_cumulative_total: number;
+  sample_years: number[];
+  samples_count: number;
+}
+
+export interface TrackBranchForecastDetailExcludedYear {
+  year: number;
+  reason: string;
+}
+
+export type TrackBranchForecastDetailHistoricalExpectedStatus =
+  | 'available'
+  | 'no_comparable_history'
+  | 'missing_expected_month_total';
+
+export interface TrackBranchForecastDetailHistoricalExpectedCurve {
+  source_basis: 'venta_total_base';
+  status: TrackBranchForecastDetailHistoricalExpectedStatus;
+  method: string;
+  target_month: string;
+  cutoff_day: number;
+  comparison_years_requested: number[];
+  comparison_years_used: number[];
+  comparison_years_excluded: TrackBranchForecastDetailExcludedYear[];
+  samples_count: number;
+  historical_expected_month_total: number | null;
+  historical_progress_pct_at_cutoff: number | null;
+  historical_expected_mtd_at_cutoff: number | null;
+  points: TrackBranchForecastDetailHistoricalExpectedPoint[];
+}
+
+export type TrackBranchForecastDetailProjectedPointKind =
+  | 'cutoff_anchor'
+  | 'projected_future';
+
+export interface TrackBranchForecastDetailProjectedPathPoint {
+  day: number;
+  date: string;
+  point_kind: TrackBranchForecastDetailProjectedPointKind;
+  historical_progress_pct: number;
+  remaining_progress_share: number;
+  projected_daily_increment: number;
+  projected_cumulative_total: number;
+}
+
+export type TrackBranchForecastDetailProjectedPathStatus =
+  | 'available'
+  | 'expected_curve_unavailable'
+  | 'missing_current_mtd'
+  | 'missing_projected_close'
+  | 'projection_below_current_mtd'
+  | 'no_remaining_historical_progress'
+  | 'inconsistent_month_end_projection';
+
+export interface TrackBranchForecastDetailProjectedPath {
+  status: TrackBranchForecastDetailProjectedPathStatus;
+  method: 'historical_remaining_daily_weights';
+  metric_basis: 'base_mtd';
+  target_month: string;
+  cutoff_day: number;
+  current_mtd_at_cutoff: number | null;
+  projected_close: number | null;
+  projected_remaining: number | null;
+  historical_progress_pct_at_cutoff: number | null;
+  remaining_historical_progress: number | null;
+  comparison_years_used: number[];
+  samples_count: number;
+  points: TrackBranchForecastDetailProjectedPathPoint[];
+}
+
+export type TrackBranchForecastDetailComparableProjectionStatus =
+  | 'available'
+  | 'blocked_by_forecast_quality'
+  | 'missing_base_mtd'
+  | 'invalid_historical_progress'
+  | 'projected_path_unavailable';
+
+export interface TrackBranchForecastDetailComparableBaseProjection {
+  status: TrackBranchForecastDetailComparableProjectionStatus;
+  method: 'stable_historical_pace_base';
+  formula: 'base_projected_close = real_base_mtd / historical_progress_pct';
+  metric_basis: 'base_mtd';
+  projected_close: number | null;
+  confidence: string;
+  quality_issue: TrackVentaTotalForecastBranchHistoryWarning | null;
+  path: TrackBranchForecastDetailProjectedPath | null;
+}
+
+export interface TrackBranchForecastDetailSeries {
+  current_track: TrackBranchForecastDetailCurrentTrackSeries;
+  historical_years: TrackBranchForecastDetailHistoricalYearsCollection;
+  historical_expected: TrackBranchForecastDetailHistoricalExpectedCurve;
+  comparable_base_projection: TrackBranchForecastDetailComparableBaseProjection;
+}
+
+export interface TrackBranchForecastDetailCurrentSeriesQuality {
+  points_count: number;
+  expected_days_to_cutoff: number;
+  missing_dates: string[];
+}
+
+export interface TrackBranchForecastDetailSourceComparability {
+  historical_basis: 'venta_total_base';
+  current_comparable_basis: 'base_mtd';
+  executive_total_basis: 'total_mtd';
+  agregadoras_not_present_in_historical_series: true;
+}
+
+export interface TrackBranchForecastDetailDataQuality {
+  forecast: TrackVentaTotalForecastDataQuality;
+  current_series: TrackBranchForecastDetailCurrentSeriesQuality;
+  source_comparability: TrackBranchForecastDetailSourceComparability;
+  warnings: TrackVentaTotalForecastWarning[];
+}
+
+export interface TrackBranchForecastDetailResponse {
+  status: 'ok';
+  metadata: TrackBranchForecastDetailMetadata;
+  summary: TrackBranchForecastDetailSummary;
+  forecast_context: TrackBranchForecastDetailForecastContext;
+  series: TrackBranchForecastDetailSeries;
+  data_quality: TrackBranchForecastDetailDataQuality;
+}
+
 @Injectable({
   providedIn: 'root',
 })
@@ -847,6 +1061,22 @@ export class TrackService {
   getForecastBranches(): Observable<TrackForecastBranchesResponse> {
     return this.http.get<TrackForecastBranchesResponse>(
       `${this.baseUrl}/forecast/branches`,
+    );
+  }
+
+  getBranchForecastDetail(
+    sucursalCanon: string,
+    trackDate: string,
+    generationMode: TrackGenerationMode,
+  ): Observable<TrackBranchForecastDetailResponse> {
+    const params = new HttpParams()
+      .set('track_date', trackDate)
+      .set('generation_mode', generationMode);
+    const encodedBranch = encodeURIComponent(sucursalCanon.trim().toUpperCase());
+
+    return this.http.get<TrackBranchForecastDetailResponse>(
+      `${this.baseUrl}/forecast/branches/${encodedBranch}/detail`,
+      { params },
     );
   }
 

@@ -279,7 +279,14 @@
                 <tr *ngFor="let row of selectedCohortBranchRows; let position = index">
                   <td data-label="Posición">{{ position + 1 }}</td>
                   <td data-label="Sucursal" class="track-trend-cohort-branch">
-                    <strong>{{ row.track_label || row.sucursal_canon }}</strong>
+                    <button
+                      type="button"
+                      class="track-trend-branch-link"
+                      [attr.aria-label]="'Ver detalle de Tendencias de ' + (row.track_label || row.sucursal_canon)"
+                      (click)="openBranchDetail(row)"
+                    >
+                      {{ row.track_label || row.sucursal_canon }}
+                    </button>
                     <small>{{ row.sucursal_canon }}</small>
                   </td>
                   <td data-label="Real MTD">{{ formatCurrency(row.real_mtd) }}</td>
