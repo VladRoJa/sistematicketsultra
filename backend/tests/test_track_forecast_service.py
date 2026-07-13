@@ -13,6 +13,7 @@ from app.models.warehouse import (
     VentaTotalSnapshotORM,
 )
 from app.warehouse.services.track_forecast_service import (
+    build_branch_historical_expected_daily_curve,
     build_branch_historical_daily_series,
     build_venta_total_forecast,
     select_track_daily_branch_versions,
@@ -739,3 +740,272 @@ class BranchHistoricalDailySeriesTest(unittest.TestCase):
 
         self.assertEqual(item["status"], "no_canonical_snapshot")
         self.assertEqual(item["points"], [])
+
+
+class BranchHistoricalExpectedDailyCurveTest(unittest.TestCase):
+    TARGET_MONTH = date(2026, 7, 1)
+    CUTOFF_DAY = 15
+
+    def _series(
+        self,
+        *,
+        year: int,
+        daily_totals: list[str],
+        status: str = "available",
+    ):
+        business_month = date(year, self.TARGET_MONTH.month, 1)
+        if status != "available":
+            return {
+                "year": year,
+                "business_month": business_month,
+                "status": status,
+                "snapshot_id": None,
+                "snapshot_business_date": None,
+                "days_in_month": len(daily_totals),
+                "days_with_positive_sale_row": 0,
+                "first_positive_sale_date": None,
+                "last_positive_sale_date": None,
+                "mtd_at_cutoff": None,
+                "full_month_total": None,
+                "points": [],
+            }
+
+        cumulative_total = Decimal("0")
+        points = []
+        for day, raw_total in enumerate(daily_totals, start=1):
+            daily_total = Decimal(raw_total)
+            cumulative_total += daily_total
+            points.append(
+                {
+                    "day": day,
+                    "date": business_month.replace(day=day),
+                    "daily_total": daily_total,
+                    "cumulative_total": cumulative_total,
+                    "has_positive_sale_row": daily_total > 0,
+                }
+            )
+
+        effective_cutoff = min(self.CUTOFF_DAY, len(points))
+        return {
+            "year": year,
+            "business_month": business_month,
+            "status": "available",
+            "snapshot_id": year,
+            "snapshot_business_date": business_month.replace(day=len(points)),
+            "days_in_month": len(points),
+            "days_with_positive_sale_row": sum(
+                point["has_positive_sale_row"] for point in points
+            ),
+            "first_positive_sale_date": None,
+            "last_positive_sale_date": None,
+            "mtd_at_cutoff": points[effective_cutoff - 1]["cumulative_total"],
+            "full_month_total": cumulative_total,
+            "points": points,
+        }
+
+    def _build(
+        self,
+        series,
+        *,
+        target_month: date | None = None,
+        cutoff_day: int | None = None,
+        expected_month_total: Decimal | None = Decimal("620.00"),
+    ):
+        return build_branch_historical_expected_daily_curve(
+            historical_series=series,
+            target_month=target_month or self.TARGET_MONTH,
+            cutoff_day=cutoff_day or self.CUTOFF_DAY,
+            historical_expected_month_total=expected_month_total,
+        )
+
+    def test_builds_31_day_curve_with_multiple_comparable_years(self):
+        result = self._build(
+            [
+                self._series(year=2023, daily_totals=["10"] * 31),
+                self._series(year=2024, daily_totals=["20"] * 31),
+            ]
+        )
+
+        self.assertEqual(result["status"], "available")
+        self.assertEqual(len(result["points"]), 31)
+        self.assertEqual(result["comparison_years_used"], [2023, 2024])
+        self.assertEqual(result["samples_count"], 2)
+
+    def test_cutoff_matches_current_aggregate_progress_method(self):
+        series = [
+            self._series(year=2023, daily_totals=["10"] * 31),
+            self._series(year=2024, daily_totals=["30"] * 31),
+        ]
+        result = self._build(series)
+        legacy_progress = (
+            sum((item["mtd_at_cutoff"] for item in series), Decimal("0"))
+            / sum((item["full_month_total"] for item in series), Decimal("0"))
+        )
+
+        self.assertEqual(
+            result["historical_progress_pct_at_cutoff"],
+            legacy_progress,
+        )
+
+    def test_cutoff_expected_total_matches_current_historical_expected_mtd(self):
+        series = [
+            self._series(year=2023, daily_totals=["10"] * 31),
+            self._series(year=2024, daily_totals=["30"] * 31),
+        ]
+        aggregate_month_total = sum(
+            (item["full_month_total"] for item in series), Decimal("0")
+        )
+        expected_month_total = aggregate_month_total / Decimal(len(series))
+        result = self._build(series, expected_month_total=expected_month_total)
+        legacy_expected_mtd = (
+            sum((item["mtd_at_cutoff"] for item in series), Decimal("0"))
+            / Decimal(len(series))
+        )
+
+        self.assertEqual(
+            result["historical_expected_mtd_at_cutoff"],
+            legacy_expected_mtd,
+        )
+
+    def test_last_point_is_complete_and_equals_expected_close(self):
+        result = self._build(
+            [self._series(year=2025, daily_totals=["1"] * 31)]
+        )
+        last_point = result["points"][-1]
+
+        self.assertEqual(last_point["historical_progress_pct"], Decimal("1"))
+        self.assertEqual(last_point["expected_cumulative_total"], Decimal("620.00"))
+
+    def test_daily_totals_sum_exactly_to_expected_close(self):
+        result = self._build(
+            [self._series(year=2025, daily_totals=["1"] * 31)]
+        )
+
+        self.assertEqual(
+            sum(
+                (point["expected_daily_total"] for point in result["points"]),
+                Decimal("0"),
+            ),
+            Decimal("620.00"),
+        )
+
+    def test_curve_is_monotonic_non_decreasing(self):
+        result = self._build(
+            [self._series(year=2025, daily_totals=["3", "0"] * 15 + ["1"])]
+        )
+        cumulative = [
+            point["expected_cumulative_total"] for point in result["points"]
+        ]
+
+        self.assertEqual(cumulative, sorted(cumulative))
+        self.assertTrue(
+            all(point["expected_daily_total"] >= 0 for point in result["points"])
+        )
+
+    def test_zero_sale_days_preserve_curve(self):
+        result = self._build(
+            [self._series(year=2025, daily_totals=["10", "0"] + ["1"] * 29)]
+        )
+
+        self.assertEqual(
+            result["points"][1]["expected_cumulative_total"],
+            result["points"][0]["expected_cumulative_total"],
+        )
+        self.assertEqual(result["points"][1]["expected_daily_total"], Decimal("0"))
+
+    def test_unavailable_years_are_excluded_with_explicit_reasons(self):
+        result = self._build(
+            [
+                self._series(
+                    year=2023,
+                    daily_totals=["0"] * 31,
+                    status="no_canonical_snapshot",
+                ),
+                self._series(
+                    year=2024,
+                    daily_totals=["0"] * 31,
+                    status="no_branch_rows",
+                ),
+                self._series(year=2025, daily_totals=["1"] * 31),
+            ]
+        )
+
+        self.assertEqual(
+            result["comparison_years_excluded"],
+            [
+                {"year": 2023, "reason": "no_canonical_snapshot"},
+                {"year": 2024, "reason": "no_branch_rows"},
+            ],
+        )
+
+    def test_zero_full_month_total_is_excluded(self):
+        result = self._build(
+            [
+                self._series(year=2024, daily_totals=["0"] * 31),
+                self._series(year=2025, daily_totals=["1"] * 31),
+            ]
+        )
+
+        self.assertEqual(result["comparison_years_used"], [2025])
+        self.assertEqual(
+            result["comparison_years_excluded"],
+            [{"year": 2024, "reason": "non_positive_full_month_total"}],
+        )
+
+    def test_without_usable_years_returns_no_comparable_history(self):
+        result = self._build(
+            [self._series(year=2025, daily_totals=["0"] * 31)]
+        )
+
+        self.assertEqual(result["status"], "no_comparable_history")
+        self.assertEqual(result["points"], [])
+
+    def test_missing_expected_month_total_returns_empty_curve(self):
+        result = self._build(
+            [self._series(year=2025, daily_totals=["1"] * 31)],
+            expected_month_total=None,
+        )
+
+        self.assertEqual(result["status"], "missing_expected_month_total")
+        self.assertEqual(result["points"], [])
+
+    def test_single_year_builds_without_inventing_confidence(self):
+        result = self._build(
+            [self._series(year=2025, daily_totals=["1"] * 31)]
+        )
+
+        self.assertEqual(result["samples_count"], 1)
+        self.assertEqual(result["points"][0]["samples_count"], 1)
+        self.assertNotIn("confidence", result)
+
+    def test_leap_and_non_leap_february_keep_both_years(self):
+        self.TARGET_MONTH = date(2024, 2, 1)
+        self.addCleanup(setattr, self, "TARGET_MONTH", date(2026, 7, 1))
+        series = [
+            self._series(year=2023, daily_totals=["1"] * 28),
+            self._series(year=2024, daily_totals=["1"] * 29),
+        ]
+        result = self._build(
+            series,
+            target_month=date(2024, 2, 1),
+            cutoff_day=20,
+            expected_month_total=Decimal("28.5"),
+        )
+
+        self.assertEqual(len(result["points"]), 29)
+        self.assertEqual(result["points"][-1]["sample_years"], [2023, 2024])
+        self.assertEqual(result["points"][-1]["samples_count"], 2)
+        self.assertEqual(result["points"][-1]["historical_progress_pct"], Decimal("1"))
+
+    def test_all_numeric_curve_values_remain_decimal(self):
+        result = self._build(
+            [self._series(year=2025, daily_totals=["1.25"] * 31)]
+        )
+
+        self.assertIsInstance(result["historical_expected_month_total"], Decimal)
+        self.assertIsInstance(result["historical_progress_pct_at_cutoff"], Decimal)
+        self.assertIsInstance(result["historical_expected_mtd_at_cutoff"], Decimal)
+        for point in result["points"]:
+            self.assertIsInstance(point["historical_progress_pct"], Decimal)
+            self.assertIsInstance(point["expected_daily_total"], Decimal)
+            self.assertIsInstance(point["expected_cumulative_total"], Decimal)
