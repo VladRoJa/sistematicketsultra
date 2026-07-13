@@ -90,9 +90,9 @@ export interface TrackVentaTotalForecastDataQuality {
 export interface TrackVentaTotalForecastHistoricalCurve {
   source: TrackVentaTotalForecastScope;
   historical_months: number;
-  historical_month_total: number | null;
-  historical_mtd_total: number | null;
-  historical_remaining_total: number | null;
+  historical_month_total: number;
+  historical_mtd_total: number;
+  historical_remaining_total: number;
   historical_progress_pct: number | null;
   distinct_days: number;
   confidence: string;
