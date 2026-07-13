@@ -522,47 +522,22 @@ export class TrackForecastComponent implements OnInit {
     return this.selectedCohortKey === cohortKey;
   }
 
-  getCohortDetailTooltip(
-    metric: CohortDetailMetricKey,
-    row?: TrackVentaTotalForecastBranchDriverItem,
-  ): string {
-    const explanation = COHORT_DETAIL_METRIC_TOOLTIPS[metric];
+  getCohortDetailTooltip(metric: CohortDetailMetricKey): string {
+    return COHORT_DETAIL_METRIC_TOOLTIPS[metric];
+  }
 
-    if (!row) {
-      return explanation;
+  getBlockedProjectionTooltip(row: TrackVentaTotalForecastBranchDriverItem): string {
+    const qualityIssue = row.projection_quality_issue;
+
+    if (!qualityIssue) {
+      return '';
     }
 
-    if (metric === 'historical_expected_mtd' && row.historical_expected_mtd === null) {
-      return `${explanation} No existe histórico comparable suficiente para esta sucursal.`;
-    }
+    const reasons = qualityIssue.reasons.length
+      ? ` Motivos: ${qualityIssue.reasons.join(' ')}`
+      : '';
 
-    if (metric === 'gap' && row.gap_vs_historical_expected === null) {
-      return `${explanation} No puede calcularse sin una referencia histórica válida.`;
-    }
-
-    if (metric === 'trend_factor' && row.trend_factor === null) {
-      return `${explanation} No puede calcularse sin una referencia histórica válida.`;
-    }
-
-    if (metric === 'projected_close' && row.projected_close === null) {
-      const qualityIssue = row.projection_quality_issue;
-
-      if (!qualityIssue) {
-        return `${explanation} No hay una proyección estable disponible para esta sucursal.`;
-      }
-
-      const reasons = qualityIssue.reasons.length
-        ? ` Motivos: ${qualityIssue.reasons.join(' ')}`
-        : '';
-
-      return `${explanation} No hay proyección estable. ${qualityIssue.message}${reasons}`;
-    }
-
-    if (metric === 'confidence') {
-      return `${explanation} Confianza actual: ${row.confidence.replace('_', ' ')}.`;
-    }
-
-    return explanation;
+    return `${qualityIssue.message}${reasons}`;
   }
 
   get branchDrivers(): TrackVentaTotalForecastBranchDrivers | null {
