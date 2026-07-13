@@ -15,6 +15,7 @@ from app.models.warehouse import (
 from app.warehouse.services.track_forecast_service import (
     build_branch_historical_expected_daily_curve,
     build_branch_historical_daily_series,
+    build_branch_projected_daily_path,
     build_venta_total_forecast,
     select_track_daily_branch_versions,
 )
@@ -107,6 +108,7 @@ class TrackForecastServiceCharacterizationTest(unittest.TestCase):
             "projected_close_experimental",
             result["summary"],
         )
+        self.assertNotIn("projected_daily_path", result)
 
 
 class TrackDailyBranchVersionSelectorTest(unittest.TestCase):
@@ -1009,3 +1011,295 @@ class BranchHistoricalExpectedDailyCurveTest(unittest.TestCase):
             self.assertIsInstance(point["historical_progress_pct"], Decimal)
             self.assertIsInstance(point["expected_daily_total"], Decimal)
             self.assertIsInstance(point["expected_cumulative_total"], Decimal)
+
+
+class BranchProjectedDailyPathTest(unittest.TestCase):
+    TARGET_MONTH = date(2026, 7, 1)
+    CUTOFF_DAY = 15
+
+    def _expected_curve(
+        self,
+        *,
+        target_month: date | None = None,
+        cutoff_day: int | None = None,
+        daily_weights: list[str] | None = None,
+        status: str = "available",
+    ):
+        target_month = target_month or self.TARGET_MONTH
+        cutoff_day = cutoff_day or self.CUTOFF_DAY
+        weights = [Decimal(value) for value in (daily_weights or ["1"] * 31)]
+
+        if status != "available":
+            return {
+                "status": status,
+                "method": "test_expected_curve",
+                "target_month": target_month,
+                "cutoff_day": cutoff_day,
+                "comparison_years_requested": [2024, 2025],
+                "comparison_years_used": [2024, 2025],
+                "comparison_years_excluded": [],
+                "samples_count": 2,
+                "historical_expected_month_total": None,
+                "historical_progress_pct_at_cutoff": None,
+                "historical_expected_mtd_at_cutoff": None,
+                "points": [],
+            }
+
+        month_total = sum(weights, Decimal("0"))
+        cumulative = Decimal("0")
+        points = []
+        for day, weight in enumerate(weights, start=1):
+            cumulative += weight
+            progress = cumulative / month_total
+            if day == len(weights):
+                progress = Decimal("1")
+            points.append(
+                {
+                    "day": day,
+                    "date": target_month.replace(day=day),
+                    "historical_progress_pct": progress,
+                    "expected_daily_total": weight,
+                    "expected_cumulative_total": cumulative,
+                    "sample_years": [2024, 2025],
+                    "samples_count": 2,
+                }
+            )
+
+        return {
+            "status": "available",
+            "method": "test_expected_curve",
+            "target_month": target_month,
+            "cutoff_day": cutoff_day,
+            "comparison_years_requested": [2024, 2025],
+            "comparison_years_used": [2024, 2025],
+            "comparison_years_excluded": [],
+            "samples_count": 2,
+            "historical_expected_month_total": month_total,
+            "historical_progress_pct_at_cutoff": points[cutoff_day - 1][
+                "historical_progress_pct"
+            ],
+            "historical_expected_mtd_at_cutoff": points[cutoff_day - 1][
+                "expected_cumulative_total"
+            ],
+            "points": points,
+        }
+
+    def _build(
+        self,
+        *,
+        expected_curve=None,
+        target_month: date | None = None,
+        cutoff_day: int | None = None,
+        metric_basis: str = "total_mtd",
+        current_mtd_at_cutoff: Decimal | None = Decimal("150"),
+        projected_close: Decimal | None = Decimal("310"),
+    ):
+        target_month = target_month or self.TARGET_MONTH
+        cutoff_day = cutoff_day or self.CUTOFF_DAY
+        return build_branch_projected_daily_path(
+            expected_curve=expected_curve
+            or self._expected_curve(
+                target_month=target_month,
+                cutoff_day=cutoff_day,
+            ),
+            target_month=target_month,
+            cutoff_day=cutoff_day,
+            metric_basis=metric_basis,
+            current_mtd_at_cutoff=current_mtd_at_cutoff,
+            projected_close=projected_close,
+        )
+
+    def test_builds_available_31_day_path_from_cutoff_to_month_end(self):
+        result = self._build()
+
+        self.assertEqual(result["status"], "available")
+        self.assertEqual(result["method"], "historical_remaining_daily_weights")
+        self.assertEqual(len(result["points"]), 17)
+        self.assertEqual(result["comparison_years_used"], [2024, 2025])
+        self.assertEqual(result["samples_count"], 2)
+
+    def test_cutoff_point_is_exact_zero_increment_anchor(self):
+        first = self._build()["points"][0]
+
+        self.assertEqual(first["day"], self.CUTOFF_DAY)
+        self.assertEqual(first["date"], date(2026, 7, 15))
+        self.assertEqual(first["point_kind"], "cutoff_anchor")
+        self.assertEqual(first["projected_cumulative_total"], Decimal("150"))
+        self.assertEqual(first["projected_daily_increment"], Decimal("0"))
+
+    def test_last_point_and_increment_sum_close_exactly(self):
+        result = self._build(
+            projected_close=Decimal("310.123456789"),
+        )
+
+        self.assertEqual(
+            result["points"][-1]["projected_cumulative_total"],
+            Decimal("310.123456789"),
+        )
+        self.assertEqual(
+            sum(
+                (
+                    point["projected_daily_increment"]
+                    for point in result["points"][1:]
+                ),
+                Decimal("0"),
+            ),
+            result["projected_remaining"],
+        )
+
+    def test_non_uniform_historical_weights_produce_non_linear_path(self):
+        weights = ["1"] * 15 + [str(day) for day in range(1, 17)]
+        result = self._build(
+            expected_curve=self._expected_curve(daily_weights=weights)
+        )
+        future_increments = [
+            point["projected_daily_increment"] for point in result["points"][1:]
+        ]
+
+        self.assertGreater(len(set(future_increments)), 1)
+
+    def test_path_is_monotonic_and_increments_are_non_negative(self):
+        weights = ["2", "0"] * 15 + ["1"]
+        result = self._build(
+            expected_curve=self._expected_curve(daily_weights=weights)
+        )
+        cumulative = [
+            point["projected_cumulative_total"] for point in result["points"]
+        ]
+
+        self.assertEqual(cumulative, sorted(cumulative))
+        self.assertTrue(
+            all(
+                point["projected_daily_increment"] >= 0
+                for point in result["points"]
+            )
+        )
+
+    def test_unavailable_expected_curve_returns_empty_path(self):
+        result = self._build(
+            expected_curve=self._expected_curve(status="no_comparable_history")
+        )
+
+        self.assertEqual(result["status"], "expected_curve_unavailable")
+        self.assertEqual(result["points"], [])
+
+    def test_missing_current_mtd_returns_empty_path(self):
+        result = self._build(current_mtd_at_cutoff=None)
+
+        self.assertEqual(result["status"], "missing_current_mtd")
+        self.assertEqual(result["points"], [])
+
+    def test_missing_projected_close_returns_empty_path(self):
+        result = self._build(projected_close=None)
+
+        self.assertEqual(result["status"], "missing_projected_close")
+        self.assertEqual(result["points"], [])
+
+    def test_projection_below_current_mtd_returns_empty_path(self):
+        result = self._build(projected_close=Decimal("149.99"))
+
+        self.assertEqual(result["status"], "projection_below_current_mtd")
+        self.assertEqual(result["points"], [])
+
+    def test_equal_month_end_projection_returns_single_anchor(self):
+        target_month = date(2026, 7, 1)
+        result = self._build(
+            target_month=target_month,
+            cutoff_day=31,
+            expected_curve=self._expected_curve(cutoff_day=31),
+            current_mtd_at_cutoff=Decimal("310"),
+            projected_close=Decimal("310"),
+        )
+
+        self.assertEqual(result["status"], "available")
+        self.assertEqual(len(result["points"]), 1)
+        self.assertEqual(result["points"][0]["point_kind"], "cutoff_anchor")
+
+    def test_different_month_end_projection_is_inconsistent(self):
+        result = self._build(
+            cutoff_day=31,
+            expected_curve=self._expected_curve(cutoff_day=31),
+            projected_close=Decimal("311"),
+        )
+
+        self.assertEqual(result["status"], "inconsistent_month_end_projection")
+        self.assertEqual(result["points"], [])
+
+    def test_curve_without_remaining_historical_progress_is_unavailable(self):
+        weights = ["1"] * 15 + ["0"] * 16
+        result = self._build(
+            expected_curve=self._expected_curve(daily_weights=weights)
+        )
+
+        self.assertEqual(result["status"], "no_remaining_historical_progress")
+        self.assertEqual(result["remaining_historical_progress"], Decimal("0"))
+        self.assertEqual(result["points"], [])
+
+    def test_metric_basis_is_preserved_without_changing_formula(self):
+        results = {
+            basis: self._build(metric_basis=basis)
+            for basis in ("base_mtd", "total_mtd")
+        }
+
+        self.assertEqual(results["base_mtd"]["metric_basis"], "base_mtd")
+        self.assertEqual(results["total_mtd"]["metric_basis"], "total_mtd")
+        self.assertEqual(
+            results["base_mtd"]["points"],
+            results["total_mtd"]["points"],
+        )
+
+    def test_all_numeric_path_values_remain_decimal(self):
+        result = self._build()
+
+        for field in (
+            "current_mtd_at_cutoff",
+            "projected_close",
+            "projected_remaining",
+            "historical_progress_pct_at_cutoff",
+            "remaining_historical_progress",
+        ):
+            self.assertIsInstance(result[field], Decimal)
+        for point in result["points"]:
+            for field in (
+                "historical_progress_pct",
+                "remaining_progress_share",
+                "projected_daily_increment",
+                "projected_cumulative_total",
+            ):
+                self.assertIsInstance(point[field], Decimal)
+
+    def test_leap_february_ends_on_day_29(self):
+        target_month = date(2024, 2, 1)
+        curve = self._expected_curve(
+            target_month=target_month,
+            cutoff_day=20,
+            daily_weights=["1"] * 29,
+        )
+        result = self._build(
+            expected_curve=curve,
+            target_month=target_month,
+            cutoff_day=20,
+            current_mtd_at_cutoff=Decimal("200"),
+            projected_close=Decimal("290"),
+        )
+
+        self.assertEqual(result["points"][-1]["day"], 29)
+        self.assertEqual(result["points"][-1]["date"], date(2024, 2, 29))
+        self.assertEqual(
+            result["points"][-1]["projected_cumulative_total"],
+            Decimal("290"),
+        )
+
+    def test_zero_future_historical_weight_preserves_cumulative_total(self):
+        weights = ["1"] * 15 + ["0"] + ["1"] * 15
+        result = self._build(
+            expected_curve=self._expected_curve(daily_weights=weights)
+        )
+        zero_weight_point = result["points"][1]
+
+        self.assertEqual(zero_weight_point["day"], 16)
+        self.assertEqual(zero_weight_point["projected_daily_increment"], Decimal("0"))
+        self.assertEqual(
+            zero_weight_point["projected_cumulative_total"],
+            result["points"][0]["projected_cumulative_total"],
+        )

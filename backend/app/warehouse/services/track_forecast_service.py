@@ -123,6 +123,44 @@ class BranchHistoricalExpectedCurve(TypedDict):
     points: list[BranchHistoricalExpectedDailyPoint]
 
 
+BranchProjectedPathMetricBasis = Literal["base_mtd", "total_mtd"]
+BranchProjectedDailyPathStatus = Literal[
+    "available",
+    "expected_curve_unavailable",
+    "missing_current_mtd",
+    "missing_projected_close",
+    "projection_below_current_mtd",
+    "no_remaining_historical_progress",
+    "inconsistent_month_end_projection",
+]
+
+
+class BranchProjectedDailyPoint(TypedDict):
+    day: int
+    date: date
+    point_kind: Literal["cutoff_anchor", "projected_future"]
+    historical_progress_pct: Decimal
+    remaining_progress_share: Decimal
+    projected_daily_increment: Decimal
+    projected_cumulative_total: Decimal
+
+
+class BranchProjectedDailyPath(TypedDict):
+    status: BranchProjectedDailyPathStatus
+    method: str
+    metric_basis: BranchProjectedPathMetricBasis
+    target_month: date
+    cutoff_day: int
+    current_mtd_at_cutoff: Decimal | None
+    projected_close: Decimal | None
+    projected_remaining: Decimal | None
+    historical_progress_pct_at_cutoff: Decimal | None
+    remaining_historical_progress: Decimal | None
+    comparison_years_used: list[int]
+    samples_count: int
+    points: list[BranchProjectedDailyPoint]
+
+
 def _get_track_daily_branch_version_candidates(
     *,
     sucursal_canon: str,
@@ -670,6 +708,173 @@ def build_branch_historical_expected_daily_curve(
         "historical_expected_mtd_at_cutoff": cutoff_point[
             "expected_cumulative_total"
         ],
+        "points": points,
+    }
+
+
+def build_branch_projected_daily_path(
+    *,
+    expected_curve: BranchHistoricalExpectedCurve,
+    target_month: date,
+    cutoff_day: int,
+    metric_basis: BranchProjectedPathMetricBasis,
+    current_mtd_at_cutoff: Decimal | None,
+    projected_close: Decimal | None,
+) -> BranchProjectedDailyPath:
+    target_month = target_month.replace(day=1)
+    days_in_month = monthrange(target_month.year, target_month.month)[1]
+    if not 1 <= cutoff_day <= days_in_month:
+        raise ValueError("cutoff_day debe pertenecer a target_month.")
+    if metric_basis not in ("base_mtd", "total_mtd"):
+        raise ValueError("metric_basis debe ser base_mtd o total_mtd.")
+
+    method = "historical_remaining_daily_weights"
+    comparison_years_used = expected_curve["comparison_years_used"].copy()
+    samples_count = expected_curve["samples_count"]
+    projected_remaining = (
+        projected_close - current_mtd_at_cutoff
+        if projected_close is not None and current_mtd_at_cutoff is not None
+        else None
+    )
+
+    def empty_result(
+        status: BranchProjectedDailyPathStatus,
+        *,
+        historical_progress_pct_at_cutoff: Decimal | None = None,
+        remaining_historical_progress: Decimal | None = None,
+    ) -> BranchProjectedDailyPath:
+        return {
+            "status": status,
+            "method": method,
+            "metric_basis": metric_basis,
+            "target_month": target_month,
+            "cutoff_day": cutoff_day,
+            "current_mtd_at_cutoff": current_mtd_at_cutoff,
+            "projected_close": projected_close,
+            "projected_remaining": projected_remaining,
+            "historical_progress_pct_at_cutoff": (
+                historical_progress_pct_at_cutoff
+            ),
+            "remaining_historical_progress": remaining_historical_progress,
+            "comparison_years_used": comparison_years_used,
+            "samples_count": samples_count,
+            "points": [],
+        }
+
+    if expected_curve["status"] != "available":
+        return empty_result("expected_curve_unavailable")
+    if current_mtd_at_cutoff is None:
+        return empty_result("missing_current_mtd")
+    if projected_close is None:
+        return empty_result("missing_projected_close")
+    if projected_close < current_mtd_at_cutoff:
+        return empty_result("projection_below_current_mtd")
+
+    expected_points_by_day = {
+        point["day"]: point for point in expected_curve["points"]
+    }
+    cutoff_expected_point = expected_points_by_day.get(cutoff_day)
+    if cutoff_expected_point is None:
+        raise ValueError("expected_curve no contiene el día de corte.")
+
+    historical_progress_at_cutoff = cutoff_expected_point[
+        "historical_progress_pct"
+    ]
+    remaining_historical_progress = (
+        Decimal("1") - historical_progress_at_cutoff
+    )
+
+    if cutoff_day == days_in_month:
+        if projected_close != current_mtd_at_cutoff:
+            return empty_result(
+                "inconsistent_month_end_projection",
+                historical_progress_pct_at_cutoff=historical_progress_at_cutoff,
+                remaining_historical_progress=remaining_historical_progress,
+            )
+
+        anchor: BranchProjectedDailyPoint = {
+            "day": cutoff_day,
+            "date": target_month.replace(day=cutoff_day),
+            "point_kind": "cutoff_anchor",
+            "historical_progress_pct": historical_progress_at_cutoff,
+            "remaining_progress_share": Decimal("0"),
+            "projected_daily_increment": Decimal("0"),
+            "projected_cumulative_total": current_mtd_at_cutoff,
+        }
+        result = empty_result(
+            "available",
+            historical_progress_pct_at_cutoff=historical_progress_at_cutoff,
+            remaining_historical_progress=remaining_historical_progress,
+        )
+        result["points"] = [anchor]
+        return result
+
+    if remaining_historical_progress <= 0:
+        return empty_result(
+            "no_remaining_historical_progress",
+            historical_progress_pct_at_cutoff=historical_progress_at_cutoff,
+            remaining_historical_progress=remaining_historical_progress,
+        )
+
+    points: list[BranchProjectedDailyPoint] = [
+        {
+            "day": cutoff_day,
+            "date": target_month.replace(day=cutoff_day),
+            "point_kind": "cutoff_anchor",
+            "historical_progress_pct": historical_progress_at_cutoff,
+            "remaining_progress_share": Decimal("0"),
+            "projected_daily_increment": Decimal("0"),
+            "projected_cumulative_total": current_mtd_at_cutoff,
+        }
+    ]
+    previous_cumulative = current_mtd_at_cutoff
+
+    for day in range(cutoff_day + 1, days_in_month + 1):
+        expected_point = expected_points_by_day.get(day)
+        if expected_point is None:
+            raise ValueError(f"expected_curve no contiene el día {day}.")
+
+        historical_progress_pct = expected_point["historical_progress_pct"]
+        remaining_progress_share = (
+            historical_progress_pct - historical_progress_at_cutoff
+        ) / remaining_historical_progress
+        projected_cumulative_total = (
+            current_mtd_at_cutoff
+            + projected_remaining * remaining_progress_share
+        )
+        if day == days_in_month:
+            remaining_progress_share = Decimal("1")
+            projected_cumulative_total = projected_close
+
+        projected_daily_increment = (
+            projected_cumulative_total - previous_cumulative
+        )
+        points.append(
+            {
+                "day": day,
+                "date": target_month.replace(day=day),
+                "point_kind": "projected_future",
+                "historical_progress_pct": historical_progress_pct,
+                "remaining_progress_share": remaining_progress_share,
+                "projected_daily_increment": projected_daily_increment,
+                "projected_cumulative_total": projected_cumulative_total,
+            }
+        )
+        previous_cumulative = projected_cumulative_total
+
+    return {
+        "status": "available",
+        "method": method,
+        "metric_basis": metric_basis,
+        "target_month": target_month,
+        "cutoff_day": cutoff_day,
+        "current_mtd_at_cutoff": current_mtd_at_cutoff,
+        "projected_close": projected_close,
+        "projected_remaining": projected_remaining,
+        "historical_progress_pct_at_cutoff": historical_progress_at_cutoff,
+        "remaining_historical_progress": remaining_historical_progress,
+        "comparison_years_used": comparison_years_used,
+        "samples_count": samples_count,
         "points": points,
     }
 
