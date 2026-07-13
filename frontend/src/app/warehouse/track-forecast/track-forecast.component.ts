@@ -22,6 +22,17 @@ import {
   TrackVentaTotalForecastWarning,
 } from '../../services/track.service';
 
+type TrackForecastComparableBar = {
+  year: number;
+  mtdValue: number;
+  monthTotalValue: number | null;
+  isCurrent: boolean;
+  mtdBarPct: number;
+  monthBarPct: number;
+  monthLabel: string;
+  monthValueLabel: string;
+};
+
 @Component({
   selector: 'app-track-forecast',
   standalone: true,
@@ -153,6 +164,89 @@ export class TrackForecastComponent implements OnInit {
     return this.forecast?.summary ?? null;
   }
 
+  get trackContextDateLabel(): string {
+    const trackDate = this.forecast?.metadata?.track_date;
+    return trackDate ? this.formatShortDate(trackDate) : 'Sin corte';
+  }
+
+  get trackContextBranchesLabel(): string {
+    const count = this.forecast?.metadata?.selected_branches_count;
+    return count === undefined ? 'Sin sucursales' : `${count} sucursales`;
+  }
+
+  get trackContextVersionLabel(): string {
+    const versionId = this.forecast?.metadata?.resolved_version.id;
+    return versionId === undefined ? 'Sin versión' : `Versión ${versionId}`;
+  }
+
+  get generationModeDisplayLabel(): string {
+    const mode = this.forecast?.metadata?.generation_mode ?? this.generationMode;
+    return mode === 'official_closed_day' ? 'Cierre oficial' : 'Vista preliminar';
+  }
+
+  get executiveToneClass(): string {
+    const level = this.executiveStatus?.level ?? 'neutral';
+    return `track-trend-tone--${level}`;
+  }
+
+  get goalToneClass(): string {
+    const status = this.forecast?.data_quality?.goal_status;
+
+    if (status === 'available') {
+      return 'track-trend-tone--positive';
+    }
+
+    if (status === 'partial') {
+      return 'track-trend-tone--warning';
+    }
+
+    return 'track-trend-tone--neutral';
+  }
+
+  get historicalExpectedMtdLabel(): string {
+    const value = this.summary?.historical_expected_mtd;
+    return value === null || value === undefined
+      ? 'Sin histórico comparable'
+      : this.formatCurrency(value);
+  }
+
+  get projectedCloseLabel(): string {
+    const value = this.summary?.projected_close;
+    return value === null || value === undefined
+      ? 'Sin proyección estable'
+      : this.formatCurrency(value);
+  }
+
+  get projectionSupportText(): string {
+    if (this.summary?.projected_close !== null && this.summary?.projected_close !== undefined) {
+      return this.executiveMessage;
+    }
+
+    return (
+      this.forecast?.data_quality?.branch_projection_quality_issue?.message
+      || this.forecastExplanation?.plain_text
+      || 'No hay histórico suficiente para calcular una proyección estable.'
+    );
+  }
+
+  get goalValueLabel(): string {
+    const status = this.forecast?.data_quality?.goal_status;
+
+    if (status === 'pending') {
+      return 'Meta pendiente';
+    }
+
+    if (status === 'partial') {
+      return 'Meta parcial';
+    }
+
+    return this.formatCurrency(this.summary?.goal_month);
+  }
+
+  get goalSupportText(): string {
+    return this.goalStatusMessage || 'Meta mensual disponible';
+  }
+
   get executiveStatus(): TrackVentaTotalForecastExecutiveStatus | null {
     return this.forecast?.executive_status ?? null;
   }
@@ -202,18 +296,69 @@ export class TrackForecastComponent implements OnInit {
     return this.sameDayHistoryItems.length > 0;
   }
 
+  get comparableChartBars(): TrackForecastComparableBar[] {
+    const history = this.sameDayHistory;
+
+    if (!history || !history.items.length) {
+      return [];
+    }
+
+    const rawBars: Array<Omit<
+      TrackForecastComparableBar,
+      'mtdBarPct' | 'monthBarPct' | 'monthLabel' | 'monthValueLabel'
+    >> = history.items.map((item) => ({
+      year: item.year,
+      mtdValue: item.mtd_total,
+      monthTotalValue: item.month_total,
+      isCurrent: false,
+    }));
+
+    rawBars.push({
+      year: history.current.year,
+      mtdValue: history.current.mtd_total,
+      monthTotalValue: history.current.projected_close,
+      isCurrent: true,
+    });
+
+    const maxVisibleValue = Math.max(
+      0,
+      ...rawBars.flatMap((item) => [
+        item.mtdValue,
+        item.monthTotalValue ?? 0,
+      ]),
+    );
+
+    return rawBars.map((item) => ({
+      ...item,
+      mtdBarPct: this.toVisualPercent(item.mtdValue, maxVisibleValue),
+      monthBarPct: this.toVisualPercent(item.monthTotalValue, maxVisibleValue),
+      monthLabel: item.isCurrent ? 'Proyección disponible' : 'Cierre mensual',
+      monthValueLabel: item.monthTotalValue === null
+        ? 'Sin proyección estable'
+        : this.formatCurrency(item.monthTotalValue),
+    }));
+  }
+
+  get hasComparableChart(): boolean {
+    return this.comparableChartBars.length > 0;
+  }
+
   get currentSameDayGapVsAverageLabel(): string {
     const gapPct = this.sameDayHistoryAverage?.gap_current_vs_average_mtd_pct;
 
     if (gapPct === null || gapPct === undefined) {
-      return 'Sin promedio comparable';
+      return '';
     }
 
-    if (gapPct >= 0) {
-      return `${this.formatPercent(gapPct)} arriba del promedio`;
+    if (gapPct > 0) {
+      return `Actual: ${this.formatPercent(Math.abs(gapPct))} arriba del promedio simple comparable`;
     }
 
-    return `${this.formatPercent(Math.abs(gapPct))} abajo del promedio`;
+    if (gapPct < 0) {
+      return `Actual: ${this.formatPercent(Math.abs(gapPct))} abajo del promedio simple comparable`;
+    }
+
+    return 'Actual: en línea con el promedio simple comparable';
   }
 
 
@@ -591,6 +736,28 @@ export class TrackForecastComponent implements OnInit {
     return new Intl.NumberFormat('es-MX', {
       maximumFractionDigits: 2,
     }).format(value);
+  }
+
+  private toVisualPercent(value: number | null, maximum: number): number {
+    if (value === null || maximum <= 0) {
+      return 0;
+    }
+
+    return Math.min(100, Math.max(0, (value / maximum) * 100));
+  }
+
+  private formatShortDate(value: string): string {
+    const date = new Date(`${value}T00:00:00`);
+
+    if (Number.isNaN(date.getTime())) {
+      return value;
+    }
+
+    return new Intl.DateTimeFormat('es-MX', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    }).format(date);
   }
 
   private getTodayIsoDate(): string {
