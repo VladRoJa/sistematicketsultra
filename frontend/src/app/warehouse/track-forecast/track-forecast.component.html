@@ -163,185 +163,97 @@
       </p>
     </section>
 
-    <section class="track-forecast-cohorts" *ngIf="hasCohortForecast">
-      <div class="track-forecast-section-header">
-        <div>
-          <span>Método alterno</span>
-          <h2>{{ cohortForecastTitle }}</h2>
-          <p>{{ cohortForecastSubtitle }}</p>
+    <div class="track-trend-lower">
+      <section class="track-trend-section track-trend-cohorts">
+        <header class="track-trend-section-heading">
+          <span>Cohort forecast</span>
+          <h2>Composición del cierre</h2>
+          <p>Cómo contribuyen las sucursales base y las nuevas aperturas</p>
+        </header>
+
+        <div class="track-trend-cohort-grid" *ngIf="cohortViewModels.length; else noCohorts">
+          <article
+            class="track-trend-cohort"
+            *ngFor="let item of cohortViewModels"
+            [class.track-trend-cohort--total]="item.cohort_key === 'total_ultra'"
+          >
+            <div class="track-trend-cohort-title">
+              <div>
+                <span>{{ item.cohort_key }}</span>
+                <h3>{{ item.label }}</h3>
+              </div>
+              <strong>{{ item.branches_count }} sucursales</strong>
+            </div>
+            <dl class="track-trend-metrics">
+              <div><dt>Real MTD</dt><dd>{{ formatCurrency(item.real_mtd) }}</dd></div>
+              <div><dt>Esperado MTD</dt><dd>{{ formatCurrency(item.historical_expected_mtd) }}</dd></div>
+              <div><dt>Brecha</dt><dd [ngClass]="'track-trend-value--' + item.visualTone">{{ item.gapLabel }}</dd></div>
+              <div><dt>Factor de tendencia</dt><dd>{{ item.trendLabel }}</dd></div>
+              <div><dt>Proyección estable</dt><dd>{{ item.projectionLabel }}</dd></div>
+              <div><dt>Confianza</dt><dd>{{ item.confidence }}</dd></div>
+            </dl>
+            <p class="track-trend-experimental" *ngIf="item.projected_close === null && item.projected_close_experimental !== null">
+              <span>Referencia experimental</span>
+              <strong>{{ item.experimentalLabel }}</strong>
+            </p>
+            <p class="track-trend-quality" *ngIf="item.projection_quality_issue">
+              {{ item.projection_quality_issue.message }}
+            </p>
+          </article>
         </div>
+        <ng-template #noCohorts><p class="track-trend-empty-state">{{ cohortEmptyMessage }}</p></ng-template>
+      </section>
 
-        <div class="track-forecast-cohort-message">
-          <span>Lectura</span>
-          <strong>{{ cohortForecastMainMessage }}</strong>
+      <section class="track-trend-section track-trend-drivers">
+        <header class="track-trend-section-heading">
+          <span>Branch drivers</span>
+          <h2>Sucursales que frenan el ritmo</h2>
+          <p>Mayor brecha negativa frente al esperado histórico</p>
+        </header>
+
+        <div class="track-trend-driver-list" *ngIf="branchDriverViewModels.length; else noDrivers">
+          <article class="track-trend-driver" *ngFor="let item of branchDriverViewModels">
+            <strong class="track-trend-driver-rank">{{ item.rank }}</strong>
+            <div class="track-trend-driver-name"><strong>{{ item.track_label }}</strong><small>{{ item.sucursal_canon }}</small></div>
+            <div class="track-trend-driver-metric"><span>Brecha</span><strong>{{ formatCurrency(item.gap_vs_historical_expected) }}</strong><small>{{ formatPercent(item.gap_vs_historical_expected_pct) }}</small></div>
+            <div class="track-trend-driver-impact">
+              <div><span>Participación en el impacto</span><strong>{{ formatNumber(item.impact_share_pct) }}%</strong></div>
+              <div class="track-trend-impact-track"><span [style.width.%]="item.impactBarPct"></span></div>
+            </div>
+            <div class="track-trend-driver-metric"><span>Factor de tendencia</span><strong>{{ formatPercent(item.trend_factor) }}</strong></div>
+            <div class="track-trend-driver-metric"><span>Confianza</span><strong>{{ item.confidence }}</strong></div>
+          </article>
         </div>
-      </div>
+        <ng-template #noDrivers><p class="track-trend-empty-state track-trend-empty-state--positive">{{ branchDriversEmptyMessage }}</p></ng-template>
+      </section>
 
-      <div class="track-forecast-table-wrap">
-        <table class="track-forecast-table">
-          <thead>
-            <tr>
-              <th>Cohorte</th>
-              <th>Gyms</th>
-              <th>Real MTD</th>
-              <th>Esperado MTD</th>
-              <th>Gap</th>
-              <th>Ritmo</th>
-              <th>Proyección estable</th>
-              <th>Referencia experimental</th>
-              <th>Calidad</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            <tr *ngFor="let item of cohortForecastItems">
-              <td>
-                <strong>{{ item.label || item.cohort_key }}</strong>
-                <small>{{ item.cohort_key }}</small>
-              </td>
-
-              <td>{{ formatNumber(item.branches_count) }}</td>
-              <td>{{ formatCurrency(item.real_mtd) }}</td>
-              <td>{{ formatCurrency(item.historical_expected_mtd) }}</td>
-
-              <td>
-                <span class="track-forecast-delta" [ngClass]="getCohortTrendClass(item)">
-                  {{ formatCurrency(item.gap_vs_expected_mtd) }}
-                  ·
-                  {{ formatPercent(item.gap_vs_expected_mtd_pct) }}
-                </span>
-              </td>
-
-              <td>{{ formatPercent(item.trend_factor) }}</td>
-              <td>{{ getCohortProjectionLabel(item) }}</td>
-              <td>{{ getCohortExperimentalLabel(item) }}</td>
-
-              <td>
-                <span class="track-forecast-cohort-quality" [ngClass]="getCohortQualityClass(item)">
-                  {{ getCohortQualityLabel(item) }}
-                </span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <section class="track-forecast-branch-drivers" *ngIf="hasBranchDrivers">
-      <div class="track-forecast-section-header">
-        <div>
-          <span>Diagnóstico operativo</span>
-          <h2>{{ branchDriversTitle }}</h2>
-          <p>{{ branchDriversSubtitle }}</p>
+      <section class="track-trend-section track-trend-alerts">
+        <header class="track-trend-section-heading">
+          <span>Warnings y quality issues</span>
+          <h2>Alertas del forecast</h2>
+        </header>
+        <div class="track-trend-alert-grid" *ngIf="forecastAlerts.length; else noAlerts">
+          <article class="track-trend-alert" *ngFor="let alert of forecastAlerts" [ngClass]="'track-trend-alert--' + alert.tone">
+            <div><span>{{ alert.sourceLabel }}</span><strong>{{ alert.title }}</strong></div>
+            <p>{{ alert.message }}</p>
+            <ul *ngIf="alert.reasons.length"><li *ngFor="let reason of alert.reasons">{{ reason }}</li></ul>
+          </article>
         </div>
+        <ng-template #noAlerts><p class="track-trend-empty-state">Sin alertas técnicas para este corte.</p></ng-template>
+      </section>
 
-        <div class="track-forecast-driver-summary">
-          <div>
-            <span>Gap negativo total</span>
-            <strong>{{ negativeGapTotalLabel }}</strong>
-          </div>
-
-          <div>
-            <span>Mayor impacto</span>
-            <strong>{{ topNegativeDriverLabel }}</strong>
-          </div>
-        </div>
-      </div>
-
-      <div class="track-forecast-table-wrap">
-        <table class="track-forecast-table">
-          <thead>
-            <tr>
-              <th>Sucursal</th>
-              <th>Real MTD</th>
-              <th>Esperado MTD</th>
-              <th>Gap</th>
-              <th>Ritmo</th>
-              <th>Impacto</th>
-              <th>Confianza</th>
-              <th>Proyección</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            <tr *ngFor="let item of negativeBranchDrivers">
-              <td>
-                <strong>{{ item.track_label || item.sucursal_canon }}</strong>
-                <small>{{ item.sucursal_canon }}</small>
-              </td>
-
-              <td>{{ formatCurrency(item.real_mtd) }}</td>
-              <td>{{ formatCurrency(item.historical_expected_mtd) }}</td>
-
-              <td>
-                <span class="track-forecast-delta" [ngClass]="getDriverTrendClass(item)">
-                  {{ formatCurrency(item.gap_vs_historical_expected) }}
-                  ·
-                  {{ formatPercent(item.gap_vs_historical_expected_pct) }}
-                </span>
-              </td>
-
-              <td>{{ formatPercent(item.trend_factor) }}</td>
-              <td>{{ formatPercent(item.impact_share_pct) }}</td>
-              <td>{{ item.confidence || '—' }}</td>
-              <td>{{ getDriverProjectionLabel(item) }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <section class="track-forecast-explanation">
-      <article>
-        <span>Lectura del cálculo</span>
-        <h2>{{ forecastExplanationText }}</h2>
-        <code>{{ forecastFormula }}</code>
-      </article>
-
-      <article>
-        <span>Último corte canónico disponible</span>
-        <h2>{{ forecastCutoffMessage }}</h2>
-        <p>{{ canonicalCutoffLabel }}</p>
-      </article>
-    </section>
-
-    <section class="track-forecast-warnings" *ngIf="forecastWarnings.length">
-      <h2>Advertencias</h2>
-
-      <div
-        class="track-forecast-warning"
-        *ngFor="let warning of forecastWarnings"
-        [ngClass]="getWarningClass(warning)"
-      >
-        <strong>{{ getWarningTitle(warning) }}</strong>
-        <p>{{ warning.message }}</p>
-      </div>
-    </section>
-
-    <section class="track-forecast-detail">
-      <h2>Calidad y trazabilidad</h2>
-
-      <div class="track-forecast-detail-grid">
-        <div>
-          <span>Curva histórica</span>
-          <strong>{{ historyConfidence }}</strong>
-        </div>
-
-        <div>
-          <span>Cobertura histórica</span>
-          <strong>{{ historyCoverageLabel }}</strong>
-        </div>
-
-        <div>
-          <span>Versión Track</span>
-          <strong>{{ resolvedVersionLabel }}</strong>
-        </div>
-
-        <div>
-          <span>Sucursales seleccionadas</span>
-          <strong>{{ selectedBranchesCount }}</strong>
-        </div>
-      </div>
-    </section>
+      <section class="track-trend-section track-trend-trace">
+        <header class="track-trend-section-heading">
+          <span>Soporte técnico</span>
+          <h2>Trazabilidad del cálculo</h2>
+        </header>
+        <details>
+          <summary>Ver trazabilidad y detalle técnico</summary>
+          <dl class="track-trend-trace-grid">
+            <div *ngFor="let item of traceItems"><dt>{{ item.label }}</dt><dd>{{ item.value }}</dd></div>
+          </dl>
+        </details>
+      </section>
+    </div>
   </ng-container>
 </section>
