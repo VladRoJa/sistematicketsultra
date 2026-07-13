@@ -51,9 +51,7 @@
 .track-trend-cohort-table td { color: #273448; font-size: .76rem; }
 .track-trend-tooltip-trigger { align-items: center; appearance: none; background: transparent; border: 0; color: #526075; cursor: help; display: inline-flex; font: inherit; height: 1.75rem; justify-content: center; margin: -.45rem -.35rem -.45rem .1rem; padding: 0; width: 1.75rem; }
 .track-trend-tooltip-trigger:focus-visible { border-radius: 50%; outline: 2px solid #3f6f9f; outline-offset: 1px; }
-.track-trend-metric-cell { cursor: help; }
-.track-trend-metric-cell:focus-visible { outline: 2px solid #3f6f9f; outline-offset: -2px; }
-.track-trend-metric-value { text-decoration-line: underline; text-decoration-style: dotted; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.track-trend-tooltip-trigger--inline { margin-left: .15rem; vertical-align: middle; }
 :host ::ng-deep .track-trend-metric-tooltip .mdc-tooltip__surface { font-size: .75rem; line-height: 1.45; max-width: 360px; padding: .65rem .75rem; white-space: normal; }
 .track-trend-cohort-table th:first-child,
 .track-trend-cohort-table td:first-child,
