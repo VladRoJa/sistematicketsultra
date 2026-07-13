@@ -3,11 +3,12 @@ from __future__ import annotations
 from calendar import monthrange
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import Any
+from typing import Any, TypedDict
 
-from sqlalchemy import bindparam, text
+from sqlalchemy import and_, bindparam, func, or_, text
 
 from app.extensions import db
+from app.models.warehouse import TrackDailyMartORM, TrackDailyVersionORM
 
 from app.warehouse.services.track_branch_cohort_service import (
     TRACK_BRANCH_COHORT_LEGACY_21,
@@ -24,6 +25,199 @@ EXCLUDED_BRANCHES = {
     "GIMNASIO PRUEBA",
     "LA_VIGA",
 }
+
+_TRACK_DAILY_BRANCH_VERSION_PRIORITY = {
+    "cierre_canonico": 0,
+    "base_nocturna_canonica": 1,
+    "preview_operativo": 2,
+}
+
+_TRACK_DAILY_BRANCH_SELECTION_REASONS = {
+    "cierre_canonico": "current_canonical_close",
+    "base_nocturna_canonica": "current_nightly_base",
+    "preview_operativo": "current_operational_preview",
+}
+
+
+class TrackDailyBranchVersionSelection(TypedDict):
+    track_date: date
+    version_id: int
+    version_type: str
+    selection_reason: str
+    ingreso_real_base_mtd: Decimal | None
+    ingreso_real_agregadora_mtd: Decimal | None
+    ingreso_real_total_mtd: Decimal | None
+
+
+class _TrackDailyBranchVersionCandidate(TypedDict):
+    track_date: date
+    version_id: int
+    version_type: str
+    ingreso_real_base_mtd: Decimal | None
+    ingreso_real_agregadora_mtd: Decimal | None
+    ingreso_real_total_mtd: Decimal | None
+
+
+def _get_track_daily_branch_version_candidates(
+    *,
+    sucursal_canon: str,
+    start_date: date,
+    cutoff_date: date,
+    resolved_cutoff_version_id: int,
+) -> list[_TrackDailyBranchVersionCandidate]:
+    rows = (
+        db.session.query(TrackDailyVersionORM, TrackDailyMartORM)
+        .join(
+            TrackDailyMartORM,
+            TrackDailyMartORM.track_daily_version_id == TrackDailyVersionORM.id,
+        )
+        .filter(
+            func.upper(func.trim(TrackDailyMartORM.sucursal_canon))
+            == sucursal_canon,
+            TrackDailyMartORM.track_date == TrackDailyVersionORM.track_date,
+            TrackDailyVersionORM.track_date.between(start_date, cutoff_date),
+            or_(
+                and_(
+                    TrackDailyVersionORM.track_date == cutoff_date,
+                    TrackDailyVersionORM.id == resolved_cutoff_version_id,
+                ),
+                and_(
+                    TrackDailyVersionORM.track_date < cutoff_date,
+                    TrackDailyVersionORM.status == "success",
+                    TrackDailyVersionORM.is_current.is_(True),
+                    TrackDailyVersionORM.version_type.in_(
+                        tuple(_TRACK_DAILY_BRANCH_VERSION_PRIORITY)
+                    ),
+                ),
+            ),
+        )
+        .order_by(
+            TrackDailyVersionORM.track_date.asc(),
+            TrackDailyVersionORM.id.desc(),
+        )
+        .all()
+    )
+
+    return [
+        {
+            "track_date": version.track_date,
+            "version_id": version.id,
+            "version_type": version.version_type,
+            "ingreso_real_base_mtd": mart_row.ingreso_real_base_mtd,
+            "ingreso_real_agregadora_mtd": mart_row.ingreso_real_agregadora_mtd,
+            "ingreso_real_total_mtd": mart_row.ingreso_real_total_mtd,
+        }
+        for version, mart_row in rows
+    ]
+
+
+def _select_track_daily_branch_version_candidates(
+    *,
+    candidates: list[_TrackDailyBranchVersionCandidate],
+    cutoff_date: date,
+    resolved_cutoff_version_id: int,
+) -> list[tuple[_TrackDailyBranchVersionCandidate, str]]:
+    selected_by_date: dict[
+        date,
+        tuple[_TrackDailyBranchVersionCandidate, str],
+    ] = {}
+
+    for candidate in candidates:
+        candidate_date = candidate["track_date"]
+        candidate_version_id = candidate["version_id"]
+
+        if candidate_date == cutoff_date:
+            if candidate_version_id == resolved_cutoff_version_id:
+                selected_by_date[candidate_date] = (
+                    candidate,
+                    "resolved_cutoff_version",
+                )
+            continue
+
+        candidate_version_type = candidate["version_type"]
+        selection_reason = _TRACK_DAILY_BRANCH_SELECTION_REASONS[
+            candidate_version_type
+        ]
+        current = selected_by_date.get(candidate_date)
+
+        if current is None:
+            selected_by_date[candidate_date] = (candidate, selection_reason)
+            continue
+
+        current_candidate = current[0]
+        candidate_rank = (
+            _TRACK_DAILY_BRANCH_VERSION_PRIORITY[candidate_version_type],
+            -candidate_version_id,
+        )
+        current_rank = (
+            _TRACK_DAILY_BRANCH_VERSION_PRIORITY[current_candidate["version_type"]],
+            -current_candidate["version_id"],
+        )
+
+        if candidate_rank < current_rank:
+            selected_by_date[candidate_date] = (candidate, selection_reason)
+
+    cutoff_selection = selected_by_date.get(cutoff_date)
+    if cutoff_selection is None:
+        raise ValueError(
+            "La versión resuelta del corte no tiene una fila TrackDailyMart "
+            "para la sucursal solicitada."
+        )
+
+    return [selected_by_date[track_date] for track_date in sorted(selected_by_date)]
+
+
+def _build_track_daily_branch_version_selection(
+    candidate: _TrackDailyBranchVersionCandidate,
+    *,
+    selection_reason: str,
+) -> TrackDailyBranchVersionSelection:
+    return {
+        "track_date": candidate["track_date"],
+        "version_id": candidate["version_id"],
+        "version_type": candidate["version_type"],
+        "selection_reason": selection_reason,
+        "ingreso_real_base_mtd": candidate["ingreso_real_base_mtd"],
+        "ingreso_real_agregadora_mtd": candidate[
+            "ingreso_real_agregadora_mtd"
+        ],
+        "ingreso_real_total_mtd": candidate["ingreso_real_total_mtd"],
+    }
+
+
+def select_track_daily_branch_versions(
+    *,
+    sucursal_canon: str,
+    start_date: date,
+    cutoff_date: date,
+    resolved_cutoff_version_id: int,
+) -> list[TrackDailyBranchVersionSelection]:
+    normalized_branch = str(sucursal_canon or "").strip().upper()
+    if not normalized_branch:
+        raise ValueError("sucursal_canon es requerido.")
+
+    if start_date > cutoff_date:
+        raise ValueError("start_date no puede ser posterior a cutoff_date.")
+
+    candidates = _get_track_daily_branch_version_candidates(
+        sucursal_canon=normalized_branch,
+        start_date=start_date,
+        cutoff_date=cutoff_date,
+        resolved_cutoff_version_id=resolved_cutoff_version_id,
+    )
+    selected_candidates = _select_track_daily_branch_version_candidates(
+        candidates=candidates,
+        cutoff_date=cutoff_date,
+        resolved_cutoff_version_id=resolved_cutoff_version_id,
+    )
+
+    return [
+        _build_track_daily_branch_version_selection(
+            candidate,
+            selection_reason=selection_reason,
+        )
+        for candidate, selection_reason in selected_candidates
+    ]
 
 
 def _to_float(value: Any) -> float | None:
