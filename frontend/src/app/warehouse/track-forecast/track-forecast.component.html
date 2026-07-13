@@ -172,10 +172,17 @@
         </header>
 
         <div class="track-trend-cohort-grid" *ngIf="cohortViewModels.length; else noCohorts">
-          <article
+          <button
+            type="button"
             class="track-trend-cohort"
             *ngFor="let item of cohortViewModels"
             [class.track-trend-cohort--total]="item.cohort_key === 'total_ultra'"
+            [class.track-trend-cohort--active]="isCohortSelected(item.cohort_key)"
+            [attr.aria-pressed]="isCohortSelected(item.cohort_key)"
+            [attr.aria-expanded]="isCohortSelected(item.cohort_key)"
+            aria-controls="cohort-branch-detail"
+            [disabled]="!canOpenCohortDetails"
+            (click)="selectCohort(item.cohort_key)"
           >
             <div class="track-trend-cohort-title">
               <div>
@@ -203,9 +210,86 @@
             <p class="track-trend-quality" *ngIf="item.projection_quality_issue">
               {{ item.projection_quality_issue.message }}
             </p>
-          </article>
+            <span class="track-trend-cohort-action">
+              {{ isCohortSelected(item.cohort_key) ? 'Ocultar detalle' : 'Ver detalle' }}
+            </span>
+          </button>
         </div>
         <ng-template #noCohorts><p class="track-trend-empty-state">{{ cohortEmptyMessage }}</p></ng-template>
+
+        <section
+          *ngIf="selectedCohortItem && canOpenCohortDetails"
+          id="cohort-branch-detail"
+          class="track-trend-cohort-detail"
+          aria-live="polite"
+        >
+          <header class="track-trend-cohort-detail-heading">
+            <div>
+              <span>Detalle por sucursal</span>
+              <h3>Detalle de {{ selectedCohortTitle }}</h3>
+              <p>{{ selectedCohortCount }} sucursales que componen esta cohorte</p>
+            </div>
+          </header>
+
+          <p class="track-trend-cohort-detail-note">
+            Los ingresos reales, base y agregadoras cuadran directamente con el agregado. El esperado histórico y la proyección se calculan con cobertura y calidad propias por sucursal, por lo que no siempre son métricas aditivas.
+          </p>
+
+          <div class="track-trend-cohort-table-wrap" *ngIf="selectedCohortBranchRows.length; else noCohortBranchRows">
+            <table class="track-trend-cohort-table">
+              <thead>
+                <tr>
+                  <th scope="col">#</th>
+                  <th scope="col">Sucursal</th>
+                  <th scope="col">Real MTD</th>
+                  <th scope="col">Base</th>
+                  <th scope="col">Agregadoras</th>
+                  <th scope="col">Esperado histórico al corte</th>
+                  <th scope="col">Brecha</th>
+                  <th scope="col">Factor de tendencia</th>
+                  <th scope="col">Proyección estable</th>
+                  <th scope="col">Confianza</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let row of selectedCohortBranchRows; let position = index">
+                  <td data-label="Posición">{{ position + 1 }}</td>
+                  <td data-label="Sucursal" class="track-trend-cohort-branch">
+                    <strong>{{ row.track_label || row.sucursal_canon }}</strong>
+                    <small>{{ row.sucursal_canon }}</small>
+                  </td>
+                  <td data-label="Real MTD">{{ formatCurrency(row.real_mtd) }}</td>
+                  <td data-label="Base">{{ formatCurrency(row.real_base_mtd) }}</td>
+                  <td data-label="Agregadoras">{{ formatCurrency(row.real_agregadora_mtd) }}</td>
+                  <td data-label="Esperado histórico al corte">
+                    {{ row.historical_expected_mtd === null ? 'Sin histórico comparable' : formatCurrency(row.historical_expected_mtd) }}
+                  </td>
+                  <td data-label="Brecha" [class.track-trend-value--negative]="row.gap_vs_historical_expected !== null && row.gap_vs_historical_expected < 0">
+                    <ng-container *ngIf="row.gap_vs_historical_expected !== null; else noBranchComparison">
+                      <strong>{{ formatCurrency(row.gap_vs_historical_expected) }}</strong>
+                      <small>{{ formatPercent(row.gap_vs_historical_expected_pct) }}</small>
+                    </ng-container>
+                    <ng-template #noBranchComparison>Sin comparación</ng-template>
+                  </td>
+                  <td data-label="Factor de tendencia">
+                    {{ row.trend_factor === null ? 'Sin tendencia' : formatPercent(row.trend_factor) }}
+                  </td>
+                  <td data-label="Proyección estable">
+                    <strong>{{ row.projected_close === null ? 'Sin proyección estable' : formatCurrency(row.projected_close) }}</strong>
+                    <small *ngIf="row.projection_quality_issue" class="track-trend-cohort-quality-message">
+                      {{ row.projection_quality_issue.message }}
+                    </small>
+                  </td>
+                  <td data-label="Confianza">{{ row.confidence }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <ng-template #noCohortBranchRows>
+            <p class="track-trend-empty-state">No se encontró detalle individual para las sucursales de esta cohorte.</p>
+          </ng-template>
+        </section>
       </section>
 
       <section class="track-trend-section track-trend-drivers">

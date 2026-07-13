@@ -104,6 +104,7 @@ export class TrackForecastComponent implements OnInit {
   branchCatalogMessage = '';
   forecast: TrackVentaTotalForecastResponse | null = null;
   branchOptions: TrackForecastBranchOption[] = [];
+  selectedCohortKey: TrackVentaTotalForecastCohortItem['cohort_key'] | null = null;
 
   private readonly betaUserId = 47;
 
@@ -183,6 +184,7 @@ export class TrackForecastComponent implements OnInit {
     this.loading = true;
     this.errorMessage = '';
     this.forecast = null;
+    this.selectedCohortKey = null;
 
     this.trackService
       .getVentaTotalForecast(
@@ -454,6 +456,48 @@ export class TrackForecastComponent implements OnInit {
     return this.cohortForecast?.status === 'not_applicable'
       ? 'La composición por cohortes no aplica para el alcance por sucursal.'
       : 'No hay cohortes disponibles para este corte.';
+  }
+
+  get selectedCohortItem(): TrackVentaTotalForecastCohortItem | null {
+    if (!this.selectedCohortKey) {
+      return null;
+    }
+
+    return this.cohortForecastItems.find((item) => item.cohort_key === this.selectedCohortKey) ?? null;
+  }
+
+  get selectedCohortBranches(): string[] {
+    return this.selectedCohortItem?.branches ?? [];
+  }
+
+  get selectedCohortBranchRows(): TrackVentaTotalForecastBranchDriverItem[] {
+    const selectedBranches = new Set(this.selectedCohortBranches);
+
+    return this.branchDriverItems.filter((item) => selectedBranches.has(item.sucursal_canon));
+  }
+
+  get selectedCohortTitle(): string {
+    return this.selectedCohortItem?.label || this.selectedCohortItem?.cohort_key || '';
+  }
+
+  get selectedCohortCount(): number {
+    return this.selectedCohortBranches.length;
+  }
+
+  get canOpenCohortDetails(): boolean {
+    return this.branchDrivers?.status === 'ok';
+  }
+
+  selectCohort(cohortKey: TrackVentaTotalForecastCohortItem['cohort_key']): void {
+    if (!this.canOpenCohortDetails) {
+      return;
+    }
+
+    this.selectedCohortKey = this.selectedCohortKey === cohortKey ? null : cohortKey;
+  }
+
+  isCohortSelected(cohortKey: TrackVentaTotalForecastCohortItem['cohort_key']): boolean {
+    return this.selectedCohortKey === cohortKey;
   }
 
   get branchDrivers(): TrackVentaTotalForecastBranchDrivers | null {
