@@ -7,169 +7,20 @@ import {
   TrackForecastBranchOption,
   TrackGenerationMode,
   TrackService,
+  TrackVentaTotalForecastBranchDriverItem,
+  TrackVentaTotalForecastBranchDrivers,
+  TrackVentaTotalForecastCohortForecast,
+  TrackVentaTotalForecastCohortItem,
+  TrackVentaTotalForecastCutoff,
+  TrackVentaTotalForecastExecutiveStatus,
+  TrackVentaTotalForecastExplanation,
   TrackVentaTotalForecastResponse,
+  TrackVentaTotalForecastSameDayHistory,
+  TrackVentaTotalForecastSameDayHistoryItem,
   TrackVentaTotalForecastScope,
   TrackVentaTotalForecastSummary,
+  TrackVentaTotalForecastWarning,
 } from '../../services/track.service';
-
-
-type SameDayHistoryItem = {
-  year?: number;
-  business_month?: string | null;
-  mtd_total?: number | null;
-  month_total?: number | null;
-  remaining_total?: number | null;
-  progress_pct?: number | null;
-  mtd_days?: number | null;
-  month_days?: number | null;
-  gap_current_vs_mtd?: number | null;
-  gap_current_vs_mtd_pct?: number | null;
-};
-
-type SameDayHistory = {
-  source?: 'national' | 'branch' | string;
-  branch?: string | null;
-  target_month?: string;
-  cutoff_day?: number;
-  historical_years?: number;
-  confidence?: string;
-  average?: {
-    mtd_total?: number | null;
-    month_total?: number | null;
-    gap_current_vs_average_mtd?: number | null;
-    gap_current_vs_average_mtd_pct?: number | null;
-  };
-  current?: {
-    year?: number;
-    mtd_total?: number | null;
-    projected_close?: number | null;
-    historical_progress_pct?: number | null;
-    trend_factor?: number | null;
-  };
-  items?: SameDayHistoryItem[];
-};
-
-
-
-type CohortForecastItem = {
-  cohort_key?: string;
-  label?: string;
-  branches_count?: number | null;
-  branches?: string[];
-  real_mtd?: number | null;
-  real_base_mtd?: number | null;
-  real_agregadora_mtd?: number | null;
-  historical_months?: number | null;
-  historical_expected_mtd?: number | null;
-  historical_expected_remaining?: number | null;
-  historical_expected_month_total?: number | null;
-  historical_progress_pct?: number | null;
-  trend_factor?: number | null;
-  gap_vs_expected_mtd?: number | null;
-  gap_vs_expected_mtd_pct?: number | null;
-  projected_close?: number | null;
-  projected_close_experimental?: number | null;
-  confidence?: string;
-  projection_quality_issue?: {
-    code?: string;
-    severity?: string;
-    message?: string;
-    reasons?: string[];
-  } | null;
-};
-
-type CohortForecast = {
-  status?: string;
-  method?: string;
-  scope?: string;
-  target_month?: string;
-  cutoff_day?: number;
-  items?: CohortForecastItem[];
-};
-
-type BranchDriverItem = {
-  sucursal_canon?: string;
-  track_label?: string;
-  display_order?: number | null;
-  real_mtd?: number | null;
-  real_base_mtd?: number | null;
-  real_agregadora_mtd?: number | null;
-  historical_months?: number | null;
-  historical_expected_mtd?: number | null;
-  historical_expected_month_total?: number | null;
-  historical_progress_pct?: number | null;
-  gap_vs_historical_expected?: number | null;
-  gap_vs_historical_expected_pct?: number | null;
-  trend_factor?: number | null;
-  projected_close?: number | null;
-  impact_share_pct?: number | null;
-  confidence?: string;
-  projection_quality_issue?: {
-    code?: string;
-    severity?: string;
-    message?: string;
-    reasons?: string[];
-  } | null;
-};
-
-type BranchDrivers = {
-  status?: string;
-  scope?: string;
-  metric?: string;
-  target_month?: string;
-  cutoff_day?: number;
-  items_count?: number;
-  negative_gap_total?: number | null;
-  items?: BranchDriverItem[];
-};
-
-type ForecastExecutiveStatus = {
-  level?: 'success' | 'warning' | 'danger' | 'neutral' | string;
-  code?: string;
-  title?: string;
-  message?: string;
-  primary_metric_label?: string;
-  primary_metric_value?: number | null;
-  primary_metric_unit?: string;
-};
-
-type ForecastExplanation = {
-  formula_key?: string;
-  formula?: string;
-  plain_text?: string;
-  components?: {
-    cutoff_day?: number;
-    real_mtd?: number | null;
-    historical_progress_pct?: number | null;
-    historical_expected_mtd?: number | null;
-    trend_factor?: number | null;
-    projected_close?: number | null;
-  };
-};
-
-type ForecastWarning = {
-  code?: string;
-  severity?: 'info' | 'warning' | 'danger' | string;
-  message?: string;
-};
-
-type ForecastCutoff = {
-  track_date?: string;
-  target_month?: string;
-  cutoff_day?: number;
-  generation_mode?: string;
-  is_official_forecast?: boolean;
-  basis?: string;
-  message?: string;
-  canonical_cutoff?: {
-    snapshot_id?: number;
-    business_date?: string;
-    aggregate_rows?: number;
-    first_sale_date?: string;
-    last_sale_date?: string;
-    branches?: number;
-  } | null;
-};
 
 @Component({
   selector: 'app-track-forecast',
@@ -302,36 +153,36 @@ export class TrackForecastComponent implements OnInit {
     return this.forecast?.summary ?? null;
   }
 
-  get executiveStatus(): ForecastExecutiveStatus | null {
-    return ((this.forecast as any)?.executive_status ?? null) as ForecastExecutiveStatus | null;
+  get executiveStatus(): TrackVentaTotalForecastExecutiveStatus | null {
+    return this.forecast?.executive_status ?? null;
   }
 
-  get forecastExplanation(): ForecastExplanation | null {
-    return ((this.forecast as any)?.forecast_explanation ?? null) as ForecastExplanation | null;
+  get forecastExplanation(): TrackVentaTotalForecastExplanation | null {
+    return this.forecast?.forecast_explanation ?? null;
   }
 
-  get forecastWarnings(): ForecastWarning[] {
-    return (((this.forecast as any)?.warnings ?? []) as ForecastWarning[]);
+  get forecastWarnings(): TrackVentaTotalForecastWarning[] {
+    return this.forecast?.warnings ?? [];
   }
 
-  get forecastCutoff(): ForecastCutoff | null {
-    return ((this.forecast as any)?.forecast_cutoff ?? null) as ForecastCutoff | null;
+  get forecastCutoff(): TrackVentaTotalForecastCutoff | null {
+    return this.forecast?.forecast_cutoff ?? null;
   }
 
 
-  get sameDayHistory(): SameDayHistory | null {
-    return ((this.forecast as any)?.same_day_history ?? null) as SameDayHistory | null;
+  get sameDayHistory(): TrackVentaTotalForecastSameDayHistory | null {
+    return this.forecast?.same_day_history ?? null;
   }
 
-  get sameDayHistoryItems(): SameDayHistoryItem[] {
+  get sameDayHistoryItems(): TrackVentaTotalForecastSameDayHistoryItem[] {
     return this.sameDayHistory?.items || [];
   }
 
-  get sameDayHistoryCurrent(): SameDayHistory['current'] | null {
+  get sameDayHistoryCurrent(): TrackVentaTotalForecastSameDayHistory['current'] | null {
     return this.sameDayHistory?.current || null;
   }
 
-  get sameDayHistoryAverage(): SameDayHistory['average'] | null {
+  get sameDayHistoryAverage(): TrackVentaTotalForecastSameDayHistory['average'] | null {
     return this.sameDayHistory?.average || null;
   }
 
@@ -367,12 +218,13 @@ export class TrackForecastComponent implements OnInit {
 
 
 
-  get cohortForecast(): CohortForecast | null {
-    return ((this.forecast as any)?.cohort_forecast ?? null) as CohortForecast | null;
+  get cohortForecast(): TrackVentaTotalForecastCohortForecast | null {
+    return this.forecast?.cohort_forecast ?? null;
   }
 
-  get cohortForecastItems(): CohortForecastItem[] {
-    return this.cohortForecast?.items || [];
+  get cohortForecastItems(): TrackVentaTotalForecastCohortItem[] {
+    const forecast = this.cohortForecast;
+    return forecast?.status === 'ok' ? forecast.items : [];
   }
 
   get hasCohortForecast(): boolean {
@@ -380,7 +232,10 @@ export class TrackForecastComponent implements OnInit {
   }
 
   get cohortForecastTitle(): string {
-    const cutoffDay = this.cohortForecast?.cutoff_day || this.forecastCutoff?.cutoff_day || '—';
+    const forecast = this.cohortForecast;
+    const cutoffDay = (
+      forecast?.status === 'ok' ? forecast.cutoff_day : null
+    ) || this.forecastCutoff?.cutoff_day || '—';
     return `Proyección por cohortes · día ${cutoffDay}`;
   }
 
@@ -404,7 +259,7 @@ export class TrackForecastComponent implements OnInit {
     return 'Proyección consolidada disponible.';
   }
 
-  getCohortProjectionLabel(item: CohortForecastItem): string {
+  getCohortProjectionLabel(item: TrackVentaTotalForecastCohortItem): string {
     if (item.projected_close === null || item.projected_close === undefined) {
       return 'Sin proyección estable';
     }
@@ -412,7 +267,7 @@ export class TrackForecastComponent implements OnInit {
     return this.formatCurrency(item.projected_close);
   }
 
-  getCohortExperimentalLabel(item: CohortForecastItem): string {
+  getCohortExperimentalLabel(item: TrackVentaTotalForecastCohortItem): string {
     if (item.projected_close_experimental === null || item.projected_close_experimental === undefined) {
       return '—';
     }
@@ -420,7 +275,7 @@ export class TrackForecastComponent implements OnInit {
     return this.formatCurrency(item.projected_close_experimental);
   }
 
-  getCohortQualityLabel(item: CohortForecastItem): string {
+  getCohortQualityLabel(item: TrackVentaTotalForecastCohortItem): string {
     const issueCode = item.projection_quality_issue?.code;
 
     if (issueCode === 'partial_cohort_history') {
@@ -434,7 +289,7 @@ export class TrackForecastComponent implements OnInit {
     return item.confidence || '—';
   }
 
-  getCohortQualityClass(item: CohortForecastItem): string {
+  getCohortQualityClass(item: TrackVentaTotalForecastCohortItem): string {
     if (item.projection_quality_issue) {
       return 'track-forecast-cohort-quality--warning';
     }
@@ -446,7 +301,7 @@ export class TrackForecastComponent implements OnInit {
     return 'track-forecast-cohort-quality--neutral';
   }
 
-  getCohortTrendClass(item: CohortForecastItem): string {
+  getCohortTrendClass(item: TrackVentaTotalForecastCohortItem): string {
     const trend = item.trend_factor;
 
     if (trend === null || trend === undefined) {
@@ -464,15 +319,16 @@ export class TrackForecastComponent implements OnInit {
     return 'track-forecast-delta--neutral';
   }
 
-  get branchDrivers(): BranchDrivers | null {
-    return ((this.forecast as any)?.branch_drivers ?? null) as BranchDrivers | null;
+  get branchDrivers(): TrackVentaTotalForecastBranchDrivers | null {
+    return this.forecast?.branch_drivers ?? null;
   }
 
-  get branchDriverItems(): BranchDriverItem[] {
-    return this.branchDrivers?.items || [];
+  get branchDriverItems(): TrackVentaTotalForecastBranchDriverItem[] {
+    const drivers = this.branchDrivers;
+    return drivers?.status === 'ok' ? drivers.items : [];
   }
 
-  get negativeBranchDrivers(): BranchDriverItem[] {
+  get negativeBranchDrivers(): TrackVentaTotalForecastBranchDriverItem[] {
     return this.branchDriverItems
       .filter((item) => (item.gap_vs_historical_expected ?? 0) < 0)
       .slice(0, 12);
@@ -483,17 +339,26 @@ export class TrackForecastComponent implements OnInit {
   }
 
   get branchDriversTitle(): string {
-    const cutoffDay = this.branchDrivers?.cutoff_day || this.forecastCutoff?.cutoff_day || '—';
+    const drivers = this.branchDrivers;
+    const cutoffDay = (
+      drivers?.status === 'ok' ? drivers.cutoff_day : null
+    ) || this.forecastCutoff?.cutoff_day || '—';
     return `Tendencias por sucursal · día ${cutoffDay}`;
   }
 
   get branchDriversSubtitle(): string {
-    const count = this.branchDrivers?.items_count || this.branchDriverItems.length || 0;
+    const drivers = this.branchDrivers;
+    const count = (
+      drivers?.status === 'ok' ? drivers.items_count : null
+    ) || this.branchDriverItems.length || 0;
     return `${count} sucursales analizadas · ordenado por mayor gap negativo`;
   }
 
   get negativeGapTotalLabel(): string {
-    return this.formatCurrency(this.branchDrivers?.negative_gap_total);
+    const drivers = this.branchDrivers;
+    return this.formatCurrency(
+      drivers?.status === 'ok' ? drivers.negative_gap_total : null,
+    );
   }
 
   get topNegativeDriverLabel(): string {
@@ -506,7 +371,7 @@ export class TrackForecastComponent implements OnInit {
     return `${top.track_label || top.sucursal_canon} · ${this.formatPercent(top.impact_share_pct)} del gap`;
   }
 
-  getDriverTrendClass(item: BranchDriverItem): string {
+  getDriverTrendClass(item: TrackVentaTotalForecastBranchDriverItem): string {
     const gap = item.gap_vs_historical_expected ?? 0;
 
     if (gap < 0) {
@@ -520,7 +385,7 @@ export class TrackForecastComponent implements OnInit {
     return 'track-forecast-delta--neutral';
   }
 
-  getDriverProjectionLabel(item: BranchDriverItem): string {
+  getDriverProjectionLabel(item: TrackVentaTotalForecastBranchDriverItem): string {
     if (item.projection_quality_issue) {
       return 'Sin proyección estable';
     }
@@ -665,7 +530,7 @@ export class TrackForecastComponent implements OnInit {
     return this.forecast?.metadata?.selected_branches_count || 0;
   }
 
-  getWarningTitle(warning: ForecastWarning): string {
+  getWarningTitle(warning: TrackVentaTotalForecastWarning): string {
     if (warning.code === 'preview_operativo') {
       return 'Preview operativo';
     }
@@ -689,7 +554,7 @@ export class TrackForecastComponent implements OnInit {
     return warning.code || 'Advertencia';
   }
 
-  getWarningClass(warning: ForecastWarning): string {
+  getWarningClass(warning: TrackVentaTotalForecastWarning): string {
     const severity = warning.severity || 'info';
     return `track-forecast-warning--${severity}`;
   }

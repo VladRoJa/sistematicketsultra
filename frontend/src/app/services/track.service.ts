@@ -73,6 +73,11 @@ export interface TrackVentaTotalForecastResolvedVersion {
   finished_at_utc: string | null;
 }
 
+export interface TrackVentaTotalForecastHistoryWindow {
+  start: string;
+  end_exclusive: string;
+}
+
 export interface TrackVentaTotalForecastHistoryCoverage {
   months_count: number;
   first_month: string | null;
@@ -591,11 +596,8 @@ export interface TrackVentaTotalForecastMetadata {
   branch: string | null;
   selected_branches_count: number;
   excluded_branches: string[];
-  history_window?: {
-    start: string;
-    end_exclusive: string;
-  };
-  resolved_version?: TrackVentaTotalForecastResolvedVersion;
+  history_window: TrackVentaTotalForecastHistoryWindow;
+  resolved_version: TrackVentaTotalForecastResolvedVersion;
 }
 
 export interface TrackVentaTotalForecastResponse {
