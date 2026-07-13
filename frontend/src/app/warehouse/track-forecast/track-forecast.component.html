@@ -241,14 +241,38 @@
                 <tr>
                   <th scope="col">#</th>
                   <th scope="col">Sucursal</th>
-                  <th scope="col">Real MTD</th>
-                  <th scope="col">Base</th>
-                  <th scope="col">Agregadoras</th>
-                  <th scope="col">Esperado histórico al corte</th>
-                  <th scope="col">Brecha</th>
-                  <th scope="col">Factor de tendencia</th>
-                  <th scope="col">Proyección estable</th>
-                  <th scope="col">Confianza</th>
+                  <th scope="col">
+                    Real MTD
+                    <button type="button" class="track-trend-tooltip-trigger" aria-label="Explicación de Real MTD" [matTooltip]="getCohortDetailTooltip('real_mtd')" matTooltipPosition="above" [matTooltipShowDelay]="300" matTooltipClass="track-trend-metric-tooltip">ⓘ</button>
+                  </th>
+                  <th scope="col">
+                    Base
+                    <button type="button" class="track-trend-tooltip-trigger" aria-label="Explicación de Base" [matTooltip]="getCohortDetailTooltip('real_base_mtd')" matTooltipPosition="above" [matTooltipShowDelay]="300" matTooltipClass="track-trend-metric-tooltip">ⓘ</button>
+                  </th>
+                  <th scope="col">
+                    Agregadoras
+                    <button type="button" class="track-trend-tooltip-trigger" aria-label="Explicación de Agregadoras" [matTooltip]="getCohortDetailTooltip('real_agregadora_mtd')" matTooltipPosition="above" [matTooltipShowDelay]="300" matTooltipClass="track-trend-metric-tooltip">ⓘ</button>
+                  </th>
+                  <th scope="col">
+                    Esperado histórico al corte
+                    <button type="button" class="track-trend-tooltip-trigger" aria-label="Explicación de Esperado histórico al corte" [matTooltip]="getCohortDetailTooltip('historical_expected_mtd')" matTooltipPosition="above" [matTooltipShowDelay]="300" matTooltipClass="track-trend-metric-tooltip">ⓘ</button>
+                  </th>
+                  <th scope="col">
+                    Brecha
+                    <button type="button" class="track-trend-tooltip-trigger" aria-label="Explicación de Brecha" [matTooltip]="getCohortDetailTooltip('gap')" matTooltipPosition="above" [matTooltipShowDelay]="300" matTooltipClass="track-trend-metric-tooltip">ⓘ</button>
+                  </th>
+                  <th scope="col">
+                    Factor de tendencia
+                    <button type="button" class="track-trend-tooltip-trigger" aria-label="Explicación de Factor de tendencia" [matTooltip]="getCohortDetailTooltip('trend_factor')" matTooltipPosition="above" [matTooltipShowDelay]="300" matTooltipClass="track-trend-metric-tooltip">ⓘ</button>
+                  </th>
+                  <th scope="col">
+                    Proyección estable
+                    <button type="button" class="track-trend-tooltip-trigger" aria-label="Explicación de Proyección estable" [matTooltip]="getCohortDetailTooltip('projected_close')" matTooltipPosition="above" [matTooltipShowDelay]="300" matTooltipClass="track-trend-metric-tooltip">ⓘ</button>
+                  </th>
+                  <th scope="col">
+                    Confianza
+                    <button type="button" class="track-trend-tooltip-trigger" aria-label="Explicación de Confianza" [matTooltip]="getCohortDetailTooltip('confidence')" matTooltipPosition="above" [matTooltipShowDelay]="300" matTooltipClass="track-trend-metric-tooltip">ⓘ</button>
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -258,29 +282,29 @@
                     <strong>{{ row.track_label || row.sucursal_canon }}</strong>
                     <small>{{ row.sucursal_canon }}</small>
                   </td>
-                  <td data-label="Real MTD">{{ formatCurrency(row.real_mtd) }}</td>
-                  <td data-label="Base">{{ formatCurrency(row.real_base_mtd) }}</td>
-                  <td data-label="Agregadoras">{{ formatCurrency(row.real_agregadora_mtd) }}</td>
-                  <td data-label="Esperado histórico al corte">
-                    {{ row.historical_expected_mtd === null ? 'Sin histórico comparable' : formatCurrency(row.historical_expected_mtd) }}
+                  <td class="track-trend-metric-cell" data-label="Real MTD" tabindex="0" [matTooltip]="getCohortDetailTooltip('real_mtd', row)" matTooltipPosition="above" [matTooltipShowDelay]="300" matTooltipClass="track-trend-metric-tooltip"><span class="track-trend-metric-value">{{ formatCurrency(row.real_mtd) }}</span></td>
+                  <td class="track-trend-metric-cell" data-label="Base" tabindex="0" [matTooltip]="getCohortDetailTooltip('real_base_mtd', row)" matTooltipPosition="above" [matTooltipShowDelay]="300" matTooltipClass="track-trend-metric-tooltip"><span class="track-trend-metric-value">{{ formatCurrency(row.real_base_mtd) }}</span></td>
+                  <td class="track-trend-metric-cell" data-label="Agregadoras" tabindex="0" [matTooltip]="getCohortDetailTooltip('real_agregadora_mtd', row)" matTooltipPosition="above" [matTooltipShowDelay]="300" matTooltipClass="track-trend-metric-tooltip"><span class="track-trend-metric-value">{{ formatCurrency(row.real_agregadora_mtd) }}</span></td>
+                  <td class="track-trend-metric-cell" data-label="Esperado histórico al corte" tabindex="0" [matTooltip]="getCohortDetailTooltip('historical_expected_mtd', row)" matTooltipPosition="above" [matTooltipShowDelay]="300" matTooltipClass="track-trend-metric-tooltip">
+                    <span class="track-trend-metric-value">{{ row.historical_expected_mtd === null ? 'Sin histórico comparable' : formatCurrency(row.historical_expected_mtd) }}</span>
                   </td>
-                  <td data-label="Brecha" [class.track-trend-value--negative]="row.gap_vs_historical_expected !== null && row.gap_vs_historical_expected < 0">
+                  <td class="track-trend-metric-cell" data-label="Brecha" tabindex="0" [matTooltip]="getCohortDetailTooltip('gap', row)" matTooltipPosition="above" [matTooltipShowDelay]="300" matTooltipClass="track-trend-metric-tooltip" [class.track-trend-value--negative]="row.gap_vs_historical_expected !== null && row.gap_vs_historical_expected < 0">
                     <ng-container *ngIf="row.gap_vs_historical_expected !== null; else noBranchComparison">
-                      <strong>{{ formatCurrency(row.gap_vs_historical_expected) }}</strong>
+                      <strong class="track-trend-metric-value">{{ formatCurrency(row.gap_vs_historical_expected) }}</strong>
                       <small>{{ formatPercent(row.gap_vs_historical_expected_pct) }}</small>
                     </ng-container>
-                    <ng-template #noBranchComparison>Sin comparación</ng-template>
+                    <ng-template #noBranchComparison><span class="track-trend-metric-value">Sin comparación</span></ng-template>
                   </td>
-                  <td data-label="Factor de tendencia">
-                    {{ row.trend_factor === null ? 'Sin tendencia' : formatPercent(row.trend_factor) }}
+                  <td class="track-trend-metric-cell" data-label="Factor de tendencia" tabindex="0" [matTooltip]="getCohortDetailTooltip('trend_factor', row)" matTooltipPosition="above" [matTooltipShowDelay]="300" matTooltipClass="track-trend-metric-tooltip">
+                    <span class="track-trend-metric-value">{{ row.trend_factor === null ? 'Sin tendencia' : formatPercent(row.trend_factor) }}</span>
                   </td>
-                  <td data-label="Proyección estable">
-                    <strong>{{ row.projected_close === null ? 'Sin proyección estable' : formatCurrency(row.projected_close) }}</strong>
+                  <td class="track-trend-metric-cell" data-label="Proyección estable" tabindex="0" [matTooltip]="getCohortDetailTooltip('projected_close', row)" matTooltipPosition="above" [matTooltipShowDelay]="300" matTooltipClass="track-trend-metric-tooltip">
+                    <strong class="track-trend-metric-value">{{ row.projected_close === null ? 'Sin proyección estable' : formatCurrency(row.projected_close) }}</strong>
                     <small *ngIf="row.projection_quality_issue" class="track-trend-cohort-quality-message">
                       {{ row.projection_quality_issue.message }}
                     </small>
                   </td>
-                  <td data-label="Confianza">{{ row.confidence }}</td>
+                  <td class="track-trend-metric-cell" data-label="Confianza" tabindex="0" [matTooltip]="getCohortDetailTooltip('confidence', row)" matTooltipPosition="above" [matTooltipShowDelay]="300" matTooltipClass="track-trend-metric-tooltip"><span class="track-trend-metric-value">{{ row.confidence }}</span></td>
                 </tr>
               </tbody>
             </table>
