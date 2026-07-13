@@ -1,5 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { FormsModule } from '@angular/forms';
 
 import { AuthService } from '../../services/auth.service';
@@ -53,6 +54,27 @@ type TrackForecastCohortViewModel = {
   experimentalLabel: string;
 };
 
+type CohortDetailMetricKey =
+  | 'real_mtd'
+  | 'real_base_mtd'
+  | 'real_agregadora_mtd'
+  | 'historical_expected_mtd'
+  | 'gap'
+  | 'trend_factor'
+  | 'projected_close'
+  | 'confidence';
+
+const COHORT_DETAIL_METRIC_TOOLTIPS: Readonly<Record<CohortDetailMetricKey, string>> = {
+  real_mtd: 'Ingreso acumulado de la sucursal hasta la fecha Track. Está compuesto por el ingreso base más el ingreso de agregadoras.',
+  real_base_mtd: 'Ingreso real acumulado proveniente de la operación base de la sucursal.',
+  real_agregadora_mtd: 'Ingreso real acumulado proveniente de fuentes agregadoras integradas en Track, como Wellhub o TotalPass, según la información disponible.',
+  historical_expected_mtd: 'Referencia histórica de cuánto llevaba normalmente esta sucursal al mismo día del mes. Depende de los meses comparables disponibles y no representa por sí sola una proyección de cierre.',
+  gap: 'Diferencia entre el ingreso real acumulado y el esperado histórico al corte. Fórmula conceptual: Real MTD menos Esperado histórico. Un valor negativo indica que la sucursal va por debajo de su ritmo histórico.',
+  trend_factor: 'Ritmo actual frente al esperado histórico al corte. Un 100% indica que la sucursal avanza exactamente al ritmo histórico esperado; menos de 100% está por debajo y más de 100% está por encima.',
+  projected_close: 'Estimación de cierre calculada con el avance histórico del mes. Solo se muestra cuando la sucursal supera los controles de calidad y estabilidad del forecast.',
+  confidence: 'Calidad del histórico utilizado para interpretar la tendencia. Considera cobertura histórica, volumen comparable y estabilidad del factor de tendencia.',
+};
+
 type TrackForecastBranchDriverViewModel = {
   rank: number;
   track_label: string;
@@ -88,7 +110,7 @@ type TrackForecastTraceItem = {
 @Component({
   selector: 'app-track-forecast',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, MatTooltipModule],
   templateUrl: './track-forecast.component.html',
   styleUrls: ['./track-forecast.component.css'],
 })
@@ -498,6 +520,49 @@ export class TrackForecastComponent implements OnInit {
 
   isCohortSelected(cohortKey: TrackVentaTotalForecastCohortItem['cohort_key']): boolean {
     return this.selectedCohortKey === cohortKey;
+  }
+
+  getCohortDetailTooltip(
+    metric: CohortDetailMetricKey,
+    row?: TrackVentaTotalForecastBranchDriverItem,
+  ): string {
+    const explanation = COHORT_DETAIL_METRIC_TOOLTIPS[metric];
+
+    if (!row) {
+      return explanation;
+    }
+
+    if (metric === 'historical_expected_mtd' && row.historical_expected_mtd === null) {
+      return `${explanation} No existe histórico comparable suficiente para esta sucursal.`;
+    }
+
+    if (metric === 'gap' && row.gap_vs_historical_expected === null) {
+      return `${explanation} No puede calcularse sin una referencia histórica válida.`;
+    }
+
+    if (metric === 'trend_factor' && row.trend_factor === null) {
+      return `${explanation} No puede calcularse sin una referencia histórica válida.`;
+    }
+
+    if (metric === 'projected_close' && row.projected_close === null) {
+      const qualityIssue = row.projection_quality_issue;
+
+      if (!qualityIssue) {
+        return `${explanation} No hay una proyección estable disponible para esta sucursal.`;
+      }
+
+      const reasons = qualityIssue.reasons.length
+        ? ` Motivos: ${qualityIssue.reasons.join(' ')}`
+        : '';
+
+      return `${explanation} No hay proyección estable. ${qualityIssue.message}${reasons}`;
+    }
+
+    if (metric === 'confidence') {
+      return `${explanation} Confianza actual: ${row.confidence.replace('_', ' ')}.`;
+    }
+
+    return explanation;
   }
 
   get branchDrivers(): TrackVentaTotalForecastBranchDrivers | null {
