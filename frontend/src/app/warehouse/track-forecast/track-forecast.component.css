@@ -26,6 +26,7 @@
 .track-trend-driver span,
 .track-trend-trace-grid dt { color: #687386; font-size: .7rem; font-weight: 700; }
 .track-trend-metrics dd { color: #273448; font-size: .83rem; font-weight: 800; margin: .2rem 0 0; overflow-wrap: anywhere; }
+.track-trend-metrics small { color: #8a5a1f; display: block; font-size: .68rem; line-height: 1.35; margin-top: .25rem; }
 .track-trend-value--negative { color: #a04444 !important; }
 .track-trend-experimental,
 .track-trend-quality { border-top: 1px solid #dfe4eb; color: #526075; font-size: .75rem; margin: .6rem 0 0; padding-top: .6rem; }
@@ -48,6 +49,11 @@
 .track-trend-impact-track { background: #e7ebf0; height: .4rem; margin-top: .35rem; overflow: hidden; }
 .track-trend-impact-track span { background: #a65a5a; display: block; height: 100%; }
 .track-trend-alert-grid { display: grid; gap: .75rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.track-trend-alerts summary { color: #344256; cursor: pointer; font-size: .9rem; font-weight: 800; list-style: none; min-height: 2.75rem; padding: .85rem 2rem .85rem 0; position: relative; }
+.track-trend-alerts summary::-webkit-details-marker { display: none; }
+.track-trend-alerts summary::after { content: '+'; font-size: 1.2rem; position: absolute; right: .35rem; top: .65rem; }
+.track-trend-alerts details[open] summary::after { content: '−'; }
+.track-trend-alerts details[open] summary { border-bottom: 1px solid #dfe4eb; margin-bottom: .75rem; }
 .track-trend-alert { background: #f7f8fa; border-left: 3px solid #8290a3; padding: .75rem; }
 .track-trend-alert--warning { background: #fbf7f0; border-left-color: #c2852e; }
 .track-trend-alert strong { color: #273448; display: block; font-size: .88rem; margin-top: .2rem; }

@@ -186,7 +186,11 @@
             </div>
             <dl class="track-trend-metrics">
               <div><dt>Real MTD</dt><dd>{{ formatCurrency(item.real_mtd) }}</dd></div>
-              <div><dt>Esperado MTD</dt><dd>{{ formatCurrency(item.historical_expected_mtd) }}</dd></div>
+              <div>
+                <dt>Esperado histórico al corte</dt>
+                <dd>{{ formatCurrency(item.historical_expected_mtd) }}</dd>
+                <small *ngIf="item.projection_quality_issue">Referencia histórica de baja confiabilidad; no representa una proyección.</small>
+              </div>
               <div><dt>Brecha</dt><dd [ngClass]="'track-trend-value--' + item.visualTone">{{ item.gapLabel }}</dd></div>
               <div><dt>Factor de tendencia</dt><dd>{{ item.trendLabel }}</dd></div>
               <div><dt>Proyección estable</dt><dd>{{ item.projectionLabel }}</dd></div>
@@ -208,7 +212,7 @@
         <header class="track-trend-section-heading">
           <span>Branch drivers</span>
           <h2>Sucursales que frenan el ritmo</h2>
-          <p>Mayor brecha negativa frente al esperado histórico</p>
+          <p>Mayor brecha negativa frente al esperado histórico · Barra relativa al mayor impacto visible</p>
         </header>
 
         <div class="track-trend-driver-list" *ngIf="branchDriverViewModels.length; else noDrivers">
@@ -217,7 +221,7 @@
             <div class="track-trend-driver-name"><strong>{{ item.track_label }}</strong><small>{{ item.sucursal_canon }}</small></div>
             <div class="track-trend-driver-metric"><span>Brecha</span><strong>{{ formatCurrency(item.gap_vs_historical_expected) }}</strong><small>{{ formatPercent(item.gap_vs_historical_expected_pct) }}</small></div>
             <div class="track-trend-driver-impact">
-              <div><span>Participación en el impacto</span><strong>{{ formatNumber(item.impact_share_pct) }}%</strong></div>
+              <div><span>Participación en el impacto</span><strong>{{ formatPercent(item.impact_share_pct) }} del gap negativo total</strong></div>
               <div class="track-trend-impact-track"><span [style.width.%]="item.impactBarPct"></span></div>
             </div>
             <div class="track-trend-driver-metric"><span>Factor de tendencia</span><strong>{{ formatPercent(item.trend_factor) }}</strong></div>
@@ -228,17 +232,16 @@
       </section>
 
       <section class="track-trend-section track-trend-alerts">
-        <header class="track-trend-section-heading">
-          <span>Warnings y quality issues</span>
-          <h2>Alertas del forecast</h2>
-        </header>
-        <div class="track-trend-alert-grid" *ngIf="forecastAlerts.length; else noAlerts">
-          <article class="track-trend-alert" *ngFor="let alert of forecastAlerts" [ngClass]="'track-trend-alert--' + alert.tone">
-            <div><span>{{ alert.sourceLabel }}</span><strong>{{ alert.title }}</strong></div>
-            <p>{{ alert.message }}</p>
-            <ul *ngIf="alert.reasons.length"><li *ngFor="let reason of alert.reasons">{{ reason }}</li></ul>
-          </article>
-        </div>
+        <details *ngIf="forecastAlerts.length; else noAlerts">
+          <summary>Alertas del forecast · {{ forecastAlerts.length }}</summary>
+          <div class="track-trend-alert-grid">
+            <article class="track-trend-alert" *ngFor="let alert of forecastAlerts" [ngClass]="'track-trend-alert--' + alert.tone">
+              <div><span>{{ alert.sourceLabel }}</span><strong>{{ alert.title }}</strong></div>
+              <p>{{ alert.message }}</p>
+              <ul *ngIf="alert.reasons.length"><li *ngFor="let reason of alert.reasons">{{ reason }}</li></ul>
+            </article>
+          </div>
+        </details>
         <ng-template #noAlerts><p class="track-trend-empty-state">Sin alertas técnicas para este corte.</p></ng-template>
       </section>
 
