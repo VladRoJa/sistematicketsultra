@@ -84,6 +84,7 @@ export interface TrackVentaTotalForecastDataQuality {
   goal_status: TrackVentaTotalGoalStatus;
   goal_status_message: string | null;
   history_coverage: TrackVentaTotalForecastHistoryCoverage;
+  branch_projection_quality_issue: TrackVentaTotalForecastBranchHistoryWarning | null;
 }
 
 export interface TrackVentaTotalForecastHistoricalCurve {
