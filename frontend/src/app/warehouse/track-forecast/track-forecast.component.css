@@ -15,8 +15,12 @@
 .track-trend-section-heading h2 { color: #172033; font-size: 1.15rem; margin: .25rem 0; }
 .track-trend-section-heading p { color: #687386; font-size: .82rem; margin: 0; }
 .track-trend-cohort-grid { display: grid; gap: .75rem; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.track-trend-cohort { border: 1px solid #dfe4eb; min-width: 0; padding: .9rem; }
+.track-trend-cohort { appearance: none; background: #fff; border: 1px solid #dfe4eb; color: inherit; cursor: pointer; font: inherit; min-width: 0; padding: .9rem; text-align: left; width: 100%; }
 .track-trend-cohort--total { background: #f2f6fa; border-top: 3px solid #3f6f9f; }
+.track-trend-cohort:hover { border-color: #9cabbc; }
+.track-trend-cohort:focus-visible { outline: 3px solid rgba(63, 111, 159, .28); outline-offset: 2px; }
+.track-trend-cohort--active { border-color: #3f6f9f; box-shadow: inset 0 0 0 1px #3f6f9f; }
+.track-trend-cohort:disabled { cursor: default; opacity: .72; }
 .track-trend-cohort-title { align-items: flex-start; display: flex; gap: .75rem; justify-content: space-between; }
 .track-trend-cohort-title h3 { color: #273448; font-size: 1rem; margin: .2rem 0 0; }
 .track-trend-cohort-title > strong { color: #526075; font-size: .72rem; white-space: nowrap; }
@@ -33,6 +37,27 @@
 .track-trend-experimental span,
 .track-trend-experimental strong { display: block; }
 .track-trend-quality { color: #8a5a1f; }
+.track-trend-cohort-action { border-top: 1px solid #dfe4eb; color: #3f6f9f; display: block; font-size: .73rem; font-weight: 800; margin-top: .7rem; padding-top: .65rem; }
+.track-trend-cohort-detail { border-top: 1px solid #d8dee8; margin-top: 1rem; padding-top: 1rem; }
+.track-trend-cohort-detail-heading span { color: #687386; font-size: .7rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.track-trend-cohort-detail-heading h3 { color: #172033; font-size: 1.05rem; margin: .2rem 0; }
+.track-trend-cohort-detail-heading p { color: #526075; font-size: .78rem; margin: 0; }
+.track-trend-cohort-detail-note { background: #f6f8fa; border-left: 3px solid #8290a3; color: #526075; font-size: .75rem; line-height: 1.45; margin: .85rem 0; padding: .65rem .75rem; }
+.track-trend-cohort-table-wrap { overflow-x: auto; }
+.track-trend-cohort-table { border-collapse: collapse; min-width: 1180px; width: 100%; }
+.track-trend-cohort-table th,
+.track-trend-cohort-table td { border-bottom: 1px solid #e7ebf0; padding: .6rem .5rem; text-align: right; vertical-align: top; }
+.track-trend-cohort-table th { color: #687386; font-size: .67rem; font-weight: 800; line-height: 1.25; text-transform: uppercase; }
+.track-trend-cohort-table td { color: #273448; font-size: .76rem; }
+.track-trend-cohort-table th:first-child,
+.track-trend-cohort-table td:first-child,
+.track-trend-cohort-table th:nth-child(2),
+.track-trend-cohort-table td:nth-child(2) { text-align: left; }
+.track-trend-cohort-table td strong,
+.track-trend-cohort-table td small { display: block; }
+.track-trend-cohort-table td small { color: #687386; font-size: .66rem; line-height: 1.35; margin-top: .15rem; }
+.track-trend-cohort-branch { min-width: 150px; }
+.track-trend-cohort-quality-message { color: #8a5a1f !important; max-width: 190px; }
 .track-trend-driver-list { border-top: 1px solid #dfe4eb; }
 .track-trend-driver { align-items: center; border-bottom: 1px solid #e7ebf0; display: grid; gap: .75rem; grid-template-columns: 2rem minmax(150px, 1.1fr) minmax(125px, .8fr) minmax(190px, 1.4fr) minmax(120px, .75fr) minmax(90px, .55fr); padding: .7rem 0; }
 .track-trend-driver-rank { color: #526075; font-size: .85rem; text-align: center; }
@@ -80,6 +105,19 @@
   .track-trend-driver-name { grid-column: 2 / -1; }
   .track-trend-driver-impact { grid-column: 1 / -1; }
   .track-trend-driver-metric { min-width: 0; }
+  .track-trend-cohort-table-wrap { overflow-x: visible; }
+  .track-trend-cohort-table { min-width: 0; }
+  .track-trend-cohort-table thead { display: none; }
+  .track-trend-cohort-table,
+  .track-trend-cohort-table tbody { display: block; }
+  .track-trend-cohort-table tr { background: #f8fafc; border: 1px solid #dfe4eb; display: grid; gap: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: .65rem; padding: .35rem; }
+  .track-trend-cohort-table td { border-bottom: 1px solid #e7ebf0; display: block; min-width: 0; padding: .55rem; text-align: left; }
+  .track-trend-cohort-table td::before { color: #687386; content: attr(data-label); display: block; font-size: .63rem; font-weight: 800; margin-bottom: .2rem; text-transform: uppercase; }
+  .track-trend-cohort-table td:first-child,
+  .track-trend-cohort-table td:nth-child(2),
+  .track-trend-cohort-table td:last-child { grid-column: 1 / -1; }
+  .track-trend-cohort-table td:last-child { border-bottom: 0; }
+  .track-trend-cohort-quality-message { max-width: none; }
 }
 
 .track-forecast-header {
