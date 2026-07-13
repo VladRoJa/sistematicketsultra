@@ -89,6 +89,40 @@ class BranchHistoricalYearSeries(TypedDict):
     points: list[BranchHistoricalDailyPoint]
 
 
+class BranchHistoricalExpectedDailyPoint(TypedDict):
+    day: int
+    date: date
+    historical_progress_pct: Decimal
+    expected_daily_total: Decimal
+    expected_cumulative_total: Decimal
+    sample_years: list[int]
+    samples_count: int
+
+
+class BranchHistoricalExpectedExcludedYear(TypedDict):
+    year: int
+    reason: str
+
+
+class BranchHistoricalExpectedCurve(TypedDict):
+    status: Literal[
+        "available",
+        "no_comparable_history",
+        "missing_expected_month_total",
+    ]
+    method: str
+    target_month: date
+    cutoff_day: int
+    comparison_years_requested: list[int]
+    comparison_years_used: list[int]
+    comparison_years_excluded: list[BranchHistoricalExpectedExcludedYear]
+    samples_count: int
+    historical_expected_month_total: Decimal | None
+    historical_progress_pct_at_cutoff: Decimal | None
+    historical_expected_mtd_at_cutoff: Decimal | None
+    points: list[BranchHistoricalExpectedDailyPoint]
+
+
 def _get_track_daily_branch_version_candidates(
     *,
     sucursal_canon: str,
@@ -491,6 +525,153 @@ def build_branch_historical_daily_series(
         )
 
     return series
+
+
+def build_branch_historical_expected_daily_curve(
+    *,
+    historical_series: Sequence[BranchHistoricalYearSeries],
+    target_month: date,
+    cutoff_day: int,
+    historical_expected_month_total: Decimal | None,
+) -> BranchHistoricalExpectedCurve:
+    target_month = target_month.replace(day=1)
+    target_days_in_month = monthrange(target_month.year, target_month.month)[1]
+    if not 1 <= cutoff_day <= target_days_in_month:
+        raise ValueError("cutoff_day debe pertenecer a target_month.")
+
+    comparison_years_requested = sorted(
+        {series["year"] for series in historical_series}
+    )
+    usable_series: list[tuple[BranchHistoricalYearSeries, Decimal]] = []
+    excluded_years: list[BranchHistoricalExpectedExcludedYear] = []
+
+    for series in historical_series:
+        if series["status"] != "available":
+            excluded_years.append(
+                {"year": series["year"], "reason": series["status"]}
+            )
+            continue
+
+        if not series["points"]:
+            excluded_years.append(
+                {"year": series["year"], "reason": "no_points"}
+            )
+            continue
+
+        full_month_total = series["full_month_total"]
+        if full_month_total is None or full_month_total <= 0:
+            excluded_years.append(
+                {
+                    "year": series["year"],
+                    "reason": "non_positive_full_month_total",
+                }
+            )
+            continue
+
+        usable_series.append((series, full_month_total))
+
+    comparison_years_used = [series["year"] for series, _ in usable_series]
+    method = "aggregate_cumulative_total_divided_by_aggregate_month_total"
+
+    def empty_result(
+        status: Literal[
+            "no_comparable_history",
+            "missing_expected_month_total",
+        ],
+    ) -> BranchHistoricalExpectedCurve:
+        return {
+            "status": status,
+            "method": method,
+            "target_month": target_month,
+            "cutoff_day": cutoff_day,
+            "comparison_years_requested": comparison_years_requested,
+            "comparison_years_used": comparison_years_used,
+            "comparison_years_excluded": excluded_years,
+            "samples_count": len(usable_series),
+            "historical_expected_month_total": historical_expected_month_total,
+            "historical_progress_pct_at_cutoff": None,
+            "historical_expected_mtd_at_cutoff": None,
+            "points": [],
+        }
+
+    if historical_expected_month_total is None:
+        return empty_result("missing_expected_month_total")
+
+    if not usable_series:
+        return empty_result("no_comparable_history")
+
+    aggregate_month_total = sum(
+        (full_month_total for _, full_month_total in usable_series),
+        Decimal("0"),
+    )
+    sample_years = comparison_years_used.copy()
+    points: list[BranchHistoricalExpectedDailyPoint] = []
+    previous_progress = Decimal("0")
+    previous_expected_cumulative = Decimal("0")
+
+    for day in range(1, target_days_in_month + 1):
+        aggregate_cumulative_total = Decimal("0")
+        for series, _ in usable_series:
+            # A non-leap February keeps contributing its day-28 close on day 29.
+            source_day_index = min(day, len(series["points"])) - 1
+            aggregate_cumulative_total += series["points"][source_day_index][
+                "cumulative_total"
+            ]
+
+        historical_progress_pct = (
+            aggregate_cumulative_total / aggregate_month_total
+        )
+        if historical_progress_pct < previous_progress:
+            historical_progress_pct = previous_progress
+        if day == target_days_in_month:
+            historical_progress_pct = Decimal("1")
+
+        expected_cumulative_total = (
+            historical_expected_month_total * historical_progress_pct
+        )
+        if day == target_days_in_month:
+            expected_cumulative_total = historical_expected_month_total
+
+        expected_daily_total = (
+            expected_cumulative_total - previous_expected_cumulative
+        )
+        if expected_daily_total < 0:
+            expected_daily_total = Decimal("0")
+            expected_cumulative_total = previous_expected_cumulative
+
+        points.append(
+            {
+                "day": day,
+                "date": target_month.replace(day=day),
+                "historical_progress_pct": historical_progress_pct,
+                "expected_daily_total": expected_daily_total,
+                "expected_cumulative_total": expected_cumulative_total,
+                "sample_years": sample_years.copy(),
+                "samples_count": len(sample_years),
+            }
+        )
+        previous_progress = historical_progress_pct
+        previous_expected_cumulative = expected_cumulative_total
+
+    cutoff_point = points[cutoff_day - 1]
+    return {
+        "status": "available",
+        "method": method,
+        "target_month": target_month,
+        "cutoff_day": cutoff_day,
+        "comparison_years_requested": comparison_years_requested,
+        "comparison_years_used": comparison_years_used,
+        "comparison_years_excluded": excluded_years,
+        "samples_count": len(usable_series),
+        "historical_expected_month_total": historical_expected_month_total,
+        "historical_progress_pct_at_cutoff": cutoff_point[
+            "historical_progress_pct"
+        ],
+        "historical_expected_mtd_at_cutoff": cutoff_point[
+            "expected_cumulative_total"
+        ],
+        "points": points,
+    }
 
 
 def _to_float(value: Any) -> float | None:
