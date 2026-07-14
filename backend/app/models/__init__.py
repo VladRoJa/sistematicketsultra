@@ -94,6 +94,12 @@ from .rpa import (
     GascaSmsRequestStatus,
 )
 
+
+from .routine_control import (
+    RoutineControlPipelineRunORM,
+    RoutineControlProviderRunORM,
+)
+
 # -------------------------------------------------------------------------------
 # EXPORTACIONES: Control de qué modelos estarán disponibles al importar app.models
 # -------------------------------------------------------------------------------
@@ -170,6 +176,8 @@ __all__ = [
     "PermissionRouteMapORM",
     "PermissionGrantORM",
     "PermissionGrantAuditLogORM",
+    "RoutineControlPipelineRunORM",
+    "RoutineControlProviderRunORM",
     "GascaSmsRequestORM",
     "GascaSmsRequestStatus",
 ]
