@@ -45,3 +45,21 @@ class RegisterRoutineEvidenceCommand:
     payload_hash: str
     source_metadata: dict[str, Any] | None
     observed_at_utc: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class LinkRoutineMemberEvidenceCommand:
+    member_id: int
+    evidence_id: int
+    match_method: str
+    provider_run_id: int | None = None
+    linked_at_utc: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class UnlinkRoutineMemberEvidenceCommand:
+    member_id: int
+    evidence_id: int
+    unlink_reason: str
+    provider_run_id: int | None = None
+    unlinked_at_utc: datetime | None = None
