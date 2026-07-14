@@ -34,3 +34,17 @@ class RoutineControlMemberEvidenceNotFound(RoutineControlMemberEvidenceError):
 
 class RoutineControlMemberEvidenceConflict(RoutineControlMemberEvidenceError):
     """El estado actual de la asociación impide la operación solicitada."""
+
+
+class RoutineControlReconciliationError(RuntimeError):
+    """Error base de reconciliación de estado de Control de Rutinas."""
+
+
+class RoutineControlReconciliationValidationError(
+    RoutineControlReconciliationError
+):
+    """El comando de reconciliación no cumple sus reglas de validación."""
+
+
+class RoutineControlReconciliationNotFound(RoutineControlReconciliationError):
+    """No existe el miembro solicitado para reconciliación."""
