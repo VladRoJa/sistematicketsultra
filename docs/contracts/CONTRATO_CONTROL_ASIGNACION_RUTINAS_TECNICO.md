@@ -9823,3 +9823,1150 @@ Después se cerrarán:
 * Ventanas.
 * Mapeos.
 * Primer modelo Alembic.
+
+
+# Bloque 8: validación de fuentes reales y cierre de llaves técnicas
+
+**Versión:** 1.1
+**Estado:** Validado con fuentes reales
+**Corte analizado:** 1 al 12 de julio de 2026
+**Archivos analizados:**
+
+* `gasca_ventas_nuevas_socios.xlsx`
+* `tg_workout.xlsx`
+
+---
+
+## 283. Resultado general de la validación
+
+La revisión de los archivos reales permitió cerrar:
+
+* Identidad del socio entre Gasca y Trainingym.
+* Fecha oficial de cohorte.
+* Regla exacta para reconocer una rutina.
+* Identidad de las evidencias Trainingym.
+* Uso técnico de `IDFolio`.
+* Jerarquía de conciliación.
+* Tratamiento de sucursales y centros.
+* Reglas de filas no operativas.
+* Manejo de correos vacíos o inconsistentes.
+
+---
+
+## 284. Estructura real de Gasca
+
+El archivo contiene 27 columnas.
+
+Campos relevantes:
+
+```text
+IDSocio
+Pin
+Sucursal
+Nombre
+ApellidoPaterno
+ApellidoMaterno
+Telefono
+Email
+FechaCreacion
+FechaPago
+IDFolio
+TotalPagado
+```
+
+En el corte analizado:
+
+```text
+Registros: 854
+IDSocio no nulos: 854
+IDSocio distintos: 854
+Pin no nulos: 854
+Pin distintos: 854
+Correos no vacíos: 851
+Correos vacíos: 3
+Sucursales: 26
+```
+
+---
+
+## 285. Fecha de cohorte
+
+La fecha oficial será:
+
+```text
+FechaPago
+```
+
+`FechaCreacion` no deberá determinar la cohorte.
+
+En el archivo analizado existen cuentas creadas desde 2020 que realizaron una venta nueva en julio de 2026.
+
+Por tanto:
+
+```text
+sale_date = DATE(FechaPago en America/Tijuana)
+cohort_month = primer día del mes de sale_date
+```
+
+Ejemplo:
+
+```text
+FechaCreacion = 2020-09-21
+FechaPago = 2026-07-01
+
+Cohorte = 2026-07-01
+```
+
+---
+
+## 286. Identidad del socio
+
+Gasca `IDSocio` corresponde con Trainingym `Idsocioexterno`.
+
+Se utilizarán los siguientes conceptos:
+
+```text
+Gasca.IDSocio
+    → external_member_id canónico del provider Gasca
+
+Trainingym.Idsocioexterno
+    → referencia al IDSocio de Gasca
+
+Trainingym.id
+    → identificador interno del perfil o cuenta Trainingym
+```
+
+`Pin` se conservará como metadata operativa, pero no será la llave de conciliación con Trainingym.
+
+---
+
+## 287. Jerarquía de conciliación
+
+La conciliación seguirá esta prioridad:
+
+### Nivel 1: identificador externo
+
+```text
+gasca.IDSocio = trainingym.Idsocioexterno
+```
+
+Esta será la coincidencia primaria.
+
+### Nivel 2: correo exacto normalizado
+
+Cuando Trainingym no entregue `Idsocioexterno` o no se encuentre el ID:
+
+```text
+trim(lower(gasca.Email))
+=
+trim(lower(trainingym.Email))
+```
+
+### Nivel 3: incidencia
+
+Si el ID y el correo apuntan a socios Gasca diferentes:
+
+```text
+IDENTITY_CONFLICT
+```
+
+No se conciliará automáticamente.
+
+### Resultado del corte validado
+
+```text
+Socios con rutina por unión de llaves: 226
+Coincidencia por ID: 218
+Coincidencia por correo: 218
+Coincidencia por ambos: 210
+Solo por ID: 8
+Solo por correo: 8
+Conflictos ID contra correo: 0
+```
+
+---
+
+## 288. Correos diferentes entre sistemas
+
+Una diferencia de correo no invalidará una coincidencia por ID.
+
+Casos observados:
+
+```text
+Gasca: dmdh2005@gmail.com
+TG:    dmvh2005@gmail.com
+IDSocio/Idsocioexterno coincidente
+```
+
+También existen correos cambiados completamente entre ambos sistemas.
+
+Regla:
+
+```text
+Si IDSocio = Idsocioexterno:
+    aceptar identidad
+    conservar ambos correos
+    abrir advertencia EMAIL_DIFFERENCE cuando corresponda
+```
+
+La advertencia no será bloqueante para reconocer una rutina.
+
+---
+
+## 289. Correo vacío
+
+El correo vacío no será siempre una incidencia bloqueante.
+
+Reglas:
+
+```text
+Correo vacío + coincidencia por ID + rutina válida
+    → CON_RUTINA
+    → advertencia EMAIL_EMPTY
+
+Correo vacío + sin coincidencia por ID
+    → clasificación INCIDENT
+    → EMAIL_EMPTY_BLOCKING
+```
+
+Esto permite reconocer una rutina cuando existe evidencia inequívoca por identificador externo.
+
+---
+
+## 290. Identidad del registro Gasca
+
+`IDFolio` no es único por socio.
+
+En el corte analizado existen 14 folios compartidos por dos registros. Estos casos corresponden a operaciones donde:
+
+* La sucursal coincide.
+* `FechaPago` coincide.
+* Un socio normalmente tiene importe pagado.
+* Otro socio aparece con importe cero.
+
+Por tanto:
+
+```text
+IDFolio
+```
+
+no podrá utilizarse por sí solo como `source_record_id`.
+
+### Llave recomendada
+
+```text
+source_record_id =
+    IDSocio + ":" + IDFolio_raw
+```
+
+Llave técnica:
+
+```text
+source_identity_key =
+    sha256(
+        "gasca|new_members|"
+        + IDSocio
+        + "|"
+        + IDFolio_raw
+    )
+```
+
+### Fallback
+
+Cuando `IDFolio` no esté disponible:
+
+```text
+sha256(
+    "gasca|new_members|"
+    + IDSocio
+    + "|"
+    + FechaPago normalizada
+)
+```
+
+### Regla de tipo
+
+`IDFolio` deberá tratarse como texto.
+
+No se convertirá a:
+
+* `float`
+* `double`
+* entero JavaScript
+* número Excel calculado
+
+El archivo actual lo presenta en notación científica y puede superar la precisión numérica segura.
+
+---
+
+## 291. Identidad entre cohortes
+
+`IDSocio` representa a la persona o cuenta, pero no por sí solo el evento de alta.
+
+Una persona podrá aparecer nuevamente en una cohorte posterior.
+
+Por ello:
+
+```text
+UNIQUE(IDSocio)
+```
+
+no será una restricción válida para la tabla de cohortes.
+
+La identidad del caso utilizará:
+
+```text
+IDSocio + IDFolio
+```
+
+o su fallback con `FechaPago`.
+
+---
+
+## 292. Estructura real de Trainingym
+
+El archivo contiene 14 columnas:
+
+```text
+id
+Idsocioexterno
+NombreApellidos
+Email
+Edad
+Movil
+Sexo
+Técnico
+NºRutinas
+NºPesajes
+Total Rutinas-Pesaje
+Valoración
+Fecha
+Centro Origen
+```
+
+En el corte analizado:
+
+```text
+Filas operativas: 2821
+Filas Automático: 1348
+Filas con técnico humano: 1473
+Filas humanas con rutina: 1472
+Filas humanas solo con pesaje: 1
+Centros: 25
+```
+
+---
+
+## 293. Filas no operativas de Trainingym
+
+El export contiene al final:
+
+* Una fila `Total`.
+* Una fila vacía.
+* Una fila con el texto `Filtros aplicados`.
+
+El normalizador deberá excluir filas cuando:
+
+```text
+id está vacío
+id = "Total"
+id comienza con "Filtros aplicados:"
+Fecha está vacía
+Centro Origen está vacío
+```
+
+La fila Total no deberá convertirse en una evidencia.
+
+---
+
+## 294. Regla exacta de rutina válida
+
+Una fila será evidencia de rutina únicamente cuando:
+
+```text
+id válido
+Fecha válida
+Técnico no vacío
+Técnico no automático
+NºRutinas > 0
+```
+
+Pseudocódigo:
+
+```python
+is_valid_routine = (
+    valid_trainingym_id
+    and valid_date
+    and technician_is_human
+    and routine_count > 0
+)
+```
+
+No será suficiente:
+
+```text
+Técnico != Automático
+```
+
+porque el reporte también contiene pesajes realizados por técnicos humanos.
+
+---
+
+## 295. Rutinas automáticas
+
+Se excluirán filas donde el técnico normalizado contenga:
+
+```text
+automat
+```
+
+Ejemplos:
+
+```text
+Automático
+Automatico
+AUTOMATICO
+```
+
+Una rutina automática no demostrará acompañamiento humano.
+
+Estas filas se contabilizarán como:
+
+```text
+excluded_reason = AUTOMATIC_ROUTINE
+```
+
+---
+
+## 296. Pesajes
+
+Las filas con:
+
+```text
+NºRutinas vacío o cero
+NºPesajes > 0
+```
+
+no serán evidencia de rutina.
+
+Podrán conservarse únicamente como metadata o registro rechazado:
+
+```text
+excluded_reason = WEIGHING_ONLY
+```
+
+No modificarán el estado del socio.
+
+---
+
+## 297. Fecha Trainingym
+
+`Fecha` se entrega como una fecha Excel sin hora.
+
+Se almacenará inicialmente como:
+
+```text
+DATE
+```
+
+No se inventará un timestamp.
+
+Concepto recomendado:
+
+```text
+routine_activity_date
+```
+
+El campo representa el día en que el reporte informa actividad de rutina.
+
+`first_routine_at` y `latest_routine_at` podrán implementarse como fechas mientras la fuente no entregue mayor precisión.
+
+---
+
+## 298. Identidad de evidencia Trainingym
+
+Trainingym no entrega un ID individual de rutina en este reporte.
+
+El campo `id` se repite en diferentes fechas, por lo que representa al perfil Trainingym y no a una rutina individual.
+
+En las 1,472 filas válidas, esta combinación fue única:
+
+```text
+id
+Fecha
+Técnico
+Centro Origen
+```
+
+Llave recomendada:
+
+```text
+evidence_identity_key =
+    sha256(
+        "trainingym|workout|"
+        + id
+        + "|"
+        + Fecha
+        + "|"
+        + Técnico normalizado
+        + "|"
+        + Centro Origen normalizado
+    )
+```
+
+`NºRutinas` no formará parte de la identidad lógica.
+
+Se almacenará como:
+
+```text
+routine_count
+```
+
+El hash completo de la fila permitirá detectar si el contador fue corregido posteriormente.
+
+---
+
+## 299. Datos de evidencia Trainingym
+
+Mapeo recomendado:
+
+```text
+Trainingym.id
+    → provider_member_id
+
+Trainingym.Idsocioexterno
+    → external_member_id / Gasca IDSocio
+
+Trainingym.Email
+    → email_original
+
+Trainingym.Fecha
+    → routine_activity_date
+
+Trainingym.Técnico
+    → instructor_name
+
+Trainingym.Centro Origen
+    → provider_center_key / provider_center_name
+
+Trainingym.NºRutinas
+    → routine_count
+
+Trainingym.NºPesajes
+    → weighing_count
+```
+
+`external_routine_id` permanecerá nulo porque el reporte no lo entrega.
+
+---
+
+## 300. Múltiples evidencias
+
+El mismo socio puede aparecer:
+
+* En varias fechas.
+* Con diferentes técnicos.
+* Con más de un perfil Trainingym.
+* Con varias rutinas.
+
+No se reducirá el archivo a una sola fila por correo antes de persistir.
+
+Cada evidencia válida se conservará.
+
+El dominio calculará:
+
+```text
+Primera fecha conocida de rutina
+Última fecha conocida de rutina
+Instructor más reciente
+Cantidad de evidencias
+```
+
+---
+
+## 301. Perfiles duplicados Trainingym
+
+Se observaron correos asociados a varios valores de `id`.
+
+Esto coincide con la existencia operativa de cuentas duplicadas en Trainingym.
+
+Reglas:
+
+* `id` se conserva como identificador del perfil TG.
+* `Idsocioexterno` tiene prioridad para identificar al socio Gasca.
+* Dos perfiles TG podrán relacionarse con el mismo socio.
+* No se fusionarán físicamente desde Suite.
+* Se podrá abrir una advertencia:
+
+```text
+MULTIPLE_TRAININGYM_PROFILES
+```
+
+La existencia de varios perfiles no invalida una rutina cuando la identidad externa es inequívoca.
+
+---
+
+## 302. Sucursal operativa y centro de rutina
+
+La sucursal del caso será siempre:
+
+```text
+Gasca.Sucursal
+```
+
+`Trainingym.Centro Origen` será un atributo de la evidencia.
+
+Se observaron rutinas creadas en un centro diferente de la sucursal de venta.
+
+Por tanto:
+
+```text
+Sucursal Gasca != Centro Trainingym
+```
+
+no será una incidencia bloqueante.
+
+Podrá registrarse como:
+
+```text
+CROSS_BRANCH_ROUTINE
+```
+
+para análisis operativo, pero la rutina será válida.
+
+---
+
+## 303. Alias de centros Trainingym
+
+Mapeo validado:
+
+```text
+UltraGym & Fitness - Azahares
+    → AZAHARES CUL
+
+UltraGym & Fitness - Carrousel
+    → CARROUSEL TJ
+
+UltraGym & Fitness - Independencia.
+    → INDEPENDENCIA
+
+UltraGym & Fitness - Insurgentes
+    → INSURGENTES
+
+UltraGym & Fitness - La Paz
+    → PASEO LA PAZ
+
+UltraGym & Fitness - Loma Bonita
+    → LOMA BONITA
+
+UltraGym & Fitness - Metepec
+    → METEPEC
+
+UltraGym & Fitness - Misión Ensenada
+    → MISION ENS
+
+UltraGym & Fitness - Pabellón Rosarito
+    → PABELLON RTO
+
+UltraGym & Fitness - Papalote
+    → PAPALOTE TJ
+
+UltraGym & Fitness - Paseo 2000
+    → PASEO 2000
+
+UltraGym & Fitness - Saltillo Norte
+    → SALTILLO VILLALTA
+
+UltraGym & Fitness - San Isidro
+    → SAN ISIDRO CUL
+
+UltraGym & Fitness - San Luis RC
+    → SAN LUIS
+
+UltraGym & Fitness - Santa Fe
+    → SANTA FE
+
+UltraGym & Fitness - Sendero CLN
+    → SEND CUL
+
+UltraGym & Fitness - Sendero Chihuahua
+    → SEND CHIH
+
+UltraGym & Fitness - Sendero Ixtapaluca
+    → IXTAPALUCA
+
+UltraGym & Fitness - Sendero Mexicali
+    → SEND MXL
+
+UltraGym & Fitness - Sendero Saltillo Sur
+    → SEND SALTILLO
+
+UltraGym & Fitness - Sendero Santa Catarina
+    → STA CATARINA
+
+UltraGym & Fitness - Tecnológico
+    → TEC MXL
+
+UltraGym & Fitness - Tlalnepantla
+    → TLALNEPANTLA
+
+UltraGym & Fitness - Villa Verde
+    → VILLA VERDE
+
+UltraGym & Fitness - Villa del Rey
+    → VILLAS DEL REY
+```
+
+El mapeo deberá almacenarse mediante el servicio canónico de aliases de sucursales, no mediante condicionales dentro del provider.
+
+---
+
+## 304. Serranía
+
+Gasca contiene:
+
+```text
+SERRANIA: 32 socios nuevos
+```
+
+Trainingym no contiene un centro Serranía en el corte analizado.
+
+Regla:
+
+```text
+Si una sucursal Gasca no tiene cobertura en el provider de rutinas:
+    no clasificar sus socios como SIN_RUTINA confirmado
+    abrir incidencia de cobertura del provider
+```
+
+Código recomendado:
+
+```text
+ROUTINE_PROVIDER_BRANCH_NOT_CONFIGURED
+```
+
+La incidencia podrá ser una incidencia de sucursal asociada a los casos afectados, evitando crear falsos pendientes.
+
+---
+
+## 305. Reglas de conciliación definitivas
+
+Pseudocódigo:
+
+```python
+def resolve_member(evidence):
+    if evidence.external_member_id:
+        member = find_gasca_member_by_idsocio(
+            evidence.external_member_id
+        )
+
+        if member:
+            if (
+                evidence.email_normalized
+                and member.email_normalized
+                and evidence.email_normalized
+                    != member.email_normalized
+            ):
+                create_warning("EMAIL_DIFFERENCE")
+
+            return member
+
+    if evidence.email_normalized:
+        candidates = find_gasca_members_by_email(
+            evidence.email_normalized
+        )
+
+        if len(candidates) == 1:
+            return candidates[0]
+
+        if len(candidates) > 1:
+            create_incident("EMAIL_MATCH_AMBIGUOUS")
+            return None
+
+    create_incident("ROUTINE_MEMBER_NOT_FOUND")
+    return None
+```
+
+Si la búsqueda por ID y la búsqueda por correo regresan socios diferentes:
+
+```text
+IDENTITY_CONFLICT
+```
+
+La evidencia no se asociará automáticamente.
+
+---
+
+## 306. Correcciones al contrato anterior
+
+Se reemplaza la decisión:
+
+```text
+Conciliación únicamente por correo normalizado
+```
+
+por:
+
+```text
+Conciliación primaria por IDSocio/Idsocioexterno
+con fallback por correo normalizado.
+```
+
+También se reemplaza:
+
+```text
+Todo correo vacío es una incidencia bloqueante
+```
+
+por:
+
+```text
+El correo vacío es bloqueante únicamente cuando
+no existe una identidad externa suficiente para conciliar.
+```
+
+Se agrega como condición obligatoria de evidencia:
+
+```text
+NºRutinas > 0
+```
+
+---
+
+## 307. Impacto sobre el script anterior
+
+El script anterior:
+
+* Cruza únicamente por correo.
+* Ignora `Idsocioexterno`.
+* Conserva solo la última fila por correo.
+* No valida `NºRutinas`.
+* Pierde el historial de evidencias.
+* Puede perder coincidencias por correos corregidos.
+* Puede interpretar un pesaje humano como rutina.
+
+El nuevo módulo no replicará esas limitaciones.
+
+---
+
+## 308. Pendiente de validación histórica
+
+El corte actual confirma la identidad entre sistemas, pero solo contiene una cohorte mensual.
+
+Antes de aplicar la migración operativa deberá revisarse al menos otro mes de Gasca para confirmar:
+
+* Reaparición de un mismo `IDSocio` en distintas cohortes.
+* Cambio de `IDFolio` entre eventos.
+* Estabilidad del `IDSocio`.
+* Estabilidad de la llave `IDSocio + IDFolio`.
+* Casos de alta repetida dentro del mismo mes.
+
+Este pendiente no impide comenzar los modelos de runs y providers, pero deberá cerrarse antes de fijar el constraint definitivo de identidad del caso.
+
+
+## 309. Validación con exportación directa de junio
+
+Se analizó una exportación descargada directamente desde Gasca:
+
+```text
+KpiUnoSociosNuevosDetallado20260713185413.xlsx
+```
+
+La ventana contenida corresponde al mes completo de junio de 2026:
+
+```text
+FechaPago mínima: 2026-06-01 05:09:41
+FechaPago máxima: 2026-06-30 22:20:04
+Registros: 2,497
+Sucursales: 26
+```
+
+El archivo utiliza:
+
+```text
+Hoja: Socios
+Columnas: 27
+```
+
+La estructura coincide con la exportación utilizada para julio.
+
+---
+
+## 310. Unicidad validada en junio
+
+Resultados:
+
+```text
+IDSocio no nulos: 2,497
+IDSocio distintos: 2,497
+
+IDFolio no nulos: 2,497
+IDFolio distintos: 2,466
+IDFolio compartidos: 31
+
+Combinaciones IDSocio + IDFolio: 2,497
+Combinaciones duplicadas: 0
+```
+
+Esto confirma que:
+
+```text
+IDSocio
+```
+
+es adecuado como identificador externo de la persona o cuenta dentro de Gasca.
+
+También confirma que:
+
+```text
+IDSocio + IDFolio
+```
+
+es una llave adecuada para identificar el evento de venta nueva.
+
+---
+
+## 311. IDFolio no es una llave individual
+
+En junio existen 31 folios compartidos por dos socios.
+
+La mayoría corresponde al patrón:
+
+```text
+Socio principal: TotalPagado = importe de la operación
+Socio adicional: TotalPagado = 0
+```
+
+También existen folios compartidos entre nombres de sucursal diferentes.
+
+Por tanto, queda prohibido utilizar:
+
+```text
+UNIQUE(IDFolio)
+```
+
+o:
+
+```text
+source_record_id = IDFolio
+```
+
+La llave definitiva será:
+
+```text
+source_record_id =
+    str(IDSocio) + ":" + str(IDFolio)
+```
+
+Y:
+
+```text
+source_identity_key =
+    sha256(
+        "gasca|new_members|"
+        + str(IDSocio)
+        + "|"
+        + str(IDFolio)
+    )
+```
+
+`IDFolio` deberá mantenerse como texto.
+
+---
+
+## 312. PIN no único
+
+En el archivo directo se encontraron PIN repetidos entre personas diferentes.
+
+Ejemplos observados:
+
+```text
+PIN 11215 → dos IDSocio diferentes
+PIN 8123  → dos IDSocio diferentes
+```
+
+Por tanto:
+
+```text
+Pin
+```
+
+se conservará únicamente como metadata operativa.
+
+No podrá utilizarse para:
+
+* Identidad.
+* Constraint único.
+* Conciliación con Trainingym.
+* Idempotencia.
+
+---
+
+## 313. Validación del correo
+
+Aunque no existen celdas de correo vacías en junio, se encontraron valores que no son correos válidos.
+
+Ejemplo:
+
+```text
+Email = "195"
+```
+
+aparece en cuatro registros diferentes.
+
+Por tanto, la validación no deberá limitarse a:
+
+```text
+email is not null
+email != ""
+```
+
+También deberá comprobar una estructura mínima de correo.
+
+Reglas:
+
+```text
+Correo válido
+    → disponible como fallback de conciliación
+
+Correo vacío o con formato inválido
+    + IDSocio disponible
+    → advertencia no bloqueante
+
+Correo vacío o inválido
+    + sin identificador externo conciliable
+    → incidencia bloqueante
+```
+
+El correo nunca será la identidad principal.
+
+---
+
+## 314. Comparación junio contra julio
+
+Al comparar:
+
+```text
+Junio 2026: 2,497 socios
+Julio 1–12 de 2026: 854 socios
+```
+
+se obtuvo:
+
+```text
+IDSocio repetidos entre meses: 0
+Correos repetidos entre meses: 0
+IDSocio + IDFolio repetidos: 0
+```
+
+No se observó en estos dos cortes un mismo socio reapareciendo como venta nueva.
+
+Esto no impide que ocurra históricamente.
+
+El modelo seguirá permitiendo:
+
+```text
+Mismo IDSocio
++
+Nuevo IDFolio
+=
+Nuevo evento de venta y nueva cohorte
+```
+
+Si se vuelve a observar:
+
+```text
+Mismo IDSocio
++
+Mismo IDFolio
+```
+
+se tratará como la misma venta ya procesada y se aplicará upsert idempotente.
+
+---
+
+## 315. Mapeo técnico definitivo de Gasca
+
+```text
+Gasca.IDSocio
+    → external_member_id
+
+Gasca.IDFolio
+    → external_sale_id
+
+Gasca.IDSocio + ":" + Gasca.IDFolio
+    → source_record_id
+
+Gasca.Pin
+    → metadata.pin
+
+Gasca.FechaPago
+    → sale_datetime_original
+    → sale_date
+    → cohort_month
+
+Gasca.FechaCreacion
+    → source_account_created_at
+
+Gasca.Sucursal
+    → external_branch_name
+
+Gasca.Email
+    → email_original
+    → email_normalized cuando sea válido
+```
+
+---
+
+## 316. Formato de fechas
+
+Las fechas del archivo directo se entregan como texto:
+
+```text
+dd-mm-yyyy HH:mm:ss
+```
+
+El normalizador Gasca deberá analizarlas explícitamente.
+
+Ejemplo:
+
+```text
+30-06-2026 22:20:04
+```
+
+Resultado:
+
+```text
+sale_datetime_original = 2026-06-30 22:20:04 America/Tijuana
+sale_date = 2026-06-30
+cohort_month = 2026-06-01
+```
+
+No se deberá depender de que Excel entregue una fecha nativa.
+
+---
+
+## 317. Decisión final de identidad Gasca
+
+Queda cerrado el contrato:
+
+```text
+Identidad externa de persona:
+    IDSocio
+
+Identidad del evento de venta nueva:
+    IDSocio + IDFolio
+
+Identidad técnica:
+    hash(provider + dataset + IDSocio + IDFolio)
+
+Conciliación primaria con rutinas:
+    IDSocio = Idsocioexterno
+
+Conciliación secundaria:
+    correo normalizado válido
+```
+
+Ya no queda pendiente revisar otro mes para definir la llave inicial del modelo.
+
+Una validación histórica posterior podrá descubrir casos especiales, pero no bloquea la creación de los primeros modelos y migraciones.
