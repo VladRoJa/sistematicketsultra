@@ -755,6 +755,207 @@ class RoutineControlMemberORM(db.Model):
         back_populates="member",
         passive_deletes=True,
     )
+    incidents = db.relationship(
+        "RoutineControlIncidentORM",
+        back_populates="member",
+        passive_deletes=True,
+    )
+    decisions = db.relationship(
+        "RoutineControlDecisionORM",
+        back_populates="member",
+        passive_deletes=True,
+    )
+
+
+class RoutineControlIncidentORM(db.Model):
+    __tablename__ = "routine_control_incidents"
+
+    __table_args__ = (
+        db.CheckConstraint(
+            """
+            incident_type IN (
+                'EMAIL_VACIO',
+                'EMAIL_DUPLICADO_GASCA',
+                'COINCIDENCIA_AMBIGUA',
+                'SUCURSAL_NO_RESUELTA',
+                'FECHA_VENTA_INVALIDA',
+                'COHORTE_NO_DETERMINADA',
+                'REGISTRO_ORIGEN_INVALIDO'
+            )
+            """,
+            name="ck_routine_control_incidents_incident_type",
+        ),
+        db.CheckConstraint(
+            "is_active = false OR resolved_at_utc IS NULL",
+            name="ck_routine_control_incidents_active_resolution",
+        ),
+        db.Index(
+            "ix_routine_control_incidents_member_active_blocking",
+            "member_id",
+            "is_active",
+            "is_blocking",
+        ),
+        db.Index(
+            "uq_routine_control_incidents_active_member_type",
+            "member_id",
+            "incident_type",
+            unique=True,
+            postgresql_where=db.text("is_active = true"),
+        ),
+    )
+
+    id = db.Column(
+        db.BigInteger,
+        primary_key=True,
+        autoincrement=True,
+    )
+    member_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey(
+            "routine_control_members.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+    )
+    incident_type = db.Column(
+        db.String(64),
+        nullable=False,
+    )
+    is_blocking = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=True,
+        server_default=db.text("true"),
+    )
+    is_active = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=True,
+        server_default=db.text("true"),
+    )
+    detected_at_utc = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+    )
+    resolved_at_utc = db.Column(
+        db.DateTime(timezone=True),
+        nullable=True,
+    )
+    resolution_note = db.Column(
+        db.Text,
+        nullable=True,
+    )
+    created_at_utc = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        server_default=db.text("now()"),
+    )
+    updated_at_utc = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        server_default=db.text("now()"),
+        onupdate=db.func.now(),
+    )
+
+    member = db.relationship(
+        "RoutineControlMemberORM",
+        back_populates="incidents",
+    )
+
+
+class RoutineControlDecisionORM(db.Model):
+    __tablename__ = "routine_control_decisions"
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "decision_type IN ('NO_DESEA_RUTINA')",
+            name="ck_routine_control_decisions_decision_type",
+        ),
+        db.CheckConstraint(
+            """
+            effective_to_utc IS NULL
+            OR effective_to_utc > effective_from_utc
+            """,
+            name="ck_routine_control_decisions_effective_range",
+        ),
+        db.CheckConstraint(
+            "is_active = false OR revoked_at_utc IS NULL",
+            name="ck_routine_control_decisions_active_revocation",
+        ),
+        db.Index(
+            "ix_routine_control_decisions_member_type_active",
+            "member_id",
+            "decision_type",
+            "is_active",
+        ),
+        db.Index(
+            "uq_routine_control_decisions_active_member_type",
+            "member_id",
+            "decision_type",
+            unique=True,
+            postgresql_where=db.text("is_active = true"),
+        ),
+    )
+
+    id = db.Column(
+        db.BigInteger,
+        primary_key=True,
+        autoincrement=True,
+    )
+    member_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey(
+            "routine_control_members.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+    )
+    decision_type = db.Column(
+        db.String(64),
+        nullable=False,
+    )
+    is_active = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=True,
+        server_default=db.text("true"),
+    )
+    decided_at_utc = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+    )
+    effective_from_utc = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+    )
+    effective_to_utc = db.Column(
+        db.DateTime(timezone=True),
+        nullable=True,
+    )
+    revoked_at_utc = db.Column(
+        db.DateTime(timezone=True),
+        nullable=True,
+    )
+    decision_reason = db.Column(
+        db.Text,
+        nullable=True,
+    )
+    created_at_utc = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        server_default=db.text("now()"),
+    )
+    updated_at_utc = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        server_default=db.text("now()"),
+        onupdate=db.func.now(),
+    )
+
+    member = db.relationship(
+        "RoutineControlMemberORM",
+        back_populates="decisions",
+    )
 
 
 class RoutineAssignmentEvidenceORM(db.Model):
