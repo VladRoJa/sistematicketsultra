@@ -1,3 +1,5 @@
+from sqlalchemy.dialects.postgresql import JSONB
+
 from app import db
 
 
@@ -479,4 +481,662 @@ class RoutineControlProviderRunORM(db.Model):
     pipeline_run = db.relationship(
         "RoutineControlPipelineRunORM",
         back_populates="provider_runs",
+    )
+
+
+class RoutineControlMemberORM(db.Model):
+    __tablename__ = "routine_control_members"
+
+    __table_args__ = (
+        db.CheckConstraint(
+            """
+            classification_status IN (
+                'CLASSIFIED',
+                'INCIDENT'
+            )
+            """,
+            name="ck_routine_control_members_classification_status",
+        ),
+        db.CheckConstraint(
+            """
+            current_status IS NULL
+            OR current_status IN (
+                'SIN_RUTINA',
+                'CON_RUTINA',
+                'NO_DESEA_RUTINA'
+            )
+            """,
+            name="ck_routine_control_members_current_status",
+        ),
+        db.CheckConstraint(
+            """
+            (
+                classification_status = 'CLASSIFIED'
+                AND current_status IS NOT NULL
+            )
+            OR
+            (
+                classification_status = 'INCIDENT'
+                AND current_status IS NULL
+            )
+            """,
+            name="ck_routine_control_members_status_consistency",
+        ),
+        db.CheckConstraint(
+            "status_version >= 1",
+            name="ck_routine_control_members_status_version",
+        ),
+        db.CheckConstraint(
+            """
+            cohort_month
+            = date_trunc('month', cohort_month)::date
+            """,
+            name="ck_routine_control_members_cohort_month",
+        ),
+        db.CheckConstraint(
+            """
+            routine_assignment_type IS NULL
+            OR routine_assignment_type IN (
+                'PREEXISTENTE',
+                'MISMO_DIA',
+                'POSTERIOR'
+            )
+            """,
+            name="ck_routine_control_members_assignment_type",
+        ),
+        db.CheckConstraint(
+            """
+            (
+                first_routine_at IS NULL
+                AND latest_routine_at IS NULL
+                AND routine_assignment_type IS NULL
+            )
+            OR
+            (
+                first_routine_at IS NOT NULL
+                AND latest_routine_at IS NOT NULL
+                AND routine_assignment_type IS NOT NULL
+                AND first_routine_at <= latest_routine_at
+            )
+            """,
+            name="ck_routine_control_members_routine_dates",
+        ),
+        db.UniqueConstraint(
+            "source_system",
+            "source_record_id",
+            name="uq_routine_control_members_source_record",
+        ),
+        db.UniqueConstraint(
+            "source_system",
+            "source_identity_key",
+            name="uq_routine_control_members_identity_key",
+        ),
+        db.Index(
+            "ix_routine_control_members_cohort_month",
+            "cohort_month",
+        ),
+        db.Index(
+            "ix_routine_control_members_sucursal_cohort",
+            "sucursal_id",
+            "cohort_month",
+        ),
+        db.Index(
+            "ix_routine_control_members_status_cohort",
+            "current_status",
+            "cohort_month",
+        ),
+        db.Index(
+            "ix_routine_control_members_classification_cohort",
+            "classification_status",
+            "cohort_month",
+        ),
+        db.Index(
+            "ix_routine_control_members_email_normalized",
+            "email_normalized",
+        ),
+        db.Index(
+            "ix_routine_control_members_branch_status_cohort",
+            "sucursal_id",
+            "current_status",
+            "cohort_month",
+        ),
+        db.Index(
+            "ix_routine_control_members_sale_date",
+            "sale_date",
+        ),
+        db.Index(
+            "ix_routine_control_members_external_member",
+            "source_system",
+            "external_member_id",
+        ),
+    )
+
+    id = db.Column(
+        db.BigInteger,
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    source_system = db.Column(
+        db.String(80),
+        nullable=False,
+    )
+    source_record_id = db.Column(
+        db.String(255),
+        nullable=False,
+    )
+    source_identity_key = db.Column(
+        db.String(64),
+        nullable=False,
+    )
+
+    external_member_id = db.Column(
+        db.String(128),
+        nullable=False,
+    )
+    external_sale_id = db.Column(
+        db.String(128),
+        nullable=True,
+    )
+
+    sucursal_id = db.Column(
+        db.Integer,
+        db.ForeignKey(
+            "sucursales.sucursal_id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+    )
+    source_branch_name = db.Column(
+        db.String(255),
+        nullable=True,
+    )
+
+    member_name = db.Column(
+        db.String(255),
+        nullable=True,
+    )
+    email_original = db.Column(
+        db.String(320),
+        nullable=True,
+    )
+    email_normalized = db.Column(
+        db.String(320),
+        nullable=True,
+    )
+
+    sale_date = db.Column(
+        db.Date,
+        nullable=False,
+    )
+    cohort_month = db.Column(
+        db.Date,
+        nullable=False,
+    )
+
+    classification_status = db.Column(
+        db.String(32),
+        nullable=False,
+        default="CLASSIFIED",
+        server_default="CLASSIFIED",
+    )
+    current_status = db.Column(
+        db.String(32),
+        nullable=True,
+        default="SIN_RUTINA",
+        server_default="SIN_RUTINA",
+    )
+    status_version = db.Column(
+        db.Integer,
+        nullable=False,
+        default=1,
+        server_default="1",
+    )
+
+    first_routine_at = db.Column(
+        db.Date,
+        nullable=True,
+    )
+    latest_routine_at = db.Column(
+        db.Date,
+        nullable=True,
+    )
+    current_instructor_name = db.Column(
+        db.String(255),
+        nullable=True,
+    )
+    routine_assignment_type = db.Column(
+        db.String(32),
+        nullable=True,
+    )
+
+    first_seen_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        server_default=db.text("now()"),
+    )
+    last_seen_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        server_default=db.text("now()"),
+    )
+    source_updated_at_utc = db.Column(
+        db.DateTime(timezone=True),
+        nullable=True,
+    )
+
+    payload_hash = db.Column(
+        db.String(64),
+        nullable=False,
+    )
+    source_metadata = db.Column(
+        JSONB,
+        nullable=True,
+    )
+
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        server_default=db.text("now()"),
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        server_default=db.text("now()"),
+        onupdate=db.func.now(),
+    )
+
+    sucursal = db.relationship(
+        "Sucursal",
+        foreign_keys=[sucursal_id],
+    )
+    evidence_links = db.relationship(
+        "RoutineControlMemberEvidenceORM",
+        back_populates="member",
+        passive_deletes=True,
+    )
+
+
+class RoutineAssignmentEvidenceORM(db.Model):
+    __tablename__ = "routine_assignment_evidences"
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "routine_count > 0",
+            name="ck_routine_assignment_evidences_routine_count",
+        ),
+        db.CheckConstraint(
+            "weighing_count >= 0",
+            name="ck_routine_assignment_evidences_weighing_count",
+        ),
+        db.CheckConstraint(
+            """
+            (
+                is_valid = true
+                AND invalidated_at_utc IS NULL
+                AND invalidated_by_user_id IS NULL
+                AND invalidation_reason IS NULL
+            )
+            OR
+            (
+                is_valid = false
+                AND invalidated_at_utc IS NOT NULL
+                AND invalidated_by_user_id IS NOT NULL
+                AND invalidation_reason IS NOT NULL
+            )
+            """,
+            name="ck_routine_assignment_evidences_invalidation",
+        ),
+        db.UniqueConstraint(
+            "provider_key",
+            "evidence_identity_key",
+            name="uq_routine_assignment_evidences_identity",
+        ),
+        db.Index(
+            "ix_routine_assignment_evidences_external_member_date",
+            "external_member_id",
+            "routine_activity_date",
+        ),
+        db.Index(
+            "ix_routine_assignment_evidences_email",
+            "email_normalized",
+        ),
+        db.Index(
+            "ix_routine_assignment_evidences_provider_date",
+            "provider_key",
+            "routine_activity_date",
+        ),
+        db.Index(
+            "ix_routine_assignment_evidences_valid_date",
+            "is_valid",
+            "routine_activity_date",
+        ),
+        db.Index(
+            "ix_routine_assignment_evidences_provider_member_date",
+            "provider_member_id",
+            "routine_activity_date",
+        ),
+        db.Index(
+            "ix_routine_assignment_evidences_center_date",
+            "provider_center_key",
+            "routine_activity_date",
+        ),
+    )
+
+    id = db.Column(
+        db.BigInteger,
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    provider_key = db.Column(
+        db.String(80),
+        nullable=False,
+    )
+    provider_member_id = db.Column(
+        db.String(128),
+        nullable=False,
+    )
+    evidence_identity_key = db.Column(
+        db.String(64),
+        nullable=False,
+    )
+
+    external_member_id = db.Column(
+        db.String(128),
+        nullable=True,
+    )
+    external_routine_id = db.Column(
+        db.String(128),
+        nullable=True,
+    )
+
+    email_original = db.Column(
+        db.String(320),
+        nullable=True,
+    )
+    email_normalized = db.Column(
+        db.String(320),
+        nullable=True,
+    )
+
+    provider_center_key = db.Column(
+        db.String(255),
+        nullable=False,
+    )
+    provider_center_name = db.Column(
+        db.String(255),
+        nullable=False,
+    )
+    sucursal_id = db.Column(
+        db.Integer,
+        db.ForeignKey(
+            "sucursales.sucursal_id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+    )
+
+    routine_activity_date = db.Column(
+        db.Date,
+        nullable=False,
+    )
+    instructor_name = db.Column(
+        db.String(255),
+        nullable=False,
+    )
+    instructor_name_normalized = db.Column(
+        db.String(255),
+        nullable=False,
+    )
+
+    routine_count = db.Column(
+        db.Integer,
+        nullable=False,
+    )
+    weighing_count = db.Column(
+        db.Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
+
+    first_observed_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        server_default=db.text("now()"),
+    )
+    last_observed_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        server_default=db.text("now()"),
+    )
+
+    first_provider_run_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey(
+            "routine_control_provider_runs.id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+    )
+    last_provider_run_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey(
+            "routine_control_provider_runs.id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+    )
+
+    payload_hash = db.Column(
+        db.String(64),
+        nullable=False,
+    )
+    source_metadata = db.Column(
+        JSONB,
+        nullable=True,
+    )
+
+    is_valid = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=True,
+        server_default=db.text("true"),
+    )
+    invalidated_at_utc = db.Column(
+        db.DateTime(timezone=True),
+        nullable=True,
+    )
+    invalidated_by_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey(
+            "users.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=True,
+    )
+    invalidation_reason = db.Column(
+        db.Text,
+        nullable=True,
+    )
+
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        server_default=db.text("now()"),
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        server_default=db.text("now()"),
+        onupdate=db.func.now(),
+    )
+
+    sucursal = db.relationship(
+        "Sucursal",
+        foreign_keys=[sucursal_id],
+    )
+    first_provider_run = db.relationship(
+        "RoutineControlProviderRunORM",
+        foreign_keys=[first_provider_run_id],
+    )
+    last_provider_run = db.relationship(
+        "RoutineControlProviderRunORM",
+        foreign_keys=[last_provider_run_id],
+    )
+    invalidated_by = db.relationship(
+        "UserORM",
+        foreign_keys=[invalidated_by_user_id],
+    )
+    member_links = db.relationship(
+        "RoutineControlMemberEvidenceORM",
+        back_populates="evidence",
+        passive_deletes=True,
+    )
+
+
+class RoutineControlMemberEvidenceORM(db.Model):
+    __tablename__ = "routine_control_member_evidences"
+
+    __table_args__ = (
+        db.CheckConstraint(
+            """
+            match_method IN (
+                'EXTERNAL_ID',
+                'EMAIL'
+            )
+            """,
+            name="ck_routine_control_member_evidences_match_method",
+        ),
+        db.CheckConstraint(
+            """
+            (
+                is_active = true
+                AND unlinked_at_utc IS NULL
+                AND unlink_reason IS NULL
+            )
+            OR
+            (
+                is_active = false
+                AND unlinked_at_utc IS NOT NULL
+                AND unlink_reason IS NOT NULL
+            )
+            """,
+            name="ck_routine_control_member_evidences_active",
+        ),
+        db.UniqueConstraint(
+            "member_id",
+            "evidence_id",
+            name="uq_routine_control_member_evidences_pair",
+        ),
+        db.Index(
+            "ix_routine_control_member_evidences_member_active",
+            "member_id",
+            "is_active",
+        ),
+        db.Index(
+            "ix_routine_control_member_evidences_evidence_active",
+            "evidence_id",
+            "is_active",
+        ),
+        db.Index(
+            "ix_routine_control_member_evidences_method_active",
+            "match_method",
+            "is_active",
+        ),
+    )
+
+    id = db.Column(
+        db.BigInteger,
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    member_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey(
+            "routine_control_members.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+    )
+    evidence_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey(
+            "routine_assignment_evidences.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+    )
+
+    match_method = db.Column(
+        db.String(32),
+        nullable=False,
+    )
+    is_active = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=True,
+        server_default=db.text("true"),
+    )
+
+    linked_by_provider_run_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey(
+            "routine_control_provider_runs.id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+    )
+    linked_at_utc = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        server_default=db.text("now()"),
+    )
+
+    unlinked_by_provider_run_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey(
+            "routine_control_provider_runs.id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+    )
+    unlinked_at_utc = db.Column(
+        db.DateTime(timezone=True),
+        nullable=True,
+    )
+    unlink_reason = db.Column(
+        db.Text,
+        nullable=True,
+    )
+
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        server_default=db.text("now()"),
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        server_default=db.text("now()"),
+        onupdate=db.func.now(),
+    )
+
+    member = db.relationship(
+        "RoutineControlMemberORM",
+        back_populates="evidence_links",
+    )
+    evidence = db.relationship(
+        "RoutineAssignmentEvidenceORM",
+        back_populates="member_links",
+    )
+    linked_by_provider_run = db.relationship(
+        "RoutineControlProviderRunORM",
+        foreign_keys=[linked_by_provider_run_id],
+    )
+    unlinked_by_provider_run = db.relationship(
+        "RoutineControlProviderRunORM",
+        foreign_keys=[unlinked_by_provider_run_id],
     )
