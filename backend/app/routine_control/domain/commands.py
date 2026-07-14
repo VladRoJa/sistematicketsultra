@@ -22,3 +22,26 @@ class UpsertRoutineMemberCommand:
     payload_hash: str
     source_metadata: dict[str, Any] | None
     observed_at_utc: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class RegisterRoutineEvidenceCommand:
+    provider_key: str
+    provider_member_id: str
+    evidence_identity_key: str
+    external_member_id: str | None
+    external_routine_id: str | None
+    email_original: str | None
+    email_normalized: str | None
+    provider_center_key: str
+    provider_center_name: str
+    sucursal_id: int | None
+    routine_activity_date: date
+    instructor_name: str
+    instructor_name_normalized: str
+    routine_count: int
+    weighing_count: int
+    provider_run_id: int | None
+    payload_hash: str
+    source_metadata: dict[str, Any] | None
+    observed_at_utc: datetime | None = None
