@@ -63,3 +63,9 @@ class UnlinkRoutineMemberEvidenceCommand:
     unlink_reason: str
     provider_run_id: int | None = None
     unlinked_at_utc: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ReconcileRoutineMemberCommand:
+    member_id: int
+    as_of_utc: datetime | None = None
