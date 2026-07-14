@@ -96,6 +96,9 @@ from .rpa import (
 
 
 from .routine_control import (
+    RoutineAssignmentEvidenceORM,
+    RoutineControlMemberEvidenceORM,
+    RoutineControlMemberORM,
     RoutineControlPipelineRunORM,
     RoutineControlProviderRunORM,
 )
@@ -176,6 +179,9 @@ __all__ = [
     "PermissionRouteMapORM",
     "PermissionGrantORM",
     "PermissionGrantAuditLogORM",
+    "RoutineAssignmentEvidenceORM",
+    "RoutineControlMemberEvidenceORM",
+    "RoutineControlMemberORM",
     "RoutineControlPipelineRunORM",
     "RoutineControlProviderRunORM",
     "GascaSmsRequestORM",
