@@ -809,7 +809,19 @@ export interface TrackBranchForecastDetailCurrentPoint {
   base_mtd: number | null;
   agregadora_mtd: number | null;
   total_mtd: number | null;
+  base_daily: number | null;
+  agregadora_daily: number | null;
+  total_daily: number | null;
+  daily_value_status: TrackBranchCurrentDailyValueStatus;
+  daily_value_method: 'calendar_day_mtd_delta';
 }
+
+export type TrackBranchCurrentDailyValueStatus =
+  | 'available'
+  | 'available_with_negative_adjustment'
+  | 'missing_previous_calendar_day'
+  | 'inconsistent_components'
+  | 'missing_cumulative_value';
 
 export interface TrackBranchForecastDetailCurrentTrackSeries {
   source_basis: 'track_daily_mart';
@@ -868,6 +880,60 @@ export interface TrackBranchForecastDetailExcludedYear {
   reason: string;
 }
 
+export type TrackBranchCalendarAlignedStatus =
+  | 'available'
+  | 'available_with_fallback'
+  | 'no_comparable_history'
+  | 'missing_cutoff_progress'
+  | 'non_positive_segment_weight'
+  | 'missing_calendar_sample';
+
+export type TrackBranchCalendarAlignmentKind =
+  | 'exact_ordinal_match'
+  | 'last_weekday_occurrence_fallback';
+
+export interface TrackBranchCalendarAlignedHistoricalSample {
+  year: number;
+  source_date: string;
+  source_day: number;
+  source_weekday: string;
+  source_weekday_ordinal: number;
+  alignment_kind: TrackBranchCalendarAlignmentKind;
+  source_daily_total: number;
+  source_full_month_total: number;
+  sample_daily_share: number;
+}
+
+export interface TrackBranchCalendarAlignedDailyPoint {
+  day: number;
+  date: string;
+  weekday: string;
+  weekday_index: number;
+  weekday_ordinal: number;
+  alignment_key: string;
+  raw_daily_weight: number | null;
+  normalized_daily_weight: number | null;
+  cumulative_weight: number | null;
+  samples_count: number;
+  sample_years: number[];
+  used_fallback: boolean;
+  historical_samples: TrackBranchCalendarAlignedHistoricalSample[];
+}
+
+export interface TrackBranchCalendarAlignedDistribution {
+  status: TrackBranchCalendarAlignedStatus;
+  method: 'weekday_ordinal_aligned_historical_weights';
+  target_month: string;
+  cutoff_day: number;
+  historical_progress_pct_at_cutoff: number | null;
+  comparison_years_requested: number[];
+  comparison_years_used: number[];
+  comparison_years_excluded: TrackBranchForecastDetailExcludedYear[];
+  exact_matches_count: number;
+  fallback_matches_count: number;
+  points: TrackBranchCalendarAlignedDailyPoint[];
+}
+
 export type TrackBranchForecastDetailHistoricalExpectedStatus =
   | 'available'
   | 'no_comparable_history'
@@ -886,6 +952,8 @@ export interface TrackBranchForecastDetailHistoricalExpectedCurve {
   historical_expected_month_total: number | null;
   historical_progress_pct_at_cutoff: number | null;
   historical_expected_mtd_at_cutoff: number | null;
+  distribution_status: TrackBranchCalendarAlignedStatus | null;
+  calendar_alignment_applied: boolean;
   points: TrackBranchForecastDetailHistoricalExpectedPoint[];
 }
 
@@ -978,7 +1046,7 @@ export interface TrackBranchGoalPace {
   metric_basis: 'total_mtd';
   goal_metric_basis: 'total_mtd';
   distribution_basis: 'venta_total_base';
-  method: 'goal_month_by_historical_progress';
+  method: 'goal_month_by_weekday_ordinal_aligned_historical_weights';
   includes_agregadoras: true;
   aggregadoras_assumed_same_daily_shape: true;
   comparability_note: string;
@@ -1028,6 +1096,7 @@ export interface TrackBranchForecastDetailResponse {
   status: 'ok';
   metadata: TrackBranchForecastDetailMetadata;
   summary: TrackBranchForecastDetailSummary;
+  calendar_aligned_distribution: TrackBranchCalendarAlignedDistribution;
   goal_pace: TrackBranchGoalPace;
   forecast_context: TrackBranchForecastDetailForecastContext;
   series: TrackBranchForecastDetailSeries;

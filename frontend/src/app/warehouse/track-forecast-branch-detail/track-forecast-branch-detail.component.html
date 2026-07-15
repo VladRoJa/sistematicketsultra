@@ -75,6 +75,97 @@
           aria-label="Gráfica de trayectoria hacia la meta mensual total"
         ></div>
       </section>
+
+      <section class="branch-detail-daily-section">
+        <div class="branch-detail-methodology">
+          <h3>Cómo se distribuye esta trayectoria</h3>
+          <p>La trayectoria no divide el mes en partes iguales. Cada fecha recibe un peso según días históricos equivalentes: mismo día de la semana y misma posición dentro del mes. Por ejemplo, el segundo lunes se compara con los segundos lunes de los años históricos disponibles.</p>
+          <p>El tramo anterior al corte preserva exactamente el avance vigente y el posterior distribuye el remanente. Una quinta ocurrencia puede usar la última ocurrencia disponible del mismo día de la semana; nunca se sustituye por otro día.</p>
+        </div>
+
+        <p class="branch-detail-state-note" *ngIf="calendarDistributionStatusMessage" role="status">
+          {{ calendarDistributionStatusMessage }}
+        </p>
+
+        <ng-container *ngIf="showCalendarDistributionDetails">
+          <header class="branch-detail-section-heading branch-detail-subheading">
+            <span>Movimiento por fecha</span>
+            <h3>Ingreso diario hacia la meta</h3>
+            <p>Real total diario, requerido diario y proyección total diaria reportados por el backend.</p>
+          </header>
+          <div
+            echarts
+            [options]="goalPaceDailyChartOption"
+            class="branch-detail-chart branch-detail-daily-chart"
+            aria-label="Gráfica diaria de ingreso hacia la meta"
+          ></div>
+
+          <details class="branch-detail-audit">
+            <summary>Detalle de distribución de la meta</summary>
+            <div class="branch-detail-table-wrap branch-detail-audit-wrap">
+              <table class="branch-detail-table branch-detail-audit-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Fecha</th>
+                    <th scope="col">Día comparable</th>
+                    <th scope="col">Peso histórico</th>
+                    <th scope="col">Requerido del día</th>
+                    <th scope="col">Meta acumulada</th>
+                    <th scope="col">Real total diario</th>
+                    <th scope="col">Proyección total diaria</th>
+                    <th scope="col">Muestras</th>
+                    <th scope="col">Estado de alineación</th>
+                    <th scope="col">Estado del valor real diario</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <ng-container *ngFor="let row of goalAuditRows">
+                    <tr [class.branch-detail-audit-fallback]="row.usedFallback">
+                      <td data-label="Fecha"><strong>{{ row.dateLabel }}</strong></td>
+                      <td data-label="Día comparable">{{ row.comparableDayLabel }}</td>
+                      <td data-label="Peso histórico">{{ row.weightLabel }}</td>
+                      <td data-label="Requerido del día">{{ row.expectedDailyLabel }}</td>
+                      <td data-label="Meta acumulada">{{ row.expectedCumulativeLabel }}</td>
+                      <td data-label="Real total diario">{{ row.realDailyLabel }}</td>
+                      <td data-label="Proyección total diaria">{{ row.projectedDailyLabel }}</td>
+                      <td data-label="Muestras">
+                        <button
+                          *ngIf="row.historicalSamples.length"
+                          type="button"
+                          class="branch-detail-samples-toggle"
+                          [attr.aria-expanded]="isAuditRowExpanded('goal', row.key)"
+                          (click)="toggleAuditRow('goal', row.key)"
+                        >{{ row.samplesLabel }}</button>
+                        <span *ngIf="!row.historicalSamples.length">{{ row.samplesLabel }}</span>
+                      </td>
+                      <td data-label="Estado de alineación">{{ row.alignmentStatusLabel }}</td>
+                      <td data-label="Estado del valor real diario">
+                        <span class="branch-detail-status" [class.branch-detail-status--warning]="row.dailyStatusTone === 'warning'" [class.branch-detail-status--missing]="row.dailyStatusTone === 'missing'">{{ row.dailyValueStatusLabel }}</span>
+                      </td>
+                    </tr>
+                    <tr class="branch-detail-samples-row" *ngIf="isAuditRowExpanded('goal', row.key)">
+                      <td colspan="10">
+                        <div class="branch-detail-samples">
+                          <article *ngFor="let sample of row.historicalSamples">
+                            <strong>{{ sample.year }} — {{ formatDate(sample.source_date) }}</strong>
+                            <span>{{ getComparableDayLabel(sample.source_weekday, sample.source_weekday_ordinal) }}</span>
+                            <dl>
+                              <div><dt>Venta diaria fuente</dt><dd>{{ formatCurrency(sample.source_daily_total) }}</dd></div>
+                              <div><dt>Cierre mensual fuente</dt><dd>{{ formatCurrency(sample.source_full_month_total) }}</dd></div>
+                              <div><dt>Participación diaria</dt><dd>{{ formatPercent(sample.sample_daily_share) }}</dd></div>
+                              <div><dt>Alineación</dt><dd>{{ getAlignmentKindLabel(sample.alignment_kind) }}</dd></div>
+                            </dl>
+                          </article>
+                        </div>
+                      </td>
+                    </tr>
+                  </ng-container>
+                </tbody>
+              </table>
+            </div>
+          </details>
+        </ng-container>
+      </section>
     </section>
 
     <p class="branch-detail-goal-notice" *ngIf="!showGoalPaceSection" role="status">
@@ -124,6 +215,97 @@
       <ul class="branch-detail-chart-notes" *ngIf="chartNotes.length">
         <li *ngFor="let note of chartNotes">{{ note }}</li>
       </ul>
+
+      <section class="branch-detail-daily-section">
+        <div class="branch-detail-methodology">
+          <h3>Cómo se distribuye esta trayectoria</h3>
+          <p>La trayectoria no divide el mes en partes iguales. Cada fecha recibe un peso según días históricos equivalentes: mismo día de la semana y misma posición dentro del mes. Por ejemplo, el segundo lunes se compara con los segundos lunes de los años históricos disponibles.</p>
+          <p>El tramo anterior al corte preserva exactamente el avance vigente y el posterior distribuye el remanente. Una quinta ocurrencia puede usar la última ocurrencia disponible del mismo día de la semana; nunca se sustituye por otro día.</p>
+        </div>
+
+        <p class="branch-detail-state-note" *ngIf="calendarDistributionStatusMessage" role="status">
+          {{ calendarDistributionStatusMessage }}
+        </p>
+
+        <ng-container *ngIf="showCalendarDistributionDetails">
+          <header class="branch-detail-section-heading branch-detail-subheading">
+            <span>Patrón diario comparable</span>
+            <h3>Distribución diaria esperada de venta base</h3>
+            <p>Real, esperado y proyección diaria exclusivamente sobre venta base.</p>
+          </header>
+          <div
+            echarts
+            [options]="baseDailyChartOption"
+            class="branch-detail-chart branch-detail-daily-chart"
+            aria-label="Gráfica de distribución diaria esperada de venta base"
+          ></div>
+
+          <details class="branch-detail-audit">
+            <summary>Detalle de distribución de venta base</summary>
+            <div class="branch-detail-table-wrap branch-detail-audit-wrap">
+              <table class="branch-detail-table branch-detail-audit-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Fecha</th>
+                    <th scope="col">Día comparable</th>
+                    <th scope="col">Peso histórico</th>
+                    <th scope="col">Esperado base diario</th>
+                    <th scope="col">Esperado base acumulado</th>
+                    <th scope="col">Real base diario</th>
+                    <th scope="col">Proyección base diaria</th>
+                    <th scope="col">Muestras</th>
+                    <th scope="col">Estado de alineación</th>
+                    <th scope="col">Estado del valor real diario</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <ng-container *ngFor="let row of baseAuditRows">
+                    <tr [class.branch-detail-audit-fallback]="row.usedFallback">
+                      <td data-label="Fecha"><strong>{{ row.dateLabel }}</strong></td>
+                      <td data-label="Día comparable">{{ row.comparableDayLabel }}</td>
+                      <td data-label="Peso histórico">{{ row.weightLabel }}</td>
+                      <td data-label="Esperado base diario">{{ row.expectedDailyLabel }}</td>
+                      <td data-label="Esperado base acumulado">{{ row.expectedCumulativeLabel }}</td>
+                      <td data-label="Real base diario">{{ row.realDailyLabel }}</td>
+                      <td data-label="Proyección base diaria">{{ row.projectedDailyLabel }}</td>
+                      <td data-label="Muestras">
+                        <button
+                          *ngIf="row.historicalSamples.length"
+                          type="button"
+                          class="branch-detail-samples-toggle"
+                          [attr.aria-expanded]="isAuditRowExpanded('base', row.key)"
+                          (click)="toggleAuditRow('base', row.key)"
+                        >{{ row.samplesLabel }}</button>
+                        <span *ngIf="!row.historicalSamples.length">{{ row.samplesLabel }}</span>
+                      </td>
+                      <td data-label="Estado de alineación">{{ row.alignmentStatusLabel }}</td>
+                      <td data-label="Estado del valor real diario">
+                        <span class="branch-detail-status" [class.branch-detail-status--warning]="row.dailyStatusTone === 'warning'" [class.branch-detail-status--missing]="row.dailyStatusTone === 'missing'">{{ row.dailyValueStatusLabel }}</span>
+                      </td>
+                    </tr>
+                    <tr class="branch-detail-samples-row" *ngIf="isAuditRowExpanded('base', row.key)">
+                      <td colspan="10">
+                        <div class="branch-detail-samples">
+                          <article *ngFor="let sample of row.historicalSamples">
+                            <strong>{{ sample.year }} — {{ formatDate(sample.source_date) }}</strong>
+                            <span>{{ getComparableDayLabel(sample.source_weekday, sample.source_weekday_ordinal) }}</span>
+                            <dl>
+                              <div><dt>Venta diaria fuente</dt><dd>{{ formatCurrency(sample.source_daily_total) }}</dd></div>
+                              <div><dt>Cierre mensual fuente</dt><dd>{{ formatCurrency(sample.source_full_month_total) }}</dd></div>
+                              <div><dt>Participación diaria</dt><dd>{{ formatPercent(sample.sample_daily_share) }}</dd></div>
+                              <div><dt>Alineación</dt><dd>{{ getAlignmentKindLabel(sample.alignment_kind) }}</dd></div>
+                            </dl>
+                          </article>
+                        </div>
+                      </td>
+                    </tr>
+                  </ng-container>
+                </tbody>
+              </table>
+            </div>
+          </details>
+        </ng-container>
+      </section>
     </section>
 
     <section class="branch-detail-panel">
@@ -195,6 +377,22 @@
               <dd>{{ item.value }}</dd>
             </div>
           </dl>
+        </div>
+      </details>
+
+      <details class="branch-detail-panel branch-detail-alignment">
+        <summary>Alineación calendario</summary>
+        <div class="branch-detail-disclosure-body">
+          <dl class="branch-detail-facts">
+            <div *ngFor="let item of calendarAlignmentItems">
+              <dt>{{ item.label }}</dt>
+              <dd>{{ item.value }}</dd>
+            </div>
+          </dl>
+          <p class="branch-detail-state-note" *ngIf="calendarDistributionStatusMessage" role="status">
+            {{ calendarDistributionStatusMessage }}
+          </p>
+          <p class="branch-detail-trace-explanation">El valor diario se obtiene restando el acumulado del día calendario anterior. Cuando falta ese día, el sistema no puentea el hueco.</p>
         </div>
       </details>
     </section>
