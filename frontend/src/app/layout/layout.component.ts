@@ -969,8 +969,13 @@ onClickReporteBug(): void {
 
 
 private puedeVerTrackForecastBeta(): boolean {
-  const user = this.authService.getUser() as any;
+  const user = this.authService.getUser();
   const userId = Number(user?.id ?? user?.user_id ?? user?.usuario_id ?? 0);
+  const rol = String(user?.rol ?? user?.role ?? '').trim().toUpperCase();
+
+  if (rol === 'LECTOR_GLOBAL') {
+    return true;
+  }
 
   return userId === 47;
 }
