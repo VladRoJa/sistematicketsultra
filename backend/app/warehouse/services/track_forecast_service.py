@@ -161,6 +161,48 @@ class BranchProjectedDailyPath(TypedDict):
     points: list[BranchProjectedDailyPoint]
 
 
+BranchGoalPaceStatus = Literal[
+    "available",
+    "no_goal",
+    "partial_goal",
+    "invalid_goal",
+    "historical_curve_unavailable",
+    "projection_unavailable",
+]
+
+
+class BranchGoalPacePoint(TypedDict):
+    day: int
+    date: date
+    historical_progress_pct: Decimal
+    goal_expected_daily: Decimal
+    goal_expected_cumulative: Decimal
+
+
+class BranchGoalPaceDetail(TypedDict):
+    status: BranchGoalPaceStatus
+    metric_basis: Literal["total_mtd"]
+    goal_metric_basis: Literal["total_mtd"]
+    distribution_basis: Literal["venta_total_base"]
+    method: Literal["goal_month_by_historical_progress"]
+    includes_agregadoras: Literal[True]
+    aggregadoras_assumed_same_daily_shape: Literal[True]
+    comparability_note: str
+    goal_month: Decimal | None
+    goal_expected_mtd_at_cutoff: Decimal | None
+    real_mtd_at_cutoff: Decimal | None
+    gap_vs_goal_pace: Decimal | None
+    gap_vs_goal_pace_pct: Decimal | None
+    remaining_to_goal: Decimal | None
+    remaining_days: int
+    required_daily_average: Decimal | None
+    projected_close: Decimal | None
+    projected_gap_to_goal: Decimal | None
+    projected_goal_attainment_pct: Decimal | None
+    points: list[BranchGoalPacePoint]
+    projected_path: BranchProjectedDailyPath | None
+
+
 class BranchForecastDetailConsistencyError(RuntimeError):
     """Raised when detail sources disagree with the resolved base forecast."""
 
@@ -3064,6 +3106,206 @@ def _require_detail_match(
         )
 
 
+def _build_branch_goal_pace_detail(
+    *,
+    goal_status: str,
+    goal_month: Decimal | None,
+    real_mtd_at_cutoff: Decimal | None,
+    projected_close: Decimal | None,
+    target_month: date,
+    cutoff_day: int,
+    historical_expected: BranchHistoricalExpectedCurve,
+) -> BranchGoalPaceDetail:
+    target_month = target_month.replace(day=1)
+    days_in_target_month = monthrange(target_month.year, target_month.month)[1]
+    remaining_days = days_in_target_month - min(
+        max(cutoff_day, 0),
+        days_in_target_month,
+    )
+    comparability_note = (
+        "La distribución diaria se deriva del patrón histórico de venta base "
+        "y se aplica a la meta total, incluidas agregadoras."
+    )
+
+    result: BranchGoalPaceDetail = {
+        "status": "invalid_goal",
+        "metric_basis": "total_mtd",
+        "goal_metric_basis": "total_mtd",
+        "distribution_basis": "venta_total_base",
+        "method": "goal_month_by_historical_progress",
+        "includes_agregadoras": True,
+        "aggregadoras_assumed_same_daily_shape": True,
+        "comparability_note": comparability_note,
+        "goal_month": goal_month,
+        "goal_expected_mtd_at_cutoff": None,
+        "real_mtd_at_cutoff": real_mtd_at_cutoff,
+        "gap_vs_goal_pace": None,
+        "gap_vs_goal_pace_pct": None,
+        "remaining_to_goal": None,
+        "remaining_days": remaining_days,
+        "required_daily_average": None,
+        "projected_close": projected_close,
+        "projected_gap_to_goal": None,
+        "projected_goal_attainment_pct": None,
+        "points": [],
+        "projected_path": None,
+    }
+
+    if goal_status == "pending":
+        result["status"] = "no_goal"
+        return result
+    if goal_status == "partial":
+        result["status"] = "partial_goal"
+        return result
+    if goal_month is None or not goal_month.is_finite():
+        if goal_month is not None:
+            result["goal_month"] = None
+        return result
+    if goal_month <= 0:
+        progress_at_cutoff = historical_expected[
+            "historical_progress_pct_at_cutoff"
+        ]
+        if (
+            real_mtd_at_cutoff is not None
+            and real_mtd_at_cutoff.is_finite()
+            and historical_expected["status"] == "available"
+            and progress_at_cutoff is not None
+            and progress_at_cutoff.is_finite()
+        ):
+            goal_expected_mtd_at_cutoff = goal_month * progress_at_cutoff
+            result["goal_expected_mtd_at_cutoff"] = (
+                goal_expected_mtd_at_cutoff
+            )
+            result["gap_vs_goal_pace"] = (
+                real_mtd_at_cutoff - goal_expected_mtd_at_cutoff
+            )
+        return result
+    if (
+        real_mtd_at_cutoff is None
+        or not real_mtd_at_cutoff.is_finite()
+    ):
+        raise BranchForecastDetailConsistencyError(
+            "summary.real_mtd no contiene un valor finito para goal_pace."
+        )
+    if projected_close is not None and not projected_close.is_finite():
+        raise BranchForecastDetailConsistencyError(
+            "summary.projected_close no contiene un valor finito para goal_pace."
+        )
+
+    remaining_to_goal = max(
+        goal_month - real_mtd_at_cutoff,
+        Decimal("0"),
+    )
+    required_daily_average = None
+    if remaining_to_goal == 0:
+        required_daily_average = Decimal("0")
+    elif remaining_days > 0:
+        required_daily_average = remaining_to_goal / Decimal(remaining_days)
+    result["remaining_to_goal"] = remaining_to_goal
+    result["required_daily_average"] = required_daily_average
+
+    if (
+        historical_expected["status"] != "available"
+        or not historical_expected["points"]
+    ):
+        result["status"] = "historical_curve_unavailable"
+        return result
+
+    points: list[BranchGoalPacePoint] = []
+    previous_cumulative = Decimal("0")
+    cutoff_point: BranchGoalPacePoint | None = None
+    historical_points = historical_expected["points"]
+    for index, historical_point in enumerate(historical_points):
+        progress = historical_point["historical_progress_pct"]
+        if not progress.is_finite():
+            raise BranchForecastDetailConsistencyError(
+                "historical_expected contiene avance histórico no finito."
+            )
+        expected_cumulative = goal_month * progress
+        if index == len(historical_points) - 1:
+            expected_cumulative = goal_month
+        expected_daily = expected_cumulative - previous_cumulative
+        if expected_daily < 0:
+            raise BranchForecastDetailConsistencyError(
+                "historical_expected produce incrementos negativos para goal_pace."
+            )
+        point: BranchGoalPacePoint = {
+            "day": historical_point["day"],
+            "date": historical_point["date"],
+            "historical_progress_pct": progress,
+            "goal_expected_daily": expected_daily,
+            "goal_expected_cumulative": expected_cumulative,
+        }
+        points.append(point)
+        if point["day"] == cutoff_day:
+            cutoff_point = point
+        previous_cumulative = expected_cumulative
+
+    if cutoff_point is None:
+        raise BranchForecastDetailConsistencyError(
+            "historical_expected no contiene el día de corte para goal_pace."
+        )
+    _require_detail_match(
+        actual=cutoff_point["historical_progress_pct"],
+        expected=historical_expected["historical_progress_pct_at_cutoff"],
+        field_name="goal_pace.cutoff.historical_progress_pct",
+    )
+
+    goal_expected_mtd_at_cutoff = cutoff_point[
+        "goal_expected_cumulative"
+    ]
+    gap_vs_goal_pace = real_mtd_at_cutoff - goal_expected_mtd_at_cutoff
+    gap_vs_goal_pace_pct = (
+        gap_vs_goal_pace / goal_expected_mtd_at_cutoff
+        if goal_expected_mtd_at_cutoff > 0
+        else None
+    )
+    result.update(
+        {
+            "goal_expected_mtd_at_cutoff": goal_expected_mtd_at_cutoff,
+            "gap_vs_goal_pace": gap_vs_goal_pace,
+            "gap_vs_goal_pace_pct": gap_vs_goal_pace_pct,
+            "points": points,
+        }
+    )
+
+    if projected_close is None:
+        result["status"] = "projection_unavailable"
+        return result
+
+    projected_path = build_branch_projected_daily_path(
+        expected_curve=historical_expected,
+        target_month=target_month,
+        cutoff_day=cutoff_day,
+        metric_basis="total_mtd",
+        current_mtd_at_cutoff=real_mtd_at_cutoff,
+        projected_close=projected_close,
+    )
+    result["projected_path"] = projected_path
+    if projected_path["status"] != "available":
+        result["status"] = "projection_unavailable"
+        return result
+
+    _require_detail_match(
+        actual=projected_path["points"][0]["projected_cumulative_total"],
+        expected=real_mtd_at_cutoff,
+        field_name="goal_pace.projected_path.cutoff",
+    )
+    _require_detail_match(
+        actual=projected_path["points"][-1]["projected_cumulative_total"],
+        expected=projected_close,
+        field_name="goal_pace.projected_path.month_end",
+    )
+    result.update(
+        {
+            "status": "available",
+            "projected_gap_to_goal": projected_close - goal_month,
+            "projected_goal_attainment_pct": projected_close / goal_month,
+        }
+    )
+    return result
+
+
 def _build_detail_comparison_years(
     *,
     target_month: date,
@@ -3332,6 +3574,35 @@ def build_branch_forecast_detail(
         "includes_agregadoras": True,
         "source": "existing_stable_forecast",
     }
+    goal_pace = _build_branch_goal_pace_detail(
+        goal_status=str(forecast_data_quality.get("goal_status") or ""),
+        goal_month=_detail_decimal(
+            forecast_summary.get("goal_month"),
+            field_name="summary.goal_month",
+        ),
+        real_mtd_at_cutoff=_detail_decimal(
+            forecast_summary.get("real_mtd"),
+            field_name="summary.real_mtd",
+        ),
+        projected_close=_detail_decimal(
+            forecast_summary.get("projected_close"),
+            field_name="summary.projected_close",
+        ),
+        target_month=target_month,
+        cutoff_day=cutoff_day,
+        historical_expected=historical_expected,
+    )
+    for summary_field, goal_pace_field in (
+        ("weighted_goal_mtd", "goal_expected_mtd_at_cutoff"),
+        ("gap_vs_weighted_goal", "gap_vs_goal_pace"),
+        ("gap_vs_weighted_goal_pct", "gap_vs_goal_pace_pct"),
+    ):
+        if forecast_summary.get(summary_field) is not None:
+            _require_detail_match(
+                actual=goal_pace[goal_pace_field],
+                expected=forecast_summary[summary_field],
+                field_name=f"goal_pace.{goal_pace_field}",
+            )
     return {
         "status": "ok",
         "metadata": {
@@ -3345,6 +3616,7 @@ def build_branch_forecast_detail(
             "comparison_years": comparison_years,
         },
         "summary": summary,
+        "goal_pace": goal_pace,
         "forecast_context": {
             "forecast_cutoff": forecast["forecast_cutoff"],
             "same_day_history": forecast["same_day_history"],
