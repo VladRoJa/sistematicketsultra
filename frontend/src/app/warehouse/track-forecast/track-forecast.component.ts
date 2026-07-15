@@ -154,6 +154,11 @@ export class TrackForecastComponent implements OnInit {
   puedeVerForecastBeta(): boolean {
     const user = this.authService.getUser();
     const userId = Number(user?.id ?? user?.user_id ?? user?.usuario_id ?? 0);
+    const role = String(user?.rol ?? user?.role ?? '').trim().toUpperCase();
+
+    if (role === 'LECTOR_GLOBAL') {
+      return true;
+    }
 
     return userId === this.betaUserId;
   }
