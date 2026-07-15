@@ -3,7 +3,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { Component, DestroyRef, OnInit, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
-import { LineChart, LineSeriesOption } from 'echarts/charts';
+import { BarChart, LineChart, LineSeriesOption } from 'echarts/charts';
 import {
   AriaComponent,
   GridComponent,
@@ -20,6 +20,11 @@ import { EMPTY, auditTime, catchError, combineLatest, distinctUntilChanged, swit
 
 import {
   TrackBranchGoalPaceStatus,
+  TrackBranchCalendarAlignedDailyPoint,
+  TrackBranchCalendarAlignedHistoricalSample,
+  TrackBranchCalendarAlignedStatus,
+  TrackBranchCalendarAlignmentKind,
+  TrackBranchCurrentDailyValueStatus,
   TrackBranchForecastDetailHistoricalYearItem,
   TrackBranchForecastDetailHistoricalYearStatus,
   TrackBranchForecastDetailResponse,
@@ -28,6 +33,7 @@ import {
 } from '../../services/track.service';
 
 echarts.use([
+  BarChart,
   LineChart,
   GridComponent,
   TooltipComponent,
@@ -78,6 +84,35 @@ type BranchDetailGoalCard = {
   tone: 'neutral' | 'favorable' | 'unfavorable';
 };
 
+type BranchDetailAuditRow = {
+  key: string;
+  dateLabel: string;
+  comparableDayLabel: string;
+  weightLabel: string;
+  expectedDailyLabel: string;
+  expectedCumulativeLabel: string;
+  realDailyLabel: string;
+  projectedDailyLabel: string;
+  samplesLabel: string;
+  alignmentStatusLabel: string;
+  dailyValueStatusLabel: string;
+  usedFallback: boolean;
+  dailyStatusTone: 'available' | 'warning' | 'missing';
+  historicalSamples: TrackBranchCalendarAlignedHistoricalSample[];
+};
+
+type BranchDetailDailyChartDatum = {
+  value: number | null;
+  statusLabel?: string;
+};
+
+type BranchDetailDailyTooltipParam = {
+  marker: string;
+  seriesName: string;
+  name: string;
+  data: BranchDetailDailyChartDatum;
+};
+
 @Component({
   selector: 'app-track-forecast-branch-detail',
   standalone: true,
@@ -94,6 +129,8 @@ export class TrackForecastBranchDetailComponent implements OnInit {
   detail: TrackBranchForecastDetailResponse | null = null;
   chartOption: EChartsCoreOption = {};
   goalPaceChartOption: EChartsCoreOption = {};
+  goalPaceDailyChartOption: EChartsCoreOption = {};
+  baseDailyChartOption: EChartsCoreOption = {};
   summaryCards: BranchDetailSummaryCard[] = [];
   goalPaceCards: BranchDetailGoalCard[] = [];
   goalPaceExecutiveMessage = '';
@@ -104,6 +141,10 @@ export class TrackForecastBranchDetailComponent implements OnInit {
   warningMessages: string[] = [];
   usedYearsLabel = 'No disponible';
   excludedYearsLabel = 'Ninguno';
+  goalAuditRows: BranchDetailAuditRow[] = [];
+  baseAuditRows: BranchDetailAuditRow[] = [];
+  calendarAlignmentItems: BranchDetailTraceItem[] = [];
+  private readonly expandedAuditRows = new Set<string>();
 
   sucursalCanon = '';
   branchDisplayName = 'Sucursal';
@@ -225,6 +266,38 @@ export class TrackForecastBranchDetailComponent implements OnInit {
     return Array.isArray(series) && series.length > 0;
   }
 
+  get showCalendarDistributionDetails(): boolean {
+    const status = this.detail?.calendar_aligned_distribution.status;
+    return status === 'available' || status === 'available_with_fallback';
+  }
+
+  get calendarDistributionStatusMessage(): string {
+    const status = this.detail?.calendar_aligned_distribution.status;
+    if (!status || status === 'available') return '';
+    const messages: Record<TrackBranchCalendarAlignedStatus, string> = {
+      available: '',
+      available_with_fallback: 'Una o más quintas ocurrencias usaron la última ocurrencia disponible del mismo día de la semana. Nunca se sustituyó por otro día de la semana.',
+      no_comparable_history: 'No existe historia comparable suficiente para distribuir la trayectoria por fechas equivalentes.',
+      missing_cutoff_progress: 'No fue posible preservar el avance vigente a la fecha de corte.',
+      non_positive_segment_weight: 'Un tramo no tuvo peso monetario histórico positivo y no puede distribuirse.',
+      missing_calendar_sample: 'Falta una muestra de calendario para una o más fechas; no se fabricaron valores.',
+    };
+    return messages[status];
+  }
+
+  toggleAuditRow(section: 'goal' | 'base', rowKey: string): void {
+    const key = `${section}:${rowKey}`;
+    if (this.expandedAuditRows.has(key)) {
+      this.expandedAuditRows.delete(key);
+      return;
+    }
+    this.expandedAuditRows.add(key);
+  }
+
+  isAuditRowExpanded(section: 'goal' | 'base', rowKey: string): boolean {
+    return this.expandedAuditRows.has(`${section}:${rowKey}`);
+  }
+
   get goalPaceStatusMessage(): string {
     const status = this.detail?.goal_pace.status;
     if (!status) return '';
@@ -330,7 +403,11 @@ export class TrackForecastBranchDetailComponent implements OnInit {
     this.goalPaceCards = this.buildGoalPaceCards(response);
     this.goalPaceExecutiveMessage = this.buildGoalPaceExecutiveMessage(response);
     this.goalPaceChartOption = this.buildGoalPaceChartOption(response);
+    this.goalPaceDailyChartOption = this.buildGoalPaceDailyChartOption(response);
     this.chartOption = this.buildChartOption(response);
+    this.baseDailyChartOption = this.buildBaseDailyChartOption(response);
+    this.goalAuditRows = this.buildGoalAuditRows(response);
+    this.baseAuditRows = this.buildBaseAuditRows(response);
     this.annualRows = this.buildAnnualRows(response);
     this.warningMessages = response.data_quality.warnings.map((warning) => warning.message);
     this.usedYearsLabel = response.series.historical_expected.comparison_years_used.length
@@ -343,6 +420,7 @@ export class TrackForecastBranchDetailComponent implements OnInit {
       : 'Ninguno';
     this.qualityItems = this.buildQualityItems(response);
     this.traceItems = this.buildTraceItems(response);
+    this.calendarAlignmentItems = this.buildCalendarAlignmentItems(response);
   }
 
   private buildGoalPaceCards(response: TrackBranchForecastDetailResponse): BranchDetailGoalCard[] {
@@ -522,6 +600,244 @@ export class TrackForecastBranchDetailComponent implements OnInit {
         axisLabel: { formatter: (value: number) => this.formatCompactCurrency(value) },
       },
       series: lineSeries,
+    };
+  }
+
+  private buildGoalPaceDailyChartOption(response: TrackBranchForecastDetailResponse): EChartsCoreOption {
+    const distribution = response.calendar_aligned_distribution;
+    if (distribution.status !== 'available' && distribution.status !== 'available_with_fallback') return {};
+
+    const currentByDate = new Map(response.series.current_track.points.map((point) => [point.date, point]));
+    const goalByDate = new Map(response.goal_pace.points.map((point) => [point.date, point]));
+    const projectedByDate = new Map(
+      (response.goal_pace.projected_path?.points || [])
+        .filter((point) => point.point_kind === 'projected_future')
+        .map((point) => [point.date, point]),
+    );
+    const dates = distribution.points.map((point) => point.date);
+    const series = [
+      {
+        name: 'Real total diario',
+        color: '#244f78',
+        data: dates.map((date): BranchDetailDailyChartDatum => {
+          const point = currentByDate.get(date);
+          return {
+            value: point?.total_daily ?? null,
+            statusLabel: point ? this.getDailyValueStatusLabel(point.daily_value_status) : undefined,
+          };
+        }),
+      },
+      {
+        name: 'Requerido diario',
+        color: '#a66a18',
+        data: dates.map((date): BranchDetailDailyChartDatum => ({
+          value: goalByDate.get(date)?.goal_expected_daily ?? null,
+        })),
+      },
+    ];
+
+    if (
+      response.goal_pace.status === 'available'
+      && response.goal_pace.projected_path?.status === 'available'
+    ) {
+      series.push({
+        name: 'Proyección total diaria',
+        color: '#24745b',
+        data: dates.map((date): BranchDetailDailyChartDatum => ({
+          value: projectedByDate.get(date)?.projected_daily_increment ?? null,
+        })),
+      });
+    }
+
+    return this.buildDailyBarChartOption(dates, response.metadata.track_date, series);
+  }
+
+  private buildBaseDailyChartOption(response: TrackBranchForecastDetailResponse): EChartsCoreOption {
+    const distribution = response.calendar_aligned_distribution;
+    if (distribution.status !== 'available' && distribution.status !== 'available_with_fallback') return {};
+
+    const currentByDate = new Map(response.series.current_track.points.map((point) => [point.date, point]));
+    const expectedByDate = new Map(response.series.historical_expected.points.map((point) => [point.date, point]));
+    const projectedByDate = new Map(
+      (response.series.comparable_base_projection.path?.points || [])
+        .filter((point) => point.point_kind === 'projected_future')
+        .map((point) => [point.date, point]),
+    );
+    const dates = distribution.points.map((point) => point.date);
+    return this.buildDailyBarChartOption(dates, response.metadata.track_date, [
+      {
+        name: 'Real base diario',
+        color: '#315f8c',
+        data: dates.map((date): BranchDetailDailyChartDatum => {
+          const point = currentByDate.get(date);
+          return {
+            value: point?.base_daily ?? null,
+            statusLabel: point ? this.getDailyValueStatusLabel(point.daily_value_status) : undefined,
+          };
+        }),
+      },
+      {
+        name: 'Esperado base diario',
+        color: '#a66a18',
+        data: dates.map((date): BranchDetailDailyChartDatum => ({
+          value: expectedByDate.get(date)?.expected_daily_total ?? null,
+        })),
+      },
+      {
+        name: 'Proyección base diaria',
+        color: '#278363',
+        data: dates.map((date): BranchDetailDailyChartDatum => ({
+          value: projectedByDate.get(date)?.projected_daily_increment ?? null,
+        })),
+      },
+    ]);
+  }
+
+  private buildDailyBarChartOption(
+    dates: string[],
+    cutoffDate: string,
+    dailySeries: Array<{ name: string; color: string; data: BranchDetailDailyChartDatum[] }>,
+  ): EChartsCoreOption {
+    return {
+      animation: false,
+      aria: { enabled: true, decal: { show: false } },
+      grid: { left: 18, right: 24, top: 72, bottom: 70, containLabel: true },
+      legend: { type: 'scroll', top: 8, left: 8, right: 8 },
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: { type: 'shadow' },
+        formatter: (params: unknown) => this.formatDailyTooltip(params),
+      },
+      xAxis: {
+        type: 'category',
+        data: dates,
+        axisLabel: {
+          interval: 0,
+          rotate: dates.length > 20 ? 55 : 0,
+          formatter: (value: string) => String(Number(value.slice(8, 10))),
+        },
+        name: 'Día',
+      },
+      yAxis: {
+        type: 'value',
+        name: 'Importe diario',
+        axisLabel: { formatter: (value: number) => this.formatCompactCurrency(value) },
+      },
+      series: dailySeries.map((series, index) => ({
+        name: series.name,
+        type: 'bar',
+        data: series.data,
+        itemStyle: { color: series.color },
+        emphasis: { focus: 'series' },
+        markLine: index === 0 ? {
+          silent: true,
+          symbol: 'none',
+          label: { formatter: 'Corte actual', color: '#526075' },
+          lineStyle: { color: '#687386', type: 'dashed', width: 1.25 },
+          data: [{ xAxis: cutoffDate }],
+        } : undefined,
+      })),
+    };
+  }
+
+  private formatDailyTooltip(params: unknown): string {
+    const items = Array.isArray(params) ? params : [params];
+    const validItems = items.filter((item): item is BranchDetailDailyTooltipParam => this.isDailyTooltipParam(item));
+    if (!validItems.length) return '';
+
+    const lines = validItems
+      .filter((item) => item.data.value !== null)
+      .map((item) => {
+        const status = item.data.statusLabel ? `<br><small>${item.data.statusLabel}</small>` : '';
+        return `${item.marker}${item.seriesName}: ${this.formatCurrency(item.data.value)}${status}`;
+      });
+    return [`<strong>${this.formatDate(validItems[0].name)}</strong>`, ...lines].join('<br>');
+  }
+
+  private isDailyTooltipParam(value: unknown): value is BranchDetailDailyTooltipParam {
+    if (typeof value !== 'object' || value === null) return false;
+    const candidate = value as Partial<BranchDetailDailyTooltipParam>;
+    return typeof candidate.marker === 'string'
+      && typeof candidate.seriesName === 'string'
+      && typeof candidate.name === 'string'
+      && typeof candidate.data === 'object'
+      && candidate.data !== null
+      && 'value' in candidate.data;
+  }
+
+  private buildGoalAuditRows(response: TrackBranchForecastDetailResponse): BranchDetailAuditRow[] {
+    const goalByDate = new Map(response.goal_pace.points.map((point) => [point.date, point]));
+    const projectedByDate = new Map(
+      (response.goal_pace.projected_path?.points || [])
+        .filter((point) => point.point_kind === 'projected_future')
+        .map((point) => [point.date, point]),
+    );
+    const currentByDate = new Map(response.series.current_track.points.map((point) => [point.date, point]));
+
+    return response.calendar_aligned_distribution.points.map((point) => {
+      const goal = goalByDate.get(point.date);
+      const current = currentByDate.get(point.date);
+      return this.toAuditRow(
+        point,
+        goal?.goal_expected_daily ?? null,
+        goal?.goal_expected_cumulative ?? null,
+        current?.total_daily ?? null,
+        projectedByDate.get(point.date)?.projected_daily_increment ?? null,
+        current?.daily_value_status,
+      );
+    });
+  }
+
+  private buildBaseAuditRows(response: TrackBranchForecastDetailResponse): BranchDetailAuditRow[] {
+    const expectedByDate = new Map(response.series.historical_expected.points.map((point) => [point.date, point]));
+    const projectedByDate = new Map(
+      (response.series.comparable_base_projection.path?.points || [])
+        .filter((point) => point.point_kind === 'projected_future')
+        .map((point) => [point.date, point]),
+    );
+    const currentByDate = new Map(response.series.current_track.points.map((point) => [point.date, point]));
+
+    return response.calendar_aligned_distribution.points.map((point) => {
+      const expected = expectedByDate.get(point.date);
+      const current = currentByDate.get(point.date);
+      return this.toAuditRow(
+        point,
+        expected?.expected_daily_total ?? null,
+        expected?.expected_cumulative_total ?? null,
+        current?.base_daily ?? null,
+        projectedByDate.get(point.date)?.projected_daily_increment ?? null,
+        current?.daily_value_status,
+      );
+    });
+  }
+
+  private toAuditRow(
+    point: TrackBranchCalendarAlignedDailyPoint,
+    expectedDaily: number | null,
+    expectedCumulative: number | null,
+    realDaily: number | null,
+    projectedDaily: number | null,
+    dailyStatus?: TrackBranchCurrentDailyValueStatus,
+  ): BranchDetailAuditRow {
+    return {
+      key: point.date,
+      dateLabel: this.formatDate(point.date),
+      comparableDayLabel: this.getComparableDayLabel(point.weekday, point.weekday_ordinal),
+      weightLabel: this.formatPercent(point.normalized_daily_weight),
+      expectedDailyLabel: this.formatCurrency(expectedDaily),
+      expectedCumulativeLabel: this.formatCurrency(expectedCumulative),
+      realDailyLabel: this.formatCurrency(realDaily),
+      projectedDailyLabel: this.formatCurrency(projectedDaily),
+      samplesLabel: point.samples_count ? `${point.samples_count} · ${this.formatYears(point.sample_years)}` : 'Sin muestras',
+      alignmentStatusLabel: point.used_fallback
+        ? this.getAlignmentKindLabel('last_weekday_occurrence_fallback')
+        : point.historical_samples.length
+          ? this.getAlignmentKindLabel('exact_ordinal_match')
+          : 'Sin muestra de calendario',
+      dailyValueStatusLabel: dailyStatus ? this.getDailyValueStatusLabel(dailyStatus) : 'Sin valor real reportado',
+      usedFallback: point.used_fallback,
+      dailyStatusTone: this.getDailyStatusTone(dailyStatus),
+      historicalSamples: point.historical_samples,
     };
   }
 
@@ -758,6 +1074,33 @@ export class TrackForecastBranchDetailComponent implements OnInit {
     ];
   }
 
+  private buildCalendarAlignmentItems(response: TrackBranchForecastDetailResponse): BranchDetailTraceItem[] {
+    const distribution = response.calendar_aligned_distribution;
+    return [
+      { label: 'Estado', value: this.getDistributionStatusLabel(distribution.status) },
+      { label: 'Método', value: 'Pesos históricos por día de la semana y posición dentro del mes' },
+      { label: 'Años solicitados', value: this.formatYears(distribution.comparison_years_requested) },
+      { label: 'Años usados', value: this.formatYears(distribution.comparison_years_used) },
+      {
+        label: 'Años excluidos',
+        value: distribution.comparison_years_excluded.length
+          ? distribution.comparison_years_excluded
+              .map((item) => `${item.year}: ${this.formatTechnicalLabel(item.reason)}`)
+              .join(' · ')
+          : 'Ninguno',
+      },
+      { label: 'Coincidencias exactas', value: String(distribution.exact_matches_count) },
+      { label: 'Fallbacks del mismo día', value: String(distribution.fallback_matches_count) },
+      { label: 'Fecha de corte', value: this.formatDate(response.metadata.track_date) },
+      {
+        label: 'Progreso histórico preservado',
+        value: this.formatPercent(distribution.historical_progress_pct_at_cutoff),
+      },
+      { label: 'Valor diario', value: 'Diferencia contra el acumulado del día calendario anterior' },
+      { label: 'Método diario', value: 'calendar_day_mtd_delta' },
+    ];
+  }
+
   private toGoalPaceCard(
     label: string,
     value: number | null,
@@ -872,6 +1215,68 @@ export class TrackForecastBranchDetailComponent implements OnInit {
     return explanations[status];
   }
 
+  getWeekdayLabel(weekday: string): string {
+    switch (weekday) {
+      case 'monday': return 'lunes';
+      case 'tuesday': return 'martes';
+      case 'wednesday': return 'miércoles';
+      case 'thursday': return 'jueves';
+      case 'friday': return 'viernes';
+      case 'saturday': return 'sábado';
+      case 'sunday': return 'domingo';
+      default: return this.formatTechnicalLabel(weekday);
+    }
+  }
+
+  getOrdinalLabel(ordinal: number): string {
+    return `${ordinal}.º`;
+  }
+
+  getComparableDayLabel(weekday: string, ordinal: number): string {
+    return `${this.getOrdinalLabel(ordinal)} ${this.getWeekdayLabel(weekday)}`;
+  }
+
+  getAlignmentKindLabel(kind: TrackBranchCalendarAlignmentKind): string {
+    return kind === 'exact_ordinal_match'
+      ? 'Coincidencia exacta'
+      : 'Última ocurrencia disponible del mismo día';
+  }
+
+  getDistributionStatusLabel(status: TrackBranchCalendarAlignedStatus): string {
+    const labels: Record<TrackBranchCalendarAlignedStatus, string> = {
+      available: 'Disponible',
+      available_with_fallback: 'Disponible con fallback del mismo día',
+      no_comparable_history: 'Sin historia comparable',
+      missing_cutoff_progress: 'Sin avance preservable al corte',
+      non_positive_segment_weight: 'Tramo sin peso histórico positivo',
+      missing_calendar_sample: 'Falta una muestra de calendario',
+    };
+    return labels[status];
+  }
+
+  getDailyValueStatusLabel(status: TrackBranchCurrentDailyValueStatus): string {
+    const labels: Record<TrackBranchCurrentDailyValueStatus, string> = {
+      available: 'Disponible',
+      available_with_negative_adjustment: 'Ajuste negativo registrado',
+      missing_previous_calendar_day: 'Falta el día calendario anterior',
+      inconsistent_components: 'Componentes inconsistentes',
+      missing_cumulative_value: 'Acumulado no disponible',
+    };
+    return labels[status];
+  }
+
+  formatYears(years: number[]): string {
+    return years.length ? years.join(', ') : 'Ninguno';
+  }
+
+  private getDailyStatusTone(
+    status?: TrackBranchCurrentDailyValueStatus,
+  ): BranchDetailAuditRow['dailyStatusTone'] {
+    if (!status || status === 'missing_previous_calendar_day' || status === 'missing_cumulative_value') return 'missing';
+    if (status === 'available') return 'available';
+    return 'warning';
+  }
+
   private getSignedTone(value: number | null): BranchDetailGoalCard['tone'] {
     if (value === null) return 'neutral';
     return value >= 0 ? 'favorable' : 'unfavorable';
@@ -882,7 +1287,7 @@ export class TrackForecastBranchDetailComponent implements OnInit {
     return value >= 1 ? 'favorable' : 'unfavorable';
   }
 
-  private formatCurrency(value: number | null): string {
+  formatCurrency(value: number | null): string {
     if (value === null) return 'No disponible';
     return new Intl.NumberFormat('es-MX', {
       style: 'currency',
@@ -911,7 +1316,7 @@ export class TrackForecastBranchDetailComponent implements OnInit {
     return magnitude;
   }
 
-  private formatPercent(value: number | null): string {
+  formatPercent(value: number | null): string {
     if (value === null) return 'No disponible';
     return new Intl.NumberFormat('es-MX', {
       style: 'percent',
@@ -919,7 +1324,7 @@ export class TrackForecastBranchDetailComponent implements OnInit {
     }).format(value);
   }
 
-  private formatDate(value: string): string {
+  formatDate(value: string): string {
     const date = new Date(`${value}T00:00:00`);
     if (Number.isNaN(date.getTime())) return 'No disponible';
     return new Intl.DateTimeFormat('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }).format(date);
@@ -948,6 +1353,8 @@ export class TrackForecastBranchDetailComponent implements OnInit {
   private resetPresentation(): void {
     this.chartOption = {};
     this.goalPaceChartOption = {};
+    this.goalPaceDailyChartOption = {};
+    this.baseDailyChartOption = {};
     this.summaryCards = [];
     this.goalPaceCards = [];
     this.goalPaceExecutiveMessage = '';
@@ -958,5 +1365,9 @@ export class TrackForecastBranchDetailComponent implements OnInit {
     this.warningMessages = [];
     this.usedYearsLabel = 'No disponible';
     this.excludedYearsLabel = 'Ninguno';
+    this.goalAuditRows = [];
+    this.baseAuditRows = [];
+    this.calendarAlignmentItems = [];
+    this.expandedAuditRows.clear();
   }
 }
