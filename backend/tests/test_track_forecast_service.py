@@ -1,3 +1,5 @@
+from calendar import monthrange
+from contextlib import ExitStack
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from copy import deepcopy
@@ -16,6 +18,7 @@ from app.models.warehouse import (
 from app.warehouse.services.track_forecast_service import (
     BranchForecastDetailConsistencyError,
     _build_branch_goal_pace_detail,
+    build_branch_calendar_aligned_daily_weights,
     build_branch_forecast_detail,
     build_branch_historical_expected_daily_curve,
     build_branch_historical_daily_series,
@@ -188,21 +191,43 @@ class BranchForecastDetailOrchestratorTest(unittest.TestCase):
         ]
 
     def _historical_series(self):
-        return [
-            {
-                "year": 2023,
-                "business_month": date(2023, 7, 1),
+        def available_series(year, daily_totals):
+            business_month = date(year, 7, 1)
+            cumulative = Decimal("0")
+            points = []
+            for day, raw_total in enumerate(daily_totals, start=1):
+                daily_total = Decimal(raw_total)
+                cumulative += daily_total
+                points.append(
+                    {
+                        "day": day,
+                        "date": business_month.replace(day=day),
+                        "daily_total": daily_total,
+                        "cumulative_total": cumulative,
+                        "has_positive_sale_row": daily_total > 0,
+                    }
+                )
+            return {
+                "year": year,
+                "business_month": business_month,
                 "status": "available",
-                "snapshot_id": 10,
-                "snapshot_business_date": date(2023, 7, 31),
+                "snapshot_id": year,
+                "snapshot_business_date": business_month.replace(day=31),
                 "days_in_month": 31,
                 "days_with_positive_sale_row": 31,
-                "first_positive_sale_date": date(2023, 7, 1),
-                "last_positive_sale_date": date(2023, 7, 31),
-                "mtd_at_cutoff": Decimal("50"),
-                "full_month_total": Decimal("100"),
-                "points": [],
-            },
+                "first_positive_sale_date": business_month,
+                "last_positive_sale_date": business_month.replace(day=31),
+                "mtd_at_cutoff": points[11]["cumulative_total"],
+                "full_month_total": cumulative,
+                "points": points,
+            }
+
+        strong_weekday_totals = []
+        for day in range(1, 32):
+            weekday = date(2023, 7, day).weekday()
+            strong_weekday_totals.append("5" if weekday in (0, 1) else "1")
+        return [
+            available_series(2023, strong_weekday_totals),
             {
                 "year": 2024,
                 "business_month": date(2024, 7, 1),
@@ -217,6 +242,7 @@ class BranchForecastDetailOrchestratorTest(unittest.TestCase):
                 "full_month_total": None,
                 "points": [],
             },
+            available_series(2025, ["1"] * 31),
         ]
 
     def _expected_curve(self, *, status="available"):
@@ -277,28 +303,102 @@ class BranchForecastDetailOrchestratorTest(unittest.TestCase):
             "points": points,
         }
 
+    def _calendar_distribution(self, *, expected_curve=None):
+        expected_curve = expected_curve or self._expected_curve()
+        points = []
+        previous_progress = Decimal("0")
+        for day in range(1, 32):
+            curve_point = next(
+                (
+                    point
+                    for point in expected_curve.get("points", [])
+                    if point["day"] == day
+                ),
+                None,
+            )
+            cumulative_weight = (
+                curve_point["historical_progress_pct"]
+                if curve_point is not None
+                else None
+            )
+            normalized_weight = (
+                cumulative_weight - previous_progress
+                if cumulative_weight is not None
+                else None
+            )
+            target_date = self.TARGET_MONTH.replace(day=day)
+            points.append(
+                {
+                    "day": day,
+                    "date": target_date,
+                    "weekday": target_date.strftime("%A").lower(),
+                    "weekday_index": target_date.weekday(),
+                    "weekday_ordinal": ((day - 1) // 7) + 1,
+                    "alignment_key": (
+                        f"{target_date.strftime('%A').lower()}:"
+                        f"{((day - 1) // 7) + 1}"
+                    ),
+                    "raw_daily_weight": normalized_weight,
+                    "normalized_daily_weight": normalized_weight,
+                    "cumulative_weight": cumulative_weight,
+                    "samples_count": 2 if curve_point is not None else 0,
+                    "sample_years": [2023, 2025] if curve_point is not None else [],
+                    "used_fallback": False,
+                    "historical_samples": [],
+                }
+            )
+            if cumulative_weight is not None:
+                previous_progress = cumulative_weight
+        return {
+            "status": (
+                "available"
+                if expected_curve.get("status") == "available"
+                else "no_comparable_history"
+            ),
+            "method": "weekday_ordinal_aligned_historical_weights",
+            "target_month": self.TARGET_MONTH,
+            "cutoff_day": 12,
+            "historical_progress_pct_at_cutoff": expected_curve.get(
+                "historical_progress_pct_at_cutoff"
+            ),
+            "comparison_years_requested": [2023, 2024, 2025],
+            "comparison_years_used": [2023, 2025],
+            "comparison_years_excluded": [
+                {"year": 2024, "reason": "no_canonical_snapshot"}
+            ],
+            "exact_matches_count": 62,
+            "fallback_matches_count": 0,
+            "points": points,
+        }
+
     def _build(self, *, forecast=None, selections=None, expected_curve=None):
         forecast = forecast or self._forecast()
         selections = selections if selections is not None else self._selections()
-        expected_curve = expected_curve or self._expected_curve()
-        with (
-            patch(
+        with ExitStack() as stack:
+            base_mock = stack.enter_context(patch(
                 "app.warehouse.services.track_forecast_service.build_venta_total_forecast",
                 return_value=forecast,
-            ) as base_mock,
-            patch(
+            ))
+            select_mock = stack.enter_context(patch(
                 "app.warehouse.services.track_forecast_service.select_track_daily_branch_versions",
                 return_value=selections,
-            ) as select_mock,
-            patch(
+            ))
+            history_mock = stack.enter_context(patch(
                 "app.warehouse.services.track_forecast_service.build_branch_historical_daily_series",
                 return_value=self._historical_series(),
-            ) as history_mock,
-            patch(
-                "app.warehouse.services.track_forecast_service.build_branch_historical_expected_daily_curve",
-                return_value=expected_curve,
-            ),
-        ):
+            ))
+            if expected_curve is not None:
+                calendar_distribution = self._calendar_distribution(
+                    expected_curve=expected_curve
+                )
+                stack.enter_context(patch(
+                    "app.warehouse.services.track_forecast_service.build_branch_calendar_aligned_daily_weights",
+                    return_value=calendar_distribution,
+                ))
+                stack.enter_context(patch(
+                    "app.warehouse.services.track_forecast_service._build_branch_calendar_aligned_historical_expected_daily_curve",
+                    return_value=expected_curve,
+                ))
             result = build_branch_forecast_detail(
                 sucursal_canon=" tijuana ",
                 track_date=self.TRACK_DATE,
@@ -344,6 +444,99 @@ class BranchForecastDetailOrchestratorTest(unittest.TestCase):
             scope="branch",
             branch=self.BRANCH,
         )
+
+    def test_calendar_distribution_drives_expected_base_and_goal_pace(self):
+        result, _, _, _ = self._build()
+        distribution = result["calendar_aligned_distribution"]
+        historical_expected = result["series"]["historical_expected"]
+        goal_pace = result["goal_pace"]
+
+        self.assertEqual(
+            distribution["method"],
+            "weekday_ordinal_aligned_historical_weights",
+        )
+        self.assertIn(
+            distribution["status"],
+            ("available", "available_with_fallback"),
+        )
+        self.assertEqual(
+            historical_expected["method"],
+            "weekday_ordinal_aligned_historical_weights",
+        )
+        self.assertTrue(historical_expected["calendar_alignment_applied"])
+        self.assertEqual(
+            historical_expected["distribution_status"], distribution["status"]
+        )
+        self.assertEqual(
+            historical_expected["historical_expected_mtd_at_cutoff"],
+            Decimal("100.0"),
+        )
+        self.assertEqual(
+            historical_expected["points"][-1]["expected_cumulative_total"],
+            Decimal("200.0"),
+        )
+        self.assertEqual(
+            sum(
+                (
+                    point["expected_daily_total"]
+                    for point in historical_expected["points"]
+                ),
+                Decimal("0"),
+            ),
+            Decimal("200.0"),
+        )
+        self.assertEqual(
+            goal_pace["method"],
+            "goal_month_by_weekday_ordinal_aligned_historical_weights",
+        )
+        self.assertEqual(goal_pace["goal_expected_mtd_at_cutoff"], Decimal("150.0"))
+        self.assertEqual(
+            goal_pace["points"][-1]["goal_expected_cumulative"],
+            Decimal("300.0"),
+        )
+
+    def test_aligned_paths_keep_anchors_and_strong_weekday_shape(self):
+        result, _, _, _ = self._build()
+        base_path = result["series"]["comparable_base_projection"]["path"]
+        total_path = result["goal_pace"]["projected_path"]
+
+        self.assertEqual(
+            base_path["points"][0]["projected_cumulative_total"],
+            Decimal("100.0"),
+        )
+        self.assertEqual(
+            base_path["points"][-1]["projected_cumulative_total"],
+            Decimal("200.0"),
+        )
+        self.assertEqual(
+            total_path["points"][0]["projected_cumulative_total"],
+            Decimal("120.0"),
+        )
+        self.assertEqual(
+            total_path["points"][-1]["projected_cumulative_total"],
+            Decimal("240.0"),
+        )
+        base_by_day = {point["day"]: point for point in base_path["points"]}
+        total_by_day = {point["day"]: point for point in total_path["points"]}
+        self.assertGreater(
+            base_by_day[13]["projected_daily_increment"],
+            base_by_day[15]["projected_daily_increment"],
+        )
+        self.assertGreater(
+            total_by_day[14]["projected_daily_increment"],
+            total_by_day[16]["projected_daily_increment"],
+        )
+
+    def test_observed_history_and_legacy_summary_fields_are_unchanged(self):
+        forecast = self._forecast()
+        expected_history = self._historical_series()
+        result, _, _, _ = self._build(forecast=forecast)
+
+        self.assertEqual(
+            result["series"]["historical_years"]["items"], expected_history
+        )
+        for field_name, expected_value in forecast["summary"].items():
+            self.assertEqual(result["summary"][field_name], expected_value)
 
     def test_resolved_cutoff_version_and_series_order_are_exact(self):
         result, _, select_mock, _ = self._build()
@@ -1184,6 +1377,262 @@ class BranchHistoricalDailySeriesTest(unittest.TestCase):
         self.assertEqual(item["points"], [])
 
 
+class BranchCalendarAlignedDailyWeightsTest(unittest.TestCase):
+    TARGET_MONTH = date(2026, 7, 1)
+    CUTOFF_DAY = 12
+
+    def _series(
+        self,
+        *,
+        year: int,
+        target_month: date | None = None,
+        daily_totals: list[str] | None = None,
+        status: str = "available",
+        full_month_total: Decimal | None = None,
+    ):
+        target_month = target_month or self.TARGET_MONTH
+        business_month = date(year, target_month.month, 1)
+        days_in_month = monthrange(year, target_month.month)[1]
+        if status != "available":
+            return {
+                "year": year,
+                "business_month": business_month,
+                "status": status,
+                "snapshot_id": None,
+                "snapshot_business_date": None,
+                "days_in_month": days_in_month,
+                "days_with_positive_sale_row": 0,
+                "first_positive_sale_date": None,
+                "last_positive_sale_date": None,
+                "mtd_at_cutoff": None,
+                "full_month_total": None,
+                "points": [],
+            }
+        raw_totals = daily_totals or ["1"] * days_in_month
+        cumulative = Decimal("0")
+        points = []
+        for day, raw_total in enumerate(raw_totals, start=1):
+            daily_total = Decimal(raw_total)
+            cumulative += daily_total
+            points.append(
+                {
+                    "day": day,
+                    "date": business_month.replace(day=day),
+                    "daily_total": daily_total,
+                    "cumulative_total": cumulative,
+                    "has_positive_sale_row": daily_total > 0,
+                }
+            )
+        return {
+            "year": year,
+            "business_month": business_month,
+            "status": "available",
+            "snapshot_id": year,
+            "snapshot_business_date": business_month.replace(day=len(points)),
+            "days_in_month": days_in_month,
+            "days_with_positive_sale_row": sum(
+                point["has_positive_sale_row"] for point in points
+            ),
+            "first_positive_sale_date": business_month,
+            "last_positive_sale_date": business_month.replace(day=len(points)),
+            "mtd_at_cutoff": points[min(self.CUTOFF_DAY, len(points)) - 1][
+                "cumulative_total"
+            ],
+            "full_month_total": (
+                cumulative if full_month_total is None else full_month_total
+            ),
+            "points": points,
+        }
+
+    def _build(
+        self,
+        series=None,
+        *,
+        target_month: date | None = None,
+        cutoff_day: int | None = None,
+        progress: Decimal | None = Decimal("0.4"),
+    ):
+        target_month = target_month or self.TARGET_MONTH
+        return build_branch_calendar_aligned_daily_weights(
+            historical_series=series
+            if series is not None
+            else [self._series(year=2025, target_month=target_month)],
+            target_month=target_month,
+            cutoff_day=cutoff_day or self.CUTOFF_DAY,
+            historical_progress_pct_at_cutoff=progress,
+        )
+
+    def test_weekday_ordinals_cover_first_through_fifth(self):
+        result = self._build()
+
+        self.assertEqual(result["status"], "available_with_fallback")
+        self.assertEqual(
+            {point["weekday_ordinal"] for point in result["points"]},
+            {1, 2, 3, 4, 5},
+        )
+        fifth_friday = result["points"][30]
+        self.assertEqual(fifth_friday["weekday"], "friday")
+        self.assertEqual(fifth_friday["weekday_ordinal"], 5)
+
+    def test_second_monday_aligns_to_historical_second_monday_not_day(self):
+        result = self._build()
+        target_point = result["points"][12]
+        sample = target_point["historical_samples"][0]
+
+        self.assertEqual(target_point["date"], date(2026, 7, 13))
+        self.assertEqual(target_point["alignment_key"], "monday:2")
+        self.assertEqual(sample["source_date"], date(2025, 7, 14))
+        self.assertNotEqual(sample["source_day"], target_point["day"])
+        self.assertEqual(sample["alignment_kind"], "exact_ordinal_match")
+
+    def test_fifth_weekday_uses_explicit_same_weekday_fallback(self):
+        result = self._build()
+        target_point = result["points"][30]
+        sample = target_point["historical_samples"][0]
+
+        self.assertEqual(sample["source_date"], date(2025, 7, 25))
+        self.assertEqual(sample["source_weekday"], "friday")
+        self.assertEqual(
+            sample["alignment_kind"],
+            "last_weekday_occurrence_fallback",
+        )
+        self.assertTrue(target_point["used_fallback"])
+
+    def test_zero_sale_is_a_valid_decimal_sample(self):
+        totals = ["1"] * 31
+        totals[24] = "0"
+        result = self._build([self._series(year=2025, daily_totals=totals)])
+        sample = result["points"][30]["historical_samples"][0]
+
+        self.assertEqual(sample["source_daily_total"], Decimal("0"))
+        self.assertEqual(sample["sample_daily_share"], Decimal("0"))
+        self.assertIsInstance(result["points"][0]["raw_daily_weight"], Decimal)
+        self.assertIsInstance(
+            result["points"][0]["normalized_daily_weight"], Decimal
+        )
+
+    def test_raw_weight_uses_monetary_aggregate_formula(self):
+        totals_2024 = ["1"] * 31
+        totals_2025 = ["2"] * 31
+        series_2024 = self._series(year=2024, daily_totals=totals_2024)
+        series_2025 = self._series(year=2025, daily_totals=totals_2025)
+        result = self._build([series_2024, series_2025])
+        point = result["points"][12]
+        numerator = sum(
+            (sample["source_daily_total"] for sample in point["historical_samples"]),
+            Decimal("0"),
+        )
+        denominator = sum(
+            (
+                sample["source_full_month_total"]
+                for sample in point["historical_samples"]
+            ),
+            Decimal("0"),
+        )
+
+        self.assertEqual(point["raw_daily_weight"], numerator / denominator)
+        self.assertEqual(point["sample_years"], [2024, 2025])
+
+    def test_segment_normalization_and_cumulative_are_exact(self):
+        progress = Decimal("0.417")
+        result = self._build(progress=progress)
+        normalized = [
+            point["normalized_daily_weight"] for point in result["points"]
+        ]
+        cumulative = [point["cumulative_weight"] for point in result["points"]]
+
+        self.assertEqual(sum(normalized[:12], Decimal("0")), progress)
+        self.assertEqual(
+            sum(normalized[12:], Decimal("0")), Decimal("1") - progress
+        )
+        self.assertEqual(cumulative[-1], Decimal("1"))
+        self.assertEqual(cumulative, sorted(cumulative))
+
+    def test_records_used_years_samples_and_match_counts(self):
+        result = self._build(
+            [self._series(year=2024), self._series(year=2025)]
+        )
+
+        self.assertEqual(result["comparison_years_used"], [2024, 2025])
+        self.assertGreater(result["exact_matches_count"], 0)
+        self.assertGreater(result["fallback_matches_count"], 0)
+        self.assertEqual(result["points"][0]["samples_count"], 2)
+
+    def test_missing_sample_has_explicit_status_without_invented_weight(self):
+        malformed = self._series(year=2025)
+        malformed["points"] = malformed["points"][:1]
+        result = self._build([malformed])
+
+        self.assertEqual(result["status"], "missing_calendar_sample")
+        missing_point = next(
+            point for point in result["points"] if point["samples_count"] == 0
+        )
+        self.assertIsNone(missing_point["raw_daily_weight"])
+        self.assertIsNone(missing_point["normalized_daily_weight"])
+
+    def test_non_positive_segment_weight_has_explicit_status(self):
+        series = self._series(
+            year=2025,
+            daily_totals=["0"] * 31,
+            full_month_total=Decimal("1"),
+        )
+        result = self._build([series])
+
+        self.assertEqual(result["status"], "non_positive_segment_weight")
+
+    def test_missing_cutoff_progress_has_explicit_status(self):
+        result = self._build(progress=None)
+
+        self.assertEqual(result["status"], "missing_cutoff_progress")
+
+    def test_leap_february_and_month_lengths_are_supported(self):
+        for target_month, expected_days in (
+            (date(2024, 2, 1), 29),
+            (date(2026, 4, 1), 30),
+            (date(2026, 7, 1), 31),
+        ):
+            with self.subTest(target_month=target_month):
+                result = self._build(
+                    [self._series(year=2023, target_month=target_month)],
+                    target_month=target_month,
+                    cutoff_day=min(12, expected_days),
+                )
+                self.assertEqual(len(result["points"]), expected_days)
+                self.assertEqual(result["points"][-1]["cumulative_weight"], Decimal("1"))
+
+    def test_single_comparable_year_is_available(self):
+        result = self._build([self._series(year=2025)])
+
+        self.assertIn(result["status"], ("available", "available_with_fallback"))
+        self.assertEqual(result["comparison_years_used"], [2025])
+
+    def test_unavailable_years_are_excluded(self):
+        result = self._build(
+            [
+                self._series(year=2023, status="no_canonical_snapshot"),
+                self._series(year=2024, status="no_branch_rows"),
+                self._series(year=2025),
+            ]
+        )
+
+        self.assertEqual(result["comparison_years_used"], [2025])
+        self.assertEqual(
+            result["comparison_years_excluded"],
+            [
+                {"year": 2023, "reason": "no_canonical_snapshot"},
+                {"year": 2024, "reason": "no_branch_rows"},
+            ],
+        )
+
+    def test_without_comparable_history_is_explicit(self):
+        result = self._build(
+            [self._series(year=2025, status="no_canonical_snapshot")]
+        )
+
+        self.assertEqual(result["status"], "no_comparable_history")
+        self.assertEqual(result["comparison_years_used"], [])
+
+
 class BranchHistoricalExpectedDailyCurveTest(unittest.TestCase):
     TARGET_MONTH = date(2026, 7, 1)
     CUTOFF_DAY = 15
@@ -1539,6 +1988,56 @@ class BranchGoalPaceDetailTest(unittest.TestCase):
     ):
         target_month = target_month or self.TARGET_MONTH
         cutoff_day = cutoff_day or self.CUTOFF_DAY
+        historical_expected = historical_expected or self._expected_curve(
+            target_month=target_month,
+            cutoff_day=cutoff_day,
+        )
+        previous_progress = Decimal("0")
+        distribution_points = []
+        for curve_point in historical_expected["points"]:
+            progress = curve_point["historical_progress_pct"]
+            normalized_weight = progress - previous_progress
+            point_date = curve_point["date"]
+            distribution_points.append(
+                {
+                    "day": curve_point["day"],
+                    "date": point_date,
+                    "weekday": point_date.strftime("%A").lower(),
+                    "weekday_index": point_date.weekday(),
+                    "weekday_ordinal": ((point_date.day - 1) // 7) + 1,
+                    "alignment_key": (
+                        f"{point_date.strftime('%A').lower()}:"
+                        f"{((point_date.day - 1) // 7) + 1}"
+                    ),
+                    "raw_daily_weight": normalized_weight,
+                    "normalized_daily_weight": normalized_weight,
+                    "cumulative_weight": progress,
+                    "samples_count": curve_point["samples_count"],
+                    "sample_years": curve_point["sample_years"].copy(),
+                    "used_fallback": False,
+                    "historical_samples": [],
+                }
+            )
+            previous_progress = progress
+        distribution = {
+            "status": (
+                "available"
+                if historical_expected["status"] == "available"
+                else "no_comparable_history"
+            ),
+            "method": "weekday_ordinal_aligned_historical_weights",
+            "target_month": target_month,
+            "cutoff_day": cutoff_day,
+            "historical_progress_pct_at_cutoff": historical_expected[
+                "historical_progress_pct_at_cutoff"
+            ],
+            "comparison_years_requested": [2024, 2025],
+            "comparison_years_used": [2024, 2025],
+            "comparison_years_excluded": [],
+            "exact_matches_count": len(distribution_points) * 2,
+            "fallback_matches_count": 0,
+            "points": distribution_points,
+        }
         return _build_branch_goal_pace_detail(
             goal_status=goal_status,
             goal_month=goal_month,
@@ -1546,11 +2045,8 @@ class BranchGoalPaceDetailTest(unittest.TestCase):
             projected_close=projected_close,
             target_month=target_month,
             cutoff_day=cutoff_day,
-            historical_expected=historical_expected
-            or self._expected_curve(
-                target_month=target_month,
-                cutoff_day=cutoff_day,
-            ),
+            historical_expected=historical_expected,
+            calendar_aligned_distribution=distribution,
         )
 
     def test_available_contract_has_explicit_basis_method_and_metadata(self):
@@ -1560,7 +2056,10 @@ class BranchGoalPaceDetailTest(unittest.TestCase):
         self.assertEqual(result["metric_basis"], "total_mtd")
         self.assertEqual(result["goal_metric_basis"], "total_mtd")
         self.assertEqual(result["distribution_basis"], "venta_total_base")
-        self.assertEqual(result["method"], "goal_month_by_historical_progress")
+        self.assertEqual(
+            result["method"],
+            "goal_month_by_weekday_ordinal_aligned_historical_weights",
+        )
         self.assertTrue(result["includes_agregadoras"])
         self.assertTrue(result["aggregadoras_assumed_same_daily_shape"])
         self.assertIn("venta base", result["comparability_note"])
