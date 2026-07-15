@@ -73,12 +73,57 @@ class TrackForecastRoutesTest(unittest.TestCase):
                     "source": "existing_stable_forecast",
                 },
             },
+            "calendar_aligned_distribution": {
+                "status": "available_with_fallback",
+                "method": "weekday_ordinal_aligned_historical_weights",
+                "target_month": date(2026, 7, 1),
+                "cutoff_day": 12,
+                "historical_progress_pct_at_cutoff": Decimal("0.50"),
+                "comparison_years_requested": [2023, 2024, 2025],
+                "comparison_years_used": [2023, 2025],
+                "comparison_years_excluded": [
+                    {"year": 2024, "reason": "no_canonical_snapshot"}
+                ],
+                "exact_matches_count": 61,
+                "fallback_matches_count": 1,
+                "points": [
+                    {
+                        "day": 31,
+                        "date": date(2026, 7, 31),
+                        "weekday": "friday",
+                        "weekday_index": 4,
+                        "weekday_ordinal": 5,
+                        "alignment_key": "friday:5",
+                        "raw_daily_weight": Decimal("0.03"),
+                        "normalized_daily_weight": Decimal("0.04"),
+                        "cumulative_weight": Decimal("1"),
+                        "samples_count": 1,
+                        "sample_years": [2025],
+                        "used_fallback": True,
+                        "historical_samples": [
+                            {
+                                "year": 2025,
+                                "source_date": date(2025, 7, 25),
+                                "source_day": 25,
+                                "source_weekday": "friday",
+                                "source_weekday_ordinal": 4,
+                                "alignment_kind": (
+                                    "last_weekday_occurrence_fallback"
+                                ),
+                                "source_daily_total": Decimal("3.00"),
+                                "source_full_month_total": Decimal("100.00"),
+                                "sample_daily_share": Decimal("0.03"),
+                            }
+                        ],
+                    }
+                ],
+            },
             "goal_pace": {
                 "status": "available",
                 "metric_basis": "total_mtd",
                 "goal_metric_basis": "total_mtd",
                 "distribution_basis": "venta_total_base",
-                "method": "goal_month_by_historical_progress",
+                "method": "goal_month_by_weekday_ordinal_aligned_historical_weights",
                 "includes_agregadoras": True,
                 "aggregadoras_assumed_same_daily_shape": True,
                 "comparability_note": "Distribución histórica de venta base aplicada a la meta total.",
@@ -134,6 +179,9 @@ class TrackForecastRoutesTest(unittest.TestCase):
                 },
                 "historical_expected": {
                     "source_basis": "venta_total_base",
+                    "method": "weekday_ordinal_aligned_historical_weights",
+                    "distribution_status": "available_with_fallback",
+                    "calendar_alignment_applied": True,
                     "points": [],
                 },
                 "comparable_base_projection": {
@@ -178,6 +226,11 @@ class TrackForecastRoutesTest(unittest.TestCase):
         payload = response.get_json()
         self.assertEqual(payload["status"], "ok")
         self.assertIn("summary", payload)
+        self.assertIn("calendar_aligned_distribution", payload)
+        self.assertEqual(
+            payload["calendar_aligned_distribution"]["method"],
+            "weekday_ordinal_aligned_historical_weights",
+        )
         self.assertIn("goal_pace", payload)
         self.assertEqual(payload["goal_pace"]["status"], "available")
         self.assertIn("series", payload)
@@ -398,6 +451,12 @@ class TrackForecastRoutesTest(unittest.TestCase):
             ],
             240.0,
         )
+        distribution_point = payload["calendar_aligned_distribution"]["points"][0]
+        historical_sample = distribution_point["historical_samples"][0]
+        self.assertEqual(distribution_point["date"], "2026-07-31")
+        self.assertEqual(distribution_point["normalized_daily_weight"], 0.04)
+        self.assertEqual(historical_sample["source_date"], "2025-07-25")
+        self.assertEqual(historical_sample["source_daily_total"], 3.0)
 
     def test_branch_detail_serializes_no_goal_status(self):
         detail_payload = deepcopy(self._detail_payload())

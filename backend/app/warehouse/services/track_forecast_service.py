@@ -89,6 +89,61 @@ class BranchHistoricalYearSeries(TypedDict):
     points: list[BranchHistoricalDailyPoint]
 
 
+BranchCalendarAlignedStatus = Literal[
+    "available",
+    "available_with_fallback",
+    "no_comparable_history",
+    "missing_cutoff_progress",
+    "non_positive_segment_weight",
+    "missing_calendar_sample",
+]
+
+
+class BranchCalendarAlignedHistoricalSample(TypedDict):
+    year: int
+    source_date: date
+    source_day: int
+    source_weekday: str
+    source_weekday_ordinal: int
+    alignment_kind: Literal[
+        "exact_ordinal_match",
+        "last_weekday_occurrence_fallback",
+    ]
+    source_daily_total: Decimal
+    source_full_month_total: Decimal
+    sample_daily_share: Decimal
+
+
+class BranchCalendarAlignedDailyPoint(TypedDict):
+    day: int
+    date: date
+    weekday: str
+    weekday_index: int
+    weekday_ordinal: int
+    alignment_key: str
+    raw_daily_weight: Decimal | None
+    normalized_daily_weight: Decimal | None
+    cumulative_weight: Decimal | None
+    samples_count: int
+    sample_years: list[int]
+    used_fallback: bool
+    historical_samples: list[BranchCalendarAlignedHistoricalSample]
+
+
+class BranchCalendarAlignedDistribution(TypedDict):
+    status: BranchCalendarAlignedStatus
+    method: Literal["weekday_ordinal_aligned_historical_weights"]
+    target_month: date
+    cutoff_day: int
+    historical_progress_pct_at_cutoff: Decimal | None
+    comparison_years_requested: list[int]
+    comparison_years_used: list[int]
+    comparison_years_excluded: list[BranchHistoricalExpectedExcludedYear]
+    exact_matches_count: int
+    fallback_matches_count: int
+    points: list[BranchCalendarAlignedDailyPoint]
+
+
 class BranchHistoricalExpectedDailyPoint(TypedDict):
     day: int
     date: date
@@ -120,6 +175,8 @@ class BranchHistoricalExpectedCurve(TypedDict):
     historical_expected_month_total: Decimal | None
     historical_progress_pct_at_cutoff: Decimal | None
     historical_expected_mtd_at_cutoff: Decimal | None
+    distribution_status: BranchCalendarAlignedStatus | None
+    calendar_alignment_applied: bool
     points: list[BranchHistoricalExpectedDailyPoint]
 
 
@@ -184,7 +241,7 @@ class BranchGoalPaceDetail(TypedDict):
     metric_basis: Literal["total_mtd"]
     goal_metric_basis: Literal["total_mtd"]
     distribution_basis: Literal["venta_total_base"]
-    method: Literal["goal_month_by_historical_progress"]
+    method: Literal["goal_month_by_weekday_ordinal_aligned_historical_weights"]
     includes_agregadoras: Literal[True]
     aggregadoras_assumed_same_daily_shape: Literal[True]
     comparability_note: str
@@ -611,6 +668,234 @@ def build_branch_historical_daily_series(
     return series
 
 
+_WEEKDAY_KEYS = (
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+    "sunday",
+)
+
+
+def build_branch_calendar_aligned_daily_weights(
+    *,
+    historical_series: Sequence[BranchHistoricalYearSeries],
+    target_month: date,
+    cutoff_day: int,
+    historical_progress_pct_at_cutoff: Decimal | None,
+) -> BranchCalendarAlignedDistribution:
+    target_month = target_month.replace(day=1)
+    target_days_in_month = monthrange(target_month.year, target_month.month)[1]
+    if not 1 <= cutoff_day <= target_days_in_month:
+        raise ValueError("cutoff_day debe pertenecer a target_month.")
+
+    method = "weekday_ordinal_aligned_historical_weights"
+    comparison_years_requested = sorted(
+        {series["year"] for series in historical_series}
+    )
+    usable_series: list[tuple[BranchHistoricalYearSeries, Decimal]] = []
+    excluded_years: list[BranchHistoricalExpectedExcludedYear] = []
+    for series in historical_series:
+        if series["status"] != "available":
+            excluded_years.append(
+                {"year": series["year"], "reason": series["status"]}
+            )
+            continue
+        if not series["points"]:
+            excluded_years.append(
+                {"year": series["year"], "reason": "no_points"}
+            )
+            continue
+        full_month_total = series["full_month_total"]
+        if full_month_total is None or full_month_total <= 0:
+            excluded_years.append(
+                {
+                    "year": series["year"],
+                    "reason": "non_positive_full_month_total",
+                }
+            )
+            continue
+        usable_series.append((series, full_month_total))
+
+    comparison_years_used = [series["year"] for series, _ in usable_series]
+    points: list[BranchCalendarAlignedDailyPoint] = []
+    exact_matches_count = 0
+    fallback_matches_count = 0
+
+    for target_day in range(1, target_days_in_month + 1):
+        target_date = target_month.replace(day=target_day)
+        weekday_index = target_date.weekday()
+        weekday = _WEEKDAY_KEYS[weekday_index]
+        weekday_ordinal = ((target_day - 1) // 7) + 1
+        historical_samples: list[BranchCalendarAlignedHistoricalSample] = []
+
+        for series, full_month_total in usable_series:
+            weekday_points = [
+                point
+                for point in series["points"]
+                if point["date"].weekday() == weekday_index
+            ]
+            source_point: BranchHistoricalDailyPoint | None = None
+            alignment_kind: Literal[
+                "exact_ordinal_match",
+                "last_weekday_occurrence_fallback",
+            ] = "exact_ordinal_match"
+            if len(weekday_points) >= weekday_ordinal:
+                source_point = weekday_points[weekday_ordinal - 1]
+            elif weekday_ordinal == 5 and weekday_points:
+                source_point = weekday_points[-1]
+                alignment_kind = "last_weekday_occurrence_fallback"
+
+            if source_point is None:
+                continue
+
+            if alignment_kind == "exact_ordinal_match":
+                exact_matches_count += 1
+            else:
+                fallback_matches_count += 1
+            source_date = source_point["date"]
+            source_daily_total = source_point["daily_total"]
+            historical_samples.append(
+                {
+                    "year": series["year"],
+                    "source_date": source_date,
+                    "source_day": source_point["day"],
+                    "source_weekday": _WEEKDAY_KEYS[source_date.weekday()],
+                    "source_weekday_ordinal": ((source_date.day - 1) // 7) + 1,
+                    "alignment_kind": alignment_kind,
+                    "source_daily_total": source_daily_total,
+                    "source_full_month_total": full_month_total,
+                    "sample_daily_share": source_daily_total / full_month_total,
+                }
+            )
+
+        raw_daily_weight = None
+        if historical_samples:
+            raw_daily_weight = sum(
+                (sample["source_daily_total"] for sample in historical_samples),
+                Decimal("0"),
+            ) / sum(
+                (
+                    sample["source_full_month_total"]
+                    for sample in historical_samples
+                ),
+                Decimal("0"),
+            )
+        points.append(
+            {
+                "day": target_day,
+                "date": target_date,
+                "weekday": weekday,
+                "weekday_index": weekday_index,
+                "weekday_ordinal": weekday_ordinal,
+                "alignment_key": f"{weekday}:{weekday_ordinal}",
+                "raw_daily_weight": raw_daily_weight,
+                "normalized_daily_weight": None,
+                "cumulative_weight": None,
+                "samples_count": len(historical_samples),
+                "sample_years": sorted(
+                    sample["year"] for sample in historical_samples
+                ),
+                "used_fallback": any(
+                    sample["alignment_kind"]
+                    == "last_weekday_occurrence_fallback"
+                    for sample in historical_samples
+                ),
+                "historical_samples": historical_samples,
+            }
+        )
+
+    def result(status: BranchCalendarAlignedStatus) -> BranchCalendarAlignedDistribution:
+        return {
+            "status": status,
+            "method": method,
+            "target_month": target_month,
+            "cutoff_day": cutoff_day,
+            "historical_progress_pct_at_cutoff": (
+                historical_progress_pct_at_cutoff
+            ),
+            "comparison_years_requested": comparison_years_requested,
+            "comparison_years_used": comparison_years_used,
+            "comparison_years_excluded": excluded_years,
+            "exact_matches_count": exact_matches_count,
+            "fallback_matches_count": fallback_matches_count,
+            "points": points,
+        }
+
+    if not usable_series:
+        return result("no_comparable_history")
+    if any(point["raw_daily_weight"] is None for point in points):
+        return result("missing_calendar_sample")
+    if (
+        historical_progress_pct_at_cutoff is None
+        or not historical_progress_pct_at_cutoff.is_finite()
+        or not Decimal("0")
+        <= historical_progress_pct_at_cutoff
+        <= Decimal("1")
+        or (
+            cutoff_day == target_days_in_month
+            and historical_progress_pct_at_cutoff != Decimal("1")
+        )
+    ):
+        return result("missing_cutoff_progress")
+
+    segment_definitions = (
+        (range(0, cutoff_day), historical_progress_pct_at_cutoff),
+        (
+            range(cutoff_day, target_days_in_month),
+            Decimal("1") - historical_progress_pct_at_cutoff,
+        ),
+    )
+    for indexes, segment_target in segment_definitions:
+        segment_indexes = list(indexes)
+        if not segment_indexes:
+            continue
+        raw_weights = [
+            points[index]["raw_daily_weight"] for index in segment_indexes
+        ]
+        if any(weight is None or weight < 0 for weight in raw_weights):
+            return result("non_positive_segment_weight")
+        segment_raw_weight = sum(
+            (weight for weight in raw_weights if weight is not None),
+            Decimal("0"),
+        )
+        if segment_raw_weight <= 0:
+            return result("non_positive_segment_weight")
+
+        normalized_before_last = Decimal("0")
+        for index in segment_indexes[:-1]:
+            raw_weight = points[index]["raw_daily_weight"]
+            assert raw_weight is not None
+            normalized_weight = (
+                raw_weight / segment_raw_weight * segment_target
+            )
+            points[index]["normalized_daily_weight"] = normalized_weight
+            normalized_before_last += normalized_weight
+        last_normalized_weight = segment_target - normalized_before_last
+        if last_normalized_weight < 0:
+            return result("non_positive_segment_weight")
+        points[segment_indexes[-1]]["normalized_daily_weight"] = (
+            last_normalized_weight
+        )
+
+    cumulative_weight = Decimal("0")
+    for point in points:
+        normalized_weight = point["normalized_daily_weight"]
+        if normalized_weight is None or normalized_weight < 0:
+            return result("non_positive_segment_weight")
+        cumulative_weight += normalized_weight
+        point["cumulative_weight"] = cumulative_weight
+    points[-1]["cumulative_weight"] = Decimal("1")
+
+    return result(
+        "available_with_fallback"
+        if fallback_matches_count
+        else "available"
+    )
+
+
 def build_branch_historical_expected_daily_curve(
     *,
     historical_series: Sequence[BranchHistoricalYearSeries],
@@ -754,6 +1039,123 @@ def build_branch_historical_expected_daily_curve(
         "historical_expected_mtd_at_cutoff": cutoff_point[
             "expected_cumulative_total"
         ],
+        "points": points,
+    }
+
+
+def _build_branch_calendar_aligned_historical_expected_daily_curve(
+    *,
+    distribution: BranchCalendarAlignedDistribution,
+    target_month: date,
+    cutoff_day: int,
+    historical_expected_month_total: Decimal | None,
+) -> BranchHistoricalExpectedCurve:
+    target_month = target_month.replace(day=1)
+    days_in_month = monthrange(target_month.year, target_month.month)[1]
+    if not 1 <= cutoff_day <= days_in_month:
+        raise ValueError("cutoff_day debe pertenecer a target_month.")
+    if distribution["target_month"] != target_month:
+        raise ValueError("distribution no corresponde a target_month.")
+    if distribution["cutoff_day"] != cutoff_day:
+        raise ValueError("distribution no corresponde a cutoff_day.")
+
+    method = "weekday_ordinal_aligned_historical_weights"
+
+    def empty_result(
+        status: Literal[
+            "no_comparable_history",
+            "missing_expected_month_total",
+        ],
+    ) -> BranchHistoricalExpectedCurve:
+        return {
+            "status": status,
+            "method": method,
+            "target_month": target_month,
+            "cutoff_day": cutoff_day,
+            "comparison_years_requested": distribution[
+                "comparison_years_requested"
+            ].copy(),
+            "comparison_years_used": distribution[
+                "comparison_years_used"
+            ].copy(),
+            "comparison_years_excluded": [
+                dict(item) for item in distribution["comparison_years_excluded"]
+            ],
+            "samples_count": len(distribution["comparison_years_used"]),
+            "historical_expected_month_total": historical_expected_month_total,
+            "historical_progress_pct_at_cutoff": distribution[
+                "historical_progress_pct_at_cutoff"
+            ],
+            "historical_expected_mtd_at_cutoff": None,
+            "distribution_status": distribution["status"],
+            "calendar_alignment_applied": True,
+            "points": [],
+        }
+
+    if historical_expected_month_total is None:
+        return empty_result("missing_expected_month_total")
+    if distribution["status"] not in ("available", "available_with_fallback"):
+        return empty_result("no_comparable_history")
+
+    points: list[BranchHistoricalExpectedDailyPoint] = []
+    previous_expected_cumulative = Decimal("0")
+    for distribution_point in distribution["points"]:
+        normalized_daily_weight = distribution_point[
+            "normalized_daily_weight"
+        ]
+        cumulative_weight = distribution_point["cumulative_weight"]
+        if normalized_daily_weight is None or cumulative_weight is None:
+            raise BranchForecastDetailConsistencyError(
+                "La distribución calendario disponible contiene pesos nulos."
+            )
+        expected_cumulative_total = (
+            historical_expected_month_total * cumulative_weight
+        )
+        if distribution_point["day"] == days_in_month:
+            expected_cumulative_total = historical_expected_month_total
+        expected_daily_total = (
+            expected_cumulative_total - previous_expected_cumulative
+        )
+        if expected_daily_total < 0:
+            raise BranchForecastDetailConsistencyError(
+                "La distribución calendario produce incrementos históricos negativos."
+            )
+        points.append(
+            {
+                "day": distribution_point["day"],
+                "date": distribution_point["date"],
+                "historical_progress_pct": cumulative_weight,
+                "expected_daily_total": expected_daily_total,
+                "expected_cumulative_total": expected_cumulative_total,
+                "sample_years": distribution_point["sample_years"].copy(),
+                "samples_count": distribution_point["samples_count"],
+            }
+        )
+        previous_expected_cumulative = expected_cumulative_total
+
+    cutoff_point = points[cutoff_day - 1]
+    return {
+        "status": "available",
+        "method": method,
+        "target_month": target_month,
+        "cutoff_day": cutoff_day,
+        "comparison_years_requested": distribution[
+            "comparison_years_requested"
+        ].copy(),
+        "comparison_years_used": distribution["comparison_years_used"].copy(),
+        "comparison_years_excluded": [
+            dict(item) for item in distribution["comparison_years_excluded"]
+        ],
+        "samples_count": len(distribution["comparison_years_used"]),
+        "historical_expected_month_total": historical_expected_month_total,
+        "historical_progress_pct_at_cutoff": cutoff_point[
+            "historical_progress_pct"
+        ],
+        "historical_expected_mtd_at_cutoff": cutoff_point[
+            "expected_cumulative_total"
+        ],
+        "distribution_status": distribution["status"],
+        "calendar_alignment_applied": True,
         "points": points,
     }
 
@@ -3115,6 +3517,7 @@ def _build_branch_goal_pace_detail(
     target_month: date,
     cutoff_day: int,
     historical_expected: BranchHistoricalExpectedCurve,
+    calendar_aligned_distribution: BranchCalendarAlignedDistribution,
 ) -> BranchGoalPaceDetail:
     target_month = target_month.replace(day=1)
     days_in_target_month = monthrange(target_month.year, target_month.month)[1]
@@ -3132,7 +3535,7 @@ def _build_branch_goal_pace_detail(
         "metric_basis": "total_mtd",
         "goal_metric_basis": "total_mtd",
         "distribution_basis": "venta_total_base",
-        "method": "goal_month_by_historical_progress",
+        "method": "goal_month_by_weekday_ordinal_aligned_historical_weights",
         "includes_agregadoras": True,
         "aggregadoras_assumed_same_daily_shape": True,
         "comparability_note": comparability_note,
@@ -3162,13 +3565,14 @@ def _build_branch_goal_pace_detail(
             result["goal_month"] = None
         return result
     if goal_month <= 0:
-        progress_at_cutoff = historical_expected[
+        progress_at_cutoff = calendar_aligned_distribution[
             "historical_progress_pct_at_cutoff"
         ]
         if (
             real_mtd_at_cutoff is not None
             and real_mtd_at_cutoff.is_finite()
-            and historical_expected["status"] == "available"
+            and calendar_aligned_distribution["status"]
+            in ("available", "available_with_fallback")
             and progress_at_cutoff is not None
             and progress_at_cutoff.is_finite()
         ):
@@ -3207,6 +3611,9 @@ def _build_branch_goal_pace_detail(
     if (
         historical_expected["status"] != "available"
         or not historical_expected["points"]
+        or calendar_aligned_distribution["status"]
+        not in ("available", "available_with_fallback")
+        or not calendar_aligned_distribution["points"]
     ):
         result["status"] = "historical_curve_unavailable"
         return result
@@ -3214,24 +3621,30 @@ def _build_branch_goal_pace_detail(
     points: list[BranchGoalPacePoint] = []
     previous_cumulative = Decimal("0")
     cutoff_point: BranchGoalPacePoint | None = None
-    historical_points = historical_expected["points"]
-    for index, historical_point in enumerate(historical_points):
-        progress = historical_point["historical_progress_pct"]
+    distribution_points = calendar_aligned_distribution["points"]
+    for index, distribution_point in enumerate(distribution_points):
+        progress = distribution_point["cumulative_weight"]
+        normalized_weight = distribution_point["normalized_daily_weight"]
+        if progress is None or normalized_weight is None:
+            raise BranchForecastDetailConsistencyError(
+                "calendar_aligned_distribution contiene pesos nulos para goal_pace."
+            )
         if not progress.is_finite():
             raise BranchForecastDetailConsistencyError(
                 "historical_expected contiene avance histórico no finito."
             )
         expected_cumulative = goal_month * progress
-        if index == len(historical_points) - 1:
-            expected_cumulative = goal_month
         expected_daily = expected_cumulative - previous_cumulative
+        if index == len(distribution_points) - 1:
+            expected_cumulative = goal_month
+            expected_daily = expected_cumulative - previous_cumulative
         if expected_daily < 0:
             raise BranchForecastDetailConsistencyError(
                 "historical_expected produce incrementos negativos para goal_pace."
             )
         point: BranchGoalPacePoint = {
-            "day": historical_point["day"],
-            "date": historical_point["date"],
+            "day": distribution_point["day"],
+            "date": distribution_point["date"],
             "historical_progress_pct": progress,
             "goal_expected_daily": expected_daily,
             "goal_expected_cumulative": expected_cumulative,
@@ -3545,11 +3958,23 @@ def build_branch_forecast_detail(
         forecast_summary.get("historical_expected_month_total"),
         field_name="summary.historical_expected_month_total",
     )
-    historical_expected = build_branch_historical_expected_daily_curve(
+    historical_progress_pct_at_cutoff = _detail_decimal(
+        forecast_summary.get("historical_progress_pct"),
+        field_name="summary.historical_progress_pct",
+    )
+    calendar_aligned_distribution = build_branch_calendar_aligned_daily_weights(
         historical_series=historical_series,
         target_month=target_month,
         cutoff_day=cutoff_day,
-        historical_expected_month_total=historical_expected_month_total,
+        historical_progress_pct_at_cutoff=historical_progress_pct_at_cutoff,
+    )
+    historical_expected = (
+        _build_branch_calendar_aligned_historical_expected_daily_curve(
+            distribution=calendar_aligned_distribution,
+            target_month=target_month,
+            cutoff_day=cutoff_day,
+            historical_expected_month_total=historical_expected_month_total,
+        )
     )
     _validate_historical_expected_detail(
         expected_curve=historical_expected,
@@ -3591,6 +4016,7 @@ def build_branch_forecast_detail(
         target_month=target_month,
         cutoff_day=cutoff_day,
         historical_expected=historical_expected,
+        calendar_aligned_distribution=calendar_aligned_distribution,
     )
     for summary_field, goal_pace_field in (
         ("weighted_goal_mtd", "goal_expected_mtd_at_cutoff"),
@@ -3616,6 +4042,7 @@ def build_branch_forecast_detail(
             "comparison_years": comparison_years,
         },
         "summary": summary,
+        "calendar_aligned_distribution": calendar_aligned_distribution,
         "goal_pace": goal_pace,
         "forecast_context": {
             "forecast_cutoff": forecast["forecast_cutoff"],
