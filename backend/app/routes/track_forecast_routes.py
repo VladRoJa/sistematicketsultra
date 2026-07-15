@@ -11,6 +11,7 @@ from flask_jwt_extended import get_jwt_identity, jwt_required
 from app.routes.track_routes import (
     ALLOWED_GENERATION_MODES,
     _ensure_date,
+    _get_current_role,
     _require_track_read_role,
     _resolve_current_track_daily_version_for_query,
     _serialize_decimal,
@@ -52,6 +53,11 @@ def _get_forecast_beta_user_ids() -> set[int]:
 
 
 def _require_track_forecast_beta_user() -> None:
+    role = _get_current_role()
+
+    if role == "LECTOR_GLOBAL":
+        return
+
     allowed_user_ids = _get_forecast_beta_user_ids()
 
     if not allowed_user_ids:
