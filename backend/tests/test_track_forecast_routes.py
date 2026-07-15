@@ -1,5 +1,6 @@
 from datetime import date, datetime, timezone
 from decimal import Decimal
+from copy import deepcopy
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
@@ -72,6 +73,51 @@ class TrackForecastRoutesTest(unittest.TestCase):
                     "source": "existing_stable_forecast",
                 },
             },
+            "goal_pace": {
+                "status": "available",
+                "metric_basis": "total_mtd",
+                "goal_metric_basis": "total_mtd",
+                "distribution_basis": "venta_total_base",
+                "method": "goal_month_by_historical_progress",
+                "includes_agregadoras": True,
+                "aggregadoras_assumed_same_daily_shape": True,
+                "comparability_note": "Distribución histórica de venta base aplicada a la meta total.",
+                "goal_month": Decimal("300.00"),
+                "goal_expected_mtd_at_cutoff": Decimal("150.00"),
+                "real_mtd_at_cutoff": Decimal("120.00"),
+                "gap_vs_goal_pace": Decimal("-30.00"),
+                "gap_vs_goal_pace_pct": Decimal("-0.20"),
+                "remaining_to_goal": Decimal("180.00"),
+                "remaining_days": 19,
+                "required_daily_average": Decimal("9.473684210526315789"),
+                "projected_close": Decimal("240.00"),
+                "projected_gap_to_goal": Decimal("-60.00"),
+                "projected_goal_attainment_pct": Decimal("0.80"),
+                "points": [
+                    {
+                        "day": 12,
+                        "date": date(2026, 7, 12),
+                        "historical_progress_pct": Decimal("0.50"),
+                        "goal_expected_daily": Decimal("10.00"),
+                        "goal_expected_cumulative": Decimal("150.00"),
+                    }
+                ],
+                "projected_path": {
+                    "status": "available",
+                    "method": "historical_remaining_daily_weights",
+                    "metric_basis": "total_mtd",
+                    "points": [
+                        {
+                            "date": date(2026, 7, 12),
+                            "projected_cumulative_total": Decimal("120.00"),
+                        },
+                        {
+                            "date": date(2026, 7, 31),
+                            "projected_cumulative_total": Decimal("240.00"),
+                        },
+                    ],
+                },
+            },
             "series": {
                 "current_track": {
                     "source_basis": "track_daily_mart",
@@ -132,6 +178,8 @@ class TrackForecastRoutesTest(unittest.TestCase):
         payload = response.get_json()
         self.assertEqual(payload["status"], "ok")
         self.assertIn("summary", payload)
+        self.assertIn("goal_pace", payload)
+        self.assertEqual(payload["goal_pace"]["status"], "available")
         self.assertIn("series", payload)
         self.assertIn("data_quality", payload)
         self.assertEqual(payload["metadata"]["resolved_version"]["id"], 987)
@@ -342,6 +390,86 @@ class TrackForecastRoutesTest(unittest.TestCase):
             payload["metadata"]["resolved_version"]["generated_at_utc"],
             "2026-07-12T18:00:00+00:00",
         )
+        self.assertEqual(payload["goal_pace"]["goal_month"], 300.0)
+        self.assertEqual(payload["goal_pace"]["points"][0]["date"], "2026-07-12")
+        self.assertEqual(
+            payload["goal_pace"]["projected_path"]["points"][-1][
+                "projected_cumulative_total"
+            ],
+            240.0,
+        )
+
+    def test_branch_detail_serializes_no_goal_status(self):
+        detail_payload = deepcopy(self._detail_payload())
+        detail_payload["goal_pace"].update(
+            {
+                "status": "no_goal",
+                "goal_month": None,
+                "goal_expected_mtd_at_cutoff": None,
+                "points": [],
+                "projected_path": None,
+            }
+        )
+        with (
+            patch("app.routes.track_forecast_routes._require_track_read_role"),
+            patch("app.routes.track_forecast_routes._require_track_forecast_beta_user"),
+            patch(
+                "app.routes.track_forecast_routes._resolve_active_forecast_branch",
+                return_value="TIJUANA",
+            ),
+            patch(
+                "app.routes.track_forecast_routes._resolve_current_track_daily_version_for_query",
+                return_value=self._resolved_version(),
+            ),
+            patch(
+                "app.routes.track_forecast_routes.build_branch_forecast_detail",
+                return_value=detail_payload,
+            ),
+        ):
+            response = self.client.get(
+                "/api/track/forecast/branches/tijuana/detail?track_date=2026-07-12",
+                headers=self.headers,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["goal_pace"]["status"], "no_goal")
+
+    def test_branch_detail_serializes_projection_unavailable_status(self):
+        detail_payload = deepcopy(self._detail_payload())
+        detail_payload["goal_pace"].update(
+            {
+                "status": "projection_unavailable",
+                "projected_close": None,
+                "projected_gap_to_goal": None,
+                "projected_goal_attainment_pct": None,
+                "projected_path": None,
+            }
+        )
+        with (
+            patch("app.routes.track_forecast_routes._require_track_read_role"),
+            patch("app.routes.track_forecast_routes._require_track_forecast_beta_user"),
+            patch(
+                "app.routes.track_forecast_routes._resolve_active_forecast_branch",
+                return_value="TIJUANA",
+            ),
+            patch(
+                "app.routes.track_forecast_routes._resolve_current_track_daily_version_for_query",
+                return_value=self._resolved_version(),
+            ),
+            patch(
+                "app.routes.track_forecast_routes.build_branch_forecast_detail",
+                return_value=detail_payload,
+            ),
+        ):
+            response = self.client.get(
+                "/api/track/forecast/branches/tijuana/detail?track_date=2026-07-12",
+                headers=self.headers,
+            )
+
+        payload = response.get_json()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload["goal_pace"]["status"], "projection_unavailable")
+        self.assertEqual(len(payload["goal_pace"]["points"]), 1)
 
     def test_existing_venta_total_endpoint_contract_remains_available(self):
         base_payload = {"status": "ok", "metadata": {}, "summary": {}}
@@ -364,7 +492,9 @@ class TrackForecastRoutesTest(unittest.TestCase):
             )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.get_json()["status"], "ok")
+        payload = response.get_json()
+        self.assertEqual(payload["status"], "ok")
+        self.assertNotIn("goal_pace", payload)
         service_mock.assert_called_once()
 
 

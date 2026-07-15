@@ -15,6 +15,7 @@ from app.models.warehouse import (
 )
 from app.warehouse.services.track_forecast_service import (
     BranchForecastDetailConsistencyError,
+    _build_branch_goal_pace_detail,
     build_branch_forecast_detail,
     build_branch_historical_expected_daily_curve,
     build_branch_historical_daily_series,
@@ -121,6 +122,7 @@ class BranchForecastDetailOrchestratorTest(unittest.TestCase):
     VERSION_ID = 987
 
     def _forecast(self, *, quality_issue=None, progress=0.5):
+        pace_available = quality_issue is None and progress == 0.5
         return {
             "status": "ok",
             "metadata": {
@@ -139,6 +141,7 @@ class BranchForecastDetailOrchestratorTest(unittest.TestCase):
             "same_day_history": {"status": "available"},
             "warnings": [{"code": "fixture_warning"}],
             "data_quality": {
+                "goal_status": "available",
                 "history_coverage": {"confidence": "alta"},
                 "branch_projection_quality_issue": quality_issue,
             },
@@ -153,7 +156,11 @@ class BranchForecastDetailOrchestratorTest(unittest.TestCase):
                 "historical_expected_month_total": (
                     200.0 if progress == 0.5 else None
                 ),
-                "projected_close": 240.0,
+                "goal_month": 300.0,
+                "projected_close": 240.0 if pace_available else None,
+                "weighted_goal_mtd": 150.0 if pace_available else None,
+                "gap_vs_weighted_goal": -30.0 if pace_available else None,
+                "gap_vs_weighted_goal_pct": -0.2 if pace_available else None,
                 "confidence": "alta",
             },
         }
@@ -318,6 +325,18 @@ class BranchForecastDetailOrchestratorTest(unittest.TestCase):
             result["summary"]["total_projection_basis"]["metric_basis"],
             "total_mtd",
         )
+        self.assertEqual(result["goal_pace"]["status"], "available")
+        self.assertEqual(result["goal_pace"]["metric_basis"], "total_mtd")
+        self.assertEqual(
+            result["goal_pace"]["goal_expected_mtd_at_cutoff"],
+            Decimal("150.0"),
+        )
+        self.assertEqual(
+            result["goal_pace"]["projected_path"]["points"][-1][
+                "projected_cumulative_total"
+            ],
+            Decimal("240.0"),
+        )
         base_mock.assert_called_once_with(
             track_date=self.TRACK_DATE,
             generation_mode="manual_preview",
@@ -376,6 +395,11 @@ class BranchForecastDetailOrchestratorTest(unittest.TestCase):
         projection = result["series"]["comparable_base_projection"]
         self.assertEqual(projection["status"], "blocked_by_forecast_quality")
         self.assertEqual(projection["quality_issue"], issue)
+        self.assertEqual(result["goal_pace"]["status"], "projection_unavailable")
+        self.assertEqual(
+            result["goal_pace"]["goal_expected_mtd_at_cutoff"],
+            Decimal("150.0"),
+        )
         path_mock.assert_not_called()
 
     def test_invalid_historical_progress_blocks_base_path(self):
@@ -471,6 +495,60 @@ class BranchForecastDetailOrchestratorTest(unittest.TestCase):
         self._build(forecast=forecast)
 
         self.assertEqual(forecast, original)
+
+    def test_goal_pace_does_not_depend_on_legacy_weighted_goal_fields(self):
+        forecast = self._forecast()
+        forecast["summary"]["weighted_goal_mtd"] = None
+        forecast["summary"]["gap_vs_weighted_goal"] = None
+        forecast["summary"]["gap_vs_weighted_goal_pct"] = None
+
+        result, _, _, _ = self._build(forecast=forecast)
+
+        self.assertEqual(result["goal_pace"]["status"], "available")
+        self.assertEqual(
+            result["goal_pace"]["goal_expected_mtd_at_cutoff"],
+            Decimal("150.0"),
+        )
+
+    def test_goal_pace_requires_consistency_with_legacy_goal_fields(self):
+        cases = (
+            ("weighted_goal_mtd", "151"),
+            ("gap_vs_weighted_goal", "-31"),
+            ("gap_vs_weighted_goal_pct", "-0.3"),
+        )
+        for field_name, value in cases:
+            with self.subTest(field_name=field_name):
+                forecast = self._forecast()
+                forecast["summary"][field_name] = value
+                with self.assertRaisesRegex(
+                    BranchForecastDetailConsistencyError,
+                    "goal_pace",
+                ):
+                    self._build(forecast=forecast)
+
+    def test_zero_goal_remains_invalid_and_consistent_with_legacy_summary(self):
+        forecast = self._forecast()
+        forecast["summary"].update(
+            {
+                "goal_month": 0.0,
+                "weighted_goal_mtd": 0.0,
+                "gap_vs_weighted_goal": 120.0,
+                "gap_vs_weighted_goal_pct": None,
+            }
+        )
+
+        result, _, _, _ = self._build(forecast=forecast)
+
+        self.assertEqual(result["goal_pace"]["status"], "invalid_goal")
+        self.assertEqual(
+            result["goal_pace"]["goal_expected_mtd_at_cutoff"],
+            Decimal("0.00"),
+        )
+        self.assertEqual(
+            result["goal_pace"]["gap_vs_goal_pace"],
+            Decimal("120.0"),
+        )
+        self.assertEqual(result["goal_pace"]["points"], [])
 
 
 class TrackDailyBranchVersionSelectorTest(unittest.TestCase):
@@ -1373,6 +1451,285 @@ class BranchHistoricalExpectedDailyCurveTest(unittest.TestCase):
             self.assertIsInstance(point["historical_progress_pct"], Decimal)
             self.assertIsInstance(point["expected_daily_total"], Decimal)
             self.assertIsInstance(point["expected_cumulative_total"], Decimal)
+
+
+class BranchGoalPaceDetailTest(unittest.TestCase):
+    TARGET_MONTH = date(2026, 7, 1)
+    CUTOFF_DAY = 15
+
+    def _expected_curve(
+        self,
+        *,
+        target_month: date | None = None,
+        cutoff_day: int | None = None,
+        status: str = "available",
+        daily_weights: list[str] | None = None,
+    ):
+        target_month = target_month or self.TARGET_MONTH
+        cutoff_day = cutoff_day or self.CUTOFF_DAY
+        if status != "available":
+            return {
+                "status": status,
+                "method": "fixture",
+                "target_month": target_month,
+                "cutoff_day": cutoff_day,
+                "comparison_years_requested": [2024, 2025],
+                "comparison_years_used": [],
+                "comparison_years_excluded": [],
+                "samples_count": 0,
+                "historical_expected_month_total": None,
+                "historical_progress_pct_at_cutoff": None,
+                "historical_expected_mtd_at_cutoff": None,
+                "points": [],
+            }
+
+        days_in_month = 31 if target_month.month == 7 else 29
+        weights = [
+            Decimal(value)
+            for value in (daily_weights or ["1"] * days_in_month)
+        ]
+        month_total = sum(weights, Decimal("0"))
+        cumulative = Decimal("0")
+        points = []
+        for day, weight in enumerate(weights, start=1):
+            cumulative += weight
+            progress = cumulative / month_total
+            if day == len(weights):
+                progress = Decimal("1")
+            points.append(
+                {
+                    "day": day,
+                    "date": target_month.replace(day=day),
+                    "historical_progress_pct": progress,
+                    "expected_daily_total": weight,
+                    "expected_cumulative_total": cumulative,
+                    "sample_years": [2024, 2025],
+                    "samples_count": 2,
+                }
+            )
+        return {
+            "status": "available",
+            "method": "fixture",
+            "target_month": target_month,
+            "cutoff_day": cutoff_day,
+            "comparison_years_requested": [2024, 2025],
+            "comparison_years_used": [2024, 2025],
+            "comparison_years_excluded": [],
+            "samples_count": 2,
+            "historical_expected_month_total": month_total,
+            "historical_progress_pct_at_cutoff": points[cutoff_day - 1][
+                "historical_progress_pct"
+            ],
+            "historical_expected_mtd_at_cutoff": points[cutoff_day - 1][
+                "expected_cumulative_total"
+            ],
+            "points": points,
+        }
+
+    def _build(
+        self,
+        *,
+        goal_status: str = "available",
+        goal_month: Decimal | None = Decimal("310"),
+        real_mtd_at_cutoff: Decimal | None = Decimal("150"),
+        projected_close: Decimal | None = Decimal("310"),
+        target_month: date | None = None,
+        cutoff_day: int | None = None,
+        historical_expected=None,
+    ):
+        target_month = target_month or self.TARGET_MONTH
+        cutoff_day = cutoff_day or self.CUTOFF_DAY
+        return _build_branch_goal_pace_detail(
+            goal_status=goal_status,
+            goal_month=goal_month,
+            real_mtd_at_cutoff=real_mtd_at_cutoff,
+            projected_close=projected_close,
+            target_month=target_month,
+            cutoff_day=cutoff_day,
+            historical_expected=historical_expected
+            or self._expected_curve(
+                target_month=target_month,
+                cutoff_day=cutoff_day,
+            ),
+        )
+
+    def test_available_contract_has_explicit_basis_method_and_metadata(self):
+        result = self._build()
+
+        self.assertEqual(result["status"], "available")
+        self.assertEqual(result["metric_basis"], "total_mtd")
+        self.assertEqual(result["goal_metric_basis"], "total_mtd")
+        self.assertEqual(result["distribution_basis"], "venta_total_base")
+        self.assertEqual(result["method"], "goal_month_by_historical_progress")
+        self.assertTrue(result["includes_agregadoras"])
+        self.assertTrue(result["aggregadoras_assumed_same_daily_shape"])
+        self.assertIn("venta base", result["comparability_note"])
+
+    def test_no_goal_and_partial_goal_follow_precedence(self):
+        no_goal = self._build(goal_status="pending", goal_month=None)
+        partial = self._build(goal_status="partial", goal_month=Decimal("310"))
+
+        self.assertEqual(no_goal["status"], "no_goal")
+        self.assertEqual(partial["status"], "partial_goal")
+        self.assertEqual(no_goal["points"], [])
+        self.assertEqual(partial["points"], [])
+
+    def test_zero_negative_and_non_finite_goals_are_invalid(self):
+        for goal in (Decimal("0"), Decimal("-1"), Decimal("NaN")):
+            with self.subTest(goal=goal):
+                result = self._build(goal_month=goal)
+                self.assertEqual(result["status"], "invalid_goal")
+                self.assertEqual(result["points"], [])
+                if not goal.is_finite():
+                    self.assertIsNone(result["goal_month"])
+
+    def test_historical_curve_unavailable_preserves_independent_metrics(self):
+        curve = self._expected_curve(status="no_comparable_history")
+        result = self._build(historical_expected=curve)
+
+        self.assertEqual(result["status"], "historical_curve_unavailable")
+        self.assertEqual(result["goal_month"], Decimal("310"))
+        self.assertEqual(result["real_mtd_at_cutoff"], Decimal("150"))
+        self.assertEqual(result["remaining_to_goal"], Decimal("160"))
+        self.assertEqual(result["remaining_days"], 16)
+        self.assertEqual(result["required_daily_average"], Decimal("10"))
+        self.assertIsNone(result["goal_expected_mtd_at_cutoff"])
+        self.assertEqual(result["points"], [])
+
+    def test_projection_unavailable_preserves_curve_and_pace_metrics(self):
+        result = self._build(projected_close=None)
+
+        self.assertEqual(result["status"], "projection_unavailable")
+        self.assertEqual(result["goal_expected_mtd_at_cutoff"], Decimal("150"))
+        self.assertEqual(result["gap_vs_goal_pace"], Decimal("0"))
+        self.assertEqual(len(result["points"]), 31)
+        self.assertIsNone(result["projected_path"])
+        self.assertIsNone(result["projected_gap_to_goal"])
+        self.assertIsNone(result["projected_goal_attainment_pct"])
+
+    def test_unavailable_projected_path_preserves_goal_curve(self):
+        unavailable_path = {
+            "status": "projection_below_current_mtd",
+            "points": [],
+        }
+        with patch(
+            "app.warehouse.services.track_forecast_service.build_branch_projected_daily_path",
+            return_value=unavailable_path,
+        ):
+            result = self._build(projected_close=Decimal("149"))
+
+        self.assertEqual(result["status"], "projection_unavailable")
+        self.assertEqual(len(result["points"]), 31)
+        self.assertIs(result["projected_path"], unavailable_path)
+        self.assertIsNone(result["projected_gap_to_goal"])
+
+    def test_goal_curve_ends_and_sums_exactly_to_goal(self):
+        result = self._build(goal_month=Decimal("310.123456789"))
+
+        self.assertEqual(
+            result["points"][-1]["goal_expected_cumulative"],
+            Decimal("310.123456789"),
+        )
+        self.assertEqual(
+            sum(
+                (point["goal_expected_daily"] for point in result["points"]),
+                Decimal("0"),
+            ),
+            Decimal("310.123456789"),
+        )
+
+    def test_cutoff_point_gap_and_ratio_are_exact(self):
+        result = self._build(real_mtd_at_cutoff=Decimal("140"))
+        cutoff = result["points"][self.CUTOFF_DAY - 1]
+
+        self.assertEqual(result["goal_expected_mtd_at_cutoff"], Decimal("150"))
+        self.assertEqual(
+            cutoff["goal_expected_cumulative"],
+            result["goal_expected_mtd_at_cutoff"],
+        )
+        self.assertEqual(result["gap_vs_goal_pace"], Decimal("-10"))
+        self.assertEqual(result["gap_vs_goal_pace_pct"], Decimal("-10") / Decimal("150"))
+
+    def test_remaining_and_required_average_never_go_negative(self):
+        result = self._build(real_mtd_at_cutoff=Decimal("400"), projected_close=Decimal("400"))
+
+        self.assertEqual(result["remaining_to_goal"], Decimal("0"))
+        self.assertEqual(result["required_daily_average"], Decimal("0"))
+
+    def test_last_day_with_missing_goal_has_no_required_average(self):
+        curve = self._expected_curve(cutoff_day=31)
+        result = self._build(
+            cutoff_day=31,
+            historical_expected=curve,
+            real_mtd_at_cutoff=Decimal("300"),
+            projected_close=None,
+        )
+
+        self.assertEqual(result["remaining_days"], 0)
+        self.assertEqual(result["remaining_to_goal"], Decimal("10"))
+        self.assertIsNone(result["required_daily_average"])
+
+    def test_projected_gap_and_attainment_ratio_are_exact(self):
+        result = self._build(projected_close=Decimal("341"))
+
+        self.assertEqual(result["projected_gap_to_goal"], Decimal("31"))
+        self.assertEqual(result["projected_goal_attainment_pct"], Decimal("1.1"))
+
+    def test_projected_path_uses_total_and_exact_anchors(self):
+        curve = self._expected_curve(
+            daily_weights=["1"] * 15 + [str(day) for day in range(1, 17)]
+        )
+        result = self._build(
+            historical_expected=curve,
+            projected_close=Decimal("400"),
+        )
+        path = result["projected_path"]
+
+        self.assertEqual(path["metric_basis"], "total_mtd")
+        self.assertEqual(
+            path["points"][0]["projected_cumulative_total"],
+            Decimal("150"),
+        )
+        self.assertEqual(
+            path["points"][-1]["projected_cumulative_total"],
+            Decimal("400"),
+        )
+        self.assertGreater(
+            len({point["projected_daily_increment"] for point in path["points"][1:]}),
+            1,
+        )
+
+    def test_all_numeric_goal_values_remain_decimal(self):
+        result = self._build(projected_close=Decimal("341"))
+        scalar_fields = (
+            "goal_month",
+            "goal_expected_mtd_at_cutoff",
+            "real_mtd_at_cutoff",
+            "gap_vs_goal_pace",
+            "gap_vs_goal_pace_pct",
+            "remaining_to_goal",
+            "required_daily_average",
+            "projected_close",
+            "projected_gap_to_goal",
+            "projected_goal_attainment_pct",
+        )
+
+        for field in scalar_fields:
+            self.assertIsInstance(result[field], Decimal)
+        for point in result["points"]:
+            self.assertIsInstance(point["historical_progress_pct"], Decimal)
+            self.assertIsInstance(point["goal_expected_daily"], Decimal)
+            self.assertIsInstance(point["goal_expected_cumulative"], Decimal)
+
+    def test_decreasing_historical_curve_is_explicit_inconsistency(self):
+        curve = self._expected_curve()
+        curve["points"][1]["historical_progress_pct"] = Decimal("0")
+
+        with self.assertRaisesRegex(
+            BranchForecastDetailConsistencyError,
+            "incrementos negativos",
+        ):
+            self._build(historical_expected=curve)
 
 
 class BranchProjectedDailyPathTest(unittest.TestCase):
