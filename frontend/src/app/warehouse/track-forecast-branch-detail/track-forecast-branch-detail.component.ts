@@ -19,6 +19,7 @@ import { NgxEchartsDirective, provideEchartsCore } from 'ngx-echarts';
 import { EMPTY, auditTime, catchError, combineLatest, distinctUntilChanged, switchMap, tap } from 'rxjs';
 
 import {
+  TrackBranchGoalPaceStatus,
   TrackBranchForecastDetailHistoricalYearItem,
   TrackBranchForecastDetailHistoricalYearStatus,
   TrackBranchForecastDetailResponse,
@@ -70,6 +71,13 @@ type BranchDetailTraceItem = {
   value: string;
 };
 
+type BranchDetailGoalCard = {
+  label: string;
+  value: string;
+  support: string;
+  tone: 'neutral' | 'favorable' | 'unfavorable';
+};
+
 @Component({
   selector: 'app-track-forecast-branch-detail',
   standalone: true,
@@ -85,7 +93,10 @@ export class TrackForecastBranchDetailComponent implements OnInit {
   errorMessage = '';
   detail: TrackBranchForecastDetailResponse | null = null;
   chartOption: EChartsCoreOption = {};
+  goalPaceChartOption: EChartsCoreOption = {};
   summaryCards: BranchDetailSummaryCard[] = [];
+  goalPaceCards: BranchDetailGoalCard[] = [];
+  goalPaceExecutiveMessage = '';
   annualRows: BranchDetailAnnualRow[] = [];
   qualityItems: BranchDetailTraceItem[] = [];
   traceItems: BranchDetailTraceItem[] = [];
@@ -196,6 +207,39 @@ export class TrackForecastBranchDetailComponent implements OnInit {
     return Array.isArray(series) && series.length > 0;
   }
 
+  get showGoalPaceSection(): boolean {
+    const status = this.detail?.goal_pace.status;
+    return status === 'available'
+      || status === 'projection_unavailable'
+      || status === 'historical_curve_unavailable';
+  }
+
+  get showGoalPaceChart(): boolean {
+    return this.showGoalPaceSection
+      && this.detail?.goal_pace.status !== 'historical_curve_unavailable'
+      && this.hasGoalPaceChartSeries;
+  }
+
+  get hasGoalPaceChartSeries(): boolean {
+    const series = this.goalPaceChartOption.series;
+    return Array.isArray(series) && series.length > 0;
+  }
+
+  get goalPaceStatusMessage(): string {
+    const status = this.detail?.goal_pace.status;
+    if (!status) return '';
+
+    const messages: Record<TrackBranchGoalPaceStatus, string> = {
+      available: '',
+      projection_unavailable: 'La meta puede seguirse, pero no existe una proyección de cierre disponible.',
+      historical_curve_unavailable: 'No existe una curva histórica suficiente para distribuir la meta durante el mes.',
+      no_goal: 'No hay una meta mensual disponible para esta sucursal y periodo.',
+      partial_goal: 'La cobertura de meta para este periodo es parcial.',
+      invalid_goal: 'La meta mensual disponible no es válida para el análisis.',
+    };
+    return messages[status];
+  }
+
   private get cutoffPoint() {
     const points = this.detail?.series.current_track.points || [];
     return points.length ? points[points.length - 1] : null;
@@ -237,7 +281,6 @@ export class TrackForecastBranchDetailComponent implements OnInit {
     const unavailableSupport = qualityIssue?.message || 'No existe un valor disponible para este corte.';
 
     this.summaryCards = [
-      this.toSummaryCard('Real Track MTD', summary.real_mtd, 'Venta total al corte: base más agregadoras.', 'total'),
       this.toSummaryCard('Base MTD', summary.real_base_mtd, 'Venta base comparable al corte.', 'base'),
       this.toSummaryCard('Agregadoras MTD', summary.real_agregadora_mtd, 'Fuentes agregadoras integradas en Track.', 'neutral'),
       this.toSummaryCard(
@@ -255,7 +298,7 @@ export class TrackForecastBranchDetailComponent implements OnInit {
         'neutral',
       ),
       this.toSummaryCard(
-        'Proyección total Track',
+        'Proyección total · referencia',
         summary.projected_close,
         summary.projected_close === null
           ? 'No existe una proyección total disponible para este corte.'
@@ -270,8 +313,23 @@ export class TrackForecastBranchDetailComponent implements OnInit {
           : 'Cierre proyectado exclusivamente sobre venta base.',
         'base',
       ),
+      {
+        label: 'Confianza',
+        value: this.confidenceLabel,
+        support: 'Nivel de confianza reportado para el forecast actual.',
+        emphasis: 'neutral',
+      },
+      this.toSummaryCard(
+        'Real Track MTD · referencia',
+        summary.real_mtd,
+        'Venta total al corte: base más agregadoras.',
+        'total',
+      ),
     ];
 
+    this.goalPaceCards = this.buildGoalPaceCards(response);
+    this.goalPaceExecutiveMessage = this.buildGoalPaceExecutiveMessage(response);
+    this.goalPaceChartOption = this.buildGoalPaceChartOption(response);
     this.chartOption = this.buildChartOption(response);
     this.annualRows = this.buildAnnualRows(response);
     this.warningMessages = response.data_quality.warnings.map((warning) => warning.message);
@@ -285,6 +343,186 @@ export class TrackForecastBranchDetailComponent implements OnInit {
       : 'Ninguno';
     this.qualityItems = this.buildQualityItems(response);
     this.traceItems = this.buildTraceItems(response);
+  }
+
+  private buildGoalPaceCards(response: TrackBranchForecastDetailResponse): BranchDetailGoalCard[] {
+    const goalPace = response.goal_pace;
+    const unavailable = this.getGoalPaceUnavailableExplanation(goalPace.status);
+    const gapSupport = goalPace.gap_vs_goal_pace_pct === null
+      ? unavailable
+      : `${this.formatPercent(goalPace.gap_vs_goal_pace_pct)} contra el ritmo requerido.`;
+    const requiredSupport = goalPace.required_daily_average === null
+      ? unavailable
+      : `${goalPace.remaining_days} días restantes, según el corte.`;
+    const projectionSupport = goalPace.projected_gap_to_goal === null
+      ? unavailable
+      : `Brecha proyectada: ${this.formatSignedCurrency(goalPace.projected_gap_to_goal)}.`;
+
+    return [
+      this.toGoalPaceCard('Meta mensual', goalPace.goal_month, 'Meta mensual total Track.', 'neutral'),
+      this.toGoalPaceCard('Real total al corte', goalPace.real_mtd_at_cutoff, 'Venta total Track acumulada.', 'neutral'),
+      this.toGoalPaceCard('Meta esperada al corte', goalPace.goal_expected_mtd_at_cutoff, unavailable, 'neutral'),
+      this.toGoalPaceCard(
+        'Brecha contra ritmo de meta',
+        goalPace.gap_vs_goal_pace,
+        gapSupport,
+        this.getSignedTone(goalPace.gap_vs_goal_pace),
+      ),
+      this.toGoalPaceCard('Restante para alcanzar la meta', goalPace.remaining_to_goal, unavailable, 'neutral'),
+      this.toGoalPaceCard('Promedio diario requerido', goalPace.required_daily_average, requiredSupport, 'neutral'),
+      this.toGoalPaceCard(
+        'Proyección de cierre total',
+        goalPace.projected_close,
+        projectionSupport,
+        this.getSignedTone(goalPace.projected_gap_to_goal),
+      ),
+      {
+        label: 'Cumplimiento proyectado',
+        value: this.formatPercent(goalPace.projected_goal_attainment_pct),
+        support: goalPace.projected_goal_attainment_pct === null ? unavailable : 'Porcentaje proyectado por el backend.',
+        tone: this.getAttainmentTone(goalPace.projected_goal_attainment_pct),
+      },
+    ];
+  }
+
+  private buildGoalPaceExecutiveMessage(response: TrackBranchForecastDetailResponse): string {
+    const goalPace = response.goal_pace;
+    if (goalPace.remaining_to_goal === 0) {
+      return 'La meta mensual ya fue alcanzada.';
+    }
+
+    const messages: string[] = [];
+    if (
+      goalPace.gap_vs_goal_pace !== null
+      && goalPace.required_daily_average !== null
+    ) {
+      const direction = goalPace.gap_vs_goal_pace < 0 ? 'por debajo' : 'por encima';
+      messages.push(
+        `Va ${this.formatCurrencyMagnitude(goalPace.gap_vs_goal_pace)} ${direction} del ritmo necesario. `
+        + `Requiere promediar ${this.formatCurrency(goalPace.required_daily_average)} diarios durante `
+        + `${goalPace.remaining_days} días restantes.`,
+      );
+    }
+
+    if (
+      goalPace.projected_goal_attainment_pct !== null
+      && goalPace.projected_gap_to_goal !== null
+    ) {
+      messages.push(
+        `Al ritmo proyectado cerraría en ${this.formatPercent(goalPace.projected_goal_attainment_pct)} de la meta, `
+        + `con una brecha estimada de ${this.formatSignedCurrency(goalPace.projected_gap_to_goal)}.`,
+      );
+    }
+
+    return messages.join(' ');
+  }
+
+  private buildGoalPaceChartOption(response: TrackBranchForecastDetailResponse): EChartsCoreOption {
+    const goalPace = response.goal_pace;
+    if (goalPace.status === 'historical_curve_unavailable') return {};
+
+    const lineSeries: LineSeriesOption[] = [];
+    const daysInTargetMonth = this.daysInMonth(response.metadata.target_month);
+    const cutoffDay = response.metadata.cutoff_day;
+    const showCutoffMarker = Number.isInteger(cutoffDay)
+      && cutoffDay >= 1
+      && cutoffDay <= daysInTargetMonth;
+    const realPoints = response.series.current_track.points
+      .filter((point) => point.total_mtd !== null)
+      .map((point) => [point.day, point.total_mtd]);
+    const markLineData: Array<{ xAxis: number } | { yAxis: number; name: string }> = [];
+    if (showCutoffMarker) markLineData.push({ xAxis: cutoffDay });
+    if (goalPace.goal_month !== null && goalPace.goal_month > 0) {
+      markLineData.push({ yAxis: goalPace.goal_month, name: 'Meta mensual' });
+    }
+
+    if (realPoints.length) {
+      lineSeries.push({
+        name: 'Real total',
+        type: 'line',
+        data: realPoints,
+        showSymbol: false,
+        symbol: 'circle',
+        symbolSize: 6,
+        lineStyle: { color: '#244f78', width: 3.5, type: 'solid' },
+        itemStyle: { color: '#244f78' },
+        emphasis: { focus: 'series' },
+        markLine: markLineData.length ? {
+          silent: true,
+          symbol: 'none',
+          label: {
+            formatter: (params) => params.name || 'Corte actual',
+            color: '#526075',
+          },
+          lineStyle: { color: '#687386', type: 'dashed', width: 1.25 },
+          data: markLineData,
+        } : undefined,
+        z: 6,
+      });
+    }
+
+    if (goalPace.points.length) {
+      lineSeries.push({
+        name: 'Ritmo requerido',
+        type: 'line',
+        data: goalPace.points.map((point) => [point.day, point.goal_expected_cumulative]),
+        showSymbol: false,
+        symbol: 'circle',
+        symbolSize: 5,
+        lineStyle: { color: '#a66a18', width: 2.4, type: 'dashed' },
+        itemStyle: { color: '#a66a18' },
+        emphasis: { focus: 'series' },
+        z: 4,
+      });
+    }
+
+    if (
+      goalPace.status === 'available'
+      && goalPace.projected_path?.status === 'available'
+      && goalPace.projected_path.points.length
+    ) {
+      lineSeries.push({
+        name: 'Proyección total',
+        type: 'line',
+        data: goalPace.projected_path.points.map((point) => [point.day, point.projected_cumulative_total]),
+        showSymbol: false,
+        symbol: 'diamond',
+        symbolSize: 6,
+        lineStyle: { color: '#24745b', width: 2.8, type: 'dotted' },
+        itemStyle: { color: '#24745b' },
+        emphasis: { focus: 'series' },
+        z: 5,
+      });
+    }
+
+    return {
+      animation: false,
+      aria: { enabled: true, decal: { show: false } },
+      grid: { left: 18, right: 24, top: 72, bottom: 45, containLabel: true },
+      legend: { type: 'scroll', top: 8, left: 8, right: 8 },
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: { type: 'line' },
+        valueFormatter: (value) => {
+          const metricValue = Array.isArray(value) ? value[1] : value;
+          return typeof metricValue === 'number' ? this.formatCurrency(metricValue) : String(metricValue);
+        },
+      },
+      xAxis: {
+        type: 'value',
+        min: 1,
+        max: daysInTargetMonth,
+        minInterval: 1,
+        name: 'Día',
+        axisLabel: { formatter: (value: number) => Number.isInteger(value) ? String(value) : '' },
+      },
+      yAxis: {
+        type: 'value',
+        name: 'Importe acumulado',
+        axisLabel: { formatter: (value: number) => this.formatCompactCurrency(value) },
+      },
+      series: lineSeries,
+    };
   }
 
   private buildChartOption(response: TrackBranchForecastDetailResponse): EChartsCoreOption {
@@ -471,6 +709,7 @@ export class TrackForecastBranchDetailComponent implements OnInit {
   private buildQualityItems(response: TrackBranchForecastDetailResponse): BranchDetailTraceItem[] {
     const forecastQuality = response.data_quality.forecast;
     const comparability = response.data_quality.source_comparability;
+    const goalPace = response.goal_pace;
     return [
       { label: 'Calidad del forecast', value: forecastQuality.goal_status_message || this.formatTechnicalLabel(forecastQuality.goal_status) },
       { label: 'Cobertura histórica', value: `${forecastQuality.history_coverage.months_count} meses · confianza ${this.formatTechnicalLabel(forecastQuality.history_coverage.confidence)}` },
@@ -481,6 +720,12 @@ export class TrackForecastBranchDetailComponent implements OnInit {
       { label: 'Puntos Track al corte', value: `${response.data_quality.current_series.points_count} de ${response.data_quality.current_series.expected_days_to_cutoff}` },
       { label: 'Fechas Track faltantes', value: response.data_quality.current_series.missing_dates.length ? response.data_quality.current_series.missing_dates.map((date) => this.formatDate(date)).join(', ') : 'Ninguna' },
       { label: 'Calidad de proyección base', value: response.series.comparable_base_projection.quality_issue?.message || 'Sin incidencias reportadas.' },
+      { label: 'Estado de ritmo de meta', value: this.getGoalPaceStatusLabel(goalPace.status) },
+      { label: 'Base métrica de meta', value: this.formatTechnicalLabel(goalPace.metric_basis) },
+      { label: 'Base de distribución', value: this.formatTechnicalLabel(goalPace.distribution_basis) },
+      { label: 'Meta incluye agregadoras', value: goalPace.includes_agregadoras ? 'Sí' : 'No' },
+      { label: 'Agregadoras asumen el mismo patrón diario', value: goalPace.aggregadoras_assumed_same_daily_shape ? 'Sí' : 'No' },
+      { label: 'Nota de comparabilidad', value: goalPace.comparability_note },
     ];
   }
 
@@ -488,6 +733,7 @@ export class TrackForecastBranchDetailComponent implements OnInit {
     const current = response.series.current_track;
     const cutoff = current.points.length ? current.points[current.points.length - 1] : null;
     const projection = response.series.comparable_base_projection;
+    const goalPace = response.goal_pace;
     return [
       { label: 'Version ID', value: String(response.metadata.resolved_version.id) },
       { label: 'Version type', value: cutoff ? this.formatTechnicalLabel(cutoff.version_type) : 'No disponible' },
@@ -501,7 +747,29 @@ export class TrackForecastBranchDetailComponent implements OnInit {
       { label: 'Método de trayectoria', value: projection.path ? this.formatTechnicalLabel(projection.path.method) : 'No disponible' },
       { label: 'Método de proyección base', value: this.formatTechnicalLabel(projection.method) },
       { label: 'Fórmula de proyección base', value: projection.formula },
+      { label: 'Método de meta', value: this.formatTechnicalLabel(goalPace.method) },
+      { label: 'Base de meta total', value: this.formatTechnicalLabel(goalPace.metric_basis) },
+      {
+        label: 'Método de trayectoria total proyectada',
+        value: goalPace.projected_path
+          ? this.formatTechnicalLabel(goalPace.projected_path.method)
+          : 'No disponible',
+      },
     ];
+  }
+
+  private toGoalPaceCard(
+    label: string,
+    value: number | null,
+    support: string,
+    tone: BranchDetailGoalCard['tone'],
+  ): BranchDetailGoalCard {
+    return {
+      label,
+      value: this.formatCurrency(value),
+      support,
+      tone,
+    };
   }
 
   private toSummaryCard(
@@ -522,6 +790,8 @@ export class TrackForecastBranchDetailComponent implements OnInit {
     return response?.status === 'ok'
       && Boolean(response.metadata?.sucursal_canon)
       && Boolean(response.summary)
+      && Boolean(response.goal_pace)
+      && Array.isArray(response.goal_pace?.points)
       && Boolean(response.forecast_context)
       && Array.isArray(response.series?.current_track?.points)
       && Array.isArray(response.series?.historical_years?.items)
@@ -578,6 +848,40 @@ export class TrackForecastBranchDetailComponent implements OnInit {
     return labels[status];
   }
 
+  private getGoalPaceStatusLabel(status: TrackBranchGoalPaceStatus): string {
+    const labels: Record<TrackBranchGoalPaceStatus, string> = {
+      available: 'Disponible',
+      no_goal: 'Sin meta',
+      partial_goal: 'Meta parcial',
+      invalid_goal: 'Meta no válida',
+      historical_curve_unavailable: 'Curva histórica no disponible',
+      projection_unavailable: 'Proyección no disponible',
+    };
+    return labels[status];
+  }
+
+  private getGoalPaceUnavailableExplanation(status: TrackBranchGoalPaceStatus): string {
+    const explanations: Record<TrackBranchGoalPaceStatus, string> = {
+      available: 'El backend no reportó este valor para el corte.',
+      no_goal: 'No hay una meta mensual disponible.',
+      partial_goal: 'La cobertura de meta es parcial.',
+      invalid_goal: 'La meta mensual no es válida para el análisis.',
+      historical_curve_unavailable: 'No existe una curva histórica suficiente.',
+      projection_unavailable: 'No existe una proyección de cierre disponible.',
+    };
+    return explanations[status];
+  }
+
+  private getSignedTone(value: number | null): BranchDetailGoalCard['tone'] {
+    if (value === null) return 'neutral';
+    return value >= 0 ? 'favorable' : 'unfavorable';
+  }
+
+  private getAttainmentTone(value: number | null): BranchDetailGoalCard['tone'] {
+    if (value === null) return 'neutral';
+    return value >= 1 ? 'favorable' : 'unfavorable';
+  }
+
   private formatCurrency(value: number | null): string {
     if (value === null) return 'No disponible';
     return new Intl.NumberFormat('es-MX', {
@@ -592,6 +896,25 @@ export class TrackForecastBranchDetailComponent implements OnInit {
       style: 'currency',
       currency: 'MXN',
       notation: 'compact',
+      maximumFractionDigits: 1,
+    }).format(value);
+  }
+
+  private formatCurrencyMagnitude(value: number): string {
+    return this.formatCurrency(Math.abs(value));
+  }
+
+  private formatSignedCurrency(value: number): string {
+    const magnitude = this.formatCurrencyMagnitude(value);
+    if (value > 0) return `+${magnitude}`;
+    if (value < 0) return `-${magnitude}`;
+    return magnitude;
+  }
+
+  private formatPercent(value: number | null): string {
+    if (value === null) return 'No disponible';
+    return new Intl.NumberFormat('es-MX', {
+      style: 'percent',
       maximumFractionDigits: 1,
     }).format(value);
   }
@@ -624,7 +947,10 @@ export class TrackForecastBranchDetailComponent implements OnInit {
 
   private resetPresentation(): void {
     this.chartOption = {};
+    this.goalPaceChartOption = {};
     this.summaryCards = [];
+    this.goalPaceCards = [];
+    this.goalPaceExecutiveMessage = '';
     this.annualRows = [];
     this.qualityItems = [];
     this.traceItems = [];

@@ -946,6 +946,57 @@ export interface TrackBranchForecastDetailComparableBaseProjection {
   path: TrackBranchForecastDetailProjectedPath | null;
 }
 
+export type TrackBranchGoalPaceStatus =
+  | 'available'
+  | 'no_goal'
+  | 'partial_goal'
+  | 'invalid_goal'
+  | 'historical_curve_unavailable'
+  | 'projection_unavailable';
+
+export interface TrackBranchGoalPacePoint {
+  day: number;
+  date: string;
+  historical_progress_pct: number;
+  goal_expected_daily: number;
+  goal_expected_cumulative: number;
+}
+
+export type TrackBranchGoalPaceProjectedPathPoint =
+  TrackBranchForecastDetailProjectedPathPoint;
+
+export type TrackBranchGoalPaceProjectedPath = Omit<
+  TrackBranchForecastDetailProjectedPath,
+  'metric_basis'
+> & {
+  metric_basis: 'total_mtd';
+  points: TrackBranchGoalPaceProjectedPathPoint[];
+};
+
+export interface TrackBranchGoalPace {
+  status: TrackBranchGoalPaceStatus;
+  metric_basis: 'total_mtd';
+  goal_metric_basis: 'total_mtd';
+  distribution_basis: 'venta_total_base';
+  method: 'goal_month_by_historical_progress';
+  includes_agregadoras: true;
+  aggregadoras_assumed_same_daily_shape: true;
+  comparability_note: string;
+  goal_month: number | null;
+  goal_expected_mtd_at_cutoff: number | null;
+  real_mtd_at_cutoff: number | null;
+  gap_vs_goal_pace: number | null;
+  gap_vs_goal_pace_pct: number | null;
+  remaining_to_goal: number | null;
+  remaining_days: number;
+  required_daily_average: number | null;
+  projected_close: number | null;
+  projected_gap_to_goal: number | null;
+  projected_goal_attainment_pct: number | null;
+  points: TrackBranchGoalPacePoint[];
+  projected_path: TrackBranchGoalPaceProjectedPath | null;
+}
+
 export interface TrackBranchForecastDetailSeries {
   current_track: TrackBranchForecastDetailCurrentTrackSeries;
   historical_years: TrackBranchForecastDetailHistoricalYearsCollection;
@@ -977,6 +1028,7 @@ export interface TrackBranchForecastDetailResponse {
   status: 'ok';
   metadata: TrackBranchForecastDetailMetadata;
   summary: TrackBranchForecastDetailSummary;
+  goal_pace: TrackBranchGoalPace;
   forecast_context: TrackBranchForecastDetailForecastContext;
   series: TrackBranchForecastDetailSeries;
   data_quality: TrackBranchForecastDetailDataQuality;
