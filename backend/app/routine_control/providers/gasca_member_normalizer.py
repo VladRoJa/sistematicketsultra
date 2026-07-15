@@ -189,6 +189,7 @@ def normalize_gasca_member_row(
     *,
     observed_at_utc: datetime,
     branch_resolver: Callable[[str], int | None],
+    require_resolved_branch: bool = True,
 ) -> UpsertRoutineMemberCommand:
     observed_at = _aware_utc(observed_at_utc)
     if not callable(branch_resolver):
@@ -203,12 +204,12 @@ def normalize_gasca_member_row(
         raise GascaInvalidRequiredValueError("Sucursal es obligatoria.")
 
     sucursal_id = branch_resolver(source_branch_name)
-    if sucursal_id is None:
+    if sucursal_id is None and require_resolved_branch:
         raise _GascaRowRejected(
             "BRANCH_UNRESOLVED",
             "La sucursal de origen no pudo resolverse.",
         )
-    if (
+    if sucursal_id is not None and (
         not isinstance(sucursal_id, int)
         or isinstance(sucursal_id, bool)
         or sucursal_id <= 0
@@ -301,6 +302,7 @@ def load_gasca_member_commands_from_xlsx(
     *,
     observed_at_utc: datetime,
     branch_resolver: Callable[[str], int | None],
+    require_resolved_branch: bool = True,
 ) -> GascaMemberBatch:
     observed_at = _aware_utc(observed_at_utc)
     if not callable(branch_resolver):
@@ -339,6 +341,7 @@ def load_gasca_member_commands_from_xlsx(
                         row,
                         observed_at_utc=observed_at,
                         branch_resolver=branch_resolver,
+                        require_resolved_branch=require_resolved_branch,
                     )
                 )
             except GascaNormalizationError as exc:
