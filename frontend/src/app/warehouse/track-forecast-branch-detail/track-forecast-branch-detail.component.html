@@ -29,28 +29,84 @@
   </section>
 
   <ng-container *ngIf="detail">
-    <section class="branch-detail-summary" aria-label="Resumen del detalle por sucursal">
-      <article
-        *ngFor="let card of summaryCards"
-        class="branch-detail-summary-card"
-        [class.branch-detail-summary-card--total]="card.emphasis === 'total'"
-        [class.branch-detail-summary-card--base]="card.emphasis === 'base'"
-      >
-        <span>{{ card.label }}</span>
-        <strong>{{ card.value }}</strong>
-        <small>{{ card.support }}</small>
-      </article>
+    <section class="branch-detail-panel branch-detail-goal" *ngIf="showGoalPaceSection">
+      <header class="branch-detail-section-heading">
+        <span>Meta mensual total</span>
+        <h2>Rumbo a la meta total</h2>
+        <p>Avance requerido para alcanzar la meta mensual de venta total Track.</p>
+      </header>
+
+      <p class="branch-detail-basis-note">
+        La meta y el real incluyen agregadoras. Su distribución diaria utiliza el patrón histórico de venta base.
+      </p>
+
+      <p class="branch-detail-state-note" *ngIf="goalPaceStatusMessage" role="status">
+        {{ goalPaceStatusMessage }}
+      </p>
+
+      <div class="branch-detail-goal-summary" aria-label="Resumen operativo de la meta mensual">
+        <article
+          *ngFor="let card of goalPaceCards"
+          class="branch-detail-goal-card"
+          [class.branch-detail-goal-card--favorable]="card.tone === 'favorable'"
+          [class.branch-detail-goal-card--unfavorable]="card.tone === 'unfavorable'"
+        >
+          <span>{{ card.label }}</span>
+          <strong>{{ card.value }}</strong>
+          <small>{{ card.support }}</small>
+        </article>
+      </div>
+
+      <div class="branch-detail-executive" *ngIf="goalPaceExecutiveMessage">
+        <span>Lectura ejecutiva</span>
+        <p>{{ goalPaceExecutiveMessage }}</p>
+      </div>
+
+      <section class="branch-detail-goal-chart-section" *ngIf="showGoalPaceChart">
+        <header class="branch-detail-section-heading">
+          <span>Seguimiento mensual</span>
+          <h2>Trayectoria hacia la meta</h2>
+          <p>Real total, ritmo requerido y cierre proyectado.</p>
+        </header>
+        <div
+          echarts
+          [options]="goalPaceChartOption"
+          class="branch-detail-chart branch-detail-goal-chart"
+          aria-label="Gráfica de trayectoria hacia la meta mensual total"
+        ></div>
+      </section>
     </section>
 
-    <p class="branch-detail-basis-note">
-      La proyección total incluye agregadoras. La gráfica histórica comparable usa venta base.
+    <p class="branch-detail-goal-notice" *ngIf="!showGoalPaceSection" role="status">
+      {{ goalPaceStatusMessage }}
     </p>
+
+    <section class="branch-detail-panel">
+      <header class="branch-detail-section-heading">
+        <span>Forecast vigente</span>
+        <h2>Lectura del forecast actual</h2>
+        <p>Indicadores al corte y proyecciones reportadas por el forecast vigente.</p>
+      </header>
+
+      <div class="branch-detail-summary" aria-label="Resumen del forecast actual">
+        <article
+          *ngFor="let card of summaryCards"
+          class="branch-detail-summary-card"
+          [class.branch-detail-summary-card--total]="card.emphasis === 'total'"
+          [class.branch-detail-summary-card--base]="card.emphasis === 'base'"
+        >
+          <span>{{ card.label }}</span>
+          <strong>{{ card.value }}</strong>
+          <small>{{ card.support }}</small>
+        </article>
+      </div>
+    </section>
 
     <section class="branch-detail-panel branch-detail-chart-panel">
       <header class="branch-detail-section-heading">
         <span>Comparabilidad base</span>
-        <h2>Ritmo acumulado de venta base</h2>
-        <p>Comparación diaria contra años históricos, trayectoria esperada y proyección base.</p>
+        <h2>Contexto histórico de venta base</h2>
+        <p>Comparación contra años anteriores, patrón esperado y proyección base comparable.</p>
       </header>
 
       <div
