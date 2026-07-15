@@ -19,6 +19,7 @@ from app.warehouse.services.track_forecast_service import (
     BranchForecastDetailConsistencyError,
     _build_branch_goal_pace_detail,
     build_branch_calendar_aligned_daily_weights,
+    build_branch_current_track_daily_values,
     build_branch_forecast_detail,
     build_branch_historical_expected_daily_curve,
     build_branch_historical_daily_series,
@@ -445,6 +446,17 @@ class BranchForecastDetailOrchestratorTest(unittest.TestCase):
             branch=self.BRANCH,
         )
 
+        current_points = result["series"]["current_track"]["points"]
+        self.assertEqual(
+            current_points[0]["daily_value_status"],
+            "missing_previous_calendar_day",
+        )
+        self.assertIsNone(current_points[0]["total_daily"])
+        self.assertEqual(
+            current_points[-1]["daily_value_method"],
+            "calendar_day_mtd_delta",
+        )
+
     def test_calendar_distribution_drives_expected_base_and_goal_pace(self):
         result, _, _, _ = self._build()
         distribution = result["calendar_aligned_distribution"]
@@ -742,6 +754,252 @@ class BranchForecastDetailOrchestratorTest(unittest.TestCase):
             Decimal("120.0"),
         )
         self.assertEqual(result["goal_pace"]["points"], [])
+
+
+class BranchCurrentTrackDailyValuesTest(unittest.TestCase):
+    @staticmethod
+    def _point(
+        point_date: date,
+        *,
+        base_mtd: Decimal | None,
+        agregadora_mtd: Decimal | None,
+        total_mtd: Decimal | None,
+        version_id: int = 1,
+    ):
+        return {
+            "day": point_date.day,
+            "date": point_date,
+            "version_id": version_id,
+            "version_type": "cierre_canonico",
+            "selection_reason": "current_canonical_close",
+            "base_mtd": base_mtd,
+            "agregadora_mtd": agregadora_mtd,
+            "total_mtd": total_mtd,
+        }
+
+    def test_day_one_uses_zero_baseline_and_preserves_decimal_values(self):
+        source = self._point(
+            date(2026, 7, 1),
+            base_mtd=Decimal("10.25"),
+            agregadora_mtd=Decimal("0"),
+            total_mtd=Decimal("10.25"),
+        )
+
+        result = build_branch_current_track_daily_values([source])
+        point = result[0]
+
+        self.assertEqual(point["base_daily"], Decimal("10.25"))
+        self.assertEqual(point["agregadora_daily"], Decimal("0"))
+        self.assertEqual(point["total_daily"], Decimal("10.25"))
+        self.assertEqual(point["daily_value_status"], "available")
+        self.assertEqual(
+            point["daily_value_method"],
+            "calendar_day_mtd_delta",
+        )
+        self.assertTrue(
+            all(
+                isinstance(point[field], Decimal)
+                for field in ("base_daily", "agregadora_daily", "total_daily")
+            )
+        )
+
+    def test_consecutive_days_calculate_each_signed_mtd_delta(self):
+        points = [
+            self._point(
+                date(2026, 7, 1),
+                base_mtd=Decimal("10"),
+                agregadora_mtd=Decimal("2"),
+                total_mtd=Decimal("12"),
+            ),
+            self._point(
+                date(2026, 7, 2),
+                base_mtd=Decimal("17"),
+                agregadora_mtd=Decimal("5"),
+                total_mtd=Decimal("22"),
+            ),
+        ]
+
+        point = build_branch_current_track_daily_values(points)[1]
+
+        self.assertEqual(point["base_daily"], Decimal("7"))
+        self.assertEqual(point["agregadora_daily"], Decimal("3"))
+        self.assertEqual(point["total_daily"], Decimal("10"))
+        self.assertEqual(
+            point["total_daily"],
+            point["base_daily"] + point["agregadora_daily"],
+        )
+        self.assertEqual(point["daily_value_status"], "available")
+
+    def test_missing_previous_calendar_day_does_not_bridge_gap(self):
+        points = [
+            self._point(
+                date(2026, 7, 10),
+                base_mtd=Decimal("100"),
+                agregadora_mtd=Decimal("20"),
+                total_mtd=Decimal("120"),
+            ),
+            self._point(
+                date(2026, 7, 12),
+                base_mtd=Decimal("130"),
+                agregadora_mtd=Decimal("25"),
+                total_mtd=Decimal("155"),
+            ),
+            self._point(
+                date(2026, 7, 15),
+                base_mtd=Decimal("160"),
+                agregadora_mtd=Decimal("30"),
+                total_mtd=Decimal("190"),
+            ),
+        ]
+
+        result = build_branch_current_track_daily_values(points)
+
+        for point in result:
+            self.assertIsNone(point["base_daily"])
+            self.assertIsNone(point["agregadora_daily"])
+            self.assertIsNone(point["total_daily"])
+            self.assertEqual(
+                point["daily_value_status"],
+                "missing_previous_calendar_day",
+            )
+
+    def test_negative_adjustment_is_preserved_and_marked(self):
+        points = [
+            self._point(
+                date(2026, 7, 5),
+                base_mtd=Decimal("50"),
+                agregadora_mtd=Decimal("10"),
+                total_mtd=Decimal("60"),
+            ),
+            self._point(
+                date(2026, 7, 6),
+                base_mtd=Decimal("45"),
+                agregadora_mtd=Decimal("12"),
+                total_mtd=Decimal("57"),
+            ),
+        ]
+
+        point = build_branch_current_track_daily_values(points)[1]
+
+        self.assertEqual(point["base_daily"], Decimal("-5"))
+        self.assertEqual(point["agregadora_daily"], Decimal("2"))
+        self.assertEqual(point["total_daily"], Decimal("-3"))
+        self.assertEqual(
+            point["daily_value_status"],
+            "available_with_negative_adjustment",
+        )
+
+    def test_inconsistent_components_keep_independent_total_delta(self):
+        points = [
+            self._point(
+                date(2026, 7, 5),
+                base_mtd=Decimal("50"),
+                agregadora_mtd=Decimal("10"),
+                total_mtd=Decimal("60"),
+            ),
+            self._point(
+                date(2026, 7, 6),
+                base_mtd=Decimal("55"),
+                agregadora_mtd=Decimal("12"),
+                total_mtd=Decimal("70"),
+            ),
+        ]
+
+        point = build_branch_current_track_daily_values(points)[1]
+
+        self.assertEqual(point["base_daily"], Decimal("5"))
+        self.assertEqual(point["agregadora_daily"], Decimal("2"))
+        self.assertEqual(point["total_daily"], Decimal("10"))
+        self.assertEqual(point["daily_value_status"], "inconsistent_components")
+
+    def test_cumulative_values_are_not_changed_and_input_is_sorted(self):
+        later = self._point(
+            date(2026, 7, 2),
+            base_mtd=Decimal("17"),
+            agregadora_mtd=Decimal("5"),
+            total_mtd=Decimal("22"),
+            version_id=2,
+        )
+        first = self._point(
+            date(2026, 7, 1),
+            base_mtd=Decimal("10"),
+            agregadora_mtd=Decimal("2"),
+            total_mtd=Decimal("12"),
+        )
+
+        result = build_branch_current_track_daily_values([later, first])
+
+        self.assertEqual(
+            [point["date"] for point in result],
+            [first["date"], later["date"]],
+        )
+        for source, point in zip((first, later), result):
+            for field in ("base_mtd", "agregadora_mtd", "total_mtd"):
+                self.assertEqual(point[field], source[field])
+
+    def test_first_day_of_new_month_ignores_previous_month(self):
+        points = [
+            self._point(
+                date(2026, 6, 30),
+                base_mtd=Decimal("300"),
+                agregadora_mtd=Decimal("30"),
+                total_mtd=Decimal("330"),
+            ),
+            self._point(
+                date(2026, 7, 1),
+                base_mtd=Decimal("8"),
+                agregadora_mtd=Decimal("0"),
+                total_mtd=Decimal("8"),
+            ),
+        ]
+
+        point = build_branch_current_track_daily_values(points)[1]
+
+        self.assertEqual(point["base_daily"], Decimal("8"))
+        self.assertEqual(point["agregadora_daily"], Decimal("0"))
+        self.assertEqual(point["total_daily"], Decimal("8"))
+        self.assertEqual(point["daily_value_status"], "available")
+
+    def test_missing_cumulative_value_only_nulls_affected_delta(self):
+        points = [
+            self._point(
+                date(2026, 7, 5),
+                base_mtd=Decimal("50"),
+                agregadora_mtd=None,
+                total_mtd=Decimal("60"),
+            ),
+            self._point(
+                date(2026, 7, 6),
+                base_mtd=Decimal("55"),
+                agregadora_mtd=Decimal("12"),
+                total_mtd=Decimal("67"),
+            ),
+        ]
+
+        point = build_branch_current_track_daily_values(points)[1]
+
+        self.assertEqual(point["base_daily"], Decimal("5"))
+        self.assertIsNone(point["agregadora_daily"])
+        self.assertEqual(point["total_daily"], Decimal("7"))
+        self.assertEqual(point["daily_value_status"], "missing_cumulative_value")
+
+    def test_missing_current_cumulative_value_has_priority_over_gap(self):
+        point = self._point(
+            date(2026, 7, 8),
+            base_mtd=None,
+            agregadora_mtd=Decimal("12"),
+            total_mtd=Decimal("67"),
+        )
+
+        result = build_branch_current_track_daily_values([point])[0]
+
+        self.assertIsNone(result["base_daily"])
+        self.assertIsNone(result["agregadora_daily"])
+        self.assertIsNone(result["total_daily"])
+        self.assertEqual(
+            result["daily_value_status"],
+            "missing_cumulative_value",
+        )
 
 
 class TrackDailyBranchVersionSelectorTest(unittest.TestCase):

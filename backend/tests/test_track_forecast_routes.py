@@ -168,9 +168,53 @@ class TrackForecastRoutesTest(unittest.TestCase):
                     "source_basis": "track_daily_mart",
                     "points": [
                         {
-                            "date": date(2026, 7, 12),
-                            "base_mtd": Decimal("100.25"),
-                        }
+                            "date": date(2026, 7, 1),
+                            "base_mtd": Decimal("10.25"),
+                            "agregadora_mtd": Decimal("2.00"),
+                            "total_mtd": Decimal("12.25"),
+                            "base_daily": Decimal("10.25"),
+                            "agregadora_daily": Decimal("2.00"),
+                            "total_daily": Decimal("12.25"),
+                            "daily_value_status": "available",
+                            "daily_value_method": "calendar_day_mtd_delta",
+                        },
+                        {
+                            "date": date(2026, 7, 2),
+                            "base_mtd": Decimal("17.25"),
+                            "agregadora_mtd": Decimal("5.00"),
+                            "total_mtd": Decimal("22.25"),
+                            "base_daily": Decimal("7.00"),
+                            "agregadora_daily": Decimal("3.00"),
+                            "total_daily": Decimal("10.00"),
+                            "daily_value_status": "available",
+                            "daily_value_method": "calendar_day_mtd_delta",
+                        },
+                        {
+                            "date": date(2026, 7, 4),
+                            "base_mtd": Decimal("30.00"),
+                            "agregadora_mtd": Decimal("6.00"),
+                            "total_mtd": Decimal("36.00"),
+                            "base_daily": None,
+                            "agregadora_daily": None,
+                            "total_daily": None,
+                            "daily_value_status": (
+                                "missing_previous_calendar_day"
+                            ),
+                            "daily_value_method": "calendar_day_mtd_delta",
+                        },
+                        {
+                            "date": date(2026, 7, 5),
+                            "base_mtd": Decimal("29.00"),
+                            "agregadora_mtd": Decimal("7.00"),
+                            "total_mtd": Decimal("36.00"),
+                            "base_daily": Decimal("-1.00"),
+                            "agregadora_daily": Decimal("1.00"),
+                            "total_daily": Decimal("0.00"),
+                            "daily_value_status": (
+                                "available_with_negative_adjustment"
+                            ),
+                            "daily_value_method": "calendar_day_mtd_delta",
+                        },
                     ],
                 },
                 "historical_years": {
@@ -436,9 +480,35 @@ class TrackForecastRoutesTest(unittest.TestCase):
         payload = response.get_json()
         point = payload["series"]["current_track"]["points"][0]
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(point["date"], "2026-07-12")
-        self.assertEqual(point["base_mtd"], 100.25)
+        self.assertEqual(point["date"], "2026-07-01")
+        self.assertEqual(point["base_mtd"], 10.25)
         self.assertIsInstance(point["base_mtd"], float)
+        self.assertEqual(point["base_daily"], 10.25)
+        self.assertEqual(point["agregadora_daily"], 2.0)
+        self.assertEqual(point["total_daily"], 12.25)
+        self.assertEqual(point["daily_value_status"], "available")
+        self.assertEqual(
+            point["daily_value_method"],
+            "calendar_day_mtd_delta",
+        )
+        consecutive_point = payload["series"]["current_track"]["points"][1]
+        self.assertEqual(consecutive_point["base_daily"], 7.0)
+        self.assertEqual(consecutive_point["agregadora_daily"], 3.0)
+        self.assertEqual(consecutive_point["total_daily"], 10.0)
+        gap_point = payload["series"]["current_track"]["points"][2]
+        self.assertIsNone(gap_point["base_daily"])
+        self.assertIsNone(gap_point["agregadora_daily"])
+        self.assertIsNone(gap_point["total_daily"])
+        self.assertEqual(
+            gap_point["daily_value_status"],
+            "missing_previous_calendar_day",
+        )
+        correction_point = payload["series"]["current_track"]["points"][3]
+        self.assertEqual(correction_point["base_daily"], -1.0)
+        self.assertEqual(
+            correction_point["daily_value_status"],
+            "available_with_negative_adjustment",
+        )
         self.assertEqual(
             payload["metadata"]["resolved_version"]["generated_at_utc"],
             "2026-07-12T18:00:00+00:00",
@@ -457,6 +527,24 @@ class TrackForecastRoutesTest(unittest.TestCase):
         self.assertEqual(distribution_point["normalized_daily_weight"], 0.04)
         self.assertEqual(historical_sample["source_date"], "2025-07-25")
         self.assertEqual(historical_sample["source_daily_total"], 3.0)
+        self.assertEqual(payload["summary"]["real_mtd"], 120.0)
+        self.assertEqual(
+            payload["summary"]["total_projection_basis"]["source"],
+            "existing_stable_forecast",
+        )
+        self.assertEqual(
+            payload["series"]["historical_years"],
+            {"source_basis": "venta_total_base", "items": []},
+        )
+        self.assertTrue(
+            payload["series"]["historical_expected"][
+                "calendar_alignment_applied"
+            ]
+        )
+        self.assertEqual(
+            payload["series"]["comparable_base_projection"]["projected_close"],
+            200.5,
+        )
 
     def test_branch_detail_serializes_no_goal_status(self):
         detail_payload = deepcopy(self._detail_payload())

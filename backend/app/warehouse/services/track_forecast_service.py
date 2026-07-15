@@ -53,6 +53,34 @@ class TrackDailyBranchVersionSelection(TypedDict):
     ingreso_real_total_mtd: Decimal | None
 
 
+BranchCurrentTrackDailyValueStatus = Literal[
+    "available",
+    "available_with_negative_adjustment",
+    "missing_previous_calendar_day",
+    "inconsistent_components",
+    "missing_cumulative_value",
+]
+
+
+class BranchCurrentTrackCumulativePoint(TypedDict):
+    day: int
+    date: date
+    version_id: int
+    version_type: str
+    selection_reason: str
+    base_mtd: Decimal | None
+    agregadora_mtd: Decimal | None
+    total_mtd: Decimal | None
+
+
+class BranchCurrentTrackPoint(BranchCurrentTrackCumulativePoint):
+    base_daily: Decimal | None
+    agregadora_daily: Decimal | None
+    total_daily: Decimal | None
+    daily_value_status: BranchCurrentTrackDailyValueStatus
+    daily_value_method: Literal["calendar_day_mtd_delta"]
+
+
 class _TrackDailyBranchVersionCandidate(TypedDict):
     track_date: date
     version_id: int
@@ -3484,6 +3512,78 @@ def _detail_decimal(value: Any, *, field_name: str) -> Decimal | None:
         ) from exc
 
 
+def build_branch_current_track_daily_values(
+    points: Sequence[BranchCurrentTrackCumulativePoint],
+) -> list[BranchCurrentTrackPoint]:
+    sorted_points = sorted(points, key=lambda point: point["date"])
+    points_by_date = {point["date"]: point for point in sorted_points}
+    result: list[BranchCurrentTrackPoint] = []
+
+    for point in sorted_points:
+        point_date = point["date"]
+        previous_point = (
+            None
+            if point_date.day == 1
+            else points_by_date.get(point_date - timedelta(days=1))
+        )
+        current_values = (
+            point["base_mtd"],
+            point["agregadora_mtd"],
+            point["total_mtd"],
+        )
+
+        if point_date.day == 1:
+            previous_values: tuple[Decimal | None, ...] = (
+                Decimal("0"),
+                Decimal("0"),
+                Decimal("0"),
+            )
+        elif previous_point is None:
+            previous_values = (None, None, None)
+        else:
+            previous_values = (
+                previous_point["base_mtd"],
+                previous_point["agregadora_mtd"],
+                previous_point["total_mtd"],
+            )
+
+        daily_values = tuple(
+            current - previous
+            if current is not None and previous is not None
+            else None
+            for current, previous in zip(current_values, previous_values)
+        )
+        base_daily, agregadora_daily, total_daily = daily_values
+
+        if any(value is None for value in current_values):
+            status: BranchCurrentTrackDailyValueStatus = (
+                "missing_cumulative_value"
+            )
+        elif point_date.day > 1 and previous_point is None:
+            status = "missing_previous_calendar_day"
+        elif any(value is None for value in previous_values):
+            status = "missing_cumulative_value"
+        elif total_daily != base_daily + agregadora_daily:
+            status = "inconsistent_components"
+        elif any(value < 0 for value in daily_values):
+            status = "available_with_negative_adjustment"
+        else:
+            status = "available"
+
+        result.append(
+            {
+                **point,
+                "base_daily": base_daily,
+                "agregadora_daily": agregadora_daily,
+                "total_daily": total_daily,
+                "daily_value_status": status,
+                "daily_value_method": "calendar_day_mtd_delta",
+            }
+        )
+
+    return result
+
+
 def _require_detail_match(
     *,
     actual: Any,
@@ -3761,7 +3861,7 @@ def _build_current_track_detail(
             raise BranchForecastDetailConsistencyError(str(exc)) from exc
         raise
 
-    points = [
+    cumulative_points: list[BranchCurrentTrackCumulativePoint] = [
         {
             "day": item["track_date"].day,
             "date": item["track_date"],
@@ -3774,6 +3874,7 @@ def _build_current_track_detail(
         }
         for item in selections
     ]
+    points = build_branch_current_track_daily_values(cumulative_points)
     if not points or points[-1]["date"] != track_date:
         raise BranchForecastDetailConsistencyError(
             "La serie Track no contiene el punto correspondiente al día de corte."
