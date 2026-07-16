@@ -15,6 +15,7 @@ from app.rpa.services.gasca_sms_code_lookup_service import (
 )
 from app.rpa.services.google_messages_sms_sender_service import (
     GoogleMessagesSmsSenderError,
+    GoogleMessagesSmsSenderSession,
     send_sms_via_google_messages,
 )
 
@@ -192,6 +193,7 @@ def process_gasca_sms_request(
     *,
     today: date | None = None,
     headless: bool = True,
+    sender_session: GoogleMessagesSmsSenderSession | None = None,
 ) -> GascaSmsRequestORM:
     request.status = GascaSmsRequestStatus.GASCA_SEARCHING
     request.attempt_count = (request.attempt_count or 0) + 1
@@ -242,10 +244,16 @@ def process_gasca_sms_request(
             )
             db.session.flush()
 
-            sms_result = send_sms_via_google_messages(
-                phone=request.requested_phone_raw,
-                message=sms_message,
-            )
+            if sender_session is not None:
+                sms_result = sender_session.send(
+                    phone=request.requested_phone_raw,
+                    message=sms_message,
+                )
+            else:
+                sms_result = send_sms_via_google_messages(
+                    phone=request.requested_phone_raw,
+                    message=sms_message,
+                )
 
             if not sms_result.get("ok"):
                 raise GoogleMessagesSmsSenderError(
@@ -329,5 +337,52 @@ def create_and_process_gasca_sms_request(
         today=today,
     )
 
+    db.session.commit()
+    return request
+
+def create_queued_gasca_sms_request(
+    *,
+    pin_raw: str,
+    phone_raw: str,
+    motivo: str,
+    motivo_detalle: str | None = None,
+    requested_by_user_id: int | None = None,
+    sucursal_id: int | None = None,
+) -> GascaSmsRequestORM:
+    pin_normalized = normalize_pin(pin_raw)
+    requested_phone_digits = validate_phone_digits(phone_raw)
+
+    recent_duplicate = _find_recent_duplicate_request(
+        pin_normalized=pin_normalized,
+        requested_phone_digits=requested_phone_digits,
+    )
+
+    request = create_gasca_sms_request(
+        pin_raw=pin_raw,
+        phone_raw=phone_raw,
+        motivo=motivo,
+        motivo_detalle=motivo_detalle,
+        requested_by_user_id=requested_by_user_id,
+        sucursal_id=sucursal_id,
+    )
+
+    if recent_duplicate is not None:
+        request.status = GascaSmsRequestStatus.FAILED
+        request.user_message = (
+            "Ya existe una solicitud reciente para este PIN y teléfono. "
+            "Espera unos segundos antes de intentar de nuevo."
+        )
+        request.internal_error = (
+            f"duplicate_recent_request: existing_request_id={recent_duplicate.id}"
+        )
+        request.processed_at = db.func.now()
+        db.session.commit()
+        return request
+
+    request.status = GascaSmsRequestStatus.PENDING
+    request.user_message = (
+        "Solicitud registrada en cola para envío SMS. "
+        "Suite la procesará automáticamente."
+    )
     db.session.commit()
     return request

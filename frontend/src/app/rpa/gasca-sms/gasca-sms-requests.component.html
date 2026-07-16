@@ -6,8 +6,8 @@
       <h1>Reenvío de códigos Gasca</h1>
 
       <p>
-        Consulta Gasca, valida PIN, teléfono, fecha y uso del código antes de
-        enviar el SMS al socio.
+        Registra la solicitud, valida PIN, teléfono, fecha y uso del código, y la envía
+        automáticamente en cola.
       </p>
     </div>
 
@@ -30,8 +30,8 @@
         <mat-card-title>Nueva solicitud</mat-card-title>
 
         <mat-card-subtitle>
-          Captura los datos enviados por la sucursal. Suite solo enviará el SMS
-          si Gasca devuelve un código válido.
+          Captura los datos enviados por la sucursal. Suite registrará la solicitud
+          y el procesador SMS la atenderá automáticamente.
         </mat-card-subtitle>
       </mat-card-header>
 
@@ -122,7 +122,7 @@
               class="actions__primary"
             >
               <mat-icon>send</mat-icon>
-              Procesar solicitud
+              Registrar solicitud
             </button>
 
             <button
@@ -136,7 +136,7 @@
 
             <div class="actions__loading" *ngIf="creating">
               <mat-spinner diameter="24"></mat-spinner>
-              <span>Procesando...</span>
+              <span>Registrando solicitud...</span>
             </div>
           </div>
         </form>

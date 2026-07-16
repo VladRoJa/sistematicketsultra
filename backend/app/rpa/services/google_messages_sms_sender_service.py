@@ -679,44 +679,8 @@ def _send_by_enter(
         f"Google Messages no pudo enviar el SMS. Último error: {last_error}"
     )
 
-
-def send_sms_via_google_messages(
-    phone: str,
-    message: str,
-    config: GoogleMessagesSmsConfig | None = None,
-) -> dict[str, Any]:
-    resolved_config = config or resolve_config_from_env()
-    phone_digits = normalize_phone_digits(phone)
-
-    if not resolved_config.profile_dir.exists():
-        raise GoogleMessagesSmsSenderError(
-            f"No existe perfil Google Messages: {resolved_config.profile_dir}. "
-            "Primero se debe emparejar el teléfono."
-        )
-
-    started_at = time.perf_counter()
-    steps: list[dict[str, Any]] = []
-
-    def measure(label: str, fn):
-        step_started_at = time.perf_counter()
-
-        try:
-            result = fn()
-            ok = True
-            return result
-        except Exception:
-            ok = False
-            raise
-        finally:
-            steps.append(
-                {
-                    "label": label,
-                    "ok": ok,
-                    "elapsed_ms": round((time.perf_counter() - step_started_at) * 1000, 2),
-                }
-            )
-
-    chromium_args = [
+def _build_chromium_args() -> list[str]:
+    return [
         "--disable-notifications",
         "--disable-gpu",
         "--disable-dev-shm-usage",
@@ -725,77 +689,222 @@ def send_sms_via_google_messages(
         "--disable-blink-features=AutomationControlled",
     ]
 
-    with sync_playwright() as p:
-        context = measure(
+
+def _assert_google_messages_profile_exists(config: GoogleMessagesSmsConfig) -> None:
+    if not config.profile_dir.exists():
+        raise GoogleMessagesSmsSenderError(
+            f"No existe perfil Google Messages: {config.profile_dir}. "
+            "Primero se debe emparejar el teléfono."
+        )
+
+
+def _measure_step(steps: list[dict[str, Any]], label: str, fn):
+    step_started_at = time.perf_counter()
+
+    try:
+        result = fn()
+        ok = True
+        return result
+    except Exception:
+        ok = False
+        raise
+    finally:
+        steps.append(
+            {
+                "label": label,
+                "ok": ok,
+                "elapsed_ms": round((time.perf_counter() - step_started_at) * 1000, 2),
+            }
+        )
+
+
+def _send_sms_with_open_page(
+    *,
+    page: Page,
+    phone_digits: str,
+    message: str,
+    config: GoogleMessagesSmsConfig,
+    steps: list[dict[str, Any]],
+    started_at: float,
+) -> dict[str, Any]:
+    _measure_step(
+        steps,
+        "goto_conversations_new",
+        lambda: page.goto(
+            MESSAGES_NEW_URL,
+            wait_until="domcontentloaded",
+            timeout=config.timeout_ms,
+        ),
+    )
+
+    _measure_step(
+        steps,
+        "handle_welcome_gate",
+        lambda: _handle_welcome_gate(page, config),
+    )
+
+    _measure_step(
+        steps,
+        "assert_session_ready",
+        lambda: _assert_google_messages_session_ready(page),
+    )
+
+    _measure_step(
+        steps,
+        "fill_recipient",
+        lambda: _fill_recipient(page, phone_digits, config),
+    )
+
+    selected_recipient = _measure_step(
+        steps,
+        "select_recipient",
+        lambda: _select_recipient(page, phone_digits, config),
+    )
+
+    message_selector = _measure_step(
+        steps,
+        "fill_message",
+        lambda: _fill_message(page, message, config),
+    )
+
+    send_result = _measure_step(
+        steps,
+        "send_by_enter",
+        lambda: _send_by_enter(
+            page,
+            message_selector,
+            message,
+            config,
+        ),
+    )
+
+    elapsed_ms = round((time.perf_counter() - started_at) * 1000, 2)
+
+    return {
+        "ok": True,
+        "provider": "google_messages_web",
+        "phone_digits": phone_digits,
+        "message_length": len(message),
+        "selected_recipient": selected_recipient,
+        "conversation_url": page.url,
+        "headless": config.headless,
+        "elapsed_ms": elapsed_ms,
+        "steps": steps,
+        **send_result,
+    }
+
+
+class GoogleMessagesSmsSenderSession:
+    """Sesión reusable de Google Messages Web para enviar varios SMS en serie."""
+
+    def __init__(self, config: GoogleMessagesSmsConfig | None = None):
+        self.config = config or resolve_config_from_env()
+        self._playwright_manager = None
+        self._playwright = None
+        self._context = None
+        self._page: Page | None = None
+
+    def open(self) -> list[dict[str, Any]]:
+        if self._context is not None and self._page is not None:
+            return [
+                {
+                    "label": "reuse_persistent_chromium",
+                    "ok": True,
+                    "elapsed_ms": 0,
+                }
+            ]
+
+        _assert_google_messages_profile_exists(self.config)
+
+        steps: list[dict[str, Any]] = []
+        self._playwright_manager = sync_playwright()
+        self._playwright = self._playwright_manager.start()
+
+        self._context = _measure_step(
+            steps,
             "launch_persistent_chromium",
-            lambda: p.chromium.launch_persistent_context(
-                user_data_dir=str(resolved_config.profile_dir),
-                headless=resolved_config.headless,
+            lambda: self._playwright.chromium.launch_persistent_context(
+                user_data_dir=str(self.config.profile_dir),
+                headless=self.config.headless,
                 viewport={"width": 1366, "height": 768},
-                args=chromium_args,
+                args=_build_chromium_args(),
             ),
         )
 
+        self._page = _measure_step(
+            steps,
+            "new_page",
+            lambda: self._context.new_page(),
+        )
+
+        return steps
+
+    def send(self, phone: str, message: str) -> dict[str, Any]:
+        phone_digits = normalize_phone_digits(phone)
+        started_at = time.perf_counter()
+
+        steps = self.open()
+
+        if self._page is None:
+            raise GoogleMessagesSmsSenderError(
+                "No se pudo abrir página de Google Messages para envío SMS."
+            )
+
+        return _send_sms_with_open_page(
+            page=self._page,
+            phone_digits=phone_digits,
+            message=message,
+            config=self.config,
+            steps=steps,
+            started_at=started_at,
+        )
+
+    def close(self, steps: list[dict[str, Any]] | None = None) -> None:
+        close_error: Exception | None = None
+
         try:
-            page = measure("new_page", lambda: context.new_page())
-
-            measure(
-                "goto_conversations_new",
-                lambda: page.goto(
-                    MESSAGES_NEW_URL,
-                    wait_until="domcontentloaded",
-                    timeout=resolved_config.timeout_ms,
-                ),
-            )
-
-            measure(
-                "handle_welcome_gate",
-                lambda: _handle_welcome_gate(page, resolved_config),
-            )
-
-            measure(
-                "assert_session_ready",
-                lambda: _assert_google_messages_session_ready(page),
-            )
-
-            measure(
-                "fill_recipient",
-                lambda: _fill_recipient(page, phone_digits, resolved_config),
-            )
-
-            selected_recipient = measure(
-                "select_recipient",
-                lambda: _select_recipient(page, phone_digits, resolved_config),
-            )
-
-            message_selector = measure(
-                "fill_message",
-                lambda: _fill_message(page, message, resolved_config),
-            )
-
-            send_result = measure(
-                "send_by_enter",
-                lambda: _send_by_enter(
-                    page,
-                    message_selector,
-                    message,
-                    resolved_config,
-                ),
-            )
-
-            elapsed_ms = round((time.perf_counter() - started_at) * 1000, 2)
-
-            return {
-                "ok": True,
-                "provider": "google_messages_web",
-                "phone_digits": phone_digits,
-                "message_length": len(message),
-                "selected_recipient": selected_recipient,
-                "conversation_url": page.url,
-                "headless": resolved_config.headless,
-                "elapsed_ms": elapsed_ms,
-                "steps": steps,
-                **send_result,
-            }
+            if self._context is not None:
+                try:
+                    if steps is not None:
+                        _measure_step(steps, "close_context", lambda: self._context.close())
+                    else:
+                        self._context.close()
+                except Exception as exc:
+                    close_error = exc
         finally:
-            measure("close_context", lambda: context.close())
+            try:
+                if self._playwright_manager is not None:
+                    self._playwright_manager.__exit__(None, None, None)
+            except Exception as exc:
+                if close_error is None:
+                    close_error = exc
+
+            self._page = None
+            self._context = None
+            self._playwright = None
+            self._playwright_manager = None
+
+        if close_error is not None:
+            raise close_error
+
+    def __enter__(self) -> "GoogleMessagesSmsSenderSession":
+        self.open()
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        self.close()
+
+
+def send_sms_via_google_messages(
+    phone: str,
+    message: str,
+    config: GoogleMessagesSmsConfig | None = None,
+) -> dict[str, Any]:
+    session = GoogleMessagesSmsSenderSession(config)
+    result: dict[str, Any] | None = None
+
+    try:
+        result = session.send(phone, message)
+        return result
+    finally:
+        session.close(steps=result.get("steps") if result else None)
