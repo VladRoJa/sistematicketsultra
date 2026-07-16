@@ -138,6 +138,12 @@ export const routes: Routes = [
         component: TrackKpiDesempenoComponent,
       },
       {
+        path: 'warehouse/track/forecast-center',
+        loadComponent: () =>
+          import('./warehouse/track-forecast-center/track-forecast-center.component')
+            .then(m => m.TrackForecastCenterComponent),
+      },
+      {
         path: 'warehouse/track/forecast/branches/:sucursalCanon',
         loadComponent: () =>
           import('./warehouse/track-forecast-branch-detail/track-forecast-branch-detail.component')

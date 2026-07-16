@@ -1,0 +1,42 @@
+<section class="summary-view">
+  <div class="summary-view__message">{{ executiveMessage }}</div>
+
+  <div class="summary-view__cards">
+    <article *ngFor="let card of cards" class="metric" [class.metric--negative]="card.tone === 'negative'">
+      <span>{{ card.label }}</span>
+      <strong>{{ card.value }}</strong>
+      <small *ngIf="card.secondary">{{ card.secondary }}</small>
+      <small>{{ card.coverage }}</small>
+    </article>
+  </div>
+
+  <section *ngIf="cohortCards.length" class="summary-view__cohorts">
+    <h2>Cohortes</h2>
+    <div class="cohort-grid">
+      <article *ngFor="let card of cohortCards" class="cohort-card">
+        <header><h3>{{ card.label }}</h3><span>{{ card.branchCount }}</span></header>
+        <dl>
+          <div><dt>Meta</dt><dd>{{ card.goal }}</dd></div>
+          <div><dt>Real</dt><dd>{{ card.real }}</dd></div>
+          <div><dt>Brecha contra ritmo</dt><dd>{{ card.gap }}</dd></div>
+          <div><dt>Proyección</dt><dd>{{ card.projection }}</dd></div>
+          <div><dt>Cumplimiento</dt><dd>{{ card.attainment }}</dd></div>
+        </dl>
+        <p>{{ card.quality }} · {{ card.coverage }}</p>
+        <button type="button" (click)="openCohort(card)">Ver cohorte</button>
+      </article>
+    </div>
+  </section>
+
+  <section class="summary-view__chart">
+    <div class="chart-header">
+      <div><h2>Avance acumulado</h2><p>{{ chartCoverageNote }}</p></div>
+      <div class="segmented" aria-label="Comparación de gráfica">
+        <button type="button" [class.is-active]="comparisonMode === 'goal'" (click)="setComparisonMode('goal')">Vs meta</button>
+        <button type="button" [class.is-active]="comparisonMode === 'projection'" (click)="setComparisonMode('projection')">Vs proyección</button>
+      </div>
+    </div>
+    <div echarts [options]="chartOption" class="chart"></div>
+  </section>
+</section>
+

@@ -1,0 +1,28 @@
+.summary-view { display: grid; gap: 16px; }
+.summary-view__message { border-left: 4px solid #174ea6; background: #f1f5fb; padding: 14px; line-height: 1.5; }
+.summary-view__cards { display: grid; grid-template-columns: repeat(4, minmax(180px, 1fr)); gap: 10px; }
+.metric { display: grid; gap: 5px; min-width: 0; border: 1px solid #d8dde7; padding: 13px; background: #fff; }
+.metric > span { color: #596476; font-size: .78rem; }
+.metric strong { font-size: 1.25rem; overflow-wrap: anywhere; }
+.metric small { color: #697386; }
+.metric--negative strong { color: #a52828; }
+.summary-view__cohorts h2, .summary-view__chart h2 { margin: 0; font-size: 1rem; }
+.cohort-grid { display: grid; grid-template-columns: repeat(2, minmax(260px, 1fr)); gap: 10px; margin-top: 8px; }
+.cohort-card { border: 1px solid #d8dde7; padding: 14px; }
+.cohort-card header { display: flex; justify-content: space-between; gap: 12px; }
+.cohort-card h3 { margin: 0; }
+.cohort-card dl { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px 16px; }
+.cohort-card dl div { display: grid; gap: 2px; }
+.cohort-card dt { color: #697386; font-size: .75rem; }
+.cohort-card dd { margin: 0; font-weight: 650; }
+.cohort-card p { color: #697386; font-size: .78rem; }
+.cohort-card button, .segmented button { border: 1px solid #aeb7c6; background: #fff; padding: 7px 11px; cursor: pointer; }
+.summary-view__chart { border: 1px solid #d8dde7; padding: 14px; min-width: 0; }
+.chart-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.chart-header p { margin: 4px 0; color: #697386; font-size: .8rem; }
+.segmented { display: flex; }
+.segmented button.is-active { background: #174ea6; border-color: #174ea6; color: #fff; }
+.chart { height: 390px; width: 100%; }
+@media (max-width: 1000px) { .summary-view__cards { grid-template-columns: repeat(2, minmax(170px, 1fr)); } }
+@media (max-width: 650px) { .summary-view__cards, .cohort-grid { grid-template-columns: 1fr; } .chart-header { display: grid; } .chart { height: 360px; } }
+

@@ -1,0 +1,11 @@
+.methodology-view { display: grid; grid-template-columns: repeat(2, minmax(260px, 1fr)); gap: 12px; }
+.methodology-view > header, .technical { grid-column: 1 / -1; }
+.methodology-view h2, .methodology-view h3 { margin: 0; }
+.methodology-view header p, article p { color: #657085; line-height: 1.45; }
+article, .technical { border: 1px solid #d8dde7; padding: 14px; min-width: 0; }
+dl { display: grid; gap: 7px; }
+dl div { display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid #edf0f4; padding-bottom: 6px; }
+dt { color: #657085; } dd { margin: 0; text-align: right; font-weight: 650; overflow-wrap: anywhere; }
+ul { padding-left: 20px; } li { margin: 5px 0; }
+.technical summary { cursor: pointer; font-weight: 650; }
+@media (max-width: 800px) { .methodology-view { grid-template-columns: 1fr; } .methodology-view > header, .technical { grid-column: auto; } }

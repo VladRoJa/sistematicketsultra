@@ -1,0 +1,19 @@
+<section class="pace-view">
+  <header class="pace-view__header">
+    <div><h2>Ritmo y forecast</h2><p>{{ explanation }}</p></div>
+    <div class="segmented">
+      <button type="button" [class.is-active]="mode === 'goal'" (click)="setMode('goal')">Vs meta</button>
+      <button type="button" [class.is-active]="mode === 'projection'" (click)="setMode('projection')">Vs proyección</button>
+    </div>
+  </header>
+
+  <div class="pace-view__facts">
+    <span>{{ coverageLabel }}</span><span>{{ includedLabel }}</span><span>{{ excludedLabel }}</span>
+    <span>{{ statusLabel }}</span><span>{{ remainingDaysLabel }}</span><span>{{ requiredAverageLabel }}</span>
+  </div>
+
+  <section class="pace-chart"><h3>Acumulado</h3><div echarts [options]="cumulativeOption" class="chart"></div></section>
+  <section class="pace-chart"><h3>Diario</h3><div echarts [options]="dailyOption" class="chart"></div></section>
+  <p class="pace-view__note">Los días futuros sin real no se consideran un error. En la vista de proyección, el punto de corte es un ancla y no se presenta como ingreso diario proyectado.</p>
+</section>
+

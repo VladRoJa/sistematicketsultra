@@ -1,0 +1,106 @@
+<section class="forecast-center">
+  <header class="forecast-center__header">
+    <div>
+      <p class="forecast-center__eyebrow">Track / BI</p>
+      <h1>Centro de Forecast</h1>
+      <p>Seguimiento nacional, regional y por sucursal frente a meta y proyección.</p>
+    </div>
+    <span *ngIf="accessLabel" class="forecast-center__access">{{ accessLabel }}</span>
+  </header>
+
+  <div *ngIf="loadingCatalogs" class="forecast-center__state">Cargando catálogos…</div>
+
+  <ng-container *ngIf="catalogs && !loadingCatalogs">
+    <form class="forecast-center__filters" (ngSubmit)="onCalculationFilterChange()">
+      <label>
+        <span>Fecha de corte</span>
+        <input type="date" name="trackDate" [(ngModel)]="filters.trackDate" (change)="onCalculationFilterChange()">
+      </label>
+
+      <label>
+        <span>Modo</span>
+        <select name="generationMode" [(ngModel)]="filters.generationMode" (change)="onCalculationFilterChange()">
+          <option *ngFor="let mode of catalogs.generation_modes" [ngValue]="mode">
+            {{ getGenerationModeLabel(mode) }}
+          </option>
+        </select>
+      </label>
+
+      <label>
+        <span>Alcance</span>
+        <select name="scope" [(ngModel)]="filters.scope" (change)="onCalculationFilterChange()">
+          <option *ngFor="let scope of scopeOptions" [ngValue]="scope.key">
+            {{ getScopeLabel(scope.key) }}
+          </option>
+        </select>
+      </label>
+
+      <label>
+        <span>Unidad / cohorte</span>
+        <select name="cohort" [(ngModel)]="filters.cohort" (change)="onCalculationFilterChange()">
+          <option *ngFor="let cohort of catalogs.cohorts" [ngValue]="cohort.key">{{ cohort.label }}</option>
+        </select>
+      </label>
+
+      <label *ngIf="showRegionSelector">
+        <span>Región</span>
+        <select name="region" [(ngModel)]="filters.scopeId" (change)="onCalculationFilterChange()">
+          <option *ngFor="let region of regionOptions" [ngValue]="region.region_key">{{ region.label }}</option>
+        </select>
+      </label>
+
+      <label *ngIf="showBranchSelector">
+        <span>Sucursal</span>
+        <select name="branch" [(ngModel)]="filters.scopeId" (change)="onCalculationFilterChange()">
+          <option *ngFor="let branch of branchOptions" [ngValue]="branch.sucursal_canon">{{ branch.label }}</option>
+        </select>
+      </label>
+
+      <label *ngIf="showBreakdownSelector">
+        <span>Desglose</span>
+        <select name="breakdown" [(ngModel)]="filters.breakdown" (change)="onCalculationFilterChange()">
+          <option value="cohort">Cohortes</option>
+          <option value="region">Regiones</option>
+        </select>
+      </label>
+    </form>
+
+    <nav class="forecast-center__tabs" aria-label="Vistas del Centro de Forecast">
+      <button
+        *ngFor="let view of views"
+        type="button"
+        [class.is-active]="filters.view === view"
+        (click)="selectView(view)">
+        {{ viewLabels[view] }}
+      </button>
+    </nav>
+  </ng-container>
+
+  <div *ngIf="errorMessage" class="forecast-center__error" role="alert">{{ errorMessage }}</div>
+  <div *ngIf="loadingData" class="forecast-center__state">Actualizando Centro de Forecast…</div>
+  <div *ngIf="qualityNotice && !loadingData" class="forecast-center__notice">{{ qualityNotice }}</div>
+
+  <ng-container *ngIf="response && !loadingData">
+    <app-track-forecast-center-summary
+      *ngIf="filters.view === 'summary'"
+      [response]="response"
+      (navigate)="handleNavigation($event)">
+    </app-track-forecast-center-summary>
+
+    <app-track-forecast-center-pace
+      *ngIf="filters.view === 'pace'"
+      [response]="response">
+    </app-track-forecast-center-pace>
+
+    <app-track-forecast-center-breakdown
+      *ngIf="filters.view === 'breakdown'"
+      [response]="response"
+      (navigate)="handleNavigation($event)">
+    </app-track-forecast-center-breakdown>
+
+    <app-track-forecast-center-methodology
+      *ngIf="filters.view === 'methodology'"
+      [response]="response">
+    </app-track-forecast-center-methodology>
+  </ng-container>
+</section>
