@@ -1,0 +1,13 @@
+<section class="methodology-view">
+  <header><h2>Metodología y calidad</h2><p>La lectura distingue el real operativo del universo comparable. Un valor nulo significa que el dato no está disponible; no equivale a cero.</p></header>
+
+  <article><h3>Universo analizado</h3><dl><div *ngFor="let item of universeItems"><dt>{{ item.label }}</dt><dd>{{ item.value }}</dd></div></dl></article>
+  <article><h3>Cobertura por métrica</h3><dl><div *ngFor="let item of coverageItems"><dt>{{ item.label }}</dt><dd>{{ item.value }}</dd></div></dl></article>
+  <article><h3>Exclusiones</h3><ul><li *ngFor="let item of exclusionItems">{{ item }}</li><li *ngIf="!exclusionItems.length">Sin exclusiones visibles.</li></ul></article>
+  <article><h3>Fallbacks calendario</h3><ul><li *ngFor="let item of fallbackItems">{{ item }}</li><li *ngIf="!fallbackItems.length">No se aplicaron fallbacks.</li></ul><p>El fallback conserva la alineación disponible; no sustituye el criterio de día de la semana.</p></article>
+  <article><h3>Cutoff y versión Track</h3><dl><div *ngFor="let item of cutoffItems"><dt>{{ item.label }}</dt><dd>{{ item.value }}</dd></div></dl></article>
+  <article><h3>Metodología</h3><dl><div *ngFor="let item of methodologyItems"><dt>{{ item.label }}</dt><dd>{{ item.value }}</dd></div></dl><p>Vs meta compara <strong>real comparable al ritmo</strong> y <strong>requerido</strong>. Vs proyección usa únicamente el real, meta y proyección del universo proyectable.</p></article>
+
+  <details class="technical"><summary>Detalle técnico de cargas</summary><dl><div *ngFor="let item of loaderItems"><dt>{{ item.label }}</dt><dd>{{ item.value }}</dd></div></dl></details>
+</section>
+

@@ -1,0 +1,16 @@
+.breakdown-view { min-width: 0; }
+.breakdown-view header h2 { margin: 0; }
+.breakdown-view header p { margin: 5px 0 12px; color: #657085; }
+.table-wrap { overflow-x: auto; border: 1px solid #d8dde7; }
+table { width: 100%; min-width: 1320px; border-collapse: collapse; font-size: .82rem; }
+th, td { padding: 9px 10px; border-bottom: 1px solid #e1e5ec; text-align: right; white-space: nowrap; }
+th { background: #f4f6f9; color: #4f5a6d; font-size: .75rem; }
+th:first-child, td:first-child { position: sticky; left: 0; text-align: left; background: #fff; }
+th:first-child { background: #f4f6f9; }
+td button, .branch-summary button { border: 1px solid #9da8ba; background: #fff; padding: 6px 9px; cursor: pointer; }
+.branch-summary { display: flex; justify-content: space-between; align-items: center; gap: 16px; border: 1px solid #d8dde7; padding: 14px; }
+.branch-summary div { display: grid; gap: 4px; }
+.branch-summary span { color: #657085; }
+.empty { padding: 12px; }
+@media (max-width: 650px) { .branch-summary { display: grid; } }
+

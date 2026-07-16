@@ -1,0 +1,23 @@
+<section class="breakdown-view">
+  <header><h2>Desglose</h2><p>Ordenado por la peor brecha contra ritmo; los valores sin dato aparecen al final.</p></header>
+
+  <div *ngIf="isBranchScope" class="branch-summary">
+    <div><strong>{{ branchLabel }}</strong><span>Este alcance no duplica el detalle analítico existente.</span></div>
+    <button type="button" (click)="openBranchAnalysis()">Ver análisis completo</button>
+  </div>
+
+  <div *ngIf="!isBranchScope" class="table-wrap">
+    <table>
+      <thead><tr><th>Unidad</th><th>Sucursales</th><th>Meta</th><th>Real</th><th>Ritmo esperado</th><th>Brecha contra ritmo</th><th>Proyección comparable</th><th>Cumplimiento proyectado</th><th>Cobertura</th><th>Estado</th><th>Acción</th></tr></thead>
+      <tbody>
+        <tr *ngFor="let row of rows">
+          <td>{{ row.label }}</td><td>{{ row.branches }}</td><td>{{ row.goal }}</td><td>{{ row.real }}</td>
+          <td>{{ row.expected }}</td><td>{{ row.gap }}</td><td>{{ row.projection }}</td><td>{{ row.attainment }}</td>
+          <td>{{ row.coverage }}</td><td>{{ row.status }}</td><td><button type="button" (click)="open(row)">{{ row.action }}</button></td>
+        </tr>
+      </tbody>
+    </table>
+    <p *ngIf="!rows.length" class="empty">No hay elementos disponibles para este desglose.</p>
+  </div>
+</section>
+

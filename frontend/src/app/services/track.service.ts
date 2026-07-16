@@ -1103,6 +1103,279 @@ export interface TrackBranchForecastDetailResponse {
   data_quality: TrackBranchForecastDetailDataQuality;
 }
 
+export type TrackForecastCenterStatus = 'available' | 'partial' | 'unavailable';
+export type TrackForecastCenterScope = 'national' | 'region' | 'authorized_pool' | 'branch';
+export type TrackForecastCenterCohort = 'all' | 'total_ultra' | 'legacy_21' | 'new_gyms';
+export type TrackForecastCenterBreakdownDimension = 'cohort' | 'region' | 'branch' | 'none';
+
+export interface TrackForecastCenterAccess {
+  type: 'global' | 'primary_branch' | 'assigned_branches';
+  is_global: boolean;
+  authorized_branch_ids: number[];
+  authorized_branch_count: number;
+  fallback_used: boolean;
+  fallback_reason: string | null;
+}
+
+export interface TrackForecastCenterCatalogContext {
+  user_access_scope: TrackForecastCenterAccess;
+  default_scope: TrackForecastCenterScope;
+  default_scope_id: string | null;
+  default_cohort: TrackForecastCenterCohort;
+  default_generation_mode: TrackGenerationMode;
+}
+
+export interface TrackForecastCenterCapabilities {
+  can_view_national: boolean;
+  can_view_regions: boolean;
+  can_view_authorized_pool: boolean;
+  can_view_branches: boolean;
+  can_drilldown: boolean;
+  can_view_methodology: boolean;
+}
+
+export interface TrackForecastCenterCatalogScope {
+  key: TrackForecastCenterScope;
+  label: string;
+}
+
+export interface TrackForecastCenterCatalogCohort {
+  key: TrackForecastCenterCohort;
+  label: string;
+}
+
+export interface TrackForecastCenterCatalogRegion {
+  region_key: string;
+  label: string;
+  authorized_branch_count: number;
+  total_region_branch_count: number;
+  is_partial_access: boolean;
+}
+
+export interface TrackForecastCenterCatalogBranch {
+  sucursal_canon: string;
+  sucursal_id: number;
+  label: string;
+  cohort: TrackForecastCenterCohort;
+  region_key: string | null;
+  operational_status: string;
+}
+
+export interface TrackForecastCenterCatalogsResponse {
+  status: 'ok';
+  context: TrackForecastCenterCatalogContext;
+  capabilities: TrackForecastCenterCapabilities;
+  scopes: TrackForecastCenterCatalogScope[];
+  cohorts: TrackForecastCenterCatalogCohort[];
+  regions: TrackForecastCenterCatalogRegion[];
+  branches: TrackForecastCenterCatalogBranch[];
+  generation_modes: TrackGenerationMode[];
+}
+
+export interface TrackForecastCenterMetricCoverage {
+  status: TrackForecastCenterStatus;
+  eligible_branch_count: number;
+  included_branch_count: number;
+  excluded_branch_count: number;
+}
+
+export interface TrackForecastCenterSummaryValues {
+  goal_month: number | null;
+  real_mtd: number | null;
+  real_mtd_comparable_to_goal: number | null;
+  real_mtd_comparable_to_pace: number | null;
+  goal_expected_mtd_at_cutoff: number | null;
+  gap_vs_goal_pace: number | null;
+  gap_vs_goal_pace_pct: number | null;
+  projected_close: number | null;
+  projected_close_comparable_to_goal: number | null;
+  goal_month_comparable_to_projection: number | null;
+  real_mtd_comparable_to_projection: number | null;
+  projected_gap_to_goal: number | null;
+  projected_goal_attainment_pct: number | null;
+  remaining_to_goal: number | null;
+  remaining_days: number;
+  required_daily_average: number | null;
+}
+
+export type TrackForecastCenterMetricKey = keyof TrackForecastCenterSummaryValues;
+export type TrackForecastCenterMetricCoverageMap = Record<
+  Exclude<TrackForecastCenterMetricKey, 'remaining_days'>,
+  TrackForecastCenterMetricCoverage
+>;
+
+export interface TrackForecastCenterSummary extends TrackForecastCenterSummaryValues {
+  branch_count: number;
+  metric_coverage: TrackForecastCenterMetricCoverageMap;
+}
+
+export interface TrackForecastCenterSeriesPoint {
+  date: string;
+  day: number;
+  daily: number | null;
+  cumulative: number | null;
+  status: TrackForecastCenterStatus;
+  eligible_branch_count: number;
+  included_branch_count: number;
+  excluded_branch_count: number;
+  expected_branches: number;
+  included_branches: number;
+  excluded_branches: number;
+  exclusion_reasons: Record<string, number>;
+  coverage: TrackForecastCenterMetricCoverage;
+}
+
+export interface TrackForecastCenterSeriesItem {
+  status: TrackForecastCenterStatus;
+  points: TrackForecastCenterSeriesPoint[];
+}
+
+export interface TrackForecastCenterSeries {
+  actual: TrackForecastCenterSeriesItem;
+  pace_actual: TrackForecastCenterSeriesItem;
+  required: TrackForecastCenterSeriesItem;
+  projection_actual: TrackForecastCenterSeriesItem;
+  projection_required: TrackForecastCenterSeriesItem;
+  projected: TrackForecastCenterSeriesItem;
+}
+
+export interface TrackForecastCenterContribution {
+  real_mtd_share: number | null;
+  projected_gap_share: number | null;
+}
+
+export interface TrackForecastCenterDrilldown {
+  scope: TrackForecastCenterScope;
+  scope_id?: string;
+  cohort?: TrackForecastCenterCohort;
+  analytic_route?: string;
+}
+
+export interface TrackForecastCenterBreakdownItem {
+  key: string;
+  label: string;
+  dimension: Exclude<TrackForecastCenterBreakdownDimension, 'none'>;
+  branch_count: number;
+  summary: TrackForecastCenterSummaryValues;
+  metric_coverage: TrackForecastCenterMetricCoverageMap;
+  quality_status: TrackForecastCenterStatus;
+  contribution: TrackForecastCenterContribution;
+  drilldown: TrackForecastCenterDrilldown;
+}
+
+export interface TrackForecastCenterBreakdown {
+  dimension: TrackForecastCenterBreakdownDimension;
+  items: TrackForecastCenterBreakdownItem[];
+}
+
+export interface TrackForecastCenterQualityBranches {
+  selected: number;
+  included: number;
+  with_track_row: number;
+  with_goal: number;
+  with_history: number;
+  with_projection: number;
+  with_calendar_fallback: number;
+  with_daily_gaps: number;
+  without_region: number;
+  unauthorized_removed: number;
+}
+
+export interface TrackForecastCenterMonetaryCoverage {
+  known_goal_amount: number | null;
+  goal_amount_with_projection: number | null;
+  projection_vs_known_goal_pct: number | null;
+  real_amount_total: number | null;
+  real_amount_comparable_to_goal: number | null;
+  real_amount_with_projection: number | null;
+  projection_real_coverage_pct: number | null;
+}
+
+export interface TrackForecastCenterExclusion {
+  sucursal_canon: string | null;
+  reasons: string[];
+  stage: string;
+  affects_metrics: string[];
+}
+
+export interface TrackForecastCenterFallback {
+  type: 'authorization' | 'calendar';
+  reason: string | null;
+  branch_count?: number;
+  branches?: string[];
+}
+
+export interface TrackForecastCenterCutoff {
+  track_daily_version_id: number;
+  version_type: string;
+  status: string;
+  canonical_snapshot_id: number | null;
+  canonical_business_date: string | null;
+}
+
+export interface TrackForecastCenterMethodology {
+  projection_formula: string;
+  calendar_method: string;
+  goal_basis: string;
+  distribution_basis: string;
+  aggregadoras_assumed_same_daily_shape: boolean;
+  aggregate_method: string;
+}
+
+export interface TrackForecastCenterLoaderInvocations {
+  mart: number;
+  targets: number;
+  current_daily_versions: number;
+  historical_snapshots_and_daily_totals: number;
+  canonical_cutoff: number;
+}
+
+export interface TrackForecastCenterQuality {
+  status: TrackForecastCenterStatus;
+  branches: TrackForecastCenterQualityBranches;
+  monetary_coverage: TrackForecastCenterMonetaryCoverage;
+  exclusions: TrackForecastCenterExclusion[];
+  fallbacks: TrackForecastCenterFallback[];
+  cutoff: TrackForecastCenterCutoff;
+  loader_invocations: TrackForecastCenterLoaderInvocations;
+  methodology: TrackForecastCenterMethodology;
+}
+
+export interface TrackForecastCenterContext {
+  requested_track_date: string;
+  resolved_track_date: string;
+  target_month: string;
+  generation_mode: TrackGenerationMode;
+  scope: TrackForecastCenterScope;
+  scope_id: string | null;
+  cohort: TrackForecastCenterCohort;
+  user_access_scope: TrackForecastCenterAccess;
+  resolved_version: {
+    id: number;
+    version_type: string;
+    status: string;
+    generated_at_utc: string;
+  };
+}
+
+export interface TrackForecastCenterResponse {
+  status: 'ok';
+  context: TrackForecastCenterContext;
+  summary: TrackForecastCenterSummary;
+  series: TrackForecastCenterSeries;
+  breakdown: TrackForecastCenterBreakdown;
+  quality: TrackForecastCenterQuality;
+}
+
+export interface TrackForecastCenterParams {
+  track_date: string;
+  generation_mode: TrackGenerationMode;
+  scope: TrackForecastCenterScope;
+  scope_id?: string | null;
+  cohort: TrackForecastCenterCohort;
+  breakdown: TrackForecastCenterBreakdownDimension;
+}
+
 @Injectable({
   providedIn: 'root',
 })
@@ -1182,6 +1455,33 @@ export class TrackService {
   getForecastBranches(): Observable<TrackForecastBranchesResponse> {
     return this.http.get<TrackForecastBranchesResponse>(
       `${this.baseUrl}/forecast/branches`,
+    );
+  }
+
+  getForecastCenterCatalogs(): Observable<TrackForecastCenterCatalogsResponse> {
+    return this.http.get<TrackForecastCenterCatalogsResponse>(
+      `${this.baseUrl}/forecast/center/catalogs`,
+    );
+  }
+
+  getForecastCenter(
+    request: TrackForecastCenterParams,
+  ): Observable<TrackForecastCenterResponse> {
+    let params = new HttpParams()
+      .set('track_date', request.track_date)
+      .set('generation_mode', request.generation_mode)
+      .set('scope', request.scope)
+      .set('cohort', request.cohort)
+      .set('breakdown', request.breakdown);
+
+    const scopeId = request.scope_id?.trim();
+    if (scopeId) {
+      params = params.set('scope_id', scopeId);
+    }
+
+    return this.http.get<TrackForecastCenterResponse>(
+      `${this.baseUrl}/forecast/center`,
+      { params },
     );
   }
 

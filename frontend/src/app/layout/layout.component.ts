@@ -135,6 +135,13 @@ ngOnInit(): void {
     });
   }
 
+  if (this.puedeVerTrackForecastCenterPorRol()) {
+    trackSubmenu.push({
+      label: 'Centro de Forecast',
+      path: '/warehouse/track/forecast-center',
+    });
+  }
+
   const menuTrackDiario = {
     label: 'Track',
     path: '/warehouse/track',
@@ -978,6 +985,20 @@ private puedeVerTrackForecastBeta(): boolean {
   }
 
   return userId === 47;
+}
+
+private puedeVerTrackForecastCenterPorRol(): boolean {
+  const user = this.authService.getUser();
+  const rol = String(user?.rol ?? user?.role ?? '').trim().toUpperCase();
+
+  return [
+    'ADMIN',
+    'ADMINISTRADOR',
+    'SUPER_ADMIN',
+    'LECTOR_GLOBAL',
+    'GERENTE',
+    'GERENTE_REGIONAL',
+  ].includes(rol);
 }
 
 private puedeVerKpiDesempenoPorRol(): boolean {

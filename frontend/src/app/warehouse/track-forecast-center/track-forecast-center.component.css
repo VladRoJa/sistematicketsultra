@@ -1,0 +1,137 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.forecast-center {
+  padding: 20px;
+  color: #172033;
+}
+
+.forecast-center__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 16px;
+}
+
+.forecast-center__header h1 {
+  margin: 2px 0 4px;
+  font-size: 1.65rem;
+}
+
+.forecast-center__header p {
+  margin: 0;
+  color: #5d6678;
+}
+
+.forecast-center__eyebrow {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.forecast-center__access {
+  border: 1px solid #c9d1df;
+  padding: 7px 10px;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.forecast-center__filters {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(130px, 1fr));
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #d8dde7;
+  background: #f7f8fa;
+}
+
+.forecast-center__filters label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  font-size: 0.75rem;
+  font-weight: 650;
+  color: #4c566a;
+}
+
+.forecast-center__filters input,
+.forecast-center__filters select {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  border: 1px solid #b9c1cf;
+  background: #fff;
+  padding: 8px;
+  color: #172033;
+}
+
+.forecast-center__tabs {
+  display: flex;
+  overflow-x: auto;
+  margin: 14px 0;
+  border-bottom: 1px solid #cdd3de;
+}
+
+.forecast-center__tabs button {
+  flex: 0 0 auto;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  padding: 10px 16px;
+  color: #576174;
+  cursor: pointer;
+}
+
+.forecast-center__tabs button.is-active {
+  border-bottom-color: #174ea6;
+  color: #174ea6;
+  font-weight: 700;
+}
+
+.forecast-center__state,
+.forecast-center__error,
+.forecast-center__notice {
+  margin: 12px 0;
+  border: 1px solid #d8dde7;
+  padding: 12px;
+}
+
+.forecast-center__error {
+  border-color: #c63d3d;
+  background: #fff1f1;
+  color: #8b1f1f;
+}
+
+.forecast-center__notice {
+  border-color: #d5a72e;
+  background: #fff8e4;
+  color: #6d5310;
+}
+
+@media (max-width: 1180px) {
+  .forecast-center__filters {
+    grid-template-columns: repeat(4, minmax(150px, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .forecast-center {
+    padding: 12px;
+  }
+
+  .forecast-center__header {
+    display: grid;
+  }
+
+  .forecast-center__access {
+    white-space: normal;
+  }
+
+  .forecast-center__filters {
+    grid-template-columns: 1fr;
+  }
+}
