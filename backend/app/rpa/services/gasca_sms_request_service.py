@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date
 
 from app import db
+from sqlalchemy import text
 from app.models.rpa import GascaSmsRequestORM, GascaSmsRequestStatus
 from app.rpa.services.gasca_sms_code_lookup_service import (
     GascaSmsCodeLookupError,
@@ -20,6 +21,10 @@ from app.rpa.services.google_messages_sms_sender_service import (
 
 class GascaSmsRequestServiceError(RuntimeError):
     pass
+
+
+DUPLICATE_REQUEST_WINDOW_MINUTES = 2
+GOOGLE_MESSAGES_ADVISORY_LOCK_KEY = 5247002301
 
 
 class GascaSmsRequestMotivo:
@@ -88,6 +93,43 @@ def mask_sms_message_for_storage(message: str, code: str) -> str:
     return (message or "").replace(code, masked_code)
 
 
+
+
+def _find_recent_duplicate_request(
+    *,
+    pin_normalized: str,
+    requested_phone_digits: str,
+) -> GascaSmsRequestORM | None:
+    duplicate_statuses = [
+        GascaSmsRequestStatus.PENDING,
+        GascaSmsRequestStatus.GASCA_SEARCHING,
+        GascaSmsRequestStatus.READY_TO_SEND,
+        GascaSmsRequestStatus.SMS_SENDING,
+        GascaSmsRequestStatus.SENT,
+    ]
+
+    recent_threshold = db.func.now() - text(
+        f"INTERVAL '{DUPLICATE_REQUEST_WINDOW_MINUTES} minutes'"
+    )
+
+    return (
+        GascaSmsRequestORM.query
+        .filter(GascaSmsRequestORM.pin_normalized == pin_normalized)
+        .filter(GascaSmsRequestORM.requested_phone_digits == requested_phone_digits)
+        .filter(GascaSmsRequestORM.status.in_(duplicate_statuses))
+        .filter(GascaSmsRequestORM.created_at >= recent_threshold)
+        .order_by(GascaSmsRequestORM.id.desc())
+        .first()
+    )
+
+
+def _try_acquire_google_messages_sender_lock() -> bool:
+    return bool(
+        db.session.execute(
+            text("SELECT pg_try_advisory_xact_lock(:lock_key)"),
+            {"lock_key": GOOGLE_MESSAGES_ADVISORY_LOCK_KEY},
+        ).scalar()
+    )
 
 def _apply_lookup_result_to_request(
     request: GascaSmsRequestORM,
@@ -179,6 +221,19 @@ def process_gasca_sms_request(
         if request.status == GascaSmsRequestStatus.READY_TO_SEND:
             sms_message = build_gasca_sms_message(gasca_code_real)
 
+            if not _try_acquire_google_messages_sender_lock():
+                request.status = GascaSmsRequestStatus.FAILED
+                request.user_message = (
+                    "Hay otro reenvío SMS en proceso. "
+                    "Espera unos segundos e intenta nuevamente."
+                )
+                request.internal_error = (
+                    "google_messages_sender_busy: advisory lock not acquired"
+                )
+                request.processed_at = db.func.now()
+                db.session.flush()
+                return request
+
             request.status = GascaSmsRequestStatus.SMS_SENDING
             request.sms_provider = "google_messages_web"
             request.sms_message_masked = mask_sms_message_for_storage(
@@ -239,6 +294,14 @@ def create_and_process_gasca_sms_request(
     sucursal_id: int | None = None,
     today: date | None = None,
 ) -> GascaSmsRequestORM:
+    pin_normalized = normalize_pin(pin_raw)
+    requested_phone_digits = validate_phone_digits(phone_raw)
+
+    recent_duplicate = _find_recent_duplicate_request(
+        pin_normalized=pin_normalized,
+        requested_phone_digits=requested_phone_digits,
+    )
+
     request = create_gasca_sms_request(
         pin_raw=pin_raw,
         phone_raw=phone_raw,
@@ -247,6 +310,19 @@ def create_and_process_gasca_sms_request(
         requested_by_user_id=requested_by_user_id,
         sucursal_id=sucursal_id,
     )
+
+    if recent_duplicate is not None:
+        request.status = GascaSmsRequestStatus.FAILED
+        request.user_message = (
+            "Ya existe una solicitud reciente para este PIN y teléfono. "
+            "Espera unos segundos antes de intentar de nuevo."
+        )
+        request.internal_error = (
+            f"duplicate_recent_request: existing_request_id={recent_duplicate.id}"
+        )
+        request.processed_at = db.func.now()
+        db.session.commit()
+        return request
 
     process_gasca_sms_request(
         request,
