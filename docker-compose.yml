@@ -50,6 +50,39 @@ services:
 
 
 
+  gasca-sms-worker:
+    build:
+      context: ./backend
+    depends_on:
+      - db
+    env_file:
+      - .env.docker
+    environment:
+      APP_ENV: "prod"
+      DISPLAY: ":99"
+      GOOGLE_MESSAGES_HEADLESS: "0"
+      GOOGLE_MESSAGES_PROFILE_DIR: "/app/.playwright/google_messages_profile"
+      GASCA_SMS_WORKER_POLL_SECONDS: "2"
+      GASCA_SMS_WORKER_IDLE_TIMEOUT_SECONDS: "300"
+      GASCA_SMS_WORKER_BATCH_SLEEP_SECONDS: "0.5"
+    command:
+      - sh
+      - -lc
+      - |
+        mkdir -p /app/.playwright/google_messages_profile
+        Xvfb :99 -screen 0 1368x900x24 >/tmp/gasca_sms_worker_xvfb.log 2>&1 &
+        exec python -m app.rpa.workers.gasca_sms_worker
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 90s
+    networks:
+      - backend-net
+    volumes:
+      - ./backend/.playwright:/app/.playwright
+    profiles:
+      - scheduler
+
+
   frontend:
     build: ./frontend
     restart: unless-stopped

@@ -14,7 +14,7 @@ from app.models.rpa import GascaSmsRequestORM
 from app.models.user_model import UserORM
 from app.rpa.services.gasca_sms_request_service import (
     GascaSmsRequestMotivo,
-    create_and_process_gasca_sms_request,
+    create_queued_gasca_sms_request,
 )
 
 
@@ -359,7 +359,7 @@ def create_gasca_sms_request_route():
         if forbidden:
             return forbidden
 
-        item = create_and_process_gasca_sms_request(
+        item = create_queued_gasca_sms_request(
             pin_raw=pin_raw,
             phone_raw=phone_raw,
             motivo=motivo,
@@ -382,7 +382,7 @@ def create_gasca_sms_request_route():
         current_app.logger.exception("Error creando solicitud Gasca SMS")
         return jsonify({
             "error": "Internal Server Error",
-            "detail": "No se pudo procesar la solicitud Gasca SMS.",
+            "detail": "No se pudo registrar la solicitud Gasca SMS.",
         }), 500
 
 
