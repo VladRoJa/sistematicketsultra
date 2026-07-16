@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { Subscription, timer } from 'rxjs';
 import { finalize } from 'rxjs/operators';
 
 import { MatButtonModule } from '@angular/material/button';
@@ -63,7 +64,7 @@ interface GascaSmsListFilterState {
     MatSnackBarModule,
   ],
 })
-export class GascaSmsRequestsComponent implements OnInit {
+export class GascaSmsRequestsComponent implements OnDestroy, OnInit {
   readonly displayedColumns = [
     'created_at',
     'pin',
@@ -110,11 +111,13 @@ export class GascaSmsRequestsComponent implements OnInit {
   loadingCatalogs = false;
   creating = false;
   loadingList = false;
+  autoRefreshingList = false;
   exportingList = false;
 
   latestResult: GascaSmsRequest | null = null;
   resultModalOpen = false;
   items: GascaSmsRequest[] = [];
+  private autoRefreshSubscription: Subscription | null = null;
 
   listFilters: GascaSmsListFilterState = {
     date_preset: 'today',
@@ -144,6 +147,37 @@ export class GascaSmsRequestsComponent implements OnInit {
   ngOnInit(): void {
     this.loadCatalogs();
     this.loadRecentRequests();
+    this.startAutoRefresh();
+  }
+
+  ngOnDestroy(): void {
+    this.autoRefreshSubscription?.unsubscribe();
+  }
+
+  private startAutoRefresh(): void {
+    this.autoRefreshSubscription = timer(5000, 5000).subscribe(() => {
+      if (this.creating || this.loadingList || this.autoRefreshingList || !this.hasLiveRequests()) {
+        return;
+      }
+
+      this.loadRequests(this.listPage, { silent: true });
+    });
+  }
+
+  private hasLiveRequests(): boolean {
+    return this.items.some((item) => this.isLiveStatus(item.status));
+  }
+
+  private isLiveStatus(status?: string | null): boolean {
+    const value = String(status || '').trim();
+
+    return [
+      'pending',
+      'gasca_searching',
+      'ready_to_send',
+      'multiple_candidates_selected_latest',
+      'sms_sending',
+    ].includes(value);
   }
 
   loadCatalogs(): void {
@@ -166,17 +200,37 @@ export class GascaSmsRequestsComponent implements OnInit {
     this.loadRequests(1);
   }
 
-  loadRequests(page: number = this.listPage): void {
-    this.loadingList = true;
+  loadRequests(page: number = this.listPage, options: { silent?: boolean } = {}): void {
+    if (options.silent) {
+      this.autoRefreshingList = true;
+    } else {
+      this.loadingList = true;
+    }
+
     this.listPage = Math.max(1, page);
 
     const params = this.buildListParams();
 
     this.gascaSmsService.listRequests(params)
-      .pipe(finalize(() => this.loadingList = false))
+      .pipe(finalize(() => {
+        if (options.silent) {
+          this.autoRefreshingList = false;
+        } else {
+          this.loadingList = false;
+        }
+      }))
       .subscribe({
         next: (response) => {
           this.items = response.items || [];
+
+          if (this.latestResult) {
+            const freshResult = this.items.find((item) => item.id === this.latestResult?.id);
+
+            if (freshResult) {
+              this.latestResult = freshResult;
+            }
+          }
+
           this.listPage = response.page || this.listPage;
           this.listPageSize = response.page_size || this.listPageSize;
           this.listTotal = response.total || 0;
