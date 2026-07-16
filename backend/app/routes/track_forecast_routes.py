@@ -4,6 +4,7 @@ from datetime import date, datetime
 from decimal import Decimal
 import os
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
@@ -16,7 +17,15 @@ from app.routes.track_routes import (
     _resolve_current_track_daily_version_for_query,
     _serialize_decimal,
 )
+from app.models.user_model import UserORM
 from app.models.warehouse import TrackBranchCatalogORM
+from app.warehouse.services.track_forecast_center_service import (
+    ForecastCenterAuthorizationError,
+    ForecastCenterNotFoundError,
+    ForecastCenterValidationError,
+    build_forecast_center,
+    build_forecast_center_catalogs,
+)
 from app.warehouse.services.track_forecast_service import (
     EXCLUDED_BRANCHES,
     BranchForecastDetailConsistencyError,
@@ -26,6 +35,18 @@ from app.warehouse.services.track_forecast_service import (
 
 
 track_forecast_bp = Blueprint("track_forecast_bp", __name__)
+
+
+def _get_current_forecast_center_user():
+    try:
+        user_id = int(get_jwt_identity())
+    except (TypeError, ValueError) as exc:
+        raise PermissionError("No autorizado para consultar el Centro de Forecast.") from exc
+
+    user = UserORM.get_by_id(user_id)
+    if user is None:
+        raise PermissionError("Usuario no encontrado.")
+    return user
 
 
 def _get_forecast_beta_user_ids() -> set[int]:
@@ -105,6 +126,106 @@ def _serialize_branch_forecast_detail(value: Any) -> Any:
     raise TypeError(
         f"Tipo no serializable en detalle de forecast: {type(value).__name__}."
     )
+
+
+@track_forecast_bp.get("/center/catalogs")
+@jwt_required()
+def get_forecast_center_catalogs_endpoint():
+    try:
+        user = _get_current_forecast_center_user()
+        requested_track_date = datetime.now(ZoneInfo("America/Tijuana")).date()
+        payload = build_forecast_center_catalogs(
+            user=user,
+            requested_track_date=requested_track_date,
+        )
+        return jsonify(_serialize_branch_forecast_detail(payload)), 200
+    except (PermissionError, ForecastCenterAuthorizationError) as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 403
+    except ForecastCenterValidationError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception:
+        return jsonify(
+            {
+                "status": "error",
+                "message": "Falló la consulta de catálogos del Centro de Forecast.",
+            }
+        ), 500
+
+
+@track_forecast_bp.get("/center")
+@jwt_required()
+def get_forecast_center_endpoint():
+    try:
+        if "view" in request.args or "tab" in request.args:
+            raise ForecastCenterValidationError(
+                "view y tab no son parámetros de cálculo del Centro de Forecast."
+            )
+
+        user = _get_current_forecast_center_user()
+        track_date = _ensure_date(
+            request.args.get("track_date"),
+            field_name="track_date",
+        )
+        generation_mode = str(
+            request.args.get("generation_mode") or "manual_preview"
+        ).strip()
+        if generation_mode not in ALLOWED_GENERATION_MODES:
+            return jsonify(
+                {
+                    "status": "error",
+                    "message": "generation_mode inválido.",
+                    "allowed_generation_modes": sorted(ALLOWED_GENERATION_MODES),
+                }
+            ), 400
+
+        scope = str(request.args.get("scope") or "national").strip().lower()
+        scope_id = request.args.get("scope_id")
+        cohort = str(request.args.get("cohort") or "all").strip().lower()
+        breakdown = request.args.get("breakdown")
+
+        if scope == "branch" and breakdown not in (None, "none"):
+            raise ForecastCenterValidationError(
+                "scope=branch sólo admite breakdown=none."
+            )
+
+        resolved_version = _resolve_current_track_daily_version_for_query(
+            track_date=track_date,
+            generation_mode=generation_mode,
+        )
+        if resolved_version is None:
+            return jsonify(
+                {
+                    "status": "error",
+                    "message": "No existe versión Track disponible para la fecha/modo solicitados.",
+                    "track_date": track_date.isoformat(),
+                    "generation_mode": generation_mode,
+                }
+            ), 404
+
+        payload = build_forecast_center(
+            user=user,
+            requested_track_date=track_date,
+            generation_mode=generation_mode,
+            resolved_version=resolved_version,
+            scope=scope,
+            scope_id=scope_id,
+            cohort=cohort,
+            breakdown=breakdown,
+        )
+        return jsonify(_serialize_branch_forecast_detail(payload)), 200
+    except (PermissionError, ForecastCenterAuthorizationError) as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 403
+    except ForecastCenterNotFoundError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 404
+    except (ValueError, ForecastCenterValidationError) as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception:
+        return jsonify(
+            {
+                "status": "error",
+                "message": "Falló la consulta del Centro de Forecast.",
+            }
+        ), 500
 
 
 @track_forecast_bp.route("/venta-total", methods=["GET"])
