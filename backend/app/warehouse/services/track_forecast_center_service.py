@@ -963,8 +963,21 @@ def calculate_compact_branch_forecast(
         ]
 
     valid_goal = goal_month is not None and goal_month > 0
+    pace_usable = goal_pace["status"] in {"projection_unavailable", "available"}
     comparable_real = real_mtd if valid_goal else None
-    comparable_projection = projected_close if valid_goal else None
+    comparable_real_to_pace = (
+        real_mtd
+        if pace_usable
+        and real_mtd is not None
+        and goal_pace["goal_expected_mtd_at_cutoff"] is not None
+        else None
+    )
+    projection_comparable = (
+        valid_goal and projected_close is not None and real_mtd is not None
+    )
+    comparable_projection = projected_close if projection_comparable else None
+    comparable_goal_to_projection = goal_month if projection_comparable else None
+    comparable_real_to_projection = real_mtd if projection_comparable else None
     exclusion_reasons: list[str] = []
     if missing_dates:
         exclusion_reasons.append("daily_gaps")
@@ -985,10 +998,13 @@ def calculate_compact_branch_forecast(
             "goal_month": goal_month if valid_goal else None,
             "real_mtd": real_mtd,
             "real_mtd_comparable_to_goal": comparable_real,
+            "real_mtd_comparable_to_pace": comparable_real_to_pace,
             "goal_expected_mtd_at_cutoff": goal_pace["goal_expected_mtd_at_cutoff"],
             "gap_vs_goal_pace": goal_pace["gap_vs_goal_pace"],
             "projected_close": projected_close,
             "projected_close_comparable_to_goal": comparable_projection,
+            "goal_month_comparable_to_projection": comparable_goal_to_projection,
+            "real_mtd_comparable_to_projection": comparable_real_to_projection,
             "projected_gap_to_goal": goal_pace["projected_gap_to_goal"],
             "projected_goal_attainment_pct": goal_pace[
                 "projected_goal_attainment_pct"
@@ -1037,6 +1053,21 @@ def aggregate_forecast_center_results(
     real_comparable, real_comparable_count = _sum_values(
         item["real_mtd_comparable_to_goal"] for item in summaries
     )
+    pace_pairs = [
+        (
+            item["real_mtd_comparable_to_pace"],
+            item["goal_expected_mtd_at_cutoff"],
+        )
+        for item in summaries
+        if item["real_mtd_comparable_to_pace"] is not None
+        and item["goal_expected_mtd_at_cutoff"] is not None
+    ]
+    real_comparable_to_pace, pace_comparable_count = _sum_values(
+        real for real, _ in pace_pairs
+    )
+    expected_comparable_to_pace, _ = _sum_values(
+        expected_value for _, expected_value in pace_pairs
+    )
     expected, expected_count = _sum_values(
         item["goal_expected_mtd_at_cutoff"] for item in summaries
     )
@@ -1046,21 +1077,26 @@ def aggregate_forecast_center_results(
     projected_comparable, projected_comparable_count = _sum_values(
         item["projected_close_comparable_to_goal"] for item in summaries
     )
+    comparable_goal, comparable_goal_count = _sum_values(
+        item["goal_month_comparable_to_projection"] for item in summaries
+    )
+    comparable_real_to_projection, comparable_real_to_projection_count = _sum_values(
+        item["real_mtd_comparable_to_projection"] for item in summaries
+    )
 
     gap = (
-        real_comparable - expected
-        if real_comparable is not None and expected is not None
+        real_comparable_to_pace - expected_comparable_to_pace
+        if real_comparable_to_pace is not None
+        and expected_comparable_to_pace is not None
         else None
     )
-    gap_pct = gap / expected if gap is not None and expected is not None and expected > 0 else None
-
-    comparable_goal_values = [
-        item["goal_month"]
-        for item in summaries
-        if item["projected_close_comparable_to_goal"] is not None
-        and item["goal_month"] is not None
-    ]
-    comparable_goal, comparable_goal_count = _sum_values(comparable_goal_values)
+    gap_pct = (
+        gap / expected_comparable_to_pace
+        if gap is not None
+        and expected_comparable_to_pace is not None
+        and expected_comparable_to_pace > 0
+        else None
+    )
     projected_gap = (
         projected_comparable - comparable_goal
         if projected_comparable is not None and comparable_goal is not None
@@ -1095,15 +1131,16 @@ def aggregate_forecast_center_results(
         "goal_month": goal_count,
         "real_mtd": real_count,
         "real_mtd_comparable_to_goal": real_comparable_count,
+        "real_mtd_comparable_to_pace": pace_comparable_count,
         "goal_expected_mtd_at_cutoff": expected_count,
-        "gap_vs_goal_pace": min(real_comparable_count, expected_count),
-        "gap_vs_goal_pace_pct": min(real_comparable_count, expected_count),
+        "gap_vs_goal_pace": pace_comparable_count,
+        "gap_vs_goal_pace_pct": pace_comparable_count,
         "projected_close": projected_count,
         "projected_close_comparable_to_goal": projected_comparable_count,
-        "projected_gap_to_goal": min(projected_comparable_count, comparable_goal_count),
-        "projected_goal_attainment_pct": min(
-            projected_comparable_count, comparable_goal_count
-        ),
+        "goal_month_comparable_to_projection": comparable_goal_count,
+        "real_mtd_comparable_to_projection": comparable_real_to_projection_count,
+        "projected_gap_to_goal": projected_comparable_count,
+        "projected_goal_attainment_pct": projected_comparable_count,
         "remaining_to_goal": min(goal_count, real_comparable_count),
         "required_daily_average": min(goal_count, real_comparable_count),
     }
@@ -1112,11 +1149,14 @@ def aggregate_forecast_center_results(
         "goal_month": goal_month,
         "real_mtd": real_mtd,
         "real_mtd_comparable_to_goal": real_comparable,
+        "real_mtd_comparable_to_pace": real_comparable_to_pace,
         "goal_expected_mtd_at_cutoff": expected,
         "gap_vs_goal_pace": gap,
         "gap_vs_goal_pace_pct": gap_pct,
         "projected_close": projected,
         "projected_close_comparable_to_goal": projected_comparable,
+        "goal_month_comparable_to_projection": comparable_goal,
+        "real_mtd_comparable_to_projection": comparable_real_to_projection,
         "projected_gap_to_goal": projected_gap,
         "projected_goal_attainment_pct": projected_attainment,
         "remaining_to_goal": remaining,
@@ -1136,10 +1176,20 @@ def aggregate_forecast_center_series(
 ) -> dict[str, Any]:
     days_in_month = monthrange(target_month.year, target_month.month)[1]
     output: dict[str, Any] = {}
-    for series_key in ("actual", "required", "projected"):
+    required_results = [result for result in results if result.series["required"]]
+    projected_results = [result for result in results if result.series["projected"]]
+    series_specs = (
+        ("actual", "actual", results),
+        ("required", "required", required_results),
+        ("projected", "projected", projected_results),
+        ("pace_actual", "actual", required_results),
+        ("projection_actual", "actual", projected_results),
+        ("projection_required", "required", projected_results),
+    )
+    for output_key, source_key, universe_results in series_specs:
         points_by_branch = [
-            {point["date"]: point for point in result.series[series_key]}
-            for result in results
+            {point["date"]: point for point in result.series[source_key]}
+            for result in universe_results
         ]
         aggregate_points: list[dict[str, Any]] = []
         for day in range(1, days_in_month + 1):
@@ -1147,6 +1197,9 @@ def aggregate_forecast_center_series(
             daily_values: list[Decimal] = []
             cumulative_values: list[Decimal] = []
             reasons: Counter[str] = Counter()
+            missing_from_universe = len(results) - len(universe_results)
+            if missing_from_universe:
+                reasons["missing_series"] = missing_from_universe
             included = 0
             for branch_points in points_by_branch:
                 point = branch_points.get(point_date)
@@ -1154,7 +1207,7 @@ def aggregate_forecast_center_series(
                     reasons["missing_date"] += 1
                     continue
                 point_status = str(point.get("status") or "")
-                if series_key == "actual" and point_status not in {
+                if source_key == "actual" and point_status not in {
                     "available",
                     "available_with_negative_adjustment",
                 }:
@@ -1162,7 +1215,7 @@ def aggregate_forecast_center_series(
                     continue
                 daily = _decimal(point.get("daily"))
                 cumulative = _decimal(point.get("cumulative"))
-                if series_key == "projected" and point_status == "cutoff_anchor":
+                if source_key == "projected" and point_status == "cutoff_anchor":
                     daily = Decimal("0")
                 if daily is None or cumulative is None:
                     reasons["missing_value"] += 1
@@ -1171,6 +1224,7 @@ def aggregate_forecast_center_series(
                 cumulative_values.append(cumulative)
                 included += 1
             expected = len(results)
+            coverage = _metric_coverage(eligible=expected, included=included)
             aggregate_points.append(
                 {
                     "date": point_date,
@@ -1185,6 +1239,10 @@ def aggregate_forecast_center_series(
                     "expected_branches": expected,
                     "included_branches": included,
                     "excluded_branches": max(expected - included, 0),
+                    "eligible_branch_count": expected,
+                    "included_branch_count": included,
+                    "excluded_branch_count": max(expected - included, 0),
+                    "coverage": coverage,
                     "exclusion_reasons": dict(sorted(reasons.items())),
                 }
             )
@@ -1195,7 +1253,7 @@ def aggregate_forecast_center_series(
             status = "available"
         else:
             status = "partial"
-        output[series_key] = {"status": status, "points": aggregate_points}
+        output[output_key] = {"status": status, "points": aggregate_points}
     return output
 
 
@@ -1241,6 +1299,8 @@ def _build_breakdown(
         drilldown: dict[str, Any] = {"scope": dimension, "scope_id": key}
         if dimension == "branch":
             drilldown = dict(group[0].drilldown)
+        elif dimension == "cohort":
+            drilldown = {"scope": "national", "cohort": key}
         items.append(
             {
                 "key": key,

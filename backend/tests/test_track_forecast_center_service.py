@@ -63,7 +63,11 @@ def _result(
 ) -> BranchForecastCenterResult:
     valid_goal = goal is not None and goal > 0
     comparable_real = real if valid_goal else None
-    comparable_projected = projected if valid_goal else None
+    comparable_real_to_pace = (
+        real if valid_goal and real is not None and expected is not None else None
+    )
+    projection_comparable = valid_goal and projected is not None and real is not None
+    comparable_projected = projected if projection_comparable else None
     return BranchForecastCenterResult(
         identity={
             "sucursal_canon": canon,
@@ -76,6 +80,7 @@ def _result(
             "goal_month": goal,
             "real_mtd": real,
             "real_mtd_comparable_to_goal": comparable_real,
+            "real_mtd_comparable_to_pace": comparable_real_to_pace,
             "goal_expected_mtd_at_cutoff": expected if valid_goal else None,
             "gap_vs_goal_pace": (
                 comparable_real - expected
@@ -84,6 +89,12 @@ def _result(
             ),
             "projected_close": projected,
             "projected_close_comparable_to_goal": comparable_projected,
+            "goal_month_comparable_to_projection": (
+                goal if projection_comparable else None
+            ),
+            "real_mtd_comparable_to_projection": (
+                real if projection_comparable else None
+            ),
             "projected_gap_to_goal": (
                 comparable_projected - goal
                 if comparable_projected is not None and goal is not None
@@ -501,6 +512,46 @@ class ForecastCenterAggregationTest(unittest.TestCase):
         self.assertEqual(result["goal_month"], Decimal("100"))
         self.assertEqual(result["metric_coverage"]["goal_month"]["status"], "partial")
 
+    def test_pace_gap_uses_only_branches_in_real_expected_intersection(self):
+        results = [
+            _result("A", real=Decimal("50"), expected=Decimal("40")),
+            _result("B", branch_id=2, real=Decimal("70"), expected=Decimal("60")),
+            _result("C", branch_id=3, real=Decimal("80"), expected=None),
+            _result(
+                "D",
+                branch_id=4,
+                goal=None,
+                real=Decimal("90"),
+                expected=None,
+                projected=None,
+            ),
+        ]
+
+        result = aggregate_forecast_center_results(results)
+
+        self.assertEqual(result["real_mtd"], Decimal("290"))
+        self.assertEqual(result["real_mtd_comparable_to_pace"], Decimal("120"))
+        self.assertEqual(result["goal_expected_mtd_at_cutoff"], Decimal("100"))
+        self.assertEqual(result["gap_vs_goal_pace"], Decimal("20"))
+        self.assertEqual(result["gap_vs_goal_pace_pct"], Decimal("0.2"))
+        self.assertEqual(
+            result["metric_coverage"]["real_mtd_comparable_to_pace"][
+                "included_branch_count"
+            ],
+            2,
+        )
+        self.assertEqual(
+            result["gap_vs_goal_pace"],
+            sum(
+                (
+                    item.summary["gap_vs_goal_pace"]
+                    for item in results
+                    if item.summary["real_mtd_comparable_to_pace"] is not None
+                ),
+                Decimal("0"),
+            ),
+        )
+
     def test_partial_projection_uses_goal_projection_intersection(self):
         result = aggregate_forecast_center_results(
             [
@@ -512,6 +563,43 @@ class ForecastCenterAggregationTest(unittest.TestCase):
         self.assertEqual(result["projected_gap_to_goal"], Decimal("20"))
         self.assertEqual(result["projected_goal_attainment_pct"], Decimal("1.2"))
         self.assertEqual(result["metric_coverage"]["projected_close"]["status"], "partial")
+
+    def test_partial_projection_exposes_all_comparable_amounts(self):
+        results = [
+            _result(
+                f"B{index}",
+                branch_id=index,
+                goal=Decimal("100"),
+                real=Decimal("50"),
+                projected=Decimal("120") if index <= 21 else None,
+            )
+            for index in range(1, 26)
+        ]
+
+        result = aggregate_forecast_center_results(results)
+
+        self.assertEqual(result["metric_coverage"]["projected_close"]["status"], "partial")
+        self.assertEqual(
+            result["goal_month_comparable_to_projection"], Decimal("2100")
+        )
+        self.assertEqual(
+            result["real_mtd_comparable_to_projection"], Decimal("1050")
+        )
+        self.assertEqual(
+            result["projected_close_comparable_to_goal"], Decimal("2520")
+        )
+        self.assertEqual(result["projected_gap_to_goal"], Decimal("420"))
+        self.assertEqual(result["projected_goal_attainment_pct"], Decimal("1.2"))
+
+    def test_projection_comparable_fields_are_null_without_projection(self):
+        result = aggregate_forecast_center_results(
+            [_result("NEW", projected=None)]
+        )
+
+        self.assertIsNone(result["projected_close"])
+        self.assertIsNone(result["goal_month_comparable_to_projection"])
+        self.assertIsNone(result["real_mtd_comparable_to_projection"])
+        self.assertIsNone(result["projected_goal_attainment_pct"])
 
     def test_remaining_to_goal_never_negative(self):
         result = aggregate_forecast_center_results(
@@ -553,6 +641,14 @@ class ForecastCenterAggregationTest(unittest.TestCase):
         self.assertEqual(
             sum((item["summary"]["real_mtd"] for item in breakdown["items"]), Decimal("0")),
             total["real_mtd"],
+        )
+        self.assertEqual(
+            breakdown["items"][0]["drilldown"],
+            {"scope": "national", "cohort": "legacy_21"},
+        )
+        self.assertEqual(
+            breakdown["items"][1]["drilldown"],
+            {"scope": "national", "cohort": "new_gyms"},
         )
 
     def test_branch_breakdown_preserves_analytic_route(self):
@@ -650,6 +746,43 @@ class ForecastCenterSeriesTest(unittest.TestCase):
             target_month=date(2026, 7, 1),
         )
         self.assertEqual(series["projected"]["points"][-1]["cumulative"], Decimal("350"))
+
+    def test_comparable_series_preserve_their_exact_branch_universes(self):
+        point_date = date(2026, 7, 10)
+        actual_a = {"date": point_date, "day": 10, "daily": Decimal("10"), "cumulative": Decimal("50"), "status": "available"}
+        actual_b = {"date": point_date, "day": 10, "daily": Decimal("20"), "cumulative": Decimal("70"), "status": "available"}
+        actual_c = {"date": point_date, "day": 10, "daily": Decimal("30"), "cumulative": Decimal("90"), "status": "available"}
+        required_a = {"date": point_date, "day": 10, "daily": Decimal("8"), "cumulative": Decimal("40"), "status": "available"}
+        required_b = {"date": point_date, "day": 10, "daily": Decimal("12"), "cumulative": Decimal("60"), "status": "available"}
+        projected_a = {"date": point_date, "day": 10, "daily": None, "cumulative": Decimal("50"), "status": "cutoff_anchor"}
+        series = aggregate_forecast_center_series(
+            [
+                _result("A", actual=[actual_a], required=[required_a], projected_series=[projected_a]),
+                _result("B", branch_id=2, actual=[actual_b], required=[required_b], projected=None),
+                _result("C", branch_id=3, actual=[actual_c], required=[], projected=None),
+            ],
+            target_month=date(2026, 7, 1),
+        )
+
+        point_index = 9
+        self.assertEqual(series["actual"]["points"][point_index]["cumulative"], Decimal("210"))
+        self.assertEqual(series["actual"]["points"][point_index]["included_branch_count"], 3)
+        self.assertEqual(series["pace_actual"]["points"][point_index]["cumulative"], Decimal("120"))
+        self.assertEqual(
+            series["pace_actual"]["points"][point_index]["included_branch_count"],
+            series["required"]["points"][point_index]["included_branch_count"],
+        )
+        for key in ("projection_actual", "projection_required", "projected"):
+            self.assertEqual(
+                series[key]["points"][point_index]["included_branch_count"], 1
+            )
+            self.assertEqual(series[key]["points"][point_index]["status"], "partial")
+            self.assertEqual(
+                series[key]["points"][point_index]["eligible_branch_count"], 3
+            )
+            self.assertEqual(
+                series[key]["points"][point_index]["excluded_branch_count"], 2
+            )
 
 
 class ForecastCenterBulkLoaderTest(unittest.TestCase):
