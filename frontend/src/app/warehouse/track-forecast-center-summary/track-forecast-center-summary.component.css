@@ -16,7 +16,7 @@
 .cohort-card dt { color: #697386; font-size: .75rem; }
 .cohort-card dd { margin: 0; font-weight: 650; }
 .cohort-card p { color: #697386; font-size: .78rem; }
-.cohort-card button, .segmented button { border: 1px solid #aeb7c6; background: #fff; padding: 7px 11px; cursor: pointer; }
+.segmented button { border: 1px solid #aeb7c6; background: #fff; padding: 7px 11px; cursor: pointer; }
 .summary-view__chart { border: 1px solid #d8dde7; padding: 14px; min-width: 0; }
 .chart-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .chart-header p { margin: 4px 0; color: #697386; font-size: .8rem; }

@@ -35,8 +35,8 @@
         </select>
       </label>
 
-      <label>
-        <span>Unidad / cohorte</span>
+      <label *ngIf="showCohortSelector">
+        <span>Cohorte</span>
         <select name="cohort" [(ngModel)]="filters.cohort" (change)="onCalculationFilterChange()">
           <option *ngFor="let cohort of catalogs.cohorts" [ngValue]="cohort.key">{{ cohort.label }}</option>
         </select>
@@ -83,8 +83,7 @@
   <ng-container *ngIf="response && !loadingData">
     <app-track-forecast-center-summary
       *ngIf="filters.view === 'summary'"
-      [response]="response"
-      (navigate)="handleNavigation($event)">
+      [response]="response">
     </app-track-forecast-center-summary>
 
     <app-track-forecast-center-pace

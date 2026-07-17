@@ -128,6 +128,10 @@ export class TrackForecastCenterComponent implements OnInit, OnDestroy {
     return this.filters.scope === 'region';
   }
 
+  get showCohortSelector(): boolean {
+    return this.filters.scope === 'national';
+  }
+
   get showBranchSelector(): boolean {
     return this.filters.scope === 'branch';
   }
@@ -203,6 +207,7 @@ export class TrackForecastCenterComponent implements OnInit, OnDestroy {
     this.filters.scopeId = drilldown.scope_id ?? '';
     this.filters.cohort = drilldown.cohort ?? this.filters.cohort;
     this.filters.breakdown = this.defaultBreakdown(this.filters.scope);
+    this.normalizeDependentFilters();
     this.navigateToFilters();
   }
 
@@ -291,10 +296,7 @@ export class TrackForecastCenterComponent implements OnInit, OnDestroy {
     const scope = catalogs.scopes.some((item) => item.key === requestedScope)
       ? requestedScope as TrackForecastCenterScope
       : defaultScope;
-    const requestedCohort = params.get('cohort') as TrackForecastCenterCohort | null;
-    const cohort = catalogs.cohorts.some((item) => item.key === requestedCohort)
-      ? requestedCohort as TrackForecastCenterCohort
-      : catalogs.context.default_cohort;
+    const cohort = this.normalizeCohort(scope, params.get('cohort'), catalogs);
     const requestedMode = params.get('generation_mode') as TrackGenerationMode | null;
     const generationMode = catalogs.generation_modes.includes(requestedMode as TrackGenerationMode)
       ? requestedMode as TrackGenerationMode
@@ -347,10 +349,21 @@ export class TrackForecastCenterComponent implements OnInit, OnDestroy {
       return;
     }
     this.filters.scopeId = this.normalizeScopeId(this.filters.scope, this.filters.scopeId, catalogs);
+    this.filters.cohort = this.normalizeCohort(this.filters.scope, this.filters.cohort, catalogs);
     this.filters.breakdown = this.normalizeBreakdown(this.filters.scope, this.filters.breakdown);
-    if (!catalogs.cohorts.some((item) => item.key === this.filters.cohort)) {
-      this.filters.cohort = catalogs.context.default_cohort;
+  }
+
+  private normalizeCohort(
+    scope: TrackForecastCenterScope,
+    requested: string | null,
+    catalogs: TrackForecastCenterCatalogsResponse,
+  ): TrackForecastCenterCohort {
+    if (scope !== 'national') {
+      return 'all';
     }
+    return catalogs.cohorts.some((item) => item.key === requested)
+      ? requested as TrackForecastCenterCohort
+      : 'all';
   }
 
   private defaultBreakdown(scope: TrackForecastCenterScope): TrackForecastCenterBreakdownDimension {
