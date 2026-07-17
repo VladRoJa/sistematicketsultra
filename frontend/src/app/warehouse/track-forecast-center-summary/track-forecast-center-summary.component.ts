@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, EventEmitter, Input, OnChanges, Output } from '@angular/core';
+import { Component, Input, OnChanges } from '@angular/core';
 import { EChartsCoreOption } from 'echarts/core';
 import { NgxEchartsDirective } from 'ngx-echarts';
 
@@ -10,7 +10,6 @@ import {
   TrackForecastCenterResponse,
   TrackForecastCenterSeriesItem,
 } from '../../services/track.service';
-import { TrackForecastCenterNavigationEvent } from '../track-forecast-center/track-forecast-center.models';
 
 type ComparisonMode = 'goal' | 'projection';
 
@@ -23,7 +22,6 @@ interface SummaryCard {
 }
 
 interface CohortCard {
-  source: TrackForecastCenterBreakdownItem;
   label: string;
   branchCount: string;
   goal: string;
@@ -44,7 +42,6 @@ interface CohortCard {
 })
 export class TrackForecastCenterSummaryComponent implements OnChanges {
   @Input({ required: true }) response!: TrackForecastCenterResponse;
-  @Output() navigate = new EventEmitter<TrackForecastCenterNavigationEvent>();
 
   comparisonMode: ComparisonMode = 'goal';
   cards: SummaryCard[] = [];
@@ -60,10 +57,6 @@ export class TrackForecastCenterSummaryComponent implements OnChanges {
   setComparisonMode(mode: ComparisonMode): void {
     this.comparisonMode = mode;
     this.buildChart();
-  }
-
-  openCohort(card: CohortCard): void {
-    this.navigate.emit({ drilldown: card.source.drilldown, sourceView: 'summary' });
   }
 
   private buildPresentation(): void {
@@ -129,7 +122,6 @@ export class TrackForecastCenterSummaryComponent implements OnChanges {
     const summary = item.summary;
     const projectionCoverage = item.metric_coverage.projected_close_comparable_to_goal;
     return {
-      source: item,
       label: item.label,
       branchCount: `${item.branch_count} sucursales`,
       goal: this.formatCurrency(summary.goal_month),
