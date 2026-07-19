@@ -16,7 +16,7 @@ type ComparisonMode = 'goal' | 'projection';
 interface SummaryCard {
   label: string;
   value: string;
-  secondary: string;
+  secondary: string[];
   coverage: string;
   tone: 'neutral' | 'positive' | 'negative';
 }
@@ -31,6 +31,9 @@ interface CohortCard {
   attainment: string;
   quality: string;
   coverage: string;
+  method: string;
+  methodCoverage: string;
+  methodReason: string;
 }
 
 @Component({
@@ -49,6 +52,7 @@ export class TrackForecastCenterSummaryComponent implements OnChanges {
   executiveMessage = '';
   chartOption: EChartsCoreOption = {};
   chartCoverageNote = '';
+  chartMethodologyNote = '';
 
   ngOnChanges(): void {
     this.buildPresentation();
@@ -75,12 +79,7 @@ export class TrackForecastCenterSummaryComponent implements OnChanges {
         'gap_vs_goal_pace',
         this.formatPercent(summary.gap_vs_goal_pace_pct),
       ),
-      this.card(
-        'Proyección comparable',
-        summary.projected_close_comparable_to_goal,
-        'projected_close_comparable_to_goal',
-        'Universo con proyección disponible',
-      ),
+      this.projectionCard(),
       this.card(
         'Meta comparable a proyección',
         summary.goal_month_comparable_to_projection,
@@ -112,7 +111,7 @@ export class TrackForecastCenterSummaryComponent implements OnChanges {
     return {
       label,
       value: percentValue ? this.formatPercent(value) : this.formatCurrency(value),
-      secondary,
+      secondary: secondary ? [secondary] : [],
       coverage: this.formatCoverage(coverage),
       tone: value === null ? 'neutral' : value < 0 ? 'negative' : 'neutral',
     };
@@ -135,14 +134,71 @@ export class TrackForecastCenterSummaryComponent implements OnChanges {
         : this.formatPercent(summary.projected_goal_attainment_pct),
       quality: this.statusLabel(item.quality_status),
       coverage: this.formatCoverage(projectionCoverage),
+      method: this.cohortMethodLabel(item),
+      methodCoverage: this.cohortMethodCoverage(item),
+      methodReason: this.cohortMethodReason(item),
+    };
+  }
+
+  private projectionCard(): SummaryCard {
+    const summary = this.response.summary;
+    const methods = this.response.quality.projection_methods;
+    const own = methods.branch_historical_calendar_weights.branch_count;
+    const provisional = methods.legacy_21_calendar_weights.branch_count;
+    const unavailable = methods.unavailable.branch_count;
+    const projected = own + provisional;
+    const total = own + provisional + unavailable;
+    const referenceBranches = this.response.quality.legacy_21_curve.contributing_branch_count;
+    let label = 'Proyección estimada total';
+    let secondary = [
+      `${own} sucursales con forecast histórico propio`,
+      `${provisional} sucursales con patrón Ultra provisional`,
+    ];
+    if (own > 0 && provisional === 0) {
+      label = 'Proyección de cierre';
+      secondary = [`${own} de ${total} sucursales con forecast histórico propio.`];
+    } else if (provisional > 0 && own === 0) {
+      label = 'Proyección provisional con patrón Ultra';
+      secondary = [
+        `Basada en la distribución histórica diaria de las ${referenceBranches} sucursales maduras.`,
+        `${projected} de ${total} sucursales estimadas · Sin histórico propio comparable.`,
+      ];
+    }
+    if (unavailable > 0) {
+      secondary.push(`${unavailable} sucursales sin proyección disponible.`);
+    }
+    const coverage = summary.metric_coverage.projected_close_comparable_to_goal;
+    return {
+      label,
+      value: this.formatCurrency(summary.projected_close_comparable_to_goal),
+      secondary,
+      coverage: this.formatCoverage(coverage),
+      tone: 'neutral',
     };
   }
 
   private buildExecutiveMessage(): string {
     const summary = this.response.summary;
-    const paceCoverage = summary.metric_coverage.real_mtd_comparable_to_pace;
-    const projectionCoverage = summary.metric_coverage.projected_close_comparable_to_goal;
-    return `El alcance lleva ${this.formatCurrency(summary.real_mtd_comparable_to_pace)} frente a un ritmo esperado de ${this.formatCurrency(summary.goal_expected_mtd_at_cutoff)} en ${this.formatCoverage(paceCoverage)}. Las sucursales proyectables estiman cerrar en ${this.formatCurrency(summary.projected_close_comparable_to_goal)}, equivalente a ${this.formatPercent(summary.projected_goal_attainment_pct)} de su meta comparable (${this.formatCoverage(projectionCoverage)}).`;
+    const methods = this.response.quality.projection_methods;
+    const own = methods.branch_historical_calendar_weights.branch_count;
+    const provisional = methods.legacy_21_calendar_weights.branch_count;
+    const branchCount = this.response.summary.branch_count;
+    const projected = this.formatCurrency(summary.projected_close_comparable_to_goal);
+    const attainment = this.formatPercent(summary.projected_goal_attainment_pct);
+    if (this.response.context.cohort === 'new_gyms') {
+      const referenceBranches = this.response.quality.legacy_21_curve.contributing_branch_count;
+      return `Las ${branchCount} sucursales nuevas proyectan cerrar en ${projected}, equivalente a ${attainment} de su meta. La estimación es provisional y utiliza su ritmo real actual junto con el patrón calendario histórico de ${referenceBranches} Gyms.`;
+    }
+    if (own > 0 && provisional > 0 && this.response.context.scope === 'national') {
+      return `Total Ultra proyecta cerrar en ${projected}, equivalente a ${attainment} de la meta. La estimación combina ${own} forecasts históricos propios y ${provisional} proyecciones provisionales basadas en el patrón diario de las sucursales maduras.`;
+    }
+    if (own > 0 && provisional > 0) {
+      return `El alcance proyecta cerrar en ${projected}, equivalente a ${attainment} de la meta. La estimación combina ${own} forecasts históricos propios y ${provisional} proyecciones provisionales con patrón Ultra.`;
+    }
+    if (provisional > 0) {
+      return `El alcance proyecta cerrar en ${projected}, equivalente a ${attainment} de la meta. La estimación es provisional y utiliza el patrón diario de las sucursales maduras.`;
+    }
+    return `El alcance proyecta cerrar en ${projected}, equivalente a ${attainment} de la meta, mediante forecasts históricos propios de ${own} sucursales.`;
   }
 
   private buildChart(): void {
@@ -164,6 +220,7 @@ export class TrackForecastCenterSummaryComponent implements OnChanges {
     this.chartCoverageNote = coveragePoint
       ? `Comparación basada en ${coveragePoint.included_branch_count} de ${coveragePoint.eligible_branch_count} sucursales.`
       : 'Comparación sin cobertura disponible.';
+    this.chartMethodologyNote = isGoal ? '' : this.projectionMethodologyNote();
     this.chartOption = {
       aria: { enabled: true },
       color: series.map((item) => item.lineStyle.color),
@@ -181,6 +238,43 @@ export class TrackForecastCenterSummaryComponent implements OnChanges {
         } : undefined,
       })),
     };
+  }
+
+  private projectionMethodologyNote(): string {
+    const methods = this.response.quality.projection_methods;
+    const own = methods.branch_historical_calendar_weights.branch_count;
+    const provisional = methods.legacy_21_calendar_weights.branch_count;
+    if (this.response.context.cohort === 'new_gyms' && provisional > 0) {
+      const referenceBranches = this.response.quality.legacy_21_curve.contributing_branch_count;
+      return `Proyección provisional basada en el patrón calendario de las ${referenceBranches} sucursales maduras.`;
+    }
+    if (own > 0 && provisional > 0) {
+      return `Proyección compuesta por ${own} forecasts históricos y ${provisional} estimaciones provisionales con patrón Ultra.`;
+    }
+    return '';
+  }
+
+  private cohortMethodLabel(item: TrackForecastCenterBreakdownItem): string {
+    const own = item.projection_methods.branch_historical_calendar_weights.branch_count;
+    const provisional = item.projection_methods.legacy_21_calendar_weights.branch_count;
+    if (own > 0 && provisional === 0) return 'Forecast histórico propio';
+    if (provisional > 0 && own === 0) return 'Proyección provisional con patrón Ultra';
+    return 'Metodología mixta';
+  }
+
+  private cohortMethodCoverage(item: TrackForecastCenterBreakdownItem): string {
+    const own = item.projection_methods.branch_historical_calendar_weights.projected_branch_count;
+    const provisional = item.projection_methods.legacy_21_calendar_weights.projected_branch_count;
+    if (own > 0 && provisional === 0) {
+      return `${own} de ${item.branch_count} sucursales con forecast histórico propio`;
+    }
+    return `${own + provisional} de ${item.branch_count} sucursales estimadas`;
+  }
+
+  private cohortMethodReason(item: TrackForecastCenterBreakdownItem): string {
+    return item.projection_methods.legacy_21_calendar_weights.branch_count > 0
+      ? 'Sin histórico propio comparable'
+      : '';
   }
 
   private line(name: string, series: TrackForecastCenterSeriesItem, color: string) {

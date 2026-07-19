@@ -22,6 +22,8 @@ export class TrackForecastCenterMethodologyComponent implements OnChanges {
   cutoffItems: MethodologyItem[] = [];
   methodologyItems: MethodologyItem[] = [];
   loaderItems: MethodologyItem[] = [];
+  newBranchProjectionItems: MethodologyItem[] = [];
+  showNewBranchProjection = false;
 
   ngOnChanges(): void {
     if (!this.response) return;
@@ -62,6 +64,18 @@ export class TrackForecastCenterMethodologyComponent implements OnChanges {
       { label: 'Base de meta', value: this.translate(quality.methodology.goal_basis) },
       { label: 'Fórmula de proyección', value: quality.methodology.projection_formula },
       { label: 'Forma diaria de agregadoras', value: quality.methodology.aggregadoras_assumed_same_daily_shape ? 'Se asume la misma forma diaria.' : 'No se asume la misma forma diaria.' },
+      { label: 'Prioridad de métodos', value: quality.methodology.projection_method_priority.map((method) => this.translate(method)).join(' → ') },
+      { label: 'Fallback provisional', value: this.fallbackLinearityLabel(quality.methodology.fallback_is_linear) },
+    ];
+    const provisionalCount = quality.projection_methods.legacy_21_calendar_weights.branch_count;
+    this.showNewBranchProjection = provisionalCount > 0;
+    this.newBranchProjectionItems = [
+      { label: 'Sucursales estimadas', value: String(provisionalCount) },
+      { label: 'Muestras válidas', value: String(quality.legacy_21_curve.valid_branch_month_samples) },
+      { label: 'Sucursales contribuyentes', value: String(quality.legacy_21_curve.contributing_branch_count) },
+      { label: 'Pesos suman 1', value: quality.legacy_21_curve.weights_sum === 1 ? 'Sí' : 'No' },
+      { label: 'Cutoff mínimo', value: `Día ${quality.legacy_21_curve.cutoff_minimum_day}` },
+      { label: 'Patrón calendario', value: this.translate(quality.legacy_21_curve.calendar_method) },
     ];
     this.loaderItems = Object.entries(quality.loader_invocations).map(([label, value]) => ({ label, value: String(value) }));
   }
@@ -74,6 +88,11 @@ export class TrackForecastCenterMethodologyComponent implements OnChanges {
       total_mtd: 'Ingreso Track total acumulado.',
       calendar: 'Calendario',
       authorization: 'Autorización',
+      legacy_21_calendar_projection_fallback: 'Proyección provisional con patrón Ultra',
+      branch_historical_calendar_weights: 'Forecast histórico propio',
+      legacy_21_calendar_weights: 'Proyección provisional con patrón Ultra',
+      unavailable: 'Proyección no disponible',
+      insufficient_comparable_branch_history: 'Sin histórico propio comparable',
       last_weekday_occurrence_fallback: 'Se utilizó la última ocurrencia disponible del mismo día de la semana.',
       empty_assigned_branches_used_primary_branch: 'Se utilizó la sucursal primaria ante un pool vacío.',
       daily_gaps: 'faltan días en la serie diaria',
@@ -88,6 +107,12 @@ export class TrackForecastCenterMethodologyComponent implements OnChanges {
   private currency(value: number | null): string {
     if (value === null) return '—';
     return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }).format(value);
+  }
+
+  private fallbackLinearityLabel(fallbackIsLinear: false): string {
+    return fallbackIsLinear
+      ? 'La estimación utiliza un run rate lineal.'
+      : 'La estimación no utiliza un run rate lineal.';
   }
 
   private percent(value: number | null): string {

@@ -1,5 +1,5 @@
 .pace-view { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-.pace-view__header, .pace-view__facts, .pace-view__note { grid-column: 1 / -1; }
+.pace-view__header, .pace-view__facts, .pace-view__methodology, .pace-view__note { grid-column: 1 / -1; }
 .pace-view__header { display: flex; justify-content: space-between; gap: 16px; }
 .pace-view__header h2, .pace-chart h3 { margin: 0; }
 .pace-view__header p { margin: 5px 0; color: #657085; max-width: 850px; }
@@ -11,6 +11,7 @@
 .pace-chart { border: 1px solid #d8dde7; padding: 12px; min-width: 0; }
 .chart { height: 350px; width: 100%; }
 .pace-view__note { margin: 0; color: #657085; font-size: .82rem; }
+.pace-view__methodology { margin: 0; border-left: 3px solid #d5a43b; padding-left: 9px; color: #596476; font-size: .82rem; }
 @media (max-width: 900px) { .pace-view { grid-template-columns: 1fr; } .pace-view__header { display: grid; } }
 @media (max-width: 650px) { .chart { height: 340px; } }
 

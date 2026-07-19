@@ -5,7 +5,7 @@
     <article *ngFor="let card of cards" class="metric" [class.metric--negative]="card.tone === 'negative'">
       <span>{{ card.label }}</span>
       <strong>{{ card.value }}</strong>
-      <small *ngIf="card.secondary">{{ card.secondary }}</small>
+      <small *ngFor="let secondary of card.secondary">{{ secondary }}</small>
       <small>{{ card.coverage }}</small>
     </article>
   </div>
@@ -22,6 +22,11 @@
           <div><dt>Proyección</dt><dd>{{ card.projection }}</dd></div>
           <div><dt>Cumplimiento</dt><dd>{{ card.attainment }}</dd></div>
         </dl>
+        <div class="cohort-card__method">
+          <strong>{{ card.method }}</strong>
+          <span>{{ card.methodCoverage }}</span>
+          <span *ngIf="card.methodReason">{{ card.methodReason }}</span>
+        </div>
         <p>{{ card.quality }} · {{ card.coverage }}</p>
       </article>
     </div>
@@ -36,6 +41,7 @@
       </div>
     </div>
     <div echarts [options]="chartOption" class="chart"></div>
+    <p *ngIf="chartMethodologyNote" class="chart-methodology">{{ chartMethodologyNote }}</p>
   </section>
 </section>
 

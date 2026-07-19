@@ -8,10 +8,12 @@
 
   <div *ngIf="!isBranchScope" class="table-wrap">
     <table>
-      <thead><tr><th>Unidad</th><th>Sucursales</th><th>Meta</th><th>Real</th><th>Ritmo esperado</th><th>Brecha contra ritmo</th><th>Proyección comparable</th><th>Cumplimiento proyectado</th><th>Cobertura</th><th>Estado</th><th>Acción</th></tr></thead>
+      <thead><tr><th>Unidad</th><th>Sucursales</th><th>Método de proyección</th><th>Meta</th><th>Real</th><th>Ritmo esperado</th><th>Brecha contra ritmo</th><th>Proyección comparable</th><th>Cumplimiento proyectado</th><th>Cobertura</th><th>Estado</th><th>Acción</th></tr></thead>
       <tbody>
         <tr *ngFor="let row of rows">
-          <td>{{ row.label }}</td><td>{{ row.branches }}</td><td>{{ row.goal }}</td><td>{{ row.real }}</td>
+          <td>{{ row.label }}</td><td>{{ row.branches }}</td>
+          <td class="method-cell"><div class="method-list"><span *ngFor="let method of row.methodItems" class="method-badge" [class.method-badge--provisional]="method.tone === 'provisional'" [class.method-badge--unavailable]="method.tone === 'unavailable'">{{ method.label }}</span></div></td>
+          <td>{{ row.goal }}</td><td>{{ row.real }}</td>
           <td>{{ row.expected }}</td><td>{{ row.gap }}</td><td>{{ row.projection }}</td><td>{{ row.attainment }}</td>
           <td>{{ row.coverage }}</td><td>{{ row.status }}</td><td><button type="button" (click)="open(row)">{{ row.action }}</button></td>
         </tr>

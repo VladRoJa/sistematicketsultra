@@ -1,7 +1,11 @@
 import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, OnChanges, Output } from '@angular/core';
 
-import { TrackForecastCenterBreakdownItem, TrackForecastCenterResponse } from '../../services/track.service';
+import {
+  TrackForecastCenterBreakdownItem,
+  TrackForecastCenterProjectionMethod,
+  TrackForecastCenterResponse,
+} from '../../services/track.service';
 import { TrackForecastCenterNavigationEvent } from '../track-forecast-center/track-forecast-center.models';
 
 interface BreakdownRow {
@@ -17,6 +21,12 @@ interface BreakdownRow {
   coverage: string;
   status: string;
   action: string;
+  methodItems: ProjectionMethodItem[];
+}
+
+interface ProjectionMethodItem {
+  label: string;
+  tone: 'historical' | 'provisional' | 'unavailable';
 }
 
 @Component({
@@ -85,7 +95,38 @@ export class TrackForecastCenterBreakdownComponent implements OnChanges {
       coverage: `${coverage.included_branch_count} de ${coverage.eligible_branch_count}`,
       status: this.status(item.quality_status),
       action: item.dimension === 'cohort' ? 'Ver cohorte' : item.dimension === 'region' ? 'Ver región' : 'Ver análisis completo',
+      methodItems: this.projectionMethods(item),
     };
+  }
+
+  private projectionMethods(item: TrackForecastCenterBreakdownItem): ProjectionMethodItem[] {
+    if (item.branch_projection) {
+      return [{
+        label: this.branchMethodLabel(item.branch_projection.projection_method),
+        tone: this.methodTone(item.branch_projection.projection_method),
+      }];
+    }
+    const methods = item.projection_methods;
+    const items: ProjectionMethodItem[] = [];
+    const historical = methods.branch_historical_calendar_weights.branch_count;
+    const provisional = methods.legacy_21_calendar_weights.branch_count;
+    const unavailable = methods.unavailable.branch_count;
+    if (historical > 0) items.push({ label: `${historical} histórico`, tone: 'historical' });
+    if (provisional > 0) items.push({ label: `${provisional} provisional`, tone: 'provisional' });
+    if (unavailable > 0) items.push({ label: `${unavailable} sin proyección`, tone: 'unavailable' });
+    return items;
+  }
+
+  private branchMethodLabel(method: TrackForecastCenterProjectionMethod): string {
+    if (method === 'branch_historical_calendar_weights') return 'Histórico propio';
+    if (method === 'legacy_21_calendar_weights') return 'Patrón Ultra · Provisional';
+    return 'No disponible';
+  }
+
+  private methodTone(method: TrackForecastCenterProjectionMethod): ProjectionMethodItem['tone'] {
+    if (method === 'branch_historical_calendar_weights') return 'historical';
+    if (method === 'legacy_21_calendar_weights') return 'provisional';
+    return 'unavailable';
   }
 
   private currency(value: number | null): string {
