@@ -1043,6 +1043,7 @@ def calculate_compact_branch_forecast(
         or historical_expected_mtd_average < Decimal("50000")
     )
     extreme_trend = trend_factor is not None and trend_factor > 3
+    historical_model_issue_allows_legacy = insufficient_comparable_history
 
     projection_method = "unavailable"
     projection_method_status = "unavailable"
@@ -1067,7 +1068,7 @@ def calculate_compact_branch_forecast(
         projection_method = "branch_historical_calendar_weights"
         projection_method_status = "available"
         projection_method_reason = "sufficient_branch_history"
-    elif not insufficient_comparable_history:
+    elif not historical_model_issue_allows_legacy:
         projection_method_reason = (
             "extreme_trend_factor" if extreme_trend else "historical_projection_unavailable"
         )
@@ -1090,8 +1091,6 @@ def calculate_compact_branch_forecast(
             projection_method_reason = "legacy_fallback_not_allowed_for_cohort"
         elif bundle.cutoff_day < 10:
             projection_method_reason = "minimum_cutoff_day_not_reached"
-        elif extreme_trend:
-            projection_method_reason = "extreme_trend_factor"
         elif real_mtd is None or not real_mtd.is_finite() or real_mtd <= 0:
             projection_method_reason = "invalid_real_mtd"
         elif goal_status != "available":
