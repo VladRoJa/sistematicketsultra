@@ -24,6 +24,7 @@ from app.warehouse.services.track_forecast_service import (
     build_branch_historical_expected_daily_curve,
     build_branch_historical_daily_series,
     build_branch_projected_daily_path,
+    build_legacy_21_calendar_aligned_daily_weights,
     build_venta_total_forecast,
     select_track_daily_branch_versions,
 )
@@ -1889,6 +1890,111 @@ class BranchCalendarAlignedDailyWeightsTest(unittest.TestCase):
 
         self.assertEqual(result["status"], "no_comparable_history")
         self.assertEqual(result["comparison_years_used"], [])
+
+
+class Legacy21CalendarAlignedDailyWeightsTest(unittest.TestCase):
+    TARGET_MONTH = date(2026, 7, 1)
+
+    def _sample(
+        self,
+        canon: str,
+        business_month: date,
+        *,
+        amounts: list[str] | None = None,
+    ):
+        days = monthrange(business_month.year, business_month.month)[1]
+        amounts = amounts or ["1"] * days
+        return {
+            "sucursal_canon": canon,
+            "business_month": business_month,
+            "points": [
+                {
+                    "day": day,
+                    "date": business_month.replace(day=day),
+                    "daily_total": Decimal(amount),
+                }
+                for day, amount in enumerate(amounts, start=1)
+            ],
+        }
+
+    def _build(self, samples):
+        return build_legacy_21_calendar_aligned_daily_weights(
+            branch_month_samples=samples,
+            target_month=self.TARGET_MONTH,
+        )
+
+    def test_each_branch_month_is_normalized_before_equal_weight_average(self):
+        month = date(2025, 6, 1)
+        small = self._sample("A", month, amounts=["10"] + ["1"] * 29)
+        large = self._sample("B", month, amounts=["10", "100"] + ["10"] * 28)
+        result = self._build([small, large])
+
+        source_date = date(2025, 6, 1)
+        target = next(
+            point
+            for point in result["points"]
+            if point["weekday_index"] == source_date.weekday()
+            and point["weekday_ordinal"] == 1
+        )
+        expected = (Decimal("10") / Decimal("39") + Decimal("10") / Decimal("390")) / 2
+        self.assertEqual(target["raw_daily_weight"], expected)
+
+    def test_ten_times_larger_branch_does_not_dominate_curve(self):
+        month = date(2025, 6, 1)
+        a = ["20"] + ["1"] * 29
+        b = ["1", "20"] + ["1"] * 28
+        baseline = self._build([self._sample("A", month, amounts=a), self._sample("B", month, amounts=b)])
+        scaled = self._build(
+            [
+                self._sample("A", month, amounts=[str(Decimal(value) * 10) for value in a]),
+                self._sample("B", month, amounts=b),
+            ]
+        )
+        self.assertEqual(
+            [point["normalized_daily_weight"] for point in baseline["points"]],
+            [point["normalized_daily_weight"] for point in scaled["points"]],
+        )
+
+    def test_final_weights_sum_exactly_one(self):
+        result = self._build([self._sample("A", date(2025, 6, 1))])
+        self.assertEqual(result["weights_sum"], Decimal("1"))
+        self.assertEqual(
+            sum((point["normalized_daily_weight"] for point in result["points"]), Decimal("0")),
+            Decimal("1"),
+        )
+        self.assertNotIn("sucursal_canon", result)
+        self.assertTrue(
+            all(not point["historical_samples"] for point in result["points"])
+        )
+
+    def test_weekday_ordinal_alignment_and_fifth_occurrence_rule_are_reused(self):
+        result = self._build([self._sample("A", date(2025, 6, 1))])
+        second_monday = next(
+            point for point in result["points"]
+            if point["alignment_key"] == "monday:2"
+        )
+        self.assertEqual(second_monday["date"], date(2026, 7, 13))
+        self.assertTrue(any(point["used_fallback"] for point in result["points"]))
+
+    def test_target_and_future_months_are_excluded(self):
+        result = self._build(
+            [
+                self._sample("A", date(2025, 6, 1)),
+                self._sample("A", date(2026, 7, 1)),
+                self._sample("A", date(2026, 8, 1)),
+            ]
+        )
+        self.assertEqual(result["valid_branch_month_samples"], 1)
+        self.assertEqual(result["excluded_sample_counts"]["target_or_future_month"], 2)
+
+    def test_incomplete_month_and_zero_total_are_excluded_without_zero_fill(self):
+        incomplete = self._sample("A", date(2025, 6, 1))
+        incomplete["points"].pop()
+        zero = self._sample("B", date(2025, 5, 1), amounts=["0"] * 31)
+        result = self._build([incomplete, zero])
+        self.assertEqual(result["status"], "unavailable")
+        self.assertEqual(result["excluded_sample_counts"]["incomplete_daily_coverage"], 1)
+        self.assertEqual(result["excluded_sample_counts"]["non_positive_month_total"], 1)
 
 
 class BranchHistoricalExpectedDailyCurveTest(unittest.TestCase):

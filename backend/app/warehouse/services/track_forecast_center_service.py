@@ -26,6 +26,7 @@ from app.warehouse.services.track_branch_cohort_service import (
     TRACK_BRANCH_COHORT_LEGACY_21,
     TRACK_BRANCH_COHORT_NEW_GYMS,
     TRACK_BRANCH_COHORT_TOTAL_ULTRA,
+    TRACK_LEGACY_21_MAX_DISPLAY_ORDER,
     get_track_branch_cohort_definitions,
     resolve_track_branch_cohort_from_display_order,
 )
@@ -40,6 +41,7 @@ from app.warehouse.services.track_forecast_service import (
     _select_track_daily_branch_version_candidates,
     build_branch_calendar_aligned_daily_weights,
     build_branch_current_track_daily_values,
+    build_legacy_21_calendar_aligned_daily_weights,
 )
 
 
@@ -146,6 +148,7 @@ class ForecastCenterBulkBundle:
     canonical_snapshot_id: int | None
     canonical_business_date: date | None
     loader_invocations: dict[str, int]
+    legacy_21_curve: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -700,6 +703,81 @@ def _load_canonical_cutoff_bulk(
     return int(snapshot.id), snapshot.business_date
 
 
+def _load_legacy_21_curve_bulk(*, target_month: date) -> dict[str, Any]:
+    rows = db.session.execute(
+        text(
+            """
+            WITH closed_snapshots AS (
+                SELECT id, business_date,
+                       row_number() OVER (
+                           PARTITION BY business_date
+                           ORDER BY captured_at DESC, id DESC
+                       ) AS snapshot_rank
+                FROM venta_total_snapshots
+                WHERE report_type_key = 'venta_total'
+                  AND snapshot_kind = 'daily'
+                  AND is_canonical IS TRUE
+                  AND business_date < :target_month
+                  AND business_date = (
+                      date_trunc('month', business_date)
+                      + interval '1 month - 1 day'
+                  )::date
+            )
+            SELECT upper(trim(agg.sucursal_canon)) AS sucursal_canon,
+                   date_trunc('month', snapshot.business_date)::date AS business_month,
+                   agg.sale_date,
+                   extract(day FROM agg.sale_date)::integer AS day_of_month,
+                   SUM(agg.total)::numeric AS daily_total
+            FROM closed_snapshots snapshot
+            JOIN track_venta_total_daily_branch_agg agg
+              ON agg.snapshot_id = snapshot.id
+            JOIN track_branch_catalog catalog
+              ON upper(trim(catalog.sucursal_canon)) = upper(trim(agg.sucursal_canon))
+            JOIN sucursales sucursal
+              ON sucursal.sucursal_id = catalog.sucursal_id
+            WHERE snapshot.snapshot_rank = 1
+              AND catalog.is_track_active IS TRUE
+              AND catalog.display_order BETWEEN 1 AND :legacy_max_display_order
+              AND sucursal.operational_status = :active_status
+              AND upper(trim(agg.sucursal_canon)) NOT IN :excluded_branches
+              AND agg.sale_date >= date_trunc('month', snapshot.business_date)::date
+              AND agg.sale_date <= snapshot.business_date
+            GROUP BY upper(trim(agg.sucursal_canon)),
+                     date_trunc('month', snapshot.business_date)::date,
+                     agg.sale_date
+            ORDER BY sucursal_canon, business_month, agg.sale_date
+            """
+        ).bindparams(bindparam("excluded_branches", expanding=True)),
+        {
+            "target_month": target_month,
+            "legacy_max_display_order": TRACK_LEGACY_21_MAX_DISPLAY_ORDER,
+            "active_status": SucursalOperationalStatus.ACTIVA,
+            "excluded_branches": tuple(sorted(EXCLUDED_BRANCHES)),
+        },
+    ).mappings().all()
+    samples_by_key: dict[tuple[str, date], list[dict[str, Any]]] = defaultdict(list)
+    for row in rows:
+        key = (str(row["sucursal_canon"]), row["business_month"])
+        samples_by_key[key].append(
+            {
+                "day": int(row["day_of_month"]),
+                "date": row["sale_date"],
+                "daily_total": _decimal(row["daily_total"]),
+            }
+        )
+    return build_legacy_21_calendar_aligned_daily_weights(
+        branch_month_samples=[
+            {
+                "sucursal_canon": canon,
+                "business_month": business_month,
+                "points": points,
+            }
+            for (canon, business_month), points in samples_by_key.items()
+        ],
+        target_month=target_month,
+    )
+
+
 def bulk_load_forecast_center_data(
     *,
     branches: Sequence[ForecastCenterBranch],
@@ -759,6 +837,9 @@ def bulk_load_forecast_center_data(
         track_date=track_date,
     )
 
+    loader_invocations["legacy_21_calendar_reference"] += 1
+    legacy_21_curve = _load_legacy_21_curve_bulk(target_month=target_month)
+
     return ForecastCenterBulkBundle(
         target_month=target_month,
         cutoff_day=cutoff_day,
@@ -770,6 +851,7 @@ def bulk_load_forecast_center_data(
         canonical_snapshot_id=snapshot_id,
         canonical_business_date=snapshot_date,
         loader_invocations=dict(loader_invocations),
+        legacy_21_curve=legacy_21_curve,
     )
 
 
@@ -806,6 +888,40 @@ def _build_current_series(
     ]
     missing_dates = [value for value in expected_dates if value not in selected_dates]
     return points, missing_dates
+
+
+def _legacy_curve_as_branch_distribution(
+    *,
+    curve: dict[str, Any],
+    target_month: date,
+    cutoff_day: int,
+) -> dict[str, Any]:
+    points = [dict(point) for point in curve.get("points") or []]
+    progress = (
+        points[cutoff_day - 1].get("cumulative_weight")
+        if len(points) >= cutoff_day
+        else None
+    )
+    years = sorted(
+        {
+            year
+            for point in points
+            for year in point.get("sample_years", [])
+        }
+    )
+    return {
+        "status": "available" if curve.get("status") == "available" else "no_comparable_history",
+        "method": "weekday_ordinal_aligned_historical_weights",
+        "target_month": target_month,
+        "cutoff_day": cutoff_day,
+        "historical_progress_pct_at_cutoff": progress,
+        "comparison_years_requested": years,
+        "comparison_years_used": years,
+        "comparison_years_excluded": [],
+        "exact_matches_count": 0,
+        "fallback_matches_count": sum(bool(point.get("used_fallback")) for point in points),
+        "points": points,
+    }
 
 
 def calculate_compact_branch_forecast(
@@ -878,7 +994,7 @@ def calculate_compact_branch_forecast(
             else "sin_historia"
         ),
     }
-    projected_close = (
+    own_projected_close = (
         real_mtd / historical_progress
         if real_mtd is not None and historical_progress is not None and historical_progress > 0
         else None
@@ -889,19 +1005,131 @@ def calculate_compact_branch_forecast(
         trend_factor=trend_factor,
     )
     if quality_issue:
-        projected_close = None
+        own_projected_close = None
 
-    distribution = build_branch_calendar_aligned_daily_weights(
+    own_distribution = build_branch_calendar_aligned_daily_weights(
         historical_series=historical_series,
         target_month=bundle.target_month,
         cutoff_day=bundle.cutoff_day,
         historical_progress_pct_at_cutoff=historical_progress,
     )
+    current_points, missing_dates = _build_current_series(
+        candidates=bundle.current_candidates_by_branch.get(canon, []),
+        target_month=bundle.target_month,
+        track_date=track_date,
+        track_daily_version_id=track_daily_version_id,
+    )
+    invalid_current_statuses = sorted(
+        {
+            str(point["daily_value_status"])
+            for point in current_points
+            if point["daily_value_status"]
+            not in {"available", "available_with_negative_adjustment"}
+        }
+    )
+    current_cutoff_matches_real = bool(
+        current_points
+        and current_points[-1].get("date") == track_date
+        and _decimal(current_points[-1].get("total_mtd")) == real_mtd
+    )
+    historical_expected_mtd_average = (
+        historical_mtd_total / Decimal(len(available_history))
+        if available_history
+        else None
+    )
+    insufficient_comparable_history = (
+        len(available_history) < 3
+        or historical_expected_mtd_average is None
+        or historical_expected_mtd_average < Decimal("50000")
+    )
+    extreme_trend = trend_factor is not None and trend_factor > 3
+
+    projection_method = "unavailable"
+    projection_method_status = "unavailable"
+    projection_is_provisional = False
+    projection_method_reason = "projection_unavailable"
+    projected_close = own_projected_close
+    distribution = own_distribution
+    reference_sample_count: int | None = None
+    reference_branch_count: int | None = None
+    minimum_cutoff_day: int | None = None
+
+    if missing_dates:
+        projected_close = None
+        projection_method_reason = "missing_dates"
+    elif invalid_current_statuses:
+        projected_close = None
+        projection_method_reason = invalid_current_statuses[0]
+    elif not current_cutoff_matches_real:
+        projected_close = None
+        projection_method_reason = "inconsistent_current_real"
+    elif own_projected_close is not None:
+        projection_method = "branch_historical_calendar_weights"
+        projection_method_status = "available"
+        projection_method_reason = "sufficient_branch_history"
+    elif not insufficient_comparable_history:
+        projection_method_reason = (
+            "extreme_trend_factor" if extreme_trend else "historical_projection_unavailable"
+        )
+    else:
+        legacy_curve = getattr(bundle, "legacy_21_curve", {}) or {}
+        legacy_distribution = _legacy_curve_as_branch_distribution(
+            curve=legacy_curve,
+            target_month=bundle.target_month,
+            cutoff_day=bundle.cutoff_day,
+        )
+        expected_share_at_cutoff = legacy_distribution.get(
+            "historical_progress_pct_at_cutoff"
+        )
+        future_share = (
+            Decimal("1") - expected_share_at_cutoff
+            if isinstance(expected_share_at_cutoff, Decimal)
+            else None
+        )
+        if branch.cohort != TRACK_BRANCH_COHORT_NEW_GYMS:
+            projection_method_reason = "legacy_fallback_not_allowed_for_cohort"
+        elif bundle.cutoff_day < 10:
+            projection_method_reason = "minimum_cutoff_day_not_reached"
+        elif extreme_trend:
+            projection_method_reason = "extreme_trend_factor"
+        elif real_mtd is None or not real_mtd.is_finite() or real_mtd <= 0:
+            projection_method_reason = "invalid_real_mtd"
+        elif goal_status != "available":
+            projection_method_reason = "invalid_goal"
+        elif legacy_curve.get("status") != "available":
+            projection_method_reason = "legacy_21_curve_unavailable"
+        elif (
+            not isinstance(expected_share_at_cutoff, Decimal)
+            or not expected_share_at_cutoff.is_finite()
+            or expected_share_at_cutoff <= 0
+        ):
+            projection_method_reason = "non_positive_expected_share_at_cutoff"
+        elif future_share is None or future_share <= 0:
+            projection_method_reason = "insufficient_future_calendar_share"
+        else:
+            projected_close = real_mtd / expected_share_at_cutoff
+            distribution = legacy_distribution
+            projection_method = "legacy_21_calendar_weights"
+            projection_method_status = "available"
+            projection_is_provisional = True
+            projection_method_reason = "insufficient_comparable_branch_history"
+            reference_sample_count = int(
+                legacy_curve.get("valid_branch_month_samples") or 0
+            )
+            reference_branch_count = int(
+                legacy_curve.get("contributing_branch_count") or 0
+            )
+            minimum_cutoff_day = 10
+
     historical_expected = _build_branch_calendar_aligned_historical_expected_daily_curve(
         distribution=distribution,
         target_month=bundle.target_month,
         cutoff_day=bundle.cutoff_day,
-        historical_expected_month_total=historical_expected_month_total,
+        historical_expected_month_total=(
+            Decimal("1")
+            if projection_method == "legacy_21_calendar_weights"
+            else historical_expected_month_total
+        ),
     )
     goal_pace = _build_branch_goal_pace_detail(
         goal_status=goal_status,
@@ -913,13 +1141,6 @@ def calculate_compact_branch_forecast(
         historical_expected=historical_expected,
         calendar_aligned_distribution=distribution,
     )
-    current_points, missing_dates = _build_current_series(
-        candidates=bundle.current_candidates_by_branch.get(canon, []),
-        target_month=bundle.target_month,
-        track_date=track_date,
-        track_daily_version_id=track_daily_version_id,
-    )
-
     actual = [
         {
             "date": point["date"],
@@ -941,6 +1162,25 @@ def calculate_compact_branch_forecast(
         for point in goal_pace["points"]
     ]
     projected_path = goal_pace.get("projected_path")
+    if projected_close is not None and (
+        not projected_path or projected_path.get("status") != "available"
+    ):
+        projection_method = "unavailable"
+        projection_method_status = "unavailable"
+        projection_is_provisional = False
+        projection_method_reason = (
+            f"projected_path_{projected_path.get('status')}"
+            if projected_path
+            else "projected_path_unavailable"
+        )
+        projected_close = None
+        reference_sample_count = None
+        reference_branch_count = None
+        minimum_cutoff_day = None
+        goal_pace["projected_close"] = None
+        goal_pace["projected_gap_to_goal"] = None
+        goal_pace["projected_goal_attainment_pct"] = None
+        goal_pace["status"] = "projection_unavailable"
     projected = []
     if projected_path and projected_path.get("status") == "available":
         projected = [
@@ -1023,6 +1263,13 @@ def calculate_compact_branch_forecast(
             "calendar_status": distribution["status"],
             "has_daily_gaps": bool(missing_dates),
             "has_calendar_fallback": bool(distribution["fallback_matches_count"]),
+            "projection_method": projection_method,
+            "projection_method_status": projection_method_status,
+            "projection_is_provisional": projection_is_provisional,
+            "projection_method_reason": projection_method_reason,
+            "reference_sample_count": reference_sample_count,
+            "reference_branch_count": reference_branch_count,
+            "minimum_cutoff_day": minimum_cutoff_day,
             "exclusion_reasons": exclusion_reasons,
         },
         drilldown={
@@ -1257,6 +1504,54 @@ def aggregate_forecast_center_series(
     return output
 
 
+def _projection_method_coverage(
+    results: Sequence[BranchForecastCenterResult],
+) -> dict[str, dict[str, int]]:
+    methods = (
+        "branch_historical_calendar_weights",
+        "legacy_21_calendar_weights",
+        "unavailable",
+    )
+    resolved_methods = [
+        result.quality.get("projection_method")
+        or (
+            "branch_historical_calendar_weights"
+            if result.summary.get("projected_close") is not None
+            else "unavailable"
+        )
+        for result in results
+    ]
+    return {
+        method: {
+            "branch_count": sum(value == method for value in resolved_methods),
+            "projected_branch_count": sum(
+                resolved_method == method
+                and result.summary.get("projected_close") is not None
+                for resolved_method, result in zip(resolved_methods, results)
+            ),
+        }
+        for method in methods
+    }
+
+
+def _projection_method_detail(result: BranchForecastCenterResult) -> dict[str, Any]:
+    return {
+        "projection_method": result.quality.get("projection_method", "unavailable"),
+        "projection_method_status": result.quality.get(
+            "projection_method_status", "unavailable"
+        ),
+        "projection_is_provisional": bool(
+            result.quality.get("projection_is_provisional")
+        ),
+        "projection_method_reason": result.quality.get(
+            "projection_method_reason", "projection_unavailable"
+        ),
+        "reference_sample_count": result.quality.get("reference_sample_count"),
+        "reference_branch_count": result.quality.get("reference_branch_count"),
+        "minimum_cutoff_day": result.quality.get("minimum_cutoff_day"),
+    }
+
+
 def _build_breakdown(
     *,
     results: Sequence[BranchForecastCenterResult],
@@ -1313,6 +1608,12 @@ def _build_breakdown(
                     if field not in {"metric_coverage", "branch_count"}
                 },
                 "metric_coverage": summary["metric_coverage"],
+                "projection_methods": _projection_method_coverage(group),
+                "branch_projection": (
+                    _projection_method_detail(group[0])
+                    if dimension == "branch" and len(group) == 1
+                    else None
+                ),
                 "quality_status": _overall_quality_status(group, len(group)),
                 "contribution": {
                     "real_mtd_share": (
@@ -1417,6 +1718,29 @@ def _build_quality(
                 "branches": calendar_fallback_branches,
             }
         )
+    legacy_projection_results = [
+        result
+        for result in results
+        if result.quality.get("projection_method") == "legacy_21_calendar_weights"
+    ]
+    legacy_curve = getattr(bundle, "legacy_21_curve", {}) or {}
+    if legacy_projection_results:
+        fallbacks.append(
+            {
+                "type": "legacy_21_calendar_projection_fallback",
+                "reason": "insufficient_comparable_branch_history",
+                "branch_count": len(legacy_projection_results),
+                "valid_branch_month_samples": int(
+                    legacy_curve.get("valid_branch_month_samples") or 0
+                ),
+                "contributing_branch_count": int(
+                    legacy_curve.get("contributing_branch_count") or 0
+                ),
+                "minimum_cutoff_day": 10,
+                "calendar_method": legacy_curve.get("calendar_method"),
+            }
+        )
+    projection_methods = _projection_method_coverage(results)
     return {
         "status": _overall_quality_status(results, len(selected_branches)),
         "branches": {
@@ -1466,6 +1790,33 @@ def _build_quality(
         },
         "exclusions": visible_exclusions,
         "fallbacks": fallbacks,
+        "projection_methods": {
+            method: {"branch_count": values["branch_count"]}
+            for method, values in projection_methods.items()
+        },
+        "selected_branch_projection": (
+            _projection_method_detail(results[0])
+            if len(selected_branches) == 1 and len(results) == 1
+            else None
+        ),
+        "legacy_21_curve": {
+            "status": legacy_curve.get("status", "unavailable"),
+            "calendar_method": legacy_curve.get(
+                "calendar_method", "weekday_ordinal_aligned_historical_weights"
+            ),
+            "valid_branch_month_samples": int(
+                legacy_curve.get("valid_branch_month_samples") or 0
+            ),
+            "contributing_branch_count": int(
+                legacy_curve.get("contributing_branch_count") or 0
+            ),
+            "weights_sum": legacy_curve.get("weights_sum", Decimal("0")),
+            "excluded_sample_counts": dict(
+                legacy_curve.get("excluded_sample_counts") or {}
+            ),
+            "target_month": bundle.target_month,
+            "cutoff_minimum_day": 10,
+        },
         "cutoff": {
             "track_daily_version_id": int(resolved_version.id),
             "version_type": str(resolved_version.version_type),
@@ -1480,6 +1831,12 @@ def _build_quality(
             "distribution_basis": "venta_total_base",
             "aggregadoras_assumed_same_daily_shape": True,
             "aggregate_method": "sum_branch_forecasts",
+            "projection_method_priority": [
+                "branch_historical_calendar_weights",
+                "legacy_21_calendar_weights",
+                "unavailable",
+            ],
+            "fallback_is_linear": False,
         },
         "loader_invocations": bundle.loader_invocations,
     }
