@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from calendar import monthrange
+from collections import Counter
 from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any, Literal, Sequence, TypedDict
@@ -707,6 +708,25 @@ _WEEKDAY_KEYS = (
 )
 
 
+def _select_weekday_ordinal_point(
+    *,
+    points: Sequence[dict[str, Any]],
+    target_date: date,
+) -> tuple[dict[str, Any] | None, Literal[
+    "exact_ordinal_match",
+    "last_weekday_occurrence_fallback",
+]]:
+    weekday_points = [
+        point for point in points if point["date"].weekday() == target_date.weekday()
+    ]
+    weekday_ordinal = ((target_date.day - 1) // 7) + 1
+    if len(weekday_points) >= weekday_ordinal:
+        return weekday_points[weekday_ordinal - 1], "exact_ordinal_match"
+    if weekday_ordinal == 5 and weekday_points:
+        return weekday_points[-1], "last_weekday_occurrence_fallback"
+    return None, "exact_ordinal_match"
+
+
 def build_branch_calendar_aligned_daily_weights(
     *,
     historical_series: Sequence[BranchHistoricalYearSeries],
@@ -760,21 +780,10 @@ def build_branch_calendar_aligned_daily_weights(
         historical_samples: list[BranchCalendarAlignedHistoricalSample] = []
 
         for series, full_month_total in usable_series:
-            weekday_points = [
-                point
-                for point in series["points"]
-                if point["date"].weekday() == weekday_index
-            ]
-            source_point: BranchHistoricalDailyPoint | None = None
-            alignment_kind: Literal[
-                "exact_ordinal_match",
-                "last_weekday_occurrence_fallback",
-            ] = "exact_ordinal_match"
-            if len(weekday_points) >= weekday_ordinal:
-                source_point = weekday_points[weekday_ordinal - 1]
-            elif weekday_ordinal == 5 and weekday_points:
-                source_point = weekday_points[-1]
-                alignment_kind = "last_weekday_occurrence_fallback"
+            source_point, alignment_kind = _select_weekday_ordinal_point(
+                points=series["points"],
+                target_date=target_date,
+            )
 
             if source_point is None:
                 continue
@@ -922,6 +931,173 @@ def build_branch_calendar_aligned_daily_weights(
         if fallback_matches_count
         else "available"
     )
+
+
+def build_legacy_21_calendar_aligned_daily_weights(
+    *,
+    branch_month_samples: Sequence[dict[str, Any]],
+    target_month: date,
+    cutoff_minimum_day: int = 10,
+) -> dict[str, Any]:
+    """Build an equal-weight calendar curve from strictly complete branch-months."""
+    target_month = target_month.replace(day=1)
+    target_days = monthrange(target_month.year, target_month.month)[1]
+    excluded: Counter[str] = Counter()
+    normalized_samples: list[dict[str, Any]] = []
+
+    for sample in branch_month_samples:
+        business_month = sample.get("business_month")
+        if not isinstance(business_month, date) or business_month.day != 1:
+            excluded["invalid_business_month"] += 1
+            continue
+        if business_month >= target_month:
+            excluded["target_or_future_month"] += 1
+            continue
+        days_in_sample = monthrange(business_month.year, business_month.month)[1]
+        points = list(sample.get("points") or [])
+        dates = [point.get("date") for point in points]
+        expected_dates = [
+            business_month.replace(day=day) for day in range(1, days_in_sample + 1)
+        ]
+        if (
+            len(points) != days_in_sample
+            or len(set(dates)) != days_in_sample
+            or any(not isinstance(value, date) for value in dates)
+            or sorted(value for value in dates if isinstance(value, date))
+            != expected_dates
+            or any(
+                point.get("day") != point["date"].day
+                or point["date"].replace(day=1) != business_month
+                for point in points
+                if isinstance(point.get("date"), date)
+            )
+        ):
+            excluded["incomplete_daily_coverage"] += 1
+            continue
+        daily_amounts = [_decimal_point_value(point.get("daily_total")) for point in points]
+        if any(value is None or not value.is_finite() for value in daily_amounts):
+            excluded["invalid_daily_amount"] += 1
+            continue
+        month_total = sum(
+            (value for value in daily_amounts if value is not None), Decimal("0")
+        )
+        if month_total <= 0:
+            excluded["non_positive_month_total"] += 1
+            continue
+        normalized_samples.append(
+            {
+                "sucursal_canon": str(sample.get("sucursal_canon") or ""),
+                "business_month": business_month,
+                "points": [
+                    {**point, "sample_daily_share": value / month_total}
+                    for point, value in zip(points, daily_amounts)
+                    if value is not None
+                ],
+            }
+        )
+
+    def result(status: str, points: list[dict[str, Any]]) -> dict[str, Any]:
+        weights_sum = sum(
+            (
+                point["normalized_daily_weight"]
+                for point in points
+                if point.get("normalized_daily_weight") is not None
+            ),
+            Decimal("0"),
+        )
+        return {
+            "status": status,
+            "calendar_method": "weekday_ordinal_aligned_historical_weights",
+            "target_month": target_month,
+            "cutoff_minimum_day": cutoff_minimum_day,
+            "valid_branch_month_samples": len(normalized_samples),
+            "contributing_branch_count": len(
+                {
+                    sample["sucursal_canon"]
+                    for sample in normalized_samples
+                    if sample["sucursal_canon"]
+                }
+            ),
+            "weights_sum": weights_sum,
+            "excluded_sample_counts": dict(sorted(excluded.items())),
+            "points": points,
+        }
+
+    if not normalized_samples:
+        return result("unavailable", [])
+
+    aligned_points: list[dict[str, Any]] = []
+    for target_day in range(1, target_days + 1):
+        target_date = target_month.replace(day=target_day)
+        shares: list[Decimal] = []
+        used_fallback = False
+        for sample in normalized_samples:
+            source_point, alignment_kind = _select_weekday_ordinal_point(
+                points=sample["points"],
+                target_date=target_date,
+            )
+            if source_point is None:
+                continue
+            shares.append(source_point["sample_daily_share"])
+            used_fallback = used_fallback or (
+                alignment_kind == "last_weekday_occurrence_fallback"
+            )
+        if len(shares) != len(normalized_samples):
+            excluded["missing_calendar_sample"] += 1
+            return result("unavailable", [])
+        aligned_points.append(
+            {
+                "day": target_day,
+                "date": target_date,
+                "weekday": _WEEKDAY_KEYS[target_date.weekday()],
+                "weekday_index": target_date.weekday(),
+                "weekday_ordinal": ((target_day - 1) // 7) + 1,
+                "alignment_key": (
+                    f"{_WEEKDAY_KEYS[target_date.weekday()]}:"
+                    f"{((target_day - 1) // 7) + 1}"
+                ),
+                "raw_daily_weight": sum(shares, Decimal("0"))
+                / Decimal(len(shares)),
+                "normalized_daily_weight": None,
+                "cumulative_weight": None,
+                "samples_count": len(shares),
+                "sample_years": sorted(
+                    {sample["business_month"].year for sample in normalized_samples}
+                ),
+                "used_fallback": used_fallback,
+                "historical_samples": [],
+            }
+        )
+
+    raw_total = sum(
+        (point["raw_daily_weight"] for point in aligned_points), Decimal("0")
+    )
+    if raw_total <= 0:
+        excluded["non_positive_aligned_weight"] += 1
+        return result("unavailable", [])
+    normalized_before_last = Decimal("0")
+    cumulative = Decimal("0")
+    for point in aligned_points[:-1]:
+        weight = point["raw_daily_weight"] / raw_total
+        point["normalized_daily_weight"] = weight
+        normalized_before_last += weight
+        cumulative += weight
+        point["cumulative_weight"] = cumulative
+    last_weight = Decimal("1") - normalized_before_last
+    aligned_points[-1]["normalized_daily_weight"] = last_weight
+    aligned_points[-1]["cumulative_weight"] = Decimal("1")
+    return result("available", aligned_points)
+
+
+def _decimal_point_value(value: Any) -> Decimal | None:
+    if isinstance(value, Decimal):
+        return value
+    if value is None:
+        return None
+    try:
+        return Decimal(str(value))
+    except (ValueError, TypeError):
+        return None
 
 
 def build_branch_historical_expected_daily_curve(

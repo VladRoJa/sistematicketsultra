@@ -92,8 +92,42 @@ class TrackForecastCenterRoutesTest(unittest.TestCase):
                 "metric_coverage": {},
             },
             "series": {"actual": {}, "required": {}, "projected": {}},
-            "breakdown": {"dimension": "cohort", "items": []},
-            "quality": {"status": "partial"},
+            "breakdown": {
+                "dimension": "cohort",
+                "items": [
+                    {
+                        "key": "new_gyms",
+                        "projection_methods": {
+                            "legacy_21_calendar_weights": {
+                                "branch_count": 2,
+                                "projected_branch_count": 2,
+                            }
+                        },
+                    }
+                ],
+            },
+            "quality": {
+                "status": "partial",
+                "projection_methods": {
+                    "branch_historical_calendar_weights": {"branch_count": 0},
+                    "legacy_21_calendar_weights": {"branch_count": 2},
+                    "unavailable": {"branch_count": 0},
+                },
+                "legacy_21_curve": {
+                    "status": "available",
+                    "target_month": date(2026, 7, 1),
+                    "weights_sum": Decimal("1"),
+                    "valid_branch_month_samples": 12,
+                },
+                "methodology": {
+                    "projection_method_priority": [
+                        "branch_historical_calendar_weights",
+                        "legacy_21_calendar_weights",
+                        "unavailable",
+                    ],
+                    "fallback_is_linear": False,
+                },
+            },
         }
 
     @staticmethod
@@ -142,7 +176,18 @@ class TrackForecastCenterRoutesTest(unittest.TestCase):
         build_center.return_value = self._center_payload()
         response = self._get_center("?track_date=2026-07-14&scope=national")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.get_json()["summary"]["goal_month"], 100.5)
+        body = response.get_json()
+        self.assertEqual(body["summary"]["goal_month"], 100.5)
+        self.assertEqual(body["quality"]["legacy_21_curve"]["weights_sum"], 1.0)
+        self.assertEqual(
+            body["quality"]["legacy_21_curve"]["target_month"],
+            "2026-07-01",
+        )
+        self.assertEqual(
+            body["breakdown"]["items"][0]["projection_methods"]
+            ["legacy_21_calendar_weights"]["branch_count"],
+            2,
+        )
         build_center.assert_called_once()
 
     @patch("app.routes.track_forecast_routes.build_forecast_center")

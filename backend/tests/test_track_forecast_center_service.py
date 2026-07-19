@@ -23,6 +23,7 @@ from app.warehouse.services.track_forecast_center_service import (
     resolve_forecast_center_universe,
     select_forecast_center_scope,
     _build_breakdown,
+    _projection_method_coverage,
 )
 
 
@@ -125,6 +126,23 @@ def _result(
             "calendar_status": "available",
             "has_daily_gaps": False,
             "has_calendar_fallback": False,
+            "projection_method": (
+                "branch_historical_calendar_weights"
+                if projected is not None
+                else "unavailable"
+            ),
+            "projection_method_status": (
+                "available" if projected is not None else "unavailable"
+            ),
+            "projection_is_provisional": False,
+            "projection_method_reason": (
+                "sufficient_branch_history"
+                if projected is not None
+                else "projection_unavailable"
+            ),
+            "reference_sample_count": None,
+            "reference_branch_count": None,
+            "minimum_cutoff_day": None,
             "exclusion_reasons": [],
         },
         drilldown={
@@ -663,6 +681,43 @@ class ForecastCenterAggregationTest(unittest.TestCase):
             breakdown["items"][0]["drilldown"]["analytic_route"],
             "/warehouse/track/forecast/branches/A",
         )
+        self.assertEqual(
+            breakdown["items"][0]["branch_projection"]["projection_method"],
+            "branch_historical_calendar_weights",
+        )
+
+    def test_method_coverage_counts_mixed_twenty_one_plus_four_universe(self):
+        results = [
+            _result(f"L{index}", branch_id=index)
+            for index in range(1, 22)
+        ]
+        fallbacks = [
+            _result(
+                f"N{index}",
+                branch_id=21 + index,
+                cohort="new_gyms",
+            )
+            for index in range(1, 5)
+        ]
+        for result in fallbacks:
+            result.quality.update(
+                {
+                    "projection_method": "legacy_21_calendar_weights",
+                    "projection_is_provisional": True,
+                    "projection_method_reason": "insufficient_comparable_branch_history",
+                    "reference_sample_count": 684,
+                    "reference_branch_count": 21,
+                    "minimum_cutoff_day": 10,
+                }
+            )
+        coverage = _projection_method_coverage([*results, *fallbacks])
+        self.assertEqual(
+            coverage["branch_historical_calendar_weights"]["branch_count"], 21
+        )
+        self.assertEqual(coverage["legacy_21_calendar_weights"]["branch_count"], 4)
+        self.assertEqual(
+            coverage["legacy_21_calendar_weights"]["projected_branch_count"], 4
+        )
 
 
 class ForecastCenterSeriesTest(unittest.TestCase):
@@ -786,6 +841,7 @@ class ForecastCenterSeriesTest(unittest.TestCase):
 
 
 class ForecastCenterBulkLoaderTest(unittest.TestCase):
+    @patch("app.warehouse.services.track_forecast_center_service._load_legacy_21_curve_bulk")
     @patch("app.warehouse.services.track_forecast_center_service._load_canonical_cutoff_bulk")
     @patch("app.warehouse.services.track_forecast_center_service._load_historical_series_bulk")
     @patch("app.warehouse.services.track_forecast_center_service._load_current_candidates_bulk")
@@ -798,12 +854,14 @@ class ForecastCenterBulkLoaderTest(unittest.TestCase):
         current_loader,
         history_loader,
         cutoff_loader,
+        legacy_loader,
     ):
         mart_model.query.filter.return_value.all.return_value = []
         target_model.query.filter.return_value.all.return_value = []
         current_loader.return_value = {}
         history_loader.return_value = {}
         cutoff_loader.return_value = (None, None)
+        legacy_loader.return_value = {"status": "unavailable", "points": []}
         branches = [_branch(f"B{index}", index) for index in range(1, 51)]
 
         bundle = bulk_load_forecast_center_data(
@@ -820,6 +878,8 @@ class ForecastCenterBulkLoaderTest(unittest.TestCase):
             1,
         )
         self.assertEqual(bundle.loader_invocations["canonical_cutoff"], 1)
+        self.assertEqual(bundle.loader_invocations["legacy_21_calendar_reference"], 1)
+        legacy_loader.assert_called_once_with(target_month=date(2026, 7, 1))
         current_loader.assert_called_once()
         history_loader.assert_called_once()
         cutoff_loader.assert_called_once()
@@ -885,6 +945,191 @@ class ForecastCenterCompactCalculationTest(unittest.TestCase):
         self.assertEqual(result.summary["goal_month"], Decimal("100"))
         self.assertIsNone(result.summary["projected_close"])
         self.assertEqual(result.quality["history_status"], "missing_expected_month_total")
+
+
+class ForecastCenterLegacyFallbackTest(unittest.TestCase):
+    TARGET_MONTH = date(2026, 7, 1)
+
+    def _legacy_curve(self, *, available: bool = True):
+        if not available:
+            return {
+                "status": "unavailable",
+                "calendar_method": "weekday_ordinal_aligned_historical_weights",
+                "valid_branch_month_samples": 0,
+                "contributing_branch_count": 0,
+                "weights_sum": Decimal("0"),
+                "excluded_sample_counts": {},
+                "points": [],
+            }
+        raw_weights = [Decimal(day) for day in range(1, 32)]
+        total = sum(raw_weights, Decimal("0"))
+        cumulative = Decimal("0")
+        points = []
+        for day, raw in enumerate(raw_weights, start=1):
+            weight = raw / total if day < 31 else Decimal("1") - cumulative
+            cumulative += weight
+            points.append(
+                {
+                    "day": day,
+                    "date": self.TARGET_MONTH.replace(day=day),
+                    "weekday": "test",
+                    "weekday_index": self.TARGET_MONTH.replace(day=day).weekday(),
+                    "weekday_ordinal": ((day - 1) // 7) + 1,
+                    "alignment_key": "test",
+                    "raw_daily_weight": raw,
+                    "normalized_daily_weight": weight,
+                    "cumulative_weight": Decimal("1") if day == 31 else cumulative,
+                    "samples_count": 12,
+                    "sample_years": [2024, 2025],
+                    "used_fallback": False,
+                    "historical_samples": [],
+                }
+            )
+        return {
+            "status": "available",
+            "calendar_method": "weekday_ordinal_aligned_historical_weights",
+            "valid_branch_month_samples": 12,
+            "contributing_branch_count": 6,
+            "weights_sum": Decimal("1"),
+            "excluded_sample_counts": {},
+            "points": points,
+        }
+
+    def _historical_series(self, count: int):
+        series = []
+        for year in range(2023, 2023 + count):
+            month = date(year, 7, 1)
+            cumulative = Decimal("0")
+            points = []
+            for day in range(1, 32):
+                cumulative += Decimal("10000")
+                points.append(
+                    {
+                        "day": day,
+                        "date": month.replace(day=day),
+                        "daily_total": Decimal("10000"),
+                        "cumulative_total": cumulative,
+                        "has_positive_sale_row": True,
+                    }
+                )
+            series.append(
+                {
+                    "year": year,
+                    "business_month": month,
+                    "status": "available",
+                    "snapshot_id": year,
+                    "snapshot_business_date": month.replace(day=31),
+                    "days_in_month": 31,
+                    "days_with_positive_sale_row": 31,
+                    "first_positive_sale_date": month,
+                    "last_positive_sale_date": month.replace(day=31),
+                    "mtd_at_cutoff": Decimal("100000"),
+                    "full_month_total": Decimal("310000"),
+                    "points": points,
+                }
+            )
+        return series
+
+    def _calculate(
+        self,
+        *,
+        cutoff: int = 10,
+        cohort: str = "new_gyms",
+        real: Decimal = Decimal("100000"),
+        missing_day: int | None = None,
+        legacy_available: bool = True,
+        historical_count: int = 0,
+    ):
+        branch = _branch("NEW", 99, cohort=cohort)
+        mart = SimpleNamespace(
+            ingreso_real_total_mtd=real,
+            ingreso_real_mtd=real,
+            ingreso_real_base_mtd=real,
+            ingreso_real_agregadora_mtd=Decimal("0"),
+            meta_faycgo_mes=Decimal("400000"),
+        )
+        candidates = []
+        for day in range(1, cutoff + 1):
+            if day == missing_day:
+                continue
+            cumulative = real * Decimal(day) / Decimal(cutoff) if cutoff else real
+            candidates.append(
+                {
+                    "track_date": self.TARGET_MONTH.replace(day=day),
+                    "version_id": 99 if day == cutoff else day,
+                    "version_type": "preview_operativo",
+                    "ingreso_real_base_mtd": cumulative,
+                    "ingreso_real_agregadora_mtd": Decimal("0"),
+                    "ingreso_real_total_mtd": cumulative,
+                }
+            )
+        bundle = SimpleNamespace(
+            target_month=self.TARGET_MONTH,
+            cutoff_day=cutoff,
+            mart_by_branch={"NEW": mart},
+            target_by_branch={},
+            current_candidates_by_branch={"NEW": candidates},
+            historical_series_by_branch={"NEW": self._historical_series(historical_count)},
+            legacy_21_curve=self._legacy_curve(available=legacy_available),
+        )
+        return calculate_compact_branch_forecast(
+            branch=branch,
+            bundle=bundle,
+            track_date=self.TARGET_MONTH.replace(day=cutoff),
+            track_daily_version_id=99,
+        )
+
+    def test_historical_method_keeps_priority(self):
+        result = self._calculate(historical_count=3)
+        self.assertEqual(result.quality["projection_method"], "branch_historical_calendar_weights")
+        self.assertFalse(result.quality["projection_is_provisional"])
+
+    def test_new_gym_uses_provisional_legacy_fallback_from_day_ten(self):
+        result = self._calculate()
+        self.assertEqual(result.quality["projection_method"], "legacy_21_calendar_weights")
+        self.assertTrue(result.quality["projection_is_provisional"])
+        self.assertEqual(result.quality["reference_sample_count"], 12)
+        self.assertEqual(result.quality["minimum_cutoff_day"], 10)
+        self.assertEqual(result.series["projected"][0]["status"], "cutoff_anchor")
+        self.assertIsNone(result.series["projected"][0]["daily"])
+        self.assertEqual(
+            result.series["projected"][-1]["cumulative"],
+            result.summary["projected_close"],
+        )
+        future_daily = [point["daily"] for point in result.series["projected"][1:]]
+        self.assertGreater(len(set(future_daily)), 1)
+
+    def test_day_nine_is_unavailable(self):
+        result = self._calculate(cutoff=9)
+        self.assertEqual(result.quality["projection_method"], "unavailable")
+        self.assertEqual(result.quality["projection_method_reason"], "minimum_cutoff_day_not_reached")
+
+    def test_missing_dates_blocks_fallback(self):
+        result = self._calculate(missing_day=5)
+        self.assertEqual(result.quality["projection_method"], "unavailable")
+        self.assertEqual(result.quality["projection_method_reason"], "missing_dates")
+
+    def test_non_positive_real_blocks_fallback(self):
+        result = self._calculate(real=Decimal("0"))
+        self.assertEqual(result.quality["projection_method"], "unavailable")
+        self.assertEqual(result.quality["projection_method_reason"], "invalid_real_mtd")
+
+    def test_unavailable_reference_curve_blocks_fallback(self):
+        result = self._calculate(legacy_available=False)
+        self.assertEqual(result.quality["projection_method_reason"], "legacy_21_curve_unavailable")
+
+    def test_extreme_trend_is_not_hidden_by_fallback(self):
+        result = self._calculate(
+            historical_count=1,
+            real=Decimal("400001"),
+        )
+        self.assertEqual(result.quality["projection_method"], "unavailable")
+        self.assertEqual(result.quality["projection_method_reason"], "extreme_trend_factor")
+
+    def test_legacy_branch_without_history_does_not_receive_fallback(self):
+        result = self._calculate(cohort="legacy_21")
+        self.assertEqual(result.quality["projection_method"], "unavailable")
+        self.assertEqual(result.quality["projection_method_reason"], "legacy_fallback_not_allowed_for_cohort")
 
 
 if __name__ == "__main__":
