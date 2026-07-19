@@ -14,6 +14,7 @@
 
   <section class="pace-chart"><h3>Acumulado</h3><div echarts [options]="cumulativeOption" class="chart"></div></section>
   <section class="pace-chart"><h3>Diario</h3><div echarts [options]="dailyOption" class="chart"></div></section>
+  <p *ngIf="methodologyNote" class="pace-view__methodology">{{ methodologyNote }}</p>
   <p class="pace-view__note">Los días futuros sin real no se consideran un error. En la vista de proyección, el punto de corte es un ancla y no se presenta como ingreso diario proyectado.</p>
 </section>
 

@@ -152,10 +152,17 @@ export class TrackForecastCenterComponent implements OnInit, OnDestroy {
   }
 
   get qualityNotice(): string {
-    if (this.response?.quality.status !== 'partial') {
+    if (!this.response) {
       return '';
     }
     const branches = this.response.quality.branches;
+    const unavailable = this.response.quality.projection_methods.unavailable.branch_count;
+    if (branches.included === branches.selected && unavailable === 0) {
+      return '';
+    }
+    if (unavailable > 0) {
+      return `Cobertura de proyección: ${branches.with_projection} de ${branches.selected} sucursales; ${unavailable} sin proyección disponible.`;
+    }
     return `Cobertura parcial: ${branches.included} de ${branches.selected} sucursales incluidas.`;
   }
 

@@ -27,6 +27,7 @@ export class TrackForecastCenterPaceComponent implements OnChanges {
   remainingDaysLabel = '';
   requiredAverageLabel = '';
   explanation = '';
+  methodologyNote = '';
 
   ngOnChanges(): void {
     this.buildPresentation();
@@ -51,10 +52,11 @@ export class TrackForecastCenterPaceComponent implements OnChanges {
     this.coverageLabel = `${included} de ${eligible} sucursales`;
     this.includedLabel = `${included} incluidas`;
     this.excludedLabel = `${excluded} excluidas`;
-    this.statusLabel = this.statusText(coveragePoint?.coverage.status ?? 'unavailable');
+    this.statusLabel = this.coverageStatusText(included, eligible, coveragePoint?.coverage.status ?? 'unavailable');
     this.remainingDaysLabel = `${this.response.summary.remaining_days} días restantes`;
     this.requiredAverageLabel = `${this.formatCurrency(this.response.summary.required_daily_average)} promedio diario requerido`;
     this.explanation = this.buildExplanation();
+    this.methodologyNote = this.mode === 'projection' ? this.buildMethodologyNote() : '';
     this.cumulativeOption = this.buildChart('cumulative');
     this.dailyOption = this.buildChart('daily');
   }
@@ -124,6 +126,25 @@ export class TrackForecastCenterPaceComponent implements OnChanges {
     if (status === 'available') return 'Disponible';
     if (status === 'partial') return 'Cobertura parcial';
     return 'No disponible';
+  }
+
+  private coverageStatusText(included: number, eligible: number, status: string): string {
+    if (eligible > 0 && included === eligible) return 'Cobertura completa';
+    return this.statusText(status);
+  }
+
+  private buildMethodologyNote(): string {
+    const methods = this.response.quality.projection_methods;
+    const own = methods.branch_historical_calendar_weights.branch_count;
+    const provisional = methods.legacy_21_calendar_weights.branch_count;
+    const referenceBranches = this.response.quality.legacy_21_curve.contributing_branch_count;
+    if (this.response.context.cohort === 'new_gyms' && provisional > 0) {
+      return `Proyección provisional basada en el patrón calendario de las ${referenceBranches} sucursales maduras.`;
+    }
+    if (own > 0 && provisional > 0) {
+      return `Proyección compuesta por ${own} forecasts históricos y ${provisional} estimaciones provisionales con patrón Ultra.`;
+    }
+    return '';
   }
 
   private formatCurrency(value: number | null): string {

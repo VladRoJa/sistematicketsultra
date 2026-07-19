@@ -1107,6 +1107,68 @@ export type TrackForecastCenterStatus = 'available' | 'partial' | 'unavailable';
 export type TrackForecastCenterScope = 'national' | 'region' | 'authorized_pool' | 'branch';
 export type TrackForecastCenterCohort = 'all' | 'total_ultra' | 'legacy_21' | 'new_gyms';
 export type TrackForecastCenterBreakdownDimension = 'cohort' | 'region' | 'branch' | 'none';
+export type TrackForecastCenterProjectionMethod =
+  | 'branch_historical_calendar_weights'
+  | 'legacy_21_calendar_weights'
+  | 'unavailable';
+export type TrackForecastCenterProjectionMethodStatus = 'available' | 'unavailable';
+export type TrackForecastCenterProjectionMethodReason =
+  | 'sufficient_branch_history'
+  | 'insufficient_comparable_branch_history'
+  | 'projection_unavailable'
+  | 'missing_dates'
+  | 'inconsistent_current_real'
+  | 'available_with_negative_adjustment'
+  | 'missing_previous_calendar_day'
+  | 'inconsistent_components'
+  | 'missing_cumulative_value'
+  | 'extreme_trend_factor'
+  | 'historical_projection_unavailable'
+  | 'legacy_fallback_not_allowed_for_cohort'
+  | 'minimum_cutoff_day_not_reached'
+  | 'invalid_real_mtd'
+  | 'invalid_goal'
+  | 'legacy_21_curve_unavailable'
+  | 'non_positive_expected_share_at_cutoff'
+  | 'insufficient_future_calendar_share'
+  | 'projected_path_unavailable'
+  | 'projected_path_expected_curve_unavailable'
+  | 'projected_path_missing_current_mtd'
+  | 'projected_path_missing_projected_close'
+  | 'projected_path_projection_below_current_mtd'
+  | 'projected_path_no_remaining_historical_progress'
+  | 'projected_path_inconsistent_month_end_projection';
+export type TrackForecastCenterCalendarMethod =
+  'weekday_ordinal_aligned_historical_weights';
+
+export interface TrackForecastCenterProjectionMethodCoverage {
+  branch_count: number;
+}
+
+export type TrackForecastCenterProjectionMethods = Record<
+  TrackForecastCenterProjectionMethod,
+  TrackForecastCenterProjectionMethodCoverage
+>;
+
+export interface TrackForecastCenterBreakdownProjectionMethodCoverage
+  extends TrackForecastCenterProjectionMethodCoverage {
+  projected_branch_count: number;
+}
+
+export type TrackForecastCenterBreakdownProjectionMethods = Record<
+  TrackForecastCenterProjectionMethod,
+  TrackForecastCenterBreakdownProjectionMethodCoverage
+>;
+
+export interface TrackForecastCenterBranchProjection {
+  projection_method: TrackForecastCenterProjectionMethod;
+  projection_method_status: TrackForecastCenterProjectionMethodStatus;
+  projection_is_provisional: boolean;
+  projection_method_reason: TrackForecastCenterProjectionMethodReason;
+  reference_branch_count: number | null;
+  reference_sample_count: number | null;
+  minimum_cutoff_day: number | null;
+}
 
 export interface TrackForecastCenterAccess {
   type: 'global' | 'primary_branch' | 'assigned_branches';
@@ -1258,6 +1320,8 @@ export interface TrackForecastCenterBreakdownItem {
   branch_count: number;
   summary: TrackForecastCenterSummaryValues;
   metric_coverage: TrackForecastCenterMetricCoverageMap;
+  projection_methods: TrackForecastCenterBreakdownProjectionMethods;
+  branch_projection: TrackForecastCenterBranchProjection | null;
   quality_status: TrackForecastCenterStatus;
   contribution: TrackForecastCenterContribution;
   drilldown: TrackForecastCenterDrilldown;
@@ -1298,11 +1362,36 @@ export interface TrackForecastCenterExclusion {
   affects_metrics: string[];
 }
 
-export interface TrackForecastCenterFallback {
+export interface TrackForecastCenterGeneralFallback {
   type: 'authorization' | 'calendar';
   reason: string | null;
   branch_count?: number;
   branches?: string[];
+}
+
+export interface TrackForecastCenterLegacyProjectionFallback {
+  type: 'legacy_21_calendar_projection_fallback';
+  reason: 'insufficient_comparable_branch_history';
+  branch_count: number;
+  valid_branch_month_samples: number;
+  contributing_branch_count: number;
+  minimum_cutoff_day: number;
+  calendar_method: TrackForecastCenterCalendarMethod;
+}
+
+export type TrackForecastCenterFallback =
+  | TrackForecastCenterGeneralFallback
+  | TrackForecastCenterLegacyProjectionFallback;
+
+export interface TrackForecastCenterLegacyCurve {
+  status: 'available' | 'unavailable';
+  calendar_method: TrackForecastCenterCalendarMethod;
+  valid_branch_month_samples: number;
+  contributing_branch_count: number;
+  weights_sum: number;
+  excluded_sample_counts: Record<string, number>;
+  target_month: string;
+  cutoff_minimum_day: number;
 }
 
 export interface TrackForecastCenterCutoff {
@@ -1314,12 +1403,14 @@ export interface TrackForecastCenterCutoff {
 }
 
 export interface TrackForecastCenterMethodology {
-  projection_formula: string;
-  calendar_method: string;
-  goal_basis: string;
-  distribution_basis: string;
-  aggregadoras_assumed_same_daily_shape: boolean;
-  aggregate_method: string;
+  projection_formula: 'projected_close = real_mtd / historical_progress_pct';
+  calendar_method: TrackForecastCenterCalendarMethod;
+  goal_basis: 'total_mtd';
+  distribution_basis: 'venta_total_base';
+  aggregadoras_assumed_same_daily_shape: true;
+  aggregate_method: 'sum_branch_forecasts';
+  projection_method_priority: TrackForecastCenterProjectionMethod[];
+  fallback_is_linear: false;
 }
 
 export interface TrackForecastCenterLoaderInvocations {
@@ -1336,6 +1427,9 @@ export interface TrackForecastCenterQuality {
   monetary_coverage: TrackForecastCenterMonetaryCoverage;
   exclusions: TrackForecastCenterExclusion[];
   fallbacks: TrackForecastCenterFallback[];
+  projection_methods: TrackForecastCenterProjectionMethods;
+  selected_branch_projection: TrackForecastCenterBranchProjection | null;
+  legacy_21_curve: TrackForecastCenterLegacyCurve;
   cutoff: TrackForecastCenterCutoff;
   loader_invocations: TrackForecastCenterLoaderInvocations;
   methodology: TrackForecastCenterMethodology;

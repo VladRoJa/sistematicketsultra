@@ -12,5 +12,10 @@ td button, .branch-summary button { border: 1px solid #9da8ba; background: #fff;
 .branch-summary div { display: grid; gap: 4px; }
 .branch-summary span { color: #657085; }
 .empty { padding: 12px; }
+.method-cell { max-width: 190px; white-space: normal; }
+.method-list { display: flex; flex-wrap: wrap; gap: 4px; }
+.method-badge { border: 1px solid #9ab2a2; background: #edf6f0; color: #285b38; padding: 3px 6px; line-height: 1.25; }
+.method-badge--provisional { border-color: #d5b36a; background: #fff8e7; color: #72520c; }
+.method-badge--unavailable { border-color: #b9c0ca; background: #f3f4f6; color: #5a6270; }
 @media (max-width: 650px) { .branch-summary { display: grid; } }
 
