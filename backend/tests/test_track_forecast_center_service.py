@@ -1039,6 +1039,8 @@ class ForecastCenterLegacyFallbackTest(unittest.TestCase):
         missing_day: int | None = None,
         legacy_available: bool = True,
         historical_count: int = 0,
+        goal: Decimal = Decimal("400000"),
+        inconsistent_components: bool = False,
     ):
         branch = _branch("NEW", 99, cohort=cohort)
         mart = SimpleNamespace(
@@ -1046,7 +1048,7 @@ class ForecastCenterLegacyFallbackTest(unittest.TestCase):
             ingreso_real_mtd=real,
             ingreso_real_base_mtd=real,
             ingreso_real_agregadora_mtd=Decimal("0"),
-            meta_faycgo_mes=Decimal("400000"),
+            meta_faycgo_mes=goal,
         )
         candidates = []
         for day in range(1, cutoff + 1):
@@ -1058,7 +1060,11 @@ class ForecastCenterLegacyFallbackTest(unittest.TestCase):
                     "track_date": self.TARGET_MONTH.replace(day=day),
                     "version_id": 99 if day == cutoff else day,
                     "version_type": "preview_operativo",
-                    "ingreso_real_base_mtd": cumulative,
+                    "ingreso_real_base_mtd": (
+                        cumulative + Decimal("1")
+                        if inconsistent_components and day == cutoff
+                        else cumulative
+                    ),
                     "ingreso_real_agregadora_mtd": Decimal("0"),
                     "ingreso_real_total_mtd": cumulative,
                 }
@@ -1118,13 +1124,52 @@ class ForecastCenterLegacyFallbackTest(unittest.TestCase):
         result = self._calculate(legacy_available=False)
         self.assertEqual(result.quality["projection_method_reason"], "legacy_21_curve_unavailable")
 
-    def test_extreme_trend_is_not_hidden_by_fallback(self):
+    def test_new_gym_with_immature_history_and_extreme_trend_uses_legacy_fallback(self):
         result = self._calculate(
             historical_count=1,
             real=Decimal("400001"),
         )
+        self.assertEqual(result.quality["projection_method"], "legacy_21_calendar_weights")
+        self.assertEqual(result.quality["projection_method_status"], "available")
+        self.assertTrue(result.quality["projection_is_provisional"])
+        self.assertEqual(
+            result.quality["projection_method_reason"],
+            "insufficient_comparable_branch_history",
+        )
+
+    def test_legacy_branch_with_extreme_trend_remains_unavailable(self):
+        result = self._calculate(
+            cohort="legacy_21",
+            historical_count=1,
+            real=Decimal("400001"),
+        )
         self.assertEqual(result.quality["projection_method"], "unavailable")
-        self.assertEqual(result.quality["projection_method_reason"], "extreme_trend_factor")
+        self.assertEqual(
+            result.quality["projection_method_reason"],
+            "legacy_fallback_not_allowed_for_cohort",
+        )
+
+    def test_extreme_trend_with_missing_dates_remains_unavailable(self):
+        result = self._calculate(
+            historical_count=1,
+            real=Decimal("400001"),
+            missing_day=5,
+        )
+        self.assertEqual(result.quality["projection_method"], "unavailable")
+        self.assertEqual(result.quality["projection_method_reason"], "missing_dates")
+
+    def test_inconsistent_components_remain_unavailable(self):
+        result = self._calculate(inconsistent_components=True)
+        self.assertEqual(result.quality["projection_method"], "unavailable")
+        self.assertEqual(
+            result.quality["projection_method_reason"],
+            "inconsistent_components",
+        )
+
+    def test_invalid_goal_remains_unavailable(self):
+        result = self._calculate(goal=Decimal("0"))
+        self.assertEqual(result.quality["projection_method"], "unavailable")
+        self.assertEqual(result.quality["projection_method_reason"], "invalid_goal")
 
     def test_legacy_branch_without_history_does_not_receive_fallback(self):
         result = self._calculate(cohort="legacy_21")
