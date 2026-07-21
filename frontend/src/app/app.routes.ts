@@ -184,6 +184,12 @@ export const routes: Routes = [
           import('./rpa/gasca-sms/gasca-sms-requests.component')
             .then(m => m.GascaSmsRequestsComponent),
       },
+      {
+        path: 'control-rutinas',
+        loadChildren: () =>
+          import('./routine-control/routine-control.routes')
+            .then((m) => m.ROUTINE_CONTROL_ROUTES),
+      },
     ],
   },
 

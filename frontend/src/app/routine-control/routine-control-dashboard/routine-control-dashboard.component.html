@@ -1,0 +1,81 @@
+<section class="routine-page">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">{{ scopeLabel }}</p>
+      <h1>Control de Rutinas</h1>
+      <div class="freshness" *ngIf="summary">
+        <span>Gasca: {{ summary.freshness.last_gasca_success_at_utc ? (summary.freshness.last_gasca_success_at_utc | date:'short') : 'Sin actualización' }}</span>
+        <span>Trainingym: {{ summary.freshness.last_trainingym_success_at_utc ? (summary.freshness.last_trainingym_success_at_utc | date:'short') : 'Sin actualización' }}</span>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button mat-stroked-button type="button" (click)="openRuns()"><mat-icon>history</mat-icon> Historial de corridas</button>
+      <button mat-flat-button color="primary" type="button" [disabled]="exporting" (click)="exportMembers()"><mat-icon>download</mat-icon> Exportar Excel</button>
+    </div>
+  </header>
+
+  <form class="filters" [formGroup]="form">
+    <mat-form-field appearance="outline" *ngIf="canSelectRegion">
+      <mat-label>Región</mat-label>
+      <mat-select formControlName="region_key" (selectionChange)="selectRegion()">
+        <mat-option value="">Todas</mat-option>
+        <mat-option *ngFor="let region of catalogs?.regions" [value]="region.key">{{ region.name }}</mat-option>
+      </mat-select>
+    </mat-form-field>
+    <mat-form-field appearance="outline" *ngIf="canSelectBranch">
+      <mat-label>Sucursal</mat-label>
+      <mat-select formControlName="branch_id">
+        <mat-option [value]="null">Todas</mat-option>
+        <mat-option *ngFor="let branch of availableBranches" [value]="branch.id">{{ branch.name }}</mat-option>
+      </mat-select>
+    </mat-form-field>
+    <mat-form-field appearance="outline"><mat-label>Venta desde</mat-label><input matInput type="date" formControlName="sale_date_from"></mat-form-field>
+    <mat-form-field appearance="outline"><mat-label>Venta hasta</mat-label><input matInput type="date" formControlName="sale_date_to"></mat-form-field>
+    <mat-form-field appearance="outline"><mat-label>Estado</mat-label><mat-select formControlName="current_status"><mat-option value="">Todos</mat-option><mat-option *ngFor="let status of catalogs?.statuses" [value]="status">{{ statusLabel(status) }}</mat-option></mat-select></mat-form-field>
+    <mat-form-field appearance="outline"><mat-label>Tipo</mat-label><mat-select formControlName="assignment_type"><mat-option value="">Todos</mat-option><mat-option *ngFor="let type of catalogs?.assignment_types" [value]="type">{{ type }}</mat-option></mat-select></mat-form-field>
+    <mat-form-field appearance="outline"><mat-label>Instructor</mat-label><input matInput formControlName="instructor"></mat-form-field>
+    <mat-form-field appearance="outline" class="search"><mat-label>Socio, ID, email o folio</mat-label><input matInput formControlName="search"><mat-icon matSuffix>search</mat-icon></mat-form-field>
+    <button mat-stroked-button type="button" (click)="clearFilters()">Limpiar filtros</button>
+  </form>
+
+  <div class="error" *ngIf="errorMessage"><mat-icon>error_outline</mat-icon>{{ errorMessage }}</div>
+  <div class="loading" *ngIf="loading">Consultando información…</div>
+
+  <div class="metrics" *ngIf="summary">
+    <mat-card><span>Total en seguimiento</span><strong>{{ summary.total_members }}</strong></mat-card>
+    <mat-card><span>Con rutina</span><strong>{{ summary.status_counts.CON_RUTINA }}</strong></mat-card>
+    <mat-card><span>Sin rutina</span><strong>{{ summary.status_counts.SIN_RUTINA }}</strong></mat-card>
+    <mat-card><span>No desea rutina</span><strong>{{ summary.status_counts.NO_DESEA_RUTINA }}</strong></mat-card>
+    <mat-card><span>Incidencias</span><strong>{{ summary.status_counts.INCIDENT }}</strong></mat-card>
+  </div>
+
+  <section class="branch-summary" *ngIf="sortedBranches.length">
+    <div class="section-title"><h2>Resumen por sucursal</h2><div><button type="button" (click)="sortBranches('total_members')">Total</button><button type="button" (click)="sortBranches('con_rutina')">Con rutina</button><button type="button" (click)="sortBranches('sin_rutina')">Sin rutina</button><button type="button" (click)="sortBranches('incidents')">Incidencias</button></div></div>
+    <button class="branch-row" type="button" *ngFor="let branch of sortedBranches" (click)="selectBranch(branch.branch_id)">
+      <span>{{ branch.branch_name }}</span><span class="bar"><i [style.width.%]="branchBarWidth(branch)"></i></span><strong>{{ branch.total_members }}</strong><small>{{ branch.con_rutina }} con · {{ branch.sin_rutina }} sin · {{ branch.incidents }} incidencias</small>
+    </button>
+  </section>
+
+  <section class="members-section">
+    <h2>Socios en seguimiento</h2>
+    <div class="desktop-table" *ngIf="members.length">
+      <table mat-table [dataSource]="members">
+        <ng-container matColumnDef="member"><th mat-header-cell *matHeaderCellDef>Socio</th><td mat-cell *matCellDef="let item">{{ item.member_name || 'Sin nombre' }}</td></ng-container>
+        <ng-container matColumnDef="external_member_id"><th mat-header-cell *matHeaderCellDef>ID socio</th><td mat-cell *matCellDef="let item">{{ item.external_member_id }}</td></ng-container>
+        <ng-container matColumnDef="branch"><th mat-header-cell *matHeaderCellDef>Sucursal</th><td mat-cell *matCellDef="let item">{{ item.branch_name || item.source_branch_name || 'Sin resolver' }}</td></ng-container>
+        <ng-container matColumnDef="sale_date"><th mat-header-cell *matHeaderCellDef>Fecha venta</th><td mat-cell *matCellDef="let item">{{ item.sale_date | date:'yyyy-MM-dd' }}</td></ng-container>
+        <ng-container matColumnDef="status"><th mat-header-cell *matHeaderCellDef>Estado</th><td mat-cell *matCellDef="let item"><span [class]="statusClass(statusOf(item))">{{ statusLabel(statusOf(item)) }}</span></td></ng-container>
+        <ng-container matColumnDef="first_routine_at"><th mat-header-cell *matHeaderCellDef>Primera rutina</th><td mat-cell *matCellDef="let item">{{ item.first_routine_at || '—' }}</td></ng-container>
+        <ng-container matColumnDef="latest_routine_at"><th mat-header-cell *matHeaderCellDef>Última rutina</th><td mat-cell *matCellDef="let item">{{ item.latest_routine_at || '—' }}</td></ng-container>
+        <ng-container matColumnDef="instructor"><th mat-header-cell *matHeaderCellDef>Instructor</th><td mat-cell *matCellDef="let item">{{ item.current_instructor_name || '—' }}</td></ng-container>
+        <ng-container matColumnDef="assignment_type"><th mat-header-cell *matHeaderCellDef>Tipo</th><td mat-cell *matCellDef="let item">{{ item.routine_assignment_type || '—' }}</td></ng-container>
+        <ng-container matColumnDef="incidents"><th mat-header-cell *matHeaderCellDef>Incidencias</th><td mat-cell *matCellDef="let item">{{ item.active_incident_count }}</td></ng-container>
+        <ng-container matColumnDef="detail"><th mat-header-cell *matHeaderCellDef></th><td mat-cell *matCellDef="let item"><button mat-icon-button type="button" aria-label="Ver detalle" (click)="openDetail(item.id)"><mat-icon>chevron_right</mat-icon></button></td></ng-container>
+        <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr><tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
+      </table>
+    </div>
+    <div class="mobile-list" *ngIf="members.length"><article *ngFor="let item of members"><div><strong>{{ item.member_name || 'Sin nombre' }}</strong><small>{{ item.branch_name || item.source_branch_name || 'Sin resolver' }}</small></div><span [class]="statusClass(statusOf(item))">{{ statusLabel(statusOf(item)) }}</span><span>Venta {{ item.sale_date | date:'yyyy-MM-dd' }}</span><button mat-stroked-button type="button" (click)="openDetail(item.id)">Ver detalle</button></article></div>
+    <div class="empty" *ngIf="!loading && !members.length">No hay socios que coincidan con los filtros seleccionados.</div>
+    <mat-paginator [length]="total" [pageIndex]="page - 1" [pageSize]="pageSize" [pageSizeOptions]="[10, 25, 50, 100]" (page)="pageChanged($event)"></mat-paginator>
+  </section>
+</section>
