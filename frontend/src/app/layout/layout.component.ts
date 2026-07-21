@@ -172,6 +172,15 @@ ngOnInit(): void {
     ],
   };
 
+  const menuControlRutinas = {
+    label: 'Control de Rutinas',
+    path: '/control-rutinas',
+    submenu: [
+      { label: 'Resumen operativo', path: '/control-rutinas' },
+      { label: 'Historial de corridas', path: '/control-rutinas/corridas' },
+    ],
+  };
+
   const soloTickets = [
     {
       label: 'Tickets',
@@ -341,6 +350,16 @@ if (
   this.menuItems = [
     ...this.menuItems,
     menuAutomatizacion,
+  ];
+}
+
+if (
+  this.puedeVerControlRutinasPorRol() &&
+  !this.menuItems.some((item) => item.label === 'Control de Rutinas')
+) {
+  this.menuItems = [
+    ...this.menuItems,
+    menuControlRutinas,
   ];
 }
 
@@ -1046,6 +1065,20 @@ private puedeVerGascaSmsPorRol(): boolean {
   ].includes(rol);
 }
 
+private puedeVerControlRutinasPorRol(): boolean {
+  const user = this.authService.getUser();
+  const rol = String(user?.rol ?? user?.role ?? '').trim().toUpperCase();
+
+  return [
+    'ADMIN',
+    'ADMINISTRADOR',
+    'SUPER_ADMIN',
+    'LECTOR_GLOBAL',
+    'GERENTE',
+    'GERENTE_REGIONAL',
+  ].includes(rol);
+}
+
 private puedeVerAperturasPorRol(): boolean {
   const user = this.authService.getUser();
   const rol = (user?.rol || '').toString().trim().toUpperCase();
@@ -1078,6 +1111,7 @@ getMenuIcon(label: string): string {
     catálogos: 'category',
     catalogos: 'category',
     permisos: 'admin_panel_settings',
+    'control de rutinas': 'assignment_turned_in',
   };
 
   return iconsByLabel[normalizedLabel] || 'apps';
@@ -1128,6 +1162,10 @@ getSubmenuIcon(label: string): string {
 
   if (normalizedLabel.includes('historial') || normalizedLabel.includes('consulta')) {
     return 'history';
+  }
+
+  if (normalizedLabel.includes('resumen operativo')) {
+    return 'dashboard';
   }
 
   if (normalizedLabel.includes('configuración') || normalizedLabel.includes('configuracion')) {
