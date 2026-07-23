@@ -198,6 +198,56 @@ class ProviderRuntimeTestCase(unittest.TestCase):
             ["page", "context", "browser", "manager"] * 2,
         )
 
+    def test_browser_resources_close_on_success(self) -> None:
+        events: list[str] = []
+        runtime = BrowserRuntime(
+            ProviderRuntimeConfig(
+                artifact_root=Path("unused"),
+                headless=True,
+                timeout_ms=1_000,
+                max_attempts=2,
+            ),
+            playwright_factory=lambda: _FakeManager(events),
+            sleeper=lambda _seconds: None,
+        )
+        result = runtime.run(lambda _page, _tracker, _attempt: "ok")
+        self.assertEqual(result.value, "ok")
+        self.assertEqual(
+            events,
+            ["page", "context", "browser", "manager"],
+        )
+
+    def test_deterministic_operation_error_is_not_retried(self) -> None:
+        class DeterministicError(RuntimeError):
+            provider_retryable = False
+
+        events: list[str] = []
+        calls = 0
+
+        def operation(_page, tracker, _attempt):
+            nonlocal calls
+            calls += 1
+            tracker.set(BrowserPhase.LOGIN)
+            raise DeterministicError("private-value")
+
+        runtime = BrowserRuntime(
+            ProviderRuntimeConfig(
+                artifact_root=Path("unused"),
+                headless=True,
+                timeout_ms=1_000,
+                max_attempts=3,
+            ),
+            playwright_factory=lambda: _FakeManager(events),
+            sleeper=lambda _seconds: None,
+        )
+        with self.assertRaises(DeterministicError):
+            runtime.run(operation)
+        self.assertEqual(calls, 1)
+        self.assertEqual(
+            events,
+            ["page", "context", "browser", "manager"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

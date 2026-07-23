@@ -12,8 +12,10 @@ from .contracts import ProviderRuntimeConfig
 
 class BrowserPhase(StrEnum):
     CONFIG = "CONFIG"
+    BROWSER = "BROWSER"
     LOGIN = "LOGIN"
     NAVIGATION = "NAVIGATION"
+    DISCOVERY = "DISCOVERY"
     EXPORT = "EXPORT"
     DOWNLOAD = "DOWNLOAD"
     VALIDATION = "VALIDATION"
@@ -37,7 +39,7 @@ class BrowserExecutionResult:
 
 class BrowserPhaseTracker:
     def __init__(self) -> None:
-        self.phase = BrowserPhase.CONFIG
+        self.phase = BrowserPhase.BROWSER
 
     def set(self, phase: BrowserPhase) -> None:
         self.phase = phase
@@ -87,9 +89,25 @@ class BrowserRuntime:
                     attempts=attempt,
                     elapsed_seconds=round(time.monotonic() - started, 3),
                 )
-            except Exception:
+            except Exception as exc:
                 last_phase = tracker.phase
+                if getattr(exc, "provider_retryable", True) is False:
+                    try:
+                        exc.attempts = attempt
+                    except Exception:
+                        pass
+                    raise
                 if attempt >= self._config.max_attempts:
+                    if getattr(
+                        exc,
+                        "provider_preserve_on_exhaustion",
+                        False,
+                    ):
+                        try:
+                            exc.attempts = attempt
+                        except Exception:
+                            pass
+                        raise
                     raise ProviderBrowserError(
                         phase=last_phase,
                         attempts=attempt,
@@ -108,4 +126,3 @@ class BrowserRuntime:
             phase=last_phase,
             attempts=self._config.max_attempts,
         )
-
