@@ -64,6 +64,7 @@ _ROUTE_STABLE_MS = 1_500
 _ROUTE_SETTLE_TIMEOUT_MS = 15_000
 _REPORT_RENDER_TIMEOUT_MS = 60_000
 _REPORT_SLICER_TIMEOUT_MS = 180_000
+_DOWNLOAD_TIMEOUT_MS = 240_000
 _REPORT_SLICER_POLL_MS = 500
 _REPORT_HEADER_PATTERNS = (
     re.compile(r"^Email$", re.IGNORECASE),
@@ -818,14 +819,33 @@ def _download_workout(
     _open_export_dialog(frame, visual)
     export_button = _dialog_controls(page)
     try:
-        with page.expect_download() as download_info:
+        print(
+            "⏳ [TG] Esperando generación y descarga del XLSX..."
+        )
+
+        with page.expect_download(
+            timeout=_DOWNLOAD_TIMEOUT_MS,
+        ) as download_info:
             export_button.click()
+
         download = download_info.value
         download.save_as(str(partial_path))
+
+        print("✅ [TG] Descarga XLSX recibida.")
+
+    except PlaywrightTimeoutError as exc:
+        raise TrainingymWorkoutExtractionError(
+            "TRAININGYM_WORKOUT_DOWNLOAD_FAILED",
+            (
+                "Power BI no produjo la descarga XLSX "
+                "dentro de 240 segundos."
+            ),
+        ) from exc
+
     except Exception as exc:
         raise TrainingymWorkoutExtractionError(
             "TRAININGYM_WORKOUT_DOWNLOAD_FAILED",
-            "No fue posible completar la descarga XLSX.",
+            "No fue posible guardar la descarga XLSX.",
         ) from exc
     if not partial_path.is_file() or partial_path.stat().st_size <= 0:
         raise TrainingymWorkoutExtractionError(
