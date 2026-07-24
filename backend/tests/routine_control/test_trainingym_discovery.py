@@ -23,8 +23,8 @@ from app.routine_control.providers.trainingym.discovery import (
 )
 
 
-USER_SELECTOR = 'input[placeholder="Usuario*"]'
-PASSWORD_SELECTOR = 'input[placeholder="Contraseña*"]'
+USER_SELECTOR = 'input[type="text"]'
+PASSWORD_SELECTOR = 'input[type="password"]'
 COOKIE_SELECTOR = "#hs-eu-confirmation-button"
 LOGIN_SELECTOR = "#tg-login-accept"
 CENTER_INPUT_SELECTOR = (
