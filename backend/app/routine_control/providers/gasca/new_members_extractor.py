@@ -5,11 +5,13 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Callable
 
+from openpyxl import load_workbook
+
 from app.routine_control.providers.runtime import (
     ArtifactStore,
+    ArtifactStoreError,
     BrowserPhase,
     BrowserRuntime,
-    ProviderArtifact,
     ProviderBrowserError,
     ProviderConfigurationError,
     ProviderExtractionResult,
@@ -22,6 +24,7 @@ from .config import GascaProviderConfig
 
 GASCA_PROVIDER_KEY = "gasca"
 GASCA_DATASET_KEY = "new_members"
+GASCA_NEW_MEMBERS_FILENAME = "gasca-new-members.xlsx"
 GASCA_NEW_MEMBER_HEADERS = frozenset(
     {
         "IDSocio",
@@ -35,11 +38,20 @@ GASCA_NEW_MEMBER_HEADERS = frozenset(
         "FechaCreacion",
     }
 )
-GASCA_CONTRACT_ERROR = "GASCA_DETAILED_REPORT_CONTRACT_UNVERIFIED"
-GASCA_CONTRACT_MESSAGE = (
-    "Falta comprobar la ruta, los filtros y la exportación XLSX del reporte "
-    "individual de socios nuevos."
-)
+_GASCA_REPORT_OPTION = "Ventas Nuevas Socios"
+_GASCA_DATE_SELECTOR = "#txtFechaIn input.form-control"
+_GASCA_DOWNLOAD_SELECTOR = "#btnGenerarKpiVentasClientesNuevosDetallado"
+_GASCA_DOWNLOAD_TIMEOUT_MS = 240_000
+_GASCA_WORKSHEET = "Socios"
+
+
+class GascaNewMembersExtractionError(RuntimeError):
+    provider_retryable = False
+
+    def __init__(self, error_code: str, error_message: str) -> None:
+        super().__init__(error_message)
+        self.error_code = error_code
+        self.attempts = 1
 
 
 DownloadOperation = Callable[
@@ -49,11 +61,152 @@ DownloadOperation = Callable[
 
 
 def login_with_verified_gasca_selectors(page, config: GascaProviderConfig) -> None:
-    """Login reutilizado del runner Gasca existente; no navega al reporte."""
-    page.goto(config.login_url)
-    page.get_by_label("Usuario").fill(config.user)
-    page.get_by_label("Contraseña").fill(config.password)
-    page.get_by_role("button", name="INICIAR SESIÓN").click()
+    try:
+        page.goto(config.login_url, wait_until="domcontentloaded")
+        page.locator("#NombreUsuario").fill(config.user)
+        page.locator("#Contrasena").fill(config.password)
+        page.locator('button[type="submit"]').click()
+        page.wait_for_load_state("domcontentloaded")
+    except Exception as exc:
+        raise GascaNewMembersExtractionError(
+            "GASCA_LOGIN_FAILED",
+            "Gasca no permitió completar el acceso.",
+        ) from exc
+
+
+def handle_optional_gasca_home_link(page) -> None:
+    try:
+        home_link = page.get_by_role("link", name="Ir a Inicio", exact=True)
+        if home_link.is_visible():
+            home_link.click()
+            page.wait_for_load_state("domcontentloaded")
+    except Exception as exc:
+        raise GascaNewMembersExtractionError(
+            "GASCA_REPORT_NAVIGATION_FAILED",
+            "Gasca no permitió completar la navegación posterior al acceso.",
+        ) from exc
+
+
+def navigate_to_gasca_kpi(page, config: GascaProviderConfig) -> None:
+    try:
+        page.goto(config.kpi_url, wait_until="domcontentloaded")
+    except Exception as exc:
+        raise GascaNewMembersExtractionError(
+            "GASCA_REPORT_NAVIGATION_FAILED",
+            "Gasca no permitió abrir la pantalla de KPI.",
+        ) from exc
+
+
+def select_gasca_new_members_report(page) -> None:
+    try:
+        page.locator("select").select_option(label=_GASCA_REPORT_OPTION)
+    except Exception as exc:
+        raise GascaNewMembersExtractionError(
+            "GASCA_REPORT_OPTION_NOT_FOUND",
+            "Gasca no mostró la opción requerida del reporte.",
+        ) from exc
+
+
+def configure_gasca_cutoff_date(page, date_to: date) -> None:
+    try:
+        page.locator(_GASCA_DATE_SELECTOR).fill(date_to.strftime("%m/%d/%Y"))
+    except Exception as exc:
+        raise GascaNewMembersExtractionError(
+            "GASCA_DATE_CONTROL_FAILED",
+            "Gasca no permitió configurar la fecha de corte.",
+        ) from exc
+
+
+def download_gasca_new_members_xlsx(page, partial_path: Path) -> str:
+    try:
+        with page.expect_download(
+            timeout=_GASCA_DOWNLOAD_TIMEOUT_MS,
+        ) as download_info:
+            page.locator(_GASCA_DOWNLOAD_SELECTOR).click()
+        download = download_info.value
+        download.save_as(str(partial_path))
+        source_filename = Path(str(download.suggested_filename or "")).name
+        if not source_filename:
+            raise ValueError("missing suggested filename")
+        return source_filename
+    except GascaNewMembersExtractionError:
+        raise
+    except Exception as exc:
+        raise GascaNewMembersExtractionError(
+            "GASCA_DOWNLOAD_FAILED",
+            "Gasca no produjo una descarga XLSX utilizable.",
+        ) from exc
+
+
+def validate_gasca_new_members_xlsx(partial_path: Path) -> None:
+    try:
+        if not partial_path.is_file():
+            raise ValueError("missing download")
+        with partial_path.open("rb") as source:
+            workbook = load_workbook(source, read_only=True, data_only=True)
+            try:
+                if _GASCA_WORKSHEET not in workbook.sheetnames:
+                    raise ValueError("missing worksheet")
+                worksheet = workbook[_GASCA_WORKSHEET]
+                first_row = next(
+                    worksheet.iter_rows(min_row=1, max_row=1, values_only=True),
+                    (),
+                )
+                headers = {
+                    str(value).strip()
+                    for value in first_row
+                    if value is not None and str(value).strip()
+                }
+                if not GASCA_NEW_MEMBER_HEADERS.issubset(headers):
+                    raise ValueError("missing headers")
+            finally:
+                workbook.close()
+    except Exception as exc:
+        raise GascaNewMembersExtractionError(
+            "GASCA_VALIDATION_FAILED",
+            "El XLSX descargado no cumple el contrato de socios nuevos.",
+        ) from exc
+
+
+def run_productive_gasca_download(
+    page,
+    tracker,
+    config: GascaProviderConfig,
+    _date_from: date,
+    date_to: date,
+    partial_path: Path,
+) -> str:
+    tracker.set(BrowserPhase.LOGIN)
+    login_with_verified_gasca_selectors(page, config)
+    tracker.set(BrowserPhase.NAVIGATION)
+    handle_optional_gasca_home_link(page)
+    navigate_to_gasca_kpi(page, config)
+    tracker.set(BrowserPhase.DISCOVERY)
+    select_gasca_new_members_report(page)
+    tracker.set(BrowserPhase.EXPORT)
+    configure_gasca_cutoff_date(page, date_to)
+    tracker.set(BrowserPhase.DOWNLOAD)
+    return download_gasca_new_members_xlsx(page, partial_path)
+
+
+def _validate_month_to_date_range(date_from: date, date_to: date) -> None:
+    if (
+        date_from > date_to
+        or date_from.day != 1
+        or date_from.year != date_to.year
+        or date_from.month != date_to.month
+    ):
+        raise GascaNewMembersExtractionError(
+            "GASCA_DATE_CONTROL_FAILED",
+            "Gasca sólo admite un rango mensual iniciado el día 1.",
+        )
+
+
+def _discard_partial(store: ArtifactStore, partial_path: Path) -> None:
+    try:
+        store.discard_incomplete(partial_path)
+    except ArtifactStoreError:
+        pass
 
 
 class GascaNewMembersExtractor:
@@ -63,7 +216,8 @@ class GascaNewMembersExtractor:
         download_operation: DownloadOperation | None = None,
         runtime_factory: Callable[[ProviderRuntimeConfig], BrowserRuntime] = BrowserRuntime,
     ) -> None:
-        self._download_operation = download_operation
+        self._uses_productive_operation = download_operation is None
+        self._download_operation = download_operation or run_productive_gasca_download
         self._runtime_factory = runtime_factory
 
     @staticmethod
@@ -92,11 +246,13 @@ class GascaNewMembersExtractor:
         headless: bool | None = None,
     ) -> ProviderExtractionResult:
         started = time.monotonic()
-        if date_from > date_to:
+        try:
+            _validate_month_to_date_range(date_from, date_to)
+        except GascaNewMembersExtractionError as exc:
             return self._failed(
                 started=started,
-                error_code="INVALID_DATE_RANGE",
-                error_message="date_from no puede ser posterior a date_to.",
+                error_code=exc.error_code,
+                error_message=str(exc),
             )
         if (
             observed_at_utc.tzinfo is None
@@ -117,29 +273,27 @@ class GascaNewMembersExtractor:
                 error_message=str(exc),
             )
 
-        # El repositorio no contiene todavía el contrato del reporte individual.
-        # Se detiene antes de crear Playwright; una operación sólo se inyecta
-        # cuando ha sido comprobada o durante pruebas locales.
-        if self._download_operation is None:
+        try:
+            store = ArtifactStore(runtime_config.artifact_root)
+            run_dir = store.create_run_directory(
+                provider_key=GASCA_PROVIDER_KEY,
+                dataset_key=GASCA_DATASET_KEY,
+            )
+            partial, final = store.prepare_download(
+                run_directory=run_dir,
+                source_filename=GASCA_NEW_MEMBERS_FILENAME,
+            )
+        except (ArtifactStoreError, OSError):
             return self._failed(
                 started=started,
-                error_code=GASCA_CONTRACT_ERROR,
-                error_message=GASCA_CONTRACT_MESSAGE,
+                error_code="GASCA_VALIDATION_FAILED",
+                error_message="No fue posible preparar el artifact de socios nuevos.",
             )
-
-        store = ArtifactStore(runtime_config.artifact_root)
-        run_dir = store.create_run_directory(
-            provider_key=GASCA_PROVIDER_KEY,
-            dataset_key=GASCA_DATASET_KEY,
-        )
-        partial, final = store.prepare_download(
-            run_directory=run_dir,
-            source_filename="gasca-new-members.xlsx",
-        )
-        artifact: ProviderArtifact | None = None
+        execution = None
 
         def operation(page, tracker, _attempt):
-            tracker.set(BrowserPhase.LOGIN)
+            if not self._uses_productive_operation:
+                tracker.set(BrowserPhase.LOGIN)
             source_name = self._download_operation(
                 page,
                 tracker,
@@ -149,7 +303,8 @@ class GascaNewMembersExtractor:
                 partial,
             )
             tracker.set(BrowserPhase.VALIDATION)
-            return source_name or "gasca-new-members.xlsx"
+            validate_gasca_new_members_xlsx(partial)
+            return source_name or GASCA_NEW_MEMBERS_FILENAME
 
         try:
             with provider_lock(
@@ -168,7 +323,9 @@ class GascaNewMembersExtractor:
                     business_date_from=date_from,
                     business_date_to=date_to,
                     source_filename=Path(str(execution.value)).name,
-                    diagnostic_metadata={"report_contract": "injected_verified_operation"},
+                    diagnostic_metadata={
+                        "report_contract": "verified_kpi_new_members_detailed",
+                    },
                 )
             return ProviderExtractionResult(
                 succeeded=True,
@@ -176,19 +333,36 @@ class GascaNewMembersExtractor:
                 attempts=execution.attempts,
                 elapsed_seconds=execution.elapsed_seconds,
             )
+        except GascaNewMembersExtractionError as exc:
+            _discard_partial(store, partial)
+            return self._failed(
+                started=started,
+                error_code=exc.error_code,
+                error_message=str(exc),
+                attempts=int(getattr(exc, "attempts", 1)),
+            )
         except ProviderBrowserError as exc:
-            store.discard_incomplete(partial)
+            _discard_partial(store, partial)
             return self._failed(
                 started=started,
                 error_code=f"GASCA_{exc.phase.value}_FAILED",
                 error_message=str(exc),
                 attempts=exc.attempts,
             )
-        except Exception as exc:
-            store.discard_incomplete(partial)
+        except (ArtifactStoreError, OSError):
+            _discard_partial(store, partial)
             return self._failed(
                 started=started,
-                error_code="GASCA_ARTIFACT_INVALID",
-                error_message=type(exc).__name__,
+                error_code="GASCA_VALIDATION_FAILED",
+                error_message="No fue posible validar el artifact de socios nuevos.",
+                attempts=execution.attempts if execution else 1,
+            )
+        except Exception:
+            _discard_partial(store, partial)
+            return self._failed(
+                started=started,
+                error_code="GASCA_VALIDATION_FAILED",
+                error_message="No fue posible finalizar el artifact de socios nuevos.",
+                attempts=execution.attempts if execution else 1,
             )
 
