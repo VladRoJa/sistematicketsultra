@@ -2,8 +2,13 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from urllib.parse import urlsplit
 
 from app.routine_control.providers.runtime import ProviderConfigurationError
+
+
+class TrainingymWorkoutConfigurationError(ProviderConfigurationError):
+    pass
 
 
 @dataclass(frozen=True, slots=True)
@@ -12,12 +17,14 @@ class TrainingymProviderConfig:
     user: str
     password: str
     center_name: str | None
+    workout_url: str | None
 
     @classmethod
     def from_env(
         cls,
         *,
         require_center: bool = False,
+        require_workout: bool = False,
     ) -> "TrainingymProviderConfig":
         names = [
             "TRAININGYM_LOGIN_URL",
@@ -38,9 +45,38 @@ class TrainingymProviderConfig:
             raise ProviderConfigurationError(
                 "TRAININGYM_CENTER_NAME refiere a una sucursal dada de baja."
             )
+        workout_url = (os.getenv("TRAININGYM_WORKOUT_URL") or "").strip() or None
+        if require_workout and not workout_url:
+            raise TrainingymWorkoutConfigurationError(
+                "Falta la variable de entorno: TRAININGYM_WORKOUT_URL"
+            )
+        if workout_url:
+            login = urlsplit(values["TRAININGYM_LOGIN_URL"])
+            workout = urlsplit(workout_url)
+            if workout.scheme.casefold() != "https":
+                raise TrainingymWorkoutConfigurationError(
+                    "TRAININGYM_WORKOUT_URL debe usar HTTPS."
+                )
+            if not workout.hostname or (
+                (login.hostname or "").casefold()
+                != workout.hostname.casefold()
+            ):
+                raise TrainingymWorkoutConfigurationError(
+                    "TRAININGYM_WORKOUT_URL debe usar el mismo hostname "
+                    "que TRAININGYM_LOGIN_URL."
+                )
+            if not workout.path or workout.path == "/":
+                raise TrainingymWorkoutConfigurationError(
+                    "TRAININGYM_WORKOUT_URL debe incluir un path."
+                )
+            if workout.fragment:
+                raise TrainingymWorkoutConfigurationError(
+                    "TRAININGYM_WORKOUT_URL no admite fragmentos."
+                )
         return cls(
             login_url=values["TRAININGYM_LOGIN_URL"],
             user=values["TRAININGYM_USER"],
             password=values["TRAININGYM_PASS"],
             center_name=center_name,
+            workout_url=workout_url,
         )

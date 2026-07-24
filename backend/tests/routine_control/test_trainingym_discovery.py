@@ -33,6 +33,7 @@ CENTER_INPUT_SELECTOR = (
 CENTER_OPTIONS_SELECTOR = (
     "nz-option-item,[role='option'],.ant-select-item-option"
 )
+WORKOUT_URL = "https://portal.example.invalid/reports/workout?source=private"
 
 
 class _Tracker:
@@ -161,6 +162,7 @@ class _FakePage:
         context_destroyed_after_center_submit: bool = False,
         context_destroyed_on_title_once: bool = False,
         context_destroyed_on_controls_once: bool = False,
+        workout_evidence: bool = True,
     ) -> None:
         self.cookies_present = cookies_present
         self.cookie_after_controls = cookie_after_controls
@@ -182,6 +184,7 @@ class _FakePage:
         )
         self.context_destroyed_on_title_once = context_destroyed_on_title_once
         self.context_destroyed_on_controls_once = context_destroyed_on_controls_once
+        self.workout_evidence = workout_evidence
         self.center_input_visible = False
         self.center_opened = False
         self.selected_center: str | None = None
@@ -205,6 +208,10 @@ class _FakePage:
         self.screenshots: list[Path] = []
         self.events: list[str] = []
         self.title_calls = 0
+        self.frames = [self]
+        self.main_frame = self
+        self.name = ""
+        self.keyboard = _FakeKeyboard()
         self.closed = False
 
     def cookie_is_visible(self) -> bool:
@@ -218,6 +225,12 @@ class _FakePage:
 
     def wait_for_load_state(self, state: str) -> None:
         self.load_states.append(state)
+
+    def wait_for_url(self, pattern: str) -> None:
+        if pattern != "**/reports/workout*":
+            raise PlaywrightTimeoutError("unexpected workout URL pattern")
+        if "/reports/workout" not in self.url:
+            raise PlaywrightTimeoutError("workout navigation timeout")
 
     def title(self) -> str:
         self.title_calls += 1
@@ -283,12 +296,26 @@ class _FakePage:
         if "document.readyState" in script:
             self.events.append("document-stable")
             return
+        if "Rutinas y pesajes" in script and not self.workout_evidence:
+            raise PlaywrightTimeoutError("workout evidence timeout")
 
     def wait_for_timeout(self, milliseconds: int) -> None:
         self.wait_timeouts.append(milliseconds)
 
     def evaluate(self, script: str):
         self.evaluate_scripts.append(script)
+        if "contains_powerbi" in script:
+            return {
+                "contains_powerbi": False,
+                "contains_report_controls": True,
+                "contains_workout_text": True,
+            }
+        if "workout_filters" in script:
+            return []
+        if "workout_export_candidates" in script:
+            return []
+        if "workout_menu_items" in script:
+            return []
         self.events.append("controls-read")
         if (
             self.context_destroyed_on_controls_once
@@ -314,6 +341,14 @@ class _FakePage:
 
     def close(self) -> None:
         self.closed = True
+
+
+class _FakeKeyboard:
+    def __init__(self) -> None:
+        self.presses: list[str] = []
+
+    def press(self, key: str) -> None:
+        self.presses.append(key)
 
 
 class _PageRuntime:
@@ -398,6 +433,7 @@ class TrainingymDiscoveryTestCase(unittest.TestCase):
             "TRAININGYM_USER": "trainingym-user-secret",
             "TRAININGYM_PASS": "trainingym-password-secret",
             "TRAININGYM_CENTER_NAME": "UltraGym & Fitness - Azahares",
+            "TRAININGYM_WORKOUT_URL": WORKOUT_URL,
             "ROUTINE_CONTROL_ARTIFACT_DIR": artifact_root,
         }
 
@@ -444,6 +480,25 @@ class TrainingymDiscoveryTestCase(unittest.TestCase):
         self.assertIn("TRAININGYM_CENTER_NAME", result.error_message)
         self.assertNotIn("trainingym-user-secret", result.error_message)
 
+    def test_missing_workout_url_is_workout_config_failure_before_browser(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            environment = self._environment(temp_dir)
+            environment.pop("TRAININGYM_WORKOUT_URL")
+            with patch.dict("os.environ", environment, clear=True):
+                result = TrainingymDiscoveryService(
+                    runtime_factory=_NoBrowserRuntime,
+                ).run(headless=True, diagnostic_dir=None)
+        self.assertEqual(
+            result.error_code,
+            "TRAININGYM_WORKOUT_CONFIG_FAILED",
+        )
+        self.assertEqual(
+            result.workout_error_code,
+            "TRAININGYM_WORKOUT_CONFIG_FAILED",
+        )
+        self.assertIn("TRAININGYM_WORKOUT_URL", result.error_message)
+        self.assertNotIn("trainingym-user-secret", result.error_message)
+
     def test_la_viga_center_is_rejected_without_echoing_configured_value(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             environment = self._environment(temp_dir)
@@ -469,11 +524,14 @@ class TrainingymDiscoveryTestCase(unittest.TestCase):
         self.assertEqual(runtime.calls, 1)
         self.assertEqual(
             page.goto_calls,
-            [("https://portal.example.invalid/auth", "domcontentloaded")],
+            [
+                ("https://portal.example.invalid/auth", "domcontentloaded"),
+                (WORKOUT_URL, "domcontentloaded"),
+            ],
         )
         self.assertEqual(
             page.load_states,
-            ["domcontentloaded", "domcontentloaded"],
+            ["domcontentloaded", "domcontentloaded", "domcontentloaded"],
         )
         for selector in (
             COOKIE_SELECTOR,
@@ -510,6 +568,14 @@ class TrainingymDiscoveryTestCase(unittest.TestCase):
             ],
         )
         self.assertEqual(result.post_login_path, "/")
+        self.assertEqual(result.workout_path, "/reports/workout")
+        self.assertTrue(result.workout_reached)
+        self.assertEqual(result.report_mode, "native_dom")
+        self.assertFalse(result.export_contract_verified)
+        self.assertEqual(
+            result.workout_error_code,
+            "TRAININGYM_WORKOUT_EXPORT_CONTRACT_UNVERIFIED",
+        )
 
     def test_direct_authentication_skips_center_selection(self) -> None:
         page = _FakePage(cookies_present=False, auth_mode="direct")
@@ -813,7 +879,7 @@ class TrainingymDiscoveryTestCase(unittest.TestCase):
         ):
             result, _runtime = self._run_page(page, temp_dir)
         self.assertTrue(result.succeeded)
-        self.assertEqual(page.events.count("document-stable"), 2)
+        self.assertEqual(page.events.count("document-stable"), 3)
         self.assertGreaterEqual(page.title_calls, 3)
 
     def test_context_destruction_during_control_read_restabilizes(self) -> None:
@@ -828,7 +894,7 @@ class TrainingymDiscoveryTestCase(unittest.TestCase):
         ):
             result, _runtime = self._run_page(page, temp_dir)
         self.assertTrue(result.succeeded)
-        self.assertEqual(page.events.count("document-stable"), 2)
+        self.assertEqual(page.events.count("document-stable"), 3)
         self.assertEqual(page.events.count("controls-read"), 2)
 
     def test_post_login_document_is_stable_before_controls_are_read(self) -> None:
@@ -1023,6 +1089,46 @@ class TrainingymDiscoveryTestCase(unittest.TestCase):
         self.assertEqual(events.count("launch"), 1)
         self.assertEqual(page.clicks.count(LOGIN_SELECTOR), 1)
         self.assertEqual(page.screenshots, [])
+        self.assertTrue(page.closed)
+        self.assertEqual(events[-3:], ["context", "browser", "manager"])
+
+    def test_workout_contract_failure_preserves_login_without_retry(self) -> None:
+        page = _FakePage(
+            cookies_present=False,
+            workout_evidence=False,
+        )
+        events: list[str] = []
+
+        def runtime_factory(config):
+            return BrowserRuntime(
+                config,
+                playwright_factory=lambda: _HarnessManager(page, events),
+                sleeper=lambda _seconds: None,
+            )
+
+        with tempfile.TemporaryDirectory() as temp_dir, patch.dict(
+            "os.environ",
+            {
+                **self._environment(temp_dir),
+                "ROUTINE_CONTROL_PROVIDER_MAX_ATTEMPTS": "3",
+            },
+            clear=True,
+        ):
+            result = TrainingymDiscoveryService(
+                runtime_factory=runtime_factory,
+            ).run(
+                headless=True,
+                diagnostic_dir=Path(temp_dir) / "diagnostics",
+            )
+        self.assertFalse(result.succeeded)
+        self.assertEqual(
+            result.error_code,
+            "TRAININGYM_WORKOUT_CONTRACT_FAILED",
+        )
+        self.assertEqual(result.workout_error_code, result.error_code)
+        self.assertEqual(result.post_login_path, "/")
+        self.assertEqual(result.attempts, 1)
+        self.assertEqual(page.clicks.count(LOGIN_SELECTOR), 1)
         self.assertTrue(page.closed)
         self.assertEqual(events[-3:], ["context", "browser", "manager"])
 

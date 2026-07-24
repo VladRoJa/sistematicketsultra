@@ -19,7 +19,18 @@ from app.routine_control.providers.runtime import (
     ProviderRuntimeConfig,
 )
 
-from .config import TrainingymProviderConfig
+from .config import (
+    TrainingymProviderConfig,
+    TrainingymWorkoutConfigurationError,
+)
+from .workout_discovery import (
+    TrainingymWorkoutDiscoveryError,
+    WorkoutDiscoveryObservation,
+    WorkoutExportControl,
+    WorkoutFilterControl,
+    WorkoutFrameSummary,
+    discover_workout,
+)
 
 
 _EMAIL = re.compile(r"\b[^@\s]+@[^@\s]+\.[^@\s]+\b", re.IGNORECASE)
@@ -169,6 +180,7 @@ class DiscoveryObservation:
     post_login_url: str
     visible_texts: tuple[str, ...]
     diagnostic_artifact: str | None
+    workout: WorkoutDiscoveryObservation | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -179,6 +191,14 @@ class TrainingymDiscoveryResult:
     diagnostic_artifact: str | None
     attempts: int
     elapsed_seconds: float
+    workout_path: str | None = None
+    workout_reached: bool = False
+    report_mode: str | None = None
+    frame_summaries: tuple[WorkoutFrameSummary, ...] = ()
+    filter_controls: tuple[WorkoutFilterControl, ...] = ()
+    export_controls: tuple[WorkoutExportControl, ...] = ()
+    export_contract_verified: bool = False
+    workout_error_code: str | None = None
     error_code: str | None = None
     error_message: str | None = None
 
@@ -189,9 +209,23 @@ class TrainingymDiscoveryResult:
             "elapsed_seconds": self.elapsed_seconds,
             "error_code": self.error_code,
             "error_message": self.error_message,
+            "export_contract_verified": self.export_contract_verified,
+            "export_controls": [
+                control.to_dict() for control in self.export_controls
+            ],
+            "filter_controls": [
+                control.to_dict() for control in self.filter_controls
+            ],
+            "frame_summaries": [
+                frame.to_dict() for frame in self.frame_summaries
+            ],
             "post_login_path": self.post_login_path,
+            "report_mode": self.report_mode,
             "succeeded": self.succeeded,
             "visible_controls": list(self.visible_controls),
+            "workout_error_code": self.workout_error_code,
+            "workout_path": self.workout_path,
+            "workout_reached": self.workout_reached,
         }
 
 
@@ -562,6 +596,7 @@ class TrainingymDiscoveryService:
         tracker.set(BrowserPhase.DISCOVERY)
         try:
             post_login_path, title, controls = _read_stable_post_login(page)
+            post_login_url = page.url
             visible_texts = (f"title: {title}", f"path: {post_login_path}", *controls)
 
             screenshot_name = None
@@ -581,10 +616,21 @@ class TrainingymDiscoveryService:
                 "TRAININGYM_DISCOVERY_FAILED",
                 "No fue posible inspeccionar controles post-login.",
             ) from exc
+        if not config.workout_url:
+            raise TrainingymWorkoutDiscoveryError(
+                "TRAININGYM_WORKOUT_CONFIG_FAILED",
+                "Falta la variable de entorno: TRAININGYM_WORKOUT_URL",
+            )
+        try:
+            workout = discover_workout(page, config.workout_url)
+        except TrainingymWorkoutDiscoveryError as exc:
+            exc.post_login_path = post_login_path
+            raise
         return DiscoveryObservation(
-            post_login_url=page.url,
+            post_login_url=post_login_url,
             visible_texts=visible_texts,
             diagnostic_artifact=screenshot_name,
+            workout=workout,
         )
 
     def run(
@@ -597,11 +643,24 @@ class TrainingymDiscoveryService:
         try:
             provider_config = TrainingymProviderConfig.from_env(
                 require_center=True,
+                require_workout=True,
             )
             runtime_config = ProviderRuntimeConfig.from_env(headless=headless)
             diagnostics = _resolve_diagnostic_dir(
                 runtime_config.artifact_root,
                 diagnostic_dir,
+            )
+        except TrainingymWorkoutConfigurationError as exc:
+            return TrainingymDiscoveryResult(
+                succeeded=False,
+                post_login_path=None,
+                visible_controls=(),
+                diagnostic_artifact=None,
+                attempts=0,
+                elapsed_seconds=round(time.monotonic() - started, 3),
+                workout_error_code="TRAININGYM_WORKOUT_CONFIG_FAILED",
+                error_code="TRAININGYM_WORKOUT_CONFIG_FAILED",
+                error_message=str(exc),
             )
         except ProviderConfigurationError as exc:
             return TrainingymDiscoveryResult(
@@ -627,6 +686,7 @@ class TrainingymDiscoveryService:
         try:
             execution = self._runtime_factory(runtime_config).run(operation)
             observation = execution.value
+            workout = observation.workout
             return TrainingymDiscoveryResult(
                 succeeded=True,
                 post_login_path=sanitized_url_path(observation.post_login_url),
@@ -640,6 +700,36 @@ class TrainingymDiscoveryService:
                 ),
                 attempts=execution.attempts,
                 elapsed_seconds=execution.elapsed_seconds,
+                workout_path=workout.workout_path if workout else None,
+                workout_reached=bool(workout and workout.workout_reached),
+                report_mode=workout.report_mode if workout else None,
+                frame_summaries=(
+                    workout.frame_summaries if workout else ()
+                ),
+                filter_controls=(
+                    workout.filter_controls if workout else ()
+                ),
+                export_controls=(
+                    workout.export_controls if workout else ()
+                ),
+                export_contract_verified=bool(
+                    workout and workout.export_contract_verified
+                ),
+                workout_error_code=(
+                    workout.workout_error_code if workout else None
+                ),
+            )
+        except TrainingymWorkoutDiscoveryError as exc:
+            return TrainingymDiscoveryResult(
+                succeeded=False,
+                post_login_path=getattr(exc, "post_login_path", None),
+                visible_controls=(),
+                diagnostic_artifact=None,
+                attempts=int(getattr(exc, "attempts", 1)),
+                elapsed_seconds=round(time.monotonic() - started, 3),
+                workout_error_code=exc.error_code,
+                error_code=exc.error_code,
+                error_message=str(exc),
             )
         except TrainingymDiscoveryError as exc:
             return TrainingymDiscoveryResult(

@@ -39,8 +39,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     else:
         print(f"succeeded={str(result.succeeded).lower()}")
         print(f"post_login_path={result.post_login_path or ''}")
+        print(f"workout_path={result.workout_path or ''}")
+        print(f"workout_reached={str(result.workout_reached).lower()}")
+        print(f"report_mode={result.report_mode or ''}")
+        print(
+            "export_contract_verified="
+            f"{str(result.export_contract_verified).lower()}"
+        )
         print(f"visible_controls={len(result.visible_controls)}")
         print(f"diagnostic_artifact={result.diagnostic_artifact or ''}")
+        if result.workout_error_code:
+            print(f"workout_error_code={result.workout_error_code}")
         if result.error_code:
             print(f"error_code={result.error_code}")
     return 0 if result.succeeded else 1
@@ -48,4 +57,3 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
