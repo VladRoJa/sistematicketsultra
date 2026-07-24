@@ -42,8 +42,8 @@ _LONG_IDENTIFIER = re.compile(r"\b\d{5,}\b")
 _SPACE = re.compile(r"\s+")
 _AUTH_PATH = "/auth"
 _EXPECTED_TITLE = "Trainingym Manager"
-_USER_SELECTOR = 'input[placeholder="Usuario*"]'
-_PASSWORD_SELECTOR = 'input[placeholder="Contraseña*"]'
+_USER_SELECTOR = 'input[type="text"]'
+_PASSWORD_SELECTOR = 'input[type="password"]'
 _COOKIE_SELECTOR = "#hs-eu-confirmation-button"
 _LOGIN_SELECTOR = "#tg-login-accept"
 _CENTER_INPUT_SELECTOR = (
