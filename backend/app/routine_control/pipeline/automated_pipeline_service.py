@@ -22,6 +22,9 @@ from app.routine_control.providers.runtime import (
     provider_lock,
 )
 from app.routine_control.providers.trainingym import TrainingymProviderConfig
+from app.routine_control.providers.trainingym.workout_extractor import (
+    TrainingymWorkoutExtractor,
+)
 
 
 class ProviderExtractor(Protocol):
@@ -33,28 +36,6 @@ class ProviderExtractor(Protocol):
         observed_at_utc: datetime,
         headless: bool | None,
     ) -> ProviderExtractionResult: ...
-
-
-class _UnavailableTrainingymExtractor:
-    def extract(
-        self,
-        *,
-        date_from: date,
-        date_to: date,
-        observed_at_utc: datetime,
-        headless: bool | None,
-    ) -> ProviderExtractionResult:
-        del date_from, date_to, observed_at_utc, headless
-        return ProviderExtractionResult(
-            succeeded=False,
-            artifact=None,
-            attempts=0,
-            elapsed_seconds=0.0,
-            error_code="TRAININGYM_WORKOUT_CONTRACT_UNVERIFIED",
-            error_message=(
-                "Faltan URL Workout, filtros, centro y exportación comprobados."
-            ),
-        )
 
 
 def _artifact_summary(artifact: ProviderArtifact | None) -> dict[str, object] | None:
@@ -169,7 +150,10 @@ def run_automated_routine_control_pipeline(
     try:
         # Se valida todo antes del lock y antes de que cualquier extractor abra Playwright.
         GascaProviderConfig.from_env()
-        TrainingymProviderConfig.from_env()
+        TrainingymProviderConfig.from_env(
+            require_center=True,
+            require_workout=True,
+        )
         runtime_config = ProviderRuntimeConfig.from_env(headless=headless)
     except ProviderConfigurationError as exc:
         return _result(
@@ -180,7 +164,10 @@ def run_automated_routine_control_pipeline(
         )
 
     gasca_provider = gasca_extractor or GascaNewMembersExtractor()
-    trainingym_provider = trainingym_extractor or _UnavailableTrainingymExtractor()
+    trainingym_provider = (
+        trainingym_extractor
+        or TrainingymWorkoutExtractor()
+    )
     try:
         with lock_factory(
             runtime_config.artifact_root,

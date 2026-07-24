@@ -49,6 +49,10 @@ class AutomatedPipelineServiceTestCase(unittest.TestCase):
             "TRAININGYM_LOGIN_URL": "https://trainingym.invalid/auth",
             "TRAININGYM_USER": "trainingym-user-secret",
             "TRAININGYM_PASS": "trainingym-pass-secret",
+            "TRAININGYM_CENTER_NAME": "UltraGym & Fitness - Azahares",
+            "TRAININGYM_WORKOUT_URL": (
+                "https://trainingym.invalid/reports/workout"
+            ),
             "ROUTINE_CONTROL_ARTIFACT_DIR": root,
         }
 
@@ -203,6 +207,58 @@ class AutomatedPipelineServiceTestCase(unittest.TestCase):
         self.assertNotIn(temp_dir, payload)
         self.assertNotIn("socio@example.com", payload)
         self.assertNotIn("private C:/absolute", payload)
+        
+    def test_default_pipeline_uses_real_trainingym_extractor(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir, patch.dict(
+            "os.environ",
+            self._environment(temp_dir),
+            clear=True,
+        ):
+            gasca_result = self._success(
+                "gasca",
+                "new_members",
+                Path(temp_dir) / "gasca.xlsx",
+            )
+            trainingym_result = self._success(
+                "trainingym",
+                "workout",
+                Path(temp_dir) / "trainingym.xlsx",
+            )
+
+            gasca = _Extractor(gasca_result)
+            trainingym = _Extractor(trainingym_result)
+
+            with patch(
+                (
+                    "app.routine_control.pipeline."
+                    "automated_pipeline_service."
+                    "GascaNewMembersExtractor"
+                ),
+                return_value=gasca,
+            ) as gasca_class, patch(
+                (
+                    "app.routine_control.pipeline."
+                    "automated_pipeline_service."
+                    "TrainingymWorkoutExtractor"
+                ),
+                return_value=trainingym,
+            ) as trainingym_class:
+                result = run_automated_routine_control_pipeline(
+                    date_from=date(2026, 7, 1),
+                    date_to=date(2026, 7, 23),
+                    observed_at_utc=OBSERVED_AT,
+                    manual_pipeline=lambda **_kwargs: _ManualResult(
+                        succeeded=True,
+                    ),
+                )
+
+        self.assertTrue(result.succeeded)
+        gasca_class.assert_called_once_with()
+        trainingym_class.assert_called_once_with()
+        self.assertEqual(gasca.calls, 1)
+        self.assertEqual(trainingym.calls, 1)        
 
 
 if __name__ == "__main__":
