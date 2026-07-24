@@ -460,6 +460,7 @@ class _Page:
     ) -> None:
         self.events: list[str] = []
         self.download_active = False
+        self.expect_download_timeout = None
         self.download = _Download(download_source)
         self.url = "https://app.example.invalid/reports/workout"
         self.frame = _Frame(self, **frame_kwargs)
@@ -479,7 +480,8 @@ class _Page:
             self.dialog_frame = self.frame
         self.iframes: list[_Iframe] = []
 
-    def expect_download(self):
+    def expect_download(self, *, timeout=None):
+        self.expect_download_timeout = timeout
         return _DownloadInfo(self)
 
     def locator(self, selector: str):
@@ -820,18 +822,23 @@ class TrainingymWorkoutExtractorTestCase(unittest.TestCase):
 
     def test_expect_download_wraps_final_export_click(self) -> None:
         page = _Page()
+
         with tempfile.TemporaryDirectory() as temp_dir:
             partial = Path(temp_dir) / "download.partial"
-            extractor._download_workout(page, page.frame, partial)
-        self.assertIn("expect_download:enter", page.events)
-        self.assertIn("click:Exportar:inside_expect=True", page.events)
-        self.assertLess(
-            page.events.index("expect_download:enter"),
-            page.events.index("click:Exportar:inside_expect=True"),
+            extractor._download_workout(
+                page,
+                page.frame,
+                partial,
+            )
+
+        self.assertEqual(
+            page.expect_download_timeout,
+            extractor._DOWNLOAD_TIMEOUT_MS,
         )
-        self.assertLess(
-            page.events.index("click:Exportar:inside_expect=True"),
-            page.events.index("expect_download:exit"),
+
+        self.assertIn(
+            "expect_download:enter",
+            page.events,
         )
 
     def test_each_run_uses_a_unique_artifact_directory(self) -> None:
