@@ -411,7 +411,11 @@ class _HarnessChromium:
 
 class _HarnessPlaywright:
     def __init__(self, page: _FakePage, events: list[str]) -> None:
+        self.events = events
         self.chromium = _HarnessChromium(page, events)
+
+    def stop(self) -> None:
+        self.events.append("playwright")
 
 
 class _HarnessManager:
@@ -421,9 +425,6 @@ class _HarnessManager:
 
     def start(self):
         return _HarnessPlaywright(self.page, self.events)
-
-    def stop(self) -> None:
-        self.events.append("manager")
 
 
 class TrainingymDiscoveryTestCase(unittest.TestCase):
@@ -849,7 +850,7 @@ class TrainingymDiscoveryTestCase(unittest.TestCase):
             )
         self.assertEqual(result.error_code, "TRAININGYM_CENTER_NOT_FOUND")
         self.assertTrue(page.closed)
-        self.assertEqual(events[-3:], ["context", "browser", "manager"])
+        self.assertEqual(events[-3:], ["context", "browser", "playwright"])
 
     def test_context_destruction_after_second_submit_is_tolerated(self) -> None:
         page = _FakePage(
@@ -1090,7 +1091,7 @@ class TrainingymDiscoveryTestCase(unittest.TestCase):
         self.assertEqual(page.clicks.count(LOGIN_SELECTOR), 1)
         self.assertEqual(page.screenshots, [])
         self.assertTrue(page.closed)
-        self.assertEqual(events[-3:], ["context", "browser", "manager"])
+        self.assertEqual(events[-3:], ["context", "browser", "playwright"])
 
     def test_workout_contract_failure_preserves_login_without_retry(self) -> None:
         page = _FakePage(
@@ -1130,7 +1131,7 @@ class TrainingymDiscoveryTestCase(unittest.TestCase):
         self.assertEqual(result.attempts, 1)
         self.assertEqual(page.clicks.count(LOGIN_SELECTOR), 1)
         self.assertTrue(page.closed)
-        self.assertEqual(events[-3:], ["context", "browser", "manager"])
+        self.assertEqual(events[-3:], ["context", "browser", "playwright"])
 
     def test_missing_login_selector_is_contract_failure_after_wait(self) -> None:
         page = _FakePage(missing_selectors={PASSWORD_SELECTOR})

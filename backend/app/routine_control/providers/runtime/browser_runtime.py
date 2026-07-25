@@ -73,7 +73,7 @@ class BrowserRuntime:
         started = time.monotonic()
         last_phase = BrowserPhase.CONFIG
         for attempt in range(1, self._config.max_attempts + 1):
-            manager = browser = context = page = None
+            manager = playwright = browser = context = page = None
             tracker = BrowserPhaseTracker()
             try:
                 manager = self._playwright_factory()
@@ -116,9 +116,9 @@ class BrowserRuntime:
                 self._close(page)
                 self._close(context)
                 self._close(browser)
-                if manager is not None:
+                if playwright is not None:
                     try:
-                        manager.stop()
+                        playwright.stop()
                     except Exception:
                         pass
             self._sleeper(min(0.25 * attempt, 1.0))
