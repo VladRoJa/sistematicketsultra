@@ -217,6 +217,8 @@ def run_automated_routine_control_pipeline(
                 gasca_xlsx=gasca_result.artifact.local_path,
                 trainingym_xlsx=trainingym_result.artifact.local_path,
                 observed_at_utc=observed_at_utc,
+                date_from=date_from,
+                date_to=date_to,
                 requested_by="automated_provider_cli",
             )
             if not bool(getattr(manual_result, "succeeded", False)):

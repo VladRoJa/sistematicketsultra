@@ -22,9 +22,15 @@ def build_manual_pipeline_idempotency_key(
     *,
     gasca_content_hash: str,
     trainingym_content_hash: str,
+    date_from: date,
+    date_to: date,
 ) -> str:
     payload = (
-        f"manual\x00{gasca_content_hash}\x00{trainingym_content_hash}"
+        f"manual"
+        f"\x00{gasca_content_hash}"
+        f"\x00{trainingym_content_hash}"
+        f"\x00{date_from.isoformat()}"
+        f"\x00{date_to.isoformat()}"
     ).encode("ascii")
     return f"manual:{hashlib.sha256(payload).hexdigest()}"
 
@@ -68,11 +74,13 @@ class RoutineControlRunRepository:
         *,
         idempotency_key: str,
         business_date: date,
+        date_from: date,
+        date_to: date,
     ) -> RoutineControlPipelineRunORM:
         run = RoutineControlPipelineRunORM(
             business_date=business_date,
-            date_from=business_date,
-            date_to=business_date,
+            date_from=date_from,
+            date_to=date_to,
             generation_mode="MANUAL",
             status="PENDING",
             idempotency_key=idempotency_key,

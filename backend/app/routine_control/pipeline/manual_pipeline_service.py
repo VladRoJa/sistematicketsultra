@@ -6,7 +6,7 @@ import re
 from collections import Counter, defaultdict
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any
@@ -142,6 +142,34 @@ def _aware_utc(value: datetime) -> datetime:
             "observed_at_utc debe incluir timezone."
         )
     return value.astimezone(timezone.utc)
+
+
+def _resolve_pipeline_date_range(
+    *,
+    observed_at_utc: datetime,
+    date_from: date | None,
+    date_to: date | None,
+) -> tuple[date, date]:
+    if (date_from is None) != (date_to is None):
+        raise ManualRoutineControlPipelineError(
+            "date_from y date_to deben proporcionarse juntos."
+        )
+
+    if date_from is None:
+        observed_date = observed_at_utc.date()
+        return observed_date, observed_date
+
+    if type(date_from) is not date or type(date_to) is not date:
+        raise ManualRoutineControlPipelineError(
+            "date_from y date_to deben ser fechas."
+        )
+
+    if date_from > date_to:
+        raise ManualRoutineControlPipelineError(
+            "date_from no puede ser posterior a date_to."
+        )
+
+    return date_from, date_to
 
 
 def _source_path(value: str | Path, *, field_name: str) -> Path:
@@ -329,12 +357,19 @@ def run_manual_routine_control_pipeline(
     gasca_xlsx: str | Path,
     trainingym_xlsx: str | Path,
     observed_at_utc: datetime,
+    date_from: date | None = None,
+    date_to: date | None = None,
     requested_by: str | None = None,
     session: Any | None = None,
     gasca_branch_resolver: Callable[[str], int | None] | None = None,
     trainingym_center_resolver: Callable[[str], int | None] | None = None,
 ) -> ManualRoutineControlPipelineResult:
     observed_at = _aware_utc(observed_at_utc)
+    effective_date_from, effective_date_to = _resolve_pipeline_date_range(
+        observed_at_utc=observed_at,
+        date_from=date_from,
+        date_to=date_to,
+    )
     gasca_path = _source_path(gasca_xlsx, field_name="gasca_xlsx")
     trainingym_path = _source_path(
         trainingym_xlsx,
@@ -347,6 +382,8 @@ def run_manual_routine_control_pipeline(
     idempotency_key = build_manual_pipeline_idempotency_key(
         gasca_content_hash=gasca_hash,
         trainingym_content_hash=trainingym_hash,
+        date_from=effective_date_from,
+        date_to=effective_date_to,
     )
     runs = RoutineControlRunRepository(pipeline_session)
     runs.acquire_pipeline_lock(idempotency_key=idempotency_key)
@@ -355,7 +392,9 @@ def run_manual_routine_control_pipeline(
     if pipeline_run is None:
         pipeline_run = runs.create_pipeline_run(
             idempotency_key=idempotency_key,
-            business_date=observed_at.date(),
+            business_date=effective_date_to,
+            date_from=effective_date_from,
+            date_to=effective_date_to,
         )
     gasca_provider_run = runs.ensure_provider_run(
         pipeline_run=pipeline_run,
