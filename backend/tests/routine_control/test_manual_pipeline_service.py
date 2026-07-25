@@ -4,7 +4,7 @@ import hashlib
 import tempfile
 import unittest
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
 from uuid import uuid4
@@ -141,6 +141,8 @@ class ManualPipelineFixturePostgresTestCase(unittest.TestCase):
         cls.idempotency_key = build_manual_pipeline_idempotency_key(
             gasca_content_hash=_sha256(GASCA_FIXTURE),
             trainingym_content_hash=_sha256(TRAININGYM_FIXTURE),
+            date_from=OBSERVED_AT.date(),
+            date_to=OBSERVED_AT.date(),
         )
 
     @classmethod
@@ -254,6 +256,18 @@ class ManualPipelineFixturePostgresTestCase(unittest.TestCase):
         gasca_run = db.session.get(RoutineControlProviderRunORM, first.gasca_provider_run_id)
         trainingym_run = db.session.get(RoutineControlProviderRunORM, first.trainingym_provider_run_id)
         self.assertEqual((pipeline.status, gasca_run.status, trainingym_run.status), ("SUCCESS", "SUCCESS", "SUCCESS"))
+        self.assertEqual(
+            (pipeline.business_date, pipeline.date_from, pipeline.date_to),
+            (OBSERVED_AT.date(), OBSERVED_AT.date(), OBSERVED_AT.date()),
+        )
+        self.assertEqual(
+            (gasca_run.date_from, gasca_run.date_to),
+            (OBSERVED_AT.date(), OBSERVED_AT.date()),
+        )
+        self.assertEqual(
+            (trainingym_run.date_from, trainingym_run.date_to),
+            (OBSERVED_AT.date(), OBSERVED_AT.date()),
+        )
         self.assertEqual(gasca_run.content_hash, _sha256(GASCA_FIXTURE))
         self.assertEqual(trainingym_run.content_hash, _sha256(TRAININGYM_FIXTURE))
 
@@ -350,6 +364,86 @@ class ManualPipelineFocusedPostgresTestCase(unittest.TestCase):
     @staticmethod
     def _evidence(provider_id, external_id, email):
         return [provider_id, external_id, email, "Instructor", 1, 0, datetime(2026, 7, 15), "Centro"]
+
+    def test_explicit_range_persists_and_changes_idempotency(self) -> None:
+        seed = int(uuid4().hex[:8], 16) % 100000000 + 850000000
+        gasca, trainingym = self._files(
+            [
+                self._member(
+                    seed,
+                    "91000000000000000001",
+                    "range@example.test",
+                )
+            ],
+            [
+                self._evidence(
+                    seed + 10,
+                    seed,
+                    "range@example.test",
+                )
+            ],
+        )
+
+        first = run_manual_routine_control_pipeline(
+            gasca_xlsx=gasca,
+            trainingym_xlsx=trainingym,
+            observed_at_utc=OBSERVED_AT,
+            date_from=date(2026, 7, 1),
+            date_to=date(2026, 7, 24),
+        )
+        self.pipeline_ids.append(first.pipeline_run_id)
+
+        second = run_manual_routine_control_pipeline(
+            gasca_xlsx=gasca,
+            trainingym_xlsx=trainingym,
+            observed_at_utc=OBSERVED_AT,
+            date_from=date(2026, 7, 1),
+            date_to=date(2026, 7, 23),
+        )
+        self.pipeline_ids.append(second.pipeline_run_id)
+
+        self.assertTrue(first.succeeded)
+        self.assertTrue(second.succeeded)
+        self.assertFalse(first.reused_existing_run)
+        self.assertFalse(second.reused_existing_run)
+        self.assertNotEqual(first.pipeline_run_id, second.pipeline_run_id)
+
+        for result, expected_to in (
+            (first, date(2026, 7, 24)),
+            (second, date(2026, 7, 23)),
+        ):
+            pipeline = db.session.get(
+                RoutineControlPipelineRunORM,
+                result.pipeline_run_id,
+            )
+            provider_runs = db.session.execute(
+                select(RoutineControlProviderRunORM)
+                .where(
+                    RoutineControlProviderRunORM.pipeline_run_id
+                    == result.pipeline_run_id
+                )
+                .order_by(RoutineControlProviderRunORM.id)
+            ).scalars().all()
+
+            self.assertEqual(
+                (
+                    pipeline.business_date,
+                    pipeline.date_from,
+                    pipeline.date_to,
+                ),
+                (
+                    expected_to,
+                    date(2026, 7, 1),
+                    expected_to,
+                ),
+            )
+            self.assertEqual(len(provider_runs), 2)
+
+            for provider_run in provider_runs:
+                self.assertEqual(
+                    (provider_run.date_from, provider_run.date_to),
+                    (date(2026, 7, 1), expected_to),
+                )
 
     def test_email_fallback_ambiguous_and_multiple_cohorts(self) -> None:
         seed = int(uuid4().hex[:8], 16) % 100000000 + 800000000
