@@ -253,7 +253,11 @@ class _HarnessChromium:
 
 class _HarnessPlaywright:
     def __init__(self, page: _WorkoutPage, events: list[str]) -> None:
+        self.events = events
         self.chromium = _HarnessChromium(page, events)
+
+    def stop(self) -> None:
+        self.events.append("playwright")
 
 
 class _HarnessManager:
@@ -263,9 +267,6 @@ class _HarnessManager:
 
     def start(self) -> _HarnessPlaywright:
         return _HarnessPlaywright(self.page, self.events)
-
-    def stop(self) -> None:
-        self.events.append("manager")
 
 
 def _filter(
@@ -625,7 +626,7 @@ class TrainingymWorkoutDiscoveryTestCase(unittest.TestCase):
             runtime.run(operation)
         self.assertEqual(login_submissions, 1)
         self.assertTrue(page.closed)
-        self.assertEqual(events, ["launch", "context", "browser", "manager"])
+        self.assertEqual(events, ["launch", "context", "browser", "playwright"])
 
     def test_resources_close_on_success(self) -> None:
         page = _WorkoutPage()
@@ -648,7 +649,7 @@ class TrainingymWorkoutDiscoveryTestCase(unittest.TestCase):
         )
         self.assertTrue(result.value.workout_reached)
         self.assertTrue(page.closed)
-        self.assertEqual(events, ["launch", "context", "browser", "manager"])
+        self.assertEqual(events, ["launch", "context", "browser", "playwright"])
 
 
 if __name__ == "__main__":

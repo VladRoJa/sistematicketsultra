@@ -552,7 +552,11 @@ class _HarnessChromium:
 
 class _HarnessPlaywright:
     def __init__(self, events: list[str]) -> None:
+        self.events = events
         self.chromium = _HarnessChromium(events)
+
+    def stop(self) -> None:
+        self.events.append("playwright")
 
 
 class _HarnessManager:
@@ -561,9 +565,6 @@ class _HarnessManager:
 
     def start(self):
         return _HarnessPlaywright(self.events)
-
-    def stop(self) -> None:
-        self.events.append("manager")
 
 
 class TrainingymWorkoutExtractorTestCase(unittest.TestCase):
@@ -1021,7 +1022,7 @@ class TrainingymWorkoutExtractorTestCase(unittest.TestCase):
         self.assertNotIn("trainingym-user-secret", payload)
         self.assertNotIn("trainingym-password-secret", payload)
 
-    def test_runtime_closes_page_context_browser_and_manager_on_success(self) -> None:
+    def test_runtime_closes_page_context_browser_and_playwright_on_success(self) -> None:
         events: list[str] = []
 
         def runtime_factory(config):
@@ -1043,7 +1044,7 @@ class TrainingymWorkoutExtractorTestCase(unittest.TestCase):
         self.assertTrue(result.succeeded)
         self.assertEqual(
             events,
-            ["launch", "page", "context", "browser", "manager"],
+            ["launch", "page", "context", "browser", "playwright"],
         )
 
     def test_export_error_is_not_retried_and_resources_close(self) -> None:
@@ -1085,7 +1086,7 @@ class TrainingymWorkoutExtractorTestCase(unittest.TestCase):
         )
         self.assertEqual(
             events,
-            ["launch", "page", "context", "browser", "manager"],
+            ["launch", "page", "context", "browser", "playwright"],
         )
 
     def test_configuration_failure_precedes_browser(self) -> None:

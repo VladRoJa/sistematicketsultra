@@ -68,18 +68,30 @@ class _FakeChromium:
 
 class _FakePlaywright:
     def __init__(self, events: list[str]) -> None:
+        self.events = events
         self.chromium = _FakeChromium(events)
+        self.stop_calls = 0
+
+    def stop(self) -> None:
+        self.stop_calls += 1
+        self.events.append("playwright")
 
 
 class _FakeManager:
     def __init__(self, events: list[str]) -> None:
         self.events = events
+        self.playwright_instances: list[_FakePlaywright] = []
+        self.stop_accesses = 0
 
     def start(self):
-        return _FakePlaywright(self.events)
+        playwright = _FakePlaywright(self.events)
+        self.playwright_instances.append(playwright)
+        return playwright
 
-    def stop(self) -> None:
-        self.events.append("manager")
+    def __getattr__(self, name: str):
+        if name == "stop":
+            self.stop_accesses += 1
+        raise AttributeError(name)
 
 
 class ProviderRuntimeTestCase(unittest.TestCase):
@@ -195,7 +207,7 @@ class ProviderRuntimeTestCase(unittest.TestCase):
         self.assertNotIn("secret-value", str(caught.exception))
         self.assertEqual(
             events,
-            ["page", "context", "browser", "manager"] * 2,
+            ["page", "context", "browser", "playwright"] * 2,
         )
 
     def test_browser_resources_close_on_success(self) -> None:
@@ -214,7 +226,53 @@ class ProviderRuntimeTestCase(unittest.TestCase):
         self.assertEqual(result.value, "ok")
         self.assertEqual(
             events,
-            ["page", "context", "browser", "manager"],
+            ["page", "context", "browser", "playwright"],
+        )
+
+    def test_two_consecutive_runs_stop_each_playwright_instance(self) -> None:
+        events: list[str] = []
+        managers: list[_FakeManager] = []
+
+        def factory():
+            manager = _FakeManager(events)
+            managers.append(manager)
+            return manager
+
+        runtime = BrowserRuntime(
+            ProviderRuntimeConfig(
+                artifact_root=Path("unused"),
+                headless=True,
+                timeout_ms=1_000,
+                max_attempts=2,
+            ),
+            playwright_factory=factory,
+            sleeper=lambda _seconds: None,
+        )
+
+        first = runtime.run(
+            lambda _page, _tracker, _attempt: "first"
+        )
+        second = runtime.run(
+            lambda _page, _tracker, _attempt: "second"
+        )
+
+        self.assertEqual(first.value, "first")
+        self.assertEqual(second.value, "second")
+        self.assertEqual(
+            events,
+            ["page", "context", "browser", "playwright"] * 2,
+        )
+        self.assertEqual(len(managers), 2)
+        self.assertEqual(
+            [manager.stop_accesses for manager in managers],
+            [0, 0],
+        )
+        self.assertEqual(
+            [
+                manager.playwright_instances[0].stop_calls
+                for manager in managers
+            ],
+            [1, 1],
         )
 
     def test_deterministic_operation_error_is_not_retried(self) -> None:
@@ -245,7 +303,7 @@ class ProviderRuntimeTestCase(unittest.TestCase):
         self.assertEqual(calls, 1)
         self.assertEqual(
             events,
-            ["page", "context", "browser", "manager"],
+            ["page", "context", "browser", "playwright"],
         )
 
 
