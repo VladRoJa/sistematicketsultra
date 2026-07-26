@@ -79,6 +79,12 @@ class RoutineControlReconciliationPostgresTestCase(unittest.TestCase):
         db.session.add(self.member)
         db.session.commit()
 
+        self.actor_user_id = db.session.execute(
+            select(UserORM.id)
+            .order_by(UserORM.id)
+            .limit(1)
+        ).scalar_one()
+
     def tearDown(self) -> None:
         db.session.rollback()
         member_ids = select(RoutineControlMemberORM.id).where(
@@ -195,18 +201,53 @@ class RoutineControlReconciliationPostgresTestCase(unittest.TestCase):
         db.session.commit()
         return evidence
 
-    def _decision(self, **overrides) -> RoutineControlDecisionORM:
+    def _decision(
+        self,
+        **overrides,
+    ) -> RoutineControlDecisionORM:
         values = {
             "member_id": self.member.id,
             "decision_type": "NO_DESEA_RUTINA",
+            "reason_code": "NO_INTERESADO",
+            "notes": "Decisión de prueba.",
             "is_active": True,
-            "decided_at_utc": self.now - timedelta(days=1),
-            "effective_from_utc": self.now - timedelta(days=1),
+            "decided_at_utc": (
+                self.now - timedelta(days=1)
+            ),
+            "effective_from_utc": (
+                self.now - timedelta(days=1)
+            ),
             "effective_to_utc": None,
+            "created_by_user_id": self.actor_user_id,
+            "created_from_sucursal_id": None,
             "revoked_at_utc": None,
-            "decision_reason": "Test decision",
+            "revoked_by_user_id": None,
+            "revocation_reason": None,
         }
         values.update(overrides)
+
+        if values["is_active"] is False:
+            revoked_at = (
+                values.get("revoked_at_utc")
+                or self.now
+            )
+
+            if "revoked_at_utc" not in overrides:
+                values["revoked_at_utc"] = revoked_at
+
+            if "effective_to_utc" not in overrides:
+                values["effective_to_utc"] = revoked_at
+
+            if "revoked_by_user_id" not in overrides:
+                values["revoked_by_user_id"] = (
+                    self.actor_user_id
+                )
+
+            if "revocation_reason" not in overrides:
+                values["revocation_reason"] = (
+                    "Reversión de prueba."
+                )
+
         decision = RoutineControlDecisionORM(**values)
         db.session.add(decision)
         db.session.commit()
@@ -324,24 +365,48 @@ class RoutineControlReconciliationPostgresTestCase(unittest.TestCase):
 
         self.assertEqual(result.current_status, "SIN_RUTINA")
 
-    def test_expired_decision_does_not_participate(self) -> None:
-        self._decision(effective_to_utc=self.now - timedelta(seconds=1))
+    def test_expired_decision_does_not_participate(
+        self,
+    ) -> None:
+        revoked_at = self.now - timedelta(seconds=1)
 
-        result = reconcile_routine_member(self._command())
+        self._decision(
+            is_active=False,
+            effective_to_utc=revoked_at,
+            revoked_at_utc=revoked_at,
+        )
 
-        self.assertEqual(result.current_status, "SIN_RUTINA")
+        result = reconcile_routine_member(
+            self._command()
+        )
 
-    def test_inactive_or_revoked_decision_does_not_participate(self) -> None:
-        for revoked_at in (None, self.now - timedelta(hours=1)):
-            with self.subTest(revoked=revoked_at is not None):
-                decision = self._decision(
-                    is_active=False,
-                    revoked_at_utc=revoked_at,
-                )
-                result = reconcile_routine_member(self._command())
-                self.assertEqual(result.current_status, "SIN_RUTINA")
-                db.session.delete(decision)
-                db.session.commit()
+        self.assertEqual(
+            result.current_status,
+            "SIN_RUTINA",
+        )
+
+    def test_inactive_or_revoked_decision_does_not_participate(
+        self,
+    ) -> None:
+        revoked_at = self.now - timedelta(hours=1)
+
+        decision = self._decision(
+            is_active=False,
+            effective_to_utc=revoked_at,
+            revoked_at_utc=revoked_at,
+        )
+
+        result = reconcile_routine_member(
+            self._command()
+        )
+
+        self.assertEqual(
+            result.current_status,
+            "SIN_RUTINA",
+        )
+
+        db.session.delete(decision)
+        db.session.commit()
 
     def test_evidence_has_priority_and_decision_is_not_modified(self) -> None:
         decision = self._decision()
@@ -599,6 +664,34 @@ class RoutineControlReconciliationPostgresTestCase(unittest.TestCase):
             repository=repository,
         )
         self.assertEqual(result.member_id, self.member.id)
+
+    def test_can_defer_commit_to_external_transaction_owner(
+        self,
+    ) -> None:
+        repository = RoutineControlReconciliationRepository(
+            db.session
+        )
+        original_commit = db.session.commit
+
+        with patch.object(db.session, "commit") as commit:
+            result = reconcile_routine_member(
+                self._command(),
+                repository=repository,
+                manage_transaction=False,
+            )
+
+            commit.assert_not_called()
+
+        self.assertEqual(
+            result.member_id,
+            self.member.id,
+        )
+        self.assertEqual(
+            result.current_status,
+            "SIN_RUTINA",
+        )
+
+        original_commit()
 
     def test_repository_never_commits_or_rolls_back(self) -> None:
         repository = RoutineControlReconciliationRepository(db.session)

@@ -129,9 +129,13 @@ def reconcile_routine_member(
     command: ReconcileRoutineMemberCommand,
     *,
     repository: RoutineControlReconciliationRepository | None = None,
+    manage_transaction: bool = True,
 ) -> RoutineControlReconciliationResult:
     if not isinstance(command, ReconcileRoutineMemberCommand):
         raise TypeError("command debe ser ReconcileRoutineMemberCommand.")
+
+    if not isinstance(manage_transaction, bool):
+        raise TypeError("manage_transaction debe ser booleano.")
 
     reconciliation_repository = (
         repository or RoutineControlReconciliationRepository(db.session)
@@ -180,11 +184,16 @@ def reconcile_routine_member(
 
         session.flush()
         result = _result(member, changed=changed)
-        session.commit()
+
+        if manage_transaction:
+            session.commit()
+
         return result
     except RoutineControlReconciliationError:
-        session.rollback()
+        if manage_transaction:
+            session.rollback()
         raise
     except Exception:
-        session.rollback()
+        if manage_transaction:
+            session.rollback()
         raise

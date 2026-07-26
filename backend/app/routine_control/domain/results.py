@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,4 +42,19 @@ class RoutineControlReconciliationResult:
     latest_routine_at: date | None
     current_instructor_name: str | None
     routine_assignment_type: str | None
+    status_version: int
+
+
+@dataclass(frozen=True, slots=True)
+class RoutineControlDecisionMutationResult:
+    decision_id: int
+    member_id: int
+    action: str
+    is_active: bool
+    reason_code: str
+    notes: str | None
+    decided_at_utc: datetime
+    revoked_at_utc: datetime | None
+    classification_status: str
+    current_status: str | None
     status_version: int

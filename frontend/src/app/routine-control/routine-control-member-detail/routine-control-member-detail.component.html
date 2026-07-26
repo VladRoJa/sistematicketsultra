@@ -1,1 +1,491 @@
-<section class="detail-page"><button mat-button type="button" (click)="back()"><mat-icon>arrow_back</mat-icon> Control de Rutinas</button><div class="message" *ngIf="loading">Consultando detalle…</div><div class="message error" *ngIf="errorMessage">{{ errorMessage }}</div><ng-container *ngIf="detail"><header><div><p>{{ detail.member.branch_name || detail.member.source_branch_name }}</p><h1>{{ detail.member.member_name || 'Socio sin nombre' }}</h1><span class="status">{{ statusLabel() }}</span></div><dl><div><dt>ID socio</dt><dd>{{ detail.member.external_member_id }}</dd></div><div><dt>Folio</dt><dd>{{ detail.member.external_sale_id || '—' }}</dd></div><div><dt>Venta</dt><dd>{{ detail.member.sale_date }}</dd></div><div><dt>Email</dt><dd>{{ detail.member.email || '—' }}</dd></div></dl></header><section><h2>Seguimiento</h2><dl class="facts"><div><dt>Primera rutina</dt><dd>{{ detail.member.first_routine_at || '—' }}</dd></div><div><dt>Última rutina</dt><dd>{{ detail.member.latest_routine_at || '—' }}</dd></div><div><dt>Instructor</dt><dd>{{ detail.member.current_instructor_name || '—' }}</dd></div><div><dt>Tipo</dt><dd>{{ detail.member.routine_assignment_type || '—' }}</dd></div><div><dt>Versión</dt><dd>{{ detail.member.status_version }}</dd></div></dl></section><section><h2>Evidencias vinculadas</h2><div class="record" *ngFor="let evidence of detail.evidences" [class.invalid]="!evidence.is_valid"><strong>{{ evidence.routine_activity_date }} · {{ evidence.instructor_name }}</strong><span class="tag">{{ evidence.match_method === 'EXTERNAL_ID' ? 'Vínculo por ID' : 'Vínculo por email' }}</span><p>{{ evidence.provider_center_name }} · {{ evidence.routine_count }} rutina(s) · {{ evidence.weighing_count }} pesaje(s)</p></div><p *ngIf="!detail.evidences.length">No hay evidencias vinculadas.</p></section><section><h2>Incidencias</h2><div class="record" *ngFor="let incident of detail.incidents" [class.active]="incident.is_active"><strong>{{ incident.incident_type }}</strong><span class="tag">{{ incident.is_active ? 'Activa' : 'Resuelta' }}</span><p>Detectada {{ incident.detected_at_utc | date:'short' }}<span *ngIf="incident.resolution_note"> · {{ incident.resolution_note }}</span></p></div><p *ngIf="!detail.incidents.length">No hay incidencias registradas.</p></section><section><h2>Decisiones</h2><div class="record" *ngFor="let decision of detail.decisions"><strong>{{ decision.decision_type }}</strong><span class="tag">{{ decision.is_active ? 'Vigente' : 'Histórica' }}</span><p>{{ decision.decided_at_utc | date:'short' }}<span *ngIf="decision.decision_reason"> · {{ decision.decision_reason }}</span></p></div><p *ngIf="!detail.decisions.length">No hay decisiones registradas.</p></section></ng-container></section>
+<section class="detail-page">
+  <button
+    mat-button
+    type="button"
+    class="back-button"
+    (click)="back()"
+  >
+    <mat-icon>arrow_back</mat-icon>
+    Control de Rutinas
+  </button>
+
+  <div class="message" *ngIf="loading">
+    Consultando detalle…
+  </div>
+
+  <div
+    class="message error"
+    *ngIf="errorMessage"
+  >
+    {{ errorMessage }}
+  </div>
+
+  <ng-container *ngIf="detail">
+    <header class="member-header">
+      <div>
+        <p class="eyebrow">
+          {{
+            detail.member.branch_name
+              || detail.member.source_branch_name
+              || 'Sin sucursal'
+          }}
+        </p>
+
+        <h1>
+          {{
+            detail.member.member_name
+              || 'Socio sin nombre'
+          }}
+        </h1>
+
+        <span class="status">
+          {{ statusLabel() }}
+        </span>
+      </div>
+
+      <dl>
+        <div>
+          <dt>ID socio</dt>
+          <dd>
+            {{ detail.member.external_member_id }}
+          </dd>
+        </div>
+
+        <div>
+          <dt>Folio</dt>
+          <dd>
+            {{
+              detail.member.external_sale_id
+                || '—'
+            }}
+          </dd>
+        </div>
+
+        <div>
+          <dt>Venta</dt>
+          <dd>{{ detail.member.sale_date }}</dd>
+        </div>
+
+        <div>
+          <dt>Email</dt>
+          <dd>{{ detail.member.email || '—' }}</dd>
+        </div>
+      </dl>
+    </header>
+
+    <section class="decision-panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">
+            Decisión operativa
+          </p>
+          <h2>Necesidad de rutina de Ultra</h2>
+        </div>
+
+        <button
+          mat-flat-button
+          type="button"
+          *ngIf="
+            canCreateDecision()
+            && !showCreateDecisionForm
+          "
+          (click)="openCreateDecisionForm()"
+        >
+          <mat-icon>person_off</mat-icon>
+          No requiere rutina de Ultra
+        </button>
+
+        <button
+          mat-stroked-button
+          type="button"
+          color="warn"
+          *ngIf="
+            canWriteDecisions()
+            && activeDecision()
+            && !showRevokeDecisionForm
+          "
+          (click)="openRevokeDecisionForm()"
+        >
+          <mat-icon>undo</mat-icon>
+          Revertir decisión
+        </button>
+      </div>
+
+      <div
+        class="active-decision"
+        *ngIf="activeDecision() as decision"
+      >
+        <mat-icon>verified</mat-icon>
+
+        <div>
+          <strong>{{ decisionLabel() }}</strong>
+          <p>
+            {{ reasonLabel(decision.reason_code) }}
+            <span *ngIf="decision.notes">
+              · {{ decision.notes }}
+            </span>
+          </p>
+          <small>
+            Registrada
+            {{
+              decision.decided_at_utc
+                | date:'short'
+            }}
+          </small>
+        </div>
+      </div>
+
+      <p
+        class="support-copy"
+        *ngIf="
+          canCreateDecision()
+          && !showCreateDecisionForm
+        "
+      >
+        Usa esta opción cuando el socio confirmó que
+        no necesita una rutina elaborada por Ultra.
+      </p>
+
+      <form
+        class="decision-form"
+        [formGroup]="createDecisionForm"
+        *ngIf="showCreateDecisionForm"
+        (ngSubmit)="createDecision()"
+      >
+        <div class="form-intro">
+          <strong>
+            Marcar como “No requiere rutina de Ultra”
+          </strong>
+          <p>
+            Esta acción cambia el estado operativo del
+            socio y quedará registrada en el historial.
+          </p>
+        </div>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Motivo</mat-label>
+          <mat-select formControlName="reason_code">
+            <mat-option
+              *ngFor="let option of reasonOptions"
+              [value]="option.value"
+            >
+              {{ option.label }}
+            </mat-option>
+          </mat-select>
+
+          <mat-error
+            *ngIf="
+              createDecisionForm.controls
+                .reason_code.hasError('required')
+            "
+          >
+            Selecciona un motivo.
+          </mat-error>
+        </mat-form-field>
+
+        <mat-form-field
+          appearance="outline"
+          class="full-width"
+        >
+          <mat-label>
+            Observaciones
+            {{
+              createDecisionForm.controls
+                .reason_code.value === 'OTRO'
+                ? '(obligatorias)'
+                : '(opcionales)'
+            }}
+          </mat-label>
+
+          <textarea
+            matInput
+            formControlName="notes"
+            rows="3"
+            maxlength="500"
+          ></textarea>
+
+          <mat-hint align="end">
+            {{
+              createDecisionForm.controls
+                .notes.value.length
+            }}/500
+          </mat-hint>
+
+          <mat-error
+            *ngIf="otherReasonRequiresNotes()"
+          >
+            Explica el motivo cuando seleccionas Otro.
+          </mat-error>
+        </mat-form-field>
+
+        <mat-checkbox formControlName="confirmed">
+          Confirmo que el socio no requiere una rutina
+          elaborada por Ultra.
+        </mat-checkbox>
+
+        <div class="form-actions">
+          <button
+            mat-button
+            type="button"
+            [disabled]="savingDecision"
+            (click)="cancelCreateDecision()"
+          >
+            Cancelar
+          </button>
+
+          <button
+            mat-flat-button
+            type="submit"
+            [disabled]="savingDecision"
+          >
+            <mat-icon>check</mat-icon>
+            {{
+              savingDecision
+                ? 'Guardando…'
+                : 'Confirmar decisión'
+            }}
+          </button>
+        </div>
+      </form>
+
+      <form
+        class="decision-form revoke-form"
+        [formGroup]="revokeDecisionForm"
+        *ngIf="showRevokeDecisionForm"
+        (ngSubmit)="revokeDecision()"
+      >
+        <div class="form-intro">
+          <strong>Revertir decisión vigente</strong>
+          <p>
+            El registro no se eliminará. Quedará como
+            histórico y el estado será recalculado.
+          </p>
+        </div>
+
+        <mat-form-field
+          appearance="outline"
+          class="full-width"
+        >
+          <mat-label>Motivo de reversión</mat-label>
+          <textarea
+            matInput
+            formControlName="revocation_reason"
+            rows="3"
+            maxlength="500"
+          ></textarea>
+
+          <mat-error
+            *ngIf="
+              revokeDecisionForm.controls
+                .revocation_reason.hasError('required')
+            "
+          >
+            El motivo es obligatorio.
+          </mat-error>
+        </mat-form-field>
+
+        <div class="form-actions">
+          <button
+            mat-button
+            type="button"
+            [disabled]="revokingDecision"
+            (click)="cancelRevokeDecision()"
+          >
+            Cancelar
+          </button>
+
+          <button
+            mat-flat-button
+            color="warn"
+            type="submit"
+            [disabled]="revokingDecision"
+          >
+            <mat-icon>undo</mat-icon>
+            {{
+              revokingDecision
+                ? 'Revirtiendo…'
+                : 'Revertir decisión'
+            }}
+          </button>
+        </div>
+      </form>
+
+      <div
+        class="message success"
+        *ngIf="actionSuccessMessage"
+      >
+        {{ actionSuccessMessage }}
+      </div>
+
+      <div
+        class="message error"
+        *ngIf="actionErrorMessage"
+      >
+        {{ actionErrorMessage }}
+      </div>
+    </section>
+
+    <section>
+      <h2>Seguimiento</h2>
+
+      <dl class="facts">
+        <div>
+          <dt>Primera rutina</dt>
+          <dd>
+            {{ detail.member.first_routine_at || '—' }}
+          </dd>
+        </div>
+
+        <div>
+          <dt>Última rutina</dt>
+          <dd>
+            {{ detail.member.latest_routine_at || '—' }}
+          </dd>
+        </div>
+
+        <div>
+          <dt>Instructor</dt>
+          <dd>
+            {{
+              detail.member.current_instructor_name
+                || '—'
+            }}
+          </dd>
+        </div>
+
+        <div>
+          <dt>Tipo</dt>
+          <dd>
+            {{
+              detail.member.routine_assignment_type
+                || '—'
+            }}
+          </dd>
+        </div>
+
+        <div>
+          <dt>Versión</dt>
+          <dd>{{ detail.member.status_version }}</dd>
+        </div>
+      </dl>
+    </section>
+
+    <section>
+      <h2>Evidencias vinculadas</h2>
+
+      <div
+        class="record"
+        *ngFor="let evidence of detail.evidences"
+        [class.invalid]="!evidence.is_valid"
+      >
+        <strong>
+          {{ evidence.routine_activity_date }}
+          · {{ evidence.instructor_name }}
+        </strong>
+
+        <span class="tag">
+          {{
+            evidence.match_method === 'EXTERNAL_ID'
+              ? 'Vínculo por ID'
+              : 'Vínculo por email'
+          }}
+        </span>
+
+        <p>
+          {{ evidence.provider_center_name }}
+          · {{ evidence.routine_count }} rutina(s)
+          · {{ evidence.weighing_count }} pesaje(s)
+        </p>
+      </div>
+
+      <p *ngIf="!detail.evidences.length">
+        No hay evidencias vinculadas.
+      </p>
+    </section>
+
+    <section>
+      <h2>Incidencias</h2>
+
+      <div
+        class="record"
+        *ngFor="let incident of detail.incidents"
+        [class.active]="incident.is_active"
+      >
+        <strong>{{ incident.incident_type }}</strong>
+
+        <span class="tag">
+          {{ incident.is_active ? 'Activa' : 'Resuelta' }}
+        </span>
+
+        <p>
+          Detectada
+          {{
+            incident.detected_at_utc
+              | date:'short'
+          }}
+
+          <span *ngIf="incident.resolution_note">
+            · {{ incident.resolution_note }}
+          </span>
+        </p>
+      </div>
+
+      <p *ngIf="!detail.incidents.length">
+        No hay incidencias registradas.
+      </p>
+    </section>
+
+    <section>
+      <h2>Historial de decisiones</h2>
+
+      <div
+        class="record decision-record"
+        *ngFor="let decision of detail.decisions"
+      >
+        <div class="record-heading">
+          <strong>{{ decisionLabel() }}</strong>
+
+          <span class="tag">
+            {{
+              decision.is_active
+                ? 'Vigente'
+                : 'Histórica'
+            }}
+          </span>
+        </div>
+
+        <p>
+          {{ reasonLabel(decision.reason_code) }}
+
+          <span *ngIf="decision.notes">
+            · {{ decision.notes }}
+          </span>
+        </p>
+
+        <small>
+          Registrada
+          {{
+            decision.decided_at_utc
+              | date:'short'
+          }}
+        </small>
+
+        <p
+          class="revocation"
+          *ngIf="decision.revoked_at_utc"
+        >
+          Revertida
+          {{
+            decision.revoked_at_utc
+              | date:'short'
+          }}
+          · {{ decision.revocation_reason }}
+        </p>
+      </div>
+
+      <p *ngIf="!detail.decisions.length">
+        No hay decisiones registradas.
+      </p>
+    </section>
+  </ng-container>
+</section>
