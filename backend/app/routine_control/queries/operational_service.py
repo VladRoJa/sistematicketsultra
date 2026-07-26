@@ -97,32 +97,81 @@ class RoutineControlOperationalService:
                 ) from exc
         return RoutineControlScope("REGIONAL", False, assigned, None, role)
 
-    def catalogs(self, user: UserORM) -> dict:
-        scope = self.resolve_scope(user)
+    def _catalog_branches_and_regions(
+        self,
+        scope: RoutineControlScope,
+    ) -> tuple[list[dict], list[dict]]:
         allowed = set(scope.allowed_branch_ids)
-        branches = [item for item in self.repository.list_operational_branches() if item["id"] in allowed]
+
+        branches = [
+            item
+            for item in self.repository
+            .list_operational_branches()
+            if item["id"] in allowed
+        ]
+
         regions: dict[str, dict] = {}
+
         for branch in branches:
             key = branch["region_key"]
+
             if not key:
                 continue
-            region = regions.setdefault(key, {"key": key, "name": branch["region_name"] or key, "branch_ids": []})
+
+            region = regions.setdefault(
+                key,
+                {
+                    "key": key,
+                    "name": (
+                        branch["region_name"]
+                        or key
+                    ),
+                    "branch_ids": [],
+                },
+            )
             region["branch_ids"].append(branch["id"])
+
+        return branches, list(regions.values())
+
+    def catalogs(self, user: UserORM) -> dict:
+        scope = self.resolve_scope(user)
+        branches, regions = (
+            self._catalog_branches_and_regions(scope)
+        )
+
         return {
             "scope": {
                 "scope_type": scope.scope_type,
-                "allowed_branch_ids": list(scope.allowed_branch_ids),
+                "allowed_branch_ids": list(
+                    scope.allowed_branch_ids
+                ),
                 "fixed_branch_id": scope.fixed_branch_id,
             },
             "branches": branches,
-            "regions": list(regions.values()),
-            "statuses": ["SIN_RUTINA", "CON_RUTINA", "NO_DESEA_RUTINA", "INCIDENT"],
-            "assignment_types": ["PREEXISTENTE", "MISMO_DIA", "POSTERIOR"],
+            "regions": regions,
+            "statuses": [
+                "SIN_RUTINA",
+                "CON_RUTINA",
+                "NO_DESEA_RUTINA",
+                "INCIDENT",
+            ],
+            "assignment_types": [
+                "PREEXISTENTE",
+                "MISMO_DIA",
+                "POSTERIOR",
+            ],
+            "instructors": (
+                self.repository.list_instructor_catalog(
+                    scope.allowed_branch_ids
+                )
+            ),
         }
 
     def _filters(self, user: UserORM, raw: dict, *, listing: bool) -> tuple[RoutineControlScope, dict]:
         scope = self.resolve_scope(user)
-        catalogs = self.catalogs(user)
+        _, regions = self._catalog_branches_and_regions(
+            scope
+        )
         branch_id = _parse_int(raw.get("branch_id"), "branch_id")
         region_key = str(raw.get("region_key") or "").strip() or None
         allowed = set(scope.allowed_branch_ids)
@@ -130,7 +179,7 @@ class RoutineControlOperationalService:
             raise RoutineControlAuthorizationError("Sucursal fuera del alcance autorizado.")
         region_branch_ids: set[int] | None = None
         if region_key:
-            region = next((item for item in catalogs["regions"] if item["key"] == region_key), None)
+            region = next((item for item in regions if item["key"] == region_key), None)
             if region is None:
                 if any(item["region_key"] == region_key for item in self.repository.list_operational_branches()):
                     raise RoutineControlAuthorizationError("Región fuera del alcance autorizado.")

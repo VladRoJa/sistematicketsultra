@@ -78,6 +78,65 @@ class RoutineControlOperationalRepository:
                 existing["region_name"] = None
         return list(branches.values())
 
+    def list_instructor_catalog(
+        self,
+        branch_ids: tuple[int, ...],
+    ) -> list[dict]:
+        if not branch_ids:
+            return []
+
+        instructor_name = func.trim(
+            RoutineControlMemberORM.current_instructor_name
+        )
+
+        rows = (
+            self.session.query(
+                RoutineControlMemberORM.sucursal_id,
+                instructor_name.label("instructor_name"),
+            )
+            .filter(
+                RoutineControlMemberORM.sucursal_id.in_(
+                    branch_ids
+                ),
+                RoutineControlMemberORM
+                .current_instructor_name
+                .isnot(None),
+                func.length(instructor_name) > 0,
+            )
+            .distinct()
+            .all()
+        )
+
+        grouped: dict[str, dict] = {}
+
+        for branch_id, name in rows:
+            normalized_name = str(name).strip()
+
+            if not normalized_name:
+                continue
+
+            normalized_key = normalized_name.casefold()
+
+            item = grouped.setdefault(
+                normalized_key,
+                {
+                    "name": normalized_name,
+                    "branch_ids": set(),
+                },
+            )
+            item["branch_ids"].add(int(branch_id))
+
+        return [
+            {
+                "name": item["name"],
+                "branch_ids": sorted(item["branch_ids"]),
+            }
+            for item in sorted(
+                grouped.values(),
+                key=lambda value: value["name"].casefold(),
+            )
+        ]
+
     @staticmethod
     def _active_evidence_counts():
         return (
