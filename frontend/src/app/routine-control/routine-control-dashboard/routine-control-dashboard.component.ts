@@ -16,6 +16,7 @@ import {
   RoutineControlBranchCatalog,
   RoutineControlCatalogs,
   RoutineControlFilters,
+  RoutineControlInstructorCatalog,
   RoutineControlMember,
   RoutineControlMembersResponse,
   RoutineControlSummary,
@@ -98,9 +99,61 @@ export class RoutineControlDashboardComponent implements OnInit, OnDestroy {
   }
 
   get availableBranches(): RoutineControlBranchCatalog[] {
-    const regionKey = this.form.controls.region_key.value;
-    if (!regionKey) return this.catalogs?.branches || [];
-    return (this.catalogs?.branches || []).filter((branch) => branch.region_key === regionKey);
+    const regionKey =
+      this.form.controls.region_key.value;
+
+    if (!regionKey) {
+      return this.catalogs?.branches || [];
+    }
+
+    return (this.catalogs?.branches || []).filter(
+      (branch) => branch.region_key === regionKey,
+    );
+  }
+
+  get availableInstructors():
+    RoutineControlInstructorCatalog[] {
+    const instructors =
+      this.catalogs?.instructors || [];
+
+    const branchId =
+      this.form.controls.branch_id.value;
+
+    if (branchId !== null) {
+      return instructors.filter(
+        (instructor) =>
+          instructor.branch_ids.includes(branchId),
+      );
+    }
+
+    const regionKey =
+      this.form.controls.region_key.value;
+
+    if (!regionKey) {
+      return instructors;
+    }
+
+    const region = this.catalogs?.regions.find(
+      (item) => item.key === regionKey,
+    );
+
+    if (!region) {
+      return [];
+    }
+
+    const regionBranchIds = new Set(
+      region.branch_ids,
+    );
+
+    return instructors.filter(
+      (instructor) =>
+        instructor.branch_ids.some(
+          (instructorBranchId) =>
+            regionBranchIds.has(
+              instructorBranchId,
+            ),
+        ),
+    );
   }
 
   get sortedBranches(): RoutineControlSummaryBranch[] {
@@ -122,7 +175,7 @@ export class RoutineControlDashboardComponent implements OnInit, OnDestroy {
 
   statusLabel(status: RoutineControlVisibleStatus): string {
     return ({
-      CON_RUTINA: 'Con rutina', SIN_RUTINA: 'Sin rutina', NO_DESEA_RUTINA: 'No desea rutina', INCIDENT: 'Incidencia',
+      CON_RUTINA: 'Con rutina', SIN_RUTINA: 'Sin rutina', NO_DESEA_RUTINA: 'No requiere rutina de Ultra', INCIDENT: 'Incidencia',
     })[status];
   }
 
@@ -135,15 +188,42 @@ export class RoutineControlDashboardComponent implements OnInit, OnDestroy {
   }
 
   selectRegion(): void {
-    const selected = this.form.controls.branch_id.value;
-    if (selected !== null && !this.availableBranches.some((branch) => branch.id === selected)) {
-      this.form.controls.branch_id.setValue(null);
+    const selectedBranchId =
+      this.form.controls.branch_id.value;
+
+    if (
+      selectedBranchId !== null
+      && !this.availableBranches.some(
+        (branch) =>
+          branch.id === selectedBranchId,
+      )
+    ) {
+      this.form.controls.branch_id.setValue(
+        null,
+      );
     }
+
+    this.syncInstructorSelection();
   }
 
-  selectBranch(branchId: number | null): void {
-    if (branchId === null || !this.canSelectBranch) return;
-    this.form.controls.branch_id.setValue(branchId);
+  selectBranchFilter(): void {
+    this.syncInstructorSelection();
+  }
+
+  selectBranch(
+    branchId: number | null,
+  ): void {
+    if (
+      branchId === null
+      || !this.canSelectBranch
+    ) {
+      return;
+    }
+
+    this.form.controls.branch_id.setValue(
+      branchId,
+    );
+    this.syncInstructorSelection();
   }
 
   sortBranches(field: keyof RoutineControlSummaryBranch): void {
@@ -215,6 +295,26 @@ export class RoutineControlDashboardComponent implements OnInit, OnDestroy {
       this.members = result.members.items;
       this.total = result.members.total;
     }));
+  }
+
+  private syncInstructorSelection(): void {
+    const selectedInstructor = String(
+      this.form.controls.instructor.value ?? '',
+    ).trim();
+
+    if (!selectedInstructor) {
+      return;
+    }
+
+    const remainsAvailable =
+      this.availableInstructors.some(
+        (instructor) =>
+          instructor.name === selectedInstructor,
+      );
+
+    if (!remainsAvailable) {
+      this.form.controls.instructor.setValue('');
+    }
   }
 
   private currentFilters(): RoutineControlFilters {

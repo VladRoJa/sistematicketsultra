@@ -15,6 +15,11 @@ export interface RoutineControlBranchCatalog {
   region_name: string | null;
 }
 
+export interface RoutineControlInstructorCatalog {
+  name: string;
+  branch_ids: number[];
+}
+
 export interface RoutineControlRegionCatalog {
   key: string;
   name: string;
@@ -27,6 +32,7 @@ export interface RoutineControlCatalogs {
   regions: RoutineControlRegionCatalog[];
   statuses: RoutineControlVisibleStatus[];
   assignment_types: RoutineControlAssignmentType[];
+  instructors: RoutineControlInstructorCatalog[];
 }
 
 export interface RoutineControlFilters {
