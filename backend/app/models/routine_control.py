@@ -879,8 +879,44 @@ class RoutineControlDecisionORM(db.Model):
             name="ck_routine_control_decisions_effective_range",
         ),
         db.CheckConstraint(
-            "is_active = false OR revoked_at_utc IS NULL",
-            name="ck_routine_control_decisions_active_revocation",
+            """
+            reason_code IN (
+                'NO_INTERESADO',
+                'RUTINA_PROPIA',
+                'ENTRENADOR_EXTERNO',
+                'LIMITACION_MEDICA',
+                'SOLO_CLASES_GRUPALES',
+                'OTRO'
+            )
+            """,
+            name="ck_routine_control_decisions_reason_code",
+        ),
+        db.CheckConstraint(
+            """
+            reason_code <> 'OTRO'
+            OR NULLIF(BTRIM(notes), '') IS NOT NULL
+            """,
+            name="ck_routine_control_decisions_other_requires_notes",
+        ),
+        db.CheckConstraint(
+            """
+            (
+                is_active = true
+                AND effective_to_utc IS NULL
+                AND revoked_at_utc IS NULL
+                AND revoked_by_user_id IS NULL
+                AND revocation_reason IS NULL
+            )
+            OR
+            (
+                is_active = false
+                AND effective_to_utc IS NOT NULL
+                AND revoked_at_utc IS NOT NULL
+                AND revoked_by_user_id IS NOT NULL
+                AND NULLIF(BTRIM(revocation_reason), '') IS NOT NULL
+            )
+            """,
+            name="ck_routine_control_decisions_revocation_audit",
         ),
         db.Index(
             "ix_routine_control_decisions_member_type_active",
@@ -902,6 +938,7 @@ class RoutineControlDecisionORM(db.Model):
         primary_key=True,
         autoincrement=True,
     )
+
     member_id = db.Column(
         db.BigInteger,
         db.ForeignKey(
@@ -910,41 +947,87 @@ class RoutineControlDecisionORM(db.Model):
         ),
         nullable=False,
     )
+
     decision_type = db.Column(
         db.String(64),
         nullable=False,
     )
+
+    reason_code = db.Column(
+        db.String(64),
+        nullable=False,
+    )
+
+    notes = db.Column(
+        db.Text,
+        nullable=True,
+    )
+
     is_active = db.Column(
         db.Boolean,
         nullable=False,
         default=True,
         server_default=db.text("true"),
     )
+
     decided_at_utc = db.Column(
         db.DateTime(timezone=True),
         nullable=False,
     )
+
     effective_from_utc = db.Column(
         db.DateTime(timezone=True),
         nullable=False,
     )
+
     effective_to_utc = db.Column(
         db.DateTime(timezone=True),
         nullable=True,
     )
+
+    created_by_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey(
+            "users.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+    )
+
+    created_from_sucursal_id = db.Column(
+        db.Integer,
+        db.ForeignKey(
+            "sucursales.sucursal_id",
+            ondelete="RESTRICT",
+        ),
+        nullable=True,
+    )
+
     revoked_at_utc = db.Column(
         db.DateTime(timezone=True),
         nullable=True,
     )
-    decision_reason = db.Column(
+
+    revoked_by_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey(
+            "users.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=True,
+    )
+
+    revocation_reason = db.Column(
         db.Text,
         nullable=True,
     )
+
     created_at_utc = db.Column(
         db.DateTime(timezone=True),
         nullable=False,
         server_default=db.text("now()"),
     )
+
     updated_at_utc = db.Column(
         db.DateTime(timezone=True),
         nullable=False,
@@ -955,6 +1038,21 @@ class RoutineControlDecisionORM(db.Model):
     member = db.relationship(
         "RoutineControlMemberORM",
         back_populates="decisions",
+    )
+
+    created_by_user = db.relationship(
+        "UserORM",
+        foreign_keys=[created_by_user_id],
+    )
+
+    revoked_by_user = db.relationship(
+        "UserORM",
+        foreign_keys=[revoked_by_user_id],
+    )
+
+    created_from_sucursal = db.relationship(
+        "Sucursal",
+        foreign_keys=[created_from_sucursal_id],
     )
 
 

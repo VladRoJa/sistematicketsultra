@@ -126,15 +126,89 @@ export interface RoutineControlIncident {
   resolution_note: string | null;
 }
 
+export type RoutineControlNoRoutineReasonCode =
+  | 'NO_INTERESADO'
+  | 'RUTINA_PROPIA'
+  | 'ENTRENADOR_EXTERNO'
+  | 'LIMITACION_MEDICA'
+  | 'SOLO_CLASES_GRUPALES'
+  | 'OTRO';
+
+export interface RoutineControlNoRoutineReasonOption {
+  value: RoutineControlNoRoutineReasonCode;
+  label: string;
+}
+
+export const ROUTINE_CONTROL_NO_ROUTINE_REASON_OPTIONS:
+  readonly RoutineControlNoRoutineReasonOption[] = [
+    {
+      value: 'NO_INTERESADO',
+      label: 'No está interesado',
+    },
+    {
+      value: 'RUTINA_PROPIA',
+      label: 'Ya cuenta con rutina propia',
+    },
+    {
+      value: 'ENTRENADOR_EXTERNO',
+      label: 'Tiene entrenador externo',
+    },
+    {
+      value: 'LIMITACION_MEDICA',
+      label: 'Limitación médica o indicación profesional',
+    },
+    {
+      value: 'SOLO_CLASES_GRUPALES',
+      label: 'Sólo utiliza clases o actividades grupales',
+    },
+    {
+      value: 'OTRO',
+      label: 'Otro',
+    },
+  ];
+
+export interface RoutineControlCreateNoRoutineDecisionRequest {
+  reason_code: RoutineControlNoRoutineReasonCode;
+  notes: string | null;
+  confirmed: true;
+}
+
+export interface RoutineControlRevokeNoRoutineDecisionRequest {
+  revocation_reason: string;
+}
+
+export interface RoutineControlDecisionMutationResponse {
+  decision_id: number;
+  member_id: number;
+  action: 'CREATED' | 'REVOKED';
+  is_active: boolean;
+  reason_code: RoutineControlNoRoutineReasonCode;
+  notes: string | null;
+  decided_at_utc: string;
+  revoked_at_utc: string | null;
+  classification_status: 'CLASSIFIED' | 'INCIDENT';
+  current_status:
+    | 'SIN_RUTINA'
+    | 'CON_RUTINA'
+    | 'NO_DESEA_RUTINA'
+    | null;
+  status_version: number;
+}
+
 export interface RoutineControlDecision {
   id: number;
-  decision_type: string;
+  decision_type: 'NO_DESEA_RUTINA';
+  reason_code: RoutineControlNoRoutineReasonCode;
+  notes: string | null;
   is_active: boolean;
   decided_at_utc: string;
   effective_from_utc: string;
   effective_to_utc: string | null;
+  created_by_user_id: number;
+  created_from_sucursal_id: number | null;
   revoked_at_utc: string | null;
-  decision_reason: string | null;
+  revoked_by_user_id: number | null;
+  revocation_reason: string | null;
 }
 
 export interface RoutineControlMemberDetail {

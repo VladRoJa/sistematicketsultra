@@ -4,9 +4,12 @@ import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import {
   RoutineControlCatalogs,
+  RoutineControlCreateNoRoutineDecisionRequest,
+  RoutineControlDecisionMutationResponse,
   RoutineControlFilters,
   RoutineControlMemberDetail,
   RoutineControlMembersResponse,
+  RoutineControlRevokeNoRoutineDecisionRequest,
   RoutineControlRunFilters,
   RoutineControlRunsResponse,
   RoutineControlSummary,
@@ -35,7 +38,30 @@ export class RoutineControlService {
   }
 
   getMemberDetail(id: number): Observable<RoutineControlMemberDetail> {
-    return this.http.get<RoutineControlMemberDetail>(`${this.baseUrl}/members/${id}`);
+    return this.http.get<RoutineControlMemberDetail>(
+      `${this.baseUrl}/members/${id}`,
+    );
+  }
+
+  createNoRoutineDecision(
+    memberId: number,
+    payload: RoutineControlCreateNoRoutineDecisionRequest,
+  ): Observable<RoutineControlDecisionMutationResponse> {
+    return this.http.post<RoutineControlDecisionMutationResponse>(
+      `${this.baseUrl}/members/${memberId}/no-routine-decision`,
+      payload,
+    );
+  }
+
+  revokeNoRoutineDecision(
+    memberId: number,
+    decisionId: number,
+    payload: RoutineControlRevokeNoRoutineDecisionRequest,
+  ): Observable<RoutineControlDecisionMutationResponse> {
+    return this.http.post<RoutineControlDecisionMutationResponse>(
+      `${this.baseUrl}/members/${memberId}/no-routine-decision/${decisionId}/revoke`,
+      payload,
+    );
   }
 
   getRuns(filters: RoutineControlRunFilters): Observable<RoutineControlRunsResponse> {

@@ -283,10 +283,33 @@ class RoutineControlOperationalService:
                 "resolution_note": item.resolution_note,
             } for item in relations["incidents"]],
             "decisions": [{
-                "id": int(item.id), "decision_type": item.decision_type, "is_active": bool(item.is_active),
-                "decided_at_utc": _iso(item.decided_at_utc), "effective_from_utc": _iso(item.effective_from_utc),
-                "effective_to_utc": _iso(item.effective_to_utc), "revoked_at_utc": _iso(item.revoked_at_utc),
-                "decision_reason": item.decision_reason,
+                "id": int(item.id),
+                "decision_type": item.decision_type,
+                "reason_code": item.reason_code,
+                "notes": item.notes,
+                "is_active": bool(item.is_active),
+                "decided_at_utc": _iso(item.decided_at_utc),
+                "effective_from_utc": _iso(
+                    item.effective_from_utc
+                ),
+                "effective_to_utc": _iso(
+                    item.effective_to_utc
+                ),
+                "created_by_user_id": (
+                    item.created_by_user_id
+                ),
+                "created_from_sucursal_id": (
+                    item.created_from_sucursal_id
+                ),
+                "revoked_at_utc": _iso(
+                    item.revoked_at_utc
+                ),
+                "revoked_by_user_id": (
+                    item.revoked_by_user_id
+                ),
+                "revocation_reason": (
+                    item.revocation_reason
+                ),
             } for item in relations["decisions"]],
         }
 

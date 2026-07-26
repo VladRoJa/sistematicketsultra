@@ -69,3 +69,22 @@ class UnlinkRoutineMemberEvidenceCommand:
 class ReconcileRoutineMemberCommand:
     member_id: int
     as_of_utc: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class CreateNoRoutineDecisionCommand:
+    member_id: int
+    reason_code: str
+    notes: str | None
+    actor_user_id: int
+    confirmed: bool
+    decided_at_utc: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class RevokeNoRoutineDecisionCommand:
+    member_id: int
+    decision_id: int
+    actor_user_id: int
+    revocation_reason: str
+    revoked_at_utc: datetime | None = None

@@ -4,7 +4,7 @@ import unittest
 from datetime import date, datetime, timedelta, timezone
 from uuid import uuid4
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 
 from app import create_app
@@ -14,17 +14,23 @@ from app.models.routine_control import (
     RoutineControlIncidentORM,
     RoutineControlMemberORM,
 )
+from app.models.sucursal_model import Sucursal
+from app.models.user_model import UserORM
 
 
-class RoutineControlIncidentDecisionModelsPostgresTestCase(unittest.TestCase):
+class RoutineControlIncidentDecisionModelsPostgresTestCase(
+    unittest.TestCase
+):
     @classmethod
     def setUpClass(cls) -> None:
         cls.app = create_app()
         cls.app_context = cls.app.app_context()
         cls.app_context.push()
+
         if db.engine.dialect.name != "postgresql":
             raise RuntimeError(
-                "Estas pruebas requieren PostgreSQL real; SQLite no está permitido."
+                "Estas pruebas requieren PostgreSQL real; "
+                "SQLite no está permitido."
             )
 
     @classmethod
@@ -33,16 +39,51 @@ class RoutineControlIncidentDecisionModelsPostgresTestCase(unittest.TestCase):
         cls.app_context.pop()
 
     def setUp(self) -> None:
-        self.source_system = f"TEST_ROUTINE_CONTROL_{uuid4().hex}"
-        self.now = datetime(2026, 7, 14, 19, 0, tzinfo=timezone.utc)
+        token = uuid4().hex
+        self.source_system = f"TEST_ROUTINE_CONTROL_{token}"
+        self.now = datetime(
+            2026,
+            7,
+            14,
+            19,
+            0,
+            tzinfo=timezone.utc,
+        )
+
+        self.branch = Sucursal(
+            serie=f"RT{token[:8]}",
+            sucursal=f"Sucursal prueba {token}",
+            estado="Baja California",
+            municipio="Mexicali",
+            direccion="Dirección de prueba",
+        )
+        db.session.add(self.branch)
+        db.session.flush()
+
+        max_user_id = db.session.execute(
+            select(func.coalesce(func.max(UserORM.id), 0))
+        ).scalar_one()
+
+        self.user = UserORM(
+            id=int(max_user_id) + 1,
+            username=f"routine-control-{token}",
+            password="password-no-utilizado",
+            rol="ADMINISTRADOR",
+            sucursal_id=self.branch.sucursal_id,
+            department_id=1,
+            email=f"{token}@example.com",
+        )
+        db.session.add(self.user)
+        db.session.flush()
+
         self.member = RoutineControlMemberORM(
             source_system=self.source_system,
             source_record_id="record-1",
             source_identity_key="identity-1",
             external_member_id="member-1",
             external_sale_id="sale-1",
-            sucursal_id=None,
-            source_branch_name="Sucursal Fuente",
+            sucursal_id=self.branch.sucursal_id,
+            source_branch_name=self.branch.sucursal,
             member_name="Miembro de prueba",
             email_original="member@example.com",
             email_normalized="member@example.com",
@@ -61,28 +102,53 @@ class RoutineControlIncidentDecisionModelsPostgresTestCase(unittest.TestCase):
 
     def tearDown(self) -> None:
         db.session.rollback()
-        member_ids = select(RoutineControlMemberORM.id).where(
-            RoutineControlMemberORM.source_system == self.source_system
+
+        member_ids = select(
+            RoutineControlMemberORM.id
+        ).where(
+            RoutineControlMemberORM.source_system
+            == self.source_system
         )
+
         db.session.execute(
             delete(RoutineControlDecisionORM).where(
-                RoutineControlDecisionORM.member_id.in_(member_ids)
+                RoutineControlDecisionORM.member_id.in_(
+                    member_ids
+                )
             )
         )
         db.session.execute(
             delete(RoutineControlIncidentORM).where(
-                RoutineControlIncidentORM.member_id.in_(member_ids)
+                RoutineControlIncidentORM.member_id.in_(
+                    member_ids
+                )
             )
         )
         db.session.execute(
             delete(RoutineControlMemberORM).where(
-                RoutineControlMemberORM.source_system == self.source_system
+                RoutineControlMemberORM.source_system
+                == self.source_system
             )
         )
+        db.session.execute(
+            delete(UserORM).where(
+                UserORM.id == self.user.id
+            )
+        )
+        db.session.execute(
+            delete(Sucursal).where(
+                Sucursal.sucursal_id
+                == self.branch.sucursal_id
+            )
+        )
+
         db.session.commit()
         db.session.remove()
 
-    def _incident(self, **overrides) -> RoutineControlIncidentORM:
+    def _incident(
+        self,
+        **overrides,
+    ) -> RoutineControlIncidentORM:
         values = {
             "member_id": self.member.id,
             "incident_type": "EMAIL_VACIO",
@@ -91,23 +157,59 @@ class RoutineControlIncidentDecisionModelsPostgresTestCase(unittest.TestCase):
         values.update(overrides)
         return RoutineControlIncidentORM(**values)
 
-    def _decision(self, **overrides) -> RoutineControlDecisionORM:
+    def _decision(
+        self,
+        **overrides,
+    ) -> RoutineControlDecisionORM:
         values = {
             "member_id": self.member.id,
             "decision_type": "NO_DESEA_RUTINA",
+            "reason_code": "NO_INTERESADO",
+            "notes": None,
+            "created_by_user_id": self.user.id,
+            "created_from_sucursal_id": (
+                self.branch.sucursal_id
+            ),
             "decided_at_utc": self.now,
             "effective_from_utc": self.now,
+            "is_active": True,
         }
         values.update(overrides)
+
+        if values["is_active"] is False:
+            revoked_at = values.get(
+                "revoked_at_utc"
+            ) or (
+                values["effective_from_utc"]
+                + timedelta(hours=1)
+            )
+
+            if "revoked_at_utc" not in overrides:
+                values["revoked_at_utc"] = revoked_at
+            if "effective_to_utc" not in overrides:
+                values["effective_to_utc"] = revoked_at
+            if "revoked_by_user_id" not in overrides:
+                values["revoked_by_user_id"] = self.user.id
+            if "revocation_reason" not in overrides:
+                values["revocation_reason"] = (
+                    "Reversión de prueba."
+                )
+
         return RoutineControlDecisionORM(**values)
 
     def _assert_flush_rejected(self, entity) -> None:
         db.session.add(entity)
+
         with self.assertRaises(IntegrityError):
             db.session.flush()
+
         db.session.rollback()
+
         self.assertIsNotNone(
-            db.session.get(RoutineControlMemberORM, self.member.id)
+            db.session.get(
+                RoutineControlMemberORM,
+                self.member.id,
+            )
         )
 
     def test_creates_incident_with_defaults(self) -> None:
@@ -121,154 +223,344 @@ class RoutineControlIncidentDecisionModelsPostgresTestCase(unittest.TestCase):
         self.assertIsNone(incident.resolved_at_utc)
         self.assertIsNotNone(incident.created_at_utc)
         self.assertIsNotNone(incident.updated_at_utc)
-        self.assertEqual(incident.member.id, self.member.id)
-        self.assertIn(incident, self.member.incidents)
+        self.assertEqual(
+            incident.member.id,
+            self.member.id,
+        )
+        self.assertIn(
+            incident,
+            self.member.incidents,
+        )
 
     def test_rejects_unknown_incident_type(self) -> None:
         self._assert_flush_rejected(
-            self._incident(incident_type="TIPO_DESCONOCIDO")
+            self._incident(
+                incident_type="TIPO_DESCONOCIDO"
+            )
         )
 
-    def test_rejects_active_incident_with_resolved_at(self) -> None:
+    def test_rejects_active_incident_with_resolved_at(
+        self,
+    ) -> None:
         self._assert_flush_rejected(
-            self._incident(resolved_at_utc=self.now + timedelta(hours=1))
+            self._incident(
+                resolved_at_utc=(
+                    self.now + timedelta(hours=1)
+                )
+            )
         )
 
-    def test_allows_inactive_resolved_incident(self) -> None:
+    def test_allows_inactive_resolved_incident(
+        self,
+    ) -> None:
         incident = self._incident(
             is_active=False,
-            resolved_at_utc=self.now + timedelta(hours=1),
-            resolution_note="Resuelta durante la prueba.",
+            resolved_at_utc=(
+                self.now + timedelta(hours=1)
+            ),
+            resolution_note=(
+                "Resuelta durante la prueba."
+            ),
         )
         db.session.add(incident)
         db.session.commit()
 
         self.assertFalse(incident.is_active)
-        self.assertEqual(incident.resolved_at_utc, self.now + timedelta(hours=1))
+        self.assertEqual(
+            incident.resolved_at_utc,
+            self.now + timedelta(hours=1),
+        )
 
-    def test_prevents_duplicate_active_incident_type_for_member(self) -> None:
+    def test_prevents_duplicate_active_incident_type_for_member(
+        self,
+    ) -> None:
         db.session.add(self._incident())
         db.session.commit()
 
-        self._assert_flush_rejected(self._incident())
+        self._assert_flush_rejected(
+            self._incident()
+        )
 
-    def test_allows_repeated_inactive_incident_history(self) -> None:
+    def test_allows_repeated_inactive_incident_history(
+        self,
+    ) -> None:
         db.session.add_all(
             (
                 self._incident(
                     is_active=False,
-                    resolved_at_utc=self.now + timedelta(hours=1),
+                    resolved_at_utc=(
+                        self.now + timedelta(hours=1)
+                    ),
                 ),
                 self._incident(
                     is_active=False,
-                    detected_at_utc=self.now + timedelta(days=1),
-                    resolved_at_utc=self.now + timedelta(days=1, hours=1),
+                    detected_at_utc=(
+                        self.now + timedelta(days=1)
+                    ),
+                    resolved_at_utc=(
+                        self.now
+                        + timedelta(days=1, hours=1)
+                    ),
                 ),
             )
         )
         db.session.commit()
 
-        count = RoutineControlIncidentORM.query.filter_by(
-            member_id=self.member.id,
-            incident_type="EMAIL_VACIO",
-            is_active=False,
-        ).count()
+        count = (
+            RoutineControlIncidentORM.query.filter_by(
+                member_id=self.member.id,
+                incident_type="EMAIL_VACIO",
+                is_active=False,
+            ).count()
+        )
         self.assertEqual(count, 2)
 
-    def test_allows_different_active_incident_types(self) -> None:
+    def test_allows_different_active_incident_types(
+        self,
+    ) -> None:
         db.session.add_all(
             (
-                self._incident(incident_type="EMAIL_VACIO"),
-                self._incident(incident_type="COINCIDENCIA_AMBIGUA"),
+                self._incident(
+                    incident_type="EMAIL_VACIO"
+                ),
+                self._incident(
+                    incident_type="COINCIDENCIA_AMBIGUA"
+                ),
             )
         )
         db.session.commit()
 
-        count = RoutineControlIncidentORM.query.filter_by(
-            member_id=self.member.id,
-            is_active=True,
-        ).count()
+        count = (
+            RoutineControlIncidentORM.query.filter_by(
+                member_id=self.member.id,
+                is_active=True,
+            ).count()
+        )
         self.assertEqual(count, 2)
 
-    def test_creates_no_desea_rutina_decision(self) -> None:
-        decision = self._decision(decision_reason="Decisión del socio.")
+    def test_creates_no_desea_rutina_decision(
+        self,
+    ) -> None:
+        decision = self._decision(
+            reason_code="RUTINA_PROPIA",
+            notes="El socio confirmó rutina propia.",
+        )
         db.session.add(decision)
         db.session.commit()
 
         self.assertIsNotNone(decision.id)
         self.assertTrue(decision.is_active)
-        self.assertIsNone(decision.effective_to_utc)
-        self.assertIsNone(decision.revoked_at_utc)
-        self.assertEqual(decision.member.id, self.member.id)
-        self.assertIn(decision, self.member.decisions)
-
-    def test_rejects_unknown_decision_type(self) -> None:
-        self._assert_flush_rejected(
-            self._decision(decision_type="DECISION_DESCONOCIDA")
+        self.assertEqual(
+            decision.reason_code,
+            "RUTINA_PROPIA",
+        )
+        self.assertEqual(
+            decision.notes,
+            "El socio confirmó rutina propia.",
+        )
+        self.assertIsNone(
+            decision.effective_to_utc
+        )
+        self.assertIsNone(
+            decision.revoked_at_utc
+        )
+        self.assertEqual(
+            decision.member.id,
+            self.member.id,
+        )
+        self.assertEqual(
+            decision.created_by_user.id,
+            self.user.id,
+        )
+        self.assertEqual(
+            decision.created_from_sucursal.sucursal_id,
+            self.branch.sucursal_id,
+        )
+        self.assertIn(
+            decision,
+            self.member.decisions,
         )
 
-    def test_rejects_invalid_decision_effective_range(self) -> None:
-        for effective_to in (self.now, self.now - timedelta(seconds=1)):
-            with self.subTest(effective_to=effective_to):
+    def test_rejects_unknown_decision_type(
+        self,
+    ) -> None:
+        self._assert_flush_rejected(
+            self._decision(
+                decision_type="DECISION_DESCONOCIDA"
+            )
+        )
+
+    def test_rejects_unknown_reason_code(
+        self,
+    ) -> None:
+        self._assert_flush_rejected(
+            self._decision(
+                reason_code="MOTIVO_DESCONOCIDO"
+            )
+        )
+
+    def test_other_reason_requires_notes(
+        self,
+    ) -> None:
+        for notes in (None, "", "   "):
+            with self.subTest(notes=notes):
                 self._assert_flush_rejected(
-                    self._decision(effective_to_utc=effective_to)
+                    self._decision(
+                        reason_code="OTRO",
+                        notes=notes,
+                    )
                 )
 
-    def test_rejects_active_decision_with_revoked_at(self) -> None:
-        self._assert_flush_rejected(
-            self._decision(revoked_at_utc=self.now + timedelta(hours=1))
+    def test_allows_other_reason_with_notes(
+        self,
+    ) -> None:
+        decision = self._decision(
+            reason_code="OTRO",
+            notes="Motivo operativo particular.",
+        )
+        db.session.add(decision)
+        db.session.commit()
+
+        self.assertEqual(
+            decision.reason_code,
+            "OTRO",
         )
 
-    def test_allows_inactive_revoked_decision(self) -> None:
+    def test_rejects_invalid_decision_effective_range(
+        self,
+    ) -> None:
+        for effective_to in (
+            self.now,
+            self.now - timedelta(seconds=1),
+        ):
+            with self.subTest(
+                effective_to=effective_to
+            ):
+                self._assert_flush_rejected(
+                    self._decision(
+                        effective_to_utc=effective_to
+                    )
+                )
+
+    def test_rejects_active_decision_with_revocation_data(
+        self,
+    ) -> None:
+        self._assert_flush_rejected(
+            self._decision(
+                revoked_at_utc=(
+                    self.now + timedelta(hours=1)
+                ),
+                revoked_by_user_id=self.user.id,
+                revocation_reason=(
+                    "No debe existir en una decisión activa."
+                ),
+            )
+        )
+
+    def test_allows_inactive_revoked_decision(
+        self,
+    ) -> None:
         decision = self._decision(
             is_active=False,
-            revoked_at_utc=self.now + timedelta(hours=1),
+            revoked_at_utc=(
+                self.now + timedelta(hours=1)
+            ),
         )
         db.session.add(decision)
         db.session.commit()
 
         self.assertFalse(decision.is_active)
-        self.assertEqual(decision.revoked_at_utc, self.now + timedelta(hours=1))
+        self.assertEqual(
+            decision.effective_to_utc,
+            self.now + timedelta(hours=1),
+        )
+        self.assertEqual(
+            decision.revoked_at_utc,
+            self.now + timedelta(hours=1),
+        )
+        self.assertEqual(
+            decision.revoked_by_user.id,
+            self.user.id,
+        )
+        self.assertEqual(
+            decision.revocation_reason,
+            "Reversión de prueba.",
+        )
 
-    def test_prevents_duplicate_active_decision_type_for_member(self) -> None:
+    def test_rejects_incomplete_revocation_audit(
+        self,
+    ) -> None:
+        self._assert_flush_rejected(
+            self._decision(
+                is_active=False,
+                revoked_by_user_id=None,
+            )
+        )
+
+    def test_prevents_duplicate_active_decision_type_for_member(
+        self,
+    ) -> None:
         db.session.add(self._decision())
         db.session.commit()
 
-        self._assert_flush_rejected(self._decision())
+        self._assert_flush_rejected(
+            self._decision()
+        )
 
-    def test_allows_repeated_inactive_decision_history(self) -> None:
+    def test_allows_repeated_inactive_decision_history(
+        self,
+    ) -> None:
         db.session.add_all(
             (
                 self._decision(
                     is_active=False,
-                    revoked_at_utc=self.now + timedelta(hours=1),
+                    revoked_at_utc=(
+                        self.now + timedelta(hours=1)
+                    ),
                 ),
                 self._decision(
                     is_active=False,
-                    decided_at_utc=self.now + timedelta(days=1),
-                    effective_from_utc=self.now + timedelta(days=1),
-                    revoked_at_utc=self.now + timedelta(days=1, hours=1),
+                    decided_at_utc=(
+                        self.now + timedelta(days=1)
+                    ),
+                    effective_from_utc=(
+                        self.now + timedelta(days=1)
+                    ),
+                    revoked_at_utc=(
+                        self.now
+                        + timedelta(days=1, hours=1)
+                    ),
                 ),
             )
         )
         db.session.commit()
 
-        count = RoutineControlDecisionORM.query.filter_by(
-            member_id=self.member.id,
-            decision_type="NO_DESEA_RUTINA",
-            is_active=False,
-        ).count()
+        count = (
+            RoutineControlDecisionORM.query.filter_by(
+                member_id=self.member.id,
+                decision_type="NO_DESEA_RUTINA",
+                is_active=False,
+            ).count()
+        )
         self.assertEqual(count, 2)
 
-    def test_persists_timezone_aware_datetimes(self) -> None:
+    def test_persists_timezone_aware_datetimes(
+        self,
+    ) -> None:
         incident = self._incident(
             is_active=False,
-            resolved_at_utc=self.now + timedelta(hours=1),
+            resolved_at_utc=(
+                self.now + timedelta(hours=1)
+            ),
         )
         decision = self._decision(
             is_active=False,
-            effective_to_utc=self.now + timedelta(hours=2),
-            revoked_at_utc=self.now + timedelta(hours=1),
+            effective_to_utc=(
+                self.now + timedelta(hours=2)
+            ),
+            revoked_at_utc=(
+                self.now + timedelta(hours=1)
+            ),
         )
         db.session.add_all((incident, decision))
         db.session.commit()
@@ -285,36 +577,72 @@ class RoutineControlIncidentDecisionModelsPostgresTestCase(unittest.TestCase):
             decision.created_at_utc,
             decision.updated_at_utc,
         )
-        self.assertTrue(all(value.utcoffset() is not None for value in values))
+        self.assertTrue(
+            all(
+                value.utcoffset() is not None
+                for value in values
+            )
+        )
 
-    def test_member_foreign_keys_are_restrictive(self) -> None:
-        db.session.add_all((self._incident(), self._decision()))
+    def test_member_foreign_keys_are_restrictive(
+        self,
+    ) -> None:
+        db.session.add_all(
+            (
+                self._incident(),
+                self._decision(),
+            )
+        )
         db.session.commit()
 
         with self.assertRaises(IntegrityError):
             db.session.execute(
                 delete(RoutineControlMemberORM).where(
-                    RoutineControlMemberORM.id == self.member.id
+                    RoutineControlMemberORM.id
+                    == self.member.id
                 )
             )
+
         db.session.rollback()
+
         self.assertIsNotNone(
-            db.session.get(RoutineControlMemberORM, self.member.id)
+            db.session.get(
+                RoutineControlMemberORM,
+                self.member.id,
+            )
         )
 
-    def test_rejects_missing_member_foreign_key(self) -> None:
+    def test_rejects_missing_member_foreign_key(
+        self,
+    ) -> None:
         self._assert_flush_rejected(
-            self._incident(member_id=9_000_000_000_000_000_000)
+            self._incident(
+                member_id=9_000_000_000_000_000_000
+            )
         )
 
-    def test_session_is_reusable_after_integrity_error(self) -> None:
+    def test_rejects_missing_creator_foreign_key(
+        self,
+    ) -> None:
         self._assert_flush_rejected(
-            self._decision(decision_type="DECISION_DESCONOCIDA")
+            self._decision(
+                created_by_user_id=2_000_000_000
+            )
+        )
+
+    def test_session_is_reusable_after_integrity_error(
+        self,
+    ) -> None:
+        self._assert_flush_rejected(
+            self._decision(
+                decision_type="DECISION_DESCONOCIDA"
+            )
         )
 
         decision = self._decision()
         db.session.add(decision)
         db.session.commit()
+
         self.assertIsNotNone(decision.id)
 
 

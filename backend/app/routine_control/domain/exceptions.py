@@ -48,3 +48,27 @@ class RoutineControlReconciliationValidationError(
 
 class RoutineControlReconciliationNotFound(RoutineControlReconciliationError):
     """No existe el miembro solicitado para reconciliación."""
+
+
+class RoutineControlDecisionError(Exception):
+    pass
+
+
+class RoutineControlDecisionValidationError(
+    RoutineControlDecisionError,
+    ValueError,
+):
+    pass
+
+
+class RoutineControlDecisionNotFound(
+    RoutineControlDecisionError,
+    LookupError,
+):
+    pass
+
+
+class RoutineControlDecisionConflict(
+    RoutineControlDecisionError,
+):
+    pass
