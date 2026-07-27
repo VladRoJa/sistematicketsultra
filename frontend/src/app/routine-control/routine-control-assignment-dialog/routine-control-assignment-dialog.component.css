@@ -19,13 +19,18 @@
 }
 
 .assignment-dialog {
+  display: flex;
+  flex-direction: column;
   width: 100%;
+  max-height: calc(100vh - 8px);
   box-sizing: border-box;
+  overflow: hidden;
   color: var(--report-gray-900);
   background: var(--report-surface);
 }
 
 .dialog-header {
+  flex: 0 0 auto;
   display: flex;
   justify-content: space-between;
   gap: 20px;
@@ -70,6 +75,7 @@
 }
 
 .report-definition {
+  flex: 0 0 auto;
   display: flex;
   flex-wrap: wrap;
   gap: 8px 22px;
@@ -84,8 +90,11 @@
 }
 
 .table-wrapper {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: calc(100vh - 245px);
   overflow: auto;
-  margin: 0 18px;
+  margin: 0 12px;
   border: 1px solid var(--report-gray-200);
   border-radius: 14px;
   background: var(--report-surface);
@@ -93,8 +102,9 @@
 
 .assignment-table {
   width: 100%;
-  min-width: 980px;
-  border-collapse: collapse;
+  min-width: 900px;
+  border-collapse: separate;
+  border-spacing: 0;
   font-size: 12px;
 }
 
@@ -108,9 +118,18 @@
 }
 
 .assignment-table th {
-  padding: 12px 11px;
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  padding: 11px 8px;
   border-right:
     1px solid rgba(255, 255, 255, 0.1);
+  background:
+    linear-gradient(
+      135deg,
+      #071f56,
+      #082d70
+    );
   color: #ffffff;
   font-size: 10px;
   font-weight: 900;
@@ -120,7 +139,7 @@
 }
 
 .assignment-table td {
-  padding: 8px 11px;
+  padding: 8px;
   border-bottom:
     1px solid var(--report-gray-200);
   color: var(--report-gray-700);
@@ -232,8 +251,17 @@
 }
 
 .assignment-table tfoot td {
-  padding: 11px;
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  padding: 11px 8px;
   border: 0;
+  background:
+    linear-gradient(
+      135deg,
+      #071f56,
+      #082d70
+    );
   color: #ffffff;
   font-weight: 900;
 }
@@ -249,6 +277,7 @@
 }
 
 .dialog-actions {
+  flex: 0 0 auto;
   display: flex;
   justify-content: flex-end;
   padding: 15px 18px 18px;
