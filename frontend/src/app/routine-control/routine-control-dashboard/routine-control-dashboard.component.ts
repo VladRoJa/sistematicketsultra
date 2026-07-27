@@ -326,9 +326,9 @@ export class RoutineControlDashboardComponent implements OnInit, OnDestroy {
     this.dialog.open(
       RoutineControlAssignmentDialogComponent,
       {
-        width: '1180px',
-        maxWidth: 'calc(100vw - 24px)',
-        maxHeight: 'calc(100vh - 24px)',
+        width: '1440px',
+        maxWidth: 'calc(100vw - 8px)',
+        maxHeight: 'calc(100vh - 8px)',
         autoFocus: false,
         restoreFocus: true,
         data: {
