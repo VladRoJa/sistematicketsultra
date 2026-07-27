@@ -37,7 +37,7 @@ import { RoutineControlService } from '../services/routine-control.service';
 })
 export class RoutineControlDashboardComponent implements OnInit, OnDestroy {
   readonly displayedColumns = [
-    'member', 'external_member_id', 'branch', 'sale_date', 'status', 'first_routine_at',
+    'member', 'branch', 'sale_date', 'status', 'first_routine_at',
     'latest_routine_at', 'instructor', 'assignment_type', 'incidents', 'detail',
   ];
   readonly form = this.fb.group({

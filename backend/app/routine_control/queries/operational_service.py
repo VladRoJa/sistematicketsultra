@@ -216,8 +216,18 @@ class RoutineControlOperationalService:
     @staticmethod
     def _member_dto(row) -> dict:
         member, branch_name, incident_count, evidence_count = row
+
+        metadata = (
+            member.source_metadata
+            if isinstance(member.source_metadata, dict)
+            else {}
+        )
+
+        pin = str(metadata.get("pin") or "").strip() or None
+
         return {
             "id": int(member.id),
+            "pin": pin,
             "external_member_id": member.external_member_id,
             "external_sale_id": member.external_sale_id,
             "member_name": member.member_name,

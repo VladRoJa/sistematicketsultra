@@ -26,28 +26,70 @@
   </header>
 
   <form class="filters" [formGroup]="form">
-    <mat-form-field appearance="fill" *ngIf="canSelectRegion">
+    <mat-form-field
+      appearance="fill"
+      subscriptSizing="dynamic"
+      class="search search-primary"
+    >
+      <mat-label>Buscar socio</mat-label>
+
+      <input
+        matInput
+        formControlName="search"
+        placeholder="PIN, nombre, ID, email o folio"
+      >
+
+      <mat-icon matSuffix>search</mat-icon>
+    </mat-form-field>
+
+    <mat-form-field
+      appearance="fill"
+      subscriptSizing="dynamic"
+      *ngIf="canSelectRegion"
+    >
       <mat-label>Región</mat-label>
-      <mat-select formControlName="region_key" (selectionChange)="selectRegion()">
+
+      <mat-select
+        formControlName="region_key"
+        (selectionChange)="selectRegion()"
+      >
         <mat-option value="">Todas</mat-option>
-        <mat-option *ngFor="let region of catalogs?.regions" [value]="region.key">{{ region.name }}</mat-option>
+
+        <mat-option
+          *ngFor="let region of catalogs?.regions"
+          [value]="region.key"
+        >
+          {{ region.name }}
+        </mat-option>
       </mat-select>
     </mat-form-field>
-    <mat-form-field appearance="fill" *ngIf="canSelectBranch">
+
+    <mat-form-field
+      appearance="fill"
+      subscriptSizing="dynamic"
+      *ngIf="canSelectBranch"
+    >
       <mat-label>Sucursal</mat-label>
+
       <mat-select
         formControlName="branch_id"
         (selectionChange)="selectBranchFilter()"
       >
         <mat-option [value]="null">Todas</mat-option>
-        <mat-option *ngFor="let branch of availableBranches" [value]="branch.id">{{ branch.name }}</mat-option>
+
+        <mat-option
+          *ngFor="let branch of availableBranches"
+          [value]="branch.id"
+        >
+          {{ branch.name }}
+        </mat-option>
       </mat-select>
     </mat-form-field>
-    <mat-form-field appearance="fill"><mat-label>Venta desde</mat-label><input matInput type="date" formControlName="sale_date_from"></mat-form-field>
-    <mat-form-field appearance="fill"><mat-label>Venta hasta</mat-label><input matInput type="date" formControlName="sale_date_to"></mat-form-field>
-    <mat-form-field appearance="fill"><mat-label>Estado</mat-label><mat-select formControlName="current_status"><mat-option value="">Todos</mat-option><mat-option *ngFor="let status of catalogs?.statuses" [value]="status">{{ statusLabel(status) }}</mat-option></mat-select></mat-form-field>
-    <mat-form-field appearance="fill"><mat-label>Tipo</mat-label><mat-select formControlName="assignment_type"><mat-option value="">Todos</mat-option><mat-option *ngFor="let type of catalogs?.assignment_types" [value]="type">{{ type }}</mat-option></mat-select></mat-form-field>
-    <mat-form-field appearance="fill">
+
+    <mat-form-field
+      appearance="fill"
+      subscriptSizing="dynamic"
+    >
       <mat-label>Instructor</mat-label>
 
       <mat-select formControlName="instructor">
@@ -56,16 +98,78 @@
         </mat-option>
 
         <mat-option
-          *ngFor="
-            let instructor of availableInstructors
-          "
+          *ngFor="let instructor of availableInstructors"
           [value]="instructor.name"
         >
           {{ instructor.name }}
         </mat-option>
       </mat-select>
     </mat-form-field>
-    <mat-form-field appearance="fill" class="search"><mat-label>Socio, ID, email o folio</mat-label><input matInput formControlName="search"><mat-icon matSuffix>search</mat-icon></mat-form-field>
+
+    <mat-form-field
+      appearance="fill"
+      subscriptSizing="dynamic"
+    >
+      <mat-label>Estado</mat-label>
+
+      <mat-select formControlName="current_status">
+        <mat-option value="">Todos</mat-option>
+
+        <mat-option
+          *ngFor="let status of catalogs?.statuses"
+          [value]="status"
+        >
+          {{ statusLabel(status) }}
+        </mat-option>
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field
+      appearance="fill"
+      subscriptSizing="dynamic"
+    >
+      <mat-label>Tipo</mat-label>
+
+      <mat-select formControlName="assignment_type">
+        <mat-option value="">Todos</mat-option>
+
+        <mat-option
+          *ngFor="let type of catalogs?.assignment_types"
+          [value]="type"
+        >
+          {{ type }}
+        </mat-option>
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field
+      appearance="fill"
+      subscriptSizing="dynamic"
+      class="date-filter"
+    >
+      <mat-label>Venta desde</mat-label>
+
+      <input
+        matInput
+        type="date"
+        formControlName="sale_date_from"
+      >
+    </mat-form-field>
+
+    <mat-form-field
+      appearance="fill"
+      subscriptSizing="dynamic"
+      class="date-filter"
+    >
+      <mat-label>Venta hasta</mat-label>
+
+      <input
+        matInput
+        type="date"
+        formControlName="sale_date_to"
+      >
+    </mat-form-field>
+
     <button
       mat-stroked-button
       class="filter-reset"
@@ -73,7 +177,7 @@
       (click)="clearFilters()"
     >
       <mat-icon>filter_alt_off</mat-icon>
-      Limpiar filtros
+      Limpiar
     </button>
   </form>
 
@@ -119,8 +223,29 @@
     <h2>Socios en seguimiento</h2>
     <div class="desktop-table table-shell" *ngIf="members.length">
       <table mat-table [dataSource]="members">
-        <ng-container matColumnDef="member"><th mat-header-cell *matHeaderCellDef>Socio</th><td mat-cell *matCellDef="let item">{{ item.member_name || 'Sin nombre' }}</td></ng-container>
-        <ng-container matColumnDef="external_member_id"><th mat-header-cell *matHeaderCellDef>ID socio</th><td mat-cell *matCellDef="let item">{{ item.external_member_id }}</td></ng-container>
+        <ng-container matColumnDef="member">
+          <th mat-header-cell *matHeaderCellDef>
+            Socio
+          </th>
+
+          <td mat-cell *matCellDef="let item">
+            <div class="member-cell">
+              <strong>
+                {{ item.member_name || 'Sin nombre' }}
+              </strong>
+
+              <small>
+                <span *ngIf="item.pin">
+                  PIN {{ item.pin }}
+                </span>
+
+                <span>
+                  ID {{ item.external_member_id }}
+                </span>
+              </small>
+            </div>
+          </td>
+        </ng-container>
         <ng-container matColumnDef="branch"><th mat-header-cell *matHeaderCellDef>Sucursal</th><td mat-cell *matCellDef="let item">{{ item.branch_name || item.source_branch_name || 'Sin resolver' }}</td></ng-container>
         <ng-container matColumnDef="sale_date"><th mat-header-cell *matHeaderCellDef>Fecha venta</th><td mat-cell *matCellDef="let item">{{ item.sale_date | date:'yyyy-MM-dd' }}</td></ng-container>
         <ng-container matColumnDef="status"><th mat-header-cell *matHeaderCellDef>Estado</th><td mat-cell *matCellDef="let item"><span [class]="statusClass(statusOf(item))">{{ statusLabel(statusOf(item)) }}</span></td></ng-container>
@@ -133,7 +258,20 @@
         <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr><tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
       </table>
     </div>
-    <div class="mobile-list" *ngIf="members.length"><article *ngFor="let item of members"><div><strong>{{ item.member_name || 'Sin nombre' }}</strong><small>{{ item.branch_name || item.source_branch_name || 'Sin resolver' }}</small></div><span [class]="statusClass(statusOf(item))">{{ statusLabel(statusOf(item)) }}</span><span>Venta {{ item.sale_date | date:'yyyy-MM-dd' }}</span><button mat-stroked-button type="button" (click)="openDetail(item.id)">Ver detalle</button></article></div>
+    <div class="mobile-list" *ngIf="members.length"><article *ngFor="let item of members"><div><strong>{{ item.member_name || 'Sin nombre' }}</strong>
+        <small class="mobile-member-identifiers">
+          <span *ngIf="item.pin">
+            PIN {{ item.pin }}
+          </span>
+          <span>ID {{ item.external_member_id }}</span>
+        </small>
+        <small>
+          {{
+            item.branch_name
+              || item.source_branch_name
+              || 'Sin resolver'
+          }}
+        </small></div><span [class]="statusClass(statusOf(item))">{{ statusLabel(statusOf(item)) }}</span><span>Venta {{ item.sale_date | date:'yyyy-MM-dd' }}</span><button mat-stroked-button type="button" (click)="openDetail(item.id)">Ver detalle</button></article></div>
     <div class="empty" *ngIf="!loading && !members.length">No hay socios que coincidan con los filtros seleccionados.</div>
     <mat-paginator [length]="total" [pageIndex]="page - 1" [pageSize]="pageSize" [pageSizeOptions]="[10, 25, 50, 100]" (page)="pageChanged($event)"></mat-paginator>
   </section>

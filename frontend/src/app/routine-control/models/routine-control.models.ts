@@ -80,6 +80,7 @@ export interface RoutineControlSummary {
 
 export interface RoutineControlMember {
   id: number;
+  pin: string | null;
   external_member_id: string;
   external_sale_id: string | null;
   member_name: string | null;
