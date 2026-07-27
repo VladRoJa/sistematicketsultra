@@ -207,12 +207,23 @@ class RoutineControlOperationalRepository:
             )
         if filters.get("search"):
             pattern = f"%{filters['search']}%"
+
+            pin_value = (
+                RoutineControlMemberORM.source_metadata
+                .op("->>")("pin")
+            )
+
             query = query.filter(
                 or_(
-                    RoutineControlMemberORM.member_name.ilike(pattern),
-                    RoutineControlMemberORM.external_member_id.ilike(pattern),
-                    RoutineControlMemberORM.email_normalized.ilike(pattern),
-                    RoutineControlMemberORM.external_sale_id.ilike(pattern),
+                    RoutineControlMemberORM.member_name
+                    .ilike(pattern),
+                    RoutineControlMemberORM.external_member_id
+                    .ilike(pattern),
+                    RoutineControlMemberORM.email_normalized
+                    .ilike(pattern),
+                    RoutineControlMemberORM.external_sale_id
+                    .ilike(pattern),
+                    pin_value.ilike(pattern),
                 )
             )
         return query
