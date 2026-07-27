@@ -3,6 +3,7 @@ import { Component, OnDestroy, OnInit } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
@@ -23,14 +24,18 @@ import {
   RoutineControlSummaryBranch,
   RoutineControlVisibleStatus,
 } from '../models/routine-control.models';
+import {
+  RoutineControlDecisionDialogComponent,
+} from '../routine-control-decision-dialog/routine-control-decision-dialog.component';
 import { RoutineControlService } from '../services/routine-control.service';
 
 @Component({
   selector: 'app-routine-control-dashboard',
   standalone: true,
   imports: [
-    CommonModule, ReactiveFormsModule, MatButtonModule, MatCardModule, MatFormFieldModule,
-    MatIconModule, MatInputModule, MatPaginatorModule, MatSelectModule, MatTableModule,
+    CommonModule, ReactiveFormsModule, MatButtonModule, MatCardModule, MatDialogModule,
+    MatFormFieldModule, MatIconModule, MatInputModule, MatPaginatorModule,
+    MatSelectModule, MatTableModule,
   ],
   templateUrl: './routine-control-dashboard.component.html',
   styleUrls: ['./routine-control-dashboard.component.css'],
@@ -38,7 +43,7 @@ import { RoutineControlService } from '../services/routine-control.service';
 export class RoutineControlDashboardComponent implements OnInit, OnDestroy {
   readonly displayedColumns = [
     'member', 'branch', 'sale_date', 'status', 'first_routine_at',
-    'latest_routine_at', 'instructor', 'assignment_type', 'incidents', 'detail',
+    'latest_routine_at', 'instructor', 'assignment_type', 'incidents', 'decision',
   ];
   readonly form = this.fb.group({
     region_key: [''], branch_id: [null as number | null], sale_date_from: [''], sale_date_to: [''],
@@ -62,6 +67,7 @@ export class RoutineControlDashboardComponent implements OnInit, OnDestroy {
     private readonly fb: FormBuilder,
     private readonly service: RoutineControlService,
     private readonly router: Router,
+    private readonly dialog: MatDialog,
   ) {}
 
   ngOnInit(): void {
@@ -249,8 +255,64 @@ export class RoutineControlDashboardComponent implements OnInit, OnDestroy {
     this.reload$.next();
   }
 
-  openDetail(memberId: number): void {
-    this.router.navigate(['/control-rutinas/socios', memberId]);
+  canOpenDecision(
+    member: RoutineControlMember,
+  ): boolean {
+    return (
+      member.current_status === 'NO_DESEA_RUTINA'
+      || (
+        member.classification_status === 'CLASSIFIED'
+        && member.current_status === 'SIN_RUTINA'
+      )
+    );
+  }
+
+  decisionActionLabel(
+    member: RoutineControlMember,
+  ): string {
+    return member.current_status === 'NO_DESEA_RUTINA'
+      ? 'Ver decisión'
+      : 'No requiere rutina';
+  }
+
+  decisionActionIcon(
+    member: RoutineControlMember,
+  ): string {
+    return member.current_status === 'NO_DESEA_RUTINA'
+      ? 'visibility'
+      : 'person_off';
+  }
+
+  openDecisionDialog(
+    member: RoutineControlMember,
+  ): void {
+    if (!this.canOpenDecision(member)) {
+      return;
+    }
+
+    const dialogRef = this.dialog.open(
+      RoutineControlDecisionDialogComponent,
+      {
+        width: '720px',
+        maxWidth: 'calc(100vw - 24px)',
+        maxHeight: 'calc(100vh - 24px)',
+        autoFocus: false,
+        restoreFocus: true,
+        data: {
+          memberId: member.id,
+        },
+      },
+    );
+
+    this.subscriptions.add(
+      dialogRef.afterClosed().subscribe(
+        (changed: boolean | undefined) => {
+          if (changed) {
+            this.reload$.next();
+          }
+        },
+      ),
+    );
   }
 
   openRuns(): void {

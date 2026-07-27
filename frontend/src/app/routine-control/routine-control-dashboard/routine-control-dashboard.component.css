@@ -539,6 +539,36 @@ table {
   background: #fee2e2;
 }
 
+.row-decision-action {
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border-color:
+    rgba(229, 69, 37, 0.26) !important;
+  background: var(--rc-orange-soft);
+  color: var(--rc-orange) !important;
+  font-size: 10px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.row-decision-action:hover {
+  border-color:
+    rgba(229, 69, 37, 0.42) !important;
+  background: rgba(229, 69, 37, 0.16);
+}
+
+.row-decision-action mat-icon {
+  margin-right: 4px;
+  font-size: 17px;
+  width: 17px;
+  height: 17px;
+}
+
+.no-action {
+  color: var(--rc-gray-300);
+}
+
 mat-paginator {
   margin-top: 10px;
   border-radius: 12px;
