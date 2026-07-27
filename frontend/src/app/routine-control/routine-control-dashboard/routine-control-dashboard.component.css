@@ -109,6 +109,7 @@ h2 {
 
 .primary-action,
 .secondary-action,
+.assignment-report-action,
 .filter-reset {
   min-height: 42px;
   border-radius: 999px;
@@ -141,11 +142,26 @@ h2 {
 }
 
 .secondary-action:hover,
+.assignment-report-action:hover,
 .filter-reset:hover {
   color: var(--rc-orange) !important;
   border-color:
     rgba(229, 69, 37, 0.32) !important;
   background: var(--rc-orange-soft);
+}
+
+.assignment-report-action {
+  color: var(--rc-orange) !important;
+  border-color:
+    rgba(229, 69, 37, 0.28) !important;
+  background: var(--rc-orange-soft);
+  box-shadow:
+    0 7px 16px rgba(229, 69, 37, 0.1);
+}
+
+.assignment-report-action:disabled {
+  opacity: 0.5;
+  box-shadow: none;
 }
 
 /* ==========================================================================

@@ -11,6 +11,17 @@
     <div class="header-actions">
       <button
         mat-stroked-button
+        class="assignment-report-action"
+        type="button"
+        [disabled]="!summary || !catalogs"
+        (click)="openAssignmentReport()"
+      >
+        <mat-icon>table_view</mat-icon>
+        Vista de asignación
+      </button>
+
+      <button
+        mat-stroked-button
         class="secondary-action"
         type="button"
         (click)="openRuns()"

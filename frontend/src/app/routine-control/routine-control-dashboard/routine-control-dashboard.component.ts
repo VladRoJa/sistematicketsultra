@@ -25,6 +25,9 @@ import {
   RoutineControlVisibleStatus,
 } from '../models/routine-control.models';
 import {
+  RoutineControlAssignmentDialogComponent,
+} from '../routine-control-assignment-dialog/routine-control-assignment-dialog.component';
+import {
   RoutineControlDecisionDialogComponent,
 } from '../routine-control-decision-dialog/routine-control-decision-dialog.component';
 import { RoutineControlService } from '../services/routine-control.service';
@@ -315,6 +318,29 @@ export class RoutineControlDashboardComponent implements OnInit, OnDestroy {
     );
   }
 
+  openAssignmentReport(): void {
+    if (!this.summary || !this.catalogs) {
+      return;
+    }
+
+    this.dialog.open(
+      RoutineControlAssignmentDialogComponent,
+      {
+        width: '1180px',
+        maxWidth: 'calc(100vw - 24px)',
+        maxHeight: 'calc(100vh - 24px)',
+        autoFocus: false,
+        restoreFocus: true,
+        data: {
+          branches: this.summary.branches,
+          branchCatalogs: this.catalogs.branches,
+          cutoffDate:
+            this.assignmentReportCutoffDate(),
+        },
+      },
+    );
+  }
+
   openRuns(): void {
     this.router.navigate(['/control-rutinas/corridas']);
   }
@@ -377,6 +403,24 @@ export class RoutineControlDashboardComponent implements OnInit, OnDestroy {
     if (!remainsAvailable) {
       this.form.controls.instructor.setValue('');
     }
+  }
+
+  private assignmentReportCutoffDate():
+    string | null {
+    const selectedDate =
+      this.form.controls.sale_date_to.value;
+
+    if (selectedDate) {
+      return selectedDate;
+    }
+
+    return (
+      this.summary?.freshness
+        .last_successful_pipeline_at_utc
+      ?? this.summary?.freshness
+        .last_gasca_success_at_utc
+      ?? null
+    );
   }
 
   private currentFilters(): RoutineControlFilters {
