@@ -126,6 +126,8 @@ def run_automated_routine_control_pipeline(
     date_from: date,
     date_to: date,
     observed_at_utc: datetime,
+    generation_mode: str = "MANUAL",
+    trigger_source: str = "AUTOMATED_PROVIDER_CLI",
     headless: bool | None = None,
     gasca_extractor: ProviderExtractor | None = None,
     trainingym_extractor: ProviderExtractor | None = None,
@@ -220,6 +222,8 @@ def run_automated_routine_control_pipeline(
                 date_from=date_from,
                 date_to=date_to,
                 requested_by="automated_provider_cli",
+                generation_mode=generation_mode,
+                trigger_source=trigger_source,
             )
             if not bool(getattr(manual_result, "succeeded", False)):
                 return _result(

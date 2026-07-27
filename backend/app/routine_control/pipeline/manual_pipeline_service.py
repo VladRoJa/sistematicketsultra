@@ -192,8 +192,45 @@ def _content_hash(path: Path) -> str:
 def _sanitize_requested_by(value: str | None) -> str | None:
     if value is None:
         return None
-    normalized = _REQUESTED_BY_UNSAFE.sub("_", str(value).strip())[:80]
+
+    normalized = _REQUESTED_BY_UNSAFE.sub(
+        "_",
+        str(value).strip(),
+    )[:80]
+
     return normalized or None
+
+
+_ALLOWED_GENERATION_MODES = frozenset(
+    {
+        "SCHEDULED",
+        "MANUAL",
+        "BACKFILL",
+        "RETRY",
+    }
+)
+
+
+def _normalize_generation_mode(value: str) -> str:
+    normalized = str(value or "").strip().upper()
+
+    if normalized not in _ALLOWED_GENERATION_MODES:
+        raise ManualRoutineControlPipelineError(
+            "generation_mode inválido."
+        )
+
+    return normalized
+
+
+def _normalize_trigger_source(value: str) -> str:
+    normalized = _sanitize_requested_by(value)
+
+    if normalized is None:
+        raise ManualRoutineControlPipelineError(
+            "trigger_source es obligatorio."
+        )
+
+    return normalized.upper()
 
 
 def _set_stage(run, session: Any, stage: str, at_utc: datetime) -> None:
@@ -360,6 +397,8 @@ def run_manual_routine_control_pipeline(
     date_from: date | None = None,
     date_to: date | None = None,
     requested_by: str | None = None,
+    generation_mode: str = "MANUAL",
+    trigger_source: str = "MANUAL_CLI",
     session: Any | None = None,
     gasca_branch_resolver: Callable[[str], int | None] | None = None,
     trainingym_center_resolver: Callable[[str], int | None] | None = None,
@@ -376,6 +415,12 @@ def run_manual_routine_control_pipeline(
         field_name="trainingym_xlsx",
     )
     _sanitize_requested_by(requested_by)
+    effective_generation_mode = _normalize_generation_mode(
+        generation_mode
+    )
+    effective_trigger_source = _normalize_trigger_source(
+        trigger_source
+    )
     pipeline_session = session or db.session
     gasca_hash = _content_hash(gasca_path)
     trainingym_hash = _content_hash(trainingym_path)
@@ -384,6 +429,8 @@ def run_manual_routine_control_pipeline(
         trainingym_content_hash=trainingym_hash,
         date_from=effective_date_from,
         date_to=effective_date_to,
+        generation_mode=effective_generation_mode,
+        trigger_source=effective_trigger_source,
     )
     runs = RoutineControlRunRepository(pipeline_session)
     runs.acquire_pipeline_lock(idempotency_key=idempotency_key)
@@ -395,6 +442,8 @@ def run_manual_routine_control_pipeline(
             business_date=effective_date_to,
             date_from=effective_date_from,
             date_to=effective_date_to,
+            generation_mode=effective_generation_mode,
+            trigger_source=effective_trigger_source,
         )
     gasca_provider_run = runs.ensure_provider_run(
         pipeline_run=pipeline_run,

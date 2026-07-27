@@ -28,6 +28,7 @@ services:
       - .env.docker
     environment:
       APP_ENV: "prod"
+      ROUTINE_CONTROL_ARTIFACT_DIR: "/app/runtime/routine-control/artifacts"
 
       DISPLAY: ":99"
       GOOGLE_MESSAGES_HEADLESS: "0"
@@ -47,6 +48,7 @@ services:
     volumes:
       - /home/adminrdp/sistematicketsultra/uploads:/uploads
       - ./backend/.playwright:/app/.playwright
+      - routine_control_runtime:/app/runtime/routine-control
 
 
 
@@ -126,6 +128,32 @@ services:
     profiles:
       - scheduler
     
+  routine-control-scheduler:
+    build:
+      context: ./backend
+    depends_on:
+      - db
+    env_file:
+      - .env.docker
+    environment:
+      APP_ENV: "prod"
+      ROUTINE_CONTROL_SCHEDULER_ENABLED: "true"
+      ROUTINE_CONTROL_DAILY_TIME: "08:30"
+      ROUTINE_CONTROL_TIMEZONE: "America/Tijuana"
+      ROUTINE_CONTROL_WORKER_POLL_SECONDS: "60"
+      ROUTINE_CONTROL_PROVIDER_HEADLESS: "true"
+      ROUTINE_CONTROL_ARTIFACT_DIR: "/app/runtime/routine-control/artifacts"
+    command: python -m app.routine_control.scheduler.routine_control_scheduler_worker
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 120s
+    networks:
+      - backend-net
+    volumes:
+      - routine_control_runtime:/app/runtime/routine-control
+    profiles:
+      - scheduler
+
   reports-scheduler:
     build:
       context: ./backend
@@ -147,6 +175,7 @@ services:
       - scheduler
 volumes:
   postgres_data:
+  routine_control_runtime:
 
 networks:
   backend-net:

@@ -180,8 +180,22 @@ class AutomatedPipelineServiceTestCase(unittest.TestCase):
         self.assertEqual(calls[0]["gasca_xlsx"], gasca_path)
         self.assertEqual(calls[0]["trainingym_xlsx"], trainingym_path)
         self.assertEqual(calls[0]["date_from"], date(2026, 7, 1))
-        self.assertEqual(calls[0]["date_to"], date(2026, 7, 23))
-        self.assertEqual(lock_events, ["acquire", "release"])
+        self.assertEqual(
+            calls[0]["date_to"],
+            date(2026, 7, 23),
+        )
+        self.assertEqual(
+            calls[0]["generation_mode"],
+            "MANUAL",
+        )
+        self.assertEqual(
+            calls[0]["trigger_source"],
+            "AUTOMATED_PROVIDER_CLI",
+        )
+        self.assertEqual(
+            lock_events,
+            ["acquire", "release"],
+        )
 
     def test_json_summary_has_short_hashes_and_no_paths_or_pii(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir, patch.dict(
