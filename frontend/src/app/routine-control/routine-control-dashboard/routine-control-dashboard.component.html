@@ -254,7 +254,35 @@
         <ng-container matColumnDef="instructor"><th mat-header-cell *matHeaderCellDef>Instructor</th><td mat-cell *matCellDef="let item">{{ item.current_instructor_name || '—' }}</td></ng-container>
         <ng-container matColumnDef="assignment_type"><th mat-header-cell *matHeaderCellDef>Tipo</th><td mat-cell *matCellDef="let item">{{ item.routine_assignment_type || '—' }}</td></ng-container>
         <ng-container matColumnDef="incidents"><th mat-header-cell *matHeaderCellDef>Incidencias</th><td mat-cell *matCellDef="let item">{{ item.active_incident_count }}</td></ng-container>
-        <ng-container matColumnDef="detail"><th mat-header-cell *matHeaderCellDef></th><td mat-cell *matCellDef="let item"><button mat-icon-button type="button" aria-label="Ver detalle" (click)="openDetail(item.id)"><mat-icon>chevron_right</mat-icon></button></td></ng-container>
+        <ng-container matColumnDef="decision">
+          <th mat-header-cell *matHeaderCellDef>
+            Decisión
+          </th>
+
+          <td mat-cell *matCellDef="let item">
+            <button
+              mat-stroked-button
+              class="row-decision-action"
+              type="button"
+              *ngIf="canOpenDecision(item)"
+              [attr.aria-label]="decisionActionLabel(item)"
+              (click)="openDecisionDialog(item)"
+            >
+              <mat-icon>
+                {{ decisionActionIcon(item) }}
+              </mat-icon>
+
+              {{ decisionActionLabel(item) }}
+            </button>
+
+            <span
+              class="no-action"
+              *ngIf="!canOpenDecision(item)"
+            >
+              —
+            </span>
+          </td>
+        </ng-container>
         <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr><tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
       </table>
     </div>
@@ -271,7 +299,18 @@
               || item.source_branch_name
               || 'Sin resolver'
           }}
-        </small></div><span [class]="statusClass(statusOf(item))">{{ statusLabel(statusOf(item)) }}</span><span>Venta {{ item.sale_date | date:'yyyy-MM-dd' }}</span><button mat-stroked-button type="button" (click)="openDetail(item.id)">Ver detalle</button></article></div>
+        </small></div><span [class]="statusClass(statusOf(item))">{{ statusLabel(statusOf(item)) }}</span><span>Venta {{ item.sale_date | date:'yyyy-MM-dd' }}</span><button
+          mat-stroked-button
+          class="row-decision-action"
+          type="button"
+          *ngIf="canOpenDecision(item)"
+          (click)="openDecisionDialog(item)"
+        >
+          <mat-icon>
+            {{ decisionActionIcon(item) }}
+          </mat-icon>
+          {{ decisionActionLabel(item) }}
+        </button></article></div>
     <div class="empty" *ngIf="!loading && !members.length">No hay socios que coincidan con los filtros seleccionados.</div>
     <mat-paginator [length]="total" [pageIndex]="page - 1" [pageSize]="pageSize" [pageSizeOptions]="[10, 25, 50, 100]" (page)="pageChanged($event)"></mat-paginator>
   </section>

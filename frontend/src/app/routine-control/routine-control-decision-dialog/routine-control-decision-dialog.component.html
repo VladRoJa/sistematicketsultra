@@ -1,0 +1,297 @@
+<section class="decision-dialog">
+  <header class="dialog-header">
+    <div>
+      <p class="eyebrow">Control de Rutinas</p>
+      <h2>Necesidad de rutina de Ultra</h2>
+    </div>
+
+    <button
+      mat-icon-button
+      type="button"
+      aria-label="Cerrar"
+      [disabled]="saving || revoking"
+      (click)="close()"
+    >
+      <mat-icon>close</mat-icon>
+    </button>
+  </header>
+
+  <div class="message" *ngIf="loading">
+    Consultando información del socio…
+  </div>
+
+  <div
+    class="message message--error"
+    *ngIf="errorMessage"
+  >
+    <mat-icon>error_outline</mat-icon>
+    {{ errorMessage }}
+  </div>
+
+  <ng-container *ngIf="detail">
+    <section class="member-summary">
+      <div>
+        <p class="branch-name">
+          {{
+            detail.member.branch_name
+              || detail.member.source_branch_name
+              || 'Sin sucursal'
+          }}
+        </p>
+
+        <h3>
+          {{
+            detail.member.member_name
+              || 'Socio sin nombre'
+          }}
+        </h3>
+
+        <div class="member-identifiers">
+          <span *ngIf="detail.member.pin">
+            PIN {{ detail.member.pin }}
+          </span>
+          <span>
+            ID {{ detail.member.external_member_id }}
+          </span>
+        </div>
+      </div>
+
+      <span class="status-chip">
+        {{ statusLabel() }}
+      </span>
+    </section>
+
+    <section
+      class="active-decision"
+      *ngIf="activeDecision() as decision"
+    >
+      <div class="decision-icon">
+        <mat-icon>verified</mat-icon>
+      </div>
+
+      <div class="decision-content">
+        <p class="decision-kicker">
+          Decisión vigente
+        </p>
+
+        <h3>No requiere rutina de Ultra</h3>
+
+        <p>
+          {{ reasonLabel(decision.reason_code) }}
+          <span *ngIf="decision.notes">
+            · {{ decision.notes }}
+          </span>
+        </p>
+
+        <small>
+          Registrada
+          {{
+            decision.decided_at_utc
+              | date:'short'
+          }}
+        </small>
+      </div>
+
+      <button
+        mat-stroked-button
+        class="danger-action"
+        type="button"
+        *ngIf="
+          canWriteDecisions()
+          && !showRevokeForm
+        "
+        (click)="openRevokeForm()"
+      >
+        <mat-icon>undo</mat-icon>
+        Revertir
+      </button>
+    </section>
+
+    <form
+      class="decision-form"
+      [formGroup]="createForm"
+      *ngIf="canCreateDecision()"
+      (ngSubmit)="createDecision()"
+    >
+      <div class="form-intro">
+        <p class="eyebrow">Decisión operativa</p>
+        <h3>Marcar como “No requiere rutina de Ultra”</h3>
+        <p>
+          La decisión quedará registrada con usuario,
+          fecha, motivo y sucursal.
+        </p>
+      </div>
+
+      <mat-form-field
+        appearance="fill"
+        subscriptSizing="dynamic"
+      >
+        <mat-label>Motivo</mat-label>
+
+        <mat-select formControlName="reason_code">
+          <mat-option
+            *ngFor="let option of reasonOptions"
+            [value]="option.value"
+          >
+            {{ option.label }}
+          </mat-option>
+        </mat-select>
+
+        <mat-error
+          *ngIf="
+            createForm.controls
+              .reason_code.hasError('required')
+          "
+        >
+          Selecciona un motivo.
+        </mat-error>
+      </mat-form-field>
+
+      <mat-form-field
+        appearance="fill"
+        subscriptSizing="dynamic"
+        class="full-width"
+      >
+        <mat-label>
+          Observaciones
+          {{
+            createForm.controls
+              .reason_code.value === 'OTRO'
+              ? '(obligatorias)'
+              : '(opcionales)'
+          }}
+        </mat-label>
+
+        <textarea
+          matInput
+          formControlName="notes"
+          rows="3"
+          maxlength="500"
+        ></textarea>
+
+        <mat-hint align="end">
+          {{
+            createForm.controls.notes.value.length
+          }}/500
+        </mat-hint>
+      </mat-form-field>
+
+      <p
+        class="field-error"
+        *ngIf="
+          otherReasonRequiresNotes()
+          && createForm.controls.notes.touched
+        "
+      >
+        Explica el motivo cuando seleccionas Otro.
+      </p>
+
+      <mat-checkbox formControlName="confirmed">
+        Confirmo que el socio no requiere una rutina
+        elaborada por Ultra.
+      </mat-checkbox>
+
+      <div class="form-actions">
+        <button
+          mat-button
+          type="button"
+          [disabled]="saving"
+          (click)="close()"
+        >
+          Cancelar
+        </button>
+
+        <button
+          mat-flat-button
+          class="primary-action"
+          type="submit"
+          [disabled]="saving"
+        >
+          <mat-icon>check</mat-icon>
+          {{
+            saving
+              ? 'Guardando…'
+              : 'Confirmar decisión'
+          }}
+        </button>
+      </div>
+    </form>
+
+    <form
+      class="decision-form revoke-form"
+      [formGroup]="revokeForm"
+      *ngIf="showRevokeForm"
+      (ngSubmit)="revokeDecision()"
+    >
+      <div class="form-intro">
+        <p class="eyebrow">Reversión auditable</p>
+        <h3>Revertir decisión vigente</h3>
+        <p>
+          El registro permanecerá en el historial y
+          el estado del socio será recalculado.
+        </p>
+      </div>
+
+      <mat-form-field
+        appearance="fill"
+        subscriptSizing="dynamic"
+        class="full-width"
+      >
+        <mat-label>Motivo de reversión</mat-label>
+
+        <textarea
+          matInput
+          formControlName="revocation_reason"
+          rows="3"
+          maxlength="500"
+        ></textarea>
+
+        <mat-error
+          *ngIf="
+            revokeForm.controls
+              .revocation_reason.hasError('required')
+          "
+        >
+          El motivo es obligatorio.
+        </mat-error>
+      </mat-form-field>
+
+      <div class="form-actions">
+        <button
+          mat-button
+          type="button"
+          [disabled]="revoking"
+          (click)="cancelRevoke()"
+        >
+          Cancelar
+        </button>
+
+        <button
+          mat-flat-button
+          class="danger-primary"
+          type="submit"
+          [disabled]="revoking"
+        >
+          <mat-icon>undo</mat-icon>
+          {{
+            revoking
+              ? 'Revirtiendo…'
+              : 'Revertir decisión'
+          }}
+        </button>
+      </div>
+    </form>
+
+    <div
+      class="read-only-note"
+      *ngIf="
+        activeDecision()
+        && !canWriteDecisions()
+      "
+    >
+      <mat-icon>visibility</mat-icon>
+      Tu rol permite consultar esta decisión, pero no
+      modificarla.
+    </div>
+  </ng-container>
+</section>
