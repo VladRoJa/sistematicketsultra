@@ -1,0 +1,171 @@
+<section class="assignment-dialog">
+  <header class="dialog-header">
+    <div>
+      <p class="eyebrow">Control de Rutinas</p>
+
+      <h2>Reporte de asignación de rutinas</h2>
+
+      <p class="subtitle">
+        Alcance al {{ cutoffLabel }}
+      </p>
+    </div>
+
+    <button
+      mat-icon-button
+      type="button"
+      aria-label="Cerrar"
+      (click)="close()"
+    >
+      <mat-icon>close</mat-icon>
+    </button>
+  </header>
+
+  <div class="report-definition">
+    <span>
+      <strong>Total:</strong>
+      Con rutina + Sin rutina
+    </span>
+
+    <span>
+      “No requiere rutina de Ultra” se muestra
+      por separado y no participa en los porcentajes.
+    </span>
+  </div>
+
+  <div class="table-wrapper">
+    <table class="assignment-table">
+      <thead>
+        <tr>
+          <th>Región</th>
+          <th>Sucursal</th>
+          <th class="numeric">Con rutina</th>
+          <th class="numeric">%</th>
+          <th class="numeric">Sin rutina</th>
+          <th class="numeric">%</th>
+          <th class="numeric no-routine-header">
+            No requiere rutina de Ultra
+          </th>
+          <th class="numeric">Total</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        <tr *ngFor="let row of rows">
+          <td>
+            <span
+              class="region-chip"
+              [ngClass]="row.regionClass"
+            >
+              {{ row.regionName }}
+            </span>
+          </td>
+
+          <td class="branch-name">
+            {{ row.branchName }}
+          </td>
+
+          <td class="numeric">
+            {{ row.conRutina | number }}
+          </td>
+
+          <td class="numeric">
+            <span
+              [class]="
+                conPercentClass(
+                  row.percentConRutina
+                )
+              "
+            >
+              {{
+                row.percentConRutina
+                  | number:'1.1-1'
+              }}%
+            </span>
+          </td>
+
+          <td class="numeric">
+            {{ row.sinRutina | number }}
+          </td>
+
+          <td class="numeric">
+            <span
+              [class]="
+                sinPercentClass(
+                  row.percentSinRutina
+                )
+              "
+            >
+              {{
+                row.percentSinRutina
+                  | number:'1.1-1'
+              }}%
+            </span>
+          </td>
+
+          <td class="numeric no-routine-cell">
+            {{ row.noRequiereRutina | number }}
+          </td>
+
+          <td class="numeric total-cell">
+            {{ row.total | number }}
+          </td>
+        </tr>
+      </tbody>
+
+      <tfoot>
+        <tr>
+          <td colspan="2">Total general</td>
+
+          <td class="numeric">
+            {{ totals.conRutina | number }}
+          </td>
+
+          <td class="numeric">
+            {{
+              totals.percentConRutina
+                | number:'1.1-1'
+            }}%
+          </td>
+
+          <td class="numeric">
+            {{ totals.sinRutina | number }}
+          </td>
+
+          <td class="numeric">
+            {{
+              totals.percentSinRutina
+                | number:'1.1-1'
+            }}%
+          </td>
+
+          <td class="numeric">
+            {{
+              totals.noRequiereRutina
+                | number
+            }}
+          </td>
+
+          <td class="numeric">
+            {{ totals.total | number }}
+          </td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <div class="empty-state" *ngIf="!rows.length">
+    No hay sucursales que coincidan con los filtros
+    seleccionados.
+  </div>
+
+  <footer class="dialog-actions">
+    <button
+      mat-flat-button
+      class="primary-action"
+      type="button"
+      (click)="close()"
+    >
+      Cerrar
+    </button>
+  </footer>
+</section>
