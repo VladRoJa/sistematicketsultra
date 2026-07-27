@@ -25,6 +25,10 @@ class FakeRepository:
     def list_operational_branches(self):
         return BRANCHES
 
+    def list_instructor_catalog(self, branch_ids):
+        self.last_branch_ids = branch_ids
+        return []
+
     def get_summary(self, filters, branch_ids):
         self.last_filters, self.last_branch_ids = filters, branch_ids
         return {"rows": [
@@ -47,6 +51,7 @@ class FakeRepository:
             source_branch_name="Centro", sale_date=date(2026, 7, 1), classification_status="CLASSIFIED",
             current_status="CON_RUTINA", first_routine_at=date(2026, 7, 1), latest_routine_at=date(2026, 7, 2),
             current_instructor_name="Ana", routine_assignment_type="MISMO_DIA", status_version=2,
+            source_metadata={"pin": "12345"},
         )
         return [(member, "Centro", 1, 2)], 1
 

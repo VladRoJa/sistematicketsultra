@@ -12,6 +12,9 @@ from unittest.mock import patch
 from app.routine_control.pipeline.automated_pipeline_service import (
     run_automated_routine_control_pipeline,
 )
+from app.routine_control.pipeline.warehouse_raw_publisher import (
+    RoutineControlWarehousePublishResult,
+)
 from app.routine_control.providers.runtime import (
     ProviderArtifact,
     ProviderExtractionResult,
@@ -85,6 +88,17 @@ class AutomatedPipelineServiceTestCase(unittest.TestCase):
             error_message="private C:/absolute socio@example.com",
         )
 
+    def _warehouse_success(
+        self,
+        warehouse_upload_id: int = 71,
+    ) -> RoutineControlWarehousePublishResult:
+        return RoutineControlWarehousePublishResult(
+            warehouse_upload_id=warehouse_upload_id,
+            upload_status="created",
+            duplicate_detected=False,
+            duplicate_upload_id=None,
+        )
+
     def test_gasca_failure_skips_trainingym_and_manual_pipeline(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir, patch.dict(
             "os.environ",
@@ -112,6 +126,53 @@ class AutomatedPipelineServiceTestCase(unittest.TestCase):
         self.assertEqual(trainingym.calls, 0)
         self.assertEqual(manual_calls, 0)
 
+    def test_warehouse_failure_skips_trainingym_and_manual_pipeline(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir, patch.dict(
+            "os.environ",
+            self._environment(temp_dir),
+            clear=True,
+        ):
+            gasca = _Extractor(
+                self._success(
+                    "gasca",
+                    "new_members",
+                    Path(temp_dir) / "gasca.xlsx",
+                )
+            )
+            trainingym = _Extractor(self._failed("SHOULD_NOT_RUN"))
+            manual_calls = 0
+
+            def warehouse_publisher(**_kwargs):
+                raise RuntimeError("warehouse unavailable")
+
+            def manual(**_kwargs):
+                nonlocal manual_calls
+                manual_calls += 1
+
+            result = run_automated_routine_control_pipeline(
+                date_from=date(2026, 7, 1),
+                date_to=date(2026, 7, 23),
+                observed_at_utc=OBSERVED_AT,
+                gasca_extractor=gasca,
+                trainingym_extractor=trainingym,
+                warehouse_publisher=warehouse_publisher,
+                manual_pipeline=manual,
+            )
+
+        self.assertEqual(result.status, "FAILED")
+        self.assertFalse(result.succeeded)
+        self.assertEqual(
+            result.error_code,
+            "WAREHOUSE_PUBLISH_FAILED",
+        )
+        self.assertEqual(result.error_message, "RuntimeError")
+        self.assertEqual(gasca.calls, 1)
+        self.assertEqual(trainingym.calls, 0)
+        self.assertEqual(manual_calls, 0)
+        self.assertIsNone(result.warehouse_upload)
+
     def test_trainingym_failure_preserves_gasca_and_skips_manual(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir, patch.dict(
             "os.environ",
@@ -128,10 +189,17 @@ class AutomatedPipelineServiceTestCase(unittest.TestCase):
                 observed_at_utc=OBSERVED_AT,
                 gasca_extractor=gasca,
                 trainingym_extractor=trainingym,
+                warehouse_publisher=(
+                    lambda **_kwargs: self._warehouse_success(72)
+                ),
                 manual_pipeline=lambda **_kwargs: self.fail("No debe invocarse"),
             )
             self.assertEqual(result.status, "PARTIAL")
             self.assertTrue(result.gasca.artifact.local_path.exists())
+            self.assertEqual(
+                result.warehouse_upload.warehouse_upload_id,
+                72,
+            )
             self.assertIsNone(result.manual_pipeline)
 
     def test_both_artifacts_invoke_manual_once_and_release_lock(self) -> None:
@@ -172,10 +240,17 @@ class AutomatedPipelineServiceTestCase(unittest.TestCase):
                 observed_at_utc=OBSERVED_AT,
                 gasca_extractor=gasca,
                 trainingym_extractor=trainingym,
+                warehouse_publisher=(
+                    lambda **_kwargs: self._warehouse_success(73)
+                ),
                 manual_pipeline=manual,
                 lock_factory=lock_factory,
             )
         self.assertTrue(result.succeeded)
+        self.assertEqual(
+            result.warehouse_upload.warehouse_upload_id,
+            73,
+        )
         self.assertEqual(len(calls), 1)
         self.assertEqual(calls[0]["gasca_xlsx"], gasca_path)
         self.assertEqual(calls[0]["trainingym_xlsx"], trainingym_path)
@@ -217,9 +292,13 @@ class AutomatedPipelineServiceTestCase(unittest.TestCase):
                 observed_at_utc=OBSERVED_AT,
                 gasca_extractor=gasca,
                 trainingym_extractor=trainingym,
+                warehouse_publisher=(
+                    lambda **_kwargs: self._warehouse_success(74)
+                ),
             )
             payload = json.dumps(result.to_dict())
         self.assertIn('"sha256": "aaaaaaaaaaaa"', payload)
+        self.assertIn('"warehouse_upload_id": 74', payload)
         self.assertNotIn(temp_dir, payload)
         self.assertNotIn("socio@example.com", payload)
         self.assertNotIn("private C:/absolute", payload)
@@ -265,6 +344,9 @@ class AutomatedPipelineServiceTestCase(unittest.TestCase):
                     date_from=date(2026, 7, 1),
                     date_to=date(2026, 7, 23),
                     observed_at_utc=OBSERVED_AT,
+                    warehouse_publisher=(
+                        lambda **_kwargs: self._warehouse_success(75)
+                    ),
                     manual_pipeline=lambda **_kwargs: _ManualResult(
                         succeeded=True,
                     ),

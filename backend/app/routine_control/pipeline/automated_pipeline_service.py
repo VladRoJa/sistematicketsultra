@@ -10,6 +10,10 @@ from typing import Any, Callable, Protocol
 from app.routine_control.pipeline.manual_pipeline_service import (
     run_manual_routine_control_pipeline,
 )
+from app.routine_control.pipeline.warehouse_raw_publisher import (
+    RoutineControlWarehousePublishResult,
+    publish_gasca_new_members_artifact_to_warehouse,
+)
 from app.routine_control.providers.gasca import (
     GascaNewMembersExtractor,
     GascaProviderConfig,
@@ -68,11 +72,20 @@ def _extraction_summary(result: ProviderExtractionResult | None) -> dict[str, ob
     }
 
 
+def _warehouse_upload_summary(
+    result: RoutineControlWarehousePublishResult | None,
+) -> dict[str, object] | None:
+    if result is None:
+        return None
+    return result.to_dict()
+
+
 @dataclass(frozen=True, slots=True)
 class AutomatedRoutineControlPipelineResult:
     status: str
     succeeded: bool
     gasca: ProviderExtractionResult | None
+    warehouse_upload: RoutineControlWarehousePublishResult | None
     trainingym: ProviderExtractionResult | None
     manual_pipeline: Any | None
     elapsed_seconds: float
@@ -92,6 +105,9 @@ class AutomatedRoutineControlPipelineResult:
             "error_code": self.error_code,
             "error_message": self.error_message,
             "gasca": _extraction_summary(self.gasca),
+            "warehouse_upload": _warehouse_upload_summary(
+                self.warehouse_upload
+            ),
             "manual_pipeline": manual,
             "status": self.status,
             "succeeded": self.succeeded,
@@ -104,6 +120,7 @@ def _result(
     started: float,
     status: str,
     gasca: ProviderExtractionResult | None = None,
+    warehouse_upload: RoutineControlWarehousePublishResult | None = None,
     trainingym: ProviderExtractionResult | None = None,
     manual_pipeline: Any | None = None,
     error_code: str | None = None,
@@ -113,6 +130,7 @@ def _result(
         status=status,
         succeeded=status == "SUCCESS",
         gasca=gasca,
+        warehouse_upload=warehouse_upload,
         trainingym=trainingym,
         manual_pipeline=manual_pipeline,
         elapsed_seconds=round(time.monotonic() - started, 3),
@@ -131,6 +149,9 @@ def run_automated_routine_control_pipeline(
     headless: bool | None = None,
     gasca_extractor: ProviderExtractor | None = None,
     trainingym_extractor: ProviderExtractor | None = None,
+    warehouse_publisher: Callable[
+        ..., RoutineControlWarehousePublishResult
+    ] = publish_gasca_new_members_artifact_to_warehouse,
     manual_pipeline: Callable[..., Any] = run_manual_routine_control_pipeline,
     lock_factory: Callable[..., AbstractContextManager[None]] = provider_lock,
 ) -> AutomatedRoutineControlPipelineResult:
@@ -191,6 +212,21 @@ def run_automated_routine_control_pipeline(
                     error_message="La extracción Gasca no produjo un artifact válido.",
                 )
 
+            try:
+                warehouse_upload = warehouse_publisher(
+                    artifact=gasca_result.artifact,
+                    generation_mode=generation_mode,
+                    trigger_source=trigger_source,
+                )
+            except Exception as exc:
+                return _result(
+                    started=started,
+                    status="FAILED",
+                    gasca=gasca_result,
+                    error_code="WAREHOUSE_PUBLISH_FAILED",
+                    error_message=type(exc).__name__,
+                )
+
             trainingym_result = trainingym_provider.extract(
                 date_from=date_from,
                 date_to=date_to,
@@ -205,6 +241,7 @@ def run_automated_routine_control_pipeline(
                     started=started,
                     status="PARTIAL",
                     gasca=gasca_result,
+                    warehouse_upload=warehouse_upload,
                     trainingym=trainingym_result,
                     error_code=(
                         trainingym_result.error_code
@@ -230,6 +267,7 @@ def run_automated_routine_control_pipeline(
                     started=started,
                     status="FAILED",
                     gasca=gasca_result,
+                    warehouse_upload=warehouse_upload,
                     trainingym=trainingym_result,
                     manual_pipeline=manual_result,
                     error_code="MANUAL_PIPELINE_FAILED",
@@ -239,6 +277,7 @@ def run_automated_routine_control_pipeline(
                 started=started,
                 status="SUCCESS",
                 gasca=gasca_result,
+                warehouse_upload=warehouse_upload,
                 trainingym=trainingym_result,
                 manual_pipeline=manual_result,
             )
