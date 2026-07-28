@@ -44,6 +44,7 @@ import { RoutineControlService } from '../services/routine-control.service';
   styleUrls: ['./routine-control-dashboard.component.css'],
 })
 export class RoutineControlDashboardComponent implements OnInit, OnDestroy {
+  private static readonly BUSINESS_TIME_ZONE = 'America/Tijuana';
   readonly displayedColumns = [
     'member', 'branch', 'sale_date', 'status', 'first_routine_at',
     'latest_routine_at', 'instructor', 'assignment_type', 'incidents', 'decision',
@@ -74,6 +75,7 @@ export class RoutineControlDashboardComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
+    this.initializeCurrentMonthRange();
     this.loading = true;
     this.subscriptions.add(this.service.getCatalogs().subscribe({
       next: (catalogs) => {
@@ -92,6 +94,14 @@ export class RoutineControlDashboardComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.subscriptions.unsubscribe();
+  }
+
+  initializeCurrentMonthRange(now: Date = new Date()): void {
+    const currentDate = this.getCurrentBusinessDateParts(now);
+    this.form.patchValue({
+      sale_date_from: this.formatDateForApi(currentDate.year, currentDate.month, 1),
+      sale_date_to: this.formatDateForApi(currentDate.year, currentDate.month, currentDate.day),
+    }, { emitEvent: false });
   }
 
   get scopeLabel(): string {
@@ -403,6 +413,48 @@ export class RoutineControlDashboardComponent implements OnInit, OnDestroy {
     if (!remainsAvailable) {
       this.form.controls.instructor.setValue('');
     }
+  }
+
+  private getCurrentBusinessDateParts(
+    now: Date,
+  ): { year: number; month: number; day: number } {
+    const parts = new Intl.DateTimeFormat(
+      'en-CA',
+      {
+        timeZone:
+          RoutineControlDashboardComponent
+            .BUSINESS_TIME_ZONE,
+        calendar: 'gregory',
+        numberingSystem: 'latn',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      },
+    ).formatToParts(now);
+    const valueByType = new Map(
+      parts.map((part) => [
+        part.type,
+        part.value,
+      ]),
+    );
+
+    return {
+      year: Number(valueByType.get('year')),
+      month: Number(valueByType.get('month')),
+      day: Number(valueByType.get('day')),
+    };
+  }
+
+  private formatDateForApi(
+    year: number,
+    month: number,
+    day: number,
+  ): string {
+    return [
+      String(year).padStart(4, '0'),
+      String(month).padStart(2, '0'),
+      String(day).padStart(2, '0'),
+    ].join('-');
   }
 
   private assignmentReportCutoffDate():
