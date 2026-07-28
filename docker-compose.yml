@@ -150,6 +150,7 @@ services:
     networks:
       - backend-net
     volumes:
+      - /home/adminrdp/sistematicketsultra/uploads:/uploads
       - routine_control_runtime:/app/runtime/routine-control
     profiles:
       - scheduler

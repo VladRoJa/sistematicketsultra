@@ -7,6 +7,9 @@ from types import SimpleNamespace
 import pytest
 
 import app.warehouse.services.ventas_nuevos_socios_detalle_repository as repository
+from app.warehouse.services.ventas_nuevos_socios_detalle_canonicality_resolver import (
+    resolve_ventas_nuevos_socios_detalle_canonicality,
+)
 
 
 def _parsed_row() -> dict[str, object]:
@@ -377,3 +380,43 @@ def test_count_mismatch_is_rejected():
             )
         )
 
+
+
+def test_repository_passes_quality_to_real_canonicality_resolver(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(
+        repository,
+        "_fetch_existing_canonical_snapshot",
+        lambda **_: None,
+    )
+
+    result = repository._resolve_canonicality_decision(
+        business_date=date(2026, 7, 27),
+        date_from=date(2026, 7, 1),
+        date_to=date(2026, 7, 27),
+        snapshot_kind="month_to_date",
+        captured_at=datetime(
+            2026,
+            7,
+            27,
+            17,
+            37,
+            tzinfo=timezone.utc,
+        ),
+        row_count_valid=1942,
+        row_count_rejected=0,
+        canonicality_resolver=(
+            resolve_ventas_nuevos_socios_detalle_canonicality
+        ),
+    )
+
+    assert result["is_canonical"] is True
+    assert (
+        result["replace_existing_canonical"]
+        is False
+    )
+    assert (
+        result["reason"]
+        == "first_snapshot_for_business_date"
+    )
