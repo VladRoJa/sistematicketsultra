@@ -328,7 +328,7 @@ def reportar_error():
             sucursal_id=user.sucursal_id,
             estado='abierto',
             criticidad=int(criticidad) if criticidad.isdigit() else 1,
-            departamento_id=7,
+            departamento_id=14,
             clasificacion_id=538,  
             categoria=537,  
             subcategoria=538,
