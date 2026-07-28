@@ -749,6 +749,9 @@ def _resolve_canonicality_decision(
     date_from: date,
     date_to: date,
     snapshot_kind: str,
+    captured_at: datetime,
+    row_count_valid: int,
+    row_count_rejected: int,
     canonicality_resolver: (
         Callable[..., dict[str, Any] | None]
         | None
@@ -789,6 +792,9 @@ def _resolve_canonicality_decision(
         existing_canonical_snapshot=(
             existing_canonical
         ),
+        captured_at=captured_at,
+        row_count_valid=row_count_valid,
+        row_count_rejected=row_count_rejected,
     )
 
     if not resolved:
@@ -960,6 +966,17 @@ def persist_ventas_nuevos_socios_detalle_snapshot(
                 date_to=date_to_value,
                 snapshot_kind=(
                     normalized_snapshot_kind
+                ),
+                captured_at=captured_at_value,
+                row_count_valid=int(
+                    normalized_snapshot[
+                        "row_count_valid"
+                    ]
+                ),
+                row_count_rejected=int(
+                    normalized_snapshot[
+                        "row_count_rejected"
+                    ]
                 ),
                 canonicality_resolver=(
                     canonicality_resolver
