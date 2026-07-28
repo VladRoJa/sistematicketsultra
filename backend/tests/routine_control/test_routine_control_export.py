@@ -11,7 +11,7 @@ from app.routine_control.queries.export_service import EXPORT_HEADERS, build_mem
 class RoutineControlExportTest(unittest.TestCase):
     def setUp(self):
         self.item = {
-            "external_member_id": "M-1", "external_sale_id": "F-1", "member_name": "Socio",
+            "external_member_id": "M-1", "pin": "12345", "external_sale_id": "F-1", "member_name": "Socio",
             "email": "socio@example.com", "branch_name": "Centro", "sale_date": "2026-07-01",
             "classification_status": "CLASSIFIED", "current_status": "CON_RUTINA",
             "first_routine_at": "2026-07-01", "latest_routine_at": "2026-07-02",
@@ -25,15 +25,17 @@ class RoutineControlExportTest(unittest.TestCase):
     def test_headers_and_values_match_contract(self):
         self.assertEqual(tuple(cell.value for cell in self.sheet[1]), EXPORT_HEADERS)
         self.assertEqual(self.sheet["A2"].value, "M-1")
-        self.assertEqual(self.sheet["O2"].value, 2)
+        self.assertEqual(self.sheet["B2"].value, "12345")
+        self.assertEqual(self.sheet["C2"].value, "F-1")
+        self.assertEqual(self.sheet["P2"].value, 2)
 
     def test_dates_are_native_excel_dates(self):
-        self.assertIsInstance(self.sheet["F2"].value, (date,))
-        self.assertEqual(self.sheet["F2"].number_format, "yyyy-mm-dd")
+        self.assertIsInstance(self.sheet["G2"].value, (date,))
+        self.assertEqual(self.sheet["G2"].number_format, "yyyy-mm-dd")
 
     def test_filter_freeze_and_visible_headers(self):
         self.assertEqual(self.sheet.freeze_panes, "A2")
-        self.assertEqual(self.sheet.auto_filter.ref, "A1:O2")
+        self.assertEqual(self.sheet.auto_filter.ref, "A1:P2")
         self.assertTrue(self.sheet["A1"].font.bold)
 
     def test_sensitive_metadata_is_not_exported(self):
