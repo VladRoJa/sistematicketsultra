@@ -609,6 +609,361 @@ class TrackBranchCatalogORM(db.Model):
         ),
     )
     
+
+class VentasNuevosSociosDetalleSnapshotORM(db.Model):
+    __tablename__ = "ventas_nuevos_socios_detalle_snapshots"
+
+    id = db.Column(
+        db.BigInteger,
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    warehouse_upload_id = db.Column(
+        db.Integer,
+        db.ForeignKey("warehouse_uploads.id"),
+        nullable=False,
+        unique=True,
+    )
+
+    report_type_key = db.Column(
+        db.String(100),
+        nullable=False,
+    )
+
+    business_date = db.Column(
+        db.Date,
+        nullable=False,
+    )
+
+    date_from = db.Column(
+        db.Date,
+        nullable=False,
+    )
+
+    date_to = db.Column(
+        db.Date,
+        nullable=False,
+    )
+
+    captured_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+    )
+
+    snapshot_kind = db.Column(
+        db.String(50),
+        nullable=False,
+    )
+
+    is_canonical = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=False,
+    )
+
+    row_count_detected = db.Column(
+        db.Integer,
+        nullable=False,
+    )
+
+    row_count_valid = db.Column(
+        db.Integer,
+        nullable=False,
+    )
+
+    row_count_rejected = db.Column(
+        db.Integer,
+        nullable=False,
+        default=0,
+    )
+
+    metadata_json = db.Column(
+        db.JSON,
+        nullable=True,
+    )
+
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+    )
+
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+    )
+
+    warehouse_upload = db.relationship(
+        "WarehouseUploadORM",
+    )
+
+    rows = db.relationship(
+        "VentasNuevosSociosDetalleSnapshotRowORM",
+        back_populates="snapshot",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "date_from <= date_to",
+            name=(
+                "ck_vns_detalle_snapshots_valid_date_range"
+            ),
+        ),
+        db.CheckConstraint(
+            "business_date = date_to",
+            name=(
+                "ck_vns_detalle_snapshots_business_date"
+            ),
+        ),
+        db.Index(
+            "ix_vns_detalle_snapshots_business_date",
+            "business_date",
+        ),
+        db.Index(
+            "ix_vns_detalle_snapshots_date_range",
+            "date_from",
+            "date_to",
+        ),
+        db.Index(
+            "ix_vns_detalle_snapshots_is_canonical",
+            "is_canonical",
+        ),
+    )
+
+
+class VentasNuevosSociosDetalleSnapshotRowORM(db.Model):
+    __tablename__ = "ventas_nuevos_socios_detalle_snapshot_rows"
+
+    id = db.Column(
+        db.BigInteger,
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    snapshot_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey(
+            "ventas_nuevos_socios_detalle_snapshots.id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+    )
+
+    row_index = db.Column(
+        db.Integer,
+        nullable=False,
+    )
+
+    row_hash = db.Column(
+        db.String(64),
+        nullable=False,
+    )
+
+    id_socio = db.Column(
+        db.String(64),
+        nullable=False,
+    )
+
+    pin = db.Column(
+        db.String(32),
+        nullable=False,
+    )
+
+    sucursal_raw = db.Column(
+        db.String(255),
+        nullable=False,
+    )
+
+    sucursal_id = db.Column(
+        db.Integer,
+        db.ForeignKey(
+            "sucursales.sucursal_id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+    )
+
+    nombre = db.Column(
+        db.String(255),
+        nullable=False,
+    )
+
+    apellido_paterno = db.Column(
+        db.String(255),
+        nullable=False,
+    )
+
+    apellido_materno = db.Column(
+        db.String(255),
+        nullable=False,
+    )
+
+    lada = db.Column(
+        db.String(20),
+        nullable=False,
+    )
+
+    telefono = db.Column(
+        db.String(50),
+        nullable=False,
+    )
+
+    domicilio = db.Column(
+        db.Text,
+        nullable=True,
+    )
+
+    genero = db.Column(
+        db.String(50),
+        nullable=True,
+    )
+
+    fecha_nacimiento = db.Column(
+        db.Date,
+        nullable=True,
+    )
+
+    email = db.Column(
+        db.String(320),
+        nullable=True,
+    )
+
+    fecha_creacion_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+    )
+
+    inscripcion = db.Column(
+        db.String(255),
+        nullable=True,
+    )
+
+    tipo_membresia = db.Column(
+        db.String(100),
+        nullable=False,
+    )
+
+    tarifa = db.Column(
+        db.String(255),
+        nullable=False,
+    )
+
+    total = db.Column(
+        db.Numeric(14, 2),
+        nullable=True,
+    )
+
+    fecha_pago_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+    )
+
+    fecha_renovacion_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+    )
+
+    fecha_firma_contrato_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=True,
+    )
+
+    tipo_pago_code = db.Column(
+        db.Integer,
+        nullable=False,
+    )
+
+    tipo_tarjeta_code = db.Column(
+        db.Integer,
+        nullable=True,
+    )
+
+    lugar_pago = db.Column(
+        db.String(100),
+        nullable=False,
+    )
+
+    id_folio = db.Column(
+        db.String(100),
+        nullable=False,
+    )
+
+    pase = db.Column(
+        db.String(255),
+        nullable=True,
+    )
+
+    anfitrion = db.Column(
+        db.String(255),
+        nullable=True,
+    )
+
+    total_pagado = db.Column(
+        db.Numeric(14, 2),
+        nullable=True,
+    )
+
+    quality_flags = db.Column(
+        db.JSON,
+        nullable=True,
+    )
+
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+    )
+
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+    )
+
+    snapshot = db.relationship(
+        "VentasNuevosSociosDetalleSnapshotORM",
+        back_populates="rows",
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "snapshot_id",
+            "id_socio",
+            name="uq_vns_detalle_rows_snapshot_socio",
+        ),
+        db.Index(
+            "ix_vns_detalle_rows_snapshot_id",
+            "snapshot_id",
+        ),
+        db.Index(
+            "ix_vns_detalle_rows_id_socio",
+            "id_socio",
+        ),
+        db.Index(
+            "ix_vns_detalle_rows_snapshot_branch",
+            "snapshot_id",
+            "sucursal_id",
+        ),
+        db.Index(
+            "ix_vns_detalle_rows_snapshot_payment",
+            "snapshot_id",
+            "fecha_pago_at",
+        ),
+        db.Index(
+            "ix_vns_detalle_rows_telefono",
+            "telefono",
+        ),
+        db.Index(
+            "ix_vns_detalle_rows_id_folio",
+            "id_folio",
+        ),
+        db.Index(
+            "ix_vns_detalle_rows_tarifa",
+            "tarifa",
+        ),
+    )
+
+
 class TrackBranchAliasORM(db.Model):
     __tablename__ = "track_branch_aliases"
 

@@ -173,6 +173,134 @@ class AutomatedPipelineServiceTestCase(unittest.TestCase):
         self.assertEqual(manual_calls, 0)
         self.assertIsNone(result.warehouse_upload)
 
+    def test_structured_ingestion_failure_preserves_raw_and_skips_downstream(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir, patch.dict(
+            "os.environ",
+            self._environment(temp_dir),
+            clear=True,
+        ):
+            gasca = _Extractor(
+                self._success(
+                    "gasca",
+                    "new_members",
+                    Path(temp_dir) / "gasca.xlsx",
+                )
+            )
+
+            trainingym = _Extractor(
+                self._failed("SHOULD_NOT_RUN")
+            )
+
+            structured_calls: list[
+                dict[str, object]
+            ] = []
+
+            manual_calls = 0
+
+            def structured_ingestor(**kwargs):
+                structured_calls.append(
+                    dict(kwargs)
+                )
+
+                raise RuntimeError(
+                    "structured unavailable"
+                )
+
+            def manual(**_kwargs):
+                nonlocal manual_calls
+                manual_calls += 1
+
+            result = (
+                run_automated_routine_control_pipeline(
+                    date_from=date(2026, 7, 1),
+                    date_to=date(2026, 7, 23),
+                    observed_at_utc=OBSERVED_AT,
+                    gasca_extractor=gasca,
+                    trainingym_extractor=trainingym,
+                    warehouse_publisher=(
+                        lambda **_kwargs:
+                        self._warehouse_success(76)
+                    ),
+                    warehouse_structured_ingestor=(
+                        structured_ingestor
+                    ),
+                    manual_pipeline=manual,
+                )
+            )
+
+        self.assertEqual(
+            result.status,
+            "FAILED",
+        )
+
+        self.assertFalse(
+            result.succeeded
+        )
+
+        self.assertEqual(
+            result.error_code,
+            "WAREHOUSE_STRUCTURED_INGESTION_FAILED",
+        )
+
+        self.assertEqual(
+            result.error_message,
+            "RuntimeError",
+        )
+
+        self.assertEqual(
+            gasca.calls,
+            1,
+        )
+
+        self.assertEqual(
+            trainingym.calls,
+            0,
+        )
+
+        self.assertEqual(
+            manual_calls,
+            0,
+        )
+
+        self.assertIsNotNone(
+            result.warehouse_upload
+        )
+
+        self.assertEqual(
+            result.warehouse_upload.warehouse_upload_id,
+            76,
+        )
+
+        self.assertEqual(
+            len(structured_calls),
+            1,
+        )
+
+        structured_call = structured_calls[0]
+
+        self.assertEqual(
+            structured_call["warehouse_upload_id"],
+            76,
+        )
+
+        self.assertEqual(
+            structured_call["snapshot_kind"],
+            "month_to_date",
+        )
+
+        self.assertEqual(
+            structured_call["requested_by"],
+            "automated_provider_cli",
+        )
+
+        self.assertEqual(
+            structured_call["ingestion_source"],
+            "AUTOMATED_PROVIDER_CLI",
+        )
+
+
     def test_trainingym_failure_preserves_gasca_and_skips_manual(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir, patch.dict(
             "os.environ",
@@ -191,6 +319,12 @@ class AutomatedPipelineServiceTestCase(unittest.TestCase):
                 trainingym_extractor=trainingym,
                 warehouse_publisher=(
                     lambda **_kwargs: self._warehouse_success(72)
+                ),
+                warehouse_structured_ingestor=(
+                    lambda **_kwargs: {
+                        "status": "ingested",
+                        "snapshot_id": 172,
+                    }
                 ),
                 manual_pipeline=lambda **_kwargs: self.fail("No debe invocarse"),
             )
@@ -228,7 +362,24 @@ class AutomatedPipelineServiceTestCase(unittest.TestCase):
                     trainingym_path,
                 )
             )
+            structured_calls: list[
+                dict[str, object]
+            ] = []
+
             calls: list[dict[str, object]] = []
+
+            def structured_ingestor(**kwargs):
+                structured_calls.append(
+                    dict(kwargs)
+                )
+
+                return {
+                    "status": "ingested",
+                    "snapshot_id": 173,
+                    "warehouse_upload_id": 73,
+                    "row_count_valid": 1942,
+                    "row_count_rejected": 0,
+                }
 
             def manual(**kwargs):
                 calls.append(kwargs)
@@ -243,6 +394,9 @@ class AutomatedPipelineServiceTestCase(unittest.TestCase):
                 warehouse_publisher=(
                     lambda **_kwargs: self._warehouse_success(73)
                 ),
+                warehouse_structured_ingestor=(
+                    structured_ingestor
+                ),
                 manual_pipeline=manual,
                 lock_factory=lock_factory,
             )
@@ -251,6 +405,34 @@ class AutomatedPipelineServiceTestCase(unittest.TestCase):
             result.warehouse_upload.warehouse_upload_id,
             73,
         )
+
+        self.assertEqual(
+            len(structured_calls),
+            1,
+        )
+
+        structured_call = structured_calls[0]
+
+        self.assertEqual(
+            structured_call["warehouse_upload_id"],
+            73,
+        )
+
+        self.assertEqual(
+            structured_call["snapshot_kind"],
+            "month_to_date",
+        )
+
+        self.assertEqual(
+            structured_call["requested_by"],
+            "automated_provider_cli",
+        )
+
+        self.assertEqual(
+            structured_call["ingestion_source"],
+            "AUTOMATED_PROVIDER_CLI",
+        )
+
         self.assertEqual(len(calls), 1)
         self.assertEqual(calls[0]["gasca_xlsx"], gasca_path)
         self.assertEqual(calls[0]["trainingym_xlsx"], trainingym_path)
@@ -294,6 +476,12 @@ class AutomatedPipelineServiceTestCase(unittest.TestCase):
                 trainingym_extractor=trainingym,
                 warehouse_publisher=(
                     lambda **_kwargs: self._warehouse_success(74)
+                ),
+                warehouse_structured_ingestor=(
+                    lambda **_kwargs: {
+                        "status": "ingested",
+                        "snapshot_id": 174,
+                    }
                 ),
             )
             payload = json.dumps(result.to_dict())
@@ -346,6 +534,12 @@ class AutomatedPipelineServiceTestCase(unittest.TestCase):
                     observed_at_utc=OBSERVED_AT,
                     warehouse_publisher=(
                         lambda **_kwargs: self._warehouse_success(75)
+                    ),
+                    warehouse_structured_ingestor=(
+                        lambda **_kwargs: {
+                            "status": "ingested",
+                            "snapshot_id": 175,
+                        }
                     ),
                     manual_pipeline=lambda **_kwargs: _ManualResult(
                         succeeded=True,

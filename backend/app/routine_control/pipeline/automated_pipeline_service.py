@@ -14,6 +14,9 @@ from app.routine_control.pipeline.warehouse_raw_publisher import (
     RoutineControlWarehousePublishResult,
     publish_gasca_new_members_artifact_to_warehouse,
 )
+from app.warehouse.services.ventas_nuevos_socios_detalle_ingestion_service import (
+    ingest_ventas_nuevos_socios_detalle_upload,
+)
 from app.routine_control.providers.gasca import (
     GascaNewMembersExtractor,
     GascaProviderConfig,
@@ -152,6 +155,9 @@ def run_automated_routine_control_pipeline(
     warehouse_publisher: Callable[
         ..., RoutineControlWarehousePublishResult
     ] = publish_gasca_new_members_artifact_to_warehouse,
+    warehouse_structured_ingestor: Callable[
+        ..., dict[str, Any]
+    ] = ingest_ventas_nuevos_socios_detalle_upload,
     manual_pipeline: Callable[..., Any] = run_manual_routine_control_pipeline,
     lock_factory: Callable[..., AbstractContextManager[None]] = provider_lock,
 ) -> AutomatedRoutineControlPipelineResult:
@@ -224,6 +230,27 @@ def run_automated_routine_control_pipeline(
                     status="FAILED",
                     gasca=gasca_result,
                     error_code="WAREHOUSE_PUBLISH_FAILED",
+                    error_message=type(exc).__name__,
+                )
+
+            try:
+                warehouse_structured_ingestor(
+                    warehouse_upload_id=(
+                        warehouse_upload.warehouse_upload_id
+                    ),
+                    snapshot_kind="month_to_date",
+                    requested_by="automated_provider_cli",
+                    ingestion_source=trigger_source,
+                )
+            except Exception as exc:
+                return _result(
+                    started=started,
+                    status="FAILED",
+                    gasca=gasca_result,
+                    warehouse_upload=warehouse_upload,
+                    error_code=(
+                        "WAREHOUSE_STRUCTURED_INGESTION_FAILED"
+                    ),
                     error_message=type(exc).__name__,
                 )
 

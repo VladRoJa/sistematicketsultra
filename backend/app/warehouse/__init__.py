@@ -47,6 +47,22 @@ from app.warehouse.services.ingresos_wellhub_ingestion_service import (register_
 
 from app.warehouse.services.track_monthly_targets_ingestion_service import (register_track_monthly_targets_ingestor,)
 
+from app.warehouse.services.ventas_nuevos_socios_detalle_parser import (
+    register_ventas_nuevos_socios_detalle_parser,
+)
+from app.warehouse.services.ventas_nuevos_socios_detalle_repository import (
+    register_ventas_nuevos_socios_detalle_repository,
+)
+from app.warehouse.services.ventas_nuevos_socios_detalle_branch_resolver import (
+    resolve_ventas_nuevos_socios_detalle_branch_id,
+)
+from app.warehouse.services.ventas_nuevos_socios_detalle_canonicality_resolver import (
+    resolve_ventas_nuevos_socios_detalle_canonicality,
+)
+from app.warehouse.services.ventas_nuevos_socios_detalle_ingestion_service import (
+    register_ventas_nuevos_socios_detalle_ingestor,
+)
+
 from app.warehouse.services.warehouse_manual_ingestion_dispatcher import ( register_warehouse_manual_ingestion_dispatcher,)
 
 
@@ -90,6 +106,9 @@ def _mark_runtime_hooks_registered(app: Flask) -> None:
         "ingresos_wellhub_repository": True,
         "ingresos_wellhub_ingestor": True,
         "register_track_monthly_targets_ingestor": True,
+        "ventas_nuevos_socios_detalle_parser": True,
+        "ventas_nuevos_socios_detalle_repository": True,
+        "ventas_nuevos_socios_detalle_ingestor": True,
     }
 
 
@@ -111,6 +130,9 @@ def register_warehouse_runtime_hooks(app: Flask) -> None:
     - app.config["WAREHOUSE_REPORTE_DIRECCION_INGESTOR"]
     - app.config["WAREHOUSE_REPORTE_DIRECCION_PARSER"]
     - app.config["WAREHOUSE_REPORTE_DIRECCION_REPOSITORY"]
+    - app.config["WAREHOUSE_VENTAS_NUEVOS_SOCIOS_DETALLE_PARSER"]
+    - app.config["WAREHOUSE_VENTAS_NUEVOS_SOCIOS_DETALLE_REPOSITORY"]
+    - app.config["WAREHOUSE_VENTAS_NUEVOS_SOCIOS_DETALLE_INGESTOR"]
 
     Debe llamarse una sola vez desde la app factory.
     """
@@ -159,6 +181,18 @@ def register_warehouse_runtime_hooks(app: Flask) -> None:
     
     register_track_monthly_targets_ingestor(app)
     
+    register_ventas_nuevos_socios_detalle_parser(app)
+    register_ventas_nuevos_socios_detalle_repository(app)
+    register_ventas_nuevos_socios_detalle_ingestor(app)
+    app.config.setdefault(
+        "WAREHOUSE_VENTAS_NUEVOS_SOCIOS_DETALLE_BRANCH_RESOLVER",
+        resolve_ventas_nuevos_socios_detalle_branch_id,
+    )
+    app.config.setdefault(
+        "WAREHOUSE_VENTAS_NUEVOS_SOCIOS_DETALLE_CANONICALITY_RESOLVER",
+        resolve_ventas_nuevos_socios_detalle_canonicality,
+    )
+
     register_warehouse_manual_ingestion_dispatcher(app)
     
     register_gasca_single_report_runner_impl(app)
