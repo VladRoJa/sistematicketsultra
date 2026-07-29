@@ -1,13 +1,33 @@
 <main class="marketing-page">
   <header class="page-header">
     <div class="page-heading">
-      <p class="section-label">Track / BI</p>
+      <p class="eyebrow">Track / BI</p>
       <h1>Marketing y Conversión</h1>
       <p class="page-subtitle">Embudo operativo mensual</p>
+      <div class="header-context">
+        <span
+          *ngIf="dashboard"
+          class="cohort-badge"
+          [class.cohort-badge--pending]="cohortIsIncomplete"
+        >
+          <mat-icon>
+            {{ cohortIsIncomplete ? 'schedule' : 'verified' }}
+          </mat-icon>
+          Cohorte {{ cohortStatusLabel }}
+        </span>
+        <span class="attribution-note">
+          <mat-icon>link</mat-icon>
+          Atribución por teléfono, misma sucursal y ventana de 30 días
+        </span>
+      </div>
     </div>
 
     <div class="page-actions">
-      <mat-form-field appearance="outline" class="month-field">
+      <mat-form-field
+        appearance="fill"
+        subscriptSizing="dynamic"
+        class="month-field"
+      >
         <mat-label>Mes</mat-label>
         <input
           matInput
@@ -22,6 +42,7 @@
 
       <button
         mat-stroked-button
+        class="secondary-action"
         type="button"
         [disabled]="loading || monthControl.invalid"
         (click)="refreshDashboard()"
@@ -33,7 +54,7 @@
       <button
         *ngIf="canEditInputs && !editingInputs"
         mat-flat-button
-        color="primary"
+        class="primary-action"
         type="button"
         [disabled]="loading"
         (click)="openInputEditor()"
@@ -43,14 +64,6 @@
       </button>
     </div>
   </header>
-
-  <section class="methodology-notice" aria-label="Metodología">
-    <mat-icon>info</mat-icon>
-    <p>
-      Los leads se capturan de forma agregada. La relación visita → venta
-      utiliza teléfono exacto, misma sucursal y una ventana de 30 días.
-    </p>
-  </section>
 
   <section *ngIf="loading" class="state-panel" aria-live="polite">
     <mat-spinner diameter="36"></mat-spinner>
@@ -77,29 +90,42 @@
   </section>
 
   <ng-container *ngIf="!loading && !errorMessage && dashboard">
-    <section
-      *ngIf="cohortIsIncomplete"
-      class="cohort-warning"
-      role="status"
-    >
-      <mat-icon>schedule</mat-icon>
-      <p>
-        La cohorte todavía puede recibir ventas dentro de su ventana de 30 días.
-      </p>
-    </section>
-
     <section class="metrics-section" aria-labelledby="summary-title">
       <div class="section-heading">
         <div>
-          <h2 id="summary-title">Resumen del mes</h2>
-          <p>Indicadores consolidados dentro del alcance autorizado.</p>
+          <p class="section-kicker">Rendimiento consolidado</p>
+          <h2 id="summary-title">Embudo del mes</h2>
+          <p>
+            De la inversión capturada al ingreso conciliado dentro del
+            alcance autorizado.
+          </p>
+        </div>
+        <div
+          *ngIf="cohortIsIncomplete"
+          class="cohort-warning"
+          role="status"
+        >
+          <mat-icon>schedule</mat-icon>
+          <span>La cohorte aún puede recibir ventas.</span>
         </div>
       </div>
 
-      <div class="primary-metrics">
+      <div class="funnel" aria-label="Embudo principal de conversión">
         <article
-          *ngFor="let card of primaryCards"
-          class="metric-card metric-card--primary"
+          *ngFor="let card of primaryCards; let step = index"
+          class="funnel-card"
+        >
+          <span class="funnel-step">0{{ step + 1 }}</span>
+          <span class="metric-label">{{ card.label }}</span>
+          <strong>{{ card.value }}</strong>
+          <small>{{ card.supportingText }}</small>
+        </article>
+      </div>
+
+      <div class="conversion-strip" aria-label="Conversiones del embudo">
+        <article
+          *ngFor="let card of conversionCards"
+          class="conversion-card"
         >
           <span>{{ card.label }}</span>
           <strong>{{ card.value }}</strong>
@@ -107,16 +133,22 @@
         </article>
       </div>
 
-      <div class="secondary-metrics">
-        <article
-          *ngFor="let card of secondaryCards"
-          class="metric-card"
-        >
-          <span>{{ card.label }}</span>
-          <strong>{{ card.value }}</strong>
-          <small>{{ card.supportingText }}</small>
-        </article>
-      </div>
+      <aside class="cost-panel" aria-labelledby="cost-title">
+        <div class="cost-heading">
+          <span class="cost-icon"><mat-icon>payments</mat-icon></span>
+          <div>
+            <p class="section-kicker">Eficiencia económica</p>
+            <h3 id="cost-title">Costos de adquisición</h3>
+          </div>
+        </div>
+        <div class="cost-grid">
+          <article *ngFor="let card of costCards" class="cost-card">
+            <span>{{ card.label }}</span>
+            <strong>{{ card.value }}</strong>
+            <small>{{ card.supportingText }}</small>
+          </article>
+        </div>
+      </aside>
     </section>
 
     <section
@@ -131,9 +163,11 @@
         </div>
         <button
           mat-stroked-button
+          class="secondary-action"
           type="button"
           (click)="closeInputEditor()"
         >
+          <mat-icon>close</mat-icon>
           Cerrar edición
         </button>
       </div>
@@ -232,7 +266,7 @@
           <div class="input-save">
             <button
               mat-flat-button
-              color="primary"
+              class="primary-action"
               type="submit"
               [disabled]="row.saving"
             >
@@ -249,6 +283,7 @@
     <section class="table-section" aria-labelledby="branch-table-title">
       <div class="section-heading">
         <div>
+          <p class="section-kicker">Desglose operativo</p>
           <h2 id="branch-table-title">Detalle por sucursal</h2>
           <p>Solo se muestran sucursales devueltas por el backend.</p>
         </div>
@@ -349,43 +384,51 @@
     <section class="quality-section" aria-labelledby="quality-title">
       <div class="section-heading">
         <div>
+          <p class="section-kicker">Confiabilidad</p>
           <h2 id="quality-title">Calidad de datos</h2>
           <p>Alcance y cobertura de la medición del mes.</p>
         </div>
       </div>
 
-      <dl class="quality-modes">
-        <div>
-          <dt>Modo de leads</dt>
-          <dd>{{ leadModeLabel }}</dd>
-        </div>
-        <div>
-          <dt>Modo de atribución de ventas</dt>
-          <dd>{{ salesAttributionModeLabel }}</dd>
-        </div>
-      </dl>
+      <div class="quality-layout">
+        <dl class="quality-modes">
+          <div>
+            <dt>Modo de leads</dt>
+            <dd>{{ leadModeLabel }}</dd>
+          </div>
+          <div>
+            <dt>Modo de atribución de ventas</dt>
+            <dd>{{ salesAttributionModeLabel }}</dd>
+          </div>
+        </dl>
 
-      <dl class="quality-grid">
-        <div *ngFor="let item of qualityItems">
-          <dt>{{ item.label }}</dt>
-          <dd>{{ item.value }}</dd>
-        </div>
         <div>
-          <dt>Maduración de la cohorte</dt>
-          <dd>{{ cohortStatusLabel }}</dd>
-        </div>
-      </dl>
+          <dl class="quality-grid">
+            <div *ngFor="let item of qualityItems">
+              <dt>{{ item.label }}</dt>
+              <dd>{{ item.value }}</dd>
+            </div>
+            <div>
+              <dt>Maduración de la cohorte</dt>
+              <dd>{{ cohortStatusLabel }}</dd>
+            </div>
+          </dl>
 
-      <div
-        *ngIf="qualityLimitations.length > 0"
-        class="limitations"
-      >
-        <h3>Limitaciones informadas por el backend</h3>
-        <ul>
-          <li *ngFor="let limitation of qualityLimitations">
-            {{ limitation }}
-          </li>
-        </ul>
+          <div
+            *ngIf="qualityLimitations.length > 0"
+            class="limitations"
+          >
+            <h3>
+              <mat-icon>info</mat-icon>
+              Limitaciones informadas por el backend
+            </h3>
+            <ul>
+              <li *ngFor="let limitation of qualityLimitations">
+                {{ limitation }}
+              </li>
+            </ul>
+          </div>
+        </div>
       </div>
     </section>
   </ng-container>

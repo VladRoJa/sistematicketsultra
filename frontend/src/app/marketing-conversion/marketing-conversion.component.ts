@@ -151,7 +151,8 @@ export class MarketingConversionComponent implements OnInit {
 
   dashboard: MarketingDashboardResponse | null = null;
   primaryCards: MarketingMetricCard[] = [];
-  secondaryCards: MarketingMetricCard[] = [];
+  costCards: MarketingMetricCard[] = [];
+  conversionCards: MarketingMetricCard[] = [];
   branchRows: MarketingBranchView[] = [];
   qualityItems: MarketingQualityItem[] = [];
   qualityLimitations: string[] = [];
@@ -460,7 +461,9 @@ export class MarketingConversionComponent implements OnInit {
   private applyDashboard(data: MarketingDashboardResponse): void {
     this.dashboard = data;
     this.primaryCards = this.buildPrimaryCards(data.summary);
-    this.secondaryCards = this.buildSecondaryCards(data.summary);
+    this.costCards = this.buildCostCards(data.summary);
+    this.conversionCards =
+      this.buildConversionCards(data.summary);
     this.branchRows = data.branches.map((branch) =>
       this.buildBranchView(branch),
     );
@@ -499,7 +502,7 @@ export class MarketingConversionComponent implements OnInit {
     ];
   }
 
-  private buildSecondaryCards(
+  private buildCostCards(
     metrics: MarketingMetrics,
   ): MarketingMetricCard[] {
     return [
@@ -518,6 +521,13 @@ export class MarketingConversionComponent implements OnInit {
         value: this.formatCurrency(metrics.cost_per_sale),
         supportingText: 'Inversión / ventas atribuidas',
       },
+    ];
+  }
+
+  private buildConversionCards(
+    metrics: MarketingMetrics,
+  ): MarketingMetricCard[] {
+    return [
       {
         label: 'Lead → visita',
         value: this.formatPercent(metrics.lead_to_visit_rate),

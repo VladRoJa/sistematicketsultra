@@ -119,10 +119,6 @@ ngOnInit(): void {
   };
   const trackSubmenu = [
     { label: 'Track Diario', path: '/warehouse/track' },
-    {
-      label: 'Marketing y Conversión',
-      path: '/marketing-conversion',
-    },
   ];
 
   if (this.puedeVerKpiDesempenoPorRol()) {
@@ -182,6 +178,14 @@ ngOnInit(): void {
     submenu: [
       { label: 'Resumen operativo', path: '/control-rutinas' },
       { label: 'Historial de corridas', path: '/control-rutinas/corridas' },
+    ],
+  };
+
+  const menuMarketingConversion = {
+    label: 'Marketing y Conversión',
+    path: '/marketing-conversion',
+    submenu: [
+      { label: 'Embudo mensual', path: '/marketing-conversion' },
     ],
   };
 
@@ -364,6 +368,16 @@ if (
   this.menuItems = [
     ...this.menuItems,
     menuControlRutinas,
+  ];
+}
+
+if (
+  this.puedeVerMarketingConversionPorRol() &&
+  !this.menuItems.some((item) => item.label === 'Marketing y Conversión')
+) {
+  this.menuItems = [
+    ...this.menuItems,
+    menuMarketingConversion,
   ];
 }
 
@@ -1080,6 +1094,21 @@ private puedeVerControlRutinasPorRol(): boolean {
     //'LECTOR_GLOBAL',
     //'GERENTE',
     //'GERENTE_REGIONAL',
+  ].includes(rol);
+}
+
+private puedeVerMarketingConversionPorRol(): boolean {
+  const user = this.authService.getUser();
+  const rol = String(user?.rol ?? user?.role ?? '').trim().toUpperCase();
+
+  return [
+    'ADMIN',
+    //'ADMINISTRADOR',
+    //'SUPER_ADMIN',
+    //'MARKETING',
+    //'LECTOR_GLOBAL',
+    //'GERENTE_REGIONAL',
+    //'GERENTE',
   ].includes(rol);
 }
 
