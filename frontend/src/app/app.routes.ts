@@ -134,6 +134,12 @@ export const routes: Routes = [
         component: TrackDashboardComponent,
       },
       {
+        path: 'marketing-conversion',
+        loadComponent: () =>
+          import('./marketing-conversion/marketing-conversion.component')
+            .then(m => m.MarketingConversionComponent),
+      },
+      {
         path: 'warehouse/track/kpi-desempeno',
         component: TrackKpiDesempenoComponent,
       },

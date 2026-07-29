@@ -1,0 +1,823 @@
+from __future__ import annotations
+
+from calendar import monthrange
+from dataclasses import dataclass, field
+from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal, InvalidOperation
+from typing import Any, Iterable
+import unicodedata
+from zoneinfo import ZoneInfo
+
+from app.extensions import db
+from app.models.marketing import MarketingMonthlyInputORM
+from app.models.warehouse import (
+    TrackBranchAliasORM,
+    TrackBranchCatalogORM,
+    VentaTotalSnapshotORM,
+    VentaTotalSnapshotRowORM,
+    VentasNuevosSociosDetalleSnapshotORM,
+    VentasNuevosSociosDetalleSnapshotRowORM,
+)
+from app.services.marketing_access import MarketingAccess
+from app.services.marketing_attribution import (
+    SaleRecord,
+    VisitEvent,
+    count_unique_visitors,
+    deduplicate_visit_events,
+    reconcile_visit_sales,
+    safe_divide,
+)
+from app.services.marketing_inputs_service import (
+    list_marketing_inputs,
+    parse_month,
+)
+from app.services.marketing_phone import (
+    normalize_member_phone,
+    normalize_phone,
+)
+
+
+TIJUANA_TIMEZONE = ZoneInfo("America/Tijuana")
+ELIGIBLE_VISIT_DESCRIPTIONS = frozenset(
+    {
+        "PASE 2 DIAS GRATIS",
+        "PASE RECORRIDO",
+    }
+)
+CANCELLED_STATUS_TERMS = (
+    "CANCELADO",
+    "CANCELADA",
+    "ANULADO",
+    "ANULADA",
+)
+FIXED_LIMITATIONS = (
+    "Los leads se capturan de forma agregada por mes y sucursal.",
+    "No existe todavía atribución individual lead -> visita.",
+    "Las ventas solo se atribuyen con teléfono exacto y misma sucursal.",
+    "Una cohorte reciente puede seguir madurando durante 30 días.",
+)
+
+
+@dataclass(frozen=True)
+class MarketingBranch:
+    sucursal_id: int
+    name: str
+    display_order: int
+
+
+@dataclass(frozen=True)
+class _EligibleVisit:
+    event_key: str
+    branch_id: int
+    visit_date: date
+    phone: str | None
+    description: str
+
+
+@dataclass
+class VisitLoadResult:
+    events: list[VisitEvent] = field(default_factory=list)
+    eligible_visit_events: int = 0
+    visit_events_with_valid_phone: int = 0
+    visit_events_without_valid_phone: int = 0
+    snapshot_id: int | None = None
+    limitations: list[str] = field(default_factory=list)
+
+
+@dataclass
+class SalesLoadResult:
+    sales: list[SaleRecord] = field(default_factory=list)
+    snapshot_ids: list[int] = field(default_factory=list)
+    limitations: list[str] = field(default_factory=list)
+
+
+def _normalize_text(value: Any) -> str:
+    text_value = str(value or "").strip().upper()
+    without_accents = "".join(
+        character
+        for character in unicodedata.normalize(
+            "NFKD",
+            text_value,
+        )
+        if not unicodedata.combining(character)
+    )
+    return " ".join(without_accents.split())
+
+
+def _to_decimal(value: Any) -> Decimal:
+    if value is None:
+        return Decimal("0")
+    if isinstance(value, Decimal):
+        return value
+
+    try:
+        return Decimal(
+            str(value).strip().replace("$", "").replace(",", "")
+        )
+    except (InvalidOperation, ValueError) as exc:
+        raise ValueError(
+            f"No se pudo convertir a Decimal: {value!r}"
+        ) from exc
+
+
+def _month_end(month_start: date) -> date:
+    return date(
+        month_start.year,
+        month_start.month,
+        monthrange(
+            month_start.year,
+            month_start.month,
+        )[1],
+    )
+
+
+def _calendar_month_starts(
+    *,
+    start_date: date,
+    end_date: date,
+) -> list[date]:
+    current = start_date.replace(day=1)
+    last_month = end_date.replace(day=1)
+    result: list[date] = []
+
+    while current <= last_month:
+        result.append(current)
+        if current.month == 12:
+            current = date(current.year + 1, 1, 1)
+        else:
+            current = date(
+                current.year,
+                current.month + 1,
+                1,
+            )
+
+    return result
+
+
+def _parse_visit_date(value: Any) -> date:
+    if isinstance(value, date) and not isinstance(
+        value,
+        datetime,
+    ):
+        return value
+    if isinstance(value, datetime):
+        return value.date()
+
+    raw_value = str(value or "").strip()
+    for date_format in (
+        "%Y-%m-%d",
+        "%d-%m-%y",
+        "%d/%m/%y",
+        "%d-%m-%Y",
+        "%d/%m/%Y",
+    ):
+        try:
+            return datetime.strptime(
+                raw_value,
+                date_format,
+            ).date()
+        except ValueError:
+            continue
+
+    raise ValueError(
+        f"No se pudo interpretar fecha de visita: {value!r}"
+    )
+
+
+def _payment_local_date(value: Any) -> date:
+    if isinstance(value, date) and not isinstance(
+        value,
+        datetime,
+    ):
+        return value
+    if not isinstance(value, datetime):
+        raise ValueError(
+            "fecha_pago_at debe ser datetime."
+        )
+
+    normalized = value
+    if normalized.tzinfo is None:
+        normalized = normalized.replace(
+            tzinfo=timezone.utc
+        )
+
+    return normalized.astimezone(
+        TIJUANA_TIMEZONE
+    ).date()
+
+
+def _load_available_branches() -> list[MarketingBranch]:
+    catalog_rows = (
+        TrackBranchCatalogORM.query.filter(
+            TrackBranchCatalogORM.is_track_active.is_(
+                True
+            ),
+            TrackBranchCatalogORM.sucursal_id.isnot(
+                None
+            ),
+        )
+        .order_by(
+            TrackBranchCatalogORM.display_order.asc(),
+            TrackBranchCatalogORM.sucursal_id.asc(),
+        )
+        .all()
+    )
+
+    return [
+        MarketingBranch(
+            sucursal_id=int(row.sucursal_id),
+            name=(
+                str(row.sucursal.sucursal).strip()
+                if row.sucursal is not None
+                else str(row.track_label).strip()
+            ),
+            display_order=int(row.display_order),
+        )
+        for row in catalog_rows
+    ]
+
+
+def load_visible_marketing_branches(
+    access: MarketingAccess,
+) -> tuple[
+    list[MarketingBranch],
+    tuple[int, ...],
+    dict[str, object],
+]:
+    available_branches = _load_available_branches()
+    visible_branch_ids = access.visible_branch_ids(
+        branch.sucursal_id
+        for branch in available_branches
+    )
+    visible_id_set = set(visible_branch_ids)
+    visible_branches = [
+        branch
+        for branch in available_branches
+        if branch.sucursal_id in visible_id_set
+    ]
+    scope = access.to_scope_dict(
+        branch.sucursal_id
+        for branch in available_branches
+    )
+    return (
+        visible_branches,
+        visible_branch_ids,
+        scope,
+    )
+
+
+def _load_branch_alias_map() -> dict[str, int]:
+    rows = (
+        db.session.query(
+            TrackBranchAliasORM,
+            TrackBranchCatalogORM,
+        )
+        .join(
+            TrackBranchCatalogORM,
+            TrackBranchCatalogORM.sucursal_canon
+            == TrackBranchAliasORM.sucursal_canon,
+        )
+        .filter(
+            TrackBranchAliasORM.source_family
+            == "gasca_family",
+            TrackBranchAliasORM.is_active.is_(True),
+            TrackBranchCatalogORM.is_track_active.is_(
+                True
+            ),
+            TrackBranchCatalogORM.sucursal_id.isnot(
+                None
+            ),
+        )
+        .all()
+    )
+
+    return {
+        _normalize_text(alias.raw_branch_name): int(
+            catalog.sucursal_id
+        )
+        for alias, catalog in rows
+    }
+
+
+def _select_venta_total_snapshot(
+    *,
+    month_start: date,
+) -> VentaTotalSnapshotORM | None:
+    return (
+        VentaTotalSnapshotORM.query.filter(
+            VentaTotalSnapshotORM.report_type_key
+            == "venta_total",
+            VentaTotalSnapshotORM.business_date
+            >= month_start,
+            VentaTotalSnapshotORM.business_date
+            <= _month_end(month_start),
+            VentaTotalSnapshotORM.snapshot_kind
+            == "daily",
+            VentaTotalSnapshotORM.is_canonical.is_(
+                True
+            ),
+        )
+        .order_by(
+            VentaTotalSnapshotORM.business_date.desc(),
+            VentaTotalSnapshotORM.id.desc(),
+        )
+        .first()
+    )
+
+
+def _visit_event_key(
+    *,
+    row: VentaTotalSnapshotRowORM,
+    branch_id: int,
+    visit_date: date,
+    phone: str | None,
+    description: str,
+) -> str:
+    id_orden = str(row.id_orden or "").strip()
+    if id_orden:
+        return f"id_orden:{id_orden}"
+
+    folio = str(row.folio or "").strip()
+    if folio:
+        return f"folio:{folio}"
+
+    raw_phone_key = (
+        phone
+        or _normalize_text(row.telefono)
+        or "SIN_TELEFONO"
+    )
+    return (
+        f"fallback:{branch_id}:"
+        f"{visit_date.isoformat()}:"
+        f"{raw_phone_key}:{description}"
+    )
+
+
+def _load_visit_events(
+    *,
+    month_start: date,
+    branch_ids: tuple[int, ...],
+) -> VisitLoadResult:
+    snapshot = _select_venta_total_snapshot(
+        month_start=month_start
+    )
+    if snapshot is None:
+        return VisitLoadResult(
+            limitations=[
+                "No existe snapshot canónico de Venta Total para el mes."
+            ]
+        )
+
+    allowed_branch_ids = set(branch_ids)
+    alias_map = _load_branch_alias_map()
+    rows = VentaTotalSnapshotRowORM.query.filter_by(
+        snapshot_id=snapshot.id
+    ).all()
+    eligible_by_key: dict[str, _EligibleVisit] = {}
+
+    for row in rows:
+        try:
+            visit_date = _parse_visit_date(row.fecha)
+            total = _to_decimal(row.total)
+        except ValueError:
+            continue
+
+        if visit_date.replace(day=1) != month_start:
+            continue
+
+        description = _normalize_text(
+            row.descripcion
+        )
+        if description not in ELIGIBLE_VISIT_DESCRIPTIONS:
+            continue
+
+        if total != 0:
+            continue
+
+        normalized_status = _normalize_text(row.estatus)
+        if any(
+            term in normalized_status
+            for term in CANCELLED_STATUS_TERMS
+        ):
+            continue
+
+        branch_id = alias_map.get(
+            _normalize_text(row.sucursal)
+        )
+        if (
+            branch_id is None
+            or branch_id not in allowed_branch_ids
+        ):
+            continue
+
+        phone = normalize_phone(row.telefono)
+        event_key = _visit_event_key(
+            row=row,
+            branch_id=branch_id,
+            visit_date=visit_date,
+            phone=phone,
+            description=description,
+        )
+        eligible_by_key.setdefault(
+            event_key,
+            _EligibleVisit(
+                event_key=event_key,
+                branch_id=branch_id,
+                visit_date=visit_date,
+                phone=phone,
+                description=description,
+            ),
+        )
+
+    eligible_events = list(
+        eligible_by_key.values()
+    )
+    valid_events = [
+        VisitEvent(
+            event_key=event.event_key,
+            branch_id=event.branch_id,
+            visit_date=event.visit_date,
+            phone=event.phone,
+            description=event.description,
+        )
+        for event in eligible_events
+        if event.phone is not None
+    ]
+
+    return VisitLoadResult(
+        events=deduplicate_visit_events(valid_events),
+        eligible_visit_events=len(eligible_events),
+        visit_events_with_valid_phone=len(valid_events),
+        visit_events_without_valid_phone=(
+            len(eligible_events) - len(valid_events)
+        ),
+        snapshot_id=int(snapshot.id),
+    )
+
+
+def _select_sales_snapshots(
+    *,
+    window_start: date,
+    window_end: date,
+) -> list[
+    VentasNuevosSociosDetalleSnapshotORM
+]:
+    selected = []
+
+    for calendar_month in _calendar_month_starts(
+        start_date=window_start,
+        end_date=window_end,
+    ):
+        snapshot = (
+            VentasNuevosSociosDetalleSnapshotORM.query
+            .filter(
+                VentasNuevosSociosDetalleSnapshotORM.report_type_key
+                == "ventas_nuevos_socios_detalle",
+                VentasNuevosSociosDetalleSnapshotORM.business_date
+                >= calendar_month,
+                VentasNuevosSociosDetalleSnapshotORM.business_date
+                <= _month_end(calendar_month),
+                VentasNuevosSociosDetalleSnapshotORM.date_from
+                == calendar_month,
+                VentasNuevosSociosDetalleSnapshotORM.snapshot_kind
+                == "month_to_date",
+                VentasNuevosSociosDetalleSnapshotORM.is_canonical.is_(
+                    True
+                ),
+            )
+            .order_by(
+                VentasNuevosSociosDetalleSnapshotORM.business_date.desc(),
+                VentasNuevosSociosDetalleSnapshotORM.captured_at.desc(),
+                VentasNuevosSociosDetalleSnapshotORM.id.desc(),
+            )
+            .first()
+        )
+        if snapshot is not None:
+            selected.append(snapshot)
+
+    return selected
+
+
+def _load_sales(
+    *,
+    window_start: date,
+    window_end: date,
+    branch_ids: tuple[int, ...],
+) -> SalesLoadResult:
+    snapshots = _select_sales_snapshots(
+        window_start=window_start,
+        window_end=window_end,
+    )
+    snapshot_ids = [
+        int(snapshot.id)
+        for snapshot in snapshots
+    ]
+    if not snapshot_ids:
+        return SalesLoadResult(
+            limitations=[
+                "No existen snapshots canónicos de ventas nuevas para la ventana."
+            ]
+        )
+
+    allowed_branch_ids = set(branch_ids)
+    rows = (
+        VentasNuevosSociosDetalleSnapshotRowORM.query
+        .filter(
+            VentasNuevosSociosDetalleSnapshotRowORM.snapshot_id.in_(
+                snapshot_ids
+            )
+        )
+        .all()
+    )
+    sales: list[SaleRecord] = []
+
+    for row in rows:
+        if row.sucursal_id is None:
+            continue
+
+        branch_id = int(row.sucursal_id)
+        if branch_id not in allowed_branch_ids:
+            continue
+
+        try:
+            payment_date = _payment_local_date(
+                row.fecha_pago_at
+            )
+        except ValueError:
+            continue
+
+        if not (
+            window_start
+            <= payment_date
+            <= window_end
+        ):
+            continue
+
+        phone = normalize_member_phone(
+            lada=row.lada,
+            telefono=row.telefono,
+        )
+        if phone is None:
+            continue
+
+        member_id = str(row.id_socio or "").strip()
+        id_folio = str(row.id_folio or "").strip()
+        if member_id:
+            sale_key = f"id_socio:{member_id}"
+        elif id_folio:
+            sale_key = f"id_folio:{id_folio}"
+        else:
+            continue
+
+        sales.append(
+            SaleRecord(
+                sale_key=sale_key,
+                branch_id=branch_id,
+                payment_date=payment_date,
+                phone=phone,
+                member_id=member_id or None,
+                revenue=_to_decimal(
+                    row.total_pagado
+                ),
+            )
+        )
+
+    return SalesLoadResult(
+        sales=sales,
+        snapshot_ids=snapshot_ids,
+    )
+
+
+def _load_inputs_by_branch(
+    *,
+    month_start: date,
+    branch_ids: tuple[int, ...],
+) -> dict[int, MarketingMonthlyInputORM]:
+    return {
+        int(row.sucursal_id): row
+        for row in list_marketing_inputs(
+            month_start=month_start,
+            branch_ids=branch_ids,
+        )
+    }
+
+
+def _serialize_ratio(value: Decimal | None) -> float | None:
+    if value is None:
+        return None
+    return float(value)
+
+
+def _build_metrics(
+    *,
+    investment: Decimal,
+    leads: int,
+    visits: int,
+    sales: int,
+    sales_revenue: Decimal,
+) -> dict[str, Any]:
+    return {
+        "investment": float(investment),
+        "leads": leads,
+        "visits": visits,
+        "sales": sales,
+        "sales_revenue": float(sales_revenue),
+        "cost_per_lead": _serialize_ratio(
+            safe_divide(investment, leads)
+        ),
+        "cost_per_visit": _serialize_ratio(
+            safe_divide(investment, visits)
+        ),
+        "cost_per_sale": _serialize_ratio(
+            safe_divide(investment, sales)
+        ),
+        "lead_to_visit_rate": _serialize_ratio(
+            safe_divide(visits, leads)
+        ),
+        "visit_to_sale_rate": _serialize_ratio(
+            safe_divide(sales, visits)
+        ),
+        "lead_to_sale_rate": _serialize_ratio(
+            safe_divide(sales, leads)
+        ),
+    }
+
+
+def build_marketing_dashboard(
+    *,
+    month: str,
+    access: MarketingAccess,
+    today: date | None = None,
+) -> dict[str, Any]:
+    month_start = parse_month(month)
+    month_end = _month_end(month_start)
+    attribution_window_end = month_end + timedelta(
+        days=30
+    )
+    (
+        branches,
+        visible_branch_ids,
+        scope,
+    ) = load_visible_marketing_branches(access)
+
+    inputs_by_branch = _load_inputs_by_branch(
+        month_start=month_start,
+        branch_ids=visible_branch_ids,
+    )
+    visit_result = _load_visit_events(
+        month_start=month_start,
+        branch_ids=visible_branch_ids,
+    )
+    sales_result = _load_sales(
+        window_start=month_start,
+        window_end=attribution_window_end,
+        branch_ids=visible_branch_ids,
+    )
+    attributions = reconcile_visit_sales(
+        visits=visit_result.events,
+        sales=sales_result.sales,
+    )
+
+    visits_by_branch: dict[int, list[VisitEvent]] = {
+        branch_id: []
+        for branch_id in visible_branch_ids
+    }
+    for event in visit_result.events:
+        visits_by_branch.setdefault(
+            event.branch_id,
+            [],
+        ).append(event)
+
+    attributions_by_branch = {
+        branch_id: []
+        for branch_id in visible_branch_ids
+    }
+    for attribution in attributions:
+        attributions_by_branch.setdefault(
+            attribution.visit.branch_id,
+            [],
+        ).append(attribution)
+
+    branch_payloads: list[dict[str, Any]] = []
+    summary_investment = Decimal("0")
+    summary_leads = 0
+    summary_visits = 0
+    summary_sales = 0
+    summary_revenue = Decimal("0")
+
+    for branch in branches:
+        monthly_input = inputs_by_branch.get(
+            branch.sucursal_id
+        )
+        investment = (
+            _to_decimal(monthly_input.investment)
+            if monthly_input is not None
+            else Decimal("0")
+        )
+        leads = (
+            int(monthly_input.leads)
+            if monthly_input is not None
+            else 0
+        )
+        visits = count_unique_visitors(
+            visits_by_branch.get(
+                branch.sucursal_id,
+                [],
+            )
+        )
+        branch_attributions = (
+            attributions_by_branch.get(
+                branch.sucursal_id,
+                [],
+            )
+        )
+        sales = len(branch_attributions)
+        revenue = sum(
+            (
+                attribution.sale.revenue
+                for attribution in branch_attributions
+            ),
+            Decimal("0"),
+        )
+        metrics = _build_metrics(
+            investment=investment,
+            leads=leads,
+            visits=visits,
+            sales=sales,
+            sales_revenue=revenue,
+        )
+        branch_payloads.append(
+            {
+                "sucursal_id": branch.sucursal_id,
+                "sucursal": branch.name,
+                **metrics,
+            }
+        )
+
+        summary_investment += investment
+        summary_leads += leads
+        summary_visits += visits
+        summary_sales += sales
+        summary_revenue += revenue
+
+    normalized_today = (
+        today
+        if today is not None
+        else datetime.now(
+            TIJUANA_TIMEZONE
+        ).date()
+    )
+    quality_limitations = list(FIXED_LIMITATIONS)
+    quality_limitations.extend(
+        visit_result.limitations
+    )
+    quality_limitations.extend(
+        sales_result.limitations
+    )
+
+    return {
+        "month": month_start.strftime("%Y-%m"),
+        "cohort_mode": "visit_month",
+        "scope": scope,
+        "permissions": {
+            "can_edit_inputs": access.can_edit_inputs,
+        },
+        "summary": _build_metrics(
+            investment=summary_investment,
+            leads=summary_leads,
+            visits=summary_visits,
+            sales=summary_sales,
+            sales_revenue=summary_revenue,
+        ),
+        "branches": branch_payloads,
+        "data_quality": {
+            "lead_mode": "monthly_aggregate_manual",
+            "sales_attribution_mode": (
+                "exact_phone_same_branch_30d"
+            ),
+            "individual_lead_attribution": False,
+            "cohort_complete": (
+                normalized_today
+                >= attribution_window_end
+            ),
+            "eligible_visit_events": (
+                visit_result.eligible_visit_events
+            ),
+            "unique_visitors": count_unique_visitors(
+                visit_result.events
+            ),
+            "visit_events_with_valid_phone": (
+                visit_result.visit_events_with_valid_phone
+            ),
+            "visit_events_without_valid_phone": (
+                visit_result.visit_events_without_valid_phone
+            ),
+            "visit_phone_coverage_rate": _serialize_ratio(
+                safe_divide(
+                    visit_result.visit_events_with_valid_phone,
+                    visit_result.eligible_visit_events,
+                )
+            ),
+            "limitations": quality_limitations,
+        },
+    }

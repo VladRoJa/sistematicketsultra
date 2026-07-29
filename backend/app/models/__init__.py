@@ -45,6 +45,7 @@ from .planning_targets import (
     PlanningTargetApprovalEventORM,
     PlanningOperatorORM,
 )
+from .marketing import MarketingMonthlyInputORM
 from .internal_documents import (
     InternalDocumentCategoryORM,
     InternalDocumentORM,
@@ -143,6 +144,7 @@ __all__ = [
     "PlanningTargetAdjustmentORM",
     "PlanningTargetApprovalEventORM",
     "PlanningOperatorORM",
+    "MarketingMonthlyInputORM",
     "InternalDocumentCategoryORM",
     "InternalDocumentORM",
     "InternalDocumentVersionORM",

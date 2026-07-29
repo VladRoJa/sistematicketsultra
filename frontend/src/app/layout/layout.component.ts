@@ -119,6 +119,10 @@ ngOnInit(): void {
   };
   const trackSubmenu = [
     { label: 'Track Diario', path: '/warehouse/track' },
+    {
+      label: 'Marketing y Conversión',
+      path: '/marketing-conversion',
+    },
   ];
 
   if (this.puedeVerKpiDesempenoPorRol()) {
@@ -1136,6 +1140,10 @@ getSubmenuIcon(label: string): string {
     return 'monitoring';
   }
 
+  if (normalizedLabel.includes('marketing')) {
+    return 'campaign';
+  }
+
   if (
     normalizedLabel.includes('códigos gasca') ||
     normalizedLabel.includes('codigos gasca') ||
@@ -1216,6 +1224,10 @@ getSubmenuDescription(label: string): string {
 
   if (normalizedLabel.includes('track')) {
     return 'Consulta indicadores diarios, metas y avance por club.';
+  }
+
+  if (normalizedLabel.includes('marketing')) {
+    return 'Consulta el embudo mensual de leads, visitas y ventas atribuidas.';
   }
 
   if (

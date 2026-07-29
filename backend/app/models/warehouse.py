@@ -542,6 +542,7 @@ class VentaTotalSnapshotRowORM(db.Model):
     socio = db.Column(db.String(255), nullable=True)
     nuevo = db.Column(db.String(100), nullable=True)
     tipo = db.Column(db.String(100), nullable=True)
+    telefono = db.Column(db.String(50), nullable=True)
 
     created_at = db.Column(db.DateTime(timezone=True), nullable=False)
     updated_at = db.Column(db.DateTime(timezone=True), nullable=False)
@@ -553,6 +554,7 @@ class VentaTotalSnapshotRowORM(db.Model):
 
     __table_args__ = (
         Index("ix_venta_total_snapshot_rows_snapshot_id", "snapshot_id"),
+        Index("ix_venta_total_snapshot_rows_telefono", "telefono"),
     )
     
 class TrackMonthlyTargetORM(db.Model):
