@@ -110,6 +110,7 @@ class VentaTotalParsedRow:
     socio: str | None
     nuevo: str | None
     tipo: str | None
+    telefono: str | None = None
 
 
 @dataclass(slots=True)
@@ -233,6 +234,12 @@ def parse_venta_total_xlsx(
                 socio=_normalize_optional_text(row.get("Socio")),
                 nuevo=_normalize_optional_text(row.get("Nuevo")),
                 tipo=_normalize_optional_text(row.get("Tipo")),
+                telefono=_normalize_optional_text(
+                    _get_optional_column_value(
+                        row,
+                        column_names=("Telefono", "Teléfono"),
+                    )
+                ),
             )
         )
 
@@ -365,6 +372,18 @@ def _normalize_text(value: Any) -> str:
 def _normalize_optional_text(value: Any) -> str | None:
     normalized = _normalize_text(value)
     return normalized or None
+
+
+def _get_optional_column_value(
+    row: pd.Series,
+    *,
+    column_names: tuple[str, ...],
+) -> Any:
+    for column_name in column_names:
+        if column_name in row.index:
+            return row.get(column_name)
+
+    return None
 
 
 def _normalize_required_text(

@@ -223,6 +223,7 @@ def _rows_from_parsed_snapshot(parsed_snapshot: Any) -> list[dict[str, Any]]:
                 "socio": _normalize_optional_text(row.get("socio")),
                 "nuevo": _normalize_optional_text(row.get("nuevo")),
                 "tipo": _normalize_optional_text(row.get("tipo")),
+                "telefono": _normalize_optional_text(row.get("telefono")),
             }
         )
 
@@ -325,6 +326,7 @@ def _insert_snapshot_rows(
             socio=row["socio"],
             nuevo=row["nuevo"],
             tipo=row["tipo"],
+            telefono=row["telefono"],
             created_at=now,
             updated_at=now,
         )
