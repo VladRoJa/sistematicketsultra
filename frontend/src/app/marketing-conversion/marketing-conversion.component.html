@@ -1,0 +1,392 @@
+<main class="marketing-page">
+  <header class="page-header">
+    <div class="page-heading">
+      <p class="section-label">Track / BI</p>
+      <h1>Marketing y Conversión</h1>
+      <p class="page-subtitle">Embudo operativo mensual</p>
+    </div>
+
+    <div class="page-actions">
+      <mat-form-field appearance="outline" class="month-field">
+        <mat-label>Mes</mat-label>
+        <input
+          matInput
+          type="month"
+          [formControl]="monthControl"
+          aria-label="Mes del dashboard de Marketing y Conversión"
+        />
+        <mat-error *ngIf="monthControl.invalid">
+          Selecciona un mes válido.
+        </mat-error>
+      </mat-form-field>
+
+      <button
+        mat-stroked-button
+        type="button"
+        [disabled]="loading || monthControl.invalid"
+        (click)="refreshDashboard()"
+      >
+        <mat-icon>refresh</mat-icon>
+        Actualizar
+      </button>
+
+      <button
+        *ngIf="canEditInputs && !editingInputs"
+        mat-flat-button
+        color="primary"
+        type="button"
+        [disabled]="loading"
+        (click)="openInputEditor()"
+      >
+        <mat-icon>edit_note</mat-icon>
+        Capturar datos Meta
+      </button>
+    </div>
+  </header>
+
+  <section class="methodology-notice" aria-label="Metodología">
+    <mat-icon>info</mat-icon>
+    <p>
+      Los leads se capturan de forma agregada. La relación visita → venta
+      utiliza teléfono exacto, misma sucursal y una ventana de 30 días.
+    </p>
+  </section>
+
+  <section *ngIf="loading" class="state-panel" aria-live="polite">
+    <mat-spinner diameter="36"></mat-spinner>
+    <p>Cargando Marketing y Conversión…</p>
+  </section>
+
+  <section
+    *ngIf="!loading && errorMessage"
+    class="state-panel state-panel--error"
+    role="alert"
+  >
+    <mat-icon>error_outline</mat-icon>
+    <div>
+      <h2>No se pudo cargar el dashboard</h2>
+      <p>{{ errorMessage }}</p>
+      <button
+        mat-stroked-button
+        type="button"
+        (click)="refreshDashboard()"
+      >
+        Reintentar
+      </button>
+    </div>
+  </section>
+
+  <ng-container *ngIf="!loading && !errorMessage && dashboard">
+    <section
+      *ngIf="cohortIsIncomplete"
+      class="cohort-warning"
+      role="status"
+    >
+      <mat-icon>schedule</mat-icon>
+      <p>
+        La cohorte todavía puede recibir ventas dentro de su ventana de 30 días.
+      </p>
+    </section>
+
+    <section class="metrics-section" aria-labelledby="summary-title">
+      <div class="section-heading">
+        <div>
+          <h2 id="summary-title">Resumen del mes</h2>
+          <p>Indicadores consolidados dentro del alcance autorizado.</p>
+        </div>
+      </div>
+
+      <div class="primary-metrics">
+        <article
+          *ngFor="let card of primaryCards"
+          class="metric-card metric-card--primary"
+        >
+          <span>{{ card.label }}</span>
+          <strong>{{ card.value }}</strong>
+          <small>{{ card.supportingText }}</small>
+        </article>
+      </div>
+
+      <div class="secondary-metrics">
+        <article
+          *ngFor="let card of secondaryCards"
+          class="metric-card"
+        >
+          <span>{{ card.label }}</span>
+          <strong>{{ card.value }}</strong>
+          <small>{{ card.supportingText }}</small>
+        </article>
+      </div>
+    </section>
+
+    <section
+      *ngIf="editingInputs"
+      class="input-section"
+      aria-labelledby="input-title"
+    >
+      <div class="section-heading section-heading--actions">
+        <div>
+          <h2 id="input-title">Captura mensual por sucursal</h2>
+          <p>Guarda inversión, leads y notas de una sucursal a la vez.</p>
+        </div>
+        <button
+          mat-stroked-button
+          type="button"
+          (click)="closeInputEditor()"
+        >
+          Cerrar edición
+        </button>
+      </div>
+
+      <div *ngIf="inputsLoading" class="inline-state">
+        <mat-spinner diameter="28"></mat-spinner>
+        <span>Cargando inputs del mes…</span>
+      </div>
+
+      <div
+        *ngIf="!inputsLoading && inputsErrorMessage"
+        class="inline-error"
+        role="alert"
+      >
+        <p>{{ inputsErrorMessage }}</p>
+        <button
+          mat-stroked-button
+          type="button"
+          (click)="retryInputs()"
+        >
+          Reintentar
+        </button>
+      </div>
+
+      <p
+        *ngIf="
+          !inputsLoading &&
+          !inputsErrorMessage &&
+          inputRows.length === 0
+        "
+        class="empty-message"
+      >
+        No hay sucursales disponibles para capturar en este alcance.
+      </p>
+
+      <div
+        *ngIf="
+          !inputsLoading &&
+          !inputsErrorMessage &&
+          inputRows.length > 0
+        "
+        class="input-list"
+      >
+        <form
+          *ngFor="
+            let row of inputRows;
+            trackBy: trackInputRow
+          "
+          class="input-row"
+          [formGroup]="row.form"
+          (ngSubmit)="saveInput(row)"
+        >
+          <div class="input-branch">
+            <strong>{{ row.branchName }}</strong>
+            <span>{{ getInputStatusLabel(row) }}</span>
+          </div>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Inversión</mat-label>
+            <span matTextPrefix>$&nbsp;</span>
+            <input
+              matInput
+              type="number"
+              min="0"
+              step="0.01"
+              formControlName="investment"
+            />
+            <mat-error *ngIf="getInvestmentError(row)">
+              {{ getInvestmentError(row) }}
+            </mat-error>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Leads</mat-label>
+            <input
+              matInput
+              type="number"
+              min="0"
+              step="1"
+              formControlName="leads"
+            />
+            <mat-error *ngIf="getLeadsError(row)">
+              {{ getLeadsError(row) }}
+            </mat-error>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="notes-field">
+            <mat-label>Notas (opcional)</mat-label>
+            <textarea
+              matInput
+              rows="2"
+              formControlName="notes"
+            ></textarea>
+          </mat-form-field>
+
+          <div class="input-save">
+            <button
+              mat-flat-button
+              color="primary"
+              type="submit"
+              [disabled]="row.saving"
+            >
+              {{ getSaveButtonLabel(row) }}
+            </button>
+            <p *ngIf="row.errorMessage" role="alert">
+              {{ row.errorMessage }}
+            </p>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <section class="table-section" aria-labelledby="branch-table-title">
+      <div class="section-heading">
+        <div>
+          <h2 id="branch-table-title">Detalle por sucursal</h2>
+          <p>Solo se muestran sucursales devueltas por el backend.</p>
+        </div>
+      </div>
+
+      <p *ngIf="!hasBranches" class="empty-message">
+        No hay sucursales disponibles para el mes y alcance seleccionados.
+      </p>
+
+      <div *ngIf="hasBranches" class="table-scroll">
+        <table
+          mat-table
+          [dataSource]="branchRows"
+          class="branch-table"
+        >
+          <ng-container matColumnDef="sucursal">
+            <th mat-header-cell *matHeaderCellDef>Sucursal</th>
+            <td mat-cell *matCellDef="let row">{{ row.sucursal }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="investment">
+            <th mat-header-cell *matHeaderCellDef>Inversión</th>
+            <td mat-cell *matCellDef="let row">
+              {{ row.investment_display }}
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="leads">
+            <th mat-header-cell *matHeaderCellDef>Leads</th>
+            <td mat-cell *matCellDef="let row">{{ row.leads_display }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="visits">
+            <th mat-header-cell *matHeaderCellDef>Visitantes</th>
+            <td mat-cell *matCellDef="let row">{{ row.visits_display }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="sales">
+            <th mat-header-cell *matHeaderCellDef>Ventas atribuidas</th>
+            <td mat-cell *matCellDef="let row">{{ row.sales_display }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="sales_revenue">
+            <th mat-header-cell *matHeaderCellDef>Ingreso atribuido</th>
+            <td mat-cell *matCellDef="let row">
+              {{ row.sales_revenue_display }}
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="cost_per_lead">
+            <th mat-header-cell *matHeaderCellDef>Costo por lead</th>
+            <td mat-cell *matCellDef="let row">
+              {{ row.cost_per_lead_display }}
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="cost_per_visit">
+            <th mat-header-cell *matHeaderCellDef>Costo por visita</th>
+            <td mat-cell *matCellDef="let row">
+              {{ row.cost_per_visit_display }}
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="cost_per_sale">
+            <th mat-header-cell *matHeaderCellDef>Costo por venta</th>
+            <td mat-cell *matCellDef="let row">
+              {{ row.cost_per_sale_display }}
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="lead_to_visit_rate">
+            <th mat-header-cell *matHeaderCellDef>Lead → visita</th>
+            <td mat-cell *matCellDef="let row">
+              {{ row.lead_to_visit_rate_display }}
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="visit_to_sale_rate">
+            <th mat-header-cell *matHeaderCellDef>Visita → venta</th>
+            <td mat-cell *matCellDef="let row">
+              {{ row.visit_to_sale_rate_display }}
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="lead_to_sale_rate">
+            <th mat-header-cell *matHeaderCellDef>Lead → venta</th>
+            <td mat-cell *matCellDef="let row">
+              {{ row.lead_to_sale_rate_display }}
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="branchColumns"></tr>
+          <tr mat-row *matRowDef="let row; columns: branchColumns"></tr>
+        </table>
+      </div>
+    </section>
+
+    <section class="quality-section" aria-labelledby="quality-title">
+      <div class="section-heading">
+        <div>
+          <h2 id="quality-title">Calidad de datos</h2>
+          <p>Alcance y cobertura de la medición del mes.</p>
+        </div>
+      </div>
+
+      <dl class="quality-modes">
+        <div>
+          <dt>Modo de leads</dt>
+          <dd>{{ leadModeLabel }}</dd>
+        </div>
+        <div>
+          <dt>Modo de atribución de ventas</dt>
+          <dd>{{ salesAttributionModeLabel }}</dd>
+        </div>
+      </dl>
+
+      <dl class="quality-grid">
+        <div *ngFor="let item of qualityItems">
+          <dt>{{ item.label }}</dt>
+          <dd>{{ item.value }}</dd>
+        </div>
+        <div>
+          <dt>Maduración de la cohorte</dt>
+          <dd>{{ cohortStatusLabel }}</dd>
+        </div>
+      </dl>
+
+      <div
+        *ngIf="qualityLimitations.length > 0"
+        class="limitations"
+      >
+        <h3>Limitaciones informadas por el backend</h3>
+        <ul>
+          <li *ngFor="let limitation of qualityLimitations">
+            {{ limitation }}
+          </li>
+        </ul>
+      </div>
+    </section>
+  </ng-container>
+</main>
