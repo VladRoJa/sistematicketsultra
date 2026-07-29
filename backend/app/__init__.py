@@ -33,6 +33,7 @@ from app.routes.openings_routes import openings_bp
 from app.routes.permissions_catalog_routes import permissions_catalog_bp
 from app.routes.rpa_gasca_sms_routes import rpa_gasca_sms_bp
 from app.routes.routine_control_routes import routine_control_bp
+from app.routes.marketing_routes import marketing_bp
 
 
 def create_app():
@@ -110,6 +111,7 @@ def create_app():
     app.register_blueprint(permissions_catalog_bp, url_prefix="/api/permissions/catalog")
     app.register_blueprint(rpa_gasca_sms_bp, url_prefix="/api/rpa/gasca-sms")
     app.register_blueprint(routine_control_bp, url_prefix="/api/routine-control")
+    app.register_blueprint(marketing_bp, url_prefix="/api/marketing")
 
     app.config['DEBUG'] = True
     app.config['PROPAGATE_EXCEPTIONS'] = True

@@ -1,0 +1,283 @@
+from __future__ import annotations
+
+from datetime import date, datetime, timezone
+from decimal import Decimal, InvalidOperation
+import re
+from typing import Any
+
+from sqlalchemy.exc import IntegrityError
+
+from app.extensions import db
+from app.models.marketing import MarketingMonthlyInputORM
+from app.models.sucursal_model import Sucursal
+
+
+ALLOWED_INPUT_FIELDS = frozenset(
+    {
+        "month",
+        "investment",
+        "leads",
+        "notes",
+    }
+)
+
+
+class MarketingInputValidationError(ValueError):
+    pass
+
+
+class MarketingInputConflictError(RuntimeError):
+    pass
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def parse_month(value: Any) -> date:
+    raw_value = str(value or "").strip()
+    if not re.fullmatch(r"\d{4}-\d{2}", raw_value):
+        raise MarketingInputValidationError(
+            "month es obligatorio y debe usar formato YYYY-MM."
+        )
+
+    try:
+        return datetime.strptime(
+            raw_value,
+            "%Y-%m",
+        ).date()
+    except ValueError as exc:
+        raise MarketingInputValidationError(
+            "month no representa un mes válido."
+        ) from exc
+
+
+def _parse_investment(value: Any) -> Decimal:
+    if isinstance(value, bool):
+        raise MarketingInputValidationError(
+            "investment debe ser numérico."
+        )
+
+    try:
+        investment = Decimal(str(value))
+    except (InvalidOperation, ValueError, TypeError) as exc:
+        raise MarketingInputValidationError(
+            "investment debe ser numérico."
+        ) from exc
+
+    if not investment.is_finite():
+        raise MarketingInputValidationError(
+            "investment debe ser un número finito."
+        )
+
+    if investment < 0:
+        raise MarketingInputValidationError(
+            "investment no puede ser negativo."
+        )
+
+    return investment
+
+
+def _parse_leads(value: Any) -> int:
+    if isinstance(value, bool):
+        raise MarketingInputValidationError(
+            "leads debe ser un entero."
+        )
+
+    try:
+        decimal_value = Decimal(str(value))
+    except (InvalidOperation, ValueError, TypeError) as exc:
+        raise MarketingInputValidationError(
+            "leads debe ser un entero."
+        ) from exc
+
+    if (
+        not decimal_value.is_finite()
+        or decimal_value
+        != decimal_value.to_integral_value()
+    ):
+        raise MarketingInputValidationError(
+            "leads debe ser un entero."
+        )
+
+    leads = int(decimal_value)
+    if leads < 0:
+        raise MarketingInputValidationError(
+            "leads no puede ser negativo."
+        )
+
+    return leads
+
+
+def validate_input_payload(
+    payload: Any,
+) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise MarketingInputValidationError(
+            "El payload JSON debe ser un objeto."
+        )
+
+    unknown_fields = sorted(
+        set(payload) - ALLOWED_INPUT_FIELDS
+    )
+    if unknown_fields:
+        raise MarketingInputValidationError(
+            "Campos no permitidos: "
+            + ", ".join(unknown_fields)
+            + "."
+        )
+
+    missing_fields = [
+        field_name
+        for field_name in (
+            "month",
+            "investment",
+            "leads",
+        )
+        if field_name not in payload
+    ]
+    if missing_fields:
+        raise MarketingInputValidationError(
+            "Campos obligatorios faltantes: "
+            + ", ".join(missing_fields)
+            + "."
+        )
+
+    notes = payload.get("notes")
+    if notes is not None and not isinstance(notes, str):
+        raise MarketingInputValidationError(
+            "notes debe ser texto o null."
+        )
+
+    return {
+        "month_start": parse_month(payload.get("month")),
+        "investment": _parse_investment(
+            payload.get("investment")
+        ),
+        "leads": _parse_leads(payload.get("leads")),
+        "notes": (
+            str(notes).strip() or None
+            if notes is not None
+            else None
+        ),
+    }
+
+
+def _branch_exists(sucursal_id: int) -> bool:
+    return (
+        Sucursal.query.filter_by(
+            sucursal_id=sucursal_id
+        ).first()
+        is not None
+    )
+
+
+def _find_monthly_input(
+    *,
+    month_start: date,
+    sucursal_id: int,
+) -> MarketingMonthlyInputORM | None:
+    return MarketingMonthlyInputORM.query.filter_by(
+        month_start=month_start,
+        sucursal_id=sucursal_id,
+    ).first()
+
+
+def serialize_marketing_input(
+    row: MarketingMonthlyInputORM,
+) -> dict[str, Any]:
+    return {
+        "id": row.id,
+        "month": row.month_start.strftime("%Y-%m"),
+        "sucursal_id": row.sucursal_id,
+        "investment": float(row.investment),
+        "leads": int(row.leads),
+        "notes": row.notes,
+        "created_by_user_id": row.created_by_user_id,
+        "updated_by_user_id": row.updated_by_user_id,
+        "created_at": (
+            row.created_at.isoformat()
+            if row.created_at is not None
+            else None
+        ),
+        "updated_at": (
+            row.updated_at.isoformat()
+            if row.updated_at is not None
+            else None
+        ),
+    }
+
+
+def upsert_marketing_input(
+    *,
+    month_start: date,
+    sucursal_id: int,
+    investment: Decimal,
+    leads: int,
+    notes: str | None,
+    user_id: int | None,
+) -> tuple[MarketingMonthlyInputORM, bool]:
+    if not _branch_exists(sucursal_id):
+        raise MarketingInputValidationError(
+            "La sucursal indicada no existe."
+        )
+
+    existing = _find_monthly_input(
+        month_start=month_start,
+        sucursal_id=sucursal_id,
+    )
+    now = _utc_now()
+    created = existing is None
+
+    if existing is None:
+        existing = MarketingMonthlyInputORM(
+            month_start=month_start,
+            sucursal_id=sucursal_id,
+            investment=investment,
+            leads=leads,
+            notes=notes,
+            created_by_user_id=user_id,
+            updated_by_user_id=user_id,
+            created_at=now,
+            updated_at=now,
+        )
+        db.session.add(existing)
+    else:
+        existing.investment = investment
+        existing.leads = leads
+        existing.notes = notes
+        existing.updated_by_user_id = user_id
+        existing.updated_at = now
+
+    try:
+        db.session.commit()
+    except IntegrityError as exc:
+        db.session.rollback()
+        raise MarketingInputConflictError(
+            "Conflicto al guardar el input mensual."
+        ) from exc
+
+    return existing, created
+
+
+def list_marketing_inputs(
+    *,
+    month_start: date,
+    branch_ids: tuple[int, ...],
+) -> list[MarketingMonthlyInputORM]:
+    if not branch_ids:
+        return []
+
+    return (
+        MarketingMonthlyInputORM.query.filter(
+            MarketingMonthlyInputORM.month_start
+            == month_start,
+            MarketingMonthlyInputORM.sucursal_id.in_(
+                branch_ids
+            ),
+        )
+        .order_by(
+            MarketingMonthlyInputORM.sucursal_id.asc()
+        )
+        .all()
+    )
