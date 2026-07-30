@@ -11,7 +11,7 @@ from app.utils.scope_utils import normalize_branch_ids, normalize_role
 from .operational_repository import RoutineControlOperationalRepository
 
 
-GLOBAL_ROLES = frozenset({"ADMIN", "ADMINISTRADOR", "SUPER_ADMIN", "LECTOR_GLOBAL"})
+GLOBAL_ROLES = frozenset({"ADMIN", "ADMINISTRADOR", "SUPER_ADMIN", "LECTOR_GLOBAL", "GERENCIA DEPORTIVA"})
 ALLOWED_ROLES = GLOBAL_ROLES | {"GERENTE", "GERENTE_REGIONAL"}
 MEMBER_STATUSES = frozenset({"SIN_RUTINA", "CON_RUTINA", "NO_DESEA_RUTINA"})
 CLASSIFICATION_STATUSES = frozenset({"CLASSIFIED", "INCIDENT"})
