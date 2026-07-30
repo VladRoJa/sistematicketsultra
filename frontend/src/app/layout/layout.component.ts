@@ -1092,8 +1092,8 @@ private puedeVerControlRutinasPorRol(): boolean {
     'ADMINISTRADOR',
     'SUPER_ADMIN',
     'LECTOR_GLOBAL',
-    'GERENTE',
-    'GERENTE_REGIONAL',
+    //'GERENTE',
+    //'GERENTE_REGIONAL',
     "GERENCIA DEPORTIVA",
   ].includes(rol);
 }
