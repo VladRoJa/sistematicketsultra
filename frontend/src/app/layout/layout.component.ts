@@ -1104,8 +1104,8 @@ private puedeVerMarketingConversionPorRol(): boolean {
 
   return [
     'ADMIN',
-    //'ADMINISTRADOR',
-    //'SUPER_ADMIN',
+    'ADMINISTRADOR',
+    'SUPER_ADMIN',
     //'MARKETING',
     //'LECTOR_GLOBAL',
     //'GERENTE_REGIONAL',
