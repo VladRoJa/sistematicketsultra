@@ -1094,6 +1094,7 @@ private puedeVerControlRutinasPorRol(): boolean {
     'LECTOR_GLOBAL',
     'GERENTE',
     'GERENTE_REGIONAL',
+    "GERENCIA DEPORTIVA",
   ].includes(rol);
 }
 
