@@ -883,3 +883,59 @@
     display: grid;
   }
 }
+
+.funnel-card--interactive {
+  cursor: pointer;
+  outline: none;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.funnel-card--interactive:hover,
+.funnel-card--interactive:focus-visible {
+  z-index: 3;
+  border-color: rgba(229, 69, 37, 0.42);
+  transform: translateY(-3px);
+  box-shadow: 0 14px 30px rgba(229, 69, 37, 0.15);
+}
+
+.funnel-card--interactive::before {
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  color: var(--mc-orange);
+  content: 'Ver detalle';
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.metric-detail-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 7px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--mc-gray-900);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 900;
+}
+
+.metric-detail-link:hover,
+.metric-detail-link:focus-visible {
+  color: var(--mc-orange);
+  background: var(--mc-orange-soft);
+  outline: none;
+}
+
+.metric-detail-link mat-icon {
+  width: 15px;
+  height: 15px;
+  font-size: 15px;
+}

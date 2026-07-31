@@ -1,0 +1,267 @@
+<section class="dialog-shell">
+  <header class="dialog-header">
+    <div>
+      <p class="dialog-kicker">Trazabilidad de conversión</p>
+      <h2>{{ title }}</h2>
+      <p>
+        Cohorte de visitas {{ data.month }} · ventana de atribución
+        de hasta 30 días.
+      </p>
+    </div>
+
+    <button
+      mat-icon-button
+      type="button"
+      aria-label="Cerrar detalle de ventas atribuidas"
+      (click)="close()"
+    >
+      <mat-icon>close</mat-icon>
+    </button>
+  </header>
+
+  <div class="dialog-body">
+    <section
+      *ngIf="loading"
+      class="detail-state"
+      aria-live="polite"
+    >
+      <mat-spinner diameter="34"></mat-spinner>
+      <p>Cargando ventas atribuidas…</p>
+    </section>
+
+    <section
+      *ngIf="!loading && errorMessage"
+      class="detail-state detail-state--error"
+      role="alert"
+    >
+      <mat-icon>error_outline</mat-icon>
+      <div>
+        <strong>No se pudo cargar el detalle</strong>
+        <p>{{ errorMessage }}</p>
+        <button
+          mat-stroked-button
+          type="button"
+          (click)="loadDetail()"
+        >
+          Reintentar
+        </button>
+      </div>
+    </section>
+
+    <ng-container *ngIf="!loading && !errorMessage && detail">
+      <section
+        class="detail-summary"
+        aria-label="Resumen del detalle atribuido"
+      >
+        <article>
+          <span>Ventas atribuidas</span>
+          <strong>{{ detail.summary.sales }}</strong>
+        </article>
+
+        <article>
+          <span>Ingreso atribuido</span>
+          <strong>
+            {{ formatCurrency(detail.summary.sales_revenue) }}
+          </strong>
+        </article>
+
+        <article
+          [class.detail-summary__warning]="
+            detail.summary.non_positive_sales > 0
+          "
+        >
+          <span>Sin ingreso positivo</span>
+          <strong>
+            {{ detail.summary.non_positive_sales }}
+          </strong>
+          <small
+            *ngIf="detail.summary.non_positive_sales > 0"
+          >
+            Requieren revisión
+          </small>
+        </article>
+      </section>
+
+      <section class="detail-toolbar">
+        <mat-form-field
+          appearance="fill"
+          subscriptSizing="dynamic"
+          class="search-field"
+        >
+          <mat-label>Buscar venta</mat-label>
+          <mat-icon matPrefix>search</mat-icon>
+          <input
+            matInput
+            type="search"
+            [formControl]="searchControl"
+            placeholder="Sucursal, socio, tarifa o folio"
+          />
+          <button
+            *ngIf="searchControl.value"
+            mat-icon-button
+            matSuffix
+            type="button"
+            aria-label="Limpiar búsqueda"
+            (click)="searchControl.setValue('')"
+          >
+            <mat-icon>close</mat-icon>
+          </button>
+        </mat-form-field>
+
+        <mat-checkbox
+          [formControl]="onlyNonPositiveControl"
+        >
+          Solo ventas sin ingreso positivo
+        </mat-checkbox>
+
+        <span class="result-count">
+          {{ resultCountLabel }}
+        </span>
+      </section>
+
+      <p
+        *ngIf="rows.length === 0"
+        class="empty-detail"
+      >
+        No hay ventas atribuidas para este alcance.
+      </p>
+
+      <p
+        *ngIf="rows.length > 0 && filteredRows.length === 0"
+        class="empty-detail"
+      >
+        No hay ventas que coincidan con los filtros.
+      </p>
+
+      <div
+        *ngIf="filteredRows.length > 0"
+        class="detail-table-scroll"
+      >
+        <table
+          mat-table
+          [dataSource]="filteredRows"
+          class="detail-table"
+        >
+          <ng-container matColumnDef="sucursal">
+            <th mat-header-cell *matHeaderCellDef>
+              Sucursal
+            </th>
+            <td mat-cell *matCellDef="let row">
+              <strong>{{ row.sucursal }}</strong>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="socio">
+            <th mat-header-cell *matHeaderCellDef>
+              Socio
+            </th>
+            <td mat-cell *matCellDef="let row">
+              <div class="cell-stack">
+                <strong>{{ row.socio || 'Sin nombre' }}</strong>
+                <span>
+                  ID {{ row.id_socio || '—' }} ·
+                  {{ row.telefono }}
+                </span>
+              </div>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="visita">
+            <th mat-header-cell *matHeaderCellDef>
+              Visita
+            </th>
+            <td mat-cell *matCellDef="let row">
+              <div class="cell-stack">
+                <strong>{{ formatDate(row.fecha_visita) }}</strong>
+                <span>{{ row.tipo_visita }}</span>
+              </div>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="pago">
+            <th mat-header-cell *matHeaderCellDef>
+              Pago
+            </th>
+            <td mat-cell *matCellDef="let row">
+              <div class="cell-stack">
+                <strong>{{ formatDate(row.fecha_pago) }}</strong>
+                <span>
+                  {{ row.lugar_pago || 'Lugar no informado' }}
+                </span>
+                <span>Folio {{ row.id_folio || '—' }}</span>
+              </div>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="dias">
+            <th mat-header-cell *matHeaderCellDef>
+              Días
+            </th>
+            <td mat-cell *matCellDef="let row">
+              <span class="days-badge">
+                {{ row.dias_a_venta }}
+              </span>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="membresia">
+            <th mat-header-cell *matHeaderCellDef>
+              Membresía
+            </th>
+            <td mat-cell *matCellDef="let row">
+              <div class="cell-stack">
+                <strong>
+                  {{ row.tipo_membresia || 'No informada' }}
+                </strong>
+                <span>{{ row.inscripcion || '—' }}</span>
+              </div>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="tarifa">
+            <th mat-header-cell *matHeaderCellDef>
+              Tarifa
+            </th>
+            <td mat-cell *matCellDef="let row">
+              <div class="cell-stack">
+                <strong>{{ row.tarifa || 'No informada' }}</strong>
+                <span>{{ row.pase || '—' }}</span>
+              </div>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="ingreso">
+            <th mat-header-cell *matHeaderCellDef>
+              Ingreso
+            </th>
+            <td mat-cell *matCellDef="let row">
+              <div class="revenue-cell">
+                <strong>
+                  {{ formatCurrency(row.total_pagado) }}
+                </strong>
+                <span
+                  *ngIf="row.venta_sin_ingreso_positivo"
+                  class="warning-label"
+                >
+                  Revisar
+                </span>
+              </div>
+            </td>
+          </ng-container>
+
+          <tr
+            mat-header-row
+            *matHeaderRowDef="columns; sticky: true"
+          ></tr>
+          <tr
+            mat-row
+            *matRowDef="let row; columns: columns"
+            [class.detail-row--warning]="
+              row.venta_sin_ingreso_positivo
+            "
+          ></tr>
+        </table>
+      </div>
+    </ng-container>
+  </div>
+</section>

@@ -114,6 +114,22 @@
         <article
           *ngFor="let card of primaryCards; let step = index"
           class="funnel-card"
+          [class.funnel-card--interactive]="
+            card.opensAttributionDetail
+          "
+          [attr.role]="
+            card.opensAttributionDetail ? 'button' : null
+          "
+          [attr.tabindex]="
+            card.opensAttributionDetail ? 0 : null
+          "
+          [attr.aria-label]="
+            card.opensAttributionDetail
+              ? 'Abrir detalle de ' + card.label
+              : null
+          "
+          (click)="openPrimaryCardDetail(card)"
+          (keydown)="handlePrimaryCardKeydown($event, card)"
         >
           <span class="funnel-step">0{{ step + 1 }}</span>
           <span class="metric-label">{{ card.label }}</span>
@@ -323,13 +339,45 @@
 
           <ng-container matColumnDef="sales">
             <th mat-header-cell *matHeaderCellDef>Ventas atribuidas</th>
-            <td mat-cell *matCellDef="let row">{{ row.sales_display }}</td>
+            <td mat-cell *matCellDef="let row">
+              <button
+                type="button"
+                class="metric-detail-link"
+                [attr.aria-label]="
+                  'Abrir ventas atribuidas de ' + row.sucursal
+                "
+                (click)="
+                  openAttributionDetail(
+                    row.sucursal_id,
+                    row.sucursal
+                  )
+                "
+              >
+                <span>{{ row.sales_display }}</span>
+                <mat-icon>open_in_new</mat-icon>
+              </button>
+            </td>
           </ng-container>
 
           <ng-container matColumnDef="sales_revenue">
             <th mat-header-cell *matHeaderCellDef>Ingreso atribuido</th>
             <td mat-cell *matCellDef="let row">
-              {{ row.sales_revenue_display }}
+              <button
+                type="button"
+                class="metric-detail-link"
+                [attr.aria-label]="
+                  'Abrir ingreso atribuido de ' + row.sucursal
+                "
+                (click)="
+                  openAttributionDetail(
+                    row.sucursal_id,
+                    row.sucursal
+                  )
+                "
+              >
+                <span>{{ row.sales_revenue_display }}</span>
+                <mat-icon>open_in_new</mat-icon>
+              </button>
             </td>
           </ng-container>
 

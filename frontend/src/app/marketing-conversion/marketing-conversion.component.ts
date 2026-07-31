@@ -16,6 +16,7 @@ import {
   Validators,
 } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
@@ -39,12 +40,16 @@ import {
   MarketingMetrics,
   MarketingMonthlyInput,
 } from './marketing.models';
+import {
+  MarketingAttributionDetailDialogComponent,
+} from './marketing-attribution-detail-dialog.component';
 import { MarketingService } from './marketing.service';
 
 interface MarketingMetricCard {
   label: string;
   value: string;
   supportingText: string;
+  opensAttributionDetail?: boolean;
 }
 
 interface MarketingBranchView extends MarketingBranchMetrics {
@@ -107,6 +112,7 @@ const integerValidator: ValidatorFn = (
   imports: [
     CommonModule,
     MatButtonModule,
+    MatDialogModule,
     MatFormFieldModule,
     MatIconModule,
     MatInputModule,
@@ -122,6 +128,7 @@ export class MarketingConversionComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   private readonly marketingService = inject(MarketingService);
   private readonly snackBar = inject(MatSnackBar);
+  private readonly dialog = inject(MatDialog);
   private readonly dashboardRequests = new Subject<string>();
   private dashboardRequestId = 0;
   private inputsRequestId = 0;
@@ -255,6 +262,50 @@ export class MarketingConversionComponent implements OnInit {
     }
 
     this.dashboardRequests.next(this.selectedMonth);
+  }
+
+  openPrimaryCardDetail(card: MarketingMetricCard): void {
+    if (!card.opensAttributionDetail) {
+      return;
+    }
+
+    this.openAttributionDetail();
+  }
+
+  handlePrimaryCardKeydown(
+    event: KeyboardEvent,
+    card: MarketingMetricCard,
+  ): void {
+    if (
+      !card.opensAttributionDetail ||
+      (event.key !== 'Enter' && event.key !== ' ')
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    this.openAttributionDetail();
+  }
+
+  openAttributionDetail(
+    branchId?: number,
+    branchName?: string,
+  ): void {
+    this.dialog.open(
+      MarketingAttributionDetailDialogComponent,
+      {
+        data: {
+          month: this.selectedMonth,
+          branchId,
+          branchName,
+        },
+        width: 'min(1240px, 96vw)',
+        maxWidth: '96vw',
+        maxHeight: '92vh',
+        autoFocus: false,
+        restoreFocus: true,
+      },
+    );
   }
 
   openInputEditor(): void {
@@ -492,12 +543,14 @@ export class MarketingConversionComponent implements OnInit {
       {
         label: 'Ventas atribuidas',
         value: this.formatInteger(metrics.sales),
-        supportingText: 'Misma sucursal, hasta 30 días',
+        supportingText: 'Abrir conciliación venta por venta',
+        opensAttributionDetail: true,
       },
       {
         label: 'Ingreso atribuido',
         value: this.formatCurrency(metrics.sales_revenue),
-        supportingText: 'Ventas conciliadas por teléfono',
+        supportingText: 'Abrir composición del ingreso',
+        opensAttributionDetail: true,
       },
     ];
   }
