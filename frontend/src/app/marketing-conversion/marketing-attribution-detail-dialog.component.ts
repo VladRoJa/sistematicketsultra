@@ -21,6 +21,10 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import {
+  MatSnackBar,
+  MatSnackBarModule,
+} from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
@@ -32,6 +36,9 @@ import {
   MarketingAttributionDetailResponse,
   MarketingAttributionDetailRow,
 } from './marketing.models';
+import {
+  MarketingExcelExportService,
+} from './marketing-excel-export.service';
 import { MarketingService } from './marketing.service';
 
 export interface MarketingAttributionDialogData {
@@ -46,12 +53,12 @@ export interface MarketingAttributionDialogData {
   imports: [
     CommonModule,
     MatButtonModule,
-    MatCheckboxModule,
     MatDialogModule,
     MatFormFieldModule,
     MatIconModule,
     MatInputModule,
     MatProgressSpinnerModule,
+    MatSnackBarModule,
     MatTableModule,
     ReactiveFormsModule,
   ],
@@ -66,6 +73,10 @@ export class MarketingAttributionDetailDialogComponent
 {
   private readonly destroyRef = inject(DestroyRef);
   private readonly marketingService = inject(MarketingService);
+  private readonly excelExport = inject(
+    MarketingExcelExportService,
+  );
+  private readonly snackBar = inject(MatSnackBar);
   private readonly dialogRef = inject(
     MatDialogRef<MarketingAttributionDetailDialogComponent>,
   );
@@ -82,7 +93,7 @@ export class MarketingAttributionDetailDialogComponent
     nonNullable: true,
   });
 
-  readonly columns = [
+  private readonly globalColumns = [
     'sucursal',
     'socio',
     'visita',
@@ -93,12 +104,33 @@ export class MarketingAttributionDetailDialogComponent
     'ingreso',
   ];
 
+  private readonly branchColumns = [
+    'socio',
+    'visita',
+    'pago',
+    'dias',
+    'membresia',
+    'tarifa',
+    'ingreso',
+  ];
+
+  get columns(): string[] {
+    return this.data.branchId === undefined
+      ? this.globalColumns
+      : this.branchColumns;
+  }
+
+  get isBranchDetail(): boolean {
+    return this.data.branchId !== undefined;
+  }
+
   detail: MarketingAttributionDetailResponse | null = null;
   rows: MarketingAttributionDetailRow[] = [];
   filteredRows: MarketingAttributionDetailRow[] = [];
 
   loading = true;
   errorMessage = '';
+  exportingCohort = false;
 
   get title(): string {
     return this.data.branchName
@@ -108,6 +140,16 @@ export class MarketingAttributionDetailDialogComponent
 
   get resultCountLabel(): string {
     return `${this.filteredRows.length} de ${this.rows.length} ventas`;
+  }
+
+  get nonPositiveFilterActive(): boolean {
+    return this.onlyNonPositiveControl.value;
+  }
+
+  get nonPositiveActionLabel(): string {
+    return this.nonPositiveFilterActive
+      ? 'Mostrar todas las ventas'
+      : 'Ver ventas que requieren revisión';
   }
 
   ngOnInit(): void {
@@ -153,8 +195,53 @@ export class MarketingAttributionDetailDialogComponent
       });
   }
 
+  async exportCohort(): Promise<void> {
+    if (!this.detail || this.exportingCohort) {
+      return;
+    }
+
+    this.exportingCohort = true;
+
+    try {
+      await this.excelExport.exportAttributionCohort(
+        this.detail,
+      );
+
+      this.snackBar.open(
+        'Excel de cohorte generado.',
+        'Cerrar',
+        {
+          duration: 3000,
+        },
+      );
+    } catch {
+      this.snackBar.open(
+        'No fue posible generar el Excel de cohorte.',
+        'Cerrar',
+        {
+          duration: 4500,
+        },
+      );
+    } finally {
+      this.exportingCohort = false;
+    }
+  }
+
   close(): void {
     this.dialogRef.close();
+  }
+
+  toggleNonPositiveFilter(): void {
+    if (
+      !this.detail ||
+      this.detail.summary.non_positive_sales === 0
+    ) {
+      return;
+    }
+
+    this.onlyNonPositiveControl.setValue(
+      !this.onlyNonPositiveControl.value,
+    );
   }
 
   trackRow(

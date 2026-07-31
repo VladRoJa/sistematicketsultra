@@ -43,6 +43,9 @@ import {
 import {
   MarketingAttributionDetailDialogComponent,
 } from './marketing-attribution-detail-dialog.component';
+import {
+  MarketingExcelExportService,
+} from './marketing-excel-export.service';
 import { MarketingService } from './marketing.service';
 
 interface MarketingMetricCard {
@@ -129,6 +132,9 @@ export class MarketingConversionComponent implements OnInit {
   private readonly marketingService = inject(MarketingService);
   private readonly snackBar = inject(MatSnackBar);
   private readonly dialog = inject(MatDialog);
+  private readonly excelExport = inject(
+    MarketingExcelExportService,
+  );
   private readonly dashboardRequests = new Subject<string>();
   private dashboardRequestId = 0;
   private inputsRequestId = 0;
@@ -172,6 +178,7 @@ export class MarketingConversionComponent implements OnInit {
   inputsLoading = false;
   inputsErrorMessage = '';
   inputRows: MarketingInputEditRow[] = [];
+  exportingGlobal = false;
 
   get canEditInputs(): boolean {
     return Boolean(this.dashboard?.permissions.can_edit_inputs);
@@ -262,6 +269,38 @@ export class MarketingConversionComponent implements OnInit {
     }
 
     this.dashboardRequests.next(this.selectedMonth);
+  }
+
+  async exportGlobalDashboard(): Promise<void> {
+    if (!this.dashboard || this.exportingGlobal) {
+      return;
+    }
+
+    this.exportingGlobal = true;
+
+    try {
+      await this.excelExport.exportDashboard(
+        this.dashboard,
+      );
+
+      this.snackBar.open(
+        'Excel global generado.',
+        'Cerrar',
+        {
+          duration: 3000,
+        },
+      );
+    } catch {
+      this.snackBar.open(
+        'No fue posible generar el Excel global.',
+        'Cerrar',
+        {
+          duration: 4500,
+        },
+      );
+    } finally {
+      this.exportingGlobal = false;
+    }
   }
 
   openPrimaryCardDetail(card: MarketingMetricCard): void {
