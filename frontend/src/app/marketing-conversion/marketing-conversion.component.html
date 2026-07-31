@@ -52,6 +52,25 @@
       </button>
 
       <button
+        mat-stroked-button
+        class="secondary-action"
+        type="button"
+        [disabled]="
+          loading ||
+          !dashboard ||
+          exportingGlobal
+        "
+        (click)="exportGlobalDashboard()"
+      >
+        <mat-icon>download</mat-icon>
+        {{
+          exportingGlobal
+            ? 'Generando…'
+            : 'Exportar global'
+        }}
+      </button>
+
+      <button
         *ngIf="canEditInputs && !editingInputs"
         mat-flat-button
         class="primary-action"

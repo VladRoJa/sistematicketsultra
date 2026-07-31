@@ -9,14 +9,35 @@
       </p>
     </div>
 
-    <button
-      mat-icon-button
-      type="button"
-      aria-label="Cerrar detalle de ventas atribuidas"
-      (click)="close()"
-    >
-      <mat-icon>close</mat-icon>
-    </button>
+    <div class="dialog-header-actions">
+      <button
+        mat-stroked-button
+        type="button"
+        class="dialog-export-button"
+        [disabled]="
+          loading ||
+          !detail ||
+          exportingCohort
+        "
+        (click)="exportCohort()"
+      >
+        <mat-icon>download</mat-icon>
+        {{
+          exportingCohort
+            ? 'Generando…'
+            : 'Exportar cohorte'
+        }}
+      </button>
+
+      <button
+        mat-icon-button
+        type="button"
+        aria-label="Cerrar detalle de ventas atribuidas"
+        (click)="close()"
+      >
+        <mat-icon>close</mat-icon>
+      </button>
+    </div>
   </header>
 
   <div class="dialog-body">
@@ -65,10 +86,24 @@
           </strong>
         </article>
 
-        <article
+        <button
+          type="button"
+          class="detail-summary-card"
           [class.detail-summary__warning]="
             detail.summary.non_positive_sales > 0
           "
+          [class.detail-summary__warning--active]="
+            nonPositiveFilterActive
+          "
+          [disabled]="
+            detail.summary.non_positive_sales === 0
+          "
+          [attr.aria-pressed]="
+            detail.summary.non_positive_sales > 0
+              ? nonPositiveFilterActive
+              : null
+          "
+          (click)="toggleNonPositiveFilter()"
         >
           <span>Sin ingreso positivo</span>
           <strong>
@@ -77,9 +112,9 @@
           <small
             *ngIf="detail.summary.non_positive_sales > 0"
           >
-            Requieren revisión
+            {{ nonPositiveActionLabel }}
           </small>
-        </article>
+        </button>
       </section>
 
       <section class="detail-toolbar">
@@ -108,11 +143,7 @@
           </button>
         </mat-form-field>
 
-        <mat-checkbox
-          [formControl]="onlyNonPositiveControl"
-        >
-          Solo ventas sin ingreso positivo
-        </mat-checkbox>
+
 
         <span class="result-count">
           {{ resultCountLabel }}
@@ -141,6 +172,7 @@
           mat-table
           [dataSource]="filteredRows"
           class="detail-table"
+          [class.detail-table--branch]="isBranchDetail"
         >
           <ng-container matColumnDef="sucursal">
             <th mat-header-cell *matHeaderCellDef>
