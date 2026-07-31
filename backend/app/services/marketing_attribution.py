@@ -27,6 +27,16 @@ class SaleRecord:
     phone: str
     member_id: str | None
     revenue: Decimal
+    snapshot_id: int | None = None
+    source_row_id: int | None = None
+    folio: str | None = None
+    member_name: str | None = None
+    membership_type: str | None = None
+    tariff: str | None = None
+    registration: str | None = None
+    pass_name: str | None = None
+    payment_place: str | None = None
+    listed_total: Decimal | None = None
 
 
 @dataclass(frozen=True)
