@@ -175,3 +175,138 @@ def test_sales_window_can_intersect_three_calendar_months():
         date(2026, 2, 1),
         date(2026, 3, 1),
     ]
+def test_attribution_detail_serializes_reconciled_sales(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(
+        service,
+        "_load_available_branches",
+        lambda: [
+            service.MarketingBranch(1, "Sucursal A", 1),
+            service.MarketingBranch(2, "Sucursal B", 2),
+        ],
+    )
+    monkeypatch.setattr(
+        service,
+        "_load_visit_events",
+        lambda **_: service.VisitLoadResult(
+            events=[
+                VisitEvent(
+                    "visit-a",
+                    1,
+                    date(2026, 7, 1),
+                    "0000000000",
+                    "PASE 2 DIAS GRATIS",
+                ),
+                VisitEvent(
+                    "visit-b",
+                    2,
+                    date(2026, 7, 10),
+                    "1111111111",
+                    "PASE RECORRIDO",
+                ),
+            ],
+            snapshot_id=50,
+        ),
+    )
+    monkeypatch.setattr(
+        service,
+        "_load_sales",
+        lambda **_: service.SalesLoadResult(
+            sales=[
+                SaleRecord(
+                    sale_key="id_socio:member-1",
+                    branch_id=1,
+                    payment_date=date(2026, 7, 3),
+                    phone="0000000000",
+                    member_id="member-1",
+                    revenue=Decimal("250.00"),
+                    snapshot_id=60,
+                    source_row_id=6001,
+                    folio="F-1",
+                    member_name="Socio Uno",
+                    membership_type="MENSUAL",
+                    tariff="TARIFA A",
+                    registration="NUEVO",
+                    pass_name="PASE 2 DIAS GRATIS",
+                    payment_place="CAJA",
+                    listed_total=Decimal("250.00"),
+                ),
+                SaleRecord(
+                    sale_key="id_socio:member-2",
+                    branch_id=2,
+                    payment_date=date(2026, 7, 12),
+                    phone="1111111111",
+                    member_id="member-2",
+                    revenue=Decimal("0.00"),
+                    snapshot_id=61,
+                    source_row_id=6101,
+                    folio="F-2",
+                    member_name="Socio Dos",
+                    membership_type="MENSUAL",
+                    tariff="CORTESIA",
+                    registration=None,
+                    pass_name="PASE RECORRIDO",
+                    payment_place="CAJA",
+                    listed_total=Decimal("0.00"),
+                ),
+            ],
+            snapshot_ids=[60, 61],
+        ),
+    )
+
+    result = service.build_marketing_attribution_detail(
+        month="2026-07",
+        access=_global_access(),
+    )
+
+    assert result["summary"] == {
+        "sales": 2,
+        "sales_revenue": 250.0,
+        "non_positive_sales": 1,
+    }
+    assert result["source"] == {
+        "visit_snapshot_id": 50,
+        "sales_snapshot_ids": [60, 61],
+    }
+    assert len(result["rows"]) == 2
+
+    first_row = result["rows"][0]
+    assert first_row["sucursal"] == "Sucursal A"
+    assert first_row["id_socio"] == "member-1"
+    assert first_row["id_folio"] == "F-1"
+    assert first_row["socio"] == "Socio Uno"
+    assert first_row["telefono"] == "*** *** 0000"
+    assert first_row["fecha_visita"] == "2026-07-01"
+    assert first_row["fecha_pago"] == "2026-07-03"
+    assert first_row["dias_a_venta"] == 2
+    assert first_row["tipo_membresia"] == "MENSUAL"
+    assert first_row["tarifa"] == "TARIFA A"
+    assert first_row["total_pagado"] == 250.0
+    assert first_row["venta_sin_ingreso_positivo"] is False
+
+    second_row = result["rows"][1]
+    assert second_row["total_pagado"] == 0.0
+    assert second_row["venta_sin_ingreso_positivo"] is True
+
+
+def test_attribution_detail_rejects_branch_outside_scope(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(
+        service,
+        "_load_available_branches",
+        lambda: [
+            service.MarketingBranch(1, "Sucursal A", 1),
+        ],
+    )
+
+    with pytest.raises(
+        service.MarketingAuthorizationError,
+        match="fuera del alcance autorizado",
+    ):
+        service.build_marketing_attribution_detail(
+            month="2026-07",
+            access=_global_access(),
+            sucursal_id=999,
+        )

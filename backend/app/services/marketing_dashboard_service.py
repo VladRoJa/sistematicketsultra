@@ -18,7 +18,10 @@ from app.models.warehouse import (
     VentasNuevosSociosDetalleSnapshotORM,
     VentasNuevosSociosDetalleSnapshotRowORM,
 )
-from app.services.marketing_access import MarketingAccess
+from app.services.marketing_access import (
+    MarketingAccess,
+    MarketingAuthorizationError,
+)
 from app.services.marketing_attribution import (
     SaleRecord,
     VisitEvent,
@@ -118,6 +121,33 @@ def _to_decimal(value: Any) -> Decimal:
         raise ValueError(
             f"No se pudo convertir a Decimal: {value!r}"
         ) from exc
+
+
+def _optional_decimal(value: Any) -> Decimal | None:
+    if value is None:
+        return None
+    return _to_decimal(value)
+
+
+def _join_member_name(row: Any) -> str | None:
+    parts = [
+        str(getattr(row, field_name, "") or "").strip()
+        for field_name in (
+            "nombre",
+            "apellido_paterno",
+            "apellido_materno",
+        )
+    ]
+    full_name = " ".join(
+        part
+        for part in parts
+        if part
+    )
+    return full_name or None
+
+
+def _mask_phone(phone: str) -> str:
+    return f"*** *** {phone[-4:]}"
 
 
 def _month_end(month_start: date) -> date:
@@ -579,6 +609,31 @@ def _load_sales(
                 revenue=_to_decimal(
                     row.total_pagado
                 ),
+                snapshot_id=int(row.snapshot_id),
+                source_row_id=int(row.id),
+                folio=id_folio or None,
+                member_name=_join_member_name(row),
+                membership_type=(
+                    str(row.tipo_membresia or "").strip()
+                    or None
+                ),
+                tariff=(
+                    str(row.tarifa or "").strip()
+                    or None
+                ),
+                registration=(
+                    str(row.inscripcion or "").strip()
+                    or None
+                ),
+                pass_name=(
+                    str(row.pase or "").strip()
+                    or None
+                ),
+                payment_place=(
+                    str(row.lugar_pago or "").strip()
+                    or None
+                ),
+                listed_total=_optional_decimal(row.total),
             )
         )
 
@@ -820,4 +875,153 @@ def build_marketing_dashboard(
             ),
             "limitations": quality_limitations,
         },
+    }
+
+
+def build_marketing_attribution_detail(
+    *,
+    month: str,
+    access: MarketingAccess,
+    sucursal_id: int | None = None,
+) -> dict[str, Any]:
+    month_start = parse_month(month)
+    month_end = _month_end(month_start)
+    attribution_window_end = month_end + timedelta(days=30)
+
+    (
+        visible_branches,
+        visible_branch_ids,
+        scope,
+    ) = load_visible_marketing_branches(access)
+
+    selected_branch_ids = visible_branch_ids
+    selected_branches = visible_branches
+
+    if sucursal_id is not None:
+        if sucursal_id not in set(visible_branch_ids):
+            raise MarketingAuthorizationError(
+                "La sucursal está fuera del alcance autorizado."
+            )
+
+        selected_branch_ids = (sucursal_id,)
+        selected_branches = [
+            branch
+            for branch in visible_branches
+            if branch.sucursal_id == sucursal_id
+        ]
+
+    visit_result = _load_visit_events(
+        month_start=month_start,
+        branch_ids=selected_branch_ids,
+    )
+    sales_result = _load_sales(
+        window_start=month_start,
+        window_end=attribution_window_end,
+        branch_ids=selected_branch_ids,
+    )
+    attributions = reconcile_visit_sales(
+        visits=visit_result.events,
+        sales=sales_result.sales,
+    )
+
+    branch_names = {
+        branch.sucursal_id: branch.name
+        for branch in selected_branches
+    }
+    branch_order = {
+        branch.sucursal_id: branch.display_order
+        for branch in selected_branches
+    }
+
+    attributions.sort(
+        key=lambda attribution: (
+            branch_order.get(
+                attribution.visit.branch_id,
+                999999,
+            ),
+            attribution.visit.visit_date,
+            attribution.sale.payment_date,
+            attribution.sale.sale_key,
+        )
+    )
+
+    total_revenue = sum(
+        (
+            attribution.sale.revenue
+            for attribution in attributions
+        ),
+        Decimal("0"),
+    )
+    non_positive_sales = sum(
+        1
+        for attribution in attributions
+        if attribution.sale.revenue <= 0
+    )
+
+    return {
+        "month": month_start.strftime("%Y-%m"),
+        "cohort_mode": "visit_month",
+        "scope": scope,
+        "filters": {
+            "sucursal_id": sucursal_id,
+        },
+        "summary": {
+            "sales": len(attributions),
+            "sales_revenue": float(total_revenue),
+            "non_positive_sales": non_positive_sales,
+        },
+        "source": {
+            "visit_snapshot_id": visit_result.snapshot_id,
+            "sales_snapshot_ids": sales_result.snapshot_ids,
+        },
+        "rows": [
+            {
+                "sucursal_id": attribution.visit.branch_id,
+                "sucursal": branch_names.get(
+                    attribution.visit.branch_id,
+                    str(attribution.visit.branch_id),
+                ),
+                "sale_key": attribution.sale.sale_key,
+                "id_socio": attribution.sale.member_id,
+                "id_folio": attribution.sale.folio,
+                "socio": attribution.sale.member_name,
+                "telefono": _mask_phone(
+                    attribution.sale.phone
+                ),
+                "fecha_visita": (
+                    attribution.visit.visit_date.isoformat()
+                ),
+                "fecha_pago": (
+                    attribution.sale.payment_date.isoformat()
+                ),
+                "dias_a_venta": (
+                    attribution.sale.payment_date
+                    - attribution.visit.visit_date
+                ).days,
+                "tipo_visita": attribution.visit.description,
+                "tipo_membresia": (
+                    attribution.sale.membership_type
+                ),
+                "tarifa": attribution.sale.tariff,
+                "inscripcion": attribution.sale.registration,
+                "pase": attribution.sale.pass_name,
+                "lugar_pago": attribution.sale.payment_place,
+                "total": (
+                    float(attribution.sale.listed_total)
+                    if attribution.sale.listed_total is not None
+                    else None
+                ),
+                "total_pagado": float(
+                    attribution.sale.revenue
+                ),
+                "venta_sin_ingreso_positivo": (
+                    attribution.sale.revenue <= 0
+                ),
+                "snapshot_id": attribution.sale.snapshot_id,
+                "source_row_id": (
+                    attribution.sale.source_row_id
+                ),
+            }
+            for attribution in attributions
+        ],
     }

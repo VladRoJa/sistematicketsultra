@@ -12,6 +12,7 @@ from app.services.marketing_access import (
     resolve_marketing_access,
 )
 from app.services.marketing_dashboard_service import (
+    build_marketing_attribution_detail,
     build_marketing_dashboard,
     load_visible_marketing_branches,
 )
@@ -51,6 +52,26 @@ def _resolve_request_access():
     return user, access
 
 
+def _parse_optional_branch_id() -> int | None:
+    raw_value = request.args.get("sucursal_id")
+    if raw_value is None or not raw_value.strip():
+        return None
+
+    try:
+        branch_id = int(raw_value)
+    except (TypeError, ValueError) as exc:
+        raise MarketingInputValidationError(
+            "sucursal_id debe ser un entero válido."
+        ) from exc
+
+    if branch_id <= 0:
+        raise MarketingInputValidationError(
+            "sucursal_id debe ser mayor a cero."
+        )
+
+    return branch_id
+
+
 @marketing_bp.get("/dashboard")
 @jwt_required()
 def get_marketing_dashboard_endpoint():
@@ -82,6 +103,43 @@ def get_marketing_dashboard_endpoint():
                 "message": (
                     "Falló la consulta del dashboard "
                     "de Marketing y Conversión."
+                ),
+            }
+        ), 500
+
+
+@marketing_bp.get("/attributions")
+@jwt_required()
+def get_marketing_attributions_endpoint():
+    try:
+        _, access = _resolve_request_access()
+        result = build_marketing_attribution_detail(
+            month=request.args.get("month", ""),
+            access=access,
+            sucursal_id=_parse_optional_branch_id(),
+        )
+        return jsonify(result), 200
+    except MarketingAuthorizationError as exc:
+        return jsonify(
+            {
+                "status": "error",
+                "message": str(exc),
+            }
+        ), 403
+    except MarketingInputValidationError as exc:
+        return jsonify(
+            {
+                "status": "error",
+                "message": str(exc),
+            }
+        ), 400
+    except Exception:
+        return jsonify(
+            {
+                "status": "error",
+                "message": (
+                    "Falló la consulta del detalle "
+                    "de ventas atribuidas."
                 ),
             }
         ), 500
