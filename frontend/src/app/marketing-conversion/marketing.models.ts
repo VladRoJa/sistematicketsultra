@@ -80,3 +80,50 @@ export interface MarketingInputSaveResponse {
   status: 'created' | 'updated';
   input: MarketingMonthlyInput;
 }
+
+export interface MarketingAttributionDetailSummary {
+  sales: number;
+  sales_revenue: number;
+  non_positive_sales: number;
+}
+
+export interface MarketingAttributionDetailSource {
+  visit_snapshot_id: number | null;
+  sales_snapshot_ids: number[];
+}
+
+export interface MarketingAttributionDetailRow {
+  sucursal_id: number;
+  sucursal: string;
+  sale_key: string;
+  id_socio: string | null;
+  id_folio: string | null;
+  socio: string | null;
+  telefono: string;
+  fecha_visita: string;
+  fecha_pago: string;
+  dias_a_venta: number;
+  tipo_visita: string;
+  tipo_membresia: string | null;
+  tarifa: string | null;
+  inscripcion: string | null;
+  pase: string | null;
+  lugar_pago: string | null;
+  total: number | null;
+  total_pagado: number;
+  venta_sin_ingreso_positivo: boolean;
+  snapshot_id: number | null;
+  source_row_id: number | null;
+}
+
+export interface MarketingAttributionDetailResponse {
+  month: string;
+  cohort_mode: 'visit_month';
+  scope: MarketingScope;
+  filters: {
+    sucursal_id: number | null;
+  };
+  summary: MarketingAttributionDetailSummary;
+  source: MarketingAttributionDetailSource;
+  rows: MarketingAttributionDetailRow[];
+}

@@ -5,6 +5,7 @@ import { Observable } from 'rxjs';
 import { environment } from 'src/environments/environment';
 
 import {
+  MarketingAttributionDetailResponse,
   MarketingDashboardResponse,
   MarketingInputPayload,
   MarketingInputsResponse,
@@ -24,6 +25,22 @@ export class MarketingService {
 
     return this.http.get<MarketingDashboardResponse>(
       `${this.apiUrl}/dashboard`,
+      { params },
+    );
+  }
+
+  getAttributions(
+    month: string,
+    branchId?: number,
+  ): Observable<MarketingAttributionDetailResponse> {
+    let params = new HttpParams().set('month', month);
+
+    if (branchId !== undefined) {
+      params = params.set('sucursal_id', String(branchId));
+    }
+
+    return this.http.get<MarketingAttributionDetailResponse>(
+      `${this.apiUrl}/attributions`,
       { params },
     );
   }
