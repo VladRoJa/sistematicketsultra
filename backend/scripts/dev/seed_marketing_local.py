@@ -571,6 +571,12 @@ def build_sales_rows(
                 branch_position == 1
                 and person_position == 5
             ):
+                membership_type = "Sin contrato"
+                tariff = (
+                    "DOMICILIADO 12 MESES "
+                    "PLAN FAMILIAR $999 "
+                    "(ADULTO + ADULTO)"
+                )
                 amount = Decimal("0.00")
 
             if (
@@ -956,8 +962,12 @@ def run_seed(month_start: date) -> None:
         f"${detail['summary']['sales_revenue']:,.2f}"
     )
     print(
-        "sin_ingreso_positivo="
-        f"{detail['summary']['non_positive_sales']}"
+        "casos_por_revisar="
+        f"{detail['summary']['review_sales']}"
+    )
+    print(
+        "integrantes_plan_familiar="
+        f"{detail['summary']['family_plan_additional_members']}"
     )
     print(
         f"filas_detalle={len(detail['rows'])}"

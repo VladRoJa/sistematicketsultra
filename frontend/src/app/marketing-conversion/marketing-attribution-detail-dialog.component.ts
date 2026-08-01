@@ -89,7 +89,7 @@ export class MarketingAttributionDetailDialogComponent
     nonNullable: true,
   });
 
-  readonly onlyNonPositiveControl = new FormControl(false, {
+  readonly onlyReviewControl = new FormControl(false, {
     nonNullable: true,
   });
 
@@ -142,14 +142,32 @@ export class MarketingAttributionDetailDialogComponent
     return `${this.filteredRows.length} de ${this.rows.length} ventas`;
   }
 
-  get nonPositiveFilterActive(): boolean {
-    return this.onlyNonPositiveControl.value;
+  get reviewFilterActive(): boolean {
+    return this.onlyReviewControl.value;
   }
 
-  get nonPositiveActionLabel(): string {
-    return this.nonPositiveFilterActive
+  get reviewActionLabel(): string {
+    return this.reviewFilterActive
       ? 'Mostrar todas las ventas'
       : 'Ver ventas que requieren revisión';
+  }
+
+  get familyPlanAdditionalMessage(): string {
+    const count =
+      this.detail?.summary
+        .family_plan_additional_members ?? 0;
+
+    const noun = (
+      count === 1
+        ? 'integrante adicional'
+        : 'integrantes adicionales'
+    );
+
+    return (
+      `${count} ${noun} de planes familiares `
+      + 'tienen el importe registrado '
+      + 'en el socio titular.'
+    );
   }
 
   ngOnInit(): void {
@@ -161,7 +179,7 @@ export class MarketingAttributionDetailDialogComponent
       )
       .subscribe(() => this.applyFilters());
 
-    this.onlyNonPositiveControl.valueChanges
+    this.onlyReviewControl.valueChanges
       .pipe(
         distinctUntilChanged(),
         takeUntilDestroyed(this.destroyRef),
@@ -231,7 +249,7 @@ export class MarketingAttributionDetailDialogComponent
     this.dialogRef.close();
   }
 
-  toggleNonPositiveFilter(): void {
+  toggleReviewFilter(): void {
     if (
       !this.detail ||
       this.detail.summary.non_positive_sales === 0
@@ -239,8 +257,8 @@ export class MarketingAttributionDetailDialogComponent
       return;
     }
 
-    this.onlyNonPositiveControl.setValue(
-      !this.onlyNonPositiveControl.value,
+    this.onlyReviewControl.setValue(
+      !this.onlyReviewControl.value,
     );
   }
 
@@ -277,12 +295,12 @@ export class MarketingAttributionDetailDialogComponent
     const query = this.normalizeText(
       this.searchControl.value,
     );
-    const onlyNonPositive =
-      this.onlyNonPositiveControl.value;
+    const onlyReview =
+      this.onlyReviewControl.value;
 
     this.filteredRows = this.rows.filter((row) => {
       if (
-        onlyNonPositive &&
+        onlyReview &&
         !row.venta_sin_ingreso_positivo
       ) {
         return false;
@@ -295,6 +313,7 @@ export class MarketingAttributionDetailDialogComponent
       const searchableText = [
         row.sucursal,
         row.socio,
+        row.attribution_classification,
         row.id_socio,
         row.id_folio,
         row.telefono,

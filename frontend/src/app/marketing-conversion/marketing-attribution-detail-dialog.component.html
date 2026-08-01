@@ -90,32 +90,48 @@
           type="button"
           class="detail-summary-card"
           [class.detail-summary__warning]="
-            detail.summary.non_positive_sales > 0
+            detail.summary.review_sales > 0
           "
           [class.detail-summary__warning--active]="
-            nonPositiveFilterActive
+            reviewFilterActive
           "
           [disabled]="
-            detail.summary.non_positive_sales === 0
+            detail.summary.review_sales === 0
           "
           [attr.aria-pressed]="
-            detail.summary.non_positive_sales > 0
-              ? nonPositiveFilterActive
+            detail.summary.review_sales > 0
+              ? reviewFilterActive
               : null
           "
-          (click)="toggleNonPositiveFilter()"
+          (click)="toggleReviewFilter()"
         >
-          <span>Sin ingreso positivo</span>
+          <span>Casos por revisar</span>
           <strong>
-            {{ detail.summary.non_positive_sales }}
+            {{ detail.summary.review_sales }}
           </strong>
           <small
-            *ngIf="detail.summary.non_positive_sales > 0"
+            *ngIf="detail.summary.review_sales > 0"
           >
-            {{ nonPositiveActionLabel }}
+            {{ reviewActionLabel }}
           </small>
         </button>
       </section>
+
+      <aside
+        *ngIf="
+          detail.summary
+            .family_plan_additional_members > 0
+        "
+        class="family-plan-note"
+      >
+        <mat-icon>group</mat-icon>
+        <div>
+          <strong>
+            Integrantes adicionales de plan familiar
+          </strong>
+          <p>{{ familyPlanAdditionalMessage }}</p>
+        </div>
+      </aside>
 
       <section class="detail-toolbar">
         <mat-form-field
@@ -272,6 +288,20 @@
                   {{ formatCurrency(row.total_pagado) }}
                 </strong>
                 <span
+                  *ngIf="
+                    row.amount_assigned_to_primary_member
+                  "
+                  class="family-label"
+                  title="
+                    Integrante adicional de plan familiar.
+                    El importe completo se registra
+                    en el socio titular.
+                  "
+                >
+                  Importe en titular
+                </span>
+
+                <span
                   *ngIf="row.venta_sin_ingreso_positivo"
                   class="warning-label"
                 >
@@ -290,6 +320,9 @@
             *matRowDef="let row; columns: columns"
             [class.detail-row--warning]="
               row.venta_sin_ingreso_positivo
+            "
+            [class.detail-row--family]="
+              row.amount_assigned_to_primary_member
             "
           ></tr>
         </table>

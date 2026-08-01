@@ -84,13 +84,20 @@ export interface MarketingInputSaveResponse {
 export interface MarketingAttributionDetailSummary {
   sales: number;
   sales_revenue: number;
+  review_sales: number;
   non_positive_sales: number;
+  family_plan_additional_members: number;
 }
 
 export interface MarketingAttributionDetailSource {
   visit_snapshot_id: number | null;
   sales_snapshot_ids: number[];
 }
+
+export type MarketingAttributionClassification =
+  | 'STANDARD_SALE'
+  | 'FAMILY_PLAN_ADDITIONAL_MEMBER'
+  | 'NON_POSITIVE_AMOUNT_REVIEW';
 
 export interface MarketingAttributionDetailRow {
   sucursal_id: number;
@@ -111,6 +118,9 @@ export interface MarketingAttributionDetailRow {
   lugar_pago: string | null;
   total: number | null;
   total_pagado: number;
+  attribution_classification:
+    MarketingAttributionClassification;
+  amount_assigned_to_primary_member: boolean;
   venta_sin_ingreso_positivo: boolean;
   snapshot_id: number | null;
   source_row_id: number | null;

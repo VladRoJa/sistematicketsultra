@@ -12,6 +12,8 @@
   --detail-gray-700: var(--ultra-gray-700, #334155);
   --detail-gray-900: var(--ultra-gray-900, #0f172a);
   display: block;
+  max-height: 92vh;
+  overflow: hidden;
 }
 
 * {
@@ -90,9 +92,11 @@
 }
 
 .dialog-body {
+  display: flex;
   min-height: 0;
   flex: 1;
-  overflow: auto;
+  flex-direction: column;
+  overflow: hidden;
   padding: 16px 18px 20px;
 }
 
@@ -220,8 +224,11 @@
 }
 
 .detail-table-scroll {
-  max-height: min(520px, 60vh);
+  min-height: 0;
+  flex: 1 1 auto;
   overflow: auto;
+  overscroll-behavior: contain;
+  scroll-padding-top: 48px;
   border: 1px solid var(--detail-gray-200);
   border-radius: 14px;
   background: var(--detail-surface);
@@ -343,6 +350,31 @@
   }
 }
 
+.detail-table th.mat-column-ingreso,
+.detail-table td.mat-column-ingreso {
+  width: 160px;
+  min-width: 160px;
+  text-align: right;
+}
+
+.detail-table th.mat-column-ingreso {
+  padding-right: 18px;
+}
+
+.detail-table td.mat-column-ingreso {
+  padding-right: 16px;
+}
+
+.revenue-cell {
+  align-items: flex-end;
+  white-space: nowrap;
+}
+
+.detail-table tr.mat-mdc-header-row {
+  z-index: 5;
+  background: var(--detail-gray-50);
+}
+
 .detail-table--branch {
   min-width: 980px;
 }
@@ -360,4 +392,130 @@
 .detail-table--branch th.mat-column-tarifa,
 .detail-table--branch td.mat-column-tarifa {
   min-width: 190px;
+}
+
+.family-plan-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 12px 0 0;
+  padding: 11px 13px;
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  color: #1e3a8a;
+  background: #eff6ff;
+}
+
+.family-plan-note mat-icon {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.family-plan-note strong {
+  display: block;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.family-plan-note p {
+  margin: 2px 0 0;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.family-label {
+  width: fit-content;
+  padding: 3px 8px;
+  border-radius: 999px;
+  color: #1e40af;
+  background: #dbeafe;
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 1.15;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.detail-row--family td {
+  background: #f8fbff;
+}
+
+/* La vista global aprovecha todo el modal sin scroll horizontal. */
+.detail-table:not(.detail-table--branch) {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+}
+
+.detail-table:not(.detail-table--branch) th,
+.detail-table:not(.detail-table--branch) td {
+  min-width: 0;
+  padding-right: 10px;
+  padding-left: 10px;
+}
+
+.detail-table:not(.detail-table--branch)
+  th.mat-column-sucursal,
+.detail-table:not(.detail-table--branch)
+  td.mat-column-sucursal {
+  width: 10%;
+}
+
+.detail-table:not(.detail-table--branch)
+  th.mat-column-socio,
+.detail-table:not(.detail-table--branch)
+  td.mat-column-socio {
+  width: 17%;
+}
+
+.detail-table:not(.detail-table--branch)
+  th.mat-column-visita,
+.detail-table:not(.detail-table--branch)
+  td.mat-column-visita {
+  width: 11%;
+}
+
+.detail-table:not(.detail-table--branch)
+  th.mat-column-pago,
+.detail-table:not(.detail-table--branch)
+  td.mat-column-pago {
+  width: 14%;
+}
+
+.detail-table:not(.detail-table--branch)
+  th.mat-column-dias,
+.detail-table:not(.detail-table--branch)
+  td.mat-column-dias {
+  width: 6%;
+}
+
+.detail-table:not(.detail-table--branch)
+  th.mat-column-membresia,
+.detail-table:not(.detail-table--branch)
+  td.mat-column-membresia {
+  width: 11%;
+}
+
+.detail-table:not(.detail-table--branch)
+  th.mat-column-tarifa,
+.detail-table:not(.detail-table--branch)
+  td.mat-column-tarifa {
+  width: 19%;
+}
+
+.detail-table:not(.detail-table--branch)
+  th.mat-column-ingreso,
+.detail-table:not(.detail-table--branch)
+  td.mat-column-ingreso {
+  width: 12%;
+  min-width: 0;
+}
+
+.detail-table:not(.detail-table--branch)
+  .family-label {
+  max-width: 100%;
+  line-height: 1.1;
+  text-align: center;
+  white-space: normal;
 }

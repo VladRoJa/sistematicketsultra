@@ -263,7 +263,9 @@ def test_attribution_detail_serializes_reconciled_sales(
     assert result["summary"] == {
         "sales": 2,
         "sales_revenue": 250.0,
+        "review_sales": 1,
         "non_positive_sales": 1,
+        "family_plan_additional_members": 0,
     }
     assert result["source"] == {
         "visit_snapshot_id": 50,
@@ -283,12 +285,122 @@ def test_attribution_detail_serializes_reconciled_sales(
     assert first_row["tipo_membresia"] == "MENSUAL"
     assert first_row["tarifa"] == "TARIFA A"
     assert first_row["total_pagado"] == 250.0
+    assert (
+        first_row["attribution_classification"]
+        == service.ATTRIBUTION_CLASS_STANDARD
+    )
+    assert (
+        first_row["amount_assigned_to_primary_member"]
+        is False
+    )
     assert first_row["venta_sin_ingreso_positivo"] is False
 
     second_row = result["rows"][1]
     assert second_row["total_pagado"] == 0.0
+    assert (
+        second_row["attribution_classification"]
+        == service.ATTRIBUTION_CLASS_REVIEW
+    )
+    assert (
+        second_row["amount_assigned_to_primary_member"]
+        is False
+    )
     assert second_row["venta_sin_ingreso_positivo"] is True
 
+
+
+def test_family_plan_additional_member_is_not_a_review_case(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(
+        service,
+        "_load_available_branches",
+        lambda: [
+            service.MarketingBranch(
+                1,
+                "Sucursal A",
+                1,
+            ),
+        ],
+    )
+
+    monkeypatch.setattr(
+        service,
+        "_load_visit_events",
+        lambda **_: service.VisitLoadResult(
+            events=[
+                VisitEvent(
+                    "visit-family",
+                    1,
+                    date(2026, 7, 23),
+                    "0000000000",
+                    "PASE RECORRIDO",
+                ),
+            ],
+            snapshot_id=50,
+        ),
+    )
+
+    monkeypatch.setattr(
+        service,
+        "_load_sales",
+        lambda **_: service.SalesLoadResult(
+            sales=[
+                SaleRecord(
+                    sale_key="id_socio:family-member",
+                    branch_id=1,
+                    payment_date=date(2026, 7, 24),
+                    phone="0000000000",
+                    member_id="family-member",
+                    revenue=Decimal("0.00"),
+                    snapshot_id=60,
+                    source_row_id=6001,
+                    folio="F-FAMILY",
+                    member_name="Socio Adicional",
+                    membership_type="Sin contrato",
+                    tariff=(
+                        "DOMICILIADO 12 MESES "
+                        "PLAN FAMILIAR $999 "
+                        "(ADULTO + ADULTO)"
+                    ),
+                    registration=None,
+                    pass_name="PASE RECORRIDO",
+                    payment_place="Sucursal",
+                    listed_total=Decimal("0.00"),
+                ),
+            ],
+            snapshot_ids=[60],
+        ),
+    )
+
+    result = service.build_marketing_attribution_detail(
+        month="2026-07",
+        access=_global_access(),
+    )
+
+    assert result["summary"] == {
+        "sales": 1,
+        "sales_revenue": 0.0,
+        "review_sales": 0,
+        "non_positive_sales": 0,
+        "family_plan_additional_members": 1,
+    }
+
+    assert len(result["rows"]) == 1
+
+    row = result["rows"][0]
+
+    assert (
+        row["attribution_classification"]
+        == service.ATTRIBUTION_CLASS_FAMILY_ADDITIONAL
+    )
+    assert (
+        row["amount_assigned_to_primary_member"]
+        is True
+    )
+    assert row["venta_sin_ingreso_positivo"] is False
+    assert row["total"] == 0.0
+    assert row["total_pagado"] == 0.0
 
 def test_attribution_detail_rejects_branch_outside_scope(
     monkeypatch: pytest.MonkeyPatch,
