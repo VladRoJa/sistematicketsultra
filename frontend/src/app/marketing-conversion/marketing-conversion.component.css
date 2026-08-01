@@ -17,6 +17,7 @@
   --mc-success-soft: var(--ultra-success-soft, #ecfdf5);
   --mc-warning-soft: var(--ultra-warning-soft, #fffbeb);
   --mc-danger-soft: var(--ultra-danger-soft, #fef2f2);
+  --mc-sticky-header-offset: 86px;
   display: block;
 }
 
@@ -569,7 +570,9 @@
 
 .table-scroll {
   width: 100%;
-  overflow-x: auto;
+  max-height: min(68vh, 720px);
+  overflow: auto;
+  overscroll-behavior: contain;
   border: 1px solid var(--mc-gray-200);
   border-radius: 14px;
   background: var(--mc-surface);
@@ -582,12 +585,16 @@
 }
 
 .branch-table .mat-mdc-header-row {
+  position: sticky;
+  z-index: 3;
+  top: 0;
   background:
     linear-gradient(
       135deg,
       #17191d,
       var(--mc-charcoal)
     );
+  box-shadow: 0 5px 12px rgba(15, 23, 42, 0.18);
 }
 
 .branch-table .mat-mdc-header-cell {
@@ -625,7 +632,7 @@
 }
 
 .branch-table th:first-child {
-  z-index: 2;
+  z-index: 4;
   color: #ffffff;
   background: #17191d;
 }
@@ -938,4 +945,106 @@
   width: 15px;
   height: 15px;
   font-size: 15px;
+}
+
+/* Encabezado global sticky de la tabla por sucursal */
+/*
+ * En escritorios anchos la página controla el desplazamiento
+ * vertical. Así los títulos permanecen bajo la barra principal
+ * mientras la tabla siga atravesando el viewport.
+ */
+@media (min-width: 1500px) {
+  .table-scroll {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .branch-table {
+    width: 100%;
+    min-width: 0;
+    table-layout: fixed;
+  }
+
+  .table-section {
+    overflow: visible;
+  }
+
+  .branch-table
+    .mat-mdc-header-row.mat-mdc-table-sticky {
+    position: static !important;
+  }
+
+  .branch-table .mat-mdc-header-cell {
+    position: sticky !important;
+    z-index: 20 !important;
+    top: var(--mc-sticky-header-offset) !important;
+    background:
+      linear-gradient(
+        135deg,
+        #17191d,
+        var(--mc-charcoal)
+      );
+    box-shadow:
+      0 5px 12px rgba(15, 23, 42, 0.22);
+  }
+
+  .branch-table th:first-child {
+    z-index: 22 !important;
+    top: var(--mc-sticky-header-offset) !important;
+  }
+
+  .branch-table th,
+  .branch-table td {
+    min-width: 0;
+    padding-right: 8px;
+    padding-left: 8px;
+  }
+
+  .branch-table th.mat-column-sucursal,
+  .branch-table td.mat-column-sucursal {
+    width: 14%;
+  }
+
+  .branch-table th.mat-column-investment,
+  .branch-table td.mat-column-investment {
+    width: 7%;
+  }
+
+  .branch-table th.mat-column-leads,
+  .branch-table td.mat-column-leads {
+    width: 4.5%;
+  }
+
+  .branch-table th.mat-column-visits,
+  .branch-table td.mat-column-visits {
+    width: 5.5%;
+  }
+
+  .branch-table th.mat-column-sales,
+  .branch-table td.mat-column-sales {
+    width: 9%;
+  }
+
+  .branch-table th.mat-column-sales_revenue,
+  .branch-table td.mat-column-sales_revenue {
+    width: 10%;
+  }
+
+  .branch-table th.mat-column-cost_per_lead,
+  .branch-table td.mat-column-cost_per_lead,
+  .branch-table th.mat-column-cost_per_visit,
+  .branch-table td.mat-column-cost_per_visit,
+  .branch-table th.mat-column-cost_per_sale,
+  .branch-table td.mat-column-cost_per_sale {
+    width: 8.5%;
+  }
+
+  .branch-table th.mat-column-lead_to_visit_rate,
+  .branch-table td.mat-column-lead_to_visit_rate,
+  .branch-table th.mat-column-visit_to_sale_rate,
+  .branch-table td.mat-column-visit_to_sale_rate,
+  .branch-table th.mat-column-lead_to_sale_rate,
+  .branch-table td.mat-column-lead_to_sale_rate {
+    width: 7.5%;
+  }
 }

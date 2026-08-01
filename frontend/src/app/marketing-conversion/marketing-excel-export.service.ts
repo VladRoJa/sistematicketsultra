@@ -489,8 +489,12 @@ export class MarketingExcelExportService {
         detail.summary.sales_revenue,
       ],
       [
-        'Sin ingreso positivo',
-        detail.summary.non_positive_sales,
+        'Casos por revisar',
+        detail.summary.review_sales,
+      ],
+      [
+        'Integrantes adicionales de plan familiar',
+        detail.summary.family_plan_additional_members,
       ],
       [
         'Snapshot de visitas',
@@ -522,8 +526,9 @@ export class MarketingExcelExportService {
     sheet.getCell('B7').numFmt =
       '$#,##0.00;[Red]-$#,##0.00';
     sheet.getCell('B8').numFmt = '#,##0';
+    sheet.getCell('B9').numFmt = '#,##0';
 
-    sheet.getColumn(1).width = 27;
+    sheet.getColumn(1).width = 36;
     sheet.getColumn(2).width = 52;
     sheet.getColumn(2).alignment = {
       wrapText: true,
@@ -580,7 +585,7 @@ export class MarketingExcelExportService {
       'Folio',
       'Total listado',
       'Total pagado',
-      'Revisión',
+      'Clasificación',
       'Snapshot ID',
       'Fila fuente',
     ];
@@ -711,14 +716,35 @@ export class MarketingExcelExportService {
       row.id_folio,
       row.total,
       row.total_pagado,
-      (
-        row.venta_sin_ingreso_positivo
-          ? 'REVISAR'
-          : ''
+      this.resolveAttributionClassification(
+        row,
       ),
       row.snapshot_id,
       row.source_row_id,
     ];
+  }
+
+  private resolveAttributionClassification(
+    row: MarketingAttributionDetailRow,
+  ): string {
+    if (
+      row.attribution_classification
+      === 'FAMILY_PLAN_ADDITIONAL_MEMBER'
+    ) {
+      return (
+        'Integrante adicional de plan familiar '
+        + '· importe en titular'
+      );
+    }
+
+    if (
+      row.attribution_classification
+      === 'NON_POSITIVE_AMOUNT_REVIEW'
+    ) {
+      return 'Revisar importe en fuente';
+    }
+
+    return 'Venta estándar';
   }
 
   private buildSummaryMetrics(

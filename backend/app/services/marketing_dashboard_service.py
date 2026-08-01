@@ -53,6 +53,24 @@ CANCELLED_STATUS_TERMS = (
     "ANULADO",
     "ANULADA",
 )
+
+ATTRIBUTION_CLASS_STANDARD = "STANDARD_SALE"
+ATTRIBUTION_CLASS_FAMILY_ADDITIONAL = (
+    "FAMILY_PLAN_ADDITIONAL_MEMBER"
+)
+ATTRIBUTION_CLASS_REVIEW = (
+    "NON_POSITIVE_AMOUNT_REVIEW"
+)
+
+FAMILY_PLAN_ADDITIONAL_MEMBER_TARIFFS = frozenset(
+    {
+        (
+            "DOMICILIADO 12 MESES PLAN FAMILIAR "
+            "$999 (ADULTO + ADULTO)"
+        ),
+    }
+)
+
 FIXED_LIMITATIONS = (
     "Los leads se capturan de forma agregada por mes y sucursal.",
     "No existe todavía atribución individual lead -> visita.",
@@ -148,6 +166,29 @@ def _join_member_name(row: Any) -> str | None:
 
 def _mask_phone(phone: str) -> str:
     return f"*** *** {phone[-4:]}"
+
+
+def _classify_attributed_sale(
+    sale: SaleRecord,
+) -> str:
+    if sale.revenue > 0:
+        return ATTRIBUTION_CLASS_STANDARD
+
+    normalized_tariff = _normalize_text(
+        sale.tariff
+    )
+
+    is_family_additional_member = (
+        sale.revenue == Decimal("0")
+        and sale.listed_total == Decimal("0")
+        and normalized_tariff
+        in FAMILY_PLAN_ADDITIONAL_MEMBER_TARIFFS
+    )
+
+    if is_family_additional_member:
+        return ATTRIBUTION_CLASS_FAMILY_ADDITIONAL
+
+    return ATTRIBUTION_CLASS_REVIEW
 
 
 def _month_end(month_start: date) -> date:
@@ -945,17 +986,39 @@ def build_marketing_attribution_detail(
         )
     )
 
+    classified_attributions = [
+        (
+            attribution,
+            _classify_attributed_sale(
+                attribution.sale
+            ),
+        )
+        for attribution in attributions
+    ]
+
     total_revenue = sum(
         (
             attribution.sale.revenue
-            for attribution in attributions
+            for attribution, _
+            in classified_attributions
         ),
         Decimal("0"),
     )
-    non_positive_sales = sum(
+
+    review_sales = sum(
         1
-        for attribution in attributions
-        if attribution.sale.revenue <= 0
+        for _, classification
+        in classified_attributions
+        if classification
+        == ATTRIBUTION_CLASS_REVIEW
+    )
+
+    family_plan_additional_members = sum(
+        1
+        for _, classification
+        in classified_attributions
+        if classification
+        == ATTRIBUTION_CLASS_FAMILY_ADDITIONAL
     )
 
     return {
@@ -968,7 +1031,11 @@ def build_marketing_attribution_detail(
         "summary": {
             "sales": len(attributions),
             "sales_revenue": float(total_revenue),
-            "non_positive_sales": non_positive_sales,
+            "review_sales": review_sales,
+            "non_positive_sales": review_sales,
+            "family_plan_additional_members": (
+                family_plan_additional_members
+            ),
         },
         "source": {
             "visit_snapshot_id": visit_result.snapshot_id,
@@ -1014,14 +1081,23 @@ def build_marketing_attribution_detail(
                 "total_pagado": float(
                     attribution.sale.revenue
                 ),
+                "attribution_classification": (
+                    classification
+                ),
+                "amount_assigned_to_primary_member": (
+                    classification
+                    == ATTRIBUTION_CLASS_FAMILY_ADDITIONAL
+                ),
                 "venta_sin_ingreso_positivo": (
-                    attribution.sale.revenue <= 0
+                    classification
+                    == ATTRIBUTION_CLASS_REVIEW
                 ),
                 "snapshot_id": attribution.sale.snapshot_id,
                 "source_row_id": (
                     attribution.sale.source_row_id
                 ),
             }
-            for attribution in attributions
+            for attribution, classification
+            in classified_attributions
         ],
     }
