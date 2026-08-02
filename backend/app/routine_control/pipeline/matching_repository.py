@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from app.models.routine_control import (
     RoutineAssignmentEvidenceORM,
@@ -51,6 +51,7 @@ class RoutineControlMatchingRepository:
         statement = (
             select(RoutineControlMemberORM)
             .where(
+                RoutineControlMemberORM.source_system == "gasca",
                 RoutineControlMemberORM.external_member_id
                 == external_member_id
             )
@@ -65,6 +66,7 @@ class RoutineControlMatchingRepository:
         statement = (
             select(RoutineControlMemberORM)
             .where(
+                RoutineControlMemberORM.source_system == "gasca",
                 RoutineControlMemberORM.email_normalized
                 == email_normalized
             )
@@ -94,6 +96,44 @@ class RoutineControlMatchingRepository:
         evidence_id: int,
     ) -> RoutineAssignmentEvidenceORM | None:
         return self._session.get(RoutineAssignmentEvidenceORM, evidence_id)
+
+    def find_evidences_by_ids(
+        self,
+        evidence_ids: Iterable[int],
+    ) -> list[RoutineAssignmentEvidenceORM]:
+        ids = sorted(set(evidence_ids))
+        if not ids:
+            return []
+        statement = (
+            select(RoutineAssignmentEvidenceORM)
+            .where(RoutineAssignmentEvidenceORM.id.in_(ids))
+            .order_by(RoutineAssignmentEvidenceORM.id.asc())
+        )
+        return list(self._session.execute(statement).scalars().all())
+
+    def find_evidences_by_provider_run(
+        self,
+        provider_run_id: int,
+    ) -> list[RoutineAssignmentEvidenceORM]:
+        statement = (
+            select(RoutineAssignmentEvidenceORM)
+            .where(
+                or_(
+                    RoutineAssignmentEvidenceORM.first_provider_run_id
+                    == provider_run_id,
+                    RoutineAssignmentEvidenceORM.last_provider_run_id
+                    == provider_run_id,
+                )
+            )
+            .order_by(RoutineAssignmentEvidenceORM.id.asc())
+        )
+        return list(self._session.execute(statement).scalars().all())
+
+    def find_active_links_by_evidence_id(
+        self,
+        evidence_id: int,
+    ) -> list[RoutineControlMemberEvidenceORM]:
+        return self.find_active_links_by_evidence_ids((evidence_id,))
 
     def find_evidences_by_identities(
         self,

@@ -32,6 +32,12 @@ def build_member_evidence_advisory_lock_key(
     return int.from_bytes(digest[:8], byteorder="big", signed=True)
 
 
+def build_evidence_link_advisory_lock_key(*, evidence_id: int) -> int:
+    payload = f"routine-evidence-link\x00{evidence_id}".encode("ascii")
+    digest = hashlib.sha256(payload).digest()
+    return int.from_bytes(digest[:8], byteorder="big", signed=True)
+
+
 class RoutineControlMemberEvidenceRepository:
     def __init__(self, session: Any) -> None:
         self._session = session
@@ -48,6 +54,14 @@ class RoutineControlMemberEvidenceRepository:
         self._session.execute(
             text("SELECT pg_advisory_xact_lock(:lock_key)"),
             {"lock_key": lock_key},
+        )
+
+    def acquire_evidence_lock(self, *, evidence_id: int) -> None:
+        self._session.execute(
+            text("SELECT pg_advisory_xact_lock(:lock_key)"),
+            {"lock_key": build_evidence_link_advisory_lock_key(
+                evidence_id=evidence_id
+            )},
         )
 
     def find_member(self, member_id: int) -> RoutineControlMemberORM | None:
@@ -70,6 +84,21 @@ class RoutineControlMemberEvidenceRepository:
             RoutineControlMemberEvidenceORM.evidence_id == evidence_id,
         )
         return self._session.execute(statement).scalar_one_or_none()
+
+    def find_active_by_evidence(
+        self,
+        *,
+        evidence_id: int,
+    ) -> list[RoutineControlMemberEvidenceORM]:
+        statement = (
+            select(RoutineControlMemberEvidenceORM)
+            .where(
+                RoutineControlMemberEvidenceORM.evidence_id == evidence_id,
+                RoutineControlMemberEvidenceORM.is_active.is_(True),
+            )
+            .order_by(RoutineControlMemberEvidenceORM.id.asc())
+        )
+        return list(self._session.execute(statement).scalars().all())
 
     def add(self, link: RoutineControlMemberEvidenceORM) -> None:
         self._session.add(link)

@@ -8,6 +8,9 @@ from sqlalchemy.exc import IntegrityError
 from app.extensions import db
 from app.models.routine_control import RoutineAssignmentEvidenceORM
 from app.routine_control.domain.commands import RegisterRoutineEvidenceCommand
+from app.routine_control.domain.identity_normalization import (
+    normalize_identity_name,
+)
 from app.routine_control.domain.exceptions import (
     RoutineControlEvidenceIdentityConflict,
     RoutineControlEvidenceValidationError,
@@ -21,6 +24,8 @@ from app.routine_control.repositories.evidence_repository import (
 _SOURCE_FIELDS = (
     "external_member_id",
     "external_routine_id",
+    "member_name_original",
+    "member_name_normalized",
     "email_original",
     "email_normalized",
     "provider_center_key",
@@ -52,6 +57,13 @@ def _validate_command(command: RegisterRoutineEvidenceCommand) -> None:
             raise RoutineControlEvidenceValidationError(
                 f"{field_name} no puede estar vacío."
             )
+
+    if normalize_identity_name(command.member_name_original) != (
+        command.member_name_normalized
+    ):
+        raise RoutineControlEvidenceValidationError(
+            "member_name_normalized no corresponde al nombre original."
+        )
 
     if (
         not isinstance(command.routine_count, int)
@@ -85,6 +97,8 @@ def _source_values(command: RegisterRoutineEvidenceCommand) -> dict[str, Any]:
     return {
         "external_member_id": command.external_member_id,
         "external_routine_id": command.external_routine_id,
+        "member_name_original": command.member_name_original,
+        "member_name_normalized": command.member_name_normalized,
         "email_original": command.email_original,
         "email_normalized": command.email_normalized,
         "provider_center_key": command.provider_center_key,

@@ -24,6 +24,8 @@ from app.routine_control.repositories.member_evidence_repository import (
 
 
 _MATCH_METHODS = frozenset(("EXTERNAL_ID", "EMAIL"))
+_IDENTITY_CORROBORATORS = frozenset(("EMAIL", "NAME", "EMAIL_AND_NAME"))
+_MATCHING_CONTRACT_VERSION = "IDENTITY_TEMPORAL_V2"
 
 
 def _validate_positive_id(value: object, field_name: str) -> None:
@@ -54,6 +56,39 @@ def _validate_link_command(command: LinkRoutineMemberEvidenceCommand) -> None:
         raise RoutineControlMemberEvidenceValidationError(
             "match_method debe ser EXTERNAL_ID o EMAIL."
         )
+    audit_values = (
+        command.identity_corroborator,
+        command.temporal_delta_days,
+        command.matching_contract_version,
+    )
+    if any(value is not None for value in audit_values):
+        if any(value is None for value in audit_values):
+            raise RoutineControlMemberEvidenceValidationError(
+                "La auditoría V2 del vínculo debe estar completa."
+            )
+        if command.identity_corroborator not in _IDENTITY_CORROBORATORS:
+            raise RoutineControlMemberEvidenceValidationError(
+                "identity_corroborator es inválido."
+            )
+        if (
+            not isinstance(command.temporal_delta_days, int)
+            or isinstance(command.temporal_delta_days, bool)
+            or command.temporal_delta_days < -30
+        ):
+            raise RoutineControlMemberEvidenceValidationError(
+                "temporal_delta_days debe ser entero mayor o igual a -30."
+            )
+        if command.matching_contract_version != _MATCHING_CONTRACT_VERSION:
+            raise RoutineControlMemberEvidenceValidationError(
+                "matching_contract_version es inválida."
+            )
+        if (
+            command.match_method == "EMAIL"
+            and command.identity_corroborator == "NAME"
+        ):
+            raise RoutineControlMemberEvidenceValidationError(
+                "El fallback EMAIL debe estar corroborado por email."
+            )
     _validate_timezone(command.linked_at_utc, "linked_at_utc")
 
 
@@ -81,17 +116,31 @@ def _result(
         changed=changed,
         is_active=bool(link.is_active),
         match_method=link.match_method,
+        identity_corroborator=link.identity_corroborator,
+        temporal_delta_days=link.temporal_delta_days,
+        matching_contract_version=link.matching_contract_version,
     )
 
 
-def _apply_active_match_method(
+def _apply_active_match_details(
     link: RoutineControlMemberEvidenceORM,
-    match_method: str,
+    command: LinkRoutineMemberEvidenceCommand,
 ) -> bool:
-    if link.match_method == "EMAIL" and match_method == "EXTERNAL_ID":
+    changed = False
+    if link.match_method == "EMAIL" and command.match_method == "EXTERNAL_ID":
         link.match_method = "EXTERNAL_ID"
-        return True
-    return False
+        changed = True
+    if command.matching_contract_version is not None:
+        for field_name in (
+            "identity_corroborator",
+            "temporal_delta_days",
+            "matching_contract_version",
+        ):
+            value = getattr(command, field_name)
+            if getattr(link, field_name) != value:
+                setattr(link, field_name, value)
+                changed = True
+    return changed
 
 
 def _recover_link_after_integrity_error(
@@ -102,6 +151,7 @@ def _recover_link_after_integrity_error(
 ) -> RoutineControlMemberEvidenceResult:
     session = repository.session
     try:
+        repository.acquire_evidence_lock(evidence_id=command.evidence_id)
         repository.acquire_pair_lock(
             member_id=command.member_id,
             evidence_id=command.evidence_id,
@@ -118,7 +168,19 @@ def _recover_link_after_integrity_error(
                 "Un vínculo inactivo no puede reactivarse sin perder auditoría."
             )
 
-        changed = _apply_active_match_method(link, command.match_method)
+        conflicting = [
+            active
+            for active in repository.find_active_by_evidence(
+                evidence_id=command.evidence_id
+            )
+            if int(active.member_id) != command.member_id
+        ]
+        if conflicting:
+            raise RoutineControlMemberEvidenceConflict(
+                "La evidencia ya tiene otro vínculo activo."
+            )
+
+        changed = _apply_active_match_details(link, command)
         session.flush()
         result = _result(link, created=False, changed=changed)
         session.commit()
@@ -132,9 +194,12 @@ def link_routine_member_evidence(
     command: LinkRoutineMemberEvidenceCommand,
     *,
     repository: RoutineControlMemberEvidenceRepository | None = None,
+    manage_transaction: bool = True,
 ) -> RoutineControlMemberEvidenceResult:
     if not isinstance(command, LinkRoutineMemberEvidenceCommand):
         raise TypeError("command debe ser LinkRoutineMemberEvidenceCommand.")
+    if not isinstance(manage_transaction, bool):
+        raise TypeError("manage_transaction debe ser booleano.")
     _validate_link_command(command)
 
     link_repository = repository or RoutineControlMemberEvidenceRepository(
@@ -143,6 +208,7 @@ def link_routine_member_evidence(
     session = link_repository.session
 
     try:
+        link_repository.acquire_evidence_lock(evidence_id=command.evidence_id)
         link_repository.acquire_pair_lock(
             member_id=command.member_id,
             evidence_id=command.evidence_id,
@@ -166,6 +232,9 @@ def link_routine_member_evidence(
                 member_id=command.member_id,
                 evidence_id=command.evidence_id,
                 match_method=command.match_method,
+                identity_corroborator=command.identity_corroborator,
+                temporal_delta_days=command.temporal_delta_days,
+                matching_contract_version=command.matching_contract_version,
                 is_active=True,
                 linked_by_provider_run_id=command.provider_run_id,
                 linked_at_utc=command.linked_at_utc or datetime.now(timezone.utc),
@@ -182,13 +251,29 @@ def link_routine_member_evidence(
                     "Un vínculo inactivo no puede reactivarse sin perder auditoría."
                 )
             created = False
-            changed = _apply_active_match_method(link, command.match_method)
+            changed = _apply_active_match_details(link, command)
+
+        active_links = link_repository.find_active_by_evidence(
+            evidence_id=command.evidence_id
+        )
+        conflicting = [
+            active
+            for active in active_links
+            if int(active.member_id) != command.member_id
+        ]
+        if conflicting:
+            raise RoutineControlMemberEvidenceConflict(
+                "La evidencia ya tiene otro vínculo activo."
+            )
 
         session.flush()
         result = _result(link, created=created, changed=changed)
-        session.commit()
+        if manage_transaction:
+            session.commit()
         return result
     except IntegrityError as exc:
+        if not manage_transaction:
+            raise
         session.rollback()
         return _recover_link_after_integrity_error(
             command=command,
@@ -196,7 +281,8 @@ def link_routine_member_evidence(
             integrity_error=exc,
         )
     except Exception:
-        session.rollback()
+        if manage_transaction:
+            session.rollback()
         raise
 
 
@@ -204,9 +290,12 @@ def unlink_routine_member_evidence(
     command: UnlinkRoutineMemberEvidenceCommand,
     *,
     repository: RoutineControlMemberEvidenceRepository | None = None,
+    manage_transaction: bool = True,
 ) -> RoutineControlMemberEvidenceResult:
     if not isinstance(command, UnlinkRoutineMemberEvidenceCommand):
         raise TypeError("command debe ser UnlinkRoutineMemberEvidenceCommand.")
+    if not isinstance(manage_transaction, bool):
+        raise TypeError("manage_transaction debe ser booleano.")
     _validate_unlink_command(command)
 
     link_repository = repository or RoutineControlMemberEvidenceRepository(
@@ -215,6 +304,7 @@ def unlink_routine_member_evidence(
     session = link_repository.session
 
     try:
+        link_repository.acquire_evidence_lock(evidence_id=command.evidence_id)
         link_repository.acquire_pair_lock(
             member_id=command.member_id,
             evidence_id=command.evidence_id,
@@ -239,8 +329,10 @@ def unlink_routine_member_evidence(
 
         session.flush()
         result = _result(link, created=False, changed=changed)
-        session.commit()
+        if manage_transaction:
+            session.commit()
         return result
     except Exception:
-        session.rollback()
+        if manage_transaction:
+            session.rollback()
         raise

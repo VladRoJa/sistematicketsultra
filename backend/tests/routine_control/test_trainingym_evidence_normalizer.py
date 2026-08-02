@@ -69,6 +69,7 @@ class TrainingymEvidenceNormalizerTestCase(unittest.TestCase):
         required = {
             "id",
             "Idsocioexterno",
+            "NombreApellidos",
             "Email",
             "Técnico",
             "NºRutinas",
@@ -157,6 +158,20 @@ class TrainingymEvidenceNormalizerTestCase(unittest.TestCase):
         self.assertEqual(command.instructor_name, "José Núñez")
         self.assertEqual(command.instructor_name_normalized, "jose nunez")
 
+    def test_member_name_is_persisted_and_normalized_deterministically(self) -> None:
+        row = dict(self.valid_row)
+        row["NombreApellidos"] = "  MARÍA-José   O'Connor.  "
+        command = self._normalize(row)
+        self.assertEqual(command.member_name_original, "MARÍA-José O'Connor.")
+        self.assertEqual(command.member_name_normalized, "maria jose o connor")
+
+    def test_empty_member_name_is_accepted_for_email_matching(self) -> None:
+        row = dict(self.valid_row)
+        row["NombreApellidos"] = "   "
+        command = self._normalize(row)
+        self.assertIsNone(command.member_name_original)
+        self.assertIsNone(command.member_name_normalized)
+
     def test_evidence_identity_key_is_stable(self) -> None:
         self.assertEqual(
             self._normalize().evidence_identity_key,
@@ -178,6 +193,17 @@ class TrainingymEvidenceNormalizerTestCase(unittest.TestCase):
             self._normalize().payload_hash,
             self._normalize(row).payload_hash,
         )
+
+    def test_member_name_changes_payload_hash_but_not_identity(self) -> None:
+        row = dict(self.valid_row)
+        row["NombreApellidos"] = "Nombre Corregido"
+        original = self._normalize()
+        changed = self._normalize(row)
+        self.assertEqual(
+            original.evidence_identity_key,
+            changed.evidence_identity_key,
+        )
+        self.assertNotEqual(original.payload_hash, changed.payload_hash)
 
     def test_observed_at_does_not_change_payload_hash(self) -> None:
         later = self.observed_at + timedelta(days=1)
@@ -226,6 +252,26 @@ class TrainingymEvidenceNormalizerTestCase(unittest.TestCase):
             worksheet = workbook.active
             worksheet.title = "Export"
             worksheet.append([header for header in self.headers if header != "Fecha"])
+            workbook.save(path)
+            workbook.close()
+            with self.assertRaises(TrainingymMissingHeaderError):
+                load_trainingym_evidence_commands_from_xlsx(
+                    path,
+                    observed_at_utc=self.observed_at,
+                    provider_run_id=41,
+                )
+
+    def test_missing_member_name_header_fails_batch(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "missing_member_name_header.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Export"
+            worksheet.append([
+                header
+                for header in self.headers
+                if header != "NombreApellidos"
+            ])
             workbook.save(path)
             workbook.close()
             with self.assertRaises(TrainingymMissingHeaderError):

@@ -31,6 +31,8 @@ class RegisterRoutineEvidenceCommand:
     evidence_identity_key: str
     external_member_id: str | None
     external_routine_id: str | None
+    member_name_original: str | None
+    member_name_normalized: str | None
     email_original: str | None
     email_normalized: str | None
     provider_center_key: str
@@ -52,6 +54,9 @@ class LinkRoutineMemberEvidenceCommand:
     member_id: int
     evidence_id: int
     match_method: str
+    identity_corroborator: str | None = None
+    temporal_delta_days: int | None = None
+    matching_contract_version: str | None = None
     provider_run_id: int | None = None
     linked_at_utc: datetime | None = None
 

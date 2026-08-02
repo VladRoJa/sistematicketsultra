@@ -113,6 +113,8 @@ class RoutineEvidenceIngestionPostgresTestCase(unittest.TestCase):
             evidence_identity_key=evidence_identity_key,
             external_member_id="external-member-1",
             external_routine_id="external-routine-1",
+            member_name_original="Member One",
+            member_name_normalized="member one",
             email_original="Member@Example.com",
             email_normalized="member@example.com",
             provider_center_key="center-1",
@@ -171,6 +173,8 @@ class RoutineEvidenceIngestionPostgresTestCase(unittest.TestCase):
         self.assertIsNone(evidence.first_provider_run_id)
         self.assertIsNone(evidence.last_provider_run_id)
         self.assertIsNone(evidence.invalidated_at_utc)
+        self.assertEqual(evidence.member_name_original, "Member One")
+        self.assertEqual(evidence.member_name_normalized, "member one")
 
     def test_identical_reexecution_is_idempotent(self) -> None:
         command = self._command()
@@ -201,6 +205,8 @@ class RoutineEvidenceIngestionPostgresTestCase(unittest.TestCase):
             command,
             external_member_id="external-member-2",
             external_routine_id="external-routine-2",
+            member_name_original="Updated Member",
+            member_name_normalized="updated member",
             email_original="Updated@Example.com",
             email_normalized="updated@example.com",
             provider_center_key="center-2",
@@ -220,6 +226,8 @@ class RoutineEvidenceIngestionPostgresTestCase(unittest.TestCase):
         self.assertTrue(result.source_changed)
         self.assertEqual(result.previous_payload_hash, "a" * 64)
         self.assertEqual(evidence.external_member_id, "external-member-2")
+        self.assertEqual(evidence.member_name_original, "Updated Member")
+        self.assertEqual(evidence.member_name_normalized, "updated member")
         self.assertEqual(evidence.routine_count, 2)
         self.assertEqual(evidence.weighing_count, 1)
         self.assertEqual(evidence.payload_hash, "b" * 64)
@@ -304,6 +312,18 @@ class RoutineEvidenceIngestionPostgresTestCase(unittest.TestCase):
             with self.subTest(command=command):
                 with self.assertRaises(RoutineControlEvidenceValidationError):
                     register_routine_evidence(command)
+
+        count = RoutineAssignmentEvidenceORM.query.filter_by(
+            provider_key=self.provider_key
+        ).count()
+        self.assertEqual(count, 0)
+
+    def test_inconsistent_normalized_member_name_is_rejected(self) -> None:
+        with self.assertRaises(RoutineControlEvidenceValidationError):
+            register_routine_evidence(replace(
+                self._command(),
+                member_name_normalized="different member",
+            ))
 
         count = RoutineAssignmentEvidenceORM.query.filter_by(
             provider_key=self.provider_key

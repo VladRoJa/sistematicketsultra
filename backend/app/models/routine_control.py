@@ -1150,6 +1150,15 @@ class RoutineAssignmentEvidenceORM(db.Model):
         nullable=True,
     )
 
+    member_name_original = db.Column(
+        db.String(255),
+        nullable=True,
+    )
+    member_name_normalized = db.Column(
+        db.String(255),
+        nullable=True,
+    )
+
     email_original = db.Column(
         db.String(320),
         nullable=True,
@@ -1372,6 +1381,18 @@ class RoutineControlMemberEvidenceORM(db.Model):
     match_method = db.Column(
         db.String(32),
         nullable=False,
+    )
+    identity_corroborator = db.Column(
+        db.String(40),
+        nullable=True,
+    )
+    temporal_delta_days = db.Column(
+        db.Integer,
+        nullable=True,
+    )
+    matching_contract_version = db.Column(
+        db.String(80),
+        nullable=True,
     )
     is_active = db.Column(
         db.Boolean,

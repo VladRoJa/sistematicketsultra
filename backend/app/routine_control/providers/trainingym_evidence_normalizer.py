@@ -16,6 +16,9 @@ from openpyxl.utils.datetime import WINDOWS_EPOCH, from_excel
 from openpyxl.utils.exceptions import InvalidFileException
 
 from app.routine_control.domain.commands import RegisterRoutineEvidenceCommand
+from app.routine_control.domain.identity_normalization import (
+    normalize_identity_name,
+)
 
 
 _SHEET_NAME = "Export"
@@ -23,6 +26,7 @@ _REQUIRED_HEADERS = frozenset(
     {
         "id",
         "Idsocioexterno",
+        "NombreApellidos",
         "Email",
         "Técnico",
         "NºRutinas",
@@ -117,6 +121,11 @@ def _normalize_email(value: Any) -> tuple[str | None, str | None]:
     if _EMAIL_PATTERN.fullmatch(normalized) is None:
         return original, None
     return original, normalized
+
+
+def _normalize_member_name(value: Any) -> tuple[str | None, str | None]:
+    original = _collapse_spaces(value) or None
+    return original, normalize_identity_name(original)
 
 
 def _aware_utc(value: datetime) -> datetime:
@@ -311,10 +320,15 @@ def normalize_trainingym_evidence_row(
         )
 
     activity_date = _activity_date(row.get("Fecha"), excel_epoch=excel_epoch)
+    member_name_original, member_name_normalized = _normalize_member_name(
+        row.get("NombreApellidos")
+    )
     email_original, email_normalized = _normalize_email(row.get("Email"))
     operational_payload = {
         "provider_member_id": provider_member_id,
         "external_member_id": external_member_id,
+        "member_name_original": member_name_original,
+        "member_name_normalized": member_name_normalized,
         "email_original": email_original,
         "email_normalized": email_normalized,
         "provider_center_key": provider_center_key,
@@ -338,6 +352,8 @@ def normalize_trainingym_evidence_row(
         ),
         external_member_id=external_member_id,
         external_routine_id=None,
+        member_name_original=member_name_original,
+        member_name_normalized=member_name_normalized,
         email_original=email_original,
         email_normalized=email_normalized,
         provider_center_key=provider_center_key,

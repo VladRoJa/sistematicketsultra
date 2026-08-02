@@ -15,13 +15,11 @@ from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
 from app.routine_control.domain.commands import (
-    LinkRoutineMemberEvidenceCommand,
     ReconcileRoutineMemberCommand,
 )
 from app.routine_control.domain.exceptions import (
     RoutineControlEvidenceError,
     RoutineControlMemberError,
-    RoutineControlMemberEvidenceError,
 )
 from app.routine_control.pipeline.branch_resolver import (
     resolve_gasca_branch_id,
@@ -52,9 +50,6 @@ from app.routine_control.providers.trainingym_evidence_normalizer import (
 from app.routine_control.repositories.evidence_repository import (
     RoutineAssignmentEvidenceRepository,
 )
-from app.routine_control.repositories.member_evidence_repository import (
-    RoutineControlMemberEvidenceRepository,
-)
 from app.routine_control.repositories.member_repository import (
     RoutineControlMemberRepository,
 )
@@ -64,8 +59,8 @@ from app.routine_control.repositories.reconciliation_repository import (
 from app.routine_control.services.evidence_ingestion_service import (
     register_routine_evidence,
 )
-from app.routine_control.services.member_evidence_service import (
-    link_routine_member_evidence,
+from app.routine_control.services.evidence_rematching_service import (
+    rematch_routine_evidences,
 )
 from app.routine_control.services.member_ingestion_service import (
     upsert_routine_member,
@@ -77,6 +72,11 @@ from app.routine_control.services.reconciliation_service import (
 
 LOGGER = logging.getLogger(__name__)
 _REQUESTED_BY_UNSAFE = re.compile(r"[^A-Za-z0-9_.-]+")
+_SAFE_EXCEPTION_TYPE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,119}$")
+_UNEXPECTED_ERROR_CODE = "ROUTINE_CONTROL_PIPELINE_UNEXPECTED_ERROR"
+_UNEXPECTED_PUBLIC_MESSAGE = (
+    "El pipeline terminó por un error interno inesperado."
+)
 _STATUS_KEYS = (
     "CLASSIFIED/SIN_RUTINA",
     "CLASSIFIED/CON_RUTINA",
@@ -116,6 +116,10 @@ class ManualRoutineControlPipelineResult:
     members_reconciled: int
     status_counts: Mapping[str, int]
     succeeded: bool
+    insufficient_identity_evidences: int = 0
+    reactivation_required_evidences: int = 0
+    error_code: str | None = None
+    error_message: str | None = None
 
     def to_dict(self) -> dict[str, object]:
         values = {
@@ -125,6 +129,37 @@ class ManualRoutineControlPipelineResult:
         }
         values["status_counts"] = dict(self.status_counts)
         return values
+
+
+@dataclass(frozen=True, slots=True)
+class _MatchingCounterSnapshot:
+    links_created: int
+    links_existing: int
+    links_by_external_id: int
+    links_by_email: int
+    unmatched_evidences: int
+    ambiguous_evidences: int
+    insufficient_identity_evidences: int
+    reactivation_required_evidences: int
+    considered_member_ids: frozenset[int]
+
+
+@dataclass(frozen=True, slots=True)
+class _UnexpectedErrorDetails:
+    error_code: str
+    exception_type: str
+    public_message: str
+
+
+def _unexpected_error_details(exc: BaseException) -> _UnexpectedErrorDetails:
+    exception_type = type(exc).__name__
+    if _SAFE_EXCEPTION_TYPE.fullmatch(exception_type) is None:
+        exception_type = "Exception"
+    return _UnexpectedErrorDetails(
+        error_code=_UNEXPECTED_ERROR_CODE,
+        exception_type=exception_type,
+        public_message=_UNEXPECTED_PUBLIC_MESSAGE,
+    )
 
 
 def _status_mapping(values: Mapping[str, int] | None = None):
@@ -301,6 +336,91 @@ def _status_key(classification_status: str, current_status: str | None) -> str:
     return f"{classification_status}/{current_status or 'NULL'}"
 
 
+def _dry_run_matching_counters(
+    *,
+    evidences: list[Any],
+    provider_run_id: int,
+    observed_at_utc: datetime,
+    matching: RoutineControlMatchingRepository,
+    session: Any,
+) -> _MatchingCounterSnapshot:
+    evidence_ids = [int(evidence.id) for evidence in evidences]
+    if evidence_ids:
+        rematching = rematch_routine_evidences(
+            evidence_ids,
+            provider_run_id,
+            observed_at_utc,
+            dry_run=True,
+            session=session,
+        )
+        items = rematching.items
+    else:
+        items = ()
+
+    active_links = matching.find_active_links_by_evidence_ids(evidence_ids)
+    active_links_by_id = {int(link.id): link for link in active_links}
+    links_created = 0
+    links_existing = 0
+    links_by_external_id = 0
+    links_by_email = 0
+    unmatched_evidences = 0
+    ambiguous_evidences = 0
+    insufficient_identity_evidences = 0
+    reactivation_required_evidences = 0
+    considered_member_ids: set[int] = set()
+
+    for item in items:
+        considered_member_ids.update(item.selection.considered_member_ids)
+        considered_member_ids.update(
+            action.member_id
+            for action in item.actions
+            if action.member_id is not None
+        )
+
+        if item.selection.status == "AMBIGUOUS":
+            ambiguous_evidences += 1
+        elif item.selection.status == "INSUFFICIENT_IDENTITY_DATA":
+            insufficient_identity_evidences += 1
+        elif item.selection.status != "MATCHED":
+            unmatched_evidences += 1
+
+        if any(
+            action.action == "reactivation required"
+            for action in item.actions
+        ):
+            reactivation_required_evidences += 1
+
+        kept_actions = [
+            action
+            for action in item.actions
+            if action.action == "keep" and action.link_id is not None
+        ]
+        for action in kept_actions:
+            link = active_links_by_id.get(int(action.link_id))
+            if link is None:
+                continue
+            if link.linked_by_provider_run_id == provider_run_id:
+                links_created += 1
+            else:
+                links_existing += 1
+            links_by_external_id += int(
+                action.match_method == "EXTERNAL_ID"
+            )
+            links_by_email += int(action.match_method == "EMAIL")
+
+    return _MatchingCounterSnapshot(
+        links_created=links_created,
+        links_existing=links_existing,
+        links_by_external_id=links_by_external_id,
+        links_by_email=links_by_email,
+        unmatched_evidences=unmatched_evidences,
+        ambiguous_evidences=ambiguous_evidences,
+        insufficient_identity_evidences=insufficient_identity_evidences,
+        reactivation_required_evidences=reactivation_required_evidences,
+        considered_member_ids=frozenset(considered_member_ids),
+    )
+
+
 def _reused_success_result(
     *,
     base: ManualRoutineControlPipelineResult,
@@ -341,29 +461,25 @@ def _reused_success_result(
     evidences = matching.find_evidences_by_identities(
         command.evidence_identity_key for command in trainingym_batch.commands
     )
-    links = matching.find_active_links_by_evidence_ids(
-        int(evidence.id) for evidence in evidences
+    matching_counters = _dry_run_matching_counters(
+        evidences=evidences,
+        provider_run_id=int(trainingym_provider_run.id),
+        observed_at_utc=observed_at_utc,
+        matching=matching,
+        session=session,
     )
-    member_ids.update(int(link.member_id) for link in links)
+    member_ids.update(matching_counters.considered_member_ids)
+    member_ids.update(
+        int(member.id)
+        for member in matching.find_gasca_members_by_emails(
+            command.email_normalized
+            for command in gasca_batch.commands
+            if command.email_normalized
+        )
+    )
     statuses = Counter()
     for member in matching.find_members_by_ids(member_ids):
         statuses[_status_key(member.classification_status, member.current_status)] += 1
-
-    linked_evidence_ids = {int(link.evidence_id) for link in links}
-    ambiguous = 0
-    unmatched = 0
-    for evidence in evidences:
-        if int(evidence.id) in linked_evidence_ids:
-            continue
-        candidates = (
-            matching.find_members_by_email(evidence.email_normalized)
-            if evidence.email_normalized
-            else []
-        )
-        if len({candidate.external_member_id for candidate in candidates}) > 1:
-            ambiguous += 1
-        else:
-            unmatched += 1
 
     return replace(
         base,
@@ -377,11 +493,18 @@ def _reused_success_result(
         trainingym_rejected=int(trainingym_provider_run.records_rejected),
         evidences_created=int(pipeline_run.evidences_created),
         evidences_updated=int(pipeline_run.evidences_updated),
-        links_existing=len(links),
-        links_by_external_id=sum(link.match_method == "EXTERNAL_ID" for link in links),
-        links_by_email=sum(link.match_method == "EMAIL" for link in links),
-        unmatched_evidences=unmatched,
-        ambiguous_evidences=ambiguous,
+        links_created=matching_counters.links_created,
+        links_existing=matching_counters.links_existing,
+        links_by_external_id=matching_counters.links_by_external_id,
+        links_by_email=matching_counters.links_by_email,
+        unmatched_evidences=matching_counters.unmatched_evidences,
+        ambiguous_evidences=matching_counters.ambiguous_evidences,
+        insufficient_identity_evidences=(
+            matching_counters.insufficient_identity_evidences
+        ),
+        reactivation_required_evidences=(
+            matching_counters.reactivation_required_evidences
+        ),
         incidents_created=int(pipeline_run.incidents_created),
         members_reconciled=len(member_ids),
         status_counts=_status_mapping(statuses),
@@ -457,7 +580,6 @@ def run_manual_routine_control_pipeline(
         dataset_key=TRAININGYM_DATASET_KEY,
         content_hash=trainingym_hash,
     )
-    pipeline_session.flush()
     base = _empty_result(
         pipeline_run_id=int(pipeline_run.id),
         reused=reused,
@@ -474,24 +596,29 @@ def run_manual_routine_control_pipeline(
         )
     )
     if reused and pipeline_run.status == "SUCCESS":
-        pipeline_session.commit()
-        return _reused_success_result(
-            base=base,
-            pipeline_run=pipeline_run,
-            gasca_provider_run=gasca_provider_run,
-            trainingym_provider_run=trainingym_provider_run,
-            gasca_path=gasca_path,
-            trainingym_path=trainingym_path,
-            observed_at_utc=observed_at,
-            session=pipeline_session,
-            gasca_resolver=gasca_resolver,
-            center_resolver=center_resolver,
-        )
+        try:
+            with pipeline_session.no_autoflush:
+                reused_result = _reused_success_result(
+                    base=base,
+                    pipeline_run=pipeline_run,
+                    gasca_provider_run=gasca_provider_run,
+                    trainingym_provider_run=trainingym_provider_run,
+                    gasca_path=gasca_path,
+                    trainingym_path=trainingym_path,
+                    observed_at_utc=observed_at,
+                    session=pipeline_session,
+                    gasca_resolver=gasca_resolver,
+                    center_resolver=center_resolver,
+                )
+        finally:
+            pipeline_session.rollback()
+        return reused_result
     if reused and pipeline_run.status == "RUNNING":
         pipeline_session.rollback()
         raise ManualRoutineControlPipelineError(
             "Ya existe una corrida RUNNING para estos archivos."
         )
+    pipeline_session.flush()
     runs.start_pipeline(
         pipeline_run,
         at_utc=datetime.now(timezone.utc),
@@ -517,7 +644,6 @@ def run_manual_routine_control_pipeline(
 
     member_repository = RoutineControlMemberRepository(pipeline_session)
     evidence_repository = RoutineAssignmentEvidenceRepository(pipeline_session)
-    link_repository = RoutineControlMemberEvidenceRepository(pipeline_session)
     reconciliation_repository = RoutineControlReconciliationRepository(
         pipeline_session
     )
@@ -724,78 +850,67 @@ def run_manual_routine_control_pipeline(
         links_by_email = 0
         unmatched_evidences = 0
         ambiguous_evidences = 0
-        for evidence_id in valid_evidence_ids:
-            evidence = matching.find_evidence(evidence_id)
-            if evidence is None:
-                raise ManualRoutineControlPipelineError(
-                    "La evidencia registrada no pudo releerse."
-                )
-            candidates = (
-                matching.find_members_by_external_id(
-                    evidence.external_member_id
-                )
-                if evidence.external_member_id
-                else []
+        insufficient_identity_evidences = 0
+        reactivation_required_evidences = 0
+        rematching = rematch_routine_evidences(
+            valid_evidence_ids,
+            int(trainingym_provider_run.id),
+            observed_at,
+            dry_run=False,
+            session=pipeline_session,
+        )
+        reconciliation_ids.update(rematching.affected_member_ids)
+        for item in rematching.items:
+            actions = item.actions
+            linked_actions = [
+                action
+                for action in actions
+                if action.action in ("link", "keep")
+            ]
+            links_created += sum(
+                action.action == "link" for action in linked_actions
             )
-            match_method = "EXTERNAL_ID"
-            if not candidates:
-                match_method = "EMAIL"
-                candidates = (
-                    matching.find_members_by_email(evidence.email_normalized)
-                    if evidence.email_normalized
-                    else []
-                )
-                external_ids = {
-                    member.external_member_id for member in candidates
-                }
-                if len(external_ids) > 1:
-                    ambiguous_evidences += 1
-                    for member in candidates:
-                        member_id = int(member.id)
-                        reconciliation_ids.add(member_id)
-                        created, resolved = _sync_incident(
-                            incident_repository,
-                            member_id=member_id,
-                            incident_type="COINCIDENCIA_AMBIGUA",
-                            active=True,
-                            observed_at_utc=observed_at,
-                        )
-                        incidents_created += int(created)
-                        incidents_resolved += int(resolved)
-                    continue
-                if not candidates:
-                    unmatched_evidences += 1
-                    continue
+            links_existing += sum(
+                action.action == "keep" for action in linked_actions
+            )
+            links_by_external_id += sum(
+                action.match_method == "EXTERNAL_ID"
+                for action in linked_actions
+            )
+            links_by_email += sum(
+                action.match_method == "EMAIL" for action in linked_actions
+            )
 
-            for member in candidates:
-                member_id = int(member.id)
+            if item.selection.status == "AMBIGUOUS":
+                ambiguous_evidences += 1
+            elif item.selection.status == "INSUFFICIENT_IDENTITY_DATA":
+                insufficient_identity_evidences += 1
+            elif item.selection.status != "MATCHED":
+                unmatched_evidences += 1
+            if any(
+                action.action == "reactivation required"
+                for action in actions
+            ):
+                reactivation_required_evidences += 1
+
+            incident_member_ids = set(
+                item.selection.considered_member_ids
+            )
+            incident_member_ids.update(
+                action.member_id
+                for action in actions
+                if action.member_id is not None
+            )
+            ambiguous_member_ids = set(
+                item.selection.ambiguous_member_ids
+            )
+            for member_id in sorted(incident_member_ids):
                 reconciliation_ids.add(member_id)
-                try:
-                    link_result = link_routine_member_evidence(
-                        LinkRoutineMemberEvidenceCommand(
-                            member_id=member_id,
-                            evidence_id=evidence_id,
-                            match_method=match_method,
-                            provider_run_id=int(trainingym_provider_run.id),
-                            linked_at_utc=observed_at,
-                        ),
-                        repository=link_repository,
-                    )
-                except RoutineControlMemberEvidenceError as exc:
-                    LOGGER.warning(
-                        "Evidence link skipped: %s",
-                        type(exc).__name__,
-                    )
-                    continue
-                links_created += int(link_result.created)
-                links_existing += int(not link_result.created)
-                links_by_external_id += int(match_method == "EXTERNAL_ID")
-                links_by_email += int(match_method == "EMAIL")
                 created, resolved = _sync_incident(
                     incident_repository,
                     member_id=member_id,
                     incident_type="COINCIDENCIA_AMBIGUA",
-                    active=False,
+                    active=member_id in ambiguous_member_ids,
                     observed_at_utc=observed_at,
                 )
                 incidents_created += int(created)
@@ -832,6 +947,12 @@ def run_manual_routine_control_pipeline(
             links_by_email=links_by_email,
             unmatched_evidences=unmatched_evidences,
             ambiguous_evidences=ambiguous_evidences,
+            insufficient_identity_evidences=(
+                insufficient_identity_evidences
+            ),
+            reactivation_required_evidences=(
+                reactivation_required_evidences
+            ),
             incidents_created=incidents_created,
             incidents_resolved=incidents_resolved,
             members_reconciled=len(reconciliation_ids),
@@ -852,14 +973,36 @@ def run_manual_routine_control_pipeline(
         return replace(result, succeeded=True)
 
     except Exception as exc:
+        structural_error = isinstance(
+            exc,
+            (GascaNormalizationError, TrainingymNormalizationError),
+        )
+        unexpected_error = _unexpected_error_details(exc)
+        failure_error_code = (
+            type(exc).__name__
+            if structural_error
+            else unexpected_error.error_code
+        )
+        failure_error_message = (
+            type(exc).__name__
+            if structural_error
+            else unexpected_error.public_message
+        )
+        failure_pipeline_run_id = int(pipeline_run.id)
+        failure_stage = pipeline_run.current_stage or "UNKNOWN"
+        failure_provider = (
+            active_provider_run.provider_key
+            if active_provider_run is not None
+            else "NONE"
+        )
         pipeline_session.rollback()
         try:
             if active_provider_run is not None:
                 runs.finish_provider_failed(
                     active_provider_run,
                     at_utc=datetime.now(timezone.utc),
-                    error_code=type(exc).__name__,
-                    error_message=type(exc).__name__,
+                    error_code=failure_error_code,
+                    error_message=failure_error_message,
                 )
             pipeline_run.members_created = members_created
             pipeline_run.members_updated = members_updated
@@ -871,19 +1014,38 @@ def run_manual_routine_control_pipeline(
             runs.finish_pipeline_failed(
                 pipeline_run,
                 at_utc=datetime.now(timezone.utc),
-                error_code=type(exc).__name__,
-                error_message=type(exc).__name__,
+                error_code=failure_error_code,
+                error_message=failure_error_message,
             )
             pipeline_session.commit()
         except Exception:
             pipeline_session.rollback()
-        if isinstance(exc, (GascaNormalizationError, TrainingymNormalizationError)):
+        if structural_error:
             LOGGER.error("Structural XLSX failure: %s", type(exc).__name__)
         else:
-            LOGGER.exception("Manual routine-control pipeline failed")
+            LOGGER.error(
+                "Routine Control pipeline failed unexpectedly. "
+                "error_code=%s exception_type=%s pipeline_run_id=%s "
+                "stage=%s provider=%s generation_mode=%s "
+                "date_from=%s date_to=%s",
+                unexpected_error.error_code,
+                unexpected_error.exception_type,
+                failure_pipeline_run_id,
+                failure_stage,
+                failure_provider,
+                effective_generation_mode,
+                effective_date_from.isoformat(),
+                effective_date_to.isoformat(),
+            )
         return replace(
             result,
             incidents_created=incidents_created,
             incidents_resolved=incidents_resolved,
             succeeded=False,
+            error_code=(
+                None if structural_error else unexpected_error.error_code
+            ),
+            error_message=(
+                None if structural_error else unexpected_error.public_message
+            ),
         )
