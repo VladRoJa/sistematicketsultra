@@ -50,6 +50,7 @@ TRAININGYM_WORKOUT_HEADERS = frozenset(
     {
         "id",
         "Idsocioexterno",
+        "NombreApellidos",
         "Email",
         "Técnico",
         "NºRutinas",

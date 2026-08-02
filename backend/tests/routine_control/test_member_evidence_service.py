@@ -186,6 +186,9 @@ class RoutineControlMemberEvidencePostgresTestCase(unittest.TestCase):
         member_id: int | None = None,
         evidence_id: int | None = None,
         match_method: str = "EXTERNAL_ID",
+        identity_corroborator: str | None = None,
+        temporal_delta_days: int | None = None,
+        matching_contract_version: str | None = None,
         provider_run_id: int | None = None,
         linked_at_utc: datetime | None = None,
     ) -> LinkRoutineMemberEvidenceCommand:
@@ -193,6 +196,9 @@ class RoutineControlMemberEvidencePostgresTestCase(unittest.TestCase):
             member_id=member_id or self.member.id,
             evidence_id=evidence_id or self.evidence.id,
             match_method=match_method,
+            identity_corroborator=identity_corroborator,
+            temporal_delta_days=temporal_delta_days,
+            matching_contract_version=matching_contract_version,
             provider_run_id=provider_run_id,
             linked_at_utc=linked_at_utc or self.now,
         )
@@ -273,6 +279,30 @@ class RoutineControlMemberEvidencePostgresTestCase(unittest.TestCase):
         self.assertFalse(second.changed)
         self.assertEqual(link.linked_at_utc, self.now)
         self.assertEqual(len(count), 1)
+
+    def test_v2_link_persists_identity_temporal_audit(self) -> None:
+        result = link_routine_member_evidence(self._link_command(
+            identity_corroborator="EMAIL_AND_NAME",
+            temporal_delta_days=-7,
+            matching_contract_version="IDENTITY_TEMPORAL_V2",
+        ))
+        link = self._get_link(result.link_id)
+        self.assertEqual(link.identity_corroborator, "EMAIL_AND_NAME")
+        self.assertEqual(link.temporal_delta_days, -7)
+        self.assertEqual(
+            link.matching_contract_version,
+            "IDENTITY_TEMPORAL_V2",
+        )
+
+    def test_service_rejects_second_active_member_for_same_evidence(self) -> None:
+        other_member = self._new_member("other-active")
+        db.session.add(other_member)
+        db.session.commit()
+        link_routine_member_evidence(self._link_command())
+        with self.assertRaises(RoutineControlMemberEvidenceConflict):
+            link_routine_member_evidence(self._link_command(
+                member_id=other_member.id,
+            ))
 
     def test_email_link_upgrades_to_external_id_without_rewriting_audit(self) -> None:
         provider_run = self._provider_run()

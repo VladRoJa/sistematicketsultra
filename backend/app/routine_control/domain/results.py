@@ -30,6 +30,9 @@ class RoutineControlMemberEvidenceResult:
     changed: bool
     is_active: bool
     match_method: str
+    identity_corroborator: str | None
+    temporal_delta_days: int | None
+    matching_contract_version: str | None
 
 
 @dataclass(frozen=True, slots=True)
