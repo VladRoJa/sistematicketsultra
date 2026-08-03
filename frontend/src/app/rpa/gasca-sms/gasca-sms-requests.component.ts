@@ -180,6 +180,28 @@ export class GascaSmsRequestsComponent implements OnDestroy, OnInit {
     ].includes(value);
   }
 
+
+  hasActiveDuplicateForForm(): boolean {
+    const pin = String(this.form.get('pin')?.value || '').replace(/\D/g, '');
+    const phone = String(this.form.get('phone')?.value || '').replace(/\D/g, '');
+
+    if (!pin || !phone) {
+      return false;
+    }
+
+    return this.items.some((item) => {
+      const itemPin = String(item.pin_normalized || item.pin || '').replace(/\D/g, '');
+      const itemPhone = String(
+        item.requested_phone_normalized ||
+        item.requested_phone ||
+        item.phone ||
+        ''
+      ).replace(/\D/g, '');
+
+      return itemPin === pin && itemPhone === phone && this.isLiveStatus(item.status);
+    });
+  }
+
   loadCatalogs(): void {
     this.loadingCatalogs = true;
 

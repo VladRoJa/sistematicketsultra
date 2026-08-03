@@ -3,6 +3,13 @@ import { Component, OnDestroy, OnInit } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
+import {
+  MAT_DATE_LOCALE,
+  MatNativeDateModule,
+} from '@angular/material/core';
+import {
+  MatDatepickerModule,
+} from '@angular/material/datepicker';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
@@ -11,8 +18,22 @@ import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatSelectModule } from '@angular/material/select';
 import { MatTableModule } from '@angular/material/table';
 import { Router } from '@angular/router';
-import { Subject, Subscription, forkJoin, of } from 'rxjs';
-import { catchError, debounceTime, finalize, startWith, switchMap } from 'rxjs/operators';
+import {
+  Subject,
+  Subscription,
+  combineLatest,
+  forkJoin,
+  of,
+} from 'rxjs';
+import {
+  catchError,
+  debounceTime,
+  distinctUntilChanged,
+  finalize,
+  map,
+  startWith,
+  switchMap,
+} from 'rxjs/operators';
 import {
   RoutineControlBranchCatalog,
   RoutineControlCatalogs,
@@ -37,11 +58,17 @@ import { RoutineControlService } from '../services/routine-control.service';
   standalone: true,
   imports: [
     CommonModule, ReactiveFormsModule, MatButtonModule, MatCardModule, MatDialogModule,
-    MatFormFieldModule, MatIconModule, MatInputModule, MatPaginatorModule,
-    MatSelectModule, MatTableModule,
+    MatDatepickerModule, MatFormFieldModule, MatIconModule, MatInputModule,
+    MatNativeDateModule, MatPaginatorModule, MatSelectModule, MatTableModule,
   ],
   templateUrl: './routine-control-dashboard.component.html',
   styleUrls: ['./routine-control-dashboard.component.css'],
+  providers: [
+    {
+      provide: MAT_DATE_LOCALE,
+      useValue: 'es-MX',
+    },
+  ],
 })
 export class RoutineControlDashboardComponent implements OnInit, OnDestroy {
   private static readonly BUSINESS_TIME_ZONE = 'America/Tijuana';
@@ -53,6 +80,12 @@ export class RoutineControlDashboardComponent implements OnInit, OnDestroy {
     region_key: [''], branch_id: [null as number | null], sale_date_from: [''], sale_date_to: [''],
     current_status: [''], assignment_type: [''], instructor: [''], search: [''],
   });
+
+  readonly saleDateRange = this.fb.group({
+    start: [null as Date | null],
+    end: [null as Date | null],
+  });
+
   catalogs: RoutineControlCatalogs | null = null;
   summary: RoutineControlSummary | null = null;
   members: RoutineControlMember[] = [];
@@ -76,6 +109,7 @@ export class RoutineControlDashboardComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.initializeCurrentMonthRange();
+    this.bindSaleDateRange();
     this.loading = true;
     this.subscriptions.add(this.service.getCatalogs().subscribe({
       next: (catalogs) => {
@@ -84,6 +118,7 @@ export class RoutineControlDashboardComponent implements OnInit, OnDestroy {
           this.form.controls.branch_id.setValue(catalogs.scope.fixed_branch_id, { emitEvent: false });
         }
         this.bindReloads();
+        this.bindInstructorCatalog();
       },
       error: () => {
         this.loading = false;
@@ -102,6 +137,24 @@ export class RoutineControlDashboardComponent implements OnInit, OnDestroy {
       sale_date_from: this.formatDateForApi(currentDate.year, currentDate.month, 1),
       sale_date_to: this.formatDateForApi(currentDate.year, currentDate.month, currentDate.day),
     }, { emitEvent: false });
+
+    this.saleDateRange.setValue(
+      {
+        start: new Date(
+          currentDate.year,
+          currentDate.month - 1,
+          1,
+        ),
+        end: new Date(
+          currentDate.year,
+          currentDate.month - 1,
+          currentDate.day,
+        ),
+      },
+      {
+        emitEvent: false,
+      },
+    );
   }
 
   get scopeLabel(): string {
@@ -256,6 +309,17 @@ export class RoutineControlDashboardComponent implements OnInit, OnDestroy {
 
   clearFilters(): void {
     const fixedBranch = this.catalogs?.scope.fixed_branch_id ?? null;
+
+    this.saleDateRange.reset(
+      {
+        start: null,
+        end: null,
+      },
+      {
+        emitEvent: false,
+      },
+    );
+
     this.form.reset({
       region_key: '', branch_id: fixedBranch, sale_date_from: '', sale_date_to: '', current_status: '',
       assignment_type: '', instructor: '', search: '',
@@ -365,6 +429,105 @@ export class RoutineControlDashboardComponent implements OnInit, OnDestroy {
     });
   }
 
+  private bindSaleDateRange(): void {
+    this.subscriptions.add(
+      this.saleDateRange.valueChanges.pipe(
+        debounceTime(150),
+      ).subscribe((range) => {
+        this.form.patchValue({
+          sale_date_from:
+            this.datePickerValueForApi(
+              range.start,
+            ),
+          sale_date_to:
+            this.datePickerValueForApi(
+              range.end,
+            ),
+        });
+      }),
+    );
+  }
+
+  private bindInstructorCatalog(): void {
+    this.subscriptions.add(
+      combineLatest([
+        this.form.controls.region_key.valueChanges.pipe(
+          startWith(
+            this.form.controls.region_key.value,
+          ),
+        ),
+        this.form.controls.branch_id.valueChanges.pipe(
+          startWith(
+            this.form.controls.branch_id.value,
+          ),
+        ),
+        this.form.controls.sale_date_from.valueChanges.pipe(
+          startWith(
+            this.form.controls.sale_date_from.value,
+          ),
+        ),
+        this.form.controls.sale_date_to.valueChanges.pipe(
+          startWith(
+            this.form.controls.sale_date_to.value,
+          ),
+        ),
+      ]).pipe(
+        debounceTime(250),
+        map(([
+          regionKey,
+          branchId,
+          saleDateFrom,
+          saleDateTo,
+        ]) => ({
+          region_key: regionKey || null,
+          branch_id: branchId,
+          sale_date_from: saleDateFrom || null,
+          sale_date_to: saleDateTo || null,
+        })),
+        distinctUntilChanged(
+          (previous, current) => (
+            previous.region_key
+              === current.region_key
+            && previous.branch_id
+              === current.branch_id
+            && previous.sale_date_from
+              === current.sale_date_from
+            && previous.sale_date_to
+              === current.sale_date_to
+          ),
+        ),
+        switchMap((filters) => (
+          this.service.getCatalogs(filters).pipe(
+            catchError(() => {
+              this.errorMessage =
+                'No fue posible actualizar '
+                + 'el catálogo de instructores.';
+
+              return of(null);
+            }),
+          )
+        )),
+      ).subscribe(
+        (
+          catalogs:
+            RoutineControlCatalogs | null,
+        ) => {
+          if (!catalogs || !this.catalogs) {
+            return;
+          }
+
+          this.catalogs = {
+            ...this.catalogs,
+            instructors:
+              catalogs.instructors,
+          };
+
+          this.syncInstructorSelection();
+        },
+      ),
+    );
+  }
+
   private bindReloads(): void {
     this.subscriptions.add(this.form.valueChanges.pipe(debounceTime(350)).subscribe(() => {
       this.page = 1;
@@ -413,6 +576,23 @@ export class RoutineControlDashboardComponent implements OnInit, OnDestroy {
     if (!remainsAvailable) {
       this.form.controls.instructor.setValue('');
     }
+  }
+
+  private datePickerValueForApi(
+    value: Date | null | undefined,
+  ): string {
+    if (
+      !value
+      || Number.isNaN(value.getTime())
+    ) {
+      return '';
+    }
+
+    return this.formatDateForApi(
+      value.getFullYear(),
+      value.getMonth() + 1,
+      value.getDate(),
+    );
   }
 
   private getCurrentBusinessDateParts(

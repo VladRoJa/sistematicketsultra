@@ -118,18 +118,18 @@
               mat-raised-button
               color="primary"
               type="submit"
-              [disabled]="creating"
+              [disabled]="creating || hasActiveDuplicateForForm()"
               class="actions__primary"
             >
               <mat-icon>send</mat-icon>
-              Registrar solicitud
+              {{ hasActiveDuplicateForForm() ? "Solicitud ya en proceso" : "Registrar solicitud" }}
             </button>
 
             <button
               mat-button
               type="button"
               (click)="clearForm()"
-              [disabled]="creating"
+              [disabled]="creating || hasActiveDuplicateForForm()"
             >
               Limpiar
             </button>

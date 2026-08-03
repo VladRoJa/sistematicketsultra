@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from datetime import date
 from types import SimpleNamespace
 
 from app import create_app
@@ -15,7 +16,7 @@ from app.routine_control.queries.operational_service import (
 
 class StubOperationalRepository:
     def __init__(self) -> None:
-        self.instructor_calls: list[tuple[int, ...]] = []
+        self.instructor_calls: list[dict] = []
 
     def list_operational_branches(self) -> list[dict]:
         return [
@@ -42,8 +43,15 @@ class StubOperationalRepository:
     def list_instructor_catalog(
         self,
         branch_ids: tuple[int, ...],
+        *,
+        sale_date_from: date | None = None,
+        sale_date_to: date | None = None,
     ) -> list[dict]:
-        self.instructor_calls.append(branch_ids)
+        self.instructor_calls.append({
+            "branch_ids": branch_ids,
+            "sale_date_from": sale_date_from,
+            "sale_date_to": sale_date_to,
+        })
 
         all_items = [
             {
@@ -97,7 +105,11 @@ class RoutineControlInstructorCatalogTestCase(
 
         self.assertEqual(
             repository.instructor_calls,
-            [(10,)],
+            [{
+                "branch_ids": (10,),
+                "sale_date_from": None,
+                "sale_date_to": None,
+            }],
         )
         self.assertEqual(
             result["instructors"],
@@ -135,11 +147,63 @@ class RoutineControlInstructorCatalogTestCase(
 
         self.assertEqual(
             repository.instructor_calls,
-            [(10, 20, 30)],
+            [{
+                "branch_ids": (10, 20, 30),
+                "sale_date_from": None,
+                "sale_date_to": None,
+            }],
         )
         self.assertEqual(
             len(result["instructors"]),
             3,
+        )
+
+    def test_catalog_applies_branch_and_date_filters(
+        self,
+    ) -> None:
+        repository = StubOperationalRepository()
+        service = RoutineControlOperationalService(
+            repository
+        )
+
+        user = SimpleNamespace(
+            rol="ADMINISTRADOR",
+            sucursal_id=None,
+            sucursales_ids=None,
+        )
+
+        result = service.catalogs(
+            user,
+            {
+                "region_key": "MEXICALI",
+                "branch_id": "20",
+                "sale_date_from": "2026-08-01",
+                "sale_date_to": "2026-08-02",
+            },
+        )
+
+        self.assertEqual(
+            repository.instructor_calls,
+            [{
+                "branch_ids": (20,),
+                "sale_date_from": date(
+                    2026,
+                    8,
+                    1,
+                ),
+                "sale_date_to": date(
+                    2026,
+                    8,
+                    2,
+                ),
+            }],
+        )
+        self.assertEqual(
+            result["instructors"],
+            [{
+                "name": "Carlos Ruiz",
+                "branch_ids": [20],
+            }],
         )
 
     def test_member_filters_do_not_reload_instructor_catalog(

@@ -25,6 +25,19 @@ class GascaSmsRequestServiceError(RuntimeError):
 
 
 DUPLICATE_REQUEST_WINDOW_MINUTES = 2
+
+ACTIVE_DUPLICATE_STATUSES = [
+    GascaSmsRequestStatus.PENDING,
+    GascaSmsRequestStatus.GASCA_SEARCHING,
+    GascaSmsRequestStatus.READY_TO_SEND,
+    GascaSmsRequestStatus.MULTIPLE_CANDIDATES_SELECTED_LATEST,
+    GascaSmsRequestStatus.SMS_SENDING,
+]
+
+RECENT_DUPLICATE_STATUSES = [
+    *ACTIVE_DUPLICATE_STATUSES,
+    GascaSmsRequestStatus.SENT,
+]
 GOOGLE_MESSAGES_ADVISORY_LOCK_KEY = 5247002301
 
 
@@ -99,27 +112,30 @@ def mask_sms_message_for_storage(message: str, code: str) -> str:
 def _find_recent_duplicate_request(
     *,
     pin_normalized: str,
-    requested_phone_digits: str,
+    phone_normalized: str,
+    now: datetime,
 ) -> GascaSmsRequestORM | None:
-    duplicate_statuses = [
-        GascaSmsRequestStatus.PENDING,
-        GascaSmsRequestStatus.GASCA_SEARCHING,
-        GascaSmsRequestStatus.READY_TO_SEND,
-        GascaSmsRequestStatus.SMS_SENDING,
-        GascaSmsRequestStatus.SENT,
-    ]
-
-    recent_threshold = db.func.now() - text(
-        f"INTERVAL '{DUPLICATE_REQUEST_WINDOW_MINUTES} minutes'"
+    active_request = (
+        GascaSmsRequestORM.query
+        .filter(GascaSmsRequestORM.pin_normalized == pin_normalized)
+        .filter(GascaSmsRequestORM.requested_phone_normalized == phone_normalized)
+        .filter(GascaSmsRequestORM.status.in_(ACTIVE_DUPLICATE_STATUSES))
+        .order_by(GascaSmsRequestORM.created_at.desc(), GascaSmsRequestORM.id.desc())
+        .first()
     )
+
+    if active_request is not None:
+        return active_request
+
+    recent_threshold = now - timedelta(minutes=DUPLICATE_REQUEST_WINDOW_MINUTES)
 
     return (
         GascaSmsRequestORM.query
         .filter(GascaSmsRequestORM.pin_normalized == pin_normalized)
-        .filter(GascaSmsRequestORM.requested_phone_digits == requested_phone_digits)
-        .filter(GascaSmsRequestORM.status.in_(duplicate_statuses))
+        .filter(GascaSmsRequestORM.requested_phone_normalized == phone_normalized)
+        .filter(GascaSmsRequestORM.status.in_(RECENT_DUPLICATE_STATUSES))
         .filter(GascaSmsRequestORM.created_at >= recent_threshold)
-        .order_by(GascaSmsRequestORM.id.desc())
+        .order_by(GascaSmsRequestORM.created_at.desc(), GascaSmsRequestORM.id.desc())
         .first()
     )
 
@@ -356,6 +372,9 @@ def create_queued_gasca_sms_request(
         pin_normalized=pin_normalized,
         requested_phone_digits=requested_phone_digits,
     )
+
+    if duplicate is not None:
+        return duplicate
 
     request = create_gasca_sms_request(
         pin_raw=pin_raw,

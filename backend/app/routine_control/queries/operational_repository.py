@@ -81,6 +81,9 @@ class RoutineControlOperationalRepository:
     def list_instructor_catalog(
         self,
         branch_ids: tuple[int, ...],
+        *,
+        sale_date_from: date | None = None,
+        sale_date_to: date | None = None,
     ) -> list[dict]:
         if not branch_ids:
             return []
@@ -89,7 +92,7 @@ class RoutineControlOperationalRepository:
             RoutineControlMemberORM.current_instructor_name
         )
 
-        rows = (
+        query = (
             self.session.query(
                 RoutineControlMemberORM.sucursal_id,
                 instructor_name.label("instructor_name"),
@@ -103,9 +106,21 @@ class RoutineControlOperationalRepository:
                 .isnot(None),
                 func.length(instructor_name) > 0,
             )
-            .distinct()
-            .all()
         )
+
+        if sale_date_from is not None:
+            query = query.filter(
+                RoutineControlMemberORM.sale_date
+                >= sale_date_from
+            )
+
+        if sale_date_to is not None:
+            query = query.filter(
+                RoutineControlMemberORM.sale_date
+                <= sale_date_to
+            )
+
+        rows = query.distinct().all()
 
         grouped: dict[str, dict] = {}
 
