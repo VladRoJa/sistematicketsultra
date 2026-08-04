@@ -1,5 +1,12 @@
 import { CommonModule } from '@angular/common';
-import { Component, Inject } from '@angular/core';
+import {
+  Component,
+  Inject,
+  OnDestroy,
+  OnInit,
+} from '@angular/core';
+import { Subscription } from 'rxjs';
+import { finalize } from 'rxjs/operators';
 import { MatButtonModule } from '@angular/material/button';
 import {
   MAT_DIALOG_DATA,
@@ -10,13 +17,22 @@ import { MatIconModule } from '@angular/material/icon';
 
 import {
   RoutineControlBranchCatalog,
+  RoutineControlFilters,
+  RoutineControlSummary,
   RoutineControlSummaryBranch,
 } from '../models/routine-control.models';
+import {
+  RoutineControlAssignmentPdfService,
+} from '../services/routine-control-assignment-pdf.service';
+import {
+  RoutineControlService,
+} from '../services/routine-control.service';
 
 export interface RoutineControlAssignmentDialogData {
   branches: RoutineControlSummaryBranch[];
   branchCatalogs: RoutineControlBranchCatalog[];
   cutoffDate: string | null;
+  filters: RoutineControlFilters;
 }
 
 interface RoutineControlAssignmentRow {
@@ -56,26 +72,101 @@ interface RoutineControlAssignmentTotals {
     './routine-control-assignment-dialog.component.css',
   ],
 })
-export class RoutineControlAssignmentDialogComponent {
-  readonly rows: RoutineControlAssignmentRow[];
-  readonly totals: RoutineControlAssignmentTotals;
-  readonly cutoffLabel: string;
+export class RoutineControlAssignmentDialogComponent
+  implements OnInit, OnDestroy {
+  rows: RoutineControlAssignmentRow[];
+  totals: RoutineControlAssignmentTotals;
+  selectedMonthValue: string;
+  periodLabel: string;
+  loading = false;
+  exportingPdf = false;
+  errorMessage = '';
+
+  private readonly subscriptions =
+    new Subscription();
 
   constructor(
     @Inject(MAT_DIALOG_DATA)
     readonly data: RoutineControlAssignmentDialogData,
     private readonly dialogRef:
       MatDialogRef<RoutineControlAssignmentDialogComponent>,
+    private readonly service: RoutineControlService,
+    private readonly pdfService:
+      RoutineControlAssignmentPdfService,
   ) {
-    this.rows = this.buildRows();
-    this.totals = this.buildTotals(this.rows);
-    this.cutoffLabel = this.formatCutoffDate(
-      data.cutoffDate,
+    this.selectedMonthValue =
+      this.resolveInitialMonth();
+
+    this.periodLabel =
+      this.formatMonthLabel(
+        this.selectedMonthValue,
+      );
+
+    this.rows = this.buildRows(
+      data.branches,
     );
+
+    this.totals = this.buildTotals(
+      this.rows,
+    );
+  }
+
+  ngOnInit(): void {
+    this.loadSelectedMonth();
+  }
+
+  ngOnDestroy(): void {
+    this.subscriptions.unsubscribe();
+  }
+
+  selectMonth(value: string): void {
+    if (
+      !/^\d{4}-\d{2}$/.test(value)
+      || value === this.selectedMonthValue
+    ) {
+      return;
+    }
+
+    this.selectedMonthValue = value;
+    this.periodLabel =
+      this.formatMonthLabel(value);
+
+    this.loadSelectedMonth();
   }
 
   close(): void {
     this.dialogRef.close();
+  }
+
+  async exportPdf(): Promise<void> {
+    if (
+      this.loading
+      || this.exportingPdf
+    ) {
+      return;
+    }
+
+    this.exportingPdf = true;
+    this.errorMessage = '';
+
+    try {
+      await this.pdfService.exportReport({
+        monthValue:
+          this.selectedMonthValue,
+        periodLabel:
+          this.periodLabel,
+        rows:
+          this.rows,
+        totals:
+          this.totals,
+      });
+    } catch {
+      this.errorMessage =
+        'No fue posible generar el PDF. '
+        + 'Intenta nuevamente.';
+    } finally {
+      this.exportingPdf = false;
+    }
   }
 
   conPercentClass(value: number): string {
@@ -110,7 +201,59 @@ export class RoutineControlAssignmentDialogComponent {
     return 'percentage percentage--danger';
   }
 
-  private buildRows(): RoutineControlAssignmentRow[] {
+  private loadSelectedMonth(): void {
+    const range = this.monthRange(
+      this.selectedMonthValue,
+    );
+
+    if (!range) {
+      this.errorMessage =
+        'El mes seleccionado no es válido.';
+      return;
+    }
+
+    this.loading = true;
+    this.errorMessage = '';
+
+    const filters: RoutineControlFilters = {
+      ...this.data.filters,
+      sale_date_from: range.dateFrom,
+      sale_date_to: range.dateTo,
+      page: undefined,
+      page_size: undefined,
+    };
+
+    this.subscriptions.add(
+      this.service.getSummary(filters)
+        .pipe(
+          finalize(
+            () => this.loading = false,
+          ),
+        )
+        .subscribe({
+          next: (
+            summary: RoutineControlSummary,
+          ) => {
+            this.rows = this.buildRows(
+              summary.branches,
+            );
+
+            this.totals = this.buildTotals(
+              this.rows,
+            );
+          },
+          error: () => {
+            this.errorMessage =
+              'No fue posible consultar el '
+              + 'mes seleccionado.';
+          },
+        }),
+    );
+  }
+
+  private buildRows(
+    branches: RoutineControlSummaryBranch[],
+  ): RoutineControlAssignmentRow[] {
     const branchCatalogById = new Map(
       this.data.branchCatalogs.map(
         (branch) => [branch.id, branch],
@@ -122,7 +265,7 @@ export class RoutineControlAssignmentDialogComponent {
         this.data.branchCatalogs,
       );
 
-    return this.data.branches
+    return branches
       .map((branch) => {
         const catalog = branch.branch_id === null
           ? undefined
@@ -270,42 +413,120 @@ export class RoutineControlAssignmentDialogComponent {
     );
   }
 
-  private formatCutoffDate(
-    value: string | null,
-  ): string {
-    if (!value) {
-      return 'corte actual';
+  private resolveInitialMonth(): string {
+    const candidates = [
+      this.data.filters.sale_date_to,
+      this.data.cutoffDate,
+      this.data.filters.sale_date_from,
+    ];
+
+    for (const candidate of candidates) {
+      const value = String(candidate || '');
+
+      if (/^\d{4}-\d{2}/.test(value)) {
+        return value.slice(0, 7);
+      }
     }
 
-    const datePart = value.slice(0, 10);
-    const parts = datePart
-      .split('-')
-      .map((item) => Number(item));
+    const today = new Date();
+
+    return [
+      String(today.getFullYear()).padStart(
+        4,
+        '0',
+      ),
+      String(today.getMonth() + 1).padStart(
+        2,
+        '0',
+      ),
+    ].join('-');
+  }
+
+  private monthRange(
+    value: string,
+  ): {
+    dateFrom: string;
+    dateTo: string;
+  } | null {
+    const match = /^(\d{4})-(\d{2})$/.exec(
+      value,
+    );
+
+    if (!match) {
+      return null;
+    }
+
+    const year = Number(match[1]);
+    const month = Number(match[2]);
 
     if (
-      parts.length !== 3
-      || parts.some((item) => !Number.isInteger(item))
+      !Number.isInteger(year)
+      || month < 1
+      || month > 12
     ) {
-      return 'corte actual';
+      return null;
     }
 
-    const [year, month, day] = parts;
-    const date = new Date(
+    const lastDay = new Date(
       year,
-      month - 1,
-      day,
-      12,
+      month,
       0,
-      0,
-    );
+    ).getDate();
+
+    return {
+      dateFrom: this.formatDateForApi(
+        year,
+        month,
+        1,
+      ),
+      dateTo: this.formatDateForApi(
+        year,
+        month,
+        lastDay,
+      ),
+    };
+  }
+
+  private formatMonthLabel(
+    value: string,
+  ): string {
+    const range = this.monthRange(value);
+
+    if (!range) {
+      return 'Mes no válido';
+    }
+
+    const [year, month] = value
+      .split('-')
+      .map((item) => Number(item));
 
     return new Intl.DateTimeFormat(
       'es-MX',
       {
-        day: 'numeric',
         month: 'long',
         year: 'numeric',
       },
-    ).format(date);
+    ).format(
+      new Date(
+        year,
+        month - 1,
+        1,
+        12,
+        0,
+        0,
+      ),
+    );
+  }
+
+  private formatDateForApi(
+    year: number,
+    month: number,
+    day: number,
+  ): string {
+    return [
+      String(year).padStart(4, '0'),
+      String(month).padStart(2, '0'),
+      String(day).padStart(2, '0'),
+    ].join('-');
   }
 }

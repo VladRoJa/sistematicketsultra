@@ -410,6 +410,7 @@ export class RoutineControlDashboardComponent implements OnInit, OnDestroy {
           branchCatalogs: this.catalogs.branches,
           cutoffDate:
             this.assignmentReportCutoffDate(),
+          filters: this.currentFilters(),
         },
       },
     );
