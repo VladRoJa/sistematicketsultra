@@ -40,11 +40,6 @@ class TrainingymProviderConfig:
                 "Faltan variables de entorno: " + ", ".join(missing)
             )
         center_name = (os.getenv("TRAININGYM_CENTER_NAME") or "").strip() or None
-        normalized_center = " ".join((center_name or "").split()).casefold()
-        if "la viga" in normalized_center:
-            raise ProviderConfigurationError(
-                "TRAININGYM_CENTER_NAME refiere a una sucursal dada de baja."
-            )
         workout_url = (os.getenv("TRAININGYM_WORKOUT_URL") or "").strip() or None
         if require_workout and not workout_url:
             raise TrainingymWorkoutConfigurationError(

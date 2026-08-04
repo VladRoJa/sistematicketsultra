@@ -1286,20 +1286,7 @@ export class TrackKpiDesempenoComponent implements OnInit {
   }
 
   private isExcludedWeeklyBranch(row: KpiDesempenoWeeklyRow): boolean {
-    const values = [
-      row.branch.track_label,
-      row.branch.sucursal_raw,
-      row.branch.sucursal_canon || '',
-    ].map((value) => value.trim().toUpperCase());
-
-    const isCancelledBranch = values.some((value) =>
-      value === 'LA VIGA' ||
-      value === 'LA_VIGA' ||
-      value === 'SERRANIA' ||
-      value === 'SERRANÍA'
-    );
-
-    return row.branch.is_track_active === false || isCancelledBranch;
+    return row.branch.is_track_active === false;
   }
 
   private hasWeeklyBranchAnyValue(

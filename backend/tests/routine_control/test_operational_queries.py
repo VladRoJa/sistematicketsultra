@@ -25,7 +25,13 @@ class FakeRepository:
     def list_operational_branches(self):
         return BRANCHES
 
-    def list_instructor_catalog(self, branch_ids):
+    def list_instructor_catalog(
+        self,
+        branch_ids,
+        *,
+        sale_date_from=None,
+        sale_date_to=None,
+    ):
         self.last_branch_ids = branch_ids
         return []
 
@@ -47,7 +53,8 @@ class FakeRepository:
         self.last_filters, self.last_branch_ids = filters, branch_ids
         member = SimpleNamespace(
             id=10, external_member_id="M-10", external_sale_id="F-10", member_name="Socio",
-            email_normalized="socio@example.com", email_original=None, sucursal_id=1,
+            email_normalized="socio@example.com", email_original=None,
+            phone_original="+526861234567", sucursal_id=1,
             source_branch_name="Centro", sale_date=date(2026, 7, 1), classification_status="CLASSIFIED",
             current_status="CON_RUTINA", first_routine_at=date(2026, 7, 1), latest_routine_at=date(2026, 7, 2),
             current_instructor_name="Ana", routine_assignment_type="MISMO_DIA", status_version=2,
