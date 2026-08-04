@@ -57,7 +57,6 @@ class RoutineControlOperationalRepository:
             .filter(
                 Sucursal.operational_status == SucursalOperationalStatus.ACTIVA,
                 TrackBranchCatalogORM.is_track_active.is_(True),
-                func.upper(TrackBranchCatalogORM.sucursal_canon) != "LA_VIGA",
             )
             .order_by(TrackBranchCatalogORM.display_order, Sucursal.sucursal)
             .all()

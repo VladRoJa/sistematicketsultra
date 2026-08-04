@@ -88,9 +88,9 @@ export class TrackBranchHistoryComponent implements OnInit {
   { value: 'IXTAPALUCA', label: 'IXTAPALUCA' },
   { value: 'INSURGENTES', label: 'INSURGENTES' },
   { value: 'TLALNEPANTLA', label: 'TLALNEPANTLA' },
-  { value: 'METEPEC', label: 'METEPEC' },
   { value: 'SALTILLO_VILLALTA', label: 'SALTILLO_VILLALTA' },
-  { value: 'LA_VIGA', label: 'LA_VIGA' },
+  { value: 'METEPEC', label: 'METEPEC' },
+  { value: 'SERRANIA', label: 'SERRANIA' },
 ];
 
   selectedSucursalCanon = '';

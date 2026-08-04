@@ -304,9 +304,9 @@ export class TrackDashboardComponent implements OnInit {
     'IXTAPALUCA',
     'INSURGENTES',
     'TLALNEPANTLA',
-    'METEPEC',
     'SALTILLO_VILLALTA',
-    'LA_VIGA',
+    'METEPEC',
+    'SERRANIA',
   ];
 
   readonly simplifiedTrackColumnGroupOptions: TrackColumnGroupOption[] = [
