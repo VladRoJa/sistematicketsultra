@@ -236,6 +236,8 @@ class RoutineControlOperationalRepository:
                     .ilike(pattern),
                     RoutineControlMemberORM.email_normalized
                     .ilike(pattern),
+                    RoutineControlMemberORM.phone_normalized
+                    .ilike(pattern),
                     RoutineControlMemberORM.external_sale_id
                     .ilike(pattern),
                     pin_value.ilike(pattern),

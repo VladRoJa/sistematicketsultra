@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 
 from app import db
 from sqlalchemy import text
@@ -112,13 +112,15 @@ def mask_sms_message_for_storage(message: str, code: str) -> str:
 def _find_recent_duplicate_request(
     *,
     pin_normalized: str,
-    phone_normalized: str,
-    now: datetime,
+    requested_phone_digits: str,
+    now: datetime | None = None,
 ) -> GascaSmsRequestORM | None:
+    now = now or datetime.now(timezone.utc)
+
     active_request = (
         GascaSmsRequestORM.query
         .filter(GascaSmsRequestORM.pin_normalized == pin_normalized)
-        .filter(GascaSmsRequestORM.requested_phone_normalized == phone_normalized)
+        .filter(GascaSmsRequestORM.requested_phone_digits == requested_phone_digits)
         .filter(GascaSmsRequestORM.status.in_(ACTIVE_DUPLICATE_STATUSES))
         .order_by(GascaSmsRequestORM.created_at.desc(), GascaSmsRequestORM.id.desc())
         .first()
@@ -132,7 +134,7 @@ def _find_recent_duplicate_request(
     return (
         GascaSmsRequestORM.query
         .filter(GascaSmsRequestORM.pin_normalized == pin_normalized)
-        .filter(GascaSmsRequestORM.requested_phone_normalized == phone_normalized)
+        .filter(GascaSmsRequestORM.requested_phone_digits == requested_phone_digits)
         .filter(GascaSmsRequestORM.status.in_(RECENT_DUPLICATE_STATUSES))
         .filter(GascaSmsRequestORM.created_at >= recent_threshold)
         .order_by(GascaSmsRequestORM.created_at.desc(), GascaSmsRequestORM.id.desc())
@@ -372,9 +374,6 @@ def create_queued_gasca_sms_request(
         pin_normalized=pin_normalized,
         requested_phone_digits=requested_phone_digits,
     )
-
-    if duplicate is not None:
-        return duplicate
 
     request = create_gasca_sms_request(
         pin_raw=pin_raw,

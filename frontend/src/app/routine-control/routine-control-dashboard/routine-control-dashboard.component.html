@@ -49,7 +49,7 @@
       <input
         matInput
         formControlName="search"
-        placeholder="PIN, nombre, ID, email o folio"
+        placeholder="PIN, nombre, teléfono, ID, email o folio"
       >
       <mat-icon matSuffix>search</mat-icon>
     </mat-form-field>
@@ -263,6 +263,17 @@
             </div>
           </td>
         </ng-container>
+
+        <ng-container matColumnDef="phone">
+          <th mat-header-cell *matHeaderCellDef>
+            Teléfono
+          </th>
+
+          <td mat-cell *matCellDef="let item">
+            {{ item.phone || '—' }}
+          </td>
+        </ng-container>
+
         <ng-container matColumnDef="branch"><th mat-header-cell *matHeaderCellDef>Sucursal</th><td mat-cell *matCellDef="let item">{{ item.branch_name || item.source_branch_name || 'Sin resolver' }}</td></ng-container>
         <ng-container matColumnDef="sale_date"><th mat-header-cell *matHeaderCellDef>Fecha venta</th><td mat-cell *matCellDef="let item">{{ item.sale_date | date:'yyyy-MM-dd' }}</td></ng-container>
         <ng-container matColumnDef="status"><th mat-header-cell *matHeaderCellDef>Estado</th><td mat-cell *matCellDef="let item"><span [class]="statusClass(statusOf(item))">{{ statusLabel(statusOf(item)) }}</span></td></ng-container>
@@ -310,6 +321,11 @@
           </span>
           <span>ID {{ item.external_member_id }}</span>
         </small>
+
+        <small *ngIf="item.phone">
+          Tel. {{ item.phone }}
+        </small>
+
         <small>
           {{
             item.branch_name

@@ -73,7 +73,7 @@ import { RoutineControlService } from '../services/routine-control.service';
 export class RoutineControlDashboardComponent implements OnInit, OnDestroy {
   private static readonly BUSINESS_TIME_ZONE = 'America/Tijuana';
   readonly displayedColumns = [
-    'member', 'branch', 'sale_date', 'status', 'first_routine_at',
+    'member', 'phone', 'branch', 'sale_date', 'status', 'first_routine_at',
     'latest_routine_at', 'instructor', 'assignment_type', 'incidents', 'decision',
   ];
   readonly form = this.fb.group({

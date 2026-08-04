@@ -65,6 +65,7 @@ class GascaMemberNormalizerTestCase(unittest.TestCase):
             "ApellidoPaterno",
             "ApellidoMaterno",
             "Email",
+            "Telefono",
             "FechaPago",
             "FechaCreacion",
         }
@@ -134,6 +135,21 @@ class GascaMemberNormalizerTestCase(unittest.TestCase):
         command = self._normalize(row)
         self.assertEqual(command.email_original, "User.Name@Example.COM")
         self.assertEqual(command.email_normalized, "user.name@example.com")
+
+    def test_phone_is_preserved_and_normalized(self) -> None:
+        row = dict(self.fixture_rows[0])
+        row["Telefono"] = "(686) 123-4567"
+
+        command = self._normalize(row)
+
+        self.assertEqual(
+            command.phone_original,
+            "(686) 123-4567",
+        )
+        self.assertEqual(
+            command.phone_normalized,
+            "6861234567",
+        )
 
     def test_empty_email_normalizes_to_none(self) -> None:
         row = dict(self.fixture_rows[0])

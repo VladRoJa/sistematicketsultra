@@ -34,6 +34,7 @@ GASCA_NEW_MEMBER_HEADERS = frozenset(
         "ApellidoPaterno",
         "ApellidoMaterno",
         "Email",
+        "Telefono",
         "FechaPago",
         "FechaCreacion",
     }

@@ -26,6 +26,7 @@ _REQUIRED_HEADERS = frozenset(
         "ApellidoPaterno",
         "ApellidoMaterno",
         "Email",
+        "Telefono",
         "FechaPago",
         "FechaCreacion",
     }
@@ -93,6 +94,19 @@ def _normalize_email(value: Any) -> tuple[str | None, str | None]:
     if original == "77" or _EMAIL_PATTERN.fullmatch(normalized) is None:
         return original, None
     return original, normalized
+
+
+def _normalize_phone(
+    value: Any,
+) -> tuple[str | None, str | None]:
+    original = _clean_text(value)
+
+    if original is None:
+        return None, None
+
+    normalized = re.sub(r"\D+", "", original)
+
+    return original, normalized or None
 
 
 def _aware_utc(value: datetime) -> datetime:
@@ -231,6 +245,9 @@ def normalize_gasca_member_row(
         raise GascaInvalidRequiredValueError("El nombre del miembro es obligatorio.")
 
     email_original, email_normalized = _normalize_email(row.get("Email"))
+    phone_original, phone_normalized = _normalize_phone(
+        row.get("Telefono")
+    )
     sale_date = _parse_sale_date(row.get("FechaPago"))
     operational_payload = {
         "external_member_id": external_member_id,
@@ -240,6 +257,8 @@ def normalize_gasca_member_row(
         "member_name": member_name,
         "email_original": email_original,
         "email_normalized": email_normalized,
+        "phone_original": phone_original,
+        "phone_normalized": phone_normalized,
         "sale_date": sale_date,
     }
 
@@ -258,6 +277,8 @@ def normalize_gasca_member_row(
         email_original=email_original,
         email_normalized=email_normalized,
         sale_date=sale_date,
+        phone_original=phone_original,
+        phone_normalized=phone_normalized,
         source_updated_at_utc=None,
         payload_hash=_canonical_json_hash(operational_payload),
         source_metadata=_metadata(row),

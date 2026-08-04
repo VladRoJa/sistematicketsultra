@@ -259,6 +259,7 @@ class RoutineControlOperationalService:
             "external_sale_id": member.external_sale_id,
             "member_name": member.member_name,
             "email": member.email_normalized or member.email_original,
+            "phone": member.phone_original,
             "branch_id": member.sucursal_id,
             "branch_name": branch_name,
             "source_branch_name": member.source_branch_name,

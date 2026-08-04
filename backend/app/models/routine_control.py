@@ -595,6 +595,10 @@ class RoutineControlMemberORM(db.Model):
             "email_normalized",
         ),
         db.Index(
+            "ix_routine_control_members_phone_normalized",
+            "phone_normalized",
+        ),
+        db.Index(
             "ix_routine_control_members_branch_status_cohort",
             "sucursal_id",
             "current_status",
@@ -662,6 +666,14 @@ class RoutineControlMemberORM(db.Model):
     )
     email_normalized = db.Column(
         db.String(320),
+        nullable=True,
+    )
+    phone_original = db.Column(
+        db.String(32),
+        nullable=True,
+    )
+    phone_normalized = db.Column(
+        db.String(32),
         nullable=True,
     )
 
