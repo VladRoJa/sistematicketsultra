@@ -167,7 +167,12 @@ def _error_response(exc: Exception):
 @jwt_required()
 def routine_control_catalogs():
     try:
-        return jsonify(_service().catalogs(_current_user())), 200
+        return jsonify(
+            _service().catalogs(
+                _current_user(),
+                request.args,
+            )
+        ), 200
     except Exception as exc:
         return _error_response(exc)
 

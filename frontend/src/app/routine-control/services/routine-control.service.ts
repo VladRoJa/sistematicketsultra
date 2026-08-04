@@ -21,8 +21,17 @@ export class RoutineControlService {
 
   constructor(private readonly http: HttpClient) {}
 
-  getCatalogs(): Observable<RoutineControlCatalogs> {
-    return this.http.get<RoutineControlCatalogs>(`${this.baseUrl}/catalogs`);
+  getCatalogs(
+    filters: Partial<RoutineControlFilters> = {},
+  ): Observable<RoutineControlCatalogs> {
+    return this.http.get<RoutineControlCatalogs>(
+      `${this.baseUrl}/catalogs`,
+      {
+        params: this.paramsFromRecord({
+          ...filters,
+        }),
+      },
+    );
   }
 
   getSummary(filters: RoutineControlFilters): Observable<RoutineControlSummary> {

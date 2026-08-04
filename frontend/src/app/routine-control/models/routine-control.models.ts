@@ -85,6 +85,7 @@ export interface RoutineControlMember {
   external_sale_id: string | null;
   member_name: string | null;
   email: string | null;
+  phone: string | null;
   branch_id: number | null;
   branch_name: string | null;
   source_branch_name: string | null;

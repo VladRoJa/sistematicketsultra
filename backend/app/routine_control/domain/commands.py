@@ -22,6 +22,8 @@ class UpsertRoutineMemberCommand:
     payload_hash: str
     source_metadata: dict[str, Any] | None
     observed_at_utc: datetime | None = None
+    phone_original: str | None = None
+    phone_normalized: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

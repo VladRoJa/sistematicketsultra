@@ -180,6 +180,7 @@ export class GascaSmsRequestsComponent implements OnDestroy, OnInit {
     ].includes(value);
   }
 
+
   loadCatalogs(): void {
     this.loadingCatalogs = true;
 

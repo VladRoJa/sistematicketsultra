@@ -36,36 +36,36 @@
     </div>
   </header>
 
-  <form class="filters" [formGroup]="form">
+  <form
+    class="filters filters--compact"
+    [formGroup]="form"
+  >
     <mat-form-field
       appearance="fill"
       subscriptSizing="dynamic"
-      class="search search-primary"
+      class="filter-field filter-field--search"
     >
       <mat-label>Buscar socio</mat-label>
-
       <input
         matInput
         formControlName="search"
-        placeholder="PIN, nombre, ID, email o folio"
+        placeholder="PIN, nombre, teléfono, ID, email o folio"
       >
-
       <mat-icon matSuffix>search</mat-icon>
     </mat-form-field>
 
     <mat-form-field
       appearance="fill"
       subscriptSizing="dynamic"
+      class="filter-field"
       *ngIf="canSelectRegion"
     >
       <mat-label>Región</mat-label>
-
       <mat-select
         formControlName="region_key"
         (selectionChange)="selectRegion()"
       >
         <mat-option value="">Todas</mat-option>
-
         <mat-option
           *ngFor="let region of catalogs?.regions"
           [value]="region.key"
@@ -78,16 +78,15 @@
     <mat-form-field
       appearance="fill"
       subscriptSizing="dynamic"
+      class="filter-field"
       *ngIf="canSelectBranch"
     >
       <mat-label>Sucursal</mat-label>
-
       <mat-select
         formControlName="branch_id"
         (selectionChange)="selectBranchFilter()"
       >
         <mat-option [value]="null">Todas</mat-option>
-
         <mat-option
           *ngFor="let branch of availableBranches"
           [value]="branch.id"
@@ -100,14 +99,13 @@
     <mat-form-field
       appearance="fill"
       subscriptSizing="dynamic"
+      class="filter-field filter-field--instructor"
     >
       <mat-label>Instructor</mat-label>
-
       <mat-select formControlName="instructor">
         <mat-option value="">
           Todos los instructores
         </mat-option>
-
         <mat-option
           *ngFor="let instructor of availableInstructors"
           [value]="instructor.name"
@@ -120,12 +118,11 @@
     <mat-form-field
       appearance="fill"
       subscriptSizing="dynamic"
+      class="filter-field"
     >
       <mat-label>Estado</mat-label>
-
       <mat-select formControlName="current_status">
         <mat-option value="">Todos</mat-option>
-
         <mat-option
           *ngFor="let status of catalogs?.statuses"
           [value]="status"
@@ -138,12 +135,11 @@
     <mat-form-field
       appearance="fill"
       subscriptSizing="dynamic"
+      class="filter-field"
     >
       <mat-label>Tipo</mat-label>
-
       <mat-select formControlName="assignment_type">
         <mat-option value="">Todos</mat-option>
-
         <mat-option
           *ngFor="let type of catalogs?.assignment_types"
           [value]="type"
@@ -153,33 +149,43 @@
       </mat-select>
     </mat-form-field>
 
-    <mat-form-field
-      appearance="fill"
-      subscriptSizing="dynamic"
-      class="date-filter"
+    <div
+      class="filter-date-range"
+      [formGroup]="saleDateRange"
     >
-      <mat-label>Venta desde</mat-label>
-
-      <input
-        matInput
-        type="date"
-        formControlName="sale_date_from"
+      <mat-form-field
+        appearance="fill"
+        subscriptSizing="dynamic"
+        class="filter-field filter-field--date-range"
       >
-    </mat-form-field>
+        <mat-label>Periodo de venta</mat-label>
 
-    <mat-form-field
-      appearance="fill"
-      subscriptSizing="dynamic"
-      class="date-filter"
-    >
-      <mat-label>Venta hasta</mat-label>
+        <mat-date-range-input
+          [rangePicker]="saleDatePicker"
+        >
+          <input
+            matStartDate
+            formControlName="start"
+            placeholder="Desde"
+          >
 
-      <input
-        matInput
-        type="date"
-        formControlName="sale_date_to"
-      >
-    </mat-form-field>
+          <input
+            matEndDate
+            formControlName="end"
+            placeholder="Hasta"
+          >
+        </mat-date-range-input>
+
+        <mat-datepicker-toggle
+          matSuffix
+          [for]="saleDatePicker"
+        ></mat-datepicker-toggle>
+
+        <mat-date-range-picker
+          #saleDatePicker
+        ></mat-date-range-picker>
+      </mat-form-field>
+    </div>
 
     <button
       mat-stroked-button
@@ -192,7 +198,7 @@
     </button>
   </form>
 
-  <div class="error" *ngIf="errorMessage"><mat-icon>error_outline</mat-icon>{{ errorMessage }}</div>
+  <div class="error" *ngIf="errorMessage"><mat-icon>error_fill</mat-icon>{{ errorMessage }}</div>
   <div class="loading" *ngIf="loading">Consultando información…</div>
 
   <div class="metrics" *ngIf="summary">
@@ -257,6 +263,17 @@
             </div>
           </td>
         </ng-container>
+
+        <ng-container matColumnDef="phone">
+          <th mat-header-cell *matHeaderCellDef>
+            Teléfono
+          </th>
+
+          <td mat-cell *matCellDef="let item">
+            {{ item.phone || '—' }}
+          </td>
+        </ng-container>
+
         <ng-container matColumnDef="branch"><th mat-header-cell *matHeaderCellDef>Sucursal</th><td mat-cell *matCellDef="let item">{{ item.branch_name || item.source_branch_name || 'Sin resolver' }}</td></ng-container>
         <ng-container matColumnDef="sale_date"><th mat-header-cell *matHeaderCellDef>Fecha venta</th><td mat-cell *matCellDef="let item">{{ item.sale_date | date:'yyyy-MM-dd' }}</td></ng-container>
         <ng-container matColumnDef="status"><th mat-header-cell *matHeaderCellDef>Estado</th><td mat-cell *matCellDef="let item"><span [class]="statusClass(statusOf(item))">{{ statusLabel(statusOf(item)) }}</span></td></ng-container>
@@ -304,6 +321,11 @@
           </span>
           <span>ID {{ item.external_member_id }}</span>
         </small>
+
+        <small *ngIf="item.phone">
+          Tel. {{ item.phone }}
+        </small>
+
         <small>
           {{
             item.branch_name

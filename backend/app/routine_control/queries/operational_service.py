@@ -133,10 +133,31 @@ class RoutineControlOperationalService:
 
         return branches, list(regions.values())
 
-    def catalogs(self, user: UserORM) -> dict:
+    def catalogs(
+        self,
+        user: UserORM,
+        raw: dict | None = None,
+    ) -> dict:
         scope = self.resolve_scope(user)
         branches, regions = (
             self._catalog_branches_and_regions(scope)
+        )
+
+        _, instructor_filters = self._filters(
+            user,
+            raw or {},
+            listing=False,
+        )
+
+        instructor_branch_ids = (
+            (
+                instructor_filters["branch_id"],
+            )
+            if instructor_filters["branch_id"]
+            is not None
+            else instructor_filters[
+                "effective_branch_ids"
+            ]
         )
 
         return {
@@ -162,7 +183,13 @@ class RoutineControlOperationalService:
             ],
             "instructors": (
                 self.repository.list_instructor_catalog(
-                    scope.allowed_branch_ids
+                    instructor_branch_ids,
+                    sale_date_from=instructor_filters[
+                        "sale_date_from"
+                    ],
+                    sale_date_to=instructor_filters[
+                        "sale_date_to"
+                    ],
                 )
             ),
         }
@@ -232,6 +259,7 @@ class RoutineControlOperationalService:
             "external_sale_id": member.external_sale_id,
             "member_name": member.member_name,
             "email": member.email_normalized or member.email_original,
+            "phone": member.phone_original,
             "branch_id": member.sucursal_id,
             "branch_name": branch_name,
             "source_branch_name": member.source_branch_name,
