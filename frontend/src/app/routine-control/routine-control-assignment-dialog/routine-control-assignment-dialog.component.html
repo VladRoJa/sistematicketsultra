@@ -6,7 +6,7 @@
       <h2>Reporte de asignación de rutinas</h2>
 
       <p class="subtitle">
-        Alcance al {{ cutoffLabel }}
+        Mes de venta: {{ periodLabel }}
       </p>
     </div>
 
@@ -19,6 +19,38 @@
       <mat-icon>close</mat-icon>
     </button>
   </header>
+
+  <div class="report-controls">
+    <label
+      class="month-selector"
+      for="assignment-report-month"
+    >
+      <span>Mes del reporte</span>
+
+      <input
+        #monthInput
+        id="assignment-report-month"
+        type="month"
+        [value]="selectedMonthValue"
+        [disabled]="loading"
+        (change)="selectMonth(monthInput.value)"
+      >
+    </label>
+
+    <span
+      class="loading-label"
+      *ngIf="loading"
+    >
+      Actualizando reporte...
+    </span>
+  </div>
+
+  <div
+    class="report-error"
+    *ngIf="errorMessage"
+  >
+    {{ errorMessage }}
+  </div>
 
   <div class="report-definition">
     <span>
@@ -161,8 +193,27 @@
   <footer class="dialog-actions">
     <button
       mat-flat-button
+      class="pdf-action"
+      type="button"
+      [disabled]="loading || exportingPdf"
+      (click)="exportPdf()"
+    >
+      <mat-icon>
+        picture_as_pdf
+      </mat-icon>
+
+      {{
+        exportingPdf
+          ? 'Generando PDF...'
+          : 'Exportar PDF'
+      }}
+    </button>
+
+    <button
+      mat-flat-button
       class="primary-action"
       type="button"
+      [disabled]="exportingPdf"
       (click)="close()"
     >
       Cerrar
