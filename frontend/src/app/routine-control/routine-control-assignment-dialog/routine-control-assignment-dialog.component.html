@@ -6,7 +6,7 @@
       <h2>Reporte de asignación de rutinas</h2>
 
       <p class="subtitle">
-        Mes de venta: {{ periodLabel }}
+        Periodo de venta: {{ periodLabel }}
       </p>
     </div>
 
@@ -21,21 +21,50 @@
   </header>
 
   <div class="report-controls">
-    <label
-      class="month-selector"
-      for="assignment-report-month"
-    >
-      <span>Mes del reporte</span>
-
-      <input
-        #monthInput
-        id="assignment-report-month"
-        type="month"
-        [value]="selectedMonthValue"
-        [disabled]="loading"
-        (change)="selectMonth(monthInput.value)"
+    <div class="month-range">
+      <label
+        class="month-selector"
+        for="assignment-report-month-from"
       >
-    </label>
+        <span>Mes inicial</span>
+
+        <input
+          #monthFromInput
+          id="assignment-report-month-from"
+          type="month"
+          [value]="selectedMonthFromValue"
+          [disabled]="loading"
+          (change)="
+            selectMonthRange(
+              monthFromInput.value,
+              monthToInput.value
+            )
+          "
+        >
+      </label>
+
+      <label
+        class="month-selector"
+        for="assignment-report-month-to"
+      >
+        <span>Mes final</span>
+
+        <input
+          #monthToInput
+          id="assignment-report-month-to"
+          type="month"
+          [value]="selectedMonthToValue"
+          [min]="selectedMonthFromValue"
+          [disabled]="loading"
+          (change)="
+            selectMonthRange(
+              monthFromInput.value,
+              monthToInput.value
+            )
+          "
+        >
+      </label>
+    </div>
 
     <span
       class="loading-label"

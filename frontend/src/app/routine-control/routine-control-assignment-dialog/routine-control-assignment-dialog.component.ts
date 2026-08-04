@@ -76,7 +76,8 @@ export class RoutineControlAssignmentDialogComponent
   implements OnInit, OnDestroy {
   rows: RoutineControlAssignmentRow[];
   totals: RoutineControlAssignmentTotals;
-  selectedMonthValue: string;
+  selectedMonthFromValue: string;
+  selectedMonthToValue: string;
   periodLabel: string;
   loading = false;
   exportingPdf = false;
@@ -94,12 +95,19 @@ export class RoutineControlAssignmentDialogComponent
     private readonly pdfService:
       RoutineControlAssignmentPdfService,
   ) {
-    this.selectedMonthValue =
-      this.resolveInitialMonth();
+    const initialRange =
+      this.resolveInitialMonthRange();
+
+    this.selectedMonthFromValue =
+      initialRange.monthFrom;
+
+    this.selectedMonthToValue =
+      initialRange.monthTo;
 
     this.periodLabel =
-      this.formatMonthLabel(
-        this.selectedMonthValue,
+      this.formatPeriodLabel(
+        this.selectedMonthFromValue,
+        this.selectedMonthToValue,
       );
 
     this.rows = this.buildRows(
@@ -112,26 +120,52 @@ export class RoutineControlAssignmentDialogComponent
   }
 
   ngOnInit(): void {
-    this.loadSelectedMonth();
+    this.loadSelectedMonthRange();
   }
 
   ngOnDestroy(): void {
     this.subscriptions.unsubscribe();
   }
 
-  selectMonth(value: string): void {
+  selectMonthRange(
+    monthFromValue: string,
+    monthToValue: string,
+  ): void {
+    const range = this.monthRange(
+      monthFromValue,
+      monthToValue,
+    );
+
+    if (!range) {
+      this.errorMessage =
+        'Selecciona un rango mensual válido. '
+        + 'El mes final no puede ser anterior '
+        + 'al mes inicial.';
+      return;
+    }
+
     if (
-      !/^\d{4}-\d{2}$/.test(value)
-      || value === this.selectedMonthValue
+      monthFromValue
+        === this.selectedMonthFromValue
+      && monthToValue
+        === this.selectedMonthToValue
     ) {
       return;
     }
 
-    this.selectedMonthValue = value;
-    this.periodLabel =
-      this.formatMonthLabel(value);
+    this.selectedMonthFromValue =
+      monthFromValue;
 
-    this.loadSelectedMonth();
+    this.selectedMonthToValue =
+      monthToValue;
+
+    this.periodLabel =
+      this.formatPeriodLabel(
+        monthFromValue,
+        monthToValue,
+      );
+
+    this.loadSelectedMonthRange();
   }
 
   close(): void {
@@ -151,8 +185,10 @@ export class RoutineControlAssignmentDialogComponent
 
     try {
       await this.pdfService.exportReport({
-        monthValue:
-          this.selectedMonthValue,
+        monthFromValue:
+          this.selectedMonthFromValue,
+        monthToValue:
+          this.selectedMonthToValue,
         periodLabel:
           this.periodLabel,
         rows:
@@ -201,14 +237,16 @@ export class RoutineControlAssignmentDialogComponent
     return 'percentage percentage--danger';
   }
 
-  private loadSelectedMonth(): void {
+  private loadSelectedMonthRange(): void {
     const range = this.monthRange(
-      this.selectedMonthValue,
+      this.selectedMonthFromValue,
+      this.selectedMonthToValue,
     );
 
     if (!range) {
       this.errorMessage =
-        'El mes seleccionado no es válido.';
+        'El rango mensual seleccionado '
+        + 'no es válido.';
       return;
     }
 
@@ -245,7 +283,7 @@ export class RoutineControlAssignmentDialogComponent
           error: () => {
             this.errorMessage =
               'No fue posible consultar el '
-              + 'mes seleccionado.';
+              + 'rango seleccionado.';
           },
         }),
     );
@@ -413,21 +451,44 @@ export class RoutineControlAssignmentDialogComponent
     );
   }
 
-  private resolveInitialMonth(): string {
-    const candidates = [
-      this.data.filters.sale_date_to,
-      this.data.cutoffDate,
-      this.data.filters.sale_date_from,
-    ];
+  private resolveInitialMonthRange(): {
+    monthFrom: string;
+    monthTo: string;
+  } {
+    const currentMonth =
+      this.currentMonthValue();
 
-    for (const candidate of candidates) {
-      const value = String(candidate || '');
+    const monthFrom =
+      this.monthValueFromDate(
+        this.data.filters.sale_date_from,
+      )
+      ?? this.monthValueFromDate(
+        this.data.filters.sale_date_to,
+      )
+      ?? this.monthValueFromDate(
+        this.data.cutoffDate,
+      )
+      ?? currentMonth;
 
-      if (/^\d{4}-\d{2}/.test(value)) {
-        return value.slice(0, 7);
-      }
-    }
+    const candidateMonthTo =
+      this.monthValueFromDate(
+        this.data.filters.sale_date_to,
+      )
+      ?? this.monthValueFromDate(
+        this.data.cutoffDate,
+      )
+      ?? monthFrom;
 
+    return {
+      monthFrom,
+      monthTo:
+        candidateMonthTo >= monthFrom
+          ? candidateMonthTo
+          : monthFrom,
+    };
+  }
+
+  private currentMonthValue(): string {
     const today = new Date();
 
     return [
@@ -442,11 +503,30 @@ export class RoutineControlAssignmentDialogComponent
     ].join('-');
   }
 
-  private monthRange(
+  private monthValueFromDate(
+    value: string | null | undefined,
+  ): string | null {
+    const normalized = String(
+      value || '',
+    );
+
+    if (!/^\d{4}-\d{2}/.test(normalized)) {
+      return null;
+    }
+
+    const monthValue =
+      normalized.slice(0, 7);
+
+    return this.parseMonth(monthValue)
+      ? monthValue
+      : null;
+  }
+
+  private parseMonth(
     value: string,
   ): {
-    dateFrom: string;
-    dateTo: string;
+    year: number;
+    month: number;
   } | null {
     const match = /^(\d{4})-(\d{2})$/.exec(
       value,
@@ -467,38 +547,90 @@ export class RoutineControlAssignmentDialogComponent
       return null;
     }
 
-    const lastDay = new Date(
+    return {
       year,
       month,
+    };
+  }
+
+  private monthRange(
+    monthFromValue: string,
+    monthToValue: string,
+  ): {
+    dateFrom: string;
+    dateTo: string;
+  } | null {
+    const monthFrom =
+      this.parseMonth(monthFromValue);
+
+    const monthTo =
+      this.parseMonth(monthToValue);
+
+    if (!monthFrom || !monthTo) {
+      return null;
+    }
+
+    const fromIndex =
+      monthFrom.year * 12
+      + monthFrom.month;
+
+    const toIndex =
+      monthTo.year * 12
+      + monthTo.month;
+
+    if (toIndex < fromIndex) {
+      return null;
+    }
+
+    const lastDay = new Date(
+      monthTo.year,
+      monthTo.month,
       0,
     ).getDate();
 
     return {
       dateFrom: this.formatDateForApi(
-        year,
-        month,
+        monthFrom.year,
+        monthFrom.month,
         1,
       ),
       dateTo: this.formatDateForApi(
-        year,
-        month,
+        monthTo.year,
+        monthTo.month,
         lastDay,
       ),
     };
   }
 
+  private formatPeriodLabel(
+    monthFromValue: string,
+    monthToValue: string,
+  ): string {
+    const fromLabel =
+      this.formatMonthLabel(
+        monthFromValue,
+      );
+
+    const toLabel =
+      this.formatMonthLabel(
+        monthToValue,
+      );
+
+    if (monthFromValue === monthToValue) {
+      return fromLabel;
+    }
+
+    return `${fromLabel} a ${toLabel}`;
+  }
+
   private formatMonthLabel(
     value: string,
   ): string {
-    const range = this.monthRange(value);
+    const month = this.parseMonth(value);
 
-    if (!range) {
-      return 'Mes no válido';
+    if (!month) {
+      return 'Periodo no válido';
     }
-
-    const [year, month] = value
-      .split('-')
-      .map((item) => Number(item));
 
     return new Intl.DateTimeFormat(
       'es-MX',
@@ -508,8 +640,8 @@ export class RoutineControlAssignmentDialogComponent
       },
     ).format(
       new Date(
-        year,
-        month - 1,
+        month.year,
+        month.month - 1,
         1,
         12,
         0,

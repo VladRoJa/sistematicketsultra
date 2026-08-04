@@ -35,7 +35,8 @@ export interface RoutineControlAssignmentPdfTotals {
 
 
 export interface RoutineControlAssignmentPdfData {
-  monthValue: string;
+  monthFromValue: string;
+  monthToValue: string;
   periodLabel: string;
   rows: RoutineControlAssignmentPdfRow[];
   totals: RoutineControlAssignmentPdfTotals;
@@ -324,7 +325,10 @@ export class RoutineControlAssignmentPdfService {
     });
 
     document.save(
-      this.filename(data.monthValue),
+      this.filename(
+        data.monthFromValue,
+        data.monthToValue,
+      ),
     );
   }
 
@@ -382,7 +386,7 @@ export class RoutineControlAssignmentPdfService {
     );
 
     document.text(
-      `Mes de venta: ${periodLabel}`,
+      `Periodo de venta: ${periodLabel}`,
       12,
       13.5,
     );
@@ -647,16 +651,30 @@ export class RoutineControlAssignmentPdfService {
   }
 
   private filename(
-    monthValue: string,
+    monthFromValue: string,
+    monthToValue: string,
   ): string {
-    const safeMonth =
-      /^\d{4}-\d{2}$/.test(monthValue)
-        ? monthValue
-        : 'periodo';
+    const validMonthPattern =
+      /^\d{4}-\d{2}$/;
+
+    const safeMonthFrom =
+      validMonthPattern.test(monthFromValue)
+        ? monthFromValue
+        : 'inicio';
+
+    const safeMonthTo =
+      validMonthPattern.test(monthToValue)
+        ? monthToValue
+        : 'fin';
+
+    const safePeriod =
+      safeMonthFrom === safeMonthTo
+        ? safeMonthFrom
+        : `${safeMonthFrom}_a_${safeMonthTo}`;
 
     return (
       'control_rutinas_asignacion_'
-      + `${safeMonth}.pdf`
+      + `${safePeriod}.pdf`
     );
   }
 }

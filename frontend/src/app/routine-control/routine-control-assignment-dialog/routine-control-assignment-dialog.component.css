@@ -83,6 +83,13 @@
   padding: 14px 18px 0;
 }
 
+.month-range {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
 .month-selector {
   display: flex;
   flex-direction: column;
@@ -405,6 +412,25 @@
   .empty-state {
     margin-left: 12px;
     margin-right: 12px;
+  }
+
+  .report-controls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .month-range {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .month-selector input {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .loading-label {
+    padding-bottom: 0;
   }
 
   .dialog-actions {
