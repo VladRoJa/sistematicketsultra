@@ -71,6 +71,11 @@ export class RoutineControlAssignmentPdfService {
     const periodLabel =
       this.pdfText(data.periodLabel);
 
+    const logoDataUrl =
+      await this.loadImageDataUrl(
+        '/assets/branding/ultra-gym-logo.png',
+      );
+
     const denseReport =
       data.rows.length > 18;
 
@@ -132,8 +137,13 @@ export class RoutineControlAssignmentPdfService {
       ]],
       body,
       foot: [[
-        'Total general',
-        '',
+        {
+          content: 'Total general',
+          colSpan: 2,
+          styles: {
+            halign: 'center',
+          },
+        },
         this.integer(data.totals.conRutina),
         this.percentage(
           data.totals.percentConRutina,
@@ -156,7 +166,7 @@ export class RoutineControlAssignmentPdfService {
       margin: {
         top: 22,
         right: horizontalMargin,
-        bottom: 8,
+        bottom: 17,
         left: horizontalMargin,
       },
       showHead: 'everyPage',
@@ -197,7 +207,8 @@ export class RoutineControlAssignmentPdfService {
         fillColor: [7, 31, 86],
         textColor: [255, 255, 255],
         fontStyle: 'bold',
-        halign: 'right',
+        halign: 'center',
+        valign: 'middle',
       },
       columnStyles: {
         0: {
@@ -310,7 +321,10 @@ export class RoutineControlAssignmentPdfService {
       },
     });
 
-    this.drawPageFooters(document);
+    this.drawPageFooters(
+      document,
+      logoDataUrl,
+    );
 
     document.setProperties({
       title:
@@ -433,6 +447,7 @@ export class RoutineControlAssignmentPdfService {
 
   private drawPageFooters(
     document: JsPdfDocument,
+    logoDataUrl: string,
   ): void {
     const pageCount =
       document.getNumberOfPages();
@@ -470,9 +485,9 @@ export class RoutineControlAssignmentPdfService {
 
       document.line(
         6,
-        pageHeight - 7,
+        pageHeight - 13,
         pageWidth - 6,
-        pageHeight - 7,
+        pageHeight - 13,
       );
 
       document.setFont(
@@ -489,18 +504,77 @@ export class RoutineControlAssignmentPdfService {
       document.text(
         `Generado: ${generatedAt}`,
         6,
-        pageHeight - 3,
+        pageHeight - 4,
       );
 
       document.text(
         `Página ${page} de ${pageCount}`,
-        pageWidth - 6,
-        pageHeight - 3,
+        pageWidth / 2,
+        pageHeight - 4,
         {
-          align: 'right',
+          align: 'center',
         },
       );
+
+      const logoWidth = 11.5;
+      const logoHeight = 10.6;
+
+      document.addImage(
+        logoDataUrl,
+        'PNG',
+        pageWidth - 6 - logoWidth,
+        pageHeight - 11.5,
+        logoWidth,
+        logoHeight,
+        'ultra-gym-logo',
+        'FAST',
+      );
     }
+  }
+
+  private async loadImageDataUrl(
+    imageUrl: string,
+  ): Promise<string> {
+    const response = await fetch(imageUrl);
+
+    if (!response.ok) {
+      throw new Error(
+        `No se pudo cargar el logo del PDF: `
+        + `${response.status}`,
+      );
+    }
+
+    const imageBlob = await response.blob();
+
+    return new Promise<string>(
+      (resolve, reject) => {
+        const reader = new FileReader();
+
+        reader.onload = () => {
+          if (typeof reader.result === 'string') {
+            resolve(reader.result);
+            return;
+          }
+
+          reject(
+            new Error(
+              'El logo del PDF no pudo '
+              + 'convertirse a imagen.',
+            ),
+          );
+        };
+
+        reader.onerror = () => {
+          reject(
+            new Error(
+              'No se pudo leer el logo del PDF.',
+            ),
+          );
+        };
+
+        reader.readAsDataURL(imageBlob);
+      },
+    );
   }
 
   private regionColorMap(
