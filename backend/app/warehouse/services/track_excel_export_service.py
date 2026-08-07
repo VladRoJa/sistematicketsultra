@@ -128,7 +128,7 @@ BASE_HEADERS = {
     "Q": "Alcance usuarios activos",
     "R": "Meta FAYCGO {month}",
     "S": " Ingreso ideal al CIERRE {day_month}",
-    "T": " Ingreso Real al {day_month}",
+    "T": " Ingreso Venta Total al {day_month}",
     "U": "Ingreso Real al dia anterior {month} agregadora",
     "V": "Ingreso Real total al {day} de {month}",
     "W": "% alcance de meta al {day_month}",

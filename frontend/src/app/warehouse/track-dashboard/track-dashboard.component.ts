@@ -1044,7 +1044,7 @@ private getTrackSortColumnLabel(key: TrackSortKey): string {
     // Ingresos
     meta_faycgo_mes: 'Meta FAYCGO',
     ingreso_ideal_cierre_mtd: 'Ingreso ideal al cierre',
-    ingreso_real_base_mtd: 'Ingreso base',
+    ingreso_real_base_mtd: 'Ingreso base (Venta Total)',
     ingreso_real_agregadora_mtd: 'Ingreso agregadoras',
     ingreso_real_mtd: 'Ingreso real total',
     avance_ingreso: 'Avance ingreso mensual',

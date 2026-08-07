@@ -301,7 +301,7 @@ def build_track_daily_mart_for_date(
                     desempeno_row.source_snapshot_id if desempeno_row else None
                 ),
                 "source_snapshot_id_ingresos": (
-                    ingresos_row.source_snapshot_id_reporte_direccion
+                    ingresos_row.source_snapshot_id
                     if ingresos_row else None
                 ),
                 "source_snapshot_id_nuevos": (
