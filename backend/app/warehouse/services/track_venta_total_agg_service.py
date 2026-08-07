@@ -89,8 +89,7 @@ def aggregate_venta_total_snapshot(snapshot_id: int, *, commit: bool = True) -> 
               AND r.fecha ~ '^[0-9]{2}-[0-9]{2}-[0-9]{2}$'
               AND to_date(r.fecha, 'DD-MM-YY') >= date_trunc('month', s.business_date)::date
               AND to_date(r.fecha, 'DD-MM-YY') < (date_trunc('month', s.business_date)::date + interval '1 month')
-              AND upper(trim(r.estatus)) = 'ACTIVO'
-              AND r.total > 0
+              AND upper(trim(r.estatus)) IN ('ACTIVO', 'FACTURADO')
               AND upper(trim(r.sucursal)) NOT IN :excluded_branches
               AND upper(trim(a.sucursal_canon)) NOT IN :excluded_branches
             GROUP BY

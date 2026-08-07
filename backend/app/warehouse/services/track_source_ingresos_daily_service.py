@@ -13,10 +13,10 @@ from app.models.warehouse import (
     IngresosTotalpassSnapshotRowORM,
     IngresosWellhubSnapshotORM,
     IngresosWellhubSnapshotRowORM,
-    ReporteDireccionSnapshotORM,
-    ReporteDireccionSnapshotRowORM,
+    TrackSourceAgregadorasDailyORM,
     TrackSourceIngresosDailyORM,
-    TrackSourceAgregadorasDailyORM
+    VentaTotalSnapshotORM,
+    VentaTotalSnapshotRowORM,
 )
 from app.warehouse.services.track_branch_alias_resolver_service import (
     resolve_track_branch_alias,
@@ -29,6 +29,9 @@ class TrackSourceIngresosDailyServiceError(RuntimeError):
 
 
 _DECIMAL_ZERO = Decimal("0.00")
+_VALID_VENTA_TOTAL_STATUSES = frozenset(
+    {"ACTIVO", "FACTURADO"}
+)
 
 
 def _ensure_date(value: Any, *, field_name: str) -> date:
@@ -71,23 +74,33 @@ def _is_out_of_scope_track_branch(raw_branch_name: str) -> bool:
     return normalized in {"BECA", "CORPORATIVO"}
 
 
-def _resolve_reporte_direccion_snapshot_for_track(
+def _normalize_venta_total_status(
+    value: Any,
+) -> str:
+    return str(value or "").strip().upper()
+
+
+def _resolve_venta_total_snapshot_for_track(
     *,
     business_date: date,
     generation_mode: str | None = None,
-) -> ReporteDireccionSnapshotORM | None:
-    query = ReporteDireccionSnapshotORM.query.filter_by(
+) -> VentaTotalSnapshotORM | None:
+    query = VentaTotalSnapshotORM.query.filter_by(
         business_date=business_date,
         snapshot_kind="daily",
     )
 
     if generation_mode == "manual_preview":
-        return query.order_by(ReporteDireccionSnapshotORM.id.desc()).first()
+        return query.order_by(
+            VentaTotalSnapshotORM.id.desc()
+        ).first()
 
     return (
         query
-        .filter(ReporteDireccionSnapshotORM.is_canonical.is_(True))
-        .order_by(ReporteDireccionSnapshotORM.id.desc())
+        .filter(
+            VentaTotalSnapshotORM.is_canonical.is_(True)
+        )
+        .order_by(VentaTotalSnapshotORM.id.desc())
         .first()
     )
 
@@ -96,8 +109,8 @@ def _build_base_ingresos_map_for_date(
     *,
     business_date: date,
     generation_mode: str | None = None,
-) -> tuple[dict[str, dict[str, Any]], int]:
-    snapshot = _resolve_reporte_direccion_snapshot_for_track(
+) -> tuple[dict[str, dict[str, Any]], int, str]:
+    snapshot = _resolve_venta_total_snapshot_for_track(
         business_date=business_date,
         generation_mode=generation_mode,
     )
@@ -105,16 +118,20 @@ def _build_base_ingresos_map_for_date(
     if snapshot is None:
         if generation_mode == "manual_preview":
             raise TrackSourceIngresosDailyServiceError(
-                f"No existe snapshot daily de reporte_direccion para business_date={business_date.isoformat()}."
+                "No existe snapshot daily de venta_total para "
+                f"business_date={business_date.isoformat()}."
             )
 
         raise TrackSourceIngresosDailyServiceError(
-            f"No existe snapshot canónico daily de reporte_direccion para business_date={business_date.isoformat()}."
+            "No existe snapshot canonico daily de venta_total "
+            f"para business_date={business_date.isoformat()}."
         )
 
     rows = (
-        ReporteDireccionSnapshotRowORM.query.filter_by(snapshot_id=snapshot.id)
-        .order_by(ReporteDireccionSnapshotRowORM.id.asc())
+        VentaTotalSnapshotRowORM.query.filter_by(
+            snapshot_id=snapshot.id
+        )
+        .order_by(VentaTotalSnapshotRowORM.id.asc())
         .all()
     )
 
@@ -124,6 +141,16 @@ def _build_base_ingresos_map_for_date(
         if _is_out_of_scope_track_branch(row.sucursal):
             continue
 
+        normalized_status = (
+            _normalize_venta_total_status(row.estatus)
+        )
+
+        if (
+            normalized_status
+            not in _VALID_VENTA_TOTAL_STATUSES
+        ):
+            continue
+
         sucursal_canon = resolve_track_branch_alias(
             source_family="gasca_family",
             raw_branch_name=row.sucursal,
@@ -131,25 +158,37 @@ def _build_base_ingresos_map_for_date(
 
         if sucursal_canon is None:
             raise TrackSourceIngresosDailyServiceError(
-                f"No se pudo resolver alias de sucursal para reporte_direccion: {row.sucursal!r}"
+                "No se pudo resolver alias de sucursal "
+                f"para venta_total: {row.sucursal!r}"
             )
 
         current = result.get(
             sucursal_canon,
             {
                 "ingreso_real_base_mtd": _DECIMAL_ZERO,
-                "source_snapshot_id_reporte_direccion": snapshot.id,
-                "source_report_type_key_reporte_direccion": snapshot.report_type_key,
+                "source_snapshot_id": snapshot.id,
+                "source_report_type_key": (
+                    snapshot.report_type_key
+                ),
             },
         )
 
-        current["ingreso_real_base_mtd"] = _to_decimal(
-            current["ingreso_real_base_mtd"]
-        ) + _to_decimal(row.ingreso_acumulado_mes_en_curso)
+        current["ingreso_real_base_mtd"] = (
+            _to_decimal(
+                current["ingreso_real_base_mtd"]
+            )
+            + _to_decimal(row.total)
+        )
 
         result[sucursal_canon] = current
 
-    return result, snapshot.id
+    return (
+        result,
+        snapshot.id,
+        snapshot.report_type_key,
+    )
+
+
 def _build_agregadoras_map_for_date(
     *,
     business_date: date,
@@ -212,6 +251,8 @@ def _merge_base_and_agregadoras_maps_for_date(
     business_date: date,
     base_map: dict[str, dict[str, Any]],
     agregadoras_map: dict[str, dict[str, Any]],
+    base_snapshot_id: int,
+    base_report_type_key: str,
 ) -> list[dict[str, Any]]:
     all_branch_keys = set(base_map.keys()) | set(agregadoras_map.keys())
 
@@ -242,17 +283,15 @@ def _merge_base_and_agregadoras_maps_for_date(
                 "ingreso_real_total_mtd": ingreso_real_total_mtd,
                 "ingreso_real_mtd": ingreso_real_total_mtd,
 
-                # compatibilidad legacy
-                "source_snapshot_id": base_data.get(
-                    "source_snapshot_id_reporte_direccion"
-                ),
-                "source_report_type_key": base_data.get(
-                    "source_report_type_key_reporte_direccion"
+                # Lineage oficial del ingreso base:
+                # Venta Total.
+                "source_snapshot_id": base_snapshot_id,
+                "source_report_type_key": (
+                    base_report_type_key
                 ),
 
-                "source_snapshot_id_reporte_direccion": base_data.get(
-                    "source_snapshot_id_reporte_direccion"
-                ),
+                # Columnas legacy de Reporte de Direccion.
+                "source_snapshot_id_reporte_direccion": None,
                 "source_snapshot_id_wellhub": agregadoras_data.get(
                     "source_snapshot_id_wellhub"
                 ),
@@ -262,9 +301,7 @@ def _merge_base_and_agregadoras_maps_for_date(
                 "source_business_date_agregadoras": agregadoras_data.get(
                     "source_business_date_agregadoras"
                 ),
-                "source_report_type_key_reporte_direccion": base_data.get(
-                    "source_report_type_key_reporte_direccion"
-                ),
+                "source_report_type_key_reporte_direccion": None,
                 "source_report_type_key_wellhub": agregadoras_data.get(
                     "source_report_type_key_wellhub"
                 ),
@@ -431,7 +468,11 @@ def build_track_source_ingresos_daily_for_date(
         field_name="business_date",
     )
 
-    base_map, _base_snapshot_id = _build_base_ingresos_map_for_date(
+    (
+        base_map,
+        base_snapshot_id,
+        base_report_type_key,
+    ) = _build_base_ingresos_map_for_date(
         business_date=normalized_business_date,
         generation_mode=generation_mode,
     )
@@ -448,6 +489,8 @@ def build_track_source_ingresos_daily_for_date(
         business_date=normalized_business_date,
         base_map=base_map,
         agregadoras_map=agregadoras_map,
+        base_snapshot_id=base_snapshot_id,
+        base_report_type_key=base_report_type_key,
     )
 
 def refresh_track_source_ingresos_daily_for_date(

@@ -402,7 +402,7 @@
                   [class]="getTrackSortHeaderClass('ingreso_real_base_mtd')"
                   (click)="sortTrackTable('ingreso_real_base_mtd')"
                 >
-                  Ingreso base
+                  Ingreso base (Venta Total)
                   <span>{{ getTrackSortIndicator('ingreso_real_base_mtd') }}</span>
                 </button>
               </th>
@@ -999,7 +999,7 @@
 
               <th class="cell-right">
                 <button type="button" [class]="getTrackSortHeaderClass('ingreso_real_base_mtd')" (click)="sortTrackTable('ingreso_real_base_mtd')">
-                  Ingreso Real al {{ getTrackDayMonthShortLabel() }}
+                  Ingreso Venta Total al {{ getTrackDayMonthShortLabel() }}
                   <span>{{ getTrackSortIndicator('ingreso_real_base_mtd') }}</span>
                 </button>
               </th>
