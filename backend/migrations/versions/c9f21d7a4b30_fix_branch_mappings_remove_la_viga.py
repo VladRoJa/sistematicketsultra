@@ -1,7 +1,7 @@
 """fix branch mappings and permanently remove la viga
 
 Revision ID: c9f21d7a4b30
-Revises: c81b2e6a4f90
+Revises: f3a6c1d8e2b4
 Create Date: 2026-08-04 14:45:00
 
 """
@@ -18,7 +18,7 @@ import sqlalchemy as sa
 
 
 revision = "c9f21d7a4b30"
-down_revision = "c81b2e6a4f90"
+down_revision = "f3a6c1d8e2b4"
 branch_labels = None
 depends_on = None
 
