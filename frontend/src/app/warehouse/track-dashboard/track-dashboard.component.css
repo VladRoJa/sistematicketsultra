@@ -1636,6 +1636,130 @@
 }
 
 
+/* ==========================================================================
+   Cierre canónico manual
+   ========================================================================== */
+
+.track-canonical-close-button {
+  min-height: 42px;
+  border: 1px solid rgba(229, 69, 37, 0.30);
+  border-radius: 999px;
+  padding: 0.75rem 1.1rem;
+  background:
+    linear-gradient(
+      135deg,
+      var(--ultra-black-90, #1f2937),
+      var(--ultra-charcoal, #111827)
+    );
+  color: #ffffff;
+  font-size: 0.82rem;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow:
+    0 8px 18px rgba(15, 23, 42, 0.16),
+    inset 0 0 0 1px rgba(229, 69, 37, 0.06);
+  transition:
+    transform 140ms ease,
+    box-shadow 140ms ease,
+    border-color 140ms ease,
+    opacity 140ms ease,
+    background-color 140ms ease;
+}
+
+.track-canonical-close-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: rgba(229, 69, 37, 0.60);
+  box-shadow:
+    0 12px 24px rgba(15, 23, 42, 0.22),
+    0 0 0 3px rgba(229, 69, 37, 0.08);
+}
+
+.track-canonical-close-button:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow:
+    0 6px 14px rgba(15, 23, 42, 0.18);
+}
+
+.track-canonical-close-button:disabled {
+  border-color: var(--ultra-gray-200, #e2e8f0);
+  background: var(--ultra-gray-100, #f1f5f9);
+  color: var(--ultra-gray-500, #64748b);
+  box-shadow: none;
+  cursor: not-allowed;
+  opacity: 0.88;
+}
+
+.track-canonical-close-status {
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.track-canonical-close-status__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid rgba(229, 69, 37, 0.18);
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: var(--ultra-orange-soft, #fff1ed);
+  color: var(--ultra-gray-600, #475569);
+  white-space: nowrap;
+}
+
+.track-canonical-close-status__label strong {
+  color: var(--ultra-orange, #e54525);
+  font-weight: 900;
+}
+
+.track-canonical-close-status__detail {
+  max-width: 520px;
+  border: 1px solid rgba(220, 38, 38, 0.18);
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: var(--ultra-danger-soft, #fef2f2);
+  color: #991b1b;
+  font-weight: 800;
+}
+
+@media (max-width: 1050px) {
+  .track-form--topbar .track-canonical-close-button {
+    flex: 1;
+  }
+
+  .track-canonical-close-status {
+    justify-content: flex-start;
+    width: 100%;
+  }
+}
+
+@media (max-width: 700px) {
+  .track-canonical-close-button {
+    width: 100%;
+  }
+
+  .track-canonical-close-status {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .track-canonical-close-status__label,
+  .track-canonical-close-status__detail {
+    max-width: none;
+    width: 100%;
+    border-radius: 12px;
+    white-space: normal;
+  }
+}
+
+
 .track-intelligence-button {
   border: 1px solid rgba(229, 69, 37, 0.24);
   border-radius: 999px;

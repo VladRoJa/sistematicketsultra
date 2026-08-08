@@ -1,7 +1,7 @@
 //   frontend\src\app\warehouse\track-dashboard\track-dashboard.component.ts
 
 
-import { Component, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -13,6 +13,8 @@ import {
   TrackDailyMartResponse,
   TrackDailyMartRow,
   TrackResolvedVersion,
+  TrackCanonicalCloseStatusResponse,
+  TrackCanonicalCloseVersion,
 } from '../../services/track.service';
 
 type ProgressTone = 'danger' | 'warning' | 'success' | 'neutral';
@@ -264,7 +266,7 @@ interface TrackViewRow {
   templateUrl: './track-dashboard.component.html',
   styleUrls: ['./track-dashboard.component.css'],
 })
-export class TrackDashboardComponent implements OnInit {
+export class TrackDashboardComponent implements OnInit, OnDestroy {
   readonly pageTitle = 'Track diario';
   readonly pageSubtitle =
     'Genera snapshots manuales y consulta resultados del track dentro de Warehouse.';
@@ -383,6 +385,20 @@ getTrackViewModeButtonClass(mode: TrackViewMode): string {
   isSubmitting = false;
   isLoadingMart = false;
   isDownloadingTrackExcel = false;
+
+  isRequestingCanonicalClose = false;
+  isLoadingCanonicalCloseStatus = false;
+  canonicalCloseStatusLoaded = false;
+  canonicalCloseErrorMessage = '';
+
+  currentCanonicalClose: TrackCanonicalCloseVersion | null = null;
+  latestCanonicalCloseAttempt: TrackCanonicalCloseVersion | null = null;
+
+  hasActiveCanonicalCloseRequest = false;
+  canRequestCanonicalClose = false;
+
+  private canonicalClosePollTimer:
+    ReturnType<typeof setTimeout> | null = null;
   errorMessage = '';
   martErrorMessage = '';
 
@@ -410,6 +426,11 @@ getTrackViewModeButtonClass(mode: TrackViewMode): string {
   ngOnInit(): void {
     this.syncSelectedModeLabel();
     this.loadDailyMart();
+    this.loadCanonicalCloseStatus();
+  }
+
+  ngOnDestroy(): void {
+    this.clearCanonicalClosePoll();
   }
 
   runTrackPipeline(): void {
@@ -450,6 +471,287 @@ getTrackViewModeButtonClass(mode: TrackViewMode): string {
         },
       });
   }
+
+
+requestCanonicalClose(): void {
+  if (!this.puedeEjecutarTrack()) {
+    this.canonicalCloseErrorMessage =
+      'No tienes permisos para cerrar canónicamente el Track.';
+    return;
+  }
+
+  if (!this.isSelectedTrackDateInPast()) {
+    this.canonicalCloseErrorMessage =
+      'El cierre canónico manual solo aplica a fechas pasadas.';
+    return;
+  }
+
+  if (
+    this.isRequestingCanonicalClose ||
+    this.hasActiveCanonicalCloseRequest
+  ) {
+    return;
+  }
+
+  this.isRequestingCanonicalClose = true;
+  this.canonicalCloseErrorMessage = '';
+
+  const requestedTrackDate = this.trackDate;
+
+  this.trackService
+    .requestCanonicalClose(requestedTrackDate)
+    .subscribe({
+      next: (response) => {
+        if (requestedTrackDate !== this.trackDate) {
+          return;
+        }
+
+        this.isRequestingCanonicalClose = false;
+
+        if (response.status !== 'accepted') {
+          this.canonicalCloseErrorMessage =
+            response.message ||
+            'No se pudo solicitar el cierre canónico.';
+          return;
+        }
+
+        this.hasActiveCanonicalCloseRequest = true;
+        this.canRequestCanonicalClose = false;
+
+        this.loadCanonicalCloseStatus();
+      },
+      error: (error) => {
+        if (requestedTrackDate !== this.trackDate) {
+          return;
+        }
+
+        this.isRequestingCanonicalClose = false;
+        this.canonicalCloseErrorMessage =
+          error?.error?.message ||
+          error?.error?.detail ||
+          'Ocurrió un error al solicitar el cierre canónico.';
+      },
+    });
+}
+
+loadCanonicalCloseStatus(): void {
+  this.clearCanonicalClosePoll();
+
+  if (
+    !this.puedeEjecutarTrack() ||
+    !this.isSelectedTrackDateInPast()
+  ) {
+    this.resetCanonicalCloseState();
+    return;
+  }
+
+  const requestedTrackDate = this.trackDate;
+  const wasActive =
+    this.hasActiveCanonicalCloseRequest;
+
+  this.isLoadingCanonicalCloseStatus = true;
+  this.canonicalCloseErrorMessage = '';
+
+  this.trackService
+    .getCanonicalCloseStatus(requestedTrackDate)
+    .subscribe({
+      next: (response: TrackCanonicalCloseStatusResponse) => {
+        if (requestedTrackDate !== this.trackDate) {
+          return;
+        }
+
+        this.isLoadingCanonicalCloseStatus = false;
+        this.canonicalCloseStatusLoaded = true;
+
+        if (response.status !== 'ok') {
+          this.canonicalCloseErrorMessage =
+            response.message ||
+            'No se pudo consultar el estado del cierre canónico.';
+          this.canRequestCanonicalClose = false;
+          return;
+        }
+
+        this.currentCanonicalClose =
+          response.current_close || null;
+
+        this.latestCanonicalCloseAttempt =
+          response.latest_attempt || null;
+
+        this.hasActiveCanonicalCloseRequest =
+          response.has_active_request === true;
+
+        this.canRequestCanonicalClose =
+          response.can_request_close === true;
+
+        if (this.hasActiveCanonicalCloseRequest) {
+          this.scheduleCanonicalCloseStatusPoll();
+          return;
+        }
+
+        const latestAttempt =
+          this.latestCanonicalCloseAttempt;
+
+        if (
+          wasActive &&
+          latestAttempt?.status === 'success' &&
+          latestAttempt.is_current
+        ) {
+          this.loadDailyMart();
+        }
+      },
+      error: (error) => {
+        if (requestedTrackDate !== this.trackDate) {
+          return;
+        }
+
+        this.isLoadingCanonicalCloseStatus = false;
+        this.canonicalCloseStatusLoaded = true;
+        this.canRequestCanonicalClose = false;
+
+        this.canonicalCloseErrorMessage =
+          error?.error?.message ||
+          error?.error?.detail ||
+          'Ocurrió un error al consultar el estado del cierre canónico.';
+
+        const httpStatus = Number(error?.status ?? 0);
+
+        if (
+          this.hasActiveCanonicalCloseRequest &&
+          (httpStatus === 0 || httpStatus >= 500)
+        ) {
+          this.scheduleCanonicalCloseStatusPoll();
+        }
+      },
+    });
+}
+
+shouldShowCanonicalCloseControls(): boolean {
+  return (
+    this.puedeEjecutarTrack() &&
+    this.isSelectedTrackDateInPast()
+  );
+}
+
+shouldDisableCanonicalCloseButton(): boolean {
+  return (
+    !this.shouldShowCanonicalCloseControls() ||
+    this.isRequestingCanonicalClose ||
+    this.isLoadingCanonicalCloseStatus ||
+    !this.canonicalCloseStatusLoaded ||
+    this.hasActiveCanonicalCloseRequest ||
+    !this.canRequestCanonicalClose
+  );
+}
+
+getCanonicalCloseButtonLabel(): string {
+  if (this.isRequestingCanonicalClose) {
+    return 'Solicitando cierre...';
+  }
+
+  const status =
+    this.latestCanonicalCloseAttempt?.status;
+
+  if (status === 'pending') {
+    return 'Cierre en cola';
+  }
+
+  if (status === 'running') {
+    return 'Cierre en proceso';
+  }
+
+  if (status === 'failed') {
+    return 'Reintentar cierre canónico';
+  }
+
+  if (status === 'success') {
+    return 'Volver a cerrar canónicamente';
+  }
+
+  return 'Cerrar canónicamente';
+}
+
+getCanonicalCloseStatusLabel(): string {
+  const latestAttempt =
+    this.latestCanonicalCloseAttempt;
+
+  if (!latestAttempt) {
+    if (this.currentCanonicalClose) {
+      return 'Cierre canónico vigente';
+    }
+
+    return 'Sin cierre canónico manual';
+  }
+
+  switch (latestAttempt.status) {
+    case 'pending':
+      return 'Solicitud pendiente';
+
+    case 'running':
+      return 'Cierre canónico en proceso';
+
+    case 'failed':
+      return this.currentCanonicalClose
+        ? 'Último intento falló · cierre anterior vigente'
+        : 'Cierre canónico fallido';
+
+    case 'success':
+      return latestAttempt.is_current
+        ? 'Cierre canónico completado'
+        : 'Cierre canónico exitoso';
+
+    case 'replaced':
+      return 'Cierre canónico reemplazado';
+
+    default:
+      return 'Estado de cierre no disponible';
+  }
+}
+
+getCanonicalCloseErrorDetail(): string {
+  return (
+    this.latestCanonicalCloseAttempt?.error_message ||
+    this.canonicalCloseErrorMessage ||
+    ''
+  );
+}
+
+private scheduleCanonicalCloseStatusPoll(): void {
+  this.clearCanonicalClosePoll();
+
+  if (!this.hasActiveCanonicalCloseRequest) {
+    return;
+  }
+
+  this.canonicalClosePollTimer = setTimeout(() => {
+    this.canonicalClosePollTimer = null;
+    this.loadCanonicalCloseStatus();
+  }, 5000);
+}
+
+private clearCanonicalClosePoll(): void {
+  if (this.canonicalClosePollTimer === null) {
+    return;
+  }
+
+  clearTimeout(this.canonicalClosePollTimer);
+  this.canonicalClosePollTimer = null;
+}
+
+private resetCanonicalCloseState(): void {
+  this.clearCanonicalClosePoll();
+
+  this.isRequestingCanonicalClose = false;
+  this.isLoadingCanonicalCloseStatus = false;
+  this.canonicalCloseStatusLoaded = false;
+  this.canonicalCloseErrorMessage = '';
+
+  this.currentCanonicalClose = null;
+  this.latestCanonicalCloseAttempt = null;
+
+  this.hasActiveCanonicalCloseRequest = false;
+  this.canRequestCanonicalClose = false;
+}
+
 
 loadDailyMart(): void {
   if (this.isLoadingMart) {
@@ -1077,8 +1379,11 @@ onGenerationModeChanged(): void {
 }
 
 onTrackDateChanged(): void {
+  this.clearCanonicalClosePoll();
+  this.resetCanonicalCloseState();
   this.resetLoadedMartState();
-}  
+  this.loadCanonicalCloseStatus();
+}
  
 goToPreviousTrackDate(): void {
   this.shiftTrackDateByDays(-1);
@@ -1119,6 +1424,7 @@ private shiftTrackDateByDays(days: number): void {
   this.trackDate = nextTrackDate;
   this.applyHistoricalModeForSelectedDate();
   this.loadDailyMart();
+  this.loadCanonicalCloseStatus();
 }
 
 private applyHistoricalModeForSelectedDate(): void {

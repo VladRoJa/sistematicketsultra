@@ -26,8 +26,11 @@ from app.warehouse.services.track_daily_mart_service import (
 from app.warehouse.services.track_daily_version_service import (
     create_track_daily_version,
     get_current_track_daily_version,
+    get_track_daily_version_by_id,
     mark_track_daily_version_failed,
+    mark_track_daily_version_running,
     mark_track_daily_version_success,
+    promote_track_canonical_close,
     replace_current_track_daily_version,
     _now_utc,
 )
@@ -44,6 +47,9 @@ from app.warehouse.services.track_upload_retention_service import (
 )
 from app.warehouse.services.track_source_tienda_daily_service import (
     refresh_track_source_tienda_daily_for_date,
+)
+from app.warehouse.services.venta_total_repository import (
+    promote_venta_total_snapshot_canonical,
 )
 
 SUPPORTED_GENERATION_MODES = frozenset(
@@ -398,6 +404,348 @@ def run_track_official_closed_day_job(
         trigger_source=trigger_source or "track_official_closed_day_job_service",
     )
 
+
+
+def run_requested_track_canonical_close(
+    *,
+    track_daily_version_id: int,
+) -> dict[str, Any]:
+    """
+    Ejecuta una solicitud persistida de cierre_canonico.
+
+    La versión solicitada permanece non-current durante todo el trabajo.
+    Venta Total se ingiere como staging non-canonical y ambas promociones
+    (Venta Total + Track) ocurren únicamente después de construir el mart.
+    """
+    try:
+        normalized_version_id = int(track_daily_version_id)
+    except Exception as exc:
+        raise TrackDailyPipelineServiceError(
+            "track_daily_version_id inválido: "
+            f"{track_daily_version_id!r}"
+        ) from exc
+
+    if normalized_version_id <= 0:
+        raise TrackDailyPipelineServiceError(
+            "track_daily_version_id debe ser un entero positivo."
+        )
+
+    request_version = get_track_daily_version_by_id(
+        normalized_version_id
+    )
+
+    if request_version.version_type != "cierre_canonico":
+        raise TrackDailyPipelineServiceError(
+            "La versión solicitada no es cierre_canonico. "
+            f"version_id={normalized_version_id} "
+            f"version_type={request_version.version_type!r}."
+        )
+
+    if (
+        request_version.is_current
+        and request_version.status == "success"
+    ):
+        return {
+            "status": "already_completed",
+            "track_date": request_version.track_date.isoformat(),
+            "generation_mode": "official_closed_day",
+            "track_daily_version": {
+                "id": request_version.id,
+                "version_type": "cierre_canonico",
+                "status": "success",
+                "is_current": True,
+                "base_version_id": request_version.base_version_id,
+            },
+        }
+
+    if request_version.is_current:
+        raise TrackDailyPipelineServiceError(
+            "Una solicitud pendiente/running de cierre_canonico "
+            "no puede ser current. "
+            f"version_id={normalized_version_id} "
+            f"status={request_version.status!r}."
+        )
+
+    if request_version.status not in {"pending", "running"}:
+        raise TrackDailyPipelineServiceError(
+            "Solo se puede ejecutar una solicitud cierre_canonico "
+            "pending o running. "
+            f"version_id={normalized_version_id} "
+            f"status={request_version.status!r}."
+        )
+
+    track_date = request_version.track_date
+    requested_by_value = (
+        request_version.requested_by
+        or "track_manual_canonical_close"
+    )
+    trigger_source_value = (
+        request_version.trigger_source
+        or "manual_canonical_close_request"
+    )
+
+    if request_version.status == "pending":
+        mark_track_daily_version_running(
+            version_id=normalized_version_id,
+            started_at_utc=_now_utc(),
+            auto_commit=True,
+        )
+
+    try:
+        # La base vinculada al request debe seguir siendo la base
+        # current/success. Si cambió, el request quedó obsoleto.
+        base_version = get_current_track_daily_version(
+            track_date=track_date,
+            version_type="base_nocturna_canonica",
+        )
+
+        if (
+            base_version is None
+            or base_version.status != "success"
+            or base_version.id != request_version.base_version_id
+        ):
+            raise TrackDailyPipelineServiceError(
+                "La base_nocturna_canonica vinculada al cierre "
+                "ya no es la base current/success. "
+                f"track_date={track_date.isoformat()} "
+                f"expected_base_version_id="
+                f"{request_version.base_version_id!r} "
+                f"actual_base_version_id="
+                f"{base_version.id if base_version else None!r}."
+            )
+
+        # Debe existir agregadora exacta antes de invertir tiempo
+        # en regenerar Venta Total.
+        agregadoras_readiness_before = (
+            resolve_exact_agregadoras_snapshot_status_for_date(
+                business_date=track_date,
+            )
+        )
+
+        if not agregadoras_readiness_before.get("is_ready"):
+            raise TrackDailyPipelineServiceError(
+                "El cierre_canonico requiere agregadoras exactas "
+                "del mismo día antes de iniciar. "
+                f"track_date={track_date.isoformat()}."
+            )
+
+        # 1) Rerun histórico de Venta Total.
+        # Se ingiere expresamente como NON-CANONICAL.
+        venta_total_job_result = run_gasca_report_job(
+            report_type_key="venta_total",
+            run_mode="manual_retry",
+            snapshot_kind="daily",
+            requested_by=requested_by_value,
+            trigger_source=(
+                "track_manual_canonical_close_venta_total"
+            ),
+            target_business_date=track_date,
+            force_ingestion=True,
+            force_non_canonical=True,
+        )
+
+        raw_snapshot_id = venta_total_job_result.get(
+            "snapshot_id"
+        )
+
+        raw_warehouse_upload_id = venta_total_job_result.get(
+            "warehouse_upload_id"
+        )
+
+        try:
+            venta_total_warehouse_upload_id = int(
+                raw_warehouse_upload_id
+            )
+        except Exception as exc:
+            raise TrackDailyPipelineServiceError(
+                "El rerun de Venta Total no devolvió "
+                "warehouse_upload_id válido. "
+                f"warehouse_upload_id="
+                f"{raw_warehouse_upload_id!r}."
+            ) from exc
+
+        if venta_total_warehouse_upload_id <= 0:
+            raise TrackDailyPipelineServiceError(
+                "El rerun de Venta Total devolvió "
+                "warehouse_upload_id no positivo. "
+                f"warehouse_upload_id="
+                f"{venta_total_warehouse_upload_id!r}."
+            )
+
+        upload_link_result = (
+            link_warehouse_uploads_to_track_daily_version(
+                track_daily_version_id=normalized_version_id,
+                warehouse_upload_ids=[
+                    venta_total_warehouse_upload_id
+                ],
+                auto_commit=False,
+            )
+        )
+
+        try:
+            venta_total_snapshot_id = int(raw_snapshot_id)
+        except Exception as exc:
+            raise TrackDailyPipelineServiceError(
+                "El rerun de Venta Total no devolvió "
+                "snapshot_id válido. "
+                f"snapshot_id={raw_snapshot_id!r}."
+            ) from exc
+
+        if venta_total_snapshot_id <= 0:
+            raise TrackDailyPipelineServiceError(
+                "El rerun de Venta Total devolvió "
+                "snapshot_id no positivo. "
+                f"snapshot_id={venta_total_snapshot_id!r}."
+            )
+
+        # Revalidación: el snapshot exacto de agregadoras debe
+        # seguir disponible después del job largo de Venta Total.
+        agregadoras_readiness_after = (
+            resolve_exact_agregadoras_snapshot_status_for_date(
+                business_date=track_date,
+            )
+        )
+
+        if not agregadoras_readiness_after.get("is_ready"):
+            raise TrackDailyPipelineServiceError(
+                "Las agregadoras exactas dejaron de estar "
+                "disponibles durante el cierre_canonico. "
+                f"track_date={track_date.isoformat()}."
+            )
+
+        # 2) Refresh exacto de agregadoras.
+        agregadoras_refresh_result = (
+            refresh_track_source_agregadoras_daily_for_track_date(
+                business_date=track_date,
+                generation_mode="official_closed_day",
+                agregadoras_policy=(
+                    AGREGADORAS_POLICY_EXACT_REQUIRED
+                ),
+            )
+        )
+
+        agregadoras_business_date = (
+            agregadoras_refresh_result.get(
+                "agregadoras_business_date"
+            )
+        )
+
+        if agregadoras_business_date != track_date.isoformat():
+            raise TrackDailyPipelineServiceError(
+                "El cierre_canonico requiere agregadoras "
+                "exactas del mismo día. "
+                f"track_date={track_date.isoformat()} "
+                f"agregadoras_business_date="
+                f"{agregadoras_business_date!r}."
+            )
+
+        if (
+            int(
+                agregadoras_refresh_result.get(
+                    "rows_inserted"
+                )
+                or 0
+            )
+            <= 0
+        ):
+            raise TrackDailyPipelineServiceError(
+                "No existen agregadoras exactas para crear "
+                "cierre_canonico de "
+                f"track_date={track_date.isoformat()}."
+            )
+
+        # 3) Ingresos usa EXACTAMENTE el snapshot de Venta Total
+        # recién generado aunque aún sea non-canonical.
+        ingresos_refresh_result = (
+            refresh_track_source_ingresos_daily_for_date(
+                business_date=track_date,
+                generation_mode="official_closed_day",
+                venta_total_snapshot_id=(
+                    venta_total_snapshot_id
+                ),
+            )
+        )
+
+        # 4) Tienda mantiene el comportamiento existente.
+        tienda_refresh_result = (
+            refresh_track_source_tienda_daily_for_date(
+                business_date=track_date,
+            )
+        )
+
+        # 5) El mart se construye sobre la versión solicitada,
+        # que sigue non-current.
+        mart_refresh_result = refresh_track_daily_mart_for_date(
+            business_date=track_date,
+            generation_mode="official_closed_day",
+            track_daily_version_id=normalized_version_id,
+        )
+
+        # 6) PROMOCIÓN FINAL.
+        #
+        # Ambos cambios comparten la misma sesión y ninguno hace
+        # commit por separado. Si cualquiera falla, el except hace
+        # rollback antes de marcar la solicitud failed.
+        venta_total_promotion_result = (
+            promote_venta_total_snapshot_canonical(
+                snapshot_id=venta_total_snapshot_id,
+                expected_business_date=track_date,
+                expected_snapshot_kind="daily",
+                auto_commit=False,
+            )
+        )
+
+        promoted_version = promote_track_canonical_close(
+            version_id=normalized_version_id,
+            generated_at_utc=_now_utc(),
+            finished_at_utc=_now_utc(),
+            auto_commit=False,
+        )
+
+        db.session.commit()
+
+        return {
+            "status": "completed",
+            "track_date": track_date.isoformat(),
+            "generation_mode": "official_closed_day",
+            "track_daily_version": {
+                "id": promoted_version.id,
+                "version_type": "cierre_canonico",
+                "status": promoted_version.status,
+                "is_current": promoted_version.is_current,
+                "base_version_id": promoted_version.base_version_id,
+            },
+            "requested_by": requested_by_value,
+            "trigger_source": trigger_source_value,
+            "venta_total_job_result": venta_total_job_result,
+            "venta_total_snapshot_id": venta_total_snapshot_id,
+            "venta_total_warehouse_upload_id": (
+                venta_total_warehouse_upload_id
+            ),
+            "upload_link_result": upload_link_result,
+            "venta_total_promotion_result": (
+                venta_total_promotion_result
+            ),
+            "agregadoras_readiness_before": (
+                agregadoras_readiness_before
+            ),
+            "agregadoras_readiness_after": (
+                agregadoras_readiness_after
+            ),
+            "source_refresh_results": {
+                "agregadoras": agregadoras_refresh_result,
+                "ingresos": ingresos_refresh_result,
+                "tienda": tienda_refresh_result,
+            },
+            "mart_refresh_result": mart_refresh_result,
+        }
+
+    except Exception as exc:
+        _mark_track_daily_version_failed_safely(
+            version_id=normalized_version_id,
+            error_message=str(exc),
+        )
+        raise
 
 def run_track_agregadoras_integration_for_date(
     *,

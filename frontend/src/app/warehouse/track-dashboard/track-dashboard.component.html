@@ -132,6 +132,16 @@
 </button>
 
             <button
+              *ngIf="shouldShowCanonicalCloseControls()"
+              type="button"
+              class="track-canonical-close-button"
+              (click)="requestCanonicalClose()"
+              [disabled]="shouldDisableCanonicalCloseButton()"
+            >
+              {{ getCanonicalCloseButtonLabel() }}
+            </button>
+
+            <button
               type="button"
               class="secondary-button"
               (click)="loadDailyMart()"
@@ -158,6 +168,23 @@
   <span>{{ getTrackExcelButtonLabel() }}</span>
 </button>
           </div>
+        </div>
+
+        <div
+          class="track-canonical-close-status"
+          *ngIf="shouldShowCanonicalCloseControls()"
+        >
+          <span class="track-canonical-close-status__label">
+            Cierre canónico:
+            <strong>{{ getCanonicalCloseStatusLabel() }}</strong>
+          </span>
+
+          <span
+            class="track-canonical-close-status__detail"
+            *ngIf="getCanonicalCloseErrorDetail()"
+          >
+            {{ getCanonicalCloseErrorDetail() }}
+          </span>
         </div>
       </div>
     </div>

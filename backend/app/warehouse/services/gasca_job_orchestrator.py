@@ -394,6 +394,7 @@ def _dispatch_ingestion_if_applicable(
     command: GascaExtractionCommand,
     upload_ref: WarehouseUploadRef,
     force_ingestion: bool,
+    force_non_canonical: bool = False,
 ) -> IngestionDispatchResult:
     if not force_ingestion:
         return IngestionDispatchResult(
@@ -534,6 +535,7 @@ def _dispatch_ingestion_if_applicable(
                 snapshot_kind=command.snapshot_kind,
                 requested_by=command.requested_by,
                 ingestion_source=command.trigger_source,
+                force_non_canonical=bool(force_non_canonical),
             )
         except Exception as exc:
             raise GascaIngestionError(
@@ -580,6 +582,7 @@ def run_gasca_report_job(
     trigger_source: str | None = None,
     target_business_date: date | None = None,
     force_ingestion: bool = True,
+    force_non_canonical: bool = False,
 ) -> dict[str, Any]:
     """
     Orquesta el flujo completo de un job interno de Gasca:
@@ -599,6 +602,19 @@ def run_gasca_report_job(
         run_mode=run_mode,
         snapshot_kind=snapshot_kind,
     )
+
+    normalized_force_non_canonical = bool(
+        force_non_canonical
+    )
+
+    if (
+        normalized_force_non_canonical
+        and report_type_key != "venta_total"
+    ):
+        raise ValueError(
+            "force_non_canonical solo aplica al reporte "
+            "'venta_total'."
+        )
 
     command = GascaExtractionCommand(
         report_type_key=report_type_key,
@@ -630,6 +646,7 @@ def run_gasca_report_job(
             command=command,
             upload_ref=upload_ref,
             force_ingestion=force_ingestion,
+            force_non_canonical=normalized_force_non_canonical,
         )
     else:
         if force_ingestion:
@@ -662,6 +679,7 @@ def run_gasca_report_job(
             else None
         ),
         "force_ingestion": force_ingestion,
+        "force_non_canonical": normalized_force_non_canonical,
         "artifact": {
             "original_filename": artifact.original_filename,
             "content_type": artifact.content_type,

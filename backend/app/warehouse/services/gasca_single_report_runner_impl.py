@@ -61,6 +61,7 @@ def run_gasca_single_report(
     requested_by: str | None = None,
     trigger_source: str | None = None,
     requested_at: datetime | None = None,
+    target_business_date: date | None = None,
 ) -> dict[str, Any]:
     """
     Ejecuta un solo reporte Gasca y publica el artifact contractual en Warehouse.
@@ -99,6 +100,7 @@ def run_gasca_single_report(
             artifact_path, extra_metadata = _run_venta_total_report(
                 page=page,
                 runtime=runtime,
+                target_business_date=target_business_date,
             )
         else:
             raise GascaSingleReportRunnerError(
@@ -297,6 +299,7 @@ def _run_venta_total_report(
     *,
     page: Any,
     runtime: GascaRuntimeConfig,
+    target_business_date: date | None = None,
 ) -> tuple[Path, dict[str, Any]]:
     current_app.logger.info("Gasca single report runner: ejecutando venta_total.")
 
@@ -306,12 +309,30 @@ def _run_venta_total_report(
     _seleccionar_tipo_reporte(page, "Reporte Venta Total")
 
     hoy_local = datetime.now(pytz.timezone(runtime.timezone_name)).date()
-    inicio_mes = hoy_local.replace(day=1)
+
+    if target_business_date is None:
+        fecha_fin = hoy_local
+    elif isinstance(target_business_date, datetime):
+        fecha_fin = target_business_date.date()
+    elif isinstance(target_business_date, date):
+        fecha_fin = target_business_date
+    else:
+        raise GascaSingleReportRunnerError(
+            "Venta Total: target_business_date debe ser date, datetime o None."
+        )
+
+    if fecha_fin > hoy_local:
+        raise GascaSingleReportRunnerError(
+            "Venta Total: target_business_date no puede ser una fecha futura. "
+            f"Recibida={fecha_fin.isoformat()} hoy={hoy_local.isoformat()}."
+        )
+
+    inicio_mes = fecha_fin.replace(day=1)
 
     _rellenar_fechas_rango_simple(
         page=page,
         fecha_inicio=inicio_mes,
-        fecha_fin=hoy_local,
+        fecha_fin=fecha_fin,
     )
 
     _click_boton_generar(page)
@@ -337,7 +358,7 @@ def _run_venta_total_report(
 
     metadata = {
         "date_from": inicio_mes.isoformat(),
-        "date_to": hoy_local.isoformat(),
+        "date_to": fecha_fin.isoformat(),
         "snapshot_kind_hint": "daily",
     }
     return artifact_path, metadata
