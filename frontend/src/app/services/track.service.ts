@@ -667,6 +667,65 @@ export interface TrackDailyMartResponse {
   detail?: string;
 }
 
+export type TrackCanonicalCloseStatus =
+  | 'pending'
+  | 'running'
+  | 'success'
+  | 'failed'
+  | 'replaced';
+
+export interface TrackCanonicalCloseVersion {
+  id: number;
+  track_date: string;
+  version_type: 'cierre_canonico';
+  status: TrackCanonicalCloseStatus;
+  is_current: boolean;
+  base_version_id: number | null;
+  replaces_version_id: number | null;
+  retry_count: number;
+  requested_by: string | null;
+  trigger_source: string;
+  error_message: string | null;
+  generated_at_utc: string | null;
+  started_at_utc: string | null;
+  finished_at_utc: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface TrackCanonicalCloseRequestVersion {
+  id: number;
+  version_type: 'cierre_canonico';
+  status: TrackCanonicalCloseStatus;
+  is_current: boolean;
+  base_version_id: number | null;
+  replaces_version_id: number | null;
+  retry_count: number;
+  requested_by: string | null;
+  trigger_source: string;
+}
+
+export interface TrackCanonicalCloseRequestResponse {
+  status: 'accepted' | 'not_ready' | 'error';
+  track_date?: string;
+  request?: TrackCanonicalCloseRequestVersion;
+  agregadoras_readiness?: Record<string, unknown>;
+  message?: string;
+  detail?: string;
+}
+
+export interface TrackCanonicalCloseStatusResponse {
+  status: 'ok' | 'error';
+  track_date?: string;
+  current_close?: TrackCanonicalCloseVersion | null;
+  latest_attempt?: TrackCanonicalCloseVersion | null;
+  has_active_request?: boolean;
+  can_request_close?: boolean;
+  message?: string;
+  detail?: string;
+}
+
+
 export interface TrackAgregadorasIntegrationRequest {
   track_date: string;
   requested_by?: string;
@@ -1500,6 +1559,31 @@ export class TrackService {
     return this.http.post<TrackAgregadorasIntegrationResponse>(
       `${this.baseUrl}/run-agregadoras-integration`,
       payload,
+    );
+  }
+
+  requestCanonicalClose(
+    trackDate: string,
+  ): Observable<TrackCanonicalCloseRequestResponse> {
+    return this.http.post<TrackCanonicalCloseRequestResponse>(
+      `${this.baseUrl}/request-canonical-close`,
+      {
+        track_date: trackDate,
+      },
+    );
+  }
+
+  getCanonicalCloseStatus(
+    trackDate: string,
+  ): Observable<TrackCanonicalCloseStatusResponse> {
+    const params = new HttpParams().set(
+      'track_date',
+      trackDate,
+    );
+
+    return this.http.get<TrackCanonicalCloseStatusResponse>(
+      `${this.baseUrl}/canonical-close-status`,
+      { params },
     );
   }
 

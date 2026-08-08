@@ -84,7 +84,46 @@ def _resolve_venta_total_snapshot_for_track(
     *,
     business_date: date,
     generation_mode: str | None = None,
+    venta_total_snapshot_id: int | None = None,
 ) -> VentaTotalSnapshotORM | None:
+    if venta_total_snapshot_id is not None:
+        try:
+            normalized_snapshot_id = int(
+                venta_total_snapshot_id
+            )
+        except Exception as exc:
+            raise TrackSourceIngresosDailyServiceError(
+                "venta_total_snapshot_id inválido: "
+                f"{venta_total_snapshot_id!r}"
+            ) from exc
+
+        if normalized_snapshot_id <= 0:
+            raise TrackSourceIngresosDailyServiceError(
+                "venta_total_snapshot_id debe ser un entero positivo."
+            )
+
+        snapshot = VentaTotalSnapshotORM.query.filter_by(
+            id=normalized_snapshot_id,
+            business_date=business_date,
+            snapshot_kind="daily",
+        ).first()
+
+        if snapshot is None:
+            raise TrackSourceIngresosDailyServiceError(
+                "No existe snapshot daily de venta_total "
+                f"id={normalized_snapshot_id} para "
+                f"business_date={business_date.isoformat()}."
+            )
+
+        if snapshot.report_type_key != "venta_total":
+            raise TrackSourceIngresosDailyServiceError(
+                "El snapshot solicitado no corresponde a venta_total. "
+                f"snapshot_id={normalized_snapshot_id} "
+                f"report_type_key={snapshot.report_type_key!r}."
+            )
+
+        return snapshot
+
     query = VentaTotalSnapshotORM.query.filter_by(
         business_date=business_date,
         snapshot_kind="daily",
@@ -109,10 +148,12 @@ def _build_base_ingresos_map_for_date(
     *,
     business_date: date,
     generation_mode: str | None = None,
+    venta_total_snapshot_id: int | None = None,
 ) -> tuple[dict[str, dict[str, Any]], int, str]:
     snapshot = _resolve_venta_total_snapshot_for_track(
         business_date=business_date,
         generation_mode=generation_mode,
+        venta_total_snapshot_id=venta_total_snapshot_id,
     )
 
     if snapshot is None:
@@ -462,6 +503,7 @@ def build_track_source_ingresos_daily_for_date(
     *,
     business_date: Any,
     generation_mode: str | None = None,
+    venta_total_snapshot_id: int | None = None,
 ) -> list[dict[str, Any]]:
     normalized_business_date = _ensure_date(
         business_date,
@@ -475,6 +517,7 @@ def build_track_source_ingresos_daily_for_date(
     ) = _build_base_ingresos_map_for_date(
         business_date=normalized_business_date,
         generation_mode=generation_mode,
+        venta_total_snapshot_id=venta_total_snapshot_id,
     )
     agregadoras_business_date = _resolve_agregadoras_business_date(
         business_date=normalized_business_date,
@@ -497,6 +540,7 @@ def refresh_track_source_ingresos_daily_for_date(
     *,
     business_date: Any,
     generation_mode: str | None = None,
+    venta_total_snapshot_id: int | None = None,
 ) -> dict[str, Any]:
     normalized_business_date = _ensure_date(
         business_date,
@@ -506,6 +550,7 @@ def refresh_track_source_ingresos_daily_for_date(
     rows = build_track_source_ingresos_daily_for_date(
         business_date=normalized_business_date,
         generation_mode=generation_mode,
+        venta_total_snapshot_id=venta_total_snapshot_id,
     )
 
     try:

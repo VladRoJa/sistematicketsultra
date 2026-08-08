@@ -12,14 +12,12 @@ from zoneinfo import ZoneInfo
 
 from app import create_app, db
 from app.warehouse.services.track_daily_pipeline_service import (
+    run_requested_track_canonical_close,
     run_track_daily_pipeline_for_date,
-    run_track_agregadoras_integration_for_date,
 )
 from app.warehouse.services.track_daily_version_service import (
+    claim_next_pending_track_canonical_close,
     get_current_track_daily_version,
-)
-from app.warehouse.services.track_source_agregadoras_daily_service import (
-    resolve_exact_agregadoras_snapshot_status_for_date,
 )
 from app.warehouse.services.warehouse_retention_service import (
     purge_venta_total_non_canonical_snapshots,
@@ -36,7 +34,6 @@ DEFAULT_NIGHTLY_BASE_HOUR = 23
 DEFAULT_NIGHTLY_BASE_MINUTE = 30
 DEFAULT_NIGHTLY_RETRY_HOUR = 0
 DEFAULT_NIGHTLY_RETRY_MINUTE = 30
-DEFAULT_CLOSE_LOOKBACK_DAYS = 7
 DEFAULT_WAREHOUSE_RETENTION_HOUR = 1
 DEFAULT_WAREHOUSE_RETENTION_MINUTE = 10
 DEFAULT_WAREHOUSE_RETENTION_DAYS = 7
@@ -98,44 +95,6 @@ def _has_failed_current_version(*, track_date: date, version_type: str) -> bool:
 
     return bool(version and version.status == "failed")
 
-def _is_close_check_minute(value: datetime) -> bool:
-    return value.minute in {5, 20, 35, 50}
-
-
-def _has_exact_agregadoras_ready(*, track_date: date) -> bool:
-    readiness = resolve_exact_agregadoras_snapshot_status_for_date(
-        business_date=track_date,
-    )
-
-    return bool(readiness.get("is_ready"))
-
-
-def _find_pending_cierre_canonico_date(
-    *,
-    today: date,
-    lookback_days: int,
-) -> date | None:
-    for days_back in range(1, lookback_days + 1):
-        candidate_date = today - timedelta(days=days_back)
-
-        if not _has_success_current_version(
-            track_date=candidate_date,
-            version_type="base_nocturna_canonica",
-        ):
-            continue
-
-        if _has_success_current_version(
-            track_date=candidate_date,
-            version_type="cierre_canonico",
-        ):
-            continue
-
-        if not _has_exact_agregadoras_ready(track_date=candidate_date):
-            continue
-
-        return candidate_date
-
-    return None
 
 def decide_track_scheduler_action(now_local: datetime) -> TrackSchedulerDecision | None:
     preview_start_hour = _env_int(
@@ -205,24 +164,6 @@ def decide_track_scheduler_action(now_local: datetime) -> TrackSchedulerDecision
                 track_date=previous_day,
                 reason="nightly_base_retry_after_failure",
             )
-            
-    close_lookback_days = _env_int(
-        "TRACK_CLOSE_LOOKBACK_DAYS",
-        DEFAULT_CLOSE_LOOKBACK_DAYS,
-    )
-
-    if _is_close_check_minute(now_local):
-        pending_close_date = _find_pending_cierre_canonico_date(
-            today=today,
-            lookback_days=close_lookback_days,
-        )
-
-        if pending_close_date is not None:
-            return TrackSchedulerDecision(
-                action="cierre_canonico",
-                track_date=pending_close_date,
-                reason="exact_agregadoras_available_for_closed_day",
-            )
 
     return None
 
@@ -259,14 +200,38 @@ def execute_track_scheduler_decision(decision: TrackSchedulerDecision) -> dict:
             trigger_source="scheduler_nightly_retry",
         )
 
-    if decision.action == "cierre_canonico":
-        return run_track_agregadoras_integration_for_date(
-            business_date=decision.track_date,
-            requested_by="track_scheduler",
-            trigger_source="scheduler_close_with_agregadoras",
-        )
-
     raise RuntimeError(f"Acción scheduler no soportada: {decision.action!r}")
+
+
+def execute_pending_track_canonical_close_request() -> dict | None:
+    """
+    Reclama y ejecuta como máximo una solicitud explícita pendiente.
+
+    La selección/claim ocurre en track_daily_version_service con
+    FOR UPDATE SKIP LOCKED. El trabajo largo recibe el version_id
+    persistido y nunca selecciona fechas históricas por su cuenta.
+    """
+    request_version = claim_next_pending_track_canonical_close(
+        auto_commit=True,
+    )
+
+    if request_version is None:
+        return None
+
+    request_version_id = int(request_version.id)
+    request_track_date = request_version.track_date
+
+    LOGGER.info(
+        "Track scheduler reclamó cierre canónico manual: "
+        "version_id=%s track_date=%s requested_by=%s",
+        request_version_id,
+        request_track_date.isoformat(),
+        request_version.requested_by,
+    )
+
+    return run_requested_track_canonical_close(
+        track_daily_version_id=request_version_id,
+    )
 
 def execute_warehouse_retention() -> dict:
     retention_days = _env_int(
@@ -368,6 +333,42 @@ def run_scheduler_loop() -> None:
                                 "Retención Warehouse falló para fecha local=%s",
                                 now_local.date().isoformat(),
                             )    
+                if decision is None:
+                    try:
+                        close_result = (
+                            execute_pending_track_canonical_close_request()
+                        )
+
+                        if close_result is not None:
+                            LOGGER.info(
+                                "Track scheduler terminó cierre canónico "
+                                "manual: version_id=%s track_date=%s "
+                                "result_status=%s",
+                                (
+                                    close_result.get(
+                                        "track_daily_version",
+                                        {},
+                                    ).get("id")
+                                    if isinstance(close_result, dict)
+                                    else None
+                                ),
+                                (
+                                    close_result.get("track_date")
+                                    if isinstance(close_result, dict)
+                                    else None
+                                ),
+                                (
+                                    close_result.get("status")
+                                    if isinstance(close_result, dict)
+                                    else None
+                                ),
+                            )
+                    except Exception:
+                        LOGGER.exception(
+                            "Track scheduler falló procesando "
+                            "solicitud manual de cierre canónico."
+                        )
+
             finally:
                 db.session.remove()
 

@@ -474,6 +474,141 @@ def _resolve_canonicality_decision(
         "reason": "auto_existing_canonical_kept",
     }
 
+
+def promote_venta_total_snapshot_canonical(
+    *,
+    snapshot_id: int,
+    expected_business_date: date | datetime | str | None = None,
+    expected_snapshot_kind: str | None = "daily",
+    auto_commit: bool = False,
+) -> dict[str, Any]:
+    """
+    Promueve explícitamente un snapshot Venta Total como canónico.
+
+    Este método representa una decisión explícita de negocio, por lo que
+    no aplica la heurística automática basada en cantidad de filas.
+
+    Todos los snapshots del mismo business_date + snapshot_kind se bloquean
+    FOR UPDATE antes de cambiar canonicalidad.
+    """
+    try:
+        normalized_snapshot_id = int(snapshot_id)
+    except Exception as exc:
+        raise VentaTotalRepositoryError(
+            f"snapshot_id inválido: {snapshot_id!r}"
+        ) from exc
+
+    if normalized_snapshot_id <= 0:
+        raise VentaTotalRepositoryError(
+            "snapshot_id debe ser un entero positivo."
+        )
+
+    snapshot_probe = VentaTotalSnapshotORM.query.filter_by(
+        id=normalized_snapshot_id
+    ).one_or_none()
+
+    if snapshot_probe is None:
+        raise VentaTotalRepositoryError(
+            "No existe snapshot Venta Total con "
+            f"id={normalized_snapshot_id}."
+        )
+
+    if snapshot_probe.report_type_key != VENTA_TOTAL_REPORT_TYPE_KEY:
+        raise VentaTotalRepositoryError(
+            "El snapshot solicitado no corresponde a venta_total. "
+            f"snapshot_id={normalized_snapshot_id} "
+            f"report_type_key={snapshot_probe.report_type_key!r}."
+        )
+
+    if expected_business_date is not None:
+        normalized_expected_business_date = _ensure_date(
+            expected_business_date
+        )
+
+        if snapshot_probe.business_date != normalized_expected_business_date:
+            raise VentaTotalRepositoryError(
+                "business_date inesperado para promoción canónica. "
+                f"snapshot_id={normalized_snapshot_id} "
+                f"esperado={normalized_expected_business_date.isoformat()} "
+                f"real={snapshot_probe.business_date.isoformat()}."
+            )
+
+    if expected_snapshot_kind is not None:
+        normalized_expected_snapshot_kind = str(
+            expected_snapshot_kind
+        ).strip()
+
+        if (
+            snapshot_probe.snapshot_kind
+            != normalized_expected_snapshot_kind
+        ):
+            raise VentaTotalRepositoryError(
+                "snapshot_kind inesperado para promoción canónica. "
+                f"snapshot_id={normalized_snapshot_id} "
+                f"esperado={normalized_expected_snapshot_kind!r} "
+                f"real={snapshot_probe.snapshot_kind!r}."
+            )
+
+    snapshots_for_day = (
+        VentaTotalSnapshotORM.query.filter_by(
+            business_date=snapshot_probe.business_date,
+            snapshot_kind=snapshot_probe.snapshot_kind,
+        )
+        .order_by(VentaTotalSnapshotORM.id.asc())
+        .with_for_update()
+        .all()
+    )
+
+    snapshot = next(
+        (
+            candidate
+            for candidate in snapshots_for_day
+            if candidate.id == normalized_snapshot_id
+        ),
+        None,
+    )
+
+    if snapshot is None:
+        raise VentaTotalRepositoryError(
+            "El snapshot desapareció durante la promoción canónica. "
+            f"snapshot_id={normalized_snapshot_id}."
+        )
+
+    replaced_snapshot_ids = []
+
+    now = _utc_now()
+
+    for candidate in snapshots_for_day:
+        if candidate.id == snapshot.id:
+            continue
+
+        if candidate.is_canonical:
+            candidate.is_canonical = False
+            candidate.updated_at = now
+            replaced_snapshot_ids.append(candidate.id)
+
+    # Flush intermedio deliberado:
+    # primero quitamos canonicalidad al snapshot anterior para respetar
+    # cualquier índice único parcial de canonicalidad.
+    db.session.flush()
+
+    snapshot.is_canonical = True
+    snapshot.updated_at = now
+
+    db.session.flush()
+
+    if auto_commit:
+        db.session.commit()
+
+    return {
+        "status": "promoted",
+        "snapshot_id": snapshot.id,
+        "business_date": snapshot.business_date.isoformat(),
+        "snapshot_kind": snapshot.snapshot_kind,
+        "is_canonical": True,
+        "replaced_snapshot_ids": replaced_snapshot_ids,
+    }
+
 def persist_venta_total_snapshot(
     *,
     warehouse_upload_id: int,

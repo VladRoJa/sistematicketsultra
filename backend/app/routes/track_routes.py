@@ -16,7 +16,10 @@ from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from app.models.warehouse import TrackDailyMartORM
 from app.warehouse.services.track_daily_version_service import (
+    TrackDailyVersionServiceError,
     get_current_track_daily_version,
+    get_latest_track_canonical_close_version,
+    request_track_canonical_close,
 )
 from app.warehouse.services.track_daily_pipeline_service import (
     run_track_agregadoras_integration_for_date,
@@ -24,6 +27,9 @@ from app.warehouse.services.track_daily_pipeline_service import (
 )
 from app.warehouse.services.track_excel_export_service import (
     build_track_daily_mart_excel,
+)
+from app.warehouse.services.track_source_agregadoras_daily_service import (
+    resolve_exact_agregadoras_snapshot_status_for_date,
 )
 
 
@@ -280,6 +286,35 @@ def _resolve_track_branch_history_rows(
 
     return resolved_rows
 
+
+def _serialize_track_canonical_close_version(
+    version: Any,
+) -> dict[str, Any] | None:
+    if version is None:
+        return None
+
+    def _iso(value: Any) -> str | None:
+        return value.isoformat() if value is not None else None
+
+    return {
+        "id": version.id,
+        "track_date": _iso(version.track_date),
+        "version_type": version.version_type,
+        "status": version.status,
+        "is_current": bool(version.is_current),
+        "base_version_id": version.base_version_id,
+        "replaces_version_id": version.replaces_version_id,
+        "retry_count": int(version.retry_count or 0),
+        "requested_by": version.requested_by,
+        "trigger_source": version.trigger_source,
+        "error_message": version.error_message,
+        "generated_at_utc": _iso(version.generated_at_utc),
+        "started_at_utc": _iso(version.started_at_utc),
+        "finished_at_utc": _iso(version.finished_at_utc),
+        "created_at": _iso(version.created_at),
+        "updated_at": _iso(version.updated_at),
+    }
+
 def _serialize_track_daily_mart_row(row: TrackDailyMartORM) -> dict[str, Any]:
     return {
         "track_daily_version_id": row.track_daily_version_id,
@@ -427,6 +462,255 @@ def run_track_daily_pipeline_endpoint():
                 "detail": str(exc),
             }
         ), 500
+
+
+
+@track_bp.route("/canonical-close-status", methods=["GET"])
+@jwt_required()
+def get_track_canonical_close_status_endpoint():
+    """
+    Devuelve el cierre current visible y el último intento de cierre
+    canónico para una fecha histórica.
+    """
+    try:
+        _require_track_admin_role()
+
+        track_date = _ensure_date(
+            request.args.get("track_date"),
+            field_name="track_date",
+        )
+
+        today_local = _today_tijuana()
+
+        if track_date >= today_local:
+            return jsonify(
+                {
+                    "status": "error",
+                    "message": (
+                        "El estado de cierre canónico manual "
+                        "solo aplica a fechas pasadas."
+                    ),
+                    "track_date": track_date.isoformat(),
+                    "today": today_local.isoformat(),
+                }
+            ), 400
+
+        current_close = get_current_track_daily_version(
+            track_date=track_date,
+            version_type="cierre_canonico",
+        )
+
+        latest_attempt = (
+            get_latest_track_canonical_close_version(
+                track_date=track_date,
+            )
+        )
+
+        has_active_request = bool(
+            latest_attempt is not None
+            and not latest_attempt.is_current
+            and latest_attempt.status in {"pending", "running"}
+        )
+
+        return jsonify(
+            {
+                "status": "ok",
+                "track_date": track_date.isoformat(),
+                "current_close": (
+                    _serialize_track_canonical_close_version(
+                        current_close
+                    )
+                ),
+                "latest_attempt": (
+                    _serialize_track_canonical_close_version(
+                        latest_attempt
+                    )
+                ),
+                "has_active_request": has_active_request,
+                "can_request_close": not has_active_request,
+            }
+        ), 200
+
+    except PermissionError as exc:
+        return jsonify(
+            {
+                "status": "error",
+                "message": str(exc),
+            }
+        ), 403
+
+    except ValueError as exc:
+        return jsonify(
+            {
+                "status": "error",
+                "message": str(exc),
+            }
+        ), 400
+
+    except Exception as exc:
+        return jsonify(
+            {
+                "status": "error",
+                "message": (
+                    "Falló la consulta del estado de "
+                    "cierre canónico del Track."
+                ),
+                "detail": str(exc),
+            }
+        ), 500
+
+
+@track_bp.route("/request-canonical-close", methods=["POST"])
+@jwt_required()
+def request_track_canonical_close_endpoint():
+    """
+    Registra una solicitud asíncrona de cierre canónico histórico.
+
+    Este endpoint NO ejecuta Gasca, refresh de fuentes ni mart.
+    El track-scheduler reclama posteriormente la solicitud pending.
+    """
+    try:
+        _require_track_admin_role()
+
+        payload = request.get_json(silent=True) or {}
+
+        track_date = _ensure_date(
+            payload.get("track_date"),
+            field_name="track_date",
+        )
+
+        today_local = _today_tijuana()
+
+        if track_date >= today_local:
+            return jsonify(
+                {
+                    "status": "error",
+                    "message": (
+                        "El cierre canónico manual solo aplica "
+                        "a fechas pasadas."
+                    ),
+                    "track_date": track_date.isoformat(),
+                    "today": today_local.isoformat(),
+                }
+            ), 400
+
+        agregadoras_readiness = (
+            resolve_exact_agregadoras_snapshot_status_for_date(
+                business_date=track_date,
+            )
+        )
+
+        if not agregadoras_readiness.get("is_ready"):
+            return jsonify(
+                {
+                    "status": "not_ready",
+                    "message": (
+                        "No existen agregadoras exactas para "
+                        "la fecha seleccionada."
+                    ),
+                    "track_date": track_date.isoformat(),
+                    "agregadoras_readiness": (
+                        agregadoras_readiness
+                    ),
+                }
+            ), 409
+
+        jwt_identity = get_jwt_identity()
+        requested_by = str(
+            jwt_identity
+            if jwt_identity is not None
+            else ""
+        ).strip()
+
+        if not requested_by:
+            return jsonify(
+                {
+                    "status": "error",
+                    "message": (
+                        "No se pudo resolver el usuario "
+                        "solicitante desde el JWT."
+                    ),
+                }
+            ), 401
+
+        request_version = request_track_canonical_close(
+            track_date=track_date,
+            requested_by=requested_by,
+            trigger_source="api_manual_canonical_close",
+            auto_commit=True,
+        )
+
+        return jsonify(
+            {
+                "status": "accepted",
+                "track_date": track_date.isoformat(),
+                "request": {
+                    "id": request_version.id,
+                    "version_type": (
+                        request_version.version_type
+                    ),
+                    "status": request_version.status,
+                    "is_current": (
+                        request_version.is_current
+                    ),
+                    "base_version_id": (
+                        request_version.base_version_id
+                    ),
+                    "replaces_version_id": (
+                        request_version.replaces_version_id
+                    ),
+                    "retry_count": (
+                        request_version.retry_count
+                    ),
+                    "requested_by": (
+                        request_version.requested_by
+                    ),
+                    "trigger_source": (
+                        request_version.trigger_source
+                    ),
+                },
+                "agregadoras_readiness": (
+                    agregadoras_readiness
+                ),
+            }
+        ), 202
+
+    except PermissionError as exc:
+        return jsonify(
+            {
+                "status": "error",
+                "message": str(exc),
+            }
+        ), 403
+
+    except ValueError as exc:
+        return jsonify(
+            {
+                "status": "error",
+                "message": str(exc),
+            }
+        ), 400
+
+    except TrackDailyVersionServiceError as exc:
+        return jsonify(
+            {
+                "status": "not_ready",
+                "message": str(exc),
+            }
+        ), 409
+
+    except Exception as exc:
+        return jsonify(
+            {
+                "status": "error",
+                "message": (
+                    "Falló la solicitud de cierre "
+                    "canónico del Track."
+                ),
+                "detail": str(exc),
+            }
+        ), 500
+
 
 @track_bp.route("/run-agregadoras-integration", methods=["POST"])
 @jwt_required()

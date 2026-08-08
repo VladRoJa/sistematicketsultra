@@ -145,3 +145,95 @@ def test_merge_propagates_venta_total_lineage_to_aggregator_only_branch():
             "source_report_type_key_totalpass": "ingresos_totalpass",
         }
     ]
+
+
+class _FakeSnapshotQuery:
+    def __init__(self, snapshot):
+        self._snapshot = snapshot
+        self.filters = {}
+
+    def filter_by(self, **kwargs):
+        self.filters = dict(kwargs)
+        return self
+
+    def first(self):
+        return self._snapshot
+
+
+def test_explicit_venta_total_snapshot_can_be_non_canonical(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    target_date = date(2026, 7, 31)
+
+    snapshot = SimpleNamespace(
+        id=777,
+        report_type_key="venta_total",
+        is_canonical=False,
+    )
+
+    snapshot_query = _FakeSnapshotQuery(snapshot)
+
+    rows_query = _FakeRowsQuery(
+        [
+            SimpleNamespace(
+                sucursal="SUCURSAL A",
+                estatus="ACTIVO",
+                total=Decimal("125.00"),
+            ),
+        ]
+    )
+
+    monkeypatch.setattr(
+        service,
+        "VentaTotalSnapshotORM",
+        SimpleNamespace(
+            query=snapshot_query,
+        ),
+    )
+
+    monkeypatch.setattr(
+        service,
+        "VentaTotalSnapshotRowORM",
+        SimpleNamespace(
+            query=rows_query,
+            id=_FakeColumn(),
+        ),
+    )
+
+    monkeypatch.setattr(
+        service,
+        "resolve_track_branch_alias",
+        lambda **kwargs: (
+            "SUCURSAL_A"
+            if kwargs["raw_branch_name"] == "SUCURSAL A"
+            else None
+        ),
+    )
+
+    result, snapshot_id, report_type_key = (
+        service._build_base_ingresos_map_for_date(
+            business_date=target_date,
+            generation_mode="official_closed_day",
+            venta_total_snapshot_id=777,
+        )
+    )
+
+    assert snapshot_query.filters == {
+        "id": 777,
+        "business_date": target_date,
+        "snapshot_kind": "daily",
+    }
+
+    assert "is_canonical" not in snapshot_query.filters
+
+    assert rows_query.snapshot_id == 777
+    assert snapshot_id == 777
+    assert report_type_key == "venta_total"
+
+    assert result == {
+        "SUCURSAL_A": {
+            "ingreso_real_base_mtd": Decimal("125.00"),
+            "source_snapshot_id": 777,
+            "source_report_type_key": "venta_total",
+        }
+    }

@@ -45,6 +45,7 @@ class IngestVentaTotalCommand:
     snapshot_kind: str
     requested_by: str | None = None
     ingestion_source: str | None = None
+    force_non_canonical: bool = False
 
 
 @dataclass(slots=True)
@@ -234,6 +235,14 @@ def _resolve_optional_canonicality_resolver() -> Callable[..., dict[str, Any] | 
     return fn if callable(fn) else None
 
 
+
+def _force_non_canonical_resolver(**_kwargs: Any) -> dict[str, Any]:
+    return {
+        "is_canonical": False,
+        "replace_existing_canonical": False,
+        "reason": "explicit_force_non_canonical",
+    }
+
 def _resolve_optional_advisory_lock_key(
     *,
     upload_doc: WarehouseUploadDocument,
@@ -391,12 +400,14 @@ def ingest_venta_total_upload(
     snapshot_kind: str,
     requested_by: str | None = None,
     ingestion_source: str | None = None,
+    force_non_canonical: bool = False,
 ) -> dict[str, Any]:
     command = IngestVentaTotalCommand(
         warehouse_upload_id=warehouse_upload_id,
         snapshot_kind=snapshot_kind,
         requested_by=requested_by,
         ingestion_source=ingestion_source,
+        force_non_canonical=bool(force_non_canonical),
     )
     _validate_command(command)
 
@@ -409,6 +420,10 @@ def ingest_venta_total_upload(
 
     repository = _resolve_repository()
     canonicality_resolver = _resolve_optional_canonicality_resolver()
+
+    if command.force_non_canonical:
+        canonicality_resolver = _force_non_canonical_resolver
+
     advisory_lock_key = _resolve_optional_advisory_lock_key(
         upload_doc=upload_doc,
         snapshot_kind=command.snapshot_kind,
