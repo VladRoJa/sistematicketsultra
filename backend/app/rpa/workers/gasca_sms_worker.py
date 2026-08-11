@@ -84,8 +84,6 @@ def _close_sender_session(sender_session: GoogleMessagesSmsSenderSession | None)
         sender_session.close()
     except Exception:
         LOGGER.exception("Error cerrando sesión Google Messages.")
-    finally:
-        db.session.remove()
 
 
 def run_worker_loop() -> None:
