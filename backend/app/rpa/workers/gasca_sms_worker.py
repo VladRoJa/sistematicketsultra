@@ -144,8 +144,15 @@ def run_worker_loop() -> None:
                         request.requested_phone_masked,
                     )
 
-                    if sender_session is None:
-                        sender_session = GoogleMessagesSmsSenderSession()
+                    if sender_session is not None:
+                        LOGGER.info(
+                            "Cerrando sesión Google Messages antes de consultar Gasca "
+                            "para evitar conflicto entre instancias Playwright."
+                        )
+                        _close_sender_session(sender_session)
+                        sender_session = None
+
+                    sender_session = GoogleMessagesSmsSenderSession()
 
                     process_gasca_sms_request(
                         request,
