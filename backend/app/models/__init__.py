@@ -45,7 +45,13 @@ from .planning_targets import (
     PlanningTargetApprovalEventORM,
     PlanningOperatorORM,
 )
-from .marketing import MarketingMonthlyInputORM
+from .marketing import (
+    MarketingMonthlyInputORM,
+    MarketingIventasSyncRunORM,
+    MarketingIventasRawPageORM,
+    MarketingIventasContactORM,
+    MarketingIventasContactTagORM,
+)
 from .internal_documents import (
     InternalDocumentCategoryORM,
     InternalDocumentORM,
@@ -145,6 +151,10 @@ __all__ = [
     "PlanningTargetApprovalEventORM",
     "PlanningOperatorORM",
     "MarketingMonthlyInputORM",
+    "MarketingIventasSyncRunORM",
+    "MarketingIventasRawPageORM",
+    "MarketingIventasContactORM",
+    "MarketingIventasContactTagORM",
     "InternalDocumentCategoryORM",
     "InternalDocumentORM",
     "InternalDocumentVersionORM",
@@ -193,4 +203,3 @@ __all__ = [
     "GascaSmsRequestORM",
     "GascaSmsRequestStatus",
 ]
-
