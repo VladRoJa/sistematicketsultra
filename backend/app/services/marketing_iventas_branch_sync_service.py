@@ -312,6 +312,29 @@ def sync_iventas_branch_pages(
         )
 
         # ----------------------------------------------------
+        # VALIDAR IDENTIDAD DE SUCURSAL DEL PROVEEDOR
+        # ----------------------------------------------------
+
+        provider_branch_code = (
+            str(
+                page.provider_branch_code
+                or ""
+            ).strip()
+        )
+
+        if (
+            provider_branch_code
+            and provider_branch_code.casefold()
+            != canonical_branch_code.casefold()
+        ):
+            raise MarketingIventasBranchSyncError(
+                "iVentas respondió una branch distinta "
+                "a la solicitada. "
+                f"requested={canonical_branch_code} "
+                f"provider={provider_branch_code}."
+            )
+
+        # ----------------------------------------------------
         # 5. NORMALIZE
         # ----------------------------------------------------
 

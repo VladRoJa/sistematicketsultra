@@ -67,6 +67,9 @@ from app.services.marketing_iventas_service import (
 logger = logging.getLogger(__name__)
 
 
+IVENTAS_V1_EXPECTED_BRANCH_COUNT = 26
+
+
 class MarketingIventasRunSyncError(
     RuntimeError
 ):
@@ -205,6 +208,17 @@ def _load_active_iventas_branch_codes(
         raise MarketingIventasRunSyncError(
             "Existen códigos iVentas "
             "duplicados entre aliases activos."
+        )
+
+    if (
+        len(branch_codes)
+        != IVENTAS_V1_EXPECTED_BRANCH_COUNT
+    ):
+        raise MarketingIventasRunSyncError(
+            "iVentas Contactos V1 requiere "
+            f"{IVENTAS_V1_EXPECTED_BRANCH_COUNT} "
+            "aliases activos iventas_family; "
+            f"se encontraron {len(branch_codes)}."
         )
 
     return branch_codes
@@ -663,10 +677,74 @@ def sync_iventas_full_run(
 
             continue
 
-        except Exception:
+        except Exception as unexpected_exc:
             # No ocultar bugs o inconsistencias no
             # clasificadas como falla operacional.
+            #
+            # El run ya fue COMMITeado como RUNNING antes
+            # del primer HTTP. Cerramos el snapshot como
+            # FAILED con la evidencia realmente persistida,
+            # pero después propagamos la excepción original.
             session_value.rollback()
+
+            logger.exception(
+                "iVentas unexpected branch failure "
+                "run=%s branch=%s error_type=%s",
+                sync_run_id,
+                resolution.branch_code,
+                unexpected_exc.__class__.__name__,
+            )
+
+            try:
+                stored = (
+                    read_iventas_stored_run_counters(
+                        sync_run_id=sync_run_id,
+                        session=session_value,
+                    )
+                )
+
+                aborted_branches_failed = (
+                    branches_requested
+                    - branches_completed
+                )
+
+                abort_counters = _build_run_counters(
+                    branches_completed=(
+                        branches_completed
+                    ),
+                    branches_failed=(
+                        aborted_branches_failed
+                    ),
+                    aliases_resolved=(
+                        aliases_resolved
+                    ),
+                    aliases_unresolved=0,
+                    stored=stored,
+                )
+
+                finalize_iventas_sync_run(
+                    sync_run_id=sync_run_id,
+                    status=SYNC_STATUS_FAILED,
+                    counters=abort_counters,
+                    make_canonical=False,
+                    finished_at=finished_at,
+                    session=session_value,
+                )
+
+            except Exception:
+                # El cleanup nunca debe esconder la
+                # excepción original que abortó el run.
+                session_value.rollback()
+
+                logger.exception(
+                    "iVentas failed to finalize "
+                    "aborted run=%s after "
+                    "unexpected error_type=%s",
+                    sync_run_id,
+                    unexpected_exc
+                    .__class__.__name__,
+                )
+
             raise
 
         branches_completed += 1

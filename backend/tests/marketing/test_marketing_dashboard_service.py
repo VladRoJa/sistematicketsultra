@@ -96,6 +96,20 @@ def test_dashboard_builds_branch_and_summary_metrics(
         ),
     )
 
+    monkeypatch.setattr(
+        service,
+        "read_iventas_dashboard_month_data",
+        lambda **_: SimpleNamespace(
+            available=False,
+            period_key="IVENTAS-2026-07",
+            date_from=date(2026, 7, 1),
+            date_to=date(2026, 7, 31),
+            sync_run_id=None,
+            metrics=None,
+            branch_metrics=None,
+        ),
+    )
+
     result = service.build_marketing_dashboard(
         month="2026-07",
         access=_global_access(),
@@ -144,6 +158,20 @@ def test_dashboard_zero_denominators_are_null(
         service,
         "_load_sales",
         lambda **_: service.SalesLoadResult(),
+    )
+
+    monkeypatch.setattr(
+        service,
+        "read_iventas_dashboard_month_data",
+        lambda **_: SimpleNamespace(
+            available=False,
+            period_key="IVENTAS-2026-07",
+            date_from=date(2026, 7, 1),
+            date_to=date(2026, 7, 31),
+            sync_run_id=None,
+            metrics=None,
+            branch_metrics=None,
+        ),
     )
 
     result = service.build_marketing_dashboard(
@@ -422,3 +450,332 @@ def test_attribution_detail_rejects_branch_outside_scope(
             access=_global_access(),
             sucursal_id=999,
         )
+
+
+def test_dashboard_adds_iventas_metrics_without_replacing_manual_leads(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(
+        service,
+        "_load_available_branches",
+        lambda: [
+            service.MarketingBranch(
+                1,
+                "Sucursal A",
+                1,
+            )
+        ],
+    )
+
+    monkeypatch.setattr(
+        service,
+        "_load_inputs_by_branch",
+        lambda **_: {
+            1: SimpleNamespace(
+                investment=Decimal("100.00"),
+                leads=10,
+            )
+        },
+    )
+
+    monkeypatch.setattr(
+        service,
+        "_load_visit_events",
+        lambda **_: service.VisitLoadResult(
+            events=[
+                VisitEvent(
+                    "visit-a-1",
+                    1,
+                    date(2026, 7, 2),
+                    "0000000000",
+                    "PASE RECORRIDO",
+                )
+            ],
+            eligible_visit_events=1,
+            visit_events_with_valid_phone=1,
+            visit_events_without_valid_phone=0,
+        ),
+    )
+
+    monkeypatch.setattr(
+        service,
+        "_load_sales",
+        lambda **_: service.SalesLoadResult(),
+    )
+
+    iventas_calls = {}
+
+    def fake_read_iventas_dashboard_month_data(**kwargs):
+        iventas_calls.update(kwargs)
+
+        return SimpleNamespace(
+            available=True,
+            period_key="IVENTAS-2026-07",
+            date_from=date(2026, 7, 1),
+            date_to=date(2026, 7, 31),
+            sync_run_id=41,
+            metrics=SimpleNamespace(
+                iventas_contacts=300,
+                iventas_contacts_with_first_message=80,
+                meta_observed_leads=50,
+            ),
+            branch_metrics=(
+                SimpleNamespace(
+                    sync_run_id=41,
+                    period_key="IVENTAS-2026-07",
+                    month_start=date(2026, 7, 1),
+                    sucursal_id=1,
+                    iventas_contacts=200,
+                    iventas_contacts_with_first_message=60,
+                    meta_observed_leads=35,
+                ),
+            ),
+        )
+
+    monkeypatch.setattr(
+        service,
+        "read_iventas_dashboard_month_data",
+        fake_read_iventas_dashboard_month_data,
+        raising=False,
+    )
+
+    result = service.build_marketing_dashboard(
+        month="2026-07",
+        access=_global_access(),
+        today=date(2026, 8, 30),
+    )
+
+    assert iventas_calls["month_date"] == date(
+        2026,
+        7,
+        1,
+    )
+    assert iventas_calls["today"] == date(
+        2026,
+        8,
+        30,
+    )
+
+    assert result["summary"]["leads"] == 10
+    assert result["summary"]["visits"] == 1
+    assert result["summary"]["lead_to_visit_rate"] == 0.1
+
+    summary_iventas = result["summary"]["iventas"]
+
+    assert summary_iventas["available"] is True
+    assert summary_iventas["period_key"] == "IVENTAS-2026-07"
+    assert summary_iventas["sync_run_id"] == 41
+    assert summary_iventas["date_from"] == "2026-07-01"
+    assert summary_iventas["date_to"] == "2026-07-31"
+    assert summary_iventas["contacts"] == 200
+    assert (
+        summary_iventas["contacts_with_first_message"]
+        == 60
+    )
+    assert summary_iventas["meta_observed_leads"] == 35
+
+    branch_iventas = result["branches"][0]["iventas"]
+
+    assert branch_iventas["available"] is True
+    assert branch_iventas["contacts"] == 200
+    assert (
+        branch_iventas["contacts_with_first_message"]
+        == 60
+    )
+    assert branch_iventas["meta_observed_leads"] == 35
+
+
+def test_dashboard_keeps_current_metrics_when_iventas_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(
+        service,
+        "_load_available_branches",
+        lambda: [
+            service.MarketingBranch(
+                1,
+                "Sucursal A",
+                1,
+            )
+        ],
+    )
+
+    monkeypatch.setattr(
+        service,
+        "_load_inputs_by_branch",
+        lambda **_: {
+            1: SimpleNamespace(
+                investment=Decimal("100.00"),
+                leads=10,
+            )
+        },
+    )
+
+    monkeypatch.setattr(
+        service,
+        "_load_visit_events",
+        lambda **_: service.VisitLoadResult(
+            events=[
+                VisitEvent(
+                    "visit-a-1",
+                    1,
+                    date(2026, 7, 2),
+                    "0000000000",
+                    "PASE RECORRIDO",
+                )
+            ],
+            eligible_visit_events=1,
+            visit_events_with_valid_phone=1,
+            visit_events_without_valid_phone=0,
+        ),
+    )
+
+    monkeypatch.setattr(
+        service,
+        "_load_sales",
+        lambda **_: service.SalesLoadResult(),
+    )
+
+    monkeypatch.setattr(
+        service,
+        "read_iventas_dashboard_month_data",
+        lambda **_: SimpleNamespace(
+            available=False,
+            period_key="IVENTAS-2026-07",
+            date_from=date(2026, 7, 1),
+            date_to=date(2026, 7, 31),
+            sync_run_id=None,
+            metrics=None,
+            branch_metrics=None,
+        ),
+    )
+
+    result = service.build_marketing_dashboard(
+        month="2026-07",
+        access=_global_access(),
+        today=date(2026, 8, 30),
+    )
+
+    assert result["summary"]["leads"] == 10
+    assert result["summary"]["visits"] == 1
+    assert result["summary"]["lead_to_visit_rate"] == 0.1
+
+    summary_iventas = result["summary"]["iventas"]
+
+    assert summary_iventas["available"] is False
+    assert summary_iventas["period_key"] == "IVENTAS-2026-07"
+    assert summary_iventas["sync_run_id"] is None
+    assert summary_iventas["contacts"] is None
+    assert (
+        summary_iventas["contacts_with_first_message"]
+        is None
+    )
+    assert summary_iventas["meta_observed_leads"] is None
+
+    branch_iventas = result["branches"][0]["iventas"]
+
+    assert branch_iventas["available"] is False
+    assert branch_iventas["contacts"] is None
+    assert (
+        branch_iventas["contacts_with_first_message"]
+        is None
+    )
+    assert branch_iventas["meta_observed_leads"] is None
+
+
+def test_dashboard_iventas_summary_respects_visible_branch_scope(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(
+        service,
+        "load_visible_marketing_branches",
+        lambda _: (
+            [
+                service.MarketingBranch(
+                    1,
+                    "Sucursal A",
+                    1,
+                )
+            ],
+            (1,),
+            {
+                "type": "TEST_SCOPE",
+                "branch_ids": [1],
+            },
+        ),
+    )
+
+    monkeypatch.setattr(
+        service,
+        "_load_inputs_by_branch",
+        lambda **_: {
+            1: SimpleNamespace(
+                investment=Decimal("100.00"),
+                leads=10,
+            )
+        },
+    )
+
+    monkeypatch.setattr(
+        service,
+        "_load_visit_events",
+        lambda **_: service.VisitLoadResult(),
+    )
+
+    monkeypatch.setattr(
+        service,
+        "_load_sales",
+        lambda **_: service.SalesLoadResult(),
+    )
+
+    monkeypatch.setattr(
+        service,
+        "read_iventas_dashboard_month_data",
+        lambda **_: SimpleNamespace(
+            available=True,
+            period_key="IVENTAS-2026-07",
+            date_from=date(2026, 7, 1),
+            date_to=date(2026, 7, 31),
+            sync_run_id=41,
+            metrics=SimpleNamespace(
+                iventas_contacts=300,
+                iventas_contacts_with_first_message=80,
+                meta_observed_leads=50,
+            ),
+            branch_metrics=(
+                SimpleNamespace(
+                    sucursal_id=1,
+                    iventas_contacts=120,
+                    iventas_contacts_with_first_message=40,
+                    meta_observed_leads=25,
+                ),
+                SimpleNamespace(
+                    sucursal_id=2,
+                    iventas_contacts=180,
+                    iventas_contacts_with_first_message=40,
+                    meta_observed_leads=25,
+                ),
+            ),
+        ),
+    )
+
+    result = service.build_marketing_dashboard(
+        month="2026-07",
+        access=_global_access(),
+        today=date(2026, 8, 30),
+    )
+
+    assert result["scope"]["branch_ids"] == [1]
+    assert result["summary"]["leads"] == 10
+
+    summary_iventas = result["summary"]["iventas"]
+
+    assert summary_iventas["contacts"] == 120
+    assert (
+        summary_iventas["contacts_with_first_message"]
+        == 40
+    )
+    assert summary_iventas["meta_observed_leads"] == 25
+
+    assert len(result["branches"]) == 1
+    assert result["branches"][0]["sucursal_id"] == 1

@@ -907,3 +907,81 @@ def test_invalid_page_limit_fails_before_any_dependency(
 
     assert called["resolver"] is False
     assert events == []
+
+def test_provider_branch_mismatch_stops_before_structured_persistence(
+    monkeypatch,
+) -> None:
+    events = []
+
+    client = FakeClient(
+        raw_responses=[
+            _raw(
+                cursor=None,
+                payload='{"page":1}',
+            ),
+        ],
+        pages=[
+            IventasPage(
+                request_cursor=None,
+                http_status=200,
+                raw_payload='{"page":1}',
+                payload={},
+                contacts=[
+                    {"id": "a"},
+                ],
+                has_more=False,
+                next_cursor=None,
+                provider_branch_code="otra-sucursal",
+                provider_branch_label="Otra Sucursal",
+            ),
+        ],
+        events=events,
+    )
+
+    _install_persistence_mocks(
+        monkeypatch,
+        events=events,
+        structured_results=[],
+    )
+
+    with pytest.raises(
+        service.MarketingIventasBranchSyncError,
+        match=(
+            "respondió una branch distinta "
+            "a la solicitada"
+        ),
+    ):
+        sync_iventas_branch_pages(
+            sync_run_id=7,
+            branch_code="papalote",
+            from_utc=(
+                "2026-08-01T07:00:00.000Z"
+            ),
+            to_utc=(
+                "2026-08-11T06:59:59.999Z"
+            ),
+            client=client,
+            page_limit=100,
+            session=FakeSession(
+                run=_run()
+            ),
+        )
+
+    assert events == [
+        "request:None",
+        "raw_commit:1",
+        "parse:None",
+        "metadata_commit:100",
+    ]
+
+    assert all(
+        not event.startswith(
+            "normalize:"
+        )
+        for event in events
+    )
+
+    assert (
+        "structured_commit"
+        not in events
+    )
