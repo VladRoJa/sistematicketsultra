@@ -584,7 +584,31 @@ def test_unexpected_exception_is_not_masked(
 
     assert session.rollback_count == 1
 
-    assert finalize_calls == []
+    assert len(finalize_calls) == 1
+
+    finalize_call = finalize_calls[0]
+
+    assert finalize_call[
+        "sync_run_id"
+    ] == 101
+
+    assert finalize_call[
+        "status"
+    ] == "FAILED"
+
+    assert finalize_call[
+        "make_canonical"
+    ] is False
+
+    counters = finalize_call[
+        "counters"
+    ]
+
+    assert counters.branches_completed == 0
+    assert counters.branches_failed == 3
+
+    assert counters.aliases_resolved == 3
+    assert counters.aliases_unresolved == 0
 
 
 def test_passes_commercial_utc_period_to_each_branch(
@@ -718,3 +742,36 @@ def test_partial_uses_stored_postgres_counters(
         .contacts_with_multiple_meta_ad_tags
         == 2
     )
+
+def test_requires_exactly_26_active_iventas_aliases():
+    rows = tuple(
+        SimpleNamespace(
+            raw_branch_name=f"branch-{index:02d}"
+        )
+        for index in range(1, 26)
+    )
+
+    class FakeAliasQuery:
+        def filter(self, *args):
+            return self
+
+        def order_by(self, *args):
+            return self
+
+        def all(self):
+            return rows
+
+    class FakeAliasSession:
+        def query(self, *args):
+            return FakeAliasQuery()
+
+    with pytest.raises(
+        service.MarketingIventasRunSyncError,
+        match=(
+            "requiere 26 aliases activos "
+            "iventas_family; se encontraron 25"
+        ),
+    ):
+        service._load_active_iventas_branch_codes(
+            session=FakeAliasSession(),
+        )

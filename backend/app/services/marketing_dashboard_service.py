@@ -34,6 +34,9 @@ from app.services.marketing_inputs_service import (
     list_marketing_inputs,
     parse_month,
 )
+from app.services.marketing_iventas_dashboard_data_service import (
+    read_iventas_dashboard_month_data,
+)
 from app.services.marketing_phone import (
     normalize_member_phone,
     normalize_phone,
@@ -863,6 +866,114 @@ def build_marketing_dashboard(
             TIJUANA_TIMEZONE
         ).date()
     )
+    iventas_data = read_iventas_dashboard_month_data(
+        month_date=month_start,
+        today=normalized_today,
+    )
+
+    iventas_metrics = iventas_data.metrics
+    iventas_available = bool(
+        iventas_data.available
+        and iventas_metrics is not None
+    )
+
+    if iventas_available:
+        iventas_by_branch = {
+            int(row.sucursal_id): row
+            for row in (iventas_data.branch_metrics or ())
+        }
+
+        visible_iventas_rows = [
+            iventas_by_branch[branch_id]
+            for branch_id in visible_branch_ids
+            if branch_id in iventas_by_branch
+        ]
+
+        summary_iventas = {
+            "available": True,
+            "period_key": iventas_data.period_key,
+            "sync_run_id": iventas_data.sync_run_id,
+            "date_from": iventas_data.date_from.isoformat(),
+            "date_to": iventas_data.date_to.isoformat(),
+            "contacts": sum(
+                row.iventas_contacts
+                for row in visible_iventas_rows
+            ),
+            "contacts_with_first_message": sum(
+                row.iventas_contacts_with_first_message
+                for row in visible_iventas_rows
+            ),
+            "meta_observed_leads": sum(
+                row.meta_observed_leads
+                for row in visible_iventas_rows
+            ),
+        }
+
+    else:
+        summary_iventas = {
+            "available": False,
+            "period_key": iventas_data.period_key,
+            "sync_run_id": None,
+            "date_from": iventas_data.date_from.isoformat(),
+            "date_to": iventas_data.date_to.isoformat(),
+            "contacts": None,
+            "contacts_with_first_message": None,
+            "meta_observed_leads": None,
+        }
+
+        iventas_by_branch = {}
+
+    for branch_payload in branch_payloads:
+        branch_id = int(
+            branch_payload["sucursal_id"]
+        )
+
+        branch_iventas = iventas_by_branch.get(
+            branch_id
+        )
+
+        if not iventas_available:
+            branch_payload["iventas"] = {
+                "available": False,
+                "period_key": iventas_data.period_key,
+                "sync_run_id": None,
+                "contacts": None,
+                "contacts_with_first_message": None,
+                "meta_observed_leads": None,
+            }
+            continue
+
+        branch_payload["iventas"] = {
+            "available": True,
+            "period_key": iventas_data.period_key,
+            "sync_run_id": iventas_data.sync_run_id,
+            "contacts": (
+                branch_iventas.iventas_contacts
+                if branch_iventas is not None
+                else 0
+            ),
+            "contacts_with_first_message": (
+                branch_iventas
+                .iventas_contacts_with_first_message
+                if branch_iventas is not None
+                else 0
+            ),
+            "meta_observed_leads": (
+                branch_iventas.meta_observed_leads
+                if branch_iventas is not None
+                else 0
+            ),
+        }
+
+    summary_payload = _build_metrics(
+        investment=summary_investment,
+        leads=summary_leads,
+        visits=summary_visits,
+        sales=summary_sales,
+        sales_revenue=summary_revenue,
+    )
+    summary_payload["iventas"] = summary_iventas
+
     quality_limitations = list(FIXED_LIMITATIONS)
     quality_limitations.extend(
         visit_result.limitations
@@ -878,13 +989,7 @@ def build_marketing_dashboard(
         "permissions": {
             "can_edit_inputs": access.can_edit_inputs,
         },
-        "summary": _build_metrics(
-            investment=summary_investment,
-            leads=summary_leads,
-            visits=summary_visits,
-            sales=summary_sales,
-            sales_revenue=summary_revenue,
-        ),
+        "summary": summary_payload,
         "branches": branch_payloads,
         "data_quality": {
             "lead_mode": "monthly_aggregate_manual",
