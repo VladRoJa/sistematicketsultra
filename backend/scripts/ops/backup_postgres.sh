@@ -74,7 +74,7 @@ resolve_pg_verifybackup() {
         pg_basebackup --version
     )"
 
-    if [[ ! "$version_output" =~ PostgreSQL[[:space:]]+([0-9]+) ]]; then
+    if [[ ! "$version_output" =~ PostgreSQL\)?[[:space:]]+([0-9]+) ]]; then
         log \
             "ERROR: no se pudo determinar versión mayor " \
             "desde pg_basebackup."
