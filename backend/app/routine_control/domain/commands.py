@@ -21,6 +21,7 @@ class UpsertRoutineMemberCommand:
     source_updated_at_utc: datetime | None
     payload_hash: str
     source_metadata: dict[str, Any] | None
+    sale_at_utc: datetime | None = None
     observed_at_utc: datetime | None = None
     phone_original: str | None = None
     phone_normalized: str | None = None

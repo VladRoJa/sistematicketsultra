@@ -73,8 +73,9 @@ import { RoutineControlService } from '../services/routine-control.service';
 export class RoutineControlDashboardComponent implements OnInit, OnDestroy {
   private static readonly BUSINESS_TIME_ZONE = 'America/Tijuana';
   readonly displayedColumns = [
-    'member', 'phone', 'branch', 'sale_date', 'status', 'first_routine_at',
-    'latest_routine_at', 'instructor', 'assignment_type', 'incidents', 'decision',
+    'member', 'phone', 'branch', 'sale_date', 'sale_time', 'status',
+    'first_routine_at', 'latest_routine_at', 'instructor', 'assignment_type',
+    'incidents', 'decision',
   ];
   readonly form = this.fb.group({
     region_key: [''], branch_id: [null as number | null], sale_date_from: [''], sale_date_to: [''],
@@ -239,6 +240,33 @@ export class RoutineControlDashboardComponent implements OnInit, OnDestroy {
 
   get maxBranchTotal(): number {
     return Math.max(1, ...(this.summary?.branches || []).map((branch) => branch.total_members));
+  }
+
+  formatPaymentTime(
+    saleAtUtc: string | null,
+  ): string {
+    if (!saleAtUtc) {
+      return '—';
+    }
+
+    const value = new Date(saleAtUtc);
+
+    if (Number.isNaN(value.getTime())) {
+      return '—';
+    }
+
+    return new Intl.DateTimeFormat(
+      'en-GB',
+      {
+        timeZone:
+          RoutineControlDashboardComponent
+            .BUSINESS_TIME_ZONE,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      },
+    ).format(value);
   }
 
   statusOf(member: RoutineControlMember): RoutineControlVisibleStatus {

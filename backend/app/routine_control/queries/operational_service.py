@@ -264,6 +264,7 @@ class RoutineControlOperationalService:
             "branch_name": branch_name,
             "source_branch_name": member.source_branch_name,
             "sale_date": _iso(member.sale_date),
+            "sale_at_utc": _iso(member.sale_at_utc),
             "classification_status": member.classification_status,
             "current_status": member.current_status,
             "first_routine_at": _iso(member.first_routine_at),

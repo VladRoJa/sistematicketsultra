@@ -344,7 +344,7 @@ class ManualPipelineFixturePostgresTestCase(unittest.TestCase):
 
 
 class ManualPipelineFocusedPostgresTestCase(unittest.TestCase):
-    GASCA_HEADERS = ["IDSocio", "IDFolio", "Sucursal", "Nombre", "ApellidoPaterno", "ApellidoMaterno", "Email", "FechaPago", "FechaCreacion"]
+    GASCA_HEADERS = ["IDSocio", "IDFolio", "Sucursal", "Nombre", "ApellidoPaterno", "ApellidoMaterno", "Email", "Telefono", "FechaPago", "FechaCreacion"]
     TRAININGYM_HEADERS = ["id", "Idsocioexterno", "NombreApellidos", "Email", "Técnico", "NºRutinas", "NºPesajes", "Fecha", "Centro Origen"]
 
     @classmethod
@@ -407,7 +407,18 @@ class ManualPipelineFocusedPostgresTestCase(unittest.TestCase):
         branch="VILLAS DEL REY",
         sale_at="15-07-2026 10:00:00",
     ):
-        return [member_id, folio, branch, "Test", "Member", "", email, sale_at, sale_at]
+        return [
+            member_id,
+            folio,
+            branch,
+            "Test",
+            "Member",
+            "",
+            email,
+            "6861234567",
+            sale_at,
+            sale_at,
+        ]
 
     @staticmethod
     def _evidence(provider_id, external_id, email, name="Test Member", activity_date=None):

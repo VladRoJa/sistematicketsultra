@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import unittest
-from datetime import date
+from datetime import date, datetime, timezone
 from types import SimpleNamespace
 
 from app.routine_control.queries.operational_service import (
@@ -55,7 +55,9 @@ class FakeRepository:
             id=10, external_member_id="M-10", external_sale_id="F-10", member_name="Socio",
             email_normalized="socio@example.com", email_original=None,
             phone_original="+526861234567", sucursal_id=1,
-            source_branch_name="Centro", sale_date=date(2026, 7, 1), classification_status="CLASSIFIED",
+            source_branch_name="Centro", sale_date=date(2026, 7, 1),
+            sale_at_utc=datetime(2026, 7, 1, 18, 37, 24, tzinfo=timezone.utc),
+            classification_status="CLASSIFIED",
             current_status="CON_RUTINA", first_routine_at=date(2026, 7, 1), latest_routine_at=date(2026, 7, 2),
             current_instructor_name="Ana", routine_assignment_type="MISMO_DIA", status_version=2,
             source_metadata={"pin": "12345"},
@@ -129,6 +131,10 @@ class RoutineControlOperationalServiceTest(unittest.TestCase):
         self.assertEqual(self.repository.last_filters["search"], "Socio")
         self.assertEqual(result["items"][0]["active_evidence_count"], 2)
         self.assertEqual(result["items"][0]["active_incident_count"], 1)
+        self.assertEqual(
+            result["items"][0]["sale_at_utc"],
+            "2026-07-01T18:37:24+00:00",
+        )
         self.assertNotIn("source_metadata", result["items"][0])
 
 

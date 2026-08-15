@@ -90,6 +90,7 @@ export interface RoutineControlMember {
   branch_name: string | null;
   source_branch_name: string | null;
   sale_date: string;
+  sale_at_utc: string | null;
   classification_status: 'CLASSIFIED' | 'INCIDENT';
   current_status: Exclude<RoutineControlVisibleStatus, 'INCIDENT'> | null;
   first_routine_at: string | null;

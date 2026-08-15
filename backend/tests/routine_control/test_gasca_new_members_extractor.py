@@ -303,6 +303,7 @@ class GascaNewMembersExtractorTestCase(unittest.TestCase):
                     "ApellidoPaterno",
                     "ApellidoMaterno",
                     "Email",
+                    "Telefono",
                     "FechaPago",
                     "FechaCreacion",
                 }
