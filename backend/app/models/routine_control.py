@@ -681,6 +681,10 @@ class RoutineControlMemberORM(db.Model):
         db.Date,
         nullable=False,
     )
+    sale_at_utc = db.Column(
+        db.DateTime(timezone=True),
+        nullable=True,
+    )
     cohort_month = db.Column(
         db.Date,
         nullable=False,

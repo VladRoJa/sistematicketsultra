@@ -112,6 +112,25 @@ class GascaMemberNormalizerTestCase(unittest.TestCase):
         ).date()
         self.assertEqual(command.sale_date, expected)
 
+    def test_fecha_pago_preserves_sale_time_as_utc(self) -> None:
+        row = dict(self.fixture_rows[0])
+        row["FechaPago"] = "15-08-2026 11:37:24"
+
+        command = self._normalize(row)
+
+        self.assertEqual(
+            command.sale_at_utc,
+            datetime(
+                2026,
+                8,
+                15,
+                18,
+                37,
+                24,
+                tzinfo=timezone.utc,
+            ),
+        )
+
     def test_fecha_creacion_does_not_replace_sale_date(self) -> None:
         command = self._normalize()
         self.assertIsNone(command.source_updated_at_utc)

@@ -99,6 +99,22 @@ function createDashboard(service = new RoutineControlServiceStub()) {
   return { component, service };
 }
 
+test('formatPaymentTime convierte UTC a hora civil de America/Tijuana', () => {
+  const { component } = createDashboard();
+
+  assert.equal(
+    component.formatPaymentTime(
+      '2026-08-15T18:37:24+00:00',
+    ),
+    '11:37:24',
+  );
+
+  assert.equal(
+    component.formatPaymentTime(null),
+    '—',
+  );
+});
+
 test('initializeCurrentMonthRange configura del primer día al día actual de Tijuana', () => {
   const { component } = createDashboard();
 

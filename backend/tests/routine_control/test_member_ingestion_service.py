@@ -63,6 +63,15 @@ class RoutineControlMemberIngestionPostgresTestCase(unittest.TestCase):
         payload_hash: str = "a" * 64,
         member_name: str = "Miembro Inicial",
         sale_date: date = date(2026, 7, 14),
+        sale_at_utc: datetime | None = datetime(
+            2026,
+            7,
+            14,
+            18,
+            37,
+            24,
+            tzinfo=timezone.utc,
+        ),
         observed_at_utc: datetime | None = None,
     ) -> UpsertRoutineMemberCommand:
         return UpsertRoutineMemberCommand(
@@ -77,6 +86,7 @@ class RoutineControlMemberIngestionPostgresTestCase(unittest.TestCase):
             email_original="Member@Example.com",
             email_normalized="member@example.com",
             sale_date=sale_date,
+            sale_at_utc=sale_at_utc,
             source_updated_at_utc=datetime(
                 2026,
                 7,
@@ -106,6 +116,18 @@ class RoutineControlMemberIngestionPostgresTestCase(unittest.TestCase):
         self.assertIsNone(result.previous_payload_hash)
         self.assertEqual(result.current_payload_hash, "a" * 64)
         self.assertEqual(member.cohort_month, date(2026, 7, 1))
+        self.assertEqual(
+            member.sale_at_utc,
+            datetime(
+                2026,
+                7,
+                14,
+                18,
+                37,
+                24,
+                tzinfo=timezone.utc,
+            ),
+        )
         self.assertEqual(member.classification_status, "CLASSIFIED")
         self.assertEqual(member.current_status, "SIN_RUTINA")
         self.assertEqual(member.status_version, 1)
@@ -184,6 +206,15 @@ class RoutineControlMemberIngestionPostgresTestCase(unittest.TestCase):
             email_original="Updated@Example.com",
             email_normalized="updated@example.com",
             sale_date=date(2026, 8, 2),
+            sale_at_utc=datetime(
+                2026,
+                8,
+                2,
+                20,
+                15,
+                30,
+                tzinfo=timezone.utc,
+            ),
             source_updated_at_utc=datetime(
                 2026,
                 8,
@@ -204,6 +235,18 @@ class RoutineControlMemberIngestionPostgresTestCase(unittest.TestCase):
         self.assertEqual(result.previous_payload_hash, "a" * 64)
         self.assertEqual(member.external_member_id, "member-updated")
         self.assertEqual(member.cohort_month, date(2026, 8, 1))
+        self.assertEqual(
+            member.sale_at_utc,
+            datetime(
+                2026,
+                8,
+                2,
+                20,
+                15,
+                30,
+                tzinfo=timezone.utc,
+            ),
+        )
         self.assertEqual(member.source_system, original_command.source_system)
         self.assertEqual(member.source_record_id, original_command.source_record_id)
         self.assertEqual(

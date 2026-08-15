@@ -9,6 +9,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 from zipfile import BadZipFile
+from zoneinfo import ZoneInfo
 
 from openpyxl import load_workbook
 from openpyxl.utils.exceptions import InvalidFileException
@@ -32,6 +33,7 @@ _REQUIRED_HEADERS = frozenset(
     }
 )
 _EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+_BUSINESS_TIMEZONE = ZoneInfo("America/Tijuana")
 
 
 class GascaNormalizationError(ValueError):
@@ -147,17 +149,25 @@ def _exact_folio(value: Any) -> str:
     return value
 
 
-def _parse_sale_date(value: Any) -> date:
+def _parse_sale_datetime(value: Any) -> tuple[date, datetime]:
     if not isinstance(value, str):
         raise GascaInvalidRequiredValueError(
             "FechaPago debe usar el formato dd-mm-YYYY HH:mm:ss."
         )
     try:
-        return datetime.strptime(value, "%d-%m-%Y %H:%M:%S").date()
+        local_datetime = datetime.strptime(
+            value,
+            "%d-%m-%Y %H:%M:%S",
+        ).replace(tzinfo=_BUSINESS_TIMEZONE)
     except ValueError as exc:
         raise GascaInvalidRequiredValueError(
             "FechaPago debe usar el formato dd-mm-YYYY HH:mm:ss."
         ) from exc
+
+    return (
+        local_datetime.date(),
+        local_datetime.astimezone(timezone.utc),
+    )
 
 
 def _canonical_json_hash(payload: Mapping[str, Any]) -> str:
@@ -248,7 +258,9 @@ def normalize_gasca_member_row(
     phone_original, phone_normalized = _normalize_phone(
         row.get("Telefono")
     )
-    sale_date = _parse_sale_date(row.get("FechaPago"))
+    sale_date, sale_at_utc = _parse_sale_datetime(
+        row.get("FechaPago")
+    )
     operational_payload = {
         "external_member_id": external_member_id,
         "external_sale_id": external_sale_id,
@@ -260,6 +272,7 @@ def normalize_gasca_member_row(
         "phone_original": phone_original,
         "phone_normalized": phone_normalized,
         "sale_date": sale_date,
+        "sale_at_utc": sale_at_utc,
     }
 
     return UpsertRoutineMemberCommand(
@@ -277,6 +290,7 @@ def normalize_gasca_member_row(
         email_original=email_original,
         email_normalized=email_normalized,
         sale_date=sale_date,
+        sale_at_utc=sale_at_utc,
         phone_original=phone_original,
         phone_normalized=phone_normalized,
         source_updated_at_utc=None,

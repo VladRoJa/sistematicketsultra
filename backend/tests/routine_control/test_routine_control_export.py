@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import unittest
-from datetime import date
+from datetime import date, time
 
 from openpyxl import load_workbook
 
@@ -14,6 +14,7 @@ class RoutineControlExportTest(unittest.TestCase):
             "external_member_id": "M-1", "pin": "12345", "external_sale_id": "F-1", "member_name": "Socio",
             "email": "socio@example.com", "phone": "6861234567",
             "branch_name": "Centro", "sale_date": "2026-07-01",
+            "sale_at_utc": "2026-07-01T18:37:24+00:00",
             "classification_status": "CLASSIFIED", "current_status": "CON_RUTINA",
             "first_routine_at": "2026-07-01", "latest_routine_at": "2026-07-02",
             "current_instructor_name": "Ana", "routine_assignment_type": "MISMO_DIA",
@@ -29,15 +30,27 @@ class RoutineControlExportTest(unittest.TestCase):
         self.assertEqual(self.sheet["B2"].value, "12345")
         self.assertEqual(self.sheet["C2"].value, "F-1")
         self.assertEqual(self.sheet["F2"].value, "6861234567")
-        self.assertEqual(self.sheet["Q2"].value, 2)
+        self.assertEqual(self.sheet["R2"].value, 2)
 
     def test_dates_are_native_excel_dates(self):
         self.assertIsInstance(self.sheet["H2"].value, (date,))
         self.assertEqual(self.sheet["H2"].number_format, "yyyy-mm-dd")
 
+    def test_payment_time_is_native_excel_time_in_tijuana(self):
+        self.assertEqual(self.sheet["I1"].value, "Hora de pago")
+        self.assertIsInstance(self.sheet["I2"].value, time)
+        self.assertEqual(
+            self.sheet["I2"].value,
+            time(11, 37, 24),
+        )
+        self.assertEqual(
+            self.sheet["I2"].number_format,
+            "hh:mm:ss",
+        )
+
     def test_filter_freeze_and_visible_headers(self):
         self.assertEqual(self.sheet.freeze_panes, "A2")
-        self.assertEqual(self.sheet.auto_filter.ref, "A1:Q2")
+        self.assertEqual(self.sheet.auto_filter.ref, "A1:R2")
         self.assertTrue(self.sheet["A1"].font.bold)
 
     def test_sensitive_metadata_is_not_exported(self):
