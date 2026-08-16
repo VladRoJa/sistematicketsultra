@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
 from urllib.parse import urlsplit
 
@@ -9,6 +10,23 @@ from app.routine_control.providers.runtime import ProviderConfigurationError
 
 class TrainingymWorkoutConfigurationError(ProviderConfigurationError):
     pass
+
+
+_CENTER_TOKEN_SEPARATOR = re.compile(r"[^a-z0-9]+")
+
+
+def _is_removed_center_name(value: str) -> bool:
+    normalized = _CENTER_TOKEN_SEPARATOR.sub(
+        "_",
+        value.strip().casefold(),
+    ).strip("_")
+
+    tokens = normalized.split("_")
+
+    return any(
+        tokens[index:index + 2] == ["la", "viga"]
+        for index in range(max(0, len(tokens) - 1))
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,6 +58,12 @@ class TrainingymProviderConfig:
                 "Faltan variables de entorno: " + ", ".join(missing)
             )
         center_name = (os.getenv("TRAININGYM_CENTER_NAME") or "").strip() or None
+
+        if center_name and _is_removed_center_name(center_name):
+            raise ProviderConfigurationError(
+                "TRAININGYM_CENTER_NAME corresponde a una sucursal retirada."
+            )
+
         workout_url = (os.getenv("TRAININGYM_WORKOUT_URL") or "").strip() or None
         if require_workout and not workout_url:
             raise TrainingymWorkoutConfigurationError(

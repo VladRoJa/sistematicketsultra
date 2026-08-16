@@ -7,7 +7,7 @@ from urllib.parse import urlsplit
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 
-_WORKOUT_PATH = "/reports/workout"
+_WORKOUT_PATH = "/reports/bi_routines_weighings"
 _SPACE = re.compile(r"\s+")
 _EMAIL = re.compile(r"\b[^@\s]+@[^@\s]+\.[^@\s]+\b", re.IGNORECASE)
 _LONG_IDENTIFIER = re.compile(r"\b\d{5,}\b")
@@ -16,8 +16,8 @@ _SENSITIVE = re.compile(
     re.IGNORECASE,
 )
 _POWERBI_HOST = re.compile(r"(?:^|\.)powerbi\.com$", re.IGNORECASE)
-_MORE_OPTIONS = {"more options", "más opciones"}
-_EXPORT_DATA = {"export data", "exportar datos"}
+_EXPORT_TRIGGER = {"exportar"}
+_EXPORT_CSV = {"exportar csv"}
 _DOCUMENT_STABLE_SCRIPT = """
 () => (
   document.readyState === "interactive"
@@ -96,7 +96,7 @@ _EXPORT_CANDIDATES_SCRIPT = """
   const excluded = "table,tbody,[role='grid'],[role='row'],[role='rowgroup'],"
     + ".grid,[class*='grid' i]";
   const terms = [
-    "más opciones", "more options", "exportar datos", "export data",
+    "exportar csv", "exportar",
     "export", "descargar", "download"
   ];
   const candidates = document.querySelectorAll(
@@ -421,12 +421,12 @@ def _read_export_controls(
             locator, selector = _semantic_menu_locator(frame, raw)
             menu_items: tuple[str, ...] = ()
             if (
-                normalized in _MORE_OPTIONS
+                normalized in _EXPORT_TRIGGER
                 and locator is not None
                 and locator.count() == 1
                 and locator.is_visible()
             ):
-                locator.click()
+                locator.hover()
                 try:
                     menu_items = tuple(
                         value
@@ -440,9 +440,13 @@ def _read_export_controls(
                     )[:50]
                 finally:
                     page.keyboard.press("Escape")
+
             export_visible = (
-                normalized in _EXPORT_DATA
-                or any(_normalize(item) in _EXPORT_DATA for item in menu_items)
+                normalized in _EXPORT_CSV
+                or any(
+                    _normalize(item) in _EXPORT_CSV
+                    for item in menu_items
+                )
             )
             if not selector:
                 role = _safe_text(raw.get("role"))
@@ -480,7 +484,7 @@ def discover_workout(page, workout_url: str) -> WorkoutDiscoveryObservation:
     stabilized = False
     for attempt in range(2):
         try:
-            page.wait_for_url("**/reports/workout*")
+            page.wait_for_url("**/reports/bi_routines_weighings*")
             page.wait_for_load_state("domcontentloaded")
             page.wait_for_function(_DOCUMENT_STABLE_SCRIPT)
             page.locator("body").wait_for(state="visible")

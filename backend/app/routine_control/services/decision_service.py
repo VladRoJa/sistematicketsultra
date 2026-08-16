@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from app.extensions import db
 from app.models.routine_control import (
@@ -316,6 +316,9 @@ def revoke_no_routine_decision(
         command.revocation_reason,
         field="revocation_reason",
     )
+    implicit_revocation_time = (
+        command.revoked_at_utc is None
+    )
     revoked_at_utc = _utc_datetime(
         command.revoked_at_utc,
         field="revoked_at_utc",
@@ -360,6 +363,15 @@ def revoke_no_routine_decision(
         if not decision.is_active:
             raise RoutineControlDecisionConflict(
                 "La decisión ya fue revertida."
+            )
+
+        if (
+            implicit_revocation_time
+            and revoked_at_utc <= decision.effective_from_utc
+        ):
+            revoked_at_utc = (
+                decision.effective_from_utc
+                + timedelta(microseconds=1)
             )
 
         if revoked_at_utc <= decision.effective_from_utc:
