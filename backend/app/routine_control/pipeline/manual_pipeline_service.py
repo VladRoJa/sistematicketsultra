@@ -45,6 +45,7 @@ from app.routine_control.providers.gasca_member_normalizer import (
 )
 from app.routine_control.providers.trainingym_evidence_normalizer import (
     TrainingymNormalizationError,
+    load_trainingym_evidence_commands_from_csv,
     load_trainingym_evidence_commands_from_xlsx,
 )
 from app.routine_control.repositories.evidence_repository import (
@@ -214,6 +215,36 @@ def _source_path(value: str | Path, *, field_name: str) -> Path:
             f"{field_name} no existe o no es un archivo."
         )
     return path
+
+
+def _load_trainingym_evidence_batch(
+    path: Path,
+    *,
+    observed_at_utc: datetime,
+    provider_run_id: int | None,
+    center_resolver: Callable[[str], int | None],
+):
+    suffix = path.suffix.casefold()
+
+    if suffix == ".csv":
+        return load_trainingym_evidence_commands_from_csv(
+            path,
+            observed_at_utc=observed_at_utc,
+            provider_run_id=provider_run_id,
+            center_resolver=center_resolver,
+        )
+
+    if suffix == ".xlsx":
+        return load_trainingym_evidence_commands_from_xlsx(
+            path,
+            observed_at_utc=observed_at_utc,
+            provider_run_id=provider_run_id,
+            center_resolver=center_resolver,
+        )
+
+    raise ManualRoutineControlPipelineError(
+        "trainingym_xlsx debe ser un archivo CSV o XLSX."
+    )
 
 
 def _content_hash(path: Path) -> str:
@@ -441,7 +472,7 @@ def _reused_success_result(
         branch_resolver=gasca_resolver,
         require_resolved_branch=False,
     )
-    trainingym_batch = load_trainingym_evidence_commands_from_xlsx(
+    trainingym_batch = _load_trainingym_evidence_batch(
         trainingym_path,
         observed_at_utc=observed_at_utc,
         provider_run_id=int(trainingym_provider_run.id),
@@ -782,7 +813,7 @@ def run_manual_routine_control_pipeline(
             at_utc=datetime.now(timezone.utc),
         )
         pipeline_session.commit()
-        trainingym_batch = load_trainingym_evidence_commands_from_xlsx(
+        trainingym_batch = _load_trainingym_evidence_batch(
             trainingym_path,
             observed_at_utc=observed_at,
             provider_run_id=int(trainingym_provider_run.id),

@@ -30,7 +30,7 @@ WORKOUT_URL = (
     "accessToken=private-token#not-accepted"
 )
 VALID_WORKOUT_URL = (
-    "https://app.example.invalid/reports/workout?"
+    "https://app.example.invalid/reports/bi_routines_weighings?"
     "source=private-token"
 )
 
@@ -61,6 +61,11 @@ class _SemanticLocator:
         self.frame.clicked_semantic.append((self.role, key))
         self.frame.menu_open = True
 
+    def hover(self) -> None:
+        key = self.name or self.title
+        self.frame.hovered_semantic.append((self.role, key))
+        self.frame.menu_open = True
+
 
 class _Frame:
     def __init__(
@@ -85,6 +90,7 @@ class _Frame:
         self.menu_items = menu_items
         self.menu_open = False
         self.clicked_semantic: list[tuple[str, str]] = []
+        self.hovered_semantic: list[tuple[str, str]] = []
         self.semantic_counts: dict[str, int] = {}
         self.evaluate_scripts: list[str] = []
         self.role_locators: list[tuple[str, str, bool]] = []
@@ -365,7 +371,10 @@ class TrainingymWorkoutDiscoveryTestCase(unittest.TestCase):
     def test_navigation_waits_for_workout_path(self) -> None:
         page = _WorkoutPage()
         discover_workout(page, VALID_WORKOUT_URL)
-        self.assertEqual(page.wait_url_calls, ["**/reports/workout*"])
+        self.assertEqual(
+            page.wait_url_calls,
+            ["**/reports/bi_routines_weighings*"],
+        )
         self.assertEqual(page.body_waits, ["visible"])
         self.assertEqual(page.load_states, ["domcontentloaded"])
 
@@ -480,64 +489,129 @@ class TrainingymWorkoutDiscoveryTestCase(unittest.TestCase):
         self.assertEqual(control.role, "combobox")
         self.assertEqual(main.clicked_semantic, [])
 
-    def test_more_options_is_opened_semantically(self) -> None:
+    def test_native_export_is_hovered_and_csv_is_detected(self) -> None:
         main = _Frame(
             url=VALID_WORKOUT_URL,
             workout_text=True,
             exports=(
                 _export(
-                    aria_label="More options",
-                    visual="Total Pesajes y Rutinas por Técnico",
+                    text="Exportar",
+                    role="button",
                 ),
             ),
-            menu_items=("Export data", "Show as a table"),
+            menu_items=(
+                "Exportar CSV",
+                "Exportar listado",
+            ),
         )
-        result = discover_workout(_WorkoutPage((main,)), VALID_WORKOUT_URL)
+
+        result = discover_workout(
+            _WorkoutPage((main,)),
+            VALID_WORKOUT_URL,
+        )
+
         self.assertEqual(
             main.role_locators,
-            [("button", "More options", True)],
+            [("button", "Exportar", True)],
+        )
+        self.assertEqual(
+            main.hovered_semantic,
+            [("button", "Exportar")],
         )
         self.assertEqual(
             main.clicked_semantic,
-            [("button", "More options")],
-        )
-        self.assertEqual(
-            result.export_controls[0].selector,
-            'role=button[name="More options"]',
+            [],
         )
 
-    def test_export_data_is_detected_but_never_clicked(self) -> None:
+        self.assertTrue(
+            result.export_contract_verified
+        )
+        self.assertEqual(
+            result.export_controls[0].menu_items,
+            (
+                "Exportar CSV",
+                "Exportar listado",
+            ),
+        )
+
+    def test_export_csv_is_detected_but_never_clicked(self) -> None:
         main = _Frame(
             url=VALID_WORKOUT_URL,
             workout_text=True,
             exports=(
-                _export(aria_label="Más opciones"),
-                _export(text="Exportar datos"),
-                _export(text="Download"),
+                _export(
+                    text="Exportar",
+                    role="button",
+                ),
             ),
-            menu_items=("Exportar datos",),
+            menu_items=(
+                "Exportar CSV",
+                "Exportar listado",
+            ),
         )
+
         page = _WorkoutPage((main,))
-        result = discover_workout(page, VALID_WORKOUT_URL)
-        self.assertTrue(result.export_contract_verified)
+        result = discover_workout(
+            page,
+            VALID_WORKOUT_URL,
+        )
+
+        self.assertTrue(
+            result.export_contract_verified
+        )
+
+        self.assertEqual(
+            main.hovered_semantic,
+            [("button", "Exportar")],
+        )
+
         self.assertEqual(
             main.clicked_semantic,
-            [("button", "Más opciones")],
+            [],
         )
-        self.assertNotIn(("button", "Exportar datos"), main.clicked_semantic)
-        self.assertNotIn(("button", "Download"), main.clicked_semantic)
+
+        self.assertNotIn(
+            ("button", "Exportar CSV"),
+            main.clicked_semantic,
+        )
+        self.assertNotIn(
+            ("button", "Exportar listado"),
+            main.clicked_semantic,
+        )
 
     def test_options_menu_is_closed_after_inspection(self) -> None:
         main = _Frame(
             url=VALID_WORKOUT_URL,
             workout_text=True,
-            exports=(_export(aria_label="More options"),),
-            menu_items=("Export data",),
+            exports=(
+                _export(
+                    text="Exportar",
+                    role="button",
+                ),
+            ),
+            menu_items=(
+                "Exportar CSV",
+                "Exportar listado",
+            ),
         )
+
         page = _WorkoutPage((main,))
-        discover_workout(page, VALID_WORKOUT_URL)
-        self.assertEqual(page.keyboard.presses, ["Escape"])
-        self.assertFalse(main.menu_open)
+        discover_workout(
+            page,
+            VALID_WORKOUT_URL,
+        )
+
+        self.assertEqual(
+            main.hovered_semantic,
+            [("button", "Exportar")],
+        )
+        self.assertEqual(
+            page.keyboard.presses,
+            ["Escape"],
+        )
+        self.assertFalse(
+            main.menu_open
+        )
 
     def test_unverified_export_is_nonfatal(self) -> None:
         result = discover_workout(_WorkoutPage(), VALID_WORKOUT_URL)

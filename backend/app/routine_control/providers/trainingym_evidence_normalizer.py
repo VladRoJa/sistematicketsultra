@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import hashlib
 import json
 import re
@@ -35,6 +36,34 @@ _REQUIRED_HEADERS = frozenset(
         "Centro Origen",
     }
 )
+_CSV_TO_CANONICAL_COLUMNS = {
+    "ID": "id",
+    "ID externo": "Idsocioexterno",
+    "Socio": "NombreApellidos",
+    "Email": "Email",
+    "Empleados": "Técnico",
+    "Workouts": "NºRutinas",
+    "Pesajes": "NºPesajes",
+    "Fecha": "Fecha",
+    "Centro": "Centro Origen",
+    "Valoración": "Valoración",
+    "Sexo": "Sexo",
+    "Total": "Total Rutinas-Pesaje",
+}
+
+_CSV_REQUIRED_HEADERS = frozenset(
+    {
+        "ID",
+        "ID externo",
+        "Socio",
+        "Email",
+        "Empleados",
+        "Workouts",
+        "Pesajes",
+        "Fecha",
+        "Centro",
+    }
+)
 _EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
@@ -44,6 +73,10 @@ class TrainingymNormalizationError(ValueError):
 
 class TrainingymInvalidWorkbookError(TrainingymNormalizationError):
     """El archivo no tiene una estructura XLSX utilizable."""
+
+
+class TrainingymInvalidCsvError(TrainingymNormalizationError):
+    """El archivo CSV no tiene una estructura utilizable."""
 
 
 class TrainingymMissingHeaderError(TrainingymNormalizationError):
@@ -268,6 +301,7 @@ def normalize_trainingym_evidence_row(
 
     provider_member_id = _positive_integer_text(row.get("id"), field_name="id")
     external_member_id = _external_member_id(row.get("Idsocioexterno"))
+
     instructor_name, instructor_name_normalized = _normalize_person_name(
         row.get("Técnico")
     )
@@ -371,6 +405,162 @@ def normalize_trainingym_evidence_row(
     )
 
 
+def _csv_integer(
+    value: Any,
+    *,
+    field_name: str,
+    blank_as_none: bool,
+) -> int | None:
+    cleaned = _clean_text(value)
+
+    if cleaned is None:
+        if blank_as_none:
+            return None
+        raise TrainingymInvalidRequiredValueError(
+            f"{field_name} es obligatorio en el CSV."
+        )
+
+    if not cleaned.isdigit():
+        raise TrainingymInvalidRequiredValueError(
+            f"{field_name} debe ser un entero no negativo en el CSV."
+        )
+
+    return int(cleaned)
+
+
+def _csv_activity_date(value: Any) -> date:
+    cleaned = _clean_text(value)
+
+    if cleaned is None:
+        raise TrainingymInvalidRequiredValueError(
+            "Fecha es obligatoria en el CSV."
+        )
+
+    try:
+        return date.fromisoformat(cleaned)
+    except ValueError as exc:
+        raise TrainingymInvalidRequiredValueError(
+            "Fecha debe usar formato YYYY-MM-DD en el CSV."
+        ) from exc
+
+
+def _coerce_trainingym_csv_operational_types(
+    row: Mapping[str, Any],
+) -> dict[str, Any]:
+    coerced = dict(row)
+
+    coerced["NºRutinas"] = _csv_integer(
+        row.get("NºRutinas"),
+        field_name="Workouts",
+        blank_as_none=False,
+    )
+    coerced["NºPesajes"] = _csv_integer(
+        row.get("NºPesajes"),
+        field_name="Pesajes",
+        blank_as_none=True,
+    )
+    coerced["Fecha"] = _csv_activity_date(
+        row.get("Fecha")
+    )
+
+    return coerced
+
+
+def _reject_csv_non_routine_without_employee(
+    row: Mapping[str, Any],
+) -> None:
+    if _collapse_spaces(row.get("Técnico")):
+        return
+
+    routine_count = row.get("NºRutinas")
+    weighing_count = row.get("NºPesajes")
+
+    if weighing_count is None:
+        weighing_count = 0
+
+    if (
+        not isinstance(routine_count, int)
+        or isinstance(routine_count, bool)
+        or not isinstance(weighing_count, int)
+        or isinstance(weighing_count, bool)
+    ):
+        return
+
+    if routine_count <= 0 and weighing_count > 0:
+        raise _TrainingymRowRejected(
+            "WEIGHING_ONLY",
+            "La fila contiene pesaje pero no rutina.",
+        )
+
+    if routine_count <= 0:
+        raise _TrainingymRowRejected(
+            "NO_ROUTINE",
+            "La fila no contiene una rutina.",
+        )
+
+
+def _adapt_trainingym_csv_row(
+    row: Mapping[str, Any],
+) -> dict[str, Any]:
+    return {
+        canonical_name: row.get(csv_name)
+        for csv_name, canonical_name in _CSV_TO_CANONICAL_COLUMNS.items()
+    }
+
+
+def _read_trainingym_csv_rows(
+    path: str | Path,
+) -> tuple[dict[str, str | None], ...]:
+    source_path = Path(path)
+
+    try:
+        with source_path.open(
+            "r",
+            encoding="utf-8-sig",
+            newline="",
+        ) as source:
+            reader = csv.DictReader(
+                source,
+                delimiter=";",
+            )
+
+            headers = tuple(reader.fieldnames or ())
+
+            if not headers:
+                raise TrainingymInvalidCsvError(
+                    "El CSV de Trainingym no contiene headers."
+                )
+
+            if len(headers) != len(set(headers)):
+                raise TrainingymInvalidCsvError(
+                    "El CSV de Trainingym contiene headers duplicados."
+                )
+
+            missing = sorted(
+                _CSV_REQUIRED_HEADERS.difference(headers)
+            )
+            if missing:
+                raise TrainingymMissingHeaderError(
+                    "Faltan headers obligatorios del CSV: "
+                    + ", ".join(missing)
+                    + "."
+                )
+
+            return tuple(
+                dict(row)
+                for row in reader
+            )
+
+    except (
+        OSError,
+        UnicodeDecodeError,
+        csv.Error,
+    ) as exc:
+        raise TrainingymInvalidCsvError(
+            "No fue posible abrir el CSV de Trainingym."
+        ) from exc
+
+
 def _headers(worksheet: Any) -> tuple[str | None, ...]:
     headers = tuple(cell.value for cell in worksheet[1])
     if not headers or all(header is None for header in headers):
@@ -431,6 +621,79 @@ def _rejection_for_exception(
         code = "INVALID_REQUIRED_VALUE"
         message = str(exc)
     return TrainingymRejectedRow(row_number, code, message)
+
+
+def load_trainingym_evidence_commands_from_csv(
+    path: str | Path,
+    *,
+    observed_at_utc: datetime,
+    provider_run_id: int | None,
+    center_resolver: Callable[[str], int | None] | None = None,
+) -> TrainingymEvidenceBatch:
+    observed_at = _aware_utc(observed_at_utc)
+    run_id = _provider_run_id(provider_run_id)
+
+    if center_resolver is not None and not callable(center_resolver):
+        raise TrainingymInvalidRequiredValueError(
+            "center_resolver debe ser callable o None."
+        )
+
+    source_rows = _read_trainingym_csv_rows(path)
+
+    commands: list[RegisterRoutineEvidenceCommand] = []
+    rejected_rows: list[TrainingymRejectedRow] = []
+
+    for row_number, source_row in enumerate(
+        source_rows,
+        start=2,
+    ):
+        if all(
+            _clean_text(value) is None
+            for value in source_row.values()
+        ):
+            rejected_rows.append(
+                TrainingymRejectedRow(
+                    row_number,
+                    "EMPTY_ROW",
+                    "La fila está completamente vacía.",
+                )
+            )
+            continue
+
+        try:
+            adapted = _adapt_trainingym_csv_row(
+                source_row
+            )
+            coerced = _coerce_trainingym_csv_operational_types(
+                adapted
+            )
+
+            _reject_csv_non_routine_without_employee(
+                coerced
+            )
+
+            commands.append(
+                normalize_trainingym_evidence_row(
+                    coerced,
+                    observed_at_utc=observed_at,
+                    provider_run_id=run_id,
+                    center_resolver=center_resolver,
+                )
+            )
+
+        except TrainingymNormalizationError as exc:
+            rejected_rows.append(
+                _rejection_for_exception(
+                    row_number,
+                    exc,
+                )
+            )
+
+    return TrainingymEvidenceBatch(
+        commands=tuple(commands),
+        rejected_rows=tuple(rejected_rows),
+        total_source_rows=len(source_rows),
+    )
 
 
 def load_trainingym_evidence_commands_from_xlsx(

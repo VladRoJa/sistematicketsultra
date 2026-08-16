@@ -23,7 +23,7 @@ class FakeService:
             raise self.exception
         return value
 
-    def catalogs(self, _user):
+    def catalogs(self, _user, _args):
         return self._result({"scope": {"scope_type": "GLOBAL", "allowed_branch_ids": [], "fixed_branch_id": None}, "branches": [], "regions": [], "statuses": [], "assignment_types": []})
 
     def summary(self, _user, _args):

@@ -87,6 +87,90 @@ def _matching_result_snapshot(result) -> dict[str, object]:
     return snapshot
 
 
+class TrainingymArtifactLoaderDispatchTestCase(unittest.TestCase):
+    def test_csv_uses_csv_loader(self) -> None:
+        from app.routine_control.pipeline import (
+            manual_pipeline_service as service,
+        )
+
+        trainingym_path = Path("trainingym-workout.csv")
+        resolver = lambda _center: 1
+        expected_batch = object()
+
+        with (
+            patch.object(
+                service,
+                "load_trainingym_evidence_commands_from_csv",
+                return_value=expected_batch,
+            ) as csv_loader,
+            patch.object(
+                service,
+                "load_trainingym_evidence_commands_from_xlsx",
+            ) as xlsx_loader,
+        ):
+            result = service._load_trainingym_evidence_batch(
+                trainingym_path,
+                observed_at_utc=OBSERVED_AT,
+                provider_run_id=77,
+                center_resolver=resolver,
+            )
+
+        self.assertIs(
+            result,
+            expected_batch,
+        )
+
+        csv_loader.assert_called_once_with(
+            trainingym_path,
+            observed_at_utc=OBSERVED_AT,
+            provider_run_id=77,
+            center_resolver=resolver,
+        )
+
+        xlsx_loader.assert_not_called()
+
+    def test_xlsx_uses_historical_xlsx_loader(self) -> None:
+        from app.routine_control.pipeline import (
+            manual_pipeline_service as service,
+        )
+
+        trainingym_path = Path("trainingym-workout.xlsx")
+        resolver = lambda _center: 1
+        expected_batch = object()
+
+        with (
+            patch.object(
+                service,
+                "load_trainingym_evidence_commands_from_csv",
+            ) as csv_loader,
+            patch.object(
+                service,
+                "load_trainingym_evidence_commands_from_xlsx",
+                return_value=expected_batch,
+            ) as xlsx_loader,
+        ):
+            result = service._load_trainingym_evidence_batch(
+                trainingym_path,
+                observed_at_utc=OBSERVED_AT,
+                provider_run_id=88,
+                center_resolver=resolver,
+            )
+
+        self.assertIs(
+            result,
+            expected_batch,
+        )
+
+        xlsx_loader.assert_called_once_with(
+            trainingym_path,
+            observed_at_utc=OBSERVED_AT,
+            provider_run_id=88,
+            center_resolver=resolver,
+        )
+
+        csv_loader.assert_not_called()
+
+
 class BranchResolverPostgresTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -521,6 +605,60 @@ class ManualPipelineFocusedPostgresTestCase(unittest.TestCase):
         )
         self.assertEqual(cohorts.links_by_external_id, 0)
         self.assertEqual(cohorts.ambiguous_evidences, 1)
+
+    def test_native_trainingym_csv_runs_through_real_pipeline(self) -> None:
+        seed = int(uuid4().hex[:8], 16) % 100000000 + 870000000
+        provider_id = seed + 10
+        email = "trainingym-csv@example.test"
+
+        gasca, _historical_trainingym = self._files(
+            [
+                self._member(
+                    seed,
+                    "97000000000000000001",
+                    email,
+                )
+            ],
+            [
+                self._evidence(
+                    provider_id,
+                    seed,
+                    email,
+                )
+            ],
+        )
+
+        trainingym_csv = (
+            Path(self.temp.name)
+            / f"trainingym-{uuid4().hex}.csv"
+        )
+
+        trainingym_csv.write_text(
+            (
+                "\ufeff"
+                "ID;ID externo;Socio;Email;Edad;Sexo;Empleados;"
+                "Workouts;Pesajes;Total;Valoración;Fecha;Centro\n"
+                f"{provider_id};{seed};Test Member;{email};30;M;"
+                "Instructor;1;0;1;;2026-07-15;Centro\n"
+            ),
+            encoding="utf-8",
+        )
+
+        result = run_manual_routine_control_pipeline(
+            gasca_xlsx=gasca,
+            trainingym_xlsx=trainingym_csv,
+            observed_at_utc=OBSERVED_AT,
+        )
+        self.pipeline_ids.append(result.pipeline_run_id)
+
+        self.assertTrue(result.succeeded)
+        self.assertFalse(result.reused_existing_run)
+        self.assertEqual(result.trainingym_source_rows, 1)
+        self.assertEqual(result.trainingym_accepted, 1)
+        self.assertEqual(result.trainingym_rejected, 0)
+        self.assertEqual(result.evidences_created, 1)
+        self.assertEqual(result.links_by_external_id, 1)
+
 
     def test_positive_identity_routes_use_shared_matching_coordinator(self) -> None:
         seed = int(uuid4().hex[:8], 16) % 100000000 + 820000000

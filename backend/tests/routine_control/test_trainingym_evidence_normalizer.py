@@ -11,9 +11,14 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.utils.datetime import WINDOWS_EPOCH, to_excel
 
 from app.routine_control.providers.trainingym_evidence_normalizer import (
+    _adapt_trainingym_csv_row,
+    _coerce_trainingym_csv_operational_types,
+    _reject_csv_non_routine_without_employee,
+    _read_trainingym_csv_rows,
     TrainingymInvalidRequiredValueError,
     TrainingymMissingHeaderError,
     TrainingymNormalizationError,
+    load_trainingym_evidence_commands_from_csv,
     load_trainingym_evidence_commands_from_xlsx,
     normalize_trainingym_evidence_row,
 )
@@ -62,6 +67,274 @@ class TrainingymEvidenceNormalizerTestCase(unittest.TestCase):
             excel_epoch=kwargs.get("excel_epoch", self.epoch),
         )
 
+    def test_new_trainingym_csv_reads_bom_semicolon_and_required_headers(self) -> None:
+        content = (
+            "\ufeff"
+            '"ID";"ID externo";"Socio";"Email";"Edad";"Sexo";'
+            '"Empleados";"Workouts";"Pesajes";"Total";"Valoración";'
+            '"Fecha";"Centro"\n'
+            '"24639860";"88669";"SOCIO PRUEBA";"test@example.com";'
+            '"42";"F";"TECNICO PRUEBA";"1";"0";"1";"";'
+            '"2026-08-15";"UltraGym & Fitness - Centro"\n'
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "rutinas_pesajes.csv"
+            path.write_text(
+                content,
+                encoding="utf-8",
+                newline="",
+            )
+
+            rows = _read_trainingym_csv_rows(path)
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["ID"], "24639860")
+        self.assertEqual(rows[0]["ID externo"], "88669")
+        self.assertEqual(rows[0]["Empleados"], "TECNICO PRUEBA")
+        self.assertEqual(rows[0]["Workouts"], "1")
+        self.assertEqual(rows[0]["Pesajes"], "0")
+        self.assertEqual(rows[0]["Fecha"], "2026-08-15")
+        self.assertEqual(
+            rows[0]["Centro"],
+            "UltraGym & Fitness - Centro",
+        )
+
+    def test_new_trainingym_csv_missing_required_header_fails(self) -> None:
+        content = (
+            "\ufeff"
+            '"ID";"ID externo";"Socio";"Email";"Empleados";'
+            '"Workouts";"Pesajes";"Centro"\n'
+            '"24639860";"88669";"SOCIO PRUEBA";"test@example.com";'
+            '"TECNICO PRUEBA";"1";"0";'
+            '"UltraGym & Fitness - Centro"\n'
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "missing_fecha.csv"
+            path.write_text(
+                content,
+                encoding="utf-8",
+                newline="",
+            )
+
+            with self.assertRaises(
+                TrainingymMissingHeaderError
+            ) as raised:
+                _read_trainingym_csv_rows(path)
+
+        self.assertIn(
+            "Fecha",
+            str(raised.exception),
+        )
+
+    def test_new_trainingym_csv_row_maps_to_canonical_contract(self) -> None:
+        source = {
+            "ID": "24639860",
+            "ID externo": "88669",
+            "Socio": "SOCIO PRUEBA",
+            "Email": "test@example.com",
+            "Edad": "42",
+            "Sexo": "F",
+            "Empleados": "TECNICO PRUEBA",
+            "Workouts": "1",
+            "Pesajes": "0",
+            "Total": "1",
+            "Valoración": "5",
+            "Fecha": "2026-08-15",
+            "Centro": "UltraGym & Fitness - Centro",
+        }
+
+        adapted = _adapt_trainingym_csv_row(source)
+
+        self.assertEqual(adapted["id"], "24639860")
+        self.assertEqual(adapted["Idsocioexterno"], "88669")
+        self.assertEqual(adapted["NombreApellidos"], "SOCIO PRUEBA")
+        self.assertEqual(adapted["Email"], "test@example.com")
+        self.assertEqual(adapted["Técnico"], "TECNICO PRUEBA")
+        self.assertEqual(adapted["NºRutinas"], "1")
+        self.assertEqual(adapted["NºPesajes"], "0")
+        self.assertEqual(adapted["Fecha"], "2026-08-15")
+        self.assertEqual(
+            adapted["Centro Origen"],
+            "UltraGym & Fitness - Centro",
+        )
+        self.assertEqual(adapted["Valoración"], "5")
+        self.assertEqual(adapted["Sexo"], "F")
+        self.assertEqual(adapted["Total Rutinas-Pesaje"], "1")
+
+        self.assertNotIn("Edad", adapted)
+        self.assertNotIn("age", adapted)
+
+    def test_new_trainingym_csv_operational_types_are_coerced(self) -> None:
+        adapted = {
+            "id": "24639860",
+            "Idsocioexterno": "88669",
+            "NombreApellidos": "SOCIO PRUEBA",
+            "Email": "test@example.com",
+            "Técnico": "TECNICO PRUEBA",
+            "NºRutinas": "1",
+            "NºPesajes": "0",
+            "Fecha": "2026-08-15",
+            "Centro Origen": "UltraGym & Fitness - Centro",
+            "Valoración": "5",
+            "Sexo": "F",
+            "Total Rutinas-Pesaje": "1",
+        }
+
+        coerced = _coerce_trainingym_csv_operational_types(
+            adapted
+        )
+
+        self.assertEqual(coerced["NºRutinas"], 1)
+        self.assertIsInstance(coerced["NºRutinas"], int)
+
+        self.assertEqual(coerced["NºPesajes"], 0)
+        self.assertIsInstance(coerced["NºPesajes"], int)
+
+        self.assertEqual(
+            coerced["Fecha"],
+            date(2026, 8, 15),
+        )
+        self.assertIsInstance(coerced["Fecha"], date)
+
+        self.assertEqual(
+            coerced["Técnico"],
+            "TECNICO PRUEBA",
+        )
+        self.assertEqual(
+            coerced["Valoración"],
+            "5",
+        )
+
+    def test_new_trainingym_csv_row_generates_valid_routine_evidence(self) -> None:
+        source = {
+            "ID": "24639860",
+            "ID externo": "88669",
+            "Socio": "SOCIO PRUEBA",
+            "Email": "Test@Example.COM",
+            "Edad": "42",
+            "Sexo": "F",
+            "Empleados": "  José   Núñez  ",
+            "Workouts": "1",
+            "Pesajes": "0",
+            "Total": "1",
+            "Valoración": "5",
+            "Fecha": "2026-08-15",
+            "Centro": "  UltraGym   Centro.  ",
+        }
+
+        adapted = _adapt_trainingym_csv_row(source)
+        coerced = _coerce_trainingym_csv_operational_types(
+            adapted
+        )
+
+        command = normalize_trainingym_evidence_row(
+            coerced,
+            observed_at_utc=self.observed_at,
+            provider_run_id=41,
+        )
+
+        self.assertEqual(command.provider_key, "trainingym")
+        self.assertEqual(
+            command.provider_member_id,
+            "24639860",
+        )
+        self.assertEqual(
+            command.external_member_id,
+            "88669",
+        )
+        self.assertEqual(
+            command.member_name_original,
+            "SOCIO PRUEBA",
+        )
+        self.assertEqual(
+            command.email_normalized,
+            "test@example.com",
+        )
+        self.assertEqual(
+            command.instructor_name,
+            "José Núñez",
+        )
+        self.assertEqual(
+            command.instructor_name_normalized,
+            "jose nunez",
+        )
+        self.assertEqual(
+            command.routine_activity_date,
+            date(2026, 8, 15),
+        )
+        self.assertEqual(command.routine_count, 1)
+        self.assertEqual(command.weighing_count, 0)
+        self.assertEqual(
+            command.provider_center_name,
+            "UltraGym Centro.",
+        )
+        self.assertEqual(
+            command.provider_center_key,
+            "ultragym centro",
+        )
+        self.assertEqual(command.provider_run_id, 41)
+
+    def test_new_trainingym_csv_loader_builds_batch_and_rejects_weighing_only(self) -> None:
+        content = (
+            "\ufeff"
+            '"ID";"ID externo";"Socio";"Email";"Edad";"Sexo";'
+            '"Empleados";"Workouts";"Pesajes";"Total";"Valoración";'
+            '"Fecha";"Centro"\n'
+            '"24639860";"88669";"SOCIO RUTINA";"uno@example.com";'
+            '"42";"F";"TECNICO PRUEBA";"1";"0";"1";"";'
+            '"2026-08-15";"UltraGym Centro"\n'
+            '"24639861";"88670";"SOCIO PESAJE";"dos@example.com";'
+            '"39";"M";"";"0";"1";"1";"";'
+            '"2026-08-15";"UltraGym Centro"\n'
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "rutinas_pesajes.csv"
+
+            path.write_text(
+                content,
+                encoding="utf-8",
+                newline="",
+            )
+
+            batch = load_trainingym_evidence_commands_from_csv(
+                path,
+                observed_at_utc=self.observed_at,
+                provider_run_id=41,
+            )
+
+        self.assertEqual(
+            batch.total_source_rows,
+            2,
+        )
+        self.assertEqual(
+            len(batch.commands),
+            1,
+        )
+        self.assertEqual(
+            batch.commands[0].provider_member_id,
+            "24639860",
+        )
+        self.assertEqual(
+            batch.commands[0].routine_count,
+            1,
+        )
+
+        self.assertEqual(
+            len(batch.rejected_rows),
+            1,
+        )
+        self.assertEqual(
+            batch.rejected_rows[0].row_number,
+            3,
+        )
+        self.assertEqual(
+            batch.rejected_rows[0].reason_code,
+            "WEIGHING_ONLY",
+        )
+
     def test_fixture_opens_export_sheet(self) -> None:
         self.assertEqual(self.sheet_names, ["Export"])
 
@@ -88,6 +361,40 @@ class TrainingymEvidenceNormalizerTestCase(unittest.TestCase):
     def test_fixture_excludes_automatic_routines(self) -> None:
         reasons = Counter(row.reason_code for row in self.batch.rejected_rows)
         self.assertEqual(reasons["AUTOMATIC_ROUTINE"], 9)
+
+    def test_new_csv_weighing_only_with_blank_employee_is_classified_correctly(self) -> None:
+        source = {
+            "ID": "24639860",
+            "ID externo": "88669",
+            "Socio": "SOCIO PRUEBA",
+            "Email": "test@example.com",
+            "Edad": "42",
+            "Sexo": "F",
+            "Empleados": "",
+            "Workouts": "0",
+            "Pesajes": "1",
+            "Total": "1",
+            "Valoración": "",
+            "Fecha": "2026-08-15",
+            "Centro": "UltraGym Centro",
+        }
+
+        adapted = _adapt_trainingym_csv_row(source)
+        coerced = _coerce_trainingym_csv_operational_types(
+            adapted
+        )
+
+        with self.assertRaises(
+            TrainingymNormalizationError
+        ) as caught:
+            _reject_csv_non_routine_without_employee(
+                coerced
+            )
+
+        self.assertEqual(
+            caught.exception.reason_code,
+            "WEIGHING_ONLY",
+        )
 
     def test_weighing_without_routine_is_excluded(self) -> None:
         row = dict(self.valid_row)

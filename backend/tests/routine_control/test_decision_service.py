@@ -338,6 +338,71 @@ class RoutineControlDecisionServicePostgresTestCase(
             revoked_at,
         )
 
+    def test_implicit_revocation_time_is_strictly_after_effective_from(
+        self,
+    ) -> None:
+        created = self._create_decision()
+
+        with patch(
+            "app.routine_control.services.decision_service._utc_datetime",
+            return_value=self.now,
+        ):
+            result = revoke_no_routine_decision(
+                RevokeNoRoutineDecisionCommand(
+                    member_id=self.member.id,
+                    decision_id=created.decision_id,
+                    actor_user_id=self.actor.id,
+                    revocation_reason=(
+                        "El socio ahora requiere apoyo."
+                    ),
+                )
+            )
+
+        decision = db.session.get(
+            RoutineControlDecisionORM,
+            created.decision_id,
+        )
+
+        self.assertEqual(
+            result.action,
+            "REVOKED",
+        )
+        self.assertIsNotNone(
+            decision.revoked_at_utc
+        )
+        self.assertGreater(
+            decision.revoked_at_utc,
+            decision.effective_from_utc,
+        )
+
+    def test_rejects_explicit_revocation_at_effective_from(
+        self,
+    ) -> None:
+        created = self._create_decision()
+
+        with self.assertRaises(
+            RoutineControlDecisionValidationError
+        ):
+            revoke_no_routine_decision(
+                RevokeNoRoutineDecisionCommand(
+                    member_id=self.member.id,
+                    decision_id=created.decision_id,
+                    actor_user_id=self.actor.id,
+                    revocation_reason=(
+                        "Fecha explícita inválida."
+                    ),
+                    revoked_at_utc=self.now,
+                )
+            )
+
+        decision = db.session.get(
+            RoutineControlDecisionORM,
+            created.decision_id,
+        )
+
+        self.assertTrue(decision.is_active)
+        self.assertIsNone(decision.revoked_at_utc)
+
     def test_rejects_second_revocation(
         self,
     ) -> None:

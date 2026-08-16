@@ -23,6 +23,7 @@ from app.routine_control.providers.runtime import (
 )
 from app.routine_control.providers.trainingym_evidence_normalizer import (
     TrainingymNormalizationError,
+    load_trainingym_evidence_commands_from_csv,
     load_trainingym_evidence_commands_from_xlsx,
 )
 
@@ -45,21 +46,53 @@ from .discovery import (
 
 TRAININGYM_PROVIDER_KEY = "trainingym"
 TRAININGYM_WORKOUT_DATASET_KEY = "workout"
-TRAININGYM_WORKOUT_FILENAME = "trainingym-workout.xlsx"
+TRAININGYM_WORKOUT_FILENAME = "trainingym-workout.csv"
 TRAININGYM_WORKOUT_HEADERS = frozenset(
     {
-        "id",
-        "Idsocioexterno",
-        "NombreApellidos",
+        "ID",
+        "ID externo",
+        "Socio",
         "Email",
-        "Técnico",
-        "NºRutinas",
-        "NºPesajes",
+        "Empleados",
+        "Workouts",
+        "Pesajes",
         "Fecha",
-        "Centro Origen",
+        "Centro",
     }
 )
-_REPORT_PATH = "/reports/workout"
+_REPORT_PATH = "/reports/bi_routines_weighings"
+_CENTER_SELECT_SELECTOR = "#drp_brp_filters_center"
+_CENTER_TOGGLE_ALL_SELECTOR = "#drp_brp_filters_center_selectAll"
+_DATE_RANGE_SELECTOR = "#drp_brp_filters_dateRange"
+_DATE_START_SELECTOR = 'input[placeholder="Fecha inicial"]'
+_DATE_END_SELECTOR = 'input[placeholder="Fecha final"]'
+_NATIVE_EXPORT_BUTTON_SELECTOR = "#btn_brp_detail_export"
+_NATIVE_EXPORT_CSV_TEXT = "Exportar CSV"
+TRAININGYM_WORKOUT_CSV_FILENAME = "trainingym-workout.csv"
+_SET_NATIVE_DATE_INPUT_SCRIPT = """
+(element, value) => {
+  const setter = Object.getOwnPropertyDescriptor(
+    HTMLInputElement.prototype,
+    "value"
+  ).set;
+
+  element.focus();
+  setter.call(element, value);
+
+  element.dispatchEvent(new InputEvent("input", {
+    bubbles: true,
+    inputType: "insertText"
+  }));
+
+  element.dispatchEvent(new Event("change", {
+    bubbles: true
+  }));
+
+  element.blur();
+
+  return element.value;
+}
+"""
 _HOME_PATH = "/trainingym/home"
 _ROUTE_STABLE_MS = 1_500
 _ROUTE_SETTLE_TIMEOUT_MS = 15_000
@@ -241,6 +274,19 @@ def _authenticate_trainingym(
     _wait_until_outside_auth(page)
     _stabilize_post_login(page)
 
+    if not _wait_for_stable_path(
+        page,
+        _HOME_PATH,
+    ):
+        raise TrainingymDiscoveryError(
+            "TRAININGYM_NAVIGATION_FAILED",
+            (
+                "Trainingym no estabilizó Home "
+                "después del acceso."
+            ),
+            retryable=True,
+        )
+
 def _wait_for_stable_path(
     page,
     expected_path: str,
@@ -339,6 +385,210 @@ def _navigate_to_workout(
         "TRAININGYM_WORKOUT_NAVIGATION_FAILED",
         "Trainingym regresó a Home antes de estabilizar Workout.",
     )
+
+
+def _set_native_date_range(
+    page,
+    date_from: date,
+    date_to: date,
+) -> None:
+    date_range = page.locator(_DATE_RANGE_SELECTOR)
+    date_range.wait_for(state="visible")
+
+    start_input = date_range.locator(_DATE_START_SELECTOR)
+    end_input = date_range.locator(_DATE_END_SELECTOR)
+
+    start_input.wait_for(state="visible")
+    end_input.wait_for(state="visible")
+
+    start_value = date_from.strftime("%d/%m/%Y")
+    end_value = date_to.strftime("%d/%m/%Y")
+
+    start_input.click()
+
+    dropdown = page.locator(
+        ".ant-picker-dropdown:not(.ant-picker-dropdown-hidden)"
+    )
+    dropdown.wait_for(state="visible")
+
+    def visible_left_month() -> tuple[int, int]:
+        panels = dropdown.locator(
+            ".ant-picker-panel"
+        )
+
+        first_cell = panels.first.locator(
+            "td.ant-picker-cell-in-view[title]"
+        ).first
+
+        title = first_cell.get_attribute(
+            "title"
+        )
+
+        try:
+            _day, month, year = (
+                int(part)
+                for part in str(
+                    title or ""
+                ).split("/")
+            )
+        except (TypeError, ValueError):
+            raise TrainingymWorkoutExtractionError(
+                "TRAININGYM_WORKOUT_FILTER_CONTRACT_FAILED",
+                (
+                    "No fue posible identificar el mes "
+                    "visible del calendario Trainingym."
+                ),
+            )
+
+        return year, month
+
+    def move_to_month(
+        target: date,
+    ) -> None:
+        target_key = (
+            target.year,
+            target.month,
+        )
+
+        for _attempt in range(240):
+            current_key = visible_left_month()
+
+            if current_key == target_key:
+                return
+
+            if target_key < current_key:
+                selector = (
+                    ".ant-picker-header-prev-btn:visible"
+                )
+            else:
+                selector = (
+                    ".ant-picker-header-next-btn:visible"
+                )
+
+            button = dropdown.locator(
+                selector
+            ).first
+
+            previous_key = current_key
+            button.click()
+
+            for _poll in range(50):
+                current_key = visible_left_month()
+
+                if current_key != previous_key:
+                    break
+
+                page.wait_for_timeout(100)
+            else:
+                raise TrainingymWorkoutExtractionError(
+                    "TRAININGYM_WORKOUT_FILTER_CONTRACT_FAILED",
+                    (
+                        "El calendario Trainingym no cambió "
+                        "al mes solicitado."
+                    ),
+                )
+
+        raise TrainingymWorkoutExtractionError(
+            "TRAININGYM_WORKOUT_FILTER_CONTRACT_FAILED",
+            (
+                "El calendario Trainingym excedió "
+                "el límite de navegación por meses."
+            ),
+        )
+
+    def click_calendar_date(
+        target: date,
+        value: str,
+    ) -> None:
+        selector = (
+            'td.ant-picker-cell-in-view'
+            f'[title="{value}"]'
+        )
+
+        cells = dropdown.locator(
+            selector
+        )
+
+        if (
+            cells.count() < 1
+            or not cells.first.is_visible()
+        ):
+            move_to_month(target)
+
+            cells = dropdown.locator(
+                selector
+            )
+
+        if (
+            cells.count() < 1
+            or not cells.first.is_visible()
+        ):
+            raise TrainingymWorkoutExtractionError(
+                "TRAININGYM_WORKOUT_FILTER_CONTRACT_FAILED",
+                (
+                    "No apareció la fecha esperada "
+                    "en el calendario Trainingym."
+                ),
+            )
+
+        cells.first.click()
+
+    move_to_month(
+        date_from
+    )
+
+    click_calendar_date(
+        date_from,
+        start_value,
+    )
+
+    click_calendar_date(
+        date_to,
+        end_value,
+    )
+
+    if (
+        start_input.input_value() != start_value
+        or end_input.input_value() != end_value
+    ):
+        raise TrainingymWorkoutExtractionError(
+            "TRAININGYM_WORKOUT_FILTER_CONTRACT_FAILED",
+            (
+                "El rango de fechas de Trainingym "
+                "no conservó los valores esperados."
+            ),
+        )
+
+
+def _normalize_control_text(value: object) -> str:
+    return " ".join(
+        str(value or "").strip().casefold().replace("_", " ").split()
+    )
+
+
+def _ensure_all_centers(page) -> None:
+    center_select = page.locator(_CENTER_SELECT_SELECTOR)
+    center_select.wait_for(state="visible")
+    center_select.click()
+
+    center_options = page.locator("nz-option-item")
+    center_options.first.wait_for(state="visible")
+
+    toggle_all = page.locator(_CENTER_TOGGLE_ALL_SELECTOR)
+    toggle_all.wait_for(state="visible")
+
+    state = _normalize_control_text(toggle_all.inner_text())
+
+    if state == "seleccionar todos":
+        toggle_all.click()
+        toggle_all.wait_for(state="visible")
+        state = _normalize_control_text(toggle_all.inner_text())
+
+    if state != "quitar todos":
+        raise TrainingymWorkoutExtractionError(
+            "TRAININGYM_WORKOUT_FILTER_CONTRACT_FAILED",
+            "No fue posible confirmar que todos los centros estén seleccionados.",
+        )
 
 
 def _is_powerbi_report_frame(frame) -> bool:
@@ -806,6 +1056,86 @@ def _dialog_controls(page):
     return export_button
 
 
+def _download_native_csv(
+    page,
+    partial_path: Path,
+) -> str:
+    export_button = page.locator(_NATIVE_EXPORT_BUTTON_SELECTOR)
+    export_button.wait_for(state="visible")
+
+    deadline = time.monotonic() + (_REPORT_RENDER_TIMEOUT_MS / 1000)
+    while export_button.is_disabled():
+        if time.monotonic() >= deadline:
+            raise TrainingymWorkoutExtractionError(
+                "TRAININGYM_WORKOUT_DOWNLOAD_FAILED",
+                "El botón Exportar no quedó habilitado dentro del timeout.",
+            )
+        page.wait_for_timeout(200)
+
+    try:
+        export_button.hover()
+    except Exception as exc:
+        raise TrainingymWorkoutExtractionError(
+            "TRAININGYM_WORKOUT_MENU_NOT_FOUND",
+            "No fue posible activar el menú Exportar.",
+        ) from exc
+
+    deadline = time.monotonic() + (_MENU_RENDER_TIMEOUT_MS / 1000)
+    export_csv = None
+
+    while time.monotonic() < deadline:
+        export_csv = _first_visible(
+            page.get_by_text(
+                _NATIVE_EXPORT_CSV_TEXT,
+                exact=True,
+            )
+        )
+        if export_csv is not None:
+            break
+
+        try:
+            export_button.hover()
+        except Exception:
+            pass
+
+        page.wait_for_timeout(200)
+
+    if export_csv is None:
+        raise TrainingymWorkoutExtractionError(
+            "TRAININGYM_WORKOUT_MENU_NOT_FOUND",
+            "No apareció la acción Exportar CSV.",
+        )
+
+    try:
+        with page.expect_download(
+            timeout=_DOWNLOAD_TIMEOUT_MS,
+        ) as download_info:
+            export_csv.click()
+
+        download = download_info.value
+        download.save_as(str(partial_path))
+
+    except PlaywrightTimeoutError as exc:
+        raise TrainingymWorkoutExtractionError(
+            "TRAININGYM_WORKOUT_DOWNLOAD_FAILED",
+            "Trainingym no produjo la descarga CSV dentro del timeout.",
+        ) from exc
+
+    except Exception as exc:
+        raise TrainingymWorkoutExtractionError(
+            "TRAININGYM_WORKOUT_DOWNLOAD_FAILED",
+            "No fue posible guardar la descarga CSV.",
+        ) from exc
+
+    if not partial_path.is_file() or partial_path.stat().st_size <= 0:
+        raise TrainingymWorkoutExtractionError(
+            "TRAININGYM_WORKOUT_DOWNLOAD_FAILED",
+            "La descarga CSV no produjo un archivo utilizable.",
+        )
+
+    return TRAININGYM_WORKOUT_CSV_FILENAME
+
+
 def _safe_source_filename(value: object) -> str:
     del value
     return TRAININGYM_WORKOUT_FILENAME
@@ -869,16 +1199,18 @@ def _browser_export(
     tracker.set(BrowserPhase.NAVIGATION)
     _navigate_to_workout(page, config)
 
-    frame = _find_report_frame(page)
-
     tracker.set(BrowserPhase.EXPORT)
-    _configure_filters(frame, date_from, date_to)
+    _ensure_all_centers(page)
+    _set_native_date_range(
+        page,
+        date_from,
+        date_to,
+    )
 
     tracker.set(BrowserPhase.DOWNLOAD)
 
-    return _download_workout(
+    return _download_native_csv(
         page,
-        frame,
         partial_path,
     )
 
@@ -888,7 +1220,7 @@ class TrainingymWorkoutExtractor:
         *,
         download_operation: DownloadOperation = _browser_export,
         runtime_factory: Callable[[ProviderRuntimeConfig], BrowserRuntime] = BrowserRuntime,
-        normalizer: Normalizer = load_trainingym_evidence_commands_from_xlsx,
+        normalizer: Normalizer = load_trainingym_evidence_commands_from_csv,
         store_factory: Callable[[Path], ArtifactStore] = ArtifactStore,
     ) -> None:
         self._download_operation = download_operation
@@ -994,7 +1326,7 @@ class TrainingymWorkoutExtractor:
                 except TrainingymNormalizationError as exc:
                     raise TrainingymWorkoutExtractionError(
                         "TRAININGYM_WORKOUT_VALIDATION_FAILED",
-                        "El XLSX descargado no cumple el contrato Trainingym.",
+                        "El CSV descargado no cumple el contrato Trainingym.",
                     ) from exc
                 artifact = store.finalize_download(
                     partial_path=partial_path,
@@ -1007,7 +1339,7 @@ class TrainingymWorkoutExtractor:
                     business_date_to=date_to,
                     source_filename=_safe_source_filename(execution.value),
                     diagnostic_metadata={
-                        "export_contract": "powerbi_current_layout",
+                        "export_contract": "tg_native_routines_weighings_csv",
                     },
                 )
             return ProviderExtractionResult(

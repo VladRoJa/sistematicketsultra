@@ -33,7 +33,7 @@ CENTER_INPUT_SELECTOR = (
 CENTER_OPTIONS_SELECTOR = (
     "nz-option-item,[role='option'],.ant-select-item-option"
 )
-WORKOUT_URL = "https://portal.example.invalid/reports/workout?source=private"
+WORKOUT_URL = "https://portal.example.invalid/reports/bi_routines_weighings?source=private"
 
 
 class _Tracker:
@@ -227,9 +227,9 @@ class _FakePage:
         self.load_states.append(state)
 
     def wait_for_url(self, pattern: str) -> None:
-        if pattern != "**/reports/workout*":
+        if pattern != "**/reports/bi_routines_weighings*":
             raise PlaywrightTimeoutError("unexpected workout URL pattern")
-        if "/reports/workout" not in self.url:
+        if "/reports/bi_routines_weighings" not in self.url:
             raise PlaywrightTimeoutError("workout navigation timeout")
 
     def title(self) -> str:
@@ -569,7 +569,10 @@ class TrainingymDiscoveryTestCase(unittest.TestCase):
             ],
         )
         self.assertEqual(result.post_login_path, "/")
-        self.assertEqual(result.workout_path, "/reports/workout")
+        self.assertEqual(
+            result.workout_path,
+            "/reports/bi_routines_weighings",
+        )
         self.assertTrue(result.workout_reached)
         self.assertEqual(result.report_mode, "native_dom")
         self.assertFalse(result.export_contract_verified)

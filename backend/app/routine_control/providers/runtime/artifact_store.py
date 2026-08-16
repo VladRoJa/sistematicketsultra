@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import hashlib
 import os
 import re
@@ -66,14 +67,17 @@ class ArtifactStore:
         if not run_dir.is_dir():
             raise ArtifactStoreError("La carpeta de ejecución no existe.")
         name = str(source_filename or "").strip()
+        suffix = Path(name).suffix.lower()
         if (
             not name
             or name != Path(name).name
             or "/" in name
             or "\\" in name
-            or Path(name).suffix.lower() != ".xlsx"
+            or suffix not in {".xlsx", ".csv"}
         ):
-            raise ArtifactStoreError("source_filename debe ser un nombre XLSX seguro.")
+            raise ArtifactStoreError(
+                "source_filename debe ser un nombre XLSX o CSV seguro."
+            )
         final_path = self._inside_root(run_dir / name)
         partial_path = self._inside_root(run_dir / f".{name}.{uuid4().hex}.partial")
         if final_path.exists() or partial_path.exists():
@@ -121,6 +125,79 @@ class ArtifactStore:
         except Exception as exc:
             raise ArtifactStoreError("El archivo descargado no es un XLSX válido.") from exc
 
+    @staticmethod
+    def _validate_csv(
+        path: Path,
+        required_headers: Iterable[str],
+    ) -> None:
+        required = frozenset(required_headers)
+
+        try:
+            with path.open(
+                "r",
+                encoding="utf-8-sig",
+                newline="",
+            ) as source:
+                sample = source.read(8192)
+
+                if not sample.strip():
+                    raise ArtifactStoreError(
+                        "El archivo CSV descargado está vacío."
+                    )
+
+                try:
+                    dialect = csv.Sniffer().sniff(
+                        sample,
+                        delimiters=",;\t|",
+                    )
+                except csv.Error as exc:
+                    raise ArtifactStoreError(
+                        "No fue posible identificar el delimitador del CSV."
+                    ) from exc
+
+                source.seek(0)
+
+                reader = csv.reader(
+                    source,
+                    dialect,
+                )
+
+                headers_row = next(
+                    reader,
+                    (),
+                )
+
+                headers = {
+                    str(value).strip()
+                    for value in headers_row
+                    if value is not None
+                    and str(value).strip()
+                }
+
+                missing = sorted(
+                    required.difference(headers)
+                )
+
+                if missing:
+                    raise ArtifactStoreError(
+                        "El CSV no contiene los headers requeridos: "
+                        + ", ".join(missing)
+                        + "."
+                    )
+
+        except ArtifactStoreError:
+            raise
+
+        except (
+            OSError,
+            UnicodeDecodeError,
+            csv.Error,
+        ) as exc:
+            raise ArtifactStoreError(
+                "El archivo descargado no es un CSV válido."
+            ) from exc
+
+
     def finalize_download(
         self,
         *,
@@ -142,7 +219,23 @@ class ArtifactStore:
                 raise ArtifactStoreError("La descarga temporal no existe.")
             if final.exists():
                 raise ArtifactStoreError("El artifact final ya existe.")
-            self._validate_xlsx(partial, required_headers)
+            suffix = final.suffix.lower()
+
+            if suffix == ".xlsx":
+                self._validate_xlsx(
+                    partial,
+                    required_headers,
+                )
+            elif suffix == ".csv":
+                self._validate_csv(
+                    partial,
+                    required_headers,
+                )
+            else:
+                raise ArtifactStoreError(
+                    "El formato del artifact no está soportado."
+                )
+
             size_bytes = partial.stat().st_size
             sha256 = self._sha256(partial)
             os.replace(partial, final)

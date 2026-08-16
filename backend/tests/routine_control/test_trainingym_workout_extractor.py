@@ -462,7 +462,7 @@ class _Page:
         self.download_active = False
         self.expect_download_timeout = None
         self.download = _Download(download_source)
-        self.url = "https://app.example.invalid/reports/workout"
+        self.url = "https://app.example.invalid/reports/bi_routines_weighings"
         self.frame = _Frame(self, **frame_kwargs)
         self.frames = [self.frame]
         if dialog_in_other_frame:
@@ -575,7 +575,7 @@ class TrainingymWorkoutExtractorTestCase(unittest.TestCase):
             "TRAININGYM_PASS": "trainingym-password-secret",
             "TRAININGYM_CENTER_NAME": "Configured Center",
             "TRAININGYM_WORKOUT_URL": (
-                "https://app.example.invalid/reports/workout"
+                "https://app.example.invalid/reports/bi_routines_weighings"
             ),
             "ROUTINE_CONTROL_ARTIFACT_DIR": artifact_root,
         }
@@ -589,8 +589,20 @@ class TrainingymWorkoutExtractorTestCase(unittest.TestCase):
         _date_to,
         partial_path,
     ) -> str:
-        shutil.copyfile(FIXTURE, partial_path)
-        return "sensitive-token-report.xlsx"
+        partial_path.write_text(
+            (
+                "\ufeff"
+                '"ID";"ID externo";"Socio";"Email";"Edad";"Sexo";'
+                '"Empleados";"Workouts";"Pesajes";"Total";"Valoración";'
+                '"Fecha";"Centro"\n'
+                '"24639860";"88669";"SOCIO PRUEBA";"test@example.com";'
+                '"42";"F";"TECNICO PRUEBA";"1";"0";"1";"";'
+                '"2026-07-23";"UltraGym Centro"\n'
+            ),
+            encoding="utf-8",
+            newline="",
+        )
+        return TRAININGYM_WORKOUT_FILENAME
 
     def _extract(self, temp_dir: str, **kwargs):
         extractor_kwargs = {
@@ -609,6 +621,68 @@ class TrainingymWorkoutExtractorTestCase(unittest.TestCase):
             date_to=DATE_TO,
             observed_at_utc=OBSERVED_AT,
             headless=True,
+        )
+
+    def test_native_csv_is_validated_and_stored_as_provider_artifact(self) -> None:
+        def native_csv_operation(
+            _page,
+            _tracker,
+            _config,
+            _date_from,
+            _date_to,
+            partial_path,
+        ) -> str:
+            partial_path.write_text(
+                (
+                    "\ufeff"
+                    '"ID";"ID externo";"Socio";"Email";"Edad";"Sexo";'
+                    '"Empleados";"Workouts";"Pesajes";"Total";"Valoración";'
+                    '"Fecha";"Centro"\n'
+                    '"24639860";"88669";"SOCIO PRUEBA";"test@example.com";'
+                    '"42";"F";"TECNICO PRUEBA";"1";"0";"1";"";'
+                    '"2026-07-23";"UltraGym Centro"\n'
+                ),
+                encoding="utf-8",
+                newline="",
+            )
+            return extractor.TRAININGYM_WORKOUT_CSV_FILENAME
+
+        with tempfile.TemporaryDirectory() as temp_dir, patch.dict(
+            "os.environ",
+            self._environment(temp_dir),
+            clear=True,
+        ):
+            result = TrainingymWorkoutExtractor(
+                download_operation=native_csv_operation,
+                runtime_factory=_LocalRuntime,
+            ).extract(
+                date_from=DATE_FROM,
+                date_to=DATE_TO,
+                observed_at_utc=OBSERVED_AT,
+                headless=True,
+            )
+
+        self.assertTrue(result.succeeded)
+        self.assertIsNotNone(result.artifact)
+        self.assertEqual(
+            result.artifact.source_filename,
+            "trainingym-workout.csv",
+        )
+        self.assertEqual(
+            result.artifact.provider_key,
+            "trainingym",
+        )
+        self.assertEqual(
+            result.artifact.dataset_key,
+            "workout",
+        )
+        self.assertEqual(
+            result.artifact.local_path.name,
+            "trainingym-workout.csv",
+        )
+        self.assertEqual(
+            result.artifact.diagnostic_metadata["export_contract"],
+            "tg_native_routines_weighings_csv",
         )
 
     def test_complete_success_creates_provider_artifact(self) -> None:
@@ -631,9 +705,16 @@ class TrainingymWorkoutExtractorTestCase(unittest.TestCase):
                 "sensitive-token",
                 json.dumps(dict(result.artifact.diagnostic_metadata)),
             )
-            self.assertEqual(
-                result.artifact.local_path.read_bytes(),
-                FIXTURE.read_bytes(),
+            artifact_text = result.artifact.local_path.read_text(
+                encoding="utf-8-sig",
+            )
+            self.assertIn(
+                '"ID";"ID externo";"Socio";',
+                artifact_text,
+            )
+            self.assertIn(
+                '"Workouts";"Pesajes";',
+                artifact_text,
             )
 
     def test_download_is_validated_by_current_normalizer(self) -> None:
@@ -682,6 +763,192 @@ class TrainingymWorkoutExtractorTestCase(unittest.TestCase):
         ]
         self.assertIs(extractor._find_report_frame(page), powerbi)
 
+    def test_authentication_waits_for_post_login_route_to_settle(self) -> None:
+        class Field:
+            def fill(self, _value: str) -> None:
+                pass
+
+            def evaluate(self, _script) -> bool:
+                return True
+
+        class Submit:
+            def __init__(self, page) -> None:
+                self.page = page
+
+            def click(self) -> None:
+                # El login real devuelve primero a la raíz.
+                self.page.url = "https://app.example.invalid/"
+
+        class Body:
+            def wait_for(self, **_kwargs) -> None:
+                pass
+
+        class Page:
+            def __init__(self) -> None:
+                self.url = "https://app.example.invalid/auth"
+                self.elapsed_ms = 0
+
+            def goto(self, url: str, *, wait_until: str) -> None:
+                self.url = url
+
+            def wait_for_load_state(self, _state: str) -> None:
+                pass
+
+            def wait_for_function(self, _script) -> None:
+                pass
+
+            def title(self) -> str:
+                return extractor._EXPECTED_TITLE
+
+            def wait_for_timeout(self, milliseconds: int) -> None:
+                self.elapsed_ms += milliseconds
+
+                if self.elapsed_ms >= 1_300:
+                    self.url = (
+                        "https://app.example.invalid/"
+                        "trainingym/home"
+                    )
+                elif self.elapsed_ms >= 400:
+                    self.url = (
+                        "https://app.example.invalid/"
+                        "trainingym"
+                    )
+
+            def locator(self, selector: str):
+                if selector != "body":
+                    raise AssertionError(
+                        f"Unexpected selector: {selector}"
+                    )
+                return Body()
+
+        page = Page()
+        tracker = _Tracker()
+
+        config = TrainingymProviderConfig(
+            login_url="https://app.example.invalid/auth",
+            user="private-user",
+            password="private-password",
+            center_name="Configured Center",
+            workout_url=(
+                "https://app.example.invalid/"
+                "reports/bi_routines_weighings"
+            ),
+        )
+
+        user_field = Field()
+        password_field = Field()
+        submit = Submit(page)
+
+        with (
+            patch.object(
+                extractor,
+                "_dismiss_cookie_banner",
+                return_value=False,
+            ),
+            patch.object(
+                extractor,
+                "_wait_for_login_controls",
+                return_value=(
+                    user_field,
+                    password_field,
+                    submit,
+                ),
+            ),
+            patch.object(
+                extractor,
+                "_wait_for_first_auth_outcome",
+                return_value="DIRECT_AUTH",
+            ),
+            patch.object(
+                extractor,
+                "_wait_until_outside_auth",
+            ),
+            patch.object(
+                extractor,
+                "_stabilize_post_login",
+                return_value=("/", extractor._EXPECTED_TITLE),
+            ),
+        ):
+            extractor._authenticate_trainingym(
+                page,
+                tracker,
+                config,
+            )
+
+        self.assertEqual(
+            page.url,
+            "https://app.example.invalid/trainingym/home",
+        )
+
+
+    def test_navigation_survives_delayed_post_login_home_redirect(self) -> None:
+        class Body:
+            def wait_for(self, **_kwargs) -> None:
+                pass
+
+        class Page:
+            def __init__(self) -> None:
+                self.url = "https://app.example.invalid/"
+                self.events: list[str] = []
+                self.elapsed_ms = 0
+                self.pending_login_redirect = True
+
+            def goto(self, url: str, *, wait_until: str) -> None:
+                self.events.append(
+                    f"goto:{url}:{wait_until}"
+                )
+                self.url = url
+
+            def wait_for_timeout(self, milliseconds: int) -> None:
+                self.elapsed_ms += milliseconds
+
+                if (
+                    self.pending_login_redirect
+                    and self.elapsed_ms >= 1_800
+                ):
+                    self.url = (
+                        "https://app.example.invalid/"
+                        "trainingym/home"
+                    )
+                    self.pending_login_redirect = False
+
+            def locator(self, selector: str):
+                if selector != "body":
+                    raise AssertionError(
+                        f"Unexpected selector: {selector}"
+                    )
+                return Body()
+
+        page = Page()
+
+        config = TrainingymProviderConfig(
+            login_url="https://app.example.invalid/auth",
+            user="private-user",
+            password="private-password",
+            center_name="Configured Center",
+            workout_url=(
+                "https://app.example.invalid/"
+                "reports/bi_routines_weighings"
+            ),
+        )
+
+        extractor._navigate_to_workout(
+            page,
+            config,
+        )
+
+        # Simula el pequeño intervalo posterior al return.
+        # El redirect pendiente del login no debe poder
+        # sustituir el reporte después de que navegación
+        # haya sido declarada exitosa.
+        page.wait_for_timeout(500)
+
+        self.assertEqual(
+            page.url,
+            config.workout_url,
+        )
+
+
     def test_home_is_not_an_error_and_navigation_uses_workout_url(self) -> None:
         page = _Page()
         page.url = "https://app.example.invalid/trainingym/home"
@@ -690,7 +957,7 @@ class TrainingymWorkoutExtractorTestCase(unittest.TestCase):
             user="private-user",
             password="private-password",
             center_name="Configured Center",
-            workout_url="https://app.example.invalid/reports/workout",
+            workout_url="https://app.example.invalid/reports/bi_routines_weighings",
         )
         extractor._navigate_to_workout(page, config)
         self.assertEqual(page.url, config.workout_url)
@@ -698,6 +965,674 @@ class TrainingymWorkoutExtractorTestCase(unittest.TestCase):
             f"goto:{config.workout_url}:domcontentloaded",
             page.events,
         )
+
+    def test_native_center_selector_waits_for_options_before_select_all(self) -> None:
+        events: list[str] = []
+
+        class Page:
+            def __init__(self) -> None:
+                self.options_ready = False
+
+            def locator(self, selector: str):
+                if selector == extractor._CENTER_SELECT_SELECTOR:
+                    return Select(self)
+
+                if selector == extractor._CENTER_TOGGLE_ALL_SELECTOR:
+                    return Toggle(self)
+
+                if selector == "nz-option-item":
+                    return Options(self)
+
+                raise AssertionError(
+                    f"Unexpected selector: {selector}"
+                )
+
+        class Select:
+            def __init__(self, page) -> None:
+                self.page = page
+
+            def wait_for(self, **_kwargs) -> None:
+                events.append("center:visible")
+
+            def click(self) -> None:
+                events.append("center:click")
+
+        class Options:
+            def __init__(self, page) -> None:
+                self.page = page
+
+            @property
+            def first(self):
+                return self
+
+            def wait_for(self, **_kwargs) -> None:
+                events.append("options:ready")
+                self.page.options_ready = True
+
+        class Toggle:
+            def __init__(self, page) -> None:
+                self.page = page
+
+            def wait_for(self, **_kwargs) -> None:
+                events.append("toggle:visible")
+
+            def inner_text(self) -> str:
+                if self.page.options_ready:
+                    return getattr(
+                        self.page,
+                        "toggle_text",
+                        "Seleccionar todos",
+                    )
+
+                return "Seleccionar todos"
+
+            def click(self) -> None:
+                if not self.page.options_ready:
+                    events.append(
+                        "toggle:premature-click"
+                    )
+                    return
+
+                events.append("toggle:click")
+                self.page.toggle_text = "quitar_todos"
+
+        extractor._ensure_all_centers(
+            Page()
+        )
+
+        self.assertNotIn(
+            "toggle:premature-click",
+            events,
+        )
+
+        self.assertEqual(
+            events[:3],
+            [
+                "center:visible",
+                "center:click",
+                "options:ready",
+            ],
+        )
+
+
+    def test_native_center_selector_ensures_all_centers(self) -> None:
+        events: list[str] = []
+
+        class Toggle:
+            def __init__(self) -> None:
+                self.text = "Seleccionar todos"
+
+            def wait_for(self, **_kwargs) -> None:
+                pass
+
+            def inner_text(self) -> str:
+                return self.text
+
+            def click(self) -> None:
+                events.append("click:select-all")
+                self.text = "quitar_todos"
+
+        class Select:
+            @property
+            def first(self):
+                return self
+
+            def wait_for(self, **_kwargs) -> None:
+                pass
+
+            def click(self) -> None:
+                events.append("click:center-select")
+
+        toggle = Toggle()
+        select = Select()
+
+        class Page:
+            def locator(self, selector: str):
+                if selector == extractor._CENTER_SELECT_SELECTOR:
+                    return select
+                if selector == extractor._CENTER_TOGGLE_ALL_SELECTOR:
+                    return toggle
+                if selector == "nz-option-item":
+                    return select
+                raise AssertionError(f"Unexpected selector: {selector}")
+
+        extractor._ensure_all_centers(Page())
+
+        self.assertEqual(
+            events,
+            ["click:center-select", "click:select-all"],
+        )
+        self.assertEqual(
+            extractor._normalize_control_text(toggle.inner_text()),
+            "quitar todos",
+        )
+
+    def test_native_center_selector_does_not_toggle_when_all_are_selected(self) -> None:
+        events: list[str] = []
+
+        class Toggle:
+            def wait_for(self, **_kwargs) -> None:
+                pass
+
+            def inner_text(self) -> str:
+                return "quitar_todos"
+
+            def click(self) -> None:
+                events.append("click:select-all")
+
+        class Select:
+            @property
+            def first(self):
+                return self
+
+            def wait_for(self, **_kwargs) -> None:
+                pass
+
+            def click(self) -> None:
+                events.append("click:center-select")
+
+        toggle = Toggle()
+        select = Select()
+
+        class Page:
+            def locator(self, selector: str):
+                if selector == extractor._CENTER_SELECT_SELECTOR:
+                    return select
+                if selector == extractor._CENTER_TOGGLE_ALL_SELECTOR:
+                    return toggle
+                if selector == "nz-option-item":
+                    return select
+                raise AssertionError(f"Unexpected selector: {selector}")
+
+        extractor._ensure_all_centers(Page())
+
+        self.assertEqual(
+            events,
+            ["click:center-select"],
+        )
+
+    def test_native_date_range_uses_calendar_and_navigates_to_target_month(self) -> None:
+        events: list[str] = []
+
+        class Input:
+            def __init__(
+                self,
+                name: str,
+                value: str,
+            ) -> None:
+                self.name = name
+                self.value = value
+
+            def wait_for(self, **_kwargs) -> None:
+                pass
+
+            def click(self) -> None:
+                events.append(
+                    f"input:click:{self.name}"
+                )
+
+            def fill(self, _value: str) -> None:
+                raise AssertionError(
+                    "El rango nativo no debe usar fill()."
+                )
+
+            def input_value(self) -> str:
+                return self.value
+
+        start = Input(
+            "fecha-inicial",
+            "01/08/2026",
+        )
+        end = Input(
+            "fecha-final",
+            "31/08/2026",
+        )
+
+        class Page:
+            def __init__(self) -> None:
+                self.left_year = 2026
+                self.left_month = 8
+
+            def shift_month(self, delta: int) -> None:
+                absolute = (
+                    self.left_year * 12
+                    + self.left_month
+                    - 1
+                    + delta
+                )
+
+                self.left_year = absolute // 12
+                self.left_month = absolute % 12 + 1
+
+            def visible_months(self):
+                current = (
+                    self.left_year,
+                    self.left_month,
+                )
+
+                absolute = (
+                    self.left_year * 12
+                    + self.left_month
+                )
+
+                following = (
+                    absolute // 12,
+                    absolute % 12 + 1,
+                )
+
+                return {
+                    current,
+                    following,
+                }
+
+            def locator(self, selector: str):
+                if selector == extractor._DATE_RANGE_SELECTOR:
+                    return DateRange(self)
+
+                if selector == (
+                    ".ant-picker-dropdown:"
+                    "not(.ant-picker-dropdown-hidden)"
+                ):
+                    return Dropdown(self)
+
+                raise AssertionError(
+                    f"Unexpected selector: {selector}"
+                )
+
+            def wait_for_timeout(
+                self,
+                _milliseconds: int,
+            ) -> None:
+                pass
+
+        class DateRange:
+            def __init__(self, page) -> None:
+                self.page = page
+
+            def wait_for(self, **_kwargs) -> None:
+                pass
+
+            def locator(self, selector: str):
+                if selector == extractor._DATE_START_SELECTOR:
+                    return start
+
+                if selector == extractor._DATE_END_SELECTOR:
+                    return end
+
+                raise AssertionError(
+                    f"Unexpected selector: {selector}"
+                )
+
+        class FirstInViewCell:
+            def __init__(self, page) -> None:
+                self.page = page
+
+            def get_attribute(self, name: str):
+                if name != "title":
+                    return None
+
+                return (
+                    f"01/{self.page.left_month:02d}/"
+                    f"{self.page.left_year:04d}"
+                )
+
+        class FirstInViewCells:
+            def __init__(self, page) -> None:
+                self.page = page
+
+            @property
+            def first(self):
+                return FirstInViewCell(
+                    self.page
+                )
+
+        class Panel:
+            def __init__(self, page) -> None:
+                self.page = page
+
+            def locator(self, selector: str):
+                if selector == (
+                    "td.ant-picker-cell-in-view[title]"
+                ):
+                    return FirstInViewCells(
+                        self.page
+                    )
+
+                raise AssertionError(
+                    f"Unexpected panel selector: {selector}"
+                )
+
+        class Panels:
+            def __init__(self, page) -> None:
+                self.page = page
+
+            @property
+            def first(self):
+                return Panel(
+                    self.page
+                )
+
+        class DateCell:
+            def __init__(
+                self,
+                page,
+                title: str,
+            ) -> None:
+                self.page = page
+                self.title = title
+
+            def is_visible(self) -> bool:
+                return True
+
+            def click(self) -> None:
+                events.append(
+                    f"calendar:click:{self.title}"
+                )
+
+                if self.title == "01/07/2026":
+                    start.value = self.title
+
+                elif self.title == "23/07/2026":
+                    end.value = self.title
+
+        class DateCells:
+            def __init__(
+                self,
+                page,
+                title: str,
+            ) -> None:
+                self.page = page
+                self.title = title
+
+            def count(self) -> int:
+                _day, month, year = (
+                    int(part)
+                    for part in self.title.split("/")
+                )
+
+                return int(
+                    (year, month)
+                    in self.page.visible_months()
+                )
+
+            @property
+            def first(self):
+                return DateCell(
+                    self.page,
+                    self.title,
+                )
+
+        class NavigationButton:
+            def __init__(
+                self,
+                page,
+                delta: int,
+                name: str,
+            ) -> None:
+                self.page = page
+                self.delta = delta
+                self.name = name
+
+            @property
+            def first(self):
+                return self
+
+            def click(self) -> None:
+                events.append(
+                    f"calendar:{self.name}"
+                )
+                self.page.shift_month(
+                    self.delta
+                )
+
+        class Dropdown:
+            def __init__(self, page) -> None:
+                self.page = page
+
+            def wait_for(self, **_kwargs) -> None:
+                pass
+
+            def locator(self, selector: str):
+                if selector == ".ant-picker-panel":
+                    return Panels(
+                        self.page
+                    )
+
+                if selector == (
+                    ".ant-picker-header-prev-btn:visible"
+                ):
+                    return NavigationButton(
+                        self.page,
+                        -1,
+                        "previous-month",
+                    )
+
+                if selector == (
+                    ".ant-picker-header-next-btn:visible"
+                ):
+                    return NavigationButton(
+                        self.page,
+                        1,
+                        "next-month",
+                    )
+
+                prefix = (
+                    'td.ant-picker-cell-in-view'
+                    '[title="'
+                )
+
+                if (
+                    selector.startswith(prefix)
+                    and selector.endswith('"]')
+                ):
+                    title = selector[
+                        len(prefix):-2
+                    ]
+
+                    return DateCells(
+                        self.page,
+                        title,
+                    )
+
+                raise AssertionError(
+                    f"Unexpected dropdown selector: {selector}"
+                )
+
+        page = Page()
+
+        extractor._set_native_date_range(
+            page,
+            DATE_FROM,
+            DATE_TO,
+        )
+
+        self.assertEqual(
+            start.value,
+            "01/07/2026",
+        )
+        self.assertEqual(
+            end.value,
+            "23/07/2026",
+        )
+
+        self.assertEqual(
+            events,
+            [
+                "input:click:fecha-inicial",
+                "calendar:previous-month",
+                "calendar:click:01/07/2026",
+                "calendar:click:23/07/2026",
+            ],
+        )
+
+
+    def test_native_date_range_fails_if_trainingym_does_not_keep_values(self) -> None:
+        class Input:
+            def __init__(
+                self,
+                value: str,
+                *,
+                persisted_value: str | None = None,
+            ) -> None:
+                self.value = value
+                self.persisted_value = persisted_value
+
+            def wait_for(self, **_kwargs) -> None:
+                pass
+
+            def click(self) -> None:
+                pass
+
+            def input_value(self) -> str:
+                return (
+                    self.persisted_value
+                    or self.value
+                )
+
+        start_input = Input(
+            "01/08/2026",
+        )
+
+        end_input = Input(
+            "31/08/2026",
+            persisted_value="31/07/2026",
+        )
+
+        class DateRange:
+            def wait_for(self, **_kwargs) -> None:
+                pass
+
+            def locator(self, selector: str):
+                if selector == extractor._DATE_START_SELECTOR:
+                    return start_input
+
+                if selector == extractor._DATE_END_SELECTOR:
+                    return end_input
+
+                raise AssertionError(
+                    f"Unexpected selector: {selector}"
+                )
+
+        class FirstCell:
+            def get_attribute(self, name: str):
+                if name == "title":
+                    return "01/07/2026"
+
+                return None
+
+        class FirstCells:
+            @property
+            def first(self):
+                return FirstCell()
+
+        class Panel:
+            def locator(self, selector: str):
+                if selector == (
+                    "td.ant-picker-cell-in-view[title]"
+                ):
+                    return FirstCells()
+
+                raise AssertionError(
+                    f"Unexpected panel selector: {selector}"
+                )
+
+        class Panels:
+            @property
+            def first(self):
+                return Panel()
+
+        class DateCell:
+            def __init__(self, title: str) -> None:
+                self.title = title
+
+            def is_visible(self) -> bool:
+                return True
+
+            def click(self) -> None:
+                if self.title == "01/07/2026":
+                    start_input.value = self.title
+
+                elif self.title == "23/07/2026":
+                    end_input.value = self.title
+
+        class DateCells:
+            def __init__(self, title: str) -> None:
+                self.title = title
+
+            def count(self) -> int:
+                return 1
+
+            @property
+            def first(self):
+                return DateCell(
+                    self.title
+                )
+
+        class Dropdown:
+            def wait_for(self, **_kwargs) -> None:
+                pass
+
+            def locator(self, selector: str):
+                if selector == ".ant-picker-panel":
+                    return Panels()
+
+                prefix = (
+                    'td.ant-picker-cell-in-view'
+                    '[title="'
+                )
+
+                if (
+                    selector.startswith(prefix)
+                    and selector.endswith('"]')
+                ):
+                    title = selector[
+                        len(prefix):-2
+                    ]
+
+                    return DateCells(
+                        title
+                    )
+
+                raise AssertionError(
+                    f"Unexpected dropdown selector: {selector}"
+                )
+
+        class Page:
+            def locator(self, selector: str):
+                if selector == extractor._DATE_RANGE_SELECTOR:
+                    return DateRange()
+
+                if selector == (
+                    ".ant-picker-dropdown:"
+                    "not(.ant-picker-dropdown-hidden)"
+                ):
+                    return Dropdown()
+
+                raise AssertionError(
+                    f"Unexpected selector: {selector}"
+                )
+
+            def wait_for_timeout(
+                self,
+                _milliseconds: int,
+            ) -> None:
+                pass
+
+        with self.assertRaises(
+            TrainingymWorkoutExtractionError
+        ) as raised:
+            extractor._set_native_date_range(
+                Page(),
+                DATE_FROM,
+                DATE_TO,
+            )
+
+        self.assertEqual(
+            raised.exception.error_code,
+            "TRAININGYM_WORKOUT_FILTER_CONTRACT_FAILED",
+        )
+
+
 
     def test_dates_use_exact_slicers_end_first_and_dispatch_events(self) -> None:
         page = _Page()
@@ -777,6 +1712,257 @@ class TrainingymWorkoutExtractorTestCase(unittest.TestCase):
         page = _Page(use_visual_container=True)
         visual = extractor._find_tabular_visual(page.frame)
         self.assertIs(visual, page.frame.visual)
+
+    def test_browser_export_uses_native_trainingym_flow_without_powerbi(self) -> None:
+        page = object()
+        tracker = _Tracker()
+
+        config = TrainingymProviderConfig(
+            login_url="https://app.example.invalid/auth",
+            user="private-user",
+            password="private-password",
+            center_name="Configured Center",
+            workout_url=(
+                "https://app.example.invalid/"
+                "reports/bi_routines_weighings"
+            ),
+        )
+
+        events: list[str] = []
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            partial = Path(temp_dir) / "download.partial"
+
+            with (
+                patch.object(
+                    extractor,
+                    "_authenticate_trainingym",
+                    side_effect=lambda *_args: events.append("authenticate"),
+                ),
+                patch.object(
+                    extractor,
+                    "_navigate_to_workout",
+                    side_effect=lambda *_args: events.append("navigate"),
+                ),
+                patch.object(
+                    extractor,
+                    "_ensure_all_centers",
+                    side_effect=lambda *_args: events.append("centers"),
+                ),
+                patch.object(
+                    extractor,
+                    "_set_native_date_range",
+                    side_effect=lambda *_args: events.append("dates"),
+                ),
+                patch.object(
+                    extractor,
+                    "_download_native_csv",
+                    side_effect=lambda *_args: (
+                        events.append("download")
+                        or extractor.TRAININGYM_WORKOUT_CSV_FILENAME
+                    ),
+                ),
+                patch.object(
+                    extractor,
+                    "_find_report_frame",
+                    side_effect=AssertionError(
+                        "Power BI frame must not be used."
+                    ),
+                ),
+                patch.object(
+                    extractor,
+                    "_configure_filters",
+                    side_effect=AssertionError(
+                        "Power BI filters must not be used."
+                    ),
+                ),
+                patch.object(
+                    extractor,
+                    "_download_workout",
+                    side_effect=AssertionError(
+                        "Power BI XLSX download must not be used."
+                    ),
+                ),
+            ):
+                result = extractor._browser_export(
+                    page,
+                    tracker,
+                    config,
+                    DATE_FROM,
+                    DATE_TO,
+                    partial,
+                )
+
+        self.assertEqual(
+            result,
+            extractor.TRAININGYM_WORKOUT_CSV_FILENAME,
+        )
+        self.assertEqual(
+            events,
+            [
+                "authenticate",
+                "navigate",
+                "centers",
+                "dates",
+                "download",
+            ],
+        )
+        self.assertEqual(
+            tracker.phases,
+            [
+                BrowserPhase.NAVIGATION,
+                BrowserPhase.EXPORT,
+                BrowserPhase.DOWNLOAD,
+            ],
+        )
+
+    def test_native_csv_export_hovers_and_wraps_click_with_expect_download(self) -> None:
+        events: list[str] = []
+
+        class ExportButton:
+            def wait_for(self, **_kwargs) -> None:
+                pass
+
+            def is_disabled(self) -> bool:
+                return False
+
+            def hover(self) -> None:
+                events.append("hover:export")
+
+        class ExportCsv:
+            def is_visible(self) -> bool:
+                return True
+
+            def click(self) -> None:
+                events.append(
+                    f"click:Exportar CSV:inside_expect={page.download_active}"
+                )
+
+        class Download:
+            suggested_filename = "rutinas_pesajes.csv"
+
+            def save_as(self, path: str) -> None:
+                Path(path).write_bytes(b"csv-data")
+                events.append("save:csv")
+
+        class DownloadInfo:
+            def __enter__(self):
+                page.download_active = True
+                events.append("expect_download:enter")
+                return self
+
+            def __exit__(self, _exc_type, _exc, _traceback):
+                events.append("expect_download:exit")
+                page.download_active = False
+
+            @property
+            def value(self):
+                return Download()
+
+        class Page:
+            def __init__(self) -> None:
+                self.download_active = False
+                self.button = ExportButton()
+                self.csv = ExportCsv()
+
+            def locator(self, selector: str):
+                if selector == extractor._NATIVE_EXPORT_BUTTON_SELECTOR:
+                    return self.button
+                raise AssertionError(f"Unexpected selector: {selector}")
+
+            def get_by_text(self, text: str, *, exact: bool):
+                if text == extractor._NATIVE_EXPORT_CSV_TEXT and exact:
+                    return _Collection((self.csv,))
+                return _Collection()
+
+            def expect_download(self, *, timeout=None):
+                self.expect_download_timeout = timeout
+                return DownloadInfo()
+
+            def wait_for_timeout(self, _timeout: int) -> None:
+                pass
+
+        page = Page()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            partial = Path(temp_dir) / "download.partial"
+
+            source_filename = extractor._download_native_csv(
+                page,
+                partial,
+            )
+
+            self.assertTrue(partial.is_file())
+
+        self.assertEqual(
+            source_filename,
+            extractor.TRAININGYM_WORKOUT_CSV_FILENAME,
+        )
+        self.assertEqual(
+            page.expect_download_timeout,
+            extractor._DOWNLOAD_TIMEOUT_MS,
+        )
+        self.assertLess(
+            events.index("hover:export"),
+            events.index("expect_download:enter"),
+        )
+        self.assertIn(
+            "click:Exportar CSV:inside_expect=True",
+            events,
+        )
+        self.assertLess(
+            events.index("expect_download:enter"),
+            events.index("click:Exportar CSV:inside_expect=True"),
+        )
+        self.assertLess(
+            events.index("click:Exportar CSV:inside_expect=True"),
+            events.index("expect_download:exit"),
+        )
+        self.assertIn("save:csv", events)
+
+    def test_native_csv_export_fails_if_csv_action_is_missing(self) -> None:
+        class ExportButton:
+            def wait_for(self, **_kwargs) -> None:
+                pass
+
+            def is_disabled(self) -> bool:
+                return False
+
+            def hover(self) -> None:
+                pass
+
+        class Page:
+            def locator(self, selector: str):
+                if selector == extractor._NATIVE_EXPORT_BUTTON_SELECTOR:
+                    return ExportButton()
+                raise AssertionError(f"Unexpected selector: {selector}")
+
+            def get_by_text(self, text: str, *, exact: bool):
+                self.assertEqual if False else None
+                return _Collection()
+
+            def wait_for_timeout(self, _timeout: int) -> None:
+                pass
+
+        with tempfile.TemporaryDirectory() as temp_dir, patch.object(
+            extractor,
+            "_MENU_RENDER_TIMEOUT_MS",
+            0,
+        ):
+            partial = Path(temp_dir) / "download.partial"
+
+            with self.assertRaises(
+                TrainingymWorkoutExtractionError
+            ) as raised:
+                extractor._download_native_csv(
+                    Page(),
+                    partial,
+                )
+
+        self.assertEqual(
+            raised.exception.error_code,
+            "TRAININGYM_WORKOUT_MENU_NOT_FOUND",
+        )
 
     def test_hover_precedes_more_options_and_export_data(self) -> None:
         page = _Page()
@@ -925,10 +2111,22 @@ class TrainingymWorkoutExtractorTestCase(unittest.TestCase):
             nonlocal calls
             calls += 1
             if calls == 1:
-                shutil.copyfile(FIXTURE, partial_path)
+                partial_path.write_text(
+                    (
+                        "\ufeff"
+                        '"ID";"ID externo";"Socio";"Email";"Edad";"Sexo";'
+                        '"Empleados";"Workouts";"Pesajes";"Total";"Valoración";'
+                        '"Fecha";"Centro"\n'
+                        '"24639860";"88669";"SOCIO PRUEBA";"test@example.com";'
+                        '"42";"F";"TECNICO PRUEBA";"1";"0";"1";"";'
+                        '"2026-07-23";"UltraGym Centro"\n'
+                    ),
+                    encoding="utf-8",
+                    newline="",
+                )
             else:
                 partial_path.write_bytes(b"invalid")
-            return "workout.xlsx"
+            return TRAININGYM_WORKOUT_FILENAME
 
         with tempfile.TemporaryDirectory() as temp_dir, patch.dict(
             "os.environ",
@@ -1197,49 +2395,114 @@ class TrainingymWorkoutExtractorTestCase(unittest.TestCase):
             visible_header_texts,
         )
 
-    def test_browser_export_navigates_from_home_to_workout_before_frame(self) -> None:
+    def test_browser_export_navigates_from_home_before_native_controls(self) -> None:
         page = _Page()
         tracker = _Tracker()
+
         config = TrainingymProviderConfig(
             login_url="https://app.example.invalid/auth",
             user="private-user",
             password="private-password",
             center_name="Configured Center",
-            workout_url="https://app.example.invalid/reports/workout",
+            workout_url=(
+                "https://app.example.invalid/"
+                "reports/bi_routines_weighings"
+            ),
         )
 
-        def authenticate(current_page, _tracker, _config):
-            current_page.url = "https://app.example.invalid/trainingym/home"
-            current_page.events.append("authenticated:/trainingym/home")
+        events: list[str] = []
 
-        def navigate(current_page, current_config):
-            self.assertTrue(current_page.url.endswith("/trainingym/home"))
+        def authenticate(
+            current_page,
+            _tracker,
+            _config,
+        ):
+            current_page.url = (
+                "https://app.example.invalid/trainingym/home"
+            )
+            events.append("authenticated:/trainingym/home")
+
+        def navigate(
+            current_page,
+            current_config,
+        ):
+            self.assertTrue(
+                current_page.url.endswith("/trainingym/home")
+            )
             current_page.goto(
                 current_config.workout_url,
                 wait_until="domcontentloaded",
             )
-            current_page.events.append("workout:navigated")
+            events.append("workout:navigated")
 
-        def find_frame(current_page):
-            self.assertEqual(current_page.url, config.workout_url)
-            current_page.events.append("reportEmbed:searched")
-            return current_page.frame
+        def ensure_centers(current_page):
+            self.assertEqual(
+                current_page.url,
+                config.workout_url,
+            )
+            events.append("native:centers")
+
+        def set_dates(
+            current_page,
+            date_from,
+            date_to,
+        ):
+            self.assertEqual(
+                current_page.url,
+                config.workout_url,
+            )
+            self.assertEqual(date_from, DATE_FROM)
+            self.assertEqual(date_to, DATE_TO)
+            events.append("native:dates")
+
+        def download_csv(
+            current_page,
+            _partial_path,
+        ):
+            self.assertEqual(
+                current_page.url,
+                config.workout_url,
+            )
+            events.append("native:download")
+            return extractor.TRAININGYM_WORKOUT_CSV_FILENAME
 
         with tempfile.TemporaryDirectory() as temp_dir:
             partial = Path(temp_dir) / "download.partial"
-            with patch.object(
-                extractor,
-                "_authenticate_trainingym",
-                side_effect=authenticate,
-            ) as authenticate_mock, patch.object(
-                extractor,
-                "_navigate_to_workout",
-                side_effect=navigate,
-            ) as navigate_mock, patch.object(
-                extractor,
-                "_find_report_frame",
-                side_effect=find_frame,
-            ) as frame_mock:
+
+            with (
+                patch.object(
+                    extractor,
+                    "_authenticate_trainingym",
+                    side_effect=authenticate,
+                ),
+                patch.object(
+                    extractor,
+                    "_navigate_to_workout",
+                    side_effect=navigate,
+                ),
+                patch.object(
+                    extractor,
+                    "_ensure_all_centers",
+                    side_effect=ensure_centers,
+                ),
+                patch.object(
+                    extractor,
+                    "_set_native_date_range",
+                    side_effect=set_dates,
+                ),
+                patch.object(
+                    extractor,
+                    "_download_native_csv",
+                    side_effect=download_csv,
+                ),
+                patch.object(
+                    extractor,
+                    "_find_report_frame",
+                    side_effect=AssertionError(
+                        "El flujo nativo no debe buscar Power BI."
+                    ),
+                ),
+            ):
                 source_name = extractor._browser_export(
                     page,
                     tracker,
@@ -1248,26 +2511,31 @@ class TrainingymWorkoutExtractorTestCase(unittest.TestCase):
                     DATE_TO,
                     partial,
                 )
-        authenticate_mock.assert_called_once_with(page, tracker, config)
-        navigate_mock.assert_called_once_with(page, config)
-        frame_mock.assert_called_once_with(page)
-        self.assertLess(
-            page.events.index("authenticated:/trainingym/home"),
-            page.events.index("workout:navigated"),
-        )
-        self.assertLess(
-            page.events.index("workout:navigated"),
-            page.events.index("reportEmbed:searched"),
-        )
-        self.assertLess(
-            page.events.index("reportEmbed:searched"),
-            page.events.index("date:fecha-final:input"),
-        )
-        self.assertEqual(source_name, TRAININGYM_WORKOUT_FILENAME)
-        self.assertIn(BrowserPhase.EXPORT, tracker.phases)
-        self.assertIn(BrowserPhase.DOWNLOAD, tracker.phases)
-        self.assertEqual(page.frame.center.value, "Todas")
 
+        self.assertEqual(
+            source_name,
+            extractor.TRAININGYM_WORKOUT_CSV_FILENAME,
+        )
+
+        self.assertEqual(
+            events,
+            [
+                "authenticated:/trainingym/home",
+                "workout:navigated",
+                "native:centers",
+                "native:dates",
+                "native:download",
+            ],
+        )
+
+        self.assertEqual(
+            tracker.phases,
+            [
+                BrowserPhase.NAVIGATION,
+                BrowserPhase.EXPORT,
+                BrowserPhase.DOWNLOAD,
+            ],
+        )
 
 if __name__ == "__main__":
     unittest.main()
