@@ -129,3 +129,45 @@ def test_pending_close_executor_claims_and_executes_exact_version_id(
     assert result["status"] == "completed"
     assert result["track_date"] == "2026-07-31"
     assert result["track_daily_version"]["id"] == 321
+
+def test_preview_operativo_starts_at_5am_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    for env_name in (
+        "TRACK_PREVIEW_START_HOUR",
+        "TRACK_PREVIEW_END_HOUR",
+        "TRACK_NIGHTLY_BASE_HOUR",
+        "TRACK_NIGHTLY_BASE_MINUTE",
+        "TRACK_NIGHTLY_RETRY_HOUR",
+        "TRACK_NIGHTLY_RETRY_MINUTE",
+    ):
+        monkeypatch.delenv(env_name, raising=False)
+
+    cases = (
+        (4, None),
+        (5, "preview_operativo"),
+        (6, "preview_operativo"),
+        (7, "preview_operativo"),
+    )
+
+    for hour, expected_action in cases:
+        now_local = datetime(
+            2026,
+            8,
+            17,
+            hour,
+            0,
+            tzinfo=worker.TRACK_TIMEZONE,
+        )
+
+        decision = worker.decide_track_scheduler_action(
+            now_local
+        )
+
+        actual_action = (
+            decision.action
+            if decision is not None
+            else None
+        )
+
+        assert actual_action == expected_action
