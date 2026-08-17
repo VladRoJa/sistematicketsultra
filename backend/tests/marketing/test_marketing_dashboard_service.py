@@ -24,6 +24,32 @@ def _global_access() -> MarketingAccess:
     )
 
 
+@pytest.fixture(autouse=True)
+def _canonical_meta_investment(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(
+        service,
+        "read_meta_dashboard_investment_data",
+        lambda **kwargs: SimpleNamespace(
+            available=True,
+            meta_sync_run_id=82,
+            iventas_sync_run_id=kwargs["iventas_sync_run_id"],
+            date_from=date(2026, 7, 1),
+            date_to=date(2026, 7, 31),
+            total_meta_spend=Decimal("103.00"),
+            assigned_spend=Decimal("100.00"),
+            unassigned_spend=Decimal("3.00"),
+            conflict_spend=Decimal("0"),
+            branch_spend={1: Decimal("100.00")},
+            campaigns_total=2,
+            campaigns_assigned=1,
+            campaigns_unassigned=1,
+            campaigns_conflict=0,
+        ),
+    )
+
+
 def test_dashboard_builds_branch_and_summary_metrics(
     monkeypatch: pytest.MonkeyPatch,
 ):
@@ -34,16 +60,6 @@ def test_dashboard_builds_branch_and_summary_metrics(
             service.MarketingBranch(1, "Sucursal A", 1),
             service.MarketingBranch(2, "Sucursal B", 2),
         ],
-    )
-    monkeypatch.setattr(
-        service,
-        "_load_inputs_by_branch",
-        lambda **_: {
-            1: SimpleNamespace(
-                investment=Decimal("100.00"),
-                leads=999,
-            )
-        },
     )
     monkeypatch.setattr(
         service,
@@ -130,6 +146,21 @@ def test_dashboard_builds_branch_and_summary_metrics(
     assert result["cohort_mode"] == "visit_month"
     assert result["scope"]["branch_ids"] == [1, 2]
     assert result["summary"]["investment"] == 100.0
+    assert result["summary"]["meta"] == {
+        "available": True,
+        "meta_sync_run_id": 82,
+        "iventas_sync_run_id": 41,
+        "date_from": "2026-07-01",
+        "date_to": "2026-07-31",
+        "total_spend": 103.0,
+        "assigned_spend": 100.0,
+        "unassigned_spend": 3.0,
+        "conflict_spend": 0.0,
+        "campaigns_total": 2,
+        "campaigns_assigned": 1,
+        "campaigns_unassigned": 1,
+        "campaigns_conflict": 0,
+    }
     assert result["summary"]["leads"] == 10
     assert result["summary"]["visits"] == 2
     assert result["summary"]["sales"] == 1
@@ -157,11 +188,6 @@ def test_dashboard_zero_denominators_are_null(
         lambda: [
             service.MarketingBranch(1, "Sucursal A", 1)
         ],
-    )
-    monkeypatch.setattr(
-        service,
-        "_load_inputs_by_branch",
-        lambda **_: {},
     )
     monkeypatch.setattr(
         service,
@@ -481,16 +507,6 @@ def test_dashboard_uses_iventas_leads_without_adding_meta_actions(
         ],
     )
 
-    monkeypatch.setattr(
-        service,
-        "_load_inputs_by_branch",
-        lambda **_: {
-            1: SimpleNamespace(
-                investment=Decimal("100.00"),
-                leads=10,
-            )
-        },
-    )
 
     monkeypatch.setattr(
         service,
@@ -620,16 +636,6 @@ def test_dashboard_does_not_fallback_to_manual_when_iventas_unavailable(
         ],
     )
 
-    monkeypatch.setattr(
-        service,
-        "_load_inputs_by_branch",
-        lambda **_: {
-            1: SimpleNamespace(
-                investment=Decimal("100.00"),
-                leads=10,
-            )
-        },
-    )
 
     monkeypatch.setattr(
         service,
@@ -670,6 +676,27 @@ def test_dashboard_does_not_fallback_to_manual_when_iventas_unavailable(
         ),
     )
 
+    monkeypatch.setattr(
+        service,
+        "read_meta_dashboard_investment_data",
+        lambda **_: SimpleNamespace(
+            available=True,
+            meta_sync_run_id=82,
+            iventas_sync_run_id=None,
+            date_from=date(2026, 7, 1),
+            date_to=date(2026, 7, 31),
+            total_meta_spend=Decimal("125.50"),
+            assigned_spend=None,
+            unassigned_spend=None,
+            conflict_spend=None,
+            branch_spend={},
+            campaigns_total=1,
+            campaigns_assigned=None,
+            campaigns_unassigned=None,
+            campaigns_conflict=None,
+        ),
+    )
+
     result = service.build_marketing_dashboard(
         month="2026-07",
         access=_global_access(),
@@ -678,7 +705,11 @@ def test_dashboard_does_not_fallback_to_manual_when_iventas_unavailable(
 
     assert result["summary"]["leads"] is None
     assert result["summary"]["visits"] == 1
+    assert result["summary"]["investment"] is None
     assert result["summary"]["cost_per_lead"] is None
+    assert result["summary"]["cost_per_visit"] is None
+    assert result["summary"]["cost_per_sale"] is None
+    assert result["branches"][0]["investment"] is None
     assert result["summary"]["lead_to_visit_rate"] is None
     assert result["summary"]["lead_to_sale_rate"] is None
     assert result["branches"][0]["leads"] is None
@@ -732,16 +763,6 @@ def test_dashboard_iventas_summary_respects_visible_branch_scope(
         ),
     )
 
-    monkeypatch.setattr(
-        service,
-        "_load_inputs_by_branch",
-        lambda **_: {
-            1: SimpleNamespace(
-                investment=Decimal("100.00"),
-                leads=10,
-            )
-        },
-    )
 
     monkeypatch.setattr(
         service,
@@ -807,3 +828,136 @@ def test_dashboard_iventas_summary_respects_visible_branch_scope(
     assert len(result["branches"]) == 1
     assert result["branches"][0]["sucursal_id"] == 1
     assert result["branches"][0]["leads"] == 25
+
+
+def test_dashboard_without_canonical_meta_nulls_investment_and_costs(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(
+        service,
+        "_load_available_branches",
+        lambda: [service.MarketingBranch(1, "Sucursal A", 1)],
+    )
+    monkeypatch.setattr(
+        service,
+        "_load_visit_events",
+        lambda **_: service.VisitLoadResult(
+            events=[
+                VisitEvent(
+                    "visit-a",
+                    1,
+                    date(2026, 7, 2),
+                    "0000000000",
+                    "PASE RECORRIDO",
+                )
+            ]
+        ),
+    )
+    monkeypatch.setattr(
+        service,
+        "_load_sales",
+        lambda **_: service.SalesLoadResult(),
+    )
+    monkeypatch.setattr(
+        service,
+        "read_iventas_dashboard_month_data",
+        lambda **_: SimpleNamespace(
+            available=True,
+            period_key="IVENTAS-2026-07",
+            date_from=date(2026, 7, 1),
+            date_to=date(2026, 7, 31),
+            sync_run_id=41,
+            metrics=SimpleNamespace(),
+            branch_metrics=(
+                SimpleNamespace(
+                    sucursal_id=1,
+                    iventas_contacts=5,
+                    iventas_contacts_with_first_message=3,
+                    meta_observed_leads=2,
+                ),
+            ),
+        ),
+    )
+    monkeypatch.setattr(
+        service,
+        "read_meta_dashboard_investment_data",
+        lambda **_: SimpleNamespace(
+            available=False,
+            meta_sync_run_id=None,
+            iventas_sync_run_id=41,
+            date_from=None,
+            date_to=None,
+            total_meta_spend=None,
+            assigned_spend=None,
+            unassigned_spend=None,
+            conflict_spend=None,
+            branch_spend={},
+            campaigns_total=None,
+            campaigns_assigned=None,
+            campaigns_unassigned=None,
+            campaigns_conflict=None,
+        ),
+    )
+
+    result = service.build_marketing_dashboard(
+        month="2026-07",
+        access=_global_access(),
+        today=date(2026, 7, 15),
+    )
+
+    assert result["summary"]["investment"] is None
+    assert result["summary"]["cost_per_lead"] is None
+    assert result["summary"]["cost_per_visit"] is None
+    assert result["summary"]["cost_per_sale"] is None
+    assert result["branches"][0]["investment"] is None
+    assert result["summary"]["meta"]["available"] is False
+
+
+def test_historical_manual_investment_does_not_change_dashboard(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(
+        service,
+        "_load_inputs_by_branch",
+        lambda **_: {
+            1: SimpleNamespace(investment=Decimal("999999.00"))
+        },
+        raising=False,
+    )
+    monkeypatch.setattr(
+        service,
+        "_load_available_branches",
+        lambda: [service.MarketingBranch(1, "Sucursal A", 1)],
+    )
+    monkeypatch.setattr(
+        service,
+        "_load_visit_events",
+        lambda **_: service.VisitLoadResult(),
+    )
+    monkeypatch.setattr(
+        service,
+        "_load_sales",
+        lambda **_: service.SalesLoadResult(),
+    )
+    monkeypatch.setattr(
+        service,
+        "read_iventas_dashboard_month_data",
+        lambda **_: SimpleNamespace(
+            available=False,
+            period_key="IVENTAS-2026-07",
+            date_from=date(2026, 7, 1),
+            date_to=date(2026, 7, 31),
+            sync_run_id=None,
+            metrics=None,
+            branch_metrics=None,
+        ),
+    )
+
+    result = service.build_marketing_dashboard(
+        month="2026-07",
+        access=_global_access(),
+        today=date(2026, 7, 15),
+    )
+
+    assert result["summary"]["investment"] == 100.0
+    assert result["branches"][0]["investment"] == 100.0

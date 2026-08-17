@@ -8,7 +8,7 @@ export interface MarketingPermissions {
 }
 
 export interface MarketingMetrics {
-  investment: number;
+  investment: number | null;
   leads: number | null;
   visits: number;
   sales: number;
@@ -19,6 +19,22 @@ export interface MarketingMetrics {
   lead_to_visit_rate: number | null;
   visit_to_sale_rate: number | null;
   lead_to_sale_rate: number | null;
+}
+
+export interface MarketingMetaSummaryMetadata {
+  available: boolean;
+  meta_sync_run_id: number | null;
+  iventas_sync_run_id: number | null;
+  date_from: string | null;
+  date_to: string | null;
+  total_spend: number | null;
+  assigned_spend: number | null;
+  unassigned_spend: number | null;
+  conflict_spend: number | null;
+  campaigns_total: number | null;
+  campaigns_assigned: number | null;
+  campaigns_unassigned: number | null;
+  campaigns_conflict: number | null;
 }
 
 export interface MarketingIventasMetadata {
@@ -38,6 +54,7 @@ export interface MarketingIventasSummaryMetadata
 
 export interface MarketingSummaryMetrics extends MarketingMetrics {
   iventas: MarketingIventasSummaryMetadata;
+  meta: MarketingMetaSummaryMetadata;
 }
 
 export interface MarketingBranchMetrics extends MarketingMetrics {
@@ -73,7 +90,6 @@ export interface MarketingMonthlyInput {
   id: number;
   month: string;
   sucursal_id: number;
-  investment: number;
   notes: string | null;
   created_by_user_id: number | null;
   updated_by_user_id: number | null;
@@ -90,7 +106,6 @@ export interface MarketingInputsResponse {
 
 export interface MarketingInputPayload {
   month: string;
-  investment: number;
   notes: string | null;
 }
 

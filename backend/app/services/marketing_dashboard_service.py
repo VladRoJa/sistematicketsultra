@@ -9,7 +9,6 @@ import unicodedata
 from zoneinfo import ZoneInfo
 
 from app.extensions import db
-from app.models.marketing import MarketingMonthlyInputORM
 from app.models.warehouse import (
     TrackBranchAliasORM,
     TrackBranchCatalogORM,
@@ -30,12 +29,13 @@ from app.services.marketing_attribution import (
     reconcile_visit_sales,
     safe_divide,
 )
-from app.services.marketing_inputs_service import (
-    list_marketing_inputs,
-    parse_month,
-)
+from app.services.marketing_inputs_service import parse_month
 from app.services.marketing_iventas_dashboard_data_service import (
     read_iventas_dashboard_month_data,
+)
+from app.services.marketing_meta_dashboard_service import (
+    MetaDashboardInvestmentData,
+    read_meta_dashboard_investment_data,
 )
 from app.services.marketing_phone import (
     normalize_member_phone,
@@ -690,20 +690,6 @@ def _load_sales(
     )
 
 
-def _load_inputs_by_branch(
-    *,
-    month_start: date,
-    branch_ids: tuple[int, ...],
-) -> dict[int, MarketingMonthlyInputORM]:
-    return {
-        int(row.sucursal_id): row
-        for row in list_marketing_inputs(
-            month_start=month_start,
-            branch_ids=branch_ids,
-        )
-    }
-
-
 def _serialize_ratio(value: Decimal | None) -> float | None:
     if value is None:
         return None
@@ -712,14 +698,18 @@ def _serialize_ratio(value: Decimal | None) -> float | None:
 
 def _build_metrics(
     *,
-    investment: Decimal,
+    investment: Decimal | None,
     leads: int | None,
     visits: int,
     sales: int,
     sales_revenue: Decimal,
 ) -> dict[str, Any]:
     return {
-        "investment": float(investment),
+        "investment": (
+            float(investment)
+            if investment is not None
+            else None
+        ),
         "leads": leads,
         "visits": visits,
         "sales": sales,
@@ -728,14 +718,18 @@ def _build_metrics(
             _serialize_ratio(
                 safe_divide(investment, leads)
             )
-            if leads is not None
+            if investment is not None and leads is not None
             else None
         ),
-        "cost_per_visit": _serialize_ratio(
-            safe_divide(investment, visits)
+        "cost_per_visit": (
+            _serialize_ratio(safe_divide(investment, visits))
+            if investment is not None
+            else None
         ),
-        "cost_per_sale": _serialize_ratio(
-            safe_divide(investment, sales)
+        "cost_per_sale": (
+            _serialize_ratio(safe_divide(investment, sales))
+            if investment is not None
+            else None
         ),
         "lead_to_visit_rate": (
             _serialize_ratio(
@@ -832,9 +826,13 @@ def build_marketing_dashboard(
             "meta_observed_leads": None,
         }
 
-    inputs_by_branch = _load_inputs_by_branch(
-        month_start=month_start,
-        branch_ids=visible_branch_ids,
+    meta_data = read_meta_dashboard_investment_data(
+        month_date=month_start,
+        iventas_sync_run_id=(
+            iventas_data.sync_run_id
+            if iventas_available
+            else None
+        ),
     )
     visit_result = _load_visit_events(
         month_start=month_start,
@@ -871,7 +869,15 @@ def build_marketing_dashboard(
         ).append(attribution)
 
     branch_payloads: list[dict[str, Any]] = []
-    summary_investment = Decimal("0")
+    meta_investment_available = (
+        meta_data.available
+        and meta_data.assigned_spend is not None
+    )
+    summary_investment: Decimal | None = (
+        Decimal("0")
+        if meta_investment_available
+        else None
+    )
     summary_leads: int | None = (
         0 if iventas_available else None
     )
@@ -880,13 +886,13 @@ def build_marketing_dashboard(
     summary_revenue = Decimal("0")
 
     for branch in branches:
-        monthly_input = inputs_by_branch.get(
-            branch.sucursal_id
-        )
-        investment = (
-            _to_decimal(monthly_input.investment)
-            if monthly_input is not None
-            else Decimal("0")
+        investment: Decimal | None = (
+            meta_data.branch_spend.get(
+                branch.sucursal_id,
+                Decimal("0"),
+            )
+            if meta_investment_available
+            else None
         )
         branch_iventas = iventas_by_branch.get(
             branch.sucursal_id
@@ -964,7 +970,8 @@ def build_marketing_dashboard(
             }
         )
 
-        summary_investment += investment
+        if summary_investment is not None and investment is not None:
+            summary_investment += investment
         if summary_leads is not None and leads is not None:
             summary_leads += leads
         summary_visits += visits
@@ -979,6 +986,11 @@ def build_marketing_dashboard(
         sales_revenue=summary_revenue,
     )
     summary_payload["iventas"] = summary_iventas
+    summary_payload["meta"] = _serialize_meta_summary(
+        meta_data=meta_data,
+        scoped_assigned_spend=summary_investment,
+        expose_global_quality=access.is_global,
+    )
 
     quality_limitations = list(FIXED_LIMITATIONS)
     quality_limitations.extend(
@@ -992,6 +1004,22 @@ def build_marketing_dashboard(
             "No existe un sync canónico iVentas para el periodo; "
             "los leads y métricas dependientes no están disponibles."
         )
+    if not meta_data.available:
+        quality_limitations.append(
+            "No existe un sync canónico Meta para el periodo; "
+            "la inversión y los costos dependientes no están disponibles."
+        )
+    elif access.is_global:
+        if meta_data.unassigned_spend:
+            quality_limitations.append(
+                "Existe inversión Meta sin evidencia iVentas suficiente "
+                "para asignarla a una sucursal."
+            )
+        if meta_data.conflict_spend:
+            quality_limitations.append(
+                "Existe inversión Meta en campañas con evidencia iVentas "
+                "de más de una sucursal; no fue dividida ni asignada."
+            )
 
     return {
         "month": month_start.strftime("%Y-%m"),
@@ -1034,6 +1062,80 @@ def build_marketing_dashboard(
             ),
             "limitations": quality_limitations,
         },
+    }
+
+
+def _serialize_meta_summary(
+    *,
+    meta_data: MetaDashboardInvestmentData,
+    scoped_assigned_spend: Decimal | None,
+    expose_global_quality: bool,
+) -> dict[str, Any]:
+    if not meta_data.available:
+        return {
+            "available": False,
+            "meta_sync_run_id": None,
+            "iventas_sync_run_id": meta_data.iventas_sync_run_id,
+            "date_from": None,
+            "date_to": None,
+            "total_spend": None,
+            "assigned_spend": None,
+            "unassigned_spend": None,
+            "conflict_spend": None,
+            "campaigns_total": None,
+            "campaigns_assigned": None,
+            "campaigns_unassigned": None,
+            "campaigns_conflict": None,
+        }
+
+    def global_decimal(value: Decimal | None) -> float | None:
+        if not expose_global_quality or value is None:
+            return None
+        return float(value)
+
+    def global_count(value: int | None) -> int | None:
+        return value if expose_global_quality else None
+
+    return {
+        "available": True,
+        "meta_sync_run_id": meta_data.meta_sync_run_id,
+        "iventas_sync_run_id": meta_data.iventas_sync_run_id,
+        "date_from": (
+            meta_data.date_from.isoformat()
+            if meta_data.date_from is not None
+            else None
+        ),
+        "date_to": (
+            meta_data.date_to.isoformat()
+            if meta_data.date_to is not None
+            else None
+        ),
+        "total_spend": global_decimal(
+            meta_data.total_meta_spend
+        ),
+        "assigned_spend": (
+            float(scoped_assigned_spend)
+            if scoped_assigned_spend is not None
+            else None
+        ),
+        "unassigned_spend": global_decimal(
+            meta_data.unassigned_spend
+        ),
+        "conflict_spend": global_decimal(
+            meta_data.conflict_spend
+        ),
+        "campaigns_total": global_count(
+            meta_data.campaigns_total
+        ),
+        "campaigns_assigned": global_count(
+            meta_data.campaigns_assigned
+        ),
+        "campaigns_unassigned": global_count(
+            meta_data.campaigns_unassigned
+        ),
+        "campaigns_conflict": global_count(
+            meta_data.campaigns_conflict
+        ),
     }
 
 

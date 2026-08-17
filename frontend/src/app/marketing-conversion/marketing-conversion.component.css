@@ -495,7 +495,7 @@
   font-weight: 900;
 }
 
-/* Captura mensual */
+/* Notas mensuales */
 
 .input-list {
   display: flex;
@@ -507,7 +507,6 @@
   display: grid;
   grid-template-columns:
     minmax(170px, 0.8fr)
-    minmax(145px, 0.7fr)
     minmax(220px, 1.5fr)
     minmax(145px, 0.7fr);
   align-items: start;

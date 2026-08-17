@@ -51,7 +51,6 @@ def test_monthly_input_upsert_updates_existing_row(
     validated = service.validate_input_payload(
         {
             "month": "2026-07",
-            "investment": "100.00",
             "notes": "Primera carga",
         }
     )
@@ -62,11 +61,11 @@ def test_monthly_input_upsert_updates_existing_row(
     )
     stored["row"] = created_row
     created_row.leads = 77
+    created_row.investment = Decimal("125.50")
 
     updated_values = service.validate_input_payload(
         {
             "month": "2026-07",
-            "investment": "125.50",
             "notes": "Actualizada",
         }
     )
@@ -88,18 +87,6 @@ def test_monthly_input_upsert_updates_existing_row(
     assert len(fake_session.added) == 1
 
 
-def test_negative_investment_is_rejected():
-    payload = {
-        "month": "2026-07",
-        "investment": -1,
-    }
-
-    with pytest.raises(
-        service.MarketingInputValidationError
-    ):
-        service.validate_input_payload(payload)
-
-
 def test_unknown_payload_field_is_rejected():
     with pytest.raises(
         service.MarketingInputValidationError,
@@ -108,7 +95,6 @@ def test_unknown_payload_field_is_rejected():
         service.validate_input_payload(
             {
                 "month": "2026-07",
-                "investment": 100,
                 "campaigns": 5,
             }
         )
@@ -122,7 +108,19 @@ def test_deprecated_leads_field_is_rejected():
         service.validate_input_payload(
             {
                 "month": "2026-07",
-                "investment": 100,
                 "leads": 10,
+            }
+        )
+
+
+def test_deprecated_investment_field_is_rejected():
+    with pytest.raises(
+        service.MarketingInputValidationError,
+        match="Campos no permitidos: investment",
+    ):
+        service.validate_input_payload(
+            {
+                "month": "2026-07",
+                "investment": 100,
             }
         )
