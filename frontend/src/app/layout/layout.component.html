@@ -31,7 +31,7 @@
       aria-label="Navegación principal"
     >
       <button
-        *ngFor="let item of menuItems"
+        *ngFor="let item of menuItemsPrincipales"
         type="button"
         class="suite-main-nav__item"
         [class.suite-main-nav__item--active]="isMainMenuActive(item.label)"
@@ -44,6 +44,21 @@
         </mat-icon>
 
         <span>{{ item.label }}</span>
+      </button>
+
+      <button
+        *ngIf="hayMenuAdicional"
+        type="button"
+        class="suite-main-nav__item suite-main-nav__item--more"
+        [class.suite-main-nav__item--active]="currentSubmenu === 'Más' || isMoreMenuActive()"
+        (mouseenter)="cambiarMenu('Más')"
+        (click)="cambiarMenu('Más')"
+        aria-label="Más módulos"
+        title="Más módulos"
+      >
+        <mat-icon class="suite-main-nav__icon">
+          more_horiz
+        </mat-icon>
       </button>
     </nav>
 

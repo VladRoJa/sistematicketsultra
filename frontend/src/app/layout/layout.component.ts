@@ -50,6 +50,55 @@ export class LayoutComponent implements OnInit, AfterViewInit, OnDestroy {
   timeoutSubmenu: any;
   ocultarTimeout: any;
   menuItems: any[] = [];
+  readonly maxMainMenuItems = 10;
+
+private readonly mainMenuPriority: string[] = [
+  'Tickets',
+  'Mantenimiento',
+  'Inventario',
+  'Track',
+  'Aperturas',
+  'Automatización',
+  'Control de Rutinas',
+  'Marketing y Conversión',
+  'Warehouse',
+  'Planeación',
+];
+
+get menuItemsPrincipales(): any[] {
+  const priorityByLabel = new Map(
+    this.mainMenuPriority.map((label, index) => [label, index])
+  );
+
+  return [...this.menuItems]
+    .sort((a, b) => {
+      const priorityA = priorityByLabel.get(a.label) ?? Number.MAX_SAFE_INTEGER;
+      const priorityB = priorityByLabel.get(b.label) ?? Number.MAX_SAFE_INTEGER;
+
+      return priorityA - priorityB;
+    })
+    .slice(0, this.maxMainMenuItems);
+}
+
+get menuItemsAdicionales(): any[] {
+  const labelsPrincipales = new Set(
+    this.menuItemsPrincipales.map((item) => item.label)
+  );
+
+  return this.menuItems.filter(
+    (item) => !labelsPrincipales.has(item.label)
+  );
+}
+
+get hayMenuAdicional(): boolean {
+  return this.menuItemsAdicionales.length > 0;
+}
+
+isMoreMenuActive(): boolean {
+  return this.menuItemsAdicionales.some(
+    (item) => item.label === this.currentSubmenu
+  );
+}
   puedeVerMantenimiento = false;
   puedeVerMantenimientoCompleto = false;
   puedeVerMantenimientoOperativo = false;
@@ -772,6 +821,12 @@ private verificarRolUsuario(): void {
   }
 
   seleccionarSubmenu(label: string, path: string): void {
+    if (this.currentSubmenu === 'Más') {
+      this.currentSubmenu = label;
+      this.router.navigateByUrl(path);
+      return;
+    }
+
     this.submenuActivo[this.currentSubmenu] = label;
     this.router.navigateByUrl(path);
   }
@@ -800,6 +855,10 @@ private verificarRolUsuario(): void {
   }
 
   get submenuActual() {
+    if (this.currentSubmenu === 'Más') {
+      return this.menuItemsAdicionales;
+    }
+
     return this.menuItems.find(m => m.label === this.currentSubmenu)?.submenu || [];
   }
 
