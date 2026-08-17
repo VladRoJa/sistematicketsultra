@@ -760,7 +760,10 @@ export class MarketingExcelExportService {
       {
         label: 'Leads',
         value: metrics.leads,
-        definition: 'Leads capturados para el mes.',
+        definition: (
+          'Contactos del canónico iVentas con firstMessageAt '
+          + 'y al menos un tag META_AD.'
+        ),
         format: 'integer',
       },
       {

@@ -52,6 +52,9 @@ from .marketing import (
     MarketingIventasRawPageORM,
     MarketingIventasContactORM,
     MarketingIventasContactTagORM,
+    MarketingMetaSyncRunORM,
+    MarketingMetaRawPageORM,
+    MarketingMetaAdInsightORM,
 )
 from .internal_documents import (
     InternalDocumentCategoryORM,
@@ -157,6 +160,9 @@ __all__ = [
     "MarketingIventasRawPageORM",
     "MarketingIventasContactORM",
     "MarketingIventasContactTagORM",
+    "MarketingMetaSyncRunORM",
+    "MarketingMetaRawPageORM",
+    "MarketingMetaAdInsightORM",
     "InternalDocumentCategoryORM",
     "InternalDocumentORM",
     "InternalDocumentVersionORM",

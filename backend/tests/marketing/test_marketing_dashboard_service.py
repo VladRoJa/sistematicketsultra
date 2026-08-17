@@ -41,7 +41,7 @@ def test_dashboard_builds_branch_and_summary_metrics(
         lambda **_: {
             1: SimpleNamespace(
                 investment=Decimal("100.00"),
-                leads=10,
+                leads=999,
             )
         },
     )
@@ -100,13 +100,24 @@ def test_dashboard_builds_branch_and_summary_metrics(
         service,
         "read_iventas_dashboard_month_data",
         lambda **_: SimpleNamespace(
-            available=False,
+            available=True,
             period_key="IVENTAS-2026-07",
             date_from=date(2026, 7, 1),
             date_to=date(2026, 7, 31),
-            sync_run_id=None,
-            metrics=None,
-            branch_metrics=None,
+            sync_run_id=41,
+            metrics=SimpleNamespace(
+                iventas_contacts=20,
+                iventas_contacts_with_first_message=12,
+                meta_observed_leads=10,
+            ),
+            branch_metrics=(
+                SimpleNamespace(
+                    sucursal_id=1,
+                    iventas_contacts=20,
+                    iventas_contacts_with_first_message=12,
+                    meta_observed_leads=10,
+                ),
+            ),
         ),
     )
 
@@ -132,6 +143,9 @@ def test_dashboard_builds_branch_and_summary_metrics(
         == 0.75
     )
     assert result["data_quality"]["cohort_complete"] is True
+    assert result["data_quality"]["lead_mode"] == (
+        "iventas_canonical_first_message_meta_ad"
+    )
 
 
 def test_dashboard_zero_denominators_are_null(
@@ -452,7 +466,7 @@ def test_attribution_detail_rejects_branch_outside_scope(
         )
 
 
-def test_dashboard_adds_iventas_metrics_without_replacing_manual_leads(
+def test_dashboard_uses_iventas_leads_without_adding_meta_actions(
     monkeypatch: pytest.MonkeyPatch,
 ):
     monkeypatch.setattr(
@@ -518,6 +532,7 @@ def test_dashboard_adds_iventas_metrics_without_replacing_manual_leads(
                 iventas_contacts=300,
                 iventas_contacts_with_first_message=80,
                 meta_observed_leads=50,
+                meta_platform_reported_leads=900,
             ),
             branch_metrics=(
                 SimpleNamespace(
@@ -556,9 +571,14 @@ def test_dashboard_adds_iventas_metrics_without_replacing_manual_leads(
         30,
     )
 
-    assert result["summary"]["leads"] == 10
+    assert result["summary"]["leads"] == 35
     assert result["summary"]["visits"] == 1
-    assert result["summary"]["lead_to_visit_rate"] == 0.1
+    assert result["summary"]["lead_to_visit_rate"] == (
+        1 / 35
+    )
+    assert result["branches"][0]["leads"] == 35
+    assert result["summary"]["leads"] != 10 + 35
+    assert result["summary"]["leads"] != 35 + 900
 
     summary_iventas = result["summary"]["iventas"]
 
@@ -585,7 +605,7 @@ def test_dashboard_adds_iventas_metrics_without_replacing_manual_leads(
     assert branch_iventas["meta_observed_leads"] == 35
 
 
-def test_dashboard_keeps_current_metrics_when_iventas_is_unavailable(
+def test_dashboard_does_not_fallback_to_manual_when_iventas_unavailable(
     monkeypatch: pytest.MonkeyPatch,
 ):
     monkeypatch.setattr(
@@ -656,9 +676,12 @@ def test_dashboard_keeps_current_metrics_when_iventas_is_unavailable(
         today=date(2026, 8, 30),
     )
 
-    assert result["summary"]["leads"] == 10
+    assert result["summary"]["leads"] is None
     assert result["summary"]["visits"] == 1
-    assert result["summary"]["lead_to_visit_rate"] == 0.1
+    assert result["summary"]["cost_per_lead"] is None
+    assert result["summary"]["lead_to_visit_rate"] is None
+    assert result["summary"]["lead_to_sale_rate"] is None
+    assert result["branches"][0]["leads"] is None
 
     summary_iventas = result["summary"]["iventas"]
 
@@ -681,6 +704,10 @@ def test_dashboard_keeps_current_metrics_when_iventas_is_unavailable(
         is None
     )
     assert branch_iventas["meta_observed_leads"] is None
+    assert any(
+        "no están disponibles" in limitation
+        for limitation in result["data_quality"]["limitations"]
+    )
 
 
 def test_dashboard_iventas_summary_respects_visible_branch_scope(
@@ -766,7 +793,7 @@ def test_dashboard_iventas_summary_respects_visible_branch_scope(
     )
 
     assert result["scope"]["branch_ids"] == [1]
-    assert result["summary"]["leads"] == 10
+    assert result["summary"]["leads"] == 25
 
     summary_iventas = result["summary"]["iventas"]
 
@@ -779,3 +806,4 @@ def test_dashboard_iventas_summary_respects_visible_branch_scope(
 
     assert len(result["branches"]) == 1
     assert result["branches"][0]["sucursal_id"] == 1
+    assert result["branches"][0]["leads"] == 25

@@ -12,7 +12,7 @@ Esta capa separa explícitamente:
   contactos con firstMessageAt y al menos una relación
   META_AD observada.
 
-No reemplaza marketing_monthly_inputs.leads.
+Es la fuente operativa de leads del dashboard de Marketing.
 No realiza atribución causal a Meta.
 No lee runs no canónicos.
 """

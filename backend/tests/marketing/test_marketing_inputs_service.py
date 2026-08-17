@@ -52,7 +52,6 @@ def test_monthly_input_upsert_updates_existing_row(
         {
             "month": "2026-07",
             "investment": "100.00",
-            "leads": 10,
             "notes": "Primera carga",
         }
     )
@@ -62,12 +61,12 @@ def test_monthly_input_upsert_updates_existing_row(
         **validated,
     )
     stored["row"] = created_row
+    created_row.leads = 77
 
     updated_values = service.validate_input_payload(
         {
             "month": "2026-07",
             "investment": "125.50",
-            "leads": 12,
             "notes": "Actualizada",
         }
     )
@@ -83,29 +82,17 @@ def test_monthly_input_upsert_updates_existing_row(
     assert updated_created is False
     assert updated_row.id == 91
     assert updated_row.investment == Decimal("125.50")
-    assert updated_row.leads == 12
+    assert updated_row.leads == 77
     assert updated_row.updated_by_user_id == 4
     assert fake_session.commit_calls == 2
     assert len(fake_session.added) == 1
 
 
-@pytest.mark.parametrize(
-    ("field_name", "field_value"),
-    [
-        ("investment", -1),
-        ("leads", -1),
-    ],
-)
-def test_negative_values_are_rejected(
-    field_name,
-    field_value,
-):
+def test_negative_investment_is_rejected():
     payload = {
         "month": "2026-07",
-        "investment": 100,
-        "leads": 10,
+        "investment": -1,
     }
-    payload[field_name] = field_value
 
     with pytest.raises(
         service.MarketingInputValidationError
@@ -122,7 +109,20 @@ def test_unknown_payload_field_is_rejected():
             {
                 "month": "2026-07",
                 "investment": 100,
-                "leads": 10,
                 "campaigns": 5,
+            }
+        )
+
+
+def test_deprecated_leads_field_is_rejected():
+    with pytest.raises(
+        service.MarketingInputValidationError,
+        match="Campos no permitidos: leads",
+    ):
+        service.validate_input_payload(
+            {
+                "month": "2026-07",
+                "investment": 100,
+                "leads": 10,
             }
         )

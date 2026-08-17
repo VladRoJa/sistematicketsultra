@@ -728,3 +728,387 @@ class MarketingIventasContactTagORM(db.Model):
             "meta_ad_id",
         ),
     )
+
+
+class MarketingMetaSyncRunORM(db.Model):
+    __tablename__ = "marketing_meta_sync_runs"
+
+    id = db.Column(
+        db.BigInteger,
+        primary_key=True,
+        autoincrement=True,
+    )
+    period_key = db.Column(
+        db.String(64),
+        nullable=False,
+    )
+    date_from = db.Column(
+        db.Date,
+        nullable=False,
+    )
+    date_to = db.Column(
+        db.Date,
+        nullable=False,
+    )
+    started_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+    )
+    finished_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=True,
+    )
+    status = db.Column(
+        db.String(20),
+        nullable=False,
+    )
+    accounts_requested = db.Column(
+        db.Integer,
+        nullable=False,
+        default=0,
+    )
+    accounts_completed = db.Column(
+        db.Integer,
+        nullable=False,
+        default=0,
+    )
+    accounts_failed = db.Column(
+        db.Integer,
+        nullable=False,
+        default=0,
+    )
+    pages_received = db.Column(
+        db.Integer,
+        nullable=False,
+        default=0,
+    )
+    insights_received = db.Column(
+        db.Integer,
+        nullable=False,
+        default=0,
+    )
+    insights_unique = db.Column(
+        db.Integer,
+        nullable=False,
+        default=0,
+    )
+    is_canonical = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=False,
+    )
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+    )
+
+    raw_pages = db.relationship(
+        "MarketingMetaRawPageORM",
+        back_populates="sync_run",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    ad_insights = db.relationship(
+        "MarketingMetaAdInsightORM",
+        back_populates="sync_run",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "date_from <= date_to",
+            name="ck_marketing_meta_sync_runs_date_range",
+        ),
+        db.CheckConstraint(
+            "status IN ("
+            "'RUNNING', "
+            "'COMPLETED', "
+            "'PARTIAL', "
+            "'FAILED'"
+            ")",
+            name="ck_marketing_meta_sync_runs_status",
+        ),
+        db.CheckConstraint(
+            "accounts_requested >= 0 "
+            "AND accounts_completed >= 0 "
+            "AND accounts_failed >= 0 "
+            "AND pages_received >= 0 "
+            "AND insights_received >= 0 "
+            "AND insights_unique >= 0",
+            name="ck_marketing_meta_sync_runs_counts_nonnegative",
+        ),
+        db.CheckConstraint(
+            "NOT is_canonical "
+            "OR ("
+            "status = 'COMPLETED' "
+            "AND accounts_failed = 0"
+            ")",
+            name="ck_marketing_meta_sync_runs_canonical_valid",
+        ),
+        db.Index(
+            "ix_marketing_meta_sync_runs_period_key",
+            "period_key",
+        ),
+        db.Index(
+            "ix_marketing_meta_sync_runs_status",
+            "status",
+        ),
+        db.Index(
+            "ix_marketing_meta_sync_runs_is_canonical",
+            "is_canonical",
+        ),
+        db.Index(
+            "uq_marketing_meta_sync_runs_canonical_period",
+            "period_key",
+            unique=True,
+            postgresql_where=db.text(
+                "is_canonical = true"
+            ),
+        ),
+    )
+
+
+class MarketingMetaRawPageORM(db.Model):
+    __tablename__ = "marketing_meta_raw_pages"
+
+    id = db.Column(
+        db.BigInteger,
+        primary_key=True,
+        autoincrement=True,
+    )
+    sync_run_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey(
+            "marketing_meta_sync_runs.id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+    )
+    account_id = db.Column(
+        db.String(64),
+        nullable=False,
+    )
+    page_number = db.Column(
+        db.Integer,
+        nullable=False,
+    )
+    request_cursor = db.Column(
+        db.Text,
+        nullable=True,
+    )
+    next_cursor = db.Column(
+        db.Text,
+        nullable=True,
+    )
+    has_more = db.Column(
+        db.Boolean,
+        nullable=True,
+    )
+    rows_count = db.Column(
+        db.Integer,
+        nullable=True,
+    )
+    http_status = db.Column(
+        db.Integer,
+        nullable=False,
+    )
+    payload_json = db.Column(
+        db.Text,
+        nullable=False,
+    )
+    received_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+    )
+
+    sync_run = db.relationship(
+        "MarketingMetaSyncRunORM",
+        back_populates="raw_pages",
+    )
+    ad_insights = db.relationship(
+        "MarketingMetaAdInsightORM",
+        back_populates="raw_page",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "sync_run_id",
+            "account_id",
+            "page_number",
+            name="uq_marketing_meta_raw_pages_run_account_page",
+        ),
+        db.CheckConstraint(
+            "page_number >= 1",
+            name="ck_marketing_meta_raw_pages_page_positive",
+        ),
+        db.CheckConstraint(
+            "rows_count IS NULL OR rows_count >= 0",
+            name="ck_marketing_meta_raw_pages_rows_nonnegative",
+        ),
+        db.CheckConstraint(
+            "http_status >= 100 AND http_status <= 599",
+            name="ck_marketing_meta_raw_pages_http_status",
+        ),
+        db.Index(
+            "ix_marketing_meta_raw_pages_sync_run_id",
+            "sync_run_id",
+        ),
+        db.Index(
+            "ix_marketing_meta_raw_pages_account_id",
+            "account_id",
+        ),
+    )
+
+
+class MarketingMetaAdInsightORM(db.Model):
+    __tablename__ = "marketing_meta_ad_insights"
+
+    id = db.Column(
+        db.BigInteger,
+        primary_key=True,
+        autoincrement=True,
+    )
+    sync_run_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey(
+            "marketing_meta_sync_runs.id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+    )
+    raw_page_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey(
+            "marketing_meta_raw_pages.id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+    )
+    account_id = db.Column(
+        db.String(64),
+        nullable=False,
+    )
+    account_name = db.Column(
+        db.Text,
+        nullable=True,
+    )
+    campaign_id = db.Column(
+        db.String(64),
+        nullable=False,
+    )
+    campaign_name = db.Column(
+        db.Text,
+        nullable=True,
+    )
+    adset_id = db.Column(
+        db.String(64),
+        nullable=False,
+    )
+    adset_name = db.Column(
+        db.Text,
+        nullable=True,
+    )
+    ad_id = db.Column(
+        db.String(64),
+        nullable=False,
+    )
+    ad_name = db.Column(
+        db.Text,
+        nullable=True,
+    )
+    date_start = db.Column(
+        db.Date,
+        nullable=False,
+    )
+    date_stop = db.Column(
+        db.Date,
+        nullable=False,
+    )
+    spend = db.Column(
+        db.Numeric(16, 4),
+        nullable=False,
+    )
+    reach = db.Column(
+        db.BigInteger,
+        nullable=False,
+    )
+    impressions = db.Column(
+        db.BigInteger,
+        nullable=False,
+    )
+    clicks = db.Column(
+        db.BigInteger,
+        nullable=False,
+    )
+    actions_json = db.Column(
+        db.JSON,
+        nullable=False,
+    )
+    row_hash = db.Column(
+        db.String(64),
+        nullable=False,
+    )
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+    )
+
+    sync_run = db.relationship(
+        "MarketingMetaSyncRunORM",
+        back_populates="ad_insights",
+    )
+    raw_page = db.relationship(
+        "MarketingMetaRawPageORM",
+        back_populates="ad_insights",
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "sync_run_id",
+            "account_id",
+            "ad_id",
+            "date_start",
+            "date_stop",
+            name="uq_marketing_meta_insights_run_ad_period",
+        ),
+        db.CheckConstraint(
+            "date_start <= date_stop",
+            name="ck_marketing_meta_insights_date_range",
+        ),
+        db.CheckConstraint(
+            "spend >= 0 "
+            "AND reach >= 0 "
+            "AND impressions >= 0 "
+            "AND clicks >= 0",
+            name="ck_marketing_meta_insights_metrics_nonnegative",
+        ),
+        db.Index(
+            "ix_marketing_meta_insights_sync_run_id",
+            "sync_run_id",
+        ),
+        db.Index(
+            "ix_marketing_meta_insights_raw_page_id",
+            "raw_page_id",
+        ),
+        db.Index(
+            "ix_marketing_meta_insights_account_id",
+            "account_id",
+        ),
+        db.Index(
+            "ix_marketing_meta_insights_ad_id",
+            "ad_id",
+        ),
+        db.Index(
+            "ix_marketing_meta_insights_date_start",
+            "date_start",
+        ),
+        db.Index(
+            "ix_marketing_meta_insights_row_hash",
+            "row_hash",
+        ),
+    )
