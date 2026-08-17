@@ -5,6 +5,7 @@
 # -------------------------------------------------------------------------------
 
 from .ticket_model import Ticket
+from .ticket_attachment import TicketAttachmentORM
 from .user_model import UserORM
 from .sucursal_model import Sucursal, SucursalOperationalStatus
 from .inventario import (
@@ -117,6 +118,7 @@ from .routine_control import (
 # -------------------------------------------------------------------------------
 __all__ = [
     "Ticket",
+    "TicketAttachmentORM",
     "UserORM",
     "Sucursal",
     "InventarioGeneral",

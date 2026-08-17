@@ -238,7 +238,8 @@ class Ticket(db.Model):
                     aprobacion_estado: str | None = None,
                     aprobador_username: str | None = None,
                     aprobacion_fecha=None,
-                    aprobacion_comentario: str | None = None):
+                    aprobacion_comentario: str | None = None,
+                    commit: bool = True):
         # Sanitizar: si llega un número como texto, lo consideramos vacío (derivaremos la ruta)
         def _clean_text(v):
             if v is None:
@@ -338,7 +339,9 @@ class Ticket(db.Model):
                 if not ticket.detalle:
                     ticket.detalle = det
 
-        db.session.commit()
+        if commit:
+            db.session.commit()
+
         return ticket
 
 
@@ -472,7 +475,7 @@ class Ticket(db.Model):
         db.session.commit()
 
 
-    def aceptar_conformidad_creador(self):
+    def aceptar_conformidad_creador(self, commit: bool = True):
         """El creador confirma el cierre y el ticket pasa a 'finalizado'."""
         from datetime import datetime, timezone
 
@@ -485,7 +488,8 @@ class Ticket(db.Model):
         if not self.fecha_finalizado:
             self.fecha_finalizado = datetime.now(timezone.utc)
 
-        db.session.commit()
+        if commit:
+            db.session.commit()
 
 
     def rechazar_conformidad_creador(

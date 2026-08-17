@@ -28,6 +28,9 @@ uploads/
 # Local/generated Warehouse automation outputs
 backend/storage/
 
+# Local/private ticket attachment storage
+backend/runtime/ticket-attachments/
+
 
 # Let's Encrypt / Certbot runtime files
 certbot/

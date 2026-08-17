@@ -15,8 +15,13 @@ from app.utils.notify_targets import build_subject, pick_recipients
 from app.utils.notify_utils import render_ticket_html, render_ticket_whatsapp_text
 from app.utils.ticket_filters import filtrar_tickets_por_usuario
 from app.services.ticket_validation_summary_service import get_ticket_validation_summary_for_user
+from app.services.ticket_attachment_service import create_ticket_image_attachment
+from app.services.ticket_attachment_image_service import MAX_TICKET_ATTACHMENT_BYTES
+from app.services.ticket_attachment_storage_service import resolve_ticket_attachment_path
+from app.services.ticket_attachment_retention_service import schedule_ticket_attachment_retention
 from app.config import Config
 from app.models.ticket_model import Ticket
+from app.models.ticket_attachment import TicketAttachmentORM
 from app.models.user_model import UserORM
 from app.extensions import db
 from app.utils.error_handler import manejar_error
@@ -25,6 +30,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.utils.datetime_utils import format_datetime 
 from app.models.sucursal_model import Sucursal
 import os, threading
+import json
 from app.utils.auth_utils import bloquea_lectores_globales
 from decimal import Decimal, InvalidOperation
 
@@ -59,6 +65,78 @@ def _send_email_maybe_async(to_list, subject, html):
             current_app.logger.exception("❌ Error enviando correo: %s", e)
         except Exception:
             print("❌ Error enviando correo:", e)
+
+
+def _parse_create_ticket_request():
+    """
+    Interpreta el body de creación de ticket sin crear nada.
+
+    Compatibilidad:
+    - application/json:
+        body JSON histórico.
+    - multipart/form-data:
+        payload = JSON serializado del ticket
+        image   = archivo opcional.
+
+    Returns:
+        tuple[data: dict, image_file | None]
+    """
+    if request.is_json:
+        data = request.get_json(silent=True)
+
+        if not isinstance(data, dict):
+            raise ValueError(
+                "El cuerpo JSON del ticket es inválido"
+            )
+
+        return data, None
+
+    if request.mimetype == "multipart/form-data":
+        raw_payload = request.form.get("payload")
+
+        if not raw_payload:
+            raise ValueError(
+                "Falta el campo 'payload' del ticket"
+            )
+
+        try:
+            data = json.loads(raw_payload)
+        except (TypeError, json.JSONDecodeError) as exc:
+            raise ValueError(
+                "El campo 'payload' no contiene JSON válido"
+            ) from exc
+
+        if not isinstance(data, dict):
+            raise ValueError(
+                "El campo 'payload' debe contener un objeto JSON"
+            )
+
+        unexpected_files = [
+            field_name
+            for field_name in request.files.keys()
+            if field_name != "image"
+        ]
+
+        if unexpected_files:
+            raise ValueError(
+                "Se recibieron campos de archivo no permitidos"
+            )
+
+        image_file = request.files.get("image")
+
+        # Un input file vacío puede llegar como FileStorage
+        # con filename vacío; lo tratamos como "sin imagen".
+        if image_file is not None and not (
+            image_file.filename or ""
+        ).strip():
+            image_file = None
+
+        return data, image_file
+
+    raise ValueError(
+        "Content-Type no soportado para crear tickets"
+    )
+
 
 def _get_current_operational_year() -> int:
     tz_tijuana = pytz.timezone("America/Tijuana")
@@ -276,7 +354,10 @@ def create_ticket():
         if not user:
             return jsonify({"mensaje": "Usuario no encontrado"}), 404
 
-        data = request.get_json() or {}
+        try:
+            data, image_file = _parse_create_ticket_request()
+        except ValueError as exc:
+            return jsonify({"mensaje": str(exc)}), 400
 
         descripcion         = data.get("descripcion")
         departamento_id     = data.get("departamento_id")
@@ -353,8 +434,41 @@ def create_ticket():
             aprobacion_estado=aprobacion_estado,
             aprobador_username=aprobador_username,
             aprobacion_fecha=aprobacion_fecha,
-            aprobacion_comentario=aprobacion_comentario
+            aprobacion_comentario=aprobacion_comentario,
+
+            # Sin imagen conserva el comportamiento histórico.
+            # Con imagen dejamos ticket + attachment en una sola transacción.
+            commit=(image_file is None)
         )
+
+        if image_file is not None:
+            try:
+                image_content = image_file.read(
+                    MAX_TICKET_ATTACHMENT_BYTES + 1
+                )
+
+                if len(image_content) > MAX_TICKET_ATTACHMENT_BYTES:
+                    db.session.rollback()
+                    return jsonify({
+                        "mensaje": "La imagen excede el límite máximo de 15 MB"
+                    }), 400
+
+                create_ticket_image_attachment(
+                    ticket_id=nuevo_ticket.id,
+                    content=image_content,
+                    original_filename=image_file.filename,
+                    declared_mime_type=image_file.mimetype,
+                )
+
+            except ValueError as exc:
+                db.session.rollback()
+                return jsonify({"mensaje": str(exc)}), 400
+
+            except Exception:
+                # El servicio elimina el archivo físico si alcanzó
+                # a escribirlo y posteriormente falla la transacción.
+                db.session.rollback()
+                raise
 
         # ⬇️ Notificación de creación + retorno de destinatarios
         recipients = []
@@ -380,6 +494,212 @@ def create_ticket():
 
     except Exception as e:
         return manejar_error(e)
+
+# ─────────────────────────────────────────────────────────────
+# RUTA: Adjunto privado de ticket
+# ─────────────────────────────────────────────────────────────
+
+def _get_visible_ticket_for_attachment(
+    user: UserORM,
+    ticket_id: int,
+):
+    """
+    Reutiliza exactamente el scope normal de lectura de Tickets.
+
+    Si el ticket no pertenece al scope del usuario, devuelve None.
+    """
+    return (
+        filtrar_tickets_por_usuario(user)
+        .filter(Ticket.id == ticket_id)
+        .first()
+    )
+
+
+def _get_ticket_ids_with_active_attachments(
+    ticket_ids,
+) -> set[int]:
+    ids = {
+        int(ticket_id)
+        for ticket_id in (ticket_ids or [])
+        if ticket_id is not None
+    }
+
+    if not ids:
+        return set()
+
+    rows = (
+        db.session.query(TicketAttachmentORM.ticket_id)
+        .filter(
+            TicketAttachmentORM.ticket_id.in_(ids),
+            TicketAttachmentORM.deleted_at.is_(None),
+        )
+        .distinct()
+        .all()
+    )
+
+    return {
+        int(row[0])
+        for row in rows
+    }
+
+
+def _get_ticket_attachment(ticket_id: int):
+    return (
+        TicketAttachmentORM.query
+        .filter(
+            TicketAttachmentORM.ticket_id == ticket_id
+        )
+        .order_by(TicketAttachmentORM.id.asc())
+        .first()
+    )
+
+
+def _attachment_metadata(attachment: TicketAttachmentORM) -> dict:
+    available = False
+
+    if attachment.deleted_at is None:
+        try:
+            available = resolve_ticket_attachment_path(
+                attachment.storage_key
+            ).is_file()
+        except (ValueError, OSError):
+            available = False
+
+    def iso(value):
+        return value.isoformat() if value else None
+
+    return {
+        "id": attachment.id,
+        "ticket_id": attachment.ticket_id,
+        "original_filename": attachment.original_filename,
+        "mime_type": attachment.mime_type,
+        "size_bytes": attachment.size_bytes,
+        "width": attachment.width,
+        "height": attachment.height,
+        "sha256": attachment.sha256,
+        "optimization_mode": attachment.optimization_mode,
+        "created_at": iso(attachment.created_at),
+        "emailed_at": iso(attachment.emailed_at),
+        "delete_after": iso(attachment.delete_after),
+        "deleted_at": iso(attachment.deleted_at),
+        "available": available,
+    }
+
+
+@ticket_bp.route(
+    '/<int:ticket_id>/attachment',
+    methods=['GET'],
+)
+@jwt_required()
+def get_ticket_attachment_metadata(ticket_id):
+    try:
+        user = UserORM.get_by_id(get_jwt_identity())
+
+        if not user:
+            return jsonify(
+                {"mensaje": "Usuario no encontrado"}
+            ), 404
+
+        ticket = _get_visible_ticket_for_attachment(
+            user,
+            ticket_id,
+        )
+
+        if not ticket:
+            return jsonify(
+                {"mensaje": "Ticket no encontrado"}
+            ), 404
+
+        attachment = _get_ticket_attachment(ticket_id)
+
+        if not attachment:
+            return jsonify(
+                {"mensaje": "El ticket no tiene archivo adjunto"}
+            ), 404
+
+        return jsonify(
+            _attachment_metadata(attachment)
+        ), 200
+
+    except Exception as exc:
+        return manejar_error(
+            exc,
+            "get_ticket_attachment_metadata",
+        )
+
+
+@ticket_bp.route(
+    '/<int:ticket_id>/attachment/file',
+    methods=['GET'],
+)
+@jwt_required()
+def get_ticket_attachment_file(ticket_id):
+    try:
+        user = UserORM.get_by_id(get_jwt_identity())
+
+        if not user:
+            return jsonify(
+                {"mensaje": "Usuario no encontrado"}
+            ), 404
+
+        ticket = _get_visible_ticket_for_attachment(
+            user,
+            ticket_id,
+        )
+
+        if not ticket:
+            return jsonify(
+                {"mensaje": "Ticket no encontrado"}
+            ), 404
+
+        attachment = _get_ticket_attachment(ticket_id)
+
+        if not attachment:
+            return jsonify(
+                {"mensaje": "El ticket no tiene archivo adjunto"}
+            ), 404
+
+        if attachment.deleted_at is not None:
+            return jsonify({
+                "mensaje": (
+                    "El archivo adjunto ya no está disponible "
+                    "por política de retención"
+                )
+            }), 410
+
+        try:
+            file_path = resolve_ticket_attachment_path(
+                attachment.storage_key
+            )
+        except ValueError:
+            current_app.logger.error(
+                "storage_key inválido para attachment=%s ticket=%s",
+                attachment.id,
+                ticket_id,
+            )
+            return jsonify(
+                {"mensaje": "Archivo adjunto no disponible"}
+            ), 410
+
+        if not file_path.is_file():
+            return jsonify(
+                {"mensaje": "Archivo adjunto no disponible"}
+            ), 410
+
+        return send_file(
+            file_path,
+            mimetype=attachment.mime_type,
+            as_attachment=False,
+            download_name=attachment.original_filename,
+            conditional=True,
+        )
+
+    except Exception as exc:
+        return manejar_error(
+            exc,
+            "get_ticket_attachment_file",
+        )
+
 
 # ─────────────────────────────────────────────────────────────
 # RUTA: Resumen de tickets pendientes por validar
@@ -490,9 +810,24 @@ def list_tickets_with_filters():
 
         tickets = query.order_by(Ticket.id.desc()).all()
 
+        attachment_ticket_ids = (
+            _get_ticket_ids_with_active_attachments(
+                [ticket.id for ticket in tickets]
+            )
+        )
+
+        tickets_payload = []
+
+        for ticket in tickets:
+            item = ticket.to_dict()
+            item["has_attachment"] = (
+                ticket.id in attachment_ticket_ids
+            )
+            tickets_payload.append(item)
+
         return jsonify({
             "mensaje": "Tickets filtrados",
-            "tickets": [t.to_dict() for t in tickets],
+            "tickets": tickets_payload,
             "total_tickets": total_tickets,
             "year_scope": year_scope,
         }), 200
@@ -2024,6 +2359,11 @@ def cierre_gerente_desde_cero(ticket_id):
         t.estado_cierre = "cerrado_por_gerente_desde_cero"
         t.notas_cierre = motivo
 
+        schedule_ticket_attachment_retention(
+            ticket_id=t.id,
+            finalized_at=t.fecha_finalizado,
+        )
+
         db.session.commit()
 
         notificados = _notificar_evento_ticket(
@@ -2149,7 +2489,17 @@ def cierre_aceptar_creador(ticket_id):
             "mensaje": "Solo se pueden aceptar tickets en estado por_validar."
         }), 400
 
-    t.aceptar_conformidad_creador()
+    finalized_at = datetime.now(timezone.utc)
+
+    t.aceptar_conformidad_creador(commit=False)
+
+    schedule_ticket_attachment_retention(
+        ticket_id=t.id,
+        finalized_at=finalized_at,
+    )
+
+    db.session.commit()
+
     notificados = _notificar_evento_ticket(
         ticket=t,
         actor_username=user.username,

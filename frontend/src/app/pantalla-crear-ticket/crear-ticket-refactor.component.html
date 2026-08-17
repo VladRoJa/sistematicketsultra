@@ -174,6 +174,53 @@
           </mat-form-field>
         </div>
         -->
+
+        <!-- Imagen adjunta opcional -->
+        <div class="crear-ticket-attachment">
+          <div class="crear-ticket-attachment__header">
+            <div>
+              <strong>Adjuntar imagen</strong>
+              <p>Opcional · JPEG, PNG o WebP · máximo 15 MB</p>
+            </div>
+          </div>
+
+          <input
+            #ticketImageInput
+            type="file"
+            accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+            (change)="onImagenSeleccionada($event)"
+            hidden
+          />
+
+          <button
+            *ngIf="!imagenSeleccionada"
+            mat-stroked-button
+            type="button"
+            class="crear-ticket-attachment__select"
+            (click)="abrirSelectorImagen(ticketImageInput)"
+          >
+            Seleccionar imagen
+          </button>
+
+          <div
+            *ngIf="imagenSeleccionada"
+            class="crear-ticket-attachment__selected"
+          >
+            <span class="crear-ticket-attachment__filename">
+              {{ imagenSeleccionada.name }}
+            </span>
+
+            <button
+              mat-button
+              type="button"
+              class="crear-ticket-attachment__remove"
+              (click)="quitarImagenSeleccionada(ticketImageInput)"
+            >
+              Quitar
+            </button>
+          </div>
+        </div>
+
       </section>
 
       <!-- ==========================================================================

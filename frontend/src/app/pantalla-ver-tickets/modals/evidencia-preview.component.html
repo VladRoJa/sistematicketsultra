@@ -1,0 +1,71 @@
+<div class="evidencia-preview">
+  <header class="evidencia-preview__header">
+    <div>
+      <span class="evidencia-preview__eyebrow">
+        Vista previa
+      </span>
+
+      <strong class="evidencia-preview__title">
+        {{ data?.titulo || filename || 'Evidencia' }}
+      </strong>
+
+      <span
+        *ngIf="filename && previewUrl"
+        class="evidencia-preview__filename"
+      >
+        {{ filename }}
+      </span>
+    </div>
+
+    <div class="evidencia-preview__actions">
+      <button
+        *ngIf="previewUrl"
+        mat-raised-button
+        type="button"
+        class="evidencia-preview__download"
+        (click)="descargar()"
+      >
+        Descargar
+      </button>
+
+      <button
+        mat-raised-button
+        type="button"
+        color="warn"
+        class="evidencia-preview__close"
+        (click)="close()"
+      >
+        Cerrar
+      </button>
+    </div>
+  </header>
+
+  <section class="evidencia-preview__content">
+    <div
+      *ngIf="loading"
+      class="evidencia-preview__status"
+    >
+      Cargando imagen...
+    </div>
+
+    <img
+      *ngIf="!loading && previewUrl"
+      [src]="previewUrl"
+      [alt]="filename || 'Evidencia del ticket'"
+    />
+
+    <div
+      *ngIf="!loading && !previewUrl && errorMessage"
+      class="evidencia-preview__status evidencia-preview__status--error"
+    >
+      {{ errorMessage }}
+    </div>
+
+    <div
+      *ngIf="!loading && !previewUrl && !errorMessage"
+      class="evidencia-preview__status"
+    >
+      Sin evidencia para este ticket.
+    </div>
+  </section>
+</div>

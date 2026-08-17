@@ -100,6 +100,7 @@ export interface Ticket {
   descripcion_refaccion?: string;
   sucursal_id_destino?: number | null;
   url_evidencia?: string | null;
+  has_attachment?: boolean;
   refaccion_definida_por_jefe?: boolean;
   estado_cierre?:
   | 'pendiente_jefe'
@@ -2677,6 +2678,32 @@ get kpiTicketsCriticos(): number {
   ).length;
 }
 //para cargar imagenes
+
+openAdjunto(ticket: Ticket, event?: Event): void {
+  event?.stopPropagation();
+
+  if (!ticket?.id || !ticket.has_attachment) {
+    mostrarAlertaToast(
+      'Este ticket no tiene imagen adjunta.',
+      'error'
+    );
+    return;
+  }
+
+  this.dialog.open(EvidenciaPreviewComponent, {
+    data: {
+      ticketId: ticket.id,
+      titulo: `Ticket #${ticket.id}`,
+    },
+    width: 'min(90vw, 1100px)',
+    maxWidth: '90vw',
+    maxHeight: '90vh',
+    autoFocus: false,
+    restoreFocus: false,
+    panelClass: 'dlg-evidencia',
+  });
+}
+
 
 /** Abre la evidencia en otra pestaña (si existe) */
 openEvidencia(t: Ticket): void {
