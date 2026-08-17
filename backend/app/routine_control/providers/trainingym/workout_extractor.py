@@ -98,6 +98,7 @@ _ROUTE_STABLE_MS = 1_500
 _ROUTE_SETTLE_TIMEOUT_MS = 15_000
 _REPORT_RENDER_TIMEOUT_MS = 60_000
 _REPORT_SLICER_TIMEOUT_MS = 180_000
+_NATIVE_EXPORT_READY_TIMEOUT_MS = 240_000
 _DOWNLOAD_TIMEOUT_MS = 240_000
 _REPORT_SLICER_POLL_MS = 500
 _REPORT_HEADER_PATTERNS = (
@@ -1063,7 +1064,9 @@ def _download_native_csv(
     export_button = page.locator(_NATIVE_EXPORT_BUTTON_SELECTOR)
     export_button.wait_for(state="visible")
 
-    deadline = time.monotonic() + (_REPORT_RENDER_TIMEOUT_MS / 1000)
+    deadline = time.monotonic() + (
+        _NATIVE_EXPORT_READY_TIMEOUT_MS / 1000
+    )
     while export_button.is_disabled():
         if time.monotonic() >= deadline:
             raise TrainingymWorkoutExtractionError(
