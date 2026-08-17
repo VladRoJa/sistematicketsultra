@@ -131,6 +131,15 @@ def _parse_integer(row: dict[str, Any], field_name: str) -> int:
     return int(value)
 
 
+def _parse_delivery_integer(
+    row: dict[str, Any],
+    field_name: str,
+) -> int:
+    if field_name not in row or row.get(field_name) in (None, ""):
+        return 0
+    return _parse_integer(row, field_name)
+
+
 def _parse_actions(row: dict[str, Any]) -> tuple[dict[str, Any], ...]:
     raw_actions = row.get("actions", [])
     if raw_actions is None:
@@ -182,9 +191,9 @@ def _normalize_insight(row: dict[str, Any]) -> MarketingMetaAdInsight:
     adset_name = _optional_name(row, "adset_name")
     ad_name = _optional_name(row, "ad_name")
     spend = _parse_decimal(row, "spend")
-    reach = _parse_integer(row, "reach")
-    impressions = _parse_integer(row, "impressions")
-    clicks = _parse_integer(row, "clicks")
+    reach = _parse_delivery_integer(row, "reach")
+    impressions = _parse_delivery_integer(row, "impressions")
+    clicks = _parse_delivery_integer(row, "clicks")
     actions = _parse_actions(row)
 
     hash_values = {
