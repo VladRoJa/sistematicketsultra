@@ -7,12 +7,9 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import {
-  AbstractControl,
   FormControl,
   FormGroup,
   ReactiveFormsModule,
-  ValidationErrors,
-  ValidatorFn,
   Validators,
 } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -39,6 +36,7 @@ import {
   MarketingDataQuality,
   MarketingMetrics,
   MarketingMonthlyInput,
+  MarketingSummaryMetrics,
 } from './marketing.models';
 import {
   MarketingAttributionDetailDialogComponent,
@@ -76,7 +74,6 @@ interface MarketingQualityItem {
 
 type MarketingInputForm = FormGroup<{
   investment: FormControl<number>;
-  leads: FormControl<number>;
   notes: FormControl<string>;
 }>;
 
@@ -100,14 +97,6 @@ type DashboardRequestResult =
       status: 'error';
       error: HttpErrorResponse;
     };
-
-const integerValidator: ValidatorFn = (
-  control: AbstractControl,
-): ValidationErrors | null => {
-  const value = Number(control.value);
-
-  return Number.isInteger(value) ? null : { integer: true };
-};
 
 @Component({
   selector: 'app-marketing-conversion',
@@ -392,7 +381,6 @@ export class MarketingConversionComponent implements OnInit {
       .saveInput(row.branchId, {
         month,
         investment: formValue.investment,
-        leads: formValue.leads,
         notes: formValue.notes.trim() || null,
       })
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -403,7 +391,6 @@ export class MarketingConversionComponent implements OnInit {
             row.input = response.input;
             row.form.patchValue({
               investment: response.input.investment,
-              leads: response.input.leads,
               notes: response.input.notes || '',
             });
             row.form.markAsPristine();
@@ -432,20 +419,6 @@ export class MarketingConversionComponent implements OnInit {
       return 'La inversión es obligatoria.';
     }
     return 'Captura una inversión igual o mayor a cero.';
-  }
-
-  getLeadsError(row: MarketingInputEditRow): string {
-    const control = row.form.controls.leads;
-    if (!control.touched || !control.errors) {
-      return '';
-    }
-    if (control.hasError('required')) {
-      return 'Los leads son obligatorios.';
-    }
-    if (control.hasError('integer')) {
-      return 'Los leads deben ser un número entero.';
-    }
-    return 'Captura una cantidad igual o mayor a cero.';
   }
 
   getInputStatusLabel(row: MarketingInputEditRow): string {
@@ -533,14 +506,6 @@ export class MarketingConversionComponent implements OnInit {
             Validators.min(0),
           ],
         }),
-        leads: new FormControl(input?.leads || 0, {
-          nonNullable: true,
-          validators: [
-            Validators.required,
-            Validators.min(0),
-            integerValidator,
-          ],
-        }),
         notes: new FormControl(input?.notes || '', {
           nonNullable: true,
         }),
@@ -561,7 +526,7 @@ export class MarketingConversionComponent implements OnInit {
   }
 
   private buildPrimaryCards(
-    metrics: MarketingMetrics,
+    metrics: MarketingSummaryMetrics,
   ): MarketingMetricCard[] {
     return [
       {
@@ -572,7 +537,9 @@ export class MarketingConversionComponent implements OnInit {
       {
         label: 'Leads',
         value: this.formatInteger(metrics.leads),
-        supportingText: 'Captura manual agregada',
+        supportingText: metrics.iventas.available
+          ? 'iVentas canónico · firstMessageAt + META_AD'
+          : 'iVentas canónico no disponible',
       },
       {
         label: 'Visitantes',
@@ -705,8 +672,10 @@ export class MarketingConversionComponent implements OnInit {
   }
 
   private resolveLeadMode(mode: string): string {
-    if (mode === 'monthly_aggregate_manual') {
-      return 'Captura manual agregada por mes y sucursal';
+    if (mode === 'iventas_canonical_first_message_meta_ad') {
+      return (
+        'iVentas canónico: firstMessageAt y tag META_AD'
+      );
     }
     return mode;
   }

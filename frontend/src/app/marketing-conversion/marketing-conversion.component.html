@@ -79,7 +79,7 @@
         (click)="openInputEditor()"
       >
         <mat-icon>edit_note</mat-icon>
-        Capturar datos Meta
+        Capturar inversión
       </button>
     </div>
   </header>
@@ -194,7 +194,7 @@
       <div class="section-heading section-heading--actions">
         <div>
           <h2 id="input-title">Captura mensual por sucursal</h2>
-          <p>Guarda inversión, leads y notas de una sucursal a la vez.</p>
+          <p>Guarda inversión y notas de una sucursal a la vez.</p>
         </div>
         <button
           mat-stroked-button
@@ -272,20 +272,6 @@
             />
             <mat-error *ngIf="getInvestmentError(row)">
               {{ getInvestmentError(row) }}
-            </mat-error>
-          </mat-form-field>
-
-          <mat-form-field appearance="fill">
-            <mat-label>Leads</mat-label>
-            <input
-              matInput
-              type="number"
-              min="0"
-              step="1"
-              formControlName="leads"
-            />
-            <mat-error *ngIf="getLeadsError(row)">
-              {{ getLeadsError(row) }}
             </mat-error>
           </mat-form-field>
 

@@ -16,7 +16,6 @@ ALLOWED_INPUT_FIELDS = frozenset(
     {
         "month",
         "investment",
-        "leads",
         "notes",
     }
 )
@@ -78,37 +77,6 @@ def _parse_investment(value: Any) -> Decimal:
     return investment
 
 
-def _parse_leads(value: Any) -> int:
-    if isinstance(value, bool):
-        raise MarketingInputValidationError(
-            "leads debe ser un entero."
-        )
-
-    try:
-        decimal_value = Decimal(str(value))
-    except (InvalidOperation, ValueError, TypeError) as exc:
-        raise MarketingInputValidationError(
-            "leads debe ser un entero."
-        ) from exc
-
-    if (
-        not decimal_value.is_finite()
-        or decimal_value
-        != decimal_value.to_integral_value()
-    ):
-        raise MarketingInputValidationError(
-            "leads debe ser un entero."
-        )
-
-    leads = int(decimal_value)
-    if leads < 0:
-        raise MarketingInputValidationError(
-            "leads no puede ser negativo."
-        )
-
-    return leads
-
-
 def validate_input_payload(
     payload: Any,
 ) -> dict[str, Any]:
@@ -132,7 +100,6 @@ def validate_input_payload(
         for field_name in (
             "month",
             "investment",
-            "leads",
         )
         if field_name not in payload
     ]
@@ -154,7 +121,6 @@ def validate_input_payload(
         "investment": _parse_investment(
             payload.get("investment")
         ),
-        "leads": _parse_leads(payload.get("leads")),
         "notes": (
             str(notes).strip() or None
             if notes is not None
@@ -191,7 +157,6 @@ def serialize_marketing_input(
         "month": row.month_start.strftime("%Y-%m"),
         "sucursal_id": row.sucursal_id,
         "investment": float(row.investment),
-        "leads": int(row.leads),
         "notes": row.notes,
         "created_by_user_id": row.created_by_user_id,
         "updated_by_user_id": row.updated_by_user_id,
@@ -213,7 +178,6 @@ def upsert_marketing_input(
     month_start: date,
     sucursal_id: int,
     investment: Decimal,
-    leads: int,
     notes: str | None,
     user_id: int | None,
 ) -> tuple[MarketingMonthlyInputORM, bool]:
@@ -234,7 +198,9 @@ def upsert_marketing_input(
             month_start=month_start,
             sucursal_id=sucursal_id,
             investment=investment,
-            leads=leads,
+            # Columna histórica no nula. Ya no forma parte
+            # del contrato ni de los cálculos del dashboard.
+            leads=0,
             notes=notes,
             created_by_user_id=user_id,
             updated_by_user_id=user_id,
@@ -244,7 +210,6 @@ def upsert_marketing_input(
         db.session.add(existing)
     else:
         existing.investment = investment
-        existing.leads = leads
         existing.notes = notes
         existing.updated_by_user_id = user_id
         existing.updated_at = now

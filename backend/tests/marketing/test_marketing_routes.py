@@ -168,7 +168,6 @@ class TestMarketingRoutes:
                 json={
                     "month": "2026-07",
                     "investment": 100,
-                    "leads": 10,
                     "notes": "Carga sintética",
                 },
                 headers=self.headers,
@@ -176,6 +175,7 @@ class TestMarketingRoutes:
 
         assert response.status_code == 201
         assert response.get_json()["status"] == "created"
+        assert "leads" not in response.get_json()["input"]
 
     def test_negative_input_is_rejected_by_endpoint(self):
         with (
@@ -202,7 +202,6 @@ class TestMarketingRoutes:
                 json={
                     "month": "2026-07",
                     "investment": -1,
-                    "leads": 10,
                 },
                 headers=self.headers,
             )
@@ -226,7 +225,6 @@ class TestMarketingRoutes:
                 json={
                     "month": "2026-07",
                     "investment": 100,
-                    "leads": 10,
                 },
                 headers=self.headers,
             )
@@ -264,7 +262,6 @@ class TestMarketingRoutes:
                 json={
                     "month": "2026-07",
                     "investment": 100,
-                    "leads": 10,
                 },
                 headers=self.headers,
             )

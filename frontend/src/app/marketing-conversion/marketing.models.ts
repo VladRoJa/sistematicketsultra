@@ -9,7 +9,7 @@ export interface MarketingPermissions {
 
 export interface MarketingMetrics {
   investment: number;
-  leads: number;
+  leads: number | null;
   visits: number;
   sales: number;
   sales_revenue: number;
@@ -21,9 +21,29 @@ export interface MarketingMetrics {
   lead_to_sale_rate: number | null;
 }
 
+export interface MarketingIventasMetadata {
+  available: boolean;
+  period_key: string;
+  sync_run_id: number | null;
+  contacts: number | null;
+  contacts_with_first_message: number | null;
+  meta_observed_leads: number | null;
+}
+
+export interface MarketingIventasSummaryMetadata
+  extends MarketingIventasMetadata {
+  date_from: string;
+  date_to: string;
+}
+
+export interface MarketingSummaryMetrics extends MarketingMetrics {
+  iventas: MarketingIventasSummaryMetadata;
+}
+
 export interface MarketingBranchMetrics extends MarketingMetrics {
   sucursal_id: number;
   sucursal: string;
+  iventas: MarketingIventasMetadata;
 }
 
 export interface MarketingDataQuality {
@@ -44,7 +64,7 @@ export interface MarketingDashboardResponse {
   cohort_mode: 'visit_month';
   scope: MarketingScope;
   permissions: MarketingPermissions;
-  summary: MarketingMetrics;
+  summary: MarketingSummaryMetrics;
   branches: MarketingBranchMetrics[];
   data_quality: MarketingDataQuality;
 }
@@ -54,7 +74,6 @@ export interface MarketingMonthlyInput {
   month: string;
   sucursal_id: number;
   investment: number;
-  leads: number;
   notes: string | null;
   created_by_user_id: number | null;
   updated_by_user_id: number | null;
@@ -72,7 +91,6 @@ export interface MarketingInputsResponse {
 export interface MarketingInputPayload {
   month: string;
   investment: number;
-  leads: number;
   notes: string | null;
 }
 
