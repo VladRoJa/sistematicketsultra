@@ -62,7 +62,7 @@ class _FakeTicketModel:
         self.estado_cierre = "pendiente_creador"
         self.fecha_finalizado = datetime.now(timezone.utc)
 
-    def aceptar_conformidad_creador(self):
+    def aceptar_conformidad_creador(self, commit: bool = True):
         self.estado = "finalizado"
         self.estado_cierre = None
         self.motivo_rechazo_cierre = None
@@ -85,6 +85,14 @@ class _FakeTicketModel:
 class TicketCreatorClosureFlowTest(unittest.TestCase):
     def setUp(self):
         _FakeTicketModel.reset()
+
+        self.retention_patch = patch(
+            "app.routes.ticket_routes."
+            "schedule_ticket_attachment_retention",
+            return_value=(0, None),
+        )
+        self.mock_retention = self.retention_patch.start()
+        self.addCleanup(self.retention_patch.stop)
 
         self.users = {
             101: SimpleNamespace(

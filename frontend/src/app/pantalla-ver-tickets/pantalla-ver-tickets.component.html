@@ -771,6 +771,19 @@
             <mat-icon>qr_code_2</mat-icon>
           </button>
 
+          <button
+            *ngIf="ticket.has_attachment"
+            type="button"
+            mat-icon-button
+            class="btn-ticket-attachment"
+            matTooltip="Este ticket tiene una imagen adjunta"
+            matTooltipShowDelay="500"
+            (click)="openAdjunto(ticket, $event)"
+            aria-label="Ver imagen adjunta"
+          >
+            <mat-icon>image</mat-icon>
+          </button>
+
           <mat-menu #menuCodigoEquipo="matMenu" class="menu-codigo-equipo">
             <div class="codigo-equipo-popover" (click)="$event.stopPropagation()">
               <span class="codigo-equipo-popover__eyebrow">Equipo</span>

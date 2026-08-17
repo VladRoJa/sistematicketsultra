@@ -29,6 +29,7 @@ services:
     environment:
       APP_ENV: "prod"
       ROUTINE_CONTROL_ARTIFACT_DIR: "/app/runtime/routine-control/artifacts"
+      TICKET_ATTACHMENT_DIR: "/app/runtime/ticket-attachments"
 
       DISPLAY: ":99"
       GOOGLE_MESSAGES_HEADLESS: "0"
@@ -47,6 +48,7 @@ services:
       - backend-net
     volumes:
       - /home/adminrdp/sistematicketsultra/uploads:/uploads
+      - /home/adminrdp/sistematicketsultra/private/ticket-attachments:/app/runtime/ticket-attachments
       - ./backend/.playwright:/app/.playwright
       - routine_control_runtime:/app/runtime/routine-control
 
@@ -127,6 +129,30 @@ services:
       - /home/adminrdp/sistematicketsultra/uploads:/uploads
     profiles:
       - scheduler
+
+
+  ticket-attachment-cleanup:
+    build:
+      context: ./backend
+    depends_on:
+      - db
+    env_file:
+      - .env.docker
+    environment:
+      APP_ENV: "prod"
+      TICKET_ATTACHMENT_DIR: "/app/runtime/ticket-attachments"
+      TICKET_ATTACHMENT_CLEANUP_POLL_INTERVAL_SECONDS: "3600"
+      TICKET_ATTACHMENT_CLEANUP_BATCH_SIZE: "500"
+    command: python -m app.services.ticket_attachment_cleanup_worker
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
+    networks:
+      - backend-net
+    volumes:
+      - /home/adminrdp/sistematicketsultra/private/ticket-attachments:/app/runtime/ticket-attachments
+    profiles:
+      - maintenance
     
   routine-control-scheduler:
     build:

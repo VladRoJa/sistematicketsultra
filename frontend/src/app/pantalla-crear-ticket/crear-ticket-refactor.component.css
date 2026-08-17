@@ -244,6 +244,80 @@
 }
 
 /* ==========================================================================
+   Suite Ultra UI v1 - Imagen adjunta opcional
+   ========================================================================== */
+
+.crear-ticket-attachment {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--ultra-gray-200);
+  border-radius: 14px;
+  background: var(--ultra-gray-50);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.crear-ticket-attachment__header {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.crear-ticket-attachment__header strong {
+  display: block;
+  color: var(--ultra-gray-900);
+  font-size: 13px;
+  line-height: 1.2;
+  font-weight: 900;
+}
+
+.crear-ticket-attachment__header p {
+  margin: 3px 0 0;
+  color: var(--ultra-gray-600);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.crear-ticket-attachment__select {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  font-weight: 800;
+}
+
+.crear-ticket-attachment__selected {
+  min-width: 0;
+  flex: 0 1 48%;
+  padding: 7px 8px 7px 12px;
+  border: 1px solid var(--ultra-gray-200);
+  border-radius: 999px;
+  background: var(--ultra-surface);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.crear-ticket-attachment__filename {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ultra-gray-900);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.crear-ticket-attachment__remove {
+  flex: 0 0 auto;
+  min-width: auto;
+  padding-inline: 10px;
+  border-radius: 999px;
+  color: var(--ultra-orange-dark);
+  font-weight: 800;
+}
+
+/* ==========================================================================
    Suite Ultra UI v1 - Botón principal
    ========================================================================== */
 
@@ -359,5 +433,20 @@
 
   .crear-ticket-section__header {
     gap: 10px;
+  }
+
+  .crear-ticket-attachment {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .crear-ticket-attachment__select,
+  .crear-ticket-attachment__selected {
+    width: 100%;
+  }
+
+  .crear-ticket-attachment__selected {
+    flex-basis: auto;
+    box-sizing: border-box;
   }
 }

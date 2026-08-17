@@ -61,6 +61,20 @@ export class CrearTicketRefactorComponent implements OnInit, OnDestroy {
   loadingGuardar = false;
   listaSucursales: any[] = [];
 
+  imagenSeleccionada: File | null = null;
+  private readonly MAX_IMAGEN_TICKET_BYTES = 15 * 1024 * 1024;
+  private readonly TIPOS_IMAGEN_TICKET = new Set([
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+  ]);
+  private readonly EXTENSIONES_IMAGEN_TICKET = new Set([
+    'jpg',
+    'jpeg',
+    'png',
+    'webp',
+  ]);
+
   // Mapeo de nombre de control → etiqueta a mostrar
   private etiquetas: Record<string, string> = {
     sucursal_id: 'Sucursal destino',
@@ -482,6 +496,66 @@ public get mostrarSubformSistemasDispositivos(): boolean {
 public mostrarRefaccion: boolean = false;
 
 
+  abrirSelectorImagen(input: HTMLInputElement): void {
+    // Permite volver a seleccionar incluso el mismo archivo.
+    input.value = '';
+    input.click();
+  }
+
+  onImagenSeleccionada(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0] ?? null;
+
+    if (!file) {
+      this.imagenSeleccionada = null;
+      return;
+    }
+
+    const extension = file.name
+      .split('.')
+      .pop()
+      ?.toLowerCase()
+      .trim() ?? '';
+
+    const extensionValida =
+      this.EXTENSIONES_IMAGEN_TICKET.has(extension);
+
+    const mimeValido =
+      !file.type || this.TIPOS_IMAGEN_TICKET.has(file.type);
+
+    if (!extensionValida || !mimeValido) {
+      this.imagenSeleccionada = null;
+      input.value = '';
+
+      mostrarAlertaToast(
+        'Solo se permiten imágenes JPEG, PNG o WebP.',
+        'error'
+      );
+      return;
+    }
+
+    if (file.size > this.MAX_IMAGEN_TICKET_BYTES) {
+      this.imagenSeleccionada = null;
+      input.value = '';
+
+      mostrarAlertaToast(
+        'La imagen no puede exceder 15 MB.',
+        'error'
+      );
+      return;
+    }
+
+    this.imagenSeleccionada = file;
+  }
+
+  quitarImagenSeleccionada(input?: HTMLInputElement): void {
+    this.imagenSeleccionada = null;
+
+    if (input) {
+      input.value = '';
+    }
+  }
+
   limpiarCamposNumericosVacios(obj: any, campos: string[]) {
     campos.forEach((c) => {
       if (obj[c] === '' || obj[c] === undefined) obj[c] = null;
@@ -583,11 +657,29 @@ enviar() {
     delete body.subcategoria;
   }
 
+  let requestBody: any = body;
+
+  if (this.imagenSeleccionada) {
+    const formData = new FormData();
+
+    formData.append(
+      'payload',
+      JSON.stringify(body)
+    );
+
+    formData.append(
+      'image',
+      this.imagenSeleccionada,
+      this.imagenSeleccionada.name
+    );
+
+    requestBody = formData;
+  }
 
   this.http
     .post<{ mensaje: string; ticket_id: number; notificados?: string[] }>(
       `${environment.apiUrl}/tickets/create`,
-      body,
+      requestBody,
       { headers }
     )
     .subscribe({
@@ -601,6 +693,7 @@ enviar() {
           sucursal_id: this.sucursalIdUsuario,
           criticidad: null
         });
+        this.imagenSeleccionada = null;
         this.nivel2Sub?.unsubscribe();
         this.nivel2Sub = undefined;
         this.niveles = [];
