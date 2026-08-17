@@ -2462,7 +2462,12 @@ async rechazarCierre(ticket: Ticket): Promise<void> {
 
 
 esCreador(ticket: Ticket): boolean {
-  return !!ticket && ticket.username === this.usuarioActual;
+  if (!ticket) return false;
+
+  const creador = String(ticket.username || '').trim().toUpperCase();
+  const usuarioActual = String(this.usuarioActual || '').trim().toUpperCase();
+
+  return !!creador && creador === usuarioActual;
 }
 
 esPendienteCierreCreador(ticket: Ticket): boolean {
@@ -2515,6 +2520,8 @@ puedeMostrarBotonesValidarCierre(ticket: Ticket): boolean {
     estadoCierre === 'pendiente_creador';
 
   if (!estaPendienteDeValidacion) return false;
+
+  if (this.esCreador(ticket)) return true;
 
   if (this.esAdminParaValidarCierre()) return true;
 

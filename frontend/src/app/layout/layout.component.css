@@ -24,6 +24,25 @@
   box-shadow: var(--ultra-shadow-md);
 }
 
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Hover bridge del menú
+   Mantiene activo el header al mover el cursor diagonalmente hacia el submenú.
+   ========================================================================== */
+
+.suite-header::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -24px;
+  height: 32px;
+  background: transparent;
+  pointer-events: auto;
+  z-index: 1110;
+}
+
+
 .suite-header__bar {
   min-height: 72px;
   padding: 12px 22px;

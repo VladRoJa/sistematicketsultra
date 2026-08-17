@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Literal
 
+from sqlalchemy import func
+
 from app.models.ticket_model import Ticket
 from app.utils.ticket_filters import filtrar_tickets_por_usuario
 
@@ -62,9 +64,7 @@ def get_ticket_validation_summary_for_user(
     warning_cutoff = now - timedelta(hours=WARNING_HOURS)
     critical_cutoff = now - timedelta(hours=CRITICAL_HOURS)
 
-    base_query = filtrar_tickets_por_usuario(user).filter(
-        Ticket.estado == TICKET_STATUS_POR_VALIDAR
-    )
+    base_query = _ticket_validation_query_for_user(user)
 
     total_por_validar = base_query.order_by(None).count()
 
@@ -144,12 +144,43 @@ def _ensure_utc(value: datetime) -> datetime:
 
     return value.astimezone(timezone.utc)
 
+def _ticket_validation_query_for_user(user):
+    rol = (getattr(user, "rol", "") or "").strip().upper()
+    username = (getattr(user, "username", "") or "").strip()
+
+    if rol in {
+        "ADMIN",
+        "ADMINISTRADOR",
+        "SUPER_ADMIN",
+    }:
+        return Ticket.query.filter(
+            Ticket.estado == TICKET_STATUS_POR_VALIDAR
+        )
+
+    if rol == "GERENTE":
+        return filtrar_tickets_por_usuario(user).filter(
+            Ticket.estado == TICKET_STATUS_POR_VALIDAR
+        )
+
+    if not username:
+        return Ticket.query.filter(False)
+
+    return Ticket.query.filter(
+        Ticket.estado == TICKET_STATUS_POR_VALIDAR,
+        func.lower(Ticket.username) == username.lower(),
+    )
+
+
 def _can_receive_ticket_validation_alert(user) -> bool:
     rol = (getattr(user, "rol", "") or "").strip().upper()
+    username = (getattr(user, "username", "") or "").strip()
 
-    return rol in {
+    if rol in {
         "ADMIN",
         "ADMINISTRADOR",
         "SUPER_ADMIN",
         "GERENTE",
-    }
+    }:
+        return True
+
+    return bool(username)
