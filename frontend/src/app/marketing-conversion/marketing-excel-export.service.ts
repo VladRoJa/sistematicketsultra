@@ -754,7 +754,10 @@ export class MarketingExcelExportService {
       {
         label: 'Inversión',
         value: metrics.investment,
-        definition: 'Captura manual del mes.',
+        definition: (
+          'Spend del Meta canónico asignado por campaña '
+          + 'mediante evidencia iVentas.'
+        ),
         format: 'currency',
       },
       {

@@ -79,7 +79,7 @@
         (click)="openInputEditor()"
       >
         <mat-icon>edit_note</mat-icon>
-        Capturar inversión
+        Capturar notas
       </button>
     </div>
   </header>
@@ -115,7 +115,7 @@
           <p class="section-kicker">Rendimiento consolidado</p>
           <h2 id="summary-title">Embudo del mes</h2>
           <p>
-            De la inversión capturada al ingreso conciliado dentro del
+            De la inversión Meta canónica al ingreso conciliado dentro del
             alcance autorizado.
           </p>
         </div>
@@ -193,8 +193,8 @@
     >
       <div class="section-heading section-heading--actions">
         <div>
-          <h2 id="input-title">Captura mensual por sucursal</h2>
-          <p>Guarda inversión y notas de una sucursal a la vez.</p>
+          <h2 id="input-title">Notas mensuales por sucursal</h2>
+          <p>Guarda notas operativas de una sucursal a la vez.</p>
         </div>
         <button
           mat-stroked-button
@@ -259,21 +259,6 @@
             <strong>{{ row.branchName }}</strong>
             <span>{{ getInputStatusLabel(row) }}</span>
           </div>
-
-          <mat-form-field appearance="fill">
-            <mat-label>Inversión</mat-label>
-            <span matTextPrefix>$&nbsp;</span>
-            <input
-              matInput
-              type="number"
-              min="0"
-              step="0.01"
-              formControlName="investment"
-            />
-            <mat-error *ngIf="getInvestmentError(row)">
-              {{ getInvestmentError(row) }}
-            </mat-error>
-          </mat-form-field>
 
           <mat-form-field appearance="fill" class="notes-field">
             <mat-label>Notas (opcional)</mat-label>

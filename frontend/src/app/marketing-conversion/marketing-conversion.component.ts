@@ -34,6 +34,7 @@ import {
   MarketingBranchMetrics,
   MarketingDashboardResponse,
   MarketingDataQuality,
+  MarketingMetaSummaryMetadata,
   MarketingMetrics,
   MarketingMonthlyInput,
   MarketingSummaryMetrics,
@@ -73,7 +74,6 @@ interface MarketingQualityItem {
 }
 
 type MarketingInputForm = FormGroup<{
-  investment: FormControl<number>;
   notes: FormControl<string>;
 }>;
 
@@ -380,7 +380,6 @@ export class MarketingConversionComponent implements OnInit {
     this.marketingService
       .saveInput(row.branchId, {
         month,
-        investment: formValue.investment,
         notes: formValue.notes.trim() || null,
       })
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -390,7 +389,6 @@ export class MarketingConversionComponent implements OnInit {
           if (this.selectedMonth === month && this.editingInputs) {
             row.input = response.input;
             row.form.patchValue({
-              investment: response.input.investment,
               notes: response.input.notes || '',
             });
             row.form.markAsPristine();
@@ -408,17 +406,6 @@ export class MarketingConversionComponent implements OnInit {
           row.errorMessage = this.resolveInputSaveError(error);
         },
       });
-  }
-
-  getInvestmentError(row: MarketingInputEditRow): string {
-    const control = row.form.controls.investment;
-    if (!control.touched || !control.errors) {
-      return '';
-    }
-    if (control.hasError('required')) {
-      return 'La inversión es obligatoria.';
-    }
-    return 'Captura una inversión igual o mayor a cero.';
   }
 
   getInputStatusLabel(row: MarketingInputEditRow): string {
@@ -499,13 +486,6 @@ export class MarketingConversionComponent implements OnInit {
       saving: false,
       errorMessage: '',
       form: new FormGroup({
-        investment: new FormControl(input?.investment || 0, {
-          nonNullable: true,
-          validators: [
-            Validators.required,
-            Validators.min(0),
-          ],
-        }),
         notes: new FormControl(input?.notes || '', {
           nonNullable: true,
         }),
@@ -522,7 +502,7 @@ export class MarketingConversionComponent implements OnInit {
     this.branchRows = data.branches.map((branch) =>
       this.buildBranchView(branch),
     );
-    this.applyDataQuality(data.data_quality);
+    this.applyDataQuality(data.data_quality, data.summary.meta);
   }
 
   private buildPrimaryCards(
@@ -532,7 +512,9 @@ export class MarketingConversionComponent implements OnInit {
       {
         label: 'Inversión',
         value: this.formatCurrency(metrics.investment),
-        supportingText: 'Captura manual del mes',
+        supportingText: metrics.meta.available
+          ? 'Meta canónico · campañas asignadas por evidencia iVentas'
+          : 'Meta canónico no disponible',
       },
       {
         label: 'Leads',
@@ -630,7 +612,10 @@ export class MarketingConversionComponent implements OnInit {
     };
   }
 
-  private applyDataQuality(dataQuality: MarketingDataQuality): void {
+  private applyDataQuality(
+    dataQuality: MarketingDataQuality,
+    meta: MarketingMetaSummaryMetadata,
+  ): void {
     this.leadModeLabel = this.resolveLeadMode(
       dataQuality.lead_mode,
     );
@@ -638,7 +623,34 @@ export class MarketingConversionComponent implements OnInit {
       this.resolveSalesAttributionMode(
         dataQuality.sales_attribution_mode,
       );
+    const metaItems: MarketingQualityItem[] = [];
+    if (meta.available) {
+      if (meta.total_spend !== null) {
+        metaItems.push({
+          label: 'Inversión Meta total',
+          value: this.formatCurrency(meta.total_spend),
+        });
+      }
+      metaItems.push({
+        label: 'Inversión Meta asignada al alcance',
+        value: this.formatCurrency(meta.assigned_spend),
+      });
+      if (meta.unassigned_spend !== null) {
+        metaItems.push({
+          label: 'Inversión Meta sin asignar',
+          value: this.formatCurrency(meta.unassigned_spend),
+        });
+      }
+      if (meta.conflict_spend !== null && meta.conflict_spend > 0) {
+        metaItems.push({
+          label: 'Inversión Meta en conflicto',
+          value: this.formatCurrency(meta.conflict_spend),
+        });
+      }
+    }
+
     this.qualityItems = [
+      ...metaItems,
       {
         label: 'Eventos de visita elegibles',
         value: this.formatInteger(

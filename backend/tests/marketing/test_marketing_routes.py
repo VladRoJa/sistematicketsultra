@@ -167,7 +167,6 @@ class TestMarketingRoutes:
                 "/api/marketing/inputs/1",
                 json={
                     "month": "2026-07",
-                    "investment": 100,
                     "notes": "Carga sintética",
                 },
                 headers=self.headers,
@@ -176,8 +175,9 @@ class TestMarketingRoutes:
         assert response.status_code == 201
         assert response.get_json()["status"] == "created"
         assert "leads" not in response.get_json()["input"]
+        assert "investment" not in response.get_json()["input"]
 
-    def test_negative_input_is_rejected_by_endpoint(self):
+    def test_deprecated_investment_is_rejected_by_endpoint(self):
         with (
             patch(
                 "app.routes.marketing_routes."
@@ -201,7 +201,7 @@ class TestMarketingRoutes:
                 "/api/marketing/inputs/1",
                 json={
                     "month": "2026-07",
-                    "investment": -1,
+                    "investment": 100,
                 },
                 headers=self.headers,
             )
@@ -224,7 +224,7 @@ class TestMarketingRoutes:
                 "/api/marketing/inputs/1",
                 json={
                     "month": "2026-07",
-                    "investment": 100,
+                    "notes": "Sin autorización",
                 },
                 headers=self.headers,
             )
@@ -261,7 +261,7 @@ class TestMarketingRoutes:
                 "/api/marketing/inputs/2",
                 json={
                     "month": "2026-07",
-                    "investment": 100,
+                    "notes": "Fuera de alcance",
                 },
                 headers=self.headers,
             )

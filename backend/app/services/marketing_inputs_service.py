@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 import re
 from typing import Any
 
@@ -15,7 +15,6 @@ from app.models.sucursal_model import Sucursal
 ALLOWED_INPUT_FIELDS = frozenset(
     {
         "month",
-        "investment",
         "notes",
     }
 )
@@ -51,32 +50,6 @@ def parse_month(value: Any) -> date:
         ) from exc
 
 
-def _parse_investment(value: Any) -> Decimal:
-    if isinstance(value, bool):
-        raise MarketingInputValidationError(
-            "investment debe ser numérico."
-        )
-
-    try:
-        investment = Decimal(str(value))
-    except (InvalidOperation, ValueError, TypeError) as exc:
-        raise MarketingInputValidationError(
-            "investment debe ser numérico."
-        ) from exc
-
-    if not investment.is_finite():
-        raise MarketingInputValidationError(
-            "investment debe ser un número finito."
-        )
-
-    if investment < 0:
-        raise MarketingInputValidationError(
-            "investment no puede ser negativo."
-        )
-
-    return investment
-
-
 def validate_input_payload(
     payload: Any,
 ) -> dict[str, Any]:
@@ -95,19 +68,9 @@ def validate_input_payload(
             + "."
         )
 
-    missing_fields = [
-        field_name
-        for field_name in (
-            "month",
-            "investment",
-        )
-        if field_name not in payload
-    ]
-    if missing_fields:
+    if "month" not in payload:
         raise MarketingInputValidationError(
-            "Campos obligatorios faltantes: "
-            + ", ".join(missing_fields)
-            + "."
+            "Campos obligatorios faltantes: month."
         )
 
     notes = payload.get("notes")
@@ -118,9 +81,6 @@ def validate_input_payload(
 
     return {
         "month_start": parse_month(payload.get("month")),
-        "investment": _parse_investment(
-            payload.get("investment")
-        ),
         "notes": (
             str(notes).strip() or None
             if notes is not None
@@ -156,7 +116,6 @@ def serialize_marketing_input(
         "id": row.id,
         "month": row.month_start.strftime("%Y-%m"),
         "sucursal_id": row.sucursal_id,
-        "investment": float(row.investment),
         "notes": row.notes,
         "created_by_user_id": row.created_by_user_id,
         "updated_by_user_id": row.updated_by_user_id,
@@ -177,7 +136,6 @@ def upsert_marketing_input(
     *,
     month_start: date,
     sucursal_id: int,
-    investment: Decimal,
     notes: str | None,
     user_id: int | None,
 ) -> tuple[MarketingMonthlyInputORM, bool]:
@@ -197,7 +155,9 @@ def upsert_marketing_input(
         existing = MarketingMonthlyInputORM(
             month_start=month_start,
             sucursal_id=sucursal_id,
-            investment=investment,
+            # Columna histórica no nula. La inversión funcional
+            # proviene exclusivamente del snapshot canónico Meta.
+            investment=Decimal("0"),
             # Columna histórica no nula. Ya no forma parte
             # del contrato ni de los cálculos del dashboard.
             leads=0,
@@ -209,7 +169,6 @@ def upsert_marketing_input(
         )
         db.session.add(existing)
     else:
-        existing.investment = investment
         existing.notes = notes
         existing.updated_by_user_id = user_id
         existing.updated_at = now
