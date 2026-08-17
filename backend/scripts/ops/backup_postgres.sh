@@ -35,7 +35,8 @@ TAR_PARTIAL="${TAR_FILE}.partial"
 
 LOCK_FILE="${BASE_DIR}/.backup_postgres.lock"
 
-PG_VERIFYBACKUP_BIN="${PG_VERIFYBACKUP_BIN:-}"
+PG_SERVER_MAJOR="${PG_SERVER_MAJOR:-}"
+PG_VERIFY_IMAGE="${PG_VERIFY_IMAGE:-}"
 
 
 log() {
@@ -55,51 +56,134 @@ require_command() {
 }
 
 
-resolve_pg_verifybackup() {
-    local version_output
-    local pg_major
+resolve_pg_server_major() {
+    local server_version_num
 
-    if [[ -n "$PG_VERIFYBACKUP_BIN" ]]; then
-        if [[ ! -x "$PG_VERIFYBACKUP_BIN" ]]; then
-            log \
-                "ERROR: PG_VERIFYBACKUP_BIN no es ejecutable: " \
-                "${PG_VERIFYBACKUP_BIN}"
+    if [[ -n "$PG_SERVER_MAJOR" ]]; then
+        if ! [[ "$PG_SERVER_MAJOR" =~ ^[1-9][0-9]*$ ]]; then
+            log "ERROR: PG_SERVER_MAJOR debe ser entero positivo."
             exit 1
         fi
 
         return 0
     fi
 
-    version_output="$(
-        pg_basebackup --version
+    server_version_num="$(
+        psql \
+            -h "$PGHOST" \
+            -p "$PGPORT" \
+            -U "$PGUSER" \
+            -d postgres \
+            -Atqc \
+            "SHOW server_version_num;"
     )"
 
-    if [[ ! "$version_output" =~ PostgreSQL\)?[[:space:]]+([0-9]+) ]]; then
+    if ! [[ "$server_version_num" =~ ^[0-9]+$ ]]; then
         log \
-            "ERROR: no se pudo determinar versión mayor " \
-            "desde pg_basebackup."
+            "ERROR: no se pudo determinar server_version_num."
         exit 1
     fi
 
-    pg_major="${BASH_REMATCH[1]}"
+    PG_SERVER_MAJOR=$(( server_version_num / 10000 ))
 
-    PG_VERIFYBACKUP_BIN="$(
-        printf \
-            '/usr/lib/postgresql/%s/bin/pg_verifybackup' \
-            "$pg_major"
-    )"
-
-    if [[ ! -x "$PG_VERIFYBACKUP_BIN" ]]; then
+    if (( PG_SERVER_MAJOR < 10 )); then
         log \
-            "ERROR: pg_verifybackup no disponible: " \
-            "${PG_VERIFYBACKUP_BIN}"
+            "ERROR: versión PostgreSQL no soportada por este flujo: " \
+            "${server_version_num}"
         exit 1
     fi
 
     log \
-        "Verificador PostgreSQL: " \
-        "${PG_VERIFYBACKUP_BIN}"
+        "Versión mayor PostgreSQL servidor: " \
+        "${PG_SERVER_MAJOR}"
 }
+
+
+resolve_pg_verify_image() {
+    if [[ -z "$PG_VERIFY_IMAGE" ]]; then
+        PG_VERIFY_IMAGE="postgres:${PG_SERVER_MAJOR}"
+    fi
+
+    if ! docker image inspect \
+        "$PG_VERIFY_IMAGE" \
+        >/dev/null 2>&1; then
+        log \
+            "ERROR: imagen PostgreSQL para verificación no disponible: " \
+            "${PG_VERIFY_IMAGE}"
+        exit 1
+    fi
+
+    log \
+        "Imagen PostgreSQL para verificación: " \
+        "${PG_VERIFY_IMAGE}"
+}
+
+
+validate_pg_verify_image_tools() {
+    local verify_version
+    local waldump_version
+    local verify_major
+    local waldump_major
+
+    if ! verify_version="$(
+        docker run \
+            --rm \
+            --pull=never \
+            --network none \
+            "$PG_VERIFY_IMAGE" \
+            pg_verifybackup \
+            --version
+    )"; then
+        log \
+            "ERROR: pg_verifybackup no funciona en imagen: " \
+            "${PG_VERIFY_IMAGE}"
+        exit 1
+    fi
+
+    if ! waldump_version="$(
+        docker run \
+            --rm \
+            --pull=never \
+            --network none \
+            "$PG_VERIFY_IMAGE" \
+            pg_waldump \
+            --version
+    )"; then
+        log \
+            "ERROR: pg_waldump no funciona en imagen: " \
+            "${PG_VERIFY_IMAGE}"
+        exit 1
+    fi
+
+    if [[ ! "$verify_version" =~ PostgreSQL\)?[[:space:]]+([0-9]+) ]]; then
+        log "ERROR: no se pudo leer versión de pg_verifybackup."
+        exit 1
+    fi
+
+    verify_major="${BASH_REMATCH[1]}"
+
+    if [[ ! "$waldump_version" =~ PostgreSQL\)?[[:space:]]+([0-9]+) ]]; then
+        log "ERROR: no se pudo leer versión de pg_waldump."
+        exit 1
+    fi
+
+    waldump_major="${BASH_REMATCH[1]}"
+
+    if [[ "$verify_major" != "$PG_SERVER_MAJOR" ]] \
+        || [[ "$waldump_major" != "$PG_SERVER_MAJOR" ]]; then
+        log \
+            "ERROR: versión de herramientas no coincide con servidor. " \
+            "servidor=${PG_SERVER_MAJOR} " \
+            "pg_verifybackup=${verify_major} " \
+            "pg_waldump=${waldump_major}"
+        exit 1
+    fi
+
+    log \
+        "Herramientas PostgreSQL verificadas para major: " \
+        "${PG_SERVER_MAJOR}"
+}
+
 
 validate_configuration() {
     if ! [[ "$KEEP_LOCAL_BACKUPS" =~ ^[1-9][0-9]*$ ]]; then
@@ -242,8 +326,15 @@ create_base_backup() {
 verify_base_backup() {
     log "Verificando integridad del backup base."
 
-    "$PG_VERIFYBACKUP_BIN" \
-        "$BACKUP_DIR"
+    docker run \
+        --rm \
+        --pull=never \
+        --network none \
+        --mount \
+        "type=bind,src=${BACKUP_DIR},dst=/backup,readonly" \
+        "$PG_VERIFY_IMAGE" \
+        pg_verifybackup \
+        /backup
 
     log "Verificación del backup completada."
 }
@@ -321,10 +412,14 @@ main() {
     require_command tar
     require_command rclone
     require_command flock
-
-    resolve_pg_verifybackup
+    require_command docker
 
     mkdir -p "$BASE_DIR"
+
+    validate_configuration
+    resolve_pg_server_major
+    resolve_pg_verify_image
+    validate_pg_verify_image_tools
 
     if [[ "${1:-}" == "--preflight" ]]; then
         if (( $# != 1 )); then
@@ -332,7 +427,6 @@ main() {
             exit 2
         fi
 
-        validate_configuration
         validate_free_space
 
         log "Preflight PostgreSQL backup: OK"
@@ -352,7 +446,6 @@ main() {
         exit 1
     fi
 
-    validate_configuration
     validate_free_space
 
     trap cleanup_partial_backup EXIT
