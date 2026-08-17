@@ -747,9 +747,24 @@ def get_tickets():
         total_tickets = query.count()
         tickets = query.order_by(Ticket.id.desc()).limit(limit).offset(offset).all()
 
+        attachment_ticket_ids = (
+            _get_ticket_ids_with_active_attachments(
+                [ticket.id for ticket in tickets]
+            )
+        )
+
+        tickets_payload = []
+
+        for ticket in tickets:
+            item = ticket.to_dict()
+            item["has_attachment"] = (
+                ticket.id in attachment_ticket_ids
+            )
+            tickets_payload.append(item)
+
         return jsonify({
             "mensaje": "Tickets cargados correctamente",
-            "tickets": [t.to_dict() for t in tickets],
+            "tickets": tickets_payload,
             "total_tickets": total_tickets,
             "year_scope": year_scope,
         }), 200
