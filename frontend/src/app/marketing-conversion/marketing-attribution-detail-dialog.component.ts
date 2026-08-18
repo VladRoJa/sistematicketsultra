@@ -45,6 +45,7 @@ export interface MarketingAttributionDialogData {
   month: string;
   branchId?: number;
   branchName?: string;
+  focus?: 'sales' | 'revenue';
 }
 
 @Component({
@@ -133,9 +134,44 @@ export class MarketingAttributionDetailDialogComponent
   exportingCohort = false;
 
   get title(): string {
+    const metric = this.data.focus === 'revenue'
+      ? 'Ingreso atribuido'
+      : 'Ventas atribuidas';
     return this.data.branchName
-      ? `Ventas atribuidas · ${this.data.branchName}`
-      : 'Ventas atribuidas · Todas las sucursales';
+      ? `${metric} · ${this.data.branchName}`
+      : `${metric} · Todas las sucursales`;
+  }
+
+  get closeAriaLabel(): string {
+    return this.data.focus === 'revenue'
+      ? 'Cerrar detalle de ingreso atribuido'
+      : 'Cerrar detalle de ventas atribuidas';
+  }
+
+  get loadingLabel(): string {
+    return this.data.focus === 'revenue'
+      ? 'Cargando ingreso atribuido…'
+      : 'Cargando ventas atribuidas…';
+  }
+
+  get emptyLabel(): string {
+    return this.data.focus === 'revenue'
+      ? 'No hay ingreso atribuido para este alcance.'
+      : 'No hay ventas atribuidas para este alcance.';
+  }
+
+  get filteredEmptyLabel(): string {
+    return this.data.focus === 'revenue'
+      ? 'No hay ingresos que coincidan con los filtros.'
+      : 'No hay ventas que coincidan con los filtros.';
+  }
+  get exportButtonLabel(): string {
+    if (this.exportingCohort) {
+      return 'Generando…';
+    }
+    return this.data.focus === 'revenue'
+      ? 'Exportar ingreso atribuido'
+      : 'Exportar ventas atribuidas';
   }
 
   get resultCountLabel(): string {
@@ -223,6 +259,7 @@ export class MarketingAttributionDetailDialogComponent
     try {
       await this.excelExport.exportAttributionCohort(
         this.detail,
+        this.data.focus ?? 'sales',
       );
 
       this.snackBar.open(

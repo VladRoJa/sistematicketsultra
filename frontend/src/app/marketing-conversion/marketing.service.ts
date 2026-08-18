@@ -7,9 +7,12 @@ import { environment } from 'src/environments/environment';
 import {
   MarketingAttributionDetailResponse,
   MarketingDashboardResponse,
+  MarketingInvestmentDetailResponse,
   MarketingInputPayload,
   MarketingInputsResponse,
   MarketingInputSaveResponse,
+  MarketingLeadsDetailResponse,
+  MarketingVisitorsDetailResponse,
 } from './marketing.models';
 
 @Injectable({
@@ -41,6 +44,48 @@ export class MarketingService {
 
     return this.http.get<MarketingAttributionDetailResponse>(
       `${this.apiUrl}/attributions`,
+      { params },
+    );
+  }
+
+  getInvestmentDetail(
+    month: string,
+    branchId?: number,
+  ): Observable<MarketingInvestmentDetailResponse> {
+    let params = new HttpParams().set('month', month);
+    if (branchId !== undefined) {
+      params = params.set('sucursal_id', String(branchId));
+    }
+    return this.http.get<MarketingInvestmentDetailResponse>(
+      `${this.apiUrl}/investment-detail`,
+      { params },
+    );
+  }
+
+  getLeadsDetail(
+    month: string,
+    branchId?: number,
+  ): Observable<MarketingLeadsDetailResponse> {
+    let params = new HttpParams().set('month', month);
+    if (branchId !== undefined) {
+      params = params.set('sucursal_id', String(branchId));
+    }
+    return this.http.get<MarketingLeadsDetailResponse>(
+      `${this.apiUrl}/leads-detail`,
+      { params },
+    );
+  }
+
+  getVisitorsDetail(
+    month: string,
+    branchId?: number,
+  ): Observable<MarketingVisitorsDetailResponse> {
+    let params = new HttpParams().set('month', month);
+    if (branchId !== undefined) {
+      params = params.set('sucursal_id', String(branchId));
+    }
+    return this.http.get<MarketingVisitorsDetailResponse>(
+      `${this.apiUrl}/visitors-detail`,
       { params },
     );
   }

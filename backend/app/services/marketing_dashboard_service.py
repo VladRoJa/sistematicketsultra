@@ -36,8 +36,10 @@ from app.services.marketing_iventas_dashboard_data_service import (
 from app.services.marketing_meta_dashboard_service import (
     MetaDashboardInvestmentData,
     read_meta_dashboard_investment_data,
+    serialize_meta_investment_detail,
 )
 from app.services.marketing_phone import (
+    mask_phone,
     normalize_member_phone,
     normalize_phone,
 )
@@ -168,10 +170,6 @@ def _join_member_name(row: Any) -> str | None:
         if part
     )
     return full_name or None
-
-
-def _mask_phone(phone: str) -> str:
-    return f"*** *** {phone[-4:]}"
 
 
 def _classify_attributed_sale(
@@ -1139,6 +1137,195 @@ def _serialize_meta_summary(
     }
 
 
+def resolve_marketing_detail_scope(
+    *,
+    access: MarketingAccess,
+    sucursal_id: int | None,
+) -> tuple[
+    list[MarketingBranch],
+    tuple[int, ...],
+    dict[str, object],
+]:
+    branches, branch_ids, scope = (
+        load_visible_marketing_branches(access)
+    )
+    if sucursal_id is None:
+        return branches, branch_ids, scope
+
+    if sucursal_id not in set(branch_ids):
+        raise MarketingAuthorizationError(
+            "La sucursal está fuera del alcance autorizado."
+        )
+
+    return (
+        [
+            branch
+            for branch in branches
+            if branch.sucursal_id == sucursal_id
+        ],
+        (sucursal_id,),
+        scope,
+    )
+
+
+def build_marketing_investment_detail(
+    *,
+    month: str,
+    access: MarketingAccess,
+    sucursal_id: int | None = None,
+    today: date | None = None,
+) -> dict[str, Any]:
+    month_start = parse_month(month)
+    branches, selected_branch_ids, scope = (
+        resolve_marketing_detail_scope(
+            access=access,
+            sucursal_id=sucursal_id,
+        )
+    )
+    normalized_today = (
+        today
+        if today is not None
+        else datetime.now(TIJUANA_TIMEZONE).date()
+    )
+    iventas_data = read_iventas_dashboard_month_data(
+        month_date=month_start,
+        today=normalized_today,
+    )
+    meta_data = read_meta_dashboard_investment_data(
+        month_date=month_start,
+        iventas_sync_run_id=(
+            iventas_data.sync_run_id
+            if iventas_data.available
+            else None
+        ),
+    )
+
+    return serialize_meta_investment_detail(
+        month=month_start.strftime("%Y-%m"),
+        scope=scope,
+        sucursal_id=sucursal_id,
+        meta_data=meta_data,
+        selected_branch_ids=selected_branch_ids,
+        branch_names={
+            branch.sucursal_id: branch.name
+            for branch in branches
+        },
+        expose_global_totals=(
+            access.is_global and sucursal_id is None
+        ),
+    )
+
+
+def _build_unique_visitor_rows(
+    *,
+    events: Iterable[VisitEvent],
+    branch_names: Mapping[int, str],
+) -> list[dict[str, Any]]:
+    visitors: dict[
+        tuple[int, str],
+        list[VisitEvent],
+    ] = {}
+    for event in events:
+        visitors.setdefault(
+            (event.branch_id, event.phone),
+            [],
+        ).append(event)
+
+    rows: list[dict[str, Any]] = []
+    for (branch_id, phone), visitor_events in sorted(
+        visitors.items(),
+        key=lambda item: (
+            item[0][0],
+            min(event.visit_date for event in item[1]),
+            item[0][1],
+        ),
+    ):
+        ordered_events = sorted(
+            visitor_events,
+            key=lambda event: (
+                event.visit_date,
+                event.event_key,
+            ),
+        )
+        rows.append(
+            {
+                "sucursal_id": branch_id,
+                "sucursal": branch_names.get(
+                    branch_id,
+                    str(branch_id),
+                ),
+                "telefono": mask_phone(phone),
+                "first_visit_date": (
+                    ordered_events[0].visit_date.isoformat()
+                ),
+                "last_visit_date": (
+                    ordered_events[-1].visit_date.isoformat()
+                ),
+                "event_count": len(ordered_events),
+                "visit_types": sorted(
+                    {
+                        event.description
+                        for event in ordered_events
+                    }
+                ),
+            }
+        )
+    return rows
+
+
+def build_marketing_visitors_detail(
+    *,
+    month: str,
+    access: MarketingAccess,
+    sucursal_id: int | None = None,
+) -> dict[str, Any]:
+    month_start = parse_month(month)
+    branches, selected_branch_ids, scope = (
+        resolve_marketing_detail_scope(
+            access=access,
+            sucursal_id=sucursal_id,
+        )
+    )
+    visit_result = _load_visit_events(
+        month_start=month_start,
+        branch_ids=selected_branch_ids,
+    )
+    rows = _build_unique_visitor_rows(
+        events=visit_result.events,
+        branch_names={
+            branch.sucursal_id: branch.name
+            for branch in branches
+        },
+    )
+    return {
+        "month": month_start.strftime("%Y-%m"),
+        "scope": scope,
+        "filters": {"sucursal_id": sucursal_id},
+        "summary": {
+            "unique_visitors": len(rows),
+            "eligible_visit_events": (
+                visit_result.eligible_visit_events
+            ),
+            "visit_events_with_valid_phone": (
+                visit_result.visit_events_with_valid_phone
+            ),
+            "visit_events_without_valid_phone": (
+                visit_result.visit_events_without_valid_phone
+            ),
+            "visit_phone_coverage_rate": _serialize_ratio(
+                safe_divide(
+                    visit_result.visit_events_with_valid_phone,
+                    visit_result.eligible_visit_events,
+                )
+            ),
+        },
+        "source": {
+            "visit_snapshot_id": visit_result.snapshot_id,
+        },
+        "rows": rows,
+    }
+
+
 def build_marketing_attribution_detail(
     *,
     month: str,
@@ -1272,7 +1459,7 @@ def build_marketing_attribution_detail(
                 "id_socio": attribution.sale.member_id,
                 "id_folio": attribution.sale.folio,
                 "socio": attribution.sale.member_name,
-                "telefono": _mask_phone(
+                "telefono": mask_phone(
                     attribution.sale.phone
                 ),
                 "fecha_visita": (

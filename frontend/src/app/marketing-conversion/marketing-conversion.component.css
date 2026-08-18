@@ -408,6 +408,14 @@
   line-height: 1.35;
 }
 
+.funnel-detail-action {
+  margin-top: 7px;
+  color: var(--mc-orange);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+}
+
 .conversion-strip {
   display: grid;
   grid-template-columns: repeat(3, minmax(160px, 1fr));
@@ -904,18 +912,6 @@
   border-color: rgba(229, 69, 37, 0.42);
   transform: translateY(-3px);
   box-shadow: 0 14px 30px rgba(229, 69, 37, 0.15);
-}
-
-.funnel-card--interactive::before {
-  position: absolute;
-  right: 12px;
-  bottom: 10px;
-  color: var(--mc-orange);
-  content: 'Ver detalle';
-  font-size: 9px;
-  font-weight: 900;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 
 .metric-detail-link {

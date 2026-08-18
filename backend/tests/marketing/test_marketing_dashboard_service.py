@@ -961,3 +961,154 @@ def test_historical_manual_investment_does_not_change_dashboard(
 
     assert result["summary"]["investment"] == 100.0
     assert result["branches"][0]["investment"] == 100.0
+
+
+def test_unique_visitor_detail_groups_events_by_branch_and_phone():
+    rows = service._build_unique_visitor_rows(
+        events=[
+            VisitEvent(
+                "visit-1",
+                1,
+                date(2026, 8, 2),
+                "6641234567",
+                "PASE RECORRIDO",
+            ),
+            VisitEvent(
+                "visit-2",
+                1,
+                date(2026, 8, 5),
+                "6641234567",
+                "PASE 2 DIAS GRATIS",
+            ),
+        ],
+        branch_names={1: "Centro"},
+    )
+
+    assert len(rows) == 1
+    assert rows[0]["event_count"] == 2
+    assert rows[0]["first_visit_date"] == "2026-08-02"
+    assert rows[0]["last_visit_date"] == "2026-08-05"
+    assert rows[0]["telefono"] == "*** *** 4567"
+
+
+def test_same_phone_in_two_branches_is_two_visitors():
+    rows = service._build_unique_visitor_rows(
+        events=[
+            VisitEvent(
+                "visit-1",
+                1,
+                date(2026, 8, 2),
+                "6641234567",
+                "PASE RECORRIDO",
+            ),
+            VisitEvent(
+                "visit-2",
+                2,
+                date(2026, 8, 2),
+                "6641234567",
+                "PASE RECORRIDO",
+            ),
+        ],
+        branch_names={1: "Centro", 2: "Norte"},
+    )
+
+    assert len(rows) == 2
+
+
+def test_visitors_detail_reconciles_rows_and_invalid_event_summary(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(
+        service,
+        "load_visible_marketing_branches",
+        lambda _: (
+            [service.MarketingBranch(1, "Centro", 1)],
+            (1,),
+            {"type": "GLOBAL", "branch_ids": [1]},
+        ),
+    )
+    monkeypatch.setattr(
+        service,
+        "_load_visit_events",
+        lambda **_: service.VisitLoadResult(
+            events=[
+                VisitEvent(
+                    "visit-1",
+                    1,
+                    date(2026, 8, 2),
+                    "6641234567",
+                    "PASE RECORRIDO",
+                ),
+                VisitEvent(
+                    "visit-2",
+                    1,
+                    date(2026, 8, 3),
+                    "6641234567",
+                    "PASE RECORRIDO",
+                ),
+            ],
+            eligible_visit_events=3,
+            visit_events_with_valid_phone=2,
+            visit_events_without_valid_phone=1,
+            snapshot_id=91,
+        ),
+    )
+
+    detail = service.build_marketing_visitors_detail(
+        month="2026-08",
+        access=_global_access(),
+    )
+
+    assert len(detail["rows"]) == 1
+    assert detail["summary"]["unique_visitors"] == 1
+    assert detail["summary"]["eligible_visit_events"] == 3
+    assert detail["summary"]["visit_events_without_valid_phone"] == 1
+    assert detail["source"]["visit_snapshot_id"] == 91
+
+
+def test_visitors_detail_rejects_branch_outside_scope(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(
+        service,
+        "load_visible_marketing_branches",
+        lambda _: (
+            [service.MarketingBranch(1, "Centro", 1)],
+            (1,),
+            {"type": "PRIMARY_BRANCH", "branch_ids": [1]},
+        ),
+    )
+
+    with pytest.raises(
+        service.MarketingAuthorizationError,
+        match="fuera del alcance autorizado",
+    ):
+        service.build_marketing_visitors_detail(
+            month="2026-08",
+            access=_global_access(),
+            sucursal_id=2,
+        )
+
+
+def test_investment_detail_rejects_branch_outside_scope(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(
+        service,
+        "load_visible_marketing_branches",
+        lambda _: (
+            [service.MarketingBranch(1, "Centro", 1)],
+            (1,),
+            {"type": "PRIMARY_BRANCH", "branch_ids": [1]},
+        ),
+    )
+
+    with pytest.raises(
+        service.MarketingAuthorizationError,
+        match="fuera del alcance autorizado",
+    ):
+        service.build_marketing_investment_detail(
+            month="2026-08",
+            access=_global_access(),
+            sucursal_id=2,
+        )
