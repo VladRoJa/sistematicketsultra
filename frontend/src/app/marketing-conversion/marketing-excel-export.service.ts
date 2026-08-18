@@ -10,9 +10,14 @@ import {
   MarketingAttributionDetailRow,
   MarketingDashboardResponse,
   MarketingDataQuality,
+  MarketingInvestmentDetailResponse,
+  MarketingLeadsDetailResponse,
   MarketingMetrics,
   MarketingScope,
+  MarketingVisitorsDetailResponse,
 } from './marketing.models';
+
+type ExcelDetailValue = string | number | Date | null;
 
 interface SummaryMetric {
   label: string;
@@ -63,28 +68,226 @@ export class MarketingExcelExportService {
 
   async exportAttributionCohort(
     detail: MarketingAttributionDetailResponse,
+    focus: 'sales' | 'revenue' = 'sales',
   ): Promise<void> {
     const workbook = this.createWorkbook();
 
     this.buildCohortSummarySheet(
       workbook,
       detail,
+      focus,
     );
     this.buildCohortDetailSheet(
       workbook,
       detail,
     );
 
-    const scopeName = this.resolveCohortScopeName(
-      detail,
-    );
+    const scopeName = this.resolveCohortScopeName(detail);
+    const prefix = focus === 'revenue'
+      ? 'marketing_ingreso_atribuido'
+      : 'marketing_ventas_atribuidas';
 
     await this.downloadWorkbook(
       workbook,
       [
-        'marketing_cohorte',
+        prefix,
         detail.month,
         this.slugify(scopeName),
+      ].join('_') + '.xlsx',
+    );
+  }
+
+  async exportInvestmentDetail(
+    detail: MarketingInvestmentDetailResponse,
+  ): Promise<void> {
+    const assignedSpend = detail.rows
+      .filter((row) => row.assignment_status === 'ASSIGNED')
+      .reduce((total, row) => total + row.spend, 0);
+    const unassignedSpend = detail.rows
+      .filter((row) => row.assignment_status === 'UNASSIGNED')
+      .reduce((total, row) => total + row.spend, 0);
+    const conflictSpend = detail.rows
+      .filter((row) => row.assignment_status === 'CONFLICT')
+      .reduce((total, row) => total + row.spend, 0);
+    const totalSpend = assignedSpend + unassignedSpend + conflictSpend;
+    const doesNotMatch = (
+      expected: number | null,
+      actual: number,
+    ): boolean => expected !== null
+      && Math.abs(actual - expected) > 0.005;
+    if (
+      doesNotMatch(detail.summary.card_investment, assignedSpend)
+      || doesNotMatch(detail.summary.total_meta_spend, totalSpend)
+      || doesNotMatch(detail.summary.unassigned_spend, unassignedSpend)
+      || doesNotMatch(detail.summary.conflict_spend, conflictSpend)
+    ) {
+      throw new Error('El detalle de inversión no reconcilia.');
+    }
+
+    const workbook = this.createWorkbook();
+    this.buildSimpleSummarySheet(
+      workbook,
+      'Detalle de inversión',
+      [
+        ['Mes', detail.month],
+        ['Alcance', this.resolveFunnelScopeName(detail.filters.sucursal_id)],
+        ['Meta sync run', detail.source.meta_sync_run_id ?? '—'],
+        ['iVentas sync run', detail.source.iventas_sync_run_id ?? '—'],
+        [
+          'Periodo',
+          detail.source.date_from && detail.source.date_to
+            ? `${detail.source.date_from} a ${detail.source.date_to}`
+            : '—',
+        ],
+        ['Inversión del funnel', detail.summary.card_investment ?? '—'],
+        ['Meta total', detail.summary.total_meta_spend ?? '—'],
+        ['Sin asignar', detail.summary.unassigned_spend ?? '—'],
+        ['Conflicto', detail.summary.conflict_spend ?? '—'],
+        ['Campañas', detail.summary.campaigns_total ?? '—'],
+      ],
+    );
+    this.buildSimpleDetailSheet(
+      workbook,
+      [
+        'Estado', 'Sucursal', 'Campaign ID', 'Campaña',
+        'Account ID', 'Cuenta Meta', 'Spend', 'Anuncios',
+        'Anuncios con evidencia', 'Leads observados',
+        'Sucursales evidencia', 'Impresiones', 'Clicks',
+        'Desde', 'Hasta',
+      ],
+      detail.rows.map((row) => [
+        row.assignment_status,
+        row.sucursal,
+        row.campaign_id,
+        row.campaign_name,
+        row.account_id,
+        row.account_name,
+        row.spend,
+        row.ads_count,
+        row.matched_ads_count,
+        row.meta_observed_leads,
+        row.evidence_branch_ids.join(', '),
+        row.impressions,
+        row.clicks,
+        row.date_from,
+        row.date_to,
+      ]),
+      [7],
+    );
+    await this.downloadWorkbook(
+      workbook,
+      [
+        'marketing_inversion',
+        detail.month,
+        this.resolveFunnelScopeName(detail.filters.sucursal_id),
+      ].join('_') + '.xlsx',
+    );
+  }
+
+  async exportLeadsDetail(
+    detail: MarketingLeadsDetailResponse,
+  ): Promise<void> {
+    if (
+      detail.summary.leads !== null
+      && detail.rows.length !== detail.summary.leads
+    ) {
+      throw new Error('El detalle de leads no reconcilia.');
+    }
+
+    const workbook = this.createWorkbook();
+    this.buildSimpleSummarySheet(
+      workbook,
+      'Detalle de leads',
+      [
+        ['Mes', detail.month],
+        ['Alcance', this.resolveFunnelScopeName(detail.filters.sucursal_id)],
+        ['iVentas sync run', detail.source.iventas_sync_run_id ?? '—'],
+        ['Periodo', `${detail.source.date_from} a ${detail.source.date_to}`],
+        ['Leads', detail.summary.leads ?? '—'],
+      ],
+    );
+    this.buildSimpleDetailSheet(
+      workbook,
+      [
+        'Sucursal', 'Contact ID', 'Nombre', 'Teléfono',
+        'Primer mensaje', 'Fecha primer mensaje', 'Canal',
+        'Plataforma', 'Meta Ad IDs', 'Campañas', 'Anuncios',
+        'Enriquecimiento Meta',
+      ],
+      detail.rows.map((row) => [
+        row.sucursal,
+        row.contact_id,
+        row.name,
+        row.telefono,
+        row.first_message_at_local,
+        row.first_message_date_local,
+        row.channel_name,
+        row.channel_platform,
+        row.meta_ad_ids.join(', '),
+        row.campaign_names.join(', '),
+        row.ad_names.join(', '),
+        row.meta_enrichment_available ? 'Sí' : 'No',
+      ]),
+    );
+    await this.downloadWorkbook(
+      workbook,
+      [
+        'marketing_leads',
+        detail.month,
+        this.resolveFunnelScopeName(detail.filters.sucursal_id),
+      ].join('_') + '.xlsx',
+    );
+  }
+
+  async exportVisitorsDetail(
+    detail: MarketingVisitorsDetailResponse,
+  ): Promise<void> {
+    if (detail.rows.length !== detail.summary.unique_visitors) {
+      throw new Error('El detalle de visitantes no reconcilia.');
+    }
+
+    const workbook = this.createWorkbook();
+    this.buildSimpleSummarySheet(
+      workbook,
+      'Detalle de visitantes',
+      [
+        ['Mes', detail.month],
+        ['Alcance', this.resolveFunnelScopeName(detail.filters.sucursal_id)],
+        ['Snapshot Venta Total', detail.source.visit_snapshot_id ?? '—'],
+        ['Visitantes únicos', detail.summary.unique_visitors],
+        ['Eventos elegibles', detail.summary.eligible_visit_events],
+        [
+          'Eventos con teléfono',
+          detail.summary.visit_events_with_valid_phone,
+        ],
+        [
+          'Eventos sin teléfono',
+          detail.summary.visit_events_without_valid_phone,
+        ],
+        ['Cobertura', detail.summary.visit_phone_coverage_rate ?? '—'],
+      ],
+    );
+    this.buildSimpleDetailSheet(
+      workbook,
+      [
+        'Sucursal', 'Teléfono', 'Primera visita', 'Última visita',
+        'Eventos', 'Tipos de visita',
+      ],
+      detail.rows.map((row) => [
+        row.sucursal,
+        row.telefono,
+        row.first_visit_date,
+        row.last_visit_date,
+        row.event_count,
+        row.visit_types.join(', '),
+      ]),
+    );
+    await this.downloadWorkbook(
+      workbook,
+      [
+        'marketing_visitantes',
+        detail.month,
+        this.resolveFunnelScopeName(detail.filters.sucursal_id),
       ].join('_') + '.xlsx',
     );
   }
@@ -99,6 +302,80 @@ export class MarketingExcelExportService {
     workbook.modified = new Date();
 
     return workbook;
+  }
+
+  private buildSimpleSummarySheet(
+    workbook: Workbook,
+    title: string,
+    rows: Array<[string, ExcelDetailValue]>,
+  ): void {
+    const sheet = workbook.addWorksheet('Resumen');
+    this.addReportTitle(sheet, title, 'Suite Ultra · Marketing', 2);
+    rows.forEach((values, index) => {
+      const row = sheet.getRow(index + 4);
+      row.values = values;
+      row.getCell(1).font = {
+        bold: true,
+        color: { argb: this.gray500 },
+      };
+      const label = String(values[0]);
+      if (
+        label.includes('Inversión')
+        || label.includes('Meta total')
+        || label.includes('Sin asignar')
+        || label.includes('Conflicto')
+      ) {
+        row.getCell(2).numFmt = '$#,##0.00;[Red]-$#,##0.00';
+      } else if (label === 'Cobertura') {
+        row.getCell(2).numFmt = '0.0%';
+      }
+    });
+    sheet.getColumn(1).width = 32;
+    sheet.getColumn(2).width = 48;
+    this.applyBodyBorders(sheet, 4, rows.length + 3, 1, 2);
+  }
+
+  private buildSimpleDetailSheet(
+    workbook: Workbook,
+    headers: string[],
+    values: ExcelDetailValue[][],
+    currencyColumns: number[] = [],
+  ): void {
+    const sheet = workbook.addWorksheet('Detalle', {
+      views: [{ state: 'frozen', ySplit: 1 }],
+    });
+    const header = sheet.getRow(1);
+    header.values = headers;
+    this.styleHeaderRow(header);
+    values.forEach((rowValues, index) => {
+      const row = sheet.getRow(index + 2);
+      row.values = rowValues;
+      if (index % 2 === 1) {
+        this.applyAlternateFill(row);
+      }
+    });
+    sheet.autoFilter = {
+      from: { row: 1, column: 1 },
+      to: {
+        row: Math.max(values.length + 1, 1),
+        column: headers.length,
+      },
+    };
+    headers.forEach((_value, index) => {
+      sheet.getColumn(index + 1).width = 22;
+    });
+    this.applyColumnFormat(
+      sheet,
+      currencyColumns,
+      '$#,##0.00;[Red]-$#,##0.00',
+    );
+    this.applyBodyBorders(
+      sheet,
+      2,
+      values.length + 1,
+      1,
+      headers.length,
+    );
   }
 
   private buildDashboardSummarySheet(
@@ -459,6 +736,7 @@ export class MarketingExcelExportService {
   private buildCohortSummarySheet(
     workbook: Workbook,
     detail: MarketingAttributionDetailResponse,
+    focus: 'sales' | 'revenue',
   ): void {
     const sheet = workbook.addWorksheet(
       'Resumen cohorte',
@@ -466,7 +744,9 @@ export class MarketingExcelExportService {
 
     this.addReportTitle(
       sheet,
-      'Ventas atribuidas',
+      focus === 'revenue'
+        ? 'Ingreso atribuido'
+        : 'Ventas atribuidas',
       'Resumen de cohorte',
       3,
     );
@@ -1132,6 +1412,14 @@ export class MarketingExcelExportService {
       detail.rows[0]?.sucursal ||
       `Sucursal ${detail.filters.sucursal_id}`
     );
+  }
+
+  private resolveFunnelScopeName(
+    sucursalId: number | null,
+  ): string {
+    return sucursalId === null
+      ? 'global'
+      : `sucursal-${sucursalId}`;
   }
 
   private parseIsoDate(value: string): Date {

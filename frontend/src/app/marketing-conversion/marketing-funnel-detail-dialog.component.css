@@ -1,0 +1,29 @@
+.detail-summary {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.detail-table--funnel {
+  min-width: 980px;
+}
+
+.assignment-status {
+  color: #166534;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.assignment-status--warning {
+  color: #b42318;
+}
+
+mat-paginator {
+  border-top: 1px solid #e2e8f0;
+}
+
+@media (max-width: 720px) {
+  .detail-table--funnel {
+    min-width: 820px;
+  }
+}

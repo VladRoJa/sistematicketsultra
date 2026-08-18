@@ -10,6 +10,7 @@ from app.services.marketing_meta_dashboard_service import (
     build_canonical_meta_run_statement,
     build_iventas_campaign_evidence_statement,
     read_meta_dashboard_investment_data,
+    serialize_meta_investment_detail,
 )
 
 
@@ -31,9 +32,21 @@ def test_campaign_with_multiple_ads_and_leads_spends_once():
             {"campaign_id": "c1", "ad_id": "a2", "spend": "4.75"},
         ],
         [
-            {"meta_ad_id": "a1", "sucursal_id": 7},
-            {"meta_ad_id": "a1", "sucursal_id": 7},
-            {"meta_ad_id": "a2", "sucursal_id": 7},
+            {
+                "meta_ad_id": "a1",
+                "sucursal_id": 7,
+                "iventas_contact_row_id": 101,
+            },
+            {
+                "meta_ad_id": "a1",
+                "sucursal_id": 7,
+                "iventas_contact_row_id": 102,
+            },
+            {
+                "meta_ad_id": "a2",
+                "sucursal_id": 7,
+                "iventas_contact_row_id": 101,
+            },
         ],
     )
 
@@ -41,6 +54,9 @@ def test_campaign_with_multiple_ads_and_leads_spends_once():
     assert result.assigned_spend == Decimal("15.00")
     assert result.branch_spend == {7: Decimal("15.00")}
     assert result.campaigns_assigned == 1
+    assert len(result.campaign_rows) == 1
+    assert result.campaign_rows[0].meta_observed_leads == 2
+    assert result.campaign_rows[0].ads_count == 2
 
 
 def test_ad_without_leads_is_included_when_campaign_resolves():
@@ -49,7 +65,13 @@ def test_ad_without_leads_is_included_when_campaign_resolves():
             {"campaign_id": "c1", "ad_id": "a1", "spend": "10"},
             {"campaign_id": "c1", "ad_id": "a2", "spend": "6"},
         ],
-        [{"meta_ad_id": "a1", "sucursal_id": 3}],
+        [
+            {
+                "meta_ad_id": "a1",
+                "sucursal_id": 3,
+                "iventas_contact_row_id": 201,
+            }
+        ],
     )
 
     assert result.branch_spend == {3: Decimal("16")}
@@ -71,8 +93,16 @@ def test_campaign_with_two_branches_is_conflict_without_split():
     result = _aggregate(
         [{"campaign_id": "c1", "ad_id": "a1", "spend": "20"}],
         [
-            {"meta_ad_id": "a1", "sucursal_id": 1},
-            {"meta_ad_id": "a1", "sucursal_id": 2},
+            {
+                "meta_ad_id": "a1",
+                "sucursal_id": 1,
+                "iventas_contact_row_id": 301,
+            },
+            {
+                "meta_ad_id": "a1",
+                "sucursal_id": 2,
+                "iventas_contact_row_id": 302,
+            },
         ],
     )
 
@@ -191,6 +221,7 @@ def test_matching_meta_and_iventas_windows_assign_investment():
                     {
                         "meta_ad_id": "a1",
                         "sucursal_id": 7,
+                        "iventas_contact_row_id": 401,
                     }
                 ],
             ]
@@ -267,6 +298,7 @@ def test_meta_and_iventas_date_window_mismatch_does_not_assign_investment():
     assert result.campaigns_assigned is None
     assert result.campaigns_unassigned is None
     assert result.campaigns_conflict is None
+    assert result.campaign_rows == ()
 
 
 def test_canonical_meta_statement_requires_completed_canonical_period():
@@ -302,3 +334,96 @@ def test_iventas_evidence_statement_uses_only_exact_run_and_lead_tags():
     assert "first_message_at_utc is not null" in sql
     assert "tag_kind = 'meta_ad'" in sql
     assert "meta_ad_id is not null" in sql
+
+
+def test_global_detail_rows_reconcile_all_campaign_statuses():
+    result = _aggregate(
+        [
+            {"campaign_id": "assigned", "ad_id": "a1", "spend": "10"},
+            {"campaign_id": "unassigned", "ad_id": "a2", "spend": "4"},
+            {"campaign_id": "conflict", "ad_id": "a3", "spend": "6"},
+        ],
+        [
+            {
+                "meta_ad_id": "a1",
+                "sucursal_id": 1,
+                "iventas_contact_row_id": 1,
+            },
+            {
+                "meta_ad_id": "a3",
+                "sucursal_id": 1,
+                "iventas_contact_row_id": 2,
+            },
+            {
+                "meta_ad_id": "a3",
+                "sucursal_id": 2,
+                "iventas_contact_row_id": 3,
+            },
+        ],
+    )
+
+    detail = serialize_meta_investment_detail(
+        month="2026-08",
+        scope={"type": "GLOBAL", "branch_ids": [1, 2]},
+        sucursal_id=None,
+        meta_data=result,
+        selected_branch_ids=(1, 2),
+        branch_names={1: "Uno", 2: "Dos"},
+        expose_global_totals=True,
+    )
+
+    spend_by_status = {
+        status: sum(
+            row["spend"]
+            for row in detail["rows"]
+            if row["assignment_status"] == status
+        )
+        for status in ("ASSIGNED", "UNASSIGNED", "CONFLICT")
+    }
+    assert detail["summary"]["card_investment"] == 10.0
+    assert detail["summary"]["total_meta_spend"] == 20.0
+    assert spend_by_status == {
+        "ASSIGNED": 10.0,
+        "UNASSIGNED": 4.0,
+        "CONFLICT": 6.0,
+    }
+
+
+def test_restricted_detail_hides_campaigns_and_corporate_totals():
+    result = _aggregate(
+        [
+            {"campaign_id": "branch-1", "ad_id": "a1", "spend": "10"},
+            {"campaign_id": "branch-2", "ad_id": "a2", "spend": "8"},
+            {"campaign_id": "unassigned", "ad_id": "a3", "spend": "4"},
+        ],
+        [
+            {
+                "meta_ad_id": "a1",
+                "sucursal_id": 1,
+                "iventas_contact_row_id": 1,
+            },
+            {
+                "meta_ad_id": "a2",
+                "sucursal_id": 2,
+                "iventas_contact_row_id": 2,
+            },
+        ],
+    )
+
+    detail = serialize_meta_investment_detail(
+        month="2026-08",
+        scope={"type": "PRIMARY_BRANCH", "branch_ids": [1]},
+        sucursal_id=None,
+        meta_data=result,
+        selected_branch_ids=(1,),
+        branch_names={1: "Uno"},
+        expose_global_totals=False,
+    )
+
+    assert [row["campaign_id"] for row in detail["rows"]] == [
+        "branch-1"
+    ]
+    assert detail["summary"]["card_investment"] == 10.0
+    assert detail["summary"]["total_meta_spend"] is None
+    assert detail["summary"]["unassigned_spend"] is None
+    assert detail["summary"]["conflict_spend"] is None

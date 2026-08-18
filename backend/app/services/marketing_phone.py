@@ -29,3 +29,10 @@ def normalize_member_phone(
         return direct_phone
 
     return normalize_phone(f"{lada or ''}{telefono or ''}")
+
+
+def mask_phone(raw_value: Any) -> str:
+    digits = re.sub(r"\D", "", str(raw_value or ""))
+    if not digits:
+        return "Sin teléfono"
+    return f"*** *** {digits[-4:]}"

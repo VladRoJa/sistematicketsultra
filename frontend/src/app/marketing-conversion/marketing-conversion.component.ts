@@ -37,21 +37,30 @@ import {
   MarketingMetaSummaryMetadata,
   MarketingMetrics,
   MarketingMonthlyInput,
+  MarketingFunnelDetailKind,
   MarketingSummaryMetrics,
 } from './marketing.models';
 import {
   MarketingAttributionDetailDialogComponent,
 } from './marketing-attribution-detail-dialog.component';
 import {
+  MarketingFunnelDetailDialogComponent,
+} from './marketing-funnel-detail-dialog.component';
+import {
   MarketingExcelExportService,
 } from './marketing-excel-export.service';
 import { MarketingService } from './marketing.service';
+
+type MarketingPrimaryDetailKind =
+  | MarketingFunnelDetailKind
+  | 'sales'
+  | 'revenue';
 
 interface MarketingMetricCard {
   label: string;
   value: string;
   supportingText: string;
-  opensAttributionDetail?: boolean;
+  detailKind?: MarketingPrimaryDetailKind;
 }
 
 interface MarketingBranchView extends MarketingBranchMetrics {
@@ -293,11 +302,11 @@ export class MarketingConversionComponent implements OnInit {
   }
 
   openPrimaryCardDetail(card: MarketingMetricCard): void {
-    if (!card.opensAttributionDetail) {
+    if (!card.detailKind) {
       return;
     }
 
-    this.openAttributionDetail();
+    this.openMarketingDetail(card.detailKind);
   }
 
   handlePrimaryCardKeydown(
@@ -305,24 +314,49 @@ export class MarketingConversionComponent implements OnInit {
     card: MarketingMetricCard,
   ): void {
     if (
-      !card.opensAttributionDetail ||
+      !card.detailKind ||
       (event.key !== 'Enter' && event.key !== ' ')
     ) {
       return;
     }
 
     event.preventDefault();
-    this.openAttributionDetail();
+    this.openMarketingDetail(card.detailKind);
   }
 
   openAttributionDetail(
     branchId?: number,
     branchName?: string,
+    focus: 'sales' | 'revenue' = 'sales',
   ): void {
     this.dialog.open(
       MarketingAttributionDetailDialogComponent,
       {
         data: {
+          month: this.selectedMonth,
+          branchId,
+          branchName,
+          focus,
+        },
+        width: 'min(1240px, 96vw)',
+        maxWidth: '96vw',
+        maxHeight: '92vh',
+        autoFocus: false,
+        restoreFocus: true,
+      },
+    );
+  }
+
+  openFunnelDetail(
+    kind: MarketingFunnelDetailKind,
+    branchId?: number,
+    branchName?: string,
+  ): void {
+    this.dialog.open(
+      MarketingFunnelDetailDialogComponent,
+      {
+        data: {
+          kind,
           month: this.selectedMonth,
           branchId,
           branchName,
@@ -334,6 +368,16 @@ export class MarketingConversionComponent implements OnInit {
         restoreFocus: true,
       },
     );
+  }
+
+  private openMarketingDetail(
+    kind: MarketingPrimaryDetailKind,
+  ): void {
+    if (kind === 'sales' || kind === 'revenue') {
+      this.openAttributionDetail(undefined, undefined, kind);
+      return;
+    }
+    this.openFunnelDetail(kind);
   }
 
   openInputEditor(): void {
@@ -515,6 +559,7 @@ export class MarketingConversionComponent implements OnInit {
         supportingText: metrics.meta.available
           ? 'Meta canónico · campañas asignadas por evidencia iVentas'
           : 'Meta canónico no disponible',
+        detailKind: 'investment',
       },
       {
         label: 'Leads',
@@ -522,23 +567,25 @@ export class MarketingConversionComponent implements OnInit {
         supportingText: metrics.iventas.available
           ? 'iVentas canónico · firstMessageAt + META_AD'
           : 'iVentas canónico no disponible',
+        detailKind: 'leads',
       },
       {
         label: 'Visitantes',
         value: this.formatInteger(metrics.visits),
         supportingText: 'Teléfonos únicos elegibles',
+        detailKind: 'visitors',
       },
       {
         label: 'Ventas atribuidas',
         value: this.formatInteger(metrics.sales),
         supportingText: 'Abrir conciliación venta por venta',
-        opensAttributionDetail: true,
+        detailKind: 'sales',
       },
       {
         label: 'Ingreso atribuido',
         value: this.formatCurrency(metrics.sales_revenue),
         supportingText: 'Abrir composición del ingreso',
-        opensAttributionDetail: true,
+        detailKind: 'revenue',
       },
     ];
   }

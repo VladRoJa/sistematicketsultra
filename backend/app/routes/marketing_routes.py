@@ -14,6 +14,8 @@ from app.services.marketing_access import (
 from app.services.marketing_dashboard_service import (
     build_marketing_attribution_detail,
     build_marketing_dashboard,
+    build_marketing_investment_detail,
+    build_marketing_visitors_detail,
     load_visible_marketing_branches,
 )
 from app.services.marketing_inputs_service import (
@@ -24,6 +26,9 @@ from app.services.marketing_inputs_service import (
     serialize_marketing_input,
     upsert_marketing_input,
     validate_input_payload,
+)
+from app.services.marketing_leads_detail_service import (
+    build_marketing_leads_detail,
 )
 
 
@@ -140,6 +145,94 @@ def get_marketing_attributions_endpoint():
                 "message": (
                     "Falló la consulta del detalle "
                     "de ventas atribuidas."
+                ),
+            }
+        ), 500
+
+
+@marketing_bp.get("/investment-detail")
+@jwt_required()
+def get_marketing_investment_detail_endpoint():
+    try:
+        _, access = _resolve_request_access()
+        result = build_marketing_investment_detail(
+            month=request.args.get("month", ""),
+            access=access,
+            sucursal_id=_parse_optional_branch_id(),
+        )
+        return jsonify(result), 200
+    except MarketingAuthorizationError as exc:
+        return jsonify(
+            {"status": "error", "message": str(exc)}
+        ), 403
+    except MarketingInputValidationError as exc:
+        return jsonify(
+            {"status": "error", "message": str(exc)}
+        ), 400
+    except Exception:
+        return jsonify(
+            {
+                "status": "error",
+                "message": (
+                    "Falló la consulta del detalle de inversión."
+                ),
+            }
+        ), 500
+
+
+@marketing_bp.get("/leads-detail")
+@jwt_required()
+def get_marketing_leads_detail_endpoint():
+    try:
+        _, access = _resolve_request_access()
+        result = build_marketing_leads_detail(
+            month=request.args.get("month", ""),
+            access=access,
+            sucursal_id=_parse_optional_branch_id(),
+        )
+        return jsonify(result), 200
+    except MarketingAuthorizationError as exc:
+        return jsonify(
+            {"status": "error", "message": str(exc)}
+        ), 403
+    except MarketingInputValidationError as exc:
+        return jsonify(
+            {"status": "error", "message": str(exc)}
+        ), 400
+    except Exception:
+        return jsonify(
+            {
+                "status": "error",
+                "message": "Falló la consulta del detalle de leads.",
+            }
+        ), 500
+
+
+@marketing_bp.get("/visitors-detail")
+@jwt_required()
+def get_marketing_visitors_detail_endpoint():
+    try:
+        _, access = _resolve_request_access()
+        result = build_marketing_visitors_detail(
+            month=request.args.get("month", ""),
+            access=access,
+            sucursal_id=_parse_optional_branch_id(),
+        )
+        return jsonify(result), 200
+    except MarketingAuthorizationError as exc:
+        return jsonify(
+            {"status": "error", "message": str(exc)}
+        ), 403
+    except MarketingInputValidationError as exc:
+        return jsonify(
+            {"status": "error", "message": str(exc)}
+        ), 400
+    except Exception:
+        return jsonify(
+            {
+                "status": "error",
+                "message": (
+                    "Falló la consulta del detalle de visitantes."
                 ),
             }
         ), 500

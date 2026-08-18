@@ -134,16 +134,16 @@
           *ngFor="let card of primaryCards; let step = index"
           class="funnel-card"
           [class.funnel-card--interactive]="
-            card.opensAttributionDetail
+            card.detailKind
           "
           [attr.role]="
-            card.opensAttributionDetail ? 'button' : null
+            card.detailKind ? 'button' : null
           "
           [attr.tabindex]="
-            card.opensAttributionDetail ? 0 : null
+            card.detailKind ? 0 : null
           "
           [attr.aria-label]="
-            card.opensAttributionDetail
+            card.detailKind
               ? 'Abrir detalle de ' + card.label
               : null
           "
@@ -154,6 +154,9 @@
           <span class="metric-label">{{ card.label }}</span>
           <strong>{{ card.value }}</strong>
           <small>{{ card.supportingText }}</small>
+          <span *ngIf="card.detailKind" class="funnel-detail-action">
+            VER DETALLE
+          </span>
         </article>
       </div>
 
@@ -313,18 +316,46 @@
           <ng-container matColumnDef="investment">
             <th mat-header-cell *matHeaderCellDef>Inversión</th>
             <td mat-cell *matCellDef="let row">
-              {{ row.investment_display }}
+              <button
+                type="button"
+                class="metric-detail-link"
+                [attr.aria-label]="'Abrir inversión de ' + row.sucursal"
+                (click)="openFunnelDetail('investment', row.sucursal_id, row.sucursal)"
+              >
+                <span>{{ row.investment_display }}</span>
+                <mat-icon>open_in_new</mat-icon>
+              </button>
             </td>
           </ng-container>
 
           <ng-container matColumnDef="leads">
             <th mat-header-cell *matHeaderCellDef>Leads</th>
-            <td mat-cell *matCellDef="let row">{{ row.leads_display }}</td>
+            <td mat-cell *matCellDef="let row">
+              <button
+                type="button"
+                class="metric-detail-link"
+                [attr.aria-label]="'Abrir leads de ' + row.sucursal"
+                (click)="openFunnelDetail('leads', row.sucursal_id, row.sucursal)"
+              >
+                <span>{{ row.leads_display }}</span>
+                <mat-icon>open_in_new</mat-icon>
+              </button>
+            </td>
           </ng-container>
 
           <ng-container matColumnDef="visits">
             <th mat-header-cell *matHeaderCellDef>Visitantes</th>
-            <td mat-cell *matCellDef="let row">{{ row.visits_display }}</td>
+            <td mat-cell *matCellDef="let row">
+              <button
+                type="button"
+                class="metric-detail-link"
+                [attr.aria-label]="'Abrir visitantes de ' + row.sucursal"
+                (click)="openFunnelDetail('visitors', row.sucursal_id, row.sucursal)"
+              >
+                <span>{{ row.visits_display }}</span>
+                <mat-icon>open_in_new</mat-icon>
+              </button>
+            </td>
           </ng-container>
 
           <ng-container matColumnDef="sales">
@@ -339,7 +370,8 @@
                 (click)="
                   openAttributionDetail(
                     row.sucursal_id,
-                    row.sucursal
+                    row.sucursal,
+                    'sales'
                   )
                 "
               >
@@ -361,7 +393,8 @@
                 (click)="
                   openAttributionDetail(
                     row.sucursal_id,
-                    row.sucursal
+                    row.sucursal,
+                    'revenue'
                   )
                 "
               >

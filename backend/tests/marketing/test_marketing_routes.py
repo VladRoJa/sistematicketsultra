@@ -267,3 +267,99 @@ class TestMarketingRoutes:
             )
 
         assert response.status_code == 403
+
+    def test_investment_detail_endpoint_returns_200(self):
+        self._assert_detail_endpoint(
+            path="investment-detail",
+            service_name="build_marketing_investment_detail",
+        )
+
+    def test_leads_detail_endpoint_returns_200(self):
+        self._assert_detail_endpoint(
+            path="leads-detail",
+            service_name="build_marketing_leads_detail",
+        )
+
+    def test_visitors_detail_endpoint_returns_200(self):
+        self._assert_detail_endpoint(
+            path="visitors-detail",
+            service_name="build_marketing_visitors_detail",
+        )
+
+    def _assert_detail_endpoint(
+        self,
+        *,
+        path: str,
+        service_name: str,
+    ):
+        expected = {
+            "month": "2026-08",
+            "filters": {"sucursal_id": None},
+            "rows": [],
+        }
+        with (
+            patch(
+                "app.routes.marketing_routes."
+                "_get_current_marketing_user",
+                return_value=self.admin,
+            ),
+            patch(
+                f"app.routes.marketing_routes.{service_name}",
+                return_value=expected,
+            ),
+        ):
+            response = self.client.get(
+                f"/api/marketing/{path}?month=2026-08",
+                headers=self.headers,
+            )
+
+        assert response.status_code == 200
+        assert response.get_json() == expected
+
+    def test_detail_endpoint_rejects_invalid_branch_id(self):
+        with patch(
+            "app.routes.marketing_routes."
+            "_get_current_marketing_user",
+            return_value=self.admin,
+        ):
+            response = self.client.get(
+                "/api/marketing/leads-detail"
+                "?month=2026-08&sucursal_id=abc",
+                headers=self.headers,
+            )
+
+        assert response.status_code == 400
+
+    def test_detail_endpoint_returns_403_outside_scope(self):
+        from app.services.marketing_access import (
+            MarketingAuthorizationError,
+        )
+
+        with (
+            patch(
+                "app.routes.marketing_routes."
+                "_get_current_marketing_user",
+                return_value=self.admin,
+            ),
+            patch(
+                "app.routes.marketing_routes."
+                "build_marketing_visitors_detail",
+                side_effect=MarketingAuthorizationError(
+                    "La sucursal está fuera del alcance autorizado."
+                ),
+            ),
+        ):
+            response = self.client.get(
+                "/api/marketing/visitors-detail"
+                "?month=2026-08&sucursal_id=999",
+                headers=self.headers,
+            )
+
+        assert response.status_code == 403
+
+    def test_detail_endpoint_requires_jwt(self):
+        response = self.client.get(
+            "/api/marketing/investment-detail?month=2026-08"
+        )
+
+        assert response.status_code == 401

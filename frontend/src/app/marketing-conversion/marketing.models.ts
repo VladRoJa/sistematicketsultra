@@ -170,3 +170,132 @@ export interface MarketingAttributionDetailResponse {
   source: MarketingAttributionDetailSource;
   rows: MarketingAttributionDetailRow[];
 }
+
+export type MarketingFunnelDetailKind =
+  | 'investment'
+  | 'leads'
+  | 'visitors';
+
+export type MarketingInvestmentAssignmentStatus =
+  | 'ASSIGNED'
+  | 'UNASSIGNED'
+  | 'CONFLICT';
+
+export interface MarketingInvestmentDetailSummary {
+  card_investment: number | null;
+  total_meta_spend: number | null;
+  assigned_spend: number | null;
+  unassigned_spend: number | null;
+  conflict_spend: number | null;
+  campaigns_total: number | null;
+  campaigns_assigned: number | null;
+  campaigns_unassigned: number | null;
+  campaigns_conflict: number | null;
+}
+
+export interface MarketingInvestmentDetailSource {
+  available: boolean;
+  assignment_available: boolean;
+  meta_sync_run_id: number | null;
+  iventas_sync_run_id: number | null;
+  date_from: string | null;
+  date_to: string | null;
+}
+
+export interface MarketingInvestmentDetailRow {
+  campaign_id: string;
+  campaign_name: string | null;
+  account_id: string | null;
+  account_name: string | null;
+  spend: number;
+  ads_count: number;
+  matched_ads_count: number;
+  meta_observed_leads: number;
+  assignment_status: MarketingInvestmentAssignmentStatus;
+  sucursal_id: number | null;
+  sucursal: string | null;
+  evidence_branch_ids: number[];
+  date_from: string | null;
+  date_to: string | null;
+  impressions: number;
+  clicks: number;
+}
+
+export interface MarketingInvestmentDetailResponse {
+  month: string;
+  scope: MarketingScope;
+  filters: { sucursal_id: number | null };
+  summary: MarketingInvestmentDetailSummary;
+  source: MarketingInvestmentDetailSource;
+  rows: MarketingInvestmentDetailRow[];
+}
+
+export interface MarketingLeadsDetailSummary {
+  leads: number | null;
+}
+
+export interface MarketingLeadsDetailSource {
+  available: boolean;
+  iventas_sync_run_id: number | null;
+  period_key: string;
+  date_from: string;
+  date_to: string;
+  meta_sync_run_id: number | null;
+  meta_enrichment_available: boolean;
+}
+
+export interface MarketingLeadDetailRow {
+  sucursal_id: number;
+  sucursal: string;
+  contact_id: string;
+  name: string | null;
+  telefono: string;
+  first_message_at_local: string | null;
+  first_message_date_local: string | null;
+  channel_name: string | null;
+  channel_platform: string | null;
+  meta_ad_ids: string[];
+  campaign_names: string[];
+  ad_names: string[];
+  meta_enrichment_available: boolean;
+}
+
+export interface MarketingLeadsDetailResponse {
+  month: string;
+  scope: MarketingScope;
+  filters: { sucursal_id: number | null };
+  summary: MarketingLeadsDetailSummary;
+  source: MarketingLeadsDetailSource;
+  rows: MarketingLeadDetailRow[];
+}
+
+export interface MarketingVisitorsDetailSummary {
+  unique_visitors: number;
+  eligible_visit_events: number;
+  visit_events_with_valid_phone: number;
+  visit_events_without_valid_phone: number;
+  visit_phone_coverage_rate: number | null;
+}
+
+export interface MarketingVisitorsDetailSource {
+  visit_snapshot_id: number | null;
+}
+
+export interface MarketingVisitorDetailRow {
+  sucursal_id: number;
+  sucursal: string;
+  telefono: string;
+  first_visit_date: string;
+  last_visit_date: string;
+  event_count: number;
+  visit_types: string[];
+}
+
+export interface MarketingVisitorsDetailResponse {
+  month: string;
+  scope: MarketingScope;
+  filters: { sucursal_id: number | null };
+  summary: MarketingVisitorsDetailSummary;
+  source: MarketingVisitorsDetailSource;
+  rows: MarketingVisitorDetailRow[];
+}

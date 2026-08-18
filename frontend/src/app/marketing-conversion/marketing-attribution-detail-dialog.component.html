@@ -22,17 +22,13 @@
         (click)="exportCohort()"
       >
         <mat-icon>download</mat-icon>
-        {{
-          exportingCohort
-            ? 'Generando…'
-            : 'Exportar cohorte'
-        }}
+        {{ exportButtonLabel }}
       </button>
 
       <button
         mat-icon-button
         type="button"
-        aria-label="Cerrar detalle de ventas atribuidas"
+        [attr.aria-label]="closeAriaLabel"
         (click)="close()"
       >
         <mat-icon>close</mat-icon>
@@ -47,7 +43,7 @@
       aria-live="polite"
     >
       <mat-spinner diameter="34"></mat-spinner>
-      <p>Cargando ventas atribuidas…</p>
+      <p>{{ loadingLabel }}</p>
     </section>
 
     <section
@@ -170,14 +166,14 @@
         *ngIf="rows.length === 0"
         class="empty-detail"
       >
-        No hay ventas atribuidas para este alcance.
+        {{ emptyLabel }}
       </p>
 
       <p
         *ngIf="rows.length > 0 && filteredRows.length === 0"
         class="empty-detail"
       >
-        No hay ventas que coincidan con los filtros.
+        {{ filteredEmptyLabel }}
       </p>
 
       <div
