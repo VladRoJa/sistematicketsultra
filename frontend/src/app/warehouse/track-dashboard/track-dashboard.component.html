@@ -149,7 +149,7 @@
             >
               {{ isLoadingMart ? 'Consultando...' : 'Consultar resultado' }}
             </button>
-            <button
+          <button
             *ngIf="canViewRegionalIntelligence()"
             type="button"
             class="track-intelligence-button"
@@ -157,6 +157,15 @@
           >
             <span class="track-intelligence-icon">🏆</span>
             <span>Inteligencia regional</span>
+          </button>
+          <button
+            *ngIf="canViewRegionalOperationalIntelligence()"
+            type="button"
+            class="track-intelligence-button"
+            (click)="goToRegionalOperationalIntelligence()"
+          >
+            <span class="track-intelligence-icon">◎</span>
+            <span>Seguimiento regional</span>
           </button>
             <button
   type="button"

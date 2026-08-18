@@ -28,6 +28,9 @@ from app.warehouse.services.track_daily_pipeline_service import (
 from app.warehouse.services.track_excel_export_service import (
     build_track_daily_mart_excel,
 )
+from app.warehouse.services.track_daily_query_version_service import (
+    resolve_effective_track_daily_version,
+)
 from app.warehouse.services.track_source_agregadoras_daily_service import (
     resolve_exact_agregadoras_snapshot_status_for_date,
 )
@@ -128,137 +131,6 @@ def _serialize_decimal(value: Decimal | None) -> float | None:
 def _today_tijuana() -> date:
     return datetime.now(ZoneInfo("America/Tijuana")).date()
 
-def _resolve_track_daily_version_type_candidates(
-    *,
-    generation_mode: str,
-) -> list[str]:
-    if generation_mode == "manual_preview":
-        return ["preview_operativo"]
-
-    if generation_mode == "official_closed_day":
-        return [
-            "cierre_canonico",
-            "base_nocturna_canonica",
-        ]
-
-    raise ValueError(f"generation_mode inválido: {generation_mode!r}")
-
-def _track_daily_version_has_mart_rows(*, version_id: int) -> bool:
-    return (
-        db.session.query(TrackDailyMartORM.id)
-        .filter(TrackDailyMartORM.track_daily_version_id == version_id)
-        .first()
-        is not None
-    )
-
-
-def _resolve_replaced_track_daily_version_with_rows(version: Any):
-    if version is None or not version.replaces_version_id:
-        return None
-
-    previous_version = db.session.get(
-        type(version),
-        version.replaces_version_id,
-    )
-
-    if previous_version is None:
-        return None
-
-    if previous_version.track_date != version.track_date:
-        return None
-
-    if previous_version.version_type != version.version_type:
-        return None
-
-    if previous_version.status not in {"success", "replaced"}:
-        return None
-
-    if not _track_daily_version_has_mart_rows(
-        version_id=previous_version.id,
-    ):
-        return None
-
-    return previous_version
-
-
-def _resolve_current_track_daily_version_for_query(
-    *,
-    track_date: date,
-    generation_mode: str,
-):
-    for version_type in _resolve_track_daily_version_type_candidates(
-        generation_mode=generation_mode,
-    ):
-        version = get_current_track_daily_version(
-            track_date=track_date,
-            version_type=version_type,
-        )
-
-        if version is None:
-            continue
-
-        if (
-            version.status == "success"
-            and _track_daily_version_has_mart_rows(version_id=version.id)
-        ):
-            return version
-
-        fallback_version = _resolve_replaced_track_daily_version_with_rows(
-            version,
-        )
-
-        if fallback_version is not None:
-            return fallback_version
-
-    return None
-
-def _get_track_local_today() -> date:
-    return datetime.now(ZoneInfo("America/Tijuana")).date()
-
-
-def _resolve_track_daily_history_version_type_candidates(
-    *,
-    track_date: date,
-    generation_mode: str,
-) -> list[str]:
-    if generation_mode == "official_closed_day":
-        return [
-            "cierre_canonico",
-            "base_nocturna_canonica",
-        ]
-
-    if generation_mode == "manual_preview":
-        if track_date == _get_track_local_today():
-            return ["preview_operativo"]
-
-        return [
-            "cierre_canonico",
-            "base_nocturna_canonica",
-        ]
-
-    raise ValueError(f"generation_mode inválido: {generation_mode!r}")
-
-
-def _resolve_track_daily_history_version_for_query(
-    *,
-    track_date: date,
-    generation_mode: str,
-):
-    for version_type in _resolve_track_daily_history_version_type_candidates(
-        track_date=track_date,
-        generation_mode=generation_mode,
-    ):
-        version = get_current_track_daily_version(
-            track_date=track_date,
-            version_type=version_type,
-        )
-
-        if version is not None and version.status == "success":
-            return version
-
-    return None
-
-
 def _resolve_track_branch_history_rows(
     *,
     sucursal_canon: str,
@@ -268,7 +140,7 @@ def _resolve_track_branch_history_rows(
     resolved_rows: list[TrackDailyMartORM] = []
 
     for candidate_date in candidate_dates:
-        resolved_version = _resolve_track_daily_history_version_for_query(
+        resolved_version = resolve_effective_track_daily_version(
             track_date=candidate_date,
             generation_mode=generation_mode,
         )
@@ -462,8 +334,6 @@ def run_track_daily_pipeline_endpoint():
                 "detail": str(exc),
             }
         ), 500
-
-
 
 @track_bp.route("/canonical-close-status", methods=["GET"])
 @jwt_required()
@@ -793,7 +663,7 @@ def get_track_daily_mart_endpoint():
                 }
             ), 400
 
-        resolved_version = _resolve_current_track_daily_version_for_query(
+        resolved_version = resolve_effective_track_daily_version(
             track_date=track_date,
             generation_mode=generation_mode,
         )
@@ -892,7 +762,7 @@ def export_track_daily_mart_xlsx_endpoint():
                 }
             ), 400
 
-        resolved_version = _resolve_current_track_daily_version_for_query(
+        resolved_version = resolve_effective_track_daily_version(
             track_date=track_date,
             generation_mode=generation_mode,
         )
@@ -1119,5 +989,4 @@ def get_track_branch_history_endpoint():
                 "message": "Error consultando historial de Track por sucursal.",
                 "detail": str(exc),
             }
-        ), 500       
-        
+        ), 500

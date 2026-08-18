@@ -6,6 +6,7 @@ import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../services/auth.service';
+import { canAccessTrackRegionalOperational } from '../track-intelligence-regional-operational/track-regional-operational-access.guard';
 import {
   TrackService,
   TrackGenerationMode,
@@ -980,6 +981,10 @@ canViewRegionalIntelligence(): boolean {
   ].includes(rol);
 }
 
+canViewRegionalOperationalIntelligence(): boolean {
+  return canAccessTrackRegionalOperational(this.authService.getUser());
+}
+
 private compareTrackSortValues(
   leftValue: string | number,
   rightValue: string | number,
@@ -1480,6 +1485,18 @@ goToRegionalIntelligence(): void {
       generation_mode: this.generationMode,
     },
   });
+}
+
+goToRegionalOperationalIntelligence(): void {
+  this.router.navigate(
+    ['/warehouse/track-intelligence/regional-operational'],
+    {
+      queryParams: {
+        track_date: this.trackDate,
+        generation_mode: this.generationMode,
+      },
+    },
+  );
 }
 
 onTrackRowClicked(row: TrackViewRow): void {

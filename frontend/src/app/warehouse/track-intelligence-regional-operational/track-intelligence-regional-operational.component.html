@@ -1,0 +1,301 @@
+<div class="regional-operational-page">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">Track · seguimiento operativo</p>
+      <h1>Inteligencia regional V2</h1>
+      <p class="subtitle">
+        Ritmo mensual por sucursal, prioridades objetivas y consolidado regional.
+      </p>
+    </div>
+
+    <div class="header-controls">
+      <label class="date-field">
+        <span>Fecha Track</span>
+        <input type="date" [(ngModel)]="selectedTrackDate" />
+      </label>
+
+      <button
+        type="button"
+        class="primary-action"
+        (click)="loadOperationalDetail()"
+        [disabled]="isLoading"
+      >
+        {{ isLoading ? 'Consultando...' : 'Consultar' }}
+      </button>
+
+      <button
+        type="button"
+        class="secondary-action"
+        (click)="goToTrackDashboard()"
+      >
+        Volver al Track
+      </button>
+    </div>
+  </header>
+
+  <section class="version-strip" *ngIf="data">
+    <div>
+      <span>Fecha</span>
+      <strong>{{ data.track_date }}</strong>
+    </div>
+    <div>
+      <span>Modo</span>
+      <strong>{{ data.generation_mode }}</strong>
+    </div>
+    <div>
+      <span>Versión resuelta</span>
+      <strong *ngIf="data.resolved_version; else noVersion">
+        #{{ data.resolved_version.id }} · {{ data.resolved_version.version_type }}
+      </strong>
+      <ng-template #noVersion>
+        <strong>Sin versión disponible</strong>
+      </ng-template>
+    </div>
+  </section>
+
+  <section class="loading-state" *ngIf="isLoading">
+    <mat-spinner diameter="38"></mat-spinner>
+    <span>Cargando seguimiento regional...</span>
+  </section>
+
+  <section class="error-state" *ngIf="errorMessage">
+    {{ errorMessage }}
+  </section>
+
+  <ng-container *ngIf="!isLoading && data">
+    <section class="content-section priorities-section">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">Atención primero</p>
+          <h2>Prioridades del día</h2>
+        </div>
+        <p>
+          Listas separadas por KPI; no se mezclan mediante un score artificial.
+        </p>
+      </div>
+
+      <div class="empty-state" *ngIf="!hasAnyPriorities()">
+        No hay sucursales debajo del ritmo ni límites de bajas excedidos para este corte.
+      </div>
+
+      <div class="priority-groups" *ngIf="hasAnyPriorities()">
+        <article
+          class="priority-group"
+          *ngFor="let group of getPriorityGroups()"
+        >
+          <div class="priority-group__heading">
+            <h3>{{ group.metric_label }}</h3>
+            <span>{{ group.items.length }} caso(s)</span>
+          </div>
+
+          <div class="priority-list" *ngIf="group.items.length; else noGroupItems">
+            <div
+              class="priority-item"
+              *ngFor="let item of group.items; let position = index"
+            >
+              <span class="priority-position">{{ position + 1 }}</span>
+              <div class="priority-identity">
+                <strong>{{ item.sucursal_name }}</strong>
+                <span>{{ item.region_label }}</span>
+              </div>
+              <div class="priority-value">
+                <strong>{{ getPriorityMainValue(item) }}</strong>
+                <mat-progress-bar
+                  mode="determinate"
+                  [value]="getPriorityProgressValue(item)"
+                  [attr.aria-label]="getPriorityProgressLabel(item)"
+                  [attr.aria-valuetext]="getPriorityProgressLabel(item)"
+                ></mat-progress-bar>
+                <span>{{ getPriorityProgressLabel(item) }}</span>
+                <span
+                  *ngIf="getPriorityMonthlyProgressLabel(item) as monthlyProgressLabel"
+                >
+                  {{ monthlyProgressLabel }}
+                </span>
+                <span>{{ getPriorityGap(item) }}</span>
+              </div>
+              <span [class]="getStatusClass(item.status)">
+                {{ getStatusLabel(item.status) }}
+              </span>
+            </div>
+          </div>
+
+          <ng-template #noGroupItems>
+            <p class="group-empty">Sin casos para este KPI.</p>
+          </ng-template>
+        </article>
+      </div>
+    </section>
+
+    <section class="content-section regions-overview">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">Consolidado</p>
+          <h2>Regiones</h2>
+        </div>
+        <p>El agregado no elimina el detalle individual de las sucursales.</p>
+      </div>
+
+      <div class="table-scroll">
+        <table class="metrics-table region-table">
+          <thead>
+            <tr>
+              <th>Región</th>
+              <th>Sucursales</th>
+              <th>Clientes nuevos</th>
+              <th>Reactivaciones</th>
+              <th>Bajas</th>
+              <th>Domiciliados</th>
+              <th>Ingreso / FAYCGO</th>
+              <th>Usuarios</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let region of getRegions(); trackBy: trackRegion">
+              <td class="identity-cell">
+                <strong>{{ region.region_label }}</strong>
+              </td>
+              <td>{{ region.summary.total_branches }}</td>
+              <td>
+                <strong>{{ getPaceSummary(region.summary.metrics.clientes_nuevos) }}</strong>
+                <span>{{ getPaceGap(region.summary.metrics.clientes_nuevos) }}</span>
+              </td>
+              <td>
+                <strong>{{ getPaceSummary(region.summary.metrics.reactivaciones) }}</strong>
+                <span>{{ getPaceGap(region.summary.metrics.reactivaciones) }}</span>
+              </td>
+              <td>
+                <strong>{{ getLimitSummary(region.summary.metrics.bajas) }}</strong>
+                <span>{{ formatPercent(region.summary.metrics.bajas.limit_usage_pct) }}</span>
+              </td>
+              <td>
+                <strong>{{ getTargetSummary(region.summary.metrics.domiciliados) }}</strong>
+                <span>{{ formatPercent(region.summary.metrics.domiciliados.compliance_pct) }}</span>
+              </td>
+              <td>
+                <strong>{{ getTargetSummary(region.summary.metrics.ingreso, true) }}</strong>
+                <span>{{ formatPercent(region.summary.metrics.ingreso.compliance_pct) }}</span>
+              </td>
+              <td>
+                <strong>{{ getUsersSummary(region.summary.metrics.usuarios) }}</strong>
+                <span>
+                  Brecha {{ formatSignedNumber(region.summary.metrics.usuarios.users_gap) }}
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="empty-state" *ngIf="!getRegions().length">
+        No hay filas regionales para la versión seleccionada.
+      </div>
+    </section>
+
+    <section class="content-section branch-detail-section">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">Lectura accionable</p>
+          <h2>Detalle por región y sucursal</h2>
+        </div>
+        <p>Los estados de ritmo son matemáticos; no aplican tolerancias ocultas.</p>
+      </div>
+
+      <mat-accordion multi>
+        <mat-expansion-panel
+          *ngFor="let region of getRegions(); trackBy: trackRegion"
+          class="region-panel"
+        >
+          <mat-expansion-panel-header>
+            <mat-panel-title>{{ region.region_label }}</mat-panel-title>
+            <mat-panel-description>
+              {{ region.summary.total_branches }} sucursal(es)
+            </mat-panel-description>
+          </mat-expansion-panel-header>
+
+          <div class="table-scroll">
+            <table class="metrics-table branch-table">
+              <thead>
+                <tr>
+                  <th>Sucursal</th>
+                  <th>Clientes nuevos</th>
+                  <th>Reactivaciones</th>
+                  <th>Bajas</th>
+                  <th>Domiciliados</th>
+                  <th>Ingreso / FAYCGO</th>
+                  <th>Tienda</th>
+                  <th>Brecha de usuarios</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let branch of region.branches; trackBy: trackBranch">
+                  <td class="identity-cell">
+                    <strong>{{ branch.sucursal_name }}</strong>
+                    <span>{{ branch.sucursal_canon }}</span>
+                  </td>
+                  <td>
+                    <strong>{{ getPaceSummary(branch.metrics.clientes_nuevos) }}</strong>
+                    <span>{{ getPaceGap(branch.metrics.clientes_nuevos) }}</span>
+                    <span [class]="getStatusClass(branch.metrics.clientes_nuevos.status)">
+                      {{ getStatusLabel(branch.metrics.clientes_nuevos.status) }}
+                    </span>
+                  </td>
+                  <td>
+                    <strong>{{ getPaceSummary(branch.metrics.reactivaciones) }}</strong>
+                    <span>{{ getPaceGap(branch.metrics.reactivaciones) }}</span>
+                    <span [class]="getStatusClass(branch.metrics.reactivaciones.status)">
+                      {{ getStatusLabel(branch.metrics.reactivaciones.status) }}
+                    </span>
+                  </td>
+                  <td>
+                    <strong>{{ getLimitSummary(branch.metrics.bajas) }}</strong>
+                    <span>{{ formatPercent(branch.metrics.bajas.limit_usage_pct) }} del límite</span>
+                    <span [class]="getStatusClass(branch.metrics.bajas.status)">
+                      {{ getStatusLabel(branch.metrics.bajas.status) }}
+                    </span>
+                  </td>
+                  <td>
+                    <strong>{{ getTargetSummary(branch.metrics.domiciliados) }}</strong>
+                    <span>{{ formatPercent(branch.metrics.domiciliados.compliance_pct) }}</span>
+                  </td>
+                  <td>
+                    <strong>{{ getTargetSummary(branch.metrics.ingreso, true) }}</strong>
+                    <span>{{ formatPercent(branch.metrics.ingreso.compliance_pct) }}</span>
+                    <span>{{ getIncomeProjectionLabel(branch.metrics.ingreso) }}</span>
+                  </td>
+                  <td>
+                    <strong>{{ getTargetSummary(branch.metrics.tienda, true) }}</strong>
+                    <span>{{ formatPercent(branch.metrics.tienda.compliance_pct) }}</span>
+                  </td>
+                  <td>
+                    <strong>{{ getUsersSummary(branch.metrics.usuarios) }}</strong>
+                    <span>
+                      Brecha {{ formatSignedNumber(branch.metrics.usuarios.users_gap) }}
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </mat-expansion-panel>
+      </mat-accordion>
+    </section>
+
+    <section class="content-section methodology-section">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">Auditable</p>
+          <h2>Metodología</h2>
+        </div>
+        <p>Reglas activas devueltas por el backend para este cálculo.</p>
+      </div>
+
+      <dl class="rules-list">
+        <div *ngFor="let rule of getBusinessRules()">
+          <dt>{{ rule.label }}</dt>
+          <dd>{{ rule.description }}</dd>
+        </div>
+      </dl>
+    </section>
+  </ng-container>
+</div>

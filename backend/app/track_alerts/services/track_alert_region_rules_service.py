@@ -17,6 +17,9 @@ from app.models.warehouse import (
     TrackBranchCatalogORM,
     TrackDailyMartORM,
 )
+from app.warehouse.services.track_daily_query_version_service import (
+    resolve_effective_track_daily_version,
+)
 
 
 @dataclass(frozen=True)
@@ -97,10 +100,28 @@ class TrackRegionDetailItem:
 def evaluate_regional_rankings(
     track_date: date,
     generation_mode: str = "manual_preview",
+    track_daily_version_id: int | None = None,
 ) -> dict[str, list[TrackRegionRankingItem]]:
+    resolved_version_id = track_daily_version_id
+
+    if resolved_version_id is None:
+        resolved_version = resolve_effective_track_daily_version(
+            track_date=track_date,
+            generation_mode=generation_mode,
+        )
+        resolved_version_id = (
+            resolved_version.id if resolved_version is not None else None
+        )
+
+    if resolved_version_id is None:
+        return {
+            "income_ranking": [],
+            "income_compliance_ranking": [],
+            "new_clients_ranking": [],
+        }
+
     joined_rows = _load_track_rows_with_region(
-        track_date=track_date,
-        generation_mode=generation_mode,
+        track_daily_version_id=resolved_version_id,
     )
 
     region_totals = _build_region_totals(joined_rows)
@@ -129,14 +150,33 @@ def get_regional_detail(
     track_date: date,
     generation_mode: str = "manual_preview",
 ) -> dict[str, Any]:
-    rankings = evaluate_regional_rankings(
+    resolved_version = resolve_effective_track_daily_version(
         track_date=track_date,
         generation_mode=generation_mode,
     )
 
-    joined_rows = _load_track_rows_with_region(
+    if resolved_version is None:
+        return {
+            "track_date": track_date.isoformat(),
+            "generation_mode": generation_mode,
+            "resolved_version": None,
+            "rankings": {
+                "income_compliance": [],
+                "income": [],
+                "new_clients": [],
+            },
+            "regions": [],
+            "business_rules": _get_regional_business_rules(),
+        }
+
+    rankings = evaluate_regional_rankings(
         track_date=track_date,
         generation_mode=generation_mode,
+        track_daily_version_id=resolved_version.id,
+    )
+
+    joined_rows = _load_track_rows_with_region(
+        track_daily_version_id=resolved_version.id,
     )
 
     region_totals = _build_region_totals(joined_rows)
@@ -229,6 +269,11 @@ def get_regional_detail(
     return {
         "track_date": track_date.isoformat(),
         "generation_mode": generation_mode,
+        "resolved_version": {
+            "id": resolved_version.id,
+            "version_type": resolved_version.version_type,
+            "status": resolved_version.status,
+        },
         "rankings": {
             "income_compliance": [
                 item.to_dict()
@@ -256,8 +301,7 @@ def get_regional_detail(
     }
 
 def _load_track_rows_with_region(
-    track_date: date,
-    generation_mode: str,
+    track_daily_version_id: int,
 ) -> list[tuple[TrackDailyMartORM, TrackBranchCatalogORM, SuiteRegionORM]]:
     return (
         db.session.query(
@@ -278,8 +322,8 @@ def _load_track_rows_with_region(
             SuiteRegionORM.id == SuiteSucursalRegionAssignmentORM.region_id,
         )
         .filter(
-            TrackDailyMartORM.track_date == track_date,
-            TrackDailyMartORM.generation_mode == generation_mode,
+            TrackDailyMartORM.track_daily_version_id
+            == track_daily_version_id,
             SuiteSucursalRegionAssignmentORM.is_current.is_(True),
             SuiteRegionORM.is_active.is_(True),
             TrackBranchCatalogORM.is_track_active.is_(True),
