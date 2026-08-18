@@ -44,6 +44,16 @@
         mat-stroked-button
         class="secondary-action"
         type="button"
+        (click)="openBusinessRules()"
+      >
+        <mat-icon>rule</mat-icon>
+        Reglas de negocio
+      </button>
+
+      <button
+        mat-stroked-button
+        class="secondary-action"
+        type="button"
         [disabled]="loading || monthControl.invalid"
         (click)="refreshDashboard()"
       >

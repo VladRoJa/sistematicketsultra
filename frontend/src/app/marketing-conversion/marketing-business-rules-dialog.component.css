@@ -1,0 +1,231 @@
+:host {
+  --rules-orange: var(--ultra-orange, #e54525);
+  --rules-orange-soft: var(--ultra-orange-soft, #fff1ed);
+  --rules-surface: var(--ultra-surface, #ffffff);
+  --rules-bg: var(--ultra-bg, #f5f7fa);
+  --rules-gray-50: var(--ultra-gray-50, #f8fafc);
+  --rules-gray-100: var(--ultra-gray-100, #f1f5f9);
+  --rules-gray-200: var(--ultra-gray-200, #e2e8f0);
+  --rules-gray-500: var(--ultra-gray-500, #64748b);
+  --rules-gray-600: var(--ultra-gray-600, #475569);
+  --rules-gray-700: var(--ultra-gray-700, #334155);
+  --rules-gray-900: var(--ultra-gray-900, #0f172a);
+  display: block;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.business-rules-dialog {
+  color: var(--rules-gray-900);
+  background: var(--rules-bg);
+}
+
+.dialog-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 22px 24px 18px;
+  border-bottom: 1px solid var(--rules-gray-200);
+  background:
+    radial-gradient(
+      circle at top right,
+      rgba(229, 69, 37, 0.13),
+      transparent 38%
+    ),
+    var(--rules-surface);
+}
+
+.dialog-kicker,
+.section-kicker {
+  margin: 0;
+  color: var(--rules-orange);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.dialog-header h2 {
+  margin: 4px 0;
+  font-size: clamp(24px, 3vw, 32px);
+  font-weight: 900;
+  letter-spacing: -0.035em;
+}
+
+.dialog-subtitle {
+  margin: 0;
+  color: var(--rules-gray-500);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.dialog-content {
+  max-height: min(72vh, 760px);
+  padding: 20px 24px !important;
+}
+
+.rules-section + .rules-section {
+  margin-top: 24px;
+}
+
+.section-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.section-heading h3 {
+  margin: 3px 0 0;
+  font-size: 19px;
+  font-weight: 900;
+  letter-spacing: -0.025em;
+}
+
+.primary-rules {
+  display: grid;
+  gap: 10px;
+}
+
+.rule-card {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 13px;
+  padding: 15px 16px;
+  border: 1px solid var(--rules-gray-200);
+  border-radius: 14px;
+  background: var(--rules-surface);
+  box-shadow: 0 7px 20px rgba(15, 23, 42, 0.045);
+}
+
+.rule-number {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  color: var(--rules-orange);
+  background: var(--rules-orange-soft);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.rule-content h4 {
+  margin: 1px 0 6px;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.rule-trigger {
+  margin: 0;
+  color: var(--rules-gray-700);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.rule-trigger strong {
+  color: var(--rules-gray-900);
+}
+
+.rule-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 9px 0 0;
+  padding: 8px 10px;
+  border-radius: 9px;
+  color: var(--rules-gray-600);
+  background: var(--rules-gray-50);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.rule-note mat-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  margin-top: 1px;
+  color: var(--rules-orange);
+  font-size: 16px;
+}
+
+.derived-rules {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.derived-rule {
+  padding: 12px 14px;
+  border: 1px solid var(--rules-gray-200);
+  border-radius: 12px;
+  background: var(--rules-surface);
+}
+
+.derived-rule span {
+  display: block;
+  color: var(--rules-gray-500);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.derived-rule strong {
+  display: block;
+  margin-top: 5px;
+  color: var(--rules-gray-900);
+  font-size: 14px;
+}
+
+.derived-note {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  color: var(--rules-gray-600);
+  background: var(--rules-gray-100);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+mat-dialog-actions {
+  padding: 12px 24px 18px;
+  border-top: 1px solid var(--rules-gray-200);
+  background: var(--rules-surface);
+}
+
+.close-button {
+  min-height: 40px;
+  border-radius: 999px;
+  color: #ffffff !important;
+  background:
+    linear-gradient(
+      135deg,
+      var(--rules-orange),
+      #ff6a3d
+    ) !important;
+  font-weight: 900;
+}
+
+@media (max-width: 680px) {
+  .dialog-header {
+    padding: 18px 18px 14px;
+  }
+
+  .dialog-content {
+    padding: 16px 18px !important;
+  }
+
+  .derived-rules {
+    grid-template-columns: 1fr;
+  }
+
+  mat-dialog-actions {
+    padding: 10px 18px 16px;
+  }
+}

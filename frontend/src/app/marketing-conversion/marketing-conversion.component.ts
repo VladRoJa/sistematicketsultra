@@ -44,6 +44,9 @@ import {
   MarketingAttributionDetailDialogComponent,
 } from './marketing-attribution-detail-dialog.component';
 import {
+  MarketingBusinessRulesDialogComponent,
+} from './marketing-business-rules-dialog.component';
+import {
   MarketingFunnelDetailDialogComponent,
 } from './marketing-funnel-detail-dialog.component';
 import {
@@ -267,6 +270,19 @@ export class MarketingConversionComponent implements OnInit {
     }
 
     this.dashboardRequests.next(this.selectedMonth);
+  }
+
+  openBusinessRules(): void {
+    this.dialog.open(
+      MarketingBusinessRulesDialogComponent,
+      {
+        width: 'min(920px, 96vw)',
+        maxWidth: '96vw',
+        maxHeight: '92vh',
+        autoFocus: false,
+        restoreFocus: true,
+      },
+    );
   }
 
   async exportGlobalDashboard(): Promise<void> {

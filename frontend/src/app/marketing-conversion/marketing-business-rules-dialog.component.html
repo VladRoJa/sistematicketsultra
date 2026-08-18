@@ -1,0 +1,105 @@
+<div class="business-rules-dialog">
+  <header class="dialog-header">
+    <div>
+      <p class="dialog-kicker">Marketing y Conversión</p>
+      <h2 id="business-rules-title">Reglas de negocio</h2>
+      <p class="dialog-subtitle">
+        Qué condición debe cumplirse para que cambie cada indicador.
+      </p>
+    </div>
+
+    <button
+      mat-icon-button
+      mat-dialog-close
+      type="button"
+      aria-label="Cerrar reglas de negocio"
+    >
+      <mat-icon>close</mat-icon>
+    </button>
+  </header>
+
+  <mat-dialog-content
+    class="dialog-content"
+    aria-labelledby="business-rules-title"
+  >
+    <section
+      class="rules-section"
+      aria-labelledby="primary-rules-title"
+    >
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">Embudo principal</p>
+          <h3 id="primary-rules-title">Indicadores principales</h3>
+        </div>
+      </div>
+
+      <div class="primary-rules">
+        <article
+          *ngFor="let rule of primaryRules; let index = index"
+          class="rule-card"
+        >
+          <span class="rule-number">
+            {{ index + 1 }}
+          </span>
+
+          <div class="rule-content">
+            <h4>{{ rule.title }}</h4>
+
+            <p class="rule-trigger">
+              <strong>{{ rule.triggerLabel }}:</strong>
+              {{ rule.trigger }}
+            </p>
+
+            <p
+              *ngIf="rule.note"
+              class="rule-note"
+            >
+              <mat-icon>info</mat-icon>
+              <span>{{ rule.note }}</span>
+            </p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section
+      class="rules-section"
+      aria-labelledby="derived-rules-title"
+    >
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">Indicadores derivados</p>
+          <h3 id="derived-rules-title">
+            Costos y conversiones
+          </h3>
+        </div>
+      </div>
+
+      <div class="derived-rules">
+        <article
+          *ngFor="let rule of derivedRules"
+          class="derived-rule"
+        >
+          <span>{{ rule.title }}</span>
+          <strong>{{ rule.formula }}</strong>
+        </article>
+      </div>
+
+      <p class="derived-note">
+        Si no existe un valor válido para dividir, Suite no inventa
+        un resultado para ese indicador.
+      </p>
+    </section>
+  </mat-dialog-content>
+
+  <mat-dialog-actions align="end">
+    <button
+      mat-flat-button
+      mat-dialog-close
+      type="button"
+      class="close-button"
+    >
+      Entendido
+    </button>
+  </mat-dialog-actions>
+</div>
