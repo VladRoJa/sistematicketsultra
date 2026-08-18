@@ -132,6 +132,7 @@ export class TrackIntelligenceRegionalOperationalComponent
       DEBAJO_RITMO: 'Debajo del ritmo',
       META_SUPERADA: 'Meta superada',
       LIMITE_EXCEDIDO: 'Límite excedido',
+      DENTRO_LIMITE: 'Dentro del límite',
       SIN_META: 'Sin meta',
       DATOS_INSUFICIENTES: 'Datos insuficientes',
       DEBAJO_META: 'Pendiente de meta',
@@ -272,7 +273,21 @@ export class TrackIntelligenceRegionalOperationalComponent
 
   getPriorityGap(item: TrackRegionalOperationalPriorityItem): string {
     if (item.metric_key === 'bajas') {
-      return `Exceso: ${this.formatNumber(item.excess_units)}`;
+      const actual = this.toFiniteNumber(item.actual_mtd);
+      const limit = this.toFiniteNumber(item.monthly_limit);
+
+      if (actual === null || limit === null) {
+        return '-';
+      }
+
+      if (actual > limit) {
+        return `Exceso: ${this.formatNumber(actual - limit)}`;
+      }
+
+      return (
+        `Restan: ${this.formatNumber(Math.max(limit - actual, 0))} ` +
+        'antes del límite'
+      );
     }
 
     return `${this.formatSignedNumber(item.gap_pct_points, ' pp')} vs ritmo esperado`;
