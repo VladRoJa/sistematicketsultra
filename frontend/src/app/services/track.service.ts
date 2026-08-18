@@ -827,6 +827,128 @@ export interface TrackRegionalDetailResponse {
   business_rules: TrackRegionalBusinessRule[];
 }
 
+export interface TrackRegionalOperationalResolvedVersion {
+  id: number;
+  version_type: string;
+  status: string;
+}
+
+export interface TrackRegionalOperationalPaceMetric {
+  metric_key: 'clientes_nuevos' | 'reactivaciones';
+  actual_mtd: string | null;
+  monthly_target: string | null;
+  actual_progress_pct: string | null;
+  expected_progress_pct: string;
+  expected_mtd: string | null;
+  gap_units: string | null;
+  gap_pct_points: string | null;
+  remaining_to_target: string | null;
+  status: string;
+}
+
+export interface TrackRegionalOperationalLimitMetric {
+  metric_key: 'bajas';
+  actual_mtd: string | null;
+  monthly_limit: string | null;
+  limit_usage_pct: string | null;
+  remaining_margin: string | null;
+  status: string;
+}
+
+export interface TrackRegionalOperationalIncomeProjection {
+  status: 'available' | 'insufficient_history';
+  method?: string;
+  projected_close: string | null;
+  historical_progress_pct_at_cutoff?: string | null;
+  historical_months?: number;
+  confidence?: string;
+  quality_issue?: {
+    code?: string;
+    message?: string;
+    reasons?: string[];
+  } | null;
+}
+
+export interface TrackRegionalOperationalTargetMetric {
+  metric_key: 'domiciliados' | 'ingreso' | 'tienda';
+  actual_mtd: string | null;
+  monthly_target: string | null;
+  compliance_pct: string | null;
+  remaining_to_target: string | null;
+  status: string;
+  projection?: TrackRegionalOperationalIncomeProjection;
+}
+
+export interface TrackRegionalOperationalUsersMetric {
+  metric_key: 'usuarios';
+  current_users: string | null;
+  projected_close_users: string | null;
+  users_gap: string | null;
+  status: string;
+}
+
+export interface TrackRegionalOperationalMetrics {
+  clientes_nuevos: TrackRegionalOperationalPaceMetric;
+  reactivaciones: TrackRegionalOperationalPaceMetric;
+  bajas: TrackRegionalOperationalLimitMetric;
+  domiciliados: TrackRegionalOperationalTargetMetric;
+  ingreso: TrackRegionalOperationalTargetMetric;
+  tienda: TrackRegionalOperationalTargetMetric;
+  usuarios: TrackRegionalOperationalUsersMetric;
+}
+
+export interface TrackRegionalOperationalBranch {
+  sucursal_id: number | null;
+  sucursal_canon: string;
+  sucursal_name: string;
+  orden_apertura: number | null;
+  metrics: TrackRegionalOperationalMetrics;
+}
+
+export interface TrackRegionalOperationalRegion {
+  region_key: string;
+  region_label: string;
+  summary: {
+    total_branches: number;
+    metrics: TrackRegionalOperationalMetrics;
+  };
+  branches: TrackRegionalOperationalBranch[];
+}
+
+export interface TrackRegionalOperationalPriorityItem {
+  region_key: string;
+  region_label: string;
+  sucursal_canon: string;
+  sucursal_name: string;
+  metric_key: 'clientes_nuevos' | 'reactivaciones' | 'bajas';
+  actual_mtd: string;
+  monthly_target?: string;
+  monthly_limit?: string;
+  actual_progress_pct?: string;
+  expected_progress_pct?: string;
+  expected_mtd?: string;
+  gap_units?: string;
+  gap_pct_points?: string;
+  limit_usage_pct?: string;
+  excess_units?: string;
+  status: string;
+}
+
+export interface TrackRegionalOperationalPriorityGroup {
+  metric_key: 'clientes_nuevos' | 'reactivaciones' | 'bajas';
+  metric_label: string;
+  items: TrackRegionalOperationalPriorityItem[];
+}
+
+export interface TrackRegionalOperationalResponse {
+  track_date: string;
+  generation_mode: TrackGenerationMode;
+  resolved_version: TrackRegionalOperationalResolvedVersion | null;
+  regions: TrackRegionalOperationalRegion[];
+  priorities: TrackRegionalOperationalPriorityGroup[];
+  business_rules: TrackRegionalBusinessRule[];
+}
+
 export interface TrackBranchForecastDetailResolvedVersion {
   id: number;
 }
@@ -1624,6 +1746,21 @@ export class TrackService {
       .set('generation_mode', generationMode);
 
     return this.http.get<TrackRegionalDetailResponse>(
+      `${this.trackAlertsBaseUrl}/regional-detail`,
+      { params },
+    );
+  }
+
+  getRegionalOperationalDetail(
+    trackDate: string,
+    generationMode: TrackGenerationMode = 'manual_preview',
+  ): Observable<TrackRegionalOperationalResponse> {
+    const params = new HttpParams()
+      .set('track_date', trackDate)
+      .set('generation_mode', generationMode)
+      .set('view', 'operational');
+
+    return this.http.get<TrackRegionalOperationalResponse>(
       `${this.trackAlertsBaseUrl}/regional-detail`,
       { params },
     );

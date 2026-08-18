@@ -2284,6 +2284,95 @@ def _resolve_branch_projection_quality_issue(
         },
     }
 
+def build_branch_income_projection_summary(
+    *,
+    sucursal_canon: str,
+    target_month: date,
+    cutoff_day: int,
+    current_income_mtd: Decimal | None,
+) -> dict[str, Any]:
+    normalized_branch = str(sucursal_canon or "").strip().upper()
+
+    if not normalized_branch:
+        raise ValueError("sucursal_canon es requerido.")
+
+    if current_income_mtd is None:
+        return {
+            "status": "insufficient_history",
+            "method": "existing_stable_historical_pace",
+            "projected_close": None,
+            "historical_progress_pct_at_cutoff": None,
+            "historical_months": 0,
+            "confidence": "sin_historia",
+            "quality_issue": {
+                "code": "missing_current_income",
+                "message": "No existe ingreso actual para calcular la proyección.",
+            },
+        }
+
+    curve = _build_historical_curve(
+        target_month=target_month.replace(day=1),
+        cutoff_day=cutoff_day,
+        scope="branch",
+        branch=normalized_branch,
+    )
+    historical_months = int(curve.get("historical_months") or 0)
+    historical_progress_ratio = curve.get("historical_progress_pct")
+    historical_mtd_total = float(curve.get("historical_mtd_total") or 0)
+    historical_expected_mtd = (
+        historical_mtd_total / historical_months
+        if historical_months > 0
+        else 0.0
+    )
+    current_income = float(current_income_mtd)
+    trend_factor = (
+        current_income / historical_expected_mtd
+        if historical_expected_mtd > 0
+        else None
+    )
+    quality_issue = _resolve_branch_projection_quality_issue(
+        scope="branch",
+        curve=curve,
+        trend_factor=trend_factor,
+    )
+
+    if (
+        historical_progress_ratio is None
+        or historical_progress_ratio <= 0
+        or quality_issue is not None
+    ):
+        return {
+            "status": "insufficient_history",
+            "method": "existing_stable_historical_pace",
+            "projected_close": None,
+            "historical_progress_pct_at_cutoff": (
+                str(Decimal(str(historical_progress_ratio)) * Decimal("100"))
+                if historical_progress_ratio is not None
+                else None
+            ),
+            "historical_months": historical_months,
+            "confidence": curve.get("confidence"),
+            "quality_issue": quality_issue,
+        }
+
+    projected_close = (
+        current_income_mtd
+        / Decimal(str(historical_progress_ratio))
+    )
+
+    return {
+        "status": "available",
+        "method": "existing_stable_historical_pace",
+        "projected_close": str(projected_close),
+        "historical_progress_pct_at_cutoff": str(
+            Decimal(str(historical_progress_ratio)) * Decimal("100")
+        ),
+        "historical_months": historical_months,
+        "confidence": curve.get("confidence"),
+        "quality_issue": None,
+    }
+
+
 def _build_forecast_warnings(
     *,
     generation_mode: str,

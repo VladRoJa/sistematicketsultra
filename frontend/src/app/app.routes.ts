@@ -20,6 +20,7 @@ import { TrackKpiDesempenoComponent } from './warehouse/track-kpi-desempeno/trac
 import { TrackForecastComponent } from './warehouse/track-forecast/track-forecast.component';
 import { TrackBranchHistoryComponent } from './warehouse/track-dashboard/track-branch-history/track-branch-history.component';
 import { CommercialPromotionsComponent } from './warehouse/commercial-promotions/commercial-promotions.component';
+import { trackRegionalOperationalAccessGuard } from './warehouse/track-intelligence-regional-operational/track-regional-operational-access.guard';
 
 
 
@@ -164,6 +165,13 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./warehouse/track-intelligence-regional/track-intelligence-regional.component')
             .then(m => m.TrackIntelligenceRegionalComponent),
+      },
+      {
+        path: 'warehouse/track-intelligence/regional-operational',
+        canActivate: [trackRegionalOperationalAccessGuard],
+        loadComponent: () =>
+          import('./warehouse/track-intelligence-regional-operational/track-intelligence-regional-operational.component')
+            .then(m => m.TrackIntelligenceRegionalOperationalComponent),
       },
       {
         path: 'warehouse/track/sucursal/:sucursalCanon',

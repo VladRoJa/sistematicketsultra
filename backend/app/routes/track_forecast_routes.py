@@ -14,7 +14,6 @@ from app.routes.track_routes import (
     _ensure_date,
     _get_current_role,
     _require_track_read_role,
-    _resolve_current_track_daily_version_for_query,
     _serialize_decimal,
 )
 from app.models.user_model import UserORM
@@ -31,6 +30,14 @@ from app.warehouse.services.track_forecast_service import (
     BranchForecastDetailConsistencyError,
     build_branch_forecast_detail,
     build_venta_total_forecast,
+)
+from app.warehouse.services.track_daily_query_version_service import (
+    resolve_effective_track_daily_version,
+)
+
+
+_resolve_current_track_daily_version_for_query = (
+    resolve_effective_track_daily_version
 )
 
 

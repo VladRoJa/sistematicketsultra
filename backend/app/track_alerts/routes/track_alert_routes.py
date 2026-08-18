@@ -6,6 +6,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from flask import Blueprint, jsonify, request
+from flask_jwt_extended import jwt_required
 
 from app.extensions import db
 from smtplib import SMTPException
@@ -31,6 +32,11 @@ from app.track_alerts.services.track_alert_region_rules_service import (
 from app.track_alerts.services.track_alert_region_email_renderer_service import (
     render_regional_executive_email,
 )
+from app.track_alerts.services.track_regional_operational_service import (
+    TrackRegionalOperationalDataError,
+    get_regional_operational_detail,
+)
+from app.routes.track_routes import _require_track_read_role
 
 track_alert_bp = Blueprint(
     "track_alerts",
@@ -397,35 +403,62 @@ def preview_regional_track_alert_email():
     return rendered["html"]    
     
 @track_alert_bp.route("/regional-detail", methods=["GET"])
+@jwt_required()
 def get_regional_track_alert_detail():
-    track_date_raw = request.args.get("track_date")
-    generation_mode = request.args.get(
-        "generation_mode",
-        "manual_preview",
-    )
-
-    if not track_date_raw:
-        return jsonify(
-            {
-                "error": "track_date is required",
-            }
-        ), 400
-
     try:
+        _require_track_read_role()
+
+        track_date_raw = request.args.get("track_date")
+        generation_mode = request.args.get(
+            "generation_mode",
+            "manual_preview",
+        )
+        view = str(request.args.get("view") or "legacy").strip().lower()
+
+        if not track_date_raw:
+            return jsonify(
+                {
+                    "error": "track_date is required",
+                }
+            ), 400
+
         track_date = datetime.strptime(
             track_date_raw,
             "%Y-%m-%d",
         ).date()
-    except ValueError:
+
+        if view == "operational":
+            result = get_regional_operational_detail(
+                track_date=track_date,
+                generation_mode=generation_mode,
+            )
+        elif view == "legacy":
+            result = get_regional_detail(
+                track_date=track_date,
+                generation_mode=generation_mode,
+            )
+        else:
+            raise ValueError("view inválido. Usa legacy u operational.")
+
+        return jsonify(result)
+
+    except PermissionError as exc:
         return jsonify(
             {
-                "error": "Invalid track_date format. Use YYYY-MM-DD",
+                "error": str(exc),
+            }
+        ), 403
+
+    except ValueError as exc:
+        return jsonify(
+            {
+                "error": str(exc),
             }
         ), 400
 
-    result = get_regional_detail(
-        track_date=track_date,
-        generation_mode=generation_mode,
-    )
-
-    return jsonify(result)
+    except TrackRegionalOperationalDataError as exc:
+        return jsonify(
+            {
+                "error": str(exc),
+            }
+        ), 409
