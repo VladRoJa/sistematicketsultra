@@ -275,13 +275,16 @@ def _bajas_priority_item(
 ) -> dict[str, Any] | None:
     metric = branch["metrics"]["bajas"]
 
-    if metric["status"] != "LIMITE_EXCEDIDO":
-        return None
-
     actual = _to_optional_decimal(metric["actual_mtd"])
     limit = _to_optional_decimal(metric["monthly_limit"])
+    limit_usage_pct = _to_optional_decimal(metric["limit_usage_pct"])
 
-    if actual is None or limit is None:
+    if (
+        actual is None
+        or limit is None
+        or limit <= 0
+        or limit_usage_pct is None
+    ):
         return None
 
     return {
@@ -293,8 +296,16 @@ def _bajas_priority_item(
         "actual_mtd": metric["actual_mtd"],
         "monthly_limit": metric["monthly_limit"],
         "limit_usage_pct": metric["limit_usage_pct"],
-        "excess_units": str(actual - limit),
-        "status": metric["status"],
+        "excess_units": (
+            str(actual - limit)
+            if actual > limit
+            else None
+        ),
+        "status": (
+            "LIMITE_EXCEDIDO"
+            if actual > limit
+            else "DENTRO_LIMITE"
+        ),
     }
 
 
@@ -331,9 +342,10 @@ def _build_priorities(regions: list[dict[str, Any]]) -> list[dict[str, Any]]:
         )
 
     bajas_items.sort(
-        key=lambda item: Decimal(str(item["excess_units"])),
+        key=lambda item: Decimal(str(item["limit_usage_pct"])),
         reverse=True,
     )
+    bajas_items = bajas_items[:10]
 
     return [
         {
@@ -385,8 +397,9 @@ def _business_rules() -> list[dict[str, str]]:
             "key": "bajas_limit",
             "label": "Límite de Bajas",
             "description": (
-                "Bajas se evalúa contra el límite mensual; solo señala "
-                "LIMITE_EXCEDIDO cuando el valor actual supera la meta."
+                "Bajas se evalúa contra el límite mensual; la prioridad "
+                "muestra primero sucursales excedidas y después las más "
+                "cercanas al límite, sin umbrales artificiales."
             ),
         },
         {

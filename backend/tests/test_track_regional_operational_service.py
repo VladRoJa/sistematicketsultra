@@ -138,7 +138,8 @@ def test_lagging_branch_remains_priority_when_region_is_ahead():
 
     bajas_priorities = result["priorities"][2]["items"]
     assert [item["sucursal_canon"] for item in bajas_priorities] == [
-        "PAPALOTE_TJ"
+        "PAPALOTE_TJ",
+        "SANTA_FE_TJ",
     ]
     assert bajas_priorities[0]["status"] == "LIMITE_EXCEDIDO"
 
@@ -272,3 +273,95 @@ def test_duplicate_current_region_assignment_is_rejected():
                 track_date=date(2026, 8, 17),
                 generation_mode="manual_preview",
             )
+
+
+def test_bajas_priorities_include_nearest_to_limit_and_cap_top_10():
+    from app.track_alerts.services import (
+        track_regional_operational_service as service,
+    )
+
+    usages = [
+        ("BRANCH_01", 130, 100, "LIMITE_EXCEDIDO"),
+        ("BRANCH_02", 120, 100, "LIMITE_EXCEDIDO"),
+        ("BRANCH_03", 99, 100, "EN_RITMO"),
+        ("BRANCH_04", 98, 100, "EN_RITMO"),
+        ("BRANCH_05", 97, 100, "EN_RITMO"),
+        ("BRANCH_06", 96, 100, "EN_RITMO"),
+        ("BRANCH_07", 95, 100, "EN_RITMO"),
+        ("BRANCH_08", 94, 100, "EN_RITMO"),
+        ("BRANCH_09", 93, 100, "EN_RITMO"),
+        ("BRANCH_10", 92, 100, "EN_RITMO"),
+        ("BRANCH_11", 91, 100, "EN_RITMO"),
+        ("BRANCH_12", 80, 100, "EN_RITMO"),
+    ]
+
+    branches = []
+
+    for branch_name, actual, limit, status in usages:
+        branches.append(
+            {
+                "sucursal_canon": branch_name,
+                "sucursal_name": branch_name,
+                "metrics": {
+                    "clientes_nuevos": {
+                        "gap_pct_points": "0",
+                    },
+                    "reactivaciones": {
+                        "gap_pct_points": "0",
+                    },
+                    "bajas": {
+                        "actual_mtd": str(actual),
+                        "monthly_limit": str(limit),
+                        "limit_usage_pct": str(
+                            actual / limit * 100
+                        ),
+                        "status": status,
+                    },
+                },
+            }
+        )
+
+    priorities = service._build_priorities(
+        [
+            {
+                "region_key": "TEST_REGION",
+                "region_label": "Test region",
+                "branches": branches,
+            }
+        ]
+    )
+
+    bajas_group = next(
+        group
+        for group in priorities
+        if group["metric_key"] == "bajas"
+    )
+
+    items = bajas_group["items"]
+
+    assert len(items) == 10
+
+    assert items[0]["sucursal_canon"] == "BRANCH_01"
+    assert items[1]["sucursal_canon"] == "BRANCH_02"
+
+    assert items[2]["sucursal_canon"] == "BRANCH_03"
+    assert items[2]["status"] == "DENTRO_LIMITE"
+    assert items[2]["excess_units"] is None
+
+    usage_values = [
+        float(item["limit_usage_pct"])
+        for item in items
+    ]
+
+    assert usage_values == sorted(
+        usage_values,
+        reverse=True,
+    )
+
+    included = {
+        item["sucursal_canon"]
+        for item in items
+    }
+
+    assert "BRANCH_11" not in included
+    assert "BRANCH_12" not in included
