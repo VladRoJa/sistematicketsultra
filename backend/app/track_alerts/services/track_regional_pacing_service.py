@@ -28,6 +28,17 @@ REACTIVACIONES_WEEKDAY_WEIGHTS: dict[int, Decimal] = {
 }
 
 
+LINEAR_CALENDAR_WEEKDAY_WEIGHTS: dict[int, Decimal] = {
+    0: Decimal("1"),
+    1: Decimal("1"),
+    2: Decimal("1"),
+    3: Decimal("1"),
+    4: Decimal("1"),
+    5: Decimal("1"),
+    6: Decimal("1"),
+}
+
+
 @dataclass(frozen=True)
 class TrackRegionalPaceMetric:
     metric_key: str
@@ -307,6 +318,90 @@ def build_reactivaciones_metric(
         monthly_target=monthly_target,
         cutoff_date=cutoff_date,
         weekday_weights=REACTIVACIONES_WEEKDAY_WEIGHTS,
+    )
+
+
+def build_linear_pace_metric(
+    *,
+    metric_key: str,
+    actual_mtd: Any,
+    monthly_target: Any,
+    cutoff_date: date,
+) -> TrackRegionalPaceMetric:
+    actual = _to_optional_decimal(actual_mtd)
+    target = _to_optional_decimal(monthly_target)
+    days_in_month = monthrange(
+        cutoff_date.year,
+        cutoff_date.month,
+    )[1]
+    expected_progress_ratio = (
+        Decimal(cutoff_date.day) / Decimal(days_in_month)
+    )
+    expected_progress_pct = (
+        expected_progress_ratio * Decimal("100")
+    )
+
+    if target is None or target <= 0:
+        return TrackRegionalPaceMetric(
+            metric_key=metric_key,
+            actual_mtd=actual,
+            monthly_target=target,
+            actual_progress_pct=None,
+            expected_progress_pct=expected_progress_pct,
+            expected_mtd=None,
+            gap_units=None,
+            gap_pct_points=None,
+            remaining_to_target=None,
+            status="SIN_META",
+        )
+
+    expected_mtd = target * expected_progress_ratio
+
+    if actual is None:
+        return TrackRegionalPaceMetric(
+            metric_key=metric_key,
+            actual_mtd=None,
+            monthly_target=target,
+            actual_progress_pct=None,
+            expected_progress_pct=expected_progress_pct,
+            expected_mtd=expected_mtd,
+            gap_units=None,
+            gap_pct_points=None,
+            remaining_to_target=None,
+            status="DATOS_INSUFICIENTES",
+        )
+
+    actual_progress_pct = (
+        actual / target * Decimal("100")
+    )
+    gap_units = actual - expected_mtd
+    gap_pct_points = (
+        actual_progress_pct - expected_progress_pct
+    )
+
+    if actual > target:
+        status = "META_SUPERADA"
+    elif gap_units > 0:
+        status = "ADELANTADO"
+    elif gap_units < 0:
+        status = "DEBAJO_RITMO"
+    else:
+        status = "EN_RITMO"
+
+    return TrackRegionalPaceMetric(
+        metric_key=metric_key,
+        actual_mtd=actual,
+        monthly_target=target,
+        actual_progress_pct=actual_progress_pct,
+        expected_progress_pct=expected_progress_pct,
+        expected_mtd=expected_mtd,
+        gap_units=gap_units,
+        gap_pct_points=gap_pct_points,
+        remaining_to_target=max(
+            target - actual,
+            Decimal("0"),
+        ),
+        status=status,
     )
 
 

@@ -266,3 +266,49 @@ def test_users_metric_is_only_current_minus_projected_close():
     assert metric.status == "INFORMATIVO"
     assert metric.users_gap == Decimal("20")
     assert not hasattr(metric, "m2_sin_circulaciones")
+
+
+def test_linear_pace_uses_calendar_day_progress():
+    from datetime import date
+    from decimal import Decimal
+
+    from app.track_alerts.services.track_regional_pacing_service import (
+        build_linear_pace_metric,
+    )
+
+    april = build_linear_pace_metric(
+        metric_key="domiciliados",
+        actual_mtd=Decimal("40"),
+        monthly_target=Decimal("100"),
+        cutoff_date=date(2026, 4, 15),
+    )
+
+    assert april.expected_progress_pct == Decimal("50.0")
+    assert april.expected_mtd == Decimal("50.0")
+    assert april.actual_progress_pct == Decimal("40.0")
+    assert april.gap_units == Decimal("-10.0")
+    assert april.status == "DEBAJO_RITMO"
+
+    august = build_linear_pace_metric(
+        metric_key="domiciliados",
+        actual_mtd=Decimal("150"),
+        monthly_target=Decimal("310"),
+        cutoff_date=date(2026, 8, 18),
+    )
+
+    assert august.expected_mtd == Decimal("180")
+    assert august.expected_progress_pct == (
+        Decimal("18") / Decimal("31") * Decimal("100")
+    )
+    assert august.status == "DEBAJO_RITMO"
+
+    month_end = build_linear_pace_metric(
+        metric_key="domiciliados",
+        actual_mtd=Decimal("100"),
+        monthly_target=Decimal("100"),
+        cutoff_date=date(2026, 2, 28),
+    )
+
+    assert month_end.expected_progress_pct == Decimal("100")
+    assert month_end.expected_mtd == Decimal("100")
+    assert month_end.status == "EN_RITMO"

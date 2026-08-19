@@ -14,6 +14,22 @@
         <input type="date" [(ngModel)]="selectedTrackDate" />
       </label>
 
+      <label class="date-field region-filter-field">
+        <span>Región</span>
+        <select
+          [(ngModel)]="selectedRegionKey"
+          (ngModelChange)="onRegionFilterChange()"
+        >
+          <option value="">Todas las regiones</option>
+          <option
+            *ngFor="let region of getRegionOptions(); trackBy: trackRegion"
+            [value]="region.region_key"
+          >
+            {{ region.region_label }}
+          </option>
+        </select>
+      </label>
+
       <button
         type="button"
         class="primary-action"
@@ -75,18 +91,25 @@
       </div>
 
       <div class="empty-state" *ngIf="!hasAnyPriorities()">
-        No hay sucursales debajo del ritmo ni límites de bajas excedidos para este corte.
+        No hay sucursales con datos disponibles para este corte.
       </div>
 
-      <div class="priority-groups" *ngIf="hasAnyPriorities()">
-        <article
-          class="priority-group"
-          *ngFor="let group of getPriorityGroups()"
-        >
-          <div class="priority-group__heading">
-            <h3>{{ group.metric_label }}</h3>
-            <span>{{ group.items.length }} caso(s)</span>
+      <ng-container *ngIf="hasAnyPriorities()">
+        <div class="priority-sticky-header">
+          <div
+            class="priority-sticky-header__item"
+            *ngFor="let group of getPriorityGroups()"
+          >
+            <strong>{{ group.metric_label }}</strong>
+            <span>{{ group.items.length }} sucursal(es)</span>
           </div>
+        </div>
+
+        <div class="priority-groups">
+          <article
+            class="priority-group"
+            *ngFor="let group of getPriorityGroups()"
+          >
 
           <div class="priority-list" *ngIf="group.items.length; else noGroupItems">
             <div
@@ -112,7 +135,9 @@
                 >
                   {{ monthlyProgressLabel }}
                 </span>
-                <span>{{ getPriorityGap(item) }}</span>
+                <span *ngIf="item.metric_key === 'bajas'">
+                  {{ getPriorityGap(item) }}
+                </span>
               </div>
               <span [class]="getStatusClass(item.status)">
                 {{ getStatusLabel(item.status) }}
@@ -121,10 +146,11 @@
           </div>
 
           <ng-template #noGroupItems>
-            <p class="group-empty">Sin casos para este KPI.</p>
+            <p class="group-empty">Sin sucursales con datos para este KPI.</p>
           </ng-template>
-        </article>
-      </div>
+          </article>
+        </div>
+      </ng-container>
     </section>
 
     <section class="content-section regions-overview">

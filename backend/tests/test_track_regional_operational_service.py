@@ -132,9 +132,15 @@ def test_lagging_branch_remains_priority_when_region_is_ahead():
 
     clientes_priorities = result["priorities"][0]["items"]
     assert [item["sucursal_canon"] for item in clientes_priorities] == [
-        "PAPALOTE_TJ"
+        "PAPALOTE_TJ",
+        "SANTA_FE_TJ",
     ]
     assert Decimal(clientes_priorities[0]["gap_pct_points"]) < 0
+    assert clientes_priorities[0]["status"] == "DEBAJO_RITMO"
+    assert clientes_priorities[1]["status"] in {
+        "ADELANTADO",
+        "META_SUPERADA",
+    }
 
     bajas_priorities = result["priorities"][2]["items"]
     assert [item["sucursal_canon"] for item in bajas_priorities] == [
@@ -275,7 +281,7 @@ def test_duplicate_current_region_assignment_is_rejected():
             )
 
 
-def test_bajas_priorities_include_nearest_to_limit_and_cap_top_10():
+def test_bajas_priorities_include_all_branches_ordered_by_limit_usage():
     from app.track_alerts.services import (
         track_regional_operational_service as service,
     )
@@ -304,10 +310,24 @@ def test_bajas_priorities_include_nearest_to_limit_and_cap_top_10():
                 "sucursal_name": branch_name,
                 "metrics": {
                     "clientes_nuevos": {
+                        "actual_mtd": "100",
+                        "monthly_target": "100",
+                        "actual_progress_pct": "100",
+                        "expected_progress_pct": "100",
+                        "expected_mtd": "100",
+                        "gap_units": "0",
                         "gap_pct_points": "0",
+                        "status": "EN_RITMO",
                     },
                     "reactivaciones": {
+                        "actual_mtd": "100",
+                        "monthly_target": "100",
+                        "actual_progress_pct": "100",
+                        "expected_progress_pct": "100",
+                        "expected_mtd": "100",
+                        "gap_units": "0",
                         "gap_pct_points": "0",
+                        "status": "EN_RITMO",
                     },
                     "bajas": {
                         "actual_mtd": str(actual),
@@ -331,18 +351,33 @@ def test_bajas_priorities_include_nearest_to_limit_and_cap_top_10():
         ]
     )
 
+    clientes_group = next(
+        group
+        for group in priorities
+        if group["metric_key"] == "clientes_nuevos"
+    )
+    reactivaciones_group = next(
+        group
+        for group in priorities
+        if group["metric_key"] == "reactivaciones"
+    )
     bajas_group = next(
         group
         for group in priorities
         if group["metric_key"] == "bajas"
     )
 
+    assert len(clientes_group["items"]) == 12
+    assert len(reactivaciones_group["items"]) == 12
+    assert len(bajas_group["items"]) == 12
+
     items = bajas_group["items"]
 
-    assert len(items) == 10
-
     assert items[0]["sucursal_canon"] == "BRANCH_01"
+    assert items[0]["status"] == "LIMITE_EXCEDIDO"
+
     assert items[1]["sucursal_canon"] == "BRANCH_02"
+    assert items[1]["status"] == "LIMITE_EXCEDIDO"
 
     assert items[2]["sucursal_canon"] == "BRANCH_03"
     assert items[2]["status"] == "DENTRO_LIMITE"
@@ -358,10 +393,77 @@ def test_bajas_priorities_include_nearest_to_limit_and_cap_top_10():
         reverse=True,
     )
 
-    included = {
+    assert {
         item["sucursal_canon"]
         for item in items
+    } == {
+        branch_name
+        for branch_name, *_ in usages
     }
 
-    assert "BRANCH_11" not in included
-    assert "BRANCH_12" not in included
+
+def test_priorities_include_domiciliados_with_linear_pace():
+    from datetime import date
+    from decimal import Decimal
+
+    from app.track_alerts.services import (
+        track_regional_operational_service as service,
+    )
+
+    cutoff = date(2026, 8, 18)
+
+    branch = {
+        "sucursal_canon": "TEST_BRANCH",
+        "sucursal_name": "Test Branch",
+        "metrics": {
+            "clientes_nuevos": service.build_clientes_nuevos_metric(
+                actual_mtd=100,
+                monthly_target=100,
+                cutoff_date=cutoff,
+            ).to_dict(),
+            "reactivaciones": service.build_reactivaciones_metric(
+                actual_mtd=100,
+                monthly_target=100,
+                cutoff_date=cutoff,
+            ).to_dict(),
+            "bajas": service.build_bajas_metric(
+                actual_mtd=50,
+                monthly_limit=100,
+            ).to_dict(),
+            "domiciliados": service.build_target_progress_metric(
+                metric_key="domiciliados",
+                actual_mtd=150,
+                monthly_target=310,
+            ).to_dict(),
+        },
+    }
+
+    priorities = service._build_priorities(
+        [
+            {
+                "region_key": "TEST_REGION",
+                "region_label": "Test Region",
+                "branches": [branch],
+            }
+        ],
+        track_date=cutoff,
+    )
+
+    assert [
+        group["metric_key"]
+        for group in priorities
+    ] == [
+        "clientes_nuevos",
+        "reactivaciones",
+        "bajas",
+        "domiciliados",
+    ]
+
+    domiciliados = priorities[3]["items"]
+
+    assert len(domiciliados) == 1
+    assert domiciliados[0]["sucursal_canon"] == "TEST_BRANCH"
+    assert domiciliados[0]["actual_mtd"] == "150"
+    assert domiciliados[0]["monthly_target"] == "310"
+    assert Decimal(domiciliados[0]["expected_mtd"]) == Decimal("180")
+    assert domiciliados[0]["status"] == "DEBAJO_RITMO"
