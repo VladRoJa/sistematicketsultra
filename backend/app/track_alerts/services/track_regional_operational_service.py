@@ -14,6 +14,7 @@ from app.track_alerts.services.track_alert_region_rules_service import (
 from app.track_alerts.services.track_regional_pacing_service import (
     build_bajas_metric,
     build_clientes_nuevos_metric,
+    build_linear_pace_metric,
     build_reactivaciones_metric,
     build_target_progress_metric,
     build_users_gap_metric,
@@ -247,9 +248,6 @@ def _pace_priority_item(
     metric = branch["metrics"][metric_key]
     gap_pct_points = _to_optional_decimal(metric.get("gap_pct_points"))
 
-    if gap_pct_points is None or gap_pct_points >= 0:
-        return None
-
     return {
         "region_key": region_key,
         "region_label": region_label,
@@ -267,6 +265,39 @@ def _pace_priority_item(
     }
 
 
+def _domiciliados_priority_item(
+    *,
+    region_key: str,
+    region_label: str,
+    branch: dict[str, Any],
+    track_date: date,
+) -> dict[str, Any]:
+    metric = branch["metrics"]["domiciliados"]
+
+    pace_metric = build_linear_pace_metric(
+        metric_key="domiciliados",
+        actual_mtd=metric.get("actual_mtd"),
+        monthly_target=metric.get("monthly_target"),
+        cutoff_date=track_date,
+    ).to_dict()
+
+    return {
+        "region_key": region_key,
+        "region_label": region_label,
+        "sucursal_canon": branch["sucursal_canon"],
+        "sucursal_name": branch["sucursal_name"],
+        "metric_key": "domiciliados",
+        "actual_mtd": pace_metric["actual_mtd"],
+        "monthly_target": pace_metric["monthly_target"],
+        "actual_progress_pct": pace_metric["actual_progress_pct"],
+        "expected_progress_pct": pace_metric["expected_progress_pct"],
+        "expected_mtd": pace_metric["expected_mtd"],
+        "gap_units": pace_metric["gap_units"],
+        "gap_pct_points": pace_metric["gap_pct_points"],
+        "status": pace_metric["status"],
+    }
+
+
 def _bajas_priority_item(
     *,
     region_key: str,
@@ -279,14 +310,6 @@ def _bajas_priority_item(
     limit = _to_optional_decimal(metric["monthly_limit"])
     limit_usage_pct = _to_optional_decimal(metric["limit_usage_pct"])
 
-    if (
-        actual is None
-        or limit is None
-        or limit <= 0
-        or limit_usage_pct is None
-    ):
-        return None
-
     return {
         "region_key": region_key,
         "region_label": region_label,
@@ -298,23 +321,40 @@ def _bajas_priority_item(
         "limit_usage_pct": metric["limit_usage_pct"],
         "excess_units": (
             str(actual - limit)
-            if actual > limit
+            if (
+                actual is not None
+                and limit is not None
+                and actual > limit
+            )
             else None
         ),
         "status": (
-            "LIMITE_EXCEDIDO"
-            if actual > limit
-            else "DENTRO_LIMITE"
+            (
+                "LIMITE_EXCEDIDO"
+                if actual > limit
+                else "DENTRO_LIMITE"
+            )
+            if (
+                actual is not None
+                and limit is not None
+                and limit > 0
+            )
+            else metric["status"]
         ),
     }
 
 
-def _build_priorities(regions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _build_priorities(
+    regions: list[dict[str, Any]],
+    *,
+    track_date: date | None = None,
+) -> list[dict[str, Any]]:
     pace_items: dict[str, list[dict[str, Any]]] = {
         "clientes_nuevos": [],
         "reactivaciones": [],
     }
     bajas_items: list[dict[str, Any]] = []
+    domiciliados_items: list[dict[str, Any]] = []
 
     for region in regions:
         for branch in region["branches"]:
@@ -328,6 +368,16 @@ def _build_priorities(regions: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 if priority is not None:
                     pace_items[metric_key].append(priority)
 
+            if track_date is not None:
+                domiciliados_items.append(
+                    _domiciliados_priority_item(
+                        region_key=region["region_key"],
+                        region_label=region["region_label"],
+                        branch=branch,
+                        track_date=track_date,
+                    )
+                )
+
             bajas_priority = _bajas_priority_item(
                 region_key=region["region_key"],
                 region_label=region["region_label"],
@@ -336,16 +386,40 @@ def _build_priorities(regions: list[dict[str, Any]]) -> list[dict[str, Any]]:
             if bajas_priority is not None:
                 bajas_items.append(bajas_priority)
 
-    for items in pace_items.values():
+    for items in [*pace_items.values(), domiciliados_items]:
         items.sort(
-            key=lambda item: Decimal(str(item["gap_pct_points"])),
+            key=lambda item: (
+                _to_optional_decimal(
+                    item.get("gap_pct_points")
+                ) is None,
+                (
+                    _to_optional_decimal(
+                        item.get("gap_pct_points")
+                    )
+                    if _to_optional_decimal(
+                        item.get("gap_pct_points")
+                    ) is not None
+                    else Decimal("0")
+                ),
+            ),
         )
 
     bajas_items.sort(
-        key=lambda item: Decimal(str(item["limit_usage_pct"])),
-        reverse=True,
+        key=lambda item: (
+            _to_optional_decimal(
+                item.get("limit_usage_pct")
+            ) is None,
+            (
+                -_to_optional_decimal(
+                    item.get("limit_usage_pct")
+                )
+                if _to_optional_decimal(
+                    item.get("limit_usage_pct")
+                ) is not None
+                else Decimal("0")
+            ),
+        ),
     )
-    bajas_items = bajas_items[:10]
 
     return [
         {
@@ -362,6 +436,11 @@ def _build_priorities(regions: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "metric_key": "bajas",
             "metric_label": "Bajas",
             "items": bajas_items,
+        },
+        {
+            "metric_key": "domiciliados",
+            "metric_label": "Domiciliados",
+            "items": domiciliados_items,
         },
     ]
 
@@ -397,15 +476,18 @@ def _business_rules() -> list[dict[str, str]]:
             "key": "bajas_limit",
             "label": "Límite de Bajas",
             "description": (
-                "Bajas se evalúa contra el límite mensual; la prioridad "
-                "muestra primero sucursales excedidas y después las más "
-                "cercanas al límite, sin umbrales artificiales."
+                "Bajas muestra todas las sucursales ordenadas por consumo "
+                "del límite mensual: primero las excedidas y después las "
+                "más cercanas al límite, sin umbrales artificiales."
             ),
         },
         {
-            "key": "domiciliados_no_curve",
-            "label": "Domiciliados",
-            "description": "Domiciliados muestra avance contra meta sin curva weekday.",
+            "key": "domiciliados_linear_pace",
+            "label": "Ritmo de Domiciliados",
+            "description": (
+                "Usa pacing lineal por día calendario: el avance esperado "
+                "es día del mes dividido entre días naturales del mes."
+            ),
         },
         {
             "key": "income_source",
@@ -455,7 +537,10 @@ def get_regional_operational_detail(
             "generation_mode": generation_mode,
             "resolved_version": None,
             "regions": [],
-            "priorities": _build_priorities([]),
+            "priorities": _build_priorities(
+                [],
+                track_date=track_date,
+            ),
             "business_rules": _business_rules(),
         }
 
@@ -525,6 +610,9 @@ def get_regional_operational_detail(
             "status": resolved_version.status,
         },
         "regions": regions,
-        "priorities": _build_priorities(regions),
+        "priorities": _build_priorities(
+            regions,
+            track_date=track_date,
+        ),
         "business_rules": _business_rules(),
     }

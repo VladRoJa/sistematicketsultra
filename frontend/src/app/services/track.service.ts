@@ -920,7 +920,7 @@ export interface TrackRegionalOperationalPriorityItem {
   region_label: string;
   sucursal_canon: string;
   sucursal_name: string;
-  metric_key: 'clientes_nuevos' | 'reactivaciones' | 'bajas';
+  metric_key: 'clientes_nuevos' | 'reactivaciones' | 'bajas' | 'domiciliados';
   actual_mtd: string;
   monthly_target?: string;
   monthly_limit?: string;
@@ -935,7 +935,7 @@ export interface TrackRegionalOperationalPriorityItem {
 }
 
 export interface TrackRegionalOperationalPriorityGroup {
-  metric_key: 'clientes_nuevos' | 'reactivaciones' | 'bajas';
+  metric_key: 'clientes_nuevos' | 'reactivaciones' | 'bajas' | 'domiciliados';
   metric_label: string;
   items: TrackRegionalOperationalPriorityItem[];
 }

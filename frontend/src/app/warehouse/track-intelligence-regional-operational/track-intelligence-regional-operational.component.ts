@@ -40,6 +40,7 @@ export class TrackIntelligenceRegionalOperationalComponent
   implements OnInit, OnDestroy {
   data: TrackRegionalOperationalResponse | null = null;
   selectedTrackDate = '';
+  selectedRegionKey = '';
   generationMode: TrackGenerationMode = 'manual_preview';
   isLoading = false;
   errorMessage = '';
@@ -60,6 +61,9 @@ export class TrackIntelligenceRegionalOperationalComponent
     this.generationMode = this.normalizeGenerationMode(
       this.route.snapshot.queryParamMap.get('generation_mode'),
     );
+    this.selectedRegionKey = (
+      this.route.snapshot.queryParamMap.get('region_key') || ''
+    ).trim();
     this.loadOperationalDetail();
   }
 
@@ -86,6 +90,16 @@ export class TrackIntelligenceRegionalOperationalComponent
       .subscribe({
         next: (response) => {
           this.data = response;
+
+          if (
+            this.selectedRegionKey &&
+            !response.regions.some(
+              (region) => region.region_key === this.selectedRegionKey,
+            )
+          ) {
+            this.selectedRegionKey = '';
+          }
+
           this.isLoading = false;
           this.updateUrlQueryParams();
         },
@@ -110,11 +124,38 @@ export class TrackIntelligenceRegionalOperationalComponent
   }
 
   getPriorityGroups(): TrackRegionalOperationalPriorityGroup[] {
-    return this.data?.priorities || [];
+    const groups = this.data?.priorities || [];
+
+    if (!this.selectedRegionKey) {
+      return groups;
+    }
+
+    return groups.map((group) => ({
+      ...group,
+      items: group.items.filter(
+        (item) => item.region_key === this.selectedRegionKey,
+      ),
+    }));
   }
 
   getRegions(): TrackRegionalOperationalRegion[] {
+    const regions = this.data?.regions || [];
+
+    if (!this.selectedRegionKey) {
+      return regions;
+    }
+
+    return regions.filter(
+      (region) => region.region_key === this.selectedRegionKey,
+    );
+  }
+
+  getRegionOptions(): TrackRegionalOperationalRegion[] {
     return this.data?.regions || [];
+  }
+
+  onRegionFilterChange(): void {
+    this.updateUrlQueryParams();
   }
 
   getBusinessRules(): TrackRegionalBusinessRule[] {
@@ -391,6 +432,7 @@ export class TrackIntelligenceRegionalOperationalComponent
       queryParams: {
         track_date: this.selectedTrackDate,
         generation_mode: this.generationMode,
+        region_key: this.selectedRegionKey || null,
       },
       queryParamsHandling: 'merge',
       replaceUrl: true,
