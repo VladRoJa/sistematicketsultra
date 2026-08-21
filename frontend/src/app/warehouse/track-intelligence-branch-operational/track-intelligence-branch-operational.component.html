@@ -333,23 +333,31 @@
       <article class="content-section signals-section" aria-labelledby="signals-title">
         <div class="section-heading">
           <div>
-            <span class="section-kicker">Evidencia backend</span>
-            <h2 id="signals-title">Bloqueos y señales detectadas</h2>
+            <span class="section-kicker">Lectura operativa</span>
+            <h2 id="signals-title">Qué requiere atención</h2>
           </div>
         </div>
 
-        <div class="empty-state" *ngIf="!detail.signals.length">
-          No hay señales activas para este corte.
+        <div class="empty-state" *ngIf="!operationalSummaryCards.length">
+          No hay métricas que requieran atención para este corte.
         </div>
-        <div class="signal-list">
+
+        <div class="signal-list" *ngIf="operationalSummaryCards.length">
           <article
-            class="signal-item"
-            *ngFor="let signal of detail.signals"
-            [class]="'signal-item ' + getSemanticClass(signal.severity)"
+            *ngFor="let card of operationalSummaryCards"
+            [class]="'signal-item operational-summary-card ' + getSemanticClass(card.severity)"
           >
-            <span>{{ formatCodeLabel(signal.metric_key) }}</span>
-            <h3>{{ signal.title }}</h3>
-            <p>{{ signal.summary }}</p>
+            <span>{{ card.label }}</span>
+            <h3>{{ card.title }}</h3>
+
+            <dl class="operational-summary-rows">
+              <div *ngFor="let row of card.rows">
+                <dt>{{ row.label }}</dt>
+                <dd [class.operational-summary-value--emphasis]="row.emphasis">
+                  {{ row.value }}
+                </dd>
+              </div>
+            </dl>
           </article>
         </div>
       </article>

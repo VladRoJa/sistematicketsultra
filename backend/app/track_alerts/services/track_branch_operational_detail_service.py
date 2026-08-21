@@ -14,7 +14,7 @@ from app.track_alerts.services.track_alert_region_rules_service import (
 from app.track_alerts.services.track_regional_pacing_service import (
     build_bajas_metric,
     build_clientes_nuevos_metric,
-    build_linear_pace_metric,
+    build_domiciliados_metric,
     build_reactivaciones_metric,
     build_target_progress_metric,
 )
@@ -117,8 +117,7 @@ def _build_pace_metric(
             cutoff_date=cutoff_date,
         ).to_dict()
     elif metric_key == "domiciliados":
-        result = build_linear_pace_metric(
-            metric_key="domiciliados",
+        result = build_domiciliados_metric(
             actual_mtd=actual_mtd,
             monthly_target=monthly_target,
             cutoff_date=cutoff_date,
@@ -839,6 +838,250 @@ def _build_operational_signals(
     return signals
 
 
+def _signal_keys_for_metric(
+    signals: Iterable[dict[str, Any]],
+    *,
+    metric_key: str,
+) -> list[str]:
+    return [
+        str(signal["signal_key"])
+        for signal in signals
+        if signal.get("metric_key") == metric_key
+    ]
+
+
+def _build_pace_operational_summary(
+    *,
+    metric_key: str,
+    metric: dict[str, Any],
+    signals: Iterable[dict[str, Any]],
+) -> dict[str, Any] | None:
+    pace = _decimal(metric.get("pace_pct"))
+    actual = _decimal(metric.get("actual_mtd"))
+    target = _decimal(metric.get("monthly_target"))
+    projection = metric.get("projection") or {}
+    projected_close = _decimal(projection.get("projected_close"))
+    remaining_days = int(projection.get("remaining_days") or 0)
+
+    projected_below_target = (
+        projected_close is not None
+        and target is not None
+        and target > 0
+        and projected_close < target
+    )
+    below_pace = pace is not None and pace < Decimal("100")
+
+    # Una tendencia negativa aislada no debe convertirse en tarjeta ejecutiva
+    # si el KPI conserva ritmo sano y la proyección no queda debajo de meta.
+    if not below_pace and not projected_below_target:
+        return None
+
+    required_daily_average = (
+        max(target - actual, Decimal("0")) / Decimal(remaining_days)
+        if (
+            target is not None
+            and actual is not None
+            and remaining_days > 0
+        )
+        else None
+    )
+
+    severity = (
+        "critical"
+        if pace is not None and pace < PACE_SEVERELY_BELOW_PCT
+        else "warning"
+    )
+
+    if remaining_days == 0:
+        title = "El mes cerró por debajo de la meta"
+    else:
+        title = (
+            "El ritmo actual no alcanza para cerrar la meta"
+            if projected_below_target
+            else "Opera debajo del ritmo esperado"
+        )
+
+    return {
+        "metric_key": metric_key,
+        "severity": severity,
+        "title": title,
+        "actual_mtd": _decimal_string(actual),
+        "today_delta": metric.get("daily_delta"),
+        "pace_pct": _decimal_string(pace),
+        "recent_daily_average": projection.get("recent_daily_average"),
+        "required_daily_average": _decimal_string(required_daily_average),
+        "remaining_days": remaining_days,
+        "projected_close": projection.get("projected_close"),
+        "benchmark": _decimal_string(target),
+        "projected_gap_units": projection.get("projected_gap_units"),
+        "projected_compliance_pct": projection.get(
+            "projected_compliance_pct"
+        ),
+        "trend": metric.get("trend"),
+        "source_signal_keys": _signal_keys_for_metric(
+            signals,
+            metric_key=metric_key,
+        ),
+    }
+
+
+def _build_bajas_operational_summary(
+    *,
+    metric: dict[str, Any],
+    signals: Iterable[dict[str, Any]],
+) -> dict[str, Any] | None:
+    usage = _decimal(metric.get("limit_usage_pct"))
+    actual = _decimal(metric.get("actual_mtd"))
+    limit = _decimal(metric.get("monthly_limit"))
+    projection = metric.get("projection") or {}
+    projected_close = _decimal(projection.get("projected_close"))
+    remaining_days = int(projection.get("remaining_days") or 0)
+
+    current_attention = (
+        usage is not None
+        and usage >= BAJAS_HIGH_LIMIT_USAGE_PCT
+    )
+    projected_exceeded = (
+        projected_close is not None
+        and limit is not None
+        and limit > 0
+        and projected_close > limit
+    )
+
+    # La aceleración reciente por sí sola queda como evidencia técnica.
+    # La tarjeta ejecutiva aparece cuando existe riesgo actual o proyectado.
+    if not current_attention and not projected_exceeded:
+        return None
+
+    if remaining_days == 0:
+        if usage is not None and usage > Decimal("100"):
+            severity = "critical"
+            title = "El mes cerró por encima del límite de bajas"
+        elif usage is not None and usage >= BAJAS_NEAR_LIMIT_USAGE_PCT:
+            severity = "warning"
+            title = "El mes cerró cerca del límite de bajas"
+        else:
+            severity = "warning"
+            title = "El mes cerró dentro del límite, con consumo alto"
+    elif usage is not None and usage > Decimal("100"):
+        severity = "critical"
+        title = "El límite mensual de bajas ya fue excedido"
+    elif projected_exceeded:
+        severity = "warning"
+        title = "La tendencia actual proyecta exceder el límite"
+    elif usage is not None and usage >= BAJAS_NEAR_LIMIT_USAGE_PCT:
+        severity = "warning"
+        title = "Las bajas están cerca del límite mensual"
+    else:
+        severity = "warning"
+        title = "El consumo de bajas requiere atención"
+
+    return {
+        "metric_key": "bajas",
+        "severity": severity,
+        "title": title,
+        "actual_mtd": _decimal_string(actual),
+        "today_delta": metric.get("daily_delta"),
+        "limit_usage_pct": _decimal_string(usage),
+        "recent_daily_average": projection.get("recent_daily_average"),
+        "remaining_days": int(projection.get("remaining_days") or 0),
+        "projected_close": projection.get("projected_close"),
+        "benchmark": _decimal_string(limit),
+        "projected_excess_units": projection.get(
+            "projected_excess_units"
+        ),
+        "projected_remaining_margin": projection.get(
+            "projected_remaining_margin"
+        ),
+        "projected_limit_usage_pct": projection.get(
+            "projected_limit_usage_pct"
+        ),
+        "trend": metric.get("trend"),
+        "source_signal_keys": _signal_keys_for_metric(
+            signals,
+            metric_key="bajas",
+        ),
+    }
+
+
+def _build_income_operational_summary(
+    *,
+    metric: dict[str, Any],
+    signals: Iterable[dict[str, Any]],
+) -> dict[str, Any] | None:
+    target = _decimal(metric.get("monthly_target"))
+    actual = _decimal(metric.get("actual_mtd"))
+    projection = metric.get("projection") or {}
+    projected_close = _decimal(projection.get("projected_close"))
+
+    if (
+        projection.get("status") != "available"
+        or projected_close is None
+        or target is None
+        or target <= 0
+        or projected_close >= target
+    ):
+        return None
+
+    projected_gap = projected_close - target
+
+    return {
+        "metric_key": "ingreso",
+        "severity": "warning",
+        "title": "El cierre proyectado queda debajo de la meta",
+        "actual_mtd": _decimal_string(actual),
+        "today_delta": metric.get("daily_delta"),
+        "projected_close": _decimal_string(projected_close),
+        "benchmark": _decimal_string(target),
+        "projected_gap_units": _decimal_string(projected_gap),
+        "projected_compliance_pct": _decimal_string(
+            projected_close / target * Decimal("100")
+        ),
+        "projection_method": projection.get("method"),
+        "source_signal_keys": _signal_keys_for_metric(
+            signals,
+            metric_key="ingreso",
+        ),
+    }
+
+
+def _build_operational_summaries(
+    *,
+    metrics: dict[str, dict[str, Any]] | None,
+    signals: Iterable[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if metrics is None:
+        return []
+
+    signal_rows = list(signals)
+    summaries: list[dict[str, Any]] = []
+
+    for metric_key in PACE_METRIC_KEYS:
+        summary = _build_pace_operational_summary(
+            metric_key=metric_key,
+            metric=metrics[metric_key],
+            signals=signal_rows,
+        )
+        if summary is not None:
+            summaries.append(summary)
+
+    bajas_summary = _build_bajas_operational_summary(
+        metric=metrics["bajas"],
+        signals=signal_rows,
+    )
+    if bajas_summary is not None:
+        summaries.append(bajas_summary)
+
+    income_summary = _build_income_operational_summary(
+        metric=metrics["ingreso"],
+        signals=signal_rows,
+    )
+    if income_summary is not None:
+        summaries.append(income_summary)
+
+    return summaries
+
+
 def _has_signal(signals: Iterable[dict[str, Any]], signal_key: str) -> bool:
     return any(signal.get("signal_key") == signal_key for signal in signals)
 
@@ -1021,9 +1264,346 @@ def _build_cross_metric_diagnosis(
     }
 
 
+def _operational_display_number(value: Any) -> str | None:
+    numeric = _decimal(value)
+    if numeric is None:
+        return None
+
+    if numeric == numeric.to_integral_value():
+        return f"{numeric:.0f}"
+
+    return f"{numeric:.1f}"
+
+
+def _operational_summary_map(
+    operational_summaries: Iterable[dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    return {
+        str(summary["metric_key"]): summary
+        for summary in operational_summaries
+        if summary.get("metric_key")
+    }
+
+
+def _pace_recommendation_reason(
+    *,
+    label: str,
+    summary: dict[str, Any] | None,
+    fallback: str,
+) -> str:
+    if summary is None:
+        return fallback
+
+    projected_close = _operational_display_number(
+        summary.get("projected_close")
+    )
+    benchmark = _operational_display_number(summary.get("benchmark"))
+    gap = _decimal(summary.get("projected_gap_units"))
+    remaining_days = int(summary.get("remaining_days") or 0)
+
+    if remaining_days == 0:
+        if projected_close is None or benchmark is None:
+            return fallback
+
+        if gap is not None and gap < 0:
+            return (
+                f"{label} cerró {projected_close}/{benchmark}; "
+                f"faltaron {_operational_display_number(abs(gap))}."
+            )
+
+        return (
+            f"{label} cerró {projected_close}/{benchmark} "
+            "respecto de la meta mensual."
+        )
+
+    recent = _operational_display_number(
+        summary.get("recent_daily_average")
+    )
+    required = _operational_display_number(
+        summary.get("required_daily_average")
+    )
+
+    parts: list[str] = []
+
+    if recent is not None and required is not None:
+        parts.append(
+            f"{label} opera en {recent}/día y requiere "
+            f"{required}/día en los días restantes"
+        )
+
+    if projected_close is not None and benchmark is not None:
+        projection_text = (
+            f"cierre proyectado {projected_close}/{benchmark}"
+        )
+        if gap is not None and gap < 0:
+            projection_text += (
+                f", con brecha de "
+                f"{_operational_display_number(abs(gap))}"
+            )
+        parts.append(projection_text)
+
+    if not parts:
+        return fallback
+
+    return "; ".join(parts) + "."
+
+
+def _bajas_recommendation_reason(
+    *,
+    summary: dict[str, Any] | None,
+    fallback: str,
+) -> str:
+    if summary is None:
+        return fallback
+
+    projected_close = _operational_display_number(
+        summary.get("projected_close")
+    )
+    benchmark = _operational_display_number(summary.get("benchmark"))
+    usage = _operational_display_number(
+        summary.get("projected_limit_usage_pct")
+        or summary.get("limit_usage_pct")
+    )
+    excess = _decimal(summary.get("projected_excess_units"))
+    margin = _decimal(summary.get("projected_remaining_margin"))
+    remaining_days = int(summary.get("remaining_days") or 0)
+
+    if projected_close is None or benchmark is None:
+        return fallback
+
+    prefix = (
+        "El mes cerró"
+        if remaining_days == 0
+        else "La proyección actual cierra"
+    )
+
+    parts = [f"{prefix} en {projected_close}/{benchmark} bajas"]
+
+    if usage is not None:
+        parts.append(f"{usage}% del límite")
+
+    if excess is not None and excess > 0:
+        parts.append(
+            f"exceso de {_operational_display_number(excess)}"
+        )
+    elif margin is not None:
+        parts.append(
+            f"margen de {_operational_display_number(margin)}"
+        )
+
+    return "; ".join(parts) + "."
+
+
+def _bajas_recommendation_actions(
+    *,
+    summary: dict[str, Any] | None,
+    fallback: list[str],
+) -> list[str]:
+    if summary is None:
+        return fallback
+
+    actual = _decimal(summary.get("actual_mtd"))
+    limit = _decimal(summary.get("benchmark"))
+    recent_average = _decimal(summary.get("recent_daily_average"))
+    remaining_days = int(summary.get("remaining_days") or 0)
+
+    if (
+        actual is None
+        or limit is None
+        or remaining_days <= 0
+    ):
+        return fallback
+
+    remaining_margin = max(limit - actual, Decimal("0"))
+    max_net_daily_rate = (
+        remaining_margin / Decimal(remaining_days)
+    )
+
+    actions = [
+        (
+            "Para cerrar dentro del límite, el saldo neto de bajas "
+            f"no debe superar "
+            f"{_operational_display_number(max_net_daily_rate)} "
+            f"bajas netas/día durante los {remaining_days} días restantes."
+        ),
+    ]
+
+    if (
+        recent_average is not None
+        and recent_average > max_net_daily_rate
+    ):
+        reduction_needed = recent_average - max_net_daily_rate
+        actions.append(
+            (
+                f"El promedio reciente es "
+                f"{_operational_display_number(recent_average)}/día; "
+                f"se requiere reducir el saldo neto en aproximadamente "
+                f"{_operational_display_number(reduction_needed)} "
+                "bajas/día."
+            )
+        )
+
+    actions.extend(fallback)
+
+    return actions[:4]
+
+
+def _income_recommendation_reason(
+    *,
+    summary: dict[str, Any] | None,
+    fallback: str,
+) -> str:
+    if summary is None:
+        return fallback
+
+    projected_close = _operational_display_number(
+        summary.get("projected_close")
+    )
+    benchmark = _operational_display_number(summary.get("benchmark"))
+    gap = _decimal(summary.get("projected_gap_units"))
+
+    if projected_close is None or benchmark is None:
+        return fallback
+
+    reason = (
+        f"El cierre proyectado de ingreso es "
+        f"{projected_close}/{benchmark}"
+    )
+
+    if gap is not None and gap < 0:
+        reason += (
+            f", con brecha de "
+            f"{_operational_display_number(abs(gap))}"
+        )
+
+    return reason + "."
+
+
+def _commercial_general_reason(
+    *,
+    summaries_by_metric: dict[str, dict[str, Any]],
+    fallback: str,
+) -> str:
+    labels = {
+        "clientes_nuevos": "Clientes nuevos",
+        "reactivaciones": "Reactivaciones",
+        "domiciliados": "Domiciliados",
+    }
+
+    metric_keys = (
+        "clientes_nuevos",
+        "reactivaciones",
+        "domiciliados",
+    )
+
+    available = [
+        (metric_key, summaries_by_metric[metric_key])
+        for metric_key in metric_keys
+        if metric_key in summaries_by_metric
+    ]
+    if not available:
+        return fallback
+
+    is_open_month = any(
+        int(summary.get("remaining_days") or 0) > 0
+        for _, summary in available
+    )
+
+    if is_open_month:
+        active_labels = [
+            labels[metric_key]
+            for metric_key, _ in available
+        ]
+
+        if len(active_labels) == 3:
+            return (
+                "Clientes nuevos, reactivaciones y domiciliados "
+                "requieren recuperación simultánea."
+            )
+
+        return (
+            ", ".join(active_labels)
+            + " requieren recuperación simultánea."
+        )
+
+    parts: list[str] = []
+
+    for metric_key, summary in available:
+        close = _operational_display_number(
+            summary.get("projected_close")
+        )
+        benchmark = _operational_display_number(
+            summary.get("benchmark")
+        )
+        gap = _decimal(summary.get("projected_gap_units"))
+
+        if close is None or benchmark is None:
+            continue
+
+        text = f"{labels[metric_key]}: {close}/{benchmark}"
+        if gap is not None and gap < 0:
+            text += (
+                f" (-{_operational_display_number(abs(gap))})"
+            )
+        parts.append(text)
+
+    if not parts:
+        return fallback
+
+    return "; ".join(parts) + "."
+
+
+def _commercial_general_actions(
+    *,
+    summaries_by_metric: dict[str, dict[str, Any]],
+    fallback: list[str],
+) -> list[str]:
+    labels = {
+        "clientes_nuevos": "Clientes nuevos",
+        "reactivaciones": "Reactivaciones",
+        "domiciliados": "Domiciliados",
+    }
+
+    targets: list[str] = []
+
+    for metric_key in (
+        "clientes_nuevos",
+        "reactivaciones",
+        "domiciliados",
+    ):
+        summary = summaries_by_metric.get(metric_key)
+        if summary is None:
+            continue
+
+        if int(summary.get("remaining_days") or 0) == 0:
+            continue
+
+        required = _operational_display_number(
+            summary.get("required_daily_average")
+        )
+        if required is not None:
+            targets.append(f"{labels[metric_key]} {required}/día")
+
+    if not targets:
+        return fallback
+
+    return [
+        "Tomar como objetivo operativo desde el siguiente corte: "
+        + ", ".join(targets)
+        + ".",
+        "Revisar prospectos y cierres pendientes que puedan recuperarse hoy.",
+        "Validar contratos pendientes o incompletos de domiciliación.",
+        (
+            "Comparar resultado diario por asesor y canal contra el ritmo "
+            "requerido, sin asumir una causa hasta identificar la brecha."
+        ),
+    ]
+
+
 def _build_recommendations(
     diagnosis: dict[str, Any],
     signals: Iterable[dict[str, Any]] = (),
+    operational_summaries: Iterable[dict[str, Any]] = (),
 ) -> list[dict[str, Any]]:
     templates: dict[str, dict[str, Any]] = {
         "domiciliados": {
@@ -1146,6 +1726,9 @@ def _build_recommendations(
     recommendations: list[dict[str, Any]] = []
     used_templates: set[str] = set()
     covered_metrics: set[str] = set()
+    summaries_by_metric = _operational_summary_map(
+        operational_summaries
+    )
 
     def add_template(template_key: str | None) -> None:
         if not template_key or template_key in used_templates:
@@ -1155,12 +1738,76 @@ def _build_recommendations(
         if template is None:
             return
 
-        recommendations.append(
-            {
-                "priority": len(recommendations) + 1,
-                **template,
+        recommendation = {
+            "priority": len(recommendations) + 1,
+            **template,
+        }
+
+        metric_key = str(template.get("metric_key") or "")
+        summary = summaries_by_metric.get(metric_key)
+
+        if template_key == "comercial_general":
+            recommendation["reason"] = _commercial_general_reason(
+                summaries_by_metric=summaries_by_metric,
+                fallback=str(template["reason"]),
+            )
+            recommendation["actions"] = _commercial_general_actions(
+                summaries_by_metric=summaries_by_metric,
+                fallback=list(template["actions"]),
+            )
+        elif template_key in {
+            "clientes_nuevos",
+            "reactivaciones",
+            "domiciliados",
+        }:
+            labels = {
+                "clientes_nuevos": "Clientes nuevos",
+                "reactivaciones": "Reactivaciones",
+                "domiciliados": "Domiciliados",
             }
-        )
+            recommendation["reason"] = _pace_recommendation_reason(
+                label=labels[template_key],
+                summary=summary,
+                fallback=str(template["reason"]),
+            )
+
+            if (
+                summary is not None
+                and int(summary.get("remaining_days") or 0) > 0
+            ):
+                recent = _operational_display_number(
+                    summary.get("recent_daily_average")
+                )
+                required = _operational_display_number(
+                    summary.get("required_daily_average")
+                )
+                if recent is not None and required is not None:
+                    recommendation["actions"] = [
+                        (
+                            f"Usar como referencia operativa "
+                            f"{required}/día frente a un promedio reciente "
+                            f"de {recent}/día."
+                        ),
+                        *list(template["actions"]),
+                    ][:4]
+        elif template_key in {"bajas", "retencion"}:
+            bajas_summary = summaries_by_metric.get("bajas")
+
+            recommendation["reason"] = _bajas_recommendation_reason(
+                summary=bajas_summary,
+                fallback=str(template["reason"]),
+            )
+            recommendation["actions"] = _bajas_recommendation_actions(
+                summary=bajas_summary,
+                fallback=list(template["actions"]),
+            )
+        elif template_key == "ingreso":
+            recommendation["reason"] = _income_recommendation_reason(
+                summary=summary,
+                fallback=str(template["reason"]),
+            )
+
+        recommendations.append(recommendation)
         used_templates.add(template_key)
         covered_metrics.update(
             str(key)
@@ -1197,6 +1844,28 @@ def _build_recommendations(
 
         add_template(metric_template_keys.get(metric_key))
 
+    actionable_summaries = [
+        (index, summary)
+        for index, summary in enumerate(operational_summaries)
+        if str(summary.get("severity") or "") in severity_order
+    ]
+    actionable_summaries.sort(
+        key=lambda item: (
+            severity_order[str(item[1].get("severity"))],
+            item[0],
+        )
+    )
+
+    for _, summary in actionable_summaries:
+        if len(recommendations) >= MAX_OPERATIONAL_RECOMMENDATIONS:
+            break
+
+        metric_key = str(summary.get("metric_key") or "")
+        if not metric_key or metric_key in covered_metrics:
+            continue
+
+        add_template(metric_template_keys.get(metric_key))
+
     return recommendations
 
 
@@ -1206,8 +1875,8 @@ def _business_rules() -> dict[str, Any]:
         "clientes_nuevos_pacing": "weekday_curve",
         "reactivaciones_pacing": "weekday_curve",
         "bajas_rule": "monthly_limit_consumption",
-        "domiciliados_pacing": "calendar_linear",
-        "domiciliados_formula": "day_of_month / days_in_month",
+        "domiciliados_pacing": "weekday_curve",
+        "domiciliados_formula": "clientes_nuevos_weekday_curve",
         "projection_method": "existing_stable_historical_pace",
         "operational_projection_method": OPERATIONAL_PROJECTION_METHOD,
         "operational_projection_window_calendar_days": (
@@ -1235,7 +1904,7 @@ def _business_rules() -> dict[str, Any]:
         ],
         "income_linear_pacing_used": False,
         "recommendation_strategy": (
-            "primary_blocker_plus_distinct_active_metrics"
+            "primary_blocker_plus_distinct_operational_risks"
         ),
         "recommendation_max_items": MAX_OPERATIONAL_RECOMMENDATIONS,
     }
@@ -1471,6 +2140,10 @@ def get_track_branch_operational_detail(
         )
 
     signals = _build_operational_signals(current_metrics)
+    operational_summaries = _build_operational_summaries(
+        metrics=current_metrics,
+        signals=signals,
+    )
     diagnosis = _build_cross_metric_diagnosis(
         metrics=current_metrics,
         signals=signals,
@@ -1533,10 +2206,12 @@ def get_track_branch_operational_detail(
             current_track_date=track_date,
         ),
         "signals": signals,
+        "operational_summaries": operational_summaries,
         "diagnosis": diagnosis,
         "recommendations": _build_recommendations(
             diagnosis=diagnosis,
             signals=signals,
+            operational_summaries=operational_summaries,
         ),
         "quality": {
             "history_rows": len(history),

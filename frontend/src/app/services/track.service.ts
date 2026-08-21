@@ -1122,6 +1122,44 @@ export interface TrackBranchOperationalChangeVsPrevious {
   metrics: Partial<Record<keyof TrackBranchOperationalMetrics, TrackBranchOperationalMetricChange>>;
 }
 
+export type TrackBranchOperationalSummaryMetricKey =
+  | 'clientes_nuevos'
+  | 'reactivaciones'
+  | 'domiciliados'
+  | 'bajas'
+  | 'ingreso';
+
+export interface TrackBranchOperationalSummary {
+  metric_key: TrackBranchOperationalSummaryMetricKey;
+  severity: 'info' | 'success' | 'warning' | 'critical';
+  title: string;
+
+  actual_mtd: string | null;
+  today_delta: string | null;
+
+  pace_pct?: string | null;
+  limit_usage_pct?: string | null;
+
+  recent_daily_average?: string | null;
+  required_daily_average?: string | null;
+  remaining_days?: number;
+
+  projected_close: string | null;
+  benchmark: string | null;
+
+  projected_gap_units?: string | null;
+  projected_compliance_pct?: string | null;
+
+  projected_excess_units?: string | null;
+  projected_remaining_margin?: string | null;
+  projected_limit_usage_pct?: string | null;
+
+  trend?: TrackBranchOperationalTrend | null;
+  projection_method?: string | null;
+
+  source_signal_keys: string[];
+}
+
 export interface TrackBranchOperationalSignal {
   signal_key: string;
   metric_key: keyof TrackBranchOperationalMetrics;
@@ -1197,6 +1235,7 @@ export interface TrackBranchOperationalDetailResponse {
   history: TrackBranchOperationalHistoryPoint[];
   change_vs_previous: TrackBranchOperationalChangeVsPrevious;
   signals: TrackBranchOperationalSignal[];
+  operational_summaries: TrackBranchOperationalSummary[];
   diagnosis: TrackBranchOperationalDiagnosis;
   recommendations: TrackBranchOperationalRecommendation[];
   quality: TrackBranchOperationalQuality;

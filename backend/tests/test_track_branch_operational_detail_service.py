@@ -310,18 +310,32 @@ def test_bajas_projection_reports_close_below_limit():
     assert projection["projected_remaining_margin"] == "17"
 
 
-def test_domiciliados_uses_exact_calendar_linear_pacing():
-    metric = service._build_pace_metric(
+def test_domiciliados_reuses_clientes_nuevos_weekday_pacing():
+    cutoff_date = date(2026, 8, 18)
+
+    clientes = service._build_pace_metric(
+        metric_key="clientes_nuevos",
+        actual_mtd=150,
+        monthly_target=310,
+        cutoff_date=cutoff_date,
+    )
+
+    domiciliados = service._build_pace_metric(
         metric_key="domiciliados",
         actual_mtd=150,
         monthly_target=310,
-        cutoff_date=date(2026, 8, 18),
+        cutoff_date=cutoff_date,
     )
 
-    assert Decimal(metric["expected_mtd"]) == Decimal("180")
-    assert Decimal(metric["expected_progress_pct"]) == (
-        Decimal("18") / Decimal("31") * Decimal("100")
+    assert (
+        Decimal(domiciliados["expected_progress_pct"])
+        == Decimal(clientes["expected_progress_pct"])
     )
+    assert (
+        Decimal(domiciliados["expected_mtd"])
+        == Decimal(clientes["expected_mtd"])
+    )
+    assert domiciliados["metric_key"] == "domiciliados"
 
 
 @pytest.mark.parametrize(
@@ -493,6 +507,548 @@ def test_income_signal_uses_projection_and_never_linear_pacing():
         "ingreso_projection_below_target"
     ]
     assert service._business_rules()["income_linear_pacing_used"] is False
+
+
+def test_operational_summaries_consolidate_pace_metric_into_one_actionable_card():
+    metrics = {
+        "clientes_nuevos": {
+            "actual_mtd": "60",
+            "monthly_target": "100",
+            "daily_delta": "3",
+            "pace_pct": "75",
+            "trend": "DETERIORATING",
+            "projection": {
+                "status": "available",
+                "remaining_days": 10,
+                "recent_daily_average": "2.5",
+                "projected_close": "85",
+                "projected_gap_units": "-15",
+                "projected_compliance_pct": "85",
+            },
+        },
+        "reactivaciones": {
+            "actual_mtd": "100",
+            "monthly_target": "100",
+            "daily_delta": "2",
+            "pace_pct": "100",
+            "trend": "STABLE",
+            "projection": {
+                "status": "available",
+                "remaining_days": 10,
+                "recent_daily_average": "2",
+                "projected_close": "120",
+                "projected_gap_units": "20",
+                "projected_compliance_pct": "120",
+            },
+        },
+        "domiciliados": {
+            "actual_mtd": "100",
+            "monthly_target": "100",
+            "daily_delta": "1",
+            "pace_pct": "100",
+            "trend": "STABLE",
+            "projection": {
+                "status": "available",
+                "remaining_days": 10,
+                "recent_daily_average": "1",
+                "projected_close": "110",
+                "projected_gap_units": "10",
+                "projected_compliance_pct": "110",
+            },
+        },
+        "bajas": {
+            "actual_mtd": "40",
+            "monthly_limit": "100",
+            "daily_delta": "1",
+            "limit_usage_pct": "40",
+            "trend": "STABLE",
+            "projection": {
+                "status": "available",
+                "remaining_days": 10,
+                "recent_daily_average": "1",
+                "projected_close": "50",
+                "projected_excess_units": "0",
+                "projected_remaining_margin": "50",
+                "projected_limit_usage_pct": "50",
+            },
+        },
+        "ingreso": {
+            "actual_mtd": "900",
+            "monthly_target": "1000",
+            "daily_delta": "10",
+            "projection": {
+                "status": "available",
+                "method": "existing_stable_historical_pace",
+                "projected_close": "1100",
+            },
+        },
+    }
+    signals = [
+        {
+            "signal_key": "clientes_nuevos_severely_below_pace",
+            "metric_key": "clientes_nuevos",
+            "severity": "critical",
+        },
+        {
+            "signal_key": "clientes_nuevos_recent_slowdown",
+            "metric_key": "clientes_nuevos",
+            "severity": "warning",
+        },
+    ]
+
+    summaries = service._build_operational_summaries(
+        metrics=metrics,
+        signals=signals,
+    )
+
+    assert len(summaries) == 1
+    summary = summaries[0]
+    assert summary["metric_key"] == "clientes_nuevos"
+    assert summary["severity"] == "critical"
+    assert summary["today_delta"] == "3"
+    assert summary["recent_daily_average"] == "2.5"
+    assert summary["required_daily_average"] == "4"
+    assert summary["projected_close"] == "85"
+    assert summary["projected_gap_units"] == "-15"
+    assert summary["source_signal_keys"] == [
+        "clientes_nuevos_severely_below_pace",
+        "clientes_nuevos_recent_slowdown",
+    ]
+
+
+def test_pace_operational_summary_uses_closed_month_language():
+    summary = service._build_pace_operational_summary(
+        metric_key="clientes_nuevos",
+        metric={
+            "actual_mtd": "162",
+            "monthly_target": "300",
+            "daily_delta": "13",
+            "pace_pct": "54",
+            "trend": "IMPROVING",
+            "projection": {
+                "status": "available",
+                "remaining_days": 0,
+                "recent_daily_average": "6",
+                "projected_close": "162",
+                "projected_gap_units": "-138",
+                "projected_compliance_pct": "54",
+            },
+        },
+        signals=[],
+    )
+
+    assert summary is not None
+    assert summary["title"] == "El mes cerró por debajo de la meta"
+    assert summary["remaining_days"] == 0
+    assert summary["required_daily_average"] is None
+
+
+def test_bajas_operational_summary_uses_closed_month_language():
+    summary = service._build_bajas_operational_summary(
+        metric={
+            "actual_mtd": "201",
+            "monthly_limit": "244",
+            "daily_delta": "9",
+            "limit_usage_pct": "82.377",
+            "trend": "DETERIORATING",
+            "projection": {
+                "status": "available",
+                "remaining_days": 0,
+                "recent_daily_average": "1.14",
+                "projected_close": "201",
+                "projected_excess_units": "0",
+                "projected_remaining_margin": "43",
+                "projected_limit_usage_pct": "82.377",
+            },
+        },
+        signals=[],
+    )
+
+    assert summary is not None
+    assert (
+        summary["title"]
+        == "El mes cerró dentro del límite, con consumo alto"
+    )
+    assert summary["remaining_days"] == 0
+
+
+def test_operational_summary_ignores_trend_only_when_projection_is_healthy():
+    metrics = {
+        "clientes_nuevos": {
+            "actual_mtd": "90",
+            "monthly_target": "100",
+            "daily_delta": "3",
+            "pace_pct": "105",
+            "trend": "DETERIORATING",
+            "projection": {
+                "status": "available",
+                "remaining_days": 5,
+                "recent_daily_average": "3",
+                "projected_close": "105",
+                "projected_gap_units": "5",
+                "projected_compliance_pct": "105",
+            },
+        },
+        "reactivaciones": {
+            "actual_mtd": "100",
+            "monthly_target": "100",
+            "daily_delta": "2",
+            "pace_pct": "100",
+            "trend": "STABLE",
+            "projection": {
+                "status": "available",
+                "remaining_days": 5,
+                "recent_daily_average": "2",
+                "projected_close": "110",
+            },
+        },
+        "domiciliados": {
+            "actual_mtd": "100",
+            "monthly_target": "100",
+            "daily_delta": "1",
+            "pace_pct": "100",
+            "trend": "STABLE",
+            "projection": {
+                "status": "available",
+                "remaining_days": 5,
+                "recent_daily_average": "1",
+                "projected_close": "105",
+            },
+        },
+        "bajas": {
+            "actual_mtd": "20",
+            "monthly_limit": "100",
+            "daily_delta": "1",
+            "limit_usage_pct": "20",
+            "trend": "DETERIORATING",
+            "projection": {
+                "status": "available",
+                "remaining_days": 5,
+                "recent_daily_average": "1",
+                "projected_close": "25",
+            },
+        },
+        "ingreso": {
+            "actual_mtd": "900",
+            "monthly_target": "1000",
+            "daily_delta": "10",
+            "projection": {
+                "status": "available",
+                "projected_close": "1050",
+            },
+        },
+    }
+
+    summaries = service._build_operational_summaries(
+        metrics=metrics,
+        signals=[
+            {
+                "signal_key": "clientes_nuevos_recent_slowdown",
+                "metric_key": "clientes_nuevos",
+                "severity": "warning",
+            },
+            {
+                "signal_key": "bajas_recent_acceleration",
+                "metric_key": "bajas",
+                "severity": "warning",
+            },
+        ],
+    )
+
+    assert summaries == []
+
+
+def test_bajas_recommendation_exposes_max_net_daily_rate_to_stay_within_limit():
+    diagnosis = {
+        "primary_blocker": "bajas",
+    }
+
+    recommendations = service._build_recommendations(
+        diagnosis=diagnosis,
+        signals=[],
+        operational_summaries=[
+            {
+                "metric_key": "bajas",
+                "severity": "warning",
+                "actual_mtd": "182",
+                "remaining_days": 5,
+                "recent_daily_average": "18",
+                "projected_close": "272",
+                "benchmark": "244",
+                "projected_excess_units": "28",
+                "projected_remaining_margin": "0",
+                "projected_limit_usage_pct": "111.4754098360655737704918033",
+            }
+        ],
+    )
+
+    assert len(recommendations) == 1
+
+    recommendation = recommendations[0]
+
+    assert recommendation["metric_key"] == "bajas"
+    assert any(
+        "12.4 bajas netas/día" in action
+        for action in recommendation["actions"]
+    )
+    assert any(
+        "5.6" in action
+        for action in recommendation["actions"]
+    )
+
+
+def test_recommendations_include_projected_bajas_risk_without_bajas_signal():
+    diagnosis = {
+        "primary_blocker": "comercial_general",
+    }
+
+    signals = [
+        {
+            "signal_key": "clientes_nuevos_severely_below_pace",
+            "metric_key": "clientes_nuevos",
+            "severity": "critical",
+        },
+        {
+            "signal_key": "reactivaciones_severely_below_pace",
+            "metric_key": "reactivaciones",
+            "severity": "critical",
+        },
+        {
+            "signal_key": "domiciliados_severely_below_pace",
+            "metric_key": "domiciliados",
+            "severity": "critical",
+        },
+    ]
+
+    summaries = [
+        {
+            "metric_key": "clientes_nuevos",
+            "severity": "critical",
+            "remaining_days": 5,
+            "recent_daily_average": "3.1",
+            "required_daily_average": "34.8",
+            "projected_close": "141.7",
+            "benchmark": "300",
+            "projected_gap_units": "-158.3",
+        },
+        {
+            "metric_key": "reactivaciones",
+            "severity": "critical",
+            "remaining_days": 5,
+            "recent_daily_average": "0.7",
+            "required_daily_average": "8.8",
+            "projected_close": "56.6",
+            "benchmark": "97",
+            "projected_gap_units": "-40.4",
+        },
+        {
+            "metric_key": "domiciliados",
+            "severity": "critical",
+            "remaining_days": 5,
+            "recent_daily_average": "1.3",
+            "required_daily_average": "37",
+            "projected_close": "91.4",
+            "benchmark": "270",
+            "projected_gap_units": "-178.6",
+        },
+        {
+            "metric_key": "bajas",
+            "severity": "warning",
+            "remaining_days": 5,
+            "recent_daily_average": "18",
+            "projected_close": "272",
+            "benchmark": "244",
+            "projected_excess_units": "28",
+            "projected_remaining_margin": "0",
+            "projected_limit_usage_pct": "111.4754098360655737704918033",
+        },
+    ]
+
+    recommendations = service._build_recommendations(
+        diagnosis=diagnosis,
+        signals=signals,
+        operational_summaries=summaries,
+    )
+
+    assert len(recommendations) == 2
+    assert [item["metric_key"] for item in recommendations] == [
+        "clientes_nuevos",
+        "bajas",
+    ]
+    assert recommendations[0]["priority"] == 1
+    assert recommendations[1]["priority"] == 2
+    assert recommendations[1]["title"] == "Contener bajas y revisar causas"
+    assert "272/244 bajas" in recommendations[1]["reason"]
+    assert "exceso de 28" in recommendations[1]["reason"]
+
+
+def test_recommendations_use_operational_numbers_for_commercial_general():
+    diagnosis = {
+        "primary_blocker": "comercial_general",
+    }
+
+    summaries = [
+        {
+            "metric_key": "clientes_nuevos",
+            "remaining_days": 8,
+            "recent_daily_average": "4",
+            "required_daily_average": "19.4",
+            "projected_close": "146",
+            "benchmark": "300",
+            "projected_gap_units": "-154",
+        },
+        {
+            "metric_key": "reactivaciones",
+            "remaining_days": 8,
+            "recent_daily_average": "1.4",
+            "required_daily_average": "4.9",
+            "projected_close": "62.3",
+            "benchmark": "97",
+            "projected_gap_units": "-34.7",
+        },
+        {
+            "metric_key": "domiciliados",
+            "remaining_days": 8,
+            "recent_daily_average": "2.6",
+            "required_daily_average": "19.4",
+            "projected_close": "102",
+            "benchmark": "270",
+            "projected_gap_units": "-168",
+        },
+    ]
+
+    recommendations = service._build_recommendations(
+        diagnosis=diagnosis,
+        signals=[],
+        operational_summaries=summaries,
+    )
+
+    assert len(recommendations) == 1
+    recommendation = recommendations[0]
+
+    assert recommendation["title"] == "Revisar el embudo comercial completo"
+    assert (
+        recommendation["reason"]
+        == (
+            "Clientes nuevos, reactivaciones y domiciliados "
+            "requieren recuperación simultánea."
+        )
+    )
+    assert (
+        "Clientes nuevos 19.4/día"
+        in recommendation["actions"][0]
+    )
+    assert (
+        "Reactivaciones 4.9/día"
+        in recommendation["actions"][0]
+    )
+
+
+def test_recommendations_use_final_gap_language_for_closed_month():
+    diagnosis = {
+        "primary_blocker": "clientes_nuevos",
+    }
+
+    recommendations = service._build_recommendations(
+        diagnosis=diagnosis,
+        signals=[],
+        operational_summaries=[
+            {
+                "metric_key": "clientes_nuevos",
+                "remaining_days": 0,
+                "recent_daily_average": "6",
+                "required_daily_average": None,
+                "projected_close": "162",
+                "benchmark": "300",
+                "projected_gap_units": "-138",
+            }
+        ],
+    )
+
+    assert len(recommendations) == 1
+    assert (
+        recommendations[0]["reason"]
+        == "Clientes nuevos cerró 162/300; faltaron 138."
+    )
+
+
+def test_recommendations_keep_primary_blocker_first_and_max_three():
+    diagnosis = {
+        "primary_blocker": "comercial_general",
+    }
+    signals = [
+        {
+            "metric_key": "clientes_nuevos",
+            "severity": "critical",
+        },
+        {
+            "metric_key": "bajas",
+            "severity": "critical",
+        },
+        {
+            "metric_key": "ingreso",
+            "severity": "warning",
+        },
+        {
+            "metric_key": "reactivaciones",
+            "severity": "warning",
+        },
+    ]
+
+    recommendations = service._build_recommendations(
+        diagnosis=diagnosis,
+        signals=signals,
+    )
+
+    assert len(recommendations) == 3
+    assert [item["priority"] for item in recommendations] == [1, 2, 3]
+    assert [item["metric_key"] for item in recommendations] == [
+        "clientes_nuevos",
+        "bajas",
+        "ingreso",
+    ]
+    assert recommendations[0]["evidence_keys"] == [
+        "clientes_nuevos",
+        "reactivaciones",
+        "domiciliados",
+    ]
+
+
+def test_recommendations_skip_covered_metrics_and_preserve_severity_order():
+    diagnosis = {
+        "primary_blocker": "clientes_nuevos",
+    }
+    signals = [
+        {
+            "metric_key": "clientes_nuevos",
+            "severity": "warning",
+        },
+        {
+            "metric_key": "reactivaciones",
+            "severity": "critical",
+        },
+        {
+            "metric_key": "domiciliados",
+            "severity": "warning",
+        },
+        {
+            "metric_key": "bajas",
+            "severity": "warning",
+        },
+    ]
+
+    recommendations = service._build_recommendations(
+        diagnosis=diagnosis,
+        signals=signals,
+    )
+
+    assert len(recommendations) == 3
+    assert [item["metric_key"] for item in recommendations] == [
+        "clientes_nuevos",
+        "reactivaciones",
+        "domiciliados",
+    ]
+    assert [item["priority"] for item in recommendations] == [1, 2, 3]
 
 
 def test_all_healthy_kpis_produce_healthy_diagnosis_without_critical_signal():

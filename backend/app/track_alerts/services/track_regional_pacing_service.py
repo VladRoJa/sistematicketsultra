@@ -306,6 +306,21 @@ def build_clientes_nuevos_metric(
     )
 
 
+def build_domiciliados_metric(
+    *,
+    actual_mtd: Any,
+    monthly_target: Any,
+    cutoff_date: date,
+) -> TrackRegionalPaceMetric:
+    return build_weekday_pace_metric(
+        metric_key="domiciliados",
+        actual_mtd=actual_mtd,
+        monthly_target=monthly_target,
+        cutoff_date=cutoff_date,
+        weekday_weights=CLIENTES_NUEVOS_WEEKDAY_WEIGHTS,
+    )
+
+
 def build_reactivaciones_metric(
     *,
     actual_mtd: Any,

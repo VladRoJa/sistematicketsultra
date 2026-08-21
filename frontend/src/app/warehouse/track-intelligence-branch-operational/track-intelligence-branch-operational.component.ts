@@ -19,6 +19,7 @@ import {
   TrackBranchOperationalLimitProjection,
   TrackBranchOperationalMetricChange,
   TrackBranchOperationalMetrics,
+  TrackBranchOperationalSummary,
   TrackBranchOperationalTargetProjection,
   TrackForecastCenterCatalogBranch,
   TrackGenerationMode,
@@ -88,6 +89,20 @@ type OperationalProjection =
   | TrackBranchOperationalTargetProjection
   | TrackBranchOperationalLimitProjection;
 
+interface OperationalSummaryRowView {
+  label: string;
+  value: string;
+  emphasis?: boolean;
+}
+
+interface OperationalSummaryCardView {
+  metricKey: string;
+  label: string;
+  severity: string;
+  title: string;
+  rows: OperationalSummaryRowView[];
+}
+
 interface BusinessRuleView {
   key: keyof TrackBranchOperationalBusinessRules;
   label: string;
@@ -114,6 +129,7 @@ export class TrackIntelligenceBranchOperationalComponent
   priorityCards: PriorityCardView[] = [];
   changeCards: ChangeCardView[] = [];
   charts: ChartView[] = [];
+  operationalSummaryCards: OperationalSummaryCardView[] = [];
   businessRuleViews: BusinessRuleView[] = [];
   selectedBranch = '';
   selectedTrackDate = '';
@@ -181,6 +197,7 @@ export class TrackIntelligenceBranchOperationalComponent
     this.priorityCards = [];
     this.changeCards = [];
     this.charts = [];
+    this.operationalSummaryCards = [];
 
     this.trackService
       .getBranchOperationalDetail(
@@ -195,6 +212,9 @@ export class TrackIntelligenceBranchOperationalComponent
           this.priorityCards = this.buildPriorityCards(response);
           this.changeCards = this.buildChangeCards(response);
           this.charts = this.buildCharts(response);
+          this.operationalSummaryCards = (
+            this.buildOperationalSummaryCards(response)
+          );
           this.businessRuleViews = this.buildBusinessRuleViews(
             response.business_rules,
           );
@@ -948,6 +968,204 @@ export class TrackIntelligenceBranchOperationalComponent
     };
   }
 
+  private buildOperationalSummaryCards(
+    response: TrackBranchOperationalDetailResponse,
+  ): OperationalSummaryCardView[] {
+    return response.operational_summaries.map((summary) => ({
+      metricKey: summary.metric_key,
+      label: this.getOperationalSummaryLabel(summary.metric_key),
+      severity: summary.severity,
+      title: summary.title,
+      rows: this.buildOperationalSummaryRows(summary),
+    }));
+  }
+
+  private getOperationalSummaryLabel(metricKey: string): string {
+    const labels: Record<string, string> = {
+      clientes_nuevos: 'Clientes nuevos',
+      reactivaciones: 'Reactivaciones',
+      domiciliados: 'Domiciliados',
+      bajas: 'Bajas',
+      ingreso: 'Ingreso',
+    };
+
+    return labels[metricKey] || this.formatCodeLabel(metricKey);
+  }
+
+  private buildOperationalSummaryRows(
+    summary: TrackBranchOperationalSummary,
+  ): OperationalSummaryRowView[] {
+    if (summary.metric_key === 'ingreso') {
+      return this.buildIncomeOperationalSummaryRows(summary);
+    }
+
+    if (summary.metric_key === 'bajas') {
+      return this.buildBajasOperationalSummaryRows(summary);
+    }
+
+    return this.buildPaceOperationalSummaryRows(summary);
+  }
+
+  private buildPaceOperationalSummaryRows(
+    summary: TrackBranchOperationalSummary,
+  ): OperationalSummaryRowView[] {
+    const rows: OperationalSummaryRowView[] = [];
+    const isClosedMonth = summary.remaining_days === 0;
+
+    rows.push({
+      label: 'Hoy',
+      value: this.formatSignedDailyUnit(summary.today_delta),
+    });
+
+    if (summary.recent_daily_average !== null &&
+        summary.recent_daily_average !== undefined) {
+      rows.push({
+        label: 'Promedio diario (7 días)',
+        value: `${this.formatNumber(summary.recent_daily_average, 1)}/día`,
+      });
+    }
+
+    if (!isClosedMonth &&
+        summary.required_daily_average !== null &&
+        summary.required_daily_average !== undefined) {
+      rows.push({
+        label: 'Necesita en los días restantes',
+        value: `${this.formatNumber(summary.required_daily_average, 1)}/día`,
+        emphasis: true,
+      });
+    }
+
+    rows.push({
+      label: isClosedMonth ? 'Cierre observado' : 'Cierre proyectado',
+      value: (
+        `${this.formatNumber(summary.projected_close)} / meta ` +
+        `${this.formatNumber(summary.benchmark)}`
+      ),
+    });
+
+    if (isClosedMonth &&
+        summary.projected_compliance_pct !== null &&
+        summary.projected_compliance_pct !== undefined) {
+      rows.push({
+        label: 'Cumplimiento final',
+        value: this.formatPercent(summary.projected_compliance_pct),
+      });
+    }
+
+    const gap = this.toNumber(summary.projected_gap_units);
+
+    if (gap !== null) {
+      rows.push({
+        label: isClosedMonth ? 'Brecha final' : 'Brecha al cierre',
+        value: gap >= 0
+          ? (
+            isClosedMonth
+              ? `superávit final +${this.formatNumber(gap)}`
+              : `superávit +${this.formatNumber(gap)}`
+          )
+          : (
+            isClosedMonth
+              ? `faltaron ${this.formatNumber(Math.abs(gap))}`
+              : `faltarán ${this.formatNumber(Math.abs(gap))}`
+          ),
+        emphasis: true,
+      });
+    }
+
+    return rows;
+  }
+
+  private buildBajasOperationalSummaryRows(
+    summary: TrackBranchOperationalSummary,
+  ): OperationalSummaryRowView[] {
+    const rows: OperationalSummaryRowView[] = [];
+    const isClosedMonth = summary.remaining_days === 0;
+
+    const today = this.toNumber(summary.today_delta);
+    rows.push({
+      label: 'Hoy',
+      value: today === null
+        ? '—'
+        : `${this.formatSignedDailyUnit(today)} bajas`,
+    });
+
+    if (summary.recent_daily_average !== null &&
+        summary.recent_daily_average !== undefined) {
+      rows.push({
+        label: 'Promedio diario (7 días)',
+        value: `${this.formatNumber(summary.recent_daily_average, 1)}/día`,
+      });
+    }
+
+    rows.push({
+      label: isClosedMonth ? 'Cierre observado' : 'Cierre proyectado',
+      value: (
+        `${this.formatNumber(summary.projected_close)} / límite ` +
+        `${this.formatNumber(summary.benchmark)}`
+      ),
+    });
+
+    if (isClosedMonth &&
+        summary.projected_limit_usage_pct !== null &&
+        summary.projected_limit_usage_pct !== undefined) {
+      rows.push({
+        label: 'Consumo final',
+        value: this.formatPercent(summary.projected_limit_usage_pct),
+      });
+    }
+
+    const excess = this.toNumber(summary.projected_excess_units);
+    const margin = this.toNumber(summary.projected_remaining_margin);
+
+    if (excess !== null && excess > 0) {
+      rows.push({
+        label: isClosedMonth ? 'Exceso final' : 'Riesgo al cierre',
+        value: `exceso +${this.formatNumber(excess)}`,
+        emphasis: true,
+      });
+    } else if (margin !== null) {
+      rows.push({
+        label: isClosedMonth ? 'Margen final' : 'Margen al cierre',
+        value: this.formatNumber(margin),
+        emphasis: true,
+      });
+    }
+
+    return rows;
+  }
+
+  private buildIncomeOperationalSummaryRows(
+    summary: TrackBranchOperationalSummary,
+  ): OperationalSummaryRowView[] {
+    const rows: OperationalSummaryRowView[] = [
+      {
+        label: 'Ingreso MTD',
+        value: this.formatMoney(summary.actual_mtd),
+      },
+      {
+        label: 'Cierre proyectado',
+        value: (
+          `${this.formatMoney(summary.projected_close)} / meta ` +
+          `${this.formatMoney(summary.benchmark)}`
+        ),
+      },
+    ];
+
+    const gap = this.toNumber(summary.projected_gap_units);
+
+    if (gap !== null) {
+      rows.push({
+        label: 'Brecha al cierre',
+        value: gap >= 0
+          ? `superávit +${this.formatMoney(gap)}`
+          : `faltarán ${this.formatMoney(Math.abs(gap))}`,
+        emphasis: true,
+      });
+    }
+
+    return rows;
+  }
+
   private buildBusinessRuleViews(
     rules: TrackBranchOperationalBusinessRules,
   ): BusinessRuleView[] {
@@ -956,8 +1174,8 @@ export class TrackIntelligenceBranchOperationalComponent
       reactivaciones_pacing: 'Ritmo de reactivaciones',
       bajas_rule: 'Regla de bajas',
       domiciliados_pacing: 'Ritmo de domiciliados',
-      domiciliados_formula: 'Fórmula de domiciliados',
-      projection_method: 'Método de proyección',
+      domiciliados_formula: 'Curva base de domiciliados',
+      projection_method: 'Método de proyección de ingreso',
       operational_projection_method: 'Método de proyección operativa',
       operational_projection_window_calendar_days: 'Ventana de proyección operativa',
       operational_projection_min_valid_deltas: 'Mínimo de deltas válidos',
@@ -989,6 +1207,9 @@ export class TrackIntelligenceBranchOperationalComponent
   ): string {
     const valueLabels: Record<string, string> = {
       weekday_curve: 'Curva histórica por día de semana',
+      clientes_nuevos_weekday_curve: (
+        'Misma curva weekday que Clientes nuevos'
+      ),
       monthly_limit_consumption: 'Consumo contra límite mensual',
       calendar_linear: 'Ritmo lineal por día calendario',
       'day_of_month / days_in_month': (
@@ -998,7 +1219,7 @@ export class TrackIntelligenceBranchOperationalComponent
         'Ritmo histórico estable disponible'
       ),
       recent_valid_daily_average_7_calendar_days: (
-        'Promedio diario reciente válido'
+        'Promedio diario de deltas válidos'
       ),
       projected_close_vs_monthly_target_only: (
         'Proyección de cierre vs meta mensual'
@@ -1006,8 +1227,8 @@ export class TrackIntelligenceBranchOperationalComponent
       bajas_limit_exceeded: 'Límite de bajas excedido',
       bajas_near_limit: 'Bajas cerca del límite',
       bajas_high_limit_usage: 'Consumo alto del límite de bajas',
-      primary_blocker_plus_distinct_active_metrics: (
-        'Bloqueo principal + métricas activas distintas'
+      primary_blocker_plus_distinct_operational_risks: (
+        'Bloqueo principal + riesgos operativos distintos no cubiertos'
       ),
     };
 
