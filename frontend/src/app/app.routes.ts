@@ -174,6 +174,13 @@ export const routes: Routes = [
             .then(m => m.TrackIntelligenceRegionalOperationalComponent),
       },
       {
+        path: 'warehouse/track-intelligence/branch/:sucursalCanon',
+        canActivate: [trackRegionalOperationalAccessGuard],
+        loadComponent: () =>
+          import('./warehouse/track-intelligence-branch-operational/track-intelligence-branch-operational.component')
+            .then(m => m.TrackIntelligenceBranchOperationalComponent),
+      },
+      {
         path: 'warehouse/track/sucursal/:sucursalCanon',
         component: TrackBranchHistoryComponent,
       },

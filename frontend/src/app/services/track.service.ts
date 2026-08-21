@@ -949,6 +949,260 @@ export interface TrackRegionalOperationalResponse {
   business_rules: TrackRegionalBusinessRule[];
 }
 
+export type TrackBranchOperationalTrend =
+  | 'IMPROVING'
+  | 'DETERIORATING'
+  | 'STABLE'
+  | 'INSUFFICIENT_DATA';
+
+export type TrackBranchOperationalDirection =
+  | 'IMPROVING'
+  | 'WORSENING'
+  | 'STABLE'
+  | 'NOT_APPLICABLE'
+  | 'INSUFFICIENT_DATA';
+
+export interface TrackBranchOperationalIdentity {
+  sucursal_canon: string;
+  sucursal_label: string;
+  region_key: string | null;
+  region_label: string | null;
+}
+
+export interface TrackBranchOperationalCutoff {
+  track_date: string;
+  target_month: string;
+  generation_mode: TrackGenerationMode;
+  track_daily_version_id: number | null;
+  version_type: string | null;
+  days_in_month: number;
+  day_of_month: number;
+  resolved_by: string;
+  fallback_used: boolean | null;
+}
+
+export interface TrackBranchOperationalTrendFields {
+  trend?: TrackBranchOperationalTrend;
+  trend_net_change_pp?: string | null;
+  trend_start_date?: string | null;
+}
+
+export interface TrackBranchOperationalProjectedPoint {
+  track_date: string;
+  projected_mtd: string;
+}
+
+export interface TrackBranchOperationalProjectionBase {
+  status: 'available' | 'insufficient_history';
+  method: 'recent_valid_daily_average_7_calendar_days';
+  window_calendar_days: number;
+  valid_daily_deltas: number;
+  recent_daily_average: string | null;
+  remaining_days: number;
+  projected_close: string | null;
+  projected_points: TrackBranchOperationalProjectedPoint[];
+}
+
+export interface TrackBranchOperationalTargetProjection
+  extends TrackBranchOperationalProjectionBase {
+  projected_gap_units?: string | null;
+  projected_compliance_pct?: string | null;
+}
+
+export interface TrackBranchOperationalLimitProjection
+  extends TrackBranchOperationalProjectionBase {
+  projected_excess_units?: string | null;
+  projected_remaining_margin?: string | null;
+  projected_limit_usage_pct?: string | null;
+}
+
+export interface TrackBranchOperationalPaceMetric
+  extends TrackBranchOperationalTrendFields {
+  metric_key: 'clientes_nuevos' | 'reactivaciones' | 'domiciliados';
+  actual_mtd: string | null;
+  monthly_target: string | null;
+  actual_progress_pct: string | null;
+  expected_progress_pct: string;
+  expected_mtd: string | null;
+  gap_units: string | null;
+  gap_pct_points: string | null;
+  remaining_to_target: string | null;
+  pace_pct: string | null;
+  daily_delta: string | null;
+  projection?: TrackBranchOperationalTargetProjection;
+  status: string;
+}
+
+export interface TrackBranchOperationalLimitMetric
+  extends TrackBranchOperationalTrendFields {
+  metric_key: 'bajas';
+  actual_mtd: string | null;
+  monthly_limit: string | null;
+  limit_usage_pct: string | null;
+  remaining_margin: string | null;
+  remaining_before_limit: string | null;
+  excess_units: string | null;
+  daily_delta: string | null;
+  projection?: TrackBranchOperationalLimitProjection;
+  status: string;
+}
+
+export interface TrackBranchOperationalIncomeProjection {
+  status: 'available' | 'insufficient_history';
+  method?: string;
+  projected_close: string | null;
+  historical_progress_pct_at_cutoff?: string | null;
+  historical_months?: number;
+  confidence?: string;
+  quality_issue?: {
+    code?: string;
+    message?: string;
+    reasons?: string[];
+  } | null;
+}
+
+export interface TrackBranchOperationalTargetMetric {
+  metric_key: 'ingreso' | 'tienda';
+  actual_mtd: string | null;
+  monthly_target: string | null;
+  compliance_pct: string | null;
+  remaining_to_target: string | null;
+  daily_delta: string | null;
+  status: string;
+  base_mtd?: string | null;
+  agregadoras_mtd?: string | null;
+  projection?: TrackBranchOperationalIncomeProjection;
+}
+
+export interface TrackBranchOperationalUsersMetric {
+  metric_key: 'usuarios';
+  start_month: string | null;
+  actual: string | null;
+  change_from_start: string | null;
+  projected_month_close: string | null;
+  compliance_pct: string | null;
+  occupancy_actual: string | null;
+  occupancy_month_target: string | null;
+  daily_delta: string | null;
+  status: string;
+}
+
+export interface TrackBranchOperationalMetrics {
+  clientes_nuevos: TrackBranchOperationalPaceMetric;
+  reactivaciones: TrackBranchOperationalPaceMetric;
+  bajas: TrackBranchOperationalLimitMetric;
+  domiciliados: TrackBranchOperationalPaceMetric;
+  ingreso: TrackBranchOperationalTargetMetric;
+  usuarios: TrackBranchOperationalUsersMetric;
+  tienda: TrackBranchOperationalTargetMetric;
+}
+
+export interface TrackBranchOperationalHistoryPoint {
+  track_date: string;
+  track_daily_version_id: number;
+  previous_track_date: string | null;
+  days_since_previous: number | null;
+  is_consecutive_previous_date: boolean;
+  metrics: TrackBranchOperationalMetrics;
+}
+
+export interface TrackBranchOperationalMetricChange {
+  actual_delta: string | null;
+  comparison_field: string | null;
+  comparison_previous: string | null;
+  comparison_current: string | null;
+  comparison_delta_pp: string | null;
+  direction: TrackBranchOperationalDirection;
+}
+
+export interface TrackBranchOperationalChangeVsPrevious {
+  previous_track_date: string | null;
+  days_since_previous: number | null;
+  is_consecutive_previous_date: boolean;
+  metrics: Partial<Record<keyof TrackBranchOperationalMetrics, TrackBranchOperationalMetricChange>>;
+}
+
+export interface TrackBranchOperationalSignal {
+  signal_key: string;
+  metric_key: keyof TrackBranchOperationalMetrics;
+  severity: 'info' | 'success' | 'warning' | 'critical';
+  title: string;
+  summary: string;
+  evidence: Record<string, unknown>;
+  status: 'active';
+}
+
+export interface TrackBranchOperationalDiagnosis {
+  overall_status:
+    | 'healthy'
+    | 'watch'
+    | 'attention_required'
+    | 'critical'
+    | 'insufficient_data';
+  severity: 'info' | 'success' | 'warning' | 'critical';
+  headline: string;
+  summary: string;
+  primary_blocker: string | null;
+  supporting_signals: string[];
+}
+
+export interface TrackBranchOperationalRecommendation {
+  priority: number;
+  metric_key: keyof TrackBranchOperationalMetrics;
+  title: string;
+  reason: string;
+  actions: string[];
+  evidence_keys: string[];
+}
+
+export interface TrackBranchOperationalQuality {
+  history_rows: number;
+  expected_calendar_days: number;
+  missing_dates: string[];
+  has_gaps: boolean;
+  latest_version_available: boolean;
+  projection_available: boolean;
+  warnings: string[];
+}
+
+export interface TrackBranchOperationalBusinessRules {
+  clientes_nuevos_pacing: 'weekday_curve';
+  reactivaciones_pacing: 'weekday_curve';
+  bajas_rule: 'monthly_limit_consumption';
+  domiciliados_pacing: 'calendar_linear';
+  domiciliados_formula: 'day_of_month / days_in_month';
+  projection_method: 'existing_stable_historical_pace';
+  operational_projection_method: 'recent_valid_daily_average_7_calendar_days';
+  operational_projection_window_calendar_days: number;
+  operational_projection_min_valid_deltas: number;
+  income_signal_basis: 'projected_close_vs_monthly_target_only';
+  trend_window_valid_cuts: number;
+  trend_dead_band_pp: string;
+  pace_severely_below_pct: string;
+  bajas_high_limit_usage_pct: string;
+  bajas_near_limit_usage_pct: string;
+  bajas_signal_precedence: string[];
+  income_linear_pacing_used: false;
+  recommendation_strategy: 'primary_blocker_plus_distinct_active_metrics';
+  recommendation_max_items: number;
+}
+
+export interface TrackBranchOperationalDetailResponse {
+  status: 'ok';
+  identity: TrackBranchOperationalIdentity;
+  cutoff: TrackBranchOperationalCutoff;
+  current: {
+    metrics: TrackBranchOperationalMetrics | null;
+  };
+  history: TrackBranchOperationalHistoryPoint[];
+  change_vs_previous: TrackBranchOperationalChangeVsPrevious;
+  signals: TrackBranchOperationalSignal[];
+  diagnosis: TrackBranchOperationalDiagnosis;
+  recommendations: TrackBranchOperationalRecommendation[];
+  quality: TrackBranchOperationalQuality;
+  business_rules: TrackBranchOperationalBusinessRules;
+}
+
 export interface TrackBranchForecastDetailResolvedVersion {
   id: number;
 }
@@ -1762,6 +2016,22 @@ export class TrackService {
 
     return this.http.get<TrackRegionalOperationalResponse>(
       `${this.trackAlertsBaseUrl}/regional-detail`,
+      { params },
+    );
+  }
+
+  getBranchOperationalDetail(
+    sucursalCanon: string,
+    trackDate: string,
+    generationMode: TrackGenerationMode = 'manual_preview',
+  ): Observable<TrackBranchOperationalDetailResponse> {
+    const params = new HttpParams()
+      .set('sucursal_canon', sucursalCanon)
+      .set('track_date', trackDate)
+      .set('generation_mode', generationMode);
+
+    return this.http.get<TrackBranchOperationalDetailResponse>(
+      `${this.trackAlertsBaseUrl}/branch-operational-detail`,
       { params },
     );
   }

@@ -332,6 +332,36 @@ def _load_track_rows_with_region(
     )
 
 
+def resolve_current_track_region_for_branch_id(
+    *,
+    sucursal_id: int | None,
+) -> SuiteRegionORM | None:
+    """Resuelve la región operacional current de una sucursal Track."""
+    if sucursal_id is None:
+        return None
+
+    rows = (
+        db.session.query(SuiteRegionORM)
+        .join(
+            SuiteSucursalRegionAssignmentORM,
+            SuiteSucursalRegionAssignmentORM.region_id == SuiteRegionORM.id,
+        )
+        .filter(
+            SuiteSucursalRegionAssignmentORM.sucursal_id == sucursal_id,
+            SuiteSucursalRegionAssignmentORM.is_current.is_(True),
+            SuiteRegionORM.is_active.is_(True),
+        )
+        .all()
+    )
+
+    if len(rows) > 1:
+        raise RuntimeError(
+            f"La sucursal {sucursal_id!r} tiene más de una región current."
+        )
+
+    return rows[0] if rows else None
+
+
 def _build_region_totals(
     joined_rows: list[tuple[TrackDailyMartORM, TrackBranchCatalogORM, SuiteRegionORM]],
 ) -> dict[str, dict[str, Any]]:

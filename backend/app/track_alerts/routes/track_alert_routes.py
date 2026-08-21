@@ -6,7 +6,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from flask import Blueprint, jsonify, request
-from flask_jwt_extended import jwt_required
+from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from app.extensions import db
 from smtplib import SMTPException
@@ -17,6 +17,7 @@ from app.track_alerts.services.track_alert_rules_service import (
 from app.track_alerts.services.track_alert_event_service import (
     generate_track_alert_events,
 )
+from app.models.user_model import UserORM
 from app.models.warehouse import TrackAlertEventORM
 from app.track_alerts.services.track_alert_email_renderer_service import (
     render_executive_alert_email,
@@ -36,13 +37,39 @@ from app.track_alerts.services.track_regional_operational_service import (
     TrackRegionalOperationalDataError,
     get_regional_operational_detail,
 )
+from app.track_alerts.services.track_branch_operational_detail_service import (
+    TrackBranchOperationalDetailDataError,
+    get_track_branch_operational_detail,
+)
 from app.routes.track_routes import _require_track_read_role
+from app.warehouse.services.track_forecast_center_service import (
+    ForecastCenterAuthorizationError,
+    ForecastCenterNotFoundError,
+    ForecastCenterValidationError,
+)
+from app.warehouse.services.track_daily_query_version_service import (
+    ALLOWED_TRACK_GENERATION_MODES,
+)
 
 track_alert_bp = Blueprint(
     "track_alerts",
     __name__,
     url_prefix="/api/track-alerts",
 )
+
+
+def _get_current_track_alert_user():
+    try:
+        user_id = int(get_jwt_identity())
+    except (TypeError, ValueError) as exc:
+        raise PermissionError(
+            "No autorizado para consultar Inteligencia Regional."
+        ) from exc
+
+    user = UserORM.get_by_id(user_id)
+    if user is None:
+        raise PermissionError("Usuario no encontrado.")
+    return user
 
 
 @track_alert_bp.route("/test", methods=["POST"])
@@ -462,3 +489,52 @@ def get_regional_track_alert_detail():
                 "error": str(exc),
             }
         ), 409
+
+
+@track_alert_bp.route("/branch-operational-detail", methods=["GET"])
+@jwt_required()
+def get_track_branch_operational_detail_endpoint():
+    try:
+        _require_track_read_role()
+
+        sucursal_canon = str(
+            request.args.get("sucursal_canon") or ""
+        ).strip()
+        track_date_raw = str(request.args.get("track_date") or "").strip()
+        generation_mode = str(
+            request.args.get("generation_mode") or "manual_preview"
+        ).strip()
+
+        if not sucursal_canon:
+            raise ValueError("sucursal_canon es requerido.")
+        if not track_date_raw:
+            raise ValueError("track_date es requerido.")
+        if generation_mode not in ALLOWED_TRACK_GENERATION_MODES:
+            raise ValueError("generation_mode inválido.")
+
+        try:
+            track_date = datetime.strptime(
+                track_date_raw,
+                "%Y-%m-%d",
+            ).date()
+        except ValueError as exc:
+            raise ValueError(
+                "Formato inválido de track_date. Usa YYYY-MM-DD."
+            ) from exc
+
+        result = get_track_branch_operational_detail(
+            user=_get_current_track_alert_user(),
+            sucursal_canon=sucursal_canon,
+            track_date=track_date,
+            generation_mode=generation_mode,
+        )
+        return jsonify(result), 200
+
+    except (PermissionError, ForecastCenterAuthorizationError) as exc:
+        return jsonify({"error": str(exc)}), 403
+    except ForecastCenterNotFoundError as exc:
+        return jsonify({"error": str(exc)}), 404
+    except (ValueError, ForecastCenterValidationError) as exc:
+        return jsonify({"error": str(exc)}), 400
+    except TrackBranchOperationalDetailDataError as exc:
+        return jsonify({"error": str(exc)}), 409
