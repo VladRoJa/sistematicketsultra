@@ -276,6 +276,41 @@ h1 {
   gap: 3px;
 }
 
+.branch-link {
+  width: fit-content;
+  border: 0;
+  border-bottom: 1px solid currentColor;
+  padding: 0;
+  color: #174f82;
+  background: transparent;
+  font: inherit;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+}
+
+.branch-link:hover,
+.branch-link:focus-visible {
+  color: #0d355a;
+}
+
+.branch-link:focus-visible {
+  outline: 2px solid #5b9bd5;
+  outline-offset: 2px;
+}
+
+.branch-link--compact {
+  display: block;
+  margin-top: 4px;
+  color: #4b6075;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.region-branches-cell {
+  min-width: 150px;
+}
+
 .metrics-table td > strong,
 .metrics-table td > span {
   display: block;

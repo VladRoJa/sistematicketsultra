@@ -1,0 +1,445 @@
+<div class="branch-operational-page">
+  <header class="page-header">
+    <div class="header-identity">
+      <p class="eyebrow">Track / inteligencia operacional</p>
+      <h1>{{ data?.identity?.sucursal_label || selectedBranch }}</h1>
+      <p class="region-label">
+        {{ data?.identity?.region_label || 'Región sin identificar' }}
+      </p>
+    </div>
+
+    <div class="header-actions">
+      <button
+        type="button"
+        class="secondary-button"
+        (click)="openRulesModal()"
+        [disabled]="!data"
+      >
+        Reglas de negocio
+      </button>
+      <button
+        type="button"
+        class="secondary-button"
+        (click)="goBackToRegional()"
+      >
+        Volver a Inteligencia Regional
+      </button>
+    </div>
+  </header>
+
+  <section class="filter-bar" aria-label="Filtros del Deep Dive">
+    <label>
+      <span>Sucursal</span>
+      <select
+        [(ngModel)]="selectedBranch"
+      >
+        <option
+          *ngIf="catalogWarning && selectedBranch && !branchOptionExists()"
+          [value]="selectedBranch"
+        >
+          {{ data?.identity?.sucursal_label || selectedBranch }}
+        </option>
+        <option
+          *ngFor="let branch of branchOptions"
+          [value]="branch.sucursal_canon"
+        >
+          {{ branch.label }}
+        </option>
+      </select>
+    </label>
+
+    <label>
+      <span>Fecha de corte</span>
+      <input
+        type="date"
+        [(ngModel)]="selectedTrackDate"
+        [max]="maxTrackDate"
+      />
+    </label>
+
+    <button
+      type="button"
+      class="primary-button"
+      (click)="applyFilters()"
+      [disabled]="isLoading"
+    >
+      {{ isLoading ? 'Consultando…' : 'Consultar' }}
+    </button>
+
+    <div class="cutoff-summary" *ngIf="data">
+      <span>Corte {{ formatDate(data.cutoff.track_date) }}</span>
+      <strong>{{ getGenerationModeLabel() }}</strong>
+      <span *ngIf="data.cutoff.track_daily_version_id as versionId">
+        Versión #{{ versionId }}
+      </span>
+    </div>
+  </section>
+
+  <p class="catalog-warning" *ngIf="catalogWarning">
+    {{ catalogWarning }}
+  </p>
+
+  <section class="state-panel" *ngIf="isLoading">
+    <mat-spinner diameter="36"></mat-spinner>
+    <span>Cargando lectura operacional de la sucursal…</span>
+  </section>
+
+  <section class="state-panel state-panel--error" *ngIf="errorMessage">
+    <strong>No fue posible completar la consulta.</strong>
+    <span>{{ errorMessage }}</span>
+  </section>
+
+  <ng-container *ngIf="!isLoading && data as detail">
+    <section
+      class="diagnosis-strip"
+      [class]="'diagnosis-strip ' + getSemanticClass(detail.diagnosis.severity)"
+    >
+      <div>
+        <span class="section-kicker">Estado general</span>
+        <h2>{{ detail.diagnosis.headline }}</h2>
+        <p>{{ detail.diagnosis.summary }}</p>
+      </div>
+      <strong class="overall-status">
+        {{ formatCodeLabel(detail.diagnosis.overall_status) }}
+      </strong>
+    </section>
+
+    <section
+      class="content-section secondary-section"
+      *ngIf="detail.current.metrics as metrics"
+      aria-labelledby="secondary-title"
+    >
+      <div class="section-heading">
+        <div>
+          <span class="section-kicker">Objetivos del mes</span>
+          <h2 id="secondary-title">Metas y cierre del mes</h2>
+        </div>
+      </div>
+
+      <div class="secondary-grid">
+        <article [class]="getMonthlyGoalCardClass('ingreso', metrics)">
+          <h3>Ingreso</h3>
+          <dl>
+            <div><dt>Real MTD</dt><dd>{{ formatMoney(metrics.ingreso.actual_mtd) }}</dd></div>
+            <div><dt>Meta</dt><dd>{{ formatMoney(metrics.ingreso.monthly_target) }}</dd></div>
+            <div><dt>Cumplimiento</dt><dd>{{ formatPercent(metrics.ingreso.compliance_pct) }}</dd></div>
+            <div><dt>Base</dt><dd>{{ formatMoney(metrics.ingreso.base_mtd) }}</dd></div>
+            <div><dt>Agregadoras</dt><dd>{{ formatMoney(metrics.ingreso.agregadoras_mtd) }}</dd></div>
+            <div>
+              <dt>Proyección</dt>
+              <dd *ngIf="metrics.ingreso.projection?.status === 'available'; else noProjection">
+                {{ formatMoney(metrics.ingreso.projection?.projected_close) }}
+              </dd>
+              <ng-template #noProjection><dd>Sin historia suficiente</dd></ng-template>
+            </div>
+          </dl>
+        </article>
+
+        <article [class]="getMonthlyGoalCardClass('usuarios', metrics)">
+          <h3>Usuarios</h3>
+          <dl>
+            <div><dt>Inicio de mes</dt><dd>{{ formatNumber(metrics.usuarios.start_month) }}</dd></div>
+            <div><dt>Actuales</dt><dd>{{ formatNumber(metrics.usuarios.actual) }}</dd></div>
+            <div><dt>Cambio</dt><dd>{{ formatSigned(metrics.usuarios.change_from_start) }}</dd></div>
+            <div><dt>Proyección</dt><dd>{{ formatNumber(metrics.usuarios.projected_month_close) }}</dd></div>
+            <div>
+              <dt>Cumplimiento</dt>
+              <dd>{{ formatPercent(metrics.usuarios.compliance_pct) }}</dd>
+            </div>
+            <div>
+              <dt>Ocupación actual</dt>
+              <dd>{{ formatNumber(metrics.usuarios.occupancy_actual, 2) }} socios/m²</dd>
+            </div>
+            <div>
+              <dt>Meta ocupación del mes</dt>
+              <dd>{{ formatNumber(metrics.usuarios.occupancy_month_target, 2) }} socios/m²</dd>
+            </div>
+          </dl>
+        </article>
+
+        <article [class]="getMonthlyGoalCardClass('tienda', metrics)">
+          <h3>Tienda</h3>
+          <dl>
+            <div><dt>Venta MTD</dt><dd>{{ formatMoney(metrics.tienda.actual_mtd) }}</dd></div>
+            <div><dt>Meta</dt><dd>{{ formatMoney(metrics.tienda.monthly_target) }}</dd></div>
+            <div><dt>Cumplimiento</dt><dd>{{ formatPercent(metrics.tienda.compliance_pct) }}</dd></div>
+            <div><dt>Restante</dt><dd>{{ formatMoney(metrics.tienda.remaining_to_target) }}</dd></div>
+          </dl>
+        </article>
+      </div>
+    </section>
+
+
+    <section class="content-section" aria-labelledby="summary-title">
+      <div class="section-heading">
+        <div>
+          <span class="section-kicker">Lectura inmediata</span>
+          <h2 id="summary-title">Resumen operacional</h2>
+        </div>
+        <p>Actual, referencia, tendencia y cambio desde el último corte válido.</p>
+      </div>
+
+      <div class="empty-state" *ngIf="!priorityCards.length">
+        No existe una fila operativa para la sucursal en este corte.
+      </div>
+
+      <div class="priority-grid" *ngIf="priorityCards.length">
+        <article class="priority-card" *ngFor="let card of priorityCards">
+          <div class="priority-card__header">
+            <h3>{{ card.label }}</h3>
+            <span [class]="getSemanticClass(card.status)">
+              {{ getStatusLabel(card.status) }}
+            </span>
+          </div>
+          <strong class="priority-main-value">{{ card.mainValue }}</strong>
+          <mat-progress-bar
+            mode="determinate"
+            [value]="card.progressValue"
+            [attr.aria-label]="card.progressLabel"
+          ></mat-progress-bar>
+          <span class="priority-progress-label">{{ card.progressLabel }}</span>
+          <span class="priority-secondary" *ngIf="card.secondaryLabel">
+            {{ card.secondaryLabel }}
+          </span>
+          <div class="priority-trend">
+            <strong [class]="getSemanticClass(card.trend)">
+              Tendencia reciente: {{ getTrendLabel(card.trend) }}
+            </strong>
+            <span>{{ card.changeLabel }}</span>
+            <span *ngIf="card.trendStartDate">
+              Ventana reciente desde {{ formatDate(card.trendStartDate) }}
+            </span>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="content-section" aria-labelledby="change-title">
+      <div class="section-heading">
+        <div>
+          <span class="section-kicker">{{ getCutLabel() }}</span>
+          <h2 id="change-title">¿Qué cambió desde el último corte?</h2>
+        </div>
+        <p *ngIf="detail.change_vs_previous.previous_track_date">
+          {{ formatDate(detail.change_vs_previous.previous_track_date) }} →
+          {{ formatDate(detail.cutoff.track_date) }}
+        </p>
+      </div>
+
+      <div class="empty-state" *ngIf="!changeCards.length">
+        Se requieren al menos dos cortes válidos para comparar.
+      </div>
+
+      <div class="change-grid" *ngIf="changeCards.length">
+        <article class="change-item" *ngFor="let change of changeCards">
+          <h3>{{ change.label }}</h3>
+
+          <strong
+            [class]="getDailyDeltaClass(change.key, change.todayDeltaRaw)"
+          >
+            {{ change.todayDelta }} hoy
+          </strong>
+
+          <div class="change-seven-days">
+            <span>Últimos 7 días</span>
+
+            <div class="change-seven-days-grid">
+              <div
+                class="change-seven-days-point"
+                *ngFor="let point of change.lastSevenDays"
+              >
+                <span>{{ point.dayLabel }}</span>
+                <strong>{{ point.value }}</strong>
+              </div>
+            </div>
+
+            <small>Más antiguo → hoy</small>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="content-section" aria-labelledby="evolution-title">
+      <div class="section-heading">
+        <div>
+          <span class="section-kicker">Serie diaria acumulada</span>
+          <h2 id="evolution-title">Evolución del mes</h2>
+        </div>
+        <p>
+          Cada punto conserva su versión Track efectiva; los huecos no se rellenan.
+        </p>
+      </div>
+
+      <div class="chart-grid">
+        <article class="chart-card" *ngFor="let chart of charts">
+          <h3>{{ chart.title }}</h3>
+          <div class="chart-legend">
+            <span><i class="legend-line legend-line--actual"></i>Real acumulado</span>
+            <span><i class="legend-line legend-line--benchmark"></i>{{ chart.benchmarkLabel }}</span>
+            <span><i class="legend-line legend-line--projection"></i>Proyección</span>
+          </div>
+          <div class="chart-projection-summary">
+            <strong>{{ chart.projectionHeadline }}</strong>
+            <span *ngIf="chart.projectionBenchmark">{{ chart.projectionBenchmark }}</span>
+            <span *ngIf="chart.projectionComparison">{{ chart.projectionComparison }}</span>
+          </div>
+          <div class="chart-empty" *ngIf="chart.empty">Sin datos para graficar.</div>
+          <div class="metric-chart-wrap" *ngIf="!chart.empty">
+            <svg
+              class="metric-chart"
+              viewBox="0 0 100 36"
+              preserveAspectRatio="none"
+              role="img"
+              [attr.aria-label]="chart.title"
+            >
+              <line x1="4" y1="32" x2="96" y2="32" class="chart-axis"></line>
+              <polyline
+                [attr.points]="chart.benchmarkPoints"
+                class="chart-line chart-line--benchmark"
+              ></polyline>
+              <polyline
+                [attr.points]="chart.projectionPoints"
+                class="chart-line chart-line--projection"
+              ></polyline>
+              <polyline
+                [attr.points]="chart.actualPoints"
+                class="chart-line chart-line--actual"
+              ></polyline>
+              <circle
+                *ngFor="let marker of chart.actualMarkers"
+                [attr.cx]="marker.x"
+                [attr.cy]="marker.y"
+                r="0.9"
+                class="chart-marker"
+              >
+                <title>{{ marker.label }}</title>
+              </circle>
+            </svg>
+
+            <div class="metric-chart-axis-labels" aria-hidden="true">
+              <span
+                *ngFor="let axisLabel of chart.axisLabels"
+                [style.left.%]="axisLabel.x"
+              >
+                {{ axisLabel.label }}
+              </span>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="split-section">
+      <article class="content-section signals-section" aria-labelledby="signals-title">
+        <div class="section-heading">
+          <div>
+            <span class="section-kicker">Evidencia backend</span>
+            <h2 id="signals-title">Bloqueos y señales detectadas</h2>
+          </div>
+        </div>
+
+        <div class="empty-state" *ngIf="!detail.signals.length">
+          No hay señales activas para este corte.
+        </div>
+        <div class="signal-list">
+          <article
+            class="signal-item"
+            *ngFor="let signal of detail.signals"
+            [class]="'signal-item ' + getSemanticClass(signal.severity)"
+          >
+            <span>{{ formatCodeLabel(signal.metric_key) }}</span>
+            <h3>{{ signal.title }}</h3>
+            <p>{{ signal.summary }}</p>
+          </article>
+        </div>
+      </article>
+
+      <article
+        class="content-section recommendations-section"
+        aria-labelledby="recommendations-title"
+      >
+        <div class="section-heading">
+          <div>
+            <span class="section-kicker">Determinísticas y auditables</span>
+            <h2 id="recommendations-title">Acciones sugeridas</h2>
+          </div>
+        </div>
+
+        <div class="empty-state" *ngIf="!detail.recommendations.length">
+          El diagnóstico actual no requiere una acción prioritaria predefinida.
+        </div>
+        <article
+          class="recommendation-item"
+          *ngFor="let recommendation of detail.recommendations"
+        >
+          <span class="recommendation-priority">{{ recommendation.priority }}</span>
+          <div>
+            <h3>{{ recommendation.title }}</h3>
+            <p>{{ recommendation.reason }}</p>
+            <ul>
+              <li *ngFor="let action of recommendation.actions">{{ action }}</li>
+            </ul>
+          </div>
+        </article>
+      </article>
+    </section>
+
+    <section class="quality-strip">
+      <div>
+        <span>Histórico</span>
+        <strong>{{ detail.quality.history_rows }} / {{ detail.quality.expected_calendar_days }} cortes</strong>
+      </div>
+      <div>
+        <span>Huecos</span>
+        <strong>{{ detail.quality.has_gaps ? detail.quality.missing_dates.length : 'Sin huecos' }}</strong>
+      </div>
+      <div>
+        <span>Proyección</span>
+        <strong>{{ detail.quality.projection_available ? 'Disponible' : 'No disponible' }}</strong>
+      </div>
+      <div class="quality-warnings" *ngIf="detail.quality.warnings.length">
+        <span *ngFor="let warning of detail.quality.warnings">{{ warning }}</span>
+      </div>
+    </section>
+  </ng-container>
+
+  <div
+    class="modal-backdrop"
+    *ngIf="isRulesModalOpen"
+    (click)="closeRulesModal()"
+  >
+    <section
+      class="rules-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="rules-modal-title"
+      (click)="stopModalClose($event)"
+    >
+      <header>
+        <div>
+          <span class="section-kicker">Auditoría del cálculo</span>
+          <h2 id="rules-modal-title">Reglas de negocio</h2>
+        </div>
+        <button
+          type="button"
+          class="modal-close"
+          aria-label="Cerrar reglas de negocio"
+          (click)="closeRulesModal()"
+        >
+          ×
+        </button>
+      </header>
+
+      <p>
+        Valores devueltos por el backend para este corte. Angular no reconstruye
+        ni decide estos thresholds.
+      </p>
+      <dl class="rules-list">
+        <div *ngFor="let rule of businessRuleViews">
+          <dt>{{ rule.label }}</dt>
+          <dd>{{ rule.value }}</dd>
+        </div>
+      </dl>
+    </section>
+  </div>
+</div>

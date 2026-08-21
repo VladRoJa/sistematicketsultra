@@ -118,7 +118,13 @@
             >
               <span class="priority-position">{{ position + 1 }}</span>
               <div class="priority-identity">
-                <strong>{{ item.sucursal_name }}</strong>
+                <button
+                  type="button"
+                  class="branch-link"
+                  (click)="goToBranchOperational(item.sucursal_canon)"
+                >
+                  {{ item.sucursal_name }}
+                </button>
                 <span>{{ item.region_label }}</span>
               </div>
               <div class="priority-value">
@@ -181,7 +187,17 @@
               <td class="identity-cell">
                 <strong>{{ region.region_label }}</strong>
               </td>
-              <td>{{ region.summary.total_branches }}</td>
+              <td class="region-branches-cell">
+                <strong>{{ region.summary.total_branches }}</strong>
+                <button
+                  type="button"
+                  class="branch-link branch-link--compact"
+                  *ngFor="let branch of region.branches; trackBy: trackBranch"
+                  (click)="goToBranchOperational(branch.sucursal_canon)"
+                >
+                  {{ branch.sucursal_name }}
+                </button>
+              </td>
               <td>
                 <strong>{{ getPaceSummary(region.summary.metrics.clientes_nuevos) }}</strong>
                 <span>{{ getPaceGap(region.summary.metrics.clientes_nuevos) }}</span>
@@ -256,7 +272,13 @@
               <tbody>
                 <tr *ngFor="let branch of region.branches; trackBy: trackBranch">
                   <td class="identity-cell">
-                    <strong>{{ branch.sucursal_name }}</strong>
+                    <button
+                      type="button"
+                      class="branch-link"
+                      (click)="goToBranchOperational(branch.sucursal_canon)"
+                    >
+                      {{ branch.sucursal_name }}
+                    </button>
                     <span>{{ branch.sucursal_canon }}</span>
                   </td>
                   <td>

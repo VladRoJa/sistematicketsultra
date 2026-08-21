@@ -123,6 +123,21 @@ export class TrackIntelligenceRegionalOperationalComponent
     });
   }
 
+  goToBranchOperational(sucursalCanon: string): void {
+    this.router.navigate(
+      [
+        '/warehouse/track-intelligence/branch',
+        sucursalCanon,
+      ],
+      {
+        queryParams: {
+          track_date: this.selectedTrackDate,
+          generation_mode: this.generationMode,
+        },
+      },
+    );
+  }
+
   getPriorityGroups(): TrackRegionalOperationalPriorityGroup[] {
     const groups = this.data?.priorities || [];
 
