@@ -14,7 +14,7 @@ from app.track_alerts.services.track_alert_region_rules_service import (
 from app.track_alerts.services.track_regional_pacing_service import (
     build_bajas_metric,
     build_clientes_nuevos_metric,
-    build_linear_pace_metric,
+    build_domiciliados_metric,
     build_reactivaciones_metric,
     build_target_progress_metric,
     build_users_gap_metric,
@@ -274,8 +274,7 @@ def _domiciliados_priority_item(
 ) -> dict[str, Any]:
     metric = branch["metrics"]["domiciliados"]
 
-    pace_metric = build_linear_pace_metric(
-        metric_key="domiciliados",
+    pace_metric = build_domiciliados_metric(
         actual_mtd=metric.get("actual_mtd"),
         monthly_target=metric.get("monthly_target"),
         cutoff_date=track_date,

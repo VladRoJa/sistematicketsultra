@@ -3,6 +3,8 @@ from decimal import Decimal
 
 import pytest
 
+import app.track_alerts.services.track_regional_pacing_service as pacing_service
+
 from app.track_alerts.services.track_regional_pacing_service import (
     CLIENTES_NUEVOS_WEEKDAY_WEIGHTS,
     REACTIVACIONES_WEEKDAY_WEIGHTS,
@@ -174,6 +176,57 @@ def test_reactivaciones_without_positive_target(monthly_target):
     )
 
     assert metric.status == "SIN_META"
+
+
+def test_domiciliados_reuses_clientes_nuevos_weekday_curve():
+    cutoff_date = date(2026, 8, 17)
+
+    clientes_metric = build_clientes_nuevos_metric(
+        actual_mtd=Decimal("90"),
+        monthly_target=Decimal("180"),
+        cutoff_date=cutoff_date,
+    )
+
+    build_domiciliados_metric = getattr(
+        pacing_service,
+        "build_domiciliados_metric",
+        None,
+    )
+
+    assert build_domiciliados_metric is not None, (
+        "Domiciliados todavía no tiene un builder que reutilice "
+        "la curva weekday de Clientes nuevos."
+    )
+
+    domiciliados_metric = build_domiciliados_metric(
+        actual_mtd=Decimal("60"),
+        monthly_target=Decimal("120"),
+        cutoff_date=cutoff_date,
+    )
+
+    assert (
+        domiciliados_metric.expected_progress_pct
+        == clientes_metric.expected_progress_pct
+    )
+
+    expected_domiciliados_mtd = (
+        Decimal("120")
+        * clientes_metric.expected_progress_pct
+        / Decimal("100")
+    )
+
+    assert (
+        domiciliados_metric.expected_mtd
+        == expected_domiciliados_mtd
+    )
+
+    assert domiciliados_metric.metric_key == "domiciliados"
+
+    # Comparten patrón temporal, no meta absoluta.
+    assert (
+        domiciliados_metric.expected_mtd
+        != clientes_metric.expected_mtd
+    )
 
 
 def test_reactivaciones_does_not_reuse_clientes_nuevos_curve():

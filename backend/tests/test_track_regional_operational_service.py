@@ -402,25 +402,20 @@ def test_bajas_priorities_include_all_branches_ordered_by_limit_usage():
     }
 
 
-def test_priorities_include_domiciliados_with_linear_pace():
-    from datetime import date
-    from decimal import Decimal
-
-    from app.track_alerts.services import (
-        track_regional_operational_service as service,
-    )
-
+def test_priorities_domiciliados_reuse_clientes_nuevos_weekday_pace():
     cutoff = date(2026, 8, 18)
+
+    clientes_metric = service.build_clientes_nuevos_metric(
+        actual_mtd=100,
+        monthly_target=100,
+        cutoff_date=cutoff,
+    ).to_dict()
 
     branch = {
         "sucursal_canon": "TEST_BRANCH",
         "sucursal_name": "Test Branch",
         "metrics": {
-            "clientes_nuevos": service.build_clientes_nuevos_metric(
-                actual_mtd=100,
-                monthly_target=100,
-                cutoff_date=cutoff,
-            ).to_dict(),
+            "clientes_nuevos": clientes_metric,
             "reactivaciones": service.build_reactivaciones_metric(
                 actual_mtd=100,
                 monthly_target=100,
@@ -465,5 +460,17 @@ def test_priorities_include_domiciliados_with_linear_pace():
     assert domiciliados[0]["sucursal_canon"] == "TEST_BRANCH"
     assert domiciliados[0]["actual_mtd"] == "150"
     assert domiciliados[0]["monthly_target"] == "310"
-    assert Decimal(domiciliados[0]["expected_mtd"]) == Decimal("180")
+
+    assert (
+        Decimal(domiciliados[0]["expected_progress_pct"])
+        == Decimal(clientes_metric["expected_progress_pct"])
+    )
+
+    expected_mtd = (
+        Decimal("310")
+        * Decimal(clientes_metric["expected_progress_pct"])
+        / Decimal("100")
+    )
+
+    assert Decimal(domiciliados[0]["expected_mtd"]) == expected_mtd
     assert domiciliados[0]["status"] == "DEBAJO_RITMO"
