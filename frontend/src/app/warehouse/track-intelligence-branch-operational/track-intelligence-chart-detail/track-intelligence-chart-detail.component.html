@@ -162,13 +162,21 @@
           class="detail-chart-line detail-chart-line--projection"
         ></polyline>
         <ng-container *ngFor="let series of plot.historicalSeries">
-          <polyline
-            *ngFor="let segment of series.segments"
-            [attr.points]="segment"
-            class="detail-chart-line detail-chart-line--historical"
-            [class.detail-chart-line--previous-month]="series.classModifier === 'previous-month'"
-            [class.detail-chart-line--previous-year]="series.classModifier === 'previous-year'"
-          ></polyline>
+          <ng-container *ngFor="let segment of series.segments">
+            <polyline
+              [attr.points]="segment"
+              class="detail-chart-line detail-chart-line--historical"
+              [class.detail-chart-line--previous-month]="series.classModifier === 'previous-month'"
+              [class.detail-chart-line--previous-year]="series.classModifier === 'previous-year'"
+            ></polyline>
+            <polyline
+              [attr.points]="segment"
+              class="detail-chart-hitline"
+              role="button"
+              [attr.aria-label]="'Seleccionar ' + series.label"
+              (click)="selectHistoricalSeries(series.periodKey); $event.stopPropagation()"
+            ></polyline>
+          </ng-container>
         </ng-container>
         <polyline
           [attr.points]="plot.actualPoints"
@@ -211,6 +219,7 @@
               [attr.cy]="marker.y"
               r="0.26"
               class="detail-chart-marker detail-chart-marker--previous-month"
+              (click)="selectHistoricalSeries(series.periodKey); $event.stopPropagation()"
             >
               <title>{{ marker.label }}</title>
             </circle>
@@ -222,10 +231,33 @@
               [attr.cy]="marker.y"
               r="0.26"
               class="detail-chart-marker detail-chart-marker--previous-year"
+              (click)="selectHistoricalSeries(series.periodKey); $event.stopPropagation()"
             >
               <title>{{ marker.label }}</title>
             </circle>
           </ng-template>
+        </ng-container>
+
+        <ng-container *ngIf="plot.selectedHistoricalSeries as selectedSeries">
+          <polyline
+            *ngFor="let segment of selectedSeries.segments"
+            [attr.points]="segment"
+            class="detail-chart-line detail-chart-line--historical-selected"
+            [class.detail-chart-line--previous-month]="selectedSeries.classModifier === 'previous-month'"
+            [class.detail-chart-line--previous-year]="selectedSeries.classModifier === 'previous-year'"
+          ></polyline>
+
+          <circle
+            *ngFor="let marker of selectedSeries.markers"
+            [attr.cx]="marker.x"
+            [attr.cy]="marker.y"
+            r="0.34"
+            class="detail-chart-marker detail-chart-marker--historical-selected"
+            [class.detail-chart-marker--previous-month]="selectedSeries.classModifier === 'previous-month'"
+            [class.detail-chart-marker--previous-year]="selectedSeries.classModifier === 'previous-year'"
+          >
+            <title>{{ marker.label }}</title>
+          </circle>
         </ng-container>
 
         <g class="detail-chart-value-labels" aria-hidden="true">
@@ -237,6 +269,24 @@
             class="detail-chart-value-label"
             [class.detail-chart-value-label--above]="valueLabel.placement === 'above'"
             [class.detail-chart-value-label--below]="valueLabel.placement === 'below'"
+          >
+            {{ valueLabel.text }}
+          </text>
+        </g>
+
+        <g
+          *ngIf="plot.selectedHistoricalSeries as selectedSeries"
+          class="detail-chart-value-labels"
+          [class.detail-chart-value-labels--previous-month]="selectedSeries.classModifier === 'previous-month'"
+          [class.detail-chart-value-labels--previous-year]="selectedSeries.classModifier === 'previous-year'"
+          aria-hidden="true"
+        >
+          <text
+            *ngFor="let valueLabel of plot.selectedHistoricalValueLabels"
+            [attr.x]="valueLabel.x"
+            [attr.y]="valueLabel.y"
+            text-anchor="middle"
+            class="detail-chart-value-label"
           >
             {{ valueLabel.text }}
           </text>
