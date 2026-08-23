@@ -348,8 +348,58 @@ button:disabled {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+app-track-intelligence-chart-detail {
+  display: block;
+  margin-bottom: 16px;
+}
+
 .chart-card {
   padding: 13px;
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease;
+}
+
+.chart-card:hover {
+  border-color: #9fb8d0;
+  box-shadow: 0 5px 14px rgba(31, 51, 76, 0.08);
+  transform: translateY(-1px);
+}
+
+.chart-card:focus-visible {
+  outline: 3px solid rgba(31, 95, 153, 0.22);
+  outline-offset: 2px;
+}
+
+.chart-card.chart-card--selected {
+  border-color: #5f8db5;
+  box-shadow: 0 0 0 2px rgba(31, 95, 153, 0.12);
+}
+
+.chart-card-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.chart-card-heading h3 {
+  margin: 0;
+}
+
+.chart-card-heading span {
+  flex: 0 0 auto;
+  color: #356b9b;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.chart-card--selected .chart-card-heading span {
+  color: #1f5f99;
 }
 
 .chart-legend {
@@ -460,6 +510,19 @@ button:disabled {
   stroke: #cbd2dc;
   stroke-width: 1;
   vector-effect: non-scaling-stroke;
+}
+
+.chart-gridline {
+  stroke: #e4e8ee;
+  stroke-width: 0.8;
+  vector-effect: non-scaling-stroke;
+}
+
+.chart-y-axis-labels text {
+  fill: #667188;
+  font-size: 1.9px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
 }
 
 .chart-marker {

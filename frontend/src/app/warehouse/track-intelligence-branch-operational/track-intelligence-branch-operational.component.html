@@ -270,12 +270,39 @@
         </p>
       </div>
 
+      <ng-container *ngIf="selectedChart as activeChart">
+        <app-track-intelligence-chart-detail
+          *ngIf="selectedChartContext as detailContext"
+          [chart]="activeChart"
+          [context]="detailContext"
+          [comparisons]="detail.chart_comparisons.metrics[activeChart.key]"
+          [comparisonPeriods]="detail.chart_comparisons.periods"
+          (closeDetail)="clearChartSelection()"
+        ></app-track-intelligence-chart-detail>
+      </ng-container>
+
       <div class="chart-grid">
-        <article class="chart-card" *ngFor="let chart of charts">
-          <h3>{{ chart.title }}</h3>
+        <article
+          class="chart-card"
+          *ngFor="let chart of charts"
+          [class.chart-card--selected]="isChartSelected(chart)"
+          role="button"
+          tabindex="0"
+          [attr.aria-pressed]="isChartSelected(chart)"
+          [attr.aria-label]="'Ampliar ' + chart.title"
+          (click)="selectChart(chart)"
+          (keydown.enter)="selectChart(chart)"
+          (keydown.space)="selectChart(chart); $event.preventDefault()"
+        >
+          <div class="chart-card-heading">
+            <h3>{{ chart.title }}</h3>
+            <span>{{ isChartSelected(chart) ? 'Detalle abierto' : 'Ampliar' }}</span>
+          </div>
           <div class="chart-legend">
             <span><i class="legend-line legend-line--actual"></i>Real acumulado</span>
-            <span><i class="legend-line legend-line--benchmark"></i>{{ chart.benchmarkLabel }}</span>
+            <span *ngIf="chart.benchmarkLabel">
+              <i class="legend-line legend-line--benchmark"></i>{{ chart.benchmarkLabel }}
+            </span>
             <span><i class="legend-line legend-line--projection"></i>Proyección</span>
           </div>
           <div class="chart-projection-summary">
@@ -292,7 +319,28 @@
               role="img"
               [attr.aria-label]="chart.title"
             >
-              <line x1="4" y1="32" x2="96" y2="32" class="chart-axis"></line>
+              <g aria-hidden="true">
+                <line
+                  *ngFor="let tick of chart.yAxisTicks"
+                  x1="14"
+                  x2="96"
+                  [attr.y1]="tick.y"
+                  [attr.y2]="tick.y"
+                  class="chart-gridline"
+                ></line>
+              </g>
+              <g class="chart-y-axis-labels" aria-hidden="true">
+                <text
+                  *ngFor="let tick of chart.yAxisTicks"
+                  x="12"
+                  [attr.y]="tick.y + 0.7"
+                  text-anchor="end"
+                >
+                  {{ tick.label }}
+                </text>
+              </g>
+              <line x1="14" y1="4" x2="14" y2="31" class="chart-axis"></line>
+              <line x1="14" y1="31" x2="96" y2="31" class="chart-axis"></line>
               <polyline
                 [attr.points]="chart.benchmarkPoints"
                 class="chart-line chart-line--benchmark"

@@ -1016,6 +1016,25 @@ export interface TrackBranchOperationalLimitProjection
   projected_limit_usage_pct?: string | null;
 }
 
+export interface TrackBranchOperationalActiveMembersProjectionComponent {
+  actual_mtd: string | null;
+  projected_close: string | null;
+  remaining_projected: string | null;
+}
+
+export interface TrackBranchOperationalActiveMembersProjection {
+  status: 'available' | 'insufficient_data';
+  method: 'remaining_operational_component_projections';
+  remaining_days: number;
+  projected_close: string | null;
+  projected_points: TrackBranchOperationalProjectedPoint[];
+  components: Record<
+    'clientes_nuevos' | 'reactivaciones' | 'bajas',
+    TrackBranchOperationalActiveMembersProjectionComponent
+  >;
+  missing_components: string[];
+}
+
 export interface TrackBranchOperationalPaceMetric
   extends TrackBranchOperationalTrendFields {
   metric_key: 'clientes_nuevos' | 'reactivaciones' | 'domiciliados';
@@ -1087,6 +1106,16 @@ export interface TrackBranchOperationalUsersMetric {
   status: string;
 }
 
+export interface TrackBranchOperationalActiveMembersMetric {
+  metric_key: 'socios_activos';
+  start_month: string | null;
+  actual_mtd: string | null;
+  change_from_start: string | null;
+  daily_delta: string | null;
+  projection?: TrackBranchOperationalActiveMembersProjection;
+  status: string;
+}
+
 export interface TrackBranchOperationalMetrics {
   clientes_nuevos: TrackBranchOperationalPaceMetric;
   reactivaciones: TrackBranchOperationalPaceMetric;
@@ -1094,6 +1123,7 @@ export interface TrackBranchOperationalMetrics {
   domiciliados: TrackBranchOperationalPaceMetric;
   ingreso: TrackBranchOperationalTargetMetric;
   usuarios: TrackBranchOperationalUsersMetric;
+  socios_activos: TrackBranchOperationalActiveMembersMetric;
   tienda: TrackBranchOperationalTargetMetric;
 }
 
@@ -1104,6 +1134,65 @@ export interface TrackBranchOperationalHistoryPoint {
   days_since_previous: number | null;
   is_consecutive_previous_date: boolean;
   metrics: TrackBranchOperationalMetrics;
+}
+
+export type TrackBranchOperationalChartComparisonPeriodKey =
+  | 'current_month'
+  | 'previous_month'
+  | 'previous_year_same_month';
+
+export type TrackBranchOperationalChartComparisonMetricKey =
+  | 'clientes_nuevos'
+  | 'reactivaciones'
+  | 'domiciliados'
+  | 'bajas'
+  | 'socios_activos';
+
+export interface TrackBranchOperationalChartComparisonPeriod {
+  period_key: TrackBranchOperationalChartComparisonPeriodKey;
+  target_month: string;
+  date_from: string;
+  date_to: string;
+  days_in_month: number;
+  comparison_day: number;
+  comparison_date: string;
+  is_closed: boolean;
+  history_rows: number;
+  expected_calendar_days: number;
+  missing_dates: string[];
+  has_gaps: boolean;
+}
+
+export interface TrackBranchOperationalChartComparisonPoint {
+  track_date: string;
+  day_of_month: number;
+  track_daily_version_id: number;
+  actual_mtd: string | null;
+}
+
+export interface TrackBranchOperationalChartComparisonSeries {
+  period_key: TrackBranchOperationalChartComparisonPeriodKey;
+  points: TrackBranchOperationalChartComparisonPoint[];
+  same_day_point: TrackBranchOperationalChartComparisonPoint | null;
+}
+
+export interface TrackBranchOperationalChartComparisonMetric {
+  metric_key: TrackBranchOperationalChartComparisonMetricKey;
+  periods: Record<
+    TrackBranchOperationalChartComparisonPeriodKey,
+    TrackBranchOperationalChartComparisonSeries
+  >;
+}
+
+export interface TrackBranchOperationalChartComparisons {
+  periods: Record<
+    TrackBranchOperationalChartComparisonPeriodKey,
+    TrackBranchOperationalChartComparisonPeriod
+  >;
+  metrics: Record<
+    TrackBranchOperationalChartComparisonMetricKey,
+    TrackBranchOperationalChartComparisonMetric
+  >;
 }
 
 export interface TrackBranchOperationalMetricChange {
@@ -1213,6 +1302,10 @@ export interface TrackBranchOperationalBusinessRules {
   operational_projection_method: 'recent_valid_daily_average_7_calendar_days';
   operational_projection_window_calendar_days: number;
   operational_projection_min_valid_deltas: number;
+  active_members_observed_source: 'usuarios_activos_actual';
+  active_members_start_source: 'socios_activos_inicio_mes_not_propagated_to_track_daily_mart';
+  active_members_projection_method: 'remaining_operational_component_projections';
+  active_members_projection_formula: string;
   income_signal_basis: 'projected_close_vs_monthly_target_only';
   trend_window_valid_cuts: number;
   trend_dead_band_pp: string;
@@ -1233,6 +1326,7 @@ export interface TrackBranchOperationalDetailResponse {
     metrics: TrackBranchOperationalMetrics | null;
   };
   history: TrackBranchOperationalHistoryPoint[];
+  chart_comparisons: TrackBranchOperationalChartComparisons;
   change_vs_previous: TrackBranchOperationalChangeVsPrevious;
   signals: TrackBranchOperationalSignal[];
   operational_summaries: TrackBranchOperationalSummary[];
