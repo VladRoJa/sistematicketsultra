@@ -251,26 +251,28 @@
 }
 
 .detail-legend-line--actual {
-  background: #1f5f99;
+  background: #1769aa;
 }
 
 .detail-legend-line--benchmark {
-  background: #8994a5;
+  background: #9aa3ad;
 }
 
 .detail-legend-line--projection {
   height: 0;
-  border-top: 3px dashed #6f5b9c;
+  border-top: 2px dashed #7253a5;
 }
 
 .detail-legend-line--previous-month {
   height: 0;
-  border-top: 2px dashed #607a91;
+  border-top: 2px dashed #75879a;
+  opacity: 0.72;
 }
 
 .detail-legend-line--previous-year {
   height: 0;
-  border-top: 2px dotted #8a6e50;
+  border-top: 2px dotted #9a8975;
+  opacity: 0.72;
 }
 
 .chart-detail-scroll {
@@ -318,35 +320,36 @@
 }
 
 .detail-chart-line--actual {
-  stroke: #1f5f99;
-  stroke-width: 2.6;
+  stroke: #1769aa;
+  stroke-width: 3.1;
 }
 
 .detail-chart-line--benchmark {
-  stroke: #8994a5;
-  stroke-width: 1.8;
-  stroke-dasharray: 6 4;
+  stroke: #9aa3ad;
+  stroke-width: 1.4;
+  stroke-dasharray: 5 4;
+  opacity: 0.72;
 }
 
 .detail-chart-line--projection {
-  stroke: #6f5b9c;
-  stroke-width: 2.2;
-  stroke-dasharray: 3 3;
+  stroke: #7253a5;
+  stroke-width: 1.9;
+  stroke-dasharray: 4 4;
 }
 
 .detail-chart-line--historical {
-  stroke-width: 1.45;
-  opacity: 0.78;
+  stroke-width: 1.15;
+  opacity: 0.52;
 }
 
 .detail-chart-line--previous-month {
-  stroke: #607a91;
-  stroke-dasharray: 8 5;
+  stroke: #75879a;
+  stroke-dasharray: 7 5;
 }
 
 .detail-chart-line--previous-year {
-  stroke: #8a6e50;
-  stroke-dasharray: 2 4;
+  stroke: #9a8975;
+  stroke-dasharray: 2 5;
 }
 
 .detail-chart-marker {
@@ -355,30 +358,34 @@
 }
 
 .detail-chart-marker--actual {
-  stroke: #1f5f99;
-  stroke-width: 1.6;
+  stroke: #1769aa;
+  stroke-width: 1.8;
 }
 
 .detail-chart-marker--benchmark {
-  stroke: #8994a5;
-  stroke-width: 1.2;
+  stroke: #9aa3ad;
+  stroke-width: 1;
+  opacity: 0.65;
 }
 
 .detail-chart-marker--projection {
-  stroke: #6f5b9c;
-  stroke-width: 1.4;
+  stroke: #7253a5;
+  stroke-width: 1.1;
+  opacity: 0.82;
 }
 
 .detail-chart-marker--previous-month {
   fill: #f8fbfe;
-  stroke: #607a91;
-  stroke-width: 1;
+  stroke: #75879a;
+  stroke-width: 0.8;
+  opacity: 0.55;
 }
 
 .detail-chart-marker--previous-year {
   fill: #f8fbfe;
-  stroke: #8a6e50;
-  stroke-width: 1;
+  stroke: #9a8975;
+  stroke-width: 0.8;
+  opacity: 0.55;
 }
 
 .chart-detail-x-labels {
