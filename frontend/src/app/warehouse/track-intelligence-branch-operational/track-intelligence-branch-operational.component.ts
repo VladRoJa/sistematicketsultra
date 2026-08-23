@@ -13,6 +13,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { combineLatest, Subject, takeUntil } from 'rxjs';
 
 import {
+  TrackBranchOperationalActiveMembersProjection,
   TrackBranchOperationalBusinessRules,
   TrackBranchOperationalDetailResponse,
   TrackBranchOperationalHistoryPoint,
@@ -25,6 +26,11 @@ import {
   TrackGenerationMode,
   TrackService,
 } from '../../services/track.service';
+import {
+  TrackIntelligenceChartDetailComponent,
+  TrackIntelligenceChartDetailContext,
+  TrackIntelligenceChartDetailSeriesPoint,
+} from './track-intelligence-chart-detail/track-intelligence-chart-detail.component';
 
 
 type PriorityMetricKey =
@@ -32,6 +38,8 @@ type PriorityMetricKey =
   | 'reactivaciones'
   | 'bajas'
   | 'domiciliados';
+
+type ChartMetricKey = PriorityMetricKey | 'socios_activos';
 
 interface PriorityCardView {
   key: PriorityMetricKey;
@@ -70,15 +78,27 @@ interface ChartAxisLabel {
   label: string;
 }
 
+interface ChartYAxisTick {
+  y: number;
+  label: string;
+}
+
 interface ChartView {
-  key: PriorityMetricKey;
+  key: ChartMetricKey;
   title: string;
+  daysInMonth: number;
   actualPoints: string;
   benchmarkPoints: string;
   projectionPoints: string;
+  actualSeries: TrackIntelligenceChartDetailSeriesPoint[];
+  benchmarkSeries: TrackIntelligenceChartDetailSeriesPoint[];
+  projectionSeries: TrackIntelligenceChartDetailSeriesPoint[];
   actualMarkers: ChartMarker[];
+  benchmarkMarkers: ChartMarker[];
+  projectionMarkers: ChartMarker[];
   axisLabels: ChartAxisLabel[];
-  benchmarkLabel: string;
+  yAxisTicks: ChartYAxisTick[];
+  benchmarkLabel: string | null;
   projectionHeadline: string;
   projectionBenchmark: string | null;
   projectionComparison: string | null;
@@ -87,7 +107,8 @@ interface ChartView {
 
 type OperationalProjection =
   | TrackBranchOperationalTargetProjection
-  | TrackBranchOperationalLimitProjection;
+  | TrackBranchOperationalLimitProjection
+  | TrackBranchOperationalActiveMembersProjection;
 
 interface OperationalSummaryRowView {
   label: string;
@@ -118,6 +139,7 @@ interface BusinessRuleView {
     FormsModule,
     MatProgressBarModule,
     MatProgressSpinnerModule,
+    TrackIntelligenceChartDetailComponent,
   ],
   templateUrl: './track-intelligence-branch-operational.component.html',
   styleUrls: ['./track-intelligence-branch-operational.component.css'],
@@ -129,6 +151,8 @@ export class TrackIntelligenceBranchOperationalComponent
   priorityCards: PriorityCardView[] = [];
   changeCards: ChangeCardView[] = [];
   charts: ChartView[] = [];
+  selectedChart: ChartView | null = null;
+  selectedChartContext: TrackIntelligenceChartDetailContext | null = null;
   operationalSummaryCards: OperationalSummaryCardView[] = [];
   businessRuleViews: BusinessRuleView[] = [];
   selectedBranch = '';
@@ -197,6 +221,7 @@ export class TrackIntelligenceBranchOperationalComponent
     this.priorityCards = [];
     this.changeCards = [];
     this.charts = [];
+    this.clearChartSelection();
     this.operationalSummaryCards = [];
 
     this.trackService
@@ -449,6 +474,25 @@ export class TrackIntelligenceBranchOperationalComponent
     }
     const [year, month, day] = value.split('-');
     return `${day}/${month}/${year}`;
+  }
+
+  selectChart(chart: ChartView): void {
+    if (this.selectedChart?.key === chart.key) {
+      this.clearChartSelection();
+      return;
+    }
+
+    this.selectedChart = chart;
+    this.selectedChartContext = this.buildChartDetailContext(chart);
+  }
+
+  clearChartSelection(): void {
+    this.selectedChart = null;
+    this.selectedChartContext = null;
+  }
+
+  isChartSelected(chart: ChartView): boolean {
+    return this.selectedChart?.key === chart.key;
   }
 
   formatCodeLabel(value: string): string {
@@ -727,6 +771,7 @@ export class TrackIntelligenceBranchOperationalComponent
         response.history,
         response.cutoff.day_of_month,
         response.cutoff.days_in_month,
+        response.cutoff.target_month,
         'clientes_nuevos',
         'Clientes nuevos: real, esperado y proyección',
         metrics?.clientes_nuevos.projection,
@@ -735,6 +780,7 @@ export class TrackIntelligenceBranchOperationalComponent
         response.history,
         response.cutoff.day_of_month,
         response.cutoff.days_in_month,
+        response.cutoff.target_month,
         'reactivaciones',
         'Reactivaciones: real, esperado y proyección',
         metrics?.reactivaciones.projection,
@@ -743,6 +789,7 @@ export class TrackIntelligenceBranchOperationalComponent
         response.history,
         response.cutoff.day_of_month,
         response.cutoff.days_in_month,
+        response.cutoff.target_month,
         'domiciliados',
         'Domiciliados: real, esperado y proyección',
         metrics?.domiciliados.projection,
@@ -751,9 +798,19 @@ export class TrackIntelligenceBranchOperationalComponent
         response.history,
         response.cutoff.day_of_month,
         response.cutoff.days_in_month,
+        response.cutoff.target_month,
         'bajas',
         'Bajas: real, límite y proyección',
         metrics?.bajas.projection,
+      ),
+      this.buildChart(
+        response.history,
+        response.cutoff.day_of_month,
+        response.cutoff.days_in_month,
+        response.cutoff.target_month,
+        'socios_activos',
+        'Socios activos: real y proyección',
+        metrics?.socios_activos.projection,
       ),
     ];
   }
@@ -762,14 +819,13 @@ export class TrackIntelligenceBranchOperationalComponent
     history: TrackBranchOperationalHistoryPoint[],
     cutoffDay: number,
     daysInMonth: number,
-    metricKey: PriorityMetricKey,
+    targetMonth: string,
+    metricKey: ChartMetricKey,
     title: string,
     projection: OperationalProjection | undefined,
   ): ChartView {
     const rawPoints = history.flatMap((point) => {
-      const metric = metricKey === 'bajas'
-        ? point.metrics.bajas
-        : point.metrics[metricKey];
+      const metric = point.metrics[metricKey];
       const actual = this.toNumber(metric.actual_mtd);
       let benchmark: number | null;
       let pace: string | null;
@@ -777,6 +833,9 @@ export class TrackIntelligenceBranchOperationalComponent
       if (metricKey === 'bajas') {
         benchmark = this.toNumber(point.metrics.bajas.monthly_limit);
         pace = point.metrics.bajas.limit_usage_pct;
+      } else if (metricKey === 'socios_activos') {
+        benchmark = null;
+        pace = null;
       } else {
         const paceMetric = point.metrics[metricKey];
         benchmark = this.toNumber(paceMetric.expected_mtd);
@@ -800,42 +859,66 @@ export class TrackIntelligenceBranchOperationalComponent
           const value = this.toNumber(point.projected_mtd);
           return value === null ? [] : [{
             day: Number(point.track_date.slice(-2)),
+            date: point.track_date,
             value,
           }];
         })
       : [];
-    const maximum = Math.max(
-      1,
+    const visibleValues = [
       ...rawPoints.flatMap((point) => [
-        point.actual || 0,
-        point.benchmark || 0,
+        point.actual,
+        point.benchmark,
       ]),
       ...projectedRawPoints.map((point) => point.value),
-    );
+    ].filter((value): value is number => value !== null);
+    const yAxisScale = this.buildYAxisScale(visibleValues);
     const xForDay = (day: number): number => (
-      4 + ((day - 1) / Math.max(daysInMonth - 1, 1)) * 92
+      14 + ((day - 1) / Math.max(daysInMonth - 1, 1)) * 82
     );
-    const yForValue = (value: number): number => 32 - (value / maximum) * 27;
-    const actualMarkers = rawPoints.flatMap((point) => {
+    const yForValue = (value: number): number => (
+      31 - (
+        (value - yAxisScale.minimum) /
+        (yAxisScale.maximum - yAxisScale.minimum)
+      ) * 27
+    );
+    const yAxisTicks = yAxisScale.ticks.map((value) => ({
+      y: yForValue(value),
+      label: this.formatNumber(value),
+    }));
+    const actualSeries = rawPoints.flatMap((point) => {
       if (point.actual === null) {
         return [];
       }
       return [{
-        x: xForDay(point.day),
-        y: yForValue(point.actual),
+        day: point.day,
+        date: point.date,
+        value: point.actual,
         label: (
           `${this.formatDate(point.date)} · Real ${this.formatNumber(point.actual)} · ` +
-          `Delta ${this.formatSigned(point.dailyDelta)} · ` +
-          `${metricKey === 'bajas' ? 'Consumo' : 'Ritmo'} ${this.formatPercent(point.pace)}`
+          `Delta ${this.formatSigned(point.dailyDelta)}` +
+          (
+            metricKey === 'socios_activos'
+              ? ''
+              : (
+                  ` · ${metricKey === 'bajas' ? 'Consumo' : 'Ritmo'} ` +
+                  this.formatPercent(point.pace)
+                )
+          )
         ),
       }];
     });
+    const actualMarkers = actualSeries.map((point) => ({
+      x: xForDay(point.day),
+      y: yForValue(point.value),
+      label: point.label,
+    }));
     const actualPoints = actualMarkers
       .map((point) => `${point.x},${point.y}`)
       .join(' ');
     const benchmarkRawPoints = rawPoints
       .flatMap((point) => point.benchmark === null ? [] : [{
         day: point.day,
+        date: point.date,
         value: point.benchmark,
       }]);
     if (
@@ -845,18 +928,45 @@ export class TrackIntelligenceBranchOperationalComponent
     ) {
       benchmarkRawPoints.push({
         day: daysInMonth,
+        date: `${targetMonth}-${String(daysInMonth).padStart(2, '0')}`,
         value: benchmarkRawPoints[benchmarkRawPoints.length - 1].value,
       });
     }
-    const benchmarkPoints = benchmarkRawPoints
+    const benchmarkSeries = benchmarkRawPoints
       .map((point) => ({
-        x: xForDay(point.day),
-        y: yForValue(point.value),
-      }))
+        day: point.day,
+        date: point.date,
+        value: point.value,
+        label: (
+          `${this.formatDate(point.date)} · ${
+            metricKey === 'bajas' ? 'Límite mensual' : 'Esperado'
+          } ${this.formatNumber(point.value)}`
+        ),
+      }));
+    const benchmarkMarkers = benchmarkSeries.map((point) => ({
+      x: xForDay(point.day),
+      y: yForValue(point.value),
+      label: point.label,
+    }));
+    const benchmarkPoints = benchmarkMarkers
       .map((point) => `${point.x},${point.y}`)
       .join(' ');
-    const projectionPoints = projectedRawPoints
-      .map((point) => `${xForDay(point.day)},${yForValue(point.value)}`)
+    const projectionSeries = projectedRawPoints.map((point) => ({
+      day: point.day,
+      date: point.date,
+      value: point.value,
+      label: (
+        `${this.formatDate(point.date)} · Proyección ` +
+        this.formatNumber(point.value)
+      ),
+    }));
+    const projectionMarkers = projectionSeries.map((point) => ({
+      x: xForDay(point.day),
+      y: yForValue(point.value),
+      label: point.label,
+    }));
+    const projectionPoints = projectionMarkers
+      .map((point) => `${point.x},${point.y}`)
       .join(' ');
 
     const baseReferenceDays = [1, 5, 10, 15, 20, 25, 30]
@@ -888,19 +998,257 @@ export class TrackIntelligenceBranchOperationalComponent
     return {
       key: metricKey,
       title,
+      daysInMonth,
       actualPoints,
       benchmarkPoints,
       projectionPoints,
+      actualSeries,
+      benchmarkSeries,
+      projectionSeries,
       actualMarkers,
+      benchmarkMarkers,
+      projectionMarkers,
       axisLabels,
-      benchmarkLabel: metricKey === 'bajas' ? 'Límite mensual' : 'Esperado',
+      yAxisTicks,
+      benchmarkLabel: metricKey === 'socios_activos'
+        ? null
+        : metricKey === 'bajas'
+          ? 'Límite mensual'
+          : 'Esperado',
       ...projectionSummary,
       empty: actualMarkers.length === 0,
     };
   }
 
+  private buildChartDetailContext(
+    chart: ChartView,
+  ): TrackIntelligenceChartDetailContext | null {
+    const response = this.data;
+    const metrics = response?.current.metrics;
+
+    if (!response || !metrics) {
+      return null;
+    }
+
+    const versionParts = [
+      response.cutoff.track_daily_version_id !== null
+        ? `#${response.cutoff.track_daily_version_id}`
+        : null,
+      response.cutoff.version_type
+        ? this.formatCodeLabel(response.cutoff.version_type)
+        : null,
+    ].filter((value): value is string => Boolean(value));
+
+    if (chart.key === 'socios_activos') {
+      const metric = metrics.socios_activos;
+      const projection = metric.projection;
+      const missingComponents = projection?.missing_components || [];
+
+      return {
+        branchLabel: response.identity.sucursal_label,
+        metricLabel: 'Socios activos',
+        cutoffLabel: this.formatDate(response.cutoff.track_date),
+        targetMonthLabel: this.formatTargetMonth(response.cutoff.target_month),
+        generationLabel: this.getGenerationModeLabel(),
+        versionLabel: versionParts.join(' · ') || 'Sin versión efectiva',
+        kpis: [
+          {
+            label: 'Real observado',
+            value: this.formatNumber(metric.actual_mtd),
+            emphasis: true,
+          },
+          {
+            label: 'Inicio observado',
+            value: metric.start_month === null
+              ? 'Dato no disponible'
+              : this.formatNumber(metric.start_month),
+          },
+          {
+            label: 'Cambio vs inicio observado',
+            value: metric.change_from_start === null
+              ? 'Dato no disponible'
+              : this.formatSigned(metric.change_from_start),
+          },
+          {
+            label: 'Proyección de cierre',
+            value: this.formatNumber(projection?.projected_close),
+            emphasis: true,
+          },
+          {
+            label: 'Estado de proyección',
+            value: projection?.status === 'available'
+              ? 'Disponible'
+              : 'Datos insuficientes',
+          },
+          {
+            label: 'Componentes faltantes',
+            value: missingComponents.length
+              ? missingComponents.map((value) => this.formatCodeLabel(value)).join(', ')
+              : 'Ninguno',
+          },
+        ],
+      };
+    }
+
+    if (chart.key === 'bajas') {
+      const metric = metrics.bajas;
+      const projection = metric.projection;
+
+      return {
+        branchLabel: response.identity.sucursal_label,
+        metricLabel: 'Bajas',
+        cutoffLabel: this.formatDate(response.cutoff.track_date),
+        targetMonthLabel: this.formatTargetMonth(response.cutoff.target_month),
+        generationLabel: this.getGenerationModeLabel(),
+        versionLabel: versionParts.join(' · ') || 'Sin versión efectiva',
+        kpis: [
+          {
+            label: 'Bajas actuales',
+            value: this.formatNumber(metric.actual_mtd),
+            emphasis: true,
+          },
+          {
+            label: 'Límite mensual',
+            value: this.formatNumber(metric.monthly_limit),
+          },
+          {
+            label: 'Consumo del límite',
+            value: this.formatPercent(metric.limit_usage_pct),
+          },
+          {
+            label: 'Proyección de cierre',
+            value: this.formatNumber(projection?.projected_close),
+            emphasis: true,
+          },
+          {
+            label: 'Exceso proyectado',
+            value: this.formatNumber(projection?.projected_excess_units),
+          },
+          {
+            label: 'Margen proyectado',
+            value: this.formatNumber(projection?.projected_remaining_margin),
+          },
+        ],
+      };
+    }
+
+    const metric = metrics[chart.key];
+    const projection = metric.projection;
+    const projectedGap = this.toNumber(projection?.projected_gap_units);
+    const metricLabels: Record<Exclude<PriorityMetricKey, 'bajas'>, string> = {
+      clientes_nuevos: 'Clientes nuevos',
+      reactivaciones: 'Reactivaciones',
+      domiciliados: 'Domiciliados',
+    };
+
+    return {
+      branchLabel: response.identity.sucursal_label,
+      metricLabel: metricLabels[chart.key],
+      cutoffLabel: this.formatDate(response.cutoff.track_date),
+      targetMonthLabel: this.formatTargetMonth(response.cutoff.target_month),
+      generationLabel: this.getGenerationModeLabel(),
+      versionLabel: versionParts.join(' · ') || 'Sin versión efectiva',
+      kpis: [
+        {
+          label: 'Real al corte',
+          value: this.formatNumber(metric.actual_mtd),
+          emphasis: true,
+        },
+        {
+          label: 'Esperado al corte',
+          value: this.formatNumber(metric.expected_mtd),
+        },
+        {
+          label: 'Ritmo al corte',
+          value: this.formatPercent(metric.pace_pct),
+        },
+        {
+          label: 'Proyección de cierre',
+          value: this.formatNumber(projection?.projected_close),
+          emphasis: true,
+        },
+        {
+          label: 'Meta mensual',
+          value: this.formatNumber(metric.monthly_target),
+        },
+        {
+          label: 'Brecha proyectada',
+          value: (
+            projectedGap === null
+              ? '—'
+              : `${projectedGap > 0 ? '+' : ''}${this.formatNumber(projectedGap)}`
+          ),
+        },
+      ],
+    };
+  }
+
+  private formatTargetMonth(value: string): string {
+    const [year, month] = value.split('-').map(Number);
+
+    if (!year || !month) {
+      return value || '—';
+    }
+
+    return new Intl.DateTimeFormat('es-MX', {
+      month: 'long',
+      year: 'numeric',
+      timeZone: 'UTC',
+    }).format(new Date(Date.UTC(year, month - 1, 1)));
+  }
+
+  private buildYAxisScale(values: number[]): {
+    minimum: number;
+    maximum: number;
+    ticks: number[];
+  } {
+    const finiteValues = values.filter((value) => Number.isFinite(value));
+    const dataMinimum = Math.min(0, ...finiteValues);
+    const dataMaximum = Math.max(0, ...finiteValues);
+    const dataRange = Math.max(1, dataMaximum - dataMinimum);
+    const step = this.resolveNiceTickStep(dataRange / 4);
+    const minimum = Math.floor(dataMinimum / step) * step;
+    let maximum = Math.ceil(dataMaximum / step) * step;
+
+    if (maximum === minimum) {
+      maximum = minimum + step;
+    }
+
+    const tickCount = Math.round((maximum - minimum) / step);
+    const ticks = Array.from(
+      { length: tickCount + 1 },
+      (_, index) => minimum + step * index,
+    );
+
+    return { minimum, maximum, ticks };
+  }
+
+  private resolveNiceTickStep(roughStep: number): number {
+    if (!Number.isFinite(roughStep) || roughStep <= 0) {
+      return 1;
+    }
+
+    const magnitude = 10 ** Math.floor(Math.log10(roughStep));
+    const normalized = roughStep / magnitude;
+    let multiplier: number;
+
+    if (normalized <= 1) {
+      multiplier = 1;
+    } else if (normalized <= 2) {
+      multiplier = 2;
+    } else if (normalized <= 2.5) {
+      multiplier = 2.5;
+    } else if (normalized <= 5) {
+      multiplier = 5;
+    } else {
+      multiplier = 10;
+    }
+
+    return multiplier * magnitude;
+  }
+
   private buildProjectionSummary(
-    metricKey: PriorityMetricKey,
+    metricKey: ChartMetricKey,
     projection: OperationalProjection | undefined,
     cutoffDay: number,
     daysInMonth: number,
@@ -910,7 +1258,9 @@ export class TrackIntelligenceBranchOperationalComponent
   > {
     if (!projection || projection.status !== 'available') {
       return {
-        projectionHeadline: 'Proyección: historia insuficiente',
+        projectionHeadline: metricKey === 'socios_activos'
+          ? 'Proyección: datos insuficientes'
+          : 'Proyección: historia insuficiente',
         projectionBenchmark: null,
         projectionComparison: null,
       };
@@ -925,6 +1275,16 @@ export class TrackIntelligenceBranchOperationalComponent
     const comparisonSuffix = isObservedClose
       ? 'observado'
       : 'proyectado';
+
+    if (metricKey === 'socios_activos') {
+      return {
+        projectionHeadline: (
+          `${headlinePrefix}: ${this.formatNumber(projection.projected_close)}`
+        ),
+        projectionBenchmark: null,
+        projectionComparison: null,
+      };
+    }
 
     if (metricKey === 'bajas') {
       const limitProjection = projection as TrackBranchOperationalLimitProjection;
@@ -1179,6 +1539,10 @@ export class TrackIntelligenceBranchOperationalComponent
       operational_projection_method: 'Método de proyección operativa',
       operational_projection_window_calendar_days: 'Ventana de proyección operativa',
       operational_projection_min_valid_deltas: 'Mínimo de deltas válidos',
+      active_members_observed_source: 'Fuente observada de Socios activos',
+      active_members_start_source: 'Fuente de inicio de Socios activos',
+      active_members_projection_method: 'Método de proyección de Socios activos',
+      active_members_projection_formula: 'Fórmula de proyección de Socios activos',
       income_signal_basis: 'Base de señal de ingreso',
       trend_window_valid_cuts: 'Ventana de tendencia',
       trend_dead_band_pp: 'Banda muerta de tendencia',
@@ -1220,6 +1584,16 @@ export class TrackIntelligenceBranchOperationalComponent
       ),
       recent_valid_daily_average_7_calendar_days: (
         'Promedio diario de deltas válidos'
+      ),
+      remaining_operational_component_projections: (
+        'Remanentes de las proyecciones operativas existentes'
+      ),
+      usuarios_activos_actual: 'Usuarios activos observados al corte',
+      socios_activos_inicio_mes_not_propagated_to_track_daily_mart: (
+        'socios_activos_inicio_mes no disponible en Track Daily Mart'
+      ),
+      'usuarios_activos_actual+clientes_nuevos_remaining_projected+reactivaciones_remaining_projected-bajas_remaining_projected': (
+        'Observado + clientes nuevos restantes + reactivaciones restantes − bajas restantes'
       ),
       projected_close_vs_monthly_target_only: (
         'Proyección de cierre vs meta mensual'

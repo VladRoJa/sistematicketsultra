@@ -45,6 +45,9 @@ OPERATIONAL_PROJECTION_METHOD = (
 )
 OPERATIONAL_PROJECTION_WINDOW_CALENDAR_DAYS = 7
 OPERATIONAL_PROJECTION_MIN_VALID_DELTAS = 3
+ACTIVE_MEMBERS_PROJECTION_METHOD = (
+    "remaining_operational_component_projections"
+)
 
 PACE_METRIC_KEYS = (
     "clientes_nuevos",
@@ -58,6 +61,7 @@ DAILY_DELTA_METRIC_KEYS = (
     "domiciliados",
     "ingreso",
     "usuarios",
+    "socios_activos",
     "tienda",
 )
 OPERATIONAL_PROJECTION_METRIC_KEYS = (
@@ -65,6 +69,15 @@ OPERATIONAL_PROJECTION_METRIC_KEYS = (
     "reactivaciones",
     "domiciliados",
     "bajas",
+)
+CHART_COMPARISON_PERIOD_KEYS = (
+    "current_month",
+    "previous_month",
+    "previous_year_same_month",
+)
+CHART_COMPARISON_METRIC_KEYS = (
+    *OPERATIONAL_PROJECTION_METRIC_KEYS,
+    "socios_activos",
 )
 
 
@@ -227,6 +240,22 @@ def _build_users_metric(row: TrackDailyMartORM) -> dict[str, Any]:
     }
 
 
+def _build_active_members_metric(row: TrackDailyMartORM) -> dict[str, Any]:
+    actual = _decimal(row.usuarios_activos_actual)
+
+    return {
+        "metric_key": "socios_activos",
+        "start_month": None,
+        "actual_mtd": _decimal_string(actual),
+        "change_from_start": None,
+        "status": (
+            "AVAILABLE"
+            if actual is not None
+            else "DATOS_INSUFICIENTES"
+        ),
+    }
+
+
 def _build_metrics(
     *,
     row: TrackDailyMartORM,
@@ -271,6 +300,7 @@ def _build_metrics(
         ),
         "ingreso": income,
         "usuarios": _build_users_metric(row),
+        "socios_activos": _build_active_members_metric(row),
         "tienda": _build_target_metric(
             metric_key="tienda",
             actual_mtd=row.venta_tienda_real_mtd,
@@ -437,6 +467,139 @@ def _build_operational_projection(
             }
         )
 
+    return result
+
+
+def _build_active_members_projection(
+    *,
+    metrics: dict[str, dict[str, Any]],
+    cutoff_date: date,
+) -> dict[str, Any]:
+    component_keys = (
+        "clientes_nuevos",
+        "reactivaciones",
+        "bajas",
+    )
+    days_in_month = monthrange(cutoff_date.year, cutoff_date.month)[1]
+    remaining_days = days_in_month - cutoff_date.day
+    observed = _decimal(
+        metrics.get("socios_activos", {}).get("actual_mtd")
+    )
+    components: dict[str, dict[str, str | None]] = {}
+    missing_components: list[str] = []
+
+    for metric_key in component_keys:
+        metric = metrics.get(metric_key) or {}
+        projection = metric.get("projection") or {}
+        actual = _decimal(metric.get("actual_mtd"))
+        projected_close = (
+            _decimal(projection.get("projected_close"))
+            if projection.get("status") == "available"
+            else None
+        )
+        remaining_projected = (
+            projected_close - actual
+            if actual is not None and projected_close is not None
+            else None
+        )
+        components[metric_key] = {
+            "actual_mtd": _decimal_string(actual),
+            "projected_close": _decimal_string(projected_close),
+            "remaining_projected": _decimal_string(remaining_projected),
+        }
+        if remaining_projected is None:
+            missing_components.append(metric_key)
+
+    result: dict[str, Any] = {
+        "status": "insufficient_data",
+        "method": ACTIVE_MEMBERS_PROJECTION_METHOD,
+        "remaining_days": remaining_days,
+        "projected_close": None,
+        "projected_points": [],
+        "components": components,
+        "missing_components": missing_components,
+    }
+
+    if observed is None:
+        result["missing_components"] = [
+            "socios_activos",
+            *missing_components,
+        ]
+        return result
+
+    if remaining_days == 0:
+        result.update(
+            {
+                "status": "available",
+                "projected_close": _decimal_string(observed),
+                "missing_components": [],
+            }
+        )
+        return result
+
+    if missing_components:
+        return result
+
+    remaining_by_component = {
+        metric_key: _decimal(
+            components[metric_key]["remaining_projected"]
+        )
+        for metric_key in component_keys
+    }
+    projected_close = (
+        observed
+        + remaining_by_component["clientes_nuevos"]
+        + remaining_by_component["reactivaciones"]
+        - remaining_by_component["bajas"]
+    )
+
+    projected_point_maps: dict[str, dict[str, Decimal]] = {}
+    for metric_key in component_keys:
+        projection = metrics[metric_key]["projection"]
+        projected_point_maps[metric_key] = {
+            str(point["track_date"]): projected_value
+            for point in projection.get("projected_points", [])
+            if (projected_value := _decimal(point.get("projected_mtd")))
+            is not None
+        }
+
+    common_dates = set(projected_point_maps[component_keys[0]])
+    for metric_key in component_keys[1:]:
+        common_dates.intersection_update(projected_point_maps[metric_key])
+
+    projected_points = []
+    for track_date in sorted(common_dates):
+        clientes_remaining = (
+            projected_point_maps["clientes_nuevos"][track_date]
+            - _decimal(metrics["clientes_nuevos"]["actual_mtd"])
+        )
+        reactivaciones_remaining = (
+            projected_point_maps["reactivaciones"][track_date]
+            - _decimal(metrics["reactivaciones"]["actual_mtd"])
+        )
+        bajas_remaining = (
+            projected_point_maps["bajas"][track_date]
+            - _decimal(metrics["bajas"]["actual_mtd"])
+        )
+        projected_points.append(
+            {
+                "track_date": track_date,
+                "projected_mtd": _decimal_string(
+                    observed
+                    + clientes_remaining
+                    + reactivaciones_remaining
+                    - bajas_remaining
+                ),
+            }
+        )
+
+    result.update(
+        {
+            "status": "available",
+            "projected_close": _decimal_string(projected_close),
+            "projected_points": projected_points,
+        }
+    )
     return result
 
 
@@ -1885,6 +2048,19 @@ def _business_rules() -> dict[str, Any]:
         "operational_projection_min_valid_deltas": (
             OPERATIONAL_PROJECTION_MIN_VALID_DELTAS
         ),
+        "active_members_observed_source": "usuarios_activos_actual",
+        "active_members_start_source": (
+            "socios_activos_inicio_mes_not_propagated_to_track_daily_mart"
+        ),
+        "active_members_projection_method": (
+            ACTIVE_MEMBERS_PROJECTION_METHOD
+        ),
+        "active_members_projection_formula": (
+            "usuarios_activos_actual"
+            "+clientes_nuevos_remaining_projected"
+            "+reactivaciones_remaining_projected"
+            "-bajas_remaining_projected"
+        ),
         "income_signal_basis": "projected_close_vs_monthly_target_only",
         "trend_window_valid_cuts": TREND_WINDOW_VALID_CUTS,
         "trend_dead_band_pp": _decimal_string(TREND_DEAD_BAND_PP),
@@ -1940,6 +2116,72 @@ def _calendar_dates(month_start: date, cutoff_date: date) -> list[date]:
         month_start + timedelta(days=offset)
         for offset in range((cutoff_date - month_start).days + 1)
     ]
+
+
+def _month_end(month_start: date) -> date:
+    return month_start.replace(
+        day=monthrange(month_start.year, month_start.month)[1]
+    )
+
+
+def _build_chart_comparison_period_specs(
+    track_date: date,
+) -> dict[str, dict[str, Any]]:
+    current_month = track_date.replace(day=1)
+    previous_month = (current_month - timedelta(days=1)).replace(day=1)
+    previous_year_same_month = current_month.replace(
+        year=current_month.year - 1
+    )
+    period_bounds = {
+        "current_month": (current_month, track_date),
+        "previous_month": (
+            previous_month,
+            _month_end(previous_month),
+        ),
+        "previous_year_same_month": (
+            previous_year_same_month,
+            _month_end(previous_year_same_month),
+        ),
+    }
+    result: dict[str, dict[str, Any]] = {}
+
+    for period_key in CHART_COMPARISON_PERIOD_KEYS:
+        month_start, date_to = period_bounds[period_key]
+        days_in_month = monthrange(month_start.year, month_start.month)[1]
+        comparison_day = min(track_date.day, days_in_month)
+        result[period_key] = {
+            "period_key": period_key,
+            "target_month": month_start,
+            "date_from": month_start,
+            "date_to": date_to,
+            "days_in_month": days_in_month,
+            "comparison_day": comparison_day,
+            "comparison_date": month_start.replace(day=comparison_day),
+            "is_closed": date_to == _month_end(month_start),
+            "calendar_dates": _calendar_dates(month_start, date_to),
+        }
+
+    return result
+
+
+def _resolve_versions_for_dates(
+    *,
+    calendar_dates: Iterable[date],
+    generation_mode: str,
+    today: date,
+) -> dict[date, Any]:
+    resolved_versions: dict[date, Any] = {}
+
+    for calendar_date in sorted(set(calendar_dates)):
+        version = resolve_effective_track_daily_version(
+            track_date=calendar_date,
+            generation_mode=generation_mode,
+            today=today,
+        )
+        if version is not None:
+            resolved_versions[calendar_date] = version
+
+    return resolved_versions
 
 
 def _load_branch_rows_for_versions(
@@ -2028,6 +2270,79 @@ def _build_history(
     return history, missing_dates
 
 
+def _build_chart_comparisons(
+    *,
+    period_specs: dict[str, dict[str, Any]],
+    histories_by_period: dict[str, list[dict[str, Any]]],
+    missing_dates_by_period: dict[str, list[str]],
+) -> dict[str, Any]:
+    periods: dict[str, dict[str, Any]] = {}
+
+    for period_key in CHART_COMPARISON_PERIOD_KEYS:
+        spec = period_specs[period_key]
+        history = histories_by_period[period_key]
+        missing_dates = missing_dates_by_period[period_key]
+        periods[period_key] = {
+            "period_key": period_key,
+            "target_month": spec["target_month"].strftime("%Y-%m"),
+            "date_from": spec["date_from"].isoformat(),
+            "date_to": spec["date_to"].isoformat(),
+            "days_in_month": spec["days_in_month"],
+            "comparison_day": spec["comparison_day"],
+            "comparison_date": spec["comparison_date"].isoformat(),
+            "is_closed": spec["is_closed"],
+            "history_rows": len(history),
+            "expected_calendar_days": len(spec["calendar_dates"]),
+            "missing_dates": missing_dates,
+            "has_gaps": bool(missing_dates),
+        }
+
+    metrics: dict[str, dict[str, Any]] = {}
+    for metric_key in CHART_COMPARISON_METRIC_KEYS:
+        period_series: dict[str, dict[str, Any]] = {}
+
+        for period_key in CHART_COMPARISON_PERIOD_KEYS:
+            comparison_day = period_specs[period_key]["comparison_day"]
+            points = [
+                {
+                    "track_date": point["track_date"],
+                    "day_of_month": date.fromisoformat(
+                        point["track_date"]
+                    ).day,
+                    "track_daily_version_id": point[
+                        "track_daily_version_id"
+                    ],
+                    "actual_mtd": point["metrics"][metric_key].get(
+                        "actual_mtd"
+                    ),
+                }
+                for point in histories_by_period[period_key]
+            ]
+            same_day_point = next(
+                (
+                    point
+                    for point in points
+                    if point["day_of_month"] == comparison_day
+                ),
+                None,
+            )
+            period_series[period_key] = {
+                "period_key": period_key,
+                "points": points,
+                "same_day_point": same_day_point,
+            }
+
+        metrics[metric_key] = {
+            "metric_key": metric_key,
+            "periods": period_series,
+        }
+
+    return {
+        "periods": periods,
+        "metrics": metrics,
+    }
+
+
 def _version_fallback_used(
     *,
     version: Any | None,
@@ -2080,26 +2395,42 @@ def get_track_branch_operational_detail(
         ) from exc
 
     target_month = track_date.replace(day=1)
-    dates = _calendar_dates(target_month, track_date)
-    resolved_versions: dict[date, Any] = {}
-    for calendar_date in dates:
-        version = resolve_effective_track_daily_version(
-            track_date=calendar_date,
-            generation_mode=generation_mode,
-            today=local_today,
-        )
-        if version is not None:
-            resolved_versions[calendar_date] = version
+    period_specs = _build_chart_comparison_period_specs(track_date)
+    all_calendar_dates = [
+        calendar_date
+        for period_key in CHART_COMPARISON_PERIOD_KEYS
+        for calendar_date in period_specs[period_key]["calendar_dates"]
+    ]
+    resolved_versions = _resolve_versions_for_dates(
+        calendar_dates=all_calendar_dates,
+        generation_mode=generation_mode,
+        today=local_today,
+    )
 
     rows_by_version = _load_branch_rows_for_versions(
         sucursal_canon=branch.sucursal_canon,
         version_ids=(version.id for version in resolved_versions.values()),
     )
-    history, missing_dates = _build_history(
-        calendar_dates=dates,
-        resolved_versions=resolved_versions,
-        rows_by_version=rows_by_version,
-        target_month=target_month,
+    histories_by_period: dict[str, list[dict[str, Any]]] = {}
+    missing_dates_by_period: dict[str, list[str]] = {}
+    for period_key in CHART_COMPARISON_PERIOD_KEYS:
+        spec = period_specs[period_key]
+        period_history, period_missing_dates = _build_history(
+            calendar_dates=spec["calendar_dates"],
+            resolved_versions=resolved_versions,
+            rows_by_version=rows_by_version,
+            target_month=spec["target_month"],
+        )
+        histories_by_period[period_key] = period_history
+        missing_dates_by_period[period_key] = period_missing_dates
+
+    history = histories_by_period["current_month"]
+    missing_dates = missing_dates_by_period["current_month"]
+    dates = period_specs["current_month"]["calendar_dates"]
+    chart_comparisons = _build_chart_comparisons(
+        period_specs=period_specs,
+        histories_by_period=histories_by_period,
+        missing_dates_by_period=missing_dates_by_period,
     )
     current_version = resolved_versions.get(track_date)
     current_point = (
@@ -2128,6 +2459,12 @@ def get_track_branch_operational_detail(
                     benchmark=current_metrics[metric_key].get(benchmark_key),
                 )
             )
+        current_metrics["socios_activos"]["projection"] = (
+            _build_active_members_projection(
+                metrics=current_metrics,
+                cutoff_date=track_date,
+            )
+        )
         current_metrics["ingreso"]["projection"] = (
             build_branch_income_projection_summary(
                 sucursal_canon=branch.sucursal_canon,
@@ -2201,6 +2538,7 @@ def get_track_branch_operational_detail(
         },
         "current": {"metrics": current_metrics},
         "history": history,
+        "chart_comparisons": chart_comparisons,
         "change_vs_previous": _build_change_vs_previous(
             history,
             current_track_date=track_date,

@@ -1,0 +1,244 @@
+<article
+  *ngIf="chart && context"
+  class="chart-detail"
+  aria-labelledby="chart-detail-title"
+>
+  <header class="chart-detail-header">
+    <div>
+      <span class="chart-detail-kicker">Vista seleccionada</span>
+      <h3 id="chart-detail-title">{{ context.metricLabel }}</h3>
+      <p>{{ context.branchLabel }}</p>
+    </div>
+
+    <button type="button" class="chart-detail-close" (click)="close()">
+      Cerrar detalle
+    </button>
+  </header>
+
+  <dl class="chart-detail-context">
+    <div>
+      <dt>Fecha de corte</dt>
+      <dd>{{ context.cutoffLabel }}</dd>
+    </div>
+    <div>
+      <dt>Mes objetivo</dt>
+      <dd>{{ context.targetMonthLabel }}</dd>
+    </div>
+    <div>
+      <dt>Generación</dt>
+      <dd>{{ context.generationLabel }}</dd>
+    </div>
+    <div>
+      <dt>Versión efectiva</dt>
+      <dd>{{ context.versionLabel }}</dd>
+    </div>
+  </dl>
+
+  <dl class="chart-detail-kpis">
+    <div
+      *ngFor="let kpi of context.kpis"
+      [class.chart-detail-kpi--emphasis]="kpi.emphasis"
+    >
+      <dt>{{ kpi.label }}</dt>
+      <dd>{{ kpi.value }}</dd>
+    </div>
+  </dl>
+
+  <fieldset class="chart-detail-comparison-controls">
+    <legend>Comparativos históricos</legend>
+    <label>
+      <input
+        type="checkbox"
+        [checked]="showPreviousMonth"
+        [disabled]="!comparisons"
+        (change)="toggleComparison('previous_month')"
+      >
+      <span>Mes anterior</span>
+    </label>
+    <label>
+      <input
+        type="checkbox"
+        [checked]="showPreviousYearSameMonth"
+        [disabled]="!comparisons"
+        (change)="toggleComparison('previous_year_same_month')"
+      >
+      <span>Mismo mes año anterior</span>
+    </label>
+  </fieldset>
+
+  <dl
+    class="chart-detail-comparison-summary"
+    *ngIf="comparisonSummaries.length"
+    aria-live="polite"
+  >
+    <div
+      *ngFor="let summary of comparisonSummaries"
+      [class.chart-detail-comparison-summary--unavailable]="!summary.available"
+    >
+      <dt>{{ summary.label }} · {{ summary.periodLabel }}</dt>
+      <dd>
+        <span>{{ summary.comparisonDayLabel }}</span>
+        <strong>{{ summary.value }}</strong>
+      </dd>
+    </div>
+  </dl>
+
+  <ng-container *ngIf="expandedChart as plot">
+    <div class="chart-detail-legend" aria-label="Series visibles">
+      <span>
+        <i class="detail-legend-line detail-legend-line--actual"></i>
+        Real acumulado
+      </span>
+      <span *ngIf="chart.benchmarkLabel">
+        <i class="detail-legend-line detail-legend-line--benchmark"></i>
+        {{ chart.benchmarkLabel }}
+      </span>
+      <span>
+        <i class="detail-legend-line detail-legend-line--projection"></i>
+        Proyección
+      </span>
+      <span *ngFor="let series of plot.historicalSeries">
+        <i
+          class="detail-legend-line"
+          [class.detail-legend-line--previous-month]="series.classModifier === 'previous-month'"
+          [class.detail-legend-line--previous-year]="series.classModifier === 'previous-year'"
+        ></i>
+        {{ series.label }}
+      </span>
+    </div>
+
+    <div class="chart-detail-scroll">
+      <div class="chart-detail-canvas">
+      <svg
+        class="chart-detail-svg"
+        viewBox="0 0 100 36"
+        preserveAspectRatio="none"
+        role="img"
+        [attr.aria-label]="chart.title + ' en vista ampliada'"
+      >
+        <g aria-hidden="true">
+          <line
+            *ngFor="let tick of plot.yAxisTicks"
+            x1="14"
+            x2="96"
+            [attr.y1]="tick.y"
+            [attr.y2]="tick.y"
+            class="detail-chart-gridline"
+          ></line>
+        </g>
+
+        <g class="detail-chart-y-labels" aria-hidden="true">
+          <text
+            *ngFor="let tick of plot.yAxisTicks"
+            x="12"
+            [attr.y]="tick.y + 0.7"
+            text-anchor="end"
+          >
+            {{ tick.label }}
+          </text>
+        </g>
+
+        <line
+          x1="14"
+          y1="4"
+          x2="14"
+          y2="31"
+          class="detail-chart-axis"
+        ></line>
+        <line
+          x1="14"
+          y1="31"
+          x2="96"
+          y2="31"
+          class="detail-chart-axis"
+        ></line>
+
+        <polyline
+          [attr.points]="plot.benchmarkPoints"
+          class="detail-chart-line detail-chart-line--benchmark"
+        ></polyline>
+        <polyline
+          [attr.points]="plot.projectionPoints"
+          class="detail-chart-line detail-chart-line--projection"
+        ></polyline>
+        <ng-container *ngFor="let series of plot.historicalSeries">
+          <polyline
+            *ngFor="let segment of series.segments"
+            [attr.points]="segment"
+            class="detail-chart-line detail-chart-line--historical"
+            [class.detail-chart-line--previous-month]="series.classModifier === 'previous-month'"
+            [class.detail-chart-line--previous-year]="series.classModifier === 'previous-year'"
+          ></polyline>
+        </ng-container>
+        <polyline
+          [attr.points]="plot.actualPoints"
+          class="detail-chart-line detail-chart-line--actual"
+        ></polyline>
+
+        <circle
+          *ngFor="let marker of plot.benchmarkMarkers"
+          [attr.cx]="marker.x"
+          [attr.cy]="marker.y"
+          r="0.65"
+          class="detail-chart-marker detail-chart-marker--benchmark"
+        >
+          <title>{{ marker.label }}</title>
+        </circle>
+        <circle
+          *ngFor="let marker of plot.projectionMarkers"
+          [attr.cx]="marker.x"
+          [attr.cy]="marker.y"
+          r="0.7"
+          class="detail-chart-marker detail-chart-marker--projection"
+        >
+          <title>{{ marker.label }}</title>
+        </circle>
+        <circle
+          *ngFor="let marker of plot.actualMarkers"
+          [attr.cx]="marker.x"
+          [attr.cy]="marker.y"
+          r="0.8"
+          class="detail-chart-marker detail-chart-marker--actual"
+        >
+          <title>{{ marker.label }}</title>
+        </circle>
+
+        <ng-container *ngFor="let series of plot.historicalSeries">
+          <ng-container *ngIf="series.classModifier === 'previous-month'; else previousYearMarkers">
+            <circle
+              *ngFor="let marker of series.markers"
+              [attr.cx]="marker.x"
+              [attr.cy]="marker.y"
+              r="0.42"
+              class="detail-chart-marker detail-chart-marker--previous-month"
+            >
+              <title>{{ marker.label }}</title>
+            </circle>
+          </ng-container>
+          <ng-template #previousYearMarkers>
+            <rect
+              *ngFor="let marker of series.markers"
+              [attr.x]="marker.x - 0.42"
+              [attr.y]="marker.y - 0.42"
+              width="0.84"
+              height="0.84"
+              class="detail-chart-marker detail-chart-marker--previous-year"
+            >
+              <title>{{ marker.label }}</title>
+            </rect>
+          </ng-template>
+        </ng-container>
+      </svg>
+
+      <div class="chart-detail-x-labels" aria-hidden="true">
+        <span
+          *ngFor="let axisLabel of plot.axisLabels"
+          [style.left.%]="axisLabel.x"
+        >
+          {{ axisLabel.label }}
+        </span>
+      </div>
+    </div>
+  </div>
+  </ng-container>
+</article>

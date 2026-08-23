@@ -1,3 +1,4 @@
+from calendar import monthrange
 from datetime import date, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
@@ -308,6 +309,187 @@ def test_bajas_projection_reports_close_below_limit():
     assert projection["projected_close"] == "176"
     assert projection["projected_excess_units"] == "0"
     assert projection["projected_remaining_margin"] == "17"
+
+
+def _active_members_metrics(
+    *,
+    observed="1000",
+    clientes_actual="100",
+    clientes_close="130",
+    reactivaciones_actual="50",
+    reactivaciones_close="70",
+    bajas_actual="40",
+    bajas_close="60",
+    unavailable_component: str | None = None,
+):
+    def component(metric_key, actual, projected_close, next_value):
+        status = (
+            "insufficient_history"
+            if metric_key == unavailable_component
+            else "available"
+        )
+        return {
+            "actual_mtd": actual,
+            "projection": {
+                "status": status,
+                "projected_close": (
+                    None if status != "available" else projected_close
+                ),
+                "projected_points": (
+                    []
+                    if status != "available"
+                    else [
+                        {
+                            "track_date": "2026-08-21",
+                            "projected_mtd": actual,
+                        },
+                        {
+                            "track_date": "2026-08-22",
+                            "projected_mtd": next_value,
+                        },
+                    ]
+                ),
+            },
+        }
+
+    return {
+        "socios_activos": {"actual_mtd": observed},
+        "clientes_nuevos": component(
+            "clientes_nuevos",
+            clientes_actual,
+            clientes_close,
+            "103",
+        ),
+        "reactivaciones": component(
+            "reactivaciones",
+            reactivaciones_actual,
+            reactivaciones_close,
+            "52",
+        ),
+        "bajas": component(
+            "bajas",
+            bajas_actual,
+            bajas_close,
+            "42",
+        ),
+    }
+
+
+def test_active_members_projection_uses_remaining_component_projections():
+    projection = service._build_active_members_projection(
+        metrics=_active_members_metrics(),
+        cutoff_date=date(2026, 8, 21),
+    )
+
+    assert projection == {
+        "status": "available",
+        "method": "remaining_operational_component_projections",
+        "remaining_days": 10,
+        "projected_close": "1030",
+        "projected_points": [
+            {
+                "track_date": "2026-08-21",
+                "projected_mtd": "1000",
+            },
+            {
+                "track_date": "2026-08-22",
+                "projected_mtd": "1003",
+            },
+        ],
+        "components": {
+            "clientes_nuevos": {
+                "actual_mtd": "100",
+                "projected_close": "130",
+                "remaining_projected": "30",
+            },
+            "reactivaciones": {
+                "actual_mtd": "50",
+                "projected_close": "70",
+                "remaining_projected": "20",
+            },
+            "bajas": {
+                "actual_mtd": "40",
+                "projected_close": "60",
+                "remaining_projected": "20",
+            },
+        },
+        "missing_components": [],
+    }
+
+
+def test_active_members_projection_is_unavailable_when_component_is_missing():
+    projection = service._build_active_members_projection(
+        metrics=_active_members_metrics(
+            unavailable_component="reactivaciones",
+        ),
+        cutoff_date=date(2026, 8, 21),
+    )
+
+    assert projection["status"] == "insufficient_data"
+    assert projection["projected_close"] is None
+    assert projection["projected_points"] == []
+    assert projection["missing_components"] == ["reactivaciones"]
+    assert projection["components"]["reactivaciones"] == {
+        "actual_mtd": "50",
+        "projected_close": None,
+        "remaining_projected": None,
+    }
+
+
+def test_active_members_projection_preserves_negative_remaining_components():
+    projection = service._build_active_members_projection(
+        metrics=_active_members_metrics(
+            clientes_close="90",
+            reactivaciones_close="45",
+            bajas_close="35",
+        ),
+        cutoff_date=date(2026, 8, 21),
+    )
+
+    assert projection["status"] == "available"
+    assert projection["projected_close"] == "990"
+    assert projection["components"]["clientes_nuevos"][
+        "remaining_projected"
+    ] == "-10"
+    assert projection["components"]["reactivaciones"][
+        "remaining_projected"
+    ] == "-5"
+    assert projection["components"]["bajas"][
+        "remaining_projected"
+    ] == "-5"
+
+
+def test_active_members_projection_at_month_end_is_observed_close():
+    projection = service._build_active_members_projection(
+        metrics=_active_members_metrics(
+            observed="975",
+            unavailable_component="clientes_nuevos",
+        ),
+        cutoff_date=date(2026, 8, 31),
+    )
+
+    assert projection["status"] == "available"
+    assert projection["remaining_days"] == 0
+    assert projection["projected_close"] == "975"
+    assert projection["projected_points"] == []
+    assert projection["missing_components"] == []
+
+
+def test_active_members_does_not_expose_track_target_as_observed_start():
+    metric = service._build_active_members_metric(
+        _mart_row(
+            track_date=date(2026, 8, 21),
+            usuarios_inicio_mes=Decimal("1075"),
+            usuarios_activos_actual=Decimal("1053"),
+        )
+    )
+
+    assert metric["actual_mtd"] == "1053"
+    assert metric["start_month"] is None
+    assert metric["change_from_start"] is None
+    assert service._business_rules()["active_members_start_source"] == (
+        "socios_activos_inicio_mes_not_propagated_to_track_daily_mart"
+    )
 
 
 def test_domiciliados_reuses_clientes_nuevos_weekday_pacing():
@@ -1114,7 +1296,7 @@ def test_service_resolves_each_calendar_date_and_forecasts_only_current_cut():
         ), patch.object(
             service,
             "resolve_effective_track_daily_version",
-        side_effect=lambda track_date, **_: versions[track_date],
+        side_effect=lambda track_date, **_: versions.get(track_date),
     ) as resolve_version, patch.object(
         service,
         "_load_branch_rows_for_versions",
@@ -1132,18 +1314,38 @@ def test_service_resolves_each_calendar_date_and_forecasts_only_current_cut():
             today=cutoff,
         )
 
+    expected_resolution_dates = sorted([
+        *[
+            date(2025, 8, day)
+            for day in range(1, 32)
+        ],
+        *[
+            date(2026, 7, day)
+            for day in range(1, 32)
+        ],
+        *[
+            date(2026, 8, day)
+            for day in range(1, 4)
+        ],
+    ])
     assert resolve_version.call_args_list == [
         call(
-            track_date=date(2026, 8, day),
+            track_date=calendar_date,
             generation_mode="manual_preview",
             today=cutoff,
         )
-        for day in range(1, 4)
+        for calendar_date in expected_resolution_dates
     ]
     build_projection.assert_called_once()
     assert result["cutoff"]["track_daily_version_id"] == 3
     assert result["identity"]["sucursal_label"] == "Saltillo Villalta"
     assert result["quality"]["history_rows"] == 3
+    assert result["chart_comparisons"]["periods"]["previous_month"][
+        "history_rows"
+    ] == 0
+    assert result["chart_comparisons"]["periods"][
+        "previous_year_same_month"
+    ]["history_rows"] == 0
     assert result["current"]["metrics"]["ingreso"]["projection"] == projection
     for metric_key in service.OPERATIONAL_PROJECTION_METRIC_KEYS:
         assert (
@@ -1166,6 +1368,311 @@ def test_service_resolves_each_calendar_date_and_forecasts_only_current_cut():
         ]
         == 3
     )
+
+
+def test_chart_comparisons_contract_resolves_periods_and_shorter_month_cutoff():
+    cutoff = date(2026, 3, 31)
+    branch = ForecastCenterBranch(
+        sucursal_canon="SALTILLO_VILLALTA",
+        sucursal_id=1,
+        label="Saltillo Villalta",
+        display_order=1,
+        operational_status="ACTIVA",
+        cohort="legacy_21",
+        region_key="MONTERREY_SALTILLO_SERRANIA",
+        region_label="Monterrey / Saltillo / Serranía",
+        region_assignment_status="available",
+    )
+    period_months = (
+        date(2026, 3, 1),
+        date(2026, 2, 1),
+        date(2025, 3, 1),
+    )
+    calendar_dates = [
+        month_start.replace(day=day)
+        for month_start in period_months
+        for day in range(
+            1,
+            monthrange(month_start.year, month_start.month)[1] + 1,
+        )
+    ]
+    versions = {
+        calendar_date: SimpleNamespace(
+            id=int(calendar_date.strftime("%Y%m%d")),
+            version_type="cierre_canonico",
+            status="success",
+        )
+        for calendar_date in calendar_dates
+    }
+    rows = {
+        version.id: _mart_row(
+            track_date=calendar_date,
+            track_daily_version_id=version.id,
+        )
+        for calendar_date, version in versions.items()
+    }
+    loaded_version_ids = []
+
+    def load_rows(*, sucursal_canon, version_ids):
+        assert sucursal_canon == branch.sucursal_canon
+        loaded_version_ids.extend(version_ids)
+        return rows
+
+    with patch.object(
+        service,
+        "_resolve_authorized_branch",
+        return_value=branch,
+    ), patch.object(
+        service,
+        "resolve_current_track_region_for_branch_id",
+        return_value=SimpleNamespace(
+            region_key=branch.region_key,
+            region_label=branch.region_label,
+        ),
+    ), patch.object(
+        service,
+        "resolve_effective_track_daily_version",
+        side_effect=lambda track_date, **_: versions.get(track_date),
+    ) as resolve_version, patch.object(
+        service,
+        "_load_branch_rows_for_versions",
+        side_effect=load_rows,
+    ) as load_batch, patch.object(
+        service,
+        "build_branch_income_projection_summary",
+        return_value={
+            "status": "available",
+            "projected_close": "31000",
+            "quality_issue": None,
+        },
+    ):
+        result = service.get_track_branch_operational_detail(
+            user=SimpleNamespace(rol="ADMIN"),
+            sucursal_canon=branch.sucursal_canon,
+            track_date=cutoff,
+            generation_mode="manual_preview",
+            today=cutoff,
+        )
+
+    comparisons = result["chart_comparisons"]
+    assert tuple(comparisons["periods"]) == (
+        "current_month",
+        "previous_month",
+        "previous_year_same_month",
+    )
+    assert tuple(comparisons["metrics"]) == (
+        "clientes_nuevos",
+        "reactivaciones",
+        "domiciliados",
+        "bajas",
+        "socios_activos",
+    )
+
+    current_period = comparisons["periods"]["current_month"]
+    previous_period = comparisons["periods"]["previous_month"]
+    previous_year_period = comparisons["periods"][
+        "previous_year_same_month"
+    ]
+    assert current_period == {
+        "period_key": "current_month",
+        "target_month": "2026-03",
+        "date_from": "2026-03-01",
+        "date_to": "2026-03-31",
+        "days_in_month": 31,
+        "comparison_day": 31,
+        "comparison_date": "2026-03-31",
+        "is_closed": True,
+        "history_rows": 31,
+        "expected_calendar_days": 31,
+        "missing_dates": [],
+        "has_gaps": False,
+    }
+    assert previous_period["target_month"] == "2026-02"
+    assert previous_period["date_to"] == "2026-02-28"
+    assert previous_period["days_in_month"] == 28
+    assert previous_period["comparison_day"] == 28
+    assert previous_period["comparison_date"] == "2026-02-28"
+    assert previous_period["is_closed"] is True
+    assert previous_year_period["target_month"] == "2025-03"
+    assert previous_year_period["comparison_date"] == "2025-03-31"
+
+    new_clients = comparisons["metrics"]["clientes_nuevos"]
+    assert new_clients["metric_key"] == "clientes_nuevos"
+    assert tuple(new_clients["periods"]) == tuple(comparisons["periods"])
+    assert len(new_clients["periods"]["current_month"]["points"]) == 31
+    assert len(new_clients["periods"]["previous_month"]["points"]) == 28
+    assert (
+        new_clients["periods"]["previous_month"]["same_day_point"]
+        == {
+            "track_date": "2026-02-28",
+            "day_of_month": 28,
+            "track_daily_version_id": 20260228,
+            "actual_mtd": "280",
+        }
+    )
+    assert (
+        new_clients["periods"]["previous_year_same_month"]
+        ["same_day_point"]["track_date"]
+        == "2025-03-31"
+    )
+    assert result["current"]["metrics"]["clientes_nuevos"]["actual_mtd"] == "310"
+    assert result["current"]["metrics"]["socios_activos"]["actual_mtd"] == "969"
+    active_members = comparisons["metrics"]["socios_activos"]
+    assert active_members["metric_key"] == "socios_activos"
+    assert active_members["periods"]["previous_month"][
+        "same_day_point"
+    ] == {
+        "track_date": "2026-02-28",
+        "day_of_month": 28,
+        "track_daily_version_id": 20260228,
+        "actual_mtd": "972",
+    }
+    assert len(result["history"]) == 31
+
+    load_batch.assert_called_once()
+    assert set(loaded_version_ids) == {
+        version.id for version in versions.values()
+    }
+    assert resolve_version.call_count == len(calendar_dates)
+    assert {
+        call_item.kwargs["track_date"]
+        for call_item in resolve_version.call_args_list
+    } == set(calendar_dates)
+
+
+def test_chart_comparisons_preserve_historical_gaps_and_null_metric_values():
+    cutoff = date(2026, 8, 21)
+    branch = ForecastCenterBranch(
+        sucursal_canon="SALTILLO_VILLALTA",
+        sucursal_id=1,
+        label="Saltillo Villalta",
+        display_order=1,
+        operational_status="ACTIVA",
+        cohort="legacy_21",
+        region_key="MONTERREY_SALTILLO_SERRANIA",
+        region_label="Monterrey / Saltillo / Serranía",
+        region_assignment_status="available",
+    )
+    period_ranges = (
+        (date(2026, 8, 1), cutoff.day),
+        (date(2026, 7, 1), 31),
+        (date(2025, 8, 1), 31),
+    )
+    missing_dates = {
+        date(2026, 7, 21),
+        date(2025, 8, 10),
+    }
+    calendar_dates = [
+        month_start.replace(day=day)
+        for month_start, last_day in period_ranges
+        for day in range(1, last_day + 1)
+    ]
+    versions = {
+        calendar_date: SimpleNamespace(
+            id=int(calendar_date.strftime("%Y%m%d")),
+            version_type="cierre_canonico",
+            status="success",
+        )
+        for calendar_date in calendar_dates
+        if calendar_date not in missing_dates
+    }
+    rows = {
+        version.id: _mart_row(
+            track_date=calendar_date,
+            track_daily_version_id=version.id,
+            clientes_nuevos_real_mtd=(
+                None
+                if calendar_date == date(2026, 7, 18)
+                else Decimal(calendar_date.day * 10)
+            ),
+            usuarios_activos_actual=(
+                None
+                if calendar_date == date(2026, 7, 18)
+                else Decimal(1000 - calendar_date.day)
+            ),
+        )
+        for calendar_date, version in versions.items()
+    }
+
+    with patch.object(
+        service,
+        "_resolve_authorized_branch",
+        return_value=branch,
+    ), patch.object(
+        service,
+        "resolve_current_track_region_for_branch_id",
+        return_value=SimpleNamespace(
+            region_key=branch.region_key,
+            region_label=branch.region_label,
+        ),
+    ), patch.object(
+        service,
+        "resolve_effective_track_daily_version",
+        side_effect=lambda track_date, **_: versions.get(track_date),
+    ), patch.object(
+        service,
+        "_load_branch_rows_for_versions",
+        return_value=rows,
+    ), patch.object(
+        service,
+        "build_branch_income_projection_summary",
+        return_value={
+            "status": "available",
+            "projected_close": "21000",
+            "quality_issue": None,
+        },
+    ):
+        result = service.get_track_branch_operational_detail(
+            user=SimpleNamespace(rol="ADMIN"),
+            sucursal_canon=branch.sucursal_canon,
+            track_date=cutoff,
+            generation_mode="manual_preview",
+            today=cutoff,
+        )
+
+    comparisons = result["chart_comparisons"]
+    previous_period = comparisons["periods"]["previous_month"]
+    assert previous_period["missing_dates"] == ["2026-07-21"]
+    assert previous_period["has_gaps"] is True
+    assert previous_period["history_rows"] == 30
+
+    previous_series = comparisons["metrics"]["clientes_nuevos"][
+        "periods"
+    ]["previous_month"]
+    assert previous_series["same_day_point"] is None
+    assert all(
+        point["day_of_month"] != 21
+        for point in previous_series["points"]
+    )
+    null_point = next(
+        point
+        for point in previous_series["points"]
+        if point["day_of_month"] == 18
+    )
+    assert null_point["actual_mtd"] is None
+    assert null_point["track_daily_version_id"] == 20260718
+
+    previous_year_period = comparisons["periods"][
+        "previous_year_same_month"
+    ]
+    assert previous_year_period["missing_dates"] == ["2025-08-10"]
+    previous_year_points = comparisons["metrics"]["bajas"]["periods"][
+        "previous_year_same_month"
+    ]["points"]
+    assert all(point["day_of_month"] != 10 for point in previous_year_points)
+    assert next(
+        point for point in previous_year_points if point["day_of_month"] == 21
+    )["track_daily_version_id"] == 20250821
+    active_members_points = comparisons["metrics"]["socios_activos"][
+        "periods"
+    ]["previous_month"]["points"]
+    null_active_members_point = next(
+        point
+        for point in active_members_points
+        if point["day_of_month"] == 18
+    )
+    assert null_active_members_point["actual_mtd"] is None
+    assert null_active_members_point["track_daily_version_id"] == 20260718
 
 
 def test_current_region_inconsistency_becomes_data_error():
