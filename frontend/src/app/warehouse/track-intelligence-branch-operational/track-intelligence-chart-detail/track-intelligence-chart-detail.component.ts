@@ -106,6 +106,8 @@ interface TrackIntelligenceChartDetailExpandedView {
   projectionMarkers: TrackIntelligenceChartDetailMarker[];
   actualValueLabels: TrackIntelligenceChartDetailValueLabel[];
   historicalSeries: TrackIntelligenceChartDetailHistoricalSeries[];
+  selectedHistoricalSeries: TrackIntelligenceChartDetailHistoricalSeries | null;
+  selectedHistoricalValueLabels: TrackIntelligenceChartDetailValueLabel[];
   axisLabels: TrackIntelligenceChartDetailAxisLabel[];
   yAxisTicks: TrackIntelligenceChartDetailYAxisTick[];
 }
@@ -139,6 +141,7 @@ export class TrackIntelligenceChartDetailComponent {
 
   showPreviousMonth = false;
   showPreviousYearSameMonth = false;
+  selectedHistoricalPeriod: HistoricalPeriodKey | null = null;
   expandedChart: TrackIntelligenceChartDetailExpandedView | null = null;
   comparisonSummaries: TrackIntelligenceChartDetailComparisonSummary[] = [];
 
@@ -150,6 +153,7 @@ export class TrackIntelligenceChartDetailComponent {
     if (previousMetric && currentMetric && previousMetric !== currentMetric) {
       this.showPreviousMonth = false;
       this.showPreviousYearSameMonth = false;
+      this.selectedHistoricalPeriod = null;
     }
 
     this.rebuildExpandedChart();
@@ -161,6 +165,26 @@ export class TrackIntelligenceChartDetailComponent {
     } else {
       this.showPreviousYearSameMonth = !this.showPreviousYearSameMonth;
     }
+
+    const periodStillVisible = periodKey === 'previous_month'
+      ? this.showPreviousMonth
+      : this.showPreviousYearSameMonth;
+
+    if (
+      this.selectedHistoricalPeriod === periodKey &&
+      !periodStillVisible
+    ) {
+      this.selectedHistoricalPeriod = null;
+    }
+
+    this.rebuildExpandedChart();
+  }
+
+  selectHistoricalSeries(periodKey: HistoricalPeriodKey): void {
+    this.selectedHistoricalPeriod =
+      this.selectedHistoricalPeriod === periodKey
+        ? null
+        : periodKey;
 
     this.rebuildExpandedChart();
   }
@@ -223,11 +247,24 @@ export class TrackIntelligenceChartDetailComponent {
     const scaledHistoricalSeries = historicalSeries.map((series) => (
       this.scaleHistoricalSeries(series, xForDay, yForValue)
     ));
-    const actualValueLabels = this.buildActualValueLabels(
-      this.chart.actualSeries,
-      xForDay,
-      yForValue,
-    );
+
+    const selectedHistoricalSeries = this.selectedHistoricalPeriod
+      ? scaledHistoricalSeries.find(
+          (series) => series.periodKey === this.selectedHistoricalPeriod,
+        ) ?? null
+      : null;
+
+    const actualValueLabels = selectedHistoricalSeries
+      ? []
+      : this.buildActualValueLabels(
+          this.chart.actualSeries,
+          xForDay,
+          yForValue,
+        );
+
+    const selectedHistoricalValueLabels = selectedHistoricalSeries
+      ? this.buildHistoricalValueLabels(selectedHistoricalSeries)
+      : [];
 
     this.expandedChart = {
       actualPoints: this.toPolyline(actualMarkers),
@@ -238,6 +275,8 @@ export class TrackIntelligenceChartDetailComponent {
       projectionMarkers,
       actualValueLabels,
       historicalSeries: scaledHistoricalSeries,
+      selectedHistoricalSeries,
+      selectedHistoricalValueLabels,
       axisLabels: this.buildAxisLabels(daysInMonth, xForDay),
       yAxisTicks: yAxisScale.ticks.map((value) => ({
         y: yForValue(value),
@@ -427,6 +466,50 @@ export class TrackIntelligenceChartDetailComponent {
           placement,
         };
       });
+  }
+
+  private buildHistoricalValueLabels(
+    series: TrackIntelligenceChartDetailHistoricalSeries,
+  ): TrackIntelligenceChartDetailValueLabel[] {
+    const markers = series.markers
+      .slice()
+      .sort((left, right) => left.day - right.day);
+
+    if (!markers.length) {
+      return [];
+    }
+
+    const referenceDays = new Set([5, 10, 15, 20, 25]);
+    referenceDays.add(markers[markers.length - 1].day);
+
+    return markers.flatMap((marker) => {
+      if (!referenceDays.has(marker.day)) {
+        return [];
+      }
+
+      const value = this.getHistoricalMarkerValue(
+        series.periodKey,
+        marker.day,
+      );
+
+      if (value === null) {
+        return [];
+      }
+
+      const placement: 'above' | 'below' = marker.y <= 7
+        ? 'below'
+        : 'above';
+
+      return [{
+        day: marker.day,
+        x: marker.x,
+        y: placement === 'below'
+          ? marker.y + 2.15
+          : marker.y - 1.35,
+        text: this.formatNumber(value),
+        placement,
+      }];
+    });
   }
 
   private toPolyline(points: TrackIntelligenceChartDetailMarker[]): string {

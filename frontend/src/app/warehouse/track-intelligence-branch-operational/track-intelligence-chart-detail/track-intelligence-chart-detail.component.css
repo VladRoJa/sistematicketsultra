@@ -389,6 +389,41 @@
   opacity: 0.42;
 }
 
+.detail-chart-hitline {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 12;
+  vector-effect: non-scaling-stroke;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+.detail-chart-marker--previous-month,
+.detail-chart-marker--previous-year {
+  cursor: pointer;
+}
+
+.detail-chart-line--historical-selected {
+  stroke-width: 3.8;
+  opacity: 1;
+  filter: drop-shadow(0 4px 7px rgba(15, 23, 42, 0.16));
+  pointer-events: none;
+}
+
+.detail-chart-marker--historical-selected {
+  stroke-width: 2.8;
+  opacity: 1;
+  pointer-events: none;
+}
+
+.detail-chart-value-labels--previous-month .detail-chart-value-label {
+  fill: #16a34a;
+}
+
+.detail-chart-value-labels--previous-year .detail-chart-value-label {
+  fill: #7c3aed;
+}
+
 .detail-chart-value-label {
   fill: #c2410c;
   font-size: 1.42px;
