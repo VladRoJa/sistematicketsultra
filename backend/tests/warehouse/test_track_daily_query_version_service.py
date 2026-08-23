@@ -8,6 +8,7 @@ from app.extensions import db
 from app.models.warehouse import TrackDailyVersionORM
 from app.warehouse.services.track_daily_query_version_service import (
     resolve_effective_track_daily_version,
+    resolve_preferred_track_daily_version,
 )
 
 
@@ -187,6 +188,96 @@ def test_returns_none_when_no_effective_version_has_mart_rows(isolated_app):
             track_date=target_date,
             generation_mode="official_closed_day",
             today=date(2026, 8, 17),
+        )
+
+        assert resolved is None
+
+
+def test_preferred_version_canonical_wins_over_preview(isolated_app):
+    target_date = date(2026, 8, 23)
+
+    with isolated_app.app_context():
+        preview = _add_version(
+            track_date=target_date,
+            version_type="preview_operativo",
+        )
+        canonical = _add_version(
+            track_date=target_date,
+            version_type="cierre_canonico",
+        )
+        _add_mart_row(preview.id)
+        _add_mart_row(canonical.id)
+
+        resolved = resolve_preferred_track_daily_version(
+            track_date=target_date,
+        )
+
+        assert resolved is not None
+        assert resolved.id == canonical.id
+        assert resolved.version_type == "cierre_canonico"
+
+
+def test_preferred_version_nightly_base_wins_over_preview(isolated_app):
+    target_date = date(2026, 8, 23)
+
+    with isolated_app.app_context():
+        preview = _add_version(
+            track_date=target_date,
+            version_type="preview_operativo",
+        )
+        nightly_base = _add_version(
+            track_date=target_date,
+            version_type="base_nocturna_canonica",
+        )
+        _add_mart_row(preview.id)
+        _add_mart_row(nightly_base.id)
+
+        resolved = resolve_preferred_track_daily_version(
+            track_date=target_date,
+        )
+
+        assert resolved is not None
+        assert resolved.id == nightly_base.id
+        assert resolved.version_type == "base_nocturna_canonica"
+
+
+def test_preferred_version_falls_back_to_preview(isolated_app):
+    target_date = date(2026, 8, 23)
+
+    with isolated_app.app_context():
+        preview = _add_version(
+            track_date=target_date,
+            version_type="preview_operativo",
+        )
+        _add_mart_row(preview.id)
+
+        resolved = resolve_preferred_track_daily_version(
+            track_date=target_date,
+        )
+
+        assert resolved is not None
+        assert resolved.id == preview.id
+        assert resolved.version_type == "preview_operativo"
+
+
+def test_preferred_version_returns_none_without_queryable_versions(
+    isolated_app,
+):
+    target_date = date(2026, 8, 23)
+
+    with isolated_app.app_context():
+        _add_version(
+            track_date=target_date,
+            version_type="cierre_canonico",
+        )
+        _add_version(
+            track_date=target_date,
+            version_type="preview_operativo",
+        )
+        db.session.commit()
+
+        resolved = resolve_preferred_track_daily_version(
+            track_date=target_date,
         )
 
         assert resolved is None
