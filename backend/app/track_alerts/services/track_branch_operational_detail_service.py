@@ -1461,6 +1461,9 @@ def _pace_recommendation_reason(
         summary.get("projected_close")
     )
     benchmark = _operational_display_number(summary.get("benchmark"))
+    required = _operational_display_number(
+        summary.get("required_daily_average")
+    )
     gap = _decimal(summary.get("projected_gap_units"))
     remaining_days = int(summary.get("remaining_days") or 0)
 
@@ -1470,45 +1473,19 @@ def _pace_recommendation_reason(
 
         if gap is not None and gap < 0:
             return (
-                f"{label} cerró {projected_close}/{benchmark}; "
+                f"{label} cerró en {projected_close} de {benchmark}; "
                 f"faltaron {_operational_display_number(abs(gap))}."
             )
 
+        return f"{label} cerró en {projected_close} de {benchmark}."
+
+    if required is not None:
         return (
-            f"{label} cerró {projected_close}/{benchmark} "
-            "respecto de la meta mensual."
+            f"Para llegar a la meta se necesitan "
+            f"{required} {label.lower()} por día."
         )
 
-    recent = _operational_display_number(
-        summary.get("recent_daily_average")
-    )
-    required = _operational_display_number(
-        summary.get("required_daily_average")
-    )
-
-    parts: list[str] = []
-
-    if recent is not None and required is not None:
-        parts.append(
-            f"{label} opera en {recent}/día y requiere "
-            f"{required}/día en los días restantes"
-        )
-
-    if projected_close is not None and benchmark is not None:
-        projection_text = (
-            f"cierre proyectado {projected_close}/{benchmark}"
-        )
-        if gap is not None and gap < 0:
-            projection_text += (
-                f", con brecha de "
-                f"{_operational_display_number(abs(gap))}"
-            )
-        parts.append(projection_text)
-
-    if not parts:
-        return fallback
-
-    return "; ".join(parts) + "."
+    return fallback
 
 
 def _bajas_recommendation_reason(
@@ -1523,38 +1500,30 @@ def _bajas_recommendation_reason(
         summary.get("projected_close")
     )
     benchmark = _operational_display_number(summary.get("benchmark"))
-    usage = _operational_display_number(
-        summary.get("projected_limit_usage_pct")
-        or summary.get("limit_usage_pct")
-    )
     excess = _decimal(summary.get("projected_excess_units"))
-    margin = _decimal(summary.get("projected_remaining_margin"))
     remaining_days = int(summary.get("remaining_days") or 0)
 
     if projected_close is None or benchmark is None:
         return fallback
 
-    prefix = (
-        "El mes cerró"
-        if remaining_days == 0
-        else "La proyección actual cierra"
-    )
-
-    parts = [f"{prefix} en {projected_close}/{benchmark} bajas"]
-
-    if usage is not None:
-        parts.append(f"{usage}% del límite")
+    if remaining_days == 0:
+        reason = (
+            f"El mes cerró en {projected_close} bajas "
+            f"con un límite de {benchmark}."
+        )
+    else:
+        reason = (
+            f"Si continúa el ritmo actual, las bajas podrían cerrar "
+            f"en {projected_close} con un límite de {benchmark}."
+        )
 
     if excess is not None and excess > 0:
-        parts.append(
-            f"exceso de {_operational_display_number(excess)}"
-        )
-    elif margin is not None:
-        parts.append(
-            f"margen de {_operational_display_number(margin)}"
+        reason += (
+            f" Serían {_operational_display_number(excess)} "
+            "arriba del límite."
         )
 
-    return "; ".join(parts) + "."
+    return reason
 
 
 def _bajas_recommendation_actions(
@@ -1563,7 +1532,7 @@ def _bajas_recommendation_actions(
     fallback: list[str],
 ) -> list[str]:
     if summary is None:
-        return fallback
+        return list(fallback)[:3]
 
     actual = _decimal(summary.get("actual_mtd"))
     limit = _decimal(summary.get("benchmark"))
@@ -1575,40 +1544,40 @@ def _bajas_recommendation_actions(
         or limit is None
         or remaining_days <= 0
     ):
-        return fallback
+        return list(fallback)[:3]
 
     remaining_margin = max(limit - actual, Decimal("0"))
-    max_net_daily_rate = (
+    max_daily_increase = (
         remaining_margin / Decimal(remaining_days)
     )
 
     actions = [
         (
-            "Para cerrar dentro del límite, el saldo neto de bajas "
-            f"no debe superar "
-            f"{_operational_display_number(max_net_daily_rate)} "
-            f"bajas netas/día durante los {remaining_days} días restantes."
+            "Para no pasar el límite, el total de bajas no debería "
+            f"aumentar más de "
+            f"{_operational_display_number(max_daily_increase)} "
+            f"por día durante los {remaining_days} días restantes."
         ),
     ]
 
     if (
         recent_average is not None
-        and recent_average > max_net_daily_rate
+        and recent_average > max_daily_increase
     ):
-        reduction_needed = recent_average - max_net_daily_rate
+        reduction_needed = recent_average - max_daily_increase
         actions.append(
             (
                 f"El promedio reciente es "
-                f"{_operational_display_number(recent_average)}/día; "
-                f"se requiere reducir el saldo neto en aproximadamente "
+                f"{_operational_display_number(recent_average)} por día; "
+                f"hay que reducirlo aproximadamente "
                 f"{_operational_display_number(reduction_needed)} "
-                "bajas/día."
+                "por día."
             )
         )
 
     actions.extend(fallback)
 
-    return actions[:4]
+    return actions[:3]
 
 
 def _income_recommendation_reason(
@@ -1623,23 +1592,14 @@ def _income_recommendation_reason(
         summary.get("projected_close")
     )
     benchmark = _operational_display_number(summary.get("benchmark"))
-    gap = _decimal(summary.get("projected_gap_units"))
 
     if projected_close is None or benchmark is None:
         return fallback
 
-    reason = (
-        f"El cierre proyectado de ingreso es "
-        f"{projected_close}/{benchmark}"
+    return (
+        f"El ingreso proyectado es {projected_close} "
+        f"frente a una meta de {benchmark}."
     )
-
-    if gap is not None and gap < 0:
-        reason += (
-            f", con brecha de "
-            f"{_operational_display_number(abs(gap))}"
-        )
-
-    return reason + "."
 
 
 def _commercial_general_reason(
@@ -1649,71 +1609,36 @@ def _commercial_general_reason(
 ) -> str:
     labels = {
         "clientes_nuevos": "Clientes nuevos",
-        "reactivaciones": "Reactivaciones",
-        "domiciliados": "Domiciliados",
+        "reactivaciones": "reactivaciones",
+        "domiciliados": "domiciliados",
     }
 
-    metric_keys = (
-        "clientes_nuevos",
-        "reactivaciones",
-        "domiciliados",
-    )
-
-    available = [
-        (metric_key, summaries_by_metric[metric_key])
-        for metric_key in metric_keys
+    active_labels = [
+        labels[metric_key]
+        for metric_key in (
+            "clientes_nuevos",
+            "reactivaciones",
+            "domiciliados",
+        )
         if metric_key in summaries_by_metric
     ]
-    if not available:
+
+    if not active_labels:
         return fallback
 
-    is_open_month = any(
-        int(summary.get("remaining_days") or 0) > 0
-        for _, summary in available
-    )
+    if len(active_labels) == 1:
+        return f"{active_labels[0]} necesita recuperarse."
 
-    if is_open_month:
-        active_labels = [
-            labels[metric_key]
-            for metric_key, _ in available
-        ]
-
-        if len(active_labels) == 3:
-            return (
-                "Clientes nuevos, reactivaciones y domiciliados "
-                "requieren recuperación simultánea."
-            )
-
+    if len(active_labels) == 2:
         return (
-            ", ".join(active_labels)
-            + " requieren recuperación simultánea."
+            f"{active_labels[0]} y {active_labels[1]} "
+            "necesitan recuperarse."
         )
 
-    parts: list[str] = []
-
-    for metric_key, summary in available:
-        close = _operational_display_number(
-            summary.get("projected_close")
-        )
-        benchmark = _operational_display_number(
-            summary.get("benchmark")
-        )
-        gap = _decimal(summary.get("projected_gap_units"))
-
-        if close is None or benchmark is None:
-            continue
-
-        text = f"{labels[metric_key]}: {close}/{benchmark}"
-        if gap is not None and gap < 0:
-            text += (
-                f" (-{_operational_display_number(abs(gap))})"
-            )
-        parts.append(text)
-
-    if not parts:
-        return fallback
-
-    return "; ".join(parts) + "."
+    return (
+        f"{active_labels[0]}, {active_labels[1]} y "
+        f"{active_labels[2]} necesitan recuperarse."
+    )
 
 
 def _commercial_general_actions(
@@ -1722,9 +1647,9 @@ def _commercial_general_actions(
     fallback: list[str],
 ) -> list[str]:
     labels = {
-        "clientes_nuevos": "Clientes nuevos",
-        "reactivaciones": "Reactivaciones",
-        "domiciliados": "Domiciliados",
+        "clientes_nuevos": "clientes nuevos",
+        "reactivaciones": "reactivaciones",
+        "domiciliados": "domiciliados",
     }
 
     targets: list[str] = []
@@ -1738,29 +1663,35 @@ def _commercial_general_actions(
         if summary is None:
             continue
 
-        if int(summary.get("remaining_days") or 0) == 0:
+        if int(summary.get("remaining_days") or 0) <= 0:
             continue
 
         required = _operational_display_number(
             summary.get("required_daily_average")
         )
+
         if required is not None:
-            targets.append(f"{labels[metric_key]} {required}/día")
+            targets.append(f"{required} {labels[metric_key]}")
 
-    if not targets:
-        return fallback
+    actions: list[str] = []
 
-    return [
-        "Tomar como objetivo operativo desde el siguiente corte: "
-        + ", ".join(targets)
-        + ".",
-        "Revisar prospectos y cierres pendientes que puedan recuperarse hoy.",
-        "Validar contratos pendientes o incompletos de domiciliación.",
-        (
-            "Comparar resultado diario por asesor y canal contra el ritmo "
-            "requerido, sin asumir una causa hasta identificar la brecha."
-        ),
-    ]
+    if targets:
+        if len(targets) == 1:
+            target_text = targets[0]
+        elif len(targets) == 2:
+            target_text = f"{targets[0]} y {targets[1]}"
+        else:
+            target_text = (
+                f"{targets[0]}, {targets[1]} y {targets[2]}"
+            )
+
+        actions.append(
+            f"Objetivo diario: {target_text}."
+        )
+
+    actions.extend(fallback)
+
+    return actions[:3]
 
 
 def _build_recommendations(
@@ -1771,22 +1702,22 @@ def _build_recommendations(
     templates: dict[str, dict[str, Any]] = {
         "domiciliados": {
             "metric_key": "domiciliados",
-            "title": "Corregir brecha de domiciliación",
+            "title": "Recuperar domiciliaciones pendientes",
             "reason": (
                 "Domiciliados opera debajo del ritmo esperado o muestra "
                 "deterioro reciente."
             ),
             "actions": [
-                "Revisar altas recientes que no quedaron domiciliadas.",
-                "Identificar rechazos de tarjeta.",
-                "Revisar contratos pendientes de domiciliación.",
+                "Revisar altas recientes que siguen sin domiciliación.",
+                "Corregir tarjetas rechazadas o datos de pago incompletos.",
+                "Dar seguimiento hoy a contratos pendientes.",
                 "Dar seguimiento a pendientes del equipo comercial.",
             ],
             "evidence_keys": ["domiciliados"],
         },
         "retencion": {
             "metric_key": "bajas",
-            "title": "Revisar retención y bajas recuperables",
+            "title": "Recuperar socios en riesgo",
             "reason": (
                 "Las bajas están en zona crítica y los usuarios activos "
                 "muestran deterioro."
@@ -1801,74 +1732,74 @@ def _build_recommendations(
         },
         "bajas": {
             "metric_key": "bajas",
-            "title": "Contener bajas y revisar causas",
+            "title": "Contener las bajas",
             "reason": (
                 "Las bajas están en zona de atención o muestran "
                 "aceleración reciente."
             ),
             "actions": [
                 "Revisar motivos de baja recientes.",
-                "Identificar concentraciones por causa o periodo.",
-                "Priorizar casos potencialmente recuperables.",
-                "Revisar incidencias operativas recurrentes.",
+                "Detectar si se repite el mismo motivo de baja.",
+                "Contactar primero a los socios que todavía pueden recuperarse.",
+                "Corregir incidencias que estén provocando bajas.",
             ],
             "evidence_keys": ["bajas"],
         },
         "clientes_nuevos": {
             "metric_key": "clientes_nuevos",
-            "title": "Recuperar captación y cierres",
+            "title": "Cerrar más clientes nuevos hoy",
             "reason": (
                 "Clientes nuevos opera debajo del ritmo esperado o muestra "
                 "deterioro reciente."
             ),
             "actions": [
-                "Revisar volumen de prospectos recientes.",
-                "Validar seguimiento de prospectos abiertos.",
-                "Revisar conversión por asesor y canal.",
+                "Revisar prospectos que ya están cerca de cerrar.",
+                "Contactar hoy a los prospectos más avanzados.",
+                "Revisar qué asesores llevan pocos cierres y apoyarlos.",
             ],
             "evidence_keys": ["clientes_nuevos"],
         },
         "reactivaciones": {
             "metric_key": "reactivaciones",
-            "title": "Recuperar ritmo de reactivaciones",
+            "title": "Buscar más reactivaciones hoy",
             "reason": (
                 "Reactivaciones opera debajo del ritmo esperado o requiere "
                 "seguimiento adicional."
             ),
             "actions": [
-                "Revisar cartera reciente elegible para reactivación.",
-                "Validar intentos y seguimiento de contacto.",
-                "Comparar conversión reciente por asesor.",
+                "Contactar socios recientes que pueden reactivarse.",
+                "Priorizar a quienes ya mostraron interés en regresar.",
+                "Revisar qué asesores llevan pocas reactivaciones.",
                 "Revisar motivos recurrentes de no reactivación.",
             ],
             "evidence_keys": ["reactivaciones"],
         },
         "ingreso": {
             "metric_key": "ingreso",
-            "title": "Revisar mezcla de ingresos",
+            "title": "Recuperar ingreso pendiente",
             "reason": (
                 "La proyección histórica disponible ubica el cierre "
                 "por debajo de la meta mensual."
             ),
             "actions": [
-                "Revisar ticket promedio.",
+                "Revisar ventas pendientes de cobrar o completar.",
                 "Revisar domiciliación de altas recientes.",
-                "Validar ingreso de agregadoras.",
-                "Revisar venta complementaria.",
+                "Confirmar que el ingreso de agregadoras esté reflejado.",
+                "Revisar ventas complementarias pendientes.",
             ],
             "evidence_keys": ["ingreso"],
         },
         "comercial_general": {
             "metric_key": "clientes_nuevos",
-            "title": "Revisar el embudo comercial completo",
+            "title": "Acelerar cierres comerciales hoy",
             "reason": (
                 "Más de un KPI comercial opera debajo del ritmo esperado."
             ),
             "actions": [
-                "Revisar captación y seguimiento de prospectos.",
-                "Revisar cierres recientes.",
-                "Validar domiciliación de contratos.",
-                "Comparar desempeño diario del equipo comercial.",
+                "Revisar prospectos cercanos a cierre.",
+                "Dar seguimiento hoy a cierres pendientes.",
+                "Revisar contratos pendientes de domiciliación.",
+                "Revisar qué asesores necesitan apoyo hoy.",
             ],
             "evidence_keys": [
                 "clientes_nuevos",
@@ -1945,14 +1876,9 @@ def _build_recommendations(
                     summary.get("required_daily_average")
                 )
                 if recent is not None and required is not None:
-                    recommendation["actions"] = [
-                        (
-                            f"Usar como referencia operativa "
-                            f"{required}/día frente a un promedio reciente "
-                            f"de {recent}/día."
-                        ),
-                        *list(template["actions"]),
-                    ][:4]
+                    recommendation["actions"] = list(
+                        template["actions"]
+                    )[:3]
         elif template_key in {"bajas", "retencion"}:
             bajas_summary = summaries_by_metric.get("bajas")
 
