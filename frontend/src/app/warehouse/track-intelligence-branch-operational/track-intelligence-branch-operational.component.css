@@ -354,28 +354,34 @@ app-track-intelligence-chart-detail {
 }
 
 .chart-card {
+  overflow: hidden;
   padding: 13px;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
   cursor: pointer;
   transition:
-    border-color 150ms ease,
-    box-shadow 150ms ease,
-    transform 150ms ease;
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
 }
 
 .chart-card:hover {
-  border-color: #9fb8d0;
-  box-shadow: 0 5px 14px rgba(31, 51, 76, 0.08);
+  border-color: rgba(249, 115, 22, 0.24);
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.10);
   transform: translateY(-1px);
 }
 
 .chart-card:focus-visible {
-  outline: 3px solid rgba(31, 95, 153, 0.22);
-  outline-offset: 2px;
+  outline: 3px solid rgba(249, 115, 22, 0.28);
+  outline-offset: 3px;
 }
 
 .chart-card.chart-card--selected {
-  border-color: #5f8db5;
-  box-shadow: 0 0 0 2px rgba(31, 95, 153, 0.12);
+  border-color: rgba(249, 115, 22, 0.58);
+  box-shadow:
+    0 0 0 3px rgba(249, 115, 22, 0.12),
+    0 18px 38px rgba(15, 23, 42, 0.12);
 }
 
 .chart-card-heading {
@@ -391,15 +397,15 @@ app-track-intelligence-chart-detail {
 
 .chart-card-heading span {
   flex: 0 0 auto;
-  color: #356b9b;
+  color: #c2410c;
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 900;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
 .chart-card--selected .chart-card-heading span {
-  color: #1f5f99;
+  color: #f97316;
 }
 
 .chart-legend {
@@ -423,16 +429,18 @@ app-track-intelligence-chart-detail {
 }
 
 .legend-line--actual {
-  background: #1f5f99;
+  background: #f97316;
 }
 
 .legend-line--benchmark {
-  background: #8994a5;
+  background: #2563eb;
+  opacity: 0.58;
 }
 
 .legend-line--projection {
   height: 0;
-  border-top: 3px dashed #6f5b9c;
+  border-top: 3px dashed #f97316;
+  opacity: 0.72;
 }
 
 .chart-projection-summary {
@@ -449,7 +457,7 @@ app-track-intelligence-chart-detail {
 }
 
 .chart-projection-summary strong {
-  color: #3f365d;
+  color: #c2410c;
 }
 
 .metric-chart-wrap {
@@ -470,9 +478,10 @@ app-track-intelligence-chart-detail {
   bottom: 0;
   left: 0;
   height: 16px;
-  color: #7a8496;
+  color: #98a2b3;
   font-size: 10px;
   font-variant-numeric: tabular-nums;
+  font-weight: 800;
 }
 
 .metric-chart-axis-labels > span {
@@ -490,45 +499,50 @@ app-track-intelligence-chart-detail {
 }
 
 .chart-line--actual {
-  stroke: #1f5f99;
-  stroke-width: 2;
+  stroke: #f97316;
+  stroke-width: 3.8;
+  opacity: 1;
+  filter: drop-shadow(0 4px 7px rgba(15, 23, 42, 0.16));
 }
 
 .chart-line--benchmark {
-  stroke: #8994a5;
-  stroke-width: 1.5;
-  stroke-dasharray: 4 3;
+  stroke: #2563eb;
+  stroke-width: 1.8;
+  stroke-dasharray: 8 6;
+  opacity: 0.58;
 }
 
 .chart-line--projection {
-  stroke: #6f5b9c;
-  stroke-width: 1.8;
-  stroke-dasharray: 2 2;
+  stroke: #f97316;
+  stroke-width: 2.4;
+  stroke-dasharray: 6 5;
+  opacity: 0.72;
 }
 
 .chart-axis {
-  stroke: #cbd2dc;
+  stroke: rgba(23, 32, 51, 0.26);
   stroke-width: 1;
   vector-effect: non-scaling-stroke;
 }
 
 .chart-gridline {
-  stroke: #e4e8ee;
-  stroke-width: 0.8;
+  stroke: rgba(15, 23, 42, 0.08);
+  stroke-width: 1;
   vector-effect: non-scaling-stroke;
 }
 
 .chart-y-axis-labels text {
-  fill: #667188;
+  fill: #98a2b3;
   font-size: 1.9px;
   font-variant-numeric: tabular-nums;
-  font-weight: 600;
+  font-weight: 800;
 }
 
 .chart-marker {
-  fill: #fff;
-  stroke: #1f5f99;
-  stroke-width: 1.2;
+  fill: #ffffff;
+  stroke: #f97316;
+  stroke-width: 2.8;
+  opacity: 1;
   vector-effect: non-scaling-stroke;
 }
 

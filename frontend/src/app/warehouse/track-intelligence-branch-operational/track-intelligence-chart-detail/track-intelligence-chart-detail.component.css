@@ -251,28 +251,27 @@
 }
 
 .detail-legend-line--actual {
-  background: #1769aa;
+  background: #f97316;
 }
 
 .detail-legend-line--benchmark {
-  background: #9aa3ad;
+  background: #2563eb;
 }
 
 .detail-legend-line--projection {
   height: 0;
-  border-top: 2px dashed #7253a5;
+  border-top: 3px dashed #f97316;
+  opacity: 0.72;
 }
 
 .detail-legend-line--previous-month {
-  height: 0;
-  border-top: 2px dashed #75879a;
-  opacity: 0.72;
+  background: #16a34a;
+  opacity: 0.58;
 }
 
 .detail-legend-line--previous-year {
-  height: 0;
-  border-top: 2px dotted #9a8975;
-  opacity: 0.72;
+  background: #7c3aed;
+  opacity: 0.58;
 }
 
 .chart-detail-scroll {
@@ -294,22 +293,22 @@
 }
 
 .detail-chart-gridline {
-  stroke: #e1e7ed;
-  stroke-width: 0.8;
+  stroke: rgba(15, 23, 42, 0.08);
+  stroke-width: 1;
   vector-effect: non-scaling-stroke;
 }
 
 .detail-chart-axis {
-  stroke: #b9c5d1;
+  stroke: rgba(23, 32, 51, 0.26);
   stroke-width: 1;
   vector-effect: non-scaling-stroke;
 }
 
 .detail-chart-y-labels text {
-  fill: #596579;
+  fill: #98a2b3;
   font-size: 1.55px;
   font-variant-numeric: tabular-nums;
-  font-weight: 700;
+  font-weight: 800;
 }
 
 .detail-chart-line {
@@ -320,36 +319,37 @@
 }
 
 .detail-chart-line--actual {
-  stroke: #1769aa;
-  stroke-width: 3.1;
+  stroke: #f97316;
+  stroke-width: 3.8;
+  opacity: 1;
+  filter: drop-shadow(0 4px 7px rgba(15, 23, 42, 0.16));
 }
 
 .detail-chart-line--benchmark {
-  stroke: #9aa3ad;
-  stroke-width: 1.4;
-  stroke-dasharray: 5 4;
-  opacity: 0.72;
+  stroke: #2563eb;
+  stroke-width: 1.8;
+  stroke-dasharray: 8 6;
+  opacity: 0.58;
 }
 
 .detail-chart-line--projection {
-  stroke: #7253a5;
-  stroke-width: 1.9;
-  stroke-dasharray: 4 4;
+  stroke: #f97316;
+  stroke-width: 2.4;
+  stroke-dasharray: 6 5;
+  opacity: 0.72;
 }
 
 .detail-chart-line--historical {
-  stroke-width: 1.15;
-  opacity: 0.52;
+  stroke-width: 2.2;
+  opacity: 0.28;
 }
 
 .detail-chart-line--previous-month {
-  stroke: #75879a;
-  stroke-dasharray: 7 5;
+  stroke: #16a34a;
 }
 
 .detail-chart-line--previous-year {
-  stroke: #9a8975;
-  stroke-dasharray: 2 5;
+  stroke: #7c3aed;
 }
 
 .detail-chart-marker {
@@ -358,34 +358,49 @@
 }
 
 .detail-chart-marker--actual {
-  stroke: #1769aa;
-  stroke-width: 1.8;
+  stroke: #f97316;
+  stroke-width: 2.8;
+  opacity: 1;
 }
 
 .detail-chart-marker--benchmark {
-  stroke: #9aa3ad;
-  stroke-width: 1;
-  opacity: 0.65;
+  stroke: #2563eb;
+  stroke-width: 1.6;
+  opacity: 0.58;
 }
 
 .detail-chart-marker--projection {
-  stroke: #7253a5;
-  stroke-width: 1.1;
-  opacity: 0.82;
+  stroke: #f97316;
+  stroke-width: 1.8;
+  opacity: 0.72;
 }
 
 .detail-chart-marker--previous-month {
-  fill: #f8fbfe;
-  stroke: #75879a;
-  stroke-width: 0.8;
-  opacity: 0.55;
+  fill: #ffffff;
+  stroke: #16a34a;
+  stroke-width: 1.8;
+  opacity: 0.42;
 }
 
 .detail-chart-marker--previous-year {
-  fill: #f8fbfe;
-  stroke: #9a8975;
-  stroke-width: 0.8;
-  opacity: 0.55;
+  fill: #ffffff;
+  stroke: #7c3aed;
+  stroke-width: 1.8;
+  opacity: 0.42;
+}
+
+.detail-chart-value-label {
+  fill: #c2410c;
+  font-size: 1.42px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 900;
+  opacity: 0.96;
+  pointer-events: none;
+}
+
+.detail-chart-value-label--above,
+.detail-chart-value-label--below {
+  dominant-baseline: central;
 }
 
 .chart-detail-x-labels {
@@ -394,9 +409,10 @@
   bottom: 0;
   left: 0;
   height: 18px;
-  color: #667188;
+  color: #98a2b3;
   font-size: 11px;
   font-variant-numeric: tabular-nums;
+  font-weight: 800;
 }
 
 .chart-detail-x-labels > span {

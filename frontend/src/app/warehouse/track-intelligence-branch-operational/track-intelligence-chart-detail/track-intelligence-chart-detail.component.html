@@ -179,7 +179,7 @@
           *ngFor="let marker of plot.benchmarkMarkers"
           [attr.cx]="marker.x"
           [attr.cy]="marker.y"
-          r="0.65"
+          r="0.28"
           class="detail-chart-marker detail-chart-marker--benchmark"
         >
           <title>{{ marker.label }}</title>
@@ -188,7 +188,7 @@
           *ngFor="let marker of plot.projectionMarkers"
           [attr.cx]="marker.x"
           [attr.cy]="marker.y"
-          r="0.7"
+          r="0.30"
           class="detail-chart-marker detail-chart-marker--projection"
         >
           <title>{{ marker.label }}</title>
@@ -197,7 +197,7 @@
           *ngFor="let marker of plot.actualMarkers"
           [attr.cx]="marker.x"
           [attr.cy]="marker.y"
-          r="0.8"
+          r="0.32"
           class="detail-chart-marker detail-chart-marker--actual"
         >
           <title>{{ marker.label }}</title>
@@ -209,25 +209,38 @@
               *ngFor="let marker of series.markers"
               [attr.cx]="marker.x"
               [attr.cy]="marker.y"
-              r="0.42"
+              r="0.26"
               class="detail-chart-marker detail-chart-marker--previous-month"
             >
               <title>{{ marker.label }}</title>
             </circle>
           </ng-container>
           <ng-template #previousYearMarkers>
-            <rect
+            <circle
               *ngFor="let marker of series.markers"
-              [attr.x]="marker.x - 0.42"
-              [attr.y]="marker.y - 0.42"
-              width="0.84"
-              height="0.84"
+              [attr.cx]="marker.x"
+              [attr.cy]="marker.y"
+              r="0.26"
               class="detail-chart-marker detail-chart-marker--previous-year"
             >
               <title>{{ marker.label }}</title>
-            </rect>
+            </circle>
           </ng-template>
         </ng-container>
+
+        <g class="detail-chart-value-labels" aria-hidden="true">
+          <text
+            *ngFor="let valueLabel of plot.actualValueLabels"
+            [attr.x]="valueLabel.x"
+            [attr.y]="valueLabel.y"
+            text-anchor="middle"
+            class="detail-chart-value-label"
+            [class.detail-chart-value-label--above]="valueLabel.placement === 'above'"
+            [class.detail-chart-value-label--below]="valueLabel.placement === 'below'"
+          >
+            {{ valueLabel.text }}
+          </text>
+        </g>
       </svg>
 
       <div class="chart-detail-x-labels" aria-hidden="true">
