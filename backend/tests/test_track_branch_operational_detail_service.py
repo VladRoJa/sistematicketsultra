@@ -102,6 +102,55 @@ def _projection(
     )
 
 
+def test_deep_dive_date_resolution_uses_preferred_versions():
+    first_date = date(2026, 8, 22)
+    second_date = date(2026, 8, 23)
+    first_version = SimpleNamespace(id=101)
+
+    with patch.object(
+        service,
+        "resolve_preferred_track_daily_version",
+        side_effect=[first_version, None],
+    ) as resolver:
+        resolved = service._resolve_versions_for_dates(
+            calendar_dates=[
+                second_date,
+                first_date,
+                first_date,
+            ],
+        )
+
+    assert resolved == {
+        first_date: first_version,
+    }
+    assert resolver.call_args_list == [
+        call(track_date=first_date),
+        call(track_date=second_date),
+    ]
+
+
+def test_effective_generation_mode_follows_resolved_version_type():
+    assert service._effective_generation_mode_for_version(
+        version=SimpleNamespace(version_type="cierre_canonico"),
+        requested_generation_mode="manual_preview",
+    ) == "official_closed_day"
+
+    assert service._effective_generation_mode_for_version(
+        version=SimpleNamespace(version_type="base_nocturna_canonica"),
+        requested_generation_mode="manual_preview",
+    ) == "official_closed_day"
+
+    assert service._effective_generation_mode_for_version(
+        version=SimpleNamespace(version_type="preview_operativo"),
+        requested_generation_mode="official_closed_day",
+    ) == "manual_preview"
+
+    assert service._effective_generation_mode_for_version(
+        version=None,
+        requested_generation_mode="official_closed_day",
+    ) == "official_closed_day"
+
+
 def test_operational_projection_uses_seven_valid_daily_deltas():
     projection = _projection(
         metric_key="clientes_nuevos",
@@ -1295,7 +1344,7 @@ def test_service_resolves_each_calendar_date_and_forecasts_only_current_cut():
             ),
         ), patch.object(
             service,
-            "resolve_effective_track_daily_version",
+            "resolve_preferred_track_daily_version",
         side_effect=lambda track_date, **_: versions.get(track_date),
     ) as resolve_version, patch.object(
         service,
@@ -1329,11 +1378,7 @@ def test_service_resolves_each_calendar_date_and_forecasts_only_current_cut():
         ],
     ])
     assert resolve_version.call_args_list == [
-        call(
-            track_date=calendar_date,
-            generation_mode="manual_preview",
-            today=cutoff,
-        )
+        call(track_date=calendar_date)
         for calendar_date in expected_resolution_dates
     ]
     build_projection.assert_called_once()
@@ -1431,7 +1476,7 @@ def test_chart_comparisons_contract_resolves_periods_and_shorter_month_cutoff():
         ),
     ), patch.object(
         service,
-        "resolve_effective_track_daily_version",
+        "resolve_preferred_track_daily_version",
         side_effect=lambda track_date, **_: versions.get(track_date),
     ) as resolve_version, patch.object(
         service,
@@ -1607,7 +1652,7 @@ def test_chart_comparisons_preserve_historical_gaps_and_null_metric_values():
         ),
     ), patch.object(
         service,
-        "resolve_effective_track_daily_version",
+        "resolve_preferred_track_daily_version",
         side_effect=lambda track_date, **_: versions.get(track_date),
     ), patch.object(
         service,
@@ -1701,7 +1746,7 @@ def test_current_region_inconsistency_becomes_data_error():
         ),
     ), patch.object(
         service,
-        "resolve_effective_track_daily_version",
+        "resolve_preferred_track_daily_version",
     ) as resolve_version:
         with pytest.raises(
             service.TrackBranchOperationalDetailDataError,

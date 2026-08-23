@@ -15,6 +15,12 @@ ALLOWED_TRACK_GENERATION_MODES = {
     "official_closed_day",
 }
 
+PREFERRED_TRACK_VERSION_TYPES = (
+    "cierre_canonico",
+    "base_nocturna_canonica",
+    "preview_operativo",
+)
+
 
 def get_track_local_today() -> date:
     return datetime.now(ZoneInfo("America/Tijuana")).date()
@@ -80,6 +86,47 @@ def resolve_replaced_track_daily_version_with_rows(
         return None
 
     return previous_version
+
+
+def resolve_preferred_track_daily_version(
+    *,
+    track_date: date,
+) -> TrackDailyVersionORM | None:
+    """Resuelve la mejor versión consultable de una fecha.
+
+    Prioridad:
+    1. cierre_canonico
+    2. base_nocturna_canonica
+    3. preview_operativo
+
+    Cada candidata debe conservar las mismas garantías usadas por el
+    resolver existente: versión current exitosa con filas de mart, o
+    fallback válido hacia la versión reemplazada con filas.
+    """
+
+    for version_type in PREFERRED_TRACK_VERSION_TYPES:
+        version = get_current_track_daily_version(
+            track_date=track_date,
+            version_type=version_type,
+        )
+
+        if version is None:
+            continue
+
+        if (
+            version.status == "success"
+            and track_daily_version_has_mart_rows(version_id=version.id)
+        ):
+            return version
+
+        fallback_version = resolve_replaced_track_daily_version_with_rows(
+            version,
+        )
+
+        if fallback_version is not None:
+            return fallback_version
+
+    return None
 
 
 def resolve_effective_track_daily_version(

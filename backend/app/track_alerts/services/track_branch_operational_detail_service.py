@@ -19,9 +19,9 @@ from app.track_alerts.services.track_regional_pacing_service import (
     build_target_progress_metric,
 )
 from app.warehouse.services.track_daily_query_version_service import (
+    PREFERRED_TRACK_VERSION_TYPES,
     get_track_local_today,
-    resolve_effective_track_daily_version,
-    resolve_track_daily_version_type_candidates,
+    resolve_preferred_track_daily_version,
 )
 from app.warehouse.services.track_forecast_center_service import (
     ForecastCenterBranch,
@@ -2167,16 +2167,12 @@ def _build_chart_comparison_period_specs(
 def _resolve_versions_for_dates(
     *,
     calendar_dates: Iterable[date],
-    generation_mode: str,
-    today: date,
 ) -> dict[date, Any]:
     resolved_versions: dict[date, Any] = {}
 
     for calendar_date in sorted(set(calendar_dates)):
-        version = resolve_effective_track_daily_version(
+        version = resolve_preferred_track_daily_version(
             track_date=calendar_date,
-            generation_mode=generation_mode,
-            today=today,
         )
         if version is not None:
             resolved_versions[calendar_date] = version
@@ -2343,22 +2339,29 @@ def _build_chart_comparisons(
     }
 
 
-def _version_fallback_used(
+def _effective_generation_mode_for_version(
     *,
     version: Any | None,
-    track_date: date,
-    generation_mode: str,
-    today: date,
+    requested_generation_mode: str,
+) -> str:
+    if version is None:
+        return requested_generation_mode
+
+    if str(version.version_type) == "preview_operativo":
+        return "manual_preview"
+
+    return "official_closed_day"
+
+
+def _preferred_version_fallback_used(
+    *,
+    version: Any | None,
 ) -> bool | None:
     if version is None:
         return None
-    candidates = resolve_track_daily_version_type_candidates(
-        track_date=track_date,
-        generation_mode=generation_mode,
-        today=today,
-    )
+
     return bool(
-        version.version_type != candidates[0]
+        str(version.version_type) != PREFERRED_TRACK_VERSION_TYPES[0]
         or str(version.status) == "replaced"
     )
 
@@ -2403,8 +2406,6 @@ def get_track_branch_operational_detail(
     ]
     resolved_versions = _resolve_versions_for_dates(
         calendar_dates=all_calendar_dates,
-        generation_mode=generation_mode,
-        today=local_today,
     )
 
     rows_by_version = _load_branch_rows_for_versions(
@@ -2519,7 +2520,10 @@ def get_track_branch_operational_detail(
         "cutoff": {
             "track_date": track_date.isoformat(),
             "target_month": target_month.strftime("%Y-%m"),
-            "generation_mode": generation_mode,
+            "generation_mode": _effective_generation_mode_for_version(
+                version=current_version,
+                requested_generation_mode=generation_mode,
+            ),
             "track_daily_version_id": (
                 int(current_version.id) if current_version is not None else None
             ),
@@ -2528,12 +2532,9 @@ def get_track_branch_operational_detail(
             ),
             "days_in_month": monthrange(track_date.year, track_date.month)[1],
             "day_of_month": track_date.day,
-            "resolved_by": "resolve_effective_track_daily_version",
-            "fallback_used": _version_fallback_used(
+            "resolved_by": "resolve_preferred_track_daily_version",
+            "fallback_used": _preferred_version_fallback_used(
                 version=current_version,
-                track_date=track_date,
-                generation_mode=generation_mode,
-                today=local_today,
             ),
         },
         "current": {"metrics": current_metrics},

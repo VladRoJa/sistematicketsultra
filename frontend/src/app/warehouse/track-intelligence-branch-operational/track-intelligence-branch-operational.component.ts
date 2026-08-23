@@ -317,7 +317,12 @@ export class TrackIntelligenceBranchOperationalComponent
   }
 
   getGenerationModeLabel(): string {
-    return this.generationMode === 'official_closed_day'
+    const effectiveMode = (
+      this.data?.cutoff.generation_mode ||
+      this.generationMode
+    );
+
+    return effectiveMode === 'official_closed_day'
       ? 'Día cerrado oficial'
       : 'Preview operativo';
   }
