@@ -81,6 +81,14 @@ interface TrackIntelligenceChartDetailExpandedMarker
   day: number;
 }
 
+interface TrackIntelligenceChartDetailValueLabel {
+  day: number;
+  x: number;
+  y: number;
+  text: string;
+  placement: 'above' | 'below';
+}
+
 interface TrackIntelligenceChartDetailHistoricalSeries {
   periodKey: HistoricalPeriodKey;
   label: string;
@@ -96,6 +104,7 @@ interface TrackIntelligenceChartDetailExpandedView {
   actualMarkers: TrackIntelligenceChartDetailMarker[];
   benchmarkMarkers: TrackIntelligenceChartDetailMarker[];
   projectionMarkers: TrackIntelligenceChartDetailMarker[];
+  actualValueLabels: TrackIntelligenceChartDetailValueLabel[];
   historicalSeries: TrackIntelligenceChartDetailHistoricalSeries[];
   axisLabels: TrackIntelligenceChartDetailAxisLabel[];
   yAxisTicks: TrackIntelligenceChartDetailYAxisTick[];
@@ -214,6 +223,11 @@ export class TrackIntelligenceChartDetailComponent {
     const scaledHistoricalSeries = historicalSeries.map((series) => (
       this.scaleHistoricalSeries(series, xForDay, yForValue)
     ));
+    const actualValueLabels = this.buildActualValueLabels(
+      this.chart.actualSeries,
+      xForDay,
+      yForValue,
+    );
 
     this.expandedChart = {
       actualPoints: this.toPolyline(actualMarkers),
@@ -222,6 +236,7 @@ export class TrackIntelligenceChartDetailComponent {
       actualMarkers,
       benchmarkMarkers,
       projectionMarkers,
+      actualValueLabels,
       historicalSeries: scaledHistoricalSeries,
       axisLabels: this.buildAxisLabels(daysInMonth, xForDay),
       yAxisTicks: yAxisScale.ticks.map((value) => ({
@@ -364,6 +379,54 @@ export class TrackIntelligenceChartDetailComponent {
       y: yForValue(point.value),
       label: point.label,
     }));
+  }
+
+  private buildActualValueLabels(
+    points: TrackIntelligenceChartDetailSeriesPoint[],
+    xForDay: (day: number) => number,
+    yForValue: (value: number) => number,
+  ): TrackIntelligenceChartDetailValueLabel[] {
+    if (!points.length) {
+      return [];
+    }
+
+    const sortedPoints = points
+      .slice()
+      .filter((point) => (
+        Number.isFinite(point.day) &&
+        Number.isFinite(point.value)
+      ))
+      .sort((left, right) => left.day - right.day);
+
+    if (!sortedPoints.length) {
+      return [];
+    }
+
+    const referenceDays = new Set([5, 10, 15, 20, 25]);
+    const lastPoint = sortedPoints[sortedPoints.length - 1];
+    referenceDays.add(lastPoint.day);
+
+    return sortedPoints
+      .filter((point) => referenceDays.has(point.day))
+      .map((point) => {
+        const pointY = yForValue(point.value);
+
+        // El área útil empieza alrededor de y=4.
+        // Si estamos demasiado cerca de arriba, ponemos el texto debajo.
+        const placement: 'above' | 'below' = pointY <= 7
+          ? 'below'
+          : 'above';
+
+        return {
+          day: point.day,
+          x: xForDay(point.day),
+          y: placement === 'below'
+            ? pointY + 2.15
+            : pointY - 1.35,
+          text: this.formatNumber(point.value),
+          placement,
+        };
+      });
   }
 
   private toPolyline(points: TrackIntelligenceChartDetailMarker[]): string {
