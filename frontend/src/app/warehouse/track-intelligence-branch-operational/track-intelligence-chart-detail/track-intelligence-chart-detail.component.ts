@@ -256,14 +256,18 @@ export class TrackIntelligenceChartDetailComponent {
 
     const actualValueLabels = selectedHistoricalSeries
       ? []
-      : this.buildActualValueLabels(
-          this.chart.actualSeries,
-          xForDay,
-          yForValue,
+      : this.resolveValueLabelCollisions(
+          this.buildActualValueLabels(
+            this.chart.actualSeries,
+            xForDay,
+            yForValue,
+          ),
         );
 
     const selectedHistoricalValueLabels = selectedHistoricalSeries
-      ? this.buildHistoricalValueLabels(selectedHistoricalSeries)
+      ? this.resolveValueLabelCollisions(
+          this.buildHistoricalValueLabels(selectedHistoricalSeries),
+        )
       : [];
 
     this.expandedChart = {
@@ -466,6 +470,117 @@ export class TrackIntelligenceChartDetailComponent {
           placement,
         };
       });
+  }
+
+  private resolveValueLabelCollisions(
+    labels: TrackIntelligenceChartDetailValueLabel[],
+  ): TrackIntelligenceChartDetailValueLabel[] {
+    if (labels.length <= 1) {
+      return labels;
+    }
+
+    const sortedLabels = labels
+      .slice()
+      .sort((left, right) => left.day - right.day);
+
+    const placed: Array<{
+      left: number;
+      right: number;
+      top: number;
+      bottom: number;
+    }> = [];
+
+    const candidateOffsets = [
+      0,
+      -2.2,
+      2.2,
+      -4.4,
+      4.4,
+      -6.6,
+      6.6,
+    ];
+
+    const estimateHalfWidth = (label: string): number => (
+      Math.max(2.2, label.length * 0.48)
+    );
+
+    const labelHalfHeight = 1.05;
+    const horizontalPadding = 0.45;
+    const verticalPadding = 0.25;
+
+    const overlaps = (
+      left: number,
+      right: number,
+      top: number,
+      bottom: number,
+    ): boolean => (
+      placed.some((candidate) => !(
+        right + horizontalPadding < candidate.left ||
+        left - horizontalPadding > candidate.right ||
+        bottom + verticalPadding < candidate.top ||
+        top - verticalPadding > candidate.bottom
+      ))
+    );
+
+    return sortedLabels.map((label) => {
+      const halfWidth = estimateHalfWidth(label.text);
+      let resolvedY = label.y;
+
+      for (const offset of candidateOffsets) {
+        // El área útil SVG de la gráfica está entre y≈4 y y≈31.
+        // Dejamos margen para que el texto no choque con los bordes.
+        const candidateY = Math.min(
+          29.2,
+          Math.max(5.4, label.y + offset),
+        );
+
+        const left = label.x - halfWidth;
+        const right = label.x + halfWidth;
+        const top = candidateY - labelHalfHeight;
+        const bottom = candidateY + labelHalfHeight;
+
+        if (!overlaps(left, right, top, bottom)) {
+          resolvedY = candidateY;
+
+          placed.push({
+            left,
+            right,
+            top,
+            bottom,
+          });
+
+          return {
+            ...label,
+            y: resolvedY,
+          };
+        }
+      }
+
+      // Fallback determinista para un caso extremadamente apretado.
+      resolvedY = Math.min(
+        29.2,
+        Math.max(
+          5.4,
+          label.y + (
+            placed.length % 2 === 0
+              ? -6.6
+              : 6.6
+          ),
+        ),
+      );
+
+      placed.push({
+        left: label.x - halfWidth,
+        right: label.x + halfWidth,
+        top: resolvedY - labelHalfHeight,
+        bottom: resolvedY + labelHalfHeight,
+      });
+
+      return {
+        ...label,
+        y: resolvedY,
+      };
+    });
   }
 
   private buildHistoricalValueLabels(
