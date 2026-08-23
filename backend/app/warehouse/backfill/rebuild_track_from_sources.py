@@ -39,7 +39,7 @@ from app.warehouse.services.track_source_tienda_daily_service import (
 
 
 REQUIRED_SNAPSHOT_TABLES = {
-    "reporte_direccion": "reporte_direccion_snapshots",
+    "venta_total": "venta_total_snapshots",
     "kpi_desempeno": "kpi_desempeno_snapshots",
     "kpi_ventas_nuevos_socios": "kpi_ventas_nuevos_socios_snapshots",
 }
