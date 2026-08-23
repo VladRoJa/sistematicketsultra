@@ -1019,11 +1019,13 @@ def test_bajas_recommendation_exposes_max_net_daily_rate_to_stay_within_limit():
 
     assert recommendation["metric_key"] == "bajas"
     assert any(
-        "12.4 bajas netas/día" in action
+        "12.4" in action
+        and "por día" in action
         for action in recommendation["actions"]
     )
     assert any(
         "5.6" in action
+        and "reducirlo" in action
         for action in recommendation["actions"]
     )
 
@@ -1108,9 +1110,11 @@ def test_recommendations_include_projected_bajas_risk_without_bajas_signal():
     ]
     assert recommendations[0]["priority"] == 1
     assert recommendations[1]["priority"] == 2
-    assert recommendations[1]["title"] == "Contener bajas y revisar causas"
-    assert "272/244 bajas" in recommendations[1]["reason"]
-    assert "exceso de 28" in recommendations[1]["reason"]
+    assert recommendations[1]["title"] == "Contener las bajas"
+    assert "272" in recommendations[1]["reason"]
+    assert "244" in recommendations[1]["reason"]
+    assert "28" in recommendations[1]["reason"]
+    assert "arriba del límite" in recommendations[1]["reason"]
 
 
 def test_recommendations_use_operational_numbers_for_commercial_general():
@@ -1157,22 +1161,17 @@ def test_recommendations_use_operational_numbers_for_commercial_general():
     assert len(recommendations) == 1
     recommendation = recommendations[0]
 
-    assert recommendation["title"] == "Revisar el embudo comercial completo"
+    assert recommendation["title"] == "Acelerar cierres comerciales hoy"
     assert (
         recommendation["reason"]
         == (
             "Clientes nuevos, reactivaciones y domiciliados "
-            "requieren recuperación simultánea."
+            "necesitan recuperarse."
         )
     )
-    assert (
-        "Clientes nuevos 19.4/día"
-        in recommendation["actions"][0]
-    )
-    assert (
-        "Reactivaciones 4.9/día"
-        in recommendation["actions"][0]
-    )
+    assert "19.4 clientes nuevos" in recommendation["actions"][0]
+    assert "4.9 reactivaciones" in recommendation["actions"][0]
+    assert "19.4 domiciliados" in recommendation["actions"][0]
 
 
 def test_recommendations_use_final_gap_language_for_closed_month():
@@ -1199,7 +1198,7 @@ def test_recommendations_use_final_gap_language_for_closed_month():
     assert len(recommendations) == 1
     assert (
         recommendations[0]["reason"]
-        == "Clientes nuevos cerró 162/300; faltaron 138."
+        == "Clientes nuevos cerró en 162 de 300; faltaron 138."
     )
 
 
