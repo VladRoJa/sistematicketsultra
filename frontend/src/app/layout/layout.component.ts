@@ -20,6 +20,7 @@ import { CdkDragEnd, DragDropModule } from '@angular/cdk/drag-drop';
 import { TicketService, TicketValidationSummary } from '../services/ticket.service';
 import { Subscription } from 'rxjs';
 import { RefrescoService } from '../services/refresco.service';
+import { canAccessTrackRegionalOperational } from '../warehouse/track-intelligence-regional-operational/track-regional-operational-access.guard';
 
 @Component({
   selector: 'app-layout',
@@ -169,6 +170,17 @@ ngOnInit(): void {
   const trackSubmenu = [
     { label: 'Track Diario', path: '/warehouse/track' },
   ];
+
+  if (
+    canAccessTrackRegionalOperational(
+      this.authService.getUser()
+    )
+  ) {
+    trackSubmenu.push({
+      label: 'Seguimiento regional',
+      path: '/warehouse/track-intelligence/regional-operational',
+    });
+  }
 
   if (this.puedeVerKpiDesempenoPorRol()) {
     trackSubmenu.push({

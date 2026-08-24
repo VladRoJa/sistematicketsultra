@@ -11,6 +11,10 @@ from app.models.warehouse import TrackDailyMartORM
 from app.track_alerts.services.track_alert_region_rules_service import (
     resolve_current_track_region_for_branch_id,
 )
+from app.track_alerts.services.track_intelligence_access_service import (
+    TrackIntelligenceAuthorizationError,
+    resolve_track_intelligence_access,
+)
 from app.track_alerts.services.track_regional_pacing_service import (
     build_bajas_metric,
     build_clientes_nuevos_metric,
@@ -24,8 +28,8 @@ from app.warehouse.services.track_daily_query_version_service import (
     resolve_preferred_track_daily_version,
 )
 from app.warehouse.services.track_forecast_center_service import (
+    ForecastCenterAccess,
     ForecastCenterBranch,
-    resolve_forecast_center_access,
     resolve_forecast_center_universe,
     select_forecast_center_scope,
 )
@@ -2018,24 +2022,48 @@ def _resolve_authorized_branch(
     sucursal_canon: str,
     track_date: date,
 ) -> ForecastCenterBranch:
-    access = resolve_forecast_center_access(user)
+    access = resolve_track_intelligence_access(user)
+
+    # El universo se resuelve sin aplicar las restricciones del
+    # Centro de Forecast. Inteligencia Operacional tiene su propio
+    # contrato de autorización.
+    universe_access = ForecastCenterAccess(
+        type="global",
+        is_global=True,
+        authorized_branch_ids=(),
+        authorized_branch_count=0,
+        role=access.role,
+    )
+
     universe = resolve_forecast_center_universe(
-        access=access,
+        access=universe_access,
         requested_track_date=track_date,
     )
+
     selected = select_forecast_center_scope(
         universe=universe,
-        access=access,
+        access=universe_access,
         scope="branch",
         scope_id=sucursal_canon,
         cohort="all",
     )
+
     if len(selected) != 1:
         raise TrackBranchOperationalDetailDataError(
-            "La autorización de sucursal no produjo un resultado único."
+            "La resolución de sucursal no produjo un resultado único."
         )
-    return selected[0]
 
+    branch = selected[0]
+
+    if (
+        not access.is_global
+        and branch.sucursal_id != access.primary_branch_id
+    ):
+        raise TrackIntelligenceAuthorizationError(
+            "Sucursal fuera del alcance autorizado."
+        )
+
+    return branch
 
 def _calendar_dates(month_start: date, cutoff_date: date) -> list[date]:
     return [

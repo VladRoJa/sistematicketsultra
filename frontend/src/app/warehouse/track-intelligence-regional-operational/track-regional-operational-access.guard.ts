@@ -4,25 +4,20 @@ import { CanActivateFn, Router } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
 
 
-const ENABLED_USERNAMES = ['ADMICORP'];
-
 const ENABLED_ROLES: string[] = [
-  // 'ADMIN',
-  // 'ADMINISTRADOR',
-  // 'SUPER_ADMIN',
-  // 'LECTOR_GLOBAL',
-  // 'GERENTE_REGIONAL',
+  'ADMIN',
+  'ADMINISTRADOR',
+  'SUPER_ADMIN',
+  'LECTOR_GLOBAL',
+  'GERENTE_REGIONAL',
+  'GERENTE',
 ];
 
 
 export function canAccessTrackRegionalOperational(user: any): boolean {
-  const username = String(user?.username || '').trim().toUpperCase();
   const role = String(user?.rol || '').trim().toUpperCase();
 
-  return (
-    ENABLED_USERNAMES.includes(username) ||
-    ENABLED_ROLES.includes(role)
-  );
+  return ENABLED_ROLES.includes(role);
 }
 
 

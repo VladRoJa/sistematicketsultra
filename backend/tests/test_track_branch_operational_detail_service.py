@@ -1772,3 +1772,107 @@ def test_future_track_date_is_rejected_before_authorization():
             )
 
     authorize.assert_not_called()
+
+def test_deep_dive_regional_manager_can_open_any_branch():
+    branch = SimpleNamespace(
+        sucursal_id=999,
+        sucursal_canon="OTHER_BRANCH",
+        label="Otra sucursal",
+        region_key="REGION_TEST",
+        region_label="Región Test",
+    )
+
+    with patch.object(
+        service,
+        "resolve_forecast_center_universe",
+        return_value=SimpleNamespace(
+            branches=[branch],
+        ),
+    ) as resolve_universe, patch.object(
+        service,
+        "select_forecast_center_scope",
+        return_value=[branch],
+    ):
+        result = service._resolve_authorized_branch(
+            user=SimpleNamespace(
+                rol="GERENTE_REGIONAL",
+                sucursal_id=10,
+                sucursales_ids=[10],
+            ),
+            sucursal_canon="OTHER_BRANCH",
+            track_date=date(2026, 8, 23),
+        )
+
+    assert result is branch
+
+    universe_access = (
+        resolve_universe.call_args.kwargs["access"]
+    )
+
+    assert universe_access.is_global is True
+
+
+def test_deep_dive_manager_can_open_own_branch():
+    branch = SimpleNamespace(
+        sucursal_id=101,
+        sucursal_canon="OWN_BRANCH",
+        label="Sucursal propia",
+        region_key="REGION_TEST",
+        region_label="Región Test",
+    )
+
+    with patch.object(
+        service,
+        "resolve_forecast_center_universe",
+        return_value=SimpleNamespace(
+            branches=[branch],
+        ),
+    ), patch.object(
+        service,
+        "select_forecast_center_scope",
+        return_value=[branch],
+    ):
+        result = service._resolve_authorized_branch(
+            user=SimpleNamespace(
+                rol="GERENTE",
+                sucursal_id=101,
+            ),
+            sucursal_canon="OWN_BRANCH",
+            track_date=date(2026, 8, 23),
+        )
+
+    assert result is branch
+
+
+def test_deep_dive_manager_cannot_open_another_branch():
+    branch = SimpleNamespace(
+        sucursal_id=102,
+        sucursal_canon="OTHER_BRANCH",
+        label="Otra sucursal",
+        region_key="REGION_TEST",
+        region_label="Región Test",
+    )
+
+    with patch.object(
+        service,
+        "resolve_forecast_center_universe",
+        return_value=SimpleNamespace(
+            branches=[branch],
+        ),
+    ), patch.object(
+        service,
+        "select_forecast_center_scope",
+        return_value=[branch],
+    ):
+        with pytest.raises(
+            service.TrackIntelligenceAuthorizationError,
+            match="Sucursal fuera del alcance autorizado",
+        ):
+            service._resolve_authorized_branch(
+                user=SimpleNamespace(
+                    rol="GERENTE",
+                    sucursal_id=101,
+                ),
+                sucursal_canon="OTHER_BRANCH",
+                track_date=date(2026, 8, 23),
+            )

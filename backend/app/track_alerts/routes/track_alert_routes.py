@@ -456,6 +456,7 @@ def get_regional_track_alert_detail():
 
         if view == "operational":
             result = get_regional_operational_detail(
+                user=_get_current_track_alert_user(),
                 track_date=track_date,
                 generation_mode=generation_mode,
             )
