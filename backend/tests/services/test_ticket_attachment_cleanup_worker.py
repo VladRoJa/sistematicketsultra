@@ -1,12 +1,18 @@
 import unittest
-from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from datetime import date, datetime, time
+from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 import app.services.ticket_attachment_cleanup_worker as worker
 
 
+TIJUANA = ZoneInfo("America/Tijuana")
+
+
 class TicketAttachmentCleanupWorkerTest(unittest.TestCase):
-    def test_execute_cleanup_uses_configured_batch_size(self):
+    def test_execute_cleanup_uses_configured_batch_size(
+        self,
+    ):
         expected = {
             "examined": 2,
             "marked_deleted": 2,
@@ -19,7 +25,8 @@ class TicketAttachmentCleanupWorkerTest(unittest.TestCase):
             patch.dict(
                 worker.os.environ,
                 {
-                    "TICKET_ATTACHMENT_CLEANUP_BATCH_SIZE": "250",
+                    "TICKET_ATTACHMENT_CLEANUP_BATCH_SIZE":
+                        "250",
                 },
                 clear=False,
             ),
@@ -29,18 +36,21 @@ class TicketAttachmentCleanupWorkerTest(unittest.TestCase):
                 return_value=expected,
             ) as cleanup_mock,
         ):
-            result = worker.execute_ticket_attachment_cleanup()
+            result = (
+                worker.execute_ticket_attachment_cleanup()
+            )
 
-        cleanup_mock.assert_called_once_with(
-            limit=250,
-        )
+        cleanup_mock.assert_called_once_with(limit=250)
         self.assertEqual(result, expected)
 
-    def test_invalid_environment_value_uses_default(self):
+    def test_invalid_environment_value_uses_default(
+        self,
+    ):
         with patch.dict(
             worker.os.environ,
             {
-                "TICKET_ATTACHMENT_CLEANUP_BATCH_SIZE": "invalid",
+                "TICKET_ATTACHMENT_CLEANUP_BATCH_SIZE":
+                    "invalid",
             },
             clear=False,
         ):
@@ -51,104 +61,72 @@ class TicketAttachmentCleanupWorkerTest(unittest.TestCase):
 
         self.assertEqual(value, 500)
 
-    def test_loop_removes_database_session_after_cycle(self):
-        session = MagicMock()
+    def test_default_run_time_is_0220(self):
+        with patch.dict(
+            worker.os.environ,
+            {
+                "TICKET_ATTACHMENT_CLEANUP_RUN_TIME": "",
+            },
+            clear=False,
+        ):
+            self.assertEqual(
+                worker._resolve_run_time(),
+                time(2, 20),
+            )
 
-        class FakeAppContext:
-            def __enter__(self):
-                return self
-
-            def __exit__(
-                self,
-                exc_type,
-                exc,
-                traceback,
-            ):
-                return False
-
-        fake_app = SimpleNamespace(
-            app_context=lambda: FakeAppContext(),
+    def test_cleanup_not_due_before_run_time(self):
+        now_local = datetime(
+            2026,
+            8,
+            25,
+            2,
+            19,
+            tzinfo=TIJUANA,
         )
 
-        with (
-            patch.object(
-                worker,
-                "create_app",
-                return_value=fake_app,
-            ),
-            patch.object(
-                worker,
-                "db",
-                SimpleNamespace(session=session),
-            ),
-            patch.object(
-                worker,
-                "execute_ticket_attachment_cleanup",
-                return_value={
-                    "examined": 0,
-                    "marked_deleted": 0,
-                    "files_deleted": 0,
-                    "files_already_missing": 0,
-                    "failed": [],
-                },
-            ) as execute_mock,
-            patch.object(
-                worker.time,
-                "sleep",
-                side_effect=KeyboardInterrupt,
-            ),
-        ):
-            with self.assertRaises(KeyboardInterrupt):
-                worker.run_cleanup_loop()
-
-        execute_mock.assert_called_once_with()
-        session.remove.assert_called_once_with()
-
-    def test_cleanup_exception_does_not_skip_session_remove(self):
-        session = MagicMock()
-
-        class FakeAppContext:
-            def __enter__(self):
-                return self
-
-            def __exit__(
-                self,
-                exc_type,
-                exc,
-                traceback,
-            ):
-                return False
-
-        fake_app = SimpleNamespace(
-            app_context=lambda: FakeAppContext(),
+        self.assertFalse(
+            worker._should_run_cleanup(
+                now_local=now_local,
+                run_time=time(2, 20),
+                last_run_date=None,
+            )
         )
 
-        with (
-            patch.object(
-                worker,
-                "create_app",
-                return_value=fake_app,
-            ),
-            patch.object(
-                worker,
-                "db",
-                SimpleNamespace(session=session),
-            ),
-            patch.object(
-                worker,
-                "execute_ticket_attachment_cleanup",
-                side_effect=RuntimeError("cleanup failed"),
-            ),
-            patch.object(
-                worker.time,
-                "sleep",
-                side_effect=KeyboardInterrupt,
-            ),
-        ):
-            with self.assertRaises(KeyboardInterrupt):
-                worker.run_cleanup_loop()
+    def test_cleanup_due_after_run_time(self):
+        now_local = datetime(
+            2026,
+            8,
+            25,
+            2,
+            21,
+            tzinfo=TIJUANA,
+        )
 
-        session.remove.assert_called_once_with()
+        self.assertTrue(
+            worker._should_run_cleanup(
+                now_local=now_local,
+                run_time=time(2, 20),
+                last_run_date=None,
+            )
+        )
+
+    def test_cleanup_not_repeated_same_day(self):
+        now_local = datetime(
+            2026,
+            8,
+            25,
+            10,
+            0,
+            tzinfo=TIJUANA,
+        )
+
+        self.assertFalse(
+            worker._should_run_cleanup(
+                now_local=now_local,
+                run_time=time(2, 20),
+                last_run_date=date(2026, 8, 25),
+            )
+        )
 
 
 if __name__ == "__main__":

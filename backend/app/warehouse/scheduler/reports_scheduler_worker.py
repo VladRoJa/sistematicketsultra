@@ -15,6 +15,9 @@ from app.warehouse.jobs.cobranza_recurrente_rechazados_job import (
     CobranzaRecurrenteNotReadyError,
     run_job as run_cobranza_recurrente_job,
 )
+from app.warehouse.services.scheduler_priority_service import (
+    get_secondary_job_block_reason,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -190,6 +193,17 @@ def _run_cobranza_recurrente_if_due(now: datetime) -> None:
         default_hour=8,
         default_minute=0,
     ):
+        return
+
+    block_reason = get_secondary_job_block_reason(now)
+
+    if block_reason is not None:
+        logger.debug(
+            "%s diferido por prioridad Track. reason=%s now=%s",
+            job_key,
+            block_reason,
+            now.isoformat(timespec="seconds"),
+        )
         return
 
     business_date = now.date()

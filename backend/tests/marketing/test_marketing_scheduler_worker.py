@@ -26,35 +26,59 @@ def reset_scheduler_state():
     worker._NEXT_RETRY_BY_SLOT.clear()
 
 
-def test_parse_run_hours_uses_expected_defaults(
+def test_parse_run_times_uses_expected_defaults(
     monkeypatch,
 ):
+    monkeypatch.delenv(
+        "MARKETING_SCHEDULER_RUN_TIMES",
+        raising=False,
+    )
     monkeypatch.delenv(
         "MARKETING_SCHEDULER_RUN_HOURS",
         raising=False,
     )
 
-    assert worker._parse_run_hours() == (
-        8,
-        12,
-        16,
-        20,
+    assert worker._parse_run_times() == (
+        (8, 20),
+        (12, 20),
+        (16, 20),
+        (20, 20),
     )
 
 
-def test_parse_run_hours_accepts_configurable_values(
+def test_parse_run_times_accepts_configurable_values(
     monkeypatch,
 ):
     monkeypatch.setenv(
-        "MARKETING_SCHEDULER_RUN_HOURS",
-        "20,8,12,16,12",
+        "MARKETING_SCHEDULER_RUN_TIMES",
+        "20:20,08:20,12:20,16:20,12:20",
     )
 
-    assert worker._parse_run_hours() == (
-        8,
-        12,
-        16,
-        20,
+    assert worker._parse_run_times() == (
+        (8, 20),
+        (12, 20),
+        (16, 20),
+        (20, 20),
+    )
+
+
+def test_parse_run_times_supports_legacy_run_hours(
+    monkeypatch,
+):
+    monkeypatch.delenv(
+        "MARKETING_SCHEDULER_RUN_TIMES",
+        raising=False,
+    )
+    monkeypatch.setenv(
+        "MARKETING_SCHEDULER_RUN_HOURS",
+        "20,8,12,16",
+    )
+
+    assert worker._parse_run_times() == (
+        (8, 0),
+        (12, 0),
+        (16, 0),
+        (20, 0),
     )
 
 
@@ -70,13 +94,42 @@ def test_resolve_due_slot_runs_latest_elapsed_slot():
 
     result = worker._resolve_due_slot(
         now=now,
-        run_hours=(8, 12, 16, 20),
+        run_times=(
+            (8, 20),
+            (12, 20),
+            (16, 20),
+            (20, 20),
+        ),
     )
 
     assert result == (
         date(2026, 8, 24),
         8,
+        20,
     )
+
+
+def test_resolve_due_slot_does_not_run_before_first_slot():
+    now = datetime(
+        2026,
+        8,
+        24,
+        8,
+        19,
+        tzinfo=TIJUANA,
+    )
+
+    result = worker._resolve_due_slot(
+        now=now,
+        run_times=(
+            (8, 20),
+            (12, 20),
+            (16, 20),
+            (20, 20),
+        ),
+    )
+
+    assert result is None
 
 
 def test_resolve_due_slot_does_not_repeat_completed_slot():
@@ -92,6 +145,7 @@ def test_resolve_due_slot_does_not_repeat_completed_slot():
     slot_key = (
         date(2026, 8, 24),
         8,
+        20,
     )
 
     worker._COMPLETED_SLOTS.add(
@@ -100,7 +154,12 @@ def test_resolve_due_slot_does_not_repeat_completed_slot():
 
     result = worker._resolve_due_slot(
         now=now,
-        run_hours=(8, 12, 16, 20),
+        run_times=(
+            (8, 20),
+            (12, 20),
+            (16, 20),
+            (20, 20),
+        ),
     )
 
     assert result is None
@@ -110,6 +169,7 @@ def test_resolve_due_slot_waits_for_retry_window():
     slot_key = (
         date(2026, 8, 24),
         8,
+        20,
     )
 
     retry_at = datetime(
@@ -127,12 +187,22 @@ def test_resolve_due_slot_waits_for_retry_window():
 
     before_retry = worker._resolve_due_slot(
         now=retry_at - timedelta(minutes=1),
-        run_hours=(8, 12, 16, 20),
+        run_times=(
+            (8, 20),
+            (12, 20),
+            (16, 20),
+            (20, 20),
+        ),
     )
 
     at_retry = worker._resolve_due_slot(
         now=retry_at,
-        run_hours=(8, 12, 16, 20),
+        run_times=(
+            (8, 20),
+            (12, 20),
+            (16, 20),
+            (20, 20),
+        ),
     )
 
     assert before_retry is None
@@ -145,20 +215,25 @@ def test_resolve_due_slot_moves_to_newer_scheduled_cut():
         8,
         24,
         12,
-        5,
+        25,
         tzinfo=TIJUANA,
     )
 
     result = worker._resolve_due_slot(
         now=now,
-        run_hours=(8, 12, 16, 20),
+        run_times=(
+            (8, 20),
+            (12, 20),
+            (16, 20),
+            (20, 20),
+        ),
     )
 
     assert result == (
         date(2026, 8, 24),
         12,
+        20,
     )
-
 
 def test_load_meta_accounts_requires_and_loads_five_accounts(
     monkeypatch,
@@ -321,6 +396,7 @@ def test_retry_flags_only_failed_source():
     slot_key = (
         date(2026, 8, 24),
         8,
+        20,
     )
 
     worker._IVENTAS_COMPLETED_SLOTS.add(

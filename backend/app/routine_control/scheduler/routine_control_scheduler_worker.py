@@ -22,18 +22,28 @@ from app.models.routine_control import (
 from app.routine_control.pipeline.automated_pipeline_service import (
     run_automated_routine_control_pipeline,
 )
+from app.warehouse.services.scheduler_priority_service import (
+    get_secondary_job_block_reason,
+)
 
 
 LOGGER = logging.getLogger(__name__)
 
 DEFAULT_TIMEZONE = "America/Tijuana"
-DEFAULT_DAILY_TIME = "08:30"
+DEFAULT_RUN_TIMES = (
+    "09:20",
+    "13:20",
+    "17:20",
+    "21:20",
+)
 DEFAULT_POLL_SECONDS = 60
 
 SCHEDULED_GENERATION_MODE = "SCHEDULED"
 SCHEDULER_TRIGGER_SOURCE = (
     "ROUTINE_CONTROL_SCHEDULER"
 )
+
+RoutineControlSlotKey = tuple[date, int, int]
 
 
 @dataclass(frozen=True)
@@ -42,6 +52,9 @@ class RoutineControlSchedulerDecision:
     date_from: date
     date_to: date
     observed_at_utc: datetime
+    scheduled_time: dt_time
+    slot_key: RoutineControlSlotKey
+    trigger_source: str
     reason: str
 
 
@@ -137,30 +150,116 @@ def _parse_daily_time(value: str) -> dt_time:
         return dt_time(hour=hour, minute=minute)
     except (TypeError, ValueError):
         raise ValueError(
-            "ROUTINE_CONTROL_DAILY_TIME debe usar HH:MM."
+            "El horario de Routine Control debe usar HH:MM."
         )
 
 
-def _resolve_daily_time() -> dt_time:
-    raw_value = (
+def _resolve_run_times() -> tuple[dt_time, ...]:
+    raw_value = str(
+        os.getenv("ROUTINE_CONTROL_RUN_TIMES")
+        or ""
+    ).strip()
+
+    if raw_value:
+        try:
+            values = {
+                _parse_daily_time(item.strip())
+                for item in raw_value.split(",")
+                if item.strip()
+            }
+
+            if not values:
+                raise ValueError(
+                    "No contiene horarios."
+                )
+
+            return tuple(sorted(values))
+
+        except ValueError:
+            LOGGER.warning(
+                "ROUTINE_CONTROL_RUN_TIMES inválido=%r. "
+                "Usando defaults=%s.",
+                raw_value,
+                ",".join(DEFAULT_RUN_TIMES),
+            )
+
+            return tuple(
+                _parse_daily_time(value)
+                for value in DEFAULT_RUN_TIMES
+            )
+
+    legacy_value = str(
         os.getenv("ROUTINE_CONTROL_DAILY_TIME")
-        or DEFAULT_DAILY_TIME
+        or ""
+    ).strip()
+
+    if legacy_value:
+        try:
+            return (
+                _parse_daily_time(legacy_value),
+            )
+        except ValueError:
+            LOGGER.warning(
+                "ROUTINE_CONTROL_DAILY_TIME inválido=%r. "
+                "Usando nuevos defaults=%s.",
+                legacy_value,
+                ",".join(DEFAULT_RUN_TIMES),
+            )
+
+    return tuple(
+        _parse_daily_time(value)
+        for value in DEFAULT_RUN_TIMES
     )
 
-    try:
-        return _parse_daily_time(raw_value)
-    except ValueError:
-        LOGGER.warning(
-            "Hora diaria inválida %r. Usando %s.",
-            raw_value,
-            DEFAULT_DAILY_TIME,
-        )
-        return _parse_daily_time(DEFAULT_DAILY_TIME)
 
+def _resolve_due_scheduled_time(
+    *,
+    now_local: datetime,
+    run_times: tuple[dt_time, ...],
+) -> dt_time | None:
+    current_time = dt_time(
+        hour=now_local.hour,
+        minute=now_local.minute,
+        second=now_local.second,
+    )
+
+    eligible = tuple(
+        scheduled_time
+        for scheduled_time in run_times
+        if scheduled_time <= current_time
+    )
+
+    if not eligible:
+        return None
+
+    return max(eligible)
+
+
+def _build_slot_trigger_source(
+    scheduled_time: dt_time,
+) -> str:
+    return (
+        f"{SCHEDULER_TRIGGER_SOURCE}_"
+        f"{scheduled_time.hour:02d}_"
+        f"{scheduled_time.minute:02d}"
+    )
+
+
+def _build_slot_key(
+    *,
+    business_date: date,
+    scheduled_time: dt_time,
+) -> RoutineControlSlotKey:
+    return (
+        business_date,
+        scheduled_time.hour,
+        scheduled_time.minute,
+    )
 
 def _has_successful_scheduled_run(
     *,
     business_date: date,
+    trigger_source: str,
 ) -> bool:
     statement = (
         select(RoutineControlPipelineRunORM.id)
@@ -170,7 +269,7 @@ def _has_successful_scheduled_run(
             RoutineControlPipelineRunORM.generation_mode
             == SCHEDULED_GENERATION_MODE,
             RoutineControlPipelineRunORM.trigger_source
-            == SCHEDULER_TRIGGER_SOURCE,
+            == trigger_source,
             RoutineControlPipelineRunORM.status
             == "SUCCESS",
         )
@@ -181,7 +280,6 @@ def _has_successful_scheduled_run(
         db.session.execute(statement).scalar_one_or_none()
         is not None
     )
-
 
 def decide_routine_control_scheduler_action(
     now_local: datetime,
@@ -211,6 +309,9 @@ def decide_routine_control_scheduler_action(
         return None
 
     business_date = now_local.date()
+    trigger_source = _build_slot_trigger_source(
+        scheduled_time
+    )
 
     return RoutineControlSchedulerDecision(
         business_date=business_date,
@@ -219,9 +320,14 @@ def decide_routine_control_scheduler_action(
         observed_at_utc=now_local.astimezone(
             timezone.utc
         ),
-        reason="daily_cutoff_pending",
+        scheduled_time=scheduled_time,
+        slot_key=_build_slot_key(
+            business_date=business_date,
+            scheduled_time=scheduled_time,
+        ),
+        trigger_source=trigger_source,
+        reason="scheduled_slot_pending",
     )
-
 
 def execute_routine_control_scheduler_decision(
     decision: RoutineControlSchedulerDecision,
@@ -232,8 +338,10 @@ def execute_routine_control_scheduler_decision(
 ) -> Any:
     LOGGER.info(
         "Ejecutando scheduler Control de Rutinas: "
-        "business_date=%s date_from=%s date_to=%s",
+        "business_date=%s slot=%s "
+        "date_from=%s date_to=%s",
         decision.business_date.isoformat(),
+        decision.scheduled_time.strftime("%H:%M"),
         decision.date_from.isoformat(),
         decision.date_to.isoformat(),
     )
@@ -243,10 +351,9 @@ def execute_routine_control_scheduler_decision(
         date_to=decision.date_to,
         observed_at_utc=decision.observed_at_utc,
         generation_mode=SCHEDULED_GENERATION_MODE,
-        trigger_source=SCHEDULER_TRIGGER_SOURCE,
+        trigger_source=decision.trigger_source,
         headless=True,
     )
-
 
 def run_scheduler_loop() -> None:
     enabled = _env_bool(
@@ -258,20 +365,23 @@ def run_scheduler_loop() -> None:
         DEFAULT_POLL_SECONDS,
     )
     scheduler_timezone = _resolve_timezone()
-    scheduled_time = _resolve_daily_time()
+    run_times = _resolve_run_times()
 
     LOGGER.info(
         "Routine Control scheduler iniciado. "
-        "enabled=%s timezone=%s daily_time=%s "
+        "enabled=%s timezone=%s run_times=%s "
         "poll_seconds=%s",
         enabled,
         scheduler_timezone.key,
-        scheduled_time.strftime("%H:%M"),
+        ",".join(
+            value.strftime("%H:%M")
+            for value in run_times
+        ),
         poll_seconds,
     )
 
     app = create_app()
-    last_attempted_date: date | None = None
+    attempted_slots: set[RoutineControlSlotKey] = set()
 
     with app.app_context():
         while True:
@@ -282,63 +392,115 @@ def run_scheduler_loop() -> None:
                     )
                     business_date = now_local.date()
 
-                    has_successful_run = (
-                        _has_successful_scheduled_run(
-                            business_date=business_date
+                    attempted_slots = {
+                        slot_key
+                        for slot_key in attempted_slots
+                        if slot_key[0] == business_date
+                    }
+
+                    scheduled_time = (
+                        _resolve_due_scheduled_time(
+                            now_local=now_local,
+                            run_times=run_times,
                         )
                     )
 
-                    decision = (
-                        decide_routine_control_scheduler_action(
-                            now_local,
-                            scheduled_time=scheduled_time,
-                            has_successful_run=(
-                                has_successful_run
-                            ),
-                            already_attempted=(
-                                last_attempted_date
-                                == business_date
-                            ),
-                        )
-                    )
-
-                    if decision is not None:
-                        last_attempted_date = (
-                            decision.business_date
+                    if scheduled_time is not None:
+                        block_reason = (
+                            get_secondary_job_block_reason(
+                                now_local
+                            )
                         )
 
-                        try:
-                            result = (
-                                execute_routine_control_scheduler_decision(
-                                    decision
+                        if block_reason is None:
+                            trigger_source = (
+                                _build_slot_trigger_source(
+                                    scheduled_time
                                 )
                             )
 
-                            LOGGER.info(
-                                "Routine Control scheduler terminó. "
-                                "business_date=%s status=%s "
-                                "succeeded=%s error_code=%s",
-                                decision.business_date.isoformat(),
-                                getattr(result, "status", None),
-                                getattr(result, "succeeded", None),
-                                getattr(
-                                    result,
-                                    "error_code",
-                                    None,
-                                ),
+                            slot_key = _build_slot_key(
+                                business_date=business_date,
+                                scheduled_time=scheduled_time,
                             )
-                        except Exception:
-                            LOGGER.exception(
-                                "Routine Control scheduler falló. "
-                                "business_date=%s",
-                                decision.business_date.isoformat(),
+
+                            has_successful_run = (
+                                _has_successful_scheduled_run(
+                                    business_date=business_date,
+                                    trigger_source=trigger_source,
+                                )
+                            )
+
+                            decision = (
+                                decide_routine_control_scheduler_action(
+                                    now_local,
+                                    scheduled_time=scheduled_time,
+                                    has_successful_run=(
+                                        has_successful_run
+                                    ),
+                                    already_attempted=(
+                                        slot_key
+                                        in attempted_slots
+                                    ),
+                                )
+                            )
+
+                            if decision is not None:
+                                attempted_slots.add(
+                                    decision.slot_key
+                                )
+
+                                try:
+                                    result = (
+                                        execute_routine_control_scheduler_decision(
+                                            decision
+                                        )
+                                    )
+
+                                    LOGGER.info(
+                                        "Routine Control scheduler terminó. "
+                                        "business_date=%s slot=%s "
+                                        "status=%s succeeded=%s "
+                                        "error_code=%s",
+                                        decision.business_date.isoformat(),
+                                        decision.scheduled_time.strftime(
+                                            "%H:%M"
+                                        ),
+                                        getattr(
+                                            result,
+                                            "status",
+                                            None,
+                                        ),
+                                        getattr(
+                                            result,
+                                            "succeeded",
+                                            None,
+                                        ),
+                                        getattr(
+                                            result,
+                                            "error_code",
+                                            None,
+                                        ),
+                                    )
+                                except Exception:
+                                    LOGGER.exception(
+                                        "Routine Control scheduler falló. "
+                                        "business_date=%s slot=%s",
+                                        decision.business_date.isoformat(),
+                                        decision.scheduled_time.strftime(
+                                            "%H:%M"
+                                        ),
+                                    )
+                        else:
+                            LOGGER.debug(
+                                "Routine Control diferido por "
+                                "prioridad Track. reason=%s now=%s",
+                                block_reason,
+                                now_local.isoformat(
+                                    timespec="seconds"
+                                ),
                             )
             finally:
                 db.session.remove()
 
             time.sleep(poll_seconds)
-
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    run_scheduler_loop()
