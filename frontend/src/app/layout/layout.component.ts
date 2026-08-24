@@ -470,46 +470,22 @@ private habilitarAdminUsuariosEnMenuSiAplica(): void {
     return;
   }
 
-  const crearUsuarioSubmenu = {
-    label: 'Crear usuario',
-    path: '/admin/usuarios',
-  };
-
-  const permisosMenu = this.menuItems.find(
-    (item) => item.label === 'Permisos'
+  const alreadyExists = this.menuItems.some(
+    (item) => item.path === '/admin/usuarios'
   );
 
-  if (permisosMenu) {
-    const submenu = Array.isArray(permisosMenu.submenu)
-      ? permisosMenu.submenu
-      : [];
-
-    const alreadyExists = submenu.some(
-      (item: { path: string }) => item.path === crearUsuarioSubmenu.path
-    );
-
-    if (!alreadyExists) {
-      permisosMenu.submenu = [
-        ...submenu,
-        crearUsuarioSubmenu,
-      ];
-    }
-
+  if (alreadyExists) {
     return;
   }
 
   this.menuItems = [
     ...this.menuItems,
     {
-      label: 'Permisos',
+      label: 'Crear usuario',
       path: '/admin/usuarios',
-      submenu: [
-        crearUsuarioSubmenu,
-      ],
     },
   ];
 }
-
 
 private habilitarPermisosObservabilidadEnMenuSiAplica(): void {
   const user = this.session.getUser();
@@ -907,7 +883,7 @@ private verificarRolUsuario(): void {
   programarOcultarSubmenu(): void {
     this.ocultarTimeout = setTimeout(() => {
       this.submenuVisible = false;
-    }, 300);
+    }, 700);
   }
 
   cancelarOcultarSubmenu(): void {
