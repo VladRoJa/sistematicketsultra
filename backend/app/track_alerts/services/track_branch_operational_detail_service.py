@@ -19,6 +19,7 @@ from app.track_alerts.services.track_regional_pacing_service import (
     build_bajas_metric,
     build_clientes_nuevos_metric,
     build_domiciliados_metric,
+    build_expected_monthly_curve_points,
     build_reactivaciones_metric,
     build_target_progress_metric,
 )
@@ -311,6 +312,29 @@ def _build_metrics(
             monthly_target=row.meta_venta_tienda_mes,
         ),
     }
+
+
+def _build_expected_monthly_curves(
+    *,
+    metrics: dict[str, dict[str, Any]] | None,
+    target_month: date,
+) -> dict[str, list[dict[str, str]]]:
+    result: dict[str, list[dict[str, str]]] = {}
+
+    for metric_key in PACE_METRIC_KEYS:
+        metric = (
+            metrics.get(metric_key, {})
+            if metrics is not None
+            else {}
+        )
+
+        result[metric_key] = build_expected_monthly_curve_points(
+            metric_key=metric_key,
+            monthly_target=metric.get("monthly_target"),
+            target_month=target_month,
+        )
+
+    return result
 
 
 def _metric_mtd_value(metric_key: str, metric: dict[str, Any]) -> Decimal | None:
@@ -2492,6 +2516,10 @@ def get_track_branch_operational_detail(
             ),
         },
         "current": {"metrics": current_metrics},
+        "expected_monthly_curves": _build_expected_monthly_curves(
+            metrics=current_metrics,
+            target_month=target_month,
+        ),
         "history": history,
         "chart_comparisons": chart_comparisons,
         "change_vs_previous": _build_change_vs_previous(

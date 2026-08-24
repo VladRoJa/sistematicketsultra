@@ -1876,3 +1876,55 @@ def test_deep_dive_manager_cannot_open_another_branch():
                 sucursal_canon="OTHER_BRANCH",
                 track_date=date(2026, 8, 23),
             )
+
+def test_expected_monthly_curves_use_current_monthly_targets():
+    curves = service._build_expected_monthly_curves(
+        metrics={
+            "clientes_nuevos": {
+                "monthly_target": "115",
+            },
+            "reactivaciones": {
+                "monthly_target": "86",
+            },
+            "domiciliados": {
+                "monthly_target": "70",
+            },
+        },
+        target_month=date(2026, 8, 1),
+    )
+
+    assert set(curves) == {
+        "clientes_nuevos",
+        "reactivaciones",
+        "domiciliados",
+    }
+
+    assert len(curves["clientes_nuevos"]) == 31
+    assert len(curves["reactivaciones"]) == 31
+    assert len(curves["domiciliados"]) == 31
+
+    assert (
+        Decimal(curves["clientes_nuevos"][-1]["expected_mtd"])
+        == Decimal("115")
+    )
+    assert (
+        Decimal(curves["reactivaciones"][-1]["expected_mtd"])
+        == Decimal("86")
+    )
+    assert (
+        Decimal(curves["domiciliados"][-1]["expected_mtd"])
+        == Decimal("70")
+    )
+
+
+def test_expected_monthly_curves_are_empty_without_current_metrics():
+    curves = service._build_expected_monthly_curves(
+        metrics=None,
+        target_month=date(2026, 8, 1),
+    )
+
+    assert curves == {
+        "clientes_nuevos": [],
+        "reactivaciones": [],
+        "domiciliados": [],
+    }

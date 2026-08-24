@@ -16,6 +16,7 @@ import {
   TrackBranchOperationalActiveMembersProjection,
   TrackBranchOperationalBusinessRules,
   TrackBranchOperationalDetailResponse,
+  TrackBranchOperationalExpectedMonthlyCurvePoint,
   TrackBranchOperationalHistoryPoint,
   TrackBranchOperationalLimitProjection,
   TrackBranchOperationalMetricChange,
@@ -568,11 +569,14 @@ export class TrackIntelligenceBranchOperationalComponent
       label,
       mainValue: (
         `${this.formatNumber(metric.actual_mtd)} / ` +
-        `${this.formatNumber(metric.expected_mtd)} esperado`
+        `${this.formatNumber(metric.expected_mtd)} esperado al corte`
       ),
       progressValue: this.clampPercent(metric.pace_pct),
       progressLabel: `${this.formatPercent(metric.pace_pct)} del ritmo esperado`,
-      secondaryLabel: `${this.formatPercent(metric.actual_progress_pct)} de la meta mensual`,
+      secondaryLabel: (
+        `Meta mensual: ${this.formatNumber(metric.monthly_target)} · ` +
+        `${this.formatPercent(metric.actual_progress_pct)} alcanzado`
+      ),
       status: metric.status,
       trend: metric.trend || 'INSUFFICIENT_DATA',
       trendStartDate: metric.trend_start_date || null,
@@ -779,6 +783,7 @@ export class TrackIntelligenceBranchOperationalComponent
         response.cutoff.target_month,
         'clientes_nuevos',
         'Clientes nuevos: real, esperado y proyección',
+        response.expected_monthly_curves.clientes_nuevos,
         metrics?.clientes_nuevos.projection,
       ),
       this.buildChart(
@@ -788,6 +793,7 @@ export class TrackIntelligenceBranchOperationalComponent
         response.cutoff.target_month,
         'reactivaciones',
         'Reactivaciones: real, esperado y proyección',
+        response.expected_monthly_curves.reactivaciones,
         metrics?.reactivaciones.projection,
       ),
       this.buildChart(
@@ -797,6 +803,7 @@ export class TrackIntelligenceBranchOperationalComponent
         response.cutoff.target_month,
         'domiciliados',
         'Domiciliados: real, esperado y proyección',
+        response.expected_monthly_curves.domiciliados,
         metrics?.domiciliados.projection,
       ),
       this.buildChart(
@@ -806,6 +813,7 @@ export class TrackIntelligenceBranchOperationalComponent
         response.cutoff.target_month,
         'bajas',
         'Bajas: real, límite y proyección',
+        [],
         metrics?.bajas.projection,
       ),
       this.buildChart(
@@ -815,6 +823,7 @@ export class TrackIntelligenceBranchOperationalComponent
         response.cutoff.target_month,
         'socios_activos',
         'Socios activos: real y proyección',
+        [],
         metrics?.socios_activos.projection,
       ),
     ];
@@ -827,6 +836,7 @@ export class TrackIntelligenceBranchOperationalComponent
     targetMonth: string,
     metricKey: ChartMetricKey,
     title: string,
+    expectedMonthlyCurve: TrackBranchOperationalExpectedMonthlyCurvePoint[],
     projection: OperationalProjection | undefined,
   ): ChartView {
     const rawPoints = history.flatMap((point) => {
@@ -859,6 +869,18 @@ export class TrackIntelligenceBranchOperationalComponent
         pace,
       }];
     });
+    const expectedMonthlyRawPoints = expectedMonthlyCurve.flatMap(
+      (point) => {
+        const value = this.toNumber(point.expected_mtd);
+
+        return value === null ? [] : [{
+          day: Number(point.track_date.slice(-2)),
+          date: point.track_date,
+          value,
+        }];
+      },
+    );
+
     const projectedRawPoints = projection?.status === 'available'
       ? projection.projected_points.flatMap((point) => {
           const value = this.toNumber(point.projected_mtd);
@@ -869,11 +891,13 @@ export class TrackIntelligenceBranchOperationalComponent
           }];
         })
       : [];
+
     const visibleValues = [
       ...rawPoints.flatMap((point) => [
         point.actual,
         point.benchmark,
       ]),
+      ...expectedMonthlyRawPoints.map((point) => point.value),
       ...projectedRawPoints.map((point) => point.value),
     ].filter((value): value is number => value !== null);
     const yAxisScale = this.buildYAxisScale(visibleValues);
@@ -920,12 +944,19 @@ export class TrackIntelligenceBranchOperationalComponent
     const actualPoints = actualMarkers
       .map((point) => `${point.x},${point.y}`)
       .join(' ');
-    const benchmarkRawPoints = rawPoints
-      .flatMap((point) => point.benchmark === null ? [] : [{
-        day: point.day,
-        date: point.date,
-        value: point.benchmark,
-      }]);
+    const benchmarkRawPoints = (
+      metricKey === 'clientes_nuevos' ||
+      metricKey === 'reactivaciones' ||
+      metricKey === 'domiciliados'
+        ? [...expectedMonthlyRawPoints]
+        : rawPoints.flatMap(
+            (point) => point.benchmark === null ? [] : [{
+              day: point.day,
+              date: point.date,
+              value: point.benchmark,
+            }],
+          )
+    );
     if (
       metricKey === 'bajas' &&
       benchmarkRawPoints.length > 0 &&

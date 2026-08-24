@@ -10,6 +10,7 @@ from app.track_alerts.services.track_regional_pacing_service import (
     REACTIVACIONES_WEEKDAY_WEIGHTS,
     build_bajas_metric,
     build_clientes_nuevos_metric,
+    build_expected_monthly_curve_points,
     build_normalized_monthly_curve,
     build_reactivaciones_metric,
     build_target_progress_metric,
@@ -365,3 +366,60 @@ def test_linear_pace_uses_calendar_day_progress():
     assert month_end.expected_progress_pct == Decimal("100")
     assert month_end.expected_mtd == Decimal("100")
     assert month_end.status == "EN_RITMO"
+
+def test_expected_monthly_curve_covers_full_month_and_ends_at_target():
+    points = build_expected_monthly_curve_points(
+        metric_key="clientes_nuevos",
+        monthly_target=Decimal("115"),
+        target_month=date(2026, 8, 23),
+    )
+
+    assert len(points) == 31
+    assert points[0]["track_date"] == "2026-08-01"
+    assert points[-1]["track_date"] == "2026-08-31"
+    assert Decimal(points[-1]["expected_mtd"]) == Decimal("115")
+
+
+def test_domiciliados_expected_curve_reuses_clientes_nuevos_shape():
+    clientes = build_expected_monthly_curve_points(
+        metric_key="clientes_nuevos",
+        monthly_target=Decimal("100"),
+        target_month=date(2026, 8, 23),
+    )
+    domiciliados = build_expected_monthly_curve_points(
+        metric_key="domiciliados",
+        monthly_target=Decimal("100"),
+        target_month=date(2026, 8, 23),
+    )
+
+    assert domiciliados == clientes
+
+
+def test_reactivaciones_expected_curve_has_own_shape_but_same_final_target():
+    clientes = build_expected_monthly_curve_points(
+        metric_key="clientes_nuevos",
+        monthly_target=Decimal("100"),
+        target_month=date(2026, 8, 23),
+    )
+    reactivaciones = build_expected_monthly_curve_points(
+        metric_key="reactivaciones",
+        monthly_target=Decimal("100"),
+        target_month=date(2026, 8, 23),
+    )
+
+    assert reactivaciones[16]["expected_mtd"] != clientes[16]["expected_mtd"]
+    assert Decimal(reactivaciones[-1]["expected_mtd"]) == Decimal("100")
+    assert Decimal(clientes[-1]["expected_mtd"]) == Decimal("100")
+
+
+@pytest.mark.parametrize("monthly_target", [None, 0])
+def test_expected_monthly_curve_without_positive_target_is_empty(
+    monthly_target,
+):
+    points = build_expected_monthly_curve_points(
+        metric_key="clientes_nuevos",
+        monthly_target=monthly_target,
+        target_month=date(2026, 8, 23),
+    )
+
+    assert points == []

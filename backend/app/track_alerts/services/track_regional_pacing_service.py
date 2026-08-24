@@ -219,6 +219,53 @@ def calculate_expected_progress_ratio(
     )
 
 
+def build_expected_monthly_curve_points(
+    *,
+    metric_key: str,
+    monthly_target: Any,
+    target_month: date,
+) -> list[dict[str, str]]:
+    target = _to_optional_decimal(monthly_target)
+
+    if target is None or target <= 0:
+        return []
+
+    if metric_key in {
+        "clientes_nuevos",
+        "domiciliados",
+    }:
+        weekday_weights = CLIENTES_NUEVOS_WEEKDAY_WEIGHTS
+    elif metric_key == "reactivaciones":
+        weekday_weights = REACTIVACIONES_WEEKDAY_WEIGHTS
+    else:
+        raise ValueError(
+            "Métrica sin curva esperada mensual soportada: "
+            f"{metric_key!r}"
+        )
+
+    curve = build_normalized_monthly_curve(
+        target_month=target_month,
+        weekday_weights=weekday_weights,
+    )
+
+    accumulated_ratio = Decimal("0")
+    points: list[dict[str, str]] = []
+
+    for calendar_date, daily_ratio in curve.items():
+        accumulated_ratio += daily_ratio
+
+        points.append(
+            {
+                "track_date": calendar_date.isoformat(),
+                "expected_mtd": _decimal_to_string(
+                    target * accumulated_ratio
+                ),
+            }
+        )
+
+    return points
+
+
 def build_weekday_pace_metric(
     *,
     metric_key: str,
