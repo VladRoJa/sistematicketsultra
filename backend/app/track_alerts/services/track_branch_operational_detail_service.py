@@ -1755,7 +1755,7 @@ def _build_recommendations(
             "actions": [
                 "Revisar prospectos que ya están cerca de cerrar.",
                 "Contactar hoy a los prospectos más avanzados.",
-                "Revisar qué asesores llevan pocos cierres y apoyarlos.",
+                "Revisar si los prospectos pendientes están recibiendo seguimiento.",
             ],
             "evidence_keys": ["clientes_nuevos"],
         },
@@ -1769,7 +1769,7 @@ def _build_recommendations(
             "actions": [
                 "Contactar socios recientes que pueden reactivarse.",
                 "Priorizar a quienes ya mostraron interés en regresar.",
-                "Revisar qué asesores llevan pocas reactivaciones.",
+                "Revisar si las reactivaciones pendientes están recibiendo seguimiento.",
                 "Revisar motivos recurrentes de no reactivación.",
             ],
             "evidence_keys": ["reactivaciones"],
@@ -1799,7 +1799,7 @@ def _build_recommendations(
                 "Revisar prospectos cercanos a cierre.",
                 "Dar seguimiento hoy a cierres pendientes.",
                 "Revisar contratos pendientes de domiciliación.",
-                "Revisar qué asesores necesitan apoyo hoy.",
+                "Revisar dónde se están acumulando pendientes comerciales.",
             ],
             "evidence_keys": [
                 "clientes_nuevos",
