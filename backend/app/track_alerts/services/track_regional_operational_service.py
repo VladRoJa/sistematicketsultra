@@ -11,6 +11,10 @@ from app.track_alerts.services.track_alert_region_rules_service import (
     _get_branch_display_name,
     _load_track_rows_with_region,
 )
+from app.track_alerts.services.track_intelligence_access_service import (
+    TrackIntelligenceAuthorizationError,
+    resolve_track_intelligence_access,
+)
 from app.track_alerts.services.track_regional_pacing_service import (
     build_bajas_metric,
     build_clientes_nuevos_metric,
@@ -522,9 +526,12 @@ def _business_rules() -> list[dict[str, str]]:
 
 def get_regional_operational_detail(
     *,
+    user: Any,
     track_date: date,
     generation_mode: str = "manual_preview",
 ) -> dict[str, Any]:
+    access = resolve_track_intelligence_access(user)
+
     resolved_version = resolve_effective_track_daily_version(
         track_date=track_date,
         generation_mode=generation_mode,
@@ -535,6 +542,7 @@ def get_regional_operational_detail(
             "track_date": track_date.isoformat(),
             "generation_mode": generation_mode,
             "resolved_version": None,
+            "access": access.to_public_dict(),
             "regions": [],
             "priorities": _build_priorities(
                 [],
@@ -547,58 +555,145 @@ def get_regional_operational_detail(
         track_daily_version_id=resolved_version.id,
     )
     joined_rows = [
-        _RegionalJoinedRow(mart=mart, branch=branch, region=region)
+        _RegionalJoinedRow(
+            mart=mart,
+            branch=branch,
+            region=region,
+        )
         for mart, branch, region in raw_joined_rows
     ]
+
     target_month = track_date.replace(day=1)
     seen_branches: set[str] = set()
     rows_by_region: dict[str, list[_RegionalJoinedRow]] = {}
 
     for joined_row in joined_rows:
-        mart_target_month = getattr(joined_row.mart, "target_month", None)
-        if mart_target_month is not None and mart_target_month != target_month:
+        mart_target_month = getattr(
+            joined_row.mart,
+            "target_month",
+            None,
+        )
+
+        if (
+            mart_target_month is not None
+            and mart_target_month != target_month
+        ):
             raise TrackRegionalOperationalDataError(
-                "La versión resuelta contiene una fila con target_month "
-                "distinto al mes consultado."
+                "La versión resuelta contiene una fila con "
+                "target_month distinto al mes consultado."
             )
 
         branch_key = joined_row.branch.sucursal_canon
+
         if branch_key in seen_branches:
             raise TrackRegionalOperationalDataError(
-                f"La sucursal {branch_key!r} tiene más de una región current."
+                f"La sucursal {branch_key!r} tiene más de una "
+                "región current."
             )
+
         seen_branches.add(branch_key)
-        rows_by_region.setdefault(joined_row.region.region_key, []).append(
-            joined_row
+
+        rows_by_region.setdefault(
+            joined_row.region.region_key,
+            [],
+        ).append(joined_row)
+
+    manager_branch_id = (
+        access.primary_branch_id
+        if not access.is_global
+        else None
+    )
+    manager_region_key: str | None = None
+
+    if manager_branch_id is not None:
+        manager_rows = []
+
+        for joined_row in joined_rows:
+            try:
+                branch_id = int(joined_row.branch.sucursal_id)
+            except (TypeError, ValueError):
+                continue
+
+            if branch_id == manager_branch_id:
+                manager_rows.append(joined_row)
+
+        if not manager_rows:
+            raise TrackIntelligenceAuthorizationError(
+                "La sucursal primaria del gerente no pertenece "
+                "al universo disponible de Track."
+            )
+
+        if len(manager_rows) != 1:
+            raise TrackRegionalOperationalDataError(
+                "La sucursal primaria del gerente no produjo "
+                "una región única."
+            )
+
+        manager_region_key = str(
+            manager_rows[0].region.region_key
         )
 
     regions: list[dict[str, Any]] = []
 
-    for region_rows in rows_by_region.values():
+    for region_key, region_rows in rows_by_region.items():
+        if (
+            manager_region_key is not None
+            and region_key != manager_region_key
+        ):
+            continue
+
         region_row = region_rows[0].region
+
+        if manager_branch_id is None:
+            visible_branch_rows = region_rows
+        else:
+            visible_branch_rows = []
+
+            for row in region_rows:
+                try:
+                    branch_id = int(row.branch.sucursal_id)
+                except (TypeError, ValueError):
+                    continue
+
+                if branch_id == manager_branch_id:
+                    visible_branch_rows.append(row)
+
         branches = [
-            _build_branch_item(track_date=track_date, joined_row=row)
-            for row in region_rows
+            _build_branch_item(
+                track_date=track_date,
+                joined_row=row,
+            )
+            for row in visible_branch_rows
         ]
+
         branches.sort(
             key=lambda branch: (
                 branch["orden_apertura"] or 9999,
                 branch["sucursal_name"],
             )
         )
+
         regions.append(
             {
                 "region_key": region_row.region_key,
                 "region_label": region_row.region_label,
+
+                # El consolidado utiliza TODAS las sucursales
+                # de la región autorizada.
                 "summary": _build_region_summary(
                     track_date=track_date,
                     rows=region_rows,
                 ),
+
+                # El gerente normal sólo recibe su propia
+                # sucursal en el detalle.
                 "branches": branches,
             }
         )
 
-    regions.sort(key=lambda region: region["region_label"])
+    regions.sort(
+        key=lambda region: region["region_label"]
+    )
 
     return {
         "track_date": track_date.isoformat(),
@@ -608,6 +703,7 @@ def get_regional_operational_detail(
             "version_type": resolved_version.version_type,
             "status": resolved_version.status,
         },
+        "access": access.to_public_dict(),
         "regions": regions,
         "priorities": _build_priorities(
             regions,

@@ -114,6 +114,7 @@ def test_lagging_branch_remains_priority_when_region_is_ahead():
         return_value=insufficient_projection,
     ):
         result = service.get_regional_operational_detail(
+            user=SimpleNamespace(rol="ADMIN", sucursal_id=None),
             track_date=track_date,
             generation_mode="manual_preview",
         )
@@ -220,6 +221,7 @@ def test_regional_domiciliados_sums_actual_and_target_before_percentage():
         },
     ):
         result = service.get_regional_operational_detail(
+            user=SimpleNamespace(rol="ADMIN", sucursal_id=None),
             track_date=track_date,
             generation_mode="manual_preview",
         )
@@ -276,6 +278,7 @@ def test_duplicate_current_region_assignment_is_rejected():
             match="más de una región current",
         ):
             service.get_regional_operational_detail(
+                user=SimpleNamespace(rol="ADMIN", sucursal_id=None),
                 track_date=date(2026, 8, 17),
                 generation_mode="manual_preview",
             )
@@ -474,3 +477,117 @@ def test_priorities_domiciliados_reuse_clientes_nuevos_weekday_pace():
 
     assert Decimal(domiciliados[0]["expected_mtd"]) == expected_mtd
     assert domiciliados[0]["status"] == "DEBAJO_RITMO"
+
+def test_gerente_sees_region_summary_but_only_own_branch_detail():
+    track_date = date(2026, 8, 17)
+
+    region_norte = SimpleNamespace(
+        region_key="REGION_NORTE",
+        region_label="Región Norte",
+    )
+    region_sur = SimpleNamespace(
+        region_key="REGION_SUR",
+        region_label="Región Sur",
+    )
+
+    rows = [
+        (
+            _mart_row(
+                clientes_actual=Decimal("10"),
+                bajas_actual=10,
+            ),
+            _branch(
+                branch_id=101,
+                canon="GERENTE_BRANCH",
+                name="Sucursal gerente",
+                order=1,
+            ),
+            region_norte,
+        ),
+        (
+            _mart_row(
+                clientes_actual=Decimal("20"),
+                bajas_actual=20,
+            ),
+            _branch(
+                branch_id=102,
+                canon="OTHER_SAME_REGION",
+                name="Otra misma región",
+                order=2,
+            ),
+            region_norte,
+        ),
+        (
+            _mart_row(
+                clientes_actual=Decimal("30"),
+                bajas_actual=30,
+            ),
+            _branch(
+                branch_id=201,
+                canon="OTHER_REGION",
+                name="Otra región",
+                order=3,
+            ),
+            region_sur,
+        ),
+    ]
+
+    with patch.object(
+        service,
+        "resolve_effective_track_daily_version",
+        return_value=SimpleNamespace(
+            id=901,
+            version_type="preview_operativo",
+            status="success",
+        ),
+    ), patch.object(
+        service,
+        "_load_track_rows_with_region",
+        return_value=rows,
+    ), patch.object(
+        service,
+        "build_branch_income_projection_summary",
+        return_value={
+            "status": "insufficient_history",
+            "projected_close": None,
+        },
+    ):
+        result = service.get_regional_operational_detail(
+            user=SimpleNamespace(
+                rol="GERENTE",
+                sucursal_id=101,
+            ),
+            track_date=track_date,
+            generation_mode="manual_preview",
+        )
+
+    assert result["access"] == {
+        "scope": "manager",
+        "is_global": False,
+    }
+
+    assert len(result["regions"]) == 1
+
+    region = result["regions"][0]
+
+    assert region["region_key"] == "REGION_NORTE"
+
+    # El consolidado sí representa toda su región.
+    assert region["summary"]["total_branches"] == 2
+    assert (
+        region["summary"]["metrics"]["clientes_nuevos"]["actual_mtd"]
+        == "30"
+    )
+
+    # El detalle sólo expone su propia sucursal.
+    assert [
+        branch["sucursal_canon"]
+        for branch in region["branches"]
+    ] == ["GERENTE_BRANCH"]
+
+    # Las prioridades tampoco revelan otras sucursales.
+    for priority_group in result["priorities"]:
+        assert {
+            item["sucursal_canon"]
+            for item in priority_group["items"]
+        } <= {"GERENTE_BRANCH"}

@@ -74,8 +74,13 @@ def test_regional_detail_dispatches_operational_view(client_and_token):
         "business_rules": [],
     }
 
+    user = object()
+
     with patch(
         "app.track_alerts.routes.track_alert_routes._require_track_read_role",
+    ), patch(
+        "app.track_alerts.routes.track_alert_routes._get_current_track_alert_user",
+        return_value=user,
     ), patch(
         "app.track_alerts.routes.track_alert_routes.get_regional_operational_detail",
         return_value=expected,
@@ -93,6 +98,7 @@ def test_regional_detail_dispatches_operational_view(client_and_token):
     assert response.status_code == 200
     assert response.get_json() == expected
     get_operational.assert_called_once()
+    assert get_operational.call_args.kwargs["user"] is user
     assert get_operational.call_args.kwargs["generation_mode"] == (
         "manual_preview"
     )
