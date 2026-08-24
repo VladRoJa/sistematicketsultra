@@ -29,6 +29,28 @@ def _require_admin():
     return None
 
 
+def _require_admicorp():
+    current_user_id = get_jwt_identity()
+    user = UserORM.get_by_id(current_user_id)
+
+    if not user:
+        return jsonify({
+            "error": "Unauthorized",
+            "detail": "Usuario no encontrado",
+        }), 401
+
+    username = (user.username or "").strip().upper()
+
+    if username != "ADMICORP":
+        return jsonify({
+            "error": "Forbidden",
+            "detail": "Solo ADMICORP puede crear usuarios.",
+            "code": "USER_CREATE_ADMICORP_ONLY",
+        }), 403
+
+    return None
+
+
 # ─────────────────────────────────────────────────────────────
 # GET: Lista todos los usuarios
 # ─────────────────────────────────────────────────────────────
@@ -75,7 +97,7 @@ def obtener_usuario(user_id):
 @usuarios_bp.route('', methods=['POST'])
 @jwt_required()  # Requiere autenticación para acceder a esta ruta
 def crear_usuario():
-    forbidden = _require_admin()
+    forbidden = _require_admicorp()
     if forbidden:
         return forbidden  
     data = request.json or {}
