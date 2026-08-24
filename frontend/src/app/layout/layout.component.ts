@@ -446,6 +446,7 @@ this.habilitarWarehouseEnMenuSiAplica(menuWarehouse);
   this.habilitarPlanningEnMenuSiAplica(menuPlanning);
   this.habilitarInternalDocumentsEnMenuSiAplica(menuNubeCorporativa);
   this.habilitarPermisosObservabilidadEnMenuSiAplica();
+  this.habilitarAdminUsuariosEnMenuSiAplica();
   this.sincronizarMenuConRutaActual();
   this.cargarTicketValidationAlertPosition();
   this.cargarTicketValidationSummary();
@@ -459,6 +460,55 @@ this.habilitarWarehouseEnMenuSiAplica(menuWarehouse);
       this.cargarTicketValidationSummary();
     });
   }
+
+
+private habilitarAdminUsuariosEnMenuSiAplica(): void {
+  const user = this.session.getUser();
+  const username = String(user?.username || '').trim().toUpperCase();
+
+  if (username !== 'ADMICORP') {
+    return;
+  }
+
+  const crearUsuarioSubmenu = {
+    label: 'Crear usuario',
+    path: '/admin/usuarios',
+  };
+
+  const permisosMenu = this.menuItems.find(
+    (item) => item.label === 'Permisos'
+  );
+
+  if (permisosMenu) {
+    const submenu = Array.isArray(permisosMenu.submenu)
+      ? permisosMenu.submenu
+      : [];
+
+    const alreadyExists = submenu.some(
+      (item: { path: string }) => item.path === crearUsuarioSubmenu.path
+    );
+
+    if (!alreadyExists) {
+      permisosMenu.submenu = [
+        ...submenu,
+        crearUsuarioSubmenu,
+      ];
+    }
+
+    return;
+  }
+
+  this.menuItems = [
+    ...this.menuItems,
+    {
+      label: 'Permisos',
+      path: '/admin/usuarios',
+      submenu: [
+        crearUsuarioSubmenu,
+      ],
+    },
+  ];
+}
 
 
 private habilitarPermisosObservabilidadEnMenuSiAplica(): void {
