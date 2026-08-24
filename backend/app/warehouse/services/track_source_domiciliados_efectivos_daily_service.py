@@ -42,8 +42,17 @@ def _ensure_date(value: Any, *, field_name: str) -> date:
     )
 
 
-def _is_active_status(value: Any) -> bool:
-    return str(value or "").strip().upper() == "ACTIVO"
+COUNTABLE_DOMICILIADO_STATUSES = frozenset(
+    {
+        "ACTIVO",
+        "FACTURADO",
+    }
+)
+
+
+def _is_countable_domiciliado_status(value: Any) -> bool:
+    normalized = str(value or "").strip().upper()
+    return normalized in COUNTABLE_DOMICILIADO_STATUSES
 
 
 def _is_domiciliado_payment(value: Any) -> bool:
@@ -178,7 +187,7 @@ def build_track_source_domiciliados_efectivos_daily_for_date(
         if _is_out_of_scope_track_branch(row.sucursal):
             continue
 
-        if not _is_active_status(row.estatus):
+        if not _is_countable_domiciliado_status(row.estatus):
             continue
 
         if not _is_domiciliado_payment(row.forma_pago):
