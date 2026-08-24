@@ -43,6 +43,7 @@ export class AdminUsuariosComponent implements OnInit {
     COMPRAS: 'Compras',
     FINANZAS: 'Finanzas',
     'GERENCIA DEPORTIVA': 'Gerencia Deportiva',
+    GERENTE: 'Sucursales',
     MANTENIMIENTO: 'Mantenimiento',
     MARKETING: 'Marketing',
     RECEPCIONISTA: 'Sucursales',
