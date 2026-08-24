@@ -272,6 +272,30 @@ def execute_warehouse_retention() -> dict:
 
     return result
 
+def _should_run_warehouse_retention(
+    *,
+    now_local: datetime,
+    last_run_date: date | None,
+) -> bool:
+    retention_hour = _env_int(
+        "WAREHOUSE_RETENTION_HOUR",
+        DEFAULT_WAREHOUSE_RETENTION_HOUR,
+    )
+    retention_minute = _env_int(
+        "WAREHOUSE_RETENTION_MINUTE",
+        DEFAULT_WAREHOUSE_RETENTION_MINUTE,
+    )
+
+    return (
+        _is_exact_minute(
+            now_local,
+            hour=retention_hour,
+            minute=retention_minute,
+        )
+        and last_run_date != now_local.date()
+    )
+
+
 def run_scheduler_loop() -> None:
     poll_interval_seconds = _env_int(
         "TRACK_SCHEDULER_POLL_INTERVAL_SECONDS",
@@ -308,31 +332,24 @@ def run_scheduler_loop() -> None:
                             decision.action,
                             decision.track_date.isoformat(),
                         )
-                    retention_hour = _env_int(
-                        "WAREHOUSE_RETENTION_HOUR",
-                        DEFAULT_WAREHOUSE_RETENTION_HOUR,
-                    )
-                    retention_minute = _env_int(
-                        "WAREHOUSE_RETENTION_MINUTE",
-                        DEFAULT_WAREHOUSE_RETENTION_MINUTE,
-                    )
-
-                    if (
-                        _is_exact_minute(
-                            now_local,
-                            hour=retention_hour,
-                            minute=retention_minute,
+                if _should_run_warehouse_retention(
+                    now_local=now_local,
+                    last_run_date=(
+                        last_warehouse_retention_run_date
+                    ),
+                ):
+                    try:
+                        execute_warehouse_retention()
+                        last_warehouse_retention_run_date = (
+                            now_local.date()
                         )
-                        and last_warehouse_retention_run_date != now_local.date()
-                    ):
-                        try:
-                            execute_warehouse_retention()
-                            last_warehouse_retention_run_date = now_local.date()
-                        except Exception:
-                            LOGGER.exception(
-                                "Retención Warehouse falló para fecha local=%s",
-                                now_local.date().isoformat(),
-                            )    
+                    except Exception:
+                        LOGGER.exception(
+                            "Retención Warehouse falló "
+                            "para fecha local=%s",
+                            now_local.date().isoformat(),
+                        )
+
                 if decision is None:
                     try:
                         close_result = (

@@ -10,6 +10,9 @@ from zoneinfo import ZoneInfo
 
 from app import create_app
 from app.extensions import db
+from app.warehouse.services.scheduler_priority_service import (
+    get_secondary_job_block_reason,
+)
 from app.services.marketing_iventas_period_service import (
     resolve_iventas_month_period,
 )
@@ -33,7 +36,12 @@ logging.basicConfig(
 )
 
 DEFAULT_TIMEZONE = "America/Tijuana"
-DEFAULT_RUN_HOURS = (8, 12, 16, 20)
+DEFAULT_RUN_TIMES = (
+    (8, 20),
+    (12, 20),
+    (16, 20),
+    (20, 20),
+)
 DEFAULT_POLL_SECONDS = 60
 DEFAULT_RETRY_MINUTES = 15
 
@@ -62,12 +70,15 @@ DEFAULT_META_ACCOUNT_BINDINGS = (
 
 _SHOULD_STOP = False
 
-_COMPLETED_SLOTS: set[tuple[date, int]] = set()
-_IVENTAS_COMPLETED_SLOTS: set[tuple[date, int]] = set()
-_META_COMPLETED_SLOTS: set[tuple[date, int]] = set()
+MarketingRunTime = tuple[int, int]
+MarketingSlotKey = tuple[date, int, int]
+
+_COMPLETED_SLOTS: set[MarketingSlotKey] = set()
+_IVENTAS_COMPLETED_SLOTS: set[MarketingSlotKey] = set()
+_META_COMPLETED_SLOTS: set[MarketingSlotKey] = set()
 
 _NEXT_RETRY_BY_SLOT: dict[
-    tuple[date, int],
+    MarketingSlotKey,
     datetime,
 ] = {}
 
@@ -146,42 +157,67 @@ def _now_local() -> datetime:
     return datetime.now(_timezone())
 
 
-def _parse_run_hours() -> tuple[int, ...]:
-    raw_value = os.getenv(
-        "MARKETING_SCHEDULER_RUN_HOURS"
-    )
+def _parse_run_times() -> tuple[MarketingRunTime, ...]:
+    raw_value = str(
+        os.getenv("MARKETING_SCHEDULER_RUN_TIMES")
+        or ""
+    ).strip()
+
+    source_env = "MARKETING_SCHEDULER_RUN_TIMES"
 
     if not raw_value:
-        return DEFAULT_RUN_HOURS
+        legacy_raw_value = str(
+            os.getenv("MARKETING_SCHEDULER_RUN_HOURS")
+            or ""
+        ).strip()
 
-    values: set[int] = set()
+        if not legacy_raw_value:
+            return DEFAULT_RUN_TIMES
 
-    for raw_hour in raw_value.split(","):
-        clean_hour = raw_hour.strip()
+        raw_value = legacy_raw_value
+        source_env = "MARKETING_SCHEDULER_RUN_HOURS"
 
-        if not clean_hour:
+    values: set[MarketingRunTime] = set()
+
+    for raw_time in raw_value.split(","):
+        clean_time = raw_time.strip()
+
+        if not clean_time:
             continue
 
         try:
-            hour = int(clean_hour)
+            if ":" in clean_time:
+                hour_text, minute_text = clean_time.split(
+                    ":",
+                    maxsplit=1,
+                )
+                hour = int(hour_text)
+                minute = int(minute_text)
+            else:
+                hour = int(clean_time)
+                minute = 0
         except ValueError as exc:
             raise RuntimeError(
-                "MARKETING_SCHEDULER_RUN_HOURS "
-                f"contiene valor inválido={clean_hour!r}."
+                f"{source_env} contiene valor "
+                f"inválido={clean_time!r}."
             ) from exc
 
-        if hour < 0 or hour > 23:
+        if (
+            hour < 0
+            or hour > 23
+            or minute < 0
+            or minute > 59
+        ):
             raise RuntimeError(
-                "MARKETING_SCHEDULER_RUN_HOURS "
-                f"fuera de rango={hour}."
+                f"{source_env} fuera de rango="
+                f"{clean_time!r}."
             )
 
-        values.add(hour)
+        values.add((hour, minute))
 
     if not values:
         raise RuntimeError(
-            "MARKETING_SCHEDULER_RUN_HOURS "
-            "no contiene horarios válidos."
+            f"{source_env} no contiene horarios válidos."
         )
 
     return tuple(sorted(values))
@@ -358,22 +394,30 @@ def execute_marketing_sync(
 def _resolve_due_slot(
     *,
     now: datetime,
-    run_hours: tuple[int, ...],
-) -> tuple[date, int] | None:
-    eligible_hours = tuple(
-        hour
-        for hour in run_hours
-        if hour <= now.hour
+    run_times: tuple[MarketingRunTime, ...],
+) -> MarketingSlotKey | None:
+    current_time = (
+        now.hour,
+        now.minute,
     )
 
-    if not eligible_hours:
+    eligible_times = tuple(
+        run_time
+        for run_time in run_times
+        if run_time <= current_time
+    )
+
+    if not eligible_times:
         return None
 
-    slot_hour = max(eligible_hours)
+    slot_hour, slot_minute = max(
+        eligible_times
+    )
 
     slot_key = (
         now.date(),
         slot_hour,
+        slot_minute,
     )
 
     if slot_key in _COMPLETED_SLOTS:
@@ -395,7 +439,7 @@ def _resolve_due_slot(
 
 
 def run_scheduler_loop() -> None:
-    run_hours = _parse_run_hours()
+    run_times = _parse_run_times()
 
     poll_seconds = max(
         _env_int(
@@ -415,12 +459,12 @@ def run_scheduler_loop() -> None:
 
     LOGGER.info(
         "Marketing scheduler iniciado. "
-        "timezone=%s run_hours=%s "
+        "timezone=%s run_times=%s "
         "poll_seconds=%s retry_minutes=%s",
         _timezone().key,
         ",".join(
-            str(hour)
-            for hour in run_hours
+            f"{hour:02d}:{minute:02d}"
+            for hour, minute in run_times
         ),
         poll_seconds,
         retry_minutes,
@@ -432,10 +476,19 @@ def run_scheduler_loop() -> None:
 
             slot_key = _resolve_due_slot(
                 now=now,
-                run_hours=run_hours,
+                run_times=run_times,
             )
 
-            if slot_key is not None:
+            block_reason = (
+                get_secondary_job_block_reason(now)
+                if slot_key is not None
+                else None
+            )
+
+            if (
+                slot_key is not None
+                and block_reason is None
+            ):
                 run_iventas = (
                     slot_key
                     not in _IVENTAS_COMPLETED_SLOTS
@@ -483,10 +536,11 @@ def run_scheduler_loop() -> None:
 
                     LOGGER.warning(
                         "Corte incompleto. "
-                        "slot=%s-%02d "
+                        "slot=%s-%02d:%02d "
                         "next_retry_at=%s",
                         slot_key[0].isoformat(),
                         slot_key[1],
+                        slot_key[2],
                         next_retry_at.isoformat(
                             timespec="seconds"
                         ),

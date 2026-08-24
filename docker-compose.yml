@@ -141,7 +141,9 @@ services:
     environment:
       APP_ENV: "prod"
       TICKET_ATTACHMENT_DIR: "/app/runtime/ticket-attachments"
-      TICKET_ATTACHMENT_CLEANUP_POLL_INTERVAL_SECONDS: "3600"
+      TICKET_ATTACHMENT_CLEANUP_TIMEZONE: "America/Tijuana"
+      TICKET_ATTACHMENT_CLEANUP_RUN_TIME: "02:20"
+      TICKET_ATTACHMENT_CLEANUP_POLL_INTERVAL_SECONDS: "60"
       TICKET_ATTACHMENT_CLEANUP_BATCH_SIZE: "500"
     command: python -m app.services.ticket_attachment_cleanup_worker
     restart: unless-stopped
@@ -164,7 +166,7 @@ services:
     environment:
       APP_ENV: "prod"
       ROUTINE_CONTROL_SCHEDULER_ENABLED: "true"
-      ROUTINE_CONTROL_DAILY_TIME: "08:30"
+      ROUTINE_CONTROL_RUN_TIMES: "09:20,13:20,17:20,21:20"
       ROUTINE_CONTROL_TIMEZONE: "America/Tijuana"
       ROUTINE_CONTROL_WORKER_POLL_SECONDS: "60"
       ROUTINE_CONTROL_PROVIDER_HEADLESS: "true"
@@ -190,6 +192,10 @@ services:
       - .env.docker
     environment:
       APP_ENV: "prod"
+      REPORTS_SCHEDULER_TZ: "America/Tijuana"
+      COBRANZA_RECURRENTE_ENABLED: "true"
+      COBRANZA_RECURRENTE_RUN_HOUR: "8"
+      COBRANZA_RECURRENTE_RUN_MINUTE: "40"
     command: python -m app.warehouse.scheduler.reports_scheduler_worker
     restart: unless-stopped
     init: true
@@ -211,7 +217,7 @@ services:
     environment:
       APP_ENV: "prod"
       MARKETING_SCHEDULER_TZ: "America/Tijuana"
-      MARKETING_SCHEDULER_RUN_HOURS: "8,12,16,20"
+      MARKETING_SCHEDULER_RUN_TIMES: "08:20,12:20,16:20,20:20"
       MARKETING_SCHEDULER_POLL_SECONDS: "60"
       MARKETING_SCHEDULER_RETRY_MINUTES: "15"
     command: python -m app.services.marketing_scheduler_worker
