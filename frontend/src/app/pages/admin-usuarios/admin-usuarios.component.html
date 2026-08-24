@@ -1,0 +1,275 @@
+<section class="admin-users-page">
+  <header class="page-hero">
+    <div class="hero-content">
+      <div class="hero-kicker">
+        <span class="hero-dot"></span>
+        Suite Ultra · Administración
+      </div>
+
+      <h1>Crear usuario</h1>
+
+      <p>
+        Da de alta una nueva cuenta y define desde el inicio su rol,
+        sucursal y departamento dentro de Suite Ultra.
+      </p>
+    </div>
+
+    <div class="hero-access">
+      <span class="access-label">Acceso restringido</span>
+      <strong>ADMICORP</strong>
+      <small>Alta exclusiva de usuarios</small>
+    </div>
+  </header>
+
+  <form
+    class="user-create-panel"
+    [formGroup]="form"
+    (ngSubmit)="crearUsuario()"
+  >
+    <div class="panel-heading">
+      <div>
+        <p class="eyebrow">Nueva cuenta</p>
+        <h2>Datos del usuario</h2>
+        <p>
+          Captura las credenciales y la asignación organizacional.
+          Los campos marcados son obligatorios.
+        </p>
+      </div>
+
+      <span class="status-pill" *ngIf="cargandoCatalogos">
+        Cargando catálogos...
+      </span>
+    </div>
+
+    <section class="form-section">
+      <div class="section-heading">
+        <span class="section-step">01</span>
+
+        <div>
+          <h3>Acceso</h3>
+          <p>Credenciales con las que el usuario ingresará a Suite Ultra.</p>
+        </div>
+      </div>
+
+      <div class="form-grid">
+        <div class="field">
+          <label for="admin-user-username">Usuario *</label>
+
+          <input
+            id="admin-user-username"
+            type="text"
+            formControlName="username"
+            autocomplete="off"
+            placeholder="Ej. JUANPEREZ"
+          />
+
+          <small>
+            Identificador único para iniciar sesión.
+          </small>
+
+          <span
+            class="field-error"
+            *ngIf="
+              form.get('username')?.touched &&
+              form.get('username')?.hasError('required')
+            "
+          >
+            El usuario es obligatorio.
+          </span>
+        </div>
+
+        <div class="field">
+          <label for="admin-user-password">Contraseña *</label>
+
+          <input
+            id="admin-user-password"
+            type="password"
+            formControlName="password"
+            autocomplete="new-password"
+            placeholder="Mínimo 6 caracteres"
+          />
+
+          <small>
+            Se almacenará protegida mediante hash en el backend.
+          </small>
+
+          <span
+            class="field-error"
+            *ngIf="
+              form.get('password')?.touched &&
+              form.get('password')?.hasError('required')
+            "
+          >
+            La contraseña es obligatoria.
+          </span>
+
+          <span
+            class="field-error"
+            *ngIf="
+              form.get('password')?.touched &&
+              form.get('password')?.hasError('minlength')
+            "
+          >
+            La contraseña debe tener al menos 6 caracteres.
+          </span>
+        </div>
+
+        <div class="field field-wide">
+          <label for="admin-user-email">Email</label>
+
+          <input
+            id="admin-user-email"
+            type="email"
+            formControlName="email"
+            autocomplete="off"
+            placeholder="usuario@empresa.com"
+          />
+
+          <small>
+            Opcional. Si se captura, debe ser único.
+          </small>
+
+          <span
+            class="field-error"
+            *ngIf="
+              form.get('email')?.touched &&
+              form.get('email')?.hasError('email')
+            "
+          >
+            Captura un email válido.
+          </span>
+        </div>
+      </div>
+    </section>
+
+    <section class="form-section">
+      <div class="section-heading">
+        <span class="section-step">02</span>
+
+        <div>
+          <h3>Asignación organizacional</h3>
+          <p>
+            Define el alcance inicial del usuario dentro de la operación.
+          </p>
+        </div>
+      </div>
+
+      <div class="form-grid form-grid-three">
+        <div class="field">
+          <label for="admin-user-role">Rol *</label>
+
+          <select
+            id="admin-user-role"
+            formControlName="rol"
+          >
+            <option value="">Selecciona un rol</option>
+
+            <option
+              *ngFor="let rol of rolesDisponibles"
+              [value]="rol"
+            >
+              {{ rol }}
+            </option>
+          </select>
+
+          <span
+            class="field-error"
+            *ngIf="
+              form.get('rol')?.touched &&
+              form.get('rol')?.hasError('required')
+            "
+          >
+            Selecciona un rol.
+          </span>
+        </div>
+
+        <div class="field">
+          <label for="admin-user-branch">Sucursal *</label>
+
+          <select
+            id="admin-user-branch"
+            formControlName="sucursal_id"
+            [attr.disabled]="cargandoCatalogos ? true : null"
+          >
+            <option [ngValue]="null">Selecciona sucursal</option>
+
+            <option
+              *ngFor="let sucursal of sucursales"
+              [ngValue]="sucursal.sucursal_id"
+            >
+              {{ sucursal.sucursal }}
+            </option>
+          </select>
+
+          <span
+            class="field-error"
+            *ngIf="
+              form.get('sucursal_id')?.touched &&
+              form.get('sucursal_id')?.hasError('required')
+            "
+          >
+            Selecciona una sucursal.
+          </span>
+        </div>
+
+        <div class="field">
+          <label for="admin-user-department">Departamento *</label>
+
+          <select
+            id="admin-user-department"
+            formControlName="department_id"
+            [attr.disabled]="cargandoCatalogos ? true : null"
+          >
+            <option [ngValue]="null">Selecciona departamento</option>
+
+            <option
+              *ngFor="let departamento of departamentos"
+              [ngValue]="departamento.id"
+            >
+              {{ departamento.nombre }}
+            </option>
+          </select>
+
+          <span
+            class="field-error"
+            *ngIf="
+              form.get('department_id')?.touched &&
+              form.get('department_id')?.hasError('required')
+            "
+          >
+            Selecciona un departamento.
+          </span>
+        </div>
+      </div>
+    </section>
+
+    <section class="security-strip">
+      <div class="security-icon">✓</div>
+
+      <div>
+        <strong>Alta protegida</strong>
+        <p>
+          El backend vuelve a validar que la sesión pertenezca a ADMICORP
+          antes de crear cualquier usuario.
+        </p>
+      </div>
+    </section>
+
+    <footer class="form-actions">
+      <div class="action-copy">
+        <strong>Crear cuenta</strong>
+        <span>
+          Revisa rol, sucursal y departamento antes de continuar.
+        </span>
+      </div>
+
+      <button
+        class="primary-action"
+        type="submit"
+        [disabled]="form.invalid || guardando || cargandoCatalogos"
+      >
+        {{ guardando ? 'Creando usuario...' : 'Crear usuario' }}
+      </button>
+    </footer>
+  </form>
+</section>

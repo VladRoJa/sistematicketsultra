@@ -7,6 +7,7 @@ import { PantallaVerTicketsComponent } from './pantalla-ver-tickets/pantalla-ver
 import { AdminPermisosComponent } from './admin-permisos/admin-permisos.component';
 import { AuthGuard } from './guards/auth.guard';
 import { AdminGuard } from './guards/admin.guard';
+import { AdmicorpGuard } from './guards/admicorp.guard';
 import { LayoutComponent } from './layout/layout.component';
 import { AdminPanelComponent } from './admin-panel/admin-panel.component';
 import { CrearTicketRefactorComponent } from './pantalla-crear-ticket/crear-ticket-refactor.component';
@@ -63,6 +64,13 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./permissions-observability/permissions-observability.component')
             .then(m => m.PermissionsObservabilityComponent),
+      },
+      {
+        path: 'admin/usuarios',
+        canActivate: [AdmicorpGuard],
+        loadComponent: () =>
+          import('./pages/admin-usuarios/admin-usuarios.component')
+            .then(m => m.AdminUsuariosComponent),
       },
       {
         path: 'inventario',
