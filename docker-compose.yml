@@ -200,9 +200,33 @@ services:
       - /home/adminrdp/sistematicketsultra/uploads:/uploads
     profiles:
       - scheduler
+
+  marketing-scheduler:
+    build:
+      context: ./backend
+    depends_on:
+      - db
+    env_file:
+      - .env.docker
+    environment:
+      APP_ENV: "prod"
+      MARKETING_SCHEDULER_TZ: "America/Tijuana"
+      MARKETING_SCHEDULER_RUN_HOURS: "8,12,16,20"
+      MARKETING_SCHEDULER_POLL_SECONDS: "60"
+      MARKETING_SCHEDULER_RETRY_MINUTES: "15"
+    command: python -m app.services.marketing_scheduler_worker
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 120s
+    networks:
+      - backend-net
+    profiles:
+      - scheduler
+
 volumes:
   postgres_data:
   routine_control_runtime:
 
 networks:
   backend-net:
+
