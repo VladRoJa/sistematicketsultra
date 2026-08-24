@@ -992,6 +992,12 @@ export interface TrackBranchOperationalProjectedPoint {
   projected_mtd: string;
 }
 
+export interface TrackBranchOperationalExpectedMonthlyCurvePoint {
+  track_date: string;
+  expected_mtd: string;
+}
+
+
 export interface TrackBranchOperationalProjectionBase {
   status: 'available' | 'insufficient_history';
   method: 'recent_valid_daily_average_7_calendar_days';
@@ -1324,6 +1330,11 @@ export interface TrackBranchOperationalDetailResponse {
   cutoff: TrackBranchOperationalCutoff;
   current: {
     metrics: TrackBranchOperationalMetrics | null;
+  };
+  expected_monthly_curves: {
+    clientes_nuevos: TrackBranchOperationalExpectedMonthlyCurvePoint[];
+    reactivaciones: TrackBranchOperationalExpectedMonthlyCurvePoint[];
+    domiciliados: TrackBranchOperationalExpectedMonthlyCurvePoint[];
   };
   history: TrackBranchOperationalHistoryPoint[];
   chart_comparisons: TrackBranchOperationalChartComparisons;
