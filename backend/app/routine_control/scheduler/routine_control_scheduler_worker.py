@@ -504,3 +504,7 @@ def run_scheduler_loop() -> None:
                 db.session.remove()
 
             time.sleep(poll_seconds)
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    run_scheduler_loop()
