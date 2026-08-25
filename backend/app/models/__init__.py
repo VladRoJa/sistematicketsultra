@@ -30,6 +30,8 @@ from .warehouse import (
     KpiDesempenoSnapshotRowORM,
     KpiVentasNuevosSociosSnapshotORM,
     KpiVentasNuevosSociosSnapshotRowORM,
+    SociosVencidosSnapshotORM,
+    SociosVencidosSnapshotRowORM,
     TrackSourceTiendaDailyORM,
     WarehouseCommercialCatalogORM,
 )
@@ -144,6 +146,8 @@ __all__ = [
     "KpiDesempenoSnapshotRowORM",
     "KpiVentasNuevosSociosSnapshotORM",
     "KpiVentasNuevosSociosSnapshotRowORM",
+    "SociosVencidosSnapshotORM",
+    "SociosVencidosSnapshotRowORM",
     "TrackSourceTiendaDailyORM",
     "WarehouseCommercialCatalogORM",
     "SuiteRegionORM",

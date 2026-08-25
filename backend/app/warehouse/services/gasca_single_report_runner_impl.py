@@ -24,7 +24,15 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 CORTE_CAJA_REPORT_TYPE_KEY = "corte_caja"
 CARGOS_RECURRENTES_REPORT_TYPE_KEY = "cargos_recurrentes"
 VENTA_TOTAL_REPORT_TYPE_KEY = "venta_total"
-SUPPORTED_REPORT_TYPES = frozenset({CORTE_CAJA_REPORT_TYPE_KEY, CARGOS_RECURRENTES_REPORT_TYPE_KEY,VENTA_TOTAL_REPORT_TYPE_KEY})
+SOCIOS_VENCIDOS_REPORT_TYPE_KEY = "socios_vencidos"
+SUPPORTED_REPORT_TYPES = frozenset(
+    {
+        CORTE_CAJA_REPORT_TYPE_KEY,
+        CARGOS_RECURRENTES_REPORT_TYPE_KEY,
+        VENTA_TOTAL_REPORT_TYPE_KEY,
+        SOCIOS_VENCIDOS_REPORT_TYPE_KEY,
+    }
+)
 XLSX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
@@ -62,6 +70,8 @@ def run_gasca_single_report(
     trigger_source: str | None = None,
     requested_at: datetime | None = None,
     target_business_date: date | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
 ) -> dict[str, Any]:
     """
     Ejecuta un solo reporte Gasca y publica el artifact contractual en Warehouse.
@@ -101,6 +111,13 @@ def run_gasca_single_report(
                 page=page,
                 runtime=runtime,
                 target_business_date=target_business_date,
+            )
+        elif report_type_key == SOCIOS_VENCIDOS_REPORT_TYPE_KEY:
+            artifact_path, extra_metadata = _run_socios_vencidos_report(
+                page=page,
+                runtime=runtime,
+                date_from=date_from,
+                date_to=date_to,
             )
         else:
             raise GascaSingleReportRunnerError(
@@ -363,6 +380,202 @@ def _run_venta_total_report(
     }
     return artifact_path, metadata
 
+
+def _normalize_socios_vencidos_date(
+    value: date | None,
+    *,
+    field_name: str,
+) -> date:
+    if value is None:
+        raise GascaSingleReportRunnerError(
+            f"Socios Vencidos: {field_name} es requerido."
+        )
+
+    if isinstance(value, datetime):
+        return value.date()
+
+    if isinstance(value, date):
+        return value
+
+    raise GascaSingleReportRunnerError(
+        f"Socios Vencidos: {field_name} debe ser date o datetime."
+    )
+
+
+def _validate_socios_vencidos_date_range(
+    *,
+    runtime: GascaRuntimeConfig,
+    date_from: date | None,
+    date_to: date | None,
+) -> tuple[date, date]:
+    normalized_date_from = _normalize_socios_vencidos_date(
+        date_from,
+        field_name="date_from",
+    )
+    normalized_date_to = _normalize_socios_vencidos_date(
+        date_to,
+        field_name="date_to",
+    )
+
+    if normalized_date_from > normalized_date_to:
+        raise GascaSingleReportRunnerError(
+            "Socios Vencidos: date_from no puede ser posterior a date_to."
+        )
+
+    today_local = datetime.now(
+        pytz.timezone(runtime.timezone_name)
+    ).date()
+    if normalized_date_to > today_local:
+        raise GascaSingleReportRunnerError(
+            "Socios Vencidos: date_to no puede ser una fecha futura. "
+            f"Recibida={normalized_date_to.isoformat()} "
+            f"hoy={today_local.isoformat()}."
+        )
+
+    return normalized_date_from, normalized_date_to
+
+
+def _esperar_tabla_socios_vencidos(
+    *,
+    page: Any,
+    timeout_seconds: int = 120,
+) -> int:
+    current_app.logger.info(
+        "Gasca single report runner: esperando tabla de Socios Vencidos."
+    )
+
+    loading = page.get_by_text("Cargando", exact=False).first
+    try:
+        loading.wait_for(state="visible", timeout=10_000)
+        loading.wait_for(
+            state="hidden",
+            timeout=timeout_seconds * 1000,
+        )
+    except PlaywrightTimeoutError:
+        # La tabla puede responder tan rápido que el loader no llegue a observarse.
+        pass
+
+    try:
+        page.wait_for_selector(
+            "table tbody tr:visible",
+            state="visible",
+            timeout=timeout_seconds * 1000,
+        )
+        page.wait_for_selector(
+            "button:has-text('Exportar')",
+            state="visible",
+            timeout=timeout_seconds * 1000,
+        )
+    except PlaywrightTimeoutError as exc:
+        raise GascaSingleReportRunnerError(
+            "Socios Vencidos: no apareció una tabla exportable dentro del timeout."
+        ) from exc
+
+    approximate_row_count = page.locator(
+        "table tbody tr:visible"
+    ).count()
+    if approximate_row_count <= 0:
+        raise GascaSingleReportRunnerError(
+            "Socios Vencidos: la tabla visible no contiene filas exportables."
+        )
+
+    return approximate_row_count
+
+
+def _validate_downloaded_xlsx(artifact_path: Path) -> None:
+    if not artifact_path.is_file():
+        raise GascaSingleReportRunnerError(
+            "Socios Vencidos: la descarga no produjo el archivo esperado."
+        )
+
+    if artifact_path.stat().st_size <= 0:
+        raise GascaSingleReportRunnerError(
+            "Socios Vencidos: el archivo descargado está vacío."
+        )
+
+
+def _run_socios_vencidos_report(
+    *,
+    page: Any,
+    runtime: GascaRuntimeConfig,
+    date_from: date | None,
+    date_to: date | None,
+) -> tuple[Path, dict[str, Any]]:
+    normalized_date_from, normalized_date_to = (
+        _validate_socios_vencidos_date_range(
+            runtime=runtime,
+            date_from=date_from,
+            date_to=date_to,
+        )
+    )
+    started_at = time.monotonic()
+
+    current_app.logger.info(
+        "Gasca single report runner: ejecutando socios_vencidos "
+        "date_from=%s date_to=%s branch_scope=unfiltered.",
+        normalized_date_from.isoformat(),
+        normalized_date_to.isoformat(),
+    )
+
+    try:
+        page.goto(runtime.reportes_url, timeout=120_000)
+        page.wait_for_load_state("networkidle")
+
+        _seleccionar_tipo_reporte(page, "Reporte Socios Vencidos")
+        _rellenar_fechas_rango_simple(
+            page=page,
+            fecha_inicio=normalized_date_from,
+            fecha_fin=normalized_date_to,
+        )
+        _click_boton_generar(page)
+
+        approximate_row_count = _esperar_tabla_socios_vencidos(
+            page=page,
+            timeout_seconds=120,
+        )
+
+        artifact_path = _resolve_contractual_output_path(
+            report_type_key=SOCIOS_VENCIDOS_REPORT_TYPE_KEY
+        )
+        _descargar_excel_desde_tabla(
+            page=page,
+            nombre_reporte="Reporte Socios Vencidos",
+            destination_path=artifact_path,
+        )
+        _validate_downloaded_xlsx(artifact_path)
+    except Exception:
+        duration_seconds = round(time.monotonic() - started_at, 3)
+        current_app.logger.warning(
+            "Gasca single report runner: socios_vencidos terminado "
+            "date_from=%s date_to=%s duration_seconds=%s status=failed.",
+            normalized_date_from.isoformat(),
+            normalized_date_to.isoformat(),
+            duration_seconds,
+        )
+        raise
+
+    duration_seconds = round(time.monotonic() - started_at, 3)
+    current_app.logger.info(
+        "Gasca single report runner: socios_vencidos terminado "
+        "date_from=%s date_to=%s approximate_rows=%s "
+        "duration_seconds=%s status=downloaded.",
+        normalized_date_from.isoformat(),
+        normalized_date_to.isoformat(),
+        approximate_row_count,
+        duration_seconds,
+    )
+
+    metadata = {
+        "date_from": normalized_date_from.isoformat(),
+        "date_to": normalized_date_to.isoformat(),
+        "snapshot_kind_hint": "range",
+        "branch_scope": "unfiltered",
+        "approximate_row_count": approximate_row_count,
+        "duration_seconds": duration_seconds,
+        "raw_file_preserved": True,
+    }
+    return artifact_path, metadata
+
 def _resolve_contractual_output_path(*, report_type_key: str) -> Path:
     backend_dir = Path(__file__).resolve().parents[3]
     output_dir = backend_dir / "data" / report_type_key
@@ -372,6 +585,7 @@ def _resolve_contractual_output_path(*, report_type_key: str) -> Path:
         CORTE_CAJA_REPORT_TYPE_KEY: "corte_caja.xlsx",
         CARGOS_RECURRENTES_REPORT_TYPE_KEY: "cargos_recurrentes.xlsx",
         VENTA_TOTAL_REPORT_TYPE_KEY: "venta_total.xlsx",
+        SOCIOS_VENCIDOS_REPORT_TYPE_KEY: "socios_vencidos.xlsx",
     }
     filename = filename_map.get(report_type_key)
     if not filename:

@@ -13,6 +13,7 @@ MANUAL_STRUCTURED_TOTALPASS_REPORT_TYPE_KEY = "ingresos_totalpass"
 MANUAL_STRUCTURED_WELLHUB_REPORT_TYPE_KEY = "ingresos_wellhub"
 MANUAL_STRUCTURED_TRACK_MONTHLY_TARGETS_REPORT_TYPE_KEY = "track_monthly_targets"
 MANUAL_STRUCTURED_VENTA_TOTAL_REPORT_TYPE_KEY = "venta_total"
+MANUAL_STRUCTURED_SOCIOS_VENCIDOS_REPORT_TYPE_KEY = "socios_vencidos"
 
 SUPPORTED_MANUAL_STRUCTURED_REPORT_TYPES = frozenset(
     {
@@ -20,6 +21,7 @@ SUPPORTED_MANUAL_STRUCTURED_REPORT_TYPES = frozenset(
         MANUAL_STRUCTURED_WELLHUB_REPORT_TYPE_KEY,
         MANUAL_STRUCTURED_TRACK_MONTHLY_TARGETS_REPORT_TYPE_KEY,
         MANUAL_STRUCTURED_VENTA_TOTAL_REPORT_TYPE_KEY,
+        MANUAL_STRUCTURED_SOCIOS_VENCIDOS_REPORT_TYPE_KEY,
     }
 )
 
@@ -172,6 +174,15 @@ def _resolve_venta_total_ingestor() -> Callable[..., Any]:
         module_key="WAREHOUSE_VENTA_TOTAL_INGESTOR_MODULE",
         entrypoint_key="WAREHOUSE_VENTA_TOTAL_INGESTOR_ENTRYPOINT",
         description="ingestor estructurado de venta_total",
+    )
+
+
+def _resolve_socios_vencidos_ingestor() -> Callable[..., Any]:
+    return _resolve_callable(
+        direct_callable_key="WAREHOUSE_SOCIOS_VENCIDOS_INGESTOR",
+        module_key="WAREHOUSE_SOCIOS_VENCIDOS_INGESTOR_MODULE",
+        entrypoint_key="WAREHOUSE_SOCIOS_VENCIDOS_INGESTOR_ENTRYPOINT",
+        description="ingestor estructurado de socios_vencidos",
     )
 
 
@@ -333,6 +344,30 @@ def _dispatch_track_monthly_targets_ingestion(
         "Debe devolver dict."
     )
 
+
+def _dispatch_socios_vencidos_ingestion(
+    *,
+    warehouse_upload_id: int,
+    requested_by: str | None,
+    ingestion_source: str | None,
+) -> dict[str, Any]:
+    ingestor = _resolve_socios_vencidos_ingestor()
+    raw_result = _invoke_callable_flexibly(
+        ingestor,
+        kwargs={
+            "warehouse_upload_id": warehouse_upload_id,
+            "requested_by": requested_by,
+            "ingestion_source": ingestion_source,
+        },
+        description="ingestor estructurado manual de socios_vencidos",
+    )
+    if isinstance(raw_result, dict):
+        return raw_result
+    raise WarehouseManualIngestionDispatcherError(
+        "El ingestor manual de socios_vencidos devolvió un tipo no soportado. "
+        "Debe devolver dict."
+    )
+
 def dispatch_manual_structured_ingestion(
     *,
     warehouse_upload_id: int,
@@ -372,6 +407,19 @@ def dispatch_manual_structured_ingestion(
 
     if report_type_key == MANUAL_STRUCTURED_TRACK_MONTHLY_TARGETS_REPORT_TYPE_KEY:
         ingestion_result = _dispatch_track_monthly_targets_ingestion(
+            warehouse_upload_id=warehouse_upload_id,
+            requested_by=requested_by,
+            ingestion_source=ingestion_source,
+        )
+        return {
+            "ingestion_status": ingestion_result.get("status", "ingested"),
+            "warehouse_upload_id": warehouse_upload_id,
+            "report_type_key": report_type_key,
+            "structured_result": ingestion_result,
+        }
+
+    if report_type_key == MANUAL_STRUCTURED_SOCIOS_VENCIDOS_REPORT_TYPE_KEY:
+        ingestion_result = _dispatch_socios_vencidos_ingestion(
             warehouse_upload_id=warehouse_upload_id,
             requested_by=requested_by,
             ingestion_source=ingestion_source,

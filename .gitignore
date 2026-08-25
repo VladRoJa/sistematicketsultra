@@ -27,6 +27,7 @@ uploads/
 
 # Local/generated Warehouse automation outputs
 backend/storage/
+backend/data/socios_vencidos/
 
 # Local/private ticket attachment storage
 backend/runtime/ticket-attachments/

@@ -62,6 +62,15 @@ from app.warehouse.services.ventas_nuevos_socios_detalle_canonicality_resolver i
 from app.warehouse.services.ventas_nuevos_socios_detalle_ingestion_service import (
     register_ventas_nuevos_socios_detalle_ingestor,
 )
+from app.warehouse.services.socios_vencidos_parser import (
+    register_socios_vencidos_parser,
+)
+from app.warehouse.services.socios_vencidos_repository import (
+    register_socios_vencidos_repository,
+)
+from app.warehouse.services.socios_vencidos_ingestion_service import (
+    register_socios_vencidos_ingestor,
+)
 
 from app.warehouse.services.warehouse_manual_ingestion_dispatcher import ( register_warehouse_manual_ingestion_dispatcher,)
 
@@ -109,6 +118,9 @@ def _mark_runtime_hooks_registered(app: Flask) -> None:
         "ventas_nuevos_socios_detalle_parser": True,
         "ventas_nuevos_socios_detalle_repository": True,
         "ventas_nuevos_socios_detalle_ingestor": True,
+        "socios_vencidos_parser": True,
+        "socios_vencidos_repository": True,
+        "socios_vencidos_ingestor": True,
     }
 
 
@@ -192,6 +204,10 @@ def register_warehouse_runtime_hooks(app: Flask) -> None:
         "WAREHOUSE_VENTAS_NUEVOS_SOCIOS_DETALLE_CANONICALITY_RESOLVER",
         resolve_ventas_nuevos_socios_detalle_canonicality,
     )
+
+    register_socios_vencidos_parser(app)
+    register_socios_vencidos_repository(app)
+    register_socios_vencidos_ingestor(app)
 
     register_warehouse_manual_ingestion_dispatcher(app)
     
