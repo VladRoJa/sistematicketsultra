@@ -71,6 +71,15 @@ from app.warehouse.services.socios_vencidos_repository import (
 from app.warehouse.services.socios_vencidos_ingestion_service import (
     register_socios_vencidos_ingestor,
 )
+from app.warehouse.services.socios_activos_parser import (
+    register_socios_activos_parser,
+)
+from app.warehouse.services.socios_activos_repository import (
+    register_socios_activos_repository,
+)
+from app.warehouse.services.socios_activos_ingestion_service import (
+    register_socios_activos_ingestor,
+)
 
 from app.warehouse.services.warehouse_manual_ingestion_dispatcher import ( register_warehouse_manual_ingestion_dispatcher,)
 
@@ -209,6 +218,10 @@ def register_warehouse_runtime_hooks(app: Flask) -> None:
     register_socios_vencidos_repository(app)
     register_socios_vencidos_ingestor(app)
 
+    register_socios_activos_parser(app)
+    register_socios_activos_repository(app)
+    register_socios_activos_ingestor(app)
+
     register_warehouse_manual_ingestion_dispatcher(app)
     
     register_gasca_single_report_runner_impl(app)
@@ -216,3 +229,4 @@ def register_warehouse_runtime_hooks(app: Flask) -> None:
     _mark_runtime_hooks_registered(app)
 
     app.logger.info("Warehouse runtime hooks registrados correctamente.")
+

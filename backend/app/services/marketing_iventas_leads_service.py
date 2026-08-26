@@ -205,14 +205,18 @@ def _build_lead_metrics_statement(
     )
 
 
-def _read_canonical_run(
+def read_canonical_iventas_run(
     *,
     period_key: str,
     session: Any,
 ):
+    period_key_value = _validate_period_key(
+        period_key
+    )
+
     statement = (
         _build_canonical_run_statement(
-            period_key
+            period_key_value
         )
     )
 
@@ -230,7 +234,7 @@ def _read_canonical_run(
         raise (
             MarketingIventasCanonicalRunRequiredError(
                 "No existe snapshot iVentas canónico "
-                f"para period_key={period_key!r}."
+                f"para period_key={period_key_value!r}."
             )
         )
 
@@ -304,7 +308,7 @@ def read_canonical_iventas_lead_metrics(
     )
 
     canonical_run = (
-        _read_canonical_run(
+        read_canonical_iventas_run(
             period_key=period_key_value,
             session=session_value,
         )
@@ -492,7 +496,7 @@ def list_canonical_iventas_lead_metrics_by_branch_date(
     )
 
     canonical_run = (
-        _read_canonical_run(
+        read_canonical_iventas_run(
             period_key=period_key_value,
             session=session_value,
         )
@@ -799,7 +803,7 @@ def list_canonical_iventas_lead_metrics_by_branch_month(
         session
     )
 
-    canonical_run = _read_canonical_run(
+    canonical_run = read_canonical_iventas_run(
         period_key=period_key_value,
         session=session_value,
     )

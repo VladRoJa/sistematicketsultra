@@ -1788,3 +1788,259 @@ class TrackAlertEventORM(db.Model):
             "was_sent",
         ),
     )
+
+
+class SociosActivosSnapshotORM(db.Model):
+    __tablename__ = "socios_activos_snapshots"
+
+    id = db.Column(
+        db.BigInteger,
+        primary_key=True,
+        autoincrement=True,
+    )
+    warehouse_upload_id = db.Column(
+        db.Integer,
+        db.ForeignKey(
+            "warehouse_uploads.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+        unique=True,
+    )
+    report_type_key = db.Column(
+        db.String(100),
+        nullable=False,
+    )
+    cutoff_date = db.Column(
+        db.Date,
+        nullable=False,
+    )
+    captured_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+    )
+    snapshot_kind = db.Column(
+        db.String(50),
+        nullable=False,
+    )
+    is_canonical = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=False,
+    )
+    row_count_detected = db.Column(
+        db.Integer,
+        nullable=False,
+    )
+    row_count_valid = db.Column(
+        db.Integer,
+        nullable=False,
+    )
+    row_count_rejected = db.Column(
+        db.Integer,
+        nullable=False,
+        default=0,
+    )
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+    )
+
+    warehouse_upload = db.relationship(
+        "WarehouseUploadORM",
+    )
+    rows = db.relationship(
+        "SociosActivosSnapshotRowORM",
+        back_populates="snapshot",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+    __table_args__ = (
+        db.Index(
+            "ix_socios_activos_snapshots_cutoff_date",
+            "cutoff_date",
+        ),
+        db.Index(
+            "ix_socios_activos_snapshots_captured_at",
+            "captured_at",
+        ),
+        db.Index(
+            "ix_socios_activos_snapshots_is_canonical",
+            "is_canonical",
+        ),
+        db.Index(
+            "ix_socios_activos_snapshots_cutoff_canonical",
+            "cutoff_date",
+            "is_canonical",
+        ),
+    )
+
+
+class SociosActivosSnapshotRowORM(db.Model):
+    __tablename__ = "socios_activos_snapshot_rows"
+
+    id = db.Column(
+        db.BigInteger,
+        primary_key=True,
+        autoincrement=True,
+    )
+    snapshot_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey(
+            "socios_activos_snapshots.id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+    )
+    row_index = db.Column(
+        db.Integer,
+        nullable=False,
+    )
+    source_row_number = db.Column(
+        db.Integer,
+        nullable=True,
+    )
+
+    id_socio = db.Column(
+        db.String(64),
+        nullable=False,
+    )
+    pin = db.Column(
+        db.String(64),
+        nullable=False,
+    )
+    nombre = db.Column(
+        db.String(255),
+        nullable=True,
+    )
+    sucursal_raw = db.Column(
+        db.String(255),
+        nullable=False,
+    )
+
+    fecha_ultimo_pago_local = db.Column(
+        db.DateTime(timezone=False),
+        nullable=True,
+    )
+    fecha_vencimiento_local = db.Column(
+        db.DateTime(timezone=False),
+        nullable=False,
+    )
+    fecha_vencimiento_date = db.Column(
+        db.Date,
+        nullable=False,
+    )
+    fecha_ingreso_local = db.Column(
+        db.DateTime(timezone=False),
+        nullable=True,
+    )
+    fecha_firma_local = db.Column(
+        db.DateTime(timezone=False),
+        nullable=True,
+    )
+
+    tarifa = db.Column(
+        db.String(255),
+        nullable=True,
+    )
+    importe_tarifa = db.Column(
+        db.Numeric(14, 2),
+        nullable=True,
+    )
+
+    lada_raw = db.Column(
+        db.String(32),
+        nullable=True,
+    )
+    telefono_raw = db.Column(
+        db.String(64),
+        nullable=True,
+    )
+    telefono_digits = db.Column(
+        db.String(32),
+        nullable=True,
+    )
+
+    aplica_kpi_raw = db.Column(
+        db.String(32),
+        nullable=False,
+    )
+    aplica_kpi = db.Column(
+        db.Boolean,
+        nullable=False,
+    )
+
+    email_raw = db.Column(
+        db.String(320),
+        nullable=True,
+    )
+
+    row_hash = db.Column(
+        db.String(64),
+        nullable=False,
+    )
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+    )
+
+    snapshot = db.relationship(
+        "SociosActivosSnapshotORM",
+        back_populates="rows",
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "snapshot_id",
+            "row_index",
+            name="uq_socios_activos_rows_snapshot_row_index",
+        ),
+        db.Index(
+            "ix_socios_activos_rows_snapshot_id",
+            "snapshot_id",
+        ),
+        db.Index(
+            "ix_socios_activos_rows_id_socio",
+            "id_socio",
+        ),
+        db.Index(
+            "ix_socios_activos_rows_pin",
+            "pin",
+        ),
+        db.Index(
+            "ix_socios_activos_rows_branch",
+            "sucursal_raw",
+        ),
+        db.Index(
+            "ix_socios_activos_rows_phone",
+            "telefono_digits",
+        ),
+        db.Index(
+            "ix_socios_activos_rows_email",
+            "email_raw",
+        ),
+        db.Index(
+            "ix_socios_activos_rows_expiration_date",
+            "fecha_vencimiento_date",
+        ),
+        db.Index(
+            "ix_socios_activos_rows_snapshot_member",
+            "snapshot_id",
+            "id_socio",
+        ),
+        db.Index(
+            "ix_socios_activos_rows_snapshot_branch_pin",
+            "snapshot_id",
+            "sucursal_raw",
+            "pin",
+        ),
+    )

@@ -11,6 +11,7 @@ from app.services.marketing_iventas_leads_service import (
     _build_lead_metrics_by_branch_date_statement,
     _build_lead_metrics_statement,
     list_canonical_iventas_lead_metrics_by_branch_date,
+    read_canonical_iventas_run,
     read_canonical_iventas_lead_metrics,
 )
 
@@ -72,6 +73,80 @@ def _metrics_row():
         "iventas_contacts_with_first_message": 508,
         "meta_observed_leads": 288,
     }
+
+
+def test_reads_canonical_iventas_run():
+    session = FakeSession(
+        canonical_run=_canonical_run(),
+    )
+
+    result = read_canonical_iventas_run(
+        period_key="IVENTAS-2026-08-11",
+        session=session,
+    )
+
+    assert result["sync_run_id"] == 41
+    assert result["period_key"] == "IVENTAS-2026-08-11"
+    assert result["date_from"] == date(2026, 8, 11)
+    assert result["date_to"] == date(2026, 8, 11)
+    assert result["status"] == "COMPLETED"
+    assert result["is_canonical"] is True
+
+
+def test_read_canonical_iventas_run_requires_canonical_snapshot():
+    with pytest.raises(
+        MarketingIventasCanonicalRunRequiredError,
+        match="canónico",
+    ):
+        read_canonical_iventas_run(
+            period_key="IVENTAS-2026-08-11",
+            session=FakeSession(
+                canonical_run=None,
+            ),
+        )
+
+
+def test_read_canonical_iventas_run_requires_period_key():
+    with pytest.raises(
+        ValueError,
+        match="period_key",
+    ):
+        read_canonical_iventas_run(
+            period_key="",
+            session=FakeSession(),
+        )
+
+
+def test_canonical_iventas_run_sql_contract():
+    session = FakeSession(
+        canonical_run=_canonical_run(),
+    )
+
+    read_canonical_iventas_run(
+        period_key="IVENTAS-2026-08-11",
+        session=session,
+    )
+
+    sql = str(
+        session.executed_statements[0].compile(
+            dialect=postgresql.dialect(),
+            compile_kwargs={
+                "literal_binds": True,
+            },
+        )
+    ).lower()
+
+    assert (
+        "marketing_iventas_sync_runs.period_key "
+        "= 'iventas-2026-08-11'"
+    ) in sql
+    assert (
+        "marketing_iventas_sync_runs.status "
+        "= 'completed'"
+    ) in sql
+    assert (
+        "marketing_iventas_sync_runs.is_canonical is true"
+    ) in sql
 
 
 def test_reads_three_separate_business_populations():

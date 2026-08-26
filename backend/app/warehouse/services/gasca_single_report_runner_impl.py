@@ -34,6 +34,10 @@ SUPPORTED_REPORT_TYPES = frozenset(
     }
 )
 XLSX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+DATATABLES_EXPORT_MENU_SELECTOR = "div.dropdown-menu[role='menu']:visible"
+DATATABLES_EXCEL_OPTION_SELECTOR = (
+    "a.dt-button.buttons-excel.buttons-html5[href='#']:visible"
+)
 
 
 
@@ -742,6 +746,42 @@ def _click_tab_membresia(page: Any) -> None:
     raise GascaSingleReportRunnerError("No se encontró un tab clickeable 'Membresía/Membresia'.")
 
 
+def _resolver_opcion_excel_datatables(
+    *,
+    page: Any,
+    nombre_reporte: str,
+) -> Any:
+    try:
+        page.wait_for_selector(
+            DATATABLES_EXPORT_MENU_SELECTOR,
+            state="visible",
+            timeout=10_000,
+        )
+    except PlaywrightTimeoutError as exc:
+        raise GascaSingleReportRunnerError(
+            f"{nombre_reporte}: se encontraron 0 candidatos Excel interactivos "
+            "visibles porque no apareció el menú DataTables Exportar."
+        ) from exc
+
+    menus = page.locator(DATATABLES_EXPORT_MENU_SELECTOR)
+    menu_count = menus.count()
+    if menu_count != 1:
+        raise GascaSingleReportRunnerError(
+            f"{nombre_reporte}: se esperaba exactamente 1 menú DataTables "
+            f"Exportar visible y se encontraron {menu_count}."
+        )
+
+    candidates = menus.locator(DATATABLES_EXCEL_OPTION_SELECTOR)
+    candidate_count = candidates.count()
+    if candidate_count != 1:
+        raise GascaSingleReportRunnerError(
+            f"{nombre_reporte}: {candidate_count} candidatos Excel interactivos "
+            "visibles; se esperaba exactamente 1."
+        )
+
+    return candidates
+
+
 def _descargar_excel_desde_tabla(
     *,
     page: Any,
@@ -765,14 +805,15 @@ def _descargar_excel_desde_tabla(
 
     export_btn.scroll_into_view_if_needed()
     export_btn.click()
-    time.sleep(1)
+
+    excel_option = _resolver_opcion_excel_datatables(
+        page=page,
+        nombre_reporte=nombre_reporte,
+    )
 
     try:
         with page.expect_download(timeout=60_000) as dl_info:
-            try:
-                page.get_by_text("Excel", exact=False).first.click()
-            except Exception:
-                page.locator("text=Excel").first.click()
+            excel_option.click()
 
         download = dl_info.value
     except PlaywrightTimeoutError as exc:

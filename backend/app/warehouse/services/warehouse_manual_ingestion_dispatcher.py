@@ -14,6 +14,7 @@ MANUAL_STRUCTURED_WELLHUB_REPORT_TYPE_KEY = "ingresos_wellhub"
 MANUAL_STRUCTURED_TRACK_MONTHLY_TARGETS_REPORT_TYPE_KEY = "track_monthly_targets"
 MANUAL_STRUCTURED_VENTA_TOTAL_REPORT_TYPE_KEY = "venta_total"
 MANUAL_STRUCTURED_SOCIOS_VENCIDOS_REPORT_TYPE_KEY = "socios_vencidos"
+MANUAL_STRUCTURED_SOCIOS_ACTIVOS_REPORT_TYPE_KEY = "socios_activos"
 
 SUPPORTED_MANUAL_STRUCTURED_REPORT_TYPES = frozenset(
     {
@@ -22,6 +23,7 @@ SUPPORTED_MANUAL_STRUCTURED_REPORT_TYPES = frozenset(
         MANUAL_STRUCTURED_TRACK_MONTHLY_TARGETS_REPORT_TYPE_KEY,
         MANUAL_STRUCTURED_VENTA_TOTAL_REPORT_TYPE_KEY,
         MANUAL_STRUCTURED_SOCIOS_VENCIDOS_REPORT_TYPE_KEY,
+        MANUAL_STRUCTURED_SOCIOS_ACTIVOS_REPORT_TYPE_KEY,
     }
 )
 
@@ -183,6 +185,15 @@ def _resolve_socios_vencidos_ingestor() -> Callable[..., Any]:
         module_key="WAREHOUSE_SOCIOS_VENCIDOS_INGESTOR_MODULE",
         entrypoint_key="WAREHOUSE_SOCIOS_VENCIDOS_INGESTOR_ENTRYPOINT",
         description="ingestor estructurado de socios_vencidos",
+    )
+
+
+def _resolve_socios_activos_ingestor() -> Callable[..., Any]:
+    return _resolve_callable(
+        direct_callable_key="WAREHOUSE_SOCIOS_ACTIVOS_INGESTOR",
+        module_key="WAREHOUSE_SOCIOS_ACTIVOS_INGESTOR_MODULE",
+        entrypoint_key="WAREHOUSE_SOCIOS_ACTIVOS_INGESTOR_ENTRYPOINT",
+        description="ingestor estructurado de socios_activos",
     )
 
 
@@ -368,6 +379,33 @@ def _dispatch_socios_vencidos_ingestion(
         "Debe devolver dict."
     )
 
+def _dispatch_socios_activos_ingestion(
+    *,
+    warehouse_upload_id: int,
+    requested_by: str | None,
+    ingestion_source: str | None,
+) -> dict[str, Any]:
+    ingestor = _resolve_socios_activos_ingestor()
+
+    raw_result = _invoke_callable_flexibly(
+        ingestor,
+        kwargs={
+            "warehouse_upload_id": warehouse_upload_id,
+            "requested_by": requested_by,
+            "ingestion_source": ingestion_source,
+        },
+        description="ingestor estructurado manual de socios_activos",
+    )
+
+    if isinstance(raw_result, dict):
+        return raw_result
+
+    raise WarehouseManualIngestionDispatcherError(
+        "El ingestor manual de socios_activos devolvió "
+        "un tipo no soportado. Debe devolver dict."
+    )
+
+
 def dispatch_manual_structured_ingestion(
     *,
     warehouse_upload_id: int,
@@ -431,6 +469,19 @@ def dispatch_manual_structured_ingestion(
             "structured_result": ingestion_result,
         }
 
+    if report_type_key == MANUAL_STRUCTURED_SOCIOS_ACTIVOS_REPORT_TYPE_KEY:
+        ingestion_result = _dispatch_socios_activos_ingestion(
+            warehouse_upload_id=warehouse_upload_id,
+            requested_by=requested_by,
+            ingestion_source=ingestion_source,
+        )
+        return {
+            "ingestion_status": ingestion_result.get("status", "ingested"),
+            "warehouse_upload_id": warehouse_upload_id,
+            "report_type_key": report_type_key,
+            "structured_result": ingestion_result,
+        }
+
     snapshot_kind = _resolve_snapshot_kind_for_manual_upload(
         loaded_upload=loaded_upload,
     )
@@ -483,3 +534,4 @@ def dispatch_manual_structured_ingestion(
     raise WarehouseManualIngestionDispatcherError(
         f"Dispatcher manual sin branch para report_type_key={report_type_key!r}."
     )
+
