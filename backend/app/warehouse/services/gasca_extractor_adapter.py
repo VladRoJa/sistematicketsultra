@@ -7,6 +7,7 @@ from datetime import datetime, timezone, date
 from pathlib import Path
 from typing import Any, Callable
 import mimetypes
+import inspect
 
 from flask import current_app
 
@@ -23,7 +24,8 @@ SUPPORTED_REPORT_TYPES = frozenset(
         "kpi_ventas_nuevos_socios",
         "corte_caja",
         "cargos_recurrentes",
-        "venta_total"
+        "venta_total",
+        "socios_vencidos",
     }
 )
 
@@ -35,6 +37,7 @@ REPORT_EXTRACTOR_CONFIG_KEYS: dict[str, str] = {
     "corte_caja": "WAREHOUSE_GASCA_CORTE_CAJA_EXTRACTOR",
     "cargos_recurrentes": "WAREHOUSE_GASCA_CARGOS_RECURRENTES_EXTRACTOR",
     "venta_total": "WAREHOUSE_GASCA_VENTA_TOTAL_EXTRACTOR",
+    "socios_vencidos": "WAREHOUSE_GASCA_SOCIOS_VENCIDOS_EXTRACTOR",
 }
 
 # Fallback opcional: un solo extractor multipropósito.
@@ -54,6 +57,8 @@ class RawExtractorCommand:
     trigger_source: str | None = None
     requested_at: datetime | None = None
     target_business_date: date | None = None
+    date_from: date | None = None
+    date_to: date | None = None
 
 def register_gasca_extractor_adapter(app) -> None:
     """
@@ -255,16 +260,31 @@ def _call_extractor(
     Todos los extractores deben aceptar kwargs nombrados.
     Eso nos da un contrato estable y explícito.
     """
-    return extractor(
-        report_type_key=command.report_type_key,
-        run_mode=command.run_mode,
-        snapshot_kind=command.snapshot_kind,
-        requested_by=command.requested_by,
-        trigger_source=command.trigger_source,
-        requested_at=command.requested_at,
-        target_business_date=command.target_business_date,
-        
-    )
+    kwargs = {
+        "report_type_key": command.report_type_key,
+        "run_mode": command.run_mode,
+        "snapshot_kind": command.snapshot_kind,
+        "requested_by": command.requested_by,
+        "trigger_source": command.trigger_source,
+        "requested_at": command.requested_at,
+        "target_business_date": command.target_business_date,
+        "date_from": command.date_from,
+        "date_to": command.date_to,
+    }
+    try:
+        signature = inspect.signature(extractor)
+    except (TypeError, ValueError):
+        return extractor(**kwargs)
+    if any(
+        parameter.kind == inspect.Parameter.VAR_KEYWORD
+        for parameter in signature.parameters.values()
+    ):
+        return extractor(**kwargs)
+    return extractor(**{
+        key: value
+        for key, value in kwargs.items()
+        if key in signature.parameters
+    })
 
 
 def extract_gasca_report(
@@ -276,6 +296,8 @@ def extract_gasca_report(
     trigger_source: str | None = None,
     requested_at: datetime | None = None,
     target_business_date: date | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
     
 ) -> ProducedGascaArtifact:
     """
@@ -298,6 +320,8 @@ def extract_gasca_report(
         trigger_source=trigger_source,
         requested_at=requested_at or _utc_now(),
         target_business_date=target_business_date,
+        date_from=date_from,
+        date_to=date_to,
     )
     _validate_command(command)
 

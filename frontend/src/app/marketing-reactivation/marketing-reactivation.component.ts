@@ -9,6 +9,8 @@ import {
 } from '@angular/core';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
+import { MatNativeDateModule } from '@angular/material/core';
+import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
@@ -36,7 +38,6 @@ import {
   ReactivationCandidatesResponse,
   ReactivationIventasPeriod,
   ReactivationSourcesResponse,
-  ReactivationVencidosSnapshot,
 } from './marketing-reactivation.models';
 import { MarketingReactivationService } from './marketing-reactivation.service';
 
@@ -56,7 +57,8 @@ interface OperationalStatusOption {
 }
 
 interface CandidateSelection {
-  vencidosSnapshotId: number;
+  dateFrom: string;
+  dateTo: string;
   iventasPeriodKey: string;
 }
 
@@ -120,9 +122,11 @@ const REVIEW_IDENTITY_REASONS = new Set<ReactivationCandidateReason>([
   imports: [
     CommonModule,
     MatButtonModule,
+    MatDatepickerModule,
     MatFormFieldModule,
     MatIconModule,
     MatInputModule,
+    MatNativeDateModule,
     MatProgressSpinnerModule,
     MatSelectModule,
     MatSortModule,
@@ -140,7 +144,8 @@ export class MarketingReactivationComponent implements OnInit {
   );
   private readonly candidateRequests = new Subject<CandidateSelection>();
 
-  readonly vencidosControl = new FormControl<number | null>(null);
+  readonly dateFromControl = new FormControl<Date | null>(null);
+  readonly dateToControl = new FormControl<Date | null>(null);
   readonly iventasControl = new FormControl<string | null>(null);
   readonly branchFilter = new FormControl('ALL', { nonNullable: true });
   readonly statusFilter = new FormControl<StatusFilter>('WORK_PENDING', {
@@ -206,8 +211,12 @@ export class MarketingReactivationComponent implements OnInit {
     this.loadSources();
   }
 
-  get vencidosSnapshots(): ReactivationVencidosSnapshot[] {
-    return this.sources?.vencidos_snapshots ?? [];
+  get coverageMinDate(): Date | null {
+    return this.parseDateOnly(this.sources?.vencidos_coverage.min_date ?? null);
+  }
+
+  get coverageMaxDate(): Date | null {
+    return this.parseDateOnly(this.sources?.vencidos_coverage.max_date ?? null);
   }
 
   get iventasPeriods(): ReactivationIventasPeriod[] {
@@ -217,7 +226,7 @@ export class MarketingReactivationComponent implements OnInit {
   get hasNoSources(): boolean {
     return Boolean(
       this.sources
-      && this.vencidosSnapshots.length === 0
+      && this.sources.vencidos_coverage.total_rows === 0
       && this.iventasPeriods.length === 0,
     );
   }
@@ -225,7 +234,7 @@ export class MarketingReactivationComponent implements OnInit {
   get hasVencidosWithoutIventas(): boolean {
     return Boolean(
       this.sources
-      && this.vencidosSnapshots.length > 0
+      && this.sources.vencidos_coverage.total_rows > 0
       && this.iventasPeriods.length === 0,
     );
   }
@@ -233,7 +242,7 @@ export class MarketingReactivationComponent implements OnInit {
   get hasIventasWithoutVencidos(): boolean {
     return Boolean(
       this.sources
-      && this.vencidosSnapshots.length === 0
+      && this.sources.vencidos_coverage.total_rows === 0
       && this.iventasPeriods.length > 0,
     );
   }
@@ -259,18 +268,12 @@ export class MarketingReactivationComponent implements OnInit {
   get summaryCards(): SummaryCard[] {
     const summary = this.candidates?.summary;
     const counts = summary?.status_counts;
-    const selectedSnapshot = this.vencidosSnapshots.find(
-      (snapshot) => snapshot.id === this.vencidosControl.value,
-    );
 
     return [
       {
-        label: 'Fecha de corte',
+        label: 'Vencidos en el periodo',
         value: summary?.total_rows ?? 0,
-        displayValue: selectedSnapshot
-          ? this.formatDateOnly(selectedSnapshot.date_to)
-          : '—',
-        detail: `${summary?.total_rows ?? 0} vencidos`,
+        detail: this.formatSelectedPeriod(),
         icon: 'event',
         statusClass: 'total',
       },
@@ -418,10 +421,6 @@ export class MarketingReactivationComponent implements OnInit {
     return classes[this.getOperationalContactStatus(row)];
   }
 
-  formatVencidosSource(source: ReactivationVencidosSnapshot): string {
-    return this.formatDateOnly(source.date_to);
-  }
-
   formatIventasSource(source: ReactivationIventasPeriod): string {
     const month = this.formatMonthYear(source.date_from);
     const cutoff = this.formatShortDate(source.date_to);
@@ -482,7 +481,8 @@ export class MarketingReactivationComponent implements OnInit {
         switchMap((selection) =>
           this.reactivationService
             .getCandidates(
-              selection.vencidosSnapshotId,
+              selection.dateFrom,
+              selection.dateTo,
               selection.iventasPeriodKey,
             )
             .pipe(
@@ -521,7 +521,8 @@ export class MarketingReactivationComponent implements OnInit {
 
   private configureSourceSelection(): void {
     merge(
-      this.vencidosControl.valueChanges,
+      this.dateFromControl.valueChanges,
+      this.dateToControl.valueChanges,
       this.iventasControl.valueChanges,
     )
       .pipe(
@@ -551,30 +552,43 @@ export class MarketingReactivationComponent implements OnInit {
     this.dataSource.data = [];
     this.candidatesError = '';
 
-    const vencidosSnapshotId = sources.vencidos_snapshots[0]?.id ?? null;
+    const latestDate = this.parseDateOnly(sources.vencidos_coverage.max_date);
     const iventasPeriodKey = sources.iventas_periods[0]?.period_key ?? null;
 
-    this.vencidosControl.setValue(vencidosSnapshotId, { emitEvent: false });
+    this.dateFromControl.setValue(latestDate, { emitEvent: false });
+    this.dateToControl.setValue(latestDate, { emitEvent: false });
     this.iventasControl.setValue(iventasPeriodKey, { emitEvent: false });
 
-    if (vencidosSnapshotId && iventasPeriodKey) {
+    if (latestDate && iventasPeriodKey) {
+      const latestDateIso = this.formatDateForApi(latestDate);
       this.candidateRequests.next({
-        vencidosSnapshotId,
+        dateFrom: latestDateIso,
+        dateTo: latestDateIso,
         iventasPeriodKey,
       });
     }
   }
 
   private requestSelectedCandidates(): void {
-    const vencidosSnapshotId = this.vencidosControl.value;
+    const dateFrom = this.dateFromControl.value;
+    const dateTo = this.dateToControl.value;
     const iventasPeriodKey = this.iventasControl.value?.trim();
 
-    if (!vencidosSnapshotId || !iventasPeriodKey) {
+    if (!dateFrom || !dateTo || !iventasPeriodKey) {
+      return;
+    }
+    if (this.dateFromControl.invalid || this.dateToControl.invalid) {
+      this.candidatesError = 'Selecciona fechas dentro de la cobertura disponible.';
+      return;
+    }
+    if (dateFrom.getTime() > dateTo.getTime()) {
+      this.candidatesError = 'Desde no puede ser posterior a Hasta.';
       return;
     }
 
     this.candidateRequests.next({
-      vencidosSnapshotId,
+      dateFrom: this.formatDateForApi(dateFrom),
+      dateTo: this.formatDateForApi(dateTo),
       iventasPeriodKey,
     });
   }
@@ -670,6 +684,34 @@ export class MarketingReactivationComponent implements OnInit {
       return null;
     }
     return new Date(parts[0], parts[1] - 1, parts[2]);
+  }
+
+  private formatDateForApi(value: Date): string {
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+    const day = String(value.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  private formatSelectedPeriod(): string {
+    const dateFrom = this.dateFromControl.value;
+    const dateTo = this.dateToControl.value;
+    if (!dateFrom || !dateTo) {
+      return '—';
+    }
+    const fromIso = this.formatDateForApi(dateFrom);
+    const toIso = this.formatDateForApi(dateTo);
+    if (fromIso === toIso) {
+      return this.formatDateOnly(fromIso);
+    }
+    const formatter = new Intl.DateTimeFormat('es-MX', {
+      day: '2-digit',
+      month: 'short',
+      year: dateFrom.getFullYear() === dateTo.getFullYear()
+        ? undefined
+        : 'numeric',
+    });
+    return `${formatter.format(dateFrom)} — ${formatter.format(dateTo)}`;
   }
 
   private formatMonthYear(value: string): string {

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
+from datetime import date, datetime
 from typing import Any
 import re
 import unicodedata
@@ -10,6 +11,7 @@ from app.extensions import db
 from app.models.warehouse import (
     SociosActivosSnapshotORM,
     SociosActivosSnapshotRowORM,
+    SociosVencidosCarteraORM,
     SociosVencidosSnapshotORM,
     SociosVencidosSnapshotRowORM,
 )
@@ -52,6 +54,17 @@ class SociosVencidosCurrentStatusResult:
     vencidos_snapshot_id: int
     activos_snapshot_id: int
     vencidos_date_to: str
+    activos_cutoff_date: str
+    total_rows: int
+    status_counts: dict[str, int]
+    rows: tuple[SocioVencidoCurrentStatus, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class SociosVencidosCurrentStatusPeriodResult:
+    date_from: str
+    date_to: str
+    activos_snapshot_id: int
     activos_cutoff_date: str
     total_rows: int
     status_counts: dict[str, int]
@@ -140,40 +153,10 @@ def resolve_socios_vencidos_current_status(
         .all()
     )
 
-    indexes = _build_active_indexes(
-        activos_rows
+    resolved_rows, status_counts = _resolve_rows_against_activos(
+        vencidos_rows=vencidos_rows,
+        activos_rows=activos_rows,
     )
-
-    resolved_rows = tuple(
-        _resolve_vencido_row(
-            row,
-            indexes=indexes,
-        )
-        for row in vencidos_rows
-    )
-
-    counts = Counter(
-        row.status
-        for row in resolved_rows
-    )
-
-    status_counts = {
-        STATUS_ACTIVE_CONFIRMED: counts[
-            STATUS_ACTIVE_CONFIRMED
-        ],
-        STATUS_ACTIVE_REVIEW: counts[
-            STATUS_ACTIVE_REVIEW
-        ],
-        STATUS_AMBIGUOUS: counts[
-            STATUS_AMBIGUOUS
-        ],
-        STATUS_IDENTIFIER_CONFLICT: counts[
-            STATUS_IDENTIFIER_CONFLICT
-        ],
-        STATUS_NOT_FOUND: counts[
-            STATUS_NOT_FOUND
-        ],
-    }
 
     return SociosVencidosCurrentStatusResult(
         vencidos_snapshot_id=(
@@ -194,10 +177,109 @@ def resolve_socios_vencidos_current_status(
     )
 
 
+def resolve_socios_vencidos_current_status_for_period(
+    *,
+    date_from: date | datetime | str,
+    date_to: date | datetime | str,
+    activos_snapshot_id: int | None = None,
+    session: Any | None = None,
+) -> SociosVencidosCurrentStatusPeriodResult:
+    normalized_date_from = _ensure_date(date_from, field_name="date_from")
+    normalized_date_to = _ensure_date(date_to, field_name="date_to")
+    if normalized_date_from > normalized_date_to:
+        raise ValueError("date_from no puede ser posterior a date_to.")
+
+    normalized_activos_snapshot_id = (
+        _ensure_positive_int(activos_snapshot_id, field_name="activos_snapshot_id")
+        if activos_snapshot_id is not None
+        else None
+    )
+    active_session = session if session is not None else db.session
+    activos_snapshot = _resolve_activos_snapshot(
+        minimum_cutoff_date=normalized_date_to,
+        activos_snapshot_id=normalized_activos_snapshot_id,
+        active_session=active_session,
+    )
+    if activos_snapshot.cutoff_date < normalized_date_to:
+        raise SociosVencidosCurrentStatusResolverError(
+            "El snapshot de socios activos es anterior al periodo vencido "
+            "que se intenta resolver."
+        )
+
+    vencidos_rows = (
+        active_session.query(SociosVencidosCarteraORM)
+        .filter(
+            SociosVencidosCarteraORM.fecha_vencimiento_date.between(
+                normalized_date_from,
+                normalized_date_to,
+            )
+        )
+        .order_by(
+            SociosVencidosCarteraORM.fecha_vencimiento_date.asc(),
+            SociosVencidosCarteraORM.id.asc(),
+        )
+        .all()
+    )
+    activos_rows = (
+        active_session.query(SociosActivosSnapshotRowORM)
+        .filter(
+            SociosActivosSnapshotRowORM.snapshot_id
+            == int(activos_snapshot.id)
+        )
+        .all()
+    )
+    resolved_rows, status_counts = _resolve_rows_against_activos(
+        vencidos_rows=vencidos_rows,
+        activos_rows=activos_rows,
+    )
+    return SociosVencidosCurrentStatusPeriodResult(
+        date_from=normalized_date_from.isoformat(),
+        date_to=normalized_date_to.isoformat(),
+        activos_snapshot_id=int(activos_snapshot.id),
+        activos_cutoff_date=activos_snapshot.cutoff_date.isoformat(),
+        total_rows=len(resolved_rows),
+        status_counts=status_counts,
+        rows=resolved_rows,
+    )
+
+
+def _resolve_rows_against_activos(
+    *,
+    vencidos_rows: list[Any],
+    activos_rows: list[Any],
+) -> tuple[tuple[SocioVencidoCurrentStatus, ...], dict[str, int]]:
+    indexes = _build_active_indexes(activos_rows)
+    resolved_rows = tuple(
+        _resolve_vencido_row(row, indexes=indexes)
+        for row in vencidos_rows
+    )
+    counts = Counter(row.status for row in resolved_rows)
+    return resolved_rows, {
+        STATUS_ACTIVE_CONFIRMED: counts[STATUS_ACTIVE_CONFIRMED],
+        STATUS_ACTIVE_REVIEW: counts[STATUS_ACTIVE_REVIEW],
+        STATUS_AMBIGUOUS: counts[STATUS_AMBIGUOUS],
+        STATUS_IDENTIFIER_CONFLICT: counts[STATUS_IDENTIFIER_CONFLICT],
+        STATUS_NOT_FOUND: counts[STATUS_NOT_FOUND],
+    }
+
+
 
 def _resolve_activos_snapshot_for_vencidos(
     *,
     vencidos_snapshot: SociosVencidosSnapshotORM,
+    activos_snapshot_id: int | None,
+    active_session: Any,
+) -> SociosActivosSnapshotORM:
+    return _resolve_activos_snapshot(
+        minimum_cutoff_date=vencidos_snapshot.date_to,
+        activos_snapshot_id=activos_snapshot_id,
+        active_session=active_session,
+    )
+
+
+def _resolve_activos_snapshot(
+    *,
+    minimum_cutoff_date: date,
     activos_snapshot_id: int | None,
     active_session: Any,
 ) -> SociosActivosSnapshotORM:
@@ -223,7 +305,7 @@ def _resolve_activos_snapshot_for_vencidos(
 
     snapshot = (
         resolve_latest_canonical_socios_activos_snapshot(
-            minimum_cutoff_date=vencidos_snapshot.date_to,
+            minimum_cutoff_date=minimum_cutoff_date,
             session=active_session,
         )
     )
@@ -232,7 +314,7 @@ def _resolve_activos_snapshot_for_vencidos(
         raise SociosVencidosCurrentStatusResolverError(
             "No existe un snapshot canónico de Socios Activos "
             "con cutoff_date igual o posterior a "
-            f"{vencidos_snapshot.date_to.isoformat()}."
+            f"{minimum_cutoff_date.isoformat()}."
         )
 
     return snapshot
@@ -264,7 +346,7 @@ def _build_active_indexes(
             )
         )
 
-        branch = _normalize_text(
+        branch = normalize_socios_vencidos_branch_key(
             getattr(
                 row,
                 "sucursal_raw",
@@ -323,7 +405,7 @@ def _resolve_vencido_row(
     *,
     indexes: dict[str, dict[Any, set[str]]],
 ) -> SocioVencidoCurrentStatus:
-    branch = _normalize_text(
+    branch = normalize_socios_vencidos_branch_key(
         getattr(
             row,
             "sucursal_raw",
@@ -565,6 +647,19 @@ def _ensure_positive_int(
     return value
 
 
+def _ensure_date(value: Any, *, field_name: str) -> date:
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        try:
+            return date.fromisoformat(value)
+        except ValueError as exc:
+            raise ValueError(f"{field_name} debe ser fecha ISO.") from exc
+    raise ValueError(f"{field_name} es obligatorio.")
+
+
 def _normalize_required_id_socio(
     value: Any,
 ) -> str:
@@ -611,6 +706,14 @@ def _normalize_text(
     return " ".join(
         normalized.upper().split()
     )
+
+
+def normalize_socios_vencidos_branch_key(
+    value: Any,
+) -> str | None:
+    """Normaliza sucursal con las mismas reglas del matcher vigente."""
+
+    return _normalize_text(value)
 
 
 def _normalize_pin(

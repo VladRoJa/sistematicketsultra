@@ -17,7 +17,8 @@ SUPPORTED_REPORT_TYPES = frozenset(
         "kpi_ventas_nuevos_socios",
         "corte_caja",
         "cargos_recurrentes",
-        "venta_total"
+        "venta_total",
+        "socios_vencidos",
     }
 )
 
@@ -62,6 +63,11 @@ RUN_MODE_COMPATIBILITY: dict[str, set[str]] = {
         "manual_backfill",
         "manual_retry",
     },
+    "socios_vencidos": {
+        "scheduled_daily",
+        "manual_backfill",
+        "manual_retry",
+    },
 }
 
 EXPECTED_SNAPSHOT_KIND_BY_RUN_MODE: dict[str, str] = {
@@ -96,6 +102,8 @@ class GascaExtractionCommand:
     requested_by: str | None = None
     trigger_source: str | None = None
     target_business_date: date | None = None
+    date_from: date | None = None
+    date_to: date | None = None
     requested_at: datetime = field(
         default_factory=lambda: datetime.now(timezone.utc)
     )
@@ -252,15 +260,21 @@ def _extract_gasca_artifact(
     )
 
     try:
-        result = extractor(
-            report_type_key=command.report_type_key,
-            run_mode=command.run_mode,
-            snapshot_kind=command.snapshot_kind,
-            requested_by=command.requested_by,
-            trigger_source=command.trigger_source,
-            requested_at=command.requested_at,
-            target_business_date=command.target_business_date,
-        )
+        extractor_kwargs = {
+            "report_type_key": command.report_type_key,
+            "run_mode": command.run_mode,
+            "snapshot_kind": command.snapshot_kind,
+            "requested_by": command.requested_by,
+            "trigger_source": command.trigger_source,
+            "requested_at": command.requested_at,
+            "target_business_date": command.target_business_date,
+        }
+        if command.report_type_key == "socios_vencidos":
+            extractor_kwargs.update({
+                "date_from": command.date_from,
+                "date_to": command.date_to,
+            })
+        result = extractor(**extractor_kwargs)
     except Exception as exc:
         raise GascaProducerError(
             f"Falló la extracción desde Gasca para {command.report_type_key!r}."
@@ -363,6 +377,7 @@ def _should_dispatch_ingestion(
         "corte_caja",
         "cargos_recurrentes",
         "venta_total",
+        "socios_vencidos",
     }
     
     
@@ -554,6 +569,36 @@ def _dispatch_ingestion_if_applicable(
 
         return ingestion_result
 
+    if command.report_type_key == "socios_vencidos":
+        ingestor = _get_required_callable(
+            "WAREHOUSE_SOCIOS_VENCIDOS_INGESTOR",
+            description="ingerir estructuradamente socios_vencidos",
+        )
+        try:
+            result = ingestor(
+                warehouse_upload_id=upload_ref.warehouse_upload_id,
+                requested_by=command.requested_by,
+                ingestion_source=command.trigger_source,
+            )
+        except Exception as exc:
+            raise GascaIngestionError(
+                "Falló la ingesta estructurada de 'socios_vencidos'."
+            ) from exc
+
+        ingestion_result = _normalize_ingestion_result(result)
+        if isinstance(result, dict):
+            ingestion_result.metadata = dict(result)
+
+        current_app.logger.info(
+            "Structured ingestion dispatched: warehouse_upload_id=%s "
+            "report_type_key=%s status=%s snapshot_id=%s",
+            upload_ref.warehouse_upload_id,
+            command.report_type_key,
+            ingestion_result.ingestion_status,
+            ingestion_result.snapshot_id,
+        )
+        return ingestion_result
+
     return IngestionDispatchResult(
         ingestion_status="not_applicable",
         snapshot_id=None,
@@ -581,6 +626,8 @@ def run_gasca_report_job(
     requested_by: str | None = None,
     trigger_source: str | None = None,
     target_business_date: date | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
     force_ingestion: bool = True,
     force_non_canonical: bool = False,
 ) -> dict[str, Any]:
@@ -603,6 +650,14 @@ def run_gasca_report_job(
         snapshot_kind=snapshot_kind,
     )
 
+    if report_type_key == "socios_vencidos":
+        if date_from is None or date_to is None:
+            raise ValueError(
+                "date_from y date_to son obligatorios para socios_vencidos."
+            )
+        if date_from > date_to:
+            raise ValueError("date_from no puede ser posterior a date_to.")
+
     normalized_force_non_canonical = bool(
         force_non_canonical
     )
@@ -623,6 +678,8 @@ def run_gasca_report_job(
         requested_by=requested_by,
         trigger_source=trigger_source,
         target_business_date=target_business_date,
+        date_from=date_from,
+        date_to=date_to,
     )
 
     current_app.logger.info(
@@ -678,6 +735,8 @@ def run_gasca_report_job(
             if command.target_business_date is not None
             else None
         ),
+        "date_from": command.date_from.isoformat() if command.date_from else None,
+        "date_to": command.date_to.isoformat() if command.date_to else None,
         "force_ingestion": force_ingestion,
         "force_non_canonical": normalized_force_non_canonical,
         "artifact": {
@@ -694,5 +753,3 @@ def run_gasca_report_job(
         "snapshot_id": ingestion_result.snapshot_id,
         "ingestion_metadata": ingestion_result.metadata,
     }
-    
-    

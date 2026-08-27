@@ -10,12 +10,15 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
-from typing import Any
+from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
 from app.extensions import db
 from app.models import MarketingIventasContactORM
-from app.models.warehouse import SociosVencidosSnapshotRowORM
+from app.models.warehouse import (
+    SociosVencidosCarteraORM,
+    SociosVencidosSnapshotRowORM,
+)
 from app.services.marketing_iventas_leads_service import (
     read_canonical_iventas_run,
 )
@@ -29,6 +32,7 @@ from app.warehouse.services.socios_vencidos_current_status_resolver import (
     STATUS_IDENTIFIER_CONFLICT,
     STATUS_NOT_FOUND,
     resolve_socios_vencidos_current_status,
+    resolve_socios_vencidos_current_status_for_period,
 )
 
 
@@ -124,6 +128,30 @@ class SociosVencidosReactivationCandidateResult:
     ]
 
 
+@dataclass(frozen=True, slots=True)
+class SociosVencidosReactivationCandidatePeriodResult:
+    date_from: str
+    date_to: str
+    activos_snapshot_id: int
+    iventas_sync_run_id: int
+    iventas_period_key: str
+    total_rows: int
+    status_counts: dict[str, int]
+    reason_counts: dict[str, int]
+    rows: tuple[SocioVencidoReactivationCandidate, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class _CandidateResolution:
+    activos_snapshot_id: int
+    iventas_sync_run_id: int
+    iventas_period_key: str
+    total_rows: int
+    status_counts: dict[str, int]
+    reason_counts: dict[str, int]
+    rows: tuple[SocioVencidoReactivationCandidate, ...]
+
+
 def resolve_socios_vencidos_reactivation_candidates(
     *,
     vencidos_snapshot_id: int,
@@ -132,224 +160,175 @@ def resolve_socios_vencidos_reactivation_candidates(
     session: Any | None = None,
 ) -> SociosVencidosReactivationCandidateResult:
     """Clasifica vencidos sin persistir ni inferir elegibilidad."""
-
-    session_value = (
-        session
-        if session is not None
-        else db.session
-    )
-
-    current_status_result = (
-        resolve_socios_vencidos_current_status(
-            vencidos_snapshot_id=(
-                vencidos_snapshot_id
-            ),
-            activos_snapshot_id=(
-                activos_snapshot_id
-            ),
-            session=session_value,
-        )
-    )
-
-    canonical_run = read_canonical_iventas_run(
-        period_key=iventas_period_key,
+    session_value = session if session is not None else db.session
+    current_status_result = resolve_socios_vencidos_current_status(
+        vencidos_snapshot_id=vencidos_snapshot_id,
+        activos_snapshot_id=activos_snapshot_id,
         session=session_value,
     )
-
-    iventas_sync_run_id = int(
-        canonical_run["sync_run_id"]
+    resolution = _resolve_candidates_from_current_status(
+        current_status_result=current_status_result,
+        iventas_period_key=iventas_period_key,
+        vencido_rows_reader=lambda row_ids: _read_vencido_rows(
+            vencidos_snapshot_id=int(current_status_result.vencidos_snapshot_id),
+            vencido_row_ids=row_ids,
+            session=session_value,
+        ),
+        session=session_value,
     )
-    canonical_period_key = str(
-        canonical_run["period_key"]
+    result = SociosVencidosReactivationCandidateResult(
+        vencidos_snapshot_id=int(current_status_result.vencidos_snapshot_id),
+        activos_snapshot_id=resolution.activos_snapshot_id,
+        iventas_sync_run_id=resolution.iventas_sync_run_id,
+        iventas_period_key=resolution.iventas_period_key,
+        total_rows=resolution.total_rows,
+        status_counts=resolution.status_counts,
+        reason_counts=resolution.reason_counts,
+        rows=resolution.rows,
     )
+    _validate_result_invariants(result)
+    return result
 
-    current_rows = tuple(
-        current_status_result.rows
+
+def resolve_socios_vencidos_reactivation_candidates_for_period(
+    *,
+    date_from: date | datetime | str,
+    date_to: date | datetime | str,
+    iventas_period_key: str,
+    activos_snapshot_id: int | None = None,
+    session: Any | None = None,
+) -> SociosVencidosReactivationCandidatePeriodResult:
+    session_value = session if session is not None else db.session
+    current_status_result = resolve_socios_vencidos_current_status_for_period(
+        date_from=date_from,
+        date_to=date_to,
+        activos_snapshot_id=activos_snapshot_id,
+        session=session_value,
     )
+    resolution = _resolve_candidates_from_current_status(
+        current_status_result=current_status_result,
+        iventas_period_key=iventas_period_key,
+        vencido_rows_reader=lambda row_ids: _read_cartera_rows(
+            vencido_row_ids=row_ids,
+            session=session_value,
+        ),
+        session=session_value,
+    )
+    result = SociosVencidosReactivationCandidatePeriodResult(
+        date_from=current_status_result.date_from,
+        date_to=current_status_result.date_to,
+        activos_snapshot_id=resolution.activos_snapshot_id,
+        iventas_sync_run_id=resolution.iventas_sync_run_id,
+        iventas_period_key=resolution.iventas_period_key,
+        total_rows=resolution.total_rows,
+        status_counts=resolution.status_counts,
+        reason_counts=resolution.reason_counts,
+        rows=resolution.rows,
+    )
+    _validate_result_invariants(result)
+    return result
 
-    if (
-        len(current_rows)
-        != current_status_result.total_rows
-    ):
-        raise (
-            SociosVencidosReactivationCandidateResolverError(
-                "El resultado de estado actual tiene un "
-                "total_rows inconsistente."
-            )
+
+def _resolve_candidates_from_current_status(
+    *,
+    current_status_result: Any,
+    iventas_period_key: str,
+    vencido_rows_reader: Callable[[set[int]], dict[int, Any]],
+    session: Any,
+) -> _CandidateResolution:
+    canonical_run = read_canonical_iventas_run(
+        period_key=iventas_period_key,
+        session=session,
+    )
+    iventas_sync_run_id = int(canonical_run["sync_run_id"])
+    canonical_period_key = str(canonical_run["period_key"])
+    current_rows = tuple(current_status_result.rows)
+    if len(current_rows) != current_status_result.total_rows:
+        raise SociosVencidosReactivationCandidateResolverError(
+            "El resultado de estado actual tiene un total_rows inconsistente."
         )
 
     not_found_rows = tuple(
-        row
-        for row in current_rows
-        if row.status == STATUS_NOT_FOUND
+        row for row in current_rows if row.status == STATUS_NOT_FOUND
     )
-
-    vencido_rows_by_id = _read_vencido_rows(
-        vencidos_snapshot_id=int(
-            current_status_result.vencidos_snapshot_id
-        ),
-        vencido_row_ids={
-            int(row.vencido_row_id)
-            for row in not_found_rows
-        },
-        session=session_value,
+    vencido_rows_by_id = vencido_rows_reader(
+        {int(row.vencido_row_id) for row in not_found_rows}
     )
-
     phone_by_vencido_row_id = {
-        int(row.vencido_row_id): (
-            normalize_iventas_phone(
-                vencido_rows_by_id[
-                    int(row.vencido_row_id)
-                ].telefono_raw
-            ).phone_mx10
-        )
+        int(row.vencido_row_id): normalize_iventas_phone(
+            vencido_rows_by_id[int(row.vencido_row_id)].telefono_raw
+        ).phone_mx10
         for row in not_found_rows
     }
-
     phone_counts = Counter(
-        phone_mx10
-        for phone_mx10
-        in phone_by_vencido_row_id.values()
-        if phone_mx10 is not None
+        phone for phone in phone_by_vencido_row_id.values() if phone is not None
     )
-
-    phones_to_query = {
-        phone_mx10
-        for phone_mx10, count
-        in phone_counts.items()
-        if count == 1
-    }
-
     contacts_by_phone = _read_iventas_contacts(
         iventas_sync_run_id=iventas_sync_run_id,
-        phone_mx10_values=phones_to_query,
-        session=session_value,
+        phone_mx10_values={
+            phone for phone, count in phone_counts.items() if count == 1
+        },
+        session=session,
     )
 
-    resolved_rows: list[
-        SocioVencidoReactivationCandidate
-    ] = []
-
+    resolved_rows: list[SocioVencidoReactivationCandidate] = []
     for current_row in current_rows:
-        if (
-            current_row.status
-            == STATUS_ACTIVE_CONFIRMED
-        ):
-            resolved_rows.append(
-                _build_active_candidate(
-                    current_row=current_row,
-                    iventas_sync_run_id=(
-                        iventas_sync_run_id
-                    ),
-                    status=STATUS_EXCLUDED_ACTIVE,
-                    reason=REASON_ACTIVE_CONFIRMED,
-                )
-            )
+        if current_row.status == STATUS_ACTIVE_CONFIRMED:
+            resolved_rows.append(_build_active_candidate(
+                current_row=current_row,
+                iventas_sync_run_id=iventas_sync_run_id,
+                status=STATUS_EXCLUDED_ACTIVE,
+                reason=REASON_ACTIVE_CONFIRMED,
+            ))
             continue
-
         if current_row.status in {
             STATUS_ACTIVE_REVIEW,
             STATUS_AMBIGUOUS,
             STATUS_IDENTIFIER_CONFLICT,
         }:
-            resolved_rows.append(
-                _build_active_candidate(
-                    current_row=current_row,
-                    iventas_sync_run_id=(
-                        iventas_sync_run_id
-                    ),
-                    status=(
-                        STATUS_REVIEW_ACTIVE_MATCH
-                    ),
-                    reason=current_row.status,
-                )
-            )
-            continue
-
-        if current_row.status != STATUS_NOT_FOUND:
-            raise (
-                SociosVencidosReactivationCandidateResolverError(
-                    "Estado actual no reconocido para "
-                    f"vencido_row_id={current_row.vencido_row_id}: "
-                    f"{current_row.status!r}."
-                )
-            )
-
-        vencido_row_id = int(
-            current_row.vencido_row_id
-        )
-        phone_mx10 = phone_by_vencido_row_id[
-            vencido_row_id
-        ]
-
-        resolved_rows.append(
-            _build_not_found_candidate(
+            resolved_rows.append(_build_active_candidate(
                 current_row=current_row,
-                vencido_row=(
-                    vencido_rows_by_id[
-                        vencido_row_id
-                    ]
-                ),
-                phone_mx10=phone_mx10,
-                duplicate_phone=(
-                    phone_mx10 is not None
-                    and phone_counts[
-                        phone_mx10
-                    ] > 1
-                ),
-                contacts=(
-                    contacts_by_phone.get(
-                        phone_mx10,
-                        tuple(),
-                    )
-                    if phone_mx10 is not None
-                    else tuple()
-                ),
-                iventas_sync_run_id=(
-                    iventas_sync_run_id
-                ),
+                iventas_sync_run_id=iventas_sync_run_id,
+                status=STATUS_REVIEW_ACTIVE_MATCH,
+                reason=current_row.status,
+            ))
+            continue
+        if current_row.status != STATUS_NOT_FOUND:
+            raise SociosVencidosReactivationCandidateResolverError(
+                "Estado actual no reconocido para "
+                f"vencido_row_id={current_row.vencido_row_id}: "
+                f"{current_row.status!r}."
             )
-        )
+
+        row_id = int(current_row.vencido_row_id)
+        phone_mx10 = phone_by_vencido_row_id[row_id]
+        resolved_rows.append(_build_not_found_candidate(
+            current_row=current_row,
+            vencido_row=vencido_rows_by_id[row_id],
+            phone_mx10=phone_mx10,
+            duplicate_phone=(
+                phone_mx10 is not None and phone_counts[phone_mx10] > 1
+            ),
+            contacts=(
+                contacts_by_phone.get(phone_mx10, tuple())
+                if phone_mx10 is not None
+                else tuple()
+            ),
+            iventas_sync_run_id=iventas_sync_run_id,
+        ))
 
     rows = tuple(resolved_rows)
-    status_counter = Counter(
-        row.status
-        for row in rows
-    )
-    reason_counter = Counter(
-        row.reason
-        for row in rows
-    )
-
-    status_counts = {
-        status: status_counter[status]
-        for status in _RESULT_STATUSES
-    }
-    reason_counts = {
-        reason: reason_counter[reason]
-        for reason in _RESULT_REASONS
-    }
-
-    result = SociosVencidosReactivationCandidateResult(
-        vencidos_snapshot_id=int(
-            current_status_result.vencidos_snapshot_id
-        ),
-        activos_snapshot_id=int(
-            current_status_result.activos_snapshot_id
-        ),
+    status_counter = Counter(row.status for row in rows)
+    reason_counter = Counter(row.reason for row in rows)
+    return _CandidateResolution(
+        activos_snapshot_id=int(current_status_result.activos_snapshot_id),
         iventas_sync_run_id=iventas_sync_run_id,
         iventas_period_key=canonical_period_key,
-        total_rows=int(
-            current_status_result.total_rows
-        ),
-        status_counts=status_counts,
-        reason_counts=reason_counts,
+        total_rows=int(current_status_result.total_rows),
+        status_counts={status: status_counter[status] for status in _RESULT_STATUSES},
+        reason_counts={reason: reason_counter[reason] for reason in _RESULT_REASONS},
         rows=rows,
     )
-
-    _validate_result_invariants(result)
-
-    return result
 
 
 def _read_vencido_rows(
@@ -396,6 +375,33 @@ def _read_vencido_rows(
             )
         )
 
+    return rows_by_id
+
+
+def _read_cartera_rows(
+    *,
+    vencido_row_ids: set[int],
+    session: Any,
+) -> dict[int, Any]:
+    if not vencido_row_ids:
+        return {}
+
+    rows = (
+        session.query(SociosVencidosCarteraORM)
+        .filter(
+            SociosVencidosCarteraORM.id.in_(
+                tuple(sorted(vencido_row_ids))
+            )
+        )
+        .all()
+    )
+    rows_by_id = {int(row.id): row for row in rows}
+    missing_ids = vencido_row_ids - rows_by_id.keys()
+    if missing_ids:
+        raise SociosVencidosReactivationCandidateResolverError(
+            "No se encontraron episodios NOT_FOUND de cartera: "
+            f"{sorted(missing_ids)}."
+        )
     return rows_by_id
 
 

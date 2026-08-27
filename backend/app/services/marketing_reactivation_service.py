@@ -10,15 +10,16 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
+from sqlalchemy import func
+
 from app.extensions import db
 from app.models import MarketingIventasSyncRunORM
 from app.models.warehouse import (
-    SociosVencidosSnapshotORM,
-    SociosVencidosSnapshotRowORM,
+    SociosVencidosCarteraORM,
 )
 from app.warehouse.services.socios_vencidos_reactivation_candidate_resolver import (
     SociosVencidosReactivationCandidateResolverError,
-    resolve_socios_vencidos_reactivation_candidates,
+    resolve_socios_vencidos_reactivation_candidates_for_period,
 )
 
 
@@ -29,19 +30,16 @@ def _session_or_default(session: Any | None):
 def list_marketing_reactivation_sources(
     *,
     session: Any | None = None,
-) -> dict[str, list[dict[str, object]]]:
-    """Lista cortes vencidos y runs iVentas canónicos disponibles."""
+) -> dict[str, object]:
+    """Lista cobertura de cartera y runs iVentas canónicos disponibles."""
 
     active_session = _session_or_default(session)
 
-    vencidos_snapshots = (
-        active_session.query(SociosVencidosSnapshotORM)
-        .order_by(
-            SociosVencidosSnapshotORM.date_to.desc(),
-            SociosVencidosSnapshotORM.id.desc(),
-        )
-        .all()
-    )
+    coverage = active_session.query(
+        func.min(SociosVencidosCarteraORM.fecha_vencimiento_date),
+        func.max(SociosVencidosCarteraORM.fecha_vencimiento_date),
+        func.count(SociosVencidosCarteraORM.id),
+    ).one()
 
     iventas_runs = (
         active_session.query(MarketingIventasSyncRunORM)
@@ -57,18 +55,15 @@ def list_marketing_reactivation_sources(
     )
 
     return {
-        "vencidos_snapshots": [
-            {
-                "id": int(snapshot.id),
-                "date_from": _serialize_date(snapshot.date_from),
-                "date_to": _serialize_date(snapshot.date_to),
-                # El modelo estructurado de Socios Vencidos no
-                # persiste snapshot_kind. No se infiere desde otro campo.
-                "snapshot_kind": None,
-                "row_count": int(snapshot.row_count_valid),
-            }
-            for snapshot in vencidos_snapshots
-        ],
+        "vencidos_coverage": {
+            "min_date": (
+                _serialize_date(coverage[0]) if coverage[0] is not None else None
+            ),
+            "max_date": (
+                _serialize_date(coverage[1]) if coverage[1] is not None else None
+            ),
+            "total_rows": int(coverage[2] or 0),
+        },
         "iventas_periods": [
             {
                 "period_key": str(run.period_key),
@@ -84,15 +79,17 @@ def list_marketing_reactivation_sources(
 
 def build_marketing_reactivation_candidates(
     *,
-    vencidos_snapshot_id: int,
+    date_from: date | str,
+    date_to: date | str,
     iventas_period_key: str,
     session: Any | None = None,
 ) -> dict[str, object]:
     """Resuelve y enriquece candidatos sin modificar persistencia."""
 
     active_session = _session_or_default(session)
-    result = resolve_socios_vencidos_reactivation_candidates(
-        vencidos_snapshot_id=vencidos_snapshot_id,
+    result = resolve_socios_vencidos_reactivation_candidates_for_period(
+        date_from=date_from,
+        date_to=date_to,
         iventas_period_key=iventas_period_key,
         activos_snapshot_id=None,
         session=active_session,
@@ -105,11 +102,9 @@ def build_marketing_reactivation_candidates(
     vencido_rows = []
     if row_ids:
         vencido_rows = (
-            active_session.query(SociosVencidosSnapshotRowORM)
+            active_session.query(SociosVencidosCarteraORM)
             .filter(
-                SociosVencidosSnapshotRowORM.snapshot_id
-                == int(result.vencidos_snapshot_id),
-                SociosVencidosSnapshotRowORM.id.in_(row_ids),
+                SociosVencidosCarteraORM.id.in_(row_ids),
             )
             .all()
         )
@@ -121,13 +116,14 @@ def build_marketing_reactivation_candidates(
     missing_row_ids = set(row_ids) - vencido_rows_by_id.keys()
     if missing_row_ids:
         raise SociosVencidosReactivationCandidateResolverError(
-            "No se pudieron enriquecer filas del snapshot de vencidos: "
+            "No se pudieron enriquecer episodios de cartera: "
             f"{sorted(missing_row_ids)}."
         )
 
     return {
         "sources": {
-            "vencidos_snapshot_id": int(result.vencidos_snapshot_id),
+            "date_from": str(result.date_from),
+            "date_to": str(result.date_to),
             "activos_snapshot_id": int(result.activos_snapshot_id),
             "iventas_sync_run_id": int(result.iventas_sync_run_id),
             "iventas_period_key": str(result.iventas_period_key),

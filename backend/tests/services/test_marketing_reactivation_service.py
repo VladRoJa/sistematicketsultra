@@ -10,8 +10,7 @@ from sqlalchemy.dialects import postgresql
 
 from app.models import MarketingIventasSyncRunORM
 from app.models.warehouse import (
-    SociosVencidosSnapshotORM,
-    SociosVencidosSnapshotRowORM,
+    SociosVencidosCarteraORM,
 )
 from app.services.marketing_iventas_leads_service import (
     MarketingIventasCanonicalRunRequiredError,
@@ -20,16 +19,17 @@ from app.services import marketing_reactivation_service as service
 from app.warehouse.services.socios_vencidos_reactivation_candidate_resolver import (
     SocioVencidoReactivationCandidate,
     SociosVencidosReactivationCandidateResolverError,
-    SociosVencidosReactivationCandidateResult,
+    SociosVencidosReactivationCandidatePeriodResult,
 )
 
 
 class FakeQuery:
-    def __init__(self, *, session, model):
+    def __init__(self, *, session, model, aggregate=False):
         self.session = session
         self.model = model
         self.criteria = []
         self.ordering = []
+        self.aggregate = aggregate
 
     def filter(self, *criteria):
         self.criteria.extend(criteria)
@@ -42,15 +42,23 @@ class FakeQuery:
     def all(self):
         return list(self.session.rows_by_model.get(self.model, ()))
 
+    def one(self):
+        if not self.aggregate:
+            raise AssertionError("one() sólo se esperaba para coverage")
+        return self.session.coverage
+
 
 class FakeSession:
-    def __init__(self, rows_by_model=None):
+    def __init__(self, rows_by_model=None, coverage=(None, None, 0)):
         self.rows_by_model = rows_by_model or {}
+        self.coverage = coverage
         self.queries = []
         self.write_calls = []
 
-    def query(self, model):
-        query = FakeQuery(session=self, model=model)
+    def query(self, *entities):
+        aggregate = len(entities) > 1
+        model = "coverage" if aggregate else entities[0]
+        query = FakeQuery(session=self, model=model, aggregate=aggregate)
         self.queries.append(query)
         return query
 
@@ -90,8 +98,9 @@ def _candidate_result(*, outbound=None):
         iventas_contact_id="CONTACT-9",
         latest_outbound_at_utc=outbound,
     )
-    return SociosVencidosReactivationCandidateResult(
-        vencidos_snapshot_id=7,
+    return SociosVencidosReactivationCandidatePeriodResult(
+        date_from="2026-08-23",
+        date_to="2026-08-23",
         activos_snapshot_id=8,
         iventas_sync_run_id=26,
         iventas_period_key="IVENTAS-2026-08",
@@ -105,7 +114,7 @@ def _candidate_result(*, outbound=None):
 def _vencido_row():
     return SimpleNamespace(
         id=101,
-        snapshot_id=7,
+        sucursal_key="CENTRO",
         pin="PIN-101",
         nombre="Ana Pérez",
         sucursal_raw="CENTRO",
@@ -121,20 +130,6 @@ def _vencido_row():
 def test_sources_are_serialized_in_query_order():
     session = FakeSession(
         {
-            SociosVencidosSnapshotORM: [
-                SimpleNamespace(
-                    id=2,
-                    date_from=date(2026, 8, 24),
-                    date_to=date(2026, 8, 24),
-                    row_count_valid=700,
-                ),
-                SimpleNamespace(
-                    id=1,
-                    date_from=date(2026, 8, 23),
-                    date_to=date(2026, 8, 23),
-                    row_count_valid=679,
-                ),
-            ],
             MarketingIventasSyncRunORM: [
                 SimpleNamespace(
                     id=26,
@@ -144,21 +139,20 @@ def test_sources_are_serialized_in_query_order():
                     contacts_unique=51451,
                 )
             ],
-        }
+        },
+        coverage=(date(2026, 8, 23), date(2026, 8, 24), 1379),
     )
 
     result = service.list_marketing_reactivation_sources(
         session=session
     )
 
-    assert [row["id"] for row in result["vencidos_snapshots"]] == [2, 1]
-    assert result["vencidos_snapshots"][0]["row_count"] == 700
-    assert result["vencidos_snapshots"][0]["snapshot_kind"] is None
+    assert result["vencidos_coverage"] == {
+        "min_date": "2026-08-23",
+        "max_date": "2026-08-24",
+        "total_rows": 1379,
+    }
     assert result["iventas_periods"][0]["sync_run_id"] == 26
-
-    vencidos_sql = _compiled_query(session.queries[0])
-    assert "date_to desc" in vencidos_sql
-    assert "socios_vencidos_snapshots.id desc" in vencidos_sql
 
 
 def test_sources_query_only_completed_canonical_iventas_runs():
@@ -179,7 +173,11 @@ def test_sources_allow_empty_result():
     )
 
     assert result == {
-        "vencidos_snapshots": [],
+        "vencidos_coverage": {
+            "min_date": None,
+            "max_date": None,
+            "total_rows": 0,
+        },
         "iventas_periods": [],
     }
 
@@ -195,30 +193,33 @@ def test_candidates_use_resolver_contract_and_one_bulk_lookup(monkeypatch):
 
     monkeypatch.setattr(
         service,
-        "resolve_socios_vencidos_reactivation_candidates",
+        "resolve_socios_vencidos_reactivation_candidates_for_period",
         fake_resolver,
     )
     session = FakeSession(
-        {SociosVencidosSnapshotRowORM: [_vencido_row()]}
+        {SociosVencidosCarteraORM: [_vencido_row()]}
     )
 
     response = service.build_marketing_reactivation_candidates(
-        vencidos_snapshot_id=7,
+        date_from=date(2026, 8, 23),
+        date_to=date(2026, 8, 23),
         iventas_period_key="IVENTAS-2026-08",
         session=session,
     )
 
     assert calls == {
-        "vencidos_snapshot_id": 7,
+        "date_from": date(2026, 8, 23),
+        "date_to": date(2026, 8, 23),
         "iventas_period_key": "IVENTAS-2026-08",
         "activos_snapshot_id": None,
         "session": session,
     }
     assert len(session.queries) == 1
-    assert session.queries[0].model is SociosVencidosSnapshotRowORM
+    assert session.queries[0].model is SociosVencidosCarteraORM
     assert session.write_calls == []
     assert response["sources"] == {
-        "vencidos_snapshot_id": 7,
+        "date_from": "2026-08-23",
+        "date_to": "2026-08-23",
         "activos_snapshot_id": 8,
         "iventas_sync_run_id": 26,
         "iventas_period_key": "IVENTAS-2026-08",
@@ -251,8 +252,9 @@ def test_candidates_bulk_lookup_does_not_query_per_row(monkeypatch):
         iventas_contact_id=None,
         latest_outbound_at_utc=None,
     )
-    result = SociosVencidosReactivationCandidateResult(
-        vencidos_snapshot_id=base_result.vencidos_snapshot_id,
+    result = SociosVencidosReactivationCandidatePeriodResult(
+        date_from=base_result.date_from,
+        date_to=base_result.date_to,
         activos_snapshot_id=base_result.activos_snapshot_id,
         iventas_sync_run_id=base_result.iventas_sync_run_id,
         iventas_period_key=base_result.iventas_period_key,
@@ -276,12 +278,12 @@ def test_candidates_bulk_lookup_does_not_query_per_row(monkeypatch):
     )
     monkeypatch.setattr(
         service,
-        "resolve_socios_vencidos_reactivation_candidates",
+        "resolve_socios_vencidos_reactivation_candidates_for_period",
         lambda **kwargs: result,
     )
     session = FakeSession(
         {
-            SociosVencidosSnapshotRowORM: [
+            SociosVencidosCarteraORM: [
                 _vencido_row(),
                 second_row,
             ]
@@ -289,7 +291,8 @@ def test_candidates_bulk_lookup_does_not_query_per_row(monkeypatch):
     )
 
     response = service.build_marketing_reactivation_candidates(
-        vencidos_snapshot_id=7,
+        date_from=date(2026, 8, 23),
+        date_to=date(2026, 8, 23),
         iventas_period_key="IVENTAS-2026-08",
         session=session,
     )
@@ -302,7 +305,7 @@ def test_candidates_bulk_lookup_does_not_query_per_row(monkeypatch):
 def test_candidates_reject_missing_bulk_row(monkeypatch):
     monkeypatch.setattr(
         service,
-        "resolve_socios_vencidos_reactivation_candidates",
+        "resolve_socios_vencidos_reactivation_candidates_for_period",
         lambda **kwargs: _candidate_result(),
     )
 
@@ -311,7 +314,8 @@ def test_candidates_reject_missing_bulk_row(monkeypatch):
         match="enriquecer",
     ):
         service.build_marketing_reactivation_candidates(
-            vencidos_snapshot_id=7,
+            date_from=date(2026, 8, 23),
+            date_to=date(2026, 8, 23),
             iventas_period_key="IVENTAS-2026-08",
             session=FakeSession(),
         )
@@ -320,7 +324,7 @@ def test_candidates_reject_missing_bulk_row(monkeypatch):
 def test_candidates_require_timezone_aware_outbound(monkeypatch):
     monkeypatch.setattr(
         service,
-        "resolve_socios_vencidos_reactivation_candidates",
+        "resolve_socios_vencidos_reactivation_candidates_for_period",
         lambda **kwargs: _candidate_result(
             outbound=datetime(2026, 8, 24, 18, 5)
         ),
@@ -331,10 +335,11 @@ def test_candidates_require_timezone_aware_outbound(monkeypatch):
         match="zona horaria",
     ):
         service.build_marketing_reactivation_candidates(
-            vencidos_snapshot_id=7,
+            date_from=date(2026, 8, 23),
+            date_to=date(2026, 8, 23),
             iventas_period_key="IVENTAS-2026-08",
             session=FakeSession(
-                {SociosVencidosSnapshotRowORM: [_vencido_row()]}
+                {SociosVencidosCarteraORM: [_vencido_row()]}
             ),
         )
 
@@ -345,13 +350,14 @@ def test_canonical_error_propagates_without_empty_success(monkeypatch):
 
     monkeypatch.setattr(
         service,
-        "resolve_socios_vencidos_reactivation_candidates",
+        "resolve_socios_vencidos_reactivation_candidates_for_period",
         fail_resolver,
     )
 
     with pytest.raises(MarketingIventasCanonicalRunRequiredError):
         service.build_marketing_reactivation_candidates(
-            vencidos_snapshot_id=7,
+            date_from=date(2026, 8, 23),
+            date_to=date(2026, 8, 23),
             iventas_period_key="IVENTAS-2026-08",
             session=FakeSession(),
         )

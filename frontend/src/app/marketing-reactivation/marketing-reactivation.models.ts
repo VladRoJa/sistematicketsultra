@@ -17,12 +17,10 @@ export type ReactivationCandidateReason =
   | 'NO_OUTBOUND_EVIDENCE'
   | 'ONLY_PRE_EXPIRATION_OUTBOUND';
 
-export interface ReactivationVencidosSnapshot {
-  id: number;
-  date_from: string;
-  date_to: string;
-  snapshot_kind: string | null;
-  row_count: number;
+export interface ReactivationVencidosCoverage {
+  min_date: string | null;
+  max_date: string | null;
+  total_rows: number;
 }
 
 export interface ReactivationIventasPeriod {
@@ -34,13 +32,13 @@ export interface ReactivationIventasPeriod {
 }
 
 export interface ReactivationSourcesResponse {
-  vencidos_snapshots: ReactivationVencidosSnapshot[];
+  vencidos_coverage: ReactivationVencidosCoverage;
   iventas_periods: ReactivationIventasPeriod[];
 }
 
 export interface ReactivationCandidateSources {
-  vencidos_snapshot_id: number;
-  activos_snapshot_id: number;
+  date_from: string;
+  date_to: string;
   iventas_sync_run_id: number;
   iventas_period_key: string;
 }

@@ -23,7 +23,8 @@ SUPPORTED_REPORT_TYPES = frozenset(
         "kpi_ventas_nuevos_socios",
         "corte_caja",
         "cargos_recurrentes",
-        "venta_total"
+        "venta_total",
+        "socios_vencidos",
     }
 )
 
@@ -33,7 +34,8 @@ DEFAULT_FILENAME_PREFIXES: dict[str, str] = {
     "kpi_ventas_nuevos_socios": "kpi_ventas_nuevos_socios_",
     "corte_caja":"corte_caja",
     "cargos_recurrentes" : "cargos_recurrentes",
-    "venta_total":"venta_total"
+    "venta_total": "venta_total",
+    "socios_vencidos": "socios_vencidos",
 }
 
 DEFAULT_OUTPUT_DIRS: dict[str, str] = {
@@ -42,7 +44,8 @@ DEFAULT_OUTPUT_DIRS: dict[str, str] = {
     "kpi_ventas_nuevos_socios": "data/kpi_ventas_nuevos_socios",
     "corte_caja":"data/corte_caja",
     "cargos_recurrentes" : "data/cargos_recurrentes",
-    "venta_total": "data/venta_total"  
+    "venta_total": "data/venta_total",
+    "socios_vencidos": "data/socios_vencidos",
 }
 
 DEFAULT_XLSX_CONTENT_TYPE = (
@@ -394,6 +397,8 @@ def _call_runner(
     trigger_source: str | None,
     requested_at: datetime,
     target_business_date: date | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
 ) -> Any:
     return runner(
         report_type_key=report_type_key,
@@ -403,6 +408,8 @@ def _call_runner(
         trigger_source=trigger_source,
         requested_at=requested_at,
         target_business_date=target_business_date,
+        date_from=date_from,
+        date_to=date_to,
     )
 
 
@@ -415,6 +422,8 @@ def extract_with_gasca_script(
     trigger_source: str | None = None,
     requested_at: datetime | None = None,
     target_business_date: date | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
 ) -> ProducedGascaArtifact | dict[str, Any] | str | Path:
     """
     Bridge entre Suite y el script actual de Gasca.
@@ -473,6 +482,8 @@ def extract_with_gasca_script(
             trigger_source=trigger_source,
             requested_at=effective_requested_at,
             target_business_date=target_business_date,
+            date_from=date_from,
+            date_to=date_to,
         )
     except NotImplementedError:
         raise
