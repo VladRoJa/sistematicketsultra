@@ -87,6 +87,10 @@ class WarehouseUploadORM(db.Model):
     
     created_at = db.Column(db.DateTime(timezone=True), default=db.func.now())
     updated_at = db.Column(db.DateTime(timezone=True), default=db.func.now(), onupdate=db.func.now())
+    source_file_deleted_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=True,
+    )
     
     # Indexes
     __table_args__ = (
@@ -1006,6 +1010,26 @@ class SociosVencidosSnapshotORM(db.Model):
         nullable=False,
         default=0,
     )
+    row_storage_mode = db.Column(
+        db.String(32),
+        nullable=False,
+        default="SNAPSHOT_ONLY",
+    )
+    cartera_inserted_count = db.Column(
+        db.Integer,
+        nullable=False,
+        default=0,
+    )
+    cartera_updated_count = db.Column(
+        db.Integer,
+        nullable=False,
+        default=0,
+    )
+    cartera_existing_count = db.Column(
+        db.Integer,
+        nullable=False,
+        default=0,
+    )
     created_at = db.Column(
         db.DateTime(timezone=True),
         nullable=False,
@@ -1030,6 +1054,16 @@ class SociosVencidosSnapshotORM(db.Model):
             "date_from <= date_to",
             name="ck_socios_vencidos_snapshots_valid_date_range",
         ),
+        db.CheckConstraint(
+            "row_storage_mode IN ('SNAPSHOT_ONLY', 'CARTERA_ONLY')",
+            name="ck_socios_vencidos_snapshots_row_storage_mode",
+        ),
+        db.CheckConstraint(
+            "cartera_inserted_count >= 0 "
+            "AND cartera_updated_count >= 0 "
+            "AND cartera_existing_count >= 0",
+            name="ck_socios_vencidos_snapshots_cartera_counts",
+        ),
         db.Index(
             "ix_socios_vencidos_snapshots_date_from",
             "date_from",
@@ -1053,6 +1087,8 @@ class SociosVencidosSnapshotRowORM(db.Model):
         primary_key=True,
         autoincrement=True,
     )
+
+
     snapshot_id = db.Column(
         db.BigInteger,
         db.ForeignKey(
@@ -1150,6 +1186,89 @@ class SociosVencidosSnapshotRowORM(db.Model):
             "ix_socios_vencidos_rows_branch_expiration",
             "sucursal_raw",
             "fecha_vencimiento_date",
+        ),
+    )
+
+
+class SociosVencidosCarteraORM(db.Model):
+    """Un episodio histórico de vencimiento, independiente del batch fuente."""
+
+    __tablename__ = "socios_vencidos_cartera"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    sucursal_raw = db.Column(db.String(255), nullable=False)
+    sucursal_key = db.Column(db.String(255), nullable=False)
+    pin = db.Column(db.String(64), nullable=False)
+    nombre = db.Column(db.String(255), nullable=True)
+    genero = db.Column(db.String(50), nullable=True)
+    edad_raw = db.Column(db.Integer, nullable=True)
+    edad = db.Column(db.Integer, nullable=True)
+    edad_status = db.Column(db.String(32), nullable=False)
+    fecha_vencimiento_local = db.Column(
+        db.DateTime(timezone=False),
+        nullable=False,
+    )
+    fecha_vencimiento_date = db.Column(db.Date, nullable=False)
+    fecha_ultimo_pago_local = db.Column(
+        db.DateTime(timezone=False),
+        nullable=True,
+    )
+    tarifa = db.Column(db.String(255), nullable=True)
+    correo_raw = db.Column(db.String(320), nullable=True)
+    telefono_raw = db.Column(db.String(64), nullable=True)
+    telefono_digits = db.Column(db.String(32), nullable=True)
+    adeudo = db.Column(db.Numeric(14, 2), nullable=True)
+    row_hash = db.Column(db.String(64), nullable=False)
+    first_seen_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    last_seen_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    first_source_snapshot_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("socios_vencidos_snapshots.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    last_source_snapshot_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("socios_vencidos_snapshots.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "(edad_status = 'VALID' "
+            "AND edad_raw BETWEEN 0 AND 120 "
+            "AND edad = edad_raw) "
+            "OR (edad_status = 'INVALID_OUT_OF_RANGE' "
+            "AND edad_raw IS NOT NULL "
+            "AND (edad_raw < 0 OR edad_raw > 120) "
+            "AND edad IS NULL) "
+            "OR (edad_status = 'MISSING' "
+            "AND edad_raw IS NULL "
+            "AND edad IS NULL)",
+            name="ck_socios_vencidos_cartera_edad_quality",
+        ),
+        db.CheckConstraint(
+            "first_seen_at <= last_seen_at",
+            name="ck_socios_vencidos_cartera_seen_range",
+        ),
+        db.UniqueConstraint(
+            "sucursal_key",
+            "pin",
+            "fecha_vencimiento_date",
+            name="uq_socios_vencidos_cartera_episode",
+        ),
+        db.Index(
+            "ix_socios_vencidos_cartera_expiration_date",
+            "fecha_vencimiento_date",
+        ),
+        db.Index(
+            "ix_socios_vencidos_cartera_branch_expiration",
+            "sucursal_key",
+            "fecha_vencimiento_date",
+        ),
+        db.Index("ix_socios_vencidos_cartera_pin", "pin"),
+        db.Index(
+            "ix_socios_vencidos_cartera_phone_digits",
+            "telefono_digits",
         ),
     )
 

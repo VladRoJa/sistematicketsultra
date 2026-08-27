@@ -4,13 +4,18 @@ from dataclasses import asdict, dataclass, is_dataclass
 from datetime import date, datetime, timezone
 import importlib
 import inspect
+from pathlib import Path
 from typing import Any, Callable
 
 from flask import current_app
 
+from app.extensions import db
+from app.models.warehouse import WarehouseUploadORM
+
 
 SOCIOS_VENCIDOS_REPORT_TYPE_KEY = "socios_vencidos"
 SOCIOS_VENCIDOS_PERIOD_TYPE = "rango"
+ROW_STORAGE_MODE_CARTERA_ONLY = "CARTERA_ONLY"
 
 
 class SociosVencidosIngestionError(RuntimeError):
@@ -83,6 +88,8 @@ def ingest_socios_vencidos_upload(
     warehouse_upload_id: int,
     requested_by: str | None = None,
     ingestion_source: str | None = None,
+    row_storage_mode: str = ROW_STORAGE_MODE_CARTERA_ONLY,
+    delete_source_after_success: bool = True,
 ) -> dict[str, Any]:
     command = IngestSociosVencidosCommand(
         warehouse_upload_id=warehouse_upload_id,
@@ -106,6 +113,7 @@ def ingest_socios_vencidos_upload(
             date_to=upload_document.date_to,
             captured_at=upload_document.captured_at,
             parsed_snapshot=parsed_snapshot,
+            row_storage_mode=row_storage_mode,
         )
     except Exception as exc:
         raise SociosVencidosPersistError(
@@ -118,6 +126,14 @@ def ingest_socios_vencidos_upload(
     data_quality_counts = parser_result.get("data_quality_counts")
     if isinstance(data_quality_counts, dict):
         result["data_quality_counts"] = dict(data_quality_counts)
+
+    result["source_file_deleted"] = False
+    result["cleanup_warning"] = None
+    if delete_source_after_success and upload_document.file_path:
+        cleanup_result = _delete_source_after_structured_success(
+            upload_document=upload_document,
+        )
+        result.update(cleanup_result)
     current_app.logger.info(
         "Socios Vencidos ingestion finished: warehouse_upload_id=%s "
         "snapshot_id=%s status=%s valid=%s rejected=%s source=%s",
@@ -129,6 +145,89 @@ def ingest_socios_vencidos_upload(
         command.ingestion_source,
     )
     return result
+
+
+def _delete_source_after_structured_success(
+    *,
+    upload_document: WarehouseUploadDocument,
+) -> dict[str, Any]:
+    source_path = Path(str(upload_document.file_path))
+    try:
+        source_path.unlink()
+    except Exception as exc:
+        warning = (
+            "La ingesta quedó committed, pero no se pudo eliminar el XLSX "
+            f"temporal: {exc}"
+        )
+        current_app.logger.warning(
+            "Socios Vencidos cleanup warning: warehouse_upload_id=%s path=%s",
+            upload_document.warehouse_upload_id,
+            source_path,
+            exc_info=True,
+        )
+        return {
+            "source_file_deleted": False,
+            "cleanup_warning": warning,
+        }
+
+    deleted_at = datetime.now(timezone.utc)
+    try:
+        marker = current_app.config.get(
+            "WAREHOUSE_SOCIOS_VENCIDOS_SOURCE_DELETION_MARKER"
+        )
+        if callable(marker):
+            _invoke_callable_flexibly(
+                marker,
+                warehouse_upload_id=upload_document.warehouse_upload_id,
+                deleted_at=deleted_at,
+            )
+        else:
+            _mark_upload_source_deleted(
+                warehouse_upload_id=upload_document.warehouse_upload_id,
+                deleted_at=deleted_at,
+            )
+    except Exception as exc:
+        warning = (
+            "El XLSX temporal se eliminó, pero no se pudo registrar el "
+            f"marcador de retención: {exc}"
+        )
+        current_app.logger.warning(
+            "Socios Vencidos cleanup marker warning: warehouse_upload_id=%s",
+            upload_document.warehouse_upload_id,
+            exc_info=True,
+        )
+        return {
+            "source_file_deleted": True,
+            "source_file_deleted_at": deleted_at.isoformat(),
+            "cleanup_warning": warning,
+        }
+
+    return {
+        "source_file_deleted": True,
+        "source_file_deleted_at": deleted_at.isoformat(),
+        "cleanup_warning": None,
+    }
+
+
+def _mark_upload_source_deleted(
+    *,
+    warehouse_upload_id: int,
+    deleted_at: datetime,
+) -> None:
+    upload = WarehouseUploadORM.query.filter_by(
+        id=warehouse_upload_id
+    ).one_or_none()
+    if upload is None:
+        raise SociosVencidosIngestionError(
+            "No se encontró el WarehouseUpload para marcar el cleanup."
+        )
+
+    upload.source_file_deleted_at = deleted_at
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
 
 
 def _validate_command(command: IngestSociosVencidosCommand) -> None:

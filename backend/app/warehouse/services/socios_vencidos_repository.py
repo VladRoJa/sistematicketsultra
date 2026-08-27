@@ -6,12 +6,17 @@ from decimal import Decimal, InvalidOperation
 import re
 from typing import Any
 
+from sqlalchemy import tuple_
 from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
 from app.models.warehouse import (
+    SociosVencidosCarteraORM,
     SociosVencidosSnapshotORM,
     SociosVencidosSnapshotRowORM,
+)
+from app.warehouse.services.socios_vencidos_current_status_resolver import (
+    normalize_socios_vencidos_branch_key,
 )
 
 
@@ -20,6 +25,31 @@ _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 EDAD_STATUS_VALID = "VALID"
 EDAD_STATUS_INVALID_OUT_OF_RANGE = "INVALID_OUT_OF_RANGE"
 EDAD_STATUS_MISSING = "MISSING"
+ROW_STORAGE_MODE_SNAPSHOT_ONLY = "SNAPSHOT_ONLY"
+ROW_STORAGE_MODE_CARTERA_ONLY = "CARTERA_ONLY"
+SUPPORTED_ROW_STORAGE_MODES = frozenset(
+    {
+        ROW_STORAGE_MODE_SNAPSHOT_ONLY,
+        ROW_STORAGE_MODE_CARTERA_ONLY,
+    }
+)
+
+_CARTERA_MUTABLE_FIELDS = (
+    "sucursal_raw",
+    "nombre",
+    "genero",
+    "edad_raw",
+    "edad",
+    "edad_status",
+    "fecha_vencimiento_local",
+    "fecha_ultimo_pago_local",
+    "tarifa",
+    "correo_raw",
+    "telefono_raw",
+    "telefono_digits",
+    "adeudo",
+    "row_hash",
+)
 
 
 class SociosVencidosRepositoryError(RuntimeError):
@@ -40,6 +70,7 @@ def persist_socios_vencidos_snapshot(
     date_to: date | datetime | str,
     captured_at: datetime | str,
     parsed_snapshot: Any,
+    row_storage_mode: str = ROW_STORAGE_MODE_SNAPSHOT_ONLY,
 ) -> dict[str, Any]:
     normalized_upload_id = _ensure_positive_int(
         warehouse_upload_id,
@@ -60,6 +91,7 @@ def persist_socios_vencidos_snapshot(
         raise ValueError("date_from no puede ser posterior a date_to.")
 
     normalized_captured_at = _ensure_aware_datetime(captured_at)
+    normalized_storage_mode = _normalize_row_storage_mode(row_storage_mode)
 
     existing_snapshot = _find_snapshot_by_upload(
         warehouse_upload_id=normalized_upload_id
@@ -85,17 +117,39 @@ def persist_socios_vencidos_snapshot(
             row_count_detected=counts["row_count_detected"],
             row_count_valid=counts["row_count_valid"],
             row_count_rejected=counts["row_count_rejected"],
+            row_storage_mode=normalized_storage_mode,
+            cartera_inserted_count=0,
+            cartera_updated_count=0,
+            cartera_existing_count=0,
             created_at=now,
             updated_at=now,
         )
         db.session.add(snapshot)
         db.session.flush()
 
-        rows_inserted = _insert_snapshot_rows(
-            snapshot_id=int(snapshot.id),
-            rows=normalized_rows,
-            now=now,
-        )
+        rows_inserted = 0
+        cartera_counts = {
+            "inserted": 0,
+            "updated": 0,
+            "existing": 0,
+        }
+        if normalized_storage_mode == ROW_STORAGE_MODE_SNAPSHOT_ONLY:
+            rows_inserted = _insert_snapshot_rows(
+                snapshot_id=int(snapshot.id),
+                rows=normalized_rows,
+                now=now,
+            )
+        else:
+            cartera_counts = _upsert_cartera_rows(
+                snapshot_id=int(snapshot.id),
+                observed_at=normalized_captured_at,
+                rows=normalized_rows,
+            )
+            snapshot.cartera_inserted_count = cartera_counts["inserted"]
+            snapshot.cartera_updated_count = cartera_counts["updated"]
+            snapshot.cartera_existing_count = cartera_counts["existing"]
+            snapshot.updated_at = now
+            db.session.flush()
         db.session.commit()
 
         return _build_result(
@@ -103,6 +157,7 @@ def persist_socios_vencidos_snapshot(
             status="ingested",
             was_idempotent=False,
             rows_inserted=rows_inserted,
+            cartera_counts=cartera_counts,
         )
     except IntegrityError as exc:
         db.session.rollback()
@@ -115,6 +170,7 @@ def persist_socios_vencidos_snapshot(
                 status="already_ingested",
                 was_idempotent=True,
                 rows_inserted=0,
+                cartera_counts=_snapshot_cartera_counts(existing_snapshot),
             )
         raise SociosVencidosRepositoryError(
             "Falló la persistencia por una restricción de integridad."
@@ -177,6 +233,19 @@ def _normalize_parsed_snapshot(
     }
 
 
+def _normalize_row_storage_mode(value: Any) -> str:
+    normalized = _normalize_required_text(
+        value,
+        field_name="row_storage_mode",
+    ).upper()
+    if normalized not in SUPPORTED_ROW_STORAGE_MODES:
+        raise ValueError(
+            "row_storage_mode no soportado. "
+            f"Permitidos: {sorted(SUPPORTED_ROW_STORAGE_MODES)}."
+        )
+    return normalized
+
+
 def _normalize_row(row: dict[str, Any]) -> dict[str, Any]:
     row_hash = _normalize_required_text(
         row.get("row_hash"),
@@ -198,6 +267,14 @@ def _normalize_row(row: dict[str, Any]) -> dict[str, Any]:
         )
 
     edad_raw, edad, edad_status = _normalize_age_fields(row)
+
+    sucursal_raw = _normalize_required_text(
+        row.get("sucursal_raw"),
+        field_name="sucursal_raw",
+    )
+    sucursal_key = normalize_socios_vencidos_branch_key(sucursal_raw)
+    if not sucursal_key:
+        raise ValueError("sucursal_raw no produce una sucursal_key válida.")
 
     return {
         "row_index": _ensure_nonnegative_int(
@@ -229,10 +306,8 @@ def _normalize_row(row: dict[str, Any]) -> dict[str, Any]:
         "telefono_digits": _normalize_optional_text(
             row.get("telefono_digits")
         ),
-        "sucursal_raw": _normalize_required_text(
-            row.get("sucursal_raw"),
-            field_name="sucursal_raw",
-        ),
+        "sucursal_raw": sucursal_raw,
+        "sucursal_key": sucursal_key,
         "adeudo": _ensure_optional_decimal(
             row.get("adeudo"),
             field_name="adeudo",
@@ -294,7 +369,11 @@ def _insert_snapshot_rows(
             snapshot_id=snapshot_id,
             created_at=now,
             updated_at=now,
-            **row,
+            **{
+                key: value
+                for key, value in row.items()
+                if key != "sucursal_key"
+            },
         )
         for row in rows
     ]
@@ -304,13 +383,204 @@ def _insert_snapshot_rows(
     return len(orm_rows)
 
 
+def _upsert_cartera_rows(
+    *,
+    snapshot_id: int,
+    observed_at: datetime,
+    rows: list[dict[str, Any]],
+    session: Any | None = None,
+) -> dict[str, int]:
+    active_session = session if session is not None else db.session
+    existing_by_key = _read_existing_cartera_rows(
+        rows=rows,
+        session=active_session,
+    )
+    counts = {"inserted": 0, "updated": 0, "existing": 0}
+
+    for row in rows:
+        episode_key = _cartera_episode_key(row)
+        existing = existing_by_key.get(episode_key)
+
+        if existing is None:
+            cartera_row = SociosVencidosCarteraORM(
+                sucursal_key=row["sucursal_key"],
+                pin=row["pin"],
+                fecha_vencimiento_date=row["fecha_vencimiento_date"],
+                first_seen_at=observed_at,
+                last_seen_at=observed_at,
+                first_source_snapshot_id=snapshot_id,
+                last_source_snapshot_id=snapshot_id,
+                **{
+                    field_name: row[field_name]
+                    for field_name in _CARTERA_MUTABLE_FIELDS
+                },
+            )
+            active_session.add(cartera_row)
+            existing_by_key[episode_key] = cartera_row
+            counts["inserted"] += 1
+            continue
+
+        is_latest_observation = observed_at >= existing.last_seen_at
+        if str(existing.row_hash) == row["row_hash"]:
+            counts["existing"] += 1
+        elif is_latest_observation:
+            for field_name in _CARTERA_MUTABLE_FIELDS:
+                setattr(existing, field_name, row[field_name])
+            counts["updated"] += 1
+        else:
+            counts["existing"] += 1
+
+        if is_latest_observation:
+            existing.last_seen_at = observed_at
+            existing.last_source_snapshot_id = snapshot_id
+
+    if rows:
+        active_session.flush()
+    return counts
+
+
+def _read_existing_cartera_rows(
+    *,
+    rows: list[dict[str, Any]],
+    session: Any,
+) -> dict[tuple[str, str, date], SociosVencidosCarteraORM]:
+    episode_keys = tuple(sorted({_cartera_episode_key(row) for row in rows}))
+    if not episode_keys:
+        return {}
+
+    existing_rows = (
+        session.query(SociosVencidosCarteraORM)
+        .filter(
+            tuple_(
+                SociosVencidosCarteraORM.sucursal_key,
+                SociosVencidosCarteraORM.pin,
+                SociosVencidosCarteraORM.fecha_vencimiento_date,
+            ).in_(episode_keys)
+        )
+        .all()
+    )
+    return {
+        (
+            str(row.sucursal_key),
+            str(row.pin),
+            row.fecha_vencimiento_date,
+        ): row
+        for row in existing_rows
+    }
+
+
+def _cartera_episode_key(row: dict[str, Any]) -> tuple[str, str, date]:
+    return (
+        str(row["sucursal_key"]),
+        str(row["pin"]),
+        row["fecha_vencimiento_date"],
+    )
+
+
+def seed_socios_vencidos_cartera_from_existing_snapshots(
+    *,
+    snapshot_id: int | None = None,
+    session: Any | None = None,
+) -> dict[str, int]:
+    """Puebla cartera desde snapshots legacy sin ejecutarse al importar."""
+
+    active_session = session if session is not None else db.session
+    query = active_session.query(SociosVencidosSnapshotORM)
+    if snapshot_id is not None:
+        normalized_snapshot_id = _ensure_positive_int(
+            snapshot_id,
+            field_name="snapshot_id",
+        )
+        query = query.filter(SociosVencidosSnapshotORM.id == normalized_snapshot_id)
+
+    snapshots = query.order_by(
+        SociosVencidosSnapshotORM.captured_at.asc(),
+        SociosVencidosSnapshotORM.id.asc(),
+    ).all()
+    if snapshot_id is not None and not snapshots:
+        raise SociosVencidosRepositoryError(
+            f"No existe el snapshot de Socios Vencidos id={snapshot_id}."
+        )
+
+    totals = {
+        "snapshots_processed": 0,
+        "rows_read": 0,
+        "inserted": 0,
+        "updated": 0,
+        "existing": 0,
+    }
+    try:
+        for snapshot in snapshots:
+            snapshot_rows = (
+                active_session.query(SociosVencidosSnapshotRowORM)
+                .filter(
+                    SociosVencidosSnapshotRowORM.snapshot_id
+                    == int(snapshot.id)
+                )
+                .order_by(SociosVencidosSnapshotRowORM.row_index.asc())
+                .all()
+            )
+            normalized_rows = [
+                _normalize_row(_snapshot_row_to_payload(row))
+                for row in snapshot_rows
+            ]
+            counts = _upsert_cartera_rows(
+                snapshot_id=int(snapshot.id),
+                observed_at=_ensure_aware_datetime(snapshot.captured_at),
+                rows=normalized_rows,
+                session=active_session,
+            )
+            totals["snapshots_processed"] += 1
+            totals["rows_read"] += len(normalized_rows)
+            for key in ("inserted", "updated", "existing"):
+                totals[key] += counts[key]
+
+        active_session.commit()
+    except Exception as exc:
+        active_session.rollback()
+        raise SociosVencidosRepositoryError(
+            "Falló el seed transaccional de cartera desde snapshots."
+        ) from exc
+
+    return totals
+
+
+def _snapshot_row_to_payload(row: Any) -> dict[str, Any]:
+    return {
+        "row_index": row.row_index,
+        "source_row_number": row.source_row_number,
+        "pin": row.pin,
+        "nombre": row.nombre,
+        "genero": row.genero,
+        "edad_raw": row.edad_raw,
+        "edad": row.edad,
+        "edad_status": row.edad_status,
+        "fecha_vencimiento_local": row.fecha_vencimiento_local,
+        "fecha_vencimiento_date": row.fecha_vencimiento_date,
+        "fecha_ultimo_pago_local": row.fecha_ultimo_pago_local,
+        "tarifa": row.tarifa,
+        "correo_raw": row.correo_raw,
+        "telefono_raw": row.telefono_raw,
+        "telefono_digits": row.telefono_digits,
+        "sucursal_raw": row.sucursal_raw,
+        "adeudo": row.adeudo,
+        "row_hash": row.row_hash,
+    }
+
+
 def _build_result(
     *,
     snapshot: SociosVencidosSnapshotORM,
     status: str,
     was_idempotent: bool,
     rows_inserted: int,
+    cartera_counts: dict[str, int] | None = None,
 ) -> dict[str, Any]:
+    normalized_cartera_counts = (
+        cartera_counts
+        if cartera_counts is not None
+        else _snapshot_cartera_counts(snapshot)
+    )
     return {
         "status": status,
         "was_idempotent": was_idempotent,
@@ -323,7 +593,23 @@ def _build_result(
         "row_count_detected": int(snapshot.row_count_detected),
         "row_count_valid": int(snapshot.row_count_valid),
         "row_count_rejected": int(snapshot.row_count_rejected),
+        "row_storage_mode": str(
+            getattr(snapshot, "row_storage_mode", ROW_STORAGE_MODE_SNAPSHOT_ONLY)
+        ),
         "rows_inserted": rows_inserted,
+        "cartera_inserted": normalized_cartera_counts["inserted"],
+        "cartera_updated": normalized_cartera_counts["updated"],
+        "cartera_existing": normalized_cartera_counts["existing"],
+    }
+
+
+def _snapshot_cartera_counts(
+    snapshot: SociosVencidosSnapshotORM,
+) -> dict[str, int]:
+    return {
+        "inserted": int(getattr(snapshot, "cartera_inserted_count", 0)),
+        "updated": int(getattr(snapshot, "cartera_updated_count", 0)),
+        "existing": int(getattr(snapshot, "cartera_existing_count", 0)),
     }
 
 

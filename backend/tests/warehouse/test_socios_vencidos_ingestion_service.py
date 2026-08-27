@@ -141,3 +141,115 @@ def test_ingestion_wraps_parser_failure():
             ingestion.ingest_socios_vencidos_upload(
                 warehouse_upload_id=101
             )
+
+
+def _successful_parser(**_):
+    return {
+        "rows": [],
+        "row_count_detected": 0,
+        "row_count_valid": 0,
+        "row_count_rejected": 0,
+    }
+
+
+def _successful_repository(**_):
+    return {
+        "status": "ingested",
+        "snapshot_id": 91,
+        "row_count_valid": 0,
+        "row_count_rejected": 0,
+    }
+
+
+def test_successful_ingestion_deletes_source_after_repository(tmp_path):
+    source = tmp_path / "socios-vencidos.xlsx"
+    source.write_bytes(b"xlsx")
+    events = []
+    app = _app()
+    app.config["WAREHOUSE_UPLOAD_LOADER"] = lambda **_: _upload(
+        file_path=str(source), file_bytes=None
+    )
+    app.config["WAREHOUSE_SOCIOS_VENCIDOS_PARSER"] = _successful_parser
+
+    def repository(**_):
+        events.append("repository")
+        return _successful_repository()
+
+    def marker(**_):
+        events.append("marker")
+
+    app.config["WAREHOUSE_SOCIOS_VENCIDOS_REPOSITORY"] = repository
+    app.config[
+        "WAREHOUSE_SOCIOS_VENCIDOS_SOURCE_DELETION_MARKER"
+    ] = marker
+
+    with app.app_context():
+        result = ingestion.ingest_socios_vencidos_upload(
+            warehouse_upload_id=101
+        )
+
+    assert events == ["repository", "marker"]
+    assert source.exists() is False
+    assert result["source_file_deleted"] is True
+    assert result["cleanup_warning"] is None
+
+
+def test_parser_failure_preserves_source(tmp_path):
+    source = tmp_path / "socios-vencidos.xlsx"
+    source.write_bytes(b"xlsx")
+    app = _app()
+    app.config["WAREHOUSE_UPLOAD_LOADER"] = lambda **_: _upload(
+        file_path=str(source), file_bytes=None
+    )
+    app.config["WAREHOUSE_SOCIOS_VENCIDOS_PARSER"] = lambda **_: (_ for _ in ()).throw(
+        ValueError("parser failure")
+    )
+
+    with app.app_context(), pytest.raises(ingestion.SociosVencidosParseError):
+        ingestion.ingest_socios_vencidos_upload(warehouse_upload_id=101)
+
+    assert source.exists() is True
+
+
+def test_repository_failure_preserves_source(tmp_path):
+    source = tmp_path / "socios-vencidos.xlsx"
+    source.write_bytes(b"xlsx")
+    app = _app()
+    app.config["WAREHOUSE_UPLOAD_LOADER"] = lambda **_: _upload(
+        file_path=str(source), file_bytes=None
+    )
+    app.config["WAREHOUSE_SOCIOS_VENCIDOS_PARSER"] = _successful_parser
+    app.config["WAREHOUSE_SOCIOS_VENCIDOS_REPOSITORY"] = lambda **_: (_ for _ in ()).throw(
+        RuntimeError("db failure")
+    )
+
+    with app.app_context(), pytest.raises(ingestion.SociosVencidosPersistError):
+        ingestion.ingest_socios_vencidos_upload(warehouse_upload_id=101)
+
+    assert source.exists() is True
+
+
+def test_cleanup_failure_keeps_committed_result_visible(tmp_path, monkeypatch):
+    source = tmp_path / "socios-vencidos.xlsx"
+    source.write_bytes(b"xlsx")
+    app = _app()
+    app.config["WAREHOUSE_UPLOAD_LOADER"] = lambda **_: _upload(
+        file_path=str(source), file_bytes=None
+    )
+    app.config["WAREHOUSE_SOCIOS_VENCIDOS_PARSER"] = _successful_parser
+    app.config["WAREHOUSE_SOCIOS_VENCIDOS_REPOSITORY"] = _successful_repository
+
+    monkeypatch.setattr(
+        ingestion.Path,
+        "unlink",
+        lambda self: (_ for _ in ()).throw(OSError("locked")),
+    )
+    with app.app_context():
+        result = ingestion.ingest_socios_vencidos_upload(
+            warehouse_upload_id=101
+        )
+
+    assert result["status"] == "ingested"
+    assert result["source_file_deleted"] is False
+    assert "locked" in result["cleanup_warning"]
+    assert source.exists() is True

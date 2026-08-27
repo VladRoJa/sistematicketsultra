@@ -42,6 +42,8 @@ class GascaScriptRunCommand:
     trigger_source: str | None
     requested_at: datetime | None
     target_business_date: date | None = None
+    date_from: date | None = None
+    date_to: date | None = None
 
 
 def register_gasca_script_runner(app) -> None:
@@ -160,6 +162,8 @@ def _build_callable_kwargs(command: GascaScriptRunCommand) -> dict[str, Any]:
         "trigger_source": command.trigger_source,
         "requested_at": command.requested_at,
         "target_business_date": command.target_business_date,
+        "date_from": command.date_from,
+        "date_to": command.date_to,
     }
 
 
@@ -242,6 +246,7 @@ def _select_strategy_callable(
         "corte_caja",
         "cargos_recurrentes",
         "venta_total",
+        "socios_vencidos",
     }
 
     legacy_main_report_types = {
@@ -394,6 +399,8 @@ def run_gasca_script_report(
     trigger_source: str | None = None,
     requested_at: datetime | None = None,
     target_business_date: date | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
 ) -> Any:
     """
     Runner wrapper principal entre Suite y el script real de Gasca.
@@ -424,6 +431,8 @@ def run_gasca_script_report(
         trigger_source=trigger_source,
         requested_at=requested_at,
         target_business_date=target_business_date,
+        date_from=date_from,
+        date_to=date_to,
     )
     _validate_command(command)
 

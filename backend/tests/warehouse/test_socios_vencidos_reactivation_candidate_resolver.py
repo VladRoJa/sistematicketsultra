@@ -847,3 +847,74 @@ def test_result_cardinality_invariants(
         ]
         is None
     )
+
+
+def test_period_resolver_reads_cartera_and_reuses_classification(
+    monkeypatch,
+):
+    session = FakeSession()
+    calls = {}
+
+    def fake_current_status_for_period(**kwargs):
+        calls["current_status"] = kwargs
+        return (
+            current_status_resolver
+            .SociosVencidosCurrentStatusPeriodResult(
+                date_from="2026-08-01",
+                date_to="2026-08-31",
+                activos_snapshot_id=ACTIVOS_SNAPSHOT_ID,
+                activos_cutoff_date="2026-09-01",
+                total_rows=1,
+                status_counts={
+                    current_status_resolver.STATUS_ACTIVE_CONFIRMED: 1,
+                },
+                rows=(
+                    _current_row(
+                        row_id=91,
+                        status=(
+                            current_status_resolver
+                            .STATUS_ACTIVE_CONFIRMED
+                        ),
+                        active_id_socio="A91",
+                    ),
+                ),
+            )
+        )
+
+    monkeypatch.setattr(
+        resolver,
+        "resolve_socios_vencidos_current_status_for_period",
+        fake_current_status_for_period,
+    )
+    monkeypatch.setattr(
+        resolver,
+        "_read_cartera_rows",
+        lambda **kwargs: {
+            91: _vencido(row_id=91, phone="6861234567")
+        },
+    )
+    monkeypatch.setattr(
+        resolver,
+        "read_canonical_iventas_run",
+        lambda **kwargs: {
+            "sync_run_id": IVENTAS_SYNC_RUN_ID,
+            "period_key": IVENTAS_PERIOD_KEY,
+        },
+    )
+
+    result = (
+        resolver
+        .resolve_socios_vencidos_reactivation_candidates_for_period(
+            date_from=date(2026, 8, 1),
+            date_to=date(2026, 8, 31),
+            iventas_period_key=IVENTAS_PERIOD_KEY,
+            session=session,
+        )
+    )
+
+    assert calls["current_status"]["date_from"] == date(2026, 8, 1)
+    assert calls["current_status"]["date_to"] == date(2026, 8, 31)
+    assert result.date_from == "2026-08-01"
+    assert result.date_to == "2026-08-31"
+    assert result.total_rows == 1
+    assert result.rows[0].status == resolver.STATUS_EXCLUDED_ACTIVE

@@ -760,7 +760,7 @@ loadDailyMart(): void {
   }
 
   this.isLoadingMart = true;
-  this.resetLoadedMartState();
+  this.martErrorMessage = '';
   this.syncSelectedModeLabel();
 
   this.fetchDailyMart();

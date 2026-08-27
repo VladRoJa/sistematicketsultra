@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import date
+
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import (
     get_jwt_identity,
@@ -113,6 +115,16 @@ def _parse_required_text(parameter_name: str) -> str:
     return raw_value.strip()
 
 
+def _parse_required_iso_date(parameter_name: str) -> date:
+    raw_value = _parse_required_text(parameter_name)
+    try:
+        return date.fromisoformat(raw_value)
+    except ValueError as exc:
+        raise MarketingInputValidationError(
+            f"{parameter_name} debe ser una fecha ISO válida (YYYY-MM-DD)."
+        ) from exc
+
+
 @marketing_bp.get("/reactivation/sources")
 @jwt_required()
 def get_marketing_reactivation_sources_endpoint():
@@ -142,14 +154,18 @@ def get_marketing_reactivation_sources_endpoint():
 def get_marketing_reactivation_candidates_endpoint():
     try:
         _resolve_request_access()
-        vencidos_snapshot_id = _parse_required_positive_int(
-            "vencidos_snapshot_id"
-        )
+        date_from = _parse_required_iso_date("date_from")
+        date_to = _parse_required_iso_date("date_to")
+        if date_from > date_to:
+            raise MarketingInputValidationError(
+                "date_from no puede ser posterior a date_to."
+            )
         iventas_period_key = _parse_required_text(
             "iventas_period_key"
         )
         result = build_marketing_reactivation_candidates(
-            vencidos_snapshot_id=vencidos_snapshot_id,
+            date_from=date_from,
+            date_to=date_to,
             iventas_period_key=iventas_period_key,
             session=db.session,
         )

@@ -8,18 +8,31 @@
 
     <div class="source-selectors" *ngIf="sources">
       <mat-form-field appearance="fill" subscriptSizing="dynamic">
-        <mat-label>Corte de vencidos</mat-label>
-        <mat-select
-          [formControl]="vencidosControl"
-          aria-label="Corte de socios vencidos"
-        >
-          <mat-option
-            *ngFor="let source of vencidosSnapshots"
-            [value]="source.id"
-          >
-            {{ formatVencidosSource(source) }} · {{ source.row_count }} socios
-          </mat-option>
-        </mat-select>
+        <mat-label>Desde</mat-label>
+        <input
+          matInput
+          [matDatepicker]="dateFromPicker"
+          [formControl]="dateFromControl"
+          [min]="coverageMinDate"
+          [max]="coverageMaxDate"
+          aria-label="Fecha inicial de vencimiento"
+        />
+        <mat-datepicker-toggle matIconSuffix [for]="dateFromPicker"></mat-datepicker-toggle>
+        <mat-datepicker #dateFromPicker></mat-datepicker>
+      </mat-form-field>
+
+      <mat-form-field appearance="fill" subscriptSizing="dynamic">
+        <mat-label>Hasta</mat-label>
+        <input
+          matInput
+          [matDatepicker]="dateToPicker"
+          [formControl]="dateToControl"
+          [min]="coverageMinDate"
+          [max]="coverageMaxDate"
+          aria-label="Fecha final de vencimiento"
+        />
+        <mat-datepicker-toggle matIconSuffix [for]="dateToPicker"></mat-datepicker-toggle>
+        <mat-datepicker #dateToPicker></mat-datepicker>
       </mat-form-field>
 
       <mat-form-field appearance="fill" subscriptSizing="dynamic">
@@ -72,7 +85,7 @@
     <div>
       <h2>No hay fuentes disponibles</h2>
       <p>
-        Aún no existen cortes estructurados de vencidos ni periodos canónicos
+        Aún no existe cobertura de cartera vencida ni periodos canónicos
         de iVentas para consultar.
       </p>
     </div>
@@ -85,7 +98,7 @@
     <mat-icon>forum</mat-icon>
     <div>
       <h2>No hay un periodo iVentas canónico</h2>
-      <p>Hay cortes de vencidos, pero falta una fuente iVentas disponible.</p>
+      <p>Hay cartera de vencidos, pero falta una fuente iVentas disponible.</p>
     </div>
   </section>
 
@@ -95,7 +108,7 @@
   >
     <mat-icon>group_off</mat-icon>
     <div>
-      <h2>No hay cortes de socios vencidos</h2>
+      <h2>No hay cartera de socios vencidos</h2>
       <p>Hay periodos iVentas, pero falta el universo estructurado de vencidos.</p>
     </div>
   </section>

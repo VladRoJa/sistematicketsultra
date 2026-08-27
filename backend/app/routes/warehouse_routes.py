@@ -442,6 +442,11 @@ def _serialize_warehouse_upload_item(item: WarehouseUploadORM) -> dict:
 
         "created_at": item.created_at.isoformat() if item.created_at else None,
         "updated_at": item.updated_at.isoformat() if item.updated_at else None,
+        "source_file_deleted_at": (
+            item.source_file_deleted_at.isoformat()
+            if item.source_file_deleted_at
+            else None
+        ),
     }        
 
 @warehouse_bp.route('/uploads', methods=['GET'])
@@ -606,6 +611,11 @@ def warehouse_get_upload_detail(upload_id: int):
 
         "created_at": upload.created_at.isoformat() if upload.created_at else None,
         "updated_at": upload.updated_at.isoformat() if upload.updated_at else None,
+        "source_file_deleted_at": (
+            upload.source_file_deleted_at.isoformat()
+            if upload.source_file_deleted_at
+            else None
+        ),
     }), 200
     
     
@@ -628,6 +638,18 @@ def warehouse_download_upload(upload_id: int):
             "error": "Upload no encontrado",
             "detail": f"No existe un upload de Warehouse con id {upload_id}."
         }), 404
+
+    if upload.source_file_deleted_at is not None:
+        return jsonify({
+            "error": "Archivo fuente eliminado",
+            "detail": (
+                "El XLSX de Socios Vencidos fue eliminado después de una "
+                "ingesta estructurada exitosa; la cartera histórica está "
+                "disponible en PostgreSQL."
+            ),
+            "retention_status": "SOURCE_DELETED_AFTER_STRUCTURED_SUCCESS",
+            "source_file_deleted_at": upload.source_file_deleted_at.isoformat(),
+        }), 410
 
     base_dir = Path(current_app.root_path).parent.parent
     file_path = (base_dir / upload.stored_path / upload.stored_filename).resolve()

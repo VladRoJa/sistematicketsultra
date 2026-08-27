@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from importlib.metadata import version
 from types import SimpleNamespace
@@ -129,15 +129,11 @@ class TestMarketingRoutes:
 
     def test_reactivation_sources_returns_service_contract(self):
         expected = {
-            "vencidos_snapshots": [
-                {
-                    "id": 7,
-                    "date_from": "2026-08-23",
-                    "date_to": "2026-08-23",
-                    "snapshot_kind": None,
-                    "row_count": 679,
-                }
-            ],
+            "vencidos_coverage": {
+                "min_date": "2026-08-23",
+                "max_date": "2026-08-23",
+                "total_rows": 679,
+            },
             "iventas_periods": [
                 {
                     "period_key": "IVENTAS-2026-08",
@@ -171,7 +167,11 @@ class TestMarketingRoutes:
 
     def test_reactivation_sources_allow_empty_contract(self):
         expected = {
-            "vencidos_snapshots": [],
+            "vencidos_coverage": {
+                "min_date": None,
+                "max_date": None,
+                "total_rows": 0,
+            },
             "iventas_periods": [],
         }
         with (
@@ -198,18 +198,24 @@ class TestMarketingRoutes:
         "query_string",
         [
             "",
-            "?vencidos_snapshot_id=7",
+            "?date_from=2026-08-23&date_to=2026-08-23",
             "?iventas_period_key=IVENTAS-2026-08",
             (
-                "?vencidos_snapshot_id=abc"
+                "?date_from=abc&date_to=2026-08-23"
                 "&iventas_period_key=IVENTAS-2026-08"
             ),
             (
-                "?vencidos_snapshot_id=0"
+                "?date_from=2026-08-23&date_to=abc"
                 "&iventas_period_key=IVENTAS-2026-08"
             ),
-            "?vencidos_snapshot_id=-1&iventas_period_key=%20%20",
-            "?vencidos_snapshot_id=7&iventas_period_key=%20%20",
+            (
+                "?date_from=2026-08-24&date_to=2026-08-23"
+                "&iventas_period_key=IVENTAS-2026-08"
+            ),
+            (
+                "?date_from=2026-08-23&date_to=2026-08-23"
+                "&iventas_period_key=%20%20"
+            ),
         ],
     )
     def test_reactivation_candidates_reject_invalid_params(
@@ -232,7 +238,8 @@ class TestMarketingRoutes:
     def test_reactivation_candidates_returns_complete_contract(self):
         expected = {
             "sources": {
-                "vencidos_snapshot_id": 7,
+                "date_from": "2026-08-23",
+                "date_to": "2026-08-23",
                 "activos_snapshot_id": 8,
                 "iventas_sync_run_id": 26,
                 "iventas_period_key": "IVENTAS-2026-08",
@@ -264,7 +271,8 @@ class TestMarketingRoutes:
         ):
             response = self.client.get(
                 "/api/marketing/reactivation/candidates"
-                "?vencidos_snapshot_id=7"
+                "?date_from=2026-08-23"
+                "&date_to=2026-08-23"
                 "&iventas_period_key=IVENTAS-2026-08",
                 headers=self.headers,
             )
@@ -272,9 +280,12 @@ class TestMarketingRoutes:
         assert response.status_code == 200
         assert response.get_json() == expected
         candidate_service.assert_called_once()
-        assert candidate_service.call_args.kwargs[
-            "vencidos_snapshot_id"
-        ] == 7
+        assert candidate_service.call_args.kwargs["date_from"] == date(
+            2026, 8, 23
+        )
+        assert candidate_service.call_args.kwargs["date_to"] == date(
+            2026, 8, 23
+        )
         assert candidate_service.call_args.kwargs[
             "iventas_period_key"
         ] == "IVENTAS-2026-08"
@@ -300,7 +311,8 @@ class TestMarketingRoutes:
         ):
             response = self.client.get(
                 "/api/marketing/reactivation/candidates"
-                "?vencidos_snapshot_id=7"
+                "?date_from=2026-08-23"
+                "&date_to=2026-08-23"
                 "&iventas_period_key=IVENTAS-2026-08",
                 headers=self.headers,
             )

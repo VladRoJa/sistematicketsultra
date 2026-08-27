@@ -24,11 +24,13 @@ export class MarketingReactivationService {
   }
 
   getCandidates(
-    vencidosSnapshotId: number,
+    dateFrom: string,
+    dateTo: string,
     iventasPeriodKey: string,
   ): Observable<ReactivationCandidatesResponse> {
     const params = new HttpParams()
-      .set('vencidos_snapshot_id', String(vencidosSnapshotId))
+      .set('date_from', dateFrom)
+      .set('date_to', dateTo)
       .set('iventas_period_key', iventasPeriodKey);
 
     return this.http.get<ReactivationCandidatesResponse>(
