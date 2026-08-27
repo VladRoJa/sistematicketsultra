@@ -6,6 +6,7 @@ from flask_jwt_extended import (
     jwt_required,
 )
 
+from app.extensions import db
 from app.models.user_model import UserORM
 from app.services.marketing_access import (
     MarketingAuthorizationError,
@@ -29,6 +30,10 @@ from app.services.marketing_inputs_service import (
 )
 from app.services.marketing_leads_detail_service import (
     build_marketing_leads_detail,
+)
+from app.services.marketing_reactivation_service import (
+    build_marketing_reactivation_candidates,
+    list_marketing_reactivation_sources,
 )
 
 
@@ -75,6 +80,97 @@ def _parse_optional_branch_id() -> int | None:
         )
 
     return branch_id
+
+
+def _parse_required_positive_int(parameter_name: str) -> int:
+    raw_value = request.args.get(parameter_name)
+    if raw_value is None or not raw_value.strip():
+        raise MarketingInputValidationError(
+            f"{parameter_name} es obligatorio."
+        )
+
+    try:
+        value = int(raw_value)
+    except (TypeError, ValueError) as exc:
+        raise MarketingInputValidationError(
+            f"{parameter_name} debe ser un entero válido."
+        ) from exc
+
+    if value <= 0:
+        raise MarketingInputValidationError(
+            f"{parameter_name} debe ser mayor a cero."
+        )
+
+    return value
+
+
+def _parse_required_text(parameter_name: str) -> str:
+    raw_value = request.args.get(parameter_name)
+    if raw_value is None or not raw_value.strip():
+        raise MarketingInputValidationError(
+            f"{parameter_name} es obligatorio."
+        )
+    return raw_value.strip()
+
+
+@marketing_bp.get("/reactivation/sources")
+@jwt_required()
+def get_marketing_reactivation_sources_endpoint():
+    try:
+        _resolve_request_access()
+        result = list_marketing_reactivation_sources(
+            session=db.session,
+        )
+        return jsonify(result), 200
+    except MarketingAuthorizationError as exc:
+        return jsonify(
+            {"status": "error", "message": str(exc)}
+        ), 403
+    except Exception:
+        return jsonify(
+            {
+                "status": "error",
+                "message": (
+                    "Falló la consulta de fuentes de reactivación."
+                ),
+            }
+        ), 500
+
+
+@marketing_bp.get("/reactivation/candidates")
+@jwt_required()
+def get_marketing_reactivation_candidates_endpoint():
+    try:
+        _resolve_request_access()
+        vencidos_snapshot_id = _parse_required_positive_int(
+            "vencidos_snapshot_id"
+        )
+        iventas_period_key = _parse_required_text(
+            "iventas_period_key"
+        )
+        result = build_marketing_reactivation_candidates(
+            vencidos_snapshot_id=vencidos_snapshot_id,
+            iventas_period_key=iventas_period_key,
+            session=db.session,
+        )
+        return jsonify(result), 200
+    except MarketingAuthorizationError as exc:
+        return jsonify(
+            {"status": "error", "message": str(exc)}
+        ), 403
+    except MarketingInputValidationError as exc:
+        return jsonify(
+            {"status": "error", "message": str(exc)}
+        ), 400
+    except Exception:
+        return jsonify(
+            {
+                "status": "error",
+                "message": (
+                    "Falló la consulta de candidatos de reactivación."
+                ),
+            }
+        ), 500
 
 
 @marketing_bp.get("/dashboard")

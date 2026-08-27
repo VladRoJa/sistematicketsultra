@@ -1,0 +1,330 @@
+<main class="reactivation-page">
+  <header class="page-header">
+    <div class="page-heading">
+      <p class="eyebrow">Marketing</p>
+      <h1>Reactivación de socios</h1>
+      <p>Seguimiento de socios vencidos, estado actual y contacto iVentas</p>
+    </div>
+
+    <div class="source-selectors" *ngIf="sources">
+      <mat-form-field appearance="fill" subscriptSizing="dynamic">
+        <mat-label>Corte de vencidos</mat-label>
+        <mat-select
+          [formControl]="vencidosControl"
+          aria-label="Corte de socios vencidos"
+        >
+          <mat-option
+            *ngFor="let source of vencidosSnapshots"
+            [value]="source.id"
+          >
+            {{ formatVencidosSource(source) }} · {{ source.row_count }} socios
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field appearance="fill" subscriptSizing="dynamic">
+        <mat-label>Periodo iVentas</mat-label>
+        <mat-select
+          [formControl]="iventasControl"
+          aria-label="Periodo canónico de iVentas"
+        >
+          <mat-option
+            *ngFor="let source of iventasPeriods"
+            [value]="source.period_key"
+          >
+            {{ formatIventasSource(source) }}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+    </div>
+  </header>
+
+  <section
+    *ngIf="loadingSources"
+    class="state-panel"
+    aria-live="polite"
+  >
+    <mat-spinner diameter="34"></mat-spinner>
+    <p>Cargando fuentes de reactivación…</p>
+  </section>
+
+  <section
+    *ngIf="!loadingSources && sourcesError"
+    class="state-panel state-panel--error"
+    role="alert"
+  >
+    <mat-icon>error_outline</mat-icon>
+    <div>
+      <h2>No se pudieron cargar las fuentes</h2>
+      <p>{{ sourcesError }}</p>
+      <button mat-stroked-button type="button" (click)="loadSources()">
+        <mat-icon>refresh</mat-icon>
+        Reintentar
+      </button>
+    </div>
+  </section>
+
+  <section
+    *ngIf="!loadingSources && hasNoSources"
+    class="state-panel"
+  >
+    <mat-icon>inventory_2</mat-icon>
+    <div>
+      <h2>No hay fuentes disponibles</h2>
+      <p>
+        Aún no existen cortes estructurados de vencidos ni periodos canónicos
+        de iVentas para consultar.
+      </p>
+    </div>
+  </section>
+
+  <section
+    *ngIf="!loadingSources && hasVencidosWithoutIventas"
+    class="state-panel"
+  >
+    <mat-icon>forum</mat-icon>
+    <div>
+      <h2>No hay un periodo iVentas canónico</h2>
+      <p>Hay cortes de vencidos, pero falta una fuente iVentas disponible.</p>
+    </div>
+  </section>
+
+  <section
+    *ngIf="!loadingSources && hasIventasWithoutVencidos"
+    class="state-panel"
+  >
+    <mat-icon>group_off</mat-icon>
+    <div>
+      <h2>No hay cortes de socios vencidos</h2>
+      <p>Hay periodos iVentas, pero falta el universo estructurado de vencidos.</p>
+    </div>
+  </section>
+
+  <section
+    *ngIf="isInitialCandidateLoading"
+    class="state-panel"
+    aria-live="polite"
+  >
+    <mat-spinner diameter="34"></mat-spinner>
+    <p>Resolviendo estado actual e historial de contacto…</p>
+  </section>
+
+  <section
+    *ngIf="!loadingCandidates && !candidates && candidatesError"
+    class="state-panel state-panel--error"
+    role="alert"
+  >
+    <mat-icon>error_outline</mat-icon>
+    <div>
+      <h2>No se pudieron cargar los socios</h2>
+      <p>{{ candidatesError }}</p>
+      <button mat-stroked-button type="button" (click)="retryCandidates()">
+        <mat-icon>refresh</mat-icon>
+        Reintentar
+      </button>
+    </div>
+  </section>
+
+  <ng-container *ngIf="candidates">
+    <div
+      *ngIf="loadingCandidates"
+      class="reload-state"
+      aria-live="polite"
+    >
+      <mat-spinner diameter="20"></mat-spinner>
+      Actualizando el universo seleccionado…
+    </div>
+
+    <div
+      *ngIf="candidatesError"
+      class="inline-error"
+      role="alert"
+    >
+      <span><mat-icon>error_outline</mat-icon>{{ candidatesError }}</span>
+      <button mat-stroked-button type="button" (click)="retryCandidates()">
+        Reintentar
+      </button>
+    </div>
+
+    <section class="summary-grid" aria-label="Resumen de reactivación">
+      <article
+        *ngFor="let card of summaryCards"
+        class="summary-card"
+        [attr.data-status]="card.statusClass"
+      >
+        <mat-icon>{{ card.icon }}</mat-icon>
+        <div>
+          <span>{{ card.label }}</span>
+          <strong *ngIf="card.displayValue !== undefined">
+            {{ card.displayValue }}
+          </strong>
+          <strong *ngIf="card.displayValue === undefined">
+            {{ card.value | number }}
+          </strong>
+          <small
+            *ngIf="card.detail"
+            class="summary-card-detail"
+          >
+            {{ card.detail }}
+          </small>
+        </div>
+      </article>
+    </section>
+
+    <section class="workspace" aria-labelledby="universe-title">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">Universo operativo</p>
+          <h2 id="universe-title">Socios vencidos</h2>
+          <p>
+            Mostrando {{ visibleCount | number }} de
+            {{ totalCount | number }} socios
+          </p>
+        </div>
+        <button
+          mat-stroked-button
+          type="button"
+          class="clear-button"
+          (click)="clearFilters()"
+        >
+          <mat-icon>filter_alt_off</mat-icon>
+          Limpiar filtros
+        </button>
+      </div>
+
+      <div class="filters" aria-label="Filtros de socios">
+        <mat-form-field appearance="fill" subscriptSizing="dynamic">
+          <mat-label>Sucursal</mat-label>
+          <mat-select [formControl]="branchFilter">
+            <mat-option value="ALL">Todas</mat-option>
+            <mat-option *ngFor="let branch of branchOptions" [value]="branch">
+              {{ branch }}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
+
+        <mat-form-field appearance="fill" subscriptSizing="dynamic">
+          <mat-label>Estado</mat-label>
+          <mat-select [formControl]="statusFilter">
+            <mat-option
+              *ngFor="let option of statusOptions"
+              [value]="option.value"
+            >
+              {{ option.label }}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
+
+        <mat-form-field
+          appearance="fill"
+          subscriptSizing="dynamic"
+          class="search-field"
+        >
+          <mat-label>Buscar</mat-label>
+          <mat-icon matPrefix>search</mat-icon>
+          <input
+            matInput
+            [formControl]="searchFilter"
+            placeholder="Nombre, PIN o teléfono"
+            aria-label="Buscar por nombre, PIN o teléfono"
+          />
+        </mat-form-field>
+      </div>
+
+      <div
+        *ngIf="visibleCount === 0"
+        class="empty-filter-state"
+      >
+        <mat-icon>search_off</mat-icon>
+        <p>No hay socios que coincidan con los filtros</p>
+      </div>
+
+      <div *ngIf="visibleCount > 0" class="table-wrapper">
+        <table
+          mat-table
+          matSort
+          matSortDisableClear
+          [dataSource]="dataSource"
+          [trackBy]="trackByRowId"
+          aria-label="Socios vencidos para revisión"
+        >
+          <ng-container matColumnDef="nombre">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>Socio</th>
+            <td mat-cell *matCellDef="let row">
+              <div class="member-cell">
+                <strong>{{ row.nombre || 'Sin nombre' }}</strong>
+                <span *ngIf="row.correo">{{ row.correo }}</span>
+              </div>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="pin">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>PIN</th>
+            <td mat-cell *matCellDef="let row">{{ row.pin }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="sucursal">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>Sucursal</th>
+            <td mat-cell *matCellDef="let row">{{ row.sucursal }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="fecha_vencimiento">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>Venció</th>
+            <td mat-cell *matCellDef="let row">
+              {{ formatDateOnly(row.fecha_vencimiento) }}
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="fecha_ultimo_pago">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>Último pago</th>
+            <td mat-cell *matCellDef="let row">
+              {{ formatDateOnly(row.fecha_ultimo_pago) }}
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="tarifa">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>Tarifa</th>
+            <td
+              mat-cell
+              *matCellDef="let row"
+              [matTooltip]="adeudoTooltip(row)"
+              [matTooltipDisabled]="!row.adeudo"
+            >
+              {{ row.tarifa || '—' }}
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="telefono">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>Teléfono</th>
+            <td mat-cell *matCellDef="let row">{{ row.telefono || '—' }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="status">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>Estado</th>
+            <td mat-cell *matCellDef="let row">
+              <span
+                class="status-chip"
+                [attr.data-status]="getOperationalContactClass(row)"
+              >
+                <mat-icon>{{ getOperationalContactIcon(row) }}</mat-icon>
+                {{ getOperationalContactLabel(row) }}
+              </span>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="latest_outbound_at_utc">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>
+              Último contacto
+            </th>
+            <td mat-cell *matCellDef="let row">
+              {{ formatDateTime(row.latest_outbound_at_utc) }}
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
+        </table>
+      </div>
+    </section>
+  </ng-container>
+</main>

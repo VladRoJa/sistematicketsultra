@@ -149,6 +149,12 @@ export const routes: Routes = [
             .then(m => m.MarketingConversionComponent),
       },
       {
+        path: 'marketing/reactivation',
+        loadComponent: () =>
+          import('./marketing-reactivation/marketing-reactivation.component')
+            .then(m => m.MarketingReactivationComponent),
+      },
+      {
         path: 'warehouse/track/kpi-desempeno',
         component: TrackKpiDesempenoComponent,
       },
