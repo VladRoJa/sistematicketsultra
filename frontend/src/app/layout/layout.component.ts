@@ -247,6 +247,10 @@ ngOnInit(): void {
     path: '/marketing-conversion',
     submenu: [
       { label: 'Embudo mensual', path: '/marketing-conversion' },
+      {
+        label: 'Reactivación de socios',
+        path: '/marketing/reactivation',
+      },
     ],
   };
 
@@ -1243,6 +1247,7 @@ getMenuIcon(label: string): string {
     catalogos: 'category',
     permisos: 'admin_panel_settings',
     'control de rutinas': 'assignment_turned_in',
+    'marketing y conversión': 'campaign',
   };
 
   return iconsByLabel[normalizedLabel] || 'apps';
@@ -1269,6 +1274,10 @@ getSubmenuIcon(label: string): string {
 
   if (normalizedLabel.includes('marketing')) {
     return 'campaign';
+  }
+
+  if (normalizedLabel.includes('reactivación')) {
+    return 'person_search';
   }
 
   if (

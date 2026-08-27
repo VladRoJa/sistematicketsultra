@@ -6,6 +6,7 @@ from importlib.metadata import version
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import pytest
 import werkzeug
 from flask import Flask
 from flask_jwt_extended import (
@@ -99,6 +100,213 @@ class TestMarketingRoutes:
 
         assert response.status_code == 200
         assert response.get_json() == expected
+
+    def test_reactivation_sources_requires_jwt(self):
+        response = self.client.get(
+            "/api/marketing/reactivation/sources"
+        )
+
+        assert response.status_code == 401
+
+    def test_reactivation_sources_rejects_unauthorized_role(self):
+        unauthorized = SimpleNamespace(
+            id=8,
+            rol="OPERADOR",
+            sucursal_id=1,
+            sucursales_ids=[1],
+        )
+        with patch(
+            "app.routes.marketing_routes."
+            "_get_current_marketing_user",
+            return_value=unauthorized,
+        ):
+            response = self.client.get(
+                "/api/marketing/reactivation/sources",
+                headers=self.headers,
+            )
+
+        assert response.status_code == 403
+
+    def test_reactivation_sources_returns_service_contract(self):
+        expected = {
+            "vencidos_snapshots": [
+                {
+                    "id": 7,
+                    "date_from": "2026-08-23",
+                    "date_to": "2026-08-23",
+                    "snapshot_kind": None,
+                    "row_count": 679,
+                }
+            ],
+            "iventas_periods": [
+                {
+                    "period_key": "IVENTAS-2026-08",
+                    "sync_run_id": 26,
+                    "date_from": "2026-08-01",
+                    "date_to": "2026-08-26",
+                    "contacts_unique": 51451,
+                }
+            ],
+        }
+        with (
+            patch(
+                "app.routes.marketing_routes."
+                "_get_current_marketing_user",
+                return_value=self.admin,
+            ),
+            patch(
+                "app.routes.marketing_routes."
+                "list_marketing_reactivation_sources",
+                return_value=expected,
+            ) as source_service,
+        ):
+            response = self.client.get(
+                "/api/marketing/reactivation/sources",
+                headers=self.headers,
+            )
+
+        assert response.status_code == 200
+        assert response.get_json() == expected
+        assert source_service.call_count == 1
+
+    def test_reactivation_sources_allow_empty_contract(self):
+        expected = {
+            "vencidos_snapshots": [],
+            "iventas_periods": [],
+        }
+        with (
+            patch(
+                "app.routes.marketing_routes."
+                "_get_current_marketing_user",
+                return_value=self.admin,
+            ),
+            patch(
+                "app.routes.marketing_routes."
+                "list_marketing_reactivation_sources",
+                return_value=expected,
+            ),
+        ):
+            response = self.client.get(
+                "/api/marketing/reactivation/sources",
+                headers=self.headers,
+            )
+
+        assert response.status_code == 200
+        assert response.get_json() == expected
+
+    @pytest.mark.parametrize(
+        "query_string",
+        [
+            "",
+            "?vencidos_snapshot_id=7",
+            "?iventas_period_key=IVENTAS-2026-08",
+            (
+                "?vencidos_snapshot_id=abc"
+                "&iventas_period_key=IVENTAS-2026-08"
+            ),
+            (
+                "?vencidos_snapshot_id=0"
+                "&iventas_period_key=IVENTAS-2026-08"
+            ),
+            "?vencidos_snapshot_id=-1&iventas_period_key=%20%20",
+            "?vencidos_snapshot_id=7&iventas_period_key=%20%20",
+        ],
+    )
+    def test_reactivation_candidates_reject_invalid_params(
+        self,
+        query_string,
+    ):
+        with patch(
+            "app.routes.marketing_routes."
+            "_get_current_marketing_user",
+            return_value=self.admin,
+        ):
+            response = self.client.get(
+                "/api/marketing/reactivation/candidates"
+                f"{query_string}",
+                headers=self.headers,
+            )
+
+        assert response.status_code == 400
+
+    def test_reactivation_candidates_returns_complete_contract(self):
+        expected = {
+            "sources": {
+                "vencidos_snapshot_id": 7,
+                "activos_snapshot_id": 8,
+                "iventas_sync_run_id": 26,
+                "iventas_period_key": "IVENTAS-2026-08",
+            },
+            "summary": {
+                "total_rows": 1,
+                "status_counts": {"CONTACT_HISTORY_UNKNOWN": 1},
+                "reason_counts": {"NO_OUTBOUND_EVIDENCE": 1},
+            },
+            "rows": [
+                {
+                    "vencido_row_id": 101,
+                    "status": "CONTACT_HISTORY_UNKNOWN",
+                    "reason": "NO_OUTBOUND_EVIDENCE",
+                }
+            ],
+        }
+        with (
+            patch(
+                "app.routes.marketing_routes."
+                "_get_current_marketing_user",
+                return_value=self.admin,
+            ),
+            patch(
+                "app.routes.marketing_routes."
+                "build_marketing_reactivation_candidates",
+                return_value=expected,
+            ) as candidate_service,
+        ):
+            response = self.client.get(
+                "/api/marketing/reactivation/candidates"
+                "?vencidos_snapshot_id=7"
+                "&iventas_period_key=IVENTAS-2026-08",
+                headers=self.headers,
+            )
+
+        assert response.status_code == 200
+        assert response.get_json() == expected
+        candidate_service.assert_called_once()
+        assert candidate_service.call_args.kwargs[
+            "vencidos_snapshot_id"
+        ] == 7
+        assert candidate_service.call_args.kwargs[
+            "iventas_period_key"
+        ] == "IVENTAS-2026-08"
+
+    def test_reactivation_canonical_error_is_not_empty_success(self):
+        from app.services.marketing_iventas_leads_service import (
+            MarketingIventasCanonicalRunRequiredError,
+        )
+
+        with (
+            patch(
+                "app.routes.marketing_routes."
+                "_get_current_marketing_user",
+                return_value=self.admin,
+            ),
+            patch(
+                "app.routes.marketing_routes."
+                "build_marketing_reactivation_candidates",
+                side_effect=MarketingIventasCanonicalRunRequiredError(
+                    "Sin canonical"
+                ),
+            ),
+        ):
+            response = self.client.get(
+                "/api/marketing/reactivation/candidates"
+                "?vencidos_snapshot_id=7"
+                "&iventas_period_key=IVENTAS-2026-08",
+                headers=self.headers,
+            )
+
+        assert response.status_code == 500
+        assert response.get_json()["status"] == "error"
 
     def test_inputs_endpoint_returns_scoped_rows(self):
         with (
