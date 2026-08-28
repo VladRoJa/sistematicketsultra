@@ -384,8 +384,43 @@ def test_non_retryable_status_fails_immediately(
     assert clock.sleeps == []
 
 
-def test_timeout_becomes_transport_error() -> None:
-    client, session, _ = build_client([
+def test_timeout_retries_then_succeeds() -> None:
+    client, session, clock = build_client([
+        requests.Timeout(),
+        ok_response(),
+    ])
+
+    page = fetch_default(client)
+
+    assert page.http_status == 200
+    assert len(session.calls) == 2
+    assert clock.sleeps == [
+        2.0,
+    ]
+
+
+def test_request_exception_retries_then_succeeds(
+) -> None:
+    client, session, clock = build_client([
+        requests.ConnectionError(),
+        ok_response(),
+    ])
+
+    page = fetch_default(client)
+
+    assert page.http_status == 200
+    assert len(session.calls) == 2
+    assert clock.sleeps == [
+        2.0,
+    ]
+
+
+def test_transport_retry_exhaustion_uses_backoff(
+) -> None:
+    client, session, clock = build_client([
+        requests.Timeout(),
+        requests.Timeout(),
+        requests.Timeout(),
         requests.Timeout(),
     ])
 
@@ -394,21 +429,12 @@ def test_timeout_becomes_transport_error() -> None:
     ):
         fetch_default(client)
 
-    assert len(session.calls) == 1
-
-
-def test_request_exception_becomes_transport_error(
-) -> None:
-    client, session, _ = build_client([
-        requests.ConnectionError(),
-    ])
-
-    with pytest.raises(
-        IventasTransportError
-    ):
-        fetch_default(client)
-
-    assert len(session.calls) == 1
+    assert len(session.calls) == 4
+    assert clock.sleeps == [
+        2.0,
+        5.0,
+        10.0,
+    ]
 
 
 def test_http_200_invalid_json_is_payload_error(
