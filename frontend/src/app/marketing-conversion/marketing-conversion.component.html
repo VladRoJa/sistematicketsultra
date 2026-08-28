@@ -29,12 +29,17 @@
         class="month-field"
       >
         <mat-label>Mes</mat-label>
-        <input
-          matInput
-          type="month"
+        <mat-select
           [formControl]="monthControl"
           aria-label="Mes del dashboard de Marketing y Conversión"
-        />
+        >
+          <mat-option
+            *ngFor="let option of monthOptions"
+            [value]="option.value"
+          >
+            {{ option.label }}
+          </mat-option>
+        </mat-select>
         <mat-error *ngIf="monthControl.invalid">
           Selecciona un mes válido.
         </mat-error>

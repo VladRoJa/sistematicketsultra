@@ -18,6 +18,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -121,6 +122,7 @@ type DashboardRequestResult =
     MatIconModule,
     MatInputModule,
     MatProgressSpinnerModule,
+    MatSelectModule,
     MatSnackBarModule,
     MatTableModule,
     ReactiveFormsModule,
@@ -147,6 +149,52 @@ export class MarketingConversionComponent implements OnInit {
       Validators.pattern(/^\d{4}-\d{2}$/),
     ],
   });
+
+  readonly monthOptions = this.buildMonthOptions();
+
+  private buildMonthOptions(): Array<{
+    value: string;
+    label: string;
+  }> {
+    const firstMonth = new Date(2026, 6, 1);
+    const currentMonth = new Date();
+
+    const formatter = new Intl.DateTimeFormat('es-MX', {
+      month: 'long',
+      year: 'numeric',
+    });
+
+    const options: Array<{
+      value: string;
+      label: string;
+    }> = [];
+
+    const cursor = new Date(
+      currentMonth.getFullYear(),
+      currentMonth.getMonth(),
+      1,
+    );
+
+    while (cursor >= firstMonth) {
+      const year = cursor.getFullYear();
+      const month = String(
+        cursor.getMonth() + 1,
+      ).padStart(2, '0');
+
+      const formatted = formatter.format(cursor);
+
+      options.push({
+        value: `${year}-${month}`,
+        label:
+          formatted.charAt(0).toUpperCase()
+          + formatted.slice(1),
+      });
+
+      cursor.setMonth(cursor.getMonth() - 1);
+    }
+
+    return options;
+  }
 
   readonly branchColumns = [
     'sucursal',
