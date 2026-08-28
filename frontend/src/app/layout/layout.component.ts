@@ -1207,8 +1207,8 @@ private puedeVerMarketingConversionPorRol(): boolean {
     'ADMIN',
     'ADMINISTRADOR',
     'SUPER_ADMIN',
-    //'MARKETING',
-    //'LECTOR_GLOBAL',
+    'MARKETING',
+    'LECTOR_GLOBAL',
     //'GERENTE_REGIONAL',
     //'GERENTE',
   ].includes(rol);
