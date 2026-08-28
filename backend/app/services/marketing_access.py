@@ -92,6 +92,15 @@ def resolve_marketing_access(user) -> MarketingAccess:
 
     can_edit_inputs = role in MARKETING_INPUT_EDIT_ROLES
 
+    if role == "MARKETING":
+        return MarketingAccess(
+            type="GLOBAL",
+            is_global=True,
+            branch_ids=(),
+            role=role,
+            can_edit_inputs=can_edit_inputs,
+        )
+
     if role == "GERENTE":
         primary_branch_id = get_user_primary_branch_id(user)
         if primary_branch_id is None:

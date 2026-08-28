@@ -50,15 +50,17 @@ def test_global_scope_materializes_available_branches():
     assert access.can_edit_inputs is True
 
 
-def test_existing_marketing_role_can_edit_only_its_scope():
+def test_marketing_role_has_global_scope_and_can_edit():
     access = resolve_marketing_access(
         SimpleNamespace(
             rol="MARKETING",
-            sucursal_id=1,
-            sucursales_ids=[1, 2],
+            sucursal_id=100,
+            sucursales_ids=[100],
         )
     )
 
-    assert access.type == "ASSIGNED_BRANCHES"
-    assert access.branch_ids == (1, 2)
+    assert access.type == "GLOBAL"
+    assert access.is_global is True
+    assert access.branch_ids == ()
+    assert access.visible_branch_ids([3, 1, 2]) == (1, 2, 3)
     assert access.can_edit_inputs is True
