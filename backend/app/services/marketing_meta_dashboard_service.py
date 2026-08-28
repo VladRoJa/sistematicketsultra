@@ -30,6 +30,31 @@ ASSIGNMENT_STATUS_UNASSIGNED = "UNASSIGNED"
 ASSIGNMENT_STATUS_CONFLICT = "CONFLICT"
 
 
+# Fallbacks históricos verificados para campañas comerciales cuyo
+# ad_id nunca fue observado por iVentas. La clave es:
+# (year, month, campaign_id) -> sucursal_id.
+#
+# La evidencia exacta iVentas siempre tiene prioridad y un conflicto
+# entre sucursales nunca debe ser ocultado por este fallback.
+HISTORICAL_CAMPAIGN_BRANCH_FALLBACKS: dict[
+    tuple[int, int, str],
+    int,
+] = {
+    # Julio 2026
+    (2026, 7, "120249797495660114"): 25,  # Metepec
+    (2026, 7, "120251159837560114"): 25,  # Metepec - Julio
+    (2026, 7, "120245532978040426"): 15,  # San Isidro Culiacan
+    (2026, 7, "120245875115840426"): 20,  # Paseo La Paz
+    (2026, 7, "120245522323280426"): 13,  # Papalote Tijuana
+    (2026, 7, "120245670368460426"): 1,   # Villas del Rey
+    (2026, 7, "120249797535580114"): 4,   # Tec Mexicali
+    (2026, 7, "120245532907030426"): 5,   # Sendero Mexicali
+
+    # Agosto 2026
+    (2026, 8, "120252550610380502"): 4,   # Tec Mexicali
+}
+
+
 @dataclass(frozen=True)
 class MetaDashboardCampaignData:
     campaign_id: str
@@ -273,6 +298,16 @@ def _aggregate_campaign_investment(
             branch_ids.update(branches_by_ad.get(ad_id, set()))
             contact_ids.update(contacts_by_ad.get(ad_id, set()))
 
+        fallback_branch_id = (
+            HISTORICAL_CAMPAIGN_BRANCH_FALLBACKS.get(
+                (
+                    date_from.year,
+                    date_from.month,
+                    campaign_id,
+                )
+            )
+        )
+
         if len(branch_ids) == 1:
             branch_id = next(iter(branch_ids))
             branch_spend[branch_id] = (
@@ -281,16 +316,24 @@ def _aggregate_campaign_investment(
             assigned_spend += spend
             campaigns_assigned += 1
             assignment_status = ASSIGNMENT_STATUS_ASSIGNED
-        elif not branch_ids:
-            branch_id = None
-            unassigned_spend += spend
-            campaigns_unassigned += 1
-            assignment_status = ASSIGNMENT_STATUS_UNASSIGNED
-        else:
+        elif len(branch_ids) > 1:
             branch_id = None
             conflict_spend += spend
             campaigns_conflict += 1
             assignment_status = ASSIGNMENT_STATUS_CONFLICT
+        elif fallback_branch_id is not None:
+            branch_id = fallback_branch_id
+            branch_spend[branch_id] = (
+                branch_spend.get(branch_id, Decimal("0")) + spend
+            )
+            assigned_spend += spend
+            campaigns_assigned += 1
+            assignment_status = ASSIGNMENT_STATUS_ASSIGNED
+        else:
+            branch_id = None
+            unassigned_spend += spend
+            campaigns_unassigned += 1
+            assignment_status = ASSIGNMENT_STATUS_UNASSIGNED
 
         def first_value(
             values_by_campaign: Mapping[str, set[str]],
