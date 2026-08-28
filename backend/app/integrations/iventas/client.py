@@ -530,10 +530,27 @@ class IventasClient:
                     timeout=self._timeout,
                 )
             except requests.Timeout:
+                if attempt < total_attempts:
+                    delay = RETRY_DELAYS_SECONDS[
+                        attempt - 1
+                    ]
+
+                    self._sleeper(delay)
+                    continue
+
                 raise IventasTransportError(
                     "Timeout al consultar iVentas."
                 ) from None
+
             except requests.RequestException as exc:
+                if attempt < total_attempts:
+                    delay = RETRY_DELAYS_SECONDS[
+                        attempt - 1
+                    ]
+
+                    self._sleeper(delay)
+                    continue
+
                 raise IventasTransportError(
                     "Error de transporte al consultar "
                     f"iVentas: "
