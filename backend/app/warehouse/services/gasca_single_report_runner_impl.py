@@ -35,9 +35,7 @@ SUPPORTED_REPORT_TYPES = frozenset(
 )
 XLSX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 DATATABLES_EXPORT_MENU_SELECTOR = "div.dropdown-menu[role='menu']:visible"
-DATATABLES_EXCEL_OPTION_SELECTOR = (
-    "a.dt-button.buttons-excel.buttons-html5[href='#']:visible"
-)
+DATATABLES_EXCEL_OPTION_SELECTOR = "a:has-text('Excel'):visible"
 
 
 

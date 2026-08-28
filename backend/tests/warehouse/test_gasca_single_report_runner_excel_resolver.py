@@ -12,18 +12,12 @@ class _FakeLocator:
 
     def locator(self, selector):
         assert selector == runner.DATATABLES_EXCEL_OPTION_SELECTOR
-        required_classes = {
-            "dt-button",
-            "buttons-excel",
-            "buttons-html5",
-        }
         matches = [
             node
             for node in self.nodes[0]["children"]
             if node["visible"]
             and node["tag"] == "a"
-            and node.get("href") == "#"
-            and required_classes.issubset(node["classes"])
+            and "excel" in str(node.get("text") or "").strip().lower()
         ]
         return _FakeLocator(matches)
 
@@ -45,13 +39,8 @@ class _FakePage:
 def _excel_link():
     return {
         "tag": "a",
-        "classes": {
-            "dt-button",
-            "dropdown-item",
-            "buttons-excel",
-            "buttons-html5",
-        },
-        "href": "#",
+        "classes": {"dropdown-item"},
+        "href": "/export/excel",
         "text": "Excel",
         "visible": True,
     }
