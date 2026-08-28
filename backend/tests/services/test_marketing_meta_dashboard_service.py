@@ -427,3 +427,160 @@ def test_restricted_detail_hides_campaigns_and_corporate_totals():
     assert detail["summary"]["total_meta_spend"] is None
     assert detail["summary"]["unassigned_spend"] is None
     assert detail["summary"]["conflict_spend"] is None
+
+
+def test_historical_campaign_fallback_assigns_tecnologico_august():
+    result = _aggregate(
+        [
+            {
+                "campaign_id": "120252550610380502",
+                "campaign_name": "Tecnológico",
+                "ad_id": "120252550610370502",
+                "spend": "2140.76",
+            }
+        ],
+        [],
+    )
+
+    assert result.assigned_spend == Decimal("2140.76")
+    assert result.unassigned_spend == Decimal("0")
+    assert result.conflict_spend == Decimal("0")
+    assert result.branch_spend == {
+        4: Decimal("2140.76"),
+    }
+    assert result.campaigns_assigned == 1
+    assert result.campaigns_unassigned == 0
+    assert result.campaign_rows[0].assignment_status == "ASSIGNED"
+    assert result.campaign_rows[0].sucursal_id == 4
+
+
+def test_historical_campaign_fallbacks_assign_verified_july_campaigns():
+    result = _aggregate_campaign_investment(
+        meta_sync_run_id=20,
+        iventas_sync_run_id=22,
+        date_from=date(2026, 7, 1),
+        date_to=date(2026, 7, 31),
+        insight_rows=[
+            {
+                "campaign_id": "120249797495660114",
+                "ad_id": "a1",
+                "spend": "6836.35",
+            },
+            {
+                "campaign_id": "120251159837560114",
+                "ad_id": "a2",
+                "spend": "6649.92",
+            },
+            {
+                "campaign_id": "120245532978040426",
+                "ad_id": "a3",
+                "spend": "5124.28",
+            },
+            {
+                "campaign_id": "120245875115840426",
+                "ad_id": "a4",
+                "spend": "4465.92",
+            },
+            {
+                "campaign_id": "120245522323280426",
+                "ad_id": "a5",
+                "spend": "2611.87",
+            },
+            {
+                "campaign_id": "120245670368460426",
+                "ad_id": "a6",
+                "spend": "2301.91",
+            },
+            {
+                "campaign_id": "120249797535580114",
+                "ad_id": "a7",
+                "spend": "1277.10",
+            },
+            {
+                "campaign_id": "120245532907030426",
+                "ad_id": "a8",
+                "spend": "489.00",
+            },
+        ],
+        evidence_rows=[],
+    )
+
+    assert result.assigned_spend == Decimal("29756.35")
+    assert result.unassigned_spend == Decimal("0")
+    assert result.conflict_spend == Decimal("0")
+    assert result.campaigns_assigned == 8
+    assert result.campaigns_unassigned == 0
+    assert result.branch_spend == {
+        25: Decimal("13486.27"),
+        15: Decimal("5124.28"),
+        20: Decimal("4465.92"),
+        13: Decimal("2611.87"),
+        1: Decimal("2301.91"),
+        4: Decimal("1277.10"),
+        5: Decimal("489.00"),
+    }
+
+
+def test_historical_fallback_never_overrides_iventas_conflict():
+    result = _aggregate_campaign_investment(
+        meta_sync_run_id=21,
+        iventas_sync_run_id=23,
+        date_from=date(2026, 8, 1),
+        date_to=date(2026, 8, 27),
+        insight_rows=[
+            {
+                "campaign_id": "120252550610380502",
+                "ad_id": "120252550610370502",
+                "spend": "2140.76",
+            }
+        ],
+        evidence_rows=[
+            {
+                "meta_ad_id": "120252550610370502",
+                "sucursal_id": 4,
+                "iventas_contact_row_id": 1001,
+            },
+            {
+                "meta_ad_id": "120252550610370502",
+                "sucursal_id": 5,
+                "iventas_contact_row_id": 1002,
+            },
+        ],
+    )
+
+    assert result.assigned_spend == Decimal("0")
+    assert result.unassigned_spend == Decimal("0")
+    assert result.conflict_spend == Decimal("2140.76")
+    assert result.branch_spend == {}
+    assert result.campaigns_assigned == 0
+    assert result.campaigns_conflict == 1
+    assert result.campaign_rows[0].assignment_status == "CONFLICT"
+    assert result.campaign_rows[0].sucursal_id is None
+    assert result.campaign_rows[0].evidence_branch_ids == (4, 5)
+
+
+def test_historical_fallback_is_scoped_to_exact_month():
+    result = _aggregate_campaign_investment(
+        meta_sync_run_id=99,
+        iventas_sync_run_id=99,
+        date_from=date(2026, 9, 1),
+        date_to=date(2026, 9, 30),
+        insight_rows=[
+            {
+                "campaign_id": "120252550610380502",
+                "ad_id": "120252550610370502",
+                "spend": "100.00",
+            }
+        ],
+        evidence_rows=[],
+    )
+
+    assert result.assigned_spend == Decimal("0")
+    assert result.unassigned_spend == Decimal("100.00")
+    assert result.conflict_spend == Decimal("0")
+    assert result.branch_spend == {}
+    assert result.campaigns_assigned == 0
+    assert result.campaigns_unassigned == 1
+    assert result.campaign_rows[0].assignment_status == "UNASSIGNED"
+    assert result.campaign_rows[0].sucursal_id is None
+
