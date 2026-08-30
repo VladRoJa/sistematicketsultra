@@ -213,19 +213,28 @@ def _family_row(ticket):
 
 def _summary_rows(tickets):
     rows_by_branch = OrderedDict()
+    family_keys = {
+        family_key
+        for family_key, _ in SUMMARY_FAMILIES
+    }
+
     for ticket in tickets:
         branch_name = _safe_branch_name(ticket)
         if branch_name not in rows_by_branch:
             rows_by_branch[branch_name] = {
                 "total": 0,
+                "unclassified": 0,
                 **{family_key: 0 for family_key, _ in SUMMARY_FAMILIES},
             }
 
         counts = rows_by_branch[branch_name]
         counts["total"] += 1
+
         family_key = _snapshot_family_key(ticket)
-        if family_key in counts:
+        if family_key in family_keys:
             counts[family_key] += 1
+        else:
+            counts["unclassified"] += 1
 
     rows = []
     for branch_name in sorted(rows_by_branch, key=str.casefold):
@@ -238,6 +247,7 @@ def _summary_rows(tickets):
                     counts[family_key]
                     for family_key, _ in SUMMARY_FAMILIES
                 ),
+                counts["unclassified"],
             )
         )
     return rows
@@ -283,6 +293,7 @@ def construir_reporte_xlsx(tickets=None):
         "Sucursal",
         "Fallas",
         *(label for _, label in SUMMARY_FAMILIES),
+        "Sin clasificar",
     )
     summary_sheet.append(summary_headers)
     for row in _summary_rows(tickets):
@@ -290,7 +301,7 @@ def construir_reporte_xlsx(tickets=None):
     _style_worksheet(
         summary_sheet,
         summary_headers,
-        (24, 12, 14, 14, 14, 14, 14, 14, 16),
+        (24, 12, 14, 14, 14, 14, 14, 14, 16, 16),
     )
 
     for family_key, sheet_name in FAMILY_SHEETS:
