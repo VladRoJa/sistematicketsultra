@@ -156,6 +156,70 @@
    Suite Ultra UI v1 - Bloque refacción
    ========================================================================== */
 
+.asignar-fecha-diagnostico {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--ultra-gray-200);
+  border-radius: var(--ultra-radius-lg);
+  background: var(--ultra-gray-50);
+}
+
+.asignar-fecha-diagnostico__header {
+  grid-column: 1 / -1;
+}
+
+.asignar-fecha-diagnostico__header strong {
+  color: var(--ultra-gray-900);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.asignar-fecha-diagnostico__header p {
+  margin: 3px 0 0;
+  color: var(--ultra-gray-600);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.asignar-fecha-diagnostico__familia {
+  min-height: 56px;
+  padding: 8px 12px;
+  border: 1px solid var(--ultra-gray-300);
+  border-radius: var(--ultra-radius-md);
+  background: var(--ultra-gray-100);
+}
+
+.asignar-fecha-diagnostico__familia span,
+.asignar-fecha-diagnostico__familia strong {
+  display: block;
+}
+
+.asignar-fecha-diagnostico__familia span {
+  margin-bottom: 4px;
+  color: var(--ultra-gray-600);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.asignar-fecha-diagnostico__familia strong {
+  color: var(--ultra-gray-900);
+  font-size: 14px;
+}
+
+.asignar-fecha-diagnostico__sin-familia {
+  grid-column: 1 / -1;
+  padding: 10px 12px;
+  border: 1px solid #f0b7aa;
+  border-radius: var(--ultra-radius-md);
+  background: #fff4f1;
+  color: #8a2f1d;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
 .asignar-fecha-refaccion {
   padding: 14px;
   border: 1px solid var(--ultra-gray-200);
@@ -237,6 +301,10 @@
 
   .asignar-fecha-modal__header {
     align-items: flex-start;
+  }
+
+  .asignar-fecha-diagnostico {
+    grid-template-columns: 1fr;
   }
 
   .asignar-fecha-modal__actions {

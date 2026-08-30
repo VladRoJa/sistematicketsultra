@@ -20,6 +20,25 @@ export type EstadoCierre =
   | 'rechazado_por_creador'
   | null;
 
+export type CondicionOperativa = 'TRABAJA' | 'NO_TRABAJA';
+
+export interface FamiliaEquipoDTO {
+  id: number;
+  key: string;
+  nombre: string;
+  categoria_inventario_id?: number | null;
+  activo: boolean;
+}
+
+export interface FallaMantenimientoDTO {
+  id: number;
+  familia_equipo_id: number;
+  key: string;
+  nombre: string;
+  activo: boolean;
+  orden: number;
+}
+
 /** Inventario/Equipo que se muestra en la tabla (Sistemas y Mantenimiento) */
 export interface InventarioDTO {
   id: number;
@@ -29,6 +48,8 @@ export interface InventarioDTO {
   codigo_interno?: string | null;
   tipo?: string | null;
   descripcion?: string | null;
+  familia_equipo_id?: number | null;
+  familia_equipo?: FamiliaEquipoDTO | null;
 }
 
 /** DTO general de Ticket (para PATCH/lectura). Mantiene campos opcionales amplios. */
@@ -67,6 +88,13 @@ export interface TicketDTO {
   inventario?: InventarioDTO | null;
   equipo?: string | null;
   ubicacion?: string | null;
+
+  // Diagnóstico estructurado histórico del ticket
+  familia_equipo_id?: number | null;
+  familia_equipo?: FamiliaEquipoDTO | null;
+  falla_mantenimiento_id?: number | null;
+  falla_mantenimiento?: FallaMantenimientoDTO | null;
+  condicion_operativa?: CondicionOperativa | null;
 
   // Clasificación “plana” auxiliar
   clasificacion_id?: number | null;
@@ -115,6 +143,16 @@ export interface SetCompromisoPayload {
   descripcion_refaccion?: string | null;
   /** Lo manda el modal del Jefe cuando define la refacción */
   refaccion_definida_por_jefe?: boolean;
+}
+
+/** Operación atómica de diagnóstico y fecha compromiso de Mantenimiento. */
+export interface CompromisoMantenimientoPayload {
+  fecha_solucion: string;
+  motivo: string;
+  falla_mantenimiento_id?: number | null;
+  condicion_operativa?: CondicionOperativa | null;
+  necesita_refaccion?: boolean;
+  descripcion_refaccion?: string | null;
 }
 
 export interface RRHHAccionPayload {

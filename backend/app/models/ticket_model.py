@@ -42,6 +42,25 @@ class Ticket(db.Model):
     criticidad = db.Column(db.Integer, default=1, nullable=False)
     aparato_id = db.Column(db.Integer, db.ForeignKey('inventario_general.id'), nullable=True)
     problema_detectado = db.Column(db.Text)
+    familia_equipo_id = db.Column(
+        db.Integer,
+        db.ForeignKey(
+            'familia_equipo.id',
+            name='fk_tickets_familia_equipo',
+            ondelete='RESTRICT',
+        ),
+        nullable=True,
+    )
+    falla_mantenimiento_id = db.Column(
+        db.Integer,
+        db.ForeignKey(
+            'falla_mantenimiento.id',
+            name='fk_tickets_falla_mantenimiento',
+            ondelete='RESTRICT',
+        ),
+        nullable=True,
+    )
+    condicion_operativa = db.Column(db.String(20), nullable=True)
 
     # Refacciones
     necesita_refaccion = db.Column(db.Boolean, default=False)
@@ -85,9 +104,24 @@ class Ticket(db.Model):
     usuario = db.relationship('UserORM', foreign_keys=[username])
     sucursal = db.relationship('Sucursal', backref='tickets', foreign_keys=[sucursal_id])
     inventario = db.relationship('InventarioGeneral', foreign_keys=[aparato_id])
+    familia_equipo = db.relationship('FamiliaEquipoORM', foreign_keys=[familia_equipo_id])
+    falla_mantenimiento = db.relationship(
+        'FallaMantenimientoORM',
+        foreign_keys=[falla_mantenimiento_id],
+    )
     clasificacion = db.relationship('CatalogoClasificacion', backref='tickets')
     sucursal_destino = db.relationship('Sucursal', foreign_keys=[sucursal_id_destino], backref='tickets_destino')
     categoria_inventario = db.relationship('CategoriaInventario', foreign_keys=[categoria_inventario_id])
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "condicion_operativa IS NULL "
+            "OR condicion_operativa IN ('TRABAJA', 'NO_TRABAJA')",
+            name='ck_tickets_condicion_operativa',
+        ),
+        db.Index('ix_tickets_familia_equipo_id', 'familia_equipo_id'),
+        db.Index('ix_tickets_falla_mantenimiento_id', 'falla_mantenimiento_id'),
+    )
 
     # ─── Serialización ──────────────────────────
 
@@ -177,6 +211,7 @@ class Ticket(db.Model):
             'departamento_nombre': self.departamento.nombre if self.departamento else "N/A",
 
             'criticidad': self.criticidad,
+            'aparato_id': self.aparato_id,
             'clasificacion_id': self.clasificacion_id,
             'clasificacion_nombre': self.clasificacion and self.clasificacion.nombre,
             'jerarquia_clasificacion': self._obtener_jerarquia_clasificacion(),
@@ -197,7 +232,25 @@ class Ticket(db.Model):
                 'marca': self.inventario and self.inventario.marca,
                 'codigo_interno': self.inventario and self.inventario.codigo_interno,
                 'subcategoria': self.inventario and self.inventario.subcategoria,
+                'familia_equipo_id': self.inventario and self.inventario.familia_equipo_id,
+                'familia_equipo': (
+                    self.inventario.familia_equipo.to_dict()
+                    if self.inventario and self.inventario.familia_equipo
+                    else None
+                ),
             } if self.inventario else None,
+
+            'familia_equipo_id': self.familia_equipo_id,
+            'familia_equipo': (
+                self.familia_equipo.to_dict() if self.familia_equipo else None
+            ),
+            'falla_mantenimiento_id': self.falla_mantenimiento_id,
+            'falla_mantenimiento': (
+                self.falla_mantenimiento.to_dict()
+                if self.falla_mantenimiento
+                else None
+            ),
+            'condicion_operativa': self.condicion_operativa,
 
             'ubicacion': self.ubicacion,
             'equipo': self.equipo,

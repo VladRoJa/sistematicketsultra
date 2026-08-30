@@ -148,6 +148,16 @@
     <!-- GRUPO MUSCULAR: solo si tipo == 'aparato' -->
     <ng-container *ngIf="form.get('tipo')?.value === 'Aparatos'">
       <mat-form-field appearance="fill" class="campo">
+        <mat-label>Familia de equipo</mat-label>
+        <mat-select formControlName="familia_equipo_id">
+          <mat-option [value]="null">Sin clasificar</mat-option>
+          <mat-option *ngFor="let familia of familiasEquipo" [value]="familia.id">
+            {{ familia.nombre }}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field appearance="fill" class="campo">
         <mat-label>Grupo Muscular</mat-label>
         <mat-select formControlName="grupo_muscular">
           <mat-option>

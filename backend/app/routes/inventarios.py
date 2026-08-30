@@ -13,6 +13,7 @@ import qrcode
 from app. extensions import db
 from app.models.catalogos import CategoriaInventario
 from app.models.inventario import InventarioGeneral, MovimientoInventario, DetalleMovimiento, InventarioSucursal
+from app.models.mantenimiento_equipo import FamiliaEquipoORM
 from app.models.ticket_model import Ticket
 from app.models.user_model import UserORM
 from app.models.sucursal_model import Sucursal
@@ -243,6 +244,14 @@ def success_response(message, extra=None):
         res.update(extra)
     return jsonify(res), 200
 
+
+def _familia_equipo_actual_payload(inventario):
+    familia = getattr(inventario, 'familia_equipo', None)
+    return {
+        'familia_equipo_id': getattr(inventario, 'familia_equipo_id', None),
+        'familia_equipo': familia.to_dict() if familia else None,
+    }
+
 # ----------------------------------------------------------------------
 # RUTAS
 # ----------------------------------------------------------------------
@@ -267,6 +276,27 @@ def _parse_int_nonneg(val, field_name):
         return n
     except Exception:
         raise ValueError(f"{field_name} debe ser un entero no negativo")
+
+
+def _validar_familia_equipo_activa(value, tipo_inventario):
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return None, None
+
+    familia_id = _coerce_int_or_none(value)
+    if familia_id is None or familia_id <= 0:
+        return None, error_response('familia_equipo_id debe ser un entero positivo')
+
+    if str(tipo_inventario or '').strip().lower() not in {'aparato', 'aparatos'}:
+        return None, error_response('La familia de equipo sólo aplica a inventario de tipo aparato')
+
+    familia = FamiliaEquipoORM.query.filter_by(
+        id=familia_id,
+        activo=True,
+    ).first()
+    if not familia:
+        return None, error_response('Familia de equipo activa no encontrada')
+
+    return familia.id, None
 
 
 # Crear un nuevo inventario (producto/aparato/unificado)
@@ -299,10 +329,18 @@ def crear_inventario():
             pedido_mes = _parse_int_nonneg(data.get('pedido_mes'), 'pedido_mes')
         except ValueError as ve:
             return error_response(str(ve))
+
+        tipo_inventario = normalizar_campo(data.get('tipo', 'producto'))
+        familia_equipo_id, familia_error = _validar_familia_equipo_activa(
+            data.get('familia_equipo_id'),
+            tipo_inventario,
+        )
+        if familia_error:
+            return familia_error
         
         
         nuevo = InventarioGeneral(
-            tipo=normalizar_campo(data.get('tipo', 'producto')),
+            tipo=tipo_inventario,
             nombre=normalizar_campo(data['nombre']),
             descripcion=normalizar_campo(data.get('descripcion')),
             marca=normalizar_campo(data.get('marca')),
@@ -317,7 +355,8 @@ def crear_inventario():
             semana_pedido=normalizar_campo(data.get('semana_pedido')),
             fecha_inventario=ahora,
             grupo_muscular=normalizar_campo(data.get('grupo_muscular')),
-            subcategoria=normalizar_campo(data.get('subcategoria', ''))  
+            subcategoria=normalizar_campo(data.get('subcategoria', '')),
+            familia_equipo_id=familia_equipo_id,
             
         )
 
@@ -391,6 +430,7 @@ def obtener_inventario():
                     'grupo_muscular': inv.grupo_muscular,
                     'stock': stock,
                     'categoria_inventario_id': getattr(inv, 'categoria_inventario_id', None),
+                    **_familia_equipo_actual_payload(inv),
                 })
             return jsonify(data), 200
 
@@ -421,6 +461,7 @@ def obtener_inventario():
                 'fecha_inventario': str(inv.fecha_inventario) if inv.fecha_inventario else None,
                 'grupo_muscular': inv.grupo_muscular,
                 'categoria_inventario_id': getattr(inv, 'categoria_inventario_id', None),
+                **_familia_equipo_actual_payload(inv),
             })
         return jsonify(data), 200
 
@@ -706,6 +747,16 @@ def editar_inventario(inventario_id):
             return error_response('Inventario no encontrado', 404)
 
         data = request.get_json()
+        if 'familia_equipo_id' in data:
+            tipo_inventario = data.get('tipo', inventario.tipo)
+            familia_equipo_id, familia_error = _validar_familia_equipo_activa(
+                data.get('familia_equipo_id'),
+                tipo_inventario,
+            )
+            if familia_error:
+                return familia_error
+            inventario.familia_equipo_id = familia_equipo_id
+
         campos = [
             'tipo', 'nombre', 'descripcion', 'marca', 'proveedor',
             'categoria', 'unidad_medida',
@@ -794,7 +845,8 @@ def obtener_inventario_por_id(inventario_id):
             'gasto_mes': i.gasto_mes,
             'pedido_mes': i.pedido_mes,
             'semana_pedido': i.semana_pedido,
-            'fecha_inventario': str(i.fecha_inventario) if i.fecha_inventario else None
+            'fecha_inventario': str(i.fecha_inventario) if i.fecha_inventario else None,
+            **_familia_equipo_actual_payload(i),
         }
         return jsonify(data), 200
     except Exception as e:
@@ -833,7 +885,8 @@ def buscar_inventario():
             'gasto_mes': i.gasto_mes,
             'pedido_mes': i.pedido_mes,
             'semana_pedido': i.semana_pedido,
-            'fecha_inventario': str(i.fecha_inventario) if i.fecha_inventario else None
+            'fecha_inventario': str(i.fecha_inventario) if i.fecha_inventario else None,
+            **_familia_equipo_actual_payload(i),
         } for i in inventario]
         return jsonify(data), 200
 
@@ -985,6 +1038,7 @@ def listar_equipos():
                 "tipo": eq.tipo,
                 "marca": eq.marca,
                 "categoria": eq.categoria,
+                **_familia_equipo_actual_payload(eq),
                 "sucursal_ids": [
                     inv.sucursal_id for inv in eq.inventarios_sucursal
                 ],
@@ -1164,6 +1218,7 @@ def listar_inventario_filtrado():
             'marca': i.marca,
             'grupo_muscular': getattr(i, 'grupo_muscular', None),
             'stock': sum([inv.stock for inv in i.inventarios_sucursal]),
+            **_familia_equipo_actual_payload(i),
         } for i in inventarios]
 
         return jsonify(data), 200

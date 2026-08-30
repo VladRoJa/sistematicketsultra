@@ -14,6 +14,7 @@ from .inventario import (
     MovimientoInventario,
     DetalleMovimiento,
 )
+from .mantenimiento_equipo import FamiliaEquipoORM, FallaMantenimientoORM
 from .departamento_model import Departamento
 from .formulario_ticket import FormularioTicket, CampoFormulario
 from .pm_bitacora import PmBitacoraORM
@@ -130,6 +131,8 @@ __all__ = [
     "InventarioSucursal",
     "MovimientoInventario",
     "DetalleMovimiento",
+    "FamiliaEquipoORM",
+    "FallaMantenimientoORM",
     "Departamento",
     "FormularioTicket",
     "CampoFormulario",
