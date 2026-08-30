@@ -237,6 +237,47 @@ class MantenimientoEquiposReportServiceTest(unittest.TestCase):
         self.assertEqual(summary_row[2], 2)
         self.assertEqual(workbook["Caminadoras"].max_row, 3)
 
+    def test_resumen_muestra_sin_clasificar_y_total_cuadra(self):
+        snapshot = SimpleNamespace(
+            key="CAMINADORA",
+            nombre="Caminadora",
+        )
+
+        classified = _ticket(
+            30,
+            family=snapshot,
+            family_id=1,
+        )
+        unclassified = _ticket(
+            31,
+            family=None,
+            family_id=None,
+            failure=None,
+            condition=None,
+        )
+
+        workbook = load_workbook(
+            report.construir_reporte_xlsx(
+                [classified, unclassified]
+            )
+        )
+
+        rows = list(
+            workbook["Fallas por familia"].iter_rows(values_only=True)
+        )
+        headers = rows[0]
+        summary = rows[1]
+
+        self.assertEqual(headers[-1], "Sin clasificar")
+        self.assertEqual(summary[1], 2)
+        self.assertEqual(summary[2], 1)
+        self.assertEqual(summary[-1], 1)
+        self.assertEqual(
+            summary[1],
+            sum(value or 0 for value in summary[2:]),
+        )
+
+
 
 if __name__ == "__main__":
     unittest.main()
