@@ -12,6 +12,8 @@ import { InventarioService } from '../../services/inventario.service';
 import { mostrarAlertaToast } from 'src/app/utils/alertas';
 import { ModalAlertaCamposRequeridosComponent } from 'src/app/shared/modal-alerta-campos-requeridos/modal-alerta-campos-requeridos.component';
 import { CatalogoService, CatalogoElemento } from '../../services/catalogo.service';
+import { MantenimientoEquiposService } from '../../services/mantenimiento-equipos.service';
+import { FamiliaEquipoDTO } from '../../types/ticket';
 
 @Component({
   selector: 'app-dialogo-inventario',
@@ -40,6 +42,7 @@ export class DialogoInventarioComponent implements OnInit {
   unidades: CatalogoElemento[] = [];
   tiposInventario: CatalogoElemento[] = [];
   gruposMusculares: CatalogoElemento[] = [];
+  familiasEquipo: FamiliaEquipoDTO[] = [];
 
   // Filtros y opciones filtradas
   marcaFiltroControl = new FormControl('');
@@ -62,6 +65,7 @@ export class DialogoInventarioComponent implements OnInit {
     @Inject(MAT_DIALOG_DATA) public data: any,
     private inventarioService: InventarioService,
     private catalogoService: CatalogoService,
+    private mantenimientoEquiposService: MantenimientoEquiposService,
     private dialog: MatDialog,
   ) {
     this.modo = data?.modo || 'crear';
@@ -70,6 +74,7 @@ export class DialogoInventarioComponent implements OnInit {
       nombre: [data?.item?.nombre || '', Validators.required],
       descripcion: [data?.item?.descripcion || ''],
       tipo: [data?.item?.tipo || '', Validators.required],
+      familia_equipo_id: [data?.item?.familia_equipo_id ?? null],
       marca: [data?.item?.marca || '', Validators.required],
       proveedor: [data?.item?.proveedor || ''],
       categoria: [data?.item?.categoria || '', Validators.required],
@@ -124,6 +129,15 @@ export class DialogoInventarioComponent implements OnInit {
       gmCtrl?.clearValidators();
     }
     gmCtrl?.updateValueAndValidity({ emitEvent: false });
+
+    if (!esAparato) {
+      this.form.get('familia_equipo_id')?.setValue(null, { emitEvent: false });
+    }
+  }
+
+  get esTipoAparato(): boolean {
+    const tipo = String(this.form.get('tipo')?.value || '').trim().toLowerCase();
+    return tipo === 'aparato' || tipo === 'aparatos';
   }
 
   ngOnInit(): void {
@@ -151,6 +165,14 @@ export class DialogoInventarioComponent implements OnInit {
     this.catalogoService.getGrupoMuscular().subscribe(res => {
       this.gruposMusculares = res;
       this.gruposMuscularesFiltrados = res;
+    });
+    this.mantenimientoEquiposService.obtenerFamilias().subscribe({
+      next: (familias) => {
+        this.familiasEquipo = familias;
+      },
+      error: () => {
+        mostrarAlertaToast('No se pudieron cargar las familias de equipo.', 'error');
+      },
     });
 
     // Buscadores para cada select
@@ -244,6 +266,9 @@ export class DialogoInventarioComponent implements OnInit {
       marca: (f.marca || '').trim(),
       proveedor: (f.proveedor || '').trim(),
       categoria: (f.categoria || '').trim(),
+      familia_equipo_id: this.esTipoAparato
+        ? this._toNumberOrNull(f.familia_equipo_id)
+        : null,
       // Backend espera 'unidad_medida'
       unidad_medida: (f.unidad || '').trim(),
 

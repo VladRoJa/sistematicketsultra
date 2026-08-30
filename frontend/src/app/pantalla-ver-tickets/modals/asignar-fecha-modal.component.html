@@ -59,6 +59,50 @@
       </mat-error>
     </mat-form-field>
 
+    <section
+      *ngIf="mostrarDiagnosticoEstructurado"
+      class="asignar-fecha-diagnostico"
+    >
+      <div class="asignar-fecha-diagnostico__header">
+        <strong>Diagnóstico del equipo</strong>
+        <p>La familia actual del aparato se guardará como snapshot histórico del ticket.</p>
+      </div>
+
+      <div *ngIf="familiaEquipoId" class="asignar-fecha-diagnostico__familia">
+        <span>Familia del equipo</span>
+        <strong>{{ familiaEquipoNombre }}</strong>
+      </div>
+
+      <div *ngIf="aparatoSinFamilia" class="asignar-fecha-diagnostico__sin-familia">
+        Este aparato no tiene una familia asignada. Clasifícalo primero desde Inventario.
+      </div>
+
+      <mat-form-field appearance="fill" class="w-full">
+        <mat-label>Falla detectada</mat-label>
+        <mat-select
+          [(ngModel)]="fallaMantenimientoId"
+          [disabled]="!familiaEquipoId || cargandoCatalogos"
+          required
+        >
+          <mat-option *ngFor="let falla of fallas" [value]="falla.id">
+            {{ falla.nombre }}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field appearance="fill" class="w-full">
+        <mat-label>Condición operativa</mat-label>
+        <mat-select [(ngModel)]="condicionOperativa" required>
+          <mat-option
+            *ngFor="let condicion of condicionesOperativas"
+            [value]="condicion.value"
+          >
+            {{ condicion.label }}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+    </section>
+
     <!-- Mini-form de refacción -->
     <section
       *ngIf="mostrarRefaccionJefe"
@@ -112,6 +156,7 @@
       type="button"
       class="asignar-fecha-modal__save"
       (click)="guardar()"
+      [disabled]="guardarDeshabilitado"
     >
       Guardar
     </button>

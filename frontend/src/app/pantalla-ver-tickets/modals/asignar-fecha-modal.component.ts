@@ -1,5 +1,5 @@
 // frontend\src\app\pantalla-ver-tickets\modals\asignar-fecha-modal.component.ts
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -10,6 +10,12 @@ import { MatNativeDateModule } from '@angular/material/core';
 import { FormsModule } from '@angular/forms';
 import { mostrarAlertaToast } from 'src/app/utils/alertas';
 import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatSelectModule } from '@angular/material/select';
+import { MantenimientoEquiposService } from 'src/app/services/mantenimiento-equipos.service';
+import {
+  CondicionOperativa,
+  FallaMantenimientoDTO,
+} from 'src/app/types/ticket';
 
 @Component({
   selector: 'app-asignar-fecha-modal',
@@ -26,10 +32,12 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
     MatDatepickerModule,
     MatNativeDateModule,
     MatCheckboxModule,
+    MatSelectModule,
   ]
 })
-export class AsignarFechaModalComponent {
+export class AsignarFechaModalComponent implements OnChanges {
   @Input() fechaSeleccionada: Date | null = null;
+  @Input() puedeCapturarDiagnostico = false;
 
   // Recibe el ticket y hace prefill de refacción si ya existía
   @Input() set ticket(value: any | null) {
@@ -40,7 +48,17 @@ export class AsignarFechaModalComponent {
     if (value) {
       this.necesitaRefaccion = !!value.necesita_refaccion;
       this.descripcionRefaccion = value.descripcion_refaccion || '';
+      this.familiaEquipoId = value.inventario?.familia_equipo_id ?? null;
+      this.familiaEquipoNombre = value.inventario?.familia_equipo?.nombre || '';
+      this.fallaMantenimientoId = value.falla_mantenimiento_id ?? null;
+      this.condicionOperativa = value.condicion_operativa ?? null;
+    } else {
+      this.familiaEquipoId = null;
+      this.familiaEquipoNombre = '';
+      this.fallaMantenimientoId = null;
+      this.condicionOperativa = null;
     }
+    this.fallas = [];
   }
   get ticket(): any | null { return this._ticket; }
   private _ticket: any | null = null;
@@ -51,6 +69,8 @@ export class AsignarFechaModalComponent {
     necesita_refaccion?: boolean;
     descripcion_refaccion?: string;
     refaccion_definida_por_jefe?: boolean;
+    falla_mantenimiento_id?: number;
+    condicion_operativa?: CondicionOperativa;
   }>();
   @Output() onCancelar = new EventEmitter<void>();
 
@@ -59,6 +79,64 @@ export class AsignarFechaModalComponent {
   // Estado local del mini-form
   necesitaRefaccion: boolean = false;
   descripcionRefaccion: string = '';
+  fallas: FallaMantenimientoDTO[] = [];
+  familiaEquipoId: number | null = null;
+  familiaEquipoNombre = '';
+  fallaMantenimientoId: number | null = null;
+  condicionOperativa: CondicionOperativa | null = null;
+  cargandoCatalogos = false;
+
+  readonly condicionesOperativas: Array<{
+    value: CondicionOperativa;
+    label: string;
+  }> = [
+    { value: 'TRABAJA', label: 'Trabaja' },
+    { value: 'NO_TRABAJA', label: 'No trabaja' },
+  ];
+
+  constructor(
+    private readonly mantenimientoEquiposService: MantenimientoEquiposService,
+  ) {}
+
+  ngOnChanges(): void {
+    if (this.mostrarDiagnosticoEstructurado && this.familiaEquipoId) {
+      this.cargarFallas(this.familiaEquipoId);
+    }
+  }
+
+  get mostrarDiagnosticoEstructurado(): boolean {
+    return this.puedeCapturarDiagnostico && Number(this._ticket?.aparato_id) > 0;
+  }
+
+  get aparatoSinFamilia(): boolean {
+    return this.mostrarDiagnosticoEstructurado && !this.familiaEquipoId;
+  }
+
+  get guardarDeshabilitado(): boolean {
+    return this.aparatoSinFamilia;
+  }
+
+  private cargarFallas(familiaEquipoId: number): void {
+    this.cargandoCatalogos = true;
+    const fallaPreseleccionada = this.fallaMantenimientoId;
+    this.mantenimientoEquiposService.obtenerFallas(familiaEquipoId).subscribe({
+      next: (fallas) => {
+        this.fallas = fallas;
+        this.cargandoCatalogos = false;
+        this.fallaMantenimientoId = fallas.some(
+          (falla) => falla.id === fallaPreseleccionada,
+        )
+          ? fallaPreseleccionada
+          : null;
+      },
+      error: () => {
+        this.cargandoCatalogos = false;
+        this.fallas = [];
+        this.fallaMantenimientoId = null;
+        mostrarAlertaToast('No se pudieron cargar las fallas de la familia.', 'error');
+      },
+    });
+  }
 
   private norm(v: any): string {
     return (v ?? '')
@@ -127,6 +205,25 @@ export class AsignarFechaModalComponent {
       return;
     }
 
+    if (this.aparatoSinFamilia) {
+      mostrarAlertaToast(
+        'Este aparato no tiene una familia asignada. Clasifícalo primero desde Inventario.',
+        'error',
+      );
+      return;
+    }
+
+    if (
+      this.mostrarDiagnosticoEstructurado
+      && (!this.fallaMantenimientoId || !this.condicionOperativa)
+    ) {
+      mostrarAlertaToast(
+        'Selecciona familia, falla detectada y condición operativa.',
+        'error',
+      );
+      return;
+    }
+
     const payload: any = {
       fecha: this.fechaSeleccionada,
       motivo: this.motivo.trim(),
@@ -136,6 +233,11 @@ export class AsignarFechaModalComponent {
       payload.necesita_refaccion = !!this.necesitaRefaccion;
       payload.descripcion_refaccion = this.necesitaRefaccion ? (this.descripcionRefaccion || '') : '';
       payload.refaccion_definida_por_jefe = true;
+    }
+
+    if (this.mostrarDiagnosticoEstructurado) {
+      payload.falla_mantenimiento_id = this.fallaMantenimientoId;
+      payload.condicion_operativa = this.condicionOperativa;
     }
 
     this.onGuardar.emit(payload);

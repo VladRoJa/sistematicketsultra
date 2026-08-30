@@ -50,6 +50,12 @@ import { buscarAncestroNivel, filtrarTicketsConFiltros } from '../utils/ticket-u
 import { MatSelectModule } from '@angular/material/select';
 import { AuthService } from '../services/auth.service';
 import { DialogoConfirmacionComponent } from '../shared/dialogo-confirmacion/dialogo-confirmacion.component';
+import { MantenimientoEquiposService } from '../services/mantenimiento-equipos.service';
+import {
+  CondicionOperativa,
+  FallaMantenimientoDTO,
+  FamiliaEquipoDTO,
+} from '../types/ticket';
 
 
 
@@ -75,6 +81,7 @@ export interface Ticket {
   departamento_id: number;
   categoria: string | null;
   fecha_solucion?: string | null;
+  aparato_id?: number | null;
   subcategoria?: string | null;
   detalle?: string | null;
   historial_fechas?: Array<{
@@ -91,7 +98,14 @@ export interface Ticket {
     nombre: string;
     tipo: string;
     descripcion: string;
+    familia_equipo_id?: number | null;
+    familia_equipo?: FamiliaEquipoDTO | null;
   };
+  familia_equipo_id?: number | null;
+  familia_equipo?: FamiliaEquipoDTO | null;
+  falla_mantenimiento_id?: number | null;
+  falla_mantenimiento?: FallaMantenimientoDTO | null;
+  condicion_operativa?: CondicionOperativa | null;
   equipo?: string;  
   ubicacion?: string;    
   clasificacion_id?: number;  
@@ -301,6 +315,7 @@ export class PantallaVerTicketsComponent implements OnInit, OnDestroy {
     public catalogoService: CatalogoService,
     private sucursalesService: SucursalesService,
     private authService: AuthService, 
+    private mantenimientoEquiposService: MantenimientoEquiposService,
     private route: ActivatedRoute,
     private router: Router,
   ) {}
@@ -641,6 +656,41 @@ refrescarTicketsPreservandoFiltros(): void {
 
   // Métodos públicos conectados a helpers
   exportarTickets() { TicketAcciones.exportarTickets(this); }
+
+  descargandoReporteMantenimiento = false;
+
+  get puedeDescargarReporteMantenimiento(): boolean {
+    return String(this.user?.username || '').trim().toUpperCase() === 'ADMICORP';
+  }
+
+  descargarReporteMantenimiento(): void {
+    if (!this.puedeDescargarReporteMantenimiento || this.descargandoReporteMantenimiento) {
+      return;
+    }
+
+    this.descargandoReporteMantenimiento = true;
+    this.mantenimientoEquiposService.descargarReporte().subscribe({
+      next: (archivo) => {
+        const url = URL.createObjectURL(archivo);
+        const enlace = document.createElement('a');
+        enlace.href = url;
+        enlace.download = 'reporte_mantenimiento_equipos.xlsx';
+        enlace.click();
+        URL.revokeObjectURL(url);
+        this.descargandoReporteMantenimiento = false;
+      },
+      error: (err) => {
+        this.descargandoReporteMantenimiento = false;
+        mostrarAlertaToast(
+          err?.status === 403
+            ? 'No tienes permiso para descargar este reporte.'
+            : 'No se pudo generar el reporte de Mantenimiento.',
+          'error',
+        );
+      },
+    });
+  }
+
   cambiarEstado(ticket: Ticket, estado: "pendiente" | "en progreso" | "finalizado") {
     if (estado === 'finalizado') {
       // Antes aquí se llamaba a TicketAcciones.cambiarEstado y pegaba al /update con estado=finalizado,
@@ -1704,6 +1754,8 @@ onGuardarFechaSolucion(event: {
   necesita_refaccion?: boolean;
   descripcion_refaccion?: string;
   refaccion_definida_por_jefe?: boolean;
+  falla_mantenimiento_id?: number;
+  condicion_operativa?: CondicionOperativa;
 }) {
   if (!this.ticketParaAsignarFecha) return;
 
@@ -1713,6 +1765,47 @@ onGuardarFechaSolucion(event: {
   }
 
   const id = this.ticketParaAsignarFecha.id;
+  const capturaEstructurada = this.puedeGuardarCompromisoMantenimiento(
+    this.ticketParaAsignarFecha,
+  );
+
+  if (capturaEstructurada) {
+    const fechaSolucion07ISO = new Date(
+      event.fecha.getFullYear(),
+      event.fecha.getMonth(),
+      event.fecha.getDate(),
+      7, 0, 0,
+    ).toISOString();
+
+    this.mantenimientoEquiposService.guardarCompromiso(id, {
+      fecha_solucion: fechaSolucion07ISO,
+      motivo: event.motivo.trim(),
+      falla_mantenimiento_id: event.falla_mantenimiento_id,
+      condicion_operativa: event.condicion_operativa,
+      necesita_refaccion: !!event.necesita_refaccion,
+      descripcion_refaccion: event.necesita_refaccion
+        ? (event.descripcion_refaccion || '')
+        : '',
+    }).subscribe({
+      next: () => {
+        this.refrescarTicketsPreservandoFiltros();
+        this.showModalAsignarFecha = false;
+        this.ticketParaAsignarFecha = null;
+        mostrarAlertaToast(
+          'Diagnóstico, compromiso y estado guardados correctamente.',
+          'success',
+        );
+      },
+      error: (err) => {
+        mostrarAlertaToast(
+          err?.error?.mensaje || err?.error?.error || 'No se pudo guardar el compromiso.',
+          'error',
+        );
+      },
+    });
+    return;
+  }
+
   const tieneExtras = !!event.refaccion_definida_por_jefe;
 
   // Guardamos aquí solo para el parcheo visual inmediato (el helper lo usa para pintar el ícono),
@@ -1770,6 +1863,24 @@ onGuardarFechaSolucion(event: {
     // Sin refacción extra → directo a "en progreso"
     continuar();
   }
+}
+
+puedeCapturarDiagnosticoMantenimiento(ticket: Ticket | null): boolean {
+  return (
+    this.puedeGuardarCompromisoMantenimiento(ticket)
+    && Number(ticket?.aparato_id) > 0
+  );
+}
+
+private puedeGuardarCompromisoMantenimiento(ticket: Ticket | null): boolean {
+  const rol = String(this.user?.rol || '').trim().toUpperCase();
+  const departmentId = Number(this.user?.department_id);
+
+  return (
+    rol === 'MANTENIMIENTO'
+    && departmentId === 1
+    && Number(ticket?.departamento_id) === 1
+  );
 }
 
 

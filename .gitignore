@@ -40,3 +40,5 @@ backend/.playwright/
 
 # Local/generated Graphify knowledge graph
 graphify-out/
+
+.venv/

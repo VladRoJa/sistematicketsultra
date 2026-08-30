@@ -917,6 +917,7 @@
     <app-asignar-fecha-modal
       [fechaSeleccionada]="fechaSolucionTentativa"
       [ticket]="ticketParaAsignarFecha"
+      [puedeCapturarDiagnostico]="puedeCapturarDiagnosticoMantenimiento(ticketParaAsignarFecha)"
       (onGuardar)="onGuardarFechaSolucion($event)"
       (onCancelar)="onCancelarAsignarFecha()"
     >
@@ -941,6 +942,20 @@
     </div>
 
     <div class="export-container">
+      <button
+        *ngIf="puedeDescargarReporteMantenimiento"
+        class="boton-exportar"
+        (click)="descargarReporteMantenimiento()"
+        [disabled]="descargandoReporteMantenimiento"
+      >
+        <ng-container *ngIf="!descargandoReporteMantenimiento">
+          📊 Reporte equipos
+        </ng-container>
+        <ng-container *ngIf="descargandoReporteMantenimiento">
+          ⌛ Generando...
+        </ng-container>
+      </button>
+
       <button class="boton-exportar" (click)="exportarTickets()" [disabled]="exportandoExcel">
         <ng-container *ngIf="!exportandoExcel">📥 Exportar a Excel</ng-container>
         <ng-container *ngIf="exportandoExcel">⌛ Exportando...</ng-container>

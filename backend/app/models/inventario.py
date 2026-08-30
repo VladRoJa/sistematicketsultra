@@ -33,10 +33,24 @@ class InventarioGeneral(db.Model):
     subcategoria = db.Column(db.String(100))
     unidad_compra   = db.Column(db.String(50), nullable=True)
     factor_compra   = db.Column(db.Integer, nullable=False, default=1)
-    categoria_inventario_id = db.Column(db.Integer, db.ForeignKey('catalogo_categoria_inventario.id'), nullable=True)                   
+    categoria_inventario_id = db.Column(db.Integer, db.ForeignKey('catalogo_categoria_inventario.id'), nullable=True)
+    familia_equipo_id = db.Column(
+        db.Integer,
+        db.ForeignKey(
+            'familia_equipo.id',
+            name='fk_inventario_general_familia_equipo',
+            ondelete='RESTRICT',
+        ),
+        nullable=True,
+    )
 
     categoria_inventario = db.relationship('CategoriaInventario', foreign_keys=[categoria_inventario_id])
-    
+    familia_equipo = db.relationship('FamiliaEquipoORM', foreign_keys=[familia_equipo_id])
+
+    __table_args__ = (
+        db.Index('ix_inventario_general_familia_equipo_id', 'familia_equipo_id'),
+    )
+
     
     def __repr__(self):
         return f"<InventarioGeneral {self.tipo} {self.nombre}>"
