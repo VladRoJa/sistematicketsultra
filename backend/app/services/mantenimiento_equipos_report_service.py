@@ -76,7 +76,10 @@ def obtener_tickets_reporte():
         )
         .filter(
             Ticket.departamento_id == 1,
-            Ticket.aparato_id.isnot(None),
+            (
+                Ticket.aparato_id.isnot(None)
+                | Ticket.familia_equipo_id.isnot(None)
+            ),
             Ticket.estado.in_(ACTIVE_TICKET_STATUSES),
         )
         .order_by(Ticket.sucursal_id_destino.asc(), Ticket.id.asc())

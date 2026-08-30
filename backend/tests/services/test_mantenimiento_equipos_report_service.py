@@ -12,6 +12,11 @@ class _Expression:
     def __init__(self, predicate):
         self.predicate = predicate
 
+    def __or__(self, other):
+        return _Expression(
+            lambda row: self.predicate(row) or other.predicate(row)
+        )
+
 
 class _Column:
     def __init__(self, name):
@@ -95,16 +100,41 @@ def _ticket(
 
 
 class MantenimientoEquiposReportServiceTest(unittest.TestCase):
-    def test_consulta_incluye_activo_2025_y_excluye_finalizado_y_sin_aparato(self):
+    def test_consulta_incluye_activo_con_aparato_o_snapshot_historico(self):
         active_2025 = _ticket(1)
-        finalized = _ticket(2, state="finalizado")
-        without_apparatus = _ticket(3, apparatus_id=None)
-        other_department = _ticket(4)
+
+        snapshot = SimpleNamespace(
+            key="PESO_INTEGRADO",
+            nombre="Peso Integrado",
+        )
+        historical_without_apparatus = _ticket(
+            2,
+            apparatus_id=None,
+            family=snapshot,
+            family_id=6,
+        )
+
+        without_apparatus_or_snapshot = _ticket(
+            3,
+            apparatus_id=None,
+            family=None,
+            family_id=None,
+        )
+
+        finalized = _ticket(4, state="finalizado")
+
+        other_department = _ticket(5)
         other_department.departamento_id = 7
 
         fake_ticket_model = SimpleNamespace(
             query=_Query(
-                [active_2025, finalized, without_apparatus, other_department]
+                [
+                    active_2025,
+                    historical_without_apparatus,
+                    without_apparatus_or_snapshot,
+                    finalized,
+                    other_department,
+                ]
             ),
             inventario="inventario",
             familia_equipo="familia_equipo",
@@ -113,6 +143,7 @@ class MantenimientoEquiposReportServiceTest(unittest.TestCase):
             sucursal_destino="sucursal_destino",
             departamento_id=_Column("departamento_id"),
             aparato_id=_Column("aparato_id"),
+            familia_equipo_id=_Column("familia_equipo_id"),
             estado=_Column("estado"),
             sucursal_id_destino=_Column("sucursal_id_destino"),
             id=_Column("id"),
@@ -124,8 +155,10 @@ class MantenimientoEquiposReportServiceTest(unittest.TestCase):
         ):
             selected = report.obtener_tickets_reporte()
 
-        self.assertEqual([ticket.id for ticket in selected], [1])
-        self.assertEqual(selected[0].fecha_creacion.year, 2025)
+        self.assertEqual(
+            [ticket.id for ticket in selected],
+            [1, 2],
+        )
 
     def test_reporte_usa_snapshot_y_no_familia_actual_del_aparato(self):
         snapshot = SimpleNamespace(key="CAMINADORA", nombre="Caminadora")
