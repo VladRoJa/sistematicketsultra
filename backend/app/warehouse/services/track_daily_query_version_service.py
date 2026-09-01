@@ -60,32 +60,45 @@ def track_daily_version_has_mart_rows(*, version_id: int) -> bool:
 def resolve_replaced_track_daily_version_with_rows(
     version: TrackDailyVersionORM | None,
 ) -> TrackDailyVersionORM | None:
-    if version is None or not version.replaces_version_id:
+    if version is None:
         return None
 
-    previous_version = db.session.get(
-        TrackDailyVersionORM,
-        version.replaces_version_id,
-    )
+    current_version = version
+    visited_version_ids: set[int] = {version.id}
 
-    if previous_version is None:
-        return None
+    while current_version.replaces_version_id:
+        previous_version_id = current_version.replaces_version_id
 
-    if previous_version.track_date != version.track_date:
-        return None
+        if previous_version_id in visited_version_ids:
+            return None
 
-    if previous_version.version_type != version.version_type:
-        return None
+        visited_version_ids.add(previous_version_id)
 
-    if previous_version.status not in {"success", "replaced"}:
-        return None
+        previous_version = db.session.get(
+            TrackDailyVersionORM,
+            previous_version_id,
+        )
 
-    if not track_daily_version_has_mart_rows(
-        version_id=previous_version.id,
-    ):
-        return None
+        if previous_version is None:
+            return None
 
-    return previous_version
+        if previous_version.track_date != version.track_date:
+            return None
+
+        if previous_version.version_type != version.version_type:
+            return None
+
+        if (
+            previous_version.status in {"success", "replaced"}
+            and track_daily_version_has_mart_rows(
+                version_id=previous_version.id,
+            )
+        ):
+            return previous_version
+
+        current_version = previous_version
+
+    return None
 
 
 def resolve_preferred_track_daily_version(
