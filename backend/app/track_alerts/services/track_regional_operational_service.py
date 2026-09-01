@@ -188,10 +188,76 @@ def _build_branch_item(
     }
 
 
+def _build_region_income_projection_summary(
+    branch_items: list[dict[str, Any]],
+) -> dict[str, Any]:
+    projected_values: list[Decimal] = []
+    unavailable_branches_count = 0
+
+    for branch in branch_items:
+        projection = (
+            branch.get("metrics", {})
+            .get("ingreso", {})
+            .get("projection")
+            or {}
+        )
+
+        projected_close = _to_optional_decimal(
+            projection.get("projected_close")
+        )
+
+        if (
+            projection.get("status") != "available"
+            or projected_close is None
+        ):
+            unavailable_branches_count += 1
+            continue
+
+        projected_values.append(projected_close)
+
+    total_branches = len(branch_items)
+    available_branches = len(projected_values)
+
+    if total_branches == 0 or unavailable_branches_count:
+        return {
+            "status": "insufficient_history",
+            "method": "sum_branch_income_projections",
+            "projected_close": None,
+            "total_branches": total_branches,
+            "available_branches": available_branches,
+            "unavailable_branches_count": unavailable_branches_count,
+            "quality_issue": {
+                "code": "incomplete_regional_projection",
+                "message": (
+                    "No se proyecta el cierre regional porque "
+                    "una o más sucursales no tienen una "
+                    "proyección de ingreso disponible."
+                ),
+                "severity": "warning",
+            },
+        }
+
+    projected_close = sum(
+        projected_values,
+        Decimal("0"),
+    )
+
+    return {
+        "status": "available",
+        "method": "sum_branch_income_projections",
+        "projected_close": str(projected_close),
+        "total_branches": total_branches,
+        "available_branches": available_branches,
+        "unavailable_branches_count": 0,
+        "quality_issue": None,
+    }
+
+
 def _build_region_summary(
     *,
     track_date: date,
     rows: list[_RegionalJoinedRow],
+    branch_items: list[dict[str, Any]],
 ) -> dict[str, Any]:
     marts = [row.mart for row in rows]
     metrics = _build_metric_bundle(
@@ -234,6 +300,12 @@ def _build_region_summary(
         usuarios_proyeccion=_complete_sum(
             row.proyeccion_usuarios_cierre_mes for row in marts
         ),
+    )
+
+    metrics["ingreso"]["projection"] = (
+        _build_region_income_projection_summary(
+            branch_items
+        )
     )
 
     return {
@@ -644,27 +716,27 @@ def get_regional_operational_detail(
 
         region_row = region_rows[0].region
 
-        if manager_branch_id is None:
-            visible_branch_rows = region_rows
-        else:
-            visible_branch_rows = []
-
-            for row in region_rows:
-                try:
-                    branch_id = int(row.branch.sucursal_id)
-                except (TypeError, ValueError):
-                    continue
-
-                if branch_id == manager_branch_id:
-                    visible_branch_rows.append(row)
-
-        branches = [
+        all_region_branches = [
             _build_branch_item(
                 track_date=track_date,
                 joined_row=row,
             )
-            for row in visible_branch_rows
+            for row in region_rows
         ]
+
+        if manager_branch_id is None:
+            branches = list(all_region_branches)
+        else:
+            branches = []
+
+            for branch in all_region_branches:
+                try:
+                    branch_id = int(branch["sucursal_id"])
+                except (TypeError, ValueError, KeyError):
+                    continue
+
+                if branch_id == manager_branch_id:
+                    branches.append(branch)
 
         branches.sort(
             key=lambda branch: (
@@ -683,6 +755,7 @@ def get_regional_operational_detail(
                 "summary": _build_region_summary(
                     track_date=track_date,
                     rows=region_rows,
+                    branch_items=all_region_branches,
                 ),
 
                 # El gerente normal sólo recibe su propia
