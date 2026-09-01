@@ -18,6 +18,11 @@ from app.warehouse.services.track_daily_pipeline_service import (
 from app.warehouse.services.track_daily_version_service import (
     claim_next_pending_track_canonical_close,
     get_current_track_daily_version,
+    get_latest_track_canonical_close_version,
+    request_track_canonical_close,
+)
+from app.warehouse.services.track_source_agregadoras_daily_service import (
+    resolve_exact_agregadoras_snapshot_status_for_date,
 )
 from app.warehouse.services.warehouse_retention_service import (
     purge_venta_total_non_canonical_snapshots,
@@ -34,6 +39,8 @@ DEFAULT_NIGHTLY_BASE_HOUR = 23
 DEFAULT_NIGHTLY_BASE_MINUTE = 30
 DEFAULT_NIGHTLY_RETRY_HOUR = 0
 DEFAULT_NIGHTLY_RETRY_MINUTE = 30
+DEFAULT_CLOSE_LOOKBACK_DAYS = 7
+DEFAULT_AUTO_CLOSE_MAX_ATTEMPTS = 2
 DEFAULT_WAREHOUSE_RETENTION_HOUR = 1
 DEFAULT_WAREHOUSE_RETENTION_MINUTE = 10
 DEFAULT_WAREHOUSE_RETENTION_DAYS = 7
@@ -94,6 +101,68 @@ def _has_failed_current_version(*, track_date: date, version_type: str) -> bool:
     )
 
     return bool(version and version.status == "failed")
+
+
+def _is_close_check_minute(value: datetime) -> bool:
+    return value.minute in {5, 20, 35, 50}
+
+
+def _find_automatic_canonical_close_date(
+    *,
+    today: date,
+    lookback_days: int,
+) -> date | None:
+    max_attempts = max(
+        1,
+        _env_int(
+            "TRACK_AUTO_CLOSE_MAX_ATTEMPTS",
+            DEFAULT_AUTO_CLOSE_MAX_ATTEMPTS,
+        ),
+    )
+
+    for days_back in range(1, max(0, lookback_days) + 1):
+        candidate_date = today - timedelta(days=days_back)
+
+        if not _has_success_current_version(
+            track_date=candidate_date,
+            version_type="base_nocturna_canonica",
+        ):
+            continue
+
+        if _has_success_current_version(
+            track_date=candidate_date,
+            version_type="cierre_canonico",
+        ):
+            continue
+
+        latest_attempt = get_latest_track_canonical_close_version(
+            track_date=candidate_date,
+        )
+
+        if latest_attempt is not None:
+            if latest_attempt.status in {"pending", "running", "success"}:
+                continue
+
+            if latest_attempt.status == "failed":
+                attempts_used = int(
+                    latest_attempt.retry_count or 0
+                ) + 1
+
+                if attempts_used >= max_attempts:
+                    continue
+
+        readiness = (
+            resolve_exact_agregadoras_snapshot_status_for_date(
+                business_date=candidate_date,
+            )
+        )
+
+        if not readiness.get("is_ready"):
+            continue
+
+        return candidate_date
+
+    return None
 
 
 def decide_track_scheduler_action(now_local: datetime) -> TrackSchedulerDecision | None:
@@ -165,6 +234,31 @@ def decide_track_scheduler_action(now_local: datetime) -> TrackSchedulerDecision
                 reason="nightly_base_retry_after_failure",
             )
 
+    if _is_close_check_minute(now_local):
+        close_lookback_days = max(
+            0,
+            _env_int(
+                "TRACK_CLOSE_LOOKBACK_DAYS",
+                DEFAULT_CLOSE_LOOKBACK_DAYS,
+            ),
+        )
+
+        pending_close_date = (
+            _find_automatic_canonical_close_date(
+                today=today,
+                lookback_days=close_lookback_days,
+            )
+        )
+
+        if pending_close_date is not None:
+            return TrackSchedulerDecision(
+                action="request_cierre_canonico",
+                track_date=pending_close_date,
+                reason=(
+                    "exact_agregadoras_available_for_closed_day"
+                ),
+            )
+
     return None
 
 
@@ -199,6 +293,29 @@ def execute_track_scheduler_decision(decision: TrackSchedulerDecision) -> dict:
             requested_by="track_scheduler",
             trigger_source="scheduler_nightly_retry",
         )
+
+    if decision.action == "request_cierre_canonico":
+        request_version = request_track_canonical_close(
+            track_date=decision.track_date,
+            requested_by="track_scheduler",
+            trigger_source="scheduler_auto_canonical_close",
+            auto_commit=True,
+        )
+
+        return {
+            "status": "accepted",
+            "track_date": decision.track_date.isoformat(),
+            "track_daily_version": {
+                "id": request_version.id,
+                "version_type": request_version.version_type,
+                "status": request_version.status,
+                "is_current": bool(request_version.is_current),
+                "base_version_id": request_version.base_version_id,
+                "retry_count": int(
+                    request_version.retry_count or 0
+                ),
+            },
+        }
 
     raise RuntimeError(f"Acción scheduler no soportada: {decision.action!r}")
 
