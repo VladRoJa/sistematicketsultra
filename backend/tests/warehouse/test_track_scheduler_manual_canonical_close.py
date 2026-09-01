@@ -6,21 +6,18 @@ import pytest
 import app.warehouse.scheduler.track_scheduler_worker as worker
 
 
-def test_scheduler_no_longer_decides_automatic_close_at_old_close_minute(
+def test_scheduler_decides_automatic_canonical_close_request_when_ready(
     monkeypatch: pytest.MonkeyPatch,
 ):
-    # :05 era uno de los minutos donde el scheduler viejo buscaba
-    # autónomamente días históricos para cerrar.
     now_local = datetime(
         2026,
+        9,
+        1,
         8,
-        7,
-        12,
         5,
         tzinfo=worker.TRACK_TIMEZONE,
     )
 
-    # Aislamos variables de horario para usar los defaults conocidos.
     for env_name in (
         "TRACK_PREVIEW_START_HOUR",
         "TRACK_PREVIEW_END_HOUR",
@@ -28,15 +25,77 @@ def test_scheduler_no_longer_decides_automatic_close_at_old_close_minute(
         "TRACK_NIGHTLY_BASE_MINUTE",
         "TRACK_NIGHTLY_RETRY_HOUR",
         "TRACK_NIGHTLY_RETRY_MINUTE",
+        "TRACK_CLOSE_LOOKBACK_DAYS",
     ):
         monkeypatch.delenv(env_name, raising=False)
+
+    expected_track_date = date(2026, 8, 31)
+
+    monkeypatch.setattr(
+        worker,
+        "_find_automatic_canonical_close_date",
+        lambda *, today, lookback_days: expected_track_date,
+        raising=False,
+    )
 
     decision = worker.decide_track_scheduler_action(
         now_local
     )
 
-    assert decision is None
+    assert decision is not None
+    assert decision.action == "request_cierre_canonico"
+    assert decision.track_date == expected_track_date
+    assert (
+        decision.reason
+        == "exact_agregadoras_available_for_closed_day"
+    )
 
+
+def test_automatic_close_finder_selects_ready_closed_day(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    target_date = date(2026, 8, 31)
+
+    def fake_has_success_current_version(
+        *,
+        track_date,
+        version_type,
+    ):
+        assert track_date == target_date
+
+        return (
+            version_type == "base_nocturna_canonica"
+        )
+
+    monkeypatch.setattr(
+        worker,
+        "_has_success_current_version",
+        fake_has_success_current_version,
+    )
+
+    monkeypatch.setattr(
+        worker,
+        "get_latest_track_canonical_close_version",
+        lambda *, track_date: None,
+    )
+
+    monkeypatch.setattr(
+        worker,
+        "resolve_exact_agregadoras_snapshot_status_for_date",
+        lambda *, business_date: {
+            "business_date": business_date.isoformat(),
+            "has_wellhub": True,
+            "has_totalpass": True,
+            "is_ready": True,
+        },
+    )
+
+    result = worker._find_automatic_canonical_close_date(
+        today=date(2026, 9, 1),
+        lookback_days=7,
+    )
+
+    assert result == target_date
 
 def test_pending_close_executor_returns_none_when_no_request(
     monkeypatch: pytest.MonkeyPatch,
