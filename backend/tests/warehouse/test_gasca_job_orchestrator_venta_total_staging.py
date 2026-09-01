@@ -110,3 +110,165 @@ def test_force_non_canonical_rejected_for_non_venta_total():
                 force_ingestion=True,
                 force_non_canonical=True,
             )
+
+
+def test_venta_total_retries_extraction_once_after_transient_failure(
+    monkeypatch,
+):
+    app = _build_app()
+    extraction_attempts = []
+
+    def fake_extractor(**kwargs):
+        extraction_attempts.append(dict(kwargs))
+
+        if len(extraction_attempts) == 1:
+            raise RuntimeError("Gasca transient loading timeout")
+
+        return {
+            "report_type_key": "venta_total",
+            "original_filename": "venta_total_2026_08_31.xlsx",
+            "content_type": (
+                "application/vnd.openxmlformats-officedocument."
+                "spreadsheetml.sheet"
+            ),
+            "file_bytes": b"fake-xlsx",
+            "metadata": {
+                "date_from": "2026-08-01",
+                "date_to": "2026-08-31",
+            },
+        }
+
+    def fake_upload_creator(**kwargs):
+        return {
+            "warehouse_upload_id": 901,
+            "upload_status": "created",
+        }
+
+    def fake_venta_total_ingestor(**kwargs):
+        return {
+            "status": "ingested",
+            "snapshot_id": 902,
+        }
+
+    app.config["WAREHOUSE_GASCA_EXTRACTOR"] = fake_extractor
+    app.config["WAREHOUSE_INTERNAL_UPLOAD_CREATOR"] = (
+        fake_upload_creator
+    )
+    app.config["WAREHOUSE_VENTA_TOTAL_INGESTOR"] = (
+        fake_venta_total_ingestor
+    )
+
+    # El retry tiene una espera real en producción.
+    # En pruebas la anulamos para no ralentizar pytest.
+    monkeypatch.setattr(
+        service,
+        "sleep",
+        lambda _seconds: None,
+        raising=False,
+    )
+
+    with app.app_context():
+        result = service.run_gasca_report_job(
+            report_type_key="venta_total",
+            run_mode="scheduled_daily",
+            snapshot_kind="daily",
+            requested_by="scheduler_test",
+            trigger_source="track_scheduler",
+            target_business_date=date(2026, 8, 31),
+            force_ingestion=True,
+        )
+
+    assert len(extraction_attempts) == 2
+    assert result["job_status"] == "ingested"
+    assert result["snapshot_id"] == 902
+    assert result["ingestion_status"] == "ingested"
+
+
+def test_venta_total_stops_after_second_extraction_failure(
+    monkeypatch,
+):
+    app = _build_app()
+    extraction_attempts = []
+    upload_calls = []
+    ingestion_calls = []
+
+    def fake_extractor(**kwargs):
+        extraction_attempts.append(dict(kwargs))
+        raise RuntimeError("Gasca loading timeout")
+
+    def fake_upload_creator(**kwargs):
+        upload_calls.append(dict(kwargs))
+        raise AssertionError("No debe crear upload si falla extracción")
+
+    def fake_venta_total_ingestor(**kwargs):
+        ingestion_calls.append(dict(kwargs))
+        raise AssertionError("No debe ingerir si falla extracción")
+
+    app.config["WAREHOUSE_GASCA_EXTRACTOR"] = fake_extractor
+    app.config["WAREHOUSE_INTERNAL_UPLOAD_CREATOR"] = (
+        fake_upload_creator
+    )
+    app.config["WAREHOUSE_VENTA_TOTAL_INGESTOR"] = (
+        fake_venta_total_ingestor
+    )
+
+    monkeypatch.setattr(
+        service,
+        "sleep",
+        lambda _seconds: None,
+    )
+
+    with app.app_context():
+        with pytest.raises(
+            service.GascaProducerError,
+            match="Falló la extracción desde Gasca",
+        ):
+            service.run_gasca_report_job(
+                report_type_key="venta_total",
+                run_mode="scheduled_daily",
+                snapshot_kind="daily",
+                requested_by="scheduler_test",
+                trigger_source="track_scheduler",
+                target_business_date=date(2026, 8, 31),
+                force_ingestion=True,
+            )
+
+    assert len(extraction_attempts) == 2
+    assert upload_calls == []
+    assert ingestion_calls == []
+
+
+def test_non_venta_total_does_not_retry_extraction(
+    monkeypatch,
+):
+    app = _build_app()
+    extraction_attempts = []
+
+    def fake_extractor(**kwargs):
+        extraction_attempts.append(dict(kwargs))
+        raise RuntimeError("Gasca extraction failure")
+
+    app.config["WAREHOUSE_GASCA_EXTRACTOR"] = fake_extractor
+
+    monkeypatch.setattr(
+        service,
+        "sleep",
+        lambda _seconds: None,
+    )
+
+    with app.app_context():
+        with pytest.raises(
+            service.GascaProducerError,
+            match="Falló la extracción desde Gasca",
+        ):
+            service.run_gasca_report_job(
+                report_type_key="reporte_direccion",
+                run_mode="scheduled_daily",
+                snapshot_kind="daily",
+                requested_by="scheduler_test",
+                trigger_source="track_scheduler",
+                force_ingestion=True,
+            )
+
+    assert len(extraction_attempts) == 1
+
