@@ -591,3 +591,107 @@ def test_gerente_sees_region_summary_but_only_own_branch_detail():
             item["sucursal_canon"]
             for item in priority_group["items"]
         } <= {"GERENTE_BRANCH"}
+
+
+def test_region_income_projection_sums_all_available_branch_forecasts():
+    projections = [
+        (
+            "VILLAS_DEL_REY",
+            "791172.7181694691",
+        ),
+        (
+            "VILLA_VERDE",
+            "723497.8943661954",
+        ),
+        (
+            "INDEPENDENCIA",
+            "924048.9534239107",
+        ),
+        (
+            "TEC_MXL",
+            "887460.2043673072",
+        ),
+        (
+            "SEND_MXL",
+            "1387798.6921434574",
+        ),
+        (
+            "SAN_LUIS",
+            "727782.2716270635",
+        ),
+    ]
+
+    branch_items = [
+        {
+            "sucursal_canon": sucursal_canon,
+            "metrics": {
+                "ingreso": {
+                    "projection": {
+                        "status": "available",
+                        "projected_close": projected_close,
+                    },
+                },
+            },
+        }
+        for sucursal_canon, projected_close in projections
+    ]
+
+    result = service._build_region_income_projection_summary(
+        branch_items
+    )
+
+    assert result["status"] == "available"
+    assert result["method"] == "sum_branch_income_projections"
+
+    assert (
+        Decimal(result["projected_close"])
+        == Decimal("5441760.7340974033")
+    )
+
+    assert result["total_branches"] == 6
+    assert result["available_branches"] == 6
+    assert result["unavailable_branches_count"] == 0
+    assert result["quality_issue"] is None
+
+
+def test_region_income_projection_is_null_when_any_branch_is_unavailable():
+    branch_items = [
+        {
+            "sucursal_canon": "VILLAS_DEL_REY",
+            "metrics": {
+                "ingreso": {
+                    "projection": {
+                        "status": "available",
+                        "projected_close": "791172.7181694691",
+                    },
+                },
+            },
+        },
+        {
+            "sucursal_canon": "SERRANIA",
+            "metrics": {
+                "ingreso": {
+                    "projection": {
+                        "status": "insufficient_history",
+                        "projected_close": None,
+                    },
+                },
+            },
+        },
+    ]
+
+    result = service._build_region_income_projection_summary(
+        branch_items
+    )
+
+    assert result["status"] == "insufficient_history"
+    assert result["method"] == "sum_branch_income_projections"
+    assert result["projected_close"] is None
+
+    assert result["total_branches"] == 2
+    assert result["available_branches"] == 1
+    assert result["unavailable_branches_count"] == 1
+
+    assert result["quality_issue"]["code"] == (
+        "incomplete_regional_projection"
+    )
