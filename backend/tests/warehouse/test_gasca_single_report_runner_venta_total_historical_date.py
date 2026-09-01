@@ -17,6 +17,24 @@ class _FixedDateTime(real_datetime):
         return value
 
 
+class _FakeAjaxResponse:
+    url = (
+        "https://example.test/"
+        "Modulo/Reporte/ReporteVentaTotal_Ajax"
+    )
+    status = 200
+
+
+class _FakeExpectedResponse:
+    value = _FakeAjaxResponse()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+
 class _FakePage:
     def goto(self, *args, **kwargs):
         return None
@@ -26,6 +44,11 @@ class _FakePage:
 
     def wait_for_selector(self, *args, **kwargs):
         return None
+
+    def expect_response(self, predicate, **kwargs):
+        response = _FakeAjaxResponse()
+        assert predicate(response)
+        return _FakeExpectedResponse()
 
 
 def _build_runtime():
@@ -140,3 +163,120 @@ def test_venta_total_rejects_future_target_business_date(monkeypatch):
                 runtime=_build_runtime(),
                 target_business_date=date(2026, 8, 8),
             )
+
+
+def test_venta_total_ajax_302_is_detected_as_report_failure():
+    class FakeResponse:
+        url = (
+            "https://ultragimnasios.com/"
+            "Modulo/Reporte/ReporteVentaTotal_Ajax"
+        )
+        status = 302
+
+    with pytest.raises(
+        runner.GascaSingleReportRunnerError,
+        match="ReporteVentaTotal_Ajax.*302",
+    ):
+        runner._validate_venta_total_ajax_response(
+            FakeResponse()
+        )
+
+
+def test_venta_total_stops_before_loader_wait_when_ajax_returns_302(
+    monkeypatch,
+    tmp_path,
+):
+    class FakeResponse:
+        url = (
+            "https://ultragimnasios.com/"
+            "Modulo/Reporte/ReporteVentaTotal_Ajax"
+        )
+        status = 302
+
+    class FakeExpectedResponse:
+        value = FakeResponse()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    class FakePage:
+        def goto(self, *args, **kwargs):
+            return None
+
+        def wait_for_load_state(self, *args, **kwargs):
+            return None
+
+        def wait_for_selector(self, *args, **kwargs):
+            return None
+
+        def expect_response(self, predicate, **kwargs):
+            assert predicate(FakeResponse())
+            return FakeExpectedResponse()
+
+    monkeypatch.setattr(runner, "datetime", _FixedDateTime)
+
+    monkeypatch.setattr(
+        runner,
+        "_seleccionar_tipo_reporte",
+        lambda *args, **kwargs: None,
+    )
+
+    monkeypatch.setattr(
+        runner,
+        "_rellenar_fechas_rango_simple",
+        lambda *args, **kwargs: None,
+    )
+
+    monkeypatch.setattr(
+        runner,
+        "_click_boton_generar",
+        lambda *args, **kwargs: None,
+    )
+
+    loader_wait_called = {"value": False}
+
+    def fake_wait_loader(*args, **kwargs):
+        loader_wait_called["value"] = True
+
+    monkeypatch.setattr(
+        runner,
+        "_esperar_fin_carga_venta_total",
+        fake_wait_loader,
+    )
+
+    monkeypatch.setattr(
+        runner,
+        "_resolve_contractual_output_path",
+        lambda **kwargs: tmp_path / "venta_total.xlsx",
+    )
+
+    monkeypatch.setattr(
+        runner,
+        "_descargar_excel_desde_tabla",
+        lambda *args, **kwargs: None,
+    )
+
+    monkeypatch.setattr(
+        runner,
+        "_limpiar_excel_inplace",
+        lambda *args, **kwargs: None,
+    )
+
+    app = Flask(__name__)
+
+    with app.app_context():
+        with pytest.raises(
+            runner.GascaSingleReportRunnerError,
+            match="ReporteVentaTotal_Ajax.*302",
+        ):
+            runner._run_venta_total_report(
+                page=FakePage(),
+                runtime=_build_runtime(),
+                target_business_date=date(2026, 7, 31),
+            )
+
+    assert loader_wait_called["value"] is False
+

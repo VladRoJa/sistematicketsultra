@@ -354,7 +354,17 @@ def _run_venta_total_report(
         fecha_fin=fecha_fin,
     )
 
-    _click_boton_generar(page)
+    with page.expect_response(
+        lambda response: (
+            "ReporteVentaTotal_Ajax" in response.url
+        ),
+        timeout=120_000,
+    ) as response_info:
+        _click_boton_generar(page)
+
+    _validate_venta_total_ajax_response(
+        response_info.value
+    )
 
     _esperar_fin_carga_venta_total(
         page=page,
@@ -596,6 +606,25 @@ def _resolve_contractual_output_path(*, report_type_key: str) -> Path:
         )
 
     return output_dir / filename
+
+def _validate_venta_total_ajax_response(
+    response: Any,
+) -> None:
+    url = str(getattr(response, "url", "") or "")
+    status = int(getattr(response, "status", 0) or 0)
+
+    if "ReporteVentaTotal_Ajax" not in url:
+        raise GascaSingleReportRunnerError(
+            "Venta Total: se recibió una respuesta inesperada "
+            f"al esperar ReporteVentaTotal_Ajax: {url!r}."
+        )
+
+    if not 200 <= status < 300:
+        raise GascaSingleReportRunnerError(
+            "Venta Total: ReporteVentaTotal_Ajax respondió "
+            f"HTTP {status}."
+        )
+
 
 def _esperar_fin_carga_venta_total(*, page: Any, timeout_seconds: int = 120) -> None:
     current_app.logger.info(
