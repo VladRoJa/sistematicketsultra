@@ -70,6 +70,7 @@ def _add_version(
     version_type: str,
     is_current: bool = True,
     status: str = "success",
+    replaces_version_id: int | None = None,
 ) -> TrackDailyVersionORM:
     now = datetime.now(timezone.utc)
     version = TrackDailyVersionORM(
@@ -77,6 +78,7 @@ def _add_version(
         version_type=version_type,
         status=status,
         is_current=is_current,
+        replaces_version_id=replaces_version_id,
         trigger_source="test",
         retry_count=0,
         created_at=now,
@@ -293,3 +295,44 @@ def test_rejects_unknown_generation_mode(isolated_app):
             generation_mode="unknown",
             today=date(2026, 8, 17),
         )
+
+def test_current_failed_preview_falls_back_through_replacement_chain(
+    isolated_app,
+):
+    target_date = date(2026, 8, 31)
+
+    with isolated_app.app_context():
+        last_good = _add_version(
+            track_date=target_date,
+            version_type="preview_operativo",
+            is_current=False,
+            status="replaced",
+        )
+        _add_mart_row(last_good.id)
+
+        first_failed = _add_version(
+            track_date=target_date,
+            version_type="preview_operativo",
+            is_current=False,
+            status="replaced",
+            replaces_version_id=last_good.id,
+        )
+
+        current_failed = _add_version(
+            track_date=target_date,
+            version_type="preview_operativo",
+            is_current=True,
+            status="failed",
+            replaces_version_id=first_failed.id,
+        )
+        db.session.commit()
+
+        resolved = resolve_effective_track_daily_version(
+            track_date=target_date,
+            generation_mode="manual_preview",
+            today=target_date,
+        )
+
+        assert resolved is not None
+        assert resolved.id == last_good.id
+
