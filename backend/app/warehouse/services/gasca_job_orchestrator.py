@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone, date
 from pathlib import Path
+from time import sleep
 from typing import Any, Callable
 
 from flask import current_app
@@ -618,6 +619,29 @@ def _resolve_job_status(ingestion_status: str) -> str:
     return "completed"
 
 
+VENTA_TOTAL_EXTRACTION_RETRY_DELAY_SECONDS = 10
+
+
+def _extract_gasca_artifact_with_venta_total_retry(
+    command: GascaExtractionCommand,
+) -> ProducedGascaArtifact:
+    try:
+        return _extract_gasca_artifact(command)
+    except GascaProducerError:
+        if command.report_type_key != "venta_total":
+            raise
+
+        current_app.logger.warning(
+            "Venta Total: falló el primer intento de extracción; "
+            "se reintentará una vez en %s segundos.",
+            VENTA_TOTAL_EXTRACTION_RETRY_DELAY_SECONDS,
+        )
+
+        sleep(VENTA_TOTAL_EXTRACTION_RETRY_DELAY_SECONDS)
+
+        return _extract_gasca_artifact(command)
+
+
 def run_gasca_report_job(
     *,
     report_type_key: str,
@@ -690,7 +714,7 @@ def run_gasca_report_job(
         command.target_business_date.isoformat() if command.target_business_date else None,
     )
 
-    artifact = _extract_gasca_artifact(command)
+    artifact = _extract_gasca_artifact_with_venta_total_retry(command)
     upload_ref = _create_warehouse_upload(command=command, artifact=artifact)
 
     should_ingest = _should_dispatch_ingestion(
