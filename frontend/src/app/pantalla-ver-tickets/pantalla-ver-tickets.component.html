@@ -944,17 +944,36 @@
     <div class="export-container">
       <button
         *ngIf="puedeDescargarReporteMantenimiento"
-        class="boton-exportar"
-        (click)="descargarReporteMantenimiento()"
+        class="boton-exportar boton-exportar--menu"
+        [matMenuTriggerFor]="menuReporteMantenimiento"
         [disabled]="descargandoReporteMantenimiento"
       >
         <ng-container *ngIf="!descargandoReporteMantenimiento">
-          📊 Reporte equipos
+          <span>📊 Reporte equipos</span>
+          <mat-icon aria-hidden="true">arrow_drop_down</mat-icon>
         </ng-container>
         <ng-container *ngIf="descargandoReporteMantenimiento">
           ⌛ Generando...
         </ng-container>
       </button>
+
+      <mat-menu #menuReporteMantenimiento="matMenu">
+        <button
+          mat-menu-item
+          (click)="descargarReporteMantenimiento()"
+          [disabled]="descargandoReporteMantenimiento"
+        >
+          Todo
+        </button>
+        <button
+          mat-menu-item
+          *ngFor="let region of regionesReporteMantenimiento"
+          (click)="descargarReporteMantenimiento(region)"
+          [disabled]="descargandoReporteMantenimiento"
+        >
+          {{ region.etiqueta }}
+        </button>
+      </mat-menu>
 
       <button class="boton-exportar" (click)="exportarTickets()" [disabled]="exportandoExcel">
         <ng-container *ngIf="!exportandoExcel">📥 Exportar a Excel</ng-container>

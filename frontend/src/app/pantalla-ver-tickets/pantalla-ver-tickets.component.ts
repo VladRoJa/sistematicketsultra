@@ -11,7 +11,7 @@ import { RefrescoService } from '../services/refresco.service';
 import * as FiltrosGenericos from './helpers/filtros-genericos';
 import { HttpHeaders } from '@angular/common/http';
 import { ActivatedRoute, Router } from '@angular/router';
-import { Subscription } from 'rxjs';
+import { finalize, Subscription } from 'rxjs';
 
 
 
@@ -50,7 +50,10 @@ import { buscarAncestroNivel, filtrarTicketsConFiltros } from '../utils/ticket-u
 import { MatSelectModule } from '@angular/material/select';
 import { AuthService } from '../services/auth.service';
 import { DialogoConfirmacionComponent } from '../shared/dialogo-confirmacion/dialogo-confirmacion.component';
-import { MantenimientoEquiposService } from '../services/mantenimiento-equipos.service';
+import {
+  MantenimientoEquiposService,
+  RegionReporteMantenimientoDTO,
+} from '../services/mantenimiento-equipos.service';
 import {
   CondicionOperativa,
   FallaMantenimientoDTO,
@@ -132,6 +135,11 @@ export interface ApiResponse {
   mensaje: string;
   tickets: Ticket[];
   total_tickets: number;
+}
+
+interface RegionReporteMantenimientoOption
+  extends RegionReporteMantenimientoDTO {
+  etiqueta: string;
 }
 
 @Component({
@@ -358,6 +366,10 @@ async ngOnInit() {
 
   // 👇 NUEVO: setear usuarioActual a partir de this.user
   this.usuarioActual = (this.user?.username || '').trim().toUpperCase();
+
+  if (this.puedeDescargarReporteMantenimiento) {
+    this.cargarRegionesReporteMantenimiento();
+  }
 
   await cargarDepartamentos(this);  
   await this.cargarCatalogoCategorias();
@@ -658,37 +670,82 @@ refrescarTicketsPreservandoFiltros(): void {
   exportarTickets() { TicketAcciones.exportarTickets(this); }
 
   descargandoReporteMantenimiento = false;
+  regionesReporteMantenimiento: RegionReporteMantenimientoOption[] = [];
 
   get puedeDescargarReporteMantenimiento(): boolean {
     return String(this.user?.username || '').trim().toUpperCase() === 'ADMICORP';
   }
 
-  descargarReporteMantenimiento(): void {
+  private cargarRegionesReporteMantenimiento(): void {
+    this.mantenimientoEquiposService.obtenerRegionesReporte().subscribe({
+      next: (regiones) => {
+        this.regionesReporteMantenimiento = (regiones || [])
+          .map((region) => this.crearOpcionRegionReporte(region))
+          .filter(
+            (region): region is RegionReporteMantenimientoOption => (
+              region !== null
+            ),
+          );
+      },
+      error: () => {
+        this.regionesReporteMantenimiento = [];
+        mostrarAlertaToast(
+          'No se pudieron cargar las regiones del reporte.',
+          'error',
+        );
+      },
+    });
+  }
+
+  private crearOpcionRegionReporte(
+    region: RegionReporteMantenimientoDTO,
+  ): RegionReporteMantenimientoOption | null {
+    const id = Number(region?.id);
+    const nombre = String(region?.nombre || '').trim();
+    if (!Number.isInteger(id) || id <= 0 || !nombre) {
+      return null;
+    }
+
+    const etiqueta = /^regi[oó]n\b/i.test(nombre)
+      ? nombre
+      : `Región ${nombre}`;
+
+    return { id, nombre, etiqueta };
+  }
+
+  descargarReporteMantenimiento(
+    region?: RegionReporteMantenimientoDTO,
+  ): void {
     if (!this.puedeDescargarReporteMantenimiento || this.descargandoReporteMantenimiento) {
       return;
     }
 
     this.descargandoReporteMantenimiento = true;
-    this.mantenimientoEquiposService.descargarReporte().subscribe({
-      next: (archivo) => {
-        const url = URL.createObjectURL(archivo);
-        const enlace = document.createElement('a');
-        enlace.href = url;
-        enlace.download = 'reporte_mantenimiento_equipos.xlsx';
-        enlace.click();
-        URL.revokeObjectURL(url);
-        this.descargandoReporteMantenimiento = false;
-      },
-      error: (err) => {
-        this.descargandoReporteMantenimiento = false;
-        mostrarAlertaToast(
-          err?.status === 403
-            ? 'No tienes permiso para descargar este reporte.'
-            : 'No se pudo generar el reporte de Mantenimiento.',
-          'error',
-        );
-      },
-    });
+    this.mantenimientoEquiposService
+      .descargarReporte(region?.id)
+      .pipe(
+        finalize(() => {
+          this.descargandoReporteMantenimiento = false;
+        }),
+      )
+      .subscribe({
+        next: (descarga) => {
+          const url = URL.createObjectURL(descarga.archivo);
+          const enlace = document.createElement('a');
+          enlace.href = url;
+          enlace.download = descarga.nombreArchivo;
+          enlace.click();
+          URL.revokeObjectURL(url);
+        },
+        error: (err) => {
+          mostrarAlertaToast(
+            err?.status === 403
+              ? 'No tienes permiso para descargar este reporte.'
+              : 'No se pudo generar el reporte de Mantenimiento.',
+            'error',
+          );
+        },
+      });
   }
 
   cambiarEstado(ticket: Ticket, estado: "pendiente" | "en progreso" | "finalizado") {

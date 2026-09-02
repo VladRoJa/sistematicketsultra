@@ -1,3 +1,4 @@
+from datetime import datetime
 from io import BytesIO
 from types import SimpleNamespace
 import unittest
@@ -139,12 +140,14 @@ class MantenimientoEquiposRoutesTest(unittest.TestCase):
 
         with (
             patch.object(routes, "_current_user", return_value=self.actor),
+            patch.object(routes, "datetime") as mocked_datetime,
             patch.object(
                 routes,
                 "construir_reporte_xlsx",
                 return_value=workbook,
             ) as build_report,
         ):
+            mocked_datetime.now.return_value = datetime(2026, 9, 2, 12, 0)
             response = self._request("/api/mantenimiento-equipos/reporte")
 
         self.assertEqual(response.status_code, 200)
@@ -154,7 +157,156 @@ class MantenimientoEquiposRoutesTest(unittest.TestCase):
             response.mimetype,
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
-        build_report.assert_called_once_with()
+        self.assertEqual(
+            response.headers["Content-Disposition"],
+            "attachment; filename="
+            "reporte_mantenimiento_equipos_todo_02-sep-26.xlsx",
+        )
+        build_report.assert_called_once_with(user=self.actor, region_id=None)
+        mocked_datetime.now.assert_called_once_with(routes.BUSINESS_TIMEZONE)
+
+    def test_regiones_admicorp_devuelve_catalogo_dinamico(self):
+        self.actor.username = "admicorp"
+        regiones = [
+            SimpleNamespace(id=1, region_label="Región Norte"),
+            SimpleNamespace(id=2, region_label="Mexicali"),
+        ]
+
+        with (
+            patch.object(routes, "_current_user", return_value=self.actor),
+            patch.object(
+                routes,
+                "listar_regiones_reporte",
+                return_value=regiones,
+            ) as list_regions,
+        ):
+            response = self._request("/api/mantenimiento-equipos/regiones")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.get_json(),
+            [
+                {"id": 1, "nombre": "Región Norte"},
+                {"id": 2, "nombre": "Mexicali"},
+            ],
+        )
+        list_regions.assert_called_once_with()
+
+    def test_reporte_region_valida_envia_actor_y_region_al_generador(self):
+        self.actor.username = "admicorp"
+        workbook = BytesIO(b"xlsx-region-test")
+        region = SimpleNamespace(
+            id=7,
+            region_key="MEXICALI",
+            region_label="Mexicali",
+        )
+
+        with (
+            patch.object(routes, "_current_user", return_value=self.actor),
+            patch.object(
+                routes,
+                "obtener_region_reporte",
+                return_value=region,
+            ) as get_region,
+            patch.object(routes, "datetime") as mocked_datetime,
+            patch.object(
+                routes,
+                "construir_reporte_xlsx",
+                return_value=workbook,
+            ) as build_report,
+        ):
+            mocked_datetime.now.return_value = datetime(2026, 9, 2, 12, 0)
+            response = self._request(
+                "/api/mantenimiento-equipos/reporte?region_id=7"
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.headers["Content-Disposition"],
+            "attachment; filename="
+            "reporte_mantenimiento_equipos_reg_mexicali_02-sep-26.xlsx",
+        )
+        get_region.assert_called_once_with(7)
+        build_report.assert_called_once_with(user=self.actor, region_id=7)
+        mocked_datetime.now.assert_called_once_with(routes.BUSINESS_TIMEZONE)
+
+    def test_reporte_region_elimina_prefijo_region_del_nombre(self):
+        self.actor.username = "admicorp"
+        workbook = BytesIO(b"xlsx-region-test")
+        region = SimpleNamespace(
+            id=8,
+            region_key="REGION_SAN_LUIS",
+            region_label="Región San Luis",
+        )
+
+        with (
+            patch.object(routes, "_current_user", return_value=self.actor),
+            patch.object(
+                routes,
+                "obtener_region_reporte",
+                return_value=region,
+            ),
+            patch.object(routes, "datetime") as mocked_datetime,
+            patch.object(
+                routes,
+                "construir_reporte_xlsx",
+                return_value=workbook,
+            ),
+        ):
+            mocked_datetime.now.return_value = datetime(2026, 9, 2, 12, 0)
+            response = self._request(
+                "/api/mantenimiento-equipos/reporte?region_id=8"
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.headers["Content-Disposition"],
+            "attachment; filename="
+            "reporte_mantenimiento_equipos_reg_san_luis_02-sep-26.xlsx",
+        )
+
+    def test_reporte_region_inexistente_devuelve_404_controlado(self):
+        self.actor.username = "admicorp"
+
+        with (
+            patch.object(routes, "_current_user", return_value=self.actor),
+            patch.object(
+                routes,
+                "obtener_region_reporte",
+                side_effect=routes.RegionReporteNoEncontradaError(
+                    "La región solicitada no existe o está inactiva."
+                ),
+            ),
+            patch.object(routes, "construir_reporte_xlsx") as build_report,
+        ):
+            response = self._request(
+                "/api/mantenimiento-equipos/reporte?region_id=999999"
+            )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(
+            response.get_json(),
+            {"mensaje": "La región solicitada no existe o está inactiva."},
+        )
+        build_report.assert_not_called()
+
+    def test_reporte_region_id_no_numerico_devuelve_400_controlado(self):
+        self.actor.username = "admicorp"
+
+        with (
+            patch.object(routes, "_current_user", return_value=self.actor),
+            patch.object(routes, "construir_reporte_xlsx") as build_report,
+        ):
+            response = self._request(
+                "/api/mantenimiento-equipos/reporte?region_id=abc"
+            )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.get_json(),
+            {"mensaje": "region_id debe ser un entero positivo."},
+        )
+        build_report.assert_not_called()
 
 
 if __name__ == "__main__":
