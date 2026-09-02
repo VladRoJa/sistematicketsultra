@@ -939,8 +939,6 @@ def _build_raw_sheet(
         "ingreso_real_base_mtd",
         "ingreso_real_agregadora_mtd",
         "ingreso_real_mtd",
-        "ingreso_proyectado_cierre",
-        "ingreso_proyeccion_status",
         "meta_clientes_nuevos_mes",
         "clientes_nuevos_real_mtd",
         "meta_reactivaciones_mes",
@@ -957,6 +955,8 @@ def _build_raw_sheet(
         "source_business_date_agregadoras",
         "source_business_date_domiciliados",
         "source_business_date_tienda",
+        "ingreso_proyectado_cierre",
+        "ingreso_proyeccion_status",
     ]
 
     worksheet.append(headers)
@@ -988,9 +988,17 @@ def _build_raw_sheet(
             ),
         )
 
+        projected_close = projection.get("projected_close")
+
+        projected_close_decimal = (
+            Decimal(str(projected_close))
+            if projected_close not in (None, "")
+            else None
+        )
+
         derived_values = {
             "ingreso_proyectado_cierre": _to_number(
-                projection.get("projected_close")
+                projected_close_decimal
             ),
             "ingreso_proyeccion_status": str(
                 projection.get("status") or ""
