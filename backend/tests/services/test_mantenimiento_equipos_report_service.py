@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from datetime import timedelta
 from types import SimpleNamespace
 import unittest
 from unittest.mock import MagicMock, patch
@@ -126,7 +127,7 @@ def _fake_ticket_model(rows):
         aparato_id=_Column("aparato_id"),
         familia_equipo_id=_Column("familia_equipo_id"),
         estado=_Column("estado"),
-        sucursal_id=_Column("sucursal_id"),
+        fecha_creacion=_Column("fecha_creacion"),        sucursal_id=_Column("sucursal_id"),
         sucursal_id_destino=_Column("sucursal_id_destino"),
         id=_Column("id"),
     )
@@ -531,6 +532,381 @@ class MantenimientoEquiposReportServiceTest(unittest.TestCase):
         )
 
 
+
+    def test_resumen_agrega_total_de_todas_las_sucursales(self):
+        caminadora = SimpleNamespace(
+            key="CAMINADORA",
+            nombre="Caminadora",
+        )
+        peso_libre = SimpleNamespace(
+            key="PESO_LIBRE",
+            nombre="Peso Libre",
+        )
+
+        tickets = [
+            _ticket(
+                60,
+                branch_id=10,
+                branch_name="SUCURSAL A",
+                family=caminadora,
+                family_id=1,
+            ),
+            _ticket(
+                61,
+                branch_id=10,
+                branch_name="SUCURSAL A",
+                family=None,
+                family_id=None,
+                failure=None,
+                condition=None,
+            ),
+            _ticket(
+                62,
+                branch_id=20,
+                branch_name="SUCURSAL B",
+                family=peso_libre,
+                family_id=6,
+            ),
+        ]
+
+        workbook = load_workbook(
+            report.construir_reporte_xlsx(tickets)
+        )
+
+        rows = list(
+            workbook["Fallas por familia"].iter_rows(values_only=True)
+        )
+
+        total = rows[-1]
+
+        self.assertEqual(total[0], "TOTAL")
+        self.assertEqual(total[1], 3)
+        self.assertEqual(total[2], 1)
+        self.assertEqual(total[7], 1)
+        self.assertEqual(total[9], 1)
+        self.assertEqual(
+            total[1],
+            sum(value or 0 for value in total[2:]),
+        )
+
+    def test_historico_incluye_activos_y_finalizados(self):
+        activo = _ticket(
+            70,
+            state="abierto",
+        )
+        finalizado = _ticket(
+            71,
+            state="finalizado",
+        )
+
+        otro_departamento = _ticket(
+            72,
+            state="finalizado",
+        )
+        otro_departamento.departamento_id = 7
+
+        sin_equipo_ni_snapshot = _ticket(
+            73,
+            state="finalizado",
+            apparatus_id=None,
+            family=None,
+            family_id=None,
+        )
+
+        fake_ticket_model = _fake_ticket_model(
+            [
+                activo,
+                finalizado,
+                otro_departamento,
+                sin_equipo_ni_snapshot,
+            ]
+        )
+
+        with (
+            patch.object(report, "Ticket", fake_ticket_model),
+            patch.object(report, "joinedload", side_effect=lambda value: value),
+        ):
+            selected = report.obtener_tickets_historico_reporte()
+
+        self.assertEqual(
+            [ticket.id for ticket in selected],
+            [70, 71],
+        )
+
+    def test_historico_mensual_separa_creacion_finalizacion_y_timezone(self):
+        caminadora = SimpleNamespace(
+            key="CAMINADORA",
+            nombre="Caminadora",
+        )
+        peso_libre = SimpleNamespace(
+            key="PESO_LIBRE",
+            nombre="Peso Libre",
+        )
+
+        julio_por_timezone = _ticket(
+            80,
+            family=caminadora,
+            family_id=1,
+            created_at=datetime(
+                2026, 8, 1, 6, 30, tzinfo=timezone.utc
+            ),
+        )
+
+        agosto_finalizado_en_septiembre = _ticket(
+            81,
+            family=peso_libre,
+            family_id=6,
+            state="finalizado",
+            created_at=datetime(
+                2026, 8, 10, 18, 0, tzinfo=timezone.utc
+            ),
+        )
+        agosto_finalizado_en_septiembre.fecha_finalizado = datetime(
+            2026, 9, 5, 18, 0, tzinfo=timezone.utc
+        )
+
+        octubre_sin_clasificar = _ticket(
+            82,
+            family=None,
+            family_id=None,
+            created_at=datetime(
+                2026, 10, 10, 18, 0, tzinfo=timezone.utc
+            ),
+        )
+
+        rows = report._monthly_history_rows(
+            [
+                julio_por_timezone,
+                agosto_finalizado_en_septiembre,
+                octubre_sin_clasificar,
+            ],
+            now=datetime(
+                2026, 10, 20, 18, 0, tzinfo=timezone.utc
+            ),
+        )
+
+        self.assertEqual(
+            [row[0].strftime("%Y-%m") for row in rows],
+            [
+                "2026-07",
+                "2026-08",
+                "2026-09",
+                "2026-10",
+            ],
+        )
+
+        julio, agosto, septiembre, octubre = rows
+
+        self.assertEqual(julio[1], 1)
+        self.assertEqual(julio[2], 1)
+        self.assertEqual(julio[10], 0)
+
+        self.assertEqual(agosto[1], 1)
+        self.assertEqual(agosto[7], 1)
+        self.assertEqual(agosto[10], 0)
+
+        self.assertEqual(septiembre[1], 0)
+        self.assertEqual(
+            sum(septiembre[2:10]),
+            0,
+        )
+        self.assertEqual(septiembre[10], 1)
+
+        self.assertEqual(octubre[1], 1)
+        self.assertEqual(octubre[9], 1)
+        self.assertEqual(octubre[10], 0)
+
+        for row in rows:
+            self.assertEqual(
+                row[1],
+                sum(value or 0 for value in row[2:10]),
+            )
+
+    def test_xlsx_agrega_hoja_historico_mensual_separada_del_backlog(self):
+        backlog_ticket = _ticket(
+            90,
+            branch_name="BACKLOG ACTUAL",
+        )
+        historical_ticket = _ticket(
+            91,
+            state="finalizado",
+            branch_name="HISTORICO",
+        )
+
+        monthly_row = (
+            datetime(2026, 8, 1),
+            3,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            1,
+            2,
+        )
+
+        with patch.object(
+            report,
+            "_monthly_history_rows",
+            return_value=[monthly_row],
+        ) as monthly_rows:
+            workbook = load_workbook(
+                report.construir_reporte_xlsx(
+                    tickets=[backlog_ticket],
+                    historical_tickets=[historical_ticket],
+                )
+            )
+
+        self.assertIn("Histórico mensual", workbook.sheetnames)
+
+        self.assertEqual(
+            workbook.sheetnames[:4],
+            [
+                "Tickets",
+                "Fallas por familia",
+                "Por validar",
+                "Histórico mensual",
+            ],
+        )
+
+        rows = list(
+            workbook["Histórico mensual"].iter_rows(values_only=True)
+        )
+
+        self.assertEqual(
+            rows[0],
+            (
+                "Mes",
+                "Fallas",
+                "Caminadoras",
+                "Elípticas",
+                "Escaladoras",
+                "Recumbentes",
+                "Spinning",
+                "Peso Libre",
+                "Peso Integrado",
+                "Sin clasificar",
+                "Finalizados",
+            ),
+        )
+
+        self.assertEqual(rows[1], monthly_row)
+
+        monthly_rows.assert_called_once()
+        self.assertEqual(
+            monthly_rows.call_args.args[0],
+            [historical_ticket],
+        )
+
+        self.assertIn(
+            "mmmm yyyy",
+            workbook["Histórico mensual"]["A2"].number_format,
+        )
+
+        tickets_rows = list(
+            workbook["Tickets"].iter_rows(values_only=True)
+        )
+        self.assertEqual(tickets_rows[1][0], 90)
+
+    def test_por_validar_filtra_ordena_y_calcula_antiguedad(self):
+        now = datetime.now(timezone.utc)
+
+        antiguo = _ticket(
+            100,
+            state="por_validar",
+            branch_name="SUCURSAL A",
+            created_at=now,
+        )
+        antiguo.fecha_finalizado = now - timedelta(
+            days=5,
+            hours=2,
+        )
+
+        reciente = _ticket(
+            101,
+            state="por_validar",
+            branch_name="SUCURSAL B",
+            created_at=now,
+        )
+        reciente.fecha_finalizado = now - timedelta(
+            days=2,
+            hours=2,
+        )
+
+        en_progreso = _ticket(
+            102,
+            state="en progreso",
+            branch_name="SUCURSAL C",
+            created_at=now,
+        )
+        en_progreso.fecha_finalizado = now - timedelta(days=10)
+
+        solo_historico = _ticket(
+            103,
+            state="por_validar",
+            branch_name="SUCURSAL HISTORICA",
+            created_at=now,
+        )
+        solo_historico.fecha_finalizado = now - timedelta(days=20)
+
+        self.assertEqual(
+            report._validation_wait_days(antiguo, now=now),
+            5,
+        )
+        self.assertEqual(
+            report._validation_wait_days(reciente, now=now),
+            2,
+        )
+
+        workbook = load_workbook(
+            report.construir_reporte_xlsx(
+                tickets=[
+                    reciente,
+                    en_progreso,
+                    antiguo,
+                ],
+                historical_tickets=[
+                    solo_historico,
+                ],
+            )
+        )
+
+        self.assertIn("Por validar", workbook.sheetnames)
+
+        rows = list(
+            workbook["Por validar"].iter_rows(values_only=True)
+        )
+
+        self.assertEqual(
+            rows[0],
+            report.POR_VALIDAR_HEADERS,
+        )
+
+        data_rows = rows[1:]
+
+        self.assertEqual(
+            [row[1] for row in data_rows],
+            [100, 101],
+        )
+
+        self.assertEqual(
+            [row[9] for row in data_rows],
+            [5, 2],
+        )
+
+        self.assertNotIn(
+            102,
+            [row[1] for row in data_rows],
+        )
+        self.assertNotIn(
+            103,
+            [row[1] for row in data_rows],
+        )
+
+        self.assertTrue(data_rows[0][8])
+        self.assertTrue(data_rows[1][8])
 
 if __name__ == "__main__":
     unittest.main()

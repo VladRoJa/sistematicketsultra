@@ -69,6 +69,21 @@ FAMILY_HEADERS = (
 )
 
 
+POR_VALIDAR_HEADERS = (
+    "Sucursal",
+    "Ticket ID",
+    "Aparato/Dispositivo",
+    "Código Interno",
+    "Descripción",
+    "Familia",
+    "Falla detectada",
+    "Condición",
+    "Desde por validar",
+    "Días por validar",
+    "Reparación",
+    "Observación / Plan de trabajo",
+)
+
 class RegionReporteNoEncontradaError(ValueError):
     pass
 
@@ -118,14 +133,14 @@ def _obtener_sucursales_ids_region(region_id):
     return sorted({int(row[0]) for row in rows})
 
 
-def obtener_tickets_reporte(user=None, region_id=None):
+def _query_tickets_mantenimiento(user=None):
     query = (
         filtrar_tickets_por_usuario(user)
         if user is not None
         else Ticket.query
     )
 
-    query = (
+    return (
         query
         .options(
             joinedload(Ticket.inventario),
@@ -140,26 +155,47 @@ def obtener_tickets_reporte(user=None, region_id=None):
                 Ticket.aparato_id.isnot(None)
                 | Ticket.familia_equipo_id.isnot(None)
             ),
-            Ticket.estado.in_(ACTIVE_TICKET_STATUSES),
         )
     )
 
-    if region_id is not None:
-        sucursales_ids = _obtener_sucursales_ids_region(region_id)
-        if not sucursales_ids:
-            query = query.filter(False)
-        else:
-            query = query.filter(
-                Ticket.sucursal_id_destino.in_(sucursales_ids)
-                | (
-                    Ticket.sucursal_id_destino.is_(None)
-                    & Ticket.sucursal_id.in_(sucursales_ids)
-                )
-            )
+
+def _aplicar_filtro_region(query, region_id):
+    if region_id is None:
+        return query
+
+    sucursales_ids = _obtener_sucursales_ids_region(region_id)
+    if not sucursales_ids:
+        return query.filter(False)
+
+    return query.filter(
+        Ticket.sucursal_id_destino.in_(sucursales_ids)
+        | (
+            Ticket.sucursal_id_destino.is_(None)
+            & Ticket.sucursal_id.in_(sucursales_ids)
+        )
+    )
+
+
+def obtener_tickets_reporte(user=None, region_id=None):
+    query = _query_tickets_mantenimiento(user).filter(
+        Ticket.estado.in_(ACTIVE_TICKET_STATUSES)
+    )
+    query = _aplicar_filtro_region(query, region_id)
 
     return (
         query
         .order_by(Ticket.sucursal_id_destino.asc(), Ticket.id.asc())
+        .all()
+    )
+
+
+def obtener_tickets_historico_reporte(user=None, region_id=None):
+    query = _query_tickets_mantenimiento(user)
+    query = _aplicar_filtro_region(query, region_id)
+
+    return (
+        query
+        .order_by(Ticket.fecha_creacion.asc(), Ticket.id.asc())
         .all()
     )
 
@@ -288,6 +324,53 @@ def _family_row(ticket):
     )
 
 
+def _validation_wait_days(ticket, now=None):
+    pending_since = _to_business_datetime(
+        getattr(ticket, "fecha_finalizado", None)
+    )
+    if pending_since is None:
+        return None
+
+    now_local = (
+        _to_business_datetime(now)
+        if now is not None
+        else datetime.now(timezone.utc).astimezone(BUSINESS_TIMEZONE)
+    )
+
+    return max(0, (now_local - pending_since).days)
+
+
+def _por_validar_sort_key(ticket):
+    pending_since = _to_business_datetime(
+        getattr(ticket, "fecha_finalizado", None)
+    )
+
+    return (
+        pending_since is None,
+        pending_since.timestamp() if pending_since else float("inf"),
+        _safe_branch_name(ticket).casefold(),
+        int(getattr(ticket, "id", 0) or 0),
+    )
+
+
+def _por_validar_row(ticket):
+    return (
+        _safe_branch_name(ticket),
+        ticket.id,
+        _equipment_name(ticket),
+        _equipment_code(ticket),
+        str(ticket.descripcion or "").strip(),
+        _snapshot_family_name(ticket),
+        _failure_name(ticket),
+        _condition_name(ticket),
+        _format_created_at(
+            getattr(ticket, "fecha_finalizado", None)
+        ),
+        _validation_wait_days(ticket),
+        _format_commitment(ticket.fecha_solucion),
+        plan_trabajo_desde_historial(ticket.historial_fechas),
+    )
+
 def _summary_rows(tickets):
     rows_by_branch = OrderedDict()
     family_keys = {
@@ -330,6 +413,117 @@ def _summary_rows(tickets):
     return rows
 
 
+def _month_key(value):
+    local_value = _to_business_datetime(value)
+    if not local_value:
+        return None
+    return local_value.year, local_value.month
+
+
+def _next_month_key(month_key):
+    year, month = month_key
+    if month == 12:
+        return year + 1, 1
+    return year, month + 1
+
+
+def _monthly_history_rows(tickets, now=None):
+    family_keys = {
+        family_key
+        for family_key, _ in SUMMARY_FAMILIES
+    }
+    created_by_month = {}
+    finalized_by_month = {}
+    first_month = None
+
+    for ticket in tickets:
+        created_month = _month_key(
+            getattr(ticket, "fecha_creacion", None)
+        )
+
+        if created_month is not None:
+            if first_month is None or created_month < first_month:
+                first_month = created_month
+
+            counts = created_by_month.setdefault(
+                created_month,
+                {
+                    "total": 0,
+                    "unclassified": 0,
+                    **{
+                        family_key: 0
+                        for family_key, _ in SUMMARY_FAMILIES
+                    },
+                },
+            )
+
+            counts["total"] += 1
+
+            family_key = _snapshot_family_key(ticket)
+            if family_key in family_keys:
+                counts[family_key] += 1
+            else:
+                counts["unclassified"] += 1
+
+        estado = str(
+            getattr(ticket, "estado", "") or ""
+        ).strip().lower()
+
+        if estado == "finalizado":
+            finalized_month = _month_key(
+                getattr(ticket, "fecha_finalizado", None)
+            )
+            if finalized_month is not None:
+                finalized_by_month[finalized_month] = (
+                    finalized_by_month.get(finalized_month, 0) + 1
+                )
+
+    if first_month is None:
+        return []
+
+    if now is None:
+        now_local = datetime.now(timezone.utc).astimezone(
+            BUSINESS_TIMEZONE
+        )
+    else:
+        now_local = _to_business_datetime(now)
+
+    last_month = (now_local.year, now_local.month)
+
+    rows = []
+    month_key = first_month
+
+    while month_key <= last_month:
+        counts = created_by_month.get(
+            month_key,
+            {
+                "total": 0,
+                "unclassified": 0,
+                **{
+                    family_key: 0
+                    for family_key, _ in SUMMARY_FAMILIES
+                },
+            },
+        )
+
+        year, month = month_key
+        rows.append(
+            (
+                datetime(year, month, 1),
+                counts["total"],
+                *(
+                    counts[family_key]
+                    for family_key, _ in SUMMARY_FAMILIES
+                ),
+                counts["unclassified"],
+                finalized_by_month.get(month_key, 0),
+            )
+        )
+
+        month_key = _next_month_key(month_key)
+
+    return rows
+
 def _style_worksheet(worksheet, headers, widths):
     header_fill = PatternFill("solid", fgColor="E54525")
     header_font = Font(color="FFFFFF", bold=True)
@@ -350,13 +544,33 @@ def _style_worksheet(worksheet, headers, widths):
             cell.alignment = Alignment(vertical="top", wrap_text=True)
 
 
-def construir_reporte_xlsx(tickets=None, *, user=None, region_id=None):
+def construir_reporte_xlsx(
+    tickets=None,
+    *,
+    historical_tickets=None,
+    user=None,
+    region_id=None,
+):
+    tickets_were_provided = tickets is not None
+
     tickets = list(
         tickets
         if tickets is not None
         else obtener_tickets_reporte(user=user, region_id=region_id)
     )
 
+    historical_tickets = list(
+        historical_tickets
+        if historical_tickets is not None
+        else (
+            tickets
+            if tickets_were_provided
+            else obtener_tickets_historico_reporte(
+                user=user,
+                region_id=region_id,
+            )
+        )
+    )
     workbook = Workbook()
     tickets_sheet = workbook.active
     tickets_sheet.title = "Tickets"
@@ -377,13 +591,67 @@ def construir_reporte_xlsx(tickets=None, *, user=None, region_id=None):
         "Sin clasificar",
     )
     summary_sheet.append(summary_headers)
-    for row in _summary_rows(tickets):
+    summary_rows = _summary_rows(tickets)
+    for row in summary_rows:
         summary_sheet.append(row)
+
+    total_row = (
+        "TOTAL",
+        *(
+            sum((row[column_index] or 0) for row in summary_rows)
+            for column_index in range(1, len(summary_headers))
+        ),
+    )
+    summary_sheet.append(total_row)
+
     _style_worksheet(
         summary_sheet,
         summary_headers,
         (24, 12, 14, 14, 14, 14, 14, 14, 16, 16),
     )
+
+    validation_sheet = workbook.create_sheet("Por validar")
+    validation_sheet.append(POR_VALIDAR_HEADERS)
+
+    validation_tickets = sorted(
+        (
+            ticket
+            for ticket in tickets
+            if str(ticket.estado or "").strip().lower()
+            == "por_validar"
+        ),
+        key=_por_validar_sort_key,
+    )
+
+    for ticket in validation_tickets:
+        validation_sheet.append(_por_validar_row(ticket))
+
+    _style_worksheet(
+        validation_sheet,
+        POR_VALIDAR_HEADERS,
+        (24, 11, 24, 18, 42, 20, 30, 18, 20, 16, 18, 52),
+    )
+    history_sheet = workbook.create_sheet("Histórico mensual")
+    history_headers = (
+        "Mes",
+        "Fallas",
+        *(label for _, label in SUMMARY_FAMILIES),
+        "Sin clasificar",
+        "Finalizados",
+    )
+    history_sheet.append(history_headers)
+
+    for row in _monthly_history_rows(historical_tickets):
+        history_sheet.append(row)
+
+    _style_worksheet(
+        history_sheet,
+        history_headers,
+        (18, 12, 14, 14, 14, 14, 14, 14, 16, 16, 14),
+    )
+
+    for cell in history_sheet["A"][1:]:
+        cell.number_format = '[$-es-MX]mmmm yyyy'
 
     for family_key, sheet_name in FAMILY_SHEETS:
         worksheet = workbook.create_sheet(sheet_name)
