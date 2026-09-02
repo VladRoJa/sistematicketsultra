@@ -951,6 +951,19 @@ td.col-descripcion {
   background: var(--ultra-black-90);
 }
 
+.boton-exportar--menu {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.boton-exportar--menu mat-icon {
+  width: 18px;
+  height: 18px;
+  font-size: 18px;
+  line-height: 18px;
+}
+
 .boton-exportar:hover {
   filter: brightness(1.1);
   transform: translateY(-1px);

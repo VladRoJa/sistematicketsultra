@@ -1,6 +1,8 @@
 from datetime import datetime
 import os
+import re
 import threading
+import unicodedata
 
 from flask import Blueprint, current_app, jsonify, request, send_file
 from flask_jwt_extended import get_jwt_identity, jwt_required
@@ -10,7 +12,10 @@ from app.models.mantenimiento_equipo import FamiliaEquipoORM
 from app.models.user_model import UserORM
 from app.services.mantenimiento_equipos_report_service import (
     BUSINESS_TIMEZONE,
+    RegionReporteNoEncontradaError,
     construir_reporte_xlsx,
+    listar_regiones_reporte,
+    obtener_region_reporte,
 )
 from app.services.mantenimiento_equipos_service import (
     MantenimientoEquiposError,
@@ -26,9 +31,105 @@ from app.utils.notify_utils import render_ticket_html
 
 mantenimiento_equipos_bp = Blueprint("mantenimiento_equipos", __name__)
 
+SPANISH_MONTH_ABBREVIATIONS = (
+    "ene",
+    "feb",
+    "mar",
+    "abr",
+    "may",
+    "jun",
+    "jul",
+    "ago",
+    "sep",
+    "oct",
+    "nov",
+    "dic",
+)
+
 
 def _current_user():
     return UserORM.get_by_id(get_jwt_identity())
+
+
+def _report_actor_or_error():
+    actor = _current_user()
+    if not actor:
+        return None, (jsonify({"mensaje": "Usuario no encontrado."}), 401)
+
+    if str(actor.username or "").strip().upper() != "ADMICORP":
+        return None, (
+            jsonify({"mensaje": "Sólo ADMICORP puede descargar el reporte."}),
+            403,
+        )
+
+    return actor, None
+
+
+def _parse_optional_region_id():
+    raw_region_id = request.args.get("region_id")
+    if raw_region_id is None:
+        return None, None
+
+    try:
+        region_id = int(raw_region_id)
+    except (TypeError, ValueError):
+        return None, (
+            jsonify({"mensaje": "region_id debe ser un entero positivo."}),
+            400,
+        )
+
+    if region_id <= 0:
+        return None, (
+            jsonify({"mensaje": "region_id debe ser un entero positivo."}),
+            400,
+        )
+
+    return region_id, None
+
+
+def _region_filename_fragment(region):
+    candidates = (
+        getattr(region, "region_label", None),
+        getattr(region, "region_key", None),
+    )
+    for candidate in candidates:
+        normalized = unicodedata.normalize(
+            "NFKD",
+            str(candidate or "").strip(),
+        ).encode("ascii", "ignore").decode("ascii")
+        normalized = re.sub(
+            r"^region(?:[\s_-]+|$)",
+            "",
+            normalized,
+            flags=re.IGNORECASE,
+        )
+        fragment = re.sub(
+            r"[^a-z0-9]+",
+            "_",
+            normalized.casefold(),
+        ).strip("_")
+        if fragment:
+            return fragment
+
+    return str(region.id)
+
+
+def _report_download_name(region=None):
+    business_date = datetime.now(BUSINESS_TIMEZONE)
+    date_fragment = (
+        f"{business_date.day:02d}-"
+        f"{SPANISH_MONTH_ABBREVIATIONS[business_date.month - 1]}-"
+        f"{business_date.year % 100:02d}"
+    )
+    scope_fragment = (
+        f"reg_{_region_filename_fragment(region)}"
+        if region is not None
+        else "todo"
+    )
+    return (
+        "reporte_mantenimiento_equipos_"
+        f"{scope_fragment}_{date_fragment}.xlsx"
+    )
 
 
 def _send_email_after_commit(recipients, subject, html):
@@ -130,19 +231,43 @@ def guardar_compromiso_estructurado(ticket_id):
     ), 200
 
 
+@mantenimiento_equipos_bp.route("/regiones", methods=["GET"])
+@jwt_required()
+def listar_regiones_reporte_disponibles():
+    _, actor_error = _report_actor_or_error()
+    if actor_error:
+        return actor_error
+
+    try:
+        regiones = listar_regiones_reporte()
+        return jsonify(
+            [
+                {"id": region.id, "nombre": region.region_label}
+                for region in regiones
+            ]
+        ), 200
+    except Exception as exc:
+        return manejar_error(exc, "listar_regiones_reporte_mantenimiento")
+
+
 @mantenimiento_equipos_bp.route("/reporte", methods=["GET"])
 @jwt_required()
 def descargar_reporte():
-    actor = _current_user()
-    if not actor:
-        return jsonify({"mensaje": "Usuario no encontrado."}), 401
+    actor, actor_error = _report_actor_or_error()
+    if actor_error:
+        return actor_error
 
-    if str(actor.username or "").strip().upper() != "ADMICORP":
-        return jsonify({"mensaje": "Sólo ADMICORP puede descargar el reporte."}), 403
+    region_id, region_error = _parse_optional_region_id()
+    if region_error:
+        return region_error
 
     try:
-        output = construir_reporte_xlsx()
-        business_date = datetime.now(BUSINESS_TIMEZONE).strftime("%Y%m%d")
+        region = (
+            obtener_region_reporte(region_id)
+            if region_id is not None
+            else None
+        )
+        output = construir_reporte_xlsx(user=actor, region_id=region_id)
         return send_file(
             output,
             mimetype=(
@@ -150,7 +275,9 @@ def descargar_reporte():
                 "spreadsheetml.sheet"
             ),
             as_attachment=True,
-            download_name=f"mantenimiento_equipos_{business_date}.xlsx",
+            download_name=_report_download_name(region),
         )
+    except RegionReporteNoEncontradaError as exc:
+        return jsonify({"mensaje": str(exc)}), 404
     except Exception as exc:
         return manejar_error(exc, "descargar_reporte_mantenimiento_equipos")

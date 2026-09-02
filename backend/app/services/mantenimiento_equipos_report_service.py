@@ -9,7 +9,12 @@ from openpyxl.utils import get_column_letter
 from sqlalchemy.orm import joinedload
 import pytz
 
+from app.models.suite_governance import (
+    SuiteRegionORM,
+    SuiteSucursalRegionAssignmentORM,
+)
 from app.models.ticket_model import Ticket
+from app.utils.ticket_filters import filtrar_tickets_por_usuario
 
 
 BUSINESS_TIMEZONE = pytz.timezone("America/Tijuana")
@@ -64,9 +69,64 @@ FAMILY_HEADERS = (
 )
 
 
-def obtener_tickets_reporte():
+class RegionReporteNoEncontradaError(ValueError):
+    pass
+
+
+def listar_regiones_reporte():
     return (
-        Ticket.query
+        SuiteRegionORM.query
+        .filter(
+            SuiteRegionORM.is_active.is_(True),
+            SuiteRegionORM.sucursal_assignments.any(
+                SuiteSucursalRegionAssignmentORM.is_current.is_(True)
+            ),
+        )
+        .order_by(SuiteRegionORM.region_label.asc())
+        .all()
+    )
+
+
+def obtener_region_reporte(region_id):
+    region = (
+        SuiteRegionORM.query
+        .filter(
+            SuiteRegionORM.id == region_id,
+            SuiteRegionORM.is_active.is_(True),
+        )
+        .first()
+    )
+    if not region:
+        raise RegionReporteNoEncontradaError(
+            "La región solicitada no existe o está inactiva."
+        )
+    return region
+
+
+def _obtener_sucursales_ids_region(region_id):
+    obtener_region_reporte(region_id)
+
+    rows = (
+        SuiteSucursalRegionAssignmentORM.query
+        .with_entities(SuiteSucursalRegionAssignmentORM.sucursal_id)
+        .filter(
+            SuiteSucursalRegionAssignmentORM.region_id == region_id,
+            SuiteSucursalRegionAssignmentORM.is_current.is_(True),
+        )
+        .all()
+    )
+    return sorted({int(row[0]) for row in rows})
+
+
+def obtener_tickets_reporte(user=None, region_id=None):
+    query = (
+        filtrar_tickets_por_usuario(user)
+        if user is not None
+        else Ticket.query
+    )
+
+    query = (
+        query
         .options(
             joinedload(Ticket.inventario),
             joinedload(Ticket.familia_equipo),
@@ -82,6 +142,23 @@ def obtener_tickets_reporte():
             ),
             Ticket.estado.in_(ACTIVE_TICKET_STATUSES),
         )
+    )
+
+    if region_id is not None:
+        sucursales_ids = _obtener_sucursales_ids_region(region_id)
+        if not sucursales_ids:
+            query = query.filter(False)
+        else:
+            query = query.filter(
+                Ticket.sucursal_id_destino.in_(sucursales_ids)
+                | (
+                    Ticket.sucursal_id_destino.is_(None)
+                    & Ticket.sucursal_id.in_(sucursales_ids)
+                )
+            )
+
+    return (
+        query
         .order_by(Ticket.sucursal_id_destino.asc(), Ticket.id.asc())
         .all()
     )
@@ -273,8 +350,12 @@ def _style_worksheet(worksheet, headers, widths):
             cell.alignment = Alignment(vertical="top", wrap_text=True)
 
 
-def construir_reporte_xlsx(tickets=None):
-    tickets = list(tickets if tickets is not None else obtener_tickets_reporte())
+def construir_reporte_xlsx(tickets=None, *, user=None, region_id=None):
+    tickets = list(
+        tickets
+        if tickets is not None
+        else obtener_tickets_reporte(user=user, region_id=region_id)
+    )
 
     workbook = Workbook()
     tickets_sheet = workbook.active
