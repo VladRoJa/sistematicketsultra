@@ -16,6 +16,10 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 
+from app.warehouse.services.track_forecast_service import (
+    build_branch_income_projection_summary,
+)
+
 
 MONTH_NAMES_ES = {
     1: "enero",
@@ -267,6 +271,7 @@ def build_track_daily_mart_excel(
 
     _build_raw_sheet(
         workbook=workbook,
+        track_date=track_date,
         rows=ordered_rows,
     )
     _build_info_sheet(
@@ -913,7 +918,12 @@ def _set_number_format(
             worksheet[f"{column_letter}{row_idx}"].number_format = number_format
 
 
-def _build_raw_sheet(*, workbook: Workbook, rows: Sequence[Any]) -> None:
+def _build_raw_sheet(
+    *,
+    workbook: Workbook,
+    track_date: date,
+    rows: Sequence[Any],
+) -> None:
     worksheet = workbook.create_sheet("Daily Mart Raw")
     headers = [
         "track_daily_version_id",
@@ -929,6 +939,8 @@ def _build_raw_sheet(*, workbook: Workbook, rows: Sequence[Any]) -> None:
         "ingreso_real_base_mtd",
         "ingreso_real_agregadora_mtd",
         "ingreso_real_mtd",
+        "ingreso_proyectado_cierre",
+        "ingreso_proyeccion_status",
         "meta_clientes_nuevos_mes",
         "clientes_nuevos_real_mtd",
         "meta_reactivaciones_mes",
@@ -950,7 +962,53 @@ def _build_raw_sheet(*, workbook: Workbook, rows: Sequence[Any]) -> None:
     worksheet.append(headers)
 
     for row in rows:
-        worksheet.append([_serialize_cell_value(getattr(row, header, None)) for header in headers])
+        current_income_mtd = getattr(
+            row,
+            "ingreso_real_total_mtd",
+            None,
+        )
+
+        if current_income_mtd is None:
+            current_income_mtd = getattr(
+                row,
+                "ingreso_real_mtd",
+                None,
+            )
+
+        projection = build_branch_income_projection_summary(
+            sucursal_canon=str(
+                getattr(row, "sucursal_canon", "") or ""
+            ).strip(),
+            target_month=track_date.replace(day=1),
+            cutoff_day=track_date.day,
+            current_income_mtd=(
+                Decimal(str(current_income_mtd))
+                if current_income_mtd is not None
+                else None
+            ),
+        )
+
+        derived_values = {
+            "ingreso_proyectado_cierre": _to_number(
+                projection.get("projected_close")
+            ),
+            "ingreso_proyeccion_status": str(
+                projection.get("status") or ""
+            ),
+        }
+
+        worksheet.append(
+            [
+                (
+                    derived_values[header]
+                    if header in derived_values
+                    else _serialize_cell_value(
+                        getattr(row, header, None)
+                    )
+                )
+                for header in headers
+            ]
+        )
 
     header_fill = PatternFill("solid", fgColor="1F1F1F")
     header_font = Font(color="FFFFFF", bold=True)
