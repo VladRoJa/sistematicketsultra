@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Any, Callable, Iterator
 
+from app.extensions import db
 from app.warehouse.services.gasca_job_orchestrator import run_gasca_report_job
 
 
@@ -25,12 +26,21 @@ class SociosVencidosCarteraSyncError(RuntimeError):
 
 
 @dataclass(frozen=True, slots=True)
+class SociosVencidosBackfillFailure:
+    date_from: date
+    date_to: date
+    error: str
+
+
+@dataclass(frozen=True, slots=True)
 class SociosVencidosBackfillResult:
     date_from: date
     date_to: date
     chunks_processed: int
     last_successful_range: tuple[date, date] | None
     cleanup_warnings: tuple[str, ...]
+    chunks_failed: int = 0
+    failed_ranges: tuple[SociosVencidosBackfillFailure, ...] = ()
 
 
 def iter_calendar_month_ranges(
@@ -105,10 +115,12 @@ def backfill_socios_vencidos_cartera(
     date_from: date,
     date_to: date,
     requested_by: str | None = None,
+    continue_on_error: bool = False,
     job_runner: Callable[..., dict[str, Any]] = run_gasca_report_job,
 ) -> SociosVencidosBackfillResult:
     last_successful_range: tuple[date, date] | None = None
     cleanup_warnings: list[str] = []
+    failed_ranges: list[SociosVencidosBackfillFailure] = []
     chunks_processed = 0
 
     for chunk_from, chunk_to in iter_calendar_month_ranges(
@@ -125,11 +137,24 @@ def backfill_socios_vencidos_cartera(
                 job_runner=job_runner,
             )
         except Exception as exc:
-            raise SociosVencidosCarteraSyncError(
-                str(exc),
-                last_successful_range=last_successful_range,
-                failed_range=(chunk_from, chunk_to),
-            ) from exc
+            if not continue_on_error:
+                raise SociosVencidosCarteraSyncError(
+                    str(exc),
+                    last_successful_range=last_successful_range,
+                    failed_range=(chunk_from, chunk_to),
+                ) from exc
+            failed_ranges.append(
+                SociosVencidosBackfillFailure(
+                    date_from=chunk_from,
+                    date_to=chunk_to,
+                    error=str(exc),
+                )
+            )
+            try:
+                db.session.rollback()
+            finally:
+                db.session.remove()
+            continue
 
         warning = (result.get("ingestion_metadata") or {}).get(
             "cleanup_warning"
@@ -147,4 +172,6 @@ def backfill_socios_vencidos_cartera(
         chunks_processed=chunks_processed,
         last_successful_range=last_successful_range,
         cleanup_warnings=tuple(cleanup_warnings),
+        chunks_failed=len(failed_ranges),
+        failed_ranges=tuple(failed_ranges),
     )
