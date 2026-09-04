@@ -32,12 +32,19 @@ import {
 } from 'rxjs';
 
 import {
+  ReactivationCampaign,
+  ReactivationCampaignDetail,
+  ReactivationCampaignFilters,
+  ReactivationCampaignPreviewResponse,
+  ReactivationCampaignRequest,
   ReactivationCandidateReason,
   ReactivationCandidateRow,
   ReactivationCandidateStatus,
   ReactivationCandidatesResponse,
   ReactivationIventasPeriod,
+  ReactivationOperationalStatus,
   ReactivationSourcesResponse,
+  ReactivationTariffCount,
 } from './marketing-reactivation.models';
 import { MarketingReactivationService } from './marketing-reactivation.service';
 
@@ -49,7 +56,7 @@ type OperationalContactStatus =
   | 'REVIEW_IDENTITY'
   | 'ACTIVE';
 
-type StatusFilter = OperationalContactStatus | 'WORK_PENDING' | 'ALL';
+type StatusFilter = ReactivationOperationalStatus;
 
 interface OperationalStatusOption {
   value: StatusFilter;
@@ -148,6 +155,7 @@ export class MarketingReactivationComponent implements OnInit {
   readonly dateToControl = new FormControl<Date | null>(null);
   readonly iventasControl = new FormControl<string | null>(null);
   readonly branchFilter = new FormControl('ALL', { nonNullable: true });
+  readonly tariffFilter = new FormControl('ALL', { nonNullable: true });
   readonly statusFilter = new FormControl<StatusFilter>('WORK_PENDING', {
     nonNullable: true,
   });
@@ -171,11 +179,26 @@ export class MarketingReactivationComponent implements OnInit {
   sources: ReactivationSourcesResponse | null = null;
   candidates: ReactivationCandidatesResponse | null = null;
   allRows: ReactivationCandidateRow[] = [];
+  tariffRows: ReactivationTariffCount[] = [];
+  campaignPreview: ReactivationCampaignPreviewResponse | null = null;
+  campaigns: ReactivationCampaign[] = [];
+  selectedCampaign: ReactivationCampaignDetail | null = null;
+
+  readonly campaignNameControl = new FormControl('', { nonNullable: true });
+  readonly campaignNotesControl = new FormControl('', { nonNullable: true });
 
   loadingSources = true;
   loadingCandidates = false;
+  loadingTariffs = false;
+  loadingPreview = false;
+  creatingCampaign = false;
+  loadingCampaigns = false;
+  loadingCampaignDetail = false;
+  campaignActionId: number | null = null;
   sourcesError = '';
   candidatesError = '';
+  campaignError = '';
+  campaignSuccess = '';
 
   @ViewChild(MatSort)
   set tableSort(sort: MatSort | undefined) {
@@ -221,6 +244,14 @@ export class MarketingReactivationComponent implements OnInit {
 
   get iventasPeriods(): ReactivationIventasPeriod[] {
     return this.sources?.iventas_periods ?? [];
+  }
+
+  get canManageCampaigns(): boolean {
+    return Boolean(this.sources?.permissions?.can_manage_campaigns);
+  }
+
+  get tariffOptions(): ReactivationTariffCount[] {
+    return this.tariffRows.filter((row) => Boolean(row.tarifa));
   }
 
   get hasNoSources(): boolean {
@@ -344,9 +375,204 @@ export class MarketingReactivationComponent implements OnInit {
 
   clearFilters(): void {
     this.branchFilter.setValue('ALL', { emitEvent: false });
+    this.tariffFilter.setValue('ALL', { emitEvent: false });
     this.statusFilter.setValue('WORK_PENDING', { emitEvent: false });
     this.searchFilter.setValue('', { emitEvent: false });
     this.applyFilters();
+  }
+
+  prepareCampaign(): void {
+    const request = this.buildCampaignRequest();
+    if (!request) {
+      return;
+    }
+    this.loadingPreview = true;
+    this.campaignError = '';
+    this.campaignSuccess = '';
+    this.campaignPreview = null;
+    this.reactivationService
+      .previewCampaign(request)
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        next: (preview) => {
+          this.loadingPreview = false;
+          this.campaignPreview = preview;
+        },
+        error: (error: HttpErrorResponse) => {
+          this.loadingPreview = false;
+          this.campaignError = this.resolveErrorMessage(
+            error,
+            'No fue posible preparar el preview de campaña.',
+          );
+        },
+      });
+  }
+
+  confirmCampaign(): void {
+    if (!this.campaignPreview || this.campaignPreview.summary.eligible === 0) {
+      return;
+    }
+    const name = this.campaignNameControl.value.trim();
+    if (!name) {
+      this.campaignError = 'Escribe un nombre para la campaña.';
+      return;
+    }
+    const baseRequest = this.buildCampaignRequest();
+    if (!baseRequest) {
+      return;
+    }
+    const request: ReactivationCampaignRequest = {
+      ...baseRequest,
+      name,
+      notes: this.campaignNotesControl.value.trim() || null,
+      filters: this.campaignPreview.filters,
+    };
+    this.creatingCampaign = true;
+    this.campaignError = '';
+    this.reactivationService
+      .createCampaign(request)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          this.creatingCampaign = false;
+          this.campaignPreview = null;
+          this.campaignNameControl.setValue('');
+          this.campaignNotesControl.setValue('');
+          this.campaignSuccess = (
+            `Campaña “${response.campaign.name}” creada con `
+            + `${response.campaign.recipient_count} destinatarios.`
+          );
+          this.loadCampaigns();
+        },
+        error: (error: HttpErrorResponse) => {
+          this.creatingCampaign = false;
+          this.campaignError = this.resolveErrorMessage(
+            error,
+            'No fue posible crear la campaña.',
+          );
+        },
+      });
+  }
+
+  cancelCampaignPreview(): void {
+    this.campaignPreview = null;
+    this.campaignError = '';
+  }
+
+  loadCampaigns(): void {
+    if (!this.canManageCampaigns) {
+      return;
+    }
+    this.loadingCampaigns = true;
+    this.reactivationService
+      .getCampaigns()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          this.loadingCampaigns = false;
+          this.campaigns = response.rows;
+        },
+        error: (error: HttpErrorResponse) => {
+          this.loadingCampaigns = false;
+          this.campaignError = this.resolveErrorMessage(
+            error,
+            'No fue posible cargar el historial de campañas.',
+          );
+        },
+      });
+  }
+
+  viewCampaign(campaign: ReactivationCampaign): void {
+    this.loadingCampaignDetail = true;
+    this.selectedCampaign = null;
+    this.campaignError = '';
+    this.reactivationService
+      .getCampaign(campaign.id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          this.loadingCampaignDetail = false;
+          this.selectedCampaign = response.campaign;
+        },
+        error: (error: HttpErrorResponse) => {
+          this.loadingCampaignDetail = false;
+          this.campaignError = this.resolveErrorMessage(
+            error,
+            'No fue posible cargar el detalle de la campaña.',
+          );
+        },
+      });
+  }
+
+  closeCampaignDetail(): void {
+    this.selectedCampaign = null;
+  }
+
+  exportCampaign(campaign: ReactivationCampaign): void {
+    this.campaignActionId = campaign.id;
+    this.campaignError = '';
+    this.reactivationService
+      .exportCampaign(campaign.id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (blob) => {
+          this.campaignActionId = null;
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `reactivacion_campana_${campaign.id}.xlsx`;
+          link.click();
+          URL.revokeObjectURL(url);
+          this.loadCampaigns();
+        },
+        error: (error: HttpErrorResponse) => {
+          this.campaignActionId = null;
+          this.campaignError = this.resolveErrorMessage(
+            error,
+            'No fue posible exportar la campaña.',
+          );
+        },
+      });
+  }
+
+  markCampaignSent(campaign: ReactivationCampaign): void {
+    const confirmed = window.confirm(
+      `¿Registrar “${campaign.name}” como enviada externamente?`,
+    );
+    if (!confirmed) {
+      return;
+    }
+    this.campaignActionId = campaign.id;
+    this.campaignError = '';
+    this.reactivationService
+      .markCampaignSent(campaign.id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          this.campaignActionId = null;
+          this.campaignSuccess = 'La campaña quedó registrada como enviada.';
+          this.loadCampaigns();
+        },
+        error: (error: HttpErrorResponse) => {
+          this.campaignActionId = null;
+          this.campaignError = this.resolveErrorMessage(
+            error,
+            'No fue posible marcar la campaña como enviada.',
+          );
+        },
+      });
+  }
+
+  campaignStatusLabel(status: ReactivationCampaign['status']): string {
+    const labels: Record<ReactivationCampaign['status'], string> = {
+      DRAFT: 'Borrador',
+      EXPORTED: 'Exportada',
+      SENT: 'Enviada',
+      CANCELLED: 'Cancelada',
+    };
+    return labels[status];
   }
 
   getOperationalContactStatus(
@@ -529,12 +755,17 @@ export class MarketingReactivationComponent implements OnInit {
         debounceTime(0),
         takeUntilDestroyed(this.destroyRef),
       )
-      .subscribe(() => this.requestSelectedCandidates());
+      .subscribe(() => {
+        this.campaignPreview = null;
+        this.requestSelectedCandidates();
+        this.requestTariffs();
+      });
   }
 
   private configureFilters(): void {
     merge(
       this.branchFilter.valueChanges,
+      this.tariffFilter.valueChanges,
       this.statusFilter.valueChanges,
       this.searchFilter.valueChanges,
     )
@@ -542,7 +773,10 @@ export class MarketingReactivationComponent implements OnInit {
         debounceTime(80),
         takeUntilDestroyed(this.destroyRef),
       )
-      .subscribe(() => this.applyFilters());
+      .subscribe(() => {
+        this.campaignPreview = null;
+        this.applyFilters();
+      });
   }
 
   private applySources(sources: ReactivationSourcesResponse): void {
@@ -566,7 +800,43 @@ export class MarketingReactivationComponent implements OnInit {
         dateTo: latestDateIso,
         iventasPeriodKey,
       });
+      this.requestTariffs();
     }
+    if (this.canManageCampaigns) {
+      this.loadCampaigns();
+    }
+  }
+
+  private requestTariffs(): void {
+    const dateFrom = this.dateFromControl.value;
+    const dateTo = this.dateToControl.value;
+    if (!dateFrom || !dateTo || dateFrom.getTime() > dateTo.getTime()) {
+      return;
+    }
+    this.loadingTariffs = true;
+    this.reactivationService
+      .getTariffs(
+        this.formatDateForApi(dateFrom),
+        this.formatDateForApi(dateTo),
+      )
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          this.loadingTariffs = false;
+          this.tariffRows = response.rows;
+          const selected = this.tariffFilter.value;
+          if (
+            selected !== 'ALL'
+            && !response.rows.some((row) => row.tarifa === selected)
+          ) {
+            this.tariffFilter.setValue('ALL');
+          }
+        },
+        error: () => {
+          this.loadingTariffs = false;
+          this.tariffRows = [];
+        },
+      });
   }
 
   private requestSelectedCandidates(): void {
@@ -595,6 +865,7 @@ export class MarketingReactivationComponent implements OnInit {
 
   private applyFilters(): void {
     const branch = this.branchFilter.value;
+    const tariff = this.tariffFilter.value;
     const status = this.statusFilter.value;
     const search = this.normalizeSearch(this.searchFilter.value);
 
@@ -602,6 +873,9 @@ export class MarketingReactivationComponent implements OnInit {
       const operationalStatus = this.getOperationalContactStatus(row);
 
       if (branch !== 'ALL' && row.sucursal !== branch) {
+        return false;
+      }
+      if (tariff !== 'ALL' && row.tarifa !== tariff) {
         return false;
       }
       if (
@@ -627,6 +901,36 @@ export class MarketingReactivationComponent implements OnInit {
       return [row.nombre, row.pin, row.telefono]
         .some((value) => this.normalizeSearch(value).includes(search));
     });
+  }
+
+  private buildCampaignRequest(): ReactivationCampaignRequest | null {
+    const dateFrom = this.dateFromControl.value;
+    const dateTo = this.dateToControl.value;
+    const iventasPeriodKey = this.iventasControl.value?.trim();
+    if (!dateFrom || !dateTo || !iventasPeriodKey) {
+      this.campaignError = 'Selecciona el rango y el periodo iVentas.';
+      return null;
+    }
+    if (dateFrom.getTime() > dateTo.getTime()) {
+      this.campaignError = 'Desde no puede ser posterior a Hasta.';
+      return null;
+    }
+    const filters: ReactivationCampaignFilters = {
+      iventas_period_key: iventasPeriodKey,
+      sucursal: this.branchFilter.value === 'ALL'
+        ? null
+        : this.branchFilter.value,
+      operational_status: this.statusFilter.value,
+      search: this.searchFilter.value.trim() || null,
+      tarifa: this.tariffFilter.value === 'ALL'
+        ? null
+        : this.tariffFilter.value,
+    };
+    return {
+      date_from: this.formatDateForApi(dateFrom),
+      date_to: this.formatDateForApi(dateTo),
+      filters,
+    };
   }
 
   private sortOperationally(

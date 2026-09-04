@@ -24,6 +24,7 @@
 
 .page-header,
 .workspace,
+.campaign-panel,
 .summary-card,
 .state-panel,
 .reload-state,
@@ -233,10 +234,17 @@
   flex: 0 0 auto;
 }
 
+.section-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
 .filters {
   display: grid;
-  grid-template-columns: minmax(180px, 0.8fr) minmax(240px, 1fr)
-    minmax(280px, 1.4fr);
+  grid-template-columns: minmax(160px, 0.7fr) minmax(190px, 0.8fr)
+    minmax(230px, 1fr) minmax(260px, 1.3fr);
   gap: 10px;
   padding: 8px 16px 14px;
 }
@@ -368,6 +376,162 @@ tr.mat-mdc-row:hover td {
   font-weight: 700;
 }
 
+.campaign-panel {
+  border-radius: 8px;
+}
+
+.campaign-panel--loading,
+.history-loading,
+.campaign-success {
+  display: flex;
+  min-height: 52px;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 14px;
+  color: var(--reactivation-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.campaign-panel-heading {
+  border-bottom: 1px solid var(--reactivation-border);
+}
+
+.preview-counts {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(115px, 1fr));
+  gap: 1px;
+  background: var(--reactivation-border);
+}
+
+.preview-counts > div {
+  min-height: 70px;
+  padding: 12px;
+  background: var(--reactivation-surface);
+}
+
+.preview-counts span,
+.preview-counts strong {
+  display: block;
+}
+
+.preview-counts span {
+  color: var(--reactivation-muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.preview-counts strong {
+  margin-top: 4px;
+  font-size: 22px;
+}
+
+.preview-counts [data-tone='success'] strong {
+  color: #15803d;
+}
+
+.campaign-form {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.9fr) minmax(280px, 1.5fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+}
+
+.campaign-form mat-form-field {
+  width: 100%;
+}
+
+.campaign-form ::ng-deep .mat-mdc-form-field-subscript-wrapper {
+  display: none;
+}
+
+.campaign-form button mat-spinner {
+  display: inline-block;
+  margin-right: 7px;
+}
+
+.campaign-success {
+  min-height: 42px;
+  border: 1px solid #86efac;
+  border-radius: 6px;
+  color: #166534;
+  background: #f0fdf4;
+}
+
+.campaign-table-wrapper {
+  max-height: 360px;
+}
+
+.campaign-table {
+  width: 100%;
+  min-width: 980px;
+  border-collapse: collapse;
+}
+
+.campaign-table th,
+.campaign-table td {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--reactivation-border);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.campaign-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  color: #334155;
+  background: #f8fafc;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.campaign-table td {
+  color: #334155;
+  font-size: 12px;
+}
+
+.campaign-table td span {
+  display: block;
+}
+
+.campaign-status {
+  display: inline-flex !important;
+  padding: 3px 7px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.campaign-status[data-status='EXPORTED'] {
+  border-color: #7dd3fc;
+  color: #075985;
+  background: #f0f9ff;
+}
+
+.campaign-status[data-status='SENT'] {
+  border-color: #86efac;
+  color: #166534;
+  background: #f0fdf4;
+}
+
+.campaign-status[data-status='CANCELLED'] {
+  border-color: #cbd5e1;
+  color: #475569;
+  background: #f1f5f9;
+}
+
+.campaign-actions {
+  white-space: nowrap;
+}
+
 @media (max-width: 1180px) {
   .page-header {
     flex-direction: column;
@@ -383,6 +547,10 @@ tr.mat-mdc-row:hover td {
 
   .filters {
     grid-template-columns: repeat(2, minmax(220px, 1fr));
+  }
+
+  .preview-counts {
+    grid-template-columns: repeat(4, minmax(130px, 1fr));
   }
 }
 
@@ -404,6 +572,21 @@ tr.mat-mdc-row:hover td {
   .section-heading {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .section-actions,
+  .campaign-form {
+    width: 100%;
+  }
+
+  .section-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .campaign-form,
+  .preview-counts {
+    grid-template-columns: 1fr;
   }
 
   .clear-button {
