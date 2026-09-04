@@ -51,6 +51,7 @@ from .planning_targets import (
 )
 from .marketing import (
     MarketingMonthlyInputORM,
+    MarketingReactivationTariffORM,
     MarketingReactivationCampaignORM,
     MarketingReactivationCampaignRecipientORM,
     MarketingIventasSyncRunORM,
@@ -165,6 +166,7 @@ __all__ = [
     "PlanningTargetApprovalEventORM",
     "PlanningOperatorORM",
     "MarketingMonthlyInputORM",
+    "MarketingReactivationTariffORM",
     "MarketingReactivationCampaignORM",
     "MarketingReactivationCampaignRecipientORM",
     "MarketingIventasSyncRunORM",

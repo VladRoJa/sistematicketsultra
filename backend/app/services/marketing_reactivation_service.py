@@ -24,6 +24,7 @@ from app.models import (
     MarketingIventasSyncRunORM,
     MarketingReactivationCampaignORM,
     MarketingReactivationCampaignRecipientORM,
+    MarketingReactivationTariffORM,
 )
 from app.models.warehouse import SociosVencidosCarteraORM
 from app.services.marketing_iventas_service import normalize_iventas_phone
@@ -47,8 +48,16 @@ ELIGIBILITY_REVIEW = "REVIEW"
 
 REASON_REVIEW_IDENTITY = "REVIEW_IDENTITY"
 REASON_REVIEW_DUPLICATE_PHONE = "REVIEW_DUPLICATE_PHONE"
+REASON_REVIEW_TARIFF = "REVIEW_TARIFF"
 REASON_INVALID_PHONE = "INVALID_PHONE"
 REASON_RECENT_SUITE_CAMPAIGN = "RECENT_SUITE_CAMPAIGN"
+REASON_TARIFF_EXCLUDED = "TARIFF_EXCLUDED"
+REASON_TARIFF_DOMICILIATED_FLOW = "TARIFF_DOMICILIATED_FLOW"
+
+TARIFF_GROUP_REACTIVATE = "REACTIVATE"
+TARIFF_GROUP_DOMICILIATED_FLOW = "DOMICILIATED_FLOW"
+TARIFF_GROUP_EXCLUDE = "EXCLUDE"
+TARIFF_GROUP_REVIEW = "REVIEW"
 
 OPERATIONAL_NO_CONTACT_IN_PERIOD = "NO_CONTACT_IN_PERIOD"
 OPERATIONAL_NO_OUTBOUND_MESSAGE = "NO_OUTBOUND_MESSAGE"
@@ -186,11 +195,21 @@ def list_marketing_reactivation_tariffs(
         .order_by(SociosVencidosCarteraORM.tarifa.asc().nullslast())
         .all()
     )
+    catalog = _read_active_tariff_catalog(
+        tariff_values=(tarifa for tarifa, _ in rows),
+        session=active_session,
+    )
     return {
         "date_from": normalized_from.isoformat(),
         "date_to": normalized_to.isoformat(),
         "rows": [
-            {"tarifa": tarifa, "count": int(count_value)}
+            {
+                "tarifa": tarifa,
+                "count": int(count_value),
+                **_serialize_tariff_classification(
+                    catalog.get(normalize_reactivation_tariff_key(tarifa))
+                ),
+            }
             for tarifa, count_value in rows
         ],
     }
@@ -230,6 +249,10 @@ def build_marketing_reactivation_candidates(
             "No se pudieron enriquecer episodios de cartera: "
             f"{sorted(missing_row_ids)}."
         )
+    tariff_catalog = _read_active_tariff_catalog(
+        tariff_values=(row.tarifa for row in vencido_rows),
+        session=active_session,
+    )
     return {
         "sources": {
             "date_from": str(result.date_from),
@@ -247,6 +270,7 @@ def build_marketing_reactivation_candidates(
             _serialize_candidate(
                 candidate=candidate,
                 vencido_row=vencido_rows_by_id[int(candidate.vencido_row_id)],
+                tariff_catalog=tariff_catalog,
             )
             for candidate in result.rows
         ],
@@ -604,6 +628,16 @@ def _build_campaign_plan(
         if row["campaign_eligibility"] == ELIGIBILITY_REVIEW
         and row["eligibility_reason"] == REASON_REVIEW_IDENTITY
     )
+    domiciliated_flow_count = sum(
+        1
+        for row in decision_rows
+        if row["eligibility_reason"] == REASON_TARIFF_DOMICILIATED_FLOW
+    )
+    review_tariff_count = sum(
+        1
+        for row in decision_rows
+        if row["eligibility_reason"] == REASON_REVIEW_TARIFF
+    )
     summary = {
         "total_candidates": len(decision_rows),
         "eligible": eligibility_counts[ELIGIBILITY_ELIGIBLE],
@@ -614,6 +648,8 @@ def _build_campaign_plan(
         "review_identity": review_identity_count,
         "duplicate_phone": duplicate_count,
         "excluded_tariff": eligibility_counts[ELIGIBILITY_EXCLUDED_TARIFF],
+        "domiciliated_flow": domiciliated_flow_count,
+        "review_tariff": review_tariff_count,
         "excluded_recent_campaign": eligibility_counts[
             ELIGIBILITY_EXCLUDED_RECENT_CAMPAIGN
         ],
@@ -645,6 +681,15 @@ def _resolve_campaign_eligibility(
         return ELIGIBILITY_EXCLUDED_ACTIVE, "ACTIVE_CONFIRMED"
     if row["status"] == "REVIEW_ACTIVE_MATCH" or row["reason"] in _IDENTITY_REASONS:
         return ELIGIBILITY_REVIEW, REASON_REVIEW_IDENTITY
+    tariff_group = row.get("tarifa_group")
+    if tariff_group == TARIFF_GROUP_EXCLUDE:
+        return ELIGIBILITY_EXCLUDED_TARIFF, REASON_TARIFF_EXCLUDED
+    if tariff_group == TARIFF_GROUP_DOMICILIATED_FLOW:
+        return ELIGIBILITY_EXCLUDED_TARIFF, REASON_TARIFF_DOMICILIATED_FLOW
+    if tariff_group in {None, TARIFF_GROUP_REVIEW}:
+        return ELIGIBILITY_REVIEW, REASON_REVIEW_TARIFF
+    if tariff_group != TARIFF_GROUP_REACTIVATE:
+        return ELIGIBILITY_REVIEW, REASON_REVIEW_TARIFF
     if phone_mx10 is None:
         return ELIGIBILITY_EXCLUDED_INVALID_PHONE, REASON_INVALID_PHONE
     if duplicate_phone:
@@ -832,7 +877,11 @@ def _serialize_candidate(
     *,
     candidate: Any,
     vencido_row: Any,
+    tariff_catalog: dict[str, MarketingReactivationTariffORM],
 ) -> dict[str, object]:
+    tariff = tariff_catalog.get(
+        normalize_reactivation_tariff_key(vencido_row.tarifa)
+    )
     return {
         "vencido_row_id": int(candidate.vencido_row_id),
         "pin": str(vencido_row.pin),
@@ -845,6 +894,13 @@ def _serialize_candidate(
             vencido_row.fecha_ultimo_pago_local
         ),
         "tarifa": vencido_row.tarifa,
+        "tarifa_categoria": (
+            str(tariff.categoria_tarifa) if tariff is not None else None
+        ),
+        "tarifa_group": (
+            str(tariff.reactivation_group) if tariff is not None else None
+        ),
+        "tarifa_classified": tariff is not None,
         "adeudo": _serialize_optional_decimal(vencido_row.adeudo),
         "status": str(candidate.status),
         "reason": str(candidate.reason),
@@ -853,6 +909,55 @@ def _serialize_candidate(
         "iventas_contact_id": candidate.iventas_contact_id,
         "latest_outbound_at_utc": _serialize_optional_aware_datetime(
             candidate.latest_outbound_at_utc
+        ),
+    }
+
+
+def normalize_reactivation_tariff_key(value: Any) -> str | None:
+    if value is None:
+        return None
+    normalized = unicodedata.normalize("NFKC", str(value)).strip().upper()
+    normalized = " ".join(normalized.split())
+    return normalized or None
+
+
+def _read_active_tariff_catalog(
+    *,
+    tariff_values: Any,
+    session: Any,
+) -> dict[str, MarketingReactivationTariffORM]:
+    tariff_keys = {
+        key
+        for key in (
+            normalize_reactivation_tariff_key(value) for value in tariff_values
+        )
+        if key is not None
+    }
+    if not tariff_keys:
+        return {}
+    rows = (
+        session.query(MarketingReactivationTariffORM)
+        .filter(
+            MarketingReactivationTariffORM.is_active.is_(True),
+            MarketingReactivationTariffORM.tarifa_key.in_(
+                tuple(sorted(tariff_keys))
+            ),
+        )
+        .all()
+    )
+    return {str(row.tarifa_key): row for row in rows}
+
+
+def _serialize_tariff_classification(
+    tariff: MarketingReactivationTariffORM | None,
+) -> dict[str, object]:
+    return {
+        "classified": tariff is not None,
+        "categoria_tarifa": (
+            str(tariff.categoria_tarifa) if tariff is not None else None
+        ),
+        "reactivation_group": (
+            str(tariff.reactivation_group) if tariff is not None else None
         ),
     }
 

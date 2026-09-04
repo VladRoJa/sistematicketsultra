@@ -399,6 +399,9 @@
         <div><span>Sin teléfono válido</span><strong>{{ campaignPreview.summary.excluded_invalid_phone | number }}</strong></div>
         <div><span>Revisar identidad</span><strong>{{ campaignPreview.summary.review_identity | number }}</strong></div>
         <div><span>Teléfonos duplicados</span><strong>{{ campaignPreview.summary.duplicate_phone | number }}</strong></div>
+        <div><span>No reactivar</span><strong>{{ nonReactivationTariffCount | number }}</strong></div>
+        <div><span>Flujo domiciliados</span><strong>{{ campaignPreview.summary.domiciliated_flow | number }}</strong></div>
+        <div><span>Tarifa por revisar</span><strong>{{ campaignPreview.summary.review_tariff | number }}</strong></div>
         <div><span>Cooldown Suite</span><strong>{{ campaignPreview.summary.excluded_recent_campaign | number }}</strong></div>
       </div>
 

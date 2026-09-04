@@ -108,6 +108,46 @@ class MarketingMonthlyInputORM(db.Model):
     )
 
 
+class MarketingReactivationTariffORM(db.Model):
+    __tablename__ = "marketing_reactivation_tariffs"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    tarifa_key = db.Column(db.String(255), nullable=False)
+    tarifa_raw = db.Column(db.String(255), nullable=False)
+    categoria_tarifa = db.Column(db.String(100), nullable=False)
+    reactivation_group = db.Column(db.String(30), nullable=False)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    source = db.Column(db.String(255), nullable=False)
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+        onupdate=_utc_now,
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "tarifa_key",
+            name="uq_marketing_reactivation_tariffs_tarifa_key",
+        ),
+        db.CheckConstraint(
+            "reactivation_group IN "
+            "('REACTIVATE', 'DOMICILIATED_FLOW', 'EXCLUDE', 'REVIEW')",
+            name="ck_marketing_reactivation_tariffs_group",
+        ),
+        db.Index(
+            "ix_marketing_reactivation_tariffs_active_group",
+            "is_active",
+            "reactivation_group",
+        ),
+    )
+
+
 class MarketingReactivationCampaignORM(db.Model):
     __tablename__ = "marketing_reactivation_campaigns"
 

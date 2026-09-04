@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 from io import BytesIO
+import json
+from pathlib import Path
+import re
 from types import SimpleNamespace
 
 import pytest
@@ -26,6 +29,10 @@ def _candidate(
     phone: str | None,
     status: str = "CONTACT_HISTORY_UNKNOWN",
     reason: str = "NO_OUTBOUND_EVIDENCE",
+    tariff: str = "1 MES $899",
+    tariff_category: str | None = "Mensualidad",
+    tariff_group: str | None = "REACTIVATE",
+    tariff_classified: bool = True,
 ):
     return {
         "vencido_row_id": row_id,
@@ -36,7 +43,10 @@ def _candidate(
         "correo": None,
         "fecha_vencimiento": "2026-08-23",
         "fecha_ultimo_pago": None,
-        "tarifa": "ANUAL",
+        "tarifa": tariff,
+        "tarifa_categoria": tariff_category,
+        "tarifa_group": tariff_group,
+        "tarifa_classified": tariff_classified,
         "adeudo": None,
         "status": status,
         "reason": reason,
@@ -147,10 +157,199 @@ def test_preview_uses_one_engine_and_classifies_every_decision(monkeypatch):
         "review_identity": 1,
         "duplicate_phone": 2,
         "excluded_tariff": 0,
+        "domiciliated_flow": 0,
+        "review_tariff": 0,
         "excluded_recent_campaign": 1,
         "review": 3,
     }
     assert not hasattr(session, "added")
+
+
+@pytest.mark.parametrize(
+    (
+        "tariff",
+        "category",
+        "tariff_group",
+        "expected_eligibility",
+        "expected_reason",
+    ),
+    [
+        ("PASE GYMPASS", "Agregadora", "EXCLUDE", "EXCLUDED_TARIFF", "TARIFF_EXCLUDED"),
+        ("PASE TOTAL PASS", "Agregadora", "EXCLUDE", "EXCLUDED_TARIFF", "TARIFF_EXCLUDED"),
+        ("1 DIA", "Diario", "EXCLUDE", "EXCLUDED_TARIFF", "TARIFF_EXCLUDED"),
+        ("1 MES $899", "Mensualidad", "REACTIVATE", "ELIGIBLE", None),
+        (
+            "DOMICILIADO 12 MESES $499",
+            "Domiciliado",
+            "DOMICILIATED_FLOW",
+            "EXCLUDED_TARIFF",
+            "TARIFF_DOMICILIATED_FLOW",
+        ),
+        ("SEMANA", "Trimestre", "REVIEW", "REVIEW", "REVIEW_TARIFF"),
+        ("SEMANA $250", "Semana", "REVIEW", "REVIEW", "REVIEW_TARIFF"),
+        ("SEMANA $299", "Semana", "REVIEW", "REVIEW", "REVIEW_TARIFF"),
+        ("TARIFA INEXISTENTE", None, None, "REVIEW", "REVIEW_TARIFF"),
+    ],
+)
+def test_tariff_classification_controls_campaign_eligibility(
+    tariff,
+    category,
+    tariff_group,
+    expected_eligibility,
+    expected_reason,
+):
+    row = _candidate(
+        1,
+        phone="6861000001",
+        tariff=tariff,
+        tariff_category=category,
+        tariff_group=tariff_group,
+        tariff_classified=tariff_group is not None,
+    )
+
+    eligibility, reason = service._resolve_campaign_eligibility(
+        row=row,
+        phone_mx10="6861000001",
+        duplicate_phone=False,
+        last_sent_at=None,
+        campaign_cooldown_days=None,
+        now=NOW,
+    )
+
+    assert (eligibility, reason) == (expected_eligibility, expected_reason)
+
+
+def test_tariff_decision_precedes_phone_checks_but_follows_identity():
+    unknown = _candidate(
+        1,
+        phone=None,
+        tariff="DESCONOCIDA",
+        tariff_category=None,
+        tariff_group=None,
+        tariff_classified=False,
+    )
+    assert service._resolve_campaign_eligibility(
+        row=unknown,
+        phone_mx10=None,
+        duplicate_phone=False,
+        last_sent_at=None,
+        campaign_cooldown_days=None,
+        now=NOW,
+    ) == ("REVIEW", "REVIEW_TARIFF")
+
+    identity_review = {
+        **unknown,
+        "status": "REVIEW_ACTIVE_MATCH",
+        "reason": "ACTIVE_REVIEW",
+    }
+    assert service._resolve_campaign_eligibility(
+        row=identity_review,
+        phone_mx10=None,
+        duplicate_phone=False,
+        last_sent_at=None,
+        campaign_cooldown_days=None,
+        now=NOW,
+    ) == ("REVIEW", "REVIEW_IDENTITY")
+
+
+def test_preview_reports_separate_tariff_audit_counts(monkeypatch):
+    rows = [
+        _candidate(
+            1,
+            phone="6861000001",
+            tariff="1 DIA",
+            tariff_category="Diario",
+            tariff_group="EXCLUDE",
+        ),
+        _candidate(
+            2,
+            phone="6861000002",
+            tariff="DOMICILIADO 12 MESES $499",
+            tariff_category="Domiciliado",
+            tariff_group="DOMICILIATED_FLOW",
+        ),
+        _candidate(
+            3,
+            phone="6861000003",
+            tariff="SEMANA $250",
+            tariff_category="Semana",
+            tariff_group="REVIEW",
+        ),
+    ]
+    monkeypatch.setattr(
+        service,
+        "build_marketing_reactivation_candidates",
+        lambda **kwargs: _candidate_response(rows),
+    )
+    monkeypatch.setattr(
+        service,
+        "_read_last_suite_campaign_sent_at",
+        lambda **kwargs: {},
+    )
+
+    result = service.preview_marketing_reactivation_campaign(
+        date_from="2026-08-23",
+        date_to="2026-08-23",
+        filters=_filters(),
+        session=SimpleNamespace(),
+        now=NOW,
+    )
+
+    assert result["summary"]["excluded_tariff"] == 2
+    assert result["summary"]["domiciliated_flow"] == 1
+    assert result["summary"]["review_tariff"] == 1
+    assert result["summary"]["review"] == 1
+
+
+def test_tariff_normalization_is_exact_and_does_not_fuzzy_match():
+    assert service.normalize_reactivation_tariff_key(
+        "  pase\t gympass  "
+    ) == "PASE GYMPASS"
+    assert service.normalize_reactivation_tariff_key(
+        "１２ meses en línea $4990"
+    ) == "12 MESES EN LÍNEA $4990"
+    assert service.normalize_reactivation_tariff_key(
+        "PASE GYMPASS EXTRA"
+    ) != "PASE GYMPASS"
+
+
+def test_candidate_serialization_uses_normalized_tariff_catalog():
+    catalog_row = SimpleNamespace(
+        tarifa_key="PASE GYMPASS",
+        categoria_tarifa="Agregadora",
+        reactivation_group="EXCLUDE",
+    )
+    vencido_row = SimpleNamespace(
+        pin="PIN-1",
+        nombre="Socio 1",
+        sucursal_raw="CENTRO",
+        telefono_raw="6861000001",
+        correo_raw=None,
+        fecha_vencimiento_date=date(2026, 8, 23),
+        fecha_ultimo_pago_local=None,
+        tarifa="  pase   gympass ",
+        adeudo=None,
+    )
+    candidate = SimpleNamespace(
+        vencido_row_id=1,
+        status="CONTACT_HISTORY_UNKNOWN",
+        reason="NO_OUTBOUND_EVIDENCE",
+        active_status="NOT_FOUND",
+        active_id_socio=None,
+        iventas_contact_id=None,
+        latest_outbound_at_utc=None,
+    )
+
+    result = service._serialize_candidate(
+        candidate=candidate,
+        vencido_row=vencido_row,
+        tariff_catalog={"PASE GYMPASS": catalog_row},
+    )
+
+    assert result["tarifa"] == "  pase   gympass "
+    assert result["tarifa_categoria"] == "Agregadora"
+    assert result["tarifa_group"] == "EXCLUDE"
+    assert result["tarifa_classified"] is True
 
 
 def test_cooldown_is_not_applied_without_explicit_configuration(monkeypatch):
@@ -585,8 +784,18 @@ class AggregateSession:
         return self.query_object
 
 
-def test_tariff_lookup_filters_range_in_sql_and_returns_counts():
-    session = AggregateSession([("ANUAL", 4), (None, 2)])
+def test_tariff_lookup_filters_range_in_sql_and_enriches_unknowns(monkeypatch):
+    session = AggregateSession([("  anualidad  ", 4), ("DESCONOCIDA", 2), (None, 1)])
+    catalog_row = SimpleNamespace(
+        tarifa_key="ANUALIDAD",
+        categoria_tarifa="Anualidad",
+        reactivation_group="REACTIVATE",
+    )
+    monkeypatch.setattr(
+        service,
+        "_read_active_tariff_catalog",
+        lambda **kwargs: {"ANUALIDAD": catalog_row},
+    )
 
     result = service.list_marketing_reactivation_tariffs(
         date_from=date(2026, 8, 1),
@@ -605,6 +814,80 @@ def test_tariff_lookup_filters_range_in_sql_and_returns_counts():
     ).lower()
     assert "fecha_vencimiento_date between '2026-08-01' and '2026-08-31'" in sql
     assert result["rows"] == [
-        {"tarifa": "ANUAL", "count": 4},
-        {"tarifa": None, "count": 2},
+        {
+            "tarifa": "  anualidad  ",
+            "count": 4,
+            "classified": True,
+            "categoria_tarifa": "Anualidad",
+            "reactivation_group": "REACTIVATE",
+        },
+        {
+            "tarifa": "DESCONOCIDA",
+            "count": 2,
+            "classified": False,
+            "categoria_tarifa": None,
+            "reactivation_group": None,
+        },
+        {
+            "tarifa": None,
+            "count": 1,
+            "classified": False,
+            "categoria_tarifa": None,
+            "reactivation_group": None,
+        },
     ]
+
+
+def test_seed_has_expected_tariffs_without_normalized_duplicates():
+    backend_root = Path(__file__).resolve().parents[2]
+    seed_path = (
+        backend_root
+        / "data"
+        / "reference"
+        / "reactivacion_tarifas_edmundo_seed.json"
+    )
+    document = json.loads(seed_path.read_text(encoding="utf-8"))
+    tariffs = document["tariffs"]
+    by_raw = {row["tarifa_raw"]: row for row in tariffs}
+    keys = [
+        service.normalize_reactivation_tariff_key(row["tarifa_raw"])
+        for row in tariffs
+    ]
+
+    assert document["source"]["distinct_tariffs"] == 161
+    assert document["source"]["conflicts"] == 0
+    assert len(tariffs) == len(set(keys)) == 161
+    assert len({row["categoria_tarifa"] for row in tariffs}) == 16
+    assert by_raw["PASE GYMPASS"]["reactivation_group"] == "EXCLUDE"
+    assert by_raw["PASE TOTAL PASS"]["reactivation_group"] == "EXCLUDE"
+    assert by_raw["1 DIA"]["reactivation_group"] == "EXCLUDE"
+    assert by_raw["1 MES $899"]["reactivation_group"] == "REACTIVATE"
+    assert by_raw["DOMICILIADO 12 MESES $499"]["reactivation_group"] == (
+        "DOMICILIATED_FLOW"
+    )
+    assert by_raw["SEMANA"] == {
+        "tarifa_raw": "SEMANA",
+        "categoria_tarifa": "Trimestre",
+        "reactivation_group": "REVIEW",
+        "source_count": 62,
+    }
+    assert by_raw["SEMANA $299"]["reactivation_group"] == "REVIEW"
+
+
+def test_alembic_has_single_head_for_tariff_catalog_migration():
+    versions_path = Path(__file__).resolve().parents[2] / "migrations" / "versions"
+    revisions: set[str] = set()
+    parents: set[str] = set()
+    revision_pattern = re.compile(r'^revision\s*=\s*["\']([^"\']+)["\']', re.M)
+    parent_pattern = re.compile(r'^down_revision\s*=\s*(.+)$', re.M)
+    quoted_pattern = re.compile(r'["\']([^"\']+)["\']')
+    for migration_path in versions_path.glob("*.py"):
+        source = migration_path.read_text(encoding="utf-8")
+        revision_match = revision_pattern.search(source)
+        if revision_match:
+            revisions.add(revision_match.group(1))
+        parent_match = parent_pattern.search(source)
+        if parent_match:
+            parents.update(quoted_pattern.findall(parent_match.group(1)))
+
+    assert revisions - parents == {"e6b8c4d2f1a0"}
