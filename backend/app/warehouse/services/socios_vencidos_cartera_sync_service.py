@@ -33,6 +33,16 @@ class SociosVencidosBackfillFailure:
 
 
 @dataclass(frozen=True, slots=True)
+class SociosVencidosBackfillDownload:
+    date_from: date
+    date_to: date
+    warehouse_upload_id: int
+    ingestion_status: str
+    original_filename: str | None
+    file_path: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class SociosVencidosBackfillResult:
     date_from: date
     date_to: date
@@ -41,6 +51,7 @@ class SociosVencidosBackfillResult:
     cleanup_warnings: tuple[str, ...]
     chunks_failed: int = 0
     failed_ranges: tuple[SociosVencidosBackfillFailure, ...] = ()
+    downloaded_chunks: tuple[SociosVencidosBackfillDownload, ...] = ()
 
 
 def iter_calendar_month_ranges(
@@ -70,6 +81,7 @@ def sync_socios_vencidos_period(
     run_mode: str,
     requested_by: str | None = None,
     trigger_source: str | None = None,
+    download_only: bool = False,
     job_runner: Callable[..., dict[str, Any]] = run_gasca_report_job,
 ) -> dict[str, Any]:
     if date_from > date_to:
@@ -83,8 +95,19 @@ def sync_socios_vencidos_period(
         trigger_source=trigger_source,
         date_from=date_from,
         date_to=date_to,
-        force_ingestion=True,
+        force_ingestion=not download_only,
     )
+    if download_only:
+        if result.get("ingestion_status") != "skipped":
+            raise RuntimeError(
+                "El pipeline Gasca no confirmó la descarga sin ingesta del rango."
+            )
+        if result.get("warehouse_upload_id") is None:
+            raise RuntimeError(
+                "La descarga sin ingesta no devolvió warehouse_upload_id."
+            )
+        return result
+
     if result.get("ingestion_status") not in {"ingested", "already_ingested"}:
         raise RuntimeError(
             "El pipeline Gasca no confirmó la ingesta estructurada del rango."
@@ -116,11 +139,13 @@ def backfill_socios_vencidos_cartera(
     date_to: date,
     requested_by: str | None = None,
     continue_on_error: bool = False,
+    download_only: bool = False,
     job_runner: Callable[..., dict[str, Any]] = run_gasca_report_job,
 ) -> SociosVencidosBackfillResult:
     last_successful_range: tuple[date, date] | None = None
     cleanup_warnings: list[str] = []
     failed_ranges: list[SociosVencidosBackfillFailure] = []
+    downloaded_chunks: list[SociosVencidosBackfillDownload] = []
     chunks_processed = 0
 
     for chunk_from, chunk_to in iter_calendar_month_ranges(
@@ -134,6 +159,7 @@ def backfill_socios_vencidos_cartera(
                 run_mode="manual_backfill",
                 requested_by=requested_by,
                 trigger_source="socios_vencidos_monthly_backfill",
+                download_only=download_only,
                 job_runner=job_runner,
             )
         except Exception as exc:
@@ -156,6 +182,20 @@ def backfill_socios_vencidos_cartera(
                 db.session.remove()
             continue
 
+        if download_only:
+            artifact = result.get("artifact")
+            artifact = artifact if isinstance(artifact, dict) else {}
+            downloaded_chunks.append(
+                SociosVencidosBackfillDownload(
+                    date_from=chunk_from,
+                    date_to=chunk_to,
+                    warehouse_upload_id=result["warehouse_upload_id"],
+                    ingestion_status=result["ingestion_status"],
+                    original_filename=artifact.get("original_filename"),
+                    file_path=artifact.get("file_path"),
+                )
+            )
+
         warning = (result.get("ingestion_metadata") or {}).get(
             "cleanup_warning"
         )
@@ -174,4 +214,5 @@ def backfill_socios_vencidos_cartera(
         cleanup_warnings=tuple(cleanup_warnings),
         chunks_failed=len(failed_ranges),
         failed_ranges=tuple(failed_ranges),
+        downloaded_chunks=tuple(downloaded_chunks),
     )

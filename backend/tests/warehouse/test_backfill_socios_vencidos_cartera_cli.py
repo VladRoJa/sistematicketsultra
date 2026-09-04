@@ -24,11 +24,15 @@ class _App:
 
 
 class _SessionCleanup:
+    def __init__(self):
+        self.rollback_calls = 0
+        self.remove_calls = 0
+
     def rollback(self):
-        pass
+        self.rollback_calls += 1
 
     def remove(self):
-        pass
+        self.remove_calls += 1
 
 
 def test_continue_on_error_cli_exits_one_after_processing_full_window(
@@ -145,4 +149,100 @@ def test_continue_on_error_cli_exits_zero_when_all_chunks_succeed(
 
     assert exit_code == 0
     assert observed["continue_on_error"] is True
+    assert observed["download_only"] is False
     assert json.loads(output.getvalue())["chunks_failed"] == 0
+
+
+def test_download_only_cli_continues_after_failure_and_reports_downloads(
+    monkeypatch,
+):
+    calls = []
+    cleanup = _SessionCleanup()
+
+    def runner(**kwargs):
+        calls.append(kwargs)
+        month = kwargs["date_from"].month
+        if month == 2:
+            raise RuntimeError("febrero falló")
+        return {
+            "ingestion_status": "skipped",
+            "snapshot_id": None,
+            "warehouse_upload_id": 400 + month,
+            "ingestion_metadata": {"reason": "force_ingestion_false"},
+            "artifact": {
+                "original_filename": f"socios-vencidos-{month}.xlsx",
+                "file_path": f"storage/raw/socios-vencidos-{month}.xlsx",
+            },
+        }
+
+    def backfill_service(**kwargs):
+        return sync_service.backfill_socios_vencidos_cartera(
+            **kwargs,
+            job_runner=runner,
+        )
+
+    monkeypatch.setattr(cli, "create_app", _App)
+    monkeypatch.setattr(
+        cli,
+        "backfill_socios_vencidos_cartera",
+        backfill_service,
+    )
+    monkeypatch.setattr(
+        sync_service,
+        "db",
+        SimpleNamespace(session=cleanup),
+    )
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "backfill_socios_vencidos_cartera.py",
+            "--date-from",
+            "2024-01-01",
+            "--date-to",
+            "2024-03-31",
+            "--continue-on-error",
+            "--download-only",
+        ],
+    )
+    output = StringIO()
+
+    with redirect_stdout(output):
+        exit_code = cli.main()
+
+    payload = json.loads(output.getvalue())
+    assert exit_code == 1
+    assert [call["date_from"].month for call in calls] == [1, 2, 3]
+    assert all(call["force_ingestion"] is False for call in calls)
+    assert cleanup.rollback_calls == cleanup.remove_calls == 1
+    assert payload["chunks_processed"] == 2
+    assert payload["chunks_failed"] == 1
+    assert payload["failed_ranges"] == [
+        {
+            "date_from": "2024-02-01",
+            "date_to": "2024-02-29",
+            "error": "febrero falló",
+        }
+    ]
+    assert payload["cleanup_warnings"] == []
+    assert payload["downloaded_chunks"] == [
+        {
+            "date_from": "2024-01-01",
+            "date_to": "2024-01-31",
+            "warehouse_upload_id": 401,
+            "ingestion_status": "skipped",
+            "artifact": {
+                "original_filename": "socios-vencidos-1.xlsx",
+                "file_path": "storage/raw/socios-vencidos-1.xlsx",
+            },
+        },
+        {
+            "date_from": "2024-03-01",
+            "date_to": "2024-03-31",
+            "warehouse_upload_id": 403,
+            "ingestion_status": "skipped",
+            "artifact": {
+                "original_filename": "socios-vencidos-3.xlsx",
+                "file_path": "storage/raw/socios-vencidos-3.xlsx",
+            },
+        },
+    ]

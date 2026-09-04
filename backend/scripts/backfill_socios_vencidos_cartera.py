@@ -32,6 +32,19 @@ def _serialize_failure(value):
     }
 
 
+def _serialize_download(value):
+    return {
+        "date_from": value.date_from.isoformat(),
+        "date_to": value.date_to.isoformat(),
+        "warehouse_upload_id": value.warehouse_upload_id,
+        "ingestion_status": value.ingestion_status,
+        "artifact": {
+            "original_filename": value.original_filename,
+            "file_path": value.file_path,
+        },
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Backfill mensual de la cartera de Socios Vencidos."
@@ -43,6 +56,11 @@ def main() -> int:
         action="store_true",
         help="Continúa con el siguiente mes y reporta todos los fallos al final.",
     )
+    parser.add_argument(
+        "--download-only",
+        action="store_true",
+        help="Descarga y conserva cada XLSX raw sin ejecutar la ingesta estructurada.",
+    )
     args = parser.parse_args()
 
     app = create_app()
@@ -53,6 +71,7 @@ def main() -> int:
                 date_to=args.date_to,
                 requested_by="cli_backfill_socios_vencidos",
                 continue_on_error=args.continue_on_error,
+                download_only=args.download_only,
             )
     except SociosVencidosCarteraSyncError as exc:
         print(json.dumps({
@@ -76,6 +95,11 @@ def main() -> int:
         ],
         "cleanup_warnings": list(result.cleanup_warnings),
     }
+    if args.download_only:
+        payload["downloaded_chunks"] = [
+            _serialize_download(download)
+            for download in result.downloaded_chunks
+        ]
     print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
     return 1 if args.continue_on_error and result.chunks_failed else 0
 
