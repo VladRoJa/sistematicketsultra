@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict
 from datetime import date
 import json
 
@@ -25,12 +24,25 @@ def _serialize_range(value: tuple[date, date] | None):
     return {"date_from": value[0].isoformat(), "date_to": value[1].isoformat()}
 
 
+def _serialize_failure(value):
+    return {
+        "date_from": value.date_from.isoformat(),
+        "date_to": value.date_to.isoformat(),
+        "error": value.error,
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Backfill mensual de la cartera de Socios Vencidos."
     )
     parser.add_argument("--date-from", required=True, type=_parse_date)
     parser.add_argument("--date-to", required=True, type=_parse_date)
+    parser.add_argument(
+        "--continue-on-error",
+        action="store_true",
+        help="Continúa con el siguiente mes y reporta todos los fallos al final.",
+    )
     args = parser.parse_args()
 
     app = create_app()
@@ -40,6 +52,7 @@ def main() -> int:
                 date_from=args.date_from,
                 date_to=args.date_to,
                 requested_by="cli_backfill_socios_vencidos",
+                continue_on_error=args.continue_on_error,
             )
     except SociosVencidosCarteraSyncError as exc:
         print(json.dumps({
@@ -50,14 +63,21 @@ def main() -> int:
         }, ensure_ascii=False, sort_keys=True))
         return 1
 
-    payload = asdict(result)
-    payload["date_from"] = result.date_from.isoformat()
-    payload["date_to"] = result.date_to.isoformat()
-    payload["last_successful_range"] = _serialize_range(
-        result.last_successful_range
-    )
+    payload = {
+        "date_from": result.date_from.isoformat(),
+        "date_to": result.date_to.isoformat(),
+        "chunks_processed": result.chunks_processed,
+        "chunks_failed": result.chunks_failed,
+        "last_successful_range": _serialize_range(
+            result.last_successful_range
+        ),
+        "failed_ranges": [
+            _serialize_failure(failure) for failure in result.failed_ranges
+        ],
+        "cleanup_warnings": list(result.cleanup_warnings),
+    }
     print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
-    return 0
+    return 1 if args.continue_on_error and result.chunks_failed else 0
 
 
 if __name__ == "__main__":

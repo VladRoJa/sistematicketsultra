@@ -11,6 +11,7 @@ from sqlalchemy.dialects import postgresql
 from app.models.warehouse import SociosVencidosCarteraORM
 import app.warehouse.services.socios_vencidos_repository as repository
 import app.warehouse.services.socios_vencidos_current_status_resolver as current_resolver
+import app.warehouse.services.socios_vencidos_cartera_sync_service as sync_service
 from app.warehouse.services.socios_vencidos_cartera_sync_service import (
     SociosVencidosCarteraSyncError,
     backfill_socios_vencidos_cartera,
@@ -251,6 +252,143 @@ def test_backfill_stops_and_reports_exact_failed_range():
         (date(2024, 1, 1), date(2024, 1, 31)),
         (date(2024, 2, 1), date(2024, 2, 29)),
     ]
+
+
+class _SessionCleanup:
+    def __init__(self):
+        self.rollback_calls = 0
+        self.remove_calls = 0
+
+    def rollback(self):
+        self.rollback_calls += 1
+
+    def remove(self):
+        self.remove_calls += 1
+
+
+def _install_session_cleanup(monkeypatch):
+    session = _SessionCleanup()
+    monkeypatch.setattr(sync_service, "db", SimpleNamespace(session=session))
+    return session
+
+
+def _successful_backfill_result(*, cleanup_warning=None):
+    metadata = {}
+    if cleanup_warning is not None:
+        metadata["cleanup_warning"] = cleanup_warning
+    return {
+        "ingestion_status": "ingested",
+        "snapshot_id": 91,
+        "ingestion_metadata": metadata,
+    }
+
+
+def test_backfill_continues_after_one_failed_month(monkeypatch):
+    calls = []
+    cleanup = _install_session_cleanup(monkeypatch)
+
+    def runner(**kwargs):
+        chunk = (kwargs["date_from"], kwargs["date_to"])
+        calls.append(chunk)
+        if kwargs["date_from"] == date(2024, 2, 1):
+            raise RuntimeError("febrero falló")
+        return _successful_backfill_result()
+
+    result = backfill_socios_vencidos_cartera(
+        date_from=date(2024, 1, 1),
+        date_to=date(2024, 3, 31),
+        continue_on_error=True,
+        job_runner=runner,
+    )
+
+    assert calls == [
+        (date(2024, 1, 1), date(2024, 1, 31)),
+        (date(2024, 2, 1), date(2024, 2, 29)),
+        (date(2024, 3, 1), date(2024, 3, 31)),
+    ]
+    assert result.chunks_processed == 2
+    assert result.chunks_failed == 1
+    assert result.last_successful_range == (
+        date(2024, 3, 1),
+        date(2024, 3, 31),
+    )
+    assert result.failed_ranges[0].date_from == date(2024, 2, 1)
+    assert result.failed_ranges[0].date_to == date(2024, 2, 29)
+    assert result.failed_ranges[0].error == "febrero falló"
+    assert cleanup.rollback_calls == cleanup.remove_calls == 1
+
+
+def test_backfill_continues_across_multiple_failures(monkeypatch):
+    calls = []
+    cleanup = _install_session_cleanup(monkeypatch)
+    failed_months = {1, 3}
+
+    def runner(**kwargs):
+        calls.append(kwargs["date_from"].month)
+        if kwargs["date_from"].month in failed_months:
+            raise RuntimeError(f"falló mes {kwargs['date_from'].month}")
+        return _successful_backfill_result()
+
+    result = backfill_socios_vencidos_cartera(
+        date_from=date(2024, 1, 1),
+        date_to=date(2024, 4, 30),
+        continue_on_error=True,
+        job_runner=runner,
+    )
+
+    assert calls == [1, 2, 3, 4]
+    assert result.chunks_processed == 2
+    assert result.chunks_failed == 2
+    assert [failure.date_from.month for failure in result.failed_ranges] == [1, 3]
+    assert result.last_successful_range == (
+        date(2024, 4, 1),
+        date(2024, 4, 30),
+    )
+    assert cleanup.rollback_calls == cleanup.remove_calls == 2
+
+
+def test_backfill_reports_every_month_when_all_fail(monkeypatch):
+    calls = []
+    cleanup = _install_session_cleanup(monkeypatch)
+
+    def runner(**kwargs):
+        calls.append(kwargs["date_from"].month)
+        raise RuntimeError(f"falló mes {kwargs['date_from'].month}")
+
+    result = backfill_socios_vencidos_cartera(
+        date_from=date(2024, 1, 1),
+        date_to=date(2024, 3, 31),
+        continue_on_error=True,
+        job_runner=runner,
+    )
+
+    assert calls == [1, 2, 3]
+    assert result.chunks_processed == 0
+    assert result.chunks_failed == 3
+    assert result.last_successful_range is None
+    assert [failure.date_from.month for failure in result.failed_ranges] == [1, 2, 3]
+    assert cleanup.rollback_calls == cleanup.remove_calls == 3
+
+
+def test_cleanup_warning_on_success_does_not_count_as_failure(monkeypatch):
+    cleanup = _install_session_cleanup(monkeypatch)
+
+    result = backfill_socios_vencidos_cartera(
+        date_from=date(2024, 1, 1),
+        date_to=date(2024, 1, 31),
+        continue_on_error=True,
+        job_runner=lambda **kwargs: _successful_backfill_result(
+            cleanup_warning="no se pudo borrar el XLSX"
+        ),
+    )
+
+    assert result.chunks_processed == 1
+    assert result.chunks_failed == 0
+    assert result.failed_ranges == ()
+    assert result.cleanup_warnings == (
+        "2024-01-01..2024-01-31: no se pudo borrar el XLSX",
+    )
+    assert cleanup.rollback_calls == cleanup.remove_calls == 0
 
 
 def test_daily_sync_requests_only_business_date():
