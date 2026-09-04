@@ -254,6 +254,14 @@ export class MarketingReactivationComponent implements OnInit {
     return this.tariffRows.filter((row) => Boolean(row.tarifa));
   }
 
+  get nonReactivationTariffCount(): number {
+    const summary = this.campaignPreview?.summary;
+    if (!summary) {
+      return 0;
+    }
+    return Math.max(0, summary.excluded_tariff - summary.domiciliated_flow);
+  }
+
   get hasNoSources(): boolean {
     return Boolean(
       this.sources

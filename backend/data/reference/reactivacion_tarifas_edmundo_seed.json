@@ -1,0 +1,1004 @@
+{
+  "source": {
+    "name": "Edmundo - Reporte Socios Vencidos",
+    "file": "Reporte Socios Vencidos - 2026-09-03T134603.208.xlsx",
+    "branch": "PAPALOTE TJ",
+    "rows_observed": 16022,
+    "distinct_tariffs": 161,
+    "conflicts": 0
+  },
+  "groups": {
+    "REACTIVATE": [
+      "Convenio",
+      "Estudiante",
+      "Mensualidad",
+      "Bimestre",
+      "Trimestre",
+      "Semestre",
+      "Anualidad"
+    ],
+    "DOMICILIATED_FLOW": [
+      "Domiciliado",
+      "Recurrente"
+    ],
+    "EXCLUDE": [
+      "Diario",
+      "Beca",
+      "Pase de Cortesía",
+      "Agregadora",
+      "Instructor",
+      "Mes Reward"
+    ],
+    "REVIEW": [
+      "Semana"
+    ]
+  },
+  "tariffs": [
+    {
+      "tarifa_raw": "1 DIA",
+      "categoria_tarifa": "Diario",
+      "reactivation_group": "EXCLUDE",
+      "source_count": 86
+    },
+    {
+      "tarifa_raw": "1 MES $899",
+      "categoria_tarifa": "Mensualidad",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 61
+    },
+    {
+      "tarifa_raw": "1 MES EN LINEA $699",
+      "categoria_tarifa": "Mensualidad",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 6
+    },
+    {
+      "tarifa_raw": "12 MESES EN LÍNEA $4990",
+      "categoria_tarifa": "Anualidad",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 1
+    },
+    {
+      "tarifa_raw": "2 DIAS CORTESIA",
+      "categoria_tarifa": "Pase de Cortesía",
+      "reactivation_group": "EXCLUDE",
+      "source_count": 117
+    },
+    {
+      "tarifa_raw": "2 MESES",
+      "categoria_tarifa": "Bimestre",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 49
+    },
+    {
+      "tarifa_raw": "2 MESES PROMO",
+      "categoria_tarifa": "Bimestre",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 27
+    },
+    {
+      "tarifa_raw": "2 MESES X $ 1250",
+      "categoria_tarifa": "Bimestre",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 12
+    },
+    {
+      "tarifa_raw": "3 MESES",
+      "categoria_tarifa": "Trimestre",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 4
+    },
+    {
+      "tarifa_raw": "3 MESES $1,899",
+      "categoria_tarifa": "Trimestre",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 18
+    },
+    {
+      "tarifa_raw": "3 MESES ANIVERSARIO $1499 EN SUCURSAL",
+      "categoria_tarifa": "Trimestre",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 2
+    },
+    {
+      "tarifa_raw": "3 MESES EN LINEA",
+      "categoria_tarifa": "Trimestre",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 14
+    },
+    {
+      "tarifa_raw": "3 MESES EN MOSTRADOR $1,699",
+      "categoria_tarifa": "Trimestre",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 5
+    },
+    {
+      "tarifa_raw": "3 MESES PROMO",
+      "categoria_tarifa": "Trimestre",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 80
+    },
+    {
+      "tarifa_raw": "3 MESES X $1,690 1 MES DE REGALO",
+      "categoria_tarifa": "Trimestre",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 102
+    },
+    {
+      "tarifa_raw": "3 MESES X 1690 PROMO ENE 24",
+      "categoria_tarifa": "Trimestre",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 2
+    },
+    {
+      "tarifa_raw": "3 MESES X1290",
+      "categoria_tarifa": "Trimestre",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 1
+    },
+    {
+      "tarifa_raw": "399 HOT SALE",
+      "categoria_tarifa": "Recurrente",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 24
+    },
+    {
+      "tarifa_raw": "50% 1ER MES + INSCRIPCIÓN SIN PLAZO (TOTAL PRIMER PAGO: $549.50)",
+      "categoria_tarifa": "Recurrente",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 33
+    },
+    {
+      "tarifa_raw": "50% 1ER MES + INSCRIPCIÓN X 12 MESES (TOTAL PRIMER PAGO: $499.50)",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 20
+    },
+    {
+      "tarifa_raw": "50% 1ER MES + INSCRIPCIÓN X 6 MESES (TOTAL PRIMER PAGO: $524.50)",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 24
+    },
+    {
+      "tarifa_raw": "50% 1ER MES 12 MESES $499",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 12
+    },
+    {
+      "tarifa_raw": "50% 1ER MES 6 MESES $549",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 10
+    },
+    {
+      "tarifa_raw": "50% 1ER MES 60+ SIN PLAZO",
+      "categoria_tarifa": "Recurrente",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 1
+    },
+    {
+      "tarifa_raw": "50% 1ER MES SIN PLAZO $599",
+      "categoria_tarifa": "Recurrente",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 26
+    },
+    {
+      "tarifa_raw": "ANUALIDAD",
+      "categoria_tarifa": "Anualidad",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 4
+    },
+    {
+      "tarifa_raw": "ANUALIDAD 2024",
+      "categoria_tarifa": "Anualidad",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 1
+    },
+    {
+      "tarifa_raw": "ANUALIDAD 2X1 $2,999.50 - LA VIGENCIA DE 12 MESES",
+      "categoria_tarifa": "Anualidad",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 1
+    },
+    {
+      "tarifa_raw": "ANUALIDAD CONVENIO $3999",
+      "categoria_tarifa": "Anualidad",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 1
+    },
+    {
+      "tarifa_raw": "ANUALIDAD DE $4,999.00 3 MESES DE REGALO",
+      "categoria_tarifa": "Anualidad",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 1
+    },
+    {
+      "tarifa_raw": "ANUALIDAD LM",
+      "categoria_tarifa": "Anualidad",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 2
+    },
+    {
+      "tarifa_raw": "ANUALIDAD PROMO",
+      "categoria_tarifa": "Anualidad",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 3
+    },
+    {
+      "tarifa_raw": "ANUALIDAD PROMO $3,999",
+      "categoria_tarifa": "Anualidad",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 2
+    },
+    {
+      "tarifa_raw": "BECA",
+      "categoria_tarifa": "Beca",
+      "reactivation_group": "EXCLUDE",
+      "source_count": 2271
+    },
+    {
+      "tarifa_raw": "BECA 6 MESES",
+      "categoria_tarifa": "Beca",
+      "reactivation_group": "EXCLUDE",
+      "source_count": 9
+    },
+    {
+      "tarifa_raw": "BORRON 12 MESES PRIMER MES $699 (449 + 250)",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 1
+    },
+    {
+      "tarifa_raw": "BORRON 6 MESES PRIMER MES 699 (449 + 250)",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 12
+    },
+    {
+      "tarifa_raw": "BORRON Y CUENTA NUEVA 12 MESES",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 25
+    },
+    {
+      "tarifa_raw": "BORRON Y CUENTA NUEVA 12 MESES $499",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 20
+    },
+    {
+      "tarifa_raw": "BORRON Y CUENTA NUEVA 6 MESES",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 14
+    },
+    {
+      "tarifa_raw": "BORRON Y CUENTA NUEVA SIN PLAZO $649",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 2
+    },
+    {
+      "tarifa_raw": "BORRON Y CUENTA NUEVA TDC 12 MESES",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 1
+    },
+    {
+      "tarifa_raw": "BORRON Y CUENTA NUEVA TDC 6 MESES",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 4
+    },
+    {
+      "tarifa_raw": "BORRON Y CUENTA NUEVA TDC SIN PLAZO",
+      "categoria_tarifa": "Recurrente",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 1
+    },
+    {
+      "tarifa_raw": "BORRÓN Y CUENTA NUEVA ABRIL",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 6
+    },
+    {
+      "tarifa_raw": "BORRÓN Y CUENTA NUEVA MAYO $649",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 6
+    },
+    {
+      "tarifa_raw": "BORRÓN Y CUENTA NUEVA SIN PLAZO",
+      "categoria_tarifa": "Recurrente",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 6
+    },
+    {
+      "tarifa_raw": "BUEN FIT PAGO EN LÍNEA 3 MESES X $1350",
+      "categoria_tarifa": "Trimestre",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 7
+    },
+    {
+      "tarifa_raw": "BUEN FIT PAGO EN LÍNEA ANUALIDAD X $3999",
+      "categoria_tarifa": "Anualidad",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 7
+    },
+    {
+      "tarifa_raw": "CONVENIO",
+      "categoria_tarifa": "Convenio",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 69
+    },
+    {
+      "tarifa_raw": "CONVENIO $599",
+      "categoria_tarifa": "Convenio",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 50
+    },
+    {
+      "tarifa_raw": "CONVENIO EMPRESAS",
+      "categoria_tarifa": "Convenio",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 20
+    },
+    {
+      "tarifa_raw": "CONVENIO HTP $599",
+      "categoria_tarifa": "Convenio",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 1
+    },
+    {
+      "tarifa_raw": "CONVENIO MARINA 12 MESES $399",
+      "categoria_tarifa": "Convenio",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 3
+    },
+    {
+      "tarifa_raw": "CONVENIO PROMO NOVIEMBRE $599",
+      "categoria_tarifa": "Convenio",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 1
+    },
+    {
+      "tarifa_raw": "CONVENIOS $549",
+      "categoria_tarifa": "Convenio",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 184
+    },
+    {
+      "tarifa_raw": "CORTESIA 30 DIAS",
+      "categoria_tarifa": "Mensualidad",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 1
+    },
+    {
+      "tarifa_raw": "CORTESIA CLASES",
+      "categoria_tarifa": "Estudiante",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 1
+    },
+    {
+      "tarifa_raw": "CORTESIA DIARIA",
+      "categoria_tarifa": "Pase de Cortesía",
+      "reactivation_group": "EXCLUDE",
+      "source_count": 12
+    },
+    {
+      "tarifa_raw": "CORTESIA MENSUAL 1",
+      "categoria_tarifa": "Pase de Cortesía",
+      "reactivation_group": "EXCLUDE",
+      "source_count": 1
+    },
+    {
+      "tarifa_raw": "CUPON 1ER MES",
+      "categoria_tarifa": "Mensualidad",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 46
+    },
+    {
+      "tarifa_raw": "DIA $149",
+      "categoria_tarifa": "Diario",
+      "reactivation_group": "EXCLUDE",
+      "source_count": 55
+    },
+    {
+      "tarifa_raw": "DIARIO",
+      "categoria_tarifa": "Diario",
+      "reactivation_group": "EXCLUDE",
+      "source_count": 2506
+    },
+    {
+      "tarifa_raw": "DIARIO $100",
+      "categoria_tarifa": "Diario",
+      "reactivation_group": "EXCLUDE",
+      "source_count": 211
+    },
+    {
+      "tarifa_raw": "DIARIO $130",
+      "categoria_tarifa": "Diario",
+      "reactivation_group": "EXCLUDE",
+      "source_count": 451
+    },
+    {
+      "tarifa_raw": "DIARIO A DOMICILIADO 12 MESES",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 1
+    },
+    {
+      "tarifa_raw": "DIARIO LM",
+      "categoria_tarifa": "Diario",
+      "reactivation_group": "EXCLUDE",
+      "source_count": 18
+    },
+    {
+      "tarifa_raw": "DIARIO TOTAL PASS",
+      "categoria_tarifa": "Agregadora",
+      "reactivation_group": "EXCLUDE",
+      "source_count": 74
+    },
+    {
+      "tarifa_raw": "DICIEMBRE GRATIS",
+      "categoria_tarifa": "Mensualidad",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 2
+    },
+    {
+      "tarifa_raw": "DOMICILIADO $449 6 MESES BUENFIT",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 75
+    },
+    {
+      "tarifa_raw": "DOMICILIADO $549 3 MESES BUENFIT",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 2
+    },
+    {
+      "tarifa_raw": "DOMICILIADO 12 MESES $449 (LOS 12 MESES)",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 118
+    },
+    {
+      "tarifa_raw": "DOMICILIADO 12 MESES $499",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 117
+    },
+    {
+      "tarifa_raw": "DOMICILIADO 12 MESES $549 ABRIL 2026",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 9
+    },
+    {
+      "tarifa_raw": "DOMICILIADO 12 MESES $549 LE",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 12
+    },
+    {
+      "tarifa_raw": "DOMICILIADO 12 MESES $549 MARZO 2026",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 17
+    },
+    {
+      "tarifa_raw": "DOMICILIADO 12 MESES + 250 INSCRIPCIÓN 2DO MES GRATIS",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 10
+    },
+    {
+      "tarifa_raw": "DOMICILIADO 12 MESES 2DO MES GRATIS",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 4
+    },
+    {
+      "tarifa_raw": "DOMICILIADO 12 MESES PLAN FAMILIAR $999 (ADULTO + ADULTO)",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 13
+    },
+    {
+      "tarifa_raw": "DOMICILIADO 12 MESES PROMO NOVIEMBRE $499",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 2
+    },
+    {
+      "tarifa_raw": "DOMICILIADO 12 MESES; $399 (LOS 12 MESES)",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 70
+    },
+    {
+      "tarifa_raw": "DOMICILIADO 1ER MES GRATIS 12 MESES $499",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 10
+    },
+    {
+      "tarifa_raw": "DOMICILIADO 1ER MES GRATIS 6 MESES $549",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 7
+    },
+    {
+      "tarifa_raw": "DOMICILIADO 6 MESES $ 549",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 108
+    },
+    {
+      "tarifa_raw": "DOMICILIADO 6 MESES $399 JULIO",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 53
+    },
+    {
+      "tarifa_raw": "DOMICILIADO 6 MESES $549 (LOS 6 MESES)",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 15
+    },
+    {
+      "tarifa_raw": "DOMICILIADO 6 MESES + 250 INSCRIPCIÓN 2DO MES GRATIS",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 16
+    },
+    {
+      "tarifa_raw": "DOMICILIADO 6 MESES 2DO MES GRATIS",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 3
+    },
+    {
+      "tarifa_raw": "DOMICILIADO 6 MESES MAYO $499",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 13
+    },
+    {
+      "tarifa_raw": "DOMICILIADO 6 MESES PROMO NOVIEMBRE$549",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 4
+    },
+    {
+      "tarifa_raw": "DOMICILIADO 6 MESES: $399 (LOS 6 MESES)",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 113
+    },
+    {
+      "tarifa_raw": "DOMICILIADO 6 MESES; $449 (LOS 6 MESES)",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 42
+    },
+    {
+      "tarifa_raw": "DOMICILIADO ANUAL",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 150
+    },
+    {
+      "tarifa_raw": "DOMICILIADO NAVIDAD 3 MESES INSCRIPCION GRATIS $549",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 13
+    },
+    {
+      "tarifa_raw": "DOMICILIADO PLAN 6 MESES $449",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 13
+    },
+    {
+      "tarifa_raw": "DOMICILIADO PLAN ULTRA PAGO INCIAL 12 MESES $1,449",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 2
+    },
+    {
+      "tarifa_raw": "DOMICILIADO SANTA 12 MESES $499",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 13
+    },
+    {
+      "tarifa_raw": "DOMICILIADO SEMESTRAL",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 22
+    },
+    {
+      "tarifa_raw": "DOMICILIADO SIN PLAZO $599",
+      "categoria_tarifa": "Recurrente",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 205
+    },
+    {
+      "tarifa_raw": "DOMICILIADO SIN PLAZO PROMO NOVIEMBRE $599",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 7
+    },
+    {
+      "tarifa_raw": "ESTUDIANTE",
+      "categoria_tarifa": "Estudiante",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 274
+    },
+    {
+      "tarifa_raw": "ESTUDIANTE $599",
+      "categoria_tarifa": "Estudiante",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 178
+    },
+    {
+      "tarifa_raw": "ESTUDIANTE PROMO NOVIEMBRE $599",
+      "categoria_tarifa": "Estudiante",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 2
+    },
+    {
+      "tarifa_raw": "ESTUDIANTE/CONVENIO",
+      "categoria_tarifa": "Estudiante",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 337
+    },
+    {
+      "tarifa_raw": "ESTUDIANTES 2 MESES X $999",
+      "categoria_tarifa": "Estudiante",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 8
+    },
+    {
+      "tarifa_raw": "ESTUDIANTES 3 MESES X $1200",
+      "categoria_tarifa": "Estudiante",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 14
+    },
+    {
+      "tarifa_raw": "GYMPASS",
+      "categoria_tarifa": "Agregadora",
+      "reactivation_group": "EXCLUDE",
+      "source_count": 1
+    },
+    {
+      "tarifa_raw": "INSCRIPCIÓN $250",
+      "categoria_tarifa": "Mensualidad",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 3
+    },
+    {
+      "tarifa_raw": "INSCRIPCIÓN $400",
+      "categoria_tarifa": "Mensualidad",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 1
+    },
+    {
+      "tarifa_raw": "MENSUALIDAD",
+      "categoria_tarifa": "Mensualidad",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 2632
+    },
+    {
+      "tarifa_raw": "MENSUALIDAD $799",
+      "categoria_tarifa": "Mensualidad",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 97
+    },
+    {
+      "tarifa_raw": "MENSUALIDAD 749",
+      "categoria_tarifa": "Mensualidad",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 37
+    },
+    {
+      "tarifa_raw": "MENSUALIDAD CONVENIOS",
+      "categoria_tarifa": "Convenio",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 121
+    },
+    {
+      "tarifa_raw": "MENSUALIDAD FARMACIAS SIMILARES $399",
+      "categoria_tarifa": "Convenio",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 4
+    },
+    {
+      "tarifa_raw": "MENSUALIDAD LB/STA",
+      "categoria_tarifa": "Mensualidad",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 4
+    },
+    {
+      "tarifa_raw": "MENSUALIDAD NAVIDEÑA",
+      "categoria_tarifa": "Mensualidad",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 38
+    },
+    {
+      "tarifa_raw": "MENSUALIDAD NVA",
+      "categoria_tarifa": "Mensualidad",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 420
+    },
+    {
+      "tarifa_raw": "MENSUALIDAD STA CAT/SL/LB",
+      "categoria_tarifa": "Mensualidad",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 1
+    },
+    {
+      "tarifa_raw": "MES REWARD",
+      "categoria_tarifa": "Mes Reward",
+      "reactivation_group": "EXCLUDE",
+      "source_count": 9
+    },
+    {
+      "tarifa_raw": "PAGO EN LINEA",
+      "categoria_tarifa": "Mensualidad",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 44
+    },
+    {
+      "tarifa_raw": "PAGO EN LINEA 3 MESES",
+      "categoria_tarifa": "Mensualidad",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 2
+    },
+    {
+      "tarifa_raw": "PASE 2 DIAS GRATIS",
+      "categoria_tarifa": "Pase de Cortesía",
+      "reactivation_group": "EXCLUDE",
+      "source_count": 1282
+    },
+    {
+      "tarifa_raw": "PASE GYMPASS",
+      "categoria_tarifa": "Agregadora",
+      "reactivation_group": "EXCLUDE",
+      "source_count": 733
+    },
+    {
+      "tarifa_raw": "PASE RECORRIDO",
+      "categoria_tarifa": "Pase de Cortesía",
+      "reactivation_group": "EXCLUDE",
+      "source_count": 112
+    },
+    {
+      "tarifa_raw": "PASE TOTAL PASS",
+      "categoria_tarifa": "Agregadora",
+      "reactivation_group": "EXCLUDE",
+      "source_count": 314
+    },
+    {
+      "tarifa_raw": "PLAN FAMILIA / AMIGOS X $499",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 12
+    },
+    {
+      "tarifa_raw": "PLAN RECURRENTE PAGO INCIAL $1,449 LE",
+      "categoria_tarifa": "Recurrente",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 11
+    },
+    {
+      "tarifa_raw": "PRIMER MES",
+      "categoria_tarifa": "Mensualidad",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 100
+    },
+    {
+      "tarifa_raw": "PRIMER PAGO 399 POSTERIOR 549",
+      "categoria_tarifa": "Recurrente",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 20
+    },
+    {
+      "tarifa_raw": "PROMO 2 X 800",
+      "categoria_tarifa": "Bimestre",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 14
+    },
+    {
+      "tarifa_raw": "PROMO 2X 800",
+      "categoria_tarifa": "Bimestre",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 9
+    },
+    {
+      "tarifa_raw": "PROMO 3 X 2 $1,100",
+      "categoria_tarifa": "Trimestre",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 16
+    },
+    {
+      "tarifa_raw": "PROMO 399 PRIMER PAGO",
+      "categoria_tarifa": "Recurrente",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 60
+    },
+    {
+      "tarifa_raw": "PROMO 498 PRIMER PAGO",
+      "categoria_tarifa": "Recurrente",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 59
+    },
+    {
+      "tarifa_raw": "PROMO AMIGO BAJA",
+      "categoria_tarifa": "Mensualidad",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 1
+    },
+    {
+      "tarifa_raw": "PROMO BUEN FIN",
+      "categoria_tarifa": "Mensualidad",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 13
+    },
+    {
+      "tarifa_raw": "PROMO DICIEMBRE 3 MESES POR $1,350",
+      "categoria_tarifa": "Trimestre",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 10
+    },
+    {
+      "tarifa_raw": "PROMO ENERO 12 MESES",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 8
+    },
+    {
+      "tarifa_raw": "PROMO FEBRERO 12 MESES",
+      "categoria_tarifa": "Domiciliado",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 20
+    },
+    {
+      "tarifa_raw": "PROMO SAN VALENTIN RECURRENTE",
+      "categoria_tarifa": "Recurrente",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 19
+    },
+    {
+      "tarifa_raw": "RECURRENTE $599",
+      "categoria_tarifa": "Recurrente",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 36
+    },
+    {
+      "tarifa_raw": "RECURRENTE $649 LE",
+      "categoria_tarifa": "Recurrente",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 34
+    },
+    {
+      "tarifa_raw": "RECURRENTE 399",
+      "categoria_tarifa": "Recurrente",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 84
+    },
+    {
+      "tarifa_raw": "RECURRENTE JUBILADOS $399",
+      "categoria_tarifa": "Recurrente",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 2
+    },
+    {
+      "tarifa_raw": "RECURRENTE REACTIVACION",
+      "categoria_tarifa": "Recurrente",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 3
+    },
+    {
+      "tarifa_raw": "RECURRENTE SIN PLAZO",
+      "categoria_tarifa": "Recurrente",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 29
+    },
+    {
+      "tarifa_raw": "RECURRENTE SIN PLAZO NVA",
+      "categoria_tarifa": "Recurrente",
+      "reactivation_group": "DOMICILIATED_FLOW",
+      "source_count": 112
+    },
+    {
+      "tarifa_raw": "RENOVACION DICIEMBRE",
+      "categoria_tarifa": "Mensualidad",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 6
+    },
+    {
+      "tarifa_raw": "SEMANA",
+      "categoria_tarifa": "Trimestre",
+      "reactivation_group": "REVIEW",
+      "source_count": 62
+    },
+    {
+      "tarifa_raw": "SEMANA $250",
+      "categoria_tarifa": "Semana",
+      "reactivation_group": "REVIEW",
+      "source_count": 31
+    },
+    {
+      "tarifa_raw": "SEMANA $299",
+      "categoria_tarifa": "Semana",
+      "reactivation_group": "REVIEW",
+      "source_count": 11
+    },
+    {
+      "tarifa_raw": "SEMANA $349",
+      "categoria_tarifa": "Semana",
+      "reactivation_group": "REVIEW",
+      "source_count": 52
+    },
+    {
+      "tarifa_raw": "SEMANA INSTRUCTOR PERSONALIZADO",
+      "categoria_tarifa": "Instructor",
+      "reactivation_group": "EXCLUDE",
+      "source_count": 10
+    },
+    {
+      "tarifa_raw": "SEMANA INSTRUCTOR PERSONALIZADO EXTERNO $699",
+      "categoria_tarifa": "Instructor",
+      "reactivation_group": "EXCLUDE",
+      "source_count": 1
+    },
+    {
+      "tarifa_raw": "SEMANA SANTA 3 MESES X 1499",
+      "categoria_tarifa": "Semana",
+      "reactivation_group": "REVIEW",
+      "source_count": 4
+    },
+    {
+      "tarifa_raw": "SEMANAL",
+      "categoria_tarifa": "Semana",
+      "reactivation_group": "REVIEW",
+      "source_count": 250
+    },
+    {
+      "tarifa_raw": "SEMESTRE",
+      "categoria_tarifa": "Semestre",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 9
+    },
+    {
+      "tarifa_raw": "TARIFA ESTUDIANTE",
+      "categoria_tarifa": "Estudiante",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 132
+    },
+    {
+      "tarifa_raw": "TRIMESTRAL $1,890",
+      "categoria_tarifa": "Trimestre",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 2
+    },
+    {
+      "tarifa_raw": "TRIMESTRE ESTUDIANTE MAYO $1,499",
+      "categoria_tarifa": "Trimestre",
+      "reactivation_group": "REACTIVATE",
+      "source_count": 2
+    },
+    {
+      "tarifa_raw": "TRIMESTRE NAVIDAD",
+      "categoria_tarifa": "Instructor",
+      "reactivation_group": "EXCLUDE",
+      "source_count": 1
+    }
+  ]
+}

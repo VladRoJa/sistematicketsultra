@@ -194,6 +194,55 @@ class TestMarketingRoutes:
         assert response.status_code == 200
         assert response.get_json() == expected
 
+    def test_reactivation_tariffs_returns_enriched_contract(self):
+        expected = {
+            "date_from": "2026-08-01",
+            "date_to": "2026-08-31",
+            "rows": [
+                {
+                    "tarifa": "1 MES $899",
+                    "count": 61,
+                    "classified": True,
+                    "categoria_tarifa": "Mensualidad",
+                    "reactivation_group": "REACTIVATE",
+                },
+                {
+                    "tarifa": "TARIFA DESCONOCIDA",
+                    "count": 2,
+                    "classified": False,
+                    "categoria_tarifa": None,
+                    "reactivation_group": None,
+                },
+            ],
+        }
+        with (
+            patch(
+                "app.routes.marketing_routes."
+                "_get_current_marketing_user",
+                return_value=self.admin,
+            ),
+            patch(
+                "app.routes.marketing_routes."
+                "list_marketing_reactivation_tariffs",
+                return_value=expected,
+            ) as tariff_service,
+        ):
+            response = self.client.get(
+                "/api/marketing/reactivation/tariffs"
+                "?date_from=2026-08-01&date_to=2026-08-31",
+                headers=self.headers,
+            )
+
+        assert response.status_code == 200
+        assert response.get_json() == expected
+        tariff_service.assert_called_once()
+        assert tariff_service.call_args.kwargs["date_from"] == date(
+            2026, 8, 1
+        )
+        assert tariff_service.call_args.kwargs["date_to"] == date(
+            2026, 8, 31
+        )
+
     @pytest.mark.parametrize(
         "query_string",
         [

@@ -62,6 +62,9 @@ export interface ReactivationCandidateRow {
   fecha_vencimiento: string;
   fecha_ultimo_pago: string | null;
   tarifa: string | null;
+  tarifa_categoria: string | null;
+  tarifa_group: ReactivationTariffGroup | null;
+  tarifa_classified: boolean;
   adeudo: string | null;
   status: ReactivationCandidateStatus;
   reason: ReactivationCandidateReason;
@@ -99,7 +102,16 @@ export interface ReactivationCampaignFilters {
 export interface ReactivationTariffCount {
   tarifa: string | null;
   count: number;
+  classified: boolean;
+  categoria_tarifa: string | null;
+  reactivation_group: ReactivationTariffGroup | null;
 }
+
+export type ReactivationTariffGroup =
+  | 'REACTIVATE'
+  | 'DOMICILIATED_FLOW'
+  | 'EXCLUDE'
+  | 'REVIEW';
 
 export interface ReactivationTariffsResponse {
   date_from: string;
@@ -115,6 +127,8 @@ export interface ReactivationCampaignSummary {
   review_identity: number;
   duplicate_phone: number;
   excluded_tariff: number;
+  domiciliated_flow: number;
+  review_tariff: number;
   excluded_recent_campaign: number;
   review: number;
 }
