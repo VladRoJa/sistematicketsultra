@@ -108,6 +108,129 @@ class MarketingMonthlyInputORM(db.Model):
     )
 
 
+class MarketingReactivationCampaignORM(db.Model):
+    __tablename__ = "marketing_reactivation_campaigns"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    name = db.Column(db.String(255), nullable=False)
+    status = db.Column(db.String(20), nullable=False, default="DRAFT")
+    date_from = db.Column(db.Date, nullable=False)
+    date_to = db.Column(db.Date, nullable=False)
+    created_by_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+        onupdate=_utc_now,
+    )
+    exported_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    sent_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+    filters_json = db.Column(db.JSON, nullable=False, default=dict)
+    recipient_count = db.Column(db.Integer, nullable=False, default=0)
+
+    created_by_user = db.relationship(
+        "UserORM",
+        foreign_keys=[created_by_user_id],
+    )
+    recipients = db.relationship(
+        "MarketingReactivationCampaignRecipientORM",
+        back_populates="campaign",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="MarketingReactivationCampaignRecipientORM.id",
+    )
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "status IN ('DRAFT', 'EXPORTED', 'SENT', 'CANCELLED')",
+            name="ck_marketing_reactivation_campaigns_status",
+        ),
+        db.CheckConstraint(
+            "date_from <= date_to",
+            name="ck_marketing_reactivation_campaigns_date_range",
+        ),
+        db.CheckConstraint(
+            "recipient_count >= 0",
+            name="ck_marketing_reactivation_campaigns_recipient_count",
+        ),
+        db.Index(
+            "ix_marketing_reactivation_campaigns_created_at",
+            "created_at",
+        ),
+        db.Index(
+            "ix_marketing_reactivation_campaigns_status",
+            "status",
+        ),
+    )
+
+
+class MarketingReactivationCampaignRecipientORM(db.Model):
+    __tablename__ = "marketing_reactivation_campaign_recipients"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    campaign_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey(
+            "marketing_reactivation_campaigns.id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+    )
+    socios_vencidos_cartera_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("socios_vencidos_cartera.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    phone_mx10 = db.Column(db.String(10), nullable=False)
+    member_name = db.Column(db.String(255), nullable=True)
+    sucursal = db.Column(db.String(255), nullable=False)
+    fecha_vencimiento_date = db.Column(db.Date, nullable=False)
+    tarifa = db.Column(db.String(255), nullable=True)
+    inclusion_status = db.Column(db.String(40), nullable=False)
+    exclusion_reason = db.Column(db.String(100), nullable=True)
+    operational_status = db.Column(db.String(50), nullable=False)
+    operational_reason = db.Column(db.String(100), nullable=False)
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+    )
+
+    campaign = db.relationship(
+        "MarketingReactivationCampaignORM",
+        back_populates="recipients",
+    )
+    socios_vencidos_cartera = db.relationship(
+        "SociosVencidosCarteraORM",
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "campaign_id",
+            "phone_mx10",
+            name="uq_marketing_reactivation_recipients_campaign_phone",
+        ),
+        db.Index(
+            "ix_marketing_reactivation_recipients_campaign_id",
+            "campaign_id",
+        ),
+        db.Index(
+            "ix_marketing_reactivation_recipients_phone_mx10",
+            "phone_mx10",
+        ),
+    )
+
+
 class MarketingIventasSyncRunORM(db.Model):
     __tablename__ = "marketing_iventas_sync_runs"
 

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from datetime import date
+from io import BytesIO
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, send_file
 from flask_jwt_extended import (
     get_jwt_identity,
     jwt_required,
@@ -34,8 +35,19 @@ from app.services.marketing_leads_detail_service import (
     build_marketing_leads_detail,
 )
 from app.services.marketing_reactivation_service import (
+    MarketingReactivationConflictError,
+    MarketingReactivationInvalidTransitionError,
+    MarketingReactivationNotFoundError,
+    MarketingReactivationValidationError,
     build_marketing_reactivation_candidates,
+    create_marketing_reactivation_campaign,
+    export_marketing_reactivation_campaign,
+    get_marketing_reactivation_campaign,
+    list_marketing_reactivation_campaigns,
     list_marketing_reactivation_sources,
+    list_marketing_reactivation_tariffs,
+    mark_marketing_reactivation_campaign_sent,
+    preview_marketing_reactivation_campaign,
 )
 
 
@@ -62,6 +74,35 @@ def _resolve_request_access():
     user = _get_current_marketing_user()
     access = resolve_marketing_access(user)
     return user, access
+
+
+def _require_campaign_management(access) -> None:
+    if not access.can_edit_inputs:
+        raise MarketingAuthorizationError(
+            "No autorizado para gestionar campañas de Reactivación."
+        )
+
+
+def _parse_campaign_payload(*, require_name: bool) -> dict:
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        raise MarketingReactivationValidationError(
+            "El payload JSON debe ser un objeto."
+        )
+    allowed_fields = {
+        "date_from",
+        "date_to",
+        "filters",
+        "campaign_cooldown_days",
+    }
+    if require_name:
+        allowed_fields.update({"name", "notes"})
+    unknown_fields = sorted(set(payload) - allowed_fields)
+    if unknown_fields:
+        raise MarketingReactivationValidationError(
+            "Campos no permitidos: " + ", ".join(unknown_fields) + "."
+        )
+    return payload
 
 
 def _parse_optional_branch_id() -> int | None:
@@ -129,10 +170,13 @@ def _parse_required_iso_date(parameter_name: str) -> date:
 @jwt_required()
 def get_marketing_reactivation_sources_endpoint():
     try:
-        _resolve_request_access()
+        _, access = _resolve_request_access()
         result = list_marketing_reactivation_sources(
             session=db.session,
         )
+        result["permissions"] = {
+            "can_manage_campaigns": bool(access.can_edit_inputs),
+        }
         return jsonify(result), 200
     except MarketingAuthorizationError as exc:
         return jsonify(
@@ -146,6 +190,27 @@ def get_marketing_reactivation_sources_endpoint():
                     "Falló la consulta de fuentes de reactivación."
                 ),
             }
+        ), 500
+
+
+@marketing_bp.get("/reactivation/tariffs")
+@jwt_required()
+def get_marketing_reactivation_tariffs_endpoint():
+    try:
+        _resolve_request_access()
+        result = list_marketing_reactivation_tariffs(
+            date_from=_parse_required_iso_date("date_from"),
+            date_to=_parse_required_iso_date("date_to"),
+            session=db.session,
+        )
+        return jsonify(result), 200
+    except MarketingAuthorizationError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 403
+    except (MarketingInputValidationError, MarketingReactivationValidationError) as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception:
+        return jsonify(
+            {"status": "error", "message": "Falló la consulta de tarifas."}
         ), 500
 
 
@@ -186,6 +251,180 @@ def get_marketing_reactivation_candidates_endpoint():
                     "Falló la consulta de candidatos de reactivación."
                 ),
             }
+        ), 500
+
+
+@marketing_bp.post("/reactivation/campaigns/preview")
+@jwt_required()
+def preview_marketing_reactivation_campaign_endpoint():
+    try:
+        _, access = _resolve_request_access()
+        _require_campaign_management(access)
+        payload = _parse_campaign_payload(require_name=False)
+        result = preview_marketing_reactivation_campaign(
+            date_from=payload.get("date_from"),
+            date_to=payload.get("date_to"),
+            filters=payload.get("filters"),
+            campaign_cooldown_days=payload.get("campaign_cooldown_days"),
+            session=db.session,
+        )
+        return jsonify(result), 200
+    except MarketingAuthorizationError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 403
+    except MarketingReactivationValidationError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception:
+        return jsonify(
+            {"status": "error", "message": "Falló el preview de la campaña."}
+        ), 500
+
+
+@marketing_bp.post("/reactivation/campaigns")
+@jwt_required()
+def create_marketing_reactivation_campaign_endpoint():
+    try:
+        user, access = _resolve_request_access()
+        _require_campaign_management(access)
+        payload = _parse_campaign_payload(require_name=True)
+        result = create_marketing_reactivation_campaign(
+            name=payload.get("name"),
+            date_from=payload.get("date_from"),
+            date_to=payload.get("date_to"),
+            filters=payload.get("filters"),
+            notes=payload.get("notes"),
+            created_by_user_id=int(user.id),
+            campaign_cooldown_days=payload.get("campaign_cooldown_days"),
+            session=db.session,
+        )
+        return jsonify({"campaign": result}), 201
+    except MarketingAuthorizationError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 403
+    except MarketingReactivationValidationError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except MarketingReactivationConflictError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 409
+    except Exception:
+        db.session.rollback()
+        return jsonify(
+            {"status": "error", "message": "Falló la creación de la campaña."}
+        ), 500
+
+
+@marketing_bp.get("/reactivation/campaigns")
+@jwt_required()
+def list_marketing_reactivation_campaigns_endpoint():
+    try:
+        _, access = _resolve_request_access()
+        _require_campaign_management(access)
+        raw_limit = request.args.get("limit", "50")
+        try:
+            limit = int(raw_limit)
+        except (TypeError, ValueError) as exc:
+            raise MarketingReactivationValidationError(
+                "limit debe ser un entero."
+            ) from exc
+        return jsonify(
+            list_marketing_reactivation_campaigns(
+                limit=limit,
+                session=db.session,
+            )
+        ), 200
+    except MarketingAuthorizationError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 403
+    except MarketingReactivationValidationError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception:
+        return jsonify(
+            {"status": "error", "message": "Falló el historial de campañas."}
+        ), 500
+
+
+@marketing_bp.get("/reactivation/campaigns/<int:campaign_id>")
+@jwt_required()
+def get_marketing_reactivation_campaign_endpoint(campaign_id: int):
+    try:
+        _, access = _resolve_request_access()
+        _require_campaign_management(access)
+        return jsonify(
+            {
+                "campaign": get_marketing_reactivation_campaign(
+                    campaign_id=campaign_id,
+                    session=db.session,
+                )
+            }
+        ), 200
+    except MarketingAuthorizationError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 403
+    except MarketingReactivationNotFoundError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 404
+    except MarketingReactivationValidationError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception:
+        return jsonify(
+            {"status": "error", "message": "Falló el detalle de la campaña."}
+        ), 500
+
+
+@marketing_bp.get("/reactivation/campaigns/<int:campaign_id>/export")
+@jwt_required()
+def export_marketing_reactivation_campaign_endpoint(campaign_id: int):
+    try:
+        _, access = _resolve_request_access()
+        _require_campaign_management(access)
+        file_bytes, filename = export_marketing_reactivation_campaign(
+            campaign_id=campaign_id,
+            session=db.session,
+        )
+        return send_file(
+            BytesIO(file_bytes),
+            as_attachment=True,
+            download_name=filename,
+            mimetype=(
+                "application/vnd.openxmlformats-officedocument."
+                "spreadsheetml.sheet"
+            ),
+        )
+    except MarketingAuthorizationError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 403
+    except MarketingReactivationNotFoundError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 404
+    except (
+        MarketingReactivationConflictError,
+        MarketingReactivationInvalidTransitionError,
+    ) as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 409
+    except MarketingReactivationValidationError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception:
+        db.session.rollback()
+        return jsonify(
+            {"status": "error", "message": "Falló la exportación de la campaña."}
+        ), 500
+
+
+@marketing_bp.post("/reactivation/campaigns/<int:campaign_id>/mark-sent")
+@jwt_required()
+def mark_marketing_reactivation_campaign_sent_endpoint(campaign_id: int):
+    try:
+        _, access = _resolve_request_access()
+        _require_campaign_management(access)
+        result = mark_marketing_reactivation_campaign_sent(
+            campaign_id=campaign_id,
+            session=db.session,
+        )
+        return jsonify({"campaign": result}), 200
+    except MarketingAuthorizationError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 403
+    except MarketingReactivationNotFoundError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 404
+    except MarketingReactivationInvalidTransitionError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 409
+    except MarketingReactivationValidationError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception:
+        db.session.rollback()
+        return jsonify(
+            {"status": "error", "message": "Falló el cambio de estado de la campaña."}
         ), 500
 
 

@@ -320,6 +320,197 @@ class TestMarketingRoutes:
         assert response.status_code == 500
         assert response.get_json()["status"] == "error"
 
+    def test_reactivation_preview_requires_marketing_write_permission(self):
+        manager = SimpleNamespace(
+            id=2,
+            rol="GERENTE",
+            sucursal_id=1,
+            sucursales_ids=[1],
+        )
+        with patch(
+            "app.routes.marketing_routes._get_current_marketing_user",
+            return_value=manager,
+        ):
+            response = self.client.post(
+                "/api/marketing/reactivation/campaigns/preview",
+                json={
+                    "date_from": "2026-08-23",
+                    "date_to": "2026-08-23",
+                    "filters": {
+                        "iventas_period_key": "IVENTAS-2026-08",
+                    },
+                },
+                headers=self.headers,
+            )
+
+        assert response.status_code == 403
+
+    def test_reactivation_preview_returns_shared_engine_contract(self):
+        expected = {
+            "summary": {
+                "total_candidates": 8,
+                "eligible": 5,
+                "excluded_active": 1,
+                "excluded_invalid_phone": 1,
+                "review_identity": 1,
+                "duplicate_phone": 0,
+                "excluded_recent_campaign": 0,
+            }
+        }
+        with (
+            patch(
+                "app.routes.marketing_routes._get_current_marketing_user",
+                return_value=self.admin,
+            ),
+            patch(
+                "app.routes.marketing_routes."
+                "preview_marketing_reactivation_campaign",
+                return_value=expected,
+            ) as preview_service,
+        ):
+            response = self.client.post(
+                "/api/marketing/reactivation/campaigns/preview",
+                json={
+                    "date_from": "2026-08-23",
+                    "date_to": "2026-08-23",
+                    "filters": {
+                        "iventas_period_key": "IVENTAS-2026-08",
+                    },
+                },
+                headers=self.headers,
+            )
+
+        assert response.status_code == 200
+        assert response.get_json() == expected
+        assert preview_service.call_args.kwargs["session"] is not None
+
+    def test_reactivation_create_passes_authenticated_user(self):
+        expected = {
+            "id": 4,
+            "name": "Campaña agosto",
+            "status": "DRAFT",
+            "recipient_count": 5,
+        }
+        with (
+            patch(
+                "app.routes.marketing_routes._get_current_marketing_user",
+                return_value=self.admin,
+            ),
+            patch(
+                "app.routes.marketing_routes."
+                "create_marketing_reactivation_campaign",
+                return_value=expected,
+            ) as create_service,
+        ):
+            response = self.client.post(
+                "/api/marketing/reactivation/campaigns",
+                json={
+                    "name": "Campaña agosto",
+                    "date_from": "2026-08-23",
+                    "date_to": "2026-08-23",
+                    "filters": {
+                        "iventas_period_key": "IVENTAS-2026-08",
+                    },
+                },
+                headers=self.headers,
+            )
+
+        assert response.status_code == 201
+        assert response.get_json()["campaign"] == expected
+        assert create_service.call_args.kwargs["created_by_user_id"] == 1
+
+    def test_reactivation_campaign_history_returns_service_contract(self):
+        expected = {"rows": [{"id": 4, "status": "DRAFT"}], "limit": 50}
+        with (
+            patch(
+                "app.routes.marketing_routes._get_current_marketing_user",
+                return_value=self.admin,
+            ),
+            patch(
+                "app.routes.marketing_routes."
+                "list_marketing_reactivation_campaigns",
+                return_value=expected,
+            ),
+        ):
+            response = self.client.get(
+                "/api/marketing/reactivation/campaigns",
+                headers=self.headers,
+            )
+
+        assert response.status_code == 200
+        assert response.get_json() == expected
+
+    def test_reactivation_campaign_detail_returns_404(self):
+        from app.services.marketing_reactivation_service import (
+            MarketingReactivationNotFoundError,
+        )
+
+        with (
+            patch(
+                "app.routes.marketing_routes._get_current_marketing_user",
+                return_value=self.admin,
+            ),
+            patch(
+                "app.routes.marketing_routes."
+                "get_marketing_reactivation_campaign",
+                side_effect=MarketingReactivationNotFoundError("No existe"),
+            ),
+        ):
+            response = self.client.get(
+                "/api/marketing/reactivation/campaigns/999",
+                headers=self.headers,
+            )
+
+        assert response.status_code == 404
+
+    def test_reactivation_campaign_export_returns_xlsx(self):
+        with (
+            patch(
+                "app.routes.marketing_routes._get_current_marketing_user",
+                return_value=self.admin,
+            ),
+            patch(
+                "app.routes.marketing_routes."
+                "export_marketing_reactivation_campaign",
+                return_value=(b"xlsx-data", "reactivacion_campana_4.xlsx"),
+            ),
+        ):
+            response = self.client.get(
+                "/api/marketing/reactivation/campaigns/4/export",
+                headers=self.headers,
+            )
+
+        assert response.status_code == 200
+        assert response.data == b"xlsx-data"
+        assert "reactivacion_campana_4.xlsx" in response.headers[
+            "Content-Disposition"
+        ]
+
+    def test_reactivation_mark_sent_invalid_transition_returns_409(self):
+        from app.services.marketing_reactivation_service import (
+            MarketingReactivationInvalidTransitionError,
+        )
+
+        with (
+            patch(
+                "app.routes.marketing_routes._get_current_marketing_user",
+                return_value=self.admin,
+            ),
+            patch(
+                "app.routes.marketing_routes."
+                "mark_marketing_reactivation_campaign_sent",
+                side_effect=MarketingReactivationInvalidTransitionError(
+                    "Sólo EXPORTED"
+                ),
+            ),
+        ):
+            response = self.client.post(
+                "/api/marketing/reactivation/campaigns/4/mark-sent",
+                headers=self.headers,
+            )
+
+        assert response.status_code == 409
+
     def test_inputs_endpoint_returns_scoped_rows(self):
         with (
             patch(
