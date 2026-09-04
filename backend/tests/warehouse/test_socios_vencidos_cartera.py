@@ -17,6 +17,7 @@ from app.warehouse.services.socios_vencidos_cartera_sync_service import (
     backfill_socios_vencidos_cartera,
     iter_calendar_month_ranges,
     sync_socios_vencidos_daily,
+    sync_socios_vencidos_period,
 )
 
 
@@ -217,6 +218,89 @@ def test_calendar_backfill_chunks_are_month_bounded():
     ]
 
 
+def test_period_sync_uses_and_validates_structured_ingestion_by_default():
+    calls = []
+
+    def runner(**kwargs):
+        calls.append(kwargs)
+        return {
+            "ingestion_status": "already_ingested",
+            "snapshot_id": 91,
+        }
+
+    result = sync_socios_vencidos_period(
+        date_from=date(2024, 1, 1),
+        date_to=date(2024, 1, 31),
+        run_mode="manual_backfill",
+        job_runner=runner,
+    )
+
+    assert calls[0]["force_ingestion"] is True
+    assert result["snapshot_id"] == 91
+
+
+@pytest.mark.parametrize(
+    ("runner_result", "expected_message"),
+    [
+        (
+            {"ingestion_status": "skipped", "snapshot_id": None},
+            "no confirmó la ingesta estructurada",
+        ),
+        (
+            {"ingestion_status": "ingested", "snapshot_id": None},
+            "no devolvió snapshot_id",
+        ),
+    ],
+)
+def test_period_sync_rejects_invalid_structured_ingestion_results(
+    runner_result,
+    expected_message,
+):
+    with pytest.raises(RuntimeError, match=expected_message):
+        sync_socios_vencidos_period(
+            date_from=date(2024, 1, 1),
+            date_to=date(2024, 1, 31),
+            run_mode="manual_backfill",
+            job_runner=lambda **_kwargs: runner_result,
+        )
+
+
+def test_period_sync_download_only_accepts_skipped_without_snapshot():
+    calls = []
+    runner_result = {
+        "ingestion_status": "skipped",
+        "snapshot_id": None,
+        "warehouse_upload_id": 417,
+        "ingestion_metadata": {"reason": "force_ingestion_false"},
+    }
+
+    result = sync_socios_vencidos_period(
+        date_from=date(2024, 1, 1),
+        date_to=date(2024, 1, 31),
+        run_mode="manual_backfill",
+        download_only=True,
+        job_runner=lambda **kwargs: calls.append(kwargs) or runner_result,
+    )
+
+    assert calls[0]["force_ingestion"] is False
+    assert result is runner_result
+
+
+def test_period_sync_download_only_requires_warehouse_upload_id():
+    with pytest.raises(RuntimeError, match="warehouse_upload_id"):
+        sync_socios_vencidos_period(
+            date_from=date(2024, 1, 1),
+            date_to=date(2024, 1, 31),
+            run_mode="manual_backfill",
+            download_only=True,
+            job_runner=lambda **_kwargs: {
+                "ingestion_status": "skipped",
+                "snapshot_id": None,
+                "warehouse_upload_id": None,
+            },
+        )
+
+
 def test_backfill_stops_and_reports_exact_failed_range():
     calls = []
 
@@ -408,6 +492,7 @@ def test_daily_sync_requests_only_business_date():
     )
     assert calls[0]["date_from"] == date(2026, 8, 27)
     assert calls[0]["date_to"] == date(2026, 8, 27)
+    assert calls[0]["force_ingestion"] is True
 
 
 class _SeedQuery:
