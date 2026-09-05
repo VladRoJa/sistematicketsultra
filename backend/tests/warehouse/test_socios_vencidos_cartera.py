@@ -7,6 +7,7 @@ from types import SimpleNamespace
 import pytest
 from sqlalchemy import select
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.schema import CreateIndex
 
 from app.models.warehouse import SociosVencidosCarteraORM
 import app.warehouse.services.socios_vencidos_repository as repository
@@ -204,7 +205,17 @@ def test_model_has_real_episode_unique_and_required_indexes():
         "ix_socios_vencidos_cartera_branch_expiration",
         "ix_socios_vencidos_cartera_pin",
         "ix_socios_vencidos_cartera_phone_digits",
+        "ix_socios_vencidos_cartera_operational_latest",
     } <= index_names
+    operational_index = next(
+        index
+        for index in SociosVencidosCarteraORM.__table__.indexes
+        if index.name == "ix_socios_vencidos_cartera_operational_latest"
+    )
+    index_sql = str(
+        CreateIndex(operational_index).compile(dialect=postgresql.dialect())
+    ).lower()
+    assert "(sucursal_key, pin, fecha_vencimiento_date desc, id desc)" in index_sql
 
 
 def test_calendar_backfill_chunks_are_month_bounded():

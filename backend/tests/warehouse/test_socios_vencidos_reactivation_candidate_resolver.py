@@ -1,4 +1,5 @@
 from datetime import date, datetime, timezone
+from collections import Counter
 from types import SimpleNamespace
 
 import pytest
@@ -24,6 +25,79 @@ IVENTAS_PERIOD_KEY = "IVENTAS-2026-08-11"
 IVENTAS_SYNC_RUN_ID = 41
 VENCIDOS_SNAPSHOT_ID = 7
 ACTIVOS_SNAPSHOT_ID = 23
+
+
+def test_batch_phone_count_excludes_rows_with_active_match(monkeypatch):
+    rows = [
+        SimpleNamespace(id=1, telefono_raw="6861000001"),
+        SimpleNamespace(id=2, telefono_raw="6861000001"),
+        SimpleNamespace(id=3, telefono_raw="6861000002"),
+    ]
+    monkeypatch.setattr(
+        resolver,
+        "resolve_socios_vencidos_rows_with_context",
+        lambda **_kwargs: (
+            SimpleNamespace(
+                vencido_row_id=1,
+                status=current_status_resolver.STATUS_ACTIVE_CONFIRMED,
+            ),
+            SimpleNamespace(
+                vencido_row_id=2,
+                status=current_status_resolver.STATUS_NOT_FOUND,
+            ),
+            SimpleNamespace(
+                vencido_row_id=3,
+                status=current_status_resolver.STATUS_NOT_FOUND,
+            ),
+        ),
+    )
+    context = SimpleNamespace(current_status=object())
+
+    counts = resolver.count_socios_vencidos_not_found_phones(
+        vencidos_rows=rows,
+        context=context,
+    )
+
+    assert counts == Counter({"6861000001": 1, "6861000002": 1})
+
+
+def test_batch_reuses_pre_resolved_current_rows_without_matching_activos_again(
+    monkeypatch,
+):
+    vencido = SimpleNamespace(
+        id=1,
+        telefono_raw="6861000001",
+        fecha_vencimiento_date=date(2026, 8, 11),
+    )
+    current_rows = (
+        current_status_resolver.SocioVencidoCurrentStatus(
+            vencido_row_id=1,
+            status=current_status_resolver.STATUS_NOT_FOUND,
+            active_id_socio=None,
+        ),
+    )
+    monkeypatch.setattr(
+        resolver,
+        "resolve_socios_vencidos_rows_with_context",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            AssertionError("No debe resolver Activos dos veces")
+        ),
+    )
+    context = resolver.SociosVencidosReactivationResolutionContext(
+        current_status=SimpleNamespace(),
+        iventas_sync_run_id=IVENTAS_SYNC_RUN_ID,
+        iventas_period_key=IVENTAS_PERIOD_KEY,
+    )
+
+    result = resolver.resolve_socios_vencidos_reactivation_candidate_batch(
+        vencidos_rows=[vencido],
+        context=context,
+        phone_counts=Counter({"6861000001": 1}),
+        current_rows=current_rows,
+        session=FakeSession(),
+    )
+
+    assert result[0].reason == "NO_MATCH_CURRENT_IVENTAS_RUN"
 
 
 class FakeQuery:

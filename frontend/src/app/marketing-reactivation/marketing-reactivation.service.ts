@@ -10,6 +10,9 @@ import {
   ReactivationCampaignPreviewResponse,
   ReactivationCampaignRequest,
   ReactivationCampaignResponse,
+  ReactivationCandidateQuery,
+  ReactivationCandidateSummaryQuery,
+  ReactivationCandidateSummaryResponse,
   ReactivationCandidatesResponse,
   ReactivationSourcesResponse,
   ReactivationTariffsResponse,
@@ -30,17 +33,61 @@ export class MarketingReactivationService {
   }
 
   getCandidates(
-    dateFrom: string,
-    dateTo: string,
-    iventasPeriodKey: string,
+    query: ReactivationCandidateQuery,
   ): Observable<ReactivationCandidatesResponse> {
-    const params = new HttpParams()
-      .set('date_from', dateFrom)
-      .set('date_to', dateTo)
-      .set('iventas_period_key', iventasPeriodKey);
+    let params = new HttpParams()
+      .set('date_from', query.dateFrom)
+      .set('date_to', query.dateTo)
+      .set('iventas_period_key', query.iventasPeriodKey)
+      .set('page', String(query.page))
+      .set('page_size', String(query.pageSize))
+      .set('operational_status', query.operationalStatus)
+      .set('sort', query.sort)
+      .set('direction', query.direction);
+    if (query.sucursal) {
+      params = params.set('sucursal', query.sucursal);
+    }
+    if (query.tarifa) {
+      params = params.set('tarifa', query.tarifa);
+    }
+    if (query.tariffGroup) {
+      params = params.set('tariff_group', query.tariffGroup);
+    }
+    if (query.search) {
+      params = params.set('search', query.search);
+    }
+    if (query.cursor) {
+      params = params.set('cursor', query.cursor);
+    }
 
     return this.http.get<ReactivationCandidatesResponse>(
       `${this.apiUrl}/candidates`,
+      { params },
+    );
+  }
+
+  getCandidateSummary(
+    query: ReactivationCandidateSummaryQuery,
+  ): Observable<ReactivationCandidateSummaryResponse> {
+    let params = new HttpParams()
+      .set('date_from', query.dateFrom)
+      .set('date_to', query.dateTo)
+      .set('iventas_period_key', query.iventasPeriodKey)
+      .set('operational_status', query.operationalStatus);
+    if (query.sucursal) {
+      params = params.set('sucursal', query.sucursal);
+    }
+    if (query.tarifa) {
+      params = params.set('tarifa', query.tarifa);
+    }
+    if (query.tariffGroup) {
+      params = params.set('tariff_group', query.tariffGroup);
+    }
+    if (query.search) {
+      params = params.set('search', query.search);
+    }
+    return this.http.get<ReactivationCandidateSummaryResponse>(
+      `${this.apiUrl}/candidates/summary`,
       { params },
     );
   }

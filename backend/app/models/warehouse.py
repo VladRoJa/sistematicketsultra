@@ -1270,6 +1270,13 @@ class SociosVencidosCarteraORM(db.Model):
             "ix_socios_vencidos_cartera_phone_digits",
             "telefono_digits",
         ),
+        db.Index(
+            "ix_socios_vencidos_cartera_operational_latest",
+            "sucursal_key",
+            "pin",
+            fecha_vencimiento_date.desc(),
+            id.desc(),
+        ),
     )
 
 

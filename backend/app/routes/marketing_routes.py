@@ -39,6 +39,7 @@ from app.services.marketing_reactivation_service import (
     MarketingReactivationInvalidTransitionError,
     MarketingReactivationNotFoundError,
     MarketingReactivationValidationError,
+    build_marketing_reactivation_candidate_summary,
     build_marketing_reactivation_candidates,
     create_marketing_reactivation_campaign,
     export_marketing_reactivation_campaign,
@@ -48,6 +49,9 @@ from app.services.marketing_reactivation_service import (
     list_marketing_reactivation_tariffs,
     mark_marketing_reactivation_campaign_sent,
     preview_marketing_reactivation_campaign,
+)
+from app.warehouse.services.socios_vencidos_current_status_resolver import (
+    normalize_socios_vencidos_branch_key,
 )
 
 
@@ -81,6 +85,29 @@ def _require_campaign_management(access) -> None:
         raise MarketingAuthorizationError(
             "No autorizado para gestionar campañas de Reactivación."
         )
+
+
+def _reactivation_allowed_sucursal_keys(access) -> tuple[str, ...] | None:
+    if access.is_global:
+        return None
+    visible_branches, _, _ = load_visible_marketing_branches(access)
+    keys = tuple(
+        sorted(
+            {
+                key
+                for key in (
+                    normalize_socios_vencidos_branch_key(branch.name)
+                    for branch in visible_branches
+                )
+                if key is not None
+            }
+        )
+    )
+    if not keys:
+        raise MarketingAuthorizationError(
+            "No hay sucursales de Reactivación dentro del alcance del usuario."
+        )
+    return keys
 
 
 def _parse_campaign_payload(*, require_name: bool) -> dict:
@@ -172,6 +199,7 @@ def get_marketing_reactivation_sources_endpoint():
     try:
         _, access = _resolve_request_access()
         result = list_marketing_reactivation_sources(
+            allowed_sucursal_keys=_reactivation_allowed_sucursal_keys(access),
             session=db.session,
         )
         result["permissions"] = {
@@ -197,10 +225,11 @@ def get_marketing_reactivation_sources_endpoint():
 @jwt_required()
 def get_marketing_reactivation_tariffs_endpoint():
     try:
-        _resolve_request_access()
+        _, access = _resolve_request_access()
         result = list_marketing_reactivation_tariffs(
             date_from=_parse_required_iso_date("date_from"),
             date_to=_parse_required_iso_date("date_to"),
+            allowed_sucursal_keys=_reactivation_allowed_sucursal_keys(access),
             session=db.session,
         )
         return jsonify(result), 200
@@ -218,7 +247,7 @@ def get_marketing_reactivation_tariffs_endpoint():
 @jwt_required()
 def get_marketing_reactivation_candidates_endpoint():
     try:
-        _resolve_request_access()
+        _, access = _resolve_request_access()
         date_from = _parse_required_iso_date("date_from")
         date_to = _parse_required_iso_date("date_to")
         if date_from > date_to:
@@ -232,6 +261,19 @@ def get_marketing_reactivation_candidates_endpoint():
             date_from=date_from,
             date_to=date_to,
             iventas_period_key=iventas_period_key,
+            page=request.args.get("page", "1"),
+            page_size=request.args.get("page_size", "50"),
+            sucursal=request.args.get("sucursal"),
+            tarifa=request.args.get("tarifa"),
+            tariff_group=request.args.get("tariff_group"),
+            operational_status=request.args.get(
+                "operational_status", "ALL"
+            ),
+            search=request.args.get("search"),
+            sort=request.args.get("sort", "fecha_vencimiento"),
+            direction=request.args.get("direction", "desc"),
+            cursor=request.args.get("cursor"),
+            allowed_sucursal_keys=_reactivation_allowed_sucursal_keys(access),
             session=db.session,
         )
         return jsonify(result), 200
@@ -239,7 +281,10 @@ def get_marketing_reactivation_candidates_endpoint():
         return jsonify(
             {"status": "error", "message": str(exc)}
         ), 403
-    except MarketingInputValidationError as exc:
+    except (
+        MarketingInputValidationError,
+        MarketingReactivationValidationError,
+    ) as exc:
         return jsonify(
             {"status": "error", "message": str(exc)}
         ), 400
@@ -250,6 +295,48 @@ def get_marketing_reactivation_candidates_endpoint():
                 "message": (
                     "Falló la consulta de candidatos de reactivación."
                 ),
+            }
+        ), 500
+
+
+@marketing_bp.get("/reactivation/candidates/summary")
+@jwt_required()
+def get_marketing_reactivation_candidate_summary_endpoint():
+    try:
+        _, access = _resolve_request_access()
+        date_from = _parse_required_iso_date("date_from")
+        date_to = _parse_required_iso_date("date_to")
+        if date_from > date_to:
+            raise MarketingInputValidationError(
+                "date_from no puede ser posterior a date_to."
+            )
+        result = build_marketing_reactivation_candidate_summary(
+            date_from=date_from,
+            date_to=date_to,
+            iventas_period_key=_parse_required_text("iventas_period_key"),
+            sucursal=request.args.get("sucursal"),
+            tarifa=request.args.get("tarifa"),
+            tariff_group=request.args.get("tariff_group"),
+            operational_status=request.args.get(
+                "operational_status", "ALL"
+            ),
+            search=request.args.get("search"),
+            allowed_sucursal_keys=_reactivation_allowed_sucursal_keys(access),
+            session=db.session,
+        )
+        return jsonify(result), 200
+    except MarketingAuthorizationError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 403
+    except (
+        MarketingInputValidationError,
+        MarketingReactivationValidationError,
+    ) as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception:
+        return jsonify(
+            {
+                "status": "error",
+                "message": "Falló el resumen de candidatos de reactivación.",
             }
         ), 500
 
@@ -266,6 +353,7 @@ def preview_marketing_reactivation_campaign_endpoint():
             date_to=payload.get("date_to"),
             filters=payload.get("filters"),
             campaign_cooldown_days=payload.get("campaign_cooldown_days"),
+            allowed_sucursal_keys=_reactivation_allowed_sucursal_keys(access),
             session=db.session,
         )
         return jsonify(result), 200
@@ -294,6 +382,7 @@ def create_marketing_reactivation_campaign_endpoint():
             notes=payload.get("notes"),
             created_by_user_id=int(user.id),
             campaign_cooldown_days=payload.get("campaign_cooldown_days"),
+            allowed_sucursal_keys=_reactivation_allowed_sucursal_keys(access),
             session=db.session,
         )
         return jsonify({"campaign": result}), 201
@@ -373,6 +462,7 @@ def export_marketing_reactivation_campaign_endpoint(campaign_id: int):
         _require_campaign_management(access)
         file_bytes, filename = export_marketing_reactivation_campaign(
             campaign_id=campaign_id,
+            allowed_sucursal_keys=_reactivation_allowed_sucursal_keys(access),
             session=db.session,
         )
         return send_file(

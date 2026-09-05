@@ -7,15 +7,19 @@ para preview, creación y revalidación previa a exportar.
 
 from __future__ import annotations
 
+import base64
+import binascii
 from collections import Counter
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
+import hashlib
 from io import BytesIO
+import json
 from typing import Any
 import unicodedata
 
 from openpyxl import Workbook
-from sqlalchemy import func
+from sqlalchemy import false, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
 
@@ -28,9 +32,29 @@ from app.models import (
 )
 from app.models.warehouse import SociosVencidosCarteraORM
 from app.services.marketing_iventas_service import normalize_iventas_phone
+from app.services.marketing_reactivation_candidate_query import (
+    DEFAULT_DIRECTION,
+    DEFAULT_PAGE,
+    DEFAULT_PAGE_SIZE,
+    DEFAULT_SORT,
+    ReactivationCandidateCursor,
+    ReactivationCandidateQuery,
+    apply_candidate_cursor,
+    build_latest_operational_episode_query,
+    build_phone_variant_filter,
+    candidate_sort_value,
+    normalize_candidate_query,
+)
+from app.warehouse.services.socios_vencidos_current_status_resolver import (
+    STATUS_NOT_FOUND,
+    normalize_socios_vencidos_branch_key,
+    resolve_socios_vencidos_rows_with_context,
+)
 from app.warehouse.services.socios_vencidos_reactivation_candidate_resolver import (
     SociosVencidosReactivationCandidateResolverError,
-    resolve_socios_vencidos_reactivation_candidates_for_period,
+    count_socios_vencidos_not_found_phones,
+    prepare_socios_vencidos_reactivation_resolution_context,
+    resolve_socios_vencidos_reactivation_candidate_batch,
 )
 
 
@@ -96,9 +120,19 @@ _ALLOWED_CAMPAIGN_FILTERS = frozenset(
         "operational_status",
         "search",
         "tarifa",
+        "tariff_group",
         "campaign_cooldown_days",
     }
 )
+_TARIFF_GROUPS = frozenset(
+    {
+        TARIFF_GROUP_REACTIVATE,
+        TARIFF_GROUP_DOMICILIATED_FLOW,
+        TARIFF_GROUP_EXCLUDE,
+        TARIFF_GROUP_REVIEW,
+    }
+)
+_CANDIDATE_BATCH_SIZE = 250
 
 
 class MarketingReactivationValidationError(ValueError):
@@ -127,16 +161,24 @@ def _utc_now() -> datetime:
 
 def list_marketing_reactivation_sources(
     *,
+    allowed_sucursal_keys: tuple[str, ...] | None = None,
     session: Any | None = None,
 ) -> dict[str, object]:
     """Lista cobertura de cartera y runs iVentas canónicos disponibles."""
 
     active_session = _session_or_default(session)
-    coverage = active_session.query(
+    coverage_query = active_session.query(
         func.min(SociosVencidosCarteraORM.fecha_vencimiento_date),
         func.max(SociosVencidosCarteraORM.fecha_vencimiento_date),
         func.count(SociosVencidosCarteraORM.id),
-    ).one()
+    )
+    if allowed_sucursal_keys is not None:
+        coverage_query = coverage_query.filter(
+            SociosVencidosCarteraORM.sucursal_key.in_(allowed_sucursal_keys)
+            if allowed_sucursal_keys
+            else false()
+        )
+    coverage = coverage_query.one()
     iventas_runs = (
         active_session.query(MarketingIventasSyncRunORM)
         .filter(
@@ -169,27 +211,70 @@ def list_marketing_reactivation_sources(
             }
             for run in iventas_runs
         ],
+        "branches": _list_operational_branches(
+            date_from=coverage[0],
+            date_to=coverage[1],
+            allowed_sucursal_keys=allowed_sucursal_keys,
+            session=active_session,
+        ),
     }
+
+
+def _list_operational_branches(
+    *,
+    date_from: date | None,
+    date_to: date | None,
+    allowed_sucursal_keys: tuple[str, ...] | None,
+    session: Any,
+) -> list[dict[str, str]]:
+    if date_from is None or date_to is None:
+        return []
+    query = build_latest_operational_episode_query(
+        session=session,
+        date_from=date_from,
+        date_to=date_to,
+        allowed_sucursal_keys=allowed_sucursal_keys,
+    )
+    rows = (
+        query.order_by(None)
+        .with_entities(
+            SociosVencidosCarteraORM.sucursal_key,
+            func.min(SociosVencidosCarteraORM.sucursal_raw),
+        )
+        .group_by(SociosVencidosCarteraORM.sucursal_key)
+        .order_by(
+            func.min(SociosVencidosCarteraORM.sucursal_raw).asc().nullslast(),
+            SociosVencidosCarteraORM.sucursal_key.asc(),
+        )
+        .all()
+    )
+    return [
+        {"key": str(branch_key), "label": str(branch_label)}
+        for branch_key, branch_label in rows
+        if branch_key is not None and branch_label is not None
+    ]
 
 
 def list_marketing_reactivation_tariffs(
     *,
     date_from: date | str,
     date_to: date | str,
+    allowed_sucursal_keys: tuple[str, ...] | None = None,
     session: Any | None = None,
 ) -> dict[str, object]:
     normalized_from, normalized_to = _validate_date_range(date_from, date_to)
     active_session = _session_or_default(session)
+    operational_query = build_latest_operational_episode_query(
+        session=active_session,
+        date_from=normalized_from,
+        date_to=normalized_to,
+        allowed_sucursal_keys=allowed_sucursal_keys,
+    )
     rows = (
-        active_session.query(
+        operational_query.order_by(None)
+        .with_entities(
             SociosVencidosCarteraORM.tarifa,
             func.count(SociosVencidosCarteraORM.id),
-        )
-        .filter(
-            SociosVencidosCarteraORM.fecha_vencimiento_date.between(
-                normalized_from,
-                normalized_to,
-            )
         )
         .group_by(SociosVencidosCarteraORM.tarifa)
         .order_by(SociosVencidosCarteraORM.tarifa.asc().nullslast())
@@ -220,61 +305,649 @@ def build_marketing_reactivation_candidates(
     date_from: date | str,
     date_to: date | str,
     iventas_period_key: str,
+    page: Any = DEFAULT_PAGE,
+    page_size: Any = DEFAULT_PAGE_SIZE,
+    sucursal: Any = None,
+    tarifa: Any = None,
+    tariff_group: Any = None,
+    operational_status: Any = FILTER_ALL,
+    search: Any = None,
+    sort: Any = DEFAULT_SORT,
+    direction: Any = DEFAULT_DIRECTION,
+    cursor: Any = None,
+    allowed_sucursal_keys: tuple[str, ...] | None = None,
     session: Any | None = None,
 ) -> dict[str, object]:
-    """Resuelve y enriquece candidatos sin modificar persistencia."""
+    """Devuelve una página sin resolver el segmento operativo completo."""
 
-    active_session = _session_or_default(session)
-    result = resolve_socios_vencidos_reactivation_candidates_for_period(
+    query = _normalize_reactivation_candidate_request(
         date_from=date_from,
         date_to=date_to,
+        page=page,
+        page_size=page_size,
+        sucursal=sucursal,
+        tarifa=tarifa,
+        tariff_group=tariff_group,
+        operational_status=operational_status,
+        search=search,
+        sort=sort,
+        direction=direction,
+        cursor=cursor,
+    )
+    _validate_requested_sucursal_scope(
+        sucursal=query.sucursal,
+        allowed_sucursal_keys=allowed_sucursal_keys,
+    )
+    return _build_marketing_reactivation_candidate_page(
+        query=query,
+        iventas_period_key=iventas_period_key,
+        session=_session_or_default(session),
+        allowed_sucursal_keys=allowed_sucursal_keys,
+    )
+
+
+def build_marketing_reactivation_candidate_summary(
+    *,
+    date_from: date | str,
+    date_to: date | str,
+    iventas_period_key: str,
+    sucursal: Any = None,
+    tarifa: Any = None,
+    tariff_group: Any = None,
+    operational_status: Any = FILTER_ALL,
+    search: Any = None,
+    allowed_sucursal_keys: tuple[str, ...] | None = None,
+    session: Any | None = None,
+) -> dict[str, object]:
+    """Calcula agregados completos, independientemente de página y orden."""
+
+    query = _normalize_reactivation_candidate_request(
+        date_from=date_from,
+        date_to=date_to,
+        page=DEFAULT_PAGE,
+        page_size=DEFAULT_PAGE_SIZE,
+        sucursal=sucursal,
+        tarifa=tarifa,
+        tariff_group=tariff_group,
+        operational_status=operational_status,
+        search=search,
+        sort=DEFAULT_SORT,
+        direction=DEFAULT_DIRECTION,
+    )
+    _validate_requested_sucursal_scope(
+        sucursal=query.sucursal,
+        allowed_sucursal_keys=allowed_sucursal_keys,
+    )
+    return _build_marketing_reactivation_candidate_summary(
+        query=query,
+        iventas_period_key=iventas_period_key,
+        session=_session_or_default(session),
+        allowed_sucursal_keys=allowed_sucursal_keys,
+    )
+
+
+def _normalize_reactivation_candidate_request(
+    **values: Any,
+) -> ReactivationCandidateQuery:
+    try:
+        query = normalize_candidate_query(**values)
+    except ValueError as exc:
+        raise MarketingReactivationValidationError(str(exc)) from exc
+    requested_status = query.operational_status or FILTER_ALL
+    if requested_status not in _OPERATIONAL_FILTERS:
+        raise MarketingReactivationValidationError(
+            "operational_status no es válido."
+        )
+    if query.tariff_group and query.tariff_group not in _TARIFF_GROUPS:
+        raise MarketingReactivationValidationError(
+            "tariff_group no es válido."
+        )
+    return query
+
+
+def _build_marketing_reactivation_candidate_page(
+    *,
+    query: ReactivationCandidateQuery,
+    iventas_period_key: str,
+    session: Any,
+    allowed_sucursal_keys: tuple[str, ...] | None = None,
+) -> dict[str, Any]:
+    base_query = _build_candidate_base_query(
+        query=query,
+        session=session,
+        allowed_sucursal_keys=allowed_sucursal_keys,
+    )
+    context = prepare_socios_vencidos_reactivation_resolution_context(
+        minimum_cutoff_date=query.date_to,
         iventas_period_key=iventas_period_key,
         activos_snapshot_id=None,
-        session=active_session,
+        session=session,
     )
-    row_ids = tuple(
-        sorted(int(candidate.vencido_row_id) for candidate in result.rows)
-    )
-    vencido_rows = []
-    if row_ids:
-        vencido_rows = (
-            active_session.query(SociosVencidosCarteraORM)
-            .filter(SociosVencidosCarteraORM.id.in_(row_ids))
+    tariff_catalog = _read_all_active_tariff_catalog(session=session)
+    requested_status = query.operational_status or FILTER_ALL
+    if requested_status == FILTER_ALL:
+        if query.cursor is not None:
+            raise MarketingReactivationValidationError(
+                "cursor sólo aplica a filtros de operational_status derivados."
+            )
+        total_rows = int(base_query.order_by(None).count())
+        page_rows = (
+            base_query
+            .offset((query.page - 1) * query.page_size)
+            .limit(query.page_size)
             .all()
         )
-    vencido_rows_by_id = {int(row.id): row for row in vencido_rows}
-    missing_row_ids = set(row_ids) - vencido_rows_by_id.keys()
-    if missing_row_ids:
-        raise SociosVencidosReactivationCandidateResolverError(
-            "No se pudieron enriquecer episodios de cartera: "
-            f"{sorted(missing_row_ids)}."
+        serialized_rows = _resolve_interactive_candidate_batch(
+            vencidos_rows=page_rows,
+            query=query,
+            context=context,
+            tariff_catalog=tariff_catalog,
+            session=session,
+            allowed_sucursal_keys=allowed_sucursal_keys,
         )
-    tariff_catalog = _read_active_tariff_catalog(
-        tariff_values=(row.tarifa for row in vencido_rows),
-        session=active_session,
+        return _candidate_page_response(
+            query=query,
+            context=context,
+            rows=serialized_rows,
+            total=total_rows,
+            total_pages=(total_rows + query.page_size - 1) // query.page_size,
+            has_next=query.page * query.page_size < total_rows,
+            has_prev=query.page > 1,
+            next_cursor=None,
+        )
+
+    if query.page > 1 and query.cursor is None:
+        raise MarketingReactivationValidationError(
+            "cursor es obligatorio después de la primera página para "
+            "operational_status derivados."
+        )
+    segment_key = _candidate_cursor_segment_key(
+        query=query,
+        iventas_period_key=iventas_period_key,
+        allowed_sucursal_keys=allowed_sucursal_keys,
     )
-    return {
-        "sources": {
-            "date_from": str(result.date_from),
-            "date_to": str(result.date_to),
-            "activos_snapshot_id": int(result.activos_snapshot_id),
-            "iventas_sync_run_id": int(result.iventas_sync_run_id),
-            "iventas_period_key": str(result.iventas_period_key),
-        },
-        "summary": {
-            "total_rows": int(result.total_rows),
-            "status_counts": dict(result.status_counts),
-            "reason_counts": dict(result.reason_counts),
-        },
-        "rows": [
-            _serialize_candidate(
-                candidate=candidate,
-                vencido_row=vencido_rows_by_id[int(candidate.vencido_row_id)],
-                tariff_catalog=tariff_catalog,
+    scan_cursor = (
+        _decode_candidate_cursor(
+            query.cursor,
+            query=query,
+            expected_segment_key=segment_key,
+        )
+        if query.cursor is not None
+        else None
+    )
+    selected_rows: list[dict[str, Any]] = []
+    selected_source_row: Any | None = None
+    exhausted = False
+    batch_size = min(_CANDIDATE_BATCH_SIZE, max(DEFAULT_PAGE_SIZE, query.page_size))
+    while len(selected_rows) < query.page_size:
+        batch_query = base_query
+        if scan_cursor is not None:
+            batch_query = apply_candidate_cursor(
+                batch_query,
+                cursor=scan_cursor,
+                sort=query.sort,
+                direction=query.direction,
             )
-            for candidate in result.rows
-        ],
+        batch = list(batch_query.limit(batch_size).all())
+        if not batch:
+            exhausted = True
+            break
+        serialized_batch = _resolve_interactive_candidate_batch(
+            vencidos_rows=batch,
+            query=query,
+            context=context,
+            tariff_catalog=tariff_catalog,
+            session=session,
+            allowed_sucursal_keys=allowed_sucursal_keys,
+        )
+        serialized_by_id = {
+            int(row["vencido_row_id"]): row for row in serialized_batch
+        }
+        for source_row in batch:
+            serialized = serialized_by_id[int(source_row.id)]
+            if _matches_operational_status(
+                str(serialized["operational_status"]),
+                requested_status,
+            ):
+                selected_rows.append(serialized)
+                selected_source_row = source_row
+                if len(selected_rows) == query.page_size:
+                    break
+        if len(selected_rows) == query.page_size:
+            break
+        last_row = batch[-1]
+        scan_cursor = ReactivationCandidateCursor(
+            sort_value=candidate_sort_value(last_row, query.sort),
+            row_id=int(last_row.id),
+        )
+        if len(batch) < batch_size:
+            exhausted = True
+            break
+
+    next_cursor = (
+        _encode_candidate_cursor(
+            selected_source_row,
+            query=query,
+            segment_key=segment_key,
+        )
+        if selected_source_row is not None
+        and len(selected_rows) == query.page_size
+        and not exhausted
+        else None
+    )
+    return _candidate_page_response(
+        query=query,
+        context=context,
+        rows=selected_rows,
+        total=None,
+        total_pages=None,
+        has_next=next_cursor is not None,
+        has_prev=query.cursor is not None,
+        next_cursor=next_cursor,
+    )
+
+
+def _build_marketing_reactivation_candidate_summary(
+    *,
+    query: ReactivationCandidateQuery,
+    iventas_period_key: str,
+    session: Any,
+    allowed_sucursal_keys: tuple[str, ...] | None,
+) -> dict[str, Any]:
+    base_query = _build_candidate_base_query(
+        query=query,
+        session=session,
+        allowed_sucursal_keys=allowed_sucursal_keys,
+    ).order_by(None)
+    context = prepare_socios_vencidos_reactivation_resolution_context(
+        minimum_cutoff_date=query.date_to,
+        iventas_period_key=iventas_period_key,
+        activos_snapshot_id=None,
+        session=session,
+    )
+    phone_counts = _count_complete_segment_not_found_phones(
+        base_query=base_query,
+        context=context,
+    )
+    tariff_catalog = _read_all_active_tariff_catalog(session=session)
+    status_counts: Counter[str] = Counter()
+    reason_counts: Counter[str] = Counter()
+    total_rows = 0
+    for serialized in _iter_complete_segment_candidates(
+        base_query=base_query,
+        context=context,
+        phone_counts=phone_counts,
+        tariff_catalog=tariff_catalog,
+        session=session,
+    ):
+        if not _matches_operational_status(
+            str(serialized["operational_status"]),
+            query.operational_status or FILTER_ALL,
+        ):
+            continue
+        total_rows += 1
+        status_counts[str(serialized["status"])] += 1
+        reason_counts[str(serialized["reason"])] += 1
+    return {
+        "sources": _candidate_sources(query=query, context=context),
+        "summary": {
+            "total_rows": total_rows,
+            "status_counts": dict(status_counts),
+            "reason_counts": dict(reason_counts),
+        },
     }
+
+
+def _build_marketing_reactivation_campaign_segment(
+    *,
+    query: ReactivationCandidateQuery,
+    iventas_period_key: str,
+    session: Any,
+    allowed_sucursal_keys: tuple[str, ...] | None,
+) -> dict[str, Any]:
+    base_query = _build_candidate_base_query(
+        query=query,
+        session=session,
+        allowed_sucursal_keys=allowed_sucursal_keys,
+    )
+    context = prepare_socios_vencidos_reactivation_resolution_context(
+        minimum_cutoff_date=query.date_to,
+        iventas_period_key=iventas_period_key,
+        activos_snapshot_id=None,
+        session=session,
+    )
+    phone_counts = _count_complete_segment_not_found_phones(
+        base_query=base_query.order_by(None),
+        context=context,
+    )
+    tariff_catalog = _read_all_active_tariff_catalog(session=session)
+    rows = [
+        serialized
+        for serialized in _iter_complete_segment_candidates(
+            base_query=base_query,
+            context=context,
+            phone_counts=phone_counts,
+            tariff_catalog=tariff_catalog,
+            session=session,
+        )
+        if _matches_operational_status(
+            str(serialized["operational_status"]),
+            query.operational_status or FILTER_ALL,
+        )
+    ]
+    return {
+        "sources": _candidate_sources(query=query, context=context),
+        "rows": rows,
+    }
+
+
+def _build_candidate_base_query(
+    *,
+    query: ReactivationCandidateQuery,
+    session: Any,
+    allowed_sucursal_keys: tuple[str, ...] | None,
+):
+    return build_latest_operational_episode_query(
+        session=session,
+        date_from=query.date_from,
+        date_to=query.date_to,
+        sucursal=query.sucursal,
+        tarifa=query.tarifa,
+        tariff_group=query.tariff_group,
+        search=query.search,
+        sort=query.sort,
+        direction=query.direction,
+        allowed_sucursal_keys=allowed_sucursal_keys,
+    )
+
+
+def _count_complete_segment_not_found_phones(
+    *,
+    base_query: Any,
+    context: Any,
+) -> Counter[str]:
+    phone_counts: Counter[str] = Counter()
+    for batch in _iter_query_batches(base_query, _CANDIDATE_BATCH_SIZE):
+        phone_counts.update(
+            count_socios_vencidos_not_found_phones(
+                vencidos_rows=batch,
+                context=context,
+            )
+        )
+    return phone_counts
+
+
+def _iter_complete_segment_candidates(
+    *,
+    base_query: Any,
+    context: Any,
+    phone_counts: Counter[str],
+    tariff_catalog: dict[str, MarketingReactivationTariffORM],
+    session: Any,
+):
+    for batch in _iter_query_batches(base_query, _CANDIDATE_BATCH_SIZE):
+        candidates = resolve_socios_vencidos_reactivation_candidate_batch(
+            vencidos_rows=batch,
+            context=context,
+            phone_counts=phone_counts,
+            session=session,
+        )
+        yield from _serialize_resolved_batch(
+            vencidos_rows=batch,
+            candidates=candidates,
+            tariff_catalog=tariff_catalog,
+        )
+
+
+def _resolve_interactive_candidate_batch(
+    *,
+    vencidos_rows: list[Any],
+    query: ReactivationCandidateQuery,
+    context: Any,
+    tariff_catalog: dict[str, MarketingReactivationTariffORM],
+    session: Any,
+    allowed_sucursal_keys: tuple[str, ...] | None,
+) -> list[dict[str, Any]]:
+    if not vencidos_rows:
+        return []
+    current_rows = resolve_socios_vencidos_rows_with_context(
+        vencidos_rows=vencidos_rows,
+        context=context.current_status,
+    )
+    source_by_id = {int(row.id): row for row in vencidos_rows}
+    phone_counts = Counter(
+        phone
+        for phone in (
+            normalize_iventas_phone(
+                source_by_id[int(current_row.vencido_row_id)].telefono_raw
+            ).phone_mx10
+            for current_row in current_rows
+            if current_row.status == STATUS_NOT_FOUND
+        )
+        if phone is not None
+    )
+    target_phones = set(phone_counts)
+    if target_phones:
+        peer_query = _build_candidate_base_query(
+            query=query,
+            session=session,
+            allowed_sucursal_keys=allowed_sucursal_keys,
+        ).filter(
+            build_phone_variant_filter(target_phones),
+            SociosVencidosCarteraORM.id.notin_(tuple(source_by_id)),
+        ).order_by(None)
+        for peer_batch in _iter_query_batches(peer_query, _CANDIDATE_BATCH_SIZE):
+            phone_counts.update(
+                count_socios_vencidos_not_found_phones(
+                    vencidos_rows=peer_batch,
+                    context=context,
+                )
+            )
+    candidates = resolve_socios_vencidos_reactivation_candidate_batch(
+        vencidos_rows=vencidos_rows,
+        context=context,
+        phone_counts=phone_counts,
+        current_rows=current_rows,
+        session=session,
+    )
+    return list(_serialize_resolved_batch(
+        vencidos_rows=vencidos_rows,
+        candidates=candidates,
+        tariff_catalog=tariff_catalog,
+    ))
+
+
+def _serialize_resolved_batch(
+    *,
+    vencidos_rows: list[Any],
+    candidates: Any,
+    tariff_catalog: dict[str, MarketingReactivationTariffORM],
+):
+    candidate_by_id = {
+        int(candidate.vencido_row_id): candidate for candidate in candidates
+    }
+    for vencido_row in vencidos_rows:
+        candidate = candidate_by_id.get(int(vencido_row.id))
+        if candidate is None:
+            raise SociosVencidosReactivationCandidateResolverError(
+                "El lote resuelto no contiene todos los episodios."
+            )
+        serialized = _serialize_candidate(
+            candidate=candidate,
+            vencido_row=vencido_row,
+            tariff_catalog=tariff_catalog,
+        )
+        serialized["operational_status"] = _operational_status(serialized)
+        yield serialized
+
+
+def _candidate_page_response(
+    *,
+    query: ReactivationCandidateQuery,
+    context: Any,
+    rows: list[dict[str, Any]],
+    total: int | None,
+    total_pages: int | None,
+    has_next: bool,
+    has_prev: bool,
+    next_cursor: str | None,
+) -> dict[str, Any]:
+    return {
+        "sources": _candidate_sources(query=query, context=context),
+        "pagination": {
+            "page": query.page,
+            "page_size": query.page_size,
+            "total": total,
+            "total_pages": total_pages,
+            "has_next": has_next,
+            "has_prev": has_prev,
+            "next_cursor": next_cursor,
+        },
+        "rows": rows,
+    }
+
+
+def _candidate_sources(*, query: ReactivationCandidateQuery, context: Any):
+    return {
+        "date_from": query.date_from.isoformat(),
+        "date_to": query.date_to.isoformat(),
+        "activos_snapshot_id": int(context.current_status.activos_snapshot_id),
+        "iventas_sync_run_id": int(context.iventas_sync_run_id),
+        "iventas_period_key": str(context.iventas_period_key),
+    }
+
+
+def _candidate_cursor_segment_key(
+    *,
+    query: ReactivationCandidateQuery,
+    iventas_period_key: str,
+    allowed_sucursal_keys: tuple[str, ...] | None,
+) -> str:
+    document = {
+        "date_from": query.date_from.isoformat(),
+        "date_to": query.date_to.isoformat(),
+        "iventas_period_key": str(iventas_period_key),
+        "sucursal": query.sucursal,
+        "tarifa": query.tarifa,
+        "tariff_group": query.tariff_group,
+        "operational_status": query.operational_status or FILTER_ALL,
+        "search": query.search,
+        "sort": query.sort,
+        "direction": query.direction,
+        "allowed_sucursal_keys": allowed_sucursal_keys,
+    }
+    encoded = json.dumps(
+        document,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _encode_candidate_cursor(
+    row: Any,
+    *,
+    query: ReactivationCandidateQuery,
+    segment_key: str,
+) -> str:
+    value = candidate_sort_value(row, query.sort)
+    if isinstance(value, (date, datetime, Decimal)):
+        value = str(value.isoformat() if hasattr(value, "isoformat") else value)
+    payload = {
+        "v": 1,
+        "sort": query.sort,
+        "direction": query.direction,
+        "value": value,
+        "id": int(row.id),
+        "segment": segment_key,
+    }
+    raw = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode(
+        "utf-8"
+    )
+    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+
+def _decode_candidate_cursor(
+    raw_cursor: str,
+    *,
+    query: ReactivationCandidateQuery,
+    expected_segment_key: str,
+) -> ReactivationCandidateCursor:
+    try:
+        padded = raw_cursor + "=" * (-len(raw_cursor) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(padded).decode("utf-8"))
+        if (
+            not isinstance(payload, dict)
+            or payload.get("v") != 1
+            or payload.get("sort") != query.sort
+            or payload.get("direction") != query.direction
+            or payload.get("segment") != expected_segment_key
+            or isinstance(payload.get("id"), bool)
+            or int(payload.get("id")) <= 0
+        ):
+            raise ValueError
+        value = payload.get("value")
+        if value is not None and query.sort == "fecha_vencimiento":
+            value = date.fromisoformat(str(value))
+        elif value is not None and query.sort == "fecha_ultimo_pago":
+            value = datetime.fromisoformat(str(value))
+        elif value is not None and not isinstance(value, str):
+            raise ValueError
+        return ReactivationCandidateCursor(
+            sort_value=value,
+            row_id=int(payload["id"]),
+        )
+    except (
+        binascii.Error,
+        json.JSONDecodeError,
+        KeyError,
+        TypeError,
+        UnicodeDecodeError,
+        ValueError,
+    ) as exc:
+        raise MarketingReactivationValidationError(
+            "cursor no es válido para el segmento y orden solicitados."
+        ) from exc
+
+
+def _validate_requested_sucursal_scope(
+    *,
+    sucursal: str | None,
+    allowed_sucursal_keys: tuple[str, ...] | None,
+) -> None:
+    if sucursal is None or allowed_sucursal_keys is None:
+        return
+    requested_key = normalize_socios_vencidos_branch_key(sucursal)
+    if requested_key not in set(allowed_sucursal_keys):
+        raise MarketingReactivationValidationError(
+            "filters.sucursal está fuera del alcance autorizado."
+        )
+
+
+def _iter_query_batches(query: Any, batch_size: int):
+    batch: list[Any] = []
+    for row in query.yield_per(batch_size):
+        batch.append(row)
+        if len(batch) == batch_size:
+            yield batch
+            batch = []
+    if batch:
+        yield batch
+
+
+def _matches_operational_status(
+    operational_status: str,
+    requested_status: str,
+) -> bool:
+    if requested_status == FILTER_ALL:
+        return True
+    if requested_status == FILTER_WORK_PENDING:
+        return operational_status not in {
+            OPERATIONAL_ACTIVE,
+            OPERATIONAL_CONTACTED_AFTER_EXPIRATION,
+        }
+    return operational_status == requested_status
 
 
 def preview_marketing_reactivation_campaign(
@@ -283,6 +956,7 @@ def preview_marketing_reactivation_campaign(
     date_to: date | str,
     filters: Any,
     campaign_cooldown_days: int | None = None,
+    allowed_sucursal_keys: tuple[str, ...] | None = None,
     session: Any | None = None,
     now: datetime | None = None,
 ) -> dict[str, object]:
@@ -291,6 +965,7 @@ def preview_marketing_reactivation_campaign(
         date_to=date_to,
         filters=filters,
         campaign_cooldown_days=campaign_cooldown_days,
+        allowed_sucursal_keys=allowed_sucursal_keys,
         session=_session_or_default(session),
         now=now,
     )
@@ -310,6 +985,7 @@ def create_marketing_reactivation_campaign(
     notes: Any = None,
     created_by_user_id: int,
     campaign_cooldown_days: int | None = None,
+    allowed_sucursal_keys: tuple[str, ...] | None = None,
     session: Any | None = None,
     now: datetime | None = None,
 ) -> dict[str, object]:
@@ -322,6 +998,7 @@ def create_marketing_reactivation_campaign(
         date_to=date_to,
         filters=filters,
         campaign_cooldown_days=campaign_cooldown_days,
+        allowed_sucursal_keys=allowed_sucursal_keys,
         session=active_session,
         now=now_value,
     )
@@ -344,6 +1021,10 @@ def create_marketing_reactivation_campaign(
             "filters": plan["filters"],
             "sources": plan["sources"],
             "summary": plan["summary"],
+            "scope": plan.get(
+                "scope",
+                _serialize_campaign_scope(allowed_sucursal_keys),
+            ),
         },
         recipient_count=len(eligible_rows),
     )
@@ -427,6 +1108,7 @@ def get_marketing_reactivation_campaign(
 def export_marketing_reactivation_campaign(
     *,
     campaign_id: int,
+    allowed_sucursal_keys: tuple[str, ...] | None = None,
     session: Any | None = None,
     now: datetime | None = None,
 ) -> tuple[bytes, str]:
@@ -442,11 +1124,20 @@ def export_marketing_reactivation_campaign(
             "Sólo una campaña DRAFT o EXPORTED puede exportarse."
         )
     stored_filters = dict((campaign.filters_json or {}).get("filters") or {})
+    effective_scope = _resolve_frozen_campaign_scope_for_export(
+        stored_scope=(campaign.filters_json or {}).get("scope"),
+        current_allowed_sucursal_keys=allowed_sucursal_keys,
+    )
+    _validate_frozen_campaign_recipients_scope(
+        recipients=campaign.recipients,
+        effective_scope=effective_scope,
+    )
     plan = _build_campaign_plan(
         date_from=campaign.date_from,
         date_to=campaign.date_to,
         filters=stored_filters,
         campaign_cooldown_days=stored_filters.get("campaign_cooldown_days"),
+        allowed_sucursal_keys=effective_scope,
         session=active_session,
         now=now,
         exclude_campaign_id=int(campaign.id),
@@ -549,6 +1240,7 @@ def _build_campaign_plan(
     date_to: date | str,
     filters: Any,
     campaign_cooldown_days: int | None,
+    allowed_sucursal_keys: tuple[str, ...] | None,
     session: Any,
     now: datetime | None,
     exclude_campaign_id: int | None = None,
@@ -558,16 +1250,40 @@ def _build_campaign_plan(
         filters,
         campaign_cooldown_days=campaign_cooldown_days,
     )
-    candidates = build_marketing_reactivation_candidates(
+    candidate_query = _normalize_reactivation_candidate_request(
         date_from=normalized_from,
         date_to=normalized_to,
+        page=DEFAULT_PAGE,
+        page_size=DEFAULT_PAGE_SIZE,
+        sucursal=normalized_filters["sucursal"],
+        tarifa=normalized_filters["tarifa"],
+        tariff_group=normalized_filters["tariff_group"],
+        operational_status=normalized_filters["operational_status"],
+        search=normalized_filters["search"],
+        sort=DEFAULT_SORT,
+        direction=DEFAULT_DIRECTION,
+    )
+    _validate_requested_sucursal_scope(
+        sucursal=normalized_filters["sucursal"],
+        allowed_sucursal_keys=allowed_sucursal_keys,
+    )
+    effective_scope = _effective_campaign_scope(
+        sucursal=normalized_filters["sucursal"],
+        allowed_sucursal_keys=allowed_sucursal_keys,
+    )
+    candidates = _build_marketing_reactivation_campaign_segment(
+        query=candidate_query,
         iventas_period_key=str(normalized_filters["iventas_period_key"]),
         session=session,
+        allowed_sucursal_keys=allowed_sucursal_keys,
     )
     filtered_rows = [
-        {**row, "operational_status": _operational_status(row)}
+        {
+            **row,
+            "operational_status": row.get("operational_status")
+            or _operational_status(row),
+        }
         for row in candidates["rows"]
-        if _matches_campaign_filters(row, normalized_filters)
     ]
     phone_by_row_id = {
         int(row["vencido_row_id"]): normalize_iventas_phone(
@@ -658,6 +1374,7 @@ def _build_campaign_plan(
     return {
         "sources": candidates["sources"],
         "filters": normalized_filters,
+        "scope": _serialize_campaign_scope(effective_scope),
         "summary": summary,
         "decision_rows": decision_rows,
         "eligible_rows": [
@@ -821,8 +1538,109 @@ def _validate_campaign_filters(
         "tarifa": _validate_optional_text(
             filters.get("tarifa"), "filters.tarifa", max_length=255
         ),
+        "tariff_group": _validate_optional_tariff_group(
+            filters.get("tariff_group"), "filters.tariff_group"
+        ),
         "campaign_cooldown_days": effective_cooldown,
     }
+
+
+def _serialize_campaign_scope(
+    allowed_sucursal_keys: tuple[str, ...] | None,
+) -> dict[str, Any]:
+    return {
+        "is_global": allowed_sucursal_keys is None,
+        "allowed_sucursal_keys": (
+            None
+            if allowed_sucursal_keys is None
+            else list(sorted(set(allowed_sucursal_keys)))
+        ),
+    }
+
+
+def _effective_campaign_scope(
+    *,
+    sucursal: str | None,
+    allowed_sucursal_keys: tuple[str, ...] | None,
+) -> tuple[str, ...] | None:
+    if sucursal is not None:
+        requested_key = normalize_socios_vencidos_branch_key(sucursal)
+        if requested_key is None:
+            raise MarketingReactivationValidationError(
+                "filters.sucursal no es válida."
+            )
+        return (requested_key,)
+    return allowed_sucursal_keys
+
+
+def _resolve_frozen_campaign_scope_for_export(
+    *,
+    stored_scope: Any,
+    current_allowed_sucursal_keys: tuple[str, ...] | None,
+) -> tuple[str, ...] | None:
+    if not isinstance(stored_scope, dict):
+        if current_allowed_sucursal_keys is not None:
+            raise MarketingReactivationValidationError(
+                "La campaña heredada no tiene scope auditable y no puede "
+                "exportarse con alcance restringido."
+            )
+        return None
+    frozen_is_global = stored_scope.get("is_global") is True
+    frozen_values = stored_scope.get("allowed_sucursal_keys")
+    if frozen_is_global:
+        if frozen_values is not None:
+            raise MarketingReactivationValidationError(
+                "El scope congelado de la campaña es inválido."
+            )
+        if current_allowed_sucursal_keys is not None:
+            raise MarketingReactivationValidationError(
+                "El alcance actual no permite revalidar la campaña global."
+            )
+        return None
+    if (
+        not isinstance(frozen_values, list)
+        or not frozen_values
+        or any(not isinstance(value, str) for value in frozen_values)
+    ):
+        raise MarketingReactivationValidationError(
+            "El scope congelado de la campaña es inválido."
+        )
+    frozen_scope = tuple(sorted(set(frozen_values)))
+    if current_allowed_sucursal_keys is not None and not set(
+        frozen_scope
+    ).issubset(current_allowed_sucursal_keys):
+        raise MarketingReactivationValidationError(
+            "La campaña incluye sucursales fuera del alcance actual."
+        )
+    return frozen_scope
+
+
+def _validate_frozen_campaign_recipients_scope(
+    *,
+    recipients: Any,
+    effective_scope: tuple[str, ...] | None,
+) -> None:
+    if effective_scope is None:
+        return
+    allowed = set(effective_scope)
+    outside_scope = {
+        str(recipient.sucursal)
+        for recipient in recipients
+        if normalize_socios_vencidos_branch_key(recipient.sucursal) not in allowed
+    }
+    if outside_scope:
+        raise MarketingReactivationValidationError(
+            "La campaña contiene destinatarios fuera de su scope congelado."
+        )
+
+
+def _validate_optional_tariff_group(value: Any, field_name: str) -> str | None:
+    normalized = _validate_optional_text(value, field_name, max_length=64)
+    if normalized is not None and normalized not in _TARIFF_GROUPS:
+        raise MarketingReactivationValidationError(
+            f"{field_name} no es válido."
+        )
+    return normalized
 
 
 def _matches_campaign_filters(
@@ -943,6 +1761,18 @@ def _read_active_tariff_catalog(
                 tuple(sorted(tariff_keys))
             ),
         )
+        .all()
+    )
+    return {str(row.tarifa_key): row for row in rows}
+
+
+def _read_all_active_tariff_catalog(
+    *,
+    session: Any,
+) -> dict[str, MarketingReactivationTariffORM]:
+    rows = (
+        session.query(MarketingReactivationTariffORM)
+        .filter(MarketingReactivationTariffORM.is_active.is_(True))
         .all()
     )
     return {str(row.tarifa_key): row for row in rows}

@@ -71,6 +71,13 @@ class SociosVencidosCurrentStatusPeriodResult:
     rows: tuple[SocioVencidoCurrentStatus, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class SociosVencidosCurrentStatusContext:
+    activos_snapshot_id: int
+    activos_cutoff_date: str
+    indexes: dict[str, dict[Any, set[str]]]
+
+
 def resolve_socios_vencidos_current_status(
     *,
     vencidos_snapshot_id: int,
@@ -240,6 +247,52 @@ def resolve_socios_vencidos_current_status_for_period(
         total_rows=len(resolved_rows),
         status_counts=status_counts,
         rows=resolved_rows,
+    )
+
+
+def prepare_socios_vencidos_current_status_context(
+    *,
+    minimum_cutoff_date: date,
+    activos_snapshot_id: int | None = None,
+    session: Any | None = None,
+) -> SociosVencidosCurrentStatusContext:
+    """Carga una vez el snapshot activo para resolver lotes de cartera."""
+
+    active_session = session if session is not None else db.session
+    snapshot = _resolve_activos_snapshot(
+        minimum_cutoff_date=minimum_cutoff_date,
+        activos_snapshot_id=activos_snapshot_id,
+        active_session=active_session,
+    )
+    if snapshot.cutoff_date < minimum_cutoff_date:
+        raise SociosVencidosCurrentStatusResolverError(
+            "El snapshot de socios activos es anterior al periodo vencido "
+            "que se intenta resolver."
+        )
+    rows = (
+        active_session.query(SociosActivosSnapshotRowORM)
+        .filter(
+            SociosActivosSnapshotRowORM.snapshot_id == int(snapshot.id)
+        )
+        .all()
+    )
+    return SociosVencidosCurrentStatusContext(
+        activos_snapshot_id=int(snapshot.id),
+        activos_cutoff_date=snapshot.cutoff_date.isoformat(),
+        indexes=_build_active_indexes(rows),
+    )
+
+
+def resolve_socios_vencidos_rows_with_context(
+    *,
+    vencidos_rows: list[Any] | tuple[Any, ...],
+    context: SociosVencidosCurrentStatusContext,
+) -> tuple[SocioVencidoCurrentStatus, ...]:
+    """Aplica sin I/O el matcher vigente a un lote de episodios."""
+
+    return tuple(
+        _resolve_vencido_row(row, indexes=context.indexes)
+        for row in vencidos_rows
     )
 
 

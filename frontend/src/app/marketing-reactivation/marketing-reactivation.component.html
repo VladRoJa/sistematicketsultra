@@ -138,6 +138,55 @@
     </div>
   </section>
 
+  <div
+    *ngIf="loadingSummary"
+    class="reload-state"
+    aria-live="polite"
+  >
+    <mat-spinner diameter="20"></mat-spinner>
+    Actualizando resumen del segmento…
+  </div>
+
+  <div
+    *ngIf="summaryError"
+    class="inline-error"
+    role="alert"
+  >
+    <span><mat-icon>error_outline</mat-icon>{{ summaryError }}</span>
+    <button mat-stroked-button type="button" (click)="retrySummary()">
+      Reintentar resumen
+    </button>
+  </div>
+
+  <section
+    *ngIf="candidateSummary"
+    class="summary-grid"
+    aria-label="Resumen de reactivación"
+  >
+    <article
+      *ngFor="let card of summaryCards"
+      class="summary-card"
+      [attr.data-status]="card.statusClass"
+    >
+      <mat-icon>{{ card.icon }}</mat-icon>
+      <div>
+        <span>{{ card.label }}</span>
+        <strong *ngIf="card.displayValue !== undefined">
+          {{ card.displayValue }}
+        </strong>
+        <strong *ngIf="card.displayValue === undefined">
+          {{ card.value | number }}
+        </strong>
+        <small
+          *ngIf="card.detail"
+          class="summary-card-detail"
+        >
+          {{ card.detail }}
+        </small>
+      </div>
+    </article>
+  </section>
+
   <ng-container *ngIf="candidates">
     <div
       *ngIf="loadingCandidates"
@@ -158,31 +207,6 @@
         Reintentar
       </button>
     </div>
-
-    <section class="summary-grid" aria-label="Resumen de reactivación">
-      <article
-        *ngFor="let card of summaryCards"
-        class="summary-card"
-        [attr.data-status]="card.statusClass"
-      >
-        <mat-icon>{{ card.icon }}</mat-icon>
-        <div>
-          <span>{{ card.label }}</span>
-          <strong *ngIf="card.displayValue !== undefined">
-            {{ card.displayValue }}
-          </strong>
-          <strong *ngIf="card.displayValue === undefined">
-            {{ card.value | number }}
-          </strong>
-          <small
-            *ngIf="card.detail"
-            class="summary-card-detail"
-          >
-            {{ card.detail }}
-          </small>
-        </div>
-      </article>
-    </section>
 
     <section class="workspace" aria-labelledby="universe-title">
       <div class="section-heading">
@@ -223,8 +247,24 @@
           <mat-label>Sucursal</mat-label>
           <mat-select [formControl]="branchFilter">
             <mat-option value="ALL">Todas</mat-option>
-            <mat-option *ngFor="let branch of branchOptions" [value]="branch">
-              {{ branch }}
+            <mat-option
+              *ngFor="let branch of branchOptions"
+              [value]="branch.key"
+            >
+              {{ branch.label }}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
+
+        <mat-form-field appearance="fill" subscriptSizing="dynamic">
+          <mat-label>Grupo de tarifa</mat-label>
+          <mat-select [formControl]="tariffGroupFilter">
+            <mat-option value="ALL">Todos</mat-option>
+            <mat-option
+              *ngFor="let option of tariffGroupOptions"
+              [value]="option.value"
+            >
+              {{ option.label }}
             </mat-option>
           </mat-select>
         </mat-form-field>
@@ -283,12 +323,15 @@
           mat-table
           matSort
           matSortDisableClear
+          [matSortActive]="sortActive"
+          [matSortDirection]="sortDirection"
+          (matSortChange)="onSortChange($event)"
           [dataSource]="dataSource"
           [trackBy]="trackByRowId"
           aria-label="Socios vencidos para revisión"
         >
           <ng-container matColumnDef="nombre">
-            <th mat-header-cell *matHeaderCellDef mat-sort-header>Socio</th>
+            <th mat-header-cell *matHeaderCellDef mat-sort-header="nombre">Socio</th>
             <td mat-cell *matCellDef="let row">
               <div class="member-cell">
                 <strong>{{ row.nombre || 'Sin nombre' }}</strong>
@@ -298,31 +341,31 @@
           </ng-container>
 
           <ng-container matColumnDef="pin">
-            <th mat-header-cell *matHeaderCellDef mat-sort-header>PIN</th>
+            <th mat-header-cell *matHeaderCellDef mat-sort-header="pin">PIN</th>
             <td mat-cell *matCellDef="let row">{{ row.pin }}</td>
           </ng-container>
 
           <ng-container matColumnDef="sucursal">
-            <th mat-header-cell *matHeaderCellDef mat-sort-header>Sucursal</th>
+            <th mat-header-cell *matHeaderCellDef mat-sort-header="sucursal">Sucursal</th>
             <td mat-cell *matCellDef="let row">{{ row.sucursal }}</td>
           </ng-container>
 
           <ng-container matColumnDef="fecha_vencimiento">
-            <th mat-header-cell *matHeaderCellDef mat-sort-header>Venció</th>
+            <th mat-header-cell *matHeaderCellDef mat-sort-header="fecha_vencimiento">Venció</th>
             <td mat-cell *matCellDef="let row">
               {{ formatDateOnly(row.fecha_vencimiento) }}
             </td>
           </ng-container>
 
           <ng-container matColumnDef="fecha_ultimo_pago">
-            <th mat-header-cell *matHeaderCellDef mat-sort-header>Último pago</th>
+            <th mat-header-cell *matHeaderCellDef mat-sort-header="fecha_ultimo_pago">Último pago</th>
             <td mat-cell *matCellDef="let row">
               {{ formatDateOnly(row.fecha_ultimo_pago) }}
             </td>
           </ng-container>
 
           <ng-container matColumnDef="tarifa">
-            <th mat-header-cell *matHeaderCellDef mat-sort-header>Tarifa</th>
+            <th mat-header-cell *matHeaderCellDef mat-sort-header="tarifa">Tarifa</th>
             <td
               mat-cell
               *matCellDef="let row"
@@ -334,12 +377,12 @@
           </ng-container>
 
           <ng-container matColumnDef="telefono">
-            <th mat-header-cell *matHeaderCellDef mat-sort-header>Teléfono</th>
+            <th mat-header-cell *matHeaderCellDef mat-sort-header="telefono">Teléfono</th>
             <td mat-cell *matCellDef="let row">{{ row.telefono || '—' }}</td>
           </ng-container>
 
           <ng-container matColumnDef="status">
-            <th mat-header-cell *matHeaderCellDef mat-sort-header>Estado</th>
+            <th mat-header-cell *matHeaderCellDef>Estado</th>
             <td mat-cell *matCellDef="let row">
               <span
                 class="status-chip"
@@ -352,7 +395,7 @@
           </ng-container>
 
           <ng-container matColumnDef="latest_outbound_at_utc">
-            <th mat-header-cell *matHeaderCellDef mat-sort-header>
+            <th mat-header-cell *matHeaderCellDef>
               Último contacto
             </th>
             <td mat-cell *matCellDef="let row">
@@ -364,6 +407,16 @@
           <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
         </table>
       </div>
+      <mat-paginator
+        *ngIf="totalCount > 0"
+        [length]="totalCount"
+        [pageIndex]="pageIndex"
+        [pageSize]="pageSize"
+        [pageSizeOptions]="pageSizeOptions"
+        [showFirstLastButtons]="!usesCursorPagination"
+        aria-label="Paginación de socios vencidos"
+        (page)="onPageChange($event)"
+      ></mat-paginator>
     </section>
   </ng-container>
 

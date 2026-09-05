@@ -4,7 +4,6 @@ import {
   Component,
   DestroyRef,
   OnInit,
-  ViewChild,
   inject,
 } from '@angular/core';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
@@ -15,8 +14,9 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatSelectModule } from '@angular/material/select';
-import { MatSort, MatSortModule } from '@angular/material/sort';
+import { MatSortModule, Sort } from '@angular/material/sort';
 import { MatTableDataSource, MatTableModule } from '@angular/material/table';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -37,14 +37,18 @@ import {
   ReactivationCampaignFilters,
   ReactivationCampaignPreviewResponse,
   ReactivationCampaignRequest,
+  ReactivationCandidateQuery,
+  ReactivationCandidateSummaryQuery,
+  ReactivationCandidateSummaryResponse,
   ReactivationCandidateReason,
   ReactivationCandidateRow,
-  ReactivationCandidateStatus,
+  ReactivationCandidateSort,
   ReactivationCandidatesResponse,
   ReactivationIventasPeriod,
   ReactivationOperationalStatus,
   ReactivationSourcesResponse,
   ReactivationTariffCount,
+  ReactivationTariffGroup,
 } from './marketing-reactivation.models';
 import { MarketingReactivationService } from './marketing-reactivation.service';
 
@@ -61,12 +65,6 @@ type StatusFilter = ReactivationOperationalStatus;
 interface OperationalStatusOption {
   value: StatusFilter;
   label: string;
-}
-
-interface CandidateSelection {
-  dateFrom: string;
-  dateTo: string;
-  iventasPeriodKey: string;
 }
 
 interface SummaryCard {
@@ -86,12 +84,9 @@ type CandidatesRequestResult =
   | { status: 'success'; data: ReactivationCandidatesResponse }
   | { status: 'error'; error: HttpErrorResponse };
 
-const STATUS_ORDER: ReactivationCandidateStatus[] = [
-  'CONTACT_HISTORY_UNKNOWN',
-  'REVIEW_ACTIVE_MATCH',
-  'EXCLUDED_POST_EXPIRATION_CONTACT',
-  'EXCLUDED_ACTIVE',
-];
+type SummaryRequestResult =
+  | { status: 'success'; data: ReactivationCandidateSummaryResponse }
+  | { status: 'error'; error: HttpErrorResponse };
 
 const OPERATIONAL_STATUS_OPTIONS: OperationalStatusOption[] = [
   { value: 'WORK_PENDING', label: 'Por trabajar' },
@@ -134,6 +129,7 @@ const REVIEW_IDENTITY_REASONS = new Set<ReactivationCandidateReason>([
     MatIconModule,
     MatInputModule,
     MatNativeDateModule,
+    MatPaginatorModule,
     MatProgressSpinnerModule,
     MatSelectModule,
     MatSortModule,
@@ -149,18 +145,35 @@ export class MarketingReactivationComponent implements OnInit {
   private readonly reactivationService = inject(
     MarketingReactivationService,
   );
-  private readonly candidateRequests = new Subject<CandidateSelection>();
+  private readonly candidateRequests = new Subject<ReactivationCandidateQuery>();
+  private readonly summaryRequests = new Subject<ReactivationCandidateSummaryQuery>();
+  private readonly cursorsByPageIndex = new Map<number, string | null>([
+    [0, null],
+  ]);
 
   readonly dateFromControl = new FormControl<Date | null>(null);
   readonly dateToControl = new FormControl<Date | null>(null);
   readonly iventasControl = new FormControl<string | null>(null);
   readonly branchFilter = new FormControl('ALL', { nonNullable: true });
   readonly tariffFilter = new FormControl('ALL', { nonNullable: true });
+  readonly tariffGroupFilter = new FormControl<ReactivationTariffGroup | 'ALL'>(
+    'ALL',
+    { nonNullable: true },
+  );
   readonly statusFilter = new FormControl<StatusFilter>('WORK_PENDING', {
     nonNullable: true,
   });
   readonly searchFilter = new FormControl('', { nonNullable: true });
   readonly statusOptions = OPERATIONAL_STATUS_OPTIONS;
+  readonly tariffGroupOptions: Array<{
+    value: ReactivationTariffGroup;
+    label: string;
+  }> = [
+    { value: 'REACTIVATE', label: 'Reactivables' },
+    { value: 'DOMICILIATED_FLOW', label: 'Flujo domiciliado' },
+    { value: 'EXCLUDE', label: 'Excluidas' },
+    { value: 'REVIEW', label: 'Por revisar' },
+  ];
 
   readonly displayedColumns = [
     'nombre',
@@ -178,7 +191,7 @@ export class MarketingReactivationComponent implements OnInit {
 
   sources: ReactivationSourcesResponse | null = null;
   candidates: ReactivationCandidatesResponse | null = null;
-  allRows: ReactivationCandidateRow[] = [];
+  candidateSummary: ReactivationCandidateSummaryResponse | null = null;
   tariffRows: ReactivationTariffCount[] = [];
   campaignPreview: ReactivationCampaignPreviewResponse | null = null;
   campaigns: ReactivationCampaign[] = [];
@@ -189,6 +202,7 @@ export class MarketingReactivationComponent implements OnInit {
 
   loadingSources = true;
   loadingCandidates = false;
+  loadingSummary = false;
   loadingTariffs = false;
   loadingPreview = false;
   creatingCampaign = false;
@@ -197,38 +211,18 @@ export class MarketingReactivationComponent implements OnInit {
   campaignActionId: number | null = null;
   sourcesError = '';
   candidatesError = '';
+  summaryError = '';
   campaignError = '';
   campaignSuccess = '';
-
-  @ViewChild(MatSort)
-  set tableSort(sort: MatSort | undefined) {
-    if (sort) {
-      this.dataSource.sort = sort;
-    }
-  }
-
-  constructor() {
-    this.dataSource.sortingDataAccessor = (
-      row: ReactivationCandidateRow,
-      column: string,
-    ): string | number => {
-      const values: Record<string, string | number | null> = {
-        nombre: row.nombre,
-        pin: row.pin,
-        sucursal: row.sucursal,
-        fecha_vencimiento: row.fecha_vencimiento,
-        fecha_ultimo_pago: row.fecha_ultimo_pago,
-        tarifa: row.tarifa,
-        telefono: row.telefono,
-        status: this.getOperationalContactLabel(row),
-        latest_outbound_at_utc: row.latest_outbound_at_utc,
-      };
-      return values[column] ?? '';
-    };
-  }
+  pageIndex = 0;
+  pageSize = 50;
+  readonly pageSizeOptions = [25, 50, 100];
+  sortActive: ReactivationCandidateSort = 'fecha_vencimiento';
+  sortDirection: 'asc' | 'desc' = 'desc';
 
   ngOnInit(): void {
     this.configureCandidateRequests();
+    this.configureSummaryRequests();
     this.configureSourceSelection();
     this.configureFilters();
     this.loadSources();
@@ -295,17 +289,21 @@ export class MarketingReactivationComponent implements OnInit {
   }
 
   get totalCount(): number {
-    return this.candidates?.summary.total_rows ?? 0;
+    return this.candidateSummary?.summary.total_rows
+      ?? this.candidates?.pagination.total
+      ?? 0;
   }
 
-  get branchOptions(): string[] {
-    return Array.from(
-      new Set(this.allRows.map((row) => row.sucursal).filter(Boolean)),
-    ).sort((left, right) => left.localeCompare(right, 'es-MX'));
+  get usesCursorPagination(): boolean {
+    return this.statusFilter.value !== 'ALL';
+  }
+
+  get branchOptions() {
+    return this.sources?.branches ?? [];
   }
 
   get summaryCards(): SummaryCard[] {
-    const summary = this.candidates?.summary;
+    const summary = this.candidateSummary?.summary;
     const counts = summary?.status_counts;
 
     return [
@@ -381,12 +379,47 @@ export class MarketingReactivationComponent implements OnInit {
     this.requestSelectedCandidates();
   }
 
+  retrySummary(): void {
+    this.requestSelectedSummary();
+  }
+
   clearFilters(): void {
     this.branchFilter.setValue('ALL', { emitEvent: false });
     this.tariffFilter.setValue('ALL', { emitEvent: false });
+    this.tariffGroupFilter.setValue('ALL', { emitEvent: false });
     this.statusFilter.setValue('WORK_PENDING', { emitEvent: false });
     this.searchFilter.setValue('', { emitEvent: false });
-    this.applyFilters();
+    this.resetCandidateNavigation();
+    this.requestSelectedCandidates();
+    this.requestSelectedSummary();
+  }
+
+  onPageChange(event: PageEvent): void {
+    if (event.pageSize !== this.pageSize) {
+      this.pageSize = event.pageSize;
+      this.resetCandidateNavigation();
+      this.requestSelectedCandidates();
+      return;
+    }
+    if (
+      this.usesCursorPagination
+      && event.pageIndex > this.pageIndex
+      && !this.cursorsByPageIndex.has(event.pageIndex)
+    ) {
+      return;
+    }
+    this.pageIndex = event.pageIndex;
+    this.requestSelectedCandidates();
+  }
+
+  onSortChange(event: Sort): void {
+    if (!event.direction || !this.isServerSort(event.active)) {
+      return;
+    }
+    this.sortActive = event.active;
+    this.sortDirection = event.direction;
+    this.resetCandidateNavigation();
+    this.requestSelectedCandidates();
   }
 
   prepareCampaign(): void {
@@ -586,6 +619,9 @@ export class MarketingReactivationComponent implements OnInit {
   getOperationalContactStatus(
     row: ReactivationCandidateRow,
   ): OperationalContactStatus {
+    if (row.operational_status) {
+      return row.operational_status;
+    }
     if (row.status === 'EXCLUDED_ACTIVE') {
       return 'ACTIVE';
     }
@@ -714,11 +750,7 @@ export class MarketingReactivationComponent implements OnInit {
         }),
         switchMap((selection) =>
           this.reactivationService
-            .getCandidates(
-              selection.dateFrom,
-              selection.dateTo,
-              selection.iventasPeriodKey,
-            )
+            .getCandidates(selection)
             .pipe(
               map(
                 (data): CandidatesRequestResult => ({
@@ -748,8 +780,57 @@ export class MarketingReactivationComponent implements OnInit {
         }
 
         this.candidates = result.data;
-        this.allRows = this.sortOperationally(result.data.rows);
-        this.applyFilters();
+        this.pageIndex = Math.max(0, result.data.pagination.page - 1);
+        this.pageSize = result.data.pagination.page_size;
+        this.dataSource.data = result.data.rows;
+        if (this.usesCursorPagination) {
+          const nextCursor = result.data.pagination.next_cursor;
+          if (nextCursor) {
+            this.cursorsByPageIndex.set(
+              result.data.pagination.page,
+              nextCursor,
+            );
+          } else {
+            this.cursorsByPageIndex.delete(result.data.pagination.page);
+          }
+        }
+      });
+  }
+
+  private configureSummaryRequests(): void {
+    this.summaryRequests
+      .pipe(
+        tap(() => {
+          this.loadingSummary = true;
+          this.summaryError = '';
+        }),
+        switchMap((selection) =>
+          this.reactivationService
+            .getCandidateSummary(selection)
+            .pipe(
+              map(
+                (data): SummaryRequestResult => ({
+                  status: 'success',
+                  data,
+                }),
+              ),
+              catchError((error: HttpErrorResponse) =>
+                of<SummaryRequestResult>({ status: 'error', error }),
+              ),
+            ),
+        ),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((result) => {
+        this.loadingSummary = false;
+        if (result.status === 'error') {
+          this.summaryError = this.resolveErrorMessage(
+            result.error,
+            'No fue posible cargar el resumen del segmento.',
+          );
+          return;
+        }
+        this.candidateSummary = result.data;
       });
   }
 
@@ -765,7 +846,9 @@ export class MarketingReactivationComponent implements OnInit {
       )
       .subscribe(() => {
         this.campaignPreview = null;
+        this.resetCandidateNavigation();
         this.requestSelectedCandidates();
+        this.requestSelectedSummary();
         this.requestTariffs();
       });
   }
@@ -774,25 +857,38 @@ export class MarketingReactivationComponent implements OnInit {
     merge(
       this.branchFilter.valueChanges,
       this.tariffFilter.valueChanges,
+      this.tariffGroupFilter.valueChanges,
       this.statusFilter.valueChanges,
-      this.searchFilter.valueChanges,
     )
       .pipe(
-        debounceTime(80),
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe(() => {
         this.campaignPreview = null;
-        this.applyFilters();
+        this.resetCandidateNavigation();
+        this.requestSelectedCandidates();
+        this.requestSelectedSummary();
+      });
+    this.searchFilter.valueChanges
+      .pipe(
+        debounceTime(300),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe(() => {
+        this.campaignPreview = null;
+        this.resetCandidateNavigation();
+        this.requestSelectedCandidates();
+        this.requestSelectedSummary();
       });
   }
 
   private applySources(sources: ReactivationSourcesResponse): void {
     this.sources = sources;
     this.candidates = null;
-    this.allRows = [];
+    this.candidateSummary = null;
     this.dataSource.data = [];
     this.candidatesError = '';
+    this.resetCandidateNavigation();
 
     const latestDate = this.parseDateOnly(sources.vencidos_coverage.max_date);
     const iventasPeriodKey = sources.iventas_periods[0]?.period_key ?? null;
@@ -802,12 +898,8 @@ export class MarketingReactivationComponent implements OnInit {
     this.iventasControl.setValue(iventasPeriodKey, { emitEvent: false });
 
     if (latestDate && iventasPeriodKey) {
-      const latestDateIso = this.formatDateForApi(latestDate);
-      this.candidateRequests.next({
-        dateFrom: latestDateIso,
-        dateTo: latestDateIso,
-        iventasPeriodKey,
-      });
+      this.requestSelectedCandidates();
+      this.requestSelectedSummary();
       this.requestTariffs();
     }
     if (this.canManageCampaigns) {
@@ -868,47 +960,70 @@ export class MarketingReactivationComponent implements OnInit {
       dateFrom: this.formatDateForApi(dateFrom),
       dateTo: this.formatDateForApi(dateTo),
       iventasPeriodKey,
+      page: this.pageIndex + 1,
+      pageSize: this.pageSize,
+      sucursal: this.branchFilter.value === 'ALL'
+        ? null
+        : this.branchFilter.value,
+      tarifa: this.tariffFilter.value === 'ALL'
+        ? null
+        : this.tariffFilter.value,
+      tariffGroup: this.tariffGroupFilter.value === 'ALL'
+        ? null
+        : this.tariffGroupFilter.value,
+      operationalStatus: this.statusFilter.value,
+      search: this.searchFilter.value.trim() || null,
+      sort: this.sortActive,
+      direction: this.sortDirection,
+      cursor: this.usesCursorPagination
+        ? this.cursorsByPageIndex.get(this.pageIndex) ?? null
+        : null,
     });
   }
 
-  private applyFilters(): void {
-    const branch = this.branchFilter.value;
-    const tariff = this.tariffFilter.value;
-    const status = this.statusFilter.value;
-    const search = this.normalizeSearch(this.searchFilter.value);
+  private requestSelectedSummary(): void {
+    const selection = this.buildSummarySelection();
+    if (selection) {
+      this.summaryRequests.next(selection);
+    }
+  }
 
-    this.dataSource.data = this.allRows.filter((row) => {
-      const operationalStatus = this.getOperationalContactStatus(row);
+  private buildSummarySelection(): ReactivationCandidateSummaryQuery | null {
+    const dateFrom = this.dateFromControl.value;
+    const dateTo = this.dateToControl.value;
+    const iventasPeriodKey = this.iventasControl.value?.trim();
+    if (
+      !dateFrom
+      || !dateTo
+      || !iventasPeriodKey
+      || this.dateFromControl.invalid
+      || this.dateToControl.invalid
+      || dateFrom.getTime() > dateTo.getTime()
+    ) {
+      return null;
+    }
+    return {
+      dateFrom: this.formatDateForApi(dateFrom),
+      dateTo: this.formatDateForApi(dateTo),
+      iventasPeriodKey,
+      sucursal: this.branchFilter.value === 'ALL'
+        ? null
+        : this.branchFilter.value,
+      tarifa: this.tariffFilter.value === 'ALL'
+        ? null
+        : this.tariffFilter.value,
+      tariffGroup: this.tariffGroupFilter.value === 'ALL'
+        ? null
+        : this.tariffGroupFilter.value,
+      operationalStatus: this.statusFilter.value,
+      search: this.searchFilter.value.trim() || null,
+    };
+  }
 
-      if (branch !== 'ALL' && row.sucursal !== branch) {
-        return false;
-      }
-      if (tariff !== 'ALL' && row.tarifa !== tariff) {
-        return false;
-      }
-      if (
-        status === 'WORK_PENDING'
-        && (
-          operationalStatus === 'ACTIVE'
-          || operationalStatus === 'CONTACTED_AFTER_EXPIRATION'
-        )
-      ) {
-        return false;
-      }
-      if (
-        status !== 'ALL'
-        && status !== 'WORK_PENDING'
-        && operationalStatus !== status
-      ) {
-        return false;
-      }
-      if (!search) {
-        return true;
-      }
-
-      return [row.nombre, row.pin, row.telefono]
-        .some((value) => this.normalizeSearch(value).includes(search));
-    });
+  private resetCandidateNavigation(): void {
+    this.pageIndex = 0;
+    this.cursorsByPageIndex.clear();
+    this.cursorsByPageIndex.set(0, null);
   }
 
   private buildCampaignRequest(): ReactivationCampaignRequest | null {
@@ -933,6 +1048,9 @@ export class MarketingReactivationComponent implements OnInit {
       tarifa: this.tariffFilter.value === 'ALL'
         ? null
         : this.tariffFilter.value,
+      tariff_group: this.tariffGroupFilter.value === 'ALL'
+        ? null
+        : this.tariffGroupFilter.value,
     };
     return {
       date_from: this.formatDateForApi(dateFrom),
@@ -941,49 +1059,17 @@ export class MarketingReactivationComponent implements OnInit {
     };
   }
 
-  private sortOperationally(
-    rows: ReactivationCandidateRow[],
-  ): ReactivationCandidateRow[] {
-    const priority = new Map(
-      STATUS_ORDER.map((status, index) => [status, index]),
-    );
 
-    return [...rows].sort((left, right) => {
-      const statusDifference =
-        (priority.get(left.status) ?? Number.MAX_SAFE_INTEGER)
-        - (priority.get(right.status) ?? Number.MAX_SAFE_INTEGER);
-      if (statusDifference !== 0) {
-        return statusDifference;
-      }
-
-      const expirationDifference = right.fecha_vencimiento.localeCompare(
-        left.fecha_vencimiento,
-      );
-      if (expirationDifference !== 0) {
-        return expirationDifference;
-      }
-
-      const branchDifference = left.sucursal.localeCompare(
-        right.sucursal,
-        'es-MX',
-      );
-      if (branchDifference !== 0) {
-        return branchDifference;
-      }
-
-      return (left.nombre ?? '').localeCompare(
-        right.nombre ?? '',
-        'es-MX',
-      );
-    });
-  }
-
-  private normalizeSearch(value: string | null): string {
-    return String(value ?? '')
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .trim()
-      .toLowerCase();
+  private isServerSort(value: string): value is ReactivationCandidateSort {
+    return [
+      'nombre',
+      'pin',
+      'sucursal',
+      'fecha_vencimiento',
+      'fecha_ultimo_pago',
+      'tarifa',
+      'telefono',
+    ].includes(value);
   }
 
   private parseDateOnly(value: string | null): Date | null {
