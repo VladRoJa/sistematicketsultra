@@ -15,6 +15,9 @@ from flask_jwt_extended import (
 )
 
 from app.routes.marketing_routes import marketing_bp
+from app.services.marketing_reactivation_service import (
+    MarketingReactivationValidationError,
+)
 
 
 def _serialized_row():
@@ -293,10 +296,14 @@ class TestMarketingRoutes:
                 "iventas_sync_run_id": 26,
                 "iventas_period_key": "IVENTAS-2026-08",
             },
-            "summary": {
-                "total_rows": 1,
-                "status_counts": {"CONTACT_HISTORY_UNKNOWN": 1},
-                "reason_counts": {"NO_OUTBOUND_EVIDENCE": 1},
+            "pagination": {
+                "page": 1,
+                "page_size": 50,
+                "total": 1,
+                "total_pages": 1,
+                "has_next": False,
+                "has_prev": False,
+                "next_cursor": None,
             },
             "rows": [
                 {
@@ -338,6 +345,133 @@ class TestMarketingRoutes:
         assert candidate_service.call_args.kwargs[
             "iventas_period_key"
         ] == "IVENTAS-2026-08"
+        assert candidate_service.call_args.kwargs["page"] == "1"
+        assert candidate_service.call_args.kwargs["page_size"] == "50"
+        assert candidate_service.call_args.kwargs["sort"] == "fecha_vencimiento"
+        assert candidate_service.call_args.kwargs["direction"] == "desc"
+
+    def test_reactivation_candidates_forwards_server_side_query(self):
+        with (
+            patch(
+                "app.routes.marketing_routes._get_current_marketing_user",
+                return_value=self.admin,
+            ),
+            patch(
+                "app.routes.marketing_routes.build_marketing_reactivation_candidates",
+                return_value={"rows": []},
+            ) as candidate_service,
+        ):
+            response = self.client.get(
+                "/api/marketing/reactivation/candidates"
+                "?date_from=2026-08-01&date_to=2026-08-31"
+                "&iventas_period_key=IVENTAS-2026-08&page=3&page_size=25"
+                "&sucursal=NORTE&tarifa=ANUAL&tariff_group=REACTIVATE"
+                "&operational_status=WORK_PENDING&search=ana"
+                "&sort=nombre&direction=asc&cursor=opaque-cursor",
+                headers=self.headers,
+            )
+
+        assert response.status_code == 200
+        kwargs = candidate_service.call_args.kwargs
+        assert kwargs["page"] == "3"
+        assert kwargs["page_size"] == "25"
+        assert kwargs["sucursal"] == "NORTE"
+        assert kwargs["tarifa"] == "ANUAL"
+        assert kwargs["tariff_group"] == "REACTIVATE"
+        assert kwargs["operational_status"] == "WORK_PENDING"
+        assert kwargs["search"] == "ana"
+        assert kwargs["sort"] == "nombre"
+        assert kwargs["direction"] == "asc"
+        assert kwargs["cursor"] == "opaque-cursor"
+
+    def test_reactivation_summary_forwards_only_segment_filters(self):
+        expected = {
+            "sources": {"iventas_period_key": "IVENTAS-2026-08"},
+            "summary": {"total_rows": 87, "status_counts": {}, "reason_counts": {}},
+        }
+        with (
+            patch(
+                "app.routes.marketing_routes._get_current_marketing_user",
+                return_value=self.admin,
+            ),
+            patch(
+                "app.routes.marketing_routes."
+                "build_marketing_reactivation_candidate_summary",
+                return_value=expected,
+            ) as summary_service,
+        ):
+            response = self.client.get(
+                "/api/marketing/reactivation/candidates/summary"
+                "?date_from=2026-08-01&date_to=2026-08-31"
+                "&iventas_period_key=IVENTAS-2026-08&sucursal=CENTRO"
+                "&operational_status=WORK_PENDING&search=ana",
+                headers=self.headers,
+            )
+
+        assert response.status_code == 200
+        assert response.get_json() == expected
+        kwargs = summary_service.call_args.kwargs
+        assert kwargs["sucursal"] == "CENTRO"
+        assert kwargs["operational_status"] == "WORK_PENDING"
+        assert kwargs["search"] == "ana"
+        assert "page" not in kwargs
+        assert "sort" not in kwargs
+
+    def test_reactivation_candidates_applies_existing_branch_scope(self):
+        manager = SimpleNamespace(
+            id=2,
+            rol="GERENTE",
+            sucursal_id=7,
+            sucursales_ids=[7],
+        )
+        with (
+            patch(
+                "app.routes.marketing_routes._get_current_marketing_user",
+                return_value=manager,
+            ),
+            patch(
+                "app.routes.marketing_routes.load_visible_marketing_branches",
+                return_value=([SimpleNamespace(name="Sucursal Álamo")], (7,), {}),
+            ),
+            patch(
+                "app.routes.marketing_routes.build_marketing_reactivation_candidates",
+                return_value={"rows": []},
+            ) as candidate_service,
+        ):
+            response = self.client.get(
+                "/api/marketing/reactivation/candidates"
+                "?date_from=2026-08-01&date_to=2026-08-31"
+                "&iventas_period_key=IVENTAS-2026-08",
+                headers=self.headers,
+            )
+
+        assert response.status_code == 200
+        assert candidate_service.call_args.kwargs["allowed_sucursal_keys"] == (
+            "SUCURSAL ALAMO",
+        )
+
+    def test_reactivation_candidates_returns_400_for_query_validation(self):
+        with (
+            patch(
+                "app.routes.marketing_routes._get_current_marketing_user",
+                return_value=self.admin,
+            ),
+            patch(
+                "app.routes.marketing_routes.build_marketing_reactivation_candidates",
+                side_effect=MarketingReactivationValidationError(
+                    "page_size no puede ser mayor a 100."
+                ),
+            ),
+        ):
+            response = self.client.get(
+                "/api/marketing/reactivation/candidates"
+                "?date_from=2026-08-01&date_to=2026-08-31"
+                "&iventas_period_key=IVENTAS-2026-08&page_size=101",
+                headers=self.headers,
+            )
+
+        assert response.status_code == 400
+        assert "page_size" in response.get_json()["message"]
 
     def test_reactivation_canonical_error_is_not_empty_success(self):
         from app.services.marketing_iventas_leads_service import (
@@ -432,6 +566,7 @@ class TestMarketingRoutes:
         assert response.status_code == 200
         assert response.get_json() == expected
         assert preview_service.call_args.kwargs["session"] is not None
+        assert preview_service.call_args.kwargs["allowed_sucursal_keys"] is None
 
     def test_reactivation_create_passes_authenticated_user(self):
         expected = {
@@ -467,6 +602,7 @@ class TestMarketingRoutes:
         assert response.status_code == 201
         assert response.get_json()["campaign"] == expected
         assert create_service.call_args.kwargs["created_by_user_id"] == 1
+        assert create_service.call_args.kwargs["allowed_sucursal_keys"] is None
 
     def test_reactivation_campaign_history_returns_service_contract(self):
         expected = {"rows": [{"id": 4, "status": "DRAFT"}], "limit": 50}
@@ -522,7 +658,7 @@ class TestMarketingRoutes:
                 "app.routes.marketing_routes."
                 "export_marketing_reactivation_campaign",
                 return_value=(b"xlsx-data", "reactivacion_campana_4.xlsx"),
-            ),
+            ) as export_service,
         ):
             response = self.client.get(
                 "/api/marketing/reactivation/campaigns/4/export",
@@ -534,6 +670,7 @@ class TestMarketingRoutes:
         assert "reactivacion_campana_4.xlsx" in response.headers[
             "Content-Disposition"
         ]
+        assert export_service.call_args.kwargs["allowed_sucursal_keys"] is None
 
     def test_reactivation_mark_sent_invalid_transition_returns_409(self):
         from app.services.marketing_reactivation_service import (

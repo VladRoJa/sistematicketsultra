@@ -31,9 +31,15 @@ export interface ReactivationIventasPeriod {
   contacts_unique: number;
 }
 
+export interface ReactivationBranchOption {
+  key: string;
+  label: string;
+}
+
 export interface ReactivationSourcesResponse {
   vencidos_coverage: ReactivationVencidosCoverage;
   iventas_periods: ReactivationIventasPeriod[];
+  branches: ReactivationBranchOption[];
   permissions: {
     can_manage_campaigns: boolean;
   };
@@ -42,6 +48,7 @@ export interface ReactivationSourcesResponse {
 export interface ReactivationCandidateSources {
   date_from: string;
   date_to: string;
+  activos_snapshot_id: number;
   iventas_sync_run_id: number;
   iventas_period_key: string;
 }
@@ -72,12 +79,31 @@ export interface ReactivationCandidateRow {
   active_id_socio: string | null;
   iventas_contact_id: string | null;
   latest_outbound_at_utc: string | null;
+  operational_status: Exclude<
+    ReactivationOperationalStatus,
+    'WORK_PENDING' | 'ALL'
+  >;
+}
+
+export interface ReactivationPagination {
+  page: number;
+  page_size: number;
+  total: number | null;
+  total_pages: number | null;
+  has_next: boolean;
+  has_prev: boolean;
+  next_cursor: string | null;
 }
 
 export interface ReactivationCandidatesResponse {
   sources: ReactivationCandidateSources;
-  summary: ReactivationSummary;
+  pagination: ReactivationPagination;
   rows: ReactivationCandidateRow[];
+}
+
+export interface ReactivationCandidateSummaryResponse {
+  sources: ReactivationCandidateSources;
+  summary: ReactivationSummary;
 }
 
 export type ReactivationOperationalStatus =
@@ -96,8 +122,39 @@ export interface ReactivationCampaignFilters {
   operational_status: ReactivationOperationalStatus;
   search: string | null;
   tarifa: string | null;
+  tariff_group: ReactivationTariffGroup | null;
   campaign_cooldown_days?: number | null;
 }
+
+export type ReactivationCandidateSort =
+  | 'nombre'
+  | 'pin'
+  | 'sucursal'
+  | 'fecha_vencimiento'
+  | 'fecha_ultimo_pago'
+  | 'tarifa'
+  | 'telefono';
+
+export interface ReactivationCandidateQuery {
+  dateFrom: string;
+  dateTo: string;
+  iventasPeriodKey: string;
+  page: number;
+  pageSize: number;
+  sucursal: string | null;
+  tarifa: string | null;
+  tariffGroup: ReactivationTariffGroup | null;
+  operationalStatus: ReactivationOperationalStatus;
+  search: string | null;
+  sort: ReactivationCandidateSort;
+  direction: 'asc' | 'desc';
+  cursor: string | null;
+}
+
+export type ReactivationCandidateSummaryQuery = Omit<
+  ReactivationCandidateQuery,
+  'page' | 'pageSize' | 'sort' | 'direction' | 'cursor'
+>;
 
 export interface ReactivationTariffCount {
   tarifa: string | null;

@@ -78,6 +78,7 @@ def _filters(**overrides):
         "operational_status": "ALL",
         "search": None,
         "tarifa": None,
+        "tariff_group": None,
     }
     values.update(overrides)
     return values
@@ -130,7 +131,7 @@ def test_preview_uses_one_engine_and_classifies_every_decision(monkeypatch):
     ]
     monkeypatch.setattr(
         service,
-        "build_marketing_reactivation_candidates",
+        "_build_marketing_reactivation_campaign_segment",
         lambda **kwargs: _candidate_response(rows),
     )
     monkeypatch.setattr(
@@ -163,6 +164,114 @@ def test_preview_uses_one_engine_and_classifies_every_decision(monkeypatch):
         "review": 3,
     }
     assert not hasattr(session, "added")
+
+
+def test_preview_resolves_complete_server_side_segment(monkeypatch):
+    calls = {}
+
+    def fake_segment(**kwargs):
+        calls.update(kwargs)
+        return _candidate_response([_candidate(1, phone="6861000001")])
+
+    monkeypatch.setattr(
+        service,
+        "_build_marketing_reactivation_campaign_segment",
+        fake_segment,
+    )
+    monkeypatch.setattr(
+        service,
+        "_read_last_suite_campaign_sent_at",
+        lambda **kwargs: {},
+    )
+
+    service.preview_marketing_reactivation_campaign(
+        date_from="2026-08-01",
+        date_to="2026-08-31",
+        filters=_filters(
+            sucursal="CENTRO",
+            tarifa="1 MES $899",
+            tariff_group="REACTIVATE",
+            operational_status="WORK_PENDING",
+            search="socio",
+        ),
+        session=SimpleNamespace(),
+        now=NOW,
+    )
+
+    assert calls["allowed_sucursal_keys"] is None
+    assert calls["query"].sucursal == "CENTRO"
+    assert calls["query"].tarifa == "1 MES $899"
+    assert calls["query"].tariff_group == "REACTIVATE"
+    assert calls["query"].operational_status == "WORK_PENDING"
+    assert calls["query"].search == "socio"
+
+
+def test_campaign_plan_rejects_requested_branch_outside_backend_scope():
+    with pytest.raises(
+        service.MarketingReactivationValidationError,
+        match="fuera del alcance",
+    ):
+        service.preview_marketing_reactivation_campaign(
+            date_from="2026-08-01",
+            date_to="2026-08-31",
+            filters=_filters(sucursal="NORTE"),
+            allowed_sucursal_keys=("CENTRO",),
+            session=SimpleNamespace(),
+            now=NOW,
+        )
+
+
+def test_preview_propagates_allowed_scope_to_complete_segment(monkeypatch):
+    calls = {}
+    monkeypatch.setattr(
+        service,
+        "_build_marketing_reactivation_campaign_segment",
+        lambda **kwargs: calls.update(kwargs) or _candidate_response([]),
+    )
+    monkeypatch.setattr(
+        service,
+        "_read_last_suite_campaign_sent_at",
+        lambda **_kwargs: {},
+    )
+
+    service.preview_marketing_reactivation_campaign(
+        date_from="2026-08-01",
+        date_to="2026-08-31",
+        filters=_filters(),
+        allowed_sucursal_keys=("CENTRO",),
+        session=SimpleNamespace(),
+        now=NOW,
+    )
+
+    assert calls["allowed_sucursal_keys"] == ("CENTRO",)
+
+
+def test_campaign_freezes_filtered_branch_as_effective_scope(monkeypatch):
+    monkeypatch.setattr(
+        service,
+        "_build_marketing_reactivation_campaign_segment",
+        lambda **_kwargs: _candidate_response([]),
+    )
+    monkeypatch.setattr(
+        service,
+        "_read_last_suite_campaign_sent_at",
+        lambda **_kwargs: {},
+    )
+
+    result = service._build_campaign_plan(
+        date_from="2026-08-01",
+        date_to="2026-08-31",
+        filters=_filters(sucursal="CENTRO"),
+        campaign_cooldown_days=None,
+        allowed_sucursal_keys=("CENTRO", "NORTE"),
+        session=SimpleNamespace(),
+        now=NOW,
+    )
+
+    assert result["scope"] == {
+        "is_global": False,
+        "allowed_sucursal_keys": ["CENTRO"],
+    }
 
 
 @pytest.mark.parametrize(
@@ -278,7 +387,7 @@ def test_preview_reports_separate_tariff_audit_counts(monkeypatch):
     ]
     monkeypatch.setattr(
         service,
-        "build_marketing_reactivation_candidates",
+        "_build_marketing_reactivation_campaign_segment",
         lambda **kwargs: _candidate_response(rows),
     )
     monkeypatch.setattr(
@@ -356,7 +465,7 @@ def test_cooldown_is_not_applied_without_explicit_configuration(monkeypatch):
     rows = [_candidate(1, phone="6861000001")]
     monkeypatch.setattr(
         service,
-        "build_marketing_reactivation_candidates",
+        "_build_marketing_reactivation_campaign_segment",
         lambda **kwargs: _candidate_response(rows),
     )
     monkeypatch.setattr(
@@ -387,7 +496,7 @@ def test_no_match_current_run_is_operational_evidence_not_never_contacted(monkey
     ]
     monkeypatch.setattr(
         service,
-        "build_marketing_reactivation_candidates",
+        "_build_marketing_reactivation_campaign_segment",
         lambda **kwargs: _candidate_response(rows),
     )
     monkeypatch.setattr(
@@ -401,6 +510,7 @@ def test_no_match_current_run_is_operational_evidence_not_never_contacted(monkey
         date_to="2026-08-23",
         filters=_filters(),
         campaign_cooldown_days=None,
+        allowed_sucursal_keys=None,
         session=SimpleNamespace(),
         now=NOW,
     )
@@ -450,6 +560,13 @@ def test_create_campaign_is_atomic_and_snapshots_only_eligible_rows(monkeypatch)
     assert len(recipients) == 1
     assert recipients[0].phone_mx10 == "6861000010"
     assert recipients[0].inclusion_status == "ELIGIBLE"
+    campaign = next(
+        row for row in session.added if isinstance(row, MarketingReactivationCampaignORM)
+    )
+    assert campaign.filters_json["scope"] == {
+        "is_global": True,
+        "allowed_sucursal_keys": None,
+    }
 
 
 def test_create_rolls_back_complete_campaign_when_flush_fails(monkeypatch):
@@ -672,6 +789,82 @@ def test_export_does_not_mark_exported_when_revalidation_changes(monkeypatch):
     assert session.commits == 0
 
 
+def test_export_never_expands_or_shrinks_frozen_campaign_scope(monkeypatch):
+    campaign = _campaign()
+    campaign.filters_json["scope"] = {
+        "is_global": False,
+        "allowed_sucursal_keys": ["CENTRO", "NORTE"],
+    }
+    session = WriteSession()
+    monkeypatch.setattr(service, "_read_campaign", lambda **_kwargs: campaign)
+
+    with pytest.raises(
+        service.MarketingReactivationValidationError,
+        match="fuera del alcance actual",
+    ):
+        service.export_marketing_reactivation_campaign(
+            campaign_id=9,
+            allowed_sucursal_keys=("CENTRO",),
+            session=session,
+            now=NOW,
+        )
+
+    assert session.commits == 0
+
+
+def test_export_revalidates_with_original_frozen_scope(monkeypatch):
+    campaign = _campaign()
+    campaign.filters_json["scope"] = {
+        "is_global": False,
+        "allowed_sucursal_keys": ["CENTRO"],
+    }
+    calls = {}
+    session = WriteSession()
+    monkeypatch.setattr(service, "_read_campaign", lambda **_kwargs: campaign)
+    monkeypatch.setattr(
+        service,
+        "_build_campaign_plan",
+        lambda **kwargs: calls.update(kwargs) or {
+            "eligible_rows": [
+                {"vencido_row_id": 10, "phone_mx10": "6861000010"}
+            ]
+        },
+    )
+
+    service.export_marketing_reactivation_campaign(
+        campaign_id=9,
+        allowed_sucursal_keys=None,
+        session=session,
+        now=NOW,
+    )
+
+    assert calls["allowed_sucursal_keys"] == ("CENTRO",)
+
+
+def test_export_rejects_frozen_recipient_outside_campaign_scope(monkeypatch):
+    campaign = _campaign()
+    campaign.filters_json["scope"] = {
+        "is_global": False,
+        "allowed_sucursal_keys": ["CENTRO"],
+    }
+    campaign.recipients[0].sucursal = "NORTE"
+    session = WriteSession()
+    monkeypatch.setattr(service, "_read_campaign", lambda **_kwargs: campaign)
+
+    with pytest.raises(
+        service.MarketingReactivationValidationError,
+        match="destinatarios fuera",
+    ):
+        service.export_marketing_reactivation_campaign(
+            campaign_id=9,
+            allowed_sucursal_keys=("CENTRO",),
+            session=session,
+            now=NOW,
+        )
+
+    assert session.commits == 0
+
+
 def test_export_writer_failure_does_not_mark_exported(monkeypatch):
     campaign = _campaign()
     session = WriteSession()
@@ -766,6 +959,9 @@ class AggregateQuery:
         self.criteria.extend(criteria)
         return self
 
+    def with_entities(self, *args):
+        return self
+
     def group_by(self, *args):
         return self
 
@@ -796,6 +992,17 @@ def test_tariff_lookup_filters_range_in_sql_and_enriches_unknowns(monkeypatch):
         "_read_active_tariff_catalog",
         lambda **kwargs: {"ANUALIDAD": catalog_row},
     )
+    query_calls = {}
+
+    def fake_operational_query(**kwargs):
+        query_calls.update(kwargs)
+        return session.query_object
+
+    monkeypatch.setattr(
+        service,
+        "build_latest_operational_episode_query",
+        fake_operational_query,
+    )
 
     result = service.list_marketing_reactivation_tariffs(
         date_from=date(2026, 8, 1),
@@ -803,16 +1010,8 @@ def test_tariff_lookup_filters_range_in_sql_and_enriches_unknowns(monkeypatch):
         session=session,
     )
 
-    statement = select(SociosVencidosCarteraORM.tarifa).where(
-        *session.query_object.criteria
-    )
-    sql = str(
-        statement.compile(
-            dialect=postgresql.dialect(),
-            compile_kwargs={"literal_binds": True},
-        )
-    ).lower()
-    assert "fecha_vencimiento_date between '2026-08-01' and '2026-08-31'" in sql
+    assert query_calls["date_from"] == date(2026, 8, 1)
+    assert query_calls["date_to"] == date(2026, 8, 31)
     assert result["rows"] == [
         {
             "tarifa": "  anualidad  ",
@@ -874,7 +1073,7 @@ def test_seed_has_expected_tariffs_without_normalized_duplicates():
     assert by_raw["SEMANA $299"]["reactivation_group"] == "REVIEW"
 
 
-def test_alembic_has_single_head_for_tariff_catalog_migration():
+def test_alembic_has_single_head_for_operational_index_migration():
     versions_path = Path(__file__).resolve().parents[2] / "migrations" / "versions"
     revisions: set[str] = set()
     parents: set[str] = set()
@@ -890,4 +1089,4 @@ def test_alembic_has_single_head_for_tariff_catalog_migration():
         if parent_match:
             parents.update(quoted_pattern.findall(parent_match.group(1)))
 
-    assert revisions - parents == {"e6b8c4d2f1a0"}
+    assert revisions - parents == {"f7c9a2d4e6b1"}

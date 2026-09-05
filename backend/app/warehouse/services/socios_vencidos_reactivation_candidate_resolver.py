@@ -31,8 +31,11 @@ from app.warehouse.services.socios_vencidos_current_status_resolver import (
     STATUS_AMBIGUOUS,
     STATUS_IDENTIFIER_CONFLICT,
     STATUS_NOT_FOUND,
+    SociosVencidosCurrentStatusContext,
+    prepare_socios_vencidos_current_status_context,
     resolve_socios_vencidos_current_status,
     resolve_socios_vencidos_current_status_for_period,
+    resolve_socios_vencidos_rows_with_context,
 )
 
 
@@ -152,6 +155,13 @@ class _CandidateResolution:
     rows: tuple[SocioVencidoReactivationCandidate, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class SociosVencidosReactivationResolutionContext:
+    current_status: SociosVencidosCurrentStatusContext
+    iventas_sync_run_id: int
+    iventas_period_key: str
+
+
 def resolve_socios_vencidos_reactivation_candidates(
     *,
     vencidos_snapshot_id: int,
@@ -227,6 +237,144 @@ def resolve_socios_vencidos_reactivation_candidates_for_period(
     )
     _validate_result_invariants(result)
     return result
+
+
+def prepare_socios_vencidos_reactivation_resolution_context(
+    *,
+    minimum_cutoff_date: date,
+    iventas_period_key: str,
+    activos_snapshot_id: int | None = None,
+    session: Any | None = None,
+) -> SociosVencidosReactivationResolutionContext:
+    session_value = session if session is not None else db.session
+    current_context = prepare_socios_vencidos_current_status_context(
+        minimum_cutoff_date=minimum_cutoff_date,
+        activos_snapshot_id=activos_snapshot_id,
+        session=session_value,
+    )
+    canonical_run = read_canonical_iventas_run(
+        period_key=iventas_period_key,
+        session=session_value,
+    )
+    return SociosVencidosReactivationResolutionContext(
+        current_status=current_context,
+        iventas_sync_run_id=int(canonical_run["sync_run_id"]),
+        iventas_period_key=str(canonical_run["period_key"]),
+    )
+
+
+def resolve_socios_vencidos_reactivation_candidate_batch(
+    *,
+    vencidos_rows: list[Any] | tuple[Any, ...],
+    context: SociosVencidosReactivationResolutionContext,
+    phone_counts: Counter[str],
+    current_rows: tuple[Any, ...] | None = None,
+    session: Any | None = None,
+) -> tuple[SocioVencidoReactivationCandidate, ...]:
+    """Resuelve un lote conservando duplicados del universo completo."""
+
+    session_value = session if session is not None else db.session
+    if current_rows is None:
+        current_rows = resolve_socios_vencidos_rows_with_context(
+            vencidos_rows=vencidos_rows,
+            context=context.current_status,
+        )
+    elif {int(row.vencido_row_id) for row in current_rows} != {
+        int(row.id) for row in vencidos_rows
+    }:
+        raise SociosVencidosReactivationCandidateResolverError(
+            "Las filas de estado actual no corresponden al lote vencido."
+        )
+    current_by_id = {int(row.vencido_row_id): row for row in current_rows}
+    source_by_id = {int(row.id): row for row in vencidos_rows}
+    not_found_ids = {
+        row_id
+        for row_id, row in current_by_id.items()
+        if row.status == STATUS_NOT_FOUND
+    }
+    phone_by_id = {
+        row_id: normalize_iventas_phone(
+            source_by_id[row_id].telefono_raw
+        ).phone_mx10
+        for row_id in not_found_ids
+    }
+    contacts_by_phone = _read_iventas_contacts(
+        iventas_sync_run_id=context.iventas_sync_run_id,
+        phone_mx10_values={
+            phone
+            for phone in phone_by_id.values()
+            if phone is not None and phone_counts[phone] == 1
+        },
+        session=session_value,
+    )
+    resolved = []
+    for row_id, current_row in current_by_id.items():
+        if current_row.status == STATUS_ACTIVE_CONFIRMED:
+            resolved.append(_build_active_candidate(
+                current_row=current_row,
+                iventas_sync_run_id=context.iventas_sync_run_id,
+                status=STATUS_EXCLUDED_ACTIVE,
+                reason=REASON_ACTIVE_CONFIRMED,
+            ))
+            continue
+        if current_row.status in {
+            STATUS_ACTIVE_REVIEW,
+            STATUS_AMBIGUOUS,
+            STATUS_IDENTIFIER_CONFLICT,
+        }:
+            resolved.append(_build_active_candidate(
+                current_row=current_row,
+                iventas_sync_run_id=context.iventas_sync_run_id,
+                status=STATUS_REVIEW_ACTIVE_MATCH,
+                reason=current_row.status,
+            ))
+            continue
+        if current_row.status != STATUS_NOT_FOUND:
+            raise SociosVencidosReactivationCandidateResolverError(
+                f"Estado actual no reconocido para vencido_row_id={row_id}: "
+                f"{current_row.status!r}."
+            )
+        phone = phone_by_id[row_id]
+        resolved.append(_build_not_found_candidate(
+            current_row=current_row,
+            vencido_row=source_by_id[row_id],
+            phone_mx10=phone,
+            duplicate_phone=(
+                phone is not None and phone_counts[phone] > 1
+            ),
+            contacts=(
+                contacts_by_phone.get(phone, tuple())
+                if phone is not None
+                else tuple()
+            ),
+            iventas_sync_run_id=context.iventas_sync_run_id,
+        ))
+    return tuple(resolved)
+
+
+def count_socios_vencidos_not_found_phones(
+    *,
+    vencidos_rows: list[Any] | tuple[Any, ...],
+    context: SociosVencidosReactivationResolutionContext,
+) -> Counter[str]:
+    """Cuenta teléfonos sólo en filas sin match activo, como el resolver original."""
+
+    current_rows = resolve_socios_vencidos_rows_with_context(
+        vencidos_rows=vencidos_rows,
+        context=context.current_status,
+    )
+    source_by_id = {int(row.id): row for row in vencidos_rows}
+    return Counter(
+        phone
+        for phone in (
+            normalize_iventas_phone(
+                source_by_id[int(current_row.vencido_row_id)].telefono_raw
+            ).phone_mx10
+            for current_row in current_rows
+            if current_row.status == STATUS_NOT_FOUND
+        )
+        if phone is not None
+    )
 
 
 def _resolve_candidates_from_current_status(
