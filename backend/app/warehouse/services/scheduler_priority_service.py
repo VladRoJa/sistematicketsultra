@@ -68,6 +68,36 @@ def has_active_track_work() -> bool:
     return active_version is not None
 
 
+NIGHTLY_REPORT_CAPTURE_HOUR = 23
+NIGHTLY_REPORT_CAPTURE_START_MINUTE = 20
+NIGHTLY_REPORT_CAPTURE_END_MINUTE = 24
+
+
+def is_nightly_report_capture_window(
+    now_local: datetime,
+) -> bool:
+    return (
+        now_local.hour == NIGHTLY_REPORT_CAPTURE_HOUR
+        and NIGHTLY_REPORT_CAPTURE_START_MINUTE
+        <= now_local.minute
+        <= NIGHTLY_REPORT_CAPTURE_END_MINUTE
+    )
+
+
+def get_nightly_report_capture_block_reason(
+    now_local: datetime,
+) -> str | None:
+    if not is_nightly_report_capture_window(
+        now_local
+    ):
+        return "outside_nightly_report_capture_window"
+
+    if has_active_track_work():
+        return "track_active"
+
+    return None
+
+
 def get_secondary_job_block_reason(
     now_local: datetime,
 ) -> str | None:

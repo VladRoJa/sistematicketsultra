@@ -11,12 +11,20 @@ from zoneinfo import ZoneInfo
 
 from app import create_app
 from app.extensions import db
+from app.models.warehouse import (
+    ReporteDireccionSnapshotORM,
+)
 from app.warehouse.jobs.cobranza_recurrente_rechazados_job import (
     CobranzaRecurrenteNotReadyError,
     run_job as run_cobranza_recurrente_job,
 )
+from app.warehouse.jobs.reporte_direccion_daily_capture_job import (
+    run_job as run_reporte_direccion_daily_capture_job,
+)
 from app.warehouse.services.scheduler_priority_service import (
+    get_nightly_report_capture_block_reason,
     get_secondary_job_block_reason,
+    is_nightly_report_capture_window,
 )
 
 logger = logging.getLogger(__name__)
@@ -181,6 +189,171 @@ def _should_run_daily_job(
     return True
 
 
+def _find_existing_nightly_reporte_direccion_snapshot(
+    *,
+    business_date: date,
+    now: datetime,
+):
+    snapshots = (
+        ReporteDireccionSnapshotORM.query
+        .filter_by(
+            business_date=business_date,
+            snapshot_kind="daily",
+        )
+        .order_by(
+            ReporteDireccionSnapshotORM.id.desc()
+        )
+        .all()
+    )
+
+    target_timezone = (
+        now.tzinfo
+        if now.tzinfo is not None
+        else _timezone()
+    )
+
+    for snapshot in snapshots:
+        captured_at = snapshot.captured_at
+
+        if captured_at is None:
+            continue
+
+        if captured_at.tzinfo is None:
+            captured_at = captured_at.replace(
+                tzinfo=ZoneInfo("UTC")
+            )
+
+        captured_local = captured_at.astimezone(
+            target_timezone
+        )
+
+        if captured_local.date() != business_date:
+            continue
+
+        if is_nightly_report_capture_window(
+            captured_local
+        ):
+            return snapshot
+
+    return None
+
+
+def _run_reporte_direccion_daily_capture_if_due(
+    now: datetime,
+) -> None:
+    job_key = "reporte_direccion_daily_capture"
+
+    if not _env_bool(
+        "REPORTE_DIRECCION_DAILY_CAPTURE_ENABLED",
+        False,
+    ):
+        return
+
+    business_date = now.date()
+    run_key = _job_date_key(
+        job_key,
+        business_date,
+    )
+
+    if run_key in _COMPLETED_BY_JOB_AND_DATE:
+        return
+
+    existing_snapshot = (
+        _find_existing_nightly_reporte_direccion_snapshot(
+            business_date=business_date,
+            now=now,
+        )
+    )
+
+    if existing_snapshot is not None:
+        _mark_job_as_completed(
+            job_key,
+            business_date,
+        )
+
+        logger.info(
+            "%s ya cuenta con captura nocturna persistida. "
+            "business_date=%s snapshot_id=%s upload_id=%s",
+            job_key,
+            business_date.isoformat(),
+            existing_snapshot.id,
+            existing_snapshot.warehouse_upload_id,
+        )
+        return
+
+    next_retry_at = _NEXT_RETRY_BY_JOB_AND_DATE.get(
+        run_key
+    )
+
+    if next_retry_at and now < next_retry_at:
+        return
+
+    block_reason = (
+        get_nightly_report_capture_block_reason(
+            now
+        )
+    )
+
+    if block_reason is not None:
+        logger.debug(
+            "%s diferido. reason=%s now=%s",
+            job_key,
+            block_reason,
+            now.isoformat(timespec="seconds"),
+        )
+        return
+
+    retry_minutes = max(
+        _env_int(
+            "REPORTE_DIRECCION_DAILY_CAPTURE_RETRY_MINUTES",
+            2,
+        ),
+        1,
+    )
+
+    logger.info(
+        "%s iniciado. business_date=%s",
+        job_key,
+        business_date.isoformat(),
+    )
+
+    try:
+        result = run_reporte_direccion_daily_capture_job(
+            business_date=business_date,
+        )
+
+    except Exception:  # noqa: BLE001
+        logger.exception(
+            "%s falló. Se reintentará dentro de la "
+            "ventana nocturna si todavía hay tiempo.",
+            job_key,
+        )
+
+        _schedule_retry(
+            job_key=job_key,
+            business_date=business_date,
+            now=now,
+            retry_minutes=retry_minutes,
+            reason="technical_error",
+        )
+        return
+
+    _mark_job_as_completed(
+        job_key,
+        business_date,
+    )
+
+    logger.info(
+        "%s finalizado OK. business_date=%s "
+        "upload_id=%s snapshot_id=%s ingestion_status=%s",
+        job_key,
+        result.get("business_date"),
+        result.get("warehouse_upload_id"),
+        result.get("snapshot_id"),
+        result.get("ingestion_status"),
+    )
+
+
 def _run_cobranza_recurrente_if_due(now: datetime) -> None:
     job_key = "cobranza_recurrente_rechazados"
 
@@ -287,6 +460,9 @@ def run_scheduler_loop() -> None:
                 now.isoformat(timespec="seconds"),
             )
 
+            _run_reporte_direccion_daily_capture_if_due(
+                now
+            )
             _run_cobranza_recurrente_if_due(now)
 
         except Exception:  # noqa: BLE001
