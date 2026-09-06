@@ -13,7 +13,9 @@ from app import create_app
 from app.extensions import db
 from app.models.warehouse import (
     ReporteDireccionSnapshotORM,
+    WarehouseAuditLogORM,
 )
+from app.utils.warehouse_audit import log_warehouse_audit
 from app.warehouse.jobs.cobranza_recurrente_rechazados_job import (
     CobranzaRecurrenteNotReadyError,
     run_job as run_cobranza_recurrente_job,
@@ -124,6 +126,73 @@ def _mark_job_as_completed(job_key: str, business_date: date) -> None:
     run_key = _job_date_key(job_key, business_date)
     _COMPLETED_BY_JOB_AND_DATE.add(run_key)
     _NEXT_RETRY_BY_JOB_AND_DATE.pop(run_key, None)
+
+
+def _persist_scheduler_job_completion(
+    *,
+    job_key: str,
+    business_date: date,
+) -> int:
+    performed_by_user_id = _env_int(
+        "WAREHOUSE_AUTOMATION_USER_ID",
+        0,
+    )
+
+    if performed_by_user_id <= 0:
+        raise RuntimeError(
+            "WAREHOUSE_AUTOMATION_USER_ID debe ser un entero positivo "
+            "para persistir la finalización del scheduler."
+        )
+
+    audit = log_warehouse_audit(
+        action="JOB_COMPLETED",
+        performed_by_user_id=performed_by_user_id,
+        upload_id=None,
+        details={
+            "source": "reports_scheduler",
+            "job_key": job_key,
+            "business_date": business_date.isoformat(),
+            "status": "completed",
+        },
+    )
+
+    db.session.commit()
+
+    return int(audit.id)
+
+
+def _find_persisted_scheduler_job_completion(
+    *,
+    job_key: str,
+    business_date: date,
+):
+    expected_business_date = business_date.isoformat()
+
+    audits = (
+        WarehouseAuditLogORM.query
+        .filter_by(action="JOB_COMPLETED")
+        .order_by(WarehouseAuditLogORM.id.desc())
+        .all()
+    )
+
+    for audit in audits:
+        details = audit.details or {}
+
+        if details.get("source") != "reports_scheduler":
+            continue
+
+        if details.get("job_key") != job_key:
+            continue
+
+        if details.get("business_date") != expected_business_date:
+            continue
+
+        if details.get("status") != "completed":
+            continue
+
+        return audit
+
+    return None
 
 
 def _schedule_retry(
@@ -380,6 +449,29 @@ def _run_cobranza_recurrente_if_due(now: datetime) -> None:
         return
 
     business_date = now.date()
+
+    existing_completion = (
+        _find_persisted_scheduler_job_completion(
+            job_key=job_key,
+            business_date=business_date,
+        )
+    )
+
+    if existing_completion is not None:
+        _mark_job_as_completed(
+            job_key,
+            business_date,
+        )
+
+        logger.info(
+            "%s ya cuenta con finalización persistida. "
+            "business_date=%s completion_audit_id=%s",
+            job_key,
+            business_date.isoformat(),
+            existing_completion.id,
+        )
+        return
+
     retry_minutes = max(_env_int("COBRANZA_RECURRENTE_RETRY_MINUTES", 30), 5)
 
     logger.info(
@@ -426,9 +518,27 @@ def _run_cobranza_recurrente_if_due(now: datetime) -> None:
 
     _mark_job_as_completed(job_key, business_date)
 
+    try:
+        completion_audit_id = (
+            _persist_scheduler_job_completion(
+                job_key=job_key,
+                business_date=business_date,
+            )
+        )
+    except Exception:  # noqa: BLE001
+        db.session.rollback()
+        logger.exception(
+            "%s finalizó correctamente, pero no se pudo persistir "
+            "la marca JOB_COMPLETED.",
+            job_key,
+        )
+        completion_audit_id = None
+
     logger.info(
-        "%s finalizado OK. rows=%s files=%s uploads=%s internal_documents=%s duration=%ss",
+        "%s finalizado OK. completion_audit_id=%s "
+        "rows=%s files=%s uploads=%s internal_documents=%s duration=%ss",
         job_key,
+        completion_audit_id,
         result.get("total_rows"),
         result.get("total_files"),
         (result.get("warehouse_publication") or {}).get("total_uploads"),
