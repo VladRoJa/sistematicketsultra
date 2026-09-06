@@ -42,6 +42,7 @@ from app.warehouse.services.track_forecast_center_service import (
 )
 from app.warehouse.services.track_forecast_service import (
     build_branch_income_projection_summary,
+    load_first_store_income_dates_bulk,
 )
 
 
@@ -2241,6 +2242,14 @@ def get_track_branch_operational_detail(
         ) from exc
 
     target_month = track_date.replace(day=1)
+
+    first_store_income_dates = load_first_store_income_dates_bulk(
+        [branch.sucursal_canon]
+    )
+    first_store_income_date = first_store_income_dates.get(
+        str(branch.sucursal_canon or "").strip().upper()
+    )
+
     period_specs = _build_chart_comparison_period_specs(track_date)
     all_calendar_dates = [
         calendar_date
@@ -2317,6 +2326,7 @@ def get_track_branch_operational_detail(
                 current_income_mtd=_decimal(
                     current_metrics["ingreso"].get("actual_mtd")
                 ),
+                first_store_income_date=first_store_income_date,
             )
         )
 

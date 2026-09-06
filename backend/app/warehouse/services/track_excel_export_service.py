@@ -18,6 +18,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 
 from app.warehouse.services.track_forecast_service import (
     build_branch_income_projection_summary,
+    load_first_store_income_dates_bulk,
 )
 
 
@@ -961,7 +962,20 @@ def _build_raw_sheet(
 
     worksheet.append(headers)
 
+    first_store_income_dates = load_first_store_income_dates_bulk(
+        [
+            str(getattr(row, "sucursal_canon", "") or "")
+            .strip()
+            .upper()
+            for row in rows
+        ]
+    )
+
     for row in rows:
+        sucursal_canon = str(
+            getattr(row, "sucursal_canon", "") or ""
+        ).strip().upper()
+
         current_income_mtd = getattr(
             row,
             "ingreso_real_total_mtd",
@@ -976,15 +990,16 @@ def _build_raw_sheet(
             )
 
         projection = build_branch_income_projection_summary(
-            sucursal_canon=str(
-                getattr(row, "sucursal_canon", "") or ""
-            ).strip(),
+            sucursal_canon=sucursal_canon,
             target_month=track_date.replace(day=1),
             cutoff_day=track_date.day,
             current_income_mtd=(
                 Decimal(str(current_income_mtd))
                 if current_income_mtd is not None
                 else None
+            ),
+            first_store_income_date=(
+                first_store_income_dates.get(sucursal_canon)
             ),
         )
 

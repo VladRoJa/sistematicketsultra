@@ -14,6 +14,16 @@ from app.warehouse.services.track_forecast_center_service import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _mock_first_store_income_dates_bulk():
+    with patch.object(
+        service,
+        "load_first_store_income_dates_bulk",
+        return_value={},
+    ):
+        yield
+
+
 def _mart_row(*, track_date: date, **overrides):
     values = {
         "track_daily_version_id": track_date.day,

@@ -5,6 +5,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any, Iterable
 
+
 from app.models.sucursal_model import SucursalOperationalStatus
 from app.extensions import db
 from app.models.suite_governance import SuiteRegionORM
@@ -34,6 +35,7 @@ from app.warehouse.services.track_daily_query_version_service import (
 )
 from app.warehouse.services.track_forecast_service import (
     build_branch_income_projection_summary,
+    load_first_store_income_dates_bulk,
 )
 
 
@@ -149,6 +151,7 @@ def _build_branch_item(
     *,
     track_date: date,
     joined_row: _RegionalJoinedRow,
+    first_store_income_date: date | None = None,
 ) -> dict[str, Any]:
     mart_row = joined_row.mart
     branch_row = joined_row.branch
@@ -176,6 +179,7 @@ def _build_branch_item(
             target_month=track_date.replace(day=1),
             cutoff_day=track_date.day,
             current_income_mtd=income_value,
+            first_store_income_date=first_store_income_date,
         )
     )
 
@@ -1215,6 +1219,10 @@ def get_regional_operational_detail(
         set(history_branch_canons)
     )
 
+    first_store_income_dates = load_first_store_income_dates_bulk(
+        history_branch_canons
+    )
+
     histories_by_branch = _load_branch_operational_histories_bulk(
         track_date=track_date,
         current_version=resolved_version,
@@ -1240,6 +1248,13 @@ def get_regional_operational_detail(
             branch_item = _build_branch_item(
                 track_date=track_date,
                 joined_row=row,
+                first_store_income_date=(
+                    first_store_income_dates.get(
+                        str(row.branch.sucursal_canon or "")
+                        .strip()
+                        .upper()
+                    )
+                ),
             )
 
             branch_history_bundle = (
