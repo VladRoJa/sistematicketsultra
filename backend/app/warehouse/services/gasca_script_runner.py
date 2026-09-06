@@ -45,6 +45,7 @@ class GascaScriptRunCommand:
     target_business_date: date | None = None
     date_from: date | None = None
     date_to: date | None = None
+    report_types: set[str] | list[str] | tuple[str, ...] | None = None
 
 
 def register_gasca_script_runner(app) -> None:
@@ -165,6 +166,7 @@ def _build_callable_kwargs(command: GascaScriptRunCommand) -> dict[str, Any]:
         "target_business_date": command.target_business_date,
         "date_from": command.date_from,
         "date_to": command.date_to,
+        "report_types": command.report_types,
     }
 
 
@@ -402,6 +404,7 @@ def run_gasca_script_report(
     target_business_date: date | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
+    report_types: set[str] | list[str] | tuple[str, ...] | None = None,
 ) -> Any:
     """
     Runner wrapper principal entre Suite y el script real de Gasca.
@@ -434,6 +437,7 @@ def run_gasca_script_report(
         target_business_date=target_business_date,
         date_from=date_from,
         date_to=date_to,
+        report_types=report_types,
     )
     _validate_command(command)
 

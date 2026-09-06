@@ -399,6 +399,7 @@ def _call_runner(
     target_business_date: date | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
+    report_types: set[str] | list[str] | tuple[str, ...] | None = None,
 ) -> Any:
     return runner(
         report_type_key=report_type_key,
@@ -410,6 +411,7 @@ def _call_runner(
         target_business_date=target_business_date,
         date_from=date_from,
         date_to=date_to,
+        report_types=report_types,
     )
 
 
@@ -424,6 +426,7 @@ def extract_with_gasca_script(
     target_business_date: date | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
+    report_types: set[str] | list[str] | tuple[str, ...] | None = None,
 ) -> ProducedGascaArtifact | dict[str, Any] | str | Path:
     """
     Bridge entre Suite y el script actual de Gasca.
@@ -484,6 +487,7 @@ def extract_with_gasca_script(
             target_business_date=target_business_date,
             date_from=date_from,
             date_to=date_to,
+            report_types=report_types,
         )
     except NotImplementedError:
         raise

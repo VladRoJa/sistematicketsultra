@@ -580,22 +580,104 @@ def guardar_excel_kpi_con_metadata(
 
 # ================== main ================== #
 
-def main():
+LEGACY_REPORT_TYPES = frozenset(
+    {
+        "reporte_direccion",
+        "kpi_desempeno",
+        "kpi_ventas_nuevos_socios",
+    }
+)
+
+
+def _resolve_report_types(report_types=None):
+    """
+    Normaliza la selección de reportes del legacy main.
+
+    Compatibilidad:
+    - None => ejecuta los 3 reportes históricos.
+    - str => ejecuta solo ese report_type_key.
+    - iterable => ejecuta únicamente los seleccionados.
+    """
+    if report_types is None:
+        return set(LEGACY_REPORT_TYPES)
+
+    if isinstance(report_types, str):
+        normalized = {report_types.strip()}
+    else:
+        normalized = {
+            str(value).strip()
+            for value in report_types
+            if str(value).strip()
+        }
+
+    invalid = normalized - LEGACY_REPORT_TYPES
+
+    if invalid:
+        raise ValueError(
+            "Reportes legacy no soportados: "
+            f"{sorted(invalid)}. "
+            f"Permitidos: {sorted(LEGACY_REPORT_TYPES)}"
+        )
+
+    if not normalized:
+        raise ValueError(
+            "Debe seleccionarse al menos un reporte legacy."
+        )
+
+    return normalized
+
+
+def main(report_types=None):
+    selected_report_types = _resolve_report_types(report_types)
+
     validar_config()
-    logging.info("==== Inicio de ejecución: Dirección + KPI Desempeño + KPI Ventas NS ====")
+
+    logging.info(
+        "==== Inicio de ejecución legacy. report_types=%s ====",
+        sorted(selected_report_types),
+    )
+    print(
+        "📋 Reportes legacy solicitados: "
+        + ", ".join(sorted(selected_report_types))
+    )
 
     # Fecha local (Tijuana) para manejar cierre de mes
     hoy = datetime.now(TZ).date()
     ultimo_dia_mes = monthrange(hoy.year, hoy.month)[1]
 
-    # Si ES el último día del mes, borramos snapshots previos de hoy
+    # Si ES el último día del mes, borrar únicamente snapshots
+    # de los reportes que realmente se van a generar.
     if hoy.day == ultimo_dia_mes:
-        print("🧹 Último día del mes: limpiando snapshots previos de hoy...")
-        logging.info("Último día del mes: limpiando snapshots previos del día.")
+        print(
+            "🧹 Último día del mes: limpiando snapshots previos "
+            "de los reportes seleccionados..."
+        )
+        logging.info(
+            "Último día del mes: limpiando snapshots previos "
+            "de reportes seleccionados=%s.",
+            sorted(selected_report_types),
+        )
 
-        borrar_snapshots_del_dia(OUTPUT_DIR, "ingresos", hoy)
-        borrar_snapshots_del_dia(KPI_OUTPUT_DIR, "kpi_desempeno", hoy)
-        borrar_snapshots_del_dia(KPI_VENTAS_NS_OUTPUT_DIR, "kpi_ventas_nuevos_socios", hoy)
+        if "reporte_direccion" in selected_report_types:
+            borrar_snapshots_del_dia(
+                OUTPUT_DIR,
+                "ingresos",
+                hoy,
+            )
+
+        if "kpi_desempeno" in selected_report_types:
+            borrar_snapshots_del_dia(
+                KPI_OUTPUT_DIR,
+                "kpi_desempeno",
+                hoy,
+            )
+
+        if "kpi_ventas_nuevos_socios" in selected_report_types:
+            borrar_snapshots_del_dia(
+                KPI_VENTAS_NS_OUTPUT_DIR,
+                "kpi_ventas_nuevos_socios",
+                hoy,
+            )
 
     # Fecha objetivo del reporte:
     # - si viene GASCA_TARGET_BUSINESS_DATE, usar esa
@@ -607,11 +689,16 @@ def main():
     timestamp = f"{fecha_reporte:%Y-%m-%d}_{hora_ejecucion}"
     generated_at = datetime.now(TZ)
 
+    df_dir = None
+    df_kpi = None
+    df_kpi_vns = None
 
     try:
         with sync_playwright() as p:
             chrome_candidates = list(
-                Path("/root/.cache/ms-playwright").glob("chromium-*/chrome-linux/chrome")
+                Path("/root/.cache/ms-playwright").glob(
+                    "chromium-*/chrome-linux/chrome"
+                )
             )
 
             launch_args = [
@@ -630,34 +717,47 @@ def main():
             }
 
             if chrome_candidates and not SHOW_BROWSER:
-                launch_kwargs["executable_path"] = str(chrome_candidates[0])
+                launch_kwargs["executable_path"] = str(
+                    chrome_candidates[0]
+                )
                 launch_kwargs["headless"] = False
-                launch_kwargs["args"] = ["--headless=new", *launch_args]
+                launch_kwargs["args"] = [
+                    "--headless=new",
+                    *launch_args,
+                ]
 
             browser = p.chromium.launch(**launch_kwargs)
             context = browser.new_context()
             page = context.new_page()
 
-            # 1) Login una sola vez
+            # Login una sola vez para todos los reportes seleccionados.
             hacer_login(page)
 
-            # 2) Reporte Dirección
-            df_dir = ejecutar_con_reintentos(
-                lambda: descargar_reporte_direccion(page),
-                "Reporte Dirección"
-            )
+            if "reporte_direccion" in selected_report_types:
+                df_dir = ejecutar_con_reintentos(
+                    lambda: descargar_reporte_direccion(page),
+                    "Reporte Dirección",
+                )
 
-            # 3) KPI Desempeño
-            df_kpi = ejecutar_con_reintentos(
-                lambda: descargar_kpi_desempeno(page),
-                "KPI Desempeño"
-            )
+            if "kpi_desempeno" in selected_report_types:
+                df_kpi = ejecutar_con_reintentos(
+                    lambda: descargar_kpi_desempeno(page),
+                    "KPI Desempeño",
+                )
 
-            # 4) KPI Ventas Nuevos Socios
-            df_kpi_vns = ejecutar_con_reintentos(
-                lambda: descargar_kpi_ventas_nuevos_socios(page),
-                "KPI Ventas Nuevos Socios"
-            )
+            if (
+                "kpi_ventas_nuevos_socios"
+                in selected_report_types
+            ):
+                df_kpi_vns = ejecutar_con_reintentos(
+                    lambda: descargar_kpi_ventas_nuevos_socios(
+                        page
+                    ),
+                    "KPI Ventas Nuevos Socios",
+                )
+
+            context.close()
+            browser.close()
 
     except Exception as e:
         msg = f"❌ Error general al obtener reportes: {e}"
@@ -666,40 +766,93 @@ def main():
         send_whatsapp(msg)
         sys.exit(1)
 
-    # ----- Guardar archivos si hubo éxito ----- #
+    # ----- Guardar únicamente archivos solicitados ----- #
 
-    # Reporte Dirección
-    filename_dir = f"ingresos_{timestamp}.xlsx"
-    destino_dir = OUTPUT_DIR / filename_dir
-    df_dir.to_excel(destino_dir, index=False)
-    logging.info(f"Archivo Dirección guardado en: {destino_dir}")
-    print(f"✅ Reporte Dirección guardado en: {destino_dir}")
+    saved_report_names = []
 
-    # KPI Desempeño
-    filename_kpi = f"kpi_desempeno_{timestamp}.xlsx"
-    destino_kpi = KPI_OUTPUT_DIR / filename_kpi
-    guardar_excel_kpi_con_metadata(
-        destino=destino_kpi,
-        report_type="kpi_desempeno",
-        business_date=fecha_reporte,
-        generated_at=generated_at,
-        df=df_kpi,
-    )
-    logging.info(f"Archivo KPI Desempeño guardado en: {destino_kpi}")
-    print(f"✅ KPI Desempeño guardado en: {destino_kpi}")
+    if "reporte_direccion" in selected_report_types:
+        if df_dir is None:
+            raise RuntimeError(
+                "Reporte Dirección fue solicitado pero no produjo datos."
+            )
 
-    # KPI Ventas Nuevos Socios
-    filename_kpi_vns = f"kpi_ventas_nuevos_socios_{timestamp}.xlsx"
-    destino_kpi_vns = KPI_VENTAS_NS_OUTPUT_DIR / filename_kpi_vns
-    df_kpi_vns.to_excel(destino_kpi_vns, index=False)
-    logging.info(f"Archivo KPI Ventas Nuevos Socios guardado en: {destino_kpi_vns}")
-    print(f"✅ KPI Ventas Nuevos Socios guardado en: {destino_kpi_vns}")
+        filename_dir = f"ingresos_{timestamp}.xlsx"
+        destino_dir = OUTPUT_DIR / filename_dir
+        df_dir.to_excel(destino_dir, index=False)
+
+        logging.info(
+            "Archivo Dirección guardado en: %s",
+            destino_dir,
+        )
+        print(
+            f"✅ Reporte Dirección guardado en: {destino_dir}"
+        )
+        saved_report_names.append(
+            f"Dirección: {destino_dir.name}"
+        )
+
+    if "kpi_desempeno" in selected_report_types:
+        if df_kpi is None:
+            raise RuntimeError(
+                "KPI Desempeño fue solicitado pero no produjo datos."
+            )
+
+        filename_kpi = f"kpi_desempeno_{timestamp}.xlsx"
+        destino_kpi = KPI_OUTPUT_DIR / filename_kpi
+
+        guardar_excel_kpi_con_metadata(
+            destino=destino_kpi,
+            report_type="kpi_desempeno",
+            business_date=fecha_reporte,
+            generated_at=generated_at,
+            df=df_kpi,
+        )
+
+        logging.info(
+            "Archivo KPI Desempeño guardado en: %s",
+            destino_kpi,
+        )
+        print(
+            f"✅ KPI Desempeño guardado en: {destino_kpi}"
+        )
+        saved_report_names.append(
+            f"KPI Desempeño: {destino_kpi.name}"
+        )
+
+    if "kpi_ventas_nuevos_socios" in selected_report_types:
+        if df_kpi_vns is None:
+            raise RuntimeError(
+                "KPI Ventas Nuevos Socios fue solicitado "
+                "pero no produjo datos."
+            )
+
+        filename_kpi_vns = (
+            f"kpi_ventas_nuevos_socios_{timestamp}.xlsx"
+        )
+        destino_kpi_vns = (
+            KPI_VENTAS_NS_OUTPUT_DIR / filename_kpi_vns
+        )
+
+        df_kpi_vns.to_excel(
+            destino_kpi_vns,
+            index=False,
+        )
+
+        logging.info(
+            "Archivo KPI Ventas Nuevos Socios guardado en: %s",
+            destino_kpi_vns,
+        )
+        print(
+            "✅ KPI Ventas Nuevos Socios guardado en: "
+            f"{destino_kpi_vns}"
+        )
+        saved_report_names.append(
+            f"KPI Ventas NS: {destino_kpi_vns.name}"
+        )
 
     send_whatsapp(
-        "✅ Reportes OK "
-        f"({timestamp}). Dirección: {destino_dir.name}, "
-        f"KPI Desempeño: {destino_kpi.name}, "
-        f"KPI Ventas NS: {destino_kpi_vns.name}"
+        f"✅ Reportes OK ({timestamp}). "
+        + ", ".join(saved_report_names)
     )
 
 
