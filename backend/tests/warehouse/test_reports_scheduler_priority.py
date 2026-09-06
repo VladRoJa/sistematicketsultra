@@ -121,3 +121,142 @@ def test_cobranza_runs_when_track_priority_allows(
         "cobranza_recurrente_rechazados",
         now.date(),
     ) in worker._COMPLETED_BY_JOB_AND_DATE
+
+def test_reporte_direccion_capture_disabled_by_default(
+    monkeypatch,
+):
+    calls = {"job": 0}
+
+    monkeypatch.delenv(
+        "REPORTE_DIRECCION_DAILY_CAPTURE_ENABLED",
+        raising=False,
+    )
+
+    def fake_job(*, business_date):
+        calls["job"] += 1
+        raise AssertionError(
+            "Reporte Dirección no debía ejecutarse."
+        )
+
+    monkeypatch.setattr(
+        worker,
+        "run_reporte_direccion_daily_capture_job",
+        fake_job,
+    )
+
+    now = datetime(
+        2026,
+        9,
+        5,
+        23,
+        20,
+        tzinfo=TIJUANA,
+    )
+
+    worker._run_reporte_direccion_daily_capture_if_due(
+        now
+    )
+
+    assert calls["job"] == 0
+
+
+def test_reporte_direccion_capture_waits_when_track_active(
+    monkeypatch,
+):
+    calls = {"job": 0}
+
+    monkeypatch.setenv(
+        "REPORTE_DIRECCION_DAILY_CAPTURE_ENABLED",
+        "true",
+    )
+
+    monkeypatch.setattr(
+        worker,
+        "get_nightly_report_capture_block_reason",
+        lambda now: "track_active",
+    )
+
+    def fake_job(*, business_date):
+        calls["job"] += 1
+        raise AssertionError(
+            "Reporte Dirección no debía ejecutarse."
+        )
+
+    monkeypatch.setattr(
+        worker,
+        "run_reporte_direccion_daily_capture_job",
+        fake_job,
+    )
+
+    now = datetime(
+        2026,
+        9,
+        5,
+        23,
+        20,
+        tzinfo=TIJUANA,
+    )
+
+    worker._run_reporte_direccion_daily_capture_if_due(
+        now
+    )
+
+    assert calls["job"] == 0
+    assert not worker._COMPLETED_BY_JOB_AND_DATE
+
+
+def test_reporte_direccion_capture_runs_when_allowed(
+    monkeypatch,
+):
+    calls = []
+
+    monkeypatch.setenv(
+        "REPORTE_DIRECCION_DAILY_CAPTURE_ENABLED",
+        "true",
+    )
+
+    monkeypatch.setattr(
+        worker,
+        "get_nightly_report_capture_block_reason",
+        lambda now: None,
+    )
+
+    def fake_job(*, business_date):
+        calls.append(business_date)
+
+        return {
+            "status": "completed",
+            "business_date": business_date.isoformat(),
+            "warehouse_upload_id": 12345,
+            "snapshot_id": 67890,
+            "ingestion_status": "ingested",
+        }
+
+    monkeypatch.setattr(
+        worker,
+        "run_reporte_direccion_daily_capture_job",
+        fake_job,
+    )
+
+    now = datetime(
+        2026,
+        9,
+        5,
+        23,
+        20,
+        tzinfo=TIJUANA,
+    )
+
+    worker._run_reporte_direccion_daily_capture_if_due(
+        now
+    )
+
+    assert calls == [
+        now.date(),
+    ]
+
+    assert (
+        "reporte_direccion_daily_capture",
+        now.date(),
+    ) in worker._COMPLETED_BY_JOB_AND_DATE
+
