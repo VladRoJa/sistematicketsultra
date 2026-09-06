@@ -259,4 +259,3 @@ def test_reporte_direccion_capture_runs_when_allowed(
         "reporte_direccion_daily_capture",
         now.date(),
     ) in worker._COMPLETED_BY_JOB_AND_DATE
-
