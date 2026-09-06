@@ -26,17 +26,29 @@ def test_daily_mart_raw_includes_official_branch_income_projection(
         started_at_utc=None,
     )
 
+    def fake_first_store_income_dates(sucursal_canons):
+        assert sucursal_canons == ["TEC_MXL"]
+        return {
+            "TEC_MXL": date(2025, 8, 22),
+        }
+
     def fake_projection(**kwargs):
         assert kwargs["sucursal_canon"] == "TEC_MXL"
         assert kwargs["target_month"] == date(2026, 8, 1)
         assert kwargs["cutoff_day"] == 27
         assert kwargs["current_income_mtd"] == Decimal("80000")
+        assert kwargs["first_store_income_date"] == date(2025, 8, 22)
 
         return {
             "status": "available",
             "projected_close": "887460.2043673072",
         }
 
+    monkeypatch.setattr(
+        service,
+        "load_first_store_income_dates_bulk",
+        fake_first_store_income_dates,
+    )
     monkeypatch.setattr(
         service,
         "build_branch_income_projection_summary",

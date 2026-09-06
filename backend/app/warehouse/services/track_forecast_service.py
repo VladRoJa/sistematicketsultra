@@ -2242,6 +2242,7 @@ def _resolve_branch_projection_quality_issue(
     scope: str,
     curve: dict[str, Any],
     trend_factor: float | None,
+    enforce_legacy_history_thresholds: bool = True,
 ) -> dict[str, Any] | None:
     if scope != "branch":
         return None
@@ -2257,11 +2258,16 @@ def _resolve_branch_projection_quality_issue(
 
     reasons: list[str] = []
 
-    if historical_months < 3:
-        reasons.append("La sucursal tiene menos de 3 meses comparables para este mes.")
+    if enforce_legacy_history_thresholds:
+        if historical_months < 3:
+            reasons.append(
+                "La sucursal tiene menos de 3 meses comparables para este mes."
+            )
 
-    if confidence != "alta":
-        reasons.append(f"La confianza histórica de la sucursal es {confidence}.")
+        if confidence != "alta":
+            reasons.append(
+                f"La confianza histórica de la sucursal es {confidence}."
+            )
 
     if historical_expected_mtd < 50000:
         reasons.append("El promedio histórico esperado MTD de la sucursal es demasiado bajo para proyectar con estabilidad.")
@@ -2278,11 +2284,52 @@ def _resolve_branch_projection_quality_issue(
         "message": "Histórico insuficiente para proyectar esta sucursal con estabilidad.",
         "reasons": reasons,
         "thresholds": {
-            "min_historical_months": 3,
+            "min_historical_months": (
+                3 if enforce_legacy_history_thresholds else 1
+            ),
             "min_historical_mtd_total": 50000,
             "max_trend_factor": 3,
         },
     }
+
+def load_first_store_income_dates_bulk(
+    sucursal_canons: Iterable[str],
+) -> dict[str, date]:
+    normalized_canons = sorted({
+        str(value or "").strip().upper()
+        for value in sucursal_canons
+        if str(value or "").strip()
+    })
+
+    if not normalized_canons:
+        return {}
+
+    normalized_branch = func.upper(
+        func.trim(TrackDailyMartORM.sucursal_canon)
+    )
+
+    rows = (
+        db.session.query(
+            normalized_branch.label("sucursal_canon"),
+            func.min(TrackDailyMartORM.track_date).label(
+                "first_store_income_date"
+            ),
+        )
+        .filter(
+            normalized_branch.in_(normalized_canons),
+            TrackDailyMartORM.venta_tienda_real_mtd > 0,
+        )
+        .group_by(normalized_branch)
+        .all()
+    )
+
+    return {
+        str(row.sucursal_canon).strip().upper():
+            row.first_store_income_date
+        for row in rows
+        if row.first_store_income_date is not None
+    }
+
 
 def build_branch_income_projection_summary(
     *,
@@ -2290,6 +2337,7 @@ def build_branch_income_projection_summary(
     target_month: date,
     cutoff_day: int,
     current_income_mtd: Decimal | None,
+    first_store_income_date: date | None = None,
 ) -> dict[str, Any]:
     normalized_branch = str(sucursal_canon or "").strip().upper()
 
@@ -2309,6 +2357,49 @@ def build_branch_income_projection_summary(
                 "message": "No existe ingreso actual para calcular la proyección.",
             },
         }
+
+    cutoff_date = target_month.replace(day=cutoff_day)
+    has_completed_operating_year = False
+
+    if first_store_income_date is not None:
+        anniversary_year = first_store_income_date.year + 1
+        anniversary_day = min(
+            first_store_income_date.day,
+            monthrange(
+                anniversary_year,
+                first_store_income_date.month,
+            )[1],
+        )
+        twelve_month_anniversary = date(
+            anniversary_year,
+            first_store_income_date.month,
+            anniversary_day,
+        )
+
+        if cutoff_date < twelve_month_anniversary:
+            month_days = monthrange(
+                target_month.year,
+                target_month.month,
+            )[1]
+
+            projected_close = (
+                current_income_mtd
+                / Decimal(cutoff_day)
+                * Decimal(month_days)
+            )
+
+            return {
+                "status": "available",
+                "method": "linear_mtd_pace",
+                "projection_label": "Proyección lineal",
+                "projected_close": str(projected_close),
+                "historical_progress_pct_at_cutoff": None,
+                "historical_months": 0,
+                "confidence": None,
+                "quality_issue": None,
+            }
+
+        has_completed_operating_year = True
 
     curve = _build_historical_curve(
         target_month=target_month.replace(day=1),
@@ -2334,6 +2425,9 @@ def build_branch_income_projection_summary(
         scope="branch",
         curve=curve,
         trend_factor=trend_factor,
+        enforce_legacy_history_thresholds=(
+            not has_completed_operating_year
+        ),
     )
 
     if (
@@ -2363,6 +2457,7 @@ def build_branch_income_projection_summary(
     return {
         "status": "available",
         "method": "existing_stable_historical_pace",
+        "projection_label": "Proyección histórica",
         "projected_close": str(projected_close),
         "historical_progress_pct_at_cutoff": str(
             Decimal(str(historical_progress_ratio)) * Decimal("100")

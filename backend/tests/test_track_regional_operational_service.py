@@ -6,6 +6,17 @@ from unittest.mock import patch
 import pytest
 
 from app.track_alerts.services import track_regional_operational_service as service
+
+
+@pytest.fixture(autouse=True)
+def _mock_first_store_income_dates_bulk():
+    with patch.object(
+        service,
+        "load_first_store_income_dates_bulk",
+        return_value={},
+    ):
+        yield
+
 from app.track_alerts.services.track_regional_pacing_service import (
     CLIENTES_NUEVOS_WEEKDAY_WEIGHTS,
     calculate_expected_progress_ratio,
@@ -2155,3 +2166,104 @@ def test_region_income_projection_survives_partial_goal_coverage():
     assert result["available_branches"] == 2
     assert result["unavailable_branches_count"] == 0
     assert result["quality_issue"] is None
+
+def test_regional_income_projection_uses_linear_method_for_new_branch():
+    track_date = date(2026, 9, 6)
+
+    resolved_version = SimpleNamespace(
+        id=910,
+        version_type="preview_operativo",
+        status="success",
+    )
+
+    mart = _mart_row(
+        clientes_actual=Decimal("0"),
+        bajas_actual=0,
+    )
+    mart.track_date = track_date
+    mart.target_month = date(2026, 9, 1)
+    mart.track_daily_version_id = 910
+    mart.ingreso_real_total_mtd = Decimal("191790.12")
+    mart.ingreso_real_mtd = Decimal("191790.12")
+    mart.meta_faycgo_mes = Decimal("1305100.29")
+
+    branch = _branch(
+        branch_id=1,
+        canon="METEPEC",
+        name="Metepec",
+        order=1,
+    )
+    branch.sucursal.operational_status = (
+        service.SucursalOperationalStatus.ACTIVA
+    )
+
+    region = SimpleNamespace(
+        region_key="REGION_TEST",
+        region_label="Región Test",
+    )
+
+    with patch.object(
+        service,
+        "resolve_effective_track_daily_version",
+        return_value=resolved_version,
+    ), patch.object(
+        service,
+        "_load_track_rows_with_region",
+        return_value=[
+            (
+                mart,
+                branch,
+                region,
+            ),
+        ],
+    ), patch.object(
+        service,
+        "load_first_store_income_dates_bulk",
+        return_value={
+            "METEPEC": date(2026, 1, 21),
+        },
+    ) as load_first_store_dates, patch.object(
+        service,
+        "_load_branch_operational_histories_bulk",
+        return_value={},
+    ):
+        result = service.get_regional_operational_detail(
+            user=SimpleNamespace(
+                rol="ADMIN",
+                sucursal_id=None,
+            ),
+            track_date=track_date,
+            generation_mode="manual_preview",
+        )
+
+    load_first_store_dates.assert_called_once_with(
+        ["METEPEC"]
+    )
+
+    branch_projection = (
+        result["regions"][0]
+        ["branches"][0]
+        ["metrics"]["ingreso"]["projection"]
+    )
+
+    assert branch_projection["status"] == "available"
+    assert branch_projection["method"] == "linear_mtd_pace"
+    assert (
+        branch_projection["projection_label"]
+        == "Proyección lineal"
+    )
+    assert Decimal(
+        branch_projection["projected_close"]
+    ) == Decimal("958950.60")
+
+    region_projection = (
+        result["regions"][0]
+        ["summary"]["metrics"]["ingreso"]["projection"]
+    )
+
+    assert region_projection["status"] == "available"
+    assert Decimal(
+        region_projection["projected_close"]
+    ) == Decimal("958950.60")
+    assert region_projection["available_branches"] == 1
+    assert region_projection["unavailable_branches_count"] == 0
