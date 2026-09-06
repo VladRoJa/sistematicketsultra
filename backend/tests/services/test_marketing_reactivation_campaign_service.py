@@ -1073,7 +1073,7 @@ def test_seed_has_expected_tariffs_without_normalized_duplicates():
     assert by_raw["SEMANA $299"]["reactivation_group"] == "REVIEW"
 
 
-def test_alembic_has_single_head_for_operational_index_migration():
+def test_alembic_has_single_head_for_active_email_index_migration():
     versions_path = Path(__file__).resolve().parents[2] / "migrations" / "versions"
     revisions: set[str] = set()
     parents: set[str] = set()
@@ -1089,4 +1089,4 @@ def test_alembic_has_single_head_for_operational_index_migration():
         if parent_match:
             parents.update(quoted_pattern.findall(parent_match.group(1)))
 
-    assert revisions - parents == {"f7c9a2d4e6b1"}
+    assert revisions - parents == {"a8d1e6f3c2b4"}
