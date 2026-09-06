@@ -85,3 +85,70 @@ def test_block_reason_allows_secondary_job(
         )
         is None
     )
+
+def test_nightly_report_capture_window():
+    assert service.is_nightly_report_capture_window(
+        _time(23, 20)
+    )
+    assert service.is_nightly_report_capture_window(
+        _time(23, 24)
+    )
+
+    assert not service.is_nightly_report_capture_window(
+        _time(23, 19)
+    )
+    assert not service.is_nightly_report_capture_window(
+        _time(23, 25)
+    )
+
+
+def test_nightly_report_capture_blocks_active_track(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        service,
+        "has_active_track_work",
+        lambda: True,
+    )
+
+    assert (
+        service.get_nightly_report_capture_block_reason(
+            _time(23, 20)
+        )
+        == "track_active"
+    )
+
+
+def test_nightly_report_capture_allows_when_track_idle(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        service,
+        "has_active_track_work",
+        lambda: False,
+    )
+
+    assert (
+        service.get_nightly_report_capture_block_reason(
+            _time(23, 20)
+        )
+        is None
+    )
+
+
+def test_nightly_report_capture_blocks_outside_window(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        service,
+        "has_active_track_work",
+        lambda: False,
+    )
+
+    assert (
+        service.get_nightly_report_capture_block_reason(
+            _time(23, 25)
+        )
+        == "outside_nightly_report_capture_window"
+    )
+
