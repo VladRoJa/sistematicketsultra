@@ -833,6 +833,36 @@ export interface TrackRegionalOperationalResolvedVersion {
   status: string;
 }
 
+export interface TrackRegionalOperationalProjectionBase {
+  status: 'available' | 'insufficient_history';
+  method?: string;
+  projected_close: string | null;
+
+  window_calendar_days?: number;
+  valid_daily_deltas?: number;
+  recent_daily_average?: string | null;
+  remaining_days?: number;
+  projected_points?: TrackBranchOperationalProjectedPoint[];
+
+  benchmark?: string | null;
+  total_branches?: number;
+  available_branches?: number;
+  unavailable_branches_count?: number;
+}
+
+export interface TrackRegionalOperationalTargetProjection
+  extends TrackRegionalOperationalProjectionBase {
+  projected_gap_units?: string | null;
+  projected_compliance_pct?: string | null;
+}
+
+export interface TrackRegionalOperationalLimitProjection
+  extends TrackRegionalOperationalProjectionBase {
+  projected_excess_units?: string | null;
+  projected_remaining_margin?: string | null;
+  projected_limit_usage_pct?: string | null;
+}
+
 export interface TrackRegionalOperationalPaceMetric {
   metric_key: 'clientes_nuevos' | 'reactivaciones';
   actual_mtd: string | null;
@@ -843,6 +873,7 @@ export interface TrackRegionalOperationalPaceMetric {
   gap_units: string | null;
   gap_pct_points: string | null;
   remaining_to_target: string | null;
+  projection?: TrackRegionalOperationalTargetProjection;
   status: string;
 }
 
@@ -852,6 +883,7 @@ export interface TrackRegionalOperationalLimitMetric {
   monthly_limit: string | null;
   limit_usage_pct: string | null;
   remaining_margin: string | null;
+  projection?: TrackRegionalOperationalLimitProjection;
   status: string;
 }
 
@@ -859,6 +891,8 @@ export interface TrackRegionalOperationalIncomeProjection {
   status: 'available' | 'insufficient_history';
   method?: string;
   projected_close: string | null;
+  benchmark?: string | null;
+  projected_compliance_pct?: string | null;
   historical_progress_pct_at_cutoff?: string | null;
   historical_months?: number;
   confidence?: string;
@@ -876,7 +910,9 @@ export interface TrackRegionalOperationalTargetMetric {
   compliance_pct: string | null;
   remaining_to_target: string | null;
   status: string;
-  projection?: TrackRegionalOperationalIncomeProjection;
+  projection?:
+    | TrackRegionalOperationalTargetProjection
+    | TrackRegionalOperationalIncomeProjection;
 }
 
 export interface TrackRegionalOperationalUsersMetric {
@@ -940,10 +976,24 @@ export interface TrackRegionalOperationalPriorityGroup {
   items: TrackRegionalOperationalPriorityItem[];
 }
 
+export interface TrackRegionalOperationalAccess {
+  scope: 'global' | 'manager';
+  is_global: boolean;
+}
+
+export interface TrackRegionalOperationalScopeSummary {
+  scope: 'global' | 'manager';
+  total_branches: number;
+  metrics: TrackRegionalOperationalMetrics;
+}
+
 export interface TrackRegionalOperationalResponse {
   track_date: string;
   generation_mode: TrackGenerationMode;
   resolved_version: TrackRegionalOperationalResolvedVersion | null;
+
+  access: TrackRegionalOperationalAccess;
+  scope_summary: TrackRegionalOperationalScopeSummary | null;
   regions: TrackRegionalOperationalRegion[];
   priorities: TrackRegionalOperationalPriorityGroup[];
   business_rules: TrackRegionalBusinessRule[];

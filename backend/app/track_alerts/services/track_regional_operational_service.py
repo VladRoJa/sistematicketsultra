@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any, Iterable
 
+from app.models.sucursal_model import SucursalOperationalStatus
+from app.extensions import db
 from app.models.suite_governance import SuiteRegionORM
 from app.models.warehouse import TrackBranchCatalogORM, TrackDailyMartORM
 from app.track_alerts.services.track_alert_region_rules_service import (
@@ -14,6 +16,9 @@ from app.track_alerts.services.track_alert_region_rules_service import (
 from app.track_alerts.services.track_intelligence_access_service import (
     TrackIntelligenceAuthorizationError,
     resolve_track_intelligence_access,
+)
+from app.track_alerts.services.track_operational_projection_service import (
+    build_operational_projection,
 )
 from app.track_alerts.services.track_regional_pacing_service import (
     build_bajas_metric,
@@ -25,6 +30,7 @@ from app.track_alerts.services.track_regional_pacing_service import (
 )
 from app.warehouse.services.track_daily_query_version_service import (
     resolve_effective_track_daily_version,
+    resolve_preferred_track_daily_version,
 )
 from app.warehouse.services.track_forecast_service import (
     build_branch_income_projection_summary,
@@ -188,23 +194,439 @@ def _build_branch_item(
     }
 
 
-def _build_region_income_projection_summary(
+def _load_branch_rows_for_versions_bulk(
+    *,
+    sucursal_canons: list[str],
+    version_ids: list[int],
+) -> dict[tuple[str, int], TrackDailyMartORM]:
+    normalized_branches = tuple(
+        sorted(
+            {
+                str(value).strip()
+                for value in sucursal_canons
+                if str(value).strip()
+            }
+        )
+    )
+    normalized_ids = tuple(
+        sorted({int(value) for value in version_ids})
+    )
+
+    if not normalized_branches or not normalized_ids:
+        return {}
+
+    rows = (
+        db.session.query(TrackDailyMartORM)
+        .filter(
+            TrackDailyMartORM.track_daily_version_id.in_(
+                normalized_ids
+            ),
+            TrackDailyMartORM.sucursal_canon.in_(
+                normalized_branches
+            ),
+        )
+        .all()
+    )
+
+    result: dict[tuple[str, int], TrackDailyMartORM] = {}
+
+    for row in rows:
+        key = (
+            str(row.sucursal_canon),
+            int(row.track_daily_version_id),
+        )
+
+        if key in result:
+            raise TrackRegionalOperationalDataError(
+                f"La sucursal {key[0]!r} tiene más de una fila "
+                f"en la versión Track {key[1]}."
+            )
+
+        result[key] = row
+
+    return result
+
+def _load_branch_operational_histories_bulk(
+    *,
+    track_date: date,
+    current_version: Any,
+    sucursal_canons: list[str],
+) -> dict[str, dict[str, Any]]:
+    target_month = track_date.replace(day=1)
+
+    calendar_dates = [
+        target_month + timedelta(days=offset)
+        for offset in range(
+            (track_date - target_month).days + 1
+        )
+    ]
+
+    resolved_versions: dict[date, Any] = {}
+
+    for calendar_date in calendar_dates:
+        if calendar_date == track_date:
+            resolved_versions[calendar_date] = current_version
+            continue
+
+        version = resolve_preferred_track_daily_version(
+            track_date=calendar_date,
+        )
+
+        if version is not None:
+            resolved_versions[calendar_date] = version
+
+    normalized_branches = sorted(
+        {
+            str(value).strip()
+            for value in sucursal_canons
+            if str(value).strip()
+        }
+    )
+
+    rows_by_branch_version = (
+        _load_branch_rows_for_versions_bulk(
+            sucursal_canons=normalized_branches,
+            version_ids=[
+                int(version.id)
+                for version in resolved_versions.values()
+            ],
+        )
+    )
+
+    result: dict[str, dict[str, Any]] = {}
+
+    for sucursal_canon in normalized_branches:
+        history, missing_dates = (
+            _build_branch_operational_history(
+                sucursal_canon=sucursal_canon,
+                calendar_dates=calendar_dates,
+                resolved_versions=resolved_versions,
+                rows_by_branch_version=rows_by_branch_version,
+                target_month=target_month,
+            )
+        )
+
+        result[sucursal_canon] = {
+            "history": history,
+            "missing_dates": missing_dates,
+        }
+
+    return result
+
+def _build_branch_operational_history(
+    *,
+    sucursal_canon: str,
+    calendar_dates: list[date],
+    resolved_versions: dict[date, Any],
+    rows_by_branch_version: dict[
+        tuple[str, int],
+        TrackDailyMartORM,
+    ],
+    target_month: date,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    history: list[dict[str, Any]] = []
+    missing_dates: list[str] = []
+    previous_point: dict[str, Any] | None = None
+
+    projection_metric_keys = (
+        "clientes_nuevos",
+        "reactivaciones",
+        "domiciliados",
+        "bajas",
+    )
+
+    for calendar_date in calendar_dates:
+        version = resolved_versions.get(calendar_date)
+        row = (
+            rows_by_branch_version.get(
+                (
+                    sucursal_canon,
+                    int(version.id),
+                )
+            )
+            if version is not None
+            else None
+        )
+
+        if version is None or row is None:
+            missing_dates.append(calendar_date.isoformat())
+            continue
+
+        if row.track_date != calendar_date:
+            raise TrackRegionalOperationalDataError(
+                "La fila del Mart no coincide con la fecha "
+                "de su versión efectiva."
+            )
+
+        if row.target_month != target_month:
+            raise TrackRegionalOperationalDataError(
+                "La fila del Mart no coincide con el mes "
+                "objetivo solicitado."
+            )
+
+        metrics = _build_metric_bundle(
+            track_date=calendar_date,
+            clientes_actual=row.clientes_nuevos_real_mtd,
+            clientes_target=row.meta_clientes_nuevos_mes,
+            reactivaciones_actual=row.reactivaciones_real_mtd,
+            reactivaciones_target=row.meta_reactivaciones_mes,
+            bajas_actual=row.bajas_reales_mtd,
+            bajas_limit=row.meta_bajas_mes,
+            domiciliados_actual=row.nuevos_domiciliados_real_mtd,
+            domiciliados_target=row.meta_nuevos_domiciliados_mes,
+            ingreso_actual=_income_value(row),
+            ingreso_target=row.meta_faycgo_mes,
+            tienda_actual=row.venta_tienda_real_mtd,
+            tienda_target=row.meta_venta_tienda_mes,
+            usuarios_actual=row.usuarios_activos_actual,
+            usuarios_proyeccion=row.proyeccion_usuarios_cierre_mes,
+        )
+
+        previous_metrics = (
+            previous_point["metrics"]
+            if previous_point is not None
+            else None
+        )
+
+        for metric_key in projection_metric_keys:
+            current_value = _to_optional_decimal(
+                metrics[metric_key].get("actual_mtd")
+            )
+            previous_value = (
+                _to_optional_decimal(
+                    previous_metrics[metric_key].get("actual_mtd")
+                )
+                if previous_metrics is not None
+                else None
+            )
+
+            metrics[metric_key]["daily_delta"] = (
+                str(current_value - previous_value)
+                if (
+                    current_value is not None
+                    and previous_value is not None
+                )
+                else None
+            )
+
+        previous_date = (
+            date.fromisoformat(previous_point["track_date"])
+            if previous_point is not None
+            else None
+        )
+        days_since_previous = (
+            (calendar_date - previous_date).days
+            if previous_date is not None
+            else None
+        )
+
+        point = {
+            "track_date": calendar_date.isoformat(),
+            "track_daily_version_id": int(version.id),
+            "previous_track_date": (
+                previous_date.isoformat()
+                if previous_date is not None
+                else None
+            ),
+            "days_since_previous": days_since_previous,
+            "is_consecutive_previous_date": (
+                days_since_previous == 1
+            ),
+            "metrics": metrics,
+        }
+
+        history.append(point)
+        previous_point = point
+
+    return history, missing_dates
+
+def _attach_branch_operational_projection(
+    *,
+    branch_item: dict[str, Any],
+    history: list[dict[str, Any]],
+    metric_key: str,
+    cutoff_date: date,
+) -> dict[str, Any]:
+    metric = (
+        branch_item.get("metrics", {}).get(metric_key)
+        or {}
+    )
+
+    benchmark = (
+        metric.get("monthly_limit")
+        if metric_key == "bajas"
+        else metric.get("monthly_target")
+    )
+
+    metric["projection"] = build_operational_projection(
+        history,
+        metric_key=metric_key,
+        cutoff_date=cutoff_date,
+        actual_mtd=metric.get("actual_mtd"),
+        benchmark=benchmark,
+    )
+
+    return branch_item
+
+def _build_region_operational_projection_summary(
+    *,
     branch_items: list[dict[str, Any]],
+    metric_key: str,
 ) -> dict[str, Any]:
     projected_values: list[Decimal] = []
+    benchmark_values: list[Decimal] = []
     unavailable_branches_count = 0
 
+    benchmark_field = (
+        "monthly_limit"
+        if metric_key == "bajas"
+        else "monthly_target"
+    )
+
     for branch in branch_items:
-        projection = (
-            branch.get("metrics", {})
-            .get("ingreso", {})
-            .get("projection")
+        metric = (
+            branch.get("metrics", {}).get(metric_key, {})
             or {}
         )
+        projection = metric.get("projection") or {}
 
         projected_close = _to_optional_decimal(
             projection.get("projected_close")
         )
+        benchmark = _to_optional_decimal(
+            metric.get(benchmark_field)
+        )
+
+        if (
+            projection.get("status") != "available"
+            or projected_close is None
+            or benchmark is None
+            or benchmark <= 0
+        ):
+            unavailable_branches_count += 1
+            continue
+
+        projected_values.append(projected_close)
+        benchmark_values.append(benchmark)
+
+    total_branches = len(branch_items)
+    available_branches = len(projected_values)
+
+    if total_branches == 0 or unavailable_branches_count:
+        result = {
+            "status": "insufficient_history",
+            "method": "sum_branch_operational_projections",
+            "projected_close": None,
+            "benchmark": None,
+            "total_branches": total_branches,
+            "available_branches": available_branches,
+            "unavailable_branches_count": unavailable_branches_count,
+        }
+
+        if metric_key == "bajas":
+            result.update(
+                {
+                    "projected_limit_usage_pct": None,
+                    "projected_excess_units": None,
+                    "projected_remaining_margin": None,
+                }
+            )
+        else:
+            result["projected_compliance_pct"] = None
+
+        return result
+
+    projected_close = sum(
+        projected_values,
+        Decimal("0"),
+    )
+    benchmark = sum(
+        benchmark_values,
+        Decimal("0"),
+    )
+
+    if metric_key == "bajas":
+        projected_limit_usage_pct = (
+            projected_close
+            / benchmark
+            * Decimal("100")
+        )
+        projected_excess_units = max(
+            projected_close - benchmark,
+            Decimal("0"),
+        )
+        projected_remaining_margin = max(
+            benchmark - projected_close,
+            Decimal("0"),
+        )
+
+        return {
+            "status": "available",
+            "method": "sum_branch_operational_projections",
+            "projected_close": str(projected_close),
+            "benchmark": str(benchmark),
+            "projected_limit_usage_pct": str(
+                projected_limit_usage_pct
+            ),
+            "projected_excess_units": str(
+                projected_excess_units
+            ),
+            "projected_remaining_margin": str(
+                projected_remaining_margin
+            ),
+            "total_branches": total_branches,
+            "available_branches": available_branches,
+            "unavailable_branches_count": 0,
+        }
+
+    projected_compliance_pct = (
+        projected_close
+        / benchmark
+        * Decimal("100")
+    )
+
+    return {
+        "status": "available",
+        "method": "sum_branch_operational_projections",
+        "projected_close": str(projected_close),
+        "benchmark": str(benchmark),
+        "projected_compliance_pct": str(
+            projected_compliance_pct
+        ),
+        "total_branches": total_branches,
+        "available_branches": available_branches,
+        "unavailable_branches_count": 0,
+    }
+
+def _build_region_income_projection_summary(
+    branch_items: list[dict[str, Any]],
+) -> dict[str, Any]:
+    projected_values: list[Decimal] = []
+    benchmark_values: list[Decimal] = []
+    unavailable_branches_count = 0
+    unavailable_benchmark_count = 0
+
+    for branch in branch_items:
+        income_metric = (
+            branch.get("metrics", {}).get("ingreso", {})
+            or {}
+        )
+        projection = income_metric.get("projection") or {}
+
+        projected_close = _to_optional_decimal(
+            projection.get("projected_close")
+        )
+        benchmark = _to_optional_decimal(
+            income_metric.get("monthly_target")
+        )
+
+        if (
+            benchmark is None
+            or benchmark <= 0
+        ):
+            unavailable_benchmark_count += 1
+        else:
+            benchmark_values.append(benchmark)
 
         if (
             projection.get("status") != "available"
@@ -223,6 +645,8 @@ def _build_region_income_projection_summary(
             "status": "insufficient_history",
             "method": "sum_branch_income_projections",
             "projected_close": None,
+            "benchmark": None,
+            "projected_compliance_pct": None,
             "total_branches": total_branches,
             "available_branches": available_branches,
             "unavailable_branches_count": unavailable_branches_count,
@@ -242,10 +666,39 @@ def _build_region_income_projection_summary(
         Decimal("0"),
     )
 
+    benchmark: Decimal | None = None
+    projected_compliance_pct: Decimal | None = None
+
+    if (
+        unavailable_benchmark_count == 0
+        and len(benchmark_values) == total_branches
+    ):
+        benchmark = sum(
+            benchmark_values,
+            Decimal("0"),
+        )
+
+        if benchmark > 0:
+            projected_compliance_pct = (
+                projected_close
+                / benchmark
+                * Decimal("100")
+            )
+
     return {
         "status": "available",
         "method": "sum_branch_income_projections",
         "projected_close": str(projected_close),
+        "benchmark": (
+            str(benchmark)
+            if benchmark is not None
+            else None
+        ),
+        "projected_compliance_pct": (
+            str(projected_compliance_pct)
+            if projected_compliance_pct is not None
+            else None
+        ),
         "total_branches": total_branches,
         "available_branches": available_branches,
         "unavailable_branches_count": 0,
@@ -300,6 +753,34 @@ def _build_region_summary(
         usuarios_proyeccion=_complete_sum(
             row.proyeccion_usuarios_cierre_mes for row in marts
         ),
+    )
+
+    metrics["clientes_nuevos"]["projection"] = (
+        _build_region_operational_projection_summary(
+            branch_items=branch_items,
+            metric_key="clientes_nuevos",
+        )
+    )
+
+    metrics["reactivaciones"]["projection"] = (
+        _build_region_operational_projection_summary(
+            branch_items=branch_items,
+            metric_key="reactivaciones",
+        )
+    )
+
+    metrics["domiciliados"]["projection"] = (
+        _build_region_operational_projection_summary(
+            branch_items=branch_items,
+            metric_key="domiciliados",
+        )
+    )
+
+    metrics["bajas"]["projection"] = (
+        _build_region_operational_projection_summary(
+            branch_items=branch_items,
+            metric_key="bajas",
+        )
     )
 
     metrics["ingreso"]["projection"] = (
@@ -615,6 +1096,7 @@ def get_regional_operational_detail(
             "generation_mode": generation_mode,
             "resolved_version": None,
             "access": access.to_public_dict(),
+            "scope_summary": None,
             "regions": [],
             "priorities": _build_priorities(
                 [],
@@ -633,6 +1115,16 @@ def get_regional_operational_detail(
             region=region,
         )
         for mart, branch, region in raw_joined_rows
+        if (
+            branch.sucursal_id is not None
+            and getattr(branch, "sucursal", None) is not None
+            and getattr(
+                branch.sucursal,
+                "operational_status",
+                None,
+            )
+            == SucursalOperationalStatus.ACTIVA
+        )
     ]
 
     target_month = track_date.replace(day=1)
@@ -705,6 +1197,32 @@ def get_regional_operational_detail(
             manager_rows[0].region.region_key
         )
 
+    history_branch_canons: list[str] = []
+
+    for region_key, region_rows in rows_by_region.items():
+        if (
+            manager_region_key is not None
+            and region_key != manager_region_key
+        ):
+            continue
+
+        history_branch_canons.extend(
+            row.branch.sucursal_canon
+            for row in region_rows
+        )
+
+    history_branch_canons = sorted(
+        set(history_branch_canons)
+    )
+
+    histories_by_branch = _load_branch_operational_histories_bulk(
+        track_date=track_date,
+        current_version=resolved_version,
+        sucursal_canons=history_branch_canons,
+    )
+
+    scope_rows: list[_RegionalJoinedRow] = []
+    scope_branch_items: list[dict[str, Any]] = []
     regions: list[dict[str, Any]] = []
 
     for region_key, region_rows in rows_by_region.items():
@@ -716,13 +1234,65 @@ def get_regional_operational_detail(
 
         region_row = region_rows[0].region
 
-        all_region_branches = [
-            _build_branch_item(
+        all_region_branches: list[dict[str, Any]] = []
+
+        for row in region_rows:
+            branch_item = _build_branch_item(
                 track_date=track_date,
                 joined_row=row,
             )
-            for row in region_rows
-        ]
+
+            branch_history_bundle = (
+                histories_by_branch.get(
+                    row.branch.sucursal_canon,
+                    {},
+                )
+            )
+
+            branch_item = _attach_branch_operational_projection(
+                branch_item=branch_item,
+                history=branch_history_bundle.get(
+                    "history",
+                    [],
+                ),
+                metric_key="clientes_nuevos",
+                cutoff_date=track_date,
+            )
+
+            branch_item = _attach_branch_operational_projection(
+                branch_item=branch_item,
+                history=branch_history_bundle.get(
+                    "history",
+                    [],
+                ),
+                metric_key="reactivaciones",
+                cutoff_date=track_date,
+            )
+
+            branch_item = _attach_branch_operational_projection(
+                branch_item=branch_item,
+                history=branch_history_bundle.get(
+                    "history",
+                    [],
+                ),
+                metric_key="domiciliados",
+                cutoff_date=track_date,
+            )
+
+            branch_item = _attach_branch_operational_projection(
+                branch_item=branch_item,
+                history=branch_history_bundle.get(
+                    "history",
+                    [],
+                ),
+                metric_key="bajas",
+                cutoff_date=track_date,
+            )
+
+            all_region_branches.append(branch_item)
+
+        scope_rows.extend(region_rows)
+        scope_branch_items.extend(all_region_branches)
 
         if manager_branch_id is None:
             branches = list(all_region_branches)
@@ -777,6 +1347,14 @@ def get_regional_operational_detail(
             "status": resolved_version.status,
         },
         "access": access.to_public_dict(),
+        "scope_summary": {
+            "scope": access.scope,
+            **_build_region_summary(
+                track_date=track_date,
+                rows=scope_rows,
+                branch_items=scope_branch_items,
+            ),
+        },
         "regions": regions,
         "priorities": _build_priorities(
             regions,

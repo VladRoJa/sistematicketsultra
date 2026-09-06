@@ -45,6 +45,13 @@ export const routes: Routes = [
     canActivate: [AuthGuard],
     children: [
       {
+        path: 'control',
+        canActivate: [AdmicorpGuard],
+        loadComponent: () =>
+          import('./control-center/control-center.component')
+            .then(m => m.ControlCenterComponent),
+      },
+      {
         path: 'main',
         component: MainComponent,
         children: [

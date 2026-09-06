@@ -47,8 +47,18 @@ private handleLoginSuccess(response: any): void {
     this.cargando = true; // 🔹 Activar loader SOLO si es login correcto
     this.authService.setSession(response.token, response.user);
 
+    const username = String(
+      response.user?.username || ''
+    )
+      .trim()
+      .toUpperCase();
+
     setTimeout(() => {
-      this.router.navigate(['/main']);
+      this.router.navigate([
+        username === 'ADMICORP'
+          ? '/control'
+          : '/main',
+      ]);
     }, 2000);
 
   } else {
