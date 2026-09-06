@@ -122,7 +122,8 @@ def run_gasca_legacy_main(
     requested_by: str | None = None,
     trigger_source: str | None = None,
     requested_at: datetime | None = None,
-    target_business_date: date | None = None
+    target_business_date: date | None = None,
+    report_types=None,
 ) -> None:
     """
     Ejecuta el main legado multi-reporte de Gasca.
@@ -161,7 +162,12 @@ def run_gasca_legacy_main(
             "GASCA_TARGET_BUSINESS_DATE",
             target_business_date.isoformat() if target_business_date else None,
         ):
-            result = legacy_main()
+            if report_types is None:
+                result = legacy_main()
+            else:
+                result = legacy_main(
+                    report_types=report_types
+                )
     except NotImplementedError:
         raise
     except SystemExit as exc:

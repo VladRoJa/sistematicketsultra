@@ -59,14 +59,6 @@ SUPPORTED_GENERATION_MODES = frozenset(
     }
 )
 
-OPTIONAL_SINGLE_REPORT_TYPE_KEYS = frozenset(
-    {
-        "cargos_recurrentes",
-        "corte_caja",
-    }
-)
-
-
 class TrackDailyPipelineServiceError(RuntimeError):
     """Error base del pipeline diario del Track."""
 
@@ -209,18 +201,26 @@ def run_track_daily_pipeline_for_date(
             )
 
         # 1) RAW INGESTION
+        #
+        # Los dos KPI legacy se generan en una sola sesión/login.
+        # kpi_desempeno actúa como artefacto principal del bundle;
+        # kpi_ventas_nuevos_socios se ingiere después desde el
+        # archivo recién generado, sin volver a ejecutar navegador.
         legacy_bundle_result = run_gasca_report_job(
-            report_type_key="reporte_direccion",
+            report_type_key="kpi_desempeno",
             run_mode="manual_retry",
             snapshot_kind="daily",
             requested_by=requested_by_value,
             trigger_source=trigger_source_value,
             target_business_date=track_date,
+            report_types=(
+                "kpi_desempeno",
+                "kpi_ventas_nuevos_socios",
+            ),
             force_ingestion=True,
         )
 
         legacy_followup_report_type_keys = [
-            "kpi_desempeno",
             "kpi_ventas_nuevos_socios",
         ]
 
@@ -240,37 +240,21 @@ def run_track_daily_pipeline_for_date(
 
         single_report_type_keys = [
             "venta_total",
-            "cargos_recurrentes",
-            "corte_caja",
         ]
 
         single_report_results: list[dict[str, Any]] = []
 
         for report_type_key in single_report_type_keys:
-            try:
-                result = run_gasca_report_job(
-                    report_type_key=report_type_key,
-                    run_mode="manual_retry",
-                    snapshot_kind="daily",
-                    requested_by=requested_by_value,
-                    trigger_source=trigger_source_value,
-                    target_business_date=track_date,
-                    force_ingestion=True,
-                )
-                single_report_results.append(result)
-
-            except Exception as exc:
-                if report_type_key not in OPTIONAL_SINGLE_REPORT_TYPE_KEYS:
-                    raise
-
-                single_report_results.append(
-                    {
-                        "report_type_key": report_type_key,
-                        "job_status": "failed_optional",
-                        "ingestion_status": "not_executed",
-                        "error": str(exc),
-                    }
-                )
+            result = run_gasca_report_job(
+                report_type_key=report_type_key,
+                run_mode="manual_retry",
+                snapshot_kind="daily",
+                requested_by=requested_by_value,
+                trigger_source=trigger_source_value,
+                target_business_date=track_date,
+                force_ingestion=True,
+            )
+            single_report_results.append(result)
         
         raw_ingestion = {
             "legacy_bundle_result": legacy_bundle_result,

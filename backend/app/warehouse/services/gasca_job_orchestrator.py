@@ -105,6 +105,7 @@ class GascaExtractionCommand:
     target_business_date: date | None = None
     date_from: date | None = None
     date_to: date | None = None
+    report_types: set[str] | list[str] | tuple[str, ...] | None = None
     requested_at: datetime = field(
         default_factory=lambda: datetime.now(timezone.utc)
     )
@@ -269,6 +270,7 @@ def _extract_gasca_artifact(
             "trigger_source": command.trigger_source,
             "requested_at": command.requested_at,
             "target_business_date": command.target_business_date,
+            "report_types": command.report_types,
         }
         if command.report_type_key == "socios_vencidos":
             extractor_kwargs.update({
@@ -652,6 +654,7 @@ def run_gasca_report_job(
     target_business_date: date | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
+    report_types: set[str] | list[str] | tuple[str, ...] | None = None,
     force_ingestion: bool = True,
     force_non_canonical: bool = False,
 ) -> dict[str, Any]:
@@ -704,6 +707,7 @@ def run_gasca_report_job(
         target_business_date=target_business_date,
         date_from=date_from,
         date_to=date_to,
+        report_types=report_types,
     )
 
     current_app.logger.info(
