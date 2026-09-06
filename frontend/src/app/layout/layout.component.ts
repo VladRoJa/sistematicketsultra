@@ -54,6 +54,7 @@ export class LayoutComponent implements OnInit, AfterViewInit, OnDestroy {
   readonly maxMainMenuItems = 10;
 
 private readonly mainMenuPriority: string[] = [
+  'Control',
   'Tickets',
   'Mantenimiento',
   'Inventario',
@@ -147,6 +148,13 @@ ngOnInit(): void {
   this.usuarioLabel = (u?.username || '').toString();
   this.iniciarTimerInactividad();
   this.inactividadService.registrarCallback(() => this.reiniciarTimerInactividad());
+  const menuControl = {
+    label: 'Control',
+    path: '/control',
+    submenu: [
+      { label: 'Centro de Control', path: '/control' },
+    ],
+  };
 
   const menuWarehouse = {
     label: 'Warehouse',
@@ -394,6 +402,20 @@ const menuMantenimientoGerencial = [
   } else {
     this.menuItems = soloTickets;
   }
+
+const username = String(u?.username || '')
+  .trim()
+  .toUpperCase();
+
+if (
+  username === 'ADMICORP' &&
+  !this.menuItems.some((item) => item.label === 'Control')
+) {
+  this.menuItems = [
+    menuControl,
+    ...this.menuItems,
+  ];
+}
 
 if (
   this.puedeVerTrackDiarioPorRol() &&
