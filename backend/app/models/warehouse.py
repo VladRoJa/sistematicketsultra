@@ -2169,4 +2169,9 @@ class SociosActivosSnapshotRowORM(db.Model):
             "sucursal_raw",
             "pin",
         ),
+        db.Index(
+            "ix_socios_activos_rows_snapshot_email_normalized",
+            "snapshot_id",
+            db.func.lower(db.func.btrim(email_raw)),
+        ),
     )

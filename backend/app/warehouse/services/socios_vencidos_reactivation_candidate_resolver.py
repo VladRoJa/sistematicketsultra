@@ -278,6 +278,7 @@ def resolve_socios_vencidos_reactivation_candidate_batch(
         current_rows = resolve_socios_vencidos_rows_with_context(
             vencidos_rows=vencidos_rows,
             context=context.current_status,
+            session=session_value,
         )
     elif {int(row.vencido_row_id) for row in current_rows} != {
         int(row.id) for row in vencidos_rows
@@ -356,12 +357,14 @@ def count_socios_vencidos_not_found_phones(
     *,
     vencidos_rows: list[Any] | tuple[Any, ...],
     context: SociosVencidosReactivationResolutionContext,
+    session: Any | None = None,
 ) -> Counter[str]:
     """Cuenta teléfonos sólo en filas sin match activo, como el resolver original."""
 
     current_rows = resolve_socios_vencidos_rows_with_context(
         vencidos_rows=vencidos_rows,
         context=context.current_status,
+        session=session if session is not None else db.session,
     )
     source_by_id = {int(row.id): row for row in vencidos_rows}
     return Counter(

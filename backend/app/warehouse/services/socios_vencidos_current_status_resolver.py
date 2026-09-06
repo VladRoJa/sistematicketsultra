@@ -7,6 +7,8 @@ from typing import Any
 import re
 import unicodedata
 
+from sqlalchemy import func, or_
+
 from app.extensions import db
 from app.models.warehouse import (
     SociosActivosSnapshotORM,
@@ -30,6 +32,8 @@ STATUS_NOT_FOUND = "NOT_FOUND"
 SIGNAL_BRANCH_PIN = "branch_pin"
 SIGNAL_PHONE = "phone"
 SIGNAL_EMAIL = "email"
+
+_ACTIVE_LOOKUP_BATCH_SIZE = 250
 
 
 class SociosVencidosCurrentStatusResolverError(RuntimeError):
@@ -75,7 +79,6 @@ class SociosVencidosCurrentStatusPeriodResult:
 class SociosVencidosCurrentStatusContext:
     activos_snapshot_id: int
     activos_cutoff_date: str
-    indexes: dict[str, dict[Any, set[str]]]
 
 
 def resolve_socios_vencidos_current_status(
@@ -149,20 +152,10 @@ def resolve_socios_vencidos_current_status(
         .all()
     )
 
-    activos_rows = (
-        active_session.query(
-            SociosActivosSnapshotRowORM
-        )
-        .filter(
-            SociosActivosSnapshotRowORM.snapshot_id
-            == int(activos_snapshot.id)
-        )
-        .all()
-    )
-
-    resolved_rows, status_counts = _resolve_rows_against_activos(
+    resolved_rows, status_counts = _resolve_rows_against_activos_snapshot(
         vencidos_rows=vencidos_rows,
-        activos_rows=activos_rows,
+        activos_snapshot_id=int(activos_snapshot.id),
+        session=active_session,
     )
 
     return SociosVencidosCurrentStatusResult(
@@ -227,17 +220,10 @@ def resolve_socios_vencidos_current_status_for_period(
         )
         .all()
     )
-    activos_rows = (
-        active_session.query(SociosActivosSnapshotRowORM)
-        .filter(
-            SociosActivosSnapshotRowORM.snapshot_id
-            == int(activos_snapshot.id)
-        )
-        .all()
-    )
-    resolved_rows, status_counts = _resolve_rows_against_activos(
+    resolved_rows, status_counts = _resolve_rows_against_activos_snapshot(
         vencidos_rows=vencidos_rows,
-        activos_rows=activos_rows,
+        activos_snapshot_id=int(activos_snapshot.id),
+        session=active_session,
     )
     return SociosVencidosCurrentStatusPeriodResult(
         date_from=normalized_date_from.isoformat(),
@@ -256,7 +242,7 @@ def prepare_socios_vencidos_current_status_context(
     activos_snapshot_id: int | None = None,
     session: Any | None = None,
 ) -> SociosVencidosCurrentStatusContext:
-    """Carga una vez el snapshot activo para resolver lotes de cartera."""
+    """Resuelve sólo metadata del snapshot activo para procesar lotes."""
 
     active_session = session if session is not None else db.session
     snapshot = _resolve_activos_snapshot(
@@ -269,17 +255,9 @@ def prepare_socios_vencidos_current_status_context(
             "El snapshot de socios activos es anterior al periodo vencido "
             "que se intenta resolver."
         )
-    rows = (
-        active_session.query(SociosActivosSnapshotRowORM)
-        .filter(
-            SociosActivosSnapshotRowORM.snapshot_id == int(snapshot.id)
-        )
-        .all()
-    )
     return SociosVencidosCurrentStatusContext(
         activos_snapshot_id=int(snapshot.id),
         activos_cutoff_date=snapshot.cutoff_date.isoformat(),
-        indexes=_build_active_indexes(rows),
     )
 
 
@@ -287,13 +265,117 @@ def resolve_socios_vencidos_rows_with_context(
     *,
     vencidos_rows: list[Any] | tuple[Any, ...],
     context: SociosVencidosCurrentStatusContext,
+    session: Any | None = None,
 ) -> tuple[SocioVencidoCurrentStatus, ...]:
-    """Aplica sin I/O el matcher vigente a un lote de episodios."""
+    """Consulta candidatos activos del lote y aplica el matcher vigente."""
 
-    return tuple(
-        _resolve_vencido_row(row, indexes=context.indexes)
-        for row in vencidos_rows
+    active_session = session if session is not None else db.session
+    resolved_rows, _ = _resolve_rows_against_activos_snapshot(
+        vencidos_rows=list(vencidos_rows),
+        activos_snapshot_id=context.activos_snapshot_id,
+        session=active_session,
     )
+    return resolved_rows
+
+
+def _resolve_rows_against_activos_snapshot(
+    *,
+    vencidos_rows: list[Any],
+    activos_snapshot_id: int,
+    session: Any,
+) -> tuple[tuple[SocioVencidoCurrentStatus, ...], dict[str, int]]:
+    resolved_rows: list[SocioVencidoCurrentStatus] = []
+    for offset in range(0, len(vencidos_rows), _ACTIVE_LOOKUP_BATCH_SIZE):
+        batch = vencidos_rows[offset:offset + _ACTIVE_LOOKUP_BATCH_SIZE]
+        activos_rows = _read_potential_active_matches(
+            vencidos_rows=batch,
+            activos_snapshot_id=activos_snapshot_id,
+            session=session,
+        )
+        batch_rows, _ = _resolve_rows_against_activos(
+            vencidos_rows=batch,
+            activos_rows=activos_rows,
+        )
+        resolved_rows.extend(batch_rows)
+
+    rows = tuple(resolved_rows)
+    counts = Counter(row.status for row in rows)
+    return rows, {
+        STATUS_ACTIVE_CONFIRMED: counts[STATUS_ACTIVE_CONFIRMED],
+        STATUS_ACTIVE_REVIEW: counts[STATUS_ACTIVE_REVIEW],
+        STATUS_AMBIGUOUS: counts[STATUS_AMBIGUOUS],
+        STATUS_IDENTIFIER_CONFLICT: counts[STATUS_IDENTIFIER_CONFLICT],
+        STATUS_NOT_FOUND: counts[STATUS_NOT_FOUND],
+    }
+
+
+def _read_potential_active_matches(
+    *,
+    vencidos_rows: list[Any] | tuple[Any, ...],
+    activos_snapshot_id: int,
+    session: Any,
+) -> list[Any]:
+    signals = _extract_vencido_batch_signals(vencidos_rows)
+    predicates = []
+    if signals["pins"]:
+        predicates.append(
+            SociosActivosSnapshotRowORM.pin.in_(signals["pins"])
+        )
+    if signals["phone_variants"]:
+        predicates.append(
+            SociosActivosSnapshotRowORM.telefono_digits.in_(
+                signals["phone_variants"]
+            )
+        )
+    if signals["emails"]:
+        predicates.append(
+            func.lower(func.btrim(SociosActivosSnapshotRowORM.email_raw)).in_(
+                signals["emails"]
+            )
+        )
+    if not predicates:
+        return []
+
+    return (
+        session.query(SociosActivosSnapshotRowORM)
+        .filter(
+            SociosActivosSnapshotRowORM.snapshot_id == activos_snapshot_id,
+            or_(*predicates),
+        )
+        .all()
+    )
+
+
+def _extract_vencido_batch_signals(
+    vencidos_rows: list[Any] | tuple[Any, ...],
+) -> dict[str, tuple[str, ...]]:
+    pins: set[str] = set()
+    phone_mx10_values: set[str] = set()
+    emails: set[str] = set()
+
+    for row in vencidos_rows:
+        pin = _normalize_pin(getattr(row, "pin", None))
+        if pin:
+            pins.add(pin)
+
+        phone = _normalize_phone(getattr(row, "telefono_digits", None))
+        if phone:
+            phone_mx10_values.add(phone)
+
+        email = _normalize_email(getattr(row, "correo_raw", None))
+        if email:
+            emails.add(email)
+
+    phone_variants = {
+        variant
+        for phone in phone_mx10_values
+        for variant in (phone, f"52{phone}", f"521{phone}")
+    }
+    return {
+        "pins": tuple(sorted(pins)),
+        "phone_variants": tuple(sorted(phone_variants)),
+        "emails": tuple(sorted(emails)),
+    }
 
 
 def _resolve_rows_against_activos(

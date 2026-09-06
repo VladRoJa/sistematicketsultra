@@ -568,6 +568,7 @@ def _build_marketing_reactivation_candidate_summary(
     phone_counts = _count_complete_segment_not_found_phones(
         base_query=base_query,
         context=context,
+        session=session,
     )
     tariff_catalog = _read_all_active_tariff_catalog(session=session)
     status_counts: Counter[str] = Counter()
@@ -619,6 +620,7 @@ def _build_marketing_reactivation_campaign_segment(
     phone_counts = _count_complete_segment_not_found_phones(
         base_query=base_query.order_by(None),
         context=context,
+        session=session,
     )
     tariff_catalog = _read_all_active_tariff_catalog(session=session)
     rows = [
@@ -665,6 +667,7 @@ def _count_complete_segment_not_found_phones(
     *,
     base_query: Any,
     context: Any,
+    session: Any,
 ) -> Counter[str]:
     phone_counts: Counter[str] = Counter()
     for batch in _iter_query_batches(base_query, _CANDIDATE_BATCH_SIZE):
@@ -672,6 +675,7 @@ def _count_complete_segment_not_found_phones(
             count_socios_vencidos_not_found_phones(
                 vencidos_rows=batch,
                 context=context,
+                session=session,
             )
         )
     return phone_counts
@@ -713,6 +717,7 @@ def _resolve_interactive_candidate_batch(
     current_rows = resolve_socios_vencidos_rows_with_context(
         vencidos_rows=vencidos_rows,
         context=context.current_status,
+        session=session,
     )
     source_by_id = {int(row.id): row for row in vencidos_rows}
     phone_counts = Counter(
@@ -741,6 +746,7 @@ def _resolve_interactive_candidate_batch(
                 count_socios_vencidos_not_found_phones(
                     vencidos_rows=peer_batch,
                     context=context,
+                    session=session,
                 )
             )
     candidates = resolve_socios_vencidos_reactivation_candidate_batch(
