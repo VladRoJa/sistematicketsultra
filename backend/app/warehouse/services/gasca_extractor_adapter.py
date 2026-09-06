@@ -59,6 +59,7 @@ class RawExtractorCommand:
     target_business_date: date | None = None
     date_from: date | None = None
     date_to: date | None = None
+    report_types: set[str] | list[str] | tuple[str, ...] | None = None
 
 def register_gasca_extractor_adapter(app) -> None:
     """
@@ -270,6 +271,7 @@ def _call_extractor(
         "target_business_date": command.target_business_date,
         "date_from": command.date_from,
         "date_to": command.date_to,
+        "report_types": command.report_types,
     }
     try:
         signature = inspect.signature(extractor)
@@ -298,7 +300,7 @@ def extract_gasca_report(
     target_business_date: date | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
-    
+    report_types: set[str] | list[str] | tuple[str, ...] | None = None,
 ) -> ProducedGascaArtifact:
     """
     Hook principal del orquestador para extracción de artefactos Gasca.
@@ -322,6 +324,7 @@ def extract_gasca_report(
         target_business_date=target_business_date,
         date_from=date_from,
         date_to=date_to,
+        report_types=report_types,
     )
     _validate_command(command)
 
