@@ -11,6 +11,9 @@ from zoneinfo import ZoneInfo
 
 from app import create_app
 from app.extensions import db
+from app.models.warehouse import (
+    ReporteDireccionSnapshotORM,
+)
 from app.warehouse.jobs.cobranza_recurrente_rechazados_job import (
     CobranzaRecurrenteNotReadyError,
     run_job as run_cobranza_recurrente_job,
@@ -21,6 +24,7 @@ from app.warehouse.jobs.reporte_direccion_daily_capture_job import (
 from app.warehouse.services.scheduler_priority_service import (
     get_nightly_report_capture_block_reason,
     get_secondary_job_block_reason,
+    is_nightly_report_capture_window,
 )
 
 logger = logging.getLogger(__name__)
@@ -185,6 +189,55 @@ def _should_run_daily_job(
     return True
 
 
+def _find_existing_nightly_reporte_direccion_snapshot(
+    *,
+    business_date: date,
+    now: datetime,
+):
+    snapshots = (
+        ReporteDireccionSnapshotORM.query
+        .filter_by(
+            business_date=business_date,
+            snapshot_kind="daily",
+        )
+        .order_by(
+            ReporteDireccionSnapshotORM.id.desc()
+        )
+        .all()
+    )
+
+    target_timezone = (
+        now.tzinfo
+        if now.tzinfo is not None
+        else _timezone()
+    )
+
+    for snapshot in snapshots:
+        captured_at = snapshot.captured_at
+
+        if captured_at is None:
+            continue
+
+        if captured_at.tzinfo is None:
+            captured_at = captured_at.replace(
+                tzinfo=ZoneInfo("UTC")
+            )
+
+        captured_local = captured_at.astimezone(
+            target_timezone
+        )
+
+        if captured_local.date() != business_date:
+            continue
+
+        if is_nightly_report_capture_window(
+            captured_local
+        ):
+            return snapshot
+
+    return None
+
+
 def _run_reporte_direccion_daily_capture_if_due(
     now: datetime,
 ) -> None:
@@ -203,6 +256,29 @@ def _run_reporte_direccion_daily_capture_if_due(
     )
 
     if run_key in _COMPLETED_BY_JOB_AND_DATE:
+        return
+
+    existing_snapshot = (
+        _find_existing_nightly_reporte_direccion_snapshot(
+            business_date=business_date,
+            now=now,
+        )
+    )
+
+    if existing_snapshot is not None:
+        _mark_job_as_completed(
+            job_key,
+            business_date,
+        )
+
+        logger.info(
+            "%s ya cuenta con captura nocturna persistida. "
+            "business_date=%s snapshot_id=%s upload_id=%s",
+            job_key,
+            business_date.isoformat(),
+            existing_snapshot.id,
+            existing_snapshot.warehouse_upload_id,
+        )
         return
 
     next_retry_at = _NEXT_RETRY_BY_JOB_AND_DATE.get(
