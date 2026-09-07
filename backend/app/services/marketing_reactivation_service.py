@@ -1221,10 +1221,11 @@ def export_marketing_reactivation_campaign(
         now=now,
         exclude_campaign_id=int(campaign.id),
     )
-    planned_keys = {
-        (int(row["vencido_row_id"]), str(row["phone_mx10"]))
+    planned_rows_by_key = {
+        (int(row["vencido_row_id"]), str(row["phone_mx10"])): row
         for row in plan["eligible_rows"]
     }
+    planned_keys = set(planned_rows_by_key)
     stored_keys = {
         (int(row.socios_vencidos_cartera_id), str(row.phone_mx10))
         for row in campaign.recipients
@@ -1244,7 +1245,12 @@ def export_marketing_reactivation_campaign(
                 row.phone_mx10,
                 row.sucursal,
                 row.fecha_vencimiento_date.isoformat(),
-                row.tarifa or "",
+                planned_rows_by_key[
+                    (
+                        int(row.socios_vencidos_cartera_id),
+                        str(row.phone_mx10),
+                    )
+                ].get("tarifa_categoria") or "",
             ]
         )
     output = BytesIO()

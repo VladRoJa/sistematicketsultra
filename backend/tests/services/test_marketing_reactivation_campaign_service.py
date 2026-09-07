@@ -737,7 +737,7 @@ def test_export_builds_xlsx_and_transitions_draft_after_success(monkeypatch):
         "_build_campaign_plan",
         lambda **kwargs: {
             "eligible_rows": [
-                {"vencido_row_id": 10, "phone_mx10": "6861000010"}
+                {"vencido_row_id": 10, "phone_mx10": "6861000010", "tarifa_categoria": "Mensual"}
             ]
         },
     )
@@ -762,7 +762,7 @@ def test_export_builds_xlsx_and_transitions_draft_after_success(monkeypatch):
         "6861000010",
         "CENTRO",
         "2026-08-23",
-        "ANUAL",
+        "Mensual",
     )
     assert filename == "reactivacion_campana_9.xlsx"
     assert campaign.status == "EXPORTED"
