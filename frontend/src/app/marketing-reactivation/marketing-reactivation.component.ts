@@ -222,17 +222,7 @@ export class MarketingReactivationComponent implements OnInit {
     return Boolean(this.sources?.permissions?.can_manage_campaigns);
   }
 
-  get tariffCategoryOptions(): Array<{ category: string; count: number }> {
-    const counts = new Map<string, number>();
-    for (const row of this.tariffRows) {
-      const category = row.categoria_tarifa?.trim();
-      if (category) {
-        counts.set(category, (counts.get(category) ?? 0) + row.count);
-      }
-    }
-    return Array.from(counts, ([category, count]) => ({ category, count }))
-      .sort((left, right) => left.category.localeCompare(right.category));
-  }
+  tariffCategoryOptions: Array<{ category: string; count: number }> = [];
 
   get nonReactivationTariffCount(): number {
     const summary = this.campaignPreview?.summary;
@@ -875,6 +865,17 @@ export class MarketingReactivationComponent implements OnInit {
         next: (response) => {
           this.loadingTariffs = false;
           this.tariffRows = response.rows;
+          const counts = new Map<string, number>();
+          for (const row of response.rows) {
+            const category = row.categoria_tarifa?.trim();
+            if (category) {
+              counts.set(category, (counts.get(category) ?? 0) + row.count);
+            }
+          }
+          this.tariffCategoryOptions = Array.from(
+            counts,
+            ([category, count]) => ({ category, count }),
+          ).sort((left, right) => left.category.localeCompare(right.category));
           const selected = this.tariffCategoryFilter.value;
           if (
             selected !== 'ALL'
@@ -888,6 +889,7 @@ export class MarketingReactivationComponent implements OnInit {
         error: () => {
           this.loadingTariffs = false;
           this.tariffRows = [];
+          this.tariffCategoryOptions = [];
         },
       });
   }
