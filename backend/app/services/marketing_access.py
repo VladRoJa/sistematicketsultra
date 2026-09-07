@@ -55,7 +55,7 @@ class MarketingAccess:
     branch_ids: tuple[int, ...]
     role: str
     can_edit_inputs: bool
-    can_view_reactivation: bool
+    can_view_reactivation: bool = True
     fallback_used: bool = False
 
     def visible_branch_ids(
