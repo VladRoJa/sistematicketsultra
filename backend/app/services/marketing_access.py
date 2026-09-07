@@ -112,8 +112,8 @@ def resolve_marketing_access(user) -> MarketingAccess:
     username = str(getattr(user, "username", "") or "").strip().upper()
     can_edit_inputs = role in MARKETING_INPUT_EDIT_ROLES
     can_view_reactivation = (
-        role in MARKETING_REACTIVATION_ROLES
-        and username != "ADMICORP"
+        username == "ADMICORP"
+        or role in MARKETING_REACTIVATION_ROLES
     )
 
     if _request_targets_reactivation() and not can_view_reactivation:
