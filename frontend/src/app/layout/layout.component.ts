@@ -1251,7 +1251,7 @@ private puedeVerMarketingReactivacionPorRol(): boolean {
   const username = String(user?.username ?? '').trim().toUpperCase();
 
   if (username === 'ADMICORP') {
-    return false;
+    return true;
   }
 
   return [
