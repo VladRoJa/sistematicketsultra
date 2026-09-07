@@ -270,14 +270,14 @@
         </mat-form-field>
 
         <mat-form-field appearance="fill" subscriptSizing="dynamic">
-          <mat-label>Tarifa</mat-label>
-          <mat-select [formControl]="tariffFilter">
+          <mat-label>Categoría de tarifa</mat-label>
+          <mat-select [formControl]="tariffCategoryFilter">
             <mat-option value="ALL">Todas</mat-option>
             <mat-option
-              *ngFor="let option of tariffOptions"
-              [value]="option.tarifa"
+              *ngFor="let option of tariffCategoryOptions"
+              [value]="option.category"
             >
-              {{ option.tarifa }} ({{ option.count | number }})
+              {{ option.category }} ({{ option.count | number }})
             </mat-option>
           </mat-select>
         </mat-form-field>

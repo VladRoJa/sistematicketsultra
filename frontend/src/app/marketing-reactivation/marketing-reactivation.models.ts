@@ -57,6 +57,10 @@ export interface ReactivationSummary {
   total_rows: number;
   status_counts: Record<ReactivationCandidateStatus, number>;
   reason_counts: Record<ReactivationCandidateReason, number>;
+  operational_counts: Record<
+    'ACTIVE' | 'REVIEW_IDENTITY' | 'CONTACTED_THIS_MONTH' | 'AVAILABLE',
+    number
+  >;
 }
 
 export interface ReactivationCandidateRow {
@@ -108,10 +112,8 @@ export interface ReactivationCandidateSummaryResponse {
 
 export type ReactivationOperationalStatus =
   | 'WORK_PENDING'
-  | 'NO_CONTACT_IN_PERIOD'
-  | 'NO_OUTBOUND_MESSAGE'
-  | 'CONTACTED_BEFORE_EXPIRATION'
-  | 'CONTACTED_AFTER_EXPIRATION'
+  | 'AVAILABLE'
+  | 'CONTACTED_THIS_MONTH'
   | 'REVIEW_IDENTITY'
   | 'ACTIVE'
   | 'ALL';
@@ -122,6 +124,7 @@ export interface ReactivationCampaignFilters {
   operational_status: ReactivationOperationalStatus;
   search: string | null;
   tarifa: string | null;
+  tariff_category: string | null;
   tariff_group: ReactivationTariffGroup | null;
   campaign_cooldown_days?: number | null;
 }
@@ -143,6 +146,7 @@ export interface ReactivationCandidateQuery {
   pageSize: number;
   sucursal: string | null;
   tarifa: string | null;
+  tariffCategory: string | null;
   tariffGroup: ReactivationTariffGroup | null;
   operationalStatus: ReactivationOperationalStatus;
   search: string | null;

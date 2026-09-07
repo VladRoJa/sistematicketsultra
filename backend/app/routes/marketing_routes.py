@@ -265,6 +265,7 @@ def get_marketing_reactivation_candidates_endpoint():
             page_size=request.args.get("page_size", "50"),
             sucursal=request.args.get("sucursal"),
             tarifa=request.args.get("tarifa"),
+            tariff_category=request.args.get("tariff_category"),
             tariff_group=request.args.get("tariff_group"),
             operational_status=request.args.get(
                 "operational_status", "ALL"
@@ -316,6 +317,7 @@ def get_marketing_reactivation_candidate_summary_endpoint():
             iventas_period_key=_parse_required_text("iventas_period_key"),
             sucursal=request.args.get("sucursal"),
             tarifa=request.args.get("tarifa"),
+            tariff_category=request.args.get("tariff_category"),
             tariff_group=request.args.get("tariff_group"),
             operational_status=request.args.get(
                 "operational_status", "ALL"

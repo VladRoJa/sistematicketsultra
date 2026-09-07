@@ -78,6 +78,7 @@ def _filters(**overrides):
         "operational_status": "ALL",
         "search": None,
         "tarifa": None,
+        "tariff_category": None,
         "tariff_group": None,
     }
     values.update(overrides)
@@ -190,6 +191,7 @@ def test_preview_resolves_complete_server_side_segment(monkeypatch):
         filters=_filters(
             sucursal="CENTRO",
             tarifa="1 MES $899",
+            tariff_category="Mensualidad",
             tariff_group="REACTIVATE",
             operational_status="WORK_PENDING",
             search="socio",
@@ -201,6 +203,7 @@ def test_preview_resolves_complete_server_side_segment(monkeypatch):
     assert calls["allowed_sucursal_keys"] is None
     assert calls["query"].sucursal == "CENTRO"
     assert calls["query"].tarifa == "1 MES $899"
+    assert calls["query"].tariff_category == "Mensualidad"
     assert calls["query"].tariff_group == "REACTIVATE"
     assert calls["query"].operational_status == "WORK_PENDING"
     assert calls["query"].search == "socio"
@@ -516,7 +519,7 @@ def test_no_match_current_run_is_operational_evidence_not_never_contacted(monkey
     )
 
     assert plan["decision_rows"][0]["operational_status"] == (
-        "NO_CONTACT_IN_PERIOD"
+        "AVAILABLE"
     )
     assert plan["decision_rows"][0]["campaign_eligibility"] == "ELIGIBLE"
 
@@ -1090,3 +1093,425 @@ def test_alembic_has_single_head_for_active_email_index_migration():
             parents.update(quoted_pattern.findall(parent_match.group(1)))
 
     assert revisions - parents == {"a8d1e6f3c2b4"}
+
+def test_read_last_suite_campaign_sent_at_applies_optional_sent_window():
+    sent_from = datetime(
+        2026, 9, 1, 7, 0, tzinfo=timezone.utc
+    )
+    sent_to_exclusive = datetime(
+        2026, 10, 1, 7, 0, tzinfo=timezone.utc
+    )
+
+    class QueryStub:
+        def __init__(self):
+            self.filter_calls = []
+
+        def join(self, *_args):
+            return self
+
+        def filter(self, *args):
+            self.filter_calls.append(args)
+            return self
+
+        def group_by(self, *_args):
+            return self
+
+        def all(self):
+            return [("6861000001", NOW)]
+
+    class SessionStub:
+        def __init__(self, query):
+            self.query_stub = query
+
+        def query(self, *_args):
+            return self.query_stub
+
+    query = QueryStub()
+
+    result = service._read_last_suite_campaign_sent_at(
+        phone_mx10_values={"6861000001"},
+        session=SessionStub(query),
+        sent_from_utc=sent_from,
+        sent_to_utc_exclusive=sent_to_exclusive,
+    )
+
+    assert result == {"6861000001": NOW}
+    assert len(query.filter_calls) == 3
+
+    lower_bound = query.filter_calls[1][0]
+    upper_bound = query.filter_calls[2][0]
+
+    assert (
+        str(lower_bound.left)
+        == "marketing_reactivation_campaigns.sent_at"
+    )
+    assert " >= " in str(lower_bound)
+    assert lower_bound.right.value == sent_from
+
+    assert (
+        str(upper_bound.left)
+        == "marketing_reactivation_campaigns.sent_at"
+    )
+    assert " < " in str(upper_bound)
+    assert upper_bound.right.value == sent_to_exclusive
+
+def test_iventas_contact_window_uses_canonical_run_and_tijuana_timezone(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        service,
+        "read_canonical_iventas_run",
+        lambda **_kwargs: {
+            "id": 69,
+            "period_key": "IVENTAS-2026-09",
+            "date_from": date(2026, 9, 1),
+            "date_to": date(2026, 9, 6),
+            "status": "COMPLETED",
+            "is_canonical": True,
+        },
+    )
+
+    sent_from_utc, sent_to_utc_exclusive = (
+        service._iventas_contact_window_utc(
+            period_key="IVENTAS-2026-09",
+            session=SimpleNamespace(),
+        )
+    )
+
+    assert sent_from_utc == datetime(
+        2026, 9, 1, 7, 0, tzinfo=timezone.utc
+    )
+    assert sent_to_utc_exclusive == datetime(
+        2026, 9, 7, 7, 0, tzinfo=timezone.utc
+    )
+
+def test_suite_sent_in_selected_period_is_contacted_this_month():
+    vencido_row = SimpleNamespace(
+        id=1,
+        pin="PIN-1",
+        nombre="Socio 1",
+        sucursal_raw="CENTRO",
+        telefono_raw="686 100 0001",
+        correo_raw=None,
+        fecha_vencimiento_date=date(2026, 8, 23),
+        fecha_ultimo_pago_local=None,
+        tarifa="1 MES $899",
+        adeudo=None,
+    )
+    candidate = SimpleNamespace(
+        vencido_row_id=1,
+        status="CONTACT_HISTORY_UNKNOWN",
+        reason="NO_OUTBOUND_EVIDENCE",
+        active_status="NOT_FOUND",
+        active_id_socio=None,
+        iventas_contact_id=None,
+        latest_outbound_at_utc=None,
+    )
+
+    rows = list(
+        service._serialize_resolved_batch(
+            vencidos_rows=[vencido_row],
+            candidates=[candidate],
+            tariff_catalog={},
+            suite_sent_by_phone={"6861000001": NOW},
+        )
+    )
+
+    assert len(rows) == 1
+    assert rows[0]["status"] == "CONTACT_HISTORY_UNKNOWN"
+    assert rows[0]["reason"] == "NO_OUTBOUND_EVIDENCE"
+    assert rows[0]["operational_status"] == "CONTACTED_THIS_MONTH"
+
+def test_iventas_outbound_in_selected_period_is_contacted_this_month():
+    period_start = datetime(
+        2026, 9, 1, 7, 0, tzinfo=timezone.utc
+    )
+    period_end_exclusive = datetime(
+        2026, 9, 7, 7, 0, tzinfo=timezone.utc
+    )
+    outbound_at = datetime(
+        2026, 9, 4, 18, 30, tzinfo=timezone.utc
+    )
+
+    vencido_row = SimpleNamespace(
+        id=1,
+        pin="PIN-1",
+        nombre="Socio 1",
+        sucursal_raw="CENTRO",
+        telefono_raw="6861000001",
+        correo_raw=None,
+        fecha_vencimiento_date=date(2026, 8, 23),
+        fecha_ultimo_pago_local=None,
+        tarifa="1 MES $899",
+        adeudo=None,
+    )
+    candidate = SimpleNamespace(
+        vencido_row_id=1,
+        status="CONTACT_HISTORY_UNKNOWN",
+        reason="ONLY_PRE_EXPIRATION_OUTBOUND",
+        active_status="NOT_FOUND",
+        active_id_socio=None,
+        iventas_contact_id="CONTACT-1",
+        latest_outbound_at_utc=outbound_at,
+    )
+
+    rows = list(
+        service._serialize_resolved_batch(
+            vencidos_rows=[vencido_row],
+            candidates=[candidate],
+            tariff_catalog={},
+            suite_sent_by_phone={},
+            iventas_contact_window_utc=(
+                period_start,
+                period_end_exclusive,
+            ),
+        )
+    )
+
+    assert len(rows) == 1
+    assert rows[0]["reason"] == "ONLY_PRE_EXPIRATION_OUTBOUND"
+    assert rows[0]["operational_status"] == "CONTACTED_THIS_MONTH"
+
+def test_final_operational_status_model():
+    available_cases = [
+        {
+            "status": "CONTACT_HISTORY_UNKNOWN",
+            "reason": "NO_MATCH_CURRENT_IVENTAS_RUN",
+        },
+        {
+            "status": "CONTACT_HISTORY_UNKNOWN",
+            "reason": "NO_OUTBOUND_EVIDENCE",
+        },
+        {
+            "status": "CONTACT_HISTORY_UNKNOWN",
+            "reason": "ONLY_PRE_EXPIRATION_OUTBOUND",
+        },
+        {
+            "status": "EXCLUDED_POST_EXPIRATION_CONTACT",
+            "reason": "POST_EXPIRATION_OUTBOUND",
+        },
+    ]
+
+    for row in available_cases:
+        assert service._operational_status(row) == "AVAILABLE"
+
+    assert service._operational_status(
+        {
+            "status": "EXCLUDED_ACTIVE",
+            "reason": "ACTIVE_CONFIRMED",
+        }
+    ) == "ACTIVE"
+
+    assert service._operational_status(
+        {
+            "status": "REVIEW_ACTIVE_MATCH",
+            "reason": "ACTIVE_REVIEW",
+        }
+    ) == "REVIEW_IDENTITY"
+
+    assert service._matches_operational_status(
+        "AVAILABLE",
+        "WORK_PENDING",
+    ) is True
+
+    assert service._matches_operational_status(
+        "CONTACTED_THIS_MONTH",
+        "WORK_PENDING",
+    ) is False
+
+    assert service._matches_operational_status(
+        "REVIEW_IDENTITY",
+        "WORK_PENDING",
+    ) is False
+
+    assert service._matches_operational_status(
+        "ACTIVE",
+        "WORK_PENDING",
+    ) is False
+
+def test_candidate_summary_exposes_operational_counts(monkeypatch):
+    class DummyQuery:
+        def order_by(self, *args, **kwargs):
+            return self
+
+    query = SimpleNamespace(
+        date_to=date(2026, 9, 6),
+        operational_status="ALL",
+    )
+    context = SimpleNamespace()
+
+    monkeypatch.setattr(
+        service,
+        "_build_candidate_base_query",
+        lambda **kwargs: DummyQuery(),
+    )
+    monkeypatch.setattr(
+        service,
+        "prepare_socios_vencidos_reactivation_resolution_context",
+        lambda **kwargs: context,
+    )
+    monkeypatch.setattr(
+        service,
+        "_count_complete_segment_not_found_phones",
+        lambda **kwargs: {},
+    )
+    monkeypatch.setattr(
+        service,
+        "_read_suite_campaign_sent_for_period",
+        lambda **kwargs: {},
+    )
+    monkeypatch.setattr(
+        service,
+        "_iventas_contact_window_utc",
+        lambda **kwargs: (
+            datetime(2026, 9, 1, 7, 0, tzinfo=timezone.utc),
+            datetime(2026, 9, 7, 7, 0, tzinfo=timezone.utc),
+        ),
+    )
+    monkeypatch.setattr(
+        service,
+        "_read_all_active_tariff_catalog",
+        lambda **kwargs: {},
+    )
+    monkeypatch.setattr(
+        service,
+        "_candidate_sources",
+        lambda **kwargs: {},
+    )
+    monkeypatch.setattr(
+        service,
+        "_iter_complete_segment_candidates",
+        lambda **kwargs: iter(
+            [
+                {
+                    "status": "EXCLUDED_ACTIVE",
+                    "reason": "ACTIVE_CONFIRMED",
+                    "operational_status": "ACTIVE",
+                },
+                {
+                    "status": "REVIEW_ACTIVE_MATCH",
+                    "reason": "ACTIVE_REVIEW",
+                    "operational_status": "REVIEW_IDENTITY",
+                },
+                {
+                    "status": "CONTACT_HISTORY_UNKNOWN",
+                    "reason": "NO_OUTBOUND_EVIDENCE",
+                    "operational_status": "CONTACTED_THIS_MONTH",
+                },
+                {
+                    "status": "CONTACT_HISTORY_UNKNOWN",
+                    "reason": "NO_MATCH_CURRENT_IVENTAS_RUN",
+                    "operational_status": "AVAILABLE",
+                },
+            ]
+        ),
+    )
+
+    result = service._build_marketing_reactivation_candidate_summary(
+        query=query,
+        iventas_period_key="IVENTAS-2026-09",
+        session=SimpleNamespace(),
+        allowed_sucursal_keys=None,
+    )
+
+    assert result["summary"]["total_rows"] == 4
+    assert result["summary"]["operational_counts"] == {
+        "ACTIVE": 1,
+        "REVIEW_IDENTITY": 1,
+        "CONTACTED_THIS_MONTH": 1,
+        "AVAILABLE": 1,
+    }
+
+def test_interactive_candidate_batch_accepts_iventas_period_key():
+    result = service._resolve_interactive_candidate_batch(
+        vencidos_rows=[],
+        query=SimpleNamespace(),
+        context=SimpleNamespace(),
+        tariff_catalog={},
+        session=SimpleNamespace(),
+        allowed_sucursal_keys=None,
+        iventas_period_key="IVENTAS-2026-09",
+    )
+
+    assert result == []
+
+def test_interactive_batch_uses_suite_sent_period_evidence(monkeypatch):
+    vencido_row = SimpleNamespace(
+        id=1,
+        pin="PIN-1",
+        nombre="Socio 1",
+        sucursal_raw="CENTRO",
+        telefono_raw="6861000001",
+        correo_raw=None,
+        fecha_vencimiento_date=date(2026, 8, 23),
+        fecha_ultimo_pago_local=None,
+        tarifa="1 MES $899",
+        adeudo=None,
+    )
+    current_row = SimpleNamespace(
+        vencido_row_id=1,
+        status="NOT_FOUND",
+    )
+    candidate = SimpleNamespace(
+        vencido_row_id=1,
+        status="CONTACT_HISTORY_UNKNOWN",
+        reason="NO_OUTBOUND_EVIDENCE",
+        active_status="NOT_FOUND",
+        active_id_socio=None,
+        iventas_contact_id=None,
+        latest_outbound_at_utc=None,
+    )
+
+    monkeypatch.setattr(
+        service,
+        "resolve_socios_vencidos_rows_with_context",
+        lambda **kwargs: [current_row],
+    )
+    class DummyPeerQuery:
+        def filter(self, *args, **kwargs):
+            return self
+
+        def order_by(self, *args, **kwargs):
+            return self
+
+    monkeypatch.setattr(
+        service,
+        "_build_candidate_base_query",
+        lambda **kwargs: DummyPeerQuery(),
+    )
+    monkeypatch.setattr(
+        service,
+        "_iter_query_batches",
+        lambda *args, **kwargs: iter([]),
+    )
+
+    monkeypatch.setattr(
+        service,
+        "resolve_socios_vencidos_reactivation_candidate_batch",
+        lambda **kwargs: [candidate],
+    )
+    monkeypatch.setattr(
+        service,
+        "_read_suite_campaign_sent_for_period",
+        lambda **kwargs: {"6861000001": NOW},
+    )
+    monkeypatch.setattr(
+        service,
+        "_iventas_contact_window_utc",
+        lambda **kwargs: (
+            datetime(2026, 9, 1, 7, 0, tzinfo=timezone.utc),
+            datetime(2026, 9, 7, 7, 0, tzinfo=timezone.utc),
+        ),
+    )
+
+    result = service._resolve_interactive_candidate_batch(
+        vencidos_rows=[vencido_row],
+        query=SimpleNamespace(),
+        context=SimpleNamespace(current_status=SimpleNamespace()),
+        tariff_catalog={},
+        session=SimpleNamespace(),
+        allowed_sucursal_keys=None,
+        iventas_period_key="IVENTAS-2026-09",
+    )
+
+    assert result[0]["operational_status"] == "CONTACTED_THIS_MONTH"

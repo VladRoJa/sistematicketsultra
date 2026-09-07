@@ -53,10 +53,8 @@ import {
 import { MarketingReactivationService } from './marketing-reactivation.service';
 
 type OperationalContactStatus =
-  | 'NO_CONTACT_IN_PERIOD'
-  | 'NO_OUTBOUND_MESSAGE'
-  | 'CONTACTED_BEFORE_EXPIRATION'
-  | 'CONTACTED_AFTER_EXPIRATION'
+  | 'AVAILABLE'
+  | 'CONTACTED_THIS_MONTH'
   | 'REVIEW_IDENTITY'
   | 'ACTIVE';
 
@@ -89,33 +87,13 @@ type SummaryRequestResult =
   | { status: 'error'; error: HttpErrorResponse };
 
 const OPERATIONAL_STATUS_OPTIONS: OperationalStatusOption[] = [
-  { value: 'WORK_PENDING', label: 'Por trabajar' },
-  {
-    value: 'NO_CONTACT_IN_PERIOD',
-    label: 'No aparece en CRM este periodo',
-  },
-  { value: 'NO_OUTBOUND_MESSAGE', label: 'En CRM, sin mensaje enviado' },
-  {
-    value: 'CONTACTED_BEFORE_EXPIRATION',
-    label: 'Contactado antes de vencer',
-  },
-  {
-    value: 'CONTACTED_AFTER_EXPIRATION',
-    label: 'Contactado después de vencer',
-  },
+  { value: 'WORK_PENDING', label: 'Disponibles para campaña' },
+  { value: 'CONTACTED_THIS_MONTH', label: 'Contactados este mes' },
   { value: 'REVIEW_IDENTITY', label: 'Revisar identidad' },
   { value: 'ACTIVE', label: 'Ya está activo' },
   { value: 'ALL', label: 'Todos' },
 ];
 
-const REVIEW_IDENTITY_REASONS = new Set<ReactivationCandidateReason>([
-  'ACTIVE_REVIEW',
-  'AMBIGUOUS',
-  'IDENTIFIER_CONFLICT',
-  'NO_MX10',
-  'DUPLICATE_VENCIDO_PHONE',
-  'AMBIGUOUS_IVENTAS_IDENTITY',
-]);
 
 
 @Component({
@@ -155,7 +133,7 @@ export class MarketingReactivationComponent implements OnInit {
   readonly dateToControl = new FormControl<Date | null>(null);
   readonly iventasControl = new FormControl<string | null>(null);
   readonly branchFilter = new FormControl('ALL', { nonNullable: true });
-  readonly tariffFilter = new FormControl('ALL', { nonNullable: true });
+  readonly tariffCategoryFilter = new FormControl('ALL', { nonNullable: true });
   readonly tariffGroupFilter = new FormControl<ReactivationTariffGroup | 'ALL'>(
     'ALL',
     { nonNullable: true },
@@ -244,8 +222,16 @@ export class MarketingReactivationComponent implements OnInit {
     return Boolean(this.sources?.permissions?.can_manage_campaigns);
   }
 
-  get tariffOptions(): ReactivationTariffCount[] {
-    return this.tariffRows.filter((row) => Boolean(row.tarifa));
+  get tariffCategoryOptions(): Array<{ category: string; count: number }> {
+    const counts = new Map<string, number>();
+    for (const row of this.tariffRows) {
+      const category = row.categoria_tarifa?.trim();
+      if (category) {
+        counts.set(category, (counts.get(category) ?? 0) + row.count);
+      }
+    }
+    return Array.from(counts, ([category, count]) => ({ category, count }))
+      .sort((left, right) => left.category.localeCompare(right.category));
   }
 
   get nonReactivationTariffCount(): number {
@@ -304,39 +290,39 @@ export class MarketingReactivationComponent implements OnInit {
 
   get summaryCards(): SummaryCard[] {
     const summary = this.candidateSummary?.summary;
-    const counts = summary?.status_counts;
+    const counts = summary?.operational_counts;
 
     return [
       {
-        label: 'Vencidos en el periodo',
+        label: 'Vencidos seleccionados',
         value: summary?.total_rows ?? 0,
         detail: this.formatSelectedPeriod(),
         icon: 'event',
         statusClass: 'total',
       },
       {
-        label: 'Ya están activos',
-        value: counts?.EXCLUDED_ACTIVE ?? 0,
+        label: 'Ya activos',
+        value: counts?.ACTIVE ?? 0,
         icon: 'check_circle',
         statusClass: 'active',
       },
       {
-        label: 'Contactados después de vencer',
-        value: counts?.EXCLUDED_POST_EXPIRATION_CONTACT ?? 0,
+        label: 'Contactados este mes',
+        value: counts?.CONTACTED_THIS_MONTH ?? 0,
         icon: 'forum',
         statusClass: 'contacted',
       },
       {
-        label: 'Revisar identidad',
-        value: counts?.REVIEW_ACTIVE_MATCH ?? 0,
-        icon: 'warning_amber',
-        statusClass: 'review',
+        label: 'Disponibles para campaña',
+        value: counts?.AVAILABLE ?? 0,
+        icon: 'campaign',
+        statusClass: 'unknown',
       },
       {
-        label: 'Por revisar',
-        value: counts?.CONTACT_HISTORY_UNKNOWN ?? 0,
-        icon: 'help_outline',
-        statusClass: 'unknown',
+        label: 'Revisar identidad',
+        value: counts?.REVIEW_IDENTITY ?? 0,
+        icon: 'warning_amber',
+        statusClass: 'review',
       },
     ];
   }
@@ -385,7 +371,7 @@ export class MarketingReactivationComponent implements OnInit {
 
   clearFilters(): void {
     this.branchFilter.setValue('ALL', { emitEvent: false });
-    this.tariffFilter.setValue('ALL', { emitEvent: false });
+    this.tariffCategoryFilter.setValue('ALL', { emitEvent: false });
     this.tariffGroupFilter.setValue('ALL', { emitEvent: false });
     this.statusFilter.setValue('WORK_PENDING', { emitEvent: false });
     this.searchFilter.setValue('', { emitEvent: false });
@@ -619,48 +605,13 @@ export class MarketingReactivationComponent implements OnInit {
   getOperationalContactStatus(
     row: ReactivationCandidateRow,
   ): OperationalContactStatus {
-    if (row.operational_status) {
-      return row.operational_status;
-    }
-    if (row.status === 'EXCLUDED_ACTIVE') {
-      return 'ACTIVE';
-    }
-
-    if (
-      row.status === 'REVIEW_ACTIVE_MATCH'
-      || REVIEW_IDENTITY_REASONS.has(row.reason)
-    ) {
-      return 'REVIEW_IDENTITY';
-    }
-
-    if (row.reason === 'NO_MATCH_CURRENT_IVENTAS_RUN') {
-      return 'NO_CONTACT_IN_PERIOD';
-    }
-
-    if (row.reason === 'NO_OUTBOUND_EVIDENCE') {
-      return 'NO_OUTBOUND_MESSAGE';
-    }
-
-    if (row.reason === 'ONLY_PRE_EXPIRATION_OUTBOUND') {
-      return 'CONTACTED_BEFORE_EXPIRATION';
-    }
-
-    if (
-      row.status === 'EXCLUDED_POST_EXPIRATION_CONTACT'
-      || row.reason === 'POST_EXPIRATION_OUTBOUND'
-    ) {
-      return 'CONTACTED_AFTER_EXPIRATION';
-    }
-
-    return 'REVIEW_IDENTITY';
+    return row.operational_status;
   }
 
   getOperationalContactLabel(row: ReactivationCandidateRow): string {
     const labels: Record<OperationalContactStatus, string> = {
-      NO_CONTACT_IN_PERIOD: 'No aparece en CRM este periodo',
-      NO_OUTBOUND_MESSAGE: 'En CRM, sin mensaje enviado',
-      CONTACTED_BEFORE_EXPIRATION: 'Contactado antes de vencer',
-      CONTACTED_AFTER_EXPIRATION: 'Contactado después de vencer',
+      AVAILABLE: 'Disponible para campaña',
+      CONTACTED_THIS_MONTH: 'Contactado este mes',
       REVIEW_IDENTITY: 'Revisar identidad',
       ACTIVE: 'Ya está activo',
     };
@@ -669,10 +620,8 @@ export class MarketingReactivationComponent implements OnInit {
 
   getOperationalContactIcon(row: ReactivationCandidateRow): string {
     const icons: Record<OperationalContactStatus, string> = {
-      NO_CONTACT_IN_PERIOD: 'phone_disabled',
-      NO_OUTBOUND_MESSAGE: 'mark_chat_unread',
-      CONTACTED_BEFORE_EXPIRATION: 'forum',
-      CONTACTED_AFTER_EXPIRATION: 'forum',
+      AVAILABLE: 'campaign',
+      CONTACTED_THIS_MONTH: 'forum',
       REVIEW_IDENTITY: 'warning_amber',
       ACTIVE: 'check_circle',
     };
@@ -681,10 +630,8 @@ export class MarketingReactivationComponent implements OnInit {
 
   getOperationalContactClass(row: ReactivationCandidateRow): string {
     const classes: Record<OperationalContactStatus, string> = {
-      NO_CONTACT_IN_PERIOD: 'no-contact',
-      NO_OUTBOUND_MESSAGE: 'no-outbound',
-      CONTACTED_BEFORE_EXPIRATION: 'contacted',
-      CONTACTED_AFTER_EXPIRATION: 'contacted',
+      AVAILABLE: 'unknown',
+      CONTACTED_THIS_MONTH: 'contacted',
       REVIEW_IDENTITY: 'review',
       ACTIVE: 'active',
     };
@@ -856,7 +803,7 @@ export class MarketingReactivationComponent implements OnInit {
   private configureFilters(): void {
     merge(
       this.branchFilter.valueChanges,
-      this.tariffFilter.valueChanges,
+      this.tariffCategoryFilter.valueChanges,
       this.tariffGroupFilter.valueChanges,
       this.statusFilter.valueChanges,
     )
@@ -924,12 +871,14 @@ export class MarketingReactivationComponent implements OnInit {
         next: (response) => {
           this.loadingTariffs = false;
           this.tariffRows = response.rows;
-          const selected = this.tariffFilter.value;
+          const selected = this.tariffCategoryFilter.value;
           if (
             selected !== 'ALL'
-            && !response.rows.some((row) => row.tarifa === selected)
+            && !response.rows.some(
+              (row) => row.categoria_tarifa?.trim() === selected,
+            )
           ) {
-            this.tariffFilter.setValue('ALL');
+            this.tariffCategoryFilter.setValue('ALL');
           }
         },
         error: () => {
@@ -965,9 +914,10 @@ export class MarketingReactivationComponent implements OnInit {
       sucursal: this.branchFilter.value === 'ALL'
         ? null
         : this.branchFilter.value,
-      tarifa: this.tariffFilter.value === 'ALL'
+      tarifa: null,
+      tariffCategory: this.tariffCategoryFilter.value === 'ALL'
         ? null
-        : this.tariffFilter.value,
+        : this.tariffCategoryFilter.value,
       tariffGroup: this.tariffGroupFilter.value === 'ALL'
         ? null
         : this.tariffGroupFilter.value,
@@ -1009,13 +959,14 @@ export class MarketingReactivationComponent implements OnInit {
       sucursal: this.branchFilter.value === 'ALL'
         ? null
         : this.branchFilter.value,
-      tarifa: this.tariffFilter.value === 'ALL'
+      tarifa: null,
+      tariffCategory: this.tariffCategoryFilter.value === 'ALL'
         ? null
-        : this.tariffFilter.value,
+        : this.tariffCategoryFilter.value,
       tariffGroup: this.tariffGroupFilter.value === 'ALL'
         ? null
         : this.tariffGroupFilter.value,
-      operationalStatus: this.statusFilter.value,
+      operationalStatus: 'ALL',
       search: this.searchFilter.value.trim() || null,
     };
   }
@@ -1045,9 +996,10 @@ export class MarketingReactivationComponent implements OnInit {
         : this.branchFilter.value,
       operational_status: this.statusFilter.value,
       search: this.searchFilter.value.trim() || null,
-      tarifa: this.tariffFilter.value === 'ALL'
+      tarifa: null,
+      tariff_category: this.tariffCategoryFilter.value === 'ALL'
         ? null
-        : this.tariffFilter.value,
+        : this.tariffCategoryFilter.value,
       tariff_group: this.tariffGroupFilter.value === 'ALL'
         ? null
         : this.tariffGroupFilter.value,
