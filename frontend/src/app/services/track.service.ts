@@ -1738,11 +1738,13 @@ export type TrackForecastCenterCohort = 'all' | 'total_ultra' | 'legacy_21' | 'n
 export type TrackForecastCenterBreakdownDimension = 'cohort' | 'region' | 'branch' | 'none';
 export type TrackForecastCenterProjectionMethod =
   | 'branch_historical_calendar_weights'
+  | 'linear_mtd_pace'
   | 'legacy_21_calendar_weights'
   | 'unavailable';
 export type TrackForecastCenterProjectionMethodStatus = 'available' | 'unavailable';
 export type TrackForecastCenterProjectionMethodReason =
   | 'sufficient_branch_history'
+  | 'under_twelve_operating_months'
   | 'insufficient_comparable_branch_history'
   | 'projection_unavailable'
   | 'missing_dates'
@@ -2032,7 +2034,17 @@ export interface TrackForecastCenterCutoff {
 }
 
 export interface TrackForecastCenterMethodology {
-  projection_formula: 'projected_close = real_mtd / historical_progress_pct';
+  projection_formula: 'method_dependent_by_operational_age';
+  historical_projection_formula:
+    'projected_close = real_mtd / historical_progress_pct';
+  linear_projection_formula:
+    'projected_close = real_mtd / cutoff_day * days_in_month';
+  operational_age_threshold_months: 12;
+  projection_method_resolution: {
+    under_threshold: 'linear_mtd_pace';
+    at_or_above_threshold: 'branch_historical_calendar_weights';
+    without_operational_date: 'legacy_rules';
+  };
   calendar_method: TrackForecastCenterCalendarMethod;
   goal_basis: 'total_mtd';
   distribution_basis: 'venta_total_base';

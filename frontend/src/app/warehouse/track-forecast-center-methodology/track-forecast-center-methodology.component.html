@@ -7,13 +7,9 @@
   <article><h3>Fallbacks calendario</h3><ul><li *ngFor="let item of fallbackItems">{{ item }}</li><li *ngIf="!fallbackItems.length">No se aplicaron fallbacks.</li></ul><p>El fallback conserva la alineación disponible; no sustituye el criterio de día de la semana.</p></article>
   <article *ngIf="showNewBranchProjection" class="new-branch-projection">
     <h3>Proyección para sucursales nuevas</h3>
-    <p>Desde el día 10, la estimación toma el real acumulado de cada sucursal nueva como escala y aplica la distribución histórica por día de la semana y posición dentro del mes de las sucursales maduras.</p>
+    <p>{{ newBranchProjectionDescription }}</p>
     <ul>
-      <li>Pondera por igual cada sucursal y mes válidos.</li>
-      <li>No es una proyección lineal.</li>
-      <li>No utiliza importes históricos de otras sucursales como escala.</li>
-      <li>No rellena con cero los días faltantes.</li>
-      <li>Se mantiene como una estimación provisional.</li>
+      <li *ngFor="let note of newBranchProjectionNotes">{{ note }}</li>
     </ul>
     <dl><div *ngFor="let item of newBranchProjectionItems"><dt>{{ item.label }}</dt><dd>{{ item.value }}</dd></div></dl>
   </article>

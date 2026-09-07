@@ -2331,6 +2331,35 @@ def load_first_store_income_dates_bulk(
     }
 
 
+def resolve_branch_income_projection_mode(
+    *,
+    first_store_income_date: date | None,
+    cutoff_date: date,
+) -> Literal["linear_mtd_pace", "historical"] | None:
+    if first_store_income_date is None:
+        return None
+
+    anniversary_year = first_store_income_date.year + 1
+    anniversary_day = min(
+        first_store_income_date.day,
+        monthrange(
+            anniversary_year,
+            first_store_income_date.month,
+        )[1],
+    )
+    twelve_month_anniversary = date(
+        anniversary_year,
+        first_store_income_date.month,
+        anniversary_day,
+    )
+
+    return (
+        "linear_mtd_pace"
+        if cutoff_date < twelve_month_anniversary
+        else "historical"
+    )
+
+
 def build_branch_income_projection_summary(
     *,
     sucursal_canon: str,
@@ -2359,47 +2388,34 @@ def build_branch_income_projection_summary(
         }
 
     cutoff_date = target_month.replace(day=cutoff_day)
-    has_completed_operating_year = False
+    projection_mode = resolve_branch_income_projection_mode(
+        first_store_income_date=first_store_income_date,
+        cutoff_date=cutoff_date,
+    )
+    has_completed_operating_year = projection_mode == "historical"
 
-    if first_store_income_date is not None:
-        anniversary_year = first_store_income_date.year + 1
-        anniversary_day = min(
-            first_store_income_date.day,
-            monthrange(
-                anniversary_year,
-                first_store_income_date.month,
-            )[1],
+    if projection_mode == "linear_mtd_pace":
+        month_days = monthrange(
+            target_month.year,
+            target_month.month,
+        )[1]
+
+        projected_close = (
+            current_income_mtd
+            / Decimal(cutoff_day)
+            * Decimal(month_days)
         )
-        twelve_month_anniversary = date(
-            anniversary_year,
-            first_store_income_date.month,
-            anniversary_day,
-        )
 
-        if cutoff_date < twelve_month_anniversary:
-            month_days = monthrange(
-                target_month.year,
-                target_month.month,
-            )[1]
-
-            projected_close = (
-                current_income_mtd
-                / Decimal(cutoff_day)
-                * Decimal(month_days)
-            )
-
-            return {
-                "status": "available",
-                "method": "linear_mtd_pace",
-                "projection_label": "Proyección lineal",
-                "projected_close": str(projected_close),
-                "historical_progress_pct_at_cutoff": None,
-                "historical_months": 0,
-                "confidence": None,
-                "quality_issue": None,
-            }
-
-        has_completed_operating_year = True
+        return {
+            "status": "available",
+            "method": "linear_mtd_pace",
+            "projection_label": "Proyección lineal",
+            "projected_close": str(projected_close),
+            "historical_progress_pct_at_cutoff": None,
+            "historical_months": 0,
+            "confidence": None,
+            "quality_issue": None,
+        }
 
     curve = _build_historical_curve(
         target_month=target_month.replace(day=1),

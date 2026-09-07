@@ -23,6 +23,7 @@ from app.warehouse.services.track_forecast_center_service import (
     resolve_forecast_center_universe,
     select_forecast_center_scope,
     _build_breakdown,
+    _build_quality,
     _projection_method_coverage,
 )
 
@@ -495,6 +496,98 @@ class ForecastCenterCatalogsTest(unittest.TestCase):
         self.assertTrue(payload["regions"][0]["is_partial_access"])
 
 
+class ForecastCenterQualityTest(unittest.TestCase):
+    def test_methodology_describes_operational_age_projection_rule(self):
+        branch = _branch(
+            "NEW",
+            99,
+            cohort="new_gyms",
+        )
+        result = _result(
+            "NEW",
+            branch_id=99,
+            cohort="new_gyms",
+        )
+        result.quality.update(
+            {
+                "projection_method": "linear_mtd_pace",
+                "projection_method_status": "available",
+                "projection_is_provisional": False,
+                "projection_method_reason": "under_twelve_operating_months",
+            }
+        )
+
+        universe = ForecastCenterUniverse(
+            branches=[branch],
+            exclusions=[],
+            unauthorized_removed=0,
+            total_region_branch_counts={"R1": 1},
+        )
+        bundle = SimpleNamespace(
+            mart_by_branch={"NEW": object()},
+            legacy_21_curve={},
+            target_month=date(2026, 7, 1),
+            canonical_snapshot_id=123,
+            canonical_business_date=date(2026, 7, 10),
+            loader_invocations={},
+        )
+        access = ForecastCenterAccess(
+            "global",
+            True,
+            (),
+            0,
+            role="ADMIN",
+        )
+        resolved_version = SimpleNamespace(
+            id=99,
+            version_type="preview_operativo",
+            status="success",
+        )
+
+        quality = _build_quality(
+            selected_branches=[branch],
+            results=[result],
+            universe=universe,
+            bundle=bundle,
+            access=access,
+            resolved_version=resolved_version,
+        )
+
+        methodology = quality["methodology"]
+
+        self.assertEqual(
+            methodology["projection_formula"],
+            "method_dependent_by_operational_age",
+        )
+        self.assertEqual(
+            methodology["historical_projection_formula"],
+            "projected_close = real_mtd / historical_progress_pct",
+        )
+        self.assertEqual(
+            methodology["linear_projection_formula"],
+            "projected_close = real_mtd / cutoff_day * days_in_month",
+        )
+        self.assertEqual(
+            methodology["operational_age_threshold_months"],
+            12,
+        )
+        self.assertEqual(
+            methodology["projection_method_resolution"][
+                "under_threshold"
+            ],
+            "linear_mtd_pace",
+        )
+        self.assertEqual(
+            methodology["projection_method_resolution"][
+                "at_or_above_threshold"
+            ],
+            "branch_historical_calendar_weights",
+        )
+        self.assertFalse(
+            methodology["fallback_is_linear"]
+        )
+
+
 class ForecastCenterAggregationTest(unittest.TestCase):
     def test_direct_sums_and_derived_percentages_use_aggregate_sums(self):
         result = aggregate_forecast_center_results(
@@ -609,6 +702,55 @@ class ForecastCenterAggregationTest(unittest.TestCase):
         self.assertEqual(result["projected_gap_to_goal"], Decimal("420"))
         self.assertEqual(result["projected_goal_attainment_pct"], Decimal("1.2"))
 
+    def test_mixed_historical_and_linear_projection_reaches_full_coverage(self):
+        results = [
+            _result(
+                f"B{index}",
+                branch_id=index,
+                goal=Decimal("100"),
+                real=Decimal("50"),
+                projected=Decimal("120"),
+            )
+            for index in range(1, 26)
+        ]
+
+        for result in results[21:]:
+            result.quality.update(
+                {
+                    "projection_method": "linear_mtd_pace",
+                    "projection_method_status": "available",
+                    "projection_is_provisional": False,
+                    "projection_method_reason": "under_twelve_operating_months",
+                }
+            )
+
+        result = aggregate_forecast_center_results(results)
+
+        coverage = result["metric_coverage"][
+            "projected_close_comparable_to_goal"
+        ]
+
+        self.assertEqual(coverage["status"], "available")
+        self.assertEqual(coverage["included_branch_count"], 25)
+        self.assertEqual(coverage["eligible_branch_count"], 25)
+
+        self.assertEqual(
+            result["projected_close_comparable_to_goal"],
+            Decimal("3000"),
+        )
+        self.assertEqual(
+            result["goal_month_comparable_to_projection"],
+            Decimal("2500"),
+        )
+        self.assertEqual(
+            result["projected_gap_to_goal"],
+            Decimal("500"),
+        )
+        self.assertEqual(
+            result["projected_goal_attainment_pct"],
+            Decimal("1.2"),
+        )
+
     def test_projection_comparable_fields_are_null_without_projection(self):
         result = aggregate_forecast_center_results(
             [_result("NEW", projected=None)]
@@ -691,7 +833,7 @@ class ForecastCenterAggregationTest(unittest.TestCase):
             _result(f"L{index}", branch_id=index)
             for index in range(1, 22)
         ]
-        fallbacks = [
+        linears = [
             _result(
                 f"N{index}",
                 branch_id=21 + index,
@@ -699,25 +841,41 @@ class ForecastCenterAggregationTest(unittest.TestCase):
             )
             for index in range(1, 5)
         ]
-        for result in fallbacks:
+        for result in linears:
             result.quality.update(
                 {
-                    "projection_method": "legacy_21_calendar_weights",
-                    "projection_is_provisional": True,
-                    "projection_method_reason": "insufficient_comparable_branch_history",
-                    "reference_sample_count": 684,
-                    "reference_branch_count": 21,
-                    "minimum_cutoff_day": 10,
+                    "projection_method": "linear_mtd_pace",
+                    "projection_is_provisional": False,
+                    "projection_method_reason": "under_twelve_operating_months",
+                    "reference_sample_count": None,
+                    "reference_branch_count": None,
+                    "minimum_cutoff_day": None,
                 }
             )
-        coverage = _projection_method_coverage([*results, *fallbacks])
+
+        coverage = _projection_method_coverage([*results, *linears])
+
         self.assertEqual(
             coverage["branch_historical_calendar_weights"]["branch_count"], 21
         )
-        self.assertEqual(coverage["legacy_21_calendar_weights"]["branch_count"], 4)
         self.assertEqual(
-            coverage["legacy_21_calendar_weights"]["projected_branch_count"], 4
+            coverage["branch_historical_calendar_weights"]["projected_branch_count"],
+            21,
         )
+        self.assertEqual(
+            coverage["linear_mtd_pace"]["branch_count"],
+            4,
+        )
+        self.assertEqual(
+            coverage["linear_mtd_pace"]["projected_branch_count"],
+            4,
+        )
+
+        total_projected = sum(
+            item["projected_branch_count"]
+            for item in coverage.values()
+        )
+        self.assertEqual(total_projected, 25)
 
 
 class ForecastCenterSeriesTest(unittest.TestCase):
@@ -841,6 +999,7 @@ class ForecastCenterSeriesTest(unittest.TestCase):
 
 
 class ForecastCenterBulkLoaderTest(unittest.TestCase):
+    @patch("app.warehouse.services.track_forecast_center_service.load_first_store_income_dates_bulk")
     @patch("app.warehouse.services.track_forecast_center_service._load_legacy_21_curve_bulk")
     @patch("app.warehouse.services.track_forecast_center_service._load_canonical_cutoff_bulk")
     @patch("app.warehouse.services.track_forecast_center_service._load_historical_series_bulk")
@@ -855,6 +1014,7 @@ class ForecastCenterBulkLoaderTest(unittest.TestCase):
         history_loader,
         cutoff_loader,
         legacy_loader,
+        first_store_income_loader,
     ):
         mart_model.query.filter.return_value.all.return_value = []
         target_model.query.filter.return_value.all.return_value = []
@@ -862,6 +1022,9 @@ class ForecastCenterBulkLoaderTest(unittest.TestCase):
         history_loader.return_value = {}
         cutoff_loader.return_value = (None, None)
         legacy_loader.return_value = {"status": "unavailable", "points": []}
+        first_store_income_loader.return_value = {
+            "B1": date(2026, 1, 21),
+        }
         branches = [_branch(f"B{index}", index) for index in range(1, 51)]
 
         bundle = bulk_load_forecast_center_data(
@@ -879,6 +1042,14 @@ class ForecastCenterBulkLoaderTest(unittest.TestCase):
         )
         self.assertEqual(bundle.loader_invocations["canonical_cutoff"], 1)
         self.assertEqual(bundle.loader_invocations["legacy_21_calendar_reference"], 1)
+        self.assertEqual(bundle.loader_invocations["first_store_income_dates"], 1)
+        self.assertEqual(
+            bundle.first_store_income_dates,
+            {"B1": date(2026, 1, 21)},
+        )
+        first_store_income_loader.assert_called_once_with(
+            tuple(f"B{index}" for index in range(1, 51))
+        )
         legacy_loader.assert_called_once_with(target_month=date(2026, 7, 1))
         current_loader.assert_called_once()
         history_loader.assert_called_once()
@@ -1041,6 +1212,7 @@ class ForecastCenterLegacyFallbackTest(unittest.TestCase):
         historical_count: int = 0,
         goal: Decimal = Decimal("400000"),
         inconsistent_components: bool = False,
+        first_store_income_date: date | None = None,
     ):
         branch = _branch("NEW", 99, cohort=cohort)
         mart = SimpleNamespace(
@@ -1076,6 +1248,11 @@ class ForecastCenterLegacyFallbackTest(unittest.TestCase):
             target_by_branch={},
             current_candidates_by_branch={"NEW": candidates},
             historical_series_by_branch={"NEW": self._historical_series(historical_count)},
+            first_store_income_dates=(
+                {"NEW": first_store_income_date}
+                if first_store_income_date is not None
+                else {}
+            ),
             legacy_21_curve=self._legacy_curve(available=legacy_available),
         )
         return calculate_compact_branch_forecast(
@@ -1085,10 +1262,74 @@ class ForecastCenterLegacyFallbackTest(unittest.TestCase):
             track_daily_version_id=99,
         )
 
+    def test_new_gym_before_twelve_months_uses_linear_projection(self):
+        result = self._calculate(
+            cutoff=6,
+            real=Decimal("60000"),
+            first_store_income_date=date(2026, 1, 21),
+        )
+
+        self.assertEqual(
+            result.summary["projected_close"],
+            Decimal("310000"),
+        )
+        self.assertEqual(
+            result.quality["projection_method"],
+            "linear_mtd_pace",
+        )
+        self.assertEqual(
+            result.quality["projection_method_status"],
+            "available",
+        )
+        self.assertFalse(
+            result.quality["projection_is_provisional"]
+        )
+        self.assertEqual(
+            result.series["projected"][0]["status"],
+            "cutoff_anchor",
+        )
+        self.assertEqual(
+            result.series["projected"][-1]["cumulative"],
+            Decimal("310000"),
+        )
+        future_daily = [
+            point["daily"]
+            for point in result.series["projected"][1:]
+        ]
+        self.assertTrue(future_daily)
+        for daily in future_daily:
+            self.assertAlmostEqual(
+                daily,
+                Decimal("10000"),
+                places=10,
+            )
+
     def test_historical_method_keeps_priority(self):
         result = self._calculate(historical_count=3)
         self.assertEqual(result.quality["projection_method"], "branch_historical_calendar_weights")
         self.assertFalse(result.quality["projection_is_provisional"])
+
+    def test_mature_branch_accepts_one_useful_historical_comparable(self):
+        result = self._calculate(
+            historical_count=1,
+            first_store_income_date=date(2025, 6, 1),
+        )
+
+        self.assertEqual(
+            result.quality["projection_method"],
+            "branch_historical_calendar_weights",
+        )
+        self.assertEqual(
+            result.quality["projection_method_status"],
+            "available",
+        )
+        self.assertFalse(
+            result.quality["projection_is_provisional"]
+        )
+        self.assertEqual(
+            result.summary["projected_close"],
+            Decimal("310000"),
+        )
 
     def test_new_gym_uses_provisional_legacy_fallback_from_day_ten(self):
         result = self._calculate()
