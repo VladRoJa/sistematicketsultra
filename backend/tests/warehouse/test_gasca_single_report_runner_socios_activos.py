@@ -67,6 +67,14 @@ def test_socios_activos_downloads_current_raw_without_date_filters(
             "socios_activos no debe llenar un rango de fechas"
         ),
     )
+    monkeypatch.setattr(
+        runner,
+        "_rellenar_corte_socios_activos",
+        lambda *, page, cutoff_date: captured.setdefault(
+            "cutoff_date",
+            cutoff_date,
+        ),
+    )
     monkeypatch.setattr(runner, "_click_boton_generar", lambda page: None)
     monkeypatch.setattr(
         runner,
@@ -93,6 +101,7 @@ def test_socios_activos_downloads_current_raw_without_date_filters(
         )
 
     assert captured["report_name"] == "Reporte Socios Activos"
+    assert captured["cutoff_date"] == date(2026, 9, 7)
     assert metadata["cutoff_date"] == "2026-09-07"
     assert metadata["branch_scope"] == "unfiltered"
     assert metadata["raw_file_preserved"] is True

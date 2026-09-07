@@ -627,6 +627,32 @@ def _resolve_socios_activos_cutoff_date(
     return normalized
 
 
+def _rellenar_corte_socios_activos(
+    *,
+    page: Any,
+    cutoff_date: date,
+) -> None:
+    selector = "#txtFechaFn input"
+    field = page.locator(selector)
+
+    if field.count() != 1:
+        raise GascaSingleReportRunnerError(
+            "Socios Activos: no se encontró exactamente un campo "
+            "'Corte de fecha' (#txtFechaFn input)."
+        )
+
+    expected_value = cutoff_date.strftime("%m/%d/%Y")
+    field.fill(expected_value)
+    field.press("Tab")
+
+    actual_value = field.input_value().strip()
+    if actual_value != expected_value:
+        raise GascaSingleReportRunnerError(
+            "Socios Activos: el campo 'Corte de fecha' no conservó "
+            f"el valor esperado. esperado={expected_value!r} actual={actual_value!r}"
+        )
+
+
 def _esperar_tabla_socios_activos(
     *,
     page: Any,
@@ -704,6 +730,10 @@ def _run_socios_activos_report(
         page.goto(runtime.reportes_url, timeout=120_000)
         page.wait_for_load_state("networkidle")
         _seleccionar_tipo_reporte(page, "Reporte Socios Activos")
+        _rellenar_corte_socios_activos(
+            page=page,
+            cutoff_date=cutoff_date,
+        )
         _click_boton_generar(page)
 
         approximate_row_count = _esperar_tabla_socios_activos(
