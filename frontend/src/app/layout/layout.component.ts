@@ -250,16 +250,21 @@ ngOnInit(): void {
     ],
   };
 
+  const marketingConversionSubmenu = [
+    { label: 'Embudo mensual', path: '/marketing-conversion' },
+  ];
+
+  if (this.puedeVerMarketingReactivacionPorRol()) {
+    marketingConversionSubmenu.push({
+      label: 'Reactivación de socios',
+      path: '/marketing/reactivation',
+    });
+  }
+
   const menuMarketingConversion = {
     label: 'Marketing y Conversión',
     path: '/marketing-conversion',
-    submenu: [
-      { label: 'Embudo mensual', path: '/marketing-conversion' },
-      {
-        label: 'Reactivación de socios',
-        path: '/marketing/reactivation',
-      },
-    ],
+    submenu: marketingConversionSubmenu,
   };
 
   const soloTickets = [
@@ -1047,7 +1052,6 @@ onTicketValidationDragStarted(): void {
 onTicketValidationDragEnded(event: CdkDragEnd): void {
   const movioEnX = Math.abs(event.distance?.x || 0) > 3;
   const movioEnY = Math.abs(event.distance?.y || 0) > 3;
-
   this.validationAlertFueArrastrada = movioEnX || movioEnY;
 
   const freePosition = event.source.getFreeDragPosition();
@@ -1224,6 +1228,11 @@ private puedeVerControlRutinasPorRol(): boolean {
 private puedeVerMarketingConversionPorRol(): boolean {
   const user = this.authService.getUser();
   const rol = String(user?.rol ?? user?.role ?? '').trim().toUpperCase();
+  const username = String(user?.username ?? '').trim().toUpperCase();
+
+  if (username === 'ADMICORP') {
+    return true;
+  }
 
   return [
     'ADMIN',
@@ -1231,8 +1240,25 @@ private puedeVerMarketingConversionPorRol(): boolean {
     'SUPER_ADMIN',
     'MARKETING',
     'LECTOR_GLOBAL',
-    //'GERENTE_REGIONAL',
-    //'GERENTE',
+    'GERENTE',
+    'GERENTE_REGIONAL',
+  ].includes(rol);
+}
+
+private puedeVerMarketingReactivacionPorRol(): boolean {
+  const user = this.authService.getUser();
+  const rol = String(user?.rol ?? user?.role ?? '').trim().toUpperCase();
+  const username = String(user?.username ?? '').trim().toUpperCase();
+
+  if (username === 'ADMICORP') {
+    return false;
+  }
+
+  return [
+    'ADMIN',
+    'ADMINISTRADOR',
+    'SUPER_ADMIN',
+    'MARKETING',
   ].includes(rol);
 }
 
@@ -1453,4 +1479,3 @@ onMainMenuClick(item: any): void {
   // Fin Suite Ultra UI v1 - Helpers visuales del menú principal
   // ============================================================================
 }
-
