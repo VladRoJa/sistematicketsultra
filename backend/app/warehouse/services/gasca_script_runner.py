@@ -22,6 +22,7 @@ SUPPORTED_REPORT_TYPES = frozenset(
         "cargos_recurrentes",
         "venta_total",
         "socios_vencidos",
+        "socios_activos",
     }
 )
 
@@ -250,6 +251,7 @@ def _select_strategy_callable(
         "cargos_recurrentes",
         "venta_total",
         "socios_vencidos",
+        "socios_activos",
     }
 
     legacy_main_report_types = {

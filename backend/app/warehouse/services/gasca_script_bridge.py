@@ -25,6 +25,7 @@ SUPPORTED_REPORT_TYPES = frozenset(
         "cargos_recurrentes",
         "venta_total",
         "socios_vencidos",
+        "socios_activos",
     }
 )
 
@@ -36,6 +37,7 @@ DEFAULT_FILENAME_PREFIXES: dict[str, str] = {
     "cargos_recurrentes" : "cargos_recurrentes",
     "venta_total": "venta_total",
     "socios_vencidos": "socios_vencidos",
+    "socios_activos": "socios_activos",
 }
 
 DEFAULT_OUTPUT_DIRS: dict[str, str] = {
@@ -46,6 +48,7 @@ DEFAULT_OUTPUT_DIRS: dict[str, str] = {
     "cargos_recurrentes" : "data/cargos_recurrentes",
     "venta_total": "data/venta_total",
     "socios_vencidos": "data/socios_vencidos",
+    "socios_activos": "data/socios_activos",
 }
 
 DEFAULT_XLSX_CONTENT_TYPE = (

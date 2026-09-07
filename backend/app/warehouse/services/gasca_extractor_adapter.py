@@ -26,6 +26,7 @@ SUPPORTED_REPORT_TYPES = frozenset(
         "cargos_recurrentes",
         "venta_total",
         "socios_vencidos",
+        "socios_activos",
     }
 )
 
@@ -38,6 +39,7 @@ REPORT_EXTRACTOR_CONFIG_KEYS: dict[str, str] = {
     "cargos_recurrentes": "WAREHOUSE_GASCA_CARGOS_RECURRENTES_EXTRACTOR",
     "venta_total": "WAREHOUSE_GASCA_VENTA_TOTAL_EXTRACTOR",
     "socios_vencidos": "WAREHOUSE_GASCA_SOCIOS_VENCIDOS_EXTRACTOR",
+    "socios_activos": "WAREHOUSE_GASCA_SOCIOS_ACTIVOS_EXTRACTOR",
 }
 
 # Fallback opcional: un solo extractor multipropósito.
