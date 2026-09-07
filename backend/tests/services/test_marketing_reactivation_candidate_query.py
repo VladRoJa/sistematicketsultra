@@ -108,7 +108,7 @@ def test_same_expiration_date_uses_highest_id_as_stable_tiebreaker():
     assert [row.id for row in rows] == [20]
 
 
-def test_query_compiles_to_partitioned_row_number_and_outer_range_filter():
+def test_query_compiles_to_anti_exists_with_outer_range_filter():
     session = _session_with_rows([])
     query = build_latest_operational_episode_query(
         session=session,
@@ -120,11 +120,21 @@ def test_query_compiles_to_partitioned_row_number_and_outer_range_filter():
         dialect=postgresql.dialect(),
         compile_kwargs={"literal_binds": True},
     )).lower()
-    assert "row_number() over (partition by" in sql
-    assert "sucursal_key" in sql and "pin" in sql
-    assert "fecha_vencimiento_date desc" in sql
-    assert "socios_vencidos_cartera.id desc" in sql
-    assert "episode_rank = 1" in sql
+    assert "exists (select" in sql
+    assert "reactivation_newer_episode" in sql
+    assert "row_number()" not in sql
+    assert (
+        "reactivation_newer_episode.sucursal_key = "
+        "socios_vencidos_cartera.sucursal_key"
+    ) in sql
+    assert (
+        "reactivation_newer_episode.pin = socios_vencidos_cartera.pin"
+    ) in sql
+    assert (
+        "reactivation_newer_episode.fecha_vencimiento_date > "
+        "socios_vencidos_cartera.fecha_vencimiento_date"
+    ) in sql
+    assert "reactivation_newer_episode.id > socios_vencidos_cartera.id" in sql
     assert "between '2026-01-01' and '2026-12-31'" in sql
 
 

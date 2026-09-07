@@ -8,6 +8,7 @@ from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import and_, false, func, or_
+from sqlalchemy.orm import aliased
 
 from app.models import MarketingReactivationTariffORM
 from app.models.warehouse import SociosVencidosCarteraORM
@@ -71,33 +72,36 @@ def build_latest_operational_episode_query(
 ):
     """Selecciona primero el último episodio global y después filtra."""
 
-    ranked = session.query(
-        SociosVencidosCarteraORM.id.label("episode_id"),
-        func.row_number().over(
-            partition_by=(
-                SociosVencidosCarteraORM.sucursal_key,
-                SociosVencidosCarteraORM.pin,
-            ),
-            order_by=(
-                SociosVencidosCarteraORM.fecha_vencimiento_date.desc(),
-                SociosVencidosCarteraORM.id.desc(),
-            ),
-        ).label("episode_rank"),
-    ).subquery("reactivation_ranked_episodes")
-
-    query = (
-        session.query(SociosVencidosCarteraORM)
-        .join(
-            ranked,
-            SociosVencidosCarteraORM.id == ranked.c.episode_id,
-        )
+    newer_episode = aliased(
+        SociosVencidosCarteraORM,
+        name="reactivation_newer_episode",
+    )
+    newer_episode_exists = (
+        session.query(newer_episode.id)
         .filter(
-            ranked.c.episode_rank == 1,
-            SociosVencidosCarteraORM.fecha_vencimiento_date.between(
-                date_from,
-                date_to,
+            newer_episode.sucursal_key
+            == SociosVencidosCarteraORM.sucursal_key,
+            newer_episode.pin == SociosVencidosCarteraORM.pin,
+            or_(
+                newer_episode.fecha_vencimiento_date
+                > SociosVencidosCarteraORM.fecha_vencimiento_date,
+                and_(
+                    newer_episode.fecha_vencimiento_date
+                    == SociosVencidosCarteraORM.fecha_vencimiento_date,
+                    newer_episode.id > SociosVencidosCarteraORM.id,
+                ),
             ),
         )
+        .correlate(SociosVencidosCarteraORM)
+        .exists()
+    )
+
+    query = session.query(SociosVencidosCarteraORM).filter(
+        SociosVencidosCarteraORM.fecha_vencimiento_date.between(
+            date_from,
+            date_to,
+        ),
+        ~newer_episode_exists,
     )
     if allowed_sucursal_keys is not None:
         query = query.filter(

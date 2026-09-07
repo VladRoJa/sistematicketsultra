@@ -3,19 +3,32 @@
 ## Semántica
 
 `socios_vencidos_cartera` continúa siendo el histórico inmutable de episodios.
-El universo operativo selecciona primero una sola fila por
-`(sucursal_key, pin)` mediante:
+El universo operativo conserva una sola fila por `(sucursal_key, pin)` con la
+misma precedencia global: mayor `fecha_vencimiento_date` y, ante empate, mayor
+`id`.
+
+Para evitar rankear toda la cartera histórica en cada request, la consulta
+parte del rango solicitado y conserva una fila únicamente cuando no existe un
+episodio posterior para el mismo socio y sucursal:
 
 ```sql
-row_number() over (
-  partition by sucursal_key, pin
-  order by fecha_vencimiento_date desc, id desc
+not exists (
+  select 1
+  from socios_vencidos_cartera newer
+  where newer.sucursal_key = c.sucursal_key
+    and newer.pin = c.pin
+    and (
+      newer.fecha_vencimiento_date > c.fecha_vencimiento_date
+      or (
+        newer.fecha_vencimiento_date = c.fecha_vencimiento_date
+        and newer.id > c.id
+      )
+    )
 )
 ```
 
-Sólo después de conservar `episode_rank = 1` se aplican `date_from` y
-`date_to`. Por eso consultar un rango antiguo no revive un episodio cuando el
-mismo miembro y sucursal tienen uno globalmente posterior.
+La semántica no cambia: consultar un rango antiguo no revive un episodio cuando
+el mismo miembro y sucursal tienen uno globalmente posterior.
 
 La consulta reusable está en
 `app/services/marketing_reactivation_candidate_query.py`. Sucursal, tarifa,
@@ -39,11 +52,11 @@ on socios_vencidos_cartera (
 );
 ```
 
-El orden del índice coincide con la partición y desempate del window. Esto
-permite al planificador recorrer los episodios ya agrupados/ordenados y evita
-descubrir el episodio más reciente en Python. La consulta debe inspeccionarse
-con datos representativos después de aplicar la migración; PostgreSQL puede
-elegir un plan distinto según cardinalidad y estadísticas.
+El índice permite que el anti-join correlacionado localice rápidamente los
+episodios del mismo `(sucursal_key, pin)` y compruebe si existe una fecha o `id`
+posterior. La consulta debe inspeccionarse con datos representativos después de
+aplicar la migración; PostgreSQL puede elegir un plan distinto según
+cardinalidad y estadísticas.
 
 ## Inspección con EXPLAIN ANALYZE
 
