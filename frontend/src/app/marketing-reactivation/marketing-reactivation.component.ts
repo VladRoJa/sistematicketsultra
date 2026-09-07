@@ -288,11 +288,13 @@ export class MarketingReactivationComponent implements OnInit {
     return this.sources?.branches ?? [];
   }
 
-  get summaryCards(): SummaryCard[] {
+  summaryCards: SummaryCard[] = [];
+
+  private refreshSummaryCards(): void {
     const summary = this.candidateSummary?.summary;
     const counts = summary?.operational_counts;
 
-    return [
+    this.summaryCards = [
       {
         label: 'Vencidos seleccionados',
         value: summary?.total_rows ?? 0,
@@ -778,6 +780,7 @@ export class MarketingReactivationComponent implements OnInit {
           return;
         }
         this.candidateSummary = result.data;
+        this.refreshSummaryCards();
       });
   }
 
@@ -833,6 +836,7 @@ export class MarketingReactivationComponent implements OnInit {
     this.sources = sources;
     this.candidates = null;
     this.candidateSummary = null;
+    this.summaryCards = [];
     this.dataSource.data = [];
     this.candidatesError = '';
     this.resetCandidateNavigation();
