@@ -42,6 +42,7 @@ from app.services.marketing_reactivation_service import (
     build_marketing_reactivation_candidate_summary,
     build_marketing_reactivation_candidates,
     create_marketing_reactivation_campaign,
+    export_marketing_reactivation_selection,
     export_marketing_reactivation_campaign,
     get_marketing_reactivation_campaign,
     list_marketing_reactivation_campaigns,
@@ -339,6 +340,44 @@ def get_marketing_reactivation_candidate_summary_endpoint():
             {
                 "status": "error",
                 "message": "Falló el resumen de candidatos de reactivación.",
+            }
+        ), 500
+
+
+@marketing_bp.post("/reactivation/candidates/export")
+@jwt_required()
+def export_marketing_reactivation_selection_endpoint():
+    try:
+        _, access = _resolve_request_access()
+        _require_campaign_management(access)
+        payload = _parse_campaign_payload(require_name=False)
+        file_bytes, filename = export_marketing_reactivation_selection(
+            date_from=payload.get("date_from"),
+            date_to=payload.get("date_to"),
+            filters=payload.get("filters"),
+            allowed_sucursal_keys=_reactivation_allowed_sucursal_keys(access),
+            session=db.session,
+        )
+        return send_file(
+            BytesIO(file_bytes),
+            as_attachment=True,
+            download_name=filename,
+            mimetype=(
+                "application/vnd.openxmlformats-officedocument."
+                "spreadsheetml.sheet"
+            ),
+        )
+    except MarketingAuthorizationError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 403
+    except MarketingReactivationValidationError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception:
+        return jsonify(
+            {
+                "status": "error",
+                "message": (
+                    "Falló la descarga de la selección de reactivación."
+                ),
             }
         ), 500
 

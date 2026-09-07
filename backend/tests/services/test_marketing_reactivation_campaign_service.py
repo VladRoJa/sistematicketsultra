@@ -728,6 +728,94 @@ def _campaign(status="DRAFT"):
     )
 
 
+def test_export_selection_all_excludes_active_and_uses_catalog(monkeypatch):
+    available = {
+        **_candidate(
+            1,
+            phone="686 100 0001",
+            tariff="1 MES $899",
+            tariff_category="Mensualidad",
+        ),
+        "operational_status": "AVAILABLE",
+    }
+    contacted = {
+        **_candidate(
+            2,
+            phone="686 100 0002",
+            tariff="PASE GYMPASS",
+            tariff_category="Agregadora",
+            tariff_group="EXCLUDE",
+        ),
+        "operational_status": "CONTACTED_THIS_MONTH",
+    }
+    active = {
+        **_candidate(
+            3,
+            phone="686 100 0003",
+            status="EXCLUDED_ACTIVE",
+            reason="ACTIVE_CONFIRMED",
+            tariff_category="Mensualidad",
+        ),
+        "operational_status": "ACTIVE",
+    }
+    monkeypatch.setattr(
+        service,
+        "_build_marketing_reactivation_campaign_segment",
+        lambda **kwargs: {"rows": [available, contacted, active]},
+    )
+
+    file_bytes, filename = service.export_marketing_reactivation_selection(
+        date_from="2026-08-23",
+        date_to="2026-08-23",
+        filters=_filters(operational_status="ALL"),
+        session=object(),
+    )
+
+    workbook = load_workbook(BytesIO(file_bytes), read_only=True)
+    rows = list(workbook["Seleccion"].iter_rows(values_only=True))
+    assert rows[0] == (
+        "Nombre",
+        "Teléfono",
+        "Sucursal",
+        "Fecha vencimiento",
+        "Tarifa",
+        "Estado",
+    )
+    assert rows[1] == (
+        "Socio 1",
+        "6861000001",
+        "CENTRO",
+        "2026-08-23",
+        "Mensualidad",
+        "AVAILABLE",
+    )
+    assert rows[2] == (
+        "Socio 2",
+        "6861000002",
+        "CENTRO",
+        "2026-08-23",
+        "Agregadora",
+        "CONTACTED_THIS_MONTH",
+    )
+    assert len(rows) == 3
+    assert filename == (
+        "reactivacion_seleccion_2026-08-23_2026-08-23.xlsx"
+    )
+
+
+def test_export_selection_rejects_active_filter():
+    with pytest.raises(
+        service.MarketingReactivationValidationError,
+        match="activos no se pueden descargar",
+    ):
+        service.export_marketing_reactivation_selection(
+            date_from="2026-08-23",
+            date_to="2026-08-23",
+            filters=_filters(operational_status="ACTIVE"),
+            session=object(),
+        )
+
+
 def test_export_builds_xlsx_and_transitions_draft_after_success(monkeypatch):
     campaign = _campaign()
     session = WriteSession()

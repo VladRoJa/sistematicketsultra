@@ -184,6 +184,7 @@ export class MarketingReactivationComponent implements OnInit {
   loadingTariffs = false;
   loadingPreview = false;
   creatingCampaign = false;
+  exportingSelection = false;
   loadingCampaigns = false;
   loadingCampaignDetail = false;
   campaignActionId: number | null = null;
@@ -398,6 +399,45 @@ export class MarketingReactivationComponent implements OnInit {
     this.sortDirection = event.direction;
     this.resetCandidateNavigation();
     this.requestSelectedCandidates();
+  }
+
+  exportSelection(): void {
+    const request = this.buildCampaignRequest();
+    if (!request) {
+      return;
+    }
+    if (request.filters.operational_status === 'ACTIVE') {
+      this.campaignError = 'Los socios activos no se pueden descargar.';
+      return;
+    }
+
+    this.exportingSelection = true;
+    this.campaignError = '';
+    this.campaignSuccess = '';
+    this.reactivationService
+      .exportSelection(request)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (blob) => {
+          this.exportingSelection = false;
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = (
+            `reactivacion_seleccion_${request.date_from}_${request.date_to}.xlsx`
+          );
+          link.click();
+          URL.revokeObjectURL(url);
+          this.campaignSuccess = 'Selección descargada correctamente.';
+        },
+        error: (error: HttpErrorResponse) => {
+          this.exportingSelection = false;
+          this.campaignError = this.resolveErrorMessage(
+            error,
+            'No fue posible descargar la selección.',
+          );
+        },
+      });
   }
 
   prepareCampaign(): void {

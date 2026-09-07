@@ -221,6 +221,20 @@
         <div class="section-actions">
           <button
             *ngIf="canManageCampaigns"
+            mat-stroked-button
+            type="button"
+            (click)="exportSelection()"
+            [disabled]="
+              exportingSelection
+              || loadingCandidates
+              || statusFilter.value === 'ACTIVE'
+            "
+          >
+            <mat-icon>download</mat-icon>
+            {{ exportingSelection ? 'Descargando…' : 'Descargar selección' }}
+          </button>
+          <button
+            *ngIf="canManageCampaigns"
             mat-flat-button
             color="primary"
             type="button"
