@@ -25,12 +25,14 @@ CORTE_CAJA_REPORT_TYPE_KEY = "corte_caja"
 CARGOS_RECURRENTES_REPORT_TYPE_KEY = "cargos_recurrentes"
 VENTA_TOTAL_REPORT_TYPE_KEY = "venta_total"
 SOCIOS_VENCIDOS_REPORT_TYPE_KEY = "socios_vencidos"
+SOCIOS_ACTIVOS_REPORT_TYPE_KEY = "socios_activos"
 SUPPORTED_REPORT_TYPES = frozenset(
     {
         CORTE_CAJA_REPORT_TYPE_KEY,
         CARGOS_RECURRENTES_REPORT_TYPE_KEY,
         VENTA_TOTAL_REPORT_TYPE_KEY,
         SOCIOS_VENCIDOS_REPORT_TYPE_KEY,
+        SOCIOS_ACTIVOS_REPORT_TYPE_KEY,
     }
 )
 XLSX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -120,6 +122,12 @@ def run_gasca_single_report(
                 runtime=runtime,
                 date_from=date_from,
                 date_to=date_to,
+            )
+        elif report_type_key == SOCIOS_ACTIVOS_REPORT_TYPE_KEY:
+            artifact_path, extra_metadata = _run_socios_activos_report(
+                page=page,
+                runtime=runtime,
+                target_business_date=target_business_date,
             )
         else:
             raise GascaSingleReportRunnerError(
@@ -588,6 +596,161 @@ def _run_socios_vencidos_report(
     }
     return artifact_path, metadata
 
+def _resolve_socios_activos_cutoff_date(
+    *,
+    runtime: GascaRuntimeConfig,
+    target_business_date: date | None,
+) -> date:
+    today_local = datetime.now(
+        pytz.timezone(runtime.timezone_name)
+    ).date()
+
+    if target_business_date is None:
+        return today_local
+
+    if isinstance(target_business_date, datetime):
+        normalized = target_business_date.date()
+    elif isinstance(target_business_date, date):
+        normalized = target_business_date
+    else:
+        raise GascaSingleReportRunnerError(
+            "Socios Activos: target_business_date debe ser date, datetime o None."
+        )
+
+    if normalized != today_local:
+        raise GascaSingleReportRunnerError(
+            "Socios Activos representa únicamente el universo actual; "
+            "target_business_date debe coincidir con la fecha local de hoy. "
+            f"Recibida={normalized.isoformat()} hoy={today_local.isoformat()}."
+        )
+
+    return normalized
+
+
+def _esperar_tabla_socios_activos(
+    *,
+    page: Any,
+    timeout_seconds: int = 120,
+) -> int:
+    current_app.logger.info(
+        "Gasca single report runner: esperando tabla de Socios Activos."
+    )
+
+    loading = page.get_by_text("Cargando", exact=False).first
+    try:
+        loading.wait_for(state="visible", timeout=10_000)
+        loading.wait_for(
+            state="hidden",
+            timeout=timeout_seconds * 1000,
+        )
+    except PlaywrightTimeoutError:
+        pass
+
+    try:
+        page.wait_for_selector(
+            "table tbody tr:visible",
+            state="visible",
+            timeout=timeout_seconds * 1000,
+        )
+        page.wait_for_selector(
+            "button:has-text('Exportar')",
+            state="visible",
+            timeout=timeout_seconds * 1000,
+        )
+    except PlaywrightTimeoutError as exc:
+        raise GascaSingleReportRunnerError(
+            "Socios Activos: no apareció una tabla exportable dentro del timeout."
+        ) from exc
+
+    approximate_row_count = page.locator("table tbody tr:visible").count()
+    if approximate_row_count <= 0:
+        raise GascaSingleReportRunnerError(
+            "Socios Activos: la tabla visible no contiene filas exportables."
+        )
+
+    return approximate_row_count
+
+
+def _validate_socios_activos_downloaded_xlsx(artifact_path: Path) -> None:
+    if not artifact_path.is_file():
+        raise GascaSingleReportRunnerError(
+            "Socios Activos: la descarga no produjo el archivo esperado."
+        )
+    if artifact_path.stat().st_size <= 0:
+        raise GascaSingleReportRunnerError(
+            "Socios Activos: el archivo descargado está vacío."
+        )
+
+
+def _run_socios_activos_report(
+    *,
+    page: Any,
+    runtime: GascaRuntimeConfig,
+    target_business_date: date | None = None,
+) -> tuple[Path, dict[str, Any]]:
+    cutoff_date = _resolve_socios_activos_cutoff_date(
+        runtime=runtime,
+        target_business_date=target_business_date,
+    )
+    started_at = time.monotonic()
+
+    current_app.logger.info(
+        "Gasca single report runner: ejecutando socios_activos "
+        "cutoff_date=%s branch_scope=unfiltered.",
+        cutoff_date.isoformat(),
+    )
+
+    try:
+        page.goto(runtime.reportes_url, timeout=120_000)
+        page.wait_for_load_state("networkidle")
+        _seleccionar_tipo_reporte(page, "Reporte Socios Activos")
+        _click_boton_generar(page)
+
+        approximate_row_count = _esperar_tabla_socios_activos(
+            page=page,
+            timeout_seconds=120,
+        )
+
+        artifact_path = _resolve_contractual_output_path(
+            report_type_key=SOCIOS_ACTIVOS_REPORT_TYPE_KEY
+        )
+        _descargar_excel_desde_tabla(
+            page=page,
+            nombre_reporte="Reporte Socios Activos",
+            destination_path=artifact_path,
+        )
+        _validate_socios_activos_downloaded_xlsx(artifact_path)
+    except Exception:
+        duration_seconds = round(time.monotonic() - started_at, 3)
+        current_app.logger.warning(
+            "Gasca single report runner: socios_activos terminado "
+            "cutoff_date=%s duration_seconds=%s status=failed.",
+            cutoff_date.isoformat(),
+            duration_seconds,
+        )
+        raise
+
+    duration_seconds = round(time.monotonic() - started_at, 3)
+    current_app.logger.info(
+        "Gasca single report runner: socios_activos terminado "
+        "cutoff_date=%s approximate_rows=%s "
+        "duration_seconds=%s status=downloaded.",
+        cutoff_date.isoformat(),
+        approximate_row_count,
+        duration_seconds,
+    )
+
+    metadata = {
+        "cutoff_date": cutoff_date.isoformat(),
+        "snapshot_kind_hint": "daily",
+        "branch_scope": "unfiltered",
+        "approximate_row_count": approximate_row_count,
+        "duration_seconds": duration_seconds,
+        "raw_file_preserved": True,
+    }
+    return artifact_path, metadata
+
+
 def _resolve_contractual_output_path(*, report_type_key: str) -> Path:
     backend_dir = Path(__file__).resolve().parents[3]
     output_dir = backend_dir / "data" / report_type_key
@@ -598,6 +761,7 @@ def _resolve_contractual_output_path(*, report_type_key: str) -> Path:
         CARGOS_RECURRENTES_REPORT_TYPE_KEY: "cargos_recurrentes.xlsx",
         VENTA_TOTAL_REPORT_TYPE_KEY: "venta_total.xlsx",
         SOCIOS_VENCIDOS_REPORT_TYPE_KEY: "socios_vencidos.xlsx",
+        SOCIOS_ACTIVOS_REPORT_TYPE_KEY: "socios_activos.xlsx",
     }
     filename = filename_map.get(report_type_key)
     if not filename:

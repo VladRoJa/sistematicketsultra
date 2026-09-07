@@ -20,6 +20,7 @@ SUPPORTED_REPORT_TYPES = frozenset(
         "cargos_recurrentes",
         "venta_total",
         "socios_vencidos",
+        "socios_activos",
     }
 )
 
@@ -67,6 +68,10 @@ RUN_MODE_COMPATIBILITY: dict[str, set[str]] = {
     "socios_vencidos": {
         "scheduled_daily",
         "manual_backfill",
+        "manual_retry",
+    },
+    "socios_activos": {
+        "scheduled_daily",
         "manual_retry",
     },
 }
@@ -381,6 +386,7 @@ def _should_dispatch_ingestion(
         "cargos_recurrentes",
         "venta_total",
         "socios_vencidos",
+        "socios_activos",
     }
     
     
@@ -586,6 +592,36 @@ def _dispatch_ingestion_if_applicable(
         except Exception as exc:
             raise GascaIngestionError(
                 "Falló la ingesta estructurada de 'socios_vencidos'."
+            ) from exc
+
+        ingestion_result = _normalize_ingestion_result(result)
+        if isinstance(result, dict):
+            ingestion_result.metadata = dict(result)
+
+        current_app.logger.info(
+            "Structured ingestion dispatched: warehouse_upload_id=%s "
+            "report_type_key=%s status=%s snapshot_id=%s",
+            upload_ref.warehouse_upload_id,
+            command.report_type_key,
+            ingestion_result.ingestion_status,
+            ingestion_result.snapshot_id,
+        )
+        return ingestion_result
+
+    if command.report_type_key == "socios_activos":
+        ingestor = _get_required_callable(
+            "WAREHOUSE_SOCIOS_ACTIVOS_INGESTOR",
+            description="ingerir estructuradamente socios_activos",
+        )
+        try:
+            result = ingestor(
+                warehouse_upload_id=upload_ref.warehouse_upload_id,
+                requested_by=command.requested_by,
+                ingestion_source=command.trigger_source,
+            )
+        except Exception as exc:
+            raise GascaIngestionError(
+                "Falló la ingesta estructurada de 'socios_activos'."
             ) from exc
 
         ingestion_result = _normalize_ingestion_result(result)
