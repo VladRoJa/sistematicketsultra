@@ -42,6 +42,8 @@ from app.warehouse.services.track_forecast_service import (
     build_branch_calendar_aligned_daily_weights,
     build_branch_current_track_daily_values,
     build_legacy_21_calendar_aligned_daily_weights,
+    load_first_store_income_dates_bulk,
+    resolve_branch_income_projection_mode,
 )
 
 
@@ -145,6 +147,7 @@ class ForecastCenterBulkBundle:
     target_by_branch: dict[str, TrackMonthlyTargetORM]
     current_candidates_by_branch: dict[str, list[dict[str, Any]]]
     historical_series_by_branch: dict[str, list[dict[str, Any]]]
+    first_store_income_dates: dict[str, date]
     canonical_snapshot_id: int | None
     canonical_business_date: date | None
     loader_invocations: dict[str, int]
@@ -840,6 +843,11 @@ def bulk_load_forecast_center_data(
     loader_invocations["legacy_21_calendar_reference"] += 1
     legacy_21_curve = _load_legacy_21_curve_bulk(target_month=target_month)
 
+    loader_invocations["first_store_income_dates"] += 1
+    first_store_income_dates = load_first_store_income_dates_bulk(
+        branch_canons
+    )
+
     return ForecastCenterBulkBundle(
         target_month=target_month,
         cutoff_day=cutoff_day,
@@ -848,6 +856,7 @@ def bulk_load_forecast_center_data(
         target_by_branch=target_by_branch,
         current_candidates_by_branch=current_candidates,
         historical_series_by_branch=historical,
+        first_store_income_dates=first_store_income_dates,
         canonical_snapshot_id=snapshot_id,
         canonical_business_date=snapshot_date,
         loader_invocations=dict(loader_invocations),
@@ -924,6 +933,114 @@ def _legacy_curve_as_branch_distribution(
     }
 
 
+def _build_linear_mtd_pace_distribution(
+    *,
+    target_month: date,
+    cutoff_day: int,
+) -> dict[str, Any]:
+    target_month = target_month.replace(day=1)
+    days_in_month = monthrange(
+        target_month.year,
+        target_month.month,
+    )[1]
+
+    if not 1 <= cutoff_day <= days_in_month:
+        raise ValueError(
+            "cutoff_day debe pertenecer a target_month."
+        )
+
+    daily_weight = Decimal("1") / Decimal(days_in_month)
+    points: list[dict[str, Any]] = []
+
+    for day in range(1, days_in_month + 1):
+        cumulative_weight = (
+            Decimal("1")
+            if day == days_in_month
+            else Decimal(day) / Decimal(days_in_month)
+        )
+
+        point_date = target_month.replace(day=day)
+
+        points.append(
+            {
+                "day": day,
+                "date": point_date,
+                "weekday": point_date.strftime("%A"),
+                "weekday_index": point_date.weekday(),
+                "weekday_ordinal": ((day - 1) // 7) + 1,
+                "alignment_key": "linear_mtd_pace",
+                "raw_daily_weight": daily_weight,
+                "normalized_daily_weight": daily_weight,
+                "cumulative_weight": cumulative_weight,
+                "samples_count": 0,
+                "sample_years": [],
+                "used_fallback": False,
+                "historical_samples": [],
+            }
+        )
+
+    return {
+        "status": "available",
+        "method": "linear_mtd_pace",
+        "target_month": target_month,
+        "cutoff_day": cutoff_day,
+        "historical_progress_pct_at_cutoff": (
+            Decimal(cutoff_day) / Decimal(days_in_month)
+        ),
+        "comparison_years_requested": [],
+        "comparison_years_used": [],
+        "comparison_years_excluded": [],
+        "exact_matches_count": 0,
+        "fallback_matches_count": 0,
+        "points": points,
+    }
+
+
+def _build_linear_mtd_pace_expected_curve(
+    *,
+    distribution: dict[str, Any],
+) -> dict[str, Any]:
+    points = [
+        {
+            "day": point["day"],
+            "date": point["date"],
+            "historical_progress_pct": point[
+                "cumulative_weight"
+            ],
+            "expected_daily_total": point[
+                "normalized_daily_weight"
+            ],
+            "expected_cumulative_total": point[
+                "cumulative_weight"
+            ],
+            "sample_years": [],
+            "samples_count": 0,
+        }
+        for point in distribution["points"]
+    ]
+
+    return {
+        "status": "available",
+        "method": "linear_mtd_pace",
+        "target_month": distribution["target_month"],
+        "cutoff_day": distribution["cutoff_day"],
+        "comparison_years_requested": [],
+        "comparison_years_used": [],
+        "comparison_years_excluded": [],
+        "samples_count": 0,
+        "historical_expected_month_total": Decimal("1"),
+        "historical_progress_pct_at_cutoff": distribution[
+            "historical_progress_pct_at_cutoff"
+        ],
+        "historical_expected_mtd_at_cutoff": (
+            distribution["historical_progress_pct_at_cutoff"]
+        ),
+        "distribution_status": "available",
+        "calendar_alignment_applied": False,
+        "points": points,
+    }
+
+
 def calculate_compact_branch_forecast(
     *,
     branch: ForecastCenterBranch,
@@ -935,6 +1052,14 @@ def calculate_compact_branch_forecast(
     mart = bundle.mart_by_branch.get(canon)
     if mart is None:
         return None
+
+    first_store_income_dates = (
+        getattr(bundle, "first_store_income_dates", {}) or {}
+    )
+    projection_mode = resolve_branch_income_projection_mode(
+        first_store_income_date=first_store_income_dates.get(canon),
+        cutoff_date=track_date,
+    )
 
     real_mtd = _decimal(mart.ingreso_real_total_mtd)
     if real_mtd is None:
@@ -1003,6 +1128,9 @@ def calculate_compact_branch_forecast(
         scope="branch",
         curve=curve,
         trend_factor=trend_factor,
+        enforce_legacy_history_thresholds=(
+            projection_mode != "historical"
+        ),
     )
     if quality_issue:
         own_projected_close = None
@@ -1064,6 +1192,35 @@ def calculate_compact_branch_forecast(
     elif not current_cutoff_matches_real:
         projected_close = None
         projection_method_reason = "inconsistent_current_real"
+    elif projection_mode == "linear_mtd_pace":
+        if (
+            real_mtd is None
+            or not real_mtd.is_finite()
+            or real_mtd < 0
+        ):
+            projected_close = None
+            projection_method_reason = "invalid_real_mtd"
+        else:
+            days_in_month = monthrange(
+                bundle.target_month.year,
+                bundle.target_month.month,
+            )[1]
+
+            projected_close = (
+                real_mtd
+                / Decimal(bundle.cutoff_day)
+                * Decimal(days_in_month)
+            )
+            distribution = _build_linear_mtd_pace_distribution(
+                target_month=bundle.target_month,
+                cutoff_day=bundle.cutoff_day,
+            )
+            projection_method = "linear_mtd_pace"
+            projection_method_status = "available"
+            projection_is_provisional = False
+            projection_method_reason = (
+                "under_twelve_operating_months"
+            )
     elif own_projected_close is not None:
         projection_method = "branch_historical_calendar_weights"
         projection_method_status = "available"
@@ -1120,16 +1277,35 @@ def calculate_compact_branch_forecast(
             )
             minimum_cutoff_day = 10
 
-    historical_expected = _build_branch_calendar_aligned_historical_expected_daily_curve(
-        distribution=distribution,
-        target_month=bundle.target_month,
-        cutoff_day=bundle.cutoff_day,
-        historical_expected_month_total=(
-            Decimal("1")
-            if projection_method == "legacy_21_calendar_weights"
-            else historical_expected_month_total
-        ),
-    )
+    if projection_method == "linear_mtd_pace":
+        historical_expected = (
+            _build_branch_calendar_aligned_historical_expected_daily_curve(
+                distribution=own_distribution,
+                target_month=bundle.target_month,
+                cutoff_day=bundle.cutoff_day,
+                historical_expected_month_total=historical_expected_month_total,
+            )
+        )
+        projection_expected = (
+            _build_linear_mtd_pace_expected_curve(
+                distribution=distribution,
+            )
+        )
+    else:
+        historical_expected = (
+            _build_branch_calendar_aligned_historical_expected_daily_curve(
+                distribution=distribution,
+                target_month=bundle.target_month,
+                cutoff_day=bundle.cutoff_day,
+                historical_expected_month_total=(
+                    Decimal("1")
+                    if projection_method == "legacy_21_calendar_weights"
+                    else historical_expected_month_total
+                ),
+            )
+        )
+        projection_expected = historical_expected
+
     goal_pace = _build_branch_goal_pace_detail(
         goal_status=goal_status,
         goal_month=goal_month,
@@ -1137,7 +1313,7 @@ def calculate_compact_branch_forecast(
         projected_close=projected_close,
         target_month=bundle.target_month,
         cutoff_day=bundle.cutoff_day,
-        historical_expected=historical_expected,
+        historical_expected=projection_expected,
         calendar_aligned_distribution=distribution,
     )
     actual = [
@@ -1508,6 +1684,7 @@ def _projection_method_coverage(
 ) -> dict[str, dict[str, int]]:
     methods = (
         "branch_historical_calendar_weights",
+        "linear_mtd_pace",
         "legacy_21_calendar_weights",
         "unavailable",
     )
@@ -1824,7 +2001,21 @@ def _build_quality(
             "canonical_business_date": bundle.canonical_business_date,
         },
         "methodology": {
-            "projection_formula": "projected_close = real_mtd / historical_progress_pct",
+            "projection_formula": "method_dependent_by_operational_age",
+            "historical_projection_formula": (
+                "projected_close = real_mtd / historical_progress_pct"
+            ),
+            "linear_projection_formula": (
+                "projected_close = real_mtd / cutoff_day * days_in_month"
+            ),
+            "operational_age_threshold_months": 12,
+            "projection_method_resolution": {
+                "under_threshold": "linear_mtd_pace",
+                "at_or_above_threshold": (
+                    "branch_historical_calendar_weights"
+                ),
+                "without_operational_date": "legacy_rules",
+            },
             "calendar_method": "weekday_ordinal_aligned_historical_weights",
             "goal_basis": "total_mtd",
             "distribution_basis": "venta_total_base",

@@ -23,6 +23,8 @@ export class TrackForecastCenterMethodologyComponent implements OnChanges {
   methodologyItems: MethodologyItem[] = [];
   loaderItems: MethodologyItem[] = [];
   newBranchProjectionItems: MethodologyItem[] = [];
+  newBranchProjectionDescription = '';
+  newBranchProjectionNotes: string[] = [];
   showNewBranchProjection = false;
 
   ngOnChanges(): void {
@@ -57,26 +59,70 @@ export class TrackForecastCenterMethodologyComponent implements OnChanges {
       { label: 'Fecha comercial canónica', value: quality.cutoff.canonical_business_date ?? 'No disponible' },
       { label: 'Snapshot canónico', value: quality.cutoff.canonical_snapshot_id === null ? 'No disponible' : String(quality.cutoff.canonical_snapshot_id) },
     ];
+    const ageThreshold = quality.methodology.operational_age_threshold_months;
+
     this.methodologyItems = [
       { label: 'Agregación', value: this.translate(quality.methodology.aggregate_method) },
-      { label: 'Alineación calendario', value: this.translate(quality.methodology.calendar_method) },
+      {
+        label: 'Selección de método',
+        value: `Menos de ${ageThreshold} meses operando: Proyección lineal · ${ageThreshold} meses o más: Proyección histórica.`,
+      },
+      {
+        label: 'Fórmula histórica',
+        value: 'Ingreso real MTD ÷ avance histórico esperado al corte.',
+      },
+      {
+        label: 'Fórmula lineal',
+        value: 'Ingreso real MTD ÷ día de corte × días del mes.',
+      },
+      { label: 'Alineación calendario histórica', value: this.translate(quality.methodology.calendar_method) },
       { label: 'Base histórica', value: this.translate(quality.methodology.distribution_basis) },
       { label: 'Base de meta', value: this.translate(quality.methodology.goal_basis) },
-      { label: 'Fórmula de proyección', value: quality.methodology.projection_formula },
       { label: 'Forma diaria de agregadoras', value: quality.methodology.aggregadoras_assumed_same_daily_shape ? 'Se asume la misma forma diaria.' : 'No se asume la misma forma diaria.' },
-      { label: 'Prioridad de métodos', value: quality.methodology.projection_method_priority.map((method) => this.translate(method)).join(' → ') },
+      { label: 'Ruta fallback', value: quality.methodology.projection_method_priority.map((method) => this.translate(method)).join(' → ') },
       { label: 'Fallback provisional', value: this.fallbackLinearityLabel(quality.methodology.fallback_is_linear) },
     ];
+
+    const linearCount = quality.projection_methods.linear_mtd_pace.branch_count;
     const provisionalCount = quality.projection_methods.legacy_21_calendar_weights.branch_count;
-    this.showNewBranchProjection = provisionalCount > 0;
-    this.newBranchProjectionItems = [
-      { label: 'Sucursales estimadas', value: String(provisionalCount) },
-      { label: 'Muestras válidas', value: String(quality.legacy_21_curve.valid_branch_month_samples) },
-      { label: 'Sucursales contribuyentes', value: String(quality.legacy_21_curve.contributing_branch_count) },
-      { label: 'Pesos suman 1', value: quality.legacy_21_curve.weights_sum === 1 ? 'Sí' : 'No' },
-      { label: 'Cutoff mínimo', value: `Día ${quality.legacy_21_curve.cutoff_minimum_day}` },
-      { label: 'Patrón calendario', value: this.translate(quality.legacy_21_curve.calendar_method) },
-    ];
+
+    this.showNewBranchProjection = linearCount + provisionalCount > 0;
+    this.newBranchProjectionItems = [];
+    this.newBranchProjectionNotes = [];
+
+    if (linearCount > 0) {
+      this.newBranchProjectionItems.push({
+        label: 'Sucursales con proyección lineal',
+        value: String(linearCount),
+      });
+      this.newBranchProjectionDescription =
+        `Las sucursales con menos de ${ageThreshold} meses de operación se proyectan con su ritmo real acumulado al corte.`;
+      this.newBranchProjectionNotes.push(
+        'La escala proviene únicamente del ingreso real MTD de cada sucursal.',
+        'No utiliza el histórico de otras sucursales para calcular el cierre.',
+        'La proyección lineal es un método principal por edad operativa; no es un fallback provisional.',
+      );
+    }
+
+    if (provisionalCount > 0) {
+      this.newBranchProjectionItems.push(
+        { label: 'Sucursales con fallback provisional', value: String(provisionalCount) },
+        { label: 'Muestras válidas', value: String(quality.legacy_21_curve.valid_branch_month_samples) },
+        { label: 'Sucursales contribuyentes', value: String(quality.legacy_21_curve.contributing_branch_count) },
+        { label: 'Pesos suman 1', value: quality.legacy_21_curve.weights_sum === 1 ? 'Sí' : 'No' },
+        { label: 'Cutoff mínimo fallback', value: `Día ${quality.legacy_21_curve.cutoff_minimum_day}` },
+        { label: 'Patrón calendario fallback', value: this.translate(quality.legacy_21_curve.calendar_method) },
+      );
+
+      if (linearCount === 0) {
+        this.newBranchProjectionDescription =
+          'El fallback provisional escala el patrón calendario histórico de las sucursales maduras con el real acumulado de la sucursal.';
+      }
+
+      this.newBranchProjectionNotes.push(
+        'El fallback provisional utiliza distribución histórica; no utiliza un run rate lineal.',
+      );
+    }
     this.loaderItems = Object.entries(quality.loader_invocations).map(([label, value]) => ({ label, value: String(value) }));
   }
 
@@ -89,7 +135,8 @@ export class TrackForecastCenterMethodologyComponent implements OnChanges {
       calendar: 'Calendario',
       authorization: 'Autorización',
       legacy_21_calendar_projection_fallback: 'Proyección provisional con patrón Ultra',
-      branch_historical_calendar_weights: 'Forecast histórico propio',
+      branch_historical_calendar_weights: 'Proyección histórica',
+      linear_mtd_pace: 'Proyección lineal',
       legacy_21_calendar_weights: 'Proyección provisional con patrón Ultra',
       unavailable: 'Proyección no disponible',
       insufficient_comparable_branch_history: 'Sin histórico propio comparable',
@@ -111,8 +158,8 @@ export class TrackForecastCenterMethodologyComponent implements OnChanges {
 
   private fallbackLinearityLabel(fallbackIsLinear: false): string {
     return fallbackIsLinear
-      ? 'La estimación utiliza un run rate lineal.'
-      : 'La estimación no utiliza un run rate lineal.';
+      ? 'El fallback provisional utiliza un run rate lineal.'
+      : 'El fallback provisional no utiliza un run rate lineal.';
   }
 
   private percent(value: number | null): string {

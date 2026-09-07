@@ -135,16 +135,44 @@ export class TrackForecastCenterPaceComponent implements OnChanges {
 
   private buildMethodologyNote(): string {
     const methods = this.response.quality.projection_methods;
-    const own = methods.branch_historical_calendar_weights.branch_count;
+    const historical = methods.branch_historical_calendar_weights.branch_count;
+    const linear = methods.linear_mtd_pace.branch_count;
     const provisional = methods.legacy_21_calendar_weights.branch_count;
-    const referenceBranches = this.response.quality.legacy_21_curve.contributing_branch_count;
-    if (this.response.context.cohort === 'new_gyms' && provisional > 0) {
+
+    if (
+      this.response.context.cohort === 'new_gyms'
+      && linear > 0
+      && historical === 0
+      && provisional === 0
+    ) {
+      return `Proyección lineal basada en el ritmo real MTD de ${linear} sucursales.`;
+    }
+
+    if (
+      this.response.context.cohort === 'new_gyms'
+      && provisional > 0
+      && historical === 0
+      && linear === 0
+    ) {
+      const referenceBranches = this.response.quality.legacy_21_curve.contributing_branch_count;
       return `Proyección provisional basada en el patrón calendario de las ${referenceBranches} sucursales maduras.`;
     }
-    if (own > 0 && provisional > 0) {
-      return `Proyección compuesta por ${own} forecasts históricos y ${provisional} estimaciones provisionales con patrón Ultra.`;
+
+    const parts: string[] = [];
+
+    if (historical > 0) {
+      parts.push(`${historical} históricas`);
     }
-    return '';
+    if (linear > 0) {
+      parts.push(`${linear} lineales`);
+    }
+    if (provisional > 0) {
+      parts.push(`${provisional} provisionales con patrón Ultra`);
+    }
+
+    return parts.length > 1
+      ? `Proyección compuesta por ${parts.join(', ')}.`
+      : '';
   }
 
   private formatCurrency(value: number | null): string {

@@ -26,7 +26,7 @@ interface BreakdownRow {
 
 interface ProjectionMethodItem {
   label: string;
-  tone: 'historical' | 'provisional' | 'unavailable';
+  tone: 'historical' | 'linear' | 'provisional' | 'unavailable';
 }
 
 @Component({
@@ -109,9 +109,11 @@ export class TrackForecastCenterBreakdownComponent implements OnChanges {
     const methods = item.projection_methods;
     const items: ProjectionMethodItem[] = [];
     const historical = methods.branch_historical_calendar_weights.branch_count;
+    const linear = methods.linear_mtd_pace.branch_count;
     const provisional = methods.legacy_21_calendar_weights.branch_count;
     const unavailable = methods.unavailable.branch_count;
     if (historical > 0) items.push({ label: `${historical} histórico`, tone: 'historical' });
+    if (linear > 0) items.push({ label: `${linear} lineal`, tone: 'linear' });
     if (provisional > 0) items.push({ label: `${provisional} provisional`, tone: 'provisional' });
     if (unavailable > 0) items.push({ label: `${unavailable} sin proyección`, tone: 'unavailable' });
     return items;
@@ -119,12 +121,14 @@ export class TrackForecastCenterBreakdownComponent implements OnChanges {
 
   private branchMethodLabel(method: TrackForecastCenterProjectionMethod): string {
     if (method === 'branch_historical_calendar_weights') return 'Histórico propio';
+    if (method === 'linear_mtd_pace') return 'Proyección lineal';
     if (method === 'legacy_21_calendar_weights') return 'Patrón Ultra · Provisional';
     return 'No disponible';
   }
 
   private methodTone(method: TrackForecastCenterProjectionMethod): ProjectionMethodItem['tone'] {
     if (method === 'branch_historical_calendar_weights') return 'historical';
+    if (method === 'linear_mtd_pace') return 'linear';
     if (method === 'legacy_21_calendar_weights') return 'provisional';
     return 'unavailable';
   }

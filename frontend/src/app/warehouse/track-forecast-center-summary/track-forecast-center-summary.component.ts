@@ -143,30 +143,49 @@ export class TrackForecastCenterSummaryComponent implements OnChanges {
   private projectionCard(): SummaryCard {
     const summary = this.response.summary;
     const methods = this.response.quality.projection_methods;
-    const own = methods.branch_historical_calendar_weights.branch_count;
+    const historical = methods.branch_historical_calendar_weights.branch_count;
+    const linear = methods.linear_mtd_pace.branch_count;
     const provisional = methods.legacy_21_calendar_weights.branch_count;
     const unavailable = methods.unavailable.branch_count;
-    const projected = own + provisional;
-    const total = own + provisional + unavailable;
+    const projected = historical + linear + provisional;
+    const total = projected + unavailable;
     const referenceBranches = this.response.quality.legacy_21_curve.contributing_branch_count;
+
     let label = 'Proyección estimada total';
-    let secondary = [
-      `${own} sucursales con forecast histórico propio`,
-      `${provisional} sucursales con patrón Ultra provisional`,
-    ];
-    if (own > 0 && provisional === 0) {
+    let secondary: string[] = [];
+
+    if (historical > 0) {
+      secondary.push(`${historical} sucursales con proyección histórica`);
+    }
+    if (linear > 0) {
+      secondary.push(`${linear} sucursales con proyección lineal`);
+    }
+    if (provisional > 0) {
+      secondary.push(`${provisional} sucursales con patrón Ultra provisional`);
+    }
+
+    if (historical > 0 && linear === 0 && provisional === 0) {
       label = 'Proyección de cierre';
-      secondary = [`${own} de ${total} sucursales con forecast histórico propio.`];
-    } else if (provisional > 0 && own === 0) {
+      secondary = [
+        `${historical} de ${total} sucursales con proyección histórica.`,
+      ];
+    } else if (linear > 0 && historical === 0 && provisional === 0) {
+      label = 'Proyección lineal';
+      secondary = [
+        `${linear} de ${total} sucursales proyectadas según su ritmo real MTD.`,
+      ];
+    } else if (provisional > 0 && historical === 0 && linear === 0) {
       label = 'Proyección provisional con patrón Ultra';
       secondary = [
         `Basada en la distribución histórica diaria de las ${referenceBranches} sucursales maduras.`,
         `${projected} de ${total} sucursales estimadas · Sin histórico propio comparable.`,
       ];
     }
+
     if (unavailable > 0) {
       secondary.push(`${unavailable} sucursales sin proyección disponible.`);
     }
+
     const coverage = summary.metric_coverage.projected_close_comparable_to_goal;
     return {
       label,
@@ -180,25 +199,60 @@ export class TrackForecastCenterSummaryComponent implements OnChanges {
   private buildExecutiveMessage(): string {
     const summary = this.response.summary;
     const methods = this.response.quality.projection_methods;
-    const own = methods.branch_historical_calendar_weights.branch_count;
+    const historical = methods.branch_historical_calendar_weights.branch_count;
+    const linear = methods.linear_mtd_pace.branch_count;
     const provisional = methods.legacy_21_calendar_weights.branch_count;
     const branchCount = this.response.summary.branch_count;
     const projected = this.formatCurrency(summary.projected_close_comparable_to_goal);
     const attainment = this.formatPercent(summary.projected_goal_attainment_pct);
-    if (this.response.context.cohort === 'new_gyms') {
+
+    if (
+      this.response.context.cohort === 'new_gyms'
+      && linear > 0
+      && historical === 0
+      && provisional === 0
+    ) {
+      return `Las ${branchCount} sucursales nuevas proyectan cerrar en ${projected}, equivalente a ${attainment} de su meta. La proyección es lineal y utiliza el ritmo real MTD de cada sucursal.`;
+    }
+
+    if (
+      this.response.context.cohort === 'new_gyms'
+      && provisional > 0
+      && historical === 0
+      && linear === 0
+    ) {
       const referenceBranches = this.response.quality.legacy_21_curve.contributing_branch_count;
-      return `Las ${branchCount} sucursales nuevas proyectan cerrar en ${projected}, equivalente a ${attainment} de su meta. La estimación es provisional y utiliza su ritmo real actual junto con el patrón calendario histórico de ${referenceBranches} Gyms.`;
+      return `Las ${branchCount} sucursales nuevas proyectan cerrar en ${projected}, equivalente a ${attainment} de su meta. La estimación es provisional y utiliza el patrón calendario histórico de ${referenceBranches} Gyms.`;
     }
-    if (own > 0 && provisional > 0 && this.response.context.scope === 'national') {
-      return `Total Ultra proyecta cerrar en ${projected}, equivalente a ${attainment} de la meta. La estimación combina ${own} forecasts históricos propios y ${provisional} proyecciones provisionales basadas en el patrón diario de las sucursales maduras.`;
+
+    const methodsUsed: string[] = [];
+    if (historical > 0) {
+      methodsUsed.push(`${historical} proyecciones históricas`);
     }
-    if (own > 0 && provisional > 0) {
-      return `El alcance proyecta cerrar en ${projected}, equivalente a ${attainment} de la meta. La estimación combina ${own} forecasts históricos propios y ${provisional} proyecciones provisionales con patrón Ultra.`;
+    if (linear > 0) {
+      methodsUsed.push(`${linear} proyecciones lineales`);
     }
     if (provisional > 0) {
-      return `El alcance proyecta cerrar en ${projected}, equivalente a ${attainment} de la meta. La estimación es provisional y utiliza el patrón diario de las sucursales maduras.`;
+      methodsUsed.push(`${provisional} estimaciones provisionales con patrón Ultra`);
     }
-    return `El alcance proyecta cerrar en ${projected}, equivalente a ${attainment} de la meta, mediante forecasts históricos propios de ${own} sucursales.`;
+
+    const scopeLabel = this.response.context.scope === 'national'
+      ? 'Total Ultra'
+      : 'El alcance';
+
+    if (methodsUsed.length > 1) {
+      return `${scopeLabel} proyecta cerrar en ${projected}, equivalente a ${attainment} de la meta. La estimación combina ${methodsUsed.join(', ')}.`;
+    }
+
+    if (linear > 0) {
+      return `${scopeLabel} proyecta cerrar en ${projected}, equivalente a ${attainment} de la meta, mediante proyección lineal basada en el ritmo real MTD de ${linear} sucursales.`;
+    }
+
+    if (provisional > 0) {
+      return `${scopeLabel} proyecta cerrar en ${projected}, equivalente a ${attainment} de la meta. La estimación es provisional y utiliza el patrón diario de las sucursales maduras.`;
+    }
+
+    return `${scopeLabel} proyecta cerrar en ${projected}, equivalente a ${attainment} de la meta, mediante proyección histórica de ${historical} sucursales.`;
   }
 
   private buildChart(): void {
@@ -242,33 +296,78 @@ export class TrackForecastCenterSummaryComponent implements OnChanges {
 
   private projectionMethodologyNote(): string {
     const methods = this.response.quality.projection_methods;
-    const own = methods.branch_historical_calendar_weights.branch_count;
+    const historical = methods.branch_historical_calendar_weights.branch_count;
+    const linear = methods.linear_mtd_pace.branch_count;
     const provisional = methods.legacy_21_calendar_weights.branch_count;
-    if (this.response.context.cohort === 'new_gyms' && provisional > 0) {
+
+    if (
+      this.response.context.cohort === 'new_gyms'
+      && linear > 0
+      && historical === 0
+      && provisional === 0
+    ) {
+      return `Proyección lineal basada en el ritmo real MTD de ${linear} sucursales.`;
+    }
+
+    if (
+      this.response.context.cohort === 'new_gyms'
+      && provisional > 0
+      && historical === 0
+      && linear === 0
+    ) {
       const referenceBranches = this.response.quality.legacy_21_curve.contributing_branch_count;
       return `Proyección provisional basada en el patrón calendario de las ${referenceBranches} sucursales maduras.`;
     }
-    if (own > 0 && provisional > 0) {
-      return `Proyección compuesta por ${own} forecasts históricos y ${provisional} estimaciones provisionales con patrón Ultra.`;
+
+    const parts: string[] = [];
+    if (historical > 0) {
+      parts.push(`${historical} históricas`);
     }
-    return '';
+    if (linear > 0) {
+      parts.push(`${linear} lineales`);
+    }
+    if (provisional > 0) {
+      parts.push(`${provisional} provisionales con patrón Ultra`);
+    }
+
+    return parts.length > 1
+      ? `Proyección compuesta por ${parts.join(', ')}.`
+      : '';
   }
 
   private cohortMethodLabel(item: TrackForecastCenterBreakdownItem): string {
-    const own = item.projection_methods.branch_historical_calendar_weights.branch_count;
+    const historical = item.projection_methods.branch_historical_calendar_weights.branch_count;
+    const linear = item.projection_methods.linear_mtd_pace.branch_count;
     const provisional = item.projection_methods.legacy_21_calendar_weights.branch_count;
-    if (own > 0 && provisional === 0) return 'Forecast histórico propio';
-    if (provisional > 0 && own === 0) return 'Proyección provisional con patrón Ultra';
-    return 'Metodología mixta';
+
+    const methodCount = [
+      historical > 0,
+      linear > 0,
+      provisional > 0,
+    ].filter(Boolean).length;
+
+    if (methodCount > 1) return 'Metodología mixta';
+    if (historical > 0) return 'Proyección histórica';
+    if (linear > 0) return 'Proyección lineal';
+    if (provisional > 0) return 'Proyección provisional con patrón Ultra';
+    return 'Sin proyección';
   }
 
   private cohortMethodCoverage(item: TrackForecastCenterBreakdownItem): string {
-    const own = item.projection_methods.branch_historical_calendar_weights.projected_branch_count;
+    const historical = item.projection_methods.branch_historical_calendar_weights.projected_branch_count;
+    const linear = item.projection_methods.linear_mtd_pace.projected_branch_count;
     const provisional = item.projection_methods.legacy_21_calendar_weights.projected_branch_count;
-    if (own > 0 && provisional === 0) {
-      return `${own} de ${item.branch_count} sucursales con forecast histórico propio`;
+    const projected = historical + linear + provisional;
+
+    if (historical > 0 && linear === 0 && provisional === 0) {
+      return `${historical} de ${item.branch_count} sucursales con proyección histórica`;
     }
-    return `${own + provisional} de ${item.branch_count} sucursales estimadas`;
+
+    if (linear > 0 && historical === 0 && provisional === 0) {
+      return `${linear} de ${item.branch_count} sucursales con proyección lineal`;
+    }
+
+    return `${projected} de ${item.branch_count} sucursales proyectadas`;
   }
 
   private cohortMethodReason(item: TrackForecastCenterBreakdownItem): string {
