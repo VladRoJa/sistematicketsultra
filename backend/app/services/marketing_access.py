@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Iterable
 
+from flask import has_request_context, request
+
 from app.utils.scope_utils import (
     ROOT_ADMIN_ROLES,
     get_user_assigned_branch_ids,
@@ -87,6 +89,14 @@ class MarketingAccess:
         }
 
 
+def _request_targets_reactivation() -> bool:
+    if not has_request_context():
+        return False
+
+    path = str(request.path or "").rstrip("/")
+    return path.startswith("/api/marketing/reactivation")
+
+
 def resolve_marketing_access(user) -> MarketingAccess:
     if user is None:
         raise MarketingAuthorizationError(
@@ -105,6 +115,11 @@ def resolve_marketing_access(user) -> MarketingAccess:
         role in MARKETING_REACTIVATION_ROLES
         and username != "ADMICORP"
     )
+
+    if _request_targets_reactivation() and not can_view_reactivation:
+        raise MarketingAuthorizationError(
+            "No autorizado para consultar Reactivación de socios."
+        )
 
     if role == "MARKETING":
         return MarketingAccess(
