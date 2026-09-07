@@ -111,6 +111,14 @@ export class MarketingReactivationService {
     );
   }
 
+  exportSelection(
+    request: ReactivationCampaignRequest,
+  ): Observable<Blob> {
+    return this.http.post(`${this.apiUrl}/candidates/export`, request, {
+      responseType: 'blob',
+    });
+  }
+
   previewCampaign(
     request: ReactivationCampaignRequest,
   ): Observable<ReactivationCampaignPreviewResponse> {

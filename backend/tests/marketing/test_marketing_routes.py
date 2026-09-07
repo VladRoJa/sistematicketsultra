@@ -652,6 +652,47 @@ class TestMarketingRoutes:
 
         assert response.status_code == 404
 
+    def test_reactivation_selection_export_returns_xlsx(self):
+        with (
+            patch(
+                "app.routes.marketing_routes._get_current_marketing_user",
+                return_value=self.admin,
+            ),
+            patch(
+                "app.routes.marketing_routes."
+                "export_marketing_reactivation_selection",
+                return_value=(
+                    b"xlsx-selection",
+                    "reactivacion_seleccion_2026-08-23_2026-08-23.xlsx",
+                ),
+            ) as export_service,
+        ):
+            response = self.client.post(
+                "/api/marketing/reactivation/candidates/export",
+                json={
+                    "date_from": "2026-08-23",
+                    "date_to": "2026-08-23",
+                    "filters": {
+                        "iventas_period_key": "IVENTAS-2026-08",
+                        "operational_status": "CONTACTED_THIS_MONTH",
+                    },
+                },
+                headers=self.headers,
+            )
+
+        assert response.status_code == 200
+        assert response.data == b"xlsx-selection"
+        assert (
+            "reactivacion_seleccion_2026-08-23_2026-08-23.xlsx"
+            in response.headers["Content-Disposition"]
+        )
+        assert export_service.call_args.kwargs[
+            "allowed_sucursal_keys"
+        ] is None
+        assert export_service.call_args.kwargs[
+            "filters"
+        ]["operational_status"] == "CONTACTED_THIS_MONTH"
+
     def test_reactivation_campaign_export_returns_xlsx(self):
         with (
             patch(

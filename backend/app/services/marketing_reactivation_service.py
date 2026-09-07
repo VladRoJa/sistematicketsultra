@@ -389,6 +389,94 @@ def build_marketing_reactivation_candidate_summary(
     )
 
 
+def export_marketing_reactivation_selection(
+    *,
+    date_from: date | str,
+    date_to: date | str,
+    filters: Any,
+    allowed_sucursal_keys: tuple[str, ...] | None = None,
+    session: Any | None = None,
+) -> tuple[bytes, str]:
+    # Exporta la selección filtrada y nunca incluye socios ACTIVE.
+
+    normalized_from, normalized_to = _validate_date_range(date_from, date_to)
+    normalized_filters = _validate_campaign_filters(
+        filters,
+        campaign_cooldown_days=None,
+    )
+    if normalized_filters["operational_status"] == OPERATIONAL_ACTIVE:
+        raise MarketingReactivationValidationError(
+            "Los socios activos no se pueden descargar."
+        )
+
+    query = _normalize_reactivation_candidate_request(
+        date_from=normalized_from,
+        date_to=normalized_to,
+        page=DEFAULT_PAGE,
+        page_size=DEFAULT_PAGE_SIZE,
+        sucursal=normalized_filters["sucursal"],
+        tarifa=normalized_filters["tarifa"],
+        tariff_category=normalized_filters["tariff_category"],
+        tariff_group=normalized_filters["tariff_group"],
+        operational_status=normalized_filters["operational_status"],
+        search=normalized_filters["search"],
+        sort=DEFAULT_SORT,
+        direction=DEFAULT_DIRECTION,
+    )
+    _validate_requested_sucursal_scope(
+        sucursal=query.sucursal,
+        allowed_sucursal_keys=allowed_sucursal_keys,
+    )
+
+    active_session = _session_or_default(session)
+    segment = _build_marketing_reactivation_campaign_segment(
+        query=query,
+        iventas_period_key=str(normalized_filters["iventas_period_key"]),
+        session=active_session,
+        allowed_sucursal_keys=allowed_sucursal_keys,
+    )
+    rows = [
+        row
+        for row in segment["rows"]
+        if str(row["operational_status"]) != OPERATIONAL_ACTIVE
+    ]
+
+    workbook = Workbook(write_only=True)
+    sheet = workbook.create_sheet("Seleccion")
+    sheet.append(
+        [
+            "Nombre",
+            "Teléfono",
+            "Sucursal",
+            "Fecha vencimiento",
+            "Tarifa",
+            "Estado",
+        ]
+    )
+    for row in rows:
+        phone_mx10 = normalize_iventas_phone(
+            row.get("telefono")
+        ).phone_mx10
+        sheet.append(
+            [
+                row.get("nombre") or "",
+                phone_mx10 or "",
+                row.get("sucursal") or "",
+                row.get("fecha_vencimiento") or "",
+                row.get("tarifa_categoria") or "",
+                row.get("operational_status") or "",
+            ]
+        )
+
+    output = BytesIO()
+    workbook.save(output)
+    filename = (
+        f"reactivacion_seleccion_{normalized_from.isoformat()}_"
+        f"{normalized_to.isoformat()}.xlsx"
+    )
+    return output.getvalue(), filename
+
+
 def _normalize_reactivation_candidate_request(
     **values: Any,
 ) -> ReactivationCandidateQuery:
