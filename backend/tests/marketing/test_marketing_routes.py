@@ -365,7 +365,8 @@ class TestMarketingRoutes:
                 "/api/marketing/reactivation/candidates"
                 "?date_from=2026-08-01&date_to=2026-08-31"
                 "&iventas_period_key=IVENTAS-2026-08&page=3&page_size=25"
-                "&sucursal=NORTE&tarifa=ANUAL&tariff_group=REACTIVATE"
+                "&sucursal=NORTE&tarifa=ANUAL&tariff_category=Anualidad"
+                "&tariff_group=REACTIVATE"
                 "&operational_status=WORK_PENDING&search=ana"
                 "&sort=nombre&direction=asc&cursor=opaque-cursor",
                 headers=self.headers,
@@ -377,6 +378,7 @@ class TestMarketingRoutes:
         assert kwargs["page_size"] == "25"
         assert kwargs["sucursal"] == "NORTE"
         assert kwargs["tarifa"] == "ANUAL"
+        assert kwargs["tariff_category"] == "Anualidad"
         assert kwargs["tariff_group"] == "REACTIVATE"
         assert kwargs["operational_status"] == "WORK_PENDING"
         assert kwargs["search"] == "ana"
@@ -404,6 +406,7 @@ class TestMarketingRoutes:
                 "/api/marketing/reactivation/candidates/summary"
                 "?date_from=2026-08-01&date_to=2026-08-31"
                 "&iventas_period_key=IVENTAS-2026-08&sucursal=CENTRO"
+                "&tariff_category=Mensualidad"
                 "&operational_status=WORK_PENDING&search=ana",
                 headers=self.headers,
             )
@@ -412,6 +415,7 @@ class TestMarketingRoutes:
         assert response.get_json() == expected
         kwargs = summary_service.call_args.kwargs
         assert kwargs["sucursal"] == "CENTRO"
+        assert kwargs["tariff_category"] == "Mensualidad"
         assert kwargs["operational_status"] == "WORK_PENDING"
         assert kwargs["search"] == "ana"
         assert "page" not in kwargs

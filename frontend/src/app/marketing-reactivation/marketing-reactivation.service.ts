@@ -50,6 +50,9 @@ export class MarketingReactivationService {
     if (query.tarifa) {
       params = params.set('tarifa', query.tarifa);
     }
+    if (query.tariffCategory) {
+      params = params.set('tariff_category', query.tariffCategory);
+    }
     if (query.tariffGroup) {
       params = params.set('tariff_group', query.tariffGroup);
     }
@@ -79,6 +82,9 @@ export class MarketingReactivationService {
     }
     if (query.tarifa) {
       params = params.set('tarifa', query.tarifa);
+    }
+    if (query.tariffCategory) {
+      params = params.set('tariff_category', query.tariffCategory);
     }
     if (query.tariffGroup) {
       params = params.set('tariff_group', query.tariffGroup);

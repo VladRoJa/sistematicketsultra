@@ -40,6 +40,7 @@ class ReactivationCandidateQuery:
     page_size: int = DEFAULT_PAGE_SIZE
     sucursal: str | None = None
     tarifa: str | None = None
+    tariff_category: str | None = None
     tariff_group: str | None = None
     operational_status: str | None = None
     search: str | None = None
@@ -61,6 +62,7 @@ def build_latest_operational_episode_query(
     date_to: date,
     sucursal: str | None = None,
     tarifa: str | None = None,
+    tariff_category: str | None = None,
     tariff_group: str | None = None,
     search: str | None = None,
     allowed_sucursal_keys: tuple[str, ...] | None = None,
@@ -114,7 +116,7 @@ def build_latest_operational_episode_query(
         )
     if tarifa:
         query = query.filter(SociosVencidosCarteraORM.tarifa == tarifa)
-    if tariff_group:
+    if tariff_category or tariff_group:
         tariff_key = func.upper(
             func.regexp_replace(
                 func.trim(SociosVencidosCarteraORM.tarifa),
@@ -123,14 +125,23 @@ def build_latest_operational_episode_query(
                 "g",
             )
         )
+        tariff_conditions = [
+            MarketingReactivationTariffORM.is_active.is_(True),
+            MarketingReactivationTariffORM.tarifa_key == tariff_key,
+        ]
+        if tariff_category:
+            tariff_conditions.append(
+                MarketingReactivationTariffORM.categoria_tarifa
+                == tariff_category
+            )
+        if tariff_group:
+            tariff_conditions.append(
+                MarketingReactivationTariffORM.reactivation_group
+                == tariff_group
+            )
         query = query.join(
             MarketingReactivationTariffORM,
-            and_(
-                MarketingReactivationTariffORM.is_active.is_(True),
-                MarketingReactivationTariffORM.tarifa_key == tariff_key,
-                MarketingReactivationTariffORM.reactivation_group
-                == tariff_group,
-            ),
+            and_(*tariff_conditions),
         )
     if search:
         pattern = f"%{_escape_like(search)}%"
@@ -212,6 +223,7 @@ def normalize_candidate_query(
     page_size: Any = DEFAULT_PAGE_SIZE,
     sucursal: Any = None,
     tarifa: Any = None,
+    tariff_category: Any = None,
     tariff_group: Any = None,
     operational_status: Any = None,
     search: Any = None,
@@ -240,6 +252,10 @@ def normalize_candidate_query(
         page_size=normalized_page_size,
         sucursal=_optional_text(sucursal, "sucursal"),
         tarifa=_optional_text(tarifa, "tarifa"),
+        tariff_category=_optional_text(
+            tariff_category,
+            "tariff_category",
+        ),
         tariff_group=_optional_text(tariff_group, "tariff_group"),
         operational_status=_optional_text(
             operational_status,

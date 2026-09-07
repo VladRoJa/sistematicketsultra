@@ -318,10 +318,12 @@ def test_candidates_all_returns_requested_sql_page_without_full_resolution(monke
         page_size=1,
         operational_status="ALL",
         sucursal="CENTRO",
+        tariff_category="Mensualidad",
         session=FakeSession(),
     )
 
     assert query_calls["sucursal"] == "CENTRO"
+    assert query_calls["tariff_category"] == "Mensualidad"
     assert context_calls["minimum_cutoff_date"] == date(2026, 8, 23)
     assert response["pagination"] == {
         "page": 2,

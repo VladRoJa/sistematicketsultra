@@ -17,6 +17,7 @@ from io import BytesIO
 import json
 from typing import Any
 import unicodedata
+from zoneinfo import ZoneInfo
 
 from openpyxl import Workbook
 from sqlalchemy import false, func
@@ -31,6 +32,7 @@ from app.models import (
     MarketingReactivationTariffORM,
 )
 from app.models.warehouse import SociosVencidosCarteraORM
+from app.services.marketing_iventas_leads_service import read_canonical_iventas_run
 from app.services.marketing_iventas_service import normalize_iventas_phone
 from app.services.marketing_reactivation_candidate_query import (
     DEFAULT_DIRECTION,
@@ -83,12 +85,10 @@ TARIFF_GROUP_DOMICILIATED_FLOW = "DOMICILIATED_FLOW"
 TARIFF_GROUP_EXCLUDE = "EXCLUDE"
 TARIFF_GROUP_REVIEW = "REVIEW"
 
-OPERATIONAL_NO_CONTACT_IN_PERIOD = "NO_CONTACT_IN_PERIOD"
-OPERATIONAL_NO_OUTBOUND_MESSAGE = "NO_OUTBOUND_MESSAGE"
-OPERATIONAL_CONTACTED_BEFORE_EXPIRATION = "CONTACTED_BEFORE_EXPIRATION"
-OPERATIONAL_CONTACTED_AFTER_EXPIRATION = "CONTACTED_AFTER_EXPIRATION"
 OPERATIONAL_REVIEW_IDENTITY = "REVIEW_IDENTITY"
 OPERATIONAL_ACTIVE = "ACTIVE"
+OPERATIONAL_CONTACTED_THIS_MONTH = "CONTACTED_THIS_MONTH"
+OPERATIONAL_AVAILABLE = "AVAILABLE"
 
 FILTER_WORK_PENDING = "WORK_PENDING"
 FILTER_ALL = "ALL"
@@ -97,10 +97,8 @@ _OPERATIONAL_FILTERS = frozenset(
     {
         FILTER_WORK_PENDING,
         FILTER_ALL,
-        OPERATIONAL_NO_CONTACT_IN_PERIOD,
-        OPERATIONAL_NO_OUTBOUND_MESSAGE,
-        OPERATIONAL_CONTACTED_BEFORE_EXPIRATION,
-        OPERATIONAL_CONTACTED_AFTER_EXPIRATION,
+        OPERATIONAL_AVAILABLE,
+        OPERATIONAL_CONTACTED_THIS_MONTH,
         OPERATIONAL_REVIEW_IDENTITY,
         OPERATIONAL_ACTIVE,
     }
@@ -120,6 +118,7 @@ _ALLOWED_CAMPAIGN_FILTERS = frozenset(
         "operational_status",
         "search",
         "tarifa",
+        "tariff_category",
         "tariff_group",
         "campaign_cooldown_days",
     }
@@ -309,6 +308,7 @@ def build_marketing_reactivation_candidates(
     page_size: Any = DEFAULT_PAGE_SIZE,
     sucursal: Any = None,
     tarifa: Any = None,
+    tariff_category: Any = None,
     tariff_group: Any = None,
     operational_status: Any = FILTER_ALL,
     search: Any = None,
@@ -327,6 +327,7 @@ def build_marketing_reactivation_candidates(
         page_size=page_size,
         sucursal=sucursal,
         tarifa=tarifa,
+        tariff_category=tariff_category,
         tariff_group=tariff_group,
         operational_status=operational_status,
         search=search,
@@ -353,6 +354,7 @@ def build_marketing_reactivation_candidate_summary(
     iventas_period_key: str,
     sucursal: Any = None,
     tarifa: Any = None,
+    tariff_category: Any = None,
     tariff_group: Any = None,
     operational_status: Any = FILTER_ALL,
     search: Any = None,
@@ -368,6 +370,7 @@ def build_marketing_reactivation_candidate_summary(
         page_size=DEFAULT_PAGE_SIZE,
         sucursal=sucursal,
         tarifa=tarifa,
+        tariff_category=tariff_category,
         tariff_group=tariff_group,
         operational_status=operational_status,
         search=search,
@@ -444,6 +447,7 @@ def _build_marketing_reactivation_candidate_page(
             tariff_catalog=tariff_catalog,
             session=session,
             allowed_sucursal_keys=allowed_sucursal_keys,
+            iventas_period_key=iventas_period_key,
         )
         return _candidate_page_response(
             query=query,
@@ -499,6 +503,7 @@ def _build_marketing_reactivation_candidate_page(
             tariff_catalog=tariff_catalog,
             session=session,
             allowed_sucursal_keys=allowed_sucursal_keys,
+            iventas_period_key=iventas_period_key,
         )
         serialized_by_id = {
             int(row["vencido_row_id"]): row for row in serialized_batch
@@ -570,15 +575,27 @@ def _build_marketing_reactivation_candidate_summary(
         context=context,
         session=session,
     )
+    suite_sent_by_phone = _read_suite_campaign_sent_for_period(
+        phone_mx10_values=set(phone_counts),
+        period_key=iventas_period_key,
+        session=session,
+    )
+    iventas_contact_window_utc = _iventas_contact_window_utc(
+        period_key=iventas_period_key,
+        session=session,
+    )
     tariff_catalog = _read_all_active_tariff_catalog(session=session)
     status_counts: Counter[str] = Counter()
     reason_counts: Counter[str] = Counter()
+    operational_counts: Counter[str] = Counter()
     total_rows = 0
     for serialized in _iter_complete_segment_candidates(
         base_query=base_query,
         context=context,
         phone_counts=phone_counts,
         tariff_catalog=tariff_catalog,
+        suite_sent_by_phone=suite_sent_by_phone,
+        iventas_contact_window_utc=iventas_contact_window_utc,
         session=session,
     ):
         if not _matches_operational_status(
@@ -589,12 +606,14 @@ def _build_marketing_reactivation_candidate_summary(
         total_rows += 1
         status_counts[str(serialized["status"])] += 1
         reason_counts[str(serialized["reason"])] += 1
+        operational_counts[str(serialized["operational_status"])] += 1
     return {
         "sources": _candidate_sources(query=query, context=context),
         "summary": {
             "total_rows": total_rows,
             "status_counts": dict(status_counts),
             "reason_counts": dict(reason_counts),
+            "operational_counts": dict(operational_counts),
         },
     }
 
@@ -622,6 +641,15 @@ def _build_marketing_reactivation_campaign_segment(
         context=context,
         session=session,
     )
+    suite_sent_by_phone = _read_suite_campaign_sent_for_period(
+        phone_mx10_values=set(phone_counts),
+        period_key=iventas_period_key,
+        session=session,
+    )
+    iventas_contact_window_utc = _iventas_contact_window_utc(
+        period_key=iventas_period_key,
+        session=session,
+    )
     tariff_catalog = _read_all_active_tariff_catalog(session=session)
     rows = [
         serialized
@@ -630,6 +658,8 @@ def _build_marketing_reactivation_campaign_segment(
             context=context,
             phone_counts=phone_counts,
             tariff_catalog=tariff_catalog,
+            suite_sent_by_phone=suite_sent_by_phone,
+            iventas_contact_window_utc=iventas_contact_window_utc,
             session=session,
         )
         if _matches_operational_status(
@@ -655,6 +685,7 @@ def _build_candidate_base_query(
         date_to=query.date_to,
         sucursal=query.sucursal,
         tarifa=query.tarifa,
+        tariff_category=query.tariff_category,
         tariff_group=query.tariff_group,
         search=query.search,
         sort=query.sort,
@@ -688,6 +719,8 @@ def _iter_complete_segment_candidates(
     phone_counts: Counter[str],
     tariff_catalog: dict[str, MarketingReactivationTariffORM],
     session: Any,
+    suite_sent_by_phone: dict[str, datetime] | None = None,
+    iventas_contact_window_utc: tuple[datetime, datetime] | None = None,
 ):
     for batch in _iter_query_batches(base_query, _CANDIDATE_BATCH_SIZE):
         candidates = resolve_socios_vencidos_reactivation_candidate_batch(
@@ -700,6 +733,8 @@ def _iter_complete_segment_candidates(
             vencidos_rows=batch,
             candidates=candidates,
             tariff_catalog=tariff_catalog,
+            suite_sent_by_phone=suite_sent_by_phone,
+            iventas_contact_window_utc=iventas_contact_window_utc,
         )
 
 
@@ -711,6 +746,7 @@ def _resolve_interactive_candidate_batch(
     tariff_catalog: dict[str, MarketingReactivationTariffORM],
     session: Any,
     allowed_sucursal_keys: tuple[str, ...] | None,
+    iventas_period_key: str,
 ) -> list[dict[str, Any]]:
     if not vencidos_rows:
         return []
@@ -756,10 +792,21 @@ def _resolve_interactive_candidate_batch(
         current_rows=current_rows,
         session=session,
     )
+    suite_sent_by_phone = _read_suite_campaign_sent_for_period(
+        phone_mx10_values=target_phones,
+        period_key=iventas_period_key,
+        session=session,
+    )
+    iventas_contact_window_utc = _iventas_contact_window_utc(
+        period_key=iventas_period_key,
+        session=session,
+    )
     return list(_serialize_resolved_batch(
         vencidos_rows=vencidos_rows,
         candidates=candidates,
         tariff_catalog=tariff_catalog,
+        suite_sent_by_phone=suite_sent_by_phone,
+        iventas_contact_window_utc=iventas_contact_window_utc,
     ))
 
 
@@ -768,6 +815,8 @@ def _serialize_resolved_batch(
     vencidos_rows: list[Any],
     candidates: Any,
     tariff_catalog: dict[str, MarketingReactivationTariffORM],
+    suite_sent_by_phone: dict[str, datetime] | None = None,
+    iventas_contact_window_utc: tuple[datetime, datetime] | None = None,
 ):
     candidate_by_id = {
         int(candidate.vencido_row_id): candidate for candidate in candidates
@@ -783,7 +832,31 @@ def _serialize_resolved_batch(
             vencido_row=vencido_row,
             tariff_catalog=tariff_catalog,
         )
-        serialized["operational_status"] = _operational_status(serialized)
+        operational_status = _operational_status(serialized)
+        phone_mx10 = normalize_iventas_phone(
+            vencido_row.telefono_raw
+        ).phone_mx10
+        if (
+            phone_mx10 is not None
+            and phone_mx10 in (suite_sent_by_phone or {})
+            and operational_status not in {
+                OPERATIONAL_ACTIVE,
+                OPERATIONAL_REVIEW_IDENTITY,
+            }
+        ):
+            operational_status = OPERATIONAL_CONTACTED_THIS_MONTH
+        if (
+            iventas_contact_window_utc is not None
+            and candidate.latest_outbound_at_utc is not None
+            and iventas_contact_window_utc[0] <= candidate.latest_outbound_at_utc
+            and candidate.latest_outbound_at_utc < iventas_contact_window_utc[1]
+            and operational_status not in {
+                OPERATIONAL_ACTIVE,
+                OPERATIONAL_REVIEW_IDENTITY,
+            }
+        ):
+            operational_status = OPERATIONAL_CONTACTED_THIS_MONTH
+        serialized["operational_status"] = operational_status
         yield serialized
 
 
@@ -835,6 +908,7 @@ def _candidate_cursor_segment_key(
         "iventas_period_key": str(iventas_period_key),
         "sucursal": query.sucursal,
         "tarifa": query.tarifa,
+        "tariff_category": query.tariff_category,
         "tariff_group": query.tariff_group,
         "operational_status": query.operational_status or FILTER_ALL,
         "search": query.search,
@@ -949,11 +1023,10 @@ def _matches_operational_status(
     if requested_status == FILTER_ALL:
         return True
     if requested_status == FILTER_WORK_PENDING:
-        return operational_status not in {
-            OPERATIONAL_ACTIVE,
-            OPERATIONAL_CONTACTED_AFTER_EXPIRATION,
-        }
+        return operational_status == OPERATIONAL_AVAILABLE
     return operational_status == requested_status
+
+
 
 
 def preview_marketing_reactivation_campaign(
@@ -1263,6 +1336,7 @@ def _build_campaign_plan(
         page_size=DEFAULT_PAGE_SIZE,
         sucursal=normalized_filters["sucursal"],
         tarifa=normalized_filters["tarifa"],
+        tariff_category=normalized_filters["tariff_category"],
         tariff_group=normalized_filters["tariff_group"],
         operational_status=normalized_filters["operational_status"],
         search=normalized_filters["search"],
@@ -1426,11 +1500,61 @@ def _resolve_campaign_eligibility(
     return ELIGIBILITY_ELIGIBLE, None
 
 
+def _iventas_contact_window_utc(
+    *,
+    period_key: str,
+    session: Any,
+) -> tuple[datetime, datetime]:
+    canonical_run = read_canonical_iventas_run(
+        period_key=period_key,
+        session=session,
+    )
+    tijuanatz = ZoneInfo("America/Tijuana")
+    local_start = datetime.combine(
+        canonical_run["date_from"],
+        datetime.min.time(),
+        tzinfo=tijuanatz,
+    )
+    local_end_exclusive = datetime.combine(
+        canonical_run["date_to"] + timedelta(days=1),
+        datetime.min.time(),
+        tzinfo=tijuanatz,
+    )
+    return (
+        local_start.astimezone(timezone.utc),
+        local_end_exclusive.astimezone(timezone.utc),
+    )
+
+
+def _read_suite_campaign_sent_for_period(
+    *,
+    phone_mx10_values: set[str],
+    period_key: str,
+    session: Any,
+    exclude_campaign_id: int | None = None,
+) -> dict[str, datetime]:
+    sent_from_utc, sent_to_utc_exclusive = (
+        _iventas_contact_window_utc(
+            period_key=period_key,
+            session=session,
+        )
+    )
+    return _read_last_suite_campaign_sent_at(
+        phone_mx10_values=phone_mx10_values,
+        session=session,
+        exclude_campaign_id=exclude_campaign_id,
+        sent_from_utc=sent_from_utc,
+        sent_to_utc_exclusive=sent_to_utc_exclusive,
+    )
+
+
 def _read_last_suite_campaign_sent_at(
     *,
     phone_mx10_values: set[str],
     session: Any,
     exclude_campaign_id: int | None = None,
+    sent_from_utc: datetime | None = None,
+    sent_to_utc_exclusive: datetime | None = None,
 ) -> dict[str, datetime]:
     if not phone_mx10_values:
         return {}
@@ -1454,6 +1578,14 @@ def _read_last_suite_campaign_sent_at(
     if exclude_campaign_id is not None:
         query = query.filter(
             MarketingReactivationCampaignORM.id != exclude_campaign_id
+        )
+    if sent_from_utc is not None:
+        query = query.filter(
+            MarketingReactivationCampaignORM.sent_at >= sent_from_utc
+        )
+    if sent_to_utc_exclusive is not None:
+        query = query.filter(
+            MarketingReactivationCampaignORM.sent_at < sent_to_utc_exclusive
         )
     rows = query.group_by(
         MarketingReactivationCampaignRecipientORM.phone_mx10
@@ -1543,6 +1675,11 @@ def _validate_campaign_filters(
         ),
         "tarifa": _validate_optional_text(
             filters.get("tarifa"), "filters.tarifa", max_length=255
+        ),
+        "tariff_category": _validate_optional_text(
+            filters.get("tariff_category"),
+            "filters.tariff_category",
+            max_length=100,
         ),
         "tariff_group": _validate_optional_tariff_group(
             filters.get("tariff_group"), "filters.tariff_group"
@@ -1659,13 +1796,8 @@ def _matches_campaign_filters(
         return False
     operational_status = _operational_status(row)
     requested_status = filters["operational_status"]
-    if requested_status == FILTER_WORK_PENDING and operational_status in {
-        OPERATIONAL_ACTIVE,
-        OPERATIONAL_CONTACTED_AFTER_EXPIRATION,
-    }:
-        return False
-    if requested_status not in {FILTER_ALL, FILTER_WORK_PENDING} and (
-        operational_status != requested_status
+    if not _matches_operational_status(
+        operational_status, requested_status
     ):
         return False
     search = _normalize_search(filters["search"])
@@ -1686,15 +1818,9 @@ def _operational_status(row: dict[str, Any]) -> str:
         "DUPLICATE_VENCIDO_PHONE",
     }:
         return OPERATIONAL_REVIEW_IDENTITY
-    if row["reason"] == "NO_MATCH_CURRENT_IVENTAS_RUN":
-        return OPERATIONAL_NO_CONTACT_IN_PERIOD
-    if row["reason"] == "NO_OUTBOUND_EVIDENCE":
-        return OPERATIONAL_NO_OUTBOUND_MESSAGE
-    if row["reason"] == "ONLY_PRE_EXPIRATION_OUTBOUND":
-        return OPERATIONAL_CONTACTED_BEFORE_EXPIRATION
-    if row["status"] == "EXCLUDED_POST_EXPIRATION_CONTACT":
-        return OPERATIONAL_CONTACTED_AFTER_EXPIRATION
-    return OPERATIONAL_REVIEW_IDENTITY
+    return OPERATIONAL_AVAILABLE
+
+
 
 
 def _serialize_candidate(

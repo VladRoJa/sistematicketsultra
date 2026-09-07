@@ -128,7 +128,7 @@ def test_query_compiles_to_partitioned_row_number_and_outer_range_filter():
     assert "between '2026-01-01' and '2026-12-31'" in sql
 
 
-def test_query_composes_branch_tariff_group_and_safe_search_filters():
+def test_query_composes_branch_tariff_filters_with_single_join_and_safe_search():
     session = _session_with_rows([])
     query = build_latest_operational_episode_query(
         session=session,
@@ -136,6 +136,7 @@ def test_query_composes_branch_tariff_group_and_safe_search_filters():
         date_to=date(2026, 12, 31),
         sucursal="CENTRO",
         tarifa="ANUAL",
+        tariff_category="Anualidad",
         tariff_group="REACTIVATE",
         search="Ana%_",
     )
@@ -148,7 +149,9 @@ def test_query_composes_branch_tariff_group_and_safe_search_filters():
     assert "sucursal_raw = 'centro'" in sql
     assert "tarifa = 'anual'" in sql
     assert "marketing_reactivation_tariffs.is_active is true" in sql
+    assert "categoria_tarifa = 'anualidad'" in sql
     assert "reactivation_group = 'reactivate'" in sql
+    assert sql.count("join marketing_reactivation_tariffs") == 1
     assert "ana\\\\%%\\\\_%%" in sql
     assert "escape '\\\\'" in sql
 
