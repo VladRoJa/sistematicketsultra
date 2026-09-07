@@ -35,6 +35,14 @@ MARKETING_INPUT_EDIT_ROLES = frozenset(
     }
 )
 
+MARKETING_REACTIVATION_ROLES = frozenset(
+    {
+        *ROOT_ADMIN_ROLES,
+        "EDITOR_CORPORATIVO",
+        "MARKETING",
+    }
+)
+
 
 class MarketingAuthorizationError(PermissionError):
     pass
@@ -47,6 +55,7 @@ class MarketingAccess:
     branch_ids: tuple[int, ...]
     role: str
     can_edit_inputs: bool
+    can_view_reactivation: bool
     fallback_used: bool = False
 
     def visible_branch_ids(
@@ -90,7 +99,12 @@ def resolve_marketing_access(user) -> MarketingAccess:
             "No autorizado para consultar Marketing y Conversión."
         )
 
+    username = str(getattr(user, "username", "") or "").strip().upper()
     can_edit_inputs = role in MARKETING_INPUT_EDIT_ROLES
+    can_view_reactivation = (
+        role in MARKETING_REACTIVATION_ROLES
+        and username != "ADMICORP"
+    )
 
     if role == "MARKETING":
         return MarketingAccess(
@@ -99,6 +113,7 @@ def resolve_marketing_access(user) -> MarketingAccess:
             branch_ids=(),
             role=role,
             can_edit_inputs=can_edit_inputs,
+            can_view_reactivation=can_view_reactivation,
         )
 
     if role == "GERENTE":
@@ -113,6 +128,7 @@ def resolve_marketing_access(user) -> MarketingAccess:
             branch_ids=(primary_branch_id,),
             role=role,
             can_edit_inputs=can_edit_inputs,
+            can_view_reactivation=can_view_reactivation,
         )
 
     if role == "GERENTE_REGIONAL":
@@ -124,6 +140,7 @@ def resolve_marketing_access(user) -> MarketingAccess:
                 branch_ids=assigned_branch_ids,
                 role=role,
                 can_edit_inputs=can_edit_inputs,
+                can_view_reactivation=can_view_reactivation,
             )
 
         primary_branch_id = get_user_primary_branch_id(user)
@@ -137,6 +154,7 @@ def resolve_marketing_access(user) -> MarketingAccess:
             branch_ids=(primary_branch_id,),
             role=role,
             can_edit_inputs=can_edit_inputs,
+            can_view_reactivation=can_view_reactivation,
             fallback_used=True,
         )
 
@@ -148,6 +166,7 @@ def resolve_marketing_access(user) -> MarketingAccess:
             branch_ids=(),
             role=role,
             can_edit_inputs=can_edit_inputs,
+            can_view_reactivation=can_view_reactivation,
         )
 
     if not shared_scope.branch_ids:
@@ -165,4 +184,5 @@ def resolve_marketing_access(user) -> MarketingAccess:
         branch_ids=shared_scope.branch_ids,
         role=role,
         can_edit_inputs=can_edit_inputs,
+        can_view_reactivation=can_view_reactivation,
     )
