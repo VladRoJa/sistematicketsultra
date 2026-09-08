@@ -34,6 +34,8 @@ SUPPORTED_ROW_STORAGE_MODES = frozenset(
     }
 )
 
+_CARTERA_LOOKUP_BATCH_SIZE = 500
+
 _CARTERA_MUTABLE_FIELDS = (
     "sucursal_raw",
     "nombre",
@@ -448,25 +450,42 @@ def _read_existing_cartera_rows(
     if not episode_keys:
         return {}
 
-    existing_rows = (
-        session.query(SociosVencidosCarteraORM)
-        .filter(
-            tuple_(
-                SociosVencidosCarteraORM.sucursal_key,
-                SociosVencidosCarteraORM.pin,
-                SociosVencidosCarteraORM.fecha_vencimiento_date,
-            ).in_(episode_keys)
+    existing_by_episode: dict[
+        tuple[str, str, date],
+        SociosVencidosCarteraORM,
+    ] = {}
+
+    for offset in range(
+        0,
+        len(episode_keys),
+        _CARTERA_LOOKUP_BATCH_SIZE,
+    ):
+        batch_keys = episode_keys[
+            offset : offset + _CARTERA_LOOKUP_BATCH_SIZE
+        ]
+
+        existing_rows = (
+            session.query(SociosVencidosCarteraORM)
+            .filter(
+                tuple_(
+                    SociosVencidosCarteraORM.sucursal_key,
+                    SociosVencidosCarteraORM.pin,
+                    SociosVencidosCarteraORM.fecha_vencimiento_date,
+                ).in_(batch_keys)
+            )
+            .all()
         )
-        .all()
-    )
-    return {
-        (
-            str(row.sucursal_key),
-            str(row.pin),
-            row.fecha_vencimiento_date,
-        ): row
-        for row in existing_rows
-    }
+
+        for row in existing_rows:
+            existing_by_episode[
+                (
+                    str(row.sucursal_key),
+                    str(row.pin),
+                    row.fecha_vencimiento_date,
+                )
+            ] = row
+
+    return existing_by_episode
 
 
 def _cartera_episode_key(row: dict[str, Any]) -> tuple[str, str, date]:
