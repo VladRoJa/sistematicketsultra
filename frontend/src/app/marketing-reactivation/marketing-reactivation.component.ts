@@ -172,7 +172,7 @@ export class MarketingReactivationComponent implements OnInit {
     this.service.exportCampaign(campaign.id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: blob => {
         const url = URL.createObjectURL(blob); const link = document.createElement('a');
-        link.href = url; link.download = `campana_${campaign.id}.xlsx`; link.click(); URL.revokeObjectURL(url);
+        link.href = url; link.download = this.exportFilename(campaign, blob); link.click(); URL.revokeObjectURL(url);
         this.exporting = null; this.eligible = null; this.reviewing = false; this.revision++; this.loadCampaigns();
       },
       error: error => { this.exporting = null; void this.showError(error, 'No fue posible exportar la campaña.'); },
@@ -186,6 +186,17 @@ export class MarketingReactivationComponent implements OnInit {
   }
   formatDate(value: string): string {
     return new Intl.DateTimeFormat('es-MX', {timeZone: 'America/Tijuana', dateStyle: 'medium', timeStyle: 'short'}).format(new Date(value));
+  }
+  private exportFilename(campaign: ReactivationCampaign, blob: Blob): string {
+    const normalized = campaign.name
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 80) || `CAMPANA_${campaign.id}`;
+    const extension = blob.type === 'application/zip' ? 'zip' : 'xlsx';
+    return `${normalized}.${extension}`;
   }
   private friendlyCampaignError(message: unknown, fallback: string): string {
     if (typeof message !== 'string' || !message.trim()) {
