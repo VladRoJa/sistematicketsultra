@@ -124,3 +124,23 @@ test('custom expiration dates reject an inverted range before calling API', () =
   assert.equal(requests.length, 0);
   assert.equal(component.error, 'La fecha desde no puede ser posterior a la fecha hasta.');
 });
+
+test('campaign package uses zip extension for multi-branch archive', () => {
+  const {component} = setup();
+  const campaign = {id: 9, name: 'Vencidos agosto 2026'} as any;
+  const filename = (component as any).exportFilename(
+    campaign,
+    new Blob([], {type:'application/zip'}),
+  );
+  assert.equal(filename, 'VENCIDOS_AGOSTO_2026.zip');
+});
+
+test('campaign package keeps xlsx extension for a single branch', () => {
+  const {component} = setup();
+  const campaign = {id: 10, name: 'Villas del Rey'} as any;
+  const filename = (component as any).exportFilename(
+    campaign,
+    new Blob([], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),
+  );
+  assert.equal(filename, 'VILLAS_DEL_REY.xlsx');
+});
