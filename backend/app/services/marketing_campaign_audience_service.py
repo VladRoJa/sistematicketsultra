@@ -152,11 +152,17 @@ def prepare_v1_plan(*, filters, allowed_sucursal_keys, session, now, active_buil
         custom_universe = filters.get("universo")
         if custom_universe not in {"ACTIVOS", "VENCIDOS"}:
             raise service.MarketingReactivationValidationError("Selecciona un universo válido.")
-        custom_filter_keys = {"modo_vencidos", "dias_desde", "dias_hasta", "fecha_desde", "fecha_hasta"}
-        if custom_universe == "ACTIVOS" and any(filters.get(key) is not None for key in custom_filter_keys):
-            raise service.MarketingReactivationValidationError(
-                "Los filtros de vencimiento solo aplican al universo de vencidos."
-            )
+        if custom_universe == "ACTIVOS":
+            if any(filters.get(key) is not None for key in {"modo_vencidos", "dias_desde", "dias_hasta"}):
+                raise service.MarketingReactivationValidationError(
+                    "Los filtros por días vencidos solo aplican al universo de vencidos."
+                )
+            requested_from = _parse_custom_expiration_date(filters.get("fecha_desde"), field="Fecha desde", service=service)
+            requested_to = _parse_custom_expiration_date(filters.get("fecha_hasta"), field="Fecha hasta", service=service)
+            if requested_from is not None and requested_to is not None and requested_from > requested_to:
+                raise service.MarketingReactivationValidationError(
+                    "La fecha desde no puede ser posterior a la fecha hasta."
+                )
         if custom_universe == "VENCIDOS":
             custom_expired_mode = filters.get("modo_vencidos")
             if custom_expired_mode is None:
@@ -184,7 +190,13 @@ def prepare_v1_plan(*, filters, allowed_sucursal_keys, session, now, active_buil
         kind == "PERSONALIZADA" and custom_universe == "ACTIVOS"
     ):
         active_kind = "BASCULA_RETENCION" if kind == "PERSONALIZADA" else kind
-        plan = active_builder(filters={"campaign_type": active_kind, "sucursal": branch},
+        active_filters = {"campaign_type": active_kind, "sucursal": branch}
+        if kind == "PERSONALIZADA" and custom_universe == "ACTIVOS":
+            if filters.get("fecha_desde") is not None:
+                active_filters["fecha_desde"] = filters.get("fecha_desde")
+            if filters.get("fecha_hasta") is not None:
+                active_filters["fecha_hasta"] = filters.get("fecha_hasta")
+        plan = active_builder(filters=active_filters,
                               allowed_sucursal_keys=scope, session=session, now=now)
     elif kind == "INVITA_GANA":
         rows, sources = new_member_rows(today=today, session=session)
