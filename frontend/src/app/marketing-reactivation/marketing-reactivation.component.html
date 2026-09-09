@@ -1,6 +1,16 @@
 <main class="reactivation-page">
   <header class="page-header"><div class="page-heading"><p class="eyebrow">Marketing</p><h1>Campañas</h1><p>Elige una campaña, revisa la audiencia, crea y exporta.</p></div></header>
   <div *ngIf="loading" class="state-panel" role="status"><mat-spinner diameter="24"></mat-spinner> Cargando campañas…</div>
+
+  <section *ngIf="!loading && sourceTiles.length" class="source-strip" aria-label="Fuentes de audiencia">
+    <div class="source-strip-label">Fuentes de audiencia</div>
+    <div *ngFor="let tile of sourceTiles" class="source-chip" [attr.data-status]="tile.source.status">
+      <div class="source-chip-title">{{ tile.label }}</div>
+      <div class="source-chip-date">{{ formatSourceDate(tile.source.cutoff_date) }}</div>
+      <div class="source-chip-status"><span class="status-dot"></span>{{ sourceStatusLabel(tile.source) }}</div>
+    </div>
+  </section>
+
   <section *ngIf="!loading" class="workspace" aria-labelledby="new-campaign">
     <h2 id="new-campaign">Preparar campaña</h2>
     <div class="campaign-filters" [formGroup]="form">
