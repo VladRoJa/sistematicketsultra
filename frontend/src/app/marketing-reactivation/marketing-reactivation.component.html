@@ -4,19 +4,20 @@
   <section *ngIf="!loading" class="workspace" aria-labelledby="new-campaign">
     <h2 id="new-campaign">Preparar campaña</h2>
     <div class="campaign-filters" [formGroup]="form">
-      <mat-form-field appearance="outline"><mat-label>Tipo de campaña</mat-label><mat-select formControlName="type"><mat-option *ngFor="let type of types" [value]="type.value">{{ type.label }}</mat-option></mat-select></mat-form-field>
-      <mat-form-field *ngIf="isWinback" appearance="outline"><mat-label>Segmento Winback</mat-label><mat-select formControlName="segment"><mat-option value="WINBACK_30">30 días · 8–30</mat-option><mat-option value="WINBACK_60">60 días · 31–60</mat-option><mat-option value="WINBACK_90">90 días · 61–90</mat-option></mat-select></mat-form-field>
-      <mat-form-field *ngIf="isCollection" appearance="outline"><mat-label>Días desde</mat-label><input matInput type="number" min="1" step="1" formControlName="from"></mat-form-field>
-      <mat-form-field *ngIf="isCollection" appearance="outline"><mat-label>Días hasta</mat-label><input matInput type="number" min="1" step="1" formControlName="to"></mat-form-field>
-      <mat-form-field appearance="outline"><mat-label>Región</mat-label><mat-select formControlName="region"><mat-option [value]="null">Todas las permitidas</mat-option><mat-option *ngFor="let region of options.regions" [value]="region.id">{{ region.label }}</mat-option></mat-select></mat-form-field>
-      <mat-form-field appearance="outline"><mat-label>Sucursal</mat-label><mat-select formControlName="branch"><mat-option value="">Todas las permitidas</mat-option><mat-option *ngFor="let branch of branches" [value]="branch.key">{{ branch.label }}</mat-option></mat-select></mat-form-field>
+      <mat-form-field appearance="fill"><mat-label>Tipo de campaña</mat-label><mat-select formControlName="type"><mat-option *ngFor="let type of types" [value]="type.value">{{ type.label }}</mat-option></mat-select></mat-form-field>
+      <mat-form-field *ngIf="isWinback" appearance="fill"><mat-label>Segmento Winback</mat-label><mat-select formControlName="segment"><mat-option value="WINBACK_30">30 días · 8–30</mat-option><mat-option value="WINBACK_60">60 días · 31–60</mat-option><mat-option value="WINBACK_90">90 días · 61–90</mat-option></mat-select></mat-form-field>
+      <mat-form-field *ngIf="isCustom" appearance="fill"><mat-label>Universo</mat-label><mat-select formControlName="universe"><mat-option value="ACTIVOS">Activos</mat-option><mat-option value="VENCIDOS">Vencidos</mat-option></mat-select></mat-form-field>
+      <mat-form-field *ngIf="showsDayRange" appearance="fill"><mat-label>Días desde</mat-label><input matInput type="number" min="1" step="1" formControlName="from"></mat-form-field>
+      <mat-form-field *ngIf="showsDayRange" appearance="fill"><mat-label>{{ isCustomExpired ? 'Días hasta (opcional)' : 'Días hasta' }}</mat-label><input matInput type="number" min="1" step="1" formControlName="to"></mat-form-field>
+      <mat-form-field appearance="fill"><mat-label>Región</mat-label><mat-select formControlName="region"><mat-option [value]="null">Todas las permitidas</mat-option><mat-option *ngFor="let region of options.regions" [value]="region.id">{{ region.label }}</mat-option></mat-select></mat-form-field>
+      <mat-form-field appearance="fill"><mat-label>Sucursal</mat-label><mat-select formControlName="branch"><mat-option value="">Todas las permitidas</mat-option><mat-option *ngFor="let branch of branches" [value]="branch.key">{{ branch.label }}</mat-option></mat-select></mat-form-field>
     </div>
     <p class="audience-description">{{ description }}</p>
     <button mat-stroked-button type="button" (click)="prepareCampaign()" [disabled]="reviewing || creating">{{ reviewing ? 'Revisando…' : 'Revisar audiencia' }}</button>
     <div *ngIf="eligible !== null" class="audience-result" aria-live="polite">
       <strong>{{ eligible | number }} contactos elegibles</strong>
       <p *ngIf="weeklyExcluded">{{ weeklyExcluded | number }} contactos excluidos por alcanzar dos campañas exportadas esta semana.</p>
-      <div class="campaign-form"><mat-form-field appearance="outline"><mat-label>Nombre de campaña</mat-label><input matInput [formControl]="name" maxlength="255"></mat-form-field><button mat-flat-button color="primary" type="button" (click)="confirmCampaign()" [disabled]="!canCreate">{{ creating ? 'Creando…' : 'Crear campaña' }}</button></div>
+      <div class="campaign-form"><mat-form-field appearance="fill"><mat-label>Nombre de campaña</mat-label><input matInput [formControl]="name" maxlength="255"></mat-form-field><button mat-flat-button color="primary" type="button" (click)="confirmCampaign()" [disabled]="!canCreate">{{ creating ? 'Creando…' : 'Crear campaña' }}</button></div>
     </div>
     <p class="frequency-note">Máximo dos campañas exportadas por contacto cada semana, de lunes a domingo. Esta protección no confirma envíos de iVentas.</p>
   </section>

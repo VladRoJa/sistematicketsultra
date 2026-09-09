@@ -26,10 +26,12 @@ export class MarketingReactivationComponent implements OnInit {
     {value: 'WINBACK', label: 'Winback'}, {value: 'PROXIMOS_VENCER', label: 'Próximos a vencer'},
     {value: 'VENCIDOS_RECIENTES', label: 'Vencidos recientes'}, {value: 'BASCULA_RETENCION', label: 'Báscula / Retención'},
     {value: 'INVITA_GANA', label: 'Invita y gana'}, {value: 'COBRANZA_LIGERA', label: 'Cobranza ligera'},
+    {value: 'PERSONALIZADA', label: 'Personalizada'},
   ];
   readonly form = new FormGroup({
     type: new FormControl<CampaignType>('WINBACK', {nonNullable: true}),
     segment: new FormControl('WINBACK_30', {nonNullable: true}),
+    universe: new FormControl<'ACTIVOS' | 'VENCIDOS'>('ACTIVOS', {nonNullable: true}),
     region: new FormControl<number | null>(null), branch: new FormControl('', {nonNullable: true}),
     from: new FormControl<number | null>(null), to: new FormControl<number | null>(null),
   });
@@ -46,12 +48,20 @@ export class MarketingReactivationComponent implements OnInit {
   success = '';
   get isWinback(): boolean { return this.form.controls.type.value === 'WINBACK'; }
   get isCollection(): boolean { return this.form.controls.type.value === 'COBRANZA_LIGERA'; }
+  get isCustom(): boolean { return this.form.controls.type.value === 'PERSONALIZADA'; }
+  get isCustomExpired(): boolean { return this.isCustom && this.form.controls.universe.value === 'VENCIDOS'; }
+  get showsDayRange(): boolean { return this.isCollection || this.isCustomExpired; }
   get branches(): CampaignOptions['branches'] {
     const region = this.options.regions.find(item => item.id === this.form.controls.region.value);
     return region ? this.options.branches.filter(item => region.branch_keys.includes(item.key)) : this.options.branches;
   }
   get canCreate(): boolean { return !this.creating && !this.reviewing && !!this.eligible && !!this.name.value.trim(); }
   get description(): string {
+    if (this.isCustom) {
+      return this.isCustomExpired
+        ? 'Define desde cuántos días vencidos quieres contactar. Deja “hasta” vacío para incluir todos los posteriores.'
+        : 'Todos los socios actualmente activos con teléfono válido.';
+    }
     const descriptions: Record<CampaignType, string> = {
       WINBACK: '8–30, 31–60 o 61–90 días vencidos, según el segmento.',
       PROXIMOS_VENCER: 'Membresías activas que vencen entre hoy y dentro de 5 días, inclusive.',
@@ -59,6 +69,7 @@ export class MarketingReactivationComponent implements OnInit {
       BASCULA_RETENCION: 'Socios actualmente activos.',
       INVITA_GANA: 'Socios nuevos con pago en la semana actual, de lunes a domingo.',
       COBRANZA_LIGERA: 'Selecciona el rango de días vencidos que necesitas contactar.',
+      PERSONALIZADA: '',
     };
     return descriptions[this.form.controls.type.value];
   }
@@ -84,6 +95,19 @@ export class MarketingReactivationComponent implements OnInit {
     if (values.branch) filters.sucursal = values.branch;
     if (values.region !== null) filters.region_id = values.region;
     if (this.isWinback) filters.segment = values.segment;
+    if (this.isCustom) {
+      filters.universo = values.universe;
+      if (this.isCustomExpired) {
+        if (!Number.isInteger(values.from) || values.from! < 1) {
+          this.error = 'Indica desde cuántos días vencidos quieres contactar.'; return null;
+        }
+        if (values.to !== null && (!Number.isInteger(values.to) || values.to! < values.from!)) {
+          this.error = 'Días hasta debe quedar vacío o ser igual o mayor que días desde.'; return null;
+        }
+        filters.dias_desde = values.from!;
+        if (values.to !== null) filters.dias_hasta = values.to!;
+      }
+    }
     if (this.isCollection) {
       if (!Number.isInteger(values.from) || !Number.isInteger(values.to) || values.from! < 1 || values.to! < values.from!) {
         this.error = 'Indica un rango de días válido: desde 1, hasta un valor igual o mayor.'; return null;
