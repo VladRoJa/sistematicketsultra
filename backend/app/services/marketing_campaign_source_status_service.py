@@ -30,7 +30,7 @@ def read_campaign_source_status(*, session: Any, now: datetime | None = None) ->
         session.query(SociosVencidosSnapshotORM)
         .filter(SociosVencidosSnapshotORM.is_canonical.is_(True))
         .order_by(
-            SociosVencidosSnapshotORM.business_date.desc(),
+            SociosVencidosSnapshotORM.date_to.desc(),
             SociosVencidosSnapshotORM.id.desc(),
         )
         .first()
@@ -56,7 +56,7 @@ def read_campaign_source_status(*, session: Any, now: datetime | None = None) ->
                 business_date=business_date,
             ),
             "vencidos": _serialize_source(
-                cutoff_date=getattr(vencidos, "business_date", None),
+                cutoff_date=getattr(vencidos, "date_to", None),
                 business_date=business_date,
             ),
             "iventas": _serialize_source(
