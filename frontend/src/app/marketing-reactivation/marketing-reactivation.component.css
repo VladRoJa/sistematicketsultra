@@ -23,7 +23,14 @@ p { margin:8px 0; } .eyebrow { color:var(--ultra-orange,#e54525); text-transform
 .campaign-filters { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:12px; }
 .campaign-filters mat-form-field { width:100%; }
 .audience-description,.frequency-note { color:var(--ultra-gray-600,#475569); } .frequency-note { font-size:12px; margin-top:20px; }
-.audience-result { margin-top:18px; padding:16px; border:1px solid #fed7cc; border-radius:16px; background:#fff8f5; } .audience-result>strong { font-size:24px; }
+.audience-result { margin-top:18px; padding:16px; border:1px solid #fed7cc; border-radius:16px; background:#fff8f5; }
+.audience-breakdown { max-width:560px; border:1px solid #e2e8f0; border-radius:12px; background:#fff; overflow:hidden; }
+.audience-breakdown-title { padding:10px 12px; background:#f8fafc; border-bottom:1px solid #e2e8f0; font-size:12px; font-weight:800; color:#334155; }
+.audience-breakdown-row { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:7px 12px; border-bottom:1px solid #f1f5f9; font-size:13px; color:#475569; }
+.audience-breakdown-row:last-child { border-bottom:0; }
+.audience-breakdown-row strong { color:#0f172a; font-variant-numeric:tabular-nums; }
+.eligible-total { max-width:560px; display:flex; justify-content:space-between; align-items:center; gap:16px; margin-top:10px; padding:12px; border-radius:12px; background:#fff1eb; color:#9a3412; font-weight:800; }
+.eligible-total strong { font-size:24px; color:#0f172a; }
 .campaign-form { display:flex; align-items:center; gap:16px; margin-top:16px; } .campaign-form mat-form-field { width:min(420px,100%); }
 .section-heading { display:flex; justify-content:space-between; align-items:center; } .section-heading h2 { margin:0; }
 .table-wrapper { overflow:auto; margin-top:12px; border:1px solid #e2e8f0; border-radius:14px; } table { border-collapse:collapse; width:100%; text-align:left; } th,td { padding:10px 12px; border-bottom:1px solid #e2e8f0; white-space:nowrap; font-size:13px; } th { background:#111827; color:#fff; font-size:11px; letter-spacing:.02em; } tbody tr:hover { background:#fff8f5; }

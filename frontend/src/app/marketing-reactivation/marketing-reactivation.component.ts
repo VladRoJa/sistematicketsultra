@@ -9,7 +9,13 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { HttpErrorResponse } from '@angular/common/http';
 import { MarketingReactivationService } from './marketing-reactivation.service';
-import { CampaignOptions, CampaignType, CampaignV1Request, ReactivationCampaign } from './marketing-reactivation.models';
+import {
+  CampaignOptions,
+  CampaignType,
+  CampaignV1Request,
+  ReactivationCampaign,
+  ReactivationCampaignSummary,
+} from './marketing-reactivation.models';
 import { CampaignSourceFreshness, CampaignSourceStatusResponse } from './marketing-campaign-source-status.models';
 
 @Component({
@@ -27,6 +33,7 @@ export class MarketingReactivationComponent implements OnInit {
     {value: 'WINBACK', label: 'Winback'}, {value: 'PROXIMOS_VENCER', label: 'Próximos a vencer (+5 días)'},
     {value: 'VENCIDOS_RECIENTES', label: 'Vencidos recientes'}, {value: 'BASCULA_RETENCION', label: 'Báscula / Retención'},
     {value: 'INVITA_GANA', label: 'Invita y gana'}, {value: 'COBRANZA_LIGERA', label: 'Cobranza ligera'},
+    {value: 'BORRON_CUENTA_NUEVA', label: 'Borrón y cuenta nueva'},
     {value: 'PERSONALIZADA', label: 'Personalizada'},
   ];
   readonly form = new FormGroup({
@@ -43,6 +50,7 @@ export class MarketingReactivationComponent implements OnInit {
   sourceStatus: CampaignSourceStatusResponse | null = null;
   campaigns: ReactivationCampaign[] = [];
   eligible: number | null = null;
+  audienceSummary: ReactivationCampaignSummary | null = null;
   weeklyExcluded = 0;
   loading = true;
   reviewing = false;
@@ -52,12 +60,13 @@ export class MarketingReactivationComponent implements OnInit {
   success = '';
   get isWinback(): boolean { return this.form.controls.type.value === 'WINBACK'; }
   get isCollection(): boolean { return this.form.controls.type.value === 'COBRANZA_LIGERA'; }
+  get isBcn(): boolean { return this.form.controls.type.value === 'BORRON_CUENTA_NUEVA'; }
   get isCustom(): boolean { return this.form.controls.type.value === 'PERSONALIZADA'; }
   get isCustomActive(): boolean { return this.isCustom && this.form.controls.universe.value === 'ACTIVOS'; }
   get isCustomExpired(): boolean { return this.isCustom && this.form.controls.universe.value === 'VENCIDOS'; }
   get isCustomExpiredByDays(): boolean { return this.isCustomExpired && this.form.controls.expiredMode.value === 'DIAS'; }
   get isCustomExpiredByDates(): boolean { return this.isCustomExpired && this.form.controls.expiredMode.value === 'FECHAS'; }
-  get showsDayRange(): boolean { return this.isCollection || this.isCustomExpiredByDays; }
+  get showsDayRange(): boolean { return this.isCollection || this.isBcn || this.isCustomExpiredByDays; }
   get showsCustomDateRange(): boolean { return this.isCustomActive || this.isCustomExpiredByDates; }
   get branches(): CampaignOptions['branches'] {
     const region = this.options.regions.find(item => item.id === this.form.controls.region.value);
@@ -70,6 +79,23 @@ export class MarketingReactivationComponent implements OnInit {
       {key: 'vencidos', label: 'Socios vencidos', source: this.sourceStatus.sources.vencidos},
       {key: 'iventas', label: 'iVentas', source: this.sourceStatus.sources.iventas},
     ];
+  }
+  get audienceBreakdown(): Array<{label: string; value: number}> {
+    const summary = this.audienceSummary;
+    if (!summary) return [];
+    const rows = [
+      {label: 'Candidatos encontrados', value: summary.total_candidates ?? 0},
+      {label: 'Actualmente activos', value: summary.excluded_active ?? 0},
+      {label: 'Identidad por revisar', value: summary.review_identity ?? 0},
+      {label: 'Excluidos por tarifa', value: summary.excluded_tariff_general ?? 0},
+      {label: 'Flujo domiciliados', value: summary.domiciliated_flow ?? 0},
+      {label: 'Borrón y cuenta nueva', value: summary.borron_cuenta_nueva ?? 0},
+      {label: 'Tarifa por revisar', value: summary.review_tariff ?? 0},
+      {label: 'Teléfono inválido', value: summary.excluded_invalid_phone ?? 0},
+      {label: 'Teléfonos duplicados', value: summary.duplicate_phone ?? 0},
+      {label: 'Protección semanal', value: summary.excluded_weekly_limit ?? 0},
+    ];
+    return rows.filter((row, index) => index === 0 || row.value > 0);
   }
   get canCreate(): boolean { return !this.creating && !this.reviewing && !!this.eligible && !!this.name.value.trim(); }
   get description(): string {
@@ -88,13 +114,15 @@ export class MarketingReactivationComponent implements OnInit {
       BASCULA_RETENCION: 'Socios actualmente activos.',
       INVITA_GANA: 'Socios nuevos con pago en la semana actual, de lunes a domingo.',
       COBRANZA_LIGERA: 'Selecciona el rango de días vencidos que necesitas contactar.',
+      BORRON_CUENTA_NUEVA: 'Selecciona el rango de días vencidos. Solo entran tarifas marcadas como Borrón y cuenta nueva en el catálogo.',
       PERSONALIZADA: '',
     };
     return descriptions[this.form.controls.type.value];
   }
   ngOnInit(): void {
     this.form.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
-      this.revision++; this.eligible = null; this.reviewing = false; this.error = ''; this.success = '';
+      this.revision++; this.eligible = null; this.audienceSummary = null; this.weeklyExcluded = 0;
+      this.reviewing = false; this.error = ''; this.success = '';
       if (!this.branches.some(item => item.key === this.form.controls.branch.value)) {
         this.form.controls.branch.setValue('', {emitEvent: false});
       }
@@ -168,7 +196,7 @@ export class MarketingReactivationComponent implements OnInit {
         }
       }
     }
-    if (this.isCollection) {
+    if (this.isCollection || this.isBcn) {
       if (!Number.isInteger(values.from) || !Number.isInteger(values.to) || values.from! < 1 || values.to! < values.from!) {
         this.error = 'Indica un rango de días válido: desde 1, hasta un valor igual o mayor.'; return null;
       }
@@ -179,11 +207,12 @@ export class MarketingReactivationComponent implements OnInit {
   prepareCampaign(): void {
     const request = this.request(); if (!request || this.reviewing || this.creating) return;
     const revision = this.revision;
-    this.reviewing = true; this.error = ''; this.eligible = null;
+    this.reviewing = true; this.error = ''; this.eligible = null; this.audienceSummary = null;
     this.service.previewCampaign(request).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: result => {
         if (revision !== this.revision) return;
         this.reviewing = false; this.eligible = result.summary.eligible;
+        this.audienceSummary = result.summary;
         this.weeklyExcluded = result.summary.excluded_weekly_limit ?? 0;
       },
       error: error => { if (revision === this.revision) { this.reviewing = false; void this.showError(error, 'No fue posible revisar la audiencia.'); } },
@@ -195,7 +224,7 @@ export class MarketingReactivationComponent implements OnInit {
     this.creating = true; this.error = ''; this.form.disable({emitEvent: false});
     this.service.createCampaign({...request, name: this.name.value.trim()}).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: result => {
-        this.creating = false; this.form.enable({emitEvent: false}); this.eligible = null; this.name.setValue('');
+        this.creating = false; this.form.enable({emitEvent: false}); this.eligible = null; this.audienceSummary = null; this.name.setValue('');
         this.success = `Campaña “${result.campaign.name}” creada con ${result.campaign.recipient_count} contactos. Puedes exportarla en el historial.`;
         this.loadCampaigns();
       },
@@ -216,7 +245,7 @@ export class MarketingReactivationComponent implements OnInit {
       next: blob => {
         const url = URL.createObjectURL(blob); const link = document.createElement('a');
         link.href = url; link.download = this.exportFilename(campaign, blob); link.click(); URL.revokeObjectURL(url);
-        this.exporting = null; this.eligible = null; this.reviewing = false; this.revision++; this.loadCampaigns();
+        this.exporting = null; this.eligible = null; this.audienceSummary = null; this.reviewing = false; this.revision++; this.loadCampaigns();
       },
       error: error => { this.exporting = null; void this.showError(error, 'No fue posible exportar la campaña.'); },
     });

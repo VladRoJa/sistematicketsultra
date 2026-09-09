@@ -63,6 +63,18 @@ test('collection requires an explicit range and sends it', () => {
   assert.deepEqual(requests[0].filters, {campaign_type:'COBRANZA_LIGERA',dias_desde:12,dias_hasta:28});
 });
 
+test('BCN requires an explicit expired-day range and sends the dedicated type', () => {
+  const {component, requests} = setup();
+  component.form.controls.type.setValue('BORRON_CUENTA_NUEVA');
+  component.prepareCampaign();
+  assert.equal(requests.length, 0);
+  component.form.controls.from.setValue(91); component.form.controls.to.setValue(365);
+  component.prepareCampaign();
+  assert.deepEqual(requests[0].filters, {
+    campaign_type:'BORRON_CUENTA_NUEVA', dias_desde:91, dias_hasta:365,
+  });
+});
+
 test('changing region clears a branch outside the selected region and invalidates preview', () => {
   const {component} = setup();
   component.form.controls.branch.setValue('NORTE'); component.eligible = 20;
@@ -79,6 +91,29 @@ test('late preview cannot recreate eligibility after changing the audience', () 
   preview.next({summary:{eligible:20}});
   assert.equal(component.eligible, null);
   assert.equal(component.canCreate, false);
+});
+
+test('preview exposes the campaign construction breakdown', () => {
+  const {component, preview} = setup();
+  component.prepareCampaign();
+  preview.next({summary:{
+    total_candidates:9422, eligible:1010, excluded_active:45,
+    excluded_invalid_phone:0, review_identity:28, duplicate_phone:15,
+    excluded_tariff:8043, excluded_tariff_general:6057,
+    domiciliated_flow:1986, borron_cuenta_nueva:624, review_tariff:281,
+    excluded_recent_campaign:0, review:309, excluded_weekly_limit:0,
+  }});
+  assert.equal(component.eligible, 1010);
+  assert.deepEqual(component.audienceBreakdown.map(row => [row.label, row.value]), [
+    ['Candidatos encontrados', 9422],
+    ['Actualmente activos', 45],
+    ['Identidad por revisar', 28],
+    ['Excluidos por tarifa', 6057],
+    ['Flujo domiciliados', 1986],
+    ['Borrón y cuenta nueva', 624],
+    ['Tarifa por revisar', 281],
+    ['Teléfonos duplicados', 15],
+  ]);
 });
 
 test('creation requires reviewed contacts and blocks double submission', () => {
