@@ -20,8 +20,8 @@
       <mat-form-field *ngIf="isCustomExpired" appearance="fill"><mat-label>Definir por</mat-label><mat-select formControlName="expiredMode"><mat-option value="DIAS">Días vencidos</mat-option><mat-option value="FECHAS">Fecha de vencimiento</mat-option></mat-select></mat-form-field>
       <mat-form-field *ngIf="showsDayRange" appearance="fill"><mat-label>Días desde</mat-label><input matInput type="number" min="1" step="1" formControlName="from"></mat-form-field>
       <mat-form-field *ngIf="showsDayRange" appearance="fill"><mat-label>{{ isCustomExpiredByDays ? 'Días hasta (opcional)' : 'Días hasta' }}</mat-label><input matInput type="number" min="1" step="1" formControlName="to"></mat-form-field>
-      <mat-form-field *ngIf="isCustomExpiredByDates" appearance="fill"><mat-label>Venció desde (opcional)</mat-label><input matInput type="date" formControlName="dateFrom"></mat-form-field>
-      <mat-form-field *ngIf="isCustomExpiredByDates" appearance="fill"><mat-label>Venció hasta (opcional)</mat-label><input matInput type="date" formControlName="dateTo"></mat-form-field>
+      <mat-form-field *ngIf="showsCustomDateRange" appearance="fill"><mat-label>{{ isCustomActive ? 'Vence desde (opcional)' : 'Venció desde (opcional)' }}</mat-label><input matInput type="date" formControlName="dateFrom"></mat-form-field>
+      <mat-form-field *ngIf="showsCustomDateRange" appearance="fill"><mat-label>{{ isCustomActive ? 'Vence hasta (opcional)' : 'Venció hasta (opcional)' }}</mat-label><input matInput type="date" formControlName="dateTo"></mat-form-field>
       <mat-form-field appearance="fill"><mat-label>Región</mat-label><mat-select formControlName="region"><mat-option [value]="null">Todas las permitidas</mat-option><mat-option *ngFor="let region of options.regions" [value]="region.id">{{ region.label }}</mat-option></mat-select></mat-form-field>
       <mat-form-field appearance="fill"><mat-label>Sucursal</mat-label><mat-select formControlName="branch"><mat-option value="">Todas las permitidas</mat-option><mat-option *ngFor="let branch of branches" [value]="branch.key">{{ branch.label }}</mat-option></mat-select></mat-form-field>
     </div>
