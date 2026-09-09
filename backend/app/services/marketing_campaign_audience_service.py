@@ -135,6 +135,26 @@ def _parse_custom_expiration_date(value, *, field, service):
         ) from exc
 
 
+def _filter_custom_active_expiration(plan, *, date_from, date_to):
+    if date_from is None and date_to is None:
+        return
+
+    filtered = []
+    for row in plan["eligible_rows"]:
+        raw_expiration = row.get("fecha_vencimiento")
+        if raw_expiration is None:
+            continue
+        expiration = date.fromisoformat(str(raw_expiration))
+        if date_from is not None and expiration < date_from:
+            continue
+        if date_to is not None and expiration > date_to:
+            continue
+        filtered.append(row)
+
+    plan["eligible_rows"] = filtered
+    plan["summary"]["eligible"] = len(filtered)
+
+
 def prepare_v1_plan(*, filters, allowed_sucursal_keys, session, now, active_builder, expired_builder):
     from app.services import marketing_reactivation_service as service
     kind = filters.get("campaign_type")
@@ -142,6 +162,8 @@ def prepare_v1_plan(*, filters, allowed_sucursal_keys, session, now, active_buil
         raise service.MarketingReactivationValidationError("Tipo de campaña no válido.")
     custom_universe = None
     custom_expired_mode = None
+    custom_active_from = None
+    custom_active_to = None
     allowed = {"campaign_type", "sucursal", "region_id"}
     if kind == "WINBACK":
         allowed.add("segment")
@@ -157,9 +179,9 @@ def prepare_v1_plan(*, filters, allowed_sucursal_keys, session, now, active_buil
                 raise service.MarketingReactivationValidationError(
                     "Los filtros por días vencidos solo aplican al universo de vencidos."
                 )
-            requested_from = _parse_custom_expiration_date(filters.get("fecha_desde"), field="Fecha desde", service=service)
-            requested_to = _parse_custom_expiration_date(filters.get("fecha_hasta"), field="Fecha hasta", service=service)
-            if requested_from is not None and requested_to is not None and requested_from > requested_to:
+            custom_active_from = _parse_custom_expiration_date(filters.get("fecha_desde"), field="Fecha desde", service=service)
+            custom_active_to = _parse_custom_expiration_date(filters.get("fecha_hasta"), field="Fecha hasta", service=service)
+            if custom_active_from is not None and custom_active_to is not None and custom_active_from > custom_active_to:
                 raise service.MarketingReactivationValidationError(
                     "La fecha desde no puede ser posterior a la fecha hasta."
                 )
@@ -190,14 +212,14 @@ def prepare_v1_plan(*, filters, allowed_sucursal_keys, session, now, active_buil
         kind == "PERSONALIZADA" and custom_universe == "ACTIVOS"
     ):
         active_kind = "BASCULA_RETENCION" if kind == "PERSONALIZADA" else kind
-        active_filters = {"campaign_type": active_kind, "sucursal": branch}
-        if kind == "PERSONALIZADA" and custom_universe == "ACTIVOS":
-            if filters.get("fecha_desde") is not None:
-                active_filters["fecha_desde"] = filters.get("fecha_desde")
-            if filters.get("fecha_hasta") is not None:
-                active_filters["fecha_hasta"] = filters.get("fecha_hasta")
-        plan = active_builder(filters=active_filters,
+        plan = active_builder(filters={"campaign_type": active_kind, "sucursal": branch},
                               allowed_sucursal_keys=scope, session=session, now=now)
+        if kind == "PERSONALIZADA" and custom_universe == "ACTIVOS":
+            _filter_custom_active_expiration(
+                plan,
+                date_from=custom_active_from,
+                date_to=custom_active_to,
+            )
     elif kind == "INVITA_GANA":
         rows, sources = new_member_rows(today=today, session=session)
         eligible, summary = clean_contact_rows(rows, scope=scope)
