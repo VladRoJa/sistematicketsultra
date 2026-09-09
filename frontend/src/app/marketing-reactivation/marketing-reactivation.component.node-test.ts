@@ -110,7 +110,7 @@ test('preview exposes the campaign construction breakdown', () => {
     ['Identidad por revisar', 28],
     ['Excluidos por tarifa', 6057],
     ['Flujo domiciliados', 1986],
-    ['Borrón y cuenta nueva', 624],
+    ['↳ Con adeudo / candidatos BCN', 624],
     ['Tarifa por revisar', 281],
     ['Teléfonos duplicados', 15],
   ]);
