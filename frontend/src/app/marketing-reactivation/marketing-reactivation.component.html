@@ -28,8 +28,13 @@
     <p class="audience-description">{{ description }}</p>
     <button mat-stroked-button type="button" (click)="prepareCampaign()" [disabled]="reviewing || creating">{{ reviewing ? 'Revisando…' : 'Revisar audiencia' }}</button>
     <div *ngIf="eligible !== null" class="audience-result" aria-live="polite">
-      <strong>{{ eligible | number }} contactos elegibles</strong>
-      <p *ngIf="weeklyExcluded">{{ weeklyExcluded | number }} contactos excluidos por alcanzar dos campañas exportadas esta semana.</p>
+      <div class="audience-breakdown" *ngIf="audienceBreakdown.length">
+        <div class="audience-breakdown-title">Cómo se construye la campaña</div>
+        <div class="audience-breakdown-row" *ngFor="let row of audienceBreakdown">
+          <span>{{ row.label }}</span><strong>{{ row.value | number }}</strong>
+        </div>
+      </div>
+      <div class="eligible-total"><span>Contactos elegibles</span><strong>{{ eligible | number }}</strong></div>
       <div class="campaign-form"><mat-form-field appearance="fill"><mat-label>Nombre de campaña</mat-label><input matInput [formControl]="name" maxlength="255"></mat-form-field><button mat-flat-button color="primary" type="button" (click)="confirmCampaign()" [disabled]="!canCreate">{{ creating ? 'Creando…' : 'Crear campaña' }}</button></div>
     </div>
     <p class="frequency-note">Máximo dos campañas exportadas por contacto cada semana, de lunes a domingo. Esta protección no confirma envíos de iVentas.</p>

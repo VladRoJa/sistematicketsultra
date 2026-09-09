@@ -172,6 +172,7 @@ export interface ReactivationTariffCount {
 export type ReactivationTariffGroup =
   | 'REACTIVATE'
   | 'DOMICILIATED_FLOW'
+  | 'BORRON_CUENTA_NUEVA'
   | 'EXCLUDE'
   | 'REVIEW';
 
@@ -190,7 +191,9 @@ export interface ReactivationCampaignSummary {
   review_identity: number;
   duplicate_phone: number;
   excluded_tariff: number;
+  excluded_tariff_general: number;
   domiciliated_flow: number;
+  borron_cuenta_nueva: number;
   review_tariff: number;
   excluded_recent_campaign: number;
   review: number;
@@ -271,7 +274,8 @@ export interface ReactivationCampaignRequest {
 }
 
 export type CampaignType = 'WINBACK' | 'PROXIMOS_VENCER' | 'VENCIDOS_RECIENTES'
-  | 'BASCULA_RETENCION' | 'INVITA_GANA' | 'COBRANZA_LIGERA' | 'PERSONALIZADA';
+  | 'BASCULA_RETENCION' | 'INVITA_GANA' | 'COBRANZA_LIGERA'
+  | 'BORRON_CUENTA_NUEVA' | 'PERSONALIZADA';
 
 export interface CampaignV1Request {
   name?: string;

@@ -14,7 +14,8 @@ from app.models.warehouse import VentasNuevosSociosDetalleSnapshotORM as NewSnap
 from app.warehouse.services.socios_vencidos_current_status_resolver import normalize_socios_vencidos_branch_key as branch_key
 
 TZ = ZoneInfo("America/Tijuana")
-TYPES = {"BASCULA_RETENCION", "PROXIMOS_VENCER", "VENCIDOS_RECIENTES", "WINBACK", "INVITA_GANA", "COBRANZA_LIGERA", "PERSONALIZADA"}
+BCN_GROUP = "BORRON_CUENTA_NUEVA"
+TYPES = {"BASCULA_RETENCION", "PROXIMOS_VENCER", "VENCIDOS_RECIENTES", "WINBACK", "INVITA_GANA", "COBRANZA_LIGERA", "BORRON_CUENTA_NUEVA", "PERSONALIZADA"}
 WINBACK = {"WINBACK_30": (8, 30), "WINBACK_60": (31, 60), "WINBACK_90": (61, 90)}
 CUSTOM_EXPIRED_MODES = {"DIAS", "FECHAS"}
 
@@ -119,7 +120,8 @@ def clean_contact_rows(rows, *, scope):
     return eligible, {
         "total_candidates": total, "eligible": len(eligible), "excluded_invalid_phone": invalid,
         "duplicate_phone": duplicates, "excluded_active": 0, "excluded_tariff": 0,
-        "review_identity": 0, "domiciliated_flow": 0, "review_tariff": 0,
+        "excluded_tariff_general": 0, "domiciliated_flow": 0, "borron_cuenta_nueva": 0,
+        "review_identity": 0, "review_tariff": 0,
         "excluded_recent_campaign": 0, "review": 0,
     }
 
@@ -155,6 +157,63 @@ def _filter_custom_active_expiration(plan, *, date_from, date_to):
     plan["summary"]["eligible"] = len(filtered)
 
 
+def _add_campaign_breakdown(plan):
+    decision_rows = plan.get("decision_rows") or []
+    if not decision_rows:
+        plan["summary"].setdefault("excluded_tariff_general", 0)
+        plan["summary"].setdefault("borron_cuenta_nueva", 0)
+        return
+
+    bcn_count = sum(1 for row in decision_rows if row.get("tarifa_group") == BCN_GROUP)
+    general_excluded = sum(
+        1 for row in decision_rows if row.get("eligibility_reason") == "TARIFF_EXCLUDED"
+    )
+    review_tariff = sum(
+        1 for row in decision_rows
+        if row.get("eligibility_reason") == "REVIEW_TARIFF" and row.get("tarifa_group") != BCN_GROUP
+    )
+    review_total = sum(
+        1 for row in decision_rows
+        if row.get("campaign_eligibility") == "REVIEW" and row.get("tarifa_group") != BCN_GROUP
+    )
+    plan["summary"]["excluded_tariff_general"] = general_excluded
+    plan["summary"]["borron_cuenta_nueva"] = bcn_count
+    plan["summary"]["review_tariff"] = review_tariff
+    plan["summary"]["review"] = review_total
+
+
+def _select_bcn_audience(plan):
+    """Turns the explicit BCN tariff bucket into the eligible campaign audience."""
+    decision_rows = plan.get("decision_rows") or []
+    selected = []
+    seen = set()
+    invalid = duplicates = 0
+
+    for row in decision_rows:
+        if row.get("tarifa_group") != BCN_GROUP:
+            continue
+        if row.get("status") == "EXCLUDED_ACTIVE":
+            continue
+        if row.get("status") == "REVIEW_ACTIVE_MATCH" or row.get("reason") in {
+            "ACTIVE_REVIEW", "AMBIGUOUS", "IDENTIFIER_CONFLICT", "AMBIGUOUS_IVENTAS_IDENTITY",
+        }:
+            continue
+        phone = row.get("phone_mx10")
+        if phone is None:
+            invalid += 1
+            continue
+        if phone in seen:
+            duplicates += 1
+            continue
+        seen.add(phone)
+        selected.append({**row, "campaign_eligibility": "ELIGIBLE", "eligibility_reason": None})
+
+    plan["eligible_rows"] = selected
+    plan["summary"]["eligible"] = len(selected)
+    plan["summary"]["excluded_invalid_phone"] = invalid
+    plan["summary"]["duplicate_phone"] = duplicates
+
+
 def prepare_v1_plan(*, filters, allowed_sucursal_keys, session, now, active_builder, expired_builder):
     from app.services import marketing_reactivation_service as service
     kind = filters.get("campaign_type")
@@ -167,7 +226,7 @@ def prepare_v1_plan(*, filters, allowed_sucursal_keys, session, now, active_buil
     allowed = {"campaign_type", "sucursal", "region_id"}
     if kind == "WINBACK":
         allowed.add("segment")
-    if kind == "COBRANZA_LIGERA":
+    if kind in {"COBRANZA_LIGERA", "BORRON_CUENTA_NUEVA"}:
         allowed.update({"dias_desde", "dias_hasta"})
     if kind == "PERSONALIZADA":
         allowed.update({"universo", "modo_vencidos", "dias_desde", "dias_hasta", "fecha_desde", "fecha_hasta"})
@@ -188,7 +247,6 @@ def prepare_v1_plan(*, filters, allowed_sucursal_keys, session, now, active_buil
         if custom_universe == "VENCIDOS":
             custom_expired_mode = filters.get("modo_vencidos")
             if custom_expired_mode is None:
-                # Backward-compatible with campaigns created before the selector existed.
                 custom_expired_mode = "FECHAS" if filters.get("fecha_desde") is not None or filters.get("fecha_hasta") is not None else "DIAS"
             if custom_expired_mode not in CUSTOM_EXPIRED_MODES:
                 raise service.MarketingReactivationValidationError("Selecciona cómo quieres definir los vencidos.")
@@ -288,6 +346,9 @@ def prepare_v1_plan(*, filters, allowed_sucursal_keys, session, now, active_buil
         plan = expired_builder(date_from=date_from, date_to=date_to,
                                filters={"iventas_period_key": run.period_key, "sucursal": branch, "operational_status": "ALL"},
                                campaign_cooldown_days=None, allowed_sucursal_keys=scope, session=session, now=now)
+        if kind == "BORRON_CUENTA_NUEVA":
+            _select_bcn_audience(plan)
+    _add_campaign_breakdown(plan)
     counts = exported_counts({row["phone_mx10"] for row in plan["eligible_rows"]}, session=session, now=now)
     before = len(plan["eligible_rows"])
     plan["eligible_rows"] = [row for row in plan["eligible_rows"] if counts.get(row["phone_mx10"], 0) < 2]
