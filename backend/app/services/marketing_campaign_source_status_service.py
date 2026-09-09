@@ -28,9 +28,9 @@ def read_campaign_source_status(*, session: Any, now: datetime | None = None) ->
     )
     vencidos = (
         session.query(SociosVencidosSnapshotORM)
-        .filter(SociosVencidosSnapshotORM.is_canonical.is_(True))
         .order_by(
             SociosVencidosSnapshotORM.date_to.desc(),
+            SociosVencidosSnapshotORM.captured_at.desc(),
             SociosVencidosSnapshotORM.id.desc(),
         )
         .first()
