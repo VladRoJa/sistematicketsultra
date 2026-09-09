@@ -81,16 +81,46 @@ test('custom active sends only the active universe', () => {
   assert.deepEqual(requests[0].filters, {campaign_type:'PERSONALIZADA', universo:'ACTIVOS'});
 });
 
-test('custom expired supports an open-ended range', () => {
+test('custom expired supports an open-ended day range', () => {
   const {component, requests} = setup();
   component.form.controls.type.setValue('PERSONALIZADA');
   component.form.controls.universe.setValue('VENCIDOS');
+  component.form.controls.expiredMode.setValue('DIAS');
   component.form.controls.from.setValue(91);
   component.form.controls.to.setValue(null);
   component.prepareCampaign();
   assert.deepEqual(requests[0].filters, {
     campaign_type:'PERSONALIZADA',
     universo:'VENCIDOS',
+    modo_vencidos:'DIAS',
     dias_desde:91,
   });
+});
+
+test('custom expired supports an open-ended expiration date range', () => {
+  const {component, requests} = setup();
+  component.form.controls.type.setValue('PERSONALIZADA');
+  component.form.controls.universe.setValue('VENCIDOS');
+  component.form.controls.expiredMode.setValue('FECHAS');
+  component.form.controls.dateFrom.setValue('2026-01-01');
+  component.form.controls.dateTo.setValue('');
+  component.prepareCampaign();
+  assert.deepEqual(requests[0].filters, {
+    campaign_type:'PERSONALIZADA',
+    universo:'VENCIDOS',
+    modo_vencidos:'FECHAS',
+    fecha_desde:'2026-01-01',
+  });
+});
+
+test('custom expiration dates reject an inverted range before calling API', () => {
+  const {component, requests} = setup();
+  component.form.controls.type.setValue('PERSONALIZADA');
+  component.form.controls.universe.setValue('VENCIDOS');
+  component.form.controls.expiredMode.setValue('FECHAS');
+  component.form.controls.dateFrom.setValue('2026-08-01');
+  component.form.controls.dateTo.setValue('2026-07-01');
+  component.prepareCampaign();
+  assert.equal(requests.length, 0);
+  assert.equal(component.error, 'La fecha desde no puede ser posterior a la fecha hasta.');
 });
