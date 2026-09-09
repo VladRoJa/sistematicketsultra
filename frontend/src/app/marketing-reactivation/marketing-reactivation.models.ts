@@ -119,6 +119,7 @@ export type ReactivationOperationalStatus =
   | 'ALL';
 
 export interface ReactivationCampaignFilters {
+  campaign_type?: CampaignType;
   iventas_period_key: string;
   sucursal: string | null;
   operational_status: ReactivationOperationalStatus;
@@ -181,6 +182,7 @@ export interface ReactivationTariffsResponse {
 }
 
 export interface ReactivationCampaignSummary {
+  excluded_weekly_limit?: number;
   total_candidates: number;
   eligible: number;
   excluded_active: number;
@@ -195,8 +197,13 @@ export interface ReactivationCampaignSummary {
 }
 
 export interface ReactivationCampaignPreviewResponse {
-  sources: ReactivationCandidateSources;
-  filters: ReactivationCampaignFilters;
+  sources: ReactivationCandidateSources | {
+    date_from: string;
+    date_to: string;
+    activos_snapshot_id?: number;
+    nuevos_snapshot_ids?: number[];
+  };
+  filters: ReactivationCampaignFilters | CampaignV1Request['filters'];
   summary: ReactivationCampaignSummary;
 }
 
@@ -219,17 +226,17 @@ export interface ReactivationCampaign {
   exported_at: string | null;
   sent_at: string | null;
   notes: string | null;
-  filters: ReactivationCampaignFilters;
+  filters: ReactivationCampaignFilters | CampaignV1Request['filters'];
   recipient_count: number;
 }
 
 export interface ReactivationCampaignRecipient {
   id: number;
-  socios_vencidos_cartera_id: number;
+  socios_vencidos_cartera_id: number | null;
   phone_mx10: string;
   member_name: string | null;
   sucursal: string;
-  fecha_vencimiento_date: string;
+  fecha_vencimiento_date: string | null;
   tarifa: string | null;
   inclusion_status: string;
   exclusion_reason: string | null;
@@ -261,4 +268,24 @@ export interface ReactivationCampaignRequest {
   date_to: string;
   filters: ReactivationCampaignFilters;
   notes?: string | null;
+}
+
+export type CampaignType = 'WINBACK' | 'PROXIMOS_VENCER' | 'VENCIDOS_RECIENTES'
+  | 'BASCULA_RETENCION' | 'INVITA_GANA' | 'COBRANZA_LIGERA';
+
+export interface CampaignV1Request {
+  name?: string;
+  filters: {
+    campaign_type: CampaignType;
+    sucursal?: string;
+    region_id?: number;
+    segment?: string;
+    dias_desde?: number;
+    dias_hasta?: number;
+  };
+}
+
+export interface CampaignOptions {
+  branches: Array<{ key: string; label: string }>;
+  regions: Array<{ id: number; label: string; branch_keys: string[] }>;
 }

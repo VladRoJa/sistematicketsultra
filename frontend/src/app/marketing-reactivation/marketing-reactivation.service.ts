@@ -5,6 +5,8 @@ import { Observable } from 'rxjs';
 import { environment } from 'src/environments/environment';
 
 import {
+  CampaignOptions,
+  CampaignV1Request,
   ReactivationCampaignDetailResponse,
   ReactivationCampaignListResponse,
   ReactivationCampaignPreviewResponse,
@@ -25,6 +27,10 @@ export class MarketingReactivationService {
   private readonly apiUrl = `${environment.apiUrl}/marketing/reactivation`;
 
   constructor(private readonly http: HttpClient) {}
+
+  getCampaignOptions(): Observable<CampaignOptions> {
+    return this.http.get<CampaignOptions>(`${this.apiUrl}/campaigns/options`);
+  }
 
   getSources(): Observable<ReactivationSourcesResponse> {
     return this.http.get<ReactivationSourcesResponse>(
@@ -120,7 +126,7 @@ export class MarketingReactivationService {
   }
 
   previewCampaign(
-    request: ReactivationCampaignRequest,
+    request: ReactivationCampaignRequest | CampaignV1Request,
   ): Observable<ReactivationCampaignPreviewResponse> {
     return this.http.post<ReactivationCampaignPreviewResponse>(
       `${this.apiUrl}/campaigns/preview`,
@@ -129,7 +135,7 @@ export class MarketingReactivationService {
   }
 
   createCampaign(
-    request: ReactivationCampaignRequest,
+    request: ReactivationCampaignRequest | CampaignV1Request,
   ): Observable<ReactivationCampaignResponse> {
     return this.http.post<ReactivationCampaignResponse>(
       `${this.apiUrl}/campaigns`,

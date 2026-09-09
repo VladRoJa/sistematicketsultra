@@ -256,7 +256,7 @@ ngOnInit(): void {
 
   if (this.puedeVerMarketingReactivacionPorRol()) {
     marketingConversionSubmenu.push({
-      label: 'Reactivación de socios',
+      label: 'Campañas',
       path: '/marketing/reactivation',
     });
   }

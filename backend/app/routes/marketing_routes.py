@@ -382,6 +382,25 @@ def export_marketing_reactivation_selection_endpoint():
         ), 500
 
 
+@marketing_bp.get("/reactivation/campaigns/options")
+@jwt_required()
+def marketing_campaign_options_endpoint():
+    from datetime import datetime, timezone
+    from app.services.marketing_campaign_audience_service import campaign_options
+    try:
+        _, access = _resolve_request_access()
+        _require_campaign_management(access)
+        result = campaign_options(
+            allowed_sucursal_keys=_reactivation_allowed_sucursal_keys(access),
+            session=db.session, now=datetime.now(timezone.utc),
+        )
+        return jsonify(result), 200
+    except MarketingAuthorizationError as exc:
+        return jsonify({"message": str(exc)}), 403
+    except Exception:
+        return jsonify({"message": "No fue posible cargar las opciones de campañas."}), 500
+
+
 @marketing_bp.post("/reactivation/campaigns/preview")
 @jwt_required()
 def preview_marketing_reactivation_campaign_endpoint():

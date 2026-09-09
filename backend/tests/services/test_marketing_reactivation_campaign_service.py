@@ -23,6 +23,13 @@ from app.services import marketing_reactivation_service as service
 NOW = datetime(2026, 9, 3, 18, 0, tzinfo=timezone.utc)
 
 
+@pytest.fixture(autouse=True)
+def isolated_export_frequency(monkeypatch):
+    from app.services import marketing_campaign_audience_service as audiences
+    monkeypatch.setattr(audiences, "exported_counts", lambda *args, **kwargs: {})
+    monkeypatch.setattr(audiences, "lock_export_phones", lambda *args, **kwargs: None)
+
+
 def _candidate(
     row_id: int,
     *,
@@ -838,46 +845,24 @@ def test_export_builds_xlsx_and_transitions_draft_after_success(monkeypatch):
 
     workbook = load_workbook(BytesIO(file_bytes), read_only=True)
     rows = list(workbook["Destinatarios"].iter_rows(values_only=True))
-    assert rows[0] == (
-        "Nombre",
-        "Teléfono",
-        "Sucursal",
-        "Fecha vencimiento",
-        "Tarifa",
-    )
-    assert rows[1] == (
-        "Ana Pérez",
-        "6861000010",
-        "CENTRO",
-        "2026-08-23",
-        "Mensual",
-    )
+    assert rows == [("telefono",), ("6861000010",)]
     assert filename == "reactivacion_campana_9.xlsx"
     assert campaign.status == "EXPORTED"
     assert campaign.exported_at == NOW
     assert session.commits == 1
 
 
-def test_export_does_not_mark_exported_when_revalidation_changes(monkeypatch):
+def test_export_uses_frozen_recipients_without_source_revalidation(monkeypatch):
     campaign = _campaign()
     session = WriteSession()
     monkeypatch.setattr(service, "_read_campaign", lambda **kwargs: campaign)
-    monkeypatch.setattr(
-        service,
-        "_build_campaign_plan",
-        lambda **kwargs: {"eligible_rows": []},
-    )
-
-    with pytest.raises(service.MarketingReactivationConflictError):
-        service.export_marketing_reactivation_campaign(
-            campaign_id=9,
-            session=session,
-            now=NOW,
-        )
-
-    assert campaign.status == "DRAFT"
-    assert campaign.exported_at is None
-    assert session.commits == 0
+    def forbidden(**kwargs):
+        pytest.fail("Export must not query audience sources")
+    monkeypatch.setattr(service, "_build_campaign_plan", forbidden)
+    data, _ = service.export_marketing_reactivation_campaign(campaign_id=9, session=session, now=NOW)
+    assert list(load_workbook(BytesIO(data)).active.values) == [("telefono",), ("6861000010",)]
+    assert campaign.status == "EXPORTED"
+    assert session.commits == 1
 
 
 def test_export_never_expands_or_shrinks_frozen_campaign_scope(monkeypatch):
@@ -903,7 +888,7 @@ def test_export_never_expands_or_shrinks_frozen_campaign_scope(monkeypatch):
     assert session.commits == 0
 
 
-def test_export_revalidates_with_original_frozen_scope(monkeypatch):
+def test_export_preserves_original_frozen_scope_without_source_reads(monkeypatch):
     campaign = _campaign()
     campaign.filters_json["scope"] = {
         "is_global": False,
@@ -929,7 +914,8 @@ def test_export_revalidates_with_original_frozen_scope(monkeypatch):
         now=NOW,
     )
 
-    assert calls["allowed_sucursal_keys"] == ("CENTRO",)
+    assert calls == {}
+    assert campaign.filters_json["scope"]["allowed_sucursal_keys"] == ["CENTRO"]
 
 
 def test_export_rejects_frozen_recipient_outside_campaign_scope(monkeypatch):
@@ -1164,7 +1150,7 @@ def test_seed_has_expected_tariffs_without_normalized_duplicates():
     assert by_raw["SEMANA $299"]["reactivation_group"] == "REVIEW"
 
 
-def test_alembic_has_single_head_for_active_email_index_migration():
+def test_alembic_has_single_head_for_nullable_campaign_recipient_migration():
     versions_path = Path(__file__).resolve().parents[2] / "migrations" / "versions"
     revisions: set[str] = set()
     parents: set[str] = set()
@@ -1180,7 +1166,7 @@ def test_alembic_has_single_head_for_active_email_index_migration():
         if parent_match:
             parents.update(quoted_pattern.findall(parent_match.group(1)))
 
-    assert revisions - parents == {"a8d1e6f3c2b4"}
+    assert revisions - parents == {"b9e2f7a4d3c5"}
 
 def test_read_last_suite_campaign_sent_at_applies_optional_sent_window():
     sent_from = datetime(

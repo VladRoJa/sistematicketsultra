@@ -229,12 +229,12 @@ class MarketingReactivationCampaignRecipientORM(db.Model):
     socios_vencidos_cartera_id = db.Column(
         db.BigInteger,
         db.ForeignKey("socios_vencidos_cartera.id", ondelete="RESTRICT"),
-        nullable=False,
+        nullable=True,
     )
     phone_mx10 = db.Column(db.String(10), nullable=False)
     member_name = db.Column(db.String(255), nullable=True)
     sucursal = db.Column(db.String(255), nullable=False)
-    fecha_vencimiento_date = db.Column(db.Date, nullable=False)
+    fecha_vencimiento_date = db.Column(db.Date, nullable=True)
     tarifa = db.Column(db.String(255), nullable=True)
     inclusion_status = db.Column(db.String(40), nullable=False)
     exclusion_reason = db.Column(db.String(100), nullable=True)
