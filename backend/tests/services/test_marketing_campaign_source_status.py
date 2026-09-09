@@ -34,7 +34,7 @@ class Session:
 def test_campaign_source_status_uses_real_cutoff_fields_and_tijuana_date():
     session = Session({
         SociosActivosSnapshotORM: NS(cutoff_date=date(2026, 9, 8)),
-        SociosVencidosSnapshotORM: NS(business_date=date(2026, 9, 7)),
+        SociosVencidosSnapshotORM: NS(date_to=date(2026, 9, 7)),
         MarketingIventasSyncRunORM: NS(date_to=date(2026, 9, 5)),
     })
 
