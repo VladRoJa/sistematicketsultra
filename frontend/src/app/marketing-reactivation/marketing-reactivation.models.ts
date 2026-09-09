@@ -271,7 +271,7 @@ export interface ReactivationCampaignRequest {
 }
 
 export type CampaignType = 'WINBACK' | 'PROXIMOS_VENCER' | 'VENCIDOS_RECIENTES'
-  | 'BASCULA_RETENCION' | 'INVITA_GANA' | 'COBRANZA_LIGERA';
+  | 'BASCULA_RETENCION' | 'INVITA_GANA' | 'COBRANZA_LIGERA' | 'PERSONALIZADA';
 
 export interface CampaignV1Request {
   name?: string;
@@ -280,6 +280,7 @@ export interface CampaignV1Request {
     sucursal?: string;
     region_id?: number;
     segment?: string;
+    universo?: 'ACTIVOS' | 'VENCIDOS';
     dias_desde?: number;
     dias_hasta?: number;
   };

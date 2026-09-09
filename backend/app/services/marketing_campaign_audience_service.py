@@ -14,7 +14,7 @@ from app.models.warehouse import VentasNuevosSociosDetalleSnapshotORM as NewSnap
 from app.warehouse.services.socios_vencidos_current_status_resolver import normalize_socios_vencidos_branch_key as branch_key
 
 TZ = ZoneInfo("America/Tijuana")
-TYPES = {"BASCULA_RETENCION", "PROXIMOS_VENCER", "VENCIDOS_RECIENTES", "WINBACK", "INVITA_GANA", "COBRANZA_LIGERA"}
+TYPES = {"BASCULA_RETENCION", "PROXIMOS_VENCER", "VENCIDOS_RECIENTES", "WINBACK", "INVITA_GANA", "COBRANZA_LIGERA", "PERSONALIZADA"}
 WINBACK = {"WINBACK_30": (8, 30), "WINBACK_60": (31, 60), "WINBACK_90": (61, 90)}
 
 
@@ -128,11 +128,23 @@ def prepare_v1_plan(*, filters, allowed_sucursal_keys, session, now, active_buil
     kind = filters.get("campaign_type")
     if not isinstance(kind, str) or kind not in TYPES:
         raise service.MarketingReactivationValidationError("Tipo de campaña no válido.")
+    custom_universe = None
     allowed = {"campaign_type", "sucursal", "region_id"}
     if kind == "WINBACK":
         allowed.add("segment")
     if kind == "COBRANZA_LIGERA":
         allowed.update({"dias_desde", "dias_hasta"})
+    if kind == "PERSONALIZADA":
+        allowed.update({"universo", "dias_desde", "dias_hasta"})
+        custom_universe = filters.get("universo")
+        if custom_universe not in {"ACTIVOS", "VENCIDOS"}:
+            raise service.MarketingReactivationValidationError("Selecciona un universo válido.")
+        if custom_universe == "ACTIVOS" and (
+            filters.get("dias_desde") is not None or filters.get("dias_hasta") is not None
+        ):
+            raise service.MarketingReactivationValidationError(
+                "Los días vencidos solo aplican al universo de vencidos."
+            )
     if set(filters) - allowed:
         raise service.MarketingReactivationValidationError("Filtros no permitidos para esta campaña.")
     today = now.astimezone(TZ).date()
@@ -149,8 +161,12 @@ def prepare_v1_plan(*, filters, allowed_sucursal_keys, session, now, active_buil
         scope = tuple(sorted(members if scope is None else members & set(scope)))
     service._validate_requested_sucursal_scope(sucursal=branch, allowed_sucursal_keys=scope)
     scope = service._effective_campaign_scope(sucursal=branch, allowed_sucursal_keys=scope)
-    if kind in {"BASCULA_RETENCION", "PROXIMOS_VENCER"}:
-        plan = active_builder(filters={"campaign_type": kind, "sucursal": branch}, allowed_sucursal_keys=scope, session=session, now=now)
+    if kind in {"BASCULA_RETENCION", "PROXIMOS_VENCER"} or (
+        kind == "PERSONALIZADA" and custom_universe == "ACTIVOS"
+    ):
+        active_kind = "BASCULA_RETENCION" if kind == "PERSONALIZADA" else kind
+        plan = active_builder(filters={"campaign_type": active_kind, "sucursal": branch},
+                              allowed_sucursal_keys=scope, session=session, now=now)
     elif kind == "INVITA_GANA":
         rows, sources = new_member_rows(today=today, session=session)
         eligible, summary = clean_contact_rows(rows, scope=scope)
@@ -162,6 +178,28 @@ def prepare_v1_plan(*, filters, allowed_sucursal_keys, session, now, active_buil
             if not isinstance(filters.get("segment"), str) or filters["segment"] not in WINBACK:
                 raise service.MarketingReactivationValidationError("Selecciona un segmento Winback válido.")
             lower, upper = WINBACK[filters["segment"]]
+        elif kind == "PERSONALIZADA":
+            lower = filters.get("dias_desde")
+            raw_upper = filters.get("dias_hasta")
+            max_days = today.toordinal() - 1
+            if (
+                not isinstance(lower, int) or isinstance(lower, bool)
+                or lower < 1 or lower > max_days
+            ):
+                raise service.MarketingReactivationValidationError(
+                    "Indica desde cuántos días vencidos quieres contactar."
+                )
+            if raw_upper is None:
+                upper = max_days
+            elif (
+                not isinstance(raw_upper, int) or isinstance(raw_upper, bool)
+                or raw_upper < lower or raw_upper > max_days
+            ):
+                raise service.MarketingReactivationValidationError(
+                    "El límite final debe ser igual o mayor que el inicial."
+                )
+            else:
+                upper = raw_upper
         else:
             lower, upper = filters.get("dias_desde"), filters.get("dias_hasta")
             if any(not isinstance(value, int) or isinstance(value, bool) for value in (lower, upper)) or not 1 <= lower <= upper <= today.toordinal() - 1:

@@ -278,3 +278,70 @@ def test_malformed_campaign_parameters_return_validation_error(filters):
     with pytest.raises(service.MarketingReactivationValidationError):
         audience.prepare_v1_plan(filters=filters, allowed_sucursal_keys=None, session=None, now=NOW,
                                  active_builder=None, expired_builder=None)
+
+def test_custom_active_reuses_active_builder(monkeypatch):
+    calls = {}
+    monkeypatch.setattr(audience, "exported_counts", lambda *a, **k: {})
+
+    def active(**kwargs):
+        calls.update(kwargs)
+        return plan([{"phone_mx10": "6861000001"}])
+
+    filters = {"campaign_type": "PERSONALIZADA", "universo": "ACTIVOS"}
+    result = audience.prepare_v1_plan(
+        filters=filters,
+        allowed_sucursal_keys=("CENTRO",),
+        session=None,
+        now=NOW,
+        active_builder=active,
+        expired_builder=None,
+    )
+
+    assert calls["filters"] == {"campaign_type": "BASCULA_RETENCION", "sucursal": None}
+    assert calls["allowed_sucursal_keys"] == ("CENTRO",)
+    assert result["filters"] == filters
+    assert result["summary"]["eligible"] == 1
+
+
+def test_custom_expired_supports_open_ended_91_plus(monkeypatch):
+    calls = {}
+    monkeypatch.setattr(audience, "exported_counts", lambda *a, **k: {})
+
+    def expired(**kwargs):
+        calls.update(kwargs)
+        return plan()
+
+    filters = {"campaign_type": "PERSONALIZADA", "universo": "VENCIDOS", "dias_desde": 91}
+    audience.prepare_v1_plan(
+        filters=filters,
+        allowed_sucursal_keys=("CENTRO",),
+        session=NS(query=lambda *a: Query(NS(period_key="CANONICAL"))),
+        now=NOW,
+        active_builder=None,
+        expired_builder=expired,
+    )
+
+    assert calls["date_from"] == date.min
+    assert calls["date_to"] == NOW.date() - timedelta(days=91)
+    assert calls["allowed_sucursal_keys"] == ("CENTRO",)
+
+
+@pytest.mark.parametrize("filters", [
+    {"campaign_type": "PERSONALIZADA"},
+    {"campaign_type": "PERSONALIZADA", "universo": "OTRO"},
+    {"campaign_type": "PERSONALIZADA", "universo": "ACTIVOS", "dias_desde": 1},
+    {"campaign_type": "PERSONALIZADA", "universo": "VENCIDOS"},
+    {"campaign_type": "PERSONALIZADA", "universo": "VENCIDOS", "dias_desde": 0},
+    {"campaign_type": "PERSONALIZADA", "universo": "VENCIDOS", "dias_desde": 91, "dias_hasta": 90},
+])
+def test_custom_rejects_invalid_filters(monkeypatch, filters):
+    monkeypatch.setattr(audience, "exported_counts", lambda *a, **k: {})
+    with pytest.raises(service.MarketingReactivationValidationError):
+        audience.prepare_v1_plan(
+            filters=filters,
+            allowed_sucursal_keys=None,
+            session=None,
+            now=NOW,
+            active_builder=lambda **k: plan(),
+            expired_builder=lambda **k: plan(),
+        )

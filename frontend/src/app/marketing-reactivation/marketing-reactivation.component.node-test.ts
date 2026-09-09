@@ -72,3 +72,25 @@ test('creation requires reviewed contacts and blocks double submission', () => {
   assert.equal(creates[0].name, 'Septiembre');
   assert.equal(component.form.disabled, true);
 });
+
+test('custom active sends only the active universe', () => {
+  const {component, requests} = setup();
+  component.form.controls.type.setValue('PERSONALIZADA');
+  component.form.controls.universe.setValue('ACTIVOS');
+  component.prepareCampaign();
+  assert.deepEqual(requests[0].filters, {campaign_type:'PERSONALIZADA', universo:'ACTIVOS'});
+});
+
+test('custom expired supports an open-ended range', () => {
+  const {component, requests} = setup();
+  component.form.controls.type.setValue('PERSONALIZADA');
+  component.form.controls.universe.setValue('VENCIDOS');
+  component.form.controls.from.setValue(91);
+  component.form.controls.to.setValue(null);
+  component.prepareCampaign();
+  assert.deepEqual(requests[0].filters, {
+    campaign_type:'PERSONALIZADA',
+    universo:'VENCIDOS',
+    dias_desde:91,
+  });
+});
