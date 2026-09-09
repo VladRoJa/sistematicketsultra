@@ -281,8 +281,11 @@ export interface CampaignV1Request {
     region_id?: number;
     segment?: string;
     universo?: 'ACTIVOS' | 'VENCIDOS';
+    modo_vencidos?: 'DIAS' | 'FECHAS';
     dias_desde?: number;
     dias_hasta?: number;
+    fecha_desde?: string;
+    fecha_hasta?: string;
   };
 }
 
