@@ -156,7 +156,7 @@ export class MarketingReactivationService {
   }
 
   exportCampaign(id: number): Observable<Blob> {
-    return this.http.get(`${this.apiUrl}/campaigns/${id}/export`, {
+    return this.http.get(`${this.apiUrl}/campaigns/${id}/export-package`, {
       responseType: 'blob',
     });
   }
