@@ -1,5 +1,6 @@
 """Campaign V1 selection and the temporary Suite export frequency policy."""
 from datetime import date, datetime, time, timedelta, timezone
+from decimal import Decimal, InvalidOperation
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, or_, text
@@ -14,7 +15,7 @@ from app.models.warehouse import VentasNuevosSociosDetalleSnapshotORM as NewSnap
 from app.warehouse.services.socios_vencidos_current_status_resolver import normalize_socios_vencidos_branch_key as branch_key
 
 TZ = ZoneInfo("America/Tijuana")
-BCN_GROUP = "BORRON_CUENTA_NUEVA"
+DOMICILIATED_GROUP = "DOMICILIATED_FLOW"
 TYPES = {"BASCULA_RETENCION", "PROXIMOS_VENCER", "VENCIDOS_RECIENTES", "WINBACK", "INVITA_GANA", "COBRANZA_LIGERA", "BORRON_CUENTA_NUEVA", "PERSONALIZADA"}
 WINBACK = {"WINBACK_30": (8, 30), "WINBACK_60": (31, 60), "WINBACK_90": (61, 90)}
 CUSTOM_EXPIRED_MODES = {"DIAS", "FECHAS"}
@@ -157,6 +158,24 @@ def _filter_custom_active_expiration(plan, *, date_from, date_to):
     plan["summary"]["eligible"] = len(filtered)
 
 
+def _has_positive_debt(row):
+    raw = row.get("adeudo")
+    if raw is None:
+        return False
+    try:
+        return Decimal(str(raw)) > 0
+    except (InvalidOperation, ValueError):
+        return False
+
+
+def _is_bcn_base_candidate(row):
+    return (
+        row.get("tarifa_group") == DOMICILIATED_GROUP
+        and row.get("eligibility_reason") == "TARIFF_DOMICILIATED_FLOW"
+        and _has_positive_debt(row)
+    )
+
+
 def _add_campaign_breakdown(plan):
     decision_rows = plan.get("decision_rows") or []
     if not decision_rows:
@@ -164,39 +183,22 @@ def _add_campaign_breakdown(plan):
         plan["summary"].setdefault("borron_cuenta_nueva", 0)
         return
 
-    bcn_count = sum(1 for row in decision_rows if row.get("tarifa_group") == BCN_GROUP)
     general_excluded = sum(
         1 for row in decision_rows if row.get("eligibility_reason") == "TARIFF_EXCLUDED"
     )
-    review_tariff = sum(
-        1 for row in decision_rows
-        if row.get("eligibility_reason") == "REVIEW_TARIFF" and row.get("tarifa_group") != BCN_GROUP
-    )
-    review_total = sum(
-        1 for row in decision_rows
-        if row.get("campaign_eligibility") == "REVIEW" and row.get("tarifa_group") != BCN_GROUP
-    )
+    bcn_count = sum(1 for row in decision_rows if _is_bcn_base_candidate(row))
     plan["summary"]["excluded_tariff_general"] = general_excluded
     plan["summary"]["borron_cuenta_nueva"] = bcn_count
-    plan["summary"]["review_tariff"] = review_tariff
-    plan["summary"]["review"] = review_total
 
 
 def _select_bcn_audience(plan):
-    """Turns the explicit BCN tariff bucket into the eligible campaign audience."""
-    decision_rows = plan.get("decision_rows") or []
+    """Select former domiciliated members with debt who are safe to contact."""
     selected = []
     seen = set()
     invalid = duplicates = 0
 
-    for row in decision_rows:
-        if row.get("tarifa_group") != BCN_GROUP:
-            continue
-        if row.get("status") == "EXCLUDED_ACTIVE":
-            continue
-        if row.get("status") == "REVIEW_ACTIVE_MATCH" or row.get("reason") in {
-            "ACTIVE_REVIEW", "AMBIGUOUS", "IDENTIFIER_CONFLICT", "AMBIGUOUS_IVENTAS_IDENTITY",
-        }:
+    for row in plan.get("decision_rows") or []:
+        if not _is_bcn_base_candidate(row):
             continue
         phone = row.get("phone_mx10")
         if phone is None:
