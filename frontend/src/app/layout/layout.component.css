@@ -119,7 +119,7 @@
 .suite-main-nav {
   min-width: 0;
   display: flex;
-  justify-content: center;
+  justify-content: safe center;
   align-items: center;
   gap: 6px;
   padding: 6px;
