@@ -10,6 +10,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { HttpErrorResponse } from '@angular/common/http';
 import { MarketingReactivationService } from './marketing-reactivation.service';
 import { CampaignOptions, CampaignType, CampaignV1Request, ReactivationCampaign } from './marketing-reactivation.models';
+import { CampaignSourceFreshness, CampaignSourceStatusResponse } from './marketing-campaign-source-status.models';
 
 @Component({
   selector: 'app-marketing-reactivation', standalone: true,
@@ -39,6 +40,7 @@ export class MarketingReactivationComponent implements OnInit {
   });
   readonly name = new FormControl('', {nonNullable: true});
   options: CampaignOptions = {branches: [], regions: []};
+  sourceStatus: CampaignSourceStatusResponse | null = null;
   campaigns: ReactivationCampaign[] = [];
   eligible: number | null = null;
   weeklyExcluded = 0;
@@ -58,6 +60,14 @@ export class MarketingReactivationComponent implements OnInit {
   get branches(): CampaignOptions['branches'] {
     const region = this.options.regions.find(item => item.id === this.form.controls.region.value);
     return region ? this.options.branches.filter(item => region.branch_keys.includes(item.key)) : this.options.branches;
+  }
+  get sourceTiles(): Array<{key: string; label: string; source: CampaignSourceFreshness}> {
+    if (!this.sourceStatus) return [];
+    return [
+      {key: 'activos', label: 'Socios activos', source: this.sourceStatus.sources.activos},
+      {key: 'vencidos', label: 'Socios vencidos', source: this.sourceStatus.sources.vencidos},
+      {key: 'iventas', label: 'iVentas', source: this.sourceStatus.sources.iventas},
+    ];
   }
   get canCreate(): boolean { return !this.creating && !this.reviewing && !!this.eligible && !!this.name.value.trim(); }
   get description(): string {
@@ -90,9 +100,32 @@ export class MarketingReactivationComponent implements OnInit {
   loadOptions(): void {
     this.loading = true; this.error = '';
     this.service.getCampaignOptions().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: options => { this.options = options; this.loading = false; this.loadCampaigns(); },
+      next: options => {
+        this.options = options;
+        this.loading = false;
+        this.loadSourceStatus();
+        this.loadCampaigns();
+      },
       error: error => { this.loading = false; void this.showError(error, 'No fue posible cargar las opciones.'); },
     });
+  }
+  private loadSourceStatus(): void {
+    this.service.getCampaignSourceStatus().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: result => { this.sourceStatus = result; },
+      error: () => { this.sourceStatus = null; },
+    });
+  }
+  sourceStatusLabel(source: CampaignSourceFreshness): string {
+    if (source.status === 'UNAVAILABLE') return 'Sin fuente';
+    if (source.status === 'CURRENT') return 'Al día';
+    if (source.age_days === 1) return '1 día de atraso';
+    return `${source.age_days ?? 0} días de atraso`;
+  }
+  formatSourceDate(value: string | null): string {
+    if (!value) return 'Sin corte';
+    return new Intl.DateTimeFormat('es-MX', {
+      day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC',
+    }).format(new Date(`${value}T12:00:00Z`));
   }
   private request(): CampaignV1Request | null {
     const values = this.form.getRawValue();

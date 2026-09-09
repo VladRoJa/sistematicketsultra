@@ -19,6 +19,7 @@ import {
   ReactivationSourcesResponse,
   ReactivationTariffsResponse,
 } from './marketing-reactivation.models';
+import { CampaignSourceStatusResponse } from './marketing-campaign-source-status.models';
 
 @Injectable({
   providedIn: 'root',
@@ -30,6 +31,12 @@ export class MarketingReactivationService {
 
   getCampaignOptions(): Observable<CampaignOptions> {
     return this.http.get<CampaignOptions>(`${this.apiUrl}/campaigns/options`);
+  }
+
+  getCampaignSourceStatus(): Observable<CampaignSourceStatusResponse> {
+    return this.http.get<CampaignSourceStatusResponse>(
+      `${this.apiUrl}/campaigns/source-status`,
+    );
   }
 
   getSources(): Observable<ReactivationSourcesResponse> {

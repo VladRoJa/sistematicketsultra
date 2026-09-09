@@ -11,9 +11,18 @@ function setup() {
   const creation = new Subject<any>();
   const requests: any[] = [];
   const creates: any[] = [];
+  const sourceStatus = {
+    business_date:'2026-09-08',
+    sources:{
+      activos:{cutoff_date:'2026-09-08',age_days:0,status:'CURRENT'},
+      vencidos:{cutoff_date:'2026-09-07',age_days:1,status:'RECENT'},
+      iventas:{cutoff_date:'2026-09-05',age_days:3,status:'STALE'},
+    },
+  };
   const service = {
     getCampaignOptions: () => of({branches: [{key:'CENTRO', label:'Centro'}, {key:'NORTE', label:'Norte'}],
       regions:[{id:1,label:'Región 1',branch_keys:['CENTRO']}]}),
+    getCampaignSourceStatus: () => of(sourceStatus),
     getCampaigns: () => of({rows:[]}),
     previewCampaign: (request: any) => {requests.push(request); return preview;},
     createCampaign: (request: any) => {creates.push(request); return creation;},
@@ -26,6 +35,16 @@ function setup() {
   component.ngOnInit();
   return {component, preview, creation, requests, creates};
 }
+
+test('source strip exposes compact freshness labels', () => {
+  const {component} = setup();
+  assert.equal(component.sourceTiles.length, 3);
+  assert.equal(component.sourceTiles[0].label, 'Socios activos');
+  assert.equal(component.sourceStatusLabel(component.sourceTiles[0].source), 'Al día');
+  assert.equal(component.sourceStatusLabel(component.sourceTiles[1].source), '1 día de atraso');
+  assert.equal(component.sourceStatusLabel(component.sourceTiles[2].source), '3 días de atraso');
+  assert.match(component.formatSourceDate('2026-09-08'), /2026/);
+});
 
 test('Winback sends only the commercial segment, without dates or iVentas', () => {
   const {component, requests} = setup();

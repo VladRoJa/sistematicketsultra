@@ -13,9 +13,15 @@ const compilerOptions = {
   module: ts.ModuleKind.ES2022,
   experimentalDecorators: true,
 };
-for (const name of ['marketing-reactivation.component.node-test', 'marketing-reactivation.component', 'marketing-reactivation.service']) {
+for (const name of [
+  'marketing-reactivation.component.node-test',
+  'marketing-reactivation.component',
+  'marketing-reactivation.service',
+  'marketing-campaign-source-status.models',
+]) {
   let source = fs.readFileSync(path.join(sourceDir, `${name}.ts`), 'utf8');
   source = source.replace(/from '\.\/(marketing-reactivation\.(?:component|service))'/g, "from './$1.mjs'");
+  source = source.replace("from './marketing-campaign-source-status.models'", "from './marketing-campaign-source-status.models.mjs'");
   source = source.replace("from 'src/environments/environment'", "from './environment.mjs'");
   fs.writeFileSync(path.join(outputDir, `${name}.mjs`), ts.transpileModule(source, { compilerOptions }).outputText);
 }
