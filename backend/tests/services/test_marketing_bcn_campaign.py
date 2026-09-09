@@ -12,15 +12,26 @@ from app.services import marketing_reactivation_service as service
 NOW = datetime(2026, 9, 9, 18, tzinfo=timezone.utc)
 
 
-def _decision(row_id, *, group, phone, status="CONTACT_HISTORY_UNKNOWN", reason="NO_OUTBOUND_EVIDENCE"):
+def _decision(
+    row_id,
+    *,
+    group="DOMICILIATED_FLOW",
+    phone="6861000001",
+    adeudo="100.00",
+    status="CONTACT_HISTORY_UNKNOWN",
+    reason="NO_OUTBOUND_EVIDENCE",
+    campaign_eligibility="EXCLUDED_TARIFF",
+    eligibility_reason="TARIFF_DOMICILIATED_FLOW",
+):
     return {
         "vencido_row_id": row_id,
         "tarifa_group": group,
         "phone_mx10": phone,
+        "adeudo": adeudo,
         "status": status,
         "reason": reason,
-        "campaign_eligibility": "REVIEW" if group == audience.BCN_GROUP else "EXCLUDED_TARIFF",
-        "eligibility_reason": "REVIEW_TARIFF" if group == audience.BCN_GROUP else "TARIFF_EXCLUDED",
+        "campaign_eligibility": campaign_eligibility,
+        "eligibility_reason": eligibility_reason,
     }
 
 
@@ -32,42 +43,91 @@ def _plan(rows):
         "summary": {
             "total_candidates": len(rows),
             "eligible": 0,
-            "excluded_active": 0,
+            "excluded_active": sum(row["eligibility_reason"] == "ACTIVE_CONFIRMED" for row in rows),
             "excluded_invalid_phone": 0,
-            "review_identity": 0,
+            "review_identity": sum(row["eligibility_reason"] == "REVIEW_IDENTITY" for row in rows),
             "duplicate_phone": 0,
-            "excluded_tariff": sum(row["tarifa_group"] != audience.BCN_GROUP for row in rows),
-            "domiciliated_flow": 0,
-            "review_tariff": sum(row["tarifa_group"] == audience.BCN_GROUP for row in rows),
+            "excluded_tariff": sum(row["campaign_eligibility"] == "EXCLUDED_TARIFF" for row in rows),
+            "excluded_tariff_general": 0,
+            "domiciliated_flow": sum(row["eligibility_reason"] == "TARIFF_DOMICILIATED_FLOW" for row in rows),
+            "borron_cuenta_nueva": 0,
+            "review_tariff": sum(row["eligibility_reason"] == "REVIEW_TARIFF" for row in rows),
             "excluded_recent_campaign": 0,
-            "review": sum(row["tarifa_group"] == audience.BCN_GROUP for row in rows),
+            "review": sum(row["campaign_eligibility"] == "REVIEW" for row in rows),
         },
     }
 
 
-def test_breakdown_separates_bcn_from_tariff_review():
+def test_bcn_base_candidate_requires_domiciliated_positive_debt_and_safe_identity():
+    eligible = _decision(1, adeudo="1250.50")
+    no_debt = _decision(2, adeudo="0.00")
+    negative_debt = _decision(3, adeudo="-10.00")
+    active = _decision(
+        4,
+        adeudo="900.00",
+        status="EXCLUDED_ACTIVE",
+        reason="ACTIVE_CONFIRMED",
+        campaign_eligibility="EXCLUDED_ACTIVE",
+        eligibility_reason="ACTIVE_CONFIRMED",
+    )
+    identity_review = _decision(
+        5,
+        adeudo="500.00",
+        status="REVIEW_ACTIVE_MATCH",
+        reason="ACTIVE_REVIEW",
+        campaign_eligibility="REVIEW",
+        eligibility_reason="REVIEW_IDENTITY",
+    )
+    reactivate = _decision(
+        6,
+        group="REACTIVATE",
+        adeudo="2000.00",
+        campaign_eligibility="ELIGIBLE",
+        eligibility_reason=None,
+    )
+
+    assert audience._is_bcn_base_candidate(eligible) is True
+    assert audience._is_bcn_base_candidate(no_debt) is False
+    assert audience._is_bcn_base_candidate(negative_debt) is False
+    assert audience._is_bcn_base_candidate(active) is False
+    assert audience._is_bcn_base_candidate(identity_review) is False
+    assert audience._is_bcn_base_candidate(reactivate) is False
+
+
+def test_breakdown_counts_bcn_as_subset_of_domiciliated_flow():
     plan = _plan([
-        _decision(1, group="EXCLUDE", phone="6861000001"),
-        _decision(2, group=audience.BCN_GROUP, phone="6861000002"),
-        _decision(3, group=audience.BCN_GROUP, phone="6861000003"),
+        _decision(1, adeudo="100.00"),
+        _decision(2, adeudo="0.00"),
+        _decision(3, adeudo="50.00"),
+        _decision(
+            4,
+            group="EXCLUDE",
+            adeudo="1000.00",
+            eligibility_reason="TARIFF_EXCLUDED",
+        ),
     ])
 
     audience._add_campaign_breakdown(plan)
-    audience._add_campaign_breakdown(plan)
 
-    assert plan["summary"]["excluded_tariff_general"] == 1
+    assert plan["summary"]["domiciliated_flow"] == 3
     assert plan["summary"]["borron_cuenta_nueva"] == 2
-    assert plan["summary"]["review_tariff"] == 0
-    assert plan["summary"]["review"] == 0
+    assert plan["summary"]["excluded_tariff_general"] == 1
 
 
-def test_bcn_selector_keeps_only_safe_unique_bcn_phones():
+def test_bcn_selector_keeps_only_positive_debt_unique_valid_phones():
     plan = _plan([
-        _decision(1, group=audience.BCN_GROUP, phone="6861000001"),
-        _decision(2, group=audience.BCN_GROUP, phone="6861000001"),
-        _decision(3, group=audience.BCN_GROUP, phone=None),
-        _decision(4, group=audience.BCN_GROUP, phone="6861000004", status="EXCLUDED_ACTIVE", reason="ACTIVE_CONFIRMED"),
-        _decision(5, group="EXCLUDE", phone="6861000005"),
+        _decision(1, phone="6861000001", adeudo="100.00"),
+        _decision(2, phone="6861000001", adeudo="200.00"),
+        _decision(3, phone=None, adeudo="300.00"),
+        _decision(4, phone="6861000004", adeudo="0.00"),
+        _decision(
+            5,
+            group="REACTIVATE",
+            phone="6861000005",
+            adeudo="999.00",
+            campaign_eligibility="ELIGIBLE",
+            eligibility_reason=None,
+        ),
     ])
 
     audience._select_bcn_audience(plan)
@@ -96,8 +156,8 @@ def test_bcn_template_reuses_expired_engine_with_explicit_day_range(monkeypatch)
     def expired(**kwargs):
         calls.update(kwargs)
         return _plan([
-            _decision(1, group=audience.BCN_GROUP, phone="6861000001"),
-            _decision(2, group="EXCLUDE", phone="6861000002"),
+            _decision(1, phone="6861000001", adeudo="450.00"),
+            _decision(2, phone="6861000002", adeudo="0.00"),
         ])
 
     result = audience.prepare_v1_plan(
@@ -148,7 +208,7 @@ def _assignment_value(tree, name):
     return None
 
 
-def test_alembic_graph_has_bcn_migration_as_single_head():
+def test_alembic_graph_has_corrective_bcn_migration_as_single_head():
     versions = Path(__file__).resolve().parents[2] / "migrations" / "versions"
     revisions = set()
     parents = set()
@@ -163,11 +223,17 @@ def test_alembic_graph_has_bcn_migration_as_single_head():
         elif down_revision:
             parents.update(down_revision)
 
-    assert revisions - parents == {"c1d4e7f9a2b3"}
+    assert revisions - parents == {"d2e5f8a0b4c6"}
 
 
-def test_bcn_migration_expands_tariff_group_constraint():
-    path = Path(__file__).resolve().parents[2] / "migrations" / "versions" / "c1d4e7f9a2b3_add_bcn_reactivation_group.py"
+def test_corrective_migration_maps_legacy_bcn_group_back_to_domiciliated():
+    path = (
+        Path(__file__).resolve().parents[2]
+        / "migrations"
+        / "versions"
+        / "d2e5f8a0b4c6_restore_reactivation_tariff_groups.py"
+    )
     source = path.read_text(encoding="utf-8")
-    assert "BORRON_CUENTA_NUEVA" in source
-    assert 'down_revision: str = "b9e2f7a4d3c5"' in source
+    assert 'down_revision: str = "c1d4e7f9a2b3"' in source
+    assert "SET reactivation_group = 'DOMICILIATED_FLOW'" in source
+    assert "WHERE reactivation_group = 'BORRON_CUENTA_NUEVA'" in source
