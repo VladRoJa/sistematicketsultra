@@ -1,5 +1,5 @@
 """Campaign V1 selection and the temporary Suite export frequency policy."""
-from datetime import datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, or_, text
@@ -16,6 +16,7 @@ from app.warehouse.services.socios_vencidos_current_status_resolver import norma
 TZ = ZoneInfo("America/Tijuana")
 TYPES = {"BASCULA_RETENCION", "PROXIMOS_VENCER", "VENCIDOS_RECIENTES", "WINBACK", "INVITA_GANA", "COBRANZA_LIGERA", "PERSONALIZADA"}
 WINBACK = {"WINBACK_30": (8, 30), "WINBACK_60": (31, 60), "WINBACK_90": (61, 90)}
+CUSTOM_EXPIRED_MODES = {"DIAS", "FECHAS"}
 
 
 def week_window(now):
@@ -123,28 +124,46 @@ def clean_contact_rows(rows, *, scope):
     }
 
 
+def _parse_custom_expiration_date(value, *, field, service):
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        return date.fromisoformat(value.strip())
+    except ValueError as exc:
+        raise service.MarketingReactivationValidationError(
+            f"{field} debe tener una fecha válida."
+        ) from exc
+
+
 def prepare_v1_plan(*, filters, allowed_sucursal_keys, session, now, active_builder, expired_builder):
     from app.services import marketing_reactivation_service as service
     kind = filters.get("campaign_type")
     if not isinstance(kind, str) or kind not in TYPES:
         raise service.MarketingReactivationValidationError("Tipo de campaña no válido.")
     custom_universe = None
+    custom_expired_mode = None
     allowed = {"campaign_type", "sucursal", "region_id"}
     if kind == "WINBACK":
         allowed.add("segment")
     if kind == "COBRANZA_LIGERA":
         allowed.update({"dias_desde", "dias_hasta"})
     if kind == "PERSONALIZADA":
-        allowed.update({"universo", "dias_desde", "dias_hasta"})
+        allowed.update({"universo", "modo_vencidos", "dias_desde", "dias_hasta", "fecha_desde", "fecha_hasta"})
         custom_universe = filters.get("universo")
         if custom_universe not in {"ACTIVOS", "VENCIDOS"}:
             raise service.MarketingReactivationValidationError("Selecciona un universo válido.")
-        if custom_universe == "ACTIVOS" and (
-            filters.get("dias_desde") is not None or filters.get("dias_hasta") is not None
-        ):
+        custom_filter_keys = {"modo_vencidos", "dias_desde", "dias_hasta", "fecha_desde", "fecha_hasta"}
+        if custom_universe == "ACTIVOS" and any(filters.get(key) is not None for key in custom_filter_keys):
             raise service.MarketingReactivationValidationError(
-                "Los días vencidos solo aplican al universo de vencidos."
+                "Los filtros de vencimiento solo aplican al universo de vencidos."
             )
+        if custom_universe == "VENCIDOS":
+            custom_expired_mode = filters.get("modo_vencidos")
+            if custom_expired_mode is None:
+                # Backward-compatible with campaigns created before the selector existed.
+                custom_expired_mode = "FECHAS" if filters.get("fecha_desde") is not None or filters.get("fecha_hasta") is not None else "DIAS"
+            if custom_expired_mode not in CUSTOM_EXPIRED_MODES:
+                raise service.MarketingReactivationValidationError("Selecciona cómo quieres definir los vencidos.")
     if set(filters) - allowed:
         raise service.MarketingReactivationValidationError("Filtros no permitidos para esta campaña.")
     today = now.astimezone(TZ).date()
@@ -173,12 +192,33 @@ def prepare_v1_plan(*, filters, allowed_sucursal_keys, session, now, active_buil
         plan = {"sources": sources, "eligible_rows": eligible, "summary": summary}
     else:
         if kind == "VENCIDOS_RECIENTES":
-            lower, upper = 1, 7
+            date_from, date_to = today - timedelta(days=7), today - timedelta(days=1)
         elif kind == "WINBACK":
             if not isinstance(filters.get("segment"), str) or filters["segment"] not in WINBACK:
                 raise service.MarketingReactivationValidationError("Selecciona un segmento Winback válido.")
             lower, upper = WINBACK[filters["segment"]]
+            date_from, date_to = today - timedelta(days=upper), today - timedelta(days=lower)
+        elif kind == "PERSONALIZADA" and custom_expired_mode == "FECHAS":
+            if filters.get("dias_desde") is not None or filters.get("dias_hasta") is not None:
+                raise service.MarketingReactivationValidationError(
+                    "Usa días o fechas para definir vencidos, no ambos."
+                )
+            requested_from = _parse_custom_expiration_date(filters.get("fecha_desde"), field="Fecha desde", service=service)
+            requested_to = _parse_custom_expiration_date(filters.get("fecha_hasta"), field="Fecha hasta", service=service)
+            if requested_from is None and requested_to is None:
+                raise service.MarketingReactivationValidationError("Indica al menos una fecha de vencimiento.")
+            yesterday = today - timedelta(days=1)
+            date_from = requested_from or date.min
+            date_to = requested_to or yesterday
+            if date_from > date_to:
+                raise service.MarketingReactivationValidationError("La fecha desde no puede ser posterior a la fecha hasta.")
+            if date_to > yesterday:
+                raise service.MarketingReactivationValidationError("La fecha hasta debe corresponder a una membresía ya vencida.")
         elif kind == "PERSONALIZADA":
+            if filters.get("fecha_desde") is not None or filters.get("fecha_hasta") is not None:
+                raise service.MarketingReactivationValidationError(
+                    "Usa días o fechas para definir vencidos, no ambos."
+                )
             lower = filters.get("dias_desde")
             raw_upper = filters.get("dias_hasta")
             max_days = today.toordinal() - 1
@@ -200,16 +240,18 @@ def prepare_v1_plan(*, filters, allowed_sucursal_keys, session, now, active_buil
                 )
             else:
                 upper = raw_upper
+            date_from, date_to = today - timedelta(days=upper), today - timedelta(days=lower)
         else:
             lower, upper = filters.get("dias_desde"), filters.get("dias_hasta")
             if any(not isinstance(value, int) or isinstance(value, bool) for value in (lower, upper)) or not 1 <= lower <= upper <= today.toordinal() - 1:
                 raise service.MarketingReactivationValidationError("Indica un rango de días vencidos válido, desde 1.")
+            date_from, date_to = today - timedelta(days=upper), today - timedelta(days=lower)
         run = session.query(MarketingIventasSyncRunORM).filter(
             MarketingIventasSyncRunORM.status == "COMPLETED", MarketingIventasSyncRunORM.is_canonical.is_(True),
         ).order_by(MarketingIventasSyncRunORM.date_to.desc(), MarketingIventasSyncRunORM.id.desc()).first()
         if run is None:
             raise service.MarketingReactivationValidationError("No hay una sincronización iVentas canónica disponible.")
-        plan = expired_builder(date_from=today - timedelta(days=upper), date_to=today - timedelta(days=lower),
+        plan = expired_builder(date_from=date_from, date_to=date_to,
                                filters={"iventas_period_key": run.period_key, "sucursal": branch, "operational_status": "ALL"},
                                campaign_cooldown_days=None, allowed_sucursal_keys=scope, session=session, now=now)
     counts = exported_counts({row["phone_mx10"] for row in plan["eligible_rows"]}, session=session, now=now)
