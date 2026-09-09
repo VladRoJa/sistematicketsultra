@@ -608,6 +608,51 @@ class TestMarketingRoutes:
         assert create_service.call_args.kwargs["created_by_user_id"] == 1
         assert create_service.call_args.kwargs["allowed_sucursal_keys"] is None
 
+    @pytest.mark.parametrize("endpoint,service_name,status", [
+        ("/campaigns/preview", "preview_marketing_reactivation_campaign", 200),
+        ("/campaigns", "create_marketing_reactivation_campaign", 201),
+    ])
+    def test_bascula_accepts_type_without_dates_or_iventas(self, endpoint, service_name, status):
+        payload = {"filters": {"campaign_type": "BASCULA_RETENCION", "sucursal": "CENTRO"}}
+        if endpoint == "/campaigns":
+            payload["name"] = "Báscula"
+        with (
+            patch("app.routes.marketing_routes._get_current_marketing_user", return_value=self.admin),
+            patch("app.routes.marketing_routes._reactivation_allowed_sucursal_keys", return_value=("CENTRO",)),
+            patch("app.routes.marketing_routes." + service_name, return_value={}) as mocked,
+        ):
+            response = self.client.post(
+                "/api/marketing/reactivation" + endpoint, json=payload, headers=self.headers,
+            )
+        assert response.status_code == status
+        assert mocked.call_args.kwargs["filters"] == payload["filters"]
+        assert mocked.call_args.kwargs["allowed_sucursal_keys"] == ("CENTRO",)
+        assert mocked.call_args.kwargs["date_from"] is None
+        assert mocked.call_args.kwargs["date_to"] is None
+
+    @pytest.mark.parametrize("endpoint", ["/campaigns/preview", "/campaigns"])
+    def test_bascula_requires_campaign_management(self, endpoint):
+        with patch("app.routes.marketing_routes._resolve_request_access", return_value=(
+            self.admin, SimpleNamespace(can_edit_inputs=False),
+        )):
+            response = self.client.post(
+                "/api/marketing/reactivation" + endpoint,
+                json={"filters": {"campaign_type": "BASCULA_RETENCION"}}, headers=self.headers,
+            )
+        assert response.status_code == 403
+
+    def test_campaign_options_uses_existing_permissions(self):
+        expected = {"branches": [], "regions": []}
+        with (
+            patch("app.routes.marketing_routes._get_current_marketing_user", return_value=self.admin),
+            patch("app.routes.marketing_routes._reactivation_allowed_sucursal_keys", return_value=("CENTRO",)),
+            patch("app.services.marketing_campaign_audience_service.campaign_options", return_value=expected) as options,
+        ):
+            response = self.client.get("/api/marketing/reactivation/campaigns/options", headers=self.headers)
+        assert response.status_code == 200
+        assert response.get_json() == expected
+        assert options.call_args.kwargs["allowed_sucursal_keys"] == ("CENTRO",)
+
     def test_reactivation_campaign_history_returns_service_contract(self):
         expected = {"rows": [{"id": 4, "status": "DRAFT"}], "limit": 50}
         with (

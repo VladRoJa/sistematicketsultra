@@ -34,6 +34,9 @@ from app.models import (
 from app.models.warehouse import SociosVencidosCarteraORM
 from app.services.marketing_iventas_leads_service import read_canonical_iventas_run
 from app.services.marketing_iventas_service import normalize_iventas_phone
+from app.warehouse.services.socios_activos_snapshot_resolver import (
+    resolve_latest_canonical_socios_activos_snapshot,
+)
 from app.services.marketing_reactivation_candidate_query import (
     DEFAULT_DIRECTION,
     DEFAULT_PAGE,
@@ -61,6 +64,7 @@ from app.warehouse.services.socios_vencidos_reactivation_candidate_resolver impo
 
 
 CAMPAIGN_STATUS_DRAFT = "DRAFT"
+CAMPAIGN_TYPE_BASCULA_RETENCION = "BASCULA_RETENCION"
 CAMPAIGN_STATUS_EXPORTED = "EXPORTED"
 CAMPAIGN_STATUS_SENT = "SENT"
 CAMPAIGN_STATUS_CANCELLED = "CANCELLED"
@@ -1119,15 +1123,15 @@ def _matches_operational_status(
 
 def preview_marketing_reactivation_campaign(
     *,
-    date_from: date | str,
-    date_to: date | str,
+    date_from: date | str | None = None,
+    date_to: date | str | None = None,
     filters: Any,
     campaign_cooldown_days: int | None = None,
     allowed_sucursal_keys: tuple[str, ...] | None = None,
     session: Any | None = None,
     now: datetime | None = None,
 ) -> dict[str, object]:
-    plan = _build_campaign_plan(
+    plan = _prepare_campaign_plan(
         date_from=date_from,
         date_to=date_to,
         filters=filters,
@@ -1146,8 +1150,8 @@ def preview_marketing_reactivation_campaign(
 def create_marketing_reactivation_campaign(
     *,
     name: Any,
-    date_from: date | str,
-    date_to: date | str,
+    date_from: date | str | None = None,
+    date_to: date | str | None = None,
     filters: Any,
     notes: Any = None,
     created_by_user_id: int,
@@ -1160,7 +1164,7 @@ def create_marketing_reactivation_campaign(
     normalized_notes = _validate_optional_text(notes, "notes", max_length=5000)
     active_session = _session_or_default(session)
     now_value = _validate_now(now)
-    plan = _build_campaign_plan(
+    plan = _prepare_campaign_plan(
         date_from=date_from,
         date_to=date_to,
         filters=filters,
@@ -1185,6 +1189,8 @@ def create_marketing_reactivation_campaign(
         updated_at=now_value,
         notes=normalized_notes,
         filters_json={
+            **({"campaign_type": plan["filters"]["campaign_type"]}
+               if "campaign_type" in plan["filters"] else {}),
             "filters": plan["filters"],
             "sources": plan["sources"],
             "summary": plan["summary"],
@@ -1202,13 +1208,16 @@ def create_marketing_reactivation_campaign(
             active_session.add(
                 MarketingReactivationCampaignRecipientORM(
                     campaign_id=int(campaign.id),
-                    socios_vencidos_cartera_id=int(row["vencido_row_id"]),
+                    socios_vencidos_cartera_id=(
+                        int(row["vencido_row_id"])
+                        if row["vencido_row_id"] is not None else None
+                    ),
                     phone_mx10=str(row["phone_mx10"]),
                     member_name=row["nombre"],
                     sucursal=str(row["sucursal"]),
                     fecha_vencimiento_date=date.fromisoformat(
                         str(row["fecha_vencimiento"])
-                    ),
+                    ) if row["fecha_vencimiento"] is not None else None,
                     tarifa=row["tarifa"],
                     inclusion_status=ELIGIBILITY_ELIGIBLE,
                     exclusion_reason=None,
@@ -1290,7 +1299,6 @@ def export_marketing_reactivation_campaign(
         raise MarketingReactivationInvalidTransitionError(
             "Sólo una campaña DRAFT o EXPORTED puede exportarse."
         )
-    stored_filters = dict((campaign.filters_json or {}).get("filters") or {})
     effective_scope = _resolve_frozen_campaign_scope_for_export(
         stored_scope=(campaign.filters_json or {}).get("scope"),
         current_allowed_sucursal_keys=allowed_sucursal_keys,
@@ -1299,48 +1307,20 @@ def export_marketing_reactivation_campaign(
         recipients=campaign.recipients,
         effective_scope=effective_scope,
     )
-    plan = _build_campaign_plan(
-        date_from=campaign.date_from,
-        date_to=campaign.date_to,
-        filters=stored_filters,
-        campaign_cooldown_days=stored_filters.get("campaign_cooldown_days"),
-        allowed_sucursal_keys=effective_scope,
-        session=active_session,
-        now=now,
-        exclude_campaign_id=int(campaign.id),
-    )
-    planned_rows_by_key = {
-        (int(row["vencido_row_id"]), str(row["phone_mx10"])): row
-        for row in plan["eligible_rows"]
-    }
-    planned_keys = set(planned_rows_by_key)
-    stored_keys = {
-        (int(row.socios_vencidos_cartera_id), str(row.phone_mx10))
-        for row in campaign.recipients
-    }
-    if planned_keys != stored_keys:
-        raise MarketingReactivationConflictError(
-            "La elegibilidad cambió desde la creación; prepara una campaña nueva."
-        )
-
+    from app.services.marketing_campaign_audience_service import exported_counts, lock_export_phones
+    if campaign.status == CAMPAIGN_STATUS_DRAFT:
+        phones = {row.phone_mx10 for row in campaign.recipients}
+        lock_export_phones(phones, session=active_session)
+        counts = exported_counts(phones, session=active_session, now=_validate_now(now))
+        if any(count >= 2 for count in counts.values()):
+            raise MarketingReactivationConflictError(
+                "La campaña incluye contactos con dos campañas exportadas esta semana. Prepara una campaña nueva."
+            )
     workbook = Workbook(write_only=True)
     sheet = workbook.create_sheet("Destinatarios")
-    sheet.append(["Nombre", "Teléfono", "Sucursal", "Fecha vencimiento", "Tarifa"])
+    sheet.append(["telefono"])
     for row in campaign.recipients:
-        sheet.append(
-            [
-                row.member_name or "",
-                row.phone_mx10,
-                row.sucursal,
-                row.fecha_vencimiento_date.isoformat(),
-                planned_rows_by_key[
-                    (
-                        int(row.socios_vencidos_cartera_id),
-                        str(row.phone_mx10),
-                    )
-                ].get("tarifa_categoria") or "",
-            ]
-        )
+        sheet.append([row.phone_mx10])
     output = BytesIO()
     workbook.save(output)
     export_bytes = output.getvalue()
@@ -1407,6 +1387,82 @@ def serialize_marketing_reactivation_campaign(
     }
 
 
+def _prepare_campaign_plan(
+    *, date_from, date_to, filters, campaign_cooldown_days,
+    allowed_sucursal_keys, session, now,
+):
+    if isinstance(filters, dict) and "campaign_type" in filters:
+        from app.services.marketing_campaign_audience_service import prepare_v1_plan
+        if date_from is not None or date_to is not None or campaign_cooldown_days is not None:
+            raise MarketingReactivationValidationError("Sólo se admiten los parámetros del tipo de campaña y sucursal/región.")
+        return prepare_v1_plan(
+            filters=filters, allowed_sucursal_keys=allowed_sucursal_keys,
+            session=session, now=_validate_now(now), active_builder=_build_bascula_campaign_plan,
+            expired_builder=lambda **kwargs: _build_campaign_plan(**kwargs, deduplicate_phones=True),
+        )
+    return _build_campaign_plan(
+        date_from=date_from, date_to=date_to, filters=filters,
+        campaign_cooldown_days=campaign_cooldown_days,
+        allowed_sucursal_keys=allowed_sucursal_keys, session=session, now=now,
+    )
+
+
+def _build_bascula_campaign_plan(*, filters, allowed_sucursal_keys, session, now):
+    unknown = sorted(set(filters) - {"campaign_type", "sucursal"})
+    if unknown:
+        raise MarketingReactivationValidationError(
+            "Filtros no permitidos: " + ", ".join(unknown) + "."
+        )
+    sucursal = _validate_optional_text(
+        filters.get("sucursal"), "filters.sucursal", max_length=255,
+    )
+    _validate_requested_sucursal_scope(
+        sucursal=sucursal, allowed_sucursal_keys=allowed_sucursal_keys,
+    )
+    scope = _effective_campaign_scope(
+        sucursal=sucursal, allowed_sucursal_keys=allowed_sucursal_keys,
+    )
+    business_date = _validate_now(now).astimezone(ZoneInfo("America/Tijuana")).date()
+    snapshot = resolve_latest_canonical_socios_activos_snapshot(
+        minimum_cutoff_date=business_date, session=session,
+    )
+    if snapshot is None or snapshot.cutoff_date != business_date:
+        raise MarketingReactivationValidationError(
+            "No hay una fuente canónica de socios activos con corte de hoy."
+        )
+    from app.services.marketing_campaign_audience_service import clean_contact_rows
+    rows = []
+    # Stable source order selects one recipient per normalized phone.
+    for row in sorted(snapshot.rows, key=lambda value: value.id):
+        if filters["campaign_type"] == "PROXIMOS_VENCER" and not (
+            row.fecha_vencimiento_date is not None
+            and business_date <= row.fecha_vencimiento_date <= business_date + timedelta(days=5)
+        ):
+            continue
+        rows.append({
+            "vencido_row_id": None,
+            "telefono": row.telefono_raw,
+            "nombre": row.nombre,
+            "sucursal": row.sucursal_raw,
+            "fecha_vencimiento": _serialize_optional_date(row.fecha_vencimiento_date),
+            "tarifa": row.tarifa,
+            "operational_status": OPERATIONAL_ACTIVE,
+            "reason": "ACTIVE_CONFIRMED",
+        })
+    eligible_rows, summary = clean_contact_rows(rows, scope=scope)
+    return {
+        "sources": {
+            "date_from": business_date.isoformat(),
+            "date_to": business_date.isoformat(),
+            "activos_snapshot_id": int(snapshot.id),
+        },
+        "filters": {"campaign_type": CAMPAIGN_TYPE_BASCULA_RETENCION, "sucursal": sucursal},
+        "scope": _serialize_campaign_scope(scope),
+        "summary": summary,
+        "eligible_rows": eligible_rows,
+    }
+
+
 def _build_campaign_plan(
     *,
     date_from: date | str,
@@ -1417,6 +1473,7 @@ def _build_campaign_plan(
     session: Any,
     now: datetime | None,
     exclude_campaign_id: int | None = None,
+    deduplicate_phones: bool = False,
 ) -> dict[str, Any]:
     normalized_from, normalized_to = _validate_date_range(date_from, date_to)
     normalized_filters = _validate_campaign_filters(
@@ -1483,7 +1540,7 @@ def _build_campaign_plan(
             row=row,
             phone_mx10=phone_mx10,
             duplicate_phone=(
-                phone_mx10 is not None and phone_counts[phone_mx10] > 1
+                not deduplicate_phones and phone_mx10 is not None and phone_counts[phone_mx10] > 1
             ),
             last_sent_at=(
                 last_sent_by_phone.get(phone_mx10)
@@ -1545,17 +1602,21 @@ def _build_campaign_plan(
         ],
         "review": eligibility_counts[ELIGIBILITY_REVIEW],
     }
+    eligible_rows = [row for row in decision_rows if row["campaign_eligibility"] == ELIGIBILITY_ELIGIBLE]
+    if deduplicate_phones:
+        unique = {}
+        for row in eligible_rows:
+            unique.setdefault(row["phone_mx10"], row)
+        summary["duplicate_phone"] += len(eligible_rows) - len(unique)
+        eligible_rows = list(unique.values())
+        summary["eligible"] = len(eligible_rows)
     return {
         "sources": candidates["sources"],
         "filters": normalized_filters,
         "scope": _serialize_campaign_scope(effective_scope),
         "summary": summary,
         "decision_rows": decision_rows,
-        "eligible_rows": [
-            row
-            for row in decision_rows
-            if row["campaign_eligibility"] == ELIGIBILITY_ELIGIBLE
-        ],
+        "eligible_rows": eligible_rows,
     }
 
 
@@ -2021,11 +2082,14 @@ def _serialize_tariff_classification(
 def _serialize_campaign_recipient(row: Any) -> dict[str, object]:
     return {
         "id": int(row.id),
-        "socios_vencidos_cartera_id": int(row.socios_vencidos_cartera_id),
+        "socios_vencidos_cartera_id": (
+            int(row.socios_vencidos_cartera_id)
+            if row.socios_vencidos_cartera_id is not None else None
+        ),
         "phone_mx10": str(row.phone_mx10),
         "member_name": row.member_name,
         "sucursal": str(row.sucursal),
-        "fecha_vencimiento_date": _serialize_date(row.fecha_vencimiento_date),
+        "fecha_vencimiento_date": _serialize_optional_date(row.fecha_vencimiento_date),
         "tarifa": row.tarifa,
         "inclusion_status": str(row.inclusion_status),
         "exclusion_reason": row.exclusion_reason,
