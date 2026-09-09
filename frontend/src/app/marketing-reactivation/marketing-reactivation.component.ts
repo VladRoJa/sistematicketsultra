@@ -24,7 +24,7 @@ export class MarketingReactivationComponent implements OnInit {
   private readonly service = inject(MarketingReactivationService);
   private revision = 0;
   readonly types: Array<{value: CampaignType; label: string}> = [
-    {value: 'WINBACK', label: 'Winback'}, {value: 'PROXIMOS_VENCER', label: 'Próximos a vencer'},
+    {value: 'WINBACK', label: 'Winback'}, {value: 'PROXIMOS_VENCER', label: 'Próximos a vencer (+5 días)'},
     {value: 'VENCIDOS_RECIENTES', label: 'Vencidos recientes'}, {value: 'BASCULA_RETENCION', label: 'Báscula / Retención'},
     {value: 'INVITA_GANA', label: 'Invita y gana'}, {value: 'COBRANZA_LIGERA', label: 'Cobranza ligera'},
     {value: 'PERSONALIZADA', label: 'Personalizada'},
@@ -53,10 +53,12 @@ export class MarketingReactivationComponent implements OnInit {
   get isWinback(): boolean { return this.form.controls.type.value === 'WINBACK'; }
   get isCollection(): boolean { return this.form.controls.type.value === 'COBRANZA_LIGERA'; }
   get isCustom(): boolean { return this.form.controls.type.value === 'PERSONALIZADA'; }
+  get isCustomActive(): boolean { return this.isCustom && this.form.controls.universe.value === 'ACTIVOS'; }
   get isCustomExpired(): boolean { return this.isCustom && this.form.controls.universe.value === 'VENCIDOS'; }
   get isCustomExpiredByDays(): boolean { return this.isCustomExpired && this.form.controls.expiredMode.value === 'DIAS'; }
   get isCustomExpiredByDates(): boolean { return this.isCustomExpired && this.form.controls.expiredMode.value === 'FECHAS'; }
   get showsDayRange(): boolean { return this.isCollection || this.isCustomExpiredByDays; }
+  get showsCustomDateRange(): boolean { return this.isCustomActive || this.isCustomExpiredByDates; }
   get branches(): CampaignOptions['branches'] {
     const region = this.options.regions.find(item => item.id === this.form.controls.region.value);
     return region ? this.options.branches.filter(item => region.branch_keys.includes(item.key)) : this.options.branches;
@@ -72,7 +74,9 @@ export class MarketingReactivationComponent implements OnInit {
   get canCreate(): boolean { return !this.creating && !this.reviewing && !!this.eligible && !!this.name.value.trim(); }
   get description(): string {
     if (this.isCustom) {
-      if (!this.isCustomExpired) return 'Todos los socios actualmente activos con teléfono válido.';
+      if (this.isCustomActive) {
+        return 'Socios actualmente activos. Puedes limitar la audiencia por fecha de vencimiento o dejar ambas fechas vacías para incluir todos.';
+      }
       return this.isCustomExpiredByDates
         ? 'Selecciona una o ambas fechas de vencimiento. Puedes dejar un extremo vacío para usar un rango abierto.'
         : 'Define desde cuántos días vencidos quieres contactar. Deja “hasta” vacío para incluir todos los posteriores.';
@@ -135,7 +139,13 @@ export class MarketingReactivationComponent implements OnInit {
     if (this.isWinback) filters.segment = values.segment;
     if (this.isCustom) {
       filters.universo = values.universe;
-      if (this.isCustomExpired) {
+      if (this.isCustomActive) {
+        if (values.dateFrom && values.dateTo && values.dateFrom > values.dateTo) {
+          this.error = 'La fecha desde no puede ser posterior a la fecha hasta.'; return null;
+        }
+        if (values.dateFrom) filters.fecha_desde = values.dateFrom;
+        if (values.dateTo) filters.fecha_hasta = values.dateTo;
+      } else if (this.isCustomExpired) {
         filters.modo_vencidos = values.expiredMode;
         if (this.isCustomExpiredByDays) {
           if (!Number.isInteger(values.from) || values.from! < 1) {
