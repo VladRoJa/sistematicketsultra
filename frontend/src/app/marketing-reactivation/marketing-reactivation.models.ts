@@ -338,10 +338,37 @@ export interface CampaignAudienceDetailRow {
   iventas_last_outbound_at_utc: string | null;
 }
 
+export type CampaignAudienceSuiteHistoryFilter = 'NEVER' | 'ONE' | 'TWO_PLUS';
+export type CampaignAudienceIventasStatusFilter =
+  | 'NONE'
+  | 'SENT'
+  | 'DELIVERED'
+  | 'VIEWED'
+  | 'FAILED';
+
+export interface CampaignAudienceExplorerFilters {
+  sucursal?: string;
+  tariff_category?: string;
+  tarifa?: string;
+  adeudo_min?: number;
+  adeudo_max?: number;
+  operational_status?: string;
+  suite_history?: CampaignAudienceSuiteHistoryFilter;
+  iventas_status?: CampaignAudienceIventasStatusFilter;
+}
+
+export interface CampaignAudienceFilterOptions {
+  branches: string[];
+  tariff_categories: string[];
+  tariffs: string[];
+  operational_statuses: string[];
+}
+
 export interface CampaignAudiencePreviewDetailRequest extends CampaignV1Request {
   bucket: CampaignAudienceBucket;
   page: number;
   page_size: number;
+  explorer_filters?: CampaignAudienceExplorerFilters;
 }
 
 export interface CampaignAudiencePreviewDetailResponse {
@@ -349,6 +376,9 @@ export interface CampaignAudiencePreviewDetailResponse {
   label: string;
   sources: ReactivationCampaignPreviewResponse['sources'];
   total: number;
+  filtered_total: number;
+  explorer_filters: CampaignAudienceExplorerFilters;
+  filter_options: CampaignAudienceFilterOptions;
   pagination: {
     page: number;
     page_size: number;
