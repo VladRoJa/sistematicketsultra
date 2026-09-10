@@ -116,6 +116,62 @@ test('preview exposes the campaign construction breakdown', () => {
   ]);
 });
 
+test('weekly frequency warning requires an explicit choice before creation', () => {
+  const {component, preview} = setup();
+  component.name.setValue('Segunda pasada');
+  component.prepareCampaign();
+  preview.next({summary:{eligible:120, weekly_limit_contacts:35, excluded_weekly_limit:0}});
+
+  assert.equal(component.weeklyLimitContacts, 35);
+  assert.equal(component.weeklyFrequencyAction, null);
+  assert.equal(component.weeklyDecisionRequired, true);
+  assert.equal(component.canCreate, false);
+});
+
+test('weekly frequency EXCLUDE choice recalculates the preview and removes contacts', () => {
+  const {component, preview, requests} = setup();
+  component.prepareCampaign();
+  preview.next({summary:{eligible:120, weekly_limit_contacts:35, excluded_weekly_limit:0}});
+
+  component.chooseWeeklyFrequencyAction('EXCLUDE');
+  assert.deepEqual(requests[1].filters, {
+    campaign_type:'WINBACK', segment:'WINBACK_30', weekly_frequency_action:'EXCLUDE',
+  });
+
+  preview.next({summary:{eligible:85, weekly_limit_contacts:35, excluded_weekly_limit:35}});
+  assert.equal(component.eligible, 85);
+  assert.equal(component.weeklyFrequencyAction, 'EXCLUDE');
+  assert.equal(component.weeklyDecisionRequired, false);
+});
+
+test('weekly frequency KEEP choice recalculates and preserves contacts', () => {
+  const {component, preview, requests} = setup();
+  component.prepareCampaign();
+  preview.next({summary:{eligible:120, weekly_limit_contacts:35, excluded_weekly_limit:0}});
+
+  component.chooseWeeklyFrequencyAction('KEEP');
+  assert.deepEqual(requests[1].filters, {
+    campaign_type:'WINBACK', segment:'WINBACK_30', weekly_frequency_action:'KEEP',
+  });
+
+  preview.next({summary:{eligible:120, weekly_limit_contacts:35, excluded_weekly_limit:0}});
+  assert.equal(component.eligible, 120);
+  assert.equal(component.weeklyFrequencyAction, 'KEEP');
+  assert.equal(component.weeklyDecisionRequired, false);
+});
+
+test('changing audience filters clears a previous weekly frequency choice', () => {
+  const {component, preview} = setup();
+  component.prepareCampaign();
+  preview.next({summary:{eligible:120, weekly_limit_contacts:35}});
+  component.chooseWeeklyFrequencyAction('KEEP');
+  assert.equal(component.weeklyFrequencyAction, 'KEEP');
+
+  component.form.controls.segment.setValue('WINBACK_60');
+  assert.equal(component.weeklyFrequencyAction, null);
+  assert.equal(component.eligible, null);
+});
+
 test('creation requires reviewed contacts and blocks double submission', () => {
   const {component, preview, creates} = setup();
   component.name.setValue('Septiembre');
