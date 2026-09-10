@@ -89,3 +89,89 @@ def test_daily_mart_raw_includes_official_branch_income_projection(
 
     assert projection_value == 887460.2043673072
     assert projection_status == "available"
+
+
+def test_forecast_sheet_uses_source_cutoffs_and_hides_helper_columns(
+    monkeypatch,
+):
+    row = SimpleNamespace(
+        sucursal_canon="VILLAS_DEL_REY",
+        usuarios_activos_actual=1206,
+        meta_faycgo_mes=Decimal("774242.59"),
+        ingreso_real_base_mtd=Decimal("137182"),
+        ingreso_real_agregadora_mtd=Decimal("11528.64"),
+        ingreso_real_mtd=Decimal("148710.64"),
+        meta_clientes_nuevos_mes=114,
+        clientes_nuevos_real_mtd=21,
+        meta_reactivaciones_mes=118,
+        reactivaciones_real_mtd=54,
+        meta_bajas_mes=176,
+        bajas_reales_mtd=119,
+        meta_venta_tienda_mes=Decimal("65252.25"),
+        venta_tienda_real_mtd=Decimal("15915"),
+        source_business_date_ingresos=date(2026, 9, 8),
+        source_business_date_agregadoras=date(2026, 9, 8),
+        source_business_date_nuevos=date(2026, 9, 7),
+        source_business_date_desempeno=date(2026, 9, 8),
+        source_business_date_tienda=date(2026, 9, 7),
+    )
+
+    resolved_version = SimpleNamespace(
+        id=456,
+        version_type="preview",
+        status="success",
+        generated_at_utc=None,
+        finished_at_utc=None,
+        started_at_utc=None,
+    )
+
+    monkeypatch.setattr(
+        service,
+        "load_first_store_income_dates_bulk",
+        lambda _sucursal_canons: {"VILLAS_DEL_REY": date(2020, 1, 1)},
+    )
+    monkeypatch.setattr(
+        service,
+        "build_branch_income_projection_summary",
+        lambda **_kwargs: {"status": "available", "projected_close": "1"},
+    )
+
+    excel_bytes = service.build_track_daily_mart_excel(
+        track_date=date(2026, 9, 9),
+        generation_mode="manual_preview",
+        resolved_version=resolved_version,
+        rows=[row],
+    )
+
+    workbook = load_workbook(BytesIO(excel_bytes), data_only=False)
+
+    assert workbook.sheetnames[0] == "Forecast"
+    worksheet = workbook["Forecast"]
+
+    assert worksheet["C4"].value == "VILLAS DEL REY"
+    assert worksheet["W4"].value == "=IFERROR((T4/8)*22,0)+IFERROR((U4/8)*22,0)"
+    assert worksheet["AF4"].value == "=IFERROR((AE4/7)*23,0)"
+    assert worksheet["AN4"].value == "=IFERROR((AM4/8)*22,0)"
+    assert worksheet["AV4"].value == "=IFERROR((AU4/8)*22,0)"
+    assert worksheet["BO4"].value == "=IFERROR((BN4/7)*23,0)"
+
+    assert worksheet["X4"].value == "=V4+W4"
+    assert worksheet["AG4"].value == "=AE4+AF4"
+    assert worksheet["AO4"].value == "=AM4+AN4"
+    assert worksheet["AW4"].value == "=AU4+AV4"
+    assert worksheet["AY4"].value == "=AS4-AW4"
+    assert worksheet["BP4"].value == "=BN4+BO4"
+
+    for helper_column in ["W", "AF", "AN", "AV", "BO"]:
+        assert worksheet.column_dimensions[helper_column].hidden is True
+
+    for visible_column in [
+        "B", "C", "R", "V", "X", "Y", "AC", "AE", "AG", "AH",
+        "AK", "AM", "AO", "AP", "AS", "AU", "AW", "AX", "AY",
+        "BM", "BN", "BP", "BQ",
+    ]:
+        assert worksheet.column_dimensions[visible_column].hidden is False
+
+    assert worksheet.column_dimensions["D"].hidden is True
+    assert worksheet.column_dimensions["T"].hidden is True
+    assert worksheet.column_dimensions["U"].hidden is True

@@ -170,6 +170,72 @@ BASE_HEADERS = {
     "BB": "% alcance real",
 }
 
+FORECAST_START_ROW = 4
+FORECAST_LAST_COL = 69  # BQ
+FORECAST_VISIBLE_COLUMNS = {
+    "B", "C",
+    "R", "V", "X", "Y",
+    "AC", "AE", "AG", "AH",
+    "AK", "AM", "AO", "AP",
+    "AS", "AU", "AW", "AX", "AY",
+    "BM", "BN", "BP", "BQ",
+}
+FORECAST_HELPER_COLUMNS = {"W", "AF", "AN", "AV", "BO"}
+FORECAST_GROUPS = [
+    ("R2:Y2", "I n g r e s o s   t o t a l e s", ULTRA_ORANGE),
+    ("AC2:AH2", "V e n t a s   n u e v a s", ULTRA_ORANGE),
+    ("AK2:AP2", "R e a c t i v a c i o n e s", ULTRA_BLUE),
+    ("AS2:AY2", "B a j a s  & Churn", ULTRA_ORANGE),
+    ("BM2:BQ2", "Tienda", ULTRA_ORANGE),
+]
+FORECAST_BRANCH_GROUPS = [
+    [
+        "VILLAS_DEL_REY",
+        "VILLA_VERDE",
+        "INDEPENDENCIA",
+        "TEC_MXL",
+        "SEND_MXL",
+        "SAN_LUIS",
+    ],
+    [
+        "PABELLON_RTO",
+        "MISION_ENS",
+        "PASEO_2000",
+        "LOMA_BONITA",
+        "SANTA_FE",
+        "CARROUSEL_TJ",
+        "PAPALOTE_TJ",
+    ],
+    [
+        "SEND_CUL",
+        "SAN_ISIDRO_CUL",
+        "AZAHARES_CUL",
+        "PASEO_LA_PAZ",
+    ],
+    [
+        "STA_CATARINA",
+        "SEND_SALTILLO",
+        "SALTILLO_VILLALTA",
+        "SERRANIA",
+    ],
+    [
+        "SEND_CHIH",
+        "IXTAPALUCA",
+        "INSURGENTES",
+        "TLALNEPANTLA",
+        "METEPEC",
+    ],
+]
+FORECAST_LEGACY_GROUP_COUNT = 4
+FORECAST_SUM_COLUMNS = [
+    "M",
+    "R", "T", "U", "V", "W", "X", "Y",
+    "AC", "AE", "AF", "AG", "AH",
+    "AK", "AM", "AN", "AO", "AP",
+    "AS", "AU", "AV", "AW", "AY",
+    "BM", "BN", "BO", "BP", "BQ",
+]
+
 
 def build_track_daily_mart_excel(
     *,
@@ -268,6 +334,12 @@ def build_track_daily_mart_excel(
     _apply_track_sheet_formatting(
         worksheet=track_sheet,
         last_row=general_totals_row,
+    )
+
+    _build_forecast_sheet(
+        workbook=workbook,
+        track_date=track_date,
+        rows=ordered_rows,
     )
 
     _build_raw_sheet(
@@ -491,6 +563,7 @@ def _write_general_totals_row(
     worksheet[f"AX{totals_row}"] = f"=IFERROR(AV{totals_row}/AU{totals_row},0)"
     worksheet[f"BB{totals_row}"] = f"=IFERROR(AZ{totals_row}/AY{totals_row},0)"
 
+
 def _apply_track_sheet_formatting(*, worksheet: Worksheet, last_row: int) -> None:
     black_fill = PatternFill("solid", fgColor="1F1F1F")
     red_fill = PatternFill("solid", fgColor="E54525")
@@ -579,7 +652,7 @@ def _apply_track_sheet_formatting(*, worksheet: Worksheet, last_row: int) -> Non
         start_row=TRACK_START_ROW,
         end_row=last_row,
         number_format=PERCENT_FORMAT,
-    )   
+    )
 
     widths = {
         "B": 6,
@@ -612,7 +685,6 @@ def _apply_track_sheet_formatting(*, worksheet: Worksheet, last_row: int) -> Non
 
     for row_idx in range(TRACK_START_ROW, last_row + 1):
         worksheet.row_dimensions[row_idx].height = 22
-        
 
     _apply_track_segment_formatting(
         worksheet=worksheet,
@@ -625,6 +697,7 @@ def _apply_track_sheet_formatting(*, worksheet: Worksheet, last_row: int) -> Non
     )
 
     worksheet.auto_filter.ref = f"B3:BB{last_row}"
+
 
 def _apply_zebra_rows(
     *,
@@ -676,6 +749,7 @@ def _apply_summary_row_formatting(
             cell = worksheet.cell(row=row_idx, column=col_idx)
             cell.fill = row_fill
             cell.font = row_font
+
 
 def _apply_track_segment_formatting(
     *,
@@ -906,6 +980,7 @@ def _column_letter_to_index(column_letter: str) -> int:
 
     return result
 
+
 def _set_number_format(
     *,
     worksheet: Worksheet,
@@ -917,6 +992,577 @@ def _set_number_format(
     for column_letter in column_letters:
         for row_idx in range(start_row, end_row + 1):
             worksheet[f"{column_letter}{row_idx}"].number_format = number_format
+
+
+def _build_forecast_sheet(
+    *,
+    workbook: Workbook,
+    track_date: date,
+    rows: Sequence[Any],
+) -> None:
+    worksheet = workbook.create_sheet("Forecast", 0)
+    days_in_month = monthrange(track_date.year, track_date.month)[1]
+    month_label = MONTH_NAMES_ES[track_date.month]
+    day_month_label = f"{track_date.day} {month_label}"
+
+    _setup_forecast_sheet(
+        worksheet=worksheet,
+        track_date=track_date,
+        month_label=month_label,
+        day_month_label=day_month_label,
+    )
+
+    grouped_rows = _build_forecast_row_groups(rows)
+    current_row = FORECAST_START_ROW
+    current_index = 1
+    regional_subtotal_rows: list[int] = []
+
+    for group_rows in grouped_rows:
+        first_data_row = current_row
+
+        for mart_row in group_rows:
+            _write_forecast_data_row(
+                worksheet=worksheet,
+                excel_row=current_row,
+                index=current_index,
+                mart_row=mart_row,
+                track_date=track_date,
+                days_in_month=days_in_month,
+            )
+            current_row += 1
+            current_index += 1
+
+        last_data_row = current_row - 1
+        subtotal_row = current_row
+        _write_forecast_subtotal_row(
+            worksheet=worksheet,
+            totals_row=subtotal_row,
+            first_data_row=first_data_row,
+            last_data_row=last_data_row,
+        )
+        regional_subtotal_rows.append(subtotal_row)
+
+        current_row += 2  # subtotal + blank separator, as in the source report
+
+    base_totals_row = current_row
+    _write_forecast_summary_row(
+        worksheet=worksheet,
+        totals_row=base_totals_row,
+        label="Subtotales 21 GYMS",
+        source_rows=regional_subtotal_rows[:FORECAST_LEGACY_GROUP_COUNT],
+    )
+
+    new_totals_row = current_row + 1
+    _write_forecast_summary_row(
+        worksheet=worksheet,
+        totals_row=new_totals_row,
+        label="Subtotales Nuevos",
+        source_rows=regional_subtotal_rows[FORECAST_LEGACY_GROUP_COUNT:],
+    )
+
+    general_totals_row = current_row + 2
+    _write_forecast_summary_row(
+        worksheet=worksheet,
+        totals_row=general_totals_row,
+        label="TOTAL GENERAL",
+        source_rows=[base_totals_row, new_totals_row],
+    )
+
+    _apply_forecast_formatting(
+        worksheet=worksheet,
+        last_row=general_totals_row,
+        regional_subtotal_rows=regional_subtotal_rows,
+        summary_rows=[base_totals_row, new_totals_row, general_totals_row],
+    )
+
+
+def _setup_forecast_sheet(
+    *,
+    worksheet: Worksheet,
+    track_date: date,
+    month_label: str,
+    day_month_label: str,
+) -> None:
+    worksheet.sheet_view.showGridLines = False
+    worksheet.sheet_view.zoomScale = 75
+    worksheet.freeze_panes = "D4"
+    worksheet["B1"] = "Track"
+
+    source_indexes = {
+        "R": 16,
+        "V": 20,
+        "AC": 24,
+        "AE": 26,
+        "AK": 29,
+        "AM": 31,
+        "AS": 34,
+        "AU": 36,
+        "BM": 49,
+        "BN": 50,
+    }
+    for column_letter, source_index in source_indexes.items():
+        worksheet[f"{column_letter}1"] = source_index
+
+    for merge_range, title, _color in FORECAST_GROUPS:
+        worksheet.merge_cells(merge_range)
+        worksheet[merge_range.split(":", 1)[0]] = title
+
+    headers = {
+        "B": "#",
+        "C": "Sucursal",
+        "M": f"Usuarios activos al {day_month_label}",
+        "R": f"Meta FAYCGO {month_label}",
+        "T": "Ingreso base MTD",
+        "U": "Ingreso agregadoras MTD",
+        "V": f"Ingreso Real total al {track_date.day} de {month_label}",
+        "W": "Pronóstico restante",
+        "X": "Pronóstico de cierre",
+        "Y": "Dif $$ Real vs Pronóstico",
+        "AC": "Meta Clientes nuevos",
+        "AE": f"Real Clientes nuevos {day_month_label}",
+        "AF": "Pronóstico restante",
+        "AG": "Pronóstico de cierre",
+        "AH": "Dif ## Real vs Pronóstico",
+        "AK": "Meta Reactiv",
+        "AM": f"Real Reactivaciones {day_month_label}",
+        "AN": "Pronóstico restante",
+        "AO": "Pronóstico de cierre",
+        "AP": "Dif ## Real vs Pronóstico",
+        "AS": "Meta bajas",
+        "AU": f"Bajas reales {day_month_label}",
+        "AV": "Pronóstico restante",
+        "AW": "Pronóstico de cierre #",
+        "AX": "Pronóstico de cierre %",
+        "AY": "Dif ## Real vs Pronóstico",
+        "BM": "Meta venta Tienda",
+        "BN": f"Real {day_month_label}",
+        "BO": "Pronóstico restante",
+        "BP": "Pronóstico de cierre",
+        "BQ": "Dif ## Real vs Pronóstico",
+    }
+    for column_letter, header in headers.items():
+        worksheet[f"{column_letter}3"] = header
+
+
+def _build_forecast_row_groups(rows: Sequence[Any]) -> list[list[Any]]:
+    rows_by_key = {
+        _normalize_branch_key(getattr(row, "sucursal_canon", "")): row
+        for row in rows
+    }
+
+    groups: list[list[Any]] = []
+    consumed: set[str] = set()
+
+    for branch_keys in FORECAST_BRANCH_GROUPS:
+        group_rows: list[Any] = []
+        for branch_key in branch_keys:
+            row = rows_by_key.get(branch_key)
+            if row is None:
+                continue
+            group_rows.append(row)
+            consumed.add(branch_key)
+        groups.append(group_rows)
+
+    extras = [
+        row
+        for row in _sort_rows_by_track_order(rows)
+        if _normalize_branch_key(getattr(row, "sucursal_canon", "")) not in consumed
+    ]
+    groups[-1].extend(extras)
+
+    return groups
+
+
+def _write_forecast_data_row(
+    *,
+    worksheet: Worksheet,
+    excel_row: int,
+    index: int,
+    mart_row: Any,
+    track_date: date,
+    days_in_month: int,
+) -> None:
+    ingreso_day = _forecast_source_day(
+        mart_row,
+        "source_business_date_ingresos",
+        track_date,
+    )
+    agregadoras_day = _forecast_source_day(
+        mart_row,
+        "source_business_date_agregadoras",
+        track_date,
+    )
+    nuevos_day = _forecast_source_day(
+        mart_row,
+        "source_business_date_nuevos",
+        track_date,
+    )
+    desempeno_day = _forecast_source_day(
+        mart_row,
+        "source_business_date_desempeno",
+        track_date,
+    )
+    tienda_day = _forecast_source_day(
+        mart_row,
+        "source_business_date_tienda",
+        track_date,
+    )
+
+    worksheet[f"B{excel_row}"] = index
+    worksheet[f"C{excel_row}"] = _format_branch_label(
+        getattr(mart_row, "sucursal_canon", "")
+    )
+
+    worksheet[f"M{excel_row}"] = _to_number(
+        getattr(mart_row, "usuarios_activos_actual", None)
+    )
+
+    worksheet[f"R{excel_row}"] = _to_number(
+        getattr(mart_row, "meta_faycgo_mes", None)
+    )
+    worksheet[f"T{excel_row}"] = _to_number(
+        getattr(mart_row, "ingreso_real_base_mtd", None)
+    )
+    worksheet[f"U{excel_row}"] = _to_number(
+        getattr(mart_row, "ingreso_real_agregadora_mtd", None)
+    )
+    worksheet[f"V{excel_row}"] = f"=T{excel_row}+U{excel_row}"
+    worksheet[f"W{excel_row}"] = _forecast_income_remaining_formula(
+        excel_row=excel_row,
+        ingreso_day=ingreso_day,
+        agregadoras_day=agregadoras_day,
+        days_in_month=days_in_month,
+    )
+    worksheet[f"X{excel_row}"] = f"=V{excel_row}+W{excel_row}"
+    worksheet[f"Y{excel_row}"] = f"=X{excel_row}-R{excel_row}"
+
+    worksheet[f"AC{excel_row}"] = _to_number(
+        getattr(mart_row, "meta_clientes_nuevos_mes", None)
+    )
+    worksheet[f"AE{excel_row}"] = _to_number(
+        getattr(mart_row, "clientes_nuevos_real_mtd", None)
+    )
+    worksheet[f"AF{excel_row}"] = _forecast_remaining_formula(
+        value_column="AE",
+        excel_row=excel_row,
+        cutoff_day=nuevos_day,
+        days_in_month=days_in_month,
+    )
+    worksheet[f"AG{excel_row}"] = f"=AE{excel_row}+AF{excel_row}"
+    worksheet[f"AH{excel_row}"] = f"=AG{excel_row}-AC{excel_row}"
+
+    worksheet[f"AK{excel_row}"] = _to_number(
+        getattr(mart_row, "meta_reactivaciones_mes", None)
+    )
+    worksheet[f"AM{excel_row}"] = _to_number(
+        getattr(mart_row, "reactivaciones_real_mtd", None)
+    )
+    worksheet[f"AN{excel_row}"] = _forecast_remaining_formula(
+        value_column="AM",
+        excel_row=excel_row,
+        cutoff_day=desempeno_day,
+        days_in_month=days_in_month,
+    )
+    worksheet[f"AO{excel_row}"] = f"=AM{excel_row}+AN{excel_row}"
+    worksheet[f"AP{excel_row}"] = f"=AO{excel_row}-AK{excel_row}"
+
+    worksheet[f"AS{excel_row}"] = _to_number(
+        getattr(mart_row, "meta_bajas_mes", None)
+    )
+    worksheet[f"AU{excel_row}"] = _to_number(
+        getattr(mart_row, "bajas_reales_mtd", None)
+    )
+    worksheet[f"AV{excel_row}"] = _forecast_remaining_formula(
+        value_column="AU",
+        excel_row=excel_row,
+        cutoff_day=desempeno_day,
+        days_in_month=days_in_month,
+    )
+    worksheet[f"AW{excel_row}"] = f"=AU{excel_row}+AV{excel_row}"
+    worksheet[f"AX{excel_row}"] = f"=IFERROR(AW{excel_row}/M{excel_row},0)"
+    worksheet[f"AY{excel_row}"] = f"=AS{excel_row}-AW{excel_row}"
+
+    worksheet[f"BM{excel_row}"] = _to_number(
+        getattr(mart_row, "meta_venta_tienda_mes", None)
+    )
+    worksheet[f"BN{excel_row}"] = _to_number(
+        getattr(mart_row, "venta_tienda_real_mtd", None)
+    )
+    worksheet[f"BO{excel_row}"] = _forecast_remaining_formula(
+        value_column="BN",
+        excel_row=excel_row,
+        cutoff_day=tienda_day,
+        days_in_month=days_in_month,
+    )
+    worksheet[f"BP{excel_row}"] = f"=BN{excel_row}+BO{excel_row}"
+    worksheet[f"BQ{excel_row}"] = f"=BP{excel_row}-BM{excel_row}"
+
+
+def _forecast_source_day(
+    mart_row: Any,
+    attribute_name: str,
+    track_date: date,
+) -> int:
+    value = getattr(mart_row, attribute_name, None)
+    if isinstance(value, datetime):
+        value = value.date()
+
+    if (
+        isinstance(value, date)
+        and value.year == track_date.year
+        and value.month == track_date.month
+    ):
+        return max(1, min(value.day, track_date.day))
+
+    return max(1, track_date.day)
+
+
+def _forecast_remaining_formula(
+    *,
+    value_column: str,
+    excel_row: int,
+    cutoff_day: int,
+    days_in_month: int,
+) -> str:
+    remaining_days = max(days_in_month - cutoff_day, 0)
+    if remaining_days == 0:
+        return "=0"
+
+    return (
+        f"=IFERROR(({value_column}{excel_row}/{cutoff_day})*"
+        f"{remaining_days},0)"
+    )
+
+
+def _forecast_income_remaining_formula(
+    *,
+    excel_row: int,
+    ingreso_day: int,
+    agregadoras_day: int,
+    days_in_month: int,
+) -> str:
+    ingreso_remaining = max(days_in_month - ingreso_day, 0)
+    agregadoras_remaining = max(days_in_month - agregadoras_day, 0)
+
+    parts = [
+        f"IFERROR((T{excel_row}/{ingreso_day})*{ingreso_remaining},0)",
+        f"IFERROR((U{excel_row}/{agregadoras_day})*{agregadoras_remaining},0)",
+    ]
+    return "=" + "+".join(parts)
+
+
+def _write_forecast_subtotal_row(
+    *,
+    worksheet: Worksheet,
+    totals_row: int,
+    first_data_row: int,
+    last_data_row: int,
+) -> None:
+    if last_data_row < first_data_row:
+        for column_letter in FORECAST_SUM_COLUMNS:
+            worksheet[f"{column_letter}{totals_row}"] = 0
+        worksheet[f"AX{totals_row}"] = 0
+        return
+
+    for column_letter in FORECAST_SUM_COLUMNS:
+        worksheet[f"{column_letter}{totals_row}"] = (
+            f"=SUM({column_letter}{first_data_row}:{column_letter}{last_data_row})"
+        )
+
+    worksheet[f"AX{totals_row}"] = f"=IFERROR(AW{totals_row}/M{totals_row},0)"
+
+
+def _write_forecast_summary_row(
+    *,
+    worksheet: Worksheet,
+    totals_row: int,
+    label: str,
+    source_rows: Sequence[int],
+) -> None:
+    worksheet[f"C{totals_row}"] = label
+
+    if not source_rows:
+        for column_letter in FORECAST_SUM_COLUMNS:
+            worksheet[f"{column_letter}{totals_row}"] = 0
+        worksheet[f"AX{totals_row}"] = 0
+        return
+
+    for column_letter in FORECAST_SUM_COLUMNS:
+        source_cells = ",".join(
+            f"{column_letter}{source_row}" for source_row in source_rows
+        )
+        worksheet[f"{column_letter}{totals_row}"] = f"=SUM({source_cells})"
+
+    worksheet[f"AX{totals_row}"] = f"=IFERROR(AW{totals_row}/M{totals_row},0)"
+
+
+def _apply_forecast_formatting(
+    *,
+    worksheet: Worksheet,
+    last_row: int,
+    regional_subtotal_rows: Sequence[int],
+    summary_rows: Sequence[int],
+) -> None:
+    thin_side = Side(style="thin", color="D9D9D9")
+    medium_side = Side(style="medium", color="111827")
+    thin_border = Border(
+        left=thin_side,
+        right=thin_side,
+        top=thin_side,
+        bottom=thin_side,
+    )
+    body_font = Font(color="0F1F3A", size=9)
+    header_font = Font(color="FFFFFF", bold=True, size=8)
+    projection_fill = PatternFill("solid", fgColor="E2F0D9")
+    projection_header_fill = PatternFill("solid", fgColor="F4E36B")
+    subtotal_fill = PatternFill("solid", fgColor="F8FAFC")
+    summary_fill = PatternFill("solid", fgColor="E5E7EB")
+    total_fill = PatternFill("solid", fgColor="FBE3DC")
+
+    worksheet["B1"].font = Font(color=ULTRA_ORANGE, bold=True, size=11)
+
+    for merge_range, _title, color in FORECAST_GROUPS:
+        start_cell = worksheet[merge_range.split(":", 1)[0]]
+        start_cell.fill = PatternFill("solid", fgColor=color)
+        start_cell.font = Font(color="FFFFFF", bold=True, size=9)
+        start_cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    for column_letter in FORECAST_VISIBLE_COLUMNS | FORECAST_HELPER_COLUMNS | {"M", "T", "U"}:
+        cell = worksheet[f"{column_letter}3"]
+        cell.fill = PatternFill("solid", fgColor=HEADER_DARK)
+        cell.font = header_font
+        cell.alignment = Alignment(
+            horizontal="center",
+            vertical="center",
+            wrap_text=True,
+        )
+        cell.border = thin_border
+
+    for column_letter in ["X", "Y", "AG", "AH", "AO", "AP", "AW", "AX", "AY", "BP", "BQ"]:
+        worksheet[f"{column_letter}3"].fill = projection_header_fill
+        worksheet[f"{column_letter}3"].font = Font(
+            color="111827",
+            bold=True,
+            size=8,
+        )
+
+    for row_idx in range(FORECAST_START_ROW, last_row + 1):
+        for column_letter in FORECAST_VISIBLE_COLUMNS | FORECAST_HELPER_COLUMNS | {"M", "T", "U"}:
+            cell = worksheet[f"{column_letter}{row_idx}"]
+            cell.font = body_font
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+            cell.border = thin_border
+
+        worksheet[f"C{row_idx}"].font = Font(color="0F1F3A", bold=True, size=9)
+        worksheet[f"C{row_idx}"].alignment = Alignment(
+            horizontal="left",
+            vertical="center",
+        )
+
+    for column_letter in ["X", "AG", "AO", "AW", "BP"]:
+        for row_idx in range(FORECAST_START_ROW, last_row + 1):
+            worksheet[f"{column_letter}{row_idx}"].fill = projection_fill
+
+    for subtotal_row in regional_subtotal_rows:
+        for column_letter in FORECAST_VISIBLE_COLUMNS | FORECAST_HELPER_COLUMNS | {"M", "T", "U"}:
+            cell = worksheet[f"{column_letter}{subtotal_row}"]
+            cell.fill = subtotal_fill
+            cell.font = Font(color="111827", bold=True, italic=True, size=9)
+            cell.border = Border(top=medium_side, bottom=medium_side)
+
+    for summary_row in summary_rows:
+        is_total = str(worksheet[f"C{summary_row}"].value or "").upper() == "TOTAL GENERAL"
+        fill = total_fill if is_total else summary_fill
+        for column_letter in FORECAST_VISIBLE_COLUMNS | FORECAST_HELPER_COLUMNS | {"M", "T", "U"}:
+            cell = worksheet[f"{column_letter}{summary_row}"]
+            cell.fill = fill
+            cell.font = Font(color="111827", bold=True, size=9)
+            cell.border = thin_border
+
+    _set_number_format(
+        worksheet=worksheet,
+        column_letters=["R", "T", "U", "V", "W", "X", "Y", "BM", "BN", "BO", "BP", "BQ"],
+        start_row=FORECAST_START_ROW,
+        end_row=last_row,
+        number_format=CURRENCY_FORMAT,
+    )
+    _set_number_format(
+        worksheet=worksheet,
+        column_letters=["B", "M", "AC", "AE", "AF", "AG", "AH", "AK", "AM", "AN", "AO", "AP", "AS", "AU", "AV", "AW", "AY"],
+        start_row=FORECAST_START_ROW,
+        end_row=last_row,
+        number_format=INTEGER_FORMAT,
+    )
+    _set_number_format(
+        worksheet=worksheet,
+        column_letters=["AX"],
+        start_row=FORECAST_START_ROW,
+        end_row=last_row,
+        number_format=PERCENT_FORMAT,
+    )
+
+    widths = {
+        "B": 5,
+        "C": 22,
+        "R": 15,
+        "V": 15,
+        "X": 15,
+        "Y": 16,
+        "AC": 13,
+        "AE": 13,
+        "AG": 13,
+        "AH": 14,
+        "AK": 13,
+        "AM": 13,
+        "AO": 13,
+        "AP": 14,
+        "AS": 13,
+        "AU": 13,
+        "AW": 14,
+        "AX": 14,
+        "AY": 14,
+        "BM": 15,
+        "BN": 14,
+        "BP": 15,
+        "BQ": 16,
+    }
+
+    for col_idx in range(1, FORECAST_LAST_COL + 1):
+        column_letter = get_column_letter(col_idx)
+        dimension = worksheet.column_dimensions[column_letter]
+        dimension.hidden = column_letter not in FORECAST_VISIBLE_COLUMNS
+        dimension.width = widths.get(column_letter, 12)
+
+    worksheet.row_dimensions[2].height = 22
+    worksheet.row_dimensions[3].height = 44
+    for row_idx in range(FORECAST_START_ROW, last_row + 1):
+        worksheet.row_dimensions[row_idx].height = 20
+
+    for difference_column in ["Y", "AH", "AP", "AY", "BQ"]:
+        cell_range = f"{difference_column}{FORECAST_START_ROW}:{difference_column}{last_row}"
+        worksheet.conditional_formatting.add(
+            cell_range,
+            CellIsRule(
+                operator="greaterThan",
+                formula=["0"],
+                fill=PatternFill("solid", fgColor=GOOD_FILL_COLOR),
+                font=Font(color=GOOD_FONT_COLOR, bold=True),
+            ),
+        )
+        worksheet.conditional_formatting.add(
+            cell_range,
+            CellIsRule(
+                operator="lessThan",
+                formula=["0"],
+                fill=PatternFill("solid", fgColor=BAD_FILL_COLOR),
+                font=Font(color=BAD_FONT_COLOR, bold=True),
+            ),
+        )
+
+    worksheet.page_setup.orientation = "landscape"
+    worksheet.page_setup.fitToWidth = 1
+    worksheet.page_setup.fitToHeight = 0
+    worksheet.sheet_properties.pageSetUpPr.fitToPage = True
 
 
 def _build_raw_sheet(
@@ -1097,6 +1743,7 @@ def _to_number(value: Any) -> float | int | None:
 
     return None
 
+
 def _format_version_update_label(resolved_version: Any) -> str:
     version_datetime = (
         getattr(resolved_version, "finished_at_utc", None)
@@ -1118,6 +1765,7 @@ def _to_tijuana_datetime(value: datetime) -> datetime:
 
     return value.astimezone(ZoneInfo("America/Tijuana"))
 
+
 def _serialize_cell_value(value: Any) -> Any:
     if isinstance(value, Decimal):
         return float(value)
@@ -1133,6 +1781,7 @@ def _serialize_cell_value(value: Any) -> Any:
 
 def _format_branch_label(value: Any) -> str:
     return _normalize_branch_key(value).replace("_", " ")
+
 
 def _sort_rows_by_track_order(rows: Sequence[Any]) -> list[Any]:
     return sorted(
