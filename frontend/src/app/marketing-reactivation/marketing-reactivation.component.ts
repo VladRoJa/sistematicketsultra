@@ -251,6 +251,14 @@ export class MarketingReactivationComponent implements OnInit {
       error: error => { if (revision === this.revision) { this.reviewing = false; void this.showError(error, 'No fue posible revisar la audiencia.'); } },
     });
   }
+  openBreakdownRow(row: AudienceBreakdownRow): void {
+    if (!row.drillable || !row.bucket) return;
+    this.openAudienceExplorer(row.bucket, row.label);
+  }
+  openEligibleExplorer(): void {
+    if (!this.eligible) return;
+    this.openAudienceExplorer('ELIGIBLE', 'Contactos elegibles');
+  }
   openAudienceExplorer(bucket: CampaignAudienceBucket, label: string): void {
     if (this.reviewing || this.creating || this.eligible === null) return;
     const request = this.request();
