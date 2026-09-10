@@ -19,15 +19,17 @@ def _row(
     phone=None,
     debt="100.00",
     operational="AVAILABLE",
+    branch="MISION ENS",
+    tariff=None,
 ):
     return {
         "vencido_row_id": row_id,
         "pin": f"PIN-{row_id}",
         "nombre": f"Socio {row_id}",
         "phone_mx10": phone or f"686100{row_id:04d}",
-        "sucursal": "MISION ENS",
+        "sucursal": branch,
         "fecha_vencimiento": "2026-08-01",
-        "tarifa": f"Tarifa {row_id}",
+        "tarifa": tariff or f"Tarifa {row_id}",
         "tarifa_categoria": category,
         "tarifa_group": group,
         "adeudo": debt,
@@ -71,7 +73,15 @@ def _plan(rows, **summary):
     }
 
 
-def _run(monkeypatch, plan, bucket, *, page=1, page_size=50):
+def _run(
+    monkeypatch,
+    plan,
+    bucket,
+    *,
+    page=1,
+    page_size=50,
+    explorer_filters=None,
+):
     monkeypatch.setattr(
         reactivation,
         "_prepare_campaign_plan",
@@ -87,6 +97,7 @@ def _run(monkeypatch, plan, bucket, *, page=1, page_size=50):
         bucket=bucket,
         page=page,
         page_size=page_size,
+        explorer_filters=explorer_filters,
         allowed_sucursal_keys=None,
         session=NS(),
     )
@@ -110,6 +121,7 @@ def test_domiciliated_bucket_matches_preview_count_and_composition(monkeypatch):
     result = _run(monkeypatch, plan, detail.BUCKET_DOMICILIATED_FLOW)
 
     assert result["total"] == 3
+    assert result["filtered_total"] == 3
     assert [row["vencido_row_id"] for row in result["rows"]] == [1, 2, 3]
     assert result["composition"] == [
         {"label": "Domiciliado", "count": 2, "percentage": 66.67},
@@ -196,6 +208,7 @@ def test_eligible_bucket_supports_sources_without_decision_rows(monkeypatch):
     result = _run(monkeypatch, plan, detail.BUCKET_ELIGIBLE)
 
     assert result["total"] == 1
+    assert result["filtered_total"] == 1
     assert result["rows"] == eligible
 
 
@@ -220,3 +233,98 @@ def test_detail_fails_closed_when_bucket_count_diverges_from_preview(monkeypatch
 
     with pytest.raises(RuntimeError, match="no coincide"):
         _run(monkeypatch, plan, detail.BUCKET_DOMICILIATED_FLOW)
+
+
+def test_base_filters_keep_original_bucket_total_and_recalculate_result(monkeypatch):
+    rows = [
+        _row(1, debt="650", tariff="DOMICILIADO ANUAL"),
+        _row(
+            2,
+            debt="300",
+            operational="CONTACTED_THIS_MONTH",
+            tariff="DOMICILIADO ANUAL",
+        ),
+        _row(
+            3,
+            category="Recurrente",
+            debt="800",
+            branch="SEND MXL",
+            tariff="RECURRENTE 799",
+        ),
+    ]
+    plan = _plan(rows, domiciliated_flow=3)
+
+    result = _run(
+        monkeypatch,
+        plan,
+        detail.BUCKET_DOMICILIATED_FLOW,
+        explorer_filters={
+            "sucursal": "MISION ENS",
+            "tariff_category": "Domiciliado",
+            "adeudo_min": 500,
+            "operational_status": "AVAILABLE",
+        },
+    )
+
+    assert result["total"] == 3
+    assert result["filtered_total"] == 1
+    assert result["pagination"]["total"] == 1
+    assert [row["vencido_row_id"] for row in result["rows"]] == [1]
+    assert result["composition"] == [
+        {"label": "Domiciliado", "count": 1, "percentage": 100.0}
+    ]
+    assert result["filter_options"]["branches"] == ["MISION ENS", "SEND MXL"]
+    assert result["filter_options"]["tariff_categories"] == [
+        "Domiciliado",
+        "Recurrente",
+    ]
+
+
+def test_suite_history_and_iventas_filters_apply_to_enriched_bucket(monkeypatch):
+    rows = [_row(1), _row(2), _row(3)]
+    rows[0].update(
+        suite_campaigns_total=0,
+        iventas_last_message_status="failed",
+    )
+    rows[1].update(
+        suite_campaigns_total=1,
+        iventas_last_message_status="viewed",
+    )
+    rows[2].update(
+        suite_campaigns_total=2,
+        iventas_last_message_status="viewed",
+    )
+    plan = _plan(rows, domiciliated_flow=3)
+
+    result = _run(
+        monkeypatch,
+        plan,
+        detail.BUCKET_DOMICILIATED_FLOW,
+        explorer_filters={
+            "suite_history": "TWO_PLUS",
+            "iventas_status": "VIEWED",
+        },
+    )
+
+    assert result["total"] == 3
+    assert result["filtered_total"] == 1
+    assert result["rows"][0]["vencido_row_id"] == 3
+    assert result["explorer_filters"] == {
+        "suite_history": "TWO_PLUS",
+        "iventas_status": "VIEWED",
+    }
+
+
+def test_debt_filter_rejects_inverted_range(monkeypatch):
+    plan = _plan([_row(1)], domiciliated_flow=1)
+
+    with pytest.raises(
+        reactivation.MarketingReactivationValidationError,
+        match="mínimo no puede ser mayor",
+    ):
+        _run(
+            monkeypatch,
+            plan,
+            detail.BUCKET_DOMICILIATED_FLOW,
+            explorer_filters={"adeudo_min": 1000, "adeudo_max": 500},
+        )
