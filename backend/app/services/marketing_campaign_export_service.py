@@ -8,6 +8,7 @@ with one XLSX per branch plus a summary when several branches are present.
 from __future__ import annotations
 
 from collections import defaultdict
+from datetime import datetime, timezone
 from io import BytesIO
 import re
 import unicodedata
@@ -16,7 +17,12 @@ from zipfile import ZIP_DEFLATED, ZipFile
 
 from openpyxl import Workbook
 
+from app.extensions import db
+from app.models.marketing import MarketingReactivationCampaignORM
 from app.services.marketing_reactivation_service import (
+    CAMPAIGN_STATUS_DRAFT,
+    CAMPAIGN_STATUS_EXPORTED,
+    MarketingReactivationConflictError,
     export_marketing_reactivation_campaign as _validate_and_mark_exported,
     get_marketing_reactivation_campaign,
 )
@@ -26,6 +32,7 @@ XLSX_MIMETYPE = (
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
 ZIP_MIMETYPE = "application/zip"
+WEEKLY_FREQUENCY_KEEP = "KEEP"
 
 
 def campaign_export_mimetype(filename: str) -> str:
@@ -42,8 +49,9 @@ def export_marketing_reactivation_campaign(
     """Returns files ready to upload from each club's iVentas profile.
 
     The package is built only from frozen recipients. The existing exporter is
-    still called before returning so scope, weekly-frequency policy and the
-    DRAFT -> EXPORTED transition remain the source of truth.
+    still called first so scope, status and the weekly-frequency guard remain
+    the source of truth. A frozen KEEP decision only overrides that final
+    frequency conflict; it does not bypass any other export validation.
     """
 
     campaign = get_marketing_reactivation_campaign(
@@ -65,16 +73,65 @@ def export_marketing_reactivation_campaign(
         groups=groups,
     )
 
-    # Run the existing guarded export after the package is safely built. Its
-    # workbook is intentionally discarded; its validation/state transition is
-    # preserved without rebuilding the campaign audience.
-    _validate_and_mark_exported(
-        campaign_id=campaign_id,
-        allowed_sucursal_keys=allowed_sucursal_keys,
-        session=session,
-        now=now,
-    )
+    try:
+        # Run the existing guarded export after the package is safely built. Its
+        # workbook is intentionally discarded; validation/state transition is
+        # preserved without rebuilding the frozen audience.
+        _validate_and_mark_exported(
+            campaign_id=campaign_id,
+            allowed_sucursal_keys=allowed_sucursal_keys,
+            session=session,
+            now=now,
+        )
+    except MarketingReactivationConflictError:
+        if _frozen_weekly_frequency_action(campaign) != WEEKLY_FREQUENCY_KEEP:
+            raise
+        # The guarded exporter reaches its frequency conflict only after it has
+        # validated state and frozen scope and acquired the export lock. KEEP is
+        # therefore allowed to override exactly that conflict, nothing else.
+        _mark_keep_override_exported(
+            campaign_id=campaign_id,
+            session=session,
+            now=now,
+        )
     return export_bytes, filename
+
+
+def _frozen_weekly_frequency_action(campaign: dict[str, Any]) -> str | None:
+    filters = campaign.get("filters")
+    if not isinstance(filters, dict):
+        return None
+    action = filters.get("weekly_frequency_action")
+    return str(action) if action is not None else None
+
+
+def _mark_keep_override_exported(
+    *,
+    campaign_id: int,
+    session: Any | None,
+    now,
+) -> None:
+    active_session = session if session is not None else db.session
+    campaign = (
+        active_session.query(MarketingReactivationCampaignORM)
+        .filter(MarketingReactivationCampaignORM.id == campaign_id)
+        .one()
+    )
+    if campaign.status == CAMPAIGN_STATUS_EXPORTED:
+        return
+    if campaign.status != CAMPAIGN_STATUS_DRAFT:
+        raise MarketingReactivationConflictError(
+            "La campaña cambió de estado antes de completar la exportación."
+        )
+    now_value = now if now is not None else datetime.now(timezone.utc)
+    campaign.status = CAMPAIGN_STATUS_EXPORTED
+    campaign.exported_at = now_value
+    campaign.updated_at = now_value
+    try:
+        active_session.commit()
+    except Exception:
+        active_session.rollback()
+        raise
 
 
 def _build_delivery_package(
