@@ -16,6 +16,10 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 
+from app.warehouse.services.track_bajas_forecast_service import (
+    BAJAS_FORECAST_METHOD,
+    build_bajas_historical_progress_curve,
+)
 from app.warehouse.services.track_forecast_service import (
     build_branch_income_projection_summary,
     load_first_store_income_dates_bulk,
@@ -251,6 +255,9 @@ def build_track_daily_mart_excel(
     track_sheet.title = "Metas OP"
 
     days_in_month = monthrange(track_date.year, track_date.month)[1]
+    bajas_progress_curve = build_bajas_historical_progress_curve(
+        target_month=track_date.replace(day=1),
+    )
 
     _setup_track_sheet(
         worksheet=track_sheet,
@@ -341,6 +348,7 @@ def build_track_daily_mart_excel(
         track_date=track_date,
         resolved_version=resolved_version,
         rows=ordered_rows,
+        bajas_progress_curve=bajas_progress_curve,
     )
 
     _build_raw_sheet(
@@ -354,6 +362,7 @@ def build_track_daily_mart_excel(
         generation_mode=generation_mode,
         resolved_version=resolved_version,
         total_rows=len(ordered_rows),
+        bajas_progress_curve=bajas_progress_curve,
     )
 
     output = BytesIO()
@@ -506,7 +515,7 @@ def _write_subtotal_row(
     worksheet[f"I{totals_row}"] = f"=AVERAGE(I{first_data_row}:I{last_data_row})"
     worksheet[f"J{totals_row}"] = f"=AVERAGE(J{first_data_row}:J{last_data_row})"
     worksheet[f"P{totals_row}"] = f"=IFERROR((M{totals_row}/L{totals_row})-1,0)"
-    worksheet[f"Q{totals_row}"] = f"=IFERROR((M{totals_row}/K{totals_row})-1,0)"
+    worksheet[f"Q{totals_row}"] = f"=IFERROR(M{totals_row}/K{totals_row}-1,0)"
     worksheet[f"W{totals_row}"] = f"=IFERROR(V{totals_row}/R{totals_row},0)"
     worksheet[f"AD{totals_row}"] = f"=IFERROR(AB{totals_row}/Z{totals_row},0)"
     worksheet[f"AI{totals_row}"] = f"=IFERROR(AG{totals_row}/AE{totals_row},0)"
@@ -548,7 +557,7 @@ def _write_general_totals_row(
     worksheet[f"I{totals_row}"] = f"=AVERAGE(I{base_totals_row}:I{new_totals_row})"
     worksheet[f"J{totals_row}"] = f"=AVERAGE(J{base_totals_row}:J{new_totals_row})"
     worksheet[f"P{totals_row}"] = f"=IFERROR((M{totals_row}/L{totals_row})-1,0)"
-    worksheet[f"Q{totals_row}"] = f"=IFERROR((M{totals_row}/K{totals_row})-1,0)"
+    worksheet[f"Q{totals_row}"] = f"=IFERROR(M{totals_row}/K{totals_row}-1,0)"
     worksheet[f"W{totals_row}"] = f"=IFERROR(V{totals_row}/R{totals_row},0)"
     worksheet[f"AD{totals_row}"] = f"=IFERROR(AB{totals_row}/Z{totals_row},0)"
     worksheet[f"AI{totals_row}"] = f"=IFERROR(AG{totals_row}/AE{totals_row},0)"
@@ -1000,6 +1009,7 @@ def _build_forecast_sheet(
     track_date: date,
     resolved_version: Any,
     rows: Sequence[Any],
+    bajas_progress_curve: dict[str, Any],
 ) -> None:
     worksheet = workbook.create_sheet("Forecast", 0)
     days_in_month = monthrange(track_date.year, track_date.month)[1]
@@ -1030,6 +1040,7 @@ def _build_forecast_sheet(
                 mart_row=mart_row,
                 track_date=track_date,
                 days_in_month=days_in_month,
+                bajas_progress_curve=bajas_progress_curve,
             )
             current_row += 1
             current_index += 1
@@ -1124,7 +1135,7 @@ def _setup_forecast_sheet(
         "AP": "Dif ## Real vs Pronóstico",
         "AS": "Meta bajas",
         "AU": f"Bajas reales {day_month_label}",
-        "AV": "Pronóstico restante",
+        "AV": "Pronóstico restante histórico",
         "AW": "Pronóstico de cierre #",
         "AX": "Pronóstico de cierre %",
         "AY": "Dif ## Real vs Pronóstico",
@@ -1175,6 +1186,7 @@ def _write_forecast_data_row(
     mart_row: Any,
     track_date: date,
     days_in_month: int,
+    bajas_progress_curve: dict[str, Any],
 ) -> None:
     ingreso_day = _forecast_source_day(
         mart_row,
@@ -1200,6 +1212,15 @@ def _write_forecast_data_row(
         mart_row,
         "source_business_date_tienda",
         track_date,
+    )
+
+    bajas_progress_point = bajas_progress_curve.get("points", {}).get(
+        desempeno_day
+    )
+    bajas_progress_median = (
+        bajas_progress_point.get("median")
+        if bajas_progress_point is not None
+        else None
     )
 
     worksheet[f"B{excel_row}"] = index
@@ -1266,11 +1287,10 @@ def _write_forecast_data_row(
     worksheet[f"AU{excel_row}"] = _to_number(
         getattr(mart_row, "bajas_reales_mtd", None)
     )
-    worksheet[f"AV{excel_row}"] = _forecast_remaining_formula(
+    worksheet[f"AV{excel_row}"] = _forecast_bajas_remaining_formula(
         value_column="AU",
         excel_row=excel_row,
-        cutoff_day=desempeno_day,
-        days_in_month=days_in_month,
+        progress_factor=bajas_progress_median,
     )
     worksheet[f"AW{excel_row}"] = f"=AU{excel_row}+AV{excel_row}"
     worksheet[f"AX{excel_row}"] = f"=IFERROR(AW{excel_row}/M{excel_row},0)"
@@ -1325,6 +1345,30 @@ def _forecast_remaining_formula(
     return (
         f"=IFERROR(({value_column}{excel_row}/{cutoff_day})*"
         f"{remaining_days},0)"
+    )
+
+
+def _forecast_bajas_remaining_formula(
+    *,
+    value_column: str,
+    excel_row: int,
+    progress_factor: Any,
+) -> str:
+    if progress_factor is None:
+        return "=NA()"
+
+    try:
+        factor = Decimal(str(progress_factor))
+    except Exception:
+        return "=NA()"
+
+    if factor <= 0:
+        return "=NA()"
+
+    factor_text = format(factor.normalize(), "f")
+    return (
+        f"=IFERROR(({value_column}{excel_row}/{factor_text})-"
+        f"{value_column}{excel_row},NA())"
     )
 
 
@@ -1703,6 +1747,7 @@ def _build_info_sheet(
     generation_mode: str,
     resolved_version: Any,
     total_rows: int,
+    bajas_progress_curve: dict[str, Any],
 ) -> None:
     worksheet = workbook.create_sheet("Info")
     worksheet.append(["Campo", "Valor"])
@@ -1717,13 +1762,33 @@ def _build_info_sheet(
     ])
     worksheet.append(["Total sucursales", total_rows])
     worksheet.append(["Fuente", "Suite Ultra / Track Daily Mart"])
+    worksheet.append([
+        "Forecast bajas - método",
+        "Bajas MTD / mediana histórica del % acumulado vs cierre mensual, por día de corte",
+    ])
+    worksheet.append([
+        "Forecast bajas - fuente histórica",
+        "KPI Desempeño daily canónico; meses completos anteriores al mes del corte; cadena sin BECA",
+    ])
+    worksheet.append([
+        "Forecast bajas - sensibilidad",
+        "P25 y P75 se calculan para auditoría; el pronóstico operativo usa la mediana",
+    ])
+    worksheet.append([
+        "Forecast bajas - método técnico",
+        bajas_progress_curve.get("method", BAJAS_FORECAST_METHOD),
+    ])
+    worksheet.append([
+        "Forecast bajas - confianza inicial",
+        "Días 1-5: baja confiabilidad histórica; desde día 6-7 el backtest mejora de forma material",
+    ])
 
     for cell in worksheet[1]:
         cell.fill = PatternFill("solid", fgColor="1F1F1F")
         cell.font = Font(color="FFFFFF", bold=True)
 
-    worksheet.column_dimensions["A"].width = 24
-    worksheet.column_dimensions["B"].width = 42
+    worksheet.column_dimensions["A"].width = 34
+    worksheet.column_dimensions["B"].width = 92
 
 
 def _to_number(value: Any) -> float | int | None:
