@@ -89,7 +89,7 @@ export class MarketingReactivationComponent implements OnInit {
       {label: 'Identidad por revisar', value: summary.review_identity ?? 0},
       {label: 'Excluidos por tarifa', value: summary.excluded_tariff_general ?? 0},
       {label: 'Flujo domiciliados', value: summary.domiciliated_flow ?? 0},
-      {label: 'Borrón y cuenta nueva', value: summary.borron_cuenta_nueva ?? 0},
+      {label: '↳ Con adeudo / candidatos BCN', value: summary.borron_cuenta_nueva ?? 0},
       {label: 'Tarifa por revisar', value: summary.review_tariff ?? 0},
       {label: 'Teléfono inválido', value: summary.excluded_invalid_phone ?? 0},
       {label: 'Teléfonos duplicados', value: summary.duplicate_phone ?? 0},
@@ -114,7 +114,7 @@ export class MarketingReactivationComponent implements OnInit {
       BASCULA_RETENCION: 'Socios actualmente activos.',
       INVITA_GANA: 'Socios nuevos con pago en la semana actual, de lunes a domingo.',
       COBRANZA_LIGERA: 'Selecciona el rango de días vencidos que necesitas contactar.',
-      BORRON_CUENTA_NUEVA: 'Selecciona el rango de días vencidos. Solo entran tarifas marcadas como Borrón y cuenta nueva en el catálogo.',
+      BORRON_CUENTA_NUEVA: 'Selecciona el rango de días vencidos. Solo entran ex domiciliados o recurrentes con adeudo pendiente, que no estén activos y cuya identidad sea confiable.',
       PERSONALIZADA: '',
     };
     return descriptions[this.form.controls.type.value];

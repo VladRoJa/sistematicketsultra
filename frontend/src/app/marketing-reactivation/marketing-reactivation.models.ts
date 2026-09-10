@@ -172,7 +172,6 @@ export interface ReactivationTariffCount {
 export type ReactivationTariffGroup =
   | 'REACTIVATE'
   | 'DOMICILIATED_FLOW'
-  | 'BORRON_CUENTA_NUEVA'
   | 'EXCLUDE'
   | 'REVIEW';
 
