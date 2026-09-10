@@ -148,6 +148,13 @@ def test_forecast_sheet_uses_source_cutoffs_and_hides_helper_columns(
     assert workbook.sheetnames[0] == "Forecast"
     worksheet = workbook["Forecast"]
 
+    assert worksheet["B1"].value == "Track"
+    assert worksheet["C1"].value == "A dia"
+    assert worksheet["R1"].value == "2026-09-09"
+    assert worksheet["V1"].value == "Actualización no disponible"
+    for cell_address in ["AC1", "AE1", "AK1", "AM1", "AS1", "AU1", "BM1", "BN1"]:
+        assert worksheet[cell_address].value is None
+
     assert worksheet["C4"].value == "VILLAS DEL REY"
     assert worksheet["W4"].value == "=IFERROR((T4/8)*22,0)+IFERROR((U4/8)*22,0)"
     assert worksheet["AF4"].value == "=IFERROR((AE4/7)*23,0)"
@@ -175,3 +182,8 @@ def test_forecast_sheet_uses_source_cutoffs_and_hides_helper_columns(
     assert worksheet.column_dimensions["D"].hidden is True
     assert worksheet.column_dimensions["T"].hidden is True
     assert worksheet.column_dimensions["U"].hidden is True
+
+    metas_op = workbook["Metas OP"]
+    assert metas_op["B2"].value is None
+    assert metas_op["C2"].value == 9
+    assert metas_op["S4"].value == "=(R4/30)*$C$2"
