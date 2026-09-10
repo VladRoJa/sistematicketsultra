@@ -5,7 +5,7 @@
       <h2>{{ result?.label || data.label }}</h2>
       <p *ngIf="result">{{ headerCountLabel }}</p>
     </div>
-    <button mat-button type="button" (click)="close()">Cerrar</button>
+    <button mat-button type="button" (click)="close()" [disabled]="creatingCampaign">Cerrar</button>
   </header>
 
   <div *ngIf="loading && !result" class="loading-state" role="status">
@@ -114,6 +114,93 @@
           Aplicar filtros
         </button>
       </div>
+    </section>
+
+    <section class="campaign-builder">
+      <div class="campaign-builder-heading">
+        <div>
+          <h3>Crear campaña desde este resultado</h3>
+          <span>El backend volverá a validar la audiencia completa antes de congelar los destinatarios.</span>
+        </div>
+        <button
+          *ngIf="!campaignSelection"
+          mat-stroked-button
+          color="primary"
+          type="button"
+          (click)="prepareCampaignSelection()"
+          [disabled]="!canPrepareCampaign"
+        >
+          <mat-spinner *ngIf="preparingCampaign" diameter="18"></mat-spinner>
+          <span>{{ preparingCampaign ? 'Preparando…' : 'Preparar campaña con este resultado' }}</span>
+        </button>
+      </div>
+
+      <div *ngIf="campaignError" class="campaign-error" role="alert">
+        {{ campaignError }}
+      </div>
+
+      <ng-container *ngIf="campaignSelection as selection">
+        <div class="campaign-selection-grid">
+          <div class="campaign-selection-stat">
+            <span>Resultado filtrado</span>
+            <strong>{{ selection.filtered_total | number }}</strong>
+          </div>
+          <div class="campaign-selection-stat">
+            <span>Filas con teléfono válido</span>
+            <strong>{{ selection.valid_phone_rows | number }}</strong>
+          </div>
+          <div class="campaign-selection-stat">
+            <span>Teléfonos duplicados</span>
+            <strong>{{ selection.duplicate_phone_rows | number }}</strong>
+          </div>
+          <div class="campaign-selection-stat">
+            <span>Fuera de reglas de campaña</span>
+            <strong>{{ selection.excluded_by_campaign_rules | number }}</strong>
+          </div>
+          <div class="campaign-selection-stat final">
+            <span>Destinatarios finales</span>
+            <strong>{{ selection.recipient_count | number }}</strong>
+          </div>
+        </div>
+
+        <div *ngIf="invalidPhoneRows > 0" class="campaign-note">
+          {{ invalidPhoneRows | number }} filas no tienen un teléfono MX10 válido y no pueden congelarse como destinatarios.
+        </div>
+
+        <div *ngIf="selection.weekly_frequency_decision_required" class="campaign-warning">
+          {{ selection.weekly_limit_contacts | number }} contactos ya aparecen en dos campañas exportadas esta semana.
+          Regresa al preview y elige Retirarlos o Conservarlos antes de crear esta campaña.
+        </div>
+
+        <div *ngIf="selection.excluded_by_campaign_rules > 0" class="campaign-note">
+          Las filas fuera de reglas permanecen visibles para análisis, pero no se incluirán en la campaña.
+        </div>
+
+        <div class="campaign-create-row" [formGroup]="campaignForm">
+          <mat-form-field appearance="outline">
+            <mat-label>Nombre de campaña</mat-label>
+            <input matInput maxlength="255" formControlName="name">
+          </mat-form-field>
+          <button
+            mat-flat-button
+            color="primary"
+            type="button"
+            (click)="createFilteredCampaign()"
+            [disabled]="!canCreateFilteredCampaign"
+          >
+            <mat-spinner *ngIf="creatingCampaign" diameter="18"></mat-spinner>
+            <span>{{ creatingCampaign ? 'Creando…' : 'Crear campaña' }}</span>
+          </button>
+          <button
+            mat-button
+            type="button"
+            (click)="prepareCampaignSelection()"
+            [disabled]="preparingCampaign || creatingCampaign"
+          >
+            Revalidar
+          </button>
+        </div>
+      </ng-container>
     </section>
 
     <section class="summary-section" *ngIf="compositionTop.length">
