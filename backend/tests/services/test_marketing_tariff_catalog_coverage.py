@@ -1,13 +1,18 @@
 import ast
+import json
 from pathlib import Path
+import re
+import unicodedata
 
 
+ROOT = Path(__file__).resolve().parents[2]
 MIGRATION = (
-    Path(__file__).resolve().parents[2]
+    ROOT
     / "migrations"
     / "versions"
     / "e3f6a9b1c5d7_expand_reactivation_tariff_catalog.py"
 )
+SEED = ROOT / "data" / "reference" / "reactivacion_tarifas_edmundo_seed.json"
 
 
 def _assignment(name):
@@ -21,17 +26,36 @@ def _assignment(name):
     raise AssertionError(f"Missing assignment {name}")
 
 
+def _normalize(value):
+    normalized = unicodedata.normalize("NFKC", str(value)).strip().upper()
+    return re.sub(r"\s+", " ", normalized)
+
+
 def test_high_confidence_tariff_batch_is_unique_and_uses_valid_groups():
     tariffs = _assignment("_TARIFFS")
 
     assert len(tariffs) == 29
-    assert len({tarifa for tarifa, _, _ in tariffs}) == 29
+    assert len({_normalize(tarifa) for tarifa, _, _ in tariffs}) == 29
     assert {group for _, _, group in tariffs} <= {
         "REACTIVATE",
         "DOMICILIATED_FLOW",
         "EXCLUDE",
         "REVIEW",
     }
+
+
+def test_high_confidence_batch_does_not_overlap_original_seed():
+    seed_document = json.loads(SEED.read_text(encoding="utf-8"))
+    seed_keys = {
+        _normalize(row["tarifa_raw"])
+        for row in seed_document["tariffs"]
+    }
+    new_keys = {
+        _normalize(tarifa)
+        for tarifa, _, _ in _assignment("_TARIFFS")
+    }
+
+    assert new_keys.isdisjoint(seed_keys)
 
 
 def test_high_confidence_batch_keeps_ambiguous_tariffs_out():
