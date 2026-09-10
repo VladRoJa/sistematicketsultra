@@ -202,7 +202,7 @@ def test_forecast_sheet_uses_source_cutoffs_and_hides_helper_columns(
     assert worksheet["W4"].value == "=IFERROR((T4/8)*22,0)+IFERROR((U4/8)*22,0)"
     assert worksheet["AF4"].value == "=IFERROR((AE4/7)*23,0)"
     assert worksheet["AN4"].value == "=IFERROR((AM4/8)*22,0)"
-    assert worksheet["AV4"].value == "=IFERROR((AU4/Info!$G$25)-AU4,NA())"
+    assert worksheet["AV4"].value == "=IFERROR((AU4/Info!$F$25)-AU4,NA())"
     assert worksheet["BO4"].value == "=IFERROR((BN4/7)*23,0)"
 
     assert worksheet["X4"].value == "=V4+W4"
@@ -248,15 +248,13 @@ def test_forecast_sheet_uses_source_cutoffs_and_hides_helper_columns(
     )
     assert info["D17"].value == "Día"
     assert info["E17"].value == "Meses históricos"
-    assert info["F17"].value == "P25"
-    assert info["G17"].value == "Mediana aplicada"
-    assert info["H17"].value == "P75"
+    assert info["F17"].value == "Mediana aplicada"
     assert info["D25"].value == 8
     assert info["E25"].value == 40
-    assert info["F25"].value == 0.345
-    assert info["G25"].value == 0.376
-    assert info["H25"].value == 0.433
-    assert info["G25"].number_format == service.PERCENT_FORMAT
+    assert info["F25"].value == 0.376
+    assert info["F25"].number_format == service.PERCENT_FORMAT
+    assert info["G17"].value is None
+    assert info["H17"].value is None
 
 
 def test_bajas_forecast_formula_fails_closed_without_historical_reference():

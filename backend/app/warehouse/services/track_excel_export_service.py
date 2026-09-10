@@ -1101,8 +1101,6 @@ def _setup_forecast_sheet(
     worksheet.sheet_view.zoomScale = 75
     worksheet.freeze_panes = "D4"
 
-    # Forecast keeps only its operational columns visible, so the Track status
-    # ribbon is distributed across those same visible columns.
     worksheet["B1"] = "Track"
     worksheet["C1"] = "A dia"
     worksheet["R1"] = track_date.isoformat()
@@ -1218,7 +1216,7 @@ def _write_forecast_data_row(
         desempeno_day
     )
     bajas_progress_reference = (
-        f"Info!$G${17 + desempeno_day}"
+        f"Info!$F${17 + desempeno_day}"
         if bajas_progress_point is not None
         else None
     )
@@ -1763,10 +1761,6 @@ def _build_info_sheet(
         "KPI Desempeño daily canónico; meses completos anteriores al mes del corte; cadena sin BECA",
     ])
     worksheet.append([
-        "Forecast bajas - sensibilidad",
-        "P25 y P75 se calculan para auditoría; el pronóstico operativo usa la mediana",
-    ])
-    worksheet.append([
         "Forecast bajas - método técnico",
         bajas_progress_curve.get("method", BAJAS_FORECAST_METHOD),
     ])
@@ -1785,7 +1779,7 @@ def _build_info_sheet(
         start_row=curve_title_row,
         start_column=4,
         end_row=curve_title_row,
-        end_column=8,
+        end_column=6,
     )
     title_cell = worksheet.cell(row=curve_title_row, column=4)
     title_cell.value = "Curva histórica de avance de bajas (% del cierre mensual)"
@@ -1793,7 +1787,7 @@ def _build_info_sheet(
     title_cell.font = Font(color="FFFFFF", bold=True)
     title_cell.alignment = Alignment(horizontal="center", vertical="center")
 
-    curve_headers = ["Día", "Meses históricos", "P25", "Mediana aplicada", "P75"]
+    curve_headers = ["Día", "Meses históricos", "Mediana aplicada"]
     thin_side = Side(style="thin", color="D9D9D9")
     thin_border = Border(
         left=thin_side,
@@ -1818,25 +1812,20 @@ def _build_info_sheet(
         worksheet.cell(row=row_idx, column=4).value = day
         if point is not None:
             worksheet.cell(row=row_idx, column=5).value = point.get("samples_count")
-            worksheet.cell(row=row_idx, column=6).value = _to_number(point.get("p25"))
-            worksheet.cell(row=row_idx, column=7).value = _to_number(point.get("median"))
-            worksheet.cell(row=row_idx, column=8).value = _to_number(point.get("p75"))
+            worksheet.cell(row=row_idx, column=6).value = _to_number(point.get("median"))
 
-        for column_idx in range(4, 9):
+        for column_idx in range(4, 7):
             cell = worksheet.cell(row=row_idx, column=column_idx)
             cell.border = thin_border
             cell.alignment = Alignment(horizontal="center", vertical="center")
 
-        for column_idx in (6, 7, 8):
-            worksheet.cell(row=row_idx, column=column_idx).number_format = PERCENT_FORMAT
+        worksheet.cell(row=row_idx, column=6).number_format = PERCENT_FORMAT
 
     worksheet.column_dimensions["A"].width = 34
     worksheet.column_dimensions["B"].width = 92
     worksheet.column_dimensions["D"].width = 10
     worksheet.column_dimensions["E"].width = 18
-    worksheet.column_dimensions["F"].width = 12
-    worksheet.column_dimensions["G"].width = 20
-    worksheet.column_dimensions["H"].width = 12
+    worksheet.column_dimensions["F"].width = 20
 
 
 def _to_number(value: Any) -> float | int | None:
