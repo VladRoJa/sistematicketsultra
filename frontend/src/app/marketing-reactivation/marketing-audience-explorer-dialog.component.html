@@ -1,0 +1,134 @@
+<section class="audience-explorer">
+  <header class="explorer-header">
+    <div>
+      <p class="eyebrow">Visor de audiencia</p>
+      <h2>{{ result?.label || data.label }}</h2>
+      <p *ngIf="result">{{ result.total | number }} contactos en esta etapa.</p>
+    </div>
+    <button mat-button type="button" (click)="close()">Cerrar</button>
+  </header>
+
+  <div *ngIf="loading && !result" class="loading-state" role="status">
+    <mat-spinner diameter="28"></mat-spinner>
+    Cargando detalle…
+  </div>
+
+  <div *ngIf="error" class="error-state" role="alert">
+    <span>{{ error }}</span>
+    <button mat-stroked-button type="button" (click)="loadPage(page)">Reintentar</button>
+  </div>
+
+  <ng-container *ngIf="result">
+    <section class="summary-section" *ngIf="compositionTop.length">
+      <div class="summary-heading">
+        <h3>Composición por tarifa</h3>
+        <span>Top {{ compositionTop.length }} categorías</span>
+      </div>
+      <div class="summary-chips">
+        <div class="summary-chip" *ngFor="let item of compositionTop">
+          <strong>{{ item.label }}</strong>
+          <span>{{ item.count | number }} · {{ item.percentage | number:'1.0-2' }}%</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="summary-section" *ngIf="operationalSummary.length">
+      <div class="summary-heading">
+        <h3>Estado operativo</h3>
+        <span>Estado actual usado por Suite</span>
+      </div>
+      <div class="summary-chips compact">
+        <div class="summary-chip" *ngFor="let item of operationalSummary">
+          <strong>{{ item.label }}</strong>
+          <span>{{ item.value | number }}</span>
+        </div>
+      </div>
+    </section>
+
+    <div class="data-note">
+      El estado de iVentas es el observado en la sincronización canónica usada por el preview; no es una consulta en vivo.
+      La respuesta del socio todavía no se muestra porque aún no existe una señal de inbound atribuible de forma confiable a esta campaña.
+    </div>
+
+    <div class="table-shell">
+      <table class="audience-table">
+        <thead>
+          <tr>
+            <th>Socio</th>
+            <th>Sucursal</th>
+            <th>Vencimiento</th>
+            <th>Tarifa</th>
+            <th>Adeudo</th>
+            <th>Estado operativo</th>
+            <th>Historial Suite</th>
+            <th>iVentas</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let row of result.rows">
+            <td>
+              <strong>{{ row.nombre || 'Sin nombre' }}</strong>
+              <span class="cell-secondary" *ngIf="row.pin">PIN {{ row.pin }}</span>
+              <span class="cell-secondary">{{ row.phone_mx10 || 'Sin teléfono válido' }}</span>
+            </td>
+            <td>{{ row.sucursal || '—' }}</td>
+            <td>{{ formatDate(row.fecha_vencimiento) }}</td>
+            <td>
+              <span>{{ row.tarifa || 'Sin tarifa' }}</span>
+              <span class="cell-secondary">{{ row.tarifa_categoria || 'Sin categoría' }}</span>
+            </td>
+            <td class="number-cell">{{ formatMoney(row.adeudo) }}</td>
+            <td>
+              <span class="status-pill" [attr.data-status]="row.operational_status">
+                {{ operationalLabel(row.operational_status) }}
+              </span>
+            </td>
+            <td>
+              <strong>{{ row.suite_campaigns_total | number }} campañas</strong>
+              <span class="cell-secondary">{{ row.suite_sent_total | number }} marcadas enviadas</span>
+              <span class="cell-secondary" *ngIf="row.last_suite_sent_at">
+                Último envío: {{ formatDateTime(row.last_suite_sent_at) }}
+              </span>
+              <span class="cell-secondary" *ngIf="!row.last_suite_sent_at && row.last_suite_exported_at">
+                Última exportación: {{ formatDateTime(row.last_suite_exported_at) }}
+              </span>
+            </td>
+            <td>
+              <span class="status-pill iventas" [attr.data-status]="row.iventas_last_message_status || 'none'">
+                {{ iventasLabel(row.iventas_last_message_status) }}
+              </span>
+              <span class="cell-secondary">
+                Último outbound: {{ formatDateTime(row.iventas_last_outbound_at_utc) }}
+              </span>
+            </td>
+          </tr>
+          <tr *ngIf="!result.rows.length">
+            <td colspan="8" class="empty-cell">No hay contactos en esta etapa.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <footer class="explorer-footer">
+      <span>{{ pageLabel }} · {{ result.total | number }} contactos</span>
+      <div class="pagination-actions">
+        <button
+          mat-stroked-button
+          type="button"
+          (click)="previousPage()"
+          [disabled]="loading || !result.pagination.has_prev"
+        >
+          Anterior
+        </button>
+        <button
+          mat-stroked-button
+          type="button"
+          (click)="nextPage()"
+          [disabled]="loading || !result.pagination.has_next"
+        >
+          Siguiente
+        </button>
+      </div>
+    </footer>
+  </ng-container>
+</section>

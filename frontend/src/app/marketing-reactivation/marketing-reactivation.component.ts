@@ -3,6 +3,7 @@ import { Component, DestroyRef, OnInit, inject } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
@@ -10,6 +11,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { HttpErrorResponse } from '@angular/common/http';
 import { MarketingReactivationService } from './marketing-reactivation.service';
 import {
+  CampaignAudienceBucket,
   CampaignOptions,
   CampaignType,
   CampaignV1Request,
@@ -18,10 +20,20 @@ import {
   WeeklyFrequencyAction,
 } from './marketing-reactivation.models';
 import { CampaignSourceFreshness, CampaignSourceStatusResponse } from './marketing-campaign-source-status.models';
+import {
+  MarketingAudienceExplorerDialogComponent,
+} from './marketing-audience-explorer-dialog.component';
+
+type AudienceBreakdownRow = {
+  label: string;
+  value: number;
+  bucket: CampaignAudienceBucket | null;
+  drillable: boolean;
+};
 
 @Component({
   selector: 'app-marketing-reactivation', standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, MatButtonModule, MatFormFieldModule,
+  imports: [CommonModule, ReactiveFormsModule, MatButtonModule, MatDialogModule, MatFormFieldModule,
     MatInputModule, MatSelectModule, MatProgressSpinnerModule],
   templateUrl: './marketing-reactivation.component.html',
   styleUrls: ['./marketing-reactivation.component.css'],
@@ -29,6 +41,7 @@ import { CampaignSourceFreshness, CampaignSourceStatusResponse } from './marketi
 export class MarketingReactivationComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   private readonly service = inject(MarketingReactivationService);
+  private readonly dialog = inject(MatDialog);
   private revision = 0;
   readonly types: Array<{value: CampaignType; label: string}> = [
     {value: 'WINBACK', label: 'Winback'}, {value: 'PROXIMOS_VENCER', label: 'Próximos a vencer (+5 días)'},
@@ -73,6 +86,15 @@ export class MarketingReactivationComponent implements OnInit {
   get weeklyDecisionRequired(): boolean {
     return this.weeklyLimitContacts > 0 && this.weeklyFrequencyAction === null;
   }
+  get supportsStageDrilldown(): boolean {
+    const type = this.form.controls.type.value;
+    return [
+      'WINBACK',
+      'VENCIDOS_RECIENTES',
+      'COBRANZA_LIGERA',
+      'BORRON_CUENTA_NUEVA',
+    ].includes(type) || this.isCustomExpired;
+  }
   get branches(): CampaignOptions['branches'] {
     const region = this.options.regions.find(item => item.id === this.form.controls.region.value);
     return region ? this.options.branches.filter(item => region.branch_keys.includes(item.key)) : this.options.branches;
@@ -85,20 +107,21 @@ export class MarketingReactivationComponent implements OnInit {
       {key: 'iventas', label: 'iVentas', source: this.sourceStatus.sources.iventas},
     ];
   }
-  get audienceBreakdown(): Array<{label: string; value: number}> {
+  get audienceBreakdown(): AudienceBreakdownRow[] {
     const summary = this.audienceSummary;
     if (!summary) return [];
-    const rows = [
-      {label: 'Candidatos encontrados', value: summary.total_candidates ?? 0},
-      {label: 'Actualmente activos', value: summary.excluded_active ?? 0},
-      {label: 'Identidad por revisar', value: summary.review_identity ?? 0},
-      {label: 'Excluidos por tarifa', value: summary.excluded_tariff_general ?? 0},
-      {label: 'Flujo domiciliados', value: summary.domiciliated_flow ?? 0},
-      {label: '↳ Con adeudo / candidatos BCN', value: summary.borron_cuenta_nueva ?? 0},
-      {label: 'Tarifa por revisar', value: summary.review_tariff ?? 0},
-      {label: 'Teléfono inválido', value: summary.excluded_invalid_phone ?? 0},
-      {label: 'Teléfonos duplicados', value: summary.duplicate_phone ?? 0},
-      {label: 'Protección semanal', value: summary.excluded_weekly_limit ?? 0},
+    const drillable = this.supportsStageDrilldown;
+    const rows: AudienceBreakdownRow[] = [
+      {label: 'Candidatos encontrados', value: summary.total_candidates ?? 0, bucket: 'TOTAL_CANDIDATES', drillable},
+      {label: 'Actualmente activos', value: summary.excluded_active ?? 0, bucket: 'EXCLUDED_ACTIVE', drillable},
+      {label: 'Identidad por revisar', value: summary.review_identity ?? 0, bucket: 'REVIEW_IDENTITY', drillable},
+      {label: 'Excluidos por tarifa', value: summary.excluded_tariff_general ?? 0, bucket: 'EXCLUDED_TARIFF_GENERAL', drillable},
+      {label: 'Flujo domiciliados', value: summary.domiciliated_flow ?? 0, bucket: 'DOMICILIATED_FLOW', drillable},
+      {label: '↳ Con adeudo / candidatos BCN', value: summary.borron_cuenta_nueva ?? 0, bucket: 'BCN_CANDIDATES', drillable},
+      {label: 'Tarifa por revisar', value: summary.review_tariff ?? 0, bucket: 'REVIEW_TARIFF', drillable},
+      {label: 'Teléfono inválido', value: summary.excluded_invalid_phone ?? 0, bucket: 'INVALID_PHONE', drillable},
+      {label: 'Teléfonos duplicados', value: summary.duplicate_phone ?? 0, bucket: 'DUPLICATE_PHONE', drillable},
+      {label: 'Protección semanal', value: summary.excluded_weekly_limit ?? 0, bucket: null, drillable: false},
     ];
     return rows.filter((row, index) => index === 0 || row.value > 0);
   }
@@ -226,6 +249,27 @@ export class MarketingReactivationComponent implements OnInit {
         this.audienceSummary = result.summary;
       },
       error: error => { if (revision === this.revision) { this.reviewing = false; void this.showError(error, 'No fue posible revisar la audiencia.'); } },
+    });
+  }
+  openBreakdownRow(row: AudienceBreakdownRow): void {
+    if (!row.drillable || !row.bucket) return;
+    this.openAudienceExplorer(row.bucket, row.label);
+  }
+  openEligibleExplorer(): void {
+    if (!this.eligible) return;
+    this.openAudienceExplorer('ELIGIBLE', 'Contactos elegibles');
+  }
+  openAudienceExplorer(bucket: CampaignAudienceBucket, label: string): void {
+    if (this.reviewing || this.creating || this.eligible === null) return;
+    const request = this.request();
+    if (!request) return;
+
+    this.dialog.open(MarketingAudienceExplorerDialogComponent, {
+      data: {request, bucket, label},
+      width: '96vw',
+      maxWidth: '1400px',
+      maxHeight: '92vh',
+      autoFocus: false,
     });
   }
   chooseWeeklyFrequencyAction(action: WeeklyFrequencyAction): void {

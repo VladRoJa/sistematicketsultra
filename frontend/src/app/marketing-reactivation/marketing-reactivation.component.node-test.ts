@@ -1,5 +1,6 @@
 import '@angular/compiler';
 import { DestroyRef, Injector, runInInjectionContext } from '@angular/core';
+import { MatDialog } from '@angular/material/dialog';
 import { of, Subject } from 'rxjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
@@ -11,6 +12,7 @@ function setup() {
   const creation = new Subject<any>();
   const requests: any[] = [];
   const creates: any[] = [];
+  const dialogOpens: any[] = [];
   const sourceStatus = {
     business_date:'2026-09-08',
     sources:{
@@ -27,13 +29,20 @@ function setup() {
     previewCampaign: (request: any) => {requests.push(request); return preview;},
     createCampaign: (request: any) => {creates.push(request); return creation;},
   };
+  const dialog = {
+    open: (component: any, config: any) => {
+      dialogOpens.push({component, config});
+      return {afterClosed: () => of(undefined)};
+    },
+  };
   const injector = Injector.create({providers:[
     {provide: MarketingReactivationService, useValue:service},
+    {provide: MatDialog, useValue:dialog},
     {provide: DestroyRef, useValue:{onDestroy: () => () => {}}},
   ]});
   const component = runInInjectionContext(injector, () => new MarketingReactivationComponent());
   component.ngOnInit();
-  return {component, preview, creation, requests, creates};
+  return {component, preview, creation, requests, creates, dialogOpens};
 }
 
 test('source strip exposes compact freshness labels', () => {
@@ -114,6 +123,57 @@ test('preview exposes the campaign construction breakdown', () => {
     ['Tarifa por revisar', 281],
     ['Teléfonos duplicados', 15],
   ]);
+});
+
+test('expired preview opens the exact drilldown bucket with the reviewed filters', () => {
+  const {component, preview, dialogOpens} = setup();
+  component.form.controls.segment.setValue('WINBACK_60');
+  component.prepareCampaign();
+  preview.next({summary:{
+    total_candidates:9422, eligible:1010, excluded_active:45,
+    excluded_invalid_phone:0, review_identity:28, duplicate_phone:15,
+    excluded_tariff:8043, excluded_tariff_general:6057,
+    domiciliated_flow:1986, borron_cuenta_nueva:624, review_tariff:281,
+    excluded_recent_campaign:0, review:309, excluded_weekly_limit:0,
+  }});
+
+  const row = component.audienceBreakdown.find(item => item.label === 'Flujo domiciliados');
+  assert.ok(row);
+  assert.equal(row.drillable, true);
+  assert.equal(row.bucket, 'DOMICILIATED_FLOW');
+
+  component.openBreakdownRow(row);
+
+  assert.equal(dialogOpens.length, 1);
+  assert.equal(dialogOpens[0].config.data.bucket, 'DOMICILIATED_FLOW');
+  assert.equal(dialogOpens[0].config.data.label, 'Flujo domiciliados');
+  assert.deepEqual(dialogOpens[0].config.data.request, {
+    filters:{campaign_type:'WINBACK',segment:'WINBACK_60'},
+  });
+});
+
+test('active campaign keeps stage drilldown disabled but exposes eligible contacts', () => {
+  const {component, preview, dialogOpens} = setup();
+  component.form.controls.type.setValue('BASCULA_RETENCION');
+  component.prepareCampaign();
+  preview.next({summary:{
+    total_candidates:120, eligible:115, excluded_active:0,
+    excluded_invalid_phone:5, review_identity:0, duplicate_phone:0,
+    excluded_tariff:0, excluded_tariff_general:0,
+    domiciliated_flow:0, borron_cuenta_nueva:0, review_tariff:0,
+    excluded_recent_campaign:0, review:0, excluded_weekly_limit:0,
+  }});
+
+  assert.equal(component.audienceBreakdown[0].drillable, false);
+  component.openBreakdownRow(component.audienceBreakdown[0]);
+  assert.equal(dialogOpens.length, 0);
+
+  component.openEligibleExplorer();
+  assert.equal(dialogOpens.length, 1);
+  assert.equal(dialogOpens[0].config.data.bucket, 'ELIGIBLE');
+  assert.deepEqual(dialogOpens[0].config.data.request, {
+    filters:{campaign_type:'BASCULA_RETENCION'},
+  });
 });
 
 test('weekly frequency warning requires an explicit choice before creation', () => {

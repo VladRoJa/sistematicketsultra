@@ -297,6 +297,71 @@ export interface CampaignV1Request {
   };
 }
 
+export type CampaignAudienceBucket =
+  | 'TOTAL_CANDIDATES'
+  | 'EXCLUDED_ACTIVE'
+  | 'REVIEW_IDENTITY'
+  | 'EXCLUDED_TARIFF_GENERAL'
+  | 'DOMICILIATED_FLOW'
+  | 'BCN_CANDIDATES'
+  | 'REVIEW_TARIFF'
+  | 'INVALID_PHONE'
+  | 'DUPLICATE_PHONE'
+  | 'ELIGIBLE';
+
+export interface CampaignAudienceCompositionRow {
+  label: string;
+  count: number;
+  percentage: number;
+}
+
+export interface CampaignAudienceDetailRow {
+  vencido_row_id: number | null;
+  pin: string | null;
+  nombre: string | null;
+  phone_mx10: string | null;
+  sucursal: string | null;
+  fecha_vencimiento: string | null;
+  tarifa: string | null;
+  tarifa_categoria: string | null;
+  tarifa_group: ReactivationTariffGroup | null;
+  adeudo: string | null;
+  operational_status: string | null;
+  campaign_eligibility: string | null;
+  eligibility_reason: string | null;
+  suite_campaigns_total: number;
+  suite_sent_total: number;
+  last_suite_exported_at: string | null;
+  last_suite_sent_at: string | null;
+  iventas_contact_id: string | null;
+  iventas_last_message_status: string | null;
+  iventas_last_outbound_at_utc: string | null;
+}
+
+export interface CampaignAudiencePreviewDetailRequest extends CampaignV1Request {
+  bucket: CampaignAudienceBucket;
+  page: number;
+  page_size: number;
+}
+
+export interface CampaignAudiencePreviewDetailResponse {
+  bucket: CampaignAudienceBucket;
+  label: string;
+  sources: ReactivationCampaignPreviewResponse['sources'];
+  total: number;
+  pagination: {
+    page: number;
+    page_size: number;
+    total: number;
+    total_pages: number;
+    has_prev: boolean;
+    has_next: boolean;
+  };
+  composition: CampaignAudienceCompositionRow[];
+  operational_counts: Record<string, number>;
+  rows: CampaignAudienceDetailRow[];
+}
+
 export interface CampaignOptions {
   branches: Array<{ key: string; label: string }>;
   regions: Array<{ id: number; label: string; branch_keys: string[] }>;
