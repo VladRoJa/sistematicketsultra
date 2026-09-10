@@ -28,45 +28,6 @@ marketing_campaign_preview_detail_bp = Blueprint(
     __name__,
 )
 
-_COMMON_SELECTION_FIELDS = {
-    "bucket",
-    "explorer_filters",
-    "date_from",
-    "date_to",
-    "filters",
-    "campaign_cooldown_days",
-}
-
-
-def _json_payload() -> dict:
-    payload = request.get_json(silent=True)
-    if not isinstance(payload, dict):
-        raise MarketingReactivationValidationError(
-            "El payload JSON debe ser un objeto."
-        )
-    return payload
-
-
-def _reject_unknown_fields(payload: dict, allowed: set[str]) -> None:
-    unknown = sorted(set(payload) - allowed)
-    if unknown:
-        raise MarketingReactivationValidationError(
-            "Campos no permitidos: " + ", ".join(unknown) + "."
-        )
-
-
-def _selection_kwargs(payload: dict, access) -> dict:
-    return {
-        "filters": payload.get("filters"),
-        "bucket": payload.get("bucket"),
-        "explorer_filters": payload.get("explorer_filters"),
-        "date_from": payload.get("date_from"),
-        "date_to": payload.get("date_to"),
-        "campaign_cooldown_days": payload.get("campaign_cooldown_days"),
-        "allowed_sucursal_keys": _reactivation_allowed_sucursal_keys(access),
-        "session": db.session,
-    }
-
 
 @marketing_campaign_preview_detail_bp.post(
     "/reactivation/campaigns/preview-detail"
@@ -76,16 +37,40 @@ def marketing_campaign_preview_detail_endpoint():
     try:
         _, access = _resolve_request_access()
         _require_campaign_management(access)
-        payload = _json_payload()
-        _reject_unknown_fields(
-            payload,
-            _COMMON_SELECTION_FIELDS | {"page", "page_size"},
-        )
+
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            raise MarketingReactivationValidationError(
+                "El payload JSON debe ser un objeto."
+            )
+
+        allowed = {
+            "bucket",
+            "page",
+            "page_size",
+            "explorer_filters",
+            "date_from",
+            "date_to",
+            "filters",
+            "campaign_cooldown_days",
+        }
+        unknown = sorted(set(payload) - allowed)
+        if unknown:
+            raise MarketingReactivationValidationError(
+                "Campos no permitidos: " + ", ".join(unknown) + "."
+            )
 
         result = build_marketing_campaign_preview_detail(
+            filters=payload.get("filters"),
+            bucket=payload.get("bucket"),
             page=payload.get("page", 1),
             page_size=payload.get("page_size", 50),
-            **_selection_kwargs(payload, access),
+            explorer_filters=payload.get("explorer_filters"),
+            date_from=payload.get("date_from"),
+            date_to=payload.get("date_to"),
+            campaign_cooldown_days=payload.get("campaign_cooldown_days"),
+            allowed_sucursal_keys=_reactivation_allowed_sucursal_keys(access),
+            session=db.session,
         )
         return jsonify(result), 200
     except MarketingAuthorizationError as exc:
@@ -101,6 +86,43 @@ def marketing_campaign_preview_detail_endpoint():
         ), 500
 
 
+def _explorer_selection_payload(*, allow_create_fields: bool) -> dict:
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        raise MarketingReactivationValidationError(
+            "El payload JSON debe ser un objeto."
+        )
+    allowed = {
+        "bucket",
+        "explorer_filters",
+        "date_from",
+        "date_to",
+        "filters",
+        "campaign_cooldown_days",
+    }
+    if allow_create_fields:
+        allowed.update({"name", "notes"})
+    unknown = sorted(set(payload) - allowed)
+    if unknown:
+        raise MarketingReactivationValidationError(
+            "Campos no permitidos: " + ", ".join(unknown) + "."
+        )
+    return payload
+
+
+def _explorer_selection_kwargs(payload: dict, access) -> dict:
+    return {
+        "filters": payload.get("filters"),
+        "bucket": payload.get("bucket"),
+        "explorer_filters": payload.get("explorer_filters"),
+        "date_from": payload.get("date_from"),
+        "date_to": payload.get("date_to"),
+        "campaign_cooldown_days": payload.get("campaign_cooldown_days"),
+        "allowed_sucursal_keys": _reactivation_allowed_sucursal_keys(access),
+        "session": db.session,
+    }
+
+
 @marketing_campaign_preview_detail_bp.post(
     "/reactivation/campaigns/preview-detail/selection"
 )
@@ -109,13 +131,11 @@ def marketing_campaign_preview_selection_endpoint():
     try:
         _, access = _resolve_request_access()
         _require_campaign_management(access)
-        payload = _json_payload()
-        _reject_unknown_fields(payload, _COMMON_SELECTION_FIELDS)
-        return jsonify(
-            build_explorer_campaign_selection(
-                **_selection_kwargs(payload, access),
-            )
-        ), 200
+        payload = _explorer_selection_payload(allow_create_fields=False)
+        result = build_explorer_campaign_selection(
+            **_explorer_selection_kwargs(payload, access),
+        )
+        return jsonify(result), 200
     except MarketingAuthorizationError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 403
     except MarketingReactivationValidationError as exc:
@@ -137,16 +157,12 @@ def marketing_campaign_preview_create_endpoint():
     try:
         user, access = _resolve_request_access()
         _require_campaign_management(access)
-        payload = _json_payload()
-        _reject_unknown_fields(
-            payload,
-            _COMMON_SELECTION_FIELDS | {"name", "notes"},
-        )
+        payload = _explorer_selection_payload(allow_create_fields=True)
         result = create_campaign_from_explorer(
             name=payload.get("name"),
             notes=payload.get("notes"),
             created_by_user_id=int(user.id),
-            **_selection_kwargs(payload, access),
+            **_explorer_selection_kwargs(payload, access),
         )
         return jsonify(result), 201
     except MarketingAuthorizationError as exc:
