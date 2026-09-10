@@ -105,6 +105,9 @@ export class MarketingAudienceExplorerDialogComponent implements OnInit {
   campaignError = '';
 
   ngOnInit(): void {
+    this.filterForm.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.resetCampaignPreparation());
     this.loadPage(1);
   }
 
@@ -141,6 +144,12 @@ export class MarketingAudienceExplorerDialogComponent implements OnInit {
     return Object.keys(this.appliedFilters).length > 0;
   }
 
+  get filtersDirty(): boolean {
+    const current = this.readExplorerFiltersFromForm(false);
+    if (current === null) return true;
+    return JSON.stringify(current) !== JSON.stringify(this.appliedFilters);
+  }
+
   get invalidPhoneRows(): number {
     if (!this.campaignSelection) return 0;
     return Math.max(
@@ -151,6 +160,7 @@ export class MarketingAudienceExplorerDialogComponent implements OnInit {
 
   get canPrepareCampaign(): boolean {
     return Boolean(this.result?.filtered_total)
+      && !this.filtersDirty
       && !this.loading
       && !this.preparingCampaign
       && !this.creatingCampaign;
@@ -159,6 +169,7 @@ export class MarketingAudienceExplorerDialogComponent implements OnInit {
   get canCreateFilteredCampaign(): boolean {
     const name = this.campaignForm.controls.name.value.trim();
     return Boolean(this.campaignSelection?.can_create)
+      && !this.filtersDirty
       && Boolean(name)
       && name.length <= 255
       && !this.preparingCampaign
@@ -247,7 +258,7 @@ export class MarketingAudienceExplorerDialogComponent implements OnInit {
   }
 
   createFilteredCampaign(): void {
-    if (!this.campaignSelection?.can_create || this.creatingCampaign) return;
+    if (!this.campaignSelection?.can_create || this.filtersDirty || this.creatingCampaign) return;
     const name = this.campaignForm.controls.name.value.trim();
     if (!name) {
       this.campaignError = 'Escribe un nombre para la campaña.';
@@ -356,13 +367,17 @@ export class MarketingAudienceExplorerDialogComponent implements OnInit {
   }
 
   private buildExplorerFilters(): CampaignAudienceExplorerFilters | null {
+    return this.readExplorerFiltersFromForm(true);
+  }
+
+  private readExplorerFiltersFromForm(reportError: boolean): CampaignAudienceExplorerFilters | null {
     const value = this.filterForm.getRawValue();
     if (value.adeudoMin !== null && (!Number.isFinite(value.adeudoMin) || value.adeudoMin < 0)) {
-      this.error = 'El adeudo mínimo debe ser un número igual o mayor a cero.';
+      if (reportError) this.error = 'El adeudo mínimo debe ser un número igual o mayor a cero.';
       return null;
     }
     if (value.adeudoMax !== null && (!Number.isFinite(value.adeudoMax) || value.adeudoMax < 0)) {
-      this.error = 'El adeudo máximo debe ser un número igual o mayor a cero.';
+      if (reportError) this.error = 'El adeudo máximo debe ser un número igual o mayor a cero.';
       return null;
     }
     if (
@@ -370,7 +385,7 @@ export class MarketingAudienceExplorerDialogComponent implements OnInit {
       && value.adeudoMax !== null
       && value.adeudoMin > value.adeudoMax
     ) {
-      this.error = 'El adeudo mínimo no puede ser mayor que el adeudo máximo.';
+      if (reportError) this.error = 'El adeudo mínimo no puede ser mayor que el adeudo máximo.';
       return null;
     }
 
