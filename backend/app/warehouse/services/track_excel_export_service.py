@@ -1217,8 +1217,8 @@ def _write_forecast_data_row(
     bajas_progress_point = bajas_progress_curve.get("points", {}).get(
         desempeno_day
     )
-    bajas_progress_median = (
-        bajas_progress_point.get("median")
+    bajas_progress_reference = (
+        f"Info!$G${17 + desempeno_day}"
         if bajas_progress_point is not None
         else None
     )
@@ -1290,7 +1290,7 @@ def _write_forecast_data_row(
     worksheet[f"AV{excel_row}"] = _forecast_bajas_remaining_formula(
         value_column="AU",
         excel_row=excel_row,
-        progress_factor=bajas_progress_median,
+        progress_reference=bajas_progress_reference,
     )
     worksheet[f"AW{excel_row}"] = f"=AU{excel_row}+AV{excel_row}"
     worksheet[f"AX{excel_row}"] = f"=IFERROR(AW{excel_row}/M{excel_row},0)"
@@ -1352,22 +1352,13 @@ def _forecast_bajas_remaining_formula(
     *,
     value_column: str,
     excel_row: int,
-    progress_factor: Any,
+    progress_reference: str | None,
 ) -> str:
-    if progress_factor is None:
+    if not progress_reference:
         return "=NA()"
 
-    try:
-        factor = Decimal(str(progress_factor))
-    except Exception:
-        return "=NA()"
-
-    if factor <= 0:
-        return "=NA()"
-
-    factor_text = format(factor.normalize(), "f")
     return (
-        f"=IFERROR(({value_column}{excel_row}/{factor_text})-"
+        f"=IFERROR(({value_column}{excel_row}/{progress_reference})-"
         f"{value_column}{excel_row},NA())"
     )
 
@@ -1750,6 +1741,7 @@ def _build_info_sheet(
     bajas_progress_curve: dict[str, Any],
 ) -> None:
     worksheet = workbook.create_sheet("Info")
+    worksheet.sheet_view.showGridLines = False
     worksheet.append(["Campo", "Valor"])
     worksheet.append(["Fecha Track", track_date.isoformat()])
     worksheet.append(["Modo", generation_mode])
@@ -1787,8 +1779,64 @@ def _build_info_sheet(
         cell.fill = PatternFill("solid", fgColor="1F1F1F")
         cell.font = Font(color="FFFFFF", bold=True)
 
+    curve_title_row = 16
+    curve_header_row = 17
+    worksheet.merge_cells(
+        start_row=curve_title_row,
+        start_column=4,
+        end_row=curve_title_row,
+        end_column=8,
+    )
+    title_cell = worksheet.cell(row=curve_title_row, column=4)
+    title_cell.value = "Curva histórica de avance de bajas (% del cierre mensual)"
+    title_cell.fill = PatternFill("solid", fgColor=ULTRA_ORANGE)
+    title_cell.font = Font(color="FFFFFF", bold=True)
+    title_cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    curve_headers = ["Día", "Meses históricos", "P25", "Mediana aplicada", "P75"]
+    thin_side = Side(style="thin", color="D9D9D9")
+    thin_border = Border(
+        left=thin_side,
+        right=thin_side,
+        top=thin_side,
+        bottom=thin_side,
+    )
+
+    for column_offset, header in enumerate(curve_headers, start=4):
+        cell = worksheet.cell(row=curve_header_row, column=column_offset)
+        cell.value = header
+        cell.fill = PatternFill("solid", fgColor=HEADER_DARK)
+        cell.font = Font(color="FFFFFF", bold=True)
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        cell.border = thin_border
+
+    points = bajas_progress_curve.get("points", {})
+    for day in range(1, 32):
+        row_idx = curve_header_row + day
+        point = points.get(day)
+
+        worksheet.cell(row=row_idx, column=4).value = day
+        if point is not None:
+            worksheet.cell(row=row_idx, column=5).value = point.get("samples_count")
+            worksheet.cell(row=row_idx, column=6).value = _to_number(point.get("p25"))
+            worksheet.cell(row=row_idx, column=7).value = _to_number(point.get("median"))
+            worksheet.cell(row=row_idx, column=8).value = _to_number(point.get("p75"))
+
+        for column_idx in range(4, 9):
+            cell = worksheet.cell(row=row_idx, column=column_idx)
+            cell.border = thin_border
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+
+        for column_idx in (6, 7, 8):
+            worksheet.cell(row=row_idx, column=column_idx).number_format = PERCENT_FORMAT
+
     worksheet.column_dimensions["A"].width = 34
     worksheet.column_dimensions["B"].width = 92
+    worksheet.column_dimensions["D"].width = 10
+    worksheet.column_dimensions["E"].width = 18
+    worksheet.column_dimensions["F"].width = 12
+    worksheet.column_dimensions["G"].width = 20
+    worksheet.column_dimensions["H"].width = 12
 
 
 def _to_number(value: Any) -> float | int | None:
