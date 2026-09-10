@@ -1,0 +1,244 @@
+.audience-explorer {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: min(1220px, 92vw);
+  max-width: 92vw;
+  padding: 22px;
+  box-sizing: border-box;
+}
+
+.explorer-header,
+.summary-heading,
+.explorer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.explorer-header h2,
+.summary-heading h3,
+.explorer-header p {
+  margin: 0;
+}
+
+.eyebrow {
+  margin: 0 0 4px;
+  color: #5967d8;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.explorer-header h2 {
+  font-size: 24px;
+}
+
+.explorer-header > div > p:last-child {
+  margin-top: 6px;
+  color: #667085;
+}
+
+.loading-state,
+.error-state {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px;
+  border-radius: 12px;
+  background: #f7f8fb;
+}
+
+.error-state {
+  justify-content: space-between;
+  color: #9f2d20;
+  background: #fff2ef;
+}
+
+.summary-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.summary-heading h3 {
+  font-size: 15px;
+}
+
+.summary-heading span {
+  color: #7a8190;
+  font-size: 12px;
+}
+
+.summary-chips {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+}
+
+.summary-chips.compact {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 220px));
+}
+
+.summary-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid #e2e5ec;
+  border-radius: 10px;
+  background: #fafbfc;
+}
+
+.summary-chip strong {
+  font-size: 13px;
+}
+
+.summary-chip span {
+  color: #667085;
+  font-size: 12px;
+}
+
+.data-note {
+  padding: 11px 13px;
+  border: 1px solid #dfe3f7;
+  border-radius: 10px;
+  color: #566075;
+  background: #f7f8ff;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.table-shell {
+  overflow: auto;
+  max-height: 54vh;
+  border: 1px solid #e0e3e9;
+  border-radius: 12px;
+}
+
+.audience-table {
+  width: 100%;
+  min-width: 1180px;
+  border-collapse: collapse;
+  background: #fff;
+}
+
+.audience-table th,
+.audience-table td {
+  padding: 11px 12px;
+  border-bottom: 1px solid #eceef2;
+  text-align: left;
+  vertical-align: top;
+  font-size: 12px;
+}
+
+.audience-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f7f8fa;
+  color: #4f5665;
+  font-weight: 700;
+}
+
+.audience-table tbody tr:hover {
+  background: #fbfbfe;
+}
+
+.cell-secondary {
+  display: block;
+  margin-top: 3px;
+  color: #7a8190;
+  font-size: 11px;
+}
+
+.number-cell {
+  white-space: nowrap;
+  text-align: right;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #eef1f5;
+  color: #4d5665;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.status-pill[data-status='AVAILABLE'] {
+  background: #edf8f0;
+  color: #276738;
+}
+
+.status-pill[data-status='CONTACTED_THIS_MONTH'] {
+  background: #eef1ff;
+  color: #4a57b8;
+}
+
+.status-pill[data-status='REVIEW_IDENTITY'] {
+  background: #fff6df;
+  color: #8a6113;
+}
+
+.status-pill[data-status='ACTIVE'] {
+  background: #edf5ff;
+  color: #2d6094;
+}
+
+.status-pill.iventas[data-status='viewed'] {
+  background: #eaf7f0;
+  color: #216a43;
+}
+
+.status-pill.iventas[data-status='delivered'] {
+  background: #edf4ff;
+  color: #2a5e9a;
+}
+
+.status-pill.iventas[data-status='sent'] {
+  background: #f1f0ff;
+  color: #5148a9;
+}
+
+.status-pill.iventas[data-status='failed'] {
+  background: #fff0ed;
+  color: #a33a2b;
+}
+
+.empty-cell {
+  padding: 28px !important;
+  color: #737b8c;
+  text-align: center !important;
+}
+
+.explorer-footer {
+  color: #667085;
+  font-size: 12px;
+}
+
+.pagination-actions {
+  display: flex;
+  gap: 8px;
+}
+
+@media (max-width: 760px) {
+  .audience-explorer {
+    min-width: 94vw;
+    max-width: 94vw;
+    padding: 16px;
+  }
+
+  .explorer-header,
+  .summary-heading,
+  .explorer-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
