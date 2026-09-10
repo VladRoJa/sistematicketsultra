@@ -30,9 +30,20 @@
     <div *ngIf="eligible !== null" class="audience-result" aria-live="polite">
       <div class="audience-breakdown" *ngIf="audienceBreakdown.length">
         <div class="audience-breakdown-title">Cómo se construye la campaña</div>
-        <div class="audience-breakdown-row" *ngFor="let row of audienceBreakdown">
-          <span>{{ row.label }}</span><strong>{{ row.value | number }}</strong>
-        </div>
+        <button
+          class="audience-breakdown-row"
+          type="button"
+          *ngFor="let row of audienceBreakdown"
+          [class.drillable]="row.drillable"
+          [disabled]="!row.drillable"
+          (click)="openBreakdownRow(row)"
+        >
+          <span>{{ row.label }}</span>
+          <span class="breakdown-value">
+            <strong>{{ row.value | number }}</strong>
+            <small *ngIf="row.drillable">Ver detalle</small>
+          </span>
+        </button>
       </div>
       <div *ngIf="weeklyLimitContacts > 0" class="frequency-decision" role="group" aria-label="Decisión de frecuencia semanal">
         <div class="frequency-decision-copy">
@@ -47,7 +58,13 @@
           {{ weeklyFrequencyAction === 'EXCLUDE' ? 'Decisión aplicada: se retirarán de esta campaña.' : 'Decisión aplicada: se conservarán en esta campaña.' }}
         </div>
       </div>
-      <div class="eligible-total"><span>Contactos elegibles</span><strong>{{ eligible | number }}</strong></div>
+      <button class="eligible-total" type="button" (click)="openEligibleExplorer()" [disabled]="!eligible">
+        <span>Contactos elegibles</span>
+        <span class="eligible-value">
+          <strong>{{ eligible | number }}</strong>
+          <small>Ver detalle</small>
+        </span>
+      </button>
       <div class="campaign-form"><mat-form-field appearance="fill"><mat-label>Nombre de campaña</mat-label><input matInput [formControl]="name" maxlength="255"></mat-form-field><button mat-flat-button color="primary" type="button" (click)="confirmCampaign()" [disabled]="!canCreate">{{ creating ? 'Creando…' : 'Crear campaña' }}</button></div>
     </div>
     <p class="frequency-note">Suite avisa cuando un contacto ya aparece en dos campañas exportadas durante la semana. Puedes retirarlo o conservarlo; la decisión queda congelada con la campaña. Esta protección no confirma envíos de iVentas.</p>
