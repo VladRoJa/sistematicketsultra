@@ -29,6 +29,12 @@ p { margin:8px 0; } .eyebrow { color:var(--ultra-orange,#e54525); text-transform
 .audience-breakdown-row { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:7px 12px; border-bottom:1px solid #f1f5f9; font-size:13px; color:#475569; }
 .audience-breakdown-row:last-child { border-bottom:0; }
 .audience-breakdown-row strong { color:#0f172a; font-variant-numeric:tabular-nums; }
+.frequency-decision { max-width:760px; margin-top:12px; padding:14px; border:1px solid #f59e0b; border-radius:12px; background:#fffbeb; color:#78350f; }
+.frequency-decision-copy { display:flex; flex-direction:column; gap:4px; font-size:13px; }
+.frequency-decision-copy strong { color:#92400e; }
+.frequency-decision-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+.frequency-decision-actions .frequency-selected { background:#fff7ed; border-color:#c2410c; color:#9a3412; font-weight:800; }
+.frequency-decision-status { margin-top:10px; font-size:12px; font-weight:700; }
 .eligible-total { max-width:560px; display:flex; justify-content:space-between; align-items:center; gap:16px; margin-top:10px; padding:12px; border-radius:12px; background:#fff1eb; color:#9a3412; font-weight:800; }
 .eligible-total strong { font-size:24px; color:#0f172a; }
 .campaign-form { display:flex; align-items:center; gap:16px; margin-top:16px; } .campaign-form mat-form-field { width:min(420px,100%); }

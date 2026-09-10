@@ -181,8 +181,12 @@ export interface ReactivationTariffsResponse {
   rows: ReactivationTariffCount[];
 }
 
+export type WeeklyFrequencyAction = 'EXCLUDE' | 'KEEP';
+
 export interface ReactivationCampaignSummary {
   excluded_weekly_limit?: number;
+  weekly_limit_contacts?: number;
+  weekly_frequency_decision_required?: boolean;
   total_candidates: number;
   eligible: number;
   excluded_active: number;
@@ -289,6 +293,7 @@ export interface CampaignV1Request {
     dias_hasta?: number;
     fecha_desde?: string;
     fecha_hasta?: string;
+    weekly_frequency_action?: WeeklyFrequencyAction;
   };
 }
 

@@ -34,10 +34,23 @@
           <span>{{ row.label }}</span><strong>{{ row.value | number }}</strong>
         </div>
       </div>
+      <div *ngIf="weeklyLimitContacts > 0" class="frequency-decision" role="group" aria-label="Decisión de frecuencia semanal">
+        <div class="frequency-decision-copy">
+          <strong>{{ weeklyLimitContacts | number }} contactos ya aparecen en 2 campañas exportadas esta semana.</strong>
+          <span>Elige qué hacer con ellos antes de crear la campaña. Conservarlos permite que vuelvan a incluirse en esta exportación.</span>
+        </div>
+        <div class="frequency-decision-actions">
+          <button mat-stroked-button type="button" (click)="chooseWeeklyFrequencyAction('EXCLUDE')" [disabled]="reviewing || creating" [class.frequency-selected]="weeklyFrequencyAction === 'EXCLUDE'" [attr.aria-pressed]="weeklyFrequencyAction === 'EXCLUDE'">Retirarlos</button>
+          <button mat-stroked-button type="button" (click)="chooseWeeklyFrequencyAction('KEEP')" [disabled]="reviewing || creating" [class.frequency-selected]="weeklyFrequencyAction === 'KEEP'" [attr.aria-pressed]="weeklyFrequencyAction === 'KEEP'">Conservarlos</button>
+        </div>
+        <div *ngIf="weeklyFrequencyAction !== null" class="frequency-decision-status">
+          {{ weeklyFrequencyAction === 'EXCLUDE' ? 'Decisión aplicada: se retirarán de esta campaña.' : 'Decisión aplicada: se conservarán en esta campaña.' }}
+        </div>
+      </div>
       <div class="eligible-total"><span>Contactos elegibles</span><strong>{{ eligible | number }}</strong></div>
       <div class="campaign-form"><mat-form-field appearance="fill"><mat-label>Nombre de campaña</mat-label><input matInput [formControl]="name" maxlength="255"></mat-form-field><button mat-flat-button color="primary" type="button" (click)="confirmCampaign()" [disabled]="!canCreate">{{ creating ? 'Creando…' : 'Crear campaña' }}</button></div>
     </div>
-    <p class="frequency-note">Máximo dos campañas exportadas por contacto cada semana, de lunes a domingo. Esta protección no confirma envíos de iVentas.</p>
+    <p class="frequency-note">Suite avisa cuando un contacto ya aparece en dos campañas exportadas durante la semana. Puedes retirarlo o conservarlo; la decisión queda congelada con la campaña. Esta protección no confirma envíos de iVentas.</p>
   </section>
   <div *ngIf="error" class="inline-error" role="alert">{{ error }} <button mat-button type="button" (click)="loadOptions()">Reintentar carga</button></div>
   <p *ngIf="success" class="campaign-success" role="status">{{ success }}</p>

@@ -16,6 +16,9 @@ from app.warehouse.services.socios_vencidos_current_status_resolver import norma
 
 TZ = ZoneInfo("America/Tijuana")
 DOMICILIATED_GROUP = "DOMICILIATED_FLOW"
+WEEKLY_FREQUENCY_EXCLUDE = "EXCLUDE"
+WEEKLY_FREQUENCY_KEEP = "KEEP"
+WEEKLY_FREQUENCY_ACTIONS = {WEEKLY_FREQUENCY_EXCLUDE, WEEKLY_FREQUENCY_KEEP}
 TYPES = {"BASCULA_RETENCION", "PROXIMOS_VENCER", "VENCIDOS_RECIENTES", "WINBACK", "INVITA_GANA", "COBRANZA_LIGERA", "BORRON_CUENTA_NUEVA", "PERSONALIZADA"}
 WINBACK = {"WINBACK_30": (8, 30), "WINBACK_60": (31, 60), "WINBACK_90": (61, 90)}
 CUSTOM_EXPIRED_MODES = {"DIAS", "FECHAS"}
@@ -124,6 +127,8 @@ def clean_contact_rows(rows, *, scope):
         "excluded_tariff_general": 0, "domiciliated_flow": 0, "borron_cuenta_nueva": 0,
         "review_identity": 0, "review_tariff": 0,
         "excluded_recent_campaign": 0, "review": 0,
+        "weekly_limit_contacts": 0, "excluded_weekly_limit": 0,
+        "weekly_frequency_decision_required": False,
     }
 
 
@@ -216,16 +221,28 @@ def _select_bcn_audience(plan):
     plan["summary"]["duplicate_phone"] = duplicates
 
 
+def _weekly_frequency_action(filters, *, service):
+    action = filters.get("weekly_frequency_action")
+    if action is None:
+        return None
+    if not isinstance(action, str) or action not in WEEKLY_FREQUENCY_ACTIONS:
+        raise service.MarketingReactivationValidationError(
+            "weekly_frequency_action debe ser EXCLUDE o KEEP."
+        )
+    return action
+
+
 def prepare_v1_plan(*, filters, allowed_sucursal_keys, session, now, active_builder, expired_builder):
     from app.services import marketing_reactivation_service as service
     kind = filters.get("campaign_type")
     if not isinstance(kind, str) or kind not in TYPES:
         raise service.MarketingReactivationValidationError("Tipo de campaña no válido.")
+    weekly_action = _weekly_frequency_action(filters, service=service)
     custom_universe = None
     custom_expired_mode = None
     custom_active_from = None
     custom_active_to = None
-    allowed = {"campaign_type", "sucursal", "region_id"}
+    allowed = {"campaign_type", "sucursal", "region_id", "weekly_frequency_action"}
     if kind == "WINBACK":
         allowed.add("segment")
     if kind in {"COBRANZA_LIGERA", "BORRON_CUENTA_NUEVA"}:
@@ -352,9 +369,23 @@ def prepare_v1_plan(*, filters, allowed_sucursal_keys, session, now, active_buil
             _select_bcn_audience(plan)
     _add_campaign_breakdown(plan)
     counts = exported_counts({row["phone_mx10"] for row in plan["eligible_rows"]}, session=session, now=now)
-    before = len(plan["eligible_rows"])
-    plan["eligible_rows"] = [row for row in plan["eligible_rows"] if counts.get(row["phone_mx10"], 0) < 2]
-    plan["summary"]["excluded_weekly_limit"] = before - len(plan["eligible_rows"])
+    limited_phones = {phone for phone, count in counts.items() if count >= 2}
+    weekly_limit_contacts = sum(
+        1 for row in plan["eligible_rows"] if row["phone_mx10"] in limited_phones
+    )
+    plan["summary"]["weekly_limit_contacts"] = weekly_limit_contacts
+    plan["summary"]["weekly_frequency_decision_required"] = (
+        weekly_limit_contacts > 0 and weekly_action is None
+    )
+    if weekly_action == WEEKLY_FREQUENCY_EXCLUDE:
+        before = len(plan["eligible_rows"])
+        plan["eligible_rows"] = [
+            row for row in plan["eligible_rows"]
+            if row["phone_mx10"] not in limited_phones
+        ]
+        plan["summary"]["excluded_weekly_limit"] = before - len(plan["eligible_rows"])
+    else:
+        plan["summary"]["excluded_weekly_limit"] = 0
     plan["summary"]["eligible"] = len(plan["eligible_rows"])
     plan["filters"] = dict(filters)
     plan["scope"] = service._serialize_campaign_scope(scope)
