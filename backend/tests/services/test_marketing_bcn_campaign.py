@@ -208,7 +208,7 @@ def _assignment_value(tree, name):
     return None
 
 
-def test_alembic_graph_has_corrective_bcn_migration_as_single_head():
+def test_alembic_graph_has_tariff_catalog_migration_as_single_head():
     versions = Path(__file__).resolve().parents[2] / "migrations" / "versions"
     revisions = set()
     parents = set()
@@ -223,7 +223,7 @@ def test_alembic_graph_has_corrective_bcn_migration_as_single_head():
         elif down_revision:
             parents.update(down_revision)
 
-    assert revisions - parents == {"d2e5f8a0b4c6"}
+    assert revisions - parents == {"e3f6a9b1c5d7"}
 
 
 def test_corrective_migration_maps_legacy_bcn_group_back_to_domiciliated():
