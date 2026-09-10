@@ -22,6 +22,7 @@ import {
 import { CampaignSourceFreshness, CampaignSourceStatusResponse } from './marketing-campaign-source-status.models';
 import {
   MarketingAudienceExplorerDialogComponent,
+  MarketingAudienceExplorerDialogResult,
 } from './marketing-audience-explorer-dialog.component';
 
 type AudienceBreakdownRow = {
@@ -264,13 +265,25 @@ export class MarketingReactivationComponent implements OnInit {
     const request = this.request();
     if (!request) return;
 
-    this.dialog.open(MarketingAudienceExplorerDialogComponent, {
+    const dialogRef = this.dialog.open<
+      MarketingAudienceExplorerDialogComponent,
+      {request: CampaignV1Request; bucket: CampaignAudienceBucket; label: string},
+      MarketingAudienceExplorerDialogResult | undefined
+    >(MarketingAudienceExplorerDialogComponent, {
       data: {request, bucket, label},
       width: '96vw',
       maxWidth: '1400px',
       maxHeight: '92vh',
       autoFocus: false,
     });
+    dialogRef.afterClosed()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(result => {
+        if (!result?.campaignCreated) return;
+        const campaign = result.campaignCreated;
+        this.success = `Campaña “${campaign.name}” creada con ${campaign.recipient_count} contactos. Puedes exportarla en el historial.`;
+        this.loadCampaigns();
+      });
   }
   chooseWeeklyFrequencyAction(action: WeeklyFrequencyAction): void {
     if (this.reviewing || this.creating) return;
