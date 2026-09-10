@@ -130,13 +130,15 @@ def test_region_intersects_permissions_and_rejects_wrong_branch(monkeypatch):
         audience.prepare_v1_plan(filters={"campaign_type": "BASCULA_RETENCION", "region_id": 1, "sucursal": "SUR"}, **kwargs)
 
 
-def test_frequency_excludes_only_third_export_in_preview(monkeypatch):
+def test_frequency_warns_before_third_export_in_preview(monkeypatch):
     monkeypatch.setattr(audience, "exported_counts", lambda *a, **k: {"6861000001": 2, "6861000002": 1})
     result = audience.prepare_v1_plan(filters={"campaign_type": "BASCULA_RETENCION"}, allowed_sucursal_keys=None,
         session=None, now=NOW, expired_builder=None,
         active_builder=lambda **k: plan([{"phone_mx10": "6861000001"}, {"phone_mx10": "6861000002"}]))
-    assert result["eligible_rows"] == [{"phone_mx10": "6861000002"}]
-    assert result["summary"]["excluded_weekly_limit"] == 1
+    assert result["eligible_rows"] == [{"phone_mx10": "6861000001"}, {"phone_mx10": "6861000002"}]
+    assert result["summary"]["weekly_limit_contacts"] == 1
+    assert result["summary"]["weekly_frequency_decision_required"] is True
+    assert result["summary"]["excluded_weekly_limit"] == 0
 
 
 @pytest.fixture
