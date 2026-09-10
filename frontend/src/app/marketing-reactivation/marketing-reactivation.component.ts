@@ -15,6 +15,7 @@ import {
   CampaignV1Request,
   ReactivationCampaign,
   ReactivationCampaignSummary,
+  WeeklyFrequencyAction,
 } from './marketing-reactivation.models';
 import { CampaignSourceFreshness, CampaignSourceStatusResponse } from './marketing-campaign-source-status.models';
 
@@ -51,7 +52,7 @@ export class MarketingReactivationComponent implements OnInit {
   campaigns: ReactivationCampaign[] = [];
   eligible: number | null = null;
   audienceSummary: ReactivationCampaignSummary | null = null;
-  weeklyExcluded = 0;
+  weeklyFrequencyAction: WeeklyFrequencyAction | null = null;
   loading = true;
   reviewing = false;
   creating = false;
@@ -68,6 +69,10 @@ export class MarketingReactivationComponent implements OnInit {
   get isCustomExpiredByDates(): boolean { return this.isCustomExpired && this.form.controls.expiredMode.value === 'FECHAS'; }
   get showsDayRange(): boolean { return this.isCollection || this.isBcn || this.isCustomExpiredByDays; }
   get showsCustomDateRange(): boolean { return this.isCustomActive || this.isCustomExpiredByDates; }
+  get weeklyLimitContacts(): number { return this.audienceSummary?.weekly_limit_contacts ?? 0; }
+  get weeklyDecisionRequired(): boolean {
+    return this.weeklyLimitContacts > 0 && this.weeklyFrequencyAction === null;
+  }
   get branches(): CampaignOptions['branches'] {
     const region = this.options.regions.find(item => item.id === this.form.controls.region.value);
     return region ? this.options.branches.filter(item => region.branch_keys.includes(item.key)) : this.options.branches;
@@ -97,7 +102,10 @@ export class MarketingReactivationComponent implements OnInit {
     ];
     return rows.filter((row, index) => index === 0 || row.value > 0);
   }
-  get canCreate(): boolean { return !this.creating && !this.reviewing && !!this.eligible && !!this.name.value.trim(); }
+  get canCreate(): boolean {
+    return !this.creating && !this.reviewing && !!this.eligible && !!this.name.value.trim()
+      && !this.weeklyDecisionRequired;
+  }
   get description(): string {
     if (this.isCustom) {
       if (this.isCustomActive) {
@@ -121,7 +129,7 @@ export class MarketingReactivationComponent implements OnInit {
   }
   ngOnInit(): void {
     this.form.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
-      this.revision++; this.eligible = null; this.audienceSummary = null; this.weeklyExcluded = 0;
+      this.revision++; this.eligible = null; this.audienceSummary = null; this.weeklyFrequencyAction = null;
       this.reviewing = false; this.error = ''; this.success = '';
       if (!this.branches.some(item => item.key === this.form.controls.branch.value)) {
         this.form.controls.branch.setValue('', {emitEvent: false});
@@ -202,6 +210,9 @@ export class MarketingReactivationComponent implements OnInit {
       }
       filters.dias_desde = values.from!; filters.dias_hasta = values.to!;
     }
+    if (this.weeklyFrequencyAction !== null) {
+      filters.weekly_frequency_action = this.weeklyFrequencyAction;
+    }
     return {filters};
   }
   prepareCampaign(): void {
@@ -213,10 +224,14 @@ export class MarketingReactivationComponent implements OnInit {
         if (revision !== this.revision) return;
         this.reviewing = false; this.eligible = result.summary.eligible;
         this.audienceSummary = result.summary;
-        this.weeklyExcluded = result.summary.excluded_weekly_limit ?? 0;
       },
       error: error => { if (revision === this.revision) { this.reviewing = false; void this.showError(error, 'No fue posible revisar la audiencia.'); } },
     });
+  }
+  chooseWeeklyFrequencyAction(action: WeeklyFrequencyAction): void {
+    if (this.reviewing || this.creating) return;
+    this.weeklyFrequencyAction = action;
+    this.prepareCampaign();
   }
   confirmCampaign(): void {
     if (!this.canCreate) return;
@@ -224,7 +239,8 @@ export class MarketingReactivationComponent implements OnInit {
     this.creating = true; this.error = ''; this.form.disable({emitEvent: false});
     this.service.createCampaign({...request, name: this.name.value.trim()}).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: result => {
-        this.creating = false; this.form.enable({emitEvent: false}); this.eligible = null; this.audienceSummary = null; this.name.setValue('');
+        this.creating = false; this.form.enable({emitEvent: false}); this.eligible = null; this.audienceSummary = null;
+        this.weeklyFrequencyAction = null; this.name.setValue('');
         this.success = `Campaña “${result.campaign.name}” creada con ${result.campaign.recipient_count} contactos. Puedes exportarla en el historial.`;
         this.loadCampaigns();
       },
@@ -245,7 +261,8 @@ export class MarketingReactivationComponent implements OnInit {
       next: blob => {
         const url = URL.createObjectURL(blob); const link = document.createElement('a');
         link.href = url; link.download = this.exportFilename(campaign, blob); link.click(); URL.revokeObjectURL(url);
-        this.exporting = null; this.eligible = null; this.audienceSummary = null; this.reviewing = false; this.revision++; this.loadCampaigns();
+        this.exporting = null; this.eligible = null; this.audienceSummary = null; this.weeklyFrequencyAction = null;
+        this.reviewing = false; this.revision++; this.loadCampaigns();
       },
       error: error => { this.exporting = null; void this.showError(error, 'No fue posible exportar la campaña.'); },
     });
