@@ -38,6 +38,7 @@ EXPLORER_SUITE_NEVER = "NEVER"
 EXPLORER_SUITE_ONE = "ONE"
 EXPLORER_SUITE_TWO_PLUS = "TWO_PLUS"
 EXPLORER_IVENTAS_NONE = "NONE"
+EXPLORER_ENRICH_BATCH_SIZE = 2_000
 
 _BUCKET_LABELS = {
     BUCKET_TOTAL_CANDIDATES: "Candidatos encontrados",
@@ -165,7 +166,7 @@ def build_marketing_campaign_preview_detail(
     sources = plan.get("sources") or {}
 
     if needs_enriched_filtering:
-        enriched_candidates = _enrich_page_rows(
+        enriched_candidates = _enrich_rows_for_filtering(
             rows=base_filtered_rows,
             sources=sources,
             session=session,
@@ -263,7 +264,7 @@ def _positive_int(
 
 def _validate_requested_page(*, page: int, page_size: int, total: int, reactivation: Any) -> None:
     total_pages = max(1, (total + page_size - 1) // page_size)
-    if page > total_pages and total > 0:
+    if page > total_pages:
         raise reactivation.MarketingReactivationValidationError(
             "page está fuera del rango disponible para este detalle."
         )
@@ -413,7 +414,7 @@ def _serialize_explorer_filters(filters: dict[str, Any]) -> dict[str, Any]:
     for key, value in filters.items():
         if value is None:
             continue
-        result[key] = str(value) if isinstance(value, Decimal) else value
+        result[key] = float(value) if isinstance(value, Decimal) else value
     return result
 
 
@@ -501,6 +502,24 @@ def _apply_enriched_explorer_filters(
             continue
         result.append(row)
     return result
+
+
+def _enrich_rows_for_filtering(
+    *,
+    rows: list[dict[str, Any]],
+    sources: dict[str, Any],
+    session: Any,
+) -> list[dict[str, Any]]:
+    enriched: list[dict[str, Any]] = []
+    for start in range(0, len(rows), EXPLORER_ENRICH_BATCH_SIZE):
+        enriched.extend(
+            _enrich_page_rows(
+                rows=rows[start : start + EXPLORER_ENRICH_BATCH_SIZE],
+                sources=sources,
+                session=session,
+            )
+        )
+    return enriched
 
 
 def _select_bucket_rows(
