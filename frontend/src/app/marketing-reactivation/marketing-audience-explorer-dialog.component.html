@@ -3,7 +3,7 @@
     <div>
       <p class="eyebrow">Visor de audiencia</p>
       <h2>{{ result?.label || data.label }}</h2>
-      <p *ngIf="result">{{ result.total | number }} contactos en esta etapa.</p>
+      <p *ngIf="result">{{ headerCountLabel }}</p>
     </div>
     <button mat-button type="button" (click)="close()">Cerrar</button>
   </header>
@@ -19,10 +19,107 @@
   </div>
 
   <ng-container *ngIf="result">
+    <section class="explorer-filters" [formGroup]="filterForm">
+      <div class="filter-heading">
+        <div>
+          <h3>Filtrar audiencia</h3>
+          <span>Los filtros se aplican dentro de esta etapa; no cambian el preview original.</span>
+        </div>
+        <strong *ngIf="hasActiveFilters">{{ result.filtered_total | number }} resultados</strong>
+      </div>
+
+      <div class="filter-grid">
+        <mat-form-field appearance="outline">
+          <mat-label>Sucursal</mat-label>
+          <mat-select formControlName="sucursal">
+            <mat-option value="">Todas</mat-option>
+            <mat-option *ngFor="let branch of result.filter_options.branches" [value]="branch">
+              {{ branch }}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Categoría de tarifa</mat-label>
+          <mat-select formControlName="tariffCategory">
+            <mat-option value="">Todas</mat-option>
+            <mat-option *ngFor="let category of result.filter_options.tariff_categories" [value]="category">
+              {{ category }}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Tarifa</mat-label>
+          <mat-select formControlName="tarifa">
+            <mat-option value="">Todas</mat-option>
+            <mat-option *ngFor="let tariff of result.filter_options.tariffs" [value]="tariff">
+              {{ tariff }}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Adeudo mínimo</mat-label>
+          <input matInput type="number" min="0" step="0.01" formControlName="adeudoMin">
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Adeudo máximo</mat-label>
+          <input matInput type="number" min="0" step="0.01" formControlName="adeudoMax">
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Estado operativo</mat-label>
+          <mat-select formControlName="operationalStatus">
+            <mat-option value="">Todos</mat-option>
+            <mat-option *ngFor="let status of result.filter_options.operational_statuses" [value]="status">
+              {{ operationalLabel(status) }}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Historial Suite</mat-label>
+          <mat-select formControlName="suiteHistory">
+            <mat-option value="">Todos</mat-option>
+            <mat-option *ngFor="let option of suiteHistoryOptions" [value]="option.value">
+              {{ option.label }}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Estado iVentas</mat-label>
+          <mat-select formControlName="iventasStatus">
+            <mat-option value="">Todos</mat-option>
+            <mat-option *ngFor="let option of iventasStatusOptions" [value]="option.value">
+              {{ option.label }}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
+      </div>
+
+      <div class="filter-actions">
+        <span *ngIf="loading" class="filter-loading"><mat-spinner diameter="18"></mat-spinner> Aplicando…</span>
+        <button
+          mat-stroked-button
+          type="button"
+          (click)="clearFilters()"
+          [disabled]="loading || !hasActiveFilters"
+        >
+          Limpiar
+        </button>
+        <button mat-flat-button color="primary" type="button" (click)="applyFilters()" [disabled]="loading">
+          Aplicar filtros
+        </button>
+      </div>
+    </section>
+
     <section class="summary-section" *ngIf="compositionTop.length">
       <div class="summary-heading">
         <h3>Composición por tarifa</h3>
-        <span>Top {{ compositionTop.length }} categorías</span>
+        <span>Top {{ compositionTop.length }} categorías del resultado</span>
       </div>
       <div class="summary-chips">
         <div class="summary-chip" *ngFor="let item of compositionTop">
@@ -35,7 +132,7 @@
     <section class="summary-section" *ngIf="operationalSummary.length">
       <div class="summary-heading">
         <h3>Estado operativo</h3>
-        <span>Estado actual usado por Suite</span>
+        <span>Estado actual usado por Suite en el resultado</span>
       </div>
       <div class="summary-chips compact">
         <div class="summary-chip" *ngFor="let item of operationalSummary">
@@ -103,14 +200,14 @@
             </td>
           </tr>
           <tr *ngIf="!result.rows.length">
-            <td colspan="8" class="empty-cell">No hay contactos en esta etapa.</td>
+            <td colspan="8" class="empty-cell">No hay contactos con los filtros aplicados.</td>
           </tr>
         </tbody>
       </table>
     </div>
 
     <footer class="explorer-footer">
-      <span>{{ pageLabel }} · {{ result.total | number }} contactos</span>
+      <span>{{ pageLabel }} · {{ result.filtered_total | number }} resultados de {{ result.total | number }} en la etapa</span>
       <div class="pagination-actions">
         <button
           mat-stroked-button
