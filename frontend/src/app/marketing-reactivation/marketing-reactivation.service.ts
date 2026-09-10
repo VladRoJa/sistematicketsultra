@@ -5,6 +5,8 @@ import { Observable } from 'rxjs';
 import { environment } from 'src/environments/environment';
 
 import {
+  CampaignAudiencePreviewDetailRequest,
+  CampaignAudiencePreviewDetailResponse,
   CampaignOptions,
   CampaignV1Request,
   ReactivationCampaignDetailResponse,
@@ -137,6 +139,15 @@ export class MarketingReactivationService {
   ): Observable<ReactivationCampaignPreviewResponse> {
     return this.http.post<ReactivationCampaignPreviewResponse>(
       `${this.apiUrl}/campaigns/preview`,
+      request,
+    );
+  }
+
+  previewCampaignDetail(
+    request: CampaignAudiencePreviewDetailRequest,
+  ): Observable<CampaignAudiencePreviewDetailResponse> {
+    return this.http.post<CampaignAudiencePreviewDetailResponse>(
+      `${this.apiUrl}/campaigns/preview-detail`,
       request,
     );
   }
