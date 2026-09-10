@@ -123,6 +123,7 @@ def _serialized_campaign(action=None):
 
 def test_export_keep_choice_overrides_only_frequency_conflict(monkeypatch):
     calls = []
+    session = object()
     monkeypatch.setattr(
         export_service,
         "get_marketing_reactivation_campaign",
@@ -143,13 +144,16 @@ def test_export_keep_choice_overrides_only_frequency_conflict(monkeypatch):
 
     file_bytes, filename = export_service.export_marketing_reactivation_campaign(
         campaign_id=1,
-        session=object(),
+        session=session,
         now=NOW,
     )
 
     assert file_bytes
     assert filename == "SEGUNDA_PASADA__CENTRO.xlsx"
-    assert calls == [{"campaign_id": 1, "session": pytest.ANY, "now": NOW}]
+    assert len(calls) == 1
+    assert calls[0]["campaign_id"] == 1
+    assert calls[0]["session"] is session
+    assert calls[0]["now"] == NOW
 
 
 @pytest.mark.parametrize("action", [None, "EXCLUDE"])
