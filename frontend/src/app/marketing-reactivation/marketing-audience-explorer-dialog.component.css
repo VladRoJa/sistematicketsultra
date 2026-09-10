@@ -1,7 +1,7 @@
 .audience-explorer {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
   min-width: min(1220px, 92vw);
   max-width: 92vw;
   padding: 22px;
@@ -10,7 +10,9 @@
 
 .explorer-header,
 .summary-heading,
-.explorer-footer {
+.explorer-footer,
+.filter-heading,
+.filter-actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -19,7 +21,8 @@
 
 .explorer-header h2,
 .summary-heading h3,
-.explorer-header p {
+.explorer-header p,
+.filter-heading h3 {
   margin: 0;
 }
 
@@ -55,6 +58,62 @@
   justify-content: space-between;
   color: #9f2d20;
   background: #fff2ef;
+}
+
+.explorer-filters {
+  padding: 14px;
+  border: 1px solid #dfe3ea;
+  border-radius: 12px;
+  background: #fbfcfe;
+}
+
+.filter-heading {
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.filter-heading h3 {
+  font-size: 15px;
+}
+
+.filter-heading span,
+.filter-heading > strong {
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.filter-heading span {
+  display: block;
+  margin-top: 3px;
+}
+
+.filter-heading > strong {
+  color: #3f4eb8;
+  white-space: nowrap;
+}
+
+.filter-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(170px, 1fr));
+  gap: 4px 10px;
+}
+
+.filter-grid mat-form-field {
+  width: 100%;
+}
+
+.filter-actions {
+  justify-content: flex-end;
+  min-height: 36px;
+}
+
+.filter-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-right: auto;
+  color: #667085;
+  font-size: 12px;
 }
 
 .summary-section {
@@ -113,7 +172,7 @@
 
 .table-shell {
   overflow: auto;
-  max-height: 54vh;
+  max-height: 46vh;
   border: 1px solid #e0e3e9;
   border-radius: 12px;
 }
@@ -228,6 +287,12 @@
   gap: 8px;
 }
 
+@media (max-width: 1050px) {
+  .filter-grid {
+    grid-template-columns: repeat(2, minmax(180px, 1fr));
+  }
+}
+
 @media (max-width: 760px) {
   .audience-explorer {
     min-width: 94vw;
@@ -237,8 +302,17 @@
 
   .explorer-header,
   .summary-heading,
-  .explorer-footer {
+  .explorer-footer,
+  .filter-heading {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .filter-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .filter-actions {
+    flex-wrap: wrap;
   }
 }
