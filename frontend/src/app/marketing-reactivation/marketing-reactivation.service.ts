@@ -5,6 +5,12 @@ import { Observable } from 'rxjs';
 import { environment } from 'src/environments/environment';
 
 import {
+  CampaignAudienceCreateRequest,
+  CampaignAudienceCreateResponse,
+  CampaignAudienceSelectionRequest,
+  CampaignAudienceSelectionResponse,
+} from './marketing-audience-explorer.models';
+import {
   CampaignAudiencePreviewDetailRequest,
   CampaignAudiencePreviewDetailResponse,
   CampaignOptions,
@@ -148,6 +154,24 @@ export class MarketingReactivationService {
   ): Observable<CampaignAudiencePreviewDetailResponse> {
     return this.http.post<CampaignAudiencePreviewDetailResponse>(
       `${this.apiUrl}/campaigns/preview-detail`,
+      request,
+    );
+  }
+
+  previewExplorerCampaignSelection(
+    request: CampaignAudienceSelectionRequest,
+  ): Observable<CampaignAudienceSelectionResponse> {
+    return this.http.post<CampaignAudienceSelectionResponse>(
+      `${this.apiUrl}/campaigns/preview-detail/selection`,
+      request,
+    );
+  }
+
+  createCampaignFromExplorer(
+    request: CampaignAudienceCreateRequest,
+  ): Observable<CampaignAudienceCreateResponse> {
+    return this.http.post<CampaignAudienceCreateResponse>(
+      `${this.apiUrl}/campaigns/preview-detail/create`,
       request,
     );
   }
