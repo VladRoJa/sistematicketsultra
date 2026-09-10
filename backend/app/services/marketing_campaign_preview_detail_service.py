@@ -1,8 +1,9 @@
 """Read-only drill-down for the Campaigns V1 audience preview.
 
-The explorer intentionally rebuilds the same frozen-in-memory plan used by the
-preview endpoint and then selects one summary bucket from that plan. This keeps
-row detail aligned with the numbers shown in "Cómo se construye la campaña".
+The explorer rebuilds the same in-memory plan used by the preview endpoint and
+selects one summary bucket from that plan. Explorer filters are applied only
+after the bucket has been validated against the preview counter, so filtering
+cannot change the meaning of "Cómo se construye la campaña".
 
 This service does not call iVentas live. Message state is read only from the
 canonical iVentas run already used by the campaign plan.
@@ -12,6 +13,7 @@ from __future__ import annotations
 
 from collections import Counter
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from app.models.marketing import (
@@ -31,6 +33,11 @@ BUCKET_REVIEW_TARIFF = "REVIEW_TARIFF"
 BUCKET_INVALID_PHONE = "INVALID_PHONE"
 BUCKET_DUPLICATE_PHONE = "DUPLICATE_PHONE"
 BUCKET_ELIGIBLE = "ELIGIBLE"
+
+EXPLORER_SUITE_NEVER = "NEVER"
+EXPLORER_SUITE_ONE = "ONE"
+EXPLORER_SUITE_TWO_PLUS = "TWO_PLUS"
+EXPLORER_IVENTAS_NONE = "NONE"
 
 _BUCKET_LABELS = {
     BUCKET_TOTAL_CANDIDATES: "Candidatos encontrados",
@@ -58,6 +65,28 @@ _BUCKET_SUMMARY_FIELDS = {
     BUCKET_ELIGIBLE: "eligible",
 }
 
+_EXPLORER_FILTER_FIELDS = frozenset(
+    {
+        "sucursal",
+        "tariff_category",
+        "tarifa",
+        "adeudo_min",
+        "adeudo_max",
+        "operational_status",
+        "suite_history",
+        "iventas_status",
+    }
+)
+_EXPLORER_OPERATIONAL_STATUSES = frozenset(
+    {"AVAILABLE", "CONTACTED_THIS_MONTH", "REVIEW_IDENTITY", "ACTIVE", "SIN_ESTADO"}
+)
+_EXPLORER_SUITE_HISTORY_VALUES = frozenset(
+    {EXPLORER_SUITE_NEVER, EXPLORER_SUITE_ONE, EXPLORER_SUITE_TWO_PLUS}
+)
+_EXPLORER_IVENTAS_STATUSES = frozenset(
+    {EXPLORER_IVENTAS_NONE, "SENT", "DELIVERED", "VIEWED", "FAILED"}
+)
+
 
 def build_marketing_campaign_preview_detail(
     *,
@@ -65,6 +94,7 @@ def build_marketing_campaign_preview_detail(
     bucket: Any,
     page: Any = 1,
     page_size: Any = 50,
+    explorer_filters: Any = None,
     date_from: Any = None,
     date_to: Any = None,
     campaign_cooldown_days: int | None = None,
@@ -72,7 +102,7 @@ def build_marketing_campaign_preview_detail(
     session: Any,
     now: datetime | None = None,
 ) -> dict[str, Any]:
-    """Return one paged bucket from the exact campaign preview plan."""
+    """Return one filtered and paged bucket from the exact preview plan."""
 
     from app.services import marketing_campaign_audience_service as audience
     from app.services import marketing_reactivation_service as reactivation
@@ -88,6 +118,10 @@ def build_marketing_campaign_preview_detail(
         page_size,
         field="page_size",
         maximum=100,
+        reactivation=reactivation,
+    )
+    normalized_explorer_filters = _validate_explorer_filters(
+        explorer_filters,
         reactivation=reactivation,
     )
 
@@ -117,42 +151,81 @@ def build_marketing_campaign_preview_detail(
             f"preview={expected_total}."
         )
 
-    total = len(bucket_rows)
-    total_pages = max(1, (total + normalized_page_size - 1) // normalized_page_size)
-    if normalized_page > total_pages and total > 0:
-        raise reactivation.MarketingReactivationValidationError(
-            "page está fuera del rango disponible para este detalle."
-        )
+    bucket_total = len(bucket_rows)
+    filter_options = _filter_options(bucket_rows)
+    base_filtered_rows = _apply_base_explorer_filters(
+        bucket_rows,
+        filters=normalized_explorer_filters,
+    )
 
-    start = (normalized_page - 1) * normalized_page_size
-    page_rows = bucket_rows[start : start + normalized_page_size]
-    enriched_rows = _enrich_page_rows(
-        rows=page_rows,
-        sources=plan.get("sources") or {},
-        session=session,
+    needs_enriched_filtering = bool(
+        normalized_explorer_filters.get("suite_history")
+        or normalized_explorer_filters.get("iventas_status")
+    )
+    sources = plan.get("sources") or {}
+
+    if needs_enriched_filtering:
+        enriched_candidates = _enrich_page_rows(
+            rows=base_filtered_rows,
+            sources=sources,
+            session=session,
+        )
+        filtered_rows = _apply_enriched_explorer_filters(
+            enriched_candidates,
+            filters=normalized_explorer_filters,
+        )
+        filtered_total = len(filtered_rows)
+        _validate_requested_page(
+            page=normalized_page,
+            page_size=normalized_page_size,
+            total=filtered_total,
+            reactivation=reactivation,
+        )
+        start = (normalized_page - 1) * normalized_page_size
+        page_rows = filtered_rows[start : start + normalized_page_size]
+        summary_rows = filtered_rows
+    else:
+        filtered_total = len(base_filtered_rows)
+        _validate_requested_page(
+            page=normalized_page,
+            page_size=normalized_page_size,
+            total=filtered_total,
+            reactivation=reactivation,
+        )
+        start = (normalized_page - 1) * normalized_page_size
+        page_rows = _enrich_page_rows(
+            rows=base_filtered_rows[start : start + normalized_page_size],
+            sources=sources,
+            session=session,
+        )
+        summary_rows = base_filtered_rows
+
+    total_pages = max(
+        1,
+        (filtered_total + normalized_page_size - 1) // normalized_page_size,
     )
 
     return {
         "bucket": normalized_bucket,
         "label": _BUCKET_LABELS[normalized_bucket],
-        "sources": plan.get("sources") or {},
-        "total": total,
+        "sources": sources,
+        "total": bucket_total,
+        "filtered_total": filtered_total,
+        "explorer_filters": _serialize_explorer_filters(
+            normalized_explorer_filters
+        ),
+        "filter_options": filter_options,
         "pagination": {
             "page": normalized_page,
             "page_size": normalized_page_size,
-            "total": total,
+            "total": filtered_total,
             "total_pages": total_pages,
             "has_prev": normalized_page > 1,
             "has_next": normalized_page < total_pages,
         },
-        "composition": _category_composition(bucket_rows),
-        "operational_counts": dict(
-            Counter(
-                str(row.get("operational_status") or "SIN_ESTADO")
-                for row in bucket_rows
-            )
-        ),
-        "rows": enriched_rows,
+        "composition": _category_composition(summary_rows),
+        "operational_counts": _operational_counts(summary_rows),
+        "rows": page_rows,
     }
 
 
@@ -186,6 +259,248 @@ def _positive_int(
             f"{field} debe estar entre 1 y {maximum}."
         )
     return normalized
+
+
+def _validate_requested_page(*, page: int, page_size: int, total: int, reactivation: Any) -> None:
+    total_pages = max(1, (total + page_size - 1) // page_size)
+    if page > total_pages and total > 0:
+        raise reactivation.MarketingReactivationValidationError(
+            "page está fuera del rango disponible para este detalle."
+        )
+
+
+def _validate_explorer_filters(value: Any, *, reactivation: Any) -> dict[str, Any]:
+    if value is None:
+        value = {}
+    if not isinstance(value, dict):
+        raise reactivation.MarketingReactivationValidationError(
+            "explorer_filters debe ser un objeto JSON."
+        )
+    unknown = sorted(set(value) - _EXPLORER_FILTER_FIELDS)
+    if unknown:
+        raise reactivation.MarketingReactivationValidationError(
+            "Filtros del visor no permitidos: " + ", ".join(unknown) + "."
+        )
+
+    operational_status = _optional_choice(
+        value.get("operational_status"),
+        field="explorer_filters.operational_status",
+        allowed=_EXPLORER_OPERATIONAL_STATUSES,
+        reactivation=reactivation,
+    )
+    suite_history = _optional_choice(
+        value.get("suite_history"),
+        field="explorer_filters.suite_history",
+        allowed=_EXPLORER_SUITE_HISTORY_VALUES,
+        reactivation=reactivation,
+    )
+    iventas_status = _optional_choice(
+        value.get("iventas_status"),
+        field="explorer_filters.iventas_status",
+        allowed=_EXPLORER_IVENTAS_STATUSES,
+        reactivation=reactivation,
+    )
+    debt_min = _optional_decimal(
+        value.get("adeudo_min"),
+        field="explorer_filters.adeudo_min",
+        reactivation=reactivation,
+    )
+    debt_max = _optional_decimal(
+        value.get("adeudo_max"),
+        field="explorer_filters.adeudo_max",
+        reactivation=reactivation,
+    )
+    if debt_min is not None and debt_max is not None and debt_min > debt_max:
+        raise reactivation.MarketingReactivationValidationError(
+            "El adeudo mínimo no puede ser mayor que el adeudo máximo."
+        )
+
+    return {
+        "sucursal": _optional_text(
+            value.get("sucursal"),
+            field="explorer_filters.sucursal",
+            maximum=255,
+            reactivation=reactivation,
+        ),
+        "tariff_category": _optional_text(
+            value.get("tariff_category"),
+            field="explorer_filters.tariff_category",
+            maximum=100,
+            reactivation=reactivation,
+        ),
+        "tarifa": _optional_text(
+            value.get("tarifa"),
+            field="explorer_filters.tarifa",
+            maximum=255,
+            reactivation=reactivation,
+        ),
+        "adeudo_min": debt_min,
+        "adeudo_max": debt_max,
+        "operational_status": operational_status,
+        "suite_history": suite_history,
+        "iventas_status": iventas_status,
+    }
+
+
+def _optional_text(
+    value: Any,
+    *,
+    field: str,
+    maximum: int,
+    reactivation: Any,
+) -> str | None:
+    if value is None or value == "":
+        return None
+    if not isinstance(value, str):
+        raise reactivation.MarketingReactivationValidationError(
+            f"{field} debe ser texto."
+        )
+    normalized = value.strip()
+    if not normalized:
+        return None
+    if len(normalized) > maximum:
+        raise reactivation.MarketingReactivationValidationError(
+            f"{field} excede {maximum} caracteres."
+        )
+    return normalized
+
+
+def _optional_choice(
+    value: Any,
+    *,
+    field: str,
+    allowed: frozenset[str],
+    reactivation: Any,
+) -> str | None:
+    normalized = _optional_text(
+        value,
+        field=field,
+        maximum=64,
+        reactivation=reactivation,
+    )
+    if normalized is None:
+        return None
+    normalized = normalized.upper()
+    if normalized not in allowed:
+        raise reactivation.MarketingReactivationValidationError(
+            f"{field} no es válido."
+        )
+    return normalized
+
+
+def _optional_decimal(value: Any, *, field: str, reactivation: Any) -> Decimal | None:
+    if value is None or value == "":
+        return None
+    if isinstance(value, bool):
+        raise reactivation.MarketingReactivationValidationError(
+            f"{field} debe ser un número válido."
+        )
+    try:
+        normalized = Decimal(str(value))
+    except (InvalidOperation, ValueError) as exc:
+        raise reactivation.MarketingReactivationValidationError(
+            f"{field} debe ser un número válido."
+        ) from exc
+    if not normalized.is_finite() or normalized < 0 or normalized > Decimal("1000000000"):
+        raise reactivation.MarketingReactivationValidationError(
+            f"{field} debe estar entre 0 y 1000000000."
+        )
+    return normalized
+
+
+def _serialize_explorer_filters(filters: dict[str, Any]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in filters.items():
+        if value is None:
+            continue
+        result[key] = str(value) if isinstance(value, Decimal) else value
+    return result
+
+
+def _filter_options(rows: list[dict[str, Any]]) -> dict[str, list[str]]:
+    return {
+        "branches": sorted(
+            {str(row.get("sucursal")) for row in rows if row.get("sucursal")}
+        ),
+        "tariff_categories": sorted({_category_label(row) for row in rows}),
+        "tariffs": sorted({_tariff_label(row) for row in rows}),
+        "operational_statuses": sorted(
+            {
+                str(row.get("operational_status") or "SIN_ESTADO")
+                for row in rows
+            }
+        ),
+    }
+
+
+def _apply_base_explorer_filters(
+    rows: list[dict[str, Any]],
+    *,
+    filters: dict[str, Any],
+) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    for row in rows:
+        if filters.get("sucursal") and str(row.get("sucursal") or "") != filters["sucursal"]:
+            continue
+        if filters.get("tariff_category") and _category_label(row) != filters["tariff_category"]:
+            continue
+        if filters.get("tarifa") and _tariff_label(row) != filters["tarifa"]:
+            continue
+        if filters.get("operational_status") and str(
+            row.get("operational_status") or "SIN_ESTADO"
+        ) != filters["operational_status"]:
+            continue
+        if not _matches_debt(row, filters=filters):
+            continue
+        result.append(row)
+    return result
+
+
+def _matches_debt(row: dict[str, Any], *, filters: dict[str, Any]) -> bool:
+    debt_min = filters.get("adeudo_min")
+    debt_max = filters.get("adeudo_max")
+    if debt_min is None and debt_max is None:
+        return True
+    raw = row.get("adeudo")
+    if raw is None or raw == "":
+        return False
+    try:
+        debt = Decimal(str(raw))
+    except (InvalidOperation, ValueError):
+        return False
+    if not debt.is_finite():
+        return False
+    if debt_min is not None and debt < debt_min:
+        return False
+    if debt_max is not None and debt > debt_max:
+        return False
+    return True
+
+
+def _apply_enriched_explorer_filters(
+    rows: list[dict[str, Any]],
+    *,
+    filters: dict[str, Any],
+) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    suite_history = filters.get("suite_history")
+    iventas_status = filters.get("iventas_status")
+    for row in rows:
+        campaign_count = int(row.get("suite_campaigns_total") or 0)
+        if suite_history == EXPLORER_SUITE_NEVER and campaign_count != 0:
+            continue
+        if suite_history == EXPLORER_SUITE_ONE and campaign_count != 1:
+            continue
+        if suite_history == EXPLORER_SUITE_TWO_PLUS and campaign_count < 2:
+            continue
+
+        observed_status = str(row.get("iventas_last_message_status") or "").strip().upper()
+        if iventas_status == EXPLORER_IVENTAS_NONE and observed_status:
+            continue
+        if iventas_status and iventas_status != EXPLORER_IVENTAS_NONE and observed_status != iventas_status:
+            continue
+        result.append(row)
+    return result
 
 
 def _select_bucket_rows(
@@ -294,11 +609,16 @@ def _duplicate_rows(
     return duplicates
 
 
+def _category_label(row: dict[str, Any]) -> str:
+    return str(row.get("tarifa_categoria") or "Sin categoría")
+
+
+def _tariff_label(row: dict[str, Any]) -> str:
+    return str(row.get("tarifa") or "Sin tarifa")
+
+
 def _category_composition(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    counts = Counter(
-        str(row.get("tarifa_categoria") or "Sin categoría")
-        for row in rows
-    )
+    counts = Counter(_category_label(row) for row in rows)
     total = len(rows)
     return [
         {
@@ -311,6 +631,15 @@ def _category_composition(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             key=lambda item: (-item[1], item[0]),
         )
     ]
+
+
+def _operational_counts(rows: list[dict[str, Any]]) -> dict[str, int]:
+    return dict(
+        Counter(
+            str(row.get("operational_status") or "SIN_ESTADO")
+            for row in rows
+        )
+    )
 
 
 def _enrich_page_rows(
