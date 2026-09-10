@@ -13,20 +13,51 @@ const compilerOptions = {
   module: ts.ModuleKind.ES2022,
   experimentalDecorators: true,
 };
-for (const name of [
+
+const sourceNames = [
   'marketing-reactivation.component.node-test',
+  'marketing-reactivation-explorer-result.node-test',
+  'marketing-audience-explorer-dialog.component.node-test',
   'marketing-reactivation.component',
+  'marketing-audience-explorer-dialog.component',
   'marketing-reactivation.service',
+  'marketing-reactivation.models',
+  'marketing-audience-explorer.models',
   'marketing-campaign-source-status.models',
-]) {
+];
+
+for (const name of sourceNames) {
   let source = fs.readFileSync(path.join(sourceDir, `${name}.ts`), 'utf8');
-  source = source.replace(/from '\.\/(marketing-reactivation\.(?:component|service))'/g, "from './$1.mjs'");
-  source = source.replace("from './marketing-campaign-source-status.models'", "from './marketing-campaign-source-status.models.mjs'");
-  source = source.replace("from 'src/environments/environment'", "from './environment.mjs'");
-  fs.writeFileSync(path.join(outputDir, `${name}.mjs`), ts.transpileModule(source, { compilerOptions }).outputText);
+  source = source.replace(
+    /from '(\.\/[^']+)'/g,
+    (_match, localPath) => `from '${localPath}.mjs'`,
+  );
+  source = source.replace(
+    "from 'src/environments/environment'",
+    "from './environment.mjs'",
+  );
+  fs.writeFileSync(
+    path.join(outputDir, `${name}.mjs`),
+    ts.transpileModule(source, { compilerOptions }).outputText,
+  );
 }
-const environment = fs.readFileSync(path.join(root, 'src/environments/environment.ts'), 'utf8');
-fs.writeFileSync(path.join(outputDir, 'environment.mjs'), ts.transpileModule(environment, { compilerOptions }).outputText);
-const result = spawnSync(process.execPath, ['--test', path.join(outputDir, 'marketing-reactivation.component.node-test.mjs')], { stdio: 'inherit' });
+
+const environment = fs.readFileSync(
+  path.join(root, 'src/environments/environment.ts'),
+  'utf8',
+);
+fs.writeFileSync(
+  path.join(outputDir, 'environment.mjs'),
+  ts.transpileModule(environment, { compilerOptions }).outputText,
+);
+
+const tests = [
+  'marketing-reactivation.component.node-test.mjs',
+  'marketing-reactivation-explorer-result.node-test.mjs',
+  'marketing-audience-explorer-dialog.component.node-test.mjs',
+].map(name => path.join(outputDir, name));
+const result = spawnSync(process.execPath, ['--test', ...tests], {
+  stdio: 'inherit',
+});
 if (result.error) throw result.error;
 process.exit(result.status ?? 1);

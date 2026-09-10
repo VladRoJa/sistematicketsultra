@@ -14,6 +14,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
 
+import { CampaignAudienceSelectionResponse } from './marketing-audience-explorer.models';
 import {
   CampaignAudienceBucket,
   CampaignAudienceCompositionRow,
@@ -22,6 +23,7 @@ import {
   CampaignAudiencePreviewDetailResponse,
   CampaignAudienceSuiteHistoryFilter,
   CampaignV1Request,
+  ReactivationCampaign,
 } from './marketing-reactivation.models';
 import { MarketingReactivationService } from './marketing-reactivation.service';
 
@@ -29,6 +31,10 @@ export interface MarketingAudienceExplorerDialogData {
   request: CampaignV1Request;
   bucket: CampaignAudienceBucket;
   label: string;
+}
+
+export interface MarketingAudienceExplorerDialogResult {
+  campaignCreated: ReactivationCampaign;
 }
 
 @Component({
@@ -51,7 +57,7 @@ export class MarketingAudienceExplorerDialogComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   private readonly service = inject(MarketingReactivationService);
   private readonly dialogRef = inject(
-    MatDialogRef<MarketingAudienceExplorerDialogComponent>,
+    MatDialogRef<MarketingAudienceExplorerDialogComponent, MarketingAudienceExplorerDialogResult | undefined>,
   );
 
   readonly data = inject<MarketingAudienceExplorerDialogData>(MAT_DIALOG_DATA);
@@ -65,6 +71,9 @@ export class MarketingAudienceExplorerDialogComponent implements OnInit {
     operationalStatus: new FormControl('', {nonNullable: true}),
     suiteHistory: new FormControl<CampaignAudienceSuiteHistoryFilter | ''>('', {nonNullable: true}),
     iventasStatus: new FormControl<CampaignAudienceIventasStatusFilter | ''>('', {nonNullable: true}),
+  });
+  readonly campaignForm = new FormGroup({
+    name: new FormControl('', {nonNullable: true}),
   });
   readonly suiteHistoryOptions: Array<{
     value: CampaignAudienceSuiteHistoryFilter;
@@ -87,11 +96,18 @@ export class MarketingAudienceExplorerDialogComponent implements OnInit {
 
   result: CampaignAudiencePreviewDetailResponse | null = null;
   appliedFilters: CampaignAudienceExplorerFilters = {};
+  campaignSelection: CampaignAudienceSelectionResponse | null = null;
   page = 1;
   loading = false;
+  preparingCampaign = false;
+  creatingCampaign = false;
   error = '';
+  campaignError = '';
 
   ngOnInit(): void {
+    this.filterForm.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.resetCampaignPreparation());
     this.loadPage(1);
   }
 
@@ -126,6 +142,38 @@ export class MarketingAudienceExplorerDialogComponent implements OnInit {
 
   get hasActiveFilters(): boolean {
     return Object.keys(this.appliedFilters).length > 0;
+  }
+
+  get filtersDirty(): boolean {
+    const current = this.readExplorerFiltersFromForm(false);
+    if (current === null) return true;
+    return JSON.stringify(current) !== JSON.stringify(this.appliedFilters);
+  }
+
+  get invalidPhoneRows(): number {
+    if (!this.campaignSelection) return 0;
+    return Math.max(
+      0,
+      this.campaignSelection.filtered_total - this.campaignSelection.valid_phone_rows,
+    );
+  }
+
+  get canPrepareCampaign(): boolean {
+    return Boolean(this.result?.filtered_total)
+      && !this.filtersDirty
+      && !this.loading
+      && !this.preparingCampaign
+      && !this.creatingCampaign;
+  }
+
+  get canCreateFilteredCampaign(): boolean {
+    const name = this.campaignForm.controls.name.value.trim();
+    return Boolean(this.campaignSelection?.can_create)
+      && !this.filtersDirty
+      && Boolean(name)
+      && name.length <= 255
+      && !this.preparingCampaign
+      && !this.creatingCampaign;
   }
 
   loadPage(
@@ -164,6 +212,7 @@ export class MarketingAudienceExplorerDialogComponent implements OnInit {
     if (this.loading) return;
     const filters = this.buildExplorerFilters();
     if (filters === null) return;
+    this.resetCampaignPreparation();
     this.loadPage(1, filters);
   }
 
@@ -179,7 +228,67 @@ export class MarketingAudienceExplorerDialogComponent implements OnInit {
       suiteHistory: '',
       iventasStatus: '',
     });
+    this.resetCampaignPreparation();
     this.loadPage(1, {});
+  }
+
+  prepareCampaignSelection(): void {
+    if (!this.canPrepareCampaign) return;
+    this.preparingCampaign = true;
+    this.campaignError = '';
+    this.campaignSelection = null;
+
+    this.service.previewExplorerCampaignSelection({
+      ...this.data.request,
+      bucket: this.data.bucket,
+      explorer_filters: {...this.appliedFilters},
+    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: selection => {
+        this.campaignSelection = selection;
+        this.preparingCampaign = false;
+      },
+      error: error => {
+        this.preparingCampaign = false;
+        this.campaignError = this.errorMessage(
+          error,
+          'No fue posible preparar la campaña con este resultado.',
+        );
+      },
+    });
+  }
+
+  createFilteredCampaign(): void {
+    if (!this.campaignSelection?.can_create || this.filtersDirty || this.creatingCampaign) return;
+    const name = this.campaignForm.controls.name.value.trim();
+    if (!name) {
+      this.campaignError = 'Escribe un nombre para la campaña.';
+      return;
+    }
+    if (name.length > 255) {
+      this.campaignError = 'El nombre de la campaña no puede exceder 255 caracteres.';
+      return;
+    }
+
+    this.creatingCampaign = true;
+    this.campaignError = '';
+    this.service.createCampaignFromExplorer({
+      ...this.data.request,
+      bucket: this.data.bucket,
+      explorer_filters: {...this.appliedFilters},
+      name,
+    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: response => {
+        this.creatingCampaign = false;
+        this.dialogRef.close({campaignCreated: response.campaign});
+      },
+      error: error => {
+        this.creatingCampaign = false;
+        this.campaignError = this.errorMessage(
+          error,
+          'No fue posible crear la campaña con este resultado.',
+        );
+      },
+    });
   }
 
   previousPage(): void {
@@ -193,6 +302,7 @@ export class MarketingAudienceExplorerDialogComponent implements OnInit {
   }
 
   close(): void {
+    if (this.creatingCampaign) return;
     this.dialogRef.close();
   }
 
@@ -251,14 +361,23 @@ export class MarketingAudienceExplorerDialogComponent implements OnInit {
     }).format(numeric);
   }
 
+  private resetCampaignPreparation(): void {
+    this.campaignSelection = null;
+    this.campaignError = '';
+  }
+
   private buildExplorerFilters(): CampaignAudienceExplorerFilters | null {
+    return this.readExplorerFiltersFromForm(true);
+  }
+
+  private readExplorerFiltersFromForm(reportError: boolean): CampaignAudienceExplorerFilters | null {
     const value = this.filterForm.getRawValue();
     if (value.adeudoMin !== null && (!Number.isFinite(value.adeudoMin) || value.adeudoMin < 0)) {
-      this.error = 'El adeudo mínimo debe ser un número igual o mayor a cero.';
+      if (reportError) this.error = 'El adeudo mínimo debe ser un número igual o mayor a cero.';
       return null;
     }
     if (value.adeudoMax !== null && (!Number.isFinite(value.adeudoMax) || value.adeudoMax < 0)) {
-      this.error = 'El adeudo máximo debe ser un número igual o mayor a cero.';
+      if (reportError) this.error = 'El adeudo máximo debe ser un número igual o mayor a cero.';
       return null;
     }
     if (
@@ -266,7 +385,7 @@ export class MarketingAudienceExplorerDialogComponent implements OnInit {
       && value.adeudoMax !== null
       && value.adeudoMin > value.adeudoMax
     ) {
-      this.error = 'El adeudo mínimo no puede ser mayor que el adeudo máximo.';
+      if (reportError) this.error = 'El adeudo mínimo no puede ser mayor que el adeudo máximo.';
       return null;
     }
 
