@@ -339,6 +339,7 @@ def build_track_daily_mart_excel(
     _build_forecast_sheet(
         workbook=workbook,
         track_date=track_date,
+        resolved_version=resolved_version,
         rows=ordered_rows,
     )
 
@@ -382,7 +383,6 @@ def _setup_track_sheet(
     worksheet.merge_cells("E1:J1")
     worksheet["E1"] = _format_version_update_label(resolved_version)
 
-    worksheet["B2"] = f"=C2/{days_in_month}"
     worksheet["C2"] = track_date.day
 
     for merge_range, title in TRACK_GROUPS:
@@ -998,6 +998,7 @@ def _build_forecast_sheet(
     *,
     workbook: Workbook,
     track_date: date,
+    resolved_version: Any,
     rows: Sequence[Any],
 ) -> None:
     worksheet = workbook.create_sheet("Forecast", 0)
@@ -1008,6 +1009,7 @@ def _build_forecast_sheet(
     _setup_forecast_sheet(
         worksheet=worksheet,
         track_date=track_date,
+        resolved_version=resolved_version,
         month_label=month_label,
         day_month_label=day_month_label,
     )
@@ -1080,28 +1082,20 @@ def _setup_forecast_sheet(
     *,
     worksheet: Worksheet,
     track_date: date,
+    resolved_version: Any,
     month_label: str,
     day_month_label: str,
 ) -> None:
     worksheet.sheet_view.showGridLines = False
     worksheet.sheet_view.zoomScale = 75
     worksheet.freeze_panes = "D4"
-    worksheet["B1"] = "Track"
 
-    source_indexes = {
-        "R": 16,
-        "V": 20,
-        "AC": 24,
-        "AE": 26,
-        "AK": 29,
-        "AM": 31,
-        "AS": 34,
-        "AU": 36,
-        "BM": 49,
-        "BN": 50,
-    }
-    for column_letter, source_index in source_indexes.items():
-        worksheet[f"{column_letter}1"] = source_index
+    # Forecast keeps only its operational columns visible, so the Track status
+    # ribbon is distributed across those same visible columns.
+    worksheet["B1"] = "Track"
+    worksheet["C1"] = "A dia"
+    worksheet["R1"] = track_date.isoformat()
+    worksheet["V1"] = _format_version_update_label(resolved_version)
 
     for merge_range, title, _color in FORECAST_GROUPS:
         worksheet.merge_cells(merge_range)
@@ -1420,6 +1414,10 @@ def _apply_forecast_formatting(
     total_fill = PatternFill("solid", fgColor="FBE3DC")
 
     worksheet["B1"].font = Font(color=ULTRA_ORANGE, bold=True, size=11)
+    worksheet["C1"].font = Font(bold=True)
+    worksheet["R1"].font = Font(bold=True)
+    worksheet["V1"].font = Font(color=ULTRA_ORANGE, bold=True)
+    worksheet["V1"].alignment = Alignment(horizontal="left", vertical="center")
 
     for merge_range, _title, color in FORECAST_GROUPS:
         start_cell = worksheet[merge_range.split(":", 1)[0]]
