@@ -8,6 +8,39 @@ from openpyxl import load_workbook
 from app.warehouse.services import track_excel_export_service as service
 
 
+def _fake_bajas_curve(*, target_month):
+    assert target_month.day == 1
+    return {
+        "status": "available",
+        "method": "chain_daily_median_share_of_month_close",
+        "target_month": target_month,
+        "history_end_exclusive": target_month,
+        "points": {
+            7: {
+                "day": 7,
+                "samples_count": 39,
+                "p25": Decimal("0.345"),
+                "median": Decimal("0.376"),
+                "p75": Decimal("0.433"),
+            },
+            8: {
+                "day": 8,
+                "samples_count": 40,
+                "p25": Decimal("0.345"),
+                "median": Decimal("0.376"),
+                "p75": Decimal("0.433"),
+            },
+            27: {
+                "day": 27,
+                "samples_count": 41,
+                "p25": Decimal("0.839"),
+                "median": Decimal("0.914"),
+                "p75": Decimal("0.977"),
+            },
+        },
+    }
+
+
 def test_daily_mart_raw_includes_official_branch_income_projection(
     monkeypatch,
 ):
@@ -53,6 +86,11 @@ def test_daily_mart_raw_includes_official_branch_income_projection(
         service,
         "build_branch_income_projection_summary",
         fake_projection,
+    )
+    monkeypatch.setattr(
+        service,
+        "build_bajas_historical_progress_curve",
+        _fake_bajas_curve,
     )
 
     excel_bytes = service.build_track_daily_mart_excel(
@@ -135,6 +173,11 @@ def test_forecast_sheet_uses_source_cutoffs_and_hides_helper_columns(
         "build_branch_income_projection_summary",
         lambda **_kwargs: {"status": "available", "projected_close": "1"},
     )
+    monkeypatch.setattr(
+        service,
+        "build_bajas_historical_progress_curve",
+        _fake_bajas_curve,
+    )
 
     excel_bytes = service.build_track_daily_mart_excel(
         track_date=date(2026, 9, 9),
@@ -159,7 +202,7 @@ def test_forecast_sheet_uses_source_cutoffs_and_hides_helper_columns(
     assert worksheet["W4"].value == "=IFERROR((T4/8)*22,0)+IFERROR((U4/8)*22,0)"
     assert worksheet["AF4"].value == "=IFERROR((AE4/7)*23,0)"
     assert worksheet["AN4"].value == "=IFERROR((AM4/8)*22,0)"
-    assert worksheet["AV4"].value == "=IFERROR((AU4/8)*22,0)"
+    assert worksheet["AV4"].value == "=IFERROR((AU4/0.376)-AU4,NA())"
     assert worksheet["BO4"].value == "=IFERROR((BN4/7)*23,0)"
 
     assert worksheet["X4"].value == "=V4+W4"
@@ -187,3 +230,23 @@ def test_forecast_sheet_uses_source_cutoffs_and_hides_helper_columns(
     assert metas_op["B2"].value is None
     assert metas_op["C2"].value == 9
     assert metas_op["S4"].value == "=(R4/30)*$C$2"
+
+    info = workbook["Info"]
+    info_values = {
+        row[0].value: row[1].value
+        for row in info.iter_rows(min_row=2, max_col=2)
+    }
+    assert info_values["Forecast bajas - método"] == (
+        "Bajas MTD / mediana histórica del % acumulado vs cierre mensual, por día de corte"
+    )
+    assert info_values["Forecast bajas - método técnico"] == (
+        "chain_daily_median_share_of_month_close"
+    )
+
+
+def test_bajas_forecast_formula_fails_closed_without_historical_factor():
+    assert service._forecast_bajas_remaining_formula(
+        value_column="AU",
+        excel_row=4,
+        progress_factor=None,
+    ) == "=NA()"
