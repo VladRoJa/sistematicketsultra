@@ -264,25 +264,26 @@ def _prepare_explorer_selection(
         filtered_rows = matched_raw
 
     valid_rows = [row for row in filtered_rows if row.get("phone_mx10")]
-    selected_phones: list[str] = []
-    seen_phones: set[str] = set()
-    for row in valid_rows:
-        phone = str(row["phone_mx10"])
-        if phone in seen_phones:
-            continue
-        seen_phones.add(phone)
-        selected_phones.append(phone)
-
-    eligible_by_phone = {
-        str(row["phone_mx10"]): row
+    unique_valid_phones = {
+        str(row["phone_mx10"])
+        for row in valid_rows
+    }
+    eligible_by_identity = {
+        _row_identity(row): row
         for row in plan.get("eligible_rows") or []
         if row.get("phone_mx10")
     }
-    final_rows = [
-        eligible_by_phone[phone]
-        for phone in selected_phones
-        if phone in eligible_by_phone
-    ]
+    final_rows: list[dict[str, Any]] = []
+    final_phones: set[str] = set()
+    for row in valid_rows:
+        eligible = eligible_by_identity.get(_row_identity(row))
+        if eligible is None:
+            continue
+        phone = str(eligible["phone_mx10"])
+        if phone in final_phones:
+            continue
+        final_phones.add(phone)
+        final_rows.append(eligible)
 
     weekly_action = (plan.get("filters") or {}).get("weekly_frequency_action")
     weekly_limit_contacts = 0
@@ -305,9 +306,9 @@ def _prepare_explorer_selection(
         "bucket_total": expected_total,
         "filtered_total": len(filtered_rows),
         "valid_phone_rows": len(valid_rows),
-        "unique_valid_contacts": len(selected_phones),
-        "duplicate_phone_rows": len(valid_rows) - len(selected_phones),
-        "excluded_by_campaign_rules": len(selected_phones) - len(final_rows),
+        "unique_valid_contacts": len(unique_valid_phones),
+        "duplicate_phone_rows": len(valid_rows) - len(unique_valid_phones),
+        "excluded_by_campaign_rules": len(unique_valid_phones) - len(final_rows),
         "weekly_limit_contacts": weekly_limit_contacts,
         "weekly_frequency_decision_required": weekly_limit_contacts > 0,
         "final_rows": final_rows,
