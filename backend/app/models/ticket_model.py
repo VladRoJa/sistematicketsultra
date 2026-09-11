@@ -149,6 +149,29 @@ class Ticket(db.Model):
             nodo = nodo.padre
         return jerarquia
 
+    @staticmethod
+    def _resolver_textos_clasificacion(ruta):
+        """Resuelve categoria/subcategoria/detalle sin exponer nodos de enrutamiento.
+
+        En Mantenimiento, ``Edificio`` existe para separar el flujo de
+        infraestructura del flujo de ``Aparatos``. No es una categoria operativa,
+        por lo que la clasificacion visible comienza en el primer hijo de Edificio.
+        Para los demas arboles conservamos el comportamiento historico de tomar
+        los ultimos tres niveles.
+        """
+        ruta_limpia = [str(x).strip() for x in (ruta or []) if str(x).strip()]
+
+        if (
+            len(ruta_limpia) >= 2
+            and ruta_limpia[0].casefold() == 'mantenimiento'
+            and ruta_limpia[1].casefold() == 'edificio'
+        ):
+            valores = ruta_limpia[2:5]
+        else:
+            valores = ruta_limpia[-3:]
+
+        return tuple((valores + [None, None, None])[:3])
+
     def to_dict(self):
         import pytz
         TZ = pytz.timezone("America/Tijuana")
@@ -165,12 +188,11 @@ class Ticket(db.Model):
         # 1) Elegir árbol según disponibilidad: inventario > clasificación de tickets
         if self.categoria_inventario:
             ruta = self._obtener_jerarquia_categoria_inv() or []
+            tail = [x for x in (ruta[-3:] if ruta else []) if x]
+            cat_resuelta, subcat_resuelta, detalle_resuelto = (tail + [None, None, None])[:3]
         else:
             ruta = self._obtener_jerarquia_clasificacion() or []
-
-        # 2) Tomar los últimos 3 niveles como cat/sub/det, tolerando vacíos
-        tail = [x for x in (ruta[-3:] if ruta else []) if x]
-        cat_resuelta, subcat_resuelta, detalle_resuelto = (tail + [None, None, None])[:3]
+            cat_resuelta, subcat_resuelta, detalle_resuelto = self._resolver_textos_clasificacion(ruta)
         
         def safe_sucursal_nombre(sucursal):
             if not sucursal:
@@ -378,13 +400,7 @@ class Ticket(db.Model):
         if (not ticket.categoria_inventario_id) and ticket.clasificacion_id and (_es_vacio_o_num(categoria) or not subcategoria or not detalle):
             ruta = ticket._obtener_jerarquia_clasificacion() or []
             if ruta:
-                tail = ruta[-3:]
-                if len(tail) == 1:
-                    cat, sub, det = tail[0], None, None
-                elif len(tail) == 2:
-                    cat, sub, det = tail[0], tail[1], None
-                else:
-                    cat, sub, det = tail[0], tail[1], tail[2]
+                cat, sub, det = ticket._resolver_textos_clasificacion(ruta)
                 if _es_vacio_o_num(ticket.categoria):
                     ticket.categoria = cat
                 if not ticket.subcategoria:
@@ -471,7 +487,7 @@ class Ticket(db.Model):
             "estadoAnterior": estado_anterior,
             "estadoNuevo": estado_nuevo,
             "estadoCierreAnterior": estado_cierre_anterior,
-            "estadoCierreNuevo": estado_cierre_nuevo,
+            "estadoCierreNuevo": self.estado_cierre,
         })
 
         def _key_fecha_cambio(item):
@@ -517,7 +533,6 @@ class Ticket(db.Model):
         self.estado_cierre = 'rechazado_por_jefe'
         self.motivo_rechazo_cierre = motivo
         self.estado = 'en progreso'
-
         # Al reabrir, la fecha_finalizado ya no es válida
         self.fecha_finalizado = None
 
@@ -583,4 +598,3 @@ class Ticket(db.Model):
         )
 
         db.session.commit()
-
