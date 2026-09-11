@@ -445,7 +445,12 @@ this.subs.push(
       this.catalogoService.getClasificacionesPlanas(undefined, val).subscribe((hijos: any[]) => {
         const tieneHijos = Array.isArray(hijos) && hijos.length > 0;
         if (tieneHijos && nivel < 5) {
-          const etiquetaSig = hijos[0]?.nivel_nombre || 'Siguiente nivel';
+          const seleccionActual = fila.opciones.find(o => `${o.id}` === `${val}`);
+          const esSelectorMantenimiento =
+            nivel === 1 && this._norm(seleccionActual?.nombre) === 'mantenimiento';
+          const etiquetaSig = esSelectorMantenimiento
+            ? 'Tipo de mantenimiento'
+            : (hijos[0]?.nivel_nombre || 'Siguiente nivel');
           this.cargarNivel(nivel + 1, val, etiquetaSig);
         } else {
           const nextName = `nivel_${nivel + 1}`;
@@ -793,4 +798,3 @@ public setVisibilidadRefaccion(): void {
 
   
 }
-
