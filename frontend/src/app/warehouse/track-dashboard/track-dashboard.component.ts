@@ -775,7 +775,7 @@ downloadTrackExcel(): void {
   this.martErrorMessage = '';
 
   this.trackService
-    .downloadDailyMartExcel(this.trackDate, this.generationMode, true)
+    .downloadDailyMartExcel(this.trackDate, this.generationMode)
     .subscribe({
       next: (blob: Blob) => {
         this.saveBlobAsFile(blob, this.buildTrackExcelFilename());
@@ -819,7 +819,7 @@ private saveBlobAsFile(blob: Blob, filename: string): void {
 
   private fetchDailyMart(): void {
     this.trackService
-      .getDailyMart(this.trackDate, this.generationMode, true)
+      .getDailyMart(this.trackDate, this.generationMode)
       .subscribe({
         next: (response: TrackDailyMartResponse) => {
           if (response.status !== 'ok') {

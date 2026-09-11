@@ -23,11 +23,13 @@ from app.warehouse.services.track_branch_cohort_service import (
     get_track_branch_cohort_definitions,
     get_track_branch_cohort_key,
 )
-from app.warehouse.services.track_operational_universe_service import (
-    EXCLUDED_BRANCHES,
-)
 
 
+EXCLUDED_BRANCHES = {
+    "CORPORATIVO",
+    "GIMNASIO PRUEBA",
+    "LA_VIGA",
+}
 
 _TRACK_DAILY_BRANCH_VERSION_PRIORITY = {
     "cierre_canonico": 0,
