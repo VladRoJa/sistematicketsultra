@@ -44,6 +44,7 @@ COPY app /app/app
 COPY migrations /app/migrations
 COPY scripts /app/scripts
 COPY data/reference /app/data/reference
+COPY data/imports /app/data/imports
 
 EXPOSE 5000
 CMD ["gunicorn", "--timeout", "18000", "-b", "0.0.0.0:5000", "app.wsgi:app"]
