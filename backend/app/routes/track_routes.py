@@ -34,9 +34,6 @@ from app.warehouse.services.track_daily_query_version_service import (
 from app.warehouse.services.track_source_agregadoras_daily_service import (
     resolve_exact_agregadoras_snapshot_status_for_date,
 )
-from app.warehouse.services.track_operational_universe_service import (
-    load_operational_track_branch_canons,
-)
 
 
 track_bp = Blueprint("track_bp", __name__)
@@ -657,13 +654,6 @@ def get_track_daily_mart_endpoint():
             request.args.get("generation_mode") or "manual_preview"
         ).strip()
 
-        operational_only = (
-            str(request.args.get("operational_only") or "")
-            .strip()
-            .lower()
-            == "true"
-        )
-
         if generation_mode not in ALLOWED_GENERATION_MODES:
             return jsonify(
                 {
@@ -688,14 +678,6 @@ def get_track_daily_mart_endpoint():
                 .order_by(TrackDailyMartORM.sucursal_canon.asc())
                 .all()
             )
-
-        if operational_only and rows:
-            operational_canons = load_operational_track_branch_canons()
-            rows = [
-                row
-                for row in rows
-                if row.sucursal_canon in operational_canons
-            ]
 
         return jsonify(
             {
@@ -771,13 +753,6 @@ def export_track_daily_mart_xlsx_endpoint():
             request.args.get("generation_mode") or "manual_preview"
         ).strip()
 
-        operational_only = (
-            str(request.args.get("operational_only") or "")
-            .strip()
-            .lower()
-            == "true"
-        )
-
         if generation_mode not in ALLOWED_GENERATION_MODES:
             return jsonify(
                 {
@@ -809,14 +784,6 @@ def export_track_daily_mart_xlsx_endpoint():
             .order_by(TrackDailyMartORM.sucursal_canon.asc())
             .all()
         )
-
-        if operational_only and rows:
-            operational_canons = load_operational_track_branch_canons()
-            rows = [
-                row
-                for row in rows
-                if row.sucursal_canon in operational_canons
-            ]
 
         if not rows:
             return jsonify(
@@ -890,7 +857,6 @@ def get_track_branch_history_endpoint():
         generation_mode = str(
             request.args.get("generation_mode") or "manual_preview"
         ).strip()
-
 
         if generation_mode not in ALLOWED_GENERATION_MODES:
             return jsonify(

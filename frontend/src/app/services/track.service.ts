@@ -2172,15 +2172,10 @@ export class TrackService {
   getDailyMart(
     trackDate: string,
     generationMode: TrackGenerationMode,
-    operationalOnly = false,
   ): Observable<TrackDailyMartResponse> {
-    let params = new HttpParams()
+    const params = new HttpParams()
       .set('track_date', trackDate)
       .set('generation_mode', generationMode);
-
-    if (operationalOnly) {
-      params = params.set('operational_only', 'true');
-    }
 
     return this.http.get<TrackDailyMartResponse>(
       `${this.baseUrl}/daily-mart`,
@@ -2191,15 +2186,10 @@ export class TrackService {
   downloadDailyMartExcel(
     trackDate: string,
     generationMode: TrackGenerationMode,
-    operationalOnly = false,
   ) {
-    let params = new HttpParams()
+    const params = new HttpParams()
       .set('track_date', trackDate)
       .set('generation_mode', generationMode);
-
-    if (operationalOnly) {
-      params = params.set('operational_only', 'true');
-    }
 
     return this.http.get(`${this.baseUrl}/daily-mart/export-xlsx`, {
       params,
