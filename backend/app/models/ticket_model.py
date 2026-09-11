@@ -487,7 +487,7 @@ class Ticket(db.Model):
             "estadoAnterior": estado_anterior,
             "estadoNuevo": estado_nuevo,
             "estadoCierreAnterior": estado_cierre_anterior,
-            "estadoCierreNuevo": self.estado_cierre,
+            "estadoCierreNuevo": estado_cierre_nuevo,
         })
 
         def _key_fecha_cambio(item):
@@ -533,6 +533,7 @@ class Ticket(db.Model):
         self.estado_cierre = 'rechazado_por_jefe'
         self.motivo_rechazo_cierre = motivo
         self.estado = 'en progreso'
+
         # Al reabrir, la fecha_finalizado ya no es válida
         self.fecha_finalizado = None
 
