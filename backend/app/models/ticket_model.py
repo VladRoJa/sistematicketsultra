@@ -153,20 +153,23 @@ class Ticket(db.Model):
     def _resolver_textos_clasificacion(ruta):
         """Resuelve categoria/subcategoria/detalle sin exponer nodos de enrutamiento.
 
-        En Mantenimiento, ``Edificio`` existe para separar el flujo de
-        infraestructura del flujo de ``Aparatos``. No es una categoria operativa,
-        por lo que la clasificacion visible comienza en el primer hijo de Edificio.
-        Para los demas arboles conservamos el comportamiento historico de tomar
-        los ultimos tres niveles.
+        En Mantenimiento, ``Edificio`` y ``Aparatos`` separan los dos flujos
+        operativos. ``Edificio`` no es una categoria visible, por lo que la
+        clasificacion comienza en su primer hijo. En el flujo corto de
+        ``Aparatos``, se omite el nodo ``Mantenimiento`` para evitar mostrar el
+        departamento como categoria. Para los demas arboles conservamos el
+        comportamiento historico de tomar los ultimos tres niveles.
         """
         ruta_limpia = [str(x).strip() for x in (ruta or []) if str(x).strip()]
 
-        if (
-            len(ruta_limpia) >= 2
-            and ruta_limpia[0].casefold() == 'mantenimiento'
-            and ruta_limpia[1].casefold() == 'edificio'
-        ):
-            valores = ruta_limpia[2:5]
+        if len(ruta_limpia) >= 2 and ruta_limpia[0].casefold() == 'mantenimiento':
+            tipo_mantenimiento = ruta_limpia[1].casefold()
+            if tipo_mantenimiento == 'edificio':
+                valores = ruta_limpia[2:5]
+            elif tipo_mantenimiento == 'aparatos':
+                valores = ruta_limpia[1:4]
+            else:
+                valores = ruta_limpia[-3:]
         else:
             valores = ruta_limpia[-3:]
 
