@@ -7,6 +7,7 @@ from datetime import date, datetime
 from typing import Any
 
 from app.extensions import db
+from app.models.sucursal_model import Sucursal
 from app.models.warehouse import (
     TrackBranchCatalogORM,
     TrackMonthlyTargetORM,
@@ -102,14 +103,22 @@ def build_track_daily_mart_for_date(
     )
 
     active_branches = (
-        TrackBranchCatalogORM.query.filter_by(is_track_active=True)
+        TrackBranchCatalogORM.query
+        .join(
+            Sucursal,
+            Sucursal.sucursal_id == TrackBranchCatalogORM.sucursal_id,
+        )
+        .filter(
+            TrackBranchCatalogORM.is_track_active.is_(True),
+            Sucursal.is_demo.is_(False),
+        )
         .order_by(TrackBranchCatalogORM.display_order.asc())
         .all()
     )
 
     if not active_branches:
         raise TrackDailyMartServiceError(
-            "No existen sucursales activas en track_branch_catalog."
+            "No existen sucursales reales activas en track_branch_catalog."
         )
 
     targets = (
