@@ -104,13 +104,16 @@ def build_track_daily_mart_for_date(
 
     active_branches = (
         TrackBranchCatalogORM.query
-        .join(
+        .outerjoin(
             Sucursal,
             Sucursal.sucursal_id == TrackBranchCatalogORM.sucursal_id,
         )
         .filter(
             TrackBranchCatalogORM.is_track_active.is_(True),
-            Sucursal.is_demo.is_(False),
+            db.or_(
+                TrackBranchCatalogORM.sucursal_id.is_(None),
+                Sucursal.is_demo.is_(False),
+            ),
         )
         .order_by(TrackBranchCatalogORM.display_order.asc())
         .all()
