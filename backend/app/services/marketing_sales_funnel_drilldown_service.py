@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from io import BytesIO
 from typing import Any
 
@@ -138,7 +138,7 @@ def _sortable_value(value: Any) -> tuple[int, Any]:
     numeric_text = text.replace(",", "")
     try:
         return 0, Decimal(numeric_text)
-    except Exception:
+    except (InvalidOperation, ValueError):
         return 1, text.casefold()
 
 
@@ -366,34 +366,33 @@ def _build_excel_workbook(
         )
 
     worksheet.freeze_panes = "A2"
-    if worksheet.max_row >= 1:
-        worksheet.auto_filter.ref = (
-            f"A1:{get_column_letter(worksheet.max_column)}{worksheet.max_row}"
-        )
+    worksheet.auto_filter.ref = (
+        f"A1:{get_column_letter(worksheet.max_column)}{worksheet.max_row}"
+    )
 
     for index, (field, label) in enumerate(columns, start=1):
         max_length = len(label)
-        for cell in worksheet.iter_cols(
-            min_col=index,
-            max_col=index,
-            min_row=2,
-            max_row=worksheet.max_row,
-        ):
-            for item in cell:
-                value = item.value
-                if value is not None:
-                    max_length = max(max_length, len(str(value)))
+        if worksheet.max_row >= 2:
+            for cell in worksheet.iter_cols(
+                min_col=index,
+                max_col=index,
+                min_row=2,
+                max_row=worksheet.max_row,
+            ):
+                for item in cell:
+                    value = item.value
+                    if value is not None:
+                        max_length = max(max_length, len(str(value)))
         worksheet.column_dimensions[get_column_letter(index)].width = min(
             max(max_length + 2, 12),
             42,
         )
 
-        if field == "revenue":
+        if field == "revenue" and worksheet.max_row >= 2:
             for cell in worksheet[get_column_letter(index)][1:]:
                 cell.number_format = '$' + '#,##0.00'
 
     worksheet.sheet_view.showGridLines = False
-    worksheet["A1"].comment = None
     workbook.properties.title = title
 
     output = BytesIO()
