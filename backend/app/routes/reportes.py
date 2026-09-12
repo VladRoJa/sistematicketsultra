@@ -44,6 +44,31 @@ def _require_inventory_report_admin():
     return None
 
 
+def _analytical_inventory_general_query():
+    """Catálogo real: conserva sin asignar y los usados por alguna sede real.
+
+    Un artículo exclusivo de ULTRA DEMO no debe aparecer en el consolidado
+    corporativo, pero un artículo compartido entre demo y una sede real sí.
+    """
+
+    any_assignment = db.session.query(InventarioSucursal.id).filter(
+        InventarioSucursal.inventario_id == InventarioGeneral.id
+    ).exists()
+    real_assignment = (
+        db.session.query(InventarioSucursal.id)
+        .join(Sucursal, Sucursal.sucursal_id == InventarioSucursal.sucursal_id)
+        .filter(
+            InventarioSucursal.inventario_id == InventarioGeneral.id,
+            Sucursal.is_demo.is_(False),
+        )
+        .exists()
+    )
+
+    return InventarioGeneral.query.filter(
+        db.or_(~any_assignment, real_assignment)
+    )
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # EXPORTAR INVENTARIO GENERAL (con filtros avanzados)
 # ═══════════════════════════════════════════════════════════════════════
@@ -61,7 +86,7 @@ def exportar_inventario():
         tipo = request.args.get('tipo')
         proveedor = request.args.get('proveedor')
 
-        query = InventarioGeneral.query
+        query = _analytical_inventory_general_query()
 
         if categoria:
             query = query.filter(InventarioGeneral.categoria.ilike(f"%{categoria}%"))
@@ -141,7 +166,15 @@ def exportar_movimientos():
         if fecha_hasta:
             query = query.filter(MovimientoInventario.fecha <= fecha_hasta)
         if sucursal_id:
+            # Una sucursal explícita puede ser DEMO para permitir auditoría.
             query = query.filter_by(sucursal_id=sucursal_id)
+        else:
+            # Un consolidado global representa únicamente operación real.
+            query = (
+                query
+                .join(Sucursal, Sucursal.sucursal_id == MovimientoInventario.sucursal_id)
+                .filter(Sucursal.is_demo.is_(False))
+            )
         if tipo_movimiento:
             query = query.filter_by(tipo_movimiento=tipo_movimiento)
         if usuario_id:
@@ -209,7 +242,12 @@ def inventario_resumen_sucursales():
         return forbidden
 
     try:
-        sucursales = Sucursal.query.all()
+        sucursales = (
+            Sucursal.query
+            .filter(Sucursal.is_demo.is_(False))
+            .order_by(Sucursal.sucursal.asc())
+            .all()
+        )
         data = []
         for suc in sucursales:
             total = db.session.query(db.func.sum(InventarioSucursal.stock)).filter_by(sucursal_id=suc.sucursal_id).scalar() or 0
@@ -240,6 +278,10 @@ def inventario_resumen_categorias():
             db.func.sum(InventarioSucursal.stock)
         ).join(
             InventarioSucursal, InventarioSucursal.inventario_id == InventarioGeneral.id
+        ).join(
+            Sucursal, Sucursal.sucursal_id == InventarioSucursal.sucursal_id
+        ).filter(
+            Sucursal.is_demo.is_(False)
         ).group_by(InventarioGeneral.categoria).all()
         data = [{
             "Categoría": cat or "Sin categoría",
@@ -263,7 +305,14 @@ def inventario_bajo_stock():
 
     try:
         umbral = request.args.get('umbral', default=10, type=int)
-        query = InventarioSucursal.query.filter(InventarioSucursal.stock <= umbral)
+        query = (
+            InventarioSucursal.query
+            .join(Sucursal, Sucursal.sucursal_id == InventarioSucursal.sucursal_id)
+            .filter(
+                InventarioSucursal.stock <= umbral,
+                Sucursal.is_demo.is_(False),
+            )
+        )
         data = [{
             "ID": s.inventario_id,
             "Nombre": s.inventario.nombre if s.inventario else "Desconocido",
@@ -353,4 +402,3 @@ def reportar_error():
     except Exception as e:
         print("❌ Excepción atrapada en reportar_error:", str(e))
         return manejar_error(e, "Reportar error con imagen")
-
