@@ -25,6 +25,7 @@ from app.services.marketing_sales_funnel_detail_service import (
     _normalize_pagination,
     _sales_detail,
     _visits_detail,
+    build_marketing_sales_funnel_detail,
 )
 from app.services.marketing_sales_funnel_service import ORIGIN_LABELS
 
@@ -283,6 +284,29 @@ def build_marketing_sales_funnel_drilldown(
         page,
         page_size,
     )
+    requested_sort_by = str(sort_by or "").strip() or None
+
+    if requested_sort_by is None:
+        detail = build_marketing_sales_funnel_detail(
+            month=month,
+            access=access,
+            metric=metric,
+            branch_id=branch_id,
+            origin=origin,
+            page=normalized_page,
+            page_size=normalized_page_size,
+        )
+        _, normalized_sort_dir = _normalize_sort(
+            None,
+            sort_dir,
+            detail["kind"],
+        )
+        return {
+            **detail,
+            "sort_by": None,
+            "sort_dir": normalized_sort_dir,
+        }
+
     detail = _load_unpaged_detail(
         month=month,
         access=access,
@@ -291,7 +315,7 @@ def build_marketing_sales_funnel_drilldown(
         origin=origin,
     )
     normalized_sort_by, normalized_sort_dir = _normalize_sort(
-        sort_by,
+        requested_sort_by,
         sort_dir,
         detail["kind"],
     )
