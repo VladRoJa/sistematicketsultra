@@ -16,7 +16,7 @@ VALID_SUCURSAL_AUDIENCES = {
 def normalize_sucursal_audience(
     value: Any,
     *,
-    default: str = SUCURSAL_AUDIENCE_OPERATIONAL,
+    default: str = SUCURSAL_AUDIENCE_ANALYTICAL,
 ) -> str:
     normalized = str(value or default).strip().lower()
     if normalized not in VALID_SUCURSAL_AUDIENCES:
@@ -30,18 +30,19 @@ def normalize_sucursal_audience(
 def apply_sucursal_audience(
     query,
     *,
-    audience: str = SUCURSAL_AUDIENCE_OPERATIONAL,
+    audience: str = SUCURSAL_AUDIENCE_ANALYTICAL,
     model=Sucursal,
 ):
     """Aplica la política canónica de participación de sucursales.
 
-    operational:
-        Incluye sucursales demo. Se usa en módulos transaccionales como Tickets,
-        Inventario, PM y Maintenance Planner para poder probar el flujo completo.
-
     analytical:
-        Excluye sucursales demo. Se usa en BI, Track, Forecast, Control y
-        consolidados ejecutivos para no contaminar indicadores reales.
+        Excluye sucursales demo. Es el default fail-closed para catálogos,
+        BI, Track, Forecast, Control y consolidados ejecutivos.
+
+    operational:
+        Incluye sucursales demo. Debe solicitarse de forma explícita en módulos
+        transaccionales que soportan sandbox, como Tickets, Inventario, PM y
+        Maintenance Planner.
     """
 
     normalized = normalize_sucursal_audience(audience)
@@ -62,19 +63,3 @@ def is_demo_sucursal(sucursal: Any) -> bool:
 
 def is_analytical_sucursal(sucursal: Any) -> bool:
     return sucursal is not None and not is_demo_sucursal(sucursal)
-
-
-def parse_include_demo(value: Any, *, default: bool = True) -> bool:
-    """Parsea flags HTTP sin aceptar silenciosamente valores ambiguos."""
-
-    if value is None:
-        return default
-    if isinstance(value, bool):
-        return value
-
-    normalized = str(value).strip().lower()
-    if normalized in {"1", "true", "yes", "si", "sí"}:
-        return True
-    if normalized in {"0", "false", "no"}:
-        return False
-    raise ValueError("include_demo debe ser true/false.")
