@@ -39,6 +39,13 @@ class Sucursal(db.Model):
         server_default=SucursalOperationalStatus.ACTIVA,
         index=True,
     )
+    is_demo = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=False,
+        server_default=db.text('false'),
+        index=True,
+    )
     municipio = db.Column(db.String(100), nullable=False)
     direccion = db.Column(db.String(255), nullable=False)
 
