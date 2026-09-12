@@ -1,0 +1,132 @@
+<section class="ticket-dialog">
+  <header class="ticket-dialog__header">
+    <div>
+      <span>Ticket #{{ ticket.ticket_id }}</span>
+      <h2>{{ ticket.equipo }}</h2>
+      <p>{{ ticket.sucursal }}</p>
+    </div>
+    <button type="button" class="ticket-dialog__close" (click)="close()">Cerrar</button>
+  </header>
+
+  <div class="ticket-dialog__status-row">
+    <span>{{ ticket.estado }}</span>
+    <span>Criticidad {{ ticket.criticidad }}</span>
+    <span>{{ ticket.condicion_operativa || 'Condición sin captura' }}</span>
+    <span *ngIf="ticket.codigo_interno">{{ ticket.codigo_interno }}</span>
+  </div>
+
+  <div class="ticket-dialog__grid">
+    <section class="ticket-dialog__main">
+      <div class="detail-block">
+        <h3>Detalle operativo</h3>
+        <dl class="detail-grid">
+          <div><dt>Creado por</dt><dd>{{ ticket.username || '—' }}</dd></div>
+          <div><dt>Responsable</dt><dd>{{ ticket.asignado_a || 'Sin asignar' }}</dd></div>
+          <div><dt>Familia</dt><dd>{{ ticket.familia || '—' }}</dd></div>
+          <div><dt>Falla</dt><dd>{{ ticket.falla || '—' }}</dd></div>
+          <div><dt>Ubicación</dt><dd>{{ ticket.ubicacion || '—' }}</dd></div>
+          <div><dt>Refacción</dt><dd>{{ ticket.necesita_refaccion ? (ticket.descripcion_refaccion || 'Sí') : 'No' }}</dd></div>
+        </dl>
+
+        <div class="detail-copy">
+          <span>Descripción</span>
+          <p>{{ ticket.descripcion }}</p>
+        </div>
+
+        <div class="detail-copy" *ngIf="ticket.problema_detectado">
+          <span>Problema detectado</span>
+          <p>{{ ticket.problema_detectado }}</p>
+        </div>
+
+        <div class="detail-copy" *ngIf="ticket.notas_cierre">
+          <span>Notas de cierre</span>
+          <p>{{ ticket.notas_cierre }}</p>
+        </div>
+      </div>
+
+      <div class="detail-block">
+        <h3>Fechas</h3>
+        <dl class="detail-grid detail-grid--dates">
+          <div><dt>Creación</dt><dd>{{ formatDateTime(ticket.fecha_creacion) }}</dd></div>
+          <div><dt>En progreso</dt><dd>{{ formatDateTime(ticket.fecha_en_progreso) }}</dd></div>
+          <div><dt>Compromiso</dt><dd>{{ formatDateTime(ticket.fecha_solucion) }}</dd></div>
+          <div><dt>Finalizado</dt><dd>{{ formatDateTime(ticket.fecha_finalizado) }}</dd></div>
+        </dl>
+      </div>
+
+      <div class="detail-block">
+        <div class="detail-block__heading">
+          <div>
+            <h3>Historial de cambios</h3>
+            <p>Fechas, comentarios y reprogramaciones del ticket.</p>
+          </div>
+          <span>{{ history.length }}</span>
+        </div>
+
+        <div class="history-list" *ngIf="history.length; else noHistory">
+          <article class="history-item" *ngFor="let item of history">
+            <div class="history-item__marker"></div>
+            <div>
+              <div class="history-item__topline">
+                <strong>{{ historyTargetDate(item) ? formatDate(historyTargetDate(item)) : 'Cambio de ticket' }}</strong>
+                <span>{{ formatDateTime(historyChangedAt(item)) }}</span>
+              </div>
+              <p>{{ historyReason(item) }}</p>
+              <small>{{ historyUser(item) }}</small>
+            </div>
+          </article>
+        </div>
+
+        <ng-template #noHistory>
+          <p class="empty-history">Este ticket todavía no tiene cambios de fecha registrados.</p>
+        </ng-template>
+      </div>
+    </section>
+
+    <aside class="ticket-dialog__side">
+      <form *ngIf="canSchedule && ticket.estado !== 'finalizado'" (ngSubmit)="saveCommitment()" class="commitment-card">
+        <div>
+          <span class="commitment-card__eyebrow">Acción operativa</span>
+          <h3>Mover compromiso</h3>
+          <p>Usa el mismo flujo de actualización que la pantalla de Tickets.</p>
+        </div>
+
+        <label>
+          <span>Nueva fecha</span>
+          <input type="date" name="scheduleDate" [(ngModel)]="scheduleDate" required />
+        </label>
+
+        <label>
+          <span>Motivo / comentario</span>
+          <textarea
+            name="scheduleReason"
+            [(ngModel)]="scheduleReason"
+            rows="4"
+            placeholder="Ej. Se mueve por llegada de refacción"
+            required
+          ></textarea>
+        </label>
+
+        <div *ngIf="errorMessage" class="commitment-card__error">{{ errorMessage }}</div>
+
+        <button
+          type="submit"
+          [disabled]="saving || !scheduleDate || !scheduleReason.trim()"
+        >
+          {{ saving ? 'Guardando…' : 'Guardar nueva fecha' }}
+        </button>
+      </form>
+
+      <div class="side-card">
+        <h3>Estado de cierre</h3>
+        <p>{{ ticket.estado_cierre || 'Sin flujo de cierre activo' }}</p>
+        <small *ngIf="ticket.motivo_rechazo_cierre">{{ ticket.motivo_rechazo_cierre }}</small>
+      </div>
+
+      <div class="side-card" *ngIf="ticket.url_evidencia">
+        <h3>Evidencia</h3>
+        <a [href]="ticket.url_evidencia" target="_blank" rel="noopener">Abrir evidencia</a>
+      </div>
+    </aside>
+  </div>
+</section>
