@@ -156,6 +156,13 @@ export const routes: Routes = [
             .then(m => m.MarketingConversionComponent),
       },
       {
+        path: 'marketing-conversion/venta-total',
+        canActivate: [AdmicorpGuard],
+        loadComponent: () =>
+          import('./marketing-sales-funnel/marketing-sales-funnel.component')
+            .then(m => m.MarketingSalesFunnelComponent),
+      },
+      {
         path: 'marketing/reactivation',
         loadComponent: () =>
           import('./marketing-reactivation/marketing-reactivation.component')

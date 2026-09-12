@@ -37,6 +37,7 @@ from app.routes.marketing_routes import marketing_bp
 from app.routes.marketing_campaign_export_routes import marketing_campaign_export_bp
 from app.routes.marketing_campaign_source_status_routes import marketing_campaign_source_status_bp
 from app.routes.marketing_campaign_preview_detail_routes import marketing_campaign_preview_detail_bp
+from app.routes.marketing_sales_funnel_routes import marketing_sales_funnel_bp
 from app.routes.mantenimiento_equipos_routes import mantenimiento_equipos_bp
 
 
@@ -119,6 +120,7 @@ def create_app():
     app.register_blueprint(marketing_campaign_export_bp, url_prefix="/api/marketing")
     app.register_blueprint(marketing_campaign_source_status_bp, url_prefix="/api/marketing")
     app.register_blueprint(marketing_campaign_preview_detail_bp, url_prefix="/api/marketing")
+    app.register_blueprint(marketing_sales_funnel_bp, url_prefix="/api/marketing")
     app.register_blueprint(
         mantenimiento_equipos_bp,
         url_prefix="/api/mantenimiento-equipos",

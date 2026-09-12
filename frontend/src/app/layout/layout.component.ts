@@ -254,6 +254,15 @@ ngOnInit(): void {
     { label: 'Embudo mensual', path: '/marketing-conversion' },
   ];
 
+  if (
+    String(u?.username || '').trim().toUpperCase() === 'ADMICORP'
+  ) {
+    marketingConversionSubmenu.push({
+      label: 'Funnel Venta Total',
+      path: '/marketing-conversion/venta-total',
+    });
+  }
+
   if (this.puedeVerMarketingReactivacionPorRol()) {
     marketingConversionSubmenu.push({
       label: 'Campañas',
