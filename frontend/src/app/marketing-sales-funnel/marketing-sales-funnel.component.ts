@@ -3,14 +3,13 @@ import { HttpErrorResponse } from '@angular/common/http';
 import {
   Component,
   DestroyRef,
-  ElementRef,
   OnInit,
-  ViewChild,
   inject,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -28,12 +27,13 @@ import {
 
 import {
   MarketingSalesFunnelBranch,
-  MarketingSalesFunnelDetailResponse,
-  MarketingSalesFunnelDetailRow,
   MarketingSalesFunnelMetrics,
   MarketingSalesFunnelResponse,
   MarketingSalesOriginBreakdown,
 } from './marketing-sales-funnel.models';
+import {
+  MarketingSalesFunnelDetailDialogComponent,
+} from './marketing-sales-funnel-detail-dialog.component';
 import { MarketingSalesFunnelService } from './marketing-sales-funnel.service';
 
 
@@ -75,12 +75,6 @@ interface SalesFunnelOriginView extends MarketingSalesOriginBreakdown {
   is_empty: boolean;
 }
 
-interface DetailQuery {
-  metric: string;
-  branchId?: number;
-  origin?: string;
-}
-
 type DashboardRequestResult =
   | {
       requestId: number;
@@ -100,6 +94,7 @@ type DashboardRequestResult =
   imports: [
     CommonModule,
     MatButtonModule,
+    MatDialogModule,
     MatFormFieldModule,
     MatIconModule,
     MatProgressSpinnerModule,
@@ -114,15 +109,9 @@ type DashboardRequestResult =
 export class MarketingSalesFunnelComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   private readonly salesFunnelService = inject(MarketingSalesFunnelService);
+  private readonly dialog = inject(MatDialog);
   private readonly dashboardRequests = new Subject<string>();
   private dashboardRequestId = 0;
-  private detailRequestId = 0;
-  private detailQuery: DetailQuery | null = null;
-
-  @ViewChild('detailSection')
-  private detailSection?: ElementRef<HTMLElement>;
-
-  readonly detailPageSize = 50;
 
   readonly monthControl = new FormControl(this.resolveCurrentMonth(), {
     nonNullable: true,
@@ -147,46 +136,12 @@ export class MarketingSalesFunnelComponent implements OnInit {
     'iventas_sale_share',
   ];
 
-  readonly detailSalesColumns = [
-    'branch',
-    'date',
-    'name',
-    'pin',
-    'phone',
-    'tariff',
-    'revenue',
-    'origin',
-    'survey',
-    'transaction_branch',
-  ];
-  readonly detailVisitColumns = [
-    'branch',
-    'date',
-    'phone',
-    'origin',
-    'source',
-  ];
-  readonly detailLeadColumns = [
-    'branch',
-    'date',
-    'name',
-    'phone',
-    'channel',
-    'contact_id',
-  ];
-
   dashboard: MarketingSalesFunnelResponse | null = null;
   funnelStages: FunnelStage[] = [];
   contextMetrics: ContextMetric[] = [];
   traceMetrics: ContextMetric[] = [];
   branchRows: SalesFunnelBranchView[] = [];
   originRows: SalesFunnelOriginView[] = [];
-
-  detail: MarketingSalesFunnelDetailResponse | null = null;
-  detailRows: MarketingSalesFunnelDetailRow[] = [];
-  detailColumns: string[] = [];
-  detailLoading = false;
-  detailError = '';
 
   loading = true;
   errorMessage = '';
@@ -248,32 +203,6 @@ export class MarketingSalesFunnelComponent implements OnInit {
     return `Detalle ${this.formatInteger(detail)} · KPI ${this.formatInteger(kpi)} · ${sign}${difference || 0}`;
   }
 
-  get detailCanGoPrevious(): boolean {
-    return Boolean(this.detail && this.detail.page > 1 && !this.detailLoading);
-  }
-
-  get detailCanGoNext(): boolean {
-    return Boolean(
-      this.detail
-      && this.detail.total_pages > 0
-      && this.detail.page < this.detail.total_pages
-      && !this.detailLoading,
-    );
-  }
-
-  get detailRangeLabel(): string {
-    if (!this.detail || this.detail.count === 0) {
-      return '0 registros';
-    }
-
-    const start = (this.detail.page - 1) * this.detail.page_size + 1;
-    const end = Math.min(
-      this.detail.page * this.detail.page_size,
-      this.detail.count,
-    );
-    return `${this.formatInteger(start)}–${this.formatInteger(end)} de ${this.formatInteger(this.detail.count)}`;
-  }
-
   ngOnInit(): void {
     this.dashboardRequests
       .pipe(
@@ -281,7 +210,6 @@ export class MarketingSalesFunnelComponent implements OnInit {
           const requestId = ++this.dashboardRequestId;
           this.loading = true;
           this.errorMessage = '';
-          this.closeDetail();
 
           return this.salesFunnelService.getDashboard(month).pipe(
             map(
@@ -343,15 +271,24 @@ export class MarketingSalesFunnelComponent implements OnInit {
     branchId?: number,
     origin?: string,
   ): void {
-    if (!metric || this.detailLoading) {
+    if (!metric) {
       return;
     }
 
-    this.detailQuery = { metric, branchId, origin };
-    this.detail = null;
-    this.detailRows = [];
-    this.detailColumns = [];
-    this.loadDetailPage(1, true);
+    this.dialog.open(MarketingSalesFunnelDetailDialogComponent, {
+      data: {
+        month: this.selectedMonth,
+        metric,
+        branchId,
+        origin,
+      },
+      width: '96vw',
+      maxWidth: '1600px',
+      height: '88vh',
+      maxHeight: '920px',
+      autoFocus: false,
+      restoreFocus: true,
+    });
   }
 
   openOriginDetail(row: SalesFunnelOriginView): void {
@@ -362,82 +299,12 @@ export class MarketingSalesFunnelComponent implements OnInit {
     this.openDetail(metric, row.sucursal_id);
   }
 
-  goToDetailPage(page: number): void {
-    if (
-      !this.detail
-      || this.detailLoading
-      || page < 1
-      || page > this.detail.total_pages
-      || page === this.detail.page
-    ) {
-      return;
-    }
-
-    this.loadDetailPage(page, true);
-  }
-
-  closeDetail(): void {
-    this.detailRequestId += 1;
-    this.detailQuery = null;
-    this.detail = null;
-    this.detailRows = [];
-    this.detailColumns = [];
-    this.detailLoading = false;
-    this.detailError = '';
-  }
-
   formatCurrency(value: number | null | undefined): string {
     return new Intl.NumberFormat('es-MX', {
       style: 'currency',
       currency: 'MXN',
       maximumFractionDigits: 0,
     }).format(value || 0);
-  }
-
-  private loadDetailPage(page: number, scroll: boolean): void {
-    if (!this.detailQuery) {
-      return;
-    }
-
-    const requestId = ++this.detailRequestId;
-    const query = this.detailQuery;
-    this.detailLoading = true;
-    this.detailError = '';
-
-    this.salesFunnelService
-      .getDetail(
-        this.selectedMonth,
-        query.metric,
-        query.branchId,
-        query.origin,
-        page,
-        this.detailPageSize,
-      )
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (detail) => {
-          if (requestId !== this.detailRequestId) {
-            return;
-          }
-          this.detailLoading = false;
-          this.detail = detail;
-          this.detailRows = detail.rows;
-          this.detailColumns = this.resolveDetailColumns(detail.kind);
-          if (scroll) {
-            this.scrollToDetail();
-          }
-        },
-        error: (error: HttpErrorResponse) => {
-          if (requestId !== this.detailRequestId) {
-            return;
-          }
-          this.detailLoading = false;
-          this.detailError = this.resolveDetailError(error);
-          if (scroll) {
-            this.scrollToDetail();
-          }
-        },
-      });
   }
 
   private applyDashboard(data: MarketingSalesFunnelResponse): void {
@@ -609,25 +476,6 @@ export class MarketingSalesFunnelComponent implements OnInit {
     };
   }
 
-  private resolveDetailColumns(kind: string): string[] {
-    if (kind === 'visits') {
-      return this.detailVisitColumns;
-    }
-    if (kind === 'leads') {
-      return this.detailLeadColumns;
-    }
-    return this.detailSalesColumns;
-  }
-
-  private scrollToDetail(): void {
-    setTimeout(() => {
-      this.detailSection?.nativeElement.scrollIntoView({
-        behavior: 'smooth',
-        block: 'start',
-      });
-    });
-  }
-
   private formatInteger(value: number): string {
     return new Intl.NumberFormat('es-MX', {
       maximumFractionDigits: 0,
@@ -703,13 +551,5 @@ export class MarketingSalesFunnelComponent implements OnInit {
       return 'No fue posible conectar con el backend.';
     }
     return 'No fue posible cargar el Funnel de Venta Total.';
-  }
-
-  private resolveDetailError(error: HttpErrorResponse): string {
-    const backendMessage = error.error?.message;
-    if (typeof backendMessage === 'string' && backendMessage.trim()) {
-      return backendMessage.trim();
-    }
-    return 'No fue posible cargar el detalle que compone este indicador.';
   }
 }

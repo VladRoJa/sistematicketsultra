@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, send_file
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from app.models.user_model import UserORM
@@ -11,7 +11,11 @@ from app.services.marketing_access import (
 from app.services.marketing_inputs_service import MarketingInputValidationError
 from app.services.marketing_sales_funnel_detail_service import (
     MarketingSalesFunnelDetailValidationError,
-    build_marketing_sales_funnel_detail,
+)
+from app.services.marketing_sales_funnel_drilldown_service import (
+    DETAIL_EXPORT_MIMETYPE,
+    build_marketing_sales_funnel_drilldown,
+    build_marketing_sales_funnel_drilldown_export,
 )
 from app.services.marketing_sales_funnel_service import (
     build_marketing_sales_funnel,
@@ -75,7 +79,7 @@ def get_marketing_sales_funnel_endpoint():
 def get_marketing_sales_funnel_detail_endpoint():
     try:
         access = _resolve_request_access()
-        result = build_marketing_sales_funnel_detail(
+        result = build_marketing_sales_funnel_drilldown(
             month=request.args.get("month", ""),
             access=access,
             metric=request.args.get("metric", ""),
@@ -83,6 +87,8 @@ def get_marketing_sales_funnel_detail_endpoint():
             origin=request.args.get("origin"),
             page=request.args.get("page"),
             page_size=request.args.get("page_size"),
+            sort_by=request.args.get("sort_by"),
+            sort_dir=request.args.get("sort_dir"),
         )
         return jsonify(result), 200
     except MarketingAuthorizationError as exc:
@@ -101,5 +107,45 @@ def get_marketing_sales_funnel_detail_endpoint():
             {
                 "status": "error",
                 "message": "Falló la consulta del detalle del funnel.",
+            }
+        ), 500
+
+
+@marketing_sales_funnel_bp.get("/sales-funnel/detail/export")
+@jwt_required()
+def export_marketing_sales_funnel_detail_endpoint():
+    try:
+        access = _resolve_request_access()
+        output, filename = build_marketing_sales_funnel_drilldown_export(
+            month=request.args.get("month", ""),
+            access=access,
+            metric=request.args.get("metric", ""),
+            branch_id=request.args.get("branch_id"),
+            origin=request.args.get("origin"),
+            sort_by=request.args.get("sort_by"),
+            sort_dir=request.args.get("sort_dir"),
+        )
+        return send_file(
+            output,
+            mimetype=DETAIL_EXPORT_MIMETYPE,
+            as_attachment=True,
+            download_name=filename,
+        )
+    except MarketingAuthorizationError as exc:
+        return jsonify(
+            {"status": "error", "message": str(exc)}
+        ), 403
+    except (
+        MarketingInputValidationError,
+        MarketingSalesFunnelDetailValidationError,
+    ) as exc:
+        return jsonify(
+            {"status": "error", "message": str(exc)}
+        ), 400
+    except Exception:
+        return jsonify(
+            {
+                "status": "error",
+                "message": "Falló la exportación del detalle del funnel.",
             }
         ), 500

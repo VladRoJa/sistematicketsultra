@@ -1,0 +1,117 @@
+<div class="audit-dialog">
+  <header class="audit-dialog__header">
+    <div class="audit-dialog__heading">
+      <p>Auditoría del indicador</p>
+      <h2>{{ detail?.title || 'Cargando detalle…' }}</h2>
+      <div *ngIf="detail" class="audit-dialog__meta">
+        <span>{{ detail.count | number:'1.0-0' }} registros</span>
+        <span>Página {{ detail.page }} de {{ detail.total_pages || 1 }}</span>
+        <span>{{ detail.page_size }} por página</span>
+        <span *ngIf="detail.kind === 'sales'">
+          {{ formatCurrency(detail.revenue_total) }}
+        </span>
+      </div>
+    </div>
+
+    <div class="audit-dialog__actions">
+      <button
+        mat-stroked-button
+        type="button"
+        [disabled]="!detail || exporting"
+        (click)="exportExcel()"
+      >
+        <mat-spinner *ngIf="exporting" diameter="16"></mat-spinner>
+        <mat-icon *ngIf="!exporting">download</mat-icon>
+        {{ exporting ? 'Exportando…' : 'Exportar Excel' }}
+      </button>
+
+      <button
+        mat-icon-button
+        type="button"
+        aria-label="Cerrar auditoría"
+        (click)="close()"
+      >
+        <mat-icon>close</mat-icon>
+      </button>
+    </div>
+  </header>
+
+  <div *ngIf="errorMessage" class="audit-dialog__error" role="alert">
+    <mat-icon>error_outline</mat-icon>
+    <span>{{ errorMessage }}</span>
+  </div>
+
+  <div class="audit-dialog__body">
+    <div *ngIf="loading && !detail" class="audit-dialog__initial-loading">
+      <mat-spinner diameter="34"></mat-spinner>
+      <span>Cargando detalle del indicador…</span>
+    </div>
+
+    <div *ngIf="detail" class="audit-table-wrap">
+      <table mat-table [dataSource]="rows" class="audit-table">
+        <ng-container
+          *ngFor="let column of columns"
+          [matColumnDef]="column.key"
+        >
+          <th mat-header-cell *matHeaderCellDef>
+            <button
+              type="button"
+              class="sort-header"
+              [matTooltip]="sortTooltip(column)"
+              (click)="toggleSort(column.key)"
+            >
+              <span>{{ column.label }}</span>
+              <mat-icon [class.sort-header__active]="sortBy === column.key">
+                {{ sortIcon(column.key) }}
+              </mat-icon>
+            </button>
+          </th>
+          <td mat-cell *matCellDef="let row">
+            {{ formatCell(row, column.key) }}
+          </td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></tr>
+        <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
+      </table>
+
+      <div *ngIf="loading" class="audit-table__loading-overlay">
+        <mat-spinner diameter="30"></mat-spinner>
+        <span>Actualizando vista…</span>
+      </div>
+    </div>
+  </div>
+
+  <footer *ngIf="detail" class="audit-dialog__footer">
+    <div class="audit-dialog__range">
+      <strong>{{ rangeLabel }}</strong>
+      <span *ngIf="sortBy">
+        Ordenado por {{ sortBy }} · {{ sortDir === 'asc' ? 'ascendente' : 'descendente' }}
+      </span>
+    </div>
+
+    <div class="audit-dialog__pagination">
+      <button
+        mat-stroked-button
+        type="button"
+        [disabled]="!canGoPrevious"
+        (click)="goToPage(detail.page - 1)"
+      >
+        <mat-icon>chevron_left</mat-icon>
+        Anterior
+      </button>
+
+      <span>Página {{ detail.page }} de {{ detail.total_pages || 1 }}</span>
+
+      <button
+        mat-stroked-button
+        type="button"
+        [disabled]="!canGoNext"
+        (click)="goToPage(detail.page + 1)"
+      >
+        Siguiente
+        <mat-icon>chevron_right</mat-icon>
+      </button>
+    </div>
+  </footer>
+</div>
