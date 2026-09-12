@@ -11,6 +11,7 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -34,6 +35,9 @@ import {
   MarketingSalesFunnelResponse,
   MarketingSalesOriginBreakdown,
 } from './marketing-sales-funnel.models';
+import {
+  MarketingSalesFunnelDetailDialogComponent,
+} from './marketing-sales-funnel-detail-dialog.component';
 import { MarketingSalesFunnelService } from './marketing-sales-funnel.service';
 
 
@@ -100,6 +104,7 @@ type DashboardRequestResult =
   imports: [
     CommonModule,
     MatButtonModule,
+    MatDialogModule,
     MatFormFieldModule,
     MatIconModule,
     MatProgressSpinnerModule,
@@ -114,6 +119,7 @@ type DashboardRequestResult =
 export class MarketingSalesFunnelComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   private readonly salesFunnelService = inject(MarketingSalesFunnelService);
+  private readonly dialog = inject(MatDialog);
   private readonly dashboardRequests = new Subject<string>();
   private dashboardRequestId = 0;
   private detailRequestId = 0;
@@ -343,15 +349,25 @@ export class MarketingSalesFunnelComponent implements OnInit {
     branchId?: number,
     origin?: string,
   ): void {
-    if (!metric || this.detailLoading) {
+    if (!metric) {
       return;
     }
 
-    this.detailQuery = { metric, branchId, origin };
-    this.detail = null;
-    this.detailRows = [];
-    this.detailColumns = [];
-    this.loadDetailPage(1, true);
+    this.closeDetail();
+    this.dialog.open(MarketingSalesFunnelDetailDialogComponent, {
+      data: {
+        month: this.selectedMonth,
+        metric,
+        branchId,
+        origin,
+      },
+      width: '96vw',
+      maxWidth: '1600px',
+      height: '88vh',
+      maxHeight: '920px',
+      autoFocus: false,
+      restoreFocus: true,
+    });
   }
 
   openOriginDetail(row: SalesFunnelOriginView): void {
