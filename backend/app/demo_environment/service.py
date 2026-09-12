@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import func
+from sqlalchemy import func, or_
 
 from app.models.sucursal_model import Sucursal, SucursalOperationalStatus
 from app.models.suite_governance import SuiteSucursalRegionAssignmentORM
@@ -39,17 +39,22 @@ class DemoBranchProvisionResult:
 
 
 def _find_demo_branch(session) -> Sucursal | None:
+    """Resuelve la demo por semántica canónica o por su llave natural inicial."""
+
     rows = (
         session.query(Sucursal)
         .filter(
-            func.upper(func.trim(Sucursal.serie)) == DEMO_BRANCH_SERIE,
+            or_(
+                Sucursal.is_demo.is_(True),
+                func.upper(func.trim(Sucursal.serie)) == DEMO_BRANCH_SERIE,
+            )
         )
         .all()
     )
 
     if len(rows) > 1:
         raise DemoEnvironmentError(
-            "Existe más de una sucursal con serie DEMO; no es seguro provisionar."
+            "Existe más de una candidata a sucursal DEMO; no es seguro provisionar."
         )
 
     return rows[0] if rows else None
@@ -115,7 +120,7 @@ def ensure_demo_branch(session) -> DemoBranchProvisionResult:
             )
 
         # El provisionador solo reafirma invariantes; no pisa nombres/direcciones
-        # que hayan sido personalizados para una presentación.
+        # ni la serie si fueron personalizados para una presentación.
         branch.operational_status = SucursalOperationalStatus.ACTIVA
         branch.is_demo = True
         session.flush()
