@@ -1,6 +1,10 @@
 from datetime import date
 from types import SimpleNamespace
 
+from app.services.marketing_sales_funnel_detail_service import (
+    _sale_matches_metric,
+    _visit_matches_metric,
+)
 from app.services.marketing_sales_funnel_service import (
     ORIGIN_IVENTAS_META,
     ORIGIN_IVENTAS_OTHER,
@@ -164,3 +168,44 @@ def test_latest_iventas_interaction_controls_meta_classification():
         )
         == ORIGIN_IVENTAS_OTHER
     )
+
+
+def test_drilldown_sale_filters_follow_same_attribution_hierarchy():
+    assert _sale_matches_metric(
+        "sales_total",
+        None,
+        phone="6861234567",
+        origin=ORIGIN_IVENTAS_META,
+    )
+    assert _sale_matches_metric(
+        "sales_with_phone",
+        None,
+        phone="6861234567",
+        origin=ORIGIN_REFERRAL,
+    )
+    assert _sale_matches_metric(
+        "sales_iventas",
+        None,
+        phone="6861234567",
+        origin=ORIGIN_IVENTAS_OTHER,
+    )
+    assert not _sale_matches_metric(
+        "sales_iventas",
+        None,
+        phone="6861234567",
+        origin=ORIGIN_SOCIAL_UNTRACED,
+    )
+    assert _sale_matches_metric(
+        "origin",
+        ORIGIN_REFERRAL,
+        phone=None,
+        origin=ORIGIN_REFERRAL,
+    )
+
+
+def test_drilldown_visit_filters_do_not_treat_unmatched_as_iventas():
+    assert _visit_matches_metric("visits_total", None)
+    assert _visit_matches_metric("visits_iventas_meta", ORIGIN_IVENTAS_META)
+    assert _visit_matches_metric("visits_iventas", ORIGIN_IVENTAS_OTHER)
+    assert _visit_matches_metric("visits_not_iventas", None)
+    assert not _visit_matches_metric("visits_iventas", None)
