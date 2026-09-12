@@ -66,8 +66,11 @@ def _aggregate_rows(rows: list[RetentionBranchRow]) -> dict[str, Any]:
         if row.meta_bajas_mes is not None
     ]
 
-    actual = sum(actual_values) if actual_values else None
-    target = sum(target_values) if target_values else None
+    actual_complete = bool(rows) and len(actual_values) == len(rows)
+    target_complete = bool(rows) and len(target_values) == len(rows)
+
+    actual = sum(actual_values) if actual_complete else None
+    target = sum(target_values) if target_complete else None
     usage = _ratio(actual, target)
     remaining = None
     if actual is not None and target is not None:
@@ -91,6 +94,14 @@ def _branch_catalog_by_canon() -> dict[str, TrackBranchCatalogORM]:
         for row in rows
         if str(row.sucursal_canon or "").strip()
     }
+
+
+def _branch_sort_key(row: RetentionBranchRow) -> tuple[float, str]:
+    usage = _ratio(row.bajas_reales_mtd, row.meta_bajas_mes)
+    return (
+        -(usage if usage is not None else -1.0),
+        row.sucursal.casefold(),
+    )
 
 
 def build_retention_summary(
@@ -162,16 +173,7 @@ def build_retention_summary(
             )
         )
 
-    rows.sort(
-        key=lambda row: (
-            -(
-                _ratio(row.bajas_reales_mtd, row.meta_bajas_mes)
-                if _ratio(row.bajas_reales_mtd, row.meta_bajas_mes) is not None
-                else -1.0
-            ),
-            row.sucursal.casefold(),
-        )
-    )
+    rows.sort(key=_branch_sort_key)
 
     return {
         "status": "ok",
