@@ -1,0 +1,301 @@
+.ticket-dialog {
+  width: min(1180px, 94vw);
+  max-height: 90vh;
+  overflow: auto;
+  color: #1f2937;
+}
+
+.ticket-dialog__header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #fff;
+  padding: 18px 20px 14px;
+}
+
+.ticket-dialog__header span,
+.ticket-dialog__header p {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.ticket-dialog__header h2,
+.ticket-dialog__header p {
+  margin: 2px 0 0;
+}
+
+.ticket-dialog__close {
+  min-height: 36px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  padding: 0 12px;
+  cursor: pointer;
+}
+
+.ticket-dialog__status-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 12px 20px 0;
+}
+
+.ticket-dialog__status-row span {
+  border: 1px solid #dbe2ea;
+  background: #f8fafc;
+  padding: 5px 8px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.ticket-dialog__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 18px;
+  padding: 18px 20px 22px;
+}
+
+.ticket-dialog__main,
+.ticket-dialog__side {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+}
+
+.detail-block,
+.commitment-card,
+.side-card {
+  border: 1px solid #dbe2ea;
+  background: #fff;
+  padding: 14px;
+}
+
+.detail-block h3,
+.commitment-card h3,
+.side-card h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.detail-block__heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.detail-block__heading p {
+  margin: 3px 0 0;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.detail-block__heading > span {
+  min-width: 28px;
+  border: 1px solid #cbd5e1;
+  padding: 4px 7px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 14px;
+  margin: 12px 0 0;
+}
+
+.detail-grid--dates {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.detail-grid dt {
+  color: #64748b;
+  font-size: 11px;
+}
+
+.detail-grid dd {
+  margin: 2px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.detail-copy {
+  margin-top: 12px;
+}
+
+.detail-copy span {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.detail-copy p {
+  margin: 4px 0 0;
+  line-height: 1.45;
+  font-size: 13px;
+}
+
+.history-list {
+  display: grid;
+  gap: 0;
+  margin-top: 12px;
+}
+
+.history-item {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr);
+  gap: 10px;
+  border-top: 1px solid #edf1f5;
+  padding: 11px 0;
+}
+
+.history-item:first-child {
+  border-top: 0;
+}
+
+.history-item__marker {
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: #334155;
+}
+
+.history-item__topline {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.history-item__topline strong {
+  font-size: 12px;
+}
+
+.history-item__topline span,
+.history-item small {
+  color: #64748b;
+  font-size: 10px;
+}
+
+.history-item p {
+  margin: 4px 0;
+  font-size: 12px;
+}
+
+.empty-history {
+  margin: 12px 0 0;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.commitment-card {
+  display: grid;
+  gap: 12px;
+  border-top: 3px solid #1d4ed8;
+}
+
+.commitment-card__eyebrow {
+  color: #1d4ed8;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.commitment-card p,
+.side-card p,
+.side-card small {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.commitment-card label {
+  display: grid;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.commitment-card input,
+.commitment-card textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  padding: 8px 9px;
+  font: inherit;
+}
+
+.commitment-card textarea {
+  resize: vertical;
+}
+
+.commitment-card button {
+  min-height: 40px;
+  border: 1px solid #1d4ed8;
+  background: #1d4ed8;
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.commitment-card button:disabled {
+  cursor: default;
+  opacity: .55;
+}
+
+.commitment-card__error {
+  border-left: 3px solid #b91c1c;
+  background: #fef2f2;
+  padding: 8px;
+  color: #991b1b;
+  font-size: 11px;
+}
+
+.side-card a {
+  display: inline-block;
+  margin-top: 6px;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+@media (max-width: 900px) {
+  .ticket-dialog__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .ticket-dialog {
+    width: 96vw;
+  }
+
+  .ticket-dialog__header,
+  .ticket-dialog__grid {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .detail-grid,
+  .detail-grid--dates {
+    grid-template-columns: 1fr;
+  }
+
+  .history-item__topline {
+    flex-direction: column;
+    gap: 2px;
+  }
+}
