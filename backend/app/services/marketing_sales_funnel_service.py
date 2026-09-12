@@ -31,6 +31,12 @@ VALID_VENTA_TOTAL_STATUSES = frozenset({"ACTIVO", "FACTURADO"})
 ELIGIBLE_VISIT_DESCRIPTIONS = frozenset(
     {"PASE 2 DIAS GRATIS", "PASE RECORRIDO"}
 )
+CANCELLED_STATUS_TERMS = (
+    "CANCELADO",
+    "CANCELADA",
+    "ANULADO",
+    "ANULADA",
+)
 
 ORIGIN_IVENTAS_META = "IVENTAS_META"
 ORIGIN_IVENTAS_OTHER = "IVENTAS_OTHER"
@@ -286,7 +292,11 @@ def _load_visits(
     events: dict[str, _CommercialVisit] = {}
 
     for row in rows:
-        if not _is_valid_status(row.estatus):
+        normalized_status = _normalize_text(row.estatus)
+        if any(
+            term in normalized_status
+            for term in CANCELLED_STATUS_TERMS
+        ):
             continue
         if _normalize_text(row.descripcion) not in ELIGIBLE_VISIT_DESCRIPTIONS:
             continue
@@ -747,6 +757,7 @@ def build_marketing_sales_funnel(
 
         if visit.phone is None:
             stats.visits_unmatchable += 1
+            stats.visits_not_iventas += 1
             continue
 
         origin = _match_iventas(
