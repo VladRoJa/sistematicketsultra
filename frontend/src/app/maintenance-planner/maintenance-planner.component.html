@@ -20,7 +20,7 @@
       <select [(ngModel)]="branchId" (ngModelChange)="onFiltersChanged()">
         <option [ngValue]="null">Todas</option>
         <option *ngFor="let branch of board?.branches || []" [ngValue]="branch.id">
-          {{ branch.name }}
+          {{ branch.name }}{{ branch.is_demo ? ' · DEMO' : '' }}
         </option>
       </select>
     </label>
@@ -118,6 +118,7 @@
                   </span>
                 </div>
                 <span class="ticket-card__branch">{{ ticket.sucursal }}</span>
+                <span class="ticket-card__flag" *ngIf="ticket.sucursal_is_demo">DEMO · datos de prueba</span>
                 <span class="ticket-card__equipment">{{ ticket.equipo }}</span>
                 <span class="ticket-card__meta" *ngIf="ticket.falla">{{ ticket.falla }}</span>
                 <span class="ticket-card__meta" *ngIf="ticket.asignado_a">Resp. {{ ticket.asignado_a }}</span>
@@ -148,7 +149,9 @@
             (click)="openTicket(ticket)"
           >
             <div>
-              <strong>#{{ ticket.ticket_id }} · {{ ticket.sucursal }}</strong>
+              <strong>
+                #{{ ticket.ticket_id }} · {{ ticket.sucursal }}{{ ticket.sucursal_is_demo ? ' · DEMO' : '' }}
+              </strong>
               <span>{{ ticket.equipo }}</span>
             </div>
             <span class="status-badge" [ngClass]="statusClass(ticket.planner_status)">
