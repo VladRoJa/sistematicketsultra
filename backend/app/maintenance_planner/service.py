@@ -6,8 +6,14 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm.attributes import flag_modified
 
+from app.models.sucursal_model import Sucursal
 from app.models.ticket_model import Ticket
 from app.utils.pm_permissions import can_pm_execute, can_pm_view
+from app.utils.sucursal_audience import (
+    SUCURSAL_AUDIENCE_ANALYTICAL,
+    SUCURSAL_AUDIENCE_OPERATIONAL,
+    normalize_sucursal_audience,
+)
 from app.utils.ticket_filters import filtrar_tickets_por_usuario
 
 
@@ -83,6 +89,10 @@ def _resolve_window(start_date: str | None, end_date: str | None) -> PlannerWind
     return PlannerWindow(start=start, end=end)
 
 
+def _ticket_branch(ticket: Ticket):
+    return ticket.sucursal_destino or ticket.sucursal
+
+
 def _ticket_branch_id(ticket: Ticket) -> int | None:
     value = ticket.sucursal_id_destino or ticket.sucursal_id
     try:
@@ -92,7 +102,7 @@ def _ticket_branch_id(ticket: Ticket) -> int | None:
 
 
 def _ticket_branch_name(ticket: Ticket) -> str:
-    branch = ticket.sucursal_destino or ticket.sucursal
+    branch = _ticket_branch(ticket)
     if branch is None:
         return "Sin sucursal"
     return str(
@@ -133,6 +143,7 @@ def _serialize_ticket(ticket: Ticket, today: date) -> dict:
     inventory = ticket.inventario
     family = ticket.familia_equipo
     failure = ticket.falla_mantenimiento
+    branch = _ticket_branch(ticket)
 
     history = [
         {**item}
@@ -149,6 +160,7 @@ def _serialize_ticket(ticket: Ticket, today: date) -> dict:
         "username": ticket.username,
         "sucursal_id": _ticket_branch_id(ticket),
         "sucursal": _ticket_branch_name(ticket),
+        "sucursal_is_demo": bool(getattr(branch, "is_demo", False)),
         "asignado_a": ticket.asignado_a,
         "fecha_creacion": _iso_business(ticket.fecha_creacion),
         "fecha_en_progreso": _iso_business(ticket.fecha_en_progreso),
@@ -187,15 +199,22 @@ def _serialize_ticket(ticket: Ticket, today: date) -> dict:
     }
 
 
-def _base_query(user):
+def _base_query(user, *, audience: str):
     if not can_pm_view(user):
         raise MaintenancePlannerAuthorizationError(
             "No tienes permiso para consultar el Planner de Mantenimiento."
         )
 
-    return filtrar_tickets_por_usuario(user).filter(
+    query = filtrar_tickets_por_usuario(user).filter(
         Ticket.departamento_id == MAINTENANCE_DEPARTMENT_ID
     )
+
+    if audience == SUCURSAL_AUDIENCE_ANALYTICAL:
+        query = query.filter(
+            Ticket.sucursal_destino.has(Sucursal.is_demo.is_(False))
+        )
+
+    return query
 
 
 def build_planner_board(
@@ -205,11 +224,20 @@ def build_planner_board(
     end_date: str | None = None,
     branch_ids: list[int] | None = None,
     state: str | None = None,
+    audience: str = SUCURSAL_AUDIENCE_OPERATIONAL,
 ) -> dict:
     window = _resolve_window(start_date, end_date)
     today = datetime.now(BUSINESS_TZ).date()
 
-    query = _base_query(user)
+    try:
+        normalized_audience = normalize_sucursal_audience(
+            audience,
+            default=SUCURSAL_AUDIENCE_OPERATIONAL,
+        )
+    except ValueError as exc:
+        raise MaintenancePlannerError(str(exc)) from exc
+
+    query = _base_query(user, audience=normalized_audience)
 
     normalized_branch_ids = sorted(
         {
@@ -246,11 +274,15 @@ def build_planner_board(
         row for row in active_rows if row["planner_status"] == "PROGRAMADO"
     ]
 
-    branches_by_id: dict[int, str] = {}
+    branches_by_id: dict[int, dict] = {}
     for row in rows:
         branch_id = row["sucursal_id"]
         if branch_id is not None:
-            branches_by_id[branch_id] = row["sucursal"]
+            branches_by_id[branch_id] = {
+                "id": branch_id,
+                "name": row["sucursal"],
+                "is_demo": bool(row["sucursal_is_demo"]),
+            }
 
     days = []
     current = window.start
@@ -272,6 +304,7 @@ def build_planner_board(
     return {
         "module": "maintenance_planner",
         "version": "v2",
+        "audience": normalized_audience,
         "window": {
             "start_date": window.start.isoformat(),
             "end_date": window.end.isoformat(),
@@ -287,12 +320,10 @@ def build_planner_board(
                 1 for row in active_rows if row["necesita_refaccion"]
             ),
         },
-        "branches": [
-            {"id": branch_id, "name": name}
-            for branch_id, name in sorted(
-                branches_by_id.items(), key=lambda item: item[1].casefold()
-            )
-        ],
+        "branches": sorted(
+            branches_by_id.values(),
+            key=lambda item: (item["is_demo"], item["name"].casefold()),
+        ),
         "days": days,
         "overdue": overdue,
         "unscheduled": unscheduled,
