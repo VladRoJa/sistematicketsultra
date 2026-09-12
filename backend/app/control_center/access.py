@@ -97,6 +97,30 @@ def _normalize_branch_ids(values: tuple[int, ...]) -> tuple[int, ...]:
     return tuple(sorted({int(value) for value in values if int(value) > 0}))
 
 
+def _filter_analytical_branch_ids(
+    branch_ids: tuple[int, ...],
+) -> tuple[int, ...]:
+    """Reduce un universo autorizado a sucursales reales de BI.
+
+    Control es una superficie analítica; una asignación accidental a una
+    sucursal demo nunca debe ampliar ni contaminar su alcance.
+    """
+
+    normalized = _normalize_branch_ids(branch_ids)
+    if not normalized:
+        return ()
+
+    rows = (
+        db.session.query(Sucursal.sucursal_id)
+        .filter(
+            Sucursal.sucursal_id.in_(normalized),
+            Sucursal.is_demo.is_(False),
+        )
+        .all()
+    )
+    return tuple(sorted(int(row[0]) for row in rows))
+
+
 def _load_region_keys_by_branch(
     branch_ids: tuple[int, ...],
     *,
@@ -114,9 +138,14 @@ def _load_region_keys_by_branch(
             SuiteRegionORM,
             SuiteRegionORM.id == SuiteSucursalRegionAssignmentORM.region_id,
         )
+        .join(
+            Sucursal,
+            Sucursal.sucursal_id == SuiteSucursalRegionAssignmentORM.sucursal_id,
+        )
         .filter(
             SuiteSucursalRegionAssignmentORM.sucursal_id.in_(branch_ids),
             SuiteRegionORM.is_active.is_(True),
+            Sucursal.is_demo.is_(False),
             or_(
                 SuiteSucursalRegionAssignmentORM.valid_from.is_(None),
                 SuiteSucursalRegionAssignmentORM.valid_from <= as_of_date,
@@ -156,11 +185,13 @@ def _resolve_regional_authorized_scope(
         if primary_branch_id is not None:
             branch_ids = (primary_branch_id,)
 
-    branch_ids = _normalize_branch_ids(branch_ids)
+    branch_ids = _filter_analytical_branch_ids(
+        _normalize_branch_ids(branch_ids)
+    )
 
     if not branch_ids:
         raise ControlAuthorizationError(
-            "El gerente regional no tiene sucursales autorizadas."
+            "El gerente regional no tiene sucursales reales autorizadas para Control."
         )
 
     regions_by_branch = _load_region_keys_by_branch(
@@ -234,9 +265,15 @@ def resolve_control_access(
             "El gerente no tiene una sucursal primaria válida."
         )
 
+    analytical_branch_ids = _filter_analytical_branch_ids((primary_branch_id,))
+    if not analytical_branch_ids:
+        raise ControlAuthorizationError(
+            "La sucursal primaria del gerente no participa en Control."
+        )
+
     scope = ControlScope(
         type="BRANCH",
-        branch_ids=(primary_branch_id,),
+        branch_ids=analytical_branch_ids,
     )
     return ControlAccess(
         role=role,
@@ -261,9 +298,14 @@ def _load_region_scope(
             SuiteRegionORM,
             SuiteRegionORM.id == SuiteSucursalRegionAssignmentORM.region_id,
         )
+        .join(
+            Sucursal,
+            Sucursal.sucursal_id == SuiteSucursalRegionAssignmentORM.sucursal_id,
+        )
         .filter(
             SuiteRegionORM.region_key == normalized_region_key,
             SuiteRegionORM.is_active.is_(True),
+            Sucursal.is_demo.is_(False),
             or_(
                 SuiteSucursalRegionAssignmentORM.valid_from.is_(None),
                 SuiteSucursalRegionAssignmentORM.valid_from <= as_of_date,
@@ -280,7 +322,7 @@ def _load_region_scope(
         sorted({int(row.sucursal_id) for row in rows})
     )
     if not branch_ids:
-        raise ControlValidationError("region_key no tiene sucursales vigentes.")
+        raise ControlValidationError("region_key no tiene sucursales reales vigentes.")
 
     return ControlScope(
         type="REGION",
@@ -300,11 +342,16 @@ def _load_branch_scope(branch_id: Any) -> ControlScope:
 
     exists = (
         db.session.query(Sucursal.sucursal_id)
-        .filter(Sucursal.sucursal_id == normalized_branch_id)
+        .filter(
+            Sucursal.sucursal_id == normalized_branch_id,
+            Sucursal.is_demo.is_(False),
+        )
         .first()
     )
     if exists is None:
-        raise ControlValidationError("branch_id no existe.")
+        raise ControlValidationError(
+            "branch_id no existe o no participa en el universo analítico."
+        )
 
     return ControlScope(
         type="BRANCH",

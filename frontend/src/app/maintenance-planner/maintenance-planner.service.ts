@@ -5,6 +5,8 @@ import { environment } from 'src/environments/environment';
 import { SessionService } from '../core/auth/session.service';
 import { TicketService } from '../services/ticket.service';
 
+export type MaintenancePlannerAudience = 'operational' | 'analytical';
+
 export interface MaintenancePlannerHistoryItem {
   fecha?: string | null;
   fecha_solucion?: string | null;
@@ -31,6 +33,7 @@ export interface MaintenancePlannerTicket {
   username: string;
   sucursal_id: number | null;
   sucursal: string;
+  sucursal_is_demo: boolean;
   asignado_a: string | null;
   fecha_creacion: string | null;
   fecha_en_progreso: string | null;
@@ -69,6 +72,7 @@ export interface MaintenancePlannerDay {
 export interface MaintenancePlannerBoard {
   module: string;
   version: string;
+  audience: MaintenancePlannerAudience;
   window: {
     start_date: string;
     end_date: string;
@@ -82,7 +86,7 @@ export interface MaintenancePlannerBoard {
     unscheduled: number;
     needs_spare_part: number;
   };
-  branches: Array<{ id: number; name: string }>;
+  branches: Array<{ id: number; name: string; is_demo: boolean }>;
   days: MaintenancePlannerDay[];
   overdue: MaintenancePlannerTicket[];
   unscheduled: MaintenancePlannerTicket[];
@@ -106,6 +110,7 @@ export class MaintenancePlannerService {
     endDate: string;
     branchId?: number | null;
     estado?: string | null;
+    audience?: MaintenancePlannerAudience;
   }): Observable<MaintenancePlannerBoard> {
     let params = new HttpParams()
       .set('start_date', filters.startDate)
@@ -116,6 +121,9 @@ export class MaintenancePlannerService {
     }
     if (filters.estado && filters.estado !== 'todos') {
       params = params.set('estado', filters.estado);
+    }
+    if (filters.audience) {
+      params = params.set('audience', filters.audience);
     }
 
     return this.http.get<MaintenancePlannerBoard>(`${this.baseUrl}/board`, { params });

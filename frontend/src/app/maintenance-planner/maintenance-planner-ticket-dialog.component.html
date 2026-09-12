@@ -3,7 +3,7 @@
     <div>
       <span>Ticket #{{ ticket.ticket_id }}</span>
       <h2>{{ ticket.equipo }}</h2>
-      <p>{{ ticket.sucursal }}</p>
+      <p>{{ ticket.sucursal }}{{ ticket.sucursal_is_demo ? ' · DEMO · datos de prueba' : '' }}</p>
     </div>
     <button type="button" class="ticket-dialog__close" (click)="close()">Cerrar</button>
   </header>

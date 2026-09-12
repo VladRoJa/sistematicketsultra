@@ -44,6 +44,7 @@ def get_board():
             end_date=request.args.get("end_date"),
             branch_ids=_parse_branch_ids(),
             state=request.args.get("estado"),
+            audience=request.args.get("audience"),
         )
         return jsonify(payload), 200
     except MaintenancePlannerError as exc:

@@ -319,7 +319,8 @@ export class OpeningsService {
   }
 
   listSucursales(): Observable<SucursalOption[]> {
-    return this.http.get<SucursalOption[]>(this.sucursalesUrl);
+    const params = new HttpParams().set('audience', 'analytical');
+    return this.http.get<SucursalOption[]>(this.sucursalesUrl, { params });
   }
 
   extractOpening(response: OpeningSingleResponse): Opening {

@@ -1,7 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule } from '@angular/forms';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { ActivatedRoute, Router } from '@angular/router';
 import { environment } from 'src/environments/environment';
 
@@ -141,10 +141,15 @@ ngOnInit(): void {
     this.loading = true;
     this.errorMsg = null;
 
-    // Nota: aquí estás usando proxy relativo /api/...
-    // Lo respetamos tal cual.
+    const params = new HttpParams().set('audience', 'operational');
+
+    // Administración de usuarios sí soporta la sucursal DEMO para poder
+    // asignar usuarios de prueba de forma explícita.
     this.http
-      .get<Array<{ sucursal_id: number; sucursal: string }>>(`${this.API_BASE_URL}/sucursales/listar`)
+      .get<Array<{ sucursal_id: number; sucursal: string }>>(
+        `${this.API_BASE_URL}/sucursales/listar`,
+        { params },
+      )
       .subscribe({
         next: (rows) => {
           this.sucursales = (rows ?? []).map((r) => ({
