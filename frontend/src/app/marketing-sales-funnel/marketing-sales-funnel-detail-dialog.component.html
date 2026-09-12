@@ -8,7 +8,7 @@
         <span>Página {{ detail.page }} de {{ detail.total_pages || 1 }}</span>
         <span>{{ detail.page_size }} por página</span>
         <span *ngIf="detail.kind === 'sales'">
-          {{ detail.revenue_total | currency:'MXN':'symbol-narrow':'1.0-0':'es-MX' }}
+          {{ formatCurrency(detail.revenue_total) }}
         </span>
       </div>
     </div>
