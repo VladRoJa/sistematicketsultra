@@ -21,23 +21,15 @@ from app.models.warehouse import (
     VentaTotalSnapshotRowORM,
 )
 from app.services.marketing_access import MarketingAccess
-from app.services.marketing_dashboard_service import (
-    load_visible_marketing_branches,
-)
+from app.services.marketing_dashboard_service import load_visible_marketing_branches
 from app.services.marketing_inputs_service import parse_month
-from app.services.marketing_iventas_dashboard_data_service import (
-    read_iventas_dashboard_month_data,
-)
 from app.services.marketing_phone import normalize_phone
 
 
 MATCH_WINDOW_DAYS = 30
 VALID_VENTA_TOTAL_STATUSES = frozenset({"ACTIVO", "FACTURADO"})
 ELIGIBLE_VISIT_DESCRIPTIONS = frozenset(
-    {
-        "PASE 2 DIAS GRATIS",
-        "PASE RECORRIDO",
-    }
+    {"PASE 2 DIAS GRATIS", "PASE RECORRIDO"}
 )
 
 ORIGIN_IVENTAS_META = "IVENTAS_META"
@@ -62,24 +54,14 @@ ORIGIN_LABELS = {
     ORIGIN_UNKNOWN: "Sin identificar",
 }
 
-ORIGIN_DISPLAY_ORDER = (
-    ORIGIN_IVENTAS_META,
-    ORIGIN_IVENTAS_OTHER,
-    ORIGIN_SOCIAL_UNTRACED,
-    ORIGIN_REFERRAL,
-    ORIGIN_PROXIMITY,
-    ORIGIN_PLAZA,
-    ORIGIN_OFFLINE,
-    ORIGIN_OTHER_SURVEY,
-    ORIGIN_UNKNOWN,
-)
+ORIGIN_DISPLAY_ORDER = tuple(ORIGIN_LABELS.keys())
 
 
 @dataclass(frozen=True)
 class _IventasEvidence:
     branch_id: int
     phone: str
-    created_date: date
+    interaction_date: date
     has_meta_ad: bool
 
 
@@ -210,13 +192,6 @@ def _is_membership_row(row: Any) -> bool:
     return _normalize_text(getattr(row, "clave_producto", None)) == "MEMBRESIA"
 
 
-def _is_visit_row(row: Any) -> bool:
-    description = _normalize_text(getattr(row, "descripcion", None))
-    if description in ELIGIBLE_VISIT_DESCRIPTIONS:
-        return True
-    return _normalize_text(getattr(row, "tipo", None)) == "PASE"
-
-
 def _classify_survey(value: Any) -> str:
     normalized = _normalize_text(value)
 
@@ -262,7 +237,6 @@ def _load_branch_alias_map() -> dict[str, int]:
 
 
 def _select_venta_total_snapshot(
-    *,
     month_start: date,
 ) -> VentaTotalSnapshotORM | None:
     return (
@@ -281,8 +255,7 @@ def _select_venta_total_snapshot(
     )
 
 
-def _visit_event_key(
-    *,
+def _visit_key(
     row: VentaTotalSnapshotRowORM,
     branch_id: int,
     visit_date: date,
@@ -296,29 +269,26 @@ def _visit_event_key(
     if folio:
         return f"folio:{branch_id}:{folio}"
 
-    raw_phone = phone or _normalize_text(row.telefono) or "SIN_TELEFONO"
     return (
         f"fallback:{branch_id}:{visit_date.isoformat()}:"
-        f"{raw_phone}:{_normalize_text(row.descripcion)}"
+        f"{phone or _normalize_text(row.telefono) or 'SIN_TELEFONO'}:"
+        f"{_normalize_text(row.descripcion)}"
     )
 
 
-def _build_visit_population(
-    *,
+def _load_visits(
     rows: list[VentaTotalSnapshotRowORM],
     month_start: date,
     branch_ids: tuple[int, ...],
     alias_map: dict[str, int],
 ) -> list[_CommercialVisit]:
-    allowed_branch_ids = set(branch_ids)
-    unique_events: dict[str, _CommercialVisit] = {}
+    allowed = set(branch_ids)
+    events: dict[str, _CommercialVisit] = {}
 
     for row in rows:
         if not _is_valid_status(row.estatus):
             continue
-
-        description = _normalize_text(row.descripcion)
-        if description not in ELIGIBLE_VISIT_DESCRIPTIONS:
+        if _normalize_text(row.descripcion) not in ELIGIBLE_VISIT_DESCRIPTIONS:
             continue
 
         try:
@@ -331,38 +301,40 @@ def _build_visit_population(
             continue
 
         branch_id = alias_map.get(_normalize_text(row.sucursal))
-        if branch_id is None or branch_id not in allowed_branch_ids:
+        if branch_id is None or branch_id not in allowed:
             continue
 
         phone = normalize_phone(row.telefono)
-        event_key = _visit_event_key(
-            row=row,
-            branch_id=branch_id,
-            visit_date=visit_date,
-            phone=phone,
-        )
-        unique_events.setdefault(
-            event_key,
-            _CommercialVisit(
-                event_key=event_key,
-                branch_id=branch_id,
-                visit_date=visit_date,
-                phone=phone,
-            ),
+        key = _visit_key(row, branch_id, visit_date, phone)
+        events.setdefault(
+            key,
+            _CommercialVisit(key, branch_id, visit_date, phone),
         )
 
-    return list(unique_events.values())
+    with_phone: dict[tuple[int, str], _CommercialVisit] = {}
+    without_phone: dict[str, _CommercialVisit] = {}
+
+    for event in sorted(
+        events.values(),
+        key=lambda item: (
+            item.visit_date,
+            item.branch_id,
+            item.phone or "",
+            item.event_key,
+        ),
+    ):
+        if event.phone is None:
+            without_phone.setdefault(event.event_key, event)
+        else:
+            with_phone.setdefault((event.branch_id, event.phone), event)
+
+    return [*with_phone.values(), *without_phone.values()]
 
 
-def _sale_identity(
-    *,
+def _sale_key(
     row: VentaTotalSnapshotRowORM,
     branch_id: int,
 ) -> str:
-    pin = str(row.pin or "").strip()
-    if pin:
-        return f"pin:{branch_id}:{pin}"
-
     id_orden = str(row.id_orden or "").strip()
     if id_orden:
         return f"id_orden:{branch_id}:{id_orden}"
@@ -371,20 +343,23 @@ def _sale_identity(
     if folio:
         return f"folio:{branch_id}:{folio}"
 
+    pin = str(row.pin or "").strip()
+    if pin:
+        return f"pin:{branch_id}:{pin}"
+
     return f"row:{branch_id}:{row.id}"
 
 
-def _build_new_sale_population(
-    *,
+def _load_new_sales(
     rows: list[VentaTotalSnapshotRowORM],
     month_start: date,
     branch_ids: tuple[int, ...],
     alias_map: dict[str, int],
 ) -> list[_CommercialSale]:
-    allowed_branch_ids = set(branch_ids)
-    all_rows_by_identity: dict[
+    allowed = set(branch_ids)
+    grouped: dict[
         str,
-        list[tuple[VentaTotalSnapshotRowORM, date]],
+        list[tuple[VentaTotalSnapshotRowORM, date, int]],
     ] = defaultdict(list)
     candidate_keys: set[str] = set()
 
@@ -396,122 +371,95 @@ def _build_new_sale_population(
             row_date = _parse_row_date(row.fecha)
         except ValueError:
             continue
-
         if row_date.replace(day=1) != month_start:
             continue
 
         branch_id = alias_map.get(_normalize_text(row.sucursal))
-        if branch_id is None or branch_id not in allowed_branch_ids:
+        if branch_id is None or branch_id not in allowed:
             continue
 
-        identity = _sale_identity(row=row, branch_id=branch_id)
-        all_rows_by_identity[identity].append((row, row_date))
+        key = _sale_key(row, branch_id)
+        grouped[key].append((row, row_date, branch_id))
 
-        if (
-            _is_new_flag(row.nuevo)
-            and _is_membership_row(row)
-            and not _is_visit_row(row)
-        ):
-            candidate_keys.add(identity)
+        if _is_new_flag(row.nuevo) and _is_membership_row(row):
+            candidate_keys.add(key)
 
     result: list[_CommercialSale] = []
 
-    for identity in sorted(candidate_keys):
-        grouped_rows = all_rows_by_identity.get(identity, [])
-        if not grouped_rows:
-            continue
-
-        candidate_rows = [
-            (row, row_date)
-            for row, row_date in grouped_rows
-            if _is_new_flag(row.nuevo)
-            and _is_membership_row(row)
-            and not _is_visit_row(row)
+    for key in sorted(candidate_keys):
+        group = grouped[key]
+        membership_rows = [
+            item
+            for item in group
+            if _is_new_flag(item[0].nuevo)
+            and _is_membership_row(item[0])
         ]
-        if not candidate_rows:
+        if not membership_rows:
             continue
 
-        candidate_rows.sort(
-            key=lambda pair: (
-                pair[1],
-                int(pair[0].row_index or 0),
-            )
+        membership_rows.sort(
+            key=lambda item: (item[1], int(item[0].row_index or 0))
         )
-        primary_row, sale_date = candidate_rows[0]
-        branch_id = alias_map[_normalize_text(primary_row.sucursal)]
+        primary_row, sale_date, branch_id = membership_rows[0]
 
-        phone = None
-        for row, _ in candidate_rows + grouped_rows:
-            phone = normalize_phone(row.telefono)
-            if phone is not None:
-                break
-
+        phone = next(
+            (
+                normalized
+                for row, _, _ in [*membership_rows, *group]
+                if (normalized := normalize_phone(row.telefono)) is not None
+            ),
+            None,
+        )
         survey_raw = next(
             (
                 str(row.encuesta).strip()
-                for row, _ in candidate_rows + grouped_rows
+                for row, _, _ in [*membership_rows, *group]
                 if str(row.encuesta or "").strip()
             ),
             None,
         )
-
         revenue = sum(
-            (_to_decimal(row.total) for row, _ in grouped_rows),
+            (_to_decimal(row.total) for row, _, _ in group),
             Decimal("0"),
         )
 
         result.append(
             _CommercialSale(
-                sale_key=identity,
-                branch_id=branch_id,
-                sale_date=sale_date,
-                phone=phone,
-                revenue=revenue,
-                survey_raw=survey_raw,
+                key,
+                branch_id,
+                sale_date,
+                phone,
+                revenue,
+                survey_raw,
             )
         )
 
     return result
 
 
-def _load_iventas_evidence(
-    *,
-    month_start: date,
-    branch_ids: tuple[int, ...],
-) -> tuple[
-    dict[tuple[int, str], list[_IventasEvidence]],
-    tuple[int, ...],
-]:
-    lookback_start = month_start - timedelta(days=MATCH_WINDOW_DAYS)
-    month_end = _month_end(month_start)
-
-    runs = (
+def _canonical_runs_for_window(
+    window_start: date,
+    window_end: date,
+) -> list[MarketingIventasSyncRunORM]:
+    return (
         MarketingIventasSyncRunORM.query.filter(
             MarketingIventasSyncRunORM.status == "COMPLETED",
             MarketingIventasSyncRunORM.is_canonical.is_(True),
-            MarketingIventasSyncRunORM.date_to >= lookback_start,
-            MarketingIventasSyncRunORM.date_from <= month_end,
+            MarketingIventasSyncRunORM.date_to >= window_start,
+            MarketingIventasSyncRunORM.date_from <= window_end,
         )
         .order_by(MarketingIventasSyncRunORM.date_from.asc())
         .all()
     )
-    run_ids = tuple(int(run.id) for run in runs)
+
+
+def _meta_contact_keys(
+    run_ids: tuple[int, ...],
+) -> set[tuple[int, int]]:
     if not run_ids:
-        return {}, ()
+        return set()
 
-    contacts = (
-        MarketingIventasContactORM.query.filter(
-            MarketingIventasContactORM.sync_run_id.in_(run_ids),
-            MarketingIventasContactORM.sucursal_id.in_(branch_ids),
-            MarketingIventasContactORM.first_message_at_utc.isnot(None),
-            MarketingIventasContactORM.phone_mx10.isnot(None),
-            MarketingIventasContactORM.created_date_local >= lookback_start,
-            MarketingIventasContactORM.created_date_local <= month_end,
-        )
-        .all()
-    )
-
-    meta_rows = (
+    rows = (
         db.session.query(
             MarketingIventasContactTagORM.sync_run_id,
             MarketingIventasContactTagORM.iventas_contact_row_id,
@@ -522,52 +470,94 @@ def _load_iventas_evidence(
         )
         .all()
     )
-    meta_contact_keys = {
+    return {
         (int(sync_run_id), int(contact_row_id))
-        for sync_run_id, contact_row_id in meta_rows
+        for sync_run_id, contact_row_id in rows
     }
 
-    evidence_by_identity: dict[
-        tuple[int, str],
-        list[_IventasEvidence],
-    ] = defaultdict(list)
+
+def _load_iventas_data(
+    month_start: date,
+    branch_ids: tuple[int, ...],
+) -> tuple[
+    dict[tuple[int, str], list[_IventasEvidence]],
+    dict[int, tuple[int, int]],
+    tuple[int, ...],
+]:
+    month_end = _month_end(month_start)
+    lookback_start = month_start - timedelta(days=MATCH_WINDOW_DAYS)
+    runs = _canonical_runs_for_window(lookback_start, month_end)
+    run_ids = tuple(int(run.id) for run in runs)
+    meta_keys = _meta_contact_keys(run_ids)
+
+    evidence: dict[tuple[int, str], list[_IventasEvidence]] = defaultdict(list)
+    month_counts: dict[int, list[int]] = {
+        branch_id: [0, 0]
+        for branch_id in branch_ids
+    }
+
+    if not run_ids:
+        return evidence, {}, run_ids
+
+    contacts = (
+        MarketingIventasContactORM.query.filter(
+            MarketingIventasContactORM.sync_run_id.in_(run_ids),
+            MarketingIventasContactORM.sucursal_id.in_(branch_ids),
+            MarketingIventasContactORM.first_message_at_utc.isnot(None),
+            MarketingIventasContactORM.phone_mx10.isnot(None),
+        )
+        .all()
+    )
+
+    current_period_key = f"IVENTAS-{month_start.strftime('%Y-%m')}"
+    current_run_ids = {
+        int(run.id)
+        for run in runs
+        if str(run.period_key) == current_period_key
+    }
 
     for contact in contacts:
+        branch_id = int(contact.sucursal_id)
         phone = str(contact.phone_mx10 or "").strip()
-        if not phone:
+        interaction_date = contact.first_message_date_local
+        if not phone or interaction_date is None:
             continue
 
-        evidence_by_identity[
-            (int(contact.sucursal_id), phone)
-        ].append(
-            _IventasEvidence(
-                branch_id=int(contact.sucursal_id),
-                phone=phone,
-                created_date=contact.created_date_local,
-                has_meta_ad=(
-                    (int(contact.sync_run_id), int(contact.id))
-                    in meta_contact_keys
-                ),
+        has_meta = (
+            (int(contact.sync_run_id), int(contact.id)) in meta_keys
+        )
+        if lookback_start <= interaction_date <= month_end:
+            evidence[(branch_id, phone)].append(
+                _IventasEvidence(
+                    branch_id,
+                    phone,
+                    interaction_date,
+                    has_meta,
+                )
             )
+
+        if int(contact.sync_run_id) in current_run_ids:
+            month_counts[branch_id][0] += 1
+            if has_meta:
+                month_counts[branch_id][1] += 1
+
+    for items in evidence.values():
+        items.sort(
+            key=lambda item: (item.interaction_date, item.has_meta_ad)
         )
 
-    for values in evidence_by_identity.values():
-        values.sort(
-            key=lambda item: (
-                item.created_date,
-                item.has_meta_ad,
-            )
-        )
+    return (
+        evidence,
+        {
+            branch_id: (counts[0], counts[1])
+            for branch_id, counts in month_counts.items()
+        },
+        run_ids,
+    )
 
-    return evidence_by_identity, run_ids
 
-
-def _match_iventas_origin(
-    *,
-    evidence_by_identity: dict[
-        tuple[int, str],
-        list[_IventasEvidence],
-    ],
+def _match_iventas(
+    evidence: dict[tuple[int, str], list[_IventasEvidence]],
     branch_id: int,
     phone: str | None,
     target_date: date,
@@ -578,44 +568,19 @@ def _match_iventas_origin(
     window_start = target_date - timedelta(days=MATCH_WINDOW_DAYS)
     candidates = [
         item
-        for item in evidence_by_identity.get((branch_id, phone), [])
-        if window_start <= item.created_date <= target_date
+        for item in evidence.get((branch_id, phone), [])
+        if window_start <= item.interaction_date <= target_date
     ]
     if not candidates:
         return None
 
-    latest_date = max(item.created_date for item in candidates)
-    latest_candidates = [
-        item
-        for item in candidates
-        if item.created_date == latest_date
+    latest_date = max(item.interaction_date for item in candidates)
+    latest = [
+        item for item in candidates if item.interaction_date == latest_date
     ]
-    if any(item.has_meta_ad for item in latest_candidates):
+    if any(item.has_meta_ad for item in latest):
         return ORIGIN_IVENTAS_META
     return ORIGIN_IVENTAS_OTHER
-
-
-def _unique_visitors(
-    events: list[_CommercialVisit],
-) -> list[_CommercialVisit]:
-    with_phone: dict[tuple[int, str], _CommercialVisit] = {}
-    without_phone: dict[str, _CommercialVisit] = {}
-
-    for event in sorted(
-        events,
-        key=lambda item: (
-            item.visit_date,
-            item.branch_id,
-            item.phone or "",
-            item.event_key,
-        ),
-    ):
-        if event.phone is None:
-            without_phone.setdefault(event.event_key, event)
-            continue
-        with_phone.setdefault((event.branch_id, event.phone), event)
-
-    return [*with_phone.values(), *without_phone.values()]
 
 
 def _serialize_origin_breakdown(
@@ -626,7 +591,9 @@ def _serialize_origin_breakdown(
             "key": key,
             "label": ORIGIN_LABELS[key],
             "sales": int(stats.origin_counts.get(key, 0)),
-            "revenue": float(stats.origin_revenue.get(key, Decimal("0"))),
+            "revenue": float(
+                stats.origin_revenue.get(key, Decimal("0"))
+            ),
         }
         for key in ORIGIN_DISPLAY_ORDER
     ]
@@ -682,7 +649,7 @@ def _serialize_stats(stats: _BranchStats) -> dict[str, Any]:
 
 
 def _merge_stats(target: _BranchStats, source: _BranchStats) -> None:
-    for field_name in (
+    integer_fields = (
         "iventas_contacts",
         "leads_meta",
         "visits_total",
@@ -697,26 +664,27 @@ def _merge_stats(target: _BranchStats, source: _BranchStats) -> None:
         "sales_iventas_other",
         "sales_not_iventas",
         "sales_without_valid_phone",
-    ):
-        setattr(
-            target,
-            field_name,
-            getattr(target, field_name) + getattr(source, field_name),
-        )
-
-    for field_name in (
+    )
+    decimal_fields = (
         "revenue_total",
         "revenue_iventas",
         "revenue_iventas_meta",
         "revenue_iventas_other",
         "revenue_not_iventas",
-    ):
+    )
+
+    for field_name in integer_fields:
         setattr(
             target,
             field_name,
             getattr(target, field_name) + getattr(source, field_name),
         )
-
+    for field_name in decimal_fields:
+        setattr(
+            target,
+            field_name,
+            getattr(target, field_name) + getattr(source, field_name),
+        )
     for key, value in source.origin_counts.items():
         target.origin_counts[key] += value
     for key, value in source.origin_revenue.items():
@@ -730,72 +698,39 @@ def build_marketing_sales_funnel(
 ) -> dict[str, Any]:
     month_start = parse_month(month)
     branches, branch_ids, scope = load_visible_marketing_branches(access)
-    branch_names = {
-        branch.sucursal_id: branch.name
-        for branch in branches
-    }
-
     stats_by_branch = {
         branch_id: _BranchStats()
         for branch_id in branch_ids
     }
-    limitations: list[str] = []
 
-    iventas_data = read_iventas_dashboard_month_data(
-        month_date=month_start,
+    evidence, month_counts, iventas_run_ids = _load_iventas_data(
+        month_start,
+        branch_ids,
     )
-    if iventas_data.available:
-        for row in iventas_data.branch_metrics or ():
-            branch_id = int(row.sucursal_id)
-            if branch_id not in stats_by_branch:
-                continue
-            stats_by_branch[branch_id].iventas_contacts = int(
-                row.iventas_contacts_with_first_message
-            )
-            stats_by_branch[branch_id].leads_meta = int(
-                row.meta_observed_leads
-            )
-    else:
+    for branch_id, (contacts, leads_meta) in month_counts.items():
+        stats_by_branch[branch_id].iventas_contacts = contacts
+        stats_by_branch[branch_id].leads_meta = leads_meta
+
+    limitations: list[str] = []
+    if not iventas_run_ids:
         limitations.append(
-            "No existe snapshot canónico iVentas para el periodo; "
-            "los cruces iVentas y Meta pueden quedar incompletos."
+            "No existen runs canónicos iVentas para la ventana de cruce."
         )
 
-    snapshot = _select_venta_total_snapshot(month_start=month_start)
+    snapshot = _select_venta_total_snapshot(month_start)
     if snapshot is None:
-        return {
-            "month": month_start.strftime("%Y-%m"),
-            "scope": scope,
-            "summary": _serialize_stats(_BranchStats()),
-            "branches": [
-                {
-                    "sucursal_id": branch.sucursal_id,
-                    "sucursal": branch.name,
-                    **_serialize_stats(stats_by_branch[branch.sucursal_id]),
-                }
-                for branch in branches
-            ],
-            "source": {
-                "venta_total_snapshot_id": None,
-                "venta_total_business_date": None,
-                "iventas_sync_run_ids": [],
-                "match_window_days": MATCH_WINDOW_DAYS,
-            },
-            "data_quality": {
-                "venta_total_available": False,
-                "iventas_available": bool(iventas_data.available),
-                "new_sale_rule": (
-                    "Nuevo=SI + Clave Producto=MEMBRESIA + "
-                    "Estatus ACTIVO/FACTURADO"
-                ),
-                "match_mode": "exact_phone_same_branch_prior_30d",
-                "survey_fallback_only_after_no_iventas_match": True,
-                "limitations": [
-                    *limitations,
-                    "No existe snapshot canónico de Venta Total para el mes.",
-                ],
-            },
-        }
+        limitations.append(
+            "No existe snapshot canónico de Venta Total para el mes."
+        )
+        return _build_response(
+            month_start=month_start,
+            scope=scope,
+            branches=branches,
+            stats_by_branch=stats_by_branch,
+            snapshot=None,
+            iventas_run_ids=iventas_run_ids,
+            limitations=limitations,
+        )
 
     rows = (
         VentaTotalSnapshotRowORM.query.filter_by(snapshot_id=snapshot.id)
@@ -803,30 +738,8 @@ def build_marketing_sales_funnel(
         .all()
     )
     alias_map = _load_branch_alias_map()
-    visits = _unique_visitors(
-        _build_visit_population(
-            rows=rows,
-            month_start=month_start,
-            branch_ids=branch_ids,
-            alias_map=alias_map,
-        )
-    )
-    sales = _build_new_sale_population(
-        rows=rows,
-        month_start=month_start,
-        branch_ids=branch_ids,
-        alias_map=alias_map,
-    )
-    evidence_by_identity, iventas_run_ids = _load_iventas_evidence(
-        month_start=month_start,
-        branch_ids=branch_ids,
-    )
-
-    if not iventas_run_ids:
-        limitations.append(
-            "No hay runs canónicos iVentas suficientes para la ventana "
-            "de cruce de 30 días."
-        )
+    visits = _load_visits(rows, month_start, branch_ids, alias_map)
+    sales = _load_new_sales(rows, month_start, branch_ids, alias_map)
 
     for visit in visits:
         stats = stats_by_branch[visit.branch_id]
@@ -836,11 +749,11 @@ def build_marketing_sales_funnel(
             stats.visits_unmatchable += 1
             continue
 
-        origin = _match_iventas_origin(
-            evidence_by_identity=evidence_by_identity,
-            branch_id=visit.branch_id,
-            phone=visit.phone,
-            target_date=visit.visit_date,
+        origin = _match_iventas(
+            evidence,
+            visit.branch_id,
+            visit.phone,
+            visit.visit_date,
         )
         if origin == ORIGIN_IVENTAS_META:
             stats.visits_iventas += 1
@@ -859,13 +772,12 @@ def build_marketing_sales_funnel(
         if sale.phone is None:
             stats.sales_without_valid_phone += 1
 
-        origin = _match_iventas_origin(
-            evidence_by_identity=evidence_by_identity,
-            branch_id=sale.branch_id,
-            phone=sale.phone,
-            target_date=sale.sale_date,
+        origin = _match_iventas(
+            evidence,
+            sale.branch_id,
+            sale.phone,
+            sale.sale_date,
         )
-
         if origin == ORIGIN_IVENTAS_META:
             stats.sales_iventas += 1
             stats.sales_iventas_meta += 1
@@ -884,6 +796,32 @@ def build_marketing_sales_funnel(
         stats.origin_counts[origin] += 1
         stats.origin_revenue[origin] += sale.revenue
 
+    limitations.append(
+        "Los tags Meta reflejan el estado observado por la API de iVentas; "
+        "una corrección posterior puede reclasificar el origen Meta."
+    )
+
+    return _build_response(
+        month_start=month_start,
+        scope=scope,
+        branches=branches,
+        stats_by_branch=stats_by_branch,
+        snapshot=snapshot,
+        iventas_run_ids=iventas_run_ids,
+        limitations=limitations,
+    )
+
+
+def _build_response(
+    *,
+    month_start: date,
+    scope: dict[str, object],
+    branches: list[Any],
+    stats_by_branch: dict[int, _BranchStats],
+    snapshot: VentaTotalSnapshotORM | None,
+    iventas_run_ids: tuple[int, ...],
+    limitations: list[str],
+) -> dict[str, Any]:
     total_stats = _BranchStats()
     branch_payloads: list[dict[str, Any]] = []
 
@@ -893,16 +831,10 @@ def build_marketing_sales_funnel(
         branch_payloads.append(
             {
                 "sucursal_id": branch.sucursal_id,
-                "sucursal": branch_names[branch.sucursal_id],
+                "sucursal": branch.name,
                 **_serialize_stats(stats),
             }
         )
-
-    limitations.append(
-        "Los tags Meta de iVentas representan el estado observado en el "
-        "snapshot; una corrección posterior de iVentas puede cambiar la "
-        "clasificación Meta sin cambiar la venta de Venta Total."
-    )
 
     return {
         "month": month_start.strftime("%Y-%m"),
@@ -910,19 +842,27 @@ def build_marketing_sales_funnel(
         "summary": _serialize_stats(total_stats),
         "branches": branch_payloads,
         "source": {
-            "venta_total_snapshot_id": int(snapshot.id),
-            "venta_total_business_date": snapshot.business_date.isoformat(),
+            "venta_total_snapshot_id": (
+                int(snapshot.id) if snapshot is not None else None
+            ),
+            "venta_total_business_date": (
+                snapshot.business_date.isoformat()
+                if snapshot is not None
+                else None
+            ),
             "iventas_sync_run_ids": list(iventas_run_ids),
             "match_window_days": MATCH_WINDOW_DAYS,
         },
         "data_quality": {
-            "venta_total_available": True,
-            "iventas_available": bool(iventas_data.available),
+            "venta_total_available": snapshot is not None,
+            "iventas_available": bool(iventas_run_ids),
             "new_sale_rule": (
                 "Nuevo=SI + Clave Producto=MEMBRESIA + "
                 "Estatus ACTIVO/FACTURADO"
             ),
-            "match_mode": "exact_phone_same_branch_prior_30d",
+            "match_mode": (
+                "exact_phone_same_branch_first_message_prior_30d"
+            ),
             "survey_fallback_only_after_no_iventas_match": True,
             "limitations": limitations,
         },
