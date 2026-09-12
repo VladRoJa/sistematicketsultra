@@ -21,11 +21,11 @@ import {
   ControlCenterService,
   ControlContextRequest,
   ControlContextResponse,
+  ControlRetentionResponse,
   ControlScope,
-  ControlScopeType,
 } from './control-center.service';
 
-type ControlMetricKey = 'forecast' | 'conversion' | 'leads' | 'maintenance';
+type ControlMetricKey = 'forecast' | 'conversion' | 'retention' | 'maintenance';
 type ControlDetailLevel = 'summary' | 'why' | 'where' | 'source';
 type ControlTone = 'normal' | 'attention' | 'critical' | 'muted';
 
@@ -91,6 +91,7 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
   catalogs: TrackForecastCenterCatalogsResponse | null = null;
   forecastData: TrackForecastCenterResponse | null = null;
   marketingData: MarketingDashboardResponse | null = null;
+  retentionData: ControlRetentionResponse | null = null;
   maintenanceData: MaintenancePlannerBoard | null = null;
 
   scopeOptions: ControlScopeOption[] = [];
@@ -122,6 +123,10 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
     return this.loadingContext || this.loadingSources;
   }
 
+  get canOpenSelectedModule(): boolean {
+    return this.selectedMetric !== 'retention';
+  }
+
   get scopeLabel(): string {
     const selected = this.scopeOptions.find(
       (option) => option.key === this.selectedScopeKey,
@@ -132,6 +137,7 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
   get metricCards(): ControlMetricCard[] {
     const forecast = this.forecastData?.summary;
     const marketing = this.marketingOverview;
+    const retention = this.retentionData?.summary;
     const maintenance = this.maintenanceOverview;
 
     const forecastGap = forecast?.projected_gap_to_goal ?? null;
@@ -142,7 +148,14 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
         : 'normal';
 
     const conversion = marketing.leadToSaleRate;
-    const conversionTone: ControlTone = conversion === null ? 'muted' : 'normal';
+    const retentionUsage = retention?.limit_usage_ratio ?? null;
+    const retentionTone: ControlTone = retentionUsage === null
+      ? 'muted'
+      : retentionUsage > 1
+        ? 'critical'
+        : retentionUsage >= 0.85
+          ? 'attention'
+          : 'normal';
 
     return [
       {
@@ -163,16 +176,16 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
         supportingText: marketing.leads === null
           ? 'Leads no disponibles para el alcance actual'
           : `${this.formatInteger(marketing.sales)} ventas de ${this.formatInteger(marketing.leads)} leads`,
-        tone: conversionTone,
+        tone: conversion === null ? 'muted' : 'normal',
       },
       {
-        key: 'leads',
-        title: 'Leads',
-        value: marketing.leads === null
-          ? '—'
-          : this.formatInteger(marketing.leads),
-        supportingText: `${this.formatInteger(marketing.visits)} visitas · ${this.formatInteger(marketing.sales)} ventas`,
-        tone: marketing.leads === null ? 'muted' : 'normal',
+        key: 'retention',
+        title: 'Bajas',
+        value: this.formatInteger(retention?.bajas_reales_mtd),
+        supportingText: retentionUsage === null
+          ? 'Sin meta comparable disponible'
+          : `${this.formatPercent(retentionUsage)} del límite mensual`,
+        tone: retentionTone,
       },
       {
         key: 'maintenance',
@@ -203,6 +216,19 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
         metric: 'forecast',
         title: 'Forecast debajo de meta',
         text: `Brecha proyectada ${this.formatSignedCurrency(forecastGap)}.`,
+      });
+    }
+
+    const retention = this.retentionData?.summary;
+    if (
+      retention?.limit_usage_ratio !== null
+      && retention?.limit_usage_ratio !== undefined
+      && retention.limit_usage_ratio > 1
+    ) {
+      items.push({
+        metric: 'retention',
+        title: 'Bajas por encima del límite',
+        text: `${this.formatPercent(retention.limit_usage_ratio)} de la meta/límite mensual consumido.`,
       });
     }
 
@@ -350,12 +376,14 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
       return;
     }
 
-    if (this.selectedMetric === 'conversion' || this.selectedMetric === 'leads') {
+    if (this.selectedMetric === 'conversion') {
       void this.router.navigate(['/marketing-conversion']);
       return;
     }
 
-    void this.router.navigate(['/maintenance-planner']);
+    if (this.selectedMetric === 'maintenance') {
+      void this.router.navigate(['/maintenance-planner']);
+    }
   }
 
   formatCurrency(value: number | null | undefined): string {
@@ -403,6 +431,7 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
     const week = this.resolveWeek(this.cutoffDate);
     const month = this.cutoffDate.slice(0, 7);
     const forecastParams = this.buildForecastParams(this.context.effective_scope);
+    const scopeRequest = this.requestForEffectiveScope(this.context.effective_scope);
 
     this.loadingSources = true;
     this.errorMessage = '';
@@ -410,13 +439,18 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
     forkJoin({
       forecast: this.controlService.getForecast(forecastParams),
       marketing: this.controlService.getMarketing(month),
+      retention: this.controlService.getRetention({
+        ...scopeRequest,
+        cutoffDate: this.cutoffDate,
+      }),
       maintenance: this.controlService.getMaintenance(week.start, week.end),
     })
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: ({ forecast, marketing, maintenance }) => {
+        next: ({ forecast, marketing, retention, maintenance }) => {
           this.forecastData = forecast;
           this.marketingData = marketing;
+          this.retentionData = retention;
           this.maintenanceData = maintenance;
           this.loadingSources = false;
         },
@@ -544,6 +578,7 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
   private buildSummaryRows(): ControlDetailRow[] {
     const forecast = this.forecastData?.summary;
     const marketing = this.marketingOverview;
+    const retention = this.retentionData?.summary;
     const maintenance = this.maintenanceOverview;
 
     switch (this.selectedMetric) {
@@ -571,14 +606,15 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
           { label: 'Lead → venta', value: this.formatPercent(marketing.leadToSaleRate) },
           { label: 'Lead → visita', value: this.formatPercent(marketing.leadToVisitRate) },
           { label: 'Visita → venta', value: this.formatPercent(marketing.visitToSaleRate) },
+          { label: 'Leads', value: marketing.leads === null ? '—' : this.formatInteger(marketing.leads) },
           { label: 'Ventas atribuidas', value: this.formatInteger(marketing.sales) },
         ];
-      case 'leads':
+      case 'retention':
         return [
-          { label: 'Leads', value: marketing.leads === null ? '—' : this.formatInteger(marketing.leads) },
-          { label: 'Visitas', value: this.formatInteger(marketing.visits) },
-          { label: 'Ventas', value: this.formatInteger(marketing.sales) },
-          { label: 'Ingreso atribuido', value: this.formatCurrency(marketing.salesRevenue) },
+          { label: 'Bajas MTD', value: this.formatInteger(retention?.bajas_reales_mtd) },
+          { label: 'Límite / meta mensual', value: this.formatInteger(retention?.meta_bajas_mes) },
+          { label: 'Límite consumido', value: this.formatPercent(retention?.limit_usage_ratio) },
+          { label: 'Margen restante', value: this.formatInteger(retention?.remaining_margin) },
         ];
       default:
         return [
@@ -593,6 +629,7 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
   private buildWhyRows(): ControlDetailRow[] {
     const forecast = this.forecastData?.summary;
     const marketing = this.marketingOverview;
+    const retention = this.retentionData?.summary;
     const maintenance = this.maintenanceOverview;
 
     switch (this.selectedMetric) {
@@ -619,15 +656,26 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
           { label: 'Leads', value: marketing.leads === null ? '—' : this.formatInteger(marketing.leads) },
           { label: 'Visitas', value: this.formatInteger(marketing.visits) },
           { label: 'Ventas', value: this.formatInteger(marketing.sales) },
-          { label: 'Pérdida lead → visita', value: this.formatPercent(marketing.leadToVisitRate) },
-          { label: 'Cierre visita → venta', value: this.formatPercent(marketing.visitToSaleRate) },
+          { label: 'Lead → visita', value: this.formatPercent(marketing.leadToVisitRate) },
+          { label: 'Visita → venta', value: this.formatPercent(marketing.visitToSaleRate) },
         ];
-      case 'leads':
+      case 'retention':
         return [
-          { label: 'Leads observados', value: marketing.leads === null ? '—' : this.formatInteger(marketing.leads) },
-          { label: 'Llegan a visita', value: this.formatInteger(marketing.visits) },
-          { label: 'Terminan en venta', value: this.formatInteger(marketing.sales) },
-          { label: 'Conversión final', value: this.formatPercent(marketing.leadToSaleRate) },
+          {
+            label: 'Bajas acumuladas',
+            value: this.formatInteger(retention?.bajas_reales_mtd),
+            supportingText: 'En control de bajas, un número mayor es peor.',
+          },
+          {
+            label: 'Límite mensual',
+            value: this.formatInteger(retention?.meta_bajas_mes),
+            supportingText: 'Suma de las metas/límites de las sucursales del alcance.',
+          },
+          {
+            label: 'Consumo del límite',
+            value: this.formatPercent(retention?.limit_usage_ratio),
+            supportingText: 'Más de 100% significa que el límite mensual ya fue rebasado.',
+          },
         ];
       default:
         return [
@@ -665,24 +713,31 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
       }];
     }
 
-    if (this.selectedMetric === 'conversion' || this.selectedMetric === 'leads') {
-      const branches = [...this.marketingOverview.branches].sort((a, b) => {
-        if (this.selectedMetric === 'conversion') {
-          return (a.lead_to_sale_rate ?? Number.POSITIVE_INFINITY)
-            - (b.lead_to_sale_rate ?? Number.POSITIVE_INFINITY);
-        }
-        return (b.leads ?? -1) - (a.leads ?? -1);
-      });
+    if (this.selectedMetric === 'conversion') {
+      return [...this.marketingOverview.branches]
+        .sort((a, b) =>
+          (a.lead_to_sale_rate ?? Number.POSITIVE_INFINITY)
+          - (b.lead_to_sale_rate ?? Number.POSITIVE_INFINITY),
+        )
+        .slice(0, 8)
+        .map((branch) => ({
+          label: branch.sucursal,
+          value: this.formatPercent(branch.lead_to_sale_rate),
+          supportingText: `${branch.leads === null ? '—' : this.formatInteger(branch.leads)} leads · ${this.formatInteger(branch.sales)} ventas`,
+        }));
+    }
 
-      return branches.slice(0, 8).map((branch) => ({
-        label: branch.sucursal,
-        value: this.selectedMetric === 'conversion'
-          ? this.formatPercent(branch.lead_to_sale_rate)
-          : branch.leads === null
-            ? '—'
-            : this.formatInteger(branch.leads),
-        supportingText: `${this.formatInteger(branch.visits)} visitas · ${this.formatInteger(branch.sales)} ventas`,
-      }));
+    if (this.selectedMetric === 'retention') {
+      return [...(this.retentionData?.branches || [])]
+        .sort((a, b) =>
+          (b.limit_usage_ratio ?? -1) - (a.limit_usage_ratio ?? -1),
+        )
+        .slice(0, 8)
+        .map((branch) => ({
+          label: branch.sucursal,
+          value: this.formatInteger(branch.bajas_reales_mtd),
+          supportingText: `${this.formatPercent(branch.limit_usage_ratio)} de su límite`,
+        }));
     }
 
     const counts = new Map<string, number>();
@@ -711,12 +766,18 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
           { label: 'Contrato', value: 'Forecast Center' },
         ];
       case 'conversion':
-      case 'leads':
         return [
           { label: 'Módulo dueño', value: 'Marketing y Conversión' },
           { label: 'Mes', value: this.marketingData?.month || this.cutoffDate.slice(0, 7) },
           { label: 'Alcance', value: this.scopeLabel },
           { label: 'Cohorte', value: this.marketingData?.cohort_mode || '—' },
+        ];
+      case 'retention':
+        return [
+          { label: 'Módulo dueño', value: 'Control / adapter Retención' },
+          { label: 'Fuente canónica', value: 'track_daily_mart' },
+          { label: 'Versión Track', value: this.retentionData?.resolved_version ? `#${this.retentionData.resolved_version.id}` : '—' },
+          { label: 'Corte', value: this.retentionData?.cutoff_date || this.cutoffDate },
         ];
       default:
         return [
@@ -849,6 +910,25 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
     return {
       scope: 'branch',
       scope_id: branch.sucursal_canon,
+    };
+  }
+
+  private requestForEffectiveScope(scope: ControlScope): ControlContextRequest {
+    if (scope.type === 'GLOBAL') {
+      return { scopeType: 'GLOBAL' };
+    }
+    if (scope.type === 'REGION') {
+      return {
+        scopeType: 'REGION',
+        regionKey: scope.region_keys[0] || null,
+      };
+    }
+    if (scope.type === 'BRANCH_POOL') {
+      return { scopeType: 'BRANCH_POOL' };
+    }
+    return {
+      scopeType: 'BRANCH',
+      branchId: scope.branch_ids[0] || null,
     };
   }
 
