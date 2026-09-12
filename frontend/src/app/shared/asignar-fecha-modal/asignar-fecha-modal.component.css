@@ -1,0 +1,214 @@
+:host {
+  display: block;
+  width: 100%;
+  color: var(--ultra-gray-900);
+  box-sizing: border-box;
+}
+
+.asignar-fecha-modal,
+.asignar-fecha-modal__header,
+.asignar-fecha-modal__content,
+.asignar-fecha-modal__actions {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.asignar-fecha-modal__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.asignar-fecha-modal__icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  background: var(--ultra-orange-soft);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  font-size: 20px;
+}
+
+.asignar-fecha-modal__title h2 {
+  margin: 0;
+  color: var(--ultra-gray-900);
+  font-size: 19px;
+  line-height: 1.15;
+  font-weight: 900;
+}
+
+.asignar-fecha-modal__title p {
+  margin: 4px 0 0;
+  color: var(--ultra-gray-600);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.asignar-fecha-modal__notice {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border-radius: var(--ultra-radius-lg);
+  border: 1px solid rgba(229, 69, 37, 0.24);
+  background: var(--ultra-orange-soft);
+  color: var(--ultra-gray-800);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.asignar-fecha-modal__notice strong {
+  color: var(--ultra-orange);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.asignar-fecha-modal__notice span {
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.asignar-fecha-modal__content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.w-full {
+  width: 100%;
+}
+
+.asignar-fecha-modal ::ng-deep .mat-mdc-form-field {
+  --mdc-filled-text-field-container-color: var(--ultra-gray-50);
+  --mdc-filled-text-field-label-text-color: var(--ultra-gray-600);
+  --mdc-filled-text-field-focus-label-text-color: var(--ultra-orange);
+  --mdc-filled-text-field-active-indicator-color: var(--ultra-gray-300);
+  --mdc-filled-text-field-focus-active-indicator-color: var(--ultra-orange);
+}
+
+.asignar-fecha-modal ::ng-deep .mat-mdc-text-field-wrapper {
+  border-radius: 14px 14px 8px 8px;
+  overflow: hidden;
+}
+
+.asignar-fecha-modal textarea {
+  min-height: 92px;
+  resize: vertical;
+  line-height: 1.35;
+}
+
+.asignar-fecha-diagnostico {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--ultra-gray-200);
+  border-radius: var(--ultra-radius-lg);
+  background: var(--ultra-gray-50);
+}
+
+.asignar-fecha-diagnostico__header,
+.asignar-fecha-diagnostico__sin-familia {
+  grid-column: 1 / -1;
+}
+
+.asignar-fecha-diagnostico__header strong,
+.asignar-fecha-refaccion__header strong {
+  color: var(--ultra-gray-900);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.asignar-fecha-diagnostico__header p,
+.asignar-fecha-refaccion__header p {
+  margin: 3px 0 0;
+  color: var(--ultra-gray-600);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.asignar-fecha-diagnostico__familia {
+  min-height: 56px;
+  padding: 8px 12px;
+  border: 1px solid var(--ultra-gray-300);
+  border-radius: var(--ultra-radius-md);
+  background: var(--ultra-gray-100);
+}
+
+.asignar-fecha-diagnostico__familia span,
+.asignar-fecha-diagnostico__familia strong {
+  display: block;
+}
+
+.asignar-fecha-diagnostico__familia span {
+  margin-bottom: 4px;
+  color: var(--ultra-gray-600);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.asignar-fecha-diagnostico__sin-familia {
+  padding: 10px 12px;
+  border: 1px solid #f0b7aa;
+  border-radius: var(--ultra-radius-md);
+  background: #fff4f1;
+  color: #8a2f1d;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.asignar-fecha-refaccion {
+  padding: 14px;
+  border: 1px solid var(--ultra-gray-200);
+  border-radius: var(--ultra-radius-lg);
+  background: var(--ultra-gray-50);
+}
+
+.asignar-fecha-refaccion__header {
+  margin-bottom: 10px;
+}
+
+.asignar-fecha-refaccion__checkbox {
+  display: block;
+  margin-bottom: 10px;
+  color: var(--ultra-gray-800);
+  font-weight: 800;
+}
+
+.asignar-fecha-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.asignar-fecha-modal__cancel,
+.asignar-fecha-modal__save {
+  min-width: 110px;
+  border-radius: 999px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.asignar-fecha-modal__save {
+  background: var(--ultra-orange);
+  color: var(--ultra-surface);
+}
+
+@media (max-width: 560px) {
+  .asignar-fecha-modal__actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .asignar-fecha-modal__cancel,
+  .asignar-fecha-modal__save {
+    width: 100%;
+  }
+}

@@ -1,8 +1,9 @@
 import { CommonModule } from '@angular/common';
 import { Component, Inject } from '@angular/core';
-import { FormsModule } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 
+import { AsignarFechaModalComponent } from '../shared/asignar-fecha-modal/asignar-fecha-modal.component';
+import { AsignarFechaPayload } from '../types/ticket';
 import {
   MaintenancePlannerHistoryItem,
   MaintenancePlannerService,
@@ -12,24 +13,32 @@ import {
 export interface MaintenancePlannerTicketDialogData {
   ticket: MaintenancePlannerTicket;
   canSchedule: boolean;
+  canCaptureDiagnosis: boolean;
   initialDate?: string | null;
 }
 
 @Component({
   selector: 'app-maintenance-planner-ticket-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatDialogModule],
+  imports: [CommonModule, MatDialogModule, AsignarFechaModalComponent],
   templateUrl: './maintenance-planner-ticket-dialog.component.html',
   styleUrls: ['./maintenance-planner-ticket-dialog.component.css'],
 })
 export class MaintenancePlannerTicketDialogComponent {
   readonly ticket = this.data.ticket;
   readonly canSchedule = this.data.canSchedule;
+  readonly canCaptureDiagnosis = this.data.canCaptureDiagnosis;
+  readonly commitmentTicket = {
+    ...this.data.ticket,
+    id: this.data.ticket.ticket_id,
+    departamento_id: 1,
+    departamento_nombre: 'Mantenimiento',
+  };
 
-  scheduleDate = this.data.initialDate
-    || this.ticket.fecha_solucion_date
-    || this.todayDateOnly();
-  scheduleReason = '';
+  readonly commitmentDate = this.parseCommitmentDate(
+    this.data.initialDate || this.ticket.fecha_solucion_date,
+  );
+
   saving = false;
   errorMessage = '';
 
@@ -48,13 +57,8 @@ export class MaintenancePlannerTicketDialogComponent {
     });
   }
 
-  saveCommitment(): void {
-    if (
-      !this.canSchedule
-      || !this.scheduleDate
-      || !this.scheduleReason.trim()
-      || this.saving
-    ) {
+  saveCommitment(event: AsignarFechaPayload): void {
+    if (!this.canSchedule || this.saving) {
       return;
     }
 
@@ -62,10 +66,10 @@ export class MaintenancePlannerTicketDialogComponent {
     this.errorMessage = '';
 
     this.plannerService
-      .updateCommitment(
+      .updateCommitmentFromForm(
         this.ticket,
-        this.scheduleDate,
-        this.scheduleReason,
+        event,
+        this.canCaptureDiagnosis,
       )
       .subscribe({
         next: () => {
@@ -77,7 +81,7 @@ export class MaintenancePlannerTicketDialogComponent {
           this.errorMessage =
             error?.error?.mensaje
             || error?.error?.message
-            || 'No se pudo actualizar la fecha compromiso.';
+            || 'No se pudo actualizar el compromiso del ticket.';
         },
       });
   }
@@ -145,11 +149,16 @@ export class MaintenancePlannerTicketDialogComponent {
     );
   }
 
-  private todayDateOnly(): string {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+  private parseCommitmentDate(value: string | null | undefined): Date | null {
+    if (!value) {
+      return null;
+    }
+
+    const [year, month, day] = value.split('-').map(Number);
+    if (!year || !month || !day) {
+      return null;
+    }
+
+    return new Date(year, month - 1, day, 7, 0, 0);
   }
 }

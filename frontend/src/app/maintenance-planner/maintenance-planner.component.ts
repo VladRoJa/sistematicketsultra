@@ -1,11 +1,7 @@
+import { CdkDragDrop, DragDropModule, transferArrayItem } from '@angular/cdk/drag-drop';
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import {
-  CdkDragDrop,
-  DragDropModule,
-  transferArrayItem,
-} from '@angular/cdk/drag-drop';
 import { MatDialog } from '@angular/material/dialog';
 
 import {
@@ -14,9 +10,7 @@ import {
   MaintenancePlannerService,
   MaintenancePlannerTicket,
 } from './maintenance-planner.service';
-import {
-  MaintenancePlannerTicketDialogComponent,
-} from './maintenance-planner-ticket-dialog.component';
+import { MaintenancePlannerTicketDialogComponent } from './maintenance-planner-ticket-dialog.component';
 
 @Component({
   selector: 'app-maintenance-planner',
@@ -124,6 +118,9 @@ export class MaintenancePlannerComponent implements OnInit {
       data: {
         ticket,
         canSchedule: Boolean(this.board?.permissions.can_schedule),
+        canCaptureDiagnosis: Boolean(
+          this.board?.permissions.can_capture_diagnosis,
+        ),
         initialDate: initialDate || null,
       },
       width: '1180px',

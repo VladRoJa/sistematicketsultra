@@ -8,6 +8,9 @@ from app.maintenance_planner.service import (
     build_planner_board,
     schedule_ticket,
 )
+from app.services.mantenimiento_equipos_service import (
+    puede_capturar_diagnostico_mantenimiento,
+)
 
 
 maintenance_planner_bp = Blueprint("maintenance_planner", __name__)
@@ -45,6 +48,9 @@ def get_board():
             branch_ids=_parse_branch_ids(),
             state=request.args.get("estado"),
             audience=request.args.get("audience"),
+        )
+        payload.setdefault("permissions", {})["can_capture_diagnosis"] = (
+            puede_capturar_diagnostico_mantenimiento(user)
         )
         return jsonify(payload), 200
     except MaintenancePlannerError as exc:

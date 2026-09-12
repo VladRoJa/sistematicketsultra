@@ -135,6 +135,17 @@ export interface TicketDTO {
   [key: string]: any;
 }
 
+/** Contrato UI compartido para asignar/reprogramar el compromiso de un ticket. */
+export interface AsignarFechaPayload {
+  fecha: Date;
+  motivo: string;
+  necesita_refaccion?: boolean;
+  descripcion_refaccion?: string;
+  refaccion_definida_por_jefe?: boolean;
+  falla_mantenimiento_id?: number;
+  condicion_operativa?: CondicionOperativa;
+}
+
 /** Payload para fijar/actualizar compromiso (fecha_solucion y refacción) */
 export interface SetCompromisoPayload {
   /** ISO: 2025-03-14T07:00:00.000Z (tu backend convierte a UTC) */

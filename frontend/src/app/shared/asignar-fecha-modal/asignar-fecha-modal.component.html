@@ -1,0 +1,154 @@
+<section class="asignar-fecha-modal">
+  <header class="asignar-fecha-modal__header">
+    <span class="asignar-fecha-modal__icon">📅</span>
+
+    <div class="asignar-fecha-modal__title">
+      <h2>Asignar fecha de solución</h2>
+      <p>
+        Define la fecha compromiso y registra el motivo para mantener trazabilidad.
+      </p>
+    </div>
+  </header>
+
+  <div class="asignar-fecha-modal__notice">
+    <strong>Registro obligatorio</strong>
+    <span>
+      La fecha y el motivo quedarán asociados al historial del ticket.
+    </span>
+  </div>
+
+  <div class="asignar-fecha-modal__content">
+    <mat-form-field appearance="fill" class="w-full">
+      <mat-label>Selecciona una fecha</mat-label>
+      <input
+        matInput
+        [matDatepicker]="picker"
+        [(ngModel)]="fechaSeleccionada"
+        [min]="minDate"
+        required
+        #fechaNg="ngModel"
+      />
+      <mat-datepicker-toggle matSuffix [for]="picker"></mat-datepicker-toggle>
+      <mat-datepicker #picker></mat-datepicker>
+      <mat-error *ngIf="fechaNg.invalid && fechaNg.touched">
+        La fecha es obligatoria.
+      </mat-error>
+    </mat-form-field>
+
+    <mat-form-field appearance="fill" class="w-full">
+      <mat-label>Motivo del cambio</mat-label>
+      <textarea
+        matInput
+        [(ngModel)]="motivo"
+        rows="3"
+        required
+        #motivoNg="ngModel"
+        placeholder="Ej. Se asigna fecha por programación operativa, disponibilidad o seguimiento del área."
+      ></textarea>
+      <mat-error *ngIf="motivoNg.invalid && motivoNg.touched">
+        El motivo es obligatorio.
+      </mat-error>
+    </mat-form-field>
+
+    <section
+      *ngIf="mostrarDiagnosticoEstructurado"
+      class="asignar-fecha-diagnostico"
+    >
+      <div class="asignar-fecha-diagnostico__header">
+        <strong>Diagnóstico del equipo</strong>
+        <p>La familia actual del aparato se guardará como snapshot histórico del ticket.</p>
+      </div>
+
+      <div *ngIf="familiaEquipoId" class="asignar-fecha-diagnostico__familia">
+        <span>Familia del equipo</span>
+        <strong>{{ familiaEquipoNombre }}</strong>
+      </div>
+
+      <div *ngIf="aparatoSinFamilia" class="asignar-fecha-diagnostico__sin-familia">
+        Este aparato no tiene una familia asignada. Clasifícalo primero desde Inventario.
+      </div>
+
+      <mat-form-field appearance="fill" class="w-full">
+        <mat-label>Falla detectada</mat-label>
+        <mat-select
+          [(ngModel)]="fallaMantenimientoId"
+          [disabled]="!familiaEquipoId || cargandoCatalogos"
+          required
+        >
+          <mat-option *ngFor="let falla of fallas" [value]="falla.id">
+            {{ falla.nombre }}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field appearance="fill" class="w-full">
+        <mat-label>Condición operativa</mat-label>
+        <mat-select [(ngModel)]="condicionOperativa" required>
+          <mat-option
+            *ngFor="let condicion of condicionesOperativas"
+            [value]="condicion.value"
+          >
+            {{ condicion.label }}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+    </section>
+
+    <section
+      *ngIf="mostrarRefaccionJefe"
+      class="asignar-fecha-refaccion"
+    >
+      <div class="asignar-fecha-refaccion__header">
+        <div>
+          <strong>Refacción</strong>
+          <p>
+            Indica si este ticket requiere refacción o material especial.
+          </p>
+        </div>
+      </div>
+
+      <mat-checkbox
+        class="asignar-fecha-refaccion__checkbox"
+        [(ngModel)]="necesitaRefaccion"
+      >
+        ¿Requiere refacción?
+      </mat-checkbox>
+
+      <mat-form-field appearance="fill" class="w-full asignar-fecha-refaccion__field">
+        <mat-label>Descripción técnica (opcional)</mat-label>
+        <textarea
+          matInput
+          [(ngModel)]="descripcionRefaccion"
+          [disabled]="!necesitaRefaccion"
+          rows="3"
+          maxlength="500"
+          placeholder="Describe la pieza, refacción o material necesario."
+        ></textarea>
+        <mat-hint align="end">
+          {{ (descripcionRefaccion || '').length }}/500
+        </mat-hint>
+      </mat-form-field>
+    </section>
+  </div>
+
+  <footer class="asignar-fecha-modal__actions">
+    <button
+      mat-button
+      type="button"
+      class="asignar-fecha-modal__cancel"
+      (click)="cancelar()"
+    >
+      Cancelar
+    </button>
+
+    <button
+      mat-raised-button
+      type="button"
+      class="asignar-fecha-modal__save"
+      (click)="guardar()"
+      [disabled]="guardarDeshabilitado"
+    >
+      Guardar
+    </button>
+  </footer>
+</section>
