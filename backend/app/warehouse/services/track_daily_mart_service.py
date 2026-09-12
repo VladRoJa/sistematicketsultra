@@ -86,6 +86,32 @@ def _resolve_source_dates_for_track_date(
     )
 
 
+def _load_active_analytical_branches() -> list[TrackBranchCatalogORM]:
+    """Carga el universo Track sin permitir sucursales demo.
+
+    Se usa outer join para preservar compatibilidad con filas legacy del catálogo
+    que todavía no tengan ``sucursal_id`` enlazado. Si una fila sí está enlazada,
+    la sucursal debe pertenecer al universo analítico real.
+    """
+
+    return (
+        TrackBranchCatalogORM.query
+        .outerjoin(
+            Sucursal,
+            Sucursal.sucursal_id == TrackBranchCatalogORM.sucursal_id,
+        )
+        .filter(
+            TrackBranchCatalogORM.is_track_active.is_(True),
+            db.or_(
+                TrackBranchCatalogORM.sucursal_id.is_(None),
+                Sucursal.is_demo.is_(False),
+            ),
+        )
+        .order_by(TrackBranchCatalogORM.display_order.asc())
+        .all()
+    )
+
+
 def build_track_daily_mart_for_date(
     *,
     business_date: Any,
@@ -102,22 +128,7 @@ def build_track_daily_mart_for_date(
         generation_mode=normalized_generation_mode,
     )
 
-    active_branches = (
-        TrackBranchCatalogORM.query
-        .outerjoin(
-            Sucursal,
-            Sucursal.sucursal_id == TrackBranchCatalogORM.sucursal_id,
-        )
-        .filter(
-            TrackBranchCatalogORM.is_track_active.is_(True),
-            db.or_(
-                TrackBranchCatalogORM.sucursal_id.is_(None),
-                Sucursal.is_demo.is_(False),
-            ),
-        )
-        .order_by(TrackBranchCatalogORM.display_order.asc())
-        .all()
-    )
+    active_branches = _load_active_analytical_branches()
 
     if not active_branches:
         raise TrackDailyMartServiceError(
