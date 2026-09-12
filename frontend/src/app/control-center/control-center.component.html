@@ -72,7 +72,12 @@
           <h2>{{ selectedMetricCard.title }}</h2>
           <p>{{ scopeLabel }} · corte {{ cutoffDate }}</p>
         </div>
-        <button type="button" class="module-link" (click)="openSelectedModule()">
+        <button
+          *ngIf="canOpenSelectedModule"
+          type="button"
+          class="module-link"
+          (click)="openSelectedModule()"
+        >
           Abrir módulo
         </button>
       </header>
