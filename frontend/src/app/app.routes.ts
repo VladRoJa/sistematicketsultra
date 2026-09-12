@@ -8,6 +8,7 @@ import { AdminPermisosComponent } from './admin-permisos/admin-permisos.componen
 import { AuthGuard } from './guards/auth.guard';
 import { AdminGuard } from './guards/admin.guard';
 import { AdmicorpGuard } from './guards/admicorp.guard';
+import { controlAccessGuard } from './control-center/control-access.guard';
 import { LayoutComponent } from './layout/layout.component';
 import { AdminPanelComponent } from './admin-panel/admin-panel.component';
 import { CrearTicketRefactorComponent } from './pantalla-crear-ticket/crear-ticket-refactor.component';
@@ -46,7 +47,7 @@ export const routes: Routes = [
     children: [
       {
         path: 'control',
-        canActivate: [AdmicorpGuard],
+        canActivate: [controlAccessGuard],
         loadComponent: () =>
           import('./control-center/control-center.component')
             .then(m => m.ControlCenterComponent),
