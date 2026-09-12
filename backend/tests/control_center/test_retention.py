@@ -30,7 +30,7 @@ def test_retention_aggregate_sums_actuals_targets_and_usage():
     assert summary["target_coverage_branch_count"] == 2
 
 
-def test_retention_aggregate_keeps_partial_target_coverage_visible():
+def test_retention_aggregate_does_not_publish_partial_target_ratio():
     rows = [
         RetentionBranchRow(
             sucursal_id=1,
@@ -51,6 +51,7 @@ def test_retention_aggregate_keeps_partial_target_coverage_visible():
     summary = _aggregate_rows(rows)
 
     assert summary["bajas_reales_mtd"] == 21
-    assert summary["meta_bajas_mes"] == 20
-    assert summary["limit_usage_ratio"] == 1.05
+    assert summary["meta_bajas_mes"] is None
+    assert summary["limit_usage_ratio"] is None
+    assert summary["remaining_margin"] is None
     assert summary["target_coverage_branch_count"] == 1
