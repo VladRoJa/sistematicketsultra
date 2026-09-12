@@ -1,0 +1,336 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import date, datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo
+
+from sqlalchemy.orm.attributes import flag_modified
+
+from app.models.ticket_model import Ticket
+from app.utils.pm_permissions import can_pm_execute, can_pm_view
+from app.utils.ticket_filters import filtrar_tickets_por_usuario
+
+
+BUSINESS_TZ = ZoneInfo("America/Tijuana")
+MAINTENANCE_DEPARTMENT_ID = 1
+ACTIVE_STATES = {"abierto", "en progreso", "por_validar"}
+
+
+class MaintenancePlannerError(Exception):
+    status_code = 400
+
+    def __init__(self, message: str, status_code: int | None = None):
+        super().__init__(message)
+        self.message = message
+        if status_code is not None:
+            self.status_code = status_code
+
+
+class MaintenancePlannerAuthorizationError(MaintenancePlannerError):
+    status_code = 403
+
+
+class MaintenancePlannerNotFoundError(MaintenancePlannerError):
+    status_code = 404
+
+
+@dataclass(frozen=True)
+class PlannerWindow:
+    start: date
+    end: date
+
+
+def _to_business_datetime(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(BUSINESS_TZ)
+
+
+def _parse_date(value: str | None, field_name: str) -> date | None:
+    if value in (None, ""):
+        return None
+    try:
+        return date.fromisoformat(str(value))
+    except (TypeError, ValueError) as exc:
+        raise MaintenancePlannerError(
+            f"{field_name} debe tener formato YYYY-MM-DD."
+        ) from exc
+
+
+def _default_window(reference_date: date) -> PlannerWindow:
+    monday = reference_date - timedelta(days=reference_date.weekday())
+    return PlannerWindow(start=monday, end=monday + timedelta(days=6))
+
+
+def _resolve_window(start_date: str | None, end_date: str | None) -> PlannerWindow:
+    today = datetime.now(BUSINESS_TZ).date()
+    start = _parse_date(start_date, "start_date")
+    end = _parse_date(end_date, "end_date")
+
+    if start is None and end is None:
+        return _default_window(today)
+    if start is None or end is None:
+        raise MaintenancePlannerError(
+            "start_date y end_date deben enviarse juntos."
+        )
+    if end < start:
+        raise MaintenancePlannerError("end_date no puede ser menor que start_date.")
+    if (end - start).days > 31:
+        raise MaintenancePlannerError("La ventana máxima del Planner es de 32 días.")
+    return PlannerWindow(start=start, end=end)
+
+
+def _ticket_branch_id(ticket: Ticket) -> int | None:
+    value = ticket.sucursal_id_destino or ticket.sucursal_id
+    try:
+        return int(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _ticket_branch_name(ticket: Ticket) -> str:
+    branch = ticket.sucursal_destino or ticket.sucursal
+    if branch is None:
+        return "Sin sucursal"
+    return str(
+        getattr(branch, "sucursal", None)
+        or getattr(branch, "nombre", None)
+        or getattr(branch, "nombre_sucursal", None)
+        or "Sin sucursal"
+    )
+
+
+def _ticket_due_date(ticket: Ticket) -> date | None:
+    dt = _to_business_datetime(ticket.fecha_solucion)
+    return dt.date() if dt else None
+
+
+def _planner_status(ticket: Ticket, today: date) -> str:
+    state = str(ticket.estado or "").strip().lower()
+    if state == "finalizado":
+        return "FINALIZADO"
+
+    due = _ticket_due_date(ticket)
+    if due is None:
+        return "SIN_FECHA"
+    if due < today:
+        return "VENCIDO"
+    if due == today:
+        return "HOY"
+    return "PROGRAMADO"
+
+
+def _serialize_ticket(ticket: Ticket, today: date) -> dict:
+    due_dt = _to_business_datetime(ticket.fecha_solucion)
+    created_dt = _to_business_datetime(ticket.fecha_creacion)
+    inventory = ticket.inventario
+    family = ticket.familia_equipo
+    failure = ticket.falla_mantenimiento
+
+    return {
+        "ticket_id": ticket.id,
+        "estado": ticket.estado,
+        "planner_status": _planner_status(ticket, today),
+        "criticidad": ticket.criticidad,
+        "descripcion": ticket.descripcion,
+        "sucursal_id": _ticket_branch_id(ticket),
+        "sucursal": _ticket_branch_name(ticket),
+        "asignado_a": ticket.asignado_a,
+        "fecha_creacion": created_dt.isoformat() if created_dt else None,
+        "fecha_solucion": due_dt.isoformat() if due_dt else None,
+        "fecha_solucion_date": due_dt.date().isoformat() if due_dt else None,
+        "aparato_id": ticket.aparato_id,
+        "equipo": (
+            getattr(inventory, "nombre", None)
+            or ticket.equipo
+            or ticket.detalle
+            or "Sin equipo"
+        ),
+        "codigo_interno": getattr(inventory, "codigo_interno", None),
+        "familia": getattr(family, "nombre", None),
+        "falla": getattr(failure, "nombre", None),
+        "condicion_operativa": ticket.condicion_operativa,
+        "necesita_refaccion": bool(ticket.necesita_refaccion),
+        "descripcion_refaccion": ticket.descripcion_refaccion or None,
+    }
+
+
+def _base_query(user):
+    if not can_pm_view(user):
+        raise MaintenancePlannerAuthorizationError(
+            "No tienes permiso para consultar el Planner de Mantenimiento."
+        )
+
+    return filtrar_tickets_por_usuario(user).filter(
+        Ticket.departamento_id == MAINTENANCE_DEPARTMENT_ID
+    )
+
+
+def build_planner_board(
+    user,
+    *,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    branch_ids: list[int] | None = None,
+    state: str | None = None,
+) -> dict:
+    window = _resolve_window(start_date, end_date)
+    today = datetime.now(BUSINESS_TZ).date()
+
+    query = _base_query(user)
+
+    normalized_branch_ids = sorted(
+        {
+            int(value)
+            for value in (branch_ids or [])
+            if str(value).strip().isdigit() and int(value) > 0
+        }
+    )
+    if normalized_branch_ids:
+        query = query.filter(Ticket.sucursal_id_destino.in_(normalized_branch_ids))
+
+    normalized_state = str(state or "").strip().lower()
+    if normalized_state and normalized_state != "todos":
+        allowed_states = ACTIVE_STATES | {"finalizado"}
+        if normalized_state not in allowed_states:
+            raise MaintenancePlannerError("estado inválido para el Planner.")
+        query = query.filter(Ticket.estado == normalized_state)
+
+    tickets = query.order_by(Ticket.fecha_solucion.asc().nullsfirst(), Ticket.id.asc()).all()
+    rows = [_serialize_ticket(ticket, today) for ticket in tickets]
+
+    active_rows = [row for row in rows if str(row["estado"]).lower() in ACTIVE_STATES]
+    week_rows = [
+        row
+        for row in rows
+        if row["fecha_solucion_date"]
+        and window.start.isoformat() <= row["fecha_solucion_date"] <= window.end.isoformat()
+    ]
+
+    unscheduled = [row for row in active_rows if row["planner_status"] == "SIN_FECHA"]
+    overdue = [row for row in active_rows if row["planner_status"] == "VENCIDO"]
+    today_rows = [row for row in active_rows if row["planner_status"] == "HOY"]
+    scheduled_future = [
+        row for row in active_rows if row["planner_status"] == "PROGRAMADO"
+    ]
+
+    branches_by_id: dict[int, str] = {}
+    for row in rows:
+        branch_id = row["sucursal_id"]
+        if branch_id is not None:
+            branches_by_id[branch_id] = row["sucursal"]
+
+    days = []
+    current = window.start
+    while current <= window.end:
+        date_iso = current.isoformat()
+        day_items = [
+            row for row in week_rows if row["fecha_solucion_date"] == date_iso
+        ]
+        days.append(
+            {
+                "date": date_iso,
+                "is_today": current == today,
+                "items": day_items,
+                "total": len(day_items),
+            }
+        )
+        current += timedelta(days=1)
+
+    return {
+        "module": "maintenance_planner",
+        "version": "v2",
+        "window": {
+            "start_date": window.start.isoformat(),
+            "end_date": window.end.isoformat(),
+            "today": today.isoformat(),
+        },
+        "metrics": {
+            "active": len(active_rows),
+            "overdue": len(overdue),
+            "today": len(today_rows),
+            "week": len(week_rows),
+            "unscheduled": len(unscheduled),
+            "needs_spare_part": sum(
+                1 for row in active_rows if row["necesita_refaccion"]
+            ),
+        },
+        "branches": [
+            {"id": branch_id, "name": name}
+            for branch_id, name in sorted(
+                branches_by_id.items(), key=lambda item: item[1].casefold()
+            )
+        ],
+        "days": days,
+        "overdue": overdue,
+        "unscheduled": unscheduled,
+        "today_items": today_rows,
+        "future": scheduled_future,
+        "permissions": {
+            "can_view": True,
+            "can_schedule": can_pm_execute(user),
+        },
+    }
+
+
+def _scoped_maintenance_ticket(ticket_id: int, user) -> Ticket:
+    if not can_pm_execute(user):
+        raise MaintenancePlannerAuthorizationError(
+            "No tienes permiso para programar tickets de Mantenimiento."
+        )
+
+    ticket = (
+        filtrar_tickets_por_usuario(user)
+        .filter(
+            Ticket.id == ticket_id,
+            Ticket.departamento_id == MAINTENANCE_DEPARTMENT_ID,
+        )
+        .first()
+    )
+    if ticket is None:
+        raise MaintenancePlannerNotFoundError(
+            "Ticket de Mantenimiento no encontrado o fuera de tu alcance."
+        )
+    if str(ticket.estado or "").strip().lower() == "finalizado":
+        raise MaintenancePlannerError("No se puede programar un ticket finalizado.")
+    return ticket
+
+
+def schedule_ticket(ticket_id: int, user, *, due_date: str, reason: str) -> Ticket:
+    ticket = _scoped_maintenance_ticket(ticket_id, user)
+    target_date = _parse_date(due_date, "due_date")
+    reason = str(reason or "").strip()
+    if target_date is None:
+        raise MaintenancePlannerError("due_date es obligatorio.")
+    if not reason:
+        raise MaintenancePlannerError("reason es obligatorio.")
+
+    local_due = datetime.combine(target_date, time(hour=7), tzinfo=BUSINESS_TZ)
+    due_utc = local_due.astimezone(timezone.utc)
+    now_utc = datetime.now(timezone.utc)
+
+    ticket.fecha_solucion = due_utc
+    if str(ticket.estado or "").strip().lower() == "abierto":
+        ticket.estado = "en progreso"
+    if ticket.fecha_en_progreso is None:
+        ticket.fecha_en_progreso = now_utc
+
+    history = list(ticket.historial_fechas or [])
+    history.append(
+        {
+            "fecha": due_utc.isoformat(),
+            "cambiadoPor": str(getattr(user, "username", "") or "").strip(),
+            "fechaCambio": now_utc.isoformat(),
+            "motivo": reason,
+            "origen": "maintenance_planner_v2",
+        }
+    )
+    history.sort(
+        key=lambda item: str(item.get("fechaCambio") or item.get("fecha") or ""),
+        reverse=True,
+    )
+    ticket.historial_fechas = history
+    flag_modified(ticket, "historial_fechas")
+    return ticket
