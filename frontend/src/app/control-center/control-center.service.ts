@@ -40,6 +40,13 @@ export interface ControlContextResponse {
   effective_scope: ControlScope;
 }
 
+export interface ControlContextRequest {
+  cutoffDate?: string;
+  scopeType?: ControlScopeType;
+  regionKey?: string | null;
+  branchId?: number | null;
+}
+
 @Injectable({ providedIn: 'root' })
 export class ControlCenterService {
   private readonly http = inject(HttpClient);
@@ -48,10 +55,20 @@ export class ControlCenterService {
   private readonly maintenancePlannerService = inject(MaintenancePlannerService);
   private readonly baseUrl = `${environment.apiUrl}/control`;
 
-  getContext(cutoffDate?: string): Observable<ControlContextResponse> {
+  getContext(request: ControlContextRequest = {}): Observable<ControlContextResponse> {
     let params = new HttpParams();
-    if (cutoffDate) {
-      params = params.set('cutoff_date', cutoffDate);
+
+    if (request.cutoffDate) {
+      params = params.set('cutoff_date', request.cutoffDate);
+    }
+    if (request.scopeType) {
+      params = params.set('scope_type', request.scopeType);
+    }
+    if (request.regionKey) {
+      params = params.set('region_key', request.regionKey);
+    }
+    if (request.branchId) {
+      params = params.set('branch_id', String(request.branchId));
     }
 
     return this.http.get<ControlContextResponse>(`${this.baseUrl}/context`, { params });
