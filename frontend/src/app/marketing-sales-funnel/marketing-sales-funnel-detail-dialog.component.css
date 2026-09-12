@@ -1,0 +1,254 @@
+:host {
+  display: block;
+  height: 100%;
+  min-height: 0;
+}
+
+.audit-dialog {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  background: #ffffff;
+  color: #211f1e;
+}
+
+.audit-dialog__header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.audit-dialog__heading {
+  min-width: 0;
+}
+
+.audit-dialog__heading > p {
+  margin: 0 0 4px;
+  color: #e94724;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.audit-dialog__heading h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+}
+
+.audit-dialog__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-top: 7px;
+  color: #667085;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.audit-dialog__meta span + span::before {
+  margin-right: 12px;
+  color: #c6c8ce;
+  content: '·';
+}
+
+.audit-dialog__actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.audit-dialog__actions button[mat-stroked-button] {
+  min-width: 145px;
+}
+
+.audit-dialog__actions mat-spinner {
+  display: inline-block;
+  margin-right: 7px;
+  vertical-align: middle;
+}
+
+.audit-dialog__error {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 20px 0;
+  padding: 10px 12px;
+  border: 1px solid #ffd1c8;
+  border-radius: 10px;
+  background: #fff4f1;
+  color: #9b2c1d;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.audit-dialog__body {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  padding: 12px 20px 0;
+}
+
+.audit-dialog__initial-loading {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: #667085;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.audit-table-wrap {
+  position: relative;
+  width: 100%;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.audit-table {
+  width: 100%;
+  min-width: 1120px;
+}
+
+.audit-table th.mat-mdc-header-cell {
+  height: 48px;
+  padding: 0;
+  background: #211f1e;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.audit-table td.mat-mdc-cell {
+  padding: 11px 12px;
+  border-bottom-color: #eceef1;
+  color: #344054;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.audit-table tr.mat-mdc-row:hover td.mat-mdc-cell {
+  background: #fff8f6;
+}
+
+.sort-header {
+  display: inline-flex;
+  width: 100%;
+  height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.sort-header:hover,
+.sort-header:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+  outline: none;
+}
+
+.sort-header mat-icon {
+  width: 16px;
+  height: 16px;
+  color: #aeb2ba;
+  font-size: 16px;
+}
+
+.sort-header mat-icon.sort-header__active {
+  color: #ff6a46;
+}
+
+.audit-table__loading-overlay {
+  position: absolute;
+  inset: 48px 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #667085;
+  font-size: 12px;
+  font-weight: 700;
+  backdrop-filter: blur(1px);
+}
+
+.audit-dialog__footer {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 20px 16px;
+  border-top: 1px solid #e5e7eb;
+  background: #fff;
+}
+
+.audit-dialog__range {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+  color: #344054;
+  font-size: 11px;
+}
+
+.audit-dialog__range strong {
+  font-size: 12px;
+}
+
+.audit-dialog__range span {
+  overflow: hidden;
+  color: #8a9099;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.audit-dialog__pagination {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+  color: #667085;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+@media (max-width: 900px) {
+  .audit-dialog__header,
+  .audit-dialog__footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .audit-dialog__actions,
+  .audit-dialog__pagination {
+    justify-content: space-between;
+  }
+
+  .audit-dialog__actions button[mat-stroked-button] {
+    flex: 1 1 auto;
+  }
+}
