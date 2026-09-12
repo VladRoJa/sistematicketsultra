@@ -156,6 +156,13 @@ export class AsignarFechaModalComponent implements OnChanges {
     return departamento === 'mantenimiento' || departamento === 'sistemas';
   }
 
+  onNecesitaRefaccionChange(checked: boolean): void {
+    this.necesitaRefaccion = checked;
+    if (!checked) {
+      this.descripcionRefaccion = '';
+    }
+  }
+
   guardar(): void {
     if (!this.fechaSeleccionada || !this.motivo.trim()) {
       mostrarAlertaToast(
