@@ -43,7 +43,7 @@
         mat-stroked-button
         class="secondary-action"
         type="button"
-        [disabled]="loading || monthControl.invalid"
+        [disabled]="refreshDisabled"
         (click)="refreshDashboard()"
       >
         <mat-icon>refresh</mat-icon>
@@ -52,13 +52,13 @@
     </div>
   </header>
 
-  <section *ngIf="loading" class="state-panel" aria-live="polite">
+  <section *ngIf="showLoading" class="state-panel" aria-live="polite">
     <mat-spinner diameter="36"></mat-spinner>
     <p>Cargando Funnel de Venta Total…</p>
   </section>
 
   <section
-    *ngIf="!loading && errorMessage"
+    *ngIf="showError"
     class="state-panel state-panel--error"
     role="alert"
   >
@@ -76,7 +76,7 @@
     </div>
   </section>
 
-  <ng-container *ngIf="!loading && !errorMessage && dashboard">
+  <ng-container *ngIf="showDashboard">
     <section class="metrics-section" aria-labelledby="commercial-title">
       <div class="section-heading">
         <div>
@@ -91,10 +91,10 @@
 
       <div class="funnel" aria-label="Embudo comercial de Venta Total">
         <article
-          *ngFor="let card of commercialCards; let step = index"
+          *ngFor="let card of commercialCards"
           class="funnel-card"
         >
-          <span class="funnel-step">0{{ step + 1 }}</span>
+          <span class="funnel-step">{{ card.stepLabel }}</span>
           <span class="metric-label">{{ card.label }}</span>
           <strong>{{ card.value }}</strong>
           <small>{{ card.supportingText }}</small>
@@ -116,10 +116,10 @@
 
       <div class="funnel" aria-label="Recorrido trazable iVentas y Meta">
         <article
-          *ngFor="let card of iventasCards; let step = index"
+          *ngFor="let card of iventasCards"
           class="funnel-card"
         >
-          <span class="funnel-step">0{{ step + 1 }}</span>
+          <span class="funnel-step">{{ card.stepLabel }}</span>
           <span class="metric-label">{{ card.label }}</span>
           <strong>{{ card.value }}</strong>
           <small>{{ card.supportingText }}</small>
@@ -150,7 +150,7 @@
         </div>
       </div>
 
-      <p *ngIf="!hasOrigins" class="empty-message">
+      <p *ngIf="showOriginEmpty" class="empty-message">
         No hay ventas clasificadas para el mes seleccionado.
       </p>
 
@@ -158,7 +158,7 @@
         <article
           *ngFor="let row of originRows"
           class="origin-card"
-          [class.origin-card--empty]="row.sales === 0"
+          [class.origin-card--empty]="row.is_empty"
         >
           <span>{{ row.label }}</span>
           <strong>{{ row.sales_display }}</strong>
@@ -179,7 +179,7 @@
         </div>
       </div>
 
-      <p *ngIf="!hasBranches" class="empty-message">
+      <p *ngIf="showBranchEmpty" class="empty-message">
         No hay sucursales disponibles para el mes seleccionado.
       </p>
 
@@ -280,25 +280,22 @@
           </div>
           <div>
             <dt>Regla de Venta Nueva</dt>
-            <dd>{{ dashboard.data_quality.new_sale_rule }}</dd>
+            <dd>{{ dashboard?.data_quality?.new_sale_rule }}</dd>
           </div>
           <div>
             <dt>Modo de cruce</dt>
-            <dd>{{ dashboard.data_quality.match_mode }}</dd>
+            <dd>{{ dashboard?.data_quality?.match_mode }}</dd>
           </div>
         </dl>
 
-        <div
-          *ngIf="dashboard.data_quality.limitations.length > 0"
-          class="limitations"
-        >
+        <div *ngIf="hasLimitations" class="limitations">
           <h3>
             <mat-icon>info</mat-icon>
             Consideraciones
           </h3>
           <ul>
             <li
-              *ngFor="let limitation of dashboard.data_quality.limitations"
+              *ngFor="let limitation of dashboard?.data_quality?.limitations"
             >
               {{ limitation }}
             </li>
