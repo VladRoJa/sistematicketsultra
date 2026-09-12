@@ -323,7 +323,9 @@
           <p class="section-kicker">Auditoría del indicador</p>
           <h2 id="detail-title">{{ detail?.title || 'Cargando detalle…' }}</h2>
           <p *ngIf="detail">
-            {{ detail.count | number:'1.0-0' }} filas
+            {{ detail.count | number:'1.0-0' }} registros
+            · Página {{ detail.page }} de {{ detail.total_pages || 1 }}
+            · {{ detail.page_size }} por página
             <ng-container *ngIf="detail.kind === 'sales'">
               · {{ formatCurrency(detail.revenue_total) }}
             </ng-container>
@@ -336,7 +338,7 @@
 
       <div *ngIf="detailLoading" class="detail-loading">
         <mat-spinner diameter="30"></mat-spinner>
-        <span>Cargando las filas que componen el KPI…</span>
+        <span>Cargando página del detalle…</span>
       </div>
 
       <div *ngIf="detailError" class="detail-error" role="alert">
@@ -402,6 +404,30 @@
           <tr mat-header-row *matHeaderRowDef="detailColumns; sticky: true"></tr>
           <tr mat-row *matRowDef="let row; columns: detailColumns"></tr>
         </table>
+      </div>
+
+      <div *ngIf="detail && !detailLoading" class="page-actions">
+        <button
+          mat-stroked-button
+          type="button"
+          [disabled]="!detailCanGoPrevious"
+          (click)="goToDetailPage(detail.page - 1)"
+        >
+          <mat-icon>chevron_left</mat-icon>
+          Anterior
+        </button>
+
+        <span>{{ detailRangeLabel }}</span>
+
+        <button
+          mat-stroked-button
+          type="button"
+          [disabled]="!detailCanGoNext"
+          (click)="goToDetailPage(detail.page + 1)"
+        >
+          Siguiente
+          <mat-icon>chevron_right</mat-icon>
+        </button>
       </div>
     </section>
 
