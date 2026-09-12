@@ -2,7 +2,7 @@
   <header class="planner-toolbar">
     <div>
       <h1>Planner de Mantenimiento</h1>
-      <p>Agenda operativa basada en tickets reales de Mantenimiento.</p>
+      <p>Agenda operativa de domingo a sábado basada en tickets reales.</p>
     </div>
 
     <div class="planner-toolbar__actions">
@@ -45,7 +45,7 @@
 
   <ng-container *ngIf="board as currentBoard">
     <section class="metric-strip" aria-label="Resumen de mantenimiento">
-      <button type="button" class="metric metric--danger" (click)="selectedTicket = currentBoard.overdue[0] || null">
+      <button type="button" class="metric metric--danger" (click)="openFirstOverdue()">
         <strong>{{ currentBoard.metrics.overdue }}</strong>
         <span>Vencidos</span>
       </button>
@@ -76,7 +76,9 @@
         <div class="section-heading">
           <div>
             <h2>Semana operativa</h2>
-            <p>Haz clic en un ticket para revisar o reprogramar.</p>
+            <p>
+              Abre un ticket para ver su historia. Si tienes permiso, arrástralo a otro día para mover el compromiso.
+            </p>
           </div>
         </div>
 
@@ -88,16 +90,26 @@
           >
             <header>
               <span>{{ formatDay(day.date) }}</span>
-              <strong>{{ day.total }}</strong>
+              <strong>{{ day.items.length }}</strong>
             </header>
 
-            <div class="day-column__items">
+            <div
+              class="day-column__items"
+              cdkDropList
+              [id]="dropListId(day)"
+              [cdkDropListData]="day.items"
+              [cdkDropListConnectedTo]="dayDropListIds"
+              (cdkDropListDropped)="dropTicket($event, day)"
+            >
               <button
                 *ngFor="let ticket of day.items; trackBy: trackTicket"
                 type="button"
                 class="ticket-card"
-                [class.ticket-card--selected]="selectedTicket?.ticket_id === ticket.ticket_id"
-                (click)="selectTicket(ticket)"
+                [class.ticket-card--saving]="dragSavingTicketId === ticket.ticket_id"
+                cdkDrag
+                [cdkDragData]="ticket"
+                [cdkDragDisabled]="!canDrag(ticket)"
+                (click)="openTicket(ticket)"
               >
                 <div class="ticket-card__topline">
                   <strong>#{{ ticket.ticket_id }}</strong>
@@ -110,9 +122,10 @@
                 <span class="ticket-card__meta" *ngIf="ticket.falla">{{ ticket.falla }}</span>
                 <span class="ticket-card__meta" *ngIf="ticket.asignado_a">Resp. {{ ticket.asignado_a }}</span>
                 <span class="ticket-card__flag" *ngIf="ticket.necesita_refaccion">Requiere refacción</span>
+                <span class="ticket-card__drag" *ngIf="canDrag(ticket)">Arrastrar para reprogramar</span>
               </button>
 
-              <div *ngIf="day.items.length === 0" class="empty-day">Sin trabajos</div>
+              <div *ngIf="day.items.length === 0" class="empty-day">Suelta aquí o sin trabajos</div>
             </div>
           </article>
         </div>
@@ -132,8 +145,7 @@
             *ngFor="let ticket of meetingFocusItems; trackBy: trackTicket"
             type="button"
             class="focus-item"
-            [class.focus-item--selected]="selectedTicket?.ticket_id === ticket.ticket_id"
-            (click)="selectTicket(ticket)"
+            (click)="openTicket(ticket)"
           >
             <div>
               <strong>#{{ ticket.ticket_id }} · {{ ticket.sucursal }}</strong>
@@ -149,54 +161,6 @@
           </div>
         </div>
       </aside>
-    </section>
-
-    <section *ngIf="selectedTicket as ticket" class="ticket-detail">
-      <div class="ticket-detail__summary">
-        <div class="ticket-detail__title">
-          <div>
-            <span>Ticket #{{ ticket.ticket_id }}</span>
-            <h2>{{ ticket.equipo }}</h2>
-          </div>
-          <button type="button" class="close-button" (click)="clearSelection()">Cerrar</button>
-        </div>
-
-        <dl>
-          <div><dt>Sucursal</dt><dd>{{ ticket.sucursal }}</dd></div>
-          <div><dt>Estado</dt><dd>{{ ticket.estado }}</dd></div>
-          <div><dt>Responsable</dt><dd>{{ ticket.asignado_a || 'Sin asignar' }}</dd></div>
-          <div><dt>Condición</dt><dd>{{ ticket.condicion_operativa || 'Sin captura' }}</dd></div>
-          <div><dt>Falla</dt><dd>{{ ticket.falla || 'Sin captura' }}</dd></div>
-          <div><dt>Refacción</dt><dd>{{ ticket.necesita_refaccion ? (ticket.descripcion_refaccion || 'Sí') : 'No' }}</dd></div>
-        </dl>
-
-        <p class="ticket-description">{{ ticket.descripcion }}</p>
-      </div>
-
-      <form class="schedule-panel" (ngSubmit)="saveSchedule()" *ngIf="currentBoard.permissions.can_schedule">
-        <h3>Fecha compromiso</h3>
-        <label>
-          <span>Fecha</span>
-          <input type="date" name="scheduleDate" [(ngModel)]="scheduleDate" required />
-        </label>
-        <label>
-          <span>Motivo / acuerdo de junta</span>
-          <textarea
-            name="scheduleReason"
-            [(ngModel)]="scheduleReason"
-            rows="3"
-            placeholder="Ej. Técnico confirma visita y refacción disponible"
-            required
-          ></textarea>
-        </label>
-        <button
-          type="submit"
-          class="primary-action"
-          [disabled]="savingSchedule || !scheduleDate || !scheduleReason.trim()"
-        >
-          {{ savingSchedule ? 'Guardando…' : 'Guardar compromiso' }}
-        </button>
-      </form>
     </section>
   </ng-container>
 
