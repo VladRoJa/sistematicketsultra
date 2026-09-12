@@ -84,6 +84,7 @@ export interface MarketingSalesFunnelResponse {
 }
 
 export type MarketingSalesFunnelDetailKind = 'sales' | 'visits' | 'leads';
+export type MarketingSalesFunnelSortDirection = 'asc' | 'desc';
 
 export interface MarketingSalesFunnelDetailRow {
   branch_id: number;
@@ -122,5 +123,7 @@ export interface MarketingSalesFunnelDetailResponse {
   page: number;
   page_size: number;
   total_pages: number;
+  sort_by: string | null;
+  sort_dir: MarketingSalesFunnelSortDirection;
   rows: MarketingSalesFunnelDetailRow[];
 }
