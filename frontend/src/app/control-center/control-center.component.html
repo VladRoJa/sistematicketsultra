@@ -1,348 +1,147 @@
-<section class="control-center">
-  <header class="control-center__header">
+<section class="control-page">
+  <header class="control-header">
     <div>
-      <p class="control-center__eyebrow">SUITE ULTRA</p>
+      <span class="control-header__eyebrow">SUITE ULTRA · CONTROL V1</span>
       <h1>{{ pageTitle }}</h1>
-      <p class="control-center__subtitle">
-        Información correcta para cada nivel de decisión.
-      </p>
+      <p>Lo que requiere atención, por qué ocurre y de dónde sale.</p>
+    </div>
 
-      <p
-        class="control-center__cutoff"
-        *ngIf="!isForecastLoading && forecastData"
-      >
-        Corte {{ getControlCutoffContext().trackDateLabel }} ·
-        {{ getControlCutoffContext().generationModeLabel }} ·
-        {{ getControlCutoffContext().operationalBranches }}
-        sucursales operativas
-      </p>
+    <div class="control-header__filters">
+      <label>
+        <span>Corte</span>
+        <input
+          type="date"
+          [(ngModel)]="cutoffDate"
+          (change)="onCutoffDateChange()"
+        />
+      </label>
+
+      <label *ngIf="scopeOptions.length">
+        <span>Alcance</span>
+        <select
+          [(ngModel)]="selectedScopeKey"
+          (change)="onScopeChange()"
+        >
+          <option
+            *ngFor="let option of scopeOptions"
+            [value]="option.key"
+          >
+            {{ option.label }}
+          </option>
+        </select>
+      </label>
+
+      <button type="button" (click)="refresh()" [disabled]="isLoading">
+        {{ isLoading ? 'Actualizando…' : 'Actualizar' }}
+      </button>
     </div>
   </header>
 
-  <section class="decision-levels">
-    <article class="decision-level">
-  <div class="decision-level__number">01</div>
-
-  <div>
-    <span class="decision-level__type">Nivel corporativo</span>
-    <h2>Dirección</h2>
-
-    <ng-container *ngIf="!isForecastLoading && forecastData; else directionStatus">
-      <div class="decision-level__direction-summary">
-        <p class="decision-level__direction-scope">
-          {{ getDirectionOverview().totalBranches }} sucursales operativas
-        </p>
-
-        <div class="decision-level__direction-metrics">
-          <p>
-            <span>Ingreso MTD</span>
-            <strong>
-              {{ getDirectionOverview().realMtd | currency:'MXN':'symbol-narrow':'1.0-0' }}
-            </strong>
-          </p>
-
-          <p>
-            <span>Meta mensual</span>
-            <strong>
-              {{ getDirectionOverview().goalMonth | currency:'MXN':'symbol-narrow':'1.0-0' }}
-            </strong>
-          </p>
-        </div>
-
-        <div class="decision-level__direction-block">
-          <span class="decision-level__direction-label">Ritmo actual</span>
-
-          <p>
-            <strong>
-              {{ getDirectionOverview().gapVsGoalPace | currency:'MXN':'symbol-narrow':'1.0-0' }}
-            </strong>
-            contra el ritmo esperado
-          </p>
-
-          <small>
-            Cobertura:
-            {{ getDirectionOverview().paceIncludedBranches }}/{{ getDirectionOverview().paceEligibleBranches }}
-            sucursales
-          </small>
-        </div>
-
-        <div class="decision-level__direction-block">
-          <span class="decision-level__direction-label">Proyección comparable</span>
-
-          <p>
-            <strong>
-              {{ getDirectionOverview().projectedClose | currency:'MXN':'symbol-narrow':'1.0-0' }}
-            </strong>
-            vs
-            {{ getDirectionOverview().comparableGoal | currency:'MXN':'symbol-narrow':'1.0-0' }}
-          </p>
-
-          <p>
-            <strong>
-              {{ getDirectionOverview().projectedAttainment | percent:'1.1-1' }}
-            </strong>
-            de cumplimiento · brecha
-            {{ getDirectionOverview().projectedGap | currency:'MXN':'symbol-narrow':'1.0-0' }}
-          </p>
-
-          <small>
-            Cobertura:
-            {{ getDirectionOverview().projectionIncludedBranches }}/{{ getDirectionOverview().projectionEligibleBranches }}
-            sucursales
-          </small>
-        </div>
-      </div>
-    </ng-container>
-
-    <ng-template #directionStatus>
-      <p *ngIf="isForecastLoading">Cargando información de Dirección...</p>
-      <p *ngIf="!isForecastLoading && forecastErrorMessage">
-        {{ forecastErrorMessage }}
-      </p>
-    </ng-template>
+  <div class="control-context" *ngIf="context">
+    <span>{{ scopeLabel }}</span>
+    <span>{{ context.access.role }}</span>
+    <span>{{ context.contract_version }}</span>
   </div>
-</article>
 
-    <article class="decision-level">
-      <div class="decision-level__number">02</div>
+  <div *ngIf="errorMessage" class="control-alert" role="alert">
+    {{ errorMessage }}
+  </div>
 
-      <div>
-        <span class="decision-level__type">Nivel gerencial</span>
-        <h2>Regiones y áreas</h2>
-
-        <ng-container *ngIf="!isLoading && data; else regionalStatus">
-          <div class="decision-level__regional-summary">
-            <p>
-              {{ getRegionalOverview().totalRegions }} regiones ·
-              {{ getRegionalOverview().totalBranches }} sucursales
-            </p>
-
-            <p>
-              <strong>
-                {{ getRegionalOverview().laggingClientRegions }}
-              </strong>
-              regiones debajo del ritmo de clientes nuevos
-            </p>
-
-            <p>
-              <strong>
-                {{ getRegionalOverview().unavailableIncomeProjectionRegions }}
-              </strong>
-              regiones sin proyección completa de ingreso
-            </p>
-          </div>
-        </ng-container>
-
-        <ng-template #regionalStatus>
-          <p *ngIf="isLoading">
-            Cargando información regional...
-          </p>
-
-          <p *ngIf="!isLoading && errorMessage">
-            {{ errorMessage }}
-          </p>
-        </ng-template>
-      </div>
-    </article>
-
-    <article class="decision-level">
-      <div class="decision-level__number">03</div>
-
-      <div>
-        <span class="decision-level__type">Nivel operativo</span>
-        <h2>Acción del día</h2>
-
-        <ng-container *ngIf="!isLoading && data; else operationalStatus">
-          <div class="decision-level__operational-summary">
-            <p>
-              <strong>
-                {{ getOperationalOverview().laggingNewClients }}
-              </strong>
-              sucursales bajo ritmo en clientes nuevos
-            </p>
-
-            <p *ngIf="getOperationalOverview().topNewClientsBranch">
-              Principal foco:
-              <strong>
-                {{ getOperationalOverview().topNewClientsBranch }}
-              </strong>
-            </p>
-
-            <p>
-              <strong>
-                {{ getOperationalOverview().laggingDomiciliados }}
-              </strong>
-              sucursales bajo ritmo en domiciliados
-            </p>
-
-            <p *ngIf="getOperationalOverview().topDomiciliadosBranch">
-              Principal foco:
-              <strong>
-                {{ getOperationalOverview().topDomiciliadosBranch }}
-              </strong>
-            </p>
-          </div>
-        </ng-container>
-
-        <ng-template #operationalStatus>
-          <p *ngIf="isLoading">
-            Cargando prioridades operativas...
-          </p>
-
-          <p *ngIf="!isLoading && errorMessage">
-            {{ errorMessage }}
-          </p>
-        </ng-template>
-      </div>
-    </article>
+  <section class="metric-grid" aria-label="Indicadores ejecutivos">
+    <button
+      *ngFor="let card of metricCards"
+      type="button"
+      class="metric-card"
+      [class.metric-card--selected]="selectedMetric === card.key"
+      [class.metric-card--attention]="card.tone === 'attention'"
+      [class.metric-card--critical]="card.tone === 'critical'"
+      [class.metric-card--muted]="card.tone === 'muted'"
+      (click)="selectMetric(card.key)"
+    >
+      <span>{{ card.title }}</span>
+      <strong>{{ card.value }}</strong>
+      <small>{{ card.supportingText }}</small>
+    </button>
   </section>
 
-  <section
-    class="regional-pulse"
-    *ngIf="!isLoading && data"
-  >
-    <header class="regional-pulse__header">
-      <div>
-        <p class="regional-pulse__eyebrow">
-          DESEMPEÑO REGIONAL
-        </p>
-
-        <h2>Pulso de desempeño</h2>
-
-        <p>
-          Avance actual, referencia mensual y cierre proyectado por región.
-        </p>
-      </div>
-
-      <div class="regional-pulse__legend">
-        <span>
-          <i class="regional-pulse__legend-current"></i>
-          Actual
-        </span>
-
-        <span>
-          <i class="regional-pulse__legend-projection"></i>
-          Proyección
-        </span>
-
-        <span>
-          <i class="regional-pulse__legend-target"></i>
-          Referencia 100%
-        </span>
-      </div>
-    </header>
-
-    <div class="regional-pulse__grid">
-      <article
-        class="regional-pulse__card"
-        *ngFor="let region of getRegionalPulse()"
-      >
-        <header class="regional-pulse__card-header">
-          <div>
-            <h3>{{ region.regionLabel }}</h3>
-            <p>
-              {{ region.totalBranches }}
-              sucursales operativas
-            </p>
-          </div>
-        </header>
-
-        <div class="regional-pulse__metrics">
-          <div
-            class="regional-pulse__metric"
-            *ngFor="let metric of region.metrics"
-          >
-            <div class="regional-pulse__metric-heading">
-              <span class="regional-pulse__metric-label">
-                {{ metric.label }}
-              </span>
-
-              <div class="regional-pulse__metric-values">
-                <strong>
-                  {{ formatPulsePercent(metric.actualPct) }}
-                </strong>
-
-                <span
-                  *ngIf="
-                    metric.projectionStatus === 'available' &&
-                    metric.projectedPct !== null
-                  "
-                >
-                  → {{ formatPulsePercent(metric.projectedPct) }}
-                </span>
-
-                <span
-                  *ngIf="
-                    metric.projectionStatus !== 'available' ||
-                    metric.projectedPct === null
-                  "
-                >
-                  Sin proyección
-                </span>
-              </div>
-            </div>
-
-            <div class="regional-pulse__track">
-              <div
-                class="regional-pulse__actual"
-                [style.width.%]="
-                  getPulseBarGeometry(metric).actualWidthPct
-                "
-              ></div>
-
-              <div
-                *ngIf="
-                  getPulseBarGeometry(metric).hasProjection &&
-                  getPulseBarGeometry(metric)
-                    .projectionExtensionWidthPct > 0
-                "
-                class="regional-pulse__projection"
-                [class.regional-pulse__projection--backward]="
-                  getPulseBarGeometry(metric).projectionDirection ===
-                  'backward'
-                "
-                [style.left.%]="
-                  getPulseBarGeometry(metric)
-                    .projectionExtensionLeftPct
-                "
-                [style.width.%]="
-                  getPulseBarGeometry(metric)
-                    .projectionExtensionWidthPct
-                "
-              ></div>
-
-              <div
-                class="regional-pulse__benchmark"
-                [style.left.%]="
-                  getPulseBarGeometry(metric)
-                    .benchmarkPositionPct
-                "
-              ></div>
-            </div>
-
-            <div class="regional-pulse__metric-detail">
-              <span>
-                Actual:
-                {{ formatPulseValue(metric, metric.actualValue) }}
-              </span>
-
-              <span>
-                {{
-                  metric.behavior === 'lower_is_better'
-                    ? 'Límite'
-                    : 'Meta'
-                }}:
-                {{ formatPulseValue(metric, metric.benchmarkValue) }}
-              </span>
-
-              <span>
-                Proyección:
-                {{ formatPulseValue(metric, metric.projectedClose) }}
-              </span>
-            </div>
-          </div>
+  <section class="control-body">
+    <article class="detail-panel">
+      <header class="detail-panel__header">
+        <div>
+          <span class="detail-panel__eyebrow">LECTURA EJECUTIVA</span>
+          <h2>{{ selectedMetricCard.title }}</h2>
+          <p>{{ scopeLabel }} · corte {{ cutoffDate }}</p>
         </div>
-      </article>
-    </div>
+        <button
+          *ngIf="canOpenSelectedModule"
+          type="button"
+          class="module-link"
+          (click)="openSelectedModule()"
+        >
+          Abrir módulo
+        </button>
+      </header>
+
+      <nav class="detail-tabs" aria-label="Nivel de detalle">
+        <button
+          *ngFor="let level of detailLevels"
+          type="button"
+          [class.is-active]="selectedLevel === level.key"
+          (click)="selectLevel(level.key)"
+        >
+          {{ level.label }}
+        </button>
+      </nav>
+
+      <div class="detail-rows">
+        <article *ngFor="let row of detailRows" class="detail-row">
+          <div>
+            <span>{{ row.label }}</span>
+            <small *ngIf="row.supportingText">{{ row.supportingText }}</small>
+          </div>
+          <strong>{{ row.value }}</strong>
+        </article>
+
+        <div *ngIf="detailRows.length === 0" class="detail-empty">
+          No hay detalle disponible para este alcance y corte.
+        </div>
+      </div>
+    </article>
+
+    <aside class="attention-panel">
+      <header>
+        <div>
+          <span>ATENCIÓN HOY</span>
+          <h2>Focos</h2>
+        </div>
+        <strong>{{ attentionItems.length }}</strong>
+      </header>
+
+      <div class="attention-list" *ngIf="attentionItems.length; else noAttention">
+        <button
+          *ngFor="let item of attentionItems"
+          type="button"
+          (click)="selectMetric(item.metric)"
+        >
+          <strong>{{ item.title }}</strong>
+          <span>{{ item.text }}</span>
+        </button>
+      </div>
+
+      <ng-template #noAttention>
+        <div class="attention-empty">
+          No hay focos automáticos con las reglas actuales.
+        </div>
+      </ng-template>
+
+      <footer>
+        <span>Regla del tablero</span>
+        <p>Señal → explicación → ubicación → evidencia.</p>
+      </footer>
+    </aside>
   </section>
+
+  <div *ngIf="isLoading" class="control-loading">
+    Actualizando Centro de Control…
+  </div>
 </section>

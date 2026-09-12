@@ -1,30 +1,44 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { MaintenancePlannerBoard, MaintenancePlannerService, MaintenancePlannerTicket } from './maintenance-planner.service';
+import {
+  CdkDragDrop,
+  DragDropModule,
+  transferArrayItem,
+} from '@angular/cdk/drag-drop';
+import { MatDialog } from '@angular/material/dialog';
+
+import {
+  MaintenancePlannerBoard,
+  MaintenancePlannerDay,
+  MaintenancePlannerService,
+  MaintenancePlannerTicket,
+} from './maintenance-planner.service';
+import {
+  MaintenancePlannerTicketDialogComponent,
+} from './maintenance-planner-ticket-dialog.component';
 
 @Component({
   selector: 'app-maintenance-planner',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, DragDropModule],
   templateUrl: './maintenance-planner.component.html',
   styleUrls: ['./maintenance-planner.component.css'],
 })
 export class MaintenancePlannerComponent implements OnInit {
   private readonly plannerService = inject(MaintenancePlannerService);
+  private readonly dialog = inject(MatDialog);
+  private suppressOpenUntil = 0;
 
   board: MaintenancePlannerBoard | null = null;
   loading = false;
   errorMessage = '';
+  dragSavingTicketId: number | null = null;
 
   branchId: number | null = null;
   estado = 'todos';
-  selectedTicket: MaintenancePlannerTicket | null = null;
-  scheduleDate = '';
-  scheduleReason = '';
-  savingSchedule = false;
 
-  weekStart = this.getMonday(new Date());
+  weekStart = this.getSunday(new Date());
 
   readonly estados = [
     { value: 'todos', label: 'Activos y cerrados' },
@@ -49,6 +63,10 @@ export class MaintenancePlannerComponent implements OnInit {
     return [...this.board.overdue, ...this.board.unscheduled].slice(0, 12);
   }
 
+  get dayDropListIds(): string[] {
+    return (this.board?.days || []).map((day) => this.dropListId(day));
+  }
+
   loadBoard(): void {
     this.loading = true;
     this.errorMessage = '';
@@ -62,18 +80,14 @@ export class MaintenancePlannerComponent implements OnInit {
       next: (board) => {
         this.board = board;
         this.loading = false;
-        if (
-          this.selectedTicket &&
-          !this.findTicketById(this.selectedTicket.ticket_id)
-        ) {
-          this.clearSelection();
-        }
       },
       error: (error) => {
         this.loading = false;
         this.board = null;
         this.errorMessage =
-          error?.error?.mensaje || 'No se pudo cargar el Planner de Mantenimiento.';
+          error?.error?.mensaje
+          || error?.error?.message
+          || 'No se pudo cargar el Planner de Mantenimiento.';
       },
     });
   }
@@ -86,7 +100,7 @@ export class MaintenancePlannerComponent implements OnInit {
   }
 
   currentWeek(): void {
-    this.weekStart = this.getMonday(new Date());
+    this.weekStart = this.getSunday(new Date());
     this.loadBoard();
   }
 
@@ -98,49 +112,107 @@ export class MaintenancePlannerComponent implements OnInit {
   }
 
   onFiltersChanged(): void {
-    this.clearSelection();
     this.loadBoard();
   }
 
-  selectTicket(ticket: MaintenancePlannerTicket): void {
-    this.selectedTicket = ticket;
-    this.scheduleDate = ticket.fecha_solucion_date || this.toDateOnly(new Date());
-    this.scheduleReason = '';
-  }
-
-  clearSelection(): void {
-    this.selectedTicket = null;
-    this.scheduleDate = '';
-    this.scheduleReason = '';
-  }
-
-  saveSchedule(): void {
-    if (!this.selectedTicket || !this.scheduleDate || !this.scheduleReason.trim()) {
+  openTicket(ticket: MaintenancePlannerTicket, initialDate?: string | null): void {
+    if (Date.now() < this.suppressOpenUntil) {
       return;
     }
 
-    this.savingSchedule = true;
-    this.errorMessage = '';
-    this.plannerService.scheduleTicket(this.selectedTicket.ticket_id, {
-      due_date: this.scheduleDate,
-      reason: this.scheduleReason.trim(),
-    }).subscribe({
-      next: () => {
-        this.savingSchedule = false;
-        const selectedId = this.selectedTicket?.ticket_id ?? null;
-        this.loadBoard();
-        if (selectedId) {
-          setTimeout(() => {
-            const refreshed = this.findTicketById(selectedId);
-            if (refreshed) this.selectTicket(refreshed);
-          });
-        }
+    const dialogRef = this.dialog.open(MaintenancePlannerTicketDialogComponent, {
+      data: {
+        ticket,
+        canSchedule: Boolean(this.board?.permissions.can_schedule),
+        initialDate: initialDate || null,
       },
-      error: (error) => {
-        this.savingSchedule = false;
-        this.errorMessage = error?.error?.mensaje || 'No se pudo guardar la fecha compromiso.';
-      },
+      width: '1180px',
+      maxWidth: '96vw',
+      maxHeight: '94vh',
+      autoFocus: false,
+      restoreFocus: false,
+      panelClass: 'maintenance-planner-ticket-dialog',
     });
+
+    dialogRef.afterClosed().subscribe((result) => {
+      if (result?.updated) {
+        this.loadBoard();
+      }
+    });
+  }
+
+  openFirstOverdue(): void {
+    const ticket = this.board?.overdue?.[0];
+    if (ticket) {
+      this.openTicket(ticket);
+    }
+  }
+
+  dropTicket(
+    event: CdkDragDrop<MaintenancePlannerTicket[]>,
+    targetDay: MaintenancePlannerDay,
+  ): void {
+    this.suppressOpenUntil = Date.now() + 300;
+    const ticket = event.item.data as MaintenancePlannerTicket;
+
+    if (
+      !this.board?.permissions.can_schedule
+      || ticket.estado === 'finalizado'
+      || this.dragSavingTicketId !== null
+    ) {
+      return;
+    }
+
+    const sourceDate = ticket.fecha_solucion_date;
+    if (sourceDate === targetDay.date) {
+      return;
+    }
+
+    if (event.previousContainer !== event.container) {
+      transferArrayItem(
+        event.previousContainer.data,
+        event.container.data,
+        event.previousIndex,
+        event.currentIndex,
+      );
+    }
+
+    this.dragSavingTicketId = ticket.ticket_id;
+    this.errorMessage = '';
+
+    const reason = [
+      'Reprogramado por arrastre en Planner',
+      `${sourceDate || 'sin fecha'} → ${targetDay.date}`,
+    ].join(': ');
+
+    this.plannerService
+      .updateCommitment(ticket, targetDay.date, reason)
+      .subscribe({
+        next: () => {
+          this.dragSavingTicketId = null;
+          this.loadBoard();
+        },
+        error: (error) => {
+          this.dragSavingTicketId = null;
+          this.errorMessage =
+            error?.error?.mensaje
+            || error?.error?.message
+            || 'No se pudo mover el compromiso. Se restauró el calendario.';
+          this.loadBoard();
+        },
+      });
+  }
+
+  canDrag(ticket: MaintenancePlannerTicket): boolean {
+    return Boolean(
+      this.board?.permissions.can_schedule
+      && ticket.estado !== 'finalizado'
+      && this.dragSavingTicketId === null
+    );
+  }
+
+  dropListId(day: MaintenancePlannerDay): string {
+    return `maintenance-planner-${day.date}`;
   }
 
   statusLabel(status: MaintenancePlannerTicket['planner_status']): string {
@@ -160,11 +232,17 @@ export class MaintenancePlannerComponent implements OnInit {
 
   formatDay(dateIso: string): string {
     const date = this.parseDateOnly(dateIso);
-    return new Intl.DateTimeFormat('es-MX', { weekday: 'short', day: 'numeric' }).format(date);
+    return new Intl.DateTimeFormat('es-MX', {
+      weekday: 'short',
+      day: 'numeric',
+    }).format(date);
   }
 
   formatRange(): string {
-    const formatter = new Intl.DateTimeFormat('es-MX', { day: 'numeric', month: 'short' });
+    const formatter = new Intl.DateTimeFormat('es-MX', {
+      day: 'numeric',
+      month: 'short',
+    });
     return `${formatter.format(this.weekStart)} – ${formatter.format(this.weekEnd)}`;
   }
 
@@ -172,23 +250,13 @@ export class MaintenancePlannerComponent implements OnInit {
     return ticket.ticket_id;
   }
 
-  private findTicketById(ticketId: number): MaintenancePlannerTicket | null {
-    if (!this.board) return null;
-    const sources = [
-      ...this.board.overdue,
-      ...this.board.unscheduled,
-      ...this.board.today_items,
-      ...this.board.future,
-      ...this.board.days.flatMap((day) => day.items),
-    ];
-    return sources.find((ticket) => ticket.ticket_id === ticketId) || null;
-  }
-
-  private getMonday(source: Date): Date {
-    const date = new Date(source.getFullYear(), source.getMonth(), source.getDate());
-    const day = date.getDay();
-    const diff = day === 0 ? -6 : 1 - day;
-    date.setDate(date.getDate() + diff);
+  private getSunday(source: Date): Date {
+    const date = new Date(
+      source.getFullYear(),
+      source.getMonth(),
+      source.getDate(),
+    );
+    date.setDate(date.getDate() - date.getDay());
     return date;
   }
 
