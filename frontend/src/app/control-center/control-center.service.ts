@@ -124,6 +124,7 @@ export class ControlCenterService {
       startDate,
       endDate,
       estado: 'todos',
+      audience: 'analytical',
     });
   }
 
