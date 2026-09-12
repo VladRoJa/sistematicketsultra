@@ -119,5 +119,8 @@ export interface MarketingSalesFunnelDetailResponse {
   branch_id: number | null;
   count: number;
   revenue_total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
   rows: MarketingSalesFunnelDetailRow[];
 }

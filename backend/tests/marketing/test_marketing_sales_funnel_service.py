@@ -1,7 +1,11 @@
 from datetime import date
 from types import SimpleNamespace
 
+import pytest
+
 from app.services.marketing_sales_funnel_detail_service import (
+    MarketingSalesFunnelDetailValidationError,
+    _normalize_pagination,
     _sale_matches_metric,
     _visit_matches_metric,
 )
@@ -209,3 +213,16 @@ def test_drilldown_visit_filters_do_not_treat_unmatched_as_iventas():
     assert _visit_matches_metric("visits_iventas", ORIGIN_IVENTAS_OTHER)
     assert _visit_matches_metric("visits_not_iventas", None)
     assert not _visit_matches_metric("visits_iventas", None)
+
+
+def test_drilldown_pagination_defaults_to_first_page_of_50():
+    assert _normalize_pagination(None, None) == (1, 50)
+    assert _normalize_pagination("2", "25") == (2, 25)
+
+
+def test_drilldown_pagination_rejects_invalid_ranges():
+    with pytest.raises(MarketingSalesFunnelDetailValidationError):
+        _normalize_pagination("0", "50")
+
+    with pytest.raises(MarketingSalesFunnelDetailValidationError):
+        _normalize_pagination("1", "101")

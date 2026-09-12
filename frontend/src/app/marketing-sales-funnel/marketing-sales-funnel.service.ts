@@ -32,10 +32,14 @@ export class MarketingSalesFunnelService {
     metric: string,
     branchId?: number,
     origin?: string,
+    page = 1,
+    pageSize = 50,
   ): Observable<MarketingSalesFunnelDetailResponse> {
     let params = new HttpParams()
       .set('month', month)
-      .set('metric', metric);
+      .set('metric', metric)
+      .set('page', page)
+      .set('page_size', pageSize);
 
     if (branchId !== undefined) {
       params = params.set('branch_id', branchId);

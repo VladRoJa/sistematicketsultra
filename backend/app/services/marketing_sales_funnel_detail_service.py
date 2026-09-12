@@ -33,6 +33,10 @@ from app.services.marketing_sales_funnel_service import (
 )
 
 
+DEFAULT_PAGE_SIZE = 50
+MAX_PAGE_SIZE = 100
+
+
 class MarketingSalesFunnelDetailValidationError(ValueError):
     pass
 
@@ -83,6 +87,38 @@ def _normalize_optional_int(value: Any, *, field_name: str) -> int | None:
         raise MarketingSalesFunnelDetailValidationError(
             f"{field_name} inválido."
         ) from exc
+
+
+def _normalize_pagination(
+    page: Any,
+    page_size: Any,
+) -> tuple[int, int]:
+    normalized_page = _normalize_optional_int(page, field_name="page")
+    normalized_page_size = _normalize_optional_int(
+        page_size,
+        field_name="page_size",
+    )
+
+    if normalized_page is None:
+        normalized_page = 1
+    if normalized_page_size is None:
+        normalized_page_size = DEFAULT_PAGE_SIZE
+
+    if normalized_page < 1:
+        raise MarketingSalesFunnelDetailValidationError(
+            "page debe ser mayor o igual a 1."
+        )
+    if normalized_page_size < 1 or normalized_page_size > MAX_PAGE_SIZE:
+        raise MarketingSalesFunnelDetailValidationError(
+            f"page_size debe estar entre 1 y {MAX_PAGE_SIZE}."
+        )
+
+    return normalized_page, normalized_page_size
+
+
+def _page_bounds(page: int, page_size: int) -> tuple[int, int]:
+    start = (page - 1) * page_size
+    return start, start + page_size
 
 
 def _normalize_metric(metric: str, origin: str | None) -> tuple[str, str | None]:
@@ -221,10 +257,12 @@ def _sales_detail(
     branch_ids: tuple[int, ...],
     branch_names: dict[int, str],
     branch_id_filter: int | None,
-) -> list[dict[str, Any]]:
+    page: int,
+    page_size: int,
+) -> tuple[list[dict[str, Any]], int, Decimal]:
     detail_snapshot = _select_new_sales_detail_snapshot(month_start)
     if detail_snapshot is None:
-        return []
+        return [], 0, Decimal("0")
 
     venta_total_snapshot = _select_venta_total_snapshot(month_start)
     venta_total_rows = (
@@ -257,8 +295,11 @@ def _sales_detail(
         .all()
     )
 
+    page_start, page_end = _page_bounds(page, page_size)
     result: list[dict[str, Any]] = []
     seen_keys: set[str] = set()
+    matched_count = 0
+    revenue_total = Decimal("0")
 
     for row in raw_rows:
         sale_key = _sale_key_from_detail_row(row)
@@ -287,6 +328,12 @@ def _sales_detail(
             phone=sale.phone,
             origin=origin,
         ):
+            continue
+
+        revenue_total += sale.revenue
+        current_index = matched_count
+        matched_count += 1
+        if current_index < page_start or current_index >= page_end:
             continue
 
         folio = str(row.id_folio or "").strip()
@@ -319,7 +366,7 @@ def _sales_detail(
             }
         )
 
-    return result
+    return result, matched_count, revenue_total
 
 
 def _visits_detail(
@@ -329,10 +376,12 @@ def _visits_detail(
     branch_ids: tuple[int, ...],
     branch_names: dict[int, str],
     branch_id_filter: int | None,
-) -> list[dict[str, Any]]:
+    page: int,
+    page_size: int,
+) -> tuple[list[dict[str, Any]], int]:
     snapshot = _select_venta_total_snapshot(month_start)
     if snapshot is None:
-        return []
+        return [], 0
 
     rows = (
         VentaTotalSnapshotRowORM.query.filter_by(snapshot_id=snapshot.id)
@@ -347,7 +396,9 @@ def _visits_detail(
     )
     evidence, _, _ = _load_iventas_data(month_start, branch_ids)
 
+    page_start, page_end = _page_bounds(page, page_size)
     result: list[dict[str, Any]] = []
+    matched_count = 0
     for visit in visits:
         if branch_id_filter is not None and visit.branch_id != branch_id_filter:
             continue
@@ -359,6 +410,12 @@ def _visits_detail(
         )
         if not _visit_matches_metric(metric, origin):
             continue
+
+        current_index = matched_count
+        matched_count += 1
+        if current_index < page_start or current_index >= page_end:
+            continue
+
         result.append(
             {
                 "branch_id": visit.branch_id,
@@ -374,7 +431,7 @@ def _visits_detail(
                 "source": "Pase comercial en Venta Total",
             }
         )
-    return result
+    return result, matched_count
 
 
 def _leads_meta_detail(
@@ -383,7 +440,9 @@ def _leads_meta_detail(
     branch_ids: tuple[int, ...],
     branch_names: dict[int, str],
     branch_id_filter: int | None,
-) -> list[dict[str, Any]]:
+    page: int,
+    page_size: int,
+) -> tuple[list[dict[str, Any]], int]:
     window_start = month_start - timedelta(days=MATCH_WINDOW_DAYS)
     runs = _canonical_runs_for_window(window_start, _month_end(month_start))
     current_period_key = f"IVENTAS-{month_start.strftime('%Y-%m')}"
@@ -393,7 +452,7 @@ def _leads_meta_detail(
         if str(run.period_key) == current_period_key
     )
     if not current_run_ids:
-        return []
+        return [], 0
 
     meta_keys = _meta_contact_keys(current_run_ids)
     allowed = set(branch_ids)
@@ -408,7 +467,9 @@ def _leads_meta_detail(
         .all()
     )
 
+    page_start, page_end = _page_bounds(page, page_size)
     result: list[dict[str, Any]] = []
+    matched_count = 0
     for contact in contacts:
         branch_id = int(contact.sucursal_id)
         if branch_id not in allowed:
@@ -417,6 +478,12 @@ def _leads_meta_detail(
             continue
         if (int(contact.sync_run_id), int(contact.id)) not in meta_keys:
             continue
+
+        current_index = matched_count
+        matched_count += 1
+        if current_index < page_start or current_index >= page_end:
+            continue
+
         result.append(
             {
                 "branch_id": branch_id,
@@ -435,7 +502,7 @@ def _leads_meta_detail(
             }
         )
 
-    return result
+    return result, matched_count
 
 
 def build_marketing_sales_funnel_detail(
@@ -445,9 +512,15 @@ def build_marketing_sales_funnel_detail(
     metric: str,
     branch_id: Any = None,
     origin: str | None = None,
+    page: Any = None,
+    page_size: Any = None,
 ) -> dict[str, Any]:
     month_start = parse_month(month)
     metric, origin = _normalize_metric(metric, origin)
+    normalized_page, normalized_page_size = _normalize_pagination(
+        page,
+        page_size,
+    )
     branch_id_filter = _normalize_optional_int(
         branch_id,
         field_name="branch_id",
@@ -464,31 +537,39 @@ def build_marketing_sales_funnel_detail(
 
     if metric in SALES_METRICS or metric == "origin":
         kind = "sales"
-        rows = _sales_detail(
+        rows, count, revenue_total = _sales_detail(
             month_start=month_start,
             metric=metric,
             origin_filter=origin,
             branch_ids=branch_ids,
             branch_names=branch_names,
             branch_id_filter=branch_id_filter,
+            page=normalized_page,
+            page_size=normalized_page_size,
         )
     elif metric in VISIT_METRICS:
         kind = "visits"
-        rows = _visits_detail(
+        rows, count = _visits_detail(
             month_start=month_start,
             metric=metric,
             branch_ids=branch_ids,
             branch_names=branch_names,
             branch_id_filter=branch_id_filter,
+            page=normalized_page,
+            page_size=normalized_page_size,
         )
+        revenue_total = Decimal("0")
     else:
         kind = "leads"
-        rows = _leads_meta_detail(
+        rows, count = _leads_meta_detail(
             month_start=month_start,
             branch_ids=branch_ids,
             branch_names=branch_names,
             branch_id_filter=branch_id_filter,
+            page=normalized_page,
+            page_size=normalized_page_size,
         )
+        revenue_total = Decimal("0")
 
     title = (
         ORIGIN_LABELS[origin]
@@ -498,9 +579,9 @@ def build_marketing_sales_funnel_detail(
     if branch_id_filter is not None:
         title = f"{title} · {branch_names.get(branch_id_filter, branch_id_filter)}"
 
-    revenue_total = sum(
-        (Decimal(str(row.get("revenue") or 0)) for row in rows),
-        Decimal("0"),
+    total_pages = max(
+        1,
+        (count + normalized_page_size - 1) // normalized_page_size,
     )
 
     return {
@@ -511,7 +592,10 @@ def build_marketing_sales_funnel_detail(
         "kind": kind,
         "title": title,
         "branch_id": branch_id_filter,
-        "count": len(rows),
+        "count": count,
         "revenue_total": float(revenue_total),
+        "page": normalized_page,
+        "page_size": normalized_page_size,
+        "total_pages": total_pages,
         "rows": rows,
     }
