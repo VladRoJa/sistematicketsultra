@@ -9,6 +9,10 @@ from app.services.marketing_access import (
     resolve_marketing_access,
 )
 from app.services.marketing_inputs_service import MarketingInputValidationError
+from app.services.marketing_sales_funnel_detail_service import (
+    MarketingSalesFunnelDetailValidationError,
+    build_marketing_sales_funnel_detail,
+)
 from app.services.marketing_sales_funnel_service import (
     build_marketing_sales_funnel,
 )
@@ -62,5 +66,38 @@ def get_marketing_sales_funnel_endpoint():
                 "message": (
                     "Falló la consulta del Funnel de Venta Total."
                 ),
+            }
+        ), 500
+
+
+@marketing_sales_funnel_bp.get("/sales-funnel/detail")
+@jwt_required()
+def get_marketing_sales_funnel_detail_endpoint():
+    try:
+        access = _resolve_request_access()
+        result = build_marketing_sales_funnel_detail(
+            month=request.args.get("month", ""),
+            access=access,
+            metric=request.args.get("metric", ""),
+            branch_id=request.args.get("branch_id"),
+            origin=request.args.get("origin"),
+        )
+        return jsonify(result), 200
+    except MarketingAuthorizationError as exc:
+        return jsonify(
+            {"status": "error", "message": str(exc)}
+        ), 403
+    except (
+        MarketingInputValidationError,
+        MarketingSalesFunnelDetailValidationError,
+    ) as exc:
+        return jsonify(
+            {"status": "error", "message": str(exc)}
+        ), 400
+    except Exception:
+        return jsonify(
+            {
+                "status": "error",
+                "message": "Falló la consulta del detalle del funnel.",
             }
         ), 500
