@@ -39,6 +39,7 @@ from app.routes.marketing_campaign_source_status_routes import marketing_campaig
 from app.routes.marketing_campaign_preview_detail_routes import marketing_campaign_preview_detail_bp
 from app.routes.marketing_sales_funnel_routes import marketing_sales_funnel_bp
 from app.routes.mantenimiento_equipos_routes import mantenimiento_equipos_bp
+from app.maintenance_planner import maintenance_planner_bp
 
 
 def create_app():
@@ -97,6 +98,10 @@ def create_app():
     app.register_blueprint(formulario_ticket_bp, url_prefix='/api/formulario_ticket')
     app.register_blueprint(admin_usuarios_bp, url_prefix='/api/admin/usuarios')
     app.register_blueprint(pm_bp, url_prefix='/api/pm')
+    app.register_blueprint(
+        maintenance_planner_bp,
+        url_prefix='/api/maintenance-planner',
+    )
     app.register_blueprint(warehouse_bp, url_prefix='/api/warehouse')
     app.register_blueprint(
         warehouse_internal_jobs_bp,
