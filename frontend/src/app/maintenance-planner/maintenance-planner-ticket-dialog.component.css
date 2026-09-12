@@ -54,7 +54,7 @@
 
 .ticket-dialog__grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
+  grid-template-columns: minmax(0, 1fr) minmax(380px, 440px);
   gap: 18px;
   padding: 18px 20px 22px;
 }
@@ -201,6 +201,10 @@
   border-top: 3px solid #1d4ed8;
 }
 
+.commitment-card--shared {
+  padding: 16px;
+}
+
 .commitment-card__eyebrow {
   color: #1d4ed8;
   font-size: 10px;
@@ -260,6 +264,12 @@
   font-size: 11px;
 }
 
+.commitment-card__saving {
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 700;
+}
+
 .side-card a {
   display: inline-block;
   margin-top: 6px;
@@ -268,7 +278,7 @@
   font-weight: 700;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 980px) {
   .ticket-dialog__grid {
     grid-template-columns: 1fr;
   }

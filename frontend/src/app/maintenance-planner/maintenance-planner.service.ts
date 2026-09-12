@@ -1,9 +1,12 @@
-import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
+import { Injectable, inject } from '@angular/core';
 import { Observable, switchMap } from 'rxjs';
-import { environment } from 'src/environments/environment';
+
 import { SessionService } from '../core/auth/session.service';
+import { MantenimientoEquiposService } from '../services/mantenimiento-equipos.service';
 import { TicketService } from '../services/ticket.service';
+import { AsignarFechaPayload } from '../types/ticket';
+import { environment } from 'src/environments/environment';
 
 export type MaintenancePlannerAudience = 'operational' | 'analytical';
 
@@ -47,7 +50,7 @@ export interface MaintenancePlannerTicket {
   familia: string | null;
   falla: string | null;
   problema_detectado: string | null;
-  condicion_operativa: string | null;
+  condicion_operativa: 'TRABAJA' | 'NO_TRABAJA' | null;
   ubicacion: string | null;
   categoria: string | null;
   subcategoria: string | null;
@@ -95,6 +98,7 @@ export interface MaintenancePlannerBoard {
   permissions: {
     can_view: boolean;
     can_schedule: boolean;
+    can_capture_diagnosis: boolean;
   };
 }
 
@@ -102,6 +106,7 @@ export interface MaintenancePlannerBoard {
 export class MaintenancePlannerService {
   private readonly http = inject(HttpClient);
   private readonly ticketService = inject(TicketService);
+  private readonly mantenimientoEquiposService = inject(MantenimientoEquiposService);
   private readonly session = inject(SessionService);
   private readonly baseUrl = `${environment.apiUrl}/maintenance-planner`;
 
@@ -129,11 +134,6 @@ export class MaintenancePlannerService {
     return this.http.get<MaintenancePlannerBoard>(`${this.baseUrl}/board`, { params });
   }
 
-  /**
-   * Compatibilidad con el endpoint propio del Planner.
-   * La UI V2 ya no lo usa para editar compromisos; conserva la ruta para
-   * integraciones existentes mientras el módulo migra al contrato común de Tickets.
-   */
   scheduleTicket(
     ticketId: number,
     payload: { due_date: string; reason: string }
@@ -144,17 +144,93 @@ export class MaintenancePlannerService {
     );
   }
 
+  /** Reprogramación rápida usada por drag & drop. */
   updateCommitment(
     ticket: MaintenancePlannerTicket,
     dueDate: string,
     reason: string,
   ): Observable<unknown> {
-    const trimmedReason = reason.trim();
-    if (!dueDate || !trimmedReason) {
+    const dueDateIso = this.toCommitmentIso(dueDate);
+    return this.updateGenericCommitment(
+      ticket,
+      dueDateIso,
+      reason,
+      ticket.refaccion_definida_por_jefe
+        ? {
+            necesita_refaccion: ticket.necesita_refaccion,
+            descripcion_refaccion: ticket.descripcion_refaccion || '',
+            refaccion_definida_por_jefe: true,
+          }
+        : null,
+    );
+  }
+
+  /**
+   * Flujo completo del formulario compartido por Tickets y Planner.
+   * Cuando el backend autoriza diagnóstico estructurado, usa la operación atómica
+   * de Mantenimiento. En el resto de roles conserva el contrato general de Tickets.
+   */
+  updateCommitmentFromForm(
+    ticket: MaintenancePlannerTicket,
+    event: AsignarFechaPayload,
+    canCaptureDiagnosis: boolean,
+  ): Observable<unknown> {
+    const reason = String(event.motivo || '').trim();
+    if (!event.fecha || !reason) {
       throw new Error('La fecha y el motivo son obligatorios.');
     }
 
-    const dueDateIso = this.toCommitmentIso(dueDate);
+    const dueDateIso = this.toCommitmentIsoFromDate(event.fecha);
+
+    if (canCaptureDiagnosis && Number(ticket.aparato_id) > 0) {
+      return this.mantenimientoEquiposService.guardarCompromiso(
+        ticket.ticket_id,
+        {
+          fecha_solucion: dueDateIso,
+          motivo: reason,
+          falla_mantenimiento_id: event.falla_mantenimiento_id,
+          condicion_operativa: event.condicion_operativa,
+          necesita_refaccion: !!event.necesita_refaccion,
+          descripcion_refaccion: event.necesita_refaccion
+            ? (event.descripcion_refaccion || '')
+            : '',
+        },
+      );
+    }
+
+    const sparePart = event.refaccion_definida_por_jefe
+      ? {
+          necesita_refaccion: !!event.necesita_refaccion,
+          descripcion_refaccion: event.necesita_refaccion
+            ? (event.descripcion_refaccion || '')
+            : '',
+          refaccion_definida_por_jefe: true,
+        }
+      : null;
+
+    return this.updateGenericCommitment(
+      ticket,
+      dueDateIso,
+      reason,
+      sparePart,
+    );
+  }
+
+  private updateGenericCommitment(
+    ticket: MaintenancePlannerTicket,
+    dueDateIso: string,
+    reason: string,
+    sparePart: {
+      necesita_refaccion: boolean;
+      descripcion_refaccion: string;
+      refaccion_definida_por_jefe: boolean;
+    } | null,
+  ): Observable<unknown> {
+    const trimmedReason = reason.trim();
+    if (!dueDateIso || !trimmedReason) {
+      throw new Error('La fecha y el motivo son obligatorios.');
+    }
+
     const nowIso = new Date().toISOString();
     const history = Array.isArray(ticket.historial_fechas)
       ? ticket.historial_fechas.map((item) => ({ ...item }))
@@ -177,7 +253,7 @@ export class MaintenancePlannerService {
     const updatePayload: any = {
       estado: 'en progreso',
       fecha_solucion: dueDateIso,
-      fecha_en_progreso: nowIso,
+      fecha_en_progreso: ticket.fecha_en_progreso || nowIso,
       historial_fechas: history,
       motivo_cambio: trimmedReason,
     };
@@ -185,16 +261,16 @@ export class MaintenancePlannerService {
     const updateTicket$ = () =>
       this.ticketService.updateTicket(ticket.ticket_id, updatePayload);
 
-    if (!ticket.refaccion_definida_por_jefe) {
+    if (!sparePart) {
       return updateTicket$();
     }
 
     return this.ticketService
       .setCompromiso(ticket.ticket_id, {
         fecha_solucion: dueDateIso,
-        necesita_refaccion: ticket.necesita_refaccion,
-        descripcion_refaccion: ticket.necesita_refaccion
-          ? ticket.descripcion_refaccion
+        necesita_refaccion: sparePart.necesita_refaccion,
+        descripcion_refaccion: sparePart.necesita_refaccion
+          ? sparePart.descripcion_refaccion
           : null,
         refaccion_definida_por_jefe: true,
       })
@@ -208,5 +284,16 @@ export class MaintenancePlannerService {
     }
 
     return new Date(year, month - 1, day, 7, 0, 0).toISOString();
+  }
+
+  private toCommitmentIsoFromDate(value: Date): string {
+    return new Date(
+      value.getFullYear(),
+      value.getMonth(),
+      value.getDate(),
+      7,
+      0,
+      0,
+    ).toISOString();
   }
 }

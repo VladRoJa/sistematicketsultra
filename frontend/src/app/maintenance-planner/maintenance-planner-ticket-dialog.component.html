@@ -84,38 +84,26 @@
     </section>
 
     <aside class="ticket-dialog__side">
-      <form *ngIf="canSchedule && ticket.estado !== 'finalizado'" (ngSubmit)="saveCommitment()" class="commitment-card">
-        <div>
-          <span class="commitment-card__eyebrow">Acción operativa</span>
-          <h3>Mover compromiso</h3>
-          <p>Usa el mismo flujo de actualización que la pantalla de Tickets.</p>
+      <div
+        *ngIf="canSchedule && ticket.estado !== 'finalizado'"
+        class="commitment-card commitment-card--shared"
+      >
+        <div *ngIf="errorMessage" class="commitment-card__error">
+          {{ errorMessage }}
         </div>
 
-        <label>
-          <span>Nueva fecha</span>
-          <input type="date" name="scheduleDate" [(ngModel)]="scheduleDate" required />
-        </label>
+        <app-asignar-fecha-modal
+          [fechaSeleccionada]="commitmentDate"
+          [ticket]="commitmentTicket"
+          [puedeCapturarDiagnostico]="canCaptureDiagnosis"
+          (onGuardar)="saveCommitment($event)"
+          (onCancelar)="close()"
+        ></app-asignar-fecha-modal>
 
-        <label>
-          <span>Motivo / comentario</span>
-          <textarea
-            name="scheduleReason"
-            [(ngModel)]="scheduleReason"
-            rows="4"
-            placeholder="Ej. Se mueve por llegada de refacción"
-            required
-          ></textarea>
-        </label>
-
-        <div *ngIf="errorMessage" class="commitment-card__error">{{ errorMessage }}</div>
-
-        <button
-          type="submit"
-          [disabled]="saving || !scheduleDate || !scheduleReason.trim()"
-        >
-          {{ saving ? 'Guardando…' : 'Guardar nueva fecha' }}
-        </button>
-      </form>
+        <div *ngIf="saving" class="commitment-card__saving">
+          Guardando compromiso…
+        </div>
+      </div>
 
       <div class="side-card">
         <h3>Estado de cierre</h3>
