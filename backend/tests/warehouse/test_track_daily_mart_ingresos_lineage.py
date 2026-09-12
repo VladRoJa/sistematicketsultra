@@ -9,11 +9,6 @@ import pytest
 import app.warehouse.services.track_daily_mart_service as service
 
 
-class _FakeColumn:
-    def asc(self):
-        return self
-
-
 class _FakeQuery:
     def __init__(self, rows):
         self._rows = list(rows)
@@ -23,26 +18,12 @@ class _FakeQuery:
         self.filters.append(kwargs)
         return self
 
-    def order_by(self, *_args):
-        return self
-
     def all(self):
         return list(self._rows)
 
 
-def _fake_model(
-    rows,
-    *,
-    with_display_order=False,
-):
-    values = {
-        "query": _FakeQuery(rows),
-    }
-
-    if with_display_order:
-        values["display_order"] = _FakeColumn()
-
-    return SimpleNamespace(**values)
+def _fake_model(rows):
+    return SimpleNamespace(query=_FakeQuery(rows))
 
 
 def test_mart_uses_generic_ingresos_snapshot_lineage(
@@ -68,11 +49,8 @@ def test_mart_uses_generic_ingresos_snapshot_lineage(
 
     monkeypatch.setattr(
         service,
-        "TrackBranchCatalogORM",
-        _fake_model(
-            [active_branch],
-            with_display_order=True,
-        ),
+        "_load_active_analytical_branches",
+        lambda: [active_branch],
     )
     monkeypatch.setattr(
         service,
