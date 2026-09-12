@@ -4,7 +4,10 @@ import { Observable } from 'rxjs';
 
 import { environment } from 'src/environments/environment';
 
-import { MarketingSalesFunnelResponse } from './marketing-sales-funnel.models';
+import {
+  MarketingSalesFunnelDetailResponse,
+  MarketingSalesFunnelResponse,
+} from './marketing-sales-funnel.models';
 
 
 @Injectable({
@@ -20,6 +23,29 @@ export class MarketingSalesFunnelService {
 
     return this.http.get<MarketingSalesFunnelResponse>(
       `${this.apiUrl}/sales-funnel`,
+      { params },
+    );
+  }
+
+  getDetail(
+    month: string,
+    metric: string,
+    branchId?: number,
+    origin?: string,
+  ): Observable<MarketingSalesFunnelDetailResponse> {
+    let params = new HttpParams()
+      .set('month', month)
+      .set('metric', metric);
+
+    if (branchId !== undefined) {
+      params = params.set('branch_id', branchId);
+    }
+    if (origin) {
+      params = params.set('origin', origin);
+    }
+
+    return this.http.get<MarketingSalesFunnelDetailResponse>(
+      `${this.apiUrl}/sales-funnel/detail`,
       { params },
     );
   }

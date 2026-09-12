@@ -1,19 +1,22 @@
-import { HttpErrorResponse } from '@angular/common/http';
 import { CommonModule } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import {
   Component,
   DestroyRef,
+  ElementRef,
   OnInit,
+  ViewChild,
   inject,
 } from '@angular/core';
-import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
 import { MatTableModule } from '@angular/material/table';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import {
   Subject,
   catchError,
@@ -25,6 +28,8 @@ import {
 
 import {
   MarketingSalesFunnelBranch,
+  MarketingSalesFunnelDetailResponse,
+  MarketingSalesFunnelDetailRow,
   MarketingSalesFunnelMetrics,
   MarketingSalesFunnelResponse,
   MarketingSalesOriginBreakdown,
@@ -32,19 +37,32 @@ import {
 import { MarketingSalesFunnelService } from './marketing-sales-funnel.service';
 
 
-interface SalesFunnelCard {
+interface FunnelStage {
+  step: string;
+  label: string;
+  value: string;
+  explanation: string;
+  share: string;
+  width: number;
+  metric: string;
+  icon: string;
+}
+
+interface ContextMetric {
   label: string;
   value: string;
   supportingText: string;
-  stepLabel?: string;
+  metric?: string;
+  icon: string;
 }
 
 interface SalesFunnelBranchView extends MarketingSalesFunnelBranch {
+  leads_meta_display: string;
   visits_total_display: string;
   visits_iventas_display: string;
-  visits_not_iventas_display: string;
   sales_total_display: string;
   sales_iventas_display: string;
+  sales_iventas_meta_display: string;
   sales_not_iventas_display: string;
   revenue_total_display: string;
   iventas_sale_share_display: string;
@@ -81,6 +99,7 @@ type DashboardRequestResult =
     MatProgressSpinnerModule,
     MatSelectModule,
     MatTableModule,
+    MatTooltipModule,
     ReactiveFormsModule,
   ],
   templateUrl: './marketing-sales-funnel.component.html',
@@ -91,6 +110,10 @@ export class MarketingSalesFunnelComponent implements OnInit {
   private readonly salesFunnelService = inject(MarketingSalesFunnelService);
   private readonly dashboardRequests = new Subject<string>();
   private dashboardRequestId = 0;
+  private detailRequestId = 0;
+
+  @ViewChild('detailSection')
+  private detailSection?: ElementRef<HTMLElement>;
 
   readonly monthControl = new FormControl(this.resolveCurrentMonth(), {
     nonNullable: true,
@@ -104,22 +127,57 @@ export class MarketingSalesFunnelComponent implements OnInit {
 
   readonly branchColumns = [
     'sucursal',
+    'leads_meta',
     'visits_total',
     'visits_iventas',
-    'visits_not_iventas',
     'sales_total',
     'sales_iventas',
+    'sales_iventas_meta',
     'sales_not_iventas',
     'revenue_total',
     'iventas_sale_share',
   ];
 
+  readonly detailSalesColumns = [
+    'branch',
+    'date',
+    'name',
+    'pin',
+    'phone',
+    'tariff',
+    'revenue',
+    'origin',
+    'survey',
+    'transaction_branch',
+  ];
+  readonly detailVisitColumns = [
+    'branch',
+    'date',
+    'phone',
+    'origin',
+    'source',
+  ];
+  readonly detailLeadColumns = [
+    'branch',
+    'date',
+    'name',
+    'phone',
+    'channel',
+    'contact_id',
+  ];
+
   dashboard: MarketingSalesFunnelResponse | null = null;
-  commercialCards: SalesFunnelCard[] = [];
-  iventasCards: SalesFunnelCard[] = [];
-  conversionCards: SalesFunnelCard[] = [];
+  funnelStages: FunnelStage[] = [];
+  contextMetrics: ContextMetric[] = [];
+  traceMetrics: ContextMetric[] = [];
   branchRows: SalesFunnelBranchView[] = [];
   originRows: SalesFunnelOriginView[] = [];
+
+  detail: MarketingSalesFunnelDetailResponse | null = null;
+  detailRows: MarketingSalesFunnelDetailRow[] = [];
+  detailColumns: string[] = [];
+  detailLoading = false;
+  detailError = '';
 
   loading = true;
   errorMessage = '';
@@ -134,22 +192,6 @@ export class MarketingSalesFunnelComponent implements OnInit {
 
   get hasOrigins(): boolean {
     return this.originRows.some((row) => row.sales > 0);
-  }
-
-  get showOriginEmpty(): boolean {
-    return !this.hasOrigins;
-  }
-
-  get showBranchEmpty(): boolean {
-    return !this.hasBranches;
-  }
-
-  get showLoading(): boolean {
-    return this.loading;
-  }
-
-  get showError(): boolean {
-    return !this.loading && Boolean(this.errorMessage);
   }
 
   get showDashboard(): boolean {
@@ -169,9 +211,32 @@ export class MarketingSalesFunnelComponent implements OnInit {
     return value ? this.formatDate(value) : 'Sin snapshot';
   }
 
+  get newSalesCutoffLabel(): string {
+    const value = this.dashboard?.source.ventas_nuevos_socios_detalle_business_date;
+    return value ? this.formatDate(value) : 'Sin snapshot';
+  }
+
+  get kpiCutoffLabel(): string {
+    const value = this.dashboard?.source.kpi_desempeno_business_date;
+    return value ? this.formatDate(value) : 'Sin snapshot';
+  }
+
   get matchWindowLabel(): string {
     const days = this.dashboard?.source.match_window_days;
     return days !== undefined ? `${days} días` : '—';
+  }
+
+  get reconciliationLabel(): string {
+    const detail = this.dashboard?.data_quality.new_sales_detail_count;
+    const kpi = this.dashboard?.data_quality.kpi_new_sales_control;
+    const difference = this.dashboard?.data_quality.new_sales_vs_kpi_difference;
+
+    if (detail === undefined || kpi === undefined || kpi === null) {
+      return 'Sin control disponible';
+    }
+
+    const sign = (difference || 0) > 0 ? '+' : '';
+    return `Detalle ${this.formatInteger(detail)} · KPI ${this.formatInteger(kpi)} · ${sign}${difference || 0}`;
   }
 
   ngOnInit(): void {
@@ -181,6 +246,7 @@ export class MarketingSalesFunnelComponent implements OnInit {
           const requestId = ++this.dashboardRequestId;
           this.loading = true;
           this.errorMessage = '';
+          this.closeDetail();
 
           return this.salesFunnelService.getDashboard(month).pipe(
             map(
@@ -222,10 +288,9 @@ export class MarketingSalesFunnelComponent implements OnInit {
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe((month) => {
-        if (!this.isValidMonth(month)) {
-          return;
+        if (this.isValidMonth(month)) {
+          this.dashboardRequests.next(month.trim());
         }
-        this.dashboardRequests.next(month.trim());
       });
 
     this.dashboardRequests.next(this.selectedMonth);
@@ -233,145 +298,222 @@ export class MarketingSalesFunnelComponent implements OnInit {
 
   refreshDashboard(): void {
     this.monthControl.markAsTouched();
-    if (this.monthControl.invalid) {
+    if (!this.monthControl.invalid) {
+      this.dashboardRequests.next(this.selectedMonth);
+    }
+  }
+
+  openDetail(
+    metric: string,
+    branchId?: number,
+    origin?: string,
+  ): void {
+    if (!metric || this.detailLoading) {
       return;
     }
-    this.dashboardRequests.next(this.selectedMonth);
+
+    const requestId = ++this.detailRequestId;
+    this.detailLoading = true;
+    this.detailError = '';
+
+    this.salesFunnelService
+      .getDetail(this.selectedMonth, metric, branchId, origin)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (detail) => {
+          if (requestId !== this.detailRequestId) {
+            return;
+          }
+          this.detailLoading = false;
+          this.detail = detail;
+          this.detailRows = detail.rows;
+          this.detailColumns = this.resolveDetailColumns(detail.kind);
+          this.scrollToDetail();
+        },
+        error: (error: HttpErrorResponse) => {
+          if (requestId !== this.detailRequestId) {
+            return;
+          }
+          this.detailLoading = false;
+          this.detailError = this.resolveDetailError(error);
+          this.scrollToDetail();
+        },
+      });
+  }
+
+  openOriginDetail(row: SalesFunnelOriginView): void {
+    this.openDetail('origin', undefined, row.key);
+  }
+
+  openBranchDetail(metric: string, row: SalesFunnelBranchView): void {
+    this.openDetail(metric, row.sucursal_id);
+  }
+
+  closeDetail(): void {
+    this.detailRequestId += 1;
+    this.detail = null;
+    this.detailRows = [];
+    this.detailColumns = [];
+    this.detailLoading = false;
+    this.detailError = '';
+  }
+
+  formatCurrency(value: number | null | undefined): string {
+    return new Intl.NumberFormat('es-MX', {
+      style: 'currency',
+      currency: 'MXN',
+      maximumFractionDigits: 0,
+    }).format(value || 0);
   }
 
   private applyDashboard(data: MarketingSalesFunnelResponse): void {
     this.dashboard = data;
-    this.commercialCards = this.buildCommercialCards(data.summary);
-    this.iventasCards = this.buildIventasCards(data.summary);
-    this.conversionCards = this.buildConversionCards(data.summary);
-    this.branchRows = data.branches.map((branch) =>
-      this.buildBranchView(branch),
-    );
+    this.funnelStages = this.buildFunnelStages(data.summary);
+    this.contextMetrics = this.buildContextMetrics(data.summary);
+    this.traceMetrics = this.buildTraceMetrics(data.summary);
+    this.branchRows = data.branches.map((branch) => this.buildBranchView(branch));
     this.originRows = data.summary.origin_breakdown.map((origin) =>
       this.buildOriginView(origin, data.summary.sales_total),
     );
   }
 
-  private buildCommercialCards(
-    summary: MarketingSalesFunnelMetrics,
-  ): SalesFunnelCard[] {
+  private buildFunnelStages(summary: MarketingSalesFunnelMetrics): FunnelStage[] {
+    const total = summary.sales_total;
+    const withPhone = Math.max(0, total - summary.sales_without_valid_phone);
+
     return [
-      {
-        stepLabel: '01',
-        label: 'Visitas totales',
-        value: this.formatInteger(summary.visits_total),
-        supportingText: (
-          `${this.formatInteger(summary.visits_iventas)} con match iVentas · `
-          + `${this.formatInteger(summary.visits_not_iventas)} sin match`
-        ),
-      },
-      {
-        stepLabel: '02',
-        label: 'Ventas nuevas',
-        value: this.formatInteger(summary.sales_total),
-        supportingText: (
-          `${this.formatInteger(summary.sales_iventas)} pasaron por iVentas · `
-          + `${this.formatInteger(summary.sales_not_iventas)} por fallback`
-        ),
-      },
-      {
-        stepLabel: '03',
-        label: 'Ingreso venta nueva',
-        value: this.formatCurrency(summary.revenue_total),
-        supportingText: (
-          `${this.formatCurrency(summary.revenue_iventas)} iVentas · `
-          + `${this.formatCurrency(summary.revenue_not_iventas)} no iVentas`
-        ),
-      },
+      this.createFunnelStage(
+        '01',
+        'Venta nueva oficial',
+        total,
+        total,
+        'Filas de Ventas Nuevos Socios Detalle. KPI Desempeño funciona como control agregado.',
+        'sales_total',
+        'groups',
+      ),
+      this.createFunnelStage(
+        '02',
+        'Con teléfono utilizable',
+        withPhone,
+        total,
+        'Socios cuya fila permite intentar un cruce técnico por teléfono.',
+        'sales_with_phone',
+        'phone_in_talk',
+      ),
+      this.createFunnelStage(
+        '03',
+        'Con match iVentas',
+        summary.sales_iventas,
+        total,
+        'Teléfono exacto, misma sucursal KPI y evidencia iVentas previa dentro de la ventana.',
+        'sales_iventas',
+        'link',
+      ),
+      this.createFunnelStage(
+        '04',
+        'Meta Ads trazable',
+        summary.sales_iventas_meta,
+        total,
+        'El match iVentas más reciente conserva evidencia META_AD.',
+        'sales_iventas_meta',
+        'campaign',
+      ),
     ];
   }
 
-  private buildIventasCards(
-    summary: MarketingSalesFunnelMetrics,
-  ): SalesFunnelCard[] {
+  private createFunnelStage(
+    step: string,
+    label: string,
+    value: number,
+    total: number,
+    explanation: string,
+    metric: string,
+    icon: string,
+  ): FunnelStage {
+    const ratio = total > 0 ? value / total : 0;
+    return {
+      step,
+      label,
+      value: this.formatInteger(value),
+      explanation,
+      share: this.formatPercent(total > 0 ? ratio : null),
+      width: Math.max(38, Math.min(100, ratio * 100)),
+      metric,
+      icon,
+    };
+  }
+
+  private buildContextMetrics(summary: MarketingSalesFunnelMetrics): ContextMetric[] {
     return [
       {
-        stepLabel: '01',
         label: 'Leads Meta',
         value: this.formatInteger(summary.leads_meta),
-        supportingText: (
-          `${this.formatInteger(summary.iventas_contacts)} contactos iVentas con interacción`
-        ),
+        supportingText: `${this.formatInteger(summary.iventas_contacts)} contactos iVentas con interacción`,
+        metric: 'leads_meta',
+        icon: 'ads_click',
       },
       {
-        stepLabel: '02',
-        label: 'Visitas iVentas / Meta',
-        value: this.formatInteger(summary.visits_iventas_meta),
-        supportingText: (
-          `${this.formatInteger(summary.visits_iventas)} visitas iVentas totales`
-        ),
+        label: 'Visitas comerciales',
+        value: this.formatInteger(summary.visits_total),
+        supportingText: 'Pases de recorrido / 2 días detectados en Venta Total',
+        metric: 'visits_total',
+        icon: 'directions_walk',
       },
       {
-        stepLabel: '03',
-        label: 'Ventas iVentas / Meta',
-        value: this.formatInteger(summary.sales_iventas_meta),
-        supportingText: (
-          `${this.formatInteger(summary.sales_iventas)} ventas iVentas totales`
-        ),
+        label: 'Visitas con iVentas',
+        value: this.formatInteger(summary.visits_iventas),
+        supportingText: `${this.formatInteger(summary.visits_iventas_meta)} con evidencia Meta`,
+        metric: 'visits_iventas',
+        icon: 'link',
       },
       {
-        stepLabel: '04',
-        label: 'Ingreso iVentas / Meta',
-        value: this.formatCurrency(summary.revenue_iventas_meta),
-        supportingText: (
-          `${this.formatCurrency(summary.revenue_iventas)} ingreso iVentas total`
-        ),
+        label: 'Sin match iVentas',
+        value: this.formatInteger(summary.sales_not_iventas),
+        supportingText: 'La clasificación de origen cae a Encuesta de Venta Total',
+        metric: 'sales_not_iventas',
+        icon: 'fact_check',
       },
     ];
   }
 
-  private buildConversionCards(
-    summary: MarketingSalesFunnelMetrics,
-  ): SalesFunnelCard[] {
+  private buildTraceMetrics(summary: MarketingSalesFunnelMetrics): ContextMetric[] {
     return [
       {
-        label: 'Lead Meta → visita',
+        label: 'Lead Meta con visita trazada',
         value: this.formatPercent(summary.meta_lead_to_visit_rate),
-        supportingText: 'Lead Meta con visita trazada por teléfono.',
+        supportingText: 'Visitas Meta trazables / leads Meta.',
+        icon: 'route',
       },
       {
-        label: 'Visita Meta → venta',
-        value: this.formatPercent(summary.meta_visit_to_sale_rate),
-        supportingText: 'Visita iVentas/Meta que termina en venta nueva.',
-      },
-      {
-        label: 'Lead Meta → venta',
+        label: 'Lead Meta con venta atribuida',
         value: this.formatPercent(summary.meta_lead_to_sale_rate),
-        supportingText: 'Conversión completa del recorrido Meta trazable.',
+        supportingText: 'Ventas Meta atribuidas / leads Meta. No exige pase previo.',
+        icon: 'shopping_cart_checkout',
       },
       {
-        label: 'Visita total → venta',
-        value: this.formatPercent(summary.total_visit_to_sale_rate),
-        supportingText: 'Conversión comercial de todas las visitas.',
-      },
-      {
-        label: 'Peso iVentas en visitas',
+        label: 'Cobertura iVentas en visitas',
         value: this.formatPercent(summary.iventas_visit_share),
-        supportingText: 'Participación de iVentas dentro de las visitas.',
+        supportingText: 'Visitas con match iVentas / visitas comerciales.',
+        icon: 'visibility',
       },
       {
-        label: 'Peso iVentas en ventas',
+        label: 'Cobertura iVentas en venta nueva',
         value: this.formatPercent(summary.iventas_sale_share),
-        supportingText: 'Participación de iVentas dentro de la venta nueva.',
+        supportingText: 'Ventas con match iVentas / venta nueva oficial.',
+        icon: 'filter_alt',
       },
     ];
   }
 
-  private buildBranchView(
-    branch: MarketingSalesFunnelBranch,
-  ): SalesFunnelBranchView {
+  private buildBranchView(branch: MarketingSalesFunnelBranch): SalesFunnelBranchView {
     return {
       ...branch,
+      leads_meta_display: this.formatInteger(branch.leads_meta),
       visits_total_display: this.formatInteger(branch.visits_total),
       visits_iventas_display: this.formatInteger(branch.visits_iventas),
-      visits_not_iventas_display: this.formatInteger(branch.visits_not_iventas),
       sales_total_display: this.formatInteger(branch.sales_total),
       sales_iventas_display: this.formatInteger(branch.sales_iventas),
+      sales_iventas_meta_display: this.formatInteger(branch.sales_iventas_meta),
       sales_not_iventas_display: this.formatInteger(branch.sales_not_iventas),
       revenue_total_display: this.formatCurrency(branch.revenue_total),
       iventas_sale_share_display: this.formatPercent(branch.iventas_sale_share),
@@ -393,16 +535,27 @@ export class MarketingSalesFunnelComponent implements OnInit {
     };
   }
 
-  private formatInteger(value: number): string {
-    return new Intl.NumberFormat('es-MX', {
-      maximumFractionDigits: 0,
-    }).format(value || 0);
+  private resolveDetailColumns(kind: string): string[] {
+    if (kind === 'visits') {
+      return this.detailVisitColumns;
+    }
+    if (kind === 'leads') {
+      return this.detailLeadColumns;
+    }
+    return this.detailSalesColumns;
   }
 
-  private formatCurrency(value: number): string {
+  private scrollToDetail(): void {
+    setTimeout(() => {
+      this.detailSection?.nativeElement.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    });
+  }
+
+  private formatInteger(value: number): string {
     return new Intl.NumberFormat('es-MX', {
-      style: 'currency',
-      currency: 'MXN',
       maximumFractionDigits: 0,
     }).format(value || 0);
   }
@@ -432,15 +585,10 @@ export class MarketingSalesFunnelComponent implements OnInit {
 
   private resolveCurrentMonth(): string {
     const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    return `${year}-${month}`;
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   }
 
-  private buildMonthOptions(): Array<{
-    value: string;
-    label: string;
-  }> {
+  private buildMonthOptions(): Array<{ value: string; label: string }> {
     const firstMonth = new Date(2026, 6, 1);
     const currentMonth = new Date();
     const formatter = new Intl.DateTimeFormat('es-MX', {
@@ -458,7 +606,6 @@ export class MarketingSalesFunnelComponent implements OnInit {
       const year = cursor.getFullYear();
       const month = String(cursor.getMonth() + 1).padStart(2, '0');
       const formatted = formatter.format(cursor);
-
       options.push({
         value: `${year}-${month}`,
         label: formatted.charAt(0).toUpperCase() + formatted.slice(1),
@@ -478,11 +625,17 @@ export class MarketingSalesFunnelComponent implements OnInit {
     if (typeof backendMessage === 'string' && backendMessage.trim()) {
       return backendMessage.trim();
     }
-
     if (error.status === 0) {
       return 'No fue posible conectar con el backend.';
     }
-
     return 'No fue posible cargar el Funnel de Venta Total.';
+  }
+
+  private resolveDetailError(error: HttpErrorResponse): string {
+    const backendMessage = error.error?.message;
+    if (typeof backendMessage === 'string' && backendMessage.trim()) {
+      return backendMessage.trim();
+    }
+    return 'No fue posible cargar el detalle que compone este indicador.';
   }
 }
