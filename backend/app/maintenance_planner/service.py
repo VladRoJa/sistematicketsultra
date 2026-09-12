@@ -60,8 +60,9 @@ def _parse_date(value: str | None, field_name: str) -> date | None:
 
 
 def _default_window(reference_date: date) -> PlannerWindow:
-    monday = reference_date - timedelta(days=reference_date.weekday())
-    return PlannerWindow(start=monday, end=monday + timedelta(days=6))
+    days_since_sunday = (reference_date.weekday() + 1) % 7
+    sunday = reference_date - timedelta(days=days_since_sunday)
+    return PlannerWindow(start=sunday, end=sunday + timedelta(days=6))
 
 
 def _resolve_window(start_date: str | None, end_date: str | None) -> PlannerWindow:
@@ -122,12 +123,22 @@ def _planner_status(ticket: Ticket, today: date) -> str:
     return "PROGRAMADO"
 
 
+def _iso_business(value: datetime | None) -> str | None:
+    resolved = _to_business_datetime(value)
+    return resolved.isoformat() if resolved else None
+
+
 def _serialize_ticket(ticket: Ticket, today: date) -> dict:
     due_dt = _to_business_datetime(ticket.fecha_solucion)
-    created_dt = _to_business_datetime(ticket.fecha_creacion)
     inventory = ticket.inventario
     family = ticket.familia_equipo
     failure = ticket.falla_mantenimiento
+
+    history = [
+        {**item}
+        for item in (ticket.historial_fechas or [])
+        if isinstance(item, dict)
+    ]
 
     return {
         "ticket_id": ticket.id,
@@ -135,12 +146,16 @@ def _serialize_ticket(ticket: Ticket, today: date) -> dict:
         "planner_status": _planner_status(ticket, today),
         "criticidad": ticket.criticidad,
         "descripcion": ticket.descripcion,
+        "username": ticket.username,
         "sucursal_id": _ticket_branch_id(ticket),
         "sucursal": _ticket_branch_name(ticket),
         "asignado_a": ticket.asignado_a,
-        "fecha_creacion": created_dt.isoformat() if created_dt else None,
+        "fecha_creacion": _iso_business(ticket.fecha_creacion),
+        "fecha_en_progreso": _iso_business(ticket.fecha_en_progreso),
+        "fecha_finalizado": _iso_business(ticket.fecha_finalizado),
         "fecha_solucion": due_dt.isoformat() if due_dt else None,
         "fecha_solucion_date": due_dt.date().isoformat() if due_dt else None,
+        "historial_fechas": history,
         "aparato_id": ticket.aparato_id,
         "equipo": (
             getattr(inventory, "nombre", None)
@@ -151,9 +166,24 @@ def _serialize_ticket(ticket: Ticket, today: date) -> dict:
         "codigo_interno": getattr(inventory, "codigo_interno", None),
         "familia": getattr(family, "nombre", None),
         "falla": getattr(failure, "nombre", None),
+        "problema_detectado": ticket.problema_detectado,
         "condicion_operativa": ticket.condicion_operativa,
+        "ubicacion": ticket.ubicacion,
+        "categoria": ticket.categoria,
+        "subcategoria": ticket.subcategoria,
+        "detalle": ticket.detalle,
         "necesita_refaccion": bool(ticket.necesita_refaccion),
         "descripcion_refaccion": ticket.descripcion_refaccion or None,
+        "refaccion_definida_por_jefe": bool(ticket.refaccion_definida_por_jefe),
+        "estado_cierre": ticket.estado_cierre,
+        "motivo_rechazo_cierre": ticket.motivo_rechazo_cierre,
+        "costo_solucion": (
+            float(ticket.costo_solucion)
+            if ticket.costo_solucion is not None
+            else None
+        ),
+        "notas_cierre": ticket.notas_cierre,
+        "url_evidencia": ticket.url_evidencia,
     }
 
 
