@@ -1,0 +1,460 @@
+.planner-page {
+  padding: 16px;
+  color: #1f2937;
+}
+
+.planner-toolbar,
+.planner-filters,
+.metric-strip,
+.planner-main,
+.ticket-detail {
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+.planner-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.planner-toolbar h1,
+.section-heading h2,
+.ticket-detail h2,
+.schedule-panel h3 {
+  margin: 0;
+}
+
+.planner-toolbar p,
+.section-heading p {
+  margin: 3px 0 0;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.planner-toolbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.planner-toolbar__actions button,
+.refresh-button,
+.close-button,
+.primary-action {
+  min-height: 38px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  padding: 0 12px;
+  cursor: pointer;
+}
+
+.week-button {
+  min-width: 170px;
+  font-weight: 600;
+}
+
+.planner-filters {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 0 14px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.planner-filters label,
+.schedule-panel label {
+  display: grid;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.planner-filters select,
+.schedule-panel input,
+.schedule-panel textarea {
+  min-height: 38px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  padding: 7px 9px;
+  font: inherit;
+}
+
+.planner-filters select {
+  min-width: 190px;
+}
+
+.refresh-button:disabled,
+.primary-action:disabled {
+  cursor: default;
+  opacity: .55;
+}
+
+.planner-alert {
+  max-width: 1600px;
+  margin: 10px auto;
+  border-left: 4px solid #b91c1c;
+  background: #fef2f2;
+  padding: 10px 12px;
+}
+
+.metric-strip {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.metric {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-height: 62px;
+  border: 0;
+  border-right: 1px solid #e5e7eb;
+  background: transparent;
+  padding: 12px;
+  text-align: left;
+  color: inherit;
+}
+
+button.metric {
+  cursor: pointer;
+}
+
+.metric:last-child {
+  border-right: 0;
+}
+
+.metric strong {
+  font-size: 26px;
+  line-height: 1;
+}
+
+.metric span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.metric--danger strong {
+  color: #b91c1c;
+}
+
+.metric--warning strong {
+  color: #a16207;
+}
+
+.metric--today strong {
+  color: #1d4ed8;
+}
+
+.planner-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.section-heading h2 {
+  font-size: 16px;
+}
+
+.week-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(145px, 1fr));
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.day-column {
+  min-width: 145px;
+  border: 1px solid #dbe2ea;
+  background: #f8fafc;
+}
+
+.day-column--today {
+  border-color: #2563eb;
+}
+
+.day-column > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 38px;
+  border-bottom: 1px solid #dbe2ea;
+  padding: 7px 9px;
+  text-transform: capitalize;
+  font-size: 12px;
+}
+
+.day-column__items {
+  display: grid;
+  gap: 5px;
+  padding: 5px;
+}
+
+.ticket-card,
+.focus-item {
+  width: 100%;
+  border: 1px solid #dbe2ea;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+
+.ticket-card {
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+}
+
+.ticket-card--selected,
+.focus-item--selected {
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
+}
+
+.ticket-card__topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.ticket-card__branch,
+.ticket-card__equipment,
+.ticket-card__meta,
+.ticket-card__flag {
+  display: block;
+}
+
+.ticket-card__branch {
+  font-size: 11px;
+  color: #475569;
+}
+
+.ticket-card__equipment {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ticket-card__meta,
+.ticket-card__flag {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.ticket-card__flag {
+  color: #92400e;
+  font-weight: 600;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 2px 6px;
+  border: 1px solid #cbd5e1;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.status-vencido {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.status-hoy {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.status-sin-fecha {
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.status-finalizado {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.empty-day,
+.empty-focus {
+  padding: 12px 8px;
+  color: #94a3b8;
+  font-size: 11px;
+  text-align: center;
+}
+
+.meeting-focus {
+  min-width: 0;
+}
+
+.focus-list {
+  display: grid;
+  gap: 5px;
+}
+
+.focus-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px;
+}
+
+.focus-item > div {
+  min-width: 0;
+}
+
+.focus-item strong,
+.focus-item span {
+  display: block;
+}
+
+.focus-item strong {
+  font-size: 12px;
+}
+
+.focus-item > div > span {
+  overflow: hidden;
+  color: #64748b;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ticket-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 18px;
+  margin-top: 14px;
+  border-top: 2px solid #334155;
+  padding-top: 14px;
+}
+
+.ticket-detail__title {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ticket-detail__title > div > span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.ticket-detail__summary dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px 16px;
+  margin: 12px 0;
+}
+
+.ticket-detail__summary dl div {
+  min-width: 0;
+}
+
+.ticket-detail__summary dt {
+  color: #64748b;
+  font-size: 11px;
+}
+
+.ticket-detail__summary dd {
+  margin: 2px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ticket-description {
+  margin: 10px 0 0;
+  color: #475569;
+  font-size: 13px;
+}
+
+.schedule-panel {
+  display: grid;
+  gap: 10px;
+  border-left: 1px solid #e5e7eb;
+  padding-left: 18px;
+}
+
+.schedule-panel textarea {
+  resize: vertical;
+}
+
+.primary-action {
+  border-color: #1d4ed8;
+  background: #1d4ed8;
+  color: #fff;
+  font-weight: 700;
+}
+
+.planner-loading {
+  max-width: 1600px;
+  margin: 20px auto;
+  color: #64748b;
+}
+
+@media (max-width: 1100px) {
+  .metric-strip {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .planner-main,
+  .ticket-detail {
+    grid-template-columns: 1fr;
+  }
+
+  .schedule-panel {
+    border-left: 0;
+    border-top: 1px solid #e5e7eb;
+    padding: 14px 0 0;
+  }
+}
+
+@media (max-width: 700px) {
+  .planner-page {
+    padding: 10px;
+  }
+
+  .planner-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .planner-toolbar__actions {
+    justify-content: space-between;
+  }
+
+  .week-button {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .metric-strip {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .ticket-detail__summary dl {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

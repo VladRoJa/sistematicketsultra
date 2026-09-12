@@ -107,6 +107,12 @@ export const routes: Routes = [
         component: PmCalendarioComponent,
       },
       {
+        path: 'maintenance-planner',
+        loadComponent: () =>
+          import('./maintenance-planner/maintenance-planner.component')
+            .then(m => m.MaintenancePlannerComponent),
+      },
+      {
         path: 'catalogos',
         loadChildren: () => import('./inventario/catalogos/catalogos-routing.module').then(m => m.CatalogosRoutingModule)
       },
@@ -244,4 +250,3 @@ export const routes: Routes = [
 
   { path: '**', redirectTo: 'login', pathMatch: 'full' },
 ];
-
