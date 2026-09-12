@@ -3,10 +3,11 @@ from __future__ import annotations
 from calendar import monthrange
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Any
 import unicodedata
+from zoneinfo import ZoneInfo
 
 from app.extensions import db
 from app.models import (
@@ -15,18 +16,23 @@ from app.models import (
     MarketingIventasSyncRunORM,
 )
 from app.models.warehouse import (
+    KpiDesempenoSnapshotORM,
+    KpiDesempenoSnapshotRowORM,
     TrackBranchAliasORM,
     TrackBranchCatalogORM,
     VentaTotalSnapshotORM,
     VentaTotalSnapshotRowORM,
+    VentasNuevosSociosDetalleSnapshotORM,
+    VentasNuevosSociosDetalleSnapshotRowORM,
 )
 from app.services.marketing_access import MarketingAccess
 from app.services.marketing_dashboard_service import load_visible_marketing_branches
 from app.services.marketing_inputs_service import parse_month
-from app.services.marketing_phone import normalize_phone
+from app.services.marketing_phone import normalize_member_phone, normalize_phone
 
 
 MATCH_WINDOW_DAYS = 30
+TIJUANA_TIMEZONE = ZoneInfo("America/Tijuana")
 VALID_VENTA_TOTAL_STATUSES = frozenset({"ACTIVO", "FACTURADO"})
 ELIGIBLE_VISIT_DESCRIPTIONS = frozenset(
     {"PASE 2 DIAS GRATIS", "PASE RECORRIDO"}
@@ -87,6 +93,18 @@ class _CommercialSale:
     phone: str | None
     revenue: Decimal
     survey_raw: str | None
+
+
+@dataclass(frozen=True)
+class _VentaTotalEnrichment:
+    phone: str | None = None
+    survey_raw: str | None = None
+
+
+@dataclass(frozen=True)
+class _SalesLoadResult:
+    sales: tuple[_CommercialSale, ...] = ()
+    enriched_with_venta_total: int = 0
 
 
 @dataclass
@@ -180,6 +198,19 @@ def _parse_row_date(value: Any) -> date:
     )
 
 
+def _payment_local_date(value: Any) -> date:
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return value
+    if not isinstance(value, datetime):
+        raise ValueError("fecha_pago_at debe ser datetime.")
+
+    normalized = value
+    if normalized.tzinfo is None:
+        normalized = normalized.replace(tzinfo=timezone.utc)
+
+    return normalized.astimezone(TIJUANA_TIMEZONE).date()
+
+
 def _safe_ratio(numerator: int, denominator: int) -> float | None:
     if denominator <= 0:
         return None
@@ -188,14 +219,6 @@ def _safe_ratio(numerator: int, denominator: int) -> float | None:
 
 def _is_valid_status(value: Any) -> bool:
     return _normalize_text(value) in VALID_VENTA_TOTAL_STATUSES
-
-
-def _is_new_flag(value: Any) -> bool:
-    return _normalize_text(value) in {"SI", "TRUE", "1", "YES"}
-
-
-def _is_membership_row(row: Any) -> bool:
-    return _normalize_text(getattr(row, "clave_producto", None)) == "MEMBRESIA"
 
 
 def _classify_survey(value: Any) -> str:
@@ -256,6 +279,67 @@ def _select_venta_total_snapshot(
         .order_by(
             VentaTotalSnapshotORM.business_date.desc(),
             VentaTotalSnapshotORM.id.desc(),
+        )
+        .first()
+    )
+
+
+def _select_new_sales_detail_snapshot(
+    month_start: date,
+) -> VentasNuevosSociosDetalleSnapshotORM | None:
+    return (
+        VentasNuevosSociosDetalleSnapshotORM.query.filter(
+            VentasNuevosSociosDetalleSnapshotORM.report_type_key
+            == "ventas_nuevos_socios_detalle",
+            VentasNuevosSociosDetalleSnapshotORM.business_date >= month_start,
+            VentasNuevosSociosDetalleSnapshotORM.business_date
+            <= _month_end(month_start),
+            VentasNuevosSociosDetalleSnapshotORM.date_from == month_start,
+            VentasNuevosSociosDetalleSnapshotORM.snapshot_kind
+            == "month_to_date",
+            VentasNuevosSociosDetalleSnapshotORM.is_canonical.is_(True),
+        )
+        .order_by(
+            VentasNuevosSociosDetalleSnapshotORM.business_date.desc(),
+            VentasNuevosSociosDetalleSnapshotORM.captured_at.desc(),
+            VentasNuevosSociosDetalleSnapshotORM.id.desc(),
+        )
+        .first()
+    )
+
+
+def _select_kpi_desempeno_snapshot(
+    month_start: date,
+    preferred_business_date: date | None,
+) -> KpiDesempenoSnapshotORM | None:
+    base_query = KpiDesempenoSnapshotORM.query.filter(
+        KpiDesempenoSnapshotORM.report_type_key == "kpi_desempeno",
+        KpiDesempenoSnapshotORM.business_date >= month_start,
+        KpiDesempenoSnapshotORM.business_date <= _month_end(month_start),
+        KpiDesempenoSnapshotORM.snapshot_kind == "daily",
+        KpiDesempenoSnapshotORM.is_canonical.is_(True),
+    )
+
+    if preferred_business_date is not None:
+        same_day = (
+            base_query.filter(
+                KpiDesempenoSnapshotORM.business_date
+                == preferred_business_date
+            )
+            .order_by(
+                KpiDesempenoSnapshotORM.captured_at.desc(),
+                KpiDesempenoSnapshotORM.id.desc(),
+            )
+            .first()
+        )
+        if same_day is not None:
+            return same_day
+
+    return (
+        base_query.order_by(
+            KpiDesempenoSnapshotORM.business_date.desc(),
+            KpiDesempenoSnapshotORM.captured_at.desc(),
+            KpiDesempenoSnapshotORM.id.desc(),
         )
         .first()
     )
@@ -341,110 +425,198 @@ def _load_visits(
     return [*with_phone.values(), *without_phone.values()]
 
 
-def _sale_key(
-    row: VentaTotalSnapshotRowORM,
-    branch_id: int,
-) -> str:
-    id_orden = str(row.id_orden or "").strip()
-    if id_orden:
-        return f"id_orden:{branch_id}:{id_orden}"
+def _merge_venta_total_enrichment(
+    current: _VentaTotalEnrichment | None,
+    row: Any,
+) -> _VentaTotalEnrichment:
+    phone = current.phone if current is not None else None
+    survey_raw = current.survey_raw if current is not None else None
 
-    folio = str(row.folio or "").strip()
-    if folio:
-        return f"folio:{branch_id}:{folio}"
+    if phone is None:
+        phone = normalize_phone(getattr(row, "telefono", None))
 
-    pin = str(row.pin or "").strip()
-    if pin:
-        return f"pin:{branch_id}:{pin}"
+    if survey_raw is None:
+        survey = str(getattr(row, "encuesta", None) or "").strip()
+        survey_raw = survey or None
 
-    return f"row:{branch_id}:{row.id}"
+    return _VentaTotalEnrichment(
+        phone=phone,
+        survey_raw=survey_raw,
+    )
 
 
-def _load_new_sales(
-    rows: list[VentaTotalSnapshotRowORM],
+def _build_venta_total_enrichment(
+    rows: list[Any],
     month_start: date,
-    branch_ids: tuple[int, ...],
-    alias_map: dict[str, int],
-) -> list[_CommercialSale]:
-    allowed = set(branch_ids)
-    grouped: dict[
-        str,
-        list[tuple[VentaTotalSnapshotRowORM, date, int]],
-    ] = defaultdict(list)
-    candidate_keys: set[str] = set()
+) -> tuple[
+    dict[str, _VentaTotalEnrichment],
+    dict[tuple[str, date], _VentaTotalEnrichment],
+]:
+    by_folio: dict[str, _VentaTotalEnrichment] = {}
+    by_pin_date: dict[tuple[str, date], _VentaTotalEnrichment] = {}
 
     for row in rows:
-        if not _is_valid_status(row.estatus):
+        if not _is_valid_status(getattr(row, "estatus", None)):
             continue
 
         try:
-            row_date = _parse_row_date(row.fecha)
+            row_date = _parse_row_date(getattr(row, "fecha", None))
         except ValueError:
             continue
         if row_date.replace(day=1) != month_start:
             continue
 
+        folio = str(getattr(row, "folio", None) or "").strip()
+        if folio:
+            by_folio[folio] = _merge_venta_total_enrichment(
+                by_folio.get(folio),
+                row,
+            )
+
+        pin = str(getattr(row, "pin", None) or "").strip()
+        if pin:
+            pin_key = (pin, row_date)
+            by_pin_date[pin_key] = _merge_venta_total_enrichment(
+                by_pin_date.get(pin_key),
+                row,
+            )
+
+    return by_folio, by_pin_date
+
+
+def _find_venta_total_enrichment(
+    *,
+    by_folio: dict[str, _VentaTotalEnrichment],
+    by_pin_date: dict[tuple[str, date], _VentaTotalEnrichment],
+    folio: str | None,
+    pin: str | None,
+    payment_date: date,
+) -> _VentaTotalEnrichment | None:
+    normalized_folio = str(folio or "").strip()
+    if normalized_folio:
+        match = by_folio.get(normalized_folio)
+        if match is not None:
+            return match
+
+    normalized_pin = str(pin or "").strip()
+    if normalized_pin:
+        return by_pin_date.get((normalized_pin, payment_date))
+
+    return None
+
+
+def _load_new_sales(
+    *,
+    snapshot: VentasNuevosSociosDetalleSnapshotORM | None,
+    venta_total_rows: list[VentaTotalSnapshotRowORM],
+    month_start: date,
+    branch_ids: tuple[int, ...],
+) -> _SalesLoadResult:
+    if snapshot is None:
+        return _SalesLoadResult()
+
+    allowed = set(branch_ids)
+    by_folio, by_pin_date = _build_venta_total_enrichment(
+        venta_total_rows,
+        month_start,
+    )
+    rows = (
+        VentasNuevosSociosDetalleSnapshotRowORM.query.filter_by(
+            snapshot_id=snapshot.id
+        )
+        .order_by(VentasNuevosSociosDetalleSnapshotRowORM.id.asc())
+        .all()
+    )
+
+    sales_by_key: dict[str, _CommercialSale] = {}
+    enriched_count = 0
+
+    for row in rows:
+        if row.sucursal_id is None:
+            continue
+
+        branch_id = int(row.sucursal_id)
+        if branch_id not in allowed:
+            continue
+
+        try:
+            payment_date = _payment_local_date(row.fecha_pago_at)
+        except ValueError:
+            continue
+        if payment_date.replace(day=1) != month_start:
+            continue
+
+        member_id = str(row.id_socio or "").strip()
+        folio = str(row.id_folio or "").strip()
+        pin = str(row.pin or "").strip()
+
+        if member_id:
+            sale_key = f"id_socio:{member_id}"
+        elif folio:
+            sale_key = f"id_folio:{folio}"
+        else:
+            sale_key = f"row:{int(row.id)}"
+
+        enrichment = _find_venta_total_enrichment(
+            by_folio=by_folio,
+            by_pin_date=by_pin_date,
+            folio=folio,
+            pin=pin,
+            payment_date=payment_date,
+        )
+        if enrichment is not None:
+            enriched_count += 1
+
+        phone = normalize_member_phone(
+            lada=row.lada,
+            telefono=row.telefono,
+        )
+        if phone is None and enrichment is not None:
+            phone = enrichment.phone
+
+        sale = _CommercialSale(
+            sale_key=sale_key,
+            branch_id=branch_id,
+            sale_date=payment_date,
+            phone=phone,
+            revenue=_to_decimal(row.total_pagado),
+            survey_raw=(
+                enrichment.survey_raw
+                if enrichment is not None
+                else None
+            ),
+        )
+        sales_by_key.setdefault(sale_key, sale)
+
+    return _SalesLoadResult(
+        sales=tuple(sales_by_key.values()),
+        enriched_with_venta_total=enriched_count,
+    )
+
+
+def _load_kpi_new_sales_control(
+    *,
+    snapshot: KpiDesempenoSnapshotORM | None,
+    branch_ids: tuple[int, ...],
+    alias_map: dict[str, int],
+) -> dict[int, int]:
+    if snapshot is None:
+        return {}
+
+    allowed = set(branch_ids)
+    result: dict[int, int] = defaultdict(int)
+
+    rows = KpiDesempenoSnapshotRowORM.query.filter_by(
+        snapshot_id=snapshot.id
+    ).all()
+
+    for row in rows:
         branch_id = alias_map.get(_normalize_text(row.sucursal))
         if branch_id is None or branch_id not in allowed:
             continue
+        result[branch_id] += int(row.clientes_nuevo_real or 0)
 
-        key = _sale_key(row, branch_id)
-        grouped[key].append((row, row_date, branch_id))
-
-        if _is_new_flag(row.nuevo) and _is_membership_row(row):
-            candidate_keys.add(key)
-
-    result: list[_CommercialSale] = []
-
-    for key in sorted(candidate_keys):
-        group = grouped[key]
-        membership_rows = [
-            item
-            for item in group
-            if _is_new_flag(item[0].nuevo)
-            and _is_membership_row(item[0])
-        ]
-        if not membership_rows:
-            continue
-
-        membership_rows.sort(
-            key=lambda item: (item[1], int(item[0].row_index or 0))
-        )
-        primary_row, sale_date, branch_id = membership_rows[0]
-
-        phone = next(
-            (
-                normalized
-                for row, _, _ in [*membership_rows, *group]
-                if (normalized := normalize_phone(row.telefono)) is not None
-            ),
-            None,
-        )
-        survey_raw = next(
-            (
-                str(row.encuesta).strip()
-                for row, _, _ in [*membership_rows, *group]
-                if str(row.encuesta or "").strip()
-            ),
-            None,
-        )
-        revenue = sum(
-            (_to_decimal(row.total) for row, _, _ in group),
-            Decimal("0"),
-        )
-
-        result.append(
-            _CommercialSale(
-                key,
-                branch_id,
-                sale_date,
-                phone,
-                revenue,
-                survey_raw,
-            )
-        )
-
-    return result
+    return dict(result)
 
 
 def _canonical_runs_for_window(
@@ -727,29 +899,88 @@ def build_marketing_sales_funnel(
             "No existen runs canónicos iVentas para la ventana de cruce."
         )
 
-    snapshot = _select_venta_total_snapshot(month_start)
-    if snapshot is None:
+    alias_map = _load_branch_alias_map()
+
+    venta_total_snapshot = _select_venta_total_snapshot(month_start)
+    venta_total_rows: list[VentaTotalSnapshotRowORM] = []
+    visits: list[_CommercialVisit] = []
+    if venta_total_snapshot is None:
         limitations.append(
-            "No existe snapshot canónico de Venta Total para el mes."
+            "No existe snapshot canónico de Venta Total para el mes; "
+            "no hay visitas ni encuesta de respaldo."
         )
-        return _build_response(
-            month_start=month_start,
-            scope=scope,
-            branches=branches,
-            stats_by_branch=stats_by_branch,
-            snapshot=None,
-            iventas_run_ids=iventas_run_ids,
-            limitations=limitations,
+    else:
+        venta_total_rows = (
+            VentaTotalSnapshotRowORM.query.filter_by(
+                snapshot_id=venta_total_snapshot.id
+            )
+            .order_by(VentaTotalSnapshotRowORM.row_index.asc())
+            .all()
+        )
+        visits = _load_visits(
+            venta_total_rows,
+            month_start,
+            branch_ids,
+            alias_map,
         )
 
-    rows = (
-        VentaTotalSnapshotRowORM.query.filter_by(snapshot_id=snapshot.id)
-        .order_by(VentaTotalSnapshotRowORM.row_index.asc())
-        .all()
+    sales_detail_snapshot = _select_new_sales_detail_snapshot(month_start)
+    if sales_detail_snapshot is None:
+        limitations.append(
+            "No existe snapshot canónico de Ventas Nuevos Socios Detalle "
+            "para el mes."
+        )
+
+    sales_result = _load_new_sales(
+        snapshot=sales_detail_snapshot,
+        venta_total_rows=venta_total_rows,
+        month_start=month_start,
+        branch_ids=branch_ids,
     )
-    alias_map = _load_branch_alias_map()
-    visits = _load_visits(rows, month_start, branch_ids, alias_map)
-    sales = _load_new_sales(rows, month_start, branch_ids, alias_map)
+    sales = sales_result.sales
+
+    kpi_snapshot = _select_kpi_desempeno_snapshot(
+        month_start,
+        (
+            sales_detail_snapshot.business_date
+            if sales_detail_snapshot is not None
+            else None
+        ),
+    )
+    if kpi_snapshot is None:
+        limitations.append(
+            "No existe snapshot canónico de KPI Desempeño para controlar "
+            "Clientes Nuevo Real."
+        )
+
+    kpi_control = _load_kpi_new_sales_control(
+        snapshot=kpi_snapshot,
+        branch_ids=branch_ids,
+        alias_map=alias_map,
+    )
+    kpi_control_total = (
+        sum(kpi_control.values())
+        if kpi_snapshot is not None
+        else None
+    )
+    detail_total = len(sales)
+    reconciliation_difference = (
+        detail_total - kpi_control_total
+        if kpi_control_total is not None
+        else None
+    )
+
+    if (
+        reconciliation_difference is not None
+        and reconciliation_difference != 0
+    ):
+        limitations.append(
+            "Ventas Nuevos Socios Detalle no cuadra exactamente con "
+            "KPI Desempeño en el corte seleccionado: "
+            f"detalle={detail_total}, KPI={kpi_control_total}, "
+            f"diferencia={reconciliation_difference}. "
+            "Revisar diferencia de hora/corte antes de interpretar el gap."
+        )
 
     for visit in visits:
         stats = stats_by_branch[visit.branch_id]
@@ -817,8 +1048,14 @@ def build_marketing_sales_funnel(
         scope=scope,
         branches=branches,
         stats_by_branch=stats_by_branch,
-        snapshot=snapshot,
+        venta_total_snapshot=venta_total_snapshot,
+        sales_detail_snapshot=sales_detail_snapshot,
+        kpi_snapshot=kpi_snapshot,
         iventas_run_ids=iventas_run_ids,
+        detail_total=detail_total,
+        kpi_control_total=kpi_control_total,
+        reconciliation_difference=reconciliation_difference,
+        enriched_sales_count=sales_result.enriched_with_venta_total,
         limitations=limitations,
     )
 
@@ -829,8 +1066,14 @@ def _build_response(
     scope: dict[str, object],
     branches: list[Any],
     stats_by_branch: dict[int, _BranchStats],
-    snapshot: VentaTotalSnapshotORM | None,
+    venta_total_snapshot: VentaTotalSnapshotORM | None,
+    sales_detail_snapshot: VentasNuevosSociosDetalleSnapshotORM | None,
+    kpi_snapshot: KpiDesempenoSnapshotORM | None,
     iventas_run_ids: tuple[int, ...],
+    detail_total: int,
+    kpi_control_total: int | None,
+    reconciliation_difference: int | None,
+    enriched_sales_count: int,
     limitations: list[str],
 ) -> dict[str, Any]:
     total_stats = _BranchStats()
@@ -854,22 +1097,58 @@ def _build_response(
         "branches": branch_payloads,
         "source": {
             "venta_total_snapshot_id": (
-                int(snapshot.id) if snapshot is not None else None
+                int(venta_total_snapshot.id)
+                if venta_total_snapshot is not None
+                else None
             ),
             "venta_total_business_date": (
-                snapshot.business_date.isoformat()
-                if snapshot is not None
+                venta_total_snapshot.business_date.isoformat()
+                if venta_total_snapshot is not None
+                else None
+            ),
+            "ventas_nuevos_socios_detalle_snapshot_id": (
+                int(sales_detail_snapshot.id)
+                if sales_detail_snapshot is not None
+                else None
+            ),
+            "ventas_nuevos_socios_detalle_business_date": (
+                sales_detail_snapshot.business_date.isoformat()
+                if sales_detail_snapshot is not None
+                else None
+            ),
+            "kpi_desempeno_snapshot_id": (
+                int(kpi_snapshot.id)
+                if kpi_snapshot is not None
+                else None
+            ),
+            "kpi_desempeno_business_date": (
+                kpi_snapshot.business_date.isoformat()
+                if kpi_snapshot is not None
                 else None
             ),
             "iventas_sync_run_ids": list(iventas_run_ids),
             "match_window_days": MATCH_WINDOW_DAYS,
         },
         "data_quality": {
-            "venta_total_available": snapshot is not None,
+            "venta_total_available": venta_total_snapshot is not None,
+            "ventas_nuevos_socios_detalle_available": (
+                sales_detail_snapshot is not None
+            ),
+            "kpi_desempeno_available": kpi_snapshot is not None,
             "iventas_available": bool(iventas_run_ids),
+            "new_sale_source": "ventas_nuevos_socios_detalle",
+            "new_sale_control": "kpi_desempeno.clientes_nuevo_real",
+            "new_sales_detail_count": detail_total,
+            "kpi_new_sales_control": kpi_control_total,
+            "new_sales_vs_kpi_difference": reconciliation_difference,
+            "venta_total_enriched_sales": enriched_sales_count,
             "new_sale_rule": (
-                "Nuevo=SI + Clave Producto=MEMBRESIA + "
-                "Estatus ACTIVO/FACTURADO"
+                "Ventas Nuevos Socios Detalle define cada venta nueva y "
+                "su sucursal KPI; KPI Desempeño controla el total."
+            ),
+            "venta_total_role": (
+                "Enriquecimiento por folio; fallback PIN+fecha de pago "
+                "para Encuesta/teléfono, sin exigir misma sucursal."
             ),
             "match_mode": (
                 "exact_phone_same_branch_first_message_prior_30d"
