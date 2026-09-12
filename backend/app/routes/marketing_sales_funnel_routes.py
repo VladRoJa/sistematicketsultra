@@ -81,6 +81,8 @@ def get_marketing_sales_funnel_detail_endpoint():
             metric=request.args.get("metric", ""),
             branch_id=request.args.get("branch_id"),
             origin=request.args.get("origin"),
+            page=request.args.get("page"),
+            page_size=request.args.get("page_size"),
         )
         return jsonify(result), 200
     except MarketingAuthorizationError as exc:
