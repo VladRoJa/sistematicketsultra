@@ -158,6 +158,14 @@ export class MarketingSalesFunnelDetailDialogComponent implements OnInit {
     return String(value);
   }
 
+  formatCurrency(value: number): string {
+    return new Intl.NumberFormat('es-MX', {
+      style: 'currency',
+      currency: 'MXN',
+      maximumFractionDigits: 0,
+    }).format(value || 0);
+  }
+
   exportExcel(): void {
     if (this.exporting || !this.detail) {
       return;
@@ -185,7 +193,7 @@ export class MarketingSalesFunnelDetailDialogComponent implements OnInit {
           document.body.appendChild(anchor);
           anchor.click();
           anchor.remove();
-          URL.revokeObjectURL(url);
+          setTimeout(() => URL.revokeObjectURL(url), 0);
         },
         error: (error: HttpErrorResponse) => {
           this.exporting = false;
@@ -272,14 +280,6 @@ export class MarketingSalesFunnelDetailDialogComponent implements OnInit {
 
   private formatInteger(value: number): string {
     return new Intl.NumberFormat('es-MX', {
-      maximumFractionDigits: 0,
-    }).format(value || 0);
-  }
-
-  private formatCurrency(value: number): string {
-    return new Intl.NumberFormat('es-MX', {
-      style: 'currency',
-      currency: 'MXN',
       maximumFractionDigits: 0,
     }).format(value || 0);
   }
