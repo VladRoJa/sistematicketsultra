@@ -417,19 +417,8 @@ const menuMantenimientoGerencial = [
     this.menuItems = soloTickets;
   }
 
-const username = String(u?.username || '')
-  .trim()
-  .toUpperCase();
-
-if (
-  username === 'ADMICORP' &&
-  !this.menuItems.some((item) => item.label === 'Control')
-) {
-  this.menuItems = [
-    menuControl,
-    ...this.menuItems,
-  ];
-}
+this.habilitarControlEnMenuSiAplica(menuControl);
+this.habilitarMaintenancePlannerEnMenu();
 
 if (
   this.puedeVerTrackDiarioPorRol() &&
@@ -501,6 +490,91 @@ this.habilitarWarehouseEnMenuSiAplica(menuWarehouse);
     });
   }
 
+private habilitarControlEnMenuSiAplica(menuControl: any): void {
+  if (this.menuItems.some((item) => item.label === 'Control')) {
+    return;
+  }
+
+  this.http
+    .get<any>(`${environment.apiUrl}/control/context`)
+    .subscribe({
+      next: () => {
+        if (this.menuItems.some((item) => item.label === 'Control')) {
+          return;
+        }
+
+        this.menuItems = [menuControl, ...this.menuItems];
+        this.sincronizarMenuConRutaActual();
+      },
+      error: () => {
+        // El backend es la autoridad. Si responde 401/403 no se publica el menú.
+      },
+    });
+}
+
+private habilitarMaintenancePlannerEnMenu(): void {
+  if (!this.puedeVerMaintenancePlannerPorRol()) {
+    return;
+  }
+
+  const plannerItem = {
+    label: 'Planner de Mantenimiento',
+    path: '/maintenance-planner',
+  };
+
+  const mantenimientoMenu = this.menuItems.find(
+    (item) => item.label === 'Mantenimiento'
+  );
+
+  if (!mantenimientoMenu) {
+    this.menuItems = [
+      ...this.menuItems,
+      {
+        label: 'Mantenimiento',
+        path: '/maintenance-planner',
+        submenu: [plannerItem],
+      },
+    ];
+    this.sincronizarMenuConRutaActual();
+    return;
+  }
+
+  const submenu = Array.isArray(mantenimientoMenu.submenu)
+    ? mantenimientoMenu.submenu
+    : [];
+
+  if (submenu.some((item: { path: string }) => item.path === plannerItem.path)) {
+    return;
+  }
+
+  const nextSubmenu = [...submenu];
+  const escritorioIndex = nextSubmenu.findIndex(
+    (item: { path: string }) => item.path === '/pm/escritorio-preventivo'
+  );
+  const insertIndex = escritorioIndex >= 0 ? escritorioIndex + 1 : 0;
+  nextSubmenu.splice(insertIndex, 0, plannerItem);
+  mantenimientoMenu.submenu = nextSubmenu;
+  this.sincronizarMenuConRutaActual();
+}
+
+private puedeVerMaintenancePlannerPorRol(): boolean {
+  const user = this.authService.getUser();
+  const rol = String(user?.rol ?? user?.role ?? '').trim().toUpperCase();
+
+  return [
+    'ADMIN',
+    'ADMINISTRADOR',
+    'SUPER_ADMIN',
+    'MANTENIMIENTO',
+    'SR_MANTENIMIENTO',
+    'AUX_MANTENIMIENTO',
+    'SISTEMAS',
+    'TECNICO',
+    'GERENTE',
+    'GERENTE_REGIONAL',
+    'LECTOR_GLOBAL',
+  ].includes(rol);
+}
 
 private habilitarAdminUsuariosEnMenuSiAplica(): void {
   const user = this.session.getUser();
@@ -1292,6 +1366,7 @@ getMenuIcon(label: string): string {
   const normalizedLabel = String(label || '').toLowerCase();
 
   const iconsByLabel: Record<string, string> = {
+    control: 'dashboard',
     tickets: 'confirmation_number',
     mantenimiento: 'build',
     inventario: 'inventory_2',
@@ -1312,6 +1387,10 @@ getMenuIcon(label: string): string {
 
 getSubmenuIcon(label: string): string {
   const normalizedLabel = String(label || '').toLowerCase();
+
+  if (normalizedLabel.includes('planner')) {
+    return 'event_note';
+  }
 
   if (normalizedLabel.includes('crear')) {
     return 'add_circle';
@@ -1411,6 +1490,10 @@ getSubmenuDescription(label: string): string {
     return 'Crea un nuevo ticket para soporte o solicitud.';
   }
 
+  if (normalizedLabel.includes('planner')) {
+    return 'Agenda tickets de mantenimiento, revisa compromisos y reprograma trabajos.';
+  }
+
   if (normalizedLabel.includes('biblioteca') || normalizedLabel.includes('nube')) {
     return 'Consulta documentos publicados, manuales, políticas y reportes internos.';
   }
@@ -1431,7 +1514,11 @@ getSubmenuDescription(label: string): string {
     return 'Consulta Gasca, valida el código y deja bitácora del resultado.';
   }
 
-  if (normalizedLabel.includes('centro de control') || normalizedLabel.includes('aperturas')) {
+  if (normalizedLabel === 'centro de control') {
+    return 'Resume señales ejecutivas y permite bajar hasta su fuente.';
+  }
+
+  if (normalizedLabel.includes('aperturas')) {
     return 'Coordina fases, tareas, responsables, fechas y seguimiento de aperturas.';
   }
 
