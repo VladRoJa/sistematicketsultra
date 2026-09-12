@@ -1,7 +1,7 @@
 //usuario.service.ts
 
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from 'src/environments/environment';
 
@@ -22,6 +22,7 @@ export interface CrearUsuarioResponse {
 export interface SucursalUsuarioOption {
   sucursal_id: number;
   sucursal: string;
+  is_demo?: boolean;
 }
 
 export interface DepartamentoUsuarioOption {
@@ -51,8 +52,10 @@ export class UsuarioService {
   }
 
   getSucursales(): Observable<SucursalUsuarioOption[]> {
+    const params = new HttpParams().set('audience', 'operational');
     return this.http.get<SucursalUsuarioOption[]>(
-      `${environment.apiUrl}/sucursales/listar`
+      `${environment.apiUrl}/sucursales/listar`,
+      { params }
     );
   }
 
