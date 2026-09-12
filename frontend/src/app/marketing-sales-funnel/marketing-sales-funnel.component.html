@@ -1,0 +1,310 @@
+<main class="marketing-page">
+  <header class="page-header">
+    <div class="page-heading">
+      <p class="eyebrow">Track / BI</p>
+      <h1>Marketing y Conversión</h1>
+      <p class="page-subtitle">Funnel de Venta Total</p>
+      <div class="header-context">
+        <span class="cohort-badge">
+          <mat-icon>point_of_sale</mat-icon>
+          Universo comercial desde Venta Total
+        </span>
+        <span class="attribution-note">
+          <mat-icon>link</mat-icon>
+          Cruce iVentas por teléfono, misma sucursal y 30 días previos
+        </span>
+      </div>
+    </div>
+
+    <div class="page-actions">
+      <mat-form-field
+        appearance="fill"
+        subscriptSizing="dynamic"
+        class="month-field"
+      >
+        <mat-label>Mes</mat-label>
+        <mat-select
+          [formControl]="monthControl"
+          aria-label="Mes del Funnel de Venta Total"
+        >
+          <mat-option
+            *ngFor="let option of monthOptions"
+            [value]="option.value"
+          >
+            {{ option.label }}
+          </mat-option>
+        </mat-select>
+        <mat-error *ngIf="monthControl.invalid">
+          Selecciona un mes válido.
+        </mat-error>
+      </mat-form-field>
+
+      <button
+        mat-stroked-button
+        class="secondary-action"
+        type="button"
+        [disabled]="loading || monthControl.invalid"
+        (click)="refreshDashboard()"
+      >
+        <mat-icon>refresh</mat-icon>
+        Actualizar
+      </button>
+    </div>
+  </header>
+
+  <section *ngIf="loading" class="state-panel" aria-live="polite">
+    <mat-spinner diameter="36"></mat-spinner>
+    <p>Cargando Funnel de Venta Total…</p>
+  </section>
+
+  <section
+    *ngIf="!loading && errorMessage"
+    class="state-panel state-panel--error"
+    role="alert"
+  >
+    <mat-icon>error_outline</mat-icon>
+    <div>
+      <h2>No se pudo cargar el dashboard</h2>
+      <p>{{ errorMessage }}</p>
+      <button
+        mat-stroked-button
+        type="button"
+        (click)="refreshDashboard()"
+      >
+        Reintentar
+      </button>
+    </div>
+  </section>
+
+  <ng-container *ngIf="!loading && !errorMessage && dashboard">
+    <section class="metrics-section" aria-labelledby="commercial-title">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">Universo comercial</p>
+          <h2 id="commercial-title">Venta nueva del mes</h2>
+          <p>
+            La venta nueva nace de Venta Total; iVentas y Encuesta explican
+            el origen sin reemplazar el universo comercial.
+          </p>
+        </div>
+      </div>
+
+      <div class="funnel" aria-label="Embudo comercial de Venta Total">
+        <article
+          *ngFor="let card of commercialCards; let step = index"
+          class="funnel-card"
+        >
+          <span class="funnel-step">0{{ step + 1 }}</span>
+          <span class="metric-label">{{ card.label }}</span>
+          <strong>{{ card.value }}</strong>
+          <small>{{ card.supportingText }}</small>
+        </article>
+      </div>
+    </section>
+
+    <section class="metrics-section" aria-labelledby="iventas-title">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">Recorrido trazable</p>
+          <h2 id="iventas-title">iVentas / Meta</h2>
+          <p>
+            Solo incluye personas que pueden cruzarse por teléfono, misma
+            sucursal y una evidencia iVentas previa dentro de la ventana.
+          </p>
+        </div>
+      </div>
+
+      <div class="funnel" aria-label="Recorrido trazable iVentas y Meta">
+        <article
+          *ngFor="let card of iventasCards; let step = index"
+          class="funnel-card"
+        >
+          <span class="funnel-step">0{{ step + 1 }}</span>
+          <span class="metric-label">{{ card.label }}</span>
+          <strong>{{ card.value }}</strong>
+          <small>{{ card.supportingText }}</small>
+        </article>
+      </div>
+
+      <div class="conversion-strip conversion-strip--six">
+        <article
+          *ngFor="let card of conversionCards"
+          class="conversion-card"
+        >
+          <span>{{ card.label }}</span>
+          <strong>{{ card.value }}</strong>
+          <small>{{ card.supportingText }}</small>
+        </article>
+      </div>
+    </section>
+
+    <section class="metrics-section" aria-labelledby="origin-title">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">Composición de venta</p>
+          <h2 id="origin-title">Origen de Venta Nueva</h2>
+          <p>
+            El match técnico con iVentas tiene prioridad. Encuesta solo se
+            utiliza cuando no existe cruce iVentas.
+          </p>
+        </div>
+      </div>
+
+      <p *ngIf="!hasOrigins" class="empty-message">
+        No hay ventas clasificadas para el mes seleccionado.
+      </p>
+
+      <div *ngIf="hasOrigins" class="origin-grid">
+        <article
+          *ngFor="let row of originRows"
+          class="origin-card"
+          [class.origin-card--empty]="row.sales === 0"
+        >
+          <span>{{ row.label }}</span>
+          <strong>{{ row.sales_display }}</strong>
+          <small>{{ row.share_display }} de ventas</small>
+          <small>{{ row.revenue_display }}</small>
+        </article>
+      </div>
+    </section>
+
+    <section class="table-section" aria-labelledby="branch-table-title">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">Desglose operativo</p>
+          <h2 id="branch-table-title">Detalle por sucursal</h2>
+          <p>
+            Visitas y Venta Nueva separadas entre iVentas y no iVentas.
+          </p>
+        </div>
+      </div>
+
+      <p *ngIf="!hasBranches" class="empty-message">
+        No hay sucursales disponibles para el mes seleccionado.
+      </p>
+
+      <div *ngIf="hasBranches" class="table-scroll">
+        <table
+          mat-table
+          [dataSource]="branchRows"
+          class="branch-table"
+        >
+          <ng-container matColumnDef="sucursal">
+            <th mat-header-cell *matHeaderCellDef>Sucursal</th>
+            <td mat-cell *matCellDef="let row">{{ row.sucursal }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="visits_total">
+            <th mat-header-cell *matHeaderCellDef>Visitas</th>
+            <td mat-cell *matCellDef="let row">
+              {{ row.visits_total_display }}
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="visits_iventas">
+            <th mat-header-cell *matHeaderCellDef>Visitas iVentas</th>
+            <td mat-cell *matCellDef="let row">
+              {{ row.visits_iventas_display }}
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="visits_not_iventas">
+            <th mat-header-cell *matHeaderCellDef>Visitas no iVentas</th>
+            <td mat-cell *matCellDef="let row">
+              {{ row.visits_not_iventas_display }}
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="sales_total">
+            <th mat-header-cell *matHeaderCellDef>Venta nueva</th>
+            <td mat-cell *matCellDef="let row">
+              {{ row.sales_total_display }}
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="sales_iventas">
+            <th mat-header-cell *matHeaderCellDef>Venta iVentas</th>
+            <td mat-cell *matCellDef="let row">
+              {{ row.sales_iventas_display }}
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="sales_not_iventas">
+            <th mat-header-cell *matHeaderCellDef>Venta no iVentas</th>
+            <td mat-cell *matCellDef="let row">
+              {{ row.sales_not_iventas_display }}
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="revenue_total">
+            <th mat-header-cell *matHeaderCellDef>Ingreso venta nueva</th>
+            <td mat-cell *matCellDef="let row">
+              {{ row.revenue_total_display }}
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="iventas_sale_share">
+            <th mat-header-cell *matHeaderCellDef>% venta iVentas</th>
+            <td mat-cell *matCellDef="let row">
+              {{ row.iventas_sale_share_display }}
+            </td>
+          </ng-container>
+
+          <tr
+            mat-header-row
+            *matHeaderRowDef="branchColumns; sticky: true"
+          ></tr>
+          <tr mat-row *matRowDef="let row; columns: branchColumns"></tr>
+        </table>
+      </div>
+    </section>
+
+    <section class="quality-section" aria-labelledby="quality-title">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">Confiabilidad</p>
+          <h2 id="quality-title">Fuentes y reglas</h2>
+          <p>Datos usados para reconstruir el recorrido comercial.</p>
+        </div>
+      </div>
+
+      <div class="quality-layout">
+        <dl class="quality-modes">
+          <div>
+            <dt>Corte Venta Total</dt>
+            <dd>{{ ventaTotalCutoffLabel }}</dd>
+          </div>
+          <div>
+            <dt>Ventana iVentas</dt>
+            <dd>{{ matchWindowLabel }}</dd>
+          </div>
+          <div>
+            <dt>Regla de Venta Nueva</dt>
+            <dd>{{ dashboard.data_quality.new_sale_rule }}</dd>
+          </div>
+          <div>
+            <dt>Modo de cruce</dt>
+            <dd>{{ dashboard.data_quality.match_mode }}</dd>
+          </div>
+        </dl>
+
+        <div
+          *ngIf="dashboard.data_quality.limitations.length > 0"
+          class="limitations"
+        >
+          <h3>
+            <mat-icon>info</mat-icon>
+            Consideraciones
+          </h3>
+          <ul>
+            <li
+              *ngFor="let limitation of dashboard.data_quality.limitations"
+            >
+              {{ limitation }}
+            </li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  </ng-container>
+</main>
