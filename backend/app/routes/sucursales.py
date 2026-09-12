@@ -9,7 +9,7 @@ from flask_jwt_extended import jwt_required
 from app.models.sucursal_model import Sucursal
 from app.utils.error_handler import manejar_error
 from app.utils.sucursal_audience import (
-    SUCURSAL_AUDIENCE_OPERATIONAL,
+    SUCURSAL_AUDIENCE_ANALYTICAL,
     apply_sucursal_audience,
     normalize_sucursal_audience,
 )
@@ -25,9 +25,12 @@ sucursales_bp = Blueprint('sucursales', __name__, url_prefix='/api/sucursales')
 def listar_sucursales():
     try:
         try:
+            # Fail-closed para compatibilidad: consumidores existentes siguen
+            # viendo únicamente sucursales reales. Los módulos que soportan
+            # sandbox deben solicitar audience=operational explícitamente.
             audience = normalize_sucursal_audience(
                 request.args.get('audience'),
-                default=SUCURSAL_AUDIENCE_OPERATIONAL,
+                default=SUCURSAL_AUDIENCE_ANALYTICAL,
             )
         except ValueError as exc:
             return jsonify({'error': str(exc)}), 400
