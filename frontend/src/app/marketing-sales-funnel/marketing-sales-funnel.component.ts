@@ -36,6 +36,7 @@ interface SalesFunnelCard {
   label: string;
   value: string;
   supportingText: string;
+  stepLabel?: string;
 }
 
 interface SalesFunnelBranchView extends MarketingSalesFunnelBranch {
@@ -53,6 +54,7 @@ interface SalesFunnelOriginView extends MarketingSalesOriginBreakdown {
   sales_display: string;
   revenue_display: string;
   share_display: string;
+  is_empty: boolean;
 }
 
 type DashboardRequestResult =
@@ -132,6 +134,34 @@ export class MarketingSalesFunnelComponent implements OnInit {
 
   get hasOrigins(): boolean {
     return this.originRows.some((row) => row.sales > 0);
+  }
+
+  get showOriginEmpty(): boolean {
+    return !this.hasOrigins;
+  }
+
+  get showBranchEmpty(): boolean {
+    return !this.hasBranches;
+  }
+
+  get showLoading(): boolean {
+    return this.loading;
+  }
+
+  get showError(): boolean {
+    return !this.loading && Boolean(this.errorMessage);
+  }
+
+  get showDashboard(): boolean {
+    return !this.loading && !this.errorMessage && this.dashboard !== null;
+  }
+
+  get refreshDisabled(): boolean {
+    return this.loading || this.monthControl.invalid;
+  }
+
+  get hasLimitations(): boolean {
+    return Boolean(this.dashboard?.data_quality.limitations.length);
   }
 
   get ventaTotalCutoffLabel(): string {
@@ -227,6 +257,7 @@ export class MarketingSalesFunnelComponent implements OnInit {
   ): SalesFunnelCard[] {
     return [
       {
+        stepLabel: '01',
         label: 'Visitas totales',
         value: this.formatInteger(summary.visits_total),
         supportingText: (
@@ -235,6 +266,7 @@ export class MarketingSalesFunnelComponent implements OnInit {
         ),
       },
       {
+        stepLabel: '02',
         label: 'Ventas nuevas',
         value: this.formatInteger(summary.sales_total),
         supportingText: (
@@ -243,6 +275,7 @@ export class MarketingSalesFunnelComponent implements OnInit {
         ),
       },
       {
+        stepLabel: '03',
         label: 'Ingreso venta nueva',
         value: this.formatCurrency(summary.revenue_total),
         supportingText: (
@@ -258,6 +291,7 @@ export class MarketingSalesFunnelComponent implements OnInit {
   ): SalesFunnelCard[] {
     return [
       {
+        stepLabel: '01',
         label: 'Leads Meta',
         value: this.formatInteger(summary.leads_meta),
         supportingText: (
@@ -265,6 +299,7 @@ export class MarketingSalesFunnelComponent implements OnInit {
         ),
       },
       {
+        stepLabel: '02',
         label: 'Visitas iVentas / Meta',
         value: this.formatInteger(summary.visits_iventas_meta),
         supportingText: (
@@ -272,6 +307,7 @@ export class MarketingSalesFunnelComponent implements OnInit {
         ),
       },
       {
+        stepLabel: '03',
         label: 'Ventas iVentas / Meta',
         value: this.formatInteger(summary.sales_iventas_meta),
         supportingText: (
@@ -279,6 +315,7 @@ export class MarketingSalesFunnelComponent implements OnInit {
         ),
       },
       {
+        stepLabel: '04',
         label: 'Ingreso iVentas / Meta',
         value: this.formatCurrency(summary.revenue_iventas_meta),
         supportingText: (
@@ -352,6 +389,7 @@ export class MarketingSalesFunnelComponent implements OnInit {
       share_display: this.formatPercent(
         salesTotal > 0 ? origin.sales / salesTotal : null,
       ),
+      is_empty: origin.sales === 0,
     };
   }
 
