@@ -14,6 +14,13 @@ def test_resolve_window_accepts_explicit_range():
     assert window.end == date(2026, 9, 13)
 
 
+def test_default_window_runs_sunday_to_saturday():
+    window = service._default_window(date(2026, 9, 12))
+
+    assert window.start == date(2026, 9, 6)
+    assert window.end == date(2026, 9, 12)
+
+
 def test_resolve_window_rejects_inverted_range():
     with pytest.raises(service.MaintenancePlannerError):
         service._resolve_window("2026-09-13", "2026-09-07")
