@@ -18,13 +18,18 @@
   </div>
 
   <div class="asignar-fecha-modal__content">
-    <mat-form-field appearance="fill" class="w-full">
+    <mat-form-field
+      appearance="fill"
+      class="w-full asignar-fecha-modal__date-field"
+      (click)="picker.open()"
+    >
       <mat-label>Selecciona una fecha</mat-label>
       <input
         matInput
         [matDatepicker]="picker"
         [(ngModel)]="fechaSeleccionada"
         [min]="minDate"
+        readonly
         required
         #fechaNg="ngModel"
       />
@@ -97,29 +102,34 @@
     <section
       *ngIf="mostrarRefaccionJefe"
       class="asignar-fecha-refaccion"
+      [class.asignar-fecha-refaccion--expandida]="necesitaRefaccion"
     >
-      <div class="asignar-fecha-refaccion__header">
-        <div>
+      <div class="asignar-fecha-refaccion__summary">
+        <div class="asignar-fecha-refaccion__header">
           <strong>Refacción</strong>
-          <p>
-            Indica si este ticket requiere refacción o material especial.
+          <p *ngIf="necesitaRefaccion">
+            Describe la pieza, refacción o material necesario.
           </p>
         </div>
+
+        <mat-checkbox
+          class="asignar-fecha-refaccion__checkbox"
+          [(ngModel)]="necesitaRefaccion"
+          (change)="onNecesitaRefaccionChange($event.checked)"
+        >
+          ¿Requiere refacción?
+        </mat-checkbox>
       </div>
 
-      <mat-checkbox
-        class="asignar-fecha-refaccion__checkbox"
-        [(ngModel)]="necesitaRefaccion"
+      <mat-form-field
+        *ngIf="necesitaRefaccion"
+        appearance="fill"
+        class="w-full asignar-fecha-refaccion__field"
       >
-        ¿Requiere refacción?
-      </mat-checkbox>
-
-      <mat-form-field appearance="fill" class="w-full asignar-fecha-refaccion__field">
         <mat-label>Descripción técnica (opcional)</mat-label>
         <textarea
           matInput
           [(ngModel)]="descripcionRefaccion"
-          [disabled]="!necesitaRefaccion"
           rows="3"
           maxlength="500"
           placeholder="Describe la pieza, refacción o material necesario."
