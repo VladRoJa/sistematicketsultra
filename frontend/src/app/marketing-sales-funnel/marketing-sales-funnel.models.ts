@@ -48,14 +48,27 @@ export interface MarketingSalesFunnelBranch
 export interface MarketingSalesFunnelSource {
   venta_total_snapshot_id: number | null;
   venta_total_business_date: string | null;
+  ventas_nuevos_socios_detalle_snapshot_id?: number | null;
+  ventas_nuevos_socios_detalle_business_date?: string | null;
+  kpi_desempeno_snapshot_id?: number | null;
+  kpi_desempeno_business_date?: string | null;
   iventas_sync_run_ids: number[];
   match_window_days: number;
 }
 
 export interface MarketingSalesFunnelQuality {
   venta_total_available: boolean;
+  ventas_nuevos_socios_detalle_available?: boolean;
+  kpi_desempeno_available?: boolean;
   iventas_available: boolean;
+  new_sale_source?: string;
+  new_sale_control?: string;
+  new_sales_detail_count?: number;
+  kpi_new_sales_control?: number | null;
+  new_sales_vs_kpi_difference?: number | null;
+  venta_total_enriched_sales?: number;
   new_sale_rule: string;
+  venta_total_role?: string;
   match_mode: string;
   survey_fallback_only_after_no_iventas_match: boolean;
   limitations: string[];
@@ -68,4 +81,43 @@ export interface MarketingSalesFunnelResponse {
   branches: MarketingSalesFunnelBranch[];
   source: MarketingSalesFunnelSource;
   data_quality: MarketingSalesFunnelQuality;
+}
+
+export type MarketingSalesFunnelDetailKind = 'sales' | 'visits' | 'leads';
+
+export interface MarketingSalesFunnelDetailRow {
+  branch_id: number;
+  branch: string;
+  date: string | null;
+  name?: string | null;
+  member_id?: string | null;
+  pin?: string | null;
+  phone?: string | null;
+  folio?: string | null;
+  membership_type?: string | null;
+  tariff?: string | null;
+  revenue?: number | null;
+  survey?: string | null;
+  origin_key?: string | null;
+  origin?: string | null;
+  transaction_branch?: string | null;
+  payment_method?: string | null;
+  id_order?: string | null;
+  payment_place?: string | null;
+  source?: string | null;
+  contact_id?: string | null;
+  channel?: string | null;
+}
+
+export interface MarketingSalesFunnelDetailResponse {
+  month: string;
+  scope: Record<string, unknown>;
+  metric: string;
+  origin: string | null;
+  kind: MarketingSalesFunnelDetailKind;
+  title: string;
+  branch_id: number | null;
+  count: number;
+  revenue_total: number;
+  rows: MarketingSalesFunnelDetailRow[];
 }
