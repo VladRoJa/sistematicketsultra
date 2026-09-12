@@ -28,6 +28,7 @@ import {
 export class MaintenancePlannerComponent implements OnInit {
   private readonly plannerService = inject(MaintenancePlannerService);
   private readonly dialog = inject(MatDialog);
+  private suppressOpenUntil = 0;
 
   board: MaintenancePlannerBoard | null = null;
   loading = false;
@@ -115,6 +116,10 @@ export class MaintenancePlannerComponent implements OnInit {
   }
 
   openTicket(ticket: MaintenancePlannerTicket, initialDate?: string | null): void {
+    if (Date.now() < this.suppressOpenUntil) {
+      return;
+    }
+
     const dialogRef = this.dialog.open(MaintenancePlannerTicketDialogComponent, {
       data: {
         ticket,
@@ -147,6 +152,7 @@ export class MaintenancePlannerComponent implements OnInit {
     event: CdkDragDrop<MaintenancePlannerTicket[]>,
     targetDay: MaintenancePlannerDay,
   ): void {
+    this.suppressOpenUntil = Date.now() + 300;
     const ticket = event.item.data as MaintenancePlannerTicket;
 
     if (
