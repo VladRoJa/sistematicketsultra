@@ -40,6 +40,7 @@ from app.routes.marketing_campaign_preview_detail_routes import marketing_campai
 from app.routes.marketing_sales_funnel_routes import marketing_sales_funnel_bp
 from app.routes.mantenimiento_equipos_routes import mantenimiento_equipos_bp
 from app.maintenance_planner import maintenance_planner_bp
+from app.control_center import control_center_bp
 
 
 def create_app():
@@ -130,6 +131,7 @@ def create_app():
         mantenimiento_equipos_bp,
         url_prefix="/api/mantenimiento-equipos",
     )
+    app.register_blueprint(control_center_bp, url_prefix="/api/control")
 
     app.config['DEBUG'] = True
     app.config['PROPAGATE_EXCEPTIONS'] = True
