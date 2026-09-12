@@ -1,0 +1,204 @@
+<section class="planner-page">
+  <header class="planner-toolbar">
+    <div>
+      <h1>Planner de Mantenimiento</h1>
+      <p>Agenda operativa basada en tickets reales de Mantenimiento.</p>
+    </div>
+
+    <div class="planner-toolbar__actions">
+      <button type="button" (click)="previousWeek()" aria-label="Semana anterior">←</button>
+      <button type="button" class="week-button" (click)="currentWeek()">
+        {{ formatRange() }}
+      </button>
+      <button type="button" (click)="nextWeek()" aria-label="Semana siguiente">→</button>
+    </div>
+  </header>
+
+  <div class="planner-filters">
+    <label>
+      <span>Sucursal</span>
+      <select [(ngModel)]="branchId" (ngModelChange)="onFiltersChanged()">
+        <option [ngValue]="null">Todas</option>
+        <option *ngFor="let branch of board?.branches || []" [ngValue]="branch.id">
+          {{ branch.name }}
+        </option>
+      </select>
+    </label>
+
+    <label>
+      <span>Estado ticket</span>
+      <select [(ngModel)]="estado" (ngModelChange)="onFiltersChanged()">
+        <option *ngFor="let option of estados" [value]="option.value">
+          {{ option.label }}
+        </option>
+      </select>
+    </label>
+
+    <button type="button" class="refresh-button" (click)="loadBoard()" [disabled]="loading">
+      {{ loading ? 'Actualizando…' : 'Actualizar' }}
+    </button>
+  </div>
+
+  <div *ngIf="errorMessage" class="planner-alert" role="alert">
+    {{ errorMessage }}
+  </div>
+
+  <ng-container *ngIf="board as currentBoard">
+    <section class="metric-strip" aria-label="Resumen de mantenimiento">
+      <button type="button" class="metric metric--danger" (click)="selectedTicket = currentBoard.overdue[0] || null">
+        <strong>{{ currentBoard.metrics.overdue }}</strong>
+        <span>Vencidos</span>
+      </button>
+      <div class="metric metric--today">
+        <strong>{{ currentBoard.metrics.today }}</strong>
+        <span>Para hoy</span>
+      </div>
+      <div class="metric">
+        <strong>{{ currentBoard.metrics.week }}</strong>
+        <span>En la semana</span>
+      </div>
+      <div class="metric metric--warning">
+        <strong>{{ currentBoard.metrics.unscheduled }}</strong>
+        <span>Sin fecha</span>
+      </div>
+      <div class="metric">
+        <strong>{{ currentBoard.metrics.needs_spare_part }}</strong>
+        <span>Con refacción</span>
+      </div>
+      <div class="metric">
+        <strong>{{ currentBoard.metrics.active }}</strong>
+        <span>Activos</span>
+      </div>
+    </section>
+
+    <section class="planner-main">
+      <div class="planner-calendar">
+        <div class="section-heading">
+          <div>
+            <h2>Semana operativa</h2>
+            <p>Haz clic en un ticket para revisar o reprogramar.</p>
+          </div>
+        </div>
+
+        <div class="week-grid">
+          <article
+            *ngFor="let day of currentBoard.days"
+            class="day-column"
+            [class.day-column--today]="day.is_today"
+          >
+            <header>
+              <span>{{ formatDay(day.date) }}</span>
+              <strong>{{ day.total }}</strong>
+            </header>
+
+            <div class="day-column__items">
+              <button
+                *ngFor="let ticket of day.items; trackBy: trackTicket"
+                type="button"
+                class="ticket-card"
+                [class.ticket-card--selected]="selectedTicket?.ticket_id === ticket.ticket_id"
+                (click)="selectTicket(ticket)"
+              >
+                <div class="ticket-card__topline">
+                  <strong>#{{ ticket.ticket_id }}</strong>
+                  <span class="status-badge" [ngClass]="statusClass(ticket.planner_status)">
+                    {{ statusLabel(ticket.planner_status) }}
+                  </span>
+                </div>
+                <span class="ticket-card__branch">{{ ticket.sucursal }}</span>
+                <span class="ticket-card__equipment">{{ ticket.equipo }}</span>
+                <span class="ticket-card__meta" *ngIf="ticket.falla">{{ ticket.falla }}</span>
+                <span class="ticket-card__meta" *ngIf="ticket.asignado_a">Resp. {{ ticket.asignado_a }}</span>
+                <span class="ticket-card__flag" *ngIf="ticket.necesita_refaccion">Requiere refacción</span>
+              </button>
+
+              <div *ngIf="day.items.length === 0" class="empty-day">Sin trabajos</div>
+            </div>
+          </article>
+        </div>
+      </div>
+
+      <aside class="meeting-focus">
+        <div class="section-heading">
+          <div>
+            <h2>Resolver en junta</h2>
+            <p>Vencidos y tickets sin compromiso.</p>
+          </div>
+          <span>{{ meetingFocusItems.length }}</span>
+        </div>
+
+        <div class="focus-list">
+          <button
+            *ngFor="let ticket of meetingFocusItems; trackBy: trackTicket"
+            type="button"
+            class="focus-item"
+            [class.focus-item--selected]="selectedTicket?.ticket_id === ticket.ticket_id"
+            (click)="selectTicket(ticket)"
+          >
+            <div>
+              <strong>#{{ ticket.ticket_id }} · {{ ticket.sucursal }}</strong>
+              <span>{{ ticket.equipo }}</span>
+            </div>
+            <span class="status-badge" [ngClass]="statusClass(ticket.planner_status)">
+              {{ statusLabel(ticket.planner_status) }}
+            </span>
+          </button>
+
+          <div *ngIf="meetingFocusItems.length === 0" class="empty-focus">
+            No hay vencidos ni tickets sin fecha con los filtros actuales.
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <section *ngIf="selectedTicket as ticket" class="ticket-detail">
+      <div class="ticket-detail__summary">
+        <div class="ticket-detail__title">
+          <div>
+            <span>Ticket #{{ ticket.ticket_id }}</span>
+            <h2>{{ ticket.equipo }}</h2>
+          </div>
+          <button type="button" class="close-button" (click)="clearSelection()">Cerrar</button>
+        </div>
+
+        <dl>
+          <div><dt>Sucursal</dt><dd>{{ ticket.sucursal }}</dd></div>
+          <div><dt>Estado</dt><dd>{{ ticket.estado }}</dd></div>
+          <div><dt>Responsable</dt><dd>{{ ticket.asignado_a || 'Sin asignar' }}</dd></div>
+          <div><dt>Condición</dt><dd>{{ ticket.condicion_operativa || 'Sin captura' }}</dd></div>
+          <div><dt>Falla</dt><dd>{{ ticket.falla || 'Sin captura' }}</dd></div>
+          <div><dt>Refacción</dt><dd>{{ ticket.necesita_refaccion ? (ticket.descripcion_refaccion || 'Sí') : 'No' }}</dd></div>
+        </dl>
+
+        <p class="ticket-description">{{ ticket.descripcion }}</p>
+      </div>
+
+      <form class="schedule-panel" (ngSubmit)="saveSchedule()" *ngIf="currentBoard.permissions.can_schedule">
+        <h3>Fecha compromiso</h3>
+        <label>
+          <span>Fecha</span>
+          <input type="date" name="scheduleDate" [(ngModel)]="scheduleDate" required />
+        </label>
+        <label>
+          <span>Motivo / acuerdo de junta</span>
+          <textarea
+            name="scheduleReason"
+            [(ngModel)]="scheduleReason"
+            rows="3"
+            placeholder="Ej. Técnico confirma visita y refacción disponible"
+            required
+          ></textarea>
+        </label>
+        <button
+          type="submit"
+          class="primary-action"
+          [disabled]="savingSchedule || !scheduleDate || !scheduleReason.trim()"
+        >
+          {{ savingSchedule ? 'Guardando…' : 'Guardar compromiso' }}
+        </button>
+      </form>
+    </section>
+  </ng-container>
+
+  <div *ngIf="loading && !board" class="planner-loading">Cargando Planner…</div>
+</section>
