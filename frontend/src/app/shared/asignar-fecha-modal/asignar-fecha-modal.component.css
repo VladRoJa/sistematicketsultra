@@ -95,6 +95,12 @@
   overflow: hidden;
 }
 
+.asignar-fecha-modal__date-field,
+.asignar-fecha-modal__date-field input,
+.asignar-fecha-modal__date-field ::ng-deep .mat-datepicker-toggle {
+  cursor: pointer;
+}
+
 .asignar-fecha-modal textarea {
   min-height: 92px;
   resize: vertical;
@@ -163,21 +169,35 @@
 }
 
 .asignar-fecha-refaccion {
-  padding: 14px;
+  padding: 10px 14px;
   border: 1px solid var(--ultra-gray-200);
   border-radius: var(--ultra-radius-lg);
   background: var(--ultra-gray-50);
 }
 
+.asignar-fecha-refaccion--expandida {
+  padding-bottom: 14px;
+}
+
+.asignar-fecha-refaccion__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .asignar-fecha-refaccion__header {
-  margin-bottom: 10px;
+  min-width: 0;
 }
 
 .asignar-fecha-refaccion__checkbox {
-  display: block;
-  margin-bottom: 10px;
+  flex: 0 0 auto;
   color: var(--ultra-gray-800);
   font-weight: 800;
+}
+
+.asignar-fecha-refaccion__field {
+  margin-top: 10px;
 }
 
 .asignar-fecha-modal__actions {
@@ -202,6 +222,11 @@
 }
 
 @media (max-width: 560px) {
+  .asignar-fecha-refaccion__summary {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
   .asignar-fecha-modal__actions {
     flex-direction: column-reverse;
     align-items: stretch;
