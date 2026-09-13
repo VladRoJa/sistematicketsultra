@@ -29,11 +29,13 @@ import {
   MarketingSalesFunnelBranch,
   MarketingSalesFunnelMetrics,
   MarketingSalesFunnelResponse,
-  MarketingSalesOriginBreakdown,
 } from './marketing-sales-funnel.models';
 import {
   MarketingSalesFunnelDetailDialogComponent,
 } from './marketing-sales-funnel-detail-dialog.component';
+import {
+  MarketingSalesFunnelStoryComponent,
+} from './marketing-sales-funnel-story.component';
 import { MarketingSalesFunnelService } from './marketing-sales-funnel.service';
 
 
@@ -46,16 +48,6 @@ interface SummaryCard {
   cssClass: string;
 }
 
-interface StoryNode {
-  step: string;
-  label: string;
-  value: string;
-  share: string;
-  metric: string;
-  icon: string;
-  origin?: string;
-}
-
 interface SalesFunnelBranchView extends MarketingSalesFunnelBranch {
   visits_total_display: string;
   sales_total_display: string;
@@ -63,14 +55,6 @@ interface SalesFunnelBranchView extends MarketingSalesFunnelBranch {
   sales_not_iventas_display: string;
   revenue_total_display: string;
   iventas_sale_share_display: string;
-}
-
-interface SalesFunnelOriginView extends MarketingSalesOriginBreakdown {
-  sales_display: string;
-  revenue_display: string;
-  share_display: string;
-  is_empty: boolean;
-  icon: string;
 }
 
 type DashboardRequestResult =
@@ -91,6 +75,7 @@ type DashboardRequestResult =
   standalone: true,
   imports: [
     CommonModule,
+    MarketingSalesFunnelStoryComponent,
     MatButtonModule,
     MatDialogModule,
     MatFormFieldModule,
@@ -134,14 +119,6 @@ export class MarketingSalesFunnelComponent implements OnInit {
   dashboard: MarketingSalesFunnelResponse | null = null;
   summaryCards: SummaryCard[] = [];
   branchRows: SalesFunnelBranchView[] = [];
-  fallbackOrigins: SalesFunnelOriginView[] = [];
-
-  officialNode: StoryNode | null = null;
-  phoneNode: StoryNode | null = null;
-  iventasNode: StoryNode | null = null;
-  fallbackNode: StoryNode | null = null;
-  metaNode: StoryNode | null = null;
-  iventasOtherNode: StoryNode | null = null;
 
   loading = true;
   errorMessage = '';
@@ -152,10 +129,6 @@ export class MarketingSalesFunnelComponent implements OnInit {
 
   get hasBranches(): boolean {
     return this.branchRows.length > 0;
-  }
-
-  get hasFallbackOrigins(): boolean {
-    return this.fallbackOrigins.length > 0;
   }
 
   get showDashboard(): boolean {
@@ -201,15 +174,6 @@ export class MarketingSalesFunnelComponent implements OnInit {
 
     const sign = (difference || 0) > 0 ? '+' : '';
     return `Detalle ${this.formatInteger(detail)} · KPI ${this.formatInteger(kpi)} · ${sign}${difference || 0}`;
-  }
-
-  get funnelNarrative(): string {
-    const summary = this.dashboard?.summary;
-    if (!summary) {
-      return '';
-    }
-
-    return `${this.formatInteger(summary.sales_iventas)} pasaron por iVentas · ${this.formatInteger(summary.sales_not_iventas)} por fallback.`;
   }
 
   ngOnInit(): void {
@@ -300,17 +264,6 @@ export class MarketingSalesFunnelComponent implements OnInit {
     });
   }
 
-  openStoryNode(node: StoryNode | null): void {
-    if (!node) {
-      return;
-    }
-    this.openDetail(node.metric, undefined, node.origin);
-  }
-
-  openOriginDetail(row: SalesFunnelOriginView): void {
-    this.openDetail('origin', undefined, row.key);
-  }
-
   openBranchDetail(metric: string, row: SalesFunnelBranchView): void {
     this.openDetail(metric, row.sucursal_id);
   }
@@ -326,20 +279,7 @@ export class MarketingSalesFunnelComponent implements OnInit {
   private applyDashboard(data: MarketingSalesFunnelResponse): void {
     this.dashboard = data;
     this.summaryCards = this.buildSummaryCards(data.summary);
-    this.buildStoryNodes(data.summary);
     this.branchRows = data.branches.map((branch) => this.buildBranchView(branch));
-
-    this.fallbackOrigins = data.summary.origin_breakdown
-      .filter((origin) => (
-        origin.sales > 0
-        && origin.key !== 'IVENTAS_META'
-        && origin.key !== 'IVENTAS_OTHER'
-      ))
-      .map((origin) => this.buildOriginView(
-        origin,
-        data.summary.sales_not_iventas,
-      ))
-      .sort((left, right) => right.sales - left.sales);
   }
 
   private buildSummaryCards(summary: MarketingSalesFunnelMetrics): SummaryCard[] {
@@ -355,7 +295,7 @@ export class MarketingSalesFunnelComponent implements OnInit {
       {
         label: 'Ventas nuevas',
         value: this.formatInteger(summary.sales_total),
-        supportingText: 'Universo oficial desde Nuevos Socios Detalle',
+        supportingText: 'Universo desde Nuevos Socios Detalle',
         metric: 'sales_total',
         icon: 'groups',
         cssClass: 'summary-kpi--orange',
@@ -363,103 +303,28 @@ export class MarketingSalesFunnelComponent implements OnInit {
       {
         label: 'Ingreso Venta Nueva',
         value: this.formatCurrency(summary.revenue_total),
-        supportingText: 'Ingreso asociado al universo oficial',
+        supportingText: 'Ingreso asociado al universo de Venta Nueva',
         metric: 'revenue_total',
         icon: 'payments',
         cssClass: 'summary-kpi--green',
       },
       {
-        label: 'Ventas iVentas / Meta',
+        label: 'Ventas por publicaciones',
         value: this.formatInteger(summary.sales_iventas_meta),
-        supportingText: 'Ventas con evidencia técnica META_AD',
+        supportingText: 'Ventas iVentas con evidencia de publicidad',
         metric: 'sales_iventas_meta',
         icon: 'campaign',
         cssClass: 'summary-kpi--orange',
       },
       {
-        label: 'Ingreso iVentas / Meta',
+        label: 'Ingreso por publicaciones',
         value: this.formatCurrency(summary.revenue_iventas_meta),
-        supportingText: 'Ingreso atribuido técnicamente a Meta Ads',
+        supportingText: 'Ingreso atribuido a publicidad en iVentas',
         metric: 'revenue_iventas_meta',
         icon: 'paid',
         cssClass: 'summary-kpi--purple',
       },
     ];
-  }
-
-  private buildStoryNodes(summary: MarketingSalesFunnelMetrics): void {
-    const total = summary.sales_total;
-    const withPhone = Math.max(0, total - summary.sales_without_valid_phone);
-
-    this.officialNode = this.createStoryNode(
-      '01',
-      'Venta Nueva Oficial',
-      total,
-      total,
-      'sales_total',
-      'groups',
-    );
-    this.phoneNode = this.createStoryNode(
-      '02',
-      'Con teléfono utilizable',
-      withPhone,
-      total,
-      'sales_with_phone',
-      'phone_in_talk',
-    );
-    this.iventasNode = this.createStoryNode(
-      '03',
-      'Con Match iVentas',
-      summary.sales_iventas,
-      total,
-      'sales_iventas',
-      'link',
-    );
-    this.fallbackNode = this.createStoryNode(
-      '04',
-      'Sin Match iVentas',
-      summary.sales_not_iventas,
-      total,
-      'sales_not_iventas',
-      'person',
-    );
-    this.metaNode = this.createStoryNode(
-      '05',
-      'Meta Ads trazable',
-      summary.sales_iventas_meta,
-      total,
-      'sales_iventas_meta',
-      'campaign',
-    );
-    this.iventasOtherNode = this.createStoryNode(
-      '06',
-      'iVentas / Otro',
-      summary.sales_iventas_other,
-      total,
-      'origin',
-      'account_tree',
-      'IVENTAS_OTHER',
-    );
-  }
-
-  private createStoryNode(
-    step: string,
-    label: string,
-    value: number,
-    total: number,
-    metric: string,
-    icon: string,
-    origin?: string,
-  ): StoryNode {
-    return {
-      step,
-      label,
-      value: this.formatInteger(value),
-      share: this.formatPercent(total > 0 ? value / total : null),
-      metric,
-      icon,
-      origin,
-    };
   }
 
   private buildBranchView(branch: MarketingSalesFunnelBranch): SalesFunnelBranchView {
@@ -472,37 +337,6 @@ export class MarketingSalesFunnelComponent implements OnInit {
       revenue_total_display: this.formatCurrency(branch.revenue_total),
       iventas_sale_share_display: this.formatPercent(branch.iventas_sale_share),
     };
-  }
-
-  private buildOriginView(
-    origin: MarketingSalesOriginBreakdown,
-    denominator: number,
-  ): SalesFunnelOriginView {
-    return {
-      ...origin,
-      sales_display: this.formatInteger(origin.sales),
-      revenue_display: this.formatCurrency(origin.revenue),
-      share_display: this.formatPercent(
-        denominator > 0 ? origin.sales / denominator : null,
-      ),
-      is_empty: origin.sales === 0,
-      icon: this.resolveOriginIcon(origin.key),
-    };
-  }
-
-  private resolveOriginIcon(originKey: string): string {
-    const icons: Record<string, string> = {
-      IVENTAS_META: 'campaign',
-      IVENTAS_OTHER: 'account_tree',
-      SOCIAL_UNTRACED: 'alternate_email',
-      REFERRAL: 'groups',
-      PROXIMITY: 'location_on',
-      PLAZA: 'storefront',
-      OFFLINE: 'description',
-      OTHER_SURVEY: 'more_horiz',
-      UNKNOWN: 'help_outline',
-    };
-    return icons[originKey] || 'label';
   }
 
   private formatInteger(value: number): string {
