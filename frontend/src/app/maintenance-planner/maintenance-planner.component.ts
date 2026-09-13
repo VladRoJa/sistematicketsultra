@@ -30,7 +30,10 @@ type PlannerFocusMode =
   standalone: true,
   imports: [CommonModule, FormsModule, DragDropModule],
   templateUrl: './maintenance-planner.component.html',
-  styleUrls: ['./maintenance-planner.component.css'],
+  styleUrls: [
+    './maintenance-planner.component.css',
+    './maintenance-planner.compact-header.css',
+  ],
 })
 export class MaintenancePlannerComponent implements OnInit {
   private readonly plannerService = inject(MaintenancePlannerService);
