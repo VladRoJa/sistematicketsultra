@@ -85,7 +85,7 @@
 
     <aside class="ticket-dialog__side">
       <div
-        *ngIf="canSchedule && ticket.estado !== 'finalizado'"
+        *ngIf="canAssignInitialCommitment"
         class="commitment-card commitment-card--shared"
       >
         <div *ngIf="errorMessage" class="commitment-card__error">
@@ -93,16 +93,59 @@
         </div>
 
         <app-asignar-fecha-modal
-          [fechaSeleccionada]="commitmentDate"
+          [fechaSeleccionada]="initialCommitmentDate"
           [ticket]="commitmentTicket"
           [puedeCapturarDiagnostico]="canCaptureDiagnosis"
-          (onGuardar)="saveCommitment($event)"
+          (onGuardar)="saveInitialCommitment($event)"
           (onCancelar)="close()"
         ></app-asignar-fecha-modal>
 
         <div *ngIf="saving" class="commitment-card__saving">
           Guardando compromiso…
         </div>
+      </div>
+
+      <div
+        *ngIf="hasCommitment"
+        class="commitment-card commitment-card--reschedule"
+      >
+        <span class="commitment-card__eyebrow">Compromiso actual</span>
+        <h3>{{ formatDateTime(ticket.fecha_solucion) }}</h3>
+        <p>
+          La fecha ya fue asignada. Cualquier ajuste se registra como reprogramación,
+          igual que en la pantalla de Tickets.
+        </p>
+
+        <div *ngIf="errorMessage" class="commitment-card__error">
+          {{ errorMessage }}
+        </div>
+
+        <button
+          *ngIf="canReprogramCommitment"
+          type="button"
+          class="commitment-card__change-date"
+          (click)="openRescheduleDialog()"
+          [disabled]="saving"
+        >
+          Cambiar fecha
+        </button>
+
+        <small *ngIf="!canReprogramCommitment">
+          La fecha solo puede modificarse cuando el ticket está en progreso y tu perfil tiene permiso de ejecución.
+        </small>
+
+        <div *ngIf="saving" class="commitment-card__saving">
+          Guardando reprogramación…
+        </div>
+      </div>
+
+      <div
+        *ngIf="!hasCommitment && !canAssignInitialCommitment"
+        class="side-card"
+      >
+        <h3>Compromiso</h3>
+        <p>Sin fecha compromiso.</p>
+        <small>Tu perfil o el estado actual del ticket no permiten asignarla desde Planner.</small>
       </div>
 
       <div class="side-card">

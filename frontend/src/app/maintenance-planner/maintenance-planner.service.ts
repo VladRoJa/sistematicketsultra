@@ -136,45 +136,26 @@ export class MaintenancePlannerService {
 
   scheduleTicket(
     ticketId: number,
-    payload: { due_date: string; reason: string }
+    payload: { due_date: string; reason: string },
   ): Observable<{ mensaje: string; ticket: unknown }> {
     return this.http.put<{ mensaje: string; ticket: unknown }>(
       `${this.baseUrl}/tickets/${ticketId}/schedule`,
-      payload
+      payload,
     );
   }
 
-  /** Reprogramación rápida usada por drag & drop. */
-  updateCommitment(
-    ticket: MaintenancePlannerTicket,
-    dueDate: string,
-    reason: string,
-  ): Observable<unknown> {
-    const dueDateIso = this.toCommitmentIso(dueDate);
-    return this.updateGenericCommitment(
-      ticket,
-      dueDateIso,
-      reason,
-      ticket.refaccion_definida_por_jefe
-        ? {
-            necesita_refaccion: ticket.necesita_refaccion,
-            descripcion_refaccion: ticket.descripcion_refaccion || '',
-            refaccion_definida_por_jefe: true,
-          }
-        : null,
-    );
-  }
-
-  /**
-   * Flujo completo del formulario compartido por Tickets y Planner.
-   * Cuando el backend autoriza diagnóstico estructurado, usa la operación atómica
-   * de Mantenimiento. En el resto de roles conserva el contrato general de Tickets.
-   */
-  updateCommitmentFromForm(
+  /** Primera asignación de compromiso: equivale al flujo En progreso de Tickets. */
+  assignInitialCommitmentFromForm(
     ticket: MaintenancePlannerTicket,
     event: AsignarFechaPayload,
     canCaptureDiagnosis: boolean,
   ): Observable<unknown> {
+    if (ticket.fecha_solucion || ticket.fecha_solucion_date) {
+      throw new Error(
+        'El ticket ya tiene fecha compromiso. Usa el flujo de reprogramación.',
+      );
+    }
+
     const reason = String(event.motivo || '').trim();
     if (!event.fecha || !reason) {
       throw new Error('La fecha y el motivo son obligatorios.');
@@ -208,7 +189,7 @@ export class MaintenancePlannerService {
         }
       : null;
 
-    return this.updateGenericCommitment(
+    return this.applyCommitmentUpdate(
       ticket,
       dueDateIso,
       reason,
@@ -216,7 +197,53 @@ export class MaintenancePlannerService {
     );
   }
 
-  private updateGenericCommitment(
+  /** Reprogramación por calendario/drag & drop: solo para compromisos existentes. */
+  reprogramCommitment(
+    ticket: MaintenancePlannerTicket,
+    dueDate: string,
+    reason: string,
+  ): Observable<unknown> {
+    this.assertReprogrammable(ticket);
+    return this.applyCommitmentUpdate(
+      ticket,
+      this.toCommitmentIso(dueDate),
+      reason,
+      null,
+    );
+  }
+
+  /** Reprogramación desde el modal compartido de Editar fecha solución. */
+  reprogramCommitmentFromDate(
+    ticket: MaintenancePlannerTicket,
+    dueDate: Date,
+    reason: string,
+  ): Observable<unknown> {
+    this.assertReprogrammable(ticket);
+    return this.applyCommitmentUpdate(
+      ticket,
+      this.toCommitmentIsoFromDate(dueDate),
+      reason,
+      null,
+    );
+  }
+
+  private assertReprogrammable(ticket: MaintenancePlannerTicket): void {
+    const hasCommitment = Boolean(ticket.fecha_solucion || ticket.fecha_solucion_date);
+    const state = String(ticket.estado || '').trim().toLowerCase();
+
+    if (!hasCommitment) {
+      throw new Error(
+        'El ticket todavía no tiene compromiso. Primero debes asignar la fecha inicial.',
+      );
+    }
+    if (state !== 'en progreso') {
+      throw new Error(
+        'Solo se puede reprogramar un ticket que esté en progreso.',
+      );
+    }
+  }
+
+  private applyCommitmentUpdate(
     ticket: MaintenancePlannerTicket,
     dueDateIso: string,
     reason: string,

@@ -152,16 +152,12 @@ export class MaintenancePlannerComponent implements OnInit {
     this.suppressOpenUntil = Date.now() + 300;
     const ticket = event.item.data as MaintenancePlannerTicket;
 
-    if (
-      !this.board?.permissions.can_schedule
-      || ticket.estado === 'finalizado'
-      || this.dragSavingTicketId !== null
-    ) {
+    if (!this.canDrag(ticket)) {
       return;
     }
 
     const sourceDate = ticket.fecha_solucion_date;
-    if (sourceDate === targetDay.date) {
+    if (!sourceDate || sourceDate === targetDay.date) {
       return;
     }
 
@@ -179,11 +175,11 @@ export class MaintenancePlannerComponent implements OnInit {
 
     const reason = [
       'Reprogramado por arrastre en Planner',
-      `${sourceDate || 'sin fecha'} → ${targetDay.date}`,
+      `${sourceDate} → ${targetDay.date}`,
     ].join(': ');
 
     this.plannerService
-      .updateCommitment(ticket, targetDay.date, reason)
+      .reprogramCommitment(ticket, targetDay.date, reason)
       .subscribe({
         next: () => {
           this.dragSavingTicketId = null;
@@ -203,7 +199,8 @@ export class MaintenancePlannerComponent implements OnInit {
   canDrag(ticket: MaintenancePlannerTicket): boolean {
     return Boolean(
       this.board?.permissions.can_schedule
-      && ticket.estado !== 'finalizado'
+      && ticket.fecha_solucion_date
+      && String(ticket.estado || '').trim().toLowerCase() === 'en progreso'
       && this.dragSavingTicketId === null
     );
   }
