@@ -1,9 +1,13 @@
-import { CdkDragDrop, DragDropModule, transferArrayItem } from '@angular/cdk/drag-drop';
+import { CdkDragDrop, DragDropModule } from '@angular/cdk/drag-drop';
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatDialog } from '@angular/material/dialog';
 
+import {
+  EditarFechaSolucionDialogResult,
+  EditarFechaSolucionModalComponent,
+} from '../shared/editar-fecha-solucion-modal/editar-fecha-solucion-modal.component';
 import {
   MaintenancePlannerBoard,
   MaintenancePlannerDay,
@@ -161,39 +165,45 @@ export class MaintenancePlannerComponent implements OnInit {
       return;
     }
 
-    if (event.previousContainer !== event.container) {
-      transferArrayItem(
-        event.previousContainer.data,
-        event.container.data,
-        event.previousIndex,
-        event.currentIndex,
-      );
-    }
-
-    this.dragSavingTicketId = ticket.ticket_id;
     this.errorMessage = '';
 
-    const reason = [
-      'Reprogramado por arrastre en Planner',
-      `${sourceDate} → ${targetDay.date}`,
-    ].join(': ');
+    const dialogRef = this.dialog.open<
+      EditarFechaSolucionModalComponent,
+      { fechaActual: string | null },
+      EditarFechaSolucionDialogResult | undefined
+    >(EditarFechaSolucionModalComponent, {
+      width: '560px',
+      maxWidth: '92vw',
+      data: { fechaActual: targetDay.date },
+      autoFocus: false,
+      restoreFocus: false,
+    });
 
-    this.plannerService
-      .reprogramCommitment(ticket, targetDay.date, reason)
-      .subscribe({
-        next: () => {
-          this.dragSavingTicketId = null;
-          this.loadBoard();
-        },
-        error: (error) => {
-          this.dragSavingTicketId = null;
-          this.errorMessage =
-            error?.error?.mensaje
-            || error?.error?.message
-            || 'No se pudo mover el compromiso. Se restauró el calendario.';
-          this.loadBoard();
-        },
-      });
+    dialogRef.afterClosed().subscribe((result) => {
+      if (!result?.fecha || !result.motivo) {
+        return;
+      }
+
+      this.dragSavingTicketId = ticket.ticket_id;
+      this.errorMessage = '';
+
+      this.plannerService
+        .reprogramCommitmentFromDate(ticket, result.fecha, result.motivo)
+        .subscribe({
+          next: () => {
+            this.dragSavingTicketId = null;
+            this.loadBoard();
+          },
+          error: (error) => {
+            this.dragSavingTicketId = null;
+            this.errorMessage =
+              error?.error?.mensaje
+              || error?.error?.message
+              || 'No se pudo reprogramar el compromiso.';
+            this.loadBoard();
+          },
+        });
+    });
   }
 
   canDrag(ticket: MaintenancePlannerTicket): boolean {

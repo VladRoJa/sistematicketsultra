@@ -46,7 +46,7 @@ export class EditarFechaSolucionModalComponent {
     @Inject(MAT_DIALOG_DATA)
     public readonly data: EditarFechaSolucionDialogData,
   ) {
-    this.nuevaFecha = data.fechaActual ? new Date(data.fechaActual) : null;
+    this.nuevaFecha = this.parseInitialDate(data.fechaActual);
   }
 
   cerrar(): void {
@@ -67,5 +67,23 @@ export class EditarFechaSolucionModalComponent {
 
     this.loading = true;
     this.dialogRef.close({ fecha: this.nuevaFecha, motivo });
+  }
+
+  private parseInitialDate(value: string | null): Date | null {
+    const normalized = String(value || '').trim();
+    if (!normalized) {
+      return null;
+    }
+
+    const dateOnlyMatch = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (dateOnlyMatch) {
+      const year = Number(dateOnlyMatch[1]);
+      const month = Number(dateOnlyMatch[2]);
+      const day = Number(dateOnlyMatch[3]);
+      return new Date(year, month - 1, day, 7, 0, 0);
+    }
+
+    const parsed = new Date(normalized);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
   }
 }
