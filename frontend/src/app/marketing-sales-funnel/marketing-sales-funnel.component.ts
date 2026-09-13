@@ -29,6 +29,7 @@ import {
   MarketingSalesFunnelBranch,
   MarketingSalesFunnelMetrics,
   MarketingSalesFunnelResponse,
+  MarketingSalesFunnelScopeOption,
 } from './marketing-sales-funnel.models';
 import {
   MarketingSalesFunnelDetailDialogComponent,
@@ -55,6 +56,11 @@ interface SalesFunnelBranchView extends MarketingSalesFunnelBranch {
   sales_not_iventas_display: string;
   revenue_total_display: string;
   iventas_sale_share_display: string;
+}
+
+interface DashboardRequest {
+  month: string;
+  branchIds: number[];
 }
 
 type DashboardRequestResult =
@@ -93,7 +99,7 @@ export class MarketingSalesFunnelComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   private readonly salesFunnelService = inject(MarketingSalesFunnelService);
   private readonly dialog = inject(MatDialog);
-  private readonly dashboardRequests = new Subject<string>();
+  private readonly dashboardRequests = new Subject<DashboardRequest>();
   private dashboardRequestId = 0;
 
   readonly monthControl = new FormControl(this.resolveCurrentMonth(), {
@@ -103,6 +109,8 @@ export class MarketingSalesFunnelComponent implements OnInit {
       Validators.pattern(/^\d{4}-\d{2}$/),
     ],
   });
+  readonly regionControl = new FormControl<number | null>(null);
+  readonly branchControl = new FormControl<number | null>(null);
 
   readonly monthOptions = this.buildMonthOptions();
   readonly branchColumns = [
@@ -119,12 +127,49 @@ export class MarketingSalesFunnelComponent implements OnInit {
   dashboard: MarketingSalesFunnelResponse | null = null;
   summaryCards: SummaryCard[] = [];
   branchRows: SalesFunnelBranchView[] = [];
+  scopeOptions: MarketingSalesFunnelScopeOption[] = [];
 
   loading = true;
   errorMessage = '';
 
   get selectedMonth(): string {
     return this.monthControl.value.trim();
+  }
+
+  get selectedScopeBranchIds(): number[] {
+    const branchId = this.branchControl.value;
+    if (branchId !== null) {
+      return [branchId];
+    }
+
+    const regionId = this.regionControl.value;
+    if (regionId === null) {
+      return [];
+    }
+
+    return this.scopeOptions
+      .filter((option) => option.region_id === regionId)
+      .map((option) => option.sucursal_id);
+  }
+
+  get regionOptions(): Array<{ id: number; label: string }> {
+    const regions = new Map<number, string>();
+    for (const option of this.scopeOptions) {
+      if (option.region_id !== null && option.region) {
+        regions.set(option.region_id, option.region);
+      }
+    }
+    return Array.from(regions.entries())
+      .map(([id, label]) => ({ id, label }))
+      .sort((left, right) => left.label.localeCompare(right.label, 'es'));
+  }
+
+  get branchOptions(): MarketingSalesFunnelScopeOption[] {
+    const regionId = this.regionControl.value;
+    return this.scopeOptions
+      .filter((option) => regionId === null || option.region_id === regionId)
+      .slice()
+      .sort((left, right) => left.sucursal.localeCompare(right.sucursal, 'es'));
   }
 
   get hasBranches(): boolean {
@@ -179,27 +224,29 @@ export class MarketingSalesFunnelComponent implements OnInit {
   ngOnInit(): void {
     this.dashboardRequests
       .pipe(
-        switchMap((month) => {
+        switchMap((dashboardRequest) => {
           const requestId = ++this.dashboardRequestId;
           this.loading = true;
           this.errorMessage = '';
 
-          return this.salesFunnelService.getDashboard(month).pipe(
-            map(
-              (data): DashboardRequestResult => ({
-                requestId,
-                status: 'success',
-                data,
-              }),
-            ),
-            catchError((error: HttpErrorResponse) =>
-              of<DashboardRequestResult>({
-                requestId,
-                status: 'error',
-                error,
-              }),
-            ),
-          );
+          return this.salesFunnelService
+            .getDashboard(dashboardRequest.month, dashboardRequest.branchIds)
+            .pipe(
+              map(
+                (data): DashboardRequestResult => ({
+                  requestId,
+                  status: 'success',
+                  data,
+                }),
+              ),
+              catchError((error: HttpErrorResponse) =>
+                of<DashboardRequestResult>({
+                  requestId,
+                  status: 'error',
+                  error,
+                }),
+              ),
+            );
         }),
         takeUntilDestroyed(this.destroyRef),
       )
@@ -225,17 +272,43 @@ export class MarketingSalesFunnelComponent implements OnInit {
       )
       .subscribe((month) => {
         if (this.isValidMonth(month)) {
-          this.dashboardRequests.next(month.trim());
+          this.requestDashboard();
         }
       });
 
-    this.dashboardRequests.next(this.selectedMonth);
+    this.regionControl.valueChanges
+      .pipe(
+        distinctUntilChanged(),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((regionId) => {
+        const branchId = this.branchControl.value;
+        if (
+          branchId !== null
+          && !this.scopeOptions.some((option) => (
+            option.sucursal_id === branchId
+            && (regionId === null || option.region_id === regionId)
+          ))
+        ) {
+          this.branchControl.setValue(null, { emitEvent: false });
+        }
+        this.requestDashboard();
+      });
+
+    this.branchControl.valueChanges
+      .pipe(
+        distinctUntilChanged(),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe(() => this.requestDashboard());
+
+    this.requestDashboard();
   }
 
   refreshDashboard(): void {
     this.monthControl.markAsTouched();
     if (!this.monthControl.invalid) {
-      this.dashboardRequests.next(this.selectedMonth);
+      this.requestDashboard();
     }
   }
 
@@ -254,6 +327,7 @@ export class MarketingSalesFunnelComponent implements OnInit {
         metric,
         branchId,
         origin,
+        branchIds: this.selectedScopeBranchIds,
       },
       width: '96vw',
       maxWidth: '1600px',
@@ -276,8 +350,21 @@ export class MarketingSalesFunnelComponent implements OnInit {
     }).format(value || 0);
   }
 
+  private requestDashboard(): void {
+    if (this.monthControl.invalid) {
+      return;
+    }
+    this.dashboardRequests.next({
+      month: this.selectedMonth,
+      branchIds: this.selectedScopeBranchIds,
+    });
+  }
+
   private applyDashboard(data: MarketingSalesFunnelResponse): void {
     this.dashboard = data;
+    if (data.scope_options?.length) {
+      this.scopeOptions = data.scope_options;
+    }
     this.summaryCards = this.buildSummaryCards(data.summary);
     this.branchRows = data.branches.map((branch) => this.buildBranchView(branch));
   }
