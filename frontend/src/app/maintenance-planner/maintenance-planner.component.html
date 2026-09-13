@@ -146,6 +146,7 @@
                 *ngFor="let ticket of day.items; trackBy: trackTicket"
                 type="button"
                 class="ticket-card"
+                [ngClass]="'ticket-card--criticality-' + (ticket.criticidad || 1)"
                 [class.ticket-card--saving]="dragSavingTicketId === ticket.ticket_id"
                 cdkDrag
                 [cdkDragData]="ticket"
