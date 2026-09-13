@@ -8,7 +8,7 @@
       </p>
     </div>
 
-    <div class="page-actions">
+    <div class="page-actions funnel-scope-controls">
       <mat-form-field
         appearance="fill"
         subscriptSizing="dynamic"
@@ -24,6 +24,46 @@
             [value]="option.value"
           >
             {{ option.label }}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field
+        appearance="fill"
+        subscriptSizing="dynamic"
+        class="scope-field"
+      >
+        <mat-label>Región</mat-label>
+        <mat-select
+          [formControl]="regionControl"
+          aria-label="Región del Funnel de Venta Nueva"
+        >
+          <mat-option [value]="null">Todas las regiones</mat-option>
+          <mat-option
+            *ngFor="let region of regionOptions"
+            [value]="region.id"
+          >
+            {{ region.label }}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field
+        appearance="fill"
+        subscriptSizing="dynamic"
+        class="scope-field"
+      >
+        <mat-label>Sucursal</mat-label>
+        <mat-select
+          [formControl]="branchControl"
+          aria-label="Sucursal del Funnel de Venta Nueva"
+        >
+          <mat-option [value]="null">Todas las sucursales</mat-option>
+          <mat-option
+            *ngFor="let option of branchOptions"
+            [value]="option.sucursal_id"
+          >
+            {{ option.sucursal }}
           </mat-option>
         </mat-select>
       </mat-form-field>
@@ -86,6 +126,7 @@
       [month]="selectedMonth"
       [summary]="dashboard?.summary"
       [reconciliationLabel]="reconciliationLabel"
+      [branchIds]="selectedScopeBranchIds"
     ></app-marketing-sales-funnel-story>
 
     <section class="branch-panel" aria-labelledby="branch-table-title">
@@ -98,7 +139,7 @@
       </div>
 
       <p *ngIf="!hasBranches" class="empty-message">
-        No hay sucursales disponibles para el mes seleccionado.
+        No hay sucursales disponibles para el alcance seleccionado.
       </p>
 
       <div *ngIf="hasBranches" class="branch-table-wrap">
