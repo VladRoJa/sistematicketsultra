@@ -27,6 +27,9 @@ from app.models.warehouse import (
 )
 from app.services.marketing_access import MarketingAccess
 from app.services.marketing_dashboard_service import load_visible_marketing_branches
+from app.services.marketing_iventas_dashboard_data_service import (
+    read_iventas_dashboard_month_data,
+)
 from app.services.marketing_inputs_service import parse_month
 from app.services.marketing_phone import normalize_member_phone, normalize_phone
 
@@ -889,9 +892,41 @@ def build_marketing_sales_funnel(
         month_start,
         branch_ids,
     )
-    for branch_id, (contacts, leads_meta) in month_counts.items():
-        stats_by_branch[branch_id].iventas_contacts = contacts
-        stats_by_branch[branch_id].leads_meta = leads_meta
+    # KPI visible de iVentas:
+    # usa la misma fuente canónica mensual que el dashboard principal.
+    canonical_iventas = read_iventas_dashboard_month_data(
+        month_date=month_start,
+        today=datetime.now(TIJUANA_TIMEZONE).date(),
+    )
+
+    if (
+        canonical_iventas.available
+        and canonical_iventas.branch_metrics is not None
+    ):
+        canonical_by_branch = {
+            int(row.sucursal_id): row
+            for row in canonical_iventas.branch_metrics
+        }
+
+        for branch_id in branch_ids:
+            canonical_row = canonical_by_branch.get(branch_id)
+
+            if canonical_row is None:
+                stats_by_branch[branch_id].iventas_contacts = 0
+                stats_by_branch[branch_id].leads_meta = 0
+                continue
+
+            stats_by_branch[branch_id].iventas_contacts = int(
+                canonical_row.iventas_contacts
+            )
+            stats_by_branch[branch_id].leads_meta = int(
+                canonical_row.meta_observed_leads
+            )
+    else:
+        # Fallback solo si no existe snapshot mensual canónico.
+        for branch_id, (contacts, leads_meta) in month_counts.items():
+            stats_by_branch[branch_id].iventas_contacts = contacts
+            stats_by_branch[branch_id].leads_meta = leads_meta
 
     limitations: list[str] = []
     if not iventas_run_ids:

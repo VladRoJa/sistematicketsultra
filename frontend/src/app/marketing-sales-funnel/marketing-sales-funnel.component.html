@@ -102,23 +102,38 @@
   </section>
 
   <ng-container *ngIf="showDashboard">
-    <section class="story-summary" aria-label="Indicadores principales de Venta Nueva">
+    <section class="story-summary" aria-label="Indicadores principales de iVentas">
       <button
         *ngFor="let card of summaryCards"
         type="button"
         class="summary-kpi"
-        [ngClass]="card.cssClass"
-        (click)="openDetail(card.metric)"
+        [ngClass]="[card.cssClass, !card.metric ? 'summary-kpi--static' : '']"
+        (click)="card.metric && openDetail(card.metric)"
       >
         <span class="summary-kpi__icon">
           <mat-icon>{{ card.icon }}</mat-icon>
         </span>
+
         <span class="summary-kpi__copy">
           <span>{{ card.label }}</span>
           <strong>{{ card.value }}</strong>
           <small>{{ card.supportingText }}</small>
         </span>
-        <mat-icon class="summary-kpi__open">open_in_new</mat-icon>
+
+        <span
+          *ngIf="card.secondaryLabel"
+          class="summary-kpi__secondary"
+        >
+          <small>{{ card.secondaryLabel }}</small>
+          <strong>{{ card.secondaryValue }}</strong>
+        </span>
+
+        <mat-icon
+          *ngIf="card.metric"
+          class="summary-kpi__open"
+        >
+          open_in_new
+        </mat-icon>
       </button>
     </section>
 
