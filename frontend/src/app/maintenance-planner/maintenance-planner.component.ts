@@ -34,12 +34,12 @@ export class MaintenancePlannerComponent implements OnInit {
   dragSavingTicketId: number | null = null;
 
   branchId: number | null = null;
-  estado = 'todos';
+  estado = 'activos';
 
   weekStart = this.getSunday(new Date());
 
   readonly estados = [
-    { value: 'todos', label: 'Activos y cerrados' },
+    { value: 'activos', label: 'Activos' },
     { value: 'abierto', label: 'Abiertos' },
     { value: 'en progreso', label: 'En progreso' },
     { value: 'por_validar', label: 'Por validar' },
@@ -124,6 +124,9 @@ export class MaintenancePlannerComponent implements OnInit {
         canSchedule: Boolean(this.board?.permissions.can_schedule),
         canCaptureDiagnosis: Boolean(
           this.board?.permissions.can_capture_diagnosis,
+        ),
+        canRequestClosure: Boolean(
+          this.board?.permissions.can_request_closure,
         ),
         initialDate: initialDate || null,
       },
