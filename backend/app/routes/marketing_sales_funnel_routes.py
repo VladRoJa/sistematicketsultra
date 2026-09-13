@@ -8,7 +8,11 @@ from app.services.marketing_access import (
     MarketingAuthorizationError,
     resolve_marketing_access,
 )
-from app.services.marketing_inputs_service import MarketingInputValidationError
+from app.services.marketing_dashboard_service import load_visible_marketing_branches
+from app.services.marketing_inputs_service import (
+    MarketingInputValidationError,
+    parse_month,
+)
 from app.services.marketing_sales_funnel_detail_service import (
     MarketingSalesFunnelDetailValidationError,
 )
@@ -16,6 +20,9 @@ from app.services.marketing_sales_funnel_drilldown_service import (
     DETAIL_EXPORT_MIMETYPE,
     build_marketing_sales_funnel_drilldown,
     build_marketing_sales_funnel_drilldown_export,
+)
+from app.services.marketing_sales_funnel_iventas_stage_service import (
+    count_monthly_iventas_leads,
 )
 from app.services.marketing_sales_funnel_service import (
     build_marketing_sales_funnel,
@@ -50,9 +57,17 @@ def _resolve_request_access():
 def get_marketing_sales_funnel_endpoint():
     try:
         access = _resolve_request_access()
+        month = request.args.get("month", "")
         result = build_marketing_sales_funnel(
-            month=request.args.get("month", ""),
+            month=month,
             access=access,
+        )
+        _, branch_ids, _ = load_visible_marketing_branches(access)
+        result["summary"]["leads_iventas_month"] = (
+            count_monthly_iventas_leads(
+                month_start=parse_month(month),
+                branch_ids=branch_ids,
+            )
         )
         return jsonify(result), 200
     except MarketingAuthorizationError as exc:
