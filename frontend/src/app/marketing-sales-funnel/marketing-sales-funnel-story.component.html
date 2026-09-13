@@ -1,60 +1,6 @@
 <section class="trace-story" aria-labelledby="trace-story-title">
-  <header class="trace-story__header">
-    <div class="trace-story__copy">
-      <p class="trace-story__eyebrow">Marketing y Conversión</p>
-      <h2 id="trace-story-title">Cómo se conecta iVentas con la Venta Nueva</h2>
-      <p>{{ narrative }}</p>
-    </div>
+<div class="flow-board" aria-label="Diagrama de trazabilidad de iVentas y Venta Nueva">
 
-    <div class="trace-story__rules" aria-label="Reglas del funnel">
-      <article>
-        <mat-icon>monitoring</mat-icon>
-        <span>
-          <strong>KPI Desempeño controla</strong>
-          <small>Venta Nueva se conserva como universo comercial.</small>
-        </span>
-      </article>
-      <article>
-        <mat-icon>phone_in_talk</mat-icon>
-        <span>
-          <strong>iVentas cruza por teléfono</strong>
-          <small>Lead, visita y venta conservan trazabilidad técnica.</small>
-        </span>
-      </article>
-      <article>
-        <mat-icon>hub</mat-icon>
-        <span>
-          <strong>Dos recorridos, una venta</strong>
-          <small>Ambos funnels convergen en Ventas iVentas.</small>
-        </span>
-      </article>
-      <article>
-        <mat-icon>verified_user</mat-icon>
-        <span>
-          <strong>Cada nodo es auditable</strong>
-          <small>Haz clic para abrir las filas que forman el indicador.</small>
-        </span>
-      </article>
-    </div>
-
-    <span class="trace-story__audit-pill">
-      <mat-icon>monitoring</mat-icon>
-      {{ reconciliationLabel }}
-    </span>
-  </header>
-
-  <div class="flow-board" aria-label="Diagrama de trazabilidad de iVentas y Venta Nueva">
-    <div class="flow-board__lane flow-board__lane--iventas">
-      <mat-icon>phone_in_talk</mat-icon>
-      <strong>Funnel iVentas</strong>
-      <span>Leads → visitas → venta trazable</span>
-    </div>
-
-    <div class="flow-board__lane flow-board__lane--sales">
-      <mat-icon>groups</mat-icon>
-      <strong>Funnel Venta Nueva</strong>
-      <span>Venta total → trazable / sin match</span>
-    </div>
 
     <svg
       class="flow-board__connectors"
@@ -109,7 +55,6 @@
     </button>
 
     <button *ngIf="salesIventasNode as node" type="button" class="flow-card flow-card--junction flow-card--emphasis" (click)="openNode(node)">
-      <span class="flow-card__junction-badge">Punto de unión</span>
       <mat-icon>{{ node.icon }}</mat-icon>
       <span class="flow-card__label">{{ node.label }}</span>
       <strong>{{ node.value }}</strong>

@@ -597,3 +597,177 @@
     flex-direction: column;
   }
 }
+
+
+
+/* POLISH: cards superiores compactas */
+.flow-card--leads {
+  width: 50%;
+  justify-self: start;
+}
+
+.flow-card--visits {
+  width: 50%;
+  justify-self: center;
+  translate: -160% 0;
+}
+/* END POLISH: cards superiores compactas */
+/* POLISH: venta nueva ancho superior */
+.flow-card--sales-total {
+  width: 118%;
+  justify-self: start;
+}
+/* END POLISH: venta nueva ancho superior */
+
+/* POLISH: stack central iventas */
+.flow-card--junction {
+  position: absolute;
+  grid-column: auto !important;
+  grid-row: auto !important;
+  left: 34%;
+  top: 82px;
+  width: 14%;
+  min-height: 150px;
+}
+
+.flow-card--fallback {
+  position: absolute;
+  grid-column: auto !important;
+  grid-row: auto !important;
+  left: 34%;
+  top: 300px;
+  width: 14%;
+  min-height: 125px;
+}
+/* END POLISH: stack central iventas */
+
+/* POLISH: salidas iventas */
+.flow-card--publications {
+  position: absolute;
+  grid-column: auto !important;
+  grid-row: auto !important;
+  left: 58%;
+  top: 28px;
+  width: 16%;
+  min-height: 82px;
+  padding-top: 10px;
+  padding-bottom: 8px;
+}
+
+.flow-card--organic {
+  position: absolute;
+  grid-column: auto !important;
+  grid-row: auto !important;
+  left: 58%;
+  top: 168px;
+  width: 16%;
+  min-height: 82px;
+  padding-top: 10px;
+  padding-bottom: 8px;
+}
+/* END POLISH: salidas iventas *//* POLISH: bloque inferior sin match */
+.flow-card--fallback {
+  position: absolute;
+  grid-column: auto !important;
+  grid-row: auto !important;
+  left: 34%;
+  top: 430px;
+  width: 14%;
+  min-height: 125px;
+}
+
+.flow-origin-stack {
+  position: absolute;
+  grid-column: auto !important;
+  grid-row: auto !important;
+  left: 51%;
+  right: auto;
+  top: 335px;
+  bottom: auto;
+  width: 32%;
+  max-height: none;
+  padding: 16px;
+}
+
+.flow-origin-stack__heading {
+  margin-bottom: 12px;
+}
+
+.flow-origin-stack__heading p {
+  font-size: 8px;
+}
+
+.flow-origin-stack__heading h3 {
+  font-size: 17px;
+}
+
+.flow-origin-stack__heading > span {
+  font-size: 8px;
+}
+
+.flow-origin-stack__list {
+  gap: 6px;
+  padding-left: 16px;
+}
+
+.flow-origin-card {
+  grid-template-columns: 34px minmax(0, 1fr) 58px 52px;
+  gap: 10px;
+  min-height: 42px;
+  padding: 6px 9px;
+}
+
+.flow-origin-card__icon {
+  width: 30px;
+  height: 30px;
+}
+
+.flow-origin-card__icon mat-icon {
+  width: 18px;
+  height: 18px;
+  font-size: 18px;
+}
+
+.flow-origin-card__copy strong {
+  font-size: 10px;
+}
+
+.flow-origin-card__copy small {
+  font-size: 7px;
+}
+
+.flow-origin-card__value {
+  font-size: 15px;
+}
+
+.flow-origin-card__share {
+  min-width: 44px;
+  font-size: 9px;
+}
+/* END POLISH: bloque inferior sin match */
+/* POLISH: centrar funnel completo */
+.flow-board > .flow-card,
+.flow-board > .flow-origin-stack,
+.flow-board > .flow-board__connectors {
+  translate: 135px 0;
+}
+
+@media (max-width: 1050px) {
+  .flow-board > .flow-card,
+  .flow-board > .flow-origin-stack,
+  .flow-board > .flow-board__connectors {
+    translate: 0 0;
+  }
+}
+/* END POLISH: centrar funnel completo */
+/* POLISH: corregir visitas tras centrado */
+.flow-board > .flow-card--visits {
+  translate: calc(-160% + 135px) 0;
+}
+
+@media (max-width: 1050px) {
+  .flow-board > .flow-card--visits {
+    translate: 0 0;
+  }
+}
+/* END POLISH: corregir visitas tras centrado */

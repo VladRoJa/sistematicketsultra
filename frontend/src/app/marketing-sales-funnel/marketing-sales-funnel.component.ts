@@ -25,6 +25,8 @@ import {
   switchMap,
 } from 'rxjs';
 
+import { MarketingDashboardResponse } from '../marketing-conversion/marketing.models';
+import { MarketingService } from '../marketing-conversion/marketing.service';
 import {
   MarketingSalesFunnelBranch,
   MarketingSalesFunnelMetrics,
@@ -44,9 +46,11 @@ interface SummaryCard {
   label: string;
   value: string;
   supportingText: string;
-  metric: string;
+  metric: string | null;
   icon: string;
   cssClass: string;
+  secondaryLabel?: string;
+  secondaryValue?: string;
 }
 
 interface SalesFunnelBranchView extends MarketingSalesFunnelBranch {
@@ -98,6 +102,7 @@ type DashboardRequestResult =
 export class MarketingSalesFunnelComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   private readonly salesFunnelService = inject(MarketingSalesFunnelService);
+  private readonly marketingService = inject(MarketingService);
   private readonly dialog = inject(MatDialog);
   private readonly dashboardRequests = new Subject<DashboardRequest>();
   private dashboardRequestId = 0;
@@ -131,6 +136,10 @@ export class MarketingSalesFunnelComponent implements OnInit {
   regionOptions: Array<{ id: number; label: string }> = [];
   branchOptions: MarketingSalesFunnelScopeOption[] = [];
   activeScopeBranchIds: number[] = [];
+
+  /* POLISH: investment dashboard */
+  investmentDashboard: MarketingDashboardResponse | null = null;
+  /* END POLISH: investment dashboard */
 
   loading = true;
   errorMessage = '';
@@ -239,6 +248,7 @@ export class MarketingSalesFunnelComponent implements OnInit {
       )
       .subscribe((month) => {
         if (this.isValidMonth(month)) {
+          this.requestInvestmentDashboard();
           this.requestDashboard();
         }
       });
@@ -272,13 +282,14 @@ export class MarketingSalesFunnelComponent implements OnInit {
         this.refreshActiveScopeBranchIds();
         this.requestDashboard();
       });
-
+    this.requestInvestmentDashboard();
     this.requestDashboard();
   }
 
   refreshDashboard(): void {
     this.monthControl.markAsTouched();
     if (!this.monthControl.invalid) {
+      this.requestInvestmentDashboard();
       this.requestDashboard();
     }
   }
@@ -321,6 +332,78 @@ export class MarketingSalesFunnelComponent implements OnInit {
     }).format(value || 0);
   }
 
+
+  /* POLISH: investment scope methods */
+  private requestInvestmentDashboard(): void {
+    const month = this.selectedMonth;
+
+    this.marketingService
+      .getDashboard(month)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (data) => {
+          if (month !== this.selectedMonth) {
+            return;
+          }
+
+          this.investmentDashboard = data;
+
+          if (this.dashboard) {
+            this.summaryCards = this.buildSummaryCards(
+              this.dashboard.summary,
+            );
+          }
+        },
+        error: () => {
+          if (month !== this.selectedMonth) {
+            return;
+          }
+
+          this.investmentDashboard = null;
+
+          if (this.dashboard) {
+            this.summaryCards = this.buildSummaryCards(
+              this.dashboard.summary,
+            );
+          }
+        },
+      });
+  }
+
+  private resolveIventasCost(): number | null {
+    const dashboard = this.investmentDashboard;
+
+    if (!dashboard || dashboard.month !== this.selectedMonth) {
+      return null;
+    }
+
+    if (this.activeScopeBranchIds.length === 0) {
+      return dashboard.summary.investment;
+    }
+
+    const allowedIds = new Set(this.activeScopeBranchIds);
+
+    const scopedBranches = dashboard.branches.filter(
+      (branch) => allowedIds.has(branch.sucursal_id),
+    );
+
+    const availableInvestments = scopedBranches
+      .map((branch) => branch.investment)
+      .filter(
+        (investment): investment is number =>
+          investment !== null && investment !== undefined,
+      );
+
+    if (availableInvestments.length === 0) {
+      return null;
+    }
+
+    return availableInvestments.reduce(
+      (total, investment) => total + investment,
+      0,
+    );
+  }
+  /* END POLISH: investment scope methods */
   private requestDashboard(): void {
     if (this.monthControl.invalid) {
       return;
@@ -380,46 +463,78 @@ export class MarketingSalesFunnelComponent implements OnInit {
   }
 
   private buildSummaryCards(summary: MarketingSalesFunnelMetrics): SummaryCard[] {
+    const investment = this.resolveIventasCost();
+
+    const costPerLead = (
+      investment !== null
+      && summary.leads_meta > 0
+    )
+      ? investment / summary.leads_meta
+      : null;
+
+    const costPerSale = (
+      investment !== null
+      && summary.sales_iventas > 0
+    )
+      ? investment / summary.sales_iventas
+      : null;
+
     return [
       {
-        label: 'Visitas totales',
-        value: this.formatInteger(summary.visits_total),
-        supportingText: 'Pases comerciales detectados en Venta Total',
-        metric: 'visits_total',
-        icon: 'directions_walk',
+        label: 'Inversión',
+        value: investment !== null
+          ? this.formatCurrency(investment)
+          : 'Sin corte',
+        supportingText: 'Inversión del alcance',
+        metric: null,
+        icon: 'account_balance_wallet',
+        cssClass: 'summary-kpi--purple',
+      },
+      {
+        label: 'Leads iVentas',
+        value: this.formatInteger(summary.leads_meta),
+        supportingText: 'Leads canónicos identificados por iVentas',
+        metric: 'leads_meta',
+        icon: 'phone_in_talk',
         cssClass: 'summary-kpi--blue',
+        secondaryLabel: 'Costo por lead',
+        secondaryValue: costPerLead !== null
+          ? this.formatCurrency(costPerLead)
+          : '—',
       },
       {
-        label: 'Ventas nuevas',
-        value: this.formatInteger(summary.sales_total),
-        supportingText: 'Universo desde Nuevos Socios Detalle',
-        metric: 'sales_total',
-        icon: 'groups',
+        label: 'Ventas iVentas',
+        value: this.formatInteger(summary.sales_iventas),
+        supportingText: `${this.formatPercent(summary.iventas_sale_share)} de Venta Nueva`,
+        metric: 'sales_iventas',
+        icon: 'point_of_sale',
         cssClass: 'summary-kpi--orange',
+        secondaryLabel: 'Costo por venta',
+        secondaryValue: costPerSale !== null
+          ? this.formatCurrency(costPerSale)
+          : '—',
       },
       {
-        label: 'Ingreso Venta Nueva',
-        value: this.formatCurrency(summary.revenue_total),
-        supportingText: 'Ingreso asociado al universo de Venta Nueva',
-        metric: 'revenue_total',
-        icon: 'payments',
-        cssClass: 'summary-kpi--green',
-      },
-      {
-        label: 'Ventas por publicaciones',
+        label: 'Venta por publicaciones',
         value: this.formatInteger(summary.sales_iventas_meta),
-        supportingText: 'Ventas iVentas con evidencia de publicidad',
+        supportingText: 'Ventas trazadas a publicidad',
         metric: 'sales_iventas_meta',
         icon: 'campaign',
         cssClass: 'summary-kpi--orange',
+        secondaryLabel: 'Inversión Meta',
+        secondaryValue: investment !== null
+          ? this.formatCurrency(investment)
+          : '—',
       },
       {
-        label: 'Ingreso por publicaciones',
-        value: this.formatCurrency(summary.revenue_iventas_meta),
-        supportingText: 'Ingreso atribuido a publicidad en iVentas',
-        metric: 'revenue_iventas_meta',
-        icon: 'paid',
-        cssClass: 'summary-kpi--purple',
+        label: 'Orgánico',
+        value: this.formatInteger(summary.sales_iventas_other),
+        supportingText: 'Ventas iVentas sin evidencia Meta',
+        metric: 'sales_iventas_other',
+        icon: 'eco',
+        cssClass: 'summary-kpi--green',
+        secondaryLabel: 'Inversión plantillas',
+        secondaryValue: '—',
       },
     ];
   }
