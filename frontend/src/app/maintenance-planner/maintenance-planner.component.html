@@ -185,7 +185,10 @@
           <span class="focus-count">{{ focusTotal }}</span>
         </div>
 
-        <div class="focus-summary" *ngIf="focusTotal > 0">
+        <div
+          class="focus-summary"
+          *ngIf="focusTotal > 0 || focusMode !== 'priority'"
+        >
           <span>Mostrando {{ visibleFocusItems.length }} de {{ focusTotal }}</span>
           <button
             *ngIf="focusMode !== 'priority'"
