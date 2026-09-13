@@ -1,8 +1,12 @@
 import { CommonModule } from '@angular/common';
 import { Component, Inject } from '@angular/core';
-import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 
 import { AsignarFechaModalComponent } from '../shared/asignar-fecha-modal/asignar-fecha-modal.component';
+import {
+  EditarFechaSolucionDialogResult,
+  EditarFechaSolucionModalComponent,
+} from '../shared/editar-fecha-solucion-modal/editar-fecha-solucion-modal.component';
 import { AsignarFechaPayload } from '../types/ticket';
 import {
   MaintenancePlannerHistoryItem,
@@ -35,8 +39,8 @@ export class MaintenancePlannerTicketDialogComponent {
     departamento_nombre: 'Mantenimiento',
   };
 
-  readonly commitmentDate = this.parseCommitmentDate(
-    this.data.initialDate || this.ticket.fecha_solucion_date,
+  readonly initialCommitmentDate = this.parseCommitmentDate(
+    this.ticket.fecha_solucion_date ? null : this.data.initialDate,
   );
 
   saving = false;
@@ -46,8 +50,33 @@ export class MaintenancePlannerTicketDialogComponent {
     @Inject(MAT_DIALOG_DATA)
     readonly data: MaintenancePlannerTicketDialogData,
     private readonly dialogRef: MatDialogRef<MaintenancePlannerTicketDialogComponent>,
+    private readonly dialog: MatDialog,
     private readonly plannerService: MaintenancePlannerService,
   ) {}
+
+  get hasCommitment(): boolean {
+    return Boolean(this.ticket.fecha_solucion || this.ticket.fecha_solucion_date);
+  }
+
+  get normalizedState(): string {
+    return String(this.ticket.estado || '').trim().toLowerCase();
+  }
+
+  get canAssignInitialCommitment(): boolean {
+    return Boolean(
+      this.canSchedule
+      && !this.hasCommitment
+      && ['abierto', 'en progreso'].includes(this.normalizedState),
+    );
+  }
+
+  get canReprogramCommitment(): boolean {
+    return Boolean(
+      this.canSchedule
+      && this.hasCommitment
+      && this.normalizedState === 'en progreso',
+    );
+  }
 
   get history(): MaintenancePlannerHistoryItem[] {
     return [...(this.ticket.historial_fechas || [])].sort((a, b) => {
@@ -57,8 +86,8 @@ export class MaintenancePlannerTicketDialogComponent {
     });
   }
 
-  saveCommitment(event: AsignarFechaPayload): void {
-    if (!this.canSchedule || this.saving) {
+  saveInitialCommitment(event: AsignarFechaPayload): void {
+    if (!this.canAssignInitialCommitment || this.saving) {
       return;
     }
 
@@ -66,7 +95,7 @@ export class MaintenancePlannerTicketDialogComponent {
     this.errorMessage = '';
 
     this.plannerService
-      .updateCommitmentFromForm(
+      .assignInitialCommitmentFromForm(
         this.ticket,
         event,
         this.canCaptureDiagnosis,
@@ -81,9 +110,55 @@ export class MaintenancePlannerTicketDialogComponent {
           this.errorMessage =
             error?.error?.mensaje
             || error?.error?.message
-            || 'No se pudo actualizar el compromiso del ticket.';
+            || 'No se pudo asignar el compromiso del ticket.';
         },
       });
+  }
+
+  openRescheduleDialog(): void {
+    if (!this.canReprogramCommitment || this.saving) {
+      return;
+    }
+
+    const dialogRef = this.dialog.open<
+      EditarFechaSolucionModalComponent,
+      { fechaActual: string | null },
+      EditarFechaSolucionDialogResult | undefined
+    >(EditarFechaSolucionModalComponent, {
+      width: '560px',
+      maxWidth: '92vw',
+      data: { fechaActual: this.ticket.fecha_solucion },
+      autoFocus: false,
+    });
+
+    dialogRef.afterClosed().subscribe((result) => {
+      if (!result?.fecha || !result.motivo) {
+        return;
+      }
+
+      this.saving = true;
+      this.errorMessage = '';
+
+      this.plannerService
+        .reprogramCommitmentFromDate(
+          this.ticket,
+          result.fecha,
+          result.motivo,
+        )
+        .subscribe({
+          next: () => {
+            this.saving = false;
+            this.dialogRef.close({ updated: true });
+          },
+          error: (error) => {
+            this.saving = false;
+            this.errorMessage =
+              error?.error?.mensaje
+              || error?.error?.message
+              || 'No se pudo cambiar la fecha compromiso.';
+          },
+        });
+    });
   }
 
   close(): void {
