@@ -26,7 +26,6 @@ interface IventasStageView {
   step: string;
   label: string;
   value: string;
-  metric: string;
   icon: string;
 }
 
@@ -53,7 +52,7 @@ export class MarketingSalesFunnelStoryComponent {
   private readonly dialog = inject(MatDialog);
 
   @Input({ required: true }) month = '';
-  @Input({ required: true }) summary: MarketingSalesFunnelMetrics | null = null;
+  @Input({ required: true }) summary: MarketingSalesFunnelMetrics | null | undefined = null;
   @Input() reconciliationLabel = '';
 
   get saleNode(): FunnelNodeView | null {
@@ -143,21 +142,18 @@ export class MarketingSalesFunnelStoryComponent {
         step: '03',
         label: 'Leads iVentas',
         value: this.formatInteger(summary.iventas_contacts),
-        metric: 'leads_meta',
         icon: 'person',
       },
       {
         step: '04',
         label: 'Visitas iVentas',
         value: this.formatInteger(summary.visits_iventas),
-        metric: 'visits_iventas',
         icon: 'event',
       },
       {
         step: '05',
         label: 'Ventas iVentas',
         value: this.formatInteger(summary.sales_iventas),
-        metric: 'sales_iventas',
         icon: 'leaderboard',
       },
     ];
@@ -203,10 +199,6 @@ export class MarketingSalesFunnelStoryComponent {
       return;
     }
     this.openDetail(node.metric, node.origin);
-  }
-
-  openStage(stage: IventasStageView): void {
-    this.openDetail(stage.metric);
   }
 
   openOrigin(origin: FallbackOriginView): void {
