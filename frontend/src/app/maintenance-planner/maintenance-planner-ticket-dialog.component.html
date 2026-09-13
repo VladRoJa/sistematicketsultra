@@ -1,24 +1,38 @@
+<!-- ============================================================================
+  Suite Ultra UI v1 - Maintenance Planner ticket dialog
+============================================================================ -->
 <section class="ticket-dialog">
   <header class="ticket-dialog__header">
-    <div>
-      <span>Ticket #{{ ticket.ticket_id }}</span>
+    <div class="ticket-dialog__identity">
+      <span class="ticket-dialog__eyebrow">Mantenimiento · Ticket #{{ ticket.ticket_id }}</span>
       <h2>{{ ticket.equipo }}</h2>
-      <p>{{ ticket.sucursal }}{{ ticket.sucursal_is_demo ? ' · DEMO · datos de prueba' : '' }}</p>
+      <p>
+        <strong>{{ ticket.sucursal }}</strong>
+        <span *ngIf="ticket.sucursal_is_demo"> · DEMO · datos de prueba</span>
+      </p>
     </div>
     <button type="button" class="ticket-dialog__close" (click)="close()">Cerrar</button>
   </header>
 
   <div class="ticket-dialog__status-row">
-    <span>{{ ticket.estado }}</span>
-    <span>Criticidad {{ ticket.criticidad }}</span>
-    <span>{{ ticket.condicion_operativa || 'Condición sin captura' }}</span>
-    <span *ngIf="ticket.codigo_interno">{{ ticket.codigo_interno }}</span>
+    <span class="ticket-dialog__chip ticket-dialog__chip--state">{{ ticket.estado }}</span>
+    <span class="ticket-dialog__chip ticket-dialog__chip--priority">Criticidad {{ ticket.criticidad }}</span>
+    <span class="ticket-dialog__chip ticket-dialog__chip--condition">
+      {{ ticket.condicion_operativa || 'Condición sin captura' }}
+    </span>
+    <span *ngIf="ticket.codigo_interno" class="ticket-dialog__chip ticket-dialog__chip--code">
+      {{ ticket.codigo_interno }}
+    </span>
   </div>
 
   <div class="ticket-dialog__grid">
     <section class="ticket-dialog__main">
       <div class="detail-block">
-        <h3>Detalle operativo</h3>
+        <div class="detail-block__title">
+          <span>Información operativa</span>
+          <h3>Detalle del ticket</h3>
+        </div>
+
         <dl class="detail-grid">
           <div><dt>Creado por</dt><dd>{{ ticket.username || '—' }}</dd></div>
           <div><dt>Familia</dt><dd>{{ ticket.familia || '—' }}</dd></div>
@@ -44,7 +58,11 @@
       </div>
 
       <div class="detail-block">
-        <h3>Fechas</h3>
+        <div class="detail-block__title">
+          <span>Trazabilidad</span>
+          <h3>Fechas</h3>
+        </div>
+
         <dl class="detail-grid detail-grid--dates">
           <div><dt>Creación</dt><dd>{{ formatDateTime(ticket.fecha_creacion) }}</dd></div>
           <div><dt>En progreso</dt><dd>{{ formatDateTime(ticket.fecha_en_progreso) }}</dd></div>
@@ -53,13 +71,14 @@
         </dl>
       </div>
 
-      <div class="detail-block">
+      <div class="detail-block detail-block--history">
         <div class="detail-block__heading">
           <div>
+            <span class="detail-block__eyebrow">Trazabilidad</span>
             <h3>Historial de cambios</h3>
             <p>Fechas, comentarios y reprogramaciones del ticket.</p>
           </div>
-          <span>{{ history.length }}</span>
+          <span class="detail-block__count">{{ history.length }}</span>
         </div>
 
         <div class="history-list" *ngIf="history.length; else noHistory">
@@ -142,12 +161,14 @@
         *ngIf="!hasCommitment && !canAssignInitialCommitment"
         class="side-card"
       >
+        <span class="side-card__eyebrow">Programación</span>
         <h3>Compromiso</h3>
         <p>Sin fecha compromiso.</p>
         <small>Tu perfil o el estado actual del ticket no permiten asignarla desde Planner.</small>
       </div>
 
       <div class="side-card side-card--closure">
+        <span class="side-card__eyebrow">Flujo de cierre</span>
         <h3>Estado de cierre</h3>
         <p>{{ ticket.estado_cierre || 'Sin flujo de cierre activo' }}</p>
         <small *ngIf="ticket.motivo_rechazo_cierre">{{ ticket.motivo_rechazo_cierre }}</small>
@@ -164,6 +185,7 @@
       </div>
 
       <div class="side-card" *ngIf="ticket.url_evidencia">
+        <span class="side-card__eyebrow">Soporte</span>
         <h3>Evidencia</h3>
         <a [href]="ticket.url_evidencia" target="_blank" rel="noopener">Abrir evidencia</a>
       </div>
