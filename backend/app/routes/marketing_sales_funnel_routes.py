@@ -65,7 +65,7 @@ def get_marketing_sales_funnel_endpoint():
             access=access,
         )
         _, branch_ids, _ = load_visible_marketing_branches(access)
-        result["summary"]["leads_iventas_month"] = (
+        result["summary"]["leads_iventas"] = (
             count_monthly_iventas_leads(
                 month_start=parse_month(month),
                 branch_ids=branch_ids,

@@ -8,7 +8,6 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-from app.extensions import db
 from app.models import MarketingIventasContactORM
 from app.services.marketing_access import MarketingAccess
 from app.services.marketing_dashboard_service import load_visible_marketing_branches
@@ -29,7 +28,7 @@ LEAD_SORT_FIELDS = frozenset(
 )
 LEAD_EXPORT_COLUMNS = (
     ("branch", "Sucursal KPI"),
-    ("date", "Fecha primer mensaje"),
+    ("date", "Fecha creación"),
     ("name", "Nombre"),
     ("phone", "Teléfono"),
     ("channel", "Canal"),
@@ -48,38 +47,45 @@ def _current_month_run_ids(month_start: date) -> tuple[int, ...]:
     )
 
 
+def _monthly_iventas_lead_query(
+    *,
+    month_start: date,
+    branch_ids: tuple[int, ...],
+):
+    month_end = _month_end(month_start)
+    run_ids = _current_month_run_ids(month_start)
+    if not run_ids or not branch_ids:
+        return None
+
+    return MarketingIventasContactORM.query.filter(
+        MarketingIventasContactORM.sync_run_id.in_(run_ids),
+        MarketingIventasContactORM.sucursal_id.in_(branch_ids),
+        MarketingIventasContactORM.created_date_local.isnot(None),
+        MarketingIventasContactORM.created_date_local >= month_start,
+        MarketingIventasContactORM.created_date_local <= month_end,
+        MarketingIventasContactORM.first_message_at_utc.isnot(None),
+    )
+
+
 def count_monthly_iventas_leads(
     *,
     month_start: date,
     branch_ids: tuple[int, ...],
 ) -> int:
-    """Count unique iVentas leads whose first message happened in the month."""
-    if not branch_ids:
-        return 0
+    """Cuenta leads iVentas nacidos en el mes con evidencia de conversación.
 
-    month_end = _month_end(month_start)
-    run_ids = _current_month_run_ids(month_start)
-    if not run_ids:
-        return 0
-
-    return int(
-        db.session.query(
-            MarketingIventasContactORM.sucursal_id,
-            MarketingIventasContactORM.phone_mx10,
-        )
-        .filter(
-            MarketingIventasContactORM.sync_run_id.in_(run_ids),
-            MarketingIventasContactORM.sucursal_id.in_(branch_ids),
-            MarketingIventasContactORM.first_message_at_utc.isnot(None),
-            MarketingIventasContactORM.first_message_date_local.isnot(None),
-            MarketingIventasContactORM.first_message_date_local >= month_start,
-            MarketingIventasContactORM.first_message_date_local <= month_end,
-            MarketingIventasContactORM.phone_mx10.isnot(None),
-            MarketingIventasContactORM.phone_mx10 != "",
-        )
-        .distinct()
-        .count()
+    La definición sigue la población canónica de iVentas: contactos del run
+    mensual cuya created_date_local cae dentro del periodo y que tienen
+    first_message_at_utc. No se deduplica por teléfono porque cada contacto
+    iVentas es una fila lógica de la fuente.
+    """
+    query = _monthly_iventas_lead_query(
+        month_start=month_start,
+        branch_ids=branch_ids,
     )
+    if query is None:
+        return 0
+    return int(query.count())
 
 
 def _normalize_sort(sort_by: Any, sort_dir: Any) -> tuple[str | None, str]:
@@ -108,56 +114,35 @@ def _monthly_iventas_lead_rows(
     branch_names: dict[int, str],
     branch_id_filter: int | None,
 ) -> list[dict[str, Any]]:
-    if not branch_ids:
-        return []
-
-    month_end = _month_end(month_start)
-    run_ids = _current_month_run_ids(month_start)
-    if not run_ids:
-        return []
-
-    contacts = (
-        MarketingIventasContactORM.query.filter(
-            MarketingIventasContactORM.sync_run_id.in_(run_ids),
-            MarketingIventasContactORM.sucursal_id.in_(branch_ids),
-            MarketingIventasContactORM.first_message_at_utc.isnot(None),
-            MarketingIventasContactORM.first_message_date_local.isnot(None),
-            MarketingIventasContactORM.first_message_date_local >= month_start,
-            MarketingIventasContactORM.first_message_date_local <= month_end,
-            MarketingIventasContactORM.phone_mx10.isnot(None),
-            MarketingIventasContactORM.phone_mx10 != "",
-        )
-        .order_by(
-            MarketingIventasContactORM.first_message_date_local.asc(),
-            MarketingIventasContactORM.id.asc(),
-        )
-        .all()
+    query = _monthly_iventas_lead_query(
+        month_start=month_start,
+        branch_ids=branch_ids,
     )
+    if query is None:
+        return []
 
-    seen: set[tuple[int, str]] = set()
+    contacts = query.order_by(
+        MarketingIventasContactORM.created_date_local.asc(),
+        MarketingIventasContactORM.id.asc(),
+    ).all()
+
     rows: list[dict[str, Any]] = []
     for contact in contacts:
         branch_id = int(contact.sucursal_id)
         if branch_id_filter is not None and branch_id != branch_id_filter:
             continue
 
-        phone = str(contact.phone_mx10 or "").strip()
-        key = (branch_id, phone)
-        if not phone or key in seen:
-            continue
-        seen.add(key)
-
         rows.append(
             {
                 "branch_id": branch_id,
                 "branch": branch_names.get(branch_id, ""),
                 "date": (
-                    contact.first_message_date_local.isoformat()
-                    if contact.first_message_date_local is not None
+                    contact.created_date_local.isoformat()
+                    if contact.created_date_local is not None
                     else None
                 ),
                 "name": str(contact.name or "").strip() or None,
-                "phone": phone,
+                "phone": str(contact.phone_mx10 or "").strip() or None,
                 "contact_id": str(contact.contact_id or "").strip() or None,
                 "channel": str(contact.channel_name or "").strip() or None,
                 "origin_key": "IVENTAS",

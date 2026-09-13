@@ -1,7 +1,13 @@
 import { CommonModule } from '@angular/common';
-import { Component, Input, inject } from '@angular/core';
+import { Component, Input, OnChanges, SimpleChanges, inject } from '@angular/core';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
+import { GraphChart } from 'echarts/charts';
+import { TooltipComponent } from 'echarts/components';
+import * as echarts from 'echarts/core';
+import { EChartsCoreOption } from 'echarts/core';
+import { CanvasRenderer } from 'echarts/renderers';
+import { NgxEchartsDirective, provideEchartsCore } from 'ngx-echarts';
 
 import {
   MarketingSalesFunnelMetrics,
@@ -12,24 +18,47 @@ import {
 } from './marketing-sales-funnel-detail-dialog.component';
 
 
-interface FunnelNodeView {
-  step: string;
-  label: string;
-  value: string;
-  share: string;
-  metric: string;
-  icon: string;
+echarts.use([
+  GraphChart,
+  TooltipComponent,
+  CanvasRenderer,
+]);
+
+interface FlowNodeData {
+  id: string;
+  name: string;
+  x: number;
+  y: number;
+  value: number;
+  support: string;
+  metric?: string;
   origin?: string;
-  description?: string;
+  symbol: 'roundRect';
+  symbolSize: [number, number];
+  itemStyle: {
+    color: string;
+    borderColor: string;
+    borderWidth: number;
+    shadowBlur: number;
+    shadowColor: string;
+  };
+  label: {
+    show: boolean;
+    position: 'inside';
+    formatter: string;
+    rich: Record<string, Record<string, unknown>>;
+  };
 }
 
-interface IventasStageView {
-  step: string;
-  label: string;
-  value: string;
-  icon: string;
-  metric?: string;
-  supportingText: string;
+interface FlowLinkData {
+  source: string;
+  target: string;
+  lineStyle: {
+    color: string;
+    width: number;
+    opacity: number;
+    curveness: number;
+  };
 }
 
 interface FallbackOriginView extends MarketingSalesOriginBreakdown {
@@ -39,7 +68,6 @@ interface FallbackOriginView extends MarketingSalesOriginBreakdown {
   icon: string;
 }
 
-
 @Component({
   selector: 'app-marketing-sales-funnel-story',
   standalone: true,
@@ -47,124 +75,34 @@ interface FallbackOriginView extends MarketingSalesOriginBreakdown {
     CommonModule,
     MatDialogModule,
     MatIconModule,
+    NgxEchartsDirective,
   ],
   templateUrl: './marketing-sales-funnel-story.component.html',
   styleUrls: ['./marketing-sales-funnel-story.component.css'],
+  providers: [provideEchartsCore({ echarts })],
 })
-export class MarketingSalesFunnelStoryComponent {
+export class MarketingSalesFunnelStoryComponent implements OnChanges {
   private readonly dialog = inject(MatDialog);
 
   @Input({ required: true }) month = '';
   @Input({ required: true }) summary: MarketingSalesFunnelMetrics | null | undefined = null;
   @Input() reconciliationLabel = '';
 
-  get saleNode(): FunnelNodeView | null {
-    const summary = this.summary;
-    if (!summary) {
-      return null;
+  chartOption: EChartsCoreOption = {};
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['summary'] || changes['month']) {
+      this.chartOption = this.buildChartOption();
     }
-    return this.createNode(
-      '01',
-      'Venta Nueva',
-      summary.sales_total,
-      summary.sales_total,
-      'sales_total',
-      'groups',
-    );
   }
 
-  get salesIventasNode(): FunnelNodeView | null {
+  get narrative(): string {
     const summary = this.summary;
     if (!summary) {
-      return null;
+      return '';
     }
-    return this.createNode(
-      '03',
-      'Ventas iVentas',
-      summary.sales_iventas,
-      summary.sales_total,
-      'sales_iventas',
-      'leaderboard',
-      undefined,
-      'Punto de unión entre el funnel iVentas y la Venta Nueva.',
-    );
-  }
 
-  get fallbackNode(): FunnelNodeView | null {
-    const summary = this.summary;
-    if (!summary) {
-      return null;
-    }
-    return this.createNode(
-      '02',
-      'Sin Match iVentas',
-      summary.sales_not_iventas,
-      summary.sales_total,
-      'sales_not_iventas',
-      'person',
-    );
-  }
-
-  get publicationNode(): FunnelNodeView | null {
-    const summary = this.summary;
-    if (!summary) {
-      return null;
-    }
-    return this.createNode(
-      '04',
-      'Venta por publicaciones',
-      summary.sales_iventas_meta,
-      summary.sales_total,
-      'sales_iventas_meta',
-      'campaign',
-    );
-  }
-
-  get organicNode(): FunnelNodeView | null {
-    const summary = this.summary;
-    if (!summary) {
-      return null;
-    }
-    return this.createNode(
-      '05',
-      'Orgánico',
-      summary.sales_iventas_other,
-      summary.sales_total,
-      'origin',
-      'eco',
-      'IVENTAS_OTHER',
-      'Chats que entraron a iVentas sin publicidad pagada.',
-    );
-  }
-
-  get leadStage(): IventasStageView | null {
-    const summary = this.summary;
-    if (!summary) {
-      return null;
-    }
-    return {
-      step: 'A1',
-      label: 'Leads iVentas',
-      value: this.formatInteger(summary.leads_iventas_month || 0),
-      icon: 'person',
-      metric: 'leads_iventas',
-      supportingText: 'Primer mensaje del mes con teléfono utilizable',
-    };
-  }
-
-  get visitStage(): IventasStageView | null {
-    const summary = this.summary;
-    if (!summary) {
-      return null;
-    }
-    return {
-      step: 'A2',
-      label: 'Visitas iVentas',
-      value: this.formatInteger(summary.visits_iventas),
-      icon: 'event',
-      metric: 'visits_iventas',
-      supportingText: 'Visitas que cruzan por teléfono con iVentas',
-    };
+    return `El funnel iVentas y la Venta Nueva convergen en ${this.formatInteger(summary.sales_iventas)} ventas trazables; las ${this.formatInteger(summary.sales_not_iventas)} restantes se explican por origen de venta.`;
   }
 
   get fallbackOrigins(): FallbackOriginView[] {
@@ -193,31 +131,291 @@ export class MarketingSalesFunnelStoryComponent {
       .sort((left, right) => right.sales - left.sales);
   }
 
-  get narrative(): string {
-    const summary = this.summary;
-    if (!summary) {
-      return '';
-    }
-
-    return `Dos funnels convergen en ${this.formatInteger(summary.sales_iventas)} ventas iVentas; ${this.formatInteger(summary.sales_not_iventas)} ventas continúan por clasificación de origen.`;
-  }
-
-  openNode(node: FunnelNodeView | null): void {
-    if (!node) {
+  handleChartClick(event: { dataType?: string; data?: FlowNodeData }): void {
+    if (event?.dataType !== 'node') {
       return;
     }
+
+    const node = event.data;
+    if (!node?.metric) {
+      return;
+    }
+
     this.openDetail(node.metric, node.origin);
-  }
-
-  openStage(stage: IventasStageView | null): void {
-    if (!stage?.metric) {
-      return;
-    }
-    this.openDetail(stage.metric);
   }
 
   openOrigin(origin: FallbackOriginView): void {
     this.openDetail('origin', origin.key);
+  }
+
+  private buildChartOption(): EChartsCoreOption {
+    const summary = this.summary;
+    if (!summary) {
+      return {};
+    }
+
+    const leadsIventas = summary.leads_iventas || 0;
+    const orange = '#f0522d';
+    const orangeSoft = '#fff8f4';
+    const orangeLine = 'rgba(240, 82, 45, 0.62)';
+    const gray = '#6b819d';
+    const graySoft = '#f5f8fb';
+    const grayLine = 'rgba(107, 129, 157, 0.58)';
+
+    const nodes: FlowNodeData[] = [
+      this.createFlowNode({
+        id: 'leads',
+        name: 'Leads iVentas',
+        value: leadsIventas,
+        support: 'Creados en el mes + firstMessage',
+        metric: 'leads_iventas',
+        x: 130,
+        y: 90,
+        width: 190,
+        height: 92,
+        background: orangeSoft,
+        border: orange,
+      }),
+      this.createFlowNode({
+        id: 'visits',
+        name: 'Visitas iVentas',
+        value: summary.visits_iventas,
+        support: 'Visitas que cruzan por teléfono',
+        metric: 'visits_iventas',
+        x: 410,
+        y: 90,
+        width: 180,
+        height: 92,
+        background: orangeSoft,
+        border: orange,
+      }),
+      this.createFlowNode({
+        id: 'sales-iventas',
+        name: 'Ventas iVentas',
+        value: summary.sales_iventas,
+        support: `${this.formatPercent(summary.sales_total > 0 ? summary.sales_iventas / summary.sales_total : null)} de Venta Nueva · punto de unión`,
+        metric: 'sales_iventas',
+        x: 710,
+        y: 205,
+        width: 190,
+        height: 108,
+        background: '#fffdfb',
+        border: orange,
+        strong: true,
+      }),
+      this.createFlowNode({
+        id: 'sales-total',
+        name: 'Venta Nueva',
+        value: summary.sales_total,
+        support: '100% del universo de Venta Nueva',
+        metric: 'sales_total',
+        x: 130,
+        y: 315,
+        width: 190,
+        height: 104,
+        background: '#ffffff',
+        border: orange,
+        strong: true,
+      }),
+      this.createFlowNode({
+        id: 'sales-no-match',
+        name: 'Sin Match iVentas',
+        value: summary.sales_not_iventas,
+        support: `${this.formatPercent(summary.sales_total > 0 ? summary.sales_not_iventas / summary.sales_total : null)} de Venta Nueva · ver desglose abajo`,
+        metric: 'sales_not_iventas',
+        x: 420,
+        y: 435,
+        width: 200,
+        height: 104,
+        background: graySoft,
+        border: gray,
+      }),
+      this.createFlowNode({
+        id: 'publications',
+        name: 'Venta por publicaciones',
+        value: summary.sales_iventas_meta,
+        support: `${this.formatPercent(summary.sales_total > 0 ? summary.sales_iventas_meta / summary.sales_total : null)} del total`,
+        metric: 'sales_iventas_meta',
+        x: 1035,
+        y: 125,
+        width: 205,
+        height: 94,
+        background: orangeSoft,
+        border: orange,
+      }),
+      this.createFlowNode({
+        id: 'organic',
+        name: 'Orgánico',
+        value: summary.sales_iventas_other,
+        support: 'Entró a iVentas sin publicidad pagada',
+        metric: 'origin',
+        origin: 'IVENTAS_OTHER',
+        x: 1035,
+        y: 285,
+        width: 205,
+        height: 98,
+        background: orangeSoft,
+        border: orange,
+      }),
+    ];
+
+    const links: FlowLinkData[] = [
+      this.createFlowLink('leads', 'visits', leadsIventas, orangeLine, 0),
+      this.createFlowLink('visits', 'sales-iventas', summary.visits_iventas, orangeLine, 0.16),
+      this.createFlowLink('sales-total', 'sales-iventas', summary.sales_iventas, orangeLine, -0.16),
+      this.createFlowLink('sales-total', 'sales-no-match', summary.sales_not_iventas, grayLine, 0.18),
+      this.createFlowLink('sales-iventas', 'publications', summary.sales_iventas_meta, orangeLine, -0.16),
+      this.createFlowLink('sales-iventas', 'organic', summary.sales_iventas_other, orangeLine, 0.16),
+    ];
+
+    return {
+      animationDuration: 450,
+      tooltip: {
+        trigger: 'item',
+        backgroundColor: '#111827',
+        borderWidth: 0,
+        textStyle: {
+          color: '#ffffff',
+          fontSize: 12,
+        },
+        formatter: (params: any) => {
+          if (params?.dataType !== 'node') {
+            return '';
+          }
+          const data = params.data as FlowNodeData;
+          return `<strong>${data.name}</strong><br>${this.formatInteger(data.value)}<br><span style="opacity:.72">${data.support}</span>`;
+        },
+      },
+      series: [
+        {
+          type: 'graph',
+          layout: 'none',
+          roam: false,
+          left: 34,
+          right: 34,
+          top: 22,
+          bottom: 22,
+          data: nodes as any,
+          links: links as any,
+          symbol: 'roundRect',
+          edgeSymbol: ['none', 'arrow'],
+          edgeSymbolSize: [0, 10],
+          lineStyle: {
+            opacity: 0.65,
+          },
+          emphasis: {
+            focus: 'adjacency',
+            lineStyle: {
+              opacity: 0.95,
+            },
+          },
+          animationDurationUpdate: 350,
+        },
+      ],
+    };
+  }
+
+  private createFlowNode(config: {
+    id: string;
+    name: string;
+    value: number;
+    support: string;
+    metric?: string;
+    origin?: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    background: string;
+    border: string;
+    strong?: boolean;
+  }): FlowNodeData {
+    const valueLabel = this.formatInteger(config.value);
+    const actionLabel = config.metric ? 'Ver filas ↗' : '';
+
+    return {
+      id: config.id,
+      name: config.name,
+      x: config.x,
+      y: config.y,
+      value: config.value,
+      support: config.support,
+      metric: config.metric,
+      origin: config.origin,
+      symbol: 'roundRect',
+      symbolSize: [config.width, config.height],
+      itemStyle: {
+        color: config.background,
+        borderColor: config.border,
+        borderWidth: config.strong ? 2 : 1.2,
+        shadowBlur: config.strong ? 14 : 8,
+        shadowColor: config.strong
+          ? 'rgba(240, 82, 45, 0.12)'
+          : 'rgba(15, 23, 42, 0.06)',
+      },
+      label: {
+        show: true,
+        position: 'inside',
+        formatter: [
+          `{title|${config.name}}`,
+          `{value|${valueLabel}}`,
+          `{support|${config.support}}`,
+          actionLabel ? `{action|${actionLabel}}` : '',
+        ].filter(Boolean).join('\n'),
+        rich: {
+          title: {
+            color: '#20314a',
+            fontSize: 13,
+            fontWeight: 800,
+            lineHeight: 20,
+          },
+          value: {
+            color: '#13233d',
+            fontSize: config.strong ? 27 : 24,
+            fontWeight: 900,
+            lineHeight: 33,
+          },
+          support: {
+            color: '#64748b',
+            fontSize: 9,
+            fontWeight: 600,
+            lineHeight: 15,
+          },
+          action: {
+            color: '#f0522d',
+            fontSize: 9,
+            fontWeight: 800,
+            lineHeight: 17,
+          },
+        },
+      },
+    };
+  }
+
+  private createFlowLink(
+    source: string,
+    target: string,
+    value: number,
+    color: string,
+    curveness: number,
+  ): FlowLinkData {
+    return {
+      source,
+      target,
+      lineStyle: {
+        color,
+        width: this.flowWidth(value),
+        opacity: 0.72,
+        curveness,
+      },
+    };
+  }
+
+  private flowWidth(value: number): number {
+    if (value <= 0) {
+      return 2;
+    }
+    return Math.max(3, Math.min(18, 3 + Math.sqrt(value) * 0.42));
   }
 
   private openDetail(metric: string, origin?: string): void {
@@ -238,28 +436,6 @@ export class MarketingSalesFunnelStoryComponent {
       autoFocus: false,
       restoreFocus: true,
     });
-  }
-
-  private createNode(
-    step: string,
-    label: string,
-    value: number,
-    total: number,
-    metric: string,
-    icon: string,
-    origin?: string,
-    description?: string,
-  ): FunnelNodeView {
-    return {
-      step,
-      label,
-      value: this.formatInteger(value),
-      share: this.formatPercent(total > 0 ? value / total : null),
-      metric,
-      icon,
-      origin,
-      description,
-    };
   }
 
   private resolveOriginLabel(origin: MarketingSalesOriginBreakdown): string {
