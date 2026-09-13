@@ -10,7 +10,7 @@ from flask_jwt_extended import get_jwt_identity, jwt_required
 from app.extensions import db
 from app.models.mantenimiento_equipo import FamiliaEquipoORM
 from app.models.user_model import UserORM
-from app.services.mantenimiento_equipos_report_service import (
+from app.services.mantenimiento_report_service import (
     BUSINESS_TIMEZONE,
     RegionReporteNoEncontradaError,
     construir_reporte_xlsx,
@@ -127,7 +127,7 @@ def _report_download_name(region=None):
         else "todo"
     )
     return (
-        "reporte_mantenimiento_equipos_"
+        "reporte_mantenimiento_"
         f"{scope_fragment}_{date_fragment}.xlsx"
     )
 
@@ -280,4 +280,4 @@ def descargar_reporte():
     except RegionReporteNoEncontradaError as exc:
         return jsonify({"mensaje": str(exc)}), 404
     except Exception as exc:
-        return manejar_error(exc, "descargar_reporte_mantenimiento_equipos")
+        return manejar_error(exc, "descargar_reporte_mantenimiento")

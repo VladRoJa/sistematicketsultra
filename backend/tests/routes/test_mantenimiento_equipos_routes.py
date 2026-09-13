@@ -160,7 +160,7 @@ class MantenimientoEquiposRoutesTest(unittest.TestCase):
         self.assertEqual(
             response.headers["Content-Disposition"],
             "attachment; filename="
-            "reporte_mantenimiento_equipos_todo_02-sep-26.xlsx",
+            "reporte_mantenimiento_todo_02-sep-26.xlsx",
         )
         build_report.assert_called_once_with(user=self.actor, region_id=None)
         mocked_datetime.now.assert_called_once_with(routes.BUSINESS_TIMEZONE)
@@ -224,7 +224,7 @@ class MantenimientoEquiposRoutesTest(unittest.TestCase):
         self.assertEqual(
             response.headers["Content-Disposition"],
             "attachment; filename="
-            "reporte_mantenimiento_equipos_reg_mexicali_02-sep-26.xlsx",
+            "reporte_mantenimiento_reg_mexicali_02-sep-26.xlsx",
         )
         get_region.assert_called_once_with(7)
         build_report.assert_called_once_with(user=self.actor, region_id=7)
@@ -262,7 +262,7 @@ class MantenimientoEquiposRoutesTest(unittest.TestCase):
         self.assertEqual(
             response.headers["Content-Disposition"],
             "attachment; filename="
-            "reporte_mantenimiento_equipos_reg_san_luis_02-sep-26.xlsx",
+            "reporte_mantenimiento_reg_san_luis_02-sep-26.xlsx",
         )
 
     def test_reporte_region_inexistente_devuelve_404_controlado(self):
