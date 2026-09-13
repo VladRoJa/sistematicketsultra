@@ -119,12 +119,12 @@
   position: relative;
   display: grid;
   grid-template-columns: 22% 22% 18% 23%;
-  grid-template-rows: 120px 120px 120px 145px;
+  grid-template-rows: 120px 120px 120px 205px;
   justify-content: space-between;
   gap: 18px 0;
   box-sizing: border-box;
   width: 100%;
-  min-height: 700px;
+  min-height: 720px;
   margin: 18px 0 0;
   padding: 58px 18px 24px;
   overflow: hidden;
@@ -333,6 +333,8 @@
   grid-column: 2;
   grid-row: 4;
   align-self: start;
+  min-height: 132px;
+  margin-top: 10px;
   border-color: rgba(107, 129, 157, 0.44);
   background: linear-gradient(180deg, var(--trace-blue-soft), #fff);
 }
@@ -350,15 +352,18 @@
 .flow-card--organic {
   grid-column: 4;
   grid-row: 3;
+  align-self: start;
 }
 
 .flow-origin-stack {
-  position: absolute;
+  position: relative;
   z-index: 3;
-  right: 18px;
-  bottom: 18px;
-  width: min(31%, 360px);
-  padding: 10px 10px 11px;
+  grid-column: 4;
+  grid-row: 4;
+  align-self: stretch;
+  width: auto;
+  min-width: 0;
+  padding: 9px 9px 10px;
   border: 1px solid rgba(107, 129, 157, 0.28);
   border-radius: 13px;
   background: rgba(251, 252, 254, 0.98);
@@ -369,8 +374,8 @@
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 7px;
+  gap: 8px;
+  margin-bottom: 5px;
 }
 
 .flow-origin-stack__heading p {
@@ -399,14 +404,14 @@
 .flow-origin-stack__list {
   position: relative;
   display: grid;
-  gap: 3px;
-  padding-left: 12px;
+  gap: 2px;
+  padding-left: 11px;
 }
 
 .flow-origin-stack__list::before {
   position: absolute;
-  top: 4px;
-  bottom: 4px;
+  top: 3px;
+  bottom: 3px;
   left: 4px;
   width: 2px;
   border-radius: 999px;
@@ -417,14 +422,14 @@
 .flow-origin-card {
   position: relative;
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) auto auto;
+  grid-template-columns: 22px minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   min-width: 0;
-  min-height: 29px;
-  padding: 4px 5px;
+  min-height: 24px;
+  padding: 2px 4px;
   border: 1px solid #e5eaf0;
-  border-radius: 8px;
+  border-radius: 7px;
   background: #fff;
   color: inherit;
   text-align: left;
@@ -435,8 +440,8 @@
 .flow-origin-card::before {
   position: absolute;
   top: 50%;
-  left: -12px;
-  width: 12px;
+  left: -11px;
+  width: 11px;
   height: 1px;
   background: rgba(107, 129, 157, 0.26);
   content: '';
@@ -452,32 +457,32 @@
 
 .flow-origin-card__icon {
   display: inline-flex;
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   align-items: center;
   justify-content: center;
-  border-radius: 7px;
+  border-radius: 6px;
   background: #f1f5f9;
   color: var(--trace-blue);
 }
 
 .flow-origin-card__icon mat-icon {
-  width: 14px;
-  height: 14px;
-  font-size: 14px;
+  width: 13px;
+  height: 13px;
+  font-size: 13px;
 }
 
 .flow-origin-card__copy {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 1px;
+  gap: 0;
 }
 
 .flow-origin-card__copy strong {
   overflow: hidden;
   color: #263850;
-  font-size: 8px;
+  font-size: 7.5px;
   font-weight: 850;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -488,26 +493,26 @@
   align-items: center;
   gap: 2px;
   color: var(--trace-muted);
-  font-size: 6px;
+  font-size: 5.5px;
   font-weight: 700;
 }
 
 .flow-origin-card__copy small mat-icon {
-  width: 9px;
-  height: 9px;
-  font-size: 9px;
+  width: 8px;
+  height: 8px;
+  font-size: 8px;
 }
 
 .flow-origin-card__value {
   color: var(--trace-navy);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 950;
 }
 
 .flow-origin-card__share {
-  min-width: 36px;
+  min-width: 34px;
   color: #526b89;
-  font-size: 7px;
+  font-size: 6.5px;
   font-weight: 850;
   text-align: right;
 }
@@ -556,11 +561,13 @@
   .flow-card--sales-total,
   .flow-card--fallback,
   .flow-card--publications,
-  .flow-card--organic {
+  .flow-card--organic,
+  .flow-origin-stack {
     grid-column: 1;
     grid-row: auto;
     width: 100%;
     min-height: 0;
+    margin-top: 0;
   }
 
   .flow-card--sales-total,
@@ -570,10 +577,7 @@
 
   .flow-origin-stack {
     position: relative;
-    right: auto;
-    bottom: auto;
-    grid-column: 1;
-    grid-row: auto;
+    align-self: auto;
     width: auto;
     padding: 10px;
   }
