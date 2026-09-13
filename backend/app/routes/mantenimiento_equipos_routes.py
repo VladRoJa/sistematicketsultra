@@ -13,10 +13,10 @@ from app.models.user_model import UserORM
 from app.services.mantenimiento_report_service import (
     BUSINESS_TIMEZONE,
     RegionReporteNoEncontradaError,
-    construir_reporte_xlsx,
     listar_regiones_reporte,
     obtener_region_reporte,
 )
+from app.services.mantenimiento_edificio_summary_service import construir_reporte_xlsx
 from app.services.mantenimiento_equipos_service import (
     MantenimientoEquiposError,
     listar_fallas_activas,
