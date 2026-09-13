@@ -1,9 +1,9 @@
 <section class="trace-story" aria-labelledby="trace-story-title">
   <header class="trace-story__header">
-    <div>
-      <p class="trace-story__eyebrow">Cernido de información</p>
+    <div class="trace-story__copy">
+      <p class="trace-story__eyebrow">Marketing y Conversión</p>
       <h2 id="trace-story-title">Cómo se reduce la Venta Nueva hasta Meta trazable</h2>
-      <p>Cada nivel es un subconjunto real del anterior. {{ narrative }}</p>
+      <p>{{ narrative }}</p>
     </div>
 
     <div class="trace-story__header-side">
@@ -12,14 +12,21 @@
           <mat-icon>monitoring</mat-icon>
           <span>
             <strong>KPI Desempeño controla</strong>
-            <small>Venta Total enriquece · iVentas atribuye.</small>
+            <small>Vista total del embudo. Métricas confiables y actualizadas.</small>
           </span>
         </article>
         <article>
           <mat-icon>phone_in_talk</mat-icon>
           <span>
-            <strong>El match técnico tiene prioridad</strong>
-            <small>Encuesta solo entra cuando no existe cruce iVentas.</small>
+            <strong>iVentas atribuye por teléfono</strong>
+            <small>Desde el lead hasta la venta, el recorrido se cruza por teléfono.</small>
+          </span>
+        </article>
+        <article>
+          <mat-icon>groups</mat-icon>
+          <span>
+            <strong>Encuesta clasifica el fallback</strong>
+            <small>Identifica el origen de las ventas sin match iVentas.</small>
           </span>
         </article>
         <article>
@@ -38,7 +45,49 @@
     </div>
   </header>
 
-  <div class="trace-story__canvas">
+  <div class="funnel-map">
+    <section class="iventas-lane" aria-labelledby="iventas-lane-title">
+      <div class="iventas-lane__heading">
+        <span>
+          <mat-icon>phone_in_talk</mat-icon>
+          <strong id="iventas-lane-title">Funnel iVentas (por teléfono)</strong>
+        </span>
+        <small>Del contacto a la venta</small>
+      </div>
+
+      <div class="iventas-lane__stages">
+        <button
+          *ngIf="leadStage as stage"
+          type="button"
+          class="iventas-stage iventas-stage--button"
+          (click)="openStage(stage)"
+        >
+          <span class="iventas-stage__step">{{ stage.step }}</span>
+          <mat-icon>{{ stage.icon }}</mat-icon>
+          <strong>{{ stage.label }}</strong>
+          <b>{{ stage.value }}</b>
+          <span class="iventas-stage__action">Ver filas <mat-icon>open_in_new</mat-icon></span>
+        </button>
+
+        <mat-icon class="iventas-stage-arrow">arrow_forward</mat-icon>
+
+        <button
+          *ngIf="visitStage as stage"
+          type="button"
+          class="iventas-stage iventas-stage--button"
+          (click)="openStage(stage)"
+        >
+          <span class="iventas-stage__step">{{ stage.step }}</span>
+          <mat-icon>{{ stage.icon }}</mat-icon>
+          <strong>{{ stage.label }}</strong>
+          <b>{{ stage.value }}</b>
+          <span class="iventas-stage__action">Ver filas <mat-icon>open_in_new</mat-icon></span>
+        </button>
+      </div>
+    </section>
+
+    <div class="merge-ribbon merge-ribbon--iventas" aria-hidden="true"></div>
+
     <button
       *ngIf="saleNode as node"
       type="button"
@@ -53,13 +102,12 @@
       <span class="funnel-card__action">Ver filas <mat-icon>open_in_new</mat-icon></span>
     </button>
 
-    <div class="funnel-flow funnel-flow--trace-main" aria-hidden="true"></div>
-    <div class="funnel-flow funnel-flow--fallback-main" aria-hidden="true"></div>
+    <div class="merge-ribbon merge-ribbon--sale" aria-hidden="true"></div>
 
     <button
-      *ngIf="iventasNode as node"
+      *ngIf="salesIventasNode as node"
       type="button"
-      class="funnel-card funnel-card--iventas"
+      class="funnel-card funnel-card--junction"
       (click)="openNode(node)"
     >
       <span class="funnel-card__step">{{ node.step }}</span>
@@ -67,62 +115,47 @@
       <span class="funnel-card__label">{{ node.label }}</span>
       <strong>{{ node.value }}</strong>
       <span class="funnel-card__share">{{ node.share }} del total</span>
+      <small>{{ node.description }}</small>
       <span class="funnel-card__action">Ver filas <mat-icon>open_in_new</mat-icon></span>
     </button>
 
-    <section class="iventas-trace" aria-labelledby="iventas-trace-title">
-      <div class="iventas-trace__heading">
-        <div>
-          <mat-icon>phone_in_talk</mat-icon>
-          <strong id="iventas-trace-title">Embudo iVentas trazable</strong>
-        </div>
-        <span>Datos trazables por teléfono</span>
-      </div>
+    <div class="output-ribbons" aria-hidden="true">
+      <span></span>
+      <span></span>
+    </div>
 
-      <div class="iventas-trace__stages">
-        <ng-container *ngFor="let stage of iventasStages; let last = last">
-          <article class="iventas-stage">
-            <span>{{ stage.step }}</span>
-            <mat-icon>{{ stage.icon }}</mat-icon>
-            <strong>{{ stage.label }}</strong>
-            <b>{{ stage.value }}</b>
-          </article>
-          <mat-icon *ngIf="!last" class="iventas-trace__arrow">arrow_forward</mat-icon>
-        </ng-container>
-      </div>
-    </section>
+    <div class="iventas-outputs" aria-label="Desglose de Ventas iVentas">
+      <button
+        *ngIf="publicationNode as node"
+        type="button"
+        class="output-card"
+        (click)="openNode(node)"
+      >
+        <span class="output-card__step">{{ node.step }}</span>
+        <mat-icon>{{ node.icon }}</mat-icon>
+        <span class="output-card__label">{{ node.label }}</span>
+        <strong>{{ node.value }}</strong>
+        <span>{{ node.share }} del total</span>
+        <span class="output-card__action">Ver filas <mat-icon>open_in_new</mat-icon></span>
+      </button>
 
-    <div class="funnel-flow funnel-flow--publication" aria-hidden="true"></div>
-    <div class="funnel-flow funnel-flow--organic" aria-hidden="true"></div>
+      <button
+        *ngIf="organicNode as node"
+        type="button"
+        class="output-card"
+        (click)="openNode(node)"
+      >
+        <span class="output-card__step">{{ node.step }}</span>
+        <mat-icon>{{ node.icon }}</mat-icon>
+        <span class="output-card__label">{{ node.label }}</span>
+        <strong>{{ node.value }}</strong>
+        <span>{{ node.share }} del total</span>
+        <small>{{ node.description }}</small>
+        <span class="output-card__action">Ver filas <mat-icon>open_in_new</mat-icon></span>
+      </button>
+    </div>
 
-    <button
-      *ngIf="publicationNode as node"
-      type="button"
-      class="funnel-card funnel-card--publication"
-      (click)="openNode(node)"
-    >
-      <span class="funnel-card__step">{{ node.step }}</span>
-      <mat-icon>{{ node.icon }}</mat-icon>
-      <span class="funnel-card__label">{{ node.label }}</span>
-      <strong>{{ node.value }}</strong>
-      <span class="funnel-card__share">{{ node.share }} del total</span>
-      <span class="funnel-card__action">Ver filas <mat-icon>open_in_new</mat-icon></span>
-    </button>
-
-    <button
-      *ngIf="organicNode as node"
-      type="button"
-      class="funnel-card funnel-card--organic"
-      (click)="openNode(node)"
-    >
-      <span class="funnel-card__step">{{ node.step }}</span>
-      <mat-icon>{{ node.icon }}</mat-icon>
-      <span class="funnel-card__label">{{ node.label }}</span>
-      <strong>{{ node.value }}</strong>
-      <span class="funnel-card__share">{{ node.share }} del total</span>
-      <small>Chats que entraron a iVentas sin publicidad pagada.</small>
-      <span class="funnel-card__action">Ver filas <mat-icon>open_in_new</mat-icon></span>
-    </button>
+    <div class="fallback-ribbon fallback-ribbon--to-node" aria-hidden="true"></div>
 
     <button
       *ngIf="fallbackNode as node"
@@ -138,13 +171,15 @@
       <span class="funnel-card__action">Ver filas <mat-icon>open_in_new</mat-icon></span>
     </button>
 
+    <div class="fallback-ribbon fallback-ribbon--to-origins" aria-hidden="true"></div>
+
     <div class="fallback-list">
       <div class="fallback-list__heading">
         <span>
           <mat-icon>hub</mat-icon>
-          Origen de venta (sin match iVentas)
+          Origen de ventas
         </span>
-        <small>Clasificación por Encuesta de Venta Total</small>
+        <small>Clasificación de ventas sin match iVentas</small>
       </div>
 
       <p *ngIf="!fallbackOrigins.length" class="fallback-list__empty">

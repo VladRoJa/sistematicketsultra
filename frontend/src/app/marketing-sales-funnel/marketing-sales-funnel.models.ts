@@ -8,6 +8,7 @@ export interface MarketingSalesOriginBreakdown {
 export interface MarketingSalesFunnelMetrics {
   iventas_contacts: number;
   leads_meta: number;
+  leads_iventas_month?: number;
 
   visits_total: number;
   visits_iventas: number;

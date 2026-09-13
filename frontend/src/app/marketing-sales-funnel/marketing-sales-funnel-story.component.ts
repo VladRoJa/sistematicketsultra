@@ -20,6 +20,7 @@ interface FunnelNodeView {
   metric: string;
   icon: string;
   origin?: string;
+  description?: string;
 }
 
 interface IventasStageView {
@@ -27,6 +28,8 @@ interface IventasStageView {
   label: string;
   value: string;
   icon: string;
+  metric?: string;
+  supportingText: string;
 }
 
 interface FallbackOriginView extends MarketingSalesOriginBreakdown {
@@ -70,18 +73,20 @@ export class MarketingSalesFunnelStoryComponent {
     );
   }
 
-  get iventasNode(): FunnelNodeView | null {
+  get salesIventasNode(): FunnelNodeView | null {
     const summary = this.summary;
     if (!summary) {
       return null;
     }
     return this.createNode(
-      '02',
-      'Con Match iVentas',
+      '03',
+      'Ventas iVentas',
       summary.sales_iventas,
       summary.sales_total,
       'sales_iventas',
-      'link',
+      'leaderboard',
+      undefined,
+      'Punto de unión entre el funnel iVentas y la Venta Nueva.',
     );
   }
 
@@ -91,7 +96,7 @@ export class MarketingSalesFunnelStoryComponent {
       return null;
     }
     return this.createNode(
-      '08',
+      '02',
       'Sin Match iVentas',
       summary.sales_not_iventas,
       summary.sales_total,
@@ -106,7 +111,7 @@ export class MarketingSalesFunnelStoryComponent {
       return null;
     }
     return this.createNode(
-      '06',
+      '04',
       'Venta por publicaciones',
       summary.sales_iventas_meta,
       summary.sales_total,
@@ -121,42 +126,45 @@ export class MarketingSalesFunnelStoryComponent {
       return null;
     }
     return this.createNode(
-      '07',
+      '05',
       'Orgánico',
       summary.sales_iventas_other,
       summary.sales_total,
       'origin',
       'eco',
       'IVENTAS_OTHER',
+      'Chats que entraron a iVentas sin publicidad pagada.',
     );
   }
 
-  get iventasStages(): IventasStageView[] {
+  get leadStage(): IventasStageView | null {
     const summary = this.summary;
     if (!summary) {
-      return [];
+      return null;
     }
+    return {
+      step: 'A1',
+      label: 'Leads iVentas',
+      value: this.formatInteger(summary.leads_iventas_month || 0),
+      icon: 'person',
+      metric: 'leads_iventas',
+      supportingText: 'Primer mensaje del mes con teléfono utilizable',
+    };
+  }
 
-    return [
-      {
-        step: '03',
-        label: 'Leads iVentas',
-        value: this.formatInteger(summary.iventas_contacts),
-        icon: 'person',
-      },
-      {
-        step: '04',
-        label: 'Visitas iVentas',
-        value: this.formatInteger(summary.visits_iventas),
-        icon: 'event',
-      },
-      {
-        step: '05',
-        label: 'Ventas iVentas',
-        value: this.formatInteger(summary.sales_iventas),
-        icon: 'leaderboard',
-      },
-    ];
+  get visitStage(): IventasStageView | null {
+    const summary = this.summary;
+    if (!summary) {
+      return null;
+    }
+    return {
+      step: 'A2',
+      label: 'Visitas iVentas',
+      value: this.formatInteger(summary.visits_iventas),
+      icon: 'event',
+      metric: 'visits_iventas',
+      supportingText: 'Visitas que cruzan por teléfono con iVentas',
+    };
   }
 
   get fallbackOrigins(): FallbackOriginView[] {
@@ -191,7 +199,7 @@ export class MarketingSalesFunnelStoryComponent {
       return '';
     }
 
-    return `${this.formatInteger(summary.sales_iventas)} pasaron por iVentas · ${this.formatInteger(summary.sales_not_iventas)} por fallback`;
+    return `Dos funnels convergen en ${this.formatInteger(summary.sales_iventas)} ventas iVentas; ${this.formatInteger(summary.sales_not_iventas)} ventas continúan por clasificación de origen.`;
   }
 
   openNode(node: FunnelNodeView | null): void {
@@ -199,6 +207,13 @@ export class MarketingSalesFunnelStoryComponent {
       return;
     }
     this.openDetail(node.metric, node.origin);
+  }
+
+  openStage(stage: IventasStageView | null): void {
+    if (!stage?.metric) {
+      return;
+    }
+    this.openDetail(stage.metric);
   }
 
   openOrigin(origin: FallbackOriginView): void {
@@ -233,6 +248,7 @@ export class MarketingSalesFunnelStoryComponent {
     metric: string,
     icon: string,
     origin?: string,
+    description?: string,
   ): FunnelNodeView {
     return {
       step,
@@ -242,6 +258,7 @@ export class MarketingSalesFunnelStoryComponent {
       metric,
       icon,
       origin,
+      description,
     };
   }
 
@@ -250,7 +267,7 @@ export class MarketingSalesFunnelStoryComponent {
       return 'Visita a Plaza Comercial';
     }
     if (origin.key === 'UNKNOWN') {
-      return 'Sin identificar';
+      return 'Venta por web';
     }
     return origin.label;
   }
@@ -263,7 +280,7 @@ export class MarketingSalesFunnelStoryComponent {
       PLAZA: 'storefront',
       OFFLINE: 'description',
       OTHER_SURVEY: 'storefront',
-      UNKNOWN: 'help_outline',
+      UNKNOWN: 'language',
     };
     return icons[originKey] || 'label';
   }
