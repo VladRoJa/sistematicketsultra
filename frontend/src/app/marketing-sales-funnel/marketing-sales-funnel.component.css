@@ -731,10 +731,14 @@
 }
 
 .coverage-track > span {
+  --coverage: 0;
   display: block;
+  width: 100%;
   height: 100%;
   border-radius: inherit;
   background: linear-gradient(90deg, #ef5a34, #ff8d68);
+  transform: scaleX(var(--coverage));
+  transform-origin: left center;
 }
 
 .row-detail-action {
