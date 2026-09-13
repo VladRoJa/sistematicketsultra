@@ -5,10 +5,12 @@
 .trace-story {
   --trace-orange: #f0522d;
   --trace-orange-soft: #fff7f3;
+  --trace-orange-line: rgba(240, 82, 45, 0.54);
   --trace-navy: #13233d;
   --trace-muted: #64748b;
   --trace-border: #e2e8f0;
   --trace-blue: #6b819d;
+  --trace-blue-soft: #f5f8fb;
   padding: 20px;
   border: 1px solid rgba(240, 82, 45, 0.28);
   border-radius: 18px;
@@ -114,70 +116,236 @@
   font-size: 16px;
 }
 
-.trace-chart-shell {
+.flow-board {
   position: relative;
+  display: grid;
+  grid-template-columns: 210px minmax(200px, 1fr) 220px minmax(230px, 1fr);
+  grid-template-rows: 120px 120px 120px 120px;
+  gap: 14px 30px;
+  min-height: 520px;
   margin-top: 18px;
-  overflow-x: auto;
-  border: 1px solid rgba(240, 82, 45, 0.22);
+  padding: 54px 28px 20px;
+  overflow: hidden;
+  border: 1px solid rgba(240, 82, 45, 0.24);
   border-radius: 16px;
   background:
-    radial-gradient(circle at 58% 24%, rgba(255, 241, 234, 0.72), transparent 27%),
+    radial-gradient(circle at 57% 30%, rgba(255, 243, 236, 0.62), transparent 28%),
     linear-gradient(180deg, #fff 0%, #fffdfc 100%);
 }
 
-.trace-chart-legend {
+.flow-board__lane {
   position: absolute;
   z-index: 4;
   top: 12px;
-  left: 16px;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
+  padding: 6px 9px;
+  border-radius: 999px;
+  font-size: 8px;
+  font-weight: 850;
   pointer-events: none;
 }
 
-.trace-chart-legend__item {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 8px;
-  border-radius: 999px;
-  font-size: 8px;
-  font-weight: 900;
+.flow-board__lane mat-icon {
+  width: 15px;
+  height: 15px;
+  font-size: 15px;
 }
 
-.trace-chart-legend__item::before {
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  content: '';
+.flow-board__lane span {
+  font-weight: 650;
+  opacity: 0.72;
 }
 
-.trace-chart-legend__item--iventas,
-.trace-chart-legend__item--sales {
-  border: 1px solid rgba(240, 82, 45, 0.22);
+.flow-board__lane--iventas {
+  left: 18px;
+  border: 1px solid rgba(240, 82, 45, 0.24);
   background: var(--trace-orange-soft);
   color: #b43b20;
 }
 
-.trace-chart-legend__item--iventas::before,
-.trace-chart-legend__item--sales::before {
-  background: var(--trace-orange);
+.flow-board__lane--sales {
+  left: 330px;
+  border: 1px solid rgba(240, 82, 45, 0.18);
+  background: #fffaf7;
+  color: #8f4a36;
 }
 
-.trace-chart-legend__item--fallback {
-  border: 1px solid rgba(107, 129, 157, 0.24);
-  background: #f5f8fb;
-  color: #526b89;
+.flow-board__connectors {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
 }
 
-.trace-chart-legend__item--fallback::before {
-  background: var(--trace-blue);
+.flow-line {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
 }
 
-.trace-chart {
-  min-width: 1120px;
-  height: 560px;
+.flow-line--orange {
+  stroke: rgba(240, 82, 45, 0.46);
+  stroke-width: 5;
+}
+
+.flow-line--gray {
+  stroke: rgba(107, 129, 157, 0.48);
+  stroke-width: 5;
+}
+
+.flow-line--strong {
+  stroke-width: 7;
+}
+
+#arrow-orange path {
+  fill: rgba(240, 82, 45, 0.72);
+}
+
+#arrow-gray path {
+  fill: rgba(107, 129, 157, 0.76);
+}
+
+.flow-card {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  min-width: 0;
+  min-height: 104px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 14px 12px 11px;
+  border: 1px solid rgba(240, 82, 45, 0.36);
+  border-radius: 14px;
+  background: #fff;
+  color: var(--trace-navy);
+  text-align: center;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(34, 44, 58, 0.05);
+  transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+}
+
+.flow-card:hover,
+.flow-card:focus-visible {
+  transform: translateY(-2px);
+  outline: none;
+  border-color: rgba(240, 82, 45, 0.68);
+  box-shadow: 0 12px 26px rgba(34, 44, 58, 0.09);
+}
+
+.flow-card > mat-icon {
+  width: 25px;
+  height: 25px;
+  color: var(--trace-orange);
+  font-size: 25px;
+}
+
+.flow-card__label {
+  color: #20314a;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.15;
+}
+
+.flow-card > strong {
+  color: var(--trace-navy);
+  font-size: 28px;
+  font-weight: 950;
+  letter-spacing: -0.04em;
+}
+
+.flow-card small {
+  max-width: 180px;
+  color: var(--trace-muted);
+  font-size: 8px;
+  font-weight: 650;
+  line-height: 1.28;
+}
+
+.flow-card__action {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 2px;
+  color: #b43b20;
+  font-size: 8px;
+  font-weight: 850;
+}
+
+.flow-card__action mat-icon {
+  width: 12px;
+  height: 12px;
+  font-size: 12px;
+}
+
+.flow-card--emphasis {
+  border-width: 1.5px;
+  box-shadow: 0 10px 26px rgba(240, 82, 45, 0.10);
+}
+
+.flow-card--leads {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.flow-card--visits {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.flow-card--junction {
+  grid-column: 3;
+  grid-row: 2 / span 2;
+  align-self: center;
+  min-height: 154px;
+}
+
+.flow-card__junction-badge {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: var(--trace-orange-soft);
+  color: var(--trace-orange);
+  font-size: 7px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.flow-card--sales-total {
+  grid-column: 1;
+  grid-row: 3;
+  align-self: center;
+}
+
+.flow-card--fallback {
+  grid-column: 2;
+  grid-row: 4;
+  align-self: center;
+  border-color: rgba(107, 129, 157, 0.44);
+  background: linear-gradient(180deg, var(--trace-blue-soft), #fff);
+}
+
+.flow-card--fallback > mat-icon,
+.flow-card--fallback .flow-card__action {
+  color: var(--trace-blue);
+}
+
+.flow-card--publications {
+  grid-column: 4;
+  grid-row: 1;
+}
+
+.flow-card--organic {
+  grid-column: 4;
+  grid-row: 3;
 }
 
 .fallback-panel {
@@ -326,15 +494,46 @@
   .trace-story__audit-pill {
     justify-self: start;
   }
+
+  .flow-board {
+    grid-template-columns: 190px minmax(180px, 1fr) 200px minmax(210px, 1fr);
+    gap: 14px 20px;
+  }
 }
 
-@media (max-width: 900px) {
+@media (max-width: 980px) {
   .trace-story {
     padding: 14px;
   }
 
   .trace-story__rules {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .flow-board {
+    display: flex;
+    min-height: 0;
+    flex-direction: column;
+    gap: 10px;
+    padding: 54px 12px 14px;
+  }
+
+  .flow-board__connectors {
+    display: none;
+  }
+
+  .flow-board__lane--sales {
+    left: auto;
+    right: 18px;
+  }
+
+  .flow-card {
+    width: 100%;
+    min-height: 0;
+  }
+
+  .flow-card--junction {
+    min-height: 124px;
   }
 
   .fallback-grid {
