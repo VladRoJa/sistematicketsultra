@@ -7,6 +7,7 @@ import {
   EditarFechaSolucionDialogResult,
   EditarFechaSolucionModalComponent,
 } from '../shared/editar-fecha-solucion-modal/editar-fecha-solucion-modal.component';
+import { ModalCierreTicketComponent } from '../shared/modal-cierre-ticket/modal-cierre-ticket.component';
 import { AsignarFechaPayload } from '../types/ticket';
 import {
   MaintenancePlannerHistoryItem,
@@ -18,6 +19,7 @@ export interface MaintenancePlannerTicketDialogData {
   ticket: MaintenancePlannerTicket;
   canSchedule: boolean;
   canCaptureDiagnosis: boolean;
+  canRequestClosure: boolean;
   initialDate?: string | null;
 }
 
@@ -32,6 +34,7 @@ export class MaintenancePlannerTicketDialogComponent {
   readonly ticket = this.data.ticket;
   readonly canSchedule = this.data.canSchedule;
   readonly canCaptureDiagnosis = this.data.canCaptureDiagnosis;
+  readonly canRequestClosure = this.data.canRequestClosure;
   readonly commitmentTicket = {
     ...this.data.ticket,
     id: this.data.ticket.ticket_id,
@@ -75,6 +78,14 @@ export class MaintenancePlannerTicketDialogComponent {
       this.canSchedule
       && this.hasCommitment
       && this.normalizedState === 'en progreso',
+    );
+  }
+
+  get canFinalizeTicket(): boolean {
+    return Boolean(
+      this.canRequestClosure
+      && this.normalizedState === 'en progreso'
+      && this.ticket.estado_cierre !== 'pendiente_creador',
     );
   }
 
@@ -156,6 +167,47 @@ export class MaintenancePlannerTicketDialogComponent {
               error?.error?.mensaje
               || error?.error?.message
               || 'No se pudo cambiar la fecha compromiso.';
+          },
+        });
+    });
+  }
+
+  openClosureDialog(): void {
+    if (!this.canFinalizeTicket || this.saving) {
+      return;
+    }
+
+    const dialogRef = this.dialog.open(ModalCierreTicketComponent, {
+      width: '560px',
+      maxWidth: '92vw',
+      data: { ticketId: this.ticket.ticket_id },
+      autoFocus: false,
+    });
+
+    dialogRef.afterClosed().subscribe((result) => {
+      if (!result) {
+        return;
+      }
+
+      this.saving = true;
+      this.errorMessage = '';
+
+      this.plannerService
+        .requestClosure(this.ticket, {
+          costo_solucion: result.costo,
+          notas_cierre: result.notas,
+        })
+        .subscribe({
+          next: () => {
+            this.saving = false;
+            this.dialogRef.close({ updated: true });
+          },
+          error: (error) => {
+            this.saving = false;
+            this.errorMessage =
+              error?.error?.mensaje
+              || error?.error?.message
+              || 'No se pudo solicitar el cierre del ticket.';
           },
         });
     });
