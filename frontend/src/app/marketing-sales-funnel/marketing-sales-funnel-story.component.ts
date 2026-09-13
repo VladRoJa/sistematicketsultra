@@ -222,6 +222,17 @@ export class MarketingSalesFunnelStoryComponent {
         opacity: 0.24,
       }),
       this.createRibbon({
+        id: 'fallback-origins',
+        sourceX: 546,
+        sourceY: 516,
+        targetX: 898,
+        targetY: 560,
+        sourceThickness: this.ribbonThickness(salesFallback, salesReference, 18, 52),
+        targetThickness: this.ribbonThickness(salesFallback, salesReference, 18, 44),
+        tone: 'gray',
+        opacity: 0.18,
+      }),
+      this.createRibbon({
         id: 'iventas-publications',
         sourceX: 834,
         sourceY: 286,

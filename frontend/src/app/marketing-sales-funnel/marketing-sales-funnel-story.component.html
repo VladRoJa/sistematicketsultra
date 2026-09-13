@@ -58,7 +58,7 @@
 
     <svg
       class="flow-board__connectors"
-      viewBox="0 0 1200 620"
+      viewBox="0 0 1200 700"
       preserveAspectRatio="none"
       aria-hidden="true"
     >
@@ -140,31 +140,36 @@
       <small>{{ node.support }}</small>
       <span class="flow-card__action">Ver filas <mat-icon>open_in_new</mat-icon></span>
     </button>
-  </div>
 
-  <section class="fallback-panel" aria-labelledby="fallback-panel-title">
-    <div class="fallback-panel__heading">
-      <div>
-        <p>Ventas sin match iVentas</p>
-        <h3 id="fallback-panel-title">Origen de ventas</h3>
+    <section class="flow-origin-stack" aria-labelledby="flow-origin-stack-title">
+      <div class="flow-origin-stack__heading">
+        <div>
+          <p>Ventas sin match iVentas</p>
+          <h3 id="flow-origin-stack-title">Origen de ventas</h3>
+        </div>
+        <span>Encuesta Venta Total</span>
       </div>
-      <span>Clasificación por Encuesta de Venta Total</span>
-    </div>
 
-    <p *ngIf="!fallbackOrigins.length" class="fallback-panel__empty">
-      No hay ventas de fallback clasificadas para el periodo.
-    </p>
+      <p *ngIf="!fallbackOrigins.length" class="flow-origin-stack__empty">
+        No hay ventas clasificadas para el periodo.
+      </p>
 
-    <div *ngIf="fallbackOrigins.length" class="fallback-grid">
-      <button *ngFor="let row of fallbackOrigins" type="button" class="fallback-card" (click)="openOrigin(row)">
-        <span class="fallback-card__icon"><mat-icon>{{ row.icon }}</mat-icon></span>
-        <span class="fallback-card__copy">
-          <strong>{{ row.displayLabel }}</strong>
-          <small>Ver filas <mat-icon>open_in_new</mat-icon></small>
-        </span>
-        <span class="fallback-card__value">{{ row.salesDisplay }}</span>
-        <span class="fallback-card__share">{{ row.shareDisplay }}</span>
-      </button>
-    </div>
-  </section>
+      <div *ngIf="fallbackOrigins.length" class="flow-origin-stack__list">
+        <button
+          *ngFor="let row of fallbackOrigins"
+          type="button"
+          class="flow-origin-card"
+          (click)="openOrigin(row)"
+        >
+          <span class="flow-origin-card__icon"><mat-icon>{{ row.icon }}</mat-icon></span>
+          <span class="flow-origin-card__copy">
+            <strong>{{ row.displayLabel }}</strong>
+            <small>Ver filas <mat-icon>open_in_new</mat-icon></small>
+          </span>
+          <span class="flow-origin-card__value">{{ row.salesDisplay }}</span>
+          <span class="flow-origin-card__share">{{ row.shareDisplay }}</span>
+        </button>
+      </div>
+    </section>
+  </div>
 </section>
