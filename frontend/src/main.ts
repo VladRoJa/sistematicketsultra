@@ -9,6 +9,7 @@ import { routes } from './app/app.routes';
 import { HTTP_INTERCEPTORS } from '@angular/common/http';
 import { TokenInterceptor } from './app/interceptors/auth.interceptor';
 import { MatDialogModule } from '@angular/material/dialog';
+import { MatNativeDateModule } from '@angular/material/core';
 import { importProvidersFrom } from '@angular/core';
 import { JwtHelperService, JWT_OPTIONS } from '@auth0/angular-jwt';
 import { JwtInterceptor } from './app/interceptors/jwt.interceptor';
@@ -16,8 +17,8 @@ import { JwtInterceptor } from './app/interceptors/jwt.interceptor';
 bootstrapApplication(AppComponent, {
   providers: [
     provideAnimations(),
-    provideRouter(routes, withHashLocation()), 
-    importProvidersFrom(MatDialogModule),
+    provideRouter(routes, withHashLocation()),
+    importProvidersFrom(MatDialogModule, MatNativeDateModule),
     provideHttpClient(withInterceptorsFromDi()),
     {
       provide: HTTP_INTERCEPTORS,
