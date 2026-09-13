@@ -147,6 +147,7 @@ export class MarketingSalesFunnelStoryComponent {
       label: 'Leads iVentas',
       value: this.formatInteger(summary.leads_iventas_month || 0),
       icon: 'person',
+      metric: 'leads_iventas',
       supportingText: 'Primer mensaje del mes con teléfono utilizable',
     };
   }
