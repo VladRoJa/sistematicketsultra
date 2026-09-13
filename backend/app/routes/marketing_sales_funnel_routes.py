@@ -22,6 +22,8 @@ from app.services.marketing_sales_funnel_drilldown_service import (
     build_marketing_sales_funnel_drilldown_export,
 )
 from app.services.marketing_sales_funnel_iventas_stage_service import (
+    build_monthly_iventas_leads_detail,
+    build_monthly_iventas_leads_export,
     count_monthly_iventas_leads,
 )
 from app.services.marketing_sales_funnel_service import (
@@ -94,17 +96,29 @@ def get_marketing_sales_funnel_endpoint():
 def get_marketing_sales_funnel_detail_endpoint():
     try:
         access = _resolve_request_access()
-        result = build_marketing_sales_funnel_drilldown(
-            month=request.args.get("month", ""),
-            access=access,
-            metric=request.args.get("metric", ""),
-            branch_id=request.args.get("branch_id"),
-            origin=request.args.get("origin"),
-            page=request.args.get("page"),
-            page_size=request.args.get("page_size"),
-            sort_by=request.args.get("sort_by"),
-            sort_dir=request.args.get("sort_dir"),
-        )
+        metric = request.args.get("metric", "")
+        if metric == "leads_iventas":
+            result = build_monthly_iventas_leads_detail(
+                month=request.args.get("month", ""),
+                access=access,
+                branch_id=request.args.get("branch_id"),
+                page=request.args.get("page"),
+                page_size=request.args.get("page_size"),
+                sort_by=request.args.get("sort_by"),
+                sort_dir=request.args.get("sort_dir"),
+            )
+        else:
+            result = build_marketing_sales_funnel_drilldown(
+                month=request.args.get("month", ""),
+                access=access,
+                metric=metric,
+                branch_id=request.args.get("branch_id"),
+                origin=request.args.get("origin"),
+                page=request.args.get("page"),
+                page_size=request.args.get("page_size"),
+                sort_by=request.args.get("sort_by"),
+                sort_dir=request.args.get("sort_dir"),
+            )
         return jsonify(result), 200
     except MarketingAuthorizationError as exc:
         return jsonify(
@@ -131,15 +145,25 @@ def get_marketing_sales_funnel_detail_endpoint():
 def export_marketing_sales_funnel_detail_endpoint():
     try:
         access = _resolve_request_access()
-        output, filename = build_marketing_sales_funnel_drilldown_export(
-            month=request.args.get("month", ""),
-            access=access,
-            metric=request.args.get("metric", ""),
-            branch_id=request.args.get("branch_id"),
-            origin=request.args.get("origin"),
-            sort_by=request.args.get("sort_by"),
-            sort_dir=request.args.get("sort_dir"),
-        )
+        metric = request.args.get("metric", "")
+        if metric == "leads_iventas":
+            output, filename = build_monthly_iventas_leads_export(
+                month=request.args.get("month", ""),
+                access=access,
+                branch_id=request.args.get("branch_id"),
+                sort_by=request.args.get("sort_by"),
+                sort_dir=request.args.get("sort_dir"),
+            )
+        else:
+            output, filename = build_marketing_sales_funnel_drilldown_export(
+                month=request.args.get("month", ""),
+                access=access,
+                metric=metric,
+                branch_id=request.args.get("branch_id"),
+                origin=request.args.get("origin"),
+                sort_by=request.args.get("sort_by"),
+                sort_dir=request.args.get("sort_dir"),
+            )
         return send_file(
             output,
             mimetype=DETAIL_EXPORT_MIMETYPE,
