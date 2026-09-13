@@ -1,19 +1,11 @@
-<main class="marketing-page">
-  <header class="page-header">
+<main class="marketing-page funnel-story-page">
+  <header class="page-header story-page-header">
     <div class="page-heading">
-      <p class="eyebrow">Track / BI</p>
-      <h1>Marketing y Conversión</h1>
-      <p class="page-subtitle">Funnel de Venta Nueva</p>
-      <div class="header-context">
-        <span class="cohort-badge">
-          <mat-icon>verified</mat-icon>
-          Venta Nueva desde Nuevos Socios Detalle
-        </span>
-        <span class="attribution-note">
-          <mat-icon>account_tree</mat-icon>
-          KPI Desempeño controla · Venta Total enriquece · iVentas atribuye
-        </span>
-      </div>
+      <p class="eyebrow">Marketing y Conversión</p>
+      <h1>Funnel de Venta Nueva</h1>
+      <p class="page-subtitle">
+        Del interés al socio. Visualiza cómo se compone la Venta Nueva y qué tan trazable es cada venta.
+      </p>
     </div>
 
     <div class="page-actions">
@@ -37,8 +29,8 @@
       </mat-form-field>
 
       <button
-        mat-stroked-button
-        class="secondary-action"
+        mat-flat-button
+        class="refresh-action"
         type="button"
         [disabled]="refreshDisabled"
         (click)="refreshDashboard()"
@@ -70,14 +62,33 @@
   </section>
 
   <ng-container *ngIf="showDashboard">
-    <section class="metrics-section funnel-section" aria-labelledby="funnel-title">
-      <div class="section-heading section-heading--split">
+    <section class="story-summary" aria-label="Indicadores principales de Venta Nueva">
+      <button
+        *ngFor="let card of summaryCards"
+        type="button"
+        class="summary-kpi"
+        [ngClass]="'summary-kpi--' + card.tone"
+        (click)="openDetail(card.metric)"
+      >
+        <span class="summary-kpi__icon">
+          <mat-icon>{{ card.icon }}</mat-icon>
+        </span>
+        <span class="summary-kpi__copy">
+          <span>{{ card.label }}</span>
+          <strong>{{ card.value }}</strong>
+          <small>{{ card.supportingText }}</small>
+        </span>
+        <mat-icon class="summary-kpi__open">open_in_new</mat-icon>
+      </button>
+    </section>
+
+    <section class="story-panel" aria-labelledby="story-title">
+      <div class="story-panel__heading">
         <div>
           <p class="section-kicker">Cernido de información</p>
-          <h2 id="funnel-title">Cómo se reduce la Venta Nueva hasta Meta trazable</h2>
+          <h2 id="story-title">Cómo se reduce la Venta Nueva hasta Meta trazable</h2>
           <p>
-            Cada nivel es un subconjunto real del anterior. Haz clic en cualquier
-            etapa para abrir las filas exactas que forman el indicador.
+            Cada nivel es un subconjunto real del anterior. {{ funnelNarrative }}
           </p>
         </div>
         <div class="control-badge" matTooltip="Compara las filas de Nuevos Socios Detalle contra Clientes Nuevo Real del KPI Desempeño.">
@@ -86,134 +97,166 @@
         </div>
       </div>
 
-      <div class="visual-funnel" aria-label="Cernido de Venta Nueva">
-        <button
-          *ngFor="let stage of funnelStages"
-          type="button"
-          class="visual-funnel__stage"
-          [style.width.%]="stage.width"
-          (click)="openDetail(stage.metric)"
-          [matTooltip]="stage.explanation"
-        >
-          <span class="visual-funnel__step">{{ stage.step }}</span>
-          <mat-icon>{{ stage.icon }}</mat-icon>
-          <span class="visual-funnel__copy">
-            <span>{{ stage.label }}</span>
-            <small>{{ stage.explanation }}</small>
+      <div class="story-rules" aria-label="Reglas del indicador">
+        <article>
+          <mat-icon>monitoring</mat-icon>
+          <span>
+            <strong>KPI Desempeño controla</strong>
+            <small>Venta Total enriquece · iVentas atribuye.</small>
           </span>
-          <strong>{{ stage.value }}</strong>
-          <span class="visual-funnel__share">{{ stage.share }}</span>
-          <mat-icon class="visual-funnel__open">open_in_new</mat-icon>
-        </button>
-      </div>
-
-      <div class="fallback-lane">
-        <div>
-          <span class="fallback-lane__kicker">Rama de respaldo</span>
-          <strong>{{ dashboard?.summary?.sales_not_iventas | number:'1.0-0' }} ventas sin match iVentas</strong>
-          <small>
-            No desaparecen del análisis: pasan a clasificación por Encuesta de Venta Total.
-          </small>
-        </div>
-        <button
-          mat-stroked-button
-          type="button"
-          (click)="openDetail('sales_not_iventas')"
-        >
-          Ver filas
-          <mat-icon>arrow_forward</mat-icon>
-        </button>
-      </div>
-    </section>
-
-    <section class="metrics-section" aria-labelledby="context-title">
-      <div class="section-heading">
-        <div>
-          <p class="section-kicker">Contexto comercial</p>
-          <h2 id="context-title">Universos que rodean la Venta Nueva</h2>
-          <p>
-            Leads y visitas no se fuerzan dentro del mismo embudo porque no todas
-            las ventas requieren un pase previo registrado.
-          </p>
-        </div>
-      </div>
-
-      <div class="context-grid">
-        <button
-          *ngFor="let card of contextMetrics"
-          type="button"
-          class="context-card"
-          [class.context-card--clickable]="card.metric"
-          [disabled]="!card.metric"
-          (click)="card.metric && openDetail(card.metric)"
-        >
-          <mat-icon>{{ card.icon }}</mat-icon>
-          <span>{{ card.label }}</span>
-          <strong>{{ card.value }}</strong>
-          <small>{{ card.supportingText }}</small>
-          <span *ngIf="card.metric" class="detail-hint">
-            Ver detalle <mat-icon>open_in_new</mat-icon>
+        </article>
+        <article>
+          <mat-icon>database</mat-icon>
+          <span>
+            <strong>El match técnico tiene prioridad</strong>
+            <small>Encuesta solo entra cuando no existe cruce iVentas.</small>
           </span>
-        </button>
-      </div>
-
-      <div class="trace-strip">
-        <article *ngFor="let card of traceMetrics" class="trace-card">
-          <mat-icon>{{ card.icon }}</mat-icon>
-          <div>
-            <span>{{ card.label }}</span>
-            <strong>{{ card.value }}</strong>
-            <small>{{ card.supportingText }}</small>
-          </div>
+        </article>
+        <article>
+          <mat-icon>touch_app</mat-icon>
+          <span>
+            <strong>Cada bloque es auditable</strong>
+            <small>Abre las filas exactas que forman el indicador.</small>
+          </span>
         </article>
       </div>
-    </section>
 
-    <section class="metrics-section" aria-labelledby="origin-title">
-      <div class="section-heading">
-        <div>
-          <p class="section-kicker">Composición de Venta Nueva</p>
-          <h2 id="origin-title">Origen atribuido</h2>
-          <p>
-            Prioridad: evidencia técnica iVentas primero; Encuesta solo entra cuando
-            no existe match iVentas. Cada tarjeta abre las filas que la componen.
-          </p>
+      <div class="story-flow" aria-label="Flujo ramificado de Venta Nueva">
+        <button
+          *ngIf="officialNode as node"
+          type="button"
+          class="story-node story-node--primary story-node--official"
+          (click)="openStoryNode(node)"
+        >
+          <span class="story-node__step">{{ node.step }}</span>
+          <mat-icon>{{ node.icon }}</mat-icon>
+          <span class="story-node__label">{{ node.label }}</span>
+          <strong>{{ node.value }}</strong>
+          <span class="story-node__share">{{ node.share }}</span>
+          <span class="story-node__action">Ver filas <mat-icon>open_in_new</mat-icon></span>
+        </button>
+
+        <div class="story-ribbon story-ribbon--primary" aria-hidden="true"></div>
+
+        <button
+          *ngIf="phoneNode as node"
+          type="button"
+          class="story-node story-node--primary story-node--phone"
+          (click)="openStoryNode(node)"
+        >
+          <span class="story-node__step">{{ node.step }}</span>
+          <mat-icon>{{ node.icon }}</mat-icon>
+          <span class="story-node__label">{{ node.label }}</span>
+          <strong>{{ node.value }}</strong>
+          <span class="story-node__share">{{ node.share }}</span>
+          <span class="story-node__action">Ver filas <mat-icon>open_in_new</mat-icon></span>
+        </button>
+
+        <div class="story-split" aria-hidden="true">
+          <span class="story-split__trace"></span>
+          <span class="story-split__fallback"></span>
+        </div>
+
+        <div class="story-branch story-branch--trace">
+          <button
+            *ngIf="iventasNode as node"
+            type="button"
+            class="story-node story-node--trace"
+            (click)="openStoryNode(node)"
+          >
+            <span class="story-node__step">{{ node.step }}</span>
+            <mat-icon>{{ node.icon }}</mat-icon>
+            <span class="story-node__label">{{ node.label }}</span>
+            <strong>{{ node.value }}</strong>
+            <span class="story-node__share">{{ node.share }} del total</span>
+            <span class="story-node__action">Ver filas <mat-icon>open_in_new</mat-icon></span>
+          </button>
+
+          <div class="trace-outputs">
+            <button
+              *ngIf="metaNode as node"
+              type="button"
+              class="trace-output trace-output--meta"
+              (click)="openStoryNode(node)"
+            >
+              <span class="trace-output__step">{{ node.step }}</span>
+              <mat-icon>{{ node.icon }}</mat-icon>
+              <span>
+                <strong>{{ node.label }}</strong>
+                <b>{{ node.value }}</b>
+                <small>{{ node.share }} del total</small>
+              </span>
+              <span class="trace-output__action">Ver filas <mat-icon>arrow_forward</mat-icon></span>
+            </button>
+
+            <button
+              *ngIf="iventasOtherNode as node"
+              type="button"
+              class="trace-output trace-output--other"
+              (click)="openStoryNode(node)"
+            >
+              <span class="trace-output__step">{{ node.step }}</span>
+              <mat-icon>{{ node.icon }}</mat-icon>
+              <span>
+                <strong>{{ node.label }}</strong>
+                <b>{{ node.value }}</b>
+                <small>{{ node.share }} del total</small>
+              </span>
+              <span class="trace-output__action">Ver filas <mat-icon>arrow_forward</mat-icon></span>
+            </button>
+          </div>
+        </div>
+
+        <div class="story-branch story-branch--fallback">
+          <button
+            *ngIf="fallbackNode as node"
+            type="button"
+            class="story-node story-node--fallback"
+            (click)="openStoryNode(node)"
+          >
+            <span class="story-node__step">{{ node.step }}</span>
+            <mat-icon>{{ node.icon }}</mat-icon>
+            <span class="story-node__label">{{ node.label }}</span>
+            <strong>{{ node.value }}</strong>
+            <span class="story-node__share">{{ node.share }} del total</span>
+            <span class="story-node__action">Ver filas <mat-icon>open_in_new</mat-icon></span>
+          </button>
+
+          <div class="fallback-composition">
+            <div class="fallback-composition__heading">
+              <span>Origen de venta (sin match iVentas)</span>
+              <small>Clasificación por Encuesta de Venta Total</small>
+            </div>
+
+            <p *ngIf="!hasFallbackOrigins" class="empty-message">
+              No hay ventas de fallback clasificadas para el periodo.
+            </p>
+
+            <button
+              *ngFor="let row of fallbackOrigins"
+              type="button"
+              class="fallback-origin"
+              (click)="openOriginDetail(row)"
+            >
+              <span class="fallback-origin__icon">
+                <mat-icon>{{ row.icon }}</mat-icon>
+              </span>
+              <span class="fallback-origin__label">{{ row.label }}</span>
+              <strong>{{ row.sales_display }}</strong>
+              <span>{{ row.share_display }}</span>
+              <span class="fallback-origin__action">Ver filas <mat-icon>open_in_new</mat-icon></span>
+            </button>
+          </div>
         </div>
       </div>
-
-      <p *ngIf="!hasOrigins" class="empty-message">
-        No hay ventas clasificadas para el mes seleccionado.
-      </p>
-
-      <div *ngIf="hasOrigins" class="origin-grid">
-        <button
-          *ngFor="let row of originRows"
-          type="button"
-          class="origin-card"
-          [class.origin-card--empty]="row.is_empty"
-          [disabled]="row.is_empty"
-          (click)="openOriginDetail(row)"
-        >
-          <span>{{ row.label }}</span>
-          <strong>{{ row.sales_display }}</strong>
-          <small>{{ row.share_display }} de Venta Nueva</small>
-          <small>{{ row.revenue_display }}</small>
-          <span *ngIf="!row.is_empty" class="detail-hint">
-            Ver detalle <mat-icon>open_in_new</mat-icon>
-          </span>
-        </button>
-      </div>
     </section>
 
-    <section class="table-section" aria-labelledby="branch-table-title">
-      <div class="section-heading">
+    <section class="branch-panel" aria-labelledby="branch-table-title">
+      <div class="branch-panel__heading">
         <div>
-          <p class="section-kicker">Embudo por sucursal</p>
-          <h2 id="branch-table-title">Detalle operativo</h2>
-          <p>
-            La tabla sigue el mismo cernido. Los números subrayados son auditables:
-            haz clic para abrir las filas de esa sucursal.
-          </p>
+          <p class="section-kicker">Detalle por sucursal</p>
+          <h2 id="branch-table-title">Venta Nueva y trazabilidad por club</h2>
+          <p>Resumen operativo. Cada cifra auditable abre el mismo modal de detalle.</p>
         </div>
       </div>
 
@@ -221,88 +264,75 @@
         No hay sucursales disponibles para el mes seleccionado.
       </p>
 
-      <div *ngIf="hasBranches" class="table-scroll">
-        <table mat-table [dataSource]="branchRows" class="branch-table funnel-table">
+      <div *ngIf="hasBranches" class="branch-table-wrap">
+        <table mat-table [dataSource]="branchRows" class="branch-story-table">
           <ng-container matColumnDef="sucursal">
             <th mat-header-cell *matHeaderCellDef>Sucursal</th>
             <td mat-cell *matCellDef="let row" class="branch-name-cell">{{ row.sucursal }}</td>
-          </ng-container>
-
-          <ng-container matColumnDef="leads_meta">
-            <th mat-header-cell *matHeaderCellDef>Leads Meta</th>
-            <td mat-cell *matCellDef="let row">
-              <button class="table-detail-link" type="button" (click)="openBranchDetail('leads_meta', row)">
-                {{ row.leads_meta_display }} <mat-icon>open_in_new</mat-icon>
-              </button>
-            </td>
           </ng-container>
 
           <ng-container matColumnDef="visits_total">
             <th mat-header-cell *matHeaderCellDef>Visitas</th>
             <td mat-cell *matCellDef="let row">
               <button class="table-detail-link" type="button" (click)="openBranchDetail('visits_total', row)">
-                {{ row.visits_total_display }} <mat-icon>open_in_new</mat-icon>
-              </button>
-            </td>
-          </ng-container>
-
-          <ng-container matColumnDef="visits_iventas">
-            <th mat-header-cell *matHeaderCellDef>Visitas iVentas</th>
-            <td mat-cell *matCellDef="let row">
-              <button class="table-detail-link" type="button" (click)="openBranchDetail('visits_iventas', row)">
-                {{ row.visits_iventas_display }} <mat-icon>open_in_new</mat-icon>
+                {{ row.visits_total_display }}
               </button>
             </td>
           </ng-container>
 
           <ng-container matColumnDef="sales_total">
-            <th mat-header-cell *matHeaderCellDef>Venta Nueva</th>
-            <td mat-cell *matCellDef="let row" class="stage-cell stage-cell--sales">
+            <th mat-header-cell *matHeaderCellDef>Venta nueva</th>
+            <td mat-cell *matCellDef="let row">
               <button class="table-detail-link" type="button" (click)="openBranchDetail('sales_total', row)">
-                {{ row.sales_total_display }} <mat-icon>open_in_new</mat-icon>
+                {{ row.sales_total_display }}
               </button>
             </td>
           </ng-container>
 
           <ng-container matColumnDef="sales_iventas">
-            <th mat-header-cell *matHeaderCellDef>Match iVentas</th>
+            <th mat-header-cell *matHeaderCellDef>Venta iVentas</th>
             <td mat-cell *matCellDef="let row">
               <button class="table-detail-link" type="button" (click)="openBranchDetail('sales_iventas', row)">
-                {{ row.sales_iventas_display }} <mat-icon>open_in_new</mat-icon>
-              </button>
-            </td>
-          </ng-container>
-
-          <ng-container matColumnDef="sales_iventas_meta">
-            <th mat-header-cell *matHeaderCellDef>Meta Ads</th>
-            <td mat-cell *matCellDef="let row">
-              <button class="table-detail-link" type="button" (click)="openBranchDetail('sales_iventas_meta', row)">
-                {{ row.sales_iventas_meta_display }} <mat-icon>open_in_new</mat-icon>
+                {{ row.sales_iventas_display }}
               </button>
             </td>
           </ng-container>
 
           <ng-container matColumnDef="sales_not_iventas">
-            <th mat-header-cell *matHeaderCellDef>Fallback Encuesta</th>
+            <th mat-header-cell *matHeaderCellDef>Venta no iVentas</th>
             <td mat-cell *matCellDef="let row">
               <button class="table-detail-link" type="button" (click)="openBranchDetail('sales_not_iventas', row)">
-                {{ row.sales_not_iventas_display }} <mat-icon>open_in_new</mat-icon>
+                {{ row.sales_not_iventas_display }}
               </button>
             </td>
           </ng-container>
 
           <ng-container matColumnDef="revenue_total">
-            <th mat-header-cell *matHeaderCellDef>Ingreso VN</th>
+            <th mat-header-cell *matHeaderCellDef>Ingreso venta nueva</th>
             <td mat-cell *matCellDef="let row">
               <button class="table-detail-link table-detail-link--money" type="button" (click)="openBranchDetail('revenue_total', row)">
-                {{ row.revenue_total_display }} <mat-icon>open_in_new</mat-icon>
+                {{ row.revenue_total_display }}
               </button>
             </td>
           </ng-container>
 
           <ng-container matColumnDef="iventas_sale_share">
-            <th mat-header-cell *matHeaderCellDef>Cobertura iVentas</th>
-            <td mat-cell *matCellDef="let row">{{ row.iventas_sale_share_display }}</td>
+            <th mat-header-cell *matHeaderCellDef>% iVentas</th>
+            <td mat-cell *matCellDef="let row" class="coverage-cell">
+              <span>{{ row.iventas_sale_share_display }}</span>
+              <span class="coverage-track">
+                <span [style.width.%]="row.iventas_sale_share ? row.iventas_sale_share * 100 : 0"></span>
+              </span>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="actions">
+            <th mat-header-cell *matHeaderCellDef>Acciones</th>
+            <td mat-cell *matCellDef="let row">
+              <button class="row-detail-action" type="button" (click)="openBranchDetail('sales_total', row)">
+                Ver detalle <mat-icon>arrow_forward</mat-icon>
+              </button>
+            </td>
           </ng-container>
 
           <tr mat-header-row *matHeaderRowDef="branchColumns; sticky: true"></tr>
@@ -311,7 +341,7 @@
       </div>
     </section>
 
-    <section class="quality-section" aria-labelledby="quality-title">
+    <section class="quality-section story-quality" aria-labelledby="quality-title">
       <div class="section-heading">
         <div>
           <p class="section-kicker">Confiabilidad</p>
