@@ -16,6 +16,15 @@ import {
 } from './maintenance-planner.service';
 import { MaintenancePlannerTicketDialogComponent } from './maintenance-planner-ticket-dialog.component';
 
+type PlannerFocusMode =
+  | 'priority'
+  | 'overdue'
+  | 'today'
+  | 'week'
+  | 'unscheduled'
+  | 'spare_parts'
+  | 'active';
+
 @Component({
   selector: 'app-maintenance-planner',
   standalone: true,
@@ -35,6 +44,8 @@ export class MaintenancePlannerComponent implements OnInit {
 
   branchId: number | null = null;
   estado = 'activos';
+  focusMode: PlannerFocusMode = 'priority';
+  focusVisibleLimit = 12;
 
   weekStart = this.getSunday(new Date());
 
@@ -56,9 +67,79 @@ export class MaintenancePlannerComponent implements OnInit {
     return end;
   }
 
-  get meetingFocusItems(): MaintenancePlannerTicket[] {
+  get focusTitle(): string {
+    const titles: Record<PlannerFocusMode, string> = {
+      priority: 'Resolver en junta',
+      overdue: 'Tickets vencidos',
+      today: 'Para hoy',
+      week: 'En la semana',
+      unscheduled: 'Sin fecha compromiso',
+      spare_parts: 'Con refacción',
+      active: 'Tickets activos',
+    };
+    return titles[this.focusMode];
+  }
+
+  get focusDescription(): string {
+    const descriptions: Record<PlannerFocusMode, string> = {
+      priority: 'Prioridades: vencidos y tickets sin compromiso.',
+      overdue: 'Compromisos cuya fecha ya pasó y siguen activos.',
+      today: 'Tickets con compromiso para hoy.',
+      week: 'Tickets ubicados en la semana visible del calendario.',
+      unscheduled: 'Tickets activos que todavía no tienen fecha compromiso.',
+      spare_parts: 'Tickets activos marcados como requiere refacción.',
+      active: 'Universo activo con los filtros actuales.',
+    };
+    return descriptions[this.focusMode];
+  }
+
+  get focusItems(): MaintenancePlannerTicket[] {
     if (!this.board) return [];
-    return [...this.board.overdue, ...this.board.unscheduled].slice(0, 12);
+
+    switch (this.focusMode) {
+      case 'overdue':
+        return this.dedupeTickets(this.board.overdue);
+      case 'today':
+        return this.dedupeTickets(this.board.today_items);
+      case 'week':
+        return this.dedupeTickets(
+          this.board.days.flatMap((day) => day.items),
+        );
+      case 'unscheduled':
+        return this.dedupeTickets(this.board.unscheduled);
+      case 'spare_parts':
+        return this.allActiveItems.filter((ticket) => ticket.necesita_refaccion);
+      case 'active':
+        return this.allActiveItems;
+      case 'priority':
+      default:
+        return this.dedupeTickets([
+          ...this.board.overdue,
+          ...this.board.unscheduled,
+        ]);
+    }
+  }
+
+  get visibleFocusItems(): MaintenancePlannerTicket[] {
+    return this.focusItems.slice(0, this.focusVisibleLimit);
+  }
+
+  get focusTotal(): number {
+    return this.focusItems.length;
+  }
+
+  get focusBaseLimit(): number {
+    return this.defaultFocusLimit(this.focusMode);
+  }
+
+  get allActiveItems(): MaintenancePlannerTicket[] {
+    if (!this.board) return [];
+    return this.dedupeTickets([
+      ...this.board.overdue,
+      ...this.board.today_items,
+      ...this.board.future,
+      ...this.board.unscheduled,
+    ]);
   }
 
   get dayDropListIds(): string[] {
@@ -77,6 +158,7 @@ export class MaintenancePlannerComponent implements OnInit {
     }).subscribe({
       next: (board) => {
         this.board = board;
+        this.focusVisibleLimit = this.defaultFocusLimit(this.focusMode);
         this.loading = false;
       },
       error: (error) => {
@@ -113,6 +195,23 @@ export class MaintenancePlannerComponent implements OnInit {
     this.loadBoard();
   }
 
+  selectFocus(mode: PlannerFocusMode): void {
+    this.focusMode = mode;
+    this.focusVisibleLimit = this.defaultFocusLimit(mode);
+  }
+
+  isFocusSelected(mode: PlannerFocusMode): boolean {
+    return this.focusMode === mode;
+  }
+
+  showMoreFocus(): void {
+    this.focusVisibleLimit += 24;
+  }
+
+  showLessFocus(): void {
+    this.focusVisibleLimit = this.defaultFocusLimit(this.focusMode);
+  }
+
   openTicket(ticket: MaintenancePlannerTicket, initialDate?: string | null): void {
     if (Date.now() < this.suppressOpenUntil) {
       return;
@@ -143,13 +242,6 @@ export class MaintenancePlannerComponent implements OnInit {
         this.loadBoard();
       }
     });
-  }
-
-  openFirstOverdue(): void {
-    const ticket = this.board?.overdue?.[0];
-    if (ticket) {
-      this.openTicket(ticket);
-    }
   }
 
   dropTicket(
@@ -237,11 +329,48 @@ export class MaintenancePlannerComponent implements OnInit {
     return `status-${status.toLowerCase().replace('_', '-')}`;
   }
 
+  focusMeta(ticket: MaintenancePlannerTicket): string {
+    const dueDate = ticket.fecha_solucion_date;
+
+    if (ticket.planner_status === 'VENCIDO') {
+      const lateDays = this.daysOverdue(ticket);
+      if (!dueDate) return 'Vencido';
+      return `${this.formatDateOnly(dueDate)}${lateDays > 0 ? ` · ${lateDays} ${lateDays === 1 ? 'día' : 'días'} de atraso` : ''}`;
+    }
+
+    if (ticket.planner_status === 'SIN_FECHA') {
+      return 'Sin fecha compromiso';
+    }
+
+    if (ticket.planner_status === 'HOY') {
+      return 'Compromiso hoy';
+    }
+
+    if (ticket.planner_status === 'PROGRAMADO' && dueDate) {
+      return `Compromiso ${this.formatDateOnly(dueDate)}`;
+    }
+
+    if (ticket.planner_status === 'FINALIZADO') {
+      return 'Finalizado';
+    }
+
+    return '';
+  }
+
   formatDay(dateIso: string): string {
     const date = this.parseDateOnly(dateIso);
     return new Intl.DateTimeFormat('es-MX', {
       weekday: 'short',
       day: 'numeric',
+    }).format(date);
+  }
+
+  formatDateOnly(dateIso: string): string {
+    const date = this.parseDateOnly(dateIso);
+    return new Intl.DateTimeFormat('es-MX', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
     }).format(date);
   }
 
@@ -255,6 +384,38 @@ export class MaintenancePlannerComponent implements OnInit {
 
   trackTicket(_: number, ticket: MaintenancePlannerTicket): number {
     return ticket.ticket_id;
+  }
+
+  private defaultFocusLimit(mode: PlannerFocusMode): number {
+    return mode === 'priority' ? 12 : 24;
+  }
+
+  private dedupeTickets(
+    tickets: MaintenancePlannerTicket[],
+  ): MaintenancePlannerTicket[] {
+    const seen = new Set<number>();
+    const result: MaintenancePlannerTicket[] = [];
+
+    for (const ticket of tickets || []) {
+      if (seen.has(ticket.ticket_id)) continue;
+      seen.add(ticket.ticket_id);
+      result.push(ticket);
+    }
+
+    return result;
+  }
+
+  private daysOverdue(ticket: MaintenancePlannerTicket): number {
+    if (!ticket.fecha_solucion_date || !this.board?.window.today) {
+      return 0;
+    }
+
+    const due = this.parseDateOnly(ticket.fecha_solucion_date);
+    const today = this.parseDateOnly(this.board.window.today);
+    const dueUtc = Date.UTC(due.getFullYear(), due.getMonth(), due.getDate());
+    const todayUtc = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+
+    return Math.max(0, Math.floor((todayUtc - dueUtc) / 86400000));
   }
 
   private getSunday(source: Date): Date {
