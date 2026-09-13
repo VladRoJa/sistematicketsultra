@@ -64,9 +64,9 @@ export class MarketingSalesFunnelStoryComponent {
 
     return this.createNode(
       'Leads iVentas',
-      summary.leads_iventas || 0,
-      'Creados en el mes con conversación iniciada',
-      'leads_iventas',
+      summary.leads_meta,
+      'First message + tag Meta/FB en el snapshot canónico',
+      'leads_meta',
       'person',
       'orange',
     );
@@ -163,7 +163,7 @@ export class MarketingSalesFunnelStoryComponent {
       return [];
     }
 
-    const leads = summary.leads_iventas || 0;
+    const leads = summary.leads_meta;
     const visits = summary.visits_iventas;
     const salesIventas = summary.sales_iventas;
     const salesTotal = summary.sales_total;
