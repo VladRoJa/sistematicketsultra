@@ -67,7 +67,7 @@
         *ngFor="let card of summaryCards"
         type="button"
         class="summary-kpi"
-        [ngClass]="'summary-kpi--' + card.tone"
+        [ngClass]="card.cssClass"
         (click)="openDetail(card.metric)"
       >
         <span class="summary-kpi__icon">
