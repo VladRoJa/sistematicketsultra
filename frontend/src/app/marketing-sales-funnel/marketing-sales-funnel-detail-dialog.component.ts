@@ -106,6 +106,10 @@ export class MarketingSalesFunnelDetailDialogComponent implements OnInit {
     return this.columns.find((column) => column.key === this.sortBy)?.label || this.sortBy;
   }
 
+  get activeSortDirectionLabel(): string {
+    return this.sortDir === 'asc' ? 'ascendente' : 'descendente';
+  }
+
   close(): void {
     this.dialogRef.close();
   }
