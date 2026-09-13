@@ -48,6 +48,7 @@ export class MarketingSalesFunnelStoryComponent {
   @Input({ required: true }) month = '';
   @Input({ required: true }) summary: MarketingSalesFunnelMetrics | null | undefined = null;
   @Input() reconciliationLabel = '';
+  @Input() branchIds: number[] = [];
 
   get narrative(): string {
     const summary = this.summary;
@@ -179,10 +180,10 @@ export class MarketingSalesFunnelStoryComponent {
     return [
       this.createRibbon({
         id: 'leads-visits',
-        sourceX: 238,
-        sourceY: 114,
-        targetX: 326,
-        targetY: 114,
+        sourceX: 245,
+        sourceY: 120,
+        targetX: 330,
+        targetY: 120,
         sourceThickness: this.ribbonThickness(leads, leadReference, 18, 70),
         targetThickness: this.ribbonThickness(visits, leadReference, 14, 70),
         tone: 'orange',
@@ -190,10 +191,10 @@ export class MarketingSalesFunnelStoryComponent {
       }),
       this.createRibbon({
         id: 'visits-sales',
-        sourceX: 546,
-        sourceY: 114,
-        targetX: 634,
-        targetY: 272,
+        sourceX: 560,
+        sourceY: 120,
+        targetX: 620,
+        targetY: 270,
         sourceThickness: this.ribbonThickness(visits, iventasReference, 16, 60),
         targetThickness: this.ribbonThickness(salesIventas, iventasReference, 16, 60),
         tone: 'orange',
@@ -201,10 +202,10 @@ export class MarketingSalesFunnelStoryComponent {
       }),
       this.createRibbon({
         id: 'sales-total-iventas',
-        sourceX: 238,
-        sourceY: 374,
-        targetX: 634,
-        targetY: 332,
+        sourceX: 300,
+        sourceY: 350,
+        targetX: 620,
+        targetY: 305,
         sourceThickness: this.ribbonThickness(salesIventas, salesReference, 18, 72),
         targetThickness: this.ribbonThickness(salesIventas, salesReference, 18, 72),
         tone: 'orange',
@@ -212,10 +213,10 @@ export class MarketingSalesFunnelStoryComponent {
       }),
       this.createRibbon({
         id: 'sales-total-fallback',
-        sourceX: 238,
-        sourceY: 405,
-        targetX: 326,
-        targetY: 516,
+        sourceX: 300,
+        sourceY: 430,
+        targetX: 430,
+        targetY: 550,
         sourceThickness: this.ribbonThickness(salesFallback, salesReference, 18, 72),
         targetThickness: this.ribbonThickness(salesFallback, salesReference, 18, 72),
         tone: 'gray',
@@ -223,10 +224,10 @@ export class MarketingSalesFunnelStoryComponent {
       }),
       this.createRibbon({
         id: 'fallback-origins',
-        sourceX: 546,
-        sourceY: 516,
-        targetX: 898,
-        targetY: 560,
+        sourceX: 650,
+        sourceY: 550,
+        targetX: 900,
+        targetY: 570,
         sourceThickness: this.ribbonThickness(salesFallback, salesReference, 18, 52),
         targetThickness: this.ribbonThickness(salesFallback, salesReference, 18, 44),
         tone: 'gray',
@@ -234,10 +235,10 @@ export class MarketingSalesFunnelStoryComponent {
       }),
       this.createRibbon({
         id: 'iventas-publications',
-        sourceX: 834,
-        sourceY: 286,
-        targetX: 922,
-        targetY: 114,
+        sourceX: 820,
+        sourceY: 260,
+        targetX: 960,
+        targetY: 120,
         sourceThickness: this.ribbonThickness(publications, outputReference, 14, 58),
         targetThickness: this.ribbonThickness(publications, outputReference, 14, 58),
         tone: 'orange',
@@ -245,10 +246,10 @@ export class MarketingSalesFunnelStoryComponent {
       }),
       this.createRibbon({
         id: 'iventas-organic',
-        sourceX: 834,
-        sourceY: 340,
-        targetX: 922,
-        targetY: 382,
+        sourceX: 820,
+        sourceY: 330,
+        targetX: 960,
+        targetY: 360,
         sourceThickness: this.ribbonThickness(organic, outputReference, 14, 58),
         targetThickness: this.ribbonThickness(organic, outputReference, 14, 58),
         tone: 'orange',
@@ -374,6 +375,7 @@ export class MarketingSalesFunnelStoryComponent {
         month: this.month,
         metric,
         origin,
+        branchIds: this.branchIds,
       },
       width: '96vw',
       maxWidth: '1600px',
