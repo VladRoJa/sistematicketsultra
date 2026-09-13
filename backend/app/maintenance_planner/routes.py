@@ -4,6 +4,7 @@ from flask_jwt_extended import get_jwt_identity, jwt_required
 from app.extensions import db
 from app.models.user_model import UserORM
 from app.maintenance_planner.service import (
+    MAINTENANCE_DEPARTMENT_ID,
     MaintenancePlannerError,
     build_planner_board,
     schedule_ticket,
@@ -11,6 +12,7 @@ from app.maintenance_planner.service import (
 from app.services.mantenimiento_equipos_service import (
     puede_capturar_diagnostico_mantenimiento,
 )
+from app.utils.scope_utils import CORPORATE_BRANCH_ID, ROOT_BRANCH_ID
 
 
 maintenance_planner_bp = Blueprint("maintenance_planner", __name__)
@@ -33,6 +35,34 @@ def _parse_branch_ids() -> list[int]:
     return sorted(set(result))
 
 
+def _can_request_maintenance_closure(user) -> bool:
+    """Replica la autorización real de /tickets/cierre/solicitar para PM.
+
+    Todos los tickets servidos por este blueprint pertenecen a Mantenimiento,
+    por lo que ``_es_jefe_depto(user, ticket)`` equivale a tener department_id=1.
+    Conservamos también los perfiles corporativos/root aceptados por Tickets.
+    """
+
+    if not user:
+        return False
+
+    role = str(getattr(user, "rol", "") or "").strip().upper()
+    if role in {"ADMINISTRADOR", "SUPER_ADMIN", "EDITOR_CORPORATIVO"}:
+        return True
+
+    try:
+        branch_id = int(getattr(user, "sucursal_id", 0) or 0)
+    except (TypeError, ValueError):
+        branch_id = 0
+    if branch_id in {CORPORATE_BRANCH_ID, ROOT_BRANCH_ID}:
+        return True
+
+    try:
+        return int(getattr(user, "department_id", 0) or 0) == MAINTENANCE_DEPARTMENT_ID
+    except (TypeError, ValueError):
+        return False
+
+
 @maintenance_planner_bp.route("/board", methods=["GET"])
 @jwt_required()
 def get_board():
@@ -49,9 +79,11 @@ def get_board():
             state=request.args.get("estado"),
             audience=request.args.get("audience"),
         )
-        payload.setdefault("permissions", {})["can_capture_diagnosis"] = (
+        permissions = payload.setdefault("permissions", {})
+        permissions["can_capture_diagnosis"] = (
             puede_capturar_diagnostico_mantenimiento(user)
         )
+        permissions["can_request_closure"] = _can_request_maintenance_closure(user)
         return jsonify(payload), 200
     except MaintenancePlannerError as exc:
         return jsonify({"mensaje": exc.message}), exc.status_code

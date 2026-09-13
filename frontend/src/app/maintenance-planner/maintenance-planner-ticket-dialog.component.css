@@ -282,6 +282,26 @@
   font-weight: 700;
 }
 
+.side-card--closure {
+  display: grid;
+  gap: 10px;
+}
+
+.side-card__finish {
+  min-height: 40px;
+  margin-top: 4px;
+  border: 1px solid #15803d;
+  background: #15803d;
+  color: #fff;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.side-card__finish:disabled {
+  cursor: default;
+  opacity: .55;
+}
+
 .side-card a {
   display: inline-block;
   margin-top: 6px;

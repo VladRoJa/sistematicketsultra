@@ -5,6 +5,8 @@ from unittest.mock import patch
 import pytest
 
 from app.maintenance_planner import service
+from app.utils.scope_utils import CORPORATE_BRANCH_ID, ROOT_BRANCH_ID
+from app.utils.sucursal_audience import is_selectable_sucursal
 
 
 def test_resolve_window_accepts_explicit_range():
@@ -63,3 +65,19 @@ def test_schedule_ticket_reuses_ticket_and_appends_traceable_history():
     assert ticket.historial_fechas[-1]["motivo"] == "Acuerdo de junta"
     assert ticket.historial_fechas[-1]["origen"] == "maintenance_planner_v2"
     flag_modified.assert_called_once_with(ticket, "historial_fechas")
+
+
+def test_technical_sucursales_are_not_selectable():
+    root = SimpleNamespace(sucursal_id=ROOT_BRANCH_ID)
+    corporate = SimpleNamespace(sucursal_id=CORPORATE_BRANCH_ID)
+
+    assert is_selectable_sucursal(root) is False
+    assert is_selectable_sucursal(corporate) is False
+
+
+def test_physical_and_demo_sucursales_are_selectable():
+    physical = SimpleNamespace(sucursal_id=3, is_demo=False)
+    demo = SimpleNamespace(sucursal_id=1001, is_demo=True)
+
+    assert is_selectable_sucursal(physical) is True
+    assert is_selectable_sucursal(demo) is True

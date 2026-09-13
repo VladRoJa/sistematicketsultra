@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.models.sucursal_model import Sucursal
+from app.utils.scope_utils import CORPORATE_BRANCH_ID, ROOT_BRANCH_ID
 
 
 SUCURSAL_AUDIENCE_OPERATIONAL = "operational"
@@ -11,6 +12,14 @@ VALID_SUCURSAL_AUDIENCES = {
     SUCURSAL_AUDIENCE_OPERATIONAL,
     SUCURSAL_AUDIENCE_ANALYTICAL,
 }
+
+# Nodos técnicos usados por autenticación/alcance. No representan gimnasios
+# físicos y por lo tanto no deben aparecer como destinos seleccionables en
+# módulos operativos como Planner o creación de Tickets.
+TECHNICAL_SUCURSAL_IDS = frozenset({
+    ROOT_BRANCH_ID,
+    CORPORATE_BRANCH_ID,
+})
 
 
 def normalize_sucursal_audience(
@@ -51,6 +60,30 @@ def apply_sucursal_audience(
     return query
 
 
+def apply_selectable_sucursal_catalog(
+    query,
+    *,
+    audience: str = SUCURSAL_AUDIENCE_ANALYTICAL,
+    model=Sucursal,
+):
+    """Aplica la política de catálogos donde se elige una sede operativa.
+
+    Reutiliza la audiencia canónica y además excluye los nodos técnicos usados
+    por autenticación/alcance (root/corporativo). Esos registros existen en la
+    tabla ``sucursales`` por compatibilidad histórica, pero no representan un
+    gimnasio físico y nunca deben ofrecerse como destino operativo.
+    """
+
+    scoped_query = apply_sucursal_audience(
+        query,
+        audience=audience,
+        model=model,
+    )
+    return scoped_query.filter(
+        ~model.sucursal_id.in_(tuple(sorted(TECHNICAL_SUCURSAL_IDS)))
+    )
+
+
 def analytical_sucursal_condition(model=Sucursal):
     """Condición SQLAlchemy reutilizable para joins analíticos."""
 
@@ -63,3 +96,17 @@ def is_demo_sucursal(sucursal: Any) -> bool:
 
 def is_analytical_sucursal(sucursal: Any) -> bool:
     return sucursal is not None and not is_demo_sucursal(sucursal)
+
+
+def is_selectable_sucursal(sucursal: Any) -> bool:
+    """Indica si una fila representa una sede elegible en flujos operativos."""
+
+    if sucursal is None:
+        return False
+
+    try:
+        sucursal_id = int(getattr(sucursal, "sucursal_id", None))
+    except (TypeError, ValueError):
+        return False
+
+    return sucursal_id not in TECHNICAL_SUCURSAL_IDS

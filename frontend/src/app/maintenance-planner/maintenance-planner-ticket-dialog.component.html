@@ -21,10 +21,9 @@
         <h3>Detalle operativo</h3>
         <dl class="detail-grid">
           <div><dt>Creado por</dt><dd>{{ ticket.username || '—' }}</dd></div>
-          <div><dt>Responsable</dt><dd>{{ ticket.asignado_a || 'Sin asignar' }}</dd></div>
           <div><dt>Familia</dt><dd>{{ ticket.familia || '—' }}</dd></div>
+          <div><dt>Sucursal</dt><dd>{{ ticket.sucursal || '—' }}</dd></div>
           <div><dt>Falla</dt><dd>{{ ticket.falla || '—' }}</dd></div>
-          <div><dt>Ubicación</dt><dd>{{ ticket.ubicacion || '—' }}</dd></div>
           <div><dt>Refacción</dt><dd>{{ ticket.necesita_refaccion ? (ticket.descripcion_refaccion || 'Sí') : 'No' }}</dd></div>
         </dl>
 
@@ -49,7 +48,7 @@
         <dl class="detail-grid detail-grid--dates">
           <div><dt>Creación</dt><dd>{{ formatDateTime(ticket.fecha_creacion) }}</dd></div>
           <div><dt>En progreso</dt><dd>{{ formatDateTime(ticket.fecha_en_progreso) }}</dd></div>
-          <div><dt>Compromiso</dt><dd>{{ formatDateTime(ticket.fecha_solucion) }}</dd></div>
+          <div><dt>Compromiso</dt><dd>{{ formatDate(ticket.fecha_solucion) }}</dd></div>
           <div><dt>Finalizado</dt><dd>{{ formatDateTime(ticket.fecha_finalizado) }}</dd></div>
         </dl>
       </div>
@@ -110,7 +109,7 @@
         class="commitment-card commitment-card--reschedule"
       >
         <span class="commitment-card__eyebrow">Compromiso actual</span>
-        <h3>{{ formatDateTime(ticket.fecha_solucion) }}</h3>
+        <h3>{{ formatDate(ticket.fecha_solucion) }}</h3>
         <p>
           La fecha ya fue asignada. Cualquier ajuste se registra como reprogramación,
           igual que en la pantalla de Tickets.
@@ -135,7 +134,7 @@
         </small>
 
         <div *ngIf="saving" class="commitment-card__saving">
-          Guardando reprogramación…
+          Guardando cambios…
         </div>
       </div>
 
@@ -148,10 +147,20 @@
         <small>Tu perfil o el estado actual del ticket no permiten asignarla desde Planner.</small>
       </div>
 
-      <div class="side-card">
+      <div class="side-card side-card--closure">
         <h3>Estado de cierre</h3>
         <p>{{ ticket.estado_cierre || 'Sin flujo de cierre activo' }}</p>
         <small *ngIf="ticket.motivo_rechazo_cierre">{{ ticket.motivo_rechazo_cierre }}</small>
+
+        <button
+          *ngIf="canFinalizeTicket"
+          type="button"
+          class="side-card__finish"
+          (click)="openClosureDialog()"
+          [disabled]="saving"
+        >
+          Finalizar ticket
+        </button>
       </div>
 
       <div class="side-card" *ngIf="ticket.url_evidencia">
