@@ -128,48 +128,15 @@ export class MarketingSalesFunnelComponent implements OnInit {
   summaryCards: SummaryCard[] = [];
   branchRows: SalesFunnelBranchView[] = [];
   scopeOptions: MarketingSalesFunnelScopeOption[] = [];
+  regionOptions: Array<{ id: number; label: string }> = [];
+  branchOptions: MarketingSalesFunnelScopeOption[] = [];
+  activeScopeBranchIds: number[] = [];
 
   loading = true;
   errorMessage = '';
 
   get selectedMonth(): string {
     return this.monthControl.value.trim();
-  }
-
-  get selectedScopeBranchIds(): number[] {
-    const branchId = this.branchControl.value;
-    if (branchId !== null) {
-      return [branchId];
-    }
-
-    const regionId = this.regionControl.value;
-    if (regionId === null) {
-      return [];
-    }
-
-    return this.scopeOptions
-      .filter((option) => option.region_id === regionId)
-      .map((option) => option.sucursal_id);
-  }
-
-  get regionOptions(): Array<{ id: number; label: string }> {
-    const regions = new Map<number, string>();
-    for (const option of this.scopeOptions) {
-      if (option.region_id !== null && option.region) {
-        regions.set(option.region_id, option.region);
-      }
-    }
-    return Array.from(regions.entries())
-      .map(([id, label]) => ({ id, label }))
-      .sort((left, right) => left.label.localeCompare(right.label, 'es'));
-  }
-
-  get branchOptions(): MarketingSalesFunnelScopeOption[] {
-    const regionId = this.regionControl.value;
-    return this.scopeOptions
-      .filter((option) => regionId === null || option.region_id === regionId)
-      .slice()
-      .sort((left, right) => left.sucursal.localeCompare(right.sucursal, 'es'));
   }
 
   get hasBranches(): boolean {
@@ -282,16 +249,17 @@ export class MarketingSalesFunnelComponent implements OnInit {
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe((regionId) => {
+        this.refreshBranchOptions(regionId);
+
         const branchId = this.branchControl.value;
         if (
           branchId !== null
-          && !this.scopeOptions.some((option) => (
-            option.sucursal_id === branchId
-            && (regionId === null || option.region_id === regionId)
-          ))
+          && !this.branchOptions.some((option) => option.sucursal_id === branchId)
         ) {
           this.branchControl.setValue(null, { emitEvent: false });
         }
+
+        this.refreshActiveScopeBranchIds();
         this.requestDashboard();
       });
 
@@ -300,7 +268,10 @@ export class MarketingSalesFunnelComponent implements OnInit {
         distinctUntilChanged(),
         takeUntilDestroyed(this.destroyRef),
       )
-      .subscribe(() => this.requestDashboard());
+      .subscribe(() => {
+        this.refreshActiveScopeBranchIds();
+        this.requestDashboard();
+      });
 
     this.requestDashboard();
   }
@@ -327,7 +298,7 @@ export class MarketingSalesFunnelComponent implements OnInit {
         metric,
         branchId,
         origin,
-        branchIds: this.selectedScopeBranchIds,
+        branchIds: this.activeScopeBranchIds,
       },
       width: '96vw',
       maxWidth: '1600px',
@@ -356,17 +327,56 @@ export class MarketingSalesFunnelComponent implements OnInit {
     }
     this.dashboardRequests.next({
       month: this.selectedMonth,
-      branchIds: this.selectedScopeBranchIds,
+      branchIds: this.activeScopeBranchIds,
     });
   }
 
   private applyDashboard(data: MarketingSalesFunnelResponse): void {
     this.dashboard = data;
-    if (data.scope_options?.length) {
-      this.scopeOptions = data.scope_options;
-    }
+    this.scopeOptions = data.scope_options || [];
+    this.refreshRegionOptions();
+    this.refreshBranchOptions(this.regionControl.value);
+    this.refreshActiveScopeBranchIds();
     this.summaryCards = this.buildSummaryCards(data.summary);
     this.branchRows = data.branches.map((branch) => this.buildBranchView(branch));
+  }
+
+  private refreshRegionOptions(): void {
+    const regions = new Map<number, string>();
+    for (const option of this.scopeOptions) {
+      if (option.region_id !== null && option.region) {
+        regions.set(option.region_id, option.region);
+      }
+    }
+
+    this.regionOptions = Array.from(regions.entries())
+      .map(([id, label]) => ({ id, label }))
+      .sort((left, right) => left.label.localeCompare(right.label, 'es'));
+  }
+
+  private refreshBranchOptions(regionId: number | null): void {
+    this.branchOptions = this.scopeOptions
+      .filter((option) => regionId === null || option.region_id === regionId)
+      .slice()
+      .sort((left, right) => left.sucursal.localeCompare(right.sucursal, 'es'));
+  }
+
+  private refreshActiveScopeBranchIds(): void {
+    const branchId = this.branchControl.value;
+    if (branchId !== null) {
+      this.activeScopeBranchIds = [branchId];
+      return;
+    }
+
+    const regionId = this.regionControl.value;
+    if (regionId === null) {
+      this.activeScopeBranchIds = [];
+      return;
+    }
+
+    this.activeScopeBranchIds = this.branchOptions.map(
+      (option) => option.sucursal_id,
+    );
   }
 
   private buildSummaryCards(summary: MarketingSalesFunnelMetrics): SummaryCard[] {
