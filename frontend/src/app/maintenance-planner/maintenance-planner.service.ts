@@ -99,6 +99,7 @@ export interface MaintenancePlannerBoard {
     can_view: boolean;
     can_schedule: boolean;
     can_capture_diagnosis: boolean;
+    can_request_closure: boolean;
   };
 }
 
@@ -225,6 +226,19 @@ export class MaintenancePlannerService {
       reason,
       null,
     );
+  }
+
+  /** Solicitud de cierre usando exactamente el endpoint de la pantalla de Tickets. */
+  requestClosure(
+    ticket: MaintenancePlannerTicket,
+    payload: { costo_solucion: number | null; notas_cierre: string | null },
+  ): Observable<unknown> {
+    const state = String(ticket.estado || '').trim().toLowerCase();
+    if (state !== 'en progreso') {
+      throw new Error('Solo se puede finalizar un ticket que esté en progreso.');
+    }
+
+    return this.ticketService.cierreSolicitar(ticket.ticket_id, payload);
   }
 
   private assertReprogrammable(ticket: MaintenancePlannerTicket): void {
