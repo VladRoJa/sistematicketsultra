@@ -43,7 +43,7 @@ interface SummaryCard {
   supportingText: string;
   metric: string;
   icon: string;
-  tone: 'blue' | 'orange' | 'green' | 'purple';
+  cssClass: string;
 }
 
 interface StoryNode {
@@ -53,7 +53,6 @@ interface StoryNode {
   share: string;
   metric: string;
   icon: string;
-  tone: 'primary' | 'trace' | 'fallback' | 'meta' | 'other';
   origin?: string;
 }
 
@@ -135,7 +134,6 @@ export class MarketingSalesFunnelComponent implements OnInit {
   dashboard: MarketingSalesFunnelResponse | null = null;
   summaryCards: SummaryCard[] = [];
   branchRows: SalesFunnelBranchView[] = [];
-  originRows: SalesFunnelOriginView[] = [];
   fallbackOrigins: SalesFunnelOriginView[] = [];
 
   officialNode: StoryNode | null = null;
@@ -331,15 +329,15 @@ export class MarketingSalesFunnelComponent implements OnInit {
     this.buildStoryNodes(data.summary);
     this.branchRows = data.branches.map((branch) => this.buildBranchView(branch));
 
-    const originRows = data.summary.origin_breakdown.map((origin) =>
-      this.buildOriginView(origin, data.summary.sales_total),
-    );
-    this.originRows = originRows;
-    this.fallbackOrigins = originRows
-      .filter((row) => (
-        !row.is_empty
-        && row.key !== 'IVENTAS_META'
-        && row.key !== 'IVENTAS_OTHER'
+    this.fallbackOrigins = data.summary.origin_breakdown
+      .filter((origin) => (
+        origin.sales > 0
+        && origin.key !== 'IVENTAS_META'
+        && origin.key !== 'IVENTAS_OTHER'
+      ))
+      .map((origin) => this.buildOriginView(
+        origin,
+        data.summary.sales_not_iventas,
       ))
       .sort((left, right) => right.sales - left.sales);
   }
@@ -352,7 +350,7 @@ export class MarketingSalesFunnelComponent implements OnInit {
         supportingText: 'Pases comerciales detectados en Venta Total',
         metric: 'visits_total',
         icon: 'directions_walk',
-        tone: 'blue',
+        cssClass: 'summary-kpi--blue',
       },
       {
         label: 'Ventas nuevas',
@@ -360,7 +358,7 @@ export class MarketingSalesFunnelComponent implements OnInit {
         supportingText: 'Universo oficial desde Nuevos Socios Detalle',
         metric: 'sales_total',
         icon: 'groups',
-        tone: 'orange',
+        cssClass: 'summary-kpi--orange',
       },
       {
         label: 'Ingreso Venta Nueva',
@@ -368,7 +366,7 @@ export class MarketingSalesFunnelComponent implements OnInit {
         supportingText: 'Ingreso asociado al universo oficial',
         metric: 'revenue_total',
         icon: 'payments',
-        tone: 'green',
+        cssClass: 'summary-kpi--green',
       },
       {
         label: 'Ventas iVentas / Meta',
@@ -376,7 +374,7 @@ export class MarketingSalesFunnelComponent implements OnInit {
         supportingText: 'Ventas con evidencia técnica META_AD',
         metric: 'sales_iventas_meta',
         icon: 'campaign',
-        tone: 'orange',
+        cssClass: 'summary-kpi--orange',
       },
       {
         label: 'Ingreso iVentas / Meta',
@@ -384,7 +382,7 @@ export class MarketingSalesFunnelComponent implements OnInit {
         supportingText: 'Ingreso atribuido técnicamente a Meta Ads',
         metric: 'revenue_iventas_meta',
         icon: 'paid',
-        tone: 'purple',
+        cssClass: 'summary-kpi--purple',
       },
     ];
   }
@@ -400,7 +398,6 @@ export class MarketingSalesFunnelComponent implements OnInit {
       total,
       'sales_total',
       'groups',
-      'primary',
     );
     this.phoneNode = this.createStoryNode(
       '02',
@@ -409,7 +406,6 @@ export class MarketingSalesFunnelComponent implements OnInit {
       total,
       'sales_with_phone',
       'phone_in_talk',
-      'primary',
     );
     this.iventasNode = this.createStoryNode(
       '03',
@@ -418,7 +414,6 @@ export class MarketingSalesFunnelComponent implements OnInit {
       total,
       'sales_iventas',
       'link',
-      'trace',
     );
     this.fallbackNode = this.createStoryNode(
       '04',
@@ -427,7 +422,6 @@ export class MarketingSalesFunnelComponent implements OnInit {
       total,
       'sales_not_iventas',
       'person',
-      'fallback',
     );
     this.metaNode = this.createStoryNode(
       '05',
@@ -436,7 +430,6 @@ export class MarketingSalesFunnelComponent implements OnInit {
       total,
       'sales_iventas_meta',
       'campaign',
-      'meta',
     );
     this.iventasOtherNode = this.createStoryNode(
       '06',
@@ -445,7 +438,6 @@ export class MarketingSalesFunnelComponent implements OnInit {
       total,
       'origin',
       'account_tree',
-      'other',
       'IVENTAS_OTHER',
     );
   }
@@ -457,7 +449,6 @@ export class MarketingSalesFunnelComponent implements OnInit {
     total: number,
     metric: string,
     icon: string,
-    tone: StoryNode['tone'],
     origin?: string,
   ): StoryNode {
     return {
@@ -467,7 +458,6 @@ export class MarketingSalesFunnelComponent implements OnInit {
       share: this.formatPercent(total > 0 ? value / total : null),
       metric,
       icon,
-      tone,
       origin,
     };
   }
@@ -486,14 +476,14 @@ export class MarketingSalesFunnelComponent implements OnInit {
 
   private buildOriginView(
     origin: MarketingSalesOriginBreakdown,
-    salesTotal: number,
+    denominator: number,
   ): SalesFunnelOriginView {
     return {
       ...origin,
       sales_display: this.formatInteger(origin.sales),
       revenue_display: this.formatCurrency(origin.revenue),
       share_display: this.formatPercent(
-        salesTotal > 0 ? origin.sales / salesTotal : null,
+        denominator > 0 ? origin.sales / denominator : null,
       ),
       is_empty: origin.sales === 0,
       icon: this.resolveOriginIcon(origin.key),
