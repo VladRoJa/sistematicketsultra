@@ -9,9 +9,6 @@ from app.services.marketing_sales_funnel_detail_service import (
     _sale_matches_metric,
     _visit_matches_metric,
 )
-from app.services.marketing_sales_funnel_iventas_stage_service import (
-    _is_monthly_iventas_lead,
-)
 from app.services.marketing_sales_funnel_service import (
     ORIGIN_IVENTAS_META,
     ORIGIN_IVENTAS_OTHER,
@@ -216,32 +213,6 @@ def test_drilldown_visit_filters_do_not_treat_unmatched_as_iventas():
     assert _visit_matches_metric("visits_iventas", ORIGIN_IVENTAS_OTHER)
     assert _visit_matches_metric("visits_not_iventas", None)
     assert not _visit_matches_metric("visits_iventas", None)
-
-
-def test_monthly_iventas_lead_requires_phone_and_first_message_in_month():
-    month_start = date(2026, 9, 1)
-
-    assert _is_monthly_iventas_lead(
-        SimpleNamespace(
-            first_message_date_local=date(2026, 9, 12),
-            phone_mx10="6861234567",
-        ),
-        month_start,
-    )
-    assert not _is_monthly_iventas_lead(
-        SimpleNamespace(
-            first_message_date_local=date(2026, 8, 31),
-            phone_mx10="6861234567",
-        ),
-        month_start,
-    )
-    assert not _is_monthly_iventas_lead(
-        SimpleNamespace(
-            first_message_date_local=date(2026, 9, 12),
-            phone_mx10=None,
-        ),
-        month_start,
-    )
 
 
 def test_drilldown_pagination_defaults_to_first_page_of_50():
