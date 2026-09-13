@@ -154,6 +154,7 @@ export class MarketingSalesFunnelStoryComponent implements OnChanges {
       return {};
     }
 
+    const leadsIventas = summary.leads_iventas || 0;
     const orange = '#f0522d';
     const orangeSoft = '#fff8f4';
     const orangeLine = 'rgba(240, 82, 45, 0.62)';
@@ -165,7 +166,7 @@ export class MarketingSalesFunnelStoryComponent implements OnChanges {
       this.createFlowNode({
         id: 'leads',
         name: 'Leads iVentas',
-        value: summary.leads_iventas,
+        value: leadsIventas,
         support: 'Creados en el mes + firstMessage',
         metric: 'leads_iventas',
         x: 130,
@@ -259,7 +260,7 @@ export class MarketingSalesFunnelStoryComponent implements OnChanges {
     ];
 
     const links: FlowLinkData[] = [
-      this.createFlowLink('leads', 'visits', summary.leads_iventas, orangeLine, 0),
+      this.createFlowLink('leads', 'visits', leadsIventas, orangeLine, 0),
       this.createFlowLink('visits', 'sales-iventas', summary.visits_iventas, orangeLine, 0.16),
       this.createFlowLink('sales-total', 'sales-iventas', summary.sales_iventas, orangeLine, -0.16),
       this.createFlowLink('sales-total', 'sales-no-match', summary.sales_not_iventas, grayLine, 0.18),
@@ -307,9 +308,6 @@ export class MarketingSalesFunnelStoryComponent implements OnChanges {
             lineStyle: {
               opacity: 0.95,
             },
-          },
-          select: {
-            disabled: true,
           },
           animationDurationUpdate: 350,
         },
