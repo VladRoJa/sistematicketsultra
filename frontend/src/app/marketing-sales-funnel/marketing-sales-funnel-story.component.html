@@ -1,0 +1,168 @@
+<section class="trace-story" aria-labelledby="trace-story-title">
+  <header class="trace-story__header">
+    <div>
+      <p class="trace-story__eyebrow">Cernido de información</p>
+      <h2 id="trace-story-title">Cómo se reduce la Venta Nueva hasta Meta trazable</h2>
+      <p>Cada nivel es un subconjunto real del anterior. {{ narrative }}</p>
+    </div>
+
+    <div class="trace-story__header-side">
+      <div class="trace-story__rules" aria-label="Reglas del funnel">
+        <article>
+          <mat-icon>monitoring</mat-icon>
+          <span>
+            <strong>KPI Desempeño controla</strong>
+            <small>Venta Total enriquece · iVentas atribuye.</small>
+          </span>
+        </article>
+        <article>
+          <mat-icon>phone_in_talk</mat-icon>
+          <span>
+            <strong>El match técnico tiene prioridad</strong>
+            <small>Encuesta solo entra cuando no existe cruce iVentas.</small>
+          </span>
+        </article>
+        <article>
+          <mat-icon>verified_user</mat-icon>
+          <span>
+            <strong>Cada bloque es auditable</strong>
+            <small>Abre las filas exactas que forman el indicador.</small>
+          </span>
+        </article>
+      </div>
+
+      <span class="trace-story__audit-pill">
+        <mat-icon>monitoring</mat-icon>
+        {{ reconciliationLabel }}
+      </span>
+    </div>
+  </header>
+
+  <div class="trace-story__canvas">
+    <button
+      *ngIf="saleNode as node"
+      type="button"
+      class="funnel-card funnel-card--sale"
+      (click)="openNode(node)"
+    >
+      <span class="funnel-card__step">{{ node.step }}</span>
+      <mat-icon>{{ node.icon }}</mat-icon>
+      <span class="funnel-card__label">{{ node.label }}</span>
+      <strong>{{ node.value }}</strong>
+      <span class="funnel-card__share">{{ node.share }} del total</span>
+      <span class="funnel-card__action">Ver filas <mat-icon>open_in_new</mat-icon></span>
+    </button>
+
+    <div class="funnel-flow funnel-flow--trace-main" aria-hidden="true"></div>
+    <div class="funnel-flow funnel-flow--fallback-main" aria-hidden="true"></div>
+
+    <button
+      *ngIf="iventasNode as node"
+      type="button"
+      class="funnel-card funnel-card--iventas"
+      (click)="openNode(node)"
+    >
+      <span class="funnel-card__step">{{ node.step }}</span>
+      <mat-icon>{{ node.icon }}</mat-icon>
+      <span class="funnel-card__label">{{ node.label }}</span>
+      <strong>{{ node.value }}</strong>
+      <span class="funnel-card__share">{{ node.share }} del total</span>
+      <span class="funnel-card__action">Ver filas <mat-icon>open_in_new</mat-icon></span>
+    </button>
+
+    <section class="iventas-trace" aria-labelledby="iventas-trace-title">
+      <div class="iventas-trace__heading">
+        <div>
+          <mat-icon>phone_in_talk</mat-icon>
+          <strong id="iventas-trace-title">Embudo iVentas trazable</strong>
+        </div>
+        <span>Datos trazables por teléfono</span>
+      </div>
+
+      <div class="iventas-trace__stages">
+        <ng-container *ngFor="let stage of iventasStages; let last = last">
+          <article class="iventas-stage">
+            <span>{{ stage.step }}</span>
+            <mat-icon>{{ stage.icon }}</mat-icon>
+            <strong>{{ stage.label }}</strong>
+            <b>{{ stage.value }}</b>
+          </article>
+          <mat-icon *ngIf="!last" class="iventas-trace__arrow">arrow_forward</mat-icon>
+        </ng-container>
+      </div>
+    </section>
+
+    <div class="funnel-flow funnel-flow--publication" aria-hidden="true"></div>
+    <div class="funnel-flow funnel-flow--organic" aria-hidden="true"></div>
+
+    <button
+      *ngIf="publicationNode as node"
+      type="button"
+      class="funnel-card funnel-card--publication"
+      (click)="openNode(node)"
+    >
+      <span class="funnel-card__step">{{ node.step }}</span>
+      <mat-icon>{{ node.icon }}</mat-icon>
+      <span class="funnel-card__label">{{ node.label }}</span>
+      <strong>{{ node.value }}</strong>
+      <span class="funnel-card__share">{{ node.share }} del total</span>
+      <span class="funnel-card__action">Ver filas <mat-icon>open_in_new</mat-icon></span>
+    </button>
+
+    <button
+      *ngIf="organicNode as node"
+      type="button"
+      class="funnel-card funnel-card--organic"
+      (click)="openNode(node)"
+    >
+      <span class="funnel-card__step">{{ node.step }}</span>
+      <mat-icon>{{ node.icon }}</mat-icon>
+      <span class="funnel-card__label">{{ node.label }}</span>
+      <strong>{{ node.value }}</strong>
+      <span class="funnel-card__share">{{ node.share }} del total</span>
+      <small>Chats que entraron a iVentas sin publicidad pagada.</small>
+      <span class="funnel-card__action">Ver filas <mat-icon>open_in_new</mat-icon></span>
+    </button>
+
+    <button
+      *ngIf="fallbackNode as node"
+      type="button"
+      class="funnel-card funnel-card--fallback"
+      (click)="openNode(node)"
+    >
+      <span class="funnel-card__step">{{ node.step }}</span>
+      <mat-icon>{{ node.icon }}</mat-icon>
+      <span class="funnel-card__label">{{ node.label }}</span>
+      <strong>{{ node.value }}</strong>
+      <span class="funnel-card__share">{{ node.share }} del total</span>
+      <span class="funnel-card__action">Ver filas <mat-icon>open_in_new</mat-icon></span>
+    </button>
+
+    <div class="fallback-list">
+      <div class="fallback-list__heading">
+        <span>
+          <mat-icon>hub</mat-icon>
+          Origen de venta (sin match iVentas)
+        </span>
+        <small>Clasificación por Encuesta de Venta Total</small>
+      </div>
+
+      <p *ngIf="!fallbackOrigins.length" class="fallback-list__empty">
+        No hay ventas de fallback clasificadas para el periodo.
+      </p>
+
+      <button
+        *ngFor="let row of fallbackOrigins"
+        type="button"
+        class="fallback-row"
+        (click)="openOrigin(row)"
+      >
+        <span class="fallback-row__icon"><mat-icon>{{ row.icon }}</mat-icon></span>
+        <span class="fallback-row__label">{{ row.displayLabel }}</span>
+        <strong>{{ row.salesDisplay }}</strong>
+        <span>{{ row.shareDisplay }}</span>
+        <span class="fallback-row__action">Ver filas <mat-icon>open_in_new</mat-icon></span>
+      </button>
+    </div>
+  </div>
+</section>
