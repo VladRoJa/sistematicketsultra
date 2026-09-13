@@ -31,6 +31,7 @@ export interface MarketingSalesFunnelDetailDialogData {
 interface DetailColumn {
   key: string;
   label: string;
+  widthClass: 'compact' | 'medium' | 'wide' | 'xwide';
 }
 
 
@@ -96,6 +97,17 @@ export class MarketingSalesFunnelDetailDialogComponent implements OnInit {
       this.detail.count,
     );
     return `${this.formatInteger(start)}–${this.formatInteger(end)} de ${this.formatInteger(this.detail.count)}`;
+  }
+
+  get activeSortLabel(): string {
+    if (!this.sortBy) {
+      return '';
+    }
+    return this.columns.find((column) => column.key === this.sortBy)?.label || this.sortBy;
+  }
+
+  get activeSortDirectionLabel(): string {
+    return this.sortDir === 'asc' ? 'ascendente' : 'descendente';
   }
 
   close(): void {
@@ -237,36 +249,36 @@ export class MarketingSalesFunnelDetailDialogComponent implements OnInit {
   private resolveColumns(kind: MarketingSalesFunnelDetailKind): DetailColumn[] {
     if (kind === 'visits') {
       return [
-        { key: 'branch', label: 'Sucursal KPI' },
-        { key: 'date', label: 'Fecha' },
-        { key: 'phone', label: 'Teléfono' },
-        { key: 'origin', label: 'Origen' },
-        { key: 'source', label: 'Fuente' },
+        { key: 'branch', label: 'Sucursal KPI', widthClass: 'medium' },
+        { key: 'date', label: 'Fecha', widthClass: 'compact' },
+        { key: 'phone', label: 'Teléfono', widthClass: 'compact' },
+        { key: 'origin', label: 'Origen', widthClass: 'medium' },
+        { key: 'source', label: 'Fuente', widthClass: 'wide' },
       ];
     }
 
     if (kind === 'leads') {
       return [
-        { key: 'branch', label: 'Sucursal KPI' },
-        { key: 'date', label: 'Fecha' },
-        { key: 'name', label: 'Nombre' },
-        { key: 'phone', label: 'Teléfono' },
-        { key: 'channel', label: 'Canal' },
-        { key: 'contact_id', label: 'ID contacto' },
+        { key: 'branch', label: 'Sucursal KPI', widthClass: 'medium' },
+        { key: 'date', label: 'Fecha', widthClass: 'compact' },
+        { key: 'name', label: 'Nombre', widthClass: 'wide' },
+        { key: 'phone', label: 'Teléfono', widthClass: 'compact' },
+        { key: 'channel', label: 'Canal', widthClass: 'medium' },
+        { key: 'contact_id', label: 'ID contacto', widthClass: 'medium' },
       ];
     }
 
     return [
-      { key: 'branch', label: 'Sucursal KPI' },
-      { key: 'date', label: 'Fecha' },
-      { key: 'name', label: 'Nombre' },
-      { key: 'pin', label: 'PIN' },
-      { key: 'phone', label: 'Teléfono' },
-      { key: 'tariff', label: 'Tarifa' },
-      { key: 'revenue', label: 'Ingreso' },
-      { key: 'origin', label: 'Origen' },
-      { key: 'survey', label: 'Encuesta' },
-      { key: 'transaction_branch', label: 'Sucursal cobro' },
+      { key: 'branch', label: 'Sucursal KPI', widthClass: 'medium' },
+      { key: 'date', label: 'Fecha', widthClass: 'compact' },
+      { key: 'name', label: 'Nombre', widthClass: 'xwide' },
+      { key: 'pin', label: 'PIN', widthClass: 'compact' },
+      { key: 'phone', label: 'Teléfono', widthClass: 'compact' },
+      { key: 'tariff', label: 'Tarifa', widthClass: 'xwide' },
+      { key: 'revenue', label: 'Ingreso', widthClass: 'compact' },
+      { key: 'origin', label: 'Origen', widthClass: 'medium' },
+      { key: 'survey', label: 'Encuesta', widthClass: 'medium' },
+      { key: 'transaction_branch', label: 'Sucursal cobro', widthClass: 'medium' },
     ];
   }
 
