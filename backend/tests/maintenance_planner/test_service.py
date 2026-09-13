@@ -37,6 +37,20 @@ def test_planner_status_marks_overdue_ticket():
     assert service._planner_status(ticket, date(2026, 9, 11)) == "VENCIDO"
 
 
+def test_calendar_ticket_sort_prioritizes_highest_criticality():
+    rows = [
+        {"ticket_id": 30, "criticidad": 2},
+        {"ticket_id": 20, "criticidad": 5},
+        {"ticket_id": 10, "criticidad": 5},
+        {"ticket_id": 40, "criticidad": 1},
+        {"ticket_id": 50, "criticidad": 4},
+    ]
+
+    ordered = sorted(rows, key=service._calendar_ticket_sort_key)
+
+    assert [row["ticket_id"] for row in ordered] == [10, 20, 50, 30, 40]
+
+
 def test_schedule_ticket_reuses_ticket_and_appends_traceable_history():
     ticket = SimpleNamespace(
         id=99,

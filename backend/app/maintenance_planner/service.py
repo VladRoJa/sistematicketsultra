@@ -137,6 +137,22 @@ def _planner_status(ticket: Ticket, today: date) -> str:
     return "PROGRAMADO"
 
 
+def _calendar_ticket_sort_key(row: dict) -> tuple[int, int]:
+    """Prioriza mayor criticidad dentro de cada día del calendario."""
+
+    try:
+        criticality = int(row.get("criticidad") or 0)
+    except (TypeError, ValueError):
+        criticality = 0
+
+    try:
+        ticket_id = int(row.get("ticket_id") or 0)
+    except (TypeError, ValueError):
+        ticket_id = 0
+
+    return (-criticality, ticket_id)
+
+
 def _iso_business(value: datetime | None) -> str | None:
     resolved = _to_business_datetime(value)
     return resolved.isoformat() if resolved else None
@@ -382,9 +398,14 @@ def build_planner_board(
     current = window.start
     while current <= window.end:
         date_iso = current.isoformat()
-        day_items = [
-            row for row in week_rows if row["fecha_solucion_date"] == date_iso
-        ]
+        day_items = sorted(
+            (
+                row
+                for row in week_rows
+                if row["fecha_solucion_date"] == date_iso
+            ),
+            key=_calendar_ticket_sort_key,
+        )
         days.append(
             {
                 "date": date_iso,
