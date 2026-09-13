@@ -37,32 +37,30 @@ import {
 import { MarketingSalesFunnelService } from './marketing-sales-funnel.service';
 
 
-interface FunnelStage {
-  step: string;
-  label: string;
-  value: string;
-  explanation: string;
-  share: string;
-  width: number;
-  metric: string;
-  icon: string;
-}
-
-interface ContextMetric {
+interface SummaryCard {
   label: string;
   value: string;
   supportingText: string;
-  metric?: string;
+  metric: string;
   icon: string;
+  tone: 'blue' | 'orange' | 'green' | 'purple';
+}
+
+interface StoryNode {
+  step: string;
+  label: string;
+  value: string;
+  share: string;
+  metric: string;
+  icon: string;
+  tone: 'primary' | 'trace' | 'fallback' | 'meta' | 'other';
+  origin?: string;
 }
 
 interface SalesFunnelBranchView extends MarketingSalesFunnelBranch {
-  leads_meta_display: string;
   visits_total_display: string;
-  visits_iventas_display: string;
   sales_total_display: string;
   sales_iventas_display: string;
-  sales_iventas_meta_display: string;
   sales_not_iventas_display: string;
   revenue_total_display: string;
   iventas_sale_share_display: string;
@@ -73,6 +71,7 @@ interface SalesFunnelOriginView extends MarketingSalesOriginBreakdown {
   revenue_display: string;
   share_display: string;
   is_empty: boolean;
+  icon: string;
 }
 
 type DashboardRequestResult =
@@ -122,26 +121,29 @@ export class MarketingSalesFunnelComponent implements OnInit {
   });
 
   readonly monthOptions = this.buildMonthOptions();
-
   readonly branchColumns = [
     'sucursal',
-    'leads_meta',
     'visits_total',
-    'visits_iventas',
     'sales_total',
     'sales_iventas',
-    'sales_iventas_meta',
     'sales_not_iventas',
     'revenue_total',
     'iventas_sale_share',
+    'actions',
   ];
 
   dashboard: MarketingSalesFunnelResponse | null = null;
-  funnelStages: FunnelStage[] = [];
-  contextMetrics: ContextMetric[] = [];
-  traceMetrics: ContextMetric[] = [];
+  summaryCards: SummaryCard[] = [];
   branchRows: SalesFunnelBranchView[] = [];
   originRows: SalesFunnelOriginView[] = [];
+  fallbackOrigins: SalesFunnelOriginView[] = [];
+
+  officialNode: StoryNode | null = null;
+  phoneNode: StoryNode | null = null;
+  iventasNode: StoryNode | null = null;
+  fallbackNode: StoryNode | null = null;
+  metaNode: StoryNode | null = null;
+  iventasOtherNode: StoryNode | null = null;
 
   loading = true;
   errorMessage = '';
@@ -154,8 +156,8 @@ export class MarketingSalesFunnelComponent implements OnInit {
     return this.branchRows.length > 0;
   }
 
-  get hasOrigins(): boolean {
-    return this.originRows.some((row) => row.sales > 0);
+  get hasFallbackOrigins(): boolean {
+    return this.fallbackOrigins.length > 0;
   }
 
   get showDashboard(): boolean {
@@ -201,6 +203,15 @@ export class MarketingSalesFunnelComponent implements OnInit {
 
     const sign = (difference || 0) > 0 ? '+' : '';
     return `Detalle ${this.formatInteger(detail)} · KPI ${this.formatInteger(kpi)} · ${sign}${difference || 0}`;
+  }
+
+  get funnelNarrative(): string {
+    const summary = this.dashboard?.summary;
+    if (!summary) {
+      return '';
+    }
+
+    return `${this.formatInteger(summary.sales_iventas)} pasaron por iVentas · ${this.formatInteger(summary.sales_not_iventas)} por fallback.`;
   }
 
   ngOnInit(): void {
@@ -291,6 +302,13 @@ export class MarketingSalesFunnelComponent implements OnInit {
     });
   }
 
+  openStoryNode(node: StoryNode | null): void {
+    if (!node) {
+      return;
+    }
+    this.openDetail(node.metric, undefined, node.origin);
+  }
+
   openOriginDetail(row: SalesFunnelOriginView): void {
     this.openDetail('origin', undefined, row.key);
   }
@@ -309,152 +327,157 @@ export class MarketingSalesFunnelComponent implements OnInit {
 
   private applyDashboard(data: MarketingSalesFunnelResponse): void {
     this.dashboard = data;
-    this.funnelStages = this.buildFunnelStages(data.summary);
-    this.contextMetrics = this.buildContextMetrics(data.summary);
-    this.traceMetrics = this.buildTraceMetrics(data.summary);
+    this.summaryCards = this.buildSummaryCards(data.summary);
+    this.buildStoryNodes(data.summary);
     this.branchRows = data.branches.map((branch) => this.buildBranchView(branch));
-    this.originRows = data.summary.origin_breakdown.map((origin) =>
+
+    const originRows = data.summary.origin_breakdown.map((origin) =>
       this.buildOriginView(origin, data.summary.sales_total),
     );
+    this.originRows = originRows;
+    this.fallbackOrigins = originRows
+      .filter((row) => (
+        !row.is_empty
+        && row.key !== 'IVENTAS_META'
+        && row.key !== 'IVENTAS_OTHER'
+      ))
+      .sort((left, right) => right.sales - left.sales);
   }
 
-  private buildFunnelStages(summary: MarketingSalesFunnelMetrics): FunnelStage[] {
-    const total = summary.sales_total;
-    const withPhone = Math.max(0, total - summary.sales_without_valid_phone);
-
+  private buildSummaryCards(summary: MarketingSalesFunnelMetrics): SummaryCard[] {
     return [
-      this.createFunnelStage(
-        '01',
-        'Venta nueva oficial',
-        total,
-        total,
-        'Filas de Ventas Nuevos Socios Detalle. KPI Desempeño funciona como control agregado.',
-        'sales_total',
-        'groups',
-      ),
-      this.createFunnelStage(
-        '02',
-        'Con teléfono utilizable',
-        withPhone,
-        total,
-        'Socios cuya fila permite intentar un cruce técnico por teléfono.',
-        'sales_with_phone',
-        'phone_in_talk',
-      ),
-      this.createFunnelStage(
-        '03',
-        'Con match iVentas',
-        summary.sales_iventas,
-        total,
-        'Teléfono exacto, misma sucursal KPI y evidencia iVentas previa dentro de la ventana.',
-        'sales_iventas',
-        'link',
-      ),
-      this.createFunnelStage(
-        '04',
-        'Meta Ads trazable',
-        summary.sales_iventas_meta,
-        total,
-        'El match iVentas más reciente conserva evidencia META_AD.',
-        'sales_iventas_meta',
-        'campaign',
-      ),
+      {
+        label: 'Visitas totales',
+        value: this.formatInteger(summary.visits_total),
+        supportingText: 'Pases comerciales detectados en Venta Total',
+        metric: 'visits_total',
+        icon: 'directions_walk',
+        tone: 'blue',
+      },
+      {
+        label: 'Ventas nuevas',
+        value: this.formatInteger(summary.sales_total),
+        supportingText: 'Universo oficial desde Nuevos Socios Detalle',
+        metric: 'sales_total',
+        icon: 'groups',
+        tone: 'orange',
+      },
+      {
+        label: 'Ingreso Venta Nueva',
+        value: this.formatCurrency(summary.revenue_total),
+        supportingText: 'Ingreso asociado al universo oficial',
+        metric: 'revenue_total',
+        icon: 'payments',
+        tone: 'green',
+      },
+      {
+        label: 'Ventas iVentas / Meta',
+        value: this.formatInteger(summary.sales_iventas_meta),
+        supportingText: 'Ventas con evidencia técnica META_AD',
+        metric: 'sales_iventas_meta',
+        icon: 'campaign',
+        tone: 'orange',
+      },
+      {
+        label: 'Ingreso iVentas / Meta',
+        value: this.formatCurrency(summary.revenue_iventas_meta),
+        supportingText: 'Ingreso atribuido técnicamente a Meta Ads',
+        metric: 'revenue_iventas_meta',
+        icon: 'paid',
+        tone: 'purple',
+      },
     ];
   }
 
-  private createFunnelStage(
+  private buildStoryNodes(summary: MarketingSalesFunnelMetrics): void {
+    const total = summary.sales_total;
+    const withPhone = Math.max(0, total - summary.sales_without_valid_phone);
+
+    this.officialNode = this.createStoryNode(
+      '01',
+      'Venta Nueva Oficial',
+      total,
+      total,
+      'sales_total',
+      'groups',
+      'primary',
+    );
+    this.phoneNode = this.createStoryNode(
+      '02',
+      'Con teléfono utilizable',
+      withPhone,
+      total,
+      'sales_with_phone',
+      'phone_in_talk',
+      'primary',
+    );
+    this.iventasNode = this.createStoryNode(
+      '03',
+      'Con Match iVentas',
+      summary.sales_iventas,
+      total,
+      'sales_iventas',
+      'link',
+      'trace',
+    );
+    this.fallbackNode = this.createStoryNode(
+      '04',
+      'Sin Match iVentas',
+      summary.sales_not_iventas,
+      total,
+      'sales_not_iventas',
+      'person',
+      'fallback',
+    );
+    this.metaNode = this.createStoryNode(
+      '05',
+      'Meta Ads trazable',
+      summary.sales_iventas_meta,
+      total,
+      'sales_iventas_meta',
+      'campaign',
+      'meta',
+    );
+    this.iventasOtherNode = this.createStoryNode(
+      '06',
+      'iVentas / Otro',
+      summary.sales_iventas_other,
+      total,
+      'origin',
+      'account_tree',
+      'other',
+      'IVENTAS_OTHER',
+    );
+  }
+
+  private createStoryNode(
     step: string,
     label: string,
     value: number,
     total: number,
-    explanation: string,
     metric: string,
     icon: string,
-  ): FunnelStage {
-    const ratio = total > 0 ? value / total : 0;
+    tone: StoryNode['tone'],
+    origin?: string,
+  ): StoryNode {
     return {
       step,
       label,
       value: this.formatInteger(value),
-      explanation,
-      share: this.formatPercent(total > 0 ? ratio : null),
-      width: Math.max(38, Math.min(100, ratio * 100)),
+      share: this.formatPercent(total > 0 ? value / total : null),
       metric,
       icon,
+      tone,
+      origin,
     };
-  }
-
-  private buildContextMetrics(summary: MarketingSalesFunnelMetrics): ContextMetric[] {
-    return [
-      {
-        label: 'Leads Meta',
-        value: this.formatInteger(summary.leads_meta),
-        supportingText: `${this.formatInteger(summary.iventas_contacts)} contactos iVentas con interacción`,
-        metric: 'leads_meta',
-        icon: 'ads_click',
-      },
-      {
-        label: 'Visitas comerciales',
-        value: this.formatInteger(summary.visits_total),
-        supportingText: 'Pases de recorrido / 2 días detectados en Venta Total',
-        metric: 'visits_total',
-        icon: 'directions_walk',
-      },
-      {
-        label: 'Visitas con iVentas',
-        value: this.formatInteger(summary.visits_iventas),
-        supportingText: `${this.formatInteger(summary.visits_iventas_meta)} con evidencia Meta`,
-        metric: 'visits_iventas',
-        icon: 'link',
-      },
-      {
-        label: 'Sin match iVentas',
-        value: this.formatInteger(summary.sales_not_iventas),
-        supportingText: 'La clasificación de origen cae a Encuesta de Venta Total',
-        metric: 'sales_not_iventas',
-        icon: 'fact_check',
-      },
-    ];
-  }
-
-  private buildTraceMetrics(summary: MarketingSalesFunnelMetrics): ContextMetric[] {
-    return [
-      {
-        label: 'Lead Meta con visita trazada',
-        value: this.formatPercent(summary.meta_lead_to_visit_rate),
-        supportingText: 'Visitas Meta trazables / leads Meta.',
-        icon: 'route',
-      },
-      {
-        label: 'Lead Meta con venta atribuida',
-        value: this.formatPercent(summary.meta_lead_to_sale_rate),
-        supportingText: 'Ventas Meta atribuidas / leads Meta. No exige pase previo.',
-        icon: 'shopping_cart_checkout',
-      },
-      {
-        label: 'Cobertura iVentas en visitas',
-        value: this.formatPercent(summary.iventas_visit_share),
-        supportingText: 'Visitas con match iVentas / visitas comerciales.',
-        icon: 'visibility',
-      },
-      {
-        label: 'Cobertura iVentas en venta nueva',
-        value: this.formatPercent(summary.iventas_sale_share),
-        supportingText: 'Ventas con match iVentas / venta nueva oficial.',
-        icon: 'filter_alt',
-      },
-    ];
   }
 
   private buildBranchView(branch: MarketingSalesFunnelBranch): SalesFunnelBranchView {
     return {
       ...branch,
-      leads_meta_display: this.formatInteger(branch.leads_meta),
       visits_total_display: this.formatInteger(branch.visits_total),
-      visits_iventas_display: this.formatInteger(branch.visits_iventas),
       sales_total_display: this.formatInteger(branch.sales_total),
       sales_iventas_display: this.formatInteger(branch.sales_iventas),
-      sales_iventas_meta_display: this.formatInteger(branch.sales_iventas_meta),
       sales_not_iventas_display: this.formatInteger(branch.sales_not_iventas),
       revenue_total_display: this.formatCurrency(branch.revenue_total),
       iventas_sale_share_display: this.formatPercent(branch.iventas_sale_share),
@@ -473,7 +496,23 @@ export class MarketingSalesFunnelComponent implements OnInit {
         salesTotal > 0 ? origin.sales / salesTotal : null,
       ),
       is_empty: origin.sales === 0,
+      icon: this.resolveOriginIcon(origin.key),
     };
+  }
+
+  private resolveOriginIcon(originKey: string): string {
+    const icons: Record<string, string> = {
+      IVENTAS_META: 'campaign',
+      IVENTAS_OTHER: 'account_tree',
+      SOCIAL_UNTRACED: 'alternate_email',
+      REFERRAL: 'groups',
+      PROXIMITY: 'location_on',
+      PLAZA: 'storefront',
+      OFFLINE: 'description',
+      OTHER_SURVEY: 'more_horiz',
+      UNKNOWN: 'help_outline',
+    };
+    return icons[originKey] || 'label';
   }
 
   private formatInteger(value: number): string {
