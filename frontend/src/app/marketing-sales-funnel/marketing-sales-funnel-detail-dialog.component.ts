@@ -25,6 +25,7 @@ export interface MarketingSalesFunnelDetailDialogData {
   month: string;
   metric: string;
   branchId?: number;
+  branchIds?: number[];
   origin?: string;
 }
 
@@ -194,6 +195,7 @@ export class MarketingSalesFunnelDetailDialogComponent implements OnInit {
         this.data.origin,
         this.sortBy,
         this.sortDir,
+        this.data.branchIds || [],
       )
       .subscribe({
         next: (blob) => {
@@ -228,6 +230,7 @@ export class MarketingSalesFunnelDetailDialogComponent implements OnInit {
         this.pageSize,
         this.sortBy,
         this.sortDir,
+        this.data.branchIds || [],
       )
       .subscribe({
         next: (detail) => {

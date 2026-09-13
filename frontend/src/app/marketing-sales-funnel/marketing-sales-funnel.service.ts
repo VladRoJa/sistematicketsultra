@@ -19,8 +19,12 @@ export class MarketingSalesFunnelService {
 
   constructor(private readonly http: HttpClient) {}
 
-  getDashboard(month: string): Observable<MarketingSalesFunnelResponse> {
-    const params = new HttpParams().set('month', month);
+  getDashboard(
+    month: string,
+    branchIds: number[] = [],
+  ): Observable<MarketingSalesFunnelResponse> {
+    let params = new HttpParams().set('month', month);
+    params = this.withBranchIds(params, branchIds);
 
     return this.http.get<MarketingSalesFunnelResponse>(
       `${this.apiUrl}/sales-funnel`,
@@ -37,6 +41,7 @@ export class MarketingSalesFunnelService {
     pageSize = 50,
     sortBy?: string,
     sortDir: MarketingSalesFunnelSortDirection = 'asc',
+    branchIds: number[] = [],
   ): Observable<MarketingSalesFunnelDetailResponse> {
     const params = this.buildDetailParams(
       month,
@@ -45,6 +50,7 @@ export class MarketingSalesFunnelService {
       origin,
       sortBy,
       sortDir,
+      branchIds,
     )
       .set('page', page)
       .set('page_size', pageSize);
@@ -62,6 +68,7 @@ export class MarketingSalesFunnelService {
     origin?: string,
     sortBy?: string,
     sortDir: MarketingSalesFunnelSortDirection = 'asc',
+    branchIds: number[] = [],
   ): Observable<Blob> {
     const params = this.buildDetailParams(
       month,
@@ -70,6 +77,7 @@ export class MarketingSalesFunnelService {
       origin,
       sortBy,
       sortDir,
+      branchIds,
     );
 
     return this.http.get(
@@ -88,6 +96,7 @@ export class MarketingSalesFunnelService {
     origin?: string,
     sortBy?: string,
     sortDir: MarketingSalesFunnelSortDirection = 'asc',
+    branchIds: number[] = [],
   ): HttpParams {
     let params = new HttpParams()
       .set('month', month)
@@ -105,6 +114,13 @@ export class MarketingSalesFunnelService {
         .set('sort_dir', sortDir);
     }
 
-    return params;
+    return this.withBranchIds(params, branchIds);
+  }
+
+  private withBranchIds(params: HttpParams, branchIds: number[]): HttpParams {
+    if (!branchIds.length) {
+      return params;
+    }
+    return params.set('branch_ids', branchIds.join(','));
   }
 }

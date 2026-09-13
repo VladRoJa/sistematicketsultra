@@ -5,6 +5,13 @@ export interface MarketingSalesOriginBreakdown {
   revenue: number;
 }
 
+export interface MarketingSalesFunnelScopeOption {
+  sucursal_id: number;
+  sucursal: string;
+  region_id: number | null;
+  region: string | null;
+}
+
 export interface MarketingSalesFunnelMetrics {
   iventas_contacts: number;
   leads_iventas?: number;
@@ -78,6 +85,7 @@ export interface MarketingSalesFunnelQuality {
 export interface MarketingSalesFunnelResponse {
   month: string;
   scope: Record<string, unknown>;
+  scope_options?: MarketingSalesFunnelScopeOption[];
   summary: MarketingSalesFunnelMetrics;
   branches: MarketingSalesFunnelBranch[];
   source: MarketingSalesFunnelSource;
