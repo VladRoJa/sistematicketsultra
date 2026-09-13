@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
+from sqlalchemy import func
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.models.sucursal_model import Sucursal
@@ -12,6 +13,8 @@ from app.utils.pm_permissions import can_pm_execute, can_pm_view
 from app.utils.sucursal_audience import (
     SUCURSAL_AUDIENCE_ANALYTICAL,
     SUCURSAL_AUDIENCE_OPERATIONAL,
+    TECHNICAL_SUCURSAL_IDS,
+    apply_selectable_sucursal_catalog,
     normalize_sucursal_audience,
 )
 from app.utils.ticket_filters import filtrar_tickets_por_usuario
@@ -199,14 +202,20 @@ def _serialize_ticket(ticket: Ticket, today: date) -> dict:
     }
 
 
+def _effective_ticket_branch_id_expression():
+    return func.coalesce(Ticket.sucursal_id_destino, Ticket.sucursal_id)
+
+
 def _base_query(user, *, audience: str):
     if not can_pm_view(user):
         raise MaintenancePlannerAuthorizationError(
             "No tienes permiso para consultar el Planner de Mantenimiento."
         )
 
+    branch_id = _effective_ticket_branch_id_expression()
     query = filtrar_tickets_por_usuario(user).filter(
-        Ticket.departamento_id == MAINTENANCE_DEPARTMENT_ID
+        Ticket.departamento_id == MAINTENANCE_DEPARTMENT_ID,
+        ~branch_id.in_(tuple(sorted(TECHNICAL_SUCURSAL_IDS))),
     )
 
     if audience == SUCURSAL_AUDIENCE_ANALYTICAL:
@@ -215,6 +224,43 @@ def _base_query(user, *, audience: str):
         )
 
     return query
+
+
+def _build_authorized_branch_catalog(query, *, audience: str) -> list[dict]:
+    """Devuelve sedes visibles sin depender del filtro actual del board.
+
+    La consulta base ya contiene el scope real de Tickets/PM del usuario. Se
+    extraen sus sucursales distintas antes de aplicar ``branch_id`` o ``estado``
+    y luego se resuelven contra el catálogo canónico de Sucursal.
+    """
+
+    branch_id_expr = _effective_ticket_branch_id_expression().label("branch_id")
+    branch_rows = query.with_entities(branch_id_expr).distinct().all()
+    branch_ids = sorted(
+        {
+            int(row[0])
+            for row in branch_rows
+            if row[0] is not None
+        }
+    )
+    if not branch_ids:
+        return []
+
+    branch_query = Sucursal.query.filter(Sucursal.sucursal_id.in_(branch_ids))
+    branch_query = apply_selectable_sucursal_catalog(
+        branch_query,
+        audience=audience,
+    )
+    branches = branch_query.order_by(Sucursal.sucursal.asc()).all()
+
+    return [
+        {
+            "id": int(branch.sucursal_id),
+            "name": str(branch.sucursal),
+            "is_demo": bool(branch.is_demo),
+        }
+        for branch in branches
+    ]
 
 
 def build_planner_board(
@@ -237,7 +283,12 @@ def build_planner_board(
     except ValueError as exc:
         raise MaintenancePlannerError(str(exc)) from exc
 
-    query = _base_query(user, audience=normalized_audience)
+    base_query = _base_query(user, audience=normalized_audience)
+    branches = _build_authorized_branch_catalog(
+        base_query,
+        audience=normalized_audience,
+    )
+    query = base_query
 
     normalized_branch_ids = sorted(
         {
@@ -247,10 +298,14 @@ def build_planner_board(
         }
     )
     if normalized_branch_ids:
-        query = query.filter(Ticket.sucursal_id_destino.in_(normalized_branch_ids))
+        query = query.filter(
+            _effective_ticket_branch_id_expression().in_(normalized_branch_ids)
+        )
 
     normalized_state = str(state or "").strip().lower()
-    if normalized_state and normalized_state != "todos":
+    if normalized_state == "activos":
+        query = query.filter(Ticket.estado.in_(ACTIVE_STATES))
+    elif normalized_state and normalized_state != "todos":
         allowed_states = ACTIVE_STATES | {"finalizado"}
         if normalized_state not in allowed_states:
             raise MaintenancePlannerError("estado inválido para el Planner.")
@@ -273,16 +328,6 @@ def build_planner_board(
     scheduled_future = [
         row for row in active_rows if row["planner_status"] == "PROGRAMADO"
     ]
-
-    branches_by_id: dict[int, dict] = {}
-    for row in rows:
-        branch_id = row["sucursal_id"]
-        if branch_id is not None:
-            branches_by_id[branch_id] = {
-                "id": branch_id,
-                "name": row["sucursal"],
-                "is_demo": bool(row["sucursal_is_demo"]),
-            }
 
     days = []
     current = window.start
@@ -320,10 +365,7 @@ def build_planner_board(
                 1 for row in active_rows if row["necesita_refaccion"]
             ),
         },
-        "branches": sorted(
-            branches_by_id.values(),
-            key=lambda item: (item["is_demo"], item["name"].casefold()),
-        ),
+        "branches": branches,
         "days": days,
         "overdue": overdue,
         "unscheduled": unscheduled,
