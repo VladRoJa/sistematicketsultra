@@ -56,13 +56,18 @@
       </div>
 
       <div class="iventas-lane__stages">
-        <article *ngIf="leadStage as stage" class="iventas-stage">
+        <button
+          *ngIf="leadStage as stage"
+          type="button"
+          class="iventas-stage iventas-stage--button"
+          (click)="openStage(stage)"
+        >
           <span class="iventas-stage__step">{{ stage.step }}</span>
           <mat-icon>{{ stage.icon }}</mat-icon>
           <strong>{{ stage.label }}</strong>
           <b>{{ stage.value }}</b>
-          <small>{{ stage.supportingText }}</small>
-        </article>
+          <span class="iventas-stage__action">Ver filas <mat-icon>open_in_new</mat-icon></span>
+        </button>
 
         <mat-icon class="iventas-stage-arrow">arrow_forward</mat-icon>
 
