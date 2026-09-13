@@ -2,7 +2,6 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, switchMap } from 'rxjs';
 
-import { SessionService } from '../core/auth/session.service';
 import { MantenimientoEquiposService } from '../services/mantenimiento-equipos.service';
 import { TicketService } from '../services/ticket.service';
 import { AsignarFechaPayload } from '../types/ticket';
@@ -108,7 +107,6 @@ export class MaintenancePlannerService {
   private readonly http = inject(HttpClient);
   private readonly ticketService = inject(TicketService);
   private readonly mantenimientoEquiposService = inject(MantenimientoEquiposService);
-  private readonly session = inject(SessionService);
   private readonly baseUrl = `${environment.apiUrl}/maintenance-planner`;
 
   getBoard(filters: {
@@ -180,22 +178,27 @@ export class MaintenancePlannerService {
       );
     }
 
-    const sparePart = event.refaccion_definida_por_jefe
-      ? {
-          necesita_refaccion: !!event.necesita_refaccion,
-          descripcion_refaccion: event.necesita_refaccion
-            ? (event.descripcion_refaccion || '')
-            : '',
-          refaccion_definida_por_jefe: true,
-        }
-      : null;
+    const dueDate = this.toDateOnly(event.fecha);
+    const schedule$ = () =>
+      this.scheduleTicket(ticket.ticket_id, {
+        due_date: dueDate,
+        reason,
+      });
 
-    return this.applyCommitmentUpdate(
-      ticket,
-      dueDateIso,
-      reason,
-      sparePart,
-    );
+    if (!event.refaccion_definida_por_jefe) {
+      return schedule$();
+    }
+
+    return this.ticketService
+      .setCompromiso(ticket.ticket_id, {
+        fecha_solucion: dueDateIso,
+        necesita_refaccion: !!event.necesita_refaccion,
+        descripcion_refaccion: event.necesita_refaccion
+          ? (event.descripcion_refaccion || '')
+          : null,
+        refaccion_definida_por_jefe: true,
+      })
+      .pipe(switchMap(() => schedule$()));
   }
 
   /** Reprogramación por calendario/drag & drop: solo para compromisos existentes. */
@@ -205,12 +208,10 @@ export class MaintenancePlannerService {
     reason: string,
   ): Observable<unknown> {
     this.assertReprogrammable(ticket);
-    return this.applyCommitmentUpdate(
-      ticket,
-      this.toCommitmentIso(dueDate),
-      reason,
-      null,
-    );
+    return this.scheduleTicket(ticket.ticket_id, {
+      due_date: dueDate,
+      reason: String(reason || '').trim(),
+    });
   }
 
   /** Reprogramación desde el modal compartido de Editar fecha solución. */
@@ -220,12 +221,10 @@ export class MaintenancePlannerService {
     reason: string,
   ): Observable<unknown> {
     this.assertReprogrammable(ticket);
-    return this.applyCommitmentUpdate(
-      ticket,
-      this.toCommitmentIsoFromDate(dueDate),
-      reason,
-      null,
-    );
+    return this.scheduleTicket(ticket.ticket_id, {
+      due_date: this.toDateOnly(dueDate),
+      reason: String(reason || '').trim(),
+    });
   }
 
   /** Solicitud de cierre usando exactamente el endpoint de la pantalla de Tickets. */
@@ -257,76 +256,6 @@ export class MaintenancePlannerService {
     }
   }
 
-  private applyCommitmentUpdate(
-    ticket: MaintenancePlannerTicket,
-    dueDateIso: string,
-    reason: string,
-    sparePart: {
-      necesita_refaccion: boolean;
-      descripcion_refaccion: string;
-      refaccion_definida_por_jefe: boolean;
-    } | null,
-  ): Observable<unknown> {
-    const trimmedReason = reason.trim();
-    if (!dueDateIso || !trimmedReason) {
-      throw new Error('La fecha y el motivo son obligatorios.');
-    }
-
-    const nowIso = new Date().toISOString();
-    const history = Array.isArray(ticket.historial_fechas)
-      ? ticket.historial_fechas.map((item) => ({ ...item }))
-      : [];
-
-    history.push({
-      fecha: dueDateIso,
-      cambiadoPor: String(this.session.getUser()?.username || '').trim(),
-      fechaCambio: nowIso,
-      motivo: trimmedReason,
-      origen: 'maintenance_planner_v2',
-    });
-
-    history.sort((a, b) => {
-      const dateA = String(a.fechaCambio || a.fecha_cambio || a.fecha || '');
-      const dateB = String(b.fechaCambio || b.fecha_cambio || b.fecha || '');
-      return dateB.localeCompare(dateA);
-    });
-
-    const updatePayload: any = {
-      estado: 'en progreso',
-      fecha_solucion: dueDateIso,
-      fecha_en_progreso: ticket.fecha_en_progreso || nowIso,
-      historial_fechas: history,
-      motivo_cambio: trimmedReason,
-    };
-
-    const updateTicket$ = () =>
-      this.ticketService.updateTicket(ticket.ticket_id, updatePayload);
-
-    if (!sparePart) {
-      return updateTicket$();
-    }
-
-    return this.ticketService
-      .setCompromiso(ticket.ticket_id, {
-        fecha_solucion: dueDateIso,
-        necesita_refaccion: sparePart.necesita_refaccion,
-        descripcion_refaccion: sparePart.necesita_refaccion
-          ? sparePart.descripcion_refaccion
-          : null,
-        refaccion_definida_por_jefe: true,
-      })
-      .pipe(switchMap(() => updateTicket$()));
-  }
-
-  private toCommitmentIso(value: string): string {
-    const [year, month, day] = value.split('-').map(Number);
-    if (!year || !month || !day) {
-      throw new Error('Fecha de compromiso inválida.');
-    }
-
-    return new Date(year, month - 1, day, 7, 0, 0).toISOString();
-  }
-
   private toCommitmentIsoFromDate(value: Date): string {
     return new Date(
       value.getFullYear(),
@@ -336,5 +265,12 @@ export class MaintenancePlannerService {
       0,
       0,
     ).toISOString();
+  }
+
+  private toDateOnly(value: Date): string {
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+    const day = String(value.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
 }
