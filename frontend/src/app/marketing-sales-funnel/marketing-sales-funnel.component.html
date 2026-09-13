@@ -321,7 +321,7 @@
             <td mat-cell *matCellDef="let row" class="coverage-cell">
               <span>{{ row.iventas_sale_share_display }}</span>
               <span class="coverage-track">
-                <span [style.width.%]="row.iventas_sale_share ? row.iventas_sale_share * 100 : 0"></span>
+                <span [style.--coverage]="row.iventas_sale_share"></span>
               </span>
             </td>
           </ng-container>
