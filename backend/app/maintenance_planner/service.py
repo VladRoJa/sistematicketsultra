@@ -23,6 +23,7 @@ from app.utils.ticket_filters import filtrar_tickets_por_usuario
 BUSINESS_TZ = ZoneInfo("America/Tijuana")
 MAINTENANCE_DEPARTMENT_ID = 1
 ACTIVE_STATES = {"abierto", "en progreso", "por_validar"}
+REGIONAL_ROLE = "GERENTE_REGIONAL"
 
 
 class MaintenancePlannerError(Exception):
@@ -206,6 +207,43 @@ def _effective_ticket_branch_id_expression():
     return func.coalesce(Ticket.sucursal_id_destino, Ticket.sucursal_id)
 
 
+def _user_role(user) -> str:
+    return str(getattr(user, "rol", "") or "").strip().upper()
+
+
+def _user_scope_branch_ids(user) -> list[int]:
+    branch_ids: set[int] = set()
+    for value in (getattr(user, "sucursales_ids", None) or []):
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            continue
+        if parsed > 0 and parsed not in TECHNICAL_SUCURSAL_IDS:
+            branch_ids.add(parsed)
+    return sorted(branch_ids)
+
+
+def _apply_planner_role_scope(query, user):
+    """Endurece el scope del Planner sin alterar la semántica general de Tickets.
+
+    ``filtrar_tickets_por_usuario`` conserva un fallback por creador útil en la
+    pantalla general de Tickets. Para un GERENTE_REGIONAL, el Planner representa
+    estrictamente su pool regional, por lo que un ticket creado fuera de ese pool
+    no debe entrar al board.
+    """
+
+    if _user_role(user) != REGIONAL_ROLE:
+        return query
+
+    branch_ids = _user_scope_branch_ids(user)
+    if not branch_ids:
+        return query.filter(False)
+
+    return query.filter(
+        _effective_ticket_branch_id_expression().in_(branch_ids)
+    )
+
+
 def _base_query(user, *, audience: str):
     if not can_pm_view(user):
         raise MaintenancePlannerAuthorizationError(
@@ -217,6 +255,7 @@ def _base_query(user, *, audience: str):
         Ticket.departamento_id == MAINTENANCE_DEPARTMENT_ID,
         ~branch_id.in_(tuple(sorted(TECHNICAL_SUCURSAL_IDS))),
     )
+    query = _apply_planner_role_scope(query, user)
 
     if audience == SUCURSAL_AUDIENCE_ANALYTICAL:
         query = query.filter(
@@ -226,23 +265,32 @@ def _base_query(user, *, audience: str):
     return query
 
 
-def _build_authorized_branch_catalog(query, *, audience: str) -> list[dict]:
-    """Devuelve sedes visibles sin depender del filtro actual del board.
+def _branch_catalog_ids(user, query) -> list[int]:
+    """Resuelve el universo del selector antes de filtros del board.
 
-    La consulta base ya contiene el scope real de Tickets/PM del usuario. Se
-    extraen sus sucursales distintas antes de aplicar ``branch_id`` o ``estado``
-    y luego se resuelven contra el catálogo canónico de Sucursal.
+    Para regionales, el catálogo nace de ``sucursales_ids`` y no de los tickets
+    existentes. Así una sucursal asignada sigue visible aunque tenga cero tickets.
+    Los demás perfiles conservan el comportamiento derivado del query autorizado.
     """
+
+    if _user_role(user) == REGIONAL_ROLE:
+        return _user_scope_branch_ids(user)
 
     branch_id_expr = _effective_ticket_branch_id_expression().label("branch_id")
     branch_rows = query.with_entities(branch_id_expr).distinct().all()
-    branch_ids = sorted(
+    return sorted(
         {
             int(row[0])
             for row in branch_rows
             if row[0] is not None
         }
     )
+
+
+def _build_authorized_branch_catalog(user, query, *, audience: str) -> list[dict]:
+    """Devuelve sedes visibles sin depender del filtro actual del board."""
+
+    branch_ids = _branch_catalog_ids(user, query)
     if not branch_ids:
         return []
 
@@ -285,6 +333,7 @@ def build_planner_board(
 
     base_query = _base_query(user, audience=normalized_audience)
     branches = _build_authorized_branch_catalog(
+        user,
         base_query,
         audience=normalized_audience,
     )

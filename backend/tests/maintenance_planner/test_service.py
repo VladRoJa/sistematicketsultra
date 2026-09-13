@@ -1,6 +1,6 @@
 from datetime import date, datetime, timezone
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -81,3 +81,55 @@ def test_physical_and_demo_sucursales_are_selectable():
 
     assert is_selectable_sucursal(physical) is True
     assert is_selectable_sucursal(demo) is True
+
+
+def test_regional_scope_ids_are_strict_normalized_and_ignore_technical_nodes():
+    user = SimpleNamespace(
+        rol="GERENTE_REGIONAL",
+        sucursales_ids=[3, "5", 3, ROOT_BRANCH_ID, CORPORATE_BRANCH_ID, None, "x"],
+    )
+
+    assert service._user_scope_branch_ids(user) == [3, 5]
+
+
+def test_regional_branch_catalog_comes_from_assignments_not_ticket_activity():
+    user = SimpleNamespace(
+        rol="GERENTE_REGIONAL",
+        sucursales_ids=[8, 3, 5],
+    )
+    query = MagicMock()
+
+    result = service._branch_catalog_ids(user, query)
+
+    assert result == [3, 5, 8]
+    query.with_entities.assert_not_called()
+
+
+def test_regional_planner_scope_adds_strict_branch_filter():
+    user = SimpleNamespace(
+        rol="GERENTE_REGIONAL",
+        sucursales_ids=[3, 5],
+    )
+    query = MagicMock()
+    scoped_query = MagicMock()
+    query.filter.return_value = scoped_query
+
+    result = service._apply_planner_role_scope(query, user)
+
+    assert result is scoped_query
+    query.filter.assert_called_once()
+
+
+def test_regional_planner_without_assignments_returns_empty_scope():
+    user = SimpleNamespace(
+        rol="GERENTE_REGIONAL",
+        sucursales_ids=[],
+    )
+    query = MagicMock()
+    empty_query = MagicMock()
+    query.filter.return_value = empty_query
+
+    result = service._apply_planner_role_scope(query, user)
+
+    assert result is empty_query
+    query.filter.assert_called_once_with(False)
