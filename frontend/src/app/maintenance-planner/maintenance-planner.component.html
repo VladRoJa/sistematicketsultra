@@ -9,39 +9,41 @@
       <p>Agenda operativa de domingo a sábado basada en tickets reales.</p>
     </div>
 
-    <div class="planner-toolbar__actions">
-      <button type="button" (click)="previousWeek()" aria-label="Semana anterior">←</button>
-      <button type="button" class="week-button" (click)="currentWeek()">
-        {{ formatRange() }}
-      </button>
-      <button type="button" (click)="nextWeek()" aria-label="Semana siguiente">→</button>
+    <div class="planner-toolbar__controls">
+      <div class="planner-toolbar__filters">
+        <label>
+          <span>Sucursal</span>
+          <select [(ngModel)]="branchId" (ngModelChange)="onFiltersChanged()">
+            <option [ngValue]="null">Todas</option>
+            <option *ngFor="let branch of board?.branches || []" [ngValue]="branch.id">
+              {{ branch.name }}{{ branch.is_demo ? ' · DEMO' : '' }}
+            </option>
+          </select>
+        </label>
+
+        <label>
+          <span>Estado ticket</span>
+          <select [(ngModel)]="estado" (ngModelChange)="onFiltersChanged()">
+            <option *ngFor="let option of estados" [value]="option.value">
+              {{ option.label }}
+            </option>
+          </select>
+        </label>
+
+        <button type="button" class="refresh-button" (click)="loadBoard()" [disabled]="loading">
+          {{ loading ? 'Actualizando…' : 'Actualizar' }}
+        </button>
+      </div>
+
+      <div class="planner-toolbar__actions">
+        <button type="button" (click)="previousWeek()" aria-label="Semana anterior">←</button>
+        <button type="button" class="week-button" (click)="currentWeek()">
+          {{ formatRange() }}
+        </button>
+        <button type="button" (click)="nextWeek()" aria-label="Semana siguiente">→</button>
+      </div>
     </div>
   </header>
-
-  <div class="planner-filters">
-    <label>
-      <span>Sucursal</span>
-      <select [(ngModel)]="branchId" (ngModelChange)="onFiltersChanged()">
-        <option [ngValue]="null">Todas</option>
-        <option *ngFor="let branch of board?.branches || []" [ngValue]="branch.id">
-          {{ branch.name }}{{ branch.is_demo ? ' · DEMO' : '' }}
-        </option>
-      </select>
-    </label>
-
-    <label>
-      <span>Estado ticket</span>
-      <select [(ngModel)]="estado" (ngModelChange)="onFiltersChanged()">
-        <option *ngFor="let option of estados" [value]="option.value">
-          {{ option.label }}
-        </option>
-      </select>
-    </label>
-
-    <button type="button" class="refresh-button" (click)="loadBoard()" [disabled]="loading">
-      {{ loading ? 'Actualizando…' : 'Actualizar' }}
-    </button>
-  </div>
 
   <div *ngIf="errorMessage" class="planner-alert" role="alert">
     {{ errorMessage }}
@@ -117,17 +119,7 @@
     </section>
 
     <section class="planner-main">
-      <div class="planner-calendar">
-        <div class="section-heading">
-          <div>
-            <span class="section-eyebrow">Calendario semanal</span>
-            <h2>Semana operativa</h2>
-            <p>
-              Abre un ticket para ver su historia. Si tienes permiso, arrástralo a otro día para mover el compromiso.
-            </p>
-          </div>
-        </div>
-
+      <div class="planner-calendar" aria-label="Semana operativa">
         <div class="week-grid">
           <article
             *ngFor="let day of currentBoard.days"
