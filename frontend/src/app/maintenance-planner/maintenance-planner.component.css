@@ -348,9 +348,9 @@
    ========================================================================== */
 
 .week-grid {
+  width: 100%;
   display: grid;
   grid-template-columns: repeat(7, minmax(154px, 1fr));
-  min-width: 1120px;
   max-height: calc(100vh - 360px);
   min-height: 420px;
   overflow: auto;
@@ -892,7 +892,6 @@
   }
 
   .week-grid {
-    min-width: 1050px;
     max-height: 560px;
   }
 }
