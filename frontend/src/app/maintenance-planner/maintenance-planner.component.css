@@ -118,10 +118,33 @@
   padding: 12px;
   text-align: left;
   color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: background-color 120ms ease, box-shadow 120ms ease;
 }
 
-button.metric {
-  cursor: pointer;
+.metric:hover {
+  background: #f8fafc;
+}
+
+.metric:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
+}
+
+.metric--selected {
+  background: #f8fafc;
+  box-shadow: inset 0 -3px #2563eb;
+}
+
+.metric--danger.metric--selected {
+  background: #fff7f7;
+  box-shadow: inset 0 -3px #b91c1c;
+}
+
+.metric--warning.metric--selected {
+  background: #fffbea;
+  box-shadow: inset 0 -3px #a16207;
 }
 
 .metric:last-child {
@@ -152,7 +175,7 @@ button.metric {
 
 .planner-main {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
+  grid-template-columns: minmax(0, 1fr) 360px;
   gap: 14px;
   margin-top: 14px;
 }
@@ -185,6 +208,8 @@ button.metric {
 
 .day-column--today {
   border-color: #2563eb;
+  background: #f8fbff;
+  box-shadow: inset 0 3px #2563eb;
 }
 
 .day-column > header {
@@ -196,6 +221,27 @@ button.metric {
   padding: 7px 9px;
   text-transform: capitalize;
   font-size: 12px;
+}
+
+.day-column--today > header {
+  border-bottom-color: #bfdbfe;
+  background: #eff6ff;
+}
+
+.day-column__heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.day-column__heading small {
+  border: 1px solid #93c5fd;
+  background: #dbeafe;
+  padding: 1px 4px;
+  color: #1d4ed8;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
 }
 
 .day-column__items {
@@ -225,7 +271,12 @@ button.metric {
   display: grid;
   gap: 4px;
   padding: 8px;
-  transition: box-shadow 120ms ease, opacity 120ms ease;
+  transition: box-shadow 120ms ease, opacity 120ms ease, border-color 120ms ease;
+}
+
+.ticket-card:hover {
+  border-color: #c3d0de;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, .07);
 }
 
 .ticket-card.cdk-drag-disabled {
@@ -274,6 +325,7 @@ button.metric {
 }
 
 .ticket-card__drag {
+  width: fit-content;
   margin-top: 2px;
   border-top: 1px dashed #dbe2ea;
   padding-top: 4px;
@@ -339,40 +391,123 @@ button.metric {
 
 .meeting-focus {
   min-width: 0;
+  align-self: start;
+  border: 1px solid #dbe2ea;
+  background: #f8fafc;
+  padding: 12px;
+}
+
+.section-heading--focus {
+  align-items: flex-start;
+  margin-bottom: 6px;
+}
+
+.focus-count {
+  min-width: 34px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  padding: 4px 7px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.focus-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 8px;
+  color: #64748b;
+  font-size: 10px;
+}
+
+.focus-summary button,
+.focus-pagination button {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: #2563eb;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .focus-list {
   display: grid;
   gap: 5px;
+  max-height: 620px;
+  overflow-y: auto;
+  padding-right: 2px;
 }
 
 .focus-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
   padding: 8px;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
 }
 
-.focus-item > div {
+.focus-item:hover {
+  border-color: #c3d0de;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, .06);
+}
+
+.focus-item__content {
+  display: grid;
   min-width: 0;
+  gap: 2px;
 }
 
 .focus-item strong,
-.focus-item span {
+.focus-item span,
+.focus-item small {
   display: block;
 }
 
 .focus-item strong {
-  font-size: 12px;
-}
-
-.focus-item > div > span {
   overflow: hidden;
-  color: #64748b;
-  font-size: 11px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.focus-item__equipment,
+.focus-item__context {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.focus-item__equipment {
+  color: #334155;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.focus-item__context {
+  color: #64748b;
+  font-size: 10px;
+}
+
+.focus-item small {
+  margin-top: 2px;
+  color: #64748b;
+  font-size: 10px;
+}
+
+.focus-pagination {
+  display: flex;
+  justify-content: flex-end;
+  gap: 14px;
+  margin-top: 8px;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 8px;
+  font-size: 11px;
 }
 
 .planner-loading {
@@ -388,6 +523,10 @@ button.metric {
 
   .planner-main {
     grid-template-columns: 1fr;
+  }
+
+  .focus-list {
+    max-height: 420px;
   }
 }
 
@@ -412,5 +551,10 @@ button.metric {
 
   .metric-strip {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .focus-summary {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }

@@ -45,30 +45,71 @@
 
   <ng-container *ngIf="board as currentBoard">
     <section class="metric-strip" aria-label="Resumen de mantenimiento">
-      <button type="button" class="metric metric--danger" (click)="openFirstOverdue()">
+      <button
+        type="button"
+        class="metric metric--danger"
+        [class.metric--selected]="isFocusSelected('overdue')"
+        [attr.aria-pressed]="isFocusSelected('overdue')"
+        (click)="selectFocus('overdue')"
+      >
         <strong>{{ currentBoard.metrics.overdue }}</strong>
         <span>Vencidos</span>
       </button>
-      <div class="metric metric--today">
+
+      <button
+        type="button"
+        class="metric metric--today"
+        [class.metric--selected]="isFocusSelected('today')"
+        [attr.aria-pressed]="isFocusSelected('today')"
+        (click)="selectFocus('today')"
+      >
         <strong>{{ currentBoard.metrics.today }}</strong>
         <span>Para hoy</span>
-      </div>
-      <div class="metric">
+      </button>
+
+      <button
+        type="button"
+        class="metric"
+        [class.metric--selected]="isFocusSelected('week')"
+        [attr.aria-pressed]="isFocusSelected('week')"
+        (click)="selectFocus('week')"
+      >
         <strong>{{ currentBoard.metrics.week }}</strong>
         <span>En la semana</span>
-      </div>
-      <div class="metric metric--warning">
+      </button>
+
+      <button
+        type="button"
+        class="metric metric--warning"
+        [class.metric--selected]="isFocusSelected('unscheduled')"
+        [attr.aria-pressed]="isFocusSelected('unscheduled')"
+        (click)="selectFocus('unscheduled')"
+      >
         <strong>{{ currentBoard.metrics.unscheduled }}</strong>
         <span>Sin fecha</span>
-      </div>
-      <div class="metric">
+      </button>
+
+      <button
+        type="button"
+        class="metric"
+        [class.metric--selected]="isFocusSelected('spare_parts')"
+        [attr.aria-pressed]="isFocusSelected('spare_parts')"
+        (click)="selectFocus('spare_parts')"
+      >
         <strong>{{ currentBoard.metrics.needs_spare_part }}</strong>
         <span>Con refacción</span>
-      </div>
-      <div class="metric">
+      </button>
+
+      <button
+        type="button"
+        class="metric"
+        [class.metric--selected]="isFocusSelected('active')"
+        [attr.aria-pressed]="isFocusSelected('active')"
+        (click)="selectFocus('active')"
+      >
         <strong>{{ currentBoard.metrics.active }}</strong>
         <span>Activos</span>
-      </div>
+      </button>
     </section>
 
     <section class="planner-main">
@@ -89,7 +130,10 @@
             [class.day-column--today]="day.is_today"
           >
             <header>
-              <span>{{ formatDay(day.date) }}</span>
+              <div class="day-column__heading">
+                <span>{{ formatDay(day.date) }}</span>
+                <small *ngIf="day.is_today">Hoy</small>
+              </div>
               <strong>{{ day.items.length }}</strong>
             </header>
 
@@ -123,7 +167,7 @@
                 <span class="ticket-card__meta" *ngIf="ticket.falla">{{ ticket.falla }}</span>
                 <span class="ticket-card__meta" *ngIf="ticket.asignado_a">Resp. {{ ticket.asignado_a }}</span>
                 <span class="ticket-card__flag" *ngIf="ticket.necesita_refaccion">Requiere refacción</span>
-                <span class="ticket-card__drag" *ngIf="canDrag(ticket)">Arrastrar para reprogramar</span>
+                <span class="ticket-card__drag" *ngIf="canDrag(ticket)">Mover fecha</span>
               </button>
 
               <div *ngIf="day.items.length === 0" class="empty-day">Suelta aquí o sin trabajos</div>
@@ -133,35 +177,68 @@
       </div>
 
       <aside class="meeting-focus">
-        <div class="section-heading">
+        <div class="section-heading section-heading--focus">
           <div>
-            <h2>Resolver en junta</h2>
-            <p>Vencidos y tickets sin compromiso.</p>
+            <h2>{{ focusTitle }}</h2>
+            <p>{{ focusDescription }}</p>
           </div>
-          <span>{{ meetingFocusItems.length }}</span>
+          <span class="focus-count">{{ focusTotal }}</span>
+        </div>
+
+        <div
+          class="focus-summary"
+          *ngIf="focusTotal > 0 || focusMode !== 'priority'"
+        >
+          <span>Mostrando {{ visibleFocusItems.length }} de {{ focusTotal }}</span>
+          <button
+            *ngIf="focusMode !== 'priority'"
+            type="button"
+            (click)="selectFocus('priority')"
+          >
+            Volver a prioridades
+          </button>
         </div>
 
         <div class="focus-list">
           <button
-            *ngFor="let ticket of meetingFocusItems; trackBy: trackTicket"
+            *ngFor="let ticket of visibleFocusItems; trackBy: trackTicket"
             type="button"
             class="focus-item"
             (click)="openTicket(ticket)"
           >
-            <div>
+            <div class="focus-item__content">
               <strong>
                 #{{ ticket.ticket_id }} · {{ ticket.sucursal }}{{ ticket.sucursal_is_demo ? ' · DEMO' : '' }}
               </strong>
-              <span>{{ ticket.equipo }}</span>
+              <span class="focus-item__equipment">{{ ticket.equipo }}</span>
+              <span class="focus-item__context" *ngIf="ticket.falla">{{ ticket.falla }}</span>
+              <small>{{ focusMeta(ticket) }}</small>
             </div>
             <span class="status-badge" [ngClass]="statusClass(ticket.planner_status)">
               {{ statusLabel(ticket.planner_status) }}
             </span>
           </button>
 
-          <div *ngIf="meetingFocusItems.length === 0" class="empty-focus">
-            No hay vencidos ni tickets sin fecha con los filtros actuales.
+          <div *ngIf="focusTotal === 0" class="empty-focus">
+            No hay tickets para esta vista con los filtros actuales.
           </div>
+        </div>
+
+        <div class="focus-pagination" *ngIf="focusTotal > 0">
+          <button
+            *ngIf="visibleFocusItems.length < focusTotal"
+            type="button"
+            (click)="showMoreFocus()"
+          >
+            Mostrar más
+          </button>
+          <button
+            *ngIf="focusVisibleLimit > focusBaseLimit"
+            type="button"
+            (click)="showLessFocus()"
+          >
+            Ver menos
+          </button>
         </div>
       </aside>
     </section>
