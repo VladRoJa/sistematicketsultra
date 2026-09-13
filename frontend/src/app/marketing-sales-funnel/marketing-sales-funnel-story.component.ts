@@ -21,6 +21,13 @@ interface FunnelNodeView {
   tone: 'orange' | 'gray';
 }
 
+interface FlowRibbonView {
+  id: string;
+  d: string;
+  tone: 'orange' | 'gray';
+  opacity: number;
+}
+
 interface FallbackOriginView extends MarketingSalesOriginBreakdown {
   displayLabel: string;
   salesDisplay: string;
@@ -150,6 +157,95 @@ export class MarketingSalesFunnelStoryComponent {
     );
   }
 
+  get flowRibbons(): FlowRibbonView[] {
+    const summary = this.summary;
+    if (!summary) {
+      return [];
+    }
+
+    const leads = summary.leads_iventas || 0;
+    const visits = summary.visits_iventas;
+    const salesIventas = summary.sales_iventas;
+    const salesTotal = summary.sales_total;
+    const salesFallback = summary.sales_not_iventas;
+    const publications = summary.sales_iventas_meta;
+    const organic = summary.sales_iventas_other;
+
+    const leadReference = Math.max(leads, visits, 1);
+    const iventasReference = Math.max(visits, salesIventas, 1);
+    const salesReference = Math.max(salesTotal, 1);
+    const outputReference = Math.max(salesIventas, 1);
+
+    return [
+      this.createRibbon({
+        id: 'leads-visits',
+        sourceX: 238,
+        sourceY: 114,
+        targetX: 326,
+        targetY: 114,
+        sourceThickness: this.ribbonThickness(leads, leadReference, 18, 70),
+        targetThickness: this.ribbonThickness(visits, leadReference, 14, 70),
+        tone: 'orange',
+        opacity: 0.20,
+      }),
+      this.createRibbon({
+        id: 'visits-sales',
+        sourceX: 546,
+        sourceY: 114,
+        targetX: 634,
+        targetY: 272,
+        sourceThickness: this.ribbonThickness(visits, iventasReference, 16, 60),
+        targetThickness: this.ribbonThickness(salesIventas, iventasReference, 16, 60),
+        tone: 'orange',
+        opacity: 0.22,
+      }),
+      this.createRibbon({
+        id: 'sales-total-iventas',
+        sourceX: 238,
+        sourceY: 374,
+        targetX: 634,
+        targetY: 332,
+        sourceThickness: this.ribbonThickness(salesIventas, salesReference, 18, 72),
+        targetThickness: this.ribbonThickness(salesIventas, salesReference, 18, 72),
+        tone: 'orange',
+        opacity: 0.24,
+      }),
+      this.createRibbon({
+        id: 'sales-total-fallback',
+        sourceX: 238,
+        sourceY: 405,
+        targetX: 326,
+        targetY: 516,
+        sourceThickness: this.ribbonThickness(salesFallback, salesReference, 18, 72),
+        targetThickness: this.ribbonThickness(salesFallback, salesReference, 18, 72),
+        tone: 'gray',
+        opacity: 0.24,
+      }),
+      this.createRibbon({
+        id: 'iventas-publications',
+        sourceX: 834,
+        sourceY: 286,
+        targetX: 922,
+        targetY: 114,
+        sourceThickness: this.ribbonThickness(publications, outputReference, 14, 58),
+        targetThickness: this.ribbonThickness(publications, outputReference, 14, 58),
+        tone: 'orange',
+        opacity: 0.22,
+      }),
+      this.createRibbon({
+        id: 'iventas-organic',
+        sourceX: 834,
+        sourceY: 340,
+        targetX: 922,
+        targetY: 382,
+        sourceThickness: this.ribbonThickness(organic, outputReference, 14, 58),
+        targetThickness: this.ribbonThickness(organic, outputReference, 14, 58),
+        tone: 'orange',
+        opacity: 0.22,
+      }),
+    ];
+  }
+
   get fallbackOrigins(): FallbackOriginView[] {
     const summary = this.summary;
     if (!summary) {
@@ -203,6 +299,58 @@ export class MarketingSalesFunnelStoryComponent {
       tone,
       origin,
     };
+  }
+
+  private createRibbon(config: {
+    id: string;
+    sourceX: number;
+    sourceY: number;
+    targetX: number;
+    targetY: number;
+    sourceThickness: number;
+    targetThickness: number;
+    tone: 'orange' | 'gray';
+    opacity: number;
+  }): FlowRibbonView {
+    const horizontalDistance = Math.max(40, config.targetX - config.sourceX);
+    const controlOffset = horizontalDistance * 0.46;
+
+    const sourceTop = config.sourceY - (config.sourceThickness / 2);
+    const sourceBottom = config.sourceY + (config.sourceThickness / 2);
+    const targetTop = config.targetY - (config.targetThickness / 2);
+    const targetBottom = config.targetY + (config.targetThickness / 2);
+
+    const sourceControlX = config.sourceX + controlOffset;
+    const targetControlX = config.targetX - controlOffset;
+
+    const d = [
+      `M ${config.sourceX} ${sourceTop}`,
+      `C ${sourceControlX} ${sourceTop}, ${targetControlX} ${targetTop}, ${config.targetX} ${targetTop}`,
+      `L ${config.targetX} ${targetBottom}`,
+      `C ${targetControlX} ${targetBottom}, ${sourceControlX} ${sourceBottom}, ${config.sourceX} ${sourceBottom}`,
+      'Z',
+    ].join(' ');
+
+    return {
+      id: config.id,
+      d,
+      tone: config.tone,
+      opacity: config.opacity,
+    };
+  }
+
+  private ribbonThickness(
+    value: number,
+    reference: number,
+    minimum: number,
+    maximum: number,
+  ): number {
+    if (value <= 0 || reference <= 0) {
+      return minimum;
+    }
+
+    const ratio = Math.min(1, Math.max(0.06, value / reference));
+    return minimum + ((maximum - minimum) * Math.sqrt(ratio));
   }
 
   private openDetail(metric: string, origin?: string): void {
