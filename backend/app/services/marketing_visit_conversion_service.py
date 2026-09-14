@@ -13,17 +13,25 @@ from openpyxl.utils import get_column_letter
 
 from app.models.warehouse import VentaTotalSnapshotRowORM
 from app.services.marketing_access import MarketingAccess
-from app.services.marketing_attribution import SaleRecord, reconcile_visit_sales
+from app.services.marketing_attribution import (
+    SaleRecord,
+    VisitEvent,
+    deduplicate_visit_events,
+    reconcile_visit_sales,
+)
 from app.services.marketing_dashboard_service import (
     _load_sales as _load_attribution_sales,
-    _load_visit_events as _load_attribution_visits,
+    _visit_event_key as _build_attribution_visit_key,
     load_visible_marketing_branches,
 )
 from app.services.marketing_inputs_service import parse_month
+from app.services.marketing_phone import normalize_phone
 from app.services.marketing_sales_funnel_detail_service import (
     MarketingSalesFunnelDetailValidationError,
 )
 from app.services.marketing_sales_funnel_service import (
+    CANCELLED_STATUS_TERMS,
+    ELIGIBLE_VISIT_DESCRIPTIONS,
     MATCH_WINDOW_DAYS,
     ORIGIN_IVENTAS_META,
     ORIGIN_IVENTAS_OTHER,
@@ -32,7 +40,10 @@ from app.services.marketing_sales_funnel_service import (
     _load_iventas_data,
     _load_visits,
     _match_iventas,
+    _normalize_text,
+    _parse_row_date,
     _select_venta_total_snapshot,
+    _to_decimal,
 )
 
 
@@ -165,6 +176,69 @@ def _metric_matches(row: VisitConversionRow, metric: str) -> bool:
     return False
 
 
+def _build_attribution_visits_from_rows(
+    *,
+    rows: list[VentaTotalSnapshotRowORM],
+    month_start: date,
+    branch_ids: tuple[int, ...],
+    alias_map: dict[str, int],
+) -> list[VisitEvent]:
+    """Construye los VisitEvent de atribución sin volver a consultar Venta Total."""
+    allowed_branch_ids = set(branch_ids)
+    eligible_by_key: dict[str, VisitEvent] = {}
+
+    for row in rows:
+        try:
+            visit_date = _parse_row_date(row.fecha)
+            total = _to_decimal(row.total)
+        except ValueError:
+            continue
+
+        if visit_date.replace(day=1) != month_start:
+            continue
+
+        description = _normalize_text(row.descripcion)
+        if description not in ELIGIBLE_VISIT_DESCRIPTIONS:
+            continue
+        if total != 0:
+            continue
+
+        normalized_status = _normalize_text(row.estatus)
+        if any(
+            term in normalized_status
+            for term in CANCELLED_STATUS_TERMS
+        ):
+            continue
+
+        branch_id = alias_map.get(_normalize_text(row.sucursal))
+        if branch_id is None or branch_id not in allowed_branch_ids:
+            continue
+
+        phone = normalize_phone(row.telefono)
+        if phone is None:
+            continue
+
+        event_key = _build_attribution_visit_key(
+            row=row,
+            branch_id=branch_id,
+            visit_date=visit_date,
+            phone=phone,
+            description=description,
+        )
+        eligible_by_key.setdefault(
+            event_key,
+            VisitEvent(
+                event_key=event_key,
+                branch_id=branch_id,
+                visit_date=visit_date,
+                phone=phone,
+                description=description,
+            ),
+        )
+
+    return deduplicate_visit_events(eligible_by_key.values())
+
+
 def _build_bundle(
     *,
     month_start: date,
@@ -184,18 +258,21 @@ def _build_bundle(
         .order_by(VentaTotalSnapshotRowORM.row_index.asc())
         .all()
     )
+    alias_map = _load_branch_alias_map()
     visits = _load_visits(
         venta_total_rows,
         month_start,
         branch_ids,
-        _load_branch_alias_map(),
+        alias_map,
+    )
+    attribution_visits = _build_attribution_visits_from_rows(
+        rows=venta_total_rows,
+        month_start=month_start,
+        branch_ids=branch_ids,
+        alias_map=alias_map,
     )
 
     evidence, _, _ = _load_iventas_data(month_start, branch_ids)
-    attribution_visit_result = _load_attribution_visits(
-        month_start=month_start,
-        branch_ids=branch_ids,
-    )
     attribution_window_end = _month_end(month_start) + timedelta(
         days=MATCH_WINDOW_DAYS
     )
@@ -205,7 +282,7 @@ def _build_bundle(
         branch_ids=branch_ids,
     )
     attributions = reconcile_visit_sales(
-        visits=attribution_visit_result.events,
+        visits=attribution_visits,
         sales=attribution_sales_result.sales,
     )
 
