@@ -154,6 +154,17 @@
             costos y conversión bajo las reglas actuales del funnel.
           </p>
         </div>
+
+        <button
+          mat-stroked-button
+          class="branch-export-action"
+          type="button"
+          [disabled]="!hasBranches"
+          (click)="exportBranchTable()"
+        >
+          <mat-icon>download</mat-icon>
+          Exportar Excel
+        </button>
       </div>
 
       <p *ngIf="!hasBranches" class="empty-message">
@@ -172,7 +183,6 @@
               <th colspan="4">Venta nueva</th>
               <th colspan="3">Costos</th>
               <th colspan="4">Conversión</th>
-              <th rowspan="2">Acción</th>
             </tr>
             <tr class="branch-performance-table__columns">
               <th>Inversión</th>
@@ -181,7 +191,7 @@
               <th>Total</th>
               <th>Venta iVentas</th>
               <th>No iVentas</th>
-              <th>Ingreso</th>
+              <th>Ingreso total</th>
               <th>CPL</th>
               <th>Costo visita</th>
               <th>Costo venta</th>
@@ -295,16 +305,6 @@
                 <span class="coverage-track">
                   <span [style.--coverage]="row.iventas_sale_share"></span>
                 </span>
-              </td>
-
-              <td class="metric-cell metric-cell--action">
-                <button
-                  class="row-detail-action"
-                  type="button"
-                  (click)="openBranchDetail('sales_total', row)"
-                >
-                  Ver detalle <mat-icon>arrow_forward</mat-icon>
-                </button>
               </td>
             </tr>
           </tbody>

@@ -40,6 +40,9 @@ import {
   MarketingSalesFunnelStoryComponent,
 } from './marketing-sales-funnel-story.component';
 import { MarketingSalesFunnelService } from './marketing-sales-funnel.service';
+import {
+  exportMarketingSalesFunnelBranchTable,
+} from './marketing-sales-funnel-table-export';
 
 
 interface SummaryCard {
@@ -300,6 +303,21 @@ export class MarketingSalesFunnelComponent implements OnInit {
       this.requestInvestmentDashboard();
       this.requestDashboard();
     }
+  }
+
+  exportBranchTable(): void {
+    if (!this.dashboard || !this.hasBranches) {
+      return;
+    }
+
+    exportMarketingSalesFunnelBranchTable({
+      month: this.selectedMonth,
+      branches: this.dashboard.branches,
+      investmentDashboard: this.investmentDashboard,
+      scopeOptions: this.scopeOptions,
+      regionId: this.regionControl.value,
+      branchId: this.branchControl.value,
+    });
   }
 
   openDetail(
