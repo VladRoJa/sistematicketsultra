@@ -40,6 +40,8 @@ XLSX_MIMETYPE = (
 ZIP_MIMETYPE = "application/zip"
 WEEKLY_FREQUENCY_KEEP = "KEEP"
 _LOWERCASE_MESSAGE_WORDS = frozenset({"de", "del", "el", "la", "las", "los", "y"})
+_SHORT_NAME_ABBREVIATIONS = frozenset({"MA", "MA."})
+_SHORT_NAME_CONNECTORS = frozenset({"DE", "DEL", "EL", "LA", "LAS", "LOS", "Y"})
 
 
 def campaign_export_mimetype(filename: str) -> str:
@@ -247,7 +249,17 @@ def _short_name(value: Any) -> str:
     full_name = " ".join(str(value or "").split())
     if not full_name:
         return ""
-    return full_name.split(" ", 1)[0].title()
+
+    words = full_name.split(" ")
+    first_token = words[0]
+    if first_token.upper() not in _SHORT_NAME_ABBREVIATIONS:
+        return first_token.title()
+
+    for word in words[1:]:
+        if word.upper() not in _SHORT_NAME_CONNECTORS:
+            return word.title()
+
+    return first_token.title()
 
 
 def _phones_workbook(
