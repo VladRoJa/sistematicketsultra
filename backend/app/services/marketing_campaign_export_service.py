@@ -19,12 +19,17 @@ from openpyxl import Workbook
 
 from app.extensions import db
 from app.models.marketing import MarketingReactivationCampaignORM
+from app.models.sucursal_model import Sucursal
 from app.services.marketing_reactivation_service import (
     CAMPAIGN_STATUS_DRAFT,
     CAMPAIGN_STATUS_EXPORTED,
     MarketingReactivationConflictError,
+    MarketingReactivationValidationError,
     export_marketing_reactivation_campaign as _validate_and_mark_exported,
     get_marketing_reactivation_campaign,
+)
+from app.warehouse.services.socios_vencidos_current_status_resolver import (
+    normalize_socios_vencidos_branch_key,
 )
 
 
@@ -33,6 +38,7 @@ XLSX_MIMETYPE = (
 )
 ZIP_MIMETYPE = "application/zip"
 WEEKLY_FREQUENCY_KEEP = "KEEP"
+_LOWERCASE_MESSAGE_WORDS = frozenset({"de", "del", "el", "la", "las", "los", "y"})
 
 
 def campaign_export_mimetype(filename: str) -> str:
@@ -64,6 +70,7 @@ def export_marketing_reactivation_campaign(
         branch = str(recipient.get("sucursal") or "SIN SUCURSAL").strip()
         groups[branch].append(recipient)
 
+    branch_message_labels = _branch_message_labels(session=session)
     campaign_part = _filename_part(
         campaign.get("name"),
         fallback=f"CAMPANA_{int(campaign_id)}",
@@ -71,6 +78,7 @@ def export_marketing_reactivation_campaign(
     export_bytes, filename = _build_delivery_package(
         campaign_part=campaign_part,
         groups=groups,
+        branch_message_labels=branch_message_labels,
     )
 
     try:
@@ -134,17 +142,58 @@ def _mark_keep_override_exported(
         raise
 
 
+def _message_branch_label(value: Any) -> str:
+    words = " ".join(str(value or "").split()).split(" ")
+    rendered: list[str] = []
+    for index, word in enumerate(words):
+        lowered = word.lower()
+        if index > 0 and lowered in _LOWERCASE_MESSAGE_WORDS:
+            rendered.append(lowered)
+        else:
+            rendered.append(lowered.capitalize())
+    return " ".join(rendered)
+
+
+def _branch_message_labels(*, session: Any | None = None) -> dict[str, str]:
+    active_session = session if session is not None else db.session
+    labels: dict[str, str] = {}
+    for row in active_session.query(Sucursal).order_by(Sucursal.sucursal).all():
+        key = normalize_socios_vencidos_branch_key(row.sucursal)
+        label = _message_branch_label(row.sucursal)
+        if key and label:
+            labels[key] = label
+    return labels
+
+
+def _resolve_branch_message_label(
+    branch: str,
+    branch_message_labels: dict[str, str],
+) -> str:
+    key = normalize_socios_vencidos_branch_key(branch)
+    label = branch_message_labels.get(key) if key is not None else None
+    if label:
+        return label
+    raise MarketingReactivationValidationError(
+        "No existe un nombre de comunicación configurado para la sucursal "
+        f"{branch!r}. Revisa el catálogo de sucursales antes de exportar."
+    )
+
+
 def _build_delivery_package(
     *,
     campaign_part: str,
     groups: dict[str, list[dict[str, Any]]],
+    branch_message_labels: dict[str, str],
 ) -> tuple[bytes, str]:
     ordered_groups = sorted(groups.items(), key=lambda item: item[0].casefold())
     if len(ordered_groups) == 1:
         branch, recipients = ordered_groups[0]
         branch_part = _filename_part(branch, fallback="SIN_SUCURSAL")
         return (
-            _phones_workbook(recipients),
+            _phones_workbook(
+                recipients,
+                branch_message_labels=branch_message_labels,
+            ),
             f"{campaign_part}__{branch_part}.xlsx",
         )
 
@@ -157,7 +206,13 @@ def _build_delivery_package(
                 f"{campaign_part}__{branch_part}.xlsx",
                 used_names,
             )
-            archive.writestr(entry_name, _phones_workbook(recipients))
+            archive.writestr(
+                entry_name,
+                _phones_workbook(
+                    recipients,
+                    branch_message_labels=branch_message_labels,
+                ),
+            )
         archive.writestr("RESUMEN.xlsx", _summary_workbook(ordered_groups))
     return archive_output.getvalue(), f"{campaign_part}.zip"
 
@@ -169,10 +224,22 @@ def _short_name(value: Any) -> str:
     return full_name.split(" ", 1)[0].title()
 
 
-def _phones_workbook(recipients: list[dict[str, Any]]) -> bytes:
+def _phones_workbook(
+    recipients: list[dict[str, Any]],
+    *,
+    branch_message_labels: dict[str, str],
+) -> bytes:
     workbook = Workbook(write_only=True)
     sheet = workbook.create_sheet("Destinatarios")
-    sheet.append(["telefono", "nombre", "nombre_completo", "sucursal"])
+    sheet.append(
+        [
+            "telefono",
+            "nombre",
+            "nombre_completo",
+            "sucursal",
+            "sucursal_mensaje",
+        ]
+    )
     for recipient in sorted(
         recipients,
         key=lambda row: str(row.get("phone_mx10") or ""),
@@ -185,6 +252,7 @@ def _phones_workbook(recipients: list[dict[str, Any]]) -> bytes:
                 _short_name(full_name),
                 full_name,
                 branch,
+                _resolve_branch_message_label(branch, branch_message_labels),
             ]
         )
     output = BytesIO()
