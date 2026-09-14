@@ -20,6 +20,7 @@ from openpyxl import Workbook
 from app.extensions import db
 from app.models.marketing import MarketingReactivationCampaignORM
 from app.models.sucursal_model import Sucursal
+from app.models.warehouse import TrackBranchCatalogORM
 from app.services.marketing_reactivation_service import (
     CAMPAIGN_STATUS_DRAFT,
     CAMPAIGN_STATUS_EXPORTED,
@@ -154,14 +155,39 @@ def _message_branch_label(value: Any) -> str:
     return " ".join(rendered)
 
 
+def _catalog_branch_lookup_key(value: Any) -> str | None:
+    canonical = str(value or "").replace("_", " ")
+    return normalize_socios_vencidos_branch_key(canonical)
+
+
 def _branch_message_labels(*, session: Any | None = None) -> dict[str, str]:
     active_session = session if session is not None else db.session
+    rows = (
+        active_session.query(
+            TrackBranchCatalogORM.sucursal_canon,
+            Sucursal.sucursal,
+        )
+        .join(
+            Sucursal,
+            Sucursal.sucursal_id == TrackBranchCatalogORM.sucursal_id,
+        )
+        .filter(TrackBranchCatalogORM.sucursal_id.isnot(None))
+        .order_by(TrackBranchCatalogORM.sucursal_canon.asc())
+        .all()
+    )
+
     labels: dict[str, str] = {}
-    for row in active_session.query(Sucursal).order_by(Sucursal.sucursal).all():
-        key = normalize_socios_vencidos_branch_key(row.sucursal)
-        label = _message_branch_label(row.sucursal)
-        if key and label:
-            labels[key] = label
+    for sucursal_canon, sucursal_name in rows:
+        label = _message_branch_label(sucursal_name)
+        if not label:
+            continue
+
+        canonical_key = _catalog_branch_lookup_key(sucursal_canon)
+        human_key = normalize_socios_vencidos_branch_key(sucursal_name)
+        if canonical_key:
+            labels[canonical_key] = label
+        if human_key:
+            labels[human_key] = label
     return labels
 
 
@@ -175,7 +201,7 @@ def _resolve_branch_message_label(
         return label
     raise MarketingReactivationValidationError(
         "No existe un nombre de comunicación configurado para la sucursal "
-        f"{branch!r}. Revisa el catálogo de sucursales antes de exportar."
+        f"{branch!r}. Revisa la relación Track/sucursales antes de exportar."
     )
 
 
