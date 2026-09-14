@@ -521,9 +521,14 @@ export class MarketingSalesFunnelComponent implements OnInit {
         metric: 'sales_iventas_meta',
         icon: 'campaign',
         cssClass: 'summary-kpi--orange',
-        secondaryLabel: 'Inversión Meta',
-        secondaryValue: investment !== null
-          ? this.formatCurrency(investment)
+        secondaryLabel: 'Costo por venta',
+        secondaryValue: (
+          investment !== null
+          && summary.sales_iventas_meta > 0
+        )
+          ? this.formatCurrency(
+              investment / summary.sales_iventas_meta,
+            )
           : '—',
       },
       {
