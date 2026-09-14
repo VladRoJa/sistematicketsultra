@@ -3,8 +3,12 @@ from types import SimpleNamespace as NS
 from zipfile import ZipFile
 
 from openpyxl import load_workbook
+import pytest
 
 from app.services import marketing_campaign_export_service as export_service
+from app.services.marketing_reactivation_service import (
+    MarketingReactivationValidationError,
+)
 
 
 def _recipient(phone, branch, name=None):
@@ -15,7 +19,19 @@ def _recipient(phone, branch, name=None):
     }
 
 
-def test_single_branch_exports_direct_xlsx(monkeypatch):
+def _mock_branch_labels(monkeypatch, labels):
+    normalized = {
+        export_service.normalize_socios_vencidos_branch_key(branch): label
+        for branch, label in labels.items()
+    }
+    monkeypatch.setattr(
+        export_service,
+        "_branch_message_labels",
+        lambda **kwargs: normalized,
+    )
+
+
+def test_single_branch_exports_direct_xlsx_with_message_branch(monkeypatch):
     monkeypatch.setattr(
         export_service,
         "get_marketing_reactivation_campaign",
@@ -25,16 +41,20 @@ def test_single_branch_exports_direct_xlsx(monkeypatch):
             "recipients": [
                 _recipient(
                     "6861000002",
-                    "VILLAS DEL REY",
+                    "SEND MXL",
                     "ROSA MARIA GONZALEZ VELASCO",
                 ),
                 _recipient(
                     "6861000001",
-                    "VILLAS DEL REY",
+                    "SEND MXL",
                     "MARÍA DE JESÚS MARISCAL ALBA",
                 ),
             ],
         },
+    )
+    _mock_branch_labels(
+        monkeypatch,
+        {"SEND MXL": "Sendero Mexicali"},
     )
     guarded_calls = []
     monkeypatch.setattr(
@@ -45,25 +65,33 @@ def test_single_branch_exports_direct_xlsx(monkeypatch):
 
     data, filename = export_service.export_marketing_reactivation_campaign(
         campaign_id=7,
-        allowed_sucursal_keys=("VILLAS DEL REY",),
+        allowed_sucursal_keys=("SEND MXL",),
         session=NS(),
     )
 
-    assert filename == "CAMPANA_SEPTIEMBRE__VILLAS_DEL_REY.xlsx"
+    assert filename == "CAMPANA_SEPTIEMBRE__SEND_MXL.xlsx"
     assert export_service.campaign_export_mimetype(filename).endswith("sheet")
     assert list(load_workbook(BytesIO(data)).active.values) == [
-        ("telefono", "nombre", "nombre_completo", "sucursal"),
+        (
+            "telefono",
+            "nombre",
+            "nombre_completo",
+            "sucursal",
+            "sucursal_mensaje",
+        ),
         (
             "6861000001",
             "María",
             "MARÍA DE JESÚS MARISCAL ALBA",
-            "VILLAS DEL REY",
+            "SEND MXL",
+            "Sendero Mexicali",
         ),
         (
             "6861000002",
             "Rosa",
             "ROSA MARIA GONZALEZ VELASCO",
-            "VILLAS DEL REY",
+            "SEND MXL",
+            "Sendero Mexicali",
         ),
     ]
     assert guarded_calls[0]["campaign_id"] == 7
@@ -82,6 +110,14 @@ def test_multiple_branches_export_zip_with_summary(monkeypatch):
                 _recipient("6861000003", "VILLALTA", "LUIS GARCIA"),
                 _recipient("6861000004", "METEPEC", "SOFIA RAMIREZ"),
             ],
+        },
+    )
+    _mock_branch_labels(
+        monkeypatch,
+        {
+            "VILLAS DEL REY": "Villas del Rey",
+            "VILLALTA": "Villalta",
+            "METEPEC": "Metepec",
         },
     )
     monkeypatch.setattr(
@@ -108,9 +144,15 @@ def test_multiple_branches_export_zip_with_summary(monkeypatch):
             "VENCIDOS_AGOSTO_2026__VILLALTA.xlsx"
         )))
         assert list(villalta.active.values) == [
-            ("telefono", "nombre", "nombre_completo", "sucursal"),
-            ("6861000002", "Juan", "JUAN PEREZ", "VILLALTA"),
-            ("6861000003", "Luis", "LUIS GARCIA", "VILLALTA"),
+            (
+                "telefono",
+                "nombre",
+                "nombre_completo",
+                "sucursal",
+                "sucursal_mensaje",
+            ),
+            ("6861000002", "Juan", "JUAN PEREZ", "VILLALTA", "Villalta"),
+            ("6861000003", "Luis", "LUIS GARCIA", "VILLALTA", "Villalta"),
         ]
         summary = load_workbook(BytesIO(archive.read("RESUMEN.xlsx")))
         assert list(summary.active.values) == [
@@ -127,6 +169,18 @@ def test_short_name_normalizes_whitespace_and_keeps_accents():
     assert export_service._short_name(None) == ""
 
 
+def test_message_branch_label_is_customer_facing():
+    assert export_service._message_branch_label("SENDERO MEXICALI") == "Sendero Mexicali"
+    assert export_service._message_branch_label("VILLAS DEL REY") == "Villas del Rey"
+
+
+def test_missing_message_branch_label_fails_closed():
+    with pytest.raises(MarketingReactivationValidationError) as exc_info:
+        export_service._resolve_branch_message_label("SEND MXL", {})
+
+    assert "catálogo de sucursales" in str(exc_info.value)
+
+
 def test_export_package_never_rebuilds_campaign_audience(monkeypatch):
     monkeypatch.setattr(
         export_service,
@@ -139,6 +193,7 @@ def test_export_package_never_rebuilds_campaign_audience(monkeypatch):
             ],
         },
     )
+    _mock_branch_labels(monkeypatch, {"CENTRO": "Centro"})
     called = []
     monkeypatch.setattr(
         export_service,
