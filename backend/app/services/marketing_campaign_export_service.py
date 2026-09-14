@@ -162,15 +162,31 @@ def _build_delivery_package(
     return archive_output.getvalue(), f"{campaign_part}.zip"
 
 
+def _short_name(value: Any) -> str:
+    full_name = " ".join(str(value or "").split())
+    if not full_name:
+        return ""
+    return full_name.split(" ", 1)[0].title()
+
+
 def _phones_workbook(recipients: list[dict[str, Any]]) -> bytes:
     workbook = Workbook(write_only=True)
     sheet = workbook.create_sheet("Destinatarios")
-    sheet.append(["telefono"])
+    sheet.append(["telefono", "nombre", "nombre_completo", "sucursal"])
     for recipient in sorted(
         recipients,
         key=lambda row: str(row.get("phone_mx10") or ""),
     ):
-        sheet.append([str(recipient.get("phone_mx10") or "")])
+        full_name = " ".join(str(recipient.get("member_name") or "").split())
+        branch = str(recipient.get("sucursal") or "").strip()
+        sheet.append(
+            [
+                str(recipient.get("phone_mx10") or ""),
+                _short_name(full_name),
+                full_name,
+                branch,
+            ]
+        )
     output = BytesIO()
     workbook.save(output)
     return output.getvalue()
