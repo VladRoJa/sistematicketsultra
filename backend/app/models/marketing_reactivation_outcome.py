@@ -20,7 +20,6 @@ class MarketingReactivationCampaignRecipientOutcomeORM(db.Model):
             ondelete="CASCADE",
         ),
         nullable=False,
-        unique=True,
     )
     status = db.Column(
         db.String(20),
@@ -78,6 +77,10 @@ class MarketingReactivationCampaignRecipientOutcomeORM(db.Model):
     active_snapshot_row = db.relationship("SociosActivosSnapshotRowORM")
 
     __table_args__ = (
+        db.UniqueConstraint(
+            "campaign_recipient_id",
+            name="uq_marketing_reactivation_outcomes_recipient",
+        ),
         db.CheckConstraint(
             "status IN ('PENDING', 'REACTIVATED', 'REVIEW', 'WINDOW_CLOSED')",
             name="ck_marketing_reactivation_outcomes_status",
