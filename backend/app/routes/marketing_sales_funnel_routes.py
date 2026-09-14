@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from time import perf_counter
+
 from flask import Blueprint, jsonify, request, send_file
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
@@ -180,26 +182,41 @@ def _load_scope_options(access: MarketingAccess) -> list[dict[str, object]]:
 @marketing_sales_funnel_bp.get("/sales-funnel")
 @jwt_required()
 def get_marketing_sales_funnel_endpoint():
+    request_started = perf_counter()
     try:
+        stage_started = perf_counter()
         base_access, access = _resolve_scoped_access()
         month = request.args.get("month", "")
         month_start = parse_month(month)
+        access_ms = (perf_counter() - stage_started) * 1000
+
+        stage_started = perf_counter()
         result = build_marketing_sales_funnel(
             month=month,
             access=access,
         )
+        funnel_ms = (perf_counter() - stage_started) * 1000
+
+        stage_started = perf_counter()
         _, branch_ids, _ = load_visible_marketing_branches(access)
+        branch_scope_ms = (perf_counter() - stage_started) * 1000
+
+        stage_started = perf_counter()
         result["summary"]["leads_iventas"] = (
             count_monthly_iventas_leads(
                 month_start=month_start,
                 branch_ids=branch_ids,
             )
         )
+        leads_ms = (perf_counter() - stage_started) * 1000
 
+        stage_started = perf_counter()
         visit_conversion = build_visit_conversion_summary(
             month_start=month_start,
             branch_ids=branch_ids,
         )
+        conversion_ms = (perf_counter() - stage_started) * 1000
+
         result["summary"].update(visit_conversion["summary"])
         conversion_by_branch = visit_conversion["branches"]
         for branch_payload in result["branches"]:
@@ -220,8 +237,24 @@ def get_marketing_sales_funnel_endpoint():
                 "puede comprar hasta 30 días después."
             )
 
+        stage_started = perf_counter()
         result["scope_options"] = _load_scope_options(base_access)
-        return jsonify(result), 200
+        scope_options_ms = (perf_counter() - stage_started) * 1000
+
+        response = jsonify(result)
+        total_ms = (perf_counter() - request_started) * 1000
+        response.headers["Server-Timing"] = ", ".join(
+            (
+                f"access;dur={access_ms:.1f}",
+                f"funnel;dur={funnel_ms:.1f}",
+                f"branch_scope;dur={branch_scope_ms:.1f}",
+                f"leads;dur={leads_ms:.1f}",
+                f"visit_conversion;dur={conversion_ms:.1f}",
+                f"scope_options;dur={scope_options_ms:.1f}",
+                f"total;dur={total_ms:.1f}",
+            )
+        )
+        return response, 200
     except MarketingAuthorizationError as exc:
         return jsonify(
             {"status": "error", "message": str(exc)}
