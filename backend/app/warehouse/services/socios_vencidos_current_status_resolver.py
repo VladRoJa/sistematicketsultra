@@ -7,7 +7,7 @@ from typing import Any
 import re
 import unicodedata
 
-from sqlalchemy import func, or_
+from sqlalchemy import func
 
 from app.extensions import db
 from app.models.warehouse import (
@@ -316,34 +316,43 @@ def _read_potential_active_matches(
     session: Any,
 ) -> list[Any]:
     signals = _extract_vencido_batch_signals(vencidos_rows)
-    predicates = []
-    if signals["pins"]:
-        predicates.append(
-            SociosActivosSnapshotRowORM.pin.in_(signals["pins"])
-        )
-    if signals["phone_variants"]:
-        predicates.append(
-            SociosActivosSnapshotRowORM.telefono_digits.in_(
-                signals["phone_variants"]
-            )
-        )
-    if signals["emails"]:
-        predicates.append(
-            func.lower(func.btrim(SociosActivosSnapshotRowORM.email_raw)).in_(
-                signals["emails"]
-            )
-        )
-    if not predicates:
+    if not any(signals.values()):
         return []
 
-    return (
-        session.query(SociosActivosSnapshotRowORM)
-        .filter(
-            SociosActivosSnapshotRowORM.snapshot_id == activos_snapshot_id,
-            or_(*predicates),
-        )
-        .all()
+    base_query = session.query(SociosActivosSnapshotRowORM).filter(
+        SociosActivosSnapshotRowORM.snapshot_id == activos_snapshot_id
     )
+    rows_by_id: dict[Any, Any] = {}
+
+    def collect(rows: list[Any]) -> None:
+        for row in rows:
+            row_id = getattr(row, "id", None)
+            rows_by_id[row_id if row_id is not None else id(row)] = row
+
+    if signals["pins"]:
+        collect(
+            base_query.filter(
+                SociosActivosSnapshotRowORM.pin.in_(signals["pins"])
+            ).all()
+        )
+    if signals["phone_variants"]:
+        collect(
+            base_query.filter(
+                SociosActivosSnapshotRowORM.telefono_digits.in_(
+                    signals["phone_variants"]
+                )
+            ).all()
+        )
+    if signals["emails"]:
+        collect(
+            base_query.filter(
+                func.lower(func.btrim(SociosActivosSnapshotRowORM.email_raw)).in_(
+                    signals["emails"]
+                )
+            ).all()
+        )
+
+    return list(rows_by_id.values())
 
 
 def _extract_vencido_batch_signals(
