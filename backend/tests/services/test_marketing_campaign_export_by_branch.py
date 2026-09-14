@@ -31,6 +31,31 @@ def _mock_branch_labels(monkeypatch, labels):
     )
 
 
+class _BranchCatalogQuery:
+    def __init__(self, rows):
+        self.rows = rows
+
+    def join(self, *args, **kwargs):
+        return self
+
+    def filter(self, *args, **kwargs):
+        return self
+
+    def order_by(self, *args, **kwargs):
+        return self
+
+    def all(self):
+        return list(self.rows)
+
+
+class _BranchCatalogSession:
+    def __init__(self, rows):
+        self.rows = rows
+
+    def query(self, *args, **kwargs):
+        return _BranchCatalogQuery(self.rows)
+
+
 def test_single_branch_exports_direct_xlsx_with_message_branch(monkeypatch):
     monkeypatch.setattr(
         export_service,
@@ -174,11 +199,27 @@ def test_message_branch_label_is_customer_facing():
     assert export_service._message_branch_label("VILLAS DEL REY") == "Villas del Rey"
 
 
+def test_branch_message_labels_use_track_catalog_bridge():
+    labels = export_service._branch_message_labels(
+        session=_BranchCatalogSession(
+            [
+                ("AZAHARES_CUL", "AZAHARES CULIACAN"),
+                ("SEND_MXL", "SENDERO MEXICALI"),
+            ]
+        )
+    )
+
+    assert labels["AZAHARES CUL"] == "Azahares Culiacan"
+    assert labels["AZAHARES CULIACAN"] == "Azahares Culiacan"
+    assert labels["SEND MXL"] == "Sendero Mexicali"
+    assert labels["SENDERO MEXICALI"] == "Sendero Mexicali"
+
+
 def test_missing_message_branch_label_fails_closed():
     with pytest.raises(MarketingReactivationValidationError) as exc_info:
         export_service._resolve_branch_message_label("SEND MXL", {})
 
-    assert "catálogo de sucursales" in str(exc_info.value)
+    assert "relación Track/sucursales" in str(exc_info.value)
 
 
 def test_export_package_never_rebuilds_campaign_audience(monkeypatch):
