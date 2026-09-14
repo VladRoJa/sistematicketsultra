@@ -728,10 +728,12 @@ def _build_marketing_reactivation_campaign_segment(
         activos_snapshot_id=None,
         session=session,
     )
-    phone_counts = _count_complete_segment_not_found_phones(
-        base_query=base_query.order_by(None),
-        context=context,
-        session=session,
+    phone_counts, source_batches = (
+        _collect_complete_segment_batches_and_phone_counts(
+            base_query=base_query,
+            context=context,
+            session=session,
+        )
     )
     suite_sent_by_phone = _read_suite_campaign_sent_for_period(
         phone_mx10_values=set(phone_counts),
@@ -745,8 +747,8 @@ def _build_marketing_reactivation_campaign_segment(
     tariff_catalog = _read_all_active_tariff_catalog(session=session)
     rows = [
         serialized
-        for serialized in _iter_complete_segment_candidates(
-            base_query=base_query,
+        for serialized in _iter_cached_complete_segment_candidates(
+            batches=source_batches,
             context=context,
             phone_counts=phone_counts,
             tariff_catalog=tariff_catalog,
@@ -786,6 +788,29 @@ def _build_candidate_base_query(
     )
 
 
+def _collect_complete_segment_batches_and_phone_counts(
+    *,
+    base_query: Any,
+    context: Any,
+    session: Any,
+    batch_size: int = _CANDIDATE_BATCH_SIZE,
+) -> tuple[Counter[str], list[list[Any]]]:
+    """Recorre una vez la selección y conserva lotes para la resolución final."""
+
+    phone_counts: Counter[str] = Counter()
+    batches: list[list[Any]] = []
+    for batch in _iter_query_batches(base_query, batch_size):
+        batches.append(batch)
+        phone_counts.update(
+            count_socios_vencidos_not_found_phones(
+                vencidos_rows=batch,
+                context=context,
+                session=session,
+            )
+        )
+    return phone_counts, batches
+
+
 def _count_complete_segment_not_found_phones(
     *,
     base_query: Any,
@@ -802,6 +827,32 @@ def _count_complete_segment_not_found_phones(
             )
         )
     return phone_counts
+
+
+def _iter_cached_complete_segment_candidates(
+    *,
+    batches: list[list[Any]],
+    context: Any,
+    phone_counts: Counter[str],
+    tariff_catalog: dict[str, MarketingReactivationTariffORM],
+    session: Any,
+    suite_sent_by_phone: dict[str, datetime] | None = None,
+    iventas_contact_window_utc: tuple[datetime, datetime] | None = None,
+):
+    for batch in batches:
+        candidates = resolve_socios_vencidos_reactivation_candidate_batch(
+            vencidos_rows=batch,
+            context=context,
+            phone_counts=phone_counts,
+            session=session,
+        )
+        yield from _serialize_resolved_batch(
+            vencidos_rows=batch,
+            candidates=candidates,
+            tariff_catalog=tariff_catalog,
+            suite_sent_by_phone=suite_sent_by_phone,
+            iventas_contact_window_utc=iventas_contact_window_utc,
+        )
 
 
 def _iter_complete_segment_candidates(
