@@ -172,8 +172,8 @@ export const routes: Routes = [
       {
         path: 'marketing/reactivation',
         loadComponent: () =>
-          import('./marketing-reactivation/marketing-reactivation.component')
-            .then(m => m.MarketingReactivationComponent),
+          import('./marketing-reactivation/marketing-reactivation-page.component')
+            .then(m => m.MarketingReactivationPageComponent),
       },
       {
         path: 'warehouse/track/kpi-desempeno',

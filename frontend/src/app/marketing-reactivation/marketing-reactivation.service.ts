@@ -27,6 +27,10 @@ import {
   ReactivationSourcesResponse,
   ReactivationTariffsResponse,
 } from './marketing-reactivation.models';
+import {
+  ReactivationCampaignOutcomeDetailResponse,
+  ReactivationOutcomeSummaryResponse,
+} from './marketing-reactivation-outcome.models';
 import { CampaignSourceStatusResponse } from './marketing-campaign-source-status.models';
 
 @Injectable({
@@ -206,6 +210,38 @@ export class MarketingReactivationService {
   markCampaignSent(id: number): Observable<ReactivationCampaignResponse> {
     return this.http.post<ReactivationCampaignResponse>(
       `${this.apiUrl}/campaigns/${id}/mark-sent`,
+      {},
+    );
+  }
+
+  getOutcomeSummary(filters: {
+    dateFrom?: string | null;
+    dateTo?: string | null;
+    regionId?: number | null;
+    sucursal?: string | null;
+  } = {}): Observable<ReactivationOutcomeSummaryResponse> {
+    let params = new HttpParams();
+    if (filters.dateFrom) params = params.set('date_from', filters.dateFrom);
+    if (filters.dateTo) params = params.set('date_to', filters.dateTo);
+    if (filters.regionId !== null && filters.regionId !== undefined) {
+      params = params.set('region_id', String(filters.regionId));
+    }
+    if (filters.sucursal) params = params.set('sucursal', filters.sucursal);
+    return this.http.get<ReactivationOutcomeSummaryResponse>(
+      `${this.apiUrl}/outcomes/summary`,
+      { params },
+    );
+  }
+
+  getCampaignOutcomes(id: number): Observable<ReactivationCampaignOutcomeDetailResponse> {
+    return this.http.get<ReactivationCampaignOutcomeDetailResponse>(
+      `${this.apiUrl}/outcomes/campaigns/${id}`,
+    );
+  }
+
+  refreshOutcomes(): Observable<Record<string, unknown>> {
+    return this.http.post<Record<string, unknown>>(
+      `${this.apiUrl}/outcomes/run`,
       {},
     );
   }

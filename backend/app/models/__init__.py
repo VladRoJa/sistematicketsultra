@@ -62,6 +62,9 @@ from .marketing import (
     MarketingMetaRawPageORM,
     MarketingMetaAdInsightORM,
 )
+from .marketing_reactivation_outcome import (
+    MarketingReactivationCampaignRecipientOutcomeORM,
+)
 from .internal_documents import (
     InternalDocumentCategoryORM,
     InternalDocumentORM,
@@ -169,6 +172,7 @@ __all__ = [
     "MarketingReactivationTariffORM",
     "MarketingReactivationCampaignORM",
     "MarketingReactivationCampaignRecipientORM",
+    "MarketingReactivationCampaignRecipientOutcomeORM",
     "MarketingIventasSyncRunORM",
     "MarketingIventasRawPageORM",
     "MarketingIventasContactORM",
