@@ -154,11 +154,16 @@ def get_marketing_reactivation_outcomes_summary():
 def get_marketing_reactivation_campaign_outcomes(campaign_id: int):
     try:
         _, access = _current_user_and_access()
+        allowed = _allowed_sucursal_keys(access)
         result = build_marketing_reactivation_campaign_outcome_detail(
             campaign_id=campaign_id,
-            allowed_sucursal_keys=_allowed_sucursal_keys(access),
+            allowed_sucursal_keys=allowed,
             session=db.session,
         )
+        if allowed is not None and int((result.get("summary") or {}).get("sent") or 0) == 0:
+            raise MarketingAuthorizationError(
+                "La campaña no contiene destinatarios dentro del alcance del usuario."
+            )
         return jsonify(result), 200
     except MarketingAuthorizationError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 403
@@ -175,9 +180,9 @@ def get_marketing_reactivation_campaign_outcomes(campaign_id: int):
 def run_marketing_reactivation_outcomes_endpoint():
     try:
         _, access = _current_user_and_access()
-        if not access.can_edit_inputs:
+        if not access.can_edit_inputs or not access.is_global:
             raise MarketingAuthorizationError(
-                "No autorizado para actualizar resultados de Reactivación."
+                "La reconciliación global de Reactivación requiere acceso global de edición."
             )
         result = run_marketing_reactivation_outcomes(session=db.session)
         return jsonify(result), 200
