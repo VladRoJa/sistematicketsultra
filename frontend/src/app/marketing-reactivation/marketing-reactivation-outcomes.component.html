@@ -2,9 +2,9 @@
   <div class="outcome-header">
     <div>
       <p class="eyebrow">Resultados</p>
-      <h2>Reactivaciones atribuidas</h2>
+      <h2>Recuperaciones atribuidas</h2>
       <p class="subtitle">
-        Seguimiento de campañas enviadas con ventana de atribución y evidencia de Socios Activos.
+        Seguimiento de campañas enviadas. Una recuperación se clasifica como renovación si el socio vuelve en el mismo mes de su vencimiento y como reactivación si venció en un mes anterior.
       </p>
     </div>
     <button mat-stroked-button type="button" (click)="load()" [disabled]="loading">
@@ -60,8 +60,19 @@
         <strong>{{ data.summary.sent | number }}</strong>
       </article>
       <article class="metric-card accent">
-        <span>Reactivados</span>
-        <strong>{{ data.summary.reactivated | number }}</strong>
+        <span>Recuperados</span>
+        <strong>{{ data.summary.recovered | number }}</strong>
+        <small *ngIf="data.summary.unclassified_recovered">
+          {{ data.summary.unclassified_recovered | number }} sin clasificar
+        </small>
+      </article>
+      <article class="metric-card">
+        <span>Renovaciones</span>
+        <strong>{{ data.summary.renewals | number }}</strong>
+      </article>
+      <article class="metric-card">
+        <span>Reactivaciones</span>
+        <strong>{{ data.summary.reactivations | number }}</strong>
       </article>
       <article class="metric-card">
         <span>Conversión</span>
@@ -81,7 +92,9 @@
             <th>Campaña</th>
             <th>Enviada</th>
             <th>Enviados</th>
-            <th>Reactivados</th>
+            <th>Recuperados</th>
+            <th>Renovaciones</th>
+            <th>Reactivaciones</th>
             <th>Conversión</th>
             <th>Seguimiento</th>
             <th></th>
@@ -95,7 +108,9 @@
             </td>
             <td>{{ formatDate(campaign.sent_date_local) }}</td>
             <td>{{ campaign.sent | number }}</td>
-            <td>{{ campaign.reactivated | number }}</td>
+            <td>{{ campaign.recovered | number }}</td>
+            <td>{{ campaign.renewals | number }}</td>
+            <td>{{ campaign.reactivations | number }}</td>
             <td>{{ campaign.conversion_rate | number:'1.0-2' }}%</td>
             <td>
               {{ campaign.in_tracking | number }}
@@ -103,7 +118,7 @@
             </td>
             <td>
               <button mat-button type="button" (click)="openCampaign(campaign.campaign_id)">
-                Ver reactivados
+                Ver recuperados
               </button>
             </td>
           </tr>
@@ -122,8 +137,10 @@
         <p class="eyebrow">Detalle</p>
         <h3>{{ campaignDetail.name }}</h3>
         <p>
-          {{ campaignDetail.summary.reactivated | number }} reactivados de
-          {{ campaignDetail.summary.sent | number }} enviados.
+          {{ campaignDetail.summary.recovered | number }} recuperados de
+          {{ campaignDetail.summary.sent | number }} enviados ·
+          {{ campaignDetail.summary.renewals | number }} renovaciones ·
+          {{ campaignDetail.summary.reactivations | number }} reactivaciones.
         </p>
       </div>
       <button mat-button type="button" (click)="closeDetail()">Cerrar</button>
@@ -133,24 +150,26 @@
       <mat-spinner diameter="24"></mat-spinner>
     </div>
 
-    <div class="table-shell" *ngIf="!loadingDetail && reactivatedRows.length; else noReactivated">
+    <div class="table-shell" *ngIf="!loadingDetail && recoveredRows.length; else noRecovered">
       <table>
         <thead>
           <tr>
             <th>Socio</th>
+            <th>Resultado</th>
             <th>Sucursal campaña</th>
             <th>Venció</th>
-            <th>Reactivó</th>
+            <th>Recuperó</th>
             <th>Días</th>
             <th>Sucursal activa</th>
           </tr>
         </thead>
         <tbody>
-          <tr *ngFor="let row of reactivatedRows">
+          <tr *ngFor="let row of recoveredRows">
             <td>
               <strong>{{ row.member_name || 'Sin nombre' }}</strong>
               <small>{{ statusLabel(row.status) }}</small>
             </td>
+            <td>{{ businessResultLabel(row.business_result) }}</td>
             <td>{{ row.campaign_branch }}</td>
             <td>{{ formatDate(row.fecha_vencimiento) }}</td>
             <td>{{ formatDate(row.reactivated_at_local) }}</td>
@@ -161,8 +180,8 @@
       </table>
     </div>
 
-    <ng-template #noReactivated>
-      <div *ngIf="!loadingDetail" class="empty-state">Esta campaña todavía no tiene reactivaciones atribuidas.</div>
+    <ng-template #noRecovered>
+      <div *ngIf="!loadingDetail" class="empty-state">Esta campaña todavía no tiene recuperaciones atribuidas.</div>
     </ng-template>
   </section>
 </section>
