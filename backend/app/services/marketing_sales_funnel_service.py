@@ -114,7 +114,7 @@ class _SalesLoadResult:
 class MarketingSalesFunnelLoadedData:
     month_start: date
     branch_ids: tuple[int, ...]
-    venta_total_rows: tuple[VentaTotalSnapshotRowORM, ...]
+    venta_total_rows: tuple[VentaTotalSnapshotRowORM, ...] | None
     alias_map: dict[str, int]
     visits: tuple[_CommercialVisit, ...]
     evidence: dict[tuple[int, str], list[_IventasEvidence]]
@@ -1112,7 +1112,11 @@ def build_marketing_sales_funnel_with_loaded_data(
     loaded = MarketingSalesFunnelLoadedData(
         month_start=month_start,
         branch_ids=branch_ids,
-        venta_total_rows=tuple(venta_total_rows),
+        venta_total_rows=(
+            tuple(venta_total_rows)
+            if venta_total_snapshot is not None
+            else None
+        ),
         alias_map=alias_map,
         visits=tuple(visits),
         evidence=evidence,
