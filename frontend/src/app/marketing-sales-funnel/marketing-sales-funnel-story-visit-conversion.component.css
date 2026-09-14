@@ -194,11 +194,11 @@
 
 .conversion-kpi-card {
   display: flex;
-  min-height: 82px;
+  min-height: 94px;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: 5px;
   padding: 12px 14px;
   border: 1px solid var(--trace-border);
   border-radius: 14px;
@@ -207,7 +207,7 @@
   box-shadow: 0 7px 18px rgba(29, 41, 57, 0.035);
 }
 
-.conversion-kpi-card span {
+.conversion-kpi-card > span {
   color: #52647c;
   font-size: 10px;
   font-weight: 900;
@@ -215,12 +215,20 @@
   text-transform: uppercase;
 }
 
-.conversion-kpi-card strong {
+.conversion-kpi-card > strong {
   color: var(--trace-navy);
   font-size: clamp(24px, 2vw, 31px);
   font-weight: 950;
   line-height: 1;
   letter-spacing: -0.04em;
+}
+
+.conversion-kpi-card__flow {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1;
+  letter-spacing: 0.01em;
 }
 
 @media (max-width: 1050px) {
