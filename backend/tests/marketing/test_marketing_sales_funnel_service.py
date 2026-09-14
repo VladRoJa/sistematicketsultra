@@ -257,6 +257,59 @@ def test_load_iventas_data_reuses_projected_meta_flag(monkeypatch):
     assert evidence[(4, "6862222222")][0].has_meta_ad is True
 
 
+def test_load_new_sales_uses_projected_rows(monkeypatch):
+    projected_rows = [
+        SimpleNamespace(
+            id=101,
+            sucursal_id=4,
+            fecha_pago_at=date(2026, 9, 5),
+            id_socio="5001",
+            id_folio="F-5001",
+            pin="",
+            lada="686",
+            telefono="1234567",
+            total_pagado="499.00",
+        )
+    ]
+    queried_columns: list[object] = []
+
+    class FakeQuery:
+        def filter(self, *_args):
+            return self
+
+        def order_by(self, *_args):
+            return self
+
+        def all(self):
+            return projected_rows
+
+    def fake_query(*columns):
+        queried_columns.extend(columns)
+        return FakeQuery()
+
+    monkeypatch.setattr(
+        marketing_sales_funnel_service,
+        "db",
+        SimpleNamespace(session=SimpleNamespace(query=fake_query)),
+    )
+
+    result = marketing_sales_funnel_service._load_new_sales(
+        snapshot=SimpleNamespace(id=77),
+        venta_total_rows=[],
+        month_start=date(2026, 9, 1),
+        branch_ids=(4,),
+    )
+
+    assert len(queried_columns) == 9
+    assert len(result.sales) == 1
+    assert result.enriched_with_venta_total == 0
+    assert result.sales[0].sale_key == "id_socio:5001"
+    assert result.sales[0].branch_id == 4
+    assert result.sales[0].sale_date == date(2026, 9, 5)
+    assert result.sales[0].phone == "6861234567"
+    assert str(result.sales[0].revenue) == "499.00"
+
+
 def test_drilldown_sale_filters_follow_same_attribution_hierarchy():
     assert _sale_matches_metric(
         "sales_total",
