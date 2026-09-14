@@ -1,6 +1,6 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, map } from 'rxjs';
 
 import { environment } from 'src/environments/environment';
 
@@ -29,6 +29,8 @@ export class MarketingService {
     return this.http.get<MarketingDashboardResponse>(
       `${this.apiUrl}/dashboard`,
       { params },
+    ).pipe(
+      map((dashboard) => this.withGlobalInvestmentFallback(dashboard)),
     );
   }
 
@@ -107,5 +109,27 @@ export class MarketingService {
       `${this.apiUrl}/inputs/${branchId}`,
       payload,
     );
+  }
+
+  private withGlobalInvestmentFallback(
+    dashboard: MarketingDashboardResponse,
+  ): MarketingDashboardResponse {
+    const totalSpend = dashboard.summary.meta?.total_spend ?? null;
+
+    if (
+      dashboard.summary.investment !== null
+      || totalSpend === null
+      || totalSpend === undefined
+    ) {
+      return dashboard;
+    }
+
+    return {
+      ...dashboard,
+      summary: {
+        ...dashboard.summary,
+        investment: totalSpend,
+      },
+    };
   }
 }
