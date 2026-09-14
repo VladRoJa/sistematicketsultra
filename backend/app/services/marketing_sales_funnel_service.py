@@ -689,7 +689,6 @@ def _load_iventas_data(
     lookback_start = month_start - timedelta(days=MATCH_WINDOW_DAYS)
     runs = _canonical_runs_for_window(lookback_start, month_end)
     run_ids = tuple(int(run.id) for run in runs)
-    meta_keys = _meta_contact_keys(run_ids)
 
     evidence: dict[tuple[int, str], list[_IventasEvidence]] = defaultdict(list)
     month_counts: dict[int, list[int]] = {
@@ -700,8 +699,34 @@ def _load_iventas_data(
     if not run_ids:
         return evidence, {}, run_ids
 
+    current_period_key = f"IVENTAS-{month_start.strftime('%Y-%m')}"
+    current_run_ids = {
+        int(run.id)
+        for run in runs
+        if str(run.period_key) == current_period_key
+    }
+
+    meta_tag_exists = (
+        db.session.query(MarketingIventasContactTagORM.id)
+        .filter(
+            MarketingIventasContactTagORM.sync_run_id
+            == MarketingIventasContactORM.sync_run_id,
+            MarketingIventasContactTagORM.iventas_contact_row_id
+            == MarketingIventasContactORM.id,
+            MarketingIventasContactTagORM.tag_kind == "META_AD",
+        )
+        .exists()
+    )
+
     contacts = (
-        MarketingIventasContactORM.query.filter(
+        db.session.query(
+            MarketingIventasContactORM.sync_run_id,
+            MarketingIventasContactORM.sucursal_id,
+            MarketingIventasContactORM.phone_mx10,
+            MarketingIventasContactORM.first_message_date_local,
+            meta_tag_exists.label("has_meta"),
+        )
+        .filter(
             MarketingIventasContactORM.sync_run_id.in_(run_ids),
             MarketingIventasContactORM.sucursal_id.in_(branch_ids),
             MarketingIventasContactORM.first_message_at_utc.isnot(None),
@@ -710,13 +735,6 @@ def _load_iventas_data(
         .all()
     )
 
-    current_period_key = f"IVENTAS-{month_start.strftime('%Y-%m')}"
-    current_run_ids = {
-        int(run.id)
-        for run in runs
-        if str(run.period_key) == current_period_key
-    }
-
     for contact in contacts:
         branch_id = int(contact.sucursal_id)
         phone = str(contact.phone_mx10 or "").strip()
@@ -724,9 +742,7 @@ def _load_iventas_data(
         if not phone or interaction_date is None:
             continue
 
-        has_meta = (
-            (int(contact.sync_run_id), int(contact.id)) in meta_keys
-        )
+        has_meta = bool(contact.has_meta)
         if lookback_start <= interaction_date <= month_end:
             evidence[(branch_id, phone)].append(
                 _IventasEvidence(
