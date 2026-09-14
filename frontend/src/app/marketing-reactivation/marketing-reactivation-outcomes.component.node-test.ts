@@ -29,6 +29,10 @@ function setup() {
         summary: {
           sent: 100,
           reactivated: 12,
+          recovered: 12,
+          renewals: 5,
+          reactivations: 7,
+          unclassified_recovered: 0,
           pending: 20,
           review: 3,
           window_closed: 65,
@@ -44,6 +48,10 @@ function setup() {
           attribution_window_days: 14,
           sent: 100,
           reactivated: 12,
+          recovered: 12,
+          renewals: 5,
+          reactivations: 7,
+          unclassified_recovered: 0,
           pending: 20,
           review: 3,
           window_closed: 65,
@@ -60,13 +68,17 @@ function setup() {
         applicable: true,
         attribution_window_days: 14,
         summary: {
-          sent: 2,
-          reactivated: 1,
+          sent: 3,
+          reactivated: 2,
+          recovered: 2,
+          renewals: 1,
+          reactivations: 1,
+          unclassified_recovered: 0,
           pending: 1,
           review: 0,
           window_closed: 0,
           in_tracking: 1,
-          conversion_rate: 50,
+          conversion_rate: 66.67,
         },
         rows: [
           {
@@ -75,6 +87,7 @@ function setup() {
             campaign_branch: 'TEC MXL',
             fecha_vencimiento: '2026-09-01',
             status: 'REACTIVATED',
+            business_result: 'RENOVACION',
             review_reason: null,
             sent_at: '2026-09-10T17:00:00+00:00',
             sent_at_local: '2026-09-10T10:00:00',
@@ -87,8 +100,24 @@ function setup() {
             recipient_id: 2,
             member_name: 'Luis',
             campaign_branch: 'TEC MXL',
+            fecha_vencimiento: '2026-08-31',
+            status: 'REACTIVATED',
+            business_result: 'REACTIVACION',
+            review_reason: null,
+            sent_at: '2026-09-10T17:00:00+00:00',
+            sent_at_local: '2026-09-10T10:00:00',
+            reactivated_at_local: '2026-09-13T09:30:00',
+            days_to_reactivation: 3,
+            active_id_socio: '1002',
+            active_sucursal: 'TEC MXL',
+          },
+          {
+            recipient_id: 3,
+            member_name: 'Mario',
+            campaign_branch: 'TEC MXL',
             fecha_vencimiento: '2026-09-02',
             status: 'PENDING',
+            business_result: null,
             review_reason: null,
             sent_at: '2026-09-10T17:00:00+00:00',
             sent_at_local: '2026-09-10T10:00:00',
@@ -114,12 +143,14 @@ function setup() {
 }
 
 
-test('loads sent/reactivated/conversion summary on init', () => {
+test('loads sent/recovered/business breakdown/conversion summary on init', () => {
   const {component, summaryRequests} = setup();
 
   assert.equal(summaryRequests.length, 1);
   assert.equal(component.result?.summary.sent, 100);
-  assert.equal(component.result?.summary.reactivated, 12);
+  assert.equal(component.result?.summary.recovered, 12);
+  assert.equal(component.result?.summary.renewals, 5);
+  assert.equal(component.result?.summary.reactivations, 7);
   assert.equal(component.result?.summary.conversion_rate, 12);
   assert.equal(component.result?.summary.in_tracking, 23);
 });
@@ -137,16 +168,18 @@ test('region keeps compatible branches and forwards branch scope to summary', ()
 });
 
 
-test('campaign drilldown exposes only attributed reactivations', () => {
+test('campaign drilldown exposes attributed recoveries and business result', () => {
   const {component, detailRequests} = setup();
   component.openCampaign(44);
 
   assert.deepEqual(detailRequests, [44]);
   assert.equal(component.detail?.campaign_id, 44);
-  assert.equal(component.reactivatedRows.length, 1);
-  assert.equal(component.reactivatedRows[0].member_name, 'Ana');
-  assert.equal(component.reactivatedRows[0].days_to_reactivation, 2);
-  assert.equal(component.reactivatedRows[0].active_sucursal, 'SAN LUIS');
+  assert.equal(component.recoveredRows.length, 2);
+  assert.equal(component.recoveredRows[0].member_name, 'Ana');
+  assert.equal(component.recoveredRows[0].business_result, 'RENOVACION');
+  assert.equal(component.recoveredRows[1].business_result, 'REACTIVACION');
+  assert.equal(component.businessResultLabel(component.recoveredRows[0].business_result), 'Renovación');
+  assert.equal(component.businessResultLabel(component.recoveredRows[1].business_result), 'Reactivación');
 });
 
 

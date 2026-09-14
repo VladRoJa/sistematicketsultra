@@ -4,9 +4,15 @@ export type ReactivationOutcomeStatus =
   | 'REVIEW'
   | 'WINDOW_CLOSED';
 
+export type RecoveryBusinessResult = 'RENOVACION' | 'REACTIVACION';
+
 export interface ReactivationOutcomeCounts {
   sent: number;
   reactivated: number;
+  recovered: number;
+  renewals: number;
+  reactivations: number;
+  unclassified_recovered: number;
   pending: number;
   review: number;
   window_closed: number;
@@ -36,6 +42,7 @@ export interface ReactivationCampaignOutcomeRow {
   campaign_branch: string;
   fecha_vencimiento: string | null;
   status: ReactivationOutcomeStatus;
+  business_result: RecoveryBusinessResult | null;
   review_reason: string | null;
   sent_at: string;
   sent_at_local: string;

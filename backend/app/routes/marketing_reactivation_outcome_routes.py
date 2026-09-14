@@ -24,6 +24,10 @@ from app.services.marketing_reactivation_outcome_service import (
     build_marketing_reactivation_outcome_summary,
     run_marketing_reactivation_outcomes,
 )
+from app.services.marketing_recovery_business_service import (
+    enrich_campaign_outcome_detail_with_business_results,
+    enrich_outcome_summary_with_business_results,
+)
 from app.warehouse.services.socios_vencidos_current_status_resolver import (
     normalize_socios_vencidos_branch_key,
 )
@@ -155,6 +159,12 @@ def get_marketing_reactivation_outcomes_summary():
             selected_sucursal_keys=selected,
             session=db.session,
         )
+        result = enrich_outcome_summary_with_business_results(
+            result,
+            allowed_sucursal_keys=allowed,
+            selected_sucursal_keys=selected,
+            session=db.session,
+        )
         return jsonify(result), 200
     except MarketingAuthorizationError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 403
@@ -179,6 +189,7 @@ def get_marketing_reactivation_campaign_outcomes(campaign_id: int):
             allowed_sucursal_keys=allowed,
             session=db.session,
         )
+        result = enrich_campaign_outcome_detail_with_business_results(result)
         if allowed is not None and int((result.get("summary") or {}).get("sent") or 0) == 0:
             raise MarketingAuthorizationError(
                 "La campaña no contiene destinatarios dentro del alcance del usuario."
