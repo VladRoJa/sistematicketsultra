@@ -23,6 +23,7 @@ import { TrackForecastComponent } from './warehouse/track-forecast/track-forecas
 import { TrackBranchHistoryComponent } from './warehouse/track-dashboard/track-branch-history/track-branch-history.component';
 import { CommercialPromotionsComponent } from './warehouse/commercial-promotions/commercial-promotions.component';
 import { trackRegionalOperationalAccessGuard } from './warehouse/track-intelligence-regional-operational/track-regional-operational-access.guard';
+import { MarketingSalesFunnelAccessGuard } from './marketing-sales-funnel/marketing-sales-funnel-access.guard';
 
 
 
@@ -164,7 +165,7 @@ export const routes: Routes = [
       },
       {
         path: 'marketing-conversion/venta-total',
-        canActivate: [AdmicorpGuard],
+        canActivate: [MarketingSalesFunnelAccessGuard],
         loadComponent: () =>
           import('./marketing-sales-funnel/marketing-sales-funnel.component')
             .then(m => m.MarketingSalesFunnelComponent),
