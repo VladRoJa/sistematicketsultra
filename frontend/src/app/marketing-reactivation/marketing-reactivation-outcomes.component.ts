@@ -14,6 +14,7 @@ import {
   ReactivationCampaignOutcomeRow,
   ReactivationOutcomeSummaryResponse,
   ReactivationOutcomeStatus,
+  RecoveryBusinessResult,
 } from './marketing-reactivation-outcome.models';
 import { CampaignOptions } from './marketing-reactivation.models';
 
@@ -58,7 +59,7 @@ export class MarketingReactivationOutcomesComponent implements OnInit {
       : this.options.branches;
   }
 
-  get reactivatedRows(): ReactivationCampaignOutcomeRow[] {
+  get recoveredRows(): ReactivationCampaignOutcomeRow[] {
     return (this.detail?.rows ?? []).filter(row => row.status === 'REACTIVATED');
   }
 
@@ -97,7 +98,7 @@ export class MarketingReactivationOutcomesComponent implements OnInit {
       error: () => {
         this.result = null;
         this.loading = false;
-        this.error = 'No fue posible cargar el seguimiento de reactivaciones.';
+        this.error = 'No fue posible cargar el seguimiento de recuperaciones.';
       },
     });
   }
@@ -127,11 +128,17 @@ export class MarketingReactivationOutcomesComponent implements OnInit {
   statusLabel(status: ReactivationOutcomeStatus): string {
     const labels: Record<ReactivationOutcomeStatus, string> = {
       PENDING: 'Pendiente',
-      REACTIVATED: 'Reactivado',
+      REACTIVATED: 'Recuperado',
       REVIEW: 'Revisar identidad',
       WINDOW_CLOSED: 'Ventana cerrada',
     };
     return labels[status];
+  }
+
+  businessResultLabel(result: RecoveryBusinessResult | null): string {
+    if (result === 'RENOVACION') return 'Renovación';
+    if (result === 'REACTIVACION') return 'Reactivación';
+    return 'Sin clasificar';
   }
 
   formatDate(value: string | null): string {
