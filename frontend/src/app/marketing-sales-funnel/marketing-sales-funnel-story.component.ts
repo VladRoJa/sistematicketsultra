@@ -40,7 +40,10 @@ interface FallbackOriginView extends MarketingSalesOriginBreakdown {
   standalone: true,
   imports: [CommonModule, MatDialogModule, MatIconModule],
   templateUrl: './marketing-sales-funnel-story.component.html',
-  styleUrls: ['./marketing-sales-funnel-story.component.css'],
+  styleUrls: [
+    './marketing-sales-funnel-story.component.css',
+    './marketing-sales-funnel-story-visit-conversion.component.css',
+  ],
 })
 export class MarketingSalesFunnelStoryComponent {
   private readonly dialog = inject(MatDialog);
