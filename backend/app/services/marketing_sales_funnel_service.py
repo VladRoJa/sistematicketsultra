@@ -534,14 +534,25 @@ def _load_new_sales(
     if snapshot is None:
         return _SalesLoadResult()
 
-    allowed = set(branch_ids)
     by_folio, by_pin_date = _build_venta_total_enrichment(
         venta_total_rows,
         month_start,
     )
     rows = (
-        VentasNuevosSociosDetalleSnapshotRowORM.query.filter_by(
-            snapshot_id=snapshot.id
+        db.session.query(
+            VentasNuevosSociosDetalleSnapshotRowORM.id,
+            VentasNuevosSociosDetalleSnapshotRowORM.sucursal_id,
+            VentasNuevosSociosDetalleSnapshotRowORM.fecha_pago_at,
+            VentasNuevosSociosDetalleSnapshotRowORM.id_socio,
+            VentasNuevosSociosDetalleSnapshotRowORM.id_folio,
+            VentasNuevosSociosDetalleSnapshotRowORM.pin,
+            VentasNuevosSociosDetalleSnapshotRowORM.lada,
+            VentasNuevosSociosDetalleSnapshotRowORM.telefono,
+            VentasNuevosSociosDetalleSnapshotRowORM.total_pagado,
+        )
+        .filter(
+            VentasNuevosSociosDetalleSnapshotRowORM.snapshot_id == snapshot.id,
+            VentasNuevosSociosDetalleSnapshotRowORM.sucursal_id.in_(branch_ids),
         )
         .order_by(VentasNuevosSociosDetalleSnapshotRowORM.id.asc())
         .all()
@@ -551,12 +562,7 @@ def _load_new_sales(
     enriched_count = 0
 
     for row in rows:
-        if row.sucursal_id is None:
-            continue
-
         branch_id = int(row.sucursal_id)
-        if branch_id not in allowed:
-            continue
 
         try:
             payment_date = _payment_local_date(row.fecha_pago_at)
