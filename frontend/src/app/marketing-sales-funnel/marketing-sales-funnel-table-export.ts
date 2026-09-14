@@ -35,6 +35,8 @@ const EXPORT_HEADERS = [
   'Visita iVentas → Compra',
   'Visita sin trazabilidad → Compra',
   '% Venta iVentas',
+  'Compraron visita iVentas',
+  'Compraron visita sin trazabilidad',
 ];
 
 const CURRENCY_COLUMNS = ['B', 'L', 'M', 'N', 'O'];
@@ -59,26 +61,6 @@ export function exportMarketingSalesFunnelBranchTable(
 
   const rows = options.branches.map((branch) => {
     const investment = investmentByBranch.get(branch.sucursal_id) ?? null;
-    const costPerLead = (
-      investment !== null && branch.leads_meta > 0
-        ? investment / branch.leads_meta
-        : null
-    );
-    const costPerVisit = (
-      investment !== null && branch.visits_total > 0
-        ? investment / branch.visits_total
-        : null
-    );
-    const costPerSale = (
-      investment !== null && branch.sales_iventas > 0
-        ? investment / branch.sales_iventas
-        : null
-    );
-    const leadToVisit = (
-      branch.leads_meta > 0
-        ? branch.visits_iventas / branch.leads_meta
-        : null
-    );
 
     return [
       branch.sucursal,
@@ -88,18 +70,20 @@ export function exportMarketingSalesFunnelBranchTable(
       branch.visits_iventas,
       branch.visits_not_iventas,
       branch.sales_total,
-      branch.sales_iventas,
+      null,
       branch.sales_iventas_meta,
       branch.sales_iventas_other,
-      branch.sales_not_iventas,
+      null,
       branch.revenue_total,
-      costPerLead,
-      costPerVisit,
-      costPerSale,
-      leadToVisit,
-      branch.iventas_visit_conversion_rate,
-      branch.not_iventas_visit_conversion_rate,
-      branch.iventas_sale_share,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      branch.visits_iventas_bought,
+      branch.visits_not_iventas_bought,
     ];
   });
 
@@ -128,22 +112,104 @@ export function exportMarketingSalesFunnelBranchTable(
     { wch: 22 },
     { wch: 30 },
     { wch: 16 },
+    { wch: 24, hidden: true },
+    { wch: 31, hidden: true },
   ];
 
   const lastRow = rows.length + 1;
   worksheet['!autofilter'] = { ref: `A1:S${lastRow}` };
 
+  options.branches.forEach((branch, index) => {
+    const rowIndex = index + 2;
+    const investment = investmentByBranch.get(branch.sucursal_id) ?? null;
+    const costPerLead = (
+      investment !== null && branch.leads_meta > 0
+        ? investment / branch.leads_meta
+        : null
+    );
+    const costPerVisit = (
+      investment !== null && branch.visits_total > 0
+        ? investment / branch.visits_total
+        : null
+    );
+    const costPerSale = (
+      investment !== null && branch.sales_iventas > 0
+        ? investment / branch.sales_iventas
+        : null
+    );
+    const leadToVisit = (
+      branch.leads_meta > 0
+        ? branch.visits_iventas / branch.leads_meta
+        : null
+    );
+
+    setFormulaCell(
+      worksheet,
+      `H${rowIndex}`,
+      `I${rowIndex}+J${rowIndex}`,
+      branch.sales_iventas,
+    );
+    setFormulaCell(
+      worksheet,
+      `K${rowIndex}`,
+      `G${rowIndex}-H${rowIndex}`,
+      branch.sales_not_iventas,
+    );
+    setFormulaCell(
+      worksheet,
+      `M${rowIndex}`,
+      `IFERROR(B${rowIndex}/C${rowIndex},"")`,
+      costPerLead,
+    );
+    setFormulaCell(
+      worksheet,
+      `N${rowIndex}`,
+      `IFERROR(B${rowIndex}/D${rowIndex},"")`,
+      costPerVisit,
+    );
+    setFormulaCell(
+      worksheet,
+      `O${rowIndex}`,
+      `IFERROR(B${rowIndex}/H${rowIndex},"")`,
+      costPerSale,
+    );
+    setFormulaCell(
+      worksheet,
+      `P${rowIndex}`,
+      `IFERROR(E${rowIndex}/C${rowIndex},"")`,
+      leadToVisit,
+    );
+    setFormulaCell(
+      worksheet,
+      `Q${rowIndex}`,
+      `IFERROR(T${rowIndex}/E${rowIndex},"")`,
+      branch.iventas_visit_conversion_rate,
+    );
+    setFormulaCell(
+      worksheet,
+      `R${rowIndex}`,
+      `IFERROR(U${rowIndex}/F${rowIndex},"")`,
+      branch.not_iventas_visit_conversion_rate,
+    );
+    setFormulaCell(
+      worksheet,
+      `S${rowIndex}`,
+      `IFERROR(H${rowIndex}/G${rowIndex},"")`,
+      branch.iventas_sale_share,
+    );
+  });
+
   for (let rowIndex = 2; rowIndex <= lastRow; rowIndex += 1) {
     for (const column of CURRENCY_COLUMNS) {
       const cell = worksheet[`${column}${rowIndex}`];
-      if (cell && typeof cell.v === 'number') {
+      if (cell) {
         cell.z = '$#,##0.00';
       }
     }
 
     for (const column of PERCENT_COLUMNS) {
       const cell = worksheet[`${column}${rowIndex}`];
-      if (cell && typeof cell.v === 'number') {
+      if (cell) {
         cell.z = '0.0%';
       }
     }
@@ -156,6 +222,24 @@ export function exportMarketingSalesFunnelBranchTable(
     workbook,
     buildExportFilename(options),
   );
+}
+
+function setFormulaCell(
+  worksheet: XLSX.WorkSheet,
+  address: string,
+  formula: string,
+  cachedValue: number | null,
+): void {
+  const cell: XLSX.CellObject = {
+    t: 'n',
+    f: formula,
+  };
+
+  if (cachedValue !== null && Number.isFinite(cachedValue)) {
+    cell.v = cachedValue;
+  }
+
+  worksheet[address] = cell;
 }
 
 function buildExportFilename(options: FunnelBranchExportOptions): string {
