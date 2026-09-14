@@ -141,15 +141,6 @@
   color: #94a3b8;
 }
 
-.flow-card__visit-rate {
-  margin-top: 1px;
-  color: #169b50;
-  font-size: 5.5px;
-  font-weight: 900;
-  line-height: 1;
-  white-space: nowrap;
-}
-
 .flow-card__visit-action {
   display: inline-flex;
   align-items: center;
@@ -194,6 +185,44 @@
   color: var(--trace-blue);
 }
 
+.conversion-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.conversion-kpi-card {
+  display: flex;
+  min-height: 82px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 12px 14px;
+  border: 1px solid var(--trace-border);
+  border-radius: 14px;
+  background: #fbfcfe;
+  text-align: center;
+  box-shadow: 0 7px 18px rgba(29, 41, 57, 0.035);
+}
+
+.conversion-kpi-card span {
+  color: #52647c;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+}
+
+.conversion-kpi-card strong {
+  color: var(--trace-navy);
+  font-size: clamp(24px, 2vw, 31px);
+  font-weight: 950;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
 @media (max-width: 1050px) {
   .flow-board > .flow-card--leads,
   .flow-board > .flow-card--visits {
@@ -212,5 +241,15 @@
     top: auto;
     width: 100%;
     translate: 0 0;
+  }
+
+  .conversion-kpi-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .conversion-kpi-row {
+    grid-template-columns: 1fr;
   }
 }
