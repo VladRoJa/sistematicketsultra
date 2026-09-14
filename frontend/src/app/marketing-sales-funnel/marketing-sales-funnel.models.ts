@@ -23,6 +23,12 @@ export interface MarketingSalesFunnelMetrics {
   visits_iventas_other: number;
   visits_not_iventas: number;
   visits_unmatchable: number;
+  visits_iventas_bought: number;
+  visits_iventas_not_bought: number;
+  visits_not_iventas_bought: number;
+  visits_not_iventas_not_bought: number;
+  iventas_visit_conversion_rate: number | null;
+  not_iventas_visit_conversion_rate: number | null;
 
   sales_total: number;
   sales_iventas: number;
@@ -79,6 +85,9 @@ export interface MarketingSalesFunnelQuality {
   venta_total_role?: string;
   match_mode: string;
   survey_fallback_only_after_no_iventas_match: boolean;
+  visit_conversion_mode?: string;
+  visit_conversion_cohort_complete?: boolean;
+  visit_conversion_sales_snapshot_ids?: number[];
   limitations: string[];
 }
 
@@ -117,6 +126,10 @@ export interface MarketingSalesFunnelDetailRow {
   source?: string | null;
   contact_id?: string | null;
   channel?: string | null;
+  conversion_status?: string | null;
+  sale_date?: string | null;
+  sale_member_id?: string | null;
+  sale_revenue?: number | null;
 }
 
 export interface MarketingSalesFunnelDetailResponse {

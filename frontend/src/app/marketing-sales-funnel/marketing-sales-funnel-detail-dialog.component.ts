@@ -165,7 +165,7 @@ export class MarketingSalesFunnelDetailDialogComponent implements OnInit {
     if (value === null || value === undefined || value === '') {
       return '—';
     }
-    if (column === 'revenue') {
+    if (column === 'revenue' || column === 'sale_revenue') {
       return this.formatCurrency(Number(value));
     }
     return String(value);
@@ -239,7 +239,7 @@ export class MarketingSalesFunnelDetailDialogComponent implements OnInit {
           this.rows = detail.rows;
           this.sortBy = detail.sort_by || undefined;
           this.sortDir = detail.sort_dir || 'asc';
-          this.columns = this.resolveColumns(detail.kind);
+          this.columns = this.resolveColumns(detail.kind, detail.metric);
           this.displayedColumns = this.columns.map((column) => column.key);
         },
         error: (error: HttpErrorResponse) => {
@@ -249,8 +249,25 @@ export class MarketingSalesFunnelDetailDialogComponent implements OnInit {
       });
   }
 
-  private resolveColumns(kind: MarketingSalesFunnelDetailKind): DetailColumn[] {
+  private resolveColumns(
+    kind: MarketingSalesFunnelDetailKind,
+    metric: string,
+  ): DetailColumn[] {
     if (kind === 'visits') {
+      if (this.isVisitConversionMetric(metric)) {
+        return [
+          { key: 'branch', label: 'Sucursal KPI', widthClass: 'medium' },
+          { key: 'date', label: 'Fecha visita', widthClass: 'compact' },
+          { key: 'phone', label: 'Teléfono', widthClass: 'compact' },
+          { key: 'origin', label: 'Trazabilidad', widthClass: 'medium' },
+          { key: 'conversion_status', label: 'Conversión', widthClass: 'compact' },
+          { key: 'sale_date', label: 'Fecha venta', widthClass: 'compact' },
+          { key: 'sale_member_id', label: 'ID socio', widthClass: 'compact' },
+          { key: 'sale_revenue', label: 'Ingreso venta', widthClass: 'compact' },
+          { key: 'source', label: 'Fuente', widthClass: 'wide' },
+        ];
+      }
+
       return [
         { key: 'branch', label: 'Sucursal KPI', widthClass: 'medium' },
         { key: 'date', label: 'Fecha', widthClass: 'compact' },
@@ -283,6 +300,15 @@ export class MarketingSalesFunnelDetailDialogComponent implements OnInit {
       { key: 'survey', label: 'Encuesta', widthClass: 'medium' },
       { key: 'transaction_branch', label: 'Sucursal cobro', widthClass: 'medium' },
     ];
+  }
+
+  private isVisitConversionMetric(metric: string): boolean {
+    return [
+      'visits_iventas_bought',
+      'visits_iventas_not_bought',
+      'visits_not_iventas_bought',
+      'visits_not_iventas_not_bought',
+    ].includes(metric);
   }
 
   private exportFilename(): string {
