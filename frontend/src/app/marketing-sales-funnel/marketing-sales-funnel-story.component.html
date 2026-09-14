@@ -172,10 +172,39 @@
     </section>
   </div>
 
-  <section class="conversion-kpi-row" aria-label="Conversión comercial">
-    <article *ngFor="let kpi of conversionKpis" class="conversion-kpi-card">
-      <span>{{ kpi.label }}</span>
-      <strong>{{ kpi.value }}</strong>
-    </article>
+  <section *ngIf="summary as funnelSummary" class="conversion-kpi-row" aria-label="Conversión comercial">
+    <ng-container *ngIf="conversionKpis as kpis">
+      <article class="conversion-kpi-card">
+        <span>{{ kpis[0].label }}</span>
+        <strong>{{ kpis[0].value }}</strong>
+        <small class="conversion-kpi-card__flow">
+          {{ formatInteger(funnelSummary.leads_meta) }} → {{ formatInteger(funnelSummary.visits_iventas) }}
+        </small>
+      </article>
+
+      <article class="conversion-kpi-card">
+        <span>{{ kpis[1].label }}</span>
+        <strong>{{ kpis[1].value }}</strong>
+        <small class="conversion-kpi-card__flow">
+          {{ formatInteger(funnelSummary.visits_iventas) }} → {{ formatInteger(funnelSummary.visits_iventas_bought) }}
+        </small>
+      </article>
+
+      <article class="conversion-kpi-card">
+        <span>{{ kpis[2].label }}</span>
+        <strong>{{ kpis[2].value }}</strong>
+        <small class="conversion-kpi-card__flow">
+          {{ formatInteger(funnelSummary.visits_not_iventas) }} → {{ formatInteger(funnelSummary.visits_not_iventas_bought) }}
+        </small>
+      </article>
+
+      <article class="conversion-kpi-card">
+        <span>{{ kpis[3].label }}</span>
+        <strong>{{ kpis[3].value }}</strong>
+        <small class="conversion-kpi-card__flow">
+          {{ formatInteger(funnelSummary.sales_total) }} → {{ formatInteger(funnelSummary.sales_iventas) }}
+        </small>
+      </article>
+    </ng-container>
   </section>
 </section>
