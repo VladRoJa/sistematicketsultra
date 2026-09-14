@@ -1210,7 +1210,7 @@ onReporteBugDragEnded(event: any): void {
 
 onClickReporteBug(): void {
   if (this.reporteBugFueArrastrado) {
-    this.reporteBugFueArrastrada = false;
+    this.reporteBugFueArrastrado = false;
     return;
   }
 
