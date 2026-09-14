@@ -1,7 +1,7 @@
 """add marketing reactivation outcomes
 
 Revision ID: f4a1c8d2e6b7
-Revises: e3f6a9b1c5d7
+Revises: b7e4d8c2a1f9
 Create Date: 2026-09-13 22:55:00
 """
 
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 revision = "f4a1c8d2e6b7"
-down_revision = "e3f6a9b1c5d7"
+down_revision = "b7e4d8c2a1f9"
 branch_labels = None
 depends_on = None
 
