@@ -7,6 +7,9 @@ from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from app.extensions import db
+from app.models.marketing_reactivation_outcome import (
+    MarketingReactivationCampaignRecipientOutcomeORM,
+)
 from app.models.user_model import UserORM
 from app.services.marketing_access import (
     MarketingAuthorizationError,
@@ -15,6 +18,8 @@ from app.services.marketing_access import (
 from app.services.marketing_campaign_audience_service import region_branches
 from app.services.marketing_dashboard_service import load_visible_marketing_branches
 from app.services.marketing_reactivation_outcome_service import (
+    OUTCOME_PENDING,
+    OUTCOME_WINDOW_CLOSED,
     build_marketing_reactivation_campaign_outcome_detail,
     build_marketing_reactivation_outcome_summary,
     run_marketing_reactivation_outcomes,
@@ -122,6 +127,20 @@ def _selected_sucursal_keys(
     return tuple(sorted(selected)) if selected is not None else None
 
 
+def _reopen_closed_outcomes_for_reconciliation() -> int:
+    return int(
+        db.session.query(MarketingReactivationCampaignRecipientOutcomeORM)
+        .filter(
+            MarketingReactivationCampaignRecipientOutcomeORM.status
+            == OUTCOME_WINDOW_CLOSED
+        )
+        .update(
+            {MarketingReactivationCampaignRecipientOutcomeORM.status: OUTCOME_PENDING},
+            synchronize_session=False,
+        )
+    )
+
+
 @marketing_reactivation_outcome_bp.get("/reactivation/outcomes/summary")
 @jwt_required()
 def get_marketing_reactivation_outcomes_summary():
@@ -184,7 +203,9 @@ def run_marketing_reactivation_outcomes_endpoint():
             raise MarketingAuthorizationError(
                 "La reconciliación global de Reactivación requiere acceso global de edición."
             )
+        reopened = _reopen_closed_outcomes_for_reconciliation()
         result = run_marketing_reactivation_outcomes(session=db.session)
+        result["reopened_window_closed"] = reopened
         return jsonify(result), 200
     except MarketingAuthorizationError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 403
