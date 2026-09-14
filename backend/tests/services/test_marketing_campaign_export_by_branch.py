@@ -7,10 +7,11 @@ from openpyxl import load_workbook
 from app.services import marketing_campaign_export_service as export_service
 
 
-def _recipient(phone, branch):
+def _recipient(phone, branch, name=None):
     return {
         "phone_mx10": phone,
         "sucursal": branch,
+        "member_name": name,
     }
 
 
@@ -22,8 +23,16 @@ def test_single_branch_exports_direct_xlsx(monkeypatch):
             "id": 7,
             "name": "Campaña septiembre",
             "recipients": [
-                _recipient("6861000002", "VILLAS DEL REY"),
-                _recipient("6861000001", "VILLAS DEL REY"),
+                _recipient(
+                    "6861000002",
+                    "VILLAS DEL REY",
+                    "ROSA MARIA GONZALEZ VELASCO",
+                ),
+                _recipient(
+                    "6861000001",
+                    "VILLAS DEL REY",
+                    "MARÍA DE JESÚS MARISCAL ALBA",
+                ),
             ],
         },
     )
@@ -43,9 +52,19 @@ def test_single_branch_exports_direct_xlsx(monkeypatch):
     assert filename == "CAMPANA_SEPTIEMBRE__VILLAS_DEL_REY.xlsx"
     assert export_service.campaign_export_mimetype(filename).endswith("sheet")
     assert list(load_workbook(BytesIO(data)).active.values) == [
-        ("telefono",),
-        ("6861000001",),
-        ("6861000002",),
+        ("telefono", "nombre", "nombre_completo", "sucursal"),
+        (
+            "6861000001",
+            "María",
+            "MARÍA DE JESÚS MARISCAL ALBA",
+            "VILLAS DEL REY",
+        ),
+        (
+            "6861000002",
+            "Rosa",
+            "ROSA MARIA GONZALEZ VELASCO",
+            "VILLAS DEL REY",
+        ),
     ]
     assert guarded_calls[0]["campaign_id"] == 7
 
@@ -58,10 +77,10 @@ def test_multiple_branches_export_zip_with_summary(monkeypatch):
             "id": 9,
             "name": "Vencidos agosto 2026",
             "recipients": [
-                _recipient("6861000001", "VILLAS DEL REY"),
-                _recipient("6861000002", "VILLALTA"),
-                _recipient("6861000003", "VILLALTA"),
-                _recipient("6861000004", "METEPEC"),
+                _recipient("6861000001", "VILLAS DEL REY", "ANA LOPEZ"),
+                _recipient("6861000002", "VILLALTA", "JUAN PEREZ"),
+                _recipient("6861000003", "VILLALTA", "LUIS GARCIA"),
+                _recipient("6861000004", "METEPEC", "SOFIA RAMIREZ"),
             ],
         },
     )
@@ -89,9 +108,9 @@ def test_multiple_branches_export_zip_with_summary(monkeypatch):
             "VENCIDOS_AGOSTO_2026__VILLALTA.xlsx"
         )))
         assert list(villalta.active.values) == [
-            ("telefono",),
-            ("6861000002",),
-            ("6861000003",),
+            ("telefono", "nombre", "nombre_completo", "sucursal"),
+            ("6861000002", "Juan", "JUAN PEREZ", "VILLALTA"),
+            ("6861000003", "Luis", "LUIS GARCIA", "VILLALTA"),
         ]
         summary = load_workbook(BytesIO(archive.read("RESUMEN.xlsx")))
         assert list(summary.active.values) == [
@@ -103,6 +122,11 @@ def test_multiple_branches_export_zip_with_summary(monkeypatch):
         ]
 
 
+def test_short_name_normalizes_whitespace_and_keeps_accents():
+    assert export_service._short_name("  MARÍA   DE JESÚS  ") == "María"
+    assert export_service._short_name(None) == ""
+
+
 def test_export_package_never_rebuilds_campaign_audience(monkeypatch):
     monkeypatch.setattr(
         export_service,
@@ -110,7 +134,9 @@ def test_export_package_never_rebuilds_campaign_audience(monkeypatch):
         lambda **kwargs: {
             "id": 11,
             "name": "Prueba",
-            "recipients": [_recipient("6861000001", "CENTRO")],
+            "recipients": [
+                _recipient("6861000001", "CENTRO", "ANA LOPEZ"),
+            ],
         },
     )
     called = []
