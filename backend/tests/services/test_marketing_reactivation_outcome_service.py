@@ -225,7 +225,7 @@ def test_outcome_migration_follows_previous_single_head_and_contains_contract_fi
     ).read_text(encoding="utf-8")
 
     assert 'revision = "f4a1c8d2e6b7"' in migration
-    assert 'down_revision = "e3f6a9b1c5d7"' in migration
+    assert 'down_revision = "b7e4d8c2a1f9"' in migration
     assert '"attribution_window_days"' in migration
     assert '"marketing_reactivation_campaign_recipient_outcomes"' in migration
     assert '"reactivated_at_local"' in migration
