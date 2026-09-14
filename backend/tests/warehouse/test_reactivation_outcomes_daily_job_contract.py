@@ -39,3 +39,6 @@ def test_outcome_api_exposes_summary_detail_and_scoped_manual_reconciliation():
     assert "resolve_marketing_access" in source
     assert "not access.can_edit_inputs or not access.is_global" in source
     assert "La campaña no contiene destinatarios dentro del alcance del usuario." in source
+    assert "_reopen_closed_outcomes_for_reconciliation" in source
+    assert "OUTCOME_WINDOW_CLOSED" in source
+    assert "OUTCOME_PENDING" in source
