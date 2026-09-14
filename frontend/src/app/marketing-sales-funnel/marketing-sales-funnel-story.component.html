@@ -199,10 +199,10 @@
       </article>
 
       <article class="conversion-kpi-card">
-        <span>{{ kpis[3].label }}</span>
-        <strong>{{ kpis[3].value }}</strong>
+        <span>Lead → Venta por publicaciones</span>
+        <strong>{{ formatPercent(funnelSummary.meta_lead_to_sale_rate) }}</strong>
         <small class="conversion-kpi-card__flow">
-          {{ formatInteger(funnelSummary.sales_total) }} → {{ formatInteger(funnelSummary.sales_iventas) }}
+          {{ formatInteger(funnelSummary.leads_meta) }} → {{ formatInteger(funnelSummary.sales_iventas_meta) }}
         </small>
       </article>
     </ng-container>
