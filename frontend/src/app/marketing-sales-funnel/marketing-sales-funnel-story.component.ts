@@ -357,6 +357,18 @@ export class MarketingSalesFunnelStoryComponent {
     }).format(value || 0);
   }
 
+  formatPercent(value: number | null | undefined): string {
+    if (value === null || value === undefined) {
+      return '—';
+    }
+
+    return new Intl.NumberFormat('es-MX', {
+      style: 'percent',
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    }).format(value);
+  }
+
   private createNode(
     label: string,
     value: number,
@@ -471,17 +483,5 @@ export class MarketingSalesFunnelStoryComponent {
       UNKNOWN: 'language',
     };
     return icons[originKey] || 'label';
-  }
-
-  private formatPercent(value: number | null): string {
-    if (value === null || value === undefined) {
-      return '—';
-    }
-
-    return new Intl.NumberFormat('es-MX', {
-      style: 'percent',
-      minimumFractionDigits: 1,
-      maximumFractionDigits: 1,
-    }).format(value);
   }
 }
