@@ -35,6 +35,11 @@ interface FallbackOriginView extends MarketingSalesOriginBreakdown {
   icon: string;
 }
 
+interface ConversionKpiView {
+  label: string;
+  value: string;
+}
+
 @Component({
   selector: 'app-marketing-sales-funnel-story',
   standalone: true,
@@ -173,6 +178,36 @@ export class MarketingSalesFunnelStoryComponent {
       'person',
       'gray',
     );
+  }
+
+  get conversionKpis(): ConversionKpiView[] {
+    const summary = this.summary;
+    if (!summary) {
+      return [];
+    }
+
+    return [
+      {
+        label: 'Lead → Visita iVentas',
+        value: this.formatPercent(
+          summary.leads_meta > 0
+            ? summary.visits_iventas / summary.leads_meta
+            : null,
+        ),
+      },
+      {
+        label: 'Visita iVentas → Compra',
+        value: this.formatPercent(summary.iventas_visit_conversion_rate),
+      },
+      {
+        label: 'Visita sin trazabilidad → Compra',
+        value: this.formatPercent(summary.not_iventas_visit_conversion_rate),
+      },
+      {
+        label: 'Venta Nueva → Venta iVentas',
+        value: this.formatPercent(summary.iventas_sale_share),
+      },
+    ];
   }
 
   get flowRibbons(): FlowRibbonView[] {
