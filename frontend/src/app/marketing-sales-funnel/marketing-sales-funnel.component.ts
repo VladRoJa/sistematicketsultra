@@ -259,16 +259,8 @@ export class MarketingSalesFunnelComponent implements OnInit {
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe((regionId) => {
+        this.branchControl.setValue(null, { emitEvent: false });
         this.refreshBranchOptions(regionId);
-
-        const branchId = this.branchControl.value;
-        if (
-          branchId !== null
-          && !this.branchOptions.some((option) => option.sucursal_id === branchId)
-        ) {
-          this.branchControl.setValue(null, { emitEvent: false });
-        }
-
         this.refreshActiveScopeBranchIds();
         this.requestDashboard();
       });
@@ -278,7 +270,8 @@ export class MarketingSalesFunnelComponent implements OnInit {
         distinctUntilChanged(),
         takeUntilDestroyed(this.destroyRef),
       )
-      .subscribe(() => {
+      .subscribe((branchId) => {
+        this.syncRegionToBranch(branchId);
         this.refreshActiveScopeBranchIds();
         this.requestDashboard();
       });
@@ -442,6 +435,25 @@ export class MarketingSalesFunnelComponent implements OnInit {
       .filter((option) => regionId === null || option.region_id === regionId)
       .slice()
       .sort((left, right) => left.sucursal.localeCompare(right.sucursal, 'es'));
+  }
+
+  private syncRegionToBranch(branchId: number | null): void {
+    if (branchId === null) {
+      return;
+    }
+
+    const branch = this.scopeOptions.find(
+      (option) => option.sucursal_id === branchId,
+    );
+    if (!branch) {
+      return;
+    }
+
+    const regionId = branch.region_id;
+    if (this.regionControl.value !== regionId) {
+      this.regionControl.setValue(regionId, { emitEvent: false });
+    }
+    this.refreshBranchOptions(regionId);
   }
 
   private refreshActiveScopeBranchIds(): void {
