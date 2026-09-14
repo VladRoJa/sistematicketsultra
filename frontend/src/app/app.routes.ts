@@ -159,6 +159,7 @@ export const routes: Routes = [
       },
       {
         path: 'marketing-conversion',
+        canActivate: [AdmicorpGuard],
         loadComponent: () =>
           import('./marketing-conversion/marketing-conversion.component')
             .then(m => m.MarketingConversionComponent),

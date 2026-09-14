@@ -251,6 +251,16 @@ ngOnInit(): void {
   };
 
   const marketingConversionSubmenu: Array<{ label: string; path: string }> = [];
+  const marketingUsername = String(
+    this.authService.getUser()?.username ?? ''
+  ).trim().toUpperCase();
+
+  if (marketingUsername === 'ADMICORP') {
+    marketingConversionSubmenu.push({
+      label: 'Embudo mensual',
+      path: '/marketing-conversion',
+    });
+  }
 
   if (this.puedeVerMarketingSalesFunnelPorRol()) {
     marketingConversionSubmenu.push({
