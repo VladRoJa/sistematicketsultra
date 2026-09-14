@@ -312,16 +312,19 @@
       </div>
     </section>
 
-    <section class="quality-section story-quality" aria-labelledby="quality-title">
-      <div class="section-heading">
+    <details class="quality-section story-quality">
+      <summary class="section-heading">
         <div>
           <p class="section-kicker">Confiabilidad</p>
           <h2 id="quality-title">Fuentes y reglas</h2>
-          <p>La pantalla explica tanto el número como el camino con el que se construyó.</p>
+          <p>Ver cortes, fuentes y consideraciones del cálculo.</p>
         </div>
-      </div>
+        <span class="row-detail-action">
+          Ver / ocultar <mat-icon>unfold_more</mat-icon>
+        </span>
+      </summary>
 
-      <div class="quality-layout">
+      <div class="quality-layout" aria-labelledby="quality-title">
         <dl class="quality-modes quality-modes--three">
           <div>
             <dt>Corte Nuevos Socios</dt>
@@ -358,6 +361,6 @@
           </ul>
         </div>
       </div>
-    </section>
+    </details>
   </ng-container>
 </main>
