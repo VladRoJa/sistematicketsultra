@@ -26,6 +26,9 @@ from app.warehouse.jobs.reporte_direccion_daily_capture_job import (
 from app.warehouse.jobs.reactivation_sources_daily_job import (
     run_job as run_reactivation_sources_daily_job,
 )
+from app.warehouse.jobs.reactivation_outcomes_daily_job import (
+    run_job as run_reactivation_outcomes_daily_job,
+)
 from app.warehouse.services.scheduler_priority_service import (
     get_nightly_report_capture_block_reason,
     get_secondary_job_block_reason,
@@ -533,6 +536,123 @@ def _run_reactivation_sources_if_due(now: datetime) -> None:
 
 
 
+def _run_reactivation_outcomes_if_due(now: datetime) -> None:
+    job_key = "reactivation_outcomes_daily"
+
+    if not _should_run_daily_job(
+        job_key=job_key,
+        enabled_env="REACTIVATION_SOURCES_ENABLED",
+        hour_env="REACTIVATION_OUTCOMES_RUN_HOUR",
+        minute_env="REACTIVATION_OUTCOMES_RUN_MINUTE",
+        now=now,
+        default_hour=9,
+        default_minute=15,
+    ):
+        return
+
+    block_reason = get_secondary_job_block_reason(now)
+    if block_reason is not None:
+        logger.debug(
+            "%s diferido por prioridad Track. reason=%s now=%s",
+            job_key,
+            block_reason,
+            now.isoformat(timespec="seconds"),
+        )
+        return
+
+    business_date = now.date()
+    source_key = _job_date_key("reactivation_sources_daily", business_date)
+    source_completion = _find_persisted_scheduler_job_completion(
+        job_key="reactivation_sources_daily",
+        business_date=business_date,
+    )
+    retry_minutes = max(
+        _env_int("REACTIVATION_OUTCOMES_RETRY_MINUTES", 15),
+        5,
+    )
+    if source_key not in _COMPLETED_BY_JOB_AND_DATE and source_completion is None:
+        _schedule_retry(
+            job_key=job_key,
+            business_date=business_date,
+            now=now,
+            retry_minutes=retry_minutes,
+            reason="reactivation_sources_not_ready",
+        )
+        return
+
+    existing_completion = _find_persisted_scheduler_job_completion(
+        job_key=job_key,
+        business_date=business_date,
+    )
+    if existing_completion is not None:
+        _mark_job_as_completed(job_key, business_date)
+        logger.info(
+            "%s ya cuenta con finalizacion persistida. "
+            "business_date=%s completion_audit_id=%s",
+            job_key,
+            business_date.isoformat(),
+            existing_completion.id,
+        )
+        return
+
+    logger.info(
+        "%s iniciado. business_date=%s",
+        job_key,
+        business_date.isoformat(),
+    )
+    try:
+        result = run_reactivation_outcomes_daily_job(
+            business_date=business_date,
+            requested_by="reports_scheduler",
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception(
+            "%s fallo. Se reintentara en %s minutos.",
+            job_key,
+            retry_minutes,
+        )
+        _schedule_retry(
+            job_key=job_key,
+            business_date=business_date,
+            now=now,
+            retry_minutes=retry_minutes,
+            reason="technical_error",
+        )
+        return
+
+    _mark_job_as_completed(job_key, business_date)
+    try:
+        completion_audit_id = _persist_scheduler_job_completion(
+            job_key=job_key,
+            business_date=business_date,
+        )
+    except Exception:  # noqa: BLE001
+        db.session.rollback()
+        logger.exception(
+            "%s finalizo correctamente, pero no se pudo persistir "
+            "la marca JOB_COMPLETED.",
+            job_key,
+        )
+        completion_audit_id = None
+
+    logger.info(
+        "%s finalizado OK. completion_audit_id=%s "
+        "campaigns=%s recipients=%s checked=%s reactivated=%s "
+        "pending=%s review=%s window_closed=%s latest_activos=%s",
+        job_key,
+        completion_audit_id,
+        result.get("campaigns"),
+        result.get("recipients"),
+        result.get("checked"),
+        result.get("reactivated"),
+        result.get("pending"),
+        result.get("review"),
+        result.get("window_closed"),
+        result.get("latest_activos_cutoff_date"),
+    )
+
+
+
 def _run_cobranza_recurrente_if_due(now: datetime) -> None:
     job_key = "cobranza_recurrente_rechazados"
 
@@ -684,6 +804,7 @@ def run_scheduler_loop() -> None:
                 now
             )
             _run_reactivation_sources_if_due(now)
+            _run_reactivation_outcomes_if_due(now)
             _run_cobranza_recurrente_if_due(now)
 
         except Exception:  # noqa: BLE001
