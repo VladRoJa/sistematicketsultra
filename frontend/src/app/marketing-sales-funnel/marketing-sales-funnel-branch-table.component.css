@@ -1,0 +1,199 @@
+.branch-table-wrap--complete {
+  max-height: 500px;
+  border-color: #d8dee7;
+  background: #fff;
+}
+
+.branch-performance-table {
+  width: 100%;
+  min-width: 1880px;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: #fff;
+  color: var(--story-navy);
+  font-size: 10px;
+}
+
+.branch-performance-table th,
+.branch-performance-table td {
+  border-right: 1px solid #edf0f4;
+  border-bottom: 1px solid #e7ebf0;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.branch-performance-table th:last-child,
+.branch-performance-table td:last-child {
+  border-right: 0;
+}
+
+.branch-performance-table__groups th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  height: 34px;
+  padding: 0 12px;
+  background: #1f242c;
+  color: #fff;
+  font-size: 8px;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+  text-align: center;
+  text-transform: uppercase;
+  box-shadow: inset -1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.branch-performance-table__groups th[colspan] {
+  border-bottom-color: #3b424d;
+}
+
+.branch-performance-table__groups th:nth-child(2),
+.branch-performance-table__groups th:nth-child(4),
+.branch-performance-table__groups th:nth-child(6) {
+  box-shadow:
+    inset 2px 0 var(--story-orange),
+    inset -1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.branch-performance-table__columns th {
+  position: sticky;
+  top: 34px;
+  z-index: 4;
+  height: 38px;
+  padding: 0 11px;
+  background: #2b313a;
+  color: #f6f8fb;
+  font-size: 8px;
+  font-weight: 850;
+  text-align: center;
+}
+
+.branch-performance-table tbody tr {
+  transition: background 120ms ease;
+}
+
+.branch-performance-table tbody tr:hover td {
+  background: #fff9f6;
+}
+
+.branch-performance-table tbody td {
+  height: 50px;
+  padding: 7px 11px;
+  background: #fff;
+}
+
+.branch-sticky-column {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  min-width: 168px;
+  max-width: 210px;
+  background: #fff !important;
+  box-shadow: 7px 0 12px -12px rgba(22, 32, 48, 0.5);
+}
+
+.branch-performance-table__groups .branch-sticky-column--header {
+  top: 0;
+  z-index: 7;
+  background: #1f242c !important;
+  color: #fff !important;
+  text-align: left;
+}
+
+.branch-performance-table tbody tr:hover .branch-sticky-column {
+  background: #fff9f6 !important;
+}
+
+.branch-performance-table .branch-name-cell {
+  padding-left: 13px;
+  color: #18263a !important;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.metric-cell {
+  min-width: 86px;
+  color: #31445d;
+  text-align: center;
+}
+
+.metric-cell--money {
+  min-width: 100px;
+  font-variant-numeric: tabular-nums;
+}
+
+.metric-cell--stacked {
+  min-width: 112px;
+}
+
+.metric-cell--stacked small {
+  display: block;
+  margin-top: 3px;
+  color: #78879a;
+  font-size: 8px;
+  font-weight: 750;
+  line-height: 1.15;
+}
+
+.metric-cell--highlight {
+  background: #fffaf7 !important;
+}
+
+.branch-performance-table tbody tr:hover .metric-cell--highlight {
+  background: #fff4ee !important;
+}
+
+.metric-cell--rate {
+  min-width: 105px;
+  font-size: 9px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.metric-cell--coverage {
+  min-width: 124px;
+}
+
+.metric-cell--coverage strong {
+  display: block;
+  margin-bottom: 5px;
+  color: #23354c;
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.metric-cell--coverage .coverage-track {
+  width: 76px;
+  height: 6px;
+  margin: 0 auto;
+}
+
+.metric-cell--action {
+  min-width: 102px;
+}
+
+.table-detail-link--strong {
+  color: #172a42;
+  font-size: 10px;
+  font-weight: 950;
+}
+
+.branch-performance-table .table-detail-link--money {
+  color: #172a42;
+  font-weight: 900;
+}
+
+.branch-performance-table .row-detail-action {
+  justify-content: center;
+  white-space: nowrap;
+}
+
+@media (max-width: 1100px) {
+  .branch-performance-table {
+    min-width: 1760px;
+  }
+
+  .branch-sticky-column {
+    min-width: 150px;
+  }
+}

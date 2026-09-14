@@ -149,7 +149,10 @@
         <div>
           <p class="section-kicker">Detalle por sucursal</p>
           <h2 id="branch-table-title">Venta Nueva y trazabilidad por club</h2>
-          <p>Resumen operativo. Cada cifra auditable abre el mismo modal de detalle.</p>
+          <p>
+            Vista ejecutiva por club: inversión, adquisición, visitas, venta nueva,
+            costos y conversión bajo las reglas actuales del funnel.
+          </p>
         </div>
       </div>
 
@@ -157,79 +160,154 @@
         No hay sucursales disponibles para el alcance seleccionado.
       </p>
 
-      <div *ngIf="hasBranches" class="branch-table-wrap">
-        <table mat-table [dataSource]="branchRows" class="branch-story-table">
-          <ng-container matColumnDef="sucursal">
-            <th mat-header-cell *matHeaderCellDef>Sucursal</th>
-            <td mat-cell *matCellDef="let row" class="branch-name-cell">{{ row.sucursal }}</td>
-          </ng-container>
+      <div *ngIf="hasBranches" class="branch-table-wrap branch-table-wrap--complete">
+        <table class="branch-performance-table">
+          <thead>
+            <tr class="branch-performance-table__groups">
+              <th class="branch-sticky-column branch-sticky-column--header" rowspan="2">
+                Sucursal
+              </th>
+              <th colspan="2">Adquisición</th>
+              <th colspan="1">Visitas</th>
+              <th colspan="4">Venta nueva</th>
+              <th colspan="3">Costos</th>
+              <th colspan="4">Conversión</th>
+              <th rowspan="2">Acción</th>
+            </tr>
+            <tr class="branch-performance-table__columns">
+              <th>Inversión</th>
+              <th>Leads</th>
+              <th>Visitas</th>
+              <th>Total</th>
+              <th>Venta iVentas</th>
+              <th>No iVentas</th>
+              <th>Ingreso</th>
+              <th>CPL</th>
+              <th>Costo visita</th>
+              <th>Costo venta</th>
+              <th>Lead → Visita</th>
+              <th>Visita iV → Compra</th>
+              <th>Sin traza → Compra</th>
+              <th>% iVentas</th>
+            </tr>
+          </thead>
 
-          <ng-container matColumnDef="visits_total">
-            <th mat-header-cell *matHeaderCellDef>Visitas</th>
-            <td mat-cell *matCellDef="let row">
-              <button class="table-detail-link" type="button" (click)="openBranchDetail('visits_total', row)">
-                {{ row.visits_total_display }}
-              </button>
-            </td>
-          </ng-container>
+          <tbody>
+            <tr *ngFor="let row of branchRows">
+              <td class="branch-sticky-column branch-name-cell">
+                {{ row.sucursal }}
+              </td>
 
-          <ng-container matColumnDef="sales_total">
-            <th mat-header-cell *matHeaderCellDef>Venta nueva</th>
-            <td mat-cell *matCellDef="let row">
-              <button class="table-detail-link" type="button" (click)="openBranchDetail('sales_total', row)">
-                {{ row.sales_total_display }}
-              </button>
-            </td>
-          </ng-container>
+              <td class="metric-cell metric-cell--money">
+                <strong>{{ row.investment_display }}</strong>
+              </td>
 
-          <ng-container matColumnDef="sales_iventas">
-            <th mat-header-cell *matHeaderCellDef>Venta iVentas</th>
-            <td mat-cell *matCellDef="let row">
-              <button class="table-detail-link" type="button" (click)="openBranchDetail('sales_iventas', row)">
-                {{ row.sales_iventas_display }}
-              </button>
-            </td>
-          </ng-container>
+              <td class="metric-cell">
+                <button
+                  class="table-detail-link table-detail-link--strong"
+                  type="button"
+                  (click)="openBranchDetail('leads_meta', row)"
+                >
+                  {{ row.leads_meta_display }}
+                </button>
+              </td>
 
-          <ng-container matColumnDef="sales_not_iventas">
-            <th mat-header-cell *matHeaderCellDef>Venta no iVentas</th>
-            <td mat-cell *matCellDef="let row">
-              <button class="table-detail-link" type="button" (click)="openBranchDetail('sales_not_iventas', row)">
-                {{ row.sales_not_iventas_display }}
-              </button>
-            </td>
-          </ng-container>
+              <td class="metric-cell metric-cell--stacked">
+                <button
+                  class="table-detail-link table-detail-link--strong"
+                  type="button"
+                  (click)="openBranchDetail('visits_total', row)"
+                >
+                  {{ row.visits_total_display }}
+                </button>
+                <small>
+                  {{ row.visits_iventas_display }} iV ·
+                  {{ row.visits_not_iventas_display }} s/traza
+                </small>
+              </td>
 
-          <ng-container matColumnDef="revenue_total">
-            <th mat-header-cell *matHeaderCellDef>Ingreso venta nueva</th>
-            <td mat-cell *matCellDef="let row">
-              <button class="table-detail-link table-detail-link--money" type="button" (click)="openBranchDetail('revenue_total', row)">
-                {{ row.revenue_total_display }}
-              </button>
-            </td>
-          </ng-container>
+              <td class="metric-cell">
+                <button
+                  class="table-detail-link table-detail-link--strong"
+                  type="button"
+                  (click)="openBranchDetail('sales_total', row)"
+                >
+                  {{ row.sales_total_display }}
+                </button>
+              </td>
 
-          <ng-container matColumnDef="iventas_sale_share">
-            <th mat-header-cell *matHeaderCellDef>% iVentas</th>
-            <td mat-cell *matCellDef="let row" class="coverage-cell">
-              <span>{{ row.iventas_sale_share_display }}</span>
-              <span class="coverage-track">
-                <span [style.--coverage]="row.iventas_sale_share"></span>
-              </span>
-            </td>
-          </ng-container>
+              <td class="metric-cell metric-cell--stacked metric-cell--highlight">
+                <button
+                  class="table-detail-link table-detail-link--strong"
+                  type="button"
+                  (click)="openBranchDetail('sales_iventas', row)"
+                >
+                  {{ row.sales_iventas_display }}
+                </button>
+                <small>
+                  {{ row.sales_iventas_meta_display }} pub ·
+                  {{ row.sales_iventas_other_display }} org
+                </small>
+              </td>
 
-          <ng-container matColumnDef="actions">
-            <th mat-header-cell *matHeaderCellDef>Acciones</th>
-            <td mat-cell *matCellDef="let row">
-              <button class="row-detail-action" type="button" (click)="openBranchDetail('sales_total', row)">
-                Ver detalle <mat-icon>arrow_forward</mat-icon>
-              </button>
-            </td>
-          </ng-container>
+              <td class="metric-cell">
+                <button
+                  class="table-detail-link"
+                  type="button"
+                  (click)="openBranchDetail('sales_not_iventas', row)"
+                >
+                  {{ row.sales_not_iventas_display }}
+                </button>
+              </td>
 
-          <tr mat-header-row *matHeaderRowDef="branchColumns; sticky: true"></tr>
-          <tr mat-row *matRowDef="let row; columns: branchColumns"></tr>
+              <td class="metric-cell metric-cell--money">
+                <button
+                  class="table-detail-link table-detail-link--money"
+                  type="button"
+                  (click)="openBranchDetail('revenue_total', row)"
+                >
+                  {{ row.revenue_total_display }}
+                </button>
+              </td>
+
+              <td class="metric-cell metric-cell--money">
+                {{ row.cost_per_lead_display }}
+              </td>
+              <td class="metric-cell metric-cell--money">
+                {{ row.cost_per_visit_display }}
+              </td>
+              <td class="metric-cell metric-cell--money">
+                {{ row.cost_per_sale_display }}
+              </td>
+
+              <td class="metric-cell metric-cell--rate">
+                {{ row.lead_to_visit_display }}
+              </td>
+              <td class="metric-cell metric-cell--rate">
+                {{ row.iventas_visit_conversion_rate_display }}
+              </td>
+              <td class="metric-cell metric-cell--rate">
+                {{ row.not_iventas_visit_conversion_rate_display }}
+              </td>
+
+              <td class="metric-cell metric-cell--coverage">
+                <strong>{{ row.iventas_sale_share_display }}</strong>
+                <span class="coverage-track">
+                  <span [style.--coverage]="row.iventas_sale_share"></span>
+                </span>
+              </td>
+
+              <td class="metric-cell metric-cell--action">
+                <button
+                  class="row-detail-action"
+                  type="button"
+                  (click)="openBranchDetail('sales_total', row)"
+                >
+                  Ver detalle <mat-icon>arrow_forward</mat-icon>
+                </button>
+              </td>
+            </tr>
+          </tbody>
         </table>
       </div>
     </section>

@@ -54,11 +54,23 @@ interface SummaryCard {
 }
 
 interface SalesFunnelBranchView extends MarketingSalesFunnelBranch {
+  investment_display: string;
+  leads_meta_display: string;
   visits_total_display: string;
+  visits_iventas_display: string;
+  visits_not_iventas_display: string;
   sales_total_display: string;
   sales_iventas_display: string;
+  sales_iventas_meta_display: string;
+  sales_iventas_other_display: string;
   sales_not_iventas_display: string;
   revenue_total_display: string;
+  cost_per_lead_display: string;
+  cost_per_visit_display: string;
+  cost_per_sale_display: string;
+  lead_to_visit_display: string;
+  iventas_visit_conversion_rate_display: string;
+  not_iventas_visit_conversion_rate_display: string;
   iventas_sale_share_display: string;
 }
 
@@ -97,7 +109,10 @@ type DashboardRequestResult =
     ReactiveFormsModule,
   ],
   templateUrl: './marketing-sales-funnel.component.html',
-  styleUrls: ['./marketing-sales-funnel.component.css'],
+  styleUrls: [
+    './marketing-sales-funnel.component.css',
+    './marketing-sales-funnel-branch-table.component.css',
+  ],
 })
 export class MarketingSalesFunnelComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
@@ -345,6 +360,7 @@ export class MarketingSalesFunnelComponent implements OnInit {
             this.summaryCards = this.buildSummaryCards(
               this.dashboard.summary,
             );
+            this.refreshBranchRows();
           }
         },
         error: () => {
@@ -358,6 +374,7 @@ export class MarketingSalesFunnelComponent implements OnInit {
             this.summaryCards = this.buildSummaryCards(
               this.dashboard.summary,
             );
+            this.refreshBranchRows();
           }
         },
       });
@@ -414,7 +431,7 @@ export class MarketingSalesFunnelComponent implements OnInit {
     this.refreshBranchOptions(this.regionControl.value);
     this.refreshActiveScopeBranchIds();
     this.summaryCards = this.buildSummaryCards(data.summary);
-    this.branchRows = data.branches.map((branch) => this.buildBranchView(branch));
+    this.refreshBranchRows();
   }
 
   private refreshRegionOptions(): void {
@@ -556,16 +573,81 @@ export class MarketingSalesFunnelComponent implements OnInit {
     ];
   }
 
+  private refreshBranchRows(): void {
+    if (!this.dashboard) {
+      this.branchRows = [];
+      return;
+    }
+
+    this.branchRows = this.dashboard.branches.map(
+      (branch) => this.buildBranchView(branch),
+    );
+  }
+
+  private resolveBranchInvestment(branchId: number): number | null {
+    const dashboard = this.investmentDashboard;
+    if (!dashboard || dashboard.month !== this.selectedMonth) {
+      return null;
+    }
+
+    const branch = dashboard.branches.find(
+      (item) => item.sucursal_id === branchId,
+    );
+    return branch?.investment ?? null;
+  }
+
   private buildBranchView(branch: MarketingSalesFunnelBranch): SalesFunnelBranchView {
+    const investment = this.resolveBranchInvestment(branch.sucursal_id);
+    const costPerLead = (
+      investment !== null && branch.leads_meta > 0
+        ? investment / branch.leads_meta
+        : null
+    );
+    const costPerVisit = (
+      investment !== null && branch.visits_total > 0
+        ? investment / branch.visits_total
+        : null
+    );
+    const costPerSale = (
+      investment !== null && branch.sales_iventas > 0
+        ? investment / branch.sales_iventas
+        : null
+    );
+    const leadToVisit = (
+      branch.leads_meta > 0
+        ? branch.visits_iventas / branch.leads_meta
+        : null
+    );
+
     return {
       ...branch,
+      investment_display: this.formatOptionalCurrency(investment),
+      leads_meta_display: this.formatInteger(branch.leads_meta),
       visits_total_display: this.formatInteger(branch.visits_total),
+      visits_iventas_display: this.formatInteger(branch.visits_iventas),
+      visits_not_iventas_display: this.formatInteger(branch.visits_not_iventas),
       sales_total_display: this.formatInteger(branch.sales_total),
       sales_iventas_display: this.formatInteger(branch.sales_iventas),
+      sales_iventas_meta_display: this.formatInteger(branch.sales_iventas_meta),
+      sales_iventas_other_display: this.formatInteger(branch.sales_iventas_other),
       sales_not_iventas_display: this.formatInteger(branch.sales_not_iventas),
       revenue_total_display: this.formatCurrency(branch.revenue_total),
+      cost_per_lead_display: this.formatOptionalCurrency(costPerLead),
+      cost_per_visit_display: this.formatOptionalCurrency(costPerVisit),
+      cost_per_sale_display: this.formatOptionalCurrency(costPerSale),
+      lead_to_visit_display: this.formatPercent(leadToVisit),
+      iventas_visit_conversion_rate_display: this.formatPercent(
+        branch.iventas_visit_conversion_rate,
+      ),
+      not_iventas_visit_conversion_rate_display: this.formatPercent(
+        branch.not_iventas_visit_conversion_rate,
+      ),
       iventas_sale_share_display: this.formatPercent(branch.iventas_sale_share),
     };
+  }
+
+  private formatOptionalCurrency(value: number | null): string {
+    return value === null ? '—' : this.formatCurrency(value);
   }
 
   private formatInteger(value: number): string {
