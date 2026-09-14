@@ -34,13 +34,13 @@ from app.services.marketing_sales_funnel_iventas_stage_service import (
     count_monthly_iventas_leads,
 )
 from app.services.marketing_sales_funnel_service import (
-    build_marketing_sales_funnel,
+    build_marketing_sales_funnel_with_loaded_data,
 )
 from app.services.marketing_visit_conversion_service import (
     VISIT_CONVERSION_METRICS,
     build_visit_conversion_detail,
     build_visit_conversion_export,
-    build_visit_conversion_summary,
+    build_visit_conversion_summary_from_loaded_data,
 )
 
 
@@ -191,14 +191,15 @@ def get_marketing_sales_funnel_endpoint():
         access_ms = (perf_counter() - stage_started) * 1000
 
         stage_started = perf_counter()
-        result = build_marketing_sales_funnel(
+        funnel_build = build_marketing_sales_funnel_with_loaded_data(
             month=month,
             access=access,
         )
+        result = funnel_build.payload
         funnel_ms = (perf_counter() - stage_started) * 1000
 
         stage_started = perf_counter()
-        _, branch_ids, _ = load_visible_marketing_branches(access)
+        branch_ids = funnel_build.loaded.branch_ids
         branch_scope_ms = (perf_counter() - stage_started) * 1000
 
         stage_started = perf_counter()
@@ -211,9 +212,8 @@ def get_marketing_sales_funnel_endpoint():
         leads_ms = (perf_counter() - stage_started) * 1000
 
         stage_started = perf_counter()
-        visit_conversion = build_visit_conversion_summary(
-            month_start=month_start,
-            branch_ids=branch_ids,
+        visit_conversion = build_visit_conversion_summary_from_loaded_data(
+            loaded=funnel_build.loaded,
         )
         conversion_ms = (perf_counter() - stage_started) * 1000
 
