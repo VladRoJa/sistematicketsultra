@@ -110,6 +110,22 @@ class _SalesLoadResult:
     enriched_with_venta_total: int = 0
 
 
+@dataclass(frozen=True)
+class MarketingSalesFunnelLoadedData:
+    month_start: date
+    branch_ids: tuple[int, ...]
+    venta_total_rows: tuple[VentaTotalSnapshotRowORM, ...]
+    alias_map: dict[str, int]
+    visits: tuple[_CommercialVisit, ...]
+    evidence: dict[tuple[int, str], list[_IventasEvidence]]
+
+
+@dataclass(frozen=True)
+class MarketingSalesFunnelBuildResult:
+    payload: dict[str, Any]
+    loaded: MarketingSalesFunnelLoadedData
+
+
 @dataclass
 class _BranchStats:
     iventas_contacts: int = 0
@@ -876,11 +892,11 @@ def _merge_stats(target: _BranchStats, source: _BranchStats) -> None:
         target.origin_revenue[key] += value
 
 
-def build_marketing_sales_funnel(
+def build_marketing_sales_funnel_with_loaded_data(
     *,
     month: str,
     access: MarketingAccess,
-) -> dict[str, Any]:
+) -> MarketingSalesFunnelBuildResult:
     month_start = parse_month(month)
     branches, branch_ids, scope = load_visible_marketing_branches(access)
     stats_by_branch = {
@@ -1078,7 +1094,7 @@ def build_marketing_sales_funnel(
         "una corrección posterior puede reclasificar el origen Meta."
     )
 
-    return _build_response(
+    payload = _build_response(
         month_start=month_start,
         scope=scope,
         branches=branches,
@@ -1093,6 +1109,26 @@ def build_marketing_sales_funnel(
         enriched_sales_count=sales_result.enriched_with_venta_total,
         limitations=limitations,
     )
+    loaded = MarketingSalesFunnelLoadedData(
+        month_start=month_start,
+        branch_ids=branch_ids,
+        venta_total_rows=tuple(venta_total_rows),
+        alias_map=alias_map,
+        visits=tuple(visits),
+        evidence=evidence,
+    )
+    return MarketingSalesFunnelBuildResult(payload=payload, loaded=loaded)
+
+
+def build_marketing_sales_funnel(
+    *,
+    month: str,
+    access: MarketingAccess,
+) -> dict[str, Any]:
+    return build_marketing_sales_funnel_with_loaded_data(
+        month=month,
+        access=access,
+    ).payload
 
 
 def _build_response(
