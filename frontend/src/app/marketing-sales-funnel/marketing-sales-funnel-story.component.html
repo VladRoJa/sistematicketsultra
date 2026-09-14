@@ -1,7 +1,5 @@
 <section class="trace-story" aria-labelledby="trace-story-title">
-<div class="flow-board" aria-label="Diagrama de trazabilidad de iVentas y Venta Nueva">
-
-
+  <div class="flow-board" aria-label="Diagrama de trazabilidad de iVentas y Venta Nueva">
     <svg
       class="flow-board__connectors"
       viewBox="0 0 1200 700"
@@ -38,13 +36,37 @@
       <span class="flow-card__action">Ver filas <mat-icon>open_in_new</mat-icon></span>
     </button>
 
-    <button *ngIf="visitsNode as node" type="button" class="flow-card flow-card--visits" (click)="openNode(node)">
-      <mat-icon>{{ node.icon }}</mat-icon>
-      <span class="flow-card__label">{{ node.label }}</span>
-      <strong>{{ node.value }}</strong>
-      <small>{{ node.support }}</small>
-      <span class="flow-card__action">Ver filas <mat-icon>open_in_new</mat-icon></span>
-    </button>
+    <article *ngIf="visitsNode as node" class="flow-card flow-card--visits">
+      <button type="button" class="flow-card__visit-top" (click)="openNode(node)">
+        <mat-icon class="flow-card__visit-main-icon">smartphone</mat-icon>
+        <span class="flow-card__label">{{ node.label }}</span>
+        <strong>{{ node.value }}</strong>
+      </button>
+
+      <span class="flow-card__visit-split">
+        <button
+          type="button"
+          class="flow-card__visit-result flow-card__visit-result--not-bought"
+          (click)="openMetric('visits_iventas_not_bought')"
+        >
+          <mat-icon>shopping_cart</mat-icon>
+          <small>No compraron</small>
+          <strong>{{ formatInteger(summary?.visits_iventas_not_bought || 0) }}</strong>
+          <span class="flow-card__visit-action">Ver filas <mat-icon>open_in_new</mat-icon></span>
+        </button>
+
+        <button
+          type="button"
+          class="flow-card__visit-result flow-card__visit-result--bought"
+          (click)="openMetric('visits_iventas_bought')"
+        >
+          <mat-icon>shopping_cart</mat-icon>
+          <small>Compraron</small>
+          <strong>{{ formatInteger(summary?.visits_iventas_bought || 0) }}</strong>
+          <span class="flow-card__visit-action">Ver filas <mat-icon>open_in_new</mat-icon></span>
+        </button>
+      </span>
+    </article>
 
     <button *ngIf="salesTotalNode as node" type="button" class="flow-card flow-card--sales-total flow-card--emphasis" (click)="openNode(node)">
       <mat-icon>{{ node.icon }}</mat-icon>
@@ -77,6 +99,38 @@
       <small>{{ node.support }}</small>
       <span class="flow-card__action">Ver filas <mat-icon>open_in_new</mat-icon></span>
     </button>
+
+    <article *ngIf="untracedVisitsNode as node" class="flow-card flow-card--untraced-visits">
+      <button type="button" class="flow-card__visit-top" (click)="openNode(node)">
+        <mat-icon class="flow-card__visit-main-icon">link_off</mat-icon>
+        <span class="flow-card__label">{{ node.label }}</span>
+        <strong>{{ node.value }}</strong>
+      </button>
+
+      <span class="flow-card__visit-split">
+        <button
+          type="button"
+          class="flow-card__visit-result flow-card__visit-result--not-bought"
+          (click)="openMetric('visits_not_iventas_not_bought')"
+        >
+          <mat-icon>shopping_cart</mat-icon>
+          <small>No compraron</small>
+          <strong>{{ formatInteger(summary?.visits_not_iventas_not_bought || 0) }}</strong>
+          <span class="flow-card__visit-action">Ver filas <mat-icon>open_in_new</mat-icon></span>
+        </button>
+
+        <button
+          type="button"
+          class="flow-card__visit-result flow-card__visit-result--bought"
+          (click)="openMetric('visits_not_iventas_bought')"
+        >
+          <mat-icon>shopping_cart</mat-icon>
+          <small>Compraron</small>
+          <strong>{{ formatInteger(summary?.visits_not_iventas_bought || 0) }}</strong>
+          <span class="flow-card__visit-action">Ver filas <mat-icon>open_in_new</mat-icon></span>
+        </button>
+      </span>
+    </article>
 
     <button *ngIf="fallbackNode as node" type="button" class="flow-card flow-card--fallback" (click)="openNode(node)">
       <mat-icon>{{ node.icon }}</mat-icon>
