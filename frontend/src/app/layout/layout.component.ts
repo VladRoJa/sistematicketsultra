@@ -250,15 +250,11 @@ ngOnInit(): void {
     ],
   };
 
-  const marketingConversionSubmenu = [
-    { label: 'Embudo mensual', path: '/marketing-conversion' },
-  ];
+  const marketingConversionSubmenu: Array<{ label: string; path: string }> = [];
 
-  if (
-    String(u?.username || '').trim().toUpperCase() === 'ADMICORP'
-  ) {
+  if (this.puedeVerMarketingSalesFunnelPorRol()) {
     marketingConversionSubmenu.push({
-      label: 'Funnel Venta Total',
+      label: 'Funnel Venta Nueva',
       path: '/marketing-conversion/venta-total',
     });
   }
@@ -272,7 +268,7 @@ ngOnInit(): void {
 
   const menuMarketingConversion = {
     label: 'Marketing y Conversión',
-    path: '/marketing-conversion',
+    path: marketingConversionSubmenu[0]?.path || '/main/ver-tickets',
     submenu: marketingConversionSubmenu,
   };
 
@@ -1214,7 +1210,7 @@ onReporteBugDragEnded(event: any): void {
 
 onClickReporteBug(): void {
   if (this.reporteBugFueArrastrado) {
-    this.reporteBugFueArrastrado = false;
+    this.reporteBugFueArrastrada = false;
     return;
   }
 
@@ -1308,24 +1304,19 @@ private puedeVerControlRutinasPorRol(): boolean {
   ].includes(rol);
 }
 
-private puedeVerMarketingConversionPorRol(): boolean {
+private puedeVerMarketingSalesFunnelPorRol(): boolean {
   const user = this.authService.getUser();
   const rol = String(user?.rol ?? user?.role ?? '').trim().toUpperCase();
   const username = String(user?.username ?? '').trim().toUpperCase();
 
-  if (username === 'ADMICORP') {
-    return true;
-  }
+  return username === 'ADMICORP' || rol === 'LECTOR_GLOBAL';
+}
 
-  return [
-    'ADMIN',
-    'ADMINISTRADOR',
-    'SUPER_ADMIN',
-    'MARKETING',
-    'LECTOR_GLOBAL',
-    'GERENTE',
-    'GERENTE_REGIONAL',
-  ].includes(rol);
+private puedeVerMarketingConversionPorRol(): boolean {
+  return (
+    this.puedeVerMarketingSalesFunnelPorRol()
+    || this.puedeVerMarketingReactivacionPorRol()
+  );
 }
 
 private puedeVerMarketingReactivacionPorRol(): boolean {
