@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import cProfile
 from time import perf_counter
 
 from flask import Blueprint, jsonify, request, send_file
@@ -49,38 +48,6 @@ marketing_sales_funnel_bp = Blueprint(
     "marketing_sales_funnel",
     __name__,
 )
-
-
-_FUNNEL_PROFILE_FUNCTIONS = {
-    "load_visible_marketing_branches": "f_branches",
-    "_load_iventas_data": "f_ivdata",
-    "read_iventas_dashboard_month_data": "f_ivcanon",
-    "_load_branch_alias_map": "f_alias",
-    "_select_venta_total_snapshot": "f_vtsnap",
-    "_load_visits": "f_visits",
-    "_select_new_sales_detail_snapshot": "f_salesnap",
-    "_load_new_sales": "f_sales",
-    "_select_kpi_desempeno_snapshot": "f_kpisnap",
-    "_load_kpi_new_sales_control": "f_kpi",
-    "_match_iventas": "f_match",
-    "_build_response": "f_response",
-}
-
-
-def _profile_funnel_function_timings(
-    profiler: cProfile.Profile,
-) -> dict[str, float]:
-    timings = {
-        timing_name: 0.0
-        for timing_name in _FUNNEL_PROFILE_FUNCTIONS.values()
-    }
-    for entry in profiler.getstats():
-        function_name = getattr(entry.code, "co_name", None)
-        timing_name = _FUNNEL_PROFILE_FUNCTIONS.get(function_name)
-        if timing_name is None:
-            continue
-        timings[timing_name] += float(entry.totaltime) * 1000
-    return timings
 
 
 def _resolve_request_access():
@@ -224,14 +191,9 @@ def get_marketing_sales_funnel_endpoint():
         access_ms = (perf_counter() - stage_started) * 1000
 
         stage_started = perf_counter()
-        funnel_profiler = cProfile.Profile()
-        funnel_build = funnel_profiler.runcall(
-            build_marketing_sales_funnel_with_loaded_data,
+        funnel_build = build_marketing_sales_funnel_with_loaded_data(
             month=month,
             access=access,
-        )
-        funnel_function_ms = _profile_funnel_function_timings(
-            funnel_profiler
         )
         result = funnel_build.payload
         funnel_ms = (perf_counter() - stage_started) * 1000
@@ -281,20 +243,17 @@ def get_marketing_sales_funnel_endpoint():
 
         response = jsonify(result)
         total_ms = (perf_counter() - request_started) * 1000
-        timing_entries = [
-            f"access;dur={access_ms:.1f}",
-            f"funnel;dur={funnel_ms:.1f}",
-            f"branch_scope;dur={branch_scope_ms:.1f}",
-            f"leads;dur={leads_ms:.1f}",
-            f"visit_conversion;dur={conversion_ms:.1f}",
-            f"scope_options;dur={scope_options_ms:.1f}",
-            f"total;dur={total_ms:.1f}",
-        ]
-        timing_entries.extend(
-            f"{name};dur={duration_ms:.1f}"
-            for name, duration_ms in funnel_function_ms.items()
+        response.headers["Server-Timing"] = ", ".join(
+            (
+                f"access;dur={access_ms:.1f}",
+                f"funnel;dur={funnel_ms:.1f}",
+                f"branch_scope;dur={branch_scope_ms:.1f}",
+                f"leads;dur={leads_ms:.1f}",
+                f"visit_conversion;dur={conversion_ms:.1f}",
+                f"scope_options;dur={scope_options_ms:.1f}",
+                f"total;dur={total_ms:.1f}",
+            )
         )
-        response.headers["Server-Timing"] = ", ".join(timing_entries)
         return response, 200
     except MarketingAuthorizationError as exc:
         return jsonify(
