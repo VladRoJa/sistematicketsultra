@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
+import app.services.marketing_sales_funnel_service as marketing_sales_funnel_service
 from app.services.marketing_sales_funnel_detail_service import (
     MarketingSalesFunnelDetailValidationError,
     _normalize_pagination,
@@ -172,6 +173,88 @@ def test_latest_iventas_interaction_controls_meta_classification():
         )
         == ORIGIN_IVENTAS_OTHER
     )
+
+
+def test_load_iventas_data_reuses_projected_meta_flag(monkeypatch):
+    runs = [
+        SimpleNamespace(id=10, period_key="IVENTAS-2026-08"),
+        SimpleNamespace(id=20, period_key="IVENTAS-2026-09"),
+    ]
+    projected_contacts = [
+        SimpleNamespace(
+            sync_run_id=10,
+            sucursal_id=4,
+            phone_mx10="6861111111",
+            first_message_date_local=date(2026, 8, 20),
+            has_meta=False,
+        ),
+        SimpleNamespace(
+            sync_run_id=20,
+            sucursal_id=4,
+            phone_mx10="6862222222",
+            first_message_date_local=date(2026, 9, 5),
+            has_meta=True,
+        ),
+    ]
+
+    class FakeExists:
+        def label(self, _name):
+            return self
+
+    class FakeQuery:
+        def __init__(self, *, rows=None, exists_value=None):
+            self.rows = rows
+            self.exists_value = exists_value
+
+        def filter(self, *_args):
+            return self
+
+        def exists(self):
+            return self.exists_value
+
+        def all(self):
+            return self.rows
+
+    query_results = iter(
+        (
+            FakeQuery(exists_value=FakeExists()),
+            FakeQuery(rows=projected_contacts),
+        )
+    )
+
+    monkeypatch.setattr(
+        marketing_sales_funnel_service,
+        "_canonical_runs_for_window",
+        lambda *_args: runs,
+    )
+    monkeypatch.setattr(
+        marketing_sales_funnel_service,
+        "_meta_contact_keys",
+        lambda *_args: (_ for _ in ()).throw(
+            AssertionError("_load_iventas_data no debe cargar tags aparte")
+        ),
+    )
+    monkeypatch.setattr(
+        marketing_sales_funnel_service,
+        "db",
+        SimpleNamespace(
+            session=SimpleNamespace(
+                query=lambda *_args: next(query_results)
+            )
+        ),
+    )
+
+    evidence, month_counts, run_ids = (
+        marketing_sales_funnel_service._load_iventas_data(
+            date(2026, 9, 1),
+            (4,),
+        )
+    )
+
+    assert run_ids == (10, 20)
+    assert month_counts == {4: (1, 1)}
+    assert evidence[(4, "6861111111")][0].has_meta_ad is False
+    assert evidence[(4, "6862222222")][0].has_meta_ad is True
 
 
 def test_drilldown_sale_filters_follow_same_attribution_hierarchy():
