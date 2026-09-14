@@ -36,6 +36,7 @@ from app.services.marketing_sales_funnel_service import (
     ORIGIN_IVENTAS_META,
     ORIGIN_IVENTAS_OTHER,
     ORIGIN_LABELS,
+    MarketingSalesFunnelLoadedData,
     _load_branch_alias_map,
     _load_iventas_data,
     _load_visits,
@@ -239,47 +240,31 @@ def _build_attribution_visits_from_rows(
     return deduplicate_visit_events(eligible_by_key.values())
 
 
-def _build_bundle(
+def _build_bundle_from_loaded_data(
     *,
-    month_start: date,
-    branch_ids: tuple[int, ...],
+    loaded: MarketingSalesFunnelLoadedData,
     today: date | None = None,
 ) -> VisitConversionBundle:
-    snapshot = _select_venta_total_snapshot(month_start)
-    if snapshot is None:
+    if loaded.venta_total_rows is None:
         return VisitConversionBundle(
             rows=(),
             sales_snapshot_ids=(),
             cohort_complete=False,
         )
 
-    venta_total_rows = (
-        VentaTotalSnapshotRowORM.query.filter_by(snapshot_id=snapshot.id)
-        .order_by(VentaTotalSnapshotRowORM.row_index.asc())
-        .all()
-    )
-    alias_map = _load_branch_alias_map()
-    visits = _load_visits(
-        venta_total_rows,
-        month_start,
-        branch_ids,
-        alias_map,
-    )
     attribution_visits = _build_attribution_visits_from_rows(
-        rows=venta_total_rows,
-        month_start=month_start,
-        branch_ids=branch_ids,
-        alias_map=alias_map,
+        rows=list(loaded.venta_total_rows),
+        month_start=loaded.month_start,
+        branch_ids=loaded.branch_ids,
+        alias_map=loaded.alias_map,
     )
-
-    evidence, _, _ = _load_iventas_data(month_start, branch_ids)
-    attribution_window_end = _month_end(month_start) + timedelta(
+    attribution_window_end = _month_end(loaded.month_start) + timedelta(
         days=MATCH_WINDOW_DAYS
     )
     attribution_sales_result = _load_attribution_sales(
-        window_start=month_start,
+        window_start=loaded.month_start,
         window_end=attribution_window_end,
-        branch_ids=branch_ids,
+        branch_ids=loaded.branch_ids,
     )
     attributions = reconcile_visit_sales(
         visits=attribution_visits,
@@ -301,9 +286,9 @@ def _build_bundle(
         first_sale_by_identity.setdefault(identity, attribution.sale)
 
     result: list[VisitConversionRow] = []
-    for visit in visits:
+    for visit in loaded.visits:
         origin = _match_iventas(
-            evidence,
+            loaded.evidence,
             visit.branch_id,
             visit.phone,
             visit.visit_date,
@@ -332,6 +317,48 @@ def _build_bundle(
             for snapshot_id in attribution_sales_result.snapshot_ids
         ),
         cohort_complete=normalized_today >= attribution_window_end,
+    )
+
+
+def _build_bundle(
+    *,
+    month_start: date,
+    branch_ids: tuple[int, ...],
+    today: date | None = None,
+) -> VisitConversionBundle:
+    snapshot = _select_venta_total_snapshot(month_start)
+    if snapshot is None:
+        return VisitConversionBundle(
+            rows=(),
+            sales_snapshot_ids=(),
+            cohort_complete=False,
+        )
+
+    venta_total_rows = (
+        VentaTotalSnapshotRowORM.query.filter_by(snapshot_id=snapshot.id)
+        .order_by(VentaTotalSnapshotRowORM.row_index.asc())
+        .all()
+    )
+    alias_map = _load_branch_alias_map()
+    visits = _load_visits(
+        venta_total_rows,
+        month_start,
+        branch_ids,
+        alias_map,
+    )
+    evidence, _, _ = _load_iventas_data(month_start, branch_ids)
+
+    loaded = MarketingSalesFunnelLoadedData(
+        month_start=month_start,
+        branch_ids=branch_ids,
+        venta_total_rows=tuple(venta_total_rows),
+        alias_map=alias_map,
+        visits=tuple(visits),
+        evidence=evidence,
+    )
+    return _build_bundle_from_loaded_data(
+        loaded=loaded,
+        today=today,
     )
 
 
@@ -384,15 +411,11 @@ def _serialize_metrics(rows: list[VisitConversionRow]) -> dict[str, Any]:
     return metrics
 
 
-def build_visit_conversion_summary(
+def _serialize_summary(
     *,
-    month_start: date,
+    bundle: VisitConversionBundle,
     branch_ids: tuple[int, ...],
 ) -> dict[str, Any]:
-    bundle = _build_bundle(
-        month_start=month_start,
-        branch_ids=branch_ids,
-    )
     rows_by_branch: dict[int, list[VisitConversionRow]] = {
         branch_id: [] for branch_id in branch_ids
     }
@@ -413,6 +436,32 @@ def build_visit_conversion_summary(
             ),
         },
     }
+
+
+def build_visit_conversion_summary(
+    *,
+    month_start: date,
+    branch_ids: tuple[int, ...],
+) -> dict[str, Any]:
+    bundle = _build_bundle(
+        month_start=month_start,
+        branch_ids=branch_ids,
+    )
+    return _serialize_summary(
+        bundle=bundle,
+        branch_ids=branch_ids,
+    )
+
+
+def build_visit_conversion_summary_from_loaded_data(
+    *,
+    loaded: MarketingSalesFunnelLoadedData,
+) -> dict[str, Any]:
+    bundle = _build_bundle_from_loaded_data(loaded=loaded)
+    return _serialize_summary(
+        bundle=bundle,
+        branch_ids=loaded.branch_ids,
+    )
 
 
 def _branch_names(access: MarketingAccess) -> tuple[dict[int, str], tuple[int, ...], dict[str, object]]:
