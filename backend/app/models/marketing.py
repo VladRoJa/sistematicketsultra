@@ -177,6 +177,12 @@ class MarketingReactivationCampaignORM(db.Model):
     notes = db.Column(db.Text, nullable=True)
     filters_json = db.Column(db.JSON, nullable=False, default=dict)
     recipient_count = db.Column(db.Integer, nullable=False, default=0)
+    attribution_window_days = db.Column(
+        db.Integer,
+        nullable=False,
+        default=14,
+        server_default=db.text("14"),
+    )
 
     created_by_user = db.relationship(
         "UserORM",
@@ -202,6 +208,10 @@ class MarketingReactivationCampaignORM(db.Model):
         db.CheckConstraint(
             "recipient_count >= 0",
             name="ck_marketing_reactivation_campaigns_recipient_count",
+        ),
+        db.CheckConstraint(
+            "attribution_window_days BETWEEN 1 AND 90",
+            name="ck_marketing_reactivation_campaigns_attribution_window",
         ),
         db.Index(
             "ix_marketing_reactivation_campaigns_created_at",
