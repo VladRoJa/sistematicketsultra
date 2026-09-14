@@ -63,6 +63,9 @@
           <mat-icon>shopping_cart</mat-icon>
           <small>Compraron</small>
           <strong>{{ formatInteger(summary?.visits_iventas_bought || 0) }}</strong>
+          <span class="flow-card__visit-rate">
+            {{ formatPercent(summary?.iventas_visit_conversion_rate) }} conversión
+          </span>
           <span class="flow-card__visit-action">Ver filas <mat-icon>open_in_new</mat-icon></span>
         </button>
       </span>
@@ -127,6 +130,9 @@
           <mat-icon>shopping_cart</mat-icon>
           <small>Compraron</small>
           <strong>{{ formatInteger(summary?.visits_not_iventas_bought || 0) }}</strong>
+          <span class="flow-card__visit-rate">
+            {{ formatPercent(summary?.not_iventas_visit_conversion_rate) }} conversión
+          </span>
           <span class="flow-card__visit-action">Ver filas <mat-icon>open_in_new</mat-icon></span>
         </button>
       </span>

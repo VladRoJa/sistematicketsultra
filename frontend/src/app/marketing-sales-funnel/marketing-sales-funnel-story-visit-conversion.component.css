@@ -141,6 +141,15 @@
   color: #94a3b8;
 }
 
+.flow-card__visit-rate {
+  margin-top: 1px;
+  color: #169b50;
+  font-size: 5.5px;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+}
+
 .flow-card__visit-action {
   display: inline-flex;
   align-items: center;
