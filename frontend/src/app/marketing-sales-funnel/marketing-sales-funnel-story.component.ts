@@ -80,10 +80,24 @@ export class MarketingSalesFunnelStoryComponent {
     return this.createNode(
       'Visitas iVentas',
       summary.visits_iventas,
-      'Visitas que cruzan por teléfono con iVentas',
+      '',
       'visits_iventas',
-      'event',
+      'smartphone',
       'orange',
+    );
+  }
+
+  get untracedVisitsNode(): FunnelNodeView | null {
+    const summary = this.summary;
+    if (!summary) return null;
+
+    return this.createNode(
+      'Visitas sin trazabilidad',
+      summary.visits_not_iventas,
+      '',
+      'visits_not_iventas',
+      'link_off',
+      'gray',
     );
   }
 
@@ -166,6 +180,8 @@ export class MarketingSalesFunnelStoryComponent {
 
     const leads = summary.leads_meta;
     const visits = summary.visits_iventas;
+    const visitsIventasBought = summary.visits_iventas_bought;
+    const visitsNotIventasBought = summary.visits_not_iventas_bought;
     const salesIventas = summary.sales_iventas;
     const salesTotal = summary.sales_total;
     const salesFallback = summary.sales_not_iventas;
@@ -173,7 +189,11 @@ export class MarketingSalesFunnelStoryComponent {
     const organic = summary.sales_iventas_other;
 
     const leadReference = Math.max(leads, visits, 1);
-    const iventasReference = Math.max(visits, salesIventas, 1);
+    const conversionReference = Math.max(
+      visitsIventasBought,
+      visitsNotIventasBought,
+      1,
+    );
     const salesReference = Math.max(salesTotal, 1);
     const outputReference = Math.max(salesIventas, 1);
 
@@ -181,24 +201,34 @@ export class MarketingSalesFunnelStoryComponent {
       this.createRibbon({
         id: 'leads-visits',
         sourceX: 135,
-        sourceY: 120,
+        sourceY: 96,
         targetX: 220,
-        targetY: 120,
+        targetY: 96,
         sourceThickness: this.ribbonThickness(leads, leadReference, 18, 70),
         targetThickness: this.ribbonThickness(visits, leadReference, 14, 70),
         tone: 'orange',
         opacity: 0.20,
       }),
       this.createRibbon({
-        id: 'visits-sales',
+        id: 'visits-iventas-sales',
         sourceX: 305,
-        sourceY: 120,
+        sourceY: 138,
         targetX: 420,
         targetY: 145,
-        sourceThickness: this.ribbonThickness(visits, iventasReference, 16, 60),
-        targetThickness: this.ribbonThickness(salesIventas, iventasReference, 16, 60),
+        sourceThickness: this.ribbonThickness(
+          visitsIventasBought,
+          conversionReference,
+          10,
+          28,
+        ),
+        targetThickness: this.ribbonThickness(
+          visitsIventasBought,
+          conversionReference,
+          10,
+          28,
+        ),
         tone: 'orange',
-        opacity: 0.22,
+        opacity: 0.24,
       }),
       this.createRibbon({
         id: 'sales-total-iventas',
@@ -219,6 +249,27 @@ export class MarketingSalesFunnelStoryComponent {
         targetY: 490,
         sourceThickness: this.ribbonThickness(salesFallback, salesReference, 18, 72),
         targetThickness: this.ribbonThickness(salesFallback, salesReference, 18, 72),
+        tone: 'gray',
+        opacity: 0.24,
+      }),
+      this.createRibbon({
+        id: 'untraced-visits-fallback',
+        sourceX: 245,
+        sourceY: 585,
+        targetX: 410,
+        targetY: 505,
+        sourceThickness: this.ribbonThickness(
+          visitsNotIventasBought,
+          conversionReference,
+          10,
+          28,
+        ),
+        targetThickness: this.ribbonThickness(
+          visitsNotIventasBought,
+          conversionReference,
+          10,
+          28,
+        ),
         tone: 'gray',
         opacity: 0.24,
       }),
@@ -289,8 +340,18 @@ export class MarketingSalesFunnelStoryComponent {
     this.openDetail(node.metric, node.origin);
   }
 
+  openMetric(metric: string): void {
+    this.openDetail(metric);
+  }
+
   openOrigin(origin: FallbackOriginView): void {
     this.openDetail('origin', origin.key);
+  }
+
+  formatInteger(value: number): string {
+    return new Intl.NumberFormat('es-MX', {
+      maximumFractionDigits: 0,
+    }).format(value || 0);
   }
 
   private createNode(
@@ -407,12 +468,6 @@ export class MarketingSalesFunnelStoryComponent {
       UNKNOWN: 'language',
     };
     return icons[originKey] || 'label';
-  }
-
-  private formatInteger(value: number): string {
-    return new Intl.NumberFormat('es-MX', {
-      maximumFractionDigits: 0,
-    }).format(value || 0);
   }
 
   private formatPercent(value: number | null): string {
