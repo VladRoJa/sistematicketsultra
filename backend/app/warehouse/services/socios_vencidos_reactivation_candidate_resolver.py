@@ -8,7 +8,7 @@ ausencia de evidencia como elegibilidad y no modifica persistencia.
 from __future__ import annotations
 
 from collections import Counter, defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from typing import Any, Callable
 from zoneinfo import ZoneInfo
@@ -160,6 +160,11 @@ class SociosVencidosReactivationResolutionContext:
     current_status: SociosVencidosCurrentStatusContext
     iventas_sync_run_id: int
     iventas_period_key: str
+    current_rows_by_vencido_id: dict[int, Any] = field(
+        default_factory=dict,
+        compare=False,
+        repr=False,
+    )
 
 
 def resolve_socios_vencidos_reactivation_candidates(
@@ -275,11 +280,26 @@ def resolve_socios_vencidos_reactivation_candidate_batch(
 
     session_value = session if session is not None else db.session
     if current_rows is None:
-        current_rows = resolve_socios_vencidos_rows_with_context(
-            vencidos_rows=vencidos_rows,
-            context=context.current_status,
-            session=session_value,
-        )
+        cached_rows = getattr(context, "current_rows_by_vencido_id", None)
+        if isinstance(cached_rows, dict) and all(
+            int(row.id) in cached_rows for row in vencidos_rows
+        ):
+            current_rows = tuple(
+                cached_rows[int(row.id)] for row in vencidos_rows
+            )
+        else:
+            current_rows = resolve_socios_vencidos_rows_with_context(
+                vencidos_rows=vencidos_rows,
+                context=context.current_status,
+                session=session_value,
+            )
+            if isinstance(cached_rows, dict):
+                cached_rows.update(
+                    {
+                        int(row.vencido_row_id): row
+                        for row in current_rows
+                    }
+                )
     elif {int(row.vencido_row_id) for row in current_rows} != {
         int(row.id) for row in vencidos_rows
     }:
@@ -366,6 +386,11 @@ def count_socios_vencidos_not_found_phones(
         context=context.current_status,
         session=session if session is not None else db.session,
     )
+    cached_rows = getattr(context, "current_rows_by_vencido_id", None)
+    if isinstance(cached_rows, dict):
+        cached_rows.update(
+            {int(row.vencido_row_id): row for row in current_rows}
+        )
     source_by_id = {int(row.id): row for row in vencidos_rows}
     return Counter(
         phone
