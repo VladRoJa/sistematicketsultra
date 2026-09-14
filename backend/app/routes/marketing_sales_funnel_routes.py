@@ -34,6 +34,12 @@ from app.services.marketing_sales_funnel_iventas_stage_service import (
 from app.services.marketing_sales_funnel_service import (
     build_marketing_sales_funnel,
 )
+from app.services.marketing_visit_conversion_service import (
+    VISIT_CONVERSION_METRICS,
+    build_visit_conversion_detail,
+    build_visit_conversion_export,
+    build_visit_conversion_summary,
+)
 
 
 marketing_sales_funnel_bp = Blueprint(
@@ -177,6 +183,7 @@ def get_marketing_sales_funnel_endpoint():
     try:
         base_access, access = _resolve_scoped_access()
         month = request.args.get("month", "")
+        month_start = parse_month(month)
         result = build_marketing_sales_funnel(
             month=month,
             access=access,
@@ -184,10 +191,35 @@ def get_marketing_sales_funnel_endpoint():
         _, branch_ids, _ = load_visible_marketing_branches(access)
         result["summary"]["leads_iventas"] = (
             count_monthly_iventas_leads(
-                month_start=parse_month(month),
+                month_start=month_start,
                 branch_ids=branch_ids,
             )
         )
+
+        visit_conversion = build_visit_conversion_summary(
+            month_start=month_start,
+            branch_ids=branch_ids,
+        )
+        result["summary"].update(visit_conversion["summary"])
+        conversion_by_branch = visit_conversion["branches"]
+        for branch_payload in result["branches"]:
+            branch_payload.update(
+                conversion_by_branch.get(
+                    int(branch_payload["sucursal_id"]),
+                    {},
+                )
+            )
+        result["data_quality"].update(
+            visit_conversion["data_quality"]
+        )
+        if not visit_conversion["data_quality"][
+            "visit_conversion_cohort_complete"
+        ]:
+            result["data_quality"]["limitations"].append(
+                "La conversión de visitas sigue abierta: una visita del mes "
+                "puede comprar hasta 30 días después."
+            )
+
         result["scope_options"] = _load_scope_options(base_access)
         return jsonify(result), 200
     except MarketingAuthorizationError as exc:
@@ -222,6 +254,17 @@ def get_marketing_sales_funnel_detail_endpoint():
             result = build_monthly_iventas_leads_detail(
                 month=request.args.get("month", ""),
                 access=access,
+                branch_id=request.args.get("branch_id"),
+                page=request.args.get("page"),
+                page_size=request.args.get("page_size"),
+                sort_by=request.args.get("sort_by"),
+                sort_dir=request.args.get("sort_dir"),
+            )
+        elif metric in VISIT_CONVERSION_METRICS:
+            result = build_visit_conversion_detail(
+                month=request.args.get("month", ""),
+                access=access,
+                metric=metric,
                 branch_id=request.args.get("branch_id"),
                 page=request.args.get("page"),
                 page_size=request.args.get("page_size"),
@@ -271,6 +314,15 @@ def export_marketing_sales_funnel_detail_endpoint():
             output, filename = build_monthly_iventas_leads_export(
                 month=request.args.get("month", ""),
                 access=access,
+                branch_id=request.args.get("branch_id"),
+                sort_by=request.args.get("sort_by"),
+                sort_dir=request.args.get("sort_dir"),
+            )
+        elif metric in VISIT_CONVERSION_METRICS:
+            output, filename = build_visit_conversion_export(
+                month=request.args.get("month", ""),
+                access=access,
+                metric=metric,
                 branch_id=request.args.get("branch_id"),
                 sort_by=request.args.get("sort_by"),
                 sort_dir=request.args.get("sort_dir"),
