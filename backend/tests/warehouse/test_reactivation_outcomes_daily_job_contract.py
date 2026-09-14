@@ -30,10 +30,12 @@ def test_scheduler_runs_outcomes_after_sources_at_0915_and_retries_when_source_m
     assert "db.session.remove()" in source
 
 
-def test_outcome_api_exposes_summary_detail_and_manual_reconciliation():
+def test_outcome_api_exposes_summary_detail_and_scoped_manual_reconciliation():
     source = ROUTES.read_text(encoding="utf-8")
 
     assert '@marketing_reactivation_outcome_bp.get("/reactivation/outcomes/summary")' in source
     assert '"/reactivation/outcomes/campaigns/<int:campaign_id>"' in source
     assert '@marketing_reactivation_outcome_bp.post("/reactivation/outcomes/run")' in source
     assert "resolve_marketing_access" in source
+    assert "not access.can_edit_inputs or not access.is_global" in source
+    assert "La campaña no contiene destinatarios dentro del alcance del usuario." in source
