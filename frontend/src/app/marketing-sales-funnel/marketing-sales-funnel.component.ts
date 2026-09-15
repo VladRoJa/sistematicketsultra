@@ -25,6 +25,7 @@ import {
   switchMap,
 } from 'rxjs';
 
+import { MarketingDashboardResponse } from '../marketing-conversion/marketing.models';
 import {
   MarketingSalesFunnelBranch,
   MarketingSalesFunnelMetrics,
@@ -333,11 +334,21 @@ export class MarketingSalesFunnelComponent implements OnInit {
       return;
     }
 
+    const investmentDashboard = {
+      month: this.selectedMonth,
+      summary: {
+        investment: this.dashboard.summary.investment ?? null,
+      },
+      branches: this.dashboard.branches.map((branch) => ({
+        sucursal_id: branch.sucursal_id,
+        investment: branch.investment ?? null,
+      })),
+    } as unknown as MarketingDashboardResponse;
+
     exportMarketingSalesFunnelBranchTable({
       month: this.selectedMonth,
-      cutoffDate: this.dashboard.selected_cutoff_date,
       branches: this.dashboard.branches,
-      summary: this.dashboard.summary,
+      investmentDashboard,
       scopeOptions: this.scopeOptions,
       regionId: this.regionControl.value,
       branchId: this.branchControl.value,
