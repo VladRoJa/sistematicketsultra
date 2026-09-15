@@ -14,7 +14,7 @@ export interface MarketingSalesFunnelScopeOption {
 
 export interface MarketingSalesFunnelMetrics {
   iventas_contacts: number;
-  leads_iventas?: number;
+  leads_iventas: number;
   leads_meta: number;
 
   visits_total: number;
@@ -37,12 +37,24 @@ export interface MarketingSalesFunnelMetrics {
   sales_not_iventas: number;
   sales_without_valid_phone: number;
 
+  sales_digital: number;
+  sales_digital_organic: number;
+  sales_web: number;
+  sales_btl: number;
+
   revenue_total: number;
   revenue_iventas: number;
   revenue_iventas_meta: number;
   revenue_iventas_other: number;
   revenue_not_iventas: number;
 
+  revenue_digital: number;
+  revenue_web: number;
+  revenue_btl: number;
+
+  lead_to_visit_rate: number | null;
+  visit_to_digital_sale_rate: number | null;
+  lead_to_sale_rate: number | null;
   meta_lead_to_visit_rate: number | null;
   meta_visit_to_sale_rate: number | null;
   meta_lead_to_sale_rate: number | null;
@@ -84,6 +96,7 @@ export interface MarketingSalesFunnelQuality {
   new_sale_rule: string;
   venta_total_role?: string;
   match_mode: string;
+  commercial_classification_rule?: string;
   survey_fallback_only_after_no_iventas_match: boolean;
   visit_conversion_mode?: string;
   visit_conversion_cohort_complete?: boolean;

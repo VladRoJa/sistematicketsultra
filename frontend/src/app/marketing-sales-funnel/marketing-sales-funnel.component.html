@@ -148,10 +148,10 @@
       <div class="branch-panel__heading">
         <div>
           <p class="section-kicker">Detalle por sucursal</p>
-          <h2 id="branch-table-title">Venta Nueva y trazabilidad por club</h2>
+          <h2 id="branch-table-title">Venta Nueva por canal y eficiencia</h2>
           <p>
-            Vista ejecutiva por club: inversión, adquisición, visitas, venta nueva,
-            costos y conversión bajo las reglas actuales del funnel.
+            Una sola lectura por club: adquisición, clasificación de la venta,
+            ingresos, conversión y costo bajo el contrato comercial del funnel.
           </p>
         </div>
 
@@ -178,27 +178,35 @@
               <th class="branch-sticky-column branch-sticky-column--header" rowspan="2">
                 Sucursal
               </th>
-              <th colspan="2">Adquisición</th>
-              <th colspan="1">Visitas</th>
-              <th colspan="4">Venta nueva</th>
+              <th colspan="3">Adquisición</th>
+              <th colspan="5">Venta nueva</th>
+              <th colspan="4">Ingresos</th>
+              <th colspan="3">Conversión</th>
               <th colspan="3">Costos</th>
-              <th colspan="4">Conversión</th>
             </tr>
             <tr class="branch-performance-table__columns">
-              <th>Inversión</th>
+              <th class="group-start">Inversión</th>
               <th>Leads</th>
-              <th>Visitas</th>
-              <th>Total</th>
-              <th>Venta iVentas</th>
-              <th>No iVentas</th>
+              <th>Visitantes totales</th>
+
+              <th class="group-start">Ventas digitales</th>
+              <th>Ventas digitales orgánicas</th>
+              <th>Venta web</th>
+              <th>Venta BTL</th>
+              <th>Ventas totales</th>
+
+              <th class="group-start">Ingreso digital</th>
+              <th>Ingreso web</th>
+              <th>Ingreso BTL</th>
               <th>Ingreso total</th>
-              <th>CPL</th>
-              <th>Costo visita</th>
-              <th>Costo venta</th>
-              <th>Lead → Visita</th>
-              <th>Visita iV → Compra</th>
-              <th>Sin traza → Compra</th>
-              <th>% iVentas</th>
+
+              <th class="group-start">Lead → visita</th>
+              <th>Visita → venta digital</th>
+              <th>Lead → venta</th>
+
+              <th class="group-start">CPL</th>
+              <th>CPT</th>
+              <th>CAC</th>
             </tr>
           </thead>
 
@@ -208,7 +216,7 @@
                 {{ row.sucursal }}
               </td>
 
-              <td class="metric-cell metric-cell--money">
+              <td class="metric-cell metric-cell--money metric-cell--group-start">
                 <strong>{{ row.investment_display }}</strong>
               </td>
 
@@ -216,13 +224,13 @@
                 <button
                   class="table-detail-link table-detail-link--strong"
                   type="button"
-                  (click)="openBranchDetail('leads_meta', row)"
+                  (click)="openBranchDetail('leads_iventas', row)"
                 >
-                  {{ row.leads_meta_display }}
+                  {{ row.leads_iventas_display }}
                 </button>
               </td>
 
-              <td class="metric-cell metric-cell--stacked">
+              <td class="metric-cell">
                 <button
                   class="table-detail-link table-detail-link--strong"
                   type="button"
@@ -230,13 +238,37 @@
                 >
                   {{ row.visits_total_display }}
                 </button>
-                <small>
-                  {{ row.visits_iventas_display }} iV ·
-                  {{ row.visits_not_iventas_display }} s/traza
-                </small>
+              </td>
+
+              <td class="metric-cell metric-cell--digital metric-cell--group-start">
+                <button
+                  class="table-detail-link table-detail-link--strong"
+                  type="button"
+                  (click)="openBranchDetail('sales_iventas', row)"
+                >
+                  {{ row.sales_digital_display }}
+                </button>
+              </td>
+
+              <td class="metric-cell metric-cell--digital-soft">
+                <button
+                  class="table-detail-link"
+                  type="button"
+                  (click)="openDetail('sales_not_iventas', row.sucursal_id, 'SOCIAL_UNTRACED')"
+                >
+                  {{ row.sales_digital_organic_display }}
+                </button>
               </td>
 
               <td class="metric-cell">
+                {{ row.sales_web_display }}
+              </td>
+
+              <td class="metric-cell">
+                {{ row.sales_btl_display }}
+              </td>
+
+              <td class="metric-cell metric-cell--total">
                 <button
                   class="table-detail-link table-detail-link--strong"
                   type="button"
@@ -246,31 +278,19 @@
                 </button>
               </td>
 
-              <td class="metric-cell metric-cell--stacked metric-cell--highlight">
-                <button
-                  class="table-detail-link table-detail-link--strong"
-                  type="button"
-                  (click)="openBranchDetail('sales_iventas', row)"
-                >
-                  {{ row.sales_iventas_display }}
-                </button>
-                <small>
-                  {{ row.sales_iventas_meta_display }} pub ·
-                  {{ row.sales_iventas_other_display }} org
-                </small>
-              </td>
-
-              <td class="metric-cell">
-                <button
-                  class="table-detail-link"
-                  type="button"
-                  (click)="openBranchDetail('sales_not_iventas', row)"
-                >
-                  {{ row.sales_not_iventas_display }}
-                </button>
+              <td class="metric-cell metric-cell--money metric-cell--group-start">
+                {{ row.revenue_digital_display }}
               </td>
 
               <td class="metric-cell metric-cell--money">
+                {{ row.revenue_web_display }}
+              </td>
+
+              <td class="metric-cell metric-cell--money">
+                {{ row.revenue_btl_display }}
+              </td>
+
+              <td class="metric-cell metric-cell--money metric-cell--total">
                 <button
                   class="table-detail-link table-detail-link--money"
                   type="button"
@@ -280,31 +300,28 @@
                 </button>
               </td>
 
-              <td class="metric-cell metric-cell--money">
-                {{ row.cost_per_lead_display }}
-              </td>
-              <td class="metric-cell metric-cell--money">
-                {{ row.cost_per_visit_display }}
-              </td>
-              <td class="metric-cell metric-cell--money">
-                {{ row.cost_per_sale_display }}
-              </td>
-
-              <td class="metric-cell metric-cell--rate">
+              <td class="metric-cell metric-cell--rate metric-cell--group-start">
                 {{ row.lead_to_visit_display }}
               </td>
+
               <td class="metric-cell metric-cell--rate">
-                {{ row.iventas_visit_conversion_rate_display }}
-              </td>
-              <td class="metric-cell metric-cell--rate">
-                {{ row.not_iventas_visit_conversion_rate_display }}
+                {{ row.visit_to_digital_sale_display }}
               </td>
 
-              <td class="metric-cell metric-cell--coverage">
-                <strong>{{ row.iventas_sale_share_display }}</strong>
-                <span class="coverage-track">
-                  <span [style.--coverage]="row.iventas_sale_share"></span>
-                </span>
+              <td class="metric-cell metric-cell--rate">
+                {{ row.lead_to_sale_display }}
+              </td>
+
+              <td class="metric-cell metric-cell--money metric-cell--group-start">
+                {{ row.cpl_display }}
+              </td>
+
+              <td class="metric-cell metric-cell--money">
+                {{ row.cpt_display }}
+              </td>
+
+              <td class="metric-cell metric-cell--money">
+                {{ row.cac_display }}
               </td>
             </tr>
           </tbody>

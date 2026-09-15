@@ -57,6 +57,11 @@ ORIGIN_OFFLINE = "OFFLINE"
 ORIGIN_OTHER_SURVEY = "OTHER_SURVEY"
 ORIGIN_UNKNOWN = "UNKNOWN"
 
+SALE_CATEGORY_DIGITAL = "DIGITAL"
+SALE_CATEGORY_DIGITAL_ORGANIC = "DIGITAL_ORGANIC"
+SALE_CATEGORY_WEB = "WEB"
+SALE_CATEGORY_BTL = "BTL"
+
 ORIGIN_LABELS = {
     ORIGIN_IVENTAS_META: "iVentas / Meta Ads",
     ORIGIN_IVENTAS_OTHER: "iVentas / Otro",
@@ -96,12 +101,14 @@ class _CommercialSale:
     phone: str | None
     revenue: Decimal
     survey_raw: str | None
+    api_raw: str | None
 
 
 @dataclass(frozen=True)
 class _VentaTotalEnrichment:
     phone: str | None = None
     survey_raw: str | None = None
+    api_raw: str | None = None
 
 
 @dataclass(frozen=True)
@@ -129,6 +136,7 @@ class MarketingSalesFunnelBuildResult:
 @dataclass
 class _BranchStats:
     iventas_contacts: int = 0
+    leads_iventas: int = 0
     leads_meta: int = 0
 
     visits_total: int = 0
@@ -145,11 +153,20 @@ class _BranchStats:
     sales_not_iventas: int = 0
     sales_without_valid_phone: int = 0
 
+    sales_digital: int = 0
+    sales_digital_organic: int = 0
+    sales_web: int = 0
+    sales_btl: int = 0
+
     revenue_total: Decimal = Decimal("0")
     revenue_iventas: Decimal = Decimal("0")
     revenue_iventas_meta: Decimal = Decimal("0")
     revenue_iventas_other: Decimal = Decimal("0")
     revenue_not_iventas: Decimal = Decimal("0")
+
+    revenue_digital: Decimal = Decimal("0")
+    revenue_web: Decimal = Decimal("0")
+    revenue_btl: Decimal = Decimal("0")
 
     origin_counts: dict[str, int] = field(
         default_factory=lambda: defaultdict(int)
@@ -245,7 +262,10 @@ def _classify_survey(value: Any) -> str:
 
     if not normalized:
         return ORIGIN_UNKNOWN
-    if normalized == "REDES SOCIALES":
+    if normalized in {
+        "REDES SOCIALES",
+        "REDES SOCIALES NO TRAZADAS",
+    }:
         return ORIGIN_SOCIAL_UNTRACED
     if normalized == "FAMILIARES O AMIGOS":
         return ORIGIN_REFERRAL
@@ -256,6 +276,33 @@ def _classify_survey(value: Any) -> str:
     if normalized == "VOLANTES":
         return ORIGIN_OFFLINE
     return ORIGIN_OTHER_SURVEY
+
+
+def _classify_sale_category(
+    *,
+    iventas_origin: str | None,
+    api_raw: Any,
+    survey_raw: Any,
+) -> str:
+    if iventas_origin in {
+        ORIGIN_IVENTAS_META,
+        ORIGIN_IVENTAS_OTHER,
+    }:
+        return SALE_CATEGORY_DIGITAL
+
+    if _normalize_text(api_raw) == "IVENTAS":
+        return SALE_CATEGORY_WEB
+
+    normalized_survey = _normalize_text(survey_raw)
+    if normalized_survey in {
+        "REDES SOCIALES",
+        "REDES SOCIALES NO TRAZADAS",
+    }:
+        return SALE_CATEGORY_DIGITAL_ORGANIC
+    if normalized_survey == "VENTA POR WEB":
+        return SALE_CATEGORY_WEB
+
+    return SALE_CATEGORY_BTL
 
 
 def _load_branch_alias_map() -> dict[str, int]:
@@ -450,6 +497,7 @@ def _merge_venta_total_enrichment(
 ) -> _VentaTotalEnrichment:
     phone = current.phone if current is not None else None
     survey_raw = current.survey_raw if current is not None else None
+    api_raw = current.api_raw if current is not None else None
 
     if phone is None:
         phone = normalize_phone(getattr(row, "telefono", None))
@@ -458,9 +506,14 @@ def _merge_venta_total_enrichment(
         survey = str(getattr(row, "encuesta", None) or "").strip()
         survey_raw = survey or None
 
+    if api_raw is None:
+        api = str(getattr(row, "api", None) or "").strip()
+        api_raw = api or None
+
     return _VentaTotalEnrichment(
         phone=phone,
         survey_raw=survey_raw,
+        api_raw=api_raw,
     )
 
 
@@ -607,6 +660,11 @@ def _load_new_sales(
             revenue=_to_decimal(row.total_pagado),
             survey_raw=(
                 enrichment.survey_raw
+                if enrichment is not None
+                else None
+            ),
+            api_raw=(
+                enrichment.api_raw
                 if enrichment is not None
                 else None
             ),
@@ -825,6 +883,7 @@ def _serialize_origin_breakdown(
 def _serialize_stats(stats: _BranchStats) -> dict[str, Any]:
     return {
         "iventas_contacts": stats.iventas_contacts,
+        "leads_iventas": stats.leads_iventas,
         "leads_meta": stats.leads_meta,
         "visits_total": stats.visits_total,
         "visits_iventas": stats.visits_iventas,
@@ -838,11 +897,30 @@ def _serialize_stats(stats: _BranchStats) -> dict[str, Any]:
         "sales_iventas_other": stats.sales_iventas_other,
         "sales_not_iventas": stats.sales_not_iventas,
         "sales_without_valid_phone": stats.sales_without_valid_phone,
+        "sales_digital": stats.sales_digital,
+        "sales_digital_organic": stats.sales_digital_organic,
+        "sales_web": stats.sales_web,
+        "sales_btl": stats.sales_btl,
         "revenue_total": float(stats.revenue_total),
         "revenue_iventas": float(stats.revenue_iventas),
         "revenue_iventas_meta": float(stats.revenue_iventas_meta),
         "revenue_iventas_other": float(stats.revenue_iventas_other),
         "revenue_not_iventas": float(stats.revenue_not_iventas),
+        "revenue_digital": float(stats.revenue_digital),
+        "revenue_web": float(stats.revenue_web),
+        "revenue_btl": float(stats.revenue_btl),
+        "lead_to_visit_rate": _safe_ratio(
+            stats.visits_total,
+            stats.leads_iventas,
+        ),
+        "visit_to_digital_sale_rate": _safe_ratio(
+            stats.sales_digital,
+            stats.visits_total,
+        ),
+        "lead_to_sale_rate": _safe_ratio(
+            stats.sales_digital,
+            stats.leads_iventas,
+        ),
         "meta_lead_to_visit_rate": _safe_ratio(
             stats.visits_iventas_meta,
             stats.leads_meta,
@@ -874,6 +952,7 @@ def _serialize_stats(stats: _BranchStats) -> dict[str, Any]:
 def _merge_stats(target: _BranchStats, source: _BranchStats) -> None:
     integer_fields = (
         "iventas_contacts",
+        "leads_iventas",
         "leads_meta",
         "visits_total",
         "visits_iventas",
@@ -887,6 +966,10 @@ def _merge_stats(target: _BranchStats, source: _BranchStats) -> None:
         "sales_iventas_other",
         "sales_not_iventas",
         "sales_without_valid_phone",
+        "sales_digital",
+        "sales_digital_organic",
+        "sales_web",
+        "sales_btl",
     )
     decimal_fields = (
         "revenue_total",
@@ -894,6 +977,9 @@ def _merge_stats(target: _BranchStats, source: _BranchStats) -> None:
         "revenue_iventas_meta",
         "revenue_iventas_other",
         "revenue_not_iventas",
+        "revenue_digital",
+        "revenue_web",
+        "revenue_btl",
     )
 
     for field_name in integer_fields:
@@ -951,11 +1037,15 @@ def build_marketing_sales_funnel_with_loaded_data(
 
             if canonical_row is None:
                 stats_by_branch[branch_id].iventas_contacts = 0
+                stats_by_branch[branch_id].leads_iventas = 0
                 stats_by_branch[branch_id].leads_meta = 0
                 continue
 
             stats_by_branch[branch_id].iventas_contacts = int(
                 canonical_row.iventas_contacts
+            )
+            stats_by_branch[branch_id].leads_iventas = int(
+                canonical_row.iventas_contacts_with_first_message
             )
             stats_by_branch[branch_id].leads_meta = int(
                 canonical_row.meta_observed_leads
@@ -964,6 +1054,7 @@ def build_marketing_sales_funnel_with_loaded_data(
         # Fallback solo si no existe snapshot mensual canónico.
         for branch_id, (contacts, leads_meta) in month_counts.items():
             stats_by_branch[branch_id].iventas_contacts = contacts
+            stats_by_branch[branch_id].leads_iventas = contacts
             stats_by_branch[branch_id].leads_meta = leads_meta
 
     limitations: list[str] = []
@@ -1087,12 +1178,13 @@ def build_marketing_sales_funnel_with_loaded_data(
         if sale.phone is None:
             stats.sales_without_valid_phone += 1
 
-        origin = _match_iventas(
+        iventas_origin = _match_iventas(
             evidence,
             sale.branch_id,
             sale.phone,
             sale.sale_date,
         )
+        origin = iventas_origin
         if origin == ORIGIN_IVENTAS_META:
             stats.sales_iventas += 1
             stats.sales_iventas_meta += 1
@@ -1107,6 +1199,24 @@ def build_marketing_sales_funnel_with_loaded_data(
             origin = _classify_survey(sale.survey_raw)
             stats.sales_not_iventas += 1
             stats.revenue_not_iventas += sale.revenue
+
+        sale_category = _classify_sale_category(
+            iventas_origin=iventas_origin,
+            api_raw=sale.api_raw,
+            survey_raw=sale.survey_raw,
+        )
+        if sale_category == SALE_CATEGORY_DIGITAL:
+            stats.sales_digital += 1
+            stats.revenue_digital += sale.revenue
+        elif sale_category == SALE_CATEGORY_DIGITAL_ORGANIC:
+            stats.sales_digital_organic += 1
+            stats.revenue_digital += sale.revenue
+        elif sale_category == SALE_CATEGORY_WEB:
+            stats.sales_web += 1
+            stats.revenue_web += sale.revenue
+        else:
+            stats.sales_btl += 1
+            stats.revenue_btl += sale.revenue
 
         stats.origin_counts[origin] += 1
         stats.origin_revenue[origin] += sale.revenue
@@ -1245,10 +1355,13 @@ def _build_response(
             ),
             "venta_total_role": (
                 "Enriquecimiento por folio; fallback PIN+fecha de pago "
-                "para Encuesta/teléfono, sin exigir misma sucursal."
+                "para Encuesta/teléfono/API, sin exigir misma sucursal."
             ),
             "match_mode": (
                 "exact_phone_same_branch_first_message_prior_30d"
+            ),
+            "commercial_classification_rule": (
+                "iVentas > API=IVENTAS > encuesta > fallback BTL"
             ),
             "survey_fallback_only_after_no_iventas_match": True,
             "limitations": limitations,

@@ -16,14 +16,14 @@
 }
 
 .branch-table-wrap--complete {
-  max-height: 500px;
+  max-height: 520px;
   border-color: #d8dee7;
   background: #fff;
 }
 
 .branch-performance-table {
   width: 100%;
-  min-width: 1760px;
+  min-width: 2280px;
   border-collapse: separate;
   border-spacing: 0;
   background: #fff;
@@ -62,11 +62,6 @@
 
 .branch-performance-table__groups th[colspan] {
   border-bottom-color: #3b424d;
-}
-
-.branch-performance-table__groups th:nth-child(2),
-.branch-performance-table__groups th:nth-child(4),
-.branch-performance-table__groups th:nth-child(6) {
   box-shadow:
     inset 2px 0 var(--story-orange),
     inset -1px 0 rgba(255, 255, 255, 0.08);
@@ -76,13 +71,19 @@
   position: sticky;
   top: 34px;
   z-index: 4;
-  height: 38px;
+  height: 42px;
   padding: 0 11px;
   background: #2b313a;
   color: #f6f8fb;
   font-size: 8px;
   font-weight: 850;
+  line-height: 1.15;
   text-align: center;
+}
+
+.branch-performance-table__columns .group-start,
+.branch-performance-table .metric-cell--group-start {
+  border-left: 2px solid rgba(240, 82, 45, 0.58);
 }
 
 .branch-performance-table tbody tr {
@@ -129,60 +130,43 @@
 }
 
 .metric-cell {
-  min-width: 86px;
+  min-width: 92px;
   color: #31445d;
   text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 .metric-cell--money {
-  min-width: 100px;
-  font-variant-numeric: tabular-nums;
-}
-
-.metric-cell--stacked {
   min-width: 112px;
 }
 
-.metric-cell--stacked small {
-  display: block;
-  margin-top: 3px;
-  color: #78879a;
-  font-size: 8px;
-  font-weight: 750;
-  line-height: 1.15;
+.metric-cell--rate {
+  min-width: 118px;
+  font-size: 9px;
+  font-weight: 800;
 }
 
-.metric-cell--highlight {
+.metric-cell--digital {
+  background: #fff7f2 !important;
+}
+
+.metric-cell--digital-soft {
   background: #fffaf7 !important;
 }
 
-.branch-performance-table tbody tr:hover .metric-cell--highlight {
-  background: #fff4ee !important;
+.branch-performance-table tbody tr:hover .metric-cell--digital,
+.branch-performance-table tbody tr:hover .metric-cell--digital-soft {
+  background: #fff1e9 !important;
 }
 
-.metric-cell--rate {
-  min-width: 105px;
-  font-size: 9px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-}
-
-.metric-cell--coverage {
-  min-width: 124px;
-}
-
-.metric-cell--coverage strong {
-  display: block;
-  margin-bottom: 5px;
-  color: #23354c;
-  font-size: 9px;
+.metric-cell--total {
+  background: #f7f9fc !important;
+  color: #172a42;
   font-weight: 900;
 }
 
-.metric-cell--coverage .coverage-track {
-  width: 76px;
-  height: 6px;
-  margin: 0 auto;
+.branch-performance-table tbody tr:hover .metric-cell--total {
+  background: #f4f6fa !important;
 }
 
 .table-detail-link--strong {
@@ -198,7 +182,7 @@
 
 @media (max-width: 1100px) {
   .branch-performance-table {
-    min-width: 1640px;
+    min-width: 2180px;
   }
 
   .branch-sticky-column {
