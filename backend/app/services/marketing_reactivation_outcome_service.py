@@ -21,6 +21,9 @@ from app.models.warehouse import (
     SociosActivosSnapshotRowORM,
     SociosVencidosCarteraORM,
 )
+from app.services.marketing_campaign_delivery_service import (
+    branch_send_times_for_campaigns,
+)
 from app.warehouse.services.socios_vencidos_current_status_resolver import (
     STATUS_ACTIVE_CONFIRMED,
     STATUS_ACTIVE_REVIEW,
@@ -145,22 +148,45 @@ def _window_days(campaign: MarketingReactivationCampaignORM) -> int:
 
 def _build_entries(
     campaigns: Iterable[MarketingReactivationCampaignORM],
+    *,
+    session: Any,
 ) -> tuple[list[_RecipientEntry], dict[int, list[_RecipientEntry]]]:
+    campaigns = list(campaigns)
+    send_times = branch_send_times_for_campaigns(
+        campaign_ids=(int(campaign.id) for campaign in campaigns),
+        session=session,
+    )
+    campaigns_with_branch_sends = {
+        campaign_id for campaign_id, _ in send_times
+    }
+
     entries: list[_RecipientEntry] = []
     by_episode: dict[int, list[_RecipientEntry]] = defaultdict(list)
     for campaign in campaigns:
-        if campaign.status != "SENT" or campaign.sent_at is None:
-            continue
         if not is_attributable_campaign(campaign):
             continue
-        sent_local = _sent_local(campaign.sent_at)
-        window_end = sent_local + timedelta(days=_window_days(campaign))
+        campaign_id = int(campaign.id)
+        legacy_sent_at = (
+            campaign.sent_at
+            if campaign_id not in campaigns_with_branch_sends
+            and campaign.status == "SENT"
+            and campaign.sent_at is not None
+            else None
+        )
         for recipient in campaign.recipients:
+            sent_at = send_times.get(
+                (campaign_id, str(recipient.sucursal))
+            ) or legacy_sent_at
+            if sent_at is None:
+                continue
+            sent_local = _sent_local(sent_at)
             entry = _RecipientEntry(
                 campaign=campaign,
                 recipient=recipient,
                 sent_local=sent_local,
-                window_end_local=window_end,
+                window_end_local=(
+                    sent_local + timedelta(days=_window_days(campaign))
+                ),
             )
             entries.append(entry)
             if recipient.socios_vencidos_cartera_id is not None:
@@ -201,8 +227,7 @@ def _read_campaigns(*, session: Any, campaign_ids: Iterable[int] | None = None):
         session.query(MarketingReactivationCampaignORM)
         .options(joinedload(MarketingReactivationCampaignORM.recipients))
         .filter(
-            MarketingReactivationCampaignORM.status == "SENT",
-            MarketingReactivationCampaignORM.sent_at.isnot(None),
+            MarketingReactivationCampaignORM.status.in_(("EXPORTED", "SENT")),
         )
     )
     if campaign_ids is not None:
@@ -211,7 +236,7 @@ def _read_campaigns(*, session: Any, campaign_ids: Iterable[int] | None = None):
             return []
         query = query.filter(MarketingReactivationCampaignORM.id.in_(normalized))
     return query.order_by(
-        MarketingReactivationCampaignORM.sent_at.asc(),
+        MarketingReactivationCampaignORM.created_at.asc(),
         MarketingReactivationCampaignORM.id.asc(),
     ).all()
 
@@ -491,7 +516,10 @@ def run_marketing_reactivation_outcomes(
         session=active_session,
         campaign_ids=campaign_ids,
     )
-    entries, all_by_episode = _build_entries(campaigns)
+    entries, all_by_episode = _build_entries(
+        campaigns,
+        session=active_session,
+    )
     if not entries:
         return {
             "campaigns": 0,
@@ -624,7 +652,9 @@ def run_marketing_reactivation_outcomes(
     for outcome in outcomes.values():
         counts[str(outcome.status)] += 1
     return {
-        "campaigns": len([campaign for campaign in campaigns if is_attributable_campaign(campaign)]),
+        "campaigns": len(
+            [campaign for campaign in campaigns if is_attributable_campaign(campaign)]
+        ),
         "recipients": len(entries),
         "checked": len(entries_to_check),
         "reactivated": counts[OUTCOME_REACTIVATED],
@@ -704,7 +734,7 @@ def build_marketing_reactivation_outcome_summary(
 
     active_session = _session_or_default(session)
     campaigns = _read_campaigns(session=active_session)
-    entries, _ = _build_entries(campaigns)
+    entries, _ = _build_entries(campaigns, session=active_session)
     selected = (
         {
             key
@@ -756,15 +786,18 @@ def build_marketing_reactivation_outcome_summary(
         if not campaign_entries:
             continue
         row = _serialize_counts(entries=campaign_entries, outcomes=outcomes)
+        first_sent_local = min(entry.sent_local for entry in campaign_entries)
         row.update(
             {
                 "campaign_id": int(campaign.id),
                 "name": str(campaign.name),
                 "campaign_type": _campaign_type(campaign),
-                "sent_at": campaign.sent_at.isoformat() if campaign.sent_at else None,
-                "sent_date_local": _sent_local(campaign.sent_at).date().isoformat()
-                if campaign.sent_at
-                else None,
+                "sent_at": (
+                    campaign.sent_at.isoformat()
+                    if campaign.sent_at is not None
+                    else None
+                ),
+                "sent_date_local": first_sent_local.date().isoformat(),
                 "attribution_window_days": _window_days(campaign),
             }
         )
@@ -799,7 +832,18 @@ def build_marketing_reactivation_campaign_outcome_detail(
     )
     if campaign is None:
         raise LookupError("Campaña no encontrada.")
-    if campaign.status != "SENT" or campaign.sent_at is None or not is_attributable_campaign(campaign):
+
+    all_entries, _ = _build_entries([campaign], session=active_session)
+    entries = [
+        entry
+        for entry in all_entries
+        if _entry_in_branch_scope(
+            entry,
+            allowed_sucursal_keys=allowed_sucursal_keys,
+            selected_sucursal_keys=None,
+        )
+    ]
+    if not is_attributable_campaign(campaign) or not entries:
         return {
             "campaign_id": int(campaign.id),
             "name": str(campaign.name),
@@ -816,17 +860,6 @@ def build_marketing_reactivation_campaign_outcome_detail(
             "rows": [],
         }
 
-    sent_local = _sent_local(campaign.sent_at)
-    all_entries, _ = _build_entries([campaign])
-    entries = [
-        entry
-        for entry in all_entries
-        if _entry_in_branch_scope(
-            entry,
-            allowed_sucursal_keys=allowed_sucursal_keys,
-            selected_sucursal_keys=None,
-        )
-    ]
     recipient_ids = [int(entry.recipient.id) for entry in entries]
     outcome_rows = (
         active_session.query(MarketingReactivationCampaignRecipientOutcomeORM)
@@ -845,6 +878,7 @@ def build_marketing_reactivation_campaign_outcome_detail(
         outcome = outcomes.get(int(entry.recipient.id))
         status = str(outcome.status) if outcome is not None else OUTCOME_PENDING
         reactivated_at = outcome.reactivated_at_local if outcome is not None else None
+        sent_at_utc = entry.sent_local.replace(tzinfo=TZ).astimezone(UTC)
         rows.append(
             {
                 "recipient_id": int(entry.recipient.id),
@@ -857,17 +891,21 @@ def build_marketing_reactivation_campaign_outcome_detail(
                 ),
                 "status": status,
                 "review_reason": outcome.review_reason if outcome is not None else None,
-                "sent_at": campaign.sent_at.isoformat(),
-                "sent_at_local": sent_local.isoformat(),
+                "sent_at": sent_at_utc.isoformat(),
+                "sent_at_local": entry.sent_local.isoformat(),
                 "reactivated_at_local": (
                     reactivated_at.isoformat() if reactivated_at is not None else None
                 ),
                 "days_to_reactivation": _days_to_reactivation(
-                    sent_local,
+                    entry.sent_local,
                     reactivated_at,
                 ),
-                "active_id_socio": outcome.active_id_socio if outcome is not None else None,
-                "active_sucursal": outcome.active_sucursal if outcome is not None else None,
+                "active_id_socio": (
+                    outcome.active_id_socio if outcome is not None else None
+                ),
+                "active_sucursal": (
+                    outcome.active_sucursal if outcome is not None else None
+                ),
             }
         )
 
