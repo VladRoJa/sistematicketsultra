@@ -73,10 +73,29 @@ class RoutineEvidenceMatchingPolicyTestCase(unittest.TestCase):
         result = self._select(ids=(candidate,))
         self.assertEqual(result.status, IDENTITY_CONFLICT)
 
-    def test_email_conflict_invalidates_even_when_name_matches(self) -> None:
-        candidate = replace(self.candidate, email_normalized="other@example.com")
-        result = self._select(ids=(candidate,))
-        self.assertEqual(result.status, IDENTITY_CONFLICT)
+    def test_name_match_corroborates_external_id_even_when_email_differs(self) -> None:
+        evidence = replace(
+            self.evidence,
+            external_member_id="383893",
+            email_normalized="eliabidljimenez@gmail.com",
+            member_name_normalized="eliabi denisse lopez jimenez",
+            routine_activity_date=date(2026, 9, 11),
+        )
+        candidate = replace(
+            self.candidate,
+            member_id=22757,
+            external_member_id="383893",
+            email_normalized="eliabi.ljimenez@gmail.com",
+            member_name_normalized="eliabi denisse lopez jimenez",
+            sale_date=date(2026, 9, 11),
+        )
+        result = self._select(evidence=evidence, ids=(candidate,))
+        self.assertEqual(result.status, MATCHED)
+        self.assertEqual(result.member_id, 22757)
+        self.assertEqual(result.match_method, "EXTERNAL_ID")
+        self.assertEqual(result.identity_corroborator, "NAME")
+        self.assertEqual(result.temporal_delta_days, 0)
+        self.assertEqual(result.assignment_type, "MISMO_DIA")
 
     def test_nearest_previous_sale_wins_for_posterior_evidence(self) -> None:
         farther = replace(self.candidate, member_id=27, sale_date=date(2026, 7, 1))
