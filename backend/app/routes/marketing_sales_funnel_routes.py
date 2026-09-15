@@ -23,6 +23,7 @@ from app.services.marketing_inputs_service import (
 from app.services.marketing_sales_funnel_cutoff_detail_service import (
     build_marketing_sales_funnel_cutoff_detail,
     build_marketing_sales_funnel_cutoff_export,
+    build_visit_conversion_summary_at_cutoff,
 )
 from app.services.marketing_sales_funnel_cutoff_service import (
     build_marketing_sales_funnel_at_cutoff,
@@ -43,7 +44,6 @@ from app.services.marketing_visit_conversion_service import (
     VISIT_CONVERSION_METRICS,
     build_visit_conversion_detail,
     build_visit_conversion_export,
-    build_visit_conversion_summary_from_loaded_data,
 )
 
 
@@ -202,16 +202,16 @@ def get_marketing_sales_funnel_endpoint():
         result = funnel_build.payload
         funnel_ms = (perf_counter() - stage_started) * 1000
 
-        stage_started = perf_counter()
-        branch_scope_ms = (perf_counter() - stage_started) * 1000
+        branch_scope_ms = 0.0
 
         # El builder de corte ya toma la población exacta del run iVentas
         # seleccionado. No se vuelve a sobrescribir con el canónico mensual.
         leads_ms = 0.0
 
         stage_started = perf_counter()
-        visit_conversion = build_visit_conversion_summary_from_loaded_data(
+        visit_conversion = build_visit_conversion_summary_at_cutoff(
             loaded=funnel_build.loaded,
+            cutoff_date=result["selected_cutoff_date"],
         )
         conversion_ms = (perf_counter() - stage_started) * 1000
 
