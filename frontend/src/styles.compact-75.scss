@@ -1,0 +1,401 @@
+/* ========================================================================== 
+   Suite Ultra - compact density REVIEW ONLY / second pass
+
+   Esta capa toma la version compacta actual como 100% y reduce aprox. 25%
+   adicional. Se carga despues de styles.compact.scss para poder comparar y
+   retirar esta pasada sin tocar la base productiva.
+   ========================================================================== */
+
+body.suite-compact-review {
+  --suite-shell-height: 38px;
+  --suite-control-height: 27px;
+  --suite-control-height-sm: 24px;
+  --suite-page-gap: 8px;
+  --suite-page-padding-x: 9px;
+  --suite-page-padding-y: 8px;
+  --suite-card-padding: 9px;
+  --suite-table-cell-x: 6px;
+  --suite-table-cell-y: 4px;
+  font-size: 10px;
+}
+
+/* Shell / navegacion */
+body.suite-compact-review .suite-header .suite-header__bar {
+  min-height: var(--suite-shell-height);
+  padding: 4px 9px;
+  grid-template-columns: 124px minmax(0, 1fr) 113px;
+  gap: 8px;
+}
+
+body.suite-compact-review .suite-header .suite-brand {
+  gap: 6px;
+  padding: 2px 4px;
+  border-radius: 8px;
+}
+
+body.suite-compact-review .suite-header .suite-brand__mark {
+  width: 23px;
+  height: 23px;
+  border-radius: 7px;
+  font-size: 12px;
+  box-shadow: 0 4px 10px rgba(229, 69, 37, 0.22);
+}
+
+body.suite-compact-review .suite-header .suite-brand__text strong {
+  font-size: 10px;
+}
+
+body.suite-compact-review .suite-header .suite-brand__text small {
+  font-size: 6px;
+  letter-spacing: 0.07em;
+}
+
+body.suite-compact-review .suite-header .suite-main-nav {
+  gap: 1px;
+  padding: 2px;
+  scrollbar-width: none;
+}
+
+body.suite-compact-review .suite-header .suite-main-nav__item {
+  height: 23px;
+  padding: 0 6px;
+  gap: 4px;
+  font-size: 9px;
+}
+
+body.suite-compact-review .suite-header .suite-main-nav__icon {
+  width: 11px;
+  height: 11px;
+  font-size: 11px;
+  line-height: 11px;
+}
+
+body.suite-compact-review .suite-header .suite-user-area {
+  gap: 5px;
+}
+
+body.suite-compact-review .suite-header .suite-user-area__label {
+  max-width: 89px;
+  font-size: 8px;
+}
+
+body.suite-compact-review .suite-header .suite-user-area__logout.mat-mdc-icon-button {
+  --mdc-icon-button-state-layer-size: 24px;
+  --mdc-icon-button-icon-size: 14px;
+  width: 24px;
+  height: 24px;
+  padding: 4px;
+}
+
+body.suite-compact-review .suite-header .suite-subnav {
+  top: calc(100% - 3px);
+  padding: 0 9px;
+}
+
+body.suite-compact-review .suite-header .suite-subnav__panel {
+  width: min(570px, 100%);
+  padding: 7px;
+  border-top-width: 2px;
+  border-radius: 0 0 12px 12px;
+}
+
+body.suite-compact-review .suite-header .suite-subnav__header {
+  gap: 5px;
+  margin-bottom: 5px;
+  padding: 0 2px 5px;
+}
+
+body.suite-compact-review .suite-header .suite-subnav__eyebrow {
+  font-size: 6px;
+}
+
+body.suite-compact-review .suite-header .suite-subnav__header strong {
+  font-size: 9px;
+}
+
+body.suite-compact-review .suite-header .suite-subnav__grid {
+  gap: 5px;
+}
+
+body.suite-compact-review .suite-header .suite-subnav-card {
+  grid-template-columns: 23px minmax(0, 1fr) 13px;
+  gap: 5px;
+  padding: 6px;
+  border-radius: 8px;
+}
+
+body.suite-compact-review .suite-header .suite-subnav-card__icon {
+  width: 23px;
+  height: 23px;
+  border-radius: 7px;
+}
+
+body.suite-compact-review .suite-header .suite-subnav-card__icon mat-icon {
+  width: 12px;
+  height: 12px;
+  font-size: 12px;
+  line-height: 12px;
+}
+
+body.suite-compact-review .suite-header .suite-subnav-card__content strong {
+  font-size: 8px;
+}
+
+body.suite-compact-review .suite-header .suite-subnav-card__content small {
+  font-size: 7px;
+  line-height: 1.15;
+}
+
+body.suite-compact-review .suite-main-content {
+  min-height: calc(100vh - var(--suite-shell-height));
+}
+
+/* Angular Material */
+body.suite-compact-review .mat-mdc-form-field {
+  --mat-form-field-container-height: var(--suite-control-height);
+  --mat-form-field-container-vertical-padding: 4px;
+}
+
+body.suite-compact-review .mat-mdc-form-field-infix {
+  min-height: var(--suite-control-height) !important;
+  padding: 0 6px !important;
+}
+
+body.suite-compact-review .mat-mdc-form-field-infix input.mat-mdc-input-element {
+  height: var(--suite-control-height) !important;
+  padding: 0 5px !important;
+  font-size: 10px !important;
+}
+
+body.suite-compact-review textarea.mat-mdc-input-element {
+  min-height: 60px !important;
+  padding: 7px 8px 6px !important;
+  font-size: 10px !important;
+  line-height: 1.35 !important;
+}
+
+body.suite-compact-review .mat-mdc-select-value {
+  padding: 1px 0 !important;
+  font-size: 10px;
+  line-height: 1.18 !important;
+}
+
+body.suite-compact-review .mat-mdc-floating-label,
+body.suite-compact-review .mdc-floating-label {
+  font-size: 8px;
+}
+
+body.suite-compact-review .mat-mdc-form-field-subscript-wrapper {
+  font-size: 8px;
+  line-height: 1.1;
+}
+
+body.suite-compact-review .mat-mdc-button,
+body.suite-compact-review .mat-mdc-raised-button,
+body.suite-compact-review .mat-mdc-unelevated-button,
+body.suite-compact-review .mat-mdc-outlined-button {
+  min-height: var(--suite-control-height-sm);
+  padding-left: 8px;
+  padding-right: 8px;
+  font-size: 9px;
+}
+
+body.suite-compact-review .mat-mdc-button mat-icon,
+body.suite-compact-review .mat-mdc-raised-button mat-icon,
+body.suite-compact-review .mat-mdc-unelevated-button mat-icon,
+body.suite-compact-review .mat-mdc-outlined-button mat-icon {
+  width: 12px !important;
+  height: 12px !important;
+  font-size: 12px !important;
+  line-height: 12px !important;
+}
+
+body.suite-compact-review .mat-mdc-icon-button {
+  --mdc-icon-button-state-layer-size: 26px;
+  --mdc-icon-button-icon-size: 14px;
+  width: 26px;
+  height: 26px;
+  padding: 4px;
+}
+
+body.suite-compact-review .mat-mdc-icon-button mat-icon {
+  width: 14px !important;
+  height: 14px !important;
+  font-size: 14px !important;
+  line-height: 14px !important;
+}
+
+body.suite-compact-review .mat-mdc-option,
+body.suite-compact-review .mat-mdc-menu-item {
+  min-height: 26px;
+  font-size: 9px;
+}
+
+body.suite-compact-review .mat-mdc-chip {
+  min-height: 18px;
+  font-size: 8px;
+}
+
+body.suite-compact-review .mat-mdc-tab {
+  min-width: 63px;
+  height: 27px;
+  padding: 0 9px;
+  font-size: 9px;
+}
+
+/* Tablas */
+body.suite-compact-review table.mat-mdc-table {
+  font-size: 9px;
+}
+
+body.suite-compact-review .mdc-data-table__cell,
+body.suite-compact-review .mdc-data-table__header-cell {
+  padding: var(--suite-table-cell-y) var(--suite-table-cell-x);
+}
+
+body.suite-compact-review .mat-mdc-header-row {
+  min-height: 27px;
+  height: 27px;
+}
+
+body.suite-compact-review .mat-mdc-row {
+  min-height: 26px;
+  height: 26px;
+}
+
+body.suite-compact-review .mat-mdc-paginator-container {
+  min-height: 30px;
+  padding: 0 5px;
+  font-size: 8px;
+}
+
+/* Cards / dialogs */
+body.suite-compact-review .mat-mdc-card {
+  border-radius: 8px;
+}
+
+body.suite-compact-review .mat-mdc-card-header {
+  padding: 7px 8px 0;
+}
+
+body.suite-compact-review .mat-mdc-card-content {
+  padding: 0 8px 8px;
+}
+
+body.suite-compact-review .mat-mdc-card-actions {
+  min-height: 29px;
+  padding: 3px 6px 6px;
+}
+
+body.suite-compact-review .mat-mdc-dialog-container .mdc-dialog__surface {
+  border-radius: 11px;
+}
+
+body.suite-compact-review .espaciado-formulario {
+  gap: 0.45rem;
+  padding-top: 0.45rem;
+}
+
+/* Cabeceras de pagina */
+body.suite-compact-review .suite-main-content .page-header {
+  gap: 9px;
+  padding: 9px 11px;
+  border-radius: 11px;
+}
+
+body.suite-compact-review .suite-main-content .page-heading h1,
+body.suite-compact-review .suite-main-content .page-header h1 {
+  font-size: clamp(16px, 1.6vw, 21px);
+}
+
+body.suite-compact-review .suite-main-content .eyebrow,
+body.suite-compact-review .suite-main-content .section-kicker {
+  font-size: 7px;
+}
+
+body.suite-compact-review .suite-main-content .page-subtitle {
+  font-size: 9px;
+  line-height: 1.25;
+}
+
+body.suite-compact-review .suite-main-content .marketing-page {
+  gap: 8px;
+  padding: 8px 9px 11px;
+}
+
+/* Funnel: 75% adicional respecto a la pasada anterior */
+body.suite-compact-review .suite-main-content .summary-kpi {
+  min-height: 50px !important;
+  padding: 5px 7px !important;
+  grid-template-columns: 24px minmax(0, 1fr) auto 11px !important;
+  gap: 5px !important;
+  border-radius: 8px !important;
+}
+
+body.suite-compact-review .suite-main-content .summary-kpi__icon {
+  width: 24px !important;
+  height: 24px !important;
+  border-radius: 7px !important;
+}
+
+body.suite-compact-review .suite-main-content .summary-kpi__icon mat-icon {
+  width: 13px !important;
+  height: 13px !important;
+  font-size: 13px !important;
+  line-height: 13px !important;
+}
+
+body.suite-compact-review .suite-main-content .summary-kpi__copy > span {
+  font-size: 6px !important;
+}
+
+body.suite-compact-review .suite-main-content .summary-kpi__copy strong {
+  font-size: clamp(14px, 1.16vw, 18px) !important;
+}
+
+body.suite-compact-review .suite-main-content .summary-kpi__copy small {
+  font-size: 5px !important;
+}
+
+body.suite-compact-review .suite-main-content .summary-kpi__secondary {
+  min-width: 53px !important;
+  padding-left: 5px !important;
+}
+
+body.suite-compact-review .suite-main-content .summary-kpi__secondary small {
+  font-size: 5px !important;
+}
+
+body.suite-compact-review .suite-main-content .summary-kpi__secondary strong {
+  font-size: 10px !important;
+}
+
+/* Responsive */
+@media (max-width: 1280px) {
+  body.suite-compact-review .suite-header .suite-header__bar {
+    grid-template-columns: 109px minmax(0, 1fr) 98px;
+    gap: 5px;
+    padding-left: 7px;
+    padding-right: 7px;
+  }
+
+  body.suite-compact-review .suite-header .suite-main-nav__item {
+    padding: 0 5px;
+    font-size: 8px;
+  }
+
+  body.suite-compact-review .suite-header .suite-user-area__label {
+    max-width: 72px;
+  }
+}
+
+@media (max-width: 900px) {
+  body.suite-compact-review .suite-header .suite-header__bar {
+    min-height: 35px;
+    grid-template-columns: 96px minmax(0, 1fr) auto;
+  }
+
+  body.suite-compact-review .suite-header .suite-brand__text small {
+    display: none;
+  }
+}
