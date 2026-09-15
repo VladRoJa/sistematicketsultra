@@ -107,7 +107,6 @@ def _read_campaign(
             f"No existe la campaña id={campaign_id}."
         )
     if for_update:
-        # Load the frozen audience while the campaign row remains locked.
         _ = list(campaign.recipients)
     return campaign
 
@@ -117,6 +116,19 @@ def _branch_counts(campaign: MarketingReactivationCampaignORM) -> Counter[str]:
         str(recipient.sucursal).strip()
         for recipient in campaign.recipients
         if str(recipient.sucursal or "").strip()
+    )
+
+
+def _branch_counts_are_allowed(
+    branch_counts: Counter[str],
+    allowed_sucursal_keys: tuple[str, ...] | None,
+) -> bool:
+    if allowed_sucursal_keys is None:
+        return True
+    allowed = set(allowed_sucursal_keys)
+    return all(
+        normalize_socios_vencidos_branch_key(sucursal) in allowed
+        for sucursal in branch_counts
     )
 
 
@@ -208,13 +220,10 @@ def get_campaign_delivery(
         session=active_session,
     )
     branch_counts = _branch_counts(campaign)
-    if allowed_sucursal_keys is not None:
-        allowed = set(allowed_sucursal_keys)
-        for sucursal in branch_counts:
-            if normalize_socios_vencidos_branch_key(sucursal) not in allowed:
-                raise MarketingCampaignDeliveryValidationError(
-                    "La campaña contiene sucursales fuera del alcance actual del usuario."
-                )
+    if not _branch_counts_are_allowed(branch_counts, allowed_sucursal_keys):
+        raise MarketingCampaignDeliveryValidationError(
+            "La campaña contiene sucursales fuera del alcance actual del usuario."
+        )
     delivery = _serialize_delivery(
         campaign=campaign,
         branch_counts=branch_counts,
@@ -327,8 +336,6 @@ def register_campaign_branch_sends(
             campaign.status = "SENT"
             campaign.sent_at = max(row.sent_at for row in sends.values())
         else:
-            # A partial send intentionally remains EXPORTED so pending branches
-            # can continue to be exported/reviewed without inventing a global send.
             campaign.status = "EXPORTED"
             campaign.sent_at = None
         campaign.updated_at = now_utc
@@ -352,6 +359,7 @@ def register_campaign_branch_sends(
 def attach_delivery_summaries(
     campaigns: list[dict[str, Any]],
     *,
+    allowed_sucursal_keys: tuple[str, ...] | None = None,
     session: Any | None = None,
 ) -> list[dict[str, Any]]:
     if not campaigns:
@@ -397,10 +405,15 @@ def attach_delivery_summaries(
     orm_by_id = {int(row.id): row for row in orm_rows}
     for payload in campaigns:
         campaign_id = int(payload["id"])
-        campaign = orm_by_id[campaign_id]
+        campaign = orm_by_id.get(campaign_id)
+        if campaign is None:
+            continue
+        branch_counts = counts_by_campaign.get(campaign_id, Counter())
+        if not _branch_counts_are_allowed(branch_counts, allowed_sucursal_keys):
+            continue
         delivery = _serialize_delivery(
             campaign=campaign,
-            branch_counts=counts_by_campaign.get(campaign_id, Counter()),
+            branch_counts=branch_counts,
             sends=sends_by_campaign.get(campaign_id, {}),
         )
         payload["delivery"] = {
