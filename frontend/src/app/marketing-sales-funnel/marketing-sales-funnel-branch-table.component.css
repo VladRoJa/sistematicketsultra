@@ -23,7 +23,7 @@
 
 .branch-performance-table {
   width: 100%;
-  min-width: 2280px;
+  min-width: 1460px;
   border-collapse: separate;
   border-spacing: 0;
   background: #fff;
@@ -72,7 +72,7 @@
   top: 34px;
   z-index: 4;
   height: 42px;
-  padding: 0 11px;
+  padding: 0 10px;
   background: #2b313a;
   color: #f6f8fb;
   font-size: 8px;
@@ -95,8 +95,8 @@
 }
 
 .branch-performance-table tbody td {
-  height: 50px;
-  padding: 7px 11px;
+  height: 64px;
+  padding: 7px 10px;
   background: #fff;
 }
 
@@ -130,20 +130,14 @@
 }
 
 .metric-cell {
-  min-width: 92px;
+  min-width: 88px;
   color: #31445d;
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
 
 .metric-cell--money {
-  min-width: 112px;
-}
-
-.metric-cell--rate {
-  min-width: 118px;
-  font-size: 9px;
-  font-weight: 800;
+  min-width: 104px;
 }
 
 .metric-cell--digital {
@@ -169,6 +163,38 @@
   background: #f4f6fa !important;
 }
 
+.metric-cell--summary {
+  min-width: 170px;
+  padding-left: 12px !important;
+  padding-right: 12px !important;
+}
+
+.compact-metric-stack {
+  display: grid;
+  gap: 4px;
+  min-width: 150px;
+}
+
+.compact-metric-stack span {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  line-height: 1.15;
+}
+
+.compact-metric-stack small {
+  color: #78879a;
+  font-size: 8px;
+  font-weight: 750;
+}
+
+.compact-metric-stack strong {
+  color: #172a42;
+  font-size: 9px;
+  font-weight: 900;
+}
+
 .table-detail-link--strong {
   color: #172a42;
   font-size: 10px;
@@ -182,10 +208,14 @@
 
 @media (max-width: 1100px) {
   .branch-performance-table {
-    min-width: 2180px;
+    min-width: 1380px;
   }
 
   .branch-sticky-column {
     min-width: 150px;
+  }
+
+  .metric-cell--summary {
+    min-width: 160px;
   }
 }
