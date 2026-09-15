@@ -227,7 +227,7 @@ async function loadTemplateWorkbook(): Promise<Workbook> {
     );
   }
 
-  const encoded = (await response.text()).replace(/\s+/g, '');
+  const encoded = await response.text();
   const bytes = decodeBase64(encoded);
   const workbook = new Workbook();
 
@@ -237,7 +237,23 @@ async function loadTemplateWorkbook(): Promise<Workbook> {
 }
 
 function decodeBase64(value: string): Uint8Array {
-  const binary = window.atob(value);
+  const withoutDataUrl = value.replace(/^data:[^;]+;base64,/i, '');
+  const compact = withoutDataUrl
+    .replace(/-/g, '+')
+    .replace(/_/g, '/')
+    .replace(/[^A-Za-z0-9+/]/g, '');
+
+  if (!compact) {
+    throw new Error('La plantilla Excel está vacía o no contiene Base64 válido.');
+  }
+
+  const remainder = compact.length % 4;
+  if (remainder === 1) {
+    throw new Error('La plantilla Excel contiene una cadena Base64 inválida.');
+  }
+
+  const padded = compact + '='.repeat((4 - remainder) % 4);
+  const binary = window.atob(padded);
   const bytes = new Uint8Array(binary.length);
 
   for (let index = 0; index < binary.length; index += 1) {
