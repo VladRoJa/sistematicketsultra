@@ -671,9 +671,13 @@ function downloadWorkbook(
 
   anchor.href = url;
   anchor.download = filename;
-  anchor.click();
+  anchor.style.display = 'none';
 
-  window.URL.revokeObjectURL(url);
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+
+  setTimeout(() => window.URL.revokeObjectURL(url), 0);
 }
 
 function buildExportFilename(options: FunnelBranchExportOptions): string {
