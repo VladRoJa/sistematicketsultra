@@ -62,23 +62,29 @@ def _id_identity(
     name_comparable = bool(
         evidence.member_name_normalized and candidate.member_name_normalized
     )
-    if email_comparable and (
-        evidence.email_normalized != candidate.email_normalized
-    ):
-        return _IdentityEvaluation(None, True)
-    if name_comparable and (
-        evidence.member_name_normalized != candidate.member_name_normalized
-    ):
-        return _IdentityEvaluation(None, True)
+    email_matches = bool(
+        email_comparable
+        and evidence.email_normalized == candidate.email_normalized
+    )
+    name_matches = bool(
+        name_comparable
+        and evidence.member_name_normalized == candidate.member_name_normalized
+    )
 
-    email_matches = email_comparable
-    name_matches = name_comparable
-    if email_matches and name_matches:
-        return _IdentityEvaluation("EMAIL_AND_NAME", False)
+    # The external ID is already an exact match for this route. A matching
+    # normalized name is enough to corroborate that identity even when one
+    # source has a stale/incorrect email. Name disagreement remains a hard
+    # conflict; email is only decisive when no comparable name is available.
+    if name_matches:
+        if email_matches:
+            return _IdentityEvaluation("EMAIL_AND_NAME", False)
+        return _IdentityEvaluation("NAME", False)
+    if name_comparable:
+        return _IdentityEvaluation(None, True)
     if email_matches:
         return _IdentityEvaluation("EMAIL", False)
-    if name_matches:
-        return _IdentityEvaluation("NAME", False)
+    if email_comparable:
+        return _IdentityEvaluation(None, True)
     return _IdentityEvaluation(None, False)
 
 
