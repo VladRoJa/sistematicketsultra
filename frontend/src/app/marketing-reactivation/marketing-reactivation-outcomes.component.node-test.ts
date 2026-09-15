@@ -168,18 +168,25 @@ test('region keeps compatible branches and forwards branch scope to summary', ()
 });
 
 
-test('campaign drilldown exposes attributed recoveries and business result', () => {
+test('campaign drilldown exposes all sent recipients and filters recovered', () => {
   const {component, detailRequests} = setup();
   component.openCampaign(44);
 
   assert.deepEqual(detailRequests, [44]);
   assert.equal(component.detail?.campaign_id, 44);
-  assert.equal(component.recoveredRows.length, 2);
-  assert.equal(component.recoveredRows[0].member_name, 'Ana');
-  assert.equal(component.recoveredRows[0].business_result, 'RENOVACION');
-  assert.equal(component.recoveredRows[1].business_result, 'REACTIVACION');
-  assert.equal(component.businessResultLabel(component.recoveredRows[0].business_result), 'Renovación');
-  assert.equal(component.businessResultLabel(component.recoveredRows[1].business_result), 'Reactivación');
+  assert.equal(component.detailRows.length, 3);
+  assert.equal(component.detailRows[0].member_name, 'Ana');
+  assert.equal(component.detailRows[0].business_result, 'RENOVACION');
+
+  component.detailStatus.setValue('REACTIVATED');
+  assert.equal(component.detailRows.length, 2);
+  assert.equal(component.detailRows[1].business_result, 'REACTIVACION');
+  assert.equal(component.businessResultLabel(component.detailRows[0].business_result), 'Renovación');
+  assert.equal(component.businessResultLabel(component.detailRows[1].business_result), 'Reactivación');
+
+  component.detailStatus.setValue('PENDING');
+  assert.equal(component.detailRows.length, 1);
+  assert.equal(component.detailRows[0].member_name, 'Mario');
 });
 
 
