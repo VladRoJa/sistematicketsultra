@@ -19,12 +19,16 @@ const sourceNames = [
   'marketing-reactivation-explorer-result.node-test',
   'marketing-audience-explorer-dialog.component.node-test',
   'marketing-reactivation-outcomes.component.node-test',
+  'marketing-campaign-delivery.component.node-test',
   'marketing-reactivation.component',
   'marketing-reactivation-outcomes.component',
+  'marketing-campaign-delivery.component',
   'marketing-audience-explorer-dialog.component',
   'marketing-reactivation.service',
+  'marketing-campaign-delivery.service',
   'marketing-reactivation.models',
   'marketing-reactivation-outcome.models',
+  'marketing-campaign-delivery.models',
   'marketing-audience-explorer.models',
   'marketing-campaign-source-status.models',
 ];
@@ -59,6 +63,7 @@ const tests = [
   'marketing-reactivation-explorer-result.node-test.mjs',
   'marketing-audience-explorer-dialog.component.node-test.mjs',
   'marketing-reactivation-outcomes.component.node-test.mjs',
+  'marketing-campaign-delivery.component.node-test.mjs',
 ].map(name => path.join(outputDir, name));
 const result = spawnSync(process.execPath, ['--test', ...tests], {
   stdio: 'inherit',
