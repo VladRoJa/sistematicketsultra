@@ -1,0 +1,353 @@
+/* ========================================================================== 
+   Suite Ultra - compact density REVIEW ONLY
+
+   Objetivo: aproximar la densidad visual de trabajar con el navegador a
+   ~80-85%, sin usar CSS zoom. El modo queda aislado bajo
+   body.suite-compact-review para poder probarlo localmente y descartarlo
+   sin tocar la UI productiva.
+   ========================================================================== */
+
+body.suite-compact-review {
+  --suite-shell-height: 58px;
+  --suite-control-height: 42px;
+  --suite-control-height-sm: 36px;
+  --suite-page-gap: 12px;
+  --suite-page-padding-x: 14px;
+  --suite-page-padding-y: 12px;
+  --suite-card-padding: 14px;
+  --suite-table-cell-x: 10px;
+  --suite-table-cell-y: 7px;
+  font-size: 14px;
+}
+
+/* --------------------------------------------------------------------------
+   Shell / navegación principal
+   -------------------------------------------------------------------------- */
+
+body.suite-compact-review .suite-header .suite-header__bar {
+  min-height: var(--suite-shell-height);
+  padding: 7px 16px;
+  grid-template-columns: 185px minmax(0, 1fr) 170px;
+  gap: 12px;
+}
+
+body.suite-compact-review .suite-header .suite-brand {
+  gap: 9px;
+  padding: 4px 6px;
+  border-radius: 12px;
+}
+
+body.suite-compact-review .suite-header .suite-brand__mark {
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  font-size: 18px;
+}
+
+body.suite-compact-review .suite-header .suite-brand__text {
+  gap: 1px;
+}
+
+body.suite-compact-review .suite-header .suite-brand__text strong {
+  font-size: 14px;
+}
+
+body.suite-compact-review .suite-header .suite-brand__text small {
+  font-size: 9px;
+  letter-spacing: 0.1em;
+}
+
+body.suite-compact-review .suite-header .suite-main-nav {
+  gap: 3px;
+  padding: 4px;
+}
+
+body.suite-compact-review .suite-header .suite-main-nav__item {
+  height: 34px;
+  padding: 0 10px;
+  gap: 6px;
+  font-size: 12px;
+}
+
+body.suite-compact-review .suite-header .suite-main-nav__icon {
+  width: 17px;
+  height: 17px;
+  font-size: 17px;
+  line-height: 17px;
+}
+
+body.suite-compact-review .suite-header .suite-user-area {
+  gap: 7px;
+}
+
+body.suite-compact-review .suite-header .suite-user-area__label {
+  max-width: 132px;
+  font-size: 11px;
+}
+
+body.suite-compact-review .suite-header .suite-user-area__logout.mat-mdc-icon-button {
+  --mdc-icon-button-state-layer-size: 36px;
+  --mdc-icon-button-icon-size: 20px;
+  width: 36px;
+  height: 36px;
+  padding: 6px;
+}
+
+body.suite-compact-review .suite-header .suite-subnav {
+  top: calc(100% - 5px);
+  padding: 0 16px;
+}
+
+body.suite-compact-review .suite-header .suite-subnav__panel {
+  width: min(820px, 100%);
+  padding: 12px;
+  border-top-width: 3px;
+}
+
+body.suite-compact-review .suite-header .suite-subnav__header {
+  gap: 8px;
+  margin-bottom: 9px;
+  padding: 0 2px 9px;
+}
+
+body.suite-compact-review .suite-header .suite-subnav__eyebrow {
+  font-size: 9px;
+}
+
+body.suite-compact-review .suite-header .suite-subnav__header strong {
+  font-size: 14px;
+}
+
+body.suite-compact-review .suite-header .suite-subnav__grid {
+  gap: 7px;
+}
+
+body.suite-compact-review .suite-header .suite-subnav-card {
+  grid-template-columns: 36px minmax(0, 1fr) 20px;
+  gap: 9px;
+  padding: 10px;
+  border-radius: 12px;
+}
+
+body.suite-compact-review .suite-header .suite-subnav-card__icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+}
+
+body.suite-compact-review .suite-header .suite-subnav-card__icon mat-icon {
+  width: 19px;
+  height: 19px;
+  font-size: 19px;
+  line-height: 19px;
+}
+
+body.suite-compact-review .suite-header .suite-subnav-card__content {
+  gap: 2px;
+}
+
+body.suite-compact-review .suite-header .suite-subnav-card__content strong {
+  font-size: 12px;
+}
+
+body.suite-compact-review .suite-header .suite-subnav-card__content small {
+  font-size: 10px;
+  line-height: 1.22;
+}
+
+body.suite-compact-review .suite-main-content {
+  min-height: calc(100vh - var(--suite-shell-height));
+}
+
+/* --------------------------------------------------------------------------
+   Angular Material: controles más compactos
+   -------------------------------------------------------------------------- */
+
+body.suite-compact-review .mat-mdc-form-field {
+  --mat-form-field-container-height: var(--suite-control-height);
+  --mat-form-field-container-vertical-padding: 7px;
+}
+
+body.suite-compact-review .mat-mdc-form-field-infix {
+  min-height: var(--suite-control-height) !important;
+  padding: 0 10px !important;
+}
+
+body.suite-compact-review .mat-mdc-form-field-infix input.mat-mdc-input-element {
+  height: var(--suite-control-height) !important;
+  padding: 0 8px !important;
+  font-size: 14px !important;
+}
+
+body.suite-compact-review textarea.mat-mdc-input-element {
+  min-height: 92px !important;
+  padding: 11px 12px 9px !important;
+  font-size: 14px !important;
+  line-height: 1.45 !important;
+}
+
+body.suite-compact-review .mat-mdc-select-value {
+  padding: 3px 0 !important;
+  font-size: 14px;
+  line-height: 1.3 !important;
+}
+
+body.suite-compact-review .mat-mdc-floating-label,
+body.suite-compact-review .mdc-floating-label {
+  font-size: 13px;
+}
+
+body.suite-compact-review .mat-mdc-form-field-subscript-wrapper {
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+body.suite-compact-review .mat-mdc-button,
+body.suite-compact-review .mat-mdc-raised-button,
+body.suite-compact-review .mat-mdc-unelevated-button,
+body.suite-compact-review .mat-mdc-outlined-button {
+  min-height: var(--suite-control-height-sm);
+  padding-left: 13px;
+  padding-right: 13px;
+  font-size: 13px;
+}
+
+body.suite-compact-review .mat-mdc-icon-button {
+  --mdc-icon-button-state-layer-size: 38px;
+  --mdc-icon-button-icon-size: 20px;
+}
+
+body.suite-compact-review .mat-mdc-option {
+  min-height: 40px;
+  font-size: 13px;
+}
+
+body.suite-compact-review .mat-mdc-menu-item {
+  min-height: 40px;
+  font-size: 13px;
+}
+
+body.suite-compact-review .mat-mdc-chip {
+  min-height: 28px;
+  font-size: 12px;
+}
+
+body.suite-compact-review .mat-mdc-tab {
+  min-width: 96px;
+  height: 42px;
+  padding: 0 16px;
+}
+
+/* --------------------------------------------------------------------------
+   Tablas
+   -------------------------------------------------------------------------- */
+
+body.suite-compact-review table.mat-mdc-table {
+  font-size: 12.5px;
+}
+
+body.suite-compact-review .mdc-data-table__cell,
+body.suite-compact-review .mdc-data-table__header-cell {
+  padding: var(--suite-table-cell-y) var(--suite-table-cell-x);
+}
+
+body.suite-compact-review .mat-mdc-header-row {
+  min-height: 42px;
+  height: 42px;
+}
+
+body.suite-compact-review .mat-mdc-row {
+  min-height: 40px;
+  height: 40px;
+}
+
+body.suite-compact-review .mat-mdc-paginator-container {
+  min-height: 46px;
+  padding: 0 8px;
+}
+
+/* --------------------------------------------------------------------------
+   Cards, diálogos y espaciado compartido
+   -------------------------------------------------------------------------- */
+
+body.suite-compact-review .mat-mdc-card {
+  border-radius: 12px;
+}
+
+body.suite-compact-review .mat-mdc-card-header {
+  padding: 12px 14px 0;
+}
+
+body.suite-compact-review .mat-mdc-card-content {
+  padding: 0 14px 14px;
+}
+
+body.suite-compact-review .mat-mdc-card-actions {
+  min-height: 44px;
+  padding: 6px 10px 10px;
+}
+
+body.suite-compact-review .mat-mdc-dialog-container .mdc-dialog__surface {
+  border-radius: 16px;
+}
+
+body.suite-compact-review .espaciado-formulario {
+  gap: 0.75rem;
+  padding-top: 0.75rem;
+}
+
+/* Páginas que ya comparten la convención .page-header. El selector lleva
+   prefijo del body para ganar a los estilos encapsulados sin usar zoom. */
+body.suite-compact-review .suite-main-content .page-header {
+  gap: 16px;
+  padding: 16px 18px;
+  border-radius: 16px;
+}
+
+body.suite-compact-review .suite-main-content .page-heading h1,
+body.suite-compact-review .suite-main-content .page-header h1 {
+  font-size: clamp(24px, 2.5vw, 32px);
+}
+
+body.suite-compact-review .suite-main-content .page-subtitle {
+  font-size: 13px;
+}
+
+/* Marketing/BI ya usa este contenedor en varios módulos. */
+body.suite-compact-review .suite-main-content .marketing-page {
+  gap: 12px;
+  padding: 12px 14px 18px;
+}
+
+/* --------------------------------------------------------------------------
+   Responsive: no apretar de más donde la navegación ya necesita wrap
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 1280px) {
+  body.suite-compact-review .suite-header .suite-header__bar {
+    grid-template-columns: 160px minmax(0, 1fr) 145px;
+    gap: 9px;
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  body.suite-compact-review .suite-header .suite-main-nav__item {
+    padding: 0 8px;
+    font-size: 11px;
+  }
+
+  body.suite-compact-review .suite-header .suite-user-area__label {
+    max-width: 108px;
+  }
+}
+
+@media (max-width: 900px) {
+  body.suite-compact-review .suite-header .suite-header__bar {
+    min-height: 54px;
+    grid-template-columns: 145px minmax(0, 1fr) auto;
+  }
+
+  body.suite-compact-review .suite-header .suite-brand__text small {
+    display: none;
+  }
+}
