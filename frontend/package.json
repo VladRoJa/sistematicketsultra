@@ -3,8 +3,8 @@
   "version": "0.0.0",
   "scripts": {
     "ng": "ng",
-    "start": "node scripts/prepare-marketing-funnel-template.mjs && ng serve --proxy-config proxy.conf.json",
-    "build": "node scripts/prepare-marketing-funnel-template.mjs && ng build",
+    "start": "ng serve --proxy-config proxy.conf.json",
+    "build": "ng build",
     "test": "ng test"
   },
   "private": true,
