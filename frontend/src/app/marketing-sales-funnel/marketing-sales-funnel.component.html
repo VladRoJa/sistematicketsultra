@@ -151,7 +151,7 @@
           <h2 id="branch-table-title">Venta Nueva por canal y eficiencia</h2>
           <p>
             Una sola lectura por club: adquisición, clasificación de la venta,
-            ingresos, conversión y costo bajo el contrato comercial del funnel.
+            ingreso total y eficiencia comercial. El desglose completo vive en Excel.
           </p>
         </div>
 
@@ -180,33 +180,24 @@
               </th>
               <th colspan="3">Adquisición</th>
               <th colspan="5">Venta nueva</th>
-              <th colspan="4">Ingresos</th>
-              <th colspan="3">Conversión</th>
-              <th colspan="3">Costos</th>
+              <th colspan="1">Resultado</th>
+              <th colspan="2">Eficiencia</th>
             </tr>
             <tr class="branch-performance-table__columns">
               <th class="group-start">Inversión</th>
               <th>Leads</th>
-              <th>Visitantes totales</th>
+              <th>Visitantes</th>
 
-              <th class="group-start">Ventas digitales</th>
-              <th>Ventas digitales orgánicas</th>
-              <th>Venta web</th>
-              <th>Venta BTL</th>
-              <th>Ventas totales</th>
+              <th class="group-start">Venta digital</th>
+              <th>Orgánica digital</th>
+              <th>Web</th>
+              <th>BTL</th>
+              <th>Total</th>
 
-              <th class="group-start">Ingreso digital</th>
-              <th>Ingreso web</th>
-              <th>Ingreso BTL</th>
-              <th>Ingreso total</th>
+              <th class="group-start">Ingreso total</th>
 
-              <th class="group-start">Lead → visita</th>
-              <th>Visita → venta digital</th>
-              <th>Lead → venta</th>
-
-              <th class="group-start">CPL</th>
-              <th>CPT</th>
-              <th>CAC</th>
+              <th class="group-start">Conversión</th>
+              <th>Costos</th>
             </tr>
           </thead>
 
@@ -278,19 +269,7 @@
                 </button>
               </td>
 
-              <td class="metric-cell metric-cell--money metric-cell--group-start">
-                {{ row.revenue_digital_display }}
-              </td>
-
-              <td class="metric-cell metric-cell--money">
-                {{ row.revenue_web_display }}
-              </td>
-
-              <td class="metric-cell metric-cell--money">
-                {{ row.revenue_btl_display }}
-              </td>
-
-              <td class="metric-cell metric-cell--money metric-cell--total">
+              <td class="metric-cell metric-cell--money metric-cell--total metric-cell--group-start">
                 <button
                   class="table-detail-link table-detail-link--money"
                   type="button"
@@ -300,28 +279,38 @@
                 </button>
               </td>
 
-              <td class="metric-cell metric-cell--rate metric-cell--group-start">
-                {{ row.lead_to_visit_display }}
+              <td class="metric-cell metric-cell--summary metric-cell--group-start">
+                <div class="compact-metric-stack" aria-label="Conversiones del club">
+                  <span>
+                    <small>Lead → visita</small>
+                    <strong>{{ row.lead_to_visit_display }}</strong>
+                  </span>
+                  <span>
+                    <small>Visita → digital</small>
+                    <strong>{{ row.visit_to_digital_sale_display }}</strong>
+                  </span>
+                  <span>
+                    <small>Lead → venta</small>
+                    <strong>{{ row.lead_to_sale_display }}</strong>
+                  </span>
+                </div>
               </td>
 
-              <td class="metric-cell metric-cell--rate">
-                {{ row.visit_to_digital_sale_display }}
-              </td>
-
-              <td class="metric-cell metric-cell--rate">
-                {{ row.lead_to_sale_display }}
-              </td>
-
-              <td class="metric-cell metric-cell--money metric-cell--group-start">
-                {{ row.cpl_display }}
-              </td>
-
-              <td class="metric-cell metric-cell--money">
-                {{ row.cpt_display }}
-              </td>
-
-              <td class="metric-cell metric-cell--money">
-                {{ row.cac_display }}
+              <td class="metric-cell metric-cell--summary metric-cell--money">
+                <div class="compact-metric-stack" aria-label="Costos del club">
+                  <span>
+                    <small>CPL</small>
+                    <strong>{{ row.cpl_display }}</strong>
+                  </span>
+                  <span>
+                    <small>CPT</small>
+                    <strong>{{ row.cpt_display }}</strong>
+                  </span>
+                  <span>
+                    <small>CAC</small>
+                    <strong>{{ row.cac_display }}</strong>
+                  </span>
+                </div>
               </td>
             </tr>
           </tbody>
