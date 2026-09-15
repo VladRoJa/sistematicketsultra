@@ -219,3 +219,30 @@
     min-width: 160px;
   }
 }
+
+/* Total general del alcance visible */
+.branch-total-row td {
+  position: sticky;
+  top: 76px;
+  z-index: 3;
+  background: #f2f5f9 !important;
+  border-bottom: 2px solid #cbd4df;
+  color: #14263d;
+  font-weight: 900;
+  box-shadow: 0 4px 8px -8px rgba(20, 38, 61, 0.65);
+}
+
+.branch-total-row .branch-sticky-column {
+  z-index: 6;
+  background: #e9eef5 !important;
+  color: #14263d !important;
+  letter-spacing: 0.04em;
+}
+
+.branch-performance-table tbody .branch-total-row:hover td {
+  background: #f2f5f9 !important;
+}
+
+.branch-performance-table tbody .branch-total-row:hover .branch-sticky-column {
+  background: #e9eef5 !important;
+}

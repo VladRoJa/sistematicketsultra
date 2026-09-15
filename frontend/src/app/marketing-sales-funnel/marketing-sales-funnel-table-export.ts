@@ -23,10 +23,10 @@ const EXPORT_HEADERS = [
   'Visitas iVentas',
   'Visitas sin trazabilidad',
   'Venta nueva total',
-  'Venta iVentas',
-  'Venta publicaciones',
-  'Venta orgánico',
-  'Venta no iVentas',
+  'Venta digital',
+  'Venta digital orgánica',
+  'Venta web',
+  'Venta BTL',
   'Ingreso total',
   'Costo por lead',
   'Costo por visita',
@@ -70,10 +70,10 @@ export function exportMarketingSalesFunnelBranchTable(
       branch.visits_iventas,
       branch.visits_not_iventas,
       branch.sales_total,
-      null,
-      branch.sales_iventas_meta,
-      branch.sales_iventas_other,
-      null,
+      branch.sales_digital,
+      branch.sales_digital_organic,
+      branch.sales_web,
+      branch.sales_btl,
       branch.revenue_total,
       null,
       null,
@@ -141,19 +141,6 @@ export function exportMarketingSalesFunnelBranchTable(
       branch.leads_meta > 0
         ? branch.visits_iventas / branch.leads_meta
         : null
-    );
-
-    setFormulaCell(
-      worksheet,
-      `H${rowIndex}`,
-      `I${rowIndex}+J${rowIndex}`,
-      branch.sales_iventas,
-    );
-    setFormulaCell(
-      worksheet,
-      `K${rowIndex}`,
-      `G${rowIndex}-H${rowIndex}`,
-      branch.sales_not_iventas,
     );
     setFormulaCell(
       worksheet,
