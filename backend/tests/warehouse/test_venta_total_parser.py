@@ -47,6 +47,7 @@ NEW_EXTRA_HEADERS = (
     "Fecha Facturacion",
     "Folio Interno Factura",
     "Telefono",
+    "API",
 )
 
 NEW_EXTRA_VALUES = (
@@ -55,6 +56,7 @@ NEW_EXTRA_VALUES = (
     "2026-07-28",
     "FACTURA-SINTETICA",
     "TEL-SINTETICO-001",
+    "IVENTAS",
 )
 
 
@@ -75,11 +77,12 @@ def _xlsx_bytes(
     return stream.getvalue()
 
 
-def test_parse_historical_file_without_telefono():
+def test_parse_historical_file_without_telefono_or_api():
     result = parse_venta_total_xlsx(file_bytes=_xlsx_bytes())
 
     assert result.row_count == 1
     assert result.rows[0].telefono is None
+    assert result.rows[0].api is None
     assert result.header_columns == EXPECTED_VENTA_TOTAL_INTERNAL_COLUMNS
 
 
@@ -99,7 +102,8 @@ def test_parse_new_file_with_extra_columns_after_tipo():
 
     assert result.row_count == 1
     assert result.rows[0].telefono == "TEL-SINTETICO-001"
-    assert result.header_columns[-5:] == NEW_EXTRA_HEADERS
+    assert result.rows[0].api == "IVENTAS"
+    assert result.header_columns[-6:] == NEW_EXTRA_HEADERS
 
 
 @pytest.mark.parametrize("telefono", [None, "   "])
@@ -152,6 +156,23 @@ def test_parse_accepts_accented_telefono_header():
     )
 
     assert result.rows[0].telefono == "TEL-SINTETICO-ACENTO"
+
+
+def test_parse_api_trims_surrounding_spaces():
+    result = parse_venta_total_xlsx(
+        file_bytes=_xlsx_bytes(
+            headers=(
+                *EXPECTED_VENTA_TOTAL_RAW_COLUMNS,
+                "API",
+            ),
+            row_values=(
+                *BASE_ROW_VALUES,
+                "  IVENTAS  ",
+            ),
+        )
+    )
+
+    assert result.rows[0].api == "IVENTAS"
 
 
 def test_parse_still_requires_the_historical_25_column_prefix():

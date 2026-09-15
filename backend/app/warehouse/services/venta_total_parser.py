@@ -111,6 +111,7 @@ class VentaTotalParsedRow:
     nuevo: str | None
     tipo: str | None
     telefono: str | None = None
+    api: str | None = None
 
 
 @dataclass(slots=True)
@@ -238,6 +239,12 @@ def parse_venta_total_xlsx(
                     _get_optional_column_value(
                         row,
                         column_names=("Telefono", "Teléfono"),
+                    )
+                ),
+                api=_normalize_optional_text(
+                    _get_optional_column_value(
+                        row,
+                        column_names=("API", "Api", "api"),
                     )
                 ),
             )
