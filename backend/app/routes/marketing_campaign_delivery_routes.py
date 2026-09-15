@@ -61,6 +61,7 @@ def list_marketing_campaign_delivery_summaries_endpoint():
             )
         rows = attach_delivery_summaries(
             [{"id": campaign_id} for campaign_id in campaign_ids],
+            allowed_sucursal_keys=_reactivation_allowed_sucursal_keys(access),
             session=db.session,
         )
         return jsonify({"rows": rows}), 200
