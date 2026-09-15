@@ -26,7 +26,6 @@ import {
 } from 'rxjs';
 
 import { MarketingDashboardResponse } from '../marketing-conversion/marketing.models';
-import { MarketingService } from '../marketing-conversion/marketing.service';
 import {
   MarketingSalesFunnelBranch,
   MarketingSalesFunnelMetrics,
@@ -100,6 +99,7 @@ interface SalesFunnelBranchTotalsView {
 
 interface DashboardRequest {
   month: string;
+  cutoffDate: string | null;
   branchIds: number[];
 }
 
@@ -141,7 +141,6 @@ type DashboardRequestResult =
 export class MarketingSalesFunnelComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   private readonly salesFunnelService = inject(MarketingSalesFunnelService);
-  private readonly marketingService = inject(MarketingService);
   private readonly dialog = inject(MatDialog);
   private readonly dashboardRequests = new Subject<DashboardRequest>();
   private dashboardRequestId = 0;
@@ -153,10 +152,12 @@ export class MarketingSalesFunnelComponent implements OnInit {
       Validators.pattern(/^\d{4}-\d{2}$/),
     ],
   });
+  readonly cutoffControl = new FormControl<string | null>(null);
   readonly regionControl = new FormControl<number | null>(null);
   readonly branchControl = new FormControl<number | null>(null);
 
   readonly monthOptions = this.buildMonthOptions();
+  cutoffOptions: Array<{ value: string; label: string }> = [];
 
   dashboard: MarketingSalesFunnelResponse | null = null;
   summaryCards: SummaryCard[] = [];
@@ -167,15 +168,15 @@ export class MarketingSalesFunnelComponent implements OnInit {
   branchOptions: MarketingSalesFunnelScopeOption[] = [];
   activeScopeBranchIds: number[] = [];
 
-  /* POLISH: investment dashboard */
-  investmentDashboard: MarketingDashboardResponse | null = null;
-  /* END POLISH: investment dashboard */
-
   loading = true;
   errorMessage = '';
 
   get selectedMonth(): string {
     return this.monthControl.value.trim();
+  }
+
+  get selectedCutoff(): string | null {
+    return this.cutoffControl.value;
   }
 
   get hasBranches(): boolean {
@@ -236,7 +237,11 @@ export class MarketingSalesFunnelComponent implements OnInit {
           this.errorMessage = '';
 
           return this.salesFunnelService
-            .getDashboard(dashboardRequest.month, dashboardRequest.branchIds)
+            .getDashboard(
+              dashboardRequest.month,
+              dashboardRequest.branchIds,
+              dashboardRequest.cutoffDate,
+            )
             .pipe(
               map(
                 (data): DashboardRequestResult => ({
@@ -278,10 +283,18 @@ export class MarketingSalesFunnelComponent implements OnInit {
       )
       .subscribe((month) => {
         if (this.isValidMonth(month)) {
-          this.requestInvestmentDashboard();
+          this.cutoffControl.setValue(null, { emitEvent: false });
+          this.cutoffOptions = [];
           this.requestDashboard();
         }
       });
+
+    this.cutoffControl.valueChanges
+      .pipe(
+        distinctUntilChanged(),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe(() => this.requestDashboard());
 
     this.regionControl.valueChanges
       .pipe(
@@ -305,14 +318,13 @@ export class MarketingSalesFunnelComponent implements OnInit {
         this.refreshActiveScopeBranchIds();
         this.requestDashboard();
       });
-    this.requestInvestmentDashboard();
+
     this.requestDashboard();
   }
 
   refreshDashboard(): void {
     this.monthControl.markAsTouched();
     if (!this.monthControl.invalid) {
-      this.requestInvestmentDashboard();
       this.requestDashboard();
     }
   }
@@ -322,10 +334,21 @@ export class MarketingSalesFunnelComponent implements OnInit {
       return;
     }
 
+    const investmentDashboard = {
+      month: this.selectedMonth,
+      summary: {
+        investment: this.dashboard.summary.investment ?? null,
+      },
+      branches: this.dashboard.branches.map((branch) => ({
+        sucursal_id: branch.sucursal_id,
+        investment: branch.investment ?? null,
+      })),
+    } as unknown as MarketingDashboardResponse;
+
     exportMarketingSalesFunnelBranchTable({
       month: this.selectedMonth,
       branches: this.dashboard.branches,
-      investmentDashboard: this.investmentDashboard,
+      investmentDashboard,
       scopeOptions: this.scopeOptions,
       regionId: this.regionControl.value,
       branchId: this.branchControl.value,
@@ -344,6 +367,7 @@ export class MarketingSalesFunnelComponent implements OnInit {
     this.dialog.open(MarketingSalesFunnelDetailDialogComponent, {
       data: {
         month: this.selectedMonth,
+        cutoffDate: this.dashboard?.selected_cutoff_date || this.selectedCutoff,
         metric,
         branchId,
         origin,
@@ -370,92 +394,30 @@ export class MarketingSalesFunnelComponent implements OnInit {
     }).format(value || 0);
   }
 
-
-  /* POLISH: investment scope methods */
-  private requestInvestmentDashboard(): void {
-    const month = this.selectedMonth;
-
-    this.marketingService
-      .getDashboard(month)
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (data) => {
-          if (month !== this.selectedMonth) {
-            return;
-          }
-
-          this.investmentDashboard = data;
-
-          if (this.dashboard) {
-            this.summaryCards = this.buildSummaryCards(
-              this.dashboard.summary,
-            );
-            this.refreshBranchRows();
-          }
-        },
-        error: () => {
-          if (month !== this.selectedMonth) {
-            return;
-          }
-
-          this.investmentDashboard = null;
-
-          if (this.dashboard) {
-            this.summaryCards = this.buildSummaryCards(
-              this.dashboard.summary,
-            );
-            this.refreshBranchRows();
-          }
-        },
-      });
-  }
-
   private resolveIventasCost(): number | null {
-    const dashboard = this.investmentDashboard;
-
-    if (!dashboard || dashboard.month !== this.selectedMonth) {
-      return null;
-    }
-
-    if (this.activeScopeBranchIds.length === 0) {
-      return dashboard.summary.investment;
-    }
-
-    const allowedIds = new Set(this.activeScopeBranchIds);
-
-    const scopedBranches = dashboard.branches.filter(
-      (branch) => allowedIds.has(branch.sucursal_id),
-    );
-
-    const availableInvestments = scopedBranches
-      .map((branch) => branch.investment)
-      .filter(
-        (investment): investment is number =>
-          investment !== null && investment !== undefined,
-      );
-
-    if (availableInvestments.length === 0) {
-      return null;
-    }
-
-    return availableInvestments.reduce(
-      (total, investment) => total + investment,
-      0,
-    );
+    return this.dashboard?.summary.investment ?? null;
   }
-  /* END POLISH: investment scope methods */
+
   private requestDashboard(): void {
     if (this.monthControl.invalid) {
       return;
     }
     this.dashboardRequests.next({
       month: this.selectedMonth,
+      cutoffDate: this.selectedCutoff,
       branchIds: this.activeScopeBranchIds,
     });
   }
 
   private applyDashboard(data: MarketingSalesFunnelResponse): void {
     this.dashboard = data;
+    this.cutoffOptions = (data.available_cutoff_dates || []).map((value) => ({
+      value,
+      label: this.formatDate(value),
+    }));
+    if (this.cutoffControl.value !== data.selected_cutoff_date) {
+      this.cutoffControl.setValue(data.selected_cutoff_date, { emitEvent: false });
+    }
     this.scopeOptions = data.scope_options || [];
     this.refreshRegionOptions();
     this.refreshBranchOptions(this.regionControl.value);
@@ -685,13 +647,9 @@ export class MarketingSalesFunnelComponent implements OnInit {
       cac_display: this.formatOptionalCurrency(cac),
     };
   }
-  private resolveBranchInvestment(branchId: number): number | null {
-    const dashboard = this.investmentDashboard;
-    if (!dashboard || dashboard.month !== this.selectedMonth) {
-      return null;
-    }
 
-    const branch = dashboard.branches.find(
+  private resolveBranchInvestment(branchId: number): number | null {
+    const branch = this.dashboard?.branches.find(
       (item) => item.sucursal_id === branchId,
     );
     return branch?.investment ?? null;

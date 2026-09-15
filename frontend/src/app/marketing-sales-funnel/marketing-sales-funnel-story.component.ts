@@ -54,6 +54,7 @@ export class MarketingSalesFunnelStoryComponent {
   private readonly dialog = inject(MatDialog);
 
   @Input({ required: true }) month = '';
+  @Input() cutoffDate: string | null = null;
   @Input({ required: true }) summary: MarketingSalesFunnelMetrics | null | undefined = null;
   @Input() reconciliationLabel = '';
   @Input() branchIds: number[] = [];
@@ -484,6 +485,7 @@ export class MarketingSalesFunnelStoryComponent {
     this.dialog.open(MarketingSalesFunnelDetailDialogComponent, {
       data: {
         month: this.month,
+        cutoffDate: this.cutoffDate,
         metric,
         origin,
         branchIds: this.branchIds,

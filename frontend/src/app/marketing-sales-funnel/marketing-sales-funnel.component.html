@@ -31,6 +31,25 @@
       <mat-form-field
         appearance="fill"
         subscriptSizing="dynamic"
+        class="month-field"
+      >
+        <mat-label>Corte</mat-label>
+        <mat-select
+          [formControl]="cutoffControl"
+          aria-label="Corte del Funnel de Venta Nueva"
+        >
+          <mat-option
+            *ngFor="let option of cutoffOptions"
+            [value]="option.value"
+          >
+            {{ option.label }}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field
+        appearance="fill"
+        subscriptSizing="dynamic"
         class="scope-field"
       >
         <mat-label>Región</mat-label>
@@ -139,6 +158,7 @@
 
     <app-marketing-sales-funnel-story
       [month]="selectedMonth"
+      [cutoffDate]="dashboard?.selected_cutoff_date || null"
       [summary]="dashboard?.summary"
       [reconciliationLabel]="reconciliationLabel"
       [branchIds]="activeScopeBranchIds"
@@ -434,6 +454,10 @@
 
       <div class="quality-layout" aria-labelledby="quality-title">
         <dl class="quality-modes quality-modes--three">
+          <div>
+            <dt>Corte seleccionado</dt>
+            <dd>{{ dashboard?.selected_cutoff_date ? (dashboard?.selected_cutoff_date | date:'dd MMM yyyy':'UTC':'es-MX') : '—' }}</dd>
+          </div>
           <div>
             <dt>Corte Nuevos Socios</dt>
             <dd>{{ newSalesCutoffLabel }}</dd>

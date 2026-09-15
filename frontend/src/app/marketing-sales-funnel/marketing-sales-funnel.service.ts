@@ -22,8 +22,12 @@ export class MarketingSalesFunnelService {
   getDashboard(
     month: string,
     branchIds: number[] = [],
+    cutoffDate?: string | null,
   ): Observable<MarketingSalesFunnelResponse> {
     let params = new HttpParams().set('month', month);
+    if (cutoffDate) {
+      params = params.set('cutoff_date', cutoffDate);
+    }
     params = this.withBranchIds(params, branchIds);
 
     return this.http.get<MarketingSalesFunnelResponse>(
@@ -42,8 +46,9 @@ export class MarketingSalesFunnelService {
     sortBy?: string,
     sortDir: MarketingSalesFunnelSortDirection = 'asc',
     branchIds: number[] = [],
+    cutoffDate?: string | null,
   ): Observable<MarketingSalesFunnelDetailResponse> {
-    const params = this.buildDetailParams(
+    let params = this.buildDetailParams(
       month,
       metric,
       branchId,
@@ -54,6 +59,10 @@ export class MarketingSalesFunnelService {
     )
       .set('page', page)
       .set('page_size', pageSize);
+
+    if (cutoffDate) {
+      params = params.set('cutoff_date', cutoffDate);
+    }
 
     return this.http.get<MarketingSalesFunnelDetailResponse>(
       `${this.apiUrl}/sales-funnel/detail`,
@@ -69,8 +78,9 @@ export class MarketingSalesFunnelService {
     sortBy?: string,
     sortDir: MarketingSalesFunnelSortDirection = 'asc',
     branchIds: number[] = [],
+    cutoffDate?: string | null,
   ): Observable<Blob> {
-    const params = this.buildDetailParams(
+    let params = this.buildDetailParams(
       month,
       metric,
       branchId,
@@ -79,6 +89,9 @@ export class MarketingSalesFunnelService {
       sortDir,
       branchIds,
     );
+    if (cutoffDate) {
+      params = params.set('cutoff_date', cutoffDate);
+    }
 
     return this.http.get(
       `${this.apiUrl}/sales-funnel/detail/export`,
