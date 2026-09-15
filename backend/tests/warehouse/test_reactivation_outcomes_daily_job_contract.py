@@ -7,10 +7,11 @@ SCHEDULER = ROOT / "app" / "warehouse" / "scheduler" / "reports_scheduler_worker
 ROUTES = ROOT / "app" / "routes" / "marketing_reactivation_outcome_routes.py"
 
 
-def test_daily_job_only_requests_campaigns_with_open_outcomes():
+def test_daily_job_only_requests_campaigns_with_open_outcomes_and_registered_sends():
     source = JOB.read_text(encoding="utf-8")
 
-    assert 'MarketingReactivationCampaignORM.status == "SENT"' in source
+    assert "MarketingReactivationCampaignBranchSendORM" in source
+    assert 'MarketingReactivationCampaignORM.status.in_(("EXPORTED", "SENT"))' in source
     assert "MarketingReactivationCampaignRecipientOutcomeORM.id.is_(None)" in source
     assert "OUTCOME_PENDING" in source
     assert "OUTCOME_REVIEW" in source

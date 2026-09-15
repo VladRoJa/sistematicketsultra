@@ -8,12 +8,32 @@ from app.services import marketing_reactivation_outcome_service as service
 UTC = timezone.utc
 
 
-def _recipient(recipient_id=1, episode_id=101):
+class _Query:
+    def __init__(self, rows):
+        self.rows = rows
+
+    def filter(self, *args, **kwargs):
+        return self
+
+    def all(self):
+        return list(self.rows)
+
+
+class _BranchSendSession:
+    def __init__(self, rows=None):
+        self.rows = list(rows or [])
+
+    def query(self, *args, **kwargs):
+        return _Query(self.rows)
+
+
+def _recipient(recipient_id=1, episode_id=101, sucursal="TEC MXL"):
     return NS(
         id=recipient_id,
         socios_vencidos_cartera_id=episode_id,
         member_name="Socio",
-        sucursal="TEC MXL",
+        phone_mx10="6861000001",
+        sucursal=sucursal,
         fecha_vencimiento_date=None,
     )
 
@@ -57,13 +77,20 @@ def _outcome(status="PENDING"):
     )
 
 
+def _legacy_entries(campaigns):
+    return service._build_entries(
+        campaigns,
+        session=_BranchSendSession(),
+    )
+
+
 def test_sent_at_is_compared_in_tijuana_local_time():
     sent_utc = datetime(2026, 9, 13, 18, 0, tzinfo=UTC)
 
     assert service._sent_local(sent_utc).isoformat() == "2026-09-13T11:00:00"
 
 
-def test_only_sent_expired_campaigns_are_attributable():
+def test_only_sent_expired_campaigns_are_attributable_without_branch_records():
     sent = datetime(2026, 9, 13, 18, tzinfo=UTC)
     campaigns = [
         _campaign(1, sent, campaign_type="WINBACK"),
@@ -76,15 +103,39 @@ def test_only_sent_expired_campaigns_are_attributable():
         _campaign(8, sent, campaign_type="WINBACK", status="EXPORTED"),
     ]
 
-    entries, _ = service._build_entries(campaigns)
+    entries, _ = _legacy_entries(campaigns)
 
     assert [entry.campaign.id for entry in entries] == [1, 2, 3, 4, 5]
+
+
+def test_partial_campaign_only_builds_entries_for_sent_branches():
+    sent = datetime(2026, 9, 14, 17, 30, tzinfo=UTC)
+    campaign = _campaign(
+        50,
+        None,
+        campaign_type="PERSONALIZADA",
+        universe="VENCIDOS",
+        status="EXPORTED",
+        recipients=[
+            _recipient(1, 101, "VILLAS DEL REY"),
+            _recipient(2, 102, "TEC MXL"),
+        ],
+    )
+    session = _BranchSendSession(
+        [NS(campaign_id=50, sucursal="VILLAS DEL REY", sent_at=sent)]
+    )
+
+    entries, by_episode = service._build_entries([campaign], session=session)
+
+    assert [entry.recipient.id for entry in entries] == [1]
+    assert set(by_episode) == {101}
+    assert entries[0].sent_local == service._sent_local(sent)
 
 
 def test_attribution_window_is_strict_after_send_and_inclusive_at_day_14():
     sent = datetime(2026, 9, 1, 17, tzinfo=UTC)
     campaign = _campaign(1, sent)
-    entry = service._build_entries([campaign])[0][0]
+    entry = _legacy_entries([campaign])[0][0]
 
     assert service._eligible_entries_for_payment(
         [entry], entry.sent_local
@@ -113,7 +164,7 @@ def test_last_touch_credits_only_latest_eligible_campaign():
         datetime(2026, 9, 8, 16, tzinfo=UTC),
         recipients=[recipient_b],
     )
-    entries, by_episode = service._build_entries([first, second])
+    entries, by_episode = _legacy_entries([first, second])
     assert len(entries) == 2
 
     payment = datetime(2026, 9, 10, 12, 0)
@@ -189,7 +240,7 @@ def test_missing_outcome_counts_as_pending_and_conversion_uses_sent_denominator(
             _recipient(4, 104),
         ],
     )
-    entries, _ = service._build_entries([campaign])
+    entries, _ = _legacy_entries([campaign])
     outcomes = {
         1: NS(status="REACTIVATED"),
         2: NS(status="WINDOW_CLOSED"),

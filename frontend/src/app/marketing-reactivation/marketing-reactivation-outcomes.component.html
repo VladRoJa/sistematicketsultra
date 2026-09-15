@@ -4,7 +4,7 @@
       <p class="eyebrow">Resultados</p>
       <h2>Recuperaciones atribuidas</h2>
       <p class="subtitle">
-        Seguimiento de campañas enviadas. Una recuperación se clasifica como renovación si el socio vuelve en el mismo mes de su vencimiento y como reactivación si venció en un mes anterior.
+        Seguimiento de destinatarios realmente registrados como enviados. Una recuperación se clasifica como renovación si el socio vuelve en el mismo mes de su vencimiento y como reactivación si venció en un mes anterior.
       </p>
     </div>
     <button mat-stroked-button type="button" (click)="load()" [disabled]="loading">
@@ -90,7 +90,7 @@
         <thead>
           <tr>
             <th>Campaña</th>
-            <th>Enviada</th>
+            <th>Primer envío</th>
             <th>Enviados</th>
             <th>Recuperados</th>
             <th>Renovaciones</th>
@@ -118,7 +118,7 @@
             </td>
             <td>
               <button mat-button type="button" (click)="openCampaign(campaign.campaign_id)">
-                Ver recuperados
+                Ver seguimiento
               </button>
             </td>
           </tr>
@@ -127,18 +127,18 @@
     </div>
 
     <ng-template #noCampaigns>
-      <div class="empty-state">No hay campañas enviadas atribuibles en el periodo seleccionado.</div>
+      <div class="empty-state">No hay destinatarios enviados atribuibles en el periodo seleccionado.</div>
     </ng-template>
   </ng-container>
 
   <section class="detail" *ngIf="detail as campaignDetail">
     <div class="detail-header">
       <div>
-        <p class="eyebrow">Detalle</p>
+        <p class="eyebrow">Seguimiento de campaña</p>
         <h3>{{ campaignDetail.name }}</h3>
         <p>
-          {{ campaignDetail.summary.recovered | number }} recuperados de
-          {{ campaignDetail.summary.sent | number }} enviados ·
+          {{ campaignDetail.summary.sent | number }} destinatarios registrados como enviados ·
+          {{ campaignDetail.summary.recovered | number }} recuperados ·
           {{ campaignDetail.summary.renewals | number }} renovaciones ·
           {{ campaignDetail.summary.reactivations | number }} reactivaciones.
         </p>
@@ -146,29 +146,39 @@
       <button mat-button type="button" (click)="closeDetail()">Cerrar</button>
     </div>
 
+    <mat-form-field *ngIf="!loadingDetail" appearance="outline">
+      <mat-label>Estado del destinatario</mat-label>
+      <mat-select [formControl]="detailStatus">
+        <mat-option value="ALL">Todos los enviados</mat-option>
+        <mat-option value="REACTIVATED">Recuperados</mat-option>
+        <mat-option value="PENDING">Pendientes</mat-option>
+        <mat-option value="REVIEW">Revisión</mat-option>
+        <mat-option value="WINDOW_CLOSED">Ventana cerrada</mat-option>
+      </mat-select>
+    </mat-form-field>
+
     <div *ngIf="loadingDetail" class="loading-row">
       <mat-spinner diameter="24"></mat-spinner>
     </div>
 
-    <div class="table-shell" *ngIf="!loadingDetail && recoveredRows.length; else noRecovered">
+    <div class="table-shell" *ngIf="!loadingDetail && detailRows.length; else noDetailRows">
       <table>
         <thead>
           <tr>
             <th>Socio</th>
+            <th>Estado</th>
             <th>Resultado</th>
             <th>Sucursal campaña</th>
             <th>Venció</th>
             <th>Recuperó</th>
             <th>Días</th>
-            <th>Sucursal activa</th>
+            <th>Sucursal de regreso</th>
           </tr>
         </thead>
         <tbody>
-          <tr *ngFor="let row of recoveredRows">
-            <td>
-              <strong>{{ row.member_name || 'Sin nombre' }}</strong>
-              <small>{{ statusLabel(row.status) }}</small>
-            </td>
+          <tr *ngFor="let row of detailRows">
+            <td><strong>{{ row.member_name || 'Sin nombre' }}</strong></td>
+            <td>{{ statusLabel(row.status) }}</td>
             <td>{{ businessResultLabel(row.business_result) }}</td>
             <td>{{ row.campaign_branch }}</td>
             <td>{{ formatDate(row.fecha_vencimiento) }}</td>
@@ -180,8 +190,8 @@
       </table>
     </div>
 
-    <ng-template #noRecovered>
-      <div *ngIf="!loadingDetail" class="empty-state">Esta campaña todavía no tiene recuperaciones atribuidas.</div>
+    <ng-template #noDetailRows>
+      <div *ngIf="!loadingDetail" class="empty-state">No hay destinatarios con el estado seleccionado.</div>
     </ng-template>
   </section>
 </section>

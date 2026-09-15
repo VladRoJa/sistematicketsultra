@@ -18,6 +18,8 @@ import {
 } from './marketing-reactivation-outcome.models';
 import { CampaignOptions } from './marketing-reactivation.models';
 
+type DetailStatusFilter = 'ALL' | ReactivationOutcomeStatus;
+
 @Component({
   selector: 'app-marketing-reactivation-outcomes',
   standalone: true,
@@ -43,6 +45,9 @@ export class MarketingReactivationOutcomesComponent implements OnInit {
     regionId: new FormControl<number | null>(null),
     sucursal: new FormControl('', { nonNullable: true }),
   });
+  readonly detailStatus = new FormControl<DetailStatusFilter>('ALL', {
+    nonNullable: true,
+  });
 
   options: CampaignOptions = { branches: [], regions: [] };
   result: ReactivationOutcomeSummaryResponse | null = null;
@@ -59,8 +64,10 @@ export class MarketingReactivationOutcomesComponent implements OnInit {
       : this.options.branches;
   }
 
-  get recoveredRows(): ReactivationCampaignOutcomeRow[] {
-    return (this.detail?.rows ?? []).filter(row => row.status === 'REACTIVATED');
+  get detailRows(): ReactivationCampaignOutcomeRow[] {
+    const rows = this.detail?.rows ?? [];
+    const status = this.detailStatus.value;
+    return status === 'ALL' ? rows : rows.filter(row => row.status === status);
   }
 
   ngOnInit(): void {
@@ -106,6 +113,7 @@ export class MarketingReactivationOutcomesComponent implements OnInit {
   openCampaign(campaignId: number): void {
     this.loadingDetail = true;
     this.error = '';
+    this.detailStatus.setValue('ALL', { emitEvent: false });
     this.service.getCampaignOutcomes(campaignId)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
@@ -123,6 +131,7 @@ export class MarketingReactivationOutcomesComponent implements OnInit {
 
   closeDetail(): void {
     this.detail = null;
+    this.detailStatus.setValue('ALL', { emitEvent: false });
   }
 
   statusLabel(status: ReactivationOutcomeStatus): string {
@@ -138,7 +147,7 @@ export class MarketingReactivationOutcomesComponent implements OnInit {
   businessResultLabel(result: RecoveryBusinessResult | null): string {
     if (result === 'RENOVACION') return 'Renovación';
     if (result === 'REACTIVACION') return 'Reactivación';
-    return 'Sin clasificar';
+    return '—';
   }
 
   formatDate(value: string | null): string {

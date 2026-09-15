@@ -10,6 +10,9 @@ from app.models.marketing import (
     MarketingReactivationCampaignORM,
     MarketingReactivationCampaignRecipientORM,
 )
+from app.models.marketing_campaign_delivery import (
+    MarketingReactivationCampaignBranchSendORM,
+)
 from app.models.marketing_reactivation_outcome import (
     MarketingReactivationCampaignRecipientOutcomeORM,
 )
@@ -28,14 +31,24 @@ def _campaign_ids_requiring_daily_check() -> list[int]:
             MarketingReactivationCampaignRecipientORM.campaign_id
             == MarketingReactivationCampaignORM.id,
         )
+        .join(
+            MarketingReactivationCampaignBranchSendORM,
+            (
+                MarketingReactivationCampaignBranchSendORM.campaign_id
+                == MarketingReactivationCampaignRecipientORM.campaign_id
+            )
+            & (
+                MarketingReactivationCampaignBranchSendORM.sucursal
+                == MarketingReactivationCampaignRecipientORM.sucursal
+            ),
+        )
         .outerjoin(
             MarketingReactivationCampaignRecipientOutcomeORM,
             MarketingReactivationCampaignRecipientOutcomeORM.campaign_recipient_id
             == MarketingReactivationCampaignRecipientORM.id,
         )
         .filter(
-            MarketingReactivationCampaignORM.status == "SENT",
-            MarketingReactivationCampaignORM.sent_at.isnot(None),
+            MarketingReactivationCampaignORM.status.in_(("EXPORTED", "SENT")),
             or_(
                 MarketingReactivationCampaignRecipientOutcomeORM.id.is_(None),
                 MarketingReactivationCampaignRecipientOutcomeORM.status.in_(
