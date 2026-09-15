@@ -1,6 +1,7 @@
 import { Component } from '@angular/core';
 
 import { MarketingReactivationComponent } from './marketing-reactivation.component';
+import { MarketingCampaignDeliveryComponent } from './marketing-campaign-delivery.component';
 import { MarketingReactivationOutcomesComponent } from './marketing-reactivation-outcomes.component';
 
 @Component({
@@ -8,6 +9,7 @@ import { MarketingReactivationOutcomesComponent } from './marketing-reactivation
   standalone: true,
   imports: [
     MarketingReactivationComponent,
+    MarketingCampaignDeliveryComponent,
     MarketingReactivationOutcomesComponent,
   ],
   templateUrl: './marketing-reactivation-page.component.html',
