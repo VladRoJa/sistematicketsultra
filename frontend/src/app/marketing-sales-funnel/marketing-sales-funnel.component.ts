@@ -58,7 +58,7 @@ interface SummaryCard {
 
 interface SalesFunnelBranchView extends MarketingSalesFunnelBranch {
   investment_display: string;
-  leads_iventas_display: string;
+  leads_meta_display: string;
   visits_total_display: string;
   sales_digital_display: string;
   sales_digital_organic_display: string;
@@ -607,8 +607,8 @@ export class MarketingSalesFunnelComponent implements OnInit {
   private buildBranchView(branch: MarketingSalesFunnelBranch): SalesFunnelBranchView {
     const investment = this.resolveBranchInvestment(branch.sucursal_id);
     const cpl = (
-      investment !== null && branch.leads_iventas > 0
-        ? investment / branch.leads_iventas
+      investment !== null && branch.leads_meta > 0
+        ? investment / branch.leads_meta
         : null
     );
     const cpt = (
@@ -624,11 +624,21 @@ export class MarketingSalesFunnelComponent implements OnInit {
         ? investment / digitalSalesForCac
         : null
     );
+    const leadToVisit = (
+      branch.leads_meta > 0
+        ? branch.visits_total / branch.leads_meta
+        : null
+    );
+    const leadToSale = (
+      branch.leads_meta > 0
+        ? branch.sales_digital / branch.leads_meta
+        : null
+    );
 
     return {
       ...branch,
       investment_display: this.formatOptionalCurrency(investment),
-      leads_iventas_display: this.formatInteger(branch.leads_iventas),
+      leads_meta_display: this.formatInteger(branch.leads_meta),
       visits_total_display: this.formatInteger(branch.visits_total),
       sales_digital_display: this.formatInteger(branch.sales_digital),
       sales_digital_organic_display: this.formatInteger(
@@ -641,11 +651,11 @@ export class MarketingSalesFunnelComponent implements OnInit {
       revenue_web_display: this.formatCurrency(branch.revenue_web),
       revenue_btl_display: this.formatCurrency(branch.revenue_btl),
       revenue_total_display: this.formatCurrency(branch.revenue_total),
-      lead_to_visit_display: this.formatPercent(branch.lead_to_visit_rate),
+      lead_to_visit_display: this.formatPercent(leadToVisit),
       visit_to_digital_sale_display: this.formatPercent(
         branch.visit_to_digital_sale_rate,
       ),
-      lead_to_sale_display: this.formatPercent(branch.lead_to_sale_rate),
+      lead_to_sale_display: this.formatPercent(leadToSale),
       cpl_display: this.formatOptionalCurrency(cpl),
       cpt_display: this.formatOptionalCurrency(cpt),
       cac_display: this.formatOptionalCurrency(cac),
