@@ -246,3 +246,62 @@
 .branch-performance-table tbody .branch-total-row:hover .branch-sticky-column {
   background: #e9eef5 !important;
 }
+
+/* Cabecera del Funnel: Mes | Corte | Región | Sucursal | Actualizar */
+.funnel-scope-controls {
+  grid-template-columns: 170px 180px 210px 220px 132px;
+  align-items: stretch;
+  min-width: 944px;
+}
+
+.funnel-scope-controls .month-field,
+.funnel-scope-controls .scope-field,
+.funnel-scope-controls .refresh-action {
+  min-width: 0;
+}
+
+.funnel-scope-controls .refresh-action {
+  width: 100%;
+  min-height: 40px;
+  align-self: stretch;
+}
+
+@media (max-width: 1450px) {
+  .funnel-scope-controls {
+    grid-template-columns: 150px 165px 185px 195px 120px;
+    min-width: 847px;
+  }
+}
+
+@media (max-width: 1280px) {
+  .funnel-scope-controls {
+    width: 100%;
+    min-width: 0;
+    grid-template-columns:
+      minmax(150px, 1fr)
+      minmax(160px, 1fr)
+      minmax(170px, 1fr)
+      minmax(180px, 1fr)
+      128px;
+  }
+}
+
+@media (max-width: 900px) {
+  .funnel-scope-controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .funnel-scope-controls .refresh-action {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 720px) {
+  .funnel-scope-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .funnel-scope-controls .refresh-action {
+    grid-column: auto;
+  }
+}
