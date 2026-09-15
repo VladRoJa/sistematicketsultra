@@ -77,6 +77,27 @@ interface SalesFunnelBranchView extends MarketingSalesFunnelBranch {
   cac_display: string;
 }
 
+interface SalesFunnelBranchTotalsView {
+  investment_display: string;
+  leads_display: string;
+  visits_display: string;
+  sales_digital_display: string;
+  sales_digital_organic_display: string;
+  sales_web_display: string;
+  sales_btl_display: string;
+  sales_total_display: string;
+  revenue_digital_display: string;
+  revenue_web_display: string;
+  revenue_btl_display: string;
+  revenue_total_display: string;
+  lead_to_visit_display: string;
+  visit_to_digital_sale_display: string;
+  lead_to_sale_display: string;
+  cpl_display: string;
+  cpt_display: string;
+  cac_display: string;
+}
+
 interface DashboardRequest {
   month: string;
   branchIds: number[];
@@ -140,6 +161,7 @@ export class MarketingSalesFunnelComponent implements OnInit {
   dashboard: MarketingSalesFunnelResponse | null = null;
   summaryCards: SummaryCard[] = [];
   branchRows: SalesFunnelBranchView[] = [];
+  branchTotals: SalesFunnelBranchTotalsView | null = null;
   scopeOptions: MarketingSalesFunnelScopeOption[] = [];
   regionOptions: Array<{ id: number; label: string }> = [];
   branchOptions: MarketingSalesFunnelScopeOption[] = [];
@@ -584,14 +606,85 @@ export class MarketingSalesFunnelComponent implements OnInit {
   private refreshBranchRows(): void {
     if (!this.dashboard) {
       this.branchRows = [];
+      this.branchTotals = null;
       return;
     }
 
     this.branchRows = this.dashboard.branches.map(
       (branch) => this.buildBranchView(branch),
     );
+
+    this.branchTotals = this.buildBranchTotals(this.dashboard.summary);
   }
 
+  private buildBranchTotals(
+    summary: MarketingSalesFunnelMetrics,
+  ): SalesFunnelBranchTotalsView {
+    const investment = this.resolveIventasCost();
+
+    const digitalSalesForCac = (
+      summary.sales_digital + summary.sales_digital_organic
+    );
+
+    const leadToVisit = (
+      summary.leads_meta > 0
+        ? summary.visits_total / summary.leads_meta
+        : null
+    );
+
+    const visitToDigitalSale = (
+      summary.visits_total > 0
+        ? summary.sales_digital / summary.visits_total
+        : null
+    );
+
+    const leadToSale = (
+      summary.leads_meta > 0
+        ? summary.sales_digital / summary.leads_meta
+        : null
+    );
+
+    const cpl = (
+      investment !== null && summary.leads_meta > 0
+        ? investment / summary.leads_meta
+        : null
+    );
+
+    const cpt = (
+      investment !== null && summary.visits_total > 0
+        ? investment / summary.visits_total
+        : null
+    );
+
+    const cac = (
+      investment !== null && digitalSalesForCac > 0
+        ? investment / digitalSalesForCac
+        : null
+    );
+
+    return {
+      investment_display: this.formatOptionalCurrency(investment),
+      leads_display: this.formatInteger(summary.leads_meta),
+      visits_display: this.formatInteger(summary.visits_total),
+      sales_digital_display: this.formatInteger(summary.sales_digital),
+      sales_digital_organic_display: this.formatInteger(
+        summary.sales_digital_organic,
+      ),
+      sales_web_display: this.formatInteger(summary.sales_web),
+      sales_btl_display: this.formatInteger(summary.sales_btl),
+      sales_total_display: this.formatInteger(summary.sales_total),
+      revenue_digital_display: this.formatCurrency(summary.revenue_digital),
+      revenue_web_display: this.formatCurrency(summary.revenue_web),
+      revenue_btl_display: this.formatCurrency(summary.revenue_btl),
+      revenue_total_display: this.formatCurrency(summary.revenue_total),
+      lead_to_visit_display: this.formatPercent(leadToVisit),
+      visit_to_digital_sale_display: this.formatPercent(visitToDigitalSale),
+      lead_to_sale_display: this.formatPercent(leadToSale),
+      cpl_display: this.formatOptionalCurrency(cpl),
+      cpt_display: this.formatOptionalCurrency(cpt),
+      cac_display: this.formatOptionalCurrency(cac),
+    };
+  }
   private resolveBranchInvestment(branchId: number): number | null {
     const dashboard = this.investmentDashboard;
     if (!dashboard || dashboard.month !== this.selectedMonth) {
