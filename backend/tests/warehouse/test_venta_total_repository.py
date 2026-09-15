@@ -8,7 +8,11 @@ import pytest
 import app.warehouse.services.venta_total_repository as repository
 
 
-def _parsed_row(*, telefono: object = "TEL-SINTETICO-001") -> dict[str, object]:
+def _parsed_row(
+    *,
+    telefono: object = "TEL-SINTETICO-001",
+    api: object = "IVENTAS",
+) -> dict[str, object]:
     return {
         "row_index": 0,
         "fecha": "2026-07-28",
@@ -36,6 +40,7 @@ def _parsed_row(*, telefono: object = "TEL-SINTETICO-001") -> dict[str, object]:
         "nuevo": "NO",
         "tipo": "VENTA",
         "telefono": telefono,
+        "api": api,
     }
 
 
@@ -51,25 +56,30 @@ class _FakeSession:
         self.flush_calls += 1
 
 
-def test_repository_normalizes_optional_telefono():
+def test_repository_normalizes_optional_telefono_and_api():
     normalized_rows = repository._rows_from_parsed_snapshot(
         {
             "rows": [
-                _parsed_row(telefono="  TEL-SINTETICO-ESPACIOS  "),
+                _parsed_row(
+                    telefono="  TEL-SINTETICO-ESPACIOS  ",
+                    api="  IVENTAS  ",
+                ),
                 {
                     key: value
                     for key, value in _parsed_row().items()
-                    if key != "telefono"
+                    if key not in {"telefono", "api"}
                 },
             ]
         }
     )
 
     assert normalized_rows[0]["telefono"] == "TEL-SINTETICO-ESPACIOS"
+    assert normalized_rows[0]["api"] == "IVENTAS"
     assert normalized_rows[1]["telefono"] is None
+    assert normalized_rows[1]["api"] is None
 
 
-def test_insert_snapshot_rows_persists_telefono(
+def test_insert_snapshot_rows_persists_telefono_and_api(
     monkeypatch: pytest.MonkeyPatch,
 ):
     fake_session = _FakeSession()
@@ -91,3 +101,4 @@ def test_insert_snapshot_rows_persists_telefono(
     assert inserted_count == 1
     assert fake_session.flush_calls == 1
     assert fake_session.added_rows[0].telefono == "TEL-SINTETICO-001"
+    assert fake_session.added_rows[0].api == "IVENTAS"
