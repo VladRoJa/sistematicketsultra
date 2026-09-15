@@ -1,0 +1,138 @@
+<section class="delivery-panel" aria-labelledby="delivery-title">
+  <div class="delivery-header">
+    <div>
+      <p class="eyebrow">Operación</p>
+      <h2 id="delivery-title">Control de envíos por sucursal</h2>
+      <p class="subtitle">
+        Registra únicamente las sucursales que realmente se enviaron. Las pendientes vienen seleccionadas por default para que solo retires excepciones.
+      </p>
+    </div>
+    <button mat-stroked-button type="button" (click)="loadCampaigns()" [disabled]="loadingCampaigns">
+      Actualizar
+    </button>
+  </div>
+
+  <div *ngIf="loadingCampaigns" class="loading-row">
+    <mat-spinner diameter="24"></mat-spinner>
+    <span>Cargando campañas…</span>
+  </div>
+
+  <mat-form-field *ngIf="!loadingCampaigns && campaigns.length" appearance="outline" class="campaign-select">
+    <mat-label>Campaña</mat-label>
+    <mat-select [formControl]="campaignId">
+      <mat-option *ngFor="let campaign of campaigns" [value]="campaign.id">
+        {{ campaign.name }} · {{ deliveryStatusLabel(campaign) }}
+      </mat-option>
+    </mat-select>
+  </mat-form-field>
+
+  <div *ngIf="!loadingCampaigns && !campaigns.length" class="empty-state">
+    No hay campañas exportadas disponibles para registrar envíos.
+  </div>
+
+  <div *ngIf="error" class="error-box" role="alert">{{ error }}</div>
+  <div *ngIf="success" class="success-box" role="status">{{ success }}</div>
+
+  <div *ngIf="loadingDetail" class="loading-row">
+    <mat-spinner diameter="24"></mat-spinner>
+    <span>Cargando sucursales…</span>
+  </div>
+
+  <ng-container *ngIf="!loadingDetail && detail as data">
+    <div class="summary-grid">
+      <article>
+        <span>Sucursales enviadas</span>
+        <strong>{{ data.delivery.sent_branches }} / {{ data.delivery.total_branches }}</strong>
+      </article>
+      <article>
+        <span>Contactos enviados</span>
+        <strong>{{ data.delivery.sent_contacts | number }} / {{ data.delivery.total_contacts | number }}</strong>
+      </article>
+      <article>
+        <span>Pendientes</span>
+        <strong>{{ data.delivery.pending_contacts | number }}</strong>
+        <small>{{ data.delivery.pending_branches }} sucursales</small>
+      </article>
+      <article>
+        <span>Estado</span>
+        <strong>{{ statusLabel(data.delivery.status) }}</strong>
+      </article>
+    </div>
+
+    <div *ngIf="data.delivery.pending_branches" class="send-time-row">
+      <mat-form-field appearance="outline">
+        <mat-label>Fecha del envío</mat-label>
+        <input matInput type="date" [formControl]="sentDate" />
+      </mat-form-field>
+      <mat-form-field appearance="outline">
+        <mat-label>Hora aproximada</mat-label>
+        <input matInput type="time" [formControl]="sentTime" />
+      </mat-form-field>
+    </div>
+
+    <div class="selection-toolbar" *ngIf="data.delivery.pending_branches">
+      <mat-checkbox
+        [checked]="allPendingSelected"
+        [indeterminate]="partiallyPendingSelected"
+        (change)="toggleAllPending($event.checked)"
+      >
+        Seleccionar todas las pendientes
+      </mat-checkbox>
+      <span>
+        {{ selectedBranchCount }} sucursales · {{ selectedContactCount | number }} contactos seleccionados
+      </span>
+    </div>
+
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>Registrar envío</th>
+            <th>Sucursal</th>
+            <th>Contactos</th>
+            <th>Estado</th>
+            <th>Fecha registrada</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let branch of data.delivery.branches" [class.sent-row]="branch.sent">
+            <td>
+              <mat-checkbox
+                [checked]="branch.sent || selectedPending.has(branch.sucursal)"
+                [disabled]="branch.sent"
+                (change)="toggleBranch(branch, $event.checked)"
+                [attr.aria-label]="'Registrar envío de ' + branch.sucursal"
+              ></mat-checkbox>
+            </td>
+            <td><strong>{{ branch.sucursal }}</strong></td>
+            <td>{{ branch.recipient_count | number }}</td>
+            <td>
+              <span class="status-pill" [class.sent]="branch.sent">
+                {{ branch.sent ? 'Enviada' : 'Pendiente' }}
+              </span>
+            </td>
+            <td>{{ formatSentAt(branch.sent_at) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div *ngIf="data.delivery.pending_branches" class="save-bar">
+      <div class="save-copy">
+        <strong>
+          Vas a registrar {{ selectedBranchCount }} sucursales / {{ selectedContactCount | number }} contactos.
+        </strong>
+        <span>
+          {{ remainingBranchesAfterSave }} sucursales permanecerán pendientes. Una sucursal ya enviada no se puede desmarcar desde este control.
+        </span>
+      </div>
+      <button mat-flat-button color="primary" type="button" (click)="save()" [disabled]="!canSave">
+        {{ saving ? 'Guardando…' : 'Guardar envíos' }}
+      </button>
+    </div>
+
+    <div *ngIf="!data.delivery.pending_branches" class="all-sent-state">
+      Todas las sucursales de esta campaña ya tienen un envío registrado.
+    </div>
+  </ng-container>
+</section>
