@@ -547,6 +547,7 @@ class VentaTotalSnapshotRowORM(db.Model):
     nuevo = db.Column(db.String(100), nullable=True)
     tipo = db.Column(db.String(100), nullable=True)
     telefono = db.Column(db.String(50), nullable=True)
+    api = db.Column(db.String(100), nullable=True)
 
     created_at = db.Column(db.DateTime(timezone=True), nullable=False)
     updated_at = db.Column(db.DateTime(timezone=True), nullable=False)
