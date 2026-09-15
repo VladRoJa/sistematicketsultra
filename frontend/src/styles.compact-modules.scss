@@ -385,3 +385,208 @@ body.suite-compact-review .ticket-card__drag {
     grid-template-columns: minmax(0, 1fr) 245px;
   }
 }
+
+/* ========================================================================== 
+   Tickets - tercera pasada, mas densa. Planner se conserva sin cambios.
+   ========================================================================== */
+body.suite-compact-review .tickets-page {
+  --desc-col-width: 250px;
+  padding: 5px 6px;
+}
+
+body.suite-compact-review .tickets-page__header {
+  gap: 6px;
+  margin-bottom: 5px;
+  align-items: center;
+}
+
+body.suite-compact-review .tickets-page__eyebrow {
+  margin-bottom: 2px;
+  font-size: 6px;
+}
+
+body.suite-compact-review .tickets-page__title {
+  font-size: 15px;
+}
+
+body.suite-compact-review .tickets-page__subtitle {
+  margin-top: 2px;
+  font-size: 7px;
+}
+
+body.suite-compact-review .tickets-scope-toggle {
+  height: 30px;
+  gap: 2px;
+  padding: 2px;
+}
+
+body.suite-compact-review .tickets-scope-toggle__btn {
+  height: 24px;
+  padding: 0 7px;
+  gap: 3px;
+  font-size: 8px;
+}
+
+body.suite-compact-review .tickets-scope-toggle__btn mat-icon {
+  width: 12px;
+  height: 12px;
+  font-size: 12px;
+  line-height: 12px;
+}
+
+body.suite-compact-review .tickets-year-mini {
+  height: 36px;
+  min-width: 215px;
+  padding: 3px 6px;
+  border-radius: 10px;
+  gap: 5px;
+}
+
+body.suite-compact-review .tickets-year-mini__label {
+  min-width: 78px;
+  gap: 1px;
+}
+
+body.suite-compact-review .tickets-year-mini__label span,
+body.suite-compact-review .tickets-year-mini__label small {
+  font-size: 7px;
+}
+
+body.suite-compact-review .tickets-year-mini__select {
+  width: 92px;
+}
+
+body.suite-compact-review .tickets-year-mini__select .mat-mdc-text-field-wrapper,
+body.suite-compact-review .tickets-year-mini__select .mat-mdc-form-field-flex {
+  height: 28px !important;
+}
+
+body.suite-compact-review .tickets-year-mini__select .mat-mdc-form-field-infix {
+  min-height: 28px !important;
+  padding: 0 5px !important;
+}
+
+body.suite-compact-review .tickets-page__status {
+  min-width: 78px;
+  padding: 4px 6px;
+  border-radius: 8px;
+}
+
+body.suite-compact-review .tickets-page__status-label {
+  font-size: 6px;
+}
+
+body.suite-compact-review .tickets-page__status strong {
+  margin-top: 1px;
+  font-size: 13px;
+}
+
+body.suite-compact-review .tickets-kpi-grid {
+  grid-template-columns: repeat(6, minmax(74px, 1fr));
+  gap: 4px;
+  margin-bottom: 5px;
+}
+
+body.suite-compact-review .tickets-kpi-card {
+  min-height: 42px;
+  padding: 4px 6px;
+  border-radius: 8px;
+}
+
+body.suite-compact-review .tickets-kpi-card span {
+  font-size: 6px;
+}
+
+body.suite-compact-review .tickets-kpi-card strong {
+  margin-top: 2px;
+  font-size: 14px;
+}
+
+body.suite-compact-review .tickets-kpi-card small {
+  margin-top: 1px;
+  font-size: 6px;
+}
+
+body.suite-compact-review .tickets-table-card {
+  padding: 0 4px 4px;
+  border-radius: 9px;
+  max-height: calc(100vh - 158px);
+}
+
+body.suite-compact-review .tabla-tickets {
+  font-size: 7.5px;
+}
+
+body.suite-compact-review .tabla-tickets th,
+body.suite-compact-review .tabla-tickets td {
+  padding: 3px 4px;
+}
+
+body.suite-compact-review .tabla-tickets th {
+  font-size: 7px;
+}
+
+body.suite-compact-review .tabla-tickets .c-id { width: 42px; }
+body.suite-compact-review .tabla-tickets .c-cat { width: 70px; }
+body.suite-compact-review .tabla-tickets .c-apa { width: 100px; }
+body.suite-compact-review .tabla-tickets .c-desc { width: 250px; }
+body.suite-compact-review .tabla-tickets .c-suc { width: 72px; }
+body.suite-compact-review .tabla-tickets .c-est { width: 66px; }
+body.suite-compact-review .tabla-tickets .c-cri { width: 55px; }
+body.suite-compact-review .tabla-tickets .c-fc,
+body.suite-compact-review .tabla-tickets .c-fp,
+body.suite-compact-review .tabla-tickets .c-ff { width: 94px; }
+body.suite-compact-review .tabla-tickets .c-dep { width: 78px; }
+body.suite-compact-review .tabla-tickets .c-sub { width: 88px; }
+body.suite-compact-review .tabla-tickets .c-det { width: 80px; }
+body.suite-compact-review .tabla-tickets .c-acc { width: 86px; }
+body.suite-compact-review .tabla-tickets .c-sol,
+body.suite-compact-review .tabla-tickets .c-his { width: 76px; }
+
+body.suite-compact-review .td-acciones {
+  min-width: 86px;
+}
+
+body.suite-compact-review .ticket-action {
+  min-height: 20px;
+  width: 92px;
+  padding: 2px 6px;
+  font-size: 7px;
+  line-height: 1;
+}
+
+body.suite-compact-review .ticket-action mat-icon {
+  width: 11px !important;
+  height: 11px !important;
+  font-size: 11px !important;
+  line-height: 11px !important;
+}
+
+body.suite-compact-review .pagination-export-container {
+  padding: 4px 6px;
+  border-radius: 9px;
+}
+
+body.suite-compact-review .pagination-container {
+  gap: 5px;
+  font-size: 8px;
+}
+
+body.suite-compact-review .pagination-button {
+  padding: 4px 8px;
+  font-size: 8px;
+}
+
+body.suite-compact-review .export-container {
+  gap: 5px;
+}
+
+body.suite-compact-review .export-container button,
+body.suite-compact-review .pagination-export-container .mat-mdc-button,
+body.suite-compact-review .pagination-export-container .mat-mdc-raised-button,
+body.suite-compact-review .pagination-export-container .mat-mdc-unelevated-button {
+  min-height: 24px !important;
+  padding-left: 8px !important;
+  padding-right: 8px !important;
+  font-size: 8px !important;
+}
