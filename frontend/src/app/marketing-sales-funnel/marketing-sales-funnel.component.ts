@@ -58,23 +58,23 @@ interface SummaryCard {
 
 interface SalesFunnelBranchView extends MarketingSalesFunnelBranch {
   investment_display: string;
-  leads_meta_display: string;
+  leads_iventas_display: string;
   visits_total_display: string;
-  visits_iventas_display: string;
-  visits_not_iventas_display: string;
+  sales_digital_display: string;
+  sales_digital_organic_display: string;
+  sales_web_display: string;
+  sales_btl_display: string;
   sales_total_display: string;
-  sales_iventas_display: string;
-  sales_iventas_meta_display: string;
-  sales_iventas_other_display: string;
-  sales_not_iventas_display: string;
+  revenue_digital_display: string;
+  revenue_web_display: string;
+  revenue_btl_display: string;
   revenue_total_display: string;
-  cost_per_lead_display: string;
-  cost_per_visit_display: string;
-  cost_per_sale_display: string;
   lead_to_visit_display: string;
-  iventas_visit_conversion_rate_display: string;
-  not_iventas_visit_conversion_rate_display: string;
-  iventas_sale_share_display: string;
+  visit_to_digital_sale_display: string;
+  lead_to_sale_display: string;
+  cpl_display: string;
+  cpt_display: string;
+  cac_display: string;
 }
 
 interface DashboardRequest {
@@ -136,16 +136,6 @@ export class MarketingSalesFunnelComponent implements OnInit {
   readonly branchControl = new FormControl<number | null>(null);
 
   readonly monthOptions = this.buildMonthOptions();
-  readonly branchColumns = [
-    'sucursal',
-    'visits_total',
-    'sales_total',
-    'sales_iventas',
-    'sales_not_iventas',
-    'revenue_total',
-    'iventas_sale_share',
-    'actions',
-  ];
 
   dashboard: MarketingSalesFunnelResponse | null = null;
   summaryCards: SummaryCard[] = [];
@@ -616,51 +606,49 @@ export class MarketingSalesFunnelComponent implements OnInit {
 
   private buildBranchView(branch: MarketingSalesFunnelBranch): SalesFunnelBranchView {
     const investment = this.resolveBranchInvestment(branch.sucursal_id);
-    const costPerLead = (
-      investment !== null && branch.leads_meta > 0
-        ? investment / branch.leads_meta
+    const cpl = (
+      investment !== null && branch.leads_iventas > 0
+        ? investment / branch.leads_iventas
         : null
     );
-    const costPerVisit = (
+    const cpt = (
       investment !== null && branch.visits_total > 0
         ? investment / branch.visits_total
         : null
     );
-    const costPerSale = (
-      investment !== null && branch.sales_iventas > 0
-        ? investment / branch.sales_iventas
-        : null
+    const digitalSalesForCac = (
+      branch.sales_digital + branch.sales_digital_organic
     );
-    const leadToVisit = (
-      branch.leads_meta > 0
-        ? branch.visits_iventas / branch.leads_meta
+    const cac = (
+      investment !== null && digitalSalesForCac > 0
+        ? investment / digitalSalesForCac
         : null
     );
 
     return {
       ...branch,
       investment_display: this.formatOptionalCurrency(investment),
-      leads_meta_display: this.formatInteger(branch.leads_meta),
+      leads_iventas_display: this.formatInteger(branch.leads_iventas),
       visits_total_display: this.formatInteger(branch.visits_total),
-      visits_iventas_display: this.formatInteger(branch.visits_iventas),
-      visits_not_iventas_display: this.formatInteger(branch.visits_not_iventas),
+      sales_digital_display: this.formatInteger(branch.sales_digital),
+      sales_digital_organic_display: this.formatInteger(
+        branch.sales_digital_organic,
+      ),
+      sales_web_display: this.formatInteger(branch.sales_web),
+      sales_btl_display: this.formatInteger(branch.sales_btl),
       sales_total_display: this.formatInteger(branch.sales_total),
-      sales_iventas_display: this.formatInteger(branch.sales_iventas),
-      sales_iventas_meta_display: this.formatInteger(branch.sales_iventas_meta),
-      sales_iventas_other_display: this.formatInteger(branch.sales_iventas_other),
-      sales_not_iventas_display: this.formatInteger(branch.sales_not_iventas),
+      revenue_digital_display: this.formatCurrency(branch.revenue_digital),
+      revenue_web_display: this.formatCurrency(branch.revenue_web),
+      revenue_btl_display: this.formatCurrency(branch.revenue_btl),
       revenue_total_display: this.formatCurrency(branch.revenue_total),
-      cost_per_lead_display: this.formatOptionalCurrency(costPerLead),
-      cost_per_visit_display: this.formatOptionalCurrency(costPerVisit),
-      cost_per_sale_display: this.formatOptionalCurrency(costPerSale),
-      lead_to_visit_display: this.formatPercent(leadToVisit),
-      iventas_visit_conversion_rate_display: this.formatPercent(
-        branch.iventas_visit_conversion_rate,
+      lead_to_visit_display: this.formatPercent(branch.lead_to_visit_rate),
+      visit_to_digital_sale_display: this.formatPercent(
+        branch.visit_to_digital_sale_rate,
       ),
-      not_iventas_visit_conversion_rate_display: this.formatPercent(
-        branch.not_iventas_visit_conversion_rate,
-      ),
-      iventas_sale_share_display: this.formatPercent(branch.iventas_sale_share),
+      lead_to_sale_display: this.formatPercent(branch.lead_to_sale_rate),
+      cpl_display: this.formatOptionalCurrency(cpl),
+      cpt_display: this.formatOptionalCurrency(cpt),
+      cac_display: this.formatOptionalCurrency(cac),
     };
   }
 
