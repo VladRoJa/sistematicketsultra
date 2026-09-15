@@ -6,7 +6,6 @@ from decimal import Decimal
 from io import BytesIO
 from typing import Any
 
-from app.extensions import db
 from app.models import MarketingIventasContactORM
 from app.models.warehouse import (
     VentasNuevosSociosDetalleSnapshotORM,
@@ -52,13 +51,13 @@ from app.services.marketing_sales_funnel_service import (
 from app.services.marketing_visit_conversion_service import (
     VISIT_CONVERSION_METRICS,
     VISIT_CONVERSION_TITLES,
+    VisitConversionBundle,
     _build_bundle_from_loaded_data,
     _metric_matches as _visit_conversion_metric_matches,
+    _normalize_sort as _normalize_visit_conversion_sort,
     _serialize_detail_row as _serialize_visit_conversion_row,
+    _serialize_summary as _serialize_visit_conversion_summary,
 )
-
-
-FULL_DETAIL_PAGE_SIZE = 1_000_000
 
 
 def _selected_snapshot(
@@ -76,6 +75,18 @@ def _selected_snapshot(
 def _selected_iventas_run_id(source: dict[str, Any]) -> int | None:
     value = source.get("iventas_sync_run_id")
     return int(value) if value is not None else None
+
+
+def _normalize_detail_sort(
+    *,
+    metric: str,
+    kind: str,
+    sort_by: Any,
+    sort_dir: Any,
+) -> tuple[str | None, str]:
+    if metric in VISIT_CONVERSION_METRICS:
+        return _normalize_visit_conversion_sort(sort_by, sort_dir)
+    return _normalize_sort(sort_by, sort_dir, kind)
 
 
 def _sales_rows(
@@ -288,6 +299,40 @@ def _lead_rows(
     return rows
 
 
+def _normalized_visit_conversion_bundle(
+    *,
+    loaded: Any,
+    cutoff_date: date,
+) -> VisitConversionBundle:
+    bundle = _build_bundle_from_loaded_data(loaded=loaded, today=cutoff_date)
+    return VisitConversionBundle(
+        rows=tuple(
+            replace(row, sale=None)
+            if row.sale is not None and row.sale.payment_date > cutoff_date
+            else row
+            for row in bundle.rows
+        ),
+        sales_snapshot_ids=bundle.sales_snapshot_ids,
+        cohort_complete=bundle.cohort_complete,
+    )
+
+
+def build_visit_conversion_summary_at_cutoff(
+    *,
+    loaded: Any,
+    cutoff_date: str,
+) -> dict[str, Any]:
+    selected_cutoff = date.fromisoformat(cutoff_date)
+    bundle = _normalized_visit_conversion_bundle(
+        loaded=loaded,
+        cutoff_date=selected_cutoff,
+    )
+    return _serialize_visit_conversion_summary(
+        bundle=bundle,
+        branch_ids=loaded.branch_ids,
+    )
+
+
 def _visit_conversion_rows(
     *,
     cutoff_date: date,
@@ -296,17 +341,17 @@ def _visit_conversion_rows(
     branch_id_filter: int | None,
     loaded: Any,
 ) -> list[dict[str, Any]]:
-    bundle = _build_bundle_from_loaded_data(loaded=loaded, today=cutoff_date)
+    bundle = _normalized_visit_conversion_bundle(
+        loaded=loaded,
+        cutoff_date=cutoff_date,
+    )
     rows: list[dict[str, Any]] = []
     for row in bundle.rows:
-        normalized_row = row
-        if row.sale is not None and row.sale.payment_date > cutoff_date:
-            normalized_row = replace(row, sale=None)
-        if not _visit_conversion_metric_matches(normalized_row, metric):
+        if not _visit_conversion_metric_matches(row, metric):
             continue
-        if branch_id_filter is not None and normalized_row.branch_id != branch_id_filter:
+        if branch_id_filter is not None and row.branch_id != branch_id_filter:
             continue
-        rows.append(_serialize_visit_conversion_row(normalized_row, branch_names))
+        rows.append(_serialize_visit_conversion_row(row, branch_names))
     return rows
 
 
@@ -322,7 +367,10 @@ def _resolve_detail_rows(
     month_start = parse_month(month)
     normalized_metric = str(metric or "").strip()
     normalized_origin = str(origin or "").strip() or None
-    if normalized_metric not in VISIT_CONVERSION_METRICS and normalized_metric != "leads_iventas":
+    if (
+        normalized_metric not in VISIT_CONVERSION_METRICS
+        and normalized_metric != "leads_iventas"
+    ):
         normalized_metric, normalized_origin = _normalize_metric(
             normalized_metric,
             normalized_origin,
@@ -451,10 +499,11 @@ def build_marketing_sales_funnel_cutoff_detail(
         branch_id=branch_id,
         origin=origin,
     )
-    normalized_sort_by, normalized_sort_dir = _normalize_sort(
-        sort_by,
-        sort_dir,
-        detail["kind"],
+    normalized_sort_by, normalized_sort_dir = _normalize_detail_sort(
+        metric=detail["metric"],
+        kind=detail["kind"],
+        sort_by=sort_by,
+        sort_dir=sort_dir,
     )
     rows = _sort_rows(
         detail["rows"],
@@ -497,10 +546,11 @@ def build_marketing_sales_funnel_cutoff_export(
         branch_id=branch_id,
         origin=origin,
     )
-    normalized_sort_by, normalized_sort_dir = _normalize_sort(
-        sort_by,
-        sort_dir,
-        detail["kind"],
+    normalized_sort_by, normalized_sort_dir = _normalize_detail_sort(
+        metric=detail["metric"],
+        kind=detail["kind"],
+        sort_by=sort_by,
+        sort_dir=sort_dir,
     )
     rows = _sort_rows(
         detail["rows"],
