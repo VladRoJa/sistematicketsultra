@@ -20,6 +20,9 @@ from app.services.marketing_inputs_service import (
     MarketingInputValidationError,
     parse_month,
 )
+from app.services.marketing_sales_funnel_cutoff_service import (
+    build_marketing_sales_funnel_at_cutoff,
+)
 from app.services.marketing_sales_funnel_detail_service import (
     MarketingSalesFunnelDetailValidationError,
 )
@@ -31,10 +34,6 @@ from app.services.marketing_sales_funnel_drilldown_service import (
 from app.services.marketing_sales_funnel_iventas_stage_service import (
     build_monthly_iventas_leads_detail,
     build_monthly_iventas_leads_export,
-    count_monthly_iventas_leads,
-)
-from app.services.marketing_sales_funnel_service import (
-    build_marketing_sales_funnel_with_loaded_data,
 )
 from app.services.marketing_visit_conversion_service import (
     VISIT_CONVERSION_METRICS,
@@ -187,13 +186,14 @@ def get_marketing_sales_funnel_endpoint():
         stage_started = perf_counter()
         base_access, access = _resolve_scoped_access()
         month = request.args.get("month", "")
-        month_start = parse_month(month)
+        parse_month(month)
         access_ms = (perf_counter() - stage_started) * 1000
 
         stage_started = perf_counter()
-        funnel_build = build_marketing_sales_funnel_with_loaded_data(
+        funnel_build = build_marketing_sales_funnel_at_cutoff(
             month=month,
             access=access,
+            cutoff_date=request.args.get("cutoff_date"),
         )
         result = funnel_build.payload
         funnel_ms = (perf_counter() - stage_started) * 1000
@@ -202,14 +202,9 @@ def get_marketing_sales_funnel_endpoint():
         branch_ids = funnel_build.loaded.branch_ids
         branch_scope_ms = (perf_counter() - stage_started) * 1000
 
-        stage_started = perf_counter()
-        result["summary"]["leads_iventas"] = (
-            count_monthly_iventas_leads(
-                month_start=month_start,
-                branch_ids=branch_ids,
-            )
-        )
-        leads_ms = (perf_counter() - stage_started) * 1000
+        # El builder de corte ya toma la población exacta del run iVentas
+        # seleccionado. No se vuelve a sobrescribir con el canónico mensual.
+        leads_ms = 0.0
 
         stage_started = perf_counter()
         visit_conversion = build_visit_conversion_summary_from_loaded_data(
