@@ -23,6 +23,7 @@ import { MarketingSalesFunnelService } from './marketing-sales-funnel.service';
 
 export interface MarketingSalesFunnelDetailDialogData {
   month: string;
+  cutoffDate?: string | null;
   metric: string;
   branchId?: number;
   branchIds?: number[];
@@ -196,6 +197,7 @@ export class MarketingSalesFunnelDetailDialogComponent implements OnInit {
         this.sortBy,
         this.sortDir,
         this.data.branchIds || [],
+        this.data.cutoffDate,
       )
       .subscribe({
         next: (blob) => {
@@ -231,6 +233,7 @@ export class MarketingSalesFunnelDetailDialogComponent implements OnInit {
         this.sortBy,
         this.sortDir,
         this.data.branchIds || [],
+        this.data.cutoffDate,
       )
       .subscribe({
         next: (detail) => {
@@ -316,7 +319,8 @@ export class MarketingSalesFunnelDetailDialogComponent implements OnInit {
     const branch = this.data.branchId !== undefined
       ? `_sucursal_${this.data.branchId}`
       : '';
-    return `funnel_venta_nueva_${this.data.month}_${metric}${branch}.xlsx`;
+    const cutoff = this.data.cutoffDate ? `_corte_${this.data.cutoffDate}` : '';
+    return `funnel_venta_nueva_${this.data.month}${cutoff}_${metric}${branch}.xlsx`;
   }
 
   private formatInteger(value: number): string {
