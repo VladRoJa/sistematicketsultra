@@ -18,18 +18,6 @@ interface FunnelBranchExportOptions {
   branchId: number | null;
 }
 
-interface BranchRowLayout {
-  branchId: number;
-  row: number;
-}
-
-interface RegionLayout {
-  branchIds: number[];
-  firstRow: number;
-  lastRow: number;
-  subtotalRow: number;
-}
-
 interface ExportTotals {
   investment: number | null;
   leads: number;
@@ -45,69 +33,16 @@ interface ExportTotals {
   revenueTotal: number;
 }
 
-const TEMPLATE_ASSET =
-  'assets/templates/marketing-sales-funnel-agosto-template.xlsx';
+interface RegionSection {
+  branchIds: number[];
+}
 
-const BRANCH_LAYOUT: BranchRowLayout[] = [
-  { branchId: 1, row: 2 },
-  { branchId: 2, row: 3 },
-  { branchId: 3, row: 4 },
-  { branchId: 4, row: 5 },
-  { branchId: 5, row: 6 },
-  { branchId: 6, row: 7 },
-  { branchId: 7, row: 9 },
-  { branchId: 8, row: 10 },
-  { branchId: 9, row: 11 },
-  { branchId: 10, row: 12 },
-  { branchId: 11, row: 13 },
-  { branchId: 12, row: 14 },
-  { branchId: 13, row: 15 },
-  { branchId: 14, row: 17 },
-  { branchId: 15, row: 18 },
-  { branchId: 16, row: 19 },
-  { branchId: 20, row: 20 },
-  { branchId: 17, row: 22 },
-  { branchId: 18, row: 23 },
-  { branchId: 24, row: 24 },
-  { branchId: 26, row: 25 },
-  { branchId: 19, row: 27 },
-  { branchId: 21, row: 28 },
-  { branchId: 22, row: 29 },
-  { branchId: 23, row: 30 },
-  { branchId: 25, row: 31 },
-];
-
-const REGION_LAYOUT: RegionLayout[] = [
-  {
-    branchIds: [1, 2, 3, 4, 5, 6],
-    firstRow: 2,
-    lastRow: 7,
-    subtotalRow: 8,
-  },
-  {
-    branchIds: [7, 8, 9, 10, 11, 12, 13],
-    firstRow: 9,
-    lastRow: 15,
-    subtotalRow: 16,
-  },
-  {
-    branchIds: [14, 15, 16, 20],
-    firstRow: 17,
-    lastRow: 20,
-    subtotalRow: 21,
-  },
-  {
-    branchIds: [17, 18, 24, 26],
-    firstRow: 22,
-    lastRow: 25,
-    subtotalRow: 26,
-  },
-  {
-    branchIds: [19, 21, 22, 23, 25],
-    firstRow: 27,
-    lastRow: 31,
-    subtotalRow: 32,
-  },
+const REGION_SECTIONS: RegionSection[] = [
+  { branchIds: [1, 2, 3, 4, 5, 6] },
+  { branchIds: [7, 8, 9, 10, 11, 12, 13] },
+  { branchIds: [14, 15, 16, 20] },
+  { branchIds: [17, 18, 24, 26] },
+  { branchIds: [19, 21, 22, 23, 25] },
 ];
 
 const HEADER_VALUES = [
@@ -132,8 +67,23 @@ const HEADER_VALUES = [
   'Costo por venta (CAC)',
 ];
 
-const SUBTOTAL_ROWS = REGION_LAYOUT.map((region) => region.subtotalRow);
-const DATA_COLUMNS = 'BCDEFGHIJKLMNOPQRS'.split('');
+const CURRENCY_COLUMNS = ['B', 'J', 'K', 'L', 'M', 'Q', 'R', 'S'];
+const PERCENT_COLUMNS = ['N', 'O', 'P'];
+const INTEGER_COLUMNS = ['C', 'D', 'E', 'F', 'G', 'H', 'I'];
+
+const COLORS = {
+  dark: 'FF1F2937',
+  darkSoft: 'FF374151',
+  accent: 'FFF4512C',
+  accentSoft: 'FFFFEDE8',
+  region: 'FFE5E7EB',
+  subtotal: 'FFF3F4F6',
+  total: 'FFE8EEF7',
+  white: 'FFFFFFFF',
+  text: 'FF111827',
+  muted: 'FF6B7280',
+  border: 'FFD1D5DB',
+};
 
 export function exportMarketingSalesFunnelBranchTable(
   options: FunnelBranchExportOptions,
@@ -142,72 +92,113 @@ export function exportMarketingSalesFunnelBranchTable(
     return;
   }
 
-  void exportFromAugustTemplate(options).catch((error) => {
+  void exportProgrammaticWorkbook(options).catch((error) => {
     console.error(
-      'No se pudo exportar el Funnel Venta Nueva con la plantilla oficial.',
+      'No se pudo generar el Excel del Funnel Venta Nueva.',
       error,
     );
   });
 }
 
-async function exportFromAugustTemplate(
+async function exportProgrammaticWorkbook(
   options: FunnelBranchExportOptions,
 ): Promise<void> {
-  const workbook = await loadTemplateWorkbook();
-  const worksheet = workbook.getWorksheet('Agosto');
+  const workbook = new Workbook();
+  workbook.creator = 'Suite Ultra';
+  workbook.company = 'Ultra Gym';
+  workbook.created = new Date();
+  workbook.calcProperties.fullCalcOnLoad = true;
 
-  if (!worksheet) {
-    throw new Error('La plantilla no contiene la pestaña Agosto.');
-  }
+  const worksheet = workbook.addWorksheet(
+    resolveMonthSheetName(options.month),
+    {
+      views: [
+        {
+          state: 'frozen',
+          xSplit: 1,
+          ySplit: 4,
+          topLeftCell: 'B5',
+          activeCell: 'B5',
+        },
+      ],
+      pageSetup: {
+        orientation: 'landscape',
+        fitToPage: true,
+        fitToWidth: 1,
+        fitToHeight: 0,
+      },
+    },
+  );
 
-  removeNonTemplateWorksheets(workbook, worksheet);
-  worksheet.name = resolveMonthSheetName(options.month);
-
-  writeHeaders(worksheet);
+  configureWorksheet(worksheet);
+  writeTitle(worksheet, options);
+  writeHeader(worksheet, 4);
 
   const branchById = new Map<number, MarketingSalesFunnelBranch>(
     options.branches.map((branch) => [branch.sucursal_id, branch]),
   );
   const investmentByBranch = buildInvestmentMap(options);
+  const subtotalRows: number[] = [];
+  let currentRow = 5;
 
-  for (const layout of BRANCH_LAYOUT) {
-    const branch = branchById.get(layout.branchId) ?? null;
-    clearBranchRow(worksheet, layout.row);
-    worksheet.getRow(layout.row).hidden = branch === null;
-
-    if (branch !== null) {
-      writeBranchRow(
-        worksheet,
-        layout.row,
-        branch,
-        investmentByBranch.get(branch.sucursal_id) ?? null,
-      );
-    }
-  }
-
-  for (const region of REGION_LAYOUT) {
-    const regionBranches = region.branchIds
+  for (let index = 0; index < REGION_SECTIONS.length; index += 1) {
+    const section = REGION_SECTIONS[index];
+    const branches = section.branchIds
       .map((branchId) => branchById.get(branchId) ?? null)
       .filter(
         (branch): branch is MarketingSalesFunnelBranch => branch !== null,
       );
 
-    worksheet.getRow(region.subtotalRow).hidden = (
-      options.branchId !== null || regionBranches.length === 0
-    );
+    if (!branches.length) {
+      continue;
+    }
 
-    writeRegionSubtotal(
+    currentRow = writeRegionSection(
       worksheet,
-      region,
-      regionBranches,
+      currentRow,
+      index,
+      branches,
       investmentByBranch,
+      options.scopeOptions,
+      subtotalRows,
+    );
+  }
+
+  const knownIds = new Set(
+    REGION_SECTIONS.flatMap((section) => section.branchIds),
+  );
+  const extraBranches = options.branches.filter(
+    (branch) => !knownIds.has(branch.sucursal_id),
+  );
+
+  if (extraBranches.length) {
+    currentRow = writeNamedSection(
+      worksheet,
+      currentRow,
+      'OTRAS SUCURSALES',
+      extraBranches,
+      investmentByBranch,
+      subtotalRows,
     );
   }
 
   const totals = buildTotals(options.branches, investmentByBranch);
-  writeBottomSummary(worksheet, totals);
+  const grandInvestment = resolveGrandInvestment(options, totals.investment);
+  const grandTotalRow = writeGrandTotal(
+    worksheet,
+    currentRow + 1,
+    subtotalRows,
+    totals,
+    grandInvestment,
+  );
 
-  workbook.calcProperties.fullCalcOnLoad = true;
+  writeSummaryBlock(
+    worksheet,
+    grandTotalRow + 3,
+    grandTotalRow,
+    totals,
+    grandInvestment,
+  );
 
   const buffer = await workbook.xlsx.writeBuffer();
   downloadWorkbook(
@@ -216,80 +207,156 @@ async function exportFromAugustTemplate(
   );
 }
 
-async function loadTemplateWorkbook(): Promise<Workbook> {
-  const response = await fetch(TEMPLATE_ASSET, {
-    cache: 'no-store',
-  });
+function configureWorksheet(worksheet: Worksheet): void {
+  worksheet.properties.defaultRowHeight = 18;
 
-  if (!response.ok) {
-    throw new Error(
-      `No se pudo cargar la plantilla Excel (${response.status}).`,
-    );
-  }
+  const widths = [
+    26, 14, 12, 15, 15, 19, 12, 12, 14, 15,
+    14, 14, 15, 14, 18, 14, 17, 18, 18,
+  ];
 
-  const buffer = await response.arrayBuffer();
-  const bytes = new Uint8Array(buffer);
-
-  if (
-    bytes.length < 4
-    || bytes[0] !== 0x50
-    || bytes[1] !== 0x4b
-    || bytes[2] !== 0x03
-    || bytes[3] !== 0x04
-  ) {
-    throw new Error('La plantilla recibida no es un XLSX/ZIP válido.');
-  }
-
-  const workbook = new Workbook();
-  await workbook.xlsx.load(buffer as any);
-
-  return workbook;
-}
-
-function removeNonTemplateWorksheets(
-  workbook: Workbook,
-  templateWorksheet: Worksheet,
-): void {
-  for (const worksheet of [...workbook.worksheets]) {
-    if (worksheet.id !== templateWorksheet.id) {
-      workbook.removeWorksheet(worksheet.id);
-    }
-  }
-}
-
-function writeHeaders(worksheet: Worksheet): void {
-  HEADER_VALUES.forEach((value, index) => {
-    worksheet.getCell(1, index + 1).value = value;
+  widths.forEach((width, index) => {
+    worksheet.getColumn(index + 1).width = width;
   });
 }
 
-function buildInvestmentMap(
+function writeTitle(
+  worksheet: Worksheet,
   options: FunnelBranchExportOptions,
-): Map<number, number | null> {
-  const result = new Map<number, number | null>();
+): void {
+  worksheet.mergeCells('A1:S1');
+  const title = worksheet.getCell('A1');
+  title.value = 'FUNNEL DE VENTA NUEVA · DETALLE POR SUCURSAL';
+  title.font = {
+    bold: true,
+    size: 16,
+    color: { argb: COLORS.white },
+  };
+  title.fill = solidFill(COLORS.dark);
+  title.alignment = { vertical: 'middle', horizontal: 'left' };
+  worksheet.getRow(1).height = 28;
 
+  worksheet.mergeCells('A2:S2');
+  const scopeLabel = resolveScopeLabel(options);
+  const meta = worksheet.getCell('A2');
+  meta.value = `${formatMonthLabel(options.month)} · Alcance: ${scopeLabel}`;
+  meta.font = {
+    italic: true,
+    color: { argb: COLORS.muted },
+  };
+  meta.alignment = { vertical: 'middle', horizontal: 'left' };
+
+  const investmentAvailable = hasBranchInvestment(options);
   if (
-    options.investmentDashboard
-    && options.investmentDashboard.month === options.month
+    !investmentAvailable
+    && options.regionId === null
+    && options.branchId === null
+    && options.investmentDashboard?.summary.investment != null
   ) {
-    for (const branch of options.investmentDashboard.branches) {
-      result.set(
-        branch.sucursal_id,
-        branch.investment ?? null,
-      );
-    }
+    worksheet.mergeCells('A3:S3');
+    const note = worksheet.getCell('A3');
+    note.value =
+      'Inversión global disponible; la asignación por sucursal no está disponible para este corte.';
+    note.font = {
+      italic: true,
+      color: { argb: COLORS.accent },
+    };
   }
-
-  return result;
 }
 
-function clearBranchRow(
+function writeHeader(
   worksheet: Worksheet,
   rowNumber: number,
 ): void {
-  for (const column of DATA_COLUMNS) {
-    worksheet.getCell(`${column}${rowNumber}`).value = null;
+  HEADER_VALUES.forEach((value, index) => {
+    const cell = worksheet.getCell(rowNumber, index + 1);
+    cell.value = value;
+    cell.font = {
+      bold: true,
+      color: { argb: COLORS.white },
+      size: 9,
+    };
+    cell.fill = solidFill(COLORS.darkSoft);
+    cell.alignment = {
+      horizontal: 'center',
+      vertical: 'middle',
+      wrapText: true,
+    };
+    applyBorder(cell);
+  });
+
+  worksheet.getRow(rowNumber).height = 34;
+}
+
+function writeRegionSection(
+  worksheet: Worksheet,
+  startRow: number,
+  sectionIndex: number,
+  branches: MarketingSalesFunnelBranch[],
+  investmentByBranch: Map<number, number | null>,
+  scopeOptions: MarketingSalesFunnelScopeOption[],
+  subtotalRows: number[],
+): number {
+  const label = resolveRegionLabel(
+    branches,
+    scopeOptions,
+    sectionIndex,
+  );
+
+  return writeNamedSection(
+    worksheet,
+    startRow,
+    label,
+    branches,
+    investmentByBranch,
+    subtotalRows,
+  );
+}
+
+function writeNamedSection(
+  worksheet: Worksheet,
+  startRow: number,
+  label: string,
+  branches: MarketingSalesFunnelBranch[],
+  investmentByBranch: Map<number, number | null>,
+  subtotalRows: number[],
+): number {
+  worksheet.mergeCells(`A${startRow}:S${startRow}`);
+  const regionCell = worksheet.getCell(`A${startRow}`);
+  regionCell.value = label.toUpperCase();
+  regionCell.font = {
+    bold: true,
+    color: { argb: COLORS.text },
+  };
+  regionCell.fill = solidFill(COLORS.region);
+  regionCell.alignment = { vertical: 'middle', horizontal: 'left' };
+  worksheet.getRow(startRow).height = 21;
+
+  const firstBranchRow = startRow + 1;
+  let rowNumber = firstBranchRow;
+
+  for (const branch of branches) {
+    writeBranchRow(
+      worksheet,
+      rowNumber,
+      branch,
+      investmentByBranch.get(branch.sucursal_id) ?? null,
+    );
+    rowNumber += 1;
   }
+
+  const subtotalRow = rowNumber;
+  const totals = buildTotals(branches, investmentByBranch);
+  writeSubtotalRow(
+    worksheet,
+    subtotalRow,
+    firstBranchRow,
+    subtotalRow - 1,
+    totals,
+  );
+  subtotalRows.push(subtotalRow);
+
+  return subtotalRow + 2;
 }
 
 function writeBranchRow(
@@ -324,7 +391,6 @@ function writeBranchRow(
     `SUM(J${rowNumber}:L${rowNumber})`,
     branch.revenue_total,
   );
-
   setFormulaCell(
     worksheet,
     `N${rowNumber}`,
@@ -343,7 +409,6 @@ function writeBranchRow(
     `IFERROR(E${rowNumber}/C${rowNumber},"")`,
     branch.lead_to_sale_rate,
   );
-
   setFormulaCell(
     worksheet,
     `Q${rowNumber}`,
@@ -365,72 +430,146 @@ function writeBranchRow(
       branch.sales_digital + branch.sales_digital_organic,
     ),
   );
+
+  styleDataRow(worksheet, rowNumber, false);
 }
 
-function writeRegionSubtotal(
+function writeSubtotalRow(
   worksheet: Worksheet,
-  region: RegionLayout,
-  branches: MarketingSalesFunnelBranch[],
-  investmentByBranch: Map<number, number | null>,
+  rowNumber: number,
+  firstDataRow: number,
+  lastDataRow: number,
+  totals: ExportTotals,
 ): void {
-  const totals = buildTotals(branches, investmentByBranch);
-  const row = region.subtotalRow;
+  worksheet.getCell(`A${rowNumber}`).value = 'SUBTOTAL REGIÓN';
+  const ranges = [
+    ['B', totals.investment],
+    ['C', totals.leads],
+    ['D', totals.visitors],
+    ['E', totals.salesDigital],
+    ['F', totals.salesDigitalOrganic],
+    ['G', totals.salesWeb],
+    ['H', totals.salesBtl],
+    ['I', totals.salesTotal],
+    ['J', totals.revenueDigital],
+    ['K', totals.revenueWeb],
+    ['L', totals.revenueBtl],
+    ['M', totals.revenueTotal],
+  ] as const;
 
-  worksheet.getCell(`A${row}`).value = null;
+  for (const [column, result] of ranges) {
+    setFormulaCell(
+      worksheet,
+      `${column}${rowNumber}`,
+      `SUM(${column}${firstDataRow}:${column}${lastDataRow})`,
+      result,
+    );
+  }
 
-  setSumFormula(worksheet, `B${row}`, 'B', region, totals.investment);
-  setSumFormula(worksheet, `C${row}`, 'C', region, totals.leads);
-  setSumFormula(worksheet, `D${row}`, 'D', region, totals.visitors);
-  setSumFormula(worksheet, `E${row}`, 'E', region, totals.salesDigital);
-  setSumFormula(
+  setRateAndCostFormulas(worksheet, rowNumber, totals);
+  styleDataRow(worksheet, rowNumber, true);
+}
+
+function writeGrandTotal(
+  worksheet: Worksheet,
+  rowNumber: number,
+  subtotalRows: number[],
+  totals: ExportTotals,
+  grandInvestment: number | null,
+): number {
+  worksheet.getCell(`A${rowNumber}`).value = 'TOTAL';
+
+  if (grandInvestment !== null) {
+    worksheet.getCell(`B${rowNumber}`).value = grandInvestment;
+  }
+
+  const resultByColumn: Array<[string, number]> = [
+    ['C', totals.leads],
+    ['D', totals.visitors],
+    ['E', totals.salesDigital],
+    ['F', totals.salesDigitalOrganic],
+    ['G', totals.salesWeb],
+    ['H', totals.salesBtl],
+    ['I', totals.salesTotal],
+    ['J', totals.revenueDigital],
+    ['K', totals.revenueWeb],
+    ['L', totals.revenueBtl],
+    ['M', totals.revenueTotal],
+  ];
+
+  for (const [column, result] of resultByColumn) {
+    const formula = subtotalRows.length
+      ? `SUM(${subtotalRows.map((row) => `${column}${row}`).join(',')})`
+      : '0';
+    setFormulaCell(
+      worksheet,
+      `${column}${rowNumber}`,
+      formula,
+      result,
+    );
+  }
+
+  setRateAndCostFormulas(
     worksheet,
-    `F${row}`,
-    'F',
-    region,
-    totals.salesDigitalOrganic,
+    rowNumber,
+    {
+      ...totals,
+      investment: grandInvestment,
+    },
   );
-  setSumFormula(worksheet, `G${row}`, 'G', region, totals.salesWeb);
-  setSumFormula(worksheet, `H${row}`, 'H', region, totals.salesBtl);
-  setSumFormula(worksheet, `I${row}`, 'I', region, totals.salesTotal);
-  setSumFormula(worksheet, `J${row}`, 'J', region, totals.revenueDigital);
-  setSumFormula(worksheet, `K${row}`, 'K', region, totals.revenueWeb);
-  setSumFormula(worksheet, `L${row}`, 'L', region, totals.revenueBtl);
-  setSumFormula(worksheet, `M${row}`, 'M', region, totals.revenueTotal);
 
+  for (let column = 1; column <= 19; column += 1) {
+    const cell = worksheet.getCell(rowNumber, column);
+    cell.fill = solidFill(COLORS.total);
+    cell.font = { bold: true, color: { argb: COLORS.text } };
+    applyBorder(cell);
+  }
+
+  applyNumberFormats(worksheet, rowNumber);
+  worksheet.getRow(rowNumber).height = 22;
+
+  return rowNumber;
+}
+
+function setRateAndCostFormulas(
+  worksheet: Worksheet,
+  rowNumber: number,
+  totals: ExportTotals,
+): void {
   setFormulaCell(
     worksheet,
-    `N${row}`,
-    `IFERROR(D${row}/C${row},"")`,
+    `N${rowNumber}`,
+    `IFERROR(D${rowNumber}/C${rowNumber},"")`,
     safeDivide(totals.visitors, totals.leads),
   );
   setFormulaCell(
     worksheet,
-    `O${row}`,
-    `IFERROR(E${row}/D${row},"")`,
+    `O${rowNumber}`,
+    `IFERROR(E${rowNumber}/D${rowNumber},"")`,
     safeDivide(totals.salesDigital, totals.visitors),
   );
   setFormulaCell(
     worksheet,
-    `P${row}`,
-    `IFERROR(E${row}/C${row},"")`,
+    `P${rowNumber}`,
+    `IFERROR(E${rowNumber}/C${rowNumber},"")`,
     safeDivide(totals.salesDigital, totals.leads),
   );
   setFormulaCell(
     worksheet,
-    `Q${row}`,
-    `IF(OR(B${row}="",C${row}=0),"",B${row}/C${row})`,
+    `Q${rowNumber}`,
+    `IF(OR(B${rowNumber}="",C${rowNumber}=0),"",B${rowNumber}/C${rowNumber})`,
     safeDivide(totals.investment, totals.leads),
   );
   setFormulaCell(
     worksheet,
-    `R${row}`,
-    `IF(OR(B${row}="",D${row}=0),"",B${row}/D${row})`,
+    `R${rowNumber}`,
+    `IF(OR(B${rowNumber}="",D${rowNumber}=0),"",B${rowNumber}/D${rowNumber})`,
     safeDivide(totals.investment, totals.visitors),
   );
   setFormulaCell(
     worksheet,
-    `S${row}`,
-    `IF(OR(B${row}="",E${row}+F${row}=0),"",B${row}/(E${row}+F${row}))`,
+    `S${rowNumber}`,
+    `IF(OR(B${rowNumber}="",E${rowNumber}+F${rowNumber}=0),"",B${rowNumber}/(E${rowNumber}+F${rowNumber}))`,
     safeDivide(
       totals.investment,
       totals.salesDigital + totals.salesDigitalOrganic,
@@ -438,19 +577,162 @@ function writeRegionSubtotal(
   );
 }
 
-function setSumFormula(
+function writeSummaryBlock(
   worksheet: Worksheet,
-  address: string,
-  column: string,
-  region: RegionLayout,
-  result: number | null,
+  startRow: number,
+  grandTotalRow: number,
+  totals: ExportTotals,
+  grandInvestment: number | null,
 ): void {
+  worksheet.mergeCells(`A${startRow}:F${startRow}`);
+  const title = worksheet.getCell(`A${startRow}`);
+  title.value = 'RESUMEN COMERCIAL';
+  title.font = { bold: true, color: { argb: COLORS.white } };
+  title.fill = solidFill(COLORS.dark);
+
+  const rows = {
+    total: startRow + 1,
+    digital: startRow + 2,
+    other: startRow + 3,
+    investment: startRow + 4,
+  };
+
+  worksheet.getCell(`A${rows.total}`).value = 'Total de ventas nuevas';
   setFormulaCell(
     worksheet,
-    address,
-    `SUM(${column}${region.firstRow}:${column}${region.lastRow})`,
-    result,
+    `B${rows.total}`,
+    `I${grandTotalRow}`,
+    totals.salesTotal,
   );
+
+  worksheet.getCell(`A${rows.digital}`).value = 'Ventas vía Mkt Digital';
+  setFormulaCell(
+    worksheet,
+    `B${rows.digital}`,
+    `E${grandTotalRow}+F${grandTotalRow}`,
+    totals.salesDigital + totals.salesDigitalOrganic,
+  );
+  setFormulaCell(
+    worksheet,
+    `C${rows.digital}`,
+    `IFERROR(B${rows.digital}/B${rows.total},"")`,
+    safeDivide(
+      totals.salesDigital + totals.salesDigitalOrganic,
+      totals.salesTotal,
+    ),
+  );
+
+  worksheet.getCell(`A${rows.other}`).value = 'Ventas otros canales';
+  setFormulaCell(
+    worksheet,
+    `B${rows.other}`,
+    `B${rows.total}-B${rows.digital}`,
+    totals.salesTotal - totals.salesDigital - totals.salesDigitalOrganic,
+  );
+  setFormulaCell(
+    worksheet,
+    `C${rows.other}`,
+    `IFERROR(B${rows.other}/B${rows.total},"")`,
+    safeDivide(
+      totals.salesTotal - totals.salesDigital - totals.salesDigitalOrganic,
+      totals.salesTotal,
+    ),
+  );
+
+  worksheet.getCell(`A${rows.investment}`).value = 'Inversión';
+  worksheet.getCell(`B${rows.investment}`).value = grandInvestment;
+
+  worksheet.getCell(`D${rows.total}`).value = 'Meta digital (50%)';
+  setFormulaCell(
+    worksheet,
+    `E${rows.total}`,
+    `B${rows.total}*0.5`,
+    totals.salesTotal * 0.5,
+  );
+  worksheet.getCell(`D${rows.digital}`).value = 'Brecha vs meta';
+  setFormulaCell(
+    worksheet,
+    `E${rows.digital}`,
+    `B${rows.digital}-E${rows.total}`,
+    (
+      totals.salesDigital
+      + totals.salesDigitalOrganic
+      - (totals.salesTotal * 0.5)
+    ),
+  );
+
+  for (let row = rows.total; row <= rows.investment; row += 1) {
+    for (let column = 1; column <= 6; column += 1) {
+      const cell = worksheet.getCell(row, column);
+      applyBorder(cell);
+    }
+  }
+
+  worksheet.getCell(`B${rows.investment}`).numFmt = '$#,##0.00';
+  worksheet.getCell(`C${rows.digital}`).numFmt = '0.0%';
+  worksheet.getCell(`C${rows.other}`).numFmt = '0.0%';
+}
+
+function styleDataRow(
+  worksheet: Worksheet,
+  rowNumber: number,
+  subtotal: boolean,
+): void {
+  for (let column = 1; column <= 19; column += 1) {
+    const cell = worksheet.getCell(rowNumber, column);
+    applyBorder(cell);
+    cell.alignment = {
+      vertical: 'middle',
+      horizontal: column === 1 ? 'left' : 'right',
+    };
+
+    if (subtotal) {
+      cell.fill = solidFill(COLORS.subtotal);
+      cell.font = { bold: true, color: { argb: COLORS.text } };
+    }
+  }
+
+  worksheet.getCell(`A${rowNumber}`).font = {
+    bold: true,
+    color: { argb: COLORS.text },
+  };
+
+  applyNumberFormats(worksheet, rowNumber);
+}
+
+function applyNumberFormats(
+  worksheet: Worksheet,
+  rowNumber: number,
+): void {
+  for (const column of CURRENCY_COLUMNS) {
+    worksheet.getCell(`${column}${rowNumber}`).numFmt = '$#,##0.00';
+  }
+  for (const column of PERCENT_COLUMNS) {
+    worksheet.getCell(`${column}${rowNumber}`).numFmt = '0.0%';
+  }
+  for (const column of INTEGER_COLUMNS) {
+    worksheet.getCell(`${column}${rowNumber}`).numFmt = '#,##0';
+  }
+}
+
+function buildInvestmentMap(
+  options: FunnelBranchExportOptions,
+): Map<number, number | null> {
+  const result = new Map<number, number | null>();
+
+  if (
+    options.investmentDashboard
+    && options.investmentDashboard.month === options.month
+  ) {
+    for (const branch of options.investmentDashboard.branches) {
+      result.set(
+        branch.sucursal_id,
+        branch.investment ?? null,
+      );
+    }
+  }
+
+  return result;
 }
 
 function buildTotals(
@@ -462,11 +744,9 @@ function buildTotals(
     .filter((value): value is number => value !== null);
 
   return {
-    investment: (
-      investments.length > 0
-        ? investments.reduce((sum, value) => sum + value, 0)
-        : null
-    ),
+    investment: investments.length
+      ? investments.reduce((sum, value) => sum + value, 0)
+      : null,
     leads: sumBranchMetric(branches, (branch) => branch.leads_meta),
     visitors: sumBranchMetric(branches, (branch) => branch.visits_total),
     salesDigital: sumBranchMetric(
@@ -490,6 +770,56 @@ function buildTotals(
   };
 }
 
+function resolveGrandInvestment(
+  options: FunnelBranchExportOptions,
+  branchInvestment: number | null,
+): number | null {
+  if (branchInvestment !== null) {
+    return branchInvestment;
+  }
+
+  if (
+    options.regionId === null
+    && options.branchId === null
+    && options.investmentDashboard
+    && options.investmentDashboard.month === options.month
+  ) {
+    return options.investmentDashboard.summary.investment ?? null;
+  }
+
+  return null;
+}
+
+function hasBranchInvestment(options: FunnelBranchExportOptions): boolean {
+  if (
+    !options.investmentDashboard
+    || options.investmentDashboard.month !== options.month
+  ) {
+    return false;
+  }
+
+  return options.investmentDashboard.branches.some(
+    (branch) => branch.investment !== null && branch.investment !== undefined,
+  );
+}
+
+function resolveRegionLabel(
+  branches: MarketingSalesFunnelBranch[],
+  scopeOptions: MarketingSalesFunnelScopeOption[],
+  sectionIndex: number,
+): string {
+  for (const branch of branches) {
+    const option = scopeOptions.find(
+      (candidate) => candidate.sucursal_id === branch.sucursal_id,
+    );
+    if (option?.region) {
+      return option.region;
+    }
+  }
+
+  return `Región ${sectionIndex + 1}`;
+}
+
 function sumBranchMetric(
   branches: MarketingSalesFunnelBranch[],
   selector: (branch: MarketingSalesFunnelBranch) => number,
@@ -498,138 +828,6 @@ function sumBranchMetric(
     (total, branch) => total + selector(branch),
     0,
   );
-}
-
-function writeBottomSummary(
-  worksheet: Worksheet,
-  totals: ExportTotals,
-): void {
-  setFormulaCell(
-    worksheet,
-    'B34',
-    subtotalSumFormula('B'),
-    totals.investment,
-  );
-  setFormulaCell(
-    worksheet,
-    'C34',
-    subtotalSumFormula('C'),
-    totals.leads,
-  );
-  setFormulaCell(
-    worksheet,
-    'D34',
-    subtotalSumFormula('D'),
-    totals.visitors,
-  );
-  setFormulaCell(
-    worksheet,
-    'E34',
-    subtotalSumFormula('E'),
-    totals.salesDigital,
-  );
-  setFormulaCell(
-    worksheet,
-    'J34',
-    `IF(OR(B34="",${subtotalMultiSumFormula(['E', 'F'])}=0),"",B34/${subtotalMultiSumFormula(['E', 'F'])})`,
-    safeDivide(
-      totals.investment,
-      totals.salesDigital + totals.salesDigitalOrganic,
-    ),
-  );
-
-  setFormulaCell(
-    worksheet,
-    'D35',
-    'IFERROR(D34/C34,"")',
-    safeDivide(totals.visitors, totals.leads),
-  );
-  setFormulaCell(
-    worksheet,
-    'E35',
-    'IFERROR(E34/D34,"")',
-    safeDivide(totals.salesDigital, totals.visitors),
-  );
-
-  worksheet.getCell('A37').value = 'Total de ventas nuevas';
-  setFormulaCell(
-    worksheet,
-    'B37',
-    subtotalSumFormula('I'),
-    totals.salesTotal,
-  );
-
-  worksheet.getCell('A38').value = 'Ventas via Mkt Digital';
-  setFormulaCell(
-    worksheet,
-    'B38',
-    `${subtotalSumFormula('E')}+${subtotalSumFormula('F')}`,
-    totals.salesDigital + totals.salesDigitalOrganic,
-  );
-  setFormulaCell(
-    worksheet,
-    'C38',
-    'IFERROR(B38/B37,"")',
-    safeDivide(
-      totals.salesDigital + totals.salesDigitalOrganic,
-      totals.salesTotal,
-    ),
-  );
-
-  worksheet.getCell('A39').value = 'Ventas (Referidos, walk in, convenios)';
-  setFormulaCell(
-    worksheet,
-    'B39',
-    'B37-B38',
-    totals.salesTotal - totals.salesDigital - totals.salesDigitalOrganic,
-  );
-  setFormulaCell(
-    worksheet,
-    'C39',
-    'IFERROR(B39/B37,"")',
-    safeDivide(
-      totals.salesTotal - totals.salesDigital - totals.salesDigitalOrganic,
-      totals.salesTotal,
-    ),
-  );
-
-  worksheet.getCell('D37').value =
-    'GOAL: 50% del total de las venta vía Mkt Digital';
-  setFormulaCell(
-    worksheet,
-    'D38',
-    'B37*0.5',
-    totals.salesTotal * 0.5,
-  );
-  setFormulaCell(
-    worksheet,
-    'D39',
-    'B39',
-    totals.salesTotal - totals.salesDigital - totals.salesDigitalOrganic,
-  );
-  setFormulaCell(
-    worksheet,
-    'D40',
-    'SUM(D38:D39)',
-    (
-      (totals.salesTotal * 0.5)
-      + totals.salesTotal
-      - totals.salesDigital
-      - totals.salesDigitalOrganic
-    ),
-  );
-}
-
-function subtotalSumFormula(column: string): string {
-  return `SUM(${SUBTOTAL_ROWS.map((row) => `${column}${row}`).join(',')})`;
-}
-
-function subtotalMultiSumFormula(columns: string[]): string {
-  const cells = columns.flatMap((column) =>
-    SUBTOTAL_ROWS.map((row) => `${column}${row}`),
-  );
-
-  return `SUM(${cells.join(',')})`;
 }
 
 function setFormulaCell(
@@ -655,6 +853,23 @@ function safeDivide(
   return numerator / denominator;
 }
 
+function solidFill(argb: string): any {
+  return {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb },
+  };
+}
+
+function applyBorder(cell: any): void {
+  cell.border = {
+    top: { style: 'thin', color: { argb: COLORS.border } },
+    left: { style: 'thin', color: { argb: COLORS.border } },
+    bottom: { style: 'thin', color: { argb: COLORS.border } },
+    right: { style: 'thin', color: { argb: COLORS.border } },
+  };
+}
+
 function downloadWorkbook(
   buffer: BlobPart,
   filename: string,
@@ -671,7 +886,6 @@ function downloadWorkbook(
   anchor.href = url;
   anchor.download = filename;
   anchor.style.display = 'none';
-
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
@@ -704,11 +918,15 @@ function resolveScopeLabel(options: FunnelBranchExportOptions): string {
     )?.region ?? `region-${options.regionId}`;
   }
 
-  return 'todo-ultra';
+  return 'Todo Ultra';
 }
 
 function resolveMonthSheetName(month: string): string {
-  const [, rawMonth] = month.split('-');
+  return formatMonthLabel(month).slice(0, 31);
+}
+
+function formatMonthLabel(month: string): string {
+  const [rawYear, rawMonth] = month.split('-');
   const monthNumber = Number(rawMonth);
   const monthNames = [
     'Enero',
@@ -725,5 +943,6 @@ function resolveMonthSheetName(month: string): string {
     'Diciembre',
   ];
 
-  return monthNames[monthNumber - 1] ?? 'Funnel';
+  const monthName = monthNames[monthNumber - 1] ?? 'Funnel';
+  return rawYear ? `${monthName} ${rawYear}` : monthName;
 }
