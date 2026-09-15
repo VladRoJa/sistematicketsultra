@@ -46,7 +46,7 @@ interface ExportTotals {
 }
 
 const TEMPLATE_ASSET =
-  'assets/templates/marketing-sales-funnel-agosto-template.b64';
+  'assets/templates/marketing-sales-funnel-agosto-template.xlsx';
 
 const BRANCH_LAYOUT: BranchRowLayout[] = [
   { branchId: 1, row: 2 },
@@ -227,40 +227,23 @@ async function loadTemplateWorkbook(): Promise<Workbook> {
     );
   }
 
-  const encoded = await response.text();
-  const bytes = decodeBase64(encoded);
-  const workbook = new Workbook();
+  const buffer = await response.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
 
-  await workbook.xlsx.load(bytes.buffer as any);
+  if (
+    bytes.length < 4
+    || bytes[0] !== 0x50
+    || bytes[1] !== 0x4b
+    || bytes[2] !== 0x03
+    || bytes[3] !== 0x04
+  ) {
+    throw new Error('La plantilla recibida no es un XLSX/ZIP válido.');
+  }
+
+  const workbook = new Workbook();
+  await workbook.xlsx.load(buffer as any);
 
   return workbook;
-}
-
-function decodeBase64(value: string): Uint8Array {
-  const withoutDataUrl = value.replace(/^data:[^;]+;base64,/i, '');
-  const compact = withoutDataUrl
-    .replace(/-/g, '+')
-    .replace(/_/g, '/')
-    .replace(/[^A-Za-z0-9+/]/g, '');
-
-  if (!compact) {
-    throw new Error('La plantilla Excel está vacía o no contiene Base64 válido.');
-  }
-
-  const remainder = compact.length % 4;
-  if (remainder === 1) {
-    throw new Error('La plantilla Excel contiene una cadena Base64 inválida.');
-  }
-
-  const padded = compact + '='.repeat((4 - remainder) % 4);
-  const binary = window.atob(padded);
-  const bytes = new Uint8Array(binary.length);
-
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index);
-  }
-
-  return bytes;
 }
 
 function removeNonTemplateWorksheets(
