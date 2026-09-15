@@ -13,6 +13,8 @@ export interface MarketingSalesFunnelScopeOption {
 }
 
 export interface MarketingSalesFunnelMetrics {
+  investment?: number | null;
+
   iventas_contacts: number;
   leads_iventas: number;
   leads_meta: number;
@@ -79,6 +81,10 @@ export interface MarketingSalesFunnelSource {
   kpi_desempeno_snapshot_id?: number | null;
   kpi_desempeno_business_date?: string | null;
   iventas_sync_run_ids: number[];
+  iventas_sync_run_id?: number | null;
+  meta_sync_run_id?: number | null;
+  meta_date_from?: string | null;
+  meta_date_to?: string | null;
   match_window_days: number;
 }
 
@@ -106,6 +112,8 @@ export interface MarketingSalesFunnelQuality {
 
 export interface MarketingSalesFunnelResponse {
   month: string;
+  selected_cutoff_date: string;
+  available_cutoff_dates: string[];
   scope: Record<string, unknown>;
   scope_options?: MarketingSalesFunnelScopeOption[];
   summary: MarketingSalesFunnelMetrics;
