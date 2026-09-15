@@ -20,6 +20,10 @@ from app.services.marketing_inputs_service import (
     MarketingInputValidationError,
     parse_month,
 )
+from app.services.marketing_sales_funnel_cutoff_detail_service import (
+    build_marketing_sales_funnel_cutoff_detail,
+    build_marketing_sales_funnel_cutoff_export,
+)
 from app.services.marketing_sales_funnel_cutoff_service import (
     build_marketing_sales_funnel_at_cutoff,
 )
@@ -199,7 +203,6 @@ def get_marketing_sales_funnel_endpoint():
         funnel_ms = (perf_counter() - stage_started) * 1000
 
         stage_started = perf_counter()
-        branch_ids = funnel_build.loaded.branch_ids
         branch_scope_ms = (perf_counter() - stage_started) * 1000
 
         # El builder de corte ya toma la población exacta del run iVentas
@@ -277,10 +280,26 @@ def get_marketing_sales_funnel_endpoint():
 def get_marketing_sales_funnel_detail_endpoint():
     try:
         _, access = _resolve_scoped_access()
+        month = request.args.get("month", "")
+        cutoff_date = request.args.get("cutoff_date")
         metric = request.args.get("metric", "")
-        if metric == "leads_iventas":
+
+        if cutoff_date:
+            result = build_marketing_sales_funnel_cutoff_detail(
+                month=month,
+                cutoff_date=cutoff_date,
+                access=access,
+                metric=metric,
+                branch_id=request.args.get("branch_id"),
+                origin=request.args.get("origin"),
+                page=request.args.get("page"),
+                page_size=request.args.get("page_size"),
+                sort_by=request.args.get("sort_by"),
+                sort_dir=request.args.get("sort_dir"),
+            )
+        elif metric == "leads_iventas":
             result = build_monthly_iventas_leads_detail(
-                month=request.args.get("month", ""),
+                month=month,
                 access=access,
                 branch_id=request.args.get("branch_id"),
                 page=request.args.get("page"),
@@ -290,7 +309,7 @@ def get_marketing_sales_funnel_detail_endpoint():
             )
         elif metric in VISIT_CONVERSION_METRICS:
             result = build_visit_conversion_detail(
-                month=request.args.get("month", ""),
+                month=month,
                 access=access,
                 metric=metric,
                 branch_id=request.args.get("branch_id"),
@@ -301,7 +320,7 @@ def get_marketing_sales_funnel_detail_endpoint():
             )
         else:
             result = build_marketing_sales_funnel_drilldown(
-                month=request.args.get("month", ""),
+                month=month,
                 access=access,
                 metric=metric,
                 branch_id=request.args.get("branch_id"),
@@ -337,10 +356,24 @@ def get_marketing_sales_funnel_detail_endpoint():
 def export_marketing_sales_funnel_detail_endpoint():
     try:
         _, access = _resolve_scoped_access()
+        month = request.args.get("month", "")
+        cutoff_date = request.args.get("cutoff_date")
         metric = request.args.get("metric", "")
-        if metric == "leads_iventas":
+
+        if cutoff_date:
+            output, filename = build_marketing_sales_funnel_cutoff_export(
+                month=month,
+                cutoff_date=cutoff_date,
+                access=access,
+                metric=metric,
+                branch_id=request.args.get("branch_id"),
+                origin=request.args.get("origin"),
+                sort_by=request.args.get("sort_by"),
+                sort_dir=request.args.get("sort_dir"),
+            )
+        elif metric == "leads_iventas":
             output, filename = build_monthly_iventas_leads_export(
-                month=request.args.get("month", ""),
+                month=month,
                 access=access,
                 branch_id=request.args.get("branch_id"),
                 sort_by=request.args.get("sort_by"),
@@ -348,7 +381,7 @@ def export_marketing_sales_funnel_detail_endpoint():
             )
         elif metric in VISIT_CONVERSION_METRICS:
             output, filename = build_visit_conversion_export(
-                month=request.args.get("month", ""),
+                month=month,
                 access=access,
                 metric=metric,
                 branch_id=request.args.get("branch_id"),
@@ -357,7 +390,7 @@ def export_marketing_sales_funnel_detail_endpoint():
             )
         else:
             output, filename = build_marketing_sales_funnel_drilldown_export(
-                month=request.args.get("month", ""),
+                month=month,
                 access=access,
                 metric=metric,
                 branch_id=request.args.get("branch_id"),
