@@ -65,6 +65,9 @@ from .marketing import (
 from .marketing_reactivation_outcome import (
     MarketingReactivationCampaignRecipientOutcomeORM,
 )
+from .marketing_campaign_delivery import (
+    MarketingReactivationCampaignBranchSendORM,
+)
 from .internal_documents import (
     InternalDocumentCategoryORM,
     InternalDocumentORM,
@@ -173,6 +176,7 @@ __all__ = [
     "MarketingReactivationCampaignORM",
     "MarketingReactivationCampaignRecipientORM",
     "MarketingReactivationCampaignRecipientOutcomeORM",
+    "MarketingReactivationCampaignBranchSendORM",
     "MarketingIventasSyncRunORM",
     "MarketingIventasRawPageORM",
     "MarketingIventasContactORM",
