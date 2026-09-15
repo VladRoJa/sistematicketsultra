@@ -1,0 +1,387 @@
+/* ========================================================================== 
+   Suite Ultra - compact density REVIEW ONLY / module adapters
+
+   Algunos modulos legacy/custom no usan mat-card/.page-header y por eso no
+   respondian a la capa global. Esta hoja adapta esos shells sin tocar sus
+   estilos productivos.
+   ========================================================================== */
+
+/* ========================================================================== 
+   Tickets
+   ========================================================================== */
+body.suite-compact-review .tickets-page {
+  --desc-col-width: 315px;
+  min-height: calc(100vh - var(--suite-shell-height));
+  padding: 9px;
+}
+
+body.suite-compact-review .tickets-page__header {
+  gap: 9px;
+  margin-bottom: 8px;
+}
+
+body.suite-compact-review .tickets-page__eyebrow {
+  gap: 4px;
+  margin-bottom: 3px;
+  font-size: 7px;
+  letter-spacing: 0.1em;
+}
+
+body.suite-compact-review .tickets-page__title {
+  font-size: 19px;
+}
+
+body.suite-compact-review .tickets-page__subtitle {
+  margin-top: 4px;
+  font-size: 9px;
+}
+
+body.suite-compact-review .tickets-page__status {
+  min-width: 105px;
+  padding: 7px 9px;
+  border-radius: 10px;
+}
+
+body.suite-compact-review .tickets-page__status-label {
+  font-size: 7px;
+}
+
+body.suite-compact-review .tickets-page__status strong {
+  margin-top: 2px;
+  font-size: 16px;
+}
+
+body.suite-compact-review .tickets-toolbar {
+  gap: 7px;
+  margin-bottom: 7px;
+  padding: 6px;
+  border-radius: 10px;
+}
+
+body.suite-compact-review .tickets-toolbar__group {
+  gap: 5px;
+}
+
+body.suite-compact-review .tickets-toolbar__button,
+body.suite-compact-review .tickets-toolbar__toggle {
+  height: 24px;
+  gap: 4px;
+  font-size: 9px;
+}
+
+body.suite-compact-review .tickets-toolbar__button mat-icon {
+  width: 12px;
+  height: 12px;
+  font-size: 12px;
+}
+
+body.suite-compact-review .tickets-kpi-grid {
+  grid-template-columns: repeat(6, minmax(92px, 1fr));
+  gap: 6px;
+  margin-bottom: 7px;
+}
+
+body.suite-compact-review .tickets-kpi-card {
+  min-height: 58px;
+  padding: 7px 9px;
+  border-radius: 10px;
+}
+
+body.suite-compact-review .tickets-kpi-card span {
+  font-size: 7px;
+  letter-spacing: 0.06em;
+}
+
+body.suite-compact-review .tickets-kpi-card strong {
+  margin-top: 4px;
+  font-size: 18px;
+}
+
+body.suite-compact-review .tickets-kpi-card small {
+  margin-top: 3px;
+  font-size: 8px;
+}
+
+body.suite-compact-review .tickets-table-card {
+  padding: 0 7px 7px;
+  border-radius: 12px;
+  max-height: calc(100vh - 220px);
+}
+
+body.suite-compact-review .filtro-unificado-wrapper {
+  grid-template-columns: 120px minmax(170px, 1fr) minmax(220px, 1.2fr);
+  gap: 7px;
+  margin-bottom: 7px;
+  padding: 7px;
+  border-radius: 10px;
+}
+
+body.suite-compact-review .columna-select {
+  min-width: 110px;
+}
+
+body.suite-compact-review .fu-checklist {
+  max-height: 80px;
+  padding: 5px 6px;
+  border-radius: 8px;
+}
+
+body.suite-compact-review .fu-empty-state,
+body.suite-compact-review .filtro-unificado-wrapper .mdc-form-field > label {
+  font-size: 9px;
+}
+
+body.suite-compact-review .fu-checkbox {
+  margin: 2px 0;
+}
+
+body.suite-compact-review .fu-acciones,
+body.suite-compact-review .acciones-filtro {
+  gap: 5px;
+  margin-top: 5px;
+}
+
+body.suite-compact-review .tabla-tickets {
+  font-size: 9px;
+}
+
+body.suite-compact-review .tabla-tickets th,
+body.suite-compact-review .tabla-tickets td {
+  padding: 6px;
+}
+
+body.suite-compact-review .tabla-tickets th {
+  font-size: 8px;
+}
+
+body.suite-compact-review .tabla-tickets .c-id { width: 54px; }
+body.suite-compact-review .tabla-tickets .c-cat { width: 90px; }
+body.suite-compact-review .tabla-tickets .c-apa { width: 128px; }
+body.suite-compact-review .tabla-tickets .c-desc { width: 315px; }
+body.suite-compact-review .tabla-tickets .c-suc { width: 90px; }
+body.suite-compact-review .tabla-tickets .c-est { width: 83px; }
+body.suite-compact-review .tabla-tickets .c-cri { width: 69px; }
+body.suite-compact-review .tabla-tickets .c-fc,
+body.suite-compact-review .tabla-tickets .c-fp,
+body.suite-compact-review .tabla-tickets .c-ff { width: 119px; }
+body.suite-compact-review .tabla-tickets .c-dep { width: 99px; }
+body.suite-compact-review .tabla-tickets .c-sub { width: 113px; }
+body.suite-compact-review .tabla-tickets .c-det { width: 101px; }
+body.suite-compact-review .tabla-tickets .c-acc { width: 113px; }
+body.suite-compact-review .tabla-tickets .c-sol,
+body.suite-compact-review .tabla-tickets .c-his { width: 95px; }
+
+body.suite-compact-review .menu-filtro {
+  min-width: 165px;
+  padding: 0.45rem 0.65rem;
+  gap: 0.3rem;
+  font-size: 9px;
+}
+
+body.suite-compact-review .opciones-scrollable {
+  max-height: 140px;
+  margin-top: 0.3rem;
+}
+
+/* ========================================================================== 
+   Maintenance Planner
+   ========================================================================== */
+body.suite-compact-review .planner-page {
+  min-height: calc(100vh - var(--suite-shell-height));
+  padding: 9px;
+}
+
+body.suite-compact-review .planner-toolbar {
+  gap: 10px;
+  margin-bottom: 7px;
+  padding: 9px 11px;
+  border-radius: 12px;
+}
+
+body.suite-compact-review .planner-eyebrow,
+body.suite-compact-review .planner-page .section-eyebrow {
+  margin-bottom: 3px;
+  font-size: 7px;
+}
+
+body.suite-compact-review .planner-toolbar h1 {
+  font-size: 19px;
+}
+
+body.suite-compact-review .planner-toolbar p,
+body.suite-compact-review .planner-page .section-heading p {
+  margin-top: 4px;
+  font-size: 9px;
+  line-height: 1.3;
+}
+
+body.suite-compact-review .planner-toolbar__actions {
+  gap: 5px;
+}
+
+body.suite-compact-review .planner-toolbar__actions button,
+body.suite-compact-review .refresh-button {
+  min-height: 26px;
+  font-size: 9px;
+}
+
+body.suite-compact-review .planner-toolbar__actions button {
+  min-width: 26px;
+  padding: 0 8px;
+}
+
+body.suite-compact-review .week-button {
+  min-width: 120px !important;
+}
+
+body.suite-compact-review .planner-filters {
+  gap: 7px;
+  margin-bottom: 7px;
+  padding: 8px 9px;
+  border-radius: 10px;
+}
+
+body.suite-compact-review .planner-filters label {
+  gap: 3px;
+  min-width: 140px;
+}
+
+body.suite-compact-review .planner-filters label > span {
+  font-size: 7px;
+}
+
+body.suite-compact-review .planner-filters select {
+  min-height: 28px;
+  min-width: 140px;
+  padding: 4px 7px;
+  border-radius: 9px 9px 5px 5px;
+  font-size: 9px;
+}
+
+body.suite-compact-review .refresh-button {
+  min-width: 80px;
+  padding: 0 10px;
+}
+
+body.suite-compact-review .planner-alert {
+  margin-bottom: 7px;
+  padding: 7px 8px;
+  border-left-width: 3px;
+  border-radius: 8px;
+  font-size: 9px;
+}
+
+body.suite-compact-review .metric-strip {
+  margin-bottom: 7px;
+  border-radius: 10px;
+}
+
+body.suite-compact-review .metric {
+  gap: 5px;
+  min-height: 48px;
+  padding: 7px 8px;
+}
+
+body.suite-compact-review .metric strong {
+  font-size: 18px;
+}
+
+body.suite-compact-review .metric span {
+  font-size: 8px;
+}
+
+body.suite-compact-review .planner-main {
+  grid-template-columns: minmax(0, 1fr) minmax(255px, 295px);
+  gap: 8px;
+}
+
+body.suite-compact-review .planner-calendar,
+body.suite-compact-review .meeting-focus {
+  border-radius: 12px;
+}
+
+body.suite-compact-review .planner-page .section-heading {
+  gap: 7px;
+  padding: 9px 10px;
+}
+
+body.suite-compact-review .planner-page .section-heading h2 {
+  font-size: 13px;
+}
+
+body.suite-compact-review .week-grid {
+  grid-template-columns: repeat(7, minmax(110px, 1fr));
+  max-height: calc(100vh - 230px);
+  min-height: 300px;
+}
+
+body.suite-compact-review .day-column {
+  min-width: 110px;
+}
+
+body.suite-compact-review .day-column > header {
+  gap: 5px;
+  min-height: 36px;
+  padding: 6px;
+  font-size: 9px;
+}
+
+body.suite-compact-review .day-column > header > strong {
+  min-width: 18px;
+  height: 18px;
+  font-size: 8px;
+}
+
+body.suite-compact-review .day-column__heading {
+  gap: 4px;
+}
+
+body.suite-compact-review .day-column__heading small {
+  padding: 1px 4px;
+  font-size: 6px;
+}
+
+body.suite-compact-review .day-column__items {
+  gap: 4px;
+  min-height: calc(100vh - 270px);
+  padding: 5px;
+}
+
+body.suite-compact-review .ticket-card {
+  gap: 3px;
+  padding: 6px 7px;
+  border-left-width: 3px;
+  border-radius: 8px;
+}
+
+body.suite-compact-review .ticket-card__topline {
+  gap: 4px;
+}
+
+body.suite-compact-review .ticket-card__topline > strong {
+  font-size: 9px;
+}
+
+body.suite-compact-review .ticket-card__branch {
+  font-size: 7px;
+}
+
+body.suite-compact-review .ticket-card__equipment {
+  font-size: 9px;
+}
+
+body.suite-compact-review .ticket-card__meta,
+body.suite-compact-review .ticket-card__flag,
+body.suite-compact-review .ticket-card__drag {
+  font-size: 7px;
+}
+
+@media (max-width: 1280px) {
+  body.suite-compact-review .tickets-kpi-grid {
+    grid-template-columns: repeat(3, minmax(105px, 1fr));
+  }
+
+  body.suite-compact-review .planner-main {
+    grid-template-columns: minmax(0, 1fr) 245px;
+  }
+}
