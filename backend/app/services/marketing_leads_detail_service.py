@@ -6,7 +6,7 @@ from datetime import date, datetime
 from typing import Any, Iterable, Mapping
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import exists, select
+from sqlalchemy import and_, exists, or_, select
 
 from app.extensions import db
 from app.models import (
@@ -55,6 +55,14 @@ def build_marketing_lead_contacts_statement(
         )
     )
 
+    is_ads_lead = or_(
+        MarketingIventasContactORM.is_from_ads.is_(True),
+        and_(
+            MarketingIventasContactORM.is_from_ads.is_(None),
+            has_meta_tag,
+        ),
+    )
+
     return (
         select(
             MarketingIventasContactORM.id.label("contact_row_id"),
@@ -67,6 +75,8 @@ def build_marketing_lead_contacts_statement(
             MarketingIventasContactORM.first_message_date_local,
             MarketingIventasContactORM.channel_name,
             MarketingIventasContactORM.channel_platform,
+            MarketingIventasContactORM.is_from_ads,
+            MarketingIventasContactORM.ads_source_id,
         )
         .where(
             MarketingIventasContactORM.sync_run_id
@@ -75,7 +85,7 @@ def build_marketing_lead_contacts_statement(
                 normalized_branch_ids
             ),
             MarketingIventasContactORM.first_message_at_utc.is_not(None),
-            has_meta_tag,
+            is_ads_lead,
         )
         .order_by(
             MarketingIventasContactORM.sucursal_id.asc(),
@@ -176,9 +186,16 @@ def _build_marketing_lead_rows(
     result: list[dict[str, Any]] = []
     for row in contact_rows:
         contact_row_id = int(row["contact_row_id"])
-        meta_ad_ids = sorted(
+        observed_ad_ids = set(
             ad_ids_by_contact.get(contact_row_id, set())
         )
+        provider_ad_id = str(
+            row.get("ads_source_id") or ""
+        ).strip()
+        if provider_ad_id:
+            observed_ad_ids.add(provider_ad_id)
+
+        meta_ad_ids = sorted(observed_ad_ids)
         campaign_names = sorted(
             {
                 value
@@ -234,6 +251,8 @@ def _build_marketing_lead_rows(
                     str(row.get("channel_platform") or "").strip()
                     or None
                 ),
+                "is_from_ads": row.get("is_from_ads"),
+                "ads_source_id": provider_ad_id or None,
                 "meta_ad_ids": meta_ad_ids,
                 "campaign_names": campaign_names,
                 "ad_names": ad_names,
@@ -323,6 +342,12 @@ def build_marketing_leads_detail(
         for row in tags
         if str(row.get("meta_ad_id") or "").strip()
     }
+    meta_ad_ids.update(
+        str(row.get("ads_source_id") or "").strip()
+        for row in contacts
+        if str(row.get("ads_source_id") or "").strip()
+    )
+
     canonical_meta = (
         session_value.execute(
             build_canonical_meta_run_statement(

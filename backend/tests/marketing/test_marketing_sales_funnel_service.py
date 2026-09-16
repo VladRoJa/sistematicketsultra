@@ -175,7 +175,9 @@ def test_latest_iventas_interaction_controls_meta_classification():
     )
 
 
-def test_load_iventas_data_reuses_projected_meta_flag(monkeypatch):
+def test_load_iventas_data_prefers_provider_ads_origin_and_uses_legacy_fallback(
+    monkeypatch,
+):
     runs = [
         SimpleNamespace(id=10, period_key="IVENTAS-2026-08"),
         SimpleNamespace(id=20, period_key="IVENTAS-2026-09"),
@@ -186,14 +188,24 @@ def test_load_iventas_data_reuses_projected_meta_flag(monkeypatch):
             sucursal_id=4,
             phone_mx10="6861111111",
             first_message_date_local=date(2026, 8, 20),
-            has_meta=False,
+            is_from_ads=None,
+            legacy_has_meta=True,
         ),
         SimpleNamespace(
             sync_run_id=20,
             sucursal_id=4,
             phone_mx10="6862222222",
             first_message_date_local=date(2026, 9, 5),
-            has_meta=True,
+            is_from_ads=True,
+            legacy_has_meta=False,
+        ),
+        SimpleNamespace(
+            sync_run_id=20,
+            sucursal_id=4,
+            phone_mx10="6863333333",
+            first_message_date_local=date(2026, 9, 6),
+            is_from_ads=False,
+            legacy_has_meta=True,
         ),
     ]
 
@@ -252,9 +264,10 @@ def test_load_iventas_data_reuses_projected_meta_flag(monkeypatch):
     )
 
     assert run_ids == (10, 20)
-    assert month_counts == {4: (1, 1)}
-    assert evidence[(4, "6861111111")][0].has_meta_ad is False
+    assert month_counts == {4: (2, 1)}
+    assert evidence[(4, "6861111111")][0].has_meta_ad is True
     assert evidence[(4, "6862222222")][0].has_meta_ad is True
+    assert evidence[(4, "6863333333")][0].has_meta_ad is False
 
 
 def test_load_new_sales_uses_projected_rows(monkeypatch):

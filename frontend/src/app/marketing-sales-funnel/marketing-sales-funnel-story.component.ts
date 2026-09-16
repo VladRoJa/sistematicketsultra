@@ -75,7 +75,7 @@ export class MarketingSalesFunnelStoryComponent {
     return this.createNode(
       'Leads iVentas',
       summary.leads_meta,
-      'First message + tag Meta/FB en el snapshot canónico',
+      'First message + isFromAds=true en el snapshot canónico',
       'leads_meta',
       'person',
       'orange',
@@ -157,9 +157,9 @@ export class MarketingSalesFunnelStoryComponent {
     if (!summary) return null;
 
     return this.createNode(
-      'Orgánico',
+      'iVentas sin ads',
       summary.sales_iventas_other,
-      'Entró a iVentas sin publicidad pagada',
+      'iVentas no reportó origen publicitario',
       'origin',
       'eco',
       'orange',

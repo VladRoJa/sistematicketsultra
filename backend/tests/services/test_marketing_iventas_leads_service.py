@@ -295,14 +295,19 @@ def test_meta_observed_lead_sql_contract():
         )
     ).lower()
 
-    # Un contacto con N tags META sigue siendo 1 lead.
-    assert "count(distinct" in sql
-    assert "marketing_iventas_contacts.id" in sql
+    # El contacto se cuenta una sola vez desde su fila canónica.
+    assert "count(marketing_iventas_contacts.id)" in sql
 
     # Debe existir evidencia de interacción.
     assert "first_message_at_utc is not null" in sql
 
-    # Debe existir relación META_AD observada.
+    # Contrato vigente: isFromAds es la fuente de verdad.
+    assert "is_from_ads is true" in sql
+
+    # Compatibilidad histórica: solo filas sin dato nuevo pueden
+    # recurrir a la observación legacy META_AD.
+    assert "is_from_ads is null" in sql
+    assert "exists" in sql
     assert "tag_kind" in sql
     assert "'meta_ad'" in sql
 
@@ -481,7 +486,7 @@ def test_branch_date_sql_preserves_lead_business_contract():
     # Debe existir interacción real.
     assert "first_message_at_utc is not null" in sql
 
-    # Debe existir una relación META_AD observada.
+    # Debe existir una relación META_AD observada para el fallback legacy.
     assert "meta_ad" in sql
     assert "tag_kind" in sql
 

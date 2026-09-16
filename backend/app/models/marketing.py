@@ -703,6 +703,16 @@ class MarketingIventasContactORM(db.Model):
         nullable=True,
     )
 
+    is_from_ads = db.Column(
+        db.Boolean,
+        nullable=True,
+    )
+
+    ads_source_id = db.Column(
+        db.String(255),
+        nullable=True,
+    )
+
     agent_json = db.Column(
         db.JSON,
         nullable=True,
@@ -785,6 +795,12 @@ class MarketingIventasContactORM(db.Model):
         ),
         db.Index(
             "ix_marketing_iventas_contacts_first_message_date_local",
+            "first_message_date_local",
+        ),
+        db.Index(
+            "ix_marketing_iventas_contacts_run_ads_first_message",
+            "sync_run_id",
+            "is_from_ads",
             "first_message_date_local",
         ),
         db.Index(
