@@ -317,7 +317,7 @@ def test_canonical_meta_statement_requires_completed_canonical_period():
     assert "is_canonical is true" in sql
 
 
-def test_iventas_evidence_statement_uses_only_exact_run_and_lead_tags():
+def test_iventas_evidence_statement_prefers_provider_ads_origin_with_legacy_fallback():
     statement = build_iventas_campaign_evidence_statement(
         iventas_sync_run_id=27,
         meta_ad_ids=("a1", "a2"),
@@ -329,11 +329,19 @@ def test_iventas_evidence_statement_uses_only_exact_run_and_lead_tags():
         )
     ).lower()
 
-    assert "marketing_iventas_contact_tags.sync_run_id = 27" in sql
+    # La población se acota al run exacto de contactos iVentas.
     assert "marketing_iventas_contacts.sync_run_id = 27" in sql
     assert "first_message_at_utc is not null" in sql
+
+    # Contrato vigente del proveedor: el origen publicitario y el ad id
+    # salen de isFromAds / adsSourceId.
+    assert "is_from_ads is true" in sql
+    assert "ads_source_id" in sql
+
+    # Snapshots históricos sin isFromAds conservan META_AD como fallback.
+    assert "is_from_ads is null" in sql
     assert "tag_kind = 'meta_ad'" in sql
-    assert "meta_ad_id is not null" in sql
+    assert "meta_ad_id" in sql
 
 
 def test_global_detail_rows_reconcile_all_campaign_statuses():
@@ -583,4 +591,3 @@ def test_historical_fallback_is_scoped_to_exact_month():
     assert result.campaigns_unassigned == 1
     assert result.campaign_rows[0].assignment_status == "UNASSIGNED"
     assert result.campaign_rows[0].sucursal_id is None
-
