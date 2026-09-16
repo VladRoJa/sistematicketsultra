@@ -42,8 +42,6 @@ class MarketingIventasUtcPeriod:
     to_iso_z: str
 
 
-
-
 @dataclass(frozen=True)
 class MarketingIventasTimestamp:
     """Timestamp iVentas normalizado a UTC y tiempo civil Tijuana."""
@@ -112,6 +110,7 @@ def parse_iventas_timestamp(
         local_tijuana_naive=local_naive,
         local_tijuana_date=local_naive.date(),
     )
+
 
 PHONE_STATUS_MX10_MATCHABLE = "MX10_MATCHABLE"
 PHONE_STATUS_NON_MX_OR_UNRESOLVED = "NON_MX_OR_UNRESOLVED"
@@ -246,6 +245,12 @@ class MarketingIventasNormalizedContact:
 
     tags: tuple[MarketingIventasNormalizedTag, ...]
 
+    # Campos de origen publicitario reportados por iVentas.
+    # Son opcionales para poder leer snapshots históricos previos
+    # a la ampliación del contrato de la API.
+    is_from_ads: bool | None = None
+    ads_source_id: str | None = None
+
 
 def normalize_iventas_contact(
     *,
@@ -260,7 +265,8 @@ def normalize_iventas_contact(
     - createdAt debe ser válido porque es NOT NULL en DB;
     - firstMessageAt y lastOutboundMessageAt son opcionales;
     - channel y agent conservan semántica del proveedor;
-    - tags se estructuran aparte;
+    - isFromAds/adsSourceId preservan origen publicitario del proveedor;
+    - tags se estructuran aparte y quedan como evidencia legacy/auditoría;
     - row_hash representa únicamente la fila del contacto,
       no las observaciones de tags.
     """
@@ -338,6 +344,22 @@ def normalize_iventas_contact(
         raise ValueError(
             "agent debe ser objeto JSON o null."
         )
+
+    raw_is_from_ads = contact.get("isFromAds")
+    if raw_is_from_ads is None:
+        is_from_ads: bool | None = None
+    elif isinstance(raw_is_from_ads, bool):
+        is_from_ads = raw_is_from_ads
+    else:
+        raise ValueError(
+            "isFromAds debe ser boolean o null."
+        )
+
+    ads_source_id = _optional_text(
+        contact.get("adsSourceId")
+    )
+    if ads_source_id is not None:
+        ads_source_id = ads_source_id.strip() or None
 
     tags = _normalize_iventas_tags(
         contact.get("tags")
@@ -440,6 +462,8 @@ def normalize_iventas_contact(
         "channel_name": channel_name,
         "channel_phone": channel_phone,
         "channel_platform": channel_platform,
+        "is_from_ads": is_from_ads,
+        "ads_source_id": ads_source_id,
         "agent_json": agent_json,
         "last_message_status": (
             last_message_status
@@ -496,6 +520,8 @@ def normalize_iventas_contact(
         ),
         row_hash=row_hash,
         tags=tags,
+        is_from_ads=is_from_ads,
+        ads_source_id=ads_source_id,
     )
 
 
@@ -596,6 +622,7 @@ def _build_iventas_contact_row_hash(
     return hashlib.sha256(
         canonical_json.encode("utf-8")
     ).hexdigest()
+
 
 def build_iventas_utc_period(
     *,
