@@ -9,11 +9,14 @@ Esta capa separa explícitamente:
   contactos con evidencia de interacción;
 
 - meta_observed_leads:
-  contactos con firstMessageAt y al menos una relación
-  META_AD observada.
+  contactos con firstMessageAt cuyo proveedor reporta
+  isFromAds=true.
+
+Para snapshots históricos previos a la persistencia de isFromAds,
+la relación META_AD se conserva como fallback compatible. En cuanto
+isFromAds tiene un valor explícito, el tag deja de decidir la métrica.
 
 Es la fuente operativa de leads del dashboard de Marketing.
-No realiza atribución causal a Meta.
 No lee runs no canónicos.
 """
 
@@ -23,7 +26,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
-from sqlalchemy import distinct, func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import NoResultFound
 
 from app.extensions import db
@@ -51,8 +54,6 @@ class MarketingIventasLeadMetrics:
     iventas_contacts: int
     iventas_contacts_with_first_message: int
     meta_observed_leads: int
-
-
 
 
 @dataclass(frozen=True)
@@ -123,6 +124,47 @@ def _build_canonical_run_statement(
     )
 
 
+def _legacy_meta_tag_exists():
+    """Evidencia legacy solo para filas sin isFromAds persistido."""
+
+    return (
+        select(
+            MarketingIventasContactTagORM.id
+        )
+        .where(
+            MarketingIventasContactTagORM
+            .iventas_contact_row_id
+            == MarketingIventasContactORM.id,
+            MarketingIventasContactTagORM
+            .sync_run_id
+            == MarketingIventasContactORM.sync_run_id,
+            MarketingIventasContactTagORM.tag_kind
+            == TAG_KIND_META_AD,
+        )
+        .exists()
+    )
+
+
+def _is_ads_lead_condition():
+    """Contrato de lead Ads con fallback de snapshots históricos.
+
+    Nuevo contrato:
+        firstMessageAt + isFromAds=true
+
+    Compatibilidad histórica:
+        si isFromAds es NULL porque el snapshot es anterior al nuevo
+        contrato, se acepta la antigua evidencia META_AD.
+    """
+
+    return or_(
+        MarketingIventasContactORM.is_from_ads.is_(True),
+        and_(
+            MarketingIventasContactORM.is_from_ads.is_(None),
+            _legacy_meta_tag_exists(),
+        ),
+    )
+
+
 def _build_lead_metrics_statement(
     sync_run_id: int,
 ):
@@ -158,27 +200,8 @@ def _build_lead_metrics_statement(
     meta_observed_leads = (
         select(
             func.count(
-                distinct(
-                    MarketingIventasContactORM.id
-                )
+                MarketingIventasContactORM.id
             )
-        )
-        .select_from(
-            MarketingIventasContactORM
-        )
-        .join(
-            MarketingIventasContactTagORM,
-            (
-                MarketingIventasContactTagORM
-                .iventas_contact_row_id
-                == MarketingIventasContactORM.id
-            )
-            & (
-                MarketingIventasContactTagORM
-                .sync_run_id
-                == MarketingIventasContactORM
-                .sync_run_id
-            ),
         )
         .where(
             MarketingIventasContactORM.sync_run_id
@@ -186,8 +209,7 @@ def _build_lead_metrics_statement(
             MarketingIventasContactORM
             .first_message_at_utc
             .is_not(None),
-            MarketingIventasContactTagORM.tag_kind
-            == TAG_KIND_META_AD,
+            _is_ads_lead_condition(),
         )
         .scalar_subquery()
     )
@@ -374,35 +396,7 @@ def read_canonical_iventas_lead_metrics(
 def _build_lead_metrics_by_branch_date_statement(
     sync_run_id: int,
 ):
-    """Agrupa poblaciones iVentas por fecha comercial y sucursal.
-
-    No hace JOIN multiplicativo contra tags.
-
-    La existencia de META_AD se resuelve mediante EXISTS para que:
-
-        1 contacto + N META_AD = 1 meta_observed_lead
-    """
-
-    meta_tag_exists = (
-        select(
-            MarketingIventasContactTagORM.id
-        )
-        .where(
-            MarketingIventasContactTagORM
-            .iventas_contact_row_id
-            == MarketingIventasContactORM.id,
-
-            MarketingIventasContactTagORM
-            .sync_run_id
-            == MarketingIventasContactORM
-            .sync_run_id,
-
-            MarketingIventasContactTagORM
-            .tag_kind
-            == TAG_KIND_META_AD,
-        )
-        .exists()
-    )
+    """Agrupa poblaciones iVentas por fecha comercial y sucursal."""
 
     return (
         select(
@@ -439,8 +433,7 @@ def _build_lead_metrics_by_branch_date_statement(
                 MarketingIventasContactORM
                 .first_message_at_utc
                 .is_not(None),
-
-                meta_tag_exists,
+                _is_ads_lead_condition(),
             )
             .label(
                 "meta_observed_leads"
@@ -589,12 +582,7 @@ class MarketingIventasLeadMetricsByBranchMonth:
 def _build_lead_metrics_by_branch_month_statement(
     sync_run_id: int,
 ):
-    """Agrupa poblaciones iVentas por mes comercial y sucursal.
-
-    Un contacto permanece como una sola fila lógica.
-    La relación META_AD se valida mediante EXISTS para evitar
-    multiplicación cuando un contacto tiene varios tags Meta.
-    """
+    """Agrupa poblaciones iVentas por mes comercial y sucursal."""
 
     month_start = (
         func.date_trunc(
@@ -602,27 +590,6 @@ def _build_lead_metrics_by_branch_month_statement(
             MarketingIventasContactORM.created_date_local,
         )
         .cast(db.Date)
-    )
-
-    meta_tag_exists = (
-        select(
-            MarketingIventasContactTagORM.id
-        )
-        .where(
-            MarketingIventasContactTagORM
-            .iventas_contact_row_id
-            == MarketingIventasContactORM.id,
-
-            MarketingIventasContactTagORM
-            .sync_run_id
-            == MarketingIventasContactORM
-            .sync_run_id,
-
-            MarketingIventasContactTagORM
-            .tag_kind
-            == TAG_KIND_META_AD,
-        )
-        .exists()
     )
 
     return (
@@ -663,8 +630,7 @@ def _build_lead_metrics_by_branch_month_statement(
                 MarketingIventasContactORM
                 .first_message_at_utc
                 .is_not(None),
-
-                meta_tag_exists,
+                _is_ads_lead_condition(),
             )
             .label(
                 "meta_observed_leads"
