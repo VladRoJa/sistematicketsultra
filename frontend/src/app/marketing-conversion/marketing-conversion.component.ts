@@ -629,7 +629,7 @@ export class MarketingConversionComponent implements OnInit {
         label: 'Leads',
         value: this.formatInteger(metrics.leads),
         supportingText: metrics.iventas.available
-          ? 'iVentas canónico · firstMessageAt + META_AD'
+          ? 'iVentas canónico · firstMessageAt + isFromAds=true'
           : 'iVentas canónico no disponible',
         detailKind: 'leads',
       },
@@ -797,7 +797,7 @@ export class MarketingConversionComponent implements OnInit {
   private resolveLeadMode(mode: string): string {
     if (mode === 'iventas_canonical_first_message_meta_ad') {
       return (
-        'iVentas canónico: firstMessageAt y tag META_AD'
+        'iVentas canónico: firstMessageAt e isFromAds=true'
       );
     }
     return mode;
