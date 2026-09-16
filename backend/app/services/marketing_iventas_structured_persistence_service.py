@@ -318,6 +318,8 @@ def _build_contact_row(
         channel_platform=(
             normalized.channel_platform
         ),
+        is_from_ads=normalized.is_from_ads,
+        ads_source_id=normalized.ads_source_id,
         agent_json=(
             dict(normalized.agent_json)
             if normalized.agent_json
