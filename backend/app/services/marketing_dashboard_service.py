@@ -79,7 +79,8 @@ FAMILY_PLAN_ADDITIONAL_MEMBER_TARIFFS = frozenset(
 FIXED_LIMITATIONS = (
     (
         "Los leads requieren un snapshot canónico iVentas del periodo "
-        "con firstMessageAt y al menos un tag META_AD."
+        "con firstMessageAt e isFromAds=true; snapshots históricos sin "
+        "el campo pueden usar META_AD como fallback."
     ),
     "No existe todavía atribución individual lead -> visita.",
     "Las ventas solo se atribuyen con teléfono exacto y misma sucursal.",
