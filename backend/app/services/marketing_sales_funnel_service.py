@@ -788,7 +788,8 @@ def _load_iventas_data(
             MarketingIventasContactORM.sucursal_id,
             MarketingIventasContactORM.phone_mx10,
             MarketingIventasContactORM.first_message_date_local,
-            meta_tag_exists.label("has_meta"),
+            MarketingIventasContactORM.is_from_ads,
+            meta_tag_exists.label("legacy_has_meta"),
         )
         .filter(
             MarketingIventasContactORM.sync_run_id.in_(run_ids),
@@ -806,7 +807,13 @@ def _load_iventas_data(
         if not phone or interaction_date is None:
             continue
 
-        has_meta = bool(contact.has_meta)
+        has_meta = (
+            contact.is_from_ads is True
+            or (
+                contact.is_from_ads is None
+                and bool(contact.legacy_has_meta)
+            )
+        )
         if lookback_start <= interaction_date <= month_end:
             evidence[(branch_id, phone)].append(
                 _IventasEvidence(
@@ -1222,8 +1229,9 @@ def build_marketing_sales_funnel_with_loaded_data(
         stats.origin_revenue[origin] += sale.revenue
 
     limitations.append(
-        "Los tags Meta reflejan el estado observado por la API de iVentas; "
-        "una corrección posterior puede reclasificar el origen Meta."
+        "El origen publicitario de iVentas usa isFromAds; adsSourceId aporta "
+        "trazabilidad del anuncio. Los tags META_AD se conservan solo como "
+        "fallback histórico cuando isFromAds no existe en el snapshot."
     )
 
     payload = _build_response(
