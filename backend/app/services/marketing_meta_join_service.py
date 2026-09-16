@@ -1,10 +1,15 @@
-"""Consulta base exportable para relacionar leads iVentas con Meta."""
+"""Consulta base exportable para relacionar leads iVentas con Meta.
+
+El origen publicitario autoritativo de snapshots nuevos es
+isFromAds/adsSourceId. Los tags ad_fb_* quedan como fallback de
+snapshots históricos que todavía no persistían esos campos.
+"""
 
 from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import and_, case, or_, select
 
 from app.extensions import db
 from app.models import (
@@ -25,6 +30,24 @@ def build_iventas_meta_export_statement(
             "Los identificadores de sync run deben ser positivos."
         )
 
+    resolved_ad_id = case(
+        (
+            MarketingIventasContactORM.is_from_ads.is_(True),
+            MarketingIventasContactORM.ads_source_id,
+        ),
+        else_=MarketingIventasContactTagORM.meta_ad_id,
+    )
+
+    provider_evidence = and_(
+        MarketingIventasContactORM.is_from_ads.is_(True),
+        MarketingIventasContactORM.ads_source_id.is_not(None),
+    )
+    legacy_evidence = and_(
+        MarketingIventasContactORM.is_from_ads.is_(None),
+        MarketingIventasContactTagORM.tag_kind == TAG_KIND_META_AD,
+        MarketingIventasContactTagORM.meta_ad_id.is_not(None),
+    )
+
     return (
         select(
             MarketingIventasContactORM.first_message_date_local.label(
@@ -41,7 +64,7 @@ def build_iventas_meta_export_statement(
             MarketingIventasContactORM.agent_json,
             MarketingIventasContactORM.first_message_at_utc,
             MarketingIventasContactORM.first_message_at_local,
-            MarketingIventasContactTagORM.meta_ad_id,
+            resolved_ad_id.label("meta_ad_id"),
             MarketingMetaAdInsightORM.account_id,
             MarketingMetaAdInsightORM.account_name,
             MarketingMetaAdInsightORM.campaign_id,
@@ -59,7 +82,7 @@ def build_iventas_meta_export_statement(
             MarketingMetaAdInsightORM.actions_json,
         )
         .select_from(MarketingIventasContactORM)
-        .join(
+        .outerjoin(
             MarketingIventasContactTagORM,
             (
                 MarketingIventasContactTagORM.iventas_contact_row_id
@@ -73,7 +96,7 @@ def build_iventas_meta_export_statement(
         .outerjoin(
             MarketingMetaAdInsightORM,
             (
-                MarketingIventasContactTagORM.meta_ad_id
+                resolved_ad_id
                 == MarketingMetaAdInsightORM.ad_id
             )
             & (
@@ -85,14 +108,14 @@ def build_iventas_meta_export_statement(
             MarketingIventasContactORM.sync_run_id
             == iventas_sync_run_id,
             MarketingIventasContactORM.first_message_at_utc.is_not(None),
-            MarketingIventasContactTagORM.tag_kind == TAG_KIND_META_AD,
-            MarketingIventasContactTagORM.meta_ad_id.is_not(None),
+            or_(provider_evidence, legacy_evidence),
         )
+        .distinct()
         .order_by(
             MarketingIventasContactORM.first_message_at_local.asc(),
             MarketingIventasContactORM.sucursal_id.asc(),
             MarketingIventasContactORM.contact_id.asc(),
-            MarketingIventasContactTagORM.meta_ad_id.asc(),
+            resolved_ad_id.asc(),
         )
     )
 
