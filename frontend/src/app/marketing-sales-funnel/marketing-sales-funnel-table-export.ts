@@ -37,6 +37,11 @@ interface RegionSection {
   branchIds: number[];
 }
 
+interface DataRange {
+  firstRow: number;
+  lastRow: number;
+}
+
 const REGION_SECTIONS: RegionSection[] = [
   { branchIds: [1, 2, 3, 4, 5, 6] },
   { branchIds: [7, 8, 9, 10, 11, 12, 13] },
@@ -50,17 +55,17 @@ const HEADER_VALUES = [
   'Inversión',
   'Leads',
   'Visitantes totales',
-  'Ventas digitales',
-  'Ventas digitales orgánicas',
-  'Venta web',
-  'Venta BTL',
-  'Ventas totales',
+  'Ventas Mkt Digital',
+  'Ventas Mkt Dig organico',
+  'venta web',
+  'venta btl',
+  'ventas totales',
   'Ingreso digital',
   'Ingreso web',
-  'Ingreso BTL',
-  'Ingreso total',
+  'Ingreso btl',
+  'ingreso total',
   'Lead → visita',
-  'Visita → venta digital',
+  'Visita → venta dig',
   'Lead → venta',
   'Costo por lead (CPL)',
   'Costo por visita (CPT)',
@@ -71,18 +76,20 @@ const CURRENCY_COLUMNS = ['B', 'J', 'K', 'L', 'M', 'Q', 'R', 'S'];
 const PERCENT_COLUMNS = ['N', 'O', 'P'];
 const INTEGER_COLUMNS = ['C', 'D', 'E', 'F', 'G', 'H', 'I'];
 
+const CURRENCY_FORMAT = '$#,##0.00;[Red]-$#,##0.00';
+const INTEGER_FORMAT = '#,##0';
+const PERCENT_FORMAT = '0.0%';
+
 const COLORS = {
-  dark: 'FF1F2937',
-  darkSoft: 'FF374151',
-  accent: 'FFF4512C',
-  accentSoft: 'FFFFEDE8',
-  region: 'FFE5E7EB',
-  subtotal: 'FFF3F4F6',
-  total: 'FFE8EEF7',
+  black: 'FF000000',
   white: 'FFFFFFFF',
-  text: 'FF111827',
-  muted: 'FF6B7280',
-  border: 'FFD1D5DB',
+  yellow: 'FFFFFF00',
+  greenFill: 'FFC6EFCE',
+  greenText: 'FF006100',
+  amberFill: 'FFFFEB9C',
+  amberText: 'FF9C5700',
+  redFill: 'FFFFC7CE',
+  redText: 'FF9C0006',
 };
 
 export function exportMarketingSalesFunnelBranchTable(
@@ -92,7 +99,7 @@ export function exportMarketingSalesFunnelBranchTable(
     return;
   }
 
-  void exportProgrammaticWorkbook(options).catch((error) => {
+  void exportReferenceWorkbook(options).catch((error) => {
     console.error(
       'No se pudo generar el Excel del Funnel Venta Nueva.',
       error,
@@ -100,7 +107,7 @@ export function exportMarketingSalesFunnelBranchTable(
   });
 }
 
-async function exportProgrammaticWorkbook(
+async function exportReferenceWorkbook(
   options: FunnelBranchExportOptions,
 ): Promise<void> {
   const workbook = new Workbook();
@@ -116,9 +123,9 @@ async function exportProgrammaticWorkbook(
         {
           state: 'frozen',
           xSplit: 1,
-          ySplit: 4,
-          topLeftCell: 'B5',
-          activeCell: 'B5',
+          ySplit: 1,
+          topLeftCell: 'B2',
+          activeCell: 'A2',
         },
       ],
       pageSetup: {
@@ -131,18 +138,17 @@ async function exportProgrammaticWorkbook(
   );
 
   configureWorksheet(worksheet);
-  writeTitle(worksheet, options);
-  writeHeader(worksheet, 4);
+  writeHeader(worksheet);
 
   const branchById = new Map<number, MarketingSalesFunnelBranch>(
     options.branches.map((branch) => [branch.sucursal_id, branch]),
   );
   const investmentByBranch = buildInvestmentMap(options);
   const subtotalRows: number[] = [];
-  let currentRow = 5;
+  const dataRanges: DataRange[] = [];
+  let currentRow = 2;
 
-  for (let index = 0; index < REGION_SECTIONS.length; index += 1) {
-    const section = REGION_SECTIONS[index];
+  for (const section of REGION_SECTIONS) {
     const branches = section.branchIds
       .map((branchId) => branchById.get(branchId) ?? null)
       .filter(
@@ -153,52 +159,58 @@ async function exportProgrammaticWorkbook(
       continue;
     }
 
-    currentRow = writeRegionSection(
+    currentRow = writeSection(
       worksheet,
       currentRow,
-      index,
       branches,
       investmentByBranch,
-      options.scopeOptions,
       subtotalRows,
+      dataRanges,
     );
   }
 
   const knownIds = new Set(
     REGION_SECTIONS.flatMap((section) => section.branchIds),
   );
-  const extraBranches = options.branches.filter(
-    (branch) => !knownIds.has(branch.sucursal_id),
-  );
+  const extraBranches = options.branches
+    .filter((branch) => !knownIds.has(branch.sucursal_id))
+    .sort((left, right) => left.sucursal.localeCompare(right.sucursal));
 
   if (extraBranches.length) {
-    currentRow = writeNamedSection(
+    currentRow = writeSection(
       worksheet,
       currentRow,
-      'OTRAS SUCURSALES',
       extraBranches,
       investmentByBranch,
       subtotalRows,
+      dataRanges,
     );
   }
 
   const totals = buildTotals(options.branches, investmentByBranch);
   const grandInvestment = resolveGrandInvestment(options, totals.investment);
-  const grandTotalRow = writeGrandTotal(
+
+  const summaryHeaderRow = currentRow;
+  const summaryValueRow = currentRow + 1;
+  const summaryRateRow = currentRow + 2;
+  writeCompactSummary(
     worksheet,
-    currentRow + 1,
+    summaryHeaderRow,
+    summaryValueRow,
+    summaryRateRow,
     subtotalRows,
     totals,
     grandInvestment,
   );
 
-  writeSummaryBlock(
+  writeCommercialSummary(
     worksheet,
-    grandTotalRow + 3,
-    grandTotalRow,
+    summaryRateRow + 2,
+    summaryValueRow,
     totals,
-    grandInvestment,
   );
+
+  applyConditionalFormats(worksheet, dataRanges);
 
   const buffer = await workbook.xlsx.writeBuffer();
   downloadWorkbook(
@@ -208,11 +220,29 @@ async function exportProgrammaticWorkbook(
 }
 
 function configureWorksheet(worksheet: Worksheet): void {
-  worksheet.properties.defaultRowHeight = 18;
+  worksheet.properties.defaultRowHeight = 15;
+  worksheet.views = worksheet.views;
 
   const widths = [
-    26, 14, 12, 15, 15, 19, 12, 12, 14, 15,
-    14, 14, 15, 14, 18, 14, 17, 18, 18,
+    28,
+    15,
+    12,
+    13,
+    18,
+    18,
+    12,
+    12,
+    14,
+    14.2,
+    17,
+    14,
+    14,
+    16,
+    16,
+    12.2,
+    11.5,
+    12,
+    14,
   ];
 
   widths.forEach((width, index) => {
@@ -220,120 +250,35 @@ function configureWorksheet(worksheet: Worksheet): void {
   });
 }
 
-function writeTitle(
-  worksheet: Worksheet,
-  options: FunnelBranchExportOptions,
-): void {
-  worksheet.mergeCells('A1:S1');
-  const title = worksheet.getCell('A1');
-  title.value = 'FUNNEL DE VENTA NUEVA · DETALLE POR SUCURSAL';
-  title.font = {
-    bold: true,
-    size: 16,
-    color: { argb: COLORS.white },
-  };
-  title.fill = solidFill(COLORS.dark);
-  title.alignment = { vertical: 'middle', horizontal: 'left' };
-  worksheet.getRow(1).height = 28;
-
-  worksheet.mergeCells('A2:S2');
-  const scopeLabel = resolveScopeLabel(options);
-  const meta = worksheet.getCell('A2');
-  meta.value = `${formatMonthLabel(options.month)} · Alcance: ${scopeLabel}`;
-  meta.font = {
-    italic: true,
-    color: { argb: COLORS.muted },
-  };
-  meta.alignment = { vertical: 'middle', horizontal: 'left' };
-
-  const investmentAvailable = hasBranchInvestment(options);
-  if (
-    !investmentAvailable
-    && options.regionId === null
-    && options.branchId === null
-    && options.investmentDashboard?.summary.investment != null
-  ) {
-    worksheet.mergeCells('A3:S3');
-    const note = worksheet.getCell('A3');
-    note.value =
-      'Inversión global disponible; la asignación por sucursal no está disponible para este corte.';
-    note.font = {
-      italic: true,
-      color: { argb: COLORS.accent },
-    };
-  }
-}
-
-function writeHeader(
-  worksheet: Worksheet,
-  rowNumber: number,
-): void {
+function writeHeader(worksheet: Worksheet): void {
   HEADER_VALUES.forEach((value, index) => {
-    const cell = worksheet.getCell(rowNumber, index + 1);
+    const cell = worksheet.getCell(1, index + 1);
     cell.value = value;
     cell.font = {
+      name: 'Calibri',
+      size: 12,
       bold: true,
-      color: { argb: COLORS.white },
-      size: 9,
+      color: { argb: COLORS.black },
     };
-    cell.fill = solidFill(COLORS.darkSoft);
     cell.alignment = {
       horizontal: 'center',
       vertical: 'middle',
       wrapText: true,
     };
-    applyBorder(cell);
   });
 
-  worksheet.getRow(rowNumber).height = 34;
+  worksheet.getRow(1).height = 39.75;
 }
 
-function writeRegionSection(
+function writeSection(
   worksheet: Worksheet,
-  startRow: number,
-  sectionIndex: number,
-  branches: MarketingSalesFunnelBranch[],
-  investmentByBranch: Map<number, number | null>,
-  scopeOptions: MarketingSalesFunnelScopeOption[],
-  subtotalRows: number[],
-): number {
-  const label = resolveRegionLabel(
-    branches,
-    scopeOptions,
-    sectionIndex,
-  );
-
-  return writeNamedSection(
-    worksheet,
-    startRow,
-    label,
-    branches,
-    investmentByBranch,
-    subtotalRows,
-  );
-}
-
-function writeNamedSection(
-  worksheet: Worksheet,
-  startRow: number,
-  label: string,
+  firstRow: number,
   branches: MarketingSalesFunnelBranch[],
   investmentByBranch: Map<number, number | null>,
   subtotalRows: number[],
+  dataRanges: DataRange[],
 ): number {
-  worksheet.mergeCells(`A${startRow}:S${startRow}`);
-  const regionCell = worksheet.getCell(`A${startRow}`);
-  regionCell.value = label.toUpperCase();
-  regionCell.font = {
-    bold: true,
-    color: { argb: COLORS.text },
-  };
-  regionCell.fill = solidFill(COLORS.region);
-  regionCell.alignment = { vertical: 'middle', horizontal: 'left' };
-  worksheet.getRow(startRow).height = 21;
-
-  const firstBranchRow = startRow + 1;
-  let rowNumber = firstBranchRow;
+  let rowNumber = firstRow;
 
   for (const branch of branches) {
     writeBranchRow(
@@ -345,18 +290,30 @@ function writeNamedSection(
     rowNumber += 1;
   }
 
+  const lastDataRow = rowNumber - 1;
+  dataRanges.push({
+    firstRow,
+    lastRow: lastDataRow,
+  });
+
+  styleSectionBoundaries(
+    worksheet,
+    firstRow,
+    lastDataRow,
+  );
+
   const subtotalRow = rowNumber;
   const totals = buildTotals(branches, investmentByBranch);
   writeSubtotalRow(
     worksheet,
     subtotalRow,
-    firstBranchRow,
-    subtotalRow - 1,
+    firstRow,
+    lastDataRow,
     totals,
   );
   subtotalRows.push(subtotalRow);
 
-  return subtotalRow + 2;
+  return subtotalRow + 1;
 }
 
 function writeBranchRow(
@@ -431,7 +388,7 @@ function writeBranchRow(
     ),
   );
 
-  styleDataRow(worksheet, rowNumber, false);
+  styleBranchRow(worksheet, rowNumber);
 }
 
 function writeSubtotalRow(
@@ -441,49 +398,10 @@ function writeSubtotalRow(
   lastDataRow: number,
   totals: ExportTotals,
 ): void {
-  worksheet.getCell(`A${rowNumber}`).value = 'SUBTOTAL REGIÓN';
-  const ranges = [
+  worksheet.getCell(`A${rowNumber}`).value = null;
+
+  const results: Array<[string, number | null]> = [
     ['B', totals.investment],
-    ['C', totals.leads],
-    ['D', totals.visitors],
-    ['E', totals.salesDigital],
-    ['F', totals.salesDigitalOrganic],
-    ['G', totals.salesWeb],
-    ['H', totals.salesBtl],
-    ['I', totals.salesTotal],
-    ['J', totals.revenueDigital],
-    ['K', totals.revenueWeb],
-    ['L', totals.revenueBtl],
-    ['M', totals.revenueTotal],
-  ] as const;
-
-  for (const [column, result] of ranges) {
-    setFormulaCell(
-      worksheet,
-      `${column}${rowNumber}`,
-      `SUM(${column}${firstDataRow}:${column}${lastDataRow})`,
-      result,
-    );
-  }
-
-  setRateAndCostFormulas(worksheet, rowNumber, totals);
-  styleDataRow(worksheet, rowNumber, true);
-}
-
-function writeGrandTotal(
-  worksheet: Worksheet,
-  rowNumber: number,
-  subtotalRows: number[],
-  totals: ExportTotals,
-  grandInvestment: number | null,
-): number {
-  worksheet.getCell(`A${rowNumber}`).value = 'TOTAL';
-
-  if (grandInvestment !== null) {
-    worksheet.getCell(`B${rowNumber}`).value = grandInvestment;
-  }
-
-  const resultByColumn: Array<[string, number]> = [
     ['C', totals.leads],
     ['D', totals.visitors],
     ['E', totals.salesDigital],
@@ -497,38 +415,296 @@ function writeGrandTotal(
     ['M', totals.revenueTotal],
   ];
 
-  for (const [column, result] of resultByColumn) {
-    const formula = subtotalRows.length
-      ? `SUM(${subtotalRows.map((row) => `${column}${row}`).join(',')})`
-      : '0';
+  for (const [column, result] of results) {
     setFormulaCell(
       worksheet,
       `${column}${rowNumber}`,
-      formula,
+      `SUM(${column}${firstDataRow}:${column}${lastDataRow})`,
       result,
     );
   }
 
-  setRateAndCostFormulas(
-    worksheet,
-    rowNumber,
-    {
-      ...totals,
-      investment: grandInvestment,
-    },
-  );
+  setRateAndCostFormulas(worksheet, rowNumber, totals);
+  styleSubtotalRow(worksheet, rowNumber);
+}
 
-  for (let column = 1; column <= 19; column += 1) {
-    const cell = worksheet.getCell(rowNumber, column);
-    cell.fill = solidFill(COLORS.total);
-    cell.font = { bold: true, color: { argb: COLORS.text } };
-    applyBorder(cell);
+function writeCompactSummary(
+  worksheet: Worksheet,
+  headerRow: number,
+  valueRow: number,
+  rateRow: number,
+  subtotalRows: number[],
+  totals: ExportTotals,
+  grandInvestment: number | null,
+): void {
+  worksheet.getCell(`B${headerRow}`).value = 'Inversión';
+  worksheet.getCell(`C${headerRow}`).value = 'Leads';
+  worksheet.getCell(`D${headerRow}`).value = 'Visitantes';
+  worksheet.getCell(`E${headerRow}`).value = 'Ventas Mkt Digital';
+  worksheet.getCell(`J${headerRow}`).value = 'Costo por venta (CAC)';
+
+  for (const column of ['B', 'C', 'D', 'E', 'J']) {
+    const cell = worksheet.getCell(`${column}${headerRow}`);
+    cell.font = {
+      name: 'Calibri',
+      size: 10,
+      bold: true,
+      color: { argb: COLORS.black },
+    };
+    cell.alignment = {
+      horizontal: 'center',
+      vertical: 'middle',
+      wrapText: true,
+    };
+  }
+  worksheet.getRow(headerRow).height = 30.75;
+
+  if (grandInvestment !== null) {
+    worksheet.getCell(`B${valueRow}`).value = grandInvestment;
   }
 
-  applyNumberFormats(worksheet, rowNumber);
-  worksheet.getRow(rowNumber).height = 22;
+  const subtotalFormula = (column: string): string => {
+    if (!subtotalRows.length) {
+      return '0';
+    }
+    return subtotalRows.map((row) => `${column}${row}`).join('+');
+  };
 
-  return rowNumber;
+  setFormulaCell(
+    worksheet,
+    `C${valueRow}`,
+    subtotalFormula('C'),
+    totals.leads,
+  );
+  setFormulaCell(
+    worksheet,
+    `D${valueRow}`,
+    subtotalFormula('D'),
+    totals.visitors,
+  );
+  setFormulaCell(
+    worksheet,
+    `E${valueRow}`,
+    `${subtotalFormula('E')}+${subtotalFormula('F')}`,
+    totals.salesDigital + totals.salesDigitalOrganic,
+  );
+  setFormulaCell(
+    worksheet,
+    `J${valueRow}`,
+    `IF(OR(B${valueRow}="",E${valueRow}=0),"",B${valueRow}/E${valueRow})`,
+    safeDivide(
+      grandInvestment,
+      totals.salesDigital + totals.salesDigitalOrganic,
+    ),
+  );
+
+  for (let column = 2; column <= 10; column += 1) {
+    const cell = worksheet.getCell(valueRow, column);
+    cell.fill = solidFill(COLORS.black);
+    cell.font = {
+      name: 'Calibri',
+      size: 10,
+      bold: true,
+      italic: true,
+      color: { argb: COLORS.white },
+    };
+    cell.alignment = {
+      horizontal: 'center',
+      vertical: 'middle',
+    };
+  }
+  worksheet.getRow(valueRow).height = 30.75;
+
+  worksheet.getCell(`B${valueRow}`).numFmt = CURRENCY_FORMAT;
+  worksheet.getCell(`C${valueRow}`).numFmt = INTEGER_FORMAT;
+  worksheet.getCell(`D${valueRow}`).numFmt = INTEGER_FORMAT;
+  worksheet.getCell(`E${valueRow}`).numFmt = INTEGER_FORMAT;
+  worksheet.getCell(`J${valueRow}`).numFmt = CURRENCY_FORMAT;
+
+  setFormulaCell(
+    worksheet,
+    `D${rateRow}`,
+    `IFERROR(D${valueRow}/C${valueRow},"")`,
+    safeDivide(totals.visitors, totals.leads),
+  );
+  setFormulaCell(
+    worksheet,
+    `E${rateRow}`,
+    `IFERROR(E${valueRow}/D${valueRow},"")`,
+    safeDivide(
+      totals.salesDigital + totals.salesDigitalOrganic,
+      totals.visitors,
+    ),
+  );
+  worksheet.getCell(`D${rateRow}`).numFmt = PERCENT_FORMAT;
+  worksheet.getCell(`E${rateRow}`).numFmt = PERCENT_FORMAT;
+  worksheet.getCell(`D${rateRow}`).alignment = { horizontal: 'center' };
+  worksheet.getCell(`E${rateRow}`).alignment = { horizontal: 'center' };
+}
+
+function writeCommercialSummary(
+  worksheet: Worksheet,
+  startRow: number,
+  summaryValueRow: number,
+  totals: ExportTotals,
+): void {
+  const totalRow = startRow;
+  const digitalRow = startRow + 1;
+  const otherRow = startRow + 2;
+  const checkRow = startRow + 3;
+
+  worksheet.getCell(`A${totalRow}`).value = 'Total de ventas nuevas';
+  worksheet.getCell(`B${totalRow}`).value = totals.salesTotal;
+  worksheet.getCell(`D${totalRow}`).value =
+    'GOAL: 50% del total de las venta vía Mkt Digital';
+
+  worksheet.getCell(`A${digitalRow}`).value = 'Ventas via Mkt Digital';
+  setFormulaCell(
+    worksheet,
+    `B${digitalRow}`,
+    `E${summaryValueRow}`,
+    totals.salesDigital + totals.salesDigitalOrganic,
+  );
+  setFormulaCell(
+    worksheet,
+    `C${digitalRow}`,
+    `IFERROR(B${digitalRow}/B${totalRow},"")`,
+    safeDivide(
+      totals.salesDigital + totals.salesDigitalOrganic,
+      totals.salesTotal,
+    ),
+  );
+  setFormulaCell(
+    worksheet,
+    `D${digitalRow}`,
+    `B${totalRow}*0.5`,
+    totals.salesTotal * 0.5,
+  );
+
+  worksheet.getCell(`A${otherRow}`).value =
+    'Ventas (Referidos, walk in, convenios)';
+  setFormulaCell(
+    worksheet,
+    `B${otherRow}`,
+    `B${totalRow}-B${digitalRow}`,
+    totals.salesTotal - totals.salesDigital - totals.salesDigitalOrganic,
+  );
+  setFormulaCell(
+    worksheet,
+    `C${otherRow}`,
+    `IFERROR(B${otherRow}/B${totalRow},"")`,
+    safeDivide(
+      totals.salesTotal - totals.salesDigital - totals.salesDigitalOrganic,
+      totals.salesTotal,
+    ),
+  );
+  setFormulaCell(
+    worksheet,
+    `D${otherRow}`,
+    `B${otherRow}`,
+    totals.salesTotal - totals.salesDigital - totals.salesDigitalOrganic,
+  );
+  setFormulaCell(
+    worksheet,
+    `D${checkRow}`,
+    `SUM(B${digitalRow}:B${otherRow})`,
+    totals.salesTotal,
+  );
+
+  worksheet.getCell(`B${totalRow}`).numFmt = INTEGER_FORMAT;
+  worksheet.getCell(`B${digitalRow}`).numFmt = INTEGER_FORMAT;
+  worksheet.getCell(`B${otherRow}`).numFmt = INTEGER_FORMAT;
+  worksheet.getCell(`C${digitalRow}`).numFmt = '0%';
+  worksheet.getCell(`C${otherRow}`).numFmt = '0%';
+  worksheet.getCell(`D${digitalRow}`).numFmt = INTEGER_FORMAT;
+  worksheet.getCell(`D${otherRow}`).numFmt = INTEGER_FORMAT;
+  worksheet.getCell(`D${checkRow}`).numFmt = INTEGER_FORMAT;
+
+  worksheet.getCell(`B${totalRow}`).font = { bold: true };
+  worksheet.getCell(`B${digitalRow}`).font = { bold: true };
+  worksheet.getCell(`D${totalRow}`).font = { bold: true };
+  worksheet.getCell(`D${digitalRow}`).font = { bold: true };
+  worksheet.getCell(`D${digitalRow}`).fill = solidFill(COLORS.yellow);
+}
+
+function styleBranchRow(
+  worksheet: Worksheet,
+  rowNumber: number,
+): void {
+  for (let column = 1; column <= 19; column += 1) {
+    const cell = worksheet.getCell(rowNumber, column);
+    cell.font = {
+      name: 'Calibri',
+      size: 11,
+      color: { argb: COLORS.black },
+    };
+    cell.alignment = {
+      vertical: 'middle',
+      horizontal: column === 1 ? 'left' : 'center',
+      wrapText: column === 1,
+    };
+  }
+
+  worksheet.getCell(`A${rowNumber}`).border = {
+    left: mediumBorder(),
+  } as any;
+  worksheet.getCell(`S${rowNumber}`).border = {
+    right: mediumBorder(),
+  } as any;
+
+  applyNumberFormats(worksheet, rowNumber);
+}
+
+function styleSectionBoundaries(
+  worksheet: Worksheet,
+  firstRow: number,
+  lastRow: number,
+): void {
+  for (let column = 1; column <= 19; column += 1) {
+    const firstCell = worksheet.getCell(firstRow, column);
+    firstCell.border = {
+      ...firstCell.border,
+      top: mediumBorder(),
+      ...(column === 1 ? { left: mediumBorder() } : {}),
+      ...(column === 19 ? { right: mediumBorder() } : {}),
+    } as any;
+
+    const lastCell = worksheet.getCell(lastRow, column);
+    lastCell.border = {
+      ...lastCell.border,
+      bottom: mediumBorder(),
+      ...(column === 1 ? { left: mediumBorder() } : {}),
+      ...(column === 19 ? { right: mediumBorder() } : {}),
+    } as any;
+  }
+}
+
+function styleSubtotalRow(
+  worksheet: Worksheet,
+  rowNumber: number,
+): void {
+  for (let column = 1; column <= 19; column += 1) {
+    const cell = worksheet.getCell(rowNumber, column);
+    cell.font = {
+      name: 'Calibri',
+      size: 11,
+      bold: true,
+      italic: true,
+      color: { argb: COLORS.black },
+    };
+    cell.alignment = {
+      vertical: 'middle',
+      horizontal: column === 1 ? 'left' : 'center',
+      wrapText: true,
+    };
+  }
+
+  worksheet.getCell(`A${rowNumber}`).border = {
+    left: mediumBorder(),
+  } as any;
+
+  applyNumberFormats(worksheet, rowNumber);
+  worksheet.getRow(rowNumber).height = 27;
 }
 
 function setRateAndCostFormulas(
@@ -577,127 +753,81 @@ function setRateAndCostFormulas(
   );
 }
 
-function writeSummaryBlock(
+function applyConditionalFormats(
   worksheet: Worksheet,
-  startRow: number,
-  grandTotalRow: number,
-  totals: ExportTotals,
-  grandInvestment: number | null,
+  ranges: DataRange[],
 ): void {
-  worksheet.mergeCells(`A${startRow}:F${startRow}`);
-  const title = worksheet.getCell(`A${startRow}`);
-  title.value = 'RESUMEN COMERCIAL';
-  title.font = { bold: true, color: { argb: COLORS.white } };
-  title.fill = solidFill(COLORS.dark);
+  for (const range of ranges) {
+    addCellRule(
+      worksheet,
+      `N${range.firstRow}:N${range.lastRow}`,
+      'greaterThan',
+      0.15,
+      COLORS.greenFill,
+      COLORS.greenText,
+    );
+    addCellRule(
+      worksheet,
+      `O${range.firstRow}:O${range.lastRow}`,
+      'greaterThan',
+      0.30,
+      COLORS.greenFill,
+      COLORS.greenText,
+    );
 
-  const rows = {
-    total: startRow + 1,
-    digital: startRow + 2,
-    other: startRow + 3,
-    investment: startRow + 4,
-  };
-
-  worksheet.getCell(`A${rows.total}`).value = 'Total de ventas nuevas';
-  setFormulaCell(
-    worksheet,
-    `B${rows.total}`,
-    `I${grandTotalRow}`,
-    totals.salesTotal,
-  );
-
-  worksheet.getCell(`A${rows.digital}`).value = 'Ventas vía Mkt Digital';
-  setFormulaCell(
-    worksheet,
-    `B${rows.digital}`,
-    `E${grandTotalRow}+F${grandTotalRow}`,
-    totals.salesDigital + totals.salesDigitalOrganic,
-  );
-  setFormulaCell(
-    worksheet,
-    `C${rows.digital}`,
-    `IFERROR(B${rows.digital}/B${rows.total},"")`,
-    safeDivide(
-      totals.salesDigital + totals.salesDigitalOrganic,
-      totals.salesTotal,
-    ),
-  );
-
-  worksheet.getCell(`A${rows.other}`).value = 'Ventas otros canales';
-  setFormulaCell(
-    worksheet,
-    `B${rows.other}`,
-    `B${rows.total}-B${rows.digital}`,
-    totals.salesTotal - totals.salesDigital - totals.salesDigitalOrganic,
-  );
-  setFormulaCell(
-    worksheet,
-    `C${rows.other}`,
-    `IFERROR(B${rows.other}/B${rows.total},"")`,
-    safeDivide(
-      totals.salesTotal - totals.salesDigital - totals.salesDigitalOrganic,
-      totals.salesTotal,
-    ),
-  );
-
-  worksheet.getCell(`A${rows.investment}`).value = 'Inversión';
-  worksheet.getCell(`B${rows.investment}`).value = grandInvestment;
-
-  worksheet.getCell(`D${rows.total}`).value = 'Meta digital (50%)';
-  setFormulaCell(
-    worksheet,
-    `E${rows.total}`,
-    `B${rows.total}*0.5`,
-    totals.salesTotal * 0.5,
-  );
-  worksheet.getCell(`D${rows.digital}`).value = 'Brecha vs meta';
-  setFormulaCell(
-    worksheet,
-    `E${rows.digital}`,
-    `B${rows.digital}-E${rows.total}`,
-    (
-      totals.salesDigital
-      + totals.salesDigitalOrganic
-      - (totals.salesTotal * 0.5)
-    ),
-  );
-
-  for (let row = rows.total; row <= rows.investment; row += 1) {
-    for (let column = 1; column <= 6; column += 1) {
-      const cell = worksheet.getCell(row, column);
-      applyBorder(cell);
-    }
+    addCellRule(
+      worksheet,
+      `P${range.firstRow}:P${range.lastRow}`,
+      'lessThan',
+      0.015,
+      COLORS.redFill,
+      COLORS.redText,
+      true,
+    );
+    addCellRule(
+      worksheet,
+      `P${range.firstRow}:P${range.lastRow}`,
+      'lessThan',
+      0.032,
+      COLORS.amberFill,
+      COLORS.amberText,
+      true,
+    );
+    addCellRule(
+      worksheet,
+      `P${range.firstRow}:P${range.lastRow}`,
+      'greaterThan',
+      0.033,
+      COLORS.greenFill,
+      COLORS.greenText,
+    );
   }
-
-  worksheet.getCell(`B${rows.investment}`).numFmt = '$#,##0.00';
-  worksheet.getCell(`C${rows.digital}`).numFmt = '0.0%';
-  worksheet.getCell(`C${rows.other}`).numFmt = '0.0%';
 }
 
-function styleDataRow(
+function addCellRule(
   worksheet: Worksheet,
-  rowNumber: number,
-  subtotal: boolean,
+  ref: string,
+  operator: 'greaterThan' | 'lessThan',
+  threshold: number,
+  fillColor: string,
+  fontColor: string,
+  stopIfTrue = false,
 ): void {
-  for (let column = 1; column <= 19; column += 1) {
-    const cell = worksheet.getCell(rowNumber, column);
-    applyBorder(cell);
-    cell.alignment = {
-      vertical: 'middle',
-      horizontal: column === 1 ? 'left' : 'right',
-    };
-
-    if (subtotal) {
-      cell.fill = solidFill(COLORS.subtotal);
-      cell.font = { bold: true, color: { argb: COLORS.text } };
-    }
-  }
-
-  worksheet.getCell(`A${rowNumber}`).font = {
-    bold: true,
-    color: { argb: COLORS.text },
-  };
-
-  applyNumberFormats(worksheet, rowNumber);
+  worksheet.addConditionalFormatting({
+    ref,
+    rules: [
+      {
+        type: 'cellIs',
+        operator,
+        formulae: [threshold],
+        stopIfTrue,
+        style: {
+          font: { color: { argb: fontColor } },
+          fill: solidFill(fillColor),
+        },
+      } as any,
+    ],
+  });
 }
 
 function applyNumberFormats(
@@ -705,13 +835,13 @@ function applyNumberFormats(
   rowNumber: number,
 ): void {
   for (const column of CURRENCY_COLUMNS) {
-    worksheet.getCell(`${column}${rowNumber}`).numFmt = '$#,##0.00';
+    worksheet.getCell(`${column}${rowNumber}`).numFmt = CURRENCY_FORMAT;
   }
   for (const column of PERCENT_COLUMNS) {
-    worksheet.getCell(`${column}${rowNumber}`).numFmt = '0.0%';
+    worksheet.getCell(`${column}${rowNumber}`).numFmt = PERCENT_FORMAT;
   }
   for (const column of INTEGER_COLUMNS) {
-    worksheet.getCell(`${column}${rowNumber}`).numFmt = '#,##0';
+    worksheet.getCell(`${column}${rowNumber}`).numFmt = INTEGER_FORMAT;
   }
 }
 
@@ -790,36 +920,6 @@ function resolveGrandInvestment(
   return null;
 }
 
-function hasBranchInvestment(options: FunnelBranchExportOptions): boolean {
-  if (
-    !options.investmentDashboard
-    || options.investmentDashboard.month !== options.month
-  ) {
-    return false;
-  }
-
-  return options.investmentDashboard.branches.some(
-    (branch) => branch.investment !== null && branch.investment !== undefined,
-  );
-}
-
-function resolveRegionLabel(
-  branches: MarketingSalesFunnelBranch[],
-  scopeOptions: MarketingSalesFunnelScopeOption[],
-  sectionIndex: number,
-): string {
-  for (const branch of branches) {
-    const option = scopeOptions.find(
-      (candidate) => candidate.sucursal_id === branch.sucursal_id,
-    );
-    if (option?.region) {
-      return option.region;
-    }
-  }
-
-  return `Región ${sectionIndex + 1}`;
-}
-
 function sumBranchMetric(
   branches: MarketingSalesFunnelBranch[],
   selector: (branch: MarketingSalesFunnelBranch) => number,
@@ -861,12 +961,10 @@ function solidFill(argb: string): any {
   };
 }
 
-function applyBorder(cell: any): void {
-  cell.border = {
-    top: { style: 'thin', color: { argb: COLORS.border } },
-    left: { style: 'thin', color: { argb: COLORS.border } },
-    bottom: { style: 'thin', color: { argb: COLORS.border } },
-    right: { style: 'thin', color: { argb: COLORS.border } },
+function mediumBorder(): any {
+  return {
+    style: 'medium',
+    color: { argb: COLORS.black },
   };
 }
 
@@ -922,10 +1020,6 @@ function resolveScopeLabel(options: FunnelBranchExportOptions): string {
 }
 
 function resolveMonthSheetName(month: string): string {
-  return formatMonthLabel(month).slice(0, 31);
-}
-
-function formatMonthLabel(month: string): string {
   const [rawYear, rawMonth] = month.split('-');
   const monthNumber = Number(rawMonth);
   const monthNames = [
@@ -944,5 +1038,6 @@ function formatMonthLabel(month: string): string {
   ];
 
   const monthName = monthNames[monthNumber - 1] ?? 'Funnel';
-  return rawYear ? `${monthName} ${rawYear}` : monthName;
+  const suffix = rawYear ? ` ${rawYear}` : '';
+  return `${monthName}${suffix}`.slice(0, 31);
 }
