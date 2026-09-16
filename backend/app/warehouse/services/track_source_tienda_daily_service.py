@@ -183,6 +183,9 @@ def _is_tienda_candidate(row: VentaTotalSnapshotRowORM) -> bool:
     if clave_producto == "membresia":
         return False
 
+    if clave_producto == "locker":
+        return True
+
     excluded_terms = (
         "membresia",
         "mensual",
