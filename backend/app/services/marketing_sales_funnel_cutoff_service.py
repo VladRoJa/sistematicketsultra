@@ -366,7 +366,8 @@ def _load_iventas_data_for_cutoff(
             MarketingIventasContactORM.sucursal_id,
             MarketingIventasContactORM.phone_mx10,
             MarketingIventasContactORM.first_message_date_local,
-            meta_tag_exists.label("has_meta"),
+            MarketingIventasContactORM.is_from_ads,
+            meta_tag_exists.label("legacy_has_meta"),
         )
         .filter(
             MarketingIventasContactORM.sync_run_id.in_(run_ids),
@@ -388,12 +389,19 @@ def _load_iventas_data_for_cutoff(
         ):
             continue
         branch_id = int(contact.sucursal_id)
+        has_meta = (
+            contact.is_from_ads is True
+            or (
+                contact.is_from_ads is None
+                and bool(contact.legacy_has_meta)
+            )
+        )
         evidence[(branch_id, phone)].append(
             _IventasEvidence(
                 branch_id=branch_id,
                 phone=phone,
                 interaction_date=interaction_date,
-                has_meta_ad=bool(contact.has_meta),
+                has_meta_ad=has_meta,
             )
         )
 
