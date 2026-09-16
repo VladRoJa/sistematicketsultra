@@ -2,6 +2,10 @@
 
 La inversión se agrega primero por campaña. La evidencia iVentas sólo
 resuelve la sucursal de cada campaña y nunca participa en la suma de spend.
+
+Para snapshots nuevos, adsSourceId es la evidencia autoritativa del anuncio.
+Los tags ad_fb_* se conservan como fallback para snapshots históricos que no
+persistían isFromAds/adsSourceId.
 """
 
 from __future__ import annotations
@@ -11,7 +15,7 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Any, Iterable, Mapping
 
-from sqlalchemy import select
+from sqlalchemy import and_, case, or_, select
 
 from app.extensions import db
 from app.models import (
@@ -166,17 +170,34 @@ def build_iventas_campaign_evidence_statement(
     if not normalized_ad_ids:
         raise ValueError("meta_ad_ids no puede estar vacío.")
 
+    resolved_ad_id = case(
+        (
+            MarketingIventasContactORM.is_from_ads.is_(True),
+            MarketingIventasContactORM.ads_source_id,
+        ),
+        else_=MarketingIventasContactTagORM.meta_ad_id,
+    )
+    provider_evidence = and_(
+        MarketingIventasContactORM.is_from_ads.is_(True),
+        MarketingIventasContactORM.ads_source_id.is_not(None),
+    )
+    legacy_evidence = and_(
+        MarketingIventasContactORM.is_from_ads.is_(None),
+        MarketingIventasContactTagORM.tag_kind == TAG_KIND_META_AD,
+        MarketingIventasContactTagORM.meta_ad_id.is_not(None),
+    )
+
     return (
         select(
-            MarketingIventasContactTagORM.meta_ad_id,
+            resolved_ad_id.label("meta_ad_id"),
             MarketingIventasContactORM.sucursal_id,
             MarketingIventasContactORM.id.label(
                 "iventas_contact_row_id"
             ),
         )
-        .select_from(MarketingIventasContactTagORM)
-        .join(
-            MarketingIventasContactORM,
+        .select_from(MarketingIventasContactORM)
+        .outerjoin(
+            MarketingIventasContactTagORM,
             (
                 MarketingIventasContactORM.id
                 == MarketingIventasContactTagORM.iventas_contact_row_id
@@ -187,20 +208,15 @@ def build_iventas_campaign_evidence_statement(
             ),
         )
         .where(
-            MarketingIventasContactTagORM.sync_run_id
-            == iventas_sync_run_id,
             MarketingIventasContactORM.sync_run_id
             == iventas_sync_run_id,
             MarketingIventasContactORM.first_message_at_utc.is_not(None),
-            MarketingIventasContactTagORM.tag_kind == TAG_KIND_META_AD,
-            MarketingIventasContactTagORM.meta_ad_id.is_not(None),
-            MarketingIventasContactTagORM.meta_ad_id.in_(
-                normalized_ad_ids
-            ),
+            or_(provider_evidence, legacy_evidence),
+            resolved_ad_id.in_(normalized_ad_ids),
         )
         .distinct()
         .order_by(
-            MarketingIventasContactTagORM.meta_ad_id.asc(),
+            resolved_ad_id.asc(),
             MarketingIventasContactORM.sucursal_id.asc(),
         )
     )
