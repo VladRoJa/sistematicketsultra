@@ -1319,7 +1319,11 @@ private puedeVerMarketingSalesFunnelPorRol(): boolean {
   const rol = String(user?.rol ?? user?.role ?? '').trim().toUpperCase();
   const username = String(user?.username ?? '').trim().toUpperCase();
 
-  return username === 'ADMICORP' || rol === 'LECTOR_GLOBAL';
+  return (
+    username === 'ADMICORP'
+    || rol === 'LECTOR_GLOBAL'
+    || rol === 'GERENTE'
+  );
 }
 
 private puedeVerMarketingConversionPorRol(): boolean {
