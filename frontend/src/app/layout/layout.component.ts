@@ -1323,6 +1323,7 @@ private puedeVerMarketingSalesFunnelPorRol(): boolean {
     username === 'ADMICORP'
     || rol === 'LECTOR_GLOBAL'
     || rol === 'GERENTE'
+    || rol === 'GERENTE_REGIONAL'
   );
 }
 
