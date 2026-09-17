@@ -53,6 +53,8 @@ def get_track_tienda_composition_endpoint():
             include_operations=_parse_bool(
                 request.args.get("include_operations")
             ),
+            familia=request.args.get("familia"),
+            producto_canonico=request.args.get("producto_canonico"),
             clave_producto=request.args.get("clave_producto"),
             descripcion=request.args.get("descripcion"),
             sucursal_canon=request.args.get("sucursal_canon"),

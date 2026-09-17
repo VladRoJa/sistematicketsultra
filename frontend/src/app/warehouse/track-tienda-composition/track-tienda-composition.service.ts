@@ -24,13 +24,13 @@ export interface TrackTiendaSummary {
   cantidad_total: number;
   operaciones: number;
   ticket_promedio: number;
-  top_clave_producto: string | null;
+  top_familia: string | null;
   top_producto: string | null;
   top_sucursal: string | null;
 }
 
 export interface TrackTiendaCompositionItem {
-  clave_producto: string;
+  familia: string;
   total: number;
   cantidad: number;
   operaciones: number;
@@ -38,8 +38,15 @@ export interface TrackTiendaCompositionItem {
   ticket_promedio: number;
 }
 
-export interface TrackTiendaProductItem extends TrackTiendaCompositionItem {
-  descripcion: string;
+export interface TrackTiendaProductItem {
+  familia: string;
+  producto_canonico: string;
+  claves_producto: string[];
+  total: number;
+  cantidad: number;
+  operaciones: number;
+  participacion_pct: number;
+  ticket_promedio: number;
 }
 
 export interface TrackTiendaBranchItem {
@@ -67,6 +74,8 @@ export interface TrackTiendaOperation {
   folio: string;
   clave: string;
   clave_producto: string;
+  familia: string;
+  producto_canonico: string;
   descripcion: string;
   cantidad: number;
   precio_unitario: number;
@@ -79,6 +88,8 @@ export interface TrackTiendaOperation {
 }
 
 export interface TrackTiendaDetailFilter {
+  familia: string | null;
+  producto_canonico: string | null;
   clave_producto: string | null;
   descripcion: string | null;
   sucursal_canon: string | null;
@@ -107,6 +118,8 @@ export interface TrackTiendaCompositionRequest {
   trackDate: string;
   generationMode: TrackTiendaGenerationMode;
   includeOperations?: boolean;
+  familia?: string | null;
+  productoCanonico?: string | null;
   claveProducto?: string | null;
   descripcion?: string | null;
   sucursalCanon?: string | null;
@@ -130,6 +143,14 @@ export class TrackTiendaCompositionService {
 
     if (request.includeOperations) {
       params = params.set('include_operations', 'true');
+    }
+
+    if (request.familia) {
+      params = params.set('familia', request.familia);
+    }
+
+    if (request.productoCanonico) {
+      params = params.set('producto_canonico', request.productoCanonico);
     }
 
     if (request.claveProducto) {
