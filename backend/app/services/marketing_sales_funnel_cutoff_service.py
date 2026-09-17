@@ -625,6 +625,8 @@ def build_marketing_sales_funnel_at_cutoff(
         else:
             stats.sales_btl += 1
             stats.revenue_btl += sale.revenue
+            stats.btl_origin_counts[origin] += 1
+            stats.btl_origin_revenue[origin] += sale.revenue
 
         stats.origin_counts[origin] += 1
         stats.origin_revenue[origin] += sale.revenue

@@ -261,3 +261,604 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+
+/* === FUNNEL THREE STAGE START === */
+
+/*
+ * Historia principal:
+ * Leads -> Visitas -> Venta Nueva
+ */
+
+/* Los ribbons anteriores pertenecían al storyboard viejo. */
+.flow-board__connectors {
+  display: none;
+}
+
+.flow-board {
+  display: grid;
+  grid-template-columns:
+    minmax(180px, 0.72fr)
+    minmax(390px, 1.45fr)
+    minmax(480px, 1.75fr);
+  grid-template-rows: auto auto;
+  align-items: stretch;
+  gap: 28px 34px;
+  min-height: 0;
+  padding: 54px 24px 26px;
+  overflow: visible;
+}
+
+/* =========================
+   ETAPA 1 · LEADS
+   ========================= */
+
+.flow-board > .flow-card--leads {
+  grid-column: 1;
+  grid-row: 1;
+  min-height: 360px;
+  margin: 0;
+  translate: 0 0;
+  align-self: stretch;
+}
+
+.flow-card--leads {
+  padding: 24px 18px;
+}
+
+.flow-card--leads .flow-card__label {
+  font-size: 14px;
+}
+
+.flow-card--leads > strong {
+  font-size: 38px;
+}
+
+.flow-card--leads > small {
+  min-height: 0;
+  font-size: 8px;
+}
+
+/* =========================
+   ETAPA 2 · VISITAS
+   ========================= */
+
+.flow-card--visits-hierarchy {
+  grid-column: 2;
+  grid-row: 1;
+  display: grid;
+  min-width: 0;
+  min-height: 360px;
+  padding: 0;
+  grid-template-rows: 118px 1fr;
+  gap: 0;
+  overflow: hidden;
+  cursor: default;
+}
+
+.flow-card--visits-hierarchy:hover,
+.flow-card--visits-hierarchy:focus-within {
+  transform: none;
+  box-shadow: 0 8px 20px rgba(34, 44, 58, 0.05);
+}
+
+.flow-card__visits-total {
+  display: flex;
+  width: 100%;
+  min-height: 0;
+  padding: 14px 16px 12px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  border: 0;
+  border-bottom: 1px solid #e6ebf0;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 247, 243, 0.96),
+    rgba(255, 255, 255, 0.98)
+  );
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.flow-card__visits-total > mat-icon {
+  width: 22px;
+  height: 22px;
+  color: var(--trace-orange);
+  font-size: 22px;
+}
+
+.flow-card__visits-total > strong {
+  color: var(--trace-navy);
+  font-size: 36px;
+  font-weight: 950;
+  line-height: 1;
+  letter-spacing: -0.045em;
+}
+
+.flow-card__visits-total > small {
+  color: var(--trace-muted);
+  font-size: 7px;
+}
+
+.flow-card__visit-branches {
+  display: grid;
+  min-height: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.flow-card__visit-branch {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: 96px 1fr;
+}
+
+.flow-card__visit-branch + .flow-card__visit-branch {
+  border-left: 1px solid #e5eaf0;
+}
+
+.flow-card__visit-branch--gray {
+  background: linear-gradient(
+    180deg,
+    rgba(245, 248, 251, 0.94),
+    #fff
+  );
+}
+
+.flow-card__visit-branch-main {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  padding: 9px 8px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border: 0;
+  border-bottom: 1px solid #e8edf2;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.flow-card__visit-branch-main > mat-icon {
+  width: 18px;
+  height: 18px;
+  color: var(--trace-orange);
+  font-size: 18px;
+}
+
+.flow-card__visit-branch--gray
+.flow-card__visit-branch-main > mat-icon {
+  color: var(--trace-blue);
+}
+
+.flow-card__visit-branch-main > span {
+  color: #33455c;
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.flow-card__visit-branch-main > strong {
+  color: var(--trace-navy);
+  font-size: 27px;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.flow-card__visit-branch-main > small {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--trace-muted);
+  font-size: 6px;
+}
+
+.flow-card__visit-results {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.flow-card__visit-results .flow-card__visit-result {
+  padding: 10px 5px;
+}
+
+.flow-card__visit-results
+.flow-card__visit-result + .flow-card__visit-result {
+  border-left: 1px solid #e8edf2;
+}
+
+.flow-card__visit-results
+.flow-card__visit-result strong {
+  font-size: 22px;
+}
+
+/* =========================
+   ETAPA 3 · VENTA NUEVA
+   ========================= */
+
+.flow-card--sales-hierarchy {
+  grid-column: 3;
+  grid-row: 1;
+  display: grid;
+  min-width: 0;
+  min-height: 360px;
+  padding: 0;
+  grid-template-rows: 1fr auto;
+  gap: 0;
+  overflow: hidden;
+  cursor: default;
+}
+
+.flow-card--sales-hierarchy:hover,
+.flow-card--sales-hierarchy:focus-within {
+  transform: none;
+}
+
+.flow-card__sales-total {
+  display: flex;
+  width: 100%;
+  min-height: 0;
+  padding: 24px 18px 20px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 0;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.flow-card__sales-total > mat-icon {
+  width: 34px;
+  height: 34px;
+  color: var(--trace-orange);
+  font-size: 34px;
+}
+
+.flow-card__sales-total .flow-card__label {
+  font-size: 18px;
+}
+
+.flow-card__sales-total > strong {
+  color: var(--trace-navy);
+  font-size: 48px;
+  font-weight: 950;
+  line-height: 1;
+  letter-spacing: -0.05em;
+}
+
+.flow-card__sales-total > small {
+  color: var(--trace-muted);
+  font-size: 9px;
+}
+
+.flow-card__sales-channels {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  border-top: 1px solid #d9e0e8;
+  background: #f8fafc;
+}
+
+.flow-card__sales-channel {
+  display: flex;
+  min-width: 0;
+  min-height: 82px;
+  padding: 10px 7px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
+}
+
+.flow-card__sales-channel + .flow-card__sales-channel {
+  border-left: 1px solid #d9e0e8;
+}
+
+.flow-card__sales-channel > span {
+  color: #394b63;
+  font-size: 8px;
+  font-weight: 900;
+  line-height: 1.15;
+}
+
+.flow-card__sales-channel > strong {
+  color: var(--trace-navy);
+  font-size: 18px;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.flow-card__sales-channel--total {
+  background: #edf2f8;
+}
+
+.flow-card__sales-channel--total > strong {
+  font-size: 21px;
+}
+
+/* =========================
+   FLUJO VISUAL
+   ========================= */
+
+.flow-board > .flow-card--leads::after,
+.flow-card--visits-hierarchy::after {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  right: -35px;
+  width: 35px;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    rgba(240, 82, 45, 0.45),
+    rgba(240, 82, 45, 0.18)
+  );
+  content: '';
+  pointer-events: none;
+}
+
+.flow-board > .flow-card--leads::before,
+.flow-card--visits-hierarchy::before {
+  position: absolute;
+  z-index: 2;
+  top: calc(50% - 5px);
+  right: -35px;
+  border-top: 6px solid transparent;
+  border-bottom: 6px solid transparent;
+  border-left: 8px solid rgba(240, 82, 45, 0.46);
+  content: '';
+  transform: translateX(35px);
+  pointer-events: none;
+}
+
+/* =========================
+   ORIGEN COMO DETALLE
+   ========================= */
+
+.flow-origin-stack {
+  grid-column: 2 / 4;
+  grid-row: 2;
+  width: 100%;
+  min-height: 0;
+  align-self: start;
+}
+
+/* =========================
+   RESPONSIVE
+   ========================= */
+
+@media (max-width: 1200px) {
+  .flow-board {
+    grid-template-columns: 1fr;
+  }
+
+  .flow-board > .flow-card--leads,
+  .flow-card--visits-hierarchy,
+  .flow-card--sales-hierarchy,
+  .flow-origin-stack {
+    grid-column: 1;
+    grid-row: auto;
+    width: 100%;
+    min-height: auto;
+  }
+
+  .flow-board > .flow-card--leads::after,
+  .flow-board > .flow-card--leads::before,
+  .flow-card--visits-hierarchy::after,
+  .flow-card--visits-hierarchy::before {
+    display: none;
+  }
+}
+
+@media (max-width: 680px) {
+  .flow-card__visit-branches,
+  .flow-card__sales-channels {
+    grid-template-columns: 1fr;
+  }
+
+  .flow-card__visit-branch + .flow-card__visit-branch,
+  .flow-card__sales-channel + .flow-card__sales-channel {
+    border-top: 1px solid #e5eaf0;
+    border-left: 0;
+  }
+}
+
+/* === FUNNEL THREE STAGE END === */
+
+/* === FUNNEL LEADS VISITS FLOW START === */
+
+/*
+ * Acerca físicamente la segunda etapa a Leads.
+ * Nada de translate: la posición nace del grid.
+ */
+.flow-board {
+  grid-template-columns:
+    180px
+    640px
+    minmax(480px, 1fr);
+  column-gap: 28px;
+}
+
+.flow-board > .flow-card--leads {
+  justify-self: center;
+}
+
+.flow-card--visits-hierarchy {
+  width: 100%;
+  max-width: 640px;
+  justify-self: start;
+  translate: 0 0;
+}
+
+/*
+ * Ribbon real Leads -> Visitas.
+ * La primera card deja ~10px dentro de su columna;
+ * 10px + 28px de gap = 38px hasta Visitas.
+ */
+.flow-board > .flow-card--leads::after {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  right: -148px;
+  width: 148px;
+  height: 30px;
+  border: 1px solid rgba(240, 82, 45, 0.16);
+  border-radius: 999px 0 0 999px;
+  background: linear-gradient(
+    90deg,
+    rgba(240, 82, 45, 0.18) 0%,
+    rgba(255, 155, 121, 0.24) 72%,
+    rgba(255, 155, 121, 0.34) 100%
+  );
+  clip-path: polygon(
+    0 0,
+    84% 0,
+    100% 50%,
+    84% 100%,
+    0 100%
+  );
+  content: '';
+  transform: translateY(-50%);
+  pointer-events: none;
+  box-shadow: 0 10px 22px rgba(240, 82, 45, 0.08);
+}
+
+.flow-board > .flow-card--leads::before {
+  display: none;
+}
+
+/* === FUNNEL LEADS VISITS FLOW END === */
+
+/* === FUNNEL GRID GAP FIX START === */
+
+.flow-board {
+  justify-content: start;
+}
+
+/* Ahora el espacio real entre Leads y Visitas es el column-gap. */
+.flow-board > .flow-card--leads::after {
+  right: -29px;
+  width: 29px;
+  height: 30px;
+}
+
+/* === FUNNEL GRID GAP FIX END === */
+
+/* === FUNNEL LEADS CARD ONLY START === */
+
+.flow-board > .flow-card--leads {
+  width: 220px;
+  min-width: 220px;
+  max-width: 220px;
+
+  height: 210px;
+  min-height: 210px;
+
+  box-sizing: border-box;
+  padding: 18px 16px;
+
+  justify-self: center;
+  align-self: center;
+
+  gap: 5px;
+}
+
+.flow-card--leads .flow-card__label {
+  font-size: 14px;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.flow-card--leads > strong {
+  font-size: 38px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.flow-card--leads > small {
+  max-width: 175px;
+  min-height: 0;
+  font-size: 8px;
+  line-height: 1.25;
+}
+
+/* === FUNNEL LEADS CARD ONLY END === */
+
+/* === FUNNEL SALES HEADER REMOVED START === */
+
+.flow-card--sales-hierarchy {
+  grid-template-rows: 1fr;
+  min-height: auto;
+}
+
+/* === FUNNEL SALES HEADER REMOVED END === */
+
+/* === FUNNEL VISITS WIDTH TUNE START === */
+
+.flow-card--visits-hierarchy {
+  width: 400px;
+  min-width: 400px;
+  max-width: 400px;
+  justify-self: start;
+}
+
+/* === FUNNEL VISITS WIDTH TUNE END === */
+
+/* === FUNNEL ORIGIN POSITION START === */
+
+.flow-origin-stack {
+  grid-column: 3;
+  grid-row: 1;
+
+  width: 100%;
+  max-width: 100%;
+
+  align-self: center;
+  justify-self: stretch;
+
+  margin: 0;
+}
+
+/* === FUNNEL ORIGIN POSITION END === */
+
+/* === FUNNEL GRID GEOMETRY FIX START === */
+
+.flow-board {
+  grid-template-columns:
+    220px
+    400px
+    minmax(480px, 1fr);
+
+  column-gap: 28px;
+  justify-content: start;
+}
+
+/* Visitas ocupa exactamente su columna real. */
+.flow-card--visits-hierarchy {
+  width: 400px;
+  min-width: 400px;
+  max-width: 400px;
+  translate: 0 0;
+}
+
+/* === FUNNEL GRID GEOMETRY FIX END === */
+
+/* === FUNNEL ORIGIN COMPACT WIDTH START === */
+
+.flow-origin-stack {
+  width: 420px;
+  min-width: 420px;
+  max-width: 420px;
+  justify-self: center;
+}
+
+/* === FUNNEL ORIGIN COMPACT WIDTH END === */

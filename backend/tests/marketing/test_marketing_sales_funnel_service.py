@@ -375,3 +375,30 @@ def test_drilldown_pagination_rejects_invalid_ranges():
 
     with pytest.raises(MarketingSalesFunnelDetailValidationError):
         _normalize_pagination("1", "101")
+
+
+def test_btl_origin_breakdown_sums_to_sales_btl():
+    stats = marketing_sales_funnel_service._BranchStats()
+
+    stats.sales_btl = 811
+
+    stats.btl_origin_counts[
+        marketing_sales_funnel_service.ORIGIN_REFERRAL
+    ] = 459
+    stats.btl_origin_counts[
+        marketing_sales_funnel_service.ORIGIN_PLAZA
+    ] = 200
+    stats.btl_origin_counts[
+        marketing_sales_funnel_service.ORIGIN_PROXIMITY
+    ] = 97
+    stats.btl_origin_counts[
+        marketing_sales_funnel_service.ORIGIN_OFFLINE
+    ] = 55
+
+    payload = marketing_sales_funnel_service._serialize_stats(stats)
+
+    assert payload["sales_btl"] == 811
+    assert sum(
+        row["sales"]
+        for row in payload["btl_origin_breakdown"]
+    ) == payload["sales_btl"]

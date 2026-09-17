@@ -35,9 +35,42 @@ interface FallbackOriginView extends MarketingSalesOriginBreakdown {
   icon: string;
 }
 
+interface SaleCompositionChildView {
+  label: string;
+  value: string;
+}
+
+interface SaleCompositionView {
+  total: string;
+  digitalTotal: string;
+  digitalChildren: SaleCompositionChildView[];
+  webTotal: string;
+  btlTotal: string;
+  btlOrigins: FallbackOriginView[];
+}
 interface ConversionKpiView {
   label: string;
   value: string;
+}
+
+interface VisitBranchView {
+  key: 'iventas' | 'untraced';
+  label: string;
+  value: string;
+  metric: string;
+  icon: string;
+  tone: 'orange' | 'gray';
+  bought: string;
+  boughtMetric: string;
+  notBought: string;
+  notBoughtMetric: string;
+}
+
+interface SaleChannelView {
+  key: 'digital' | 'organic' | 'web' | 'btl' | 'total';
+  label: string;
+  value: string;
+  metric: string;
 }
 
 @Component({
@@ -82,6 +115,54 @@ export class MarketingSalesFunnelStoryComponent {
     );
   }
 
+  get visitsTotalNode(): FunnelNodeView | null {
+    const summary = this.summary;
+    if (!summary) return null;
+
+    return this.createNode(
+      'Visitas',
+      summary.visits_total,
+      'Universo total de visitas identificadas en Venta Total',
+      'visits_total',
+      'storefront',
+      'orange',
+    );
+  }
+
+  get visitBranches(): VisitBranchView[] {
+    const summary = this.summary;
+    if (!summary) {
+      return [];
+    }
+
+    return [
+      {
+        key: 'iventas',
+        label: 'iVentas',
+        value: this.formatInteger(summary.visits_iventas),
+        metric: 'visits_iventas',
+        icon: 'smartphone',
+        tone: 'orange',
+        bought: this.formatInteger(summary.visits_iventas_bought),
+        boughtMetric: 'visits_iventas_bought',
+        notBought: this.formatInteger(summary.visits_iventas_not_bought),
+        notBoughtMetric: 'visits_iventas_not_bought',
+      },
+      {
+        key: 'untraced',
+        label: 'Sin trazabilidad',
+        value: this.formatInteger(summary.visits_not_iventas),
+        metric: 'visits_not_iventas',
+        icon: 'link_off',
+        tone: 'gray',
+        bought: this.formatInteger(summary.visits_not_iventas_bought),
+        boughtMetric: 'visits_not_iventas_bought',
+        notBought: this.formatInteger(summary.visits_not_iventas_not_bought),
+        notBoughtMetric: 'visits_not_iventas_not_bought',
+      },
+    ];
+  }
+
   get visitsNode(): FunnelNodeView | null {
     const summary = this.summary;
     if (!summary) return null;
@@ -110,6 +191,45 @@ export class MarketingSalesFunnelStoryComponent {
     );
   }
 
+  get saleChannelBreakdown(): SaleChannelView[] {
+    const summary = this.summary;
+    if (!summary) {
+      return [];
+    }
+
+    return [
+      {
+        key: 'digital',
+        label: 'Venta digital',
+        value: this.formatInteger(summary.sales_digital),
+        metric: 'sales_digital',
+      },
+      {
+        key: 'organic',
+        label: 'Orgánica digital',
+        value: this.formatInteger(summary.sales_digital_organic),
+        metric: 'sales_digital_organic',
+      },
+      {
+        key: 'web',
+        label: 'Web',
+        value: this.formatInteger(summary.sales_web),
+        metric: 'sales_web',
+      },
+      {
+        key: 'btl',
+        label: 'BTL',
+        value: this.formatInteger(summary.sales_btl),
+        metric: 'sales_btl',
+      },
+      {
+        key: 'total',
+        label: 'Total',
+        value: this.formatInteger(summary.sales_total),
+        metric: 'sales_total',
+      },
+    ];
+  }
   get salesTotalNode(): FunnelNodeView | null {
     const summary = this.summary;
     if (!summary) return null;
@@ -348,6 +468,49 @@ export class MarketingSalesFunnelStoryComponent {
     ];
   }
 
+  get saleComposition(): SaleCompositionView | null {
+    const summary = this.summary;
+
+    if (!summary) {
+      return null;
+    }
+
+    const digitalTotal =
+      summary.sales_digital + summary.sales_digital_organic;
+
+    const btlOrigins = (summary.btl_origin_breakdown ?? [])
+      .filter((origin) => origin.sales > 0)
+      .map((origin) => ({
+        ...origin,
+        displayLabel: origin.label,
+        salesDisplay: this.formatInteger(origin.sales),
+        shareDisplay: this.formatPercent(
+          summary.sales_btl > 0
+            ? origin.sales / summary.sales_btl
+            : null,
+        ),
+        icon: this.resolveOriginIcon(origin.key),
+      }))
+      .sort((left, right) => right.sales - left.sales);
+
+    return {
+      total: this.formatInteger(summary.sales_total),
+      digitalTotal: this.formatInteger(digitalTotal),
+      digitalChildren: [
+        {
+          label: 'Digital',
+          value: this.formatInteger(summary.sales_digital),
+        },
+        {
+          label: 'Orgánica digital',
+          value: this.formatInteger(summary.sales_digital_organic),
+        },
+      ],
+      webTotal: this.formatInteger(summary.sales_web),
+      btlTotal: this.formatInteger(summary.sales_btl),
+      btlOrigins,
+    };
+  }
   get fallbackOrigins(): FallbackOriginView[] {
     const summary = this.summary;
     if (!summary) {

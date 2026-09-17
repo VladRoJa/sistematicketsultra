@@ -176,6 +176,13 @@ class _BranchStats:
     )
 
 
+
+    btl_origin_counts: dict[str, int] = field(
+        default_factory=lambda: defaultdict(int)
+    )
+    btl_origin_revenue: dict[str, Decimal] = field(
+        default_factory=lambda: defaultdict(lambda: Decimal("0"))
+    )
 def _normalize_text(value: Any) -> str:
     text = str(value or "").strip().upper()
     without_accents = "".join(
@@ -887,6 +894,23 @@ def _serialize_origin_breakdown(
     ]
 
 
+def _serialize_btl_origin_breakdown(
+    stats: _BranchStats,
+) -> list[dict[str, Any]]:
+    return [
+        {
+            "key": key,
+            "label": ORIGIN_LABELS[key],
+            "sales": int(stats.btl_origin_counts.get(key, 0)),
+            "revenue": float(
+                stats.btl_origin_revenue.get(key, Decimal("0"))
+            ),
+        }
+        for key in ORIGIN_DISPLAY_ORDER
+        if int(stats.btl_origin_counts.get(key, 0)) > 0
+    ]
+
+
 def _serialize_stats(stats: _BranchStats) -> dict[str, Any]:
     return {
         "iventas_contacts": stats.iventas_contacts,
@@ -953,6 +977,7 @@ def _serialize_stats(stats: _BranchStats) -> dict[str, Any]:
             stats.sales_total,
         ),
         "origin_breakdown": _serialize_origin_breakdown(stats),
+        "btl_origin_breakdown": _serialize_btl_origin_breakdown(stats),
     }
 
 
@@ -1005,6 +1030,10 @@ def _merge_stats(target: _BranchStats, source: _BranchStats) -> None:
         target.origin_counts[key] += value
     for key, value in source.origin_revenue.items():
         target.origin_revenue[key] += value
+    for key, value in source.btl_origin_counts.items():
+        target.btl_origin_counts[key] += value
+    for key, value in source.btl_origin_revenue.items():
+        target.btl_origin_revenue[key] += value
 
 
 def build_marketing_sales_funnel_with_loaded_data(
@@ -1224,6 +1253,8 @@ def build_marketing_sales_funnel_with_loaded_data(
         else:
             stats.sales_btl += 1
             stats.revenue_btl += sale.revenue
+            stats.btl_origin_counts[origin] += 1
+            stats.btl_origin_revenue[origin] += sale.revenue
 
         stats.origin_counts[origin] += 1
         stats.origin_revenue[origin] += sale.revenue

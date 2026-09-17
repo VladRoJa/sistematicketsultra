@@ -65,6 +65,7 @@ export interface MarketingSalesFunnelMetrics {
   iventas_sale_share: number | null;
 
   origin_breakdown: MarketingSalesOriginBreakdown[];
+  btl_origin_breakdown: MarketingSalesOriginBreakdown[];
 }
 
 export interface MarketingSalesFunnelBranch
