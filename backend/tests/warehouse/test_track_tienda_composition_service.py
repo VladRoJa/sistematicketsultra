@@ -47,7 +47,7 @@ def _venta_row(
     )
 
 
-def test_composition_reconciles_track_and_keeps_locker_even_with_promo_terms(
+def test_composition_groups_families_and_canonical_products_without_merging_flavors(
     monkeypatch,
 ):
     resolved_version = SimpleNamespace(
@@ -62,8 +62,8 @@ def test_composition_reconciles_track_and_keeps_locker_even_with_promo_terms(
         [
             SimpleNamespace(
                 source_snapshot_id_tienda=77,
-                venta_tienda_real_mtd=Decimal("649.00"),
-                meta_venta_tienda_mes=Decimal("1000.00"),
+                venta_tienda_real_mtd=Decimal("909.00"),
+                meta_venta_tienda_mes=Decimal("1500.00"),
             )
         ]
     )
@@ -78,12 +78,36 @@ def test_composition_reconciles_track_and_keeps_locker_even_with_promo_terms(
             ),
             _venta_row(
                 row_index=2,
-                clave_producto="BEBIDA",
-                descripcion="AGUA",
+                clave_producto="001",
+                descripcion="AGUA E-PURA 1 LITRO",
                 total="100.00",
             ),
             _venta_row(
                 row_index=3,
+                clave_producto="025",
+                descripcion="AGUA E-PURA 1LT",
+                total="50.00",
+            ),
+            _venta_row(
+                row_index=4,
+                clave_producto="101",
+                descripcion="GATORADE 1LT PONCHE DE FRUTAS",
+                total="80.00",
+            ),
+            _venta_row(
+                row_index=5,
+                clave_producto="102",
+                descripcion="GATORADE 1 LT PONCHE DE FRUTAS",
+                total="70.00",
+            ),
+            _venta_row(
+                row_index=6,
+                clave_producto="103",
+                descripcion="GATORADE 1LT LIMON",
+                total="60.00",
+            ),
+            _venta_row(
+                row_index=7,
                 clave_producto="MEMBRESIA",
                 descripcion="MENSUALIDAD",
                 total="499.00",
@@ -119,18 +143,93 @@ def test_composition_reconciles_track_and_keeps_locker_even_with_promo_terms(
 
     assert mart_query.filters == {"track_daily_version_id": 123}
     assert source_query.filters == {"snapshot_id": 77}
-    assert result["summary"]["track_total"] == 649.0
-    assert result["summary"]["composition_total"] == 649.0
+    assert result["summary"]["track_total"] == 909.0
+    assert result["summary"]["composition_total"] == 909.0
     assert result["summary"]["difference"] == 0.0
     assert result["summary"]["is_reconciled"] is True
-    assert result["summary"]["operaciones"] == 2
+    assert result["summary"]["operaciones"] == 6
 
-    composition = {
-        item["clave_producto"]: item["total"]
-        for item in result["composition"]
+    families = {item["familia"]: item["total"] for item in result["composition"]}
+    assert families == {
+        "Lockers": 549.0,
+        "Aguas": 150.0,
+        "Bebidas isotónicas": 210.0,
     }
 
-    assert composition == {
-        "LOCKER": 549.0,
-        "BEBIDA": 100.0,
+    products = {
+        item["producto_canonico"]: item
+        for item in result["products"]
     }
+
+    assert products["AGUA E-PURA 1 L"]["total"] == 150.0
+    assert products["AGUA E-PURA 1 L"]["claves_producto"] == ["001", "025"]
+    assert products["GATORADE 1 L PONCHE DE FRUTAS"]["total"] == 150.0
+    assert products["GATORADE 1 L LIMON"]["total"] == 60.0
+
+
+def test_canonical_product_filter_returns_all_spelling_variants(monkeypatch):
+    resolved_version = SimpleNamespace(
+        id=123,
+        version_type="cierre_canonico",
+        status="success",
+        generated_at_utc=None,
+        finished_at_utc=None,
+    )
+
+    mart_query = _FakeQuery(
+        [
+            SimpleNamespace(
+                source_snapshot_id_tienda=77,
+                venta_tienda_real_mtd=Decimal("150.00"),
+                meta_venta_tienda_mes=Decimal("500.00"),
+            )
+        ]
+    )
+
+    source_query = _FakeQuery(
+        [
+            _venta_row(
+                row_index=1,
+                clave_producto="101",
+                descripcion="GATORADE 1LT PONCHE DE FRUTAS",
+                total="80.00",
+            ),
+            _venta_row(
+                row_index=2,
+                clave_producto="102",
+                descripcion="GATORADE 1 LT PONCHE DE FRUTAS",
+                total="70.00",
+            ),
+        ]
+    )
+
+    monkeypatch.setattr(
+        service,
+        "resolve_effective_track_daily_version",
+        lambda **_kwargs: resolved_version,
+    )
+    monkeypatch.setattr(
+        service,
+        "TrackDailyMartORM",
+        SimpleNamespace(query=mart_query),
+    )
+    monkeypatch.setattr(
+        service,
+        "VentaTotalSnapshotRowORM",
+        SimpleNamespace(query=source_query),
+    )
+    monkeypatch.setattr(
+        service,
+        "resolve_track_branch_alias",
+        lambda **_kwargs: "VILLAS_DEL_REY",
+    )
+
+    result = service.build_track_tienda_composition(
+        track_date=date(2026, 9, 14),
+        generation_mode="official_closed_day",
+        include_operations=True,
+        producto_canonico="GATORADE 1 L PONCHE DE FRUTAS",
+    )
+
+    assert result["operation_count"] == 2
+    assert [item["row_index"] for item in result["operations"]] == [2, 1]

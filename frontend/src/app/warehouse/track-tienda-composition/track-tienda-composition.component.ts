@@ -35,8 +35,8 @@ export class TrackTiendaCompositionComponent implements OnInit {
   response: TrackTiendaCompositionResponse | null = null;
   operations: TrackTiendaOperation[] = [];
 
-  selectedClaveProducto = '';
-  selectedDescripcion = '';
+  selectedFamilia = '';
+  selectedProductoCanonico = '';
   selectedSucursalCanon = '';
   detailTitle = '';
 
@@ -70,7 +70,7 @@ export class TrackTiendaCompositionComponent implements OnInit {
     this.isLoading = true;
     this.errorMessage = '';
     this.operationsErrorMessage = '';
-    this.clearDetail(false);
+    this.clearDetail();
 
     this.tiendaService
       .getComposition({
@@ -108,35 +108,32 @@ export class TrackTiendaCompositionComponent implements OnInit {
   }
 
   openCompositionItem(item: TrackTiendaCompositionItem): void {
-    this.selectedClaveProducto = item.clave_producto;
-    this.selectedDescripcion = '';
+    this.selectedFamilia = item.familia;
+    this.selectedProductoCanonico = '';
     this.selectedSucursalCanon = '';
-    this.detailTitle = item.clave_producto;
+    this.detailTitle = item.familia;
     this.operations = [];
   }
 
   openProduct(item: TrackTiendaProductItem): void {
-    this.selectedClaveProducto = item.clave_producto;
-    this.selectedDescripcion = item.descripcion;
+    this.selectedFamilia = item.familia;
+    this.selectedProductoCanonico = item.producto_canonico;
     this.selectedSucursalCanon = '';
-    this.detailTitle = `${item.clave_producto} · ${item.descripcion}`;
+    this.detailTitle = `${item.familia} · ${item.producto_canonico}`;
     this.loadOperations();
   }
 
   openBranch(item: TrackTiendaBranchItem): void {
-    this.selectedClaveProducto = '';
-    this.selectedDescripcion = '';
+    this.selectedFamilia = '';
+    this.selectedProductoCanonico = '';
     this.selectedSucursalCanon = item.sucursal_canon;
     this.detailTitle = item.sucursal_canon;
     this.loadOperations();
   }
 
-  clearDetail(clearKey = true): void {
-    if (clearKey) {
-      this.selectedClaveProducto = '';
-    }
-
-    this.selectedDescripcion = '';
+  clearDetail(): void {
+    this.selectedFamilia = '';
+    this.selectedProductoCanonico = '';
     this.selectedSucursalCanon = '';
     this.detailTitle = '';
     this.operations = [];
@@ -156,8 +153,8 @@ export class TrackTiendaCompositionComponent implements OnInit {
         trackDate: this.trackDate,
         generationMode: this.generationMode,
         includeOperations: true,
-        claveProducto: this.selectedClaveProducto || null,
-        descripcion: this.selectedDescripcion || null,
+        familia: this.selectedFamilia || null,
+        productoCanonico: this.selectedProductoCanonico || null,
         sucursalCanon: this.selectedSucursalCanon || null,
         operationLimit: 500,
       })
@@ -180,13 +177,11 @@ export class TrackTiendaCompositionComponent implements OnInit {
   get filteredProducts(): TrackTiendaProductItem[] {
     const items = this.response?.products || [];
 
-    if (!this.selectedClaveProducto) {
+    if (!this.selectedFamilia) {
       return items;
     }
 
-    return items.filter(
-      (item) => item.clave_producto === this.selectedClaveProducto,
-    );
+    return items.filter((item) => item.familia === this.selectedFamilia);
   }
 
   get composition(): TrackTiendaCompositionItem[] {
@@ -198,14 +193,13 @@ export class TrackTiendaCompositionComponent implements OnInit {
   }
 
   get daily(): TrackTiendaDailyItem[] {
-    return this.response?.daily || [];
+    return [...(this.response?.daily || [])].sort((left, right) =>
+      right.fecha.localeCompare(left.fecha),
+    );
   }
 
   get maxDailyTotal(): number {
-    return Math.max(
-      1,
-      ...this.daily.map((item) => Number(item.total || 0)),
-    );
+    return Math.max(1, ...this.daily.map((item) => Number(item.total || 0)));
   }
 
   getCompositionBarWidth(item: TrackTiendaCompositionItem): number {
@@ -218,10 +212,27 @@ export class TrackTiendaCompositionComponent implements OnInit {
   }
 
   isCompositionItemSelected(item: TrackTiendaCompositionItem): boolean {
-    return (
-      !!this.selectedClaveProducto &&
-      item.clave_producto === this.selectedClaveProducto
+    return !!this.selectedFamilia && item.familia === this.selectedFamilia;
+  }
+
+  formatProductKeys(keys: string[] | null | undefined): string {
+    const values = (keys || []).filter((value) => !!String(value || '').trim());
+    return values.length ? `Claves: ${values.join(', ')}` : 'Sin clave';
+  }
+
+  getWeekdayShort(value: string | null | undefined): string {
+    const raw = String(value || '').trim();
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+
+    if (!match) {
+      return '';
+    }
+
+    const parsed = new Date(
+      Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])),
     );
+    const labels = ['D', 'L', 'M', 'm', 'J', 'V', 'S'];
+    return labels[parsed.getUTCDay()] || '';
   }
 
   formatCurrency(value: number | null | undefined): string {

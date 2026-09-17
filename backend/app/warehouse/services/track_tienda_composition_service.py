@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import date, datetime
 from decimal import Decimal
+import re
 from typing import Any
 
 from app.models.warehouse import TrackDailyMartORM, VentaTotalSnapshotRowORM
@@ -23,6 +24,38 @@ from app.warehouse.services.track_source_tienda_daily_service import (
 
 DEFAULT_OPERATION_LIMIT = 250
 MAX_OPERATION_LIMIT = 500
+
+FAMILY_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("Lockers", ("locker",)),
+    (
+        "Bebidas energéticas",
+        (
+            "monster",
+            "c4 energy",
+            "ghost energy",
+            "red bull",
+            "energy drink",
+            "energetica",
+        ),
+    ),
+    (
+        "Bebidas isotónicas",
+        ("gatorade", "powerade", "electrolit", "isotonica", "isotonico"),
+    ),
+    ("Aguas", ("agua", "ciel", "e pura", "epura")),
+    ("Jugos", ("jugo", "nectar")),
+    ("Barras", ("barra",)),
+    ("Galletas", ("galleta", "cookie")),
+    (
+        "Suplementos",
+        ("proteina", "protein", "whey", "creatina", "amino", "bcaa"),
+    ),
+    (
+        "Accesorios",
+        ("toalla", "shaker", "termo", "cilindro", "mochila", "guante"),
+    ),
+    ("Eventos", ("5k", "indoor")),
+)
 
 
 class TrackTiendaCompositionServiceError(RuntimeError):
@@ -104,6 +137,52 @@ def _description_label(value: Any) -> str:
     return raw or "SIN_DESCRIPCION"
 
 
+def _canonical_product_key(value: Any) -> str:
+    normalized = _normalize_text(value)
+    normalized = re.sub(r"[^a-z0-9]+", " ", normalized)
+    normalized = re.sub(
+        r"\b(\d+(?:[.,]\d+)?)\s*(?:litros?|lts?|lt|l)\b",
+        r"\1 l",
+        normalized,
+    )
+    normalized = re.sub(
+        r"\b(\d+(?:[.,]\d+)?)\s*(?:mililitros?|ml)\b",
+        r"\1 ml",
+        normalized,
+    )
+    return re.sub(r"\s+", " ", normalized).strip()
+
+
+def _canonical_product_label(value: Any) -> str:
+    raw = _description_label(value).upper()
+    raw = re.sub(r"\s+", " ", raw).strip()
+    raw = re.sub(
+        r"\b(\d+(?:[.,]\d+)?)\s*(?:LITROS?|LTS?|LT)\b",
+        r"\1 L",
+        raw,
+    )
+    raw = re.sub(
+        r"\b(\d+(?:[.,]\d+)?)\s*(?:MILILITROS?|ML)\b",
+        r"\1 ML",
+        raw,
+    )
+    return raw
+
+
+def _classify_product_family(*, clave_producto: Any, descripcion: Any) -> str:
+    product_key = _normalize_text(clave_producto)
+    description = _normalize_text(descripcion)
+
+    if product_key == "locker":
+        return "Lockers"
+
+    for family, keywords in FAMILY_RULES:
+        if any(keyword in description for keyword in keywords):
+            return family
+
+    return "Otros"
+
+
 def _operation_sort_key(operation: dict[str, Any]) -> tuple[str, str, int]:
     return (
         str(operation.get("fecha") or ""),
@@ -115,10 +194,20 @@ def _operation_sort_key(operation: dict[str, Any]) -> tuple[str, str, int]:
 def _matches_operation_filter(
     operation: dict[str, Any],
     *,
+    familia: str,
+    producto_canonico: str,
     clave_producto: str,
     descripcion: str,
     sucursal_canon: str,
 ) -> bool:
+    if familia:
+        if _normalize_text(operation.get("familia")) != familia:
+            return False
+
+    if producto_canonico:
+        if operation.get("producto_canonico_key") != producto_canonico:
+            return False
+
     if clave_producto:
         if _normalize_text(operation.get("clave_producto")) != clave_producto:
             return False
@@ -139,6 +228,8 @@ def build_track_tienda_composition(
     track_date: str | date | datetime,
     generation_mode: str = "manual_preview",
     include_operations: bool = False,
+    familia: Any = None,
+    producto_canonico: Any = None,
     clave_producto: Any = None,
     descripcion: Any = None,
     sucursal_canon: Any = None,
@@ -188,17 +279,11 @@ def build_track_tienda_composition(
     source_snapshot_id = next(iter(source_snapshot_ids))
 
     track_total = sum(
-        (
-            _to_decimal(row.venta_tienda_real_mtd)
-            for row in mart_rows
-        ),
+        (_to_decimal(row.venta_tienda_real_mtd) for row in mart_rows),
         Decimal("0"),
     )
     target_total = sum(
-        (
-            _to_decimal(row.meta_venta_tienda_mes)
-            for row in mart_rows
-        ),
+        (_to_decimal(row.meta_venta_tienda_mes) for row in mart_rows),
         Decimal("0"),
     )
 
@@ -206,18 +291,19 @@ def build_track_tienda_composition(
         snapshot_id=source_snapshot_id,
     ).all()
 
-    totals_by_key: dict[str, dict[str, Any]] = defaultdict(
+    totals_by_family: dict[str, dict[str, Any]] = defaultdict(
         lambda: {
-            "clave_producto": "SIN_CLAVE",
+            "familia": "Otros",
             "total": Decimal("0"),
             "cantidad": Decimal("0"),
             "operaciones": 0,
         }
     )
-    totals_by_product: dict[tuple[str, str], dict[str, Any]] = defaultdict(
+    totals_by_product: dict[str, dict[str, Any]] = defaultdict(
         lambda: {
-            "clave_producto": "SIN_CLAVE",
-            "descripcion": "SIN_DESCRIPCION",
+            "familia": "Otros",
+            "producto_canonico": "SIN_DESCRIPCION",
+            "claves_producto": set(),
             "total": Decimal("0"),
             "cantidad": Decimal("0"),
             "operaciones": 0,
@@ -277,25 +363,29 @@ def build_track_tienda_composition(
         total = _to_decimal(row.total)
         quantity = _to_decimal(row.cantidad)
         product_key = _product_key_label(row.clave_producto)
-        product_key_normalized = _normalize_text(product_key)
         description = _description_label(row.descripcion)
-        description_normalized = _normalize_text(description)
+        canonical_product_key = _canonical_product_key(description)
+        canonical_product_label = _canonical_product_label(description)
+        family = _classify_product_family(
+            clave_producto=product_key,
+            descripcion=description,
+        )
+        family_key = _normalize_text(family)
 
         composition_total += total
         composition_quantity += quantity
         operation_count += 1
 
-        key_bucket = totals_by_key[product_key_normalized]
-        key_bucket["clave_producto"] = product_key
-        key_bucket["total"] += total
-        key_bucket["cantidad"] += quantity
-        key_bucket["operaciones"] += 1
+        family_bucket = totals_by_family[family_key]
+        family_bucket["familia"] = family
+        family_bucket["total"] += total
+        family_bucket["cantidad"] += quantity
+        family_bucket["operaciones"] += 1
 
-        product_bucket = totals_by_product[
-            (product_key_normalized, description_normalized)
-        ]
-        product_bucket["clave_producto"] = product_key
-        product_bucket["descripcion"] = description
+        product_bucket = totals_by_product[canonical_product_key]
+        product_bucket["familia"] = family
+        product_bucket["producto_canonico"] = canonical_product_label
+        product_bucket["claves_producto"].add(product_key)
         product_bucket["total"] += total
         product_bucket["cantidad"] += quantity
         product_bucket["operaciones"] += 1
@@ -321,11 +411,12 @@ def build_track_tienda_composition(
                 "folio": str(row.folio or "").strip(),
                 "clave": str(row.clave or "").strip(),
                 "clave_producto": product_key,
+                "familia": family,
+                "producto_canonico": canonical_product_label,
+                "producto_canonico_key": canonical_product_key,
                 "descripcion": description,
                 "cantidad": _serialize_quantity(row.cantidad),
-                "precio_unitario": _serialize_decimal(
-                    _to_decimal(row.precio_unitario)
-                ),
+                "precio_unitario": _serialize_decimal(_to_decimal(row.precio_unitario)),
                 "total": _serialize_decimal(total),
                 "forma_pago": str(row.forma_pago or "").strip(),
                 "estatus": str(row.estatus or "").strip(),
@@ -335,14 +426,14 @@ def build_track_tienda_composition(
             }
         )
 
-    composition_rows = sorted(
-        totals_by_key.values(),
-        key=lambda item: (item["total"], item["clave_producto"]),
+    family_rows = sorted(
+        totals_by_family.values(),
+        key=lambda item: (item["total"], item["familia"]),
         reverse=True,
     )
     product_rows = sorted(
         totals_by_product.values(),
-        key=lambda item: (item["total"], item["descripcion"]),
+        key=lambda item: (item["total"], item["producto_canonico"]),
         reverse=True,
     )
     branch_rows = sorted(
@@ -353,32 +444,27 @@ def build_track_tienda_composition(
 
     composition = [
         {
-            "clave_producto": item["clave_producto"],
+            "familia": item["familia"],
             "total": _serialize_decimal(item["total"]),
             "cantidad": _serialize_decimal(item["cantidad"]),
             "operaciones": item["operaciones"],
-            "participacion_pct": _share_percent(
-                item["total"],
-                composition_total,
-            ),
+            "participacion_pct": _share_percent(item["total"], composition_total),
             "ticket_promedio": _serialize_decimal(
                 _average(item["total"], item["operaciones"])
             ),
         }
-        for item in composition_rows
+        for item in family_rows
     ]
 
     products = [
         {
-            "clave_producto": item["clave_producto"],
-            "descripcion": item["descripcion"],
+            "familia": item["familia"],
+            "producto_canonico": item["producto_canonico"],
+            "claves_producto": sorted(item["claves_producto"]),
             "total": _serialize_decimal(item["total"]),
             "cantidad": _serialize_decimal(item["cantidad"]),
             "operaciones": item["operaciones"],
-            "participacion_pct": _share_percent(
-                item["total"],
-                composition_total,
-            ),
+            "participacion_pct": _share_percent(item["total"], composition_total),
             "ticket_promedio": _serialize_decimal(
                 _average(item["total"], item["operaciones"])
             ),
@@ -392,10 +478,7 @@ def build_track_tienda_composition(
             "total": _serialize_decimal(item["total"]),
             "cantidad": _serialize_decimal(item["cantidad"]),
             "operaciones": item["operaciones"],
-            "participacion_pct": _share_percent(
-                item["total"],
-                composition_total,
-            ),
+            "participacion_pct": _share_percent(item["total"], composition_total),
             "ticket_promedio": _serialize_decimal(
                 _average(item["total"], item["operaciones"])
             ),
@@ -410,9 +493,11 @@ def build_track_tienda_composition(
             "cantidad": _serialize_decimal(item["cantidad"]),
             "operaciones": item["operaciones"],
         }
-        for business_date, item in sorted(totals_by_day.items())
+        for business_date, item in sorted(totals_by_day.items(), reverse=True)
     ]
 
+    normalized_family_filter = _normalize_text(familia)
+    normalized_product_filter = _canonical_product_key(producto_canonico)
     normalized_key_filter = _normalize_text(clave_producto)
     normalized_description_filter = _normalize_text(descripcion)
     normalized_branch_filter = str(sucursal_canon or "").strip().upper()
@@ -422,6 +507,8 @@ def build_track_tienda_composition(
         for operation in operations
         if _matches_operation_filter(
             operation,
+            familia=normalized_family_filter,
+            producto_canonico=normalized_product_filter,
             clave_producto=normalized_key_filter,
             descripcion=normalized_description_filter,
             sucursal_canon=normalized_branch_filter,
@@ -430,15 +517,13 @@ def build_track_tienda_composition(
     filtered_operations.sort(key=_operation_sort_key, reverse=True)
 
     detail_filter = {
+        "familia": str(familia or "").strip() or None,
+        "producto_canonico": str(producto_canonico or "").strip() or None,
         "clave_producto": (
-            _product_key_label(clave_producto)
-            if normalized_key_filter
-            else None
+            _product_key_label(clave_producto) if normalized_key_filter else None
         ),
         "descripcion": (
-            str(descripcion or "").strip()
-            if normalized_description_filter
-            else None
+            str(descripcion or "").strip() if normalized_description_filter else None
         ),
         "sucursal_canon": normalized_branch_filter or None,
     }
@@ -448,7 +533,7 @@ def build_track_tienda_composition(
 
     top_product = products[0] if products else None
     top_branch = branches[0] if branches else None
-    top_key = composition[0] if composition else None
+    top_family = composition[0] if composition else None
 
     return {
         "track_date": normalized_track_date.isoformat(),
@@ -481,15 +566,11 @@ def build_track_tienda_composition(
             "ticket_promedio": _serialize_decimal(
                 _average(composition_total, operation_count)
             ),
-            "top_clave_producto": (
-                top_key["clave_producto"] if top_key else None
-            ),
+            "top_familia": top_family["familia"] if top_family else None,
             "top_producto": (
-                top_product["descripcion"] if top_product else None
+                top_product["producto_canonico"] if top_product else None
             ),
-            "top_sucursal": (
-                top_branch["sucursal_canon"] if top_branch else None
-            ),
+            "top_sucursal": top_branch["sucursal_canon"] if top_branch else None,
         },
         "composition": composition,
         "products": products,

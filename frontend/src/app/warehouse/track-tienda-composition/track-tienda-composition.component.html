@@ -74,7 +74,7 @@
       <article class="tienda-summary-card">
         <span>Producto principal</span>
         <strong>{{ response.summary.top_producto || '—' }}</strong>
-        <small>{{ response.summary.top_clave_producto || 'Sin clave' }}</small>
+        <small>{{ response.summary.top_familia || 'Sin familia' }}</small>
       </article>
 
       <article class="tienda-summary-card">
@@ -89,10 +89,10 @@
         <div class="tienda-panel__header">
           <div>
             <p class="tienda-section-kicker">¿QUÉ ESTAMOS VENDIENDO?</p>
-            <h2>Composición por clave de producto</h2>
+            <h2>Composición por familia</h2>
           </div>
           <button
-            *ngIf="selectedClaveProducto"
+            *ngIf="selectedFamilia"
             type="button"
             class="tienda-link-button"
             (click)="clearDetail()"
@@ -111,7 +111,7 @@
           >
             <div class="tienda-composition-row__top">
               <div>
-                <strong>{{ item.clave_producto }}</strong>
+                <strong>{{ item.familia }}</strong>
                 <span>
                   {{ formatDecimal(item.cantidad) }} unidades ·
                   {{ formatInteger(item.operaciones) }} operaciones
@@ -142,7 +142,10 @@
 
         <div class="tienda-daily-list">
           <div class="tienda-daily-row" *ngFor="let item of daily">
-            <span class="tienda-daily-row__date">{{ formatDate(item.fecha) }}</span>
+            <span class="tienda-daily-row__date">
+              <small>{{ getWeekdayShort(item.fecha) }}</small>
+              {{ formatDate(item.fecha) }}
+            </span>
             <div class="tienda-daily-row__bar">
               <span
                 class="tienda-daily-row__fill"
@@ -160,7 +163,7 @@
         <div>
           <p class="tienda-section-kicker">PRODUCTOS</p>
           <h2>
-            {{ selectedClaveProducto ? ('Detalle · ' + selectedClaveProducto) : 'Top productos' }}
+            {{ selectedFamilia ? ('Detalle · ' + selectedFamilia) : 'Top productos' }}
           </h2>
         </div>
         <span class="tienda-panel__hint">Clic en una fila para abrir operaciones</span>
@@ -170,8 +173,8 @@
         <table class="tienda-table">
           <thead>
             <tr>
-              <th>Clave producto</th>
-              <th>Descripción</th>
+              <th>Familia</th>
+              <th>Producto</th>
               <th class="tienda-cell-right">Unidades</th>
               <th class="tienda-cell-right">Operaciones</th>
               <th class="tienda-cell-right">Ticket prom.</th>
@@ -187,8 +190,11 @@
               tabindex="0"
               (keydown.enter)="openProduct(item)"
             >
-              <td><strong>{{ item.clave_producto }}</strong></td>
-              <td>{{ item.descripcion }}</td>
+              <td><strong>{{ item.familia }}</strong></td>
+              <td>
+                {{ item.producto_canonico }}
+                <small>{{ formatProductKeys(item.claves_producto) }}</small>
+              </td>
               <td class="tienda-cell-right">{{ formatDecimal(item.cantidad) }}</td>
               <td class="tienda-cell-right">{{ formatInteger(item.operaciones) }}</td>
               <td class="tienda-cell-right">{{ formatCurrency(item.ticket_promedio) }}</td>
@@ -251,7 +257,7 @@
 
       <div
         class="tienda-empty-detail"
-        *ngIf="!isLoadingOperations && !operationsErrorMessage && detailTitle && operations.length === 0 && (selectedDescripcion || selectedSucursalCanon)"
+        *ngIf="!isLoadingOperations && !operationsErrorMessage && detailTitle && operations.length === 0 && (selectedProductoCanonico || selectedSucursalCanon)"
       >
         No se encontraron operaciones para el filtro seleccionado.
       </div>
@@ -264,8 +270,9 @@
               <th>Hora</th>
               <th>Sucursal</th>
               <th>Folio</th>
+              <th>Familia</th>
               <th>Clave producto</th>
-              <th>Descripción</th>
+              <th>Descripción origen</th>
               <th class="tienda-cell-right">Cantidad</th>
               <th class="tienda-cell-right">Precio unit.</th>
               <th class="tienda-cell-right">Total</th>
@@ -279,6 +286,7 @@
               <td>{{ operation.hora }}</td>
               <td>{{ operation.sucursal_canon }}</td>
               <td>{{ operation.folio }}</td>
+              <td>{{ operation.familia }}</td>
               <td>{{ operation.clave_producto }}</td>
               <td>{{ operation.descripcion }}</td>
               <td class="tienda-cell-right">{{ formatDecimal(operation.cantidad) }}</td>
