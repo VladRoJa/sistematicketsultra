@@ -741,8 +741,6 @@ def _meta_contact_keys(
         )
         .filter(
             MarketingIventasContactTagORM.sync_run_id.in_(run_ids),
-            MarketingIventasContactTagORM.iventas_contact_row_id
-            == MarketingIventasContactORM.id,
             MarketingIventasContactTagORM.tag_kind == "META_AD",
         )
         .all()
