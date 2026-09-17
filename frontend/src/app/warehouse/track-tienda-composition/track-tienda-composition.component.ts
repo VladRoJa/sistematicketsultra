@@ -113,6 +113,7 @@ export class TrackTiendaCompositionComponent implements OnInit {
     this.selectedSucursalCanon = '';
     this.detailTitle = item.familia;
     this.operations = [];
+    this.loadOperations();
   }
 
   openProduct(item: TrackTiendaProductItem): void {
