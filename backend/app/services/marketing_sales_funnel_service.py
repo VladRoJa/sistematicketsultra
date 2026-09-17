@@ -278,7 +278,10 @@ def _classify_survey(value: Any) -> str:
         return ORIGIN_REFERRAL
     if normalized == "CERCA DE DOMICILIO/TRABAJO":
         return ORIGIN_PROXIMITY
-    if normalized == "VISITA A PLAZA COMERCIAL":
+    if normalized in {
+        "VISTA A PLAZA COMERCIAL",
+        "VISITA A PLAZA COMERCIAL",
+    }:
         return ORIGIN_PLAZA
     if normalized == "VOLANTES":
         return ORIGIN_OFFLINE
@@ -738,6 +741,8 @@ def _meta_contact_keys(
         )
         .filter(
             MarketingIventasContactTagORM.sync_run_id.in_(run_ids),
+            MarketingIventasContactTagORM.iventas_contact_row_id
+            == MarketingIventasContactORM.id,
             MarketingIventasContactTagORM.tag_kind == "META_AD",
         )
         .all()
