@@ -225,7 +225,7 @@
               <small>{{ iventasActivityLabel(row.iventas_activity_after_send) }}</small>
             </td>
             <td>
-              <strong>{{ row.iventas_is_from_ads === true ? 'Ads observado' : 'Sin Ads observado' }}</strong>
+              <strong>{{ iventasAdsLabel(row.iventas_is_from_ads) }}</strong>
               <small *ngIf="row.iventas_ads_source_id">Ad: {{ row.iventas_ads_source_id }}</small>
               <small *ngIf="row.iventas_tags.length">{{ row.iventas_tags.join(', ') }}</small>
               <small *ngIf="!row.iventas_tags.length">Sin tags</small>
