@@ -233,3 +233,30 @@ def test_canonical_product_filter_returns_all_spelling_variants(monkeypatch):
 
     assert result["operation_count"] == 2
     assert [item["row_index"] for item in result["operations"]] == [2, 1]
+
+
+def test_product_family_classification_covers_known_remaining_items():
+    assert service._classify_product_family(
+        clave_producto="004",
+        descripcion="GATORLYTE MORAS 20 OZ",
+    ) == "Bebidas isotónicas"
+    assert service._classify_product_family(
+        clave_producto="031",
+        descripcion="BEBIDA ENERGIZANTE GHOST 473 ML",
+    ) == "Bebidas energéticas"
+
+    accessory_descriptions = (
+        "PLAYERA ULTRA",
+        "MORRALITO MESH",
+        "MORRALITO ULTRA",
+        "SUDADERA ULTRA",
+        "GORRA ULTRA",
+        "VTA PZA TAPETE YOGA",
+        "TRAVEL BAG",
+    )
+
+    for description in accessory_descriptions:
+        assert service._classify_product_family(
+            clave_producto="999",
+            descripcion=description,
+        ) == "Accesorios"
