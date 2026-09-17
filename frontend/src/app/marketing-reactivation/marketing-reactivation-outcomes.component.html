@@ -146,6 +146,21 @@
       <button mat-button type="button" (click)="closeDetail()">Cerrar</button>
     </div>
 
+    <div class="iventas-source" *ngIf="campaignDetail.iventas_source as source">
+      <ng-container *ngIf="source.available; else noIventasSource">
+        <strong>Contexto iVentas canónico</strong>
+        <span>
+          Run {{ source.sync_run_id }} · {{ formatDate(source.date_from) }}–{{ formatDate(source.date_to) }}
+        </span>
+        <small>
+          Los estados de mensaje son la última observación del contacto en iVentas; no prueban por sí solos la entrega o lectura de esta campaña.
+        </small>
+      </ng-container>
+      <ng-template #noIventasSource>
+        <strong>Sin fuente canónica de iVentas disponible</strong>
+      </ng-template>
+    </div>
+
     <mat-form-field *ngIf="!loadingDetail" appearance="outline">
       <mat-label>Estado del destinatario</mat-label>
       <mat-select [formControl]="detailStatus">
@@ -161,30 +176,65 @@
       <mat-spinner diameter="24"></mat-spinner>
     </div>
 
-    <div class="table-shell" *ngIf="!loadingDetail && detailRows.length; else noDetailRows">
+    <div class="table-shell followup-table" *ngIf="!loadingDetail && detailRows.length; else noDetailRows">
       <table>
         <thead>
           <tr>
             <th>Socio</th>
             <th>Estado</th>
             <th>Resultado</th>
-            <th>Sucursal campaña</th>
-            <th>Venció</th>
-            <th>Recuperó</th>
-            <th>Días</th>
-            <th>Sucursal de regreso</th>
+            <th>Campaña</th>
+            <th>iVentas</th>
+            <th>Actividad iVentas</th>
+            <th>Tags / origen</th>
+            <th>Recuperación</th>
           </tr>
         </thead>
         <tbody>
           <tr *ngFor="let row of detailRows">
-            <td><strong>{{ row.member_name || 'Sin nombre' }}</strong></td>
+            <td>
+              <strong>{{ row.member_name || 'Sin nombre' }}</strong>
+              <small>{{ row.phone_mx10 || 'Sin teléfono' }}</small>
+            </td>
             <td>{{ statusLabel(row.status) }}</td>
             <td>{{ businessResultLabel(row.business_result) }}</td>
-            <td>{{ row.campaign_branch }}</td>
-            <td>{{ formatDate(row.fecha_vencimiento) }}</td>
-            <td>{{ formatDate(row.reactivated_at_local) }}</td>
-            <td>{{ row.days_to_reactivation ?? '—' }}</td>
-            <td>{{ row.active_sucursal || '—' }}</td>
+            <td>
+              <strong>{{ row.campaign_branch }}</strong>
+              <small>Enviado: {{ formatDateTime(row.sent_at_local) }}</small>
+              <small>Venció: {{ formatDate(row.fecha_vencimiento) }}</small>
+            </td>
+            <td>
+              <strong>{{ iventasMatchLabel(row.iventas_match_status) }}</strong>
+              <small *ngIf="row.iventas_match_status === 'MULTIPLE'">
+                {{ row.iventas_match_count }} contactos; se muestra el de actividad más reciente
+              </small>
+              <small *ngIf="row.iventas_contact_found && row.iventas_name">
+                Nombre iVentas: {{ row.iventas_name }}
+              </small>
+              <small *ngIf="row.iventas_contact_found && row.iventas_agent_name">
+                Agente: {{ row.iventas_agent_name }}
+              </small>
+              <small *ngIf="row.iventas_contact_found && row.iventas_channel_name">
+                Canal: {{ row.iventas_channel_name }}{{ row.iventas_channel_platform ? ' · ' + row.iventas_channel_platform : '' }}
+              </small>
+            </td>
+            <td>
+              <strong>{{ iventasMessageStatusLabel(row.iventas_last_message_status) }}</strong>
+              <small>Último outbound: {{ formatDateTime(row.iventas_last_outbound_at_local) }}</small>
+              <small>Primera conversación: {{ formatDateTime(row.iventas_first_message_at_local) }}</small>
+              <small>{{ iventasActivityLabel(row.iventas_activity_after_send) }}</small>
+            </td>
+            <td>
+              <strong>{{ row.iventas_is_from_ads === true ? 'Ads observado' : 'Sin Ads observado' }}</strong>
+              <small *ngIf="row.iventas_ads_source_id">Ad: {{ row.iventas_ads_source_id }}</small>
+              <small *ngIf="row.iventas_tags.length">{{ row.iventas_tags.join(', ') }}</small>
+              <small *ngIf="!row.iventas_tags.length">Sin tags</small>
+            </td>
+            <td>
+              <strong>{{ formatDate(row.reactivated_at_local) }}</strong>
+              <small>Días: {{ row.days_to_reactivation ?? '—' }}</small>
+              <small>Regresó en: {{ row.active_sucursal || '—' }}</small>
+            </td>
           </tr>
         </tbody>
       </table>

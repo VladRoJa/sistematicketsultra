@@ -10,6 +10,7 @@ import { MatSelectModule } from '@angular/material/select';
 
 import { MarketingReactivationService } from './marketing-reactivation.service';
 import {
+  IventasFollowupMatchStatus,
   ReactivationCampaignOutcomeDetailResponse,
   ReactivationCampaignOutcomeRow,
   ReactivationOutcomeSummaryResponse,
@@ -150,6 +151,38 @@ export class MarketingReactivationOutcomesComponent implements OnInit {
     return '—';
   }
 
+  iventasMatchLabel(status: IventasFollowupMatchStatus): string {
+    const labels: Record<IventasFollowupMatchStatus, string> = {
+      NOT_FOUND: 'Sin contacto en fuente canónica',
+      MATCHED: 'Contacto localizado',
+      MULTIPLE: 'Múltiples contactos',
+    };
+    return labels[status];
+  }
+
+  iventasMessageStatusLabel(status: string | null): string {
+    const normalized = String(status || '').trim().toLowerCase();
+    const labels: Record<string, string> = {
+      viewed: 'Visto',
+      delivered: 'Entregado',
+      failed: 'Falló',
+      sent: 'Enviado',
+    };
+    return labels[normalized] ?? (status || 'Sin estado');
+  }
+
+  iventasActivityLabel(value: boolean | null): string {
+    if (value === true) return 'Sí, posterior al envío';
+    if (value === false) return 'No posterior al envío';
+    return 'Sin dato comparable';
+  }
+
+  iventasAdsLabel(value: boolean | null): string {
+    if (value === true) return 'Ads observado';
+    if (value === false) return 'Sin Ads observado';
+    return 'Sin dato de Ads';
+  }
+
   formatDate(value: string | null): string {
     if (!value) return '—';
     const datePart = value.slice(0, 10);
@@ -160,6 +193,19 @@ export class MarketingReactivationOutcomesComponent implements OnInit {
       month: 'short',
       year: 'numeric',
     }).format(new Date(year, month - 1, day));
+  }
+
+  formatDateTime(value: string | null): string {
+    if (!value) return '—';
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return value;
+    return new Intl.DateTimeFormat('es-MX', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(parsed);
   }
 
   private loadOptions(): void {
