@@ -18,7 +18,12 @@ from app.services.marketing_sales_funnel_service import (
     ORIGIN_IVENTAS_META,
     ORIGIN_IVENTAS_OTHER,
     ORIGIN_LABELS,
+    SALE_CATEGORY_BTL,
+    SALE_CATEGORY_DIGITAL,
+    SALE_CATEGORY_DIGITAL_ORGANIC,
+    SALE_CATEGORY_WEB,
     _canonical_runs_for_window,
+    _classify_sale_category,
     _classify_survey,
     _load_branch_alias_map,
     _load_iventas_data,
@@ -48,6 +53,11 @@ SALES_METRICS = frozenset(
         "sales_iventas",
         "sales_iventas_meta",
         "sales_not_iventas",
+        "sales_digital_total",
+        "sales_digital",
+        "sales_digital_organic",
+        "sales_web",
+        "sales_btl",
         "revenue_total",
         "revenue_iventas_meta",
     }
@@ -68,6 +78,11 @@ METRIC_TITLES = {
     "sales_iventas": "Venta nueva con match iVentas",
     "sales_iventas_meta": "Venta nueva atribuida a Meta Ads",
     "sales_not_iventas": "Venta nueva sin match iVentas",
+    "sales_digital_total": "Venta nueva · Digital",
+    "sales_digital": "Venta nueva · Digital trazado",
+    "sales_digital_organic": "Venta nueva · Orgánica digital",
+    "sales_web": "Venta nueva · Web",
+    "sales_btl": "Venta nueva · BTL",
     "revenue_total": "Ingreso de Venta Nueva",
     "revenue_iventas_meta": "Ingreso de Venta Nueva Meta Ads",
     "visits_total": "Visitas comerciales detectadas",
@@ -125,7 +140,7 @@ def _normalize_metric(metric: str, origin: str | None) -> tuple[str, str | None]
     normalized_metric = str(metric or "").strip()
     normalized_origin = str(origin or "").strip() or None
 
-    if normalized_metric == "origin":
+    if normalized_metric in {"origin", "btl_origin"}:
         if normalized_origin not in ORIGIN_LABELS:
             raise MarketingSalesFunnelDetailValidationError(
                 "origin inválido para detalle de composición."
@@ -176,6 +191,7 @@ def _sale_matches_metric(
     *,
     phone: str | None,
     origin: str,
+    sale_category: str | None = None,
 ) -> bool:
     if metric in {"sales_total", "revenue_total"}:
         return True
@@ -187,8 +203,30 @@ def _sale_matches_metric(
         return origin == ORIGIN_IVENTAS_META
     if metric == "sales_not_iventas":
         return origin not in {ORIGIN_IVENTAS_META, ORIGIN_IVENTAS_OTHER}
+
+    if metric == "sales_digital_total":
+        return sale_category in {
+            SALE_CATEGORY_DIGITAL,
+            SALE_CATEGORY_DIGITAL_ORGANIC,
+        }
+    if metric == "sales_digital":
+        return sale_category == SALE_CATEGORY_DIGITAL
+    if metric == "sales_digital_organic":
+        return sale_category == SALE_CATEGORY_DIGITAL_ORGANIC
+    if metric == "sales_web":
+        return sale_category == SALE_CATEGORY_WEB
+    if metric == "sales_btl":
+        return sale_category == SALE_CATEGORY_BTL
+
+    if metric == "btl_origin":
+        return (
+            sale_category == SALE_CATEGORY_BTL
+            and origin == origin_filter
+        )
+
     if metric == "origin":
         return origin == origin_filter
+
     return False
 
 
@@ -313,20 +351,29 @@ def _sales_detail(
         if branch_id_filter is not None and sale.branch_id != branch_id_filter:
             continue
 
-        origin = _match_iventas(
+        iventas_origin = _match_iventas(
             evidence,
             sale.branch_id,
             sale.phone,
             sale.sale_date,
         )
-        if origin is None:
-            origin = _classify_survey(sale.survey_raw)
+        origin = (
+            iventas_origin
+            if iventas_origin is not None
+            else _classify_survey(sale.survey_raw)
+        )
+        sale_category = _classify_sale_category(
+            iventas_origin=iventas_origin,
+            api_raw=sale.api_raw,
+            survey_raw=sale.survey_raw,
+        )
 
         if not _sale_matches_metric(
             metric,
             origin_filter,
             phone=sale.phone,
             origin=origin,
+            sale_category=sale_category,
         ):
             continue
 
@@ -535,7 +582,7 @@ def build_marketing_sales_funnel_detail(
 
     branch_names = _branch_name_map(branches)
 
-    if metric in SALES_METRICS or metric == "origin":
+    if metric in SALES_METRICS or metric in {"origin", "btl_origin"}:
         kind = "sales"
         rows, count, revenue_total = _sales_detail(
             month_start=month_start,
@@ -572,8 +619,12 @@ def build_marketing_sales_funnel_detail(
         revenue_total = Decimal("0")
 
     title = (
-        ORIGIN_LABELS[origin]
-        if metric == "origin" and origin is not None
+        (
+            f"BTL · {ORIGIN_LABELS[origin]}"
+            if metric == "btl_origin" and origin is not None
+            else ORIGIN_LABELS[origin]
+        )
+        if metric in {"origin", "btl_origin"} and origin is not None
         else METRIC_TITLES[metric]
     )
     if branch_id_filter is not None:

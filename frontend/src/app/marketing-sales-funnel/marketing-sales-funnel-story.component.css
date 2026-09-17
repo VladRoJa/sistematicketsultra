@@ -813,3 +813,176 @@
 }
 
 /* === FUNNEL ORIGIN X POSITION END === */
+
+/* SALE COMPOSITION HIERARCHY */
+
+.sale-composition .flow-origin-stack__heading {
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.sale-composition .flow-origin-stack__heading > span {
+  color: var(--trace-navy);
+  font-size: 14px;
+  font-weight: 950;
+}
+
+.sale-composition__list {
+  gap: 8px;
+}
+
+.sale-composition__group {
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  gap: 10px;
+  min-height: 54px;
+  padding: 7px 10px;
+  cursor: default;
+}
+
+.sale-composition__group:hover,
+.sale-composition__group:focus-visible {
+  transform: none;
+  border-color: #e5eaf0;
+  box-shadow: none;
+}
+
+.sale-composition__group .flow-origin-card__icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+}
+
+.sale-composition__group .flow-origin-card__icon mat-icon {
+  width: 20px;
+  height: 20px;
+  font-size: 20px;
+}
+
+.sale-composition__group .flow-origin-card__copy strong {
+  font-size: 11px;
+}
+
+.sale-composition__group .flow-origin-card__copy small {
+  margin-top: 2px;
+  font-size: 7px;
+}
+
+.sale-composition__group .flow-origin-card__value {
+  min-width: 48px;
+  font-size: 19px;
+  text-align: right;
+}
+
+.sale-composition__children {
+  display: grid;
+  gap: 4px;
+  margin: -3px 0 2px 44px;
+  padding-left: 10px;
+  border-left: 2px solid rgba(107, 129, 157, 0.18);
+}
+
+.sale-composition__child {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 27px;
+  padding: 4px 8px;
+  border: 1px solid #edf1f5;
+  border-radius: 7px;
+  background: #fbfcfe;
+  color: #31455f;
+  font-size: 8.5px;
+}
+
+.sale-composition__child > strong {
+  color: var(--trace-navy);
+  font-size: 11px;
+  font-weight: 950;
+}
+
+.sale-composition__children--btl {
+  gap: 3px;
+}
+
+.sale-composition__child--btl {
+  grid-template-columns: 20px minmax(0, 1fr) auto 66px;
+  gap: 5px;
+}
+
+.sale-composition__child-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--trace-blue);
+}
+
+.sale-composition__child-icon mat-icon {
+  width: 15px;
+  height: 15px;
+  font-size: 15px;
+}
+
+.sale-composition__child-label {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sale-composition__child-value {
+  min-width: 26px;
+  text-align: right;
+}
+
+.sale-composition__child-share {
+  color: var(--trace-muted);
+  font-size: 7px;
+  font-weight: 700;
+  text-align: right;
+  white-space: nowrap;
+}
+
+
+/* SALE COMPOSITION CLICKABLE ROWS */
+
+.sale-composition button {
+  font: inherit;
+}
+
+.sale-composition__group {
+  width: 100%;
+}
+
+.sale-composition__group,
+.sale-composition__child {
+  cursor: pointer;
+}
+
+.sale-composition__group:hover,
+.sale-composition__group:focus-visible,
+.sale-composition__child:hover,
+.sale-composition__child:focus-visible {
+  outline: none;
+  border-color: rgba(240, 82, 45, 0.42);
+  box-shadow: 0 5px 14px rgba(15, 23, 42, 0.06);
+}
+
+.sale-composition__group:hover,
+.sale-composition__group:focus-visible {
+  transform: translateX(2px);
+}
+
+.sale-composition__child:hover,
+.sale-composition__child:focus-visible {
+  transform: translateX(2px);
+}
+
+.sale-composition__child--digital {
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+}
+
+.sale-composition__child--digital .sale-composition__child-label {
+  text-align: left;
+}

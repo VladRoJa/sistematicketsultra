@@ -43,6 +43,7 @@ from app.services.marketing_sales_funnel_drilldown_service import (
 from app.services.marketing_sales_funnel_service import (
     ORIGIN_IVENTAS_META,
     ORIGIN_LABELS,
+    _classify_sale_category,
     _classify_survey,
     _load_new_sales,
     _match_iventas,
@@ -142,20 +143,29 @@ def _sales_rows(
         if branch_id_filter is not None and sale.branch_id != branch_id_filter:
             continue
 
-        origin = _match_iventas(
+        iventas_origin = _match_iventas(
             loaded.evidence,
             sale.branch_id,
             sale.phone,
             sale.sale_date,
         )
-        if origin is None:
-            origin = _classify_survey(sale.survey_raw)
+        origin = (
+            iventas_origin
+            if iventas_origin is not None
+            else _classify_survey(sale.survey_raw)
+        )
+        sale_category = _classify_sale_category(
+            iventas_origin=iventas_origin,
+            api_raw=sale.api_raw,
+            survey_raw=sale.survey_raw,
+        )
 
         if not _sale_matches_metric(
             metric,
             origin_filter,
             phone=sale.phone,
             origin=origin,
+            sale_category=sale_category,
         ):
             continue
 
@@ -397,7 +407,7 @@ def _resolve_detail_rows(
     )
     source = funnel_build.payload["source"]
 
-    if normalized_metric in SALES_METRICS or normalized_metric == "origin":
+    if normalized_metric in SALES_METRICS or normalized_metric in {"origin", "btl_origin"}:
         kind = "sales"
         rows, revenue_total = _sales_rows(
             month_start=month_start,
@@ -411,8 +421,14 @@ def _resolve_detail_rows(
             source=source,
         )
         title = (
-            ORIGIN_LABELS[normalized_origin]
-            if normalized_metric == "origin" and normalized_origin is not None
+            (
+                f"BTL · {ORIGIN_LABELS[normalized_origin]}"
+                if normalized_metric == "btl_origin"
+                and normalized_origin is not None
+                else ORIGIN_LABELS[normalized_origin]
+            )
+            if normalized_metric in {"origin", "btl_origin"}
+            and normalized_origin is not None
             else METRIC_TITLES[normalized_metric]
         )
     elif normalized_metric in VISIT_METRICS:

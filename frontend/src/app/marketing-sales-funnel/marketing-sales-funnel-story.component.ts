@@ -38,14 +38,20 @@ interface FallbackOriginView extends MarketingSalesOriginBreakdown {
 interface SaleCompositionChildView {
   label: string;
   value: string;
+  icon: string;
+  metric: string;
 }
 
 interface SaleCompositionView {
   total: string;
+  totalMetric: string;
   digitalTotal: string;
+  digitalMetric: string;
   digitalChildren: SaleCompositionChildView[];
   webTotal: string;
+  webMetric: string;
   btlTotal: string;
+  btlMetric: string;
   btlOrigins: FallbackOriginView[];
 }
 interface ConversionKpiView {
@@ -495,19 +501,27 @@ export class MarketingSalesFunnelStoryComponent {
 
     return {
       total: this.formatInteger(summary.sales_total),
+      totalMetric: 'sales_total',
       digitalTotal: this.formatInteger(digitalTotal),
+      digitalMetric: 'sales_digital_total',
       digitalChildren: [
         {
           label: 'Digital',
           value: this.formatInteger(summary.sales_digital),
+          icon: 'ads_click',
+          metric: 'sales_digital',
         },
         {
           label: 'Orgánica digital',
           value: this.formatInteger(summary.sales_digital_organic),
+          icon: 'alternate_email',
+          metric: 'sales_digital_organic',
         },
       ],
       webTotal: this.formatInteger(summary.sales_web),
+      webMetric: 'sales_web',
       btlTotal: this.formatInteger(summary.sales_btl),
+      btlMetric: 'sales_btl',
       btlOrigins,
     };
   }
@@ -548,6 +562,10 @@ export class MarketingSalesFunnelStoryComponent {
 
   openOrigin(origin: FallbackOriginView): void {
     this.openDetail('origin', origin.key);
+  }
+
+  openBtlOrigin(origin: FallbackOriginView): void {
+    this.openDetail('btl_origin', origin.key);
   }
 
   formatInteger(value: number): string {

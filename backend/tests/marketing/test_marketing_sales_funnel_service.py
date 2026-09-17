@@ -402,3 +402,128 @@ def test_btl_origin_breakdown_sums_to_sales_btl():
         row["sales"]
         for row in payload["btl_origin_breakdown"]
     ) == payload["sales_btl"]
+
+
+def test_commercial_composition_drilldown_filters_by_sale_category():
+    digital = marketing_sales_funnel_service.SALE_CATEGORY_DIGITAL
+    organic = marketing_sales_funnel_service.SALE_CATEGORY_DIGITAL_ORGANIC
+    web = marketing_sales_funnel_service.SALE_CATEGORY_WEB
+    btl = marketing_sales_funnel_service.SALE_CATEGORY_BTL
+
+    # Padre Digital = Digital trazado + Orgánica digital.
+    assert _sale_matches_metric(
+        "sales_digital_total",
+        None,
+        phone="6861234567",
+        origin=ORIGIN_IVENTAS_META,
+        sale_category=digital,
+    )
+    assert _sale_matches_metric(
+        "sales_digital_total",
+        None,
+        phone="6861234567",
+        origin=ORIGIN_SOCIAL_UNTRACED,
+        sale_category=organic,
+    )
+    assert not _sale_matches_metric(
+        "sales_digital_total",
+        None,
+        phone="6861234567",
+        origin=ORIGIN_REFERRAL,
+        sale_category=btl,
+    )
+
+    # Hijos de Digital.
+    assert _sale_matches_metric(
+        "sales_digital",
+        None,
+        phone="6861234567",
+        origin=ORIGIN_IVENTAS_META,
+        sale_category=digital,
+    )
+    assert not _sale_matches_metric(
+        "sales_digital",
+        None,
+        phone="6861234567",
+        origin=ORIGIN_SOCIAL_UNTRACED,
+        sale_category=organic,
+    )
+
+    assert _sale_matches_metric(
+        "sales_digital_organic",
+        None,
+        phone="6861234567",
+        origin=ORIGIN_SOCIAL_UNTRACED,
+        sale_category=organic,
+    )
+    assert not _sale_matches_metric(
+        "sales_digital_organic",
+        None,
+        phone="6861234567",
+        origin=ORIGIN_IVENTAS_META,
+        sale_category=digital,
+    )
+
+    # Web.
+    assert _sale_matches_metric(
+        "sales_web",
+        None,
+        phone="6861234567",
+        origin=ORIGIN_UNKNOWN,
+        sale_category=web,
+    )
+    assert not _sale_matches_metric(
+        "sales_web",
+        None,
+        phone="6861234567",
+        origin=ORIGIN_REFERRAL,
+        sale_category=btl,
+    )
+
+    # BTL padre.
+    assert _sale_matches_metric(
+        "sales_btl",
+        None,
+        phone="6861234567",
+        origin=ORIGIN_REFERRAL,
+        sale_category=btl,
+    )
+    assert not _sale_matches_metric(
+        "sales_btl",
+        None,
+        phone="6861234567",
+        origin=ORIGIN_IVENTAS_META,
+        sale_category=digital,
+    )
+
+    # Hijos BTL: origen + categoría BTL obligatorios.
+    assert _sale_matches_metric(
+        "btl_origin",
+        ORIGIN_REFERRAL,
+        phone="6861234567",
+        origin=ORIGIN_REFERRAL,
+        sale_category=btl,
+    )
+    assert not _sale_matches_metric(
+        "btl_origin",
+        ORIGIN_REFERRAL,
+        phone="6861234567",
+        origin=ORIGIN_REFERRAL,
+        sale_category=web,
+    )
+
+    # "Sin identificar" = UNKNOWN pero exclusivamente dentro de BTL.
+    assert _sale_matches_metric(
+        "btl_origin",
+        ORIGIN_UNKNOWN,
+        phone="6861234567",
+        origin=ORIGIN_UNKNOWN,
+        sale_category=btl,
+    )
+    assert not _sale_matches_metric(
+        "btl_origin",
+        ORIGIN_UNKNOWN,
+        phone="6861234567",
+        origin=ORIGIN_UNKNOWN,
+        sale_category=web,
+    )
