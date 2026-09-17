@@ -862,3 +862,81 @@
 }
 
 /* === FUNNEL ORIGIN COMPACT WIDTH END === */
+
+/* === FUNNEL VISITS SPACE USE START === */
+
+@media (min-width: 1201px) {
+  .flow-card--visits-hierarchy {
+    grid-template-rows: 118px minmax(0, 1fr);
+  }
+
+  .flow-card__visit-branches {
+    align-items: stretch;
+  }
+
+  .flow-card__visit-branch {
+    grid-template-rows: 108px minmax(0, 1fr);
+  }
+
+  .flow-card__visit-branch-main {
+    padding: 12px 10px;
+    gap: 3px;
+  }
+
+  .flow-card__visit-branch-main > mat-icon {
+    width: 21px;
+    height: 21px;
+    font-size: 21px;
+  }
+
+  .flow-card__visit-branch-main > span {
+    font-size: 10px;
+  }
+
+  .flow-card__visit-branch-main > strong {
+    font-size: 30px;
+  }
+
+  .flow-card__visit-results {
+    grid-template-columns: 1fr;
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+  }
+
+  .flow-card__visit-results .flow-card__visit-result {
+    padding: 14px 10px;
+    gap: 4px;
+  }
+
+  .flow-card__visit-results
+  .flow-card__visit-result + .flow-card__visit-result {
+    border-top: 1px solid #e8edf2;
+    border-left: 0;
+  }
+
+  .flow-card__visit-results .flow-card__visit-result mat-icon {
+    width: 18px;
+    height: 18px;
+    font-size: 18px;
+  }
+
+  .flow-card__visit-results .flow-card__visit-result small {
+    font-size: 7px;
+  }
+
+  .flow-card__visit-results .flow-card__visit-result strong {
+    font-size: 28px;
+  }
+
+  .flow-card__visit-results .flow-card__visit-action {
+    margin-top: 1px;
+    font-size: 6px;
+  }
+
+  .flow-card__visit-results .flow-card__visit-action mat-icon {
+    width: 9px;
+    height: 9px;
+    font-size: 9px;
+  }
+}
+
+/* === FUNNEL VISITS SPACE USE END === */
