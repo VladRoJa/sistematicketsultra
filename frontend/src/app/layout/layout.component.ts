@@ -1324,6 +1324,7 @@ private puedeVerMarketingSalesFunnelPorRol(): boolean {
     || rol === 'LECTOR_GLOBAL'
     || rol === 'GERENTE'
     || rol === 'GERENTE_REGIONAL'
+    || rol === 'MARKETING'
   );
 }
 
