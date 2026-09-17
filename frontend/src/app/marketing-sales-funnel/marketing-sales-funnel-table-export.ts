@@ -45,23 +45,23 @@ interface DataRange {
 
 const REGION_SECTIONS: RegionSection[] = [
   {
-    label: 'MEXICALI / SAN LUIS',
+    label: 'REGIÓN MEXICALI BC',
     branchIds: [1, 2, 3, 4, 5, 6],
   },
   {
-    label: 'TIJUANA / ROSARITO / ENSENADA',
+    label: 'REGIÓN COSTA BC',
     branchIds: [7, 8, 9, 10, 11, 12, 13],
   },
   {
-    label: 'CULIACÁN / LA PAZ',
+    label: 'REGIÓN CLN / LA PAZ',
     branchIds: [14, 15, 16, 20],
   },
   {
-    label: 'MONTERREY / SALTILLO / SERRANÍA',
+    label: 'REGIÓN NORESTE',
     branchIds: [17, 18, 24, 26],
   },
   {
-    label: 'CDMX / IXTAPALUCA / TLALNEPANTLA / CHIHUAHUA',
+    label: 'REGIÓN CENTRO',
     branchIds: [19, 21, 22, 23, 25],
   },
 ];

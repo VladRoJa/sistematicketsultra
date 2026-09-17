@@ -42,7 +42,7 @@ function setup() {
         {key: 'SAN LUIS', label: 'SAN LUIS'},
       ],
       regions: [
-        {id: 1, label: 'Mexicali / San Luis', branch_keys: ['TEC MXL', 'SAN LUIS']},
+        {id: 1, label: 'Región Mexicali BC', branch_keys: ['TEC MXL', 'SAN LUIS']},
       ],
     }),
     getOutcomeSummary: (filters: any) => {
