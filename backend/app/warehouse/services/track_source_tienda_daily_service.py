@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import date, datetime
 from decimal import Decimal
+import re
 from typing import Any
 import unicodedata
 
@@ -181,6 +182,9 @@ def _is_tienda_candidate(row: VentaTotalSnapshotRowORM) -> bool:
         return False
 
     if clave_producto == "membresia":
+        return False
+
+    if re.search(r"(?<!\d)5\s*k(?:\s*m)?\b", descripcion):
         return False
 
     if clave_producto == "locker":
