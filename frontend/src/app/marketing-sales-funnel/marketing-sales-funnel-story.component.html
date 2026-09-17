@@ -1,5 +1,62 @@
 <section class="trace-story" aria-labelledby="trace-story-title">
   <div class="flow-board" aria-label="Diagrama de trazabilidad de iVentas y Venta Nueva">
+    <aside
+      *ngIf="executiveSummary as efficiency"
+      class="flow-efficiency-card"
+      aria-label="Resumen de eficiencia comercial"
+    >
+      <div class="flow-efficiency-card__header">
+        <div>
+          <span class="flow-efficiency-card__eyebrow">Eficiencia comercial</span>
+          <strong>Resumen de inversión</strong>
+        </div>
+
+        <div class="flow-efficiency-card__investment">
+          <span>Inversión</span>
+          <strong>{{ efficiency.investment_display }}</strong>
+        </div>
+      </div>
+
+      <div class="flow-efficiency-card__grid">
+        <section>
+          <h3>Conversión</h3>
+
+          <div class="flow-efficiency-card__metric">
+            <span>Lead → visita</span>
+            <strong>{{ efficiency.lead_to_visit_display }}</strong>
+          </div>
+
+          <div class="flow-efficiency-card__metric">
+            <span>Visita → digital</span>
+            <strong>{{ efficiency.visit_to_digital_sale_display }}</strong>
+          </div>
+
+          <div class="flow-efficiency-card__metric">
+            <span>Lead → venta</span>
+            <strong>{{ efficiency.lead_to_sale_display }}</strong>
+          </div>
+        </section>
+
+        <section>
+          <h3>Costos</h3>
+
+          <div class="flow-efficiency-card__metric">
+            <span>CPL</span>
+            <strong>{{ efficiency.cpl_display }}</strong>
+          </div>
+
+          <div class="flow-efficiency-card__metric">
+            <span>CPT</span>
+            <strong>{{ efficiency.cpt_display }}</strong>
+          </div>
+
+          <div class="flow-efficiency-card__metric">
+            <span>CAC</span>
+            <strong>{{ efficiency.cac_display }}</strong>
+          </div>
+        </section>
+      </div>
+    </aside>
     <svg
       class="flow-board__connectors"
       viewBox="0 0 1200 700"
@@ -65,7 +122,10 @@
           >
             <mat-icon>{{ branch.icon }}</mat-icon>
             <span>{{ branch.label }}</span>
-            <strong>{{ branch.value }}</strong>
+            <div class="flow-card__visit-number">
+              <strong>{{ branch.value }}</strong>
+              <span class="flow-card__visit-percent">{{ branch.share }}</span>
+            </div>
             <small>
               Ver filas
               <mat-icon>open_in_new</mat-icon>
@@ -80,7 +140,10 @@
             >
               <mat-icon>shopping_cart</mat-icon>
               <small>Compraron</small>
-              <strong>{{ branch.bought }}</strong>
+              <div class="flow-card__visit-number">
+                <strong>{{ branch.bought }}</strong>
+                <span class="flow-card__visit-percent">{{ branch.boughtShare }}</span>
+              </div>
               <span class="flow-card__visit-action">
                 Ver filas
                 <mat-icon>open_in_new</mat-icon>
@@ -94,7 +157,10 @@
             >
               <mat-icon>remove_shopping_cart</mat-icon>
               <small>No compraron</small>
-              <strong>{{ branch.notBought }}</strong>
+              <div class="flow-card__visit-number">
+                <strong>{{ branch.notBought }}</strong>
+                <span class="flow-card__visit-percent">{{ branch.notBoughtShare }}</span>
+              </div>
               <span class="flow-card__visit-action">
                 Ver filas
                 <mat-icon>open_in_new</mat-icon>
@@ -138,6 +204,9 @@
       <span class="flow-origin-card__value">
         {{ composition.digitalTotal }}
       </span>
+      <span class="flow-origin-card__share">
+        {{ composition.digitalShare }}
+      </span>
     </button>
 
     <div class="sale-composition__children">
@@ -179,6 +248,9 @@
       <span class="flow-origin-card__value">
         {{ composition.webTotal }}
       </span>
+      <span class="flow-origin-card__share">
+        {{ composition.webShare }}
+      </span>
     </button>
 
     <!-- BTL -->
@@ -198,6 +270,9 @@
 
       <span class="flow-origin-card__value">
         {{ composition.btlTotal }}
+      </span>
+      <span class="flow-origin-card__share">
+        {{ composition.btlShare }}
       </span>
     </button>
 
@@ -229,40 +304,4 @@
   </div>
 </section>
   </div>
-
-  <section *ngIf="summary as funnelSummary" class="conversion-kpi-row" aria-label="Conversión comercial">
-    <ng-container *ngIf="conversionKpis as kpis">
-      <article class="conversion-kpi-card">
-        <span>{{ kpis[0].label }}</span>
-        <strong>{{ kpis[0].value }}</strong>
-        <small class="conversion-kpi-card__flow">
-          {{ formatInteger(funnelSummary.leads_meta) }} → {{ formatInteger(funnelSummary.visits_iventas) }}
-        </small>
-      </article>
-
-      <article class="conversion-kpi-card">
-        <span>{{ kpis[1].label }}</span>
-        <strong>{{ kpis[1].value }}</strong>
-        <small class="conversion-kpi-card__flow">
-          {{ formatInteger(funnelSummary.visits_iventas) }} → {{ formatInteger(funnelSummary.visits_iventas_bought) }}
-        </small>
-      </article>
-
-      <article class="conversion-kpi-card">
-        <span>{{ kpis[2].label }}</span>
-        <strong>{{ kpis[2].value }}</strong>
-        <small class="conversion-kpi-card__flow">
-          {{ formatInteger(funnelSummary.visits_not_iventas) }} → {{ formatInteger(funnelSummary.visits_not_iventas_bought) }}
-        </small>
-      </article>
-
-      <article class="conversion-kpi-card">
-        <span>Lead → Venta por publicaciones</span>
-        <strong>{{ formatPercent(funnelSummary.meta_lead_to_sale_rate) }}</strong>
-        <small class="conversion-kpi-card__flow">
-          {{ formatInteger(funnelSummary.leads_meta) }} → {{ formatInteger(funnelSummary.sales_iventas_meta) }}
-        </small>
-      </article>
-    </ng-container>
-  </section>
 </section>
