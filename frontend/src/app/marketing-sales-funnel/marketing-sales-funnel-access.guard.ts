@@ -27,6 +27,7 @@ export class MarketingSalesFunnelAccessGuard implements CanActivate {
       username === 'ADMICORP'
       || role === 'LECTOR_GLOBAL'
       || role === 'GERENTE'
+      || role === 'GERENTE_REGIONAL'
     ) {
       return true;
     }
