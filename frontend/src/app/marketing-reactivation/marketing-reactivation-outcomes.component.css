@@ -105,6 +105,10 @@ table {
   min-width: 1120px;
 }
 
+.followup-table table {
+  min-width: 1760px;
+}
+
 th,
 td {
   padding: 12px 14px;
@@ -163,6 +167,24 @@ td small {
   margin-top: 24px;
   padding-top: 22px;
   border-top: 1px solid #e2e8f0;
+}
+
+.iventas-source {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 12px;
+  margin: 16px 0;
+  padding: 12px 14px;
+  border: 1px solid #dbeafe;
+  border-radius: 12px;
+  background: #eff6ff;
+  color: #1e3a8a;
+}
+
+.iventas-source small {
+  flex-basis: 100%;
+  color: #475569;
 }
 
 @media (max-width: 1400px) {

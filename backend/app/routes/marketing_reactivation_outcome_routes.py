@@ -16,6 +16,9 @@ from app.services.marketing_access import (
     resolve_marketing_access,
 )
 from app.services.marketing_campaign_audience_service import region_branches
+from app.services.marketing_campaign_iventas_followup_service import (
+    enrich_campaign_outcome_detail_with_iventas,
+)
 from app.services.marketing_dashboard_service import load_visible_marketing_branches
 from app.services.marketing_reactivation_outcome_service import (
     OUTCOME_PENDING,
@@ -190,6 +193,10 @@ def get_marketing_reactivation_campaign_outcomes(campaign_id: int):
             session=db.session,
         )
         result = enrich_campaign_outcome_detail_with_business_results(result)
+        result = enrich_campaign_outcome_detail_with_iventas(
+            result,
+            session=db.session,
+        )
         if allowed is not None and int((result.get("summary") or {}).get("sent") or 0) == 0:
             raise MarketingAuthorizationError(
                 "La campaña no contiene destinatarios dentro del alcance del usuario."

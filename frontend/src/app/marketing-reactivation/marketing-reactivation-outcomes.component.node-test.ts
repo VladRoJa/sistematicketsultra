@@ -8,6 +8,30 @@ import { MarketingReactivationOutcomesComponent } from './marketing-reactivation
 import { MarketingReactivationService } from './marketing-reactivation.service';
 
 
+function iventasContext(overrides: Record<string, unknown> = {}) {
+  return {
+    phone_mx10: '6861000001',
+    iventas_contact_found: true,
+    iventas_match_status: 'MATCHED',
+    iventas_match_count: 1,
+    iventas_contact_id: 'contact-1',
+    iventas_name: 'Ana CRM',
+    iventas_branch_code: 'tecnologico',
+    iventas_created_at_local: '2026-09-01T10:00:00',
+    iventas_first_message_at_local: '2026-09-01T10:01:00',
+    iventas_last_outbound_at_local: '2026-09-10T11:00:00',
+    iventas_last_message_status: 'viewed',
+    iventas_channel_name: 'Ultra Gym Tecnológico',
+    iventas_channel_platform: 'WHATSAPP',
+    iventas_agent_name: 'Gerencia TEC',
+    iventas_tags: ['Reasignada'],
+    iventas_is_from_ads: false,
+    iventas_ads_source_id: null,
+    iventas_activity_after_send: true,
+    ...overrides,
+  };
+}
+
 function setup() {
   const summaryRequests: any[] = [];
   const detailRequests: number[] = [];
@@ -67,6 +91,14 @@ function setup() {
         name: 'Winback 30',
         applicable: true,
         attribution_window_days: 14,
+        iventas_source: {
+          available: true,
+          sync_run_id: 126,
+          period_key: 'IVENTAS-2026-09',
+          date_from: '2026-09-01',
+          date_to: '2026-09-16',
+          finished_at: '2026-09-16T20:43:28-07:00',
+        },
         summary: {
           sent: 3,
           reactivated: 2,
@@ -95,6 +127,7 @@ function setup() {
             days_to_reactivation: 2,
             active_id_socio: '1001',
             active_sucursal: 'SAN LUIS',
+            ...iventasContext(),
           },
           {
             recipient_id: 2,
@@ -110,6 +143,12 @@ function setup() {
             days_to_reactivation: 3,
             active_id_socio: '1002',
             active_sucursal: 'TEC MXL',
+            ...iventasContext({
+              phone_mx10: '6861000002',
+              iventas_match_status: 'MULTIPLE',
+              iventas_match_count: 2,
+              iventas_last_message_status: 'delivered',
+            }),
           },
           {
             recipient_id: 3,
@@ -125,6 +164,17 @@ function setup() {
             days_to_reactivation: null,
             active_id_socio: null,
             active_sucursal: null,
+            ...iventasContext({
+              phone_mx10: '6861000003',
+              iventas_contact_found: false,
+              iventas_match_status: 'NOT_FOUND',
+              iventas_match_count: 0,
+              iventas_contact_id: null,
+              iventas_name: null,
+              iventas_last_message_status: null,
+              iventas_activity_after_send: null,
+              iventas_tags: [],
+            }),
           },
         ],
       });
@@ -174,6 +224,7 @@ test('campaign drilldown exposes all sent recipients and filters recovered', () 
 
   assert.deepEqual(detailRequests, [44]);
   assert.equal(component.detail?.campaign_id, 44);
+  assert.equal(component.detail?.iventas_source?.sync_run_id, 126);
   assert.equal(component.detailRows.length, 3);
   assert.equal(component.detailRows[0].member_name, 'Ana');
   assert.equal(component.detailRows[0].business_result, 'RENOVACION');
@@ -187,6 +238,18 @@ test('campaign drilldown exposes all sent recipients and filters recovered', () 
   component.detailStatus.setValue('PENDING');
   assert.equal(component.detailRows.length, 1);
   assert.equal(component.detailRows[0].member_name, 'Mario');
+});
+
+
+test('iVentas helpers keep observation wording separate from campaign delivery claims', () => {
+  const {component} = setup();
+
+  assert.equal(component.iventasMatchLabel('MATCHED'), 'Contacto localizado');
+  assert.equal(component.iventasMatchLabel('MULTIPLE'), 'Múltiples contactos');
+  assert.equal(component.iventasMessageStatusLabel('viewed'), 'Visto');
+  assert.equal(component.iventasMessageStatusLabel('failed'), 'Falló');
+  assert.equal(component.iventasActivityLabel(true), 'Sí, posterior al envío');
+  assert.equal(component.iventasActivityLabel(null), 'Sin dato comparable');
 });
 
 
