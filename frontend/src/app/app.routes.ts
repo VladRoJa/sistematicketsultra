@@ -55,6 +55,13 @@ export const routes: Routes = [
             .then(m => m.ControlCenterComponent),
       },
       {
+        path: 'control/sales-composition',
+        canActivate: [AdmicorpGuard],
+        loadComponent: () =>
+          import('./control-center/sales-composition/sales-composition.component')
+            .then(m => m.SalesCompositionComponent),
+      },
+      {
         path: 'main',
         component: MainComponent,
         children: [

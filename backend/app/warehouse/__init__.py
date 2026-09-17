@@ -80,6 +80,18 @@ from app.warehouse.services.socios_activos_repository import (
 from app.warehouse.services.socios_activos_ingestion_service import (
     register_socios_activos_ingestor,
 )
+from app.warehouse.services.resumen_ventas_parser import (
+    register_resumen_ventas_parser,
+)
+from app.warehouse.services.resumen_ventas_repository import (
+    register_resumen_ventas_repository,
+)
+from app.warehouse.services.resumen_ventas_ingestion_service import (
+    register_resumen_ventas_ingestor,
+)
+from app.warehouse.services.resumen_ventas_manual_dispatcher_extension import (
+    register_resumen_ventas_manual_dispatcher_extension,
+)
 
 from app.warehouse.services.warehouse_manual_ingestion_dispatcher import ( register_warehouse_manual_ingestion_dispatcher,)
 
@@ -130,6 +142,10 @@ def _mark_runtime_hooks_registered(app: Flask) -> None:
         "socios_vencidos_parser": True,
         "socios_vencidos_repository": True,
         "socios_vencidos_ingestor": True,
+        "resumen_ventas_parser": True,
+        "resumen_ventas_repository": True,
+        "resumen_ventas_ingestor": True,
+        "resumen_ventas_manual_dispatcher_extension": True,
     }
 
 
@@ -222,11 +238,15 @@ def register_warehouse_runtime_hooks(app: Flask) -> None:
     register_socios_activos_repository(app)
     register_socios_activos_ingestor(app)
 
+    register_resumen_ventas_parser(app)
+    register_resumen_ventas_repository(app)
+    register_resumen_ventas_ingestor(app)
+
     register_warehouse_manual_ingestion_dispatcher(app)
+    register_resumen_ventas_manual_dispatcher_extension(app)
     
     register_gasca_single_report_runner_impl(app)
 
     _mark_runtime_hooks_registered(app)
 
     app.logger.info("Warehouse runtime hooks registrados correctamente.")
-

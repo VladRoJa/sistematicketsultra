@@ -1,0 +1,431 @@
+<section class="composition-page">
+  <header class="page-header">
+    <div>
+      <span class="eyebrow">SUITE ULTRA · CONTROL COMERCIAL</span>
+      <h1>Composición y dinámica de la venta</h1>
+      <p>Qué cambió, qué lo explica y dónde está ocurriendo.</p>
+    </div>
+
+    <div class="header-actions">
+      <label class="snapshot-select" *ngIf="snapshots.length">
+        <span>Corte</span>
+        <select
+          [(ngModel)]="selectedSnapshotId"
+          (change)="onSnapshotChange()"
+        >
+          <option
+            *ngFor="let snapshot of snapshots"
+            [ngValue]="snapshot.snapshot_id"
+          >
+            {{ snapshot.current_label }} · corte {{ snapshot.business_date }}
+          </option>
+        </select>
+      </label>
+      <button
+        type="button"
+        class="secondary-button"
+        (click)="toggleUpload()"
+      >
+        {{ uploadVisible ? 'Cerrar carga' : 'Cargar corte GASCA' }}
+      </button>
+    </div>
+  </header>
+
+  <div class="status-message error" *ngIf="errorMessage">
+    {{ errorMessage }}
+  </div>
+  <div class="status-message success" *ngIf="successMessage">
+    {{ successMessage }}
+  </div>
+
+  <section class="upload-panel" *ngIf="uploadVisible">
+    <div>
+      <span class="section-kicker">NUEVA FUENTE</span>
+      <h2>Importar Resumen Ventas</h2>
+      <p>
+        Usa el XLSX exportado por GASCA. Suite conserva el archivo en
+        Warehouse y valida que las tres hojas concilien antes de analizarlo.
+      </p>
+    </div>
+    <div class="upload-fields">
+      <label>
+        <span>Desde</span>
+        <input type="date" [(ngModel)]="uploadDateFrom" />
+      </label>
+      <label>
+        <span>Hasta</span>
+        <input type="date" [(ngModel)]="uploadDateTo" />
+      </label>
+      <label class="file-field">
+        <span>Archivo XLSX</span>
+        <input
+          type="file"
+          accept=".xlsx"
+          (change)="onFileSelected($event)"
+        />
+      </label>
+      <button
+        type="button"
+        class="primary-button"
+        (click)="uploadCut()"
+        [disabled]="isUploading"
+      >
+        {{ isUploading ? 'Procesando…' : 'Cargar y analizar' }}
+      </button>
+    </div>
+  </section>
+
+  <div class="loading" *ngIf="isLoading">Actualizando análisis…</div>
+
+  <section class="empty-state" *ngIf="!isLoading && !analysis">
+    <strong>No hay cortes de Composición cargados.</strong>
+    <span>
+      Exporta Resumen Ventas desde GASCA y usa “Cargar corte GASCA”.
+    </span>
+  </section>
+
+  <ng-container *ngIf="analysis && summary">
+    <div class="source-strip">
+      <div>
+        <span>{{ analysis.source.current_label }}</span>
+        <small>vs {{ analysis.source.comparison_label }}</small>
+      </div>
+      <div
+        class="quality-pill"
+        [class.quality-pill--warning]="!dataQualityOk"
+      >
+        {{ dataQualityOk ? 'Fuente conciliada' : 'Revisar conciliación' }}
+      </div>
+      <div class="view-toggle" role="group" aria-label="Vista del analizador">
+        <button
+          type="button"
+          [class.is-active]="viewMode === 'general'"
+          (click)="setViewMode('general')"
+        >
+          General
+        </button>
+        <button
+          type="button"
+          [class.is-active]="viewMode === 'advanced'"
+          (click)="setViewMode('advanced')"
+        >
+          Análisis avanzado
+        </button>
+      </div>
+    </div>
+
+    <section class="kpi-grid">
+      <article class="kpi-card">
+        <span>Venta de membresías</span>
+        <strong>{{ formatCurrency(summary.current_flow) }}</strong>
+        <small [class]="deltaClass(summary.delta_flow)">
+          {{ formatSignedCurrency(summary.delta_flow) }} ·
+          {{ formatSignedPercent(summary.growth_pct) }}
+        </small>
+      </article>
+      <article class="kpi-card">
+        <span>Mix de contrato</span>
+        <strong>{{ formatPercent(summary.contract_mix_pct) }}</strong>
+        <small [class]="deltaClass(summary.contract_mix_delta_pp)">
+          {{ formatSignedPp(summary.contract_mix_delta_pp) }} vs comparativo
+        </small>
+      </article>
+      <article class="kpi-card">
+        <span>Concentración Top 3</span>
+        <strong>{{ formatPercent(summary.top3_concentration_pct) }}</strong>
+        <small>Participación de las 3 familias principales</small>
+      </article>
+      <article class="kpi-card">
+        <span>Mayor cambio de mix</span>
+        <strong>{{ summary.largest_mix_shift?.label || '—' }}</strong>
+        <small [class]="deltaClass(summary.largest_mix_shift?.mix_delta_pp)">
+          {{ formatSignedPp(summary.largest_mix_shift?.mix_delta_pp) }}
+        </small>
+      </article>
+    </section>
+
+    <ng-container *ngIf="viewMode === 'general'">
+      <section class="analysis-grid">
+        <article class="panel">
+          <header class="panel-header">
+            <div>
+              <span class="section-kicker">QUÉ LO EXPLICA</span>
+              <h2>Drivers del movimiento</h2>
+            </div>
+          </header>
+          <div class="driver-columns">
+            <div>
+              <h3>Impulsores</h3>
+              <div
+                class="driver-row"
+                *ngFor="let driver of positiveDrivers"
+              >
+                <div>
+                  <strong>{{ driver.label }}</strong>
+                  <small>
+                    {{ formatPercent(driver.movement_share_pct) }} del movimiento absoluto
+                  </small>
+                </div>
+                <span class="delta-positive">
+                  {{ formatSignedCurrency(driver.delta_flow) }}
+                </span>
+              </div>
+              <div class="mini-empty" *ngIf="positiveDrivers.length === 0">
+                Sin impulsores positivos en este corte.
+              </div>
+            </div>
+            <div>
+              <h3>Frenos</h3>
+              <div
+                class="driver-row"
+                *ngFor="let driver of negativeDrivers"
+              >
+                <div>
+                  <strong>{{ driver.label }}</strong>
+                  <small>{{ formatSignedPp(driver.mix_delta_pp) }} de mix</small>
+                </div>
+                <span class="delta-negative">
+                  {{ formatSignedCurrency(driver.delta_flow) }}
+                </span>
+              </div>
+              <div class="mini-empty" *ngIf="negativeDrivers.length === 0">
+                Sin movimientos negativos en este corte.
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="panel">
+          <header class="panel-header">
+            <div>
+              <span class="section-kicker">QUÉ CAMBIÓ</span>
+              <h2>Estructura de la venta</h2>
+            </div>
+          </header>
+          <div class="mix-list">
+            <div class="mix-row" *ngFor="let group of topGroups">
+              <div class="mix-row__top">
+                <div>
+                  <strong>{{ group.label }}</strong>
+                  <small>
+                    {{ group.sales_mode === 'CONTRACT' ? 'Con contrato' : 'Sin contrato' }}
+                    · {{ group.tariff_count }} tarifas
+                  </small>
+                </div>
+                <div class="mix-values">
+                  <strong>{{ formatPercent(group.current_mix_pct) }}</strong>
+                  <span [class]="deltaClass(group.mix_delta_pp)">
+                    {{ formatSignedPp(group.mix_delta_pp) }}
+                  </span>
+                </div>
+              </div>
+              <div class="mix-track">
+                <span [style.width.%]="mixBarWidth(group)"></span>
+              </div>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section class="analysis-grid lower-grid">
+        <article class="panel">
+          <header class="panel-header">
+            <div>
+              <span class="section-kicker">DÓNDE OCURRIÓ</span>
+              <h2>Sucursales con mayor movimiento</h2>
+            </div>
+          </header>
+          <div class="branch-list">
+            <div
+              class="branch-row"
+              *ngFor="let branch of topBranchMovements"
+            >
+              <div>
+                <strong>{{ branch.branch }}</strong>
+                <small>
+                  {{ formatCurrency(branch.current_flow) }} · mix
+                  {{ formatPercent(branch.current_mix_pct) }}
+                </small>
+              </div>
+              <span [class]="deltaClass(branch.delta_flow)">
+                {{ formatSignedCurrency(branch.delta_flow) }}
+              </span>
+            </div>
+          </div>
+        </article>
+
+        <article class="panel">
+          <header class="panel-header">
+            <div>
+              <span class="section-kicker">LECTURAS</span>
+              <h2>Señales automáticas</h2>
+            </div>
+          </header>
+          <div class="signal-list">
+            <article
+              class="signal-card"
+              *ngFor="let signal of analysis.signals"
+              [attr.data-tone]="signal.tone"
+            >
+              <strong>{{ signalTitle(signal) }}</strong>
+              <span>{{ signalDetail(signal) }}</span>
+            </article>
+          </div>
+        </article>
+      </section>
+    </ng-container>
+
+    <ng-container *ngIf="viewMode === 'advanced'">
+      <section class="panel advanced-panel">
+        <header class="panel-header">
+          <div>
+            <span class="section-kicker">ESTRUCTURA</span>
+            <h2>Familias y tipos de contrato</h2>
+          </div>
+        </header>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Grupo</th>
+                <th>Venta</th>
+                <th>Δ venta</th>
+                <th>Volumen</th>
+                <th>Mix</th>
+                <th>Δ mix</th>
+                <th>Tarifas</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let group of analysis.groups">
+                <td>
+                  <strong>{{ group.label }}</strong>
+                  <small>
+                    {{ group.sales_mode === 'CONTRACT' ? 'Contrato' : 'Sin contrato' }}
+                  </small>
+                </td>
+                <td>{{ formatCurrency(group.current_flow) }}</td>
+                <td [class]="deltaClass(group.delta_flow)">
+                  {{ formatSignedCurrency(group.delta_flow) }}
+                </td>
+                <td>{{ formatNumber(group.current_quantity) }}</td>
+                <td>{{ formatPercent(group.current_mix_pct) }}</td>
+                <td [class]="deltaClass(group.mix_delta_pp)">
+                  {{ formatSignedPp(group.mix_delta_pp) }}
+                </td>
+                <td>{{ group.tariff_count }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel advanced-panel">
+        <header class="panel-header panel-header--filters">
+          <div>
+            <span class="section-kicker">TARIFAS</span>
+            <h2>Detalle para investigar</h2>
+          </div>
+          <div class="inline-filters">
+            <select [(ngModel)]="salesModeFilter">
+              <option value="ALL">Contrato + sin contrato</option>
+              <option value="CONTRACT">Solo contrato</option>
+              <option value="NO_CONTRACT">Solo sin contrato</option>
+            </select>
+            <input
+              type="search"
+              [(ngModel)]="tariffSearch"
+              placeholder="Buscar tarifa o familia"
+            />
+          </div>
+        </header>
+        <div class="table-wrap tall-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Tarifa</th>
+                <th>Grupo</th>
+                <th>Costo GASCA</th>
+                <th>Equiv. mensual</th>
+                <th>Cantidad</th>
+                <th>Venta</th>
+                <th>Δ venta</th>
+                <th>Mix</th>
+                <th>Δ mix</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let tariff of filteredTariffs">
+                <td>
+                  <strong>{{ tariff.tariff_name }}</strong>
+                  <small *ngIf="tariff.plan_type">{{ tariff.plan_type }}</small>
+                  <small *ngIf="tariff.free_months_raw">
+                    Mes gratis: {{ tariff.free_months_raw }}
+                  </small>
+                </td>
+                <td>{{ tariff.group_label }}</td>
+                <td>{{ formatCurrency(tariff.source_cost) }}</td>
+                <td>{{ formatCurrency(tariff.monthly_equivalent) }}</td>
+                <td>{{ formatNumber(tariff.current_quantity) }}</td>
+                <td>{{ formatCurrency(tariff.current_flow) }}</td>
+                <td [class]="deltaClass(tariff.delta_flow)">
+                  {{ formatSignedCurrency(tariff.delta_flow) }}
+                </td>
+                <td>{{ formatPercent(tariff.current_mix_pct) }}</td>
+                <td [class]="deltaClass(tariff.mix_delta_pp)">
+                  {{ formatSignedPp(tariff.mix_delta_pp) }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel advanced-panel">
+        <header class="panel-header panel-header--filters">
+          <div>
+            <span class="section-kicker">SUCURSALES</span>
+            <h2>Contribución al movimiento</h2>
+          </div>
+          <div class="inline-filters">
+            <input
+              type="search"
+              [(ngModel)]="branchSearch"
+              placeholder="Buscar sucursal"
+            />
+          </div>
+        </header>
+        <div class="table-wrap tall-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Sucursal</th>
+                <th>Venta</th>
+                <th>Comparativo</th>
+                <th>Δ venta</th>
+                <th>Δ %</th>
+                <th>Mix</th>
+                <th>Movimiento</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let branch of filteredBranches">
+                <td><strong>{{ branch.branch }}</strong></td>
+                <td>{{ formatCurrency(branch.current_flow) }}</td>
+                <td>{{ formatCurrency(branch.comparison_flow) }}</td>
+                <td [class]="deltaClass(branch.delta_flow)">
+                  {{ formatSignedCurrency(branch.delta_flow) }}
+                </td>
+                <td [class]="deltaClass(branch.growth_pct)">
+                  {{ formatSignedPercent(branch.growth_pct) }}
+                </td>
+                <td>{{ formatPercent(branch.current_mix_pct) }}</td>
+                <td>{{ formatPercent(branch.movement_share_pct) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </ng-container>
+  </ng-container>
+</section>
