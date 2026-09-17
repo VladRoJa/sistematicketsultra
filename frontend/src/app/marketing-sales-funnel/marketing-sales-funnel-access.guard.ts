@@ -23,7 +23,11 @@ export class MarketingSalesFunnelAccessGuard implements CanActivate {
     const username = String(user.username || '').trim().toUpperCase();
     const role = String(user.rol ?? user.role ?? '').trim().toUpperCase();
 
-    if (username === 'ADMICORP' || role === 'LECTOR_GLOBAL') {
+    if (
+      username === 'ADMICORP'
+      || role === 'LECTOR_GLOBAL'
+      || role === 'GERENTE'
+    ) {
       return true;
     }
 
