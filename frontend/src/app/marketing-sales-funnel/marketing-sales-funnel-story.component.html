@@ -121,7 +121,11 @@
   <div class="flow-origin-stack__list sale-composition__list">
 
     <!-- DIGITAL -->
-    <div class="flow-origin-card sale-composition__group sale-composition__group--digital">
+    <button
+      type="button"
+      class="flow-origin-card sale-composition__group sale-composition__group--digital"
+      (click)="openMetric(composition.digitalMetric)"
+    >
       <span class="flow-origin-card__icon">
         <mat-icon>campaign</mat-icon>
       </span>
@@ -134,20 +138,35 @@
       <span class="flow-origin-card__value">
         {{ composition.digitalTotal }}
       </span>
-    </div>
+    </button>
 
     <div class="sale-composition__children">
-      <div
+      <button
         *ngFor="let row of composition.digitalChildren"
-        class="sale-composition__child"
+        type="button"
+        class="sale-composition__child sale-composition__child--digital"
+        (click)="openMetric(row.metric)"
       >
-        <span>{{ row.label }}</span>
-        <strong>{{ row.value }}</strong>
-      </div>
+        <span class="sale-composition__child-icon">
+          <mat-icon>{{ row.icon }}</mat-icon>
+        </span>
+
+        <span class="sale-composition__child-label">
+          {{ row.label }}
+        </span>
+
+        <strong class="sale-composition__child-value">
+          {{ row.value }}
+        </strong>
+      </button>
     </div>
 
     <!-- WEB -->
-    <div class="flow-origin-card sale-composition__group sale-composition__group--web">
+    <button
+      type="button"
+      class="flow-origin-card sale-composition__group sale-composition__group--web"
+      (click)="openMetric(composition.webMetric)"
+    >
       <span class="flow-origin-card__icon">
         <mat-icon>language</mat-icon>
       </span>
@@ -160,10 +179,14 @@
       <span class="flow-origin-card__value">
         {{ composition.webTotal }}
       </span>
-    </div>
+    </button>
 
     <!-- BTL -->
-    <div class="flow-origin-card sale-composition__group sale-composition__group--btl">
+    <button
+      type="button"
+      class="flow-origin-card sale-composition__group sale-composition__group--btl"
+      (click)="openMetric(composition.btlMetric)"
+    >
       <span class="flow-origin-card__icon">
         <mat-icon>storefront</mat-icon>
       </span>
@@ -176,12 +199,14 @@
       <span class="flow-origin-card__value">
         {{ composition.btlTotal }}
       </span>
-    </div>
+    </button>
 
     <div class="sale-composition__children sale-composition__children--btl">
-      <div
+      <button
         *ngFor="let row of composition.btlOrigins"
+        type="button"
         class="sale-composition__child sale-composition__child--btl"
+        (click)="openBtlOrigin(row)"
       >
         <span class="sale-composition__child-icon">
           <mat-icon>{{ row.icon }}</mat-icon>
@@ -198,7 +223,7 @@
         <small class="sale-composition__child-share">
           {{ row.shareDisplay }} de BTL
         </small>
-      </div>
+      </button>
     </div>
 
   </div>
