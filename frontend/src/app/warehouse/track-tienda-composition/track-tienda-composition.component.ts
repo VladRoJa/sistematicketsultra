@@ -232,7 +232,7 @@ export class TrackTiendaCompositionComponent implements OnInit {
     const parsed = new Date(
       Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])),
     );
-    const labels = ['D', 'L', 'M', 'm', 'J', 'V', 'S'];
+    const labels = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
     return labels[parsed.getUTCDay()] || '';
   }
 
