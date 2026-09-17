@@ -771,3 +771,45 @@
   }
 }
 /* END POLISH: corregir visitas tras centrado */
+/* === FUNNEL ORIGIN GRID FIX START === */
+
+.flow-origin-stack {
+  position: relative;
+
+  grid-column: 3 !important;
+  grid-row: 1 !important;
+
+  left: auto;
+  right: auto;
+  top: auto;
+  bottom: auto;
+
+  width: 480px;
+  max-width: 480px;
+
+  margin: 0;
+
+  align-self: center;
+  justify-self: start;
+}
+
+/* === FUNNEL ORIGIN GRID FIX END === */
+
+/* === FUNNEL ORIGIN WIDTH FIX START === */
+
+.flow-origin-stack {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 480px;
+  justify-self: stretch;
+}
+
+/* === FUNNEL ORIGIN WIDTH FIX END === */
+
+/* === FUNNEL ORIGIN X POSITION START === */
+
+.flow-origin-stack {
+  translate: -140px 0;
+}
+
+/* === FUNNEL ORIGIN X POSITION END === */
