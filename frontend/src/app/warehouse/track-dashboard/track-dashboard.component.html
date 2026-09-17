@@ -228,13 +228,25 @@
     class="summary-grid"
     *ngIf="summaryCards.length > 0"
   >
-    <article
-      *ngFor="let card of summaryCards"
-      [class]="getSummaryCardClass(card)"
-    >
-      <span class="summary-card__label">{{ card.label }}</span>
-      <strong class="summary-card__value">{{ card.value }}</strong>
-    </article>
+    <ng-container *ngFor="let card of summaryCards">
+      <a
+        *ngIf="card.label === 'Tienda'; else regularSummaryCard"
+        [class]="getSummaryCardClass(card)"
+        [attr.href]="'/#/warehouse/track/tienda-composition?track_date=' + trackDate + '&generation_mode=' + generationMode"
+        aria-label="Ver composición de venta de Tienda"
+        title="Ver composición de venta de Tienda"
+      >
+        <span class="summary-card__label">{{ card.label }}</span>
+        <strong class="summary-card__value">{{ card.value }}</strong>
+      </a>
+
+      <ng-template #regularSummaryCard>
+        <article [class]="getSummaryCardClass(card)">
+          <span class="summary-card__label">{{ card.label }}</span>
+          <strong class="summary-card__value">{{ card.value }}</strong>
+        </article>
+      </ng-template>
+    </ng-container>
   </section>
 
   <!-- ==========================================================================

@@ -1,0 +1,295 @@
+<div class="tienda-page">
+  <section class="tienda-header-card">
+    <div class="tienda-header-card__main">
+      <div>
+        <p class="tienda-kicker">TRACK / TIENDA</p>
+        <h1>{{ pageTitle }}</h1>
+        <p class="tienda-subtitle">
+          Desglose de la venta que compone el acumulado de Tienda del Track.
+        </p>
+      </div>
+
+      <div class="tienda-header-card__actions">
+        <label class="tienda-date-field">
+          <span>Fecha Track</span>
+          <input
+            type="date"
+            [(ngModel)]="trackDate"
+            (ngModelChange)="onTrackDateChanged()"
+            [disabled]="isLoading"
+          />
+        </label>
+
+        <button
+          type="button"
+          class="tienda-secondary-button"
+          (click)="goBackToTrack()"
+        >
+          ← Volver al Track
+        </button>
+      </div>
+    </div>
+
+    <div class="tienda-version-row" *ngIf="response">
+      <span>Versión: <strong>{{ resolvedVersionLabel }}</strong></span>
+      <span>Snapshot Venta Total: <strong>#{{ response.source_snapshot_id }}</strong></span>
+      <span
+        class="tienda-reconciliation"
+        [class.tienda-reconciliation--ok]="response.summary.is_reconciled"
+        [class.tienda-reconciliation--warning]="!response.summary.is_reconciled"
+      >
+        {{ reconciliationLabel }}
+      </span>
+    </div>
+  </section>
+
+  <div class="tienda-feedback" *ngIf="errorMessage">
+    {{ errorMessage }}
+  </div>
+
+  <div class="tienda-loading" *ngIf="isLoading">
+    Cargando composición de Tienda...
+  </div>
+
+  <ng-container *ngIf="!isLoading && response">
+    <section class="tienda-summary-grid">
+      <article class="tienda-summary-card tienda-summary-card--primary">
+        <span>Venta Tienda</span>
+        <strong>{{ formatCurrency(response.summary.track_total) }}</strong>
+        <small>Meta {{ formatCurrency(response.summary.target_total) }}</small>
+      </article>
+
+      <article class="tienda-summary-card">
+        <span>Avance</span>
+        <strong>{{ formatPercent(response.summary.progress_pct) }}</strong>
+        <small>{{ formatInteger(response.summary.operaciones) }} operaciones</small>
+      </article>
+
+      <article class="tienda-summary-card">
+        <span>Ticket promedio</span>
+        <strong>{{ formatCurrency(response.summary.ticket_promedio) }}</strong>
+        <small>{{ formatDecimal(response.summary.cantidad_total) }} unidades</small>
+      </article>
+
+      <article class="tienda-summary-card">
+        <span>Producto principal</span>
+        <strong>{{ response.summary.top_producto || '—' }}</strong>
+        <small>{{ response.summary.top_clave_producto || 'Sin clave' }}</small>
+      </article>
+
+      <article class="tienda-summary-card">
+        <span>Sucursal líder</span>
+        <strong>{{ response.summary.top_sucursal || '—' }}</strong>
+        <small>Mayor venta Tienda MTD</small>
+      </article>
+    </section>
+
+    <section class="tienda-grid tienda-grid--analysis">
+      <article class="tienda-panel">
+        <div class="tienda-panel__header">
+          <div>
+            <p class="tienda-section-kicker">¿QUÉ ESTAMOS VENDIENDO?</p>
+            <h2>Composición por clave de producto</h2>
+          </div>
+          <button
+            *ngIf="selectedClaveProducto"
+            type="button"
+            class="tienda-link-button"
+            (click)="clearDetail()"
+          >
+            Ver todo
+          </button>
+        </div>
+
+        <div class="tienda-composition-list">
+          <button
+            *ngFor="let item of composition"
+            type="button"
+            class="tienda-composition-row"
+            [class.tienda-composition-row--active]="isCompositionItemSelected(item)"
+            (click)="openCompositionItem(item)"
+          >
+            <div class="tienda-composition-row__top">
+              <div>
+                <strong>{{ item.clave_producto }}</strong>
+                <span>
+                  {{ formatDecimal(item.cantidad) }} unidades ·
+                  {{ formatInteger(item.operaciones) }} operaciones
+                </span>
+              </div>
+              <div class="tienda-composition-row__amount">
+                <strong>{{ formatCurrency(item.total) }}</strong>
+                <span>{{ formatPercent(item.participacion_pct) }}</span>
+              </div>
+            </div>
+            <div class="tienda-progress-track">
+              <span
+                class="tienda-progress-fill"
+                [style.width.%]="getCompositionBarWidth(item)"
+              ></span>
+            </div>
+          </button>
+        </div>
+      </article>
+
+      <article class="tienda-panel">
+        <div class="tienda-panel__header">
+          <div>
+            <p class="tienda-section-kicker">TENDENCIA</p>
+            <h2>Venta diaria</h2>
+          </div>
+        </div>
+
+        <div class="tienda-daily-list">
+          <div class="tienda-daily-row" *ngFor="let item of daily">
+            <span class="tienda-daily-row__date">{{ formatDate(item.fecha) }}</span>
+            <div class="tienda-daily-row__bar">
+              <span
+                class="tienda-daily-row__fill"
+                [style.width.%]="getDailyBarWidth(item)"
+              ></span>
+            </div>
+            <strong>{{ formatCurrency(item.total) }}</strong>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section class="tienda-panel">
+      <div class="tienda-panel__header">
+        <div>
+          <p class="tienda-section-kicker">PRODUCTOS</p>
+          <h2>
+            {{ selectedClaveProducto ? ('Detalle · ' + selectedClaveProducto) : 'Top productos' }}
+          </h2>
+        </div>
+        <span class="tienda-panel__hint">Clic en una fila para abrir operaciones</span>
+      </div>
+
+      <div class="tienda-table-wrapper">
+        <table class="tienda-table">
+          <thead>
+            <tr>
+              <th>Clave producto</th>
+              <th>Descripción</th>
+              <th class="tienda-cell-right">Unidades</th>
+              <th class="tienda-cell-right">Operaciones</th>
+              <th class="tienda-cell-right">Ticket prom.</th>
+              <th class="tienda-cell-right">Participación</th>
+              <th class="tienda-cell-right">Venta</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              *ngFor="let item of filteredProducts"
+              class="tienda-table__clickable-row"
+              (click)="openProduct(item)"
+              tabindex="0"
+              (keydown.enter)="openProduct(item)"
+            >
+              <td><strong>{{ item.clave_producto }}</strong></td>
+              <td>{{ item.descripcion }}</td>
+              <td class="tienda-cell-right">{{ formatDecimal(item.cantidad) }}</td>
+              <td class="tienda-cell-right">{{ formatInteger(item.operaciones) }}</td>
+              <td class="tienda-cell-right">{{ formatCurrency(item.ticket_promedio) }}</td>
+              <td class="tienda-cell-right">{{ formatPercent(item.participacion_pct) }}</td>
+              <td class="tienda-cell-right"><strong>{{ formatCurrency(item.total) }}</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="tienda-panel">
+      <div class="tienda-panel__header">
+        <div>
+          <p class="tienda-section-kicker">¿DÓNDE SE VENDE?</p>
+          <h2>Venta por sucursal</h2>
+        </div>
+        <span class="tienda-panel__hint">Clic para ver operaciones del club</span>
+      </div>
+
+      <div class="tienda-branch-grid">
+        <button
+          *ngFor="let item of branches"
+          type="button"
+          class="tienda-branch-card"
+          (click)="openBranch(item)"
+        >
+          <span>{{ item.sucursal_canon }}</span>
+          <strong>{{ formatCurrency(item.total) }}</strong>
+          <small>
+            {{ formatPercent(item.participacion_pct) }} ·
+            {{ formatInteger(item.operaciones) }} ops
+          </small>
+        </button>
+      </div>
+    </section>
+
+    <section class="tienda-panel" *ngIf="detailTitle || isLoadingOperations || operations.length">
+      <div class="tienda-panel__header">
+        <div>
+          <p class="tienda-section-kicker">DRILL-DOWN</p>
+          <h2>{{ detailTitle || 'Operaciones' }}</h2>
+        </div>
+        <button
+          type="button"
+          class="tienda-link-button"
+          (click)="clearDetail()"
+        >
+          Cerrar detalle
+        </button>
+      </div>
+
+      <div class="tienda-loading tienda-loading--inline" *ngIf="isLoadingOperations">
+        Cargando operaciones...
+      </div>
+
+      <div class="tienda-feedback" *ngIf="operationsErrorMessage">
+        {{ operationsErrorMessage }}
+      </div>
+
+      <div
+        class="tienda-empty-detail"
+        *ngIf="!isLoadingOperations && !operationsErrorMessage && detailTitle && operations.length === 0 && (selectedDescripcion || selectedSucursalCanon)"
+      >
+        No se encontraron operaciones para el filtro seleccionado.
+      </div>
+
+      <div class="tienda-table-wrapper" *ngIf="operations.length > 0">
+        <table class="tienda-table tienda-table--operations">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Hora</th>
+              <th>Sucursal</th>
+              <th>Folio</th>
+              <th>Clave producto</th>
+              <th>Descripción</th>
+              <th class="tienda-cell-right">Cantidad</th>
+              <th class="tienda-cell-right">Precio unit.</th>
+              <th class="tienda-cell-right">Total</th>
+              <th>Forma pago</th>
+              <th>Realizó venta</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let operation of operations">
+              <td>{{ formatDate(operation.fecha) }}</td>
+              <td>{{ operation.hora }}</td>
+              <td>{{ operation.sucursal_canon }}</td>
+              <td>{{ operation.folio }}</td>
+              <td>{{ operation.clave_producto }}</td>
+              <td>{{ operation.descripcion }}</td>
+              <td class="tienda-cell-right">{{ formatDecimal(operation.cantidad) }}</td>
+              <td class="tienda-cell-right">{{ formatCurrency(operation.precio_unitario) }}</td>
+              <td class="tienda-cell-right"><strong>{{ formatCurrency(operation.total) }}</strong></td>
+              <td>{{ operation.forma_pago }}</td>
+              <td>{{ operation.realizo_venta }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </ng-container>
+</div>

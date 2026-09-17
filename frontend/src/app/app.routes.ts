@@ -158,6 +158,13 @@ export const routes: Routes = [
         component: TrackDashboardComponent,
       },
       {
+        path: 'warehouse/track/tienda-composition',
+        canActivate: [AdmicorpGuard],
+        loadComponent: () =>
+          import('./warehouse/track-tienda-composition/track-tienda-composition.component')
+            .then(m => m.TrackTiendaCompositionComponent),
+      },
+      {
         path: 'marketing-conversion',
         canActivate: [AdmicorpGuard],
         loadComponent: () =>
