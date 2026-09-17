@@ -587,12 +587,13 @@ function writeCommercialSummary(
   totals: ExportTotals,
   grandInvestment: number | null,
 ): void {
+  const sourceTotalRow = headerRow - 3;
   const totalRow = headerRow + 1;
   const digitalRow = headerRow + 2;
   const otherRow = headerRow + 3;
   const investmentRow = headerRow + 4;
 
-  for (let column = 1; column <= 5; column += 1) {
+  for (let column = 1; column <= 6; column += 1) {
     const cell = worksheet.getCell(headerRow, column);
     cell.fill = solidFill(COLORS.navy);
   }
@@ -607,36 +608,73 @@ function writeCommercialSummary(
   worksheet.getRow(headerRow).height = 18;
 
   worksheet.getCell(`A${totalRow}`).value = 'Total de ventas nuevas';
-  worksheet.getCell(`B${totalRow}`).value = totals.salesTotal;
-  worksheet.getCell(`D${totalRow}`).value = 'Meta digital (50%)';
-  worksheet.getCell(`E${totalRow}`).value = totals.salesTotal * 0.5;
-
-  worksheet.getCell(`A${digitalRow}`).value = 'Ventas vía Digital';
-  worksheet.getCell(`B${digitalRow}`).value =
-    totals.salesDigital + totals.salesDigitalOrganic;
-  worksheet.getCell(`C${digitalRow}`).value = safeDivide(
-    totals.salesDigital + totals.salesDigitalOrganic,
+  setFormulaCell(
+    worksheet,
+    `B${totalRow}`,
+    `I${sourceTotalRow}`,
     totals.salesTotal,
   );
-  worksheet.getCell(`D${digitalRow}`).value = 'Brecha vs meta';
-  worksheet.getCell(`E${digitalRow}`).value =
+  worksheet.getCell(`E${totalRow}`).value = 'Meta digital (50%)';
+  setFormulaCell(
+    worksheet,
+    `F${totalRow}`,
+    `B${totalRow}*0.5`,
+    totals.salesTotal * 0.5,
+  );
+
+  worksheet.getCell(`A${digitalRow}`).value = 'Ventas vía Digital';
+  setFormulaCell(
+    worksheet,
+    `B${digitalRow}`,
+    `E${sourceTotalRow}+F${sourceTotalRow}`,
+    totals.salesDigital + totals.salesDigitalOrganic,
+  );
+  setFormulaCell(
+    worksheet,
+    `C${digitalRow}`,
+    `IFERROR(B${digitalRow}/B${totalRow},"")`,
+    safeDivide(
+      totals.salesDigital + totals.salesDigitalOrganic,
+      totals.salesTotal,
+    ),
+  );
+  worksheet.getCell(`E${digitalRow}`).value = 'Brecha vs meta';
+  setFormulaCell(
+    worksheet,
+    `F${digitalRow}`,
+    `B${digitalRow}-F${totalRow}`,
     totals.salesDigital
-    + totals.salesDigitalOrganic
-    - totals.salesTotal * 0.5;
+      + totals.salesDigitalOrganic
+      - totals.salesTotal * 0.5,
+  );
 
   worksheet.getCell(`A${otherRow}`).value = 'Ventas otros canales';
-  worksheet.getCell(`B${otherRow}`).value =
-    totals.salesTotal - totals.salesDigital - totals.salesDigitalOrganic;
-  worksheet.getCell(`C${otherRow}`).value = safeDivide(
+  setFormulaCell(
+    worksheet,
+    `B${otherRow}`,
+    `B${totalRow}-B${digitalRow}`,
     totals.salesTotal - totals.salesDigital - totals.salesDigitalOrganic,
-    totals.salesTotal,
+  );
+  setFormulaCell(
+    worksheet,
+    `C${otherRow}`,
+    `IFERROR(B${otherRow}/B${totalRow},"")`,
+    safeDivide(
+      totals.salesTotal - totals.salesDigital - totals.salesDigitalOrganic,
+      totals.salesTotal,
+    ),
   );
 
   worksheet.getCell(`A${investmentRow}`).value = 'Inversión';
-  worksheet.getCell(`B${investmentRow}`).value = grandInvestment;
+  setFormulaCell(
+    worksheet,
+    `B${investmentRow}`,
+    `IF(B${sourceTotalRow}="","",B${sourceTotalRow})`,
+    grandInvestment,
+  );
 
   for (let row = totalRow; row <= investmentRow; row += 1) {
-    for (let column = 1; column <= 5; column += 1) {
+    for (const column of [1, 2, 3, 5, 6]) {
       const cell = worksheet.getCell(row, column);
       cell.border = allThinBorders();
       cell.font = {
@@ -647,9 +685,11 @@ function writeCommercialSummary(
       };
       cell.alignment = {
         vertical: 'middle',
-        horizontal: column === 1 || column === 4 ? 'left' : 'right',
+        horizontal: column === 1 || column === 5 ? 'left' : 'right',
       };
     }
+
+    worksheet.getCell(`D${row}`).value = null;
   }
 
   worksheet.getCell(`B${totalRow}`).numFmt = INTEGER_FORMAT;
@@ -658,10 +698,10 @@ function writeCommercialSummary(
   worksheet.getCell(`B${investmentRow}`).numFmt = CURRENCY_FORMAT;
   worksheet.getCell(`C${digitalRow}`).numFmt = PERCENT_FORMAT;
   worksheet.getCell(`C${otherRow}`).numFmt = PERCENT_FORMAT;
-  worksheet.getCell(`E${totalRow}`).numFmt = INTEGER_FORMAT;
-  worksheet.getCell(`E${digitalRow}`).numFmt = INTEGER_FORMAT;
-  worksheet.getCell(`E${digitalRow}`).fill = solidFill(COLORS.yellow);
-  worksheet.getCell(`E${digitalRow}`).font = {
+  worksheet.getCell(`F${totalRow}`).numFmt = INTEGER_FORMAT;
+  worksheet.getCell(`F${digitalRow}`).numFmt = INTEGER_FORMAT;
+  worksheet.getCell(`F${digitalRow}`).fill = solidFill(COLORS.yellow);
+  worksheet.getCell(`F${digitalRow}`).font = {
     name: 'Calibri',
     size: 10,
     bold: true,
