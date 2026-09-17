@@ -23,6 +23,7 @@ import { TrackForecastComponent } from './warehouse/track-forecast/track-forecas
 import { TrackBranchHistoryComponent } from './warehouse/track-dashboard/track-branch-history/track-branch-history.component';
 import { CommercialPromotionsComponent } from './warehouse/commercial-promotions/commercial-promotions.component';
 import { trackRegionalOperationalAccessGuard } from './warehouse/track-intelligence-regional-operational/track-regional-operational-access.guard';
+import { trackTiendaCompositionAccessGuard } from './warehouse/track-tienda-composition/track-tienda-composition-access.guard';
 import { MarketingSalesFunnelAccessGuard } from './marketing-sales-funnel/marketing-sales-funnel-access.guard';
 
 
@@ -159,7 +160,7 @@ export const routes: Routes = [
       },
       {
         path: 'warehouse/track/tienda-composition',
-        canActivate: [AdmicorpGuard],
+        canActivate: [trackTiendaCompositionAccessGuard],
         loadComponent: () =>
           import('./warehouse/track-tienda-composition/track-tienda-composition.component')
             .then(m => m.TrackTiendaCompositionComponent),

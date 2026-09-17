@@ -13,7 +13,7 @@ from app.warehouse.services.track_tienda_composition_service import (
 track_tienda_bp = Blueprint("track_tienda_bp", __name__)
 
 
-def _require_admicorp() -> UserORM:
+def _require_tienda_composition_access() -> UserORM:
     try:
         user_id = int(get_jwt_identity())
     except (TypeError, ValueError) as exc:
@@ -25,10 +25,11 @@ def _require_admicorp() -> UserORM:
         raise PermissionError("No se pudo resolver el usuario actual.")
 
     username = str(getattr(user, "username", "") or "").strip().upper()
+    role = str(getattr(user, "rol", "") or "").strip().upper()
 
-    if username != "ADMICORP":
+    if username != "ADMICORP" and role != "TIENDA":
         raise PermissionError(
-            "La composición de Tienda está habilitada temporalmente solo para ADMICORP."
+            "La composición de Tienda está habilitada solo para ADMICORP y el perfil TIENDA."
         )
 
     return user
@@ -43,7 +44,7 @@ def _parse_bool(value: object) -> bool:
 @jwt_required()
 def get_track_tienda_composition_endpoint():
     try:
-        _require_admicorp()
+        _require_tienda_composition_access()
 
         result = build_track_tienda_composition(
             track_date=request.args.get("track_date"),
