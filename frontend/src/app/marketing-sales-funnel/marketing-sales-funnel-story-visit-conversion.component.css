@@ -427,10 +427,13 @@
 }
 
 .flow-card__visit-branch-main > mat-icon {
-  width: 18px;
-  height: 18px;
+  width: 28px;
+  height: 28px;
+  margin-bottom: 2px;
   color: var(--trace-orange);
-  font-size: 18px;
+  font-size: 28px;
+  line-height: 28px;
+  flex-shrink: 0;
 }
 
 .flow-card__visit-branch--gray
@@ -457,6 +460,13 @@
   gap: 2px;
   color: var(--trace-muted);
   font-size: 6px;
+}
+.flow-card__visit-branch-main > small mat-icon {
+  width: 9px;
+  height: 9px;
+  font-size: 9px;
+  line-height: 9px;
+  flex-shrink: 0;
 }
 
 .flow-card__visit-results {
@@ -753,6 +763,14 @@
 
 /* === FUNNEL GRID GAP FIX END === */
 
+/* === FUNNEL LEADS VISITS RIBBON REMOVAL START === */
+
+.flow-board > .flow-card--leads::after {
+  display: none;
+}
+
+/* === FUNNEL LEADS VISITS RIBBON REMOVAL END === */
+
 /* === FUNNEL LEADS CARD ONLY START === */
 
 .flow-board > .flow-card--leads {
@@ -862,3 +880,309 @@
 }
 
 /* === FUNNEL ORIGIN COMPACT WIDTH END === */
+
+/* === FUNNEL VISITS SPACE USE START === */
+
+@media (min-width: 1201px) {
+  .flow-card--visits-hierarchy {
+    grid-template-rows: 118px minmax(0, 1fr);
+  }
+
+  .flow-card__visit-branches {
+    align-items: stretch;
+  }
+
+  .flow-card__visit-branch {
+    grid-template-rows: 108px minmax(0, 1fr);
+  }
+
+  .flow-card__visit-branch-main {
+    padding: 12px 10px;
+    gap: 3px;
+  }
+  .flow-card__visit-branch-main > mat-icon {
+    width: 28px;
+    height: 28px;
+    font-size: 28px;
+    line-height: 28px;
+  }
+
+  .flow-card__visit-branch-main > span {
+    font-size: 10px;
+  }
+
+  .flow-card__visit-branch-main > strong {
+    font-size: 30px;
+  }
+
+  .flow-card__visit-results {
+    grid-template-columns: 1fr;
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+  }
+
+  .flow-card__visit-results .flow-card__visit-result {
+    padding: 14px 10px;
+    gap: 4px;
+  }
+
+  .flow-card__visit-results
+  .flow-card__visit-result + .flow-card__visit-result {
+    border-top: 1px solid #e8edf2;
+    border-left: 0;
+  }
+
+  .flow-card__visit-results .flow-card__visit-result mat-icon {
+    width: 18px;
+    height: 18px;
+    font-size: 18px;
+  }
+
+  .flow-card__visit-results .flow-card__visit-result small {
+    font-size: 7px;
+  }
+
+  .flow-card__visit-results .flow-card__visit-result strong {
+    font-size: 28px;
+  }
+
+  .flow-card__visit-results .flow-card__visit-action {
+    margin-top: 1px;
+    font-size: 6px;
+  }
+
+  .flow-card__visit-results .flow-card__visit-action mat-icon {
+    width: 9px;
+    height: 9px;
+    font-size: 9px;
+  }
+}
+
+/* === FUNNEL VISITS SPACE USE END === */
+
+/* === FUNNEL VISITS PERCENTAGES START === */
+
+.flow-card__visit-number {
+  position: relative;
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+}
+
+.flow-card__visit-percent {
+  position: absolute;
+  top: 50%;
+  left: calc(50% + 32px);
+  display: inline-flex;
+  min-width: 36px;
+  padding: 4px 6px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #52647c;
+  font-size: 8px;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+  transform: translateY(-50%);
+}
+
+.flow-card__visit-branch-main
+.flow-card__visit-number > strong {
+  color: var(--trace-navy);
+  font-size: 27px;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.flow-card__visit-branch:not(.flow-card__visit-branch--gray)
+.flow-card__visit-branch-main
+.flow-card__visit-percent {
+  background: rgba(240, 82, 45, 0.09);
+  color: #c24124;
+}
+
+.flow-card__visit-branch--gray
+.flow-card__visit-branch-main
+.flow-card__visit-percent {
+  background: rgba(107, 129, 157, 0.12);
+  color: #526b89;
+}
+
+.flow-card__visit-result--bought
+.flow-card__visit-percent {
+  background: rgba(22, 155, 80, 0.10);
+  color: #128043;
+}
+
+.flow-card__visit-result--not-bought
+.flow-card__visit-percent {
+  background: rgba(148, 163, 184, 0.14);
+  color: #64748b;
+}
+
+.flow-card__visit-branch:first-child .flow-card__visit-percent {
+  left: auto;
+  right: calc(50% + 46px);
+}
+
+.flow-card__visit-branch:last-child .flow-card__visit-percent {
+  left: calc(50% + 46px);
+}
+
+@media (min-width: 1201px) {
+  .flow-card__visit-branch-main
+  .flow-card__visit-number > strong {
+    font-size: 30px;
+  }
+}
+
+/* === FUNNEL EXECUTIVE EFFICIENCY START === */
+
+.flow-efficiency-card {
+  position: absolute;
+  z-index: 6;
+  top: 24px;
+  left: 24px;
+
+  width: 260px;
+  box-sizing: border-box;
+  padding: 14px;
+
+  border: 1px solid #d8e0e9;
+  border-radius: 14px;
+
+  background: rgba(251, 252, 254, 0.98);
+  color: var(--trace-navy);
+
+  box-shadow: 0 8px 22px rgba(34, 44, 58, 0.06);
+}
+
+.flow-efficiency-card__header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+
+  border-bottom: 1px solid #e1e7ee;
+}
+
+.flow-efficiency-card__header > div:first-child {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.flow-efficiency-card__eyebrow {
+  color: #718198;
+  font-size: 7px;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.flow-efficiency-card__header > div:first-child > strong {
+  color: #263850;
+  font-size: 10px;
+  font-weight: 950;
+  line-height: 1.1;
+}
+
+.flow-efficiency-card__investment {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.flow-efficiency-card__investment > span {
+  color: #718198;
+  font-size: 7px;
+  font-weight: 850;
+}
+
+.flow-efficiency-card__investment > strong {
+  color: var(--trace-navy);
+  font-size: 18px;
+  font-weight: 950;
+  line-height: 1;
+  letter-spacing: -0.035em;
+}
+
+.flow-efficiency-card__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+}
+
+.flow-efficiency-card__grid > section {
+  min-width: 0;
+}
+
+.flow-efficiency-card__grid > section + section {
+  padding-left: 12px;
+  margin-left: 12px;
+  border-left: 1px solid #d8e0e9;
+}
+
+.flow-efficiency-card h3 {
+  margin: 0 0 8px;
+
+  color: #33455c;
+  font-size: 8px;
+  font-weight: 950;
+  letter-spacing: 0.025em;
+}
+
+.flow-efficiency-card__metric {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 7px;
+
+  min-height: 18px;
+}
+
+.flow-efficiency-card__metric > span {
+  overflow: hidden;
+
+  color: #718198;
+  font-size: 7px;
+  font-weight: 750;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flow-efficiency-card__metric > strong {
+  color: var(--trace-navy);
+  font-size: 10px;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+@media (max-width: 1200px) {
+  .flow-efficiency-card {
+    position: relative;
+    top: auto;
+    left: auto;
+
+    grid-column: 1;
+    grid-row: auto;
+
+    width: 100%;
+    max-width: none;
+
+    justify-self: stretch;
+  }
+}
+
+/* === FUNNEL EXECUTIVE EFFICIENCY END === */

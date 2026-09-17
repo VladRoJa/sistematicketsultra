@@ -832,7 +832,7 @@
 }
 
 .sale-composition__group {
-  grid-template-columns: 38px minmax(0, 1fr) auto;
+  grid-template-columns: 38px minmax(0, 1fr) auto auto;
   gap: 10px;
   min-height: 54px;
   padding: 7px 10px;
@@ -986,3 +986,21 @@
 .sale-composition__child--digital .sale-composition__child-label {
   text-align: left;
 }
+
+/* === SALE COMPOSITION MAIN SHARE POSITION START === */
+
+.sale-composition__group .flow-origin-card__share {
+  grid-column: 3;
+  grid-row: 1;
+  min-width: 44px;
+  align-self: center;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.sale-composition__group .flow-origin-card__value {
+  grid-column: 4;
+  grid-row: 1;
+}
+
+/* === SALE COMPOSITION MAIN SHARE POSITION END === */

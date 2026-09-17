@@ -46,11 +46,14 @@ interface SaleCompositionView {
   total: string;
   totalMetric: string;
   digitalTotal: string;
+  digitalShare: string;
   digitalMetric: string;
   digitalChildren: SaleCompositionChildView[];
   webTotal: string;
+  webShare: string;
   webMetric: string;
   btlTotal: string;
+  btlShare: string;
   btlMetric: string;
   btlOrigins: FallbackOriginView[];
 }
@@ -66,12 +69,24 @@ interface VisitBranchView {
   metric: string;
   icon: string;
   tone: 'orange' | 'gray';
+  share: string;
   bought: string;
   boughtMetric: string;
+  boughtShare: string;
   notBought: string;
   notBoughtMetric: string;
+  notBoughtShare: string;
 }
 
+interface FunnelExecutiveSummaryView {
+  investment_display: string;
+  lead_to_visit_display: string;
+  visit_to_digital_sale_display: string;
+  lead_to_sale_display: string;
+  cpl_display: string;
+  cpt_display: string;
+  cac_display: string;
+}
 interface SaleChannelView {
   key: 'digital' | 'organic' | 'web' | 'btl' | 'total';
   label: string;
@@ -97,6 +112,7 @@ export class MarketingSalesFunnelStoryComponent {
   @Input({ required: true }) summary: MarketingSalesFunnelMetrics | null | undefined = null;
   @Input() reconciliationLabel = '';
   @Input() branchIds: number[] = [];
+  @Input() executiveSummary: FunnelExecutiveSummaryView | null = null;
 
   get narrative(): string {
     const summary = this.summary;
@@ -114,7 +130,7 @@ export class MarketingSalesFunnelStoryComponent {
     return this.createNode(
       'Leads iVentas',
       summary.leads_meta,
-      'First message + isFromAds=true en el snapshot canónico',
+      'Contactos que iniciaron conversación desde publicidad',
       'leads_meta',
       'person',
       'orange',
@@ -149,10 +165,25 @@ export class MarketingSalesFunnelStoryComponent {
         metric: 'visits_iventas',
         icon: 'smartphone',
         tone: 'orange',
+        share: this.formatPercent(
+          summary.visits_total > 0
+            ? summary.visits_iventas / summary.visits_total
+            : null,
+        ),
         bought: this.formatInteger(summary.visits_iventas_bought),
         boughtMetric: 'visits_iventas_bought',
+        boughtShare: this.formatPercent(
+          summary.visits_iventas > 0
+            ? summary.visits_iventas_bought / summary.visits_iventas
+            : null,
+        ),
         notBought: this.formatInteger(summary.visits_iventas_not_bought),
         notBoughtMetric: 'visits_iventas_not_bought',
+        notBoughtShare: this.formatPercent(
+          summary.visits_iventas > 0
+            ? summary.visits_iventas_not_bought / summary.visits_iventas
+            : null,
+        ),
       },
       {
         key: 'untraced',
@@ -161,10 +192,25 @@ export class MarketingSalesFunnelStoryComponent {
         metric: 'visits_not_iventas',
         icon: 'link_off',
         tone: 'gray',
+        share: this.formatPercent(
+          summary.visits_total > 0
+            ? summary.visits_not_iventas / summary.visits_total
+            : null,
+        ),
         bought: this.formatInteger(summary.visits_not_iventas_bought),
         boughtMetric: 'visits_not_iventas_bought',
+        boughtShare: this.formatPercent(
+          summary.visits_not_iventas > 0
+            ? summary.visits_not_iventas_bought / summary.visits_not_iventas
+            : null,
+        ),
         notBought: this.formatInteger(summary.visits_not_iventas_not_bought),
         notBoughtMetric: 'visits_not_iventas_not_bought',
+        notBoughtShare: this.formatPercent(
+          summary.visits_not_iventas > 0
+            ? summary.visits_not_iventas_not_bought / summary.visits_not_iventas
+            : null,
+        ),
       },
     ];
   }
@@ -372,6 +418,11 @@ export class MarketingSalesFunnelStoryComponent {
         sourceThickness: this.ribbonThickness(leads, leadReference, 18, 70),
         targetThickness: this.ribbonThickness(visits, leadReference, 14, 70),
         tone: 'orange',
+        share: this.formatPercent(
+          summary.visits_total > 0
+            ? summary.visits_iventas / summary.visits_total
+            : null,
+        ),
         opacity: 0.20,
       }),
       this.createRibbon({
@@ -393,6 +444,11 @@ export class MarketingSalesFunnelStoryComponent {
           28,
         ),
         tone: 'orange',
+        share: this.formatPercent(
+          summary.visits_total > 0
+            ? summary.visits_iventas / summary.visits_total
+            : null,
+        ),
         opacity: 0.24,
       }),
       this.createRibbon({
@@ -404,6 +460,11 @@ export class MarketingSalesFunnelStoryComponent {
         sourceThickness: this.ribbonThickness(salesIventas, salesReference, 18, 72),
         targetThickness: this.ribbonThickness(salesIventas, salesReference, 18, 72),
         tone: 'orange',
+        share: this.formatPercent(
+          summary.visits_total > 0
+            ? summary.visits_iventas / summary.visits_total
+            : null,
+        ),
         opacity: 0.24,
       }),
       this.createRibbon({
@@ -415,6 +476,11 @@ export class MarketingSalesFunnelStoryComponent {
         sourceThickness: this.ribbonThickness(salesFallback, salesReference, 18, 72),
         targetThickness: this.ribbonThickness(salesFallback, salesReference, 18, 72),
         tone: 'gray',
+        share: this.formatPercent(
+          summary.visits_total > 0
+            ? summary.visits_not_iventas / summary.visits_total
+            : null,
+        ),
         opacity: 0.24,
       }),
       this.createRibbon({
@@ -436,6 +502,11 @@ export class MarketingSalesFunnelStoryComponent {
           28,
         ),
         tone: 'gray',
+        share: this.formatPercent(
+          summary.visits_total > 0
+            ? summary.visits_not_iventas / summary.visits_total
+            : null,
+        ),
         opacity: 0.24,
       }),
       this.createRibbon({
@@ -447,6 +518,11 @@ export class MarketingSalesFunnelStoryComponent {
         sourceThickness: this.ribbonThickness(salesFallback, salesReference, 18, 52),
         targetThickness: this.ribbonThickness(salesFallback, salesReference, 18, 44),
         tone: 'gray',
+        share: this.formatPercent(
+          summary.visits_total > 0
+            ? summary.visits_not_iventas / summary.visits_total
+            : null,
+        ),
         opacity: 0.18,
       }),
       this.createRibbon({
@@ -458,6 +534,11 @@ export class MarketingSalesFunnelStoryComponent {
         sourceThickness: this.ribbonThickness(publications, outputReference, 14, 58),
         targetThickness: this.ribbonThickness(publications, outputReference, 14, 58),
         tone: 'orange',
+        share: this.formatPercent(
+          summary.visits_total > 0
+            ? summary.visits_iventas / summary.visits_total
+            : null,
+        ),
         opacity: 0.22,
       }),
       this.createRibbon({
@@ -469,6 +550,11 @@ export class MarketingSalesFunnelStoryComponent {
         sourceThickness: this.ribbonThickness(organic, outputReference, 14, 58),
         targetThickness: this.ribbonThickness(organic, outputReference, 14, 58),
         tone: 'orange',
+        share: this.formatPercent(
+          summary.visits_total > 0
+            ? summary.visits_iventas / summary.visits_total
+            : null,
+        ),
         opacity: 0.22,
       }),
     ];
@@ -503,6 +589,11 @@ export class MarketingSalesFunnelStoryComponent {
       total: this.formatInteger(summary.sales_total),
       totalMetric: 'sales_total',
       digitalTotal: this.formatInteger(digitalTotal),
+      digitalShare: this.formatPercent(
+        summary.sales_total > 0
+          ? digitalTotal / summary.sales_total
+          : null,
+      ),
       digitalMetric: 'sales_digital_total',
       digitalChildren: [
         {
@@ -519,8 +610,18 @@ export class MarketingSalesFunnelStoryComponent {
         },
       ],
       webTotal: this.formatInteger(summary.sales_web),
+      webShare: this.formatPercent(
+        summary.sales_total > 0
+          ? summary.sales_web / summary.sales_total
+          : null,
+      ),
       webMetric: 'sales_web',
       btlTotal: this.formatInteger(summary.sales_btl),
+      btlShare: this.formatPercent(
+        summary.sales_total > 0
+          ? summary.sales_btl / summary.sales_total
+          : null,
+      ),
       btlMetric: 'sales_btl',
       btlOrigins,
     };
@@ -615,6 +716,7 @@ export class MarketingSalesFunnelStoryComponent {
     sourceThickness: number;
     targetThickness: number;
     tone: 'orange' | 'gray';
+  share: string;
     opacity: number;
   }): FlowRibbonView {
     const horizontalDistance = Math.max(40, config.targetX - config.sourceX);
