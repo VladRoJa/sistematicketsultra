@@ -106,7 +106,18 @@
           </tr>
         </thead>
         <tbody>
-          <tr *ngFor="let row of operationalForecastRows">
+          <tr
+            *ngFor="let row of operationalForecastRows"
+            role="button"
+            tabindex="0"
+            [class.is-selected]="
+              selectedMetric === 'forecast'
+              && selectedForecastMetric === row.key
+            "
+            (click)="selectOperationalForecastMetric(row.key)"
+            (keydown.enter)="selectOperationalForecastMetric(row.key)"
+            (keydown.space)="selectOperationalForecastMetric(row.key); $event.preventDefault()"
+          >
             <td>
               <strong>{{ row.label }}</strong>
               <small *ngIf="operationalForecastCoverageLabel(row) as coverage">
@@ -138,7 +149,7 @@
       <header class="detail-panel__header">
         <div>
           <span class="detail-panel__eyebrow">LECTURA EJECUTIVA</span>
-          <h2>{{ selectedMetricCard.title }}</h2>
+          <h2>{{ selectedExecutiveTitle }}</h2>
           <p>{{ scopeLabel }} · corte {{ cutoffDate }}</p>
         </div>
         <button
@@ -190,7 +201,7 @@
         <button
           *ngFor="let item of attentionItems"
           type="button"
-          (click)="selectMetric(item.metric)"
+          (click)="selectAttentionItem(item)"
         >
           <strong>{{ item.title }}</strong>
           <span>{{ item.text }}</span>

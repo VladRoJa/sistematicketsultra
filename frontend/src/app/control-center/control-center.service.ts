@@ -112,6 +112,26 @@ export interface ControlOperationalForecastMetric {
   projected_compliance_pct?: string | null;
 }
 
+export interface ControlOperationalForecastBranchMetric {
+  metric_key: ControlOperationalForecastMetricKey;
+  actual_mtd: string | null;
+  projected_close: string | null;
+  benchmark: string | null;
+  benchmark_kind: 'target' | 'limit';
+  projected_gap: string | null;
+  status: 'available' | 'insufficient_history';
+  method: string | null;
+  projection?: {
+    status?: string;
+    method?: string;
+    projected_close?: string | null;
+    recent_daily_average?: string | null;
+    remaining_days?: number;
+    historical_progress_pct?: string | null;
+    historical_samples_count?: number;
+  };
+}
+
 export interface ControlOperationalForecastResponse {
   status: 'ok';
   contract_version: string;
@@ -137,6 +157,10 @@ export interface ControlOperationalForecastResponse {
     sucursal: string;
     region_key: string;
     region_label: string;
+    metrics: Record<
+      ControlOperationalForecastMetricKey,
+      ControlOperationalForecastBranchMetric
+    >;
   }>;
 }
 

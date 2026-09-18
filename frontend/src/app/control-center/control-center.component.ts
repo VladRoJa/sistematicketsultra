@@ -81,6 +81,14 @@ interface ControlOperationalForecastRow {
   metric: ControlOperationalForecastMetric;
 }
 
+interface ControlAttentionItem {
+  metric: ControlMetricKey;
+  forecastMetric?: ControlOperationalForecastMetricKey;
+  title: string;
+  text: string;
+  severity?: number;
+}
+
 @Component({
   selector: 'app-control-center',
   standalone: true,
@@ -109,6 +117,7 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
   scopeOptions: ControlScopeOption[] = [];
   selectedScopeKey = '';
   selectedMetric: ControlMetricKey = 'forecast';
+  selectedForecastMetric: ControlOperationalForecastMetricKey = 'ingreso';
   selectedLevel: ControlDetailLevel = 'summary';
 
   loadingContext = false;
@@ -136,7 +145,33 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
   }
 
   get canOpenSelectedModule(): boolean {
-    return this.selectedMetric !== 'retention';
+    if (this.selectedMetric === 'retention') {
+      return false;
+    }
+
+    if (
+      this.selectedMetric === 'forecast'
+      && this.selectedForecastMetric !== 'ingreso'
+    ) {
+      return false;
+    }
+
+    return true;
+  }
+
+  get selectedExecutiveTitle(): string {
+    if (this.selectedMetric === 'forecast') {
+      const row = this.selectedOperationalForecastRow;
+      return `${row?.label || 'Ingresos'} · Forecast de cierre`;
+    }
+
+    return this.selectedMetricCard.title;
+  }
+
+  get selectedOperationalForecastRow(): ControlOperationalForecastRow | null {
+    return this.operationalForecastRows.find(
+      (row) => row.key === this.selectedForecastMetric,
+    ) || null;
   }
 
   get scopeLabel(): string {
@@ -257,36 +292,73 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
     ];
   }
 
-  get attentionItems(): Array<{
-    metric: ControlMetricKey;
-    title: string;
-    text: string;
-  }> {
-    const items: Array<{
-      metric: ControlMetricKey;
-      title: string;
-      text: string;
-    }> = [];
+  get attentionItems(): ControlAttentionItem[] {
+    const items: ControlAttentionItem[] = [];
 
-    const forecastGap = this.forecastData?.summary.projected_gap_to_goal ?? null;
-    if (forecastGap !== null && forecastGap < 0) {
+    const forecastItems = this.operationalForecastRows
+      .map((row) => {
+        const gap = this.toFiniteNumber(row.metric.projected_gap);
+        const benchmark = this.toFiniteNumber(row.metric.benchmark);
+        const adverse = gap !== null && (
+          row.key === 'bajas'
+            ? gap > 0
+            : gap < 0
+        );
+
+        return {
+          row,
+          gap,
+          adverse,
+          severity: (
+            adverse
+            && benchmark !== null
+            && Math.abs(benchmark) > 0
+            && gap !== null
+          )
+            ? Math.abs(gap) / Math.abs(benchmark)
+            : 0,
+        };
+      })
+      .filter((item) => item.adverse)
+      .sort((a, b) => b.severity - a.severity)
+      .slice(0, 3);
+
+    for (const item of forecastItems) {
+      const row = item.row;
+      const title = row.key === 'bajas'
+        ? 'Bajas proyectadas sobre límite'
+        : row.key === 'ingreso'
+          ? 'Ingresos proyectados debajo de meta'
+          : row.key === 'clientes_nuevos'
+            ? 'Venta nueva proyectada debajo de meta'
+            : row.key === 'reactivaciones'
+              ? 'Reactivaciones proyectadas debajo de meta'
+              : 'Tienda proyectada debajo de meta';
+
       items.push({
         metric: 'forecast',
-        title: 'Forecast debajo de meta',
-        text: `Brecha proyectada ${this.formatSignedCurrency(forecastGap)}.`,
+        forecastMetric: row.key,
+        title,
+        text: `Brecha proyectada ${this.formatOperationalForecastGap(row)}.`,
+        severity: item.severity,
       });
     }
 
     const retention = this.retentionData?.summary;
+    const bajasForecast = this.operationalForecastData?.summary.metrics.bajas;
+    const bajasGap = this.toFiniteNumber(bajasForecast?.projected_gap);
+    const projectedBajasAlreadyFlagged = bajasGap !== null && bajasGap > 0;
+
     if (
-      retention?.limit_usage_ratio !== null
+      !projectedBajasAlreadyFlagged
+      && retention?.limit_usage_ratio !== null
       && retention?.limit_usage_ratio !== undefined
       && retention.limit_usage_ratio > 1
     ) {
       items.push({
         metric: 'retention',
-        title: 'Bajas por encima del límite',
-        text: `${this.formatPercent(retention.limit_usage_ratio)} de la meta/límite mensual consumido.`,
+        title: 'Bajas ya rebasaron el límite',
+        text: `${this.formatPercent(retention.limit_usage_ratio)} del límite mensual consumido.`,
       });
     }
 
@@ -408,7 +480,27 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
 
   selectMetric(metric: ControlMetricKey): void {
     this.selectedMetric = metric;
+    if (metric === 'forecast') {
+      this.selectedForecastMetric = 'ingreso';
+    }
     this.selectedLevel = 'summary';
+  }
+
+  selectOperationalForecastMetric(
+    metric: ControlOperationalForecastMetricKey,
+  ): void {
+    this.selectedMetric = 'forecast';
+    this.selectedForecastMetric = metric;
+    this.selectedLevel = 'summary';
+  }
+
+  selectAttentionItem(item: ControlAttentionItem): void {
+    if (item.forecastMetric) {
+      this.selectOperationalForecastMetric(item.forecastMetric);
+      return;
+    }
+
+    this.selectMetric(item.metric);
   }
 
   selectLevel(level: ControlDetailLevel): void {
@@ -729,31 +821,13 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
   }
 
   private buildSummaryRows(): ControlDetailRow[] {
-    const forecast = this.forecastData?.summary;
     const marketing = this.marketingOverview;
     const retention = this.retentionData?.summary;
     const maintenance = this.maintenanceOverview;
 
     switch (this.selectedMetric) {
       case 'forecast':
-        return [
-          {
-            label: 'Proyección',
-            value: this.formatCurrency(forecast?.projected_close_comparable_to_goal),
-          },
-          {
-            label: 'Meta comparable',
-            value: this.formatCurrency(forecast?.goal_month_comparable_to_projection),
-          },
-          {
-            label: 'Brecha proyectada',
-            value: this.formatSignedCurrency(forecast?.projected_gap_to_goal),
-          },
-          {
-            label: 'Cumplimiento proyectado',
-            value: this.formatPercent(forecast?.projected_goal_attainment_pct),
-          },
-        ];
+        return this.buildOperationalForecastSummaryRows();
       case 'conversion':
         return [
           { label: 'Lead → venta', value: this.formatPercent(marketing.leadToSaleRate) },
@@ -780,30 +854,13 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
   }
 
   private buildWhyRows(): ControlDetailRow[] {
-    const forecast = this.forecastData?.summary;
     const marketing = this.marketingOverview;
     const retention = this.retentionData?.summary;
     const maintenance = this.maintenanceOverview;
 
     switch (this.selectedMetric) {
       case 'forecast':
-        return [
-          {
-            label: 'Real MTD',
-            value: this.formatCurrency(forecast?.real_mtd),
-            supportingText: 'Ingreso real acumulado al corte.',
-          },
-          {
-            label: 'Ritmo vs meta',
-            value: this.formatSignedCurrency(forecast?.gap_vs_goal_pace),
-            supportingText: 'Diferencia contra lo que debería llevarse al día de corte.',
-          },
-          {
-            label: 'Proyección de cierre',
-            value: this.formatCurrency(forecast?.projected_close_comparable_to_goal),
-            supportingText: 'Cierre estimado comparable con la meta mensual.',
-          },
-        ];
+        return this.buildOperationalForecastWhyRows();
       case 'conversion':
         return [
           { label: 'Leads iVentas', value: marketing.leads === null ? '—' : this.formatInteger(marketing.leads) },
@@ -842,28 +899,7 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
 
   private buildWhereRows(): ControlDetailRow[] {
     if (this.selectedMetric === 'forecast') {
-      const items = this.forecastData?.breakdown?.items || [];
-      if (items.length > 0) {
-        return [...items]
-          .sort((a, b) =>
-            Number(a.summary.projected_gap_to_goal ?? 0)
-            - Number(b.summary.projected_gap_to_goal ?? 0),
-          )
-          .slice(0, 8)
-          .map((item) => ({
-            label: item.label,
-            value: this.formatSignedCurrency(item.summary.projected_gap_to_goal),
-            supportingText: `Proyección ${this.formatCurrency(item.summary.projected_close_comparable_to_goal)}`,
-          }));
-      }
-
-      return [{
-        label: this.scopeLabel,
-        value: this.formatSignedCurrency(
-          this.forecastData?.summary.projected_gap_to_goal,
-        ),
-        supportingText: 'El alcance actual ya está en el nivel más bajo disponible para este resumen.',
-      }];
+      return this.buildOperationalForecastWhereRows();
     }
 
     if (this.selectedMetric === 'conversion') {
@@ -916,12 +952,7 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
   private buildSourceRows(): ControlDetailRow[] {
     switch (this.selectedMetric) {
       case 'forecast':
-        return [
-          { label: 'Módulo dueño', value: 'Track / Centro de Forecast' },
-          { label: 'Corte', value: this.forecastData?.context.resolved_track_date || this.cutoffDate },
-          { label: 'Alcance', value: this.scopeLabel },
-          { label: 'Contrato', value: 'Forecast Center' },
-        ];
+        return this.buildOperationalForecastSourceRows();
       case 'conversion':
         return [
           { label: 'Módulo dueño', value: 'Marketing / Funnel de Venta Nueva' },
@@ -944,6 +975,286 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
           { label: 'Trazabilidad', value: 'Ticket.historial_fechas' },
         ];
     }
+  }
+
+  private buildOperationalForecastSummaryRows(): ControlDetailRow[] {
+    const row = this.selectedOperationalForecastRow;
+    if (!row) return [];
+
+    const projected = this.toFiniteNumber(row.metric.projected_close);
+    const benchmark = this.toFiniteNumber(row.metric.benchmark);
+    const gap = this.toFiniteNumber(row.metric.projected_gap);
+    const attainment = (
+      projected !== null
+      && benchmark !== null
+      && benchmark > 0
+    )
+      ? projected / benchmark
+      : null;
+
+    return [
+      {
+        label: 'Real MTD',
+        value: this.formatOperationalForecastValue(
+          row,
+          row.metric.actual_mtd,
+        ),
+      },
+      {
+        label: row.key === 'bajas'
+          ? 'Límite mensual'
+          : 'Meta mensual',
+        value: this.formatOperationalForecastValue(
+          row,
+          row.metric.benchmark,
+        ),
+      },
+      {
+        label: 'Forecast cierre',
+        value: this.formatOperationalForecastValue(
+          row,
+          row.metric.projected_close,
+        ),
+      },
+      {
+        label: row.key === 'bajas'
+          ? (gap !== null && gap > 0
+            ? 'Exceso proyectado'
+            : 'Margen proyectado')
+          : 'Brecha proyectada',
+        value: this.formatOperationalForecastGap(row),
+      },
+      {
+        label: row.key === 'bajas'
+          ? 'Consumo proyectado del límite'
+          : 'Cumplimiento proyectado',
+        value: this.formatPercent(attainment),
+      },
+    ];
+  }
+
+  private buildOperationalForecastWhyRows(): ControlDetailRow[] {
+    const row = this.selectedOperationalForecastRow;
+    if (!row) return [];
+
+    const actual = this.toFiniteNumber(row.metric.actual_mtd);
+    const projected = this.toFiniteNumber(row.metric.projected_close);
+    const benchmark = this.toFiniteNumber(row.metric.benchmark);
+    const remainingDays = this.remainingDaysInSelectedMonth();
+    const projectedRemaining = (
+      actual !== null && projected !== null
+    )
+      ? projected - actual
+      : null;
+    const benchmarkRemaining = (
+      actual !== null && benchmark !== null
+    )
+      ? benchmark - actual
+      : null;
+    const projectedDaily = (
+      projectedRemaining !== null && remainingDays > 0
+    )
+      ? projectedRemaining / remainingDays
+      : null;
+    const benchmarkDaily = (
+      benchmarkRemaining !== null && remainingDays > 0
+    )
+      ? benchmarkRemaining / remainingDays
+      : null;
+
+    const rows: ControlDetailRow[] = [
+      {
+        label: row.key === 'bajas'
+          ? 'Bajas proyectadas restantes'
+          : 'Avance proyectado restante',
+        value: this.formatOperationalNumber(
+          row,
+          projectedRemaining,
+        ),
+        supportingText: `${remainingDays} días restantes en el mes.`,
+      },
+      {
+        label: row.key === 'bajas'
+          ? 'Promedio diario proyectado de bajas'
+          : 'Ritmo diario proyectado',
+        value: this.formatOperationalNumber(
+          row,
+          projectedDaily,
+        ),
+        supportingText: 'Ritmo implícito en el forecast oficial.',
+      },
+      {
+        label: row.key === 'bajas'
+          ? 'Margen diario hasta el límite'
+          : 'Ritmo diario necesario para meta',
+        value: this.formatOperationalNumber(
+          row,
+          benchmarkDaily,
+        ),
+        supportingText: row.key === 'bajas'
+          ? 'Capacidad diaria restante antes de alcanzar el límite.'
+          : 'Ritmo requerido desde hoy para alcanzar la meta mensual.',
+      },
+      {
+        label: 'Método',
+        value: this.operationalForecastMethodLabel(row.metric),
+      },
+      {
+        label: 'Cobertura',
+        value: `${row.metric.coverage.projected_available_branches}/${row.metric.coverage.total_branches} sucursales`,
+      },
+    ];
+
+    return rows;
+  }
+
+  private buildOperationalForecastWhereRows(): ControlDetailRow[] {
+    const selectedRow = this.selectedOperationalForecastRow;
+    if (!selectedRow) return [];
+
+    const branches = this.operationalForecastData?.branches || [];
+    const key = selectedRow.key;
+
+    return branches
+      .map((branch) => {
+        const metric = branch.metrics?.[key];
+        const gap = this.toFiniteNumber(metric?.projected_gap);
+        return { branch, metric, gap };
+      })
+      .filter((item) => item.metric && item.gap !== null)
+      .sort((a, b) => {
+        const gapA = a.gap ?? 0;
+        const gapB = b.gap ?? 0;
+        return key === 'bajas'
+          ? gapB - gapA
+          : gapA - gapB;
+      })
+      .slice(0, 8)
+      .map(({ branch, metric, gap }) => ({
+        label: branch.sucursal,
+        value: this.formatOperationalGapByKey(
+          key,
+          gap,
+          selectedRow.money,
+        ),
+        supportingText: (
+          `Forecast ${this.formatOperationalNumber(
+            selectedRow,
+            this.toFiniteNumber(metric?.projected_close),
+          )} · `
+          + `${key === 'bajas' ? 'Límite' : 'Meta'} `
+          + this.formatOperationalNumber(
+            selectedRow,
+            this.toFiniteNumber(metric?.benchmark),
+          )
+        ),
+      }));
+  }
+
+  private buildOperationalForecastSourceRows(): ControlDetailRow[] {
+    const row = this.selectedOperationalForecastRow;
+    if (!row) return [];
+
+    return [
+      {
+        label: 'Módulo dueño',
+        value: row.key === 'ingreso'
+          ? 'Track / Centro de Forecast'
+          : 'Track / Seguimiento Regional',
+      },
+      {
+        label: 'Fuente canónica',
+        value: 'track_daily_mart',
+      },
+      {
+        label: 'Versión Track',
+        value: this.operationalForecastData?.resolved_version
+          ? `#${this.operationalForecastData.resolved_version.id}`
+          : '—',
+      },
+      {
+        label: 'Corte',
+        value: this.operationalForecastData?.cutoff_date || this.cutoffDate,
+      },
+      {
+        label: 'Método',
+        value: this.operationalForecastMethodLabel(row.metric),
+      },
+      {
+        label: 'Cobertura',
+        value: `${row.metric.coverage.projected_available_branches}/${row.metric.coverage.total_branches} sucursales`,
+      },
+    ];
+  }
+
+  private operationalForecastMethodLabel(
+    metric: ControlOperationalForecastMetric,
+  ): string {
+    const methods = metric.branch_methods || [];
+
+    if (methods.length > 1) {
+      return 'Mixto por sucursal';
+    }
+
+    const method = methods[0] || metric.method;
+
+    switch (method) {
+      case 'linear_mtd_pace':
+        return 'Proyección lineal MTD';
+      case 'existing_stable_historical_pace':
+        return 'Avance histórico propio';
+      case 'recent_valid_daily_average_7_calendar_days':
+        return 'Promedio reciente · 7 días';
+      case 'chain_daily_median_share_of_month_close':
+        return 'Curva histórica por día';
+      case 'sum_branch_operational_forecasts':
+        return 'Suma de forecasts por sucursal';
+      default:
+        return String(method || '—');
+    }
+  }
+
+  private formatOperationalNumber(
+    row: ControlOperationalForecastRow,
+    value: number | null,
+  ): string {
+    if (value === null || !Number.isFinite(value)) {
+      return '—';
+    }
+
+    return row.money
+      ? this.formatCurrency(value)
+      : this.formatInteger(value);
+  }
+
+  private formatOperationalGapByKey(
+    key: ControlOperationalForecastMetricKey,
+    gap: number | null,
+    money: boolean,
+  ): string {
+    if (gap === null || !Number.isFinite(gap)) {
+      return '—';
+    }
+
+    if (key === 'bajas') {
+      if (gap > 0) {
+        return `+${this.formatInteger(gap)} sobre límite`;
+      }
+      if (gap < 0) {
+        return `${this.formatInteger(Math.abs(gap))} de margen`;
+      }
+      return 'En límite';
+    }
+
+    return money
+      ? this.formatSignedCurrency(gap)
+      : this.formatSignedInteger(gap);
+  }
+
+  private remainingDaysInSelectedMonth(): number {
+    const [year, month, day] = this.cutoffDate.split('-').map(Number);
+    const lastDay = new Date(year, month, 0).getDate();
+    return Math.max(lastDay - day, 0);
   }
 
   private buildScopeOptions(

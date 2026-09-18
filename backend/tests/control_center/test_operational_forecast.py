@@ -126,15 +126,16 @@ def test_branch_scope_filters_before_aggregation(get_regional):
     assert ingreso["actual_mtd"] == "200"
     assert ingreso["projected_close"] == "260"
     assert ingreso["benchmark"] == "250"
-    assert result["branches"] == [
-        {
-            "sucursal_id": 2,
-            "sucursal_canon": "B",
-            "sucursal": "Sucursal B",
-            "region_key": "R1",
-            "region_label": "Región 1",
-        }
-    ]
+    assert len(result["branches"]) == 1
+    branch = result["branches"][0]
+    assert branch["sucursal_id"] == 2
+    assert branch["sucursal_canon"] == "B"
+    assert branch["sucursal"] == "Sucursal B"
+    assert branch["region_key"] == "R1"
+    assert branch["region_label"] == "Región 1"
+    assert branch["metrics"]["ingreso"]["actual_mtd"] == "200"
+    assert branch["metrics"]["ingreso"]["projected_close"] == "260"
+    assert branch["metrics"]["ingreso"]["projected_gap"] == "10.0"
 
 
 @patch(
