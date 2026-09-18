@@ -299,7 +299,7 @@
 
 .tienda-daily-row {
   display: grid;
-  grid-template-columns: 74px minmax(80px, 1fr) 105px;
+  grid-template-columns: 94px minmax(60px, 1fr) 105px;
   gap: 8px;
   align-items: center;
   font-size: 11px;
@@ -307,6 +307,7 @@
 
 .tienda-daily-row__date {
   color: #64748b;
+  white-space: nowrap;
 }
 
 .tienda-daily-row__bar {
