@@ -1,9 +1,11 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 import {
+  AbstractControl,
   FormBuilder,
   FormGroup,
   ReactiveFormsModule,
+  ValidationErrors,
   Validators,
 } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -18,8 +20,22 @@ import {
   CrearUsuarioRequest,
   DepartamentoUsuarioOption,
   SucursalUsuarioOption,
+  UsuarioAdminOption,
   UsuarioService,
 } from '../../services/usuario.service';
+
+function passwordsCoincidenValidator(
+  control: AbstractControl,
+): ValidationErrors | null {
+  const password = String(control.get('password')?.value || '');
+  const confirmacion = String(control.get('password_confirm')?.value || '');
+
+  if (!password || !confirmacion) {
+    return null;
+  }
+
+  return password === confirmacion ? null : { passwordMismatch: true };
+}
 
 @Component({
   selector: 'app-admin-usuarios',
@@ -70,11 +86,19 @@ export class AdminUsuariosComponent implements OnInit {
     'TECNICO',
   ];
 
+  modo: 'crear' | 'password' = 'crear';
+
   form: FormGroup;
+  passwordForm: FormGroup;
+
   sucursales: SucursalUsuarioOption[] = [];
   departamentos: DepartamentoUsuarioOption[] = [];
+  usuarios: UsuarioAdminOption[] = [];
+
   cargandoCatalogos = false;
+  cargandoUsuarios = false;
   guardando = false;
+  guardandoPassword = false;
 
   constructor(
     private fb: FormBuilder,
@@ -89,6 +113,17 @@ export class AdminUsuariosComponent implements OnInit {
       sucursal_id: [null, [Validators.required]],
       department_id: [null, [Validators.required]],
     });
+
+    this.passwordForm = this.fb.group(
+      {
+        user_id: [null, [Validators.required]],
+        password: ['', [Validators.required, Validators.minLength(6)]],
+        password_confirm: ['', [Validators.required]],
+      },
+      {
+        validators: [passwordsCoincidenValidator],
+      },
+    );
   }
 
   ngOnInit(): void {
@@ -96,6 +131,39 @@ export class AdminUsuariosComponent implements OnInit {
 
     this.form.get('rol')?.valueChanges.subscribe(() => {
       this.aplicarDepartamentoSugeridoPorRol();
+    });
+  }
+
+  cambiarModo(modo: 'crear' | 'password'): void {
+    this.modo = modo;
+
+    if (
+      modo === 'password' &&
+      !this.cargandoUsuarios &&
+      this.usuarios.length === 0
+    ) {
+      this.cargarUsuarios();
+    }
+  }
+
+  cargarUsuarios(): void {
+    this.cargandoUsuarios = true;
+
+    this.usuarioService.listarUsuariosAdmin().subscribe({
+      next: (usuarios) => {
+        this.usuarios = [...usuarios].sort((a, b) =>
+          a.username.localeCompare(b.username),
+        );
+        this.cargandoUsuarios = false;
+      },
+      error: () => {
+        this.cargandoUsuarios = false;
+        this.snackBar.open(
+          'No se pudo cargar la lista de usuarios.',
+          'Cerrar',
+          { duration: 5000 },
+        );
+      },
     });
   }
 
@@ -197,6 +265,8 @@ export class AdminUsuariosComponent implements OnInit {
           sucursal_id: null,
           department_id: null,
         });
+
+        this.usuarios = [];
       },
       error: (error) => {
         this.guardando = false;
@@ -211,5 +281,50 @@ export class AdminUsuariosComponent implements OnInit {
         });
       },
     });
+  }
+
+  cambiarPassword(): void {
+    if (this.passwordForm.invalid || this.guardandoPassword) {
+      this.passwordForm.markAllAsTouched();
+      return;
+    }
+
+    const value = this.passwordForm.getRawValue();
+    const userId = Number(value.user_id);
+    const password = String(value.password || '');
+
+    this.guardandoPassword = true;
+
+    this.usuarioService
+      .cambiarPasswordUsuario(userId, { password })
+      .subscribe({
+        next: (response) => {
+          this.guardandoPassword = false;
+
+          this.snackBar.open(
+            response.msg || 'Contraseña actualizada correctamente.',
+            'Cerrar',
+            { duration: 4000 },
+          );
+
+          this.passwordForm.reset({
+            user_id: null,
+            password: '',
+            password_confirm: '',
+          });
+        },
+        error: (error) => {
+          this.guardandoPassword = false;
+
+          const message =
+            error?.error?.detail ||
+            error?.error?.error ||
+            'No se pudo actualizar la contraseña.';
+
+          this.snackBar.open(message, 'Cerrar', {
+            duration: 5000,
+          });
+        },
+      });
   }
 }
