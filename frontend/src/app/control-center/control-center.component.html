@@ -147,11 +147,32 @@
   <section class="control-body">
     <article class="detail-panel">
       <header class="detail-panel__header">
-        <div>
+        <div class="detail-panel__title">
           <span class="detail-panel__eyebrow">LECTURA EJECUTIVA</span>
           <h2>{{ selectedExecutiveTitle }}</h2>
           <p>{{ scopeLabel }} · corte {{ cutoffDate }}</p>
         </div>
+
+        <nav
+          class="executive-context-pills"
+          aria-label="Contexto de lectura ejecutiva"
+        >
+          <button
+            *ngFor="let pill of executiveContextPills"
+            type="button"
+            class="executive-context-pill"
+            [class.executive-context-pill--active]="
+              isExecutiveContextPillActive(pill.key)
+            "
+            [class.executive-context-pill--separated]="
+              isExecutiveContextPillSeparated(pill)
+            "
+            (click)="selectExecutiveContextPill(pill.key)"
+          >
+            {{ pill.label }}
+          </button>
+        </nav>
+
         <button
           *ngIf="canOpenSelectedModule"
           type="button"

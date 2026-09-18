@@ -82,6 +82,16 @@ interface ControlOperationalForecastRow {
 }
 
 type ControlVisualTone = 'neutral' | 'benchmark' | 'good' | 'attention';
+type ControlExecutivePillKey =
+  | ControlOperationalForecastMetricKey
+  | 'funnel'
+  | 'tickets';
+
+interface ControlExecutivePill {
+  key: ControlExecutivePillKey;
+  label: string;
+  group: 'forecast' | 'module';
+}
 
 interface ControlExecutiveStat {
   label: string;
@@ -127,6 +137,16 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
     { key: 'why', label: 'Por qué' },
     { key: 'where', label: 'Dónde' },
     { key: 'source', label: 'Fuente' },
+  ];
+
+  readonly executiveContextPills: ControlExecutivePill[] = [
+    { key: 'ingreso', label: 'Ingresos', group: 'forecast' },
+    { key: 'clientes_nuevos', label: 'Venta nueva', group: 'forecast' },
+    { key: 'reactivaciones', label: 'Reactivaciones', group: 'forecast' },
+    { key: 'bajas', label: 'Bajas', group: 'forecast' },
+    { key: 'tienda', label: 'Tienda', group: 'forecast' },
+    { key: 'funnel', label: 'Funnel', group: 'module' },
+    { key: 'tickets', label: 'Tickets', group: 'module' },
   ];
 
   cutoffDate = this.getTodayIsoDate();
@@ -698,6 +718,45 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
     this.selectedMetric = 'forecast';
     this.selectedForecastMetric = metric;
     this.selectedLevel = 'summary';
+  }
+
+  isExecutiveContextPillActive(
+    key: ControlExecutivePillKey,
+  ): boolean {
+    if (key === 'funnel') {
+      return this.selectedMetric === 'conversion';
+    }
+
+    if (key === 'tickets') {
+      return false;
+    }
+
+    return (
+      this.selectedMetric === 'forecast'
+      && this.selectedForecastMetric === key
+    );
+  }
+
+  isExecutiveContextPillSeparated(
+    pill: ControlExecutivePill,
+  ): boolean {
+    return pill.group === 'module';
+  }
+
+  selectExecutiveContextPill(
+    key: ControlExecutivePillKey,
+  ): void {
+    if (key === 'funnel') {
+      this.selectMetric('conversion');
+      return;
+    }
+
+    if (key === 'tickets') {
+      void this.router.navigate(['/main/ver-tickets']);
+      return;
+    }
+
+    this.selectOperationalForecastMetric(key);
   }
 
   selectAttentionItem(item: ControlAttentionItem): void {
