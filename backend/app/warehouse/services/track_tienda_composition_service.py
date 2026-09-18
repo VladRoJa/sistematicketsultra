@@ -59,9 +59,8 @@ FAMILY_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
         ("proteina", "protein", "whey", "creatina", "amino", "bcaa"),
     ),
     (
-        "Accesorios",
+        "Merch",
         (
-            "toalla",
             "shaker",
             "termo",
             "cilindro",
@@ -192,12 +191,28 @@ def _canonical_product_label(value: Any) -> str:
     return raw
 
 
-def _classify_product_family(*, clave_producto: Any, descripcion: Any) -> str:
+def _classify_product_family(
+    *,
+    clave_producto: Any,
+    descripcion: Any,
+    precio_unitario: Any = None,
+) -> str:
     product_key = _normalize_text(clave_producto)
     description = _normalize_text(descripcion)
 
     if product_key == "locker":
         return "Lockers"
+
+    if "toalla" in description:
+        unit_price = _to_decimal(precio_unitario)
+
+        if unit_price in {Decimal("35"), Decimal("40")}:
+            return "Toalla chica"
+
+        if unit_price == Decimal("100"):
+            return "Toalla grande"
+
+        return "Merch"
 
     for family, keywords in FAMILY_RULES:
         if any(keyword in description for keyword in keywords):
@@ -322,7 +337,7 @@ def build_track_tienda_composition(
             "operaciones": 0,
         }
     )
-    totals_by_product: dict[str, dict[str, Any]] = defaultdict(
+    totals_by_product: dict[tuple[str, str], dict[str, Any]] = defaultdict(
         lambda: {
             "familia": "Otros",
             "producto_canonico": "SIN_DESCRIPCION",
@@ -392,6 +407,7 @@ def build_track_tienda_composition(
         family = _classify_product_family(
             clave_producto=product_key,
             descripcion=description,
+            precio_unitario=row.precio_unitario,
         )
         family_key = _normalize_text(family)
 
@@ -405,7 +421,8 @@ def build_track_tienda_composition(
         family_bucket["cantidad"] += quantity
         family_bucket["operaciones"] += 1
 
-        product_bucket = totals_by_product[canonical_product_key]
+        product_bucket_key = (family_key, canonical_product_key)
+        product_bucket = totals_by_product[product_bucket_key]
         product_bucket["familia"] = family
         product_bucket["producto_canonico"] = canonical_product_label
         product_bucket["claves_producto"].add(product_key)
