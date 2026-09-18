@@ -61,6 +61,12 @@
       <span>{{ card.title }}</span>
       <strong>{{ card.value }}</strong>
       <small>{{ card.supportingText }}</small>
+      <em
+        *ngIf="card.freshnessText"
+        class="metric-card__freshness"
+      >
+        {{ card.freshnessText }}
+      </em>
     </button>
   </section>
 
