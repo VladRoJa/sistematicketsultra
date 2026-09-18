@@ -81,6 +81,30 @@ interface ControlOperationalForecastRow {
   metric: ControlOperationalForecastMetric;
 }
 
+type ControlVisualTone = 'neutral' | 'benchmark' | 'good' | 'attention';
+
+interface ControlExecutiveStat {
+  label: string;
+  value: string;
+  supportingText?: string;
+  tone: ControlVisualTone;
+}
+
+interface ControlComparisonBar {
+  label: string;
+  value: string;
+  percent: number;
+  tone: ControlVisualTone;
+}
+
+interface ControlWhereBar {
+  label: string;
+  value: string;
+  supportingText: string;
+  percent: number;
+  tone: ControlVisualTone;
+}
+
 interface ControlAttentionItem {
   metric: ControlMetricKey;
   forecastMetric?: ControlOperationalForecastMetricKey;
@@ -223,6 +247,188 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
       ...item,
       metric: metrics[item.key],
     }));
+  }
+
+  get showOperationalSummaryVisual(): boolean {
+    return (
+      this.selectedMetric === 'forecast'
+      && this.selectedLevel === 'summary'
+      && this.selectedOperationalForecastRow !== null
+    );
+  }
+
+  get showOperationalWhereVisual(): boolean {
+    return (
+      this.selectedMetric === 'forecast'
+      && this.selectedLevel === 'where'
+      && this.selectedOperationalForecastRow !== null
+    );
+  }
+
+  get operationalExecutiveStats(): ControlExecutiveStat[] {
+    const row = this.selectedOperationalForecastRow;
+    if (!row) return [];
+
+    const projected = this.toFiniteNumber(row.metric.projected_close);
+    const benchmark = this.toFiniteNumber(row.metric.benchmark);
+    const gap = this.toFiniteNumber(row.metric.projected_gap);
+    const attainment = (
+      projected !== null
+      && benchmark !== null
+      && benchmark > 0
+    )
+      ? projected / benchmark
+      : null;
+
+    const adverse = gap !== null && (
+      row.key === 'bajas' ? gap > 0 : gap < 0
+    );
+
+    return [
+      {
+        label: 'Real MTD',
+        value: this.formatOperationalForecastValue(
+          row,
+          row.metric.actual_mtd,
+        ),
+        tone: 'neutral',
+      },
+      {
+        label: 'Forecast cierre',
+        value: this.formatOperationalForecastValue(
+          row,
+          row.metric.projected_close,
+        ),
+        tone: adverse ? 'attention' : 'good',
+      },
+      {
+        label: row.key === 'bajas' ? 'Límite mensual' : 'Meta mensual',
+        value: this.formatOperationalForecastValue(
+          row,
+          row.metric.benchmark,
+        ),
+        tone: 'benchmark',
+      },
+      {
+        label: row.key === 'bajas'
+          ? (gap !== null && gap > 0
+            ? 'Exceso proyectado'
+            : 'Margen proyectado')
+          : 'Brecha proyectada',
+        value: this.formatOperationalForecastGap(row),
+        tone: adverse ? 'attention' : 'good',
+      },
+      {
+        label: row.key === 'bajas'
+          ? 'Uso proyectado del límite'
+          : 'Cumplimiento proyectado',
+        value: this.formatPercent(attainment),
+        supportingText: this.operationalForecastMethodLabel(row.metric),
+        tone: adverse ? 'attention' : 'good',
+      },
+    ];
+  }
+
+  get operationalComparisonBars(): ControlComparisonBar[] {
+    const row = this.selectedOperationalForecastRow;
+    if (!row) return [];
+
+    const actual = this.toFiniteNumber(row.metric.actual_mtd);
+    const projected = this.toFiniteNumber(row.metric.projected_close);
+    const benchmark = this.toFiniteNumber(row.metric.benchmark);
+
+    const available = [actual, projected, benchmark]
+      .filter((value): value is number => value !== null)
+      .map((value) => Math.abs(value));
+    const maxValue = available.length > 0
+      ? Math.max(...available, 1)
+      : 1;
+
+    const gap = this.toFiniteNumber(row.metric.projected_gap);
+    const adverse = gap !== null && (
+      row.key === 'bajas' ? gap > 0 : gap < 0
+    );
+
+    return [
+      {
+        label: 'Real MTD',
+        value: this.formatOperationalNumber(row, actual),
+        percent: this.comparisonPercent(actual, maxValue),
+        tone: 'neutral',
+      },
+      {
+        label: 'Forecast cierre',
+        value: this.formatOperationalNumber(row, projected),
+        percent: this.comparisonPercent(projected, maxValue),
+        tone: adverse ? 'attention' : 'good',
+      },
+      {
+        label: row.key === 'bajas' ? 'Límite' : 'Meta',
+        value: this.formatOperationalNumber(row, benchmark),
+        percent: this.comparisonPercent(benchmark, maxValue),
+        tone: 'benchmark',
+      },
+    ];
+  }
+
+  get operationalWhereBars(): ControlWhereBar[] {
+    const row = this.selectedOperationalForecastRow;
+    if (!row) return [];
+
+    const key = row.key;
+    const items = (this.operationalForecastData?.branches || [])
+      .map((branch) => {
+        const metric = branch.metrics?.[key];
+        const gap = this.toFiniteNumber(metric?.projected_gap);
+        const projected = this.toFiniteNumber(metric?.projected_close);
+        const benchmark = this.toFiniteNumber(metric?.benchmark);
+
+        return {
+          branch,
+          metric,
+          gap,
+          projected,
+          benchmark,
+        };
+      })
+      .filter((item) => item.metric && item.gap !== null)
+      .sort((a, b) => {
+        const gapA = a.gap ?? 0;
+        const gapB = b.gap ?? 0;
+        return key === 'bajas'
+          ? gapB - gapA
+          : gapA - gapB;
+      })
+      .slice(0, 8);
+
+    const maxGap = Math.max(
+      ...items.map((item) => Math.abs(item.gap ?? 0)),
+      1,
+    );
+
+    return items.map((item) => {
+      const gap = item.gap ?? 0;
+      const adverse = key === 'bajas' ? gap > 0 : gap < 0;
+
+      return {
+        label: item.branch.sucursal,
+        value: this.formatOperationalGapByKey(
+          key,
+          gap,
+          row.money,
+        ),
+        supportingText: (
+          `Forecast ${this.formatOperationalNumber(
+            row,
+            item.projected,
+          )} · `
+          + `${key === 'bajas' ? 'Límite' : 'Meta'} `
+          + this.formatOperationalNumber(row, item.benchmark)
+        ),
+        percent: this.comparisonPercent(gap, maxGap),
+        tone: adverse ? 'attention' : 'good',
+      };
+    });
   }
 
   get metricCards(): ControlMetricCard[] {
@@ -1255,6 +1461,30 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
     const [year, month, day] = this.cutoffDate.split('-').map(Number);
     const lastDay = new Date(year, month, 0).getDate();
     return Math.max(lastDay - day, 0);
+  }
+
+  visualToneClass(tone: ControlVisualTone): string {
+    return `visual-tone visual-tone--${tone}`;
+  }
+
+  private comparisonPercent(
+    value: number | null,
+    maxValue: number,
+  ): number {
+    if (
+      value === null
+      || value === 0
+      || !Number.isFinite(value)
+      || !Number.isFinite(maxValue)
+      || maxValue <= 0
+    ) {
+      return 0;
+    }
+
+    return Math.max(
+      2,
+      Math.min(100, Math.abs(value) / maxValue * 100),
+    );
   }
 
   private buildScopeOptions(

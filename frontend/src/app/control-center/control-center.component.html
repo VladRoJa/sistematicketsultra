@@ -173,7 +173,105 @@
         </button>
       </nav>
 
-      <div class="detail-rows">
+      <section
+        *ngIf="showOperationalSummaryVisual"
+        class="forecast-visual forecast-visual--summary"
+      >
+        <div class="forecast-stat-grid">
+          <article
+            *ngFor="let stat of operationalExecutiveStats"
+            class="forecast-stat"
+            [ngClass]="visualToneClass(stat.tone)"
+          >
+            <span>{{ stat.label }}</span>
+            <strong>{{ stat.value }}</strong>
+            <small *ngIf="stat.supportingText">
+              {{ stat.supportingText }}
+            </small>
+          </article>
+        </div>
+
+        <div class="forecast-comparison">
+          <header>
+            <div>
+              <span>COMPARADOR DE CIERRE</span>
+              <strong>
+                Real MTD vs forecast vs
+                {{ selectedForecastMetric === 'bajas' ? 'límite' : 'meta' }}
+              </strong>
+            </div>
+          </header>
+
+          <div class="forecast-comparison__bars">
+            <article
+              *ngFor="let bar of operationalComparisonBars"
+              class="forecast-comparison__row"
+            >
+              <div class="forecast-comparison__label">
+                <span>{{ bar.label }}</span>
+                <strong>{{ bar.value }}</strong>
+              </div>
+              <div class="forecast-comparison__track">
+                <span
+                  class="forecast-comparison__fill"
+                  [ngClass]="visualToneClass(bar.tone)"
+                  [style.width.%]="bar.percent"
+                ></span>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section
+        *ngIf="showOperationalWhereVisual"
+        class="forecast-visual forecast-visual--where"
+      >
+        <header class="where-chart__header">
+          <div>
+            <span>BRECHA PROYECTADA POR SUCURSAL</span>
+            <strong>
+              {{ selectedForecastMetric === 'bajas'
+                ? 'Mayor exceso sobre límite'
+                : 'Mayor desviación contra meta' }}
+            </strong>
+          </div>
+          <small>Top {{ operationalWhereBars.length }}</small>
+        </header>
+
+        <div class="where-chart">
+          <article
+            *ngFor="let bar of operationalWhereBars"
+            class="where-chart__row"
+          >
+            <div class="where-chart__copy">
+              <div>
+                <strong>{{ bar.label }}</strong>
+                <small>{{ bar.supportingText }}</small>
+              </div>
+              <b [ngClass]="visualToneClass(bar.tone)">
+                {{ bar.value }}
+              </b>
+            </div>
+            <div class="where-chart__track">
+              <span
+                class="where-chart__fill"
+                [ngClass]="visualToneClass(bar.tone)"
+                [style.width.%]="bar.percent"
+              ></span>
+            </div>
+          </article>
+
+          <div *ngIf="operationalWhereBars.length === 0" class="detail-empty">
+            No hay detalle disponible para este alcance y corte.
+          </div>
+        </div>
+      </section>
+
+      <div
+        *ngIf="!showOperationalSummaryVisual && !showOperationalWhereVisual"
+        class="detail-rows"
+      >
         <article *ngFor="let row of detailRows" class="detail-row">
           <div>
             <span>{{ row.label }}</span>
