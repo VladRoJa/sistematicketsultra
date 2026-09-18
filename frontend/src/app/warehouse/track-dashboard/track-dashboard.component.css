@@ -748,10 +748,13 @@
 }
 
 .track-form--topbar .track-field input,
-.track-form--topbar .track-field select,
+.track-form--topbar .track-field select {
+  height: 36px;
+}
+
 .track-form--topbar .primary-button,
 .track-form--topbar .secondary-button {
-  height: 36px;
+  height: 34px;
 }
 
 .track-form--topbar .track-actions {
