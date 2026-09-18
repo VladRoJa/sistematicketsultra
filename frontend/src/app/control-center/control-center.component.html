@@ -70,6 +70,69 @@
     </button>
   </section>
 
+  <section
+    class="operational-forecast"
+    *ngIf="operationalForecastRows.length"
+    aria-label="Forecast operativo"
+  >
+    <header class="operational-forecast__header">
+      <div>
+        <span>FORECAST OPERATIVO</span>
+        <h2>Cómo vamos a cerrar</h2>
+        <p>
+          Real MTD, cierre proyectado y brecha contra meta o límite.
+        </p>
+      </div>
+      <div class="operational-forecast__meta">
+        <span>{{ scopeLabel }}</span>
+        <span>
+          Corte {{ operationalForecastData?.cutoff_date || cutoffDate }}
+        </span>
+        <span *ngIf="operationalForecastData?.resolved_version">
+          Track #{{ operationalForecastData?.resolved_version?.id }}
+        </span>
+      </div>
+    </header>
+
+    <div class="operational-forecast__scroll">
+      <table class="operational-forecast__table">
+        <thead>
+          <tr>
+            <th>Indicador</th>
+            <th>Real MTD</th>
+            <th>Forecast cierre</th>
+            <th>Meta / límite</th>
+            <th>Brecha proyectada</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let row of operationalForecastRows">
+            <td>
+              <strong>{{ row.label }}</strong>
+              <small *ngIf="operationalForecastCoverageLabel(row) as coverage">
+                {{ coverage }}
+              </small>
+            </td>
+            <td>
+              {{ formatOperationalForecastValue(row, row.metric.actual_mtd) }}
+            </td>
+            <td>
+              {{ formatOperationalForecastValue(row, row.metric.projected_close) }}
+            </td>
+            <td>
+              {{ formatOperationalForecastValue(row, row.metric.benchmark) }}
+            </td>
+            <td>
+              <strong [class]="operationalForecastGapClass(row)">
+                {{ formatOperationalForecastGap(row) }}
+              </strong>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
   <section class="control-body">
     <article class="detail-panel">
       <header class="detail-panel__header">

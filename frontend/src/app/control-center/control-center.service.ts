@@ -82,6 +82,64 @@ export interface ControlRetentionResponse {
   branches: ControlRetentionBranch[];
 }
 
+export type ControlOperationalForecastMetricKey =
+  | 'ingreso'
+  | 'clientes_nuevos'
+  | 'reactivaciones'
+  | 'bajas'
+  | 'tienda';
+
+export interface ControlOperationalForecastMetric {
+  metric_key: ControlOperationalForecastMetricKey;
+  actual_mtd: string | null;
+  projected_close: string | null;
+  benchmark: string | null;
+  benchmark_kind: 'target' | 'limit';
+  projected_gap: string | null;
+  status: 'available' | 'insufficient_history';
+  method: string;
+  branch_methods: string[];
+  coverage: {
+    total_branches: number;
+    actual_available_branches: number;
+    benchmark_available_branches: number;
+    projected_available_branches: number;
+    unavailable_branches_count: number;
+  };
+  projected_excess?: string | null;
+  projected_remaining_margin?: string | null;
+  projected_limit_usage_pct?: string | null;
+  projected_compliance_pct?: string | null;
+}
+
+export interface ControlOperationalForecastResponse {
+  status: 'ok';
+  contract_version: string;
+  cutoff_date: string;
+  generation_mode: string;
+  effective_scope: ControlScope;
+  resolved_version: {
+    id: number;
+    version_type: string;
+    status: string;
+  } | null;
+  summary: {
+    status: 'available' | 'partial';
+    total_branches: number;
+    metrics: Record<
+      ControlOperationalForecastMetricKey,
+      ControlOperationalForecastMetric
+    >;
+  };
+  branches: Array<{
+    sucursal_id: number;
+    sucursal_canon: string;
+    sucursal: string;
+    region_key: string;
+    region_label: string;
+  }>;
+}
+
 @Injectable({ providedIn: 'root' })
 export class ControlCenterService {
   private readonly http = inject(HttpClient);
@@ -107,6 +165,21 @@ export class ControlCenterService {
     return this.http.get<ControlRetentionResponse>(`${this.baseUrl}/retention`, {
       params,
     });
+  }
+
+  getOperationalForecast(
+    request: ControlContextRequest,
+    generationMode = 'manual_preview',
+  ): Observable<ControlOperationalForecastResponse> {
+    const params = this.buildScopeParams(request).set(
+      'generation_mode',
+      generationMode,
+    );
+
+    return this.http.get<ControlOperationalForecastResponse>(
+      `${this.baseUrl}/operational-forecast`,
+      { params },
+    );
   }
 
   getForecastCatalogs(): Observable<TrackForecastCenterCatalogsResponse> {
