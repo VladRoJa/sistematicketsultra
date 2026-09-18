@@ -85,7 +85,7 @@ type ControlVisualTone = 'neutral' | 'benchmark' | 'good' | 'attention';
 type ControlExecutivePillKey =
   | ControlOperationalForecastMetricKey
   | 'funnel'
-  | 'tickets';
+  | 'maintenance';
 
 interface ControlExecutivePill {
   key: ControlExecutivePillKey;
@@ -146,7 +146,7 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
     { key: 'bajas', label: 'Bajas', group: 'forecast' },
     { key: 'tienda', label: 'Tienda', group: 'forecast' },
     { key: 'funnel', label: 'Funnel', group: 'module' },
-    { key: 'tickets', label: 'Tickets', group: 'module' },
+    { key: 'maintenance', label: 'Mantenimiento', group: 'module' },
   ];
 
   cutoffDate = this.getTodayIsoDate();
@@ -727,8 +727,8 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
       return this.selectedMetric === 'conversion';
     }
 
-    if (key === 'tickets') {
-      return false;
+    if (key === 'maintenance') {
+      return this.selectedMetric === 'maintenance';
     }
 
     return (
@@ -751,8 +751,8 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
       return;
     }
 
-    if (key === 'tickets') {
-      void this.router.navigate(['/main/ver-tickets']);
+    if (key === 'maintenance') {
+      this.selectMetric('maintenance');
       return;
     }
 
