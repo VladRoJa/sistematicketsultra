@@ -31,7 +31,6 @@ from app.warehouse.services.track_forecast_service import (
 from app.warehouse.services.track_operational_forecast_service import (
     RECENT_DAILY_AVERAGE_METHOD,
     build_branch_operational_forecast,
-    build_operational_forecast_scope_summary,
 )
 
 
@@ -241,13 +240,6 @@ FORECAST_BRANCH_GROUPS = [
 ]
 FORECAST_LEGACY_GROUP_COUNT = 4
 SENSITIZED_FORECAST_SHEET = "Forecast Sensibilizado"
-SENSITIZED_FORECAST_GROUPS = [
-    ("D2:G2", "Ingresos", ULTRA_ORANGE),
-    ("H2:K2", "Venta nueva", ULTRA_BLUE),
-    ("L2:O2", "Reactivaciones", ULTRA_BLUE),
-    ("P2:S2", "Bajas", ULTRA_ORANGE),
-    ("T2:W2", "Tienda", ULTRA_ORANGE),
-]
 FORECAST_SUM_COLUMNS = [
     "M",
     "R", "T", "U", "V", "W", "X", "Y",
@@ -380,6 +372,7 @@ def build_track_daily_mart_excel(
         track_date=track_date,
         resolved_version=resolved_version,
         forecasts=sensitized_forecasts,
+        bajas_progress_curve=bajas_progress_curve,
     )
 
     _build_raw_sheet(
@@ -1324,57 +1317,146 @@ def _build_sensitized_forecast_inputs(
     return result
 
 
-def _forecast_metric_number(
-    forecast: dict[str, Any],
-    metric_key: str,
-    field_name: str,
-) -> float | int | None:
-    metric = (forecast.get("metrics") or {}).get(metric_key) or {}
-    value = metric.get(field_name)
-    return _to_number(_to_decimal(value))
+def _sensitized_income_info_row(
+    *,
+    forecasts: Sequence[dict[str, Any]],
+    sucursal_canon: str,
+) -> int:
+    for index, item in enumerate(forecasts):
+        if item.get("sucursal_canon") == sucursal_canon:
+            return 12 + index
+
+    raise ValueError(
+        "No se encontró soporte de ingresos para "
+        f"{sucursal_canon!r}."
+    )
 
 
-def _write_sensitized_forecast_row(
+def _sensitized_recent_info_row(
+    *,
+    forecasts: Sequence[dict[str, Any]],
+    sucursal_canon: str,
+) -> int:
+    for index, item in enumerate(forecasts):
+        if item.get("sucursal_canon") == sucursal_canon:
+            return 4 + index
+
+    raise ValueError(
+        "No se encontró soporte reciente para "
+        f"{sucursal_canon!r}."
+    )
+
+
+def _write_sensitized_forecast_data_row(
     *,
     worksheet: Worksheet,
     excel_row: int,
-    index: int | None,
-    label: str,
-    forecast: dict[str, Any],
+    index: int,
+    item: dict[str, Any],
+    track_date: date,
+    days_in_month: int,
+    bajas_progress_curve: dict[str, Any],
+    income_info_row: int,
+    recent_info_row: int,
 ) -> None:
-    worksheet[f"B{excel_row}"] = index
-    worksheet[f"C{excel_row}"] = label
-
-    metric_layout = (
-        ("ingreso", ("D", "E", "F", "G")),
-        ("clientes_nuevos", ("H", "I", "J", "K")),
-        ("reactivaciones", ("L", "M", "N", "O")),
-        ("bajas", ("P", "Q", "R", "S")),
-        ("tienda", ("T", "U", "V", "W")),
+    mart_row = item["mart_row"]
+    desempeno_day = _forecast_source_day(
+        mart_row,
+        "source_business_date_desempeno",
+        track_date,
+    )
+    bajas_progress_point = bajas_progress_curve.get(
+        "points",
+        {},
+    ).get(desempeno_day)
+    bajas_progress_reference = (
+        f"Info!$F$\${17 + desempeno_day}"
+        if bajas_progress_point is not None
+        else None
     )
 
-    for metric_key, columns in metric_layout:
-        actual_col, projected_col, benchmark_col, gap_col = columns
-        worksheet[f"{actual_col}{excel_row}"] = _forecast_metric_number(
-            forecast,
-            metric_key,
-            "actual_mtd",
-        )
-        worksheet[f"{projected_col}{excel_row}"] = _forecast_metric_number(
-            forecast,
-            metric_key,
-            "projected_close",
-        )
-        worksheet[f"{benchmark_col}{excel_row}"] = _forecast_metric_number(
-            forecast,
-            metric_key,
-            "benchmark",
-        )
-        worksheet[f"{gap_col}{excel_row}"] = _forecast_metric_number(
-            forecast,
-            metric_key,
-            "projected_gap",
-        )
+    worksheet[f"B{excel_row}"] = index
+    worksheet[f"C{excel_row}"] = item["sucursal"]
+
+    worksheet[f"M{excel_row}"] = _to_number(
+        getattr(mart_row, "usuarios_activos_actual", None)
+    )
+
+    worksheet[f"R{excel_row}"] = _to_number(
+        getattr(mart_row, "meta_faycgo_mes", None)
+    )
+    worksheet[f"T{excel_row}"] = _to_number(
+        getattr(mart_row, "ingreso_real_base_mtd", None)
+    )
+    worksheet[f"U{excel_row}"] = _to_number(
+        getattr(mart_row, "ingreso_real_agregadora_mtd", None)
+    )
+    worksheet[f"V{excel_row}"] = f"=T{excel_row}+U{excel_row}"
+    worksheet[f"X{excel_row}"] = (
+        f"=IFERROR(Info!$P$\${income_info_row},NA())"
+    )
+    worksheet[f"W{excel_row}"] = (
+        f"=IFERROR(X{excel_row}-V{excel_row},NA())"
+    )
+    worksheet[f"Y{excel_row}"] = (
+        f"=IFERROR(X{excel_row}-R{excel_row},NA())"
+    )
+
+    worksheet[f"AC{excel_row}"] = _to_number(
+        getattr(mart_row, "meta_clientes_nuevos_mes", None)
+    )
+    worksheet[f"AE{excel_row}"] = _to_number(
+        getattr(mart_row, "clientes_nuevos_real_mtd", None)
+    )
+    worksheet[f"AF{excel_row}"] = (
+        f"=IFERROR(Info!$AG$\${recent_info_row}"
+        f"*Info!$AE$\${recent_info_row},NA())"
+    )
+    worksheet[f"AG{excel_row}"] = f"=AE{excel_row}+AF{excel_row}"
+    worksheet[f"AH{excel_row}"] = f"=AG{excel_row}-AC{excel_row}"
+
+    worksheet[f"AK{excel_row}"] = _to_number(
+        getattr(mart_row, "meta_reactivaciones_mes", None)
+    )
+    worksheet[f"AM{excel_row}"] = _to_number(
+        getattr(mart_row, "reactivaciones_real_mtd", None)
+    )
+    worksheet[f"AN{excel_row}"] = (
+        f"=IFERROR(Info!$AI$\${recent_info_row}"
+        f"*Info!$AE$\${recent_info_row},NA())"
+    )
+    worksheet[f"AO{excel_row}"] = f"=AM{excel_row}+AN{excel_row}"
+    worksheet[f"AP{excel_row}"] = f"=AO{excel_row}-AK{excel_row}"
+
+    worksheet[f"AS{excel_row}"] = _to_number(
+        getattr(mart_row, "meta_bajas_mes", None)
+    )
+    worksheet[f"AU{excel_row}"] = _to_number(
+        getattr(mart_row, "bajas_reales_mtd", None)
+    )
+    worksheet[f"AV{excel_row}"] = _forecast_bajas_remaining_formula(
+        value_column="AU",
+        excel_row=excel_row,
+        progress_reference=bajas_progress_reference,
+    )
+    worksheet[f"AW{excel_row}"] = f"=AU{excel_row}+AV{excel_row}"
+    worksheet[f"AX{excel_row}"] = (
+        f"=IFERROR(AW{excel_row}/M{excel_row},0)"
+    )
+    worksheet[f"AY{excel_row}"] = f"=AS{excel_row}-AW{excel_row}"
+
+    worksheet[f"BM{excel_row}"] = _to_number(
+        getattr(mart_row, "meta_venta_tienda_mes", None)
+    )
+    worksheet[f"BN{excel_row}"] = _to_number(
+        getattr(mart_row, "venta_tienda_real_mtd", None)
+    )
+    worksheet[f"BO{excel_row}"] = (
+        f"=IFERROR(Info!$AK$\${recent_info_row}"
+        f"*Info!$AE$\${recent_info_row},NA())"
+    )
+    worksheet[f"BP{excel_row}"] = f"=BN{excel_row}+BO{excel_row}"
+    worksheet[f"BQ{excel_row}"] = f"=BP{excel_row}-BM{excel_row}"
 
 
 def _build_sensitized_forecast_sheet(
@@ -1383,241 +1465,123 @@ def _build_sensitized_forecast_sheet(
     track_date: date,
     resolved_version: Any,
     forecasts: Sequence[dict[str, Any]],
+    bajas_progress_curve: dict[str, Any],
 ) -> None:
-    worksheet = workbook.create_sheet(SENSITIZED_FORECAST_SHEET, 1)
-    worksheet.sheet_view.showGridLines = False
-    worksheet.sheet_view.zoomScale = 85
-    worksheet.freeze_panes = "D4"
-
-    worksheet["B1"] = "Track"
-    worksheet["C1"] = SENSITIZED_FORECAST_SHEET
-    worksheet["D1"] = track_date.isoformat()
-    worksheet["F1"] = _format_version_update_label(resolved_version)
-
-    for merge_range, title, color in SENSITIZED_FORECAST_GROUPS:
-        worksheet.merge_cells(merge_range)
-        cell = worksheet[merge_range.split(":", 1)[0]]
-        cell.value = title
-        cell.fill = PatternFill("solid", fgColor=color)
-        cell.font = Font(color="FFFFFF", bold=True, size=9)
-        cell.alignment = Alignment(horizontal="center", vertical="center")
-
-    headers = {
-        "B": "#",
-        "C": "Sucursal",
-        "D": "Real MTD",
-        "E": "Forecast cierre",
-        "F": "Meta",
-        "G": "Brecha proyectada",
-        "H": "Real MTD",
-        "I": "Forecast cierre",
-        "J": "Meta",
-        "K": "Brecha proyectada",
-        "L": "Real MTD",
-        "M": "Forecast cierre",
-        "N": "Meta",
-        "O": "Brecha proyectada",
-        "P": "Real MTD",
-        "Q": "Forecast cierre",
-        "R": "Límite",
-        "S": "Brecha proyectada",
-        "T": "Real MTD",
-        "U": "Forecast cierre",
-        "V": "Meta",
-        "W": "Brecha proyectada",
-    }
-    for column_letter, header in headers.items():
-        worksheet[f"{column_letter}3"] = header
-
-    row_idx = 4
-    for index, item in enumerate(forecasts, start=1):
-        _write_sensitized_forecast_row(
-            worksheet=worksheet,
-            excel_row=row_idx,
-            index=index,
-            label=item["sucursal"],
-            forecast=item["forecast"],
-        )
-        row_idx += 1
-
-    base_forecasts = [
-        item["forecast"]
-        for item in forecasts
-        if item["sucursal_canon"] in TRACK_BASE_BRANCHES
-    ]
-    new_forecasts = [
-        item["forecast"]
-        for item in forecasts
-        if item["sucursal_canon"] not in TRACK_BASE_BRANCHES
-    ]
-
-    row_idx += 1
-    summary_rows: list[int] = []
-    for label, branch_forecasts in (
-        ("Subtotales 21 GYMS", base_forecasts),
-        ("Subtotales Nuevos", new_forecasts),
-        (
-            "TOTAL GENERAL",
-            [item["forecast"] for item in forecasts],
-        ),
-    ):
-        summary = build_operational_forecast_scope_summary(
-            branch_forecasts
-        )
-        _write_sensitized_forecast_row(
-            worksheet=worksheet,
-            excel_row=row_idx,
-            index=None,
-            label=label,
-            forecast=summary,
-        )
-        summary_rows.append(row_idx)
-        row_idx += 1
-
-    last_row = row_idx - 1
-    thin_side = Side(style="thin", color="D9D9D9")
-    thin_border = Border(
-        left=thin_side,
-        right=thin_side,
-        top=thin_side,
-        bottom=thin_side,
+    worksheet = workbook.create_sheet(
+        SENSITIZED_FORECAST_SHEET,
+        1,
     )
-    header_fill = PatternFill("solid", fgColor=HEADER_DARK)
+    days_in_month = monthrange(
+        track_date.year,
+        track_date.month,
+    )[1]
+    month_label = MONTH_NAMES_ES[track_date.month]
+    day_month_label = f"{track_date.day} {month_label}"
 
-    worksheet["B1"].font = Font(color=ULTRA_ORANGE, bold=True, size=11)
-    worksheet["C1"].font = Font(bold=True, size=11)
-    worksheet["F1"].font = Font(color=ULTRA_ORANGE, bold=True, size=9)
+    _setup_forecast_sheet(
+        worksheet=worksheet,
+        track_date=track_date,
+        resolved_version=resolved_version,
+        month_label=month_label,
+        day_month_label=day_month_label,
+    )
 
-    for column_letter in headers:
-        cell = worksheet[f"{column_letter}3"]
-        cell.fill = header_fill
-        cell.font = Font(color="FFFFFF", bold=True, size=8)
-        cell.alignment = Alignment(
-            horizontal="center",
-            vertical="center",
-            wrap_text=True,
-        )
-        cell.border = thin_border
+    items_by_key = {
+        item["sucursal_canon"]: item
+        for item in forecasts
+    }
+    grouped_rows = _build_forecast_row_groups(
+        [item["mart_row"] for item in forecasts]
+    )
 
-    for current_row in range(4, last_row + 1):
-        for column_idx in range(2, 24):
-            cell = worksheet.cell(row=current_row, column=column_idx)
-            cell.border = thin_border
-            cell.alignment = Alignment(
-                horizontal=(
-                    "left" if column_idx == 3 else "center"
-                ),
-                vertical="center",
+    current_row = FORECAST_START_ROW
+    current_index = 1
+    regional_subtotal_rows: list[int] = []
+
+    for group_rows in grouped_rows:
+        first_data_row = current_row
+
+        for mart_row in group_rows:
+            sucursal_canon = _normalize_branch_key(
+                getattr(mart_row, "sucursal_canon", "")
             )
-        worksheet[f"C{current_row}"].font = Font(
-            color="0F1F3A",
-            bold=True,
-            size=9,
-        )
+            item = items_by_key.get(sucursal_canon)
+            if item is None:
+                raise ValueError(
+                    "No existe Forecast Sensibilizado para "
+                    f"{sucursal_canon!r}."
+                )
 
-    for summary_row in summary_rows:
-        fill = (
-            PatternFill("solid", fgColor="FBE3DC")
-            if worksheet[f"C{summary_row}"].value == "TOTAL GENERAL"
-            else PatternFill("solid", fgColor="E5E7EB")
-        )
-        for column_idx in range(2, 24):
-            cell = worksheet.cell(row=summary_row, column=column_idx)
-            cell.fill = fill
-            cell.font = Font(color="111827", bold=True, size=9)
+            _write_sensitized_forecast_data_row(
+                worksheet=worksheet,
+                excel_row=current_row,
+                index=current_index,
+                item=item,
+                track_date=track_date,
+                days_in_month=days_in_month,
+                bajas_progress_curve=bajas_progress_curve,
+                income_info_row=_sensitized_income_info_row(
+                    forecasts=forecasts,
+                    sucursal_canon=sucursal_canon,
+                ),
+                recent_info_row=_sensitized_recent_info_row(
+                    forecasts=forecasts,
+                    sucursal_canon=sucursal_canon,
+                ),
+            )
+            current_row += 1
+            current_index += 1
 
-    _set_number_format(
+        last_data_row = current_row - 1
+        subtotal_row = current_row
+        _write_forecast_subtotal_row(
+            worksheet=worksheet,
+            totals_row=subtotal_row,
+            first_data_row=first_data_row,
+            last_data_row=last_data_row,
+        )
+        regional_subtotal_rows.append(subtotal_row)
+
+        current_row += 2
+
+    base_totals_row = current_row
+    _write_forecast_summary_row(
         worksheet=worksheet,
-        column_letters=["D", "E", "F", "G", "T", "U", "V", "W"],
-        start_row=4,
-        end_row=last_row,
-        number_format=CURRENCY_FORMAT,
+        totals_row=base_totals_row,
+        label="Subtotales 21 GYMS",
+        source_rows=(
+            regional_subtotal_rows[:FORECAST_LEGACY_GROUP_COUNT]
+        ),
     )
-    _set_number_format(
+
+    new_totals_row = current_row + 1
+    _write_forecast_summary_row(
         worksheet=worksheet,
-        column_letters=[
-            "B", "H", "I", "J", "K", "L", "M", "N", "O",
-            "P", "Q", "R", "S",
+        totals_row=new_totals_row,
+        label="Subtotales Nuevos",
+        source_rows=(
+            regional_subtotal_rows[FORECAST_LEGACY_GROUP_COUNT:]
+        ),
+    )
+
+    general_totals_row = current_row + 2
+    _write_forecast_summary_row(
+        worksheet=worksheet,
+        totals_row=general_totals_row,
+        label="TOTAL GENERAL",
+        source_rows=[base_totals_row, new_totals_row],
+    )
+
+    _apply_forecast_formatting(
+        worksheet=worksheet,
+        last_row=general_totals_row,
+        regional_subtotal_rows=regional_subtotal_rows,
+        summary_rows=[
+            base_totals_row,
+            new_totals_row,
+            general_totals_row,
         ],
-        start_row=4,
-        end_row=last_row,
-        number_format=INTEGER_FORMAT,
     )
-
-    for gap_column in ("G", "K", "O", "W"):
-        cell_range = f"{gap_column}4:{gap_column}{last_row}"
-        worksheet.conditional_formatting.add(
-            cell_range,
-            CellIsRule(
-                operator="greaterThan",
-                formula=["0"],
-                fill=PatternFill("solid", fgColor=GOOD_FILL_COLOR),
-                font=Font(color=GOOD_FONT_COLOR, bold=True),
-            ),
-        )
-        worksheet.conditional_formatting.add(
-            cell_range,
-            CellIsRule(
-                operator="lessThan",
-                formula=["0"],
-                fill=PatternFill("solid", fgColor=BAD_FILL_COLOR),
-                font=Font(color=BAD_FONT_COLOR, bold=True),
-            ),
-        )
-
-    bajas_gap_range = f"S4:S{last_row}"
-    worksheet.conditional_formatting.add(
-        bajas_gap_range,
-        CellIsRule(
-            operator="greaterThan",
-            formula=["0"],
-            fill=PatternFill("solid", fgColor=BAD_FILL_COLOR),
-            font=Font(color=BAD_FONT_COLOR, bold=True),
-        ),
-    )
-    worksheet.conditional_formatting.add(
-        bajas_gap_range,
-        CellIsRule(
-            operator="lessThan",
-            formula=["0"],
-            fill=PatternFill("solid", fgColor=GOOD_FILL_COLOR),
-            font=Font(color=GOOD_FONT_COLOR, bold=True),
-        ),
-    )
-
-    widths = {
-        "B": 5,
-        "C": 22,
-        "D": 14,
-        "E": 15,
-        "F": 14,
-        "G": 16,
-        "H": 12,
-        "I": 14,
-        "J": 12,
-        "K": 16,
-        "L": 12,
-        "M": 14,
-        "N": 12,
-        "O": 16,
-        "P": 12,
-        "Q": 14,
-        "R": 12,
-        "S": 18,
-        "T": 14,
-        "U": 15,
-        "V": 14,
-        "W": 16,
-    }
-    for column_letter, width in widths.items():
-        worksheet.column_dimensions[column_letter].width = width
-
-    worksheet.row_dimensions[2].height = 22
-    worksheet.row_dimensions[3].height = 36
-    worksheet.page_setup.orientation = "landscape"
-    worksheet.page_setup.fitToWidth = 1
-    worksheet.page_setup.fitToHeight = 0
-    worksheet.sheet_properties.pageSetUpPr.fitToPage = True
 
 
 def _build_forecast_sheet(
@@ -2388,7 +2352,7 @@ def _build_info_sheet(
     ])
     worksheet.append([
         "Forecast sensibilizado - contrato",
-        "Mismo motor backend que Seguimiento Regional y Centro de Control; Excel sólo presenta el resultado",
+        "Mismas reglas que Seguimiento Regional y Centro de Control; las celdas derivadas se conservan como fórmulas Excel",
     ])
     worksheet.append([
         "Forecast sensibilizado - agregación",
@@ -2590,6 +2554,7 @@ def _build_info_sheet(
             if progress_pct is not None
             else None
         )
+
         values = [
             item.get("sucursal"),
             _serialize_cell_value(
@@ -2601,13 +2566,9 @@ def _build_info_sheet(
             _to_number(progress_ratio),
             income_projection.get("historical_months"),
             income_projection.get("confidence"),
-            _to_number(
-                _to_decimal(income_metric.get("projected_close"))
-            ),
+            None,
             _to_number(_to_decimal(income_metric.get("benchmark"))),
-            _to_number(
-                _to_decimal(income_metric.get("projected_gap"))
-            ),
+            None,
         ]
         for column_idx, value in enumerate(values, start=8):
             cell = worksheet.cell(
@@ -2622,6 +2583,31 @@ def _build_info_sheet(
                 wrap_text=True,
             )
 
+        method = str(income_projection.get("method") or "")
+        status = str(income_projection.get("status") or "")
+        if status != "available":
+            forecast_formula = "=NA()"
+        elif method == "existing_stable_historical_pace":
+            forecast_formula = (
+                f"=IFERROR(L{row_offset}/M{row_offset},NA())"
+            )
+        elif method == "linear_mtd_pace":
+            forecast_formula = (
+                f"=IFERROR((L{row_offset}/{track_date.day})"
+                f"*{monthrange(track_date.year, track_date.month)[1]},NA())"
+            )
+        else:
+            forecast_formula = "=NA()"
+
+        worksheet.cell(
+            row=row_offset,
+            column=16,
+        ).value = forecast_formula
+        worksheet.cell(
+            row=row_offset,
+            column=18,
+        ).value = f"=IFERROR(P{row_offset}-Q{row_offset},NA())"
+
         worksheet.cell(
             row=row_offset,
             column=13,
@@ -2632,7 +2618,7 @@ def _build_info_sheet(
                 column=column_idx,
             ).number_format = CURRENCY_FORMAT
 
-    recent_title_row = 2
+        recent_title_row = 2
     recent_header_row = 3
     worksheet.merge_cells(
         start_row=recent_title_row,
@@ -2739,6 +2725,104 @@ def _build_info_sheet(
             ).number_format = CURRENCY_FORMAT
             recent_row += 1
 
+    recent_last_row = max(recent_row - 1, recent_header_row + 1)
+
+    support_title_row = 2
+    support_header_row = 3
+    support_start_col = 30  # AD
+    support_end_col = 37  # AK
+
+    worksheet.merge_cells(
+        start_row=support_title_row,
+        start_column=support_start_col,
+        end_row=support_title_row,
+        end_column=support_end_col,
+    )
+    support_title = worksheet.cell(
+        row=support_title_row,
+        column=support_start_col,
+    )
+    support_title.value = "Soporte de promedio reciente por sucursal"
+    support_title.fill = PatternFill("solid", fgColor=ULTRA_BLUE)
+    support_title.font = Font(color="FFFFFF", bold=True)
+    support_title.alignment = Alignment(
+        horizontal="center",
+        vertical="center",
+    )
+
+    support_headers = [
+        "Sucursal",
+        "Días restantes",
+        "Deltas VN válidos",
+        "Promedio VN",
+        "Deltas React válidos",
+        "Promedio React",
+        "Deltas Tienda válidos",
+        "Promedio Tienda",
+    ]
+    for column_idx, header in enumerate(
+        support_headers,
+        start=support_start_col,
+    ):
+        cell = worksheet.cell(
+            row=support_header_row,
+            column=column_idx,
+        )
+        cell.value = header
+        cell.fill = PatternFill("solid", fgColor=HEADER_DARK)
+        cell.font = Font(color="FFFFFF", bold=True)
+        cell.alignment = Alignment(
+            horizontal="center",
+            vertical="center",
+            wrap_text=True,
+        )
+        cell.border = thin_border
+
+    for item_index, item in enumerate(sensitized_forecasts):
+        row_idx = support_header_row + 1 + item_index
+        worksheet[f"AD{row_idx}"] = item.get("sucursal")
+        worksheet[f"AE{row_idx}"] = (
+            "=DAY(EOMONTH(DATE("
+            f"{track_date.year},{track_date.month},{track_date.day}"
+            "),0))-DAY(DATE("
+            f"{track_date.year},{track_date.month},{track_date.day}"
+            "))"
+        )
+
+        metric_columns = (
+            ("AF", "AG", "Y"),
+            ("AH", "AI", "Z"),
+            ("AJ", "AK", "AA"),
+        )
+        for count_col, average_col, delta_col in metric_columns:
+            worksheet[f"{count_col}{row_idx}"] = (
+                f'=COUNTIFS($T$4:$T$\${recent_last_row},$AD{row_idx},'
+                f'$X$4:$X$\${recent_last_row},"Sí",'
+                f'$\${delta_col}$4:$\${delta_col}$\${recent_last_row},"<>")'
+            )
+            worksheet[f"{average_col}{row_idx}"] = (
+                f'=IF($AE{row_idx}=0,0,'
+                f'IF({count_col}{row_idx}>=3,'
+                f'AVERAGEIFS('
+                f'$\${delta_col}$4:$\${delta_col}$\${recent_last_row},'
+                f'$T$4:$T$\${recent_last_row},$AD{row_idx},'
+                f'$X$4:$X$\${recent_last_row},"Sí"),NA()))'
+            )
+
+        for column_idx in range(support_start_col, support_end_col + 1):
+            cell = worksheet.cell(
+                row=row_idx,
+                column=column_idx,
+            )
+            cell.border = thin_border
+            cell.alignment = Alignment(
+                horizontal="center",
+                vertical="center",
+                wrap_text=True,
+            )
+
+        worksheet[f"AK{row_idx}"].number_format = CURRENCY_FORMAT
+
     worksheet.column_dimensions["A"].width = 34
     worksheet.column_dimensions["B"].width = 92
     worksheet.column_dimensions["D"].width = 10
@@ -2765,6 +2849,14 @@ def _build_info_sheet(
         "Y": 14,
         "Z": 16,
         "AA": 14,
+        "AD": 22,
+        "AE": 14,
+        "AF": 15,
+        "AG": 14,
+        "AH": 17,
+        "AI": 15,
+        "AJ": 18,
+        "AK": 16,
     }.items():
         worksheet.column_dimensions[column_letter].width = width
 
